@@ -14,13 +14,25 @@ This document lists the environment variables used by the Memphis Zoo MCP backen
 
 | Name | Required | Purpose |
 |---|---:|---|
-| `MCP_CONNECTOR_TOKEN` | **Required for mutation** | Dedicated bearer/custom-header token for authenticated service clients and legacy SSE access. |
+| `MCP_CONNECTOR_TOKEN` | Required for legacy service clients | Dedicated bearer/custom-header token for non-ChatGPT service clients and legacy SSE access. Never paste it into ChatGPT. |
+| `MCP_OAUTH_ENABLED` | **Yes for ChatGPT/Codex OAuth** | Enables Supabase OAuth 2.1 discovery, consent, and resource-bound access-token verification for Streamable HTTP `/mcp`. Defaults to `false`. |
+| `MCP_PUBLIC_URL` | **Yes when OAuth is enabled** | Exact public HTTPS origin of this service, for example `https://memphis-zoo-mcp.onrender.com`. Paths, queries, fragments, and embedded credentials are rejected. The canonical protected resource is derived as `<origin>/mcp`. |
+| `SUPABASE_PUBLISHABLE_KEY` | **Yes when OAuth is enabled** | Public Supabase key used for user sign-in, consent, and token validation. `SUPABASE_ANON_KEY` is accepted only as a legacy fallback. This is not the service-role key. |
+| `MCP_OAUTH_COOKIE_SECRET` | **Yes when OAuth is enabled** | Dedicated secret of at least 32 characters used only to encrypt the short-lived, HttpOnly OAuth consent session. |
+| `MCP_OAUTH_ALLOWED_SUBJECTS` | **Yes when OAuth is enabled** | Comma-separated allowlist of exact Supabase Auth user UUIDs permitted to authorize complete MCP access. |
+| `MCP_OAUTH_ALLOWED_CLIENT_IDS` | **Yes when OAuth is enabled** | Comma-separated allowlist of exact pre-registered Supabase OAuth client UUIDs. |
+| `MCP_OAUTH_SCOPES` | No | Space- or comma-separated Supabase scopes that are both advertised and required in accepted access tokens. Defaults to `email`, which avoids the asymmetric-signing-key prerequisite for `openid`; supported values are `openid`, `email`, `profile`, `phone`, and `offline_access`. |
+| `MCP_OAUTH_UI_SESSION_SECONDS` | No | Encrypted consent-session cookie lifetime. Defaults to 8 hours; valid range is 60 seconds through 24 hours. Invalid explicit values fail startup when OAuth is enabled. |
+| `MCP_OAUTH_CSRF_SECONDS` | No | Consent-form CSRF lifetime. Defaults to 10 minutes; valid range is 60 through 1,800 seconds. Invalid explicit values fail startup when OAuth is enabled. |
+| `MCP_OAUTH_CLOCK_SKEW_SECONDS` | No | Maximum JWT `exp`/`nbf` clock skew. Defaults to 30 seconds; valid range is 0 through 300. Invalid explicit values fail startup when OAuth is enabled. |
 | `MCP_ALLOW_FULL_NOAUTH` | Retired | Ignored and always fail-closed. Tokenless clients never receive GitHub or Supabase mutation tools. |
-| `MCP_ALLOW_READONLY_NOAUTH` | No | Optional tokenless diagnostic-only surface. Defaults to `false`; when enabled it exposes no GitHub or Supabase adapter. |
+| `MCP_ALLOW_READONLY_NOAUTH` | No | Optional tokenless manifest-read surface. Defaults to `false`; when enabled it permits manifest/deep-health, GitHub read/search, and bounded Supabase SQL-read tools. Writes and migrations still require verified OAuth or the legacy connector token. |
 
-MCP access precedence is: a valid presented connector token receives the scoped authenticated tool set; a presented invalid token is rejected; a tokenless request receives only the diagnostic-only server when `MCP_ALLOW_READONLY_NOAUTH=true`, otherwise it is rejected. Legacy SSE is token-only.
+Streamable HTTP access precedence is: a valid legacy connector token or a verified Supabase OAuth token from an allowlisted subject and client can execute the full tool set; a presented invalid credential is rejected; a tokenless request can execute every direct manifest `READ` tool only when `MCP_ALLOW_READONLY_NOAUTH=true`, otherwise it is rejected. With both read-only noauth and OAuth enabled, the mixed tool list includes OAuth-only write descriptors so a write attempt returns the tool-result linking challenge without executing the adapter. With OAuth disabled, tokenless discovery omits all write/migration tools. A wrong custom service-token header is never retried as OAuth. Legacy SSE remains connector-token-only.
 
-The production `/mcp` URL is public. Connected clients must therefore carry the dedicated connector credential; UI provenance is not an authorization boundary.
+The production `/mcp` URL is public. ChatGPT and Codex discover OAuth through `/.well-known/oauth-protected-resource/mcp` and receive the same URL in the 401 Bearer challenge. Accepted OAuth JWTs must match the exact issuer, subject, client ID, numeric `exp`, optional numeric `nbf`, configured scopes, and the canonical `<origin>/mcp` resource in either `aud` or `resource`. Configure the Supabase OAuth client and a client-ID-specific Custom Access Token Hook so that exact resource and scope string are carried into the token while every original required claim is preserved. OAuth is fail-closed unless every required value above is valid.
+
+See `docs/chatgpt-mcp-oauth.md` for the enablement, acceptance, and rollback sequence.
 
 ## GitHub
 
@@ -39,6 +51,7 @@ The production `/mcp` URL is public. Connected clients must therefore carry the 
 |---|---:|---|
 | `SUPABASE_URL` | Yes | Supabase project URL. |
 | `SUPABASE_SERVICE_ROLE_KEY` | Yes | Service role key for trusted server-side RPC calls. |
+| `SUPABASE_PUBLISHABLE_KEY` | Yes for OAuth consent | Public browser-safe key used only for Supabase Auth user sessions and OAuth consent. It never replaces the service-role key used by trusted server adapters. |
 | `CUSTODIAL_READONLY_DATABASE_URL` | Yes in production | Dedicated PostgreSQL login for application and MCP reads. It must inherit only `custodial_application_reader`, have no `BYPASSRLS`, and must not be an admin, `postgres`, service-role, or migration credential. Every query runs inside an explicit `READ ONLY` transaction. |
 
 ## Custodial device identity

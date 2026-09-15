@@ -21,7 +21,13 @@ import { observeProductionSchemaIdentity } from "./production-schema-identity.js
 import { assertOpsManagerSessionSecret, authenticateOpsAccessRequest, createSupabaseTrustedDeviceStore, installSharedAuthRoutes, makeOpsAccessMiddleware } from "./auth/shared-access-auth.js";
 import { assertServerAssignedActor, authenticatedManagerActor } from "./manager-authority.js";
 import { authoritativeFeedbackPayload, makeFeedbackSubmitAuthority } from "./feedback-authority.js";
-import { makeMcpConnectorMiddleware } from "./auth/mcp-connector-auth.js";
+import { isMcpReadOnlyNoAuthEnabled, makeMcpConnectorMiddleware } from "./auth/mcp-connector-auth.js";
+import {
+  assertMcpOAuthConfig,
+  buildMcpWwwAuthenticateChallenge,
+  createMcpOAuthRouter,
+  createMcpOAuthVerifier,
+} from "./auth/mcp-oauth.js";
 import {
   getDeviceCredentialSecretReadiness,
   installDeviceCredentialRoutes,
@@ -78,6 +84,10 @@ app.use((req, res, next) => {
   return generalJsonParser(req, res, next);
 });
 app.use(express.urlencoded({ extended: false, limit: "32kb" }));
+const mcpOAuthConfig = assertMcpOAuthConfig(process.env);
+const mcpOAuthVerifier = createMcpOAuthVerifier({ env: process.env });
+const mcpReadOnlyNoAuthEnabled = isMcpReadOnlyNoAuthEnabled(process.env);
+app.use(createMcpOAuthRouter({ env: process.env }));
 
 const MOXIE_MOUNT_PATH = (String(process.env.MOXIE_PREFIX || "/moxie").trim() || "/moxie").replace(/\/+$/, "") || "/moxie";
 const MOXIE_STATIC_DIR = fileURLToPath(new URL("../public/moxie-assets/", import.meta.url));
@@ -199,10 +209,15 @@ function requireGuestMarketingReviewAuth(req, res, next) {
 
 const requireOpsManagerAuth = makeOpsAccessMiddleware({ trustedDeviceStore: opsTrustedDeviceStore });
 const requireOpsManagerWrite = makeOpsAccessMiddleware({ requireWrite: true, trustedDeviceStore: opsTrustedDeviceStore });
-// Streamable HTTP defaults to the full connector tool set so connected ChatGPT
-// sessions can read and write without a second credential prompt.
-// Legacy SSE remains token-only because its follow-up /messages request uses a separate HTTP request.
-const requireMcpAuth = makeMcpConnectorMiddleware();
+// Streamable HTTP is strict by default. An explicit read-only-noauth setting
+// permits every manifest read tool; OAuth-capable mixed sessions advertise
+// writes but guard them until OAuth or the legacy service token is verified.
+// Legacy SSE remains service-token-only.
+const requireMcpAuth = makeMcpConnectorMiddleware({
+  oauthVerifier: mcpOAuthVerifier,
+  resourceMetadataUrl: mcpOAuthConfig.enabled ? mcpOAuthConfig.resourceMetadataUrl : null,
+  oauthChallenge: mcpOAuthConfig.enabled ? buildMcpWwwAuthenticateChallenge(mcpOAuthConfig) : null,
+});
 const requireLegacyMcpAuth = makeMcpConnectorMiddleware({
   allowFullNoAuth: false,
   allowReadOnlyNoAuth: false,
@@ -2228,12 +2243,24 @@ async function runCanaryChecks() {
   };
 }
 
-function createMcpServer({ readOnly = false } = {}) {
+function createMcpServer({ readOnly = false, advertiseOAuth = false } = {}) {
   return createCanonicalMcpServer({
     name: process.env.APP_NAME,
     version: RELEASE_ID,
     releaseId: RELEASE_ID,
     readOnly,
+    // A tokenless request gets every manifest read tool. When OAuth is
+    // available the same mixed tool list also advertises guarded writes so a
+    // write attempt can trigger linking without ever executing anonymously.
+    includePrivilegedTools: !readOnly || advertiseOAuth,
+    allowNoAuth: mcpReadOnlyNoAuthEnabled,
+    oauth: advertiseOAuth
+      ? {
+          enabled: true,
+          scopes: mcpOAuthConfig.scopes,
+          challenge: buildMcpWwwAuthenticateChallenge(mcpOAuthConfig),
+        }
+      : { enabled: false },
   });
 }
 
@@ -3053,13 +3080,13 @@ app.post("/scan-api/rpc", parseScanAuthorityJsonBeforeAuthentication, requireDev
   }
 });
 app.get("/", (_req, res) => { res.status(200).send("Memphis Zoo MCP server is running."); });
-// Streamable HTTP accepts connected ChatGPT sessions with the full GitHub and
-// Supabase tool set by default. Legacy SSE remains token-only.
+// Streamable HTTP applies request and per-tool authority before adapters run.
+// Legacy SSE remains token-only.
 app.get("/mcp", requireMcpAuth, (_req, res) => { res.status(405).send("GET not supported on /mcp for this server."); });
 app.options("/mcp", (_req, res) => { res.sendStatus(200); });
 app.post("/mcp", requireMcpAuth, async (req, res) => {
   let server;
-  try { server = createMcpServer({ readOnly: Boolean(req.memphisMcpAuth?.read_only) }); const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined }); res.on("close", () => { transport.close(); try { server.close(); } catch {} }); await server.connect(transport); await transport.handleRequest(req, res, req.body); }
+  try { server = createMcpServer({ readOnly: Boolean(req.memphisMcpAuth?.read_only), advertiseOAuth: mcpOAuthConfig.enabled }); const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined }); res.on("close", () => { transport.close(); try { server.close(); } catch {} }); await server.connect(transport); await transport.handleRequest(req, res, req.body); }
   catch (error) { console.error("MCP request failed:", error); if (!res.headersSent) { res.status(500).json({ jsonrpc: "2.0", error: { code: -32603, message: "Internal server error" }, id: null }); } }
 });
 const sseTransports = new Map();

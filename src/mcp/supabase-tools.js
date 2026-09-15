@@ -4,7 +4,7 @@ import { applyMigration } from "../supabase/migrations.js";
 import { registerMcpTool } from "./register.js";
 import { jsonResponse } from "./responses.js";
 
-export function registerSupabaseTools(server) {
+export function registerSupabaseTools(server, { includeWrites = true } = {}) {
   registerMcpTool(
     server,
     "supabase_sql_read",
@@ -17,6 +17,8 @@ export function registerSupabaseTools(server) {
       return jsonResponse(result);
     }
   );
+
+  if (!includeWrites) return;
 
   registerMcpTool(
     server,

@@ -219,7 +219,7 @@ async function commitStatusSummary({ repo, path, ref, compare_ref }) {
   return summary;
 }
 
-export function registerGithubTools(server) {
+export function registerGithubTools(server, { includeWrites = true } = {}) {
   registerMcpTool(
     server,
     "github_debug_config",
@@ -339,6 +339,21 @@ export function registerGithubTools(server) {
 
   registerMcpTool(
     server,
+    "github_commit_status_summary",
+    {
+      description: "Return latest commit metadata plus optional path SHA and compare-ref path SHA.",
+      inputSchema: githubCommitStatusSummaryInputSchema,
+    },
+    async ({ repo, path, ref, compare_ref }) => {
+      const result = await commitStatusSummary({ repo, path, ref, compare_ref });
+      return jsonResponse(result);
+    }
+  );
+
+  if (!includeWrites) return;
+
+  registerMcpTool(
+    server,
     "github_write_file",
     {
       description: "Create a file, or overwrite only when explicitly allowed. Dry-run defaults to true in the modular layer.",
@@ -434,16 +449,4 @@ export function registerGithubTools(server) {
     }
   );
 
-  registerMcpTool(
-    server,
-    "github_commit_status_summary",
-    {
-      description: "Return latest commit metadata plus optional path SHA and compare-ref path SHA.",
-      inputSchema: githubCommitStatusSummaryInputSchema,
-    },
-    async ({ repo, path, ref, compare_ref }) => {
-      const result = await commitStatusSummary({ repo, path, ref, compare_ref });
-      return jsonResponse(result);
-    }
-  );
 }

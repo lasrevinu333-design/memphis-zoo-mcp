@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { pingInputSchema } from "./schemas.js";
-import { registerMcpTool } from "./register.js";
-import { jsonResponse, textResponse } from "./responses.js";
+import { configureMcpToolAuth, finalizeMcpToolAuth, registerMcpTool } from "./register.js";
+import { textResponse } from "./responses.js";
 import { registerGithubTools } from "./github-tools.js";
 import { registerSupabaseTools } from "./supabase-tools.js";
 import { registerServerTools } from "./server-tools.js";
@@ -26,6 +26,17 @@ export function createMcpServer(options = {}) {
     name: appInfo.name,
     version: appInfo.version,
   });
+  const includePrivilegedTools = options.includePrivilegedTools ?? options.readOnly !== true;
+
+  const securitySchemes = [];
+  if (options.allowNoAuth === true) securitySchemes.push({ type: "noauth" });
+  if (options.oauth?.enabled === true) {
+    securitySchemes.push({ type: "oauth2", scopes: [...(options.oauth.scopes || [])] });
+  }
+  configureMcpToolAuth(server, {
+    securitySchemes,
+    challenge: options.oauth?.enabled === true ? options.oauth.challenge : null,
+  });
 
   registerMcpTool(
     server,
@@ -39,29 +50,12 @@ export function createMcpServer(options = {}) {
     }
   );
 
-  if (options.readOnly === true) {
-    registerMcpTool(
-      server,
-      "server_connection_diagnostic",
-      {
-        description: "Describe the restricted MCP connection without exposing privileged adapters.",
-        inputSchema: {},
-      },
-      async () => jsonResponse({
-        ok: true,
-        access: "read_only",
-        privileged_tools_exposed: false,
-        app: appInfo,
-      }),
-    );
-    return server;
-  }
-
   registerServerTools(server, {
     getAppInfo: () => appInfo,
   });
-  registerGithubTools(server);
-  registerSupabaseTools(server);
+  registerGithubTools(server, { includeWrites: includePrivilegedTools });
+  registerSupabaseTools(server, { includeWrites: includePrivilegedTools });
 
+  finalizeMcpToolAuth(server);
   return server;
 }
