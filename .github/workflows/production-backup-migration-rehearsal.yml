@@ -254,59 +254,14 @@ jobs:
             STATIC_WEEKLY_CONTROL_PLANE_ALLOW_INSECURE_LOOPBACK_REHEARSAL=true \
             npm run --silent start:static-weekly-control-plane >"$static_log" 2>&1 &
           static_pid=$!
-          backend_alive=false
-          static_alive=false
-          static_ready=false
-          for attempt in $(seq 1 120); do
-            if curl --fail --silent --show-error 'http://127.0.0.1:31871/healthz' | jq -e '.ok == true and .process_alive == true and .probe_scope == "process_liveness"' >/dev/null; then backend_alive=true; break; fi
-            sleep 1
-          done
-          backend_expected_isolated_dependencies=false
-          backend_dependencies_status=''
-          for attempt in $(seq 1 120); do
-            if backend_dependencies_status="$(curl --silent --show-error --connect-timeout 2 --max-time 5 \
-                --output "$backend_dependencies_file" --write-out '%{http_code}' \
-                'http://127.0.0.1:31871/health/dependencies')" \
-              && test "$backend_dependencies_status" = '503' \
-              && jq -e --arg target_fingerprint "$target_fingerprint" '
-                .ok == false
-                and .process_alive == true
-                and .database_reachable == true
-                and .read_authority_ready == true
-                and .required_schema_present == true
-                and .release_canary.configured == false
-                and .release_canary.device_identifier == null
-                and .release_canary.control_initialized == false
-                and .release_canary.paused == null
-                and .device_credential_secret.contract_version == "device-credential-secret-readiness.v1"
-                and .device_credential_secret.ready == false
-                and .device_credential_secret.active_credentials == 0
-                and .device_credential_secret.confirmed_credentials == 0
-                and .device_credential_secret.unconfirmed_credentials == 0
-                and .device_credential_secret.matching_credentials == 0
-                and .device_credential_secret.unmarked_credentials == 0
-                and .device_credential_secret.mismatched_credentials == 0
-                and .device_credential_secret.reason == "no_active_device_credentials"
-                and .worker.durable_database_leases == true
-                and .schema_fingerprint == $target_fingerprint
-              ' "$backend_dependencies_file" >/dev/null; then
-              backend_expected_isolated_dependencies=true
-              break
-            fi
-            sleep 1
-          done
-          for attempt in $(seq 1 120); do
-            if curl --fail --silent --show-error 'http://127.0.0.1:31872/healthz' | jq -e '.ok == true and .data.process_ready == true' >/dev/null; then static_alive=true; break; fi
-            sleep 1
-          done
-          for attempt in $(seq 1 120); do
-            if curl --fail --silent --show-error 'http://127.0.0.1:31872/ready' | jq -e '.ok == true and .data.ready == true' >/dev/null; then static_ready=true; break; fi
-            sleep 1
-          done
-          test "$backend_alive" = true
-          test "$backend_expected_isolated_dependencies" = true
-          test "$static_alive" = true
-          test "$static_ready" = true
+          bash scripts/wait-rehearsal-json-endpoint.sh 'http://127.0.0.1:31871/healthz' \
+            '.ok == true and .process_alive == true and .probe_scope == "process_liveness"'
+          bash scripts/verify-isolated-rehearsal-backend-dependencies.sh \
+            'http://127.0.0.1:31871/health/dependencies' "$backend_dependencies_file" "$target_fingerprint"
+          bash scripts/wait-rehearsal-json-endpoint.sh 'http://127.0.0.1:31872/healthz' \
+            '.ok == true and .data.process_ready == true'
+          bash scripts/wait-rehearsal-json-endpoint.sh 'http://127.0.0.1:31872/ready' \
+            '.ok == true and .data.ready == true'
           recovery_operation="$(node -e "console.log(require('node:crypto').randomUUID())")"
           recovery_payload="$(jq -nc --arg operation_id "$recovery_operation" --arg commit "$source_commit" '{operation_id:$operation_id,category:"other",priority:"normal",message:("Recovered application write probe for "+$commit),hub_context:"public"}')"
           first_write_file="${RUNNER_TEMP}/production-backup-rehearsal-feedback-first.json"

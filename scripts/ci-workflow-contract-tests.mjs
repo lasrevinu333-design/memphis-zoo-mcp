@@ -164,8 +164,16 @@ assert.match(populatedSchemaPreflight, /test -n "\$SCHEMA_FINGERPRINT_MCP_URL"/,
 assert.match(populatedSchemaPreflight, /set -euo pipefail[\s\S]*release:populated-schema:preflight \| tee[\s\S]*test -s \/tmp\/custodial-populated-schema-preflight\.json/,
   "the production schema preflight must preserve command failure and require a non-empty receipt");
 const productionBackupRehearsal = readFileSync(resolve(workflowDirectory, "production-backup-migration-rehearsal.yml"), "utf8");
+const isolatedRehearsalBackendDependencies = readFileSync(resolve(root, "scripts/verify-isolated-rehearsal-backend-dependencies.sh"), "utf8");
+const rehearsalJsonEndpointWaiter = readFileSync(resolve(root, "scripts/wait-rehearsal-json-endpoint.sh"), "utf8");
 const productionSourceRoleCatalog = readFileSync(resolve(root, "supabase/canonical/production-source-role-catalog.sql"), "utf8");
 const emptyDatabaseRebuild = readFileSync(resolve(root, "scripts/empty-database-rebuild-check.mjs"), "utf8");
+const productionBackupRehearsalJob = workflowJobs(productionBackupRehearsal).find(({ name }) => name === "rehearse");
+assert.ok(productionBackupRehearsalJob, "the production-backup rehearsal must retain its rehearse job");
+assert.ok(
+  Math.max(...workflowRunSteps(productionBackupRehearsalJob.source).map((source) => source.replace(/^ {10}/gm, "").length)) < 19_000,
+  "every production-backup rehearsal run expression must retain margin below GitHub's 21,000-character limit",
+);
 assert.match(productionBackupRehearsal, /RESTORE_DATABASE_ONLY=true[\s\S]*release:observed-production-schema:preflight[\s\S]*release:migrations:apply[\s\S]*release:target-schema:preflight/,
   "the production-backup rehearsal must prove the restored pre-migration state, apply the signed plan, and only then check the target fingerprint");
 assert.doesNotMatch(productionBackupRehearsal, /SUPABASE_DB_URL:\s*\$\{\{\s*secrets\.SUPABASE_DB_URL/,
@@ -193,19 +201,30 @@ assert.equal(
   2,
   "both recovered production-like runtimes must remove the rehearsal alias before validating the independent manager-session secret",
 );
+assert.equal(
+  (productionBackupRehearsal.match(/bash scripts\/wait-rehearsal-json-endpoint\.sh/g) || []).length,
+  3,
+  "backend liveness and both static runtime gates must use the bounded reusable JSON waiter",
+);
+assert.match(rehearsalJsonEndpointWaiter,
+  /--fail --silent --show-error --connect-timeout 2 --max-time 5[\s\S]*jq -e "\$predicate"/,
+  "the reusable rehearsal waiter must require successful HTTP plus the exact caller-owned JSON predicate");
 assert.match(productionBackupRehearsal,
-  /backend_dependencies_status=.*curl --silent --show-error[\s\S]*--output "\$backend_dependencies_file" --write-out '%\{http_code\}'[\s\S]*test "\$backend_dependencies_status" = '503'/,
+  /bash scripts\/verify-isolated-rehearsal-backend-dependencies\.sh[\s\S]*health\/dependencies[\s\S]*"\$backend_dependencies_file" "\$target_fingerprint"/,
+  "the restored backend must use the bounded exact-state dependency verifier");
+assert.match(isolatedRehearsalBackendDependencies,
+  /status=.*curl --silent --show-error[\s\S]*--output "\$response_file" --write-out '%\{http_code\}'[\s\S]*test "\$status" = '503'/,
   "the restored backend must preserve and require the expected fail-closed dependency response instead of treating HTTP 503 as a transport failure");
-assert.doesNotMatch(productionBackupRehearsal, /curl[^\n]*--fail[^\n]*health\/dependencies|curl[^\n]*health\/dependencies[^\n]*--fail/,
+assert.doesNotMatch(`${productionBackupRehearsal}\n${isolatedRehearsalBackendDependencies}`, /curl[^\n]*--fail[^\n]*health\/dependencies|curl[^\n]*health\/dependencies[^\n]*--fail/,
   "the rehearsal dependency probe must inspect the intentional HTTP 503 response body rather than discard it with curl --fail");
 const targetFingerprintInitialization = productionBackupRehearsal.indexOf("target_fingerprint=\"$(tr -d '\\r\\n' < supabase/canonical/schema-fingerprint.txt)\"");
 assert.notEqual(targetFingerprintInitialization, -1,
   "the rehearsal must initialize the exact source-controlled target fingerprint");
 assert.ok(
-  targetFingerprintInitialization < productionBackupRehearsal.indexOf("backend_dependencies_status=\"$(curl"),
+  targetFingerprintInitialization < productionBackupRehearsal.indexOf("bash scripts/verify-isolated-rehearsal-backend-dependencies.sh"),
   "the exact target fingerprint must be initialized before the set -u dependency probe reads it",
 );
-assert.match(productionBackupRehearsal,
+assert.match(isolatedRehearsalBackendDependencies,
   /\.ok == false[\s\S]*\.process_alive == true[\s\S]*\.database_reachable == true[\s\S]*\.read_authority_ready == true[\s\S]*\.required_schema_present == true[\s\S]*\.release_canary\.configured == false[\s\S]*\.device_credential_secret\.ready == false[\s\S]*\.device_credential_secret\.active_credentials == 0[\s\S]*\.device_credential_secret\.confirmed_credentials == 0[\s\S]*\.device_credential_secret\.unconfirmed_credentials == 0[\s\S]*\.device_credential_secret\.matching_credentials == 0[\s\S]*\.device_credential_secret\.unmarked_credentials == 0[\s\S]*\.device_credential_secret\.mismatched_credentials == 0[\s\S]*\.device_credential_secret\.reason == "no_active_device_credentials"[\s\S]*\.worker\.durable_database_leases == true[\s\S]*\.schema_fingerprint == \$target_fingerprint/,
   "the isolated rehearsal must accept only the exact intentional credential-revocation 503 while proving every other dependency invariant");
 assert.match(productionBackupRehearsal,
