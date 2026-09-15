@@ -529,7 +529,7 @@
       {
         "path": "scripts/canonical-schema-reconciliation-database-tests.mjs",
         "mode": "100644",
-        "object_id": "aaa924cca7c3501973b8d8743c309f07d5763fe4"
+        "object_id": "201027a5191d9889bcc692064e8555f8fbdf713b"
       },
       {
         "path": "scripts/capture-private-json-stdin.mjs",
