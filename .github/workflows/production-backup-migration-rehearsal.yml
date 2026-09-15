@@ -174,6 +174,7 @@ jobs:
             npm run --silent test:schema-fingerprint | tee -a "$receipt"
           target_migration_head="$(jq -r '.target.source_migration_version' release/production-migration-state.json)"
           target_migration_count="$(jq -r '.target.production_ledger_count' release/production-migration-state.json)"
+          target_fingerprint="$(tr -d '\r\n' < supabase/canonical/schema-fingerprint.txt)"
           test "$(docker exec "$container" psql -v ON_ERROR_STOP=1 -At -U supabase_admin -d "$database" \
             -c 'select max(version)::text from supabase_migrations.schema_migrations;' | tail -n 1)" = "$target_migration_head"
           test "$(docker exec "$container" psql -v ON_ERROR_STOP=1 -At -U supabase_admin -d "$database" \
@@ -230,6 +231,7 @@ jobs:
             npm run --silent test:feedback-reader-database | tee -a "$receipt"
           printf '{"stage":"feedback_reader_database_authority_proven","writer":"app_apply_operational_command.feedback_create","reader_login":"custodial_readonly_runtime_20991231","reader_projection_columns":21,"sole_reader_policy":true,"reader_mutation_denied":true,"legacy_image_backup_hidden":true,"recovery_inventory_exact":true}\n' >> "$receipt"
           backend_log="${RUNNER_TEMP}/production-backup-rehearsal-backend.log"
+          backend_dependencies_file="${RUNNER_TEMP}/production-backup-rehearsal-backend-dependencies.json"
           static_log="${RUNNER_TEMP}/production-backup-rehearsal-static-weekly.log"
           env -u REHEARSAL_OPS_MANAGER_SESSION_SECRET \
             NODE_ENV=production PORT=31871 SUPABASE_URL='http://127.0.0.1:31870' \
@@ -259,9 +261,38 @@ jobs:
             if curl --fail --silent --show-error 'http://127.0.0.1:31871/healthz' | jq -e '.ok == true and .process_alive == true and .probe_scope == "process_liveness"' >/dev/null; then backend_alive=true; break; fi
             sleep 1
           done
-          backend_ready=false
+          backend_expected_isolated_dependencies=false
+          backend_dependencies_status=''
           for attempt in $(seq 1 120); do
-            if curl --fail --silent --show-error 'http://127.0.0.1:31871/health/dependencies' | jq -e '.ok == true and .database_reachable == true and .read_authority_ready == true and .required_schema_present == true and .device_credential_secret.ready == true' >/dev/null; then backend_ready=true; break; fi
+            if backend_dependencies_status="$(curl --silent --show-error --connect-timeout 2 --max-time 5 \
+                --output "$backend_dependencies_file" --write-out '%{http_code}' \
+                'http://127.0.0.1:31871/health/dependencies')" \
+              && test "$backend_dependencies_status" = '503' \
+              && jq -e --arg target_fingerprint "$target_fingerprint" '
+                .ok == false
+                and .process_alive == true
+                and .database_reachable == true
+                and .read_authority_ready == true
+                and .required_schema_present == true
+                and .release_canary.configured == false
+                and .release_canary.device_identifier == null
+                and .release_canary.control_initialized == false
+                and .release_canary.paused == null
+                and .device_credential_secret.contract_version == "device-credential-secret-readiness.v1"
+                and .device_credential_secret.ready == false
+                and .device_credential_secret.active_credentials == 0
+                and .device_credential_secret.confirmed_credentials == 0
+                and .device_credential_secret.unconfirmed_credentials == 0
+                and .device_credential_secret.matching_credentials == 0
+                and .device_credential_secret.unmarked_credentials == 0
+                and .device_credential_secret.mismatched_credentials == 0
+                and .device_credential_secret.reason == "no_active_device_credentials"
+                and .worker.durable_database_leases == true
+                and .schema_fingerprint == $target_fingerprint
+              ' "$backend_dependencies_file" >/dev/null; then
+              backend_expected_isolated_dependencies=true
+              break
+            fi
             sleep 1
           done
           for attempt in $(seq 1 120); do
@@ -273,7 +304,7 @@ jobs:
             sleep 1
           done
           test "$backend_alive" = true
-          test "$backend_ready" = true
+          test "$backend_expected_isolated_dependencies" = true
           test "$static_alive" = true
           test "$static_ready" = true
           recovery_operation="$(node -e "console.log(require('node:crypto').randomUUID())")"
@@ -304,8 +335,7 @@ jobs:
           test "$active_mutation_leases" = '0'
           test "$expired_mutation_leases" = '0'
           docker logs "$postgrest_container" >"$postgrest_log" 2>&1 || true
-          printf '{"stage":"exact_application_pair_recovered","backend_liveness":true,"backend_dependencies_ready":true,"static_liveness":true,"static_readiness":true,"postgrest_ready":true,"feedback_first_http_status":201,"feedback_replay_http_status":200,"canonical_feedback_write_rows":1,"canonical_http_replay_returned_existing":true,"active_mutation_leases":0,"expired_mutation_leases":%s}\n' "$expired_mutation_leases" >> "$receipt"
-          target_fingerprint="$(tr -d '\r\n' < supabase/canonical/schema-fingerprint.txt)"
+          printf '{"stage":"exact_application_pair_recovered","backend_liveness":true,"backend_dependencies_http_status":503,"backend_dependency_invariants_ready":true,"backend_device_credentials_intentionally_revoked":true,"backend_device_credential_reason":"no_active_device_credentials","static_liveness":true,"static_readiness":true,"postgrest_ready":true,"feedback_first_http_status":201,"feedback_replay_http_status":200,"canonical_feedback_write_rows":1,"canonical_http_replay_returned_existing":true,"active_mutation_leases":0,"expired_mutation_leases":%s}\n' "$expired_mutation_leases" >> "$receipt"
           completed_at="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
           printf '{"ok":true,"backup_run_id":"%s","archive_digest":"%s","source_commit":"%s","source_tree":"%s","source_migration_head":"%s","source_migration_count":%s,"source_migration_ledger_sha256":"%s","source_catalog_fingerprint":"%s","target_migration_head":"%s","target_migration_count":%s,"target_catalog_fingerprint":"%s","active_mutation_leases":0,"expired_mutation_leases":0,"authority_health":true,"direct_dml_denied":true,"live_production_reads":0,"completed_at":"%s"}\n' \
             '${{ inputs.backup_run_id }}' "$archive_digest" "$source_commit" "$source_tree" "$migration_head" "$source_migration_count" "$source_migration_ledger_sha256" "$source_catalog_fingerprint" "$target_migration_head" "$target_migration_count" "$target_fingerprint" "$completed_at" >> "$receipt"
@@ -324,6 +354,7 @@ jobs:
             ${{ runner.temp }}/production-backup-migration-rehearsal-attestation.json
             ${{ runner.temp }}/production-backup-migration-rehearsal-postgres.log
             ${{ runner.temp }}/production-backup-rehearsal-backend.log
+            ${{ runner.temp }}/production-backup-rehearsal-backend-dependencies.json
             ${{ runner.temp }}/production-backup-rehearsal-static-weekly.log
             ${{ runner.temp }}/production-backup-rehearsal-postgrest.log
             ${{ runner.temp }}/production-backup-rehearsal-supabase-rest-proxy.log

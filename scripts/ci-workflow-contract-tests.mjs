@@ -193,6 +193,26 @@ assert.equal(
   2,
   "both recovered production-like runtimes must remove the rehearsal alias before validating the independent manager-session secret",
 );
+assert.match(productionBackupRehearsal,
+  /backend_dependencies_status=.*curl --silent --show-error[\s\S]*--output "\$backend_dependencies_file" --write-out '%\{http_code\}'[\s\S]*test "\$backend_dependencies_status" = '503'/,
+  "the restored backend must preserve and require the expected fail-closed dependency response instead of treating HTTP 503 as a transport failure");
+assert.doesNotMatch(productionBackupRehearsal, /curl[^\n]*--fail[^\n]*health\/dependencies|curl[^\n]*health\/dependencies[^\n]*--fail/,
+  "the rehearsal dependency probe must inspect the intentional HTTP 503 response body rather than discard it with curl --fail");
+const targetFingerprintInitialization = productionBackupRehearsal.indexOf("target_fingerprint=\"$(tr -d '\\r\\n' < supabase/canonical/schema-fingerprint.txt)\"");
+assert.notEqual(targetFingerprintInitialization, -1,
+  "the rehearsal must initialize the exact source-controlled target fingerprint");
+assert.ok(
+  targetFingerprintInitialization < productionBackupRehearsal.indexOf("backend_dependencies_status=\"$(curl"),
+  "the exact target fingerprint must be initialized before the set -u dependency probe reads it",
+);
+assert.match(productionBackupRehearsal,
+  /\.ok == false[\s\S]*\.process_alive == true[\s\S]*\.database_reachable == true[\s\S]*\.read_authority_ready == true[\s\S]*\.required_schema_present == true[\s\S]*\.release_canary\.configured == false[\s\S]*\.device_credential_secret\.ready == false[\s\S]*\.device_credential_secret\.active_credentials == 0[\s\S]*\.device_credential_secret\.confirmed_credentials == 0[\s\S]*\.device_credential_secret\.unconfirmed_credentials == 0[\s\S]*\.device_credential_secret\.matching_credentials == 0[\s\S]*\.device_credential_secret\.unmarked_credentials == 0[\s\S]*\.device_credential_secret\.mismatched_credentials == 0[\s\S]*\.device_credential_secret\.reason == "no_active_device_credentials"[\s\S]*\.worker\.durable_database_leases == true[\s\S]*\.schema_fingerprint == \$target_fingerprint/,
+  "the isolated rehearsal must accept only the exact intentional credential-revocation 503 while proving every other dependency invariant");
+assert.match(productionBackupRehearsal,
+  /backend_dependencies_http_status\":503[\s\S]*backend_dependency_invariants_ready\":true[\s\S]*backend_device_credentials_intentionally_revoked\":true[\s\S]*backend_device_credential_reason\":\"no_active_device_credentials/,
+  "the rehearsal receipt must distinguish intentionally revoked device admission from production dependency readiness");
+assert.doesNotMatch(productionBackupRehearsal, /backend_dependencies_ready\":true/,
+  "the rehearsal must not claim that the restored backend is production-ready before device credentials are re-enrolled");
 assert.match(productionBackupRehearsal, /expires_at>clock_timestamp\(\)[\s\S]*active_mutation_leases[\s\S]*expired_mutation_leases/,
   "the recovered pair must distinguish live mutation leases from expired fail-closed blockers");
 assert.match(productionBackupRehearsal, /test "\$active_mutation_leases" = '0'[\s\S]*test "\$expired_mutation_leases" = '0'/,
