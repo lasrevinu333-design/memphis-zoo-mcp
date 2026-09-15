@@ -3,44 +3,78 @@ import { MCP_TOOL_MANIFEST, TOOL_SAFETY } from "./tool-manifest.js";
 
 const serverToolAuth = new WeakMap();
 const toolSafety = new Map(MCP_TOOL_MANIFEST.map((tool) => [tool.name, tool.safety]));
+const anonymousTools = new Set(["ping", "server_connection_diagnostic"]);
 
 function cloneSecuritySchemes(schemes) {
   return Array.isArray(schemes)
-    ? schemes.map((scheme) => ({ ...scheme, scopes: Array.isArray(scheme?.scopes) ? [...scheme.scopes] : scheme?.scopes }))
+    ? schemes.map((scheme) => ({
+        ...scheme,
+        scopes: Array.isArray(scheme?.scopes) ? [...scheme.scopes] : scheme?.scopes,
+      }))
     : [];
 }
 
+function requiredScopes(name) {
+  if (anonymousTools.has(name)) return [];
+  if (toolSafety.get(name) === TOOL_SAFETY.READ) return ["mcp:read"];
+  // Unknown tools fail closed as privileged until deliberately classified.
+  return ["mcp:read", "mcp:write"];
+}
+
 export function configureMcpToolAuth(server, { securitySchemes = [], challenge = null } = {}) {
+  const cloned = cloneSecuritySchemes(securitySchemes);
   serverToolAuth.set(server, {
-    securitySchemes: cloneSecuritySchemes(securitySchemes),
+    noAuthEnabled: cloned.some((scheme) => scheme?.type === "noauth"),
+    oauthEnabled: cloned.some((scheme) => scheme?.type === "oauth2"),
     challenge: String(challenge || "").trim() || null,
     finalized: false,
   });
 }
 
-function toolIsReadOnly(name) {
-  return toolSafety.get(name) === TOOL_SAFETY.READ;
+function securitySchemesForTool(configuredAuth, scopes) {
+  if (!scopes.length) return configuredAuth.noAuthEnabled ? [{ type: "noauth" }] : [];
+  return configuredAuth.oauthEnabled ? [{ type: "oauth2", scopes: [...scopes] }] : [];
 }
 
-function authErrorResult(challenge) {
+function scopedChallenge(challenge, scopes) {
+  if (!challenge) return null;
+  const scope = scopes.join(" ");
+  if (/\bscope="[^"]*"/.test(challenge)) {
+    return challenge.replace(/\bscope="[^"]*"/, `scope="${scope}"`);
+  }
+  return `${challenge}, scope="${scope}"`;
+}
+
+function authErrorResult(challenge, scopes) {
   const result = {
-    content: [{ type: "text", text: "Authentication required: no valid access token was provided." }],
+    content: [{
+      type: "text",
+      text: `OAuth authorization is required for this tool (${scopes.join(" ")}).`,
+    }],
     isError: true,
   };
-  if (challenge) result._meta = { "mcp/www_authenticate": [challenge] };
+  const scoped = scopedChallenge(challenge, scopes);
+  if (scoped) result._meta = { "mcp/www_authenticate": [scoped] };
   return result;
+}
+
+function authInfoAllows(extra, scopes) {
+  const authInfo = extra?.authInfo;
+  if (!authInfo) return false;
+  if (authInfo?.extra?.authSource === "connector_token") return true;
+  const granted = Array.isArray(authInfo.scopes) ? authInfo.scopes : [];
+  return scopes.every((scope) => granted.includes(scope));
 }
 
 export function finalizeMcpToolAuth(server) {
   const configuredAuth = serverToolAuth.get(server);
   if (!configuredAuth || configuredAuth.finalized) return;
   configuredAuth.finalized = true;
-  if (!configuredAuth.securitySchemes.length) return;
 
-  // @modelcontextprotocol/sdk 1.30.0 accepts securitySchemes in registerTool
-  // config but only serializes fields known to its current ToolSchema. Preserve
-  // the required top-level field on the wire while retaining the documented
-  // _meta compatibility mirror. Fail closed if that SDK seam changes.
+  // @modelcontextprotocol/sdk 1.30.0 preserves extension metadata but does not
+  // yet serialize the current top-level Tool.securitySchemes field. Keep the
+  // exact 9fd0f099 instance-local wire projection and the _meta compatibility
+  // mirror, failing closed if the SDK seam changes.
   const protocol = server?.server;
   const handlers = protocol?._requestHandlers;
   const listToolsHandler = handlers?.get?.("tools/list");
@@ -64,20 +98,21 @@ export function registerMcpTool(server, name, definition, handler) {
   const title = definition?.title || name;
   const description = definition?.description || "";
   const inputSchema = definition?.inputSchema || {};
-  const configuredAuth = serverToolAuth.get(server) || {};
-  const configuredSchemes = cloneSecuritySchemes(configuredAuth.securitySchemes ?? []);
-  const defaultSchemes = toolIsReadOnly(name)
-    ? configuredSchemes
-    : configuredSchemes.filter((scheme) => scheme?.type !== "noauth");
+  const configuredAuth = serverToolAuth.get(server) || {
+    noAuthEnabled: false,
+    oauthEnabled: false,
+    challenge: null,
+  };
+  const scopes = requiredScopes(name);
   const securitySchemes = cloneSecuritySchemes(
-    definition?.securitySchemes ?? defaultSchemes,
+    definition?.securitySchemes ?? securitySchemesForTool(configuredAuth, scopes),
   );
   const meta = { ...(definition?._meta || {}) };
   if (securitySchemes.length) meta.securitySchemes = cloneSecuritySchemes(securitySchemes);
-  const allowsAnonymous = toolIsReadOnly(name)
-    && securitySchemes.some((scheme) => scheme?.type === "noauth");
-  const guardedHandler = !allowsAnonymous
-    ? async (args, extra) => extra?.authInfo ? handler(args, extra) : authErrorResult(configuredAuth.challenge)
+  const guardedHandler = scopes.length
+    ? async (args, extra) => authInfoAllows(extra, scopes)
+      ? handler(args, extra)
+      : authErrorResult(configuredAuth.challenge, scopes)
     : handler;
 
   if (typeof server.registerTool === "function") {
@@ -90,7 +125,7 @@ export function registerMcpTool(server, name, definition, handler) {
         ...(securitySchemes.length ? { securitySchemes } : {}),
         ...(Object.keys(meta).length ? { _meta: meta } : {}),
       },
-      guardedHandler
+      guardedHandler,
     );
   }
 
@@ -98,8 +133,8 @@ export function registerMcpTool(server, name, definition, handler) {
     if (securitySchemes.length || Object.keys(meta).length) {
       throw new Error("MCP tool authentication metadata requires registerTool support.");
     }
-    if (description) return server.tool(name, description, inputSchema, handler);
-    return server.tool(name, inputSchema, handler);
+    if (description) return server.tool(name, description, inputSchema, guardedHandler);
+    return server.tool(name, inputSchema, guardedHandler);
   }
 
   throw new Error("MCP server does not support registerTool or tool.");

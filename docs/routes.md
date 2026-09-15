@@ -21,10 +21,12 @@ Route factories for messaging, schedule, and events are re-exported from `src/ro
 | `POST` | `/messages` | Legacy SSE message post endpoint. |
 | `GET` | `/.well-known/oauth-protected-resource/mcp` | Canonical RFC 9728 protected-resource metadata for `/mcp` OAuth discovery when enabled. |
 | `GET` | `/.well-known/oauth-protected-resource` | Compatibility protected-resource metadata for clients that probe the origin root. |
-| `GET` | `/oauth/consent` | Private Supabase OAuth consent UI. Requires a valid `authorization_id`. |
-| `POST` | `/oauth/login` | Bounded sign-in for an allowlisted Supabase Auth user; creates an encrypted HttpOnly UI session. |
-| `POST` | `/oauth/decision` | CSRF-bound, allowlisted OAuth approval or denial. |
-| `POST` | `/oauth/logout` | Revokes the local OAuth UI session and clears its cookie. |
+| `GET` | `/.well-known/oauth-authorization-server` | RFC 8414 metadata for the self-contained Render authorization server. |
+| `POST` | `/oauth/register` | Bounded stateless DCR for validated ChatGPT HTTPS redirects and PKCE public clients. |
+| `GET` | `/oauth/authorize` | Validates the exact resource/client/redirect/scope/PKCE request and presents operator login. |
+| `POST` | `/oauth/login` | CSRF- and rate-limit-bound verification of the existing Moxie operator password. Never auto-approves. |
+| `POST` | `/oauth/decision` | Separate CSRF-bound approval or denial; every redirect response includes the exact issuer. |
+| `POST` | `/oauth/token` | Public-client authorization-code/PKCE exchange and rotating refresh-token exchange. |
 
 ## Admin API
 

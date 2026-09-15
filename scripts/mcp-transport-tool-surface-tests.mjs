@@ -84,8 +84,6 @@ const safetyByName = new Map(directManifest.map((tool) => [tool.name, tool.safet
 
 const port = await reservePort();
 const connectorToken = "mcp-transport-authenticated-connector-token";
-const oauthSubject = "22222222-2222-4222-8222-222222222222";
-const oauthClientId = "11111111-1111-4111-8111-111111111111";
 let stdout = "";
 let stderr = "";
 const child = spawn(process.execPath, ["src/index.js"], {
@@ -99,11 +97,7 @@ const child = spawn(process.execPath, ["src/index.js"], {
     MCP_ALLOW_READONLY_NOAUTH: "false",
     MCP_OAUTH_ENABLED: "true",
     MCP_PUBLIC_URL: `http://127.0.0.1:${port}`,
-    SUPABASE_PUBLISHABLE_KEY: "sb_publishable_transport_contract_key",
-    MCP_OAUTH_COOKIE_SECRET: "mcp-transport-oauth-cookie-secret-32-bytes-minimum",
-    MCP_OAUTH_ALLOWED_SUBJECTS: oauthSubject,
-    MCP_OAUTH_ALLOWED_CLIENT_IDS: oauthClientId,
-    MCP_OAUTH_SCOPES: "email",
+    MOXIE_WEB_PASSWORD: "mcp-transport-test-operator-password",
     SUPABASE_URL: "http://127.0.0.1:9",
     SUPABASE_SERVICE_ROLE_KEY: "mcp-transport-test-service-role",
     EVENT_MAINTENANCE_SWEEP_MS: "0",
@@ -131,11 +125,11 @@ try {
     assert.equal(response.status, 200);
     const metadata = await response.json();
     assert.equal(metadata.resource, `${baseUrl}/mcp`);
-    assert.deepEqual(metadata.authorization_servers, ["http://127.0.0.1:9/auth/v1"]);
+    assert.deepEqual(metadata.authorization_servers, [baseUrl]);
     assert.deepEqual(metadata.bearer_methods_supported, ["header"]);
   }
 
-  const unauthorized = await fetch(`${baseUrl}/mcp`, {
+  const anonymousInitialize = await fetch(`${baseUrl}/mcp`, {
     method: "POST",
     headers: {
       accept: "application/json, text/event-stream",
@@ -148,12 +142,8 @@ try {
       params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "unauthorized-probe", version: "1" } },
     }),
   });
-  assert.equal(unauthorized.status, 401);
-  const unauthorizedChallenge = unauthorized.headers.get("www-authenticate") || "";
-  assert.match(unauthorizedChallenge, new RegExp(`resource_metadata="${baseUrl.replaceAll(".", "\\.")}\\/\\.well-known\\/oauth-protected-resource\\/mcp"`));
-  assert.match(unauthorizedChallenge, /scope="email"/);
-  const unauthorizedBody = await unauthorized.json();
-  assert.deepEqual(unauthorizedBody?._meta?.["mcp/www_authenticate"], [unauthorizedChallenge]);
+  assert.equal(anonymousInitialize.status, 200,
+    "Mixed auth must allow anonymous initialization so ChatGPT can discover per-tool requirements.");
 
   client = new Client({ name: "mcp-tool-surface-regression", version: "1.0.0" });
   const transport = new StreamableHTTPClientTransport(new URL(`${baseUrl}/mcp`), {
@@ -179,11 +169,12 @@ try {
     assert.equal(actualNames.has(required), true, `MCP tools/list must expose ${required}`);
   }
 
-  const expectedSecuritySchemes = [{
-    type: "oauth2",
-    scopes: ["email"],
-  }];
   for (const descriptor of listed.tools) {
+    const expectedSecuritySchemes = descriptor.name === "ping"
+      ? [{ type: "noauth" }]
+      : safetyByName.get(descriptor.name) === TOOL_SAFETY.READ
+        ? [{ type: "oauth2", scopes: ["mcp:read"] }]
+        : [{ type: "oauth2", scopes: ["mcp:read", "mcp:write"] }];
     assert.deepEqual(normalizedSchemes(descriptor.securitySchemes), expectedSecuritySchemes,
       `${descriptor.name} must publish top-level OAuth securitySchemes on the raw tools/list wire response.`);
     assert.deepEqual(normalizedSchemes(descriptor._meta?.securitySchemes), expectedSecuritySchemes,
@@ -244,7 +235,7 @@ try {
 
 const oauthScheme = {
   type: "oauth2",
-  scopes: ["email"],
+  scopes: ["mcp:read", "mcp:write"],
 };
 const mixedChallenge = "Bearer resource_metadata=\"https://memphis-zoo-mcp.onrender.com/.well-known/oauth-protected-resource/mcp\", error=\"invalid_token\", error_description=\"Authentication is required.\"";
 const mixedServer = createMcpServer({
@@ -262,22 +253,30 @@ try {
   const mixedTools = await listToolsOnWire(mixedClient, "mixed MCP tools/list");
   assert.deepEqual(mixedTools.tools.map((tool) => tool.name).sort(), [...expectedNames].sort());
   for (const descriptor of mixedTools.tools) {
-    const expected = safetyByName.get(descriptor.name) === TOOL_SAFETY.READ
-      ? [{ type: "noauth" }, oauthScheme]
-      : [oauthScheme];
+    const expected = descriptor.name === "ping"
+      ? [{ type: "noauth" }]
+      : safetyByName.get(descriptor.name) === TOOL_SAFETY.READ
+        ? [{ type: "oauth2", scopes: ["mcp:read"] }]
+        : [oauthScheme];
     assert.deepEqual(normalizedSchemes(descriptor.securitySchemes), expected,
       `${descriptor.name} must publish its exact mixed-session top-level auth policy.`);
     assert.deepEqual(normalizedSchemes(descriptor._meta?.securitySchemes), expected,
       `${descriptor.name} must mirror its exact mixed-session auth policy in _meta.`);
   }
   const anonymousPing = await mixedClient.callTool({ name: "ping", arguments: {} });
-  assert.equal(anonymousPing.isError, undefined, "Manifest read tools must execute anonymously in mixed mode.");
+  assert.equal(anonymousPing.isError, undefined, "Ping must execute anonymously in mixed mode.");
+  const guardedRead = await mixedClient.callTool({
+    name: "server_tool_manifest",
+    arguments: { include_planned: false },
+  });
+  assert.equal(guardedRead.isError, true, "Manifest and adapter reads must require OAuth.");
+  assert.match(guardedRead._meta?.["mcp/www_authenticate"]?.[0] || "", /scope="mcp:read"/);
   const guardedMigration = await mixedClient.callTool({
     name: "supabase_migration_apply",
     arguments: { name: "anonymous_write_must_not_run", sql: "select 1;", dry_run: true },
   });
   assert.equal(guardedMigration.isError, true);
-  assert.deepEqual(guardedMigration._meta?.["mcp/www_authenticate"], [mixedChallenge]);
+  assert.match(guardedMigration._meta?.["mcp/www_authenticate"]?.[0] || "", /scope="mcp:read mcp:write"/);
 } finally {
   await mixedClient.close().catch(() => {});
   await mixedServer.close().catch(() => {});
@@ -297,14 +296,23 @@ try {
   await anonymousReadClient.connect(anonymousClientTransport);
   const anonymousTools = await listToolsOnWire(anonymousReadClient, "anonymous read-only MCP tools/list");
   assert.deepEqual(anonymousTools.tools.map((tool) => tool.name).sort(), [...expectedReadNames].sort());
-  for (const descriptor of anonymousTools.tools) {
-    assert.deepEqual(normalizedSchemes(descriptor.securitySchemes), [{ type: "noauth" }]);
-    assert.deepEqual(normalizedSchemes(descriptor._meta?.securitySchemes), [{ type: "noauth" }]);
+  const anonymousPingDescriptor = anonymousTools.tools.find((tool) => tool.name === "ping");
+  assert.deepEqual(normalizedSchemes(anonymousPingDescriptor.securitySchemes), [{ type: "noauth" }]);
+  assert.deepEqual(normalizedSchemes(anonymousPingDescriptor._meta?.securitySchemes), [{ type: "noauth" }]);
+  for (const descriptor of anonymousTools.tools.filter((tool) => tool.name !== "ping")) {
+    assert.deepEqual(normalizedSchemes(descriptor.securitySchemes), []);
+    assert.deepEqual(normalizedSchemes(descriptor._meta?.securitySchemes), []);
   }
+  const protectedAnonymousRead = await anonymousReadClient.callTool({
+    name: "server_tool_manifest",
+    arguments: { include_planned: false },
+  });
+  assert.equal(protectedAnonymousRead.isError, true,
+    "No compatibility setting may make manifest, GitHub, or Supabase reads publicly executable.");
   const searchAlias = currentManifest.find((tool) => tool.name === "github_search_files");
   assert.equal(searchAlias?.alias_tool, "github_list_directory");
   assert.equal(anonymousTools.tools.some((tool) => tool.name === searchAlias.alias_tool), true,
-    "Anonymous read-only discovery must expose the manifest's GitHub search compatibility tool.");
+    "Compatibility discovery must retain the manifest's GitHub search alias tool.");
 } finally {
   await anonymousReadClient.close().catch(() => {});
   await anonymousReadServer.close().catch(() => {});
@@ -313,6 +321,7 @@ try {
 console.log(JSON.stringify({
   ok: true,
   strict_authenticated_tool_count: expectedNames.length,
-  anonymous_read_tool_count: expectedReadNames.length,
+  anonymous_catalog_tool_count: expectedReadNames.length,
+  public_invocation: "ping_only",
   mixed_write_challenge: true,
 }));

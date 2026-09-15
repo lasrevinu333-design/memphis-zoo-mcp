@@ -1,77 +1,109 @@
 # ChatGPT access to Memphis Zoo MCP
 
-This is the controlled enablement runbook for giving a ChatGPT developer-mode app complete access to the existing Memphis Zoo MCP tool surface. Source changes alone do not enable access and do not change production.
+The Memphis Zoo backend is its own bounded OAuth 2.1 authorization server for
+the private ChatGPT developer-mode app. It does not require Supabase OAuth
+Server, a Supabase Auth user, another database migration, or another secret.
 
-## Architecture
+## Authority and key separation
 
-- ChatGPT connects to `https://memphis-zoo-mcp.onrender.com/mcp` over Streamable HTTP.
-- The MCP endpoint returns an RFC 9728 `WWW-Authenticate` challenge and exposes protected-resource metadata for the exact `https://memphis-zoo-mcp.onrender.com/mcp` resource.
-- Supabase Auth is the OAuth 2.1 authorization server. It owns PKCE, authorization codes, access and refresh tokens, client registration, and revocation.
-- The Render service hosts only the sign-in/consent UI and validates Supabase access tokens.
-- A token receives the full MCP tool surface only when its verified `iss`, `sub`, `client_id`, lifetime, scopes, and `aud`/`resource` binding match the configured contract.
-- Every advertised Streamable HTTP tool carries a top-level OAuth `securitySchemes` declaration and `_meta.securitySchemes` compatibility mirror; unauthenticated HTTP requests and guarded tool-error results carry the same `mcp/www_authenticate` challenge.
-- GitHub and Supabase adapter credentials remain server-side. ChatGPT never receives `MCP_CONNECTOR_TOKEN`, `GITHUB_TOKEN`, or `SUPABASE_SERVICE_ROLE_KEY`.
+- The exact protected resource is
+  `https://memphis-zoo-mcp.onrender.com/mcp`.
+- RFC 9728 protected-resource metadata points to the same Render origin as the
+  RFC 8414 authorization-server issuer.
+- The existing high-entropy `MCP_CONNECTOR_TOKEN` is input only to
+  purpose-separated HKDF-SHA256 keys for client registrations, authorization
+  requests, flow cookies, codes, access tokens, refresh tokens, identifiers,
+  password comparison, and rate-limit keys. The connector token is never sent
+  to ChatGPT or copied into a token.
+- The existing `MOXIE_WEB_PASSWORD` is the one operator login credential. A
+  constant-time derived comparison verifies it. It is never stored in a
+  browser cookie or returned to ChatGPT.
+- Authorization codes and refresh tokens use authenticated encryption plus a
+  separately derived outer HMAC. Access tokens are short-lived HS256 tokens
+  with a separately derived signing key.
 
-OAuth identity scopes do not authorize database or GitHub access. The exact user/client allowlists do. ChatGPT still applies its own confirmation behavior to write tools.
+This deliberately reuses two already-managed production secrets without using
+the same derived key for two purposes. Rotating `MCP_CONNECTOR_TOKEN` revokes
+all issued OAuth artifacts and legacy connector sessions at once, so rotation
+must remain an explicit coordinated recovery action.
 
-## Preconditions
+## Protocol contract
 
-Do not deploy or change Supabase Auth until the exact branch candidate has passed tests and a fresh independent web ChatGPT architecture/security/release audit.
+- Dynamic client registration is stateless and accepts only public clients
+  using `token_endpoint_auth_method=none`, authorization-code and refresh-token
+  grants, and PKCE S256. When ChatGPT omits the optional registration scope, the
+  client is registered for the server's bounded read/write scope set so a later
+  protected write can request authorization; an explicit read-only registration
+  remains read-only.
+- Registered redirects must be exact HTTPS ChatGPT callbacks: the stable
+  `https://chatgpt.com/connector_platform_oauth_redirect`, or
+  `https://chatgpt.com/connector/oauth/{callback_id}` with a bounded callback
+  identifier. Queries, fragments, embedded credentials, other origins, and
+  unbounded registration payloads are rejected.
+- The authorization request and token exchange must preserve the exact `/mcp`
+  resource, client ID, redirect URI, scope, and PKCE binding.
+- Every redirect-based authorization success or error includes the exact `iss`
+  parameter. The metadata advertises
+  `authorization_response_iss_parameter_supported=true`.
+- Access-token verification requires exact `iss`, `aud`, `sub`, `client_id`,
+  `exp`, `nbf`, `iat`, `scope`, signature, and client-registration validity.
+- Authorization codes are five minutes, access tokens ten minutes, rotating
+  refresh tokens thirty days, and stateless client registrations one year.
+- Codes and rotating refresh tokens have an in-process replay cache. Because
+  the design intentionally adds no persistent store, a process restart can
+  clear that defense before an otherwise valid artifact expires. Short
+  lifetimes, PKCE, exact resource/redirect binding, authenticated encryption,
+  and TLS bound that residual limitation.
 
-Before enablement, record:
+## Mixed authentication
 
-- reviewed Git commit and branch;
-- exact Render service origin;
-- exact Supabase project reference;
-- one dedicated Supabase Auth owner user UUID;
-- one pre-registered Supabase OAuth client UUID and its selected token endpoint authentication method;
-- ChatGPT's exact OAuth callback URI;
-- rollback owner and time window.
+Anonymous requests may initialize the MCP transport, list the full 17-tool
+catalog, and call only `ping`. Every other current tool is listed with an OAuth
+security scheme and challenges before its adapter can run:
 
-The default connector scope is `email`, which remains compatible with a Supabase project still using HS256. If `openid` is selected, first migrate the project to an asymmetric signing key and prove that JWKS returns its current public key; Supabase cannot issue OIDC ID tokens under HS256.
+- read tools require `mcp:read`;
+- safe writes, migrations, admin, and unclassified future tools require both
+  `mcp:read` and `mcp:write`;
+- every `tools/list` descriptor carries top-level `securitySchemes` and the
+  `_meta.securitySchemes` compatibility mirror;
+- every denied tool result carries `_meta["mcp/www_authenticate"]`;
+- an invalid presented HTTP credential receives `401` and the same canonical
+  `WWW-Authenticate` protected-resource link.
 
-## Enablement sequence
+The legacy `MCP_CONNECTOR_TOKEN` bearer/custom-header lane retains complete
+tool access, and legacy SSE remains connector-token-only. A wrong legacy custom
+header never falls through to OAuth.
 
-1. In the ChatGPT plugin/app management page, start creating the private MCP app for the Render `/mcp` URL. Record the exact callback URI and client-identification mode shown for this connection. Do not paste a static bearer token; OpenAI hosts do not support customer-provided API keys for this flow.
-2. In the Memphis Zoo Supabase project, enable **Authentication → OAuth Server**. This feature is currently beta and free on all Supabase plans. Set the project Site URL to the reviewed Render origin and the authorization path to `/oauth/consent`. Keep dynamic client registration disabled for this private, predefined-client integration.
-3. Create or invite exactly one dedicated owner in Supabase Auth. Complete its sign-in and record its user UUID. Do not put authorization in user-editable metadata.
-4. Register one Supabase OAuth client named for the ChatGPT Memphis Zoo MCP connection. Register the management page's callback URI as an exact HTTPS URI. Supabase's current metadata does not advertise RFC 9207 authorization-response issuer identification by default, so use the callback-ID-specific URI unless the live discovery document explicitly advertises support and every success/error redirect returns the exact `iss`. Use the exact public or confidential token endpoint method selected in the app management page; capture any client secret once without committing or logging it.
-5. Configure the ChatGPT app with that OAuth client ID and the selected token-endpoint method. Supply a client secret only when the management page selected a confidential-client method; a public client uses `none` and has no secret.
-6. Configure a Supabase Custom Access Token Hook for this exact OAuth `client_id`. For that client only, add `aud: "https://memphis-zoo-mcp.onrender.com/mcp"` (or an equivalent `resource` claim) and `scope: "email"`; preserve every original required claim. Return no custom audience or scope for other clients. Supabase invokes the hook for all token issuance, so the exact `client_id` condition is mandatory. The resource server deliberately rejects Supabase's default `aud: "authenticated"`, tokens not bound to this exact resource, and tokens missing a required scope.
-7. Add the following Render environment values without changing existing GitHub, Supabase service-role, manager, device, or connector-token secrets:
+## Initial connection
 
-   ```text
-   MCP_OAUTH_ENABLED=true
-   MCP_PUBLIC_URL=https://memphis-zoo-mcp.onrender.com
-   SUPABASE_PUBLISHABLE_KEY=<project publishable key>
-   MCP_OAUTH_COOKIE_SECRET=<new dedicated random value, at least 32 characters>
-   MCP_OAUTH_ALLOWED_SUBJECTS=<exact owner user UUID>
-   MCP_OAUTH_ALLOWED_CLIENT_IDS=<exact OAuth client UUID>
-   MCP_OAUTH_SCOPES=email
-   ```
+No infrastructure-console work is needed. In ChatGPT developer-mode app setup:
 
-8. Deploy only the reviewed commit. Do not merge unrelated work or rely on an automatic production deploy from another branch.
-9. Create one fresh app link and then start a fresh ChatGPT/Codex task so it re-reads the link ID, metadata, and tool registry. Complete the Supabase sign-in and explicit complete-access consent. Do not loop reconnects in a task holding an older link snapshot.
+1. Use `https://memphis-zoo-mcp.onrender.com/mcp`.
+2. Select mixed authentication with dynamic client registration.
+3. ChatGPT registers its constrained public client and starts PKCE.
+4. One unavoidable browser interaction opens the Memphis Zoo login page. Enter
+   the existing Moxie operator password, then separately press **Approve
+   access** on the consent page. A correct password never auto-approves.
+5. Refresh the app's tools after the first successful connection.
 
-## Acceptance gates
+The server auto-enables this provider when both existing credentials are
+present. `MCP_OAUTH_ENABLED=false` is an optional emergency disable switch;
+`MCP_OAUTH_ENABLED=true` makes missing or invalid prerequisites a startup
+error. `MCP_PUBLIC_URL` is an optional explicit origin override; Render's
+external origin is used when present, then the canonical production origin.
 
-All gates are required. HTTP 200 or a successful deployment alone is not acceptance.
+## Acceptance and rollback
 
-1. With the default strict setting, unauthenticated `/mcp` returns `401` with `WWW-Authenticate` pointing to the exact protected-resource metadata URL and the body carries the same `mcp/www_authenticate` value. If read-only noauth was explicitly enabled, missing credentials can initialize only the read/mixed surface, an invalid bearer still returns this `401`, and any anonymous write returns the same challenge as an MCP tool error without running its adapter.
-2. Both protected-resource metadata URLs return the exact Render `/mcp` resource, exact Supabase Auth issuer, header bearer method, and configured scopes.
-3. Supabase authorization-server discovery at `https://<project-ref>.supabase.co/.well-known/oauth-authorization-server/auth/v1` returns `200` and advertises `S256`. One bounded OAuth trace proves the exact `/mcp` `resource` value is sent on both authorization and token requests, survives the code exchange, and appears as the exact token `aud`/`resource` binding. The default `email`-only HS256 flow is validated through the Auth server; if `openid` is enabled, JWKS must also return the expected asymmetric public key.
-4. A wrong static connector header is rejected and never reaches OAuth validation.
-5. Decode one newly issued token without logging it and prove the exact issuer, allowlisted subject/client, `/mcp` audience/resource, numeric `exp`/optional `nbf`, and complete scope claim. Tokens with any mismatch are rejected before a tool runs.
-6. ChatGPT completes OAuth and lists every current tool in `mcp-tools.v3`, including GitHub safe-write tools and `supabase_migration_apply`; each listed tool contains matching top-level and `_meta` `securitySchemes`. If read-only noauth is enabled, every direct manifest read tool is callable before linking while write/migration tools remain OAuth-only.
-7. ChatGPT proves one GitHub read and one Supabase read against the intended allowlisted resources.
-8. ChatGPT proves write capability first with the existing dry-run/preview controls. Any real GitHub write or Supabase migration remains a separately reviewed action with exact target and rollback evidence.
+Run `npm run test:mcp-auth`. Acceptance requires the raw wire suite to prove
+discovery, constrained DCR, PKCE, password and consent separation, code
+exchange, refresh rotation, replay rejection, wrong password/redirect/resource
+rejection, per-tool metadata, runtime challenges, the exact 17-tool catalog,
+and preserved legacy-token access.
 
-Until gates 6–8 are observed in ChatGPT, report the connection as **unverified**, not ready.
+Deployment and HTTP success alone are not final acceptance. ChatGPT must then
+complete the operator login/consent, list all 17 tools, execute one protected
+GitHub read and one protected Supabase read, and demonstrate write authority
+only through existing dry-run/preview controls.
 
-## Rollback and revocation
-
-For a code/config rollback, set `MCP_OAUTH_ENABLED=false` and redeploy the prior reviewed commit. The legacy service-token and SSE lanes remain unchanged.
-
-For identity revocation, remove the subject or client ID from the Render allowlist, revoke the Supabase OAuth grant and the user's active session, and delete or disable the OAuth client. Supabase access-token lifetime should remain short because deleting a user alone is not a complete session-revocation procedure.
-
-Rotate a secret only if evidence shows it was exposed. Ordinary rollback does not require rotating the existing connector, GitHub, Supabase service-role, manager, or device secrets.
+Rollback is code/config only: set `MCP_OAUTH_ENABLED=false` or redeploy the
+previous reviewed commit. Do not rotate an existing secret merely to roll back.

@@ -1,6 +1,6 @@
 import { getGeminiDiagnostics } from "../utils/gemini-config.js";
 import { redactSecrets } from "../utils/redact-secrets.js";
-import { getMcpOAuthConfig } from "../auth/mcp-oauth.js";
+import { getSelfContainedMcpOAuthConfig } from "../auth/mcp-self-contained-oauth.js";
 
 function read(name, fallback = "") {
   return String(process.env[name] ?? fallback).trim();
@@ -21,7 +21,7 @@ export function getRuntimeEnv() {
   const githubRepo = read("GITHUB_REPO");
   const githubAllowedRepos = readCsv("GITHUB_ALLOWED_REPOS", githubRepo);
   const gemini = getGeminiDiagnostics({ preferred: ["MEMPHIS_GEMINI_API_KEY"], model: read("MEMPHIS_GEMINI_MODEL", read("GEMINI_MODEL", "gemini-2.5-flash")) });
-  const mcpOAuth = getMcpOAuthConfig(process.env);
+  const mcpOAuth = getSelfContainedMcpOAuthConfig(process.env);
 
   return {
     app: {
@@ -45,11 +45,10 @@ export function getRuntimeEnv() {
     mcp_oauth: {
       enabled: mcpOAuth.enabled,
       ready: mcpOAuth.ready,
+      provider: "self_contained",
       public_url_present: present("MCP_PUBLIC_URL"),
-      publishable_key_present: present("SUPABASE_PUBLISHABLE_KEY") || present("SUPABASE_ANON_KEY"),
-      cookie_secret_present: present("MCP_OAUTH_COOKIE_SECRET"),
-      allowed_subject_count: mcpOAuth.allowedSubjects.size,
-      allowed_client_count: mcpOAuth.allowedClientIds.size,
+      connector_root_key_present: present("MCP_CONNECTOR_TOKEN"),
+      operator_password_present: present("MOXIE_WEB_PASSWORD"),
       scopes: [...mcpOAuth.scopes],
       resource: mcpOAuth.resource || null,
     },
@@ -72,7 +71,7 @@ export function getRuntimeEnv() {
 
 export function validateRuntimeEnv({ strict = false } = {}) {
   const env = getRuntimeEnv();
-  const mcpOAuth = getMcpOAuthConfig(process.env);
+  const mcpOAuth = getSelfContainedMcpOAuthConfig(process.env);
   const warnings = [];
   const errors = [];
 

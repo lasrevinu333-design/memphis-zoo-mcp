@@ -23,11 +23,9 @@ import { assertServerAssignedActor, authenticatedManagerActor } from "./manager-
 import { authoritativeFeedbackPayload, makeFeedbackSubmitAuthority } from "./feedback-authority.js";
 import { isMcpReadOnlyNoAuthEnabled, makeMcpConnectorMiddleware } from "./auth/mcp-connector-auth.js";
 import {
-  assertMcpOAuthConfig,
-  buildMcpWwwAuthenticateChallenge,
-  createMcpOAuthRouter,
-  createMcpOAuthVerifier,
-} from "./auth/mcp-oauth.js";
+  buildMcpBearerChallenge,
+  createSelfContainedMcpOAuthService,
+} from "./auth/mcp-self-contained-oauth.js";
 import {
   getDeviceCredentialSecretReadiness,
   installDeviceCredentialRoutes,
@@ -80,14 +78,13 @@ app.use((req, res, next) => {
 // authenticated device can durably quarantine it.
 const generalJsonParser = express.json({ limit: "10mb" });
 app.use((req, res, next) => {
-  if (req.path === "/scan-api/rpc") return next();
+  if (req.path === "/scan-api/rpc" || req.path === "/oauth/register") return next();
   return generalJsonParser(req, res, next);
 });
 app.use(express.urlencoded({ extended: false, limit: "32kb" }));
-const mcpOAuthConfig = assertMcpOAuthConfig(process.env);
-const mcpOAuthVerifier = createMcpOAuthVerifier({ env: process.env });
+const selfContainedMcpOAuth = createSelfContainedMcpOAuthService();
 const mcpReadOnlyNoAuthEnabled = isMcpReadOnlyNoAuthEnabled(process.env);
-app.use(createMcpOAuthRouter({ env: process.env }));
+app.use(selfContainedMcpOAuth.router);
 
 const MOXIE_MOUNT_PATH = (String(process.env.MOXIE_PREFIX || "/moxie").trim() || "/moxie").replace(/\/+$/, "") || "/moxie";
 const MOXIE_STATIC_DIR = fileURLToPath(new URL("../public/moxie-assets/", import.meta.url));
@@ -209,15 +206,13 @@ function requireGuestMarketingReviewAuth(req, res, next) {
 
 const requireOpsManagerAuth = makeOpsAccessMiddleware({ trustedDeviceStore: opsTrustedDeviceStore });
 const requireOpsManagerWrite = makeOpsAccessMiddleware({ requireWrite: true, trustedDeviceStore: opsTrustedDeviceStore });
-// Streamable HTTP is strict by default. An explicit read-only-noauth setting
-// permits every manifest read tool; OAuth-capable mixed sessions advertise
-// writes but guard them until OAuth or the legacy service token is verified.
-// Legacy SSE remains service-token-only.
-const requireMcpAuth = makeMcpConnectorMiddleware({
-  oauthVerifier: mcpOAuthVerifier,
-  resourceMetadataUrl: mcpOAuthConfig.enabled ? mcpOAuthConfig.resourceMetadataUrl : null,
-  oauthChallenge: mcpOAuthConfig.enabled ? buildMcpWwwAuthenticateChallenge(mcpOAuthConfig) : null,
-});
+// When both existing operator credentials are configured, Streamable HTTP uses
+// standards-oriented mixed authentication: initialize/tools-list and safe
+// diagnostics are anonymous, while each protected tool enforces OAuth scopes.
+// The static connector token and legacy SSE lanes remain available.
+const requireMcpAuth = selfContainedMcpOAuth.enabled
+  ? selfContainedMcpOAuth.middleware
+  : makeMcpConnectorMiddleware();
 const requireLegacyMcpAuth = makeMcpConnectorMiddleware({
   allowFullNoAuth: false,
   allowReadOnlyNoAuth: false,
@@ -2253,12 +2248,12 @@ function createMcpServer({ readOnly = false, advertiseOAuth = false } = {}) {
     // available the same mixed tool list also advertises guarded writes so a
     // write attempt can trigger linking without ever executing anonymously.
     includePrivilegedTools: !readOnly || advertiseOAuth,
-    allowNoAuth: mcpReadOnlyNoAuthEnabled,
+    allowNoAuth: advertiseOAuth || mcpReadOnlyNoAuthEnabled,
     oauth: advertiseOAuth
       ? {
           enabled: true,
-          scopes: mcpOAuthConfig.scopes,
-          challenge: buildMcpWwwAuthenticateChallenge(mcpOAuthConfig),
+          scopes: selfContainedMcpOAuth.config.scopes,
+          challenge: buildMcpBearerChallenge(selfContainedMcpOAuth.config),
         }
       : { enabled: false },
   });
@@ -3086,7 +3081,7 @@ app.get("/mcp", requireMcpAuth, (_req, res) => { res.status(405).send("GET not s
 app.options("/mcp", (_req, res) => { res.sendStatus(200); });
 app.post("/mcp", requireMcpAuth, async (req, res) => {
   let server;
-  try { server = createMcpServer({ readOnly: Boolean(req.memphisMcpAuth?.read_only), advertiseOAuth: mcpOAuthConfig.enabled }); const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined }); res.on("close", () => { transport.close(); try { server.close(); } catch {} }); await server.connect(transport); await transport.handleRequest(req, res, req.body); }
+  try { server = createMcpServer({ readOnly: selfContainedMcpOAuth.enabled ? false : Boolean(req.memphisMcpAuth?.read_only), advertiseOAuth: selfContainedMcpOAuth.enabled }); const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined }); res.on("close", () => { transport.close(); try { server.close(); } catch {} }); await server.connect(transport); await transport.handleRequest(req, res, req.body); }
   catch (error) { console.error("MCP request failed:", error); if (!res.headersSent) { res.status(500).json({ jsonrpc: "2.0", error: { code: -32603, message: "Internal server error" }, id: null }); } }
 });
 const sseTransports = new Map();

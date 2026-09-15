@@ -225,19 +225,19 @@ assert.deepEqual(rejectedBody?._meta?.["mcp/www_authenticate"], [oauthChallenge]
 
 const indexSource = await readFile(new URL("../src/index.js", import.meta.url), "utf8");
 assert.match(indexSource, /function createMcpServer\(\{ readOnly = false, advertiseOAuth = false \} = \{\}\)/);
-assert.match(indexSource, /createMcpServer\(\{ readOnly: Boolean\(req\.memphisMcpAuth\?\.read_only\), advertiseOAuth: mcpOAuthConfig\.enabled \}\)/);
+assert.match(indexSource, /createSelfContainedMcpOAuthService\(\)/);
+assert.match(indexSource, /createMcpServer\(\{ readOnly: selfContainedMcpOAuth\.enabled \? false : Boolean\(req\.memphisMcpAuth\?\.read_only\), advertiseOAuth: selfContainedMcpOAuth\.enabled \}\)/);
 assert.match(indexSource, /includePrivilegedTools: !readOnly \|\| advertiseOAuth/);
-assert.match(indexSource, /allowNoAuth: mcpReadOnlyNoAuthEnabled/);
+assert.match(indexSource, /allowNoAuth: advertiseOAuth \|\| mcpReadOnlyNoAuthEnabled/);
 assert.match(indexSource, /makeMcpConnectorMiddleware\(\{\s*allowFullNoAuth: false,\s*allowReadOnlyNoAuth: false,\s*\}\)/);
-assert.match(indexSource, /oauthVerifier: mcpOAuthVerifier/);
-assert.match(indexSource, /buildMcpWwwAuthenticateChallenge\(mcpOAuthConfig\)/);
+assert.match(indexSource, /buildMcpBearerChallenge\(selfContainedMcpOAuth\.config\)/);
 
 const factorySource = await readFile(new URL("../src/mcp/create-mcp-server.js", import.meta.url), "utf8");
 assert.match(factorySource, /const includePrivilegedTools = options\.includePrivilegedTools \?\? options\.readOnly !== true/);
 assert.match(factorySource, /registerGithubTools\(server, \{ includeWrites: includePrivilegedTools \}\)/);
 assert.match(factorySource, /registerSupabaseTools\(server, \{ includeWrites: includePrivilegedTools \}\)/);
 assert.doesNotMatch(factorySource, /server_connection_diagnostic/,
-  "Anonymous tool discovery must not substitute a two-tool diagnostic server for manifest reads.");
+  "Mixed discovery must preserve the exact 17-tool catalog.");
 assert.doesNotMatch(indexSource + factorySource, /prototype\.tool\s*=/, "MCP registration must not depend on prototype interception.");
 
 console.log("MCP connector authentication tests passed.");
