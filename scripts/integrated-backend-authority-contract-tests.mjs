@@ -178,7 +178,7 @@ assert.match(populatedPreflightWorkflow, /release:populated-schema:preflight/);
 assert.match(releaseInput.cutover.phase_order[1], /exact observed production ledger head.*catalog\/privilege fingerprint.*zero target-position collisions/i);
 assert.match(releaseInput.cutover.phase_order[2], /fresh post-capture backup receipt.*exact pending-migration digest.*exact source attestation/i);
 assert.match(releaseInput.cutover.phase_order[3], /five exact ordered pending migrations.*global restore mutation fence.*restricted feedback reader.*Outlook event-sync authority adoption.*release-health identity projection correction.*messaging read-horizon\/idempotent-send repair.*ledger to advance exactly five entries.*do not replay historical production migrations/i);
-assert.match(releaseInput.cutover.phase_order[4], /refresh and publish the already-preserved immutable weighted-schedule draft.*expected-revision and idempotency guards.*do not create a competing draft.*preserve the current publication/i);
+assert.match(releaseInput.cutover.phase_order[4], /retain the current immutable weighted-schedule publication by default.*only when a named manager approves a replacement.*derive exactly one replacement draft from the current publication.*expected-revision and idempotency guards.*do not create a competing draft.*preserve the current publication/i);
 assert.equal(releaseInput.cutover.production_migration_state, "release/production-migration-state.json");
 assert.equal(productionMigrationState.artifact, "production-migration-state.v2");
 assert.equal(productionMigrationState.mode, "migration_required");
