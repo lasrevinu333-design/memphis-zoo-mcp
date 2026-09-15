@@ -17,7 +17,7 @@ const migrationNames = fs.readdirSync(migrationsDir).filter((name) => name.endsW
 const uncertainMigration = "20260813210000_custodial_u4_ops_closure.sql";
 const additiveMigration = "20260814224034_reconcile_static_weekly_day_change_receipts.sql";
 const oldHistoryCommit = "3900f7db34ba8ed9aa7a743db4a2dee112e82c4c";
-const image = process.env.SCHEMA_REBUILD_DOCKER_IMAGE || "supabase/postgres@sha256:80d7b27c3e8d77cfa7226eee9508671796da214781ff15a35b3670d7ad5ee453";
+const image = process.env.SCHEMA_REBUILD_DOCKER_IMAGE || "supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed";
 const docker = (args, options = {}) => execFileAsync("docker", args, { maxBuffer: 64 * 1024 * 1024, ...options });
 
 assert.equal(migrationNames.at(-1), additiveMigration, "the reconciliation migration must remain the terminal local migration during this focused proof");

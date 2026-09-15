@@ -37,14 +37,14 @@ jobs:
       - name: Verify exact release evidence freshness
         run: npm run --silent release:integrated-backend-authority:check
       - name: Pull exact disposable PostgreSQL test image
-        run: docker pull supabase/postgres@sha256:80d7b27c3e8d77cfa7226eee9508671796da214781ff15a35b3670d7ad5ee453
+        run: docker pull supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed
       - name: Record closure toolchain provenance
         shell: bash
         run: |
           set -euo pipefail
           printf '{"image_os":"%s","image_version":"%s","node":"%s","postgres_image":"%s"}\n' \
             "${ImageOS:-unknown}" "${ImageVersion:-unknown}" "$(node --version)" \
-            "$(docker image inspect supabase/postgres@sha256:80d7b27c3e8d77cfa7226eee9508671796da214781ff15a35b3670d7ad5ee453 --format '{{.Id}}')" \
+            "$(docker image inspect supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed --format '{{.Id}}')" \
             > closure-toolchain-provenance.json
       - name: Authentication and integration contracts
         run: |

@@ -96,7 +96,7 @@ try {
   assert.equal(draft.effectiveStart, packet.effectiveDate, "a cached draft must target the packet effective date");
   assert.equal(draft.document?.authority?.baselineInputDigest, packet.sourceDigest, "a cached draft must bind the exact verified source packet");
 
-  const postgresImage = process.env.SCHEMA_REBUILD_DOCKER_IMAGE || "supabase/postgres@sha256:80d7b27c3e8d77cfa7226eee9508671796da214781ff15a35b3670d7ad5ee453";
+  const postgresImage = process.env.SCHEMA_REBUILD_DOCKER_IMAGE || "supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed";
   await docker(["image", "inspect", postgresImage]);
   const databaseStorage = databaseMemoryMb > 0
     ? ["--mount", `type=volume,source=${dataVolume},target=/var/lib/postgresql/data`]

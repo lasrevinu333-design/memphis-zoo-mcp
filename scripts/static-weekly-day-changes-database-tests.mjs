@@ -17,7 +17,7 @@ const execFileAsync = promisify(execFile);
 const container = `mz_static_weekly_day_changes_${process.pid}`;
 const migrationsDir = path.resolve(process.cwd(), "supabase/migrations");
 const migrations = fs.readdirSync(migrationsDir).filter((name) => name.endsWith(".sql")).sort().map((name) => path.join(migrationsDir, name));
-const image = process.env.SCHEMA_REBUILD_DOCKER_IMAGE || "supabase/postgres@sha256:80d7b27c3e8d77cfa7226eee9508671796da214781ff15a35b3670d7ad5ee453";
+const image = process.env.SCHEMA_REBUILD_DOCKER_IMAGE || "supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed";
 const actor = { manager_id: "10000000-0000-4000-8000-000000000061", manager_display_name: "Batch Manager" };
 const publicationId = "70000000-0000-4000-8000-000000000061";
 const versionId = "60000000-0000-4000-8000-000000000061";

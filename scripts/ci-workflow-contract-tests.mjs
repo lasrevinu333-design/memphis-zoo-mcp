@@ -17,6 +17,23 @@ const approvedActions = new Map([
 const workflowNames = readdirSync(workflowDirectory)
   .filter((name) => /\.ya?ml$/.test(name))
   .sort();
+const rehearsalPostgresImage = "supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed";
+const postgresPinSources = [
+  ...workflowNames.map((name) => resolve(workflowDirectory, name)),
+  ...readdirSync(resolve(root, "scripts"))
+    .filter((name) => name.endsWith(".mjs"))
+    .map((name) => resolve(root, "scripts", name)),
+];
+const postgresImagePins = postgresPinSources.flatMap((path) =>
+  [...readFileSync(path, "utf8").matchAll(/supabase\/postgres@sha256:[0-9a-f]{64}/g)]
+    .map((match) => match[0]),
+);
+assert.ok(postgresImagePins.length > 0, "the repository must retain an immutable rehearsal PostgreSQL image pin");
+assert.deepEqual(
+  [...new Set(postgresImagePins)],
+  [rehearsalPostgresImage],
+  "every backup, rehearsal, and disposable database path must use the extension-compatible PostgreSQL image",
+);
 
 function workflowJobs(source) {
   const jobsStart = source.indexOf("\njobs:\n");
@@ -108,13 +125,13 @@ assert.match(schedulerGate, /^on:\n\s+pull_request:\s*\n\s+push:\s*$/m, "the sch
 assert.doesNotMatch(schedulerGate, /(?:paths|paths-ignore):/i, "the scheduler authority gate may not skip scheduler source changes by path filtering");
 assert.match(schedulerGate, /npm run --silent test:static-weekly-scheduler:fast/, "the scheduler gate must retain portable/compiler/control-plane contracts");
 assert.match(schedulerGate, /npm run --silent test:static-weekly-scheduler:database/, "the scheduler gate must run the disposable database authority and independent-session concurrency suites");
-assert.match(schedulerGate, /docker pull supabase\/postgres@sha256:80d7b27c3e8d77cfa7226eee9508671796da214781ff15a35b3670d7ad5ee453[\s\S]*npm run --silent test:static-weekly-scheduler:database/, "the scheduler gate must provision its digest-pinned disposable PostgreSQL image before database suites run");
+assert.match(schedulerGate, /docker pull supabase\/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed[\s\S]*npm run --silent test:static-weekly-scheduler:database/, "the scheduler gate must provision its digest-pinned disposable PostgreSQL image before database suites run");
 assert.match(schedulerGate, /closure-toolchain-provenance\.json[\s\S]*actions\/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a/, "the scheduler gate must persist hosted-runner and database image provenance");
 assert.match(schedulerGate, /npm run --silent test:integrated-backend-authority-suite-order/, "the scheduler gate must run both integrated suite orders on isolated clean databases");
 assert.match(schedulerGate, /npm run --silent test:integrated-backend-authority-release-provenance/, "the scheduler gate must run integrated backend release-provenance contracts on pull requests and pushes");
 assert.match(schedulerGate, /npm run --silent test:final-closure-database-isolated/, "the universal foundation gate must run the final closure database attacks on a clean disposable database");
 assertExactCommandsInJob(schedulerGate, "validate", [
-  "docker pull supabase/postgres@sha256:80d7b27c3e8d77cfa7226eee9508671796da214781ff15a35b3670d7ad5ee453",
+  "docker pull supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed",
   "npm run --silent test:static-weekly-scheduler:fast",
   "npm run --silent test:static-weekly-scheduler:database",
   "npm run --silent test:integrated-backend-authority-suite-order",
@@ -225,12 +242,12 @@ assert.match(productionBackupRehearsal,
 const workflowFixture = (commands) => `name: fixture\njobs:\n  validate:\n    steps:\n      - run: |\n${commands.map((command) => `          ${command}`).join("\n")}\n`;
 assert.doesNotThrow(() => assertExactCommandsInJob(
   workflowFixture([
-    "docker pull supabase/postgres@sha256:80d7b27c3e8d77cfa7226eee9508671796da214781ff15a35b3670d7ad5ee453",
+    "docker pull supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed",
     "npm run --silent test:integrated-backend-authority-release-provenance",
   ]),
   "validate",
   [
-    "docker pull supabase/postgres@sha256:80d7b27c3e8d77cfa7226eee9508671796da214781ff15a35b3670d7ad5ee453",
+    "docker pull supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed",
     "npm run --silent test:integrated-backend-authority-release-provenance",
   ],
   "fixture.yml:validate",

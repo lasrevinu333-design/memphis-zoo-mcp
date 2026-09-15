@@ -10,7 +10,7 @@ import { SCHEMA_CATALOG_QUERIES } from "./schema-fingerprint-catalog.mjs";
 
 const execFileAsync = promisify(execFile);
 const image = process.env.SCHEMA_REBUILD_DOCKER_IMAGE
-  || "supabase/postgres@sha256:80d7b27c3e8d77cfa7226eee9508671796da214781ff15a35b3670d7ad5ee453";
+  || "supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed";
 const container = `mz_read_authority_${process.pid}`;
 const migration = await readFile(new URL(
   "../supabase/migrations/20260820133000_create_application_read_authority.sql",
