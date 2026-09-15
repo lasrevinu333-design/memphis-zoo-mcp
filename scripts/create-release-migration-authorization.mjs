@@ -13,6 +13,13 @@ import {
 } from "./disaster-recovery-crypto.mjs";
 import { materializeVerifiedArchive } from "./disaster-recovery-archive.mjs";
 import { parseJsonValueStream } from "./json-value-stream.mjs";
+import {
+  TASK_LOCAL_PROVENANCE_KIND,
+  TASK_LOCAL_RUNNER_PATH,
+  githubAuthorizationFields,
+  taskLocalAuthorizationFields,
+  validateRehearsalAttestationProvenance,
+} from "./release-migration-rehearsal-provenance.mjs";
 
 const root = resolve(new URL("..", import.meta.url).pathname);
 const state = JSON.parse(readFileSync(resolve(root, "release/production-migration-state.json"), "utf8"));
@@ -76,6 +83,16 @@ if (rehearsalAttestationEnvelope?.format !== "memphis-zoo-release-migration-rehe
     || !verifyBinding(releaseMigrationRehearsalAttestationBinding(rehearsalAttestation), rehearsalAttestationEnvelope?.signature, rehearsalAttestationVerifyKey)) {
   throw new Error("Release migration rehearsal attestation signature verification failed.");
 }
+if (!rehearsal) throw new Error("Release migration rehearsal receipt has no successful result.");
+const rehearsalResultSha256 = sha256(stableJson(rehearsal));
+const taskLocalRunnerSha256 = await sha256File(resolve(root, TASK_LOCAL_RUNNER_PATH));
+const rehearsalProvenanceKind = validateRehearsalAttestationProvenance(rehearsalAttestation, {
+  candidateCommit,
+  candidateTree,
+  archiveDigest,
+  resultSha256: rehearsalResultSha256,
+  runnerSha256: taskLocalRunnerSha256,
+});
 const plan = state.pending_migrations.map(({ order, source_migration_version, file, sha256: digest }) => ({ order, source_migration_version, file, sha256: digest }));
 const planSha256 = sha256(stableJson(plan));
 const backupCompletedAt = Date.parse(String(summary.completed_at || ""));
@@ -102,15 +119,20 @@ if (summary.format !== "memphis-zoo-disaster-recovery.v4" || summary.ok !== true
     || Number(rehearsal?.target_migration_count) !== Number(state.target.production_ledger_count)
     || Number(rehearsal?.active_mutation_leases) !== 0 || Number(rehearsal?.expired_mutation_leases) !== 0
     || rehearsal?.authority_health !== true || rehearsal?.direct_dml_denied !== true
+    || Number(rehearsal?.live_production_reads) !== 0
     || rehearsalAttestation.receipt_sha256 !== sha256(receiptBytes)
-    || rehearsalAttestation.result_sha256 !== sha256(stableJson(rehearsal))
+    || rehearsalAttestation.result_sha256 !== rehearsalResultSha256
     || rehearsalAttestation.result_completed_at !== rehearsal?.completed_at
     || rehearsalAttestation.backup_run_id !== String(rehearsal?.backup_run_id)
-    || rehearsalAttestation.repository !== "lasrevinu333-design/memphis-zoo-mcp"
-    || !String(rehearsalAttestation.workflow_ref || "").startsWith("lasrevinu333-design/memphis-zoo-mcp/.github/workflows/production-backup-migration-rehearsal.yml@")
-    || rehearsalAttestation.workflow_sha !== candidateCommit
-    || !/^[1-9][0-9]*$/.test(String(rehearsalAttestation.run_id || ""))
-    || !/^[1-9][0-9]*$/.test(String(rehearsalAttestation.run_attempt || ""))) {
+    || (rehearsalProvenanceKind === TASK_LOCAL_PROVENANCE_KIND && (
+      rehearsal?.provenance_kind !== TASK_LOCAL_PROVENANCE_KIND
+      || rehearsal?.local_execution_id !== rehearsalAttestation.local_execution_id
+      || rehearsal?.source_commit !== rehearsalAttestation.candidate_commit
+      || rehearsal?.source_tree !== rehearsalAttestation.candidate_tree
+      || rehearsal?.archive_digest !== rehearsalAttestation.archive_digest
+      || rehearsal?.archive_local_only !== true
+      || Number(rehearsal?.external_uploads) !== 0
+    ))) {
   throw new Error("Backup and rehearsal evidence do not bind the exact candidate, source state, target state, and zero-lease recovery result.");
 }
 if (![backupCompletedAt, rehearsalCompletedAt, rehearsalAttestedAt, observedAt].every(Number.isFinite)
@@ -146,11 +168,9 @@ const intent = {
     attestation_key_id: rehearsalAttestationVerifyKeyId,
     completed_at: rehearsal.completed_at,
     backup_run_id: String(rehearsal.backup_run_id),
-    repository: rehearsalAttestation.repository,
-    workflow_ref: rehearsalAttestation.workflow_ref,
-    workflow_sha: rehearsalAttestation.workflow_sha,
-    run_id: rehearsalAttestation.run_id,
-    run_attempt: rehearsalAttestation.run_attempt,
+    ...(rehearsalProvenanceKind === TASK_LOCAL_PROVENANCE_KIND
+      ? taskLocalAuthorizationFields(rehearsalAttestation)
+      : githubAuthorizationFields(rehearsalAttestation)),
     active_mutation_leases: 0,
     expired_mutation_leases: 0,
   },

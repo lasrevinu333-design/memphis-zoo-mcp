@@ -12,6 +12,11 @@ import {
   verifyBinding,
 } from "./disaster-recovery-crypto.mjs";
 import { captureSchemaCatalog, fingerprintSchemaCatalog } from "./schema-fingerprint-catalog.mjs";
+import {
+  TASK_LOCAL_PROVENANCE_KIND,
+  TASK_LOCAL_RUNNER_PATH,
+  validateAuthorizationRehearsalProvenance,
+} from "./release-migration-rehearsal-provenance.mjs";
 
 const { Client } = pg;
 const root = resolve(new URL("..", import.meta.url).pathname);
@@ -85,6 +90,7 @@ const expectedSourceCatalogFingerprint = testSourceCatalogFingerprint || state.o
 const expectedSourceCatalogCounts = testSourceCatalogCounts || state.observed_production.catalog_counts;
 let sourceLedgerSha256 = String(process.env.RELEASE_MIGRATION_SOURCE_LEDGER_SHA256 || "").trim();
 let authorizationId = null;
+let authorizationProvenanceKind = rehearsal ? "isolated-rehearsal" : null;
 if (rehearsal) {
   if (!allowFailureProbe || !/^[0-9a-f]{64}$/.test(sourceLedgerSha256)) {
     throw new Error("Release migration rehearsal is restricted to a disposable loopback database and requires the exact signed source ledger digest.");
@@ -99,10 +105,20 @@ if (rehearsal) {
     throw new Error("Release migration authorization signature verification failed.");
   }
   const intent = envelope.intent || {};
+  const rehearsalProvenanceKind = validateAuthorizationRehearsalProvenance(intent.rehearsal, {
+    candidateCommit,
+    candidateTree,
+    archiveDigest: intent.backup?.archive_digest,
+    resultSha256: intent.rehearsal?.result_sha256,
+    runnerSha256: sha256(readFileSync(resolve(root, TASK_LOCAL_RUNNER_PATH))),
+  });
   const expiresAt = Date.parse(String(intent.expires_at || ""));
   const approvedAt = Date.parse(String(intent.approved_at || ""));
   const backupCompletedAt = Date.parse(String(intent.backup?.completed_at || ""));
   const rehearsalCompletedAt = Date.parse(String(intent.rehearsal?.completed_at || ""));
+  const rehearsalAttestedAt = rehearsalProvenanceKind === TASK_LOCAL_PROVENANCE_KIND
+    ? Date.parse(String(intent.rehearsal?.attested_at || ""))
+    : rehearsalCompletedAt;
   const observedProductionAt = Date.parse(String(state.observed_production.captured_at || ""));
   if (!/^[0-9a-f-]{36}$/i.test(String(intent.authorization_id || ""))
       || intent.project_ref !== projectRef || intent.candidate_commit !== candidateCommit || intent.candidate_tree !== candidateTree
@@ -114,26 +130,25 @@ if (rehearsal) {
       || intent.target_catalog_fingerprint !== state.target.canonical_source_schema_fingerprint
       || intent.target_migration_head !== state.target.source_migration_version
       || Number(intent.target_migration_count) !== Number(state.target.production_ledger_count)
+      || intent.actor !== actor
       || intent.backup?.source_commit !== candidateCommit || intent.backup?.source_tree !== candidateTree
       || !/^[0-9a-f]{64}$/.test(String(intent.backup?.archive_digest || ""))
       || !/^[0-9a-f]{64}$/.test(String(intent.rehearsal?.receipt_sha256 || ""))
       || !/^[0-9a-f]{64}$/.test(String(intent.rehearsal?.attestation_sha256 || ""))
       || !/^[a-zA-Z0-9._:-]{1,120}$/.test(String(intent.rehearsal?.attestation_key_id || ""))
-      || intent.rehearsal?.repository !== "lasrevinu333-design/memphis-zoo-mcp"
-      || !String(intent.rehearsal?.workflow_ref || "").startsWith("lasrevinu333-design/memphis-zoo-mcp/.github/workflows/production-backup-migration-rehearsal.yml@")
-      || intent.rehearsal?.workflow_sha !== candidateCommit
-      || !/^[1-9][0-9]*$/.test(String(intent.rehearsal?.run_id || ""))
-      || !/^[1-9][0-9]*$/.test(String(intent.rehearsal?.run_attempt || ""))
       || Number(intent.rehearsal?.active_mutation_leases) !== 0 || Number(intent.rehearsal?.expired_mutation_leases) !== 0
       || !Number.isFinite(expiresAt) || expiresAt <= Date.now() || expiresAt > Date.now() + 24 * 60 * 60 * 1000
       || !Number.isFinite(approvedAt) || approvedAt < rehearsalCompletedAt || approvedAt > Date.now()
-      || !Number.isFinite(backupCompletedAt) || !Number.isFinite(rehearsalCompletedAt) || !Number.isFinite(observedProductionAt)
+      || !Number.isFinite(backupCompletedAt) || !Number.isFinite(rehearsalCompletedAt)
+      || !Number.isFinite(rehearsalAttestedAt) || !Number.isFinite(observedProductionAt)
       || backupCompletedAt < observedProductionAt || rehearsalCompletedAt < backupCompletedAt
+      || rehearsalAttestedAt < rehearsalCompletedAt || rehearsalAttestedAt > approvedAt
       || Date.now() - rehearsalCompletedAt > 24 * 60 * 60 * 1000) {
     throw new Error("Release migration authorization is stale or does not bind the exact candidate, backup, rehearsal, source, and target identities.");
   }
   sourceLedgerSha256 = intent.source_migration_ledger_sha256;
   authorizationId = intent.authorization_id;
+  authorizationProvenanceKind = rehearsalProvenanceKind;
 }
 const failAfterOrder = Number(process.env.RELEASE_MIGRATION_TEST_FAIL_AFTER_ORDER || 0);
 const db = new Client({
@@ -229,6 +244,7 @@ try {
     project_ref: projectRef,
     actor,
     authorization_id: authorizationId,
+    authorization_provenance_kind: authorizationProvenanceKind,
     rehearsal,
     candidate_commit: candidateCommit,
     candidate_tree: candidateTree,

@@ -180,6 +180,12 @@ assert.match(releaseInput.cutover.phase_order[2], /fresh post-capture backup rec
 assert.match(releaseInput.cutover.phase_order[3], /five exact ordered pending migrations.*global restore mutation fence.*restricted feedback reader.*Outlook event-sync authority adoption.*release-health identity projection correction.*messaging read-horizon\/idempotent-send repair.*ledger to advance exactly five entries.*do not replay historical production migrations/i);
 assert.match(releaseInput.cutover.phase_order[4], /retain the current immutable weighted-schedule publication by default.*only when a named manager approves a replacement.*derive exactly one replacement draft from the current publication.*expected-revision and idempotency guards.*do not create a competing draft.*preserve the current publication/i);
 assert.equal(releaseInput.cutover.production_migration_state, "release/production-migration-state.json");
+assert.match(releaseInput.cutover.production_migration_evidence.github_actions,
+  /repository.*workflow ref.*workflow commit.*run ID.*run-attempt.*cannot contain task-local fields/i);
+assert.match(releaseInput.cutover.production_migration_evidence.task_local,
+  /host networking.*db\.rqquvtjdmugpigbndmne\.supabase\.co.*verify-full.*encrypted archive stays local.*same isolated restore.*five-migration.*runtime.*write.*replay.*cleanup/i);
+assert.match(releaseInput.cutover.production_migration_evidence.authorization_and_apply,
+  /archive.*receipt\/result.*candidate commit\/tree.*runner.*signer IDs.*source\/target migration and catalog.*zero leases.*timestamps.*dedicated ephemeral verification key.*never the archive or rehearsal.*sanitized result and receipt hashes/i);
 assert.equal(productionMigrationState.artifact, "production-migration-state.v2");
 assert.equal(productionMigrationState.mode, "migration_required");
 assert.equal(productionMigrationState.project_ref, "rqquvtjdmugpigbndmne");

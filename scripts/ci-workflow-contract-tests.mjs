@@ -130,6 +130,8 @@ assert.match(schedulerGate, /closure-toolchain-provenance\.json[\s\S]*actions\/u
 assert.match(schedulerGate, /npm run --silent test:integrated-backend-authority-suite-order/, "the scheduler gate must run both integrated suite orders on isolated clean databases");
 assert.match(schedulerGate, /npm run --silent test:integrated-backend-authority-release-provenance/, "the scheduler gate must run integrated backend release-provenance contracts on pull requests and pushes");
 assert.match(schedulerGate, /npm run --silent test:final-closure-database-isolated/, "the universal foundation gate must run the final closure database attacks on a clean disposable database");
+assert.match(schedulerGate, /npm run --silent test:release-migration-authorization[\s\S]*npm run --silent test:release-migration-plan-db-isolated/,
+  "the universal foundation gate must run both release migration provenance modes and their disposable atomic database plan");
 assert.match(schedulerGate, /npm run --silent test:isolated-restore-lease-shim/, "the universal foundation gate must retain pre-migration isolated restore compatibility coverage");
 assertExactCommandsInJob(schedulerGate, "validate", [
   "docker pull supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed",
@@ -139,10 +141,15 @@ assertExactCommandsInJob(schedulerGate, "validate", [
   "npm run --silent test:integrated-backend-authority-release-provenance",
   "npm run --silent test:final-closure-database-isolated",
   "npm run --silent test:ci-workflows",
+  "npm run --silent test:release-migration-authorization",
+  "npm run --silent test:release-migration-plan-db-isolated",
 ], "foundation-security-gate.yml:validate");
 assert.match(packageManifest, /"test:static-weekly-scheduler:database":\s*"[^"]*static-weekly-schedule-authority-v3-tests\.mjs[^"]*static-weekly-schedule-concurrency-tests\.mjs/, "the database scheduler command must include v3 authority and independent-session concurrency coverage");
 assert.match(packageManifest, /"test:integrated-backend-authority-suite-order":\s*"node scripts\/integrated-backend-authority-suite-order-isolated-tests\.mjs"/, "the integrated suite-order command must own isolated database setup for both orders");
 assert.match(packageManifest, /"test:final-closure-database-isolated":\s*"node scripts\/final-closure-database-isolated-tests\.mjs"/, "the final closure database command must own its clean disposable database");
+assert.equal(parsedPackageManifest.scripts["test:release-migration-plan-db-isolated"],
+  "bash scripts/release-migration-plan-database-isolated-tests.sh",
+  "the release migration database regression must own one disposable database container");
 const releaseGate = readFileSync(resolve(workflowDirectory, "integrated-release-attestation.yml"), "utf8");
 assert.match(releaseGate, /test:integrated-backend-authority-cutover:database/,
   "the manual signed release gate must invoke the database-enabled cutover checker");
@@ -164,6 +171,10 @@ assert.match(populatedSchemaPreflight, /test -n "\$SCHEMA_FINGERPRINT_MCP_URL"/,
 assert.match(populatedSchemaPreflight, /set -euo pipefail[\s\S]*release:populated-schema:preflight \| tee[\s\S]*test -s \/tmp\/custodial-populated-schema-preflight\.json/,
   "the production schema preflight must preserve command failure and require a non-empty receipt");
 const productionBackupRehearsal = readFileSync(resolve(workflowDirectory, "production-backup-migration-rehearsal.yml"), "utf8");
+const localProductionBackupRehearsal = readFileSync(resolve(root, "scripts/run-production-backup-migration-rehearsal.sh"), "utf8");
+const build52ProductionMigrationApply = readFileSync(resolve(workflowDirectory, "build52-production-migration-apply.yml"), "utf8");
+const productionBackupSource = readFileSync(resolve(root, "scripts/production-backup.mjs"), "utf8");
+const productionBackupPgDumpCommand = readFileSync(resolve(root, "scripts/production-backup-pg-dump-command.mjs"), "utf8");
 const isolatedRehearsalBackendDependencies = readFileSync(resolve(root, "scripts/verify-isolated-rehearsal-backend-dependencies.sh"), "utf8");
 const rehearsalJsonEndpointWaiter = readFileSync(resolve(root, "scripts/wait-rehearsal-json-endpoint.sh"), "utf8");
 const productionSourceRoleCatalog = readFileSync(resolve(root, "supabase/canonical/production-source-role-catalog.sql"), "utf8");
@@ -287,6 +298,58 @@ assert.match(productionBackupRehearsal, /set role service_role; truncate public\
 assert.match(productionBackupRehearsal,
   /RELEASE_REHEARSAL_ATTESTATION_SIGNING_KEY:[\s\S]*release:migrations:attest-rehearsal[\s\S]*production-backup-migration-rehearsal-attestation\.json/,
   "the exact successful rehearsal receipt must be independently signed and retained with GitHub run provenance");
+assert.equal(parsedPackageManifest.scripts["release:migrations:rehearse-local"],
+  "bash scripts/run-production-backup-migration-rehearsal.sh",
+  "the task-local rehearsal must have one maintained package entry point");
+for (const required of [
+  /RESTORE_DATABASE_ONLY=true[\s\S]*release:observed-production-schema:preflight[\s\S]*release:migrations:apply[\s\S]*release:target-schema:preflight/,
+  /test:feedback-reader-database[\s\S]*npm start[\s\S]*feedback_first_http_status[\s\S]*feedback_replay_http_status/,
+  /active_mutation_leases[\s\S]*expired_mutation_leases[\s\S]*authority_health[\s\S]*direct_dml_denied/,
+  /release:migrations:attest-rehearsal/,
+]) {
+  assert.match(localProductionBackupRehearsal, required,
+    "the task-local runner must preserve the complete isolated restore/migrate/runtime/write/replay attestation path");
+}
+assert.match(localProductionBackupRehearsal,
+  /git rev-parse HEAD[\s\S]*git rev-parse 'HEAD\^\{tree\}'[\s\S]*git status --porcelain/,
+  "the task-local rehearsal must bind a clean exact candidate commit and tree before reading its archive");
+assert.match(localProductionBackupRehearsal,
+  /provenance_kind.*task-local[\s\S]*local_execution_id[\s\S]*archive_local_only.*true[\s\S]*external_uploads.*0/,
+  "the local receipt must truthfully distinguish local-only evidence from GitHub provenance");
+assert.match(localProductionBackupRehearsal,
+  /cleanup\(\)[\s\S]*docker rm -f[\s\S]*memphis-build52-rehearsal\.\*[\s\S]*trap cleanup EXIT INT TERM/,
+  "the local rehearsal must own and clean its processes, containers, and decrypted temporary archive");
+assert.match(localProductionBackupRehearsal,
+  /umask 077[\s\S]*Refusing to overwrite rehearsal output/,
+  "the task-local rehearsal must create private evidence and refuse duplicate-run output replacement");
+assert.doesNotMatch(localProductionBackupRehearsal, /gh\s+(?:api|run|workflow)|actions\/upload-artifact|api\.github\.com\/.*artifacts/i,
+  "the local rehearsal runner must not contain an external upload path");
+assert.match(build52ProductionMigrationApply,
+  /evidence_mode:[\s\S]*github-actions[\s\S]*task-local/,
+  "the production migration workflow must require an explicit evidence mode");
+assert.equal((build52ProductionMigrationApply.match(/if: inputs\.evidence_mode == 'github-actions'/g) || []).length, 2,
+  "only GitHub evidence mode may download the two private artifacts");
+assert.match(build52ProductionMigrationApply,
+  /BUILD52_TASK_LOCAL_RELEASE_MIGRATION_AUTHORIZATION_JSON[\s\S]*authorization_sha256[\s\S]*provenance_kind == "task-local"/,
+  "task-local evidence mode must consume only a hash-bound short-lived authorization secret");
+const productionMigrationArtifactUpload = build52ProductionMigrationApply.slice(
+  build52ProductionMigrationApply.lastIndexOf("- uses: actions/upload-artifact"),
+);
+assert.doesNotMatch(productionMigrationArtifactUpload, /build52-production-migration-authorization\.json/,
+  "the short-lived production authorization must never be uploaded as an artifact");
+assert.match(build52ProductionMigrationApply,
+  /BUILD52_TASK_LOCAL_RELEASE_MIGRATION_AUTHORIZATION_VERIFY_KEY[\s\S]*BUILD52_TASK_LOCAL_RELEASE_MIGRATION_AUTHORIZATION_VERIFY_KEY_ID/,
+  "task-local apply must use dedicated ephemeral verification authority without overwriting the established GitHub evidence signer");
+assert.match(productionBackupSource, /BACKUP_PG_DUMP_NETWORK_HOST[\s\S]*productionBackupPgDumpDockerArgs/,
+  "the backup source must route Docker network selection through its tested argument builder");
+assert.match(productionBackupPgDumpCommand,
+  /TASK_LOCAL_PRODUCTION_DATABASE_HOST = "db\.rqquvtjdmugpigbndmne\.supabase\.co"/,
+  "host networking must retain the certificate-valid production hostname instead of an IPv6 literal");
+assert.match(productionBackupPgDumpCommand,
+  /networkHost && \(executionMode !== "task-local" \|\| normalizedHost !== TASK_LOCAL_PRODUCTION_DATABASE_HOST\)[\s\S]*PGSSLMODE=verify-full[\s\S]*PGSSLROOTCERT=\/cert\/prod-ca\.crt/s,
+  "Docker host networking must remain limited to task-local access for the exact verified-TLS production hostname");
+assert.match(parsedPackageManifest.scripts["test:ci-workflows"], /production-backup-pg-dump-command-tests\.mjs/,
+  "the Foundation workflow contract suite must execute the focused pg_dump argument test");
 
 const workflowFixture = (commands) => `name: fixture\njobs:\n  validate:\n    steps:\n      - run: |\n${commands.map((command) => `          ${command}`).join("\n")}\n`;
 assert.doesNotThrow(() => assertExactCommandsInJob(

@@ -30,6 +30,7 @@ import {
   storageOwnerPrincipalId,
   validateV4StorageArchiveObjects,
 } from "./disaster-recovery-storage.mjs";
+import { productionBackupPgDumpDockerArgs } from "./production-backup-pg-dump-command.mjs";
 
 const { Client } = pg;
 const execFileAsync = promisify(execFile);
@@ -50,6 +51,14 @@ const applicationSchemaPath = join(backupDir, "inventory", "application-schema.s
 const pgDumpImage = String(process.env.BACKUP_PG_DUMP_IMAGE || "").trim();
 const runtimeContractPath = resolve(String(process.env.BACKUP_RUNTIME_CONTRACT_PATH || new URL("../release/disaster-recovery-runtime-contract.json", import.meta.url).pathname));
 const runtimeConfigurationInput = String(process.env.BACKUP_RUNTIME_CONFIGURATION_JSON || "").trim();
+const backupExecutionMode = String(process.env.BACKUP_EXECUTION_MODE || "github-actions").trim();
+const pgDumpNetworkHostInput = String(process.env.BACKUP_PG_DUMP_NETWORK_HOST || "false").trim().toLowerCase();
+if (!["github-actions", "task-local"].includes(backupExecutionMode)) throw new Error("BACKUP_EXECUTION_MODE must be github-actions or task-local.");
+if (!["true", "false"].includes(pgDumpNetworkHostInput)) throw new Error("BACKUP_PG_DUMP_NETWORK_HOST must be true or false.");
+if (backupExecutionMode === "task-local" && String(process.env.GITHUB_ACTIONS || "").trim()) {
+  throw new Error("Task-local backup execution cannot claim GitHub Actions runtime provenance.");
+}
+const pgDumpNetworkHost = pgDumpNetworkHostInput === "true";
 
 if (!/^[a-z0-9]{20}$/.test(projectRef)) throw new Error("SUPABASE_PROJECT_REF must be the 20-character project reference.");
 if (!secret) throw new Error("SUPABASE_SECRET or SUPABASE_SERVICE_ROLE_KEY is required for Storage object backup.");
@@ -132,22 +141,20 @@ async function captureApplicationSchema(exportedSnapshot) {
   }
   const inventoryDir = join(backupDir, "inventory");
   const caPath = resolve(databaseCaCertPath);
-  const args = [
-    "run", "--rm", "--entrypoint", "pg_dump",
-    "--user", `${process.getuid?.() ?? 1000}:${process.getgid?.() ?? 1000}`,
-    "-e", "PGPASSWORD", "-e", "PGOPTIONS=-c default_transaction_read_only=on",
-    "-e", "PGSSLMODE=verify-full", "-e", "PGSSLROOTCERT=/cert/prod-ca.crt",
-    "-v", `${caPath}:/cert/prod-ca.crt:ro`,
-    "-v", `${inventoryDir}:/backup:rw`,
+  const args = productionBackupPgDumpDockerArgs({
+    caPath,
+    databaseHost,
+    databaseName,
+    databasePort,
+    databaseUsername,
+    exportedSnapshot,
+    inventoryDir,
+    networkHost: pgDumpNetworkHost,
+    executionMode: backupExecutionMode,
     pgDumpImage,
-    "--host", databaseHost,
-    "--port", databasePort,
-    "--username", databaseUsername,
-    "--dbname", databaseName,
-    "--no-password",
-    "--schema-only", "--clean", "--if-exists", `--snapshot=${exportedSnapshot}`,
-    "--file=/backup/application-schema.sql",
-  ];
+    uid: process.getuid?.() ?? 1000,
+    gid: process.getgid?.() ?? 1000,
+  });
   await execFileAsync("docker", args, {
     env: { ...process.env, PGPASSWORD: databasePassword },
     maxBuffer: 10 * 1024 * 1024,

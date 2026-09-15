@@ -47,9 +47,10 @@ let sourceCatalogFingerprint = null;
 let sourceCatalogCounts = null;
 const authorizationKey = "release-migration-authorization-fixture-key-000001";
 const authorizationKeyId = "fixture-release-migration-key-v1";
+const localExecutionId = "123e4567-e89b-42d3-a456-426614174000";
 function sha256(value) { return createHash("sha256").update(value).digest("hex"); }
 function ledgerFileSha256(rows) { return stableJsonFileSha256(rows); }
-function authorizationEnvelope({ expired = false } = {}) {
+function authorizationEnvelope({ expired = false, provenanceKind = "github-actions", mixed = false } = {}) {
   const now = Date.now();
   const plan = state.pending_migrations.map(({ order, source_migration_version, file, sha256: digest }) => ({ order, source_migration_version, file, sha256: digest }));
   const intent = {
@@ -72,15 +73,35 @@ function authorizationEnvelope({ expired = false } = {}) {
       attestation_key_id: "fixture-rehearsal-attestation-v1",
       completed_at: new Date(now - 1_000).toISOString(),
       backup_run_id: "fixture-1",
-      repository: "lasrevinu333-design/memphis-zoo-mcp",
-      workflow_ref: "lasrevinu333-design/memphis-zoo-mcp/.github/workflows/production-backup-migration-rehearsal.yml@refs/heads/fixture",
-      workflow_sha: candidateCommit,
-      run_id: "100",
-      run_attempt: "1",
+      ...(provenanceKind === "task-local" ? {
+        provenance_kind: "task-local",
+        local_execution_id: localExecutionId,
+        candidate_commit: candidateCommit,
+        candidate_tree: candidateTree,
+        archive_digest: "c".repeat(64),
+        result_sha256: "f".repeat(64),
+        attested_at: new Date(now - 500).toISOString(),
+        runner_path: "scripts/run-production-backup-migration-rehearsal.sh",
+        runner_sha256: sha256(readFileSync(resolve(root, "scripts/run-production-backup-migration-rehearsal.sh"))),
+        archive_local_only: true,
+        external_uploads: 0,
+        ...(mixed ? { repository: "lasrevinu333-design/memphis-zoo-mcp" } : {}),
+      } : {
+        repository: "lasrevinu333-design/memphis-zoo-mcp",
+        workflow_ref: "lasrevinu333-design/memphis-zoo-mcp/.github/workflows/production-backup-migration-rehearsal.yml@refs/heads/fixture",
+        workflow_sha: candidateCommit,
+        run_id: "100",
+        run_attempt: "1",
+      }),
       active_mutation_leases: 0,
       expired_mutation_leases: 0,
+      ...(provenanceKind === "task-local" ? {
+        authority_health: true,
+        direct_dml_denied: true,
+        live_production_reads: 0,
+      } : {}),
     },
-    actor: "release migration test approver",
+    actor: "release migration database test",
     approved_at: new Date(now).toISOString(),
     expires_at: new Date(expired ? now - 1_000 : now + 30 * 60_000).toISOString(),
   };
@@ -178,6 +199,31 @@ try {
     Number(state.observed_production.production_ledger_count), "failure injection rolls the complete migration plan back");
   assert.equal((await db.query("select to_regprocedure('public.custodial_begin_application_mutation_lease(uuid,text)') is not null present")).rows[0].present, false,
     "failure injection cannot leave migration-one authority behind");
+  await assert.rejects(runPlan({
+    RELEASE_MIGRATION_REHEARSAL: "false",
+    RELEASE_MIGRATION_AUTHORIZATION_VERIFY_KEY: authorizationKey,
+    RELEASE_MIGRATION_AUTHORIZATION_VERIFY_KEY_ID: authorizationKeyId,
+    RELEASE_MIGRATION_AUTHORIZATION_JSON: authorizationEnvelope(),
+    RELEASE_MIGRATION_TEST_FAIL_AFTER_ORDER: "1",
+  }), /failure probe after order 1/,
+  "GitHub authorization retains the same atomic migration transaction path");
+  await assert.rejects(runPlan({
+    RELEASE_MIGRATION_REHEARSAL: "false",
+    RELEASE_MIGRATION_AUTHORIZATION_VERIFY_KEY: authorizationKey,
+    RELEASE_MIGRATION_AUTHORIZATION_VERIFY_KEY_ID: authorizationKeyId,
+    RELEASE_MIGRATION_AUTHORIZATION_JSON: authorizationEnvelope({ provenanceKind: "task-local" }),
+    RELEASE_MIGRATION_TEST_FAIL_AFTER_ORDER: "1",
+  }), /failure probe after order 1/,
+  "a valid task-local authorization reaches the same atomic migration transaction");
+  assert.equal((await db.query("select count(*)::int count from supabase_migrations.schema_migrations")).rows[0].count,
+    Number(state.observed_production.production_ledger_count), "task-local failure injection rolls the complete plan back");
+  await assert.rejects(runPlan({
+    RELEASE_MIGRATION_REHEARSAL: "false",
+    RELEASE_MIGRATION_AUTHORIZATION_VERIFY_KEY: authorizationKey,
+    RELEASE_MIGRATION_AUTHORIZATION_VERIFY_KEY_ID: authorizationKeyId,
+    RELEASE_MIGRATION_AUTHORIZATION_JSON: authorizationEnvelope({ provenanceKind: "task-local", mixed: true }),
+  }), /mixes mutually exclusive provenance fields/i,
+  "the production mutator rejects validly signed mixed local/GitHub provenance before database mutation");
   await db.query("create table public.release_plan_catalog_race_fixture(id integer primary key)");
   await assert.rejects(runPlan(), /Locked source catalog/, "an exact-head catalog change is rejected inside the migration transaction");
   await db.query("drop table public.release_plan_catalog_race_fixture");

@@ -72,6 +72,8 @@ jobs:
           npm run --silent test:release-closure
           npm run --silent test:final-closure-database-isolated
           npm run --silent test:ci-workflows
+          npm run --silent test:release-migration-authorization
+          npm run --silent test:release-migration-plan-db-isolated
           npm run --silent test:isolated-restore-lease-shim
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
