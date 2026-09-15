@@ -579,12 +579,12 @@
       {
         "path": "scripts/create-release-migration-authorization.mjs",
         "mode": "100644",
-        "object_id": "b831396fb15b2c341dab5e65edd2c4ffc7390bd8"
+        "object_id": "743e3acef3cdae42773e24f547f72a8463205036"
       },
       {
         "path": "scripts/create-release-migration-rehearsal-attestation.mjs",
         "mode": "100644",
-        "object_id": "77a390a75a69528c07a39397f264d516f07851c1"
+        "object_id": "5af7310a121ffcc767815ca54400b61e3e2194aa"
       },
       {
         "path": "scripts/create-release-signing-key.mjs",
@@ -917,6 +917,11 @@
         "object_id": "dadafa3af037e4cebfe7a0855e3615f5d5bd4422"
       },
       {
+        "path": "scripts/json-value-stream.mjs",
+        "mode": "100644",
+        "object_id": "e0cb6edaf57e0db5405cb65424d680426d04e2d7"
+      },
+      {
         "path": "scripts/live-release-alignment-check.mjs",
         "mode": "100644",
         "object_id": "a1f0902b2fad20c0e3bf9df272c94fe6225077cd"
@@ -1194,7 +1199,7 @@
       {
         "path": "scripts/release-migration-authorization-tests.mjs",
         "mode": "100644",
-        "object_id": "1d0091858358473fc5b6be5c1e8fe523369a6519"
+        "object_id": "075e73cbf140de0f7a818db555adc36ae0dc880b"
       },
       {
         "path": "scripts/release-migration-plan-database-tests.mjs",
@@ -3367,7 +3372,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 649,
+    "authority_path_count": 650,
     "migration_path_count": 125,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
