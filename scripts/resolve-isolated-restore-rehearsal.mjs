@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import pg from "pg";
+import { retireIsolatedRestoreLeaseShim } from "./isolated-restore-lease-shim.mjs";
 
 const { Client } = pg;
 const databaseUrl = String(process.env.SUPABASE_DB_URL || "").trim();
@@ -34,8 +35,9 @@ try {
   const control = await db.query("select * from custodial_dr.restore_control where singleton=true for update");
   if (control.rowCount !== 1 || control.rows[0].archive_digest !== expectedArchiveDigest) throw new Error("Isolated reconciliation does not match the exact restored archive.");
   if (control.rows[0].state === "COMPLETE" && control.rows[0].mutations_paused === false) {
+    const leaseShim = await retireIsolatedRestoreLeaseShim(db);
     await db.query("commit");
-    console.log(JSON.stringify({ ok: true, stage: "isolated_restore_already_resumed", restore_id: control.rows[0].restore_id }));
+    console.log(JSON.stringify({ ok: true, stage: "isolated_restore_already_resumed", restore_id: control.rows[0].restore_id, isolated_lease_shim_retired: leaseShim.retired }));
   } else {
   if (control.rows[0].state !== "PAUSED_RECONCILIATION" || control.rows[0].mutations_paused !== true) {
     throw new Error("Only a verified isolated restore held for explicit reconciliation can be resumed.");
@@ -64,8 +66,12 @@ try {
     insert into custodial_dr.restore_events(restore_id,authority_generation,phase,outcome,actor,evidence_json)
     values ($1,$2,'ISOLATED_REHEARSAL_RECONCILIATION','RESOLVED','GitHub isolated restore rehearsal',$3::jsonb)
   `, [control.rows[0].restore_id, control.rows[0].authority_generation, JSON.stringify({ archive_digest: expectedArchiveDigest, resolved_categories: discrepancies.rows })]);
+  const leaseShim = await retireIsolatedRestoreLeaseShim(db);
+  if (!leaseShim.sourceMigrationPresent && leaseShim.retired !== true) {
+    throw new Error("The pre-migration isolated lease shim was not retired.");
+  }
   await db.query("commit");
-  console.log(JSON.stringify({ ok: true, stage: "isolated_restore_explicitly_reconciled", restore_id: control.rows[0].restore_id, resolved_discrepancies: discrepancies.rowCount }));
+  console.log(JSON.stringify({ ok: true, stage: "isolated_restore_explicitly_reconciled", restore_id: control.rows[0].restore_id, resolved_discrepancies: discrepancies.rowCount, isolated_lease_shim_retired: leaseShim.retired }));
   }
 } catch (error) {
   await db.query("rollback").catch(() => {});

@@ -153,6 +153,9 @@ jobs:
             npm run --silent restore:verify | tee -a "$receipt"
           RESTORE_REHEARSAL_ACCEPT_EMPTY_TARGET=true RESTORE_REHEARSAL_EXPECTED_ARCHIVE_DIGEST="$archive_digest" \
             SUPABASE_DB_URL="$local_db_url" npm run --silent restore:reconcile-isolated | tee -a "$receipt"
+          test "$(docker exec "$container" psql -v ON_ERROR_STOP=1 -At -U supabase_admin -d "$database" \
+            -c "select to_regclass('custodial_dr.application_mutation_leases') is null;" | tail -n 1)" = 't'
+          printf '{"stage":"isolated_pre_migration_lease_shim_retired"}\n' >> "$receipt"
           SCHEMA_FINGERPRINT_DOCKER_CONTAINER="$container" SCHEMA_FINGERPRINT_DATABASE="$database" \
             npm run --silent release:observed-production-schema:preflight | tee -a "$receipt"
           RELEASE_MIGRATION_APPLY=true RELEASE_MIGRATION_CONFIRM_PROJECT_REF="$project_ref" \

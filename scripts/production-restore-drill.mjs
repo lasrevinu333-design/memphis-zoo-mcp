@@ -181,12 +181,16 @@ await admin.query("do $$ begin create role anon; exception when duplicate_object
 await admin.query("do $$ begin create role authenticated; exception when duplicate_object then null; end $$");
 await admin.query("do $$ begin create role service_role; exception when duplicate_object then null; end $$");
 
-const migrationSql = [
-  "20260820125325_custodial_disaster_restore_generation_authority.sql",
-  "20260827150000_disaster_recovery_global_mutation_fence.sql",
-].map((name) => readFileSync(new URL(`../supabase/migrations/${name}`, import.meta.url), "utf8")).join("\n");
+const baseControlSql = readFileSync(
+  new URL("../supabase/migrations/20260820125325_custodial_disaster_restore_generation_authority.sql", import.meta.url),
+  "utf8",
+);
+const globalMutationFenceSql = readFileSync(
+  new URL("../supabase/migrations/20260827150000_disaster_recovery_global_mutation_fence.sql", import.meta.url),
+  "utf8",
+);
 
-async function setupTarget(databaseName, { divergent }) {
+async function setupTarget(databaseName, { divergent, includeGlobalMutationFence = true }) {
   await admin.query(`create database ${pg.escapeIdentifier(databaseName)}`);
   const target = new Client({ connectionString: dbUrl(databaseName) });
   await target.connect();
@@ -229,7 +233,8 @@ async function setupTarget(databaseName, { divergent }) {
       await target.query("insert into public.custodial_session_corrections values ($1,$1,$2,$3,$4,'Current Manager','Corrected after backup',array['employee'],$5,'Current Employee',$6,'CURRENT','Current Location',$6,'KIOSK_08','Current Employee',2,'2026-08-19T12:00:00Z','2026-08-19T13:00:00Z','2026-08-19T14:00:00Z')", [currentCorrection, "3".repeat(64), archivedSession, managerCredential, currentEmployee, deviceUuid]);
     }
     await target.query("insert into public.audit3_restore_fixture values (1,'stale target row')");
-    await target.query(migrationSql);
+    await target.query(baseControlSql);
+    if (includeGlobalMutationFence) await target.query(globalMutationFenceSql);
   } finally { await target.end(); }
 }
 
@@ -301,6 +306,18 @@ async function prepareIsolated(databaseName) {
     env: {
       ...process.env,
       RESTORE_SOURCE_DIR: work,
+      SUPABASE_DB_URL: dbUrl(databaseName),
+    },
+    maxBuffer: 32 * 1024 * 1024,
+  });
+}
+
+async function resolveIsolated(databaseName) {
+  return execFileAsync(process.execPath, [new URL("./resolve-isolated-restore-rehearsal.mjs", import.meta.url).pathname], {
+    env: {
+      ...process.env,
+      RESTORE_REHEARSAL_ACCEPT_EMPTY_TARGET: "true",
+      RESTORE_REHEARSAL_EXPECTED_ARCHIVE_DIGEST: archiveDigest,
       SUPABASE_DB_URL: dbUrl(databaseName),
     },
     maxBuffer: 32 * 1024 * 1024,
@@ -381,7 +398,7 @@ try {
 
   const cleanDb = `mz_schema_rebuild_restore_${randomUUID().replaceAll("-", "").slice(0, 12)}`;
   databases.push(cleanDb);
-  await setupTarget(cleanDb, { divergent: false });
+  await setupTarget(cleanDb, { divergent: false, includeGlobalMutationFence: false });
   const prepared = await prepareIsolated(cleanDb);
   assert.match(prepared.stdout, /"stage":"signed_recovery_control_hydrated"/);
   await runRestore(cleanDb, await makeIntent(cleanDb, true));
@@ -421,6 +438,36 @@ try {
   staleEnvelope.signature = signBinding(restoreReconciliationBinding(staleEnvelope.intent), reconciliationKey);
   await assert.rejects(applyReconciliation(cleanDb, JSON.stringify(staleEnvelope)), /expired/,
     "a stale signed reconciliation cannot replay or resume a restore");
+
+  const preMigrationDb = `mz_schema_rebuild_restore_${randomUUID().replaceAll("-", "").slice(0, 12)}`;
+  databases.push(preMigrationDb);
+  await setupTarget(preMigrationDb, { divergent: false, includeGlobalMutationFence: false });
+  const preMigrationPrepared = await prepareIsolated(preMigrationDb);
+  assert.match(preMigrationPrepared.stdout, /"isolated_lease_shim_created":true/,
+    "the exact pre-mutation-fence archive receives one explicit isolated compatibility shim");
+  const preMigrationIntent = (await createRestoreIntent(preMigrationDb)).stdout.trim();
+  await runRestore(preMigrationDb, preMigrationIntent);
+  const preMigrationResolved = await resolveIsolated(preMigrationDb);
+  assert.match(preMigrationResolved.stdout, /"isolated_lease_shim_retired":true/,
+    "isolated reconciliation retires the compatibility shim before migration rehearsal");
+  const preMigration = new Client({ connectionString: dbUrl(preMigrationDb) });
+  await preMigration.connect();
+  try {
+    assert.equal((await preMigration.query("select to_regclass('custodial_dr.application_mutation_leases') is null absent")).rows[0].absent, true);
+    assert.equal((await preMigration.query("select exists(select 1 from supabase_migrations.schema_migrations where version='20260827150000') present")).rows[0].present, false);
+    await preMigration.query(globalMutationFenceSql);
+    await preMigration.query(
+      "insert into supabase_migrations.schema_migrations(version,name,statements) values ('20260827150000','disaster_recovery_global_mutation_fence','{}')",
+    );
+    const migratedLease = await preMigration.query(`
+      select
+        to_regclass('custodial_dr.application_mutation_leases') is not null present,
+        obj_description(to_regclass('custodial_dr.application_mutation_leases'),'pg_class') relation_comment
+    `);
+    assert.equal(migratedLease.rows[0].present, true, "the genuine pending migration creates the real lease table from an absent baseline");
+    assert.doesNotMatch(migratedLease.rows[0].relation_comment, /compatibility shim/,
+      "the migrated production table cannot retain the isolated shim marker");
+  } finally { await preMigration.end(); }
 
   const failureDb = `mz_schema_rebuild_restore_${randomUUID().replaceAll("-", "").slice(0, 12)}`;
   databases.push(failureDb);

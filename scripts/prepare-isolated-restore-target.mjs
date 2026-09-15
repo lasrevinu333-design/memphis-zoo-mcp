@@ -4,6 +4,10 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import pg from "pg";
+import {
+  ensureIsolatedRestoreLeaseShim,
+  ledgerHasGlobalMutationFence,
+} from "./isolated-restore-lease-shim.mjs";
 
 const { Client } = pg;
 const sourceDir = resolve(String(process.env.RESTORE_SOURCE_DIR || ""));
@@ -32,6 +36,9 @@ const db = new Client({ connectionString: databaseUrl, application_name: "memphi
 await db.connect();
 try {
   await db.query("begin");
+  const leaseShim = await ensureIsolatedRestoreLeaseShim(db, {
+    sourceMigrationPresent: ledgerHasGlobalMutationFence(ledger),
+  });
   await db.query("insert into custodial_dr.restore_control(singleton) values (true) on conflict (singleton) do nothing");
   await db.query("truncate supabase_migrations.schema_migrations");
   for (const row of ledger) {
@@ -89,6 +96,7 @@ try {
     cron_job_count: row.cron_job_count,
     release_count: row.release_count,
     extensions_sha256: actualExtensionDigest,
+    isolated_lease_shim_created: leaseShim.created,
   }));
 } catch (error) {
   await db.query("rollback").catch(() => {});

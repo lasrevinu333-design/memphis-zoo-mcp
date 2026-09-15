@@ -130,6 +130,7 @@ assert.match(schedulerGate, /closure-toolchain-provenance\.json[\s\S]*actions\/u
 assert.match(schedulerGate, /npm run --silent test:integrated-backend-authority-suite-order/, "the scheduler gate must run both integrated suite orders on isolated clean databases");
 assert.match(schedulerGate, /npm run --silent test:integrated-backend-authority-release-provenance/, "the scheduler gate must run integrated backend release-provenance contracts on pull requests and pushes");
 assert.match(schedulerGate, /npm run --silent test:final-closure-database-isolated/, "the universal foundation gate must run the final closure database attacks on a clean disposable database");
+assert.match(schedulerGate, /npm run --silent test:isolated-restore-lease-shim/, "the universal foundation gate must retain pre-migration isolated restore compatibility coverage");
 assertExactCommandsInJob(schedulerGate, "validate", [
   "docker pull supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed",
   "npm run --silent test:static-weekly-scheduler:fast",
@@ -181,6 +182,10 @@ assert.match(productionBackupRehearsal, /inventory\/application-schema\.sql[\s\S
   "the independent rehearsal must restore signed schema/control state before applying signed application data");
 assert.match(productionBackupRehearsal, /RESTORE_REHEARSAL_ACCEPT_EMPTY_TARGET=true[\s\S]*restore:reconcile-isolated[\s\S]*custodial_configure_backend_execution_key/,
   "the independent rehearsal must explicitly reconcile its disposable empty target before exercising recovered application writers");
+assert.match(productionBackupRehearsal, /restore:reconcile-isolated[\s\S]*isolated_pre_migration_lease_shim_retired[\s\S]*release:observed-production-schema:preflight[\s\S]*release:migrations:apply/,
+  "the independent rehearsal must retire its marked empty compatibility shim before proving the genuine baseline and applying the migration plan");
+assert.match(productionBackupRehearsal, /to_regclass\('custodial_dr\.application_mutation_leases'\) is null/,
+  "the independent rehearsal must prove the compatibility shim is absent before baseline fingerprinting");
 assert.match(productionBackupRehearsal, /test:feedback-reader-database[\s\S]*npm start[\s\S]*feedback_first_http_status[\s\S]*feedback_replay_http_status/,
   "the recovered application pair must prove bounded feedback reader authority before exact HTTP write and replay");
 assert.match(productionBackupRehearsal, /expires_at>clock_timestamp\(\)[\s\S]*active_mutation_leases[\s\S]*expired_mutation_leases/,
