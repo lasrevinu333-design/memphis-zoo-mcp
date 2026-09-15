@@ -194,7 +194,7 @@
       {
         "path": ".github/workflows/production-backup-migration-rehearsal.yml",
         "mode": "100644",
-        "object_id": "71eff2425117528619f1212073af48ca69ab7539"
+        "object_id": "67d35eea4c6c02293118ad82b21fcf33f0d89cb0"
       },
       {
         "path": ".github/workflows/production-database-credential-bridge.yml",
@@ -539,7 +539,7 @@
       {
         "path": "scripts/ci-workflow-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "a8e477b2c2cc7cddc64074ff13f1e0295254c556"
+        "object_id": "b04341baf9e92fcbec2ec4b20a2046f3096e31da"
       },
       {
         "path": "scripts/cleaning-identity-gps-database-tests.mjs",
