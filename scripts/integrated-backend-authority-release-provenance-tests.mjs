@@ -171,7 +171,7 @@ function expectRejected(name, mutate, expected) {
     assert.notEqual(result.status, 0, `${name} unexpectedly passed release acceptance`);
     const output = `${result.stderr}\n${result.stdout}`;
     assert.match(output, expected, `${name} did not fail for the expected provenance reason: ${output}`);
-    assert.doesNotMatch(output, /database gate requires|configured secret must pass|docker/i, `${name} reached a database gate before provenance rejection`);
+    assert.doesNotMatch(output, /database gate requires|configured secret must pass|spawnSync docker|execFileSync docker/i, `${name} reached a database gate before provenance rejection`);
     return output;
   } finally {
     disposeFixture(fixture);
@@ -186,7 +186,7 @@ function expectCommittedRejected(name, beforeCommit, expected) {
     assert.notEqual(result.status, 0, `${name} unexpectedly passed release acceptance`);
     const output = `${result.stderr}\n${result.stdout}`;
     assert.match(output, expected, `${name} did not fail for the expected provenance reason: ${output}`);
-    assert.doesNotMatch(output, /database gate requires|configured secret must pass|docker/i, `${name} reached a database gate before provenance rejection`);
+    assert.doesNotMatch(output, /database gate requires|configured secret must pass|spawnSync docker|execFileSync docker/i, `${name} reached a database gate before provenance rejection`);
     return output;
   } finally {
     disposeFixture(fixture);
@@ -339,7 +339,7 @@ expectRejected("worktree symlink replacement", (fixture) => {
     assert.notEqual(result.status, 0, "stale generated complete inventory unexpectedly passed release acceptance");
     const output = `${result.stderr}\n${result.stdout}`;
     assert.match(output, /generated release evidence is stale, incomplete, or self-referential/i);
-    assert.doesNotMatch(output, /database gate requires|configured secret must pass|docker/i);
+    assert.doesNotMatch(output, /database gate requires|configured secret must pass|spawnSync docker|execFileSync docker/i);
   } finally {
     disposeFixture(fixture);
   }
@@ -411,7 +411,7 @@ try {
   assert.notEqual(result.status, 0, "expected-tree symlink substitution unexpectedly passed release acceptance");
   const output = `${result.stderr}\n${result.stdout}`;
   assert.match(output, /expected tracked entry must be a regular non-symlink file/i);
-  assert.doesNotMatch(output, /database gate requires|configured secret must pass|docker/i);
+  assert.doesNotMatch(output, /database gate requires|configured secret must pass|spawnSync docker|execFileSync docker/i);
 } finally {
   disposeFixture(symlinkTreeFixture);
 }
