@@ -85,7 +85,7 @@
       "capture the production catalog through the read-only Supabase boundary and require the exact observed production ledger head, catalog/privilege fingerprint, object counts, static-weekly state, and zero target-position collisions recorded in release/production-migration-state.json",
       "verify production project, fresh post-capture backup receipt, observed production identity, exact pending-migration digest, and exact source attestation against release/production-migration-state.json",
       "after explicit production-change admission, apply only the five exact ordered pending migrations for the global restore mutation fence, restricted feedback reader, Outlook event-sync authority adoption, release-health identity projection correction, and messaging read-horizon/idempotent-send repair; require the production ledger to advance exactly five entries and the complete catalog delta to match the reviewed postconditions; do not replay historical production migrations or rewrite the production Outlook event-sync rows",
-      "after schema admission, refresh and publish the already-preserved immutable weighted-schedule draft through the static-weekly control plane with expected-revision and idempotency guards; do not create a competing draft, and preserve the current publication until the replacement publication and projection are complete",
+      "after schema admission, retain the current immutable weighted-schedule publication by default; only when a named manager approves a replacement, derive exactly one replacement draft from the current publication, verify and publish it through the static-weekly control plane with expected-revision and idempotency guards; do not create a competing draft, and preserve the current publication until the replacement publication and projection are complete",
       "deploy the canonical-only backend only after all authoritative procedures above are present and verified; missing canonical writers fail closed",
       "require a green authority health gate and direct-DML denial probes before routing traffic"
     ],
@@ -444,7 +444,7 @@
       {
         "path": "release/integrated-backend-authority-input.json",
         "mode": "100644",
-        "object_id": "42048d7ca310dd1403f263a70a202cbe9969f208"
+        "object_id": "091cbca126b8a058da7ff63a5736fd9305dac2ca"
       },
       {
         "path": "release/production-migration-state.json",
@@ -884,12 +884,12 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "5811b2e8bf5623080491fee03da5f8dfc1182fc3"
+        "object_id": "1e1255dfad7a40a0e33f2f66b118f969079209b6"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
         "mode": "100644",
-        "object_id": "7df31da59826c65a021c96a47eb0445d9c9e0370"
+        "object_id": "360eb52d1e4d28c53a017e8bd67bc59c1fcf2d6e"
       },
       {
         "path": "scripts/integrated-backend-authority-release-provenance-tests.mjs",
