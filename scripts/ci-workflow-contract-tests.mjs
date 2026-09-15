@@ -182,12 +182,28 @@ assert.match(productionBackupRehearsal, /State\.Health[\s\S]*test "\$healthy" = 
   "the production-backup rehearsal must survive the Supabase image's first-boot restart before creating its database");
 assert.match(productionBackupRehearsal, /production-source-role-catalog\.sql[\s\S]*source_roles_reconciled[\s\S]*createdb/,
   "the production-backup rehearsal must reproduce production ownership roles before restoring the accepted source schema");
-for (const role of ["memphis_zoo_backup", "supabase_functions_admin", "supabase_privileged_role", "supabase_realtime_admin"]) {
+for (const role of [
+  "memphis_zoo_backup",
+  "supabase_functions_admin",
+  "supabase_privileged_role",
+  "supabase_realtime_admin",
+  "custodial_application_reader",
+  "custodial_readonly_runtime_20260822",
+  "static_weekly_control_plane",
+  "static_weekly_release_operator",
+  "static_weekly_runtime_20260823",
+]) {
   assert.match(productionSourceRoleCatalog, new RegExp(`create role ${role}`),
     `the production source role catalog must include ${role}`);
 }
 assert.match(productionSourceRoleCatalog, /set role postgres;[\s\S]*grant pg_read_all_data to memphis_zoo_backup;[\s\S]*reset role;/,
   "the rehearsal role catalog must preserve the production backup membership grantor without storing credentials");
+assert.match(productionSourceRoleCatalog, /grant custodial_application_reader to custodial_readonly_runtime_20260822;/,
+  "the rehearsal role catalog must preserve the enrolled application's read-only login edge");
+assert.match(productionSourceRoleCatalog, /grant static_weekly_control_plane to static_weekly_runtime_20260823[\s\S]*with inherit false;/,
+  "the rehearsal role catalog must preserve the static-weekly NOINHERIT runtime edge");
+assert.match(productionSourceRoleCatalog, /alter role static_weekly_runtime_20260823[\s\S]*connection limit 4;/,
+  "the rehearsal role catalog must preserve the bounded static-weekly login shell");
 assert.doesNotMatch(productionSourceRoleCatalog, /\b(?:create|alter)\s+role[^;]*\bpassword\b/i,
   "the rehearsal role catalog must never contain production password material");
 assert.match(emptyDatabaseRebuild, /shared_preload_libraries=pg_cron,pg_net,pg_stat_statements[\s\S]*cron\.launch_active_jobs=off/,
