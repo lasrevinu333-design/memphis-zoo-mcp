@@ -9,6 +9,7 @@ import {
   signBinding,
   stableJson,
 } from "./disaster-recovery-crypto.mjs";
+import { parseJsonValueStream } from "./json-value-stream.mjs";
 
 const receiptPath = resolve(String(process.env.RELEASE_MIGRATION_REHEARSAL_RECEIPT || ""));
 const key = requireSigningKey(process.env.RELEASE_REHEARSAL_ATTESTATION_SIGNING_KEY, "RELEASE_REHEARSAL_ATTESTATION_SIGNING_KEY");
@@ -28,7 +29,7 @@ if (repository !== "lasrevinu333-design/memphis-zoo-mcp"
 }
 
 const receiptBytes = readFileSync(receiptPath);
-const rows = receiptBytes.toString("utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
+const rows = parseJsonValueStream(receiptBytes.toString("utf8"), "Release migration rehearsal receipt");
 const result = [...rows].reverse().find((row) => row?.ok === true);
 if (!result || result.source_commit !== workflowSha || !/^[0-9a-f]{40}$/.test(String(result.source_tree || ""))
     || !String(result.backup_run_id || "").trim()) {

@@ -12,6 +12,7 @@ import {
   verifyBinding,
 } from "./disaster-recovery-crypto.mjs";
 import { materializeVerifiedArchive } from "./disaster-recovery-archive.mjs";
+import { parseJsonValueStream } from "./json-value-stream.mjs";
 
 const root = resolve(new URL("..", import.meta.url).pathname);
 const state = JSON.parse(readFileSync(resolve(root, "release/production-migration-state.json"), "utf8"));
@@ -64,7 +65,7 @@ const { summary, archiveDigest, checksumPaths } = verifiedArchive;
 const archivedLedger = JSON.parse(readFileSync(join(verifiedBackupDir, "inventory/migration-ledger.json"), "utf8"));
 const archivedLedgerSha256 = await sha256File(join(verifiedBackupDir, "inventory/migration-ledger.json"));
 const receiptBytes = readFileSync(rehearsalReceiptPath);
-const receiptLines = receiptBytes.toString("utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
+const receiptLines = parseJsonValueStream(receiptBytes.toString("utf8"), "Release migration rehearsal receipt");
 const rehearsal = [...receiptLines].reverse().find((row) => row?.ok === true);
 const rehearsalAttestationBytes = readFileSync(rehearsalAttestationPath);
 const rehearsalAttestationEnvelope = JSON.parse(rehearsalAttestationBytes.toString("utf8"));

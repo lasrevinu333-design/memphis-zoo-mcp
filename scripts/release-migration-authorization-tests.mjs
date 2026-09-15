@@ -66,7 +66,7 @@ function writeReceipt({ expiredLeases = 0 } = {}) {
     direct_dml_denied: true,
     completed_at: new Date(now - 1_000).toISOString(),
   };
-  writeFileSync(receiptPath, `${JSON.stringify({ started: true })}\n${JSON.stringify(receipt)}\n`, { mode: 0o600 });
+  writeFileSync(receiptPath, `${JSON.stringify({ started: true }, null, 2)}\n${JSON.stringify(receipt, null, 2)}\n`, { mode: 0o600 });
 }
 async function writeAttestation() {
   const result = await execFileAsync(process.execPath, [resolve(root, "scripts/create-release-migration-rehearsal-attestation.mjs")], {
@@ -82,6 +82,7 @@ async function writeAttestation() {
       GITHUB_RUN_ATTEMPT: "1",
     },
   });
+  assert.notEqual(result.stdout.trim(), "", "rehearsal attestation signer must emit a non-empty JSON envelope");
   writeFileSync(attestationPath, result.stdout, { mode: 0o600 });
 }
 async function createAuthorization(extraEnv = {}) {
