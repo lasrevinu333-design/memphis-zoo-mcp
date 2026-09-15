@@ -494,7 +494,7 @@
       {
         "path": "scripts/audit3-repair-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "6bcdb9e3314e9101f37bb8341cf3f1a9d5611754"
+        "object_id": "036d59937a9734981a8eb29598c4af1625290481"
       },
       {
         "path": "scripts/audit4-repair-contract-tests.mjs",
@@ -1124,12 +1124,12 @@
       {
         "path": "scripts/production-restore-drill.mjs",
         "mode": "100644",
-        "object_id": "b41589653ea0da749b2bb52144742b15d7fbef1b"
+        "object_id": "36114f0ecb64ff3c6acfb468759632fd80631628"
       },
       {
         "path": "scripts/production-restore.mjs",
         "mode": "100644",
-        "object_id": "b38495faf0c853d281d787bd73ae5f2d80e28f62"
+        "object_id": "8d04b86909ce41683bdcbfd357d9ab0fe33faae9"
       },
       {
         "path": "scripts/production-runtime-contract-tests.mjs",
@@ -1215,6 +1215,11 @@
         "path": "scripts/restore-mutation-gate-tests.mjs",
         "mode": "100644",
         "object_id": "c122cd92596f1921f4fadcd256ad91a32e3dabfd"
+      },
+      {
+        "path": "scripts/restore-unvalidated-checks.mjs",
+        "mode": "100644",
+        "object_id": "d341e41ea4c316c2ae3e3ef940ff7a4b7d9878ec"
       },
       {
         "path": "scripts/restroom-rebalance-route-tests.mjs",
@@ -3352,7 +3357,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 646,
+    "authority_path_count": 647,
     "migration_path_count": 125,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
