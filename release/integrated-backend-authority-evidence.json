@@ -194,7 +194,7 @@
       {
         "path": ".github/workflows/production-backup-migration-rehearsal.yml",
         "mode": "100644",
-        "object_id": "a9f77b48f4f2cffcb3ae7cd766b9d1f4cca70dde"
+        "object_id": "94a66a9ab37483897b818816040a9c89d8738d2d"
       },
       {
         "path": ".github/workflows/production-database-credential-bridge.yml",
@@ -539,7 +539,7 @@
       {
         "path": "scripts/ci-workflow-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "064c3101d0787f0242a52ce3cb4cef78bc05c938"
+        "object_id": "dd21f07217b8590897b727661a607404da3d4d20"
       },
       {
         "path": "scripts/cleaning-identity-gps-database-tests.mjs",
@@ -1505,6 +1505,16 @@
         "path": "scripts/thursday-notification-presentation.mjs",
         "mode": "100644",
         "object_id": "6396303b980d52a1ac01533cfd8c42603a411445"
+      },
+      {
+        "path": "scripts/verify-isolated-rehearsal-backend-dependencies.sh",
+        "mode": "100644",
+        "object_id": "4c7738afca305778ec38c20e8a31091775573398"
+      },
+      {
+        "path": "scripts/wait-rehearsal-json-endpoint.sh",
+        "mode": "100644",
+        "object_id": "0847db2c5315b5a492ad56ac92418f6a8d855a58"
       },
       {
         "path": "sql/2026-05-29_primate_pavillion_daily_nfc_postcheck.sql",
@@ -3357,7 +3367,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 647,
+    "authority_path_count": 649,
     "migration_path_count": 125,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
