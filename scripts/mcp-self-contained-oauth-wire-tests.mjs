@@ -369,8 +369,11 @@ try {
   assert.equal(verified.extra.issuer, base);
   assert.equal(verified.extra.audience, `${base}/mcp`);
   assert.deepEqual(verified.scopes, ["mcp:read", "mcp:write"]);
+  const [accessHeader, accessPayload, accessSignature] = token.access_token.split(".");
+  const tamperedSignature = `${accessSignature.startsWith("A") ? "B" : "A"}${accessSignature.slice(1)}`;
+  assert.notDeepEqual(Buffer.from(tamperedSignature, "base64url"), Buffer.from(accessSignature, "base64url"));
   assert.throws(
-    () => verifyMcpOAuthAccessToken(oauth.config, `${token.access_token.slice(0, -1)}x`),
+    () => verifyMcpOAuthAccessToken(oauth.config, `${accessHeader}.${accessPayload}.${tamperedSignature}`),
     McpOAuthAccessTokenError,
   );
 
