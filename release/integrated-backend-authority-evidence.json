@@ -534,7 +534,7 @@
       {
         "path": "scripts/ci-workflow-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "dababdfac87027b888872b4dfc28114b54ac07e6"
+        "object_id": "b22fd1ffe77d86ea315f309431515854f8cf795e"
       },
       {
         "path": "scripts/cleaning-identity-gps-database-tests.mjs",
@@ -2094,7 +2094,7 @@
       {
         "path": "supabase/canonical/production-source-role-catalog.sql",
         "mode": "100644",
-        "object_id": "9047c11de4a0f2c7f1f8ebe230a5c7e9586351c0"
+        "object_id": "b3138135bcda91a4481e39339e3f3c05267675ab"
       },
       {
         "path": "supabase/canonical/schema-fingerprint-input.json",
