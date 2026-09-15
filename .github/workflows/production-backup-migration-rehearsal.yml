@@ -231,7 +231,8 @@ jobs:
           printf '{"stage":"feedback_reader_database_authority_proven","writer":"app_apply_operational_command.feedback_create","reader_login":"custodial_readonly_runtime_20991231","reader_projection_columns":21,"sole_reader_policy":true,"reader_mutation_denied":true,"legacy_image_backup_hidden":true,"recovery_inventory_exact":true}\n' >> "$receipt"
           backend_log="${RUNNER_TEMP}/production-backup-rehearsal-backend.log"
           static_log="${RUNNER_TEMP}/production-backup-rehearsal-static-weekly.log"
-          NODE_ENV=production PORT=31871 SUPABASE_URL='http://127.0.0.1:31870' \
+          env -u REHEARSAL_OPS_MANAGER_SESSION_SECRET \
+            NODE_ENV=production PORT=31871 SUPABASE_URL='http://127.0.0.1:31870' \
             SUPABASE_SERVICE_ROLE_KEY="$service_role_jwt" \
             OPS_MANAGER_SESSION_SECRET="$REHEARSAL_OPS_MANAGER_SESSION_SECRET" \
             CUSTODIAL_BACKEND_PROOF_SECRET="$REHEARSAL_CUSTODIAL_BACKEND_PROOF_SECRET" \
@@ -243,7 +244,8 @@ jobs:
             EVENT_MAINTENANCE_SWEEP_MS=0 FEEDBACK_REMINDER_SWEEP_MS=0 OPERATIONAL_NOTIFICATION_SWEEP_MS=0 \
             CUSTODIAL_RESTORE_GATE_REQUIRED=true npm start >"$backend_log" 2>&1 &
           backend_pid=$!
-          NODE_ENV=production PORT=31872 SUPABASE_URL='http://127.0.0.1:31870' \
+          env -u REHEARSAL_OPS_MANAGER_SESSION_SECRET \
+            NODE_ENV=production PORT=31872 SUPABASE_URL='http://127.0.0.1:31870' \
             SUPABASE_SERVICE_ROLE_KEY="$service_role_jwt" \
             OPS_MANAGER_SESSION_SECRET="$REHEARSAL_OPS_MANAGER_SESSION_SECRET" \
             STATIC_WEEKLY_CONTROL_PLANE_DATABASE_URL="postgresql://static_weekly_runtime_20260823:${scheduler_password}@127.0.0.1:${port}/${database}" \

@@ -188,6 +188,11 @@ assert.match(productionBackupRehearsal, /to_regclass\('custodial_dr\.application
   "the independent rehearsal must prove the compatibility shim is absent before baseline fingerprinting");
 assert.match(productionBackupRehearsal, /test:feedback-reader-database[\s\S]*npm start[\s\S]*feedback_first_http_status[\s\S]*feedback_replay_http_status/,
   "the recovered application pair must prove bounded feedback reader authority before exact HTTP write and replay");
+assert.equal(
+  (productionBackupRehearsal.match(/env -u REHEARSAL_OPS_MANAGER_SESSION_SECRET/g) || []).length,
+  2,
+  "both recovered production-like runtimes must remove the rehearsal alias before validating the independent manager-session secret",
+);
 assert.match(productionBackupRehearsal, /expires_at>clock_timestamp\(\)[\s\S]*active_mutation_leases[\s\S]*expired_mutation_leases/,
   "the recovered pair must distinguish live mutation leases from expired fail-closed blockers");
 assert.match(productionBackupRehearsal, /test "\$active_mutation_leases" = '0'[\s\S]*test "\$expired_mutation_leases" = '0'/,
