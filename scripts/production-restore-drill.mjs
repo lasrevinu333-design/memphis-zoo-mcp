@@ -36,6 +36,8 @@ const managerCredential = "00000000-0000-4000-8000-000000000401";
 const archivedSession = "00000000-0000-4000-8000-000000000501";
 const currentSession = "00000000-0000-4000-8000-000000000502";
 const currentCorrection = "00000000-0000-4000-8000-000000000503";
+const archivedCompletion = "00000000-0000-4000-8000-000000000504";
+const archivedLegacyCompletionId = "codex-prod-acceptance-completion-7072dd37-e38d-4c85-8fc1-81a9a1800000";
 const work = mkdtempSync(join(tmpdir(), "memphis-zoo-restore-drill-"));
 const databaseDir = join(work, "database");
 const inventoryDir = join(work, "inventory");
@@ -57,7 +59,7 @@ const archiveRows = {
   "public.ops_manager_trusted_devices": [{ credential_id: managerCredential, device_id: "MANAGER_01", device_label: "Archived Manager", max_access_level: "full_access", created_at: "2026-08-01T12:00:00Z", last_used_at: null, expires_at: "2030-01-01T00:00:00Z", revoked_at: null, revoked_reason: null }],
   "public.sessions": [{ id: archivedSession, session_uuid: "archived-session", client_session_id: "archived-client-session", location_id: deviceUuid, employee_id: oldEmployee, device_id: deviceUuid, employee_name_snapshot: "Archived Employee", location_code_snapshot: "ARCHIVE", location_name_snapshot: "Archived Location", device_identifier_snapshot: "KIOSK_08", device_name_snapshot: "Archived Employee", assignment_epoch_snapshot: 1, identity_snapshot_provenance: "session_create", status: "completed", started_at: "2026-08-01T12:00:00Z", ended_at: "2026-08-01T13:00:00Z", created_at: "2026-08-01T12:00:00Z", updated_at: "2026-08-01T13:00:00Z" }],
   "public.custodial_session_corrections": [],
-  "public.completion_responses": [],
+  "public.completion_responses": [{ id: archivedCompletion, session_id: archivedSession, client_completion_id: archivedLegacyCompletionId, location_id: deviceUuid, submitted_by_employee_id: oldEmployee, device_id: deviceUuid, submitted_at: "2026-08-01T13:00:00Z", created_at: "2026-08-01T13:00:00Z" }],
   "public.release_deployment_manifest": [{ release_id: "release-archived", backend_commit: "a".repeat(40), frontend_commit: "b".repeat(40), migration_head: "20260801000000", migration_manifest_sha256: "c".repeat(64), environment_contract_version: "fixture-v1", status: "deployed", details_json: {}, created_at: "2026-08-01T00:00:00Z", deployed_at: "2026-08-01T00:00:00Z" }],
   "auth.sessions": [{ id: "00000000-0000-4000-8000-000000000601" }],
   "storage.buckets": [{ id: "fixture-private", name: "fixture-private", owner: oldEmployee, public: false, file_size_limit: 4096, allowed_mime_types: ["text/plain"], created_at: "2026-08-01T00:00:00+00:00", updated_at: "2026-08-01T00:00:00+00:00" }],
@@ -232,6 +234,11 @@ async function setupTarget(databaseName, { divergent, includeGlobalMutationFence
       await target.query("insert into public.sessions values ($1,'post-backup','post-backup-client',$2,$3,$2,'Current Employee','CURRENT','Current Location','KIOSK_08','Current Employee',2,'session_create','completed','2026-08-19T12:00:00Z','2026-08-19T13:00:00Z','2026-08-19T12:00:00Z','2026-08-19T13:00:00Z')", [currentSession, deviceUuid, currentEmployee]);
       await target.query("insert into public.custodial_session_corrections values ($1,$1,$2,$3,$4,'Current Manager','Corrected after backup',array['employee'],$5,'Current Employee',$6,'CURRENT','Current Location',$6,'KIOSK_08','Current Employee',2,'2026-08-19T12:00:00Z','2026-08-19T13:00:00Z','2026-08-19T14:00:00Z')", [currentCorrection, "3".repeat(64), archivedSession, managerCredential, currentEmployee, deviceUuid]);
     }
+    await target.query(`
+      alter table public.completion_responses
+      add constraint completion_responses_client_completion_id_uuid
+      check (client_completion_id is null or client_completion_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$') not valid
+    `);
     await target.query("insert into public.audit3_restore_fixture values (1,'stale target row')");
     await target.query(baseControlSql);
     if (includeGlobalMutationFence) await target.query(globalMutationFenceSql);
@@ -409,6 +416,25 @@ try {
     assert.deepEqual(control.rows[0], { state: "PAUSED_RECONCILIATION", mutations_paused: true },
       "even a zero-discrepancy restore remains paused for separately signed reconciliation");
     assert.equal((await clean.query("select count(*)::int count from public.audit3_restore_fixture where id=7 and body='verified restore drill'")).rows[0].count, 1);
+    assert.equal((await clean.query("select count(*)::int count from public.completion_responses where id=$1 and client_completion_id=$2", [archivedCompletion, archivedLegacyCompletionId])).rows[0].count, 1,
+      "a signed historical identifier admitted before the NOT VALID UUID boundary must survive restore unchanged");
+    assert.deepEqual((await clean.query(`
+      select contype constraint_type,convalidated validated,conislocal is_local,
+        coninhcount::int inherited_count,pg_get_constraintdef(oid,true) definition
+      from pg_constraint where conrelid='public.completion_responses'::regclass
+        and conname='completion_responses_client_completion_id_uuid'
+    `)).rows[0], {
+      constraint_type: "c",
+      validated: false,
+      is_local: true,
+      inherited_count: 0,
+      definition: "CHECK (client_completion_id IS NULL OR client_completion_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'::text) NOT VALID",
+    }, "the exact NOT VALID check must be reinstated after historical rows are restored");
+    await assert.rejects(
+      clean.query("insert into public.completion_responses(id,client_completion_id) values ($1,'future-non-uuid')", [randomUUID()]),
+      /completion_responses_client_completion_id_uuid/,
+      "recovery compatibility must not weaken UUID enforcement for any new completion",
+    );
     const cron = await clean.query("select jobid,schedule,command,database,active,jobname from cron.job");
     assert.deepEqual(cron.rows, [{
       jobid: "3",

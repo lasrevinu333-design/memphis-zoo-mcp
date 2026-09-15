@@ -7,6 +7,7 @@ import { createGeminiControlledRepairWorker } from "../src/gemini-controlled-wor
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 const backup = read("scripts/production-backup.mjs");
 const restore = read("scripts/production-restore.mjs");
+const restoreUnvalidatedChecks = read("scripts/restore-unvalidated-checks.mjs");
 const restoreIntent = read("scripts/create-production-restore-intent.mjs");
 const restoreReconciliation = read("scripts/apply-production-restore-reconciliation.mjs");
 const abandonedLeaseReconciliation = read("scripts/apply-abandoned-mutation-lease-reconciliation.mjs");
@@ -66,6 +67,14 @@ assert.match(restore, /restore_phase/);
 assert.match(restore, /truncate_target_tables/);
 assert.match(restore, /database_only_metadata_verified/);
 assert.match(restore, /json_populate_record/);
+assert.match(restore, /suspendUnvalidatedRestoreChecks\(db, databaseTables\)[\s\S]*reinstateUnvalidatedRestoreChecks\(db, suspendedChecks\)/,
+  "restore must transactionally suspend and reinstate target-owned NOT VALID checks around historical row insertion");
+assert.match(restoreUnvalidatedChecks, /con\.contype='c'[\s\S]*not con\.convalidated/,
+  "restore compatibility must be restricted to unvalidated CHECK constraints");
+assert.match(restoreUnvalidatedChecks, /con\.conislocal[\s\S]*con\.coninhcount/,
+  "restore compatibility must reject inherited constraint surgery");
+assert.match(restoreUnvalidatedChecks, /add constraint[\s\S]*constraint\.definition[\s\S]*changed while being reinstated/,
+  "every temporarily suspended check must be restored and reverified exactly");
 assert.doesNotMatch(restore, /delete from custodial_dr\.application_mutation_leases where expires_at<=clock_timestamp\(\)/,
   "lease expiry cannot be treated as proof that external work stopped");
 assert.match(restore, /expired application mutation lease\(s\).*exact named reconciliation is required/i,

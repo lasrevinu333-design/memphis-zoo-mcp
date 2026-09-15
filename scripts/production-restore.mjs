@@ -30,6 +30,11 @@ import {
   readCronJobs,
   restoreCronJobs,
 } from "./disaster-recovery-cron.mjs";
+import {
+  reinstateUnvalidatedRestoreChecks,
+  restoreCheckEvidence,
+  suspendUnvalidatedRestoreChecks,
+} from "./restore-unvalidated-checks.mjs";
 
 const { Client } = pg;
 const sourceInput = String(process.env.RESTORE_SOURCE_DIR || "").trim();
@@ -343,12 +348,15 @@ try {
 
   restorePhase = "restore_database";
   await db.query("begin");
+  let unvalidatedCheckEvidence = restoreCheckEvidence([]);
   try {
     await db.query("set local session_replication_role = replica");
     if (databaseTables.length) {
       restorePhase = "truncate_target_tables";
       await db.query(`truncate ${databaseTables.map((table) => qualified(table.schema_name, table.table_name)).join(",")} restart identity cascade`);
     }
+    restorePhase = "suspend_unvalidated_restore_checks";
+    const suspendedChecks = await suspendUnvalidatedRestoreChecks(db, databaseTables);
     for (const table of databaseTables) {
       restoreTable = `${table.schema_name}.${table.table_name}`;
       restorePhase = "restore_table";
@@ -366,14 +374,16 @@ try {
       if (restored !== Number(table.row_count)) throw new Error(`Row-count mismatch while restoring ${restoreTable}.`);
     }
     restoreTable = null;
+    restorePhase = "reinstate_unvalidated_restore_checks";
+    unvalidatedCheckEvidence = await reinstateUnvalidatedRestoreChecks(db, suspendedChecks);
     await db.query("commit");
   } catch (error) {
     await db.query("rollback").catch(() => {});
     throw error;
   }
   await setControl("DATABASE_RESTORED");
-  await db.query(`update custodial_dr.restore_manifests set database_verified=true,database_evidence=$2::jsonb,updated_at=clock_timestamp() where restore_id=$1`, [restoreId, JSON.stringify({ tables: databaseTables.length, rows: databaseTables.reduce((total, table) => total + Number(table.row_count), 0) })]);
-  await recordEvent("DATABASE", "PASSED", { tables: databaseTables.length });
+  await db.query(`update custodial_dr.restore_manifests set database_verified=true,database_evidence=$2::jsonb,updated_at=clock_timestamp() where restore_id=$1`, [restoreId, JSON.stringify({ tables: databaseTables.length, rows: databaseTables.reduce((total, table) => total + Number(table.row_count), 0), unvalidated_check_constraints: unvalidatedCheckEvidence })]);
+  await recordEvent("DATABASE", "PASSED", { tables: databaseTables.length, unvalidated_check_constraints: unvalidatedCheckEvidence });
 
   restorePhase = "authority_reconciliation";
   await db.query("begin");
@@ -552,6 +562,7 @@ try {
     source_identity: summary.source_identity,
     database_tables: databaseTables.length,
     database_rows: databaseTables.reduce((total, table) => total + Number(table.row_count), 0),
+    unvalidated_check_constraints: unvalidatedCheckEvidence,
     storage: storageEvidence,
     cron: cronEvidence,
     authority_invalidated: invalidated,
