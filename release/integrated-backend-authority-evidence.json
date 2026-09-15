@@ -964,7 +964,7 @@
       {
         "path": "scripts/mcp-self-contained-oauth-wire-tests.mjs",
         "mode": "100644",
-        "object_id": "5350ba911730dc89d8a80e189136a7a6a68e04df"
+        "object_id": "e2e3b51fe228e0a96775769d2e213c31ce7dc883"
       },
       {
         "path": "scripts/mcp-transport-tool-surface-tests.mjs",
