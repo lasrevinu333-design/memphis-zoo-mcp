@@ -198,7 +198,10 @@ begin
     select n.nspname schema_name, c.relname table_name
     from pg_catalog.pg_class c
     join pg_catalog.pg_namespace n on n.oid = c.relnamespace
-    where n.nspname in ('public', 'auth')
+    -- Supabase owns the auth schema and the supported project postgres role
+    -- cannot install triggers there. Custodial application mutations are in
+    -- public, which is also the schema covered by the admitted fingerprint.
+    where n.nspname = 'public'
       and c.relkind in ('r', 'p')
       and not exists (
         select 1 from pg_catalog.pg_trigger t

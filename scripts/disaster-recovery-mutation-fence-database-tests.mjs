@@ -38,7 +38,7 @@ try {
     order by n.nspname,c.relname
   `);
   assert.deepEqual(installed.rows.map((row) => `${row.nspname}.${row.relname}`), [
-    "auth.fence_fixture", "public.fence_fixture", "public.future_fence_fixture",
+    "public.fence_fixture", "public.future_fence_fixture",
   ]);
 
   await writer.connect();

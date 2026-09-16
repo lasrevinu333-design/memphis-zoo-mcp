@@ -474,6 +474,10 @@ assert.doesNotMatch(registeredSourceDatedStatusText, /grant\s+execute\s+on\s+fun
 assert.match(disasterRecoveryMutationFenceText, /create event trigger custodial_dr_guard_application_ddl/i);
 assert.match(disasterRecoveryMutationFenceText, /create event trigger custodial_dr_install_application_mutation_fences/i);
 assert.match(disasterRecoveryMutationFenceText, /custodial_heartbeat_application_mutation_lease/i);
+assert.match(disasterRecoveryMutationFenceText, /where n\.nspname\s*=\s*'public'/i,
+  "the mutation-fence installer must target the project-owned application schema");
+assert.doesNotMatch(disasterRecoveryMutationFenceText, /n\.nspname\s+in\s*\(\s*'public'\s*,\s*'auth'/i,
+  "the supported production postgres authority cannot install triggers on Supabase-owned auth tables");
 assert.match(applicationReaderFeedbackRuntimeText, /grant select \([\s\S]*feedback_reminder_count[\s\S]*\) on table public\.system_feedback_items to custodial_application_reader/i);
 assert.match(applicationReaderFeedbackRuntimeText, /create policy custodial_application_reader_system_feedback_runtime/i);
 assert.match(applicationReaderFeedbackRuntimeText, /system_feedback_legacy_image_backups/i);

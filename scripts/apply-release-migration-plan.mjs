@@ -167,7 +167,7 @@ try {
   const applicationTables = await db.query(`
     select format('%I.%I',n.nspname,c.relname) table_name
     from pg_class c join pg_namespace n on n.oid=c.relnamespace
-    where n.nspname in ('public','auth') and c.relkind in ('r','p')
+    where n.nspname='public' and c.relkind in ('r','p')
     order by n.nspname,c.relname
   `);
   if (applicationTables.rowCount) await db.query(`lock table ${applicationTables.rows.map((row) => row.table_name).join(",")} in access exclusive mode`);
