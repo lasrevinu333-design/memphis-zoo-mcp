@@ -3,14 +3,14 @@
   "release_id": "release-2026.07.19.custodial-v3.12",
   "frontend_commit_sha": "007e72fcd64f8a8a8ce52fb78e48e03ff00bebed",
   "frontend_commit_state": "final_pair_bound",
-  "schema_fingerprint": "df953b9ea7424d4ba838eee189a3ec1e3732f65b16aac24b0299f439194b6c5c",
+  "schema_fingerprint": "81b3fa4316a772ab7553956e5b5c29a04c3d5583c6f32b2917c30eb19a011c32",
   "schema_transition": {
     "transition_id": "custodial-build52-recovery-20260914",
     "from_fingerprint": "e0f9aaebe6013f5b912cf261bd7bf7703c7b604a64bc94d98fc2aae9506387cd",
-    "to_fingerprint": "df953b9ea7424d4ba838eee189a3ec1e3732f65b16aac24b0299f439194b6c5c",
+    "to_fingerprint": "81b3fa4316a772ab7553956e5b5c29a04c3d5583c6f32b2917c30eb19a011c32",
     "expires_at": "2026-09-27T23:59:59Z"
   },
-  "frontend_source_fingerprint": "df953b9ea7424d4ba838eee189a3ec1e3732f65b16aac24b0299f439194b6c5c",
+  "frontend_source_fingerprint": "81b3fa4316a772ab7553956e5b5c29a04c3d5583c6f32b2917c30eb19a011c32",
   "backend_contract": {
     "scan": "scan.v4.snapshot-bound-authority",
     "authority": "offline-authority.v5",
@@ -445,7 +445,7 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "25d7c1b1bb3a69dc085e8929bfd3b3e475607621"
+        "object_id": "98f61c1b149660f8328c926c9d166bdacdce0474"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
@@ -455,7 +455,7 @@
       {
         "path": "release/production-migration-state.json",
         "mode": "100644",
-        "object_id": "90f6e810968e110deb60ff7048e06e8db280bd4e"
+        "object_id": "802a1cd8283903f1593ee9e629f071c214b05ab7"
       },
       {
         "path": "release/reviewed-migrations/20260809125735_cleaning_inspection_24_hour_freshness.sql",
@@ -2175,12 +2175,12 @@
       {
         "path": "supabase/canonical/schema-fingerprint-input.json",
         "mode": "100644",
-        "object_id": "d871ead6a86190edb1a42fb972e2b07191d0dd6b"
+        "object_id": "838ccb1b5dab8ccd10e2eac58f21dc347c224206"
       },
       {
         "path": "supabase/canonical/schema-fingerprint.txt",
         "mode": "100644",
-        "object_id": "37e5449e770fd68558ac7227e30b885e88230446"
+        "object_id": "62fd79b8c06cdd49ef32275c3013641183c2a82c"
       },
       {
         "path": "supabase/config.toml",
@@ -3400,7 +3400,7 @@
       {
         "path": "supabase/migrations/20260916010000_project_native_start_into_operational_truth.sql",
         "mode": "100644",
-        "object_id": "0f71043c62aae1ab2537c351d0c985a9afb42fd2"
+        "object_id": "66f3c45d447c72912c2c84c76ad974d4d4ea7e98"
       },
       {
         "path": "tmp/write_probe.txt",
