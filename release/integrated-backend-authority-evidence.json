@@ -455,7 +455,7 @@
       {
         "path": "release/production-migration-state.json",
         "mode": "100644",
-        "object_id": "802a1cd8283903f1593ee9e629f071c214b05ab7"
+        "object_id": "7c9f72edfe48db02948104d4247db25b19aaa26d"
       },
       {
         "path": "release/reviewed-migrations/20260809125735_cleaning_inspection_24_hour_freshness.sql",
@@ -495,7 +495,7 @@
       {
         "path": "scripts/apply-release-migration-plan.mjs",
         "mode": "100644",
-        "object_id": "44047d2cd3641988c54dab6cb93840d8de0178b1"
+        "object_id": "107bb297a16dfdddf2bc933b1eba0706a71b382e"
       },
       {
         "path": "scripts/audit3-repair-contract-tests.mjs",
@@ -725,7 +725,7 @@
       {
         "path": "scripts/disaster-recovery-mutation-fence-database-tests.mjs",
         "mode": "100644",
-        "object_id": "0b7a22272d4d4266e32ce912295dfe509fe111c0"
+        "object_id": "b5b420b9b1358ced6a0b54c48d8f51c3efdfd2dc"
       },
       {
         "path": "scripts/disaster-recovery-runtime-contract-tests.mjs",
@@ -895,7 +895,7 @@
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
         "mode": "100644",
-        "object_id": "c09c64d2853aae1bb27dd99e1b0877236db5def3"
+        "object_id": "57f6d3dd0846000c0082df06ffa0d65df09693a0"
       },
       {
         "path": "scripts/integrated-backend-authority-release-provenance-tests.mjs",
@@ -3375,7 +3375,7 @@
       {
         "path": "supabase/migrations/20260827150000_disaster_recovery_global_mutation_fence.sql",
         "mode": "100644",
-        "object_id": "38b54318359b6bf30f9a450b28b7c6828300ae43"
+        "object_id": "4a77e8d36444c367c3eb1ed41fa2fcab4c37109e"
       },
       {
         "path": "supabase/migrations/20260827151000_restore_application_reader_feedback_runtime.sql",
