@@ -3,14 +3,14 @@
   "release_id": "release-2026.07.19.custodial-v3.12",
   "frontend_commit_sha": "007e72fcd64f8a8a8ce52fb78e48e03ff00bebed",
   "frontend_commit_state": "final_pair_bound",
-  "schema_fingerprint": "fa66114a3c38200aa22ce1f14ee808e02eb054d6f5cc1099262635f244fb8d8d",
+  "schema_fingerprint": "df953b9ea7424d4ba838eee189a3ec1e3732f65b16aac24b0299f439194b6c5c",
   "schema_transition": {
     "transition_id": "custodial-build52-recovery-20260914",
     "from_fingerprint": "e0f9aaebe6013f5b912cf261bd7bf7703c7b604a64bc94d98fc2aae9506387cd",
-    "to_fingerprint": "fa66114a3c38200aa22ce1f14ee808e02eb054d6f5cc1099262635f244fb8d8d",
+    "to_fingerprint": "df953b9ea7424d4ba838eee189a3ec1e3732f65b16aac24b0299f439194b6c5c",
     "expires_at": "2026-09-27T23:59:59Z"
   },
-  "frontend_source_fingerprint": "fa66114a3c38200aa22ce1f14ee808e02eb054d6f5cc1099262635f244fb8d8d",
+  "frontend_source_fingerprint": "df953b9ea7424d4ba838eee189a3ec1e3732f65b16aac24b0299f439194b6c5c",
   "backend_contract": {
     "scan": "scan.v4.snapshot-bound-authority",
     "authority": "offline-authority.v5",
@@ -57,6 +57,7 @@
     "application_reader_runtime_recovery_phase": "20260826155000 restores restricted Messenger reads and 20260826160000 restores restricted Employee Events reads without granting browser roles direct relation authority",
     "static_weekly_vacancy_and_lunch_phase": "20260827010500 adds first-class empty schedule positions, requires every vacant shift to retain a valid lunch inside its shift, keeps vacant work OPEN without synthetic identity, and permits only the static-weekly control plane to create or fill a position",
     "disaster_recovery_foundation_phase": "20260827150000 fences application mutations across an exact quiescent restore lease and restores scheduler state before traffic resumes; 20260827151000 restores the bounded feedback reader projection, RLS policy, and recovery inventory without exposing legacy images; 20260827152000 adopts the production Outlook event-sync audit ledger without rewriting its rows or granting browser authority; 20260827153000 scopes release-health identity checks to the exact employee/device projection while retaining separately inventoried feedback authority",
+    "native_start_operational_truth_phase": "20260916010000 projects an attested native NFC Start into manager, scan, GPS, rollback, health, and admission truth without fabricating a sessions row; expires stale projected work into terminal cancelled evidence; and inventories every changed function, view, grant, and index for exact recovery",
     "static_weekly_writer_and_device_secret_closure_phase": "The release runtime removes the retired minute-driven 09:45 schedule writer, confines coverage rebalance to explicit manager-approved schedule or absence publication, identifies the deployed DEVICE_CREDENTIAL_SECRET generation without exposing it, and blocks canary resume until every active employee credential is confirmed and matches that generation or completes manager-code recovery."
   },
   "rollback": {
@@ -84,7 +85,7 @@
       "prepare distinct CUSTODIAL_BACKEND_PROOF_SECRET, CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET, and DEVICE_CREDENTIAL_SECRET values (minimum 32 characters each); preserve all phone-local work and require manager-code recovery for any active credential from a different secret generation without exposing any secret",
       "capture the production catalog through the read-only Supabase boundary and require the exact observed production ledger head, catalog/privilege fingerprint, object counts, static-weekly state, and zero target-position collisions recorded in release/production-migration-state.json",
       "verify production project, fresh post-capture backup receipt, observed production identity, exact pending-migration digest, and exact source attestation against release/production-migration-state.json; either retain the existing exact GitHub run provenance or use one UUID-bound task-local encrypted archive and signed full rehearsal whose receipt and result hashes, runner hash, candidate commit/tree, archive digest, signer key IDs, zero leases, and ordered timestamps are carried into a short-lived authorization without uploading production contents",
-      "after explicit production-change admission, select exactly one evidence mode and apply through the GitHub production-migration gate only: GitHub evidence retains its strict run provenance, while task-local evidence uses a dedicated ephemeral verification key plus the hash-bound authorization secret and cannot download backup or rehearsal artifacts; apply only the five exact ordered pending migrations for the global restore mutation fence, restricted feedback reader, Outlook event-sync authority adoption, release-health identity projection correction, and messaging read-horizon/idempotent-send repair; require the production ledger to advance exactly five entries and the complete catalog delta to match the reviewed postconditions; do not replay historical production migrations or rewrite the production Outlook event-sync rows",
+      "after explicit production-change admission, select exactly one evidence mode and apply through the GitHub production-migration gate only: GitHub evidence retains its strict run provenance, while task-local evidence uses a dedicated ephemeral verification key plus the hash-bound authorization secret and cannot download backup or rehearsal artifacts; apply only the six exact ordered pending migrations for the global restore mutation fence, restricted feedback reader, Outlook event-sync authority adoption, release-health identity projection correction, messaging read-horizon/idempotent-send repair, and native-Start operational-truth projection and lifecycle closure; require the production ledger to advance exactly six entries and the complete catalog delta to match the reviewed postconditions; do not replay historical production migrations or rewrite the production Outlook event-sync rows",
       "after schema admission, retain the current immutable weighted-schedule publication by default; only when a named manager approves a replacement, derive exactly one replacement draft from the current publication, verify and publish it through the static-weekly control plane with expected-revision and idempotency guards; do not create a competing draft, and preserve the current publication until the replacement publication and projection are complete",
       "deploy the canonical-only backend only after all authoritative procedures above are present and verified; missing canonical writers fail closed",
       "require a green authority health gate and direct-DML denial probes before routing traffic"
@@ -92,7 +93,7 @@
     "production_migration_state": "release/production-migration-state.json",
     "production_migration_evidence": {
       "github_actions": "The original exact repository, workflow ref, workflow commit, run ID, and run-attempt provenance remains mandatory and cannot contain task-local fields.",
-      "task_local": "The backup may use Docker host networking only from explicit task-local mode and only for db.rqquvtjdmugpigbndmne.supabase.co, preserving PGSSLMODE=verify-full and the pinned CA. The encrypted archive stays local; one clean-tree rehearsal runs the same isolated restore, five-migration, runtime, write, replay, and cleanup gates and emits a signed local-only receipt and attestation.",
+      "task_local": "The backup may use Docker host networking only from explicit task-local mode and only for db.rqquvtjdmugpigbndmne.supabase.co, preserving PGSSLMODE=verify-full and the pinned CA. The encrypted archive stays local; one clean-tree rehearsal runs the same isolated restore, six-migration, runtime, write, replay, and cleanup gates and emits a signed local-only receipt and attestation.",
       "authorization_and_apply": "A short-lived signed authorization binds the exact archive, rehearsal receipt/result, candidate commit/tree, runner, signer IDs, source/target migration and catalog identities, zero leases, and timestamps. The GitHub apply workflow consumes only its canonical JSON hash and a dedicated ephemeral verification key in explicit task-local mode, never the archive or rehearsal; only sanitized result and receipt hashes may be retained."
     },
     "rollback": {
@@ -134,7 +135,7 @@
       {
         "path": ".github/workflows/build52-production-migration-apply.yml",
         "mode": "100644",
-        "object_id": "0920776f815e2390472b77aea06b3fc3c0ff3351"
+        "object_id": "02d56892853b214526891819d271758de0d46647"
       },
       {
         "path": ".github/workflows/custodial-populated-schema-preflight.yml",
@@ -444,17 +445,17 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "5b84c5196a1d37203219c73b868b879570eb2032"
+        "object_id": "25d7c1b1bb3a69dc085e8929bfd3b3e475607621"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
         "mode": "100644",
-        "object_id": "9769393f8df2b8ec0b4601d04d11619571723c68"
+        "object_id": "c72489f4816fa106478caab68ff7c26b935dee96"
       },
       {
         "path": "release/production-migration-state.json",
         "mode": "100644",
-        "object_id": "546282b808efd52150a0b033de0c047084072aeb"
+        "object_id": "90f6e810968e110deb60ff7048e06e8db280bd4e"
       },
       {
         "path": "release/reviewed-migrations/20260809125735_cleaning_inspection_24_hour_freshness.sql",
@@ -654,7 +655,7 @@
       {
         "path": "scripts/custodial-repair-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "c24c92af47a387e4f36d57b274776c2245d5f160"
+        "object_id": "f46e5d6b9cbdb1f866a595eb827034bcefe0b822"
       },
       {
         "path": "scripts/custodial-u4-migration-convergence-tests.mjs",
@@ -889,17 +890,17 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "92539da18c8ad2a32f5cfbdf76217f4d33362601"
+        "object_id": "a4dc272f4731a27e9920566f352b4264d9890474"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
         "mode": "100644",
-        "object_id": "360eb52d1e4d28c53a017e8bd67bc59c1fcf2d6e"
+        "object_id": "c09c64d2853aae1bb27dd99e1b0877236db5def3"
       },
       {
         "path": "scripts/integrated-backend-authority-release-provenance-tests.mjs",
         "mode": "100644",
-        "object_id": "a48e3217eddbbc52ed603d4073f0b84409b257e0"
+        "object_id": "30d95c4895d705395bc54c248bbb4b37f3fbbb72"
       },
       {
         "path": "scripts/integrated-backend-authority-suite-order-isolated-tests.mjs",
@@ -1054,7 +1055,7 @@
       {
         "path": "scripts/offline-actor-recovery-database-tests.mjs",
         "mode": "100644",
-        "object_id": "f851d652c26e1dca9ee35a79cab073e3f52ea137"
+        "object_id": "a4066ab26cca9ebe7fcd190c9c2a862c51d88a71"
       },
       {
         "path": "scripts/offline-actor-recovery-route-tests.mjs",
@@ -1204,7 +1205,7 @@
       {
         "path": "scripts/release-canary-recovery-database-tests.mjs",
         "mode": "100644",
-        "object_id": "b0c97246e8fe6e72a2f258236a08546d8f813404"
+        "object_id": "131146f1a304f94c115f5f92410479dba2b2a892"
       },
       {
         "path": "scripts/release-closure-contract-tests.mjs",
@@ -1224,7 +1225,7 @@
       {
         "path": "scripts/release-migration-plan-database-tests.mjs",
         "mode": "100644",
-        "object_id": "e2ea3400e74a8697f8695839a8969ab12c6c9600"
+        "object_id": "924613cc0062869cd2a24d500725adc9c9633cce"
       },
       {
         "path": "scripts/release-migration-rehearsal-provenance.mjs",
@@ -1864,7 +1865,7 @@
       {
         "path": "src/gemini-console-api.js",
         "mode": "100644",
-        "object_id": "3e921489445a05442555b7aca46400fae462d432"
+        "object_id": "0c66bbc9217d1a129e7de791655c638b0b22457d"
       },
       {
         "path": "src/gemini-controlled-worker.js",
@@ -1904,12 +1905,12 @@
       {
         "path": "src/index.js",
         "mode": "100644",
-        "object_id": "2d87490d9473b56c48a4144470c87534cef6f312"
+        "object_id": "cd30ce8d3ddf8305797d941b7994d3c0a563b0b1"
       },
       {
         "path": "src/integrated-backend-authority-release-evidence.js",
         "mode": "100644",
-        "object_id": "b87b8ce99908b63f68791ac71e4a956d255dbb8c"
+        "object_id": "fdacfb3caddb3e1e7522e78c911755b6da224647"
       },
       {
         "path": "src/leadership-bootstrap.js",
@@ -2174,12 +2175,12 @@
       {
         "path": "supabase/canonical/schema-fingerprint-input.json",
         "mode": "100644",
-        "object_id": "b33d706eebb8080b59b2f422cc68eb68ea317bdf"
+        "object_id": "d871ead6a86190edb1a42fb972e2b07191d0dd6b"
       },
       {
         "path": "supabase/canonical/schema-fingerprint.txt",
         "mode": "100644",
-        "object_id": "f37bb76355ef0ad7f6ea6238f2613cbfa7e84f5c"
+        "object_id": "37e5449e770fd68558ac7227e30b885e88230446"
       },
       {
         "path": "supabase/config.toml",
@@ -3397,13 +3398,18 @@
         "object_id": "32acb0c221f770270fb271ae272937393dc70e11"
       },
       {
+        "path": "supabase/migrations/20260916010000_project_native_start_into_operational_truth.sql",
+        "mode": "100644",
+        "object_id": "0f71043c62aae1ab2537c351d0c985a9afb42fd2"
+      },
+      {
         "path": "tmp/write_probe.txt",
         "mode": "100644",
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 655,
-    "migration_path_count": 125,
+    "authority_path_count": 656,
+    "migration_path_count": 126,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
   },
@@ -3788,6 +3794,9 @@
     },
     {
       "name": "20260914051527_messaging_read_horizon_and_send_idempotency.sql"
+    },
+    {
+      "name": "20260916010000_project_native_start_into_operational_truth.sql"
     }
   ],
   "release_boundary": "Prepare distinct minimum-32-character backend, native-route, and employee-device credential secrets before cutover; configure database digests immediately after the migrations that create each configuration function, retain the bridge backend artifact through the scan-snapshot phase, require manager-code recovery without phone-local work loss for any device-credential generation mismatch, and require the executable health/restoration probes before traffic changes."
