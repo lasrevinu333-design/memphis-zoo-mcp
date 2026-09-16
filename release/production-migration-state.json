@@ -61,7 +61,7 @@
     "source_migration_name": "project_native_start_into_operational_truth",
     "source_migration_version": "20260916010000",
     "production_ledger_version": null,
-    "canonical_source_schema_fingerprint": "df953b9ea7424d4ba838eee189a3ec1e3732f65b16aac24b0299f439194b6c5c",
+    "canonical_source_schema_fingerprint": "81b3fa4316a772ab7553956e5b5c29a04c3d5583c6f32b2917c30eb19a011c32",
     "public_function_count": 503,
     "production_ledger_count": 226,
     "source_authority_migration_count": 126,
@@ -147,11 +147,11 @@
     { "order": 3, "phase": "adopt_outlook_event_sync_authority", "file": "20260827152000_adopt_outlook_event_sync_authority.sql", "source_migration_version": "20260827152000", "sha256": "27ee85fc8dba1365cbdcd7143d941242d7c281a072aa8d19b4db6375bde9de52" },
     { "order": 4, "phase": "scope_release_health_identity_projection", "file": "20260827153000_scope_release_health_identity_projection.sql", "source_migration_version": "20260827153000", "sha256": "f821899197b375bbd1a96dfeef11034a3e1ec5313a4b387c8a91e7a8e14cbc1a" },
     { "order": 5, "phase": "messaging_read_horizon_and_send_idempotency", "file": "20260914051527_messaging_read_horizon_and_send_idempotency.sql", "source_migration_version": "20260914051527", "sha256": "923cf50c1a0f4f3e971f20e01204cd882da53d2312d95c77cba2b34302cc667f" },
-    { "order": 6, "phase": "project_native_start_into_operational_truth", "file": "20260916010000_project_native_start_into_operational_truth.sql", "source_migration_version": "20260916010000", "sha256": "1dab41eaca899c89240655c16c4a906f6c8ac0be14a985269875ecdab74f1c76" }
+    { "order": 6, "phase": "project_native_start_into_operational_truth", "file": "20260916010000_project_native_start_into_operational_truth.sql", "source_migration_version": "20260916010000", "sha256": "1c0ea0f3e131a100baa118ee08ef422d71a927b9968a37f04cb5ff888c0dfda2" }
   ],
   "postconditions": [
     "production ledger records the six ordered pending migrations exactly once and advances from 220 to 226 without replaying historical production migrations",
-    "the complete public catalog and privilege fingerprint equals df953b9ea7424d4ba838eee189a3ec1e3732f65b16aac24b0299f439194b6c5c with the exact reviewed object counts, including the pinned provider bootstrap's explicit postgres schema-usage edge normalized as migration_owner and fail-closed retention of expired external-mutation leases",
+    "the complete public catalog and privilege fingerprint equals 81b3fa4316a772ab7553956e5b5c29a04c3d5583c6f32b2917c30eb19a011c32 with the exact reviewed object counts, including the pinned provider bootstrap's explicit postgres schema-usage edge normalized as migration_owner and fail-closed retention of expired external-mutation leases",
     "production exposes exactly 503 public functions and 344 non-owner routine grants after the ordered migrations",
     "all existing mutable public tables carry the authoritative mutation guard and future public mutable tables receive it through the reviewed event trigger",
     "restore mutation admission is quiescent, binds exact restore identity and expected ledger/catalog state, records lease ownership and heartbeat, and fails closed outside the admitted restore process",

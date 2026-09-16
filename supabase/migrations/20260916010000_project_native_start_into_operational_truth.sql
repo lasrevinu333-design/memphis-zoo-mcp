@@ -267,9 +267,10 @@ $function$;
 revoke all on function public.expire_stale_open_sessions(timestamptz) from public,anon,authenticated,service_role;
 grant execute on function public.expire_stale_open_sessions(timestamptz) to postgres;
 
--- Scan state ranks any open work ahead of terminal history. This is required
--- for delayed first sync: an older valid Start must still block a newer closed
--- row until its own completion is reconciled.
+-- Scan state ranks projected native work ahead of terminal history across an
+-- operational-day boundary because its terminal completion has not synced yet.
+-- Preserve the established stale-session rule for legacy sessions rows: an
+-- abandoned prior-day row does not mask current readiness on the scan surface.
 create or replace view public.v_location_status as
 with work_candidates as (
   select
@@ -287,6 +288,8 @@ with work_candidates as (
     work.created_at,
     0 source_priority
   from public.custodial_open_work() work
+  where work.source_kind<>'session'
+     or work.started_at>=public.operational_day_start(now())
 
   union all
 
@@ -361,12 +364,16 @@ with op_day as (
   select location_id,max(coalesce(scanned_at,created_at)) last_scan_at
   from public.scan_events group by location_id
 ), open_session as (
+  -- Native Start evidence survives the 04:00 boundary until reconciled. Old
+  -- sessions rows retain the established current-operational-day display rule.
   select distinct on (work.location_id)
     work.location_id,work.location_code,work.session_id,work.session_uuid,
     work.status session_status,work.started_at,work.ended_at,
     work.duration_minutes,work.duration_display,
     work.employee_name,work.device_identifier
   from public.custodial_open_work() work
+  where work.source_kind<>'session'
+     or work.started_at>=public.operational_day_start(now())
   order by work.location_id,work.started_at desc,work.created_at desc,work.open_work_id desc
 ), latest_completed as (
   select distinct on (session.location_id)
