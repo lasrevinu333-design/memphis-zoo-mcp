@@ -58,6 +58,7 @@ const applicationReaderFeedbackRuntime = "20260827151000_restore_application_rea
 const outlookEventSyncAuthority = "20260827152000_adopt_outlook_event_sync_authority.sql";
 const releaseHealthIdentityProjection = "20260827153000_scope_release_health_identity_projection.sql";
 const messagingDurability = "20260914051527_messaging_read_horizon_and_send_idempotency.sql";
+const nativeStartOperationalTruth = "20260916010000_project_native_start_into_operational_truth.sql";
 const releaseInputPath = "release/integrated-backend-authority-input.json";
 const releaseEvidencePath = "release/integrated-backend-authority-evidence.json";
 const productionMigrationStatePath = "release/production-migration-state.json";
@@ -263,7 +264,7 @@ const input = parseJsonBlob(blobByPath.get(releaseInputPath), "release authority
 const productionMigrationState = parseJsonBlob(blobByPath.get(productionMigrationStatePath), "production migration state");
 assert.equal(productionMigrationState.mode, "migration_required");
 assert.ok(Array.isArray(productionMigrationState.pending_migrations));
-assert.equal(productionMigrationState.pending_migrations.length, 5, "the candidate must identify the five ordered pending release-foundation and messaging migrations");
+assert.equal(productionMigrationState.pending_migrations.length, 6, "the candidate must identify the six ordered pending release-foundation, messaging, and native-Start migrations");
 assert.ok(Array.isArray(productionMigrationState.applied_release_migrations));
 const appliedReleaseMigrations = productionMigrationState.applied_release_migrations.map(({ file }) => file);
 assert.deepEqual(appliedReleaseMigrations, [
@@ -286,6 +287,7 @@ assert.deepEqual(pendingReleaseMigrations, [
   outlookEventSyncAuthority,
   releaseHealthIdentityProjection,
   messagingDurability,
+  nativeStartOperationalTruth,
 ]);
 assert.equal(new Set(appliedReleaseMigrations).size, appliedReleaseMigrations.length, "applied release migrations must be unique");
 for (const migration of appliedReleaseMigrations) {
@@ -320,6 +322,7 @@ const applicationReaderFeedbackRuntimeText = blobByPath.get(`supabase/migrations
 const outlookEventSyncAuthorityText = blobByPath.get(`supabase/migrations/${outlookEventSyncAuthority}`).bytes.toString("utf8");
 const releaseHealthIdentityProjectionText = blobByPath.get(`supabase/migrations/${releaseHealthIdentityProjection}`).bytes.toString("utf8");
 const messagingDurabilityText = blobByPath.get(`supabase/migrations/${messagingDurability}`).bytes.toString("utf8");
+const nativeStartOperationalTruthText = blobByPath.get(`supabase/migrations/${nativeStartOperationalTruth}`).bytes.toString("utf8");
 const schemaFingerprint = blobByPath.get("supabase/canonical/schema-fingerprint.txt")?.bytes.toString("utf8").trim();
 const frontendManifest = parseJsonBlob(blobByPath.get("release/frontend-release-manifest.json"), "frontend release manifest");
 
@@ -328,7 +331,7 @@ assert.match(input.backend_contract.device_credential_secret_gate, /Every active
 assert.ok(Array.isArray(input.cutover.phase_order) && input.cutover.phase_order.length >= 7);
 assert.match(input.cutover.phase_order[1], /exact observed production ledger head.*catalog\/privilege fingerprint.*zero target-position collisions/i);
 assert.match(input.cutover.phase_order[2], /fresh post-capture backup receipt.*exact pending-migration digest.*exact source attestation/i);
-assert.match(input.cutover.phase_order[3], /five exact ordered pending migrations.*global restore mutation fence.*restricted feedback reader.*Outlook event-sync authority adoption.*release-health identity projection correction.*messaging read-horizon\/idempotent-send repair.*ledger to advance exactly five entries.*do not replay historical production migrations/i);
+assert.match(input.cutover.phase_order[3], /six exact ordered pending migrations.*global restore mutation fence.*restricted feedback reader.*Outlook event-sync authority adoption.*release-health identity projection correction.*messaging read-horizon\/idempotent-send repair.*native-Start operational-truth projection and lifecycle closure.*ledger to advance exactly six entries.*do not replay historical production migrations/i);
 assert.match(input.cutover.phase_order[4], /retain the current immutable weighted-schedule publication by default.*only when a named manager approves a replacement.*derive exactly one replacement draft from the current publication.*expected-revision and idempotency guards.*do not create a competing draft.*preserve the current publication/i);
 assert.ok(input.cutover.rollback.restoration_checks.some((value) => /retired 09:45 background writer.*manager-approved schedule or absence publication/i.test(value)));
 assert.ok(input.cutover.rollback.restoration_checks.some((value) => /every active employee-device credential.*manager-code recovery.*legacy secret fallback/i.test(value)));
@@ -347,25 +350,28 @@ assert.equal(productionMigrationState.observed_production?.vacancy_functions_pre
 assert.equal(productionMigrationState.observed_production?.hydrated_initial_draft_reader_present, true);
 assert.equal(productionMigrationState.observed_production?.registered_source_dated_status_excluded, true);
 assert.equal(productionMigrationState.observed_production?.outlook_event_sync_table_present, true);
-assert.equal(productionMigrationState.target?.source_migration_file, messagingDurability);
-assert.equal(productionMigrationState.target?.source_migration_name, "messaging_read_horizon_and_send_idempotency");
-assert.equal(productionMigrationState.target?.source_migration_version, "20260914051527");
+assert.equal(productionMigrationState.target?.source_migration_file, nativeStartOperationalTruth);
+assert.equal(productionMigrationState.target?.source_migration_name, "project_native_start_into_operational_truth");
+assert.equal(productionMigrationState.target?.source_migration_version, "20260916010000");
 assert.equal(productionMigrationState.target?.production_ledger_version, null);
 assert.equal(productionMigrationState.target?.canonical_source_schema_fingerprint, schemaFingerprint);
-assert.equal(productionMigrationState.target?.public_function_count, 501);
-assert.equal(productionMigrationState.target?.production_ledger_count, 225);
+assert.equal(productionMigrationState.target?.public_function_count, 503);
+assert.equal(productionMigrationState.target?.production_ledger_count, 226);
 assert.equal(productionMigrationState.target?.source_authority_migration_count, expectedMigrationCount);
 assert.equal(productionMigrationState.target?.pending_migration_count, pendingReleaseMigrations.length);
 assert.equal(productionMigrationState.target?.registered_source_dated_status_excluded, true);
-assert.equal(productionMigrationState.target?.expected_catalog_counts?.functions, 501);
+assert.equal(productionMigrationState.target?.expected_catalog_counts?.functions, 503);
 assert.equal(productionMigrationState.target?.expected_catalog_counts?.triggers, 310);
 assert.equal(productionMigrationState.target?.expected_catalog_counts?.policies, 42);
-assert.equal(productionMigrationState.target?.expected_catalog_counts?.routine_grants, 342);
+assert.equal(productionMigrationState.target?.expected_catalog_counts?.routine_grants, 344);
 assert.equal(productionMigrationState.target?.expected_catalog_counts?.schema_grants, 9);
 assert.match(releaseHealthIdentityProjectionText, /c\.relname in \('devices','employees','device_aliases'\)/);
 assert.match(releaseHealthIdentityProjectionText, /Release health recovery inventory row is missing or duplicated/);
 assert.match(messagingDurabilityText, /msg_mark_thread_read_through/);
 assert.match(messagingDurabilityText, /p_client_message_id/);
+assert.match(nativeStartOperationalTruthText, /create or replace function public\.custodial_open_work\(\)/i);
+assert.match(nativeStartOperationalTruthText, /create or replace function public\.expire_stale_open_sessions\(/i);
+assert.match(nativeStartOperationalTruthText, /v_location_dashboard_status/i);
 assert.equal(productionMigrationState.source_binding?.kind, "external_exact_head_release_attestation");
 assert.equal(productionMigrationState.authorization?.production_mutation_required, true);
 assert.equal(productionMigrationState.authorization?.sequence_policy, "apply_exact_ordered_pending_migrations_after_release_admission");

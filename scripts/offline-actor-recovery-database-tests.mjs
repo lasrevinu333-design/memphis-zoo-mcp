@@ -16,15 +16,16 @@ const execSecret = "offline-authority-test-secret-01234567890123456789";
 const nativeRouteSecret = "offline-native-route-test-secret-0123456789012345";
 const nativeStartSignature = "a".repeat(64);
 const nativeCompletionSignature = "b".repeat(64);
-const employeeA = randomUUID(), employeeB = randomUUID();
-const deviceA = randomUUID(), deviceB = randomUUID(), deviceC = randomUUID();
-const locationA = randomUUID(), locationB = randomUUID(), locationC = randomUUID();
-const credentialA = randomUUID(), credentialB = randomUUID(), credentialC = randomUUID();
+const employeeA = randomUUID(), employeeB = randomUUID(), employeeExpiry = randomUUID();
+const deviceA = randomUUID(), deviceB = randomUUID(), deviceC = randomUUID(), deviceExpiry = randomUUID();
+const locationA = randomUUID(), locationB = randomUUID(), locationC = randomUUID(), locationExpiry = randomUUID();
+const credentialA = randomUUID(), credentialB = randomUUID(), credentialC = randomUUID(), credentialExpiry = randomUUID();
 const stamp = Date.now().toString(36);
-const codeA = `OA${stamp}A`.toUpperCase(), codeB = `OA${stamp}B`.toUpperCase(), codeC = `OA${stamp}C`.toUpperCase();
+const codeA = `OA${stamp}A`.toUpperCase(), codeB = `OA${stamp}B`.toUpperCase(), codeC = `OA${stamp}C`.toUpperCase(), codeExpiry = `OA${stamp}X`.toUpperCase();
 const tokenHashA = createHash("sha256").update(`offline-authority-a:${stamp}`).digest("hex");
 const tokenHashB = createHash("sha256").update(`offline-authority-b:${stamp}`).digest("hex");
 const tokenHashC = createHash("sha256").update(`offline-authority-c:${stamp}`).digest("hex");
+const tokenHashExpiry = createHash("sha256").update(`offline-authority-expiry:${stamp}`).digest("hex");
 let startedAt;
 let endedAt;
 const entryEvidence = { entry_source: "native-nfc" };
@@ -98,23 +99,28 @@ select public.custodial_configure_backend_execution_key(encode(extensions.digest
 select public.custodial_configure_native_route_proof_key(encode(extensions.digest(convert_to(${q(nativeRouteSecret)},'UTF8'),'sha256'),'hex'),'offline-authority-db-test');
 insert into public.employees(id,employee_code,display_name,active,role,notes) values
   ('${employeeA}'::uuid,'OA${stamp}A','Offline Authority Actor A',true,'staff','disposable authority test'),
-  ('${employeeB}'::uuid,'OA${stamp}B','Offline Authority Actor B',true,'staff','disposable authority test');
+  ('${employeeB}'::uuid,'OA${stamp}B','Offline Authority Actor B',true,'staff','disposable authority test'),
+  ('${employeeExpiry}'::uuid,'OA${stamp}X','Offline Expiry Actor',true,'staff','disposable expiry test');
 insert into public.locations(id,location_code,location_name,location_type,active,form_type,notes) values
   ('${locationA}'::uuid,'${codeA}','Offline Authority Location A','restroom',true,'restroom','disposable authority test'),
   ('${locationB}'::uuid,'${codeB}','Offline Authority Location B','restroom',true,'restroom','disposable authority test'),
-  ('${locationC}'::uuid,'${codeC}','Offline Authority Location C','restroom',true,'restroom','disposable authority test');
+  ('${locationC}'::uuid,'${codeC}','Offline Authority Location C','restroom',true,'restroom','disposable authority test'),
+  ('${locationExpiry}'::uuid,'${codeExpiry}','Offline Expiry Location','restroom',true,'restroom','disposable expiry test');
 insert into public.devices(id,device_id,device_name,active,assigned_employee_id,notes) values
   ('${deviceA}'::uuid,'OA-${stamp}-A','Offline Authority Device A',true,'${employeeA}'::uuid,'disposable authority test'),
   ('${deviceB}'::uuid,'OA-${stamp}-B','Offline Authority Device B',true,'${employeeA}'::uuid,'disposable authority test'),
-  ('${deviceC}'::uuid,'OA-${stamp}-C','Offline Authority Device C',true,'${employeeB}'::uuid,'disposable authority test');
+  ('${deviceC}'::uuid,'OA-${stamp}-C','Offline Authority Device C',true,'${employeeB}'::uuid,'disposable authority test'),
+  ('${deviceExpiry}'::uuid,'OA-${stamp}-X','Offline Expiry Device',true,'${employeeExpiry}'::uuid,'disposable expiry test');
 insert into public.device_auth_credentials(credential_id,device_id,token_hash,device_label,confirmed_at,expires_at,metadata_json) values
   ('${credentialA}'::uuid,'${deviceA}'::uuid,'${tokenHashA}','authority A',now(),now()+interval '30 days','{}'::jsonb),
   ('${credentialB}'::uuid,'${deviceB}'::uuid,'${tokenHashB}','authority B',now(),now()+interval '30 days','{}'::jsonb),
-  ('${credentialC}'::uuid,'${deviceC}'::uuid,'${tokenHashC}','authority C',now(),now()+interval '30 days','{}'::jsonb);
+  ('${credentialC}'::uuid,'${deviceC}'::uuid,'${tokenHashC}','authority C',now(),now()+interval '30 days','{}'::jsonb),
+  ('${credentialExpiry}'::uuid,'${deviceExpiry}'::uuid,'${tokenHashExpiry}','authority expiry',now(),now()+interval '30 days','{}'::jsonb);
 insert into public.custodial_employee_device_assignment_history(device_id,device_identifier,new_employee_id,new_employee_name,change_reason,source) values
   ('${deviceA}'::uuid,'OA-${stamp}-A','${employeeA}'::uuid,'Offline Authority Actor A','fixture','test'),
   ('${deviceB}'::uuid,'OA-${stamp}-B','${employeeA}'::uuid,'Offline Authority Actor A','fixture','test'),
-  ('${deviceC}'::uuid,'OA-${stamp}-C','${employeeB}'::uuid,'Offline Authority Actor B','fixture','test');`;
+  ('${deviceC}'::uuid,'OA-${stamp}-C','${employeeB}'::uuid,'Offline Authority Actor B','fixture','test'),
+  ('${deviceExpiry}'::uuid,'OA-${stamp}-X','${employeeExpiry}'::uuid,'Offline Expiry Actor','fixture','test');`;
 
 await sql(setup);
 assert.equal(await sql(`select count(*) from public.custodial_offline_actor_contexts where client_session_id like 'oa-${stamp}%';`), "0", "state reads must create no proof/context");
@@ -122,6 +128,7 @@ snapshot = JSON.parse(await sql(`select public.tool_get_offline_scan_authority_s
 snapshotsByDevice.set(`OA-${stamp}-A`, snapshot);
 snapshotsByDevice.set(`OA-${stamp}-B`, JSON.parse(await sql(`select public.tool_get_offline_scan_authority_snapshot(${q(`OA-${stamp}-B`)},${q(credentialB)},${q(execSecret)})::text;`)));
 snapshotsByDevice.set(`OA-${stamp}-C`, JSON.parse(await sql(`select public.tool_get_offline_scan_authority_snapshot(${q(`OA-${stamp}-C`)},${q(credentialC)},${q(execSecret)})::text;`)));
+snapshotsByDevice.set(`OA-${stamp}-X`, JSON.parse(await sql(`select public.tool_get_offline_scan_authority_snapshot(${q(`OA-${stamp}-X`)},${q(credentialExpiry)},${q(execSecret)})::text;`)));
 const latestSnapshotGeneratedAt = Math.max(...Array.from(snapshotsByDevice.values(), (value) => Date.parse(value.generated_at)));
 startedAt = new Date(latestSnapshotGeneratedAt + 1).toISOString();
 endedAt = new Date(latestSnapshotGeneratedAt + 2).toISOString();
@@ -206,11 +213,109 @@ const postDeactivationNewStartDenied = await sql(`select public.tool_start_offli
 assert.match(postDeactivationNewStartDenied, /device or location was not active when the offline occurrence began/i,
   "an old snapshot cannot authorize a new physical start after deactivation");
 
+const activeWorkBefore = Number(await sql("select count(*) from public.custodial_open_work() where status='active';"));
 const sessionA = `oa-${stamp}-accepted`;
 const contextA = await activate({ device: `OA-${stamp}-A`, location: codeA, session: sessionA });
 assert.equal(contextA.committable, true);
 assert.match(contextA.occurrence_id, /^[0-9a-f-]{36}$/);
 assert.match(contextA.submission_proof, /^[0-9a-f]{64}$/);
+assert.equal(await sql(`select count(*) from public.sessions where client_session_id=${q(sessionA)};`), "0",
+  "native Start remains an offline actor occurrence until terminal completion is admitted");
+assert.equal(await sql(`select (session_id is null)::text||'|'||source_kind||'|'||session_uuid||'|'||client_session_id||'|'||status||'|'||employee_name||'|'||device_identifier
+  from public.custodial_open_work() where context_id=${q(contextA.context_id)}::uuid;`),
+  `true|native_offline_context|${sessionA}|${sessionA}|active|Offline Authority Actor A|OA-${stamp}-A`,
+  "the native-attested context is the one canonical projected open-work row without a fabricated sessions FK");
+await sql(`update public.employees set display_name='Renamed Actor Fixture' where id='${employeeA}'::uuid;
+  update public.devices set device_id='RENAMED-${stamp}-A' where id='${deviceA}'::uuid;
+  update public.locations set location_code='RENAMED${stamp}A' where id='${locationA}'::uuid;`);
+assert.equal(await sql(`select location_code||'|'||employee_name||'|'||device_identifier
+  from public.custodial_open_work() where context_id=${q(contextA.context_id)}::uuid;`),
+  `${codeA}|Offline Authority Actor A|OA-${stamp}-A`,
+  "manager live truth retains the frozen Start actor, device identifier, and canonical NFC location code after mutable row renames");
+assert.equal(await sql(`select location_code||'|'||employee_name||'|'||device_id
+  from public.v_location_status where location_id='${locationA}'::uuid;`),
+  `${codeA}|Offline Authority Actor A|OA-${stamp}-A`,
+  "scan truth propagates the same frozen native Start identity");
+await sql(`update public.employees set display_name='Offline Authority Actor A' where id='${employeeA}'::uuid;
+  update public.devices set device_id='OA-${stamp}-A' where id='${deviceA}'::uuid;
+  update public.locations set location_code=${q(codeA)} where id='${locationA}'::uuid;`);
+const sameDeviceScanState = JSON.parse(await sql(`select public.tool_get_location_scan_state(${q(codeA)},${q(`OA-${stamp}-A`)})::text;`));
+assert.equal(sameDeviceScanState.latest_session_uuid, sessionA);
+assert.equal(sameDeviceScanState.latest_session_status, "active");
+assert.equal(sameDeviceScanState.latest_employee_name, "Offline Authority Actor A");
+assert.equal(sameDeviceScanState.suggested_action, "finish_session",
+  "the acknowledging phone must recover the same projected Start instead of creating another one");
+const otherDeviceScanState = JSON.parse(await sql(`select public.tool_get_location_scan_state(${q(codeA)},${q(`OA-${stamp}-B`)})::text;`));
+assert.equal(otherDeviceScanState.suggested_action, "blocked_location_active",
+  "another phone must see the native-attested location as occupied");
+assert.equal(await sql(`select (open_session_id is null)::text||'|'||open_session_uuid||'|'||open_session_status||'|'||open_session_employee_name||'|'||open_session_device_identifier||'|'||status_code||'|'||status_color
+  from public.v_location_dashboard_status where location_id='${locationA}'::uuid;`),
+  `true|${sessionA}|active|Offline Authority Actor A|OA-${stamp}-A|in_progress|blue`,
+  "manager live truth must match the exact native Start actor, location, device, and external UUID");
+await sql(`begin;
+  set local custodial.backend_execution_secret=${q(execSecret)};
+  update public.custodial_offline_actor_contexts
+  set started_at=public.operational_day_start(now())-interval '1 minute'
+  where context_id=${q(contextA.context_id)}::uuid;
+  commit;`);
+assert.equal(await sql(`select status_code||'|'||status_color||'|'||open_session_uuid
+  from public.v_location_dashboard_status where location_id='${locationA}'::uuid;`),
+  `in_progress|blue|${sessionA}`,
+  "open work crossing the 04:00 Central operational boundary remains visible to the manager");
+await sql(`begin;
+  set local custodial.backend_execution_secret=${q(execSecret)};
+  update public.custodial_offline_actor_contexts set started_at=${q(startedAt)}
+  where context_id=${q(contextA.context_id)}::uuid;
+  commit;`);
+assert.equal(Number(await sql("select active_sessions from public.v_admin_health_snapshot;")), activeWorkBefore + 1,
+  "manager health counts the durable native Start as active work");
+assert.equal(await sql(`select count(*) from public.list_open_sessions() where session_uuid=${q(sessionA)};`), "1",
+  "admin open-session tools consume the same projected Start");
+assert.equal(await sql(`select can_start::text||'|'||reason||'|'||open_session_uuid from public.can_employee_start_session('Offline Authority Actor A');`),
+  `false|employee_has_open_session|${sessionA}`,
+  "employee admission blocks a second Start while the projected occurrence is open");
+await sql(`insert into public.device_sync_status(device_id,presented_identifier,queue_count,retry_count,last_server_ack_at,frontend_version,updated_at)
+  values('${deviceA}'::uuid,'OA-${stamp}-A',0,0,now(),'test',now())
+  on conflict(device_id) do update set queue_count=0,retry_count=0,last_server_ack_at=now(),updated_at=now();`);
+const rollbackBlockedByContext = JSON.parse(await sql(`select public.tool_get_device_rollback_readiness(${q(`OA-${stamp}-A`)})::text;`));
+assert.equal(rollbackBlockedByContext.backend_open_session_count, 1);
+assert.equal(rollbackBlockedByContext.eligible, false,
+  "rollback cannot be reported safe while a native-attested actor context remains open");
+const projectedGpsEventId = randomUUID();
+const projectedGps = JSON.parse(await sql(`select public.tool_evaluate_location_proximity_v2(
+  ${q(codeA)},${q(`OA-${stamp}-A`)},35.1495,-90.0490,10,${q(sessionA)},
+  ${q(projectedGpsEventId)},${q(`${sessionA}-gps-correlation`)},now()
+)::text;`));
+assert.equal(projectedGps.ok, true);
+assert.equal(projectedGps.session_uuid, sessionA,
+  "GPS acknowledged during projected native work retains the Start identity");
+assert.equal(await sql(`select public.custodial_gps_session_state(${q(codeA)},${q(`OA-${stamp}-A`)},${q(sessionA)});`), "active",
+  "the GPS authority wrapper resolves the projected native Start as active");
+assert.equal(await sql(`select count(*) from public.device_location_proximity_status
+  where device_id='${deviceA}'::uuid and location_id='${locationA}'::uuid and session_uuid=${q(sessionA)};`), "1",
+  "pre-completion GPS is durable under the exact external work identity");
+assert.equal(await sql(`select (session_id is null)::text||'|'||(payload_json->>'session_uuid')||'|'||(payload_json->>'client_session_id')
+  from public.scan_events where client_event_id=${q(projectedGpsEventId)};`),
+  `true|${sessionA}|${sessionA}`,
+  "pre-completion GPS keeps the relational session FK empty and carries exact projected identity for manager correlation");
+const projectedGpsWrongDevice = await sql(`select public.tool_evaluate_location_proximity_v2(
+  ${q(codeA)},${q(`OA-${stamp}-B`)},35.1495,-90.0490,10,${q(sessionA)},
+  ${q(randomUUID())},${q(`${sessionA}-wrong-device`)},now()
+);`, { expectFailure: true });
+assert.match(projectedGpsWrongDevice, /Session does not belong to this device and location/i,
+  "projected GPS remains bound to the exact Start device and location");
+const projectedGpsV1EventId = randomUUID();
+const projectedGpsV1Sql = `select public.tool_evaluate_location_proximity(
+  ${q(codeA)},${q(`OA-${stamp}-A`)},35.1495,-90.0490,10,${q(sessionA)},
+  ${q(projectedGpsV1EventId)},${q(`${sessionA}-gps-v1-correlation`)}
+)::text;`;
+const projectedGpsV1 = JSON.parse(await sql(projectedGpsV1Sql));
+const projectedGpsV1Replay = JSON.parse(await sql(projectedGpsV1Sql));
+assert.equal(projectedGpsV1.session_uuid, sessionA);
+assert.equal(projectedGpsV1Replay.scan_event_id, projectedGpsV1.scan_event_id,
+  "legacy GPS transport replay resolves one stable scan event during projected native work");
+assert.equal(await sql(`select count(*) from public.scan_events where client_event_id=${q(projectedGpsV1EventId)};`), "1",
+  "legacy GPS replay cannot duplicate manager evidence");
 // Every sql() call opens a fresh psql process, so this is both an exact replay
 // after a lost response and a transport/service-restart recovery check.
 const startReplay = await activate({ device: `OA-${stamp}-A`, location: codeA, session: sessionA });
@@ -218,6 +323,79 @@ assert.equal(startReplay.committable, true, "exact start replay remains completi
 assert.equal(startReplay.replayed, true, "exact start replay is explicitly classified");
 assert.equal(startReplay.submission_proof, contextA.submission_proof, "lost start response recovers the stable durable proof");
 assert.equal(await sql(`select count(*) from public.custodial_offline_submission_proofs p join public.custodial_offline_actor_contexts c on c.context_id=p.context_id where c.client_session_id=${q(sessionA)};`), "1");
+
+// An acknowledged Start that outlives its signed context must not remain blue
+// forever. Expiry materializes one same-UUID cancelled row so the phone can
+// discard local work and every operational admission gate becomes available.
+const expirySession = `oa-${stamp}-expired-native-start`;
+const expiryContext = await activate({
+  device: `OA-${stamp}-X`, location: codeExpiry, session: expirySession,
+  credential: credentialExpiry, authoritySnapshot: snapshotsByDevice.get(`OA-${stamp}-X`),
+});
+await sql(`begin;
+  set local custodial.backend_execution_secret=${q(execSecret)};
+  update public.custodial_offline_actor_contexts
+  set expires_at=started_at+interval '1 millisecond'
+  where context_id=${q(expiryContext.context_id)}::uuid;
+  commit;`);
+const expiryNow = await sql(`select public.custodial_canonical_utc_millis(started_at+interval '2 milliseconds')
+  from public.custodial_offline_actor_contexts where context_id=${q(expiryContext.context_id)}::uuid;`);
+assert.equal(await sql(`select public.expire_stale_open_sessions(${q(expiryNow)}::timestamptz);`), "1",
+  "the hourly lifecycle writer terminalizes the one expired projected Start");
+assert.equal(await sql(`select session_uuid||'|'||client_session_id||'|'||status||'|'||completion_source
+  from public.sessions where client_session_id=${q(expirySession)};`),
+  `${expirySession}|${expirySession}|cancelled|system_timeout_cancelled`,
+  "expiry preserves the phone's external UUID in one durable cancelled session");
+assert.equal(await sql(`select context.status||'|'||proof.state||'|'||(proof.consumed_at is not null)::text
+  from public.custodial_offline_actor_contexts context
+  join public.custodial_offline_submission_proofs proof on proof.context_id=context.context_id
+  where context.context_id=${q(expiryContext.context_id)}::uuid;`), "cancelled|quarantined|true");
+assert.equal(await sql(`select count(*) from public.custodial_open_work() where client_session_id=${q(expirySession)};`), "0",
+  "expired Start leaves no projected-open residue");
+assert.equal(await sql(`select count(*) from public.session_events event
+  join public.sessions session on session.id=event.session_id
+  where session.client_session_id=${q(expirySession)} and event.event_type='offline_occurrence_expired';`), "1",
+  "expiry has one durable lifecycle event");
+const expiredScanState = JSON.parse(await sql(`select public.tool_get_location_scan_state(
+  ${q(codeExpiry)},${q(`OA-${stamp}-X`)})::text;`));
+assert.equal(expiredScanState.latest_session_uuid, expirySession);
+assert.equal(expiredScanState.latest_session_status, "cancelled");
+assert.equal(expiredScanState.suggested_action, "start_session",
+  "the same phone observes terminal cancellation and may begin new work");
+await sql(`insert into public.device_sync_status(device_id,presented_identifier,queue_count,retry_count,last_server_ack_at,frontend_version,updated_at)
+  values('${deviceExpiry}'::uuid,'OA-${stamp}-X',0,0,now(),'test',now())
+  on conflict(device_id) do update set queue_count=0,retry_count=0,last_server_ack_at=now(),updated_at=now();`);
+const expiryRollback = JSON.parse(await sql(`select public.tool_get_device_rollback_readiness(${q(`OA-${stamp}-X`)})::text;`));
+assert.equal(expiryRollback.backend_open_session_count, 0);
+assert.equal(expiryRollback.eligible, true, "expiry unblocks exact-device rollback readiness");
+assert.equal(await sql(`select can_start::text||'|'||reason from public.can_employee_start_session('Offline Expiry Actor');`),
+  "true|ok", "expiry unblocks employee admission");
+await sql(`select public.static_weekly_v4_assert_employee_turnover_ready('${employeeExpiry}'::uuid);`);
+assert.equal(await sql(`select public.expire_stale_open_sessions(${q(expiryNow)}::timestamptz);`), "0",
+  "exact expiry replay is idempotent");
+const expiryEnd = new Date(Date.parse(startedAt) + 1_000).toISOString();
+const expiryFinishId = completionUuid(`native-finish:${expiryContext.context_id}`);
+const expiredFinish = JSON.parse(await sql(jsonSql({
+  session: expirySession, completion: `${expirySession}-complete`, context: expiryContext.context_id,
+  proof: expiryContext.submission_proof, device: `OA-${stamp}-X`, location: codeExpiry,
+  credential: credentialExpiry, start: startedAt, end: expiryEnd, response: {},
+  nativeFinishScanEntry: expiryFinishId,
+  scans: [{ client_event_id: expiryFinishId, event_type: "scan_finish", result: "ok", notes: null,
+    scanned_at: expiryEnd, payload_json: entryEvidence }],
+  correlation: `${expirySession}-late-finish`,
+})));
+assert.equal(expiredFinish.status, "cancelled");
+assert.equal(expiredFinish.discard_local_workflow, true,
+  "a late Finish receives the same terminal cancellation instead of creating a quarantine loop");
+assert.equal(expiredFinish.session_uuid, expirySession);
+assert.equal(await sql(`select count(*) from public.completion_responses response
+  join public.sessions session on session.id=response.session_id
+  where session.client_session_id=${q(expirySession)};`), "0",
+  "late Finish cannot fabricate a completion for expired work");
+assert.equal(await sql(`select count(*) from public.custodial_offline_reconciliation_records
+  where client_session_id=${q(expirySession)};`), "0",
+  "late Finish does not create a manager quarantine for an already-terminal expiry");
+
 const changedStartDenied = await sql(`select public.tool_start_offline_occurrence(${q(`OA-${stamp}-A`)},${q(codeA)},${q(sessionA)},${q(new Date(Date.parse(startedAt) + 1000).toISOString())},${q(snapshot.snapshot_id)},${q(snapshot.employee_id)},${snapshot.assignment_epoch},${q(credentialA)},${q(credentialA)},${q(nativeScanEntries.get(sessionA))},'custodial-native-start.v1',${q(nativeStartSignature)},${q(nativeRouteSecret)},${q(execSecret)});`, { expectFailure: true });
 assert.match(changedStartDenied, /does not match the original frozen snapshot/i, "different start content remains fenced");
 const changedScanEntryDenied = await activate({
@@ -498,6 +676,23 @@ const acceptedSql = jsonSql({ session: sessionA, completion: `oa-${stamp}-comple
 const accepted = JSON.parse(await sql(acceptedSql));
 assert.equal(accepted.status, "closed");
 assert.equal(accepted.native_completion_attested, true);
+assert.equal(accepted.session_uuid, sessionA,
+  "completion keeps the one external UUID established by native Start");
+assert.equal(await sql(`select session_uuid||'|'||status from public.sessions where client_session_id=${q(sessionA)};`),
+  `${sessionA}|closed`, "terminal materialization preserves the projected Start identity");
+assert.equal(await sql(`select count(*) from public.custodial_open_work() where client_session_id=${q(sessionA)};`), "0",
+  "committed work leaves no projected or materialized open residue");
+const completedScanState = JSON.parse(await sql(`select public.tool_get_location_scan_state(${q(codeA)},${q(`OA-${stamp}-A`)})::text;`));
+assert.equal(completedScanState.latest_session_uuid, sessionA);
+assert.equal(completedScanState.latest_session_status, "closed");
+assert.equal(completedScanState.suggested_action, "start_session");
+const lateGps = JSON.parse(await sql(`select public.tool_evaluate_location_proximity_v2(
+  ${q(codeA)},${q(`OA-${stamp}-A`)},35.1495,-90.0490,10,${q(sessionA)},
+  ${q(randomUUID())},${q(`${sessionA}-late-gps`)},now()
+)::text;`));
+assert.equal(lateGps.result, "post_session");
+assert.equal(lateGps.authoritative, false,
+  "GPS arriving after Finish remains advisory and cannot rewrite closed work truth");
 assertCanonicalUtcMillis(accepted.started_at, "accepted.started_at");
 assertCanonicalUtcMillis(accepted.completed_at, "accepted.completed_at");
 assert.equal(await sql(`select employee_id::text from public.sessions where client_session_id=${q(sessionA)};`), employeeA);
@@ -613,6 +808,10 @@ const fenced = JSON.parse(await sql(jsonSql({ session: `oa-${stamp}-fence-b`, co
 assert.equal(fenced.status, "quarantined");
 assert.equal(await sql(`select status from public.custodial_offline_actor_contexts where context_id=${q(fenceB.context_id)}::uuid;`), "quarantined");
 assert.equal(await sql(`select state from public.custodial_offline_submission_proofs where context_id=${q(fenceB.context_id)}::uuid;`), "quarantined");
+assert.equal(await sql(`select count(*) from public.custodial_open_work() where context_id=${q(fenceB.context_id)}::uuid;`), "0",
+  "a quarantined context disappears from every projected open-work consumer");
+assert.equal(await sql(`select coalesce(public.custodial_gps_session_state(${q(codeC)},${q(`OA-${stamp}-C`)},${q(`oa-${stamp}-fence-b`)}),'missing');`), "missing",
+  "quarantine revokes projected GPS binding immediately");
 const fencedRetry = JSON.parse(await sql(jsonSql({ session: `oa-${stamp}-fence-b`, completion: `oa-${stamp}-fence-b-new-key`, context: fenceB.context_id, proof: fenceB.submission_proof, device: `OA-${stamp}-C`, location: codeC, credential: credentialC, start: fenceStart, end: fenceEnd })));
 assert.equal(fencedRetry.status, "quarantined");
 assert.equal(await sql(`select count(*) from public.completion_responses where client_completion_id=${q(completionUuid(`oa-${stamp}-fence-b-new-key`))};`), "0", "fenced proof never mints a second completion");

@@ -72,6 +72,13 @@ function createFixture({ beforeCommit = null, skipEvidenceRefresh = false } = {}
     }
     if (beforeCommit) beforeCommit(fixture);
     git(fixture, ["init", "-q"]);
+    // These repositories are disposable, single-process fixtures. Disable
+    // detached maintenance before the first add/commit so Git cannot leave a
+    // background writer racing the verified recursive cleanup on CI hosts.
+    git(fixture, ["config", "gc.auto", "0"]);
+    git(fixture, ["config", "gc.autoPackLimit", "0"]);
+    git(fixture, ["config", "gc.autoDetach", "false"]);
+    git(fixture, ["config", "maintenance.auto", "false"]);
     git(fixture, ["add", "."]);
     git(fixture, ["-c", "user.name=Release Provenance Test", "-c", "user.email=release-provenance@example.invalid", "commit", "-qm", "fixture"]);
     if (!skipEvidenceRefresh) {

@@ -136,6 +136,45 @@ assert.equal(sql(`select count(*) from public.custodial_terminal_writer_inventor
   and proname not in ('tool_start_offline_occurrence','tool_commit_cleaning_workflow_authoritative','tool_complete_session_authoritative','custodial_close_maintenance_ticket_authoritative','custodial_finish_historical_session_authoritative');`), "0",
   "the recovery control must not become an alternate terminal writer");
 
+const operationalViews = [
+  "public.v_location_status",
+  "public.v_location_dashboard_status",
+  "public.v_restroom_check_timers",
+  "public.v_admin_health_snapshot",
+  "public.v_exception_queue",
+  "public.v_restroom_package_status",
+];
+assert.equal(sql(`select count(*) from public.custodial_release_authority_restore_inventory
+  where object_kind='view' and object_identity=any(array[${operationalViews.map(q).join(",")}]);`), "6",
+  "phone, manager, health, exception, and dependent restroom views are first-class recovery objects");
+assert.equal(sql(`select count(*) from public.custodial_release_canary_authority_surface()
+  where object_kind='view' and object_identity=any(array[${operationalViews.map(q).join(",")}]);`), "6",
+  "release health owns every operational projection restored by the controller");
+const expectedDashboardViewDigest = sql(`select definition_sha256
+  from public.custodial_release_authority_restore_inventory
+  where object_kind='view' and object_identity='public.v_location_dashboard_status';`);
+sql("alter view public.v_location_dashboard_status set (security_barrier=true);");
+const viewDriftHealth = JSON.parse(sql(`select public.custodial_backend_authority_health(${q(secret)})::text;`));
+assert.equal(viewDriftHealth.ok, false, "view reloption drift cannot leave release health green");
+assert.ok(viewDriftHealth.mismatched_objects.includes("public.v_location_dashboard_status"));
+const viewRestore = JSON.parse(sql(`select public.custodial_control_release_canary(
+  '${managerId}'::uuid,'${randomUUID()}'::uuid,${q(deviceId)},'restore_authority','restore operational view drift',
+  '{"ok":false,"probe":"operational-view-drift"}'::jsonb,${q(secret)})::text;`));
+assert.ok(viewRestore.restored_objects > 40);
+assert.equal(sql(`select encode(extensions.digest(convert_to(
+  public.custodial_release_authority_current_view_definition('public.v_location_dashboard_status'),
+  'UTF8'),'sha256'),'hex');`), expectedDashboardViewDigest,
+  "recovery restores the exact dashboard query, owner, and view security options");
+assert.equal(JSON.parse(sql(`select public.custodial_backend_authority_health(${q(secret)})::text;`)).ok, true);
+assert.equal(sql(`select public.tool_get_location_scan_state(
+  (select location_code from public.locations where active=true order by location_code limit 1),${q(deviceId)}) is not null;`), "t",
+  "first-generation phone scan state executes after view recovery");
+assert.equal(sql(`select public.tool_get_location_scan_state_v2(
+  (select location_code from public.locations where active=true order by location_code limit 1),${q(deviceId)}) is not null;`), "t",
+  "retained scan-state generation executes after view recovery");
+assert.notEqual(sql("select count(*) from public.v_location_dashboard_status;"), "",
+  "manager operational projection executes after view recovery");
+
 const expectedFingerprintDigest = sql("select definition_sha256 from public.custodial_release_authority_restore_inventory where object_kind='function' and object_identity::regprocedure='public.custodial_offline_payload_fingerprint(public.custodial_offline_actor_contexts,text,timestamp with time zone,timestamp with time zone,jsonb,jsonb,text)'::regprocedure;");
 assert.match(expectedFingerprintDigest, /^[0-9a-f]{64}$/, "the payload fingerprint helper is captured in the transitive authority inventory");
 sql("create or replace function public.custodial_offline_payload_fingerprint(p_context public.custodial_offline_actor_contexts,p_client_completion_id text,p_started_at timestamptz,p_ended_at timestamptz,p_response_json jsonb,p_scan_evidence jsonb,p_correlation_id text) returns text language sql immutable as $$select repeat('0',64)$$;");

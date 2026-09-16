@@ -23,7 +23,7 @@ if (!/(localhost|127\.0\.0\.1|test|ci)/i.test(adminUrl)) throw new Error("RELEAS
 const root = resolve(new URL("..", import.meta.url).pathname);
 const state = JSON.parse(readFileSync(resolve(root, "release/production-migration-state.json"), "utf8"));
 assert.equal(
-  state.pending_migrations.slice(0, -1).every((item) => item.source_migration_version < state.observed_production.ledger_head),
+  state.pending_migrations.slice(0, -2).every((item) => item.source_migration_version < state.observed_production.ledger_head),
   true,
   "the fixture must cover planned historical-version migrations that interleave before the admitted production head",
 );
@@ -247,7 +247,7 @@ try {
   const afterFingerprint = fingerprintSchemaCatalog(afterCatalog);
   const canonical = JSON.parse(readFileSync(resolve(root, "supabase/canonical/schema-fingerprint-input.json"), "utf8"));
   assert.equal(afterFingerprint.fingerprint, state.target.canonical_source_schema_fingerprint,
-    `the exact five-migration plan must terminate at the canonical target catalog: ${JSON.stringify(firstCatalogDifference(canonical, afterFingerprint.normalized))}`);
+    `the exact six-migration plan must terminate at the canonical target catalog: ${JSON.stringify(firstCatalogDifference(canonical, afterFingerprint.normalized))}`);
   await assert.rejects(runPlan(), /already present|pre-migration production state|Locked source catalog/,
     "the complete plan is exactly-once and rejects replay or partial application");
   console.log("RELEASE_MIGRATION_PLAN_DATABASE_TESTS_PASS");

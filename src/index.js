@@ -2834,37 +2834,33 @@ app.get("/dashboard-api/work-session-alerts", requireOpsManagerAuth, async (_req
   try {
     const rows = await runReadOnlySql(`
       select
-        s.id as session_id,
-        s.session_uuid,
-        s.client_session_id,
-        s.status as session_status,
-        s.started_at,
-        l.location_code,
-        l.location_name,
-        d.device_id as device_identifier,
-        e.display_name as employee_name,
+        work.session_id,
+        work.session_uuid,
+        work.client_session_id,
+        work.status as session_status,
+        work.started_at,
+        work.location_code,
+        work.location_name,
+        work.device_identifier,
+        work.employee_name,
         coalesce(latest.result, 'gps_unverified') as result,
         latest.notes,
         coalesce(latest.payload_json, '{}'::jsonb) as payload_json,
         latest.scanned_at
-      from public.sessions s
-      join public.locations l on l.id = s.location_id
-      join public.devices d on d.id = s.device_id
-      join public.employees e on e.id = s.employee_id
+      from public.custodial_open_work() work
       left join lateral (
         select se.result, se.notes, se.payload_json, se.scanned_at
         from public.scan_events se
         where se.event_type = 'work_position_check'
           and (
-            se.session_id = s.id
-            or se.payload_json->>'session_uuid' = s.session_uuid
-            or (s.client_session_id is not null and se.payload_json->>'client_session_id' = s.client_session_id)
+            se.session_id = work.session_id
+            or se.payload_json->>'session_uuid' = work.session_uuid
+            or (work.client_session_id is not null and se.payload_json->>'client_session_id' = work.client_session_id)
           )
         order by se.scanned_at desc
         limit 1
       ) latest on true
-      where s.status in ('active', 'pending_submit')
-      order by s.started_at
+      order by work.started_at
     `);
     res.status(200).json({ ok: true, data: rows || [], meta: { version: APP_VERSION, release_id: RELEASE_ID } });
   } catch (error) {

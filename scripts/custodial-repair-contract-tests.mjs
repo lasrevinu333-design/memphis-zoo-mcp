@@ -9,6 +9,7 @@ const messagingSource = readFileSync("src/messaging-api.js", "utf8");
 const sharedAuthSource = readFileSync("src/auth/shared-access-auth.js", "utf8");
 const deviceAuthSource = readFileSync("src/auth/device-credential-auth.js", "utf8");
 const releaseManifestSource = readFileSync("src/release-manifest.js", "utf8");
+const geminiConsoleSource = readFileSync("src/gemini-console-api.js", "utf8");
 const frontendReleaseManifest = JSON.parse(readFileSync("release/frontend-release-manifest.json", "utf8"));
 const packageJson = JSON.parse(readFileSync("package.json", "utf8"));
 const migration = readFileSync("supabase/migrations/20260717161000_custodial_foundation_repair_delta.sql", "utf8");
@@ -42,6 +43,10 @@ const namedManagerSharedRoomRetirementCorrectionMigration = readFileSync(
 );
 const foreignKeyIndexMigration = readFileSync(
   "supabase/migrations/20260730222357_index_remaining_foreign_keys.sql",
+  "utf8",
+);
+const nativeStartOperationalTruthMigration = readFileSync(
+  "supabase/migrations/20260916010000_project_native_start_into_operational_truth.sql",
   "utf8",
 );
 
@@ -254,6 +259,39 @@ assert.match(deviceAuthSource, /offline_recovery_only/);
 assert.match(deviceAuthSource, /isOfflineRecoveryRequest/);
 assert.match(deviceAuthSource, /tool_start_offline_occurrence[\s\S]*tool_commit_cleaning_workflow/,
   "stale credential recovery is limited to snapshot activation and terminal submission");
+assert.match(nativeStartOperationalTruthMigration, /create or replace function public\.custodial_open_work\(\)/i);
+assert.match(nativeStartOperationalTruthMigration, /context\.status='activated'/i);
+assert.match(nativeStartOperationalTruthMigration, /context\.native_start_attestation_version='custodial-native-start\.v1'/i);
+assert.match(nativeStartOperationalTruthMigration, /proof\.state='issued'/i);
+assert.match(nativeStartOperationalTruthMigration, /context\.canonical_location_code[\s\S]*coalesce\(assignment\.new_employee_name,employee\.display_name\)[\s\S]*coalesce\(assignment\.device_identifier,device\.device_id\)/i,
+  "projected manager identity must remain bound to the frozen native Start evidence");
+assert.match(nativeStartOperationalTruthMigration, /context\.context_id,[\s\S]{0,120}'native_offline_context'::text,[\s\S]{0,120}null::uuid/i,
+  "a projected native context must not fabricate a sessions primary key");
+assert.match(nativeStartOperationalTruthMigration, /not exists\([\s\S]*public\.sessions existing[\s\S]*existing\.client_session_id=context\.client_session_id/i);
+assert.match(nativeStartOperationalTruthMigration, /create or replace view public\.v_location_status[\s\S]*public\.custodial_open_work\(\)/i);
+assert.match(nativeStartOperationalTruthMigration, /order by work\.source_priority nulls last/i,
+  "scan state must rank durable open work ahead of newer terminal history");
+assert.match(nativeStartOperationalTruthMigration, /create or replace view public\.v_location_dashboard_status[\s\S]*public\.custodial_open_work\(\)/i);
+assert.doesNotMatch(nativeStartOperationalTruthMigration, /from public\.custodial_open_work\(\) work\s+cross join op_day day\s+where work\.started_at>=day\.day_start/i,
+  "live manager truth must retain work that crosses an operational-day boundary");
+assert.match(nativeStartOperationalTruthMigration, /create or replace view public\.v_restroom_check_timers[\s\S]*from public\.custodial_open_work\(\) work/i,
+  "restroom timer and schedule health must consume the same acknowledged native Start");
+assert.doesNotMatch(nativeStartOperationalTruthMigration, /from public\.custodial_open_work\(\) work\s+where work\.started_at>=/i,
+  "restroom timer must retain open work across the service-day boundary");
+assert.match(nativeStartOperationalTruthMigration, /create or replace view public\.v_admin_health_snapshot[\s\S]*public\.custodial_open_work\(\)/i);
+assert.match(nativeStartOperationalTruthMigration, /custodial_get_device_rollback_readiness[\s\S]*from public\.custodial_open_work\(\) where device_id=v_device\.id/i);
+assert.match(nativeStartOperationalTruthMigration, /create or replace function public\.custodial_gps_session_state[\s\S]*public\.custodial_open_work\(\) work/i,
+  "GPS session authority must recognize the exact projected native Start");
+assert.match(nativeStartOperationalTruthMigration, /custodial_evaluate_location_proximity_measurement[\s\S]*public\.custodial_gps_session_state\(/i,
+  "both retained GPS measurement cores must recheck one canonical session-or-projected-work binding");
+assert.match(nativeStartOperationalTruthMigration, /''client_session_id'', nullif\(v_session_key/i,
+  "pre-completion GPS events must expose the stable external identity for manager correlation");
+assert.match(nativeStartOperationalTruthMigration, /identity='public\.custodial_open_work\(\)'[\s\S]*next_order:=99999/i,
+  "recovery must recreate the new projection helper before dependent functions");
+assert.match(nativeStartOperationalTruthMigration, /values\(v_client_session_id,v_client_session_id,v_context\.location_id/i,
+  "completion must materialize the same external session identity accepted at Start");
+assert.match(indexSource, /work-session-alerts[\s\S]{0,2400}from public\.custodial_open_work\(\) work/i);
+assert.match(geminiConsoleSource, /select count\(\*\) from public\.custodial_open_work\(\)/i);
 assert.doesNotMatch(
   atomicCommitMigration,
   /v_location_id, v_device_pk, v_employee_id\s+from public\.sessions/i,

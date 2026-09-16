@@ -234,7 +234,7 @@ export function createGeminiConsoleRouter({
     try {
       const rows = await runReadOnlySql(`
         select
-          (select count(*) from public.sessions where status in ('active','pending_submit')) as active_cleaning_sessions,
+          (select count(*) from public.custodial_open_work()) as active_cleaning_sessions,
           (select count(*) from public.maintenance_tickets where lower(coalesce(status,'')) not in ('closed','resolved','cancelled')) as open_tickets,
           (select count(*) from public.msg_messages where created_at >= now() - interval '24 hours') as messages_24h,
           (select count(*) from public.gemini_console_repair_jobs where status not in ('completed','failed','rolled_back','cancelled')) as open_repair_jobs,
