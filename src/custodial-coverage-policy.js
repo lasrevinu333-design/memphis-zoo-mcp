@@ -1,4 +1,4 @@
-export const COVERALL_STARTS_AT_ABSENCE_NUMBER = 2;
+export const COVERALL_STARTS_AT_ABSENCE_NUMBER = 3;
 
 function orderedUniqueIds(values = []) {
   const result = [];
@@ -12,9 +12,8 @@ function orderedUniqueIds(values = []) {
   return result;
 }
 
-// Absence order is operational evidence: the first recorded absence is spread
-// across the remaining zoo staff; the second and every later absence are the
-// workloads for which CoverAll capacity is requested.
+// Absence order is operational evidence: the first two absences are shared
+// by the remaining zoo staff; each third-or-later absence needs one CoverAll capacity.
 export function partitionCustodialAbsences(orderedAbsentEmployeeIds = []) {
   const ordered = orderedUniqueIds(orderedAbsentEmployeeIds);
   const internallyRedistributedEmployeeIds = ordered.slice(0, COVERALL_STARTS_AT_ABSENCE_NUMBER - 1);

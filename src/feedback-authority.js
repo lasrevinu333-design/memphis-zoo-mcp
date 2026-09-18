@@ -47,6 +47,12 @@ export function authoritativeFeedbackPayload(req) {
     const assignmentEpochText = normalized(device.assignment_epoch);
     const assignmentEpoch = Number(assignmentEpochText);
     if (!canonicalDeviceId) throw Object.assign(new Error("Enrolled phone identity is unavailable."), { status: 401 });
+    const expectedEmployeeId=normalized(source.expected_employee_id).toLowerCase();
+    if(expectedEmployeeId && (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(expectedEmployeeId)
+      || expectedEmployeeId!==normalized(device.assigned_employee_id||device.employee_id).toLowerCase())) {
+      throw Object.assign(new Error("Saved feedback belongs to a previous employee assignment and needs review."),
+        {status:409,code:"feedback_employee_assignment_changed"});
+    }
     return {
       ...source,
       hub_context: "employee",

@@ -1,3 +1,4 @@
+import {normalizeCoverAllLanguage,coverAllLabels} from './coverall-language.js';
 import express from "express";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { getGeminiApiKey } from "./utils/gemini-config.js";
@@ -1246,7 +1247,7 @@ export function createScheduleRouter({
     const row = Array.isArray(result) ? result[0] : result;
     if (!row?.id) throw new Error("The secure CoverAll assignment link could not be created.");
     const publicOrigin = String(process.env.SCHEDULE_PUBLIC_BASE_URL || process.env.PUBLIC_BASE_URL || "https://memphis-zoo-mcp.onrender.com").replace(/\/+$/, "");
-    const normalizedLang = String(lang || "en").toLowerCase() === "es" ? "es" : "en";
+    const normalizedLang = normalizeCoverAllLanguage(lang);
     return {
       link_id: row.id,
       service_date: String(row.service_date || serviceDate).slice(0, 10),
@@ -1941,7 +1942,7 @@ export function createScheduleRouter({
       internally_redistributed_employee_ids: policy.internallyRedistributedEmployeeIds,
       coverall_employee_ids: coverallAbsentIds,
       assignments: Array.from(captured.values()),
-      manager_notification: `Call CoverAll: ${policy.absentCount} custodial absences for ${serviceDate}. Zoo staff share the first absence. CoverAll covers the 2nd absence and every later absence.`,
+      manager_notification: `Call CoverAll: ${policy.absentCount} custodial absences for ${serviceDate}. Zoo staff share the first two absences. CoverAll covers the 3rd absence and every later absence.`,
     };
   }
 
@@ -3826,7 +3827,7 @@ export function createScheduleRouter({
       const serviceDate = requireDate(req.query.service_date || req.query.date || (await getServiceDate()));
       const slotCode = normalizeCoverAllSlotCode(req.query.slot || req.query.slot_code || req.query.employee_code || "COVERALL_01");
       if (!slotCode) throw Object.assign(new Error("This CoverAll assignment link is invalid or expired."), { status: 403, code: "coverall_link_invalid" });
-      const lang = String(req.query.lang || "en").trim().toLowerCase() === "es" ? "es" : "en";
+      const lang = normalizeCoverAllLanguage(req.query.lang);
       const accessToken = normalizeCoverAllAccessToken(req.query.access_token || req.query.token);
       await authorizeCoverAllAssignmentLink({ serviceDate, slotCode, accessToken });
       const slot = await getCoverAllSlotByCode(slotCode);
@@ -3874,17 +3875,15 @@ export function createScheduleRouter({
       const publicOrigin = String(process.env.SCHEDULE_PUBLIC_BASE_URL || process.env.PUBLIC_BASE_URL || "https://memphis-zoo-mcp.onrender.com").replace(/\/+$/, "");
       const enUrl = `${publicOrigin}${coverAllPublicPath(serviceDate, slot.employee_code, "en", accessToken)}`;
       const esUrl = `${publicOrigin}${coverAllPublicPath(serviceDate, slot.employee_code, "es", accessToken)}`;
-      const t = lang === "es"
-        ? { title: "Asignaciones de CoverAll", shift: "Turno", areas: "Áreas asignadas", restrooms: "Baños públicos", other: "Exhibiciones", none: "No hay asignaciones publicadas todavía.", language: "English", notice: "Revise sus áreas asignadas. No hay acceso a otras herramientas." }
-        : { title: "CoverAll Assignments", shift: "Shift", areas: "Assigned areas", restrooms: "Public restrooms", other: "Exhibits", none: "No assignments posted yet.", language: "Español", notice: "Review your assigned areas. No access to other tools is provided." };
+      const t = coverAllLabels(lang);
       const restroomItems = items.filter((item) => item?.is_public_restroom);
       const otherItems = items.filter((item) => !item?.is_public_restroom);
       const renderItems = (list) => list.length
         ? list.map((item) => `<li>${htmlEscape(item.name || item.group_name || item.location_name || item.group_code || "Area")}</li>`).join("")
         : `<li class="muted">${htmlEscape(t.none)}</li>`;
-      const switchUrl = lang === "es" ? enUrl : esUrl;
+      const bothUrl = `${publicOrigin}${coverAllPublicPath(serviceDate, slot.employee_code, "both", accessToken)}`;
       const html = `<!doctype html>
-<html lang="${lang}">
+<html lang="${lang==='both'?'en':lang}" data-assignment-language="${lang}">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -3896,10 +3895,11 @@ export function createScheduleRouter({
   .top:before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,0) 42%);pointer-events:none}.top>*{position:relative}.eyebrow{color:var(--lime2);font-size:.68rem;font-weight:800;letter-spacing:.2em;text-transform:uppercase}.lang{float:right;color:#071018;background:linear-gradient(180deg,#d7f2b0,#9fcd5e);border:0;border-radius:999px;padding:9px 13px;text-decoration:none;font-weight:900;font-size:.78rem;box-shadow:0 8px 18px rgba(0,0,0,.18)}
   h1{margin:10px 0 4px;font-size:clamp(1.75rem,7vw,2.8rem);line-height:.98;font-weight:900;letter-spacing:-.05em}.shift{font-size:1rem;color:var(--muted);font-weight:700}.wrap{max-width:860px;margin:0 auto;padding:14px}.notice{border:1px solid rgba(132,195,65,.32);border-radius:18px;padding:13px 14px;margin:14px 0;background:rgba(132,195,65,.14);color:#efffdc;font-weight:800;box-shadow:0 8px 22px rgba(0,0,0,.16)}.card{border:1px solid var(--line);border-radius:22px;padding:15px;margin:14px 0;background:var(--panel2);box-shadow:var(--shadow);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}.card h2{margin:0 0 10px;font-size:1.08rem;color:var(--lime2);font-weight:900;letter-spacing:-.02em}ul{list-style:none;padding:0;margin:0;display:grid;gap:9px}li{padding:13px 13px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.10);border-radius:16px;font-weight:850;line-height:1.3}li:before{content:"✓";display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;margin-right:9px;border-radius:999px;background:rgba(132,195,65,.18);color:var(--lime2);font-weight:900}li.muted{color:var(--muted);font-weight:700}li.muted:before{content:"•"}.meta{margin:14px 0 22px;color:var(--muted);font-size:.78rem;text-align:center;font-weight:800}.pill{display:inline-flex;align-items:center;padding:7px 11px;border-radius:999px;background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.12);font-size:.78rem;margin-top:10px;font-weight:900;color:#efffdc}
   @media(max-width:640px){body{background-attachment:scroll}.top{margin:10px 10px 0;border-radius:22px}.wrap{padding:10px}.lang{float:none;display:inline-flex;margin-bottom:10px}.card{padding:13px}.notice{font-size:.9rem}}
+  @media print{body{background:#fff!important;color:#111!important}.top,.card,.notice{background:#fff!important;color:#111!important;box-shadow:none!important;backdrop-filter:none!important;border-color:#777!important}.top nav{display:none}.shift,.card h2,.eyebrow,.meta,.muted{color:#111!important}li{break-inside:avoid;background:#fff!important;color:#111!important}}
 </style>
 </head>
 <body>
-  <header class="top"><a class="lang" href="${htmlEscape(switchUrl)}">${htmlEscape(t.language)}</a><div class="eyebrow">${htmlEscape(t.title)}</div><h1>${htmlEscape(slot.display_name || slot.employee_code)}</h1><div class="shift">${htmlEscape(t.shift)}: ${htmlEscape(data?.shift?.start || "—")} - ${htmlEscape(data?.shift?.end || "—")}</div><div class="pill">${htmlEscape(serviceDate)}</div></header>
+  <header class="top"><nav aria-label="Assignment language"><a class="lang" lang="en" href="${htmlEscape(enUrl)}">English</a><a class="lang" lang="es" href="${htmlEscape(esUrl)}">Español</a><a class="lang" href="${htmlEscape(bothUrl)}">English + Español</a></nav><div class="eyebrow">${htmlEscape(t.title)}</div><h1>${htmlEscape(slot.display_name || slot.employee_code)}</h1><div class="shift">${htmlEscape(t.shift)}: ${htmlEscape(data?.shift?.start || "—")} - ${htmlEscape(data?.shift?.end || "—")}</div><div class="pill">${htmlEscape(serviceDate)}</div></header>
   <main class="wrap"><div class="notice">${htmlEscape(t.notice)}</div><section class="card"><h2>${htmlEscape(t.restrooms)}</h2><ul>${renderItems(restroomItems)}</ul></section><section class="card"><h2>${htmlEscape(t.other)}</h2><ul>${renderItems(otherItems)}</ul></section><div class="meta">${htmlEscape(slot.employee_code)} • ${htmlEscape(serviceDate)}</div></main>
 </body>
 </html>`;

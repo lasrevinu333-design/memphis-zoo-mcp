@@ -302,7 +302,7 @@ export function installEmployeeNotificationRoutes(app, {
       contract_version: 'employee-native-push.v2',
       provider: 'fcm',
       messenger_fallback: false,
-      notification_kinds: ['event_day_before', 'event_shift_plus_15', 'message', 'due_soon', 'overdue'],
+      notification_kinds: ['event_three_days_before', 'event_two_days_before', 'event_shift_plus_15', 'message', 'due_soon', 'overdue'],
       swipe_dismissal: 'local_only',
       dependencies: {
         database_reachable: databaseReachable,
@@ -467,7 +467,7 @@ export function installEmployeeNotificationRoutes(app, {
         assignmentEpoch = eventInstance.assignment_epoch;
         channelId = 'employee-events';
         push = {
-          title: eventInstance.notification_kind === 'day_before' ? 'Event tomorrow' : 'Assigned event reminder',
+          title: 'Assigned event reminder',
           body: `${event.event_name || 'Zoo event'}${event.display_location ? ` — ${event.display_location}` : ''}`,
           data_json: {
             kind: 'employee_event',

@@ -932,20 +932,20 @@ function applyException(state, exception) {
 function applyCustodialAbsenceCoveragePolicy(state, slotById) {
   const absent = state.fullDayAbsenceSlotIds;
   const contractors = state.contractorCoverageSlotIds;
-  const expectedContractors = Math.max(0, absent.length - 1);
+  const expectedContractors = Math.max(0, absent.length - 2);
   if (new Set(absent).size !== absent.length) throw Object.assign(new Error("A daily employee absence may appear only once."), { code: "duplicate_daily_absence" });
   if (new Set(contractors).size !== contractors.length) throw Object.assign(new Error("Each CoverAll call must use a separate contractor-capacity slot."), { code: "duplicate_coverall_capacity" });
-  if (contractors.length !== expectedContractors) throw Object.assign(new Error("The first absence must be shared by zoo employees and each second-or-later absence requires one CoverAll capacity slot."), { code: "custodial_absence_coverage_mismatch" });
+  if (contractors.length !== expectedContractors) throw Object.assign(new Error("The first two absences must be shared by zoo employees and each third-or-later absence requires one CoverAll capacity slot."), { code: "custodial_absence_coverage_mismatch" });
   if (absent.some((slotId) => slotById.get(slotId)?.contractorCapacity === true)) throw Object.assign(new Error("Contractor capacity cannot be recorded as an absent zoo employee."), { code: "custodial_absence_identity_mismatch" });
   if (contractors.some((slotId) => slotById.get(slotId)?.contractorCapacity !== true || absent.includes(slotId))) throw Object.assign(new Error("CoverAll coverage must use distinct registered contractor-capacity slots."), { code: "custodial_contractor_capacity_required" });
   for (const work of state.work) {
     const absenceIndex = absent.indexOf(work.originSlotId);
-    if (absenceIndex === 0) {
+    if (absenceIndex >= 0 && absenceIndex < 2) {
       work.custodialCoverageMode = "internal_even";
       work.custodialCoverageSlotId = null;
-    } else if (absenceIndex > 0) {
+    } else if (absenceIndex >= 2) {
       work.custodialCoverageMode = "contractor_exact";
-      work.custodialCoverageSlotId = contractors[absenceIndex - 1];
+      work.custodialCoverageSlotId = contractors[absenceIndex - 2];
     } else {
       work.custodialCoverageMode = "zoo_employee_baseline";
       work.custodialCoverageSlotId = null;

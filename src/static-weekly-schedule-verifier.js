@@ -285,7 +285,7 @@ function apply(state, item) {
 }
 function applyCustodialAbsenceCoveragePolicy(state, slotById, violations, serviceDate) {
   const absent = state.fullDayAbsenceSlotIds; const contractors = state.contractorCoverageSlotIds;
-  const expectedContractors = Math.max(0, absent.length - 1);
+  const expectedContractors = Math.max(0, absent.length - 2);
   if (new Set(absent).size !== absent.length) push(violations, "duplicate_daily_absence", { serviceDate });
   if (new Set(contractors).size !== contractors.length) push(violations, "duplicate_coverall_capacity", { serviceDate });
   if (contractors.length !== expectedContractors) push(violations, "custodial_absence_coverage_mismatch", { serviceDate, absences: absent.length, contractorCapacity: contractors.length, expectedContractors });
@@ -293,8 +293,8 @@ function applyCustodialAbsenceCoveragePolicy(state, slotById, violations, servic
   if (contractors.some((slotId) => slotById.get(slotId)?.contractorCapacity !== true || absent.includes(slotId))) push(violations, "custodial_contractor_capacity_required", { serviceDate });
   for (const work of state.work) {
     const absenceIndex = absent.indexOf(work.originSlotId);
-    if (absenceIndex === 0) { work.custodialCoverageMode = "internal_even"; work.custodialCoverageSlotId = null; }
-    else if (absenceIndex > 0) { work.custodialCoverageMode = "contractor_exact"; work.custodialCoverageSlotId = contractors[absenceIndex - 1]; }
+    if (absenceIndex >= 0 && absenceIndex < 2) { work.custodialCoverageMode = "internal_even"; work.custodialCoverageSlotId = null; }
+    else if (absenceIndex >= 2) { work.custodialCoverageMode = "contractor_exact"; work.custodialCoverageSlotId = contractors[absenceIndex - 2]; }
     else { work.custodialCoverageMode = "zoo_employee_baseline"; work.custodialCoverageSlotId = null; }
   }
 }

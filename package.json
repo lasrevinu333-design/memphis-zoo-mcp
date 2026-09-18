@@ -153,7 +153,10 @@
     "test:ci-workflows": "node scripts/ci-workflow-contract-tests.mjs && node scripts/production-backup-pg-dump-command-tests.mjs",
     "test:production-schema-c674-bootstrap": "node scripts/production-schema-c674-bootstrap-contract-tests.mjs",
     "test:production-schema-inspection-freshness": "node scripts/production-schema-inspection-freshness-contract-tests.mjs",
-    "test:production-database-identity": "node scripts/production-database-identity-contract-tests.mjs"
+    "test:production-database-identity": "node scripts/production-database-identity-contract-tests.mjs",
+    "test:audit-two-absence-policy": "node scripts/audit-two-absence-policy-tests.mjs",
+    "test:audit-guest-disabled": "node scripts/audit-guest-disabled-tests.mjs",
+    "test:coverall-bilingual": "node scripts/coverall-bilingual-tests.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",

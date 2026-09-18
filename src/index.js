@@ -1469,7 +1469,9 @@ async function notifyGuestReportRecipients({ report, currentOwner, opsRecipients
 
   const body = buildGuestReportNotificationBody(report, currentOwner?.assigned_employee_name || null);
   const sendResults = await Promise.allSettled(recipientIds.map(async (recipient) => {
+    await assertGuestNotificationAllowed();
     const thread = await runRpc("msg_get_or_create_direct_thread", { p_user_a: memphisUserId, p_user_b: recipient.user_id });
+    await assertGuestNotificationAllowed();
     await runRpc("msg_send_message", {
       p_thread_id: thread.id,
       p_sender_user_id: memphisUserId,
@@ -1497,12 +1499,14 @@ async function notifyGuestReportRecipients({ report, currentOwner, opsRecipients
     }
   }
 
+  notified.paused=sendResults.some(item=>item.status==="rejected"&&item.reason?.code==="guest_reporting_paused");
   const totalAttempted = recipientIds.length;
   const totalSucceeded = totalAttempted - notified.errors.length;
   const notificationStatus = totalAttempted === 0
     ? "failed"
     : (notified.errors.length === 0 ? "sent" : (totalSucceeded === 0 ? "failed" : "partial"));
 
+  if (notified.paused && totalSucceeded===0) return notified;
   await runOperationalCommand("guest_report_notification", {
     id: report.id, notification_status: notificationStatus, notified_employee_user_id: notified.employee_user_id,
     notified_ops_count: Number(notified.ops_count || 0), delivered_count: totalSucceeded,
@@ -1528,8 +1532,16 @@ async function getGuestCleanlinessReportById(reportId) {
   return rows[0];
 }
 
+async function assertGuestNotificationAllowed() {
+  const paused=()=>Object.assign(new Error("Guest reporting is paused pending approval."),{code:"guest_reporting_paused",deferGuest:true});
+  if(!GUEST_FEATURE.enabled) throw paused();
+  const rows=await runReadOnlySql("select coalesce((select setting_value = 'true'::jsonb from public.system_settings where setting_key='guest_issues_feature_approved' limit 1),false) as approved");
+  if(rows?.[0]?.approved!==true) throw paused();
+}
+
 async function processGuestCleanlinessNotificationJob(job, { assertActive = () => {} } = {}) {
   assertActive();
+  await assertGuestNotificationAllowed();
   const report = await getGuestCleanlinessReportById(job.source_id);
   if (report.status !== "open" || report.marketing_review_status !== "approved") {
     throw new Error("Guest report has not completed Marketing approval.");
@@ -1541,8 +1553,10 @@ async function processGuestCleanlinessNotificationJob(job, { assertActive = () =
   const memphisUserId = Array.isArray(memphisRows) && memphisRows.length ? memphisRows[0].memphis_user_id : null;
   if (!isUuid(memphisUserId)) throw new Error("Memphis bot identity is unavailable.");
   assertActive();
+  await assertGuestNotificationAllowed();
   const notification = await notifyGuestReportRecipients({ report, currentOwner, opsRecipients, memphisUserId });
   assertActive();
+  if(notification.paused) throw Object.assign(new Error("Guest reporting is paused pending approval."),{code:"guest_reporting_paused",deferGuest:true});
   const deliveredCount = Number(notification.ops_count || 0) + (notification.employee_user_id ? 1 : 0);
   if (notification.errors.length || deliveredCount === 0) {
     throw new Error(notification.errors.length
@@ -1556,10 +1570,11 @@ async function runOperationalNotificationWorker({ limit = 10 } = {}) {
   if (operationalNotificationWorkerInFlight) return { ok: true, skipped: "in_flight" };
   operationalNotificationWorkerInFlight = true;
   try {
-    const claimed = await runRpc("claim_operational_notification_jobs", {
+    const claimed = await runRpc("claim_operational_notification_jobs_v2", {
       p_worker_id: OPERATIONAL_NOTIFICATION_WORKER_ID,
       p_limit: Math.max(1, Math.min(50, Number(limit) || 10)),
       p_lease_seconds: 120,
+      p_guest_reporting_enabled: GUEST_FEATURE.enabled === true,
     });
     const jobs = Array.isArray(claimed) ? claimed : (claimed ? [claimed] : []);
     const results = [];
@@ -1572,6 +1587,7 @@ async function runOperationalNotificationWorker({ limit = 10 } = {}) {
           let errorMessage = null;
           let terminal = false;
           let deferFinish = false;
+          let deferGuest = false;
           try {
             mutationLease.assertActive();
             if (job.job_type === "guest_cleanliness_report") {
@@ -1585,8 +1601,14 @@ async function runOperationalNotificationWorker({ limit = 10 } = {}) {
             succeeded = true;
           } catch (error) {
             errorMessage = String(error?.message || "Operational notification failed.").slice(0, 2000);
+            deferGuest = error?.deferGuest === true && job.job_type === "guest_cleanliness_report";
             terminal = error?.terminal === true;
             deferFinish = error?.deferFinish === true;
+          }
+          if (deferGuest) {
+            mutationLease.assertActive();
+            await runRpc("pause_guest_notification_job",{p_job_id:job.job_id,p_lease_token:job.lease_token});
+            return {job_id:job.job_id,succeeded:false,paused:true,terminal:false};
           }
           if (deferFinish) {
             return { job_id: job.job_id, succeeded: false, terminal: false, deferred: true, error: errorMessage };
