@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync } from "node:fs";
-import { resolve } from "node:path";
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
@@ -173,6 +175,112 @@ assert.match(populatedSchemaPreflight, /set -euo pipefail[\s\S]*release:populate
 const productionBackupRehearsal = readFileSync(resolve(workflowDirectory, "production-backup-migration-rehearsal.yml"), "utf8");
 const localProductionBackupRehearsal = readFileSync(resolve(root, "scripts/run-production-backup-migration-rehearsal.sh"), "utf8");
 const build52ProductionMigrationApply = readFileSync(resolve(workflowDirectory, "build52-production-migration-apply.yml"), "utf8");
+const build52ProductionMigrationApplyJob = workflowJobs(build52ProductionMigrationApply)
+  .find(({ name }) => name === "authorize-and-apply");
+assert.ok(build52ProductionMigrationApplyJob, "the Build 52 production migration workflow must retain its authorize-and-apply job");
+const build52ProductionMigrationRunSteps = workflowRunSteps(build52ProductionMigrationApplyJob.source);
+assert.ok(
+  Math.max(...build52ProductionMigrationRunSteps.map((source) => source.replace(/^ {10}/gm, "").length)) < 19_000,
+  "every Build 52 production migration run expression must retain margin below GitHub's 21,000-character limit",
+);
+const independentProductionTargetStep = build52ProductionMigrationRunSteps
+  .find((source) => source.includes('source: "direct-production-query"'));
+assert.ok(independentProductionTargetStep,
+  "the production workflow must query and verify the actual post-apply database in a separate step");
+assert.match(independentProductionTargetStep, /SUPABASE_DB_URL[\s\S]*new Client\([\s\S]*rejectUnauthorized: true/,
+  "the independent verifier must open its own TLS-verified production database connection");
+assert.match(independentProductionTargetStep,
+  /begin isolation level repeatable read read only[\s\S]*captureSchemaCatalog\(database\)[\s\S]*database\.query\("commit"\)/,
+  "the independent verifier must bind its ledger and catalog observations to one read-only snapshot");
+assert.match(independentProductionTargetStep,
+  /select count\(\*\)::integer as ledger_count,max\(version\)::text as ledger_head from supabase_migrations\.schema_migrations/,
+  "the independent verifier must read the actual production migration ledger");
+assert.match(independentProductionTargetStep, /captureSchemaCatalog\(database\)[\s\S]*fingerprintSchemaCatalog\(normalizedCatalog\)/,
+  "the independent verifier must recapture and fingerprint the actual production catalog");
+assert.doesNotMatch(independentProductionTargetStep,
+  /build52-production-migration-result\.json|\bresult_path\b|production-migration-state\.json|target_catalog_fingerprint/,
+  "the independent target decision must not trust the candidate migration result or candidate-provided target values");
+assert.ok(
+  build52ProductionMigrationApply.indexOf("npm run --silent release:migrations:apply")
+    < build52ProductionMigrationApply.indexOf('source: "direct-production-query"'),
+  "the direct production recapture must occur only after the exact migration application",
+);
+const productionApplyCommitted = build52ProductionMigrationApply.indexOf('"stage":"production_apply_committed"');
+const independentProductionRead = build52ProductionMigrationApply.indexOf('source: "direct-production-query"');
+const independentProductionPredicate = build52ProductionMigrationApply.indexOf('and .counts.functions == 506');
+const productionTargetVerified = build52ProductionMigrationApply.indexOf('"stage":"production_target_independently_verified"');
+assert.ok(
+  build52ProductionMigrationApply.indexOf("npm run --silent release:migrations:apply") < productionApplyCommitted
+    && productionApplyCommitted < independentProductionRead
+    && independentProductionRead < independentProductionPredicate
+    && independentProductionPredicate < productionTargetVerified,
+  "the workflow receipt must distinguish a committed migration from later independent target verification",
+);
+assert.match(build52ProductionMigrationApply, /build52-production-post-apply-verification\.json/,
+  "the independent production verification receipt must be uploaded even when the workflow fails closed");
+const independentTargetPredicateMatch = build52ProductionMigrationApply.match(
+  /jq -e \\\n\s+'([^']*\.source == "direct-production-query"[^']*)' \\\n\s+"\$post_apply_path"/,
+);
+assert.ok(independentTargetPredicateMatch,
+  "the production workflow must retain one exact workflow-owned post-apply acceptance predicate");
+const independentTargetPredicate = independentTargetPredicateMatch[1];
+const acceptedProductionTarget = {
+  format: "memphis-zoo-build52-production-post-apply.v1",
+  ok: true,
+  source: "direct-production-query",
+  ledger_count: 229,
+  ledger_head: "20260918012000",
+  counts: { functions: 506, routine_grants: 347 },
+  schema_fingerprint: "c9f5b9fdbb610eebc1866816ef0a15d1cf335cb888633e5387e6bee560ffce19",
+};
+const productionTargetFixtureDirectory = mkdtempSync(join(tmpdir(), "custodial-b010-jq-"));
+try {
+  const inlineVerifierMatch = independentProductionTargetStep.match(
+    /node --input-type=module > "\$post_apply_path" <<'NODE'\n([\s\S]*?)\n\s*NODE/,
+  );
+  assert.ok(inlineVerifierMatch, "the independent post-apply verifier must remain one auditable inline module");
+  const inlineVerifierPath = join(productionTargetFixtureDirectory, "post-apply-verifier.mjs");
+  writeFileSync(inlineVerifierPath, `${inlineVerifierMatch[1].replace(/^ {10}/gm, "")}\n`, { mode: 0o600 });
+  const syntaxResult = spawnSync(process.execPath, ["--check", inlineVerifierPath], {
+    encoding: "utf8",
+    timeout: 5_000,
+  });
+  assert.equal(syntaxResult.error, undefined,
+    `the independent verifier syntax check could not execute: ${syntaxResult.error?.message || "unknown error"}`);
+  assert.equal(syntaxResult.status, 0,
+    `the independent verifier must parse as an ES module: ${syntaxResult.stderr || syntaxResult.stdout}`);
+  const productionTargetFixturePath = join(productionTargetFixtureDirectory, "observed-target.json");
+  function workflowAcceptsProductionTarget(overrides = {}) {
+    writeFileSync(
+      productionTargetFixturePath,
+      `${JSON.stringify({ ...acceptedProductionTarget, ...overrides })}\n`,
+      { mode: 0o600 },
+    );
+    const result = spawnSync("jq", ["-e", independentTargetPredicate, productionTargetFixturePath], {
+      encoding: "utf8",
+      timeout: 5_000,
+    });
+    assert.equal(result.error, undefined, `jq could not execute the workflow predicate: ${result.error?.message || "unknown error"}`);
+    return result.status === 0;
+  }
+  assert.equal(workflowAcceptsProductionTarget(), true,
+    "the exact frozen B-010 production target must pass the workflow-owned predicate");
+  for (const [field, overrides] of [
+    ["format", { format: "candidate-result.v1" }],
+    ["ok", { ok: false }],
+    ["source", { source: "candidate-result" }],
+    ["ledger_count", { ledger_count: 226 }],
+    ["ledger_head", { ledger_head: "20260916010000" }],
+    ["functions", { counts: { functions: 503, routine_grants: 347 } }],
+    ["routine_grants", { counts: { functions: 506, routine_grants: 344 } }],
+    ["schema_fingerprint", { schema_fingerprint: "81b3fa4316a772ab7553956e5b5c29a04c3d5583c6f32b2917c30eb19a011c32" }],
+  ]) {
+    assert.equal(workflowAcceptsProductionTarget(overrides), false,
+      `the workflow-owned production target predicate must fail closed for wrong ${field}`);
+  }
+} finally {
+  rmSync(productionTargetFixtureDirectory, { recursive: true, force: true });
+}
 const productionBackupSource = readFileSync(resolve(root, "scripts/production-backup.mjs"), "utf8");
 const productionBackupPgDumpCommand = readFileSync(resolve(root, "scripts/production-backup-pg-dump-command.mjs"), "utf8");
 const isolatedRehearsalBackendDependencies = readFileSync(resolve(root, "scripts/verify-isolated-rehearsal-backend-dependencies.sh"), "utf8");

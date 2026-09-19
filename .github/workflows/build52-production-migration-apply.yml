@@ -245,12 +245,85 @@ jobs:
             "$result_path" >/dev/null
           printf '{"stage":"production_apply_committed","result_sha256":"%s","completed_at":"%s"}\n' \
             "$(sha256sum "$result_path" | awk '{print $1}')" "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$receipt_path"
+      - name: Independently verify the actual production target
+        shell: bash
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -euo pipefail
+          test -n "$SUPABASE_DB_URL"
+          post_apply_path="${RUNNER_TEMP}/build52-production-post-apply-verification.json"
+          receipt_path="${RUNNER_TEMP}/build52-production-migration-receipt.jsonl"
+          SUPABASE_DB_CA_CERT_PATH="$GITHUB_WORKSPACE/.github/certs/prod-ca-2021.crt" \
+            node --input-type=module > "$post_apply_path" <<'NODE'
+          import { readFileSync } from "node:fs";
+          import pg from "pg";
+          import { captureSchemaCatalog, fingerprintSchemaCatalog } from "./scripts/schema-fingerprint-catalog.mjs";
+
+          const { Client } = pg;
+          const databaseUrl = String(process.env.SUPABASE_DB_URL || "").trim();
+          const caPath = String(process.env.SUPABASE_DB_CA_CERT_PATH || "").trim();
+          if (!databaseUrl || !caPath) throw new Error("The independent production verifier requires the database URL and pinned CA certificate.");
+          const database = new Client({
+            connectionString: databaseUrl,
+            application_name: "memphis-zoo-build52-post-apply-verifier",
+            ssl: { ca: readFileSync(caPath, "utf8"), rejectUnauthorized: true },
+          });
+          let observed;
+          await database.connect();
+          try {
+            await database.query("begin isolation level repeatable read read only");
+            await database.query("set local statement_timeout='180s'");
+            const ledger = await database.query("select count(*)::integer as ledger_count,max(version)::text as ledger_head from supabase_migrations.schema_migrations");
+            const identity = await database.query("select current_database()::text as database_name");
+            const catalog = await captureSchemaCatalog(database);
+            const databaseName = identity.rows[0]?.database_name;
+            const normalizedCatalog = {
+              ...catalog,
+              cron_jobs: catalog.cron_jobs.map((row) => row.database === databaseName ? { ...row, database: "postgres" } : row),
+            };
+            const { fingerprint } = fingerprintSchemaCatalog(normalizedCatalog);
+            observed = {
+              format: "memphis-zoo-build52-production-post-apply.v1",
+              ok: true,
+              source: "direct-production-query",
+              captured_at: new Date().toISOString(),
+              ledger_count: Number(ledger.rows[0]?.ledger_count),
+              ledger_head: ledger.rows[0]?.ledger_head,
+              counts: {
+                functions: normalizedCatalog.functions.length,
+                routine_grants: normalizedCatalog.routine_grants.length,
+              },
+              schema_fingerprint: fingerprint,
+            };
+            await database.query("commit");
+          } catch (error) {
+            await database.query("rollback").catch(() => {});
+            throw error;
+          } finally {
+            await database.end();
+          }
+          process.stdout.write(`${JSON.stringify(observed, null, 2)}\n`);
+          NODE
+          jq -e \
+            '.format == "memphis-zoo-build52-production-post-apply.v1"
+             and .ok == true
+             and .source == "direct-production-query"
+             and .ledger_count == 229
+             and .ledger_head == "20260918012000"
+             and .counts.functions == 506
+             and .counts.routine_grants == 347
+             and .schema_fingerprint == "c9f5b9fdbb610eebc1866816ef0a15d1cf335cb888633e5387e6bee560ffce19"' \
+            "$post_apply_path" >/dev/null
+          printf '{"stage":"production_target_independently_verified","verification_sha256":"%s","completed_at":"%s"}\n' \
+            "$(sha256sum "$post_apply_path" | awk '{print $1}')" "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$receipt_path"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: build52-production-migration-${{ github.run_id }}
           path: |
             ${{ runner.temp }}/build52-production-migration-result.json
+            ${{ runner.temp }}/build52-production-post-apply-verification.json
             ${{ runner.temp }}/build52-production-migration-receipt.jsonl
           if-no-files-found: warn
           retention-days: 30
