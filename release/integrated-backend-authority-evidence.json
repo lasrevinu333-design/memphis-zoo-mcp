@@ -510,7 +510,7 @@
       {
         "path": "scripts/audit3-repair-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "036d59937a9734981a8eb29598c4af1625290481"
+        "object_id": "4185dd9d41a129a2f4a44f371ec4a87303dc3f2e"
       },
       {
         "path": "scripts/audit4-repair-contract-tests.mjs",
@@ -620,7 +620,7 @@
       {
         "path": "scripts/custodial-coverage-policy-database-tests.mjs",
         "mode": "100644",
-        "object_id": "46e347b6b89ed421dbbf5a14e25a503da3460ca9"
+        "object_id": "9d34362fce66e53485001942baf5f6ee41da423b"
       },
       {
         "path": "scripts/custodial-coverage-policy-tests.mjs",
@@ -1115,7 +1115,7 @@
       {
         "path": "scripts/phone-production-readiness-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "bdc1147f885571b1705f24f47e5b51c7fdd8e060"
+        "object_id": "903cffb3f1196f89dc82bd85e577d1b5d175c633"
       },
       {
         "path": "scripts/phone-production-readiness-tests.mjs",
@@ -1500,7 +1500,7 @@
       {
         "path": "scripts/static-weekly-schedule-compiler-tests.mjs",
         "mode": "100644",
-        "object_id": "87e00105f2251419032e84f531af851650424a75"
+        "object_id": "3f4b5b7cef6fbbe54c816570d86c56676eed52c2"
       },
       {
         "path": "scripts/static-weekly-schedule-concurrency-tests.mjs",
