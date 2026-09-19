@@ -16,7 +16,7 @@ const input = JSON.parse(readFileSync(new URL("../release/schema-alignment-input
 const frontend = JSON.parse(readFileSync(new URL("../release/frontend-release-manifest.json", import.meta.url), "utf8"));
 const canonicalCatalog = JSON.parse(readFileSync(new URL("../supabase/canonical/schema-fingerprint-input.json", import.meta.url), "utf8"));
 const target = readFileSync(new URL("../supabase/canonical/schema-fingerprint.txt", import.meta.url), "utf8").trim();
-const RELEASE_VALIDATION_TIME = "2026-09-14T12:00:00Z";
+const RELEASE_VALIDATION_TIME = "2026-09-19T03:30:00Z";
 const now = Date.parse(RELEASE_VALIDATION_TIME);
 
 assert.equal(frontend.frontend_commit_sha, input.frontend_commit_sha, "the backend manifest must pin the exact audited frontend");

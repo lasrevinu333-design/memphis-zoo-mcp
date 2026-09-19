@@ -22,10 +22,12 @@ const adminUrl = String(process.env.RELEASE_MIGRATION_TEST_DATABASE_URL || "").t
 if (!/(localhost|127\.0\.0\.1|test|ci)/i.test(adminUrl)) throw new Error("RELEASE_MIGRATION_TEST_DATABASE_URL must identify a disposable local/test PostgreSQL server.");
 const root = resolve(new URL("..", import.meta.url).pathname);
 const state = JSON.parse(readFileSync(resolve(root, "release/production-migration-state.json"), "utf8"));
+assert.equal(state.pending_migrations.length, 3,
+  "the correction release fixture must contain exactly the three reviewed pending migrations");
 assert.equal(
-  state.pending_migrations.slice(0, -2).every((item) => item.source_migration_version < state.observed_production.ledger_head),
+  state.pending_migrations.every((item) => item.source_migration_version > state.observed_production.ledger_head),
   true,
-  "the fixture must cover planned historical-version migrations that interleave before the admitted production head",
+  "all reviewed correction migrations must advance beyond the admitted production head",
 );
 const pending = new Set(state.pending_migrations.map((item) => item.file));
 const migrationFiles = readdirSync(resolve(root, "supabase/migrations")).filter((name) => name.endsWith(".sql")).sort();
@@ -182,6 +184,9 @@ try {
   assert.equal(sourceLedgerSha256, sha256(stableJsonFile(sourceLedger.rows)),
     "the locked live ledger must use the exact canonical backup-file serialization");
   const beforeCatalog = normalizeDisposableCronDatabase(await captureSchemaCatalog({ query: (sql) => db.query(sql) }));
+  const sourceCoverallDefinition = (await db.query(
+    "select pg_get_functiondef('public.app_apply_coverall_assignment_policy_v2(jsonb)'::regprocedure) definition"
+  )).rows[0].definition;
   sourceCatalogFingerprint = fingerprintSchemaCatalog(beforeCatalog).fingerprint;
   sourceCatalogCounts = Object.fromEntries(Object.entries(beforeCatalog).map(([name, rows]) => [name, rows.length]));
   assert.notEqual(sourceCatalogFingerprint, state.target.canonical_source_schema_fingerprint,
@@ -197,8 +202,10 @@ try {
   await assert.rejects(runPlan({ RELEASE_MIGRATION_TEST_FAIL_AFTER_ORDER: "1" }), /failure probe after order 1/);
   assert.equal((await db.query("select count(*)::int count from supabase_migrations.schema_migrations")).rows[0].count,
     Number(state.observed_production.production_ledger_count), "failure injection rolls the complete migration plan back");
-  assert.equal((await db.query("select to_regprocedure('public.custodial_begin_application_mutation_lease(uuid,text)') is not null present")).rows[0].present, false,
-    "failure injection cannot leave migration-one authority behind");
+  assert.equal((await db.query(
+    "select pg_get_functiondef('public.app_apply_coverall_assignment_policy_v2(jsonb)'::regprocedure) definition"
+  )).rows[0].definition, sourceCoverallDefinition,
+    "failure injection must restore the exact pre-migration CoverAll authority definition");
   await assert.rejects(runPlan({
     RELEASE_MIGRATION_REHEARSAL: "false",
     RELEASE_MIGRATION_AUTHORIZATION_VERIFY_KEY: authorizationKey,
@@ -247,7 +254,7 @@ try {
   const afterFingerprint = fingerprintSchemaCatalog(afterCatalog);
   const canonical = JSON.parse(readFileSync(resolve(root, "supabase/canonical/schema-fingerprint-input.json"), "utf8"));
   assert.equal(afterFingerprint.fingerprint, state.target.canonical_source_schema_fingerprint,
-    `the exact six-migration plan must terminate at the canonical target catalog: ${JSON.stringify(firstCatalogDifference(canonical, afterFingerprint.normalized))}`);
+    `the exact three-migration correction plan must terminate at the canonical target catalog: ${JSON.stringify(firstCatalogDifference(canonical, afterFingerprint.normalized))}`);
   await assert.rejects(runPlan(), /already present|pre-migration production state|Locked source catalog/,
     "the complete plan is exactly-once and rejects replay or partial application");
   console.log("RELEASE_MIGRATION_PLAN_DATABASE_TESTS_PASS");

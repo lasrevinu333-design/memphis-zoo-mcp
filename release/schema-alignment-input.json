@@ -1,12 +1,12 @@
 {
   "release_id": "release-2026.07.19.custodial-v3.12",
-  "frontend_commit_sha": "854906890b37f376a9b205768c9546429484bab2",
+  "frontend_commit_sha": "50d87bcbe9d8c207365461510fcbd9cf877326d5",
   "frontend_commit_state": "final_pair_bound",
   "backend_minimum_version": "release-2026.07.19.custodial-v3.12",
-  "schema_from_fingerprint": "e0f9aaebe6013f5b912cf261bd7bf7703c7b604a64bc94d98fc2aae9506387cd",
+  "schema_from_fingerprint": "81b3fa4316a772ab7553956e5b5c29a04c3d5583c6f32b2917c30eb19a011c32",
   "schema_transition": {
-    "transition_id": "custodial-build52-recovery-20260914",
-    "expires_at": "2026-09-27T23:59:59Z"
+    "transition_id": "custodial-audit-corrections-20260918",
+    "expires_at": "2026-10-02T23:59:59Z"
   },
   "api_contract_versions": {
     "scan": "scan.v4.snapshot-bound-authority",
@@ -22,10 +22,23 @@
     "feedback": "feedback.v3.enrolled-authority"
   },
   "queue_compatibility_versions": {
-    "scan": ["legacy-local-storage", "indexeddb-v1", "indexeddb-v2", "indexeddb-v3", "indexeddb-v4", "indexeddb-v6-offline-authority"],
-    "native_notification_actions": ["local-storage-outbox-v1"],
-    "messaging": ["local-storage-outbox-v1"],
-    "gemini_console": ["indexeddb-outbox-v1"]
+    "scan": [
+      "legacy-local-storage",
+      "indexeddb-v1",
+      "indexeddb-v2",
+      "indexeddb-v3",
+      "indexeddb-v4",
+      "indexeddb-v6-offline-authority"
+    ],
+    "native_notification_actions": [
+      "local-storage-outbox-v1"
+    ],
+    "messaging": [
+      "local-storage-outbox-v1"
+    ],
+    "gemini_console": [
+      "indexeddb-outbox-v1"
+    ]
   },
   "minimum_supported": {
     "frontend_version": "release-2026.07.19.custodial-v3.12",
