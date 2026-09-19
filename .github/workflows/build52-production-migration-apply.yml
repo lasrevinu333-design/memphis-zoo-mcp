@@ -237,11 +237,11 @@ jobs:
             '.ok == true
              and .candidate_commit == $commit
              and .candidate_tree == $tree
-             and .before_ledger_count == 220
-             and .before_ledger_head == "20260827213545"
-             and .after_ledger_count == 226
-             and .after_ledger_head == "20260916010000"
-             and (.applied | length) == 6' \
+             and .before_ledger_count == 226
+             and .before_ledger_head == "20260916010000"
+             and .after_ledger_count == 229
+             and .after_ledger_head == "20260918012000"
+             and (.applied | length) == 3' \
             "$result_path" >/dev/null
           printf '{"stage":"production_apply_committed","result_sha256":"%s","completed_at":"%s"}\n' \
             "$(sha256sum "$result_path" | awk '{print $1}')" "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$receipt_path"
