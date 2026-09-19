@@ -417,6 +417,7 @@ await statusHandler(request({ deviceId: "KIOSK_06" }), statusRes);
 assert.equal(statusRes.code, 200);
 assert.equal(statusRes.payload.data.authenticated, false);
 assert.equal(statusRes.payload.data.employee_name, null, "unenrolled status must not disclose employee identity");
+assert.equal(statusRes.payload.data.employee_id, null, "unenrolled status must not disclose employee identifiers");
 assert.equal(statusRes.payload.data.employee_role, null, "unenrolled status must not disclose employee role");
 assert.equal(statusRes.payload.data.device_name, null, "unenrolled status must not disclose device labels");
 
@@ -425,6 +426,7 @@ routeStore.findCredential = async () => credential;
 await statusHandler(request({ cookie }), authenticatedStatusRes);
 assert.equal(authenticatedStatusRes.code, 200);
 assert.equal(authenticatedStatusRes.payload.data.employee_name, "Kinnaye Peete");
+assert.equal(authenticatedStatusRes.payload.data.employee_id, deviceA.assigned_employee_id, "authenticated status supplies its own assigned employee for identity-bound offline feedback");
 assert.equal(authenticatedStatusRes.payload.data.employee_role, "staff");
 
 const logoutHandler = app.routes.get("POST /device-auth/logout").at(-1);

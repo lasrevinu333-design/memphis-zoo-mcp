@@ -45,11 +45,14 @@ begin
     raise exception using errcode='22023', message='CoverAll coverage must be an array';
   end if;
   if cardinality(v_internal_ids) <> 2 or cardinality(v_coverall_absent_ids) < 1
-     or v_internal_ids[1] = any(v_coverall_absent_ids)
+     or array_position(v_internal_ids,null) is not null
+     or array_position(v_coverall_absent_ids,null) is not null
+     or cardinality(v_internal_ids) <> (select count(distinct value) from unnest(v_internal_ids) value)
+     or v_internal_ids && v_coverall_absent_ids
      or v_date is null
      or cardinality(v_coverall_absent_ids) <> (select count(distinct value) from unnest(v_coverall_absent_ids) value)
      or jsonb_array_length(v_coverage) <> cardinality(v_coverall_absent_ids) then
-    raise exception using errcode='22023', message='First-absence redistribution and second-or-later CoverAll identities are required';
+    raise exception using errcode='22023', message='Two distinct internally covered absences and third-or-later CoverAll identities are required';
   end if;
 
   for v_capacity in select value from jsonb_array_elements(v_coverage) loop
@@ -72,7 +75,7 @@ begin
          where e.id=v_coverall_capacity_employee_id and e.active=true
            and coalesce(e.employee_code,'') in ('COVERALL_01','COVERALL_02','COVERALL_03','COVERALL_04')
        ) then
-      raise exception using errcode='23514', message='Each second-or-later absence requires one distinct registered CoverAll contractor-capacity slot';
+      raise exception using errcode='23514', message='Each third-or-later absence requires one distinct registered CoverAll contractor-capacity slot';
     end if;
     v_covered_absent_ids := array_append(v_covered_absent_ids,v_absent_employee_id);
     v_capacity_employee_ids := array_append(v_capacity_employee_ids,v_coverall_capacity_employee_id);
@@ -101,13 +104,13 @@ begin
              and ct.coverage_start=(v_item->>'coverage_start')::time
              and least(ct.coverage_end,public.sch_get_schedule_close_time(v_date))=(v_item->>'coverage_end')::time
          ) then
-        raise exception using errcode='22023', message='Every CoverAll assignment must belong to its exact second-or-later absence and carry one valid bounded window';
+        raise exception using errcode='22023', message='Every CoverAll assignment must belong to its exact third-or-later absence and carry one valid bounded window';
       end if;
     end loop;
   end loop;
   if (select array_agg(value order by value) from unnest(v_covered_absent_ids) value)
      is distinct from (select array_agg(value order by value) from unnest(v_coverall_absent_ids) value) then
-    raise exception using errcode='22023', message='Every second-or-later absence requires exactly one CoverAll capacity entry';
+    raise exception using errcode='22023', message='Every third-or-later absence requires exactly one CoverAll capacity entry';
   end if;
 
   perform pg_advisory_xact_lock(hashtextextended('custodial-coverall-policy-v2:'||v_date::text,0));
@@ -117,7 +120,7 @@ begin
     if jsonb_array_length(v_assignments) > 0 then
       insert into public.daily_work_roster(service_date,employee_id,shift_start,shift_end,source_type,notes,active,created_at,updated_at)
       select v_date,v_coverall_capacity_employee_id,min((x->>'coverage_start')::time),max((x->>'coverage_end')::time),'coverall',
-        'Call CoverAll: one contractor capacity for one second-or-later absence.',true,now(),now()
+        'Call CoverAll: one contractor capacity for one third-or-later absence.',true,now(),now()
       from jsonb_array_elements(v_assignments) x
       on conflict(service_date,employee_id) do update set
         shift_start=least(public.daily_work_roster.shift_start,excluded.shift_start),
@@ -146,7 +149,7 @@ begin
       update public.daily_schedule_assignments dsa set
         assigned_employee_id=v_coverall_capacity_employee_id,
         owner_type='EMPLOYEE',status='ASSIGNED',source_type='coverall_escalation',
-        notes=trim(concat_ws(' ',nullif(dsa.notes,''),'Call CoverAll: one contractor assigned for this second-or-later custodial absence.')),
+        notes=trim(concat_ws(' ',nullif(dsa.notes,''),'Call CoverAll: one contractor assigned for this third-or-later custodial absence.')),
         updated_at=now()
       where dsa.id=v_assignment_id;
       get diagnostics v_updated_count = row_count;
@@ -159,7 +162,10 @@ begin
       v_current_status := null;
     end loop;
   end loop;
-  return jsonb_build_object('ok',true,'assigned_count',v_assignment_count,'preserved_count',v_preserved_count,'capacity_count',cardinality(v_capacity_employee_ids),'policy','first_internal_second_plus_distinct_coverall');
+  return jsonb_build_object('ok',true,'assigned_count',v_assignment_count,'preserved_count',v_preserved_count,'capacity_count',cardinality(v_capacity_employee_ids),'policy','first_two_internal_third_plus_distinct_coverall');
 end
 $function$
 ;
+
+REVOKE ALL ON FUNCTION public.app_apply_coverall_assignment_policy_v2(jsonb) FROM public,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.app_apply_coverall_assignment_policy_v2(jsonb) TO service_role;

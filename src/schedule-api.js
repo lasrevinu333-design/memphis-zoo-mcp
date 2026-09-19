@@ -1,3 +1,4 @@
+import {readHomeTimeFacts} from './employee-home-time-facts.js';
 import {normalizeCoverAllLanguage,coverAllLabels} from './coverall-language.js';
 import express from "express";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
@@ -751,7 +752,8 @@ export function createScheduleRouter({
       };
       throw error;
     }
-    return combineFullDaySchedule(data, data.all_items);
+    const home_facts=await readHomeTimeFacts({day:data,employeeId,runReadOnlySql});
+    return {...combineFullDaySchedule(data, data.all_items),home_facts};
   }
   async function loadFullDayScheduleItems(serviceDate, employeeId) {
     const rows = await runReadOnlySql(`

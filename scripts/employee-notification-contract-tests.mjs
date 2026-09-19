@@ -26,7 +26,7 @@ for (const route of ['register', 'events', 'opened', 'test']) {
 
 assert.match(source, /messenger_fallback: false/);
 assert.match(source, /employee-native-push\.v2/);
-for (const kind of ['event_day_before', 'event_shift_plus_15', 'message', 'due_soon', 'overdue']) {
+for (const kind of ['event_three_days_before', 'event_two_days_before', 'event_shift_plus_15', 'message', 'due_soon', 'overdue']) {
   assert.ok(source.includes(`'${kind}'`), `missing native employee notification kind ${kind}`);
 }
 assert.match(source, /makeDeviceCredentialMiddleware\(\{ supabase: db, runReadOnlySql \}\)/);
@@ -651,10 +651,26 @@ const operationalWorkerStart = indexSource.indexOf("async function runOperationa
 const operationalWorkerEnd = indexSource.indexOf("async function listGuestCleanlinessReports");
 assert.ok(operationalWorkerStart >= 0 && operationalWorkerEnd > operationalWorkerStart, "the operational worker must remain inspectable");
 const operationalWorker = indexSource.slice(operationalWorkerStart, operationalWorkerEnd);
+// Keep the independent-review baseline immutable. The candidate adds only the
+// named guest-pause path; it is not declared independently reviewed by this test.
+// Removing those exact additions must recover the byte-identical reviewed worker.
+const guestPauseAdditions = [
+  ['claim_operational_notification_jobs_v2', 'claim_operational_notification_jobs'],
+  ['      p_guest_reporting_enabled: GUEST_FEATURE.enabled === true,\n', ''],
+  ['          let deferGuest = false;\n', ''],
+  ['            deferGuest = error?.deferGuest === true && job.job_type === "guest_cleanliness_report";\n', ''],
+  ['          if (deferGuest) {\n            mutationLease.assertActive();\n            await runRpc("pause_guest_notification_job",{p_job_id:job.job_id,p_lease_token:job.lease_token});\n            return {job_id:job.job_id,succeeded:false,paused:true,terminal:false};\n          }\n', ''],
+];
+let reviewedFinalizationCore = operationalWorker;
+for (const [candidateText, originalText] of guestPauseAdditions) {
+  assert.equal(reviewedFinalizationCore.split(candidateText).length - 1, 1,
+    'each declared guest-pause delta must occur exactly once');
+  reviewedFinalizationCore = reviewedFinalizationCore.replace(candidateText, originalText);
+}
 assert.equal(
-  createHash("sha256").update(operationalWorker).digest("hex"),
+  createHash("sha256").update(reviewedFinalizationCore).digest("hex"),
   "f9151af2a3115297b05a9a9725b56f8fa8e9d23394f8fd190565e5b6871008db",
-  "notification finalization authority is bound to the exact reviewed worker source",
+  "unchanged finalization core must retain the exact independently reviewed bytes",
 );
 
 async function assertOperationalWorkerDeferral(workerSource) {
@@ -662,8 +678,8 @@ async function assertOperationalWorkerDeferral(workerSource) {
   const awaitedRpcCalls = workerSource.match(/\bawait\s+runRpc\s*\(/g) || [];
   assert.equal(
     rpcReferences.length,
-    3,
-    "the worker must contain exactly three owned RPC references: claim and the two mutually exclusive finish calls",
+    4,
+    "the worker must contain exactly four owned RPC references: claim, guest pause, and two mutually exclusive finish calls",
   );
   assert.equal(
     awaitedRpcCalls.length,
@@ -679,11 +695,12 @@ async function assertOperationalWorkerDeferral(workerSource) {
   const context = createContext({
     runRpc: async (name, payload) => {
       rpcCalls.push({ name, payload });
-      if (name === "claim_operational_notification_jobs") return claimedJobs;
+      if (name === "claim_operational_notification_jobs_v2") return claimedJobs;
       return { ok: true };
     },
     withApplicationMutationLease: async ({ operation }) => operation({ assertActive() {} }),
     supabaseAdmin: {},
+    GUEST_FEATURE: {enabled:false},
     processGuestCleanlinessNotificationJob: async () => { throw new Error("guest fixture must not run"); },
     operationalNotificationJobHandlers: new Map([
       ["deferred_fixture", async (job) => {
@@ -717,7 +734,7 @@ async function assertOperationalWorkerDeferral(workerSource) {
   assert.equal(outcome.results[0].deferred, true);
   assert.equal(outcome.results[0].succeeded, false);
   assert.equal(outcome.results[1].succeeded, true);
-  const finishCalls = rpcCalls.filter(({ name }) => name !== "claim_operational_notification_jobs");
+  const finishCalls = rpcCalls.filter(({ name }) => name !== "claim_operational_notification_jobs_v2");
   assert.deepEqual(finishCalls.map(({ name, payload }) => ({ name, job_id: payload.p_job_id })), [
     { name: "finish_operational_notification_job", job_id: claimedJobs[1].job_id },
   ], "a deferred job must invoke neither retry nor terminal finalization; only the succeeding second job may finish");
@@ -729,7 +746,7 @@ const aliasedDeferredFinishMutant = operationalWorker.replace(
   'if (deferFinish) {\n            await runRpc("finish_operational_" + "notification_job", { p_job_id: job.job_id, p_lease_token: job.lease_token });',
 );
 assert.notEqual(aliasedDeferredFinishMutant, operationalWorker);
-await assert.rejects(() => assertOperationalWorkerDeferral(aliasedDeferredFinishMutant), /exactly three owned RPC references/);
+await assert.rejects(() => assertOperationalWorkerDeferral(aliasedDeferredFinishMutant), /exactly four owned RPC references/);
 const earlyBreakMutant = operationalWorker.replace("results.push(result);", "results.push(result);\n      break;");
 assert.notEqual(earlyBreakMutant, operationalWorker);
 await assert.rejects(() => assertOperationalWorkerDeferral(earlyBreakMutant), /must not stop the outer loop/);
@@ -745,7 +762,7 @@ const asynchronousDeferredFinishMutant = operationalWorker.replace(
             }, 0);`,
 );
 assert.notEqual(asynchronousDeferredFinishMutant, operationalWorker);
-await assert.rejects(() => assertOperationalWorkerDeferral(asynchronousDeferredFinishMutant), /exactly three owned RPC references/);
+await assert.rejects(() => assertOperationalWorkerDeferral(asynchronousDeferredFinishMutant), /exactly four owned RPC references/);
 const obfuscatedGlobalTimerFinishMutant = operationalWorker.replace(
   "if (deferFinish) {",
   `if (deferFinish) {
@@ -760,7 +777,7 @@ const obfuscatedGlobalTimerFinishMutant = operationalWorker.replace(
 assert.notEqual(obfuscatedGlobalTimerFinishMutant, operationalWorker);
 await assert.rejects(
   () => assertOperationalWorkerDeferral(obfuscatedGlobalTimerFinishMutant),
-  /exactly three owned RPC references/,
+  /exactly four owned RPC references/,
 );
 const intrinsicPromiseFinishMutant = operationalWorker.replace(
   "if (deferFinish) {",
@@ -783,7 +800,7 @@ const intrinsicPromiseFinishMutant = operationalWorker.replace(
 assert.notEqual(intrinsicPromiseFinishMutant, operationalWorker);
 await assert.rejects(
   () => assertOperationalWorkerDeferral(intrinsicPromiseFinishMutant),
-  /exactly three owned RPC references/,
+  /exactly four owned RPC references/,
 );
 
 console.log('EMPLOYEE_NATIVE_NOTIFICATION_CONTRACT_PASS');

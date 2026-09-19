@@ -47,6 +47,16 @@ function employeeDay(projectionStatus = "current") {
   };
 }
 
+function homeTimes() {
+  return {employee_active:true,roster:{employee_id:employeeId,
+    projection_id:'71000000-0000-4000-8000-000000000009',publication_id:'70000000-0000-4000-8000-000000000009',
+    version_id:'60000000-0000-4000-8000-000000000009',slot_id:'50000000-0000-4000-8000-000000000009',
+    active:true,staffing_state:'working',projection_status:'current',shift_start:'07:00:00',shift_end:'16:00:00',lunch_start:'12:00:00',lunch_end:'13:00:00'},
+    exceptions:[{id:'91000000-0000-4000-8000-000000000009',type:'lunch',serviceDate,status:'accepted',sequence:1,
+      baseVersionId:'60000000-0000-4000-8000-000000000009',publicationId:'70000000-0000-4000-8000-000000000009',
+      payload:{slotId:'50000000-0000-4000-8000-000000000009',lunch:{start:'13:00',end:'14:00'}}}]};
+}
+
 function buildApp(read, requireDeviceAccess) {
   const app = express();
   app.use("/schedule-api", createScheduleRouter({
@@ -76,6 +86,7 @@ const currentCalls = [];
 await withServer(buildApp(async (sql) => {
   currentCalls.push(sql);
   if (sql.includes("static_weekly_v5_read_employee_day")) return [{ data: employeeDay() }];
+  if (sql.includes("static_weekly_v6_read_roster")) return [{facts:homeTimes()}];
   throw new Error(`legacy schedule read was reached: ${sql}`);
 }), async (origin) => {
   const summary = await fetch(`${origin}/schedule-api/my-day-summary?employee_id=${employeeId}&service_date=${serviceDate}`);
@@ -83,6 +94,8 @@ await withServer(buildApp(async (sql) => {
   const summaryPayload = await summary.json();
   assert.equal(summaryPayload.data.source, "static_weekly_projection");
   assert.equal(summaryPayload.data.employee_name, "Taylor New");
+  assert.equal(summaryPayload.data.home_facts.shift.shift_start,"07:00");
+  assert.deepEqual(summaryPayload.data.home_facts.lunch,{start:"13:00",end:"14:00"},"Home uses the accepted dated lunch rather than the unchanged base lunch");
   assert.equal(summaryPayload.data.items.length, 2, "canonical occurrences at the same location and purpose must remain separate");
   assert.equal(summaryPayload.data.items[0].name, "Teton Restroom");
   assert.deepEqual(summaryPayload.data.items.map((item) => item.occurrence_id), [
@@ -94,7 +107,7 @@ await withServer(buildApp(async (sql) => {
   assert.equal(html.status, 200);
   assert.match(await html.text(), /Taylor New[\s\S]*Teton Restroom/);
 });
-assert.equal(currentCalls.every((sql) => sql.includes("static_weekly_v5_read_employee_day")), true, "governed dates must not read the legacy scheduler");
+assert.equal(currentCalls.every((sql) => sql.includes("static_weekly_v5_read_employee_day") || sql.includes("static_weekly_v6_read_roster")), true, "governed dates read only canonical published authority, not the legacy scheduler");
 
 const conflictingEmployeeId = "30000000-0000-4000-8000-000000000088";
 let authenticatedDeviceMiddlewareCalls = 0;
@@ -122,6 +135,10 @@ await withServer(buildApp(async (sql) => {
     assert.doesNotMatch(sql, new RegExp(conflictingEmployeeId));
     return [{ data: employeeDay() }];
   }
+  if (sql.includes("static_weekly_v6_read_roster")) {
+    assert.match(sql,new RegExp(employeeId));assert.doesNotMatch(sql,new RegExp(conflictingEmployeeId));
+    return [{facts:homeTimes()}];
+  }
   throw new Error(`unexpected authenticated employee-day query: ${sql}`);
 }, (req, _res, next) => {
   authenticatedDeviceMiddlewareCalls += 1;
@@ -137,6 +154,8 @@ await withServer(buildApp(async (sql) => {
   assert.equal(payload.data.employee_id, employeeId);
   assert.equal(payload.data.employee_name, "Taylor New");
   assert.equal(payload.data.canonical_device_id, "KIOSK_08");
+  assert.equal(payload.data.home_facts.employee_id,employeeId);
+  assert.equal(payload.data.home_facts.lunch.start,"13:00");
 });
 assert.equal(authenticatedDeviceMiddlewareCalls, 1, "device-addressed employee reads must authenticate the phone");
 assert.ok(authenticatedCalls.some((sql) => sql.includes("from public.device_aliases")));
