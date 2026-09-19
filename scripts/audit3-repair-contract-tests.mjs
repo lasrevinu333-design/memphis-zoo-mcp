@@ -6,6 +6,7 @@ import { createGeminiControlledRepairWorker } from "../src/gemini-controlled-wor
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 const backup = read("scripts/production-backup.mjs");
+const backupPgDumpCommand = read("scripts/production-backup-pg-dump-command.mjs");
 const restore = read("scripts/production-restore.mjs");
 const restoreUnvalidatedChecks = read("scripts/restore-unvalidated-checks.mjs");
 const restoreIntent = read("scripts/create-production-restore-intent.mjs");
@@ -37,9 +38,11 @@ assert.match(backup, /releaseIdentity\.migration_head\) !== migrationHead/,
   "a backup must not sign a release identity whose migration head differs from its snapshot ledger");
 assert.match(backup, /cron-jobs\.json/);
 assert.match(backup, /application-schema\.sql/);
-assert.match(backup, /--schema-only", "--clean", "--if-exists"/);
+assert.match(backupPgDumpCommand, /--schema-only", "--clean", "--if-exists"/,
+  "the delegated pg_dump command builder must retain the schema-only clean restore flags");
 assert.match(backup, /pg_export_snapshot/);
-assert.match(backup, /--snapshot=\$\{exportedSnapshot\}/);
+assert.match(backupPgDumpCommand, /--snapshot=\$\{exportedSnapshot\}/,
+  "the delegated pg_dump command builder must bind the exported snapshot");
 assert.match(restore, /memphis-zoo-disaster-recovery\.v4/);
 assert.match(restore, /restoreArchiveAdmission\(summary\.format, \{ apply \}\)/,
   "historical v3 evidence must be rejected before any restore apply path can reach Storage reconciliation");

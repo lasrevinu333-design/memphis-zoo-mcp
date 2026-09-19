@@ -1003,21 +1003,21 @@ coverAll.slots.find((slot) => slot.id === "cover-1").contractorCapacity = true;
 coverAll.exceptions = [
   overlay("absence-one", "pto", { slotId: "a" }),
   overlay("absence-two", "daily_absence", { slotId: "b" }),
-  overlay("coverall-two", "cover_all", { availability: coverageAvailability("cover-1", "B") }),
 ].map((exception, index) => ({ ...exception, sequence: index + 1 }));
 const coverAllResult = await compile(coverAll);
 assert.equal(coverAllResult.status, "FEASIBLE");
 assert.equal(coverAllResult.weeklyAssignments.find((item) => item.workId === "first-absence").slotId, "c", "the first absence is redistributed only to a remaining zoo employee");
-assert.equal(coverAllResult.weeklyAssignments.find((item) => item.workId === "second-absence").slotId, "cover-1", "the second absence is assigned to its exact CoverAll capacity");
+assert.equal(coverAllResult.weeklyAssignments.find((item) => item.workId === "second-absence").slotId, "c", "the second absence is also redistributed to a remaining zoo employee");
 assert.equal(coverAllResult.weeklyAssignments.find((item) => item.workId === "ordinary").slotId, "c", "CoverAll cannot take ordinary active-employee work");
-for (const [label, exceptions] of [
-  ["missing second-absence CoverAll", coverAll.exceptions.slice(0, 2)],
-  ["CoverAll on only the first absence", [coverAll.exceptions[0], coverAll.exceptions[2]]],
-]) {
-  const rejected = await compile({ ...coverAll, exceptions });
-  assert.equal(rejected.status, "REVIEW", label);
-  assert.match(JSON.stringify(rejected.fatal), /custodial_absence_coverage_mismatch/, label);
-}
+const prematureCoverAll = await compile({
+  ...coverAll,
+  exceptions: [
+    ...coverAll.exceptions,
+    { ...overlay("premature-coverall", "cover_all", { availability: coverageAvailability("cover-1", "B") }), sequence: 3 },
+  ],
+});
+assert.equal(prematureCoverAll.status, "REVIEW", "CoverAll cannot be allocated when only two employees are absent");
+assert.match(JSON.stringify(prematureCoverAll.fatal), /custodial_absence_coverage_mismatch/);
 const threeAbsences = smallInput({
   slots: ["a", "b", "c", "d", "cover-1", "cover-2"],
   availabilities: [availability("a", "A"), availability("b", "B"), availability("c", "C"), availability("d", "A")],
@@ -1028,12 +1028,23 @@ threeAbsences.exceptions = [
   overlay("three-absence-one", "pto", { slotId: "a" }),
   overlay("three-absence-two", "daily_absence", { slotId: "b" }),
   overlay("three-absence-three", "pto", { slotId: "c" }),
-  overlay("three-cover-one", "cover_all", { availability: coverageAvailability("cover-1", "B") }),
-  overlay("three-cover-two", "cover_all", { availability: coverageAvailability("cover-2", "C") }),
+  overlay("three-cover-one", "cover_all", { availability: coverageAvailability("cover-1", "C") }),
 ].map((exception, index) => ({ ...exception, sequence: index + 1 }));
 const threeAbsenceResult = await compile(threeAbsences);
 assert.equal(threeAbsenceResult.status, "FEASIBLE");
-assert.deepEqual(threeAbsenceResult.weeklyAssignments.filter((item) => item.workId.startsWith("absence-")).map((item) => item.slotId), ["d", "cover-1", "cover-2"], "each absence after the first receives a separate CoverAll capacity slot");
+assert.deepEqual(threeAbsenceResult.weeklyAssignments.filter((item) => item.workId.startsWith("absence-")).map((item) => item.slotId), ["d", "d", "cover-1"], "the first two absences stay internal and only the third uses CoverAll capacity");
+const missingThirdAbsenceCoverAll = await compile({ ...threeAbsences, exceptions: threeAbsences.exceptions.slice(0, 3) });
+assert.equal(missingThirdAbsenceCoverAll.status, "REVIEW", "the third absence requires one CoverAll capacity slot");
+assert.match(JSON.stringify(missingThirdAbsenceCoverAll.fatal), /custodial_absence_coverage_mismatch/);
+const excessThirdAbsenceCoverAll = await compile({
+  ...threeAbsences,
+  exceptions: [
+    ...threeAbsences.exceptions,
+    { ...overlay("three-cover-two", "cover_all", { availability: coverageAvailability("cover-2", "C") }), sequence: 5 },
+  ],
+});
+assert.equal(excessThirdAbsenceCoverAll.status, "REVIEW", "one third absence cannot consume two CoverAll capacity slots");
+assert.match(JSON.stringify(excessThirdAbsenceCoverAll.fatal), /custodial_absence_coverage_mismatch/);
 
 // The dated roster identity is resolved for each occurrence, never once at
 // Monday.  Wednesday's replacement is a new immutable person snapshot.

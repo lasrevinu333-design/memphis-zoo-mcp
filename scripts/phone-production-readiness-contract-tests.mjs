@@ -12,7 +12,7 @@ assert.match(PHONE_READINESS_QUERY, /finish_event\.event_type='scan_finish' and 
 assert.match(PHONE_READINESS_QUERY, /start_event\.payload_json->>'entry_source'='native-nfc'/i);
 assert.match(PHONE_READINESS_QUERY, /finish_event\.payload_json->>'entry_source'='native-nfc'/i);
 assert.match(PHONE_READINESS_QUERY, /native_start_attestation_version='custodial-native-start\.v1'/i);
-assert.match(PHONE_READINESS_QUERY, /native_completion_attestation_version='custodial-native-completion\.v1'/i);
+assert.match(PHONE_READINESS_QUERY, /native_completion_attestation_version='custodial-native-completion\.v2'/i);
 assert.match(PHONE_READINESS_QUERY, /finish_event\.scanned_at=context\.native_completed_at/i);
 assert.doesNotMatch(PHONE_READINESS_QUERY, /coalesce\(se\.result,''\) not ilike '%fail%'/i,
   "readiness must not treat arbitrary non-failure scan rows as accepted NFC evidence");

@@ -30,7 +30,6 @@ const ids = {
   second: "00000000-0000-4000-8000-00000000e102",
   third: "00000000-0000-4000-8000-00000000e103",
   coverAll1: "",
-  coverAll2: "",
   firstLocation: "00000000-0000-4000-8000-00000000e105",
   secondLocation: "00000000-0000-4000-8000-00000000e106",
   protectedLocation: "00000000-0000-4000-8000-00000000e107",
@@ -48,20 +47,17 @@ const assignment = (originalEmployeeId, locationGroupId) => ({
   coverage_end: "12:00:00",
   original_employee_id: originalEmployeeId,
 });
-const payload = ({ secondOriginal = ids.second, secondCapacity = ids.coverAll1, thirdCapacity = ids.coverAll2 } = {}) => JSON.stringify({
+const payload = ({ thirdOriginal = ids.third, thirdCapacity = ids.coverAll1 } = {}) => JSON.stringify({
   service_date: serviceDate,
-  internally_redistributed_employee_ids: [ids.first],
-  coverall_absent_employee_ids: [ids.second, ids.third],
+  internally_redistributed_employee_ids: [ids.first, ids.second],
+  coverall_absent_employee_ids: [ids.third],
   coverage: [
-    { absent_employee_id: ids.second, coverall_capacity_employee_id: secondCapacity, assignments: [assignment(secondOriginal, ids.secondLocation), assignment(ids.second, ids.protectedLocation)] },
-    { absent_employee_id: ids.third, coverall_capacity_employee_id: thirdCapacity, assignments: [assignment(ids.third, ids.thirdLocation)] },
+    { absent_employee_id: ids.third, coverall_capacity_employee_id: thirdCapacity, assignments: [assignment(thirdOriginal, ids.thirdLocation), assignment(ids.third, ids.protectedLocation)] },
   ],
 }).replaceAll("'", "''");
 
 ids.coverAll1 = await sql("select id::text from public.employees where employee_code='COVERALL_01' and active=true order by id limit 1;");
-ids.coverAll2 = await sql("select id::text from public.employees where employee_code='COVERALL_02' and active=true order by id limit 1;");
 assert.match(ids.coverAll1, /^[0-9a-f-]{36}$/i, "the disposable baseline must contain first registered CoverAll capacity");
-assert.match(ids.coverAll2, /^[0-9a-f-]{36}$/i, "the disposable baseline must contain second registered CoverAll capacity");
 
 await sql(`
   insert into public.employees(id,employee_code,display_name,active,role) values
@@ -76,7 +72,7 @@ await sql(`
   insert into public.coverage_templates(location_group_id,day_of_week,segment_number,assigned_employee_id,coverage_start,coverage_end,active,coverage_purpose) values
     ('${ids.firstLocation}',1,1,'${ids.first}','08:00','12:00',true,'area_owner'),
     ('${ids.secondLocation}',1,1,'${ids.second}','08:00','12:00',true,'area_owner'),
-    ('${ids.protectedLocation}',1,1,'${ids.second}','08:00','12:00',true,'area_owner'),
+    ('${ids.protectedLocation}',1,1,'${ids.third}','08:00','12:00',true,'area_owner'),
     ('${ids.thirdLocation}',1,1,'${ids.third}','08:00','12:00',true,'area_owner');
   insert into public.daily_schedule_assignments(
     id,service_date,location_group_id,segment_number,assigned_employee_id,owner_type,
@@ -90,36 +86,36 @@ await sql(`
 
 await expectFailure(`set role anon; select public.app_apply_coverall_assignment_policy_v2('${payload()}'::jsonb);`, /permission denied/i);
 await expectFailure(`set role authenticated; select public.app_apply_coverall_assignment_policy_v2('${payload()}'::jsonb);`, /permission denied/i);
-await expectFailure(`set role service_role; select public.app_apply_coverall_assignment_policy_v2('${payload({ secondOriginal: ids.first })}'::jsonb);`, /exact second-or-later absence/i);
-await expectFailure(`set role service_role; select public.app_apply_coverall_assignment_policy_v2('${payload({ thirdCapacity: ids.coverAll1 })}'::jsonb);`, /distinct registered CoverAll/i);
+await expectFailure(`set role service_role; select public.app_apply_coverall_assignment_policy_v2('${payload({ thirdOriginal: ids.first })}'::jsonb);`, /exact third-or-later absence/i);
+await expectFailure(`set role service_role; select public.app_apply_coverall_assignment_policy_v2('${payload({ thirdCapacity: ids.first })}'::jsonb);`, /distinct registered CoverAll/i);
 await expectFailure(`set role service_role; select public.app_apply_coverall_assignment_policy_v2('${JSON.stringify({
   service_date: serviceDate,
-  internally_redistributed_employee_ids: [ids.first, ids.second],
-  coverall_absent_employee_ids: [ids.third],
-  coverage: [{ absent_employee_id: ids.third, coverall_capacity_employee_id: ids.coverAll1, assignments: [] }],
-}).replaceAll("'", "''")}'::jsonb);`, /First-absence redistribution/i);
+  internally_redistributed_employee_ids: [ids.first],
+  coverall_absent_employee_ids: [ids.second, ids.third],
+  coverage: [],
+}).replaceAll("'", "''")}'::jsonb);`, /Two distinct internally covered absences/i);
 
 const result = JSON.parse(await sql(`set role service_role; select public.app_apply_coverall_assignment_policy_v2('${payload()}'::jsonb)::text;`));
 assert.equal(result.ok, true);
-assert.equal(result.assigned_count, 2);
+assert.equal(result.assigned_count, 1);
 assert.equal(result.preserved_count, 1);
-assert.equal(result.capacity_count, 2);
-assert.equal(result.policy, "first_internal_second_plus_distinct_coverall");
+assert.equal(result.capacity_count, 1);
+assert.equal(result.policy, "first_two_internal_third_plus_distinct_coverall");
 assert.equal(await sql(`select assigned_employee_id::text from public.daily_schedule_assignments where id='${ids.firstAssignment}';`), ids.first, "the first absence remains for internal redistribution");
-assert.equal(await sql(`select assigned_employee_id::text from public.daily_schedule_assignments where id='${ids.secondAssignment}';`), ids.coverAll1, "the second absence is assigned to the first CoverAll capacity");
-assert.equal(await sql(`select assigned_employee_id::text from public.daily_schedule_assignments where id='${ids.thirdAssignment}';`), ids.coverAll2, "the third absence is assigned to a separate CoverAll capacity");
+assert.equal(await sql(`select assigned_employee_id::text from public.daily_schedule_assignments where id='${ids.secondAssignment}';`), ids.first, "the second absence remains for internal redistribution");
+assert.equal(await sql(`select assigned_employee_id::text from public.daily_schedule_assignments where id='${ids.thirdAssignment}';`), ids.coverAll1, "the third absence is assigned to its exact CoverAll capacity");
 assert.equal(await sql(`select assigned_employee_id::text from public.daily_schedule_assignments where id='${ids.protectedAssignment}';`), ids.first, "manager-protected work is not overwritten");
-assert.equal(await sql(`select count(*) from public.daily_work_roster where service_date='${serviceDate}' and employee_id=any(array['${ids.coverAll1}'::uuid,'${ids.coverAll2}'::uuid]);`), "2");
+assert.equal(await sql(`select count(*) from public.daily_work_roster where service_date='${serviceDate}' and employee_id='${ids.coverAll1}'::uuid;`), "1");
 
 const replay = JSON.parse(await sql(`set role service_role; select public.app_apply_coverall_assignment_policy_v2('${payload()}'::jsonb)::text;`));
 assert.equal(replay.ok, true);
-assert.equal(await sql(`select count(*) from public.daily_work_roster where service_date='${serviceDate}' and employee_id=any(array['${ids.coverAll1}'::uuid,'${ids.coverAll2}'::uuid]);`), "2", "retry remains one roster entry per contractor capacity");
-assert.equal(await sql(`select count(*) from public.daily_schedule_assignments where service_date='${serviceDate}' and assigned_employee_id=any(array['${ids.coverAll1}'::uuid,'${ids.coverAll2}'::uuid]);`), "2", "retry remains one distinct contractor-owned assignment per later absence");
+assert.equal(await sql(`select count(*) from public.daily_work_roster where service_date='${serviceDate}' and employee_id='${ids.coverAll1}'::uuid;`), "1", "retry remains one roster entry for the exact contractor capacity");
+assert.equal(await sql(`select count(*) from public.daily_schedule_assignments where service_date='${serviceDate}' and assigned_employee_id='${ids.coverAll1}'::uuid;`), "1", "retry remains one contractor-owned assignment for the third absence");
 
 console.log(JSON.stringify({
   ok: true,
-  first_absence_internal: true,
-  second_and_later_distinct_coverall: true,
+  first_two_absences_internal: true,
+  third_and_later_distinct_coverall: true,
   protected_assignments_preserved: true,
   unauthorized_roles_denied: true,
   replay_idempotent: true,
