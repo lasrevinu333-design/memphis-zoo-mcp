@@ -455,7 +455,7 @@
       {
         "path": "release/production-migration-state.json",
         "mode": "100644",
-        "object_id": "5acbe1311660a5c670a6accf0965aeb3cdea3f4b"
+        "object_id": "b9983fa10e246ddf9080ad967c89f09eac7a99f7"
       },
       {
         "path": "release/reviewed-migrations/20260809125735_cleaning_inspection_24_hour_freshness.sql",
@@ -536,6 +536,11 @@
         "path": "scripts/batch-2-event-messenger-cutover-tests.mjs",
         "mode": "100644",
         "object_id": "8b7800fb76fb8c7010645f0bf7b624e16cd3494e"
+      },
+      {
+        "path": "scripts/build52-release-recovery-binding-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "fe268d0122238f38d34b6c28ef1bced244b16a74"
       },
       {
         "path": "scripts/canonical-schema-reconciliation-database-tests.mjs",
@@ -1225,7 +1230,7 @@
       {
         "path": "scripts/release-canary-recovery-database-tests.mjs",
         "mode": "100644",
-        "object_id": "131146f1a304f94c115f5f92410479dba2b2a892"
+        "object_id": "8246e83bf7ec7f90d35761a57871689b0e81b5f9"
       },
       {
         "path": "scripts/release-closure-contract-tests.mjs",
@@ -3445,7 +3450,7 @@
       {
         "path": "supabase/migrations/20260918012000_event_reminder_workday_and_owner_contract.sql",
         "mode": "100644",
-        "object_id": "c5a5a046a2860a5479c7cf8e471b7a4dc624b8f2"
+        "object_id": "78efcb6de2007e91df037914e4f3beb231e5d42e"
       },
       {
         "path": "tmp/write_probe.txt",
@@ -3453,7 +3458,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 665,
+    "authority_path_count": 666,
     "migration_path_count": 129,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
