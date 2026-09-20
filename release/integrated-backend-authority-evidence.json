@@ -1270,7 +1270,7 @@
       {
         "path": "scripts/release-migration-plan-database-tests.mjs",
         "mode": "100644",
-        "object_id": "b7d3fef15676fbfaa58c3ed65eddead0e7ecf794"
+        "object_id": "b3adf52fd57da81df13ad9d24ca803d7601a82b9"
       },
       {
         "path": "scripts/release-migration-rehearsal-provenance.mjs",
