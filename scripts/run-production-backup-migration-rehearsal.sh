@@ -213,12 +213,12 @@ docker exec -i "$container" psql -v ON_ERROR_STOP=1 -U supabase_admin -d postgre
   < supabase/canonical/production-source-role-catalog.sql
 printf '{"stage":"source_roles_reconciled"}\n' >> "$receipt"
 docker exec "$container" createdb -U supabase_admin -O postgres -T template0 "$database"
-docker exec -i "$container" psql -v ON_ERROR_STOP=1 -U supabase_admin -d "$database" \
-  -f - -c 'reset session authorization;' \
-  < "$backup_dir/inventory/application-schema.sql"
 mapped_port="$(docker port "$container" 5432/tcp | sed -E 's/.*:([0-9]+)$/\1/')"
 test -n "$mapped_port"
 local_db_url="postgresql://supabase_admin:postgres@127.0.0.1:${mapped_port}/${database}"
+# The already authenticated inventory/application-schema.sql is preserved byte-for-byte.
+RESTORE_SOURCE_DIR="$backup_dir" SUPABASE_DB_URL="$local_db_url" \
+  node scripts/restore-isolated-event-owner-schema.mjs | tee -a "$receipt"
 RESTORE_SOURCE_DIR="$backup_dir" SUPABASE_DB_URL="$local_db_url" \
   npm run --silent restore:prepare-isolated | tee -a "$receipt"
 intent_key="$(openssl rand -hex 32)"
@@ -235,9 +235,8 @@ RESTORE_APPLY=true RESTORE_DATABASE_ONLY=true RESTORE_SOURCE_DIR="$backup_dir" \
   npm run --silent restore:verify | tee -a "$receipt"
 RESTORE_REHEARSAL_ACCEPT_EMPTY_TARGET=true RESTORE_REHEARSAL_EXPECTED_ARCHIVE_DIGEST="$archive_digest" \
   SUPABASE_DB_URL="$local_db_url" npm run --silent restore:reconcile-isolated | tee -a "$receipt"
-test "$(docker exec "$container" psql -v ON_ERROR_STOP=1 -At -U supabase_admin -d "$database" \
-  -c "select to_regclass('custodial_dr.application_mutation_leases') is null;" | tail -n 1)" = 't'
-printf '{"stage":"isolated_pre_migration_lease_shim_retired"}\n' >> "$receipt"
+RESTORE_SOURCE_DIR="$backup_dir" SUPABASE_DB_URL="$local_db_url" \
+  node scripts/verify-isolated-source-lease-state.mjs | tee -a "$receipt"
 SCHEMA_FINGERPRINT_DOCKER_CONTAINER="$container" SCHEMA_FINGERPRINT_DATABASE="$database" \
   npm run --silent release:observed-production-schema:preflight | tee -a "$receipt"
 RELEASE_MIGRATION_APPLY=true RELEASE_MIGRATION_CONFIRM_PROJECT_REF="$project_ref" \

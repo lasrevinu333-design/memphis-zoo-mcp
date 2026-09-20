@@ -150,7 +150,7 @@
     "test:audit5-repairs": "node scripts/audit5-feedback-guest-contract-tests.mjs",
     "test:audit6-repairs": "node scripts/audit6-coverall-security-contract-tests.mjs",
     "test:production-runtime": "node scripts/production-runtime-contract-tests.mjs",
-    "test:ci-workflows": "node scripts/ci-workflow-contract-tests.mjs && node scripts/production-backup-pg-dump-command-tests.mjs",
+    "test:ci-workflows": "node scripts/ci-workflow-contract-tests.mjs && node scripts/production-backup-pg-dump-command-tests.mjs && node scripts/isolated-event-owner-schema-tests.mjs",
     "test:production-schema-c674-bootstrap": "node scripts/production-schema-c674-bootstrap-contract-tests.mjs",
     "test:production-schema-inspection-freshness": "node scripts/production-schema-inspection-freshness-contract-tests.mjs",
     "test:production-database-identity": "node scripts/production-database-identity-contract-tests.mjs",

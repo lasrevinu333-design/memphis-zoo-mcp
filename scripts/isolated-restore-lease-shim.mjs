@@ -30,11 +30,14 @@ async function leaseRelationState(db) {
   };
 }
 
-async function assertExactEmptyShim(db, state) {
-  if (state.relation_comment !== ISOLATED_LEASE_SHIM_COMMENT) {
+async function assertExactEmptyShim(db, state, { permanent = false } = {}) {
+  if (permanent && (!state.relation_comment || state.relation_comment === ISOLATED_LEASE_SHIM_COMMENT)) {
+    throw new Error("The permanent application mutation lease table must retain its source marker, never the isolated shim marker.");
+  }
+  if (!permanent && state.relation_comment !== ISOLATED_LEASE_SHIM_COMMENT) {
     throw new Error("Refusing to use an unmarked application mutation lease table as an isolated rehearsal shim.");
   }
-  if (!state.relation_owner || state.relation_owner !== state.current_user) {
+  if (!state.relation_owner || state.relation_owner !== (permanent ? "postgres" : state.current_user)) {
     throw new Error("The isolated application mutation lease shim is not owned by the isolated restore identity.");
   }
   if (state.relation_kind !== "r" || state.relation_persistence !== "p") {
@@ -87,7 +90,7 @@ async function assertExactEmptyShim(db, state) {
   ];
   if (JSON.stringify(shape.rows[0]?.columns || []) !== JSON.stringify(expectedColumns)
       || JSON.stringify(shape.rows[0]?.constraints || []) !== JSON.stringify(expectedConstraints)
-      || JSON.stringify(shape.rows[0]?.non_owner_acl || []) !== JSON.stringify(expectedNonOwnerAcl)) {
+      || (!permanent && JSON.stringify(shape.rows[0]?.non_owner_acl || []) !== JSON.stringify(expectedNonOwnerAcl))) {
     throw new Error("The isolated application mutation lease shim shape is not exact.");
   }
   const leases = await db.query(`
@@ -103,6 +106,35 @@ async function assertExactEmptyShim(db, state) {
       || Number(counts.expired_count) !== 0) {
     throw new Error("The isolated application mutation lease shim is not empty.");
   }
+}
+
+// The signed source ledger, not a blanket absence assertion, determines whether
+// the genuine mutation fence must exist. This check never drops any relation.
+export async function verifyIsolatedSourceLeaseState(db, { sourceLedger }) {
+  const sourceMigrationPresent = ledgerHasGlobalMutationFence(sourceLedger);
+  const migration = await db.query(
+    "select exists(select 1 from supabase_migrations.schema_migrations where version=$1) migration_present",
+    [GLOBAL_MUTATION_FENCE_MIGRATION],
+  );
+  if (migration.rows[0]?.migration_present !== sourceMigrationPresent) {
+    throw new Error("The restored migration fence ledger does not match its signed source inventory.");
+  }
+  const state = await leaseRelationState(db);
+  if (sourceMigrationPresent) {
+    if (state.relation_name !== LEASE_RELATION) {
+      throw new Error("The signed permanent mutation lease table must be preserved.");
+    }
+    await assertExactEmptyShim(db, state, { permanent: true });
+  } else if (state.relation_name) {
+    throw new Error("The pre-migration temporary lease shim must be absent before baseline fingerprinting.");
+  }
+  return {
+    source_global_fence_present: sourceMigrationPresent,
+    permanent_lease_table_preserved: sourceMigrationPresent,
+    temporary_shim_absent: true,
+    active_mutation_leases: 0,
+    expired_mutation_leases: 0,
+  };
 }
 
 export async function ensureIsolatedRestoreLeaseShim(db, { sourceMigrationPresent }) {

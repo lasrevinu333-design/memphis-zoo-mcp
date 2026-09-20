@@ -103,7 +103,8 @@ jobs:
           docker pull "$image"
           docker pull "$postgrest_image"
           docker run -d --name "$container" --tmpfs /var/lib/postgresql/data:rw,size=1g \
-            -p 127.0.0.1::5432 -e POSTGRES_PASSWORD=postgres "$image" \
+            -p 127.0.0.1::5432 -e POSTGRES_PASSWORD=postgres -e PGPASSWORD=postgres \
+            "$image" postgres -D /etc/postgresql \
             -c listen_addresses='*' \
             -c shared_preload_libraries=pg_cron,pg_net,pg_stat_statements \
             -c cron.database_name="$database" -c cron.launch_active_jobs=off
@@ -130,12 +131,13 @@ jobs:
           docker exec -i "$container" psql -v ON_ERROR_STOP=1 -U supabase_admin -d postgres \
             < supabase/canonical/production-source-role-catalog.sql
           printf '{"stage":"source_roles_reconciled"}\n' >> "$receipt"
-          docker exec "$container" createdb -U supabase_admin -T template0 "$database"
-          docker exec -i "$container" psql -v ON_ERROR_STOP=1 -U supabase_admin -d "$database" \
-            < "$backup_dir/inventory/application-schema.sql"
+          docker exec "$container" createdb -U supabase_admin -O postgres -T template0 "$database"
           port="$(docker port "$container" 5432/tcp | sed -E 's/.*:([0-9]+)$/\1/')"
           test -n "$port"
           local_db_url="postgresql://supabase_admin:postgres@127.0.0.1:${port}/${database}"
+          # Restore the already authenticated inventory/application-schema.sql unchanged.
+          RESTORE_SOURCE_DIR="$backup_dir" SUPABASE_DB_URL="$local_db_url" \
+            node scripts/restore-isolated-event-owner-schema.mjs | tee -a "$receipt"
           RESTORE_SOURCE_DIR="$backup_dir" SUPABASE_DB_URL="$local_db_url" \
             npm run --silent restore:prepare-isolated | tee -a "$receipt"
           intent_key="$(openssl rand -hex 32)"
@@ -153,9 +155,8 @@ jobs:
             npm run --silent restore:verify | tee -a "$receipt"
           RESTORE_REHEARSAL_ACCEPT_EMPTY_TARGET=true RESTORE_REHEARSAL_EXPECTED_ARCHIVE_DIGEST="$archive_digest" \
             SUPABASE_DB_URL="$local_db_url" npm run --silent restore:reconcile-isolated | tee -a "$receipt"
-          test "$(docker exec "$container" psql -v ON_ERROR_STOP=1 -At -U supabase_admin -d "$database" \
-            -c "select to_regclass('custodial_dr.application_mutation_leases') is null;" | tail -n 1)" = 't'
-          printf '{"stage":"isolated_pre_migration_lease_shim_retired"}\n' >> "$receipt"
+          RESTORE_SOURCE_DIR="$backup_dir" SUPABASE_DB_URL="$local_db_url" \
+            node scripts/verify-isolated-source-lease-state.mjs | tee -a "$receipt"
           SCHEMA_FINGERPRINT_DOCKER_CONTAINER="$container" SCHEMA_FINGERPRINT_DATABASE="$database" \
             npm run --silent release:observed-production-schema:preflight | tee -a "$receipt"
           RELEASE_MIGRATION_APPLY=true RELEASE_MIGRATION_CONFIRM_PROJECT_REF="$project_ref" \

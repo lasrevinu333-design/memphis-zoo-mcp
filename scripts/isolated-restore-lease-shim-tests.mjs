@@ -8,6 +8,7 @@ import {
   ensureIsolatedRestoreLeaseShim,
   ledgerHasGlobalMutationFence,
   retireIsolatedRestoreLeaseShim,
+  verifyIsolatedSourceLeaseState,
 } from "./isolated-restore-lease-shim.mjs";
 
 class FixtureDatabase {
@@ -21,6 +22,7 @@ class FixtureDatabase {
     relationKind = "r",
     relationPersistence = "p",
     leaseCounts = { total_count: 0, active_count: 0, expired_count: 0 },
+    wrongShape = false,
   } = {}) {
     this.relationName = relationName;
     this.relationComment = relationComment;
@@ -31,6 +33,7 @@ class FixtureDatabase {
     this.relationKind = relationKind;
     this.relationPersistence = relationPersistence;
     this.leaseCounts = leaseCounts;
+    this.wrongShape = wrongShape;
     this.queries = [];
   }
 
@@ -66,7 +69,7 @@ class FixtureDatabase {
     if (statement.includes("coalesce(json_agg(json_build_object(")) {
       return { rows: [{
         columns: [
-          { name: "request_id", type: "uuid", not_null: true, default: null },
+          { name: "request_id", type: this.wrongShape ? "text" : "uuid", not_null: true, default: null },
           { name: "authority_generation", type: "bigint", not_null: true, default: null },
           { name: "service_name", type: "text", not_null: true, default: null },
           { name: "admitted_at", type: "timestamp with time zone", not_null: true, default: "clock_timestamp()" },
@@ -182,6 +185,41 @@ await assert.rejects(
 );
 
 const liveDatabaseUrl = String(process.env.ISOLATED_LEASE_SHIM_TEST_DATABASE_URL || "").trim();
+const signedFenceLedger = [{ version: GLOBAL_MUTATION_FENCE_MIGRATION }];
+const permanentOptions = {
+  relationName: "custodial_dr.application_mutation_leases",
+  relationComment: "In-flight external API work admitted under a restore generation. Heartbeats keep live work visible; abandoned leases expire after three minutes.",
+  relationOwner: "postgres",
+  migrationPresent: true,
+};
+const permanent = new FixtureDatabase(permanentOptions);
+assert.deepEqual(await verifyIsolatedSourceLeaseState(permanent, { sourceLedger: signedFenceLedger }), {
+  source_global_fence_present: true, permanent_lease_table_preserved: true,
+  temporary_shim_absent: true, active_mutation_leases: 0, expired_mutation_leases: 0,
+});
+assert.equal(permanent.queries.some(({ statement }) => /^(drop|delete|truncate|alter) /i.test(statement)), false,
+  "permanent-table verification must be read-only and must never delete the real table or its leases");
+assert.equal((await verifyIsolatedSourceLeaseState(new FixtureDatabase(), { sourceLedger: [] })).temporary_shim_absent, true);
+for (const [override, message] of [
+  [{ relationName: null }, /must be preserved/],
+  [{ relationComment: ISOLATED_LEASE_SHIM_COMMENT }, /source marker/],
+  [{ relationComment: null }, /source marker/],
+  [{ relationOwner: "wrong_owner" }, /not owned/],
+  [{ relationKind: "v" }, /ordinary persistent/],
+  [{ relationPersistence: "u" }, /ordinary persistent/],
+  [{ wrongShape: true }, /shape is not exact/],
+  [{ leaseCounts: { total_count: 1, active_count: 1, expired_count: 0 } }, /not empty/],
+  [{ leaseCounts: { total_count: 1, active_count: 0, expired_count: 1 } }, /not empty/],
+  [{ migrationPresent: false }, /does not match its signed/],
+]) {
+  await assert.rejects(verifyIsolatedSourceLeaseState(new FixtureDatabase({ ...permanentOptions, ...override }),
+    { sourceLedger: signedFenceLedger }), message);
+}
+await assert.rejects(verifyIsolatedSourceLeaseState(new FixtureDatabase({
+  relationName: "custodial_dr.application_mutation_leases", relationComment: ISOLATED_LEASE_SHIM_COMMENT,
+}), { sourceLedger: [] }), /temporary lease shim must be absent/);
+await assert.rejects(verifyIsolatedSourceLeaseState(permanent, { sourceLedger: [] }), /does not match its signed/);
+
 if (liveDatabaseUrl) {
   const { Client } = pg;
   const live = new Client({ connectionString: liveDatabaseUrl, application_name: "isolated-lease-shim-live-test" });

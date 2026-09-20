@@ -309,10 +309,8 @@ assert.match(productionBackupRehearsal, /inventory\/application-schema\.sql[\s\S
   "the independent rehearsal must restore signed schema/control state before applying signed application data");
 assert.match(productionBackupRehearsal, /RESTORE_REHEARSAL_ACCEPT_EMPTY_TARGET=true[\s\S]*restore:reconcile-isolated[\s\S]*custodial_configure_backend_execution_key/,
   "the independent rehearsal must explicitly reconcile its disposable empty target before exercising recovered application writers");
-assert.match(productionBackupRehearsal, /restore:reconcile-isolated[\s\S]*isolated_pre_migration_lease_shim_retired[\s\S]*release:observed-production-schema:preflight[\s\S]*release:migrations:apply/,
-  "the independent rehearsal must retire its marked empty compatibility shim before proving the genuine baseline and applying the migration plan");
-assert.match(productionBackupRehearsal, /to_regclass\('custodial_dr\.application_mutation_leases'\) is null/,
-  "the independent rehearsal must prove the compatibility shim is absent before baseline fingerprinting");
+assert.match(productionBackupRehearsal, /restore:reconcile-isolated[\s\S]*verify-isolated-source-lease-state\.mjs[\s\S]*release:observed-production-schema:preflight[\s\S]*release:migrations:apply/,
+  "the independent rehearsal must verify the signed-ledger-aware permanent-table/shim distinction before baseline fingerprinting");
 assert.match(productionBackupRehearsal, /test:feedback-reader-database[\s\S]*npm start[\s\S]*feedback_first_http_status[\s\S]*feedback_replay_http_status/,
   "the recovered application pair must prove bounded feedback reader authority before exact HTTP write and replay");
 assert.equal(
@@ -415,9 +413,17 @@ assert.match(localProductionBackupRehearsal,
 assert.match(localProductionBackupRehearsal,
   /createdb -U supabase_admin -O postgres -T template0 "\$database"/,
   "the isolated database must preserve the observed production postgres owner without elevating the role");
-assert.match(localProductionBackupRehearsal,
-  /-f - -c 'reset session authorization;'[\s\S]*< "\$backup_dir\/inventory\/application-schema\.sql"/,
-  "native dump owner contexts must be explicitly reset after the unchanged signed schema is applied");
+for (const owningRehearsal of [localProductionBackupRehearsal, productionBackupRehearsal]) {
+  assert.match(owningRehearsal, /-e POSTGRES_PASSWORD=postgres -e PGPASSWORD=postgres[\s\S]*"\$image" postgres -D \/etc\/postgresql/);
+  assert.match(owningRehearsal, /createdb -U supabase_admin -O postgres -T template0 "\$database"/);
+  assert.match(owningRehearsal,
+    /RESTORE_SOURCE_DIR="\$backup_dir"[\s\S]*restore:verify[\s\S]*restore-isolated-event-owner-schema\.mjs[\s\S]*restore:prepare-isolated/,
+    "both owning restore paths must authenticate the unchanged archive before executing scoped event-owner restoration");
+  assert.match(owningRehearsal,
+    /restore:reconcile-isolated[\s\S]*verify-isolated-source-lease-state\.mjs[\s\S]*release:observed-production-schema:preflight/);
+  assert.doesNotMatch(owningRehearsal, /to_regclass\('custodial_dr\.application_mutation_leases'\) is null/,
+    "a blanket absence assertion must never reject or delete the signed permanent lease table");
+}
 for (const required of [
   /RESTORE_DATABASE_ONLY=true[\s\S]*release:observed-production-schema:preflight[\s\S]*release:migrations:apply[\s\S]*release:target-schema:preflight/,
   /test:feedback-reader-database[\s\S]*npm start[\s\S]*feedback_first_http_status[\s\S]*feedback_replay_http_status/,
@@ -467,6 +473,8 @@ assert.match(productionBackupPgDumpCommand,
   "Docker host networking must remain limited to task-local access for the exact verified-TLS production hostname");
 assert.match(parsedPackageManifest.scripts["test:ci-workflows"], /production-backup-pg-dump-command-tests\.mjs/,
   "the Foundation workflow contract suite must execute the focused pg_dump argument test");
+assert.match(parsedPackageManifest.scripts["test:ci-workflows"], /isolated-event-owner-schema-tests\.mjs/,
+  "the Foundation workflow contract suite must execute scoped event-owner lexical/reset coverage");
 
 const workflowFixture = (commands) => `name: fixture\njobs:\n  validate:\n    steps:\n      - run: |\n${commands.map((command) => `          ${command}`).join("\n")}\n`;
 assert.doesNotThrow(() => assertExactCommandsInJob(

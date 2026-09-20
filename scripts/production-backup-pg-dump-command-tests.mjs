@@ -28,8 +28,8 @@ assert.deepEqual(defaultArgs.slice(defaultArgs.indexOf("--host"), defaultArgs.in
   "--username", fixture.databaseUsername,
   "--dbname", fixture.databaseName,
 ]);
-assert.equal(defaultArgs.filter((arg) => arg === "--use-set-session-authorization").length, 1,
-  "native pg_dump owner contexts must preserve managed non-superuser event-trigger owners without ALTER OWNER repair or privilege elevation");
+assert.equal(defaultArgs.includes("--use-set-session-authorization"), false,
+  "ordinary owner serialization must preserve transferred-owner creation privileges; the isolated adapter scopes only event-trigger creation");
 assert.ok(defaultArgs.includes(`--snapshot=${fixture.exportedSnapshot}`),
   "owner-preserving serialization must retain the exact exported transaction snapshot");
 assert.equal(defaultArgs.includes("--no-owner"), false,
@@ -46,8 +46,8 @@ assert.equal(hostNetworkArgs[hostNetworkArgs.indexOf("--host") + 1], "db.rqquvtj
   "pg_dump retains the certificate hostname even when the host resolves IPv6-only");
 assert.ok(hostNetworkArgs.includes("PGSSLMODE=verify-full"));
 assert.ok(hostNetworkArgs.includes("PGSSLROOTCERT=/cert/prod-ca.crt"));
-assert.equal(hostNetworkArgs.filter((arg) => arg === "--use-set-session-authorization").length, 1,
-  "local and hosted backups must use the same native owner-preserving serialization");
+assert.equal(hostNetworkArgs.includes("--use-set-session-authorization"), false,
+  "local and hosted backups must use the same ordinary owner-preserving serialization");
 
 assert.throws(() => productionBackupPgDumpDockerArgs({ ...fixture, networkHost: true }), /task-local backup access/);
 assert.throws(() => productionBackupPgDumpDockerArgs({
