@@ -409,6 +409,15 @@ assert.match(productionBackupRehearsal,
 assert.equal(parsedPackageManifest.scripts["release:migrations:rehearse-local"],
   "bash scripts/run-production-backup-migration-rehearsal.sh",
   "the task-local rehearsal must have one maintained package entry point");
+assert.match(localProductionBackupRehearsal,
+  /-e POSTGRES_PASSWORD=postgres -e PGPASSWORD=postgres[\s\S]*"\$image" postgres -D \/etc\/postgresql/,
+  "the isolated image must retain its Supautils configuration and transport its own local test password to docker-exec clients");
+assert.match(localProductionBackupRehearsal,
+  /createdb -U supabase_admin -O postgres -T template0 "\$database"/,
+  "the isolated database must preserve the observed production postgres owner without elevating the role");
+assert.match(localProductionBackupRehearsal,
+  /-f - -c 'reset session authorization;'[\s\S]*< "\$backup_dir\/inventory\/application-schema\.sql"/,
+  "native dump owner contexts must be explicitly reset after the unchanged signed schema is applied");
 for (const required of [
   /RESTORE_DATABASE_ONLY=true[\s\S]*release:observed-production-schema:preflight[\s\S]*release:migrations:apply[\s\S]*release:target-schema:preflight/,
   /test:feedback-reader-database[\s\S]*npm start[\s\S]*feedback_first_http_status[\s\S]*feedback_replay_http_status/,

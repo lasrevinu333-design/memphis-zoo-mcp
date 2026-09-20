@@ -34,6 +34,7 @@ export function productionBackupPgDumpDockerArgs({
     "--dbname", databaseName,
     "--no-password",
     "--schema-only", "--clean", "--if-exists", `--snapshot=${exportedSnapshot}`,
+    "--use-set-session-authorization",
     "--file=/backup/application-schema.sql",
   ];
 }

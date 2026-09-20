@@ -184,7 +184,8 @@ printf '{"stage":"archive_source_bound","format":"%s","source_commit":"%s","sour
 docker pull "$image"
 docker pull "$postgrest_image"
 docker run -d --name "$container" --tmpfs /var/lib/postgresql/data:rw,size=1g \
-  -p "127.0.0.1::5432" -e POSTGRES_PASSWORD=postgres "$image" \
+  -p "127.0.0.1::5432" -e POSTGRES_PASSWORD=postgres -e PGPASSWORD=postgres \
+  "$image" postgres -D /etc/postgresql \
   -c listen_addresses='*' -c shared_preload_libraries=pg_cron,pg_net,pg_stat_statements \
   -c cron.database_name="$database" -c cron.launch_active_jobs=off
 postgres_container_owned=true
@@ -211,8 +212,9 @@ sleep 10
 docker exec -i "$container" psql -v ON_ERROR_STOP=1 -U supabase_admin -d postgres \
   < supabase/canonical/production-source-role-catalog.sql
 printf '{"stage":"source_roles_reconciled"}\n' >> "$receipt"
-docker exec "$container" createdb -U supabase_admin -T template0 "$database"
+docker exec "$container" createdb -U supabase_admin -O postgres -T template0 "$database"
 docker exec -i "$container" psql -v ON_ERROR_STOP=1 -U supabase_admin -d "$database" \
+  -f - -c 'reset session authorization;' \
   < "$backup_dir/inventory/application-schema.sql"
 mapped_port="$(docker port "$container" 5432/tcp | sed -E 's/.*:([0-9]+)$/\1/')"
 test -n "$mapped_port"
