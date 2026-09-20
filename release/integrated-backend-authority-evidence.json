@@ -200,7 +200,7 @@
       {
         "path": ".github/workflows/production-backup-migration-rehearsal.yml",
         "mode": "100644",
-        "object_id": "94a66a9ab37483897b818816040a9c89d8738d2d"
+        "object_id": "84dc80a9e3b95d184b0aeae0ba1fb3f6efa0249a"
       },
       {
         "path": ".github/workflows/production-database-credential-bridge.yml",
@@ -390,7 +390,7 @@
       {
         "path": "package.json",
         "mode": "100644",
-        "object_id": "c4d2ea15aed70e06f31cfdce41e4c819d88eb92b"
+        "object_id": "47a8f6367f80f7b5088633d0517d8b2b4700a2ec"
       },
       {
         "path": "public/moxie-assets/contacts-creekside-animal.png",
@@ -560,7 +560,7 @@
       {
         "path": "scripts/ci-workflow-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "bfd6659a196d476d3cd9dc5bc7f16795251c3d35"
+        "object_id": "1d3e1e8d5ac79bdde14543c9f8212f139c76c8db"
       },
       {
         "path": "scripts/cleaning-identity-gps-database-tests.mjs",
@@ -938,14 +938,24 @@
         "object_id": "a2e56a2df4eddcd526de7954156cb59ed36335a8"
       },
       {
+        "path": "scripts/isolated-event-owner-schema-tests.mjs",
+        "mode": "100644",
+        "object_id": "2afac73ffb6dd712b1d76d3105d6f3a27c5d299d"
+      },
+      {
+        "path": "scripts/isolated-event-owner-schema.mjs",
+        "mode": "100644",
+        "object_id": "066005a2d195cb038866cb37f81d0519be2c9350"
+      },
+      {
         "path": "scripts/isolated-restore-lease-shim-tests.mjs",
         "mode": "100644",
-        "object_id": "e0bdf79211cbd088835334028e34af155444f1cc"
+        "object_id": "2e33b33f0f894518942040c44f9b49ba424593f0"
       },
       {
         "path": "scripts/isolated-restore-lease-shim.mjs",
         "mode": "100644",
-        "object_id": "dadafa3af037e4cebfe7a0855e3615f5d5bd4422"
+        "object_id": "c8d3b8cf76b67c56a381665b369dfeb3278c14d6"
       },
       {
         "path": "scripts/json-value-stream.mjs",
@@ -1140,12 +1150,12 @@
       {
         "path": "scripts/production-backup-pg-dump-command-tests.mjs",
         "mode": "100644",
-        "object_id": "829ae6a433425cba9a32b9a89641fd3b89e93b16"
+        "object_id": "f2d58ab839fa6b612dcc83d83ef1d81c8e26763e"
       },
       {
         "path": "scripts/production-backup-pg-dump-command.mjs",
         "mode": "100644",
-        "object_id": "32782db8a0446e933b9e623d8b97e12e28d5061f"
+        "object_id": "fa56b9bc9002b15d91943ec4cdb69dcb215ddb55"
       },
       {
         "path": "scripts/production-backup.mjs",
@@ -1263,6 +1273,11 @@
         "object_id": "8a7bc9dcb2c648752d30fcab70e57fc316c6dc4f"
       },
       {
+        "path": "scripts/restore-isolated-event-owner-schema.mjs",
+        "mode": "100644",
+        "object_id": "62cfbd34bf6814ba7ae18b039f35ad41c47c79b8"
+      },
+      {
         "path": "scripts/restore-mutation-gate-terminated-owner-fixture.mjs",
         "mode": "100644",
         "object_id": "0d3aed290b886cebcf4f4561935c410db5a5ac43"
@@ -1285,7 +1300,7 @@
       {
         "path": "scripts/run-production-backup-migration-rehearsal.sh",
         "mode": "100644",
-        "object_id": "14660f7af91a6cdbe18b994c0317bcb81c3f8bf0"
+        "object_id": "e7aaba8470eea20a81cb3f5a70b0afe74493ed36"
       },
       {
         "path": "scripts/scan-authority-cutover-tests.mjs",
@@ -1571,6 +1586,11 @@
         "path": "scripts/verify-isolated-rehearsal-backend-dependencies.sh",
         "mode": "100644",
         "object_id": "4c7738afca305778ec38c20e8a31091775573398"
+      },
+      {
+        "path": "scripts/verify-isolated-source-lease-state.mjs",
+        "mode": "100644",
+        "object_id": "7bf901b855236890d2327ede95c30892ed1a5575"
       },
       {
         "path": "scripts/wait-rehearsal-json-endpoint.sh",
@@ -3458,7 +3478,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 666,
+    "authority_path_count": 670,
     "migration_path_count": 129,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
