@@ -18,8 +18,8 @@ const q = (value) => `'${String(value).replaceAll("'", "''")}'`;
 const execFileAsync = promisify(execFile);
 function sql(statement, { expectFailure = false } = {}) {
   try {
-    const result = execFileSync("docker", ["exec", container, "psql", "-v", "ON_ERROR_STOP=1", "-At", "-U", "supabase_admin", "-d", database, "-c", statement], {
-      encoding: "utf8", maxBuffer: 16 * 1024 * 1024,
+    const result = execFileSync("docker", ["exec", "-i", container, "psql", "-q", "-v", "ON_ERROR_STOP=1", "-At", "-U", "supabase_admin", "-d", database], {
+      input: statement, encoding: "utf8", maxBuffer: 16 * 1024 * 1024,
     }).trim().split("\n").at(-1) || "";
     if (expectFailure) assert.fail(`Expected SQL failure: ${statement}`);
     return result;
