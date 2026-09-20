@@ -560,7 +560,7 @@
       {
         "path": "scripts/ci-workflow-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "c81be5398758d3ad89aa123c086fd54653eed830"
+        "object_id": "bfd6659a196d476d3cd9dc5bc7f16795251c3d35"
       },
       {
         "path": "scripts/cleaning-identity-gps-database-tests.mjs",
@@ -1140,12 +1140,12 @@
       {
         "path": "scripts/production-backup-pg-dump-command-tests.mjs",
         "mode": "100644",
-        "object_id": "466fcd5ba2870352705b92676957005010efe85b"
+        "object_id": "829ae6a433425cba9a32b9a89641fd3b89e93b16"
       },
       {
         "path": "scripts/production-backup-pg-dump-command.mjs",
         "mode": "100644",
-        "object_id": "fa56b9bc9002b15d91943ec4cdb69dcb215ddb55"
+        "object_id": "32782db8a0446e933b9e623d8b97e12e28d5061f"
       },
       {
         "path": "scripts/production-backup.mjs",
@@ -1285,7 +1285,7 @@
       {
         "path": "scripts/run-production-backup-migration-rehearsal.sh",
         "mode": "100644",
-        "object_id": "26876cf12907bb99b7aa20586e8c15149667d5e1"
+        "object_id": "14660f7af91a6cdbe18b994c0317bcb81c3f8bf0"
       },
       {
         "path": "scripts/scan-authority-cutover-tests.mjs",
