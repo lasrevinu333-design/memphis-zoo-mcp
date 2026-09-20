@@ -510,6 +510,17 @@ async function seedCurrentEmployeeEventInstance(eventId, instanceId, label, kind
       union select ((now()+interval '5 hours') at time zone 'America/Chicago')::date
     ) select jsonb_agg(distinct (event_date-offsets.days)::text)::text
       from event_dates cross join (values(0),(2),(3)) offsets(days);`));
+    // Own the active physical group mapping even in a clean isolated rebuild.
+    // The group identity is deterministic for this disposable location fixture.
+    sql(`insert into public.location_groups(id,group_code,group_name,active)
+      values('${locationId}'::uuid,'UEG${stamp}','Uncertainty event family',true);
+      insert into public.location_group_memberships(location_id,location_group_id,active)
+      values('${locationId}'::uuid,'${locationId}'::uuid,true);`);
+    assert.equal(sql(`select count(*) from public.locations location
+      join public.location_group_memberships membership on membership.location_id=location.id and membership.active
+      join public.location_groups family on family.id=membership.location_group_id and family.active
+      where location.id='${locationId}'::uuid and location.active and family.id='${locationId}'::uuid;`), "1",
+    "employee event fixture must own an active physical location/group mapping before compilation");
     await seedCompiledEventAuthority({
       sql, container, database, managerId, employeeId, dates: authorityDates,
       label: `uer-${stamp}`, mode: "synthetic_append_only",
