@@ -512,7 +512,7 @@ async function seedCurrentEmployeeEventInstance(eventId, instanceId, label, kind
       from event_dates cross join (values(0),(2),(3)) offsets(days);`));
     await seedCompiledEventAuthority({
       sql, container, database, managerId, employeeId, dates: authorityDates,
-      label: `uncertainty-event-races-${stamp}`, mode: "synthetic_append_only",
+      label: `uer-${stamp}`, mode: "synthetic_append_only",
     });
     employeeEventAuthorityDates = new Set(authorityDates);
   }
