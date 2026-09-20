@@ -670,7 +670,7 @@
       {
         "path": "scripts/custodial-repair-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "a4afc50d33e20a80b8655ea9de9d095909d9dcc6"
+        "object_id": "00cfc0f3c5191da6f3b022ff1060c8c0a3c2adf5"
       },
       {
         "path": "scripts/custodial-u4-migration-convergence-tests.mjs",
@@ -910,7 +910,7 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "dfa782d332412668a3f855075630662572bf80be"
+        "object_id": "91a19ab51c5d3c7c93b7cbcd103580f9409e37b6"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
@@ -1105,7 +1105,7 @@
       {
         "path": "scripts/operations-leadership-mobile-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "82c49ca2e43239be0351a8bdde215e0dfadb66a2"
+        "object_id": "e10e224a57920cf20bb05484e03ffa03482c3c7d"
       },
       {
         "path": "scripts/operations-leadership-mobile-database-tests.mjs",
