@@ -840,7 +840,7 @@
       {
         "path": "scripts/final-uncertainty-closure-database-tests.mjs",
         "mode": "100644",
-        "object_id": "98134076e1171162ecef7a5f89a1390694a1d197"
+        "object_id": "d3d06a69588fd19f30e9e3f113213829e45f766c"
       },
       {
         "path": "scripts/fixtures/static-weekly-compiler-runtime-test-worker.mjs",
