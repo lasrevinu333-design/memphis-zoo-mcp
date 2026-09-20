@@ -17,6 +17,14 @@ const backendCommit = "a".repeat(40);
 const releaseId = "release-canary-database-test";
 const q = (value) => `'${String(value).replaceAll("'", "''")}'`;
 
+// Prove the current migration-owned bindings before the older corruption suite
+// can restore a self-consistent but obsolete catalog and conceal release drift.
+execFileSync(process.execPath, ["scripts/build52-release-recovery-binding-database-tests.mjs"], {
+  env: { ...process.env, BUILD52_RECOVERY_TEST_DOCKER_CONTAINER: container,
+    BUILD52_RECOVERY_TEST_DATABASE: database },
+  stdio: "inherit",
+});
+
 function sql(statement, { role = "supabase_admin", expectFailure = false } = {}) {
   try {
     const output = execFileSync("docker", ["exec", container, "psql", "-v", "ON_ERROR_STOP=1", "-At", "-U", role, "-d", database, "-c", statement], {

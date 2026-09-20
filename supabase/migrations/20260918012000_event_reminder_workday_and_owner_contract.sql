@@ -134,6 +134,7 @@ begin
 end
 $function$
 ;
+
 CREATE OR REPLACE FUNCTION public.mz_claim_employee_event_push_delivery(p_job_id uuid, p_lease_token uuid, p_instance_id uuid, p_credential_id uuid, p_assignment_epoch bigint, p_registration_id uuid, p_token_hash text, p_now timestamp with time zone DEFAULT now())
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -210,3 +211,119 @@ begin
 end
 $function$
 ;
+
+-- Build 52 changes must remain the known-good recovery authority after deploy.
+-- Rebind only the exact functions/grants changed by the three pending migrations
+-- and this migration's event constraint. Do not recapture unrelated catalog drift.
+-- One DO statement makes the temporary inventory-unlock and every rebind atomic.
+DO $bind_build52_recovery_inventory$
+DECLARE
+  identity text;
+  canonical text;
+  definition text;
+  grant_definition text;
+  next_order integer;
+  helper_order integer;
+  changed integer;
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger
+    WHERE tgrelid='public.custodial_release_authority_restore_inventory'::regclass
+      AND tgname='trg_custodial_release_authority_restore_inventory_immutable'
+      AND tgenabled='O'
+  ) THEN
+    RAISE EXCEPTION 'Build 52 recovery inventory immutability must be enabled before rebinding';
+  END IF;
+  SELECT min(restore_order)-2 INTO helper_order
+  FROM public.custodial_release_authority_restore_inventory
+  WHERE object_kind='function' AND object_identity NOT IN (
+    to_regprocedure('public.claim_operational_notification_jobs_v2(text,integer,integer,boolean)')::text,
+    to_regprocedure('public.mz_event_reminder_schedule(uuid,integer,uuid,text)')::text
+  );
+  IF helper_order IS NULL OR helper_order<=1000 THEN
+    RAISE EXCEPTION 'Build 52 recovery function ordering is unavailable';
+  END IF;
+  ALTER TABLE public.custodial_release_authority_restore_inventory
+    DISABLE TRIGGER trg_custodial_release_authority_restore_inventory_immutable;
+
+  FOREACH identity IN ARRAY ARRAY[
+    'public.claim_operational_notification_jobs_v2(text,integer,integer,boolean)',
+    'public.mz_event_reminder_schedule(uuid,integer,uuid,text)',
+    'public.app_apply_coverall_assignment_policy_v2(jsonb)',
+    'public.claim_operational_notification_jobs(text,integer,integer)',
+    'public.pause_guest_notification_job(uuid,uuid)',
+    'public.mz_enqueue_employee_event_pushes(timestamp with time zone)',
+    'public.mz_claim_employee_event_push_delivery(uuid,uuid,uuid,uuid,bigint,uuid,text,timestamp with time zone)'
+  ] LOOP
+    canonical:=to_regprocedure(identity)::text;
+    definition:=pg_get_functiondef(to_regprocedure(identity));
+    IF canonical IS NULL OR definition IS NULL THEN
+      RAISE EXCEPTION 'Required Build 52 recovery function % is missing',identity;
+    END IF;
+    -- The new helpers must exist before the old SQL wrapper/PLpgSQL callers.
+    next_order:=NULL;
+    IF identity='public.claim_operational_notification_jobs_v2(text,integer,integer,boolean)' THEN
+      next_order:=helper_order;
+    ELSIF identity='public.mz_event_reminder_schedule(uuid,integer,uuid,text)' THEN
+      next_order:=helper_order+1;
+    END IF;
+    UPDATE public.custodial_release_authority_restore_inventory
+       SET definition_sql=definition,
+           definition_sha256=encode(extensions.digest(convert_to(definition,'UTF8'),'sha256'),'hex'),
+           restore_order=coalesce(next_order,restore_order),captured_at=statement_timestamp()
+     WHERE object_kind='function' AND object_identity=canonical;
+    GET DIAGNOSTICS changed=ROW_COUNT;
+    IF changed=0 THEN
+      IF next_order IS NULL THEN
+        SELECT coalesce(max(restore_order),100000)+1 INTO next_order
+        FROM public.custodial_release_authority_restore_inventory
+        WHERE object_kind='function' AND restore_order<200000;
+      END IF;
+      INSERT INTO public.custodial_release_authority_restore_inventory(
+        restore_order,object_kind,object_identity,definition_sql,definition_sha256
+      ) VALUES(next_order,'function',canonical,definition,
+        encode(extensions.digest(convert_to(definition,'UTF8'),'sha256'),'hex'));
+    ELSIF changed<>1 THEN
+      RAISE EXCEPTION 'Build 52 recovery function identity % is duplicated',canonical;
+    END IF;
+
+    grant_definition:=public.custodial_release_authority_current_grant_definition(canonical);
+    IF grant_definition IS NULL THEN
+      RAISE EXCEPTION 'Build 52 recovery grant for % is unavailable',canonical;
+    END IF;
+    UPDATE public.custodial_release_authority_restore_inventory
+       SET definition_sql=grant_definition,
+           definition_sha256=encode(extensions.digest(convert_to(grant_definition,'UTF8'),'sha256'),'hex'),
+           captured_at=statement_timestamp()
+     WHERE object_kind='grant' AND object_identity=canonical;
+    GET DIAGNOSTICS changed=ROW_COUNT;
+    IF changed=0 THEN
+      SELECT coalesce(max(restore_order),900000)+1 INTO next_order
+      FROM public.custodial_release_authority_restore_inventory;
+      INSERT INTO public.custodial_release_authority_restore_inventory(
+        restore_order,object_kind,object_identity,definition_sql,definition_sha256
+      ) VALUES(next_order,'grant',canonical,grant_definition,
+        encode(extensions.digest(convert_to(grant_definition,'UTF8'),'sha256'),'hex'));
+    ELSIF changed<>1 THEN
+      RAISE EXCEPTION 'Build 52 recovery grant identity % is duplicated',canonical;
+    END IF;
+  END LOOP;
+
+  identity:='public.event_push_instances:event_push_instances_notification_kind_check';
+  definition:=public.custodial_release_authority_current_constraint_definition(identity);
+  IF definition IS NULL THEN
+    RAISE EXCEPTION 'Build 52 event reminder constraint is unavailable';
+  END IF;
+  UPDATE public.custodial_release_authority_restore_inventory
+     SET definition_sql=definition,
+         definition_sha256=encode(extensions.digest(convert_to(definition,'UTF8'),'sha256'),'hex'),
+         captured_at=statement_timestamp()
+   WHERE object_kind='constraint' AND object_identity=identity;
+  GET DIAGNOSTICS changed=ROW_COUNT;
+  IF changed<>1 THEN
+    RAISE EXCEPTION 'Build 52 event reminder constraint inventory row is missing or duplicated';
+  END IF;
+  ALTER TABLE public.custodial_release_authority_restore_inventory
+    ENABLE TRIGGER trg_custodial_release_authority_restore_inventory_immutable;
+END
+$bind_build52_recovery_inventory$;

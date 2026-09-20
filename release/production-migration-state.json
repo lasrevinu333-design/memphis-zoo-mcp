@@ -152,7 +152,7 @@
       "phase": "event_reminder_workday_and_owner_contract",
       "file": "20260918012000_event_reminder_workday_and_owner_contract.sql",
       "source_migration_version": "20260918012000",
-      "sha256": "bb576cf66b8ef9de46bbcfea8c59274f8c80579cca20890141b1480f2565c164"
+      "sha256": "1ebd66aa0b6d4eb0212bc8e80d4dd1878a36363ec4f7e1d34a96a92a0317b2b2"
     }
   ],
   "postconditions": [
