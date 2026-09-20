@@ -490,6 +490,33 @@ function leaseEmployeeEventJob(instanceId, label) {
       '{}'::jsonb,'leased',1,3,now(),now()+interval '2 minutes','${leaseToken}'::uuid,${q(`uncertainty-${label}`)});`);
   return { jobId, leaseToken, jobKey };
 }
+function seedCurrentEmployeeEventInstance(eventId, instanceId, label, kind, cancelled = false) {
+  assert.ok(["three_days_before", "two_days_before"].includes(kind));
+  const daysBefore = kind === "three_days_before" ? 3 : 2;
+  sql(`update public.events_app_events
+    set audience_scope='specific_employees',audience_employee_ids=array['${employeeId}'::uuid]
+    where id='${eventId}'::uuid;
+    insert into public.daily_work_roster(service_date,employee_id,shift_start,shift_end,source_type,active)
+    select e.event_date-offsets.days_before,'${employeeId}'::uuid,'07:00'::time,'15:00'::time,'manual',true
+    from public.events_app_events e cross join (values(0),(${daysBefore})) offsets(days_before)
+    where e.id='${eventId}'::uuid
+    on conflict(service_date,employee_id) do update
+      set shift_start=excluded.shift_start,shift_end=excluded.shift_end,active=true;
+    insert into public.event_push_instances(
+      instance_id,notification_key,event_id,event_revision,service_date,employee_id,device_id,credential_id,
+      assignment_epoch,notification_kind,scheduled_for,state,cancelled_at,last_error)
+    select '${instanceId}'::uuid,${q(`employee-event-${label}-${stamp}`)},e.id,e.revision,e.event_date,
+      '${employeeId}'::uuid,'${deviceId}'::uuid,'${employeeCredentialId}'::uuid,d.assignment_epoch,
+      ${q(kind)},s.scheduled_for,${q(cancelled ? "cancelled" : "pending")},
+      ${cancelled ? "now()" : "null"},${cancelled ? "'cancelled before provider claim'" : "null"}
+    from public.events_app_events e cross join public.devices d
+    cross join lateral public.mz_event_reminder_schedule(e.id,e.revision,'${employeeId}'::uuid,${q(kind)}) s
+    where e.id='${eventId}'::uuid and d.id='${deviceId}'::uuid;`);
+  assert.equal(sql(`select count(*) from public.event_push_instances i
+    cross join lateral public.mz_event_reminder_schedule(i.event_id,i.event_revision,i.employee_id,i.notification_kind) s
+    where i.instance_id='${instanceId}'::uuid and i.scheduled_for=s.scheduled_for and i.scheduled_for<=now();`), "1",
+  "employee event race fixture must have an exact current-owner, roster-backed and due reminder before testing its dispatch state");
+}
 sql(`insert into public.device_auth_credentials(credential_id,device_id,token_hash,device_label,confirmed_at,expires_at,metadata_json)
   values('${employeeCredentialId}'::uuid,'${deviceId}'::uuid,'${employeeCredentialTokenHash}','employee notification race',now(),now()+interval '1 day','{}'::jsonb);
   insert into public.employee_push_registrations(registration_id,device_id,credential_id,employee_id,assignment_epoch,platform,fcm_token,token_hash)
@@ -515,14 +542,7 @@ assert.equal(sql(`select (token_hash=${q(employeeTokenHashC)})::text||'|'||(last
   "rotating a reused registration must clear the previous token generation's success state");
 
 const cancelledEmployeeEventInstanceId = randomUUID();
-sql(`insert into public.event_push_instances(
-    instance_id,notification_key,event_id,event_revision,service_date,employee_id,device_id,credential_id,
-    assignment_epoch,notification_kind,scheduled_for,state,cancelled_at,last_error)
-  select '${cancelledEmployeeEventInstanceId}'::uuid,${q(`employee-event-cancelled-${stamp}`)},e.id,e.revision,e.event_date,
-    '${employeeId}'::uuid,'${deviceId}'::uuid,'${employeeCredentialId}'::uuid,d.assignment_epoch,
-    'day_before',now()-interval '1 minute','cancelled',now(),'cancelled before provider claim'
-  from public.events_app_events e cross join public.devices d
-  where e.id='${rescheduledId}'::uuid and d.id='${deviceId}'::uuid;`);
+seedCurrentEmployeeEventInstance(rescheduledId, cancelledEmployeeEventInstanceId, "cancelled", "three_days_before", true);
 const cancelledEmployeeEventJob = leaseEmployeeEventJob(cancelledEmployeeEventInstanceId, "cancelled");
 const cancelledEmployeeEventClaim = JSON.parse(sql(`select public.mz_claim_employee_event_push_delivery(
   '${cancelledEmployeeEventJob.jobId}'::uuid,'${cancelledEmployeeEventJob.leaseToken}'::uuid,
@@ -534,14 +554,7 @@ assert.equal(cancelledEmployeeEventClaim.reason, "event_push_instance_cancelled"
   "a cancelled employee event must fail the database-bound pre-provider claim");
 
 const crossingEmployeeEventInstanceId = randomUUID();
-sql(`insert into public.event_push_instances(
-    instance_id,notification_key,event_id,event_revision,service_date,employee_id,device_id,credential_id,
-    assignment_epoch,notification_kind,scheduled_for,state)
-  select '${crossingEmployeeEventInstanceId}'::uuid,${q(`employee-event-crossing-${stamp}`)},e.id,e.revision,e.event_date,
-    '${employeeId}'::uuid,'${deviceId}'::uuid,'${employeeCredentialId}'::uuid,d.assignment_epoch,
-    'shift_plus_15',now()-interval '1 minute','pending'
-  from public.events_app_events e cross join public.devices d
-  where e.id='${rescheduledId}'::uuid and d.id='${deviceId}'::uuid;`);
+seedCurrentEmployeeEventInstance(rescheduledId, crossingEmployeeEventInstanceId, "crossing", "two_days_before");
 const crossingEmployeeEventJob = leaseEmployeeEventJob(crossingEmployeeEventInstanceId, "crossing");
 const crossingEmployeeEventClaim = JSON.parse(sql(`select public.mz_claim_employee_event_push_delivery(
   '${crossingEmployeeEventJob.jobId}'::uuid,'${crossingEmployeeEventJob.leaseToken}'::uuid,
@@ -569,15 +582,8 @@ const successfulEmployeeEventInstanceId = randomUUID();
 sql(`insert into public.events_app_events(id,event_name,location_group_id,event_date,start_time,end_date,status,event_scope,display_location,needs_review)
   select '${successfulEmployeeEventId}'::uuid,'Uncertainty employee delivery',id,((now()+interval '4 hours') at time zone 'America/Chicago')::date,
     ((now()+interval '4 hours') at time zone 'America/Chicago')::time,((now()+interval '4 hours') at time zone 'America/Chicago')::date,
-    'SCHEDULED','ZOO_WIDE','Zoo Footprint',false from public.location_groups order by id limit 1;
-  insert into public.event_push_instances(
-    instance_id,notification_key,event_id,event_revision,service_date,employee_id,device_id,credential_id,
-    assignment_epoch,notification_kind,scheduled_for,state)
-  select '${successfulEmployeeEventInstanceId}'::uuid,${q(`employee-event-success-${stamp}`)},e.id,e.revision,e.event_date,
-    '${employeeId}'::uuid,'${deviceId}'::uuid,'${employeeCredentialId}'::uuid,d.assignment_epoch,
-    'day_before',now()-interval '1 minute','pending'
-  from public.events_app_events e cross join public.devices d
-  where e.id='${successfulEmployeeEventId}'::uuid and d.id='${deviceId}'::uuid;`);
+    'SCHEDULED','ZOO_WIDE','Zoo Footprint',false from public.location_groups order by id limit 1;`);
+seedCurrentEmployeeEventInstance(successfulEmployeeEventId, successfulEmployeeEventInstanceId, "success", "three_days_before");
 const successfulEmployeeEventJob = leaseEmployeeEventJob(successfulEmployeeEventInstanceId, "success");
 assert.equal(JSON.parse(sql(`select public.mz_claim_employee_event_push_delivery(
   '${successfulEmployeeEventJob.jobId}'::uuid,'${successfulEmployeeEventJob.leaseToken}'::uuid,
@@ -617,15 +623,8 @@ const ambiguousEmployeeEventInstanceId = randomUUID();
 sql(`insert into public.events_app_events(id,event_name,location_group_id,event_date,start_time,end_date,status,event_scope,display_location,needs_review)
   select '${ambiguousEmployeeEventId}'::uuid,'Uncertainty ambiguous employee delivery',id,((now()+interval '5 hours') at time zone 'America/Chicago')::date,
     ((now()+interval '5 hours') at time zone 'America/Chicago')::time,((now()+interval '5 hours') at time zone 'America/Chicago')::date,
-    'SCHEDULED','ZOO_WIDE','Zoo Footprint',false from public.location_groups order by id limit 1;
-  insert into public.event_push_instances(
-    instance_id,notification_key,event_id,event_revision,service_date,employee_id,device_id,credential_id,
-    assignment_epoch,notification_kind,scheduled_for,state)
-  select '${ambiguousEmployeeEventInstanceId}'::uuid,${q(`employee-event-ambiguous-${stamp}`)},e.id,e.revision,e.event_date,
-    '${employeeId}'::uuid,'${deviceId}'::uuid,'${employeeCredentialId}'::uuid,d.assignment_epoch,
-    'day_before',now()-interval '1 minute','pending'
-  from public.events_app_events e cross join public.devices d
-  where e.id='${ambiguousEmployeeEventId}'::uuid and d.id='${deviceId}'::uuid;`);
+    'SCHEDULED','ZOO_WIDE','Zoo Footprint',false from public.location_groups order by id limit 1;`);
+seedCurrentEmployeeEventInstance(ambiguousEmployeeEventId, ambiguousEmployeeEventInstanceId, "ambiguous", "three_days_before");
 const ambiguousEmployeeEventJob = leaseEmployeeEventJob(ambiguousEmployeeEventInstanceId, "ambiguous");
 assert.equal(JSON.parse(sql(`select public.mz_claim_employee_event_push_delivery(
   '${ambiguousEmployeeEventJob.jobId}'::uuid,'${ambiguousEmployeeEventJob.leaseToken}'::uuid,
