@@ -57,15 +57,15 @@
     "outlook_event_sync_table_present": true
   },
   "target": {
-    "source_migration_file": "20260918012000_event_reminder_workday_and_owner_contract.sql",
-    "source_migration_name": "event_reminder_workday_and_owner_contract",
-    "source_migration_version": "20260918012000",
+    "source_migration_file": "20260920010000_event_reminder_static_weekly_authority.sql",
+    "source_migration_name": "event_reminder_static_weekly_authority",
+    "source_migration_version": "20260920010000",
     "production_ledger_version": null,
-    "canonical_source_schema_fingerprint": "c9f5b9fdbb610eebc1866816ef0a15d1cf335cb888633e5387e6bee560ffce19",
+    "canonical_source_schema_fingerprint": "750e7f040519f6d4555836cbd4d172a22f98911d5bab9918fa370238fff3f822",
     "public_function_count": 506,
-    "production_ledger_count": 229,
-    "source_authority_migration_count": 129,
-    "pending_migration_count": 3,
+    "production_ledger_count": 230,
+    "source_authority_migration_count": 130,
+    "pending_migration_count": 4,
     "registered_source_dated_status_excluded": true,
     "expected_catalog_counts": {
       "extensions": 8,
@@ -95,7 +95,7 @@
   },
   "source_binding": {
     "kind": "external_exact_head_release_attestation",
-    "rule": "The production approval package binds the exact backend commit/tree, three migration blobs, generated release evidence, exact frontend commit, fresh source catalog/ledger identity, backup and rehearsal before mutation."
+    "rule": "The production approval package binds the exact backend commit/tree, four migration blobs, generated release evidence, exact frontend commit, fresh source catalog/ledger identity, backup and rehearsal before mutation."
   },
   "backup_evidence": {
     "state": "fresh_verified_backup_required_after_fresh_source_capture_and_before_mutation",
@@ -120,7 +120,7 @@
     "production migration ledger is exactly 226 rows headed by 20260916010000 project_native_start_into_operational_truth",
     "locked production source catalog must freshly recapture and equal 81b3fa4316a772ab7553956e5b5c29a04c3d5583c6f32b2917c30eb19a011c32 with the exact expected source counts before any DDL; a stale or mismatched catalog aborts the plan",
     "a fresh encrypted backup with restore verification completes after the fresh source capture and before mutation",
-    "production exposes exactly 503 public functions and 344 non-owner routine grants before the three corrections",
+    "production exposes exactly 503 public functions and 344 non-owner routine grants before the four corrections",
     "one active authority key, two active registered schedule sources, 22 roster slots, 20 incumbencies, zero draft, two published versions/publications, three projections, 1080 occurrences, 18 command receipts and authority revision 18 remain current",
     "five target schedule positions remain represented without inventing staff identities",
     "Outlook event-sync authority exists and its rows must remain unchanged by this plan",
@@ -153,15 +153,23 @@
       "file": "20260918012000_event_reminder_workday_and_owner_contract.sql",
       "source_migration_version": "20260918012000",
       "sha256": "1ebd66aa0b6d4eb0212bc8e80d4dd1878a36363ec4f7e1d34a96a92a0317b2b2"
+    },
+    {
+      "order": 4,
+      "phase": "event_reminder_static_weekly_authority",
+      "file": "20260920010000_event_reminder_static_weekly_authority.sql",
+      "source_migration_version": "20260920010000",
+      "sha256": "58e03f2e327916b53191ead3ade40ba9373b580ccc1ad4116893bc5d8ead63c4"
     }
   ],
   "postconditions": [
-    "production ledger advances exactly three rows from 226 to 229, ending at 20260918012000 event_reminder_workday_and_owner_contract, with no replay of prior migrations",
-    "complete public catalog and privilege fingerprint equals c9f5b9fdbb610eebc1866816ef0a15d1cf335cb888633e5387e6bee560ffce19 with the exact reviewed target counts",
+    "production ledger advances exactly four rows from 226 to 230, ending at 20260920010000 event_reminder_static_weekly_authority, with no replay of prior migrations",
+    "complete public catalog and privilege fingerprint equals 750e7f040519f6d4555836cbd4d172a22f98911d5bab9918fa370238fff3f822 with the exact reviewed target counts",
     "production exposes exactly 506 public functions and 347 non-owner routine grants after the corrections",
     "first two simultaneous absences remain internal and each third-or-later absence consumes exactly one distinct registered CoverAll capacity, preserving manager overrides/history",
     "guest reporting OFF prevents queued guest notification dispatch without deleting pending/history records; staff Feedback remains separate",
     "employee event reminders are generated at D-3, D-2 and event day at reminder-day shift start plus 15 minutes and final delivery revalidates current event-date ownership/assignment",
+    "governed event reminders require the current static-weekly projection, resolved employee availability and canonical ownership; missing, stale, ambiguous, unavailable or CoverAll facts do not fall back to retired daily schedules",
     "existing publications, schedule history, employees, cleaning/ticket/inspection history, event history and production-only authority are not deleted or rewritten",
     "no unexpected catalog, privilege, configuration or row diff exists"
   ]

@@ -167,6 +167,14 @@ const productionRepairGate = readFileSync(resolve(workflowDirectory, "custodial-
 assert.match(productionRepairGate,
   /CUSTODIAL_STATIC_TRUTH_TEST_DOCKER_CONTAINER="\$container"[\s\S]*npm run --silent test:static-weekly-operational-truth-db/,
   "the complete repair gate must prove canonical operational truth against its exact rebuilt schema");
+const eventAuthoritySteps = workflowRunSteps(workflowJobs(productionRepairGate).find(({ name }) => name === "backend").source)
+  .filter((source) => source.includes("npm run --silent test:event-static-authority-db"));
+assert.equal(eventAuthoritySteps.length, 1, "the current weekly event authority proof must execute exactly once");
+assert.match(eventAuthoritySteps[0], /trap cleanup_event_database EXIT[\s\S]*SCHEMA_REBUILD_KEEP_DATABASE=1 npm run --silent test:empty-db-rebuild/,
+  "the event authority proof needs its own clean rebuild and cleanup armed before creation");
+assert.match(eventAuthoritySteps[0], /EVENT_STATIC_AUTHORITY_TEST_DOCKER_CONTAINER="\$\{retained\[0\]\}"[\s\S]*EVENT_STATIC_AUTHORITY_TEST_DATABASE=postgres/,
+  "the event proof must consume its exact retained disposable database");
+assert.equal(parsedPackageManifest.scripts["test:event-static-authority-db"], "node scripts/event-static-authority-database-tests.mjs");
 const populatedSchemaPreflight = readFileSync(resolve(workflowDirectory, "custodial-populated-schema-preflight.yml"), "utf8");
 assert.match(populatedSchemaPreflight, /test -n "\$SCHEMA_FINGERPRINT_MCP_URL"/,
   "the production schema preflight must reject a missing read-only MCP endpoint");
@@ -228,10 +236,10 @@ const acceptedProductionTarget = {
   format: "memphis-zoo-build52-production-post-apply.v1",
   ok: true,
   source: "direct-production-query",
-  ledger_count: 229,
-  ledger_head: "20260918012000",
+  ledger_count: 230,
+  ledger_head: "20260920010000",
   counts: { functions: 506, routine_grants: 347 },
-  schema_fingerprint: "c9f5b9fdbb610eebc1866816ef0a15d1cf335cb888633e5387e6bee560ffce19",
+  schema_fingerprint: "750e7f040519f6d4555836cbd4d172a22f98911d5bab9918fa370238fff3f822",
 };
 const productionTargetFixtureDirectory = mkdtempSync(join(tmpdir(), "custodial-b010-jq-"));
 try {

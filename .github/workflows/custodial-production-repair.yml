@@ -131,3 +131,36 @@ jobs:
             FINAL_UNCERTAINTY_TEST_DATABASE=postgres \
             npm run --silent test:final-uncertainty-closure-db
           npm run --silent test:release-closure
+      - name: Isolated current weekly event authority
+        shell: bash
+        env:
+          SCHEMA_REBUILD_DOCKER_IMAGE: supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed
+        run: |
+          set -euo pipefail
+          # This proof uses real accepted schedule exceptions on a fresh authority
+          # fixture; it must not inherit the shared suite's synthetic publications.
+          event_log="$(mktemp /tmp/memphis-event-static-rebuild.XXXXXX)"
+          cleanup_event_database() {
+            result=$?
+            trap - EXIT
+            set +e
+            mapfile -t owned_containers < <(sed -n 's/.*"retained_test_container":"\(mz_schema_rebuild_[A-Za-z0-9_]*\)".*/\1/p' "$event_log" | sort -u)
+            if (( ${#owned_containers[@]} > 1 )); then
+              result=74
+            elif (( ${#owned_containers[@]} == 1 )); then
+              owned="${owned_containers[0]}"
+              timeout 30s docker rm -f "$owned" >/dev/null 2>&1
+              remaining="$(timeout 20s docker ps -a --filter "name=^/${owned}$" --format '{{.Names}}')"
+              query_result=$?
+              if (( query_result != 0 )) || [[ -n "$remaining" ]]; then result=74; fi
+            fi
+            rm -f -- "$event_log"
+            exit "$result"
+          }
+          trap cleanup_event_database EXIT
+          SCHEMA_REBUILD_KEEP_DATABASE=1 npm run --silent test:empty-db-rebuild | tee "$event_log"
+          mapfile -t retained < <(sed -n 's/.*"retained_test_container":"\(mz_schema_rebuild_[A-Za-z0-9_]*\)".*/\1/p' "$event_log" | sort -u)
+          test "${#retained[@]}" -eq 1
+          EVENT_STATIC_AUTHORITY_TEST_DOCKER_CONTAINER="${retained[0]}" \
+            EVENT_STATIC_AUTHORITY_TEST_DATABASE=postgres \
+            npm run --silent test:event-static-authority-db

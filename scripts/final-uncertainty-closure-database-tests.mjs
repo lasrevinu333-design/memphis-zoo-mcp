@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { execFile, execFileSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { promisify } from "node:util";
+import { seedCompiledEventAuthority } from "./fixtures/event-static-authority-fixture.mjs";
 
 const container = String(process.env.FINAL_UNCERTAINTY_TEST_DOCKER_CONTAINER || "").trim();
 const database = String(process.env.FINAL_UNCERTAINTY_TEST_DATABASE || "postgres").trim();
@@ -490,19 +491,34 @@ function leaseEmployeeEventJob(instanceId, label) {
       '{}'::jsonb,'leased',1,3,now(),now()+interval '2 minutes','${leaseToken}'::uuid,${q(`uncertainty-${label}`)});`);
   return { jobId, leaseToken, jobKey };
 }
-function seedCurrentEmployeeEventInstance(eventId, instanceId, label, kind, cancelled = false) {
+let employeeEventAuthorityDates = null;
+async function seedCurrentEmployeeEventInstance(eventId, instanceId, label, kind, cancelled = false) {
   assert.ok(["three_days_before", "two_days_before"].includes(kind));
   const daysBefore = kind === "three_days_before" ? 3 : 2;
   sql(`update public.events_app_events
     set audience_scope='specific_employees',audience_employee_ids=array['${employeeId}'::uuid]
-    where id='${eventId}'::uuid;
-    insert into public.daily_work_roster(service_date,employee_id,shift_start,shift_end,source_type,active)
-    select e.event_date-offsets.days_before,'${employeeId}'::uuid,'07:00'::time,'15:00'::time,'manual',true
-    from public.events_app_events e cross join (values(0),(${daysBefore})) offsets(days_before)
-    where e.id='${eventId}'::uuid
-    on conflict(service_date,employee_id) do update
-      set shift_start=excluded.shift_start,shift_end=excluded.shift_end,active=true;
-    insert into public.event_push_instances(
+    where id='${eventId}'::uuid;`);
+  const dates = JSON.parse(sql(`select json_build_array((event_date-${daysBefore})::text,event_date::text)::text
+    from public.events_app_events where id='${eventId}'::uuid;`));
+  if (employeeEventAuthorityDates === null) {
+    // These four races share one employee identity. Seed their actual planned
+    // event/reminder dates once; a new slot per race would create ambiguous
+    // incumbent identities in the unchanged immutable publication.
+    const authorityDates = JSON.parse(sql(`with event_dates as (
+      select event_date from public.events_app_events where id='${rescheduledId}'::uuid
+      union select ((now()+interval '4 hours') at time zone 'America/Chicago')::date
+      union select ((now()+interval '5 hours') at time zone 'America/Chicago')::date
+    ) select jsonb_agg(distinct (event_date-offsets.days)::text)::text
+      from event_dates cross join (values(0),(2),(3)) offsets(days);`));
+    await seedCompiledEventAuthority({
+      sql, container, database, managerId, employeeId, dates: authorityDates,
+      label: `uncertainty-event-races-${stamp}`, mode: "synthetic_append_only",
+    });
+    employeeEventAuthorityDates = new Set(authorityDates);
+  }
+  assert.ok(dates.every((date) => employeeEventAuthorityDates.has(date)),
+    "every provider race must reuse the exact already-compiled event/reminder dates");
+  sql(`insert into public.event_push_instances(
       instance_id,notification_key,event_id,event_revision,service_date,employee_id,device_id,credential_id,
       assignment_epoch,notification_kind,scheduled_for,state,cancelled_at,last_error)
     select '${instanceId}'::uuid,${q(`employee-event-${label}-${stamp}`)},e.id,e.revision,e.event_date,
@@ -542,7 +558,7 @@ assert.equal(sql(`select (token_hash=${q(employeeTokenHashC)})::text||'|'||(last
   "rotating a reused registration must clear the previous token generation's success state");
 
 const cancelledEmployeeEventInstanceId = randomUUID();
-seedCurrentEmployeeEventInstance(rescheduledId, cancelledEmployeeEventInstanceId, "cancelled", "three_days_before", true);
+await seedCurrentEmployeeEventInstance(rescheduledId, cancelledEmployeeEventInstanceId, "cancelled", "three_days_before", true);
 const cancelledEmployeeEventJob = leaseEmployeeEventJob(cancelledEmployeeEventInstanceId, "cancelled");
 const cancelledEmployeeEventClaim = JSON.parse(sql(`select public.mz_claim_employee_event_push_delivery(
   '${cancelledEmployeeEventJob.jobId}'::uuid,'${cancelledEmployeeEventJob.leaseToken}'::uuid,
@@ -554,7 +570,7 @@ assert.equal(cancelledEmployeeEventClaim.reason, "event_push_instance_cancelled"
   "a cancelled employee event must fail the database-bound pre-provider claim");
 
 const crossingEmployeeEventInstanceId = randomUUID();
-seedCurrentEmployeeEventInstance(rescheduledId, crossingEmployeeEventInstanceId, "crossing", "two_days_before");
+await seedCurrentEmployeeEventInstance(rescheduledId, crossingEmployeeEventInstanceId, "crossing", "two_days_before");
 const crossingEmployeeEventJob = leaseEmployeeEventJob(crossingEmployeeEventInstanceId, "crossing");
 const crossingEmployeeEventClaim = JSON.parse(sql(`select public.mz_claim_employee_event_push_delivery(
   '${crossingEmployeeEventJob.jobId}'::uuid,'${crossingEmployeeEventJob.leaseToken}'::uuid,
@@ -583,7 +599,7 @@ sql(`insert into public.events_app_events(id,event_name,location_group_id,event_
   select '${successfulEmployeeEventId}'::uuid,'Uncertainty employee delivery',id,((now()+interval '4 hours') at time zone 'America/Chicago')::date,
     ((now()+interval '4 hours') at time zone 'America/Chicago')::time,((now()+interval '4 hours') at time zone 'America/Chicago')::date,
     'SCHEDULED','ZOO_WIDE','Zoo Footprint',false from public.location_groups order by id limit 1;`);
-seedCurrentEmployeeEventInstance(successfulEmployeeEventId, successfulEmployeeEventInstanceId, "success", "three_days_before");
+await seedCurrentEmployeeEventInstance(successfulEmployeeEventId, successfulEmployeeEventInstanceId, "success", "three_days_before");
 const successfulEmployeeEventJob = leaseEmployeeEventJob(successfulEmployeeEventInstanceId, "success");
 assert.equal(JSON.parse(sql(`select public.mz_claim_employee_event_push_delivery(
   '${successfulEmployeeEventJob.jobId}'::uuid,'${successfulEmployeeEventJob.leaseToken}'::uuid,
@@ -624,7 +640,7 @@ sql(`insert into public.events_app_events(id,event_name,location_group_id,event_
   select '${ambiguousEmployeeEventId}'::uuid,'Uncertainty ambiguous employee delivery',id,((now()+interval '5 hours') at time zone 'America/Chicago')::date,
     ((now()+interval '5 hours') at time zone 'America/Chicago')::time,((now()+interval '5 hours') at time zone 'America/Chicago')::date,
     'SCHEDULED','ZOO_WIDE','Zoo Footprint',false from public.location_groups order by id limit 1;`);
-seedCurrentEmployeeEventInstance(ambiguousEmployeeEventId, ambiguousEmployeeEventInstanceId, "ambiguous", "three_days_before");
+await seedCurrentEmployeeEventInstance(ambiguousEmployeeEventId, ambiguousEmployeeEventInstanceId, "ambiguous", "three_days_before");
 const ambiguousEmployeeEventJob = leaseEmployeeEventJob(ambiguousEmployeeEventInstanceId, "ambiguous");
 assert.equal(JSON.parse(sql(`select public.mz_claim_employee_event_push_delivery(
   '${ambiguousEmployeeEventJob.jobId}'::uuid,'${ambiguousEmployeeEventJob.leaseToken}'::uuid,
