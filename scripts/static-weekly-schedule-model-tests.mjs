@@ -36,15 +36,21 @@ assert.throws(() => normalizeWindow({ start: "08:00garbage", end: "09:00" }), /H
 const baseEightWidthTen = staticWeeklyGroupedObjectiveBounds(8, 10);
 assert.equal(baseEightWidthTen.completeMaximum, 1_073_741_823n);
 assert.equal(baseEightWidthTen.completeMaximumSafe, false);
-assert.equal(identityTierWidth(6), 9, "base-eight identity grouping stops before the aggregate overflow");
-assert.equal(leximaxTierWidth(7), 9, "base-eight leximax grouping has the same aggregate bound");
+assert.equal(identityTierWidth(6), 5, "base-eight identity grouping also stays within the smaller numerical envelope");
+assert.equal(leximaxTierWidth(7), 1, "general-integer ranks use serial exact bindings without amplified objective weights");
 const baseTenWidthNine = staticWeeklyGroupedObjectiveBounds(10, 9);
 const baseTenWidthTen = staticWeeklyGroupedObjectiveBounds(10, 10);
 assert.equal(baseTenWidthNine.completeMaximum, 999_999_999n);
 assert.equal(baseTenWidthNine.completeMaximumSafe, true);
 assert.equal(baseTenWidthTen.completeMaximumSafe, false);
-assert.equal(leximaxTierWidth(9), 9, "leximax width changes exactly at the base-ten aggregate boundary");
+assert.equal(leximaxTierWidth(9), 1, "each rank remains a separate lexicographic objective");
 assert.equal(MAX_TERMINAL_EXACT_OBJECTIVE, 1_000_000_000n);
+for (const count of [1, 6, 9, 18, 32, 256]) {
+  const width = identityTierWidth(count);
+  assert.ok(staticWeeklyGroupedObjectiveBounds(count + 2, width).completeMaximum <= 32767n,
+    'complete packed identity objective stays inside the numerical envelope');
+  assert.equal(leximaxTierWidth(count * 1000), 1);
+}
 
 const expiredAccessor = {};
 Object.defineProperty(expiredAccessor, "serviceDate", { enumerable: true, get() { throw new Error("deadline must stop before preparation"); } });

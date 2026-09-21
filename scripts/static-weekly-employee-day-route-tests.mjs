@@ -219,4 +219,29 @@ await withServer(buildApp(async (sql) => {
 });
 assert.ok(!missingFunctionCalls.some((sql) => sql.includes("sch_employee_my_schedule_page")), "missing canonical authority fails closed instead of reaching a legacy writer or reader");
 
+// The real compatibility route must preserve independent lunch boundaries.
+const loanRows = [
+  { segment_id: 'loan-a', group_code: 'LOAN', group_name: 'Loan Restrooms', coverage_purpose: 'lunch_coverage', coverage_start: '11:00 AM', coverage_end: '12:00 PM', included_locations: ['Men', 'Women'], status: 'ASSIGNED' },
+  { segment_id: 'loan-b', group_code: 'LOAN', group_name: 'Loan Restrooms', coverage_purpose: 'lunch_coverage', coverage_start: '11:30 AM', coverage_end: '12:30 PM', included_locations: ['Men', 'Women'], status: 'ASSIGNED' },
+];
+await withServer(buildApp(async (sql) => {
+  if (sql.includes('static_weekly_v5_read_employee_day')) return [{ data: { governed: false, source: 'legacy_daily_schedule' } }];
+  if (sql.includes('static_weekly_v6_schedule_authority_state')) return [{ governed: false, authority_source: 'legacy_daily_schedule', projection_status: 'legacy_ungoverned' }];
+  if (sql.includes('as roster_count') && sql.includes('as assignment_count')) return [{ current_service_date: serviceDate, roster_count: 1, assignment_count: 2 }];
+  if (sql.includes('sch_employee_my_schedule_page')) return [{ data: { ok: true, employee_name: 'Fixture Custodian', shift: { start: '07:00 AM', end: '04:00 PM', active: true }, current_items: [loanRows[1]] } }];
+  if (sql.includes('sch_get_daily_schedule_with_purpose')) return structuredClone(loanRows);
+  throw new Error('Unexpected lunch compatibility query');
+}), async (origin) => {
+  const response = await fetch(`${origin}/schedule-api/my-day-summary?employee_id=${employeeId}&service_date=${serviceDate}`);
+  assert.equal(response.status, 200);
+  const { data } = await response.json();
+  const loans = data.display_items.filter(item => item.coverage_purpose === 'lunch_coverage');
+  assert.equal(loans.length, 2, 'Independent lunches must not be merged by the HTTP response');
+  assert.deepEqual(loans.map(item => item.coverage_end), ['12:00 PM', '12:30 PM']);
+  assert.deepEqual(loans.map(item => item.is_current), [false, true]);
+  assert.equal(data.raw_items.length, 2);
+  assert.equal(data.current_items.length, 1);
+});
+console.log('LUNCH_DISPLAY_HTTP_BOUNDARY_PASS');
+
 console.log("STATIC_WEEKLY_EMPLOYEE_DAY_ROUTE_PASS");

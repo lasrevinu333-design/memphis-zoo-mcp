@@ -284,18 +284,21 @@ function apply(state, item) {
   }
 }
 function applyCustodialAbsenceCoveragePolicy(state, slotById, violations, serviceDate) {
-  const absent = state.fullDayAbsenceSlotIds; const contractors = state.contractorCoverageSlotIds;
-  const expectedContractors = Math.max(0, absent.length - 2);
+  // Independently reconstruct dated turnover coverage from the accepted
+  // staffing rows and that day's non-cancelled recurring ownership.
+  const departedOwners = new Set(state.work.filter((work) => !work.cancelled).map((work) => work.originSlotId));
+  const departed = [...state.availability.values()]
+    .filter((entry) => entry.status === "departed_named_absent" && departedOwners.has(entry.slotId))
+    .map((entry) => entry.slotId).sort(stableCompare);
+  const absent = [...departed, ...state.fullDayAbsenceSlotIds]; const contractors = state.contractorCoverageSlotIds;
   if (new Set(absent).size !== absent.length) push(violations, "duplicate_daily_absence", { serviceDate });
   if (new Set(contractors).size !== contractors.length) push(violations, "duplicate_coverall_capacity", { serviceDate });
-  if (contractors.length !== expectedContractors) push(violations, "custodial_absence_coverage_mismatch", { serviceDate, absences: absent.length, contractorCapacity: contractors.length, expectedContractors });
   if (absent.some((slotId) => slotById.get(slotId)?.contractorCapacity === true)) push(violations, "custodial_absence_identity_mismatch", { serviceDate });
   if (contractors.some((slotId) => slotById.get(slotId)?.contractorCapacity !== true || absent.includes(slotId))) push(violations, "custodial_contractor_capacity_required", { serviceDate });
   for (const work of state.work) {
-    const absenceIndex = absent.indexOf(work.originSlotId);
-    if (absenceIndex >= 0 && absenceIndex < 2) { work.custodialCoverageMode = "internal_even"; work.custodialCoverageSlotId = null; }
-    else if (absenceIndex >= 2) { work.custodialCoverageMode = "contractor_exact"; work.custodialCoverageSlotId = contractors[absenceIndex - 2]; }
-    else { work.custodialCoverageMode = "zoo_employee_baseline"; work.custodialCoverageSlotId = null; }
+    work.custodialCoverageMode = contractors.length ? "manager_added_coverage"
+      : absent.includes(work.originSlotId) ? "internal_even" : "zoo_employee_baseline";
+    work.custodialCoverageSlotIds = contractors.slice();
   }
 }
 function validWork(work) {
@@ -437,9 +440,7 @@ export function verifyStaticWeeklyScheduleResult(input = {}, result = {}, deadli
     if (!flexibleCoverage && array(candidate.blockedWindows).some((window) => windowsOverlap(window, workWindow))) push(violations, "absence_violation", { planWorkId: key, slotId });
     if (array(work.restrictedSlotIds).map(text).includes(slotId) || array(candidate.restrictions).map(text).includes(text(work.locationId))) push(violations, "restriction_violation", { planWorkId: key, slotId });
     const ownerSlot = slotById.get(slotId);
-    if (work.custodialCoverageMode === "contractor_exact") {
-      if (ownerSlot?.contractorCapacity !== true || slotId !== work.custodialCoverageSlotId) push(violations, "coverall_capacity_mismatch", { planWorkId: key, slotId, requiredSlotId: work.custodialCoverageSlotId });
-    } else if (ownerSlot?.contractorCapacity === true) push(violations, "coverall_capacity_reserved_for_second_or_later_absence", { planWorkId: key, slotId });
+    if (ownerSlot?.contractorCapacity === true && !array(work.custodialCoverageSlotIds).includes(slotId)) push(violations, "coverall_capacity_not_added_by_manager", { planWorkId: key, slotId });
     const qualifications = new Set(array(candidate.qualifications).map(text)); if (array(work.requiredQualifications).map(text).some((qualification) => !qualifications.has(qualification))) push(violations, "qualification_violation", { planWorkId: key, slotId });
     if (locks.get(key) && locks.get(key) !== slotId) push(violations, "manual_lock_violation", { planWorkId: key, slotId });
     if (flexibleCoverage && !locks.get(key) && work.custodialCoverageMode === "zoo_employee_baseline" && (!work.originSlotId || slotId !== work.originSlotId)) push(violations, "baseline_owner_violation", { planWorkId: key, slotId, requiredSlotId: work.originSlotId || null });

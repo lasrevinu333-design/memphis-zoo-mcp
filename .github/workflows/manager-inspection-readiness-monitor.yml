@@ -1,8 +1,9 @@
 name: Manager Inspection Production Acceptance Monitor
 
 on:
-  schedule:
-    - cron: "11,26,41,56 * * * *"
+  # Historical acceptance evidence remains manually inspectable, but this is no
+  # longer a scheduled production gate. The current owner workflow does not use
+  # manager inspections for Custodial dashboard acceptance.
   workflow_dispatch:
 
 permissions:

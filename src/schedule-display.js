@@ -148,13 +148,29 @@ function representativePurpose(sectionKey, purposes = []) {
   return purposes[0] || "special_coverage";
 }
 
+function displayBucketIdentity(item, sectionKey, sourceIndex) {
+  const identity = groupIdentity(item);
+  if (sectionKey !== "lunch") return `${sectionKey}|${identity}`;
+  const interval = intervalForItem(item);
+  const sourceIds = ["occurrence_id", "segment_id", "id"]
+    .filter(field => normalizedText(item[field]))
+    .map(field => [field, normalizedText(item[field])]);
+  // A borrowed area must retain this loan's exact boundary. Without a source
+  // identity, identical area/time labels are not proof of a duplicate loan.
+  if (!sourceIds.length || interval.start == null || interval.end == null
+    || interval.start >= interval.end) {
+    return JSON.stringify([sectionKey, identity, "distinct_source_row", sourceIndex]);
+  }
+  return JSON.stringify([sectionKey, identity, normalizedText(item.service_date),
+    sourceIds, interval.start, interval.end]);
+}
+
 export function consolidateScheduleItems(items = []) {
   const buckets = new Map();
-  for (const item of Array.isArray(items) ? items : []) {
+  for (const [sourceIndex, item] of (Array.isArray(items) ? items : []).entries()) {
     if (!item || typeof item !== "object") continue;
     const sectionKey = scheduleSectionKey(item);
-    const identity = groupIdentity(item);
-    const bucketKey = `${sectionKey}|${identity}`;
+    const bucketKey = displayBucketIdentity(item, sectionKey, sourceIndex);
     let bucket = buckets.get(bucketKey);
     if (!bucket) {
       bucket = {

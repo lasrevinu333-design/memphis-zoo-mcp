@@ -747,6 +747,7 @@ const ALLOWED_CORS_ORIGINS = String(process.env.ALLOWED_CORS_ORIGINS || "")
 const DEFAULT_CORS_ORIGINS = [
   "https://memphis-zoo-mcp.onrender.com",
   "https://lasrevinu333-design.github.io",
+  "https://memphis-zoo-infrastructure-map.lasrevinu333.chatgpt.site",
   "https://nousresearch.github.io",
   "https://localhost",
   "http://localhost",

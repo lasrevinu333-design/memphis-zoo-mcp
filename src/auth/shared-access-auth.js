@@ -1,4 +1,5 @@
 import { createHash, createHmac, randomBytes, randomInt, randomUUID, timingSafeEqual } from "node:crypto";
+import { isMapDashboardSession, verifyCurrentMapDashboardSession, verifyMapManagerAccessToken } from "./map-manager-identity.js";
 
 const MEMPHIS_TIME_ZONE = "America/Chicago";
 const OPS_ACCESS_TOKEN_VERSION = 2;
@@ -561,17 +562,19 @@ export function makeOpsAccessMiddleware({ env = process.env, requireWrite = fals
     }
     let session = result.session;
     try {
-      const trustedState = await verifySessionAgainstTrustedDeviceStore(session, {
-        store,
-        env,
-        requireTrustedDeviceStore,
-        requireCurrentManagerAssociation,
-      });
-      if (!trustedState.ok) {
-        res.status(trustedState.status || 401).json({ ok: false, error: trustedState.error || "Unauthorized" });
+      const currentState = isMapDashboardSession(session)
+        ? await verifyCurrentMapDashboardSession(session, { store })
+        : await verifySessionAgainstTrustedDeviceStore(session, {
+            store,
+            env,
+            requireTrustedDeviceStore,
+            requireCurrentManagerAssociation,
+          });
+      if (!currentState.ok) {
+        res.status(currentState.status || 401).json({ ok: false, error: currentState.error || "Unauthorized" });
         return;
       }
-      session = trustedState.session;
+      session = currentState.session;
     } catch (error) {
       res.status(error?.status || 500).json({ ok: false, error: error?.message || "Ops Manager session verification failed." });
       return;
@@ -2511,6 +2514,40 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
     res.status(410).json({ ok: false, error: "Ops Manager enrollment uses the shared 48-hour passcode on the normal Hub URL." });
   });
 
+  app.post("/auth-api/map-session", async (req, res) => {
+    try {
+      const activeStore = trustedDeviceStoreOrThrow(store);
+      if (typeof activeStore.getManagerBySystemKey !== "function") {
+        throw Object.assign(new Error("Named manager lookup is unavailable."), { status: 503 });
+      }
+      const identity = await verifyMapManagerAccessToken(req.body?.access_token, { env });
+      const manager = await activeStore.getManagerBySystemKey(identity.system_key);
+      if (!manager?.active || manager.revoked_at) {
+        throw Object.assign(new Error("This manager dashboard access is no longer active."), { status: 403 });
+      }
+      const dashboardManager = { ...manager, roles: ["OPS_MANAGER"] };
+      const session = createOpsManagerSession({
+        deviceId: requestDeviceId(req) || "map-dashboard",
+        manager: dashboardManager,
+        accessLevel: "read_only",
+        maximumAccessLevel: "read_only",
+        authMode: `map_identity:${identity.system_key}`,
+        env,
+      });
+      res.status(200).json({
+        ok: true,
+        data: {
+          session,
+          manager: dashboardManager,
+          operational_day: getCSTDate(),
+          identity_source: "memphis_map",
+        },
+      });
+    } catch (error) {
+      sendAuthError(res, error, "Memphis Map manager sign-in failed.");
+    }
+  });
+
   app.get("/auth-api/session", async (req, res) => {
     try {
       const explicit = authenticatePresentedOpsAccessRequest(req, { env });
@@ -2519,12 +2556,14 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
           res.status(explicit.status || 401).json({ ok: false, error: explicit.error || "Invalid manager session." });
           return;
         }
-        const trustedState = await verifySessionAgainstTrustedDeviceStore(explicit.session, { store, env });
-        if (!trustedState.ok) {
-          res.status(trustedState.status || 401).json({ ok: false, error: trustedState.error || "Invalid manager session." });
+        const currentState = isMapDashboardSession(explicit.session)
+          ? await verifyCurrentMapDashboardSession(explicit.session, { store })
+          : await verifySessionAgainstTrustedDeviceStore(explicit.session, { store, env });
+        if (!currentState.ok) {
+          res.status(currentState.status || 401).json({ ok: false, error: currentState.error || "Invalid manager session." });
           return;
         }
-        res.status(200).json({ ok: true, data: { session: trustedState.session, operational_day: getCSTDate() } });
+        res.status(200).json({ ok: true, data: { session: currentState.session, manager: currentState.manager || null, operational_day: getCSTDate() } });
         return;
       }
       if (!opsManagerAuthRequired(env)) {

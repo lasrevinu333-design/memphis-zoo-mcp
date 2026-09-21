@@ -529,10 +529,22 @@ function groupedObjectiveWidth(base) {
 export function identityTierWidth(slotCount) {
   // A base-(slot-count + 2) representation encodes owner/open digits exactly.
   // Grouping is lexicographically equivalent to serial stable identity tiers.
-  return groupedObjectiveWidth(BigInt(slotCount + 2));
+  // Keep these integer rows small as well: large, exact-in-Number packed
+  // bindings can still destabilize floating-point MIP presolve. Smaller
+  // chunks preserve the complete owner order and every existing exact gate.
+  const base = BigInt(slotCount + 2);
+  let width = groupedObjectiveWidth(base);
+  while (width > 1 && staticWeeklyGroupedObjectiveBounds(base, width).completeMaximum > 32767n) width -= 1;
+  return width;
 }
 export function leximaxTierWidth(maximum) {
-  return groupedObjectiveWidth(BigInt(Math.max(2, maximum + 1)));
+  // Rank columns are general integers. Packing several ranks into a base-B
+  // objective amplifies the solver's tiny raw column residuals, even when
+  // every canonical integer row is exact. Solve each rank and bind its exact
+  // value before the next: this is the same lexicographic order without the
+  // large objective weights. Preflight uses this same width, so the complete
+  // solve count remains bounded; no acceptance tolerance is relaxed.
+  return 1;
 }
 function programExactEvaluate(terms, values) {
   try { return terms.reduce((total, [coefficient, name]) => total + (BigInt(coefficient) * BigInt(values.get(name) ?? 0)), 0n); } catch { return null; }
@@ -930,26 +942,26 @@ function applyException(state, exception) {
 }
 
 function applyCustodialAbsenceCoveragePolicy(state, slotById) {
-  const absent = state.fullDayAbsenceSlotIds;
+  // Turnover is an effective-dated staffing overlay, not a PTO exception.
+  // Include only departed owners with actual work on this day; otherwise a
+  // departed off-day slot would consume the internal-coverage allowance.
+  const departed = [...state.availability.values()]
+    .filter((entry) => entry.status === "departed_named_absent"
+      && state.work.some((work) => !work.cancelled && work.originSlotId === entry.slotId))
+    .map((entry) => entry.slotId).sort(stableCompare);
+  const absent = [...departed, ...state.fullDayAbsenceSlotIds];
   const contractors = state.contractorCoverageSlotIds;
-  const expectedContractors = Math.max(0, absent.length - 2);
   if (new Set(absent).size !== absent.length) throw Object.assign(new Error("A daily employee absence may appear only once."), { code: "duplicate_daily_absence" });
   if (new Set(contractors).size !== contractors.length) throw Object.assign(new Error("Each CoverAll call must use a separate contractor-capacity slot."), { code: "duplicate_coverall_capacity" });
-  if (contractors.length !== expectedContractors) throw Object.assign(new Error("The first two absences must be shared by zoo employees and each third-or-later absence requires one CoverAll capacity slot."), { code: "custodial_absence_coverage_mismatch" });
   if (absent.some((slotId) => slotById.get(slotId)?.contractorCapacity === true)) throw Object.assign(new Error("Contractor capacity cannot be recorded as an absent zoo employee."), { code: "custodial_absence_identity_mismatch" });
   if (contractors.some((slotId) => slotById.get(slotId)?.contractorCapacity !== true || absent.includes(slotId))) throw Object.assign(new Error("CoverAll coverage must use distinct registered contractor-capacity slots."), { code: "custodial_contractor_capacity_required" });
   for (const work of state.work) {
-    const absenceIndex = absent.indexOf(work.originSlotId);
-    if (absenceIndex >= 0 && absenceIndex < 2) {
-      work.custodialCoverageMode = "internal_even";
-      work.custodialCoverageSlotId = null;
-    } else if (absenceIndex >= 2) {
-      work.custodialCoverageMode = "contractor_exact";
-      work.custodialCoverageSlotId = contractors[absenceIndex - 2];
-    } else {
-      work.custodialCoverageMode = "zoo_employee_baseline";
-      work.custodialCoverageSlotId = null;
-    }
+    // The normal week is static. Only unavailable owners or an explicit
+    // manager-added CoverAll overlay unlock coverage. Absence count is not
+    // permission to invent, require, or prohibit contractor staffing.
+    work.custodialCoverageMode = contractors.length > 0 ? "manager_added_coverage"
+      : absent.includes(work.originSlotId) ? "internal_even" : "zoo_employee_baseline";
+    work.custodialCoverageSlotIds = [...contractors];
   }
 }
 
@@ -981,9 +993,7 @@ function candidateReasons(work, slot, availability, capacity, lockOwner) {
   if (capacity.error) return [programReason(capacity.error)];
   if (lockOwner && lockOwner !== slot.id) return [programReason("manual_lock", { lockedSlotId: lockOwner })];
   const failures = [];
-  if (work.custodialCoverageMode === "contractor_exact") {
-    if (slot.contractorCapacity !== true || slot.id !== work.custodialCoverageSlotId) failures.push(programReason("coverall_capacity_mismatch", { requiredSlotId: work.custodialCoverageSlotId }));
-  } else if (slot.contractorCapacity === true) failures.push(programReason("coverall_capacity_reserved_for_second_or_later_absence"));
+  if (slot.contractorCapacity === true && !array(work.custodialCoverageSlotIds).includes(slot.id)) failures.push(programReason("coverall_capacity_not_added_by_manager"));
   if (work.schedulingMode === STATIC_WEEKLY_FLEXIBLE_COVERAGE_MODE
     && !lockOwner && work.custodialCoverageMode === "zoo_employee_baseline"
     && (!work.originSlotId || slot.id !== work.originSlotId)) failures.push(programReason("baseline_owner_required", { requiredSlotId: work.originSlotId || null }));

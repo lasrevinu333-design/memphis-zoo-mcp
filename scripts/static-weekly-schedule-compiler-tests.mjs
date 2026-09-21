@@ -759,6 +759,22 @@ assert.equal(flexibleAbsentOwnerResult.status, "FEASIBLE");
 assert.equal(flexibleAbsentOwnerResult.weeklyAssignments[0].slotId, "a", "a real dated absence unlocks internal redistribution without rewriting the published owner");
 assert.equal(flexibleAbsentOwnerResult.weeklyAssignments[0].originSlotId, "z");
 
+const flexibleDepartedOwner = clone(flexibleStableOwner);
+flexibleDepartedOwner.versions[0].slotAvailability.find((row) => row.slotId === "z").status = "departed_named_absent";
+const flexibleDepartedOwnerResult = await compile(flexibleDepartedOwner);
+assert.equal(flexibleDepartedOwnerResult.status, "FEASIBLE", "effective-dated turnover must release the departed baseline owner without a fabricated PTO exception");
+assert.equal(flexibleDepartedOwnerResult.weeklyAssignments[0].slotId, "a");
+assert.equal(flexibleDepartedOwnerResult.weeklyAssignments[0].originSlotId, "z", "departure redistribution preserves historical route ownership");
+assert.equal(verifyStaticWeeklyScheduleResult(flexibleDepartedOwner, flexibleDepartedOwnerResult).ok, true);
+
+const overlappingDepartureAbsence = clone(flexibleDepartedOwner);
+overlappingDepartureAbsence.exceptions = clone(flexibleAbsentOwner.exceptions);
+assert.equal((await compile(overlappingDepartureAbsence)).status, "FEASIBLE", "a dated PTO overlay for the same departed person counts one unavailable owner, not two");
+
+const unavailableBaselineOwner = clone(flexibleStableOwner);
+unavailableBaselineOwner.versions[0].slotAvailability.find((row) => row.slotId === "z").status = "unavailable";
+assert.equal((await compile(unavailableBaselineOwner)).status, "REVIEW", "an unexplained unavailable owner must not gain turnover authority");
+
 const unsupportedSchedulingMode = clone(flexibleCoverage);
 unsupportedSchedulingMode.versions[0].assignments[0].schedulingMode = "route_directed_employee_system";
 const unsupportedSchedulingModeResult = await compile(unsupportedSchedulingMode);
@@ -1016,8 +1032,12 @@ const prematureCoverAll = await compile({
     { ...overlay("premature-coverall", "cover_all", { availability: coverageAvailability("cover-1", "B") }), sequence: 3 },
   ],
 });
-assert.equal(prematureCoverAll.status, "REVIEW", "CoverAll cannot be allocated when only two employees are absent");
-assert.match(JSON.stringify(prematureCoverAll.fatal), /custodial_absence_coverage_mismatch/);
+assert.equal(prematureCoverAll.status, "FEASIBLE", "a manager may explicitly add CoverAll with two absences");
+assert.equal(prematureCoverAll.verifier.ok, true);
+assert.ok(prematureCoverAll.weeklyAssignments.some((item) => item.slotId === "cover-1"));
+const discretionaryCoverAll = await compile({ ...coverAll, exceptions: [overlay("manager-cover-no-absence", "cover_all", { availability: coverageAvailability("cover-1", "B") })] });
+assert.equal(discretionaryCoverAll.status, "FEASIBLE", "manager-added CoverAll does not require a fabricated absence");
+assert.equal(discretionaryCoverAll.verifier.ok, true);
 const threeAbsences = smallInput({
   slots: ["a", "b", "c", "d", "cover-1", "cover-2"],
   availabilities: [availability("a", "A"), availability("b", "B"), availability("c", "C"), availability("d", "A")],
@@ -1032,10 +1052,11 @@ threeAbsences.exceptions = [
 ].map((exception, index) => ({ ...exception, sequence: index + 1 }));
 const threeAbsenceResult = await compile(threeAbsences);
 assert.equal(threeAbsenceResult.status, "FEASIBLE");
-assert.deepEqual(threeAbsenceResult.weeklyAssignments.filter((item) => item.workId.startsWith("absence-")).map((item) => item.slotId), ["d", "d", "cover-1"], "the first two absences stay internal and only the third uses CoverAll capacity");
+assert.equal(threeAbsenceResult.verifier.ok, true);
+assert.ok(threeAbsenceResult.weeklyAssignments.every((item) => ["d", "cover-1"].includes(item.slotId)), "only present staff and explicitly added capacity can cover absences");
 const missingThirdAbsenceCoverAll = await compile({ ...threeAbsences, exceptions: threeAbsences.exceptions.slice(0, 3) });
-assert.equal(missingThirdAbsenceCoverAll.status, "REVIEW", "the third absence requires one CoverAll capacity slot");
-assert.match(JSON.stringify(missingThirdAbsenceCoverAll.fatal), /custodial_absence_coverage_mismatch/);
+assert.equal(missingThirdAbsenceCoverAll.status, "FEASIBLE", "absence count alone cannot require a contractor; this fixture fits remaining capacity");
+assert.ok(missingThirdAbsenceCoverAll.weeklyAssignments.every((item) => item.slotId === "d"), "a missing CoverAll overlay never creates contractor capacity");
 const excessThirdAbsenceCoverAll = await compile({
   ...threeAbsences,
   exceptions: [
@@ -1043,8 +1064,11 @@ const excessThirdAbsenceCoverAll = await compile({
     { ...overlay("three-cover-two", "cover_all", { availability: coverageAvailability("cover-2", "C") }), sequence: 5 },
   ],
 });
-assert.equal(excessThirdAbsenceCoverAll.status, "REVIEW", "one third absence cannot consume two CoverAll capacity slots");
-assert.match(JSON.stringify(excessThirdAbsenceCoverAll.fatal), /custodial_absence_coverage_mismatch/);
+assert.equal(excessThirdAbsenceCoverAll.status, "FEASIBLE", "the manager may add two distinct registered CoverAll positions");
+assert.equal(excessThirdAbsenceCoverAll.verifier.ok, true);
+const duplicateCoverAll = await compile({ ...threeAbsences, exceptions: [...threeAbsences.exceptions, { ...overlay("duplicate-cover", "cover_all", { availability: coverageAvailability("cover-1", "C") }), sequence: 5 }] });
+assert.equal(duplicateCoverAll.status, "REVIEW", "one contractor slot cannot be counted twice");
+assert.match(JSON.stringify(duplicateCoverAll.fatal), /duplicate_coverall_capacity/);
 
 // The dated roster identity is resolved for each occurrence, never once at
 // Monday.  Wednesday's replacement is a new immutable person snapshot.

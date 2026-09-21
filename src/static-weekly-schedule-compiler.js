@@ -176,7 +176,7 @@ async function solveLexicographic(problem, deadline, authorityProgram) {
     const workerAttestation = { schema: "memphis-zoo.static-weekly-worker-model-attestation.v1", modelDigest: model.modelDigest, modelBasisDigest: model.modelBasisDigest, priorBindingDigest: model.priorBindingDigest };
     try { solved = await solveStaticWeeklyMip(model.lp, { deadline, timeLimitSeconds: seconds, attestation: workerAttestation }); } catch (error) { return { error: reason(error.code === "solver_timeout" ? "solver_timeout" : "solver_unavailable", { message: error.message }) }; }
     if (canonicalJson(solved.modelAttestation) !== canonicalJson(workerAttestation)) return { error: reason("worker_model_attestation_mismatch", { tier: objective.name }) };
-    const primal = extractPrimal(model, solved.result); if (primal.error) return { error: primal.error };
+    const primal = extractPrimal(model, solved.result); if (primal.error) return { error: { ...primal.error, tier: objective.name } };
     const canonicalFailure = validateCanonicalPrimal(model, primal.values); if (canonicalFailure) return { error: canonicalFailure };
     const value = recomputeObjective(objective, model, primal.values, problem);
     if (!Number.isSafeInteger(value) || Number(solved.result.ObjectiveValue) !== value) return { error: reason("solver_primal_objective_disagreement", { tier: objective.name, independentlyRecomputedObjective: value, returnedPrimalObjective: solved.result.ObjectiveValue }) };
