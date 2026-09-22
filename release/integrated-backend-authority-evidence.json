@@ -3,14 +3,14 @@
   "release_id": "release-2026.07.19.custodial-v3.12",
   "frontend_commit_sha": "fb3cb815a2ebd8f50b33f657c750807f3b4b45b4",
   "frontend_commit_state": "final_pair_bound",
-  "schema_fingerprint": "89f3d7c051bae62bc468fc053a8886cd8e8bcab49abc59ff6a67a21e9e4cc7c3",
+  "schema_fingerprint": "f6a29e0ed445095b67da6e6f98fecb71d8a2332b25d1b46cbea55279988ff553",
   "schema_transition": {
     "transition_id": "custodial-verified-visits-20260922",
     "from_fingerprint": "750e7f040519f6d4555836cbd4d172a22f98911d5bab9918fa370238fff3f822",
-    "to_fingerprint": "89f3d7c051bae62bc468fc053a8886cd8e8bcab49abc59ff6a67a21e9e4cc7c3",
+    "to_fingerprint": "f6a29e0ed445095b67da6e6f98fecb71d8a2332b25d1b46cbea55279988ff553",
     "expires_at": "2026-10-02T23:59:59Z"
   },
-  "frontend_source_fingerprint": "89f3d7c051bae62bc468fc053a8886cd8e8bcab49abc59ff6a67a21e9e4cc7c3",
+  "frontend_source_fingerprint": "f6a29e0ed445095b67da6e6f98fecb71d8a2332b25d1b46cbea55279988ff553",
   "backend_contract": {
     "scan": "scan.v4.snapshot-bound-authority",
     "authority": "offline-authority.v5",
@@ -390,7 +390,7 @@
       {
         "path": "package.json",
         "mode": "100644",
-        "object_id": "559611e7a104923257fead1d572ce639d13a8efe"
+        "object_id": "d51fa96cf5c4f28b10c6fe48121c180745800275"
       },
       {
         "path": "public/moxie-assets/contacts-creekside-animal.png",
@@ -445,7 +445,7 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "0392f85863bd2b1384c97811ac3df786c9e9dd71"
+        "object_id": "f32766bedf55fb7955816d15bd5951d7e13579a7"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
@@ -455,7 +455,7 @@
       {
         "path": "release/production-migration-state.json",
         "mode": "100644",
-        "object_id": "6fbd6d0090b00ffc4bea0895e4922b6a7b257e3e"
+        "object_id": "90c1d1efa4f0c2e31350628b62f4166fb21e7a47"
       },
       {
         "path": "release/production-schema-observation-20260922.json",
@@ -998,9 +998,14 @@
         "object_id": "f776fcfe08bdb363769dbc910d657c35b761b640"
       },
       {
+        "path": "scripts/lunch-delivery-evidence-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "659aec6793afb5169568fb2d8cfa15843902d9d8"
+      },
+      {
         "path": "scripts/lunch-delivery-failure-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "cd094e68f403f49f23e4a7ed0079899a82800e9c"
+        "object_id": "8d67f1bd77f9dfa402f72de3597bd2a51dda28a0"
       },
       {
         "path": "scripts/lunch-display-boundary-tests.mjs",
@@ -2310,12 +2315,12 @@
       {
         "path": "supabase/canonical/schema-fingerprint-input.json",
         "mode": "100644",
-        "object_id": "7253859b5b2cf317f14f081368e72b04986a522f"
+        "object_id": "b3dfe179b000f91bdcf4b064f0d95eef9935ad30"
       },
       {
         "path": "supabase/canonical/schema-fingerprint.txt",
         "mode": "100644",
-        "object_id": "5c483892a7a08c3189a766f2dabaa6a8ee752a9a"
+        "object_id": "d6e875e43f1e16f6a1a7a7e2ada365590f4c64ae"
       },
       {
         "path": "supabase/config.toml",
@@ -3560,7 +3565,7 @@
       {
         "path": "supabase/migrations/20260922050000_lunch_delivery_failure_manager_alert.sql",
         "mode": "100644",
-        "object_id": "d4cc77d570151533fb91d47fe03f95866e7f7234"
+        "object_id": "bcf98139043f7aedf15ab07751b0961b23849bf0"
       },
       {
         "path": "supabase/migrations/20260922070000_completed_cleaning_reminder_cycles.sql",
@@ -3578,7 +3583,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 690,
+    "authority_path_count": 691,
     "migration_path_count": 133,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
