@@ -213,6 +213,11 @@
         "object_id": "49f0ab5be05e7c84dd805512519e7f87d6ac8e2a"
       },
       {
+        "path": ".github/workflows/production-release-deployment-record.yml",
+        "mode": "100644",
+        "object_id": "841688500b0f10a65c518fd62cddbd3c0d7bdc5a"
+      },
+      {
         "path": ".github/workflows/production-schema-c674-bootstrap.yml",
         "mode": "100644",
         "object_id": "5045332189ca4944cddd0efb0c98170edc7cd726"
@@ -390,7 +395,7 @@
       {
         "path": "package.json",
         "mode": "100644",
-        "object_id": "d51fa96cf5c4f28b10c6fe48121c180745800275"
+        "object_id": "06128eaf4b5483eb814725987b216260f69d8c62"
       },
       {
         "path": "public/moxie-assets/contacts-creekside-animal.png",
@@ -565,7 +570,7 @@
       {
         "path": "scripts/ci-workflow-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "09a2a5ddd7f08414d1d6495a656f67c0edd90604"
+        "object_id": "ba84515a60d8d21d878cc52aaa11244462596c4a"
       },
       {
         "path": "scripts/cleaning-identity-gps-database-tests.mjs",
@@ -1223,6 +1228,21 @@
         "object_id": "666c60c503e4024ae62efe35778be9d8c9be2da2"
       },
       {
+        "path": "scripts/production-release-deployment-recorder-tests.mjs",
+        "mode": "100644",
+        "object_id": "cf19fe190d3a7c63dac59f97bb9701cc4b9e01fb"
+      },
+      {
+        "path": "scripts/production-release-recorder-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "2127392757cd8f506b0c9c10c0552337f7eb1b3c"
+      },
+      {
+        "path": "scripts/production-release-recorder-plan-tests.mjs",
+        "mode": "100644",
+        "object_id": "31f70dcefc3abde6be0b2c480fcacd226ab4cfd1"
+      },
+      {
         "path": "scripts/production-restore-drill.mjs",
         "mode": "100644",
         "object_id": "36114f0ecb64ff3c6acfb468759632fd80631628"
@@ -1266,6 +1286,11 @@
         "path": "scripts/read-only-database-authority-tests.mjs",
         "mode": "100644",
         "object_id": "0fb1282d3458a1e7de359fb64e29c5c735f8b0a1"
+      },
+      {
+        "path": "scripts/record-production-release-deployment.mjs",
+        "mode": "100644",
+        "object_id": "221d8c87628ce3d8d4068ddb8c670d468d227ee0"
       },
       {
         "path": "scripts/refresh-integrated-backend-authority-release.mjs",
@@ -2121,6 +2146,11 @@
         "path": "src/operational-analytics-api.js",
         "mode": "100644",
         "object_id": "cc646ddc24280980107d7feef837dd9b98dfea57"
+      },
+      {
+        "path": "src/production-release-deployment-recorder.js",
+        "mode": "100644",
+        "object_id": "40b1d132b4ac87c971c9ca99fcee7df0ba527a86"
       },
       {
         "path": "src/production-schema-identity.js",
@@ -3583,7 +3613,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 691,
+    "authority_path_count": 697,
     "migration_path_count": 133,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
