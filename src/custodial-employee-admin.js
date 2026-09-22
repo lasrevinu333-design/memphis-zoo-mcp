@@ -73,6 +73,15 @@ function hmacHex(env, purpose, value) {
   return crypto.createHmac("sha256", serviceSecret(env)).update(`${purpose}:${String(value || "")}`, "utf8").digest("hex");
 }
 function enrollmentCodeHash(env, devicePk, code) { return hmacHex(env, "device-enrollment", `${devicePk}:${code}`); }
+function assignedActivationTokenHash(devicePk, token) {
+  return crypto.createHash("sha256").update(`custodial-assigned-device-activation:v1:${devicePk}:${String(token || "")}`, "utf8").digest("hex");
+}
+function enrollmentProof(req, env, devicePk) {
+  const raw = String(req.body?.activation_token || req.body?.enrollment_code || req.body?.code || "").trim();
+  if (/^\d{8}$/.test(raw)) return { kind: "legacy_manager_code", secret: raw, hash: enrollmentCodeHash(env, devicePk, raw) };
+  if (/^[A-Za-z0-9_-]{43}$/.test(raw)) return { kind: "assigned_device_activation", secret: raw, hash: assignedActivationTokenHash(devicePk, raw) };
+  return null;
+}
 function tokenHash(env, secret) { return hmacHex(env, "device-token", secret); }
 function isNativeCustodialRequest(req) {
   const origin = String(req.headers?.origin || "").trim();
@@ -328,21 +337,21 @@ async function assignDevice(db, req, deviceId, employeeId, values = {}) {
   return result.data;
 }
 
-async function issueEmployeeEnrollmentCode(db, env, req, deviceId) {
+async function issueAssignedDeviceActivation(db, req, deviceId) {
   const device = await resolveNativeDevice(db, deviceId);
   const employee = Array.isArray(device?.employees) ? device.employees[0] : device?.employees;
   if (!device || device.active !== true || !device.assigned_employee_id || employee?.active !== true || !/^EMP\d+$/i.test(String(employee?.employee_code || ""))) {
-    throw Object.assign(new Error("Assign this phone to an active employee before generating an app code."), { status: 409 });
+    throw Object.assign(new Error("Assign this phone to an active employee before activation."), { status: 409 });
   }
-  const code = String(crypto.randomInt(0, 100_000_000)).padStart(8, "0");
+  const activationToken = crypto.randomBytes(32).toString("base64url");
   const expiresAt = new Date(Date.now() + EMPLOYEE_ENROLLMENT_TTL_MS).toISOString();
   const result = await db.rpc("device_auth_issue_enrollment_code", {
     p_device_id: device.id,
-    p_code_hash: enrollmentCodeHash(env, device.id, code),
+    p_code_hash: assignedActivationTokenHash(device.id, activationToken),
     p_created_by: String(req.memphisAuth.manager_id || req.memphisAuth.manager_display_name || "custodial_manager"),
     p_expires_at: expiresAt,
     p_metadata_json: {
-      purpose: "native_custodial_app_enrollment",
+      purpose: "assigned_device_activation",
       canonical_device_id: device.device_id,
       employee_id: employee.id,
       employee_name: employee.display_name,
@@ -351,9 +360,9 @@ async function issueEmployeeEnrollmentCode(db, env, req, deviceId) {
   });
   if (result.error) throw result.error;
   return {
-    enrollment_code: code,
-    display_code: `${code.slice(0, 4)} ${code.slice(4)}`,
-    enrollment_id: result.data?.enrollment_id || null,
+    activation_token: activationToken,
+    operation_id: crypto.randomUUID(),
+    activation_id: result.data?.enrollment_id || null,
     expires_at: result.data?.expires_at || expiresAt,
     max_uses: 1,
     device_id: device.device_id,
@@ -410,9 +419,13 @@ export function installCustodialEmployeeAdminRoutes(app, { env = process.env, su
     } catch (error) { fail(res, error, "Phone assignment could not be changed."); }
   });
 
-  app.post("/custodial-admin-api/devices/:deviceId/enrollment-code", configured, requireCustodialWrite, async (req, res) => {
-    try { res.json({ ok: true, data: await issueEmployeeEnrollmentCode(db, env, req, req.params?.deviceId) }); }
-    catch (error) { fail(res, error, "Employee app enrollment code could not be generated."); }
+  app.post("/custodial-admin-api/devices/:deviceId/activation", configured, requireCustodialWrite, async (req, res) => {
+    try { res.json({ ok: true, data: await issueAssignedDeviceActivation(db, req, req.params?.deviceId) }); }
+    catch (error) { fail(res, error, "Assigned phone activation could not be prepared."); }
+  });
+
+  app.post("/custodial-admin-api/devices/:deviceId/enrollment-code", configured, requireCustodialWrite, (_req, res) => {
+    res.status(410).json({ ok: false, code: "employee_enrollment_code_retired", error: "Employee-facing setup codes are retired. Use assigned-phone activation." });
   });
 
   // Compatibility routes keep already-installed manager test builds working while
@@ -449,9 +462,13 @@ export function installCustodialEmployeeAdminRoutes(app, { env = process.env, su
     } catch (error) { fail(res, error, "Phone assignment could not be changed."); }
   });
 
-  app.post("/leadership-api/phone-assignments/:deviceId/enrollment-code", configured, requireCustodialWrite, async (req, res) => {
-    try { res.json({ ok: true, data: await issueEmployeeEnrollmentCode(db, env, req, req.params?.deviceId) }); }
-    catch (error) { fail(res, error, "Employee app enrollment code could not be generated."); }
+  app.post("/leadership-api/phone-assignments/:deviceId/activation", configured, requireCustodialWrite, async (req, res) => {
+    try { res.json({ ok: true, data: await issueAssignedDeviceActivation(db, req, req.params?.deviceId) }); }
+    catch (error) { fail(res, error, "Assigned phone activation could not be prepared."); }
+  });
+
+  app.post("/leadership-api/phone-assignments/:deviceId/enrollment-code", configured, requireCustodialWrite, (_req, res) => {
+    res.status(410).json({ ok: false, code: "employee_enrollment_code_retired", error: "Employee-facing setup codes are retired. Use assigned-phone activation." });
   });
 
   const nativeEnrollment = (expectedFlow) => async (req, res) => {
@@ -478,9 +495,9 @@ export function installCustodialEmployeeAdminRoutes(app, { env = process.env, su
       if (!device || device.active !== true || !device.assigned_employee_id || employee?.active !== true || !/^EMP\d+$/i.test(String(employee?.employee_code || ""))) {
         return res.status(401).json({ ok: false, code: "device_not_eligible", error: "This phone must be assigned to an active employee before enrollment." });
       }
-      const code = String(req.body?.enrollment_code || req.body?.code || "").replace(/\D/g, "").slice(0, 8);
-      if (!/^\d{8}$/.test(code)) {
-        return res.status(400).json({ ok: false, code: "invalid_enrollment_code", error: "Enter the eight-digit enrollment code." });
+      const proof = enrollmentProof(req, env, device.id);
+      if (!proof) {
+        return res.status(400).json({ ok: false, code: "invalid_device_activation", error: "Assigned phone activation is invalid." });
       }
 
       const expired = await db.rpc("device_auth_expire_custodial_enrollment_operations", {
@@ -506,8 +523,8 @@ export function installCustodialEmployeeAdminRoutes(app, { env = process.env, su
         p_operation_id: operationId,
         p_flow: expectedFlow,
         p_device_id: device.id,
-        p_code_hash: enrollmentCodeHash(env, device.id, code),
-        p_request_fingerprint: hmacHex(env, "custodial-enrollment-operation-request", `${expectedFlow}:${device.id}:${code}`),
+        p_code_hash: proof.hash,
+        p_request_fingerprint: hmacHex(env, "custodial-enrollment-operation-request", `${expectedFlow}:${device.id}:${proof.kind}:${proof.secret}`),
         p_credential_id: credentialId,
         p_token_hash: tokenHash(env, refreshSecret),
         p_device_label: clip(req.body?.device_label, 160) || `${device.device_id} Custodial App`,
@@ -521,6 +538,7 @@ export function installCustodialEmployeeAdminRoutes(app, { env = process.env, su
         p_ip_hash: null,
         p_metadata_json: {
           enrolled_by: "native_custodial_app",
+          activation_kind: proof.kind,
           canonical_device_id: device.device_id,
           enrollment_flow: expectedFlow,
           ...deviceCredentialSecretMetadata(env),
@@ -562,7 +580,7 @@ export function installCustodialEmployeeAdminRoutes(app, { env = process.env, su
       res.status(status).json({
         ok: false,
         code: error?.code || (invalid ? "invalid_enrollment_code" : "custodial_enrollment_failed"),
-        error: invalid ? "The enrollment code is invalid or expired." : clip(error?.message || "Custodial app enrollment failed.", 1000),
+        error: invalid ? "Assigned phone activation is invalid or expired." : clip(error?.message || "Custodial app activation failed.", 1000),
       });
     }
   };

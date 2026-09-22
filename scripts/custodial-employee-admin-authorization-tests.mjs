@@ -207,9 +207,9 @@ const managerMutations = [
     rpc: "custodial_assign_employee_device",
   },
   {
-    family: "enrollment-code issuance",
+    family: "assigned-phone activation preparation",
     method: "POST",
-    path: "/custodial-admin-api/devices/KIOSK_02/enrollment-code",
+    path: "/custodial-admin-api/devices/KIOSK_02/activation",
     body: {},
     rpc: "device_auth_issue_enrollment_code",
   },
@@ -221,12 +221,16 @@ const managerMutations = [
     rpc: "custodial_assign_employee_device",
   },
   {
-    family: "legacy enrollment-code issuance",
+    family: "legacy-manager assigned-phone activation preparation",
     method: "POST",
-    path: "/leadership-api/phone-assignments/KIOSK_02/enrollment-code",
+    path: "/leadership-api/phone-assignments/KIOSK_02/activation",
     body: {},
     rpc: "device_auth_issue_enrollment_code",
   },
+];
+const retiredEmployeeCodeRoutes = [
+  { method: "POST", path: "/custodial-admin-api/devices/KIOSK_02/enrollment-code" },
+  { method: "POST", path: "/leadership-api/phone-assignments/KIOSK_02/enrollment-code" },
 ];
 const rosterOnlyMutations = [
   { family: "employee creation", method: "POST", path: "/custodial-admin-api/employees", body: { display_name: "Replacement Employee" } },
@@ -273,7 +277,7 @@ try {
     }
   }
 
-  for (const route of [...managerMutations, ...rosterOnlyMutations]) {
+  for (const route of [...managerMutations, ...retiredEmployeeCodeRoutes.map((route) => ({ ...route, family: "retired employee code route", body: {} })), ...rosterOnlyMutations]) {
     const callsBefore = databaseCalls.length;
     const result = await request(route.path, {
       method: route.method,
@@ -308,6 +312,31 @@ try {
       databaseCalls.slice(callsBefore).some((call) => call.kind === "rpc" && call.name === route.rpc),
       `${route.family} did not reach its expected authorized RPC`,
     );
+  }
+
+  const activationProbeCallsBefore = databaseCalls.length;
+  const activationProbe = await request("/custodial-admin-api/devices/KIOSK_02/activation", {
+    method: "POST", token: fullAccessToken, body: {},
+  });
+  assert.equal(activationProbe.status, 200);
+  assert.match(activationProbe.body.data.activation_token, /^[A-Za-z0-9_-]{43}$/);
+  assert.match(activationProbe.body.data.operation_id, /^[0-9a-f-]{36}$/i);
+  assert.equal(activationProbe.body.data.device_id, "KIOSK_02");
+  assert.equal(activationProbe.body.data.employee.id, employeeId);
+  const activationRpc = databaseCalls.slice(activationProbeCallsBefore).find((call) => call.kind === "rpc" && call.name === "device_auth_issue_enrollment_code");
+  assert.ok(activationRpc);
+  assert.match(activationRpc.args.p_code_hash, /^[a-f0-9]{64}$/);
+  assert.notEqual(activationRpc.args.p_code_hash, activationProbe.body.data.activation_token);
+  assert.equal(activationRpc.args.p_metadata_json.purpose, "assigned_device_activation");
+  assert.equal(activationRpc.args.p_metadata_json.canonical_device_id, "KIOSK_02");
+  assert.equal(activationRpc.args.p_metadata_json.employee_id, employeeId);
+
+  for (const route of retiredEmployeeCodeRoutes) {
+    const callsBefore = databaseCalls.length;
+    const retired = await request(route.path, { method: route.method, token: fullAccessToken, body: {} });
+    assert.equal(retired.status, 410);
+    assert.equal(retired.body.code, "employee_enrollment_code_retired");
+    assert.equal(databaseCalls.length, callsBefore, "retired employee-code route must not touch the database");
   }
 
   const assignmentCalls = databaseCalls.filter((call) => call.kind === "rpc" && call.name === "custodial_assign_employee_device");
@@ -373,9 +402,11 @@ assert.deepEqual(discoveredRoutes, [
   { method: "POST", path: "/custodial-admin-api/employees" },
   { method: "PATCH", path: "/custodial-admin-api/employees/:employeeId/status" },
   { method: "PUT", path: "/custodial-admin-api/devices/:deviceId/assignment" },
+  { method: "POST", path: "/custodial-admin-api/devices/:deviceId/activation" },
   { method: "POST", path: "/custodial-admin-api/devices/:deviceId/enrollment-code" },
   { method: "GET", path: "/leadership-api/phone-assignments" },
   { method: "POST", path: "/leadership-api/phone-assignments/:deviceId" },
+  { method: "POST", path: "/leadership-api/phone-assignments/:deviceId/activation" },
   { method: "POST", path: "/leadership-api/phone-assignments/:deviceId/enrollment-code" },
   { method: "POST", path: "/custodial-device-auth/enroll" },
   { method: "POST", path: "/custodial-device-auth/recover" },
@@ -395,8 +426,10 @@ for (const route of [
   { method: "POST", path: "/custodial-admin-api/employees" },
   { method: "PATCH", path: "/custodial-admin-api/employees/:employeeId/status" },
   { method: "PUT", path: "/custodial-admin-api/devices/:deviceId/assignment" },
+  { method: "POST", path: "/custodial-admin-api/devices/:deviceId/activation" },
   { method: "POST", path: "/custodial-admin-api/devices/:deviceId/enrollment-code" },
   { method: "POST", path: "/leadership-api/phone-assignments/:deviceId" },
+  { method: "POST", path: "/leadership-api/phone-assignments/:deviceId/activation" },
   { method: "POST", path: "/leadership-api/phone-assignments/:deviceId/enrollment-code" },
 ]) {
   assert.match(
