@@ -158,7 +158,8 @@
     "test:audit-two-absence-policy": "node scripts/audit-two-absence-policy-tests.mjs",
     "test:audit-guest-disabled": "node scripts/audit-guest-disabled-tests.mjs",
     "test:coverall-bilingual": "node scripts/coverall-bilingual-tests.mjs",
-    "test:static-weekly-lunch-coverage": "node scripts/static-weekly-lunch-coverage-tests.mjs",
+    "test:static-weekly-lunch-coverage": "node scripts/static-weekly-lunch-coverage-tests.mjs && node scripts/static-weekly-lunch-authority-adapter-tests.mjs",
+    "test:static-weekly-lunch-authority": "node scripts/static-weekly-lunch-authority-adapter-tests.mjs",
     "preflight:static-weekly-lunch-coverage": "node scripts/static-weekly-lunch-coverage-preview.mjs"
   },
   "dependencies": {
