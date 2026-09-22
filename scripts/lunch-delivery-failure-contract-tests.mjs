@@ -27,6 +27,11 @@ assert.match(migration, /td\.revoked_at is null and td\.expires_at>p_now/);
 assert.match(migration, /manager\.active=true and manager\.revoked_at is null/);
 assert.match(migration, /manager\.is_system_principal=false/);
 assert.match(migration, /on conflict\(job_key\) do nothing/);
+assert.doesNotMatch(
+  migration,
+  /v_device\|\|\s*\n\s*\|\|/,
+  'manager alert body must not contain a duplicate concatenation operator',
+);
 assert.match(
   migration,
   /perform public\.ops_manager_enqueue_lunch_delivery_failure\(v_row\.job_id,now\(\)\);/,

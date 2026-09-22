@@ -73,7 +73,7 @@ begin
     'lunch_delivery_failure',
     v_job.job_id,
     'Lunch coverage notification failed',
-    left('A lunch coverage '||v_event||' notification could not be delivered to '||v_device||
+    left('A lunch coverage '||v_event||' notification could not be delivered to '||v_device
       ||'. Review coverage and contact the custodian if needed.',1000),
     jsonb_build_object(
       'kind','lunch_delivery_failure',
