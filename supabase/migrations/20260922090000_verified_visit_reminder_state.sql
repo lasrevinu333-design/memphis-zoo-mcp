@@ -502,6 +502,12 @@ begin
      ) then
     raise exception using errcode='42501',message='the signed physical NFC finish scan is required';
   end if;
+  if exists (
+    select 1 from public.custodial_offline_actor_contexts c
+    where c.context_id=v_context_id and c.native_scan_entry_id=v_finish_scan_entry_id
+  ) then
+    raise exception using errcode='42501',message='native finish scan must differ from the start scan';
+  end if;
   v_attestation_sha256:=encode(extensions.digest(convert_to(lower(btrim(p_native_completion_attestation)),'UTF8'),'sha256'),'hex');
   if exists(
     select 1 from public.custodial_offline_actor_contexts c where c.context_id=v_context_id
