@@ -10,7 +10,8 @@
  */
 import { createHash, randomUUID } from "node:crypto";
 import { Pool } from "pg";
-import { createStaticWeeklyDraftRpcInput, createStaticWeeklyProjectionRpcInput } from "./static-weekly-schedule-database-adapter.js";
+import { createStaticWeeklyDraftRpcInput } from "./static-weekly-schedule-database-adapter.js";
+import { createStaticWeeklyProjectionWithLunchRpcInput } from "./static-weekly-lunch-publication.js";
 import {
   compileAndPrepareStaticWeeklyScheduleIsolated,
   compileStaticWeeklyScheduleIsolated,
@@ -512,7 +513,7 @@ export function createStaticWeeklyControlPlane({
     if (compilerPreparer) {
       return compilerPreparer(input, { kind: "projection", publicationId, expectedRevision, actor });
     }
-    return createStaticWeeklyProjectionRpcInput({ result: await compileOrFail(input), publicationId, expectedRevision, actor });
+    return createStaticWeeklyProjectionWithLunchRpcInput({ result: await compileOrFail(input), publicationId, expectedRevision, actor });
   }
 
   async function prepareInsideTransaction(client, work) {
@@ -556,7 +557,19 @@ export function createStaticWeeklyControlPlane({
       compilerInputFromPublishedSource(source, weekStart),
       { publicationId: effectivePublicationId, expectedRevision: revision, actor: preparedActor },
     ));
+    if (!projection.lunchDocument?.document_identity
+      || projection.lunchDocument.base_replay_digest !== projection.replayDigest
+      || projection.lunchDocument.base_authority_digest !== projection.envelope?.authority_digest) {
+      throw fail("static_weekly_lunch_publication_missing", "The verified projection must include its lunch responsibilities.");
+    }
     const materialized = await call(client, "static_weekly_v3_materialize_projection", [projection.publicationId, projection.serviceDate, projection.exceptionSetDigest, projection.compilerVersion, projection.objective, projection.metrics, projection.replayDigest, projection.envelope, projection.expectedRevision, actor.managerId, projection.idempotencyKey]);
+    const lunchPublication = await call(client, "static_weekly_v8_materialize_lunch_document",
+      [materialized?.data?.projection_id, projection.lunchDocument, actor.managerId]);
+    if (lunchPublication?.ok !== true || lunchPublication.persistence_status !== "PERSISTED"
+      || lunchPublication.projection_id !== materialized?.data?.projection_id
+      || lunchPublication.document_identity !== projection.lunchDocument.document_identity) {
+      throw fail("static_weekly_lunch_publication_failed", "Lunch responsibilities were not accepted with the weekly projection.");
+    }
     const current = await snapshotFor(client, weekStart);
     if (current?.projection_status !== "current" || text(current?.current_publication?.publication_id) !== projection.publicationId || text(current?.latest_projection?.projection_id) !== text(materialized?.data?.projection_id)) {
       throw fail("static_weekly_control_plane_projection_not_current", "The compiled weekly projection did not become the current authority projection.");

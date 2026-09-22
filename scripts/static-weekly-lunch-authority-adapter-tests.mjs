@@ -7,6 +7,9 @@ import {
   verifyStaticWeeklyLunchAuthorityDocument,
 } from '../src/static-weekly-lunch-authority-adapter.js';
 
+import { createStaticWeeklyProjectionWithLunchRpcInput } from '../src/static-weekly-lunch-publication.js';
+import { createStaticWeeklyProjectionRpcInput } from '../src/static-weekly-schedule-database-adapter.js';
+
 const clone = value => structuredClone(value);
 function fixture() {
   const slots=['a','b','c','d'], locations=['W','E','B','B2','C','C2','D','D2'];
@@ -91,4 +94,12 @@ assert.throws(
   'missing lunch facts fail closed before a persistence authority document can be created',
 );
 
-console.log('static weekly lunch authority adapter tests: PASS');
+const options={result,publicationId:'publication',expectedRevision:1,
+  actor:{managerId:'manager',managerName:'Fixture Manager',idempotencyKey:'lunch-publication-test'}};
+const prepared=createStaticWeeklyProjectionWithLunchRpcInput(options);
+assert.deepEqual(prepared.envelope,createStaticWeeklyProjectionRpcInput(options).envelope,
+  'lunch preparation never changes the accepted base projection envelope');
+assert.deepEqual(prepared.lunchDocument,document,'isolated preparation preserves the verified lunch document');
+assert.throws(()=>createStaticWeeklyProjectionWithLunchRpcInput({...options,result:missingLunchResult}),
+  /lunch_authority_candidate_not_publishable/,'publication cannot omit an unresolved lunch');
+console.log('static weekly lunch authority adapter and publication preparation tests: PASS');

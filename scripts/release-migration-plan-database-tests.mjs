@@ -26,7 +26,8 @@ assert.deepEqual(state.pending_migrations.map(({ order, file }) => ({ order, fil
   { order: 1, file: "20260922050000_lunch_delivery_failure_manager_alert.sql" },
   { order: 2, file: "20260922070000_completed_cleaning_reminder_cycles.sql" },
   { order: 3, file: "20260922090000_verified_visit_reminder_state.sql" },
-], "the correction release fixture must contain exactly the three reviewed migrations in order");
+  { order: 4, file: "20260922163000_static_weekly_lunch_publication.sql" },
+], "the correction release fixture must contain exactly the four reviewed migrations in order");
 assert.equal(
   state.pending_migrations.every((item) => item.source_migration_version > state.observed_production.ledger_head),
   true,
@@ -257,7 +258,7 @@ try {
   const afterFingerprint = fingerprintSchemaCatalog(afterCatalog);
   const canonical = JSON.parse(readFileSync(resolve(root, "supabase/canonical/schema-fingerprint-input.json"), "utf8"));
   assert.equal(afterFingerprint.fingerprint, state.target.canonical_source_schema_fingerprint,
-    `the exact three-migration correction plan must terminate at the canonical target catalog: ${JSON.stringify(firstCatalogDifference(canonical, afterFingerprint.normalized))}`);
+    `the exact four-migration correction plan must terminate at the canonical target catalog: ${JSON.stringify(firstCatalogDifference(canonical, afterFingerprint.normalized))}`);
   await assert.rejects(runPlan(), /already present|pre-migration production state|Locked source catalog/,
     "the complete plan is exactly-once and rejects replay or partial application");
   console.log("RELEASE_MIGRATION_PLAN_DATABASE_TESTS_PASS");

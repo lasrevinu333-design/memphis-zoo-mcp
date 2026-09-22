@@ -55,7 +55,7 @@ const projectionKey = (parent) => `projection-${createHash("sha256").update(pare
 
 function compilerInput() {
   const availability = {
-    slotId: "slot-a", dayOfWeek: 1, status: "working", shift: { start: "07:00", end: "16:00" },
+    slotId: "slot-a", dayOfWeek: 1, status: "working", shift: { start: "07:00", end: "16:00" }, lunch: { start: "12:00", end: "13:00" },
     productiveCapacityProvenance: "control-plane-test-shift", maxServiceEffortMinutes: 300,
     maxServiceEffortProvenance: "control-plane-test-capacity", qualifications: ["general"],
     qualificationProvenance: "control-plane-test-qualification", restrictions: [],
@@ -73,7 +73,7 @@ const acceptedProjection = await compileStaticWeeklySchedule(compilerInput());
 assert.equal(acceptedProjection.status, "FEASIBLE", "the control-plane transaction test needs one independently accepted projection");
 assert.equal(acceptedProjection.verifier.ok, true);
 
-function createAuthorityDatabase({ revision: initialRevision = 0, failMutationAt = null, failHeartbeatAt = null, heartbeatDelayMs = 0 } = {}) {
+function createAuthorityDatabase({ revision: initialRevision = 0, failMutationAt = null, failHeartbeatAt = null, heartbeatDelayMs = 0, failLunch = false } = {}) {
   const queries = [];
   const materializations = new Map();
   const projectionSnapshots = new Map();
@@ -149,6 +149,11 @@ function createAuthorityDatabase({ revision: initialRevision = 0, failMutationAt
       if (statement.includes("static_weekly_v4_replace_employee")) { revision = values[3] + 1; return { rows: [{ result: { revision, data: { new_employee_name: values[1] } } }] }; }
       if (statement.includes("static_weekly_v7_create_vacant_roster_slot")) { revision = values[2] + 1; return { rows: [{ result: { revision, data: { slot_id: values[0], slot_label: values[1], vacant: true } } }] }; }
       if (statement.includes("static_weekly_v7_fill_vacant_roster_slot")) { revision = values[4] + 1; return { rows: [{ result: { revision, data: { slot_id: values[0], new_employee_name: values[1], effective_start: values[2] } } }] }; }
+      if (statement.includes("static_weekly_v8_materialize_lunch_document")) {
+        if (failLunch) throw new Error("lunch persistence failed");
+        return {rows:[{result:{ok:true,persistence_status:"PERSISTED",projection_id:values[0],
+          document_identity:values[1].document_identity}}]};
+      }
       if (statement.includes("static_weekly_v3_materialize_projection")) {
         const key = values[10];
         if (materializations.has(key)) return { rows: [{ result: materializations.get(key) }] };
@@ -479,7 +484,7 @@ const applied = await controlPlane.applyException({
 });
 assert.equal(applied.revision, 2, "a successful staffing mutation returns the final projection revision");
 assert.equal(applied.data.current_projection.projection_id, "projection-2", "a successful staffing mutation returns the current projection");
-assert.deepEqual(authority.queries.map((entry) => entry.statement), ["begin", "set local role static_weekly_control_plane", "set local statement_timeout = '120000ms'", "select public.custodial_begin_application_mutation()", "select public.static_weekly_v3_apply_exception($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) as result", "select public.static_weekly_v3_read_publication_source($1,$2) as result", "select public.static_weekly_v3_materialize_projection($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) as result", "select public.static_weekly_v3_read_manager_snapshot($1) as result", "commit"], "a generation fence, mutation, canonical compile, current projection, and confirmation share one bounded transaction");
+assert.deepEqual(authority.queries.map((entry) => entry.statement), ["begin", "set local role static_weekly_control_plane", "set local statement_timeout = '120000ms'", "select public.custodial_begin_application_mutation()", "select public.static_weekly_v3_apply_exception($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) as result", "select public.static_weekly_v3_read_publication_source($1,$2) as result", "select public.static_weekly_v3_materialize_projection($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) as result", "select public.static_weekly_v8_materialize_lunch_document($1,$2,$3) as result", "select public.static_weekly_v3_read_manager_snapshot($1) as result", "commit"], "a generation fence, mutation, canonical compile, current projection, and confirmation share one bounded transaction");
 assert.equal(authority.queries[4].values[9], manager.manager_id, "the trusted manager ID is the only actor value passed to PostgreSQL");
 assert.equal(authority.queries[4].values.includes(manager.manager_display_name), false, "PostgreSQL must derive the actor name from its manager registry");
 assert.match(authority.queries[6].values[10], /^projection-[0-9a-f]{64}$/, "the projection subcommand uses a derived idempotency key");
@@ -625,4 +630,10 @@ const splitCallerResult = await splitCallerControlPlane.materializeProjection({ 
 assert.equal(splitCallerResult.revision, atomicPublication.revision, "an old split caller receives the atomic publication's current projection revision");
 assert.equal(splitCallerResult.data.no_op, true, "an old split materialization request becomes a read-only no-op");
 assert.equal(splitCallerAuthority.queries.filter((entry) => entry.statement.includes("static_weekly_v3_materialize_projection")).length, materializationCount, "the split-call compatibility path never duplicates projection authority");
+const failedLunchAuthority=createAuthorityDatabase({failLunch:true});
+await assert.rejects(()=>controlPlaneFor(failedLunchAuthority).publishDraft({manager,draftVersionId:versionId,
+ expectedDraftRevision:1,expectedRevision:0,idempotencyKey:"failed-lunch-write",projectionWeekStart:"2026-10-05"}),/lunch persistence failed/);
+assert.equal(failedLunchAuthority.commits(),0,"lunch failure must prevent publication commit");
+assert.equal(failedLunchAuthority.revision(),0,"lunch failure must roll back base publication and projection");
+assert.equal(failedLunchAuthority.queries.at(-1).statement,"rollback");
 console.log("static weekly control-plane separation tests: PASS");

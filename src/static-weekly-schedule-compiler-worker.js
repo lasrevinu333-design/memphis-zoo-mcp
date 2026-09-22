@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { compileStaticWeeklySchedule } from "./static-weekly-schedule-compiler.js";
-import { createStaticWeeklyDraftRpcInput, createStaticWeeklyProjectionRpcInput } from "./static-weekly-schedule-database-adapter.js";
+import { createStaticWeeklyDraftRpcInput } from "./static-weekly-schedule-database-adapter.js";
+import { createStaticWeeklyProjectionWithLunchRpcInput } from "./static-weekly-lunch-publication.js";
 import { installStaticWeeklySha256HexAccelerator } from "./static-weekly-schedule-model.js";
 import {
   getStaticWeeklySolverReadiness,
@@ -39,7 +40,7 @@ function prepareResult(result, preparation) {
     });
   }
   if (preparation.kind === "projection") {
-    return createStaticWeeklyProjectionRpcInput({
+    return createStaticWeeklyProjectionWithLunchRpcInput({
       result,
       publicationId: preparation.publicationId,
       expectedRevision: preparation.expectedRevision,
