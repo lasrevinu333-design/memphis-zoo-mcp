@@ -135,7 +135,7 @@ export function managerDeliveryAttention(rows = [], exactCount = null, pushDevic
     failed_count: failedCount,
     latest_failed_at: latestFailedAt,
     notification_types: notificationTypes,
-    message: resolvedByCurrentRegistration ? null : `${failedCount} manager notification${failedCount === 1 ? "" : "s"} could not be delivered. The related messages and events are still available in the app.`,
+    message: resolvedByCurrentRegistration ? null : `${failedCount} manager notification${failedCount === 1 ? "" : "s"} could not be delivered. The related information is still available in the app.`,
     action: resolvedByCurrentRegistration ? null : "Refresh this phone's notification connection, then send a test notification.",
   };
 }

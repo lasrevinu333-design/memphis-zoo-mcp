@@ -118,7 +118,7 @@
     "test:manager-inspection-readiness": "node scripts/manager-inspection-readiness-tests.mjs",
     "manager-inspection:readiness": "node scripts/manager-inspection-readiness.mjs",
     "device-security:password": "node scripts/device-security-password-admin.mjs",
-    "test:manager-notifications": "node scripts/manager-notification-contract-tests.mjs",
+    "test:manager-notifications": "node scripts/manager-notification-contract-tests.mjs && node scripts/lunch-delivery-failure-contract-tests.mjs",
     "test:employee-notifications": "node scripts/employee-notification-contract-tests.mjs",
     "test:batch2": "node scripts/batch-2-event-messenger-cutover-tests.mjs",
     "test:batch2-db": "node scripts/batch-2-event-messenger-cutover-database-tests.mjs",
@@ -160,7 +160,8 @@
     "test:coverall-bilingual": "node scripts/coverall-bilingual-tests.mjs",
     "test:static-weekly-lunch-coverage": "node scripts/static-weekly-lunch-coverage-tests.mjs && node scripts/static-weekly-lunch-authority-adapter-tests.mjs",
     "test:static-weekly-lunch-authority": "node scripts/static-weekly-lunch-authority-adapter-tests.mjs",
-    "preflight:static-weekly-lunch-coverage": "node scripts/static-weekly-lunch-coverage-preview.mjs"
+    "preflight:static-weekly-lunch-coverage": "node scripts/static-weekly-lunch-coverage-preview.mjs",
+    "test:lunch-delivery-failure": "node scripts/lunch-delivery-failure-contract-tests.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",

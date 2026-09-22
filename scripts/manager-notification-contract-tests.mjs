@@ -80,7 +80,7 @@ assert.equal(deliveryAttention.failed_count, 6);
 assert.equal(deliveryAttention.latest_failed_at, "2026-08-03T00:11:18Z");
 assert.deepEqual(deliveryAttention.notification_types, ["event_digest", "message"]);
 assert.match(deliveryAttention.message, /6 manager notifications could not be delivered/i);
-assert.match(deliveryAttention.message, /messages and events are still available/i);
+assert.match(deliveryAttention.message, /related information is still available/i);
 assert.match(deliveryAttention.action, /Refresh this phone's notification connection.*send a test/i);
 const resolvedDeliveryAttention = managerDeliveryAttention([
   { notification_type: "message", updated_at: "2026-08-03T00:11:18Z" },
