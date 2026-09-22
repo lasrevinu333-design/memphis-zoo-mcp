@@ -1230,12 +1230,12 @@
       {
         "path": "scripts/production-release-deployment-recorder-tests.mjs",
         "mode": "100644",
-        "object_id": "cf19fe190d3a7c63dac59f97bb9701cc4b9e01fb"
+        "object_id": "5b6bfd0d79658f2e9a74eb52eed5e7e231411d92"
       },
       {
         "path": "scripts/production-release-recorder-database-tests.mjs",
         "mode": "100644",
-        "object_id": "2127392757cd8f506b0c9c10c0552337f7eb1b3c"
+        "object_id": "8211980db393f597946aa307189dbf05807e4d5c"
       },
       {
         "path": "scripts/production-release-recorder-plan-tests.mjs",
@@ -1295,7 +1295,7 @@
       {
         "path": "scripts/record-production-release-deployment.mjs",
         "mode": "100644",
-        "object_id": "221d8c87628ce3d8d4068ddb8c670d468d227ee0"
+        "object_id": "54069ab061e40e8ddcb006689b264aeaa9e9ddc5"
       },
       {
         "path": "scripts/refresh-integrated-backend-authority-release.mjs",
@@ -2155,7 +2155,7 @@
       {
         "path": "src/production-release-deployment-recorder.js",
         "mode": "100644",
-        "object_id": "40b1d132b4ac87c971c9ca99fcee7df0ba527a86"
+        "object_id": "d1d2b73a9863aa897052bf4db97960ccd80c3039"
       },
       {
         "path": "src/production-schema-identity.js",
