@@ -3,14 +3,14 @@
   "release_id": "release-2026.07.19.custodial-v3.12",
   "frontend_commit_sha": "fb3cb815a2ebd8f50b33f657c750807f3b4b45b4",
   "frontend_commit_state": "final_pair_bound",
-  "schema_fingerprint": "ebf11090b2cf696ebcdc9b4d882cc25a852683e104678ca9890fbb75730e66c2",
+  "schema_fingerprint": "b3729c40e808f88af4a58db03defa236c58b510987a0d30d322a475f282c76bd",
   "schema_transition": {
     "transition_id": "custodial-verified-visits-20260922",
     "from_fingerprint": "750e7f040519f6d4555836cbd4d172a22f98911d5bab9918fa370238fff3f822",
-    "to_fingerprint": "ebf11090b2cf696ebcdc9b4d882cc25a852683e104678ca9890fbb75730e66c2",
+    "to_fingerprint": "b3729c40e808f88af4a58db03defa236c58b510987a0d30d322a475f282c76bd",
     "expires_at": "2026-10-02T23:59:59Z"
   },
-  "frontend_source_fingerprint": "ebf11090b2cf696ebcdc9b4d882cc25a852683e104678ca9890fbb75730e66c2",
+  "frontend_source_fingerprint": "b3729c40e808f88af4a58db03defa236c58b510987a0d30d322a475f282c76bd",
   "backend_contract": {
     "scan": "scan.v4.snapshot-bound-authority",
     "authority": "offline-authority.v5",
@@ -135,7 +135,7 @@
       {
         "path": ".github/workflows/build52-production-migration-apply.yml",
         "mode": "100644",
-        "object_id": "924068f8e6e44c3735ec7736733f0a37a1cb185f"
+        "object_id": "6bea3b82a490e459bb1cfb572d8d80e9bb44da1b"
       },
       {
         "path": ".github/workflows/custodial-populated-schema-preflight.yml",
@@ -450,7 +450,7 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "8741d6e499602f8e1982f4cbb3988faaca4edf04"
+        "object_id": "ab2bd39401608b9b23da27176366a9f47af35ac8"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
@@ -460,7 +460,7 @@
       {
         "path": "release/production-migration-state.json",
         "mode": "100644",
-        "object_id": "4032e59d0d72b631c0e68badabce3966cb1e5d26"
+        "object_id": "e12ae1498f33017a4f87e1a69d138d1294d30eb8"
       },
       {
         "path": "release/production-schema-observation-20260922.json",
@@ -945,12 +945,12 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "295dd3faeea3ed7d4831971c5ef5fe71577bd844"
+        "object_id": "e8b0268d8e3c1a7f3026f32b3b5b3dcf41d55a59"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
         "mode": "100644",
-        "object_id": "58584e77f040f9994efefa37a8095bab3255926e"
+        "object_id": "b0c6fda0f79966bb4de262ca1479a239ee6e84e6"
       },
       {
         "path": "scripts/integrated-backend-authority-release-provenance-tests.mjs",
@@ -1575,7 +1575,7 @@
       {
         "path": "scripts/static-weekly-lunch-publication-database-tests.mjs",
         "mode": "100644",
-        "object_id": "0296aa67be51e9ed5d122c9a90a3923d31287bdf"
+        "object_id": "d4d718f8a13150b61c6de1d73d3bda9924a7a3da"
       },
       {
         "path": "scripts/static-weekly-operational-truth-contract-tests.mjs",
@@ -2360,12 +2360,12 @@
       {
         "path": "supabase/canonical/schema-fingerprint-input.json",
         "mode": "100644",
-        "object_id": "84237b62982257b346f1ce603c14fd49978b4049"
+        "object_id": "bf6e20ce8996fb4f2c2531ea4341ac5975a26a01"
       },
       {
         "path": "supabase/canonical/schema-fingerprint.txt",
         "mode": "100644",
-        "object_id": "f25137978e2cf1efc69b44c42fdeb916527599d6"
+        "object_id": "1e28757d3ab8dd3256b792307ca1d74db0e4cffa"
       },
       {
         "path": "supabase/config.toml",
@@ -3625,7 +3625,7 @@
       {
         "path": "supabase/migrations/20260922163000_static_weekly_lunch_publication.sql",
         "mode": "100644",
-        "object_id": "3479b858c2ac103689faafb28ebf60243c2e32d2"
+        "object_id": "c9977d76ebc4f613a30bf7a946b063bba2b7d394"
       },
       {
         "path": "tmp/write_probe.txt",
