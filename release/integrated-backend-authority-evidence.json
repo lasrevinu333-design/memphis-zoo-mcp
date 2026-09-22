@@ -135,7 +135,7 @@
       {
         "path": ".github/workflows/build52-production-migration-apply.yml",
         "mode": "100644",
-        "object_id": "f6585cc90648a9cdb5873bf1a95f9a7db46384dd"
+        "object_id": "32a5d1c916779e3ea57c5f3a1be8b62d19982613"
       },
       {
         "path": ".github/workflows/custodial-populated-schema-preflight.yml",
@@ -565,7 +565,7 @@
       {
         "path": "scripts/ci-workflow-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "77f4adf51d0eb50a480b10886d4aee58a83de4b3"
+        "object_id": "09a2a5ddd7f08414d1d6495a656f67c0edd90604"
       },
       {
         "path": "scripts/cleaning-identity-gps-database-tests.mjs",
