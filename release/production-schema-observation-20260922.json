@@ -1,0 +1,170 @@
+{
+  "artifact": "custodial-production-schema-observation.v1",
+  "captured_at": "2026-09-22T11:06:41.482768-05:00",
+  "project_ref": "rqquvtjdmugpigbndmne",
+  "ledger_head": "20260920010000",
+  "ledger_count": 230,
+  "canonical_catalog_fingerprint": "750e7f040519f6d4555836cbd4d172a22f98911d5bab9918fa370238fff3f822",
+  "catalog_section_count": 23,
+  "catalog_counts": {
+    "extensions": 8,
+    "types": 0,
+    "sequences": 0,
+    "tables": 182,
+    "columns": 2078,
+    "constraints": 1074,
+    "indexes": 663,
+    "functions": 506,
+    "views": 33,
+    "triggers": 310,
+    "policies": 42,
+    "owned_scheduler_roles": 3,
+    "owned_scheduler_role_memberships": 3,
+    "privilege_bearing_roles": 4,
+    "role_memberships": 25,
+    "table_grants": 1527,
+    "column_grants": 43,
+    "sequence_grants": 0,
+    "routine_grants": 347,
+    "type_grants": 0,
+    "schema_grants": 9,
+    "default_privileges": 12,
+    "cron_jobs": 9
+  },
+  "catalog_arrays": {
+    "column_grants": {
+      "expected": "558aaf11e69d6be21eb1933aad2f53c99e3f4d41865fcd3b52be3771f8b6db2f",
+      "actual": "558aaf11e69d6be21eb1933aad2f53c99e3f4d41865fcd3b52be3771f8b6db2f",
+      "equal": true
+    },
+    "columns": {
+      "expected": "fca1553b897baaf29763a2733fa3c99ae0b49625bf07abfc124bb6eabbf6c727",
+      "actual": "fca1553b897baaf29763a2733fa3c99ae0b49625bf07abfc124bb6eabbf6c727",
+      "equal": true
+    },
+    "constraints": {
+      "expected": "8d5bebe135b653e7a47f5766dc44c9af5c135a3056e96d42c7d5722b03ab93b0",
+      "actual": "8d5bebe135b653e7a47f5766dc44c9af5c135a3056e96d42c7d5722b03ab93b0",
+      "equal": true
+    },
+    "cron_jobs": {
+      "expected": "2cbf6c295d76ecb87fc8528348807f4b1dfa1bd72169138533f5a5d5b379caf0",
+      "actual": "2cbf6c295d76ecb87fc8528348807f4b1dfa1bd72169138533f5a5d5b379caf0",
+      "equal": true
+    },
+    "default_privileges": {
+      "expected": "56f730edb0f381997e65cbf7b610d11f00bfdb4446614bc4b3e4ff73dbf63e88",
+      "actual": "56f730edb0f381997e65cbf7b610d11f00bfdb4446614bc4b3e4ff73dbf63e88",
+      "equal": true
+    },
+    "extensions": {
+      "expected": "b886da6e9a06d0de6f18425b9edbccd3699ba2665797aaa6445abe2aac259051",
+      "actual": "b886da6e9a06d0de6f18425b9edbccd3699ba2665797aaa6445abe2aac259051",
+      "equal": true
+    },
+    "functions": {
+      "expected": "2ad792695071c70ad36fc7b6ff38960b42fbfa000a1a3439291af327d1c110d9",
+      "actual": "2ad792695071c70ad36fc7b6ff38960b42fbfa000a1a3439291af327d1c110d9",
+      "equal": true
+    },
+    "indexes": {
+      "expected": "f4d39e13d11361f846680b8fd2d306f8c525881d479f73d9a35ef3312344fd1d",
+      "actual": "f4d39e13d11361f846680b8fd2d306f8c525881d479f73d9a35ef3312344fd1d",
+      "equal": true
+    },
+    "owned_scheduler_role_memberships": {
+      "expected": "aef0fc955d9985e27f8e944dd4346b87d67ed1057ca93f04d0aafa019c980b62",
+      "actual": "aef0fc955d9985e27f8e944dd4346b87d67ed1057ca93f04d0aafa019c980b62",
+      "equal": true
+    },
+    "owned_scheduler_roles": {
+      "expected": "466f38ac274f100f8baa49a3a34e511eb3937a0b32adf010a4cd0d6893641c54",
+      "actual": "466f38ac274f100f8baa49a3a34e511eb3937a0b32adf010a4cd0d6893641c54",
+      "equal": true
+    },
+    "policies": {
+      "expected": "78e5f09ee89023075cef4db4bb7ffe08ca86e274bbbcc05e937dec4e00244751",
+      "actual": "78e5f09ee89023075cef4db4bb7ffe08ca86e274bbbcc05e937dec4e00244751",
+      "equal": true
+    },
+    "privilege_bearing_roles": {
+      "expected": "39d55fb26c4e0f6446a3bd772ec5c055f20c16345e104791ad1d1326a22fa3d7",
+      "actual": "39d55fb26c4e0f6446a3bd772ec5c055f20c16345e104791ad1d1326a22fa3d7",
+      "equal": true
+    },
+    "role_memberships": {
+      "expected": "49d407cbcddb941cc62923687f7718d395e056732ea77ed4af541f3933c8b2f8",
+      "actual": "49d407cbcddb941cc62923687f7718d395e056732ea77ed4af541f3933c8b2f8",
+      "equal": true
+    },
+    "routine_grants": {
+      "expected": "bfbaafbee2f6ddf96fd1f2dfaca25da6d909c5d43df23d0c6351c22e77e7781a",
+      "actual": "bfbaafbee2f6ddf96fd1f2dfaca25da6d909c5d43df23d0c6351c22e77e7781a",
+      "equal": true
+    },
+    "schema_grants": {
+      "expected": "f91f581682ae4848531b5f22f2c021f2990e57dd729f4e1b22e6318453078d44",
+      "actual": "f91f581682ae4848531b5f22f2c021f2990e57dd729f4e1b22e6318453078d44",
+      "equal": true
+    },
+    "sequence_grants": {
+      "expected": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "actual": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "equal": true
+    },
+    "sequences": {
+      "expected": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "actual": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "equal": true
+    },
+    "table_grants": {
+      "expected": "2271ad4e9485c3486be17c8d825b74e13561d87724995fe0132dc76e3b2d4d0a",
+      "actual": "2271ad4e9485c3486be17c8d825b74e13561d87724995fe0132dc76e3b2d4d0a",
+      "equal": true
+    },
+    "tables": {
+      "expected": "70e557ab0131d84d8b102fa1f6da1733512bdc6713de52c7273dfc9c0741bae8",
+      "actual": "70e557ab0131d84d8b102fa1f6da1733512bdc6713de52c7273dfc9c0741bae8",
+      "equal": true
+    },
+    "triggers": {
+      "expected": "ccf49c9151d90cd8d2a5ddeedd1ff78652441cd42f89b4deb4d7324dbe0eaf7b",
+      "actual": "ccf49c9151d90cd8d2a5ddeedd1ff78652441cd42f89b4deb4d7324dbe0eaf7b",
+      "equal": true
+    },
+    "type_grants": {
+      "expected": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "actual": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "equal": true
+    },
+    "types": {
+      "expected": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "actual": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "equal": true
+    },
+    "views": {
+      "expected": "6d01220ff8deaeca868ec5266d2e63dd58cdd4395d0507987faf1968e0f5dd99",
+      "actual": "6d01220ff8deaeca868ec5266d2e63dd58cdd4395d0507987faf1968e0f5dd99",
+      "equal": true
+    }
+  },
+  "unsupported_foreign_tables": 0,
+  "unsupported_composite_types": 0,
+  "method": "Authorized read-only Supabase catalog arrays compared with the exact prior canonical input; all 23 array SHA256 values match. Fresh locked apply must recapture exact source.",
+  "operational_counts": {
+    "registered_source_count": 2,
+    "active_authority_key_count": 1,
+    "roster_slot_count": 22,
+    "roster_incumbency_count": 20,
+    "draft_version_count": 0,
+    "published_version_count": 2,
+    "publication_count": 2,
+    "command_receipt_count": 19,
+    "authority_revision": 19,
+    "projection_count": 4,
+    "occurrence_count": 1394,
+    "application_reader_identity_policy_count": 15,
+    "application_reader_credential_select": false,
+    "outlook_event_sync_table_present": true
+  }
+}

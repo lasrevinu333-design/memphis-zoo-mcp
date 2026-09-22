@@ -3,6 +3,173 @@
   "mode": "migration_required",
   "project_ref": "rqquvtjdmugpigbndmne",
   "observed_production": {
+    "captured_at": "2026-09-22T11:06:41.482768-05:00",
+    "ledger_head": "20260920010000",
+    "source_migration_name": "event_reminder_static_weekly_authority",
+    "catalog_privilege_fingerprint": "750e7f040519f6d4555836cbd4d172a22f98911d5bab9918fa370238fff3f822",
+    "catalog_capture_format": "canonical_target.v1 expected-current; locked apply must recapture and compare exact catalog before DDL",
+    "catalog_capture_provenance": "Fresh authorized read-only 23-section catalog-array equality and ledger capture; see release/production-schema-observation-20260922.json. Target schedule slot count remains the separately dated prior observation, not a fresh roster publication.",
+    "catalog_counts": {
+      "extensions": 8,
+      "types": 0,
+      "sequences": 0,
+      "tables": 182,
+      "columns": 2078,
+      "constraints": 1074,
+      "indexes": 663,
+      "functions": 506,
+      "views": 33,
+      "triggers": 310,
+      "policies": 42,
+      "owned_scheduler_roles": 3,
+      "owned_scheduler_role_memberships": 3,
+      "privilege_bearing_roles": 4,
+      "role_memberships": 25,
+      "table_grants": 1527,
+      "column_grants": 43,
+      "sequence_grants": 0,
+      "routine_grants": 347,
+      "type_grants": 0,
+      "schema_grants": 9,
+      "default_privileges": 12,
+      "cron_jobs": 9
+    },
+    "public_function_count": 506,
+    "registered_source_count": 2,
+    "active_authority_key_count": 1,
+    "roster_slot_count": 22,
+    "roster_incumbency_count": 20,
+    "draft_version_count": 0,
+    "published_version_count": 2,
+    "publication_count": 2,
+    "command_receipt_count": 19,
+    "authority_revision": 19,
+    "projection_count": 4,
+    "occurrence_count": 1394,
+    "application_reader_identity_policy_count": 15,
+    "application_reader_credential_select": false,
+    "production_ledger_count": 230,
+    "source_authority_migration_count": 130,
+    "target_schedule_slot_count": 5,
+    "vacancy_functions_present": true,
+    "hydrated_initial_draft_reader_present": true,
+    "registered_source_dated_status_excluded": true,
+    "outlook_event_sync_table_present": true,
+    "target_schedule_slot_count_observed_at": "2026-09-19T02:19:26.738042Z"
+  },
+  "target": {
+    "source_migration_file": "20260922090000_verified_visit_reminder_state.sql",
+    "source_migration_name": "verified_visit_reminder_state",
+    "source_migration_version": "20260922090000",
+    "production_ledger_version": null,
+    "canonical_source_schema_fingerprint": "89f3d7c051bae62bc468fc053a8886cd8e8bcab49abc59ff6a67a21e9e4cc7c3",
+    "public_function_count": 512,
+    "production_ledger_count": 233,
+    "source_authority_migration_count": 133,
+    "pending_migration_count": 3,
+    "registered_source_dated_status_excluded": true,
+    "expected_catalog_counts": {
+      "column_grants": 43,
+      "columns": 2078,
+      "constraints": 1074,
+      "cron_jobs": 9,
+      "default_privileges": 12,
+      "extensions": 8,
+      "functions": 512,
+      "indexes": 663,
+      "owned_scheduler_role_memberships": 3,
+      "owned_scheduler_roles": 3,
+      "policies": 42,
+      "privilege_bearing_roles": 4,
+      "role_memberships": 25,
+      "routine_grants": 353,
+      "schema_grants": 9,
+      "sequence_grants": 0,
+      "sequences": 0,
+      "table_grants": 1527,
+      "tables": 182,
+      "triggers": 310,
+      "type_grants": 0,
+      "types": 0,
+      "views": 33
+    }
+  },
+  "source_binding": {
+    "kind": "external_exact_head_release_attestation",
+    "rule": "The production approval package binds the exact backend commit/tree, three migration blobs, generated release evidence, exact frontend commit, fresh source catalog/ledger identity, backup and rehearsal before mutation."
+  },
+  "backup_evidence": {
+    "state": "fresh_verified_backup_required_after_fresh_source_capture_and_before_mutation",
+    "last_verified": {
+      "workflow_run_id": 33102836824,
+      "source_commit": "e679618b605c10ffc4055181797743cdf01978cb",
+      "artifact_name": "memphis-zoo-disaster-recovery-33102836824",
+      "artifact_sha256": "f3e7782513e3b046b04b246d509528a4b7e6cb814c7747ce6538c1b968dac8ba",
+      "archive_digest": "e3a545d1af72be16e592b6c24a53c92a7e69dc08e974774286e8f0007beffcbe",
+      "artifact_size_bytes": 10003179,
+      "restore_verification": "passed",
+      "completed_at": "2026-08-27T18:19:43.984Z"
+    }
+  },
+  "authorization": {
+    "production_mutation_required": true,
+    "sequence_policy": "apply_exact_ordered_pending_migrations_after_release_admission",
+    "rollback_policy": "forward-only; preserve fresh pre-change backup and all operational/history evidence; repair forward rather than delete evidence or re-enable retired writers"
+  },
+  "preconditions": [
+    "production project_ref equals rqquvtjdmugpigbndmne",
+    "production migration ledger is exactly 230 rows headed by 20260920010000 event_reminder_static_weekly_authority",
+    "locked production source catalog must freshly recapture and equal 750e7f040519f6d4555836cbd4d172a22f98911d5bab9918fa370238fff3f822 with the exact expected source counts before any DDL; a stale or mismatched catalog aborts the plan",
+    "a fresh encrypted backup with restore verification completes after the fresh source capture and before mutation",
+    "production exposes exactly 506 public functions and 347 non-owner routine grants before the three corrections",
+    "one active authority key, two active registered schedule sources, 22 roster slots, 20 incumbencies, zero draft, two published versions/publications, four projections, 1394 occurrences, 19 command receipts and authority revision 19 remain current",
+    "five target schedule positions remain represented without inventing staff identities",
+    "Outlook event-sync authority exists and its rows must remain unchanged by this plan",
+    "the exact backend commit/tree and exact frontend commit are externally attested"
+  ],
+  "prior_release_state": {
+    "ledger_head": "20260920010000",
+    "ledger_count": 230,
+    "schema_fingerprint": "750e7f040519f6d4555836cbd4d172a22f98911d5bab9918fa370238fff3f822",
+    "status": "fresh read-only observed source; locked source/catalog/ledger recapture remains mandatory"
+  },
+  "pending_migrations": [
+    {
+      "order": 1,
+      "phase": "lunch_delivery_failure_manager_alert",
+      "file": "20260922050000_lunch_delivery_failure_manager_alert.sql",
+      "source_migration_version": "20260922050000",
+      "sha256": "3af93bfd1fbd895207e6564a908181e2ba7d2ffb7e143c49bc1a658d2e0e0403"
+    },
+    {
+      "order": 2,
+      "phase": "completed_cleaning_reminder_cycles",
+      "file": "20260922070000_completed_cleaning_reminder_cycles.sql",
+      "source_migration_version": "20260922070000",
+      "sha256": "e288d359cfbccc7e89e8ddbd395c4bb705235f4f4a1766838436b2986f36f712"
+    },
+    {
+      "order": 3,
+      "phase": "verified_visit_reminder_state",
+      "file": "20260922090000_verified_visit_reminder_state.sql",
+      "source_migration_version": "20260922090000",
+      "sha256": "273f8786beaf5567382f08b411816cc4fc688324c480bab7da672dba9ee730e2"
+    }
+  ],
+  "postconditions": [
+    "production ledger advances exactly three rows from 230 to 233, ending at 20260922090000 verified_visit_reminder_state; no already-applied migration is replayed",
+    "complete public catalog and privilege fingerprint equals 89f3d7c051bae62bc468fc053a8886cd8e8bcab49abc59ff6a67a21e9e4cc7c3 with the exact reviewed target counts",
+    "production exposes exactly 512 public functions and 353 non-owner routine grants after the corrections",
+    "first two simultaneous absences remain internal and each third-or-later absence consumes exactly one distinct registered CoverAll capacity, preserving manager overrides/history",
+    "guest reporting OFF prevents queued guest notification dispatch without deleting pending/history records; staff Feedback remains separate",
+    "employee event reminders are generated at D-3, D-2 and event day at reminder-day shift start plus 15 minutes and final delivery revalidates current event-date ownership/assignment",
+    "governed event reminders require the current static-weekly projection, resolved employee availability and canonical ownership; missing, stale, ambiguous, unavailable or CoverAll facts do not fall back to retired daily schedules",
+    "existing publications, schedule history, employees, cleaning/ticket/inspection history, event history and production-only authority are not deleted or rewritten",
+    "no unexpected catalog, privilege, configuration or row diff exists",
+    "terminal lunch notification failures create idempotent named-manager alerts without exposing provider errors",
+    "five-minute overdue repeats resolve only after a valid distinct native Start and Finish visit; check-only visits preserve actual last-cleaned history"
+  ],
+  "previous_observation": {
     "captured_at": "2026-09-19T02:19:26.738042Z",
     "ledger_head": "20260916010000",
     "source_migration_name": "project_native_start_into_operational_truth",
@@ -55,122 +222,5 @@
     "hydrated_initial_draft_reader_present": true,
     "registered_source_dated_status_excluded": true,
     "outlook_event_sync_table_present": true
-  },
-  "target": {
-    "source_migration_file": "20260920010000_event_reminder_static_weekly_authority.sql",
-    "source_migration_name": "event_reminder_static_weekly_authority",
-    "source_migration_version": "20260920010000",
-    "production_ledger_version": null,
-    "canonical_source_schema_fingerprint": "750e7f040519f6d4555836cbd4d172a22f98911d5bab9918fa370238fff3f822",
-    "public_function_count": 506,
-    "production_ledger_count": 230,
-    "source_authority_migration_count": 130,
-    "pending_migration_count": 4,
-    "registered_source_dated_status_excluded": true,
-    "expected_catalog_counts": {
-      "extensions": 8,
-      "types": 0,
-      "sequences": 0,
-      "tables": 182,
-      "columns": 2078,
-      "constraints": 1074,
-      "indexes": 663,
-      "functions": 506,
-      "views": 33,
-      "triggers": 310,
-      "policies": 42,
-      "owned_scheduler_roles": 3,
-      "owned_scheduler_role_memberships": 3,
-      "privilege_bearing_roles": 4,
-      "role_memberships": 25,
-      "table_grants": 1527,
-      "column_grants": 43,
-      "sequence_grants": 0,
-      "routine_grants": 347,
-      "type_grants": 0,
-      "schema_grants": 9,
-      "default_privileges": 12,
-      "cron_jobs": 9
-    }
-  },
-  "source_binding": {
-    "kind": "external_exact_head_release_attestation",
-    "rule": "The production approval package binds the exact backend commit/tree, four migration blobs, generated release evidence, exact frontend commit, fresh source catalog/ledger identity, backup and rehearsal before mutation."
-  },
-  "backup_evidence": {
-    "state": "fresh_verified_backup_required_after_fresh_source_capture_and_before_mutation",
-    "last_verified": {
-      "workflow_run_id": 33102836824,
-      "source_commit": "e679618b605c10ffc4055181797743cdf01978cb",
-      "artifact_name": "memphis-zoo-disaster-recovery-33102836824",
-      "artifact_sha256": "f3e7782513e3b046b04b246d509528a4b7e6cb814c7747ce6538c1b968dac8ba",
-      "archive_digest": "e3a545d1af72be16e592b6c24a53c92a7e69dc08e974774286e8f0007beffcbe",
-      "artifact_size_bytes": 10003179,
-      "restore_verification": "passed",
-      "completed_at": "2026-08-27T18:19:43.984Z"
-    }
-  },
-  "authorization": {
-    "production_mutation_required": true,
-    "sequence_policy": "apply_exact_ordered_pending_migrations_after_release_admission",
-    "rollback_policy": "forward-only; preserve fresh pre-change backup and all operational/history evidence; repair forward rather than delete evidence or re-enable retired writers"
-  },
-  "preconditions": [
-    "production project_ref equals rqquvtjdmugpigbndmne",
-    "production migration ledger is exactly 226 rows headed by 20260916010000 project_native_start_into_operational_truth",
-    "locked production source catalog must freshly recapture and equal 81b3fa4316a772ab7553956e5b5c29a04c3d5583c6f32b2917c30eb19a011c32 with the exact expected source counts before any DDL; a stale or mismatched catalog aborts the plan",
-    "a fresh encrypted backup with restore verification completes after the fresh source capture and before mutation",
-    "production exposes exactly 503 public functions and 344 non-owner routine grants before the four corrections",
-    "one active authority key, two active registered schedule sources, 22 roster slots, 20 incumbencies, zero draft, two published versions/publications, three projections, 1080 occurrences, 18 command receipts and authority revision 18 remain current",
-    "five target schedule positions remain represented without inventing staff identities",
-    "Outlook event-sync authority exists and its rows must remain unchanged by this plan",
-    "the exact backend commit/tree and exact frontend commit are externally attested"
-  ],
-  "prior_release_state": {
-    "ledger_head": "20260916010000",
-    "ledger_count": 226,
-    "schema_fingerprint": "81b3fa4316a772ab7553956e5b5c29a04c3d5583c6f32b2917c30eb19a011c32",
-    "status": "observed current migration head; source fingerprint requires locked fresh recapture before mutation"
-  },
-  "pending_migrations": [
-    {
-      "order": 1,
-      "phase": "align_two_internal_absences",
-      "file": "20260918010000_align_two_internal_absences.sql",
-      "source_migration_version": "20260918010000",
-      "sha256": "78ae02d5b2d3cd989361abe40b9d99066011bc2059b6d04fd4fc5f5e37949905"
-    },
-    {
-      "order": 2,
-      "phase": "pause_guest_notifications_when_disabled",
-      "file": "20260918011000_pause_guest_notifications_when_disabled.sql",
-      "source_migration_version": "20260918011000",
-      "sha256": "d9f8bef965e092cf8b17fd9c37685c67c95bd57e4bcf8ac2d9f4d0a065f7baec"
-    },
-    {
-      "order": 3,
-      "phase": "event_reminder_workday_and_owner_contract",
-      "file": "20260918012000_event_reminder_workday_and_owner_contract.sql",
-      "source_migration_version": "20260918012000",
-      "sha256": "1ebd66aa0b6d4eb0212bc8e80d4dd1878a36363ec4f7e1d34a96a92a0317b2b2"
-    },
-    {
-      "order": 4,
-      "phase": "event_reminder_static_weekly_authority",
-      "file": "20260920010000_event_reminder_static_weekly_authority.sql",
-      "source_migration_version": "20260920010000",
-      "sha256": "58e03f2e327916b53191ead3ade40ba9373b580ccc1ad4116893bc5d8ead63c4"
-    }
-  ],
-  "postconditions": [
-    "production ledger advances exactly four rows from 226 to 230, ending at 20260920010000 event_reminder_static_weekly_authority, with no replay of prior migrations",
-    "complete public catalog and privilege fingerprint equals 750e7f040519f6d4555836cbd4d172a22f98911d5bab9918fa370238fff3f822 with the exact reviewed target counts",
-    "production exposes exactly 506 public functions and 347 non-owner routine grants after the corrections",
-    "first two simultaneous absences remain internal and each third-or-later absence consumes exactly one distinct registered CoverAll capacity, preserving manager overrides/history",
-    "guest reporting OFF prevents queued guest notification dispatch without deleting pending/history records; staff Feedback remains separate",
-    "employee event reminders are generated at D-3, D-2 and event day at reminder-day shift start plus 15 minutes and final delivery revalidates current event-date ownership/assignment",
-    "governed event reminders require the current static-weekly projection, resolved employee availability and canonical ownership; missing, stale, ambiguous, unavailable or CoverAll facts do not fall back to retired daily schedules",
-    "existing publications, schedule history, employees, cleaning/ticket/inspection history, event history and production-only authority are not deleted or rewritten",
-    "no unexpected catalog, privilege, configuration or row diff exists"
-  ]
+  }
 }
