@@ -509,6 +509,15 @@ export function installEmployeeNotificationRoutes(app, {
         await beforeFinalDeliveryCheck({ job, credential, assignmentEpoch, registration });
       }
       registration = await resolveAuthorizedDelivery(credential, assignmentEpoch);
+      if (push.data_json?.kind === 'employee_location_status' && push.data_json.test_delivery !== true) {
+        const current = await db.rpc('mz_validate_employee_location_reminder', {
+          p_job_id: job.job_id, p_lease_token: job.lease_token, p_now: new Date().toISOString(),
+        });
+        if (current.error) throw current.error;
+        if (current.data?.current !== true) {
+          throw terminalDeliveryError(current.data?.reason || 'location_reminder_superseded');
+        }
+      }
       if (eventInstance) {
         const claimed = await claimEventDelivery(job, eventInstance, credential, assignmentEpoch, registration);
         if (claimed.already_recorded === true) {

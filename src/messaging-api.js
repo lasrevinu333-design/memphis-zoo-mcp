@@ -1511,7 +1511,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
 
       const rows = await runReadOnlySql(`
         select * from (
-          assigned_locations as (
+          with assigned_locations as (
             select distinct on (assignment.location_id)
               assignment.location_group_id,
               assignment.group_code,
@@ -1524,6 +1524,8 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
             from public.custodial_operational_location_assignments('${esc(serviceDate)}'::date) assignment
             where assignment.assigned_employee_id = '${esc(assignment.assigned_employee_id)}'::uuid
               and assignment.assignment_status = 'ASSIGNED'
+              and assignment.coverage_start <= (now() at time zone 'America/Chicago')::time
+              and (now() at time zone 'America/Chicago')::time < assignment.coverage_end
             order by assignment.location_id, assignment.coverage_start,
               assignment.group_name, assignment.group_code
           )
@@ -1542,8 +1544,8 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
             al.location_code,
             al.location_name,
             al.form_type,
-            v.status_code,
-            v.status_color,
+            cycle.status_code,
+            case when cycle.status_code='overdue' then 'red' else 'yellow' end as status_color,
             v.latest_completed_at,
             v.latest_completed_at_display,
             v.open_session_status,
@@ -1555,19 +1557,21 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
             v.open_ticket_count,
             v.last_scan_at,
             v.last_scan_at_display,
-            ('location-status:' || '${esc(serviceDate)}' || ':' || al.location_id::text || ':' || v.status_code || ':' || coalesce(to_char(v.latest_completed_at at time zone 'UTC','YYYYMMDDHH24MISSUS'),'never')) as notification_key
+            cycle.notification_key as notification_key
           from assigned_locations al
           join public.v_location_dashboard_status v on v.location_id = al.location_id
-          where v.status_code in ('overdue', 'due_soon')
+          join public.mz_location_reminder_candidates('${esc(serviceDate)}'::date,now()) cycle
+            on cycle.location_id=al.location_id
+          where cycle.status_code in ('overdue', 'due_soon')
             and not exists (
               select 1
               from public.device_notification_acknowledgements a
               where upper(btrim(a.device_identifier)) = upper(btrim('${esc(canonicalDeviceId)}'))
-                and a.notification_key = ('location-status:' || '${esc(serviceDate)}' || ':' || al.location_id::text || ':' || v.status_code || ':' || coalesce(to_char(v.latest_completed_at at time zone 'UTC','YYYYMMDDHH24MISSUS'),'never'))
+                and a.notification_key = cycle.notification_key
                 and a.acknowledged_at is not null
             )
           order by
-            case when v.status_code = 'overdue' then 0 else 1 end,
+            case when cycle.status_code = 'overdue' then 0 else 1 end,
             case when al.form_type = 'restroom' then 0 else 1 end,
             al.location_name asc
           limit ${limit}
