@@ -395,7 +395,7 @@
       {
         "path": "package.json",
         "mode": "100644",
-        "object_id": "06128eaf4b5483eb814725987b216260f69d8c62"
+        "object_id": "4365a708442be8328d6a367e55396ccd0b8165fd"
       },
       {
         "path": "public/moxie-assets/contacts-creekside-animal.png",
@@ -520,7 +520,7 @@
       {
         "path": "scripts/audit3-repair-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "4185dd9d41a129a2f4a44f371ec4a87303dc3f2e"
+        "object_id": "e3c7d8c407088fcb109e4f7444b6514bfcfe89cf"
       },
       {
         "path": "scripts/audit4-repair-contract-tests.mjs",
@@ -600,7 +600,7 @@
       {
         "path": "scripts/create-production-restore-intent.mjs",
         "mode": "100644",
-        "object_id": "839bb0c330b498abc29c8e7a3d6d501736782f68"
+        "object_id": "71515a07d7e419f16cb6acdc8111ae7a8dd01828"
       },
       {
         "path": "scripts/create-production-restore-reconciliation.mjs",
@@ -1210,7 +1210,7 @@
       {
         "path": "scripts/production-backup.mjs",
         "mode": "100644",
-        "object_id": "9f0bf209d024d8ef0cd1489e402bd7bf1a289a68"
+        "object_id": "cbc87a6e7c9a7c57e1f6edc84a162bb504d73776"
       },
       {
         "path": "scripts/production-database-credential-bridge.mjs",
@@ -1243,6 +1243,11 @@
         "object_id": "31f70dcefc3abde6be0b2c480fcacd226ab4cfd1"
       },
       {
+        "path": "scripts/production-release-selection-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "2f2f8d014cb61130b04298bdfb008b698ddf4d62"
+      },
+      {
         "path": "scripts/production-restore-drill.mjs",
         "mode": "100644",
         "object_id": "36114f0ecb64ff3c6acfb468759632fd80631628"
@@ -1250,7 +1255,7 @@
       {
         "path": "scripts/production-restore.mjs",
         "mode": "100644",
-        "object_id": "8d04b86909ce41683bdcbfd357d9ab0fe33faae9"
+        "object_id": "ac0c983710d43931092d0e2cfe553c097097eb52"
       },
       {
         "path": "scripts/production-runtime-contract-tests.mjs",
@@ -3613,7 +3618,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 697,
+    "authority_path_count": 698,
     "migration_path_count": 133,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
