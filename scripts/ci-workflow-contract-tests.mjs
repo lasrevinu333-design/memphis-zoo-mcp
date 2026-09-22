@@ -9,6 +9,9 @@ import { fileURLToPath } from "node:url";
 
 const root = resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
 const workflowDirectory = resolve(root, ".github", "workflows");
+const releaseMigrationState = JSON.parse(readFileSync(resolve(root, "release", "production-migration-state.json"), "utf8"));
+const expectedProductionSource = releaseMigrationState.observed_production;
+const expectedProductionTarget = releaseMigrationState.target;
 const approvedActions = new Map([
   ["actions/checkout", ["3d3c42e5aac5ba805825da76410c181273ba90b1", "v7.0.1"]],
   ["actions/setup-node", ["820762786026740c76f36085b0efc47a31fe5020", "v7.0.0"]],
@@ -215,7 +218,7 @@ assert.ok(
 );
 const productionApplyCommitted = build52ProductionMigrationApply.indexOf('"stage":"production_apply_committed"');
 const independentProductionRead = build52ProductionMigrationApply.indexOf('source: "direct-production-query"');
-const independentProductionPredicate = build52ProductionMigrationApply.indexOf('and .counts.functions == 506');
+const independentProductionPredicate = build52ProductionMigrationApply.indexOf(`and .counts.functions == ${expectedProductionTarget.expected_catalog_counts.functions}`);
 const productionTargetVerified = build52ProductionMigrationApply.indexOf('"stage":"production_target_independently_verified"');
 assert.ok(
   build52ProductionMigrationApply.indexOf("npm run --silent release:migrations:apply") < productionApplyCommitted
@@ -236,11 +239,26 @@ const acceptedProductionTarget = {
   format: "memphis-zoo-build52-production-post-apply.v1",
   ok: true,
   source: "direct-production-query",
-  ledger_count: 230,
-  ledger_head: "20260920010000",
-  counts: { functions: 506, routine_grants: 347 },
-  schema_fingerprint: "750e7f040519f6d4555836cbd4d172a22f98911d5bab9918fa370238fff3f822",
+  ledger_count: expectedProductionTarget.production_ledger_count,
+  ledger_head: expectedProductionTarget.source_migration_version,
+  counts: {
+    functions: expectedProductionTarget.expected_catalog_counts.functions,
+    routine_grants: expectedProductionTarget.expected_catalog_counts.routine_grants,
+  },
+  schema_fingerprint: expectedProductionTarget.canonical_source_schema_fingerprint,
 };
+for (const expected of [
+  `.before_ledger_count == ${expectedProductionSource.production_ledger_count}`,
+  `.before_ledger_head == "${expectedProductionSource.ledger_head}"`,
+  `.after_ledger_count == ${expectedProductionTarget.production_ledger_count}`,
+  `.after_ledger_head == "${expectedProductionTarget.source_migration_version}"`,
+  `(.applied | length) == ${expectedProductionTarget.pending_migration_count}`,
+  `.ledger_count == ${expectedProductionTarget.production_ledger_count}`,
+  `.ledger_head == "${expectedProductionTarget.source_migration_version}"`,
+  `.counts.functions == ${expectedProductionTarget.expected_catalog_counts.functions}`,
+  `.counts.routine_grants == ${expectedProductionTarget.expected_catalog_counts.routine_grants}`,
+  `.schema_fingerprint == "${expectedProductionTarget.canonical_source_schema_fingerprint}"`,
+]) assert.ok(build52ProductionMigrationApply.includes(expected), `production apply workflow drifted from release state: ${expected}`);
 const productionTargetFixtureDirectory = mkdtempSync(join(tmpdir(), "custodial-b010-jq-"));
 try {
   const inlineVerifierMatch = independentProductionTargetStep.match(
@@ -277,11 +295,11 @@ try {
     ["format", { format: "candidate-result.v1" }],
     ["ok", { ok: false }],
     ["source", { source: "candidate-result" }],
-    ["ledger_count", { ledger_count: 226 }],
-    ["ledger_head", { ledger_head: "20260916010000" }],
-    ["functions", { counts: { functions: 503, routine_grants: 347 } }],
-    ["routine_grants", { counts: { functions: 506, routine_grants: 344 } }],
-    ["schema_fingerprint", { schema_fingerprint: "81b3fa4316a772ab7553956e5b5c29a04c3d5583c6f32b2917c30eb19a011c32" }],
+    ["ledger_count", { ledger_count: expectedProductionTarget.production_ledger_count - 1 }],
+    ["ledger_head", { ledger_head: expectedProductionSource.ledger_head }],
+    ["functions", { counts: { functions: expectedProductionSource.catalog_counts.functions, routine_grants: expectedProductionTarget.expected_catalog_counts.routine_grants } }],
+    ["routine_grants", { counts: { functions: expectedProductionTarget.expected_catalog_counts.functions, routine_grants: expectedProductionSource.catalog_counts.routine_grants } }],
+    ["schema_fingerprint", { schema_fingerprint: expectedProductionSource.catalog_privilege_fingerprint }],
   ]) {
     assert.equal(workflowAcceptsProductionTarget(overrides), false,
       `the workflow-owned production target predicate must fail closed for wrong ${field}`);
