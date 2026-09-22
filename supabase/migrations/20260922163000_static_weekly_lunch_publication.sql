@@ -228,6 +228,215 @@ grant execute on function public.static_weekly_v8_read_lunch_document(date) to p
 comment on table public.weekly_schedule_lunch_documents is
  'Immutable verified temporary lunch responsibility bound to one accepted weekly projection; normal ownership and visit clocks are unchanged.';
 
+-- Read temporary responsibilities only from the accepted current publication.
+create or replace function public.static_weekly_v8_read_lunch_segments(p_service_date date)
+returns table(projection_id uuid,loan_id text,responsibility_id text,normal_occurrence_id uuid,
+ normal_owner_id uuid,coverer_id uuid,coverer_name text,location_group_id uuid,group_code text,
+ group_name text,included_locations text[],included_location_ids uuid[],included_snapshots jsonb,
+ service_mode text,coverage_start time,coverage_end time)
+language plpgsql stable security definer set search_path=pg_catalog,public as $function$
+declare authority record;document jsonb;expected_count integer;actual_count integer;
+begin
+ select * into strict authority from public.static_weekly_v6_schedule_authority_state(p_service_date);
+ if not authority.governed or authority.projection_status<>'current' then return; end if;
+ document:=public.static_weekly_v8_read_lunch_document(p_service_date);
+ if document->>'persistence_status' is distinct from 'PERSISTED'
+  or document->>'projection_id' is distinct from authority.projection_id::text then
+  raise exception using errcode='55000',message='current lunch coverage is unavailable; republish the weekly schedule';
+ end if;
+ select count(*) into expected_count from jsonb_array_elements(document->'responsibilities') r
+ cross join lateral jsonb_array_elements(r->'segments') s;
+ return query select authority.projection_id,r->>'loan_id',r->>'responsibility_id',o.occurrence_id,
+ o.owner_person_id_snapshot,(r->>'coverer_person_id')::uuid,e.display_name,g.id,g.group_code,g.group_name,
+ array(select x->>'locationNameSnapshot' from jsonb_array_elements(s->'includedLocations') x),
+ array(select (x->>'locationId')::uuid from jsonb_array_elements(s->'includedLocations') x),
+ s->'includedLocations',s->>'serviceMode',(s#>>'{window,start}')::time,(s#>>'{window,end}')::time
+ from jsonb_array_elements(document->'responsibilities') r
+ cross join lateral jsonb_array_elements(r->'segments') s
+ join public.weekly_schedule_occurrences o on o.projection_id=authority.projection_id
+  and o.service_date=p_service_date and o.work_id=s->>'workId'
+  and o.owner_person_id_snapshot::text=r->>'normal_owner_person_id'
+  and o.owner_slot_id::text=r->>'normal_owner_slot_id' and o.state='created'
+  and o.coverage_start<=(s#>>'{window,start}')::time
+  and o.coverage_end>=(s#>>'{window,end}')::time
+  and o.authority_facts_json#>'{work_snapshot,includedLocations}'=s->'includedLocations'
+  and o.authority_facts_json#>>'{work_snapshot,serviceMode}'=s->>'serviceMode'
+ join public.employees e on e.id=(r->>'coverer_person_id')::uuid and e.active=true
+ join public.location_groups g on upper(g.group_code)=upper(o.location_code_snapshot) and g.active=true
+ where r->>'service_date'=p_service_date::text
+ order by (s#>>'{window,start}')::time,r->>'loan_id',r->>'responsibility_id',o.occurrence_id;
+ get diagnostics actual_count=row_count;
+ if actual_count<>expected_count then
+  raise exception using errcode='55000',message='accepted lunch coverage no longer maps exactly to current areas and employees';
+ end if;
+end $function$;
+revoke all on function public.static_weekly_v8_read_lunch_segments(date)
+ from public,anon,authenticated,service_role,static_weekly_control_plane,static_weekly_release_operator;
+grant execute on function public.static_weekly_v8_read_lunch_segments(date)
+ to custodial_application_reader;
+comment on function public.static_weekly_v8_read_lunch_segments(date) is
+ 'Current accepted lunch responsibility with original occurrence identity; missing current publication fails closed.';
+
+
+create or replace function public.custodial_operational_location_assignments(
+  p_service_date date
+) returns table(
+  service_date date,
+  authority_source text,
+  projection_status text,
+  version_id uuid,
+  publication_id uuid,
+  projection_id uuid,
+  occurrence_id uuid,
+  location_group_id uuid,
+  group_code text,
+  group_name text,
+  assigned_employee_id uuid,
+  assigned_employee_name text,
+  assignment_status text,
+  coverage_start time,
+  coverage_end time,
+  location_id uuid,
+  location_code text,
+  location_name text,
+  form_type text
+) language sql stable security definer
+set search_path = pg_catalog, public
+as $function$
+  with base(service_date,authority_source,projection_status,version_id,publication_id,projection_id,occurrence_id,location_group_id,group_code,group_name,assigned_employee_id,assigned_employee_name,assignment_status,coverage_start,coverage_end,location_id,location_code,location_name,form_type) as materialized (
+    select segment.service_date,
+    segment.source_type,
+    segment.projection_status,
+    segment.version_id,
+    segment.publication_id,
+    segment.projection_id,
+    segment.segment_id,
+    segment.location_group_id,
+    segment.group_code,
+    segment.group_name,
+    segment.assigned_employee_id,
+    segment.assigned_employee_name,
+    segment.status,
+    segment.coverage_start::time,
+    segment.coverage_end::time,
+    location.id,
+    location.location_code,
+    location.location_name,
+    location.form_type
+  from public.static_weekly_v6_read_schedule_segments(p_service_date) segment
+  cross join lateral unnest(segment.included_location_ids) included(location_id)
+  join public.locations location on location.id = included.location_id and location.active = true
+  where segment.service_mode = 'scan_tracked'
+  ), lunch as materialized (
+    select * from public.static_weekly_v8_read_lunch_segments(p_service_date)
+    where service_mode='scan_tracked'
+  ), cuts as (
+    select occurrence_id,location_id,coverage_start as boundary from base
+    union select occurrence_id,location_id,coverage_end from base
+    union select b.occurrence_id,b.location_id,l.coverage_start from base b join lunch l
+      on l.normal_occurrence_id=b.occurrence_id and b.location_id=any(l.included_location_ids)
+    union select b.occurrence_id,b.location_id,l.coverage_end from base b join lunch l
+      on l.normal_occurrence_id=b.occurrence_id and b.location_id=any(l.included_location_ids)
+  ), pieces as (
+    select occurrence_id,location_id,boundary as starts,
+      lead(boundary) over(partition by occurrence_id,location_id order by boundary) as ends
+    from cuts
+  ) select b.service_date,
+    case when l.responsibility_id is null then b.authority_source else 'static_weekly_lunch_coverage' end,
+    b.projection_status,b.version_id,b.publication_id,b.projection_id,b.occurrence_id,
+    b.location_group_id,b.group_code,b.group_name,
+    coalesce(l.coverer_id,b.assigned_employee_id),coalesce(l.coverer_name,b.assigned_employee_name),
+    b.assignment_status,p.starts,p.ends,b.location_id,b.location_code,b.location_name,b.form_type
+  from base b join pieces p on p.occurrence_id is not distinct from b.occurrence_id
+    and p.location_id=b.location_id and p.starts>=b.coverage_start and p.ends<=b.coverage_end
+  left join lunch l on l.normal_occurrence_id=b.occurrence_id
+    and b.location_id=any(l.included_location_ids) and p.starts>=l.coverage_start and p.ends<=l.coverage_end
+  where p.starts<p.ends
+
+$function$;
+
+create or replace function public.static_weekly_v5_read_employee_day(
+  p_service_date date,p_employee_id uuid,p_now timestamptz default now()
+) returns jsonb language plpgsql stable security definer set search_path=pg_catalog,public as $function$
+declare
+  v_result jsonb;
+  v_field text;
+  v_items jsonb;
+  v_lunch_items jsonb;
+  v_current_lunch jsonb;
+begin
+  v_result:=public.static_weekly_v5_read_employee_day_single_location_base(p_service_date,p_employee_id,p_now);
+  foreach v_field in array array['items','all_items','current_items'] loop
+    select coalesce(jsonb_agg(
+      case when o.occurrence_id is null then item.value
+      else item.value||jsonb_build_object(
+        'service_mode',i.service_mode,
+        'included_locations',i.location_names,
+        'included_location_ids',i.location_ids,
+        'included_location_snapshots',i.location_snapshots,
+        'is_public_restroom',case when i.service_mode='scan_tracked' then i.has_public_restroom else false end
+      ) end
+      order by item.ordinality
+    ),'[]'::jsonb) into v_items
+    from jsonb_array_elements(coalesce(v_result->v_field,'[]'::jsonb)) with ordinality item(value,ordinality)
+    left join public.weekly_schedule_occurrences o on o.occurrence_id::text=item.value->>'occurrence_id'
+    left join lateral (
+      select
+        coalesce(o.authority_facts_json#>>'{work_snapshot,serviceMode}','scan_tracked') as service_mode,
+        coalesce(jsonb_agg(location.value order by location.ordinality) filter(where location.value is not null),'[]'::jsonb) as location_snapshots,
+        coalesce(jsonb_agg(to_jsonb(location.value->>'locationId') order by location.ordinality) filter(where location.value is not null),'[]'::jsonb) as location_ids,
+        coalesce(jsonb_agg(to_jsonb(location.value->>'locationNameSnapshot') order by location.ordinality) filter(where location.value is not null),'[]'::jsonb) as location_names,
+        coalesce(bool_or(lower(location.value->>'locationNameSnapshot') like '%restroom%'
+          or lower(location.value->>'locationNameSnapshot') like '%bathroom%') filter(where location.value is not null),false) as has_public_restroom
+      from jsonb_array_elements(
+        case when jsonb_typeof(o.authority_facts_json#>'{work_snapshot,includedLocations}')='array'
+          then o.authority_facts_json#>'{work_snapshot,includedLocations}' else '[]'::jsonb end
+      ) with ordinality location(value,ordinality)
+    ) i on true;
+    v_result:=jsonb_set(v_result,array[v_field],v_items,true);
+  end loop;
+  if v_result->>'governed'='true' and v_result->>'projection_status'='current' then
+    -- Same accepted reader drives employee display and operational reminder ownership.
+    select coalesce(jsonb_agg(jsonb_build_object(
+      'id',l.responsibility_id||':'||l.normal_occurrence_id::text,
+      'occurrence_id',l.normal_occurrence_id::text,'normal_occurrence_id',l.normal_occurrence_id::text,
+      'projection_id',l.projection_id::text,'service_date',p_service_date::text,
+      'loan_id',l.loan_id,'responsibility_id',l.responsibility_id,
+      'normal_owner_person_id',l.normal_owner_id::text,'coverer_person_id',l.coverer_id::text,
+      'location_group_id',l.location_group_id::text,'group_code',l.group_code,'group_name',l.group_name,
+      'location_group_code',l.group_code,'location_group_name',l.group_name,'location_name',l.group_name,
+      'included_locations',to_jsonb(l.included_locations),'included_location_ids',to_jsonb(l.included_location_ids),
+      'included_location_snapshots',l.included_snapshots,'service_mode',l.service_mode,
+      'coverage_start',to_char(l.coverage_start,'HH24:MI:SS'),'coverage_end',to_char(l.coverage_end,'HH24:MI:SS'),
+      'start_time',to_char(l.coverage_start,'HH24:MI:SS'),'end_time',to_char(l.coverage_end,'HH24:MI:SS'),
+      'coverage_purpose','lunch_coverage','purpose','lunch_coverage','section_title','Lunch coverage',
+      'source_type','static_weekly_lunch_coverage','owner_type','EMPLOYEE','status','ASSIGNED',
+      'load_points',0,'notes','Temporary responsibility; existing check deadlines unchanged.',
+      'check_deadline_policy','inherit_existing_90_minute_deadline','creates_deep_clean',false,
+      'is_public_restroom',l.service_mode='scan_tracked' and public.sch_is_public_restroom_group(l.location_group_id)
+    ) order by l.coverage_start,l.loan_id,l.responsibility_id,l.normal_occurrence_id),'[]') into v_lunch_items
+    from public.static_weekly_v8_read_lunch_segments(p_service_date) l where l.coverer_id=p_employee_id;
+    select coalesce(jsonb_agg(item order by ordinal),'[]') into v_current_lunch
+    from jsonb_array_elements(v_lunch_items) with ordinality rows(item,ordinal)
+    where (p_now at time zone 'America/Chicago')::date=p_service_date
+      and (item->>'coverage_start')::time<=(p_now at time zone 'America/Chicago')::time
+      and (p_now at time zone 'America/Chicago')::time<(item->>'coverage_end')::time;
+    v_result:=jsonb_set(v_result,'{all_items}',coalesce(v_result->'all_items','[]')||v_lunch_items);
+    v_result:=jsonb_set(v_result,'{current_items}',coalesce(v_result->'current_items','[]')||v_current_lunch);
+    v_result:=jsonb_set(v_result,'{items}',coalesce(v_result->'items','[]')||v_current_lunch);
+    v_result:=v_result||jsonb_build_object('lunch_coverage_status','PERSISTED',
+      'lunch_coverage_contract','static-weekly-lunch-consumers.v1',
+      'assignment_count',jsonb_array_length(v_result->'all_items'));
+  else
+    v_result:=v_result||jsonb_build_object('lunch_coverage_status','UNAVAILABLE');
+  end if;
+  return jsonb_set(v_result,'{contract_version}',to_jsonb('static-weekly-employee-day.v3'::text),true);
+end
+$function$;
+
+comment on function public.custodial_operational_location_assignments(date) is 'Current physical responsibility splits at accepted lunch boundaries; normal source ownership and original occurrence identity remain unchanged.';
+comment on function public.static_weekly_v5_read_employee_day(date,uuid,timestamptz) is 'Employee day v3 with accepted current lunch coverage; regular assignments and temporary loans remain separate.';
+
 CREATE OR REPLACE FUNCTION public.custodial_release_canary_authority_surface()
  RETURNS TABLE(object_kind text, object_identity text, purpose text)
  LANGUAGE sql
@@ -235,6 +444,9 @@ CREATE OR REPLACE FUNCTION public.custodial_release_canary_authority_surface()
  SET search_path TO 'pg_catalog', 'public'
 AS $function$
   values
+    ('function','static_weekly_v8_read_lunch_segments(date)','current lunch responsibility consumer'),
+    ('function','custodial_operational_location_assignments(date)','current physical responsibility and lunch handoff'),
+    ('function','static_weekly_v5_read_employee_day(date,uuid,timestamp with time zone)','employee published lunch display'),
     ('relation','public.weekly_schedule_lunch_documents','accepted temporary lunch coverage'),
     ('function','static_weekly_v8_assert_lunch_document(uuid,jsonb)','lunch exact projection validation'),
     ('function','static_weekly_v8_materialize_lunch_document(uuid,jsonb,uuid)','atomic lunch persistence'),
@@ -303,7 +515,7 @@ begin
     public.custodial_release_authority_current_relation_definition('public.weekly_schedule_lunch_documents') definition
    union all select 100000,'function',oid::regprocedure::text,pg_get_functiondef(oid)
     from pg_proc where pronamespace='public'::regnamespace and proname in
-    ('static_weekly_v8_assert_lunch_document','static_weekly_v8_materialize_lunch_document','static_weekly_v8_read_lunch_document','custodial_release_canary_authority_surface')
+    ('static_weekly_v8_assert_lunch_document','static_weekly_v8_materialize_lunch_document','static_weekly_v8_read_lunch_document','custodial_release_canary_authority_surface','static_weekly_v8_read_lunch_segments','custodial_operational_location_assignments','static_weekly_v5_read_employee_day')
    union all select 200000,'column','public.weekly_schedule_lunch_documents:'||attname,
     public.custodial_release_authority_current_column_definition('public.weekly_schedule_lunch_documents:'||attname)
     from pg_attribute where attrelid=(select oid from relation) and attnum>0 and not attisdropped
@@ -322,7 +534,7 @@ begin
    union all select 900000,'grant',oid::regprocedure::text,
     public.custodial_release_authority_current_grant_definition(oid::regprocedure::text)
     from pg_proc where pronamespace='public'::regnamespace and proname in
-    ('static_weekly_v8_assert_lunch_document','static_weekly_v8_materialize_lunch_document','static_weekly_v8_read_lunch_document','custodial_release_canary_authority_surface')
+    ('static_weekly_v8_assert_lunch_document','static_weekly_v8_materialize_lunch_document','static_weekly_v8_read_lunch_document','custodial_release_canary_authority_surface','static_weekly_v8_read_lunch_segments','custodial_operational_location_assignments','static_weekly_v5_read_employee_day')
   ) select * from objects order by bucket,identity
  loop
   if row.definition is null then raise exception 'missing lunch recovery object %',row.identity; end if;

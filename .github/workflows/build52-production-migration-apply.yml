@@ -311,9 +311,9 @@ jobs:
              and .source == "direct-production-query"
              and .ledger_count == 234
              and .ledger_head == "20260922163000"
-             and .counts.functions == 515
-             and .counts.routine_grants == 358
-             and .schema_fingerprint == "ebf11090b2cf696ebcdc9b4d882cc25a852683e104678ca9890fbb75730e66c2"' \
+             and .counts.functions == 516
+             and .counts.routine_grants == 359
+             and .schema_fingerprint == "b3729c40e808f88af4a58db03defa236c58b510987a0d30d322a475f282c76bd"' \
             "$post_apply_path" >/dev/null
           printf '{"stage":"production_target_independently_verified","verification_sha256":"%s","completed_at":"%s"}\n' \
             "$(sha256sum "$post_apply_path" | awk '{print $1}')" "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$receipt_path"

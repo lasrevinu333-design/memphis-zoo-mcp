@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 import {randomUUID} from 'node:crypto';
+import {consolidateScheduleItems} from '../src/schedule-display.js';
 import {seedCompiledEventAuthority} from './fixtures/event-static-authority-fixture.mjs';
 import {createStaticWeeklyProjectionWithLunchRpcInput} from '../src/static-weekly-lunch-publication.js';
 import {postgresJsonbContentDigest as digest} from '../src/static-weekly-schedule-compiler.js';
@@ -15,12 +16,17 @@ function sql(text){return execFileSync('docker',['exec','-i',container,'psql','-
  '-U','supabase_admin','-d','postgres'],{input:text,encoding:'utf8',timeout:120000,maxBuffer:16*1024*1024});}
 const query=text=>sql(text).trim().split('\n').at(-1);
 const parsed=text=>JSON.parse(query(text));
-const manager=randomUUID(),week='2026-09-21';
+const manager=randomUUID(),serviceDate=process.env.LUNCH_PUBLICATION_TEST_DATE||'2026-09-21';
+assert.match(serviceDate,/^\d{4}-\d{2}-\d{2}$/);
+const serviceDay=new Date(`${serviceDate}T12:00:00Z`),dayOfWeek=serviceDay.getUTCDay();
+const weekStartDate=new Date(serviceDay);weekStartDate.setUTCDate(weekStartDate.getUTCDate()-((dayOfWeek+6)%7));
+const week=weekStartDate.toISOString().slice(0,10),nextDay=new Date(serviceDay.getTime()+86400000).toISOString().slice(0,10);
+const nextWeek=new Date(weekStartDate.getTime()+7*86400000).toISOString().slice(0,10);
 const slots=['a','b','c','d'].map((key,i)=>({key,id:randomUUID(),person:randomUUID(),name:`Synthetic lunch ${i}`}));
 const codes=['W','E','B','B2','C','C2','D','D2'];
 const locations=Object.fromEntries(codes.map(code=>[code,{id:randomUUID(),group:randomUUID(),code:`LUNCH_${code}`} ]));
 const ownerCodes=[['W','E'],['B','B2'],['C','C2'],['D','D2']];
-const lunches=[['12:00','13:00'],['10:00','11:00'],['14:00','15:00'],['15:00','16:00']];
+const lunches=[['12:00','13:00'],['12:30','13:30'],['10:00','11:00'],['14:00','15:00']];
 sql(`insert into public.ops_manager_managers(manager_id,display_name) values(${q(manager)},'Synthetic lunch manager');`);
 for(const slot of slots)sql(`insert into public.employees(id,display_name,role) values(${q(slot.person)},${q(slot.name)},'staff');`);
 for(const location of Object.values(locations))sql(`insert into public.locations(id,location_code,location_name,location_type,form_type)
@@ -32,18 +38,18 @@ const source={serviceDate:week,timezone:'America/Chicago',exceptions:[],
  proximity:codes.flatMap(from=>codes.filter(to=>from!==to).map(to=>({from:locations[from].id,to:locations[to].id,
   minutes:(from==='B'&&to==='W')||(from==='C'&&to==='E')?1:10,verified:true,provenance:'synthetic geometry'}))),
  versions:[{id:randomUUID(),publicationId:randomUUID(),status:'published',effectiveStart:week,effectiveEnd:null,
- objective:{requireVerifiedProximity:true},slotAvailability:slots.map((s,i)=>({slotId:s.id,dayOfWeek:1,status:'working',
+ objective:{requireVerifiedProximity:true},slotAvailability:slots.map((s,i)=>({slotId:s.id,dayOfWeek,status:'working',
  shift:{start:'07:00',end:'17:00'},lunch:{start:lunches[i][0],end:lunches[i][1]},
  productiveCapacityProvenance:'fixture-shift',maxServiceEffortMinutes:300,maxServiceEffortProvenance:'fixture-capacity',
  qualifications:['general'],qualificationProvenance:'fixture-role',restrictions:[],restrictionProvenance:'fixture-restrictions',
  acceptedRouteAnchorLocationId:locations[ownerCodes[i][0]].id,acceptedRouteProvenance:'fixture-normal-area'})),
- assignments:slots.flatMap((s,i)=>ownerCodes[i].map(code=>({workId:code,dayOfWeek:1,ownerSlotId:s.id,
+ assignments:slots.flatMap((s,i)=>ownerCodes[i].map(code=>({workId:code,dayOfWeek,ownerSlotId:s.id,
  locationId:locations[code].id,locationCodeSnapshot:locations[code].code,locationNameSnapshot:locations[code].code,
  includedLocations:[{locationId:locations[code].id,locationNameSnapshot:locations[code].code}],
  schedulingMode:'flexible_coverage_ownership',window:{start:'09:45',end:'16:00'},serviceEffortMinutes:20,
  serviceEffortProvenance:'fixture-effort',priority:2,priorityProvenance:'fixture-priority',requiredQualifications:['general'],
  qualificationProvenance:'fixture-work-role',restrictions:[],restrictionProvenance:'fixture-work-restrictions'})))}]};
-const fixture=await seedCompiledEventAuthority({sql,container,managerId:manager,dates:[week],source,label:'lunch-publication-test',mode:'official'});
+const fixture=await seedCompiledEventAuthority({sql,container,managerId:manager,dates:[serviceDate],source,label:'lunch-publication-test',mode:'official'});
 const projectionId=fixture.projectionIds[week],result=fixture.compiledByWeek[week];
 const prepared=createStaticWeeklyProjectionWithLunchRpcInput({result,publicationId:fixture.publicationId,expectedRevision:0,
  actor:{managerId:manager,managerName:'Synthetic lunch manager',idempotencyKey:'synthetic-lunch'}});
@@ -51,7 +57,7 @@ const document=prepared.lunchDocument;let passed=0;
 const check=(name,actual,expected)=>{assert.deepEqual(actual,expected,name);passed++;};
 const reject=(name,statement,pattern)=>{assert.throws(()=>sql(statement),pattern,name);passed++;};
 const persist=(value=document,id=projectionId,actor=manager)=>`set role static_weekly_control_plane; select public.static_weekly_v8_materialize_lunch_document(${q(id)}::uuid,${j(value)},${q(actor)}::uuid)::text;`;
-const read=()=>parsed(`select public.static_weekly_v8_read_lunch_document(${q(week)}::date)::text;`);
+const read=()=>parsed(`select public.static_weekly_v8_read_lunch_document(${q(serviceDate)}::date)::text;`);
 const original=query(`select md5(jsonb_agg(to_jsonb(o) order by occurrence_id)::text) from public.weekly_schedule_occurrences o;`);
 check('missing lunch is not falsely published',read().persistence_status,'MISSING');
 const initial=parsed(persist());check('persist accepted',initial.persistence_status,'PERSISTED');
@@ -63,7 +69,7 @@ check('normal owners unchanged',query(`select md5(jsonb_agg(to_jsonb(o) order by
 const monday=read();check('every scheduled lunch represented',monday.loans.length,4);
 check('two helpers per planned loan',monday.loans.filter(l=>l.status==='PLANNED').every(l=>l.helper_slot_ids.length===2),true);
 check('read contains actual borrowed areas',monday.responsibilities.length>0,true);
-const tuesday=parsed(`select public.static_weekly_v8_read_lunch_document('2026-09-22'::date)::text;`);
+const tuesday=parsed(`select public.static_weekly_v8_read_lunch_document(${q(nextDay)}::date)::text;`);
 check('day filtering excludes Monday loans',tuesday.loans,[]);
 function rehash(value){value.semantic_snapshot={schema:'memphis-zoo.static-weekly-lunch-semantic-snapshot.v1',
  loans_digest:digest(value.loans),responsibilities_digest:digest(value.responsibilities),notification_intents_digest:digest(value.notification_intents)};
@@ -102,15 +108,67 @@ reject('unknown manager cannot publish',persist(document,projectionId,randomUUID
 reject('normal admin cannot silently become control plane',`select public.static_weekly_v8_materialize_lunch_document(${q(projectionId)}::uuid,${j(document)},${q(manager)}::uuid);`,/control_plane identity/i);
 reject('immutable document cannot be changed',`update public.weekly_schedule_lunch_documents set document_identity=repeat('0',64);`,/append-only/i);
 reject('immutable history cannot be deleted','delete from public.weekly_schedule_lunch_documents;',/append-only/i);
-check('unrelated date does not reuse old coverage',parsed(`select public.static_weekly_v8_read_lunch_document('2026-09-28')::text;`).persistence_status,'UNAVAILABLE');
+check('unrelated date does not reuse old coverage',parsed(`select public.static_weekly_v8_read_lunch_document(${q(nextWeek)}::date)::text;`).persistence_status,'UNAVAILABLE');
 check('reader retains accepted source identity',read().document_identity,document.document_identity);
 check('base ownership still byte-identical',query(`select md5(jsonb_agg(to_jsonb(o) order by occurrence_id)::text) from public.weekly_schedule_occurrences o;`),original);
 check('canary covers lunch relation and functions',Number(query("select count(*) from public.custodial_release_canary_authority_surface() where object_identity like '%lunch_document%'")),4);
 check('reader role can execute date-filtered read',query("select has_function_privilege('custodial_application_reader','public.static_weekly_v8_read_lunch_document(date)','EXECUTE')::text"),'true');
+// Accepted-publication consumer checks; no provider/phone activity.
+const offset=new Intl.DateTimeFormat('en',{timeZone:'America/Chicago',timeZoneName:'longOffset'}).formatToParts(serviceDay).find(p=>p.type==='timeZoneName').value.replace('GMT','');
+const at=time=>`${serviceDate}T${time}:00${offset}`;
+const employeeDay=(slot,time)=>parsed(`select public.static_weekly_v5_read_employee_day(
+ ${q(serviceDate)}::date,${q(slot.person)}::uuid,${q(at(time))}::timestamptz)::text;`);
+const firstLoan=document.loans.find(loan=>loan.normal_owner_slot_id===slots[0].id);
+const firstResponsibilities=document.responsibilities.filter(r=>r.loan_id===firstLoan.loan_id);
+const helper=slots.find(slot=>slot.id===firstResponsibilities[0].coverer_slot_id);
+const helperDay=employeeDay(helper,'12:00');
+check('employee schedule consumes accepted lunch publication',helperDay.lunch_coverage_status,'PERSISTED');
+check('employee gets current lunch section',helperDay.current_items.some(item=>item.coverage_purpose==='lunch_coverage'),true);
+check('all-day list retains planned lunch before start',employeeDay(helper,'11:59').all_items.some(item=>item.loan_id===firstLoan.loan_id),true);
+check('lunch not active before exact start',employeeDay(helper,'11:59').current_items.some(item=>item.loan_id===firstLoan.loan_id),false);
+check('that loan ends exactly on scheduled boundary',employeeDay(helper,'13:00').current_items.some(item=>item.loan_id===firstLoan.loan_id),false);
+check('normal employee assignments stay in all-day list',helperDay.all_items.filter(item=>item.coverage_purpose!=='lunch_coverage').length,2);
+check('caller cannot see another helpers borrowed area',helperDay.all_items.filter(item=>item.coverage_purpose==='lunch_coverage').every(item=>item.coverer_person_id===helper.person),true);
+const currentOwners=(time)=>parsed(`select coalesce(jsonb_agg(jsonb_build_object('location',location_id,
+ 'employee',assigned_employee_id,'occurrence',occurrence_id) order by location_id),'[]')::text
+ from public.custodial_operational_location_assignments(${q(serviceDate)}::date)
+ where coverage_start<=${q(time)}::time and ${q(time)}::time<coverage_end;`);
+const ownersBefore=currentOwners('11:59'),ownersAt=currentOwners('12:00'),ownersAfter=currentOwners('13:00');
+for(const r of firstResponsibilities)for(const s of r.segments)for(const location of s.includedLocations){
+ const before=ownersBefore.filter(row=>row.location===location.locationId);
+ const during=ownersAt.filter(row=>row.location===location.locationId);
+ const after=ownersAfter.filter(row=>row.location===location.locationId);
+ check('one normal owner before lunch '+location.locationId,before.map(row=>row.employee),[slots[0].person]);
+ check('one covering custodian during lunch '+location.locationId,during.map(row=>row.employee),[r.coverer_person_id]);
+ check('normal owner restored at exact end '+location.locationId,after.map(row=>row.employee),[slots[0].person]);
+ check('handoff retains original occurrence identity '+location.locationId,during[0].occurrence,before[0].occurrence);
+}
+
+const overlappingLoan=document.loans.find(loan=>loan.normal_owner_slot_id===slots[1].id);
+check('overlapping loans shown independently',employeeDay(helper,'12:45').current_items.filter(item=>item.coverage_purpose==='lunch_coverage').some(item=>item.loan_id===firstLoan.loan_id)
+ &&employeeDay(helper,'12:45').current_items.some(item=>item.loan_id===overlappingLoan.loan_id),true);
+check('ending first loan does not end overlapping second loan',employeeDay(helper,'13:00').current_items.some(item=>item.loan_id===overlappingLoan.loan_id),true);
+check('second loan ends on its own boundary',employeeDay(helper,'13:30').current_items.some(item=>item.loan_id===overlappingLoan.loan_id),false);
+check('canonical normal owners are not replaced',Number(query(`select count(*) from public.static_weekly_v6_read_schedule_segments(${q(serviceDate)}::date) where assigned_employee_id=${q(slots[0].person)}::uuid`)),2);
+for(const functionName of ['static_weekly_v8_read_lunch_segments(date)','custodial_operational_location_assignments(date)','static_weekly_v5_read_employee_day(date,uuid,timestamp with time zone)']){
+ check('reader recovery definition '+functionName,Number(query(`select count(*) from public.custodial_release_authority_restore_inventory where object_kind='function' and object_identity=${q(functionName)}`)),1);
+ check('reader recovery grant '+functionName,Number(query(`select count(*) from public.custodial_release_authority_restore_inventory where object_kind='grant' and object_identity=${q(functionName)}`)),1);
+}
+const lunchDisplay=consolidateScheduleItems(helperDay.all_items).items.filter(item=>item.coverage_purpose==='lunch_coverage');
+check('existing display retains every independent lunch source',lunchDisplay.length,helperDay.all_items.filter(item=>item.coverage_purpose==='lunch_coverage').length);
+check('display never merges separate lunch loans',lunchDisplay.every(item=>item.source_rows===1),true);
+check('no missing or duplicate physical responsibility at any minute',Number(query(`
+ with responsibilities as materialized(select * from public.custodial_operational_location_assignments(${q(serviceDate)}::date)),
+ counts as(select minute,count(a.location_id) as total,count(distinct a.location_id) as distinct_locations
+ from generate_series(585,959) minute left join responsibilities a
+ on a.coverage_start<=(time '00:00'+make_interval(mins=>minute)) and (time '00:00'+make_interval(mins=>minute))<a.coverage_end
+ group by minute) select count(*) from counts where total<>8 or distinct_locations<>8;`)),0);
 const priorDocument=structuredClone(document);
-await fixture.applyException({exceptionType:'lunch',serviceDate:week,startsAt:'11:30',endsAt:'12:30',reason:'Synthetic scheduled lunch change',
+await fixture.applyException({exceptionType:'lunch',serviceDate,startsAt:'11:30',endsAt:'12:30',reason:'Synthetic scheduled lunch change',
  payload:{slotId:slots[0].id}});
 check('a new projection never reuses old lunch coverage',read().persistence_status,'MISSING');
+reject('employee cannot silently omit missing current lunch',`select public.static_weekly_v5_read_employee_day(${q(serviceDate)}::date,${q(helper.person)}::uuid,${q(at('12:00'))}::timestamptz);`,/current lunch coverage is unavailable/i);
+reject('reminder responsibility cannot fall back to old lunch',`select * from public.custodial_operational_location_assignments(${q(serviceDate)}::date);`,/current lunch coverage is unavailable/i);
 reject('old projection cannot be republished as current',persist(priorDocument),/not current/i);
 check('old accepted lunch document retained as history',Number(query('select count(*) from public.weekly_schedule_lunch_documents;')),1);
 const changedResult=fixture.compiledByWeek[week];

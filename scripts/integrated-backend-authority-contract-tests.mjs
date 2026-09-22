@@ -218,15 +218,15 @@ assert.equal(productionMigrationState.target.source_migration_name, "static_week
 assert.equal(productionMigrationState.target.source_migration_version, "20260922163000");
 assert.equal(productionMigrationState.target.production_ledger_version, null);
 assert.equal(productionMigrationState.target.canonical_source_schema_fingerprint, canonicalFingerprint);
-assert.equal(productionMigrationState.target.public_function_count, 515);
+assert.equal(productionMigrationState.target.public_function_count, 516);
 assert.equal(productionMigrationState.target.production_ledger_count, 234);
 assert.equal(productionMigrationState.target.source_authority_migration_count, exactMigrationCount);
 assert.equal(productionMigrationState.target.pending_migration_count, exactPendingReleaseMigrations.length);
 assert.equal(productionMigrationState.target.registered_source_dated_status_excluded, true);
-assert.equal(productionMigrationState.target.expected_catalog_counts.functions, 515);
+assert.equal(productionMigrationState.target.expected_catalog_counts.functions, 516);
 assert.equal(productionMigrationState.target.expected_catalog_counts.triggers, 312);
 assert.equal(productionMigrationState.target.expected_catalog_counts.policies, 42);
-assert.equal(productionMigrationState.target.expected_catalog_counts.routine_grants, 358);
+assert.equal(productionMigrationState.target.expected_catalog_counts.routine_grants, 359);
 assert.equal(productionMigrationState.target.expected_catalog_counts.schema_grants, 9);
 assert.match(releaseHealthIdentityProjection, /bb04f7c05f72d959b4aba5a3a047adad1163eaf6b88aeeebd5d0f9f6a3b10baf/);
 assert.match(releaseHealthIdentityProjection, /c\.relname in \('devices','employees','device_aliases'\)/);
