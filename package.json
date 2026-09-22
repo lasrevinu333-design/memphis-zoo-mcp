@@ -41,7 +41,7 @@
     "test:leadership-demo": "node scripts/demo-leadership-blank-schedule-tests.mjs",
     "test:dashboard": "node scripts/dashboard-recent-activity-contract-tests.mjs",
     "test:scheduler-overhaul": "node scripts/scheduler-overhaul-contract-tests.mjs",
-    "test:static-weekly-scheduler:fast": "node scripts/static-weekly-schedule-model-tests.mjs && node scripts/static-weekly-sha256-accelerator-tests.mjs && node scripts/static-weekly-schedule-exception-contract-tests.mjs && node scripts/static-weekly-schedule-compiler-tests.mjs && node scripts/static-weekly-schedule-solver-lifecycle-tests.mjs && node scripts/static-weekly-compiler-runtime-tests.mjs && node scripts/static-weekly-schedule-database-adapter-tests.mjs && node scripts/static-weekly-control-plane-tests.mjs && node scripts/static-weekly-control-plane-runtime-tests.mjs && node scripts/static-weekly-control-plane-deployment-contract-tests.mjs && node scripts/static-weekly-employee-day-route-tests.mjs && node scripts/static-weekly-operational-truth-contract-tests.mjs",
+    "test:static-weekly-scheduler:fast": "node scripts/static-weekly-schedule-model-tests.mjs && node scripts/static-weekly-sha256-accelerator-tests.mjs && node scripts/static-weekly-schedule-exception-contract-tests.mjs && node scripts/static-weekly-schedule-compiler-tests.mjs && node scripts/static-weekly-schedule-solver-lifecycle-tests.mjs && node scripts/static-weekly-compiler-runtime-tests.mjs && node scripts/static-weekly-schedule-database-adapter-tests.mjs && node scripts/static-weekly-control-plane-tests.mjs && node scripts/static-weekly-control-plane-runtime-tests.mjs && node scripts/static-weekly-control-plane-deployment-contract-tests.mjs && node scripts/static-weekly-employee-day-route-tests.mjs && node scripts/static-weekly-operational-truth-contract-tests.mjs && npm run --silent test:static-weekly-lunch-coverage",
     "test:static-weekly-scheduler:database": "node scripts/static-weekly-schedule-authority-v3-tests.mjs && node scripts/static-weekly-schedule-authority-closure-tests.mjs && node scripts/static-weekly-schedule-concurrency-tests.mjs && node scripts/static-weekly-day-changes-database-tests.mjs && node scripts/static-weekly-vacant-roster-slot-database-tests.mjs",
     "test:static-weekly-operational-truth-db": "node scripts/static-weekly-operational-truth-database-tests.mjs",
     "test:custodial-u4-migration-convergence": "node scripts/custodial-u4-migration-convergence-tests.mjs",
@@ -157,7 +157,9 @@
     "test:production-database-identity": "node scripts/production-database-identity-contract-tests.mjs",
     "test:audit-two-absence-policy": "node scripts/audit-two-absence-policy-tests.mjs",
     "test:audit-guest-disabled": "node scripts/audit-guest-disabled-tests.mjs",
-    "test:coverall-bilingual": "node scripts/coverall-bilingual-tests.mjs"
+    "test:coverall-bilingual": "node scripts/coverall-bilingual-tests.mjs",
+    "test:static-weekly-lunch-coverage": "node scripts/static-weekly-lunch-coverage-tests.mjs",
+    "preflight:static-weekly-lunch-coverage": "node scripts/static-weekly-lunch-coverage-preview.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
