@@ -1285,7 +1285,7 @@
       {
         "path": "scripts/release-closure-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "f2a20d50cf6b9782919f6f501afbc3cc3207d221"
+        "object_id": "248ae6bd3e545b0073799572a081afadcb7abcb9"
       },
       {
         "path": "scripts/release-migration-authorization-tests.mjs",
