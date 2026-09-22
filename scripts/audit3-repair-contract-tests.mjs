@@ -36,6 +36,14 @@ assert.match(backup, /memphis-zoo-disaster-recovery\.v4/);
 assert.match(backup, /migration-ledger\.json/);
 assert.match(backup, /releaseIdentity\.migration_head\) !== migrationHead/,
   "a backup must not sign a release identity whose migration head differs from its snapshot ledger");
+for (const [label, source] of [["backup", backup], ["restore", restore], ["restore intent", restoreIntent]]) {
+  assert.match(source, /from public\.release_deployment_manifest[\s\S]{0,240}where status='deployed'/,
+    `${label} must select production identity from deployed rows only`);
+  assert.doesNotMatch(source, /status in \('deployed','validated','candidate'\)/,
+    `${label} must never fall back to candidate or validated identities`);
+  assert.match(source, /rowCount !== 1[\s\S]{0,220}exactly one deployed release identity/i,
+    `${label} must fail closed on zero or ambiguous deployed rows`);
+}
 assert.match(backup, /cron-jobs\.json/);
 assert.match(backup, /application-schema\.sql/);
 assert.match(backupPgDumpCommand, /--schema-only", "--clean", "--if-exists"/,

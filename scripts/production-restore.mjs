@@ -230,12 +230,15 @@ async function readTargetIdentity() {
   const release = await db.query(`
     select release_id,backend_commit,frontend_commit,migration_head,migration_manifest_sha256
     from public.release_deployment_manifest
-    where status in ('deployed','validated','candidate')
-    order by (status='deployed') desc,deployed_at desc nulls last,created_at desc limit 1
+    where status='deployed'
+    order by deployed_at desc nulls last,created_at desc,release_id
   `);
+  if (release.rowCount !== 1) {
+    throw new Error(`Restore target requires exactly one deployed release identity; found ${release.rowCount}.`);
+  }
   return {
     migration_head: String(migration.rows[0]?.migration_head || ""),
-    release_identity: release.rows[0] || null,
+    release_identity: release.rows[0],
   };
 }
 

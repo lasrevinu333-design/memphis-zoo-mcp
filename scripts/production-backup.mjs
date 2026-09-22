@@ -219,11 +219,12 @@ try {
     select release_id,backend_commit,frontend_commit,migration_head,migration_manifest_sha256,
            environment_contract_version,status,details_json,created_at,deployed_at
     from public.release_deployment_manifest
-    where status in ('deployed','validated','candidate')
-    order by (status='deployed') desc,deployed_at desc nulls last,created_at desc
-    limit 1
+    where status='deployed'
+    order by deployed_at desc nulls last,created_at desc,release_id
   `);
-  if (releaseResult.rowCount !== 1) throw new Error("The production release identity is unavailable.");
+  if (releaseResult.rowCount !== 1) {
+    throw new Error(`Production backup requires exactly one deployed release identity; found ${releaseResult.rowCount}.`);
+  }
   releaseIdentity = releaseResult.rows[0];
   if (!/^[0-9a-f]{40}$/.test(String(releaseIdentity.backend_commit || ""))
       || !/^[0-9a-f]{40}$/.test(String(releaseIdentity.frontend_commit || ""))

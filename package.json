@@ -168,7 +168,8 @@
     "test:lunch-delivery-evidence-db": "node scripts/lunch-delivery-evidence-database-tests.mjs",
     "release:production-deployment:record": "node scripts/record-production-release-deployment.mjs",
     "test:production-deployment-recorder": "node scripts/production-release-deployment-recorder-tests.mjs && node scripts/production-release-recorder-plan-tests.mjs",
-    "test:production-deployment-recorder-db": "node scripts/production-release-recorder-database-tests.mjs"
+    "test:production-deployment-recorder-db": "node scripts/production-release-recorder-database-tests.mjs",
+    "test:production-release-selection-db": "node scripts/production-release-selection-database-tests.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",

@@ -95,10 +95,12 @@ try {
   const release = await db.query(`
     select release_id,backend_commit,frontend_commit,migration_head,migration_manifest_sha256
     from public.release_deployment_manifest
-    where status in ('deployed','validated','candidate')
-    order by (status='deployed') desc,deployed_at desc nulls last,created_at desc limit 1
+    where status='deployed'
+    order by deployed_at desc nulls last,created_at desc,release_id
   `);
-  if (release.rowCount !== 1) throw new Error("The target release identity is unavailable.");
+  if (release.rowCount !== 1) {
+    throw new Error(`Restore intent requires exactly one deployed release identity; found ${release.rowCount}.`);
+  }
   const intent = {
     restore_id: randomUUID(),
     authority_generation: Number(controlState.authority_generation) + 1,
