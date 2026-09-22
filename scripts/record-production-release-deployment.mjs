@@ -156,6 +156,42 @@ try {
       assert.equal(archive.rows[0].environment_contract_version, currentBase.environment_contract_version, "Archived environment contract conflicts.");
       assert.equal(archive.rows[0].status, "retired", "Archived release must be retained as history, not selected as live.");
     }
+    const otherDeployedById = new Map(otherDeployed.map((row) => [row.release_id, row]));
+    for (const retirement of plan.prior_deployed_releases) {
+      const original = otherDeployedById.get(retirement.identity.release_id);
+      assert.ok(original, `Superseded deployed release ${retirement.identity.release_id} disappeared after planning.`);
+      assert.equal(sameReleaseIdentity(original, retirement.identity), true,
+        `Superseded deployed release ${retirement.identity.release_id} changed after planning.`);
+      const archiveDetails = { ...(original.details_json || {}), archived_at: recordedAt,
+        archived_from_release_id: original.release_id, archived_by: "production-release-recorder.v1",
+        superseded_by_release_id: target.release_id };
+      await client.query(`insert into public.release_deployment_manifest(
+        release_id,backend_commit,frontend_commit,migration_head,migration_manifest_sha256,
+        environment_contract_version,status,details_json,created_at,deployed_at)
+        values($1,$2,$3,$4,$5,$6,'retired',$7::jsonb,$8,$9) on conflict (release_id) do nothing`, [
+        retirement.archive_release_id,original.backend_commit,original.frontend_commit,original.migration_head,
+        original.migration_manifest_sha256,original.environment_contract_version,JSON.stringify(archiveDetails),
+        original.created_at,original.deployed_at,
+      ]);
+      const archive = await client.query(`select release_id,backend_commit,frontend_commit,migration_head,
+        migration_manifest_sha256,environment_contract_version,status from public.release_deployment_manifest where release_id=$1`,
+      [retirement.archive_release_id]);
+      assert.equal(archive.rowCount, 1, `Superseded deployed release ${original.release_id} was not archived.`);
+      for (const field of ["backend_commit","frontend_commit","migration_head","migration_manifest_sha256","environment_contract_version"]) {
+        assert.equal(archive.rows[0][field], original[field], `Archived superseded release ${original.release_id} conflicts on ${field}.`);
+      }
+      assert.equal(archive.rows[0].status, "retired", "Archived superseded release must be retained as history.");
+      const retiredDetails = { ...(original.details_json || {}), retired_at: recordedAt,
+        retired_by: "production-release-recorder.v1", archived_as_release_id: retirement.archive_release_id,
+        superseded_by_release_id: target.release_id };
+      const retired = await client.query(`update public.release_deployment_manifest set status='retired',details_json=$8::jsonb
+        where release_id=$1 and backend_commit=$2 and frontend_commit=$3 and migration_head=$4
+          and migration_manifest_sha256=$5 and environment_contract_version=$6 and status=$7`, [
+        original.release_id,original.backend_commit,original.frontend_commit,original.migration_head,
+        original.migration_manifest_sha256,original.environment_contract_version,"deployed",JSON.stringify(retiredDetails),
+      ]);
+      assert.equal(retired.rowCount, 1, `Superseded deployed release ${original.release_id} was not retired exactly once.`);
+    }
     const details = {
       recorder: "production-release-recorder.v1", recorded_at: recordedAt, provenance,
       plan_sha256: plan.plan_sha256, schema_fingerprint: attestation.schema_fingerprint,
@@ -189,8 +225,8 @@ try {
         archive_release_id: plan.archive_release_id, prior_deployed_release_ids: plan.prior_deployed_release_ids })]);
     const selected = await client.query(`select release_id,backend_commit,frontend_commit,migration_head,
       migration_manifest_sha256,environment_contract_version,status from public.release_deployment_manifest
-      where status='deployed' order by deployed_at desc nulls last,created_at desc limit 1`);
-    assert.equal(selected.rowCount, 1, "Recorded deployed release is unavailable.");
+      where status='deployed' order by deployed_at desc nulls last,created_at desc,release_id`);
+    assert.equal(selected.rowCount, 1, "Recording must leave exactly one deployed release identity.");
     assert.equal(sameReleaseIdentity(selected.rows[0], target), true,
       "The newly selected deployed release does not equal the signed target.");
     await client.query("commit");

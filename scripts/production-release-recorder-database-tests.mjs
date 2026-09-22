@@ -89,13 +89,18 @@ try {
  check('prior release archived',archive.status,'retired');
  check('prior backend retained',archive.backend_commit,prior.backend_commit);
  check('prior details retained',archive.details_json.preserve,'prior historical details');
- check('unrelated release untouched',after.releases.find(row=>row.release_id===unrelated.release_id),
- before.releases.find(row=>row.release_id===unrelated.release_id));
+ const retiredOther=after.releases.find(row=>row.release_id===unrelated.release_id);
+ check('superseded deployed release retired',retiredOther.status,'retired');
+ check('superseded release details retained',retiredOther.details_json.preserve,'untouched');
+ const otherArchive=after.releases.find(row=>row.release_id===archivedReleaseId(unrelated));
+ check('superseded release archived',otherArchive.status,'retired');
+ check('superseded archive backend retained',otherArchive.backend_commit,unrelated.backend_commit);
+ check('exactly one deployed release remains',after.releases.filter(row=>row.status==='deployed').map(row=>row.release_id),[target.release_id]);
  check('one validation row recorded',after.validation.length,1);
  check('recorded apply run retained',after.releases.find(row=>row.release_id===target.release_id).details_json.provenance.run_id,'102');
  const replayPlan=await invoke(false);check('replay plan does not archive again',replayPlan.plan.archive_release_id,null);
  await invoke(true,replayPlan.plan.plan_sha256,{provenance:{run_id:'103'}});
- check('replay creates no duplicate archive',(await snapshot()).releases.length,3);
+ check('replay creates no duplicate archive',(await snapshot()).releases.length,4);
  await admin.query("update supabase_migrations.schema_migrations set version='20260922090001'");
  const drifted=await snapshot();await assert.rejects(()=>invoke(true,replayPlan.plan.plan_sha256),/exact admitted target/);passed++;
  check('ledger drift cannot mutate registry',await snapshot(),drifted);

@@ -67,13 +67,21 @@ export function buildRecordingPlan({ currentBase, otherDeployed = [], target, li
   const currentSummary = releaseIdentitySummary(currentBase);
   const archive_release_id = currentSummary && !sameReleaseIdentity(currentSummary, targetSummary)
     ? archivedReleaseId(currentSummary) : null;
-  const prior_deployed_release_ids = otherDeployed.map((row) => text(row.release_id))
-    .filter((releaseId) => releaseId && releaseId !== targetSummary.release_id).sort();
+  const prior_deployed_releases = otherDeployed.map((row) => {
+    const identity = releaseIdentitySummary(row);
+    if (!identity?.release_id || identity.status !== "deployed") {
+      throw new Error("Every superseded production identity must be an exact deployed release.");
+    }
+    return { identity, archive_release_id: archivedReleaseId(identity) };
+  }).filter((item) => item.identity.release_id !== targetSummary.release_id)
+    .sort((left, right) => left.identity.release_id.localeCompare(right.identity.release_id));
+  const prior_deployed_release_ids = prior_deployed_releases.map((item) => item.identity.release_id);
   const binding = {
     format: "memphis-zoo.production-release-recording-plan.v1",
     current_base: currentSummary,
     archive_release_id,
     prior_deployed_release_ids,
+    prior_deployed_releases,
     target: targetSummary,
     live_identity: stableLiveIdentity(liveCheck, targetSummary),
     workflow_identity: stableWorkflowIdentity(provenance, targetSummary),

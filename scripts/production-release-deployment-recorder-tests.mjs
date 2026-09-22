@@ -38,6 +38,8 @@ const plan = buildRecordingPlan({
 });
 assert.equal(plan.archive_release_id, archivedReleaseId(prior));
 assert.deepEqual(plan.prior_deployed_release_ids, [other.release_id]);
+assert.equal(plan.prior_deployed_releases[0].archive_release_id, archivedReleaseId(other));
+assert.deepEqual(plan.prior_deployed_releases[0].identity, { ...other });
 assert.equal(plan.target.backend_commit, target.backend_commit);
 assert.match(plan.plan_sha256, /^[0-9a-f]{64}$/);
 assert.equal(plan.plan_sha256, buildRecordingPlan({
@@ -61,6 +63,8 @@ assert.doesNotMatch(recorderSource, /SUPABASE_SERVICE_ROLE_KEY/,
   "deployment recorder must not introduce a service-role-key shortcut");
 assert.doesNotMatch(recorderSource, /delete from public\.release_deployment_manifest/i,
   "deployment recorder must preserve release history");
-assert.doesNotMatch(recorderSource, /update public\.release_deployment_manifest set status='retired'.*where release_id=\$1 and status='deployed'/s,
+assert.match(recorderSource, /prior_deployed_releases/);
+assert.match(recorderSource, /Superseded deployed release .* was not retired exactly once/);
+assert.doesNotMatch(recorderSource, /update public\.release_deployment_manifest set status='retired'[^;]*where status='deployed'(?![^;]*release_id=\$1)/s,
   "deployment recorder must not mass-retire prior deployed history rows");
 console.log("PRODUCTION_RELEASE_DEPLOYMENT_RECORDER_TESTS_PASS");
