@@ -8,6 +8,7 @@ begin
   if to_regclass('public.operational_notification_jobs') is null
      or to_regclass('public.ops_manager_notification_queue') is null
      or to_regclass('public.ops_manager_push_devices') is null
+     or to_regclass('public.employee_native_push_delivery_receipts') is null
      or to_regprocedure('public.finish_operational_notification_job_terminal(uuid,uuid,text)') is null then
     raise exception 'lunch delivery failure prerequisites are unavailable';
   end if;
@@ -39,6 +40,10 @@ declare
   v_data jsonb;
   v_event text;
   v_device text;
+  v_receipt public.employee_native_push_delivery_receipts%rowtype;
+  v_delivery_evidence text;
+  v_title text;
+  v_body text;
 begin
   if p_employee_job_id is null then
     return jsonb_build_object('ok',false,'enqueued',0,'reason','employee_job_id_required');
@@ -63,6 +68,34 @@ begin
   v_event:=case when v_data->>'event' in ('start','end') then v_data->>'event' else 'coverage' end;
   v_device:=coalesce(nullif(btrim(v_job.payload_json->>'device_identifier'),''),'assigned custodial phone');
 
+  -- A terminal worker state does not prove that the provider rejected a send.
+  -- Preserve prepared/accepted evidence without inventing a handset receipt.
+  select * into v_receipt from public.employee_native_push_delivery_receipts
+  where job_id=v_job.job_id;
+  v_delivery_evidence:=case
+    when v_receipt.job_id is null then 'not_dispatched_or_rejected'
+    when v_receipt.job_key is distinct from v_job.job_key
+      or v_receipt.source_id is distinct from v_job.source_id
+      or v_receipt.credential_id::text is distinct from v_job.payload_json->>'credential_id'
+      or v_receipt.assignment_epoch::text is distinct from v_job.payload_json->>'assignment_epoch'
+      then 'receipt_binding_unverified'
+    when v_receipt.delivery_state='delivered' then 'provider_accepted'
+    else 'provider_outcome_unknown'
+  end;
+  if v_delivery_evidence='not_dispatched_or_rejected' then
+    v_title:='Lunch coverage notification failed';
+    v_body:='A lunch coverage '||v_event||' notification could not be delivered to '||v_device||
+      '. Review coverage and contact the custodian if needed.';
+  elsif v_delivery_evidence='provider_accepted' then
+    v_title:='Lunch coverage delivery needs review';
+    v_body:='The notification service accepted a lunch coverage '||v_event||
+      ' notification for '||v_device||', but delivery recording needs review. Confirm coverage with the custodian.';
+  else
+    v_title:='Lunch coverage delivery unconfirmed';
+    v_body:='Delivery of a lunch coverage '||v_event||' notification to '||v_device||
+      ' could not be confirmed. Review coverage and contact the custodian if needed.';
+  end if;
+
   insert into public.ops_manager_notification_queue(
     job_key,credential_id,manager_id,notification_type,source_id,title,body,data_json,available_at
   )
@@ -72,9 +105,8 @@ begin
     pd.manager_id,
     'lunch_delivery_failure',
     v_job.job_id,
-    'Lunch coverage notification failed',
-    left('A lunch coverage '||v_event||' notification could not be delivered to '||v_device
-      ||'. Review coverage and contact the custodian if needed.',1000),
+    v_title,
+    left(v_body,1000),
     jsonb_build_object(
       'kind','lunch_delivery_failure',
       'route','schedule.html',
@@ -85,7 +117,9 @@ begin
       'loan_id',coalesce(v_data->>'loan_id',''),
       'device_identifier',v_device,
       'employee_id',coalesce(v_job.payload_json->>'employee_id',''),
-      'terminal_delivery_failure',true
+      'terminal_delivery_failure',v_delivery_evidence='not_dispatched_or_rejected',
+      'delivery_evidence',v_delivery_evidence,
+      'device_receipt_status','not_evaluated'
     ),
     p_now
   from public.ops_manager_push_devices pd
@@ -149,7 +183,7 @@ grant execute on function public.finish_operational_notification_job_terminal(uu
 to postgres,service_role;
 
 comment on function public.ops_manager_enqueue_lunch_delivery_failure(uuid,timestamptz) is
-  'Idempotently alerts active named manager push devices when a terminal employee lunch-coverage push cannot be delivered.';
+  'Idempotently alerts active named managers for terminal lunch delivery problems, preserving rejected, unknown and provider-accepted outcomes without claiming device receipt.';
 comment on function public.finish_operational_notification_job_terminal(uuid,uuid,text) is
   'Marks a leased employee notification terminally dead and atomically enqueues lunch-delivery manager alerts when applicable.';
 

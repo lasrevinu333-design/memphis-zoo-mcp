@@ -51,4 +51,12 @@ assert.match(migration, /custodial_release_authority_restore_inventory/);
 assert.match(migration, /ops_manager_notification_queue:ops_manager_notification_queue_type/);
 assert.match(migration, /finish_operational_notification_job_terminal\(uuid,uuid,text\)/);
 
+assert.match(migration, /employee_native_push_delivery_receipts/);
+for (const evidence of ['not_dispatched_or_rejected','receipt_binding_unverified','provider_accepted','provider_outcome_unknown']) {
+  assert.ok(migration.includes(`'${evidence}'`), `missing delivery evidence state ${evidence}`);
+}
+assert.match(migration, /'terminal_delivery_failure',v_delivery_evidence='not_dispatched_or_rejected'/);
+assert.match(migration, /'device_receipt_status','not_evaluated'/);
+assert.doesNotMatch(migration, /'terminal_delivery_failure',true/,
+  'terminal job status must not be presented as confirmed non-delivery');
 console.log('lunch-delivery-failure-contract-tests: PASS');

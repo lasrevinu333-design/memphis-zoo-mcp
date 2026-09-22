@@ -62,7 +62,7 @@
     "source_migration_name": "verified_visit_reminder_state",
     "source_migration_version": "20260922090000",
     "production_ledger_version": null,
-    "canonical_source_schema_fingerprint": "89f3d7c051bae62bc468fc053a8886cd8e8bcab49abc59ff6a67a21e9e4cc7c3",
+    "canonical_source_schema_fingerprint": "f6a29e0ed445095b67da6e6f98fecb71d8a2332b25d1b46cbea55279988ff553",
     "public_function_count": 512,
     "production_ledger_count": 233,
     "source_authority_migration_count": 133,
@@ -139,7 +139,7 @@
       "phase": "lunch_delivery_failure_manager_alert",
       "file": "20260922050000_lunch_delivery_failure_manager_alert.sql",
       "source_migration_version": "20260922050000",
-      "sha256": "3af93bfd1fbd895207e6564a908181e2ba7d2ffb7e143c49bc1a658d2e0e0403"
+      "sha256": "e5ac20bf41779c54c4b9145b5f56d10b62ef8ce850c3b6132ddc55a4f07e70f2"
     },
     {
       "order": 2,
@@ -158,7 +158,7 @@
   ],
   "postconditions": [
     "production ledger advances exactly three rows from 230 to 233, ending at 20260922090000 verified_visit_reminder_state; no already-applied migration is replayed",
-    "complete public catalog and privilege fingerprint equals 89f3d7c051bae62bc468fc053a8886cd8e8bcab49abc59ff6a67a21e9e4cc7c3 with the exact reviewed target counts",
+    "complete public catalog and privilege fingerprint equals f6a29e0ed445095b67da6e6f98fecb71d8a2332b25d1b46cbea55279988ff553 with the exact reviewed target counts",
     "production exposes exactly 512 public functions and 353 non-owner routine grants after the corrections",
     "first two simultaneous absences remain internal and each third-or-later absence consumes exactly one distinct registered CoverAll capacity, preserving manager overrides/history",
     "guest reporting OFF prevents queued guest notification dispatch without deleting pending/history records; staff Feedback remains separate",

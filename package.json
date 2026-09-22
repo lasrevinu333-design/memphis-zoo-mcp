@@ -164,7 +164,8 @@
     "test:lunch-delivery-failure": "node scripts/lunch-delivery-failure-contract-tests.mjs",
     "test:cleaning-reminder-dispatch": "node scripts/completed-cleaning-reminder-dispatch-tests.mjs",
     "test:verified-visit-reminders-db": "node scripts/verified-visit-reminder-database-tests.mjs",
-    "test:verified-visit-completion-db": "node scripts/verified-visit-completion-integration-tests.mjs"
+    "test:verified-visit-completion-db": "node scripts/verified-visit-completion-integration-tests.mjs",
+    "test:lunch-delivery-evidence-db": "node scripts/lunch-delivery-evidence-database-tests.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
