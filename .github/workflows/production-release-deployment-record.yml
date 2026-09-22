@@ -1,0 +1,119 @@
+name: Production release deployment record
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Plan first; apply requires the exact reviewed plan SHA-256
+        required: true
+        default: plan
+        type: choice
+        options:
+          - plan
+          - apply
+      candidate_commit:
+        description: Exact signed backend commit
+        required: true
+        type: string
+      candidate_tree:
+        description: Exact signed backend tree
+        required: true
+        type: string
+      confirm_project_ref:
+        description: Type the exact production Supabase project reference
+        required: true
+        type: string
+      expected_plan_sha256:
+        description: Required only for apply; copied from the successful plan result
+        required: false
+        type: string
+permissions:
+  contents: read
+
+concurrency:
+  group: production-release-deployment-record
+  cancel-in-progress: false
+
+jobs:
+  record:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22.23.1'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Bind workflow to the exact signed source
+        shell: bash
+        env:
+          CANDIDATE_COMMIT: ${{ inputs.candidate_commit }}
+          CANDIDATE_TREE: ${{ inputs.candidate_tree }}
+          CONFIRM_PROJECT_REF: ${{ inputs.confirm_project_ref }}
+          MODE: ${{ inputs.mode }}
+          EXPECTED_PLAN_SHA256: ${{ inputs.expected_plan_sha256 }}
+        run: |
+          set -euo pipefail
+          [[ "$CANDIDATE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$CANDIDATE_TREE" =~ ^[0-9a-f]{40}$ ]]
+          test "$CONFIRM_PROJECT_REF" = 'rqquvtjdmugpigbndmne'
+          test "$GITHUB_SHA" = "$CANDIDATE_COMMIT"
+          test "$(git rev-parse HEAD^{tree})" = "$CANDIDATE_TREE"
+          test "$(git status --porcelain)" = ''
+          if test "$MODE" = 'apply'; then
+            [[ "$EXPECTED_PLAN_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          else
+            test "$MODE" = 'plan'
+            test -z "$EXPECTED_PLAN_SHA256"
+          fi
+      - name: Prepare immutable external release attestation
+        shell: bash
+        env:
+          MEMPHIS_RELEASE_ATTESTATION_JSON: ${{ secrets.MEMPHIS_RELEASE_ATTESTATION_JSON }}
+        run: |
+          set -euo pipefail
+          test -n "$MEMPHIS_RELEASE_ATTESTATION_JSON"
+          umask 077
+          printf '%s' "$MEMPHIS_RELEASE_ATTESTATION_JSON" > "${RUNNER_TEMP}/release-attestation.json"
+          chmod 0444 "${RUNNER_TEMP}/release-attestation.json"
+      - name: Plan or record the exact live deployment identity
+        shell: bash
+        env:
+          LIVE_RELEASE_ATTESTATION_INPUT: ${{ runner.temp }}/release-attestation.json
+          MEMPHIS_RELEASE_ATTESTATION_PUBLIC_KEY: ${{ secrets.MEMPHIS_RELEASE_ATTESTATION_PUBLIC_KEY }}
+          BACKEND_RELEASE_MANIFEST_URL: ${{ secrets.MEMPHIS_BACKEND_RELEASE_MANIFEST_URL }}
+          BACKEND_SCHEMA_IDENTITY_URL: ${{ secrets.MEMPHIS_BACKEND_SCHEMA_IDENTITY_URL }}
+          FRONTEND_RELEASE_MANIFEST_URL: ${{ secrets.MEMPHIS_FRONTEND_RELEASE_MANIFEST_URL }}
+          FRONTEND_DEPLOYMENT_MANIFEST_URL: ${{ secrets.MEMPHIS_FRONTEND_DEPLOYMENT_MANIFEST_URL }}
+          LIVE_RELEASE_SCHEMA_IDENTITY_TOKEN: ${{ secrets.MEMPHIS_RELEASE_SCHEMA_IDENTITY_TOKEN }}
+          STATIC_WEEKLY_CONTROL_PLANE_READY_URL: ${{ secrets.MEMPHIS_STATIC_WEEKLY_CONTROL_PLANE_READY_URL }}
+          BACKUP_RUNTIME_CONFIGURATION_JSON: ${{ vars.DISASTER_RECOVERY_RUNTIME_CONFIGURATION_JSON }}
+          SUPABASE_PROJECT_REF: rqquvtjdmugpigbndmne
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          SUPABASE_DB_CA_CERT_PATH: ${{ github.workspace }}/.github/certs/prod-ca-2021.crt
+          MODE: ${{ inputs.mode }}
+          EXPECTED_PLAN_SHA256: ${{ inputs.expected_plan_sha256 }}
+        run: |
+          set -euo pipefail
+          test -n "$MEMPHIS_RELEASE_ATTESTATION_PUBLIC_KEY"
+          test -n "$BACKUP_RUNTIME_CONFIGURATION_JSON"
+          test -n "$SUPABASE_DB_URL"
+          test -s "$SUPABASE_DB_CA_CERT_PATH"
+          result="${RUNNER_TEMP}/production-release-deployment-record.json"
+          if test "$MODE" = 'plan'; then
+            npm run --silent release:production-deployment:record | tee "$result"
+            jq -e '.ok == true and .apply == false and (.plan.plan_sha256 | test("^[0-9a-f]{64}$"))' "$result" >/dev/null
+          else
+            PRODUCTION_RELEASE_RECORD_APPLY=true \
+            PRODUCTION_RELEASE_RECORD_EXPECTED_PLAN_SHA256="$EXPECTED_PLAN_SHA256" \
+              npm run --silent release:production-deployment:record -- --apply | tee "$result"
+            jq -e --arg expected "$EXPECTED_PLAN_SHA256" '.ok == true and .apply == true and .plan_sha256 == $expected' "$result" >/dev/null
+          fi
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: production-release-deployment-record-${{ github.run_id }}
+          path: ${{ runner.temp }}/production-release-deployment-record.json
+          if-no-files-found: warn
+          retention-days: 30

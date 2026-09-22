@@ -522,4 +522,35 @@ assert.throws(() => assertExactCommandsInJob(
   "fixture.yml:validate",
 ), /without bypass operators or wrappers/);
 
+
+
+const productionReleaseRecorder = readFileSync(resolve(workflowDirectory, "production-release-deployment-record.yml"), "utf8");
+assert.match(productionReleaseRecorder, /^on:\n\s+workflow_dispatch:/m,
+  "production release identity recording must remain an explicit manual gate");
+function assertManualRecorderTrigger(source) {
+  const triggerBlock = source.match(/^on:\n([\s\S]*?)(?=^\S)/m)?.[1];
+  assert.ok(triggerBlock, "recorder trigger block must be explicit");
+  const triggers = [...triggerBlock.matchAll(/^  ([a-z_]+):/gm)].map(match => match[1]);
+  assert.deepEqual(triggers, ["workflow_dispatch"], "recorder must have only its manual trigger");
+}
+assertManualRecorderTrigger(productionReleaseRecorder);
+for (const trigger of ["push", "schedule", "pull_request"]) {
+  const mutant = productionReleaseRecorder.replace("  workflow_dispatch:", `  ${trigger}: {}\n  workflow_dispatch:`);
+  assert.throws(() => assertManualRecorderTrigger(mutant), /only its manual trigger/);
+}
+assert.match(productionReleaseRecorder, /mode:[\s\S]*options:[\s\S]*- plan[\s\S]*- apply/,
+  "release identity recording must expose separate plan and apply phases");
+assert.match(productionReleaseRecorder, /EXPECTED_PLAN_SHA256[\s\S]*\^\[0-9a-f\]\{64\}\$/,
+  "apply must require the exact reviewed plan digest");
+assert.match(productionReleaseRecorder, /test "\$GITHUB_SHA" = "\$CANDIDATE_COMMIT"[\s\S]*git rev-parse HEAD\^\{tree\}/,
+  "release recorder workflow must bind exact commit and tree");
+assert.match(productionReleaseRecorder, /MEMPHIS_RELEASE_ATTESTATION_JSON[\s\S]*chmod 0444/,
+  "release recorder must materialize the signed release attestation read-only");
+assert.match(productionReleaseRecorder, /DISASTER_RECOVERY_RUNTIME_CONFIGURATION_JSON/,
+  "release recorder must consume the same recovery configuration used by backups");
+assert.match(productionReleaseRecorder, /release:production-deployment:record -- --apply/,
+  "apply mode must invoke the guarded recorder and not inline production SQL");
+assert.doesNotMatch(productionReleaseRecorder, /service_role|SUPABASE_SERVICE_ROLE_KEY/i,
+  "release recorder workflow must not add a service-role-key bypass");
+
 console.log(JSON.stringify({ ok: true, workflows_checked: workflowNames.length }, null, 2));
