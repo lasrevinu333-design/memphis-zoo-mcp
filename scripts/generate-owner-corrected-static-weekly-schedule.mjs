@@ -5,6 +5,7 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import { compileStaticWeeklySchedule, postgresJsonbContentDigest } from "../src/static-weekly-schedule-compiler.js";
 import { prepareStaticWeeklyRegistrationArtifact } from "./static-weekly-schedule-candidate-importer.mjs";
+import { completeRecurringShiftEndCoverage } from "../src/static-weekly-shift-end-coverage.js";
 
 const BACKEND = path.resolve(process.cwd());
 const CONFIG_PATH = path.join(BACKEND, "config/custodial-recurring-schedule-20260923.json");
@@ -23,6 +24,7 @@ function deterministicUuid(label) {
   return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
 }
 const config = readJson(CONFIG_PATH);
+assert.equal(new Date(`${config.effectiveDate}T00:00:00Z`).getUTCDay(),1,"new recurring publication must start on a Monday");
 assert.equal(config.schema, "custodial.owner-corrected-recurring-schedule.v1");
 assert.equal(fileHash(config.basePacket.path), config.basePacket.sha256, "base schedule packet hash changed");
 const base = readJson(config.basePacket.path);
@@ -192,8 +194,26 @@ for (const row of version.assignments) {
     assert.ok(["07:00","08:00"].includes(owner.shift[0]) || row.locationCodeSnapshot === "ELEPHANT_TRUNK_RESTROOMS", `${row.locationCodeSnapshot} must stay with later opening staff`);
   }
 }
-const compileInput = clone(input);
-compileInput.versions = [clone(input.version)];
+// Carry actual owner restrictions into the canonical compiler, not only display.
+for (const assignment of version.assignments) {
+  const disallowed = slotEntries.filter(([,slot]) =>
+    (slot.forbiddenFamilies || []).includes(assignment.locationCodeSnapshot)
+    || (slot.normalAllowedFamilies && !slot.normalAllowedFamilies.includes(assignment.locationCodeSnapshot)))
+    .map(([,slot]) => slot.slotId);
+  assignment.restrictedSlotIds = [...new Set([...(assignment.restrictedSlotIds || []), ...disallowed])].sort();
+  // The packet carries exact hash-bound source artifacts. Repeat references,
+  // not the same long explanatory prose, inside every certificate work row.
+  assignment.serviceEffortProvenance = `base:${config.basePacket.sha256}:effort`;
+  assignment.priorityProvenance = `base:${config.basePacket.sha256}:priority`;
+  assignment.qualificationProvenance = `base:${config.basePacket.sha256}:qualifications`;
+  assignment.restrictionProvenance = `owner:${fileHash(CONFIG_PATH)}:restrictions`;
+
+  assert.ok(!assignment.restrictedSlotIds.includes(assignment.ownerSlotId),
+    `normal owner violates established area restriction: ${assignment.workId}`);
+}
+const shiftEndCoverage = completeRecurringShiftEndCoverage(input, config);
+const compileInput = clone(shiftEndCoverage.input);
+compileInput.versions = [clone(shiftEndCoverage.input.version)];
 delete compileInput.version;
 const compiled = await compileStaticWeeklySchedule(compileInput);
 assert.equal(compiled.status, "FEASIBLE", `corrected recurring schedule rejected: ${JSON.stringify(compiled.fatal || compiled.reviewWork || compiled.verifier)}`);
@@ -202,7 +222,7 @@ assert.equal(compiled.verifier?.ok, true);
 assert.equal(compiled.reviewWork.length, 0, "corrected recurring schedule requires manager review");
 const canonicalSource = compiled.canonicalAuthority?.compilerInput;
 assert.ok(canonicalSource?.version && !canonicalSource.versions, "compiler did not emit one canonical source");
-const sourceId = deterministicUuid(`source:${config.effectiveDate}:${fileHash(CONFIG_PATH)}`);
+const sourceId = deterministicUuid(`source:${config.effectiveDate}:${postgresJsonbContentDigest(canonicalSource)}`);
 const rosterSlots = slotEntries.map(([slotKey,row]) => ({
   slotId: row.slotId, personId: row.personId, displayName: row.name,
   slotLabel: slotKey.startsWith("OPTION") ? `${slotKey.replace("OPTION", "Option ")} schedule position` : `${row.name} schedule position`,
@@ -212,6 +232,10 @@ const rosterSlots = slotEntries.map(([slotKey,row]) => ({
 const evidenceFiles = {
   ownerCorrectedSchedule: CONFIG_PATH,
   generator: path.join(BACKEND,"scripts/generate-owner-corrected-static-weekly-schedule.mjs"),
+  compiler: path.join(BACKEND,"src/static-weekly-schedule-compiler.js"),
+  canonicalProgram: path.join(BACKEND,"src/static-weekly-schedule-program.js"),
+  verifier: path.join(BACKEND,"src/static-weekly-schedule-verifier.js"),
+  shiftEndCoverage: path.join(BACKEND,"src/static-weekly-shift-end-coverage.js"),
   baseVerifiedSchedule: config.basePacket.path,
   ownerDirectives: "/home/eric/Documents/Codex/2026-08-27/custodial-foundation-delivery/inputs/LATEST_USER_DIRECTIVES_2026-08-27.md",
   ownerCorrection: "/home/eric/Documents/Codex/2026-09-13/i-x20/outputs/OWNER_CORRECTION_20260920.md",
@@ -225,8 +249,8 @@ const packet = {
   serviceEffort:canonicalSource.version.assignments.map((row)=>({workId:row.workId,dayOfWeek:row.dayOfWeek,workloadPoints:row.serviceEffortMinutes,unit:"dimensionless_production_workload_points",provenance:row.serviceEffortProvenance})),
   capacity:canonicalSource.version.slotAvailability.map((row)=>({slotId:row.slotId,dayOfWeek:row.dayOfWeek,status:row.status,shift:row.shift,lunch:row.lunch,maxDutyMinutes:row.maxDutyMinutes,maxServiceEffortMinutes:row.maxServiceEffortMinutes,provenance:row.productiveCapacityProvenance})),
   sourceDigest:postgresJsonbContentDigest(canonicalSource),
-  verifiedAt:"2026-09-23T02:00:00.000Z",
-  verifiedBy:"Eric Operle owner-corrected recurring schedule source verification",
+  verifiedAt:new Date().toISOString(),
+  verifiedBy:"ChatGPT compiler/verifier against owner requirements; operational review separate",
   evidence:Object.entries(evidenceFiles).map(([kind,file])=>({kind,path:file,sha256:fileHash(file)})),
   verification:{
     compilerVersion:compiled.compilerVersion, verifierVersion:compiled.verifier.verifierVersion, verifierOk:true,
@@ -234,7 +258,10 @@ const packet = {
     ownerCorrectedScheduleSha256:fileHash(CONFIG_PATH),
     stablePositions:9, staffedPositions:6, vacantPositions:3,
     preservedBaseDays:[...config.preserveBaseDays], affectedDays:[...affectedDays].sort(),
-    scheduleLoads, productionWritten:false,
+    scheduleLoads, shiftEndHandoffs:shiftEndCoverage.notes, continuityVerification:shiftEndCoverage.validation, productionWritten:false,
+    operationalReviewRequired:true,
+    preHandoffSourceDigest:postgresJsonbContentDigest(input),
+    provenanceReferences:{base:config.basePacket.sha256,owner:fileHash(CONFIG_PATH)},
     note:"Source-only full-week replacement. Production staffing/publication remains separately gated."
   }
 };
@@ -243,6 +270,7 @@ const registration = await prepareStaticWeeklyRegistrationArtifact(packet);
 assert.equal(registration.ok, true, `registration refused: ${registration.errors.join(",")}`);
 assert.equal(registration.admissibleForRegistration, true);
 assert.equal(registration.registration.sourceDigest, packet.sourceDigest);
+fs.writeFileSync(`${OUTPUT}.pre-handoff.json`, `${JSON.stringify({compilerInput:input,classification:"UNPUBLISHED_SOURCE_TEMPLATE"},null,2)}\n`, {mode:0o600,flag:"wx"});
 fs.writeFileSync(OUTPUT, `${JSON.stringify(packet,null,2)}\n`, {mode:0o600,flag:"wx"});
 fs.writeFileSync(`${OUTPUT}.registration.json`, `${JSON.stringify(registration.registration,null,2)}\n`, {mode:0o600,flag:"wx"});
 process.stdout.write(`${JSON.stringify({output:OUTPUT,packetSha256:fileHash(OUTPUT),registrationSha256:fileHash(`${OUTPUT}.registration.json`),sourceId,sourceDigest:packet.sourceDigest,replayDigest:compiled.replayDigest,verification:packet.verification})}\n`);

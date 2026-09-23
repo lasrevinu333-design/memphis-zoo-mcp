@@ -1,6 +1,6 @@
 {
   "schema": "custodial.owner-corrected-recurring-schedule.v1",
-  "effectiveDate": "2026-09-23",
+  "effectiveDate": "2026-09-28",
   "basePacket": {
     "path": "/home/eric/custodial-codex/results/production-manager-20260820/STATIC-WEEKLY-WEIGHTED-SCHEDULE-PACKET-V6-20260826.json",
     "sha256": "2aab217b29482894b883ce36a3d7a44516d8fc4aa2b329471551b2f4c9a86981"
@@ -30,6 +30,16 @@
       "lunch": [
         "09:30",
         "10:30"
+      ],
+      "normalAllowedFamilies": [
+        "CATHOUSE_CAFE_RESTROOMS",
+        "ZAMBEZI",
+        "PRIMATE_PAVILLION",
+        "BREEZEWAY_RESTROOMS",
+        "COURTYARD_RESTROOMS",
+        "EDUCATION",
+        "NOCTURNAL",
+        "BONOBOS_RESTROOMS"
       ]
     },
     "TAMMY": {
@@ -50,6 +60,14 @@
       "lunch": [
         "08:30",
         "09:30"
+      ],
+      "normalAllowedFamilies": [
+        "TETON",
+        "EAST_END_RESTROOMS",
+        "NORTH_WEST_PASSAGE",
+        "PRIMATE_PAVILLION",
+        "PRIMATE_CANYON",
+        "CHINA"
       ]
     },
     "KATHY": {
@@ -70,6 +88,14 @@
       "lunch": [
         "10:30",
         "11:30"
+      ],
+      "normalAllowedFamilies": [
+        "AQUARIUM",
+        "EXPO",
+        "MEMMEX_RESTROOMS",
+        "KOMODOS",
+        "HERPETARIUM",
+        "TROPICAL_BIRDS"
       ]
     },
     "OPTION2": {
@@ -253,7 +279,7 @@
     "PRIMATE_PAVILLION": 1,
     "TETON": 4,
     "TROPICAL_BIRDS": 1,
-    "WEST_ADMIN": 2,
+    "WEST_ADMIN": 4,
     "ZAMBEZI": 4,
     "BAMBOO_SPRINGS_GIFT_SHOP": 0.5,
     "TRADING_POST_GIFT_SHOP": 0.5,
@@ -292,23 +318,24 @@
         ],
         "TAMMY": [
           "TETON",
-          "EAST_END_RESTROOMS"
+          "EAST_END_RESTROOMS",
+          "NORTH_WEST_PASSAGE"
         ],
         "OPTION2": [
           "AQUARIUM",
           "EXPO",
-          "NORTH_WEST_PASSAGE"
+          "KOMODOS"
         ],
         "OPTION4": [
           "CHINA",
-          "KOMODOS",
           "PRIMATE_PAVILLION",
           "EDUCATION"
         ],
         "KAILI": [
           "BONOBOS_RESTROOMS",
           "TROPICAL_BIRDS",
-          "NOCTURNAL"
+          "NOCTURNAL",
+          "TRADING_POST_GIFT_SHOP"
         ],
         "ALIJAH": [
           "COURTYARD_RESTROOMS",
@@ -324,8 +351,7 @@
           "BREEZEWAY_RESTROOMS",
           "HERPETARIUM",
           "PRIMATE_CANYON",
-          "BAMBOO_SPRINGS_GIFT_SHOP",
-          "TRADING_POST_GIFT_SHOP"
+          "BAMBOO_SPRINGS_GIFT_SHOP"
         ]
       },
       "equalized": {
@@ -339,12 +365,13 @@
         ],
         "OPTION2": [
           "AQUARIUM",
-          "EXPO"
+          "EXPO",
+          "HERPETARIUM"
         ],
         "OPTION4": [
           "EAST_END_RESTROOMS",
           "CHINA",
-          "KOMODOS"
+          "PRIMATE_PAVILLION"
         ],
         "KAILI": [
           "COURTYARD_RESTROOMS",
@@ -355,18 +382,17 @@
           "BONOBOS_RESTROOMS",
           "TROPICAL_BIRDS",
           "NOCTURNAL",
-          "PRIMATE_PAVILLION"
+          "KOMODOS"
         ],
         "OPTION1": [
           "MEMMEX_RESTROOMS",
-          "WEST_ADMIN",
-          "CAT_COUNTRY"
+          "EAST_ADMIN",
+          "CAT_COUNTRY",
+          "PRIMATE_CANYON"
         ],
         "GREGORY": [
           "BREEZEWAY_RESTROOMS",
-          "EAST_ADMIN",
-          "HERPETARIUM",
-          "PRIMATE_CANYON"
+          "WEST_ADMIN"
         ]
       }
     },
@@ -375,67 +401,67 @@
         "TAMMY": [
           "TETON",
           "EAST_END_RESTROOMS",
-          "CATHOUSE_CAFE_RESTROOMS"
+          "NORTH_WEST_PASSAGE",
+          "PRIMATE_PAVILLION",
+          "PRIMATE_CANYON"
         ],
         "KATHY": [
           "AQUARIUM",
           "EXPO",
           "MEMMEX_RESTROOMS",
-          "NORTH_WEST_PASSAGE"
+          "KOMODOS"
         ],
         "KAILI": [
           "ZAMBEZI",
-          "EDUCATION",
-          "COURTYARD_RESTROOMS"
+          "COURTYARD_RESTROOMS",
+          "EDUCATION"
         ],
         "ALIJAH": [
           "BONOBOS_RESTROOMS",
           "CHINA",
           "TROPICAL_BIRDS",
           "NOCTURNAL",
-          "PRIMATE_PAVILLION"
+          "CAT_COUNTRY"
         ],
         "OPTION1": [
           "BREEZEWAY_RESTROOMS",
-          "CAT_COUNTRY",
           "EVENT_CENTER",
-          "HERPETARIUM",
-          "KOMODOS",
-          "PRIMATE_CANYON"
+          "CATHOUSE_CAFE_RESTROOMS",
+          "HERPETARIUM"
         ]
       },
       "equalized": {
         "TAMMY": [
           "TETON",
           "EAST_END_RESTROOMS",
-          "CATHOUSE_CAFE_RESTROOMS"
+          "NORTH_WEST_PASSAGE",
+          "PRIMATE_PAVILLION",
+          "PRIMATE_CANYON"
         ],
         "KATHY": [
           "AQUARIUM",
           "EXPO",
           "MEMMEX_RESTROOMS",
-          "NORTH_WEST_PASSAGE"
+          "KOMODOS",
+          "HERPETARIUM"
         ],
         "KAILI": [
           "ZAMBEZI",
-          "COURTYARD_RESTROOMS",
+          "EAST_ADMIN",
           "EDUCATION",
-          "CAT_COUNTRY"
+          "BREEZEWAY_RESTROOMS"
         ],
         "ALIJAH": [
           "BONOBOS_RESTROOMS",
+          "CATHOUSE_CAFE_RESTROOMS",
           "CHINA",
           "NOCTURNAL",
-          "PRIMATE_PAVILLION",
           "TROPICAL_BIRDS",
-          "KOMODOS"
+          "CAT_COUNTRY"
         ],
         "OPTION1": [
           "EVENT_CENTER",
-          "BREEZEWAY_RESTROOMS",
-          "HERPETARIUM",
-          "PRIMATE_CANYON",
-          "EAST_ADMIN",
+          "COURTYARD_RESTROOMS",
           "WEST_ADMIN"
         ]
       }
@@ -444,8 +470,7 @@
       "morning": {
         "KAREN": [
           "CATHOUSE_CAFE_RESTROOMS",
-          "ZAMBEZI",
-          "NORTH_WEST_PASSAGE"
+          "ZAMBEZI"
         ],
         "KATHY": [
           "AQUARIUM",
@@ -458,7 +483,8 @@
         ],
         "OPTION4": [
           "TETON",
-          "EAST_END_RESTROOMS"
+          "EAST_END_RESTROOMS",
+          "NORTH_WEST_PASSAGE"
         ],
         "ALIJAH": [
           "CHINA",
@@ -507,16 +533,24 @@
         ],
         "OPTION1": [
           "EVENT_CENTER",
-          "WEST_ADMIN",
-          "EDUCATION"
+          "WEST_ADMIN"
         ],
         "GREGORY": [
           "CAT_COUNTRY",
           "COURTYARD_RESTROOMS",
           "EAST_ADMIN",
-          "PRIMATE_CANYON"
+          "PRIMATE_CANYON",
+          "EDUCATION"
         ]
       }
     }
-  }
+  },
+  "correctionNotes": [
+    "West Admin combined package includes building1, downstairs restrooms1+1 and upstairs restrooms0.5+0.5: total4 under August27 default weights. No physical location is removed.",
+    "Monday and Thursday are rebalanced for Karen Mon/Tue/Wed/Fri/Sat; Saturday also retains Tammy off and Option4 working. All seven days are revalidated.",
+    "Established geographic areas are constrained for Karen, Tammy and Kathy; Alijah Herpetarium prohibition remains.",
+    "Monday gift-shop packages are divided among Gregory, Kaili and Option1, not duplicated.",
+    "Temporary six-person PDF lunch adjustments are not program facts. Existing program lunches retained."
+  ],
+  "effectiveDateNote": "Unpublished next-Monday candidate compatible with the existing weekly control-plane boundary. Not an activation, deployment or rollout date; later rollout must revalidate its actual effective week."
 }

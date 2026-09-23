@@ -537,6 +537,22 @@ export function identityTierWidth(slotCount) {
   while (width > 1 && staticWeeklyGroupedObjectiveBounds(base, width).completeMaximum > 32767n) width -= 1;
   return width;
 }
+// Compress each work item's feasible owner alphabet in the same stable order.
+// Lexicographic comparison is determined by its first differing work item;
+// an order-preserving per-item rank map therefore preserves the whole order.
+// No candidate or OPEN decision is removed, even for a sole candidate.
+export function staticWeeklyIdentityDomainSlots(problem, workKey) {
+  const available = new Set(problem.candidates.filter(candidate => candidate.item.key === workKey).map(candidate => candidate.slot.id));
+  return problem.slots.filter(slot => available.has(slot.id));
+}
+export function staticWeeklyIdentityDomainSize(problem) {
+  const counts = new Map();
+  for (const candidate of problem.candidates) {
+    const ids = counts.get(candidate.item.key) || new Set();
+    ids.add(candidate.slot.id); counts.set(candidate.item.key, ids);
+  }
+  return Math.max(0, ...[...counts.values()].map(ids => ids.size));
+}
 export function leximaxTierWidth(maximum) {
   // Rank columns are general integers. Packing several ranks into a base-B
   // objective amplifies the solver's tiny raw column residuals, even when
@@ -598,13 +614,18 @@ function preflightProblem(problem) {
     + (problem.candidates.length * 2)
     + (2 * dailyEntries * dailyEntries) + (3 * dailyEntries)
     + (2 * weeklyEntries * weeklyEntries) + (3 * weeklyEntries);
+  // Every assignment coefficient occurs in both lower/upper linking rows
+  // for every daily and weekly rank, plus a possible partial-top row.
+  // Counting only rank cells misses these repeated load-vector coefficients.
+  const repeatedRankLoadTerms = 2 * (dailyEntries + weeklyEntries + 1) * problem.candidates.length;
   const constraintTerms = 2 * ((problem.work.length * Math.max(2, problem.slots.length + 1))
     + (routeArcs * 4) + (problem.candidates.length * 12)
-    + (dailyEntries * dailyEntries * 8) + (weeklyEntries * weeklyEntries * 8));
+    + (dailyEntries * dailyEntries * 8) + (weeklyEntries * weeklyEntries * 8)) + repeatedRankLoadTerms;
   // Candidate count never proves a decision is fixed: coverage priority,
   // capacity, chronology and route constraints can leave a sole candidate
   // open.  Budget every assignment/open canonicalization tier.
-  const mutableIdentity = problem.work.length <= 16 ? problem.work.length : Math.ceil(problem.work.length / identityTierWidth(problem.slots.length));
+  const identitySlotCount = staticWeeklyIdentityDomainSize(problem);
+  const mutableIdentity = problem.work.length <= 16 ? problem.work.length : Math.ceil(problem.work.length / identityTierWidth(identitySlotCount));
   const requiredTiers = new Set(problem.work.filter((item) => item.required).map((item) => item.priority)).size;
   const bestEffortTiers = new Set(problem.work.filter((item) => item.coverageClass === "best_effort").map((item) => item.coverageOrder)).size;
   const projectedDailyRankMaximum = Math.max(0, ...[...problem.availabilityByDaySlot.entries()].map(([daySlot, entry]) => exactRatioCoefficient(entry.capacity.baselineServiceMinutes + problem.candidates.filter((candidate) => `${candidate.item.dayOfWeek}\u0000${candidate.slot.id}` === daySlot).reduce((total, candidate) => total + candidate.item.effort.minutes, 0), entry.capacity.productiveMinutes, problem.exactEquityScale)));
@@ -1401,8 +1422,9 @@ export function buildStaticWeeklySchedulingModel(problem, bindings, objective, d
     // lexicographic work/open/owner order without a process round-trip per
     // digit; small programs retain one tier per decision for transparency.
     identity: (() => {
-      const width = problem.work.length <= 16 ? 1 : identityTierWidth(problem.slots.length);
-      const base = problem.slots.length + 2;
+      const identitySlotCount = problem.work.length <= 16 ? problem.slots.length : staticWeeklyIdentityDomainSize(problem);
+      const width = problem.work.length <= 16 ? 1 : identityTierWidth(identitySlotCount);
+      const base = identitySlotCount + 2;
       return Array.from({ length: Math.ceil(problem.work.length / width) }, (_, groupIndex) => {
         const items = problem.work.slice(groupIndex * width, (groupIndex + 1) * width);
         return {
@@ -1411,8 +1433,9 @@ export function buildStaticWeeklySchedulingModel(problem, bindings, objective, d
           identityBase: base,
           identityWidth: items.length,
           terms: items.flatMap((item, itemIndex) => {
+            const identitySlots = problem.work.length <= 16 ? problem.slots : staticWeeklyIdentityDomainSlots(problem, item.key);
             const place = Number(BigInt(base) ** BigInt(items.length - itemIndex - 1));
-            return [...(candidatesByWork.get(item.key) || []).map((candidate) => [(problem.slots.findIndex((slot) => slot.id === candidate.slot.id) + 1) * place, x.get(`${item.key}\u0000${candidate.slot.id}`)]), [(problem.slots.length + 1) * place, uncovered.get(item.key)]];
+            return [...(candidatesByWork.get(item.key) || []).map((candidate) => [(identitySlots.findIndex((slot) => slot.id === candidate.slot.id) + 1) * place, x.get(`${item.key}\u0000${candidate.slot.id}`)]), [(identitySlots.length + 1) * place, uncovered.get(item.key)]];
           }),
         };
       });

@@ -1,0 +1,38 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {completeRecurringShiftEndCoverage,validateRecurringShiftEndCoverage} from '../src/static-weekly-shift-end-coverage.js';
+const packetPath=process.env.STATIC_WEEKLY_COVERAGE_PACKET;
+assert.ok(packetPath,'explicit candidate packet is required; no production connection');
+const packet=JSON.parse(readFileSync(packetPath,'utf8'));
+const config=JSON.parse(readFileSync(new URL('../config/custodial-recurring-schedule-20260923.json',import.meta.url),'utf8'));
+const input=packet.compilerInput,original=JSON.stringify(input);
+assert.throws(()=>validateRecurringShiftEndCoverage(input,input,config),/coverage gap/,
+ 'the old all-week source must expose its missing afternoon handoffs');
+const completed=completeRecurringShiftEndCoverage(input,config);
+assert.equal(JSON.stringify(input),original,'input source must not mutate');
+assert.ok(completed.notes.length>0,'must actually create handoff assignments');
+assert.equal(completed.validation.coverageGaps,0);
+assert.equal(completed.validation.duplicateLocations,0);
+const sum=rows=>rows.reduce((n,r)=>n+r.serviceEffortMinutes,0);
+assert.equal(sum(completed.input.version.assignments),sum(input.version.assignments),'retain exact existing workload-point budget');
+assert.deepEqual(completed.input.slots,input.slots,'do not invent employees or overwrite incumbency history');
+assert.deepEqual(completed.input.version.slotAvailability,input.version.slotAvailability,'do not change shifts or lunches');
+const broken=structuredClone(completed.input);
+const addedIndex=broken.version.assignments.findIndex(r=>r.workId.includes(':handoff:'));
+broken.version.assignments.splice(addedIndex,1);
+assert.throws(()=>validateRecurringShiftEndCoverage(input,broken,config),/coverage gap/,'a missing handoff must fail');
+const doubled=structuredClone(completed.input);
+doubled.version.assignments.push(structuredClone(doubled.version.assignments.find(r=>r.workId.includes(':handoff:'))));
+assert.throws(()=>validateRecurringShiftEndCoverage(input,doubled,config),/duplicate location/,'duplicate coverage must fail');
+assert.deepEqual(completeRecurringShiftEndCoverage(input,config),completed,'repeat generation must be deterministic');
+const missingTravel=structuredClone(input);missingTravel.proximity=[];
+assert.throws(()=>completeRecurringShiftEndCoverage(missingTravel,config),/eligible on-duty handoff/,'missing proximity is not invented');
+const offDuty=structuredClone(completed.input);
+const bad=offDuty.version.assignments.find(r=>r.workId.includes(':handoff:'));
+const originalOwner=input.version.assignments.find(r=>bad.workId.startsWith(r.workId+':handoff:')).ownerSlotId;
+bad.ownerSlotId=originalOwner;
+assert.throws(()=>validateRecurringShiftEndCoverage(input,offDuty,config),/off-duty recurring owner/,'ended shifts cannot remain responsible');
+assert.ok(completed.notes.every(row=>!Object.values(config.slots).some(slot=>slot.slotId===row.toSlotId&&slot.name==='Alijah Collins'&&row.locationCode==='HERPETARIUM')),'Alijah restriction survives every handoff');
+assert.ok(completed.input.version.assignments.every(row=>!row.workId.includes(':handoff:')||!config.mondayOnlyFamilies.includes(row.locationCodeSnapshot)),'gift-shop work never gains late handoffs');
+console.log(JSON.stringify({passed:15,failed:0,handoffRows:completed.notes.length,...completed.validation,
+ geography_review:'separate; existing proposed geography is not accepted by this test',physical_verification:false},null,2));
