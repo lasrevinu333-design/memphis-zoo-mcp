@@ -270,7 +270,7 @@
       {
         "path": "config/custodial-recurring-schedule-20260923.json",
         "mode": "100644",
-        "object_id": "ee9caf1bd1256456af32f2003a1917c8512df3cf"
+        "object_id": "94d7b395a951b914b7f3903145ef88631e8be8f8"
       },
       {
         "path": "config/fully-kiosk-devices.example.json",
@@ -405,7 +405,7 @@
       {
         "path": "package.json",
         "mode": "100644",
-        "object_id": "bfd4ef89adea8c70c48bde5ed722153afe06f6ab"
+        "object_id": "723b9614a6d5304dd61e7c9fe2c91c03c6b2f04a"
       },
       {
         "path": "public/moxie-assets/contacts-creekside-animal.png",
@@ -940,7 +940,7 @@
       {
         "path": "scripts/generate-owner-corrected-static-weekly-schedule.mjs",
         "mode": "100644",
-        "object_id": "cd6d3b22fbc64df7720958b1c04ed6045c3a9d8e"
+        "object_id": "1de28f54c09060c2f7f2d8bb11175bddbc08ac89"
       },
       {
         "path": "scripts/generate-v3-source-review.mjs",
@@ -1578,6 +1578,16 @@
         "object_id": "fcaa3004bcf67bbaab47fc35da1f82e3339ddd6f"
       },
       {
+        "path": "scripts/static-weekly-full-roster-lunch-tests.mjs",
+        "mode": "100644",
+        "object_id": "f396044821f1ce5998cb14a35441a47f363d0892"
+      },
+      {
+        "path": "scripts/static-weekly-identity-domain-tests.mjs",
+        "mode": "100644",
+        "object_id": "66c344c37db4ef4a6c5ca911fc548355faa0224e"
+      },
+      {
         "path": "scripts/static-weekly-lunch-authority-adapter-tests.mjs",
         "mode": "100644",
         "object_id": "c29dcce422b607d651a436d9dbbd60995e428b7d"
@@ -1671,6 +1681,11 @@
         "path": "scripts/static-weekly-sha256-accelerator-tests.mjs",
         "mode": "100644",
         "object_id": "c3c93894177af58a5f132ce74749a7aa5e3bcdde"
+      },
+      {
+        "path": "scripts/static-weekly-shift-end-coverage-tests.mjs",
+        "mode": "100644",
+        "object_id": "57864501f7ce42f7fdd500d1ac40c4ded1e5cbd1"
       },
       {
         "path": "scripts/static-weekly-vacant-roster-slot-database-tests.mjs",
@@ -2310,7 +2325,7 @@
       {
         "path": "src/static-weekly-schedule-program.js",
         "mode": "100644",
-        "object_id": "126de543792232bf8944278d05df4d321c188354"
+        "object_id": "084e7b917db6c52f90a240a63ffbbc38573851b8"
       },
       {
         "path": "src/static-weekly-schedule-runtime-policy.js",
@@ -2331,6 +2346,11 @@
         "path": "src/static-weekly-schedule-verifier.js",
         "mode": "100644",
         "object_id": "e00208c1d842def63f629c10e470e0a16a5b22d8"
+      },
+      {
+        "path": "src/static-weekly-shift-end-coverage.js",
+        "mode": "100644",
+        "object_id": "d9500dc4656eff4b0fdc303a6eb9ce6f9c8518a2"
       },
       {
         "path": "src/supabase/client.js",
@@ -3663,7 +3683,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 707,
+    "authority_path_count": 711,
     "migration_path_count": 135,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
