@@ -798,6 +798,13 @@ export function createStaticWeeklyControlPlane({
         requireRevision(expectedRevision), actor.managerId, key,
       ]));
     },
+    async vacateRosterSlot({ manager, sourceId, slotId, employeeId, effectiveStart, reason, expectedRevision, idempotencyKey }) {
+      const actor = requireManager(manager); const key = requireIdempotencyKey(idempotencyKey);
+      return transaction((client) => call(client, "static_weekly_v8_vacate_roster_slot", [
+        text(sourceId), text(slotId), text(employeeId), requireDate(effectiveStart, "vacancy effective start"), text(reason),
+        requireRevision(expectedRevision), actor.managerId, key,
+      ]));
+    },
     async createVacantRosterSlot({ manager, slotId, slotLabel, expectedRevision, idempotencyKey }) {
       const actor = requireManager(manager); const key = requireIdempotencyKey(idempotencyKey);
       return transaction((client) => call(client, "static_weekly_v7_create_vacant_roster_slot", [

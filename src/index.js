@@ -47,6 +47,7 @@ import { installManagerNotificationRoutes } from "./manager-notifications.js";
 import { installEmployeeNotificationRoutes } from "./employee-notifications.js";
 import { installOperationalAnalyticsRoutes } from "./operational-analytics-api.js";
 import { normalizeAttendanceRecord, toNullableNonNegativeInteger } from "./attendance-state.js";
+import { makeVisitorAttendanceCollectorHandler } from "./visitor-attendance-collector.js";
 import { normalizeCanonicalScanEvidence } from "./scan-evidence.js";
 import { buildReleaseCanaryTransportProbeCall } from "./native-phone-transport.js";
 import { makeRestoreMutationGate, withApplicationMutationLease } from "./restore-mutation-gate.js";
@@ -2815,6 +2816,10 @@ app.get("/dashboard-api/current-attendance", async (_req, res) => {
   }
   catch (error) { console.error("current attendance fetch failed:", error); res.status(502).json({ ok: false, error: error.message || "Current attendance fetch failed", source_url: ATTENDANCE_SOURCE_URL }); }
 });
+app.post("/collector-api/visitor-attendance", makeVisitorAttendanceCollectorHandler({
+  persist: persistAttendanceState,
+  accepted: () => { attendanceCache = { data: null, fetched_at_ms: 0 }; },
+}));
 app.post("/admin-api/attendance-update", requireOpsManagerWrite, async (req, res) => {
   try {
     const payload = req.body && typeof req.body === "object" ? req.body : {};

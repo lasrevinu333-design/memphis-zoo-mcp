@@ -88,7 +88,7 @@ try {
   const fillReplay = JSON.parse(await scalar(cp("static_weekly_v7_fill_vacant_roster_slot", `${quote(secondVacantSlot)},'Kaili Test Employee',${quote(effectiveStart)},'Initial named hire for stable position',2,${quote(managerId)},'vacancy-fill-two'`)));
   assert.deepEqual(fillReplay, filled, "an exact fill replay creates no second employee or incumbency");
   const beforeSecondFill = await state();
-  await expectReject(cp("static_weekly_v7_fill_vacant_roster_slot", `${quote(secondVacantSlot)},'Other Employee',${quote(effectiveStart)},'Should be rejected',3,${quote(managerId)},'vacancy-fill-again'`), /only a never-filled vacant stable position/i);
+  await expectReject(cp("static_weekly_v7_fill_vacant_roster_slot", `${quote(secondVacantSlot)},'Other Employee',${quote(effectiveStart)},'Should be rejected',3,${quote(managerId)},'vacancy-fill-again'`), /only a never-filled or explicitly vacated stable position with no current or future incumbent/i);
   assert.deepEqual(await state(), beforeSecondFill, "a second fill cannot duplicate identity or advance authority");
 
   const availability = (slotId) => ({

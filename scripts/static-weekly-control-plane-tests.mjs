@@ -148,6 +148,7 @@ function createAuthorityDatabase({ revision: initialRevision = 0, failMutationAt
       if (statement.includes("static_weekly_v4_mark_employee_departed")) { revision = values[2] + 1; return { rows: [{ result: { revision, data: { slot_id: values[0] } } }] }; }
       if (statement.includes("static_weekly_v4_replace_employee")) { revision = values[3] + 1; return { rows: [{ result: { revision, data: { new_employee_name: values[1] } } }] }; }
       if (statement.includes("static_weekly_v8_restore_existing_employee")) { revision = values[5] + 1; return { rows: [{ result: { revision, data: { source_id: values[0], slot_id: values[1], employee_id: values[2], effective_start: values[3], history_preserved: true, phone_assignment: null } } }] }; }
+      if (statement.includes("static_weekly_v8_vacate_roster_slot")) { revision = values[5] + 1; return { rows: [{ result: { revision, data: { source_id: values[0], slot_id: values[1], former_employee_id: values[2], effective_start: values[3], replacement_employee_id: null } } }] }; }
       if (statement.includes("static_weekly_v7_create_vacant_roster_slot")) { revision = values[2] + 1; return { rows: [{ result: { revision, data: { slot_id: values[0], slot_label: values[1], vacant: true } } }] }; }
       if (statement.includes("static_weekly_v7_fill_vacant_roster_slot")) { revision = values[4] + 1; return { rows: [{ result: { revision, data: { slot_id: values[0], new_employee_name: values[1], effective_start: values[2] } } }] }; }
       if (statement.includes("static_weekly_v8_materialize_lunch_document")) {
@@ -617,6 +618,17 @@ assert.equal(restoredExisting.data.employee_id, "4f501293-2973-46ba-bf83-34d440d
 assert.equal(restoredExisting.data.history_preserved, true);
 assert.equal(restoredExisting.data.phone_assignment, null);
 assert.deepEqual(restoreAuthority.queries.map((entry) => entry.statement), ["begin", "set local role static_weekly_control_plane", "set local statement_timeout = '120000ms'", "select public.custodial_begin_application_mutation()", "select public.static_weekly_v8_restore_existing_employee($1,$2,$3,$4,$5,$6,$7,$8) as result", "commit"], "existing-employee restoration is a bounded named-manager operation and does not invent a replacement identity or phone assignment");
+
+const vacateAuthority = createAuthorityDatabase();
+const vacateControlPlane = controlPlaneFor(vacateAuthority);
+const vacateInput = { manager, sourceId: "50000000-0000-4000-8000-000000000093", slotId: "20000000-0000-4000-8000-000000000099", employeeId: "40000000-0000-4000-8000-000000000093", effectiveStart: "2026-10-05", reason: "Position vacant", expectedRevision: 0, idempotencyKey: "vacate-position" };
+const vacated = await vacateControlPlane.vacateRosterSlot(vacateInput);
+assert.equal(vacated.revision, 1);
+assert.equal(vacated.data.replacement_employee_id, null);
+assert.equal(vacated.data.former_employee_id, vacateInput.employeeId);
+assert.deepEqual(vacateAuthority.queries.map(entry => entry.statement), ["begin", "set local role static_weekly_control_plane", "set local statement_timeout = '120000ms'", "select public.custodial_begin_application_mutation()", "select public.static_weekly_v8_vacate_roster_slot($1,$2,$3,$4,$5,$6,$7,$8) as result", "commit"]);
+assert.deepEqual(vacateAuthority.queries.find(entry => entry.statement.includes("static_weekly_v8_vacate_roster_slot")).values, [vacateInput.sourceId, vacateInput.slotId, vacateInput.employeeId, vacateInput.effectiveStart, vacateInput.reason, 0, manager.manager_id, vacateInput.idempotencyKey]);
+await assert.rejects(() => vacateControlPlane.vacateRosterSlot({ ...vacateInput, manager: {} }), /manager/i);
 
 const vacancyAuthority = createAuthorityDatabase();
 const vacancyControlPlane = controlPlaneFor(vacancyAuthority);

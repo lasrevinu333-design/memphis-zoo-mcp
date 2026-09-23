@@ -21,6 +21,8 @@
     "test:event-static-authority-db": "node scripts/event-static-authority-database-tests.mjs",
     "test:operational-analytics": "node scripts/operational-analytics-contract-tests.mjs",
     "test:operational-analytics-db": "node scripts/operational-analytics-database-tests.mjs",
+    "test:visitor-attendance": "node scripts/visitor-attendance-collector-tests.mjs",
+    "test:visitor-attendance-db": "node scripts/visitor-attendance-reader-database-tests.mjs",
     "test:feedback": "node scripts/feedback-contract-tests.mjs && node scripts/feedback-authority-contract-tests.mjs",
     "test:feedback-authority": "node scripts/feedback-authority-contract-tests.mjs",
     "test:feedback-reader-database": "node scripts/feedback-reader-database-probe.mjs",
@@ -42,7 +44,7 @@
     "test:dashboard": "node scripts/dashboard-recent-activity-contract-tests.mjs",
     "test:scheduler-overhaul": "node scripts/scheduler-overhaul-contract-tests.mjs",
     "test:static-weekly-scheduler:fast": "node scripts/static-weekly-schedule-model-tests.mjs && node scripts/static-weekly-sha256-accelerator-tests.mjs && node scripts/static-weekly-schedule-exception-contract-tests.mjs && node scripts/static-weekly-schedule-compiler-tests.mjs && node scripts/static-weekly-schedule-solver-lifecycle-tests.mjs && node scripts/static-weekly-compiler-runtime-tests.mjs && node scripts/static-weekly-schedule-database-adapter-tests.mjs && node scripts/static-weekly-control-plane-tests.mjs && node scripts/owner-workdays-tests.mjs && node scripts/static-weekly-control-plane-runtime-tests.mjs && node scripts/static-weekly-control-plane-deployment-contract-tests.mjs && node scripts/static-weekly-employee-day-route-tests.mjs && node scripts/static-weekly-operational-truth-contract-tests.mjs && npm run --silent test:static-weekly-lunch-coverage && node scripts/static-weekly-identity-domain-tests.mjs",
-    "test:static-weekly-scheduler:database": "node scripts/static-weekly-schedule-authority-v3-tests.mjs && node scripts/static-weekly-schedule-authority-closure-tests.mjs && node scripts/static-weekly-schedule-concurrency-tests.mjs && node scripts/static-weekly-day-changes-database-tests.mjs && node scripts/static-weekly-vacant-roster-slot-database-tests.mjs && npm run --silent test:static-weekly-existing-employee-restore-db",
+    "test:static-weekly-scheduler:database": "node scripts/static-weekly-schedule-authority-v3-tests.mjs && node scripts/static-weekly-schedule-authority-closure-tests.mjs && node scripts/static-weekly-schedule-concurrency-tests.mjs && node scripts/static-weekly-day-changes-database-tests.mjs && node scripts/static-weekly-vacant-roster-slot-database-tests.mjs && npm run --silent test:static-weekly-existing-employee-restore-db && npm run --silent test:static-weekly-vacate-roster-slot-db",
     "test:static-weekly-operational-truth-db": "node scripts/static-weekly-operational-truth-database-tests.mjs",
     "test:custodial-u4-migration-convergence": "node scripts/custodial-u4-migration-convergence-tests.mjs",
     "test:static-weekly-scheduler:physical": "STATIC_WEEKLY_PHYSICAL_SCALE=1 node scripts/static-weekly-schedule-compiler-tests.mjs",
@@ -176,6 +178,7 @@
     "test:static-weekly-identity-domain": "node scripts/static-weekly-identity-domain-tests.mjs",
     "test:static-weekly-full-roster-lunch": "node scripts/static-weekly-full-roster-lunch-tests.mjs",
     "test:static-weekly-existing-employee-restore-db": "node scripts/static-weekly-existing-employee-restore-database-tests.mjs",
+    "test:static-weekly-vacate-roster-slot-db": "node scripts/static-weekly-vacate-roster-slot-database-tests.mjs",
     "test:static-weekly-full-week-publication-db": "node scripts/static-weekly-full-week-publication-database-tests.mjs"
   },
   "dependencies": {

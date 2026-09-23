@@ -2,6 +2,7 @@ const DEFAULT_STALE_AFTER_MS = 60 * 60 * 1000;
 
 export function toNullableNonNegativeInteger(value) {
   if (value == null || value === "") return null;
+  if (typeof value !== "number" && typeof value !== "string") return null;
   const raw = typeof value === "string" ? value.trim() : value;
   if (raw === "") return null;
   if (typeof raw === "string" && !/^\d+$/.test(raw)) return null;

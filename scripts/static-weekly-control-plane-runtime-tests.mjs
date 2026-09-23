@@ -84,7 +84,9 @@ let exceptionRequest = null;
 let rebuildRequest = null;
 let dayChangesRequest = null;
 let mutationFailure = null;
+let vacancyRequest = null;
 const controlPlane = {
+  async vacateRosterSlot(request) { vacancyRequest = request; return { revision: request.expectedRevision + 1, data: { replacement_employee_id: null } }; },
   async health() { return { ready: true }; },
   async getManagerSnapshot({ weekStart }) { snapshots += 1; return { schema: "memphis-zoo.static-weekly-manager-snapshot.v1", week_start: weekStart, authority_revision: 0 }; },
   async applyContractorCapacity() { mutations += 1; return { revision: mutations, data: { exception_id: `contractor-${mutations}` } }; },
@@ -256,6 +258,23 @@ try {
   assert.equal(response.status, 503, "an unavailable trusted-device lookup method must fail closed before scheduler mutation");
   assert.equal(mutations, 3);
   store.find = savedFind;
+  lookup = async () => currentTrustedDevice();
+  const vacancyBody = { source_id: "50000000-0000-4000-8000-000000000091", employee_id: "30000000-0000-4000-8000-000000000091", effective_start: "2026-10-05", reason: "Position vacant", expected_revision: 0, idempotency_key: "runtime-vacate" };
+  const vacancyUrl = origin + "/static-weekly/roster/20000000-0000-4000-8000-000000000091/vacate";
+  const unauthenticatedVacancy = await fetch(vacancyUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(vacancyBody) });
+  assert.equal(unauthenticatedVacancy.status, 401);
+  assert.equal(vacancyRequest, null, "unauthenticated request cannot reach vacancy authority");
+  const acceptedVacancy = await fetch(vacancyUrl, { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.token }, body: JSON.stringify(vacancyBody) });
+  assert.equal(acceptedVacancy.status, 200);
+  assert.equal(vacancyRequest.employeeId, vacancyBody.employee_id);
+  assert.equal(vacancyRequest.slotId, "20000000-0000-4000-8000-000000000091");
+  assert.equal(vacancyRequest.sourceId, vacancyBody.source_id);
+  assert.equal(vacancyRequest.manager.manager_id, manager.manager_id);
+  vacancyRequest = null;
+  lookup = async () => currentTrustedDevice({ revoked_at: new Date().toISOString() });
+  const revokedVacancy = await fetch(vacancyUrl, { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.token }, body: JSON.stringify(vacancyBody) });
+  assert.equal(revokedVacancy.status, 401);
+  assert.equal(vacancyRequest, null, "revoked request cannot reach vacancy authority");
 } finally {
   await new Promise((resolve) => server.close(resolve));
 }
