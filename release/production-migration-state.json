@@ -62,7 +62,7 @@
     "source_migration_name": "visitor_attendance_reader",
     "source_migration_version": "20260923121151",
     "production_ledger_version": null,
-    "canonical_source_schema_fingerprint": "f50a1ffe94fd1ca85e13a5e02c6d949522ac3f6899bef232f70a817c455fd0d7",
+    "canonical_source_schema_fingerprint": "bcd3a816dcb6f5ab5b760df57580461ad538529d1766839f62decb9fc055643e",
     "public_function_count": 520,
     "production_ledger_count": 238,
     "source_authority_migration_count": 138,
@@ -188,12 +188,12 @@
       "phase": "visitor_attendance_reader",
       "file": "20260923121151_visitor_attendance_reader.sql",
       "source_migration_version": "20260923121151",
-      "sha256": "e5f8e3e84cd526d088a27990d69c1ddca954d4b71f8f05794133c6aa82251560"
+      "sha256": "b2249d2799c2a0c4e93177c3d9c24d8bf069467bcf1d6a33421cf1efb2d21ca2"
     }
   ],
   "postconditions": [
     "production ledger advances exactly eight rows from 230 to 238, ending at 20260923121151 visitor_attendance_reader; no already-applied migration is replayed",
-    "complete public catalog and privilege fingerprint equals f50a1ffe94fd1ca85e13a5e02c6d949522ac3f6899bef232f70a817c455fd0d7 with the exact reviewed target counts",
+    "complete public catalog and privilege fingerprint equals bcd3a816dcb6f5ab5b760df57580461ad538529d1766839f62decb9fc055643e with the exact reviewed target counts",
     "production exposes exactly 520 public functions and 362 non-owner routine grants after the corrections",
     "ordinary full-attendance days retain the fixed weekly schedule; CoverAll is explicit named-manager capacity, not an automatic absence-count threshold",
     "guest reporting OFF prevents queued guest notification dispatch without deleting pending/history records; staff Feedback remains separate",

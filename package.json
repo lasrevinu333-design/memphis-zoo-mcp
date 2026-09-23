@@ -21,7 +21,7 @@
     "test:event-static-authority-db": "node scripts/event-static-authority-database-tests.mjs",
     "test:operational-analytics": "node scripts/operational-analytics-contract-tests.mjs",
     "test:operational-analytics-db": "node scripts/operational-analytics-database-tests.mjs",
-    "test:visitor-attendance": "node scripts/visitor-attendance-collector-tests.mjs",
+    "test:visitor-attendance": "node scripts/visitor-attendance-collector-tests.mjs && node scripts/visitor-attendance-boundary-tests.mjs",
     "test:visitor-attendance-db": "node scripts/visitor-attendance-reader-database-tests.mjs",
     "test:feedback": "node scripts/feedback-contract-tests.mjs && node scripts/feedback-authority-contract-tests.mjs",
     "test:feedback-authority": "node scripts/feedback-authority-contract-tests.mjs",

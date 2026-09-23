@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
-import {readFileSync,readdirSync,writeFileSync} from 'node:fs';
+import {readFileSync,readdirSync,writeFileSync,mkdtempSync,mkdirSync,chmodSync,rmSync,existsSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {visitorDatabaseBoundaryProof} from './fixtures/visitor-attendance-database-boundary-fixture.mjs';
 import {createHash} from 'node:crypto';
 import path from 'node:path';
 const root=path.resolve(new URL('..',import.meta.url).pathname);
@@ -9,9 +11,20 @@ const image='supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a
 const docker=(args,opts={})=>execFileSync('docker',args,{encoding:'utf8',timeout:180000,maxBuffer:32*1024*1024,...opts});
 const sql=text=>docker(['exec','-i',container,'psql','-X','-q','-At','-v','ON_ERROR_STOP=1','-U','supabase_admin','-d','postgres'],{input:text});
 let owned=false;const records=[];
+const socketParent=mkdtempSync(path.join(tmpdir(),'custodial-visitor-pg-'));
+const socketDir=path.join(socketParent,'socket');mkdirSync(socketDir);chmodSync(socketDir,0o777);
+console.log('OWNED_TEST_SOCKET',socketParent,'cleanup=remove exact disposable directory after database shutdown');
+const noAutomaticGrants=process.env.ATTENDANCE_NO_AUTOMATIC_GRANTS==='1';
+const defaults="select count(*) from pg_default_acl d cross join lateral aclexplode(d.defaclacl) a where d.defaclnamespace='public'::regnamespace and d.defaclrole in ('postgres'::regrole,'supabase_admin'::regrole) and d.defaclobjtype in ('r','S') and a.grantee in ('anon'::regrole,'authenticated'::regrole,'service_role'::regrole)";
+function removeAutomaticDefaults(){for(const role of ['postgres','supabase_admin'])sql(`alter default privileges for role ${role} in schema public revoke all on tables from anon,authenticated,service_role; alter default privileges for role ${role} in schema public revoke all on sequences from anon,authenticated,service_role;`);}
+function cleanup(){
+ if(owned){docker(['rm','-f',container]);owned=false;assert.equal(docker(['ps','-a','--filter','name=^/'+container+'$','--format','{{.Names}}']).trim(),'');console.log('OWNED_TEST_CONTAINER_REMOVED',container);}
+ if(existsSync(socketParent)){rmSync(socketParent,{recursive:true,force:false});console.log('OWNED_TEST_SOCKET_REMOVED',socketParent);}
+}
+for(const signal of ['SIGINT','SIGTERM'])process.once(signal,()=>{try{cleanup();}finally{process.exit(143);}});
 try{
  docker(['image','inspect',image]);
- docker(['run','--rm','-d','--network','none','--name',container,'--tmpfs','/var/lib/postgresql/data:rw,size=1g','-e','POSTGRES_PASSWORD=postgres',image,'-c','shared_preload_libraries=pg_cron,pg_net,pg_stat_statements']);
+ docker(['run','--rm','-d','--network','none','--name',container,'--tmpfs','/var/lib/postgresql/data:rw,size=1g','--mount',`type=bind,src=${socketDir},dst=/audit-pg-socket`,'-e','POSTGRES_PASSWORD=postgres',image,'-c','shared_preload_libraries=pg_cron,pg_net,pg_stat_statements','-c','unix_socket_directories=/var/run/postgresql,/audit-pg-socket']);
  owned=true;console.log('OWNED_TEST_CONTAINER',container);
  const info=JSON.parse(docker(['inspect',container]))[0];
  assert.equal(info.HostConfig.NetworkMode,'none');assert.equal(Object.keys(info.HostConfig.PortBindings??{}).length,0);
@@ -23,14 +36,26 @@ try{
  assert.equal(consecutive,5,'isolated test database ready');
  assert.equal(sql("select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind='r'").trim(),'0');
  sql("do $$ begin create role anon; exception when duplicate_object then null; end $$; do $$ begin create role authenticated; exception when duplicate_object then null; end $$; do $$ begin create role service_role; exception when duplicate_object then null; end $$;");
+ if(noAutomaticGrants)removeAutomaticDefaults();
  for(const file of readdirSync(path.join(root,'supabase/migrations')).filter(x=>x.endsWith('.sql')).sort()){
+  if(noAutomaticGrants)assert.equal(sql(defaults).trim(),'0','no automatic table/sequence grants before '+file);
   const bytes=readFileSync(path.join(root,'supabase/migrations',file));
   sql(bytes);records.push({file,sha256:createHash('sha256').update(bytes).digest('hex'),exit:0});
+  if(noAutomaticGrants&&sql(defaults).trim()!=='0'){
+   assert.ok(['20260718083100_reconstruct_public_grant_hardening.sql','20260729150527_audit_defense_in_depth_hardening.sql','20260815160613_normalize_managed_production_schema_security.sql'].includes(file),'known historic default grant writer');
+   assert.doesNotMatch(bytes.toString(),/create\s+(?:unlogged\s+)?table|create\s+sequence/i,'historic default writer creates no tables/sequences');
+   removeAutomaticDefaults();console.log('DISPOSABLE_DEFAULT_RESET',file);
+  }
+  if(noAutomaticGrants)assert.equal(sql(defaults).trim(),'0','no automatic table/sequence grants after '+file);
   if(records.length%25===0)console.log('APPLIED_SOURCE_MIGRATIONS',records.length);
  }
  console.log('COMPLETE_SCHEMA',records.length);
+ console.log('AUTOMATIC_GRANTS_ABSENT_THROUGH_REPLAY',noAutomaticGrants);
  if(process.env.ATTENDANCE_SCHEMA_RECORDS)writeFileSync(process.env.ATTENDANCE_SCHEMA_RECORDS,JSON.stringify(records,null,2)+'\n',{flag:'wx'});
- if(process.env.ATTENDANCE_REFRESH_CATALOG==='1')execFileSync(process.execPath,[path.join(root,'scripts/refresh-schema-fingerprint.mjs')],{cwd:root,env:{...process.env,SCHEMA_FINGERPRINT_DOCKER_CONTAINER:container,SCHEMA_FINGERPRINT_DATABASE:'postgres'},stdio:'inherit',timeout:180000});
+ if(process.env.ATTENDANCE_REFRESH_CATALOG==='1'){
+  assert.equal(noAutomaticGrants,false,'canonical target uses existing production default privilege model');
+  execFileSync(process.execPath,[path.join(root,'scripts/refresh-schema-fingerprint.mjs')],{cwd:root,env:{...process.env,SCHEMA_FINGERPRINT_DOCKER_CONTAINER:container,SCHEMA_FINGERPRINT_DATABASE:'postgres'},stdio:'inherit',timeout:180000});
+ }
 
  sql("insert into public.current_attendance_state(id,attendance,last_year,planned,yesterday,yesterday_plan,source,fetched_at,updated_at) values(1,0,10,20,15,25,'synthetic-visitor-test',now(),now())");
  assert.equal(sql("set role custodial_application_reader; select attendance::text from public.current_attendance_state where id=1").trim().split('\\n').at(-1),'0','reader sees actual zero through forced RLS');
@@ -63,7 +88,8 @@ try{
  assert.throws(()=>push(older),/older than or conflicts/,'restored function preserves timestamp ordering');passed++;
  assert.equal(JSON.parse(push(newerZero)).ok,true,'restored function preserves exact replay');passed++;
  console.log(JSON.stringify({passed,failed:0,readerVisible:true,readerCanWrite:false,policyRestoreExecuted:true,productionWritten:false}));
+ await visitorDatabaseBoundaryProof({socketDir,sql});
  console.log('VISITOR_ATTENDANCE_READER_DATABASE_PASS');
 }finally{
- if(owned){docker(['rm','-f',container]);assert.equal(docker(['ps','-a','--filter','name=^/'+container+'$','--format','{{.Names}}']).trim(),'');console.log('OWNED_TEST_CONTAINER_REMOVED',container);}
+ cleanup();
 }

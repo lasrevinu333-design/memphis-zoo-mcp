@@ -46,7 +46,7 @@ import { installCustodialEmployeeAdminRoutes } from "./custodial-employee-admin.
 import { installManagerNotificationRoutes } from "./manager-notifications.js";
 import { installEmployeeNotificationRoutes } from "./employee-notifications.js";
 import { installOperationalAnalyticsRoutes } from "./operational-analytics-api.js";
-import { normalizeAttendanceRecord, toNullableNonNegativeInteger } from "./attendance-state.js";
+import { normalizeAttendanceRecord, toNullableNonNegativeInteger, canonicalAttendanceTimestamp, isCurrentAttendanceTimestamp, parseAttendanceDisplayInteger } from "./attendance-state.js";
 import { makeVisitorAttendanceCollectorHandler } from "./visitor-attendance-collector.js";
 import { normalizeCanonicalScanEvidence } from "./scan-evidence.js";
 import { buildReleaseCanaryTransportProbeCall } from "./native-phone-transport.js";
@@ -1010,21 +1010,22 @@ function requiredRequestOperationId(req) {
 
 function parseAttendanceMetric(text, label) {
   const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const pattern = new RegExp(`${escaped}:\\s*([\\d,]+)`, "i");
+  const pattern = new RegExp(`\\b${escaped}\\s*:\\s*(.*?)(?=\\s+(?:Last Year|Planned|Yesterday Plan|Yesterday)\\s*:|$)`, "i");
   const match = text.match(pattern);
   if (!match) return null;
-  const parsed = Number.parseInt(String(match[1]).replace(/,/g, ""), 10);
-  return Number.isFinite(parsed) ? parsed : null;
+  const parsed = parseAttendanceDisplayInteger(match[1]);
+  if (parsed == null) throw new Error(`Attendance ${label} value is invalid.`);
+  return parsed;
 }
 
 function parseAttendanceHtml(html) {
   const normalized = String(html || "").replace(/\r/g, "");
   const attendanceBlock = normalized.match(/<h5[^>]*>\s*Attendance\s*<\/h5>[\s\S]{0,2500}?<\/div>\s*<\/div>/i);
   const source = attendanceBlock ? attendanceBlock[0] : normalized;
-  const currentMatch = source.match(/<h1[^>]*>\s*([\d,]+)\s*<\/h1>/i);
+  const currentMatch = source.match(/<h1[^>]*>([^<]*)<\/h1>/i);
   if (!currentMatch) throw new Error("Attendance card found but current attendance value was not found.");
-  const attendance = Number.parseInt(String(currentMatch[1]).replace(/,/g, ""), 10);
-  if (!Number.isFinite(attendance) || attendance < 0) throw new Error("Parsed attendance value is invalid.");
+  const attendance = parseAttendanceDisplayInteger(currentMatch[1]);
+  if (attendance == null) throw new Error("Parsed attendance value is invalid.");
   const text = source.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
   return {
     attendance,
@@ -1038,7 +1039,8 @@ function parseAttendanceHtml(html) {
 
 async function loadStoredAttendance() {
   const rows = await runReadOnlySql(`
-    select attendance, last_year, planned, yesterday, yesterday_plan, source, fetched_at, updated_at
+    select attendance, last_year, planned, yesterday, yesterday_plan, source,
+      fetched_at::text as fetched_at, updated_at::text as updated_at
     from public.current_attendance_state
     where id = 1
     limit 1
@@ -1054,7 +1056,10 @@ async function persistAttendanceState(payload = {}) {
   const yesterday = toNullableNonNegativeInteger(payload.yesterday);
   const yesterdayPlan = toNullableNonNegativeInteger(payload.yesterday_plan);
   const source = payload.source == null ? null : String(payload.source);
-  const fetchedAt = payload.fetched_at == null ? null : String(payload.fetched_at);
+  const fetchedAt = canonicalAttendanceTimestamp(payload.fetched_at);
+  if (!isCurrentAttendanceTimestamp(fetchedAt, Date.now())) {
+    throw Object.assign(new Error("A valid current source timestamp is required."), { status: 422 });
+  }
 
   if (attendance == null) {
     throw Object.assign(new Error("attendance is required and must be a nonnegative integer."), { status: 422 });

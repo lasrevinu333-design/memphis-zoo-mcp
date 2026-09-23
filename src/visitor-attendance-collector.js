@@ -1,5 +1,5 @@
 import { createHash, timingSafeEqual } from "node:crypto";
-import { ATTENDANCE_DEFAULT_STALE_AFTER_MS, toNullableNonNegativeInteger } from "./attendance-state.js";
+import { canonicalAttendanceTimestamp, isCurrentAttendanceTimestamp, toNullableNonNegativeInteger } from "./attendance-state.js";
 
 const metrics = ["attendance", "last_year", "planned", "yesterday", "yesterday_plan"];
 const digest = value => createHash("sha256").update(value).digest();
@@ -25,17 +25,16 @@ export function makeVisitorAttendanceCollectorHandler({ env = process.env, persi
       }
       payload[field] = value;
     }
-    const fetched = typeof body.fetched_at === "string" ? Date.parse(body.fetched_at) : NaN;
-    const age = now() - fetched;
-    if (!Number.isFinite(fetched) || age < -60000 || age > ATTENDANCE_DEFAULT_STALE_AFTER_MS) {
+    const fetched = typeof body.fetched_at === "string" ? canonicalAttendanceTimestamp(body.fetched_at) : null;
+    if (!isCurrentAttendanceTimestamp(fetched, now())) {
       return res.status(422).json({ ok: false, error: "A valid current source timestamp is required." });
     }
-    payload.fetched_at = new Date(fetched).toISOString();
+    payload.fetched_at = fetched;
     payload.source = "home-browser-auto-push";
     try {
       const data = await persist(payload);
       if (!data || metrics.some(field => data[field] !== payload[field])
-        || data.source !== payload.source || Date.parse(data.fetched_at) !== fetched) {
+        || data.source !== payload.source || canonicalAttendanceTimestamp(data.fetched_at) !== fetched) {
         return res.status(503).json({ ok: false, error: "Visitor attendance has not been verified in the saved reader." });
       }
       accepted();

@@ -34,6 +34,10 @@ begin
     if nullif(v_payload->>'fetched_at','') is null or not isfinite((v_payload->>'fetched_at')::timestamptz) then
       raise exception using errcode='22023',message='visitor observation requires a finite source timestamp';
     end if;
+    if (v_payload->>'fetched_at')::timestamptz < statement_timestamp()-interval '1 hour'
+      or (v_payload->>'fetched_at')::timestamptz > statement_timestamp()+interval '60 seconds' then
+      raise exception using errcode='22023',message='visitor observation requires a current source timestamp';
+    end if;
     insert into public.current_attendance_state(id,attendance,last_year,planned,yesterday,yesterday_plan,source,fetched_at,updated_at)
     values(1,(v_payload->>'attendance')::integer,nullif(v_payload->>'last_year','')::integer,nullif(v_payload->>'planned','')::integer,
       nullif(v_payload->>'yesterday','')::integer,nullif(v_payload->>'yesterday_plan','')::integer,nullif(v_payload->>'source',''),
@@ -41,6 +45,8 @@ begin
     on conflict(id) do update set attendance=excluded.attendance,last_year=excluded.last_year,planned=excluded.planned,
       yesterday=excluded.yesterday,yesterday_plan=excluded.yesterday_plan,source=excluded.source,fetched_at=excluded.fetched_at,updated_at=now()
     where public.current_attendance_state.fetched_at is null
+      or not isfinite(public.current_attendance_state.fetched_at)
+      or public.current_attendance_state.fetched_at>statement_timestamp()+interval '60 seconds'
       or excluded.fetched_at>public.current_attendance_state.fetched_at
       or (excluded.fetched_at=public.current_attendance_state.fetched_at
         and row(excluded.attendance,excluded.last_year,excluded.planned,excluded.yesterday,excluded.yesterday_plan,excluded.source)
