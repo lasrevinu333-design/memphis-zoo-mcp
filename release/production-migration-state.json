@@ -181,14 +181,14 @@
       "phase": "static_weekly_vacate_roster_slot",
       "file": "20260923065000_static_weekly_vacate_roster_slot.sql",
       "source_migration_version": "20260923065000",
-      "sha256": "a28c17cad99b21ad0d45c2fbf2a131e7593408585c4c7a82b6694812052dc3a1"
+      "sha256": "1531f66646d0c8fa66f0332242f67cd56b1aec5e1f08d5d45ac360f497386e5c"
     },
     {
       "order": 8,
       "phase": "visitor_attendance_reader",
       "file": "20260923121151_visitor_attendance_reader.sql",
       "source_migration_version": "20260923121151",
-      "sha256": "14dd8c898e2e743f48f97c9784a8dd8cfa91a1b46ef33b71bc96838ffa468acb"
+      "sha256": "e5f8e3e84cd526d088a27990d69c1ddca954d4b71f8f05794133c6aa82251560"
     }
   ],
   "postconditions": [
