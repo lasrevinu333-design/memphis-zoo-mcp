@@ -163,6 +163,31 @@ check('no missing or duplicate physical responsibility at any minute',Number(que
  from generate_series(585,959) minute left join responsibilities a
  on a.coverage_start<=(time '00:00'+make_interval(mins=>minute)) and (time '00:00'+make_interval(mins=>minute))<a.coverage_end
  group by minute) select count(*) from counts where total<>8 or distinct_locations<>8;`)),0);
+
+// Durable lunch start/end notification producer: database queue proof only, never provider/phone proof.
+const pushDevice=randomUUID(),pushCredential=randomUUID(),pushRegistration=randomUUID();
+sql(`insert into public.devices(id,device_id,device_name,active,assigned_employee_id,assignment_epoch)
+ values(${q(pushDevice)}::uuid,'LUNCH-PUSH-TEST','Lunch push test phone',true,${q(helper.person)}::uuid,1);
+ insert into public.device_auth_credentials(credential_id,device_id,token_hash,device_label,metadata_json,created_at,confirmed_at,last_used_at,expires_at)
+ values(${q(pushCredential)}::uuid,${q(pushDevice)}::uuid,repeat('a',64),'Lunch push test phone','{}'::jsonb,now(),now(),now(),now()+interval '1 day');
+ insert into public.employee_push_registrations(registration_id,device_id,credential_id,employee_id,assignment_epoch,platform,fcm_token,token_hash,active)
+ values(${q(pushRegistration)}::uuid,${q(pushDevice)}::uuid,${q(pushCredential)}::uuid,${q(helper.person)}::uuid,1,'android','lunch-push-test-${'x'.repeat(40)}',repeat('b',64),true);`);
+const expectedHelperIntents=document.notification_intents.filter(n=>n.coverer_slot_id===helper.id).length;
+const producerEarly=parsed(`select public.mz_enqueue_employee_lunch_coverage_pushes(${q(at('09:00'))}::timestamptz)::text;`);
+check('producer queues every accepted helper start/end intent',producerEarly.enqueued,expectedHelperIntents);
+check('producer queue is credential-bound',Number(query(`select count(*) from public.operational_notification_jobs where job_type='employee_native_push' and payload_json->>'credential_id'=${q(pushCredential)} and payload_json->'data_json'->>'kind'='employee_lunch_coverage';`)),expectedHelperIntents);
+check('producer keeps exact scheduled availability',Number(query(`select count(*) from public.operational_notification_jobs where payload_json->>'credential_id'=${q(pushCredential)} and payload_json->'data_json'->>'kind'='employee_lunch_coverage' and available_at<>(((payload_json->'data_json'->>'service_date')::date+(payload_json->'data_json'->>'scheduled_time')::time) at time zone 'America/Chicago');`)),0);
+check('producer replay is idempotent',parsed(`select public.mz_enqueue_employee_lunch_coverage_pushes(${q(at('09:00'))}::timestamptz)::text;`).enqueued,0);
+check('queueing never claims provider delivery',Number(query(`select count(*) from public.employee_native_push_delivery_receipts r join public.operational_notification_jobs j on j.job_id=r.job_id where j.payload_json->'data_json'->>'kind'='employee_lunch_coverage';`)),0);
+const missingIntent=document.notification_intents.find(n=>n.coverer_slot_id!==helper.id);
+check('fixture has an unregistered accepted lunch recipient',Boolean(missingIntent),true);
+const missingDue=parsed(`select public.mz_enqueue_employee_lunch_coverage_pushes(${q(at(missingIntent.scheduled_time))}::timestamptz)::text;`);
+check('due missing recipient becomes a truthful dead delivery job',Number(query(`select count(*) from public.operational_notification_jobs where job_key=${q(`employee-lunch-push:${missingIntent.notification_key}:recipient-unavailable`)} and status='dead' and payload_json->'data_json'->>'recipient_status'='unavailable';`)),1);
+check('missing recipient does not claim provider send',Number(query(`select count(*) from public.employee_native_push_delivery_receipts r join public.operational_notification_jobs j on j.job_id=r.job_id where j.job_key=${q(`employee-lunch-push:${missingIntent.notification_key}:recipient-unavailable`)};`)),0);
+check('producer is on release canary surface',Number(query(`select count(*) from public.custodial_release_canary_authority_surface() where object_identity='mz_enqueue_employee_lunch_coverage_pushes(timestamp with time zone)'`)),1);
+check('producer recovery function binding',Number(query(`select count(*) from public.custodial_release_authority_restore_inventory where object_kind='function' and object_identity='mz_enqueue_employee_lunch_coverage_pushes(timestamp with time zone)'`)),1);
+check('producer recovery grant binding',Number(query(`select count(*) from public.custodial_release_authority_restore_inventory where object_kind='grant' and object_identity='mz_enqueue_employee_lunch_coverage_pushes(timestamp with time zone)'`)),1);
+
 const priorDocument=structuredClone(document);
 await fixture.applyException({exceptionType:'lunch',serviceDate,startsAt:'11:30',endsAt:'12:30',reason:'Synthetic scheduled lunch change',
  payload:{slotId:slots[0].id}});

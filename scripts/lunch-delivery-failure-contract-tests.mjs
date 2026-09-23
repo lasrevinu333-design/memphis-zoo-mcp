@@ -60,3 +60,26 @@ assert.match(migration, /'device_receipt_status','not_evaluated'/);
 assert.doesNotMatch(migration, /'terminal_delivery_failure',true/,
   'terminal job status must not be presented as confirmed non-delivery');
 console.log('lunch-delivery-failure-contract-tests: PASS');
+
+const producerMigration = await readFile(
+  new URL('supabase/migrations/20260922200000_lunch_notification_producer.sql', root), 'utf8',
+);
+const employeeNotifications = await readFile(new URL('src/employee-notifications.js', root), 'utf8');
+assert.match(producerMigration, /mz_enqueue_employee_lunch_coverage_pushes/);
+assert.match(producerMigration, /weekly_schedule_lunch_documents/);
+assert.match(producerMigration, /notification_intents/);
+assert.match(producerMigration, /delivery_state'='NOT_ENQUEUED'/);
+assert.match(producerMigration, /employee-lunch-push:/);
+assert.match(producerMigration, /employee_lunch_coverage/);
+assert.match(producerMigration, /notification_type','lunch_coverage'/);
+assert.match(producerMigration, /recipient_count=1/);
+assert.match(producerMigration, /recipient_status'/);
+assert.match(producerMigration, /ops_manager_enqueue_lunch_delivery_failure/);
+assert.match(producerMigration, /available_at,payload_json/);
+assert.match(producerMigration, /custodial_release_canary_authority_surface/);
+assert.match(producerMigration, /custodial_release_authority_restore_inventory/);
+assert.match(employeeNotifications, /db\.rpc\('mz_enqueue_employee_lunch_coverage_pushes', \{ p_now: now \}\)/);
+assert.match(employeeNotifications, /lunch: lunchEnqueued\.data/);
+assert.doesNotMatch(producerMigration, /acknowledged_at|opened_at|displayed_at/,
+  'lunch producer must not invent acknowledgement or handset presentation as delivery authority');
+console.log('lunch-notification-producer-contract-tests: PASS');

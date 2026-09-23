@@ -598,12 +598,14 @@ export function installEmployeeNotificationRoutes(app, {
     inFlight = true;
     try {
       const now = new Date().toISOString();
-      const [eventsEnqueued, locationsEnqueued] = await Promise.all([
+      const [eventsEnqueued, locationsEnqueued, lunchEnqueued] = await Promise.all([
         db.rpc('mz_enqueue_employee_event_pushes', { p_now: now }),
         db.rpc('mz_enqueue_employee_location_pushes', { p_now: now }),
+        db.rpc('mz_enqueue_employee_lunch_coverage_pushes', { p_now: now }),
       ]);
       if (eventsEnqueued.error) throw eventsEnqueued.error;
       if (locationsEnqueued.error) throw locationsEnqueued.error;
+      if (lunchEnqueued.error) throw lunchEnqueued.error;
       const ready = await db.from('operational_notification_jobs').select('job_key')
         .in('job_type', ['employee_event_push', 'employee_native_push']).in('status', ['pending', 'leased'])
         .lte('available_at', now).order('available_at').limit(limit);
@@ -643,7 +645,7 @@ export function installEmployeeNotificationRoutes(app, {
       }
       return {
         ok: true,
-        enqueued: { events: eventsEnqueued.data, locations: locationsEnqueued.data },
+        enqueued: { events: eventsEnqueued.data, locations: locationsEnqueued.data, lunch: lunchEnqueued.data },
         claimed: jobs.length,
       };
     } finally { inFlight = false; }
