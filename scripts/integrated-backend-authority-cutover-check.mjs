@@ -359,7 +359,7 @@ assert.equal(productionMigrationState.observed_production?.hydrated_initial_draf
 assert.equal(productionMigrationState.observed_production?.registered_source_dated_status_excluded, true);
 assert.equal(productionMigrationState.observed_production?.outlook_event_sync_table_present, true);
 assert.equal(productionMigrationState.target?.source_migration_file, restoreExistingEmployeeFile);
-assert.equal(productionMigrationState.target?.source_migration_name, "lunch_notification_producer");
+assert.equal(productionMigrationState.target?.source_migration_name, "static_weekly_existing_employee_restore");
 assert.equal(productionMigrationState.target?.source_migration_version, "20260922235500");
 assert.equal(productionMigrationState.target?.production_ledger_version, null);
 assert.equal(productionMigrationState.target?.canonical_source_schema_fingerprint, schemaFingerprint);
