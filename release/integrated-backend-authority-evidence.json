@@ -1,16 +1,16 @@
 {
   "artifact": "integrated-backend-authority-release-evidence.v2",
   "release_id": "release-2026.07.19.custodial-v3.12",
-  "frontend_commit_sha": "fb3cb815a2ebd8f50b33f657c750807f3b4b45b4",
+  "frontend_commit_sha": "f04424482b43921115a1b64ebed3d4267466ed55",
   "frontend_commit_state": "final_pair_bound",
-  "schema_fingerprint": "f893d08e47ac40d3082f0a8e3fbc6d191d617dc319b32f44c39fb15387e73c6d",
+  "schema_fingerprint": "f50a1ffe94fd1ca85e13a5e02c6d949522ac3f6899bef232f70a817c455fd0d7",
   "schema_transition": {
     "transition_id": "custodial-verified-visits-20260922",
     "from_fingerprint": "750e7f040519f6d4555836cbd4d172a22f98911d5bab9918fa370238fff3f822",
-    "to_fingerprint": "f893d08e47ac40d3082f0a8e3fbc6d191d617dc319b32f44c39fb15387e73c6d",
+    "to_fingerprint": "f50a1ffe94fd1ca85e13a5e02c6d949522ac3f6899bef232f70a817c455fd0d7",
     "expires_at": "2026-10-02T23:59:59Z"
   },
-  "frontend_source_fingerprint": "f893d08e47ac40d3082f0a8e3fbc6d191d617dc319b32f44c39fb15387e73c6d",
+  "frontend_source_fingerprint": "f50a1ffe94fd1ca85e13a5e02c6d949522ac3f6899bef232f70a817c455fd0d7",
   "backend_contract": {
     "scan": "scan.v4.snapshot-bound-authority",
     "authority": "offline-authority.v5",
@@ -405,7 +405,7 @@
       {
         "path": "ops/attendance/attendance_pusher.py",
         "mode": "100644",
-        "object_id": "0f476e1f9039e961852a40f5b2059e44d2291267"
+        "object_id": "f73b666a7c6d409e7ae462a1d364fada81efd415"
       },
       {
         "path": "package-lock.json",
@@ -415,7 +415,7 @@
       {
         "path": "package.json",
         "mode": "100644",
-        "object_id": "49b96ca4ed863603885247992eb90391e7841420"
+        "object_id": "4fdee777cdd61077266bf0a264e1d73d7a3b8466"
       },
       {
         "path": "public/moxie-assets/contacts-creekside-animal.png",
@@ -470,7 +470,7 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "00d49d697c409f39cd6109f6fd42a5d8dee2b6ad"
+        "object_id": "b6afd6b96d958caf187964a37aa5b49d122b0180"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
@@ -480,7 +480,7 @@
       {
         "path": "release/production-migration-state.json",
         "mode": "100644",
-        "object_id": "cdab1c7549b149af9bde8c55740efebbeb5313c6"
+        "object_id": "714a6eb27ba94f5dc915216afbf853d88bdc4c5d"
       },
       {
         "path": "release/production-schema-observation-20260922.json",
@@ -495,7 +495,7 @@
       {
         "path": "release/schema-alignment-input.json",
         "mode": "100644",
-        "object_id": "edc02f764fac87e6b44d35394709f7ae7fe8d3f9"
+        "object_id": "5e99d091fda62a5d30565c4209ed3f8a11bdff99"
       },
       {
         "path": "research/european_herbalism_through_paracelsus.md",
@@ -970,7 +970,7 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "72574eb399438d2661fe67e5384191a57dae8595"
+        "object_id": "376e541d9987b3dbd7b82e5a6cadeb9eab6bf2eb"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
@@ -1575,7 +1575,7 @@
       {
         "path": "scripts/static-weekly-control-plane-tests.mjs",
         "mode": "100644",
-        "object_id": "834e7bcd50a7b21ec473bb4cf9e4a17e58c44470"
+        "object_id": "c8bb594c10d8386024e565644df50573350b1793"
       },
       {
         "path": "scripts/static-weekly-day-changes-database-tests.mjs",
@@ -1626,6 +1626,16 @@
         "path": "scripts/static-weekly-lunch-publication-database-tests.mjs",
         "mode": "100644",
         "object_id": "918cc7890587c9ccd116287de454c19a921f76eb"
+      },
+      {
+        "path": "scripts/static-weekly-midweek-vacancy-database-fixture.mjs",
+        "mode": "100644",
+        "object_id": "ccbe281d0a1ac4c79ae4c7a8cae33d94a8491495"
+      },
+      {
+        "path": "scripts/static-weekly-midweek-vacancy-tests.mjs",
+        "mode": "100644",
+        "object_id": "d7b29285837c5c13bd04ead2a14d56c41e16f443"
       },
       {
         "path": "scripts/static-weekly-operational-truth-contract-tests.mjs",
@@ -1715,12 +1725,12 @@
       {
         "path": "scripts/static-weekly-vacate-roster-slot-database-tests.mjs",
         "mode": "100644",
-        "object_id": "2a695443066ef3ddac4a9aa114cd33d2fe143f10"
+        "object_id": "01b50ad2f662615ce1e1113b778626107e6a45fe"
       },
       {
         "path": "scripts/static-weekly-vacate-roster-slot-fixture-tests.mjs",
         "mode": "100644",
-        "object_id": "83e562aff284e2ff650f0d30d66bb4bc5fca7497"
+        "object_id": "b2b7038a73252588ba0eddf4d08d7403bc2da24d"
       },
       {
         "path": "scripts/supabase-rest-rehearsal-proxy.mjs",
@@ -1765,17 +1775,17 @@
       {
         "path": "scripts/visitor-attendance-collector-tests.mjs",
         "mode": "100644",
-        "object_id": "13fa317763374139a7c9ae1ca01f26b6feb0c3e9"
+        "object_id": "30cf92b6c6a25ddf43b9a8a05bc48d579acbdc5d"
       },
       {
         "path": "scripts/visitor-attendance-pusher-tests.py",
         "mode": "100644",
-        "object_id": "034c83bb2e1d0a46111ad8291b649960f746f7db"
+        "object_id": "c65fee55ad9dcded1176d4297ced355b4c6aefdd"
       },
       {
         "path": "scripts/visitor-attendance-reader-database-tests.mjs",
         "mode": "100644",
-        "object_id": "75333ab02b2659079489e2a6791fd7d063c90320"
+        "object_id": "b15d3b15dc517aca679ea27e5e4280f707412fea"
       },
       {
         "path": "scripts/wait-rehearsal-json-endpoint.sh",
@@ -2320,7 +2330,7 @@
       {
         "path": "src/static-weekly-control-plane.js",
         "mode": "100644",
-        "object_id": "a1a494788101c6002af3b0804b50ac419ad4f013"
+        "object_id": "d1da638bfd3a4bab86f98ce0ab54cd2583add06d"
       },
       {
         "path": "src/static-weekly-lunch-authority-adapter.js",
@@ -2365,12 +2375,12 @@
       {
         "path": "src/static-weekly-schedule-model.js",
         "mode": "100644",
-        "object_id": "962c20f10fc26b2e826326316425612f42704fef"
+        "object_id": "5cd3d9dbaf97dce069798f8d085aa64bfbb726a2"
       },
       {
         "path": "src/static-weekly-schedule-program.js",
         "mode": "100644",
-        "object_id": "084e7b917db6c52f90a240a63ffbbc38573851b8"
+        "object_id": "84e33b0137ab9b698e677e1376025917a5765c25"
       },
       {
         "path": "src/static-weekly-schedule-runtime-policy.js",
@@ -2390,7 +2400,7 @@
       {
         "path": "src/static-weekly-schedule-verifier.js",
         "mode": "100644",
-        "object_id": "e00208c1d842def63f629c10e470e0a16a5b22d8"
+        "object_id": "a094126671f875c4f511209158c28e10ae3241d4"
       },
       {
         "path": "src/static-weekly-shift-end-coverage.js",
@@ -2430,7 +2440,7 @@
       {
         "path": "src/visitor-attendance-collector.js",
         "mode": "100644",
-        "object_id": "700759460e768dbae776232b93cdc61fd4d9fd11"
+        "object_id": "17cf056b0b80311ca352f60b3b7e0241c9793754"
       },
       {
         "path": "supabase/.gitignore",
@@ -2455,12 +2465,12 @@
       {
         "path": "supabase/canonical/schema-fingerprint-input.json",
         "mode": "100644",
-        "object_id": "d91189f8b1554f1d5bbbde6baf65f64df6e13d8d"
+        "object_id": "5e78fe7322b3e6613148af2ef2a54ec1d962c794"
       },
       {
         "path": "supabase/canonical/schema-fingerprint.txt",
         "mode": "100644",
-        "object_id": "c607864e8a508949b569841bf5dd16862a997de4"
+        "object_id": "135601171c80943dd52b2f0b0ddb18bc015aaab2"
       },
       {
         "path": "supabase/config.toml",
@@ -3735,12 +3745,12 @@
       {
         "path": "supabase/migrations/20260923065000_static_weekly_vacate_roster_slot.sql",
         "mode": "100644",
-        "object_id": "f3dda51b097b00af0f301ee88356ad57478c5ead"
+        "object_id": "7c216dbba9b92e7410e86864e4739450f5fead51"
       },
       {
         "path": "supabase/migrations/20260923121151_visitor_attendance_reader.sql",
         "mode": "100644",
-        "object_id": "82deb6dd1de662cbb3221593a1d4ba9719ffd013"
+        "object_id": "1c06966e357f8488759960870190c84d41050709"
       },
       {
         "path": "tmp/write_probe.txt",
@@ -3748,7 +3758,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 724,
+    "authority_path_count": 726,
     "migration_path_count": 138,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
