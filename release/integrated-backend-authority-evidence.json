@@ -268,6 +268,11 @@
         "object_id": "087e6769f8efca83e172bde52f7416143afb4084"
       },
       {
+        "path": "config/custodial-recurring-schedule-20260923.json",
+        "mode": "100644",
+        "object_id": "ee9caf1bd1256456af32f2003a1917c8512df3cf"
+      },
+      {
         "path": "config/fully-kiosk-devices.example.json",
         "mode": "100644",
         "object_id": "7a680bc3f6800ddaf5c5d6e81f813aceae2f765b"
@@ -931,6 +936,11 @@
         "path": "scripts/gemini-console-foundation-tests.mjs",
         "mode": "100644",
         "object_id": "11df7764faf1bf5bd75d725c7f1c058de4e39edd"
+      },
+      {
+        "path": "scripts/generate-owner-corrected-static-weekly-schedule.mjs",
+        "mode": "100644",
+        "object_id": "cd6d3b22fbc64df7720958b1c04ed6045c3a9d8e"
       },
       {
         "path": "scripts/generate-v3-source-review.mjs",
@@ -3653,7 +3663,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 705,
+    "authority_path_count": 707,
     "migration_path_count": 135,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
