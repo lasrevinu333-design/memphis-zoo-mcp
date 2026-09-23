@@ -67,6 +67,45 @@ export async function visitorDatabaseBoundaryProof({socketDir,sql}) {
    await reset();const values=await Promise.allSettled([push(writer,observation),push(other,{...observation,planned:201})]);
    assert.equal(values.filter(v=>v.status==='fulfilled').length,1);assert.equal(values.find(v=>v.status==='rejected').reason.code,'23514');
   });
+  const delayedOlderProof=async()=>{
+   await reset();
+   const lockKey=23092353;
+   const pid=(await writer.query('select pg_backend_pid() as pid')).rows[0].pid;
+   await admin.query('select pg_advisory_lock($1)',[lockKey]);
+   let pending;
+   try{
+    // Hold A before its actual RPC in the SAME statement, not a preceding query.
+    // B commits a valid +59s observation while A still has an older statement clock.
+    pending=writer.query(`with delayed as materialized (select pg_advisory_xact_lock($1))
+      select public.app_apply_operational_command('attendance_state_upsert',
+        $2::jsonb||jsonb_build_object('fetched_at',statement_timestamp())) from delayed`,
+      [lockKey,JSON.stringify({...observation,attendance:900})]).then(value=>({value}),error=>({error}));
+    let blocked;
+    for(let attempt=0;attempt<40;attempt++){
+     const row=(await admin.query("select query_start::text,wait_event from pg_stat_activity where pid=$1",[pid])).rows[0];
+     if(row?.wait_event==='advisory'){blocked=row;break;}
+     await admin.query('select pg_sleep(0.025)');
+    }
+    assert.ok(blocked,'A is actually blocked within its older statement');
+    await admin.query('select pg_sleep(2.1)');
+    const newer=(await admin.query("select ($1::timestamptz+interval '61 seconds')::text as timestamp",[blocked.query_start])).rows[0].timestamp;
+    await push(other,{...observation,attendance:0,fetched_at:newer});
+    const before=(await admin.query(`select fetched_at> $1::timestamptz+interval '60 seconds' as old_clock_poison,
+      fetched_at<=clock_timestamp()+interval '60 seconds' as current_clock_valid
+      from public.current_attendance_state where id=1`,[blocked.query_start])).rows[0];
+    assert.equal(before.old_clock_poison,true);assert.equal(before.current_clock_valid,true);
+    await admin.query('select pg_advisory_unlock($1)',[lockKey]);
+    const outcome=await pending;
+    const saved=(await reader('select attendance,fetched_at::text from public.current_attendance_state where id=1'))[0];
+    console.log('DELAYED_WRITER_WITNESS',JSON.stringify({oldStatement:blocked.query_start,newerTimestamp:newer,...before,olderWriteCode:outcome.error?.code??'accepted',savedAttendance:saved.attendance}));
+    assert.equal(outcome.error?.code,'23514','older A cannot classify valid B as poison');
+    assert.equal(saved.attendance,0);assert.equal(Date.parse(saved.fetched_at),Date.parse(newer));
+   }finally{
+    await admin.query('select pg_advisory_unlock($1)',[lockKey]);
+    if(pending)await pending;
+   }
+  };
+  await test('R2-02 actual delayed older statement preserves later valid near-future zero',delayedOlderProof);
   for(const role of ['anon','authenticated','custodial_application_reader'])await test(role+' cannot call shared writer',async()=>{
    const denied=await connect(role);await assert.rejects(push(denied,observation),e=>e.code==='42501');
   });
@@ -84,6 +123,7 @@ export async function visitorDatabaseBoundaryProof({socketDir,sql}) {
    await reset();assert.equal((await runtime().collector(observation)).code,200);
    const denied=await connect('authenticated');await assert.rejects(push(denied,observation),e=>e.code==='42501');
   });
+  await test('R2-02 restored exact function also preserves newer zero against delayed older statement',delayedOlderProof);
   console.log(JSON.stringify({scope:'actual PostgreSQL pg driver, dedicated read authority, persistence/normalizer/routes, concurrent writers, ACL and recovery',passed:checks.length,failed:0,checks,productionWritten:false},null,2));
   return checks.length;
  } finally {

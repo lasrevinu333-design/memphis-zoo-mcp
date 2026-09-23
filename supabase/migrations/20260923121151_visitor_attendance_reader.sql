@@ -46,7 +46,9 @@ begin
       yesterday=excluded.yesterday,yesterday_plan=excluded.yesterday_plan,source=excluded.source,fetched_at=excluded.fetched_at,updated_at=now()
     where public.current_attendance_state.fetched_at is null
       or not isfinite(public.current_attendance_state.fetched_at)
-      or public.current_attendance_state.fetched_at>statement_timestamp()+interval '60 seconds'
+      -- The conflicting row may have committed after this statement began.
+      -- Classify poison when that row is considered, not with a stale start time.
+      or public.current_attendance_state.fetched_at>clock_timestamp()+interval '60 seconds'
       or excluded.fetched_at>public.current_attendance_state.fetched_at
       or (excluded.fetched_at=public.current_attendance_state.fetched_at
         and row(excluded.attendance,excluded.last_year,excluded.planned,excluded.yesterday,excluded.yesterday_plan,excluded.source)

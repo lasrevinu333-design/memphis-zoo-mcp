@@ -1,4 +1,5 @@
 import ast,json,re
+from datetime import datetime,timezone
 from pathlib import Path
 from types import SimpleNamespace
 root=Path(__file__).resolve().parents[1]
@@ -39,4 +40,26 @@ for invalid in ['Planned: 1.5','Planned: -1','Planned: N/A (updated 09:30)','Pla
  try:ns['extract_labeled_metric'](invalid,'Planned');raise AssertionError(invalid+' accepted')
  except RuntimeError:pass
  passed+=1
-print(json.dumps({'passed':passed,'failed':0,'networkCalls':0,'browserLaunched':False,'hostCollectorChanged':False}))
+extract=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='extract_attendance_from_page')
+ns.update(datetime=datetime,timezone=timezone)
+exec(compile(ast.Module(body=[extract],type_ignores=[]),'<actual page extraction with synthetic DOM>','exec'),ns)
+def page(body_text):
+ value=SimpleNamespace(text_content=lambda:'17')
+ body=SimpleNamespace(text_content=lambda:body_text,locator=lambda _:SimpleNamespace(first=value))
+ card=SimpleNamespace(locator=lambda _:body)
+ header=SimpleNamespace(text_content=lambda:'Attendance',locator=lambda _:card)
+ return SimpleNamespace(locator=lambda _:SimpleNamespace(count=lambda:1,nth=lambda _:header))
+failures=[]
+for label in ['Last Year','Planned','Yesterday','Yesterday Plan']:
+ for duplicate in ['1.5','2147483648','NaN','','200','0']:
+  text=f'17 {label}: 200 {label.lower()}: {duplicate}'
+  try:
+   ns['extract_attendance_from_page'](page(text))
+   failures.append(text)
+  except RuntimeError:
+   passed+=1
+result=ns['extract_attendance_from_page'](page('17 Planned: 0'))
+assert result['planned']==0 and result['last_year'] is None
+passed+=1
+print(json.dumps({'passed':passed,'failed':len(failures),'failures':failures,'networkCalls':0,'browserLaunched':False,'hostCollectorChanged':False}))
+assert not failures,'duplicate labeled metrics accepted through actual collector page extraction'

@@ -1010,10 +1010,11 @@ function requiredRequestOperationId(req) {
 
 function parseAttendanceMetric(text, label) {
   const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const pattern = new RegExp(`\\b${escaped}\\s*:\\s*(.*?)(?=\\s+(?:Last Year|Planned|Yesterday Plan|Yesterday)\\s*:|$)`, "i");
-  const match = text.match(pattern);
-  if (!match) return null;
-  const parsed = parseAttendanceDisplayInteger(match[1]);
+  const pattern = new RegExp(`\\b${escaped}\\s*:\\s*(.*?)(?=\\s+(?:Last Year|Planned|Yesterday Plan|Yesterday)\\s*:|$)`, "gi");
+  const matches = [...text.matchAll(pattern)];
+  if (matches.length === 0) return null;
+  if (matches.length !== 1) throw new Error(`Attendance ${label} field is duplicated.`);
+  const parsed = parseAttendanceDisplayInteger(matches[0][1]);
   if (parsed == null) throw new Error(`Attendance ${label} value is invalid.`);
   return parsed;
 }

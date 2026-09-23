@@ -57,6 +57,17 @@ await test('F2 failed refresh may retain cache only as stale',async()=>{
  let html=page('10');const f=visitorRuntimeFixture({nowMs,html:()=>html});await f.context.fetchCurrentAttendance();html=page('1,23');
  const value=await f.context.fetchCurrentAttendance({force:true});assert.equal(value.attendance,10);assert.equal(value.stale,true);
 });
+for(const label of ['Last Year','Planned','Yesterday','Yesterday Plan']){
+ for(const duplicate of ['1.5','2147483648','NaN','','200','0'])await test(`R2-01 duplicate ${label} ${duplicate} fails the entire public observation`,async()=>{
+  const f=visitorRuntimeFixture({nowMs,html:page('17',`${label}: 200 ${label}: ${duplicate}`)});
+  assert.equal((await f.publicRead()).code,502);
+ });
+ await test(`R2-01 duplicate ${label} cannot replace cached data as fresh`,async()=>{
+  let html=page('20');const f=visitorRuntimeFixture({nowMs,html:()=>html});await f.context.fetchCurrentAttendance();
+  html=page('17',`${label}: 200 ${label.toLowerCase()}: 1.5`);
+  const value=await f.context.fetchCurrentAttendance({force:true});assert.equal(value.attendance,20);assert.equal(value.stale,true);
+ });
+}
 for(const fetched_at of ['2099-01-01T00:00:00Z',iso(nowMs+60001),iso(nowMs-3600001),'not-a-date',null]){
  await test('F3 shared persistence rejects out-of-window '+fetched_at,async()=>{
   const f=visitorRuntimeFixture({nowMs});const res=await f.manager({...payload,fetched_at});

@@ -58,10 +58,12 @@ def extract_labeled_metric(text: str, label: str):
         return None
 
     escaped = re.escape(label)
-    match = re.search(rf"\b{escaped}\s*:\s*(.*?)(?=\s+(?:Last Year|Planned|Yesterday Plan|Yesterday)\s*:|$)", text, flags=re.IGNORECASE | re.DOTALL)
-    if not match:
+    matches = list(re.finditer(rf"\b{escaped}\s*:\s*(.*?)(?=\s+(?:Last Year|Planned|Yesterday Plan|Yesterday)\s*:|$)", text, flags=re.IGNORECASE | re.DOTALL))
+    if not matches:
         return None
-    value = parse_int_from_text(match.group(1))
+    if len(matches) != 1:
+        raise RuntimeError(f"Duplicate {label} visitor metric")
+    value = parse_int_from_text(matches[0].group(1))
     if value is None:
         raise RuntimeError(f"Invalid {label} visitor metric")
     return value
