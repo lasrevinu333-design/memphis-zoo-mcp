@@ -68,6 +68,7 @@ const completedCleaningReminderCycles = "20260922070000_completed_cleaning_remin
 const verifiedVisitReminderState = "20260922090000_verified_visit_reminder_state.sql";
 const lunchPublicationFile = "20260922163000_static_weekly_lunch_publication.sql";
 const lunchProducerFile = "20260922200000_lunch_notification_producer.sql";
+const restoreExistingEmployeeFile = "20260922235500_static_weekly_existing_employee_restore.sql";
 const releaseInputPath = "release/integrated-backend-authority-input.json";
 const releaseEvidencePath = "release/integrated-backend-authority-evidence.json";
 const productionMigrationStatePath = "release/production-migration-state.json";
@@ -273,7 +274,7 @@ const input = parseJsonBlob(blobByPath.get(releaseInputPath), "release authority
 const productionMigrationState = parseJsonBlob(blobByPath.get(productionMigrationStatePath), "production migration state");
 assert.equal(productionMigrationState.mode, "migration_required");
 assert.ok(Array.isArray(productionMigrationState.pending_migrations));
-assert.equal(productionMigrationState.pending_migrations.length, 5, "the candidate must identify exactly the five ordered Sep22 corrections");
+assert.equal(productionMigrationState.pending_migrations.length, 6, "the candidate must identify exactly the six ordered Sep22 corrections");
 const pendingReleaseMigrations = productionMigrationState.pending_migrations.map(({ file }) => file);
 assert.deepEqual(pendingReleaseMigrations, [
   lunchDeliveryFailureManagerAlert,
@@ -281,6 +282,7 @@ assert.deepEqual(pendingReleaseMigrations, [
   verifiedVisitReminderState,
   lunchPublicationFile,
   lunchProducerFile,
+  restoreExistingEmployeeFile,
 ]);
 assert.equal(Object.hasOwn(productionMigrationState, "applied_release_migrations"), false,
   "captured state must use the exact ledger head instead of a duplicate partial applied-migration list");
@@ -356,13 +358,13 @@ assert.equal(productionMigrationState.observed_production?.vacancy_functions_pre
 assert.equal(productionMigrationState.observed_production?.hydrated_initial_draft_reader_present, true);
 assert.equal(productionMigrationState.observed_production?.registered_source_dated_status_excluded, true);
 assert.equal(productionMigrationState.observed_production?.outlook_event_sync_table_present, true);
-assert.equal(productionMigrationState.target?.source_migration_file, lunchProducerFile);
+assert.equal(productionMigrationState.target?.source_migration_file, restoreExistingEmployeeFile);
 assert.equal(productionMigrationState.target?.source_migration_name, "lunch_notification_producer");
-assert.equal(productionMigrationState.target?.source_migration_version, "20260922200000");
+assert.equal(productionMigrationState.target?.source_migration_version, "20260922235500");
 assert.equal(productionMigrationState.target?.production_ledger_version, null);
 assert.equal(productionMigrationState.target?.canonical_source_schema_fingerprint, schemaFingerprint);
 assert.equal(productionMigrationState.target?.public_function_count, 517);
-assert.equal(productionMigrationState.target?.production_ledger_count, 235);
+assert.equal(productionMigrationState.target?.production_ledger_count, 236);
 assert.equal(productionMigrationState.target?.source_authority_migration_count, expectedMigrationCount);
 assert.equal(productionMigrationState.target?.pending_migration_count, pendingReleaseMigrations.length);
 assert.equal(productionMigrationState.target?.registered_source_dated_status_excluded, true);

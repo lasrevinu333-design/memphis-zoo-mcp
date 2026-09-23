@@ -67,12 +67,14 @@ const canonicalFingerprint = readFileSync("supabase/canonical/schema-fingerprint
 const verifiedVisitReminderFile = "20260922090000_verified_visit_reminder_state.sql";
 const lunchPublicationFile = "20260922163000_static_weekly_lunch_publication.sql";
 const lunchProducerFile = "20260922200000_lunch_notification_producer.sql";
+const restoreExistingEmployeeFile = "20260922235500_static_weekly_existing_employee_restore.sql";
 const exactPendingReleaseMigrations = [
   "20260922050000_lunch_delivery_failure_manager_alert.sql",
   "20260922070000_completed_cleaning_reminder_cycles.sql",
   verifiedVisitReminderFile,
   lunchPublicationFile,
   lunchProducerFile,
+  restoreExistingEmployeeFile,
 ];
 const exactMigrationFiles = readdirSync("supabase/migrations").filter((name) => /^[0-9]{14}_.+\.sql$/.test(name)).sort();
 const exactMigrationCount = exactMigrationFiles.length;
@@ -215,13 +217,13 @@ assert.equal(productionMigrationState.observed_production.vacancy_functions_pres
 assert.equal(productionMigrationState.observed_production.hydrated_initial_draft_reader_present, true);
 assert.equal(productionMigrationState.observed_production.registered_source_dated_status_excluded, true);
 assert.equal(productionMigrationState.observed_production.outlook_event_sync_table_present, true);
-assert.equal(productionMigrationState.target.source_migration_file, lunchProducerFile);
+assert.equal(productionMigrationState.target.source_migration_file, restoreExistingEmployeeFile);
 assert.equal(productionMigrationState.target.source_migration_name, "lunch_notification_producer");
-assert.equal(productionMigrationState.target.source_migration_version, "20260922200000");
+assert.equal(productionMigrationState.target.source_migration_version, "20260922235500");
 assert.equal(productionMigrationState.target.production_ledger_version, null);
 assert.equal(productionMigrationState.target.canonical_source_schema_fingerprint, canonicalFingerprint);
 assert.equal(productionMigrationState.target.public_function_count, 517);
-assert.equal(productionMigrationState.target.production_ledger_count, 235);
+assert.equal(productionMigrationState.target.production_ledger_count, 236);
 assert.equal(productionMigrationState.target.source_authority_migration_count, exactMigrationCount);
 assert.equal(productionMigrationState.target.pending_migration_count, exactPendingReleaseMigrations.length);
 assert.equal(productionMigrationState.target.registered_source_dated_status_excluded, true);
@@ -303,7 +305,7 @@ assert.match(outlookEventSyncAuthority, /revoke all privileges on table public\.
 assert.doesNotMatch(outlookEventSyncAuthority, /grant\s+[^;]+\s+to\s+(?:anon|authenticated|custodial_application_reader)\b/i);
 assert.equal(releaseEvidence.compatibility_window.accepted_engine.scan, "scan.v2");
 assert.equal(releaseEvidence.compatibility_window.required_engine.scan, "scan.v4.snapshot-bound-authority");
-assert.equal(releaseEvidence.migrations.at(-1).name, lunchProducerFile);
+assert.equal(releaseEvidence.migrations.at(-1).name, restoreExistingEmployeeFile);
 assert.match(applicationReaderReleaseRecovery, /application_reader_identity_projection_bounded/i);
 assert.match(applicationReaderReleaseRecovery, /custodial_application_reader_device_identity/i);
 assert.match(applicationReaderReleaseRecovery, /' grant '\|\|g\.privilege_type\|\|' \('\|\|quote_ident\(a\.attname\)/i);
@@ -363,7 +365,7 @@ assert.equal(releaseEvidence.authority_content_identity.expected_tree_inventory.
 assert.equal(releaseEvidence.authority_content_identity.authority_path_count, releaseEvidence.authority_content_identity.expected_tree_inventory.length);
 assert.equal(releaseEvidence.authority_content_identity.migration_path_count, exactMigrationCount);
 assert.equal(releaseEvidence.migrations.length, exactMigrationCount);
-assert.equal(releaseEvidence.migrations.at(-1).name, lunchProducerFile);
+assert.equal(releaseEvidence.migrations.at(-1).name, restoreExistingEmployeeFile);
 assert.match(releaseEvidence.compatibility_window.credential_replacement_lineage_phase,
   /append-only same-device predecessor-to-successor transport lineage.*original actor, device, credential, or work evidence/i);
 assert.equal(Object.hasOwn(releaseEvidence.authority_content_identity, "value"), false, "generated evidence must not self-assert a worktree-derived content hash");
