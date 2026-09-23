@@ -9,6 +9,7 @@
  * request session and the database re-resolves its active display name.
  */
 import { createHash, randomUUID } from "node:crypto";
+import { assertOwnerRecurringWorkdays } from "./static-weekly-owner-workdays.js";
 import { Pool } from "pg";
 import { createStaticWeeklyDraftRpcInput } from "./static-weekly-schedule-database-adapter.js";
 import { createStaticWeeklyProjectionWithLunchRpcInput } from "./static-weekly-lunch-publication.js";
@@ -503,6 +504,7 @@ export function createStaticWeeklyControlPlane({
   }
 
   async function prepareDraft(input, { expectedRevision, actor }) {
+    assertOwnerRecurringWorkdays(input);
     if (compilerPreparer) {
       return compilerPreparer(input, { kind: "draft", expectedRevision, actor });
     }
@@ -510,6 +512,7 @@ export function createStaticWeeklyControlPlane({
   }
 
   async function prepareProjection(input, { publicationId, expectedRevision, actor }) {
+    assertOwnerRecurringWorkdays(input);
     if (compilerPreparer) {
       return compilerPreparer(input, { kind: "projection", publicationId, expectedRevision, actor });
     }

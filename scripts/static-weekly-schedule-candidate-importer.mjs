@@ -5,6 +5,7 @@
  * routes, capacity, or publication readiness from presentation data.
  */
 import fs from "node:fs";
+import { assertOwnerRecurringWorkdays } from "../src/static-weekly-owner-workdays.js";
 import { createHash } from "node:crypto";
 import { compileStaticWeeklySchedule, postgresJsonbContentDigest } from "../src/static-weekly-schedule-compiler.js";
 
@@ -147,6 +148,10 @@ function executableCompilerInput(packet) {
 export async function prepareStaticWeeklyRegistrationArtifact(packet) {
   const result = validateStaticWeeklyPacket(packet);
   if (!result.admissibleForRegistration) return result;
+  try { assertOwnerRecurringWorkdays(packet.compilerInput, packet.effectiveDate); }
+  catch (error) {
+    return { ...result, ok: false, admissibleForRegistration: false, errors: [...result.errors, error.code || "owner_workdays_invalid"] };
+  }
   const compiled = await compileStaticWeeklySchedule(executableCompilerInput(packet));
   const canonicalSource = compiled.canonicalAuthority?.compilerInput;
   if (compiled.status !== "FEASIBLE" || compiled.publicationAuthority !== "ACCEPTABLE" || compiled.verifier?.ok !== true

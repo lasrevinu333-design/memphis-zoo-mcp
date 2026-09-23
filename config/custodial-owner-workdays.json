@@ -1,0 +1,15 @@
+{
+  "schema": "custodial.owner-recurring-workdays.v1",
+  "source": "Eric Operle explicit program correction, September 22, 2026",
+  "rules": [
+    {
+      "employeeId": "3da709bb-2223-4e15-8e3a-db02e3f32e97",
+      "slotId": "f22348e9-d4b9-5a7e-b8fd-d0d2c1ec534f",
+      "displayName": "Karen Robinson",
+      "appliesFrom": "2026-09-22",
+      "workDays": [1, 2, 3, 5, 6],
+      "daysOff": [0, 4],
+      "note": "Monday, Tuesday, Wednesday, Friday, Saturday. Sunday and Thursday off. Preserve existing identity, shift, lunch and history. Temporary PDF lunch changes are not program source changes."
+    }
+  ]
+}

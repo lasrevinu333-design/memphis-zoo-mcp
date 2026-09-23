@@ -58,15 +58,15 @@
     "target_schedule_slot_count_observed_at": "2026-09-19T02:19:26.738042Z"
   },
   "target": {
-    "source_migration_file": "20260922163000_static_weekly_lunch_publication.sql",
-    "source_migration_name": "static_weekly_lunch_publication",
-    "source_migration_version": "20260922163000",
+    "source_migration_file": "20260922200000_lunch_notification_producer.sql",
+    "source_migration_name": "lunch_notification_producer",
+    "source_migration_version": "20260922200000",
     "production_ledger_version": null,
-    "canonical_source_schema_fingerprint": "b3729c40e808f88af4a58db03defa236c58b510987a0d30d322a475f282c76bd",
-    "public_function_count": 516,
-    "production_ledger_count": 234,
-    "source_authority_migration_count": 134,
-    "pending_migration_count": 4,
+    "canonical_source_schema_fingerprint": "c4437142cda9a03bf3f89150e901e1baecf25b9e3587009d21efc365c23d57cf",
+    "public_function_count": 517,
+    "production_ledger_count": 235,
+    "source_authority_migration_count": 135,
+    "pending_migration_count": 5,
     "registered_source_dated_status_excluded": true,
     "expected_catalog_counts": {
       "column_grants": 43,
@@ -75,14 +75,14 @@
       "cron_jobs": 9,
       "default_privileges": 12,
       "extensions": 8,
-      "functions": 516,
+      "functions": 517,
       "indexes": 664,
       "owned_scheduler_role_memberships": 3,
       "owned_scheduler_roles": 3,
       "policies": 42,
       "privilege_bearing_roles": 4,
       "role_memberships": 25,
-      "routine_grants": 359,
+      "routine_grants": 360,
       "schema_grants": 9,
       "sequence_grants": 0,
       "sequences": 0,
@@ -96,7 +96,7 @@
   },
   "source_binding": {
     "kind": "external_exact_head_release_attestation",
-    "rule": "The production approval package binds the exact backend commit/tree, four migration blobs, generated release evidence, exact frontend commit, fresh source catalog/ledger identity, backup and rehearsal before mutation."
+    "rule": "The production approval package binds the exact backend commit/tree, five migration blobs, generated release evidence, exact frontend commit, fresh source catalog/ledger identity, backup and rehearsal before mutation."
   },
   "backup_evidence": {
     "state": "fresh_verified_backup_required_after_fresh_source_capture_and_before_mutation",
@@ -121,7 +121,7 @@
     "production migration ledger is exactly 230 rows headed by 20260920010000 event_reminder_static_weekly_authority",
     "locked production source catalog must freshly recapture and equal 750e7f040519f6d4555836cbd4d172a22f98911d5bab9918fa370238fff3f822 with the exact expected source counts before any DDL; a stale or mismatched catalog aborts the plan",
     "a fresh encrypted backup with restore verification completes after the fresh source capture and before mutation",
-    "production exposes exactly 506 public functions and 347 non-owner routine grants before the four corrections",
+    "production exposes exactly 506 public functions and 347 non-owner routine grants before the five corrections",
     "one active authority key, two active registered schedule sources, 22 roster slots, 20 incumbencies, zero draft, two published versions/publications, four projections, 1394 occurrences, 19 command receipts and authority revision 19 remain current",
     "five target schedule positions remain represented without inventing staff identities",
     "Outlook event-sync authority exists and its rows must remain unchanged by this plan",
@@ -161,12 +161,19 @@
       "file": "20260922163000_static_weekly_lunch_publication.sql",
       "source_migration_version": "20260922163000",
       "sha256": "738e6bf8032cbefe9643888196262305e729c13467c533138e228ffc5afc16ab"
+    },
+    {
+      "order": 5,
+      "phase": "lunch_notification_producer",
+      "file": "20260922200000_lunch_notification_producer.sql",
+      "source_migration_version": "20260922200000",
+      "sha256": "578017a8fdd5402d9d592b14651c89ef89a5a9023888f39f3b715edb45388145"
     }
   ],
   "postconditions": [
-    "production ledger advances exactly four rows from 230 to 234, ending at 20260922163000 static_weekly_lunch_publication; no already-applied migration is replayed",
-    "complete public catalog and privilege fingerprint equals b3729c40e808f88af4a58db03defa236c58b510987a0d30d322a475f282c76bd with the exact reviewed target counts",
-    "production exposes exactly 516 public functions and 359 non-owner routine grants after the corrections",
+    "production ledger advances exactly five rows from 230 to 235, ending at 20260922200000 lunch_notification_producer; no already-applied migration is replayed",
+    "complete public catalog and privilege fingerprint equals c4437142cda9a03bf3f89150e901e1baecf25b9e3587009d21efc365c23d57cf with the exact reviewed target counts",
+    "production exposes exactly 517 public functions and 360 non-owner routine grants after the corrections",
     "first two simultaneous absences remain internal and each third-or-later absence consumes exactly one distinct registered CoverAll capacity, preserving manager overrides/history",
     "guest reporting OFF prevents queued guest notification dispatch without deleting pending/history records; staff Feedback remains separate",
     "employee event reminders are generated at D-3, D-2 and event day at reminder-day shift start plus 15 minutes and final delivery revalidates current event-date ownership/assignment",
@@ -176,7 +183,8 @@
     "terminal lunch notification failures create idempotent named-manager alerts without exposing provider errors",
     "five-minute overdue repeats resolve only after a valid distinct native Start and Finish visit; check-only visits preserve actual last-cleaned history",
     "current lunch responsibilities are accepted atomically with the governed projection; malformed or stale lunch authority aborts publication without changing normal ownership or existing visit clocks",
-    "employee Schedule and physical reminder responsibility consume the same accepted lunch document; handoff keeps normal ownership and visit deadlines unchanged"
+    "employee Schedule and physical reminder responsibility consume the same accepted lunch document; handoff keeps normal ownership and visit deadlines unchanged",
+    "accepted lunch start/end intents create stable scheduled jobs for the active assigned credential without claiming provider or handset receipt"
   ],
   "previous_observation": {
     "captured_at": "2026-09-19T02:19:26.738042Z",

@@ -3,11 +3,11 @@
   "frontend_commit_sha": "fb3cb815a2ebd8f50b33f657c750807f3b4b45b4",
   "frontend_commit_state": "final_pair_bound",
   "backend_minimum_version": "release-2026.07.19.custodial-v3.12",
-  "schema_fingerprint": "b3729c40e808f88af4a58db03defa236c58b510987a0d30d322a475f282c76bd",
+  "schema_fingerprint": "c4437142cda9a03bf3f89150e901e1baecf25b9e3587009d21efc365c23d57cf",
   "schema_transition": {
     "transition_id": "custodial-verified-visits-20260922",
     "from_fingerprint": "750e7f040519f6d4555836cbd4d172a22f98911d5bab9918fa370238fff3f822",
-    "to_fingerprint": "b3729c40e808f88af4a58db03defa236c58b510987a0d30d322a475f282c76bd",
+    "to_fingerprint": "c4437142cda9a03bf3f89150e901e1baecf25b9e3587009d21efc365c23d57cf",
     "expires_at": "2026-10-02T23:59:59Z"
   },
   "api_contract_versions": {
