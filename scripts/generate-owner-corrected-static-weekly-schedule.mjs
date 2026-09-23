@@ -194,6 +194,15 @@ for (const row of version.assignments) {
     assert.ok(["07:00","08:00"].includes(owner.shift[0]) || row.locationCodeSnapshot === "ELEPHANT_TRUNK_RESTROOMS", `${row.locationCodeSnapshot} must stay with later opening staff`);
   }
 }
+// Keep all exact graph edges and capacity facts. Their full derivation is
+// in the retained hash-bound source artifacts, not duplicated per edge/row.
+for (const edge of input.proximity) edge.provenance = `base:${config.basePacket.sha256}`;
+for (const availability of version.slotAvailability) {
+  for (const key of Object.keys(availability).filter(key => key.endsWith("Provenance"))) {
+    const ownerFact = ["productiveCapacityProvenance","maxDutyProvenance","restrictionProvenance","acceptedRouteProvenance"].includes(key);
+    availability[key] = ownerFact ? `owner:${fileHash(CONFIG_PATH)}` : `base:${config.basePacket.sha256}`;
+  }
+}
 // Carry actual owner restrictions into the canonical compiler, not only display.
 for (const assignment of version.assignments) {
   const disallowed = slotEntries.filter(([,slot]) =>
