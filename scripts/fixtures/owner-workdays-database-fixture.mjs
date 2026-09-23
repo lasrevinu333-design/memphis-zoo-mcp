@@ -37,7 +37,7 @@ export function ownerWorkdaysSyntheticSource({week,people,locationId,vacancies,r
 
 // Synthetic six-person/nine-position shape. Exact policy IDs select the REAL
 // guard; no production rows are read or copied. Other identities are synthetic.
-export async function ownerWorkdaysDatabaseProof({socketDir,sql,container}) {
+export async function ownerWorkdaysDatabaseProof({socketDir,sql,container,prepublicationReplay=false}) {
  const rule=JSON.parse(readFileSync(new URL('../../config/custodial-owner-workdays.json',import.meta.url))).rules[0];
  const q=v=>`'${String(v).replaceAll("'","''")}'`,j=v=>`${q(JSON.stringify(v))}::jsonb`;
  const scalar=s=>sql(s).trim().split('\n').at(-1),json=s=>JSON.parse(scalar(s));
@@ -63,7 +63,7 @@ export async function ownerWorkdaysDatabaseProof({socketDir,sql,container}) {
   const compile=async input=>{const result=await compileStaticWeeklySchedule(input);assert.equal(result.status,'FEASIBLE',JSON.stringify(result.fatal));assert.equal(result.verifier.ok,true);return result;};
   const release=(name,args)=>json(`set role static_weekly_release_operator; select public.${name}(${args})::text`);
   const cp=(name,args)=>json(`set role static_weekly_control_plane; select public.${name}(${args})::text`);
-  const baselineCompiled=await compile(source),fullSource=baselineCompiled.canonicalAuthority.compilerInput;
+  let baselineCompiled=await compile(source);const fullSource=baselineCompiled.canonicalAuthority.compilerInput;
   // The legacy bootstrap requires a real incumbent for every initial slot.
   // Bootstrap only the six people, then create THREE ACTUAL EMPTY positions
   // through the existing vacancy RPC before publishing the full nine-slot source.
@@ -80,7 +80,37 @@ export async function ownerWorkdaysDatabaseProof({socketDir,sql,container}) {
   check(Number(scalar('select count(*)::text from public.employees')),schemaSeedPeople+6,'only six fixture people added; no fake hires');
   check(scalar(`select count(*)::text from public.employees where id in (${people.map(p=>q(p.id)).join(',')})`),'6','exact six fixture identities retained');
   check(scalar('select count(*)::text from public.weekly_roster_slots'),'9','nine real fixture positions');
-  const fullSourceId=randomUUID();release('static_weekly_v3_register_authority_source',`${q(fullSourceId)},${j(fullSource)},'synthetic full source'`);
+  let fullSourceId=randomUUID();release('static_weekly_v3_register_authority_source',`${q(fullSourceId)},${j(fullSource)},'synthetic full source'`);
+  let prepublication;
+  if(prepublicationReplay){
+   // This lane isolates original-completion replay on an all-days position.
+   // Karen's midweek/off-day departure remains covered by the normal lane below.
+   const departing=people[1],vacancySource=structuredClone(fullSource),sourceId=randomUUID();
+   vacancySource.version.vacancyCapableSlotIds.push(departing.slotId);
+   vacancySource.version.vacantSlotIds.push(departing.slotId);
+   release('static_weekly_v3_register_authority_source',`${q(sourceId)},${j(vacancySource)},'synthetic before-publication vacancy source'`);
+   // Synthetic release setup retains exactly one active source, as the actual
+   // pre-draft snapshot requires. Immutable source bytes are never edited.
+   sql(`update public.static_weekly_authority_source_documents set active=false,retired_at=statement_timestamp(),retired_by='synthetic setup' where source_id in (${q(occupiedSourceId)},${q(fullSourceId)});`);
+   fullSourceId=sourceId;
+   const manager={manager_id:managerId,manager_display_name:actor.managerName,auth_mode:'trusted_device',trusted_device:true,read_only:false};
+   const request={manager,sourceId,slotId:departing.slotId,employeeId:departing.id,effectiveStart:today,reason:'Synthetic prepublication departure',expectedRevision:revision(),idempotencyKey:'owner-prepublication-vacancy'};
+   const plane=createStaticWeeklyControlPlane({database:pool,compilerPreparer:async()=>{throw Error('UNWANTED_PREPUBLICATION_RECOMPILE');}});
+   const result=await plane.vacateRosterSlot(request);
+   check(await plane.vacateRosterSlot(request),result,'same command replays while still unpublished');
+   prepublication={plane,request,result};
+   const hydrated=cp('static_weekly_v3_read_authority_source',`${q(fullSourceId)},${q(week)}`);
+   const {version,...facts}=hydrated.compiler_input;
+   baselineCompiled=await compile({...facts,versions:[version],exceptions:hydrated.exceptions});
+   // The real draft contract binds the exact compiled recurring source. A
+   // prepublication roster change needs a newly registered source, not an edit
+   // of the immutable earlier registration. Keep the original command's source
+   // identity in its receipt so retry also proves independence from retirement.
+   const publicationSourceId=randomUUID();
+   release('static_weekly_v3_register_authority_source',`${q(publicationSourceId)},${j(baselineCompiled.canonicalAuthority.compilerInput)},'synthetic post-departure publication source'`);
+   sql(`update public.static_weekly_authority_source_documents set active=false,retired_at=statement_timestamp(),retired_by='synthetic publication setup' where source_id=${q(fullSourceId)};`);
+   fullSourceId=publicationSourceId;
+  }
   const draft=createStaticWeeklyDraftRpcInput({result:baselineCompiled,expectedRevision:revision(),actor:{...actor,idempotencyKey:'owner-baseline-draft'}});
   console.log('OWNER_FIXTURE_REAL_DRAFT_PUBLICATION');
   const created=cp('static_weekly_v3_create_draft',`${q(draft.effectiveStart)},${q(draft.objectiveVersion)},${j(draft.objective)},${j(draft.inputProvenance)},${j(draft.document)},${draft.expectedRevision},${q(managerId)},'owner-baseline-draft',${q(fullSourceId)}`);
@@ -94,6 +124,21 @@ export async function ownerWorkdaysDatabaseProof({socketDir,sql,container}) {
   const authority={publicationId,compiledByWeek:{[week]:compiled},projectionIds:{[week]:projection.data.projection_id}};
   const initialLunch=createStaticWeeklyProjectionWithLunchRpcInput({result:authority.compiledByWeek[week],publicationId:authority.publicationId,expectedRevision:revision(),actor}).lunchDocument;
   sql(`set role static_weekly_control_plane; select public.static_weekly_v8_materialize_lunch_document(${q(authority.projectionIds[week])},${j(initialLunch)},${q(managerId)});`);
+  if(prepublication){
+   const {plane,request,result}=prepublication,afterPublication=revision();
+   console.log('PREPUBLICATION_VACANCY_REPLAY_AFTER_REAL_PUBLICATION',JSON.stringify({originalRevision:result.revision,nowRevision:afterPublication}));
+   check(await plane.vacateRosterSlot(request),result,'original mutation-only success survives first publication exactly');
+   check(await Promise.all([plane.vacateRosterSlot(request),plane.vacateRosterSlot(request)]),[result,result],'concurrent retries retain original mutation-only result');
+   check(revision(),afterPublication,'prepublication replay adds no revision');
+   await assert.rejects(plane.vacateRosterSlot({...request,reason:'different semantic reason'}),/different semantic inputs/);checks++;
+   const helper='public.static_weekly_v8_read_completed_vacancy(uuid,text)';
+   sql(`drop function ${helper}; do $$ declare r record; begin for r in select definition_sql from public.custodial_release_authority_restore_inventory where object_kind in ('function','grant') and object_identity=${q(helper)} order by restore_order loop execute r.definition_sql; end loop; end $$;`);
+   check(await plane.vacateRosterSlot(request),result,'mutation-only original shape survives exact helper/grant restoration');
+   sql("create or replace function public.sch_service_date(p_at timestamptz default now()) returns date language sql stable as $$select date '2026-10-07'$$");
+   check(await plane.vacateRosterSlot(request),result,'mutation-only receipt survives later service week');
+   console.log(JSON.stringify({passed:checks,failed:0,prepublicationReplay:true,realPg:true,realControlPlane:true,realPublicationAndLunch:true,productionWritten:false}));
+   return;
+  }
   const employeeDay=(person,date=today)=>json(`set role service_role; select public.static_weekly_v5_read_employee_day(${q(date)},${q(person.id)},now())::text`);
   const beforeReads=people.slice(1).map(person=>employeeDay(person));
   console.log('OWNER_FIXTURE_REAL_PUBLICATION_READS',beforeReads.length);
@@ -125,6 +170,8 @@ export async function ownerWorkdaysDatabaseProof({socketDir,sql,container}) {
   console.log('OWNER_FIXTURE_REAL_TRANSACTION_COMMIT_TEST');
   const result=await plane.vacateRosterSlot(request);
   assert.ok(result.data.current_projection.projection_id);checks++;
+  check(result.data.completion_mode,'projection_required','original published action explicitly requires its projection');
+  check(result.data.original_publication_id,publicationId,'original publication identity is immutable');
   check(scalar(`select active::text from public.employees where id=${q(rule.employeeId)}`),'false','real departure committed');
   check(scalar('select jsonb_agg(to_jsonb(i) order by incumbency_id)::text from public.weekly_roster_slot_incumbencies i'),history,'immutable incumbency rows unchanged');
   const after=readSource();
@@ -154,6 +201,8 @@ export async function ownerWorkdaysDatabaseProof({socketDir,sql,container}) {
   const helperIdentity='public.static_weekly_v8_read_completed_vacancy(uuid,text)';
   sql(`drop function ${helperIdentity}; do $$ declare definition text; begin select definition_sql into strict definition from public.custodial_release_authority_restore_inventory where object_kind='function' and object_identity=${q(helperIdentity)}; execute definition; select definition_sql into strict definition from public.custodial_release_authority_restore_inventory where object_kind='grant' and object_identity=${q(helperIdentity)}; execute definition; end $$;`);
   check(await plane.vacateRosterSlot(request),result,'exact complete replay survives function/grant recovery');
+  assert.throws(()=>sql(`begin; alter table public.weekly_schedule_command_receipts disable trigger trg_static_weekly_weekly_schedule_command_receipts_immutable; delete from public.weekly_schedule_command_receipts where actor_manager_id=${q(managerId)} and command_type='materialize_projection' and response_json#>>'{data,projection_id}'=${q(result.data.projection_id)}; set local role static_weekly_control_plane; select public.static_weekly_v8_read_completed_vacancy(${q(managerId)},${q(request.idempotencyKey)}); rollback;`),/required projection receipt is missing/);checks++;
+  check(await plane.vacateRosterSlot(request),result,'missing-projection fault rolls back and cannot become mutation-only success');
   assert.throws(()=>sql(`begin; alter table public.weekly_schedule_lunch_documents disable trigger trg_weekly_schedule_lunch_documents_immutable; delete from public.weekly_schedule_lunch_documents where projection_id=${q(result.data.projection_id)}; set local role static_weekly_control_plane; select public.static_weekly_v8_read_completed_vacancy(${q(managerId)},${q(request.idempotencyKey)}); rollback;`),/accepted lunch binding/);checks++;
   check(await plane.vacateRosterSlot(request),result,'rolled-back missing-lunch fault leaves original full replay intact');
   sql("create or replace function public.sch_service_date(p_at timestamptz default now()) returns date language sql stable as $$select date '2026-10-07'$$");

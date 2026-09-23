@@ -110,6 +110,25 @@ await test('invalid extra weekday cannot escape the dated filter',()=>{
  const i=input();i.version.slotAvailability.push({...i.version.slotAvailability[0],dayOfWeek:7});
  assert.throws(()=>assertOwnerRecurringWorkdays(i),error=>error.code==='static_weekly_owner_workdays_mismatch');
 });
+for(const anchor of ['2026-09-21','2026-09-22','2026-09-23','2026-09-27']){
+ await test(`R2 effective-week Tuesday policy cannot be skipped by anchor ${anchor}`,()=>{
+  const i=datedVacancy();i.serviceDate=anchor;i.slots[0].incumbencies[0].effectiveEnd='2026-09-23';
+  i.version.slotAvailability.find(x=>x.dayOfWeek===2).status='off';
+  assert.throws(()=>assertOwnerRecurringWorkdays(i),error=>error.code==='static_weekly_owner_workdays_mismatch');
+ });
+ await test(`R2 policy-start week preserves pre-effective Monday under anchor ${anchor}`,()=>{
+  const i=datedVacancy();i.serviceDate=anchor;i.slots[0].incumbencies[0].effectiveEnd='2026-09-23';
+  i.version.slotAvailability.find(x=>x.dayOfWeek===1).status='off';
+  const before=JSON.stringify(i);assert.equal(assertOwnerRecurringWorkdays(i),true);assert.equal(JSON.stringify(i),before);
+ });
+}
+await test('R2 first-week Wednesday start cannot work policy-off Thursday',()=>{
+ const i=input();i.serviceDate='2026-09-21';i.slots[0].incumbencies[0].effectiveStart='2026-09-23';
+ i.version.vacancyCapableSlotIds=[rule.slotId];
+ for(const row of i.version.slotAvailability)if([1,2].includes(row.dayOfWeek))row.status='vacant_unfilled';
+ i.version.slotAvailability.push({slotId:rule.slotId,dayOfWeek:4,status:'working'});
+ assert.throws(()=>assertOwnerRecurringWorkdays(i),error=>error.code==='static_weekly_owner_workdays_mismatch');
+});
 await test('immutable baseline and policy remain unchanged by dated validation',()=>{
  const i=input(),before=JSON.stringify(i),policyBefore=readFileSync('config/custodial-owner-workdays.json','utf8');
  assertOwnerRecurringWorkdays(datedVacancy());assert.equal(JSON.stringify(i),before);
@@ -118,8 +137,8 @@ await test('immutable baseline and policy remain unchanged by dated validation',
 await test('actual vacancy control plane reaches compiler with policy-matched Wednesday departure',async()=>{
  const queries=[];let prepared=0;
  const client={async query(statement){queries.push(statement);
-  if(statement.includes('static_weekly_v3_read_manager_snapshot'))return {rows:[{result:{current_publication:{publication_id:'70000000-0000-4000-8000-000000000001'}}}]};
-  if(statement.includes('static_weekly_v8_vacate_roster_slot'))return {rows:[{result:{revision:1}}]};
+  if(statement.includes('static_weekly_v3_read_manager_snapshot'))return {rows:[{result:{authority_revision:0,current_publication:{publication_id:'70000000-0000-4000-8000-000000000001'}}}]};
+  if(statement.includes('static_weekly_v8_vacate_roster_slot'))return {rows:[{result:{revision:1,data:{completion_mode:'projection_required',original_publication_id:'70000000-0000-4000-8000-000000000001'}}}]};
   if(statement.includes('static_weekly_v3_read_publication_source'))return {rows:[{result:{compiler_input:datedVacancy(),exceptions:[]}}]};
   return {rows:[]};},release(){}};
  const plane=createStaticWeeklyControlPlane({database:{async connect(){return client;}},

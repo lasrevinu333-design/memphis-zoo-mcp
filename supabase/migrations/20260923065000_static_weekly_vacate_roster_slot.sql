@@ -60,6 +60,7 @@ declare
   v_incumbent public.v_weekly_roster_slot_incumbency_ranges%rowtype;
   v_employee public.employees%rowtype;v_slot jsonb;v_request jsonb;v_request_digest text;
   v_content_digest text;v_revision bigint;v_command uuid:=gen_random_uuid();v_response jsonb;v_status jsonb;
+  v_original_publication uuid;
 begin
   perform public.static_weekly_v3_assert_control_plane();
   perform public.custodial_assert_manager(p_manager_id);
@@ -116,6 +117,12 @@ begin
   select * into v_employee from public.employees where id=p_employee_id for update;
   if not found then raise exception using errcode='23514',message='predecessor employee identity is missing'; end if;
   perform public.static_weekly_v4_assert_employee_turnover_ready(p_employee_id);
+  -- Bind the original completion shape under the same authority lock and
+  -- effective-week selector as the manager snapshot. Absence of a later
+  -- projection receipt must never be interpreted as an unpublished action.
+  select publication_id into v_original_publication from public.weekly_schedule_publications
+    where version_id=public.static_weekly_effective_version(
+      p_effective_start-(extract(isodow from p_effective_start)::integer-1));
   v_content_digest:=public.static_weekly_digest_jsonb(v_request-'expected_revision'-'actor_manager_id'-'operation');
   v_revision:=public.static_weekly_advance_authority(p_expected_revision,'vacate_roster_slot',
     p_manager_id,v_actor->>'manager_name',v_command,v_content_digest);
@@ -133,7 +140,9 @@ begin
   v_response:=public.static_weekly_response_json('vacate_roster_slot',v_revision,v_content_digest,
     v_request_digest,jsonb_build_object('slot_id',p_slot_id,'former_employee_id',p_employee_id,
       'replacement_employee_id',null,'effective_start',p_effective_start,'source_id',p_source_id,
-      'source_digest',v_source.source_digest,'employee_status',v_status,'history_preserved',true));
+      'source_digest',v_source.source_digest,'employee_status',v_status,'history_preserved',true,
+      'completion_mode',case when v_original_publication is null then 'mutation_only' else 'projection_required' end,
+      'original_publication_id',v_original_publication));
   insert into public.weekly_schedule_command_receipts(command_id,actor_manager_id,
     actor_manager_name_snapshot,command_type,idempotency_key,expected_revision,request_digest,
     request_canonical_json,response_json,response_digest,content_digest)
@@ -380,15 +389,27 @@ begin
  select * into v_mutation from public.weekly_schedule_command_receipts
   where actor_manager_id=p_manager_id and idempotency_key=p_idempotency_key and command_type='vacate_roster_slot';
  if not found then return null; end if;
+ if v_mutation.response_json#>>'{data,completion_mode}'='mutation_only'
+   and (v_mutation.response_json->'data') ? 'original_publication_id'
+   and v_mutation.response_json#>'{data,original_publication_id}'='null'::jsonb then
+  return v_mutation.response_json;
+ end if;
+ if v_mutation.response_json#>>'{data,completion_mode}' is distinct from 'projection_required'
+   or nullif(v_mutation.response_json#>>'{data,original_publication_id}','') is null then
+  raise exception using errcode='23514',message='completed vacancy original completion binding is missing or inconsistent';
+ end if;
  select * into v_receipt from public.weekly_schedule_command_receipts
   where actor_manager_id=p_manager_id and idempotency_key='projection-'||encode(extensions.digest(convert_to(p_idempotency_key,'UTF8'),'sha256'),'hex');
- if not found then return null; end if;
+ if not found then
+  raise exception using errcode='23514',message='completed vacancy required projection receipt is missing';
+ end if;
  v_date:=(v_mutation.request_canonical_json->>'effective_start')::date;
  v_week:=v_date-(extract(isodow from v_date)::integer-1);
  if v_receipt.command_type is distinct from 'materialize_projection'
   or v_receipt.expected_revision is distinct from (v_mutation.response_json->>'revision')::bigint
   or (v_receipt.response_json->>'revision')::bigint is distinct from v_receipt.expected_revision+1
-  or v_receipt.request_canonical_json->>'service_date' is distinct from v_week::text then
+  or v_receipt.request_canonical_json->>'service_date' is distinct from v_week::text
+  or v_receipt.request_canonical_json->>'publication_id' is distinct from v_mutation.response_json#>>'{data,original_publication_id}' then
   raise exception using errcode='23514',message='completed vacancy projection receipt does not bind the exact mutation';
  end if;
  select * into v_projection from public.weekly_schedule_compiled_projections

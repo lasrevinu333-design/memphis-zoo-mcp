@@ -805,17 +805,24 @@ export function createStaticWeeklyControlPlane({
       return transaction(async (client) => {
         await client.query("select pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended($1,0))", ["memphis-static-weekly-authority"]);
         const current = await snapshotFor(client, weekStart);
+        const priorRevision = requireRevision(current?.authority_revision);
         const mutate = () => call(client, "static_weekly_v8_vacate_roster_slot", [
           text(sourceId), text(slotId), text(employeeId), date, text(reason),
           requireRevision(expectedRevision), actor.managerId, key,
         ]);
-        // Before first publication there is no employee projection to refresh.
-        // Once published, the staffing change and verified replacement projection
-        // (including lunch responsibilities) must either both commit or neither.
-        if (!current?.current_publication?.publication_id) return mutate();
         const mutation = await mutate(); // Validates the complete original request on retries, too.
-        const completed = await call(client, "static_weekly_v8_read_completed_vacancy", [actor.managerId, key]);
-        if (completed) return completed;
+        // The lock-held revision BEFORE the writer distinguishes a new mutation
+        // from a replay. A committed command has already advanced authority;
+        // it must have its ORIGINAL completion, never manufacture a new one.
+        if (priorRevision !== requireRevision(expectedRevision) || mutation?.data?.completion_mode === "mutation_only") {
+          const completed = await call(client, "static_weekly_v8_read_completed_vacancy", [actor.managerId, key]);
+          if (!completed) throw fail("static_weekly_vacancy_completion_missing", "The original vacancy completion is missing; no new schedule change was accepted.");
+          return completed;
+        }
+        if (mutation?.data?.completion_mode !== "projection_required"
+          || text(mutation.data.original_publication_id) !== text(current?.current_publication?.publication_id)) {
+          throw fail("static_weekly_vacancy_completion_mismatch", "The vacancy does not bind the original published schedule.");
+        }
         return mutateAndMaterializeCurrentProjection(client, {
           actor, weekStart, idempotencyKey: key,
           publicationId: requirePublicationId(current.current_publication.publication_id), mutate: async () => mutation,

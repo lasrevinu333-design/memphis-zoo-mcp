@@ -47,6 +47,6 @@ try{
   if(applied%25===0)console.log('APPLIED_SOURCE_MIGRATIONS',applied);
  }
  console.log('COMPLETE_SCHEMA',applied,'AUTOMATIC_GRANTS_ABSENT_THROUGH_REPLAY');
- await ownerWorkdaysDatabaseProof({socketDir,sql,container});
+ await ownerWorkdaysDatabaseProof({socketDir,sql,container,prepublicationReplay:process.env.OWNER_PREPUBLICATION_REPLAY==='1'});
  console.log('OWNER_WORKDAYS_REAL_CONTROL_PLANE_DATABASE_PASS');
 }finally{cleanup();}

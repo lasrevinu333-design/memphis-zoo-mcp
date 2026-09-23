@@ -17,7 +17,6 @@ export function assertOwnerRecurringWorkdays(input, serviceDate = input?.service
       .map(person => ({slot, person})));
     if (!matched.length) continue;
     if (!isIsoServiceDate(serviceDate)) throw fail('Dated source required for owner workday validation.');
-    if (serviceDate < rule.appliesFrom) continue;
     const monday = new Date(`${serviceDate}T00:00:00Z`);
     monday.setUTCDate(monday.getUTCDate() - (monday.getUTCDay() + 6) % 7);
     const dates = Array.from({length: 7}, (_, offset) => {
@@ -25,6 +24,7 @@ export function assertOwnerRecurringWorkdays(input, serviceDate = input?.service
       return { date: day.toISOString().slice(0, 10), dayOfWeek: day.getUTCDay() };
     });
     const ownedDays = dates.filter(({date}) => {
+      if (date < rule.appliesFrom) return false;
       const active = matched.filter(({person}) => person.effectiveStart <= date
         && (!person.effectiveEnd || date < person.effectiveEnd));
       if (active.length && (active.length !== 1 || active[0].slot.id !== rule.slotId)) {
@@ -42,6 +42,7 @@ export function assertOwnerRecurringWorkdays(input, serviceDate = input?.service
     // Resolve the same dated identities as the compiler, including capability
     // and overlap checks, before comparing only this employee's occupied days.
     for (const {date, dayOfWeek} of dates) {
+      if (date < rule.appliesFrom) continue;
       let incumbent;
       try {
         incumbent = snapshotDatedRosterSlot(slot, date, {
