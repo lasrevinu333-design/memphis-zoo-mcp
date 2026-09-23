@@ -480,7 +480,7 @@
       {
         "path": "release/production-migration-state.json",
         "mode": "100644",
-        "object_id": "714a6eb27ba94f5dc915216afbf853d88bdc4c5d"
+        "object_id": "11997d46cd8d6d447e804a828ccd3e117d208568"
       },
       {
         "path": "release/production-schema-observation-20260922.json",
@@ -970,7 +970,7 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "376e541d9987b3dbd7b82e5a6cadeb9eab6bf2eb"
+        "object_id": "37666b836114a89b14c1d1ad0ab1105d8f090e64"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
