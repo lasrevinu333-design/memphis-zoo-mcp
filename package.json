@@ -175,7 +175,8 @@
     "test:static-weekly-shift-end-coverage": "node scripts/static-weekly-shift-end-coverage-tests.mjs",
     "test:static-weekly-identity-domain": "node scripts/static-weekly-identity-domain-tests.mjs",
     "test:static-weekly-full-roster-lunch": "node scripts/static-weekly-full-roster-lunch-tests.mjs",
-    "test:static-weekly-existing-employee-restore-db": "node scripts/static-weekly-existing-employee-restore-database-tests.mjs"
+    "test:static-weekly-existing-employee-restore-db": "node scripts/static-weekly-existing-employee-restore-database-tests.mjs",
+    "test:static-weekly-full-week-publication-db": "node scripts/static-weekly-full-week-publication-database-tests.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
