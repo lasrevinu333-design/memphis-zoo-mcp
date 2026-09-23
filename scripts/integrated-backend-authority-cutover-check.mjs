@@ -363,15 +363,15 @@ assert.equal(productionMigrationState.target?.source_migration_name, "static_wee
 assert.equal(productionMigrationState.target?.source_migration_version, "20260922235500");
 assert.equal(productionMigrationState.target?.production_ledger_version, null);
 assert.equal(productionMigrationState.target?.canonical_source_schema_fingerprint, schemaFingerprint);
-assert.equal(productionMigrationState.target?.public_function_count, 517);
+assert.equal(productionMigrationState.target?.public_function_count, 518);
 assert.equal(productionMigrationState.target?.production_ledger_count, 236);
 assert.equal(productionMigrationState.target?.source_authority_migration_count, expectedMigrationCount);
 assert.equal(productionMigrationState.target?.pending_migration_count, pendingReleaseMigrations.length);
 assert.equal(productionMigrationState.target?.registered_source_dated_status_excluded, true);
-assert.equal(productionMigrationState.target?.expected_catalog_counts?.functions, 517);
+assert.equal(productionMigrationState.target?.expected_catalog_counts?.functions, 518);
 assert.equal(productionMigrationState.target?.expected_catalog_counts?.triggers, 312);
 assert.equal(productionMigrationState.target?.expected_catalog_counts?.policies, 42);
-assert.equal(productionMigrationState.target?.expected_catalog_counts?.routine_grants, 360);
+assert.equal(productionMigrationState.target?.expected_catalog_counts?.routine_grants, 361);
 assert.equal(productionMigrationState.target?.expected_catalog_counts?.schema_grants, 9);
 assert.match(releaseHealthIdentityProjectionText, /c\.relname in \('devices','employees','device_aliases'\)/);
 assert.match(releaseHealthIdentityProjectionText, /Release health recovery inventory row is missing or duplicated/);
