@@ -405,7 +405,7 @@
       {
         "path": "package.json",
         "mode": "100644",
-        "object_id": "f8468e2e0adeccd075aff6f8048c0fddf2e20298"
+        "object_id": "42a7be1727ed02b15f3b30085cdc483a4a425370"
       },
       {
         "path": "public/moxie-assets/contacts-creekside-animal.png",
@@ -1586,6 +1586,11 @@
         "path": "scripts/static-weekly-full-roster-lunch-tests.mjs",
         "mode": "100644",
         "object_id": "f396044821f1ce5998cb14a35441a47f363d0892"
+      },
+      {
+        "path": "scripts/static-weekly-full-week-publication-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "8dbc6b39699f69b6de4031e836ef27a67b0151b5"
       },
       {
         "path": "scripts/static-weekly-identity-domain-tests.mjs",
@@ -3693,7 +3698,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 713,
+    "authority_path_count": 714,
     "migration_path_count": 136,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
