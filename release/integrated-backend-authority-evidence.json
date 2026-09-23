@@ -960,12 +960,12 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "59fd3e92dadacaf0df001cc2f4381caf7786930b"
+        "object_id": "539096fe6710ce16aba08ce31572d4ec5a5d7ac6"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
         "mode": "100644",
-        "object_id": "1669e62ebf9fe2c0a0aa2cc29859caa3c9cf8a6a"
+        "object_id": "4a1706f6e374bc712ffc5fe7d619b3aa3874e2a8"
       },
       {
         "path": "scripts/integrated-backend-authority-release-provenance-tests.mjs",
