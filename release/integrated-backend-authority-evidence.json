@@ -1,16 +1,16 @@
 {
   "artifact": "integrated-backend-authority-release-evidence.v2",
   "release_id": "release-2026.07.19.custodial-v3.12",
-  "frontend_commit_sha": "f04424482b43921115a1b64ebed3d4267466ed55",
+  "frontend_commit_sha": "60743b1fb4937fa78237f0fee9b57e29736422f6",
   "frontend_commit_state": "final_pair_bound",
-  "schema_fingerprint": "f50a1ffe94fd1ca85e13a5e02c6d949522ac3f6899bef232f70a817c455fd0d7",
+  "schema_fingerprint": "bcd3a816dcb6f5ab5b760df57580461ad538529d1766839f62decb9fc055643e",
   "schema_transition": {
     "transition_id": "custodial-verified-visits-20260922",
     "from_fingerprint": "750e7f040519f6d4555836cbd4d172a22f98911d5bab9918fa370238fff3f822",
-    "to_fingerprint": "f50a1ffe94fd1ca85e13a5e02c6d949522ac3f6899bef232f70a817c455fd0d7",
+    "to_fingerprint": "bcd3a816dcb6f5ab5b760df57580461ad538529d1766839f62decb9fc055643e",
     "expires_at": "2026-10-02T23:59:59Z"
   },
-  "frontend_source_fingerprint": "f50a1ffe94fd1ca85e13a5e02c6d949522ac3f6899bef232f70a817c455fd0d7",
+  "frontend_source_fingerprint": "bcd3a816dcb6f5ab5b760df57580461ad538529d1766839f62decb9fc055643e",
   "backend_contract": {
     "scan": "scan.v4.snapshot-bound-authority",
     "authority": "offline-authority.v5",
@@ -400,7 +400,7 @@
       {
         "path": "ops/attendance/README.md",
         "mode": "100644",
-        "object_id": "a16cd456d3b7d77da5345dfae671004e20d02426"
+        "object_id": "e8727ab8a323423d35d22b87fdd1eaadf5af6b8d"
       },
       {
         "path": "ops/attendance/attendance_pusher.py",
@@ -415,7 +415,7 @@
       {
         "path": "package.json",
         "mode": "100644",
-        "object_id": "4fdee777cdd61077266bf0a264e1d73d7a3b8466"
+        "object_id": "cfa08f237e108f0c9af2c4fdc1ac9083d43048bc"
       },
       {
         "path": "public/moxie-assets/contacts-creekside-animal.png",
@@ -470,7 +470,7 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "b6afd6b96d958caf187964a37aa5b49d122b0180"
+        "object_id": "06d63ad65a29ebb8c71a02217cae5224bf70f3a4"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
@@ -480,7 +480,7 @@
       {
         "path": "release/production-migration-state.json",
         "mode": "100644",
-        "object_id": "11997d46cd8d6d447e804a828ccd3e117d208568"
+        "object_id": "9ac1b4a20c126df494491d64086b044416c6c2a8"
       },
       {
         "path": "release/production-schema-observation-20260922.json",
@@ -495,7 +495,7 @@
       {
         "path": "release/schema-alignment-input.json",
         "mode": "100644",
-        "object_id": "5e99d091fda62a5d30565c4209ed3f8a11bdff99"
+        "object_id": "8c5a8bd8d27c3d9ae775ae7d2f12ffc69f8c6580"
       },
       {
         "path": "research/european_herbalism_through_paracelsus.md",
@@ -921,6 +921,16 @@
         "path": "scripts/fixtures/static-weekly-scheduler/weighted-schedule-20260826.json",
         "mode": "100644",
         "object_id": "0e8899380987adf9157eabcbc15e31ae8e51daf6"
+      },
+      {
+        "path": "scripts/fixtures/visitor-attendance-database-boundary-fixture.mjs",
+        "mode": "100644",
+        "object_id": "ce652690c5660297401b987368d9d2689e37a7d1"
+      },
+      {
+        "path": "scripts/fixtures/visitor-attendance-runtime-fixture.mjs",
+        "mode": "100644",
+        "object_id": "99dfc9ecde6e96d57b890d5b2d4252e230855043"
       },
       {
         "path": "scripts/foundation-repair-tests.mjs",
@@ -1773,6 +1783,11 @@
         "object_id": "7bf901b855236890d2327ede95c30892ed1a5575"
       },
       {
+        "path": "scripts/visitor-attendance-boundary-tests.mjs",
+        "mode": "100644",
+        "object_id": "a6518d7010c960eacd479d2973b11c16c7e3a5d4"
+      },
+      {
         "path": "scripts/visitor-attendance-collector-tests.mjs",
         "mode": "100644",
         "object_id": "30cf92b6c6a25ddf43b9a8a05bc48d579acbdc5d"
@@ -1785,7 +1800,7 @@
       {
         "path": "scripts/visitor-attendance-reader-database-tests.mjs",
         "mode": "100644",
-        "object_id": "b15d3b15dc517aca679ea27e5e4280f707412fea"
+        "object_id": "e2cf3d59a66dc9294c5ac32ea65e9563f9c64720"
       },
       {
         "path": "scripts/wait-rehearsal-json-endpoint.sh",
@@ -2040,7 +2055,7 @@
       {
         "path": "src/attendance-state.js",
         "mode": "100644",
-        "object_id": "c223532c7cc769aaa09175fc97e961441e395ef8"
+        "object_id": "492d889c36b34daebddd7bb472ba1d3c8c6e5243"
       },
       {
         "path": "src/auth/device-credential-auth.js",
@@ -2160,7 +2175,7 @@
       {
         "path": "src/index.js",
         "mode": "100644",
-        "object_id": "8aaecaa1e8909a8a059e4ae09c8c0d7af580b759"
+        "object_id": "2e5127fc5c3ed5347b9e8e446204aa85b72f2c12"
       },
       {
         "path": "src/integrated-backend-authority-release-evidence.js",
@@ -2440,7 +2455,7 @@
       {
         "path": "src/visitor-attendance-collector.js",
         "mode": "100644",
-        "object_id": "17cf056b0b80311ca352f60b3b7e0241c9793754"
+        "object_id": "12b588a232480068e30321c5b6d3f0be1098567b"
       },
       {
         "path": "supabase/.gitignore",
@@ -2465,12 +2480,12 @@
       {
         "path": "supabase/canonical/schema-fingerprint-input.json",
         "mode": "100644",
-        "object_id": "5e78fe7322b3e6613148af2ef2a54ec1d962c794"
+        "object_id": "91f0b1674a8974e07ed580ed479aa08617bab0c2"
       },
       {
         "path": "supabase/canonical/schema-fingerprint.txt",
         "mode": "100644",
-        "object_id": "135601171c80943dd52b2f0b0ddb18bc015aaab2"
+        "object_id": "953f4e654bcd0da89021e242e3caf46cda44100c"
       },
       {
         "path": "supabase/config.toml",
@@ -3750,7 +3765,7 @@
       {
         "path": "supabase/migrations/20260923121151_visitor_attendance_reader.sql",
         "mode": "100644",
-        "object_id": "1c06966e357f8488759960870190c84d41050709"
+        "object_id": "321e926557bbacbd6bb8e500d35fc7374bf7afe6"
       },
       {
         "path": "tmp/write_probe.txt",
@@ -3758,7 +3773,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 726,
+    "authority_path_count": 729,
     "migration_path_count": 138,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
