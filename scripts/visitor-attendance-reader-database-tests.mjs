@@ -39,7 +39,30 @@ try{
  assert.equal(sql("select count(*)::text from public.custodial_release_authority_restore_inventory where object_kind='policy' and object_identity='public.current_attendance_state:custodial_reader_current_visitor_attendance' and definition_sql=public.custodial_release_authority_current_policy_definition(object_identity)").trim(),'1');
  sql("update public.current_attendance_state set attendance=125 where id=1");
  assert.equal(sql("set role custodial_application_reader; select attendance::text from public.current_attendance_state where id=1").trim().split('\\n').at(-1),'125');
- console.log(JSON.stringify({passed:5,failed:0,readerVisible:true,readerCanWrite:false,productionWritten:false}));
+ let passed=5;
+ const q=value=>`'${String(value).replaceAll("'","''")}'`;
+ const observation={attendance:200,last_year:100,planned:400,yesterday:150,yesterday_plan:175,source:'synthetic-visitor-test',fetched_at:new Date(Date.parse(sql('select clock_timestamp()::text').trim())+10000).toISOString()};
+ const push=payload=>sql(`set role service_role; select public.app_apply_operational_command('attendance_state_upsert',${q(JSON.stringify(payload))}::jsonb)::text`);
+ assert.equal(JSON.parse(push(observation)).ok,true);passed++;
+ const older={...observation,attendance:150,fetched_at:new Date(Date.parse(observation.fetched_at)-1000).toISOString()};
+ assert.throws(()=>push(older),/older than or conflicts/);passed++;
+ assert.equal(sql('select attendance::text from public.current_attendance_state where id=1').trim(),'200');passed++;
+ assert.equal(JSON.parse(push(observation)).ok,true,'exact replay accepted');passed++;
+ for(const field of ['last_year','planned','yesterday','yesterday_plan','source']){
+  assert.throws(()=>push({...observation,[field]:field==='source'?'conflict':999}),/older than or conflicts/);passed++;
+ }
+ const newerZero={...observation,attendance:0,fetched_at:new Date(Date.parse(observation.fetched_at)+1000).toISOString()};
+ assert.equal(JSON.parse(push(newerZero)).ok,true,'newer lower count and genuine zero remain valid');passed++;
+ assert.equal(sql('select attendance::text from public.current_attendance_state where id=1').trim(),'0');passed++;
+ // Real recovery execution in this disposable database, not merely hash equality.
+ sql('drop policy custodial_reader_current_visitor_attendance on public.current_attendance_state');
+ assert.equal(sql('set role custodial_application_reader; select count(*)::text from public.current_attendance_state').trim(),'0');passed++;
+ sql("do $$ declare definition text; begin select definition_sql into strict definition from public.custodial_release_authority_restore_inventory where object_kind='policy' and object_identity='public.current_attendance_state:custodial_reader_current_visitor_attendance'; execute definition; end $$");
+ assert.equal(sql('set role custodial_application_reader; select attendance::text from public.current_attendance_state where id=1').trim(),'0');passed++;
+ sql("do $$ declare definition text; begin select definition_sql into strict definition from public.custodial_release_authority_restore_inventory where object_kind='function' and object_identity='public.app_apply_operational_command(text,jsonb)'; execute definition; end $$");
+ assert.throws(()=>push(older),/older than or conflicts/,'restored function preserves timestamp ordering');passed++;
+ assert.equal(JSON.parse(push(newerZero)).ok,true,'restored function preserves exact replay');passed++;
+ console.log(JSON.stringify({passed,failed:0,readerVisible:true,readerCanWrite:false,policyRestoreExecuted:true,productionWritten:false}));
  console.log('VISITOR_ATTENDANCE_READER_DATABASE_PASS');
 }finally{
  if(owned){docker(['rm','-f',container]);assert.equal(docker(['ps','-a','--filter','name=^/'+container+'$','--format','{{.Names}}']).trim(),'');console.log('OWNED_TEST_CONTAINER_REMOVED',container);}

@@ -62,7 +62,7 @@
     "source_migration_name": "visitor_attendance_reader",
     "source_migration_version": "20260923121151",
     "production_ledger_version": null,
-    "canonical_source_schema_fingerprint": "f893d08e47ac40d3082f0a8e3fbc6d191d617dc319b32f44c39fb15387e73c6d",
+    "canonical_source_schema_fingerprint": "f50a1ffe94fd1ca85e13a5e02c6d949522ac3f6899bef232f70a817c455fd0d7",
     "public_function_count": 520,
     "production_ledger_count": 238,
     "source_authority_migration_count": 138,
@@ -193,7 +193,7 @@
   ],
   "postconditions": [
     "production ledger advances exactly eight rows from 230 to 238, ending at 20260923121151 visitor_attendance_reader; no already-applied migration is replayed",
-    "complete public catalog and privilege fingerprint equals f893d08e47ac40d3082f0a8e3fbc6d191d617dc319b32f44c39fb15387e73c6d with the exact reviewed target counts",
+    "complete public catalog and privilege fingerprint equals f50a1ffe94fd1ca85e13a5e02c6d949522ac3f6899bef232f70a817c455fd0d7 with the exact reviewed target counts",
     "production exposes exactly 520 public functions and 362 non-owner routine grants after the corrections",
     "ordinary full-attendance days retain the fixed weekly schedule; CoverAll is explicit named-manager capacity, not an automatic absence-count threshold",
     "guest reporting OFF prevents queued guest notification dispatch without deleting pending/history records; staff Feedback remains separate",

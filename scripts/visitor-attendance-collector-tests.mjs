@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { makeVisitorAttendanceCollectorHandler } from "../src/visitor-attendance-collector.js";
 import { normalizeAttendanceRecord } from "../src/attendance-state.js";
+import { makeOpsAccessMiddleware } from "../src/auth/shared-access-auth.js";
+import { makeRestoreMutationGate } from "../src/restore-mutation-gate.js";
 const now=Date.parse("2026-09-23T12:00:00Z"), token="synthetic-collector-token-0123456789";
 const original={attendance:0,last_year:100,planned:200,yesterday:150,yesterday_plan:175,fetched_at:new Date(now).toISOString()};
 let writes=[], accepted=0, storedOverride, fail=false, passed=0;
@@ -31,6 +33,10 @@ check((await run({...original,planned:false})).code,422,"reject false optional m
 check(writes.length,1,"invalid requests never reach persistence");
 storedOverride=null;check((await run()).code,503,"hidden RLS row is not success");
 storedOverride={...original,attendance:55};check((await run()).code,503,"wrong saved row is not success");
+for (const field of ["last_year","planned","yesterday","yesterday_plan","source"]) {
+ storedOverride={...original,source:"home-browser-auto-push",[field]:field==="source"?"another-writer":999};
+ check((await run()).code,503,"conflicting saved "+field+" is not this observation");
+}
 storedOverride=undefined;fail=true;const rejected=await run();
 check(rejected.code,503,"failed persistence is not accepted");
 check(JSON.stringify(rejected.body).includes("private provider"),false,"no provider error disclosure");
@@ -42,4 +48,15 @@ check(normalizeAttendanceRecord({attendance:0,fetched_at:original.fetched_at},{n
 const index=readFileSync(new URL("../src/index.js",import.meta.url),"utf8");
 assert.match(index,/app\.post\("\/admin-api\/attendance-update", requireOpsManagerWrite/);passed++;
 assert.match(index,/app\.post\("\/collector-api\/visitor-attendance", makeVisitorAttendanceCollectorHandler/);passed++;
+const managerResponse={status(code){this.code=code;return this;},json(body){this.body=body;return this;}};
+await makeOpsAccessMiddleware({env:{NODE_ENV:'production',OPS_MANAGER_SESSION_SECRET:'synthetic-manager-secret-0123456789'},requireWrite:true})(
+ {headers:{authorization:'Bearer '+token},header(name){return this.headers[name.toLowerCase()]||'';}},managerResponse,
+ ()=>assert.fail('collector token became manager write authority'));
+check(managerResponse.code,401,'real manager boundary rejects collector-only token');
+const restoreResponse={status(code){this.code=code;return this;},json(body){this.body=body;return this;}};
+await makeRestoreMutationGate({required:true,supabase:{async rpc(){return {data:null,error:new Error('disaster recovery is in progress; application mutations are paused')};}}})(
+ {method:'POST',path:'/collector-api/visitor-attendance'},restoreResponse,()=>assert.fail('collector bypassed paused restore'));
+check(restoreResponse.code,503,'collector POST observes restore pause');
+check(restoreResponse.body.code,'disaster_restore_in_progress','restore pause is explicit');
+assert.ok(index.indexOf('app.use(makeRestoreMutationGate(')<index.indexOf('app.post("/collector-api/visitor-attendance"'),'production middleware ordering covers collector');passed++;
 console.log(JSON.stringify({passed,failed:0,productionWritten:false,scope:"visitor-count collector only"},null,2));

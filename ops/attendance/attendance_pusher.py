@@ -35,12 +35,13 @@ def log(message: str) -> None:
 
 
 def parse_int_from_text(text: str):
-    if text is None:
+    if not isinstance(text, str):
         return None
-    cleaned = re.sub(r"[^\d]", "", text)
-    if not cleaned:
+    value = text.strip()
+    if not re.fullmatch(r"(?:[0-9]+|[0-9]{1,3}(?:,[0-9]{3})+)", value):
         return None
-    return int(cleaned)
+    number = int(value.replace(",", ""))
+    return number if number <= 2147483647 else None
 
 
 def extract_labeled_metric(text: str, label: str):
@@ -57,10 +58,13 @@ def extract_labeled_metric(text: str, label: str):
         return None
 
     escaped = re.escape(label)
-    match = re.search(rf"\b{escaped}\s*:\s*([\d,]+)", text, flags=re.IGNORECASE)
+    match = re.search(rf"\b{escaped}\s*:\s*(.*?)(?=\s+(?:Last Year|Planned|Yesterday Plan|Yesterday)\s*:|$)", text, flags=re.IGNORECASE | re.DOTALL)
     if not match:
         return None
-    return parse_int_from_text(match.group(1))
+    value = parse_int_from_text(match.group(1))
+    if value is None:
+        raise RuntimeError(f"Invalid {label} visitor metric")
+    return value
 
 
 def extract_attendance_from_page(page):

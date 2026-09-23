@@ -34,7 +34,8 @@ export function makeVisitorAttendanceCollectorHandler({ env = process.env, persi
     payload.source = "home-browser-auto-push";
     try {
       const data = await persist(payload);
-      if (!data || data.attendance !== payload.attendance || Date.parse(data.fetched_at) !== fetched) {
+      if (!data || metrics.some(field => data[field] !== payload[field])
+        || data.source !== payload.source || Date.parse(data.fetched_at) !== fetched) {
         return res.status(503).json({ ok: false, error: "Visitor attendance has not been verified in the saved reader." });
       }
       accepted();

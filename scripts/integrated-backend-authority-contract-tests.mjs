@@ -68,6 +68,8 @@ const verifiedVisitReminderFile = "20260922090000_verified_visit_reminder_state.
 const lunchPublicationFile = "20260922163000_static_weekly_lunch_publication.sql";
 const lunchProducerFile = "20260922200000_lunch_notification_producer.sql";
 const restoreExistingEmployeeFile = "20260922235500_static_weekly_existing_employee_restore.sql";
+const vacateRosterSlotFile = "20260923065000_static_weekly_vacate_roster_slot.sql";
+const visitorAttendanceFile = "20260923121151_visitor_attendance_reader.sql";
 const exactPendingReleaseMigrations = [
   "20260922050000_lunch_delivery_failure_manager_alert.sql",
   "20260922070000_completed_cleaning_reminder_cycles.sql",
@@ -75,6 +77,8 @@ const exactPendingReleaseMigrations = [
   lunchPublicationFile,
   lunchProducerFile,
   restoreExistingEmployeeFile,
+  vacateRosterSlotFile,
+  visitorAttendanceFile,
 ];
 const exactMigrationFiles = readdirSync("supabase/migrations").filter((name) => /^[0-9]{14}_.+\.sql$/.test(name)).sort();
 const exactMigrationCount = exactMigrationFiles.length;
@@ -217,20 +221,20 @@ assert.equal(productionMigrationState.observed_production.vacancy_functions_pres
 assert.equal(productionMigrationState.observed_production.hydrated_initial_draft_reader_present, true);
 assert.equal(productionMigrationState.observed_production.registered_source_dated_status_excluded, true);
 assert.equal(productionMigrationState.observed_production.outlook_event_sync_table_present, true);
-assert.equal(productionMigrationState.target.source_migration_file, restoreExistingEmployeeFile);
-assert.equal(productionMigrationState.target.source_migration_name, "static_weekly_existing_employee_restore");
-assert.equal(productionMigrationState.target.source_migration_version, "20260922235500");
+assert.equal(productionMigrationState.target.source_migration_file, visitorAttendanceFile);
+assert.equal(productionMigrationState.target.source_migration_name, "visitor_attendance_reader");
+assert.equal(productionMigrationState.target.source_migration_version, "20260923121151");
 assert.equal(productionMigrationState.target.production_ledger_version, null);
 assert.equal(productionMigrationState.target.canonical_source_schema_fingerprint, canonicalFingerprint);
-assert.equal(productionMigrationState.target.public_function_count, 518);
-assert.equal(productionMigrationState.target.production_ledger_count, 236);
+assert.equal(productionMigrationState.target.public_function_count, 520);
+assert.equal(productionMigrationState.target.production_ledger_count, 238);
 assert.equal(productionMigrationState.target.source_authority_migration_count, exactMigrationCount);
 assert.equal(productionMigrationState.target.pending_migration_count, exactPendingReleaseMigrations.length);
 assert.equal(productionMigrationState.target.registered_source_dated_status_excluded, true);
-assert.equal(productionMigrationState.target.expected_catalog_counts.functions, 518);
-assert.equal(productionMigrationState.target.expected_catalog_counts.triggers, 312);
-assert.equal(productionMigrationState.target.expected_catalog_counts.policies, 42);
-assert.equal(productionMigrationState.target.expected_catalog_counts.routine_grants, 361);
+assert.equal(productionMigrationState.target.expected_catalog_counts.functions, 520);
+assert.equal(productionMigrationState.target.expected_catalog_counts.triggers, 313);
+assert.equal(productionMigrationState.target.expected_catalog_counts.policies, 43);
+assert.equal(productionMigrationState.target.expected_catalog_counts.routine_grants, 362);
 assert.equal(productionMigrationState.target.expected_catalog_counts.schema_grants, 9);
 assert.match(releaseHealthIdentityProjection, /bb04f7c05f72d959b4aba5a3a047adad1163eaf6b88aeeebd5d0f9f6a3b10baf/);
 assert.match(releaseHealthIdentityProjection, /c\.relname in \('devices','employees','device_aliases'\)/);
@@ -305,7 +309,7 @@ assert.match(outlookEventSyncAuthority, /revoke all privileges on table public\.
 assert.doesNotMatch(outlookEventSyncAuthority, /grant\s+[^;]+\s+to\s+(?:anon|authenticated|custodial_application_reader)\b/i);
 assert.equal(releaseEvidence.compatibility_window.accepted_engine.scan, "scan.v2");
 assert.equal(releaseEvidence.compatibility_window.required_engine.scan, "scan.v4.snapshot-bound-authority");
-assert.equal(releaseEvidence.migrations.at(-1).name, restoreExistingEmployeeFile);
+assert.equal(releaseEvidence.migrations.at(-1).name, visitorAttendanceFile);
 assert.match(applicationReaderReleaseRecovery, /application_reader_identity_projection_bounded/i);
 assert.match(applicationReaderReleaseRecovery, /custodial_application_reader_device_identity/i);
 assert.match(applicationReaderReleaseRecovery, /' grant '\|\|g\.privilege_type\|\|' \('\|\|quote_ident\(a\.attname\)/i);
@@ -365,7 +369,7 @@ assert.equal(releaseEvidence.authority_content_identity.expected_tree_inventory.
 assert.equal(releaseEvidence.authority_content_identity.authority_path_count, releaseEvidence.authority_content_identity.expected_tree_inventory.length);
 assert.equal(releaseEvidence.authority_content_identity.migration_path_count, exactMigrationCount);
 assert.equal(releaseEvidence.migrations.length, exactMigrationCount);
-assert.equal(releaseEvidence.migrations.at(-1).name, restoreExistingEmployeeFile);
+assert.equal(releaseEvidence.migrations.at(-1).name, visitorAttendanceFile);
 assert.match(releaseEvidence.compatibility_window.credential_replacement_lineage_phase,
   /append-only same-device predecessor-to-successor transport lineage.*original actor, device, credential, or work evidence/i);
 assert.equal(Object.hasOwn(releaseEvidence.authority_content_identity, "value"), false, "generated evidence must not self-assert a worktree-derived content hash");

@@ -161,7 +161,7 @@ begin
   perform public.static_weekly_v3_assert_control_plane(); v_actor:=public.static_weekly_v3_manager_actor(p_manager_id);
   perform public.static_weekly_assert_command_identity(p_expected_revision,p_manager_id,v_actor->>'manager_name',p_idempotency_key,'fill_vacant_slot');
   if p_slot_id is null or length(v_name) not between 2 and 160 or p_effective_start is null
-    or extract(isodow from p_effective_start)::integer<>1 or p_effective_start<v_current_week
+    or extract(isodow from p_effective_start)::integer<>1
     or nullif(btrim(coalesce(p_reason,'')),'') is null or char_length(p_reason)>500 or p_reason~'[\x00-\x1f\x7f]' then
     raise exception using errcode='23514',message='filling a vacancy requires a stable slot, fresh employee name, Monday effective date, and bounded reason';
   end if;
@@ -169,6 +169,11 @@ begin
   v_request_digest:=public.static_weekly_digest_jsonb(v_request); perform pg_advisory_xact_lock(hashtextextended('memphis-static-weekly-authority',0));
   select * into v_prior from public.weekly_schedule_command_receipts where actor_manager_id=p_manager_id and idempotency_key=p_idempotency_key;
   if found then if v_prior.request_digest<>v_request_digest then raise exception using errcode='23505',message='idempotency key was already used for different semantic inputs'; end if; return v_prior.response_json; end if;
+  -- A receipt is permanent semantic evidence. Time-dependent new-operation
+  -- eligibility must never hide a successful response after its week ends.
+  if p_effective_start<v_current_week then
+    raise exception using errcode='23514',message='a new vacancy fill cannot start before the current week';
+  end if;
   select * into v_slot from public.weekly_roster_slots where slot_id=p_slot_id for share;
   if not found then raise exception using errcode='P0002',message='vacant stable roster position was not found'; end if;
   -- A vacated position is reusable; reject any overlapping or future incumbent.
@@ -201,6 +206,156 @@ begin
 end
 $function$;
 
+create or replace function public.static_weekly_v4_hydrate_compiler_source(p_source jsonb,p_service_date date)
+returns jsonb language plpgsql security definer set search_path=pg_catalog,public as $function$
+declare
+  v_slots jsonb:='[]'::jsonb;
+  v_slot jsonb;
+  v_ranges jsonb;
+  v_hydrated jsonb;
+  v_source_version jsonb;
+  v_version jsonb;
+  v_declared_vacant jsonb:='[]'::jsonb;
+  v_active_vacant jsonb:='[]'::jsonb;
+  v_availability jsonb:='[]'::jsonb;
+  v_item jsonb;
+  v_date date;
+  v_week_start date;
+  v_state text;
+  v_slot_id text;
+  v_is_declared_vacant boolean;
+  v_is_active_vacant boolean;
+begin
+  if p_service_date is null or jsonb_typeof(p_source) is distinct from 'object' or jsonb_typeof(p_source->'slots') is distinct from 'array' then
+    raise exception using errcode='23514',message='dated scheduler source requires one service date and stable slot array';
+  end if;
+  v_week_start:=p_service_date-(extract(isodow from p_service_date)::integer-1);
+  if jsonb_typeof(p_source->'version')='object' then v_source_version:=p_source->'version';
+  elsif jsonb_typeof(p_source->'versions')='array' and jsonb_array_length(p_source->'versions')=1 then v_source_version:=(p_source->'versions')->0;
+  else raise exception using errcode='23514',message='dated scheduler source must carry exactly one recurring version'; end if;
+  if jsonb_typeof(coalesce(v_source_version->'vacancyCapableSlotIds','[]'::jsonb)) is distinct from 'array'
+    or jsonb_typeof(coalesce(v_source_version->'vacantSlotIds','[]'::jsonb)) is distinct from 'array' then
+    raise exception using errcode='23514',message='vacancy-capable and active-vacancy stable-slot authority must be arrays';
+  end if;
+  v_declared_vacant:=coalesce(v_source_version->'vacancyCapableSlotIds','[]'::jsonb);
+
+  for v_slot in select value from jsonb_array_elements(p_source->'slots') loop
+    if jsonb_typeof(v_slot->'id') is distinct from 'string' or v_slot->>'id' !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' then
+      raise exception using errcode='23514',message='registered scheduler source contains a non-UUID stable roster slot identity';
+    end if;
+    v_slot_id:=v_slot->>'id';
+    select coalesce(jsonb_agg(jsonb_build_object(
+      'personId',r.person_id::text,'displayName',r.person_name_snapshot,
+      'effectiveStart',r.effective_start::text,
+      'effectiveEnd',case when r.effective_end is null then null else r.effective_end::text end
+    ) order by r.effective_start,r.incumbency_id),'[]'::jsonb) into v_ranges
+    from public.v_weekly_roster_slot_incumbency_ranges r
+    where r.slot_id=v_slot_id::uuid and r.effective_start<=v_week_start+6
+      and (r.effective_end is null or r.effective_end>v_week_start);
+    select exists(select 1 from jsonb_array_elements_text(v_declared_vacant) vacancy(slot_id) where vacancy.slot_id=v_slot_id)
+      into v_is_declared_vacant;
+    if jsonb_array_length(v_ranges)=0 then
+      if not v_is_declared_vacant then
+        raise exception using errcode='23514',message='every non-vacant projected stable roster slot requires closure-aware incumbent history for the requested horizon';
+      end if;
+      v_active_vacant:=v_active_vacant||jsonb_build_array(v_slot_id);
+    end if;
+    v_slot:=jsonb_set(v_slot,'{incumbencies}',v_ranges,true);
+    v_slots:=v_slots||jsonb_build_array(v_slot);
+  end loop;
+
+  v_hydrated:=jsonb_set(p_source,'{slots}',v_slots,true);
+  if jsonb_typeof(v_hydrated->'version')='object' then v_version:=v_hydrated->'version';
+  else v_version:=(v_hydrated->'versions')->0; end if;
+  v_version:=jsonb_set(v_version,'{vacantSlotIds}',v_active_vacant,true);
+  for v_item in select value from jsonb_array_elements(coalesce(v_version->'slotAvailability','[]'::jsonb)) loop
+    v_slot_id:=v_item->>'slotId';
+    v_date:=v_week_start+mod((v_item->>'dayOfWeek')::integer-extract(dow from v_week_start)::integer+7,7);
+    select not exists(select 1 from public.v_weekly_roster_slot_incumbency_ranges r
+      where r.slot_id=v_slot_id::uuid and r.effective_start<=v_date
+        and (r.effective_end is null or v_date<r.effective_end)) into v_is_active_vacant;
+    if v_is_active_vacant and not (v_declared_vacant ? v_slot_id) then
+      raise exception using errcode='23514',message='dated vacancy requires registered stable-slot capability';
+    end if;
+    if v_is_active_vacant then
+      v_item:=jsonb_set(v_item,'{status}',to_jsonb('vacant_unfilled'::text),true);
+    else
+      select s.staffing_state into v_state from public.weekly_roster_slot_staffing_states s
+      where s.slot_id=v_slot_id::uuid and s.effective_start<=v_date
+      order by s.effective_start desc,s.authority_revision desc limit 1;
+      if v_state='vacant_unfilled' then
+        raise exception using errcode='23514',message='vacant staffing state conflicts with an effective incumbent';
+      end if;
+      if v_state is not null then v_item:=jsonb_set(v_item,'{status}',to_jsonb(v_state),true);
+      elsif v_item->>'status'='vacant_unfilled' then v_item:=jsonb_set(v_item,'{status}',to_jsonb('working'::text),true); end if;
+    end if;
+    v_availability:=v_availability||jsonb_build_array(v_item);
+  end loop;
+  v_version:=jsonb_set(v_version,'{slotAvailability}',v_availability,true);
+  if jsonb_typeof(v_hydrated->'version')='object' then v_hydrated:=jsonb_set(v_hydrated,'{version}',v_version,true);
+  else v_hydrated:=jsonb_set(v_hydrated,'{versions}',jsonb_build_array(v_version),true); end if;
+  return jsonb_set(v_hydrated,'{serviceDate}',to_jsonb(p_service_date::text),true);
+end
+$function$;
+
+create or replace function public.static_weekly_v3_assert_draft_incumbency(p_version_id uuid)
+returns void language plpgsql security definer set search_path=pg_catalog,public as $function$
+declare v_start date; v_document jsonb; v_vacant jsonb:='[]'::jsonb; v_row record; v_person uuid; v_name text; v_date date; v_matches integer; v_is_vacant boolean;
+begin
+  select effective_start,draft_document into v_start,v_document from public.weekly_schedule_versions where version_id=p_version_id for share;
+  if v_start is null then raise exception using errcode='23514',message='draft version does not exist'; end if;
+  v_vacant:=coalesce(v_document#>'{authority,compilerInput,version,vacancyCapableSlotIds}','[]'::jsonb);
+  if jsonb_typeof(v_vacant) is distinct from 'array' then raise exception using errcode='23514',message='draft vacancy authority must be an array'; end if;
+  for v_row in select * from public.weekly_schedule_slot_availability where version_id=p_version_id order by day_of_week,slot_id loop
+    v_date:=v_start+mod(v_row.day_of_week-extract(dow from v_start)::integer+7,7);
+    select exists(select 1 from jsonb_array_elements_text(v_vacant) vacancy(slot_id) where vacancy.slot_id=v_row.slot_id::text) into v_is_vacant;
+    select count(*) into v_matches from public.v_weekly_roster_slot_incumbency_ranges where slot_id=v_row.slot_id and effective_start<=v_date and (effective_end is null or v_date<effective_end);
+    if coalesce((v_document#>'{authority,compilerInput,version,vacantSlotIds}') ? v_row.slot_id::text,false) and v_matches<>0 then
+      raise exception using errcode='23514',message='declared whole-week vacancy cannot hide an incumbent';
+    end if;
+    v_is_vacant:=v_is_vacant and v_matches=0;
+    if v_is_vacant then
+      if v_row.availability_state<>'vacant_unfilled' or v_matches<>0
+        or v_row.incumbent_person_id_snapshot is not null or v_row.incumbent_name_snapshot is not null then
+        raise exception using errcode='23514',message='vacant draft slot must retain its shift and lunch with zero incumbent identity';
+      end if;
+    else
+      if v_row.availability_state='vacant_unfilled' or v_matches<>1 then
+        raise exception using errcode='23514',message='non-vacant draft roster slot must resolve exactly one closure-aware incumbent at each service date';
+      end if;
+      select person_id,person_name_snapshot into v_person,v_name from public.v_weekly_roster_slot_incumbency_ranges where slot_id=v_row.slot_id and effective_start<=v_date and (effective_end is null or v_date<effective_end);
+      if v_row.incumbent_person_id_snapshot is distinct from v_person or v_row.incumbent_name_snapshot is distinct from v_name then
+        raise exception using errcode='23514',message='draft roster incumbency snapshot is stale or incomplete at publication service date';
+      end if;
+    end if;
+  end loop;
+  for v_row in select * from public.weekly_schedule_slot_assignments where version_id=p_version_id order by day_of_week,assignment_id loop
+    v_date:=v_start+mod(v_row.day_of_week-extract(dow from v_start)::integer+7,7);
+    if nullif(v_row.payload_json#>>'{authority_facts,baseline_owner_slot_id}','') is not null then
+      select exists(select 1 from jsonb_array_elements_text(v_vacant) vacancy(slot_id) where vacancy.slot_id=v_row.payload_json#>>'{authority_facts,baseline_owner_slot_id}') into v_is_vacant;
+      select count(*) into v_matches from public.v_weekly_roster_slot_incumbency_ranges
+        where slot_id=(v_row.payload_json#>>'{authority_facts,baseline_owner_slot_id}')::uuid
+          and effective_start<=v_date and (effective_end is null or v_date<effective_end);
+      if v_matches>1 or (v_matches=0 and not v_is_vacant) then
+        raise exception using errcode='23514',message='baseline work requires a dated incumbent or registered vacancy capability';
+      end if;
+      v_is_vacant:=v_is_vacant and v_matches=0;
+      if v_is_vacant and (v_row.status<>'open' or v_row.owner_slot_id is not null or v_row.owner_person_id_snapshot is not null
+        or nullif(v_row.payload_json#>>'{authority_facts,baseline_owner_person_id}','') is not null) then
+        raise exception using errcode='23514',message='vacant recurring work must remain OPEN with no invented owner or original actor';
+      end if;
+    end if;
+    if v_row.owner_slot_id is not null then
+      v_date:=v_start+mod(v_row.day_of_week-extract(dow from v_start)::integer+7,7);
+      select count(*) into v_matches from public.v_weekly_roster_slot_incumbency_ranges where slot_id=v_row.owner_slot_id and effective_start<=v_date and (effective_end is null or v_date<effective_end);
+      if v_matches<>1 then raise exception using errcode='23514',message='draft assignment owner must resolve exactly one closure-aware incumbent at each service date'; end if;
+      select person_id,person_name_snapshot into v_person,v_name from public.v_weekly_roster_slot_incumbency_ranges where slot_id=v_row.owner_slot_id and effective_start<=v_date and (effective_end is null or v_date<effective_end);
+      if v_row.owner_person_id_snapshot is distinct from v_person or v_row.owner_name_snapshot is distinct from v_name then raise exception using errcode='23514',message='draft recurring owner snapshot is stale or incomplete at publication service date'; end if;
+    end if;
+  end loop;
+end
+$function$;
+
 -- Rebind only this change's objects into the existing release recovery inventory.
 alter table public.custodial_release_authority_restore_inventory
   disable trigger trg_custodial_release_authority_restore_inventory_immutable;
@@ -213,6 +368,8 @@ begin
     (100000,'function','public.static_weekly_v8_guard_vacancy_closure()'),
     (100000,'function','public.static_weekly_v8_vacate_roster_slot(uuid,uuid,uuid,date,text,bigint,uuid,text)'),
     (100000,'function','public.static_weekly_v7_fill_vacant_roster_slot(uuid,text,date,text,bigint,uuid,text)'),
+    (100000,'function','public.static_weekly_v4_hydrate_compiler_source(jsonb,date)'),
+    (100000,'function','public.static_weekly_v3_assert_draft_incumbency(uuid)'),
     (200000,'column','public.weekly_roster_slot_incumbency_closures:replacement_incumbency_id'),
     (200000,'column','public.weekly_roster_slot_staffing_states:employee_id'),
     (500000,'constraint','public.weekly_roster_slot_staffing_states:weekly_roster_slot_staffing_states_vacancy_identity_check'),
@@ -221,7 +378,9 @@ begin
     (700000,'trigger','public.weekly_roster_slot_incumbency_closures.trg_static_weekly_v8_guard_vacancy_closure'),
     (900000,'grant','public.static_weekly_v8_guard_vacancy_closure()'),
     (900000,'grant','public.static_weekly_v8_vacate_roster_slot(uuid,uuid,uuid,date,text,bigint,uuid,text)'),
-    (900000,'grant','public.static_weekly_v7_fill_vacant_roster_slot(uuid,text,date,text,bigint,uuid,text)')
+    (900000,'grant','public.static_weekly_v7_fill_vacant_roster_slot(uuid,text,date,text,bigint,uuid,text)'),
+    (900000,'grant','public.static_weekly_v4_hydrate_compiler_source(jsonb,date)'),
+    (900000,'grant','public.static_weekly_v3_assert_draft_incumbency(uuid)')
   ) as objects(bucket,kind,identity) order by bucket,identity loop
     definition:=case item.kind
       when 'relation' then public.custodial_release_authority_current_relation_definition(item.identity)

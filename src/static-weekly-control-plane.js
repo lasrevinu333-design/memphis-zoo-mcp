@@ -800,10 +800,24 @@ export function createStaticWeeklyControlPlane({
     },
     async vacateRosterSlot({ manager, sourceId, slotId, employeeId, effectiveStart, reason, expectedRevision, idempotencyKey }) {
       const actor = requireManager(manager); const key = requireIdempotencyKey(idempotencyKey);
-      return transaction((client) => call(client, "static_weekly_v8_vacate_roster_slot", [
-        text(sourceId), text(slotId), text(employeeId), requireDate(effectiveStart, "vacancy effective start"), text(reason),
-        requireRevision(expectedRevision), actor.managerId, key,
-      ]));
+      const date = requireDate(effectiveStart, "vacancy effective start");
+      const weekStart = mondayForDate(date, "vacancy effective start");
+      return transaction(async (client) => {
+        await client.query("select pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended($1,0))", ["memphis-static-weekly-authority"]);
+        const current = await snapshotFor(client, weekStart);
+        const mutate = () => call(client, "static_weekly_v8_vacate_roster_slot", [
+          text(sourceId), text(slotId), text(employeeId), date, text(reason),
+          requireRevision(expectedRevision), actor.managerId, key,
+        ]);
+        // Before first publication there is no employee projection to refresh.
+        // Once published, the staffing change and verified replacement projection
+        // (including lunch responsibilities) must either both commit or neither.
+        if (!current?.current_publication?.publication_id) return mutate();
+        return mutateAndMaterializeCurrentProjection(client, {
+          actor, weekStart, idempotencyKey: key,
+          publicationId: requirePublicationId(current.current_publication.publication_id), mutate,
+        });
+      });
     },
     async createVacantRosterSlot({ manager, slotId, slotLabel, expectedRevision, idempotencyKey }) {
       const actor = requireManager(manager); const key = requireIdempotencyKey(idempotencyKey);

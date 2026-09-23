@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import {execFileSync} from 'node:child_process';
+import {execFile,execFileSync} from 'node:child_process';
+import {promisify} from 'node:util';
 import {randomUUID} from 'node:crypto';
 // Synthetic roster/history in an explicitly isolated local PostgreSQL database.
 const container=process.env.ROSTER_PUBLICATION_TEST_CONTAINER;
@@ -41,7 +42,12 @@ rejected('past date cannot rewrite history',call({date:start}),/non-past|effecti
 const deniedSource=structuredClone(source);deniedSource.version.vacancyCapableSlotIds=[];deniedSource.version.vacantSlotIds=[];
 const deniedId=randomUUID();sql(`set role static_weekly_release_operator; select public.static_weekly_v3_register_authority_source(${q(deniedId)},${j(deniedSource)},'synthetic-nonvacancy-test');`);
 rejected('source must authorize an actual vacancy',call({source:deniedId}),/vacant|vacancy/i);
-const answer=parsed(call());check('one revision advanced',answer.revision,inputRevision+1);
+const concurrent=await Promise.all([0,1].map(async()=>{
+ const {stdout}=await promisify(execFile)('docker',['exec',container,'psql','-X','-q','-At','-v','ON_ERROR_STOP=1','-U','supabase_admin','-d','postgres','-c',call()],{encoding:'utf8',timeout:120000});
+ return JSON.parse(stdout.trim().split('\n').at(-1));
+}));
+const answer=concurrent[0];check('identical concurrent calls return one receipt',concurrent[1],answer);
+check('one revision advanced',answer.revision,inputRevision+1);
 check('no replacement invented',answer.data.replacement_employee_id,null);
 check('same position returned',answer.data.slot_id,slot);
 check('actual employee retained',answer.data.former_employee_id,employee);
@@ -73,7 +79,9 @@ rejected('future vacancy cannot deactivate a current employee',call({date:nextMo
 const functions=[
  'public.static_weekly_v8_guard_vacancy_closure()',
  'public.static_weekly_v8_vacate_roster_slot(uuid,uuid,uuid,date,text,bigint,uuid,text)',
- 'public.static_weekly_v7_fill_vacant_roster_slot(uuid,text,date,text,bigint,uuid,text)'
+ 'public.static_weekly_v7_fill_vacant_roster_slot(uuid,text,date,text,bigint,uuid,text)',
+ 'public.static_weekly_v4_hydrate_compiler_source(jsonb,date)',
+ 'public.static_weekly_v3_assert_draft_incumbency(uuid)'
 ];
 for(const identity of functions){
  check('recovery function matches '+identity,sql(`select count(*)::text from public.custodial_release_authority_restore_inventory where object_kind='function' and object_identity=${q(identity)} and definition_sql=pg_get_functiondef(to_regprocedure(${q(identity)}))`),'1');
@@ -88,8 +96,35 @@ check('new hire does not reuse former identity',refilled.data.new_employee_id===
 check('old person remains inactive after refill',sql(`select active::text from public.employees where id=${q(employee)}`),'false');
 check('new hire creates no phone assignment',refilled.data.phone_assignment,null);
 check('refill retry is idempotent',parsed(refillSql),refilled);
+const originalServiceClock=parsed("select to_json(pg_get_functiondef('public.sch_service_date(timestamptz)'::regprocedure))::text");
+const followingWeek=sql(`select (${q(nextMonday)}::date+7)::text`);
+try {
+ sql(`create or replace function public.sch_service_date(p_at timestamptz default now()) returns date language sql stable as $$select ${q(followingWeek)}::date$$`);
+ check('lost acknowledgement replays after effective week ends',parsed(refillSql),refilled);
+ rejected('cross-week changed input still conflicts with original receipt',refillSql.replace('Synthetic Next Hire','Synthetic Different Hire'),/idempotency/i);
+ rejected('new command cannot retroactively fill an older week',refillSql.replace('refill-'+slot,'new-old-week-'+slot),/before the current week/i);
+} finally { sql(originalServiceClock); }
 check('only one new hire created',Number(sql('select count(*)::text from public.employees')),Number(peopleBefore)+1);
 check('exact new hire owns the next week',sql(`select person_id::text from public.v_weekly_roster_slot_incumbency_ranges where slot_id=${q(slot)} and effective_start<=${q(nextMonday)}::date and (effective_end is null or ${q(nextMonday)}::date<effective_end)`),refilled.data.new_employee_id);
 rejected('second future hire cannot occupy already-reserved slot',`set role static_weekly_control_plane; select public.static_weekly_v7_fill_vacant_roster_slot(${q(slot)},'Synthetic Duplicate Hire',${q(nextMonday)},'Rejected duplicate',${revision()},${q(manager)},'duplicate-refill')`,/no current or future incumbent/i);
+
+// Execute the production recovery controller against synthetic data only.
+// Restore the complete ordered inventory, not just the newly captured hashes.
+const releaseManager=randomUUID(),secret='synthetic-vacancy-recovery-never-production-0123456789';
+sql(`insert into public.ops_manager_managers(manager_id,display_name,roles,active) values(${q(releaseManager)},'Synthetic Recovery Director',array['DIRECTOR'],true);
+ select public.custodial_configure_backend_execution_key(encode(extensions.digest(convert_to(${q(secret)},'UTF8'),'sha256'),'hex'),'synthetic vacancy recovery');`);
+const releaseAction=action=>`select public.custodial_control_release_canary(${q(releaseManager)},${q(randomUUID())},'KIOSK_08',${q(action)},'Synthetic isolated vacancy recovery','{}'::jsonb,${q(secret)})::text`;
+check('isolated canary paused for restore',parsed(releaseAction('pause_canary')).canary_paused,true);
+const beforeRecovery=sql(`select jsonb_build_object('history',(select jsonb_agg(to_jsonb(i) order by incumbency_id) from public.weekly_roster_slot_incumbencies i),'closures',(select jsonb_agg(to_jsonb(c) order by incumbency_closure_id) from public.weekly_roster_slot_incumbency_closures c),'receipts',(select jsonb_agg(to_jsonb(r) order by command_id) from public.weekly_schedule_command_receipts r))::text`);
+sql('drop function public.static_weekly_v8_vacate_roster_slot(uuid,uuid,uuid,date,text,bigint,uuid,text); drop trigger trg_static_weekly_v8_guard_vacancy_closure on public.weekly_roster_slot_incumbency_closures;');
+check('missing writer is established before recovery',sql("select (to_regprocedure('public.static_weekly_v8_vacate_roster_slot(uuid,uuid,uuid,date,text,bigint,uuid,text)') is null)::text"),'true');
+const restored=parsed(releaseAction('restore_authority'));
+check('complete inventory actually replayed',restored.restored_objects>100,true);
+check('restore keeps canary paused',restored.canary_paused,true);
+check('historical rows and receipts survive recovery',sql(`select jsonb_build_object('history',(select jsonb_agg(to_jsonb(i) order by incumbency_id) from public.weekly_roster_slot_incumbencies i),'closures',(select jsonb_agg(to_jsonb(c) order by incumbency_closure_id) from public.weekly_roster_slot_incumbency_closures c),'receipts',(select jsonb_agg(to_jsonb(r) order by command_id) from public.weekly_schedule_command_receipts r))::text`),beforeRecovery);
+check('vacancy receipt replays after actual restoration',parsed(call()),answer);
+check('refill receipt replays after actual restoration',parsed(refillSql),refilled);
+for(const identity of functions)check('restored exact function '+identity,sql(`select (definition_sql=pg_get_functiondef(to_regprocedure(${q(identity)})))::text from public.custodial_release_authority_restore_inventory where object_kind='function' and object_identity=${q(identity)}`),'true');
+check('vacancy guard restored',sql("select count(*)::text from pg_trigger where tgrelid='public.weekly_roster_slot_incumbency_closures'::regclass and tgname='trg_static_weekly_v8_guard_vacancy_closure' and tgenabled<>'D'"),'1');
 
 console.log(JSON.stringify({passed,failed:0,fixture:'isolated registered-source vacancy conversion',production_written:false,employee_deleted:false,synthetic_employee_created_in_production:false},null,2));

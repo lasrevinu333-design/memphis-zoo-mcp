@@ -271,6 +271,18 @@ export function snapshotVacantRosterSlot(slot, serviceDate) {
   return { slotId: String(slot.id), slotLabel: String(slot.label || slot.id), personId: null, displayName: null, vacant: true };
 }
 
+// Whole-week vacancy is a summary, not the identity for every date in a
+// turnover week. Only immutable vacancy capability permits a dated gap.
+export function snapshotDatedRosterSlot(slot, serviceDate, { vacancyCapable = false, declaredVacant = false } = {}) {
+  if (declaredVacant) {
+    assert(vacancyCapable, "A declared vacancy requires source capability.", "vacant_slot_not_vacancy_capable");
+    return snapshotVacantRosterSlot(slot, serviceDate);
+  }
+  return vacancyCapable && effectiveIncumbencies(slot, serviceDate).length === 0
+    ? snapshotVacantRosterSlot(slot, serviceDate)
+    : snapshotIncumbency(slot, serviceDate);
+}
+
 function exactPayloadObject(value, required, label) {
   assert(value && typeof value === "object" && !Array.isArray(value), `${label} must be an exact object.`, "invalid_exception_payload");
   const keys = Object.keys(value).sort(stableCompare);

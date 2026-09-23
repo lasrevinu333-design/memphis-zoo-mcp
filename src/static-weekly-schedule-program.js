@@ -17,8 +17,7 @@ import {
   normalizeWindow,
   selectEffectiveWeeklyVersion,
   serviceDateWeekday,
-  snapshotIncumbency,
-  snapshotVacantRosterSlot,
+  snapshotDatedRosterSlot,
   stableCompare,
   sha256Hex,
   windowContains,
@@ -1069,8 +1068,6 @@ export function prepareStaticWeeklySchedulingProblem(input, deadline = null) {
     const identity = `${entry.dayOfWeek}\u0000${text(entry.slotId)}`;
     if (availabilityIdentities.has(identity)) return { error: programReason("duplicate_slot_availability_identity", { dayOfWeek: entry.dayOfWeek, slotId: text(entry.slotId) }) };
     if (!slotIds.has(text(entry.slotId))) return { error: programReason("unknown_slot_availability_identity", { dayOfWeek: entry.dayOfWeek, slotId: text(entry.slotId) }) };
-    if (vacantSlotIds.has(text(entry.slotId)) && entry.status !== "vacant_unfilled") return { error: programReason("vacant_slot_availability_mismatch", { dayOfWeek: entry.dayOfWeek, slotId: text(entry.slotId), status: entry.status || null }) };
-    if (!vacantSlotIds.has(text(entry.slotId)) && entry.status === "vacant_unfilled") return { error: programReason("vacant_slot_not_declared", { dayOfWeek: entry.dayOfWeek, slotId: text(entry.slotId) }) };
     availabilityIdentities.add(identity);
   }
   const incumbencyByDaySlot = new Map();
@@ -1078,10 +1075,15 @@ export function prepareStaticWeeklySchedulingProblem(input, deadline = null) {
     if (deadline != null) remainingStaticWeeklyMilliseconds(deadline);
     const date = weekdayDate(serviceDate, day);
     try {
-      incumbencyByDaySlot.set(`${day}\u0000${slot.id}`, vacantSlotIds.has(slot.id)
-        ? snapshotVacantRosterSlot(slot, date)
-        : snapshotIncumbency(slot, date));
+      incumbencyByDaySlot.set(`${day}\u0000${slot.id}`, snapshotDatedRosterSlot(slot, date, {
+        vacancyCapable: vacancyCapableSlotIds.has(slot.id), declaredVacant: vacantSlotIds.has(slot.id),
+      }));
     } catch (error) { return { error: programReason("invalid_incumbency_history", { slotId: slot.id, serviceDate: date, detail: error.code || error.message }) }; }
+  }
+  for (const entry of array(version.slotAvailability)) {
+    const vacant = incumbencyByDaySlot.get(`${entry.dayOfWeek}\u0000${text(entry.slotId)}`)?.vacant === true;
+    if (vacant && entry.status !== "vacant_unfilled") return { error: programReason("vacant_slot_availability_mismatch", { dayOfWeek: entry.dayOfWeek, slotId: text(entry.slotId), status: entry.status || null }) };
+    if (!vacant && entry.status === "vacant_unfilled") return { error: programReason("vacant_slot_not_declared", { dayOfWeek: entry.dayOfWeek, slotId: text(entry.slotId) }) };
   }
   const states = new Map(); const applied = [];
   for (let day = 0; day < 7; day += 1) {
@@ -1140,7 +1142,7 @@ export function prepareStaticWeeklySchedulingProblem(input, deadline = null) {
       const issues = workReasons(raw);
       const key = `${day}:${raw.workId}`;
       if (issues.length) return { error: programReason("work_missing_or_incompatible_provenance", { workId: raw.workId, dayOfWeek: day, reasons: issues }) };
-      const vacantBaseline = vacantSlotIds.has(text(raw.originSlotId));
+      const vacantBaseline = incumbencyByDaySlot.get(`${day}\u0000${text(raw.originSlotId)}`)?.vacant === true;
       // Preserve the recurring work requirement in source authority.  While a
       // stable position is empty, its work is derived OPEN rather than REVIEW;
       // once the position is filled, the same immutable requirement becomes
