@@ -147,6 +147,7 @@ function createAuthorityDatabase({ revision: initialRevision = 0, failMutationAt
       }
       if (statement.includes("static_weekly_v4_mark_employee_departed")) { revision = values[2] + 1; return { rows: [{ result: { revision, data: { slot_id: values[0] } } }] }; }
       if (statement.includes("static_weekly_v4_replace_employee")) { revision = values[3] + 1; return { rows: [{ result: { revision, data: { new_employee_name: values[1] } } }] }; }
+      if (statement.includes("static_weekly_v8_restore_existing_employee")) { revision = values[5] + 1; return { rows: [{ result: { revision, data: { source_id: values[0], slot_id: values[1], employee_id: values[2], effective_start: values[3], history_preserved: true, phone_assignment: null } } }] }; }
       if (statement.includes("static_weekly_v7_create_vacant_roster_slot")) { revision = values[2] + 1; return { rows: [{ result: { revision, data: { slot_id: values[0], slot_label: values[1], vacant: true } } }] }; }
       if (statement.includes("static_weekly_v7_fill_vacant_roster_slot")) { revision = values[4] + 1; return { rows: [{ result: { revision, data: { slot_id: values[0], new_employee_name: values[1], effective_start: values[2] } } }] }; }
       if (statement.includes("static_weekly_v8_materialize_lunch_document")) {
@@ -607,6 +608,15 @@ const snapshot = await snapshotControlPlane.getManagerSnapshot({ manager, weekSt
 assert.equal(snapshot.authority_revision, 7);
 assert.deepEqual(snapshotAuthority.queries.map((entry) => entry.statement), ["begin", "set local role static_weekly_control_plane", "set local statement_timeout = '120000ms'", "select public.custodial_begin_application_mutation()", "select public.static_weekly_v3_read_manager_snapshot($1) as result", "commit"]);
 await assert.rejects(() => snapshotControlPlane.getManagerSnapshot({ manager, weekStart: "2026-10-06" }), /Monday-aligned/i, "projection workflows reject non-Monday week identity before a transaction starts");
+
+const restoreAuthority = createAuthorityDatabase();
+const restoreControlPlane = controlPlaneFor(restoreAuthority);
+const restoredExisting = await restoreControlPlane.restoreExistingEmployee({ manager, sourceId: "50000000-0000-4000-8000-000000000093", slotId: "5d2d2a0e-230f-5b03-9867-2e4c2826871f", employeeId: "4f501293-2973-46ba-bf83-34d440d60407", effectiveStart: "2026-10-05", reason: "Owner-approved restoration of existing employee identity", expectedRevision: 0, idempotencyKey: "restore-existing-gregory" });
+assert.equal(restoredExisting.revision, 1);
+assert.equal(restoredExisting.data.employee_id, "4f501293-2973-46ba-bf83-34d440d60407");
+assert.equal(restoredExisting.data.history_preserved, true);
+assert.equal(restoredExisting.data.phone_assignment, null);
+assert.deepEqual(restoreAuthority.queries.map((entry) => entry.statement), ["begin", "set local role static_weekly_control_plane", "set local statement_timeout = '120000ms'", "select public.custodial_begin_application_mutation()", "select public.static_weekly_v8_restore_existing_employee($1,$2,$3,$4,$5,$6,$7,$8) as result", "commit"], "existing-employee restoration is a bounded named-manager operation and does not invent a replacement identity or phone assignment");
 
 const vacancyAuthority = createAuthorityDatabase();
 const vacancyControlPlane = controlPlaneFor(vacancyAuthority);
