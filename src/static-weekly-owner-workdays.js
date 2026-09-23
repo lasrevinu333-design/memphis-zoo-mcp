@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { isIsoServiceDate, snapshotDatedRosterSlot } from './static-weekly-schedule-model.js';
 
 const policy = JSON.parse(readFileSync(new URL('../config/custodial-owner-workdays.json', import.meta.url), 'utf8'));
 if (policy.schema !== 'custodial.owner-recurring-workdays.v1') throw new Error('owner workday policy schema mismatch');
@@ -15,17 +16,53 @@ export function assertOwnerRecurringWorkdays(input, serviceDate = input?.service
       .filter(person => person.personId === rule.employeeId)
       .map(person => ({slot, person})));
     if (!matched.length) continue;
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(serviceDate || '')) throw fail('Dated source required for owner workday validation.');
+    if (!isIsoServiceDate(serviceDate)) throw fail('Dated source required for owner workday validation.');
     if (serviceDate < rule.appliesFrom) continue;
-    const active = matched.filter(({person}) => person.effectiveStart <= serviceDate
-      && (!person.effectiveEnd || serviceDate < person.effectiveEnd));
-    if (!active.length) continue; // Do not revive an ended historical incumbent.
-    if (active.length !== 1 || active[0].slot.id !== rule.slotId) throw fail(`${rule.displayName}: current stable identity is inconsistent.`);
+    const monday = new Date(`${serviceDate}T00:00:00Z`);
+    monday.setUTCDate(monday.getUTCDate() - (monday.getUTCDay() + 6) % 7);
+    const dates = Array.from({length: 7}, (_, offset) => {
+      const day = new Date(monday); day.setUTCDate(day.getUTCDate() + offset);
+      return { date: day.toISOString().slice(0, 10), dayOfWeek: day.getUTCDay() };
+    });
+    const ownedDays = dates.filter(({date}) => {
+      const active = matched.filter(({person}) => person.effectiveStart <= date
+        && (!person.effectiveEnd || date < person.effectiveEnd));
+      if (active.length && (active.length !== 1 || active[0].slot.id !== rule.slotId)) {
+        throw fail(`${rule.displayName}: current stable identity is inconsistent.`);
+      }
+      return active.length === 1;
+    });
+    if (!ownedDays.length) continue; // No ownership anywhere in this week; never revive history.
     if (!Array.isArray(versions) || versions.length !== 1) throw fail('Exactly one recurring version is required.');
-    const rows = (versions[0].slotAvailability || []).filter(row => row.slotId === rule.slotId);
-    const days = rows.filter(row => row.status === 'working').map(row => row.dayOfWeek).sort((a,b) => a-b);
-    if (new Set(rows.map(row => row.dayOfWeek)).size !== rows.length
-      || !equal(days, rule.workDays)) throw fail(`${rule.displayName} must work Monday, Tuesday, Wednesday, Friday and Saturday; Sunday and Thursday are off. Correct and verify the recurring source before publication.`);
+    const version = versions[0];
+    const rows = (version.slotAvailability || []).filter(row => row.slotId === rule.slotId);
+    const slot = slots.find(item => item.id === rule.slotId);
+    // The SQL reader hydrates one recurring template into dated ownership. A
+    // Wednesday closure legitimately masks Wed-Sun, not the retained Mon-Tue.
+    // Resolve the same dated identities as the compiler, including capability
+    // and overlap checks, before comparing only this employee's occupied days.
+    for (const {date, dayOfWeek} of dates) {
+      let incumbent;
+      try {
+        incumbent = snapshotDatedRosterSlot(slot, date, {
+          vacancyCapable: (version.vacancyCapableSlotIds || []).includes(rule.slotId),
+          declaredVacant: (version.vacantSlotIds || []).includes(rule.slotId),
+        });
+      } catch {
+        throw fail(`${rule.displayName}: dated stable identity is inconsistent.`);
+      }
+      const row = rows.find(item => item.dayOfWeek === dayOfWeek);
+      if (row && (incumbent.vacant ? row.status !== 'vacant_unfilled' : row.status === 'vacant_unfilled')) {
+        throw fail(`${rule.displayName}: dated availability does not match stable-slot ownership.`);
+      }
+    }
+    const ownedWeekdays = new Set(ownedDays.map(day => day.dayOfWeek));
+    const days = rows.filter(row => ownedWeekdays.has(row.dayOfWeek) && row.status === 'working')
+      .map(row => row.dayOfWeek).sort((a,b) => a-b);
+    const expectedDays = rule.workDays.filter(day => ownedWeekdays.has(day));
+    if (rows.some(row => !Number.isInteger(row.dayOfWeek) || row.dayOfWeek < 0 || row.dayOfWeek > 6)
+      || new Set(rows.map(row => row.dayOfWeek)).size !== rows.length
+      || !equal(days, expectedDays)) throw fail(`${rule.displayName} must work Monday, Tuesday, Wednesday, Friday and Saturday; Sunday and Thursday are off. Correct and verify the recurring source before publication.`);
   }
   return true;
 }

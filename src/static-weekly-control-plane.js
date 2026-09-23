@@ -813,9 +813,12 @@ export function createStaticWeeklyControlPlane({
         // Once published, the staffing change and verified replacement projection
         // (including lunch responsibilities) must either both commit or neither.
         if (!current?.current_publication?.publication_id) return mutate();
+        const mutation = await mutate(); // Validates the complete original request on retries, too.
+        const completed = await call(client, "static_weekly_v8_read_completed_vacancy", [actor.managerId, key]);
+        if (completed) return completed;
         return mutateAndMaterializeCurrentProjection(client, {
           actor, weekStart, idempotencyKey: key,
-          publicationId: requirePublicationId(current.current_publication.publication_id), mutate,
+          publicationId: requirePublicationId(current.current_publication.publication_id), mutate: async () => mutation,
         });
       });
     },

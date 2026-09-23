@@ -57,6 +57,78 @@ await test('actual publication rolls back outdated Karen weekdays',async()=>{con
 await test('other people remain unaffected',()=>{const i=input([2,3,4,5,6]);i.slots[0].incumbencies[0].personId='30000000-0000-4000-8000-000000000099';assert.equal(assertOwnerRecurringWorkdays(i),true);});
 await test('plural canonical input accepted',()=>{const i=input();i.versions=[i.version];delete i.version;assert.equal(assertOwnerRecurringWorkdays(i),true);});
 await test('explicit off days accepted',()=>{const i=input();i.version.slotAvailability.push({slotId:rule.slotId,dayOfWeek:0,status:'off'},{slotId:rule.slotId,dayOfWeek:4,status:'off'});assert.equal(assertOwnerRecurringWorkdays(i),true);});
+function datedVacancy() {
+ const i=input();i.slots[0].incumbencies[0].effectiveEnd='2026-09-30';
+ i.version.vacancyCapableSlotIds=[rule.slotId];i.version.vacantSlotIds=[];
+ i.version.slotAvailability.push({slotId:rule.slotId,dayOfWeek:0,status:'off'},{slotId:rule.slotId,dayOfWeek:4,status:'off'});
+ for(const row of i.version.slotAvailability)if(![1,2].includes(row.dayOfWeek))row.status='vacant_unfilled';
+ return i;
+}
+await test('VCC-01 actual policy accepts dated Wednesday vacancy with Monday projection anchor',()=>{
+ const i=datedVacancy(),before=JSON.stringify(i);assert.equal(assertOwnerRecurringWorkdays(i),true);assert.equal(JSON.stringify(i),before);
+});
+await test('VCC-01 Wednesday anchor still validates retained Monday and Tuesday',()=>{
+ const i=datedVacancy();i.serviceDate='2026-09-30';i.version.slotAvailability.find(x=>x.dayOfWeek===1).status='off';
+ assert.throws(()=>assertOwnerRecurringWorkdays(i),error=>error.code==='static_weekly_owner_workdays_mismatch');
+});
+await test('midweek vacancy cannot hide a wrong prior Tuesday',()=>{
+ const i=datedVacancy();i.version.slotAvailability.find(x=>x.dayOfWeek===2).status='off';
+ assert.throws(()=>assertOwnerRecurringWorkdays(i),error=>error.code==='static_weekly_owner_workdays_mismatch');
+});
+await test('vacancy needs registered stable-slot capability',()=>{
+ const i=datedVacancy();delete i.version.vacancyCapableSlotIds;
+ assert.throws(()=>assertOwnerRecurringWorkdays(i),error=>error.code==='static_weekly_owner_workdays_mismatch');
+});
+await test('vacant weekday cannot retain working availability',()=>{
+ const i=datedVacancy();i.version.slotAvailability.find(x=>x.dayOfWeek===3).status='working';
+ assert.throws(()=>assertOwnerRecurringWorkdays(i),error=>error.code==='static_weekly_owner_workdays_mismatch');
+});
+await test('whole-week vacant marker cannot hide earlier employee',()=>{
+ const i=datedVacancy();i.version.vacantSlotIds=[rule.slotId];
+ assert.throws(()=>assertOwnerRecurringWorkdays(i),error=>error.code==='static_weekly_owner_workdays_mismatch');
+});
+await test('future midweek start is policy-covered despite vacant Monday',()=>{
+ const i=input([2,3,4,5,6]);i.slots[0].incumbencies[0].effectiveStart='2026-09-30';
+ i.version.vacancyCapableSlotIds=[rule.slotId];
+ for(const row of i.version.slotAvailability)if([1,2].includes(row.dayOfWeek))row.status='vacant_unfilled';
+ assert.throws(()=>assertOwnerRecurringWorkdays(i),error=>error.code==='static_weekly_owner_workdays_mismatch');
+});
+await test('legitimate midweek start accepts only dated policy workdays',()=>{
+ const i=input();i.slots[0].incumbencies[0].effectiveStart='2026-09-30';
+ i.version.vacancyCapableSlotIds=[rule.slotId];
+ for(const row of i.version.slotAvailability)if([1,2].includes(row.dayOfWeek))row.status='vacant_unfilled';
+ assert.equal(assertOwnerRecurringWorkdays(i),true);
+});
+await test('overlapping other incumbent fails rather than masking owner rule',()=>{
+ const i=datedVacancy();i.slots[0].incumbencies.push({personId:'synthetic-other',displayName:'Synthetic other',effectiveStart:'2026-09-29',effectiveEnd:null});
+ assert.throws(()=>assertOwnerRecurringWorkdays(i),error=>error.code==='static_weekly_owner_workdays_mismatch');
+});
+await test('invalid calendar date cannot bypass owner policy',()=>{
+ const i=input();i.serviceDate='2026-09-99';assert.throws(()=>assertOwnerRecurringWorkdays(i),error=>error.code==='static_weekly_owner_workdays_mismatch');
+});
+await test('invalid extra weekday cannot escape the dated filter',()=>{
+ const i=input();i.version.slotAvailability.push({...i.version.slotAvailability[0],dayOfWeek:7});
+ assert.throws(()=>assertOwnerRecurringWorkdays(i),error=>error.code==='static_weekly_owner_workdays_mismatch');
+});
+await test('immutable baseline and policy remain unchanged by dated validation',()=>{
+ const i=input(),before=JSON.stringify(i),policyBefore=readFileSync('config/custodial-owner-workdays.json','utf8');
+ assertOwnerRecurringWorkdays(datedVacancy());assert.equal(JSON.stringify(i),before);
+ assert.equal(readFileSync('config/custodial-owner-workdays.json','utf8'),policyBefore);
+});
+await test('actual vacancy control plane reaches compiler with policy-matched Wednesday departure',async()=>{
+ const queries=[];let prepared=0;
+ const client={async query(statement){queries.push(statement);
+  if(statement.includes('static_weekly_v3_read_manager_snapshot'))return {rows:[{result:{current_publication:{publication_id:'70000000-0000-4000-8000-000000000001'}}}]};
+  if(statement.includes('static_weekly_v8_vacate_roster_slot'))return {rows:[{result:{revision:1}}]};
+  if(statement.includes('static_weekly_v3_read_publication_source'))return {rows:[{result:{compiler_input:datedVacancy(),exceptions:[]}}]};
+  return {rows:[]};},release(){}};
+ const plane=createStaticWeeklyControlPlane({database:{async connect(){return client;}},
+  compilerPreparer:async()=>{prepared++;throw Error('EXPECTED_DOWNSTREAM_COMPILER_FAILURE');}});
+ await assert.rejects(plane.vacateRosterSlot({manager,sourceId:request.sourceId,slotId:rule.slotId,employeeId:rule.employeeId,
+  effectiveStart:'2026-09-30',reason:'Synthetic VCC-01 departure',expectedRevision:0,idempotencyKey:'vcc01-control-plane'}),/EXPECTED_DOWNSTREAM_COMPILER_FAILURE/);
+ assert.equal(prepared,1);assert.ok(queries.includes('rollback'));assert.ok(!queries.includes('commit'));
+ assert.ok(!queries.some(q=>q.includes('static_weekly_v3_materialize_projection')));
+});
 await test('source registration refuses obsolete Karen weekdays',async()=>{
  const i=input([2,3,4,5,6]);const packet={packetSchema:'memphis-zoo.static-weekly.verified-schedule-packet.v1',
  publicationAuthority:'VERIFIED_SERVER_PACKET',effectiveDate:date,sourceId:'50000000-0000-4000-8000-000000000001',

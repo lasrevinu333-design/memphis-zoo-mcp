@@ -356,6 +356,73 @@ begin
 end
 $function$;
 
+-- A completed vacancy already owns immutable mutation/projection/lunch receipts.
+-- Recompiling a retry would create different measured solver diagnostics, which
+-- the unchanged exact projection-command binding correctly refuses. Reconstruct
+-- the ORIGINAL complete result; never relax a receipt or substitute a new/current
+-- projection. The caller first replays the full vacancy writer to validate every
+-- original request field, then uses this constrained actor/key lookup.
+create function public.static_weekly_v8_read_completed_vacancy(p_manager_id uuid,p_idempotency_key text)
+returns jsonb language plpgsql stable security definer set search_path=pg_catalog,public as $function$
+declare
+ v_mutation public.weekly_schedule_command_receipts%rowtype;
+ v_receipt public.weekly_schedule_command_receipts%rowtype;
+ v_projection public.weekly_schedule_compiled_projections%rowtype;
+ v_lunch public.weekly_schedule_lunch_documents%rowtype;
+ v_date date;v_week date;v_projection_snapshot jsonb;
+begin
+ perform public.static_weekly_v3_assert_control_plane();
+ perform public.custodial_assert_manager(p_manager_id);
+ perform public.static_weekly_v3_manager_actor(p_manager_id);
+ if p_manager_id is null or nullif(btrim(p_idempotency_key),'') is null then
+  raise exception using errcode='22023',message='completed vacancy lookup requires exact manager and command identity';
+ end if;
+ select * into v_mutation from public.weekly_schedule_command_receipts
+  where actor_manager_id=p_manager_id and idempotency_key=p_idempotency_key and command_type='vacate_roster_slot';
+ if not found then return null; end if;
+ select * into v_receipt from public.weekly_schedule_command_receipts
+  where actor_manager_id=p_manager_id and idempotency_key='projection-'||encode(extensions.digest(convert_to(p_idempotency_key,'UTF8'),'sha256'),'hex');
+ if not found then return null; end if;
+ v_date:=(v_mutation.request_canonical_json->>'effective_start')::date;
+ v_week:=v_date-(extract(isodow from v_date)::integer-1);
+ if v_receipt.command_type is distinct from 'materialize_projection'
+  or v_receipt.expected_revision is distinct from (v_mutation.response_json->>'revision')::bigint
+  or (v_receipt.response_json->>'revision')::bigint is distinct from v_receipt.expected_revision+1
+  or v_receipt.request_canonical_json->>'service_date' is distinct from v_week::text then
+  raise exception using errcode='23514',message='completed vacancy projection receipt does not bind the exact mutation';
+ end if;
+ select * into v_projection from public.weekly_schedule_compiled_projections
+  where projection_id=(v_receipt.response_json#>>'{data,projection_id}')::uuid;
+ if not found or v_projection.week_start is distinct from v_week
+  or v_projection.publication_id::text is distinct from v_receipt.request_canonical_json->>'publication_id'
+  or v_projection.authority_digest is distinct from v_receipt.request_canonical_json#>>'{projection_envelope,authority_digest}'
+  or v_projection.replay_digest is distinct from v_receipt.request_canonical_json->>'replay_digest' then
+  raise exception using errcode='23514',message='completed vacancy immutable projection binding is missing or inconsistent';
+ end if;
+ select * into v_lunch from public.weekly_schedule_lunch_documents where projection_id=v_projection.projection_id;
+ if not found or v_lunch.accepted_by_manager_id is distinct from p_manager_id
+  or v_lunch.document_identity is distinct from v_lunch.document_json->>'document_identity'
+  or v_lunch.document_json->>'base_authority_digest' is distinct from v_projection.authority_digest
+  or v_lunch.document_json->>'base_replay_digest' is distinct from v_projection.replay_digest then
+  raise exception using errcode='23514',message='completed vacancy accepted lunch binding is missing or inconsistent';
+ end if;
+ -- Match the immutable projection descriptor in the manager snapshot used by
+ -- the first success. Do not read today's mutable latest-projection selector.
+ v_projection_snapshot:=jsonb_build_object(
+  'projection_id',v_projection.projection_id::text,'publication_id',v_projection.publication_id::text,
+  'version_id',v_projection.version_id::text,'week_start',v_projection.week_start::text,'week_end',v_projection.week_end::text,
+  'compiler_version',v_projection.compiler_version,'metrics',v_projection.metrics_json,
+  'replay_digest',v_projection.replay_digest,'compiled_at',v_projection.compiled_at,
+  'assignments',v_projection.projection_envelope->'assignments');
+ return v_receipt.response_json||jsonb_build_object('data',
+  (v_mutation.response_json->'data')||(v_receipt.response_json->'data')||
+  jsonb_build_object('current_projection',v_projection_snapshot,'mutation',v_mutation.response_json->'data'));
+end
+$function$;
+revoke all on function public.static_weekly_v8_read_completed_vacancy(uuid,text)
+ from public,anon,authenticated,service_role,static_weekly_release_operator,custodial_application_reader;
+grant execute on function public.static_weekly_v8_read_completed_vacancy(uuid,text) to static_weekly_control_plane;
+
 -- Rebind only this change's objects into the existing release recovery inventory.
 alter table public.custodial_release_authority_restore_inventory
   disable trigger trg_custodial_release_authority_restore_inventory_immutable;
@@ -367,6 +434,7 @@ begin
     (1000,'relation','public.weekly_roster_slot_staffing_states'),
     (100000,'function','public.static_weekly_v8_guard_vacancy_closure()'),
     (100000,'function','public.static_weekly_v8_vacate_roster_slot(uuid,uuid,uuid,date,text,bigint,uuid,text)'),
+    (100000,'function','public.static_weekly_v8_read_completed_vacancy(uuid,text)'),
     (100000,'function','public.static_weekly_v7_fill_vacant_roster_slot(uuid,text,date,text,bigint,uuid,text)'),
     (100000,'function','public.static_weekly_v4_hydrate_compiler_source(jsonb,date)'),
     (100000,'function','public.static_weekly_v3_assert_draft_incumbency(uuid)'),
@@ -378,6 +446,7 @@ begin
     (700000,'trigger','public.weekly_roster_slot_incumbency_closures.trg_static_weekly_v8_guard_vacancy_closure'),
     (900000,'grant','public.static_weekly_v8_guard_vacancy_closure()'),
     (900000,'grant','public.static_weekly_v8_vacate_roster_slot(uuid,uuid,uuid,date,text,bigint,uuid,text)'),
+    (900000,'grant','public.static_weekly_v8_read_completed_vacancy(uuid,text)'),
     (900000,'grant','public.static_weekly_v7_fill_vacant_roster_slot(uuid,text,date,text,bigint,uuid,text)'),
     (900000,'grant','public.static_weekly_v4_hydrate_compiler_source(jsonb,date)'),
     (900000,'grant','public.static_weekly_v3_assert_draft_incumbency(uuid)')

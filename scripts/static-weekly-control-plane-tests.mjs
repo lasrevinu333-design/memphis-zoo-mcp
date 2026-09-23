@@ -73,7 +73,7 @@ const acceptedProjection = await compileStaticWeeklySchedule(compilerInput());
 assert.equal(acceptedProjection.status, "FEASIBLE", "the control-plane transaction test needs one independently accepted projection");
 assert.equal(acceptedProjection.verifier.ok, true);
 
-function createAuthorityDatabase({ revision: initialRevision = 0, failMutationAt = null, failHeartbeatAt = null, heartbeatDelayMs = 0, failLunch = false } = {}) {
+function createAuthorityDatabase({ revision: initialRevision = 0, failMutationAt = null, failHeartbeatAt = null, heartbeatDelayMs = 0, failLunch = false, completedVacancy = null } = {}) {
   const queries = [];
   const materializations = new Map();
   const projectionSnapshots = new Map();
@@ -149,6 +149,7 @@ function createAuthorityDatabase({ revision: initialRevision = 0, failMutationAt
       if (statement.includes("static_weekly_v4_replace_employee")) { revision = values[3] + 1; return { rows: [{ result: { revision, data: { new_employee_name: values[1] } } }] }; }
       if (statement.includes("static_weekly_v8_restore_existing_employee")) { revision = values[5] + 1; return { rows: [{ result: { revision, data: { source_id: values[0], slot_id: values[1], employee_id: values[2], effective_start: values[3], history_preserved: true, phone_assignment: null } } }] }; }
       if (statement.includes("static_weekly_v8_vacate_roster_slot")) { revision = values[5] + 1; return { rows: [{ result: { revision, data: { source_id: values[0], slot_id: values[1], former_employee_id: values[2], effective_start: values[3], replacement_employee_id: null } } }] }; }
+      if (statement.includes("static_weekly_v8_read_completed_vacancy")) return { rows: [{ result: completedVacancy }] };
       if (statement.includes("static_weekly_v7_create_vacant_roster_slot")) { revision = values[2] + 1; return { rows: [{ result: { revision, data: { slot_id: values[0], slot_label: values[1], vacant: true } } }] }; }
       if (statement.includes("static_weekly_v7_fill_vacant_roster_slot")) { revision = values[4] + 1; return { rows: [{ result: { revision, data: { slot_id: values[0], new_employee_name: values[1], effective_start: values[2] } } }] }; }
       if (statement.includes("static_weekly_v8_materialize_lunch_document")) {
@@ -637,6 +638,12 @@ const failedVacancyAuthority = createAuthorityDatabase({ failLunch: true });
 await assert.rejects(() => controlPlaneFor(failedVacancyAuthority).vacateRosterSlot(vacateInput), /lunch persistence failed/);
 assert.equal(failedVacancyAuthority.commits(), 0, "a failed downstream lunch refresh cannot commit a vacancy or leave other schedules stale");
 assert.equal(failedVacancyAuthority.revision(), 0, "vacancy staffing and projection are rolled back together");
+const completedVacancyAuthority = createAuthorityDatabase({ completedVacancy: vacated });
+const completedVacancyPlane = controlPlaneFor(completedVacancyAuthority, async () => { throw Error("completed vacancy must not recompile"); });
+assert.deepEqual(await completedVacancyPlane.vacateRosterSlot(vacateInput), vacated);
+const completedStatements = completedVacancyAuthority.queries.map(entry => entry.statement);
+assert.ok(completedStatements.findIndex(s => s.includes("static_weekly_v8_vacate_roster_slot")) < completedStatements.findIndex(s => s.includes("static_weekly_v8_read_completed_vacancy")), "full semantic request must be authenticated by writer before completed response lookup");
+assert.ok(!completedStatements.some(s => /static_weekly_v3_read_publication_source|static_weekly_v3_materialize_projection|static_weekly_v8_materialize_lunch_document/.test(s)), "accepted full replay does not reread compiler input or rebuild any immutable proof");
 
 const vacancyAuthority = createAuthorityDatabase();
 const vacancyControlPlane = controlPlaneFor(vacancyAuthority);
