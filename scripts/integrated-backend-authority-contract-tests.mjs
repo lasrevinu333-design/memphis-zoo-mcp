@@ -60,6 +60,7 @@ const populatedPreflightWorkflow = readFileSync(".github/workflows/custodial-pop
 const schemaFingerprintRefresh = readFileSync("scripts/refresh-schema-fingerprint.mjs", "utf8");
 const packageManifest = JSON.parse(readFileSync("package.json", "utf8"));
 const releaseInput = JSON.parse(readFileSync("release/integrated-backend-authority-input.json", "utf8"));
+const releaseAlignment = JSON.parse(readFileSync("release/schema-alignment-input.json", "utf8"));
 const releaseEvidence = JSON.parse(readFileSync("release/integrated-backend-authority-evidence.json", "utf8"));
 const productionMigrationState = JSON.parse(readFileSync("release/production-migration-state.json", "utf8"));
 const canonicalCatalog = JSON.parse(readFileSync("supabase/canonical/schema-fingerprint-input.json", "utf8"));
@@ -316,7 +317,7 @@ assert.match(outlookEventSyncAuthority, /revoke all privileges on table public\.
 assert.doesNotMatch(outlookEventSyncAuthority, /grant\s+[^;]+\s+to\s+(?:anon|authenticated|custodial_application_reader)\b/i);
 assert.equal(releaseEvidence.compatibility_window.accepted_engine.scan, "scan.v2");
 assert.equal(releaseEvidence.compatibility_window.required_engine.scan, "scan.v4.snapshot-bound-authority");
-assert.equal(releaseEvidence.migrations.at(-1).name, visitorAttendanceFile);
+assert.equal(releaseEvidence.migrations.at(-1).name, exactPendingReleaseMigrations.at(-1));
 assert.match(applicationReaderReleaseRecovery, /application_reader_identity_projection_bounded/i);
 assert.match(applicationReaderReleaseRecovery, /custodial_application_reader_device_identity/i);
 assert.match(applicationReaderReleaseRecovery, /' grant '\|\|g\.privilege_type\|\|' \('\|\|quote_ident\(a\.attname\)/i);
@@ -359,7 +360,8 @@ assert.match(releaseEvidence.compatibility_window.native_start_operational_truth
 assert.match(dayChangeReconciliation, /static_weekly_v4_begin_day_changes/);
 assert.equal(releaseEvidence.artifact, "integrated-backend-authority-release-evidence.v2");
 assert.equal(releaseEvidence.release_id, "release-2026.07.19.custodial-v3.12");
-assert.equal(releaseEvidence.frontend_commit_sha, "38c815ce9688c37f769807839423f7b33f1d31c8");
+assert.match(releaseAlignment.frontend_commit_sha || '', /^[0-9a-f]{40}$/);
+assert.equal(releaseEvidence.frontend_commit_sha, releaseAlignment.frontend_commit_sha);
 assert.equal(releaseEvidence.frontend_commit_state, "final_pair_bound");
 assert.equal(releaseEvidence.schema_fingerprint, canonicalFingerprint);
 assert.equal(releaseEvidence.cutover.source_identity.kind, "external_signed_release_attestation");
@@ -376,7 +378,7 @@ assert.equal(releaseEvidence.authority_content_identity.expected_tree_inventory.
 assert.equal(releaseEvidence.authority_content_identity.authority_path_count, releaseEvidence.authority_content_identity.expected_tree_inventory.length);
 assert.equal(releaseEvidence.authority_content_identity.migration_path_count, exactMigrationCount);
 assert.equal(releaseEvidence.migrations.length, exactMigrationCount);
-assert.equal(releaseEvidence.migrations.at(-1).name, visitorAttendanceFile);
+assert.equal(releaseEvidence.migrations.at(-1).name, exactPendingReleaseMigrations.at(-1));
 assert.match(releaseEvidence.compatibility_window.credential_replacement_lineage_phase,
   /append-only same-device predecessor-to-successor transport lineage.*original actor, device, credential, or work evidence/i);
 assert.equal(Object.hasOwn(releaseEvidence.authority_content_identity, "value"), false, "generated evidence must not self-assert a worktree-derived content hash");
