@@ -69,6 +69,8 @@ const verifiedVisitReminderState = "20260922090000_verified_visit_reminder_state
 const lunchPublicationFile = "20260922163000_static_weekly_lunch_publication.sql";
 const lunchProducerFile = "20260922200000_lunch_notification_producer.sql";
 const restoreExistingEmployeeFile = "20260922235500_static_weekly_existing_employee_restore.sql";
+const vacateRosterSlotFile = "20260923065000_static_weekly_vacate_roster_slot.sql";
+const visitorAttendanceFile = "20260923121151_visitor_attendance_reader.sql";
 const releaseInputPath = "release/integrated-backend-authority-input.json";
 const releaseEvidencePath = "release/integrated-backend-authority-evidence.json";
 const productionMigrationStatePath = "release/production-migration-state.json";
@@ -274,7 +276,7 @@ const input = parseJsonBlob(blobByPath.get(releaseInputPath), "release authority
 const productionMigrationState = parseJsonBlob(blobByPath.get(productionMigrationStatePath), "production migration state");
 assert.equal(productionMigrationState.mode, "migration_required");
 assert.ok(Array.isArray(productionMigrationState.pending_migrations));
-assert.equal(productionMigrationState.pending_migrations.length, 6, "the candidate must identify exactly the six ordered Sep22 corrections");
+assert.equal(productionMigrationState.pending_migrations.length, 8, "the candidate must identify exactly the eight ordered Sep22-23 corrections");
 const pendingReleaseMigrations = productionMigrationState.pending_migrations.map(({ file }) => file);
 assert.deepEqual(pendingReleaseMigrations, [
   lunchDeliveryFailureManagerAlert,
@@ -283,6 +285,8 @@ assert.deepEqual(pendingReleaseMigrations, [
   lunchPublicationFile,
   lunchProducerFile,
   restoreExistingEmployeeFile,
+  vacateRosterSlotFile,
+  visitorAttendanceFile,
 ]);
 assert.equal(Object.hasOwn(productionMigrationState, "applied_release_migrations"), false,
   "captured state must use the exact ledger head instead of a duplicate partial applied-migration list");
@@ -358,20 +362,20 @@ assert.equal(productionMigrationState.observed_production?.vacancy_functions_pre
 assert.equal(productionMigrationState.observed_production?.hydrated_initial_draft_reader_present, true);
 assert.equal(productionMigrationState.observed_production?.registered_source_dated_status_excluded, true);
 assert.equal(productionMigrationState.observed_production?.outlook_event_sync_table_present, true);
-assert.equal(productionMigrationState.target?.source_migration_file, restoreExistingEmployeeFile);
-assert.equal(productionMigrationState.target?.source_migration_name, "static_weekly_existing_employee_restore");
-assert.equal(productionMigrationState.target?.source_migration_version, "20260922235500");
+assert.equal(productionMigrationState.target?.source_migration_file, visitorAttendanceFile);
+assert.equal(productionMigrationState.target?.source_migration_name, "visitor_attendance_reader");
+assert.equal(productionMigrationState.target?.source_migration_version, "20260923121151");
 assert.equal(productionMigrationState.target?.production_ledger_version, null);
 assert.equal(productionMigrationState.target?.canonical_source_schema_fingerprint, schemaFingerprint);
-assert.equal(productionMigrationState.target?.public_function_count, 518);
-assert.equal(productionMigrationState.target?.production_ledger_count, 236);
+assert.equal(productionMigrationState.target?.public_function_count, 522);
+assert.equal(productionMigrationState.target?.production_ledger_count, 238);
 assert.equal(productionMigrationState.target?.source_authority_migration_count, expectedMigrationCount);
 assert.equal(productionMigrationState.target?.pending_migration_count, pendingReleaseMigrations.length);
 assert.equal(productionMigrationState.target?.registered_source_dated_status_excluded, true);
-assert.equal(productionMigrationState.target?.expected_catalog_counts?.functions, 518);
-assert.equal(productionMigrationState.target?.expected_catalog_counts?.triggers, 312);
-assert.equal(productionMigrationState.target?.expected_catalog_counts?.policies, 42);
-assert.equal(productionMigrationState.target?.expected_catalog_counts?.routine_grants, 361);
+assert.equal(productionMigrationState.target?.expected_catalog_counts?.functions, 522);
+assert.equal(productionMigrationState.target?.expected_catalog_counts?.triggers, 313);
+assert.equal(productionMigrationState.target?.expected_catalog_counts?.policies, 43);
+assert.equal(productionMigrationState.target?.expected_catalog_counts?.routine_grants, 363);
 assert.equal(productionMigrationState.target?.expected_catalog_counts?.schema_grants, 9);
 assert.match(releaseHealthIdentityProjectionText, /c\.relname in \('devices','employees','device_aliases'\)/);
 assert.match(releaseHealthIdentityProjectionText, /Release health recovery inventory row is missing or duplicated/);

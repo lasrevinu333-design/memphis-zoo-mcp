@@ -29,7 +29,9 @@ assert.deepEqual(state.pending_migrations.map(({ order, file }) => ({ order, fil
   { order: 4, file: "20260922163000_static_weekly_lunch_publication.sql" },
   { order: 5, file: "20260922200000_lunch_notification_producer.sql" },
   { order: 6, file: "20260922235500_static_weekly_existing_employee_restore.sql" },
-], "the correction release fixture must contain exactly the five reviewed migrations in order");
+  { order: 7, file: "20260923065000_static_weekly_vacate_roster_slot.sql" },
+  { order: 8, file: "20260923121151_visitor_attendance_reader.sql" },
+], "the correction release fixture must contain exactly the eight reviewed migrations in order");
 assert.equal(
   state.pending_migrations.every((item) => item.source_migration_version > state.observed_production.ledger_head),
   true,
