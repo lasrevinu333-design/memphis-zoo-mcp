@@ -1,0 +1,9 @@
+{
+  "schema": "custodial.maintenance-recipients.v1",
+  "clientVersion": "custodial-maintenance-v1",
+  "recipients": {
+    "KIOSK_08": {
+      "adbSerialSha256": "fa6f399149812d6f91684e5371ca56ce4a65710e82a49cf3fca64003e41ded0e"
+    }
+  }
+}

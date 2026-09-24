@@ -4,6 +4,7 @@ import { makeOpsAccessMiddleware } from "./auth/shared-access-auth.js";
 import { getGeminiDiagnostics } from "./utils/gemini-config.js";
 import { createMemphisResponder } from "./services/index.js";
 import { resolveCanonicalDevice } from "./device-identity.js";
+import { nativeNotificationReceiptArguments } from "./native-notification-receipt.js";
 
 export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPayload, requireDeviceAccess, requireOpsManagerAuth: suppliedOpsManagerAuth, registerOperationalJobHandler, appVersion, releaseId, contractVersion }) {
   const router = express.Router();
@@ -1595,7 +1596,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       const action = String(req.body?.action || "dismissed").trim().toLowerCase();
       if (!requestedDeviceId) throw new Error("device_id is required.");
       if (!notificationKey || notificationKey.length > 500) throw new Error("notification_key is required and must be at most 500 characters.");
-      if (!['displayed','dismissed','opened','acknowledged'].includes(action)) throw new Error("action must be displayed, dismissed, opened, or acknowledged.");
+      if (!['received','displayed','dismissed','opened','acknowledged'].includes(action)) throw new Error("action must be received, displayed, dismissed, opened, or acknowledged.");
       const device = await getAssignedEmployeeForDevice(requestedDeviceId);
       if (!device || !device.device_active) throw new Error("Active device assignment not found.");
       const canonicalDeviceId = String(device.canonical_device_id || device.device_id).trim();
@@ -1603,7 +1604,9 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
         ? req.body.metadata
         : {};
       let data;
-      if (notificationType === 'event') {
+      if (req.body?.receipt_binding || notificationType === 'lunch_coverage') {
+        data = await runRpc('ack_native_device_notification', nativeNotificationReceiptArguments(req, canonicalDeviceId));
+      } else if (notificationType === 'event') {
         const viewer = await getViewerIdentity(canonicalDeviceId);
         // The database derives any Messenger link from the authoritative Event
         // notification record. A body message_id can only assert equality; an

@@ -1002,6 +1002,9 @@ export async function authenticateDeviceCredentialRequest(req, {
         enrollment_required: false,
       };
     }
+    const sameDeviceCredential = Boolean(row
+      && String(row.credential_id || "") === parts.credentialId
+      && String(row.device_id || "") === String(device.canonical_device_pk || ""));
     await audit(store, authEvent(req, device, {
       credentialId: parts.credentialId,
       eventType: "device_auth_failed",
@@ -1009,6 +1012,18 @@ export async function authenticateDeviceCredentialRequest(req, {
       reason: row?.revoked_at ? "revoked" : "invalid_or_expired_credential",
       env,
     }));
+    // Recovery is a per-device status fact, independent of rollout policy.
+    // Keep this AFTER frozen-work transport so revoked/expired credentials may
+    // still submit only their previously authorized work through that path.
+    // This status grants no employee access and issues no new credential: the
+    // separate exact manager operation/code remains mandatory for replacement.
+    if (sameDeviceCredential && normalCommitEligible) {
+      return {
+        ok: false, status: 401, code: "device_credential_recovery_required",
+        error: "This phone's secure access must be renewed by a manager. Saved work remains on this phone.",
+        device, policy_mode: policy.mode, enrollment_required: true, recovery_required: true,
+      };
+    }
   }
 
   if (!requireEnrolledCredential && policy.mode !== "enforce") {
@@ -1329,6 +1344,8 @@ export function installDeviceCredentialRoutes(app, {
           device_name: authenticated ? result.device.device_name : null,
           employee_name: authenticated ? result.device.assigned_employee_name : null,
           employee_id: authenticated ? (result.device.assigned_employee_id || null) : null,
+          assignment_epoch: authenticated && Number.isSafeInteger(Number(result.device.assignment_epoch))
+            && Number(result.device.assignment_epoch)>0 ? Number(result.device.assignment_epoch) : null,
           employee_role: authenticated ? (result.device.role || null) : null,
           credential_id: authenticated ? (result.credential?.credential_id || null) : null,
           credential_expires_at: authenticated ? (result.credential?.expires_at || null) : null,

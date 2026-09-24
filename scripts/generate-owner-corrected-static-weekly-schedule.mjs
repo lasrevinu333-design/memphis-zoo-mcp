@@ -5,10 +5,11 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import { compileStaticWeeklySchedule, postgresJsonbContentDigest } from "../src/static-weekly-schedule-compiler.js";
 import { prepareStaticWeeklyRegistrationArtifact } from "./static-weekly-schedule-candidate-importer.mjs";
-import { completeRecurringShiftEndCoverage } from "../src/static-weekly-shift-end-coverage.js";
+import { createShiftEndContinuityPolicy } from "../src/static-weekly-shift-end-derivation.js";
+import {validateOwnerEligibilityConfig,assertNormalOwnerEligibility,hardRestrictedSlots,verifiedBaseRestrictionInventory} from '../src/static-weekly-owner-eligibility.js';
 
 const BACKEND = path.resolve(process.cwd());
-const CONFIG_PATH = path.join(BACKEND, "config/custodial-recurring-schedule-20260923.json");
+const CONFIG_PATH = path.join(BACKEND, "config/custodial-recurring-schedule-20260924.json");
 const OUTPUT = process.argv[2];
 if (!OUTPUT) throw new Error("Usage: generate-owner-corrected-static-weekly-schedule.mjs <output-packet.json>");
 if (fs.existsSync(OUTPUT) || fs.existsSync(`${OUTPUT}.registration.json`)) throw new Error("Refusing to replace existing schedule evidence.");
@@ -25,11 +26,12 @@ function deterministicUuid(label) {
 }
 const config = readJson(CONFIG_PATH);
 assert.equal(new Date(`${config.effectiveDate}T00:00:00Z`).getUTCDay(),1,"new recurring publication must start on a Monday");
-assert.equal(config.schema, "custodial.owner-corrected-recurring-schedule.v1");
+validateOwnerEligibilityConfig(config);
 assert.equal(fileHash(config.basePacket.path), config.basePacket.sha256, "base schedule packet hash changed");
 const base = readJson(config.basePacket.path);
 assert.equal(base.packetSchema, "memphis-zoo.static-weekly.verified-schedule-packet.v1");
 const input = clone(base.compilerInput);
+const baseRestrictionInventory=verifiedBaseRestrictionInventory(input,config.basePacket.sha256);
 const version = input.version;
 assert.ok(version && !input.versions, "base packet must carry one canonical recurring version");
 input.serviceDate = config.effectiveDate;
@@ -132,9 +134,7 @@ for (const assignment of version.assignments) {
   const owner = activeBySlot.get(assignment.originSlotId);
   assert.ok(owner, `assignment owner is not one of the nine stable positions: ${assignment.workId}`);
   assert.ok(owner.workDays.includes(assignment.dayOfWeek), `${owner.key} owns work on an off day`);
-  if ((owner.forbiddenFamilies || []).includes(assignment.locationCodeSnapshot)) {
-    throw new Error(`${owner.key} received forbidden family ${assignment.locationCodeSnapshot}`);
-  }
+  assertNormalOwnerEligibility(owner,assignment.locationCodeSnapshot);
 }
 for (let day=0; day<7; day+=1) for (const phase of ["morning","equalized"]) {
   const oldFamilies = [...new Set(baseAssignments.filter((row) => row.dayOfWeek===day && phaseOf(row)===phase)
@@ -203,26 +203,26 @@ for (const availability of version.slotAvailability) {
     availability[key] = ownerFact ? `owner:${fileHash(CONFIG_PATH)}` : `base:${config.basePacket.sha256}`;
   }
 }
-// Carry actual owner restrictions into the canonical compiler, not only display.
+// Only hard eligibility is global. Normal geography was validated above and
+// must not prohibit legitimate nearby temporary lunch coverage.
 for (const assignment of version.assignments) {
-  const disallowed = slotEntries.filter(([,slot]) =>
-    (slot.forbiddenFamilies || []).includes(assignment.locationCodeSnapshot)
-    || (slot.normalAllowedFamilies && !slot.normalAllowedFamilies.includes(assignment.locationCodeSnapshot)))
-    .map(([,slot]) => slot.slotId);
-  assignment.restrictedSlotIds = [...new Set([...(assignment.restrictedSlotIds || []), ...disallowed])].sort();
+  assignment.restrictedSlotIds=hardRestrictedSlots(config,assignment.locationCodeSnapshot,assignment.restrictedSlotIds||[]);
   // The packet carries exact hash-bound source artifacts. Repeat references,
   // not the same long explanatory prose, inside every certificate work row.
   assignment.serviceEffortProvenance = `base:${config.basePacket.sha256}:effort`;
   assignment.priorityProvenance = `base:${config.basePacket.sha256}:priority`;
   assignment.qualificationProvenance = `base:${config.basePacket.sha256}:qualifications`;
-  assignment.restrictionProvenance = `owner:${fileHash(CONFIG_PATH)}:restrictions`;
+  assignment.restrictionProvenance = `owner:${fileHash(CONFIG_PATH)}:hard_place_eligibility;base:${config.basePacket.sha256}`;
 
   assert.ok(!assignment.restrictedSlotIds.includes(assignment.ownerSlotId),
     `normal owner violates established area restriction: ${assignment.workId}`);
 }
-const shiftEndCoverage = completeRecurringShiftEndCoverage(input, config);
-const compileInput = clone(shiftEndCoverage.input);
-compileInput.versions = [clone(shiftEndCoverage.input.version)];
+// Register the full immutable position template, not this roster's clipped
+// closing rows. The canonical program derives the dated closing responsibilities
+// after roster hydration; later fills never require a replacement source.
+version.shiftEndContinuityPolicy = createShiftEndContinuityPolicy(config.weights, fileHash(CONFIG_PATH), postgresJsonbContentDigest);
+const compileInput = clone(input);
+compileInput.versions = [clone(input.version)];
 delete compileInput.version;
 const compiled = await compileStaticWeeklySchedule(compileInput);
 assert.equal(compiled.status, "FEASIBLE", `corrected recurring schedule rejected: ${JSON.stringify(compiled.fatal || compiled.reviewWork || compiled.verifier)}`);
@@ -231,6 +231,10 @@ assert.equal(compiled.verifier?.ok, true);
 assert.equal(compiled.reviewWork.length, 0, "corrected recurring schedule requires manager review");
 const canonicalSource = compiled.canonicalAuthority?.compilerInput;
 assert.ok(canonicalSource?.version && !canonicalSource.versions, "compiler did not emit one canonical source");
+const shiftEndDerivation = compiled.canonicalAuthority.shiftEndDerivation;
+assert.equal(compiled.canonicalAuthority.schema, "memphis-zoo.static-weekly-authority.v4");
+assert.equal(shiftEndDerivation?.templateDigest, postgresJsonbContentDigest(canonicalSource));
+assert.equal(canonicalSource.version.assignments.length, input.version.assignments.length, "registration must retain full source rows");
 const sourceId = deterministicUuid(`source:${config.effectiveDate}:${postgresJsonbContentDigest(canonicalSource)}`);
 const rosterSlots = slotEntries.map(([slotKey,row]) => ({
   slotId: row.slotId, personId: row.personId, displayName: row.name,
@@ -240,11 +244,13 @@ const rosterSlots = slotEntries.map(([slotKey,row]) => ({
 }));
 const evidenceFiles = {
   ownerCorrectedSchedule: CONFIG_PATH,
+  eligibilityScope: path.join(BACKEND,'src/static-weekly-owner-eligibility.js'),
   generator: path.join(BACKEND,"scripts/generate-owner-corrected-static-weekly-schedule.mjs"),
   compiler: path.join(BACKEND,"src/static-weekly-schedule-compiler.js"),
   canonicalProgram: path.join(BACKEND,"src/static-weekly-schedule-program.js"),
   verifier: path.join(BACKEND,"src/static-weekly-schedule-verifier.js"),
   shiftEndCoverage: path.join(BACKEND,"src/static-weekly-shift-end-coverage.js"),
+  shiftEndDerivation: path.join(BACKEND,"src/static-weekly-shift-end-derivation.js"),
   baseVerifiedSchedule: config.basePacket.path,
   ownerDirectives: "/home/eric/Documents/Codex/2026-08-27/custodial-foundation-delivery/inputs/LATEST_USER_DIRECTIVES_2026-08-27.md",
   ownerCorrection: "/home/eric/Documents/Codex/2026-09-13/i-x20/outputs/OWNER_CORRECTION_20260920.md",
@@ -267,11 +273,16 @@ const packet = {
     ownerCorrectedScheduleSha256:fileHash(CONFIG_PATH),
     stablePositions:9, staffedPositions:6, vacantPositions:3,
     preservedBaseDays:[...config.preserveBaseDays], affectedDays:[...affectedDays].sort(),
-    scheduleLoads, shiftEndHandoffs:shiftEndCoverage.notes, continuityVerification:shiftEndCoverage.validation, productionWritten:false,
+    scheduleLoads, shiftEndDerivation,
+    continuityVerification:shiftEndDerivation.continuity, productionWritten:false,
     operationalReviewRequired:true,
     preHandoffSourceDigest:postgresJsonbContentDigest(input),
     provenanceReferences:{base:config.basePacket.sha256,owner:fileHash(CONFIG_PATH)},
-    note:"Source-only full-week replacement. Production staffing/publication remains separately gated."
+    eligibilityScope:{baseRestrictionInventory,normalAssignmentGeography:slotEntries.filter(([,s])=>s.normalAssignmentFamilies)
+      .map(([key,s])=>({slotKey:key,slotId:s.slotId,families:s.normalAssignmentFamilies,scope:'normal_assignment_geography'})),
+      hardPlaceEligibility:slotEntries.filter(([,s])=>s.hardForbiddenFamilies)
+      .map(([key,s])=>({slotKey:key,slotId:s.slotId,families:s.hardForbiddenFamilies,scope:'hard_place_eligibility'}))},
+    note:"Full immutable position template with canonical dated closing derivation. Local compiler verification only; independent review and production staffing/publication remain separately gated."
   }
 };
 assert.equal(postgresJsonbContentDigest(packet.compilerInput), packet.sourceDigest);

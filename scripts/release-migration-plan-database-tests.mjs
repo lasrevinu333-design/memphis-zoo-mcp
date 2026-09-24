@@ -31,7 +31,14 @@ assert.deepEqual(state.pending_migrations.map(({ order, file }) => ({ order, fil
   { order: 6, file: "20260922235500_static_weekly_existing_employee_restore.sql" },
   { order: 7, file: "20260923065000_static_weekly_vacate_roster_slot.sql" },
   { order: 8, file: "20260923121151_visitor_attendance_reader.sql" },
-], "the correction release fixture must contain exactly the eight reviewed migrations in order");
+  { order: 9, file: "20260924022250_release_selection_and_occurrence_guards.sql" },
+  { order: 10, file: "20260924023930_notification_receipt_and_lunch_integrity.sql" },
+  { order: 11, file: "20260924032226_bind_release_selection_guard_recovery.sql" },
+  { order: 12, file: "20260924042758_static_weekly_canonical_shift_end_derivation.sql" },
+  { order: 13, file: "20260924044035_static_weekly_atomic_roster_completion.sql" },
+  { order: 14, file: "20260924053507_assigned_phone_activation_transport.sql" },
+  { order: 15, file: "20260924080839_custodial_legacy_installation_observation.sql" },
+], "the correction release fixture must contain exactly the fifteen candidate migrations in order");
 assert.equal(
   state.pending_migrations.every((item) => item.source_migration_version > state.observed_production.ledger_head),
   true,
@@ -251,6 +258,28 @@ try {
     RELEASE_MIGRATION_AUTHORIZATION_VERIFY_KEY: authorizationKey,
     RELEASE_MIGRATION_AUTHORIZATION_VERIFY_KEY_ID: authorizationKeyId,
     RELEASE_MIGRATION_AUTHORIZATION_JSON: authorizationEnvelope(),
+  }).catch(async (error) => {
+    // Diagnostic only in this disposable fixture: reproduce the same frozen
+    // transaction bodies, show the first catalog mismatch, and ALWAYS roll back.
+    // The original failed mutator is still thrown; this cannot turn a gate green.
+    await db.query('begin');
+    try {
+      for (const item of state.pending_migrations) {
+        const sql = readFileSync(resolve(root, 'supabase/migrations', item.file), 'utf8');
+        assert.equal(sha256(sql), item.sha256);
+        const envelope = sql.match(/^([\s\S]*?\n)?begin;\s*\n([\s\S]*)\ncommit;\s*$/i);
+        await db.query(envelope ? `${envelope[1] || ''}${envelope[2]}` : sql);
+      }
+      const actual = fingerprintSchemaCatalog(normalizeDisposableCronDatabase(
+        await captureSchemaCatalog({ query: sql => db.query(sql) })));
+      const expected = JSON.parse(readFileSync(resolve(root, 'supabase/canonical/schema-fingerprint-input.json'), 'utf8'));
+      console.error('ISOLATED_RELEASE_TARGET_DIFFERENCE', JSON.stringify({
+        expectedFingerprint: state.target.canonical_source_schema_fingerprint,
+        actualFingerprint: actual.fingerprint,
+        firstDifference: firstCatalogDifference(expected, actual.normalized),
+      }));
+    } finally { await db.query('rollback'); }
+    throw error;
   })).stdout);
   assert.equal(applied.after_ledger_count, state.target.production_ledger_count);
   assert.equal(applied.after_ledger_head, state.target.source_migration_version);
@@ -262,7 +291,7 @@ try {
   const afterFingerprint = fingerprintSchemaCatalog(afterCatalog);
   const canonical = JSON.parse(readFileSync(resolve(root, "supabase/canonical/schema-fingerprint-input.json"), "utf8"));
   assert.equal(afterFingerprint.fingerprint, state.target.canonical_source_schema_fingerprint,
-    `the exact eight-migration correction plan must terminate at the canonical target catalog: ${JSON.stringify(firstCatalogDifference(canonical, afterFingerprint.normalized))}`);
+    `the exact fifteen-migration correction plan must terminate at the canonical target catalog: ${JSON.stringify(firstCatalogDifference(canonical, afterFingerprint.normalized))}`);
   await assert.rejects(runPlan(), /already present|pre-migration production state|Locked source catalog/,
     "the complete plan is exactly-once and rejects replay or partial application");
   console.log("RELEASE_MIGRATION_PLAN_DATABASE_TESTS_PASS");

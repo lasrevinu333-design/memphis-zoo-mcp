@@ -320,12 +320,16 @@ export async function compileStaticWeeklySchedule(input = {}) {
   const authorityCertificate = canonicalSolverAuthorityCertificate(core.certificate);
   const authorityTiers = canonicalSolverAuthorityTierProjection(core.solver.tiers);
   const authorityBase = {
-    schema: "memphis-zoo.static-weekly-authority.v3",
+    schema: problem.shiftEndDerivation ? "memphis-zoo.static-weekly-authority.v4" : "memphis-zoo.static-weekly-authority.v3",
     effectiveDate: problem.serviceDate,
     compilerInput: problem.baselineCanonicalInput,
     overlayCompilerInput: problem.canonicalInput,
     inputDigest: problem.inputDigest,
     baselineInputDigest: problem.baselineInputDigest,
+    ...(problem.shiftEndDerivation ? {
+      shiftEndDerivation: problem.shiftEndDerivation,
+      derivedBaselineDigest: postgresJsonbContentDigest(problem.derivedBaselineCanonicalInput),
+    } : {}),
     weeklyVersionDigest: problem.weeklyVersionDigest,
     // Availability is dated roster authority even when it receives no work.
     // The adapter and SQL boundary must never infer this immutable identity

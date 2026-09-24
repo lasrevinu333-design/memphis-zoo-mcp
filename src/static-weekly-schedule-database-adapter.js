@@ -13,8 +13,8 @@ import { postgresJsonbContentDigest } from "./static-weekly-schedule-compiler.js
 import { STATIC_WEEKLY_VERIFIER_VERSION, verifyStaticWeeklyScheduleResult } from "./static-weekly-schedule-verifier.js";
 import { generateStaticWeeklySchedulingProgram, programReason } from "./static-weekly-schedule-program.js";
 
-export const STATIC_WEEKLY_DATABASE_ADAPTER_SCHEMA = "memphis-zoo.static-weekly-database-adapter.v1";
-export const STATIC_WEEKLY_DATABASE_ADAPTER_VERSION = "static-weekly-database-adapter-v1";
+export const STATIC_WEEKLY_DATABASE_ADAPTER_SCHEMA = "memphis-zoo.static-weekly-database-adapter.v2";
+export const STATIC_WEEKLY_DATABASE_ADAPTER_VERSION = "static-weekly-database-adapter-v2-dated-shift-end";
 export const STATIC_WEEKLY_AUTHORITY_ATTESTATION_SCHEMA = "memphis-zoo.static-weekly-authority-attestation.v1";
 
 export function staticWeeklyDatabaseDocumentIdentity(document) {
@@ -311,7 +311,10 @@ function canonicalReceipt(result, authority, verification) {
 }
 
 function verifierInputFromCanonicalAuthority(authority, result) {
-  const canonical = clone(authority.overlayCompilerInput);
+  // Regeneration starts at the immutable template, never the carried derived
+  // rows. Exceptions are accepted dated overlays and are supplied separately.
+  const canonical = clone(authority.compilerInput);
+  canonical.exceptions = clone(authority.overlayCompilerInput?.exceptions || []);
   const version = canonical.version;
   delete canonical.version;
   return {
@@ -325,7 +328,7 @@ function verifierInputFromCanonicalAuthority(authority, result) {
 function validateCompiledResult(result, { allowReview = true } = {}) {
   if (!result || typeof result !== "object" || !result.canonicalAuthority) fail("database_adapter_compiler_result_required");
   const authority = result.canonicalAuthority;
-  if (authority.schema !== "memphis-zoo.static-weekly-authority.v3" || !text(authority.effectiveDate)) fail("database_adapter_authority_schema_invalid");
+  if (!["memphis-zoo.static-weekly-authority.v3", "memphis-zoo.static-weekly-authority.v4"].includes(authority.schema) || !text(authority.effectiveDate)) fail("database_adapter_authority_schema_invalid");
   if (!allowReview && result.status !== "FEASIBLE") fail("database_adapter_publishable_result_required");
   if (!allowReview && result.publicationAuthority !== "ACCEPTABLE") fail("database_adapter_publishable_authority_required");
   if (!text(result.replayDigest) || !text(result.authorityDigest) || !text(result.solutionDigest) || !text(result.inputDigest)) fail("database_adapter_compiler_identity_missing");
@@ -355,6 +358,19 @@ function validateCompiledResult(result, { allowReview = true } = {}) {
 }
 
 function assertBaselineDraftAuthority(authority) {
+  if (authority?.schema === "memphis-zoo.static-weekly-authority.v4") {
+    // Full verifier/program regeneration above already proved this exact
+    // source-to-effective mapping. It replaces equality with a stricter typed
+    // derivation identity; no unexplained source/overlay difference is allowed.
+    if (array(authority.appliedExceptions).length || array(authority.overlayCompilerInput?.exceptions).length
+      || !authority.shiftEndDerivation
+      || authority.inputDigest !== authority.derivedBaselineDigest
+      || authority.derivedBaselineDigest !== authority.shiftEndDerivation.derivedBaselineDigest
+      || authority.baselineInputDigest !== authority.shiftEndDerivation.templateDigest) {
+      fail("database_adapter_draft_requires_exception_free_derived_baseline_authority");
+    }
+    return;
+  }
   if (array(authority?.appliedExceptions).length !== 0
     || authority?.inputDigest !== authority?.baselineInputDigest
     || postgresJsonbContentDigest(authority?.overlayCompilerInput) !== postgresJsonbContentDigest(authority?.compilerInput)) {
@@ -502,8 +518,11 @@ function buildAdaptedStaticWeeklySchedule(result, { requirePublishable = false, 
   // independent verifier has accepted the compiler result; no app-held HMAC
   // can bless caller-provided truth.
   document.semantic_snapshot = {
-    schema: "memphis-zoo.static-weekly-recurring-semantic-snapshot.v2",
+    schema: "memphis-zoo.static-weekly-recurring-semantic-snapshot.v3",
     recurring_source_digest: postgresJsonbContentDigest(authority.compilerInput),
+    derived_baseline_digest: authority.derivedBaselineDigest || authority.baselineInputDigest,
+    // Absence is itself bound as JSON null; snapshot digest fields stay non-null.
+    shift_end_derivation_digest: postgresJsonbContentDigest(authority.shiftEndDerivation ?? null),
     relational_slot_availability_digest: postgresJsonbContentDigest(availability),
     relational_assignments_digest: postgresJsonbContentDigest(assignments),
   };
@@ -575,8 +594,10 @@ export function createStaticWeeklyProjectionRpcInput({ result, publicationId, ex
   const start = new Date(`${authority.effectiveDate}T00:00:00Z`);
   envelope.week_end = new Date(start.getTime() + (6 * 86_400_000)).toISOString().slice(0, 10);
   envelope.semantic_snapshot = {
-    schema: "memphis-zoo.static-weekly-projection-semantic-snapshot.v2",
+    schema: "memphis-zoo.static-weekly-projection-semantic-snapshot.v3",
     recurring_source_digest: postgresJsonbContentDigest(recurringSemanticIdentity(authority.compilerInput)),
+    derived_baseline_digest: authority.derivedBaselineDigest || authority.baselineInputDigest,
+    shift_end_derivation_digest: postgresJsonbContentDigest(authority.shiftEndDerivation ?? null),
     overlay_source_digest: postgresJsonbContentDigest(recurringSemanticIdentity(authority.overlayCompilerInput)),
     applied_exceptions_digest: postgresJsonbContentDigest(authority.appliedExceptions),
     active_assignments_digest: postgresJsonbContentDigest(assignments),

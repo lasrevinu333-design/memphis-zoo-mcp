@@ -154,6 +154,8 @@ const db = {
         expires_at: new Date(Date.now() + 1_800_000).toISOString(),
       }, error: null };
     }
+    if (name === "custodial_activation_request") return {data:{operation_id:args.p_operation,device_id:args.p_device,
+      employee_id:args.p_employee,assignment_epoch:args.p_epoch,state:'requested',state_version:1},error:null};
     throw new Error(`Unexpected RPC in authorization contract: ${name}`);
   },
 };
@@ -188,6 +190,7 @@ async function request(pathname, { method = "GET", token, body } = {}) {
     headers: {
       authorization: `Bearer ${token}`,
       ...(body === undefined ? {} : { "content-type": "application/json" }),
+      ...(body?.operation_id ? {"idempotency-key":body.operation_id} : {}),
     },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
@@ -209,9 +212,9 @@ const managerMutations = [
   {
     family: "assigned-phone activation preparation",
     method: "POST",
-    path: "/custodial-admin-api/devices/KIOSK_02/activation",
-    body: {},
-    rpc: "device_auth_issue_enrollment_code",
+    path: "/custodial-admin-api/devices/KIOSK_08/activation-operations",
+    body: {operation_id:'51000000-0000-4000-8000-000000000090',expected_employee_id:employeeId,expected_assignment_epoch:4,action:'activate_or_recover'},
+    rpc: "custodial_activation_request",
   },
   {
     family: "legacy device assignment",
@@ -223,14 +226,18 @@ const managerMutations = [
   {
     family: "legacy-manager assigned-phone activation preparation",
     method: "POST",
-    path: "/leadership-api/phone-assignments/KIOSK_02/activation",
-    body: {},
-    rpc: "device_auth_issue_enrollment_code",
+    path: "/leadership-api/phone-assignments/KIOSK_08/activation-operations",
+    body: {operation_id:'51000000-0000-4000-8000-000000000091',expected_employee_id:employeeId,expected_assignment_epoch:4,action:'activate_or_recover'},
+    rpc: "custodial_activation_request",
   },
 ];
 const retiredEmployeeCodeRoutes = [
   { method: "POST", path: "/custodial-admin-api/devices/KIOSK_02/enrollment-code" },
   { method: "POST", path: "/leadership-api/phone-assignments/KIOSK_02/enrollment-code" },
+];
+const retiredActivationRoutes = [
+  {method:'POST',path:'/custodial-admin-api/devices/KIOSK_02/activation'},
+  {method:'POST',path:'/leadership-api/phone-assignments/KIOSK_02/activation'},
 ];
 const rosterOnlyMutations = [
   { family: "employee creation", method: "POST", path: "/custodial-admin-api/employees", body: { display_name: "Replacement Employee" } },
@@ -277,7 +284,7 @@ try {
     }
   }
 
-  for (const route of [...managerMutations, ...retiredEmployeeCodeRoutes.map((route) => ({ ...route, family: "retired employee code route", body: {} })), ...rosterOnlyMutations]) {
+  for (const route of [...managerMutations, ...[...retiredEmployeeCodeRoutes,...retiredActivationRoutes].map((route) => ({ ...route, family: "retired employee code route", body: {} })), ...rosterOnlyMutations]) {
     const callsBefore = databaseCalls.length;
     const result = await request(route.path, {
       method: route.method,
@@ -314,22 +321,20 @@ try {
     );
   }
 
-  const activationProbeCallsBefore = databaseCalls.length;
-  const activationProbe = await request("/custodial-admin-api/devices/KIOSK_02/activation", {
-    method: "POST", token: fullAccessToken, body: {},
-  });
-  assert.equal(activationProbe.status, 200);
-  assert.match(activationProbe.body.data.activation_token, /^[A-Za-z0-9_-]{43}$/);
-  assert.match(activationProbe.body.data.operation_id, /^[0-9a-f-]{36}$/i);
-  assert.equal(activationProbe.body.data.device_id, "KIOSK_02");
-  assert.equal(activationProbe.body.data.employee.id, employeeId);
-  const activationRpc = databaseCalls.slice(activationProbeCallsBefore).find((call) => call.kind === "rpc" && call.name === "device_auth_issue_enrollment_code");
-  assert.ok(activationRpc);
-  assert.match(activationRpc.args.p_code_hash, /^[a-f0-9]{64}$/);
-  assert.notEqual(activationRpc.args.p_code_hash, activationProbe.body.data.activation_token);
-  assert.equal(activationRpc.args.p_metadata_json.purpose, "assigned_device_activation");
-  assert.equal(activationRpc.args.p_metadata_json.canonical_device_id, "KIOSK_02");
-  assert.equal(activationRpc.args.p_metadata_json.employee_id, employeeId);
+  for(const route of retiredActivationRoutes){
+    const before=databaseCalls.length;
+    const retired=await request(route.path,{method:'POST',token:fullAccessToken,body:{}});
+    assert.equal(retired.status,410);assert.equal(retired.body.code,'activation_operation_required');
+    assert.equal(databaseCalls.length,before,'retired plaintext activation route must not mint any token');
+  }
+  const activationRpc=databaseCalls.find(call=>call.kind==='rpc'&&call.name==='custodial_activation_request');
+  assert.equal(activationRpc.args.p_employee,employeeId);
+  assert.equal(activationRpc.args.p_epoch,4);
+  assert.equal(activationRpc.args.p_manager,managerId);
+  assert.equal(activationRpc.args.p_requester,managerCredentialId);
+  assert.match(activationRpc.args.p_serial_sha256,/^[a-f0-9]{64}$/);
+  assert.equal(databaseCalls.some(call=>call.name==='device_auth_issue_enrollment_code'),false,
+    'manager browser request must never directly issue an enrollment secret');
 
   for (const route of retiredEmployeeCodeRoutes) {
     const callsBefore = databaseCalls.length;

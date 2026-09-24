@@ -26,12 +26,39 @@ export function releaseIdentitySummary(row) {
 export function sameReleaseIdentity(left, right) {
   return stableJson(releaseIdentitySummary(left)) === stableJson(releaseIdentitySummary(right));
 }
+function occurrenceTimestamp(value, nullable = false) {
+  if (nullable && value == null) return null;
+  // SQL reads use UTC text with all six PostgreSQL fractional digits. Never
+  // round a TIMESTAMPTZ occurrence through JavaScript Date parsing.
+  const raw = value instanceof Date ? value.toISOString() : text(value);
+  const match = raw.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d{1,6}))?Z$/);
+  if (!match) throw new Error('Release occurrence timestamp must be exact UTC text.');
+  return `${match[1]}.${(match[2] || '').padEnd(6, '0')}Z`;
+}
+export function releaseOccurrenceSummary(row) {
+  if (!row) return null;
+  if (!row.details_json || typeof row.details_json !== 'object' || Array.isArray(row.details_json)) {
+    throw new Error('Release occurrence provenance must be an object.');
+  }
+  return { ...releaseIdentitySummary(row), details_json: JSON.parse(stableJson(row.details_json)),
+    created_at: occurrenceTimestamp(row.created_at), deployed_at: occurrenceTimestamp(row.deployed_at, true) };
+}
+export function sameReleaseOccurrence(left, right) {
+  return stableJson(releaseOccurrenceSummary(left)) === stableJson(releaseOccurrenceSummary(right));
+}
 export function archivedReleaseId(row) {
-  const summary = releaseIdentitySummary(row);
+  const summary = releaseOccurrenceSummary(row);
   if (!summary?.release_id || !/^[0-9a-f]{40}$/.test(summary.backend_commit)) {
     throw new Error("Existing release identity cannot be archived safely.");
   }
-  return `${summary.release_id}-history-${sha256(stableJson(summary)).slice(0, 12)}`;
+  return `${summary.release_id}-history-v2-${sha256(stableJson(summary))}`;
+}
+export function archivedReleaseRecord(row) {
+  const occurrence = releaseOccurrenceSummary(row);
+  return { ...occurrence, release_id: archivedReleaseId(row), status: 'retired',
+    details_json: { ...occurrence.details_json, recorder_archive: {
+      format: 'memphis-zoo.release-occurrence.v2', original: occurrence,
+    } } };
 }
 
 function stableLiveIdentity(liveCheck, target) {
@@ -64,20 +91,20 @@ export function buildRecordingPlan({ currentBase, otherDeployed = [], target, li
   const targetSummary = releaseIdentitySummary(target);
   if (!targetSummary || targetSummary.status !== "deployed") throw new Error("Target deployed release identity is required.");
   if (!/^[0-9a-f]{64}$/.test(text(runtimeConfigurationSha256))) throw new Error("Runtime configuration digest is required.");
-  const currentSummary = releaseIdentitySummary(currentBase);
-  const archive_release_id = currentSummary && !sameReleaseIdentity(currentSummary, targetSummary)
-    ? archivedReleaseId(currentSummary) : null;
+  const currentSummary = releaseOccurrenceSummary(currentBase);
+  // Even a same-code redeployment is a new occurrence with new provenance.
+  const archive_release_id = currentSummary ? archivedReleaseId(currentBase) : null;
   const prior_deployed_releases = otherDeployed.map((row) => {
     const identity = releaseIdentitySummary(row);
     if (!identity?.release_id || identity.status !== "deployed") {
       throw new Error("Every superseded production identity must be an exact deployed release.");
     }
-    return { identity, archive_release_id: archivedReleaseId(identity) };
+    return { identity, occurrence: releaseOccurrenceSummary(row), archive_release_id: archivedReleaseId(row) };
   }).filter((item) => item.identity.release_id !== targetSummary.release_id)
     .sort((left, right) => left.identity.release_id.localeCompare(right.identity.release_id));
   const prior_deployed_release_ids = prior_deployed_releases.map((item) => item.identity.release_id);
   const binding = {
-    format: "memphis-zoo.production-release-recording-plan.v1",
+    format: "memphis-zoo.production-release-recording-plan.v2",
     current_base: currentSummary,
     archive_release_id,
     prior_deployed_release_ids,

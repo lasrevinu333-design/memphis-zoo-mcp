@@ -2,11 +2,11 @@ import crypto from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { makeOpsAccessMiddleware } from "./auth/shared-access-auth.js";
 import { deviceCredentialSecretMetadata } from "./auth/device-credential-auth.js";
+import { installAssignedActivationTransportRoutes } from "./assigned-activation-transport.js";
 
 const NATIVE_ENROLL_ATTEMPTS = new Map();
 const NATIVE_ENROLL_WINDOW_MS = 15 * 60 * 1000;
 const NATIVE_ENROLL_LIMIT = 8;
-const EMPLOYEE_ENROLLMENT_TTL_MS = 30 * 60 * 1000;
 // Android caps a locally staged enrollment at 30 minutes. Keep the server's
 // resumable result comfortably inside that boundary so ordinary phone/server
 // clock skew can never turn a valid manager-authorized recovery into a
@@ -337,41 +337,7 @@ async function assignDevice(db, req, deviceId, employeeId, values = {}) {
   return result.data;
 }
 
-async function issueAssignedDeviceActivation(db, req, deviceId) {
-  const device = await resolveNativeDevice(db, deviceId);
-  const employee = Array.isArray(device?.employees) ? device.employees[0] : device?.employees;
-  if (!device || device.active !== true || !device.assigned_employee_id || employee?.active !== true || !/^EMP\d+$/i.test(String(employee?.employee_code || ""))) {
-    throw Object.assign(new Error("Assign this phone to an active employee before activation."), { status: 409 });
-  }
-  const activationToken = crypto.randomBytes(32).toString("base64url");
-  const expiresAt = new Date(Date.now() + EMPLOYEE_ENROLLMENT_TTL_MS).toISOString();
-  const result = await db.rpc("device_auth_issue_enrollment_code", {
-    p_device_id: device.id,
-    p_code_hash: assignedActivationTokenHash(device.id, activationToken),
-    p_created_by: String(req.memphisAuth.manager_id || req.memphisAuth.manager_display_name || "custodial_manager"),
-    p_expires_at: expiresAt,
-    p_metadata_json: {
-      purpose: "assigned_device_activation",
-      canonical_device_id: device.device_id,
-      employee_id: employee.id,
-      employee_name: employee.display_name,
-      max_uses: 1,
-    },
-  });
-  if (result.error) throw result.error;
-  return {
-    activation_token: activationToken,
-    operation_id: crypto.randomUUID(),
-    activation_id: result.data?.enrollment_id || null,
-    expires_at: result.data?.expires_at || expiresAt,
-    max_uses: 1,
-    device_id: device.device_id,
-    device_name: device.device_name,
-    employee: { id: employee.id, employee_code: employee.employee_code, display_name: employee.display_name, role: employee.role || null },
-  };
-}
-
-export function installCustodialEmployeeAdminRoutes(app, { env = process.env, supabase = null } = {}) {
+export function installCustodialEmployeeAdminRoutes(app, { env = process.env, supabase = null, requireEmployeeDeviceCredential } = {}) {
   if (!app || app.__custodialEmployeeAdminRoutesInstalled) return;
   Object.defineProperty(app, "__custodialEmployeeAdminRoutesInstalled", { value: true });
   const db = supabase || createSupabase(env);
@@ -420,8 +386,7 @@ export function installCustodialEmployeeAdminRoutes(app, { env = process.env, su
   });
 
   app.post("/custodial-admin-api/devices/:deviceId/activation", configured, requireCustodialWrite, async (req, res) => {
-    try { res.json({ ok: true, data: await issueAssignedDeviceActivation(db, req, req.params?.deviceId) }); }
-    catch (error) { fail(res, error, "Assigned phone activation could not be prepared."); }
+    res.status(410).json({ok:false,code:"activation_operation_required",error:"Use the assigned-phone activation operation and authorized maintenance workstation."});
   });
 
   app.post("/custodial-admin-api/devices/:deviceId/enrollment-code", configured, requireCustodialWrite, (_req, res) => {
@@ -463,13 +428,16 @@ export function installCustodialEmployeeAdminRoutes(app, { env = process.env, su
   });
 
   app.post("/leadership-api/phone-assignments/:deviceId/activation", configured, requireCustodialWrite, async (req, res) => {
-    try { res.json({ ok: true, data: await issueAssignedDeviceActivation(db, req, req.params?.deviceId) }); }
-    catch (error) { fail(res, error, "Assigned phone activation could not be prepared."); }
+    res.status(410).json({ok:false,code:"activation_operation_required",error:"Use the assigned-phone activation operation and authorized maintenance workstation."});
   });
 
   app.post("/leadership-api/phone-assignments/:deviceId/enrollment-code", configured, requireCustodialWrite, (_req, res) => {
     res.status(410).json({ ok: false, code: "employee_enrollment_code_retired", error: "Employee-facing setup codes are retired. Use assigned-phone activation." });
   });
+
+  installAssignedActivationTransportRoutes(app,{db,env,configured,requireManager:requireCustodialWrite,
+    resolveNativeDevice,isNativeCustodialRequest,nativeCredentialParts,tokenHash,assignedActivationTokenHash,
+    requireCurrentCredential:requireEmployeeDeviceCredential});
 
   const nativeEnrollment = (expectedFlow) => async (req, res) => {
     if (!isNativeCustodialRequest(req)) {

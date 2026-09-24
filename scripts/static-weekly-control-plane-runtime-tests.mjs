@@ -85,7 +85,9 @@ let rebuildRequest = null;
 let dayChangesRequest = null;
 let mutationFailure = null;
 let vacancyRequest = null;
+let fillRequest = null;
 const controlPlane = {
+  async fillVacantRosterSlot(request) { fillRequest = request; return { revision: request.expectedRevision + 2, data: { phone_assignment: null } }; },
   async vacateRosterSlot(request) { vacancyRequest = request; return { revision: request.expectedRevision + 1, data: { replacement_employee_id: null } }; },
   async health() { return { ready: true }; },
   async getManagerSnapshot({ weekStart }) { snapshots += 1; return { schema: "memphis-zoo.static-weekly-manager-snapshot.v1", week_start: weekStart, authority_revision: 0 }; },
@@ -270,11 +272,24 @@ try {
   assert.equal(vacancyRequest.slotId, "20000000-0000-4000-8000-000000000091");
   assert.equal(vacancyRequest.sourceId, vacancyBody.source_id);
   assert.equal(vacancyRequest.manager.manager_id, manager.manager_id);
+  const fillUrl = origin + "/static-weekly/roster/vacant-slots/20000000-0000-4000-8000-000000000091/fill";
+  const fillBody = { source_id: vacancyBody.source_id, new_employee_name: "Synthetic Authorized Hire", effective_start: vacancyBody.effective_start,
+    reason: "Synthetic fill", expected_revision: 0, idempotency_key: "runtime-source-bound-fill" };
+  const missingAuthFill = await fetch(fillUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(fillBody) });
+  assert.equal(missingAuthFill.status, 401); assert.equal(fillRequest, null);
+  const acceptedFill = await fetch(fillUrl, { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.token }, body: JSON.stringify(fillBody) });
+  assert.equal(acceptedFill.status, 200);
+  assert.equal(fillRequest.sourceId, fillBody.source_id, "runtime preserves exact selected source for the atomic fill");
+  assert.equal(fillRequest.slotId, "20000000-0000-4000-8000-000000000091");
+  assert.equal(fillRequest.newEmployeeName, fillBody.new_employee_name); assert.equal(fillRequest.idempotencyKey, fillBody.idempotency_key);
+  assert.equal(fillRequest.manager.manager_id, manager.manager_id); fillRequest = null;
   vacancyRequest = null;
   lookup = async () => currentTrustedDevice({ revoked_at: new Date().toISOString() });
   const revokedVacancy = await fetch(vacancyUrl, { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.token }, body: JSON.stringify(vacancyBody) });
   assert.equal(revokedVacancy.status, 401);
   assert.equal(vacancyRequest, null, "revoked request cannot reach vacancy authority");
+  const revokedFill = await fetch(fillUrl, { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.token }, body: JSON.stringify(fillBody) });
+  assert.equal(revokedFill.status, 401); assert.equal(fillRequest, null, "revoked manager cannot reach source-bound fill");
 } finally {
   await new Promise((resolve) => server.close(resolve));
 }

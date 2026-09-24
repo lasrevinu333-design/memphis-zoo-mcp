@@ -606,6 +606,26 @@ export function createStaticWeeklyControlPlane({
     };
   }
 
+  async function completeRosterChange(client, { actor, weekStart, idempotencyKey, expectedRevision, operation, mutate }) {
+    await lockStaticWeeklyAuthority(client);
+    const current = await snapshotFor(client, weekStart);
+    const priorRevision = requireRevision(current?.authority_revision);
+    const mutation = await mutate(); // Authenticates all original semantic inputs even on retry.
+    if (priorRevision !== expectedRevision || mutation?.data?.completion_mode === "mutation_only") {
+      const completed = await call(client, "static_weekly_v9_read_completed_roster_change", [actor.managerId, idempotencyKey, operation]);
+      if (!completed) throw fail("static_weekly_roster_completion_missing", "The original staffing completion is missing; no new schedule change was accepted.");
+      return completed;
+    }
+    if (mutation?.data?.completion_mode !== "projection_required"
+      || text(mutation.data.original_publication_id) !== text(current?.current_publication?.publication_id)) {
+      throw fail("static_weekly_roster_completion_mismatch", "The staffing change does not bind the original published schedule.");
+    }
+    return mutateAndMaterializeCurrentProjection(client, {
+      actor, weekStart, idempotencyKey,
+      publicationId: requirePublicationId(mutation.data.original_publication_id), mutate: async () => mutation,
+    });
+  }
+
   return {
     schema: STATIC_WEEKLY_CONTROL_PLANE_SCHEMA,
     health() {
@@ -793,10 +813,14 @@ export function createStaticWeeklyControlPlane({
     },
     async restoreExistingEmployee({ manager, sourceId, slotId, employeeId, effectiveStart, reason, expectedRevision, idempotencyKey }) {
       const actor = requireManager(manager); const key = requireIdempotencyKey(idempotencyKey);
-      return transaction((client) => call(client, "static_weekly_v8_restore_existing_employee", [
-        text(sourceId), text(slotId), text(employeeId), requireDate(effectiveStart, "restoration effective start"), text(reason),
-        requireRevision(expectedRevision), actor.managerId, key,
-      ]));
+      const date = requireDate(effectiveStart, "restoration effective start"); const revision = requireRevision(expectedRevision);
+      const source = requireSourceId(sourceId);
+      return transaction((client) => completeRosterChange(client, {
+        actor, weekStart: mondayForDate(date), idempotencyKey: key, expectedRevision: revision, operation: "restore_existing_employee",
+        mutate: () => call(client, "static_weekly_v8_restore_existing_employee", [
+          source, text(slotId), text(employeeId), date, text(reason), revision, actor.managerId, key,
+        ]),
+      }));
     },
     async vacateRosterSlot({ manager, sourceId, slotId, employeeId, effectiveStart, reason, expectedRevision, idempotencyKey }) {
       const actor = requireManager(manager); const key = requireIdempotencyKey(idempotencyKey);
@@ -835,18 +859,33 @@ export function createStaticWeeklyControlPlane({
         text(slotId), text(slotLabel), requireRevision(expectedRevision), actor.managerId, key,
       ]));
     },
-    async fillVacantRosterSlot({ manager, slotId, newEmployeeName, effectiveStart, reason, expectedRevision, idempotencyKey }) {
+    async fillVacantRosterSlot({ manager, sourceId, slotId, newEmployeeName, effectiveStart, reason, expectedRevision, idempotencyKey }) {
       const actor = requireManager(manager); const key = requireIdempotencyKey(idempotencyKey);
-      return transaction((client) => call(client, "static_weekly_v7_fill_vacant_roster_slot", [
-        text(slotId), text(newEmployeeName), requireMonday(effectiveStart, "vacancy effective start"), text(reason),
-        requireRevision(expectedRevision), actor.managerId, key,
-      ]));
+      const date = requireMonday(effectiveStart, "vacancy effective start"); const revision = requireRevision(expectedRevision);
+      const source = requireSourceId(sourceId);
+      return transaction((client) => completeRosterChange(client, {
+        actor, weekStart: date, idempotencyKey: key, expectedRevision: revision, operation: "fill_vacant_slot",
+        mutate: () => call(client, "static_weekly_v9_fill_vacant_roster_slot", [
+          source, text(slotId), text(newEmployeeName), date, text(reason), revision, actor.managerId, key,
+        ]),
+      }));
     },
     async materializeProjection({ manager, publicationId, serviceDate, expectedRevision, idempotencyKey }) {
       const actor = requireManager(manager); const weekStart = requireMonday(serviceDate, "projection start"); const effectivePublicationId = requirePublicationId(publicationId); const revision = requireRevision(expectedRevision); const key = requireIdempotencyKey(idempotencyKey);
       return transaction(async (client) => {
+        await client.query("select pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended($1,0))", ["memphis-static-weekly-authority"]);
         const current = await snapshotFor(client, weekStart);
         if (current?.projection_status === "current" && text(current?.current_publication?.publication_id) === effectivePublicationId && text(current?.latest_projection?.week_start) === weekStart) {
+          // The legacy split caller may replay the atomic publication, but a
+          // current base projection alone cannot prove its lunch companion.
+          // Keep the authority lock across both reads; missing companions must
+          // use the explicit rebuild path, never report a successful no-op.
+          const lunch = await call(client, "static_weekly_v8_read_lunch_document", [weekStart]);
+          if (lunch?.persistence_status !== "PERSISTED"
+            || text(lunch.projection_id) !== text(current.latest_projection.projection_id)
+            || !/^[0-9a-f]{64}$/.test(text(lunch.document_identity))) {
+            throw fail("static_weekly_lunch_publication_missing", "Current lunch responsibilities are unavailable; rebuild the weekly projection.");
+          }
           return {
             operation: "materialize_projection",
             revision: current.authority_revision,

@@ -199,10 +199,17 @@ assert.equal(projection.envelope.assignments.length, real.weeklyAssignments.leng
 assert.equal(projection.envelope.assignments.filter((row) => row.status === "open").every((row) => row.owner_slot_id === null && row.owner_person_id === null), true);
 assert.deepEqual(
   Object.keys(projection.envelope.semantic_snapshot).sort(),
-  ["active_assignments_digest", "applied_exceptions_digest", "overlay_source_digest", "recurring_source_digest", "schema"],
+  ["active_assignments_digest", "applied_exceptions_digest", "derived_baseline_digest", "overlay_source_digest", "recurring_source_digest", "schema", "shift_end_derivation_digest"],
   "the projection snapshot is one compact set of identities and never repeats production-sized source or assignment JSON",
 );
-assert.equal(projection.envelope.semantic_snapshot.schema, "memphis-zoo.static-weekly-projection-semantic-snapshot.v2");
+assert.equal(projection.envelope.semantic_snapshot.schema, "memphis-zoo.static-weekly-projection-semantic-snapshot.v3");
+assert.equal(document.semantic_snapshot.schema, "memphis-zoo.static-weekly-recurring-semantic-snapshot.v3");
+assert.equal(real.canonicalAuthority.shiftEndDerivation, undefined, "legacy source has no dated shift-end derivation");
+for (const snapshot of [document.semantic_snapshot, projection.envelope.semantic_snapshot]) {
+  assert.equal(snapshot.shift_end_derivation_digest, postgresJsonbContentDigest(null), "absence is bound to an exact non-null digest, not omitted or null");
+  assert.equal(snapshot.derived_baseline_digest, real.canonicalAuthority.baselineInputDigest);
+  assert.ok(Object.values(snapshot).every(value => typeof value === "string" && value.length > 0));
+}
 assert.equal(projection.envelope.semantic_snapshot.active_assignments_digest, postgresJsonbContentDigest(projection.envelope.assignments));
 assert.equal(projection.envelope.semantic_snapshot.applied_exceptions_digest, postgresJsonbContentDigest(projection.envelope.applied_exceptions));
 assert.equal(Object.values(projection.envelope.semantic_snapshot).some(Array.isArray), false, "the compact snapshot carries no repeated arrays");

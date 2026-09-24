@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { createHash, createHmac, randomUUID, timingSafeEqual } from "crypto";
 import express from "express";
+import { createGeneralJsonMiddleware } from "./request-json-parser.js";
 import { parse as parseAttendanceDocument } from "parse5";
 import { fileURLToPath } from "node:url";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -78,11 +79,7 @@ app.use((req, res, next) => {
 // The scan authority route owns a bounded parser that exposes valid function
 // identity to authentication while deferring malformed-input handling until an
 // authenticated device can durably quarantine it.
-const generalJsonParser = express.json({ limit: "10mb" });
-app.use((req, res, next) => {
-  if (req.path === "/scan-api/rpc" || req.path === "/oauth/register") return next();
-  return generalJsonParser(req, res, next);
-});
+app.use(createGeneralJsonMiddleware());
 app.use(express.urlencoded({ extended: false, limit: "32kb" }));
 const selfContainedMcpOAuth = createSelfContainedMcpOAuthService();
 const mcpReadOnlyNoAuthEnabled = isMcpReadOnlyNoAuthEnabled(process.env);
@@ -2335,7 +2332,7 @@ installDeviceCredentialRoutes(app, {
 // side effects.
 installAnnieMoxieRoutes(app, { supabase: supabaseAdmin });
 installLeadershipHttpRoutes(app, { supabase: supabaseAdmin });
-installCustodialEmployeeAdminRoutes(app, { supabase: supabaseAdmin });
+installCustodialEmployeeAdminRoutes(app, { supabase: supabaseAdmin, requireEmployeeDeviceCredential });
 const managerNotificationRuntime = installManagerNotificationRoutes(app, { supabase: supabaseAdmin });
 installEmployeeNotificationRoutes(app, {
   supabase: supabaseAdmin,

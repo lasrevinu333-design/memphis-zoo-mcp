@@ -23,6 +23,7 @@ import {
   windowContains,
   windowsOverlap,
 } from "./static-weekly-schedule-model.js";
+import {deriveDatedShiftEndCoverage} from "./static-weekly-shift-end-derivation.js";
 
 export const STATIC_WEEKLY_PROGRAM_SCHEMA = "memphis-zoo.static-weekly-canonical-program.v1";
 
@@ -50,7 +51,7 @@ export function canonicalProgramMatches(received, regenerated) {
 
 // prior spread-based receipt.  It is an immutable compiler identity, rather
 // than a label which callers may override.
-export const STATIC_WEEKLY_SCHEDULER_VERSION = "static-weekly-highs-mip-v8-workload-duty-boundary";
+export const STATIC_WEEKLY_SCHEDULER_VERSION = "static-weekly-highs-mip-v9-dated-shift-end";
 export const STATIC_WEEKLY_FLEXIBLE_COVERAGE_MODE = "flexible_coverage_ownership";
 export const STATIC_WEEKLY_SERVICE_MODES = Object.freeze({
   SCAN_TRACKED: "scan_tracked",
@@ -1085,6 +1086,25 @@ export function prepareStaticWeeklySchedulingProblem(input, deadline = null) {
     if (vacant && entry.status !== "vacant_unfilled") return { error: programReason("vacant_slot_availability_mismatch", { dayOfWeek: entry.dayOfWeek, slotId: text(entry.slotId), status: entry.status || null }) };
     if (!vacant && entry.status === "vacant_unfilled") return { error: programReason("vacant_slot_not_declared", { dayOfWeek: entry.dayOfWeek, slotId: text(entry.slotId) }) };
   }
+  // Keep the immutable registered template separate from dated effective work.
+  // This is roster hydration, not a daily exception/absence rescheduler.
+  const immutableVersion = version;
+  let shiftEndDerivation = null;
+  if (version.shiftEndContinuityPolicy) {
+    try {
+      const derived = deriveDatedShiftEndCoverage(
+        canonicalAuthorityInput(immutableVersion, slots, [], proximity, serviceDate),
+        postgresJsonbContentDigest,
+        (effective) => canonicalAuthorityInput(effective.version, slots, [], proximity, serviceDate),
+      );
+      version = derived.effectiveInput.version;
+      shiftEndDerivation = derived.receipt;
+    } catch (error) {
+      return { error: programReason(error.code || "invalid_shift_end_continuity_authority", { message: error.message }) };
+    }
+  } else if (version.shiftEndDerivationApplied) {
+    return { error: programReason("shift_end_immutable_template_required") };
+  }
   const states = new Map(); const applied = [];
   for (let day = 0; day < 7; day += 1) {
     if (deadline != null) remainingStaticWeeklyMilliseconds(deadline);
@@ -1180,9 +1200,10 @@ export function prepareStaticWeeklySchedulingProblem(input, deadline = null) {
   if (exactEquityScale == null) return { error: programReason("unrepresentable_exact_equity_denominators", { denominators: [...new Set([...dailyCapacityDenominators, ...weeklyCapacityDenominators.values()])].sort((a, b) => a - b), maximumEffort }) };
   const serviceDay = serviceDateWeekday(serviceDate); const serviceDayAvailability = states.get(serviceDay).availability;
   const roster = slots.map((slot) => ({ ...incumbencyByDaySlot.get(`${serviceDay}\u0000${slot.id}`), availability: serviceDayAvailability.get(slot.id)?.status || "unavailable" }));
-  const baselineCanonicalInput = canonicalAuthorityInput(version, slots, [], proximity, serviceDate);
+  const baselineCanonicalInput = canonicalAuthorityInput(immutableVersion, slots, [], proximity, serviceDate);
+  const derivedBaselineCanonicalInput = canonicalAuthorityInput(version, slots, [], proximity, serviceDate);
   const canonicalInput = canonicalAuthorityInput(version, slots, exceptions, proximity, serviceDate);
-  const prepared = { serviceDate, version, slots, roster, incumbencyByDaySlot, states, work: work.sort((a, b) => stableCompare(a.key, b.key)), candidates, availabilityByDaySlot, staticRejections, edges, applied, exactEquityScale, baselineCanonicalInput, canonicalInput, inputDigest: postgresJsonbContentDigest(canonicalInput), baselineInputDigest: postgresJsonbContentDigest(baselineCanonicalInput), weeklyVersionDigest: version.contentDigest || postgresJsonbContentDigest(canonicalAuthorityInput(version, slots, [], [])) };
+  const prepared = { serviceDate, version, slots, roster, incumbencyByDaySlot, states, work: work.sort((a, b) => stableCompare(a.key, b.key)), candidates, availabilityByDaySlot, staticRejections, edges, applied, exactEquityScale, baselineCanonicalInput, derivedBaselineCanonicalInput, shiftEndDerivation, canonicalInput, inputDigest: postgresJsonbContentDigest(canonicalInput), baselineInputDigest: postgresJsonbContentDigest(baselineCanonicalInput), weeklyVersionDigest: immutableVersion.contentDigest || postgresJsonbContentDigest(canonicalAuthorityInput(immutableVersion, slots, [], [])) };
   const preflight = preflightProblem(prepared);
   if (preflight.error) return { error: preflight.error };
   return { ...prepared, preflight: preflight.facts };

@@ -1,18 +1,24 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
-import { execFile, spawn } from "node:child_process";
+import { execFile, execFileSync, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import fs from "node:fs";
 import path from "node:path";
 
 const execFileAsync = promisify(execFile);
-const container = `mz_static_weekly_vacancy_${process.pid}`;
+const suppliedContainer=process.env.SHIFT_END_TEST_CONTAINER;
+if(suppliedContainer){
+  assert.match(suppliedContainer,/^mz_schema_shift_end_[0-9]+$/);
+  const inspection=JSON.parse(execFileSync('docker',['inspect',suppliedContainer],{encoding:'utf8',timeout:10000}))[0];
+  assert.equal(inspection.HostConfig.NetworkMode,'none');assert.equal(Object.keys(inspection.HostConfig.PortBindings??{}).length,0);
+}
+const container = suppliedContainer || `mz_static_weekly_vacancy_${process.pid}`;
 const migrationsDir = path.resolve(process.cwd(), "supabase/migrations");
 const managerId = "10000000-0000-4000-8000-000000000091";
 const sourceId = "50000000-0000-4000-8000-000000000091";
-const firstVacantSlot = "20000000-0000-4000-8000-000000000091";
-const secondVacantSlot = "20000000-0000-4000-8000-000000000092";
+const firstVacantSlot = "20000000-0000-4000-8000-000000000191";
+const secondVacantSlot = "20000000-0000-4000-8000-000000000192";
 const quote = (value) => `'${String(value).replaceAll("'", "''")}'`;
 const json = (value) => `$$${JSON.stringify(value)}$$::jsonb`;
 const docker = (args, options = {}) => execFileAsync("docker", args, { maxBuffer: 32 * 1024 * 1024, ...options });
@@ -44,9 +50,10 @@ async function state() {
 
 let removed = false;
 try {
+ if(!suppliedContainer){
   const image = process.env.SCHEMA_REBUILD_DOCKER_IMAGE || "supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed";
   await docker(["image", "inspect", image]);
-  await docker(["run", "--rm", "-d", "--name", container, "--tmpfs", "/var/lib/postgresql/data:rw,size=1g", "-e", "POSTGRES_PASSWORD=postgres", image, "-c", "shared_preload_libraries=pg_cron,pg_net,pg_stat_statements"]);
+  await docker(["run", "--rm", "-d", "--network", "none", "--name", container, "--tmpfs", "/var/lib/postgresql/data:rw,size=1g", "-e", "POSTGRES_PASSWORD=postgres", image, "-c", "shared_preload_libraries=pg_cron,pg_net,pg_stat_statements"]);
   let ready = false; let consecutiveReadyChecks = 0;
   for (let attempt = 0; attempt < 120; attempt += 1) {
     try {
@@ -58,39 +65,26 @@ try {
   assert.equal(ready, true, "disposable PostgreSQL must start before vacancy authority tests");
   await sql("do $$ begin create role anon; exception when duplicate_object then null; end $$; do $$ begin create role authenticated; exception when duplicate_object then null; end $$; do $$ begin create role service_role; exception when duplicate_object then null; end $$;");
   for (const file of fs.readdirSync(migrationsDir).filter((name) => name.endsWith(".sql")).sort()) await sql(fs.readFileSync(path.join(migrationsDir, file), "utf8"));
+ }
   await sql(`insert into public.ops_manager_managers(manager_id,display_name,roles,active,metadata_json,is_system_principal) values(${quote(managerId)},'Vacancy Test Manager',array['OPS_MANAGER','CUSTODIAL_MANAGER']::text[],true,'{}'::jsonb,false)`);
   const vacancyTemplateConstraint = await scalar("select pg_get_constraintdef(oid) from pg_constraint where conrelid='public.weekly_schedule_slot_availability'::regclass and conname='weekly_schedule_slot_availability_vacancy_template_check'");
   assert.match(vacancyTemplateConstraint, /lunch_start IS NOT NULL.*lunch_end IS NOT NULL.*shift_start < lunch_start.*lunch_end < shift_end/i, "an empty schedule position cannot be published without a protected lunch inside its shift");
 
   const initial = await state();
-  assert.equal(initial.revision, 0);
-  const createdOne = JSON.parse(await scalar(cp("static_weekly_v7_create_vacant_roster_slot", `${quote(firstVacantSlot)},'Employee 1',0,${quote(managerId)},'vacancy-create-one'`)));
-  assert.equal(createdOne.revision, 1);
+  const baseRevision=initial.revision;
+  const createdOne = JSON.parse(await scalar(cp("static_weekly_v7_create_vacant_roster_slot", `${quote(firstVacantSlot)},'Employee 1',${baseRevision},${quote(managerId)},'vacancy-create-one'`)));
+  assert.equal(createdOne.revision, baseRevision+1);
   assert.equal(createdOne.data.vacant, true);
   assert.equal(createdOne.data.slot_label, "Employee 1");
-  const replayOne = JSON.parse(await scalar(cp("static_weekly_v7_create_vacant_roster_slot", `${quote(firstVacantSlot)},'Employee 1',0,${quote(managerId)},'vacancy-create-one'`)));
+  const replayOne = JSON.parse(await scalar(cp("static_weekly_v7_create_vacant_roster_slot", `${quote(firstVacantSlot)},'Employee 1',${baseRevision},${quote(managerId)},'vacancy-create-one'`)));
   assert.deepEqual(replayOne, createdOne, "an exact create replay returns the original terminal receipt without advancing authority");
   const beforeCreateConflict = await state();
-  await expectReject(cp("static_weekly_v7_create_vacant_roster_slot", `${quote(firstVacantSlot)},'Different label',0,${quote(managerId)},'vacancy-create-one'`), /idempotency key.*different semantic inputs/i);
+  await expectReject(cp("static_weekly_v7_create_vacant_roster_slot", `${quote(firstVacantSlot)},'Different label',${baseRevision},${quote(managerId)},'vacancy-create-one'`), /idempotency key.*different semantic inputs/i);
   assert.deepEqual(await state(), beforeCreateConflict, "a conflicting create replay has no partial effects");
 
-  const createdTwo = JSON.parse(await scalar(cp("static_weekly_v7_create_vacant_roster_slot", `${quote(secondVacantSlot)},'Kaili schedule position',1,${quote(managerId)},'vacancy-create-two'`)));
-  assert.equal(createdTwo.revision, 2);
+  const createdTwo = JSON.parse(await scalar(cp("static_weekly_v7_create_vacant_roster_slot", `${quote(secondVacantSlot)},'Kaili schedule position',${createdOne.revision},${quote(managerId)},'vacancy-create-two'`)));
+  assert.equal(createdTwo.revision, baseRevision+2);
   const effectiveStart = await scalar("select (public.sch_service_date(statement_timestamp())-(extract(isodow from public.sch_service_date(statement_timestamp()))::integer-1))::text");
-  const filled = JSON.parse(await scalar(cp("static_weekly_v7_fill_vacant_roster_slot", `${quote(secondVacantSlot)},'Kaili Test Employee',${quote(effectiveStart)},'Initial named hire for stable position',2,${quote(managerId)},'vacancy-fill-two'`)));
-  assert.equal(filled.revision, 3);
-  assert.match(filled.data.new_employee_id, /^[0-9a-f-]{36}$/i);
-  assert.match(filled.data.new_employee_code, /^EMP[0-9]+$/);
-  assert.equal(await scalar(`select active::text from public.employees where id=${quote(filled.data.new_employee_id)}`), "true");
-  assert.equal(await scalar(`select is_active::text from public.msg_users where employee_id=${quote(filled.data.new_employee_id)}`), "true", "initial fill creates the same fresh Messenger identity");
-  assert.equal(await scalar(`select count(*)::text from public.weekly_roster_slot_incumbencies where slot_id=${quote(secondVacantSlot)} and person_id=${quote(filled.data.new_employee_id)}`), "1");
-  assert.equal(await scalar(`select staffing_state from public.weekly_roster_slot_staffing_states where slot_id=${quote(secondVacantSlot)} order by authority_revision desc limit 1`), "working");
-  const fillReplay = JSON.parse(await scalar(cp("static_weekly_v7_fill_vacant_roster_slot", `${quote(secondVacantSlot)},'Kaili Test Employee',${quote(effectiveStart)},'Initial named hire for stable position',2,${quote(managerId)},'vacancy-fill-two'`)));
-  assert.deepEqual(fillReplay, filled, "an exact fill replay creates no second employee or incumbency");
-  const beforeSecondFill = await state();
-  await expectReject(cp("static_weekly_v7_fill_vacant_roster_slot", `${quote(secondVacantSlot)},'Other Employee',${quote(effectiveStart)},'Should be rejected',3,${quote(managerId)},'vacancy-fill-again'`), /only a never-filled or explicitly vacated stable position with no current or future incumbent/i);
-  assert.deepEqual(await state(), beforeSecondFill, "a second fill cannot duplicate identity or advance authority");
-
   const availability = (slotId) => ({
     slotId, dayOfWeek: 1, status: "vacant_unfilled", shift: { start: "08:00", end: "17:00" }, lunch: { start: "12:30", end: "13:30" },
     productiveCapacityProvenance: "vacancy-test-shift-lunch", maxServiceEffortMinutes: 100, maxServiceEffortProvenance: "vacancy-test-load",
@@ -102,6 +96,21 @@ try {
     slots: [{ id: firstVacantSlot, label: "Employee 1", incumbencies: [] }, { id: secondVacantSlot, label: "Kaili schedule position", incumbencies: [] }],
     version: { id: "60000000-0000-4000-8000-000000000091", publicationId: "70000000-0000-4000-8000-000000000091", status: "published", effectiveStart, effectiveEnd: null, objective: {}, vacancyCapableSlotIds: [firstVacantSlot, secondVacantSlot], vacantSlotIds: [firstVacantSlot, secondVacantSlot], slotAvailability: [availability(firstVacantSlot), availability(secondVacantSlot)], assignments: [] },
   };
+  await sql(`set role static_weekly_release_operator; select public.static_weekly_v3_register_authority_source(${quote(sourceId)},${json(source)},'vacancy-reader-test')`);
+  const filled = JSON.parse(await scalar(cp("static_weekly_v9_fill_vacant_roster_slot", `${quote(sourceId)},${quote(secondVacantSlot)},'Kaili Test Employee',${quote(effectiveStart)},'Initial named hire for stable position',${createdTwo.revision},${quote(managerId)},'vacancy-fill-two'`)));
+  assert.equal(filled.revision, baseRevision+3);
+  assert.match(filled.data.new_employee_id, /^[0-9a-f-]{36}$/i);
+  assert.match(filled.data.new_employee_code, /^EMP[0-9]+$/);
+  assert.equal(await scalar(`select active::text from public.employees where id=${quote(filled.data.new_employee_id)}`), "true");
+  assert.equal(await scalar(`select is_active::text from public.msg_users where employee_id=${quote(filled.data.new_employee_id)}`), "true", "initial fill creates the same fresh Messenger identity");
+  assert.equal(await scalar(`select count(*)::text from public.weekly_roster_slot_incumbencies where slot_id=${quote(secondVacantSlot)} and person_id=${quote(filled.data.new_employee_id)}`), "1");
+  assert.equal(await scalar(`select staffing_state from public.weekly_roster_slot_staffing_states where slot_id=${quote(secondVacantSlot)} order by authority_revision desc limit 1`), "working");
+  const fillReplay = JSON.parse(await scalar(cp("static_weekly_v9_fill_vacant_roster_slot", `${quote(sourceId)},${quote(secondVacantSlot)},'Kaili Test Employee',${quote(effectiveStart)},'Initial named hire for stable position',${createdTwo.revision},${quote(managerId)},'vacancy-fill-two'`)));
+  assert.deepEqual(fillReplay, filled, "an exact fill replay creates no second employee or incumbency");
+  const beforeSecondFill = await state();
+  await expectReject(cp("static_weekly_v9_fill_vacant_roster_slot", `${quote(sourceId)},${quote(secondVacantSlot)},'Other Employee',${quote(effectiveStart)},'Should be rejected',${filled.revision},${quote(managerId)},'vacancy-fill-again'`), /only a never-filled or explicitly vacated stable position with no current or future incumbent/i);
+  assert.deepEqual(await state(), beforeSecondFill, "a second fill cannot duplicate identity or advance authority");
+
   const dynamicVacancyVariant = structuredClone(source);
   dynamicVacancyVariant.version.vacantSlotIds = [firstVacantSlot];
   assert.equal(await scalar(`select (public.static_weekly_v3_source_identity(${json(source)})=public.static_weekly_v3_source_identity(${json(dynamicVacancyVariant)}))::text`), "true", "dated active vacancy membership does not change immutable source identity");
@@ -119,7 +128,6 @@ try {
   assert.deepEqual(hydratedFromTuesday.version.vacantSlotIds, [firstVacantSlot], "daily manager changes hydrate against the containing Monday-Sunday authority week");
   assert.equal(hydratedFromTuesday.slots.find((slot) => slot.id === secondVacantSlot).incumbencies[0].personId, filled.data.new_employee_id);
 
-  await sql(`set role static_weekly_release_operator; select public.static_weekly_v3_register_authority_source(${quote(sourceId)},${json(source)},'vacancy-reader-test')`);
   const datedRegisteredSource = JSON.parse(await scalar(cp("static_weekly_v3_read_authority_source", `${quote(sourceId)},${quote(effectiveStart)}`)));
   assert.deepEqual(datedRegisteredSource.compiler_input.version.vacantSlotIds, [firstVacantSlot], "the first-draft reader derives active vacancy from the current append-only roster rather than the immutable capability list");
   assert.equal(datedRegisteredSource.compiler_input.version.slotAvailability.find((row) => row.slotId === secondVacantSlot).status, "working");
@@ -144,14 +152,16 @@ try {
   for (const role of ["public", "anon", "authenticated", "service_role", "custodial_application_reader"]) {
     assert.equal(await scalar(`select has_function_privilege(${quote(role)},'public.static_weekly_v7_create_vacant_roster_slot(uuid,text,bigint,uuid,text)','execute')::text`), "false", `${role} cannot create schedule positions`);
     assert.equal(await scalar(`select has_function_privilege(${quote(role)},'public.static_weekly_v7_fill_vacant_roster_slot(uuid,text,date,text,bigint,uuid,text)','execute')::text`), "false", `${role} cannot fill schedule positions`);
+    assert.equal(await scalar(`select has_function_privilege(${quote(role)},'public.static_weekly_v9_fill_vacant_roster_slot(uuid,uuid,text,date,text,bigint,uuid,text)','execute')::text`), "false", `${role} cannot invoke source-bound fill`);
     assert.equal(await scalar(`select has_function_privilege(${quote(role)},'public.static_weekly_v3_read_authority_source(uuid,date)','execute')::text`), "false", `${role} cannot read the release-registered schedule source`);
   }
   assert.equal(await scalar("select has_function_privilege('static_weekly_control_plane','public.static_weekly_v7_create_vacant_roster_slot(uuid,text,bigint,uuid,text)','execute')::text"), "true");
-  assert.equal(await scalar("select has_function_privilege('static_weekly_control_plane','public.static_weekly_v7_fill_vacant_roster_slot(uuid,text,date,text,bigint,uuid,text)','execute')::text"), "true");
+  assert.equal(await scalar("select has_function_privilege('static_weekly_control_plane','public.static_weekly_v7_fill_vacant_roster_slot(uuid,text,date,text,bigint,uuid,text)','execute')::text"), "false", "legacy unbound fill remains inaccessible");
+  assert.equal(await scalar("select has_function_privilege('static_weekly_control_plane','public.static_weekly_v9_fill_vacant_roster_slot(uuid,uuid,text,date,text,bigint,uuid,text)','execute')::text"), "true");
   assert.equal(await scalar("select has_function_privilege('static_weekly_control_plane','public.static_weekly_v3_read_authority_source(uuid,date)','execute')::text"), "true");
 
   console.log("static weekly vacant roster-slot database tests: PASS");
 } finally {
-  try { await docker(["rm", "-f", container]); removed = true; } catch {}
-  if (!removed) process.exitCode = 1;
+  if(!suppliedContainer){try { await docker(["rm", "-f", container]); removed = true; } catch {}
+   if (!removed) process.exitCode = 1;}
 }

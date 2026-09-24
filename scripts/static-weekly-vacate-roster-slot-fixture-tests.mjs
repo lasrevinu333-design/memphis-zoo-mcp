@@ -4,7 +4,7 @@ import {promisify} from 'node:util';
 import {randomUUID} from 'node:crypto';
 // Synthetic roster/history in an explicitly isolated local PostgreSQL database.
 const container=process.env.ROSTER_PUBLICATION_TEST_CONTAINER;
-assert.match(container??'',/^mz_schema_rebuild_roster_[0-9]+$/);
+assert.match(container??'',/^(?:mz_schema_rebuild_roster_|mz_schema_shift_end_)[0-9]+$/);
 const inspection=JSON.parse(execFileSync('docker',['inspect',container],{encoding:'utf8'}))[0];
 assert.equal(inspection.HostConfig.NetworkMode,'none');
 assert.equal(Object.keys(inspection.HostConfig.PortBindings??{}).length,0);
@@ -80,6 +80,7 @@ const functions=[
  'public.static_weekly_v8_guard_vacancy_closure()',
  'public.static_weekly_v8_vacate_roster_slot(uuid,uuid,uuid,date,text,bigint,uuid,text)',
  'public.static_weekly_v7_fill_vacant_roster_slot(uuid,text,date,text,bigint,uuid,text)',
+ 'public.static_weekly_v9_fill_vacant_roster_slot(uuid,uuid,text,date,text,bigint,uuid,text)',
  'public.static_weekly_v4_hydrate_compiler_source(jsonb,date)',
  'public.static_weekly_v3_assert_draft_incumbency(uuid)'
 ];
@@ -88,8 +89,8 @@ for(const identity of functions){
  check('recovery grants match '+identity,sql(`select count(*)::text from public.custodial_release_authority_restore_inventory where object_kind='grant' and object_identity=${q(identity)} and definition_sql=public.custodial_release_authority_current_grant_definition(${q(identity)})`),'1');
 }
 check('recovery preserves nullable vacancy closure',sql("select count(*)::text from public.custodial_release_authority_restore_inventory where object_kind='column' and object_identity='public.weekly_roster_slot_incumbency_closures:replacement_incumbency_id' and definition_sql=public.custodial_release_authority_current_column_definition(object_identity)"),'1');
-const fillArgs=`${q(slot)},'Synthetic Next Hire',${q(nextMonday)},'Test future hire',${revision()},${q(manager)},${q('refill-'+slot)}`;
-const refillSql=`set role static_weekly_control_plane; select public.static_weekly_v7_fill_vacant_roster_slot(${fillArgs})::text`;
+const fillArgs=`${q(sourceId)},${q(slot)},'Synthetic Next Hire',${q(nextMonday)},'Test future hire',${revision()},${q(manager)},${q('refill-'+slot)}`;
+const refillSql=`set role static_weekly_control_plane; select public.static_weekly_v9_fill_vacant_roster_slot(${fillArgs})::text`;
 const refilled=parsed(refillSql);
 check('vacated position can be filled',refilled.data.slot_id,slot);
 check('new hire does not reuse former identity',refilled.data.new_employee_id===employee,false);
@@ -106,7 +107,7 @@ try {
 } finally { sql(originalServiceClock); }
 check('only one new hire created',Number(sql('select count(*)::text from public.employees')),Number(peopleBefore)+1);
 check('exact new hire owns the next week',sql(`select person_id::text from public.v_weekly_roster_slot_incumbency_ranges where slot_id=${q(slot)} and effective_start<=${q(nextMonday)}::date and (effective_end is null or ${q(nextMonday)}::date<effective_end)`),refilled.data.new_employee_id);
-rejected('second future hire cannot occupy already-reserved slot',`set role static_weekly_control_plane; select public.static_weekly_v7_fill_vacant_roster_slot(${q(slot)},'Synthetic Duplicate Hire',${q(nextMonday)},'Rejected duplicate',${revision()},${q(manager)},'duplicate-refill')`,/no current or future incumbent/i);
+rejected('second future hire cannot occupy already-reserved slot',`set role static_weekly_control_plane; select public.static_weekly_v9_fill_vacant_roster_slot(${q(sourceId)},${q(slot)},'Synthetic Duplicate Hire',${q(nextMonday)},'Rejected duplicate',${revision()},${q(manager)},'duplicate-refill')`,/no current or future incumbent/i);
 
 // Execute the production recovery controller against synthetic data only.
 // Restore the complete ordered inventory, not just the newly captured hashes.

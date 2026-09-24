@@ -5,6 +5,7 @@ import {consolidateScheduleItems} from '../src/schedule-display.js';
 import {seedCompiledEventAuthority} from './fixtures/event-static-authority-fixture.mjs';
 import {createStaticWeeklyProjectionWithLunchRpcInput} from '../src/static-weekly-lunch-publication.js';
 import {postgresJsonbContentDigest as digest} from '../src/static-weekly-schedule-compiler.js';
+import {createStaticWeeklyDraftRpcInput,staticWeeklyDatabaseDocumentIdentity} from '../src/static-weekly-schedule-database-adapter.js';
 const container=process.env.LUNCH_PUBLICATION_TEST_CONTAINER;
 assert.match(container??'',/^mz_schema_rebuild_lunch_[0-9]+$/);
 const inspection=JSON.parse(execFileSync('docker',['inspect',container],{encoding:'utf8'}))[0];
@@ -56,6 +57,16 @@ const prepared=createStaticWeeklyProjectionWithLunchRpcInput({result,publication
 const document=prepared.lunchDocument;let passed=0;
 const check=(name,actual,expected)=>{assert.deepEqual(actual,expected,name);passed++;};
 const reject=(name,statement,pattern)=>{assert.throws(()=>sql(statement),pattern,name);passed++;};
+const legacyDraft=createStaticWeeklyDraftRpcInput({result,expectedRevision:0,
+ actor:{managerId:manager,managerName:'Synthetic lunch manager',idempotencyKey:'synthetic-legacy-snapshot'}});
+check('legacy v2 adapter binds absence as exact non-null digest',legacyDraft.document.semantic_snapshot.shift_end_derivation_digest,digest(null));
+for(const [name,value] of [['null',null],['wrong','f'.repeat(64)],['object',{}]]){
+ const bad=structuredClone(legacyDraft.document);bad.semantic_snapshot.shift_end_derivation_digest=value;
+ bad.validation.database_document_identity=staticWeeklyDatabaseDocumentIdentity(bad);
+ reject(`legacy ${name} derivation digest rejected by SQL`,
+  `do $probe$declare d jsonb:=${j(bad)};begin d:=jsonb_set(d,'{attestation}',public.static_weekly_v6_issue_document_attestation(d));
+   perform public.static_weekly_assert_document_attested(d,${q(week)}::date,true);end $probe$;`,/recurring semantic snapshot|recurring snapshot does not bind exact derived baseline/);
+}
 const persist=(value=document,id=projectionId,actor=manager)=>`set role static_weekly_control_plane; select public.static_weekly_v8_materialize_lunch_document(${q(id)}::uuid,${j(value)},${q(actor)}::uuid)::text;`;
 const read=()=>parsed(`select public.static_weekly_v8_read_lunch_document(${q(serviceDate)}::date)::text;`);
 const original=query(`select md5(jsonb_agg(to_jsonb(o) order by occurrence_id)::text) from public.weekly_schedule_occurrences o;`);

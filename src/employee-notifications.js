@@ -531,6 +531,14 @@ export function installEmployeeNotificationRoutes(app, {
         }
         providerBoundaryPrepared = true;
       }
+      // Carry the same immutable recipient/job identity through the handset
+      // outbox. A saved receipt must never be relabelled after recovery or a
+      // reassignment to another employee on the same KIOSK identifier.
+      if (!eventInstance && ['employee_lunch_coverage','employee_location_status'].includes(push.data_json?.kind)) {
+        push.data_json = {...push.data_json, receipt_job_id:job.job_id,
+          receipt_credential_id:credential,receipt_assignment_epoch:String(assignmentEpoch),
+          receipt_employee_id:job.payload_json.employee_id,receipt_device_id:job.payload_json.device_identifier};
+      }
       const providerMessageId = await pushRuntime.send(push, registration, { channelId });
       const recorded = eventInstance
         ? await recordEventDelivery(job, eventInstance, credential, assignmentEpoch, registration, providerMessageId)

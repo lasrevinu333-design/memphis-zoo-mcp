@@ -5,14 +5,17 @@ import { generateKeyPairSync, sign } from "node:crypto";
 import { assertBackendFrontendIdentity, assertExactReleaseAttestation, assertFrontendReleaseDeclaration, assertFrontendReleaseIdentity, assertManifestContract, assertObservedSchemaIdentity, releaseAttestationPayload } from "../src/release-contract.js";
 
 const input = JSON.parse(readFileSync(new URL("../release/schema-alignment-input.json", import.meta.url), "utf8"));
+const pairedFrontend = JSON.parse(readFileSync(new URL("../release/frontend-release-manifest.json", import.meta.url), "utf8"));
 const index = readFileSync(new URL("../src/index.js", import.meta.url), "utf8");
 const nativePhoneTransport = readFileSync(new URL("../src/native-phone-transport.js", import.meta.url), "utf8");
 const liveGate = readFileSync(new URL("./live-release-alignment-check.mjs", import.meta.url), "utf8");
 const rollbackMigration = readFileSync(new URL("../supabase/migrations/20260813060000_release_canary_operational_recovery.sql", import.meta.url), "utf8");
 const boundaryMigration = readFileSync(new URL("../supabase/migrations/20260813141806_custodial_operational_boundary_closure.sql", import.meta.url), "utf8");
 
-assert.equal(input.frontend_commit_sha, "fb3cb815a2ebd8f50b33f657c750807f3b4b45b4", "backend must pin the exact tested frontend candidate");
+assert.match(input.frontend_commit_sha || '', /^[0-9a-f]{40}$/, "backend must bind a real exact frontend commit before release closure");
+assert.equal(input.frontend_commit_sha, pairedFrontend.frontend_commit_sha, "closure input must match the immutable paired frontend declaration, not a stale test-only commit literal");
 assert.equal(input.frontend_commit_state, "final_pair_bound");
+assert.equal(pairedFrontend.frontend_commit_state, "final_pair_bound");
 assert.deepEqual(input.queue_compatibility_versions.scan.at(-1), "indexeddb-v6-offline-authority");
 assert.deepEqual(Object.keys(input.minimum_supported).sort(), ["backend_version", "frontend_version"]);
 assert.match(index, /\/admin-api\/release-schema-identity/, "schema observation endpoint is required");

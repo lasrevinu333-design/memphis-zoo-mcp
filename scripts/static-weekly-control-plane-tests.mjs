@@ -73,13 +73,14 @@ const acceptedProjection = await compileStaticWeeklySchedule(compilerInput());
 assert.equal(acceptedProjection.status, "FEASIBLE", "the control-plane transaction test needs one independently accepted projection");
 assert.equal(acceptedProjection.verifier.ok, true);
 
-function createAuthorityDatabase({ revision: initialRevision = 0, failMutationAt = null, failHeartbeatAt = null, heartbeatDelayMs = 0, failLunch = false, completedVacancy = null, priorVacancy = null, published = true } = {}) {
+function createAuthorityDatabase({ revision: initialRevision = 0, failMutationAt = null, failHeartbeatAt = null, heartbeatDelayMs = 0, failLunch = false, lunchReadOverride = null, completedVacancy = null, priorVacancy = null, priorRoster = null, completedRoster = null, published = true } = {}) {
   const queries = [];
   const materializations = new Map();
   const projectionSnapshots = new Map();
   const mutations = new Map();
   let revision = initialRevision;
   let projection = null;
+  let lunchDocumentIdentity = null;
   let transactionState = null;
   let commits = 0;
   let mutationAttempts = 0;
@@ -147,7 +148,19 @@ function createAuthorityDatabase({ revision: initialRevision = 0, failMutationAt
       }
       if (statement.includes("static_weekly_v4_mark_employee_departed")) { revision = values[2] + 1; return { rows: [{ result: { revision, data: { slot_id: values[0] } } }] }; }
       if (statement.includes("static_weekly_v4_replace_employee")) { revision = values[3] + 1; return { rows: [{ result: { revision, data: { new_employee_name: values[1] } } }] }; }
-      if (statement.includes("static_weekly_v8_restore_existing_employee")) { revision = values[5] + 1; return { rows: [{ result: { revision, data: { source_id: values[0], slot_id: values[1], employee_id: values[2], effective_start: values[3], history_preserved: true, phone_assignment: null } } }] }; }
+      if (statement.includes("static_weekly_v8_restore_existing_employee") || statement.includes("static_weekly_v9_fill_vacant_roster_slot")) {
+        if (priorRoster || mutations.has(values[7])) return {rows:[{result:priorRoster || mutations.get(values[7])}]};
+        assert.equal(values[5],revision,'roster writer sees lock-held expected revision');
+        revision = values[5] + 1;
+        const result = { revision, data: { source_id: values[0], slot_id: values[1], effective_start: values[3], phone_assignment: null,
+          ...(statement.includes('restore_existing') ? {employee_id:values[2],history_preserved:true} : {new_employee_name:values[2]}),
+          completion_mode:published?'projection_required':'mutation_only',original_publication_id:published?publicationId:null } };
+        mutations.set(values[7],result);return {rows:[{result}]};
+      }
+      if (statement.includes("static_weekly_v9_read_completed_roster_change")) {
+        const original=priorRoster || mutations.get(values[1]);
+        return {rows:[{result:completedRoster || (original?.data?.completion_mode==='mutation_only'?original:null)}]};
+      }
       if (statement.includes("static_weekly_v8_vacate_roster_slot")) {
         if (priorVacancy || mutations.has(values[7])) return { rows: [{ result: priorVacancy || mutations.get(values[7]) }] };
         revision = values[5] + 1;
@@ -159,11 +172,15 @@ function createAuthorityDatabase({ revision: initialRevision = 0, failMutationAt
         return { rows: [{ result: completedVacancy || (original?.data?.completion_mode === "mutation_only" ? original : null) }] };
       }
       if (statement.includes("static_weekly_v7_create_vacant_roster_slot")) { revision = values[2] + 1; return { rows: [{ result: { revision, data: { slot_id: values[0], slot_label: values[1], vacant: true } } }] }; }
-      if (statement.includes("static_weekly_v7_fill_vacant_roster_slot")) { revision = values[4] + 1; return { rows: [{ result: { revision, data: { slot_id: values[0], new_employee_name: values[1], effective_start: values[2] } } }] }; }
       if (statement.includes("static_weekly_v8_materialize_lunch_document")) {
         if (failLunch) throw new Error("lunch persistence failed");
+        lunchDocumentIdentity = values[1].document_identity;
         return {rows:[{result:{ok:true,persistence_status:"PERSISTED",projection_id:values[0],
           document_identity:values[1].document_identity}}]};
+      }
+      if (statement.includes("static_weekly_v8_read_lunch_document")) {
+        return {rows:[{result:lunchReadOverride || {persistence_status:"PERSISTED",
+          projection_id:projection?.projection_id,document_identity:lunchDocumentIdentity}}]};
       }
       if (statement.includes("static_weekly_v3_materialize_projection")) {
         const key = values[10];
@@ -622,11 +639,13 @@ await assert.rejects(() => snapshotControlPlane.getManagerSnapshot({ manager, we
 const restoreAuthority = createAuthorityDatabase();
 const restoreControlPlane = controlPlaneFor(restoreAuthority);
 const restoredExisting = await restoreControlPlane.restoreExistingEmployee({ manager, sourceId: "50000000-0000-4000-8000-000000000093", slotId: "5d2d2a0e-230f-5b03-9867-2e4c2826871f", employeeId: "4f501293-2973-46ba-bf83-34d440d60407", effectiveStart: "2026-10-05", reason: "Owner-approved restoration of existing employee identity", expectedRevision: 0, idempotencyKey: "restore-existing-gregory" });
-assert.equal(restoredExisting.revision, 1);
+assert.equal(restoredExisting.revision, 2);
 assert.equal(restoredExisting.data.employee_id, "4f501293-2973-46ba-bf83-34d440d60407");
 assert.equal(restoredExisting.data.history_preserved, true);
 assert.equal(restoredExisting.data.phone_assignment, null);
-assert.deepEqual(restoreAuthority.queries.map((entry) => entry.statement), ["begin", "set local role static_weekly_control_plane", "set local statement_timeout = '120000ms'", "select public.custodial_begin_application_mutation()", "select public.static_weekly_v8_restore_existing_employee($1,$2,$3,$4,$5,$6,$7,$8) as result", "commit"], "existing-employee restoration is a bounded named-manager operation and does not invent a replacement identity or phone assignment");
+assert.ok(restoreAuthority.queries.some(entry=>entry.statement.includes('static_weekly_v8_materialize_lunch_document')),
+ "existing-employee restoration completes projection and lunch without inventing identity or phone assignment");
+assert.equal(restoreAuthority.queries.at(-1).statement,'commit');
 
 const vacateAuthority = createAuthorityDatabase();
 const vacateControlPlane = controlPlaneFor(vacateAuthority);
@@ -674,13 +693,41 @@ const vacancyControlPlane = controlPlaneFor(vacancyAuthority);
 const vacantSlot = await vacancyControlPlane.createVacantRosterSlot({ manager, slotId: "20000000-0000-4000-8000-000000000099", slotLabel: "Employee 1 schedule position", expectedRevision: 0, idempotencyKey: "create-vacant-position" });
 assert.equal(vacantSlot.revision, 1);
 assert.equal(vacantSlot.data.vacant, true);
-const filledSlot = await vacancyControlPlane.fillVacantRosterSlot({ manager, slotId: vacantSlot.data.slot_id, newEmployeeName: "New Custodian", effectiveStart: "2026-10-05", reason: "Approved hire", expectedRevision: vacantSlot.revision, idempotencyKey: "fill-vacant-position" });
-assert.equal(filledSlot.revision, 2);
+const filledSlot = await vacancyControlPlane.fillVacantRosterSlot({ manager, sourceId:authoritySourceId, slotId: vacantSlot.data.slot_id, newEmployeeName: "New Custodian", effectiveStart: "2026-10-05", reason: "Approved hire", expectedRevision: vacantSlot.revision, idempotencyKey: "fill-vacant-position" });
+assert.equal(filledSlot.revision, 3);
 assert.equal(filledSlot.data.new_employee_name, "New Custodian");
-assert.deepEqual(vacancyAuthority.queries.map((entry) => entry.statement), [
-  "begin", "set local role static_weekly_control_plane", "set local statement_timeout = '120000ms'", "select public.custodial_begin_application_mutation()", "select public.static_weekly_v7_create_vacant_roster_slot($1,$2,$3,$4,$5) as result", "commit",
-  "begin", "set local role static_weekly_control_plane", "set local statement_timeout = '120000ms'", "select public.custodial_begin_application_mutation()", "select public.static_weekly_v7_fill_vacant_roster_slot($1,$2,$3,$4,$5,$6,$7) as result", "commit",
-], "vacant position creation and later hiring are bounded named-manager operations without an APK or schedule-template rewrite");
+assert.ok(vacancyAuthority.queries.some(entry=>entry.statement.includes('static_weekly_v9_fill_vacant_roster_slot')&&entry.values[0]===authoritySourceId),
+ 'fill binds the exact source and no longer invokes the mutation-only predecessor');
+assert.ok(vacancyAuthority.queries.some(entry=>entry.statement.includes('static_weekly_v8_materialize_lunch_document')),
+ 'fill persists its matching lunch companion before commit');
+assert.equal(vacancyAuthority.queries.at(-1).statement,'commit');
+
+for(const method of ['fillVacantRosterSlot','restoreExistingEmployee']){
+ const isFill=method==='fillVacantRosterSlot';
+ const request={manager,sourceId:authoritySourceId,slotId:'20000000-0000-4000-8000-000000000099',
+  newEmployeeName:'Synthetic hire',employeeId:'40000000-0000-4000-8000-000000000093',effectiveStart:'2026-10-05',
+  reason:'Synthetic test only',expectedRevision:0,idempotencyKey:'atomic-'+method};
+ const db=createAuthorityDatabase(),plane=controlPlaneFor(db),success=await plane[method](request);
+ assert.equal(success.revision,2);assert.equal(success.data.mutation.completion_mode,'projection_required');
+ assert.ok(db.queries.findIndex(e=>e.statement.includes('pg_advisory_xact_lock'))<db.queries.findIndex(e=>e.statement.includes(isFill?'v9_fill':'v8_restore')));
+ const failed=createAuthorityDatabase({failLunch:true});
+ await assert.rejects(()=>controlPlaneFor(failed)[method](request),/lunch persistence failed/);
+ assert.equal(failed.revision(),0,'downstream failure rolls back '+method);assert.equal(failed.commits(),0);
+ const compiledFailure=createAuthorityDatabase();
+ await assert.rejects(()=>controlPlaneFor(compiledFailure,async()=>{throw new Error('synthetic compiler failed');})[method](request),/synthetic compiler failed/);
+ assert.equal(compiledFailure.revision(),0);assert.equal(compiledFailure.commits(),0);
+ const noPublication=createAuthorityDatabase({published:false});
+ const unpub=await controlPlaneFor(noPublication)[method](request);
+ assert.equal(unpub.revision,1);assert.equal(unpub.data.completion_mode,'mutation_only');
+ assert.ok(!noPublication.queries.some(e=>e.statement.includes('materialize_projection')));
+ const retry=createAuthorityDatabase({revision:9,priorRoster:{revision:1,data:success.data.mutation},completedRoster:success});
+ assert.deepEqual(await controlPlaneFor(retry)[method](request),success,'exact historical completion '+method);
+ assert.ok(!retry.queries.some(e=>e.statement.includes('read_publication_source')||e.statement.includes('materialize_projection')));
+ const missing=createAuthorityDatabase({revision:9,priorRoster:{revision:1,data:success.data.mutation}});
+ await assert.rejects(()=>controlPlaneFor(missing)[method](request),/original staffing completion is missing/i);
+ assert.equal(missing.commits(),0);
+ await assert.rejects(()=>plane[method]({...request,sourceId:''}),/source_required/);
+}
 
 const splitCallerAuthority = createAuthorityDatabase();
 const splitCallerControlPlane = controlPlaneFor(splitCallerAuthority);
@@ -691,6 +738,24 @@ const splitCallerResult = await splitCallerControlPlane.materializeProjection({ 
 assert.equal(splitCallerResult.revision, atomicPublication.revision, "an old split caller receives the atomic publication's current projection revision");
 assert.equal(splitCallerResult.data.no_op, true, "an old split materialization request becomes a read-only no-op");
 assert.equal(splitCallerAuthority.queries.filter((entry) => entry.statement.includes("static_weekly_v3_materialize_projection")).length, materializationCount, "the split-call compatibility path never duplicates projection authority");
+for (const lunchReadOverride of [
+  {persistence_status:"MISSING"},
+  {persistence_status:"UNAVAILABLE"},
+  {persistence_status:"PERSISTED",projection_id:"another-projection",document_identity:"a".repeat(64)},
+  {persistence_status:"PERSISTED",projection_id:"projection-2",document_identity:""},
+]) {
+  const incomplete = createAuthorityDatabase({lunchReadOverride});
+  const incompleteControlPlane = controlPlaneFor(incomplete);
+  await incompleteControlPlane.publishDraft({manager,draftVersionId:versionId,
+    expectedDraftRevision:1,expectedRevision:0,idempotencyKey:"incomplete-lunch-publish"});
+  const committedBefore = incomplete.commits();
+  await assert.rejects(() => incompleteControlPlane.materializeProjection({manager,publicationId,
+    serviceDate:"2026-10-05",expectedRevision:1,idempotencyKey:"incomplete-lunch-no-op"}),
+    error => error.code === "static_weekly_lunch_publication_missing",
+    "a current base projection cannot imply a complete lunch companion");
+  assert.equal(incomplete.commits(),committedBefore,"an incomplete companion cannot commit a successful no-op");
+  assert.equal(incomplete.queries.at(-1).statement,"rollback");
+}
 const failedLunchAuthority=createAuthorityDatabase({failLunch:true});
 await assert.rejects(()=>controlPlaneFor(failedLunchAuthority).publishDraft({manager,draftVersionId:versionId,
  expectedDraftRevision:1,expectedRevision:0,idempotencyKey:"failed-lunch-write",projectionWeekStart:"2026-10-05"}),/lunch persistence failed/);

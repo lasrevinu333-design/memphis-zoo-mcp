@@ -56,6 +56,7 @@ const deviceA = {
   role: "staff",
   employee_active: true,
   assignment_valid: true,
+  assignment_epoch: 7,
 };
 const deviceB = {
   ...deviceA,
@@ -418,6 +419,7 @@ assert.equal(statusRes.code, 200);
 assert.equal(statusRes.payload.data.authenticated, false);
 assert.equal(statusRes.payload.data.employee_name, null, "unenrolled status must not disclose employee identity");
 assert.equal(statusRes.payload.data.employee_id, null, "unenrolled status must not disclose employee identifiers");
+assert.equal(statusRes.payload.data.assignment_epoch, null, "unenrolled status must not disclose assignment generation");
 assert.equal(statusRes.payload.data.employee_role, null, "unenrolled status must not disclose employee role");
 assert.equal(statusRes.payload.data.device_name, null, "unenrolled status must not disclose device labels");
 
@@ -428,6 +430,8 @@ assert.equal(authenticatedStatusRes.code, 200);
 assert.equal(authenticatedStatusRes.payload.data.employee_name, "Kinnaye Peete");
 assert.equal(authenticatedStatusRes.payload.data.employee_id, deviceA.assigned_employee_id, "authenticated status supplies its own assigned employee for identity-bound offline feedback");
 assert.equal(authenticatedStatusRes.payload.data.employee_role, "staff");
+assert.equal(authenticatedStatusRes.payload.data.assignment_epoch, 7, "native principal captures the authenticated assignment generation as an integer");
+assert.equal(authenticatedStatusRes.payload.data.credential_id, credential.credential_id, "native principal must bind the actual credential, not caller data");
 
 const logoutHandler = app.routes.get("POST /device-auth/logout").at(-1);
 const logoutWithoutHeader = responseCapture();

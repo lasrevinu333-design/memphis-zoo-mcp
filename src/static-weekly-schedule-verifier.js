@@ -33,7 +33,7 @@ const exactOwnKeys = (value, expected) => {
 };
 const nonnegativeSafeInteger = (value) => typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 const MAX_SAFE_EXACT_INTEGER = BigInt(Number.MAX_SAFE_INTEGER);
-export const STATIC_WEEKLY_VERIFIER_VERSION = "static-weekly-js-verifier-v8-workload-duty-boundary";
+export const STATIC_WEEKLY_VERIFIER_VERSION = "static-weekly-js-verifier-v9-dated-shift-end";
 const VERIFIER_VERSION = STATIC_WEEKLY_VERIFIER_VERSION;
 const MIP_FEASIBILITY_TOLERANCE = 1e-9;
 const exactRatio = (numerator, denominator, scale) => {
@@ -343,6 +343,18 @@ export function verifyStaticWeeklyScheduleResult(input = {}, result = {}, deadli
     else {
       const currentInput = normalizedInput;
       const baselineInput = regenerated.problem.baselineCanonicalInput;
+      const expectedDerivation = regenerated.problem.shiftEndDerivation;
+      if (expectedDerivation) {
+        if (authority.schema !== "memphis-zoo.static-weekly-authority.v4"
+          || canonicalJson(authority.shiftEndDerivation) !== canonicalJson(expectedDerivation)
+          || authority.derivedBaselineDigest !== postgresJsonbContentDigest(regenerated.problem.derivedBaselineCanonicalInput)
+          || authority.derivedBaselineDigest !== expectedDerivation.derivedBaselineDigest) {
+          push(violations, "shift_end_derivation_identity_mismatch");
+        }
+      } else if (authority.schema !== "memphis-zoo.static-weekly-authority.v3"
+        || authority.shiftEndDerivation || authority.derivedBaselineDigest) {
+        push(violations, "unexpected_shift_end_derivation_authority");
+      }
       const authorityWithoutIdentity = { ...authority }; delete authorityWithoutIdentity.databaseContentIdentity;
       if (postgresJsonbContentDigest(currentInput) !== authority.inputDigest || postgresJsonbContentDigest(authority.overlayCompilerInput || authority.compilerInput) !== authority.inputDigest || result.inputDigest !== authority.inputDigest || postgresJsonbContentDigest(authority.compilerInput) !== authority.baselineInputDigest || postgresJsonbContentDigest(baselineInput) !== authority.baselineInputDigest) push(violations, "canonical_input_mutation_or_digest_mismatch");
       if (authority.databaseContentIdentity !== postgresJsonbContentDigest(authorityWithoutIdentity)) push(violations, "canonical_authority_database_identity_mismatch");

@@ -7,7 +7,7 @@ import { isAbsolute, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
 import { assertExactReleaseAttestation } from "../src/release-contract.js";
-import { buildRecordingPlan, migrationManifestSha256, sameReleaseIdentity } from "../src/production-release-deployment-recorder.js";
+import { archivedReleaseRecord, buildRecordingPlan, migrationManifestSha256, sameReleaseIdentity, sameReleaseOccurrence } from "../src/production-release-deployment-recorder.js";
 import { stableJson } from "./disaster-recovery-crypto.mjs";
 import { loadRecoveryRuntimeContract, validateRecoveryRuntimeConfiguration } from "./disaster-recovery-runtime-contract.mjs";
 
@@ -118,11 +118,15 @@ try {
     ledger_head: state.target.source_migration_version,
   }, "Production migration ledger is not the exact admitted target.");
   const current = await client.query(`select release_id,backend_commit,frontend_commit,migration_head,
-    migration_manifest_sha256,environment_contract_version,status,details_json,created_at,deployed_at
+    migration_manifest_sha256,environment_contract_version,status,details_json,
+    to_char(created_at at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') created_at,
+    to_char(deployed_at at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') deployed_at
     from public.release_deployment_manifest where release_id=$1 ${apply ? "for update" : ""}`,
   [target.release_id]);
   const deployed = await client.query(`select release_id,backend_commit,frontend_commit,migration_head,
-    migration_manifest_sha256,environment_contract_version,status,details_json,created_at,deployed_at
+    migration_manifest_sha256,environment_contract_version,status,details_json,
+    to_char(created_at at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') created_at,
+    to_char(deployed_at at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') deployed_at
     from public.release_deployment_manifest where status='deployed' order by release_id ${apply ? "for update" : ""}`);
   const currentBase = current.rows[0] || null;
   const otherDeployed = deployed.rows.filter((row) => row.release_id !== target.release_id);
@@ -134,9 +138,9 @@ try {
     assert.equal(requiredEnv("PRODUCTION_RELEASE_RECORD_EXPECTED_PLAN_SHA256"), plan.plan_sha256,
       "Recording plan changed after operator review.");
     const recordedAt = new Date().toISOString();
-    if (currentBase && !sameReleaseIdentity(currentBase, target)) {
-      const archiveDetails = { ...(currentBase.details_json || {}), archived_at: recordedAt,
-        archived_from_release_id: target.release_id, archived_by: "production-release-recorder.v1" };
+    if (currentBase) {
+      const expectedArchive = archivedReleaseRecord(currentBase);
+      const archiveDetails = expectedArchive.details_json;
       await client.query(`insert into public.release_deployment_manifest(
         release_id,backend_commit,frontend_commit,migration_head,migration_manifest_sha256,
         environment_contract_version,status,details_json,created_at,deployed_at)
@@ -146,7 +150,10 @@ try {
         currentBase.created_at,currentBase.deployed_at,
       ]);
       const archive = await client.query(`select release_id,backend_commit,frontend_commit,migration_head,
-        migration_manifest_sha256,environment_contract_version,status from public.release_deployment_manifest where release_id=$1`,
+        migration_manifest_sha256,environment_contract_version,status,details_json,
+        to_char(created_at at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') created_at,
+        to_char(deployed_at at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') deployed_at
+        from public.release_deployment_manifest where release_id=$1`,
       [plan.archive_release_id]);
       assert.equal(archive.rowCount, 1, "Previous base release identity was not archived.");
       assert.equal(archive.rows[0].backend_commit, currentBase.backend_commit, "Archived backend identity conflicts.");
@@ -155,6 +162,7 @@ try {
       assert.equal(archive.rows[0].migration_manifest_sha256, currentBase.migration_manifest_sha256, "Archived migration manifest conflicts.");
       assert.equal(archive.rows[0].environment_contract_version, currentBase.environment_contract_version, "Archived environment contract conflicts.");
       assert.equal(archive.rows[0].status, "retired", "Archived release must be retained as history, not selected as live.");
+      assert.equal(sameReleaseOccurrence(archive.rows[0], expectedArchive), true, "Archived occurrence provenance or timestamps conflict.");
     }
     const otherDeployedById = new Map(otherDeployed.map((row) => [row.release_id, row]));
     for (const retirement of plan.prior_deployed_releases) {
@@ -162,9 +170,9 @@ try {
       assert.ok(original, `Superseded deployed release ${retirement.identity.release_id} disappeared after planning.`);
       assert.equal(sameReleaseIdentity(original, retirement.identity), true,
         `Superseded deployed release ${retirement.identity.release_id} changed after planning.`);
-      const archiveDetails = { ...(original.details_json || {}), archived_at: recordedAt,
-        archived_from_release_id: original.release_id, archived_by: "production-release-recorder.v1",
-        superseded_by_release_id: target.release_id };
+      assert.equal(sameReleaseOccurrence(original, retirement.occurrence), true, "Superseded occurrence changed after planning.");
+      const expectedArchive = archivedReleaseRecord(original);
+      const archiveDetails = expectedArchive.details_json;
       await client.query(`insert into public.release_deployment_manifest(
         release_id,backend_commit,frontend_commit,migration_head,migration_manifest_sha256,
         environment_contract_version,status,details_json,created_at,deployed_at)
@@ -174,13 +182,17 @@ try {
         original.created_at,original.deployed_at,
       ]);
       const archive = await client.query(`select release_id,backend_commit,frontend_commit,migration_head,
-        migration_manifest_sha256,environment_contract_version,status from public.release_deployment_manifest where release_id=$1`,
+        migration_manifest_sha256,environment_contract_version,status,details_json,
+        to_char(created_at at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') created_at,
+        to_char(deployed_at at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') deployed_at
+        from public.release_deployment_manifest where release_id=$1`,
       [retirement.archive_release_id]);
       assert.equal(archive.rowCount, 1, `Superseded deployed release ${original.release_id} was not archived.`);
       for (const field of ["backend_commit","frontend_commit","migration_head","migration_manifest_sha256","environment_contract_version"]) {
         assert.equal(archive.rows[0][field], original[field], `Archived superseded release ${original.release_id} conflicts on ${field}.`);
       }
       assert.equal(archive.rows[0].status, "retired", "Archived superseded release must be retained as history.");
+      assert.equal(sameReleaseOccurrence(archive.rows[0], expectedArchive), true, "Archived superseded occurrence provenance or timestamps conflict.");
       const retiredDetails = { ...(original.details_json || {}), retired_at: recordedAt,
         retired_by: "production-release-recorder.v1", archived_as_release_id: retirement.archive_release_id,
         superseded_by_release_id: target.release_id };

@@ -7,6 +7,8 @@ const prior = {
   backend_commit: "a".repeat(40), frontend_commit: "b".repeat(40),
   migration_head: "20260920010000", migration_manifest_sha256: "c".repeat(64),
   environment_contract_version: "memphis-zoo.disaster-recovery-runtime-contract.v1", status: "deployed",
+  details_json: { provenance: { run_id: 'A1', actor: 'synthetic-manager' } },
+  created_at: '2026-09-23T00:00:00.123456Z', deployed_at: '2026-09-23T01:00:00.654321Z',
 };
 const target = {
   ...prior, backend_commit: "d".repeat(40), frontend_commit: "e".repeat(40),
@@ -14,7 +16,9 @@ const target = {
 };
 assert.equal(sameReleaseIdentity(prior, { ...prior }), true);
 assert.equal(sameReleaseIdentity(prior, target), false);
-assert.match(archivedReleaseId(prior), /^release-2026\.07\.19\.custodial-v3\.12-history-[0-9a-f]{12}$/);
+assert.notEqual(archivedReleaseId(prior), archivedReleaseId({ ...prior, details_json: { provenance: { run_id: 'A2' } } }), 'archive must bind occurrence provenance');
+assert.notEqual(archivedReleaseId(prior), archivedReleaseId({ ...prior, deployed_at: '2026-09-23T01:00:00.654322Z' }), 'archive must preserve sub-millisecond deployment times');
+assert.match(archivedReleaseId(prior), /^release-2026\.07\.19\.custodial-v3\.12-history-v2-[0-9a-f]{64}$/);
 assert.equal(archivedReleaseId(prior), archivedReleaseId({ ...prior }), "archive identity must be deterministic");
 
 const migrations = [
@@ -39,7 +43,8 @@ const plan = buildRecordingPlan({
 assert.equal(plan.archive_release_id, archivedReleaseId(prior));
 assert.deepEqual(plan.prior_deployed_release_ids, [other.release_id]);
 assert.equal(plan.prior_deployed_releases[0].archive_release_id, archivedReleaseId(other));
-assert.deepEqual(plan.prior_deployed_releases[0].identity, { ...other });
+assert.equal(sameReleaseIdentity(plan.prior_deployed_releases[0].identity, other), true);
+assert.deepEqual(plan.prior_deployed_releases[0].occurrence, other);
 assert.equal(plan.target.backend_commit, target.backend_commit);
 assert.match(plan.plan_sha256, /^[0-9a-f]{64}$/);
 assert.equal(plan.plan_sha256, buildRecordingPlan({
@@ -48,7 +53,7 @@ assert.equal(plan.plan_sha256, buildRecordingPlan({
 }).plan_sha256, "recording plan identity must be deterministic");
 const replay = buildRecordingPlan({ currentBase: target, otherDeployed: [other], target,
   liveCheck, provenance, runtimeConfigurationSha256: "8".repeat(64) });
-assert.equal(replay.archive_release_id, null, "exact replay must not archive an already-current identity");
+assert.equal(replay.archive_release_id, archivedReleaseId(target), "recording another deployment must retain the previous complete occurrence, even for identical code");
 const recorderSource = readFileSync(new URL("./record-production-release-deployment.mjs", import.meta.url), "utf8");
 assert.match(recorderSource, /PRODUCTION_RELEASE_RECORD_APPLY/);
 assert.match(recorderSource, /GITHUB_ACTIONS/);

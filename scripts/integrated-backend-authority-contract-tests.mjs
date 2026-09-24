@@ -79,6 +79,12 @@ const exactPendingReleaseMigrations = [
   restoreExistingEmployeeFile,
   vacateRosterSlotFile,
   visitorAttendanceFile,
+  "20260924022250_release_selection_and_occurrence_guards.sql",
+  "20260924023930_notification_receipt_and_lunch_integrity.sql",
+  "20260924032226_bind_release_selection_guard_recovery.sql",
+  "20260924042758_static_weekly_canonical_shift_end_derivation.sql",
+  "20260924044035_static_weekly_atomic_roster_completion.sql",
+  "20260924053507_assigned_phone_activation_transport.sql",
 ];
 const exactMigrationFiles = readdirSync("supabase/migrations").filter((name) => /^[0-9]{14}_.+\.sql$/.test(name)).sort();
 const exactMigrationCount = exactMigrationFiles.length;
@@ -184,13 +190,13 @@ assert.match(schemaFingerprintRefresh, /target\?\.canonical_source_schema_finger
 assert.match(populatedPreflightWorkflow, /release:populated-schema:preflight/);
 assert.match(releaseInput.cutover.phase_order[1], /exact observed production ledger head.*catalog\/privilege fingerprint.*zero target-position collisions/i);
 assert.match(releaseInput.cutover.phase_order[2], /fresh post-capture backup receipt.*exact pending-migration digest.*exact source attestation/i);
-assert.match(releaseInput.cutover.phase_order[3], /eight exact ordered pending migrations.*lunch-delivery manager alerts.*completed-cleaning reminder compatibility.*verified-visit five-minute overdue authority.*atomic static-weekly lunch publication.*durable lunch start\/end notification production.*existing-employee identity restoration.*dated roster-slot vacancy.*aggregate visitor-attendance reading.*ledger to advance exactly eight entries.*do not replay historical production migrations/i);
+assert.match(releaseInput.cutover.phase_order[3], /fifteen exact ordered pending migrations.*lunch-delivery manager alerts.*completed-cleaning reminder compatibility.*verified-visit five-minute overdue authority.*atomic static-weekly lunch publication.*durable lunch start\/end notification production.*existing-employee identity restoration.*dated roster-slot vacancy.*aggregate visitor-attendance reading.*release-selection and occurrence guards.*independent notification receipt and lunch integrity.*release-selector recovery bindings.*canonical dated shift-end derivation.*atomic roster completion.*assigned-phone activation transport.*legacy-installation observation.*ledger to advance exactly fifteen entries.*do not replay historical production migrations/i);
 assert.match(releaseInput.cutover.phase_order[4], /retain the current immutable weighted-schedule publication by default.*only when a named manager approves a replacement.*derive exactly one replacement draft from the current publication.*expected-revision and idempotency guards.*do not create a competing draft.*preserve the current publication/i);
 assert.equal(releaseInput.cutover.production_migration_state, "release/production-migration-state.json");
 assert.match(releaseInput.cutover.production_migration_evidence.github_actions,
   /repository.*workflow ref.*workflow commit.*run ID.*run-attempt.*cannot contain task-local fields/i);
 assert.match(releaseInput.cutover.production_migration_evidence.task_local,
-  /host networking.*db\.rqquvtjdmugpigbndmne\.supabase\.co.*verify-full.*encrypted archive stays local.*same isolated restore.*eight-migration.*runtime.*write.*replay.*cleanup/i);
+  /host networking.*db\.rqquvtjdmugpigbndmne\.supabase\.co.*verify-full.*encrypted archive stays local.*same isolated restore.*fifteen-migration.*runtime.*write.*replay.*cleanup/i);
 assert.match(releaseInput.cutover.production_migration_evidence.authorization_and_apply,
   /archive.*receipt\/result.*candidate commit\/tree.*runner.*signer IDs.*source\/target migration and catalog.*zero leases.*timestamps.*dedicated ephemeral verification key.*never the archive or rehearsal.*sanitized result and receipt hashes/i);
 assert.equal(productionMigrationState.artifact, "production-migration-state.v2");
@@ -221,20 +227,20 @@ assert.equal(productionMigrationState.observed_production.vacancy_functions_pres
 assert.equal(productionMigrationState.observed_production.hydrated_initial_draft_reader_present, true);
 assert.equal(productionMigrationState.observed_production.registered_source_dated_status_excluded, true);
 assert.equal(productionMigrationState.observed_production.outlook_event_sync_table_present, true);
-assert.equal(productionMigrationState.target.source_migration_file, visitorAttendanceFile);
-assert.equal(productionMigrationState.target.source_migration_name, "visitor_attendance_reader");
-assert.equal(productionMigrationState.target.source_migration_version, "20260923121151");
+assert.equal(productionMigrationState.target.source_migration_file, "20260924053507_assigned_phone_activation_transport.sql");
+assert.equal(productionMigrationState.target.source_migration_name, "assigned_phone_activation_transport");
+assert.equal(productionMigrationState.target.source_migration_version, "20260924053507");
 assert.equal(productionMigrationState.target.production_ledger_version, null);
 assert.equal(productionMigrationState.target.canonical_source_schema_fingerprint, canonicalFingerprint);
-assert.equal(productionMigrationState.target.public_function_count, 522);
-assert.equal(productionMigrationState.target.production_ledger_count, 238);
+assert.equal(productionMigrationState.target.public_function_count, 540);
+assert.equal(productionMigrationState.target.production_ledger_count, 244);
 assert.equal(productionMigrationState.target.source_authority_migration_count, exactMigrationCount);
 assert.equal(productionMigrationState.target.pending_migration_count, exactPendingReleaseMigrations.length);
 assert.equal(productionMigrationState.target.registered_source_dated_status_excluded, true);
-assert.equal(productionMigrationState.target.expected_catalog_counts.functions, 522);
-assert.equal(productionMigrationState.target.expected_catalog_counts.triggers, 313);
+assert.equal(productionMigrationState.target.expected_catalog_counts.functions, 540);
+assert.equal(productionMigrationState.target.expected_catalog_counts.triggers, 317);
 assert.equal(productionMigrationState.target.expected_catalog_counts.policies, 43);
-assert.equal(productionMigrationState.target.expected_catalog_counts.routine_grants, 363);
+assert.equal(productionMigrationState.target.expected_catalog_counts.routine_grants, 371);
 assert.equal(productionMigrationState.target.expected_catalog_counts.schema_grants, 9);
 assert.match(releaseHealthIdentityProjection, /bb04f7c05f72d959b4aba5a3a047adad1163eaf6b88aeeebd5d0f9f6a3b10baf/);
 assert.match(releaseHealthIdentityProjection, /c\.relname in \('devices','employees','device_aliases'\)/);

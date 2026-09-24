@@ -3460,6 +3460,10 @@ export function createScheduleRouter({
           canonical_device_id: assignment?.canonical_device_id || assignment?.device_id || null,
           matched_by: assignment?.matched_by || null,
           device_name: assignment?.device_name || null,
+          employee_id: resolvedEmployeeId,
+          credential_id: req.memphisDeviceCredential?.credential_id || null,
+          assignment_epoch: Number.isSafeInteger(Number(assignment?.assignment_epoch))
+            && Number(assignment?.assignment_epoch)>0 ? Number(assignment.assignment_epoch) : null,
         },
         meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion },
       });

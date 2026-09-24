@@ -6,7 +6,10 @@ import { createStaticWeeklyLunchAuthorityDocument } from './static-weekly-lunch-
 export function createStaticWeeklyProjectionWithLunchRpcInput(options) {
   const projection = createStaticWeeklyProjectionRpcInput(options);
   const authority = options.result.canonicalAuthority;
-  const canonical = structuredClone(authority.overlayCompilerInput);
+  // The verifier derives effective closing segments from the immutable source;
+  // feeding its own derived rows back in would bypass/reapply that authority.
+  const canonical = structuredClone(authority.compilerInput);
+  canonical.exceptions = structuredClone(authority.overlayCompilerInput.exceptions);
   const version = canonical.version;
   delete canonical.version;
   const input = {
