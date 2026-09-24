@@ -184,7 +184,7 @@ assert.match(schemaFingerprintRefresh, /target\?\.canonical_source_schema_finger
 assert.match(populatedPreflightWorkflow, /release:populated-schema:preflight/);
 assert.match(releaseInput.cutover.phase_order[1], /exact observed production ledger head.*catalog\/privilege fingerprint.*zero target-position collisions/i);
 assert.match(releaseInput.cutover.phase_order[2], /fresh post-capture backup receipt.*exact pending-migration digest.*exact source attestation/i);
-assert.match(releaseInput.cutover.phase_order[3], /five exact ordered pending migrations.*lunch-delivery manager alerts.*completed-cleaning reminder compatibility.*verified-visit five-minute overdue authority.*atomic static-weekly lunch publication.*durable lunch start\/end notification production.*ledger to advance exactly five entries.*do not replay historical production migrations/i);
+assert.match(releaseInput.cutover.phase_order[3], /eight exact ordered pending migrations.*lunch-delivery manager alerts.*completed-cleaning reminder compatibility.*verified-visit five-minute overdue authority.*atomic static-weekly lunch publication.*durable lunch start\/end notification production.*existing-employee identity restoration.*dated roster-slot vacancy.*aggregate visitor-attendance reading.*ledger to advance exactly eight entries.*do not replay historical production migrations/i);
 assert.match(releaseInput.cutover.phase_order[4], /retain the current immutable weighted-schedule publication by default.*only when a named manager approves a replacement.*derive exactly one replacement draft from the current publication.*expected-revision and idempotency guards.*do not create a competing draft.*preserve the current publication/i);
 assert.equal(releaseInput.cutover.production_migration_state, "release/production-migration-state.json");
 assert.match(releaseInput.cutover.production_migration_evidence.github_actions,
@@ -226,15 +226,15 @@ assert.equal(productionMigrationState.target.source_migration_name, "visitor_att
 assert.equal(productionMigrationState.target.source_migration_version, "20260923121151");
 assert.equal(productionMigrationState.target.production_ledger_version, null);
 assert.equal(productionMigrationState.target.canonical_source_schema_fingerprint, canonicalFingerprint);
-assert.equal(productionMigrationState.target.public_function_count, 520);
+assert.equal(productionMigrationState.target.public_function_count, 522);
 assert.equal(productionMigrationState.target.production_ledger_count, 238);
 assert.equal(productionMigrationState.target.source_authority_migration_count, exactMigrationCount);
 assert.equal(productionMigrationState.target.pending_migration_count, exactPendingReleaseMigrations.length);
 assert.equal(productionMigrationState.target.registered_source_dated_status_excluded, true);
-assert.equal(productionMigrationState.target.expected_catalog_counts.functions, 520);
+assert.equal(productionMigrationState.target.expected_catalog_counts.functions, 522);
 assert.equal(productionMigrationState.target.expected_catalog_counts.triggers, 313);
 assert.equal(productionMigrationState.target.expected_catalog_counts.policies, 43);
-assert.equal(productionMigrationState.target.expected_catalog_counts.routine_grants, 362);
+assert.equal(productionMigrationState.target.expected_catalog_counts.routine_grants, 363);
 assert.equal(productionMigrationState.target.expected_catalog_counts.schema_grants, 9);
 assert.match(releaseHealthIdentityProjection, /bb04f7c05f72d959b4aba5a3a047adad1163eaf6b88aeeebd5d0f9f6a3b10baf/);
 assert.match(releaseHealthIdentityProjection, /c\.relname in \('devices','employees','device_aliases'\)/);
@@ -352,7 +352,7 @@ assert.match(releaseEvidence.compatibility_window.native_start_operational_truth
 assert.match(dayChangeReconciliation, /static_weekly_v4_begin_day_changes/);
 assert.equal(releaseEvidence.artifact, "integrated-backend-authority-release-evidence.v2");
 assert.equal(releaseEvidence.release_id, "release-2026.07.19.custodial-v3.12");
-assert.equal(releaseEvidence.frontend_commit_sha, "60743b1fb4937fa78237f0fee9b57e29736422f6");
+assert.equal(releaseEvidence.frontend_commit_sha, "38c815ce9688c37f769807839423f7b33f1d31c8");
 assert.equal(releaseEvidence.frontend_commit_state, "final_pair_bound");
 assert.equal(releaseEvidence.schema_fingerprint, canonicalFingerprint);
 assert.equal(releaseEvidence.cutover.source_identity.kind, "external_signed_release_attestation");
