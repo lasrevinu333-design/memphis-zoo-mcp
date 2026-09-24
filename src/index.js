@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { createHash, createHmac, randomUUID, timingSafeEqual } from "crypto";
 import express from "express";
+import { parse as parseAttendanceDocument } from "parse5";
 import { fileURLToPath } from "node:url";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
@@ -1020,14 +1021,44 @@ function parseAttendanceMetric(text, label) {
 }
 
 function parseAttendanceHtml(html) {
-  const normalized = String(html || "").replace(/\r/g, "");
-  const attendanceBlock = normalized.match(/<h5[^>]*>\s*Attendance\s*<\/h5>[\s\S]{0,2500}?<\/div>\s*<\/div>/i);
-  const source = attendanceBlock ? attendanceBlock[0] : normalized;
-  const currentMatch = source.match(/<h1[^>]*>([^<]*)<\/h1>/i);
-  if (!currentMatch) throw new Error("Attendance card found but current attendance value was not found.");
-  const attendance = parseAttendanceDisplayInteger(currentMatch[1]);
+  const source = String(html || "");
+  if (source.length > 2_000_000) throw new Error("Attendance source HTML exceeds the bounded page size.");
+  const ignored = new Set(["script", "style", "template", "noscript"]);
+  const blocks = new Set(["div", "p", "br", "hr", "li", "ul", "ol", "section", "article", "header", "footer", "table", "tr", "td", "th", "h1", "h2", "h3", "h4", "h5", "h6"]);
+  const children = node => ignored.has(node.tagName) ? [] : node.childNodes || [];
+  const descendants = node => {
+    const result = [], pending = [node];
+    while (pending.length) {
+      const next = pending.pop(); result.push(next);
+      if (result.length > 100_000) throw new Error("Attendance source HTML has too many nodes.");
+      for (const child of children(next)) pending.push(child);
+    }
+    return result;
+  };
+  // Preserve split inline labels/numbers; block boundaries separate metrics.
+  // Comments, executable text and inert templates are not observations.
+  const textOf = node => {
+    if (node.nodeName === "#text") return node.value;
+    const text = children(node).map(textOf).join("");
+    return blocks.has(node.tagName) ? ` ${text} ` : text;
+  };
+  const hasClass = (node, name) => (node.attrs || []).some(attr => attr.name === "class" && attr.value.split(/\s+/).includes(name));
+  const document = parseAttendanceDocument(source, { sourceCodeLocationInfo: true });
+  const headings = descendants(document).filter(node => node.tagName === "h5" && textOf(node).trim().toLowerCase() === "attendance");
+  if (headings.length !== 1) throw new Error("Attendance card heading is missing or ambiguous.");
+  let card = headings[0].parentNode;
+  for (let ancestor = card; ancestor && ancestor.tagName !== "body"; ancestor = ancestor.parentNode) {
+    if (hasClass(ancestor, "card")) { card = ancestor; break; }
+  }
+  if (card?.tagName !== "div" || !card.sourceCodeLocation?.endTag ||
+      descendants(card).filter(node => hasClass(node, "card-body")).length !== 1) {
+    throw new Error("Attendance card boundary is missing or ambiguous.");
+  }
+  const counts = descendants(card).filter(node => node.tagName === "h1");
+  if (counts.length !== 1) throw new Error("Attendance value is missing or ambiguous.");
+  const attendance = parseAttendanceDisplayInteger(textOf(counts[0]).trim());
   if (attendance == null) throw new Error("Parsed attendance value is invalid.");
-  const text = source.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  const text = textOf(card).replace(/\s+/g, " ").trim();
   return {
     attendance,
     last_year: parseAttendanceMetric(text, "Last Year"),
@@ -1087,7 +1118,7 @@ async function persistAttendanceState(payload = {}) {
 async function fetchCurrentAttendance(options = {}) {
   const now = Date.now();
   if (!options.force && attendanceCache.data && now - attendanceCache.fetched_at_ms < ATTENDANCE_CACHE_MS) {
-    return { ...attendanceCache.data, cached: true, stale: false };
+    return { ...attendanceCache.data, cached: true };
   }
 
   const controller = new AbortController();
@@ -1142,12 +1173,13 @@ async function fetchCurrentAttendance(options = {}) {
     return data;
   } catch (error) {
     if (attendanceCache.data) {
-      return {
+      attendanceCache.data = {
         ...attendanceCache.data,
         cached: true,
         stale: true,
         warning: error?.message || "Attendance fetch failed.",
       };
+      return { ...attendanceCache.data };
     }
     throw error;
   } finally {

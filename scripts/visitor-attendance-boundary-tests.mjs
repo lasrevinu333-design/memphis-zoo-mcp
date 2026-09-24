@@ -68,6 +68,35 @@ for(const label of ['Last Year','Planned','Yesterday','Yesterday Plan']){
   const value=await f.context.fetchCurrentAttendance({force:true});assert.equal(value.attendance,20);assert.equal(value.stale,true);
  });
 }
+for(const label of ['Last Year','Planned','Yesterday','Yesterday Plan'])for(const second of ['0','1.5','2147483648']){
+ await test(`R3-JS-01 complete nested card rejects duplicate ${label}: ${second}`,async()=>{
+  const html=`<div class="card"><h5 class="card-header">Attendance</h5><div class="card-body"><h1>17</h1><div class="metric-wrapper"><div>${label}: 200</div></div><div>${label}: ${second}</div></div></div>`;
+  assert.equal((await visitorRuntimeFixture({nowMs,html}).publicRead()).code,502);
+ });
+}
+await test('R3-JS-02 failed refresh remains stale across cache hits until actual success',async()=>{
+ let html=page('20');const f=visitorRuntimeFixture({nowMs,html:()=>html});
+ assert.equal((await f.publicRead()).body.data.stale,false);
+ html=page('bad');const failed=await f.context.fetchCurrentAttendance({force:true});
+ assert.equal(failed.stale,true);assert.ok(failed.warning);
+ for(let i=0;i<3;i++){const next=await f.publicRead();assert.equal(next.body.data.attendance,20);assert.equal(next.body.data.stale,true);assert.equal(next.body.data.warning,failed.warning);}
+ html=page('0');const success=await f.context.fetchCurrentAttendance({force:true});
+ assert.equal(success.attendance,0);assert.equal(success.stale,false);assert.equal(success.warning,undefined);
+ assert.equal((await f.publicRead()).body.data.stale,false);
+});
+for(const [name,html] of [
+ ['missing heading','<h1>42</h1>'],
+ ['two attendance cards',page('1')+page('2')],
+ ['two current counts',page('1</h1><h1>2')],
+ ['unclosed card',page('1').slice(0,-6)],
+ ['split-label duplicate',page('1','Plan<span>ned</span>: 0 Planned: 1')],
+ ['entity duplicate',page('1','Planned: 0 Plann&#101;d: 1')],
+ ['nested duplicate after old length limit',page('1','Planned: 0<div><div>'+ ' '.repeat(3000)+'</div></div>Planned: 1')],
+ ])await test('R4 DOM fails closed: '+name,async()=>assert.equal((await visitorRuntimeFixture({nowMs,html}).publicRead()).code,502));
+await test('R4 DOM scopes one complete card, decodes entities and ignores inert markup',async()=>{
+ const html='<div class="card"><h5>Other data</h5><h1>88</h1>Planned: bad</div>'+page('1<span>,234</span>','<span>Plann&#101;d</span>: 0<!-- Planned: 3 --><script>Planned: 4</script><style>.x {content:"Planned: 5"}</style><template>Planned: 6</template>');
+ const res=await visitorRuntimeFixture({nowMs,html}).publicRead();assert.equal(res.code,200);assert.equal(res.body.data.attendance,1234);assert.equal(res.body.data.planned,0);
+});
 for(const fetched_at of ['2099-01-01T00:00:00Z',iso(nowMs+60001),iso(nowMs-3600001),'not-a-date',null]){
  await test('F3 shared persistence rejects out-of-window '+fetched_at,async()=>{
   const f=visitorRuntimeFixture({nowMs});const res=await f.manager({...payload,fetched_at});

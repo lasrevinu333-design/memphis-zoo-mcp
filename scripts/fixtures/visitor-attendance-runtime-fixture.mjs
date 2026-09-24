@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
+import {parse as parseAttendanceDocument} from 'parse5';
 import * as attendance from '../../src/attendance-state.js';
 import {makeVisitorAttendanceCollectorHandler} from '../../src/visitor-attendance-collector.js';
 
@@ -14,7 +15,7 @@ export function visitorRuntimeFixture({nowMs=Date.now(),read,write,html}={}) {
  let row=null;
  const writes=[],queries=[],routes={};
  class Clock extends Date {constructor(...args){super(...(args.length?args:[nowMs]));}static now(){return nowMs;}}
- const context={...attendance,Date:Clock,AbortController,setTimeout,clearTimeout,
+ const context={...attendance,parseAttendanceDocument,Date:Clock,AbortController,setTimeout,clearTimeout,
   ATTENDANCE_STALE_AFTER_MS:3600000,ATTENDANCE_CACHE_MS:30000,ATTENDANCE_TIMEOUT_MS:1000,
   ATTENDANCE_SOURCE_URL:'https://synthetic.invalid/',ATTENDANCE_CF_CLEARANCE:'',
   APP_VERSION:'synthetic',RELEASE_ID:'synthetic',attendanceCache:{data:null,fetched_at_ms:0},
