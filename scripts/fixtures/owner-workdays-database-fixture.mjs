@@ -63,6 +63,50 @@ export async function ownerWorkdaysDatabaseProof({socketDir,sql,container,prepub
   const compile=async input=>{const result=await compileStaticWeeklySchedule(input);assert.equal(result.status,'FEASIBLE',JSON.stringify(result.fatal));assert.equal(result.verifier.ok,true);return result;};
   const release=(name,args)=>json(`set role static_weekly_release_operator; select public.${name}(${args})::text`);
   const cp=(name,args)=>json(`set role static_weekly_control_plane; select public.${name}(${args})::text`);
+  const corruptionProof=async(plane,request,result,mutationOnly)=>{
+   const own=`actor_manager_id=${q(managerId)} and idempotency_key=${q(request.idempotencyKey)}`;
+   const cases=[
+    ['mutation response identity',`update public.weekly_schedule_command_receipts set response_json=jsonb_set(response_json,'{data,former_employee_id}',to_jsonb(${q(randomUUID())}::text)) where ${own}`],
+    ['mutation request digest',`update public.weekly_schedule_command_receipts set request_canonical_json=jsonb_set(request_canonical_json,'{reason}','"corrupted reason"') where ${own}`],
+    ['mutation response digest',`update public.weekly_schedule_command_receipts set response_digest=repeat('0',64) where ${own}`],
+    ['mutation authority revision',`update public.weekly_schedule_authority_revisions set content_digest=repeat('0',64) where command_id=(select command_id from public.weekly_schedule_command_receipts where ${own})`],
+   ];
+   if(!mutationOnly){
+    const projection=`actor_manager_id=${q(managerId)} and command_type='materialize_projection' and response_json#>>'{data,projection_id}'=${q(result.data.projection_id)}`;
+    cases.push(['projection response operation',`update public.weekly_schedule_command_receipts set response_json=jsonb_set(response_json,'{operation}','"corrupted_operation"') where ${projection}`],
+     ['projection authority revision',`update public.weekly_schedule_authority_revisions set content_digest=repeat('0',64) where command_id=(select command_id from public.weekly_schedule_command_receipts where ${projection})`],
+     ['lunch content with unchanged identity',`update public.weekly_schedule_lunch_documents set document_json=jsonb_set(document_json,'{candidate_digest}',to_jsonb(repeat('a',64))) where projection_id=${q(result.data.projection_id)}`],
+     ['lunch semantics with recomputed identity',`update public.weekly_schedule_lunch_documents set document_json=jsonb_set(document_json,'{verification_status}','"CORRUPTED"') where projection_id=${q(result.data.projection_id)};
+      update public.weekly_schedule_lunch_documents set document_identity=public.static_weekly_digest_jsonb(document_json-'document_identity'),document_json=jsonb_set(document_json,'{document_identity}',to_jsonb(public.static_weekly_digest_jsonb(document_json-'document_identity'))) where projection_id=${q(result.data.projection_id)}`]);
+   }
+   const missed=[];
+   for(const [label,mutation] of cases){
+    try{sql(`begin;
+     alter table public.weekly_schedule_command_receipts disable trigger trg_static_weekly_weekly_schedule_command_receipts_immutable;
+     alter table public.weekly_schedule_authority_revisions disable trigger trg_static_weekly_weekly_schedule_authority_revisions_immutable;
+     alter table public.weekly_schedule_lunch_documents disable trigger trg_weekly_schedule_lunch_documents_immutable;
+     ${mutation}; set local role static_weekly_control_plane;
+     select public.static_weekly_v8_read_completed_vacancy(${q(managerId)},${q(request.idempotencyKey)}); rollback;`);missed.push(label);}
+    catch(error){assert.match(error.message,/vacancy receipt integrity|lunch.*(invalid|identity|verification)|lunch document/i,label+' must fail at its intended integrity gate');checks++;}
+    check(await plane.vacateRosterSlot(request),result,label+' rollback preserves exact original replay');
+   }
+   assert.deepEqual(missed,[],'corrupted saved chain must never replay: '+missed.join(', '));
+   // The direct writer must also reject a corrupt saved mutation before its
+   // early idempotent return, not rely solely on the full-action reader.
+   assert.throws(()=>sql(`begin; alter table public.weekly_schedule_command_receipts disable trigger trg_static_weekly_weekly_schedule_command_receipts_immutable;
+    update public.weekly_schedule_command_receipts set response_digest=repeat('0',64) where ${own};
+    set local role static_weekly_control_plane;
+    select public.static_weekly_v8_vacate_roster_slot(${q(request.sourceId)},${q(request.slotId)},${q(request.employeeId)},${q(request.effectiveStart)},${q(request.reason)},${request.expectedRevision},${q(managerId)},${q(request.idempotencyKey)}); rollback;`),/vacancy receipt integrity/);checks++;
+   check(await plane.vacateRosterSlot(request),result,'direct writer corruption rollback retains exact response');
+   const privateHelper='public.static_weekly_v8_assert_vacancy_receipt(uuid,text)';
+   for(const role of ['anon','authenticated','service_role','custodial_application_reader','static_weekly_release_operator','static_weekly_control_plane']){
+    check(scalar(`select has_function_privilege(${q(role)},${q(privateHelper)},'EXECUTE')::text`),'false',role+' cannot invoke private receipt validator');
+    assert.throws(()=>sql(`set role ${role}; select public.static_weekly_v8_assert_vacancy_receipt(null,'vacate_roster_slot');`),/permission denied/);checks++;
+   }
+   sql(`drop function ${privateHelper}; do $$ declare r record; begin for r in select definition_sql from public.custodial_release_authority_restore_inventory where object_kind in ('function','grant') and object_identity=${q(privateHelper)} order by restore_order loop execute r.definition_sql; end loop; end $$;`);
+   check(await plane.vacateRosterSlot(request),result,'private validator and exact grant restoration retains replay');
+   check(scalar(`select has_function_privilege('static_weekly_control_plane',${q(privateHelper)},'EXECUTE')::text`),'false','private recovery does not expose helper');
+  };
   let baselineCompiled=await compile(source);const fullSource=baselineCompiled.canonicalAuthority.compilerInput;
   // The legacy bootstrap requires a real incumbent for every initial slot.
   // Bootstrap only the six people, then create THREE ACTUAL EMPTY positions
@@ -130,6 +174,7 @@ export async function ownerWorkdaysDatabaseProof({socketDir,sql,container,prepub
    check(await plane.vacateRosterSlot(request),result,'original mutation-only success survives first publication exactly');
    check(await Promise.all([plane.vacateRosterSlot(request),plane.vacateRosterSlot(request)]),[result,result],'concurrent retries retain original mutation-only result');
    check(revision(),afterPublication,'prepublication replay adds no revision');
+   await corruptionProof(plane,request,result,true);
    await assert.rejects(plane.vacateRosterSlot({...request,reason:'different semantic reason'}),/different semantic inputs/);checks++;
    const helper='public.static_weekly_v8_read_completed_vacancy(uuid,text)';
    sql(`drop function ${helper}; do $$ declare r record; begin for r in select definition_sql from public.custodial_release_authority_restore_inventory where object_kind in ('function','grant') and object_identity=${q(helper)} order by restore_order loop execute r.definition_sql; end loop; end $$;`);
@@ -193,6 +238,7 @@ export async function ownerWorkdaysDatabaseProof({socketDir,sql,container,prepub
   const concurrent=await Promise.all([plane.vacateRosterSlot(request),plane.vacateRosterSlot(request)]);
   check(concurrent,[result,result],'concurrent identical full actions replay exact original response');
   check(revision(),replayRevision,'completed retries never add a revision or recompile');
+  await corruptionProof(plane,request,result,false);
   await assert.rejects(plane.vacateRosterSlot({...request,reason:'different reason'}),/different semantic inputs/);checks++;
   for(const role of ['anon','authenticated','service_role','custodial_application_reader','static_weekly_release_operator']){
    check(scalar(`select has_function_privilege(${q(role)},'public.static_weekly_v8_read_completed_vacancy(uuid,text)','EXECUTE')::text`),'false',role+' cannot read completed manager action');

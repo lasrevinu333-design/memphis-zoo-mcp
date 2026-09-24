@@ -50,6 +50,67 @@ create trigger trg_static_weekly_v8_guard_vacancy_closure
 before insert on public.weekly_roster_slot_incumbency_closures
 for each row execute function public.static_weekly_v8_guard_vacancy_closure();
 
+-- Private integrity check shared by the mutation writer and completed-action
+-- reader. Never use today's roster/source selection to validate a historic retry.
+create function public.static_weekly_v8_assert_vacancy_receipt(p_command_id uuid,p_operation text)
+returns void language plpgsql stable security definer set search_path=pg_catalog,public as $function$
+declare
+ v_receipt public.weekly_schedule_command_receipts%rowtype;
+ v_request jsonb;v_content_digest text;v_response jsonb;
+begin
+ perform public.static_weekly_v3_assert_control_plane();
+ select * into v_receipt from public.weekly_schedule_command_receipts where command_id=p_command_id;
+ if not found or p_operation not in ('vacate_roster_slot','materialize_projection') or p_operation is null
+   or v_receipt.command_type is distinct from p_operation then
+  raise exception using errcode='23514',message='vacancy receipt integrity: missing or wrong command';
+ end if;
+ v_request:=v_receipt.request_canonical_json;
+ if jsonb_typeof(v_request) is distinct from 'object'
+   or v_request->>'operation' is distinct from p_operation
+   or v_request->'expected_revision' is distinct from to_jsonb(v_receipt.expected_revision)
+   or v_request->>'actor_manager_id' is distinct from v_receipt.actor_manager_id::text
+   or public.static_weekly_digest_jsonb(v_request) is distinct from v_receipt.request_digest then
+  raise exception using errcode='23514',message='vacancy receipt integrity: canonical request mismatch';
+ end if;
+ if p_operation='vacate_roster_slot' then
+  v_content_digest:=public.static_weekly_digest_jsonb(v_request-'expected_revision'-'actor_manager_id'-'operation');
+  if v_receipt.response_json#>>'{data,slot_id}' is distinct from v_request->>'slot_id'
+    or v_receipt.response_json#>>'{data,former_employee_id}' is distinct from v_request->>'employee_id'
+    or v_receipt.response_json#>>'{data,effective_start}' is distinct from v_request->>'effective_start'
+    or v_receipt.response_json#>>'{data,source_id}' is distinct from v_request->>'source_id'
+    or v_receipt.response_json#>'{data,replacement_employee_id}' is distinct from 'null'::jsonb
+    or v_receipt.response_json#>'{data,history_preserved}' is distinct from 'true'::jsonb then
+   raise exception using errcode='23514',message='vacancy receipt integrity: mutation response mismatch';
+  end if;
+ else
+  if v_request->>'actor_manager_name' is distinct from v_receipt.actor_manager_name_snapshot then
+   raise exception using errcode='23514',message='vacancy receipt integrity: projection actor mismatch';
+  end if;
+  -- Exactly the materialize_projection writer's canonical content identity.
+  v_content_digest:=public.static_weekly_digest_jsonb(jsonb_build_object(
+   'publication_id',v_request->'publication_id','week_start',v_request->'service_date',
+   'exception_set_digest',v_request->'exception_set_digest','compiler_version',v_request->'compiler_version',
+   'objective',v_request->'objective','metrics',v_request->'metrics','replay_digest',v_request->'replay_digest',
+   'projection_envelope_identity',v_request#>'{projection_envelope,database_projection_identity}',
+   'attestation',v_request#>'{projection_envelope,attestation}'));
+ end if;
+ v_response:=public.static_weekly_response_json(p_operation,v_receipt.expected_revision+1,
+   v_content_digest,v_receipt.request_digest,v_receipt.response_json->'data');
+ if jsonb_typeof(v_receipt.response_json->'data') is distinct from 'object'
+   or v_receipt.content_digest is distinct from v_content_digest
+   or v_receipt.response_json is distinct from v_response
+   or v_receipt.response_digest is distinct from v_response->>'output_digest'
+   or not exists(select 1 from public.weekly_schedule_authority_revisions r
+     where r.command_id=v_receipt.command_id and r.authority_revision=v_receipt.expected_revision+1
+       and r.operation=p_operation and r.actor_manager_id=v_receipt.actor_manager_id
+       and r.actor_manager_name_snapshot=v_receipt.actor_manager_name_snapshot and r.content_digest=v_content_digest) then
+  raise exception using errcode='23514',message='vacancy receipt integrity: response or authority revision mismatch';
+ end if;
+end
+$function$;
+revoke all on function public.static_weekly_v8_assert_vacancy_receipt(uuid,text)
+ from public,anon,authenticated,service_role,static_weekly_control_plane,static_weekly_release_operator,custodial_application_reader;
+
 create function public.static_weekly_v8_vacate_roster_slot(
   p_source_id uuid,p_slot_id uuid,p_employee_id uuid,p_effective_start date,p_reason text,
   p_expected_revision bigint,p_manager_id uuid,p_idempotency_key text
@@ -83,6 +144,7 @@ begin
     if v_prior.request_digest<>v_request_digest then
       raise exception using errcode='23505',message='idempotency key was already used for different semantic inputs';
     end if;
+    perform public.static_weekly_v8_assert_vacancy_receipt(v_prior.command_id,'vacate_roster_slot');
     return v_prior.response_json;
   end if;
   -- Immediate turnover only. Do not deactivate someone today for a future vacancy.
@@ -389,6 +451,7 @@ begin
  select * into v_mutation from public.weekly_schedule_command_receipts
   where actor_manager_id=p_manager_id and idempotency_key=p_idempotency_key and command_type='vacate_roster_slot';
  if not found then return null; end if;
+ perform public.static_weekly_v8_assert_vacancy_receipt(v_mutation.command_id,'vacate_roster_slot');
  if v_mutation.response_json#>>'{data,completion_mode}'='mutation_only'
    and (v_mutation.response_json->'data') ? 'original_publication_id'
    and v_mutation.response_json#>'{data,original_publication_id}'='null'::jsonb then
@@ -403,6 +466,7 @@ begin
  if not found then
   raise exception using errcode='23514',message='completed vacancy required projection receipt is missing';
  end if;
+ perform public.static_weekly_v8_assert_vacancy_receipt(v_receipt.command_id,'materialize_projection');
  v_date:=(v_mutation.request_canonical_json->>'effective_start')::date;
  v_week:=v_date-(extract(isodow from v_date)::integer-1);
  if v_receipt.command_type is distinct from 'materialize_projection'
@@ -427,6 +491,7 @@ begin
   or v_lunch.document_json->>'base_replay_digest' is distinct from v_projection.replay_digest then
   raise exception using errcode='23514',message='completed vacancy accepted lunch binding is missing or inconsistent';
  end if;
+ perform public.static_weekly_v8_assert_lunch_document(v_projection.projection_id,v_lunch.document_json);
  -- Match the immutable projection descriptor in the manager snapshot used by
  -- the first success. Do not read today's mutable latest-projection selector.
  v_projection_snapshot:=jsonb_build_object(
@@ -454,6 +519,7 @@ begin
     (1000,'relation','public.weekly_roster_slot_incumbency_closures'),
     (1000,'relation','public.weekly_roster_slot_staffing_states'),
     (100000,'function','public.static_weekly_v8_guard_vacancy_closure()'),
+    (100000,'function','public.static_weekly_v8_assert_vacancy_receipt(uuid,text)'),
     (100000,'function','public.static_weekly_v8_vacate_roster_slot(uuid,uuid,uuid,date,text,bigint,uuid,text)'),
     (100000,'function','public.static_weekly_v8_read_completed_vacancy(uuid,text)'),
     (100000,'function','public.static_weekly_v7_fill_vacant_roster_slot(uuid,text,date,text,bigint,uuid,text)'),
@@ -466,6 +532,7 @@ begin
     (500000,'constraint','public.weekly_schedule_command_receipts:weekly_schedule_command_receipts_command_type_check'),
     (700000,'trigger','public.weekly_roster_slot_incumbency_closures.trg_static_weekly_v8_guard_vacancy_closure'),
     (900000,'grant','public.static_weekly_v8_guard_vacancy_closure()'),
+    (900000,'grant','public.static_weekly_v8_assert_vacancy_receipt(uuid,text)'),
     (900000,'grant','public.static_weekly_v8_vacate_roster_slot(uuid,uuid,uuid,date,text,bigint,uuid,text)'),
     (900000,'grant','public.static_weekly_v8_read_completed_vacancy(uuid,text)'),
     (900000,'grant','public.static_weekly_v7_fill_vacant_roster_slot(uuid,text,date,text,bigint,uuid,text)'),
