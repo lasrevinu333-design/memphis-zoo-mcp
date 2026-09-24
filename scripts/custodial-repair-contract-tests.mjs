@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { readFileSync } from "node:fs";
 import { createServer } from "node:net";
+import { assertExactFrontendPair } from './fixtures/exact-frontend-pair.mjs';
 
 const indexSource = readFileSync("src/index.js", "utf8");
 const messagingSource = readFileSync("src/messaging-api.js", "utf8");
@@ -11,6 +12,7 @@ const deviceAuthSource = readFileSync("src/auth/device-credential-auth.js", "utf
 const releaseManifestSource = readFileSync("src/release-manifest.js", "utf8");
 const geminiConsoleSource = readFileSync("src/gemini-console-api.js", "utf8");
 const frontendReleaseManifest = JSON.parse(readFileSync("release/frontend-release-manifest.json", "utf8"));
+const releasePairInput = JSON.parse(readFileSync("release/schema-alignment-input.json", "utf8"));
 const packageJson = JSON.parse(readFileSync("package.json", "utf8"));
 const migration = readFileSync("supabase/migrations/20260717161000_custodial_foundation_repair_delta.sql", "utf8");
 const atomicCommitMigration = readFileSync(
@@ -204,8 +206,7 @@ assert.match(releaseManifestSource, /schema-fingerprint\.txt/);
 assert.match(releaseManifestSource, /supabase\/migrations/);
 assert.match(releaseManifestSource, /queue_compatibility_versions/);
 assert.match(releaseManifestSource, /minimum_supported/);
-assert.equal(frontendReleaseManifest.frontend_commit_sha, "6fae503111ef21c40a309913965c3b963043aa01");
-assert.equal(frontendReleaseManifest.frontend_commit_state, "final_pair_bound");
+assertExactFrontendPair(frontendReleaseManifest, releasePairInput);
 assert.equal(frontendReleaseManifest.api_contract_versions.operational_analytics, "operational-analytics.v1");
 assert.equal(packageJson.scripts["test:schema-fingerprint"], "node scripts/schema-fingerprint-check.mjs");
 assert.equal(packageJson.scripts["test:empty-db-rebuild"], "node scripts/empty-database-rebuild-check.mjs");

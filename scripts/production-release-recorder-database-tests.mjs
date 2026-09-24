@@ -172,6 +172,81 @@ try {
  check('loser fails unique deployed database invariant',results.filter(row=>row.status==='rejected').map(row=>row.reason.code),['23505']);
  check('exactly one committed deployed selector',(await admin.query("select count(*)::int n from public.release_deployment_manifest where status='deployed'")).rows[0].n,1);
 
+ // An absent primary-key row cannot be locked by SELECT FOR UPDATE. Both
+ // recorders may plan an initial insert for the SAME release ID. The loser
+ // must abort, never turn that unreviewed conflict into a provenance overwrite.
+ for(const [differentCode,finishFirstBeforeSecond] of [[false,false],[true,false],[false,true],[true,true]]){
+  await admin.query('truncate public.release_deployment_manifest,public.release_validation_runs');
+  const sameTargets=[0,1].map(i=>({...target,release_id:'same-release-race',
+   backend_commit:differentCode&&i===1?'8'.repeat(40):target.backend_commit}));
+  const sameInput=(next,i)=>({target:next,liveCheck:{backend_commit_sha:next.backend_commit},
+   provenance:{run_id:String(301+i),actor:`race-actor-${i}`,workflow_sha:next.backend_commit}});
+  const samePlans=await Promise.all(sameTargets.map((next,i)=>invoke(false,null,sameInput(next,i))));
+  let selected=0,allowInsert;
+  const sameBarrier=new Promise(resolve=>{allowInsert=resolve;});
+  let firstFinished;
+  const firstDone=new Promise(resolve=>{firstFinished=resolve;});
+  const bothSelected=async(i)=>{selected++;if(selected===2)allowInsert();await sameBarrier;
+   if(finishFirstBeforeSecond&&i===1)await firstDone;};
+  const sameResults=await Promise.allSettled(sameTargets.map(async(next,i)=>{
+   try{return await invoke(true,samePlans[i].plan.plan_sha256,
+    {...sameInput(next,i),afterSelection:()=>bothSelected(i)});}
+   finally{if(i===0)firstFinished();}
+  }));
+  check('same release both absent reads reached '+differentCode,selected,2);
+  check('same release only one reviewed initial insertion commits '+differentCode,sameResults.filter(x=>x.status==='fulfilled').length,1);
+  const winner=sameResults.findIndex(x=>x.status==='fulfilled');
+  const loser=1-winner;
+  console.log(JSON.stringify({same_release_conflict:differentCode?'different-code':'same-code',finishFirstBeforeSecond,
+   code:sameResults[loser].reason.code,message:sameResults[loser].reason.message,
+   constraint:sameResults[loser].reason.constraint}));
+  const conflict=sameResults[loser].reason;
+  const guardedConflict=/Initial release occurrence appeared after review/.test(conflict.message);
+  // Simultaneous speculative insertions may lose at the separate RI03 unique
+  // index first. Staggered INSERTs force the original same-key upsert path.
+  check('same release unreviewed conflict fails closed '+differentCode,
+   guardedConflict||(!finishFirstBeforeSecond&&conflict.code==='23505'
+    &&conflict.constraint==='release_deployment_manifest_one_ordinary_deployed'),true);
+  const saved=(await admin.query("select backend_commit,details_json from public.release_deployment_manifest where release_id='same-release-race'")).rows[0];
+  check('same release winning occurrence provenance intact '+differentCode,saved.details_json.provenance.run_id,String(301+winner));
+  check('same release winning code intact '+differentCode,saved.backend_commit,sameTargets[winner].backend_commit);
+  check('same release loser cannot commit validation history '+differentCode,(await admin.query('select count(*)::int n from public.release_validation_runs')).rows[0].n,1);
+  const readOccurrence=async(id)=>(await admin.query(`select release_id,backend_commit,frontend_commit,migration_head,
+   migration_manifest_sha256,environment_contract_version,status,details_json,
+   to_char(created_at at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') created_at,
+   to_char(deployed_at at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') deployed_at
+   from public.release_deployment_manifest where release_id=$1`,[id])).rows[0];
+  const winningOccurrence=await readOccurrence('same-release-race');
+  const lostInput=sameInput(sameTargets[loser],loser);
+  const afterRace=await snapshot();
+  await assert.rejects(()=>invoke(true,samePlans[loser].plan.plan_sha256,lostInput),/Recording plan changed/);passed++;
+  check('stale retry cannot change winning occurrence '+differentCode,await snapshot(),afterRace);
+  const reviewedRetry=await invoke(false,null,lostInput);
+  check('new retry plan binds exact winning occurrence '+differentCode,
+   sameReleaseOccurrence(reviewedRetry.plan.current_base,winningOccurrence),true);
+  // Inject a crash-equivalent transaction error after archive and replacement.
+  await admin.query(`create trigger recorder_test_inject_failure before insert on public.release_validation_runs
+   for each row execute function public.recorder_test_fail_validation()`);
+  await assert.rejects(()=>invoke(true,reviewedRetry.plan.plan_sha256,lostInput),/injected validation write failure/);passed++;
+  check('retry failure rolls back archive replacement and provenance '+differentCode,await snapshot(),afterRace);
+  await admin.query('drop trigger recorder_test_inject_failure on public.release_validation_runs');
+  await invoke(true,reviewedRetry.plan.plan_sha256,lostInput);
+  const savedWinner=await readOccurrence(archivedReleaseId(winningOccurrence));
+  check('retry preserves complete winning occurrence '+differentCode,
+   sameReleaseOccurrence(savedWinner,archivedReleaseRecord(winningOccurrence)),true);
+  const savedRetry=await readOccurrence('same-release-race');
+  check('retry full provenance retained '+differentCode,savedRetry.details_json.provenance,
+   {...provenance,...lostInput.provenance});
+  for(const [field,expected] of Object.entries({backend_service_id:'synthetic-backend',backend_deployment_id:'synthetic-deploy',
+   static_weekly_service_id:'synthetic-scheduler',static_weekly_deployment_id:'synthetic-scheduler-deploy'})){
+   check('retry deployment metadata retained '+differentCode+' '+field,savedRetry.details_json[field],expected);
+  }
+  check('both admitted completed occurrences have validation rows '+differentCode,
+   (await admin.query('select count(*)::int n from public.release_validation_runs')).rows[0].n,2);
+  check('retry retains one deployed selector '+differentCode,
+   (await admin.query("select count(*)::int n from public.release_deployment_manifest where status='deployed'")).rows[0].n,1);
+ }
+
  // Paused restore may stage both identities, including replica-mode inserts;
  // it must remain paused until exactly one is reconciled. Caller flags cannot
  // create an ordinary uniqueness bypass.

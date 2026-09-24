@@ -218,7 +218,11 @@ try {
       archived_previous_base_release_id: plan.archive_release_id,
       prior_deployed_release_ids: plan.prior_deployed_release_ids,
     };
-    await client.query(`insert into public.release_deployment_manifest(
+    // An absent target cannot be locked by SELECT FOR UPDATE. Never turn a
+    // concurrent initial insert into an overwrite of an unreviewed occurrence.
+    // Existing targets were locked and fully archived above; only those may
+    // take the conflict-update path. A losing initial recorder must re-plan.
+    const recorded = await client.query(`insert into public.release_deployment_manifest(
       release_id,backend_commit,frontend_commit,migration_head,migration_manifest_sha256,
       environment_contract_version,status,details_json,created_at,deployed_at)
       values($1,$2,$3,$4,$5,$6,'deployed',$7::jsonb,clock_timestamp(),clock_timestamp())
@@ -226,10 +230,12 @@ try {
       frontend_commit=excluded.frontend_commit,migration_head=excluded.migration_head,
       migration_manifest_sha256=excluded.migration_manifest_sha256,
       environment_contract_version=excluded.environment_contract_version,status='deployed',
-      details_json=excluded.details_json,deployed_at=excluded.deployed_at`, [
+      details_json=excluded.details_json,deployed_at=excluded.deployed_at
+      where $8::boolean`, [
       target.release_id,target.backend_commit,target.frontend_commit,target.migration_head,
-      target.migration_manifest_sha256,target.environment_contract_version,JSON.stringify(details),
+      target.migration_manifest_sha256,target.environment_contract_version,JSON.stringify(details),Boolean(currentBase),
     ]);
+    assert.equal(recorded.rowCount, 1, "Initial release occurrence appeared after review; re-plan without overwriting it.");
     await client.query(`insert into public.release_validation_runs(release_id,area,status,details_json)
       values($1,'production_release_deployment_recording','pass',$2::jsonb)`, [target.release_id,
       JSON.stringify({ plan_sha256: plan.plan_sha256, target, live_check: liveCheck,

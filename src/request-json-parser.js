@@ -4,6 +4,7 @@ import express from 'express';
 // existing dedicated parser/limit/error-order contracts.
 export function createGeneralJsonMiddleware() {
   const parser = express.json({limit: '10mb'});
+  const dedicatedPath = /^\/(?:scan-api\/rpc|oauth\/register)\/?$/i;
   // Express route parameters consume one path segment, with optional trailing
   // slash and case-insensitive routing by default. Preserve the ORIGINAL bytes
   // only for the two typed, fully attested native legacy POST endpoints.
@@ -13,7 +14,7 @@ export function createGeneralJsonMiddleware() {
     verify(req, _res, bytes) { req.scanAuthorityRawBody = Buffer.from(bytes); },
   });
   return (req, res, next) => {
-    if (req.path === '/scan-api/rpc' || req.path === '/oauth/register') return next();
+    if (dedicatedPath.test(req.path)) return next();
     if (req.method === 'POST' && legacyPath.test(req.path)) return legacyParser(req, res, next);
     return parser(req, res, next);
   };

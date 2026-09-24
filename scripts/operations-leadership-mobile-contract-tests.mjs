@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import express from "express";
 import { installLeadershipHttpRoutes } from "../src/leadership-bootstrap.js";
+import { assertExactFrontendPair } from './fixtures/exact-frontend-pair.mjs';
 
 const root = new URL("../", import.meta.url);
 const [bootstrap, annieMoxie, indexSource, migration, authSource, releaseManifestSource] = await Promise.all([
@@ -13,6 +14,7 @@ const [bootstrap, annieMoxie, indexSource, migration, authSource, releaseManifes
   readFile(new URL("release/frontend-release-manifest.json", root), "utf8"),
 ]);
 const releaseManifest = JSON.parse(releaseManifestSource);
+const releasePairInput = JSON.parse(await readFile(new URL('release/schema-alignment-input.json', root), 'utf8'));
 
 for (const required of [
   "Jennifer Sheffield", "Director of Operations",
@@ -48,8 +50,7 @@ assert.match(authSource, /named_manager_enrollment:\s*!config\.passwordlessManag
 assert.match(authSource, /shared_48_hour_enrollment:\s*false/);
 assert.match(indexSource, /ops-manager-auth\.v6\.http-only-boundary/);
 assert.doesNotMatch(indexSource, /ops-manager-auth\.v4\.shared-48h/);
-assert.equal(releaseManifest.frontend_commit_sha, "6fae503111ef21c40a309913965c3b963043aa01",
-  "backend source must pin the exact audited frontend candidate");
+assertExactFrontendPair(releaseManifest, releasePairInput);
 assert.equal(releaseManifest.api_contract_versions.ops_manager_auth, "ops-manager-auth.v5.named-leadership");
 assert.equal(releaseManifest.api_contract_versions.operational_analytics, "operational-analytics.v1");
 

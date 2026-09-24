@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import {readFileSync} from 'node:fs';
+import vm from 'node:vm';
 import express from 'express';
 import {createGeneralJsonMiddleware} from '../src/request-json-parser.js';
-import {makeDeviceCredentialMiddleware,deviceCredentialInternals} from '../src/auth/device-credential-auth.js';
+import {makeDeviceCredentialMiddleware,deviceCredentialInternals,verifyNativeDeviceRequestAttestation} from '../src/auth/device-credential-auth.js';
 import {installAssignedActivationTransportRoutes} from '../src/assigned-activation-transport.js';
 const id=n=>`44000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 const env={NODE_ENV:'test',DEVICE_CREDENTIAL_SECRET:'synthetic-legacy-route-credential-root-long-enough'};
@@ -25,8 +26,20 @@ installAssignedActivationTransportRoutes(app,{env,db:{rpc:async(fn,args)=>{calls
  nativeCredentialParts:r=>{const m=/^Device ([0-9a-f-]+)\.(.+)$/.exec(r.headers.authorization||'');return m?{credentialId:m[1],secret:m[2]}:null;},
  tokenHash:(_e,s)=>deviceCredentialInternals.tokenHash(s,env)});
 // Observe the shared parser's scope without supplying any raw bytes ourselves.
-for(const probe of ['/scan-api/rpc','/oauth/register','/unrelated-json'])app.post(probe,(req,res)=>res.json({
+for(const probe of ['/oauth/register','/unrelated-json'])app.post(probe,(req,res)=>res.json({
  parsed:req.body!==undefined,raw:Buffer.isBuffer(req.scanAuthorityRawBody)}));
+// Execute the exact dedicated production parser expression, not a substitute
+// that could hide general-parser stream consumption.
+const productionIndex=readFileSync(new URL('../src/index.js',import.meta.url),'utf8');
+const scanStart=productionIndex.indexOf('const MAX_SCAN_RPC_BYTES =');
+const scanEnd=productionIndex.indexOf('const parseScanAuthorityJsonBeforeAuthentication =',scanStart);
+assert.ok(scanStart>=0&&scanEnd>scanStart);
+const exactScanParser=vm.runInNewContext(productionIndex.slice(scanStart,scanEnd)+'scanAuthorityJsonParser;', {express,Buffer});
+app.post('/scan-api/rpc',exactScanParser,
+ makeDeviceCredentialMiddleware({env,store,runReadOnlySql:async()=>[device],requireEnrolledCredential:true}),
+ (req,res)=>{try { const attestation=verifyNativeDeviceRequestAttestation(req);
+   res.json({raw:Buffer.isBuffer(req.scanAuthorityRawBody),bodySha256:attestation.body_sha256,path:attestation.path});
+ }catch(error){res.status(error.status||500).json({code:error.code});}});
 app.use((err,_req,res,_next)=>res.status(err.status||500).json({code:err.type||'test_server_error'}));
 const server=await new Promise(resolve=>{const s=app.listen(0,'127.0.0.1',()=>resolve(s));});
 console.log('OWNED_HTTP_SERVER',server.address().port,'cleanup: server close in finally');
@@ -102,9 +115,19 @@ try{
   await refused(name+' form content cannot masquerade as signed JSON',body,h=>h['content-type']='application/x-www-form-urlencoded',url);
   r=await send(body,()=>{},url+'/');check(name+' Express trailing-slash route retains signed bytes',r.status===200);await r.text();
  }
- for(const probe of ['/scan-api/rpc','/oauth/register','/unrelated-json']){
+ for(const probe of ['/oauth/register','/oauth/register/','/OAUTH/REGISTER','/OaUtH/ReGiStEr/?fixture=1','/unrelated-json']){
   const response=await send({},()=>{},probe),seen=await response.json();
   check(probe+' retains its existing parser ownership',seen.parsed===(probe==='/unrelated-json')&&seen.raw===false);
  }
+ for(const probe of ['/scan-api/rpc','/scan-api/rpc/','/SCAN-API/RPC','/ScAn-ApI/RpC/?fixture=1']){
+  const bytes=' { "fn": "tool_get_system_settings", "args": {} } ';
+  const response=await send(bytes,()=>{},probe),seen=await response.json();
+  check(probe+' dedicated original bytes authenticate',response.status===200&&seen.raw===true
+   &&seen.bodySha256===crypto.createHash('sha256').update(bytes).digest('hex')&&seen.path===probe);
+  const wrong=await send(bytes,h=>Object.assign(h,headers(JSON.stringify(JSON.parse(bytes)),probe)),probe);
+  check(probe+' rejects reserialized-body signature',wrong.status===403);await wrong.text();
+ }
+ r=await send({padding:'x'.repeat(3000)},()=>{},'/unrelated-json');
+ check('ordinary route retains larger general JSON parser',r.status===200&&(await r.json()).parsed===true);
  console.log(JSON.stringify({status:'PASS',checks,actualHttp:true,sharedProductionParser:true,actualCredentialMiddleware:true,actualHmac:true,syntheticStore:true,production:false}));
 }finally{await new Promise(resolve=>server.close(resolve));check('owned HTTP server closed',!server.listening);}
