@@ -985,7 +985,7 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "964292809a47f3e8351c48b0abc973938192c0f7"
+        "object_id": "4ddd2d3fd409e6ed987b6d1336c4e48e7e49acd3"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
@@ -1380,7 +1380,7 @@
       {
         "path": "scripts/release-migration-plan-database-tests.mjs",
         "mode": "100644",
-        "object_id": "44e0bbaa6d7253ce2dc4ee4eeb0d50d960d2fbd8"
+        "object_id": "be917d90a7532d38414728adda7862f7a25d4aa0"
       },
       {
         "path": "scripts/release-migration-rehearsal-provenance.mjs",
