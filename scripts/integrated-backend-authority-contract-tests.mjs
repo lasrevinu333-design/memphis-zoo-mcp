@@ -85,6 +85,7 @@ const exactPendingReleaseMigrations = [
   "20260924042758_static_weekly_canonical_shift_end_derivation.sql",
   "20260924044035_static_weekly_atomic_roster_completion.sql",
   "20260924053507_assigned_phone_activation_transport.sql",
+  "20260924080839_custodial_legacy_installation_observation.sql",
 ];
 const exactMigrationFiles = readdirSync("supabase/migrations").filter((name) => /^[0-9]{14}_.+\.sql$/.test(name)).sort();
 const exactMigrationCount = exactMigrationFiles.length;
@@ -227,20 +228,20 @@ assert.equal(productionMigrationState.observed_production.vacancy_functions_pres
 assert.equal(productionMigrationState.observed_production.hydrated_initial_draft_reader_present, true);
 assert.equal(productionMigrationState.observed_production.registered_source_dated_status_excluded, true);
 assert.equal(productionMigrationState.observed_production.outlook_event_sync_table_present, true);
-assert.equal(productionMigrationState.target.source_migration_file, "20260924053507_assigned_phone_activation_transport.sql");
-assert.equal(productionMigrationState.target.source_migration_name, "assigned_phone_activation_transport");
-assert.equal(productionMigrationState.target.source_migration_version, "20260924053507");
+assert.equal(productionMigrationState.target.source_migration_file, "20260924080839_custodial_legacy_installation_observation.sql");
+assert.equal(productionMigrationState.target.source_migration_name, "custodial_legacy_installation_observation");
+assert.equal(productionMigrationState.target.source_migration_version, "20260924080839");
 assert.equal(productionMigrationState.target.production_ledger_version, null);
 assert.equal(productionMigrationState.target.canonical_source_schema_fingerprint, canonicalFingerprint);
-assert.equal(productionMigrationState.target.public_function_count, 540);
-assert.equal(productionMigrationState.target.production_ledger_count, 244);
+assert.equal(productionMigrationState.target.public_function_count, 545);
+assert.equal(productionMigrationState.target.production_ledger_count, 245);
 assert.equal(productionMigrationState.target.source_authority_migration_count, exactMigrationCount);
 assert.equal(productionMigrationState.target.pending_migration_count, exactPendingReleaseMigrations.length);
 assert.equal(productionMigrationState.target.registered_source_dated_status_excluded, true);
-assert.equal(productionMigrationState.target.expected_catalog_counts.functions, 540);
-assert.equal(productionMigrationState.target.expected_catalog_counts.triggers, 317);
+assert.equal(productionMigrationState.target.expected_catalog_counts.functions, 545);
+assert.equal(productionMigrationState.target.expected_catalog_counts.triggers, 319);
 assert.equal(productionMigrationState.target.expected_catalog_counts.policies, 43);
-assert.equal(productionMigrationState.target.expected_catalog_counts.routine_grants, 371);
+assert.equal(productionMigrationState.target.expected_catalog_counts.routine_grants, 373);
 assert.equal(productionMigrationState.target.expected_catalog_counts.schema_grants, 9);
 assert.match(releaseHealthIdentityProjection, /bb04f7c05f72d959b4aba5a3a047adad1163eaf6b88aeeebd5d0f9f6a3b10baf/);
 assert.match(releaseHealthIdentityProjection, /c\.relname in \('devices','employees','device_aliases'\)/);
