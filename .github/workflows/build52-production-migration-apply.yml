@@ -239,9 +239,9 @@ jobs:
              and .candidate_tree == $tree
              and .before_ledger_count == 230
              and .before_ledger_head == "20260920010000"
-             and .after_ledger_count == 245
-             and .after_ledger_head == "20260924080839"
-             and (.applied | length) == 15' \
+             and .after_ledger_count == 252
+             and .after_ledger_head == "20260925054802"
+             and (.applied | length) == 22' \
             "$result_path" >/dev/null
           printf '{"stage":"production_apply_committed","result_sha256":"%s","completed_at":"%s"}\n' \
             "$(sha256sum "$result_path" | awk '{print $1}')" "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$receipt_path"
@@ -309,11 +309,11 @@ jobs:
             '.format == "memphis-zoo-build52-production-post-apply.v1"
              and .ok == true
              and .source == "direct-production-query"
-             and .ledger_count == 245
-             and .ledger_head == "20260924080839"
-             and .counts.functions == 545
-             and .counts.routine_grants == 373
-             and .schema_fingerprint == "7de90538d9742060f9eda2d5329715e3d64a33e084535694897469793a38659c"' \
+             and .ledger_count == 252
+             and .ledger_head == "20260925054802"
+             and .counts.functions == 567
+             and .counts.routine_grants == 383
+             and .schema_fingerprint == "3ded1de715a3d114f3098a2818904b3c5b0d0cdde17dcbef77cc7af76c3b7deb"' \
             "$post_apply_path" >/dev/null
           printf '{"stage":"production_target_independently_verified","verification_sha256":"%s","completed_at":"%s"}\n' \
             "$(sha256sum "$post_apply_path" | awk '{print $1}')" "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$receipt_path"

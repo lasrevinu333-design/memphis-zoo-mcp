@@ -38,7 +38,14 @@ assert.deepEqual(state.pending_migrations.map(({ order, file }) => ({ order, fil
   { order: 13, file: "20260924044035_static_weekly_atomic_roster_completion.sql" },
   { order: 14, file: "20260924053507_assigned_phone_activation_transport.sql" },
   { order: 15, file: "20260924080839_custodial_legacy_installation_observation.sql" },
-], "the correction release fixture must contain exactly the fifteen candidate migrations in order");
+  { order: 16, file: "20260924161004_owner_oc24_cleaning_and_inspection_boundaries.sql" },
+  { order: 17, file: "20260924172500_oc24_manual_contractor_lunch.sql" },
+  { order: 18, file: "20260924201258_native_provider_durable_authority.sql" },
+  { order: 19, file: "20260925015905_oc24_completion_selection_normalization.sql" },
+  { order: 20, file: "20260925020244_oc24_bound_legacy_completion_replay.sql" },
+  { order: 21, file: "20260925050718_static_weekly_staffing_command_ledger.sql" },
+  { order: 22, file: "20260925054802_static_weekly_staffing_atomic_acceptance.sql" },
+], "the correction release fixture must contain exactly the twenty-two candidate migrations in order");
 assert.equal(
   state.pending_migrations.every((item) => item.source_migration_version > state.observed_production.ledger_head),
   true,
@@ -291,7 +298,7 @@ try {
   const afterFingerprint = fingerprintSchemaCatalog(afterCatalog);
   const canonical = JSON.parse(readFileSync(resolve(root, "supabase/canonical/schema-fingerprint-input.json"), "utf8"));
   assert.equal(afterFingerprint.fingerprint, state.target.canonical_source_schema_fingerprint,
-    `the exact fifteen-migration correction plan must terminate at the canonical target catalog: ${JSON.stringify(firstCatalogDifference(canonical, afterFingerprint.normalized))}`);
+    `the exact twenty-two-migration correction plan must terminate at the canonical target catalog: ${JSON.stringify(firstCatalogDifference(canonical, afterFingerprint.normalized))}`);
   await assert.rejects(runPlan(), /already present|pre-migration production state|Locked source catalog/,
     "the complete plan is exactly-once and rejects replay or partial application");
   console.log("RELEASE_MIGRATION_PLAN_DATABASE_TESTS_PASS");

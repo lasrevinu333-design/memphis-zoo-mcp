@@ -276,7 +276,7 @@ const input = parseJsonBlob(blobByPath.get(releaseInputPath), "release authority
 const productionMigrationState = parseJsonBlob(blobByPath.get(productionMigrationStatePath), "production migration state");
 assert.equal(productionMigrationState.mode, "migration_required");
 assert.ok(Array.isArray(productionMigrationState.pending_migrations));
-assert.equal(productionMigrationState.pending_migrations.length, 15, "the candidate must identify exactly the fifteen ordered Sep22-24 corrections");
+assert.equal(productionMigrationState.pending_migrations.length, 22, "the candidate must identify exactly the twenty-two ordered Sep22-25 corrections");
 const pendingReleaseMigrations = productionMigrationState.pending_migrations.map(({ file }) => file);
 assert.deepEqual(pendingReleaseMigrations, [
   lunchDeliveryFailureManagerAlert,
@@ -294,6 +294,13 @@ assert.deepEqual(pendingReleaseMigrations, [
   "20260924044035_static_weekly_atomic_roster_completion.sql",
   "20260924053507_assigned_phone_activation_transport.sql",
   "20260924080839_custodial_legacy_installation_observation.sql",
+  "20260924161004_owner_oc24_cleaning_and_inspection_boundaries.sql",
+  "20260924172500_oc24_manual_contractor_lunch.sql",
+  "20260924201258_native_provider_durable_authority.sql",
+  "20260925015905_oc24_completion_selection_normalization.sql",
+  "20260925020244_oc24_bound_legacy_completion_replay.sql",
+  "20260925050718_static_weekly_staffing_command_ledger.sql",
+  "20260925054802_static_weekly_staffing_atomic_acceptance.sql",
 ]);
 assert.equal(Object.hasOwn(productionMigrationState, "applied_release_migrations"), false,
   "captured state must use the exact ledger head instead of a duplicate partial applied-migration list");
@@ -350,7 +357,7 @@ assert.match(input.backend_contract.device_credential_secret_gate, /Every active
 assert.ok(Array.isArray(input.cutover.phase_order) && input.cutover.phase_order.length >= 7);
 assert.match(input.cutover.phase_order[1], /exact observed production ledger head.*catalog\/privilege fingerprint.*zero target-position collisions/i);
 assert.match(input.cutover.phase_order[2], /fresh post-capture backup receipt.*exact pending-migration digest.*exact source attestation/i);
-assert.match(input.cutover.phase_order[3], /fifteen exact ordered pending migrations.*lunch-delivery manager alerts.*completed-cleaning reminder compatibility.*verified-visit five-minute overdue authority.*atomic static-weekly lunch publication.*durable lunch start\/end notification production.*existing-employee identity restoration.*dated roster-slot vacancy.*aggregate visitor-attendance reading.*release-selection and occurrence guards.*independent notification receipt and lunch integrity.*release-selector recovery bindings.*canonical dated shift-end derivation.*atomic roster completion.*assigned-phone activation transport.*legacy-installation observation.*ledger to advance exactly fifteen entries.*do not replay historical production migrations/i);
+assert.match(input.cutover.phase_order[3], /twenty-two exact ordered pending migrations.*lunch-delivery manager alerts.*completed-cleaning reminder compatibility.*verified-visit five-minute overdue authority.*atomic static-weekly lunch publication.*durable lunch start\/end notification production.*existing-employee identity restoration.*dated roster-slot vacancy.*aggregate visitor-attendance reading.*release-selection and occurrence guards.*independent notification receipt and lunch integrity.*release-selector recovery bindings.*canonical dated shift-end derivation.*atomic roster completion.*assigned-phone activation transport.*legacy-installation observation.*owner cleaning and inspection boundaries.*manual contractor lunch authority.*durable native provider authority.*completion-selection normalization.*bound legacy completion replay.*durable staffing command ledger.*atomic staffing acceptance.*ledger to advance exactly twenty-two entries.*do not replay historical production migrations/i);
 assert.match(input.cutover.phase_order[4], /retain the current immutable weighted-schedule publication by default.*only when a named manager approves a replacement.*derive exactly one replacement draft from the current publication.*expected-revision and idempotency guards.*do not create a competing draft.*preserve the current publication/i);
 assert.ok(input.cutover.rollback.restoration_checks.some((value) => /retired 09:45 background writer.*manager-approved schedule or absence publication/i.test(value)));
 assert.ok(input.cutover.rollback.restoration_checks.some((value) => /every active employee-device credential.*manager-code recovery.*legacy secret fallback/i.test(value)));
@@ -369,20 +376,20 @@ assert.equal(productionMigrationState.observed_production?.vacancy_functions_pre
 assert.equal(productionMigrationState.observed_production?.hydrated_initial_draft_reader_present, true);
 assert.equal(productionMigrationState.observed_production?.registered_source_dated_status_excluded, true);
 assert.equal(productionMigrationState.observed_production?.outlook_event_sync_table_present, true);
-assert.equal(productionMigrationState.target?.source_migration_file, "20260924080839_custodial_legacy_installation_observation.sql");
-assert.equal(productionMigrationState.target?.source_migration_name, "custodial_legacy_installation_observation");
-assert.equal(productionMigrationState.target?.source_migration_version, "20260924080839");
+assert.equal(productionMigrationState.target?.source_migration_file, "20260925054802_static_weekly_staffing_atomic_acceptance.sql");
+assert.equal(productionMigrationState.target?.source_migration_name, "static_weekly_staffing_atomic_acceptance");
+assert.equal(productionMigrationState.target?.source_migration_version, "20260925054802");
 assert.equal(productionMigrationState.target?.production_ledger_version, null);
 assert.equal(productionMigrationState.target?.canonical_source_schema_fingerprint, schemaFingerprint);
-assert.equal(productionMigrationState.target?.public_function_count, 545);
-assert.equal(productionMigrationState.target?.production_ledger_count, 245);
+assert.equal(productionMigrationState.target?.public_function_count, 567);
+assert.equal(productionMigrationState.target?.production_ledger_count, 252);
 assert.equal(productionMigrationState.target?.source_authority_migration_count, expectedMigrationCount);
 assert.equal(productionMigrationState.target?.pending_migration_count, pendingReleaseMigrations.length);
 assert.equal(productionMigrationState.target?.registered_source_dated_status_excluded, true);
-assert.equal(productionMigrationState.target?.expected_catalog_counts?.functions, 545);
-assert.equal(productionMigrationState.target?.expected_catalog_counts?.triggers, 319);
+assert.equal(productionMigrationState.target?.expected_catalog_counts?.functions, 567);
+assert.equal(productionMigrationState.target?.expected_catalog_counts?.triggers, 338);
 assert.equal(productionMigrationState.target?.expected_catalog_counts?.policies, 43);
-assert.equal(productionMigrationState.target?.expected_catalog_counts?.routine_grants, 373);
+assert.equal(productionMigrationState.target?.expected_catalog_counts?.routine_grants, 383);
 assert.equal(productionMigrationState.target?.expected_catalog_counts?.schema_grants, 9);
 assert.match(releaseHealthIdentityProjectionText, /c\.relname in \('devices','employees','device_aliases'\)/);
 assert.match(releaseHealthIdentityProjectionText, /Release health recovery inventory row is missing or duplicated/);

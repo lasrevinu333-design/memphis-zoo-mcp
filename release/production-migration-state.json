@@ -58,37 +58,37 @@
     "target_schedule_slot_count_observed_at": "2026-09-19T02:19:26.738042Z"
   },
   "target": {
-    "source_migration_file": "20260924080839_custodial_legacy_installation_observation.sql",
-    "source_migration_name": "custodial_legacy_installation_observation",
-    "source_migration_version": "20260924080839",
+    "source_migration_file": "20260925054802_static_weekly_staffing_atomic_acceptance.sql",
+    "source_migration_name": "static_weekly_staffing_atomic_acceptance",
+    "source_migration_version": "20260925054802",
     "production_ledger_version": null,
-    "canonical_source_schema_fingerprint": "7de90538d9742060f9eda2d5329715e3d64a33e084535694897469793a38659c",
-    "public_function_count": 545,
-    "production_ledger_count": 245,
-    "source_authority_migration_count": 145,
-    "pending_migration_count": 15,
+    "canonical_source_schema_fingerprint": "3ded1de715a3d114f3098a2818904b3c5b0d0cdde17dcbef77cc7af76c3b7deb",
+    "public_function_count": 567,
+    "production_ledger_count": 252,
+    "source_authority_migration_count": 152,
+    "pending_migration_count": 22,
     "registered_source_dated_status_excluded": true,
     "expected_catalog_counts": {
       "column_grants": 43,
-      "columns": 2126,
-      "constraints": 1113,
+      "columns": 2230,
+      "constraints": 1203,
       "cron_jobs": 9,
       "default_privileges": 12,
       "extensions": 8,
-      "functions": 545,
-      "indexes": 671,
+      "functions": 567,
+      "indexes": 700,
       "owned_scheduler_role_memberships": 3,
       "owned_scheduler_roles": 3,
       "policies": 43,
       "privilege_bearing_roles": 4,
       "role_memberships": 25,
-      "routine_grants": 373,
+      "routine_grants": 383,
       "schema_grants": 9,
       "sequence_grants": 0,
       "sequences": 0,
-      "table_grants": 1527,
-      "tables": 185,
-      "triggers": 319,
+      "table_grants": 1523,
+      "tables": 193,
+      "triggers": 338,
       "type_grants": 0,
       "types": 0,
       "views": 33
@@ -96,7 +96,7 @@
   },
   "source_binding": {
     "kind": "external_exact_head_release_attestation",
-    "rule": "The production approval package binds the exact backend commit/tree, fifteen migration blobs, generated release evidence, exact frontend commit, fresh source catalog/ledger identity, backup and rehearsal before mutation."
+    "rule": "The production approval package binds the exact backend commit/tree, twenty-two migration blobs, generated release evidence, exact frontend commit, fresh source catalog/ledger identity, backup and rehearsal before mutation."
   },
   "backup_evidence": {
     "state": "fresh_verified_backup_required_after_fresh_source_capture_and_before_mutation",
@@ -121,7 +121,7 @@
     "production migration ledger is exactly 230 rows headed by 20260920010000 event_reminder_static_weekly_authority",
     "locked production source catalog must freshly recapture and equal 750e7f040519f6d4555836cbd4d172a22f98911d5bab9918fa370238fff3f822 with the exact expected source counts before any DDL; a stale or mismatched catalog aborts the plan",
     "a fresh encrypted backup with restore verification completes after the fresh source capture and before mutation",
-    "production exposes exactly 506 public functions and 347 non-owner routine grants before the fifteen corrections",
+    "production exposes exactly 506 public functions and 347 non-owner routine grants before the twenty-two corrections",
     "one active authority key, two active registered schedule sources, 22 roster slots, 20 incumbencies, zero draft, two published versions/publications, four projections, 1394 occurrences, 19 command receipts and authority revision 19 remain current",
     "five target schedule positions remain represented without inventing staff identities",
     "Outlook event-sync authority exists and its rows must remain unchanged by this plan",
@@ -238,12 +238,61 @@
       "file": "20260924080839_custodial_legacy_installation_observation.sql",
       "source_migration_version": "20260924080839",
       "sha256": "b10bdd8df2acdf1e35e9fe7e0fc34137f912508ab56bd326042a309d978530e3"
+    },
+    {
+      "order": 16,
+      "phase": "owner_oc24_cleaning_and_inspection_boundaries",
+      "file": "20260924161004_owner_oc24_cleaning_and_inspection_boundaries.sql",
+      "source_migration_version": "20260924161004",
+      "sha256": "4f4c956efc50e147e30c00a840e535623f4f841ea2e3bc0fae102cd885bc93d8"
+    },
+    {
+      "order": 17,
+      "phase": "oc24_manual_contractor_lunch",
+      "file": "20260924172500_oc24_manual_contractor_lunch.sql",
+      "source_migration_version": "20260924172500",
+      "sha256": "7b9a36d1469a2920f3a45dd19112c44f1a13bbbf0c09951c17426f42aa7eeaa5"
+    },
+    {
+      "order": 18,
+      "phase": "native_provider_durable_authority",
+      "file": "20260924201258_native_provider_durable_authority.sql",
+      "source_migration_version": "20260924201258",
+      "sha256": "fe4f617f2531cfc941624660138bbba2c3dff983e87cb04dafe04ff58dee7538"
+    },
+    {
+      "order": 19,
+      "phase": "oc24_completion_selection_normalization",
+      "file": "20260925015905_oc24_completion_selection_normalization.sql",
+      "source_migration_version": "20260925015905",
+      "sha256": "769070342011d4ceb28e5dfbbfd2e436e5a98dc7d02d160ac47e2d75fa120316"
+    },
+    {
+      "order": 20,
+      "phase": "oc24_bound_legacy_completion_replay",
+      "file": "20260925020244_oc24_bound_legacy_completion_replay.sql",
+      "source_migration_version": "20260925020244",
+      "sha256": "a52245120109a50240a02b33de477281c47c389a028580820cdfea4fbcb1194d"
+    },
+    {
+      "order": 21,
+      "phase": "static_weekly_staffing_command_ledger",
+      "file": "20260925050718_static_weekly_staffing_command_ledger.sql",
+      "source_migration_version": "20260925050718",
+      "sha256": "acc2e14294425d221af49f8567d6995f3bed0b3c015ffa54b76a6809e4770a24"
+    },
+    {
+      "order": 22,
+      "phase": "static_weekly_staffing_atomic_acceptance",
+      "file": "20260925054802_static_weekly_staffing_atomic_acceptance.sql",
+      "source_migration_version": "20260925054802",
+      "sha256": "80cca4e537547d1984b6ecfb6fc2ea93476915daa492be651fbd138eec141a5a"
     }
   ],
   "postconditions": [
-    "production ledger advances exactly fifteen rows from 230 to 245, ending at 20260924080839 custodial_legacy_installation_observation; no already-applied migration is replayed",
-    "complete public catalog and privilege fingerprint equals 7de90538d9742060f9eda2d5329715e3d64a33e084535694897469793a38659c with the exact reviewed target counts",
-    "production exposes exactly 545 public functions and 373 non-owner routine grants after the corrections",
+    "production ledger advances exactly twenty-two rows from 230 to 252, ending at 20260925054802 static_weekly_staffing_atomic_acceptance; no already-applied migration is replayed",
+    "complete public catalog and privilege fingerprint equals 3ded1de715a3d114f3098a2818904b3c5b0d0cdde17dcbef77cc7af76c3b7deb with the exact reviewed target counts",
+    "production exposes exactly 567 public functions and 383 non-owner routine grants after the corrections",
     "ordinary full-attendance days retain the fixed weekly schedule; CoverAll is explicit named-manager capacity, not an automatic absence-count threshold",
     "guest reporting OFF prevents queued guest notification dispatch without deleting pending/history records; staff Feedback remains separate",
     "employee event reminders are generated at D-3, D-2 and event day at reminder-day shift start plus 15 minutes and final delivery revalidates current event-date ownership/assignment",
