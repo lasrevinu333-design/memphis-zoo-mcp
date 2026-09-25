@@ -49,6 +49,7 @@
     "test:custodial-u4-migration-convergence": "node scripts/custodial-u4-migration-convergence-tests.mjs",
     "test:static-weekly-scheduler:physical": "STATIC_WEEKLY_PHYSICAL_SCALE=1 node scripts/static-weekly-schedule-compiler-tests.mjs",
     "test:static-weekly-scheduler": "npm run --silent test:static-weekly-scheduler:fast && npm run --silent test:static-weekly-scheduler:database",
+    "test:staffing-continuity-v10": "node scripts/staffing-command-request-tests.mjs && node scripts/staffing-preparation-boundaries-tests.mjs && node scripts/staffing-candidate-set-tests.mjs && node scripts/staffing-week-preview-tests.mjs && node scripts/staffing-compiler-staging-tests.mjs && node scripts/staffing-command-control-plane-tests.mjs && node scripts/staffing-schedule-application-route-tests.mjs && node scripts/staffing-command-ledger-database-tests.mjs && node scripts/staffing-command-atomic-acceptance-database-tests.mjs",
     "audit:location-groups": "node scripts/location-group-audit-reminder-aware.mjs",
     "test:sch2-publish": "node scripts/sch2-publish-route-tests.mjs",
     "test:foundation": "node scripts/scheduler-alerts-gps-foundation-tests.mjs",
@@ -154,6 +155,7 @@
     "test:audit6-repairs": "node scripts/audit6-coverall-security-contract-tests.mjs",
     "test:production-runtime": "node scripts/production-runtime-contract-tests.mjs && node scripts/production-release-deployment-recorder-tests.mjs && node scripts/production-release-recorder-plan-tests.mjs",
     "test:ci-workflows": "node scripts/ci-workflow-contract-tests.mjs && node scripts/production-backup-pg-dump-command-tests.mjs && node scripts/isolated-event-owner-schema-tests.mjs",
+    "test:reviewed-source-regressions": "node scripts/legacy-activation-http-tests.mjs && node scripts/release-pair-consumer-regression-tests.mjs && node scripts/run-isolated-release-recorder-tests.mjs",
     "test:production-schema-c674-bootstrap": "node scripts/production-schema-c674-bootstrap-contract-tests.mjs",
     "test:production-schema-inspection-freshness": "node scripts/production-schema-inspection-freshness-contract-tests.mjs",
     "test:production-database-identity": "node scripts/production-database-identity-contract-tests.mjs",
@@ -192,6 +194,7 @@
     "mammoth": "^1.12.0",
     "octokit": "^5.0.3",
     "parse5": "8.0.1",
+    "pdf-lib": "1.17.1",
     "pg": "^8.21.0",
     "zod": "^4.1.12"
   },

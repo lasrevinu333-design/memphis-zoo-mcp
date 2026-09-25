@@ -1,4 +1,6 @@
-export const COVERALL_STARTS_AT_ABSENCE_NUMBER = 3;
+// OC24-01: there is no automatic absence threshold. Retain the export as an
+// explicit null for older readers; it must never be used to assign capacity.
+export const COVERALL_STARTS_AT_ABSENCE_NUMBER = null;
 
 function orderedUniqueIds(values = []) {
   const result = [];
@@ -12,14 +14,14 @@ function orderedUniqueIds(values = []) {
   return result;
 }
 
-// Absence order is operational evidence: the first two absences are shared
-// by the remaining zoo staff; each third-or-later absence needs one CoverAll capacity.
+// Absences identify uncovered work, not permission to call or assign CoverAll.
+// Actual contractor capacity comes only from the manager's dated addition.
 export function partitionCustodialAbsences(orderedAbsentEmployeeIds = []) {
   const ordered = orderedUniqueIds(orderedAbsentEmployeeIds);
-  const internallyRedistributedEmployeeIds = ordered.slice(0, COVERALL_STARTS_AT_ABSENCE_NUMBER - 1);
-  const coverAllEmployeeIds = ordered.slice(COVERALL_STARTS_AT_ABSENCE_NUMBER - 1);
+  const internallyRedistributedEmployeeIds = [...ordered];
+  const coverAllEmployeeIds = [];
   return {
-    triggered: coverAllEmployeeIds.length > 0,
+    triggered: false,
     absentCount: ordered.length,
     orderedAbsentEmployeeIds: ordered,
     internallyRedistributedEmployeeIds,

@@ -1,52 +1,25 @@
 #!/usr/bin/env node
-import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { COVERALL_STARTS_AT_ABSENCE_NUMBER, partitionCustodialAbsences } from "../src/custodial-coverage-policy.js";
-
-assert.equal(COVERALL_STARTS_AT_ABSENCE_NUMBER, 3);
-assert.deepEqual(partitionCustodialAbsences([]), {
-  triggered: false, absentCount: 0, orderedAbsentEmployeeIds: [],
-  internallyRedistributedEmployeeIds: [], coverAllEmployeeIds: [],
-});
-assert.deepEqual(partitionCustodialAbsences(["employee-a"]), {
-  triggered: false, absentCount: 1, orderedAbsentEmployeeIds: ["employee-a"],
-  internallyRedistributedEmployeeIds: ["employee-a"], coverAllEmployeeIds: [],
-});
-assert.deepEqual(partitionCustodialAbsences(["employee-a", "employee-b"]), {
-  triggered: false, absentCount: 2, orderedAbsentEmployeeIds: ["employee-a", "employee-b"],
-  internallyRedistributedEmployeeIds: ["employee-a", "employee-b"], coverAllEmployeeIds: [],
-});
-assert.deepEqual(partitionCustodialAbsences([" employee-a ", "employee-b", "employee-a", "employee-c"]), {
-  triggered: true, absentCount: 3, orderedAbsentEmployeeIds: ["employee-a", "employee-b", "employee-c"],
-  internallyRedistributedEmployeeIds: ["employee-a", "employee-b"], coverAllEmployeeIds: ["employee-c"],
-});
-
-const scheduleApi = readFileSync(new URL("../src/schedule-api.js", import.meta.url), "utf8");
-const migration = readFileSync(new URL("../supabase/migrations/20260918010000_align_two_internal_absences.sql", import.meta.url), "utf8");
-assert.match(scheduleApi, /partitionCustodialAbsences/);
-assert.match(scheduleApi, /app_apply_coverall_assignment_policy_v2/);
-assert.match(scheduleApi, /coverall_capacity_insufficient/);
-assert.match(scheduleApi, /absent_employee_id:[\s\S]*coverall_capacity_employee_id:[\s\S]*assignments:/);
-assert.match(scheduleApi, /immutable_coverage_template_owner/);
-assert.match(scheduleApi, /segment_number: assignment\.segment_number/);
-assert.match(scheduleApi, /from public\.coverage_templates ct[\s\S]*ct\.assigned_employee_id = any/);
-const absencePublishRoute = scheduleApi.slice(scheduleApi.indexOf('router.post("/absence-publish"'), scheduleApi.indexOf('router.post("/absence-return"'));
-assert.ok(absencePublishRoute.indexOf("buildCoverAllPlan") < absencePublishRoute.indexOf('runRpc("sch_absence_publish"'));
-assert.ok(absencePublishRoute.indexOf('runRpc("sch_absence_publish"') < absencePublishRoute.indexOf("applyCoverAllPlan"));
-assert.match(scheduleApi.slice(scheduleApi.indexOf("async function buildCoverAllPlan"), scheduleApi.indexOf("async function applyCoverAllPlan")), /partitionCustodialAbsences/);
-assert.match(migration, /cardinality\(v_internal_ids\) <> 2/);
-assert.match(migration, /cardinality\(v_coverall_absent_ids\) < 1/);
-assert.match(migration, /jsonb_array_length\(v_coverage\) <> cardinality\(v_coverall_absent_ids\)/);
-assert.match(migration, /v_coverall_capacity_employee_id = any\(v_capacity_employee_ids\)/);
-assert.match(migration, /original_employee_id[\s\S]*v_absent_employee_id/);
-assert.match(migration, /coverage_templates[\s\S]*ct\.assigned_employee_id=v_absent_employee_id/);
-assert.match(migration, /segment_number[\s\S]*v_current_source_type[\s\S]*ilike '%manual%'[\s\S]*ilike '%manager%'[\s\S]*ilike '%override%'/);
-assert.match(migration, /revoke all on function public\.app_apply_coverall_assignment_policy_v2\(jsonb\) from public,anon,authenticated/i);
-assert.match(migration, /grant execute on function public\.app_apply_coverall_assignment_policy_v2\(jsonb\) to service_role/i);
-
-console.log("custodial coverage policy tests: PASS");
-
-assert.match(migration, /v_internal_ids && v_coverall_absent_ids/, "Neither internal absence may also consume contractor capacity");
-assert.match(migration, /array_position\(v_internal_ids,null\) is not null/);
-assert.match(migration, /count\(distinct value\) from unnest\(v_internal_ids\)/);
-assert.doesNotMatch(migration, /second-or-later|first_internal_second_plus/);
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {COVERALL_STARTS_AT_ABSENCE_NUMBER,partitionCustodialAbsences} from '../src/custodial-coverage-policy.js';
+// OC24-01 supersedes the earlier third-absence formula. Historical SQL remains
+// unchanged; the forward migration retires its RPC rather than rewriting history.
+assert.equal(COVERALL_STARTS_AT_ABSENCE_NUMBER,null);
+for(let n=0;n<=9;n++){
+ const ids=Array.from({length:n},(_,i)=>'employee-'+i);
+ assert.deepEqual(partitionCustodialAbsences([...ids,...ids]),{triggered:false,absentCount:n,
+  orderedAbsentEmployeeIds:ids,internallyRedistributedEmployeeIds:ids,coverAllEmployeeIds:[]});
+}
+const api=readFileSync(new URL('../src/schedule-api.js',import.meta.url),'utf8');
+const region=api.slice(api.indexOf('  async function buildCoverAllPlan('),api.indexOf('  async function importPtoRows('));
+assert.match(region,/partitionCustodialAbsences/);
+assert.match(region,/coverall_manual_addition_required/);
+assert.doesNotMatch(region,/app_apply_coverall_assignment_policy_v2|await runRpc|await runCommand/);
+const manual=api.slice(api.indexOf('router.post("/coverall/slots"'),api.indexOf('router.post("/coverall/links"'));
+assert.match(manual,/requireSchedulePin/);
+assert.match(manual,/publishCoverAllSlotsForDate/);
+assert.match(api,/if \(requestedCoverAllSlots\.length\) \{\s*coverallManual = await publishCoverAllSlotsForDate/);
+const migration=readFileSync(new URL('../supabase/migrations/20260924161004_owner_oc24_cleaning_and_inspection_boundaries.sql',import.meta.url),'utf8');
+assert.match(migration,/CoverAll must be added manually through an accepted dated schedule/);
+assert.match(migration,/revoke all on function public\.app_apply_coverall_assignment_policy_v2\(jsonb\) from public,anon,authenticated,service_role/);
+console.log('OC24_MANUAL_COVERALL_POLICY_PASS');

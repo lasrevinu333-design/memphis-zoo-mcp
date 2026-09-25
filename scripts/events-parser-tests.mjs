@@ -541,3 +541,4 @@ try {
 }
 
 console.log("events parser golden tests passed");
+await import("./events-ai-source-identity-tests.mjs");

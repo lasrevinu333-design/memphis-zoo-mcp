@@ -1018,9 +1018,18 @@ function candidateReasons(work, slot, availability, capacity, lockOwner) {
   if (work.schedulingMode === STATIC_WEEKLY_FLEXIBLE_COVERAGE_MODE
     && !lockOwner && work.custodialCoverageMode === "zoo_employee_baseline"
     && (!work.originSlotId || slot.id !== work.originSlotId)) failures.push(programReason("baseline_owner_required", { requiredSlotId: work.originSlotId || null }));
+  // As with unavailable/manual-locked slots above, one definitive ownership
+  // rejection is sufficient. Avoid repeating unrelated shift/qualification
+  // diagnostics for an owner that cannot be considered at all. This does not
+  // change any candidate, constraint or witness, and retains both receipt and
+  // result size limits.
+  if (failures.length) return failures;
   const flexibleCoverage = work.schedulingMode === STATIC_WEEKLY_FLEXIBLE_COVERAGE_MODE;
   const window = normalizeWindow(work.window, "work window");
-  if (!flexibleCoverage && !windowContains(capacity.shift, window)) failures.push(programReason("not_full_window_qualified"));
+  // Flexible ownership is not a fixed cleaning appointment, but responsibility
+  // must still fit the owner's real shift. In particular a 15:00 contractor
+  // departure cannot own a 15:00-16:00 closing segment.
+  if (!windowContains(capacity.shift, window)) failures.push(programReason("not_full_window_qualified"));
   if (!flexibleCoverage && availability.lunch && windowsOverlap(availability.lunch, window)) failures.push(programReason("lunch_overlap"));
   if (!flexibleCoverage && array(availability.blockedWindows).some((blocked) => windowsOverlap(blocked, window))) failures.push(programReason("absence_window_overlap"));
   if (array(work.restrictedSlotIds).map(text).includes(slot.id) || array(availability.restrictions).map(text).includes(text(work.locationId))) failures.push(programReason("restriction"));
@@ -1124,6 +1133,11 @@ export function prepareStaticWeeklySchedulingProblem(input, deadline = null) {
     } catch (error) { return { error: programReason(error.code || "invalid_exception_overlay", { message: error.message }) }; }
     applied.push(...state.applied); states.set(day, state);
   }
+  // Weekday-number evaluation starts with Sunday, but persisted weekly
+  // exception authority is the chronological Monday-through-Sunday set.
+  // Retain each day's already-canonical sequence/id order while normalizing
+  // the cross-date representation before any authority/replay digest is made.
+  applied.sort((left, right) => identityCompare(left.serviceDate, right.serviceDate));
   // This includes accepted overlays as well as the immutable version source.
   // It must precede candidate/x-map materialization, where identical plan-work
   // identities would otherwise share one decision variable.

@@ -254,6 +254,7 @@ const evidenceFiles = {
   baseVerifiedSchedule: config.basePacket.path,
   ownerDirectives: "/home/eric/Documents/Codex/2026-08-27/custodial-foundation-delivery/inputs/LATEST_USER_DIRECTIVES_2026-08-27.md",
   ownerCorrection: "/home/eric/Documents/Codex/2026-09-13/i-x20/outputs/OWNER_CORRECTION_20260920.md",
+  ownerClarificationsOC24: "/home/eric/Documents/Codex/2026-09-13/i-x20/outputs/OWNER_CLARIFICATIONS_20260924_OC24.md",
 };
 const packet = {
   packetSchema:"memphis-zoo.static-weekly.verified-schedule-packet.v1",

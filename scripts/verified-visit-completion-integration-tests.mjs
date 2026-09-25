@@ -61,8 +61,21 @@ const status=()=>JSON.parse(sql(`select json_build_object(
  'checked',public.custodial_canonical_utc_millis(latest_checked_at),
  'status',status_code,'services',services_performed) from public.v_location_dashboard_status
  where location_id=${q(id.location)}::uuid;`));
+if(process.argv.includes('--seed-pre-cutover-legacy')){
+ const visit=startVisit(),response={services_performed:['Sweep the floor'],note:'Exact pre-cutover saved answers'};
+ const statement=completeSql(visit,response),accepted=JSON.parse(sql(statement));
+ assert.equal(accepted.status,'closed');
+ const fresh=startVisit();
+ const fixture={visit,response,statement,location:id.location,accepted,
+  freshStatement:completeSql(fresh,response),
+  forgedStatement:completeSql(fresh,{...response,legacy:true,created_at:'2020-01-01',schema_version:1}),
+  tamperedStatement:completeSql(visit,{...response,note:'changed'}),
+  bytes:sql(`select to_jsonb(cr)::text from public.completion_responses cr where client_completion_id=${q(visit.completion)}`),
+  dashboard:status()};
+ console.log(JSON.stringify(fixture));process.exit(0);
+}
 const checkOnly={work_result:'checked_no_cleaning_needed',services_performed:[]};
-const cleaning={work_result:'full',services_performed:['Floor']};
+const cleaning={work_result:'full',services_performed:['Full cleaning services']};
 const preclean=startVisit();
 check('native start alone does not establish a cleaning',status().cleaned,null);
 check('check-only completion accepted',JSON.parse(sql(completeSql(preclean,checkOnly))).status,'closed');
@@ -93,7 +106,7 @@ const completed=JSON.parse(sql(statement));
 check('protected check completed',completed.status,'closed');
 check('actual cleaning time preserved after check',status().cleaned,cleaned.finish);
 check('last checked advances to checkout',status().checked,pending.finish);
-check('cleaning services are not replaced with check',status().services,['Floor']);
+check('cleaning services are not replaced with check',status().services,['Full cleaning services']);
 check('old overdue replaced by new visit cycle',reminder(oldOverdue)[0]?.status_code,'due_soon');
 assert.equal(typeof completed.session_uuid,'string');
 check('completion replay returns same session',JSON.parse(sql(statement)).session_uuid,completed.session_uuid);
@@ -136,6 +149,31 @@ check('dismissed repeat stays one record',enqueue(iso(queueTime)).enqueued,0);
 check('next five-minute repeat still enqueues',enqueue(iso(queueTime+5*60000)).enqueued,1);
 check('two distinct overdue jobs exist',queueCount(),2);
 
+// OC24: independent issue reporting must survive the entire authenticated
+// completion/persistence route for all outcomes, including no-cleaning checks.
+for(const selection of [cleaning,{work_result:'details',services_performed:['Restock toilet paper']},checkOnly]){
+ const visit=startVisit(),response={...selection,form_type:'restroom',maintenance_issues_found:['Sink leaking'],note:'Synthetic OC24 independent issue',out_of_order_signed:'Yes',out_of_order_details:'Sink one'};
+ const before=status().cleaned;
+ check('independent issue accepted with '+selection.work_result,JSON.parse(sql(completeSql(visit,response))).status,'closed');
+ const saved=JSON.parse(sql(`select response_json from public.completion_responses where client_completion_id=${q(visit.completion)}`));
+ for(const field of ['work_result','services_performed','maintenance_issues_found','note','out_of_order_signed','out_of_order_details'])check('persisted '+field+' for '+selection.work_result,saved[field],response[field]);
+ check('truthful cleaned time for '+selection.work_result,status().cleaned,selection.work_result==='checked_no_cleaning_needed'?before:visit.finish);
+}
+
+// CB02: challenge the actual native-route precheck and final persisted answers.
+const whitespaceVisit=startVisit(),cleanedBeforeWhitespace=status().cleaned;
+for(const code of [9,10,11,12,13,32,160,5760,8192,8193,8194,8195,8196,8197,8198,8199,8200,8201,8202,8232,8233,8239,8287,12288,65279]){
+ const ws=String.fromCodePoint(code);
+ for(const services of [[ws],[ws+'Full cleaning services'+ws],[ws+'Full cleaning services'+ws,'Sweep the floor']])
+  reject('SQL precheck rejects selective whitespace/alias U+'+code.toString(16),completeSql(whitespaceVisit,{work_result:'details',services_performed:services}),/selective cleaning/);
+}
+for(const service of [null,0,false,{},[]])reject('SQL precheck rejects nonstring service '+JSON.stringify(service),completeSql(whitespaceVisit,{work_result:'details',services_performed:[service]}),/selective cleaning/);
+check('rejected whitespace does not advance last-cleaned',status().cleaned,cleanedBeforeWhitespace);
+check('rejected whitespace does not insert completion',Number(sql(`select count(*) from public.completion_responses where client_completion_id=${q(whitespaceVisit.completion)}`)),0);
+const wrappedFull={work_result:'full',services_performed:['\tFull cleaning services\u00a0']};
+check('JS-valid wrapped full accepted',JSON.parse(sql(completeSql(whitespaceVisit,wrappedFull))).status,'closed');
+check('wrapped full preserved exactly not normalized on write',JSON.parse(sql(`select response_json from public.completion_responses where client_completion_id=${q(whitespaceVisit.completion)}`)),wrappedFull);
+check('wrapped full replay same operation',JSON.parse(sql(completeSql(whitespaceVisit,wrappedFull))).replayed,true);
 const result={passed,failed:0,fixture:'synthetic native-route/database integration',
  physical_nfc_verified:false,provider_delivery_verified:false};
 console.log(JSON.stringify(result,null,2));

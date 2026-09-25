@@ -55,7 +55,7 @@ assert.match(
 assert.match(api, /\/analytics-api\/cleaning-performance/, "cleaning comparison endpoint is required");
 assert.match(api, /\/analytics-api\/ticket-trends/, "ticket trend endpoint is required");
 assert.match(api, /\/analytics-api\/session-facts/, "session fact endpoint is required");
-assert.match(api, /\/analytics-api\/inspections/, "inspection read/write endpoints are required");
+assert.match(api, /\/analytics-api\/inspections/, "historical inspection reads and explicit retirement response remain defined");
 assert.match(api, /\/analytics-api\/inspection-coverage/, "inspection coverage must be visible to operations managers");
 assert.match(api, /CUSTODIAL_MANAGER/, "personnel analytics must require Custodial Manager authority");
 assert.match(api, /Idempotency-Key/, "inspection writes must be idempotent");
@@ -177,8 +177,8 @@ await inspectionPost.at(-1)({
   memphisAuth: auth,
   get: () => operationId,
 }, response);
-assert.equal(responseStatus, 422);
-assert.match(responseBody.error, /assigned by the server/i);
+assert.equal(responseStatus, 410);
+assert.equal(responseBody.code, "inspection_recording_retired");
 assert.equal(databaseCalled, false, "a backdated API request must fail before any database write");
 
 const authorizationEnv = {

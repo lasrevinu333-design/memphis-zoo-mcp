@@ -603,10 +603,22 @@ export function createStaticWeeklyProjectionRpcInput({ result, publicationId, ex
     active_assignments_digest: postgresJsonbContentDigest(assignments),
   };
   envelope.database_projection_identity = postgresJsonbContentDigest({ ...envelope });
+  // The compiler applies a week in canonical weekday-number order (Sunday,
+  // then Monday through Saturday), while PostgreSQL's accepted authority set
+  // is a chronological Monday-through-Sunday array.  The digest identifies
+  // the SET accepted by SQL, not the execution trace order retained above.
+  // Preserve the compiler's already-canonical sequence/id order within each
+  // service date while normalizing only the cross-date order for the set.
+  const exceptionSet = array(authority.appliedExceptions)
+    .map((item, index) => ({ id: item.id, type: item.type, serviceDate: item.serviceDate,
+      payloadDigest: item.payloadDigest, index }))
+    .sort((left, right) => left.serviceDate < right.serviceDate ? -1
+      : left.serviceDate > right.serviceDate ? 1 : left.index - right.index)
+    .map(({ index: _index, ...item }) => item);
   return {
     publicationId,
     serviceDate: result.serviceDate,
-    exceptionSetDigest: postgresJsonbContentDigest(array(authority.appliedExceptions).map((item) => ({ id: item.id, type: item.type, serviceDate: item.serviceDate, payloadDigest: item.payloadDigest }))),
+    exceptionSetDigest: postgresJsonbContentDigest(exceptionSet),
     compilerVersion: result.compilerVersion,
     objective: clone(authority.optimizerResult.objective),
     metrics: clone(authority.optimizerResult.metrics),

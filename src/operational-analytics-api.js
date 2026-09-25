@@ -258,7 +258,7 @@ export function installOperationalAnalyticsRoutes(app, { env = process.env, supa
       const generatedAt = new Date();
       const rows = (result.data || []).map((row) => ({
         ...row,
-        ...inspectionEligibility(row, { nowMs: generatedAt.getTime() }),
+        inspection_eligible: false,
       }));
       res.json({
         ok: true,
@@ -266,7 +266,7 @@ export function installOperationalAnalyticsRoutes(app, { env = process.env, supa
         meta: {
           contract_version: CONTRACT_VERSION,
           generated_at: generatedAt.toISOString(),
-          inspection_freshness_window_hours: INSPECTION_FRESHNESS_WINDOW_HOURS,
+          inspection_recording: false,
         },
       });
     } catch (error) { fail(res, error, "Cleaning session facts could not be loaded."); }
@@ -293,29 +293,11 @@ export function installOperationalAnalyticsRoutes(app, { env = process.env, supa
     } catch (error) { fail(res, error, "Inspection coverage could not be loaded."); }
   });
 
-  app.post("/analytics-api/inspections", configured, requireCustodialWrite, async (req, res) => {
-    try {
-      const payload = normalizeInspectionPayload(req.body || {}, req.memphisAuth || {}, req.get?.("Idempotency-Key") || "");
-      const existing = await loadExistingInspection(db, payload.operation_id);
-      if (existing) {
-        if (existing.request_fingerprint !== payload.request_fingerprint) {
-          throw Object.assign(new Error("Idempotency key was already used for a different inspection."), { status: 409 });
-        }
-        return res.status(200).json({ ok: true, data: existing, meta: { contract_version: CONTRACT_VERSION, replayed: true } });
-      }
-
-      const inserted = await db.from("cleaning_inspections").insert(payload).select("*").single();
-      if (inserted.error) {
-        if (String(inserted.error.code || "") === "23505") {
-          const raced = await loadExistingInspection(db, payload.operation_id);
-          if (raced?.request_fingerprint === payload.request_fingerprint) {
-            return res.status(200).json({ ok: true, data: raced, meta: { contract_version: CONTRACT_VERSION, replayed: true } });
-          }
-        }
-        throw inserted.error;
-      }
-      res.status(201).json({ ok: true, data: inserted.data, meta: { contract_version: CONTRACT_VERSION, replayed: false } });
-    } catch (error) { fail(res, error, "Cleaning inspection could not be saved."); }
+  // OC24-03: reject new recording even from an otherwise authorized manager.
+  // Retained historical rows and read authority are not deleted or rewritten.
+  app.post("/analytics-api/inspections", configured, requireCustodialWrite, (_req, res) => {
+    res.status(410).json({ ok: false, code: "inspection_recording_retired",
+      error: "Inspection recording is not part of this program. Historical records are preserved." });
   });
 }
 

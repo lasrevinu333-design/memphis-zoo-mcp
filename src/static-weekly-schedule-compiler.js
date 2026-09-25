@@ -95,6 +95,15 @@ function exactEvaluate(terms, values) {
   } catch { return null; }
 }
 function evaluate(terms, values) { const exact = exactEvaluate(terms, values); return exact != null && exact <= MAX_SAFE_EXACT_INTEGER && exact >= -MAX_SAFE_EXACT_INTEGER ? Number(exact) : Number.NaN; }
+function rawObjectiveMatchesExactInteger(raw, exact) {
+  // HiGHS' object scalar can retain binary roundoff (360.0000000000001)
+  // from the same near-integer columns already canonicalized above. This is
+  // ONLY a redundant scalar consistency check: the BigInt witness/rows,
+  // prior tier bindings, exact terminal primal/dual/objective and zero gap
+  // below remain the authority. Keep the original raw scalar in the receipt.
+  return typeof raw === "number" && Number.isFinite(raw) && Number.isSafeInteger(exact)
+    && Math.round(raw) === exact && Math.abs(raw - exact) <= EPSILON;
+}
 function validateCanonicalPrimal(model, values) {
   const rows = model.modelBasis?.constraints?.rows || [];
   for (const row of rows) {
@@ -152,7 +161,7 @@ function validateTerminalReportEvidence(evidence, solverResult, objectiveValue, 
   const normalized = evidence?.normalized || {};
   if (solverResult?.Status !== evidence?.objectStatus || solverResult?.ObjectiveValue !== evidence?.objectPrimalObjective || evidence?.objectStatus !== "Optimal" || evidence?.reportStatus !== "Optimal") failures.push("object_report_status_disagreement");
   if (evidence?.reportSolutionStatus !== "feasible") failures.push("report_solution_status_invalid");
-  if (!Number.isSafeInteger(Number(evidence?.objectPrimalObjective)) || Number(evidence.objectPrimalObjective) !== objectiveValue) failures.push("object_objective_disagreement");
+  if (!rawObjectiveMatchesExactInteger(evidence?.objectPrimalObjective, objectiveValue)) failures.push("object_objective_disagreement");
   for (const field of ["primalBound", "dualBound", "objective", "gap", "boundViolation", "integerViolation", "rowViolation"]) if (normalized[field]?.kind !== "finite_decimal") failures.push(`report_${field}_not_finite`);
   if (!terminalDecimalEquals(normalized.primalBound, normalized.dualBound) || !terminalDecimalEqualsSafeInteger(normalized.primalBound, objectiveValue) || !terminalDecimalEqualsSafeInteger(normalized.dualBound, objectiveValue) || !terminalDecimalEqualsSafeInteger(normalized.objective, objectiveValue)) failures.push("report_bound_or_objective_disagreement");
   if (!terminalDecimalIsZero(normalized.gap)) failures.push("report_gap_not_zero");
@@ -179,7 +188,7 @@ async function solveLexicographic(problem, deadline, authorityProgram) {
     const primal = extractPrimal(model, solved.result); if (primal.error) return { error: { ...primal.error, tier: objective.name } };
     const canonicalFailure = validateCanonicalPrimal(model, primal.values); if (canonicalFailure) return { error: canonicalFailure };
     const value = recomputeObjective(objective, model, primal.values, problem);
-    if (!Number.isSafeInteger(value) || Number(solved.result.ObjectiveValue) !== value) return { error: reason("solver_primal_objective_disagreement", { tier: objective.name, independentlyRecomputedObjective: value, returnedPrimalObjective: solved.result.ObjectiveValue }) };
+    if (!rawObjectiveMatchesExactInteger(solved.result.ObjectiveValue, value)) return { error: reason("solver_primal_objective_disagreement", { tier: objective.name, independentlyRecomputedObjective: value, returnedPrimalObjective: solved.result.ObjectiveValue }) };
     const evidence = solved.evidence;
     workerOutputBytes += Number(evidence?.outputBytes || 0);
     if (workerOutputBytes > STATIC_WEEKLY_SERVER_LIMITS.maxWorkerOutputBytes * problem.preflight.solveCount) return { error: reason("worker_output_limit", { workerOutputBytes, limit: STATIC_WEEKLY_SERVER_LIMITS.maxWorkerOutputBytes * problem.preflight.solveCount }) };

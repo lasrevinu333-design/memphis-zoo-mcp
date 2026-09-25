@@ -43,11 +43,11 @@ function contactWhereClause(text = "") {
   return `(${filters.join(" or ")})`;
 }
 
-function summarizeContact(contact, { includePhone = false } = {}) {
+function summarizeContact(contact, { includePhone = false, includeNotes = false } = {}) {
   const parts = [`${contact.display_name}: ${contact.role_title}`];
   if (contact.department) parts.push(contact.department);
   if (includePhone && contact.phone) parts.push(`phone ${contact.phone}`);
-  if (contact.notes) parts.push(contact.notes);
+  if (includeNotes && contact.notes) parts.push(contact.notes);
   return parts.join(". ") + ".";
 }
 
@@ -87,5 +87,8 @@ export async function answerInternalContactQuestion(runReadOnlySql, text = "", u
     if (erics.length > 1) return summarizeAmbiguousContacts(erics, "Eric");
   }
 
-  return contacts.map((contact) => summarizeContact(contact, { includePhone })).join(" ");
+  // OC24-13: internal notes are not employee-visible work-directory content.
+  // Personal/work number classification remains an unanswered owner boundary;
+  // do not widen the existing manager-only phone rule here.
+  return contacts.map((contact) => summarizeContact(contact, { includePhone, includeNotes: isManagerRole(userRole) })).join(" ");
 }

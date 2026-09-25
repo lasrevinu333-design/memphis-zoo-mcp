@@ -519,22 +519,22 @@ assert.match(authority.queries[6].values[10], /^projection-[0-9a-f]{64}$/, "the 
 
 const contractor = await controlPlane.applyContractorCapacity({
   manager, serviceDate: "2026-10-06", baseVersionId: versionId, publicationId, slotId: contractorSlot,
-  shift: { start: "15:00", end: "24:00" }, reason: "Approved CoverAll help", expectedRevision: applied.revision,
+  shift: { start: "15:00", end: "24:00" }, lunch: { start: "18:00", end: "19:00" }, reason: "Approved CoverAll help", expectedRevision: applied.revision,
   idempotencyKey: "contractor-capacity-test", projectionWeekStart: "2026-10-05",
 });
-assert.equal(contractor.revision, 4, "a second daily mutation starts from the returned final projection revision");
+assert.equal(contractor.revision, 5, "explicit capacity and actual lunch share one atomic batch and final projection");
 const materializeCalls = authority.queries.filter((entry) => entry.statement.includes("static_weekly_v3_materialize_projection"));
-assert.deepEqual(materializeCalls.map((entry) => entry.values[8]), [1, 3], "multi-call daily changes materialize from each mutation's returned revision");
+assert.deepEqual(materializeCalls.map((entry) => entry.values[8]), [1, 4], "multi-call daily changes materialize only after BOTH contractor facts");
 assert.deepEqual(authority.queries.find((entry) => entry.statement.includes("static_weekly_v3_apply_exception") && entry.values[0] === "cover_all").values[7].availability.shift, { start: "15:00", end: "24:00" }, "the server preserves an exact midnight-ended employee shift for contractor coverage");
 
 const departed = await controlPlane.markEmployeeDeparted({ manager, slotId: "20000000-0000-4000-8000-000000000001", reason: "Employment turnover", expectedRevision: contractor.revision, idempotencyKey: "departed-employee", projectionWeekStart: "2026-10-05" });
-assert.equal(departed.revision, 6, "departure materializes before its transaction commits");
+assert.equal(departed.revision, 7, "departure materializes before its transaction commits");
 const replacedEmployee = await controlPlane.replaceEmployee({ manager, slotId: "20000000-0000-4000-8000-000000000001", newEmployeeName: "Fresh Employee", reason: "Employment turnover", expectedRevision: departed.revision, idempotencyKey: "replace-employee", projectionWeekStart: "2026-10-05" });
-assert.equal(replacedEmployee.revision, 8, "replacement materializes before its transaction commits");
+assert.equal(replacedEmployee.revision, 9, "replacement materializes before its transaction commits");
 const published = await controlPlane.publishDraft({ manager, draftVersionId: versionId, expectedDraftRevision: 1, expectedRevision: replacedEmployee.revision, idempotencyKey: "publish-week", projectionWeekStart: "2026-10-05" });
-assert.equal(published.revision, 10, "publication materializes before its transaction commits");
+assert.equal(published.revision, 11, "publication materializes before its transaction commits");
 const reversed = await controlPlane.applyException({ manager, exceptionType: "reverse", serviceDate: "2026-10-06", baseVersionId: versionId, publicationId, reason: "remove day change", payload: { reversesExceptionId: "exception-1" }, reversesExceptionId: "exception-1", expectedRevision: published.revision, idempotencyKey: "reverse-day-change", projectionWeekStart: "2026-10-05" });
-assert.equal(reversed.revision, 12, "exception reversals materialize before their transaction commits");
+assert.equal(reversed.revision, 13, "exception reversals materialize before their transaction commits");
 
 await assert.rejects(() => controlPlane.applyException({
   manager: { ...manager, auth_mode: "operations_first" },

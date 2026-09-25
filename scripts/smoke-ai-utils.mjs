@@ -27,4 +27,5 @@ assert.equal(addMinutesToTime("09:30", 45), "10:15");
 assert.equal(toSafeInt("100", 14, 1, 60), 60);
 assert.equal(computeWeekdayDate("2026-04-25", "sunday", "this"), "2026-04-26");
 
+await import('./memphis-contact-privacy-tests.mjs');
 console.log(JSON.stringify({ ok: true, smoke: "ai-utils passed" }, null, 2));

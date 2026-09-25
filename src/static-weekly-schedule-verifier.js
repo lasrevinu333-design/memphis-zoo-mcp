@@ -153,7 +153,12 @@ function verifyTerminalAttestation(attestation, expectedValue, solverIdentity, o
   if (canonicalJson(attestation?.parsedRaw || {}) !== canonicalJson(parsed.raw) || canonicalJson(attestation?.normalized || {}) !== canonicalJson(parsed.normalized)) errors.push("terminal_report_parsed_values_mismatch");
   if (attestation?.objectStatus !== parsed.raw.status || attestation?.reportStatus !== parsed.raw.status || attestation?.objectStatus !== "Optimal" || attestation?.reportStatus !== "Optimal") errors.push("object_report_status_disagreement");
   if (attestation?.reportPrimalBound !== parsed.raw.primalBound || attestation?.reportDualBound !== parsed.raw.dualBound || attestation?.reportGap !== parsed.raw.gap || attestation?.reportSolutionStatus !== parsed.raw.solutionStatus || parsed.raw.solutionStatus !== "feasible") errors.push("terminal_report_raw_field_disagreement");
-  if (!Number.isSafeInteger(Number(attestation?.objectPrimalObjective)) || Number(attestation.objectPrimalObjective) !== expectedValue) errors.push("object_primal_objective_disagreement");
+  // Independently compare the untouched object scalar with the exact witness
+  // objective under the existing absolute integer tolerance. No tolerance is
+  // applied to the terminal primal/dual/objective, gap or canonical rows.
+  const rawObjective = attestation?.objectPrimalObjective;
+  if (typeof rawObjective !== "number" || !Number.isFinite(rawObjective) || !Number.isSafeInteger(expectedValue)
+      || Math.round(rawObjective) !== expectedValue || Math.abs(rawObjective - expectedValue) > MIP_FEASIBILITY_TOLERANCE) errors.push("object_primal_objective_disagreement");
   const normalized = parsed.normalized;
   if (!terminalDecimalEquals(normalized.primalBound, normalized.dualBound) || !terminalDecimalEqualsSafeInteger(normalized.primalBound, expectedValue) || !terminalDecimalEqualsSafeInteger(normalized.dualBound, expectedValue) || !terminalDecimalEqualsSafeInteger(normalized.objective, expectedValue)) errors.push("report_bound_or_objective_disagreement");
   if (!terminalDecimalIsZero(normalized.gap) || !terminalDecimalIsZero(normalized.boundViolation) || !terminalDecimalWithinIntegerTolerance(normalized.integerViolation) || !terminalDecimalIsZero(normalized.rowViolation)) errors.push("report_gap_or_violation_nonzero");
@@ -455,7 +460,7 @@ export function verifyStaticWeeklyScheduleResult(input = {}, result = {}, deadli
     if (!cap) { push(violations, "ineligible_owner", { planWorkId: key, slotId }); continue; }
     const workWindow = normalizeWindow(work.window, "work window");
     const flexibleCoverage = work.schedulingMode === STATIC_WEEKLY_FLEXIBLE_COVERAGE_MODE;
-    if (!flexibleCoverage && !windowContains(cap.shift, workWindow)) push(violations, "shift_violation", { planWorkId: key, slotId });
+    if (!windowContains(cap.shift, workWindow)) push(violations, "shift_violation", { planWorkId: key, slotId });
     if (!flexibleCoverage && candidate.lunch && windowsOverlap(candidate.lunch, workWindow)) push(violations, "lunch_violation", { planWorkId: key, slotId });
     if (!flexibleCoverage && array(candidate.blockedWindows).some((window) => windowsOverlap(window, workWindow))) push(violations, "absence_violation", { planWorkId: key, slotId });
     if (array(work.restrictedSlotIds).map(text).includes(slotId) || array(candidate.restrictions).map(text).includes(text(work.locationId))) push(violations, "restriction_violation", { planWorkId: key, slotId });

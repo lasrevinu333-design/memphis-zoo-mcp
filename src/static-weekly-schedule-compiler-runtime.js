@@ -293,27 +293,31 @@ export function createStaticWeeklyCompilerRuntime({
     });
   }
 
-  function enqueue(input = {}, preparation = null) {
+  function enqueue(input = {}, preparation = null, options = {}) {
     if (closed) return Promise.reject(runtimeError("static_weekly_compiler_closed", "The isolated compiler is closed."));
     if (outstanding >= maxOutstandingRequests) return Promise.reject(runtimeError("static_weekly_compiler_busy", "The isolated compiler already has its maximum bounded request queue."));
+    const requestedDeadline = options?.deadlineMilliseconds == null ? requestMilliseconds : Number(options.deadlineMilliseconds);
+    if (!Number.isSafeInteger(requestedDeadline) || requestedDeadline < 1 || requestedDeadline > requestMilliseconds) {
+      return Promise.reject(runtimeError("static_weekly_compiler_request_deadline_invalid", "The isolated compiler request deadline is invalid."));
+    }
     outstanding += 1;
-    const deadline = monotonicNowMilliseconds() + requestMilliseconds;
+    const deadline = monotonicNowMilliseconds() + requestedDeadline;
     const run = () => send(input, preparation, deadline);
     const queued = tail.then(run, run);
     tail = queued.then(() => undefined, () => undefined);
     return queued.finally(() => { outstanding -= 1; });
   }
 
-  function compile(input = {}) {
-    return enqueue(input, null);
+  function compile(input = {}, options = {}) {
+    return enqueue(input, null, options);
   }
 
-  function compileAndPrepare(input = {}, preparation = {}) {
+  function compileAndPrepare(input = {}, preparation = {}, options = {}) {
     const kind = String(preparation?.kind || "");
     if (!new Set(["draft", "projection"]).has(kind)) {
       return Promise.reject(runtimeError("static_weekly_compiler_preparation_invalid", "The isolated compiler preparation kind is invalid."));
     }
-    return enqueue(input, preparation);
+    return enqueue(input, preparation, options);
   }
 
   function shutdown() {

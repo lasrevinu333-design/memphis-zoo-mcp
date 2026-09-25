@@ -150,60 +150,12 @@ await sql(`
     id,session_id,location_id,submitted_by_employee_id,device_id,response_json,client_completion_id
   ) values
     ('${ids.fastCompletion}','${ids.fastSession}','${ids.location}','${ids.fastEmployee}','${ids.fastDevice}',
-      '{"form_type":"exhibit","services_performed":["Full cleaning services"],"note":"Inspection-ready"}','${ids.fastCompletion}'),
+      '{"form_type":"exhibit","work_result":"full","services_performed":["Full cleaning services"],"note":"Inspection-ready"}','${ids.fastCompletion}'),
     ('${ids.slowCompletion}','${ids.slowSession}','${ids.location}','${ids.slowEmployee}','${ids.slowDevice}',
-      '{"form_type":"exhibit","services_performed":["Full cleaning services"],"note":"Inspection-ready"}','${ids.slowCompletion}'),
+      '{"form_type":"exhibit","work_result":"full","services_performed":["Full cleaning services"],"note":"Inspection-ready"}','${ids.slowCompletion}'),
     ('${ids.replayCompletion}','${ids.replaySession}','${ids.replayLocation}','${ids.fastEmployee}','${ids.fastDevice}',
-      '{"form_type":"exhibit","services_performed":["Full cleaning services"],"note":"Delayed replay"}','${ids.replayCompletion}');
-  insert into public.cleaning_inspections(
-    id,operation_id,request_fingerprint,session_id,inspector_name_snapshot,
-    inspection_type,rubric_version,overall_score,appearance_score,sanitation_score,
-    supplies_score,detail_score,safety_score,pass_threshold,critical_failure,
-    follow_up_required,findings_json,notes
-  ) values
-    ('${ids.fastInspection}','10000000-0000-4000-8000-00000000a110','${"a".repeat(64)}','${ids.fastSession}','Database Inspector',
-      'manager_spot_check','custodial-v1',96,98,96,94,96,98,85,false,false,'[]','Looks excellent.'),
-    ('${ids.slowInspection}','10000000-0000-4000-8000-00000000a111','${"b".repeat(64)}','${ids.slowSession}','Database Inspector',
-      'manager_spot_check','custodial-v1',72,75,70,78,65,74,85,false,true,'[{"category":"detail","note":"Edges and fixtures need work"}]','Needs improvement.');
-  with boundary as (
-    insert into public.sessions(
-      id,session_uuid,client_session_id,location_id,employee_id,device_id,status,
-      started_at,ended_at,duration_minutes,duration_display,completion_source
-    ) values (
-      '${ids.boundarySession}','analytics-boundary-session','analytics-boundary-session','${ids.boundaryLocation}',
-      '${ids.fastEmployee}','${ids.fastDevice}','closed',statement_timestamp()-interval '25 hours',
-      statement_timestamp()-interval '24 hours',60,'60 min','kiosk_form'
-    ) returning id
-  )
-  insert into public.cleaning_inspections(
-    id,operation_id,request_fingerprint,session_id,inspector_name_snapshot,
-    inspection_type,rubric_version,overall_score,pass_threshold,critical_failure,
-    follow_up_required,findings_json,inspected_at
-  )
-  select
-    '${ids.boundaryInspection}','10000000-0000-4000-8000-00000000a118','${"f".repeat(64)}',b.id,'Database Inspector',
-    'manager_spot_check','custodial-v1',90,85,false,false,'[]','2000-01-01T00:00:00Z'
-  from boundary b;
-  with fallback as (
-    insert into public.completion_responses(
-      id,session_id,location_id,submitted_by_employee_id,device_id,response_json,
-      client_completion_id,submitted_at,created_at
-    ) values (
-      '${ids.fallbackCompletion}','${ids.fallbackSession}','${ids.boundaryLocation}',
-      '${ids.fastEmployee}','${ids.fastDevice}','{}','${ids.fallbackCompletion}',
-      statement_timestamp()-interval '24 hours',statement_timestamp()-interval '24 hours'
-    )
-    returning session_id,submitted_at
-  )
-  insert into public.cleaning_inspections(
-    id,operation_id,request_fingerprint,session_id,inspector_name_snapshot,
-    inspection_type,rubric_version,overall_score,pass_threshold,critical_failure,
-    follow_up_required,findings_json,inspected_at
-  )
-  select
-    '${ids.fallbackInspection}','10000000-0000-4000-8000-00000000a129','${"9".repeat(64)}',f.session_id,'Database Inspector',
-    'manager_spot_check','custodial-v1',90,85,false,false,'[]','2000-01-01T00:00:00Z'
-  from fallback f;
+      '{"form_type":"exhibit","work_result":"full","services_performed":["Full cleaning services"],"note":"Delayed replay"}','${ids.replayCompletion}');
+  -- OC24: no new inspection fixture is permitted after retirement.
   insert into public.maintenance_tickets(
     completion_response_id,session_id,location_id,reported_by_employee_id,device_id,
     issue_source,status,issue_summary,issue_category,fixture_type,fixture_identifier,
@@ -235,59 +187,10 @@ await sql(`
     exception when check_violation then null;
     end;
     begin
-      insert into public.cleaning_inspections(
-        operation_id,request_fingerprint,session_id,inspector_name_snapshot,
-        overall_score,pass_threshold,critical_failure,follow_up_required,inspected_at
-      ) values (
-        '10000000-0000-4000-8000-00000000a120','${"c".repeat(64)}','${ids.fastSession}','Database Inspector',
-        70,85,false,false,now()
-      );
-      raise exception 'failed inspection without follow-up unexpectedly accepted';
-    exception when check_violation then null;
-    end;
-    begin
-      insert into public.cleaning_inspections(
-        operation_id,request_fingerprint,session_id,inspector_name_snapshot,
-        overall_score,pass_threshold,critical_failure,follow_up_required
-      ) values (
-        '10000000-0000-4000-8000-00000000a124','${"1".repeat(64)}','${ids.missingCompletionSession}','Database Inspector',
-        95,85,false,false
-      );
-      raise exception 'finished session without completion evidence unexpectedly accepted';
-    exception when check_violation then null;
-    end;
-    begin
-      update public.sessions
-      set ended_at=statement_timestamp()+interval '1 hour'
-      where id='${ids.boundarySession}';
-      insert into public.cleaning_inspections(
-        operation_id,request_fingerprint,session_id,inspector_name_snapshot,
-        overall_score,pass_threshold,critical_failure,follow_up_required
-      ) values (
-        '10000000-0000-4000-8000-00000000a121','${"d".repeat(64)}','${ids.boundarySession}','Database Inspector',
-        95,85,false,false
-      );
-      raise exception 'inspection before a future session completion unexpectedly accepted';
-    exception when check_violation then null;
-    end;
-    begin
-      update public.cleaning_inspections
-      set inspected_at=inspected_at-interval '1 minute'
-      where id='${ids.fastInspection}';
-      raise exception 'authoritative inspection timestamp mutation unexpectedly accepted';
-    exception when check_violation then null;
-    end;
-    begin
-      insert into public.cleaning_inspections(
-        operation_id,request_fingerprint,session_id,inspector_name_snapshot,
-        overall_score,pass_threshold,critical_failure,follow_up_required,inspected_at
-      )
-      select
-        '10000000-0000-4000-8000-00000000a123','${"0".repeat(64)}',s.id,'Database Inspector',
-        95,85,false,false,s.ended_at+interval '1 minute'
-      from public.sessions s where s.id='${ids.staleSession}';
-      raise exception 'stale session with a backdated inspection timestamp unexpectedly accepted';
-    exception when check_violation then null;
+      insert into public.cleaning_inspections(operation_id,request_fingerprint,session_id,inspector_name_snapshot,overall_score)
+      values('10000000-0000-4000-8000-00000000a120',repeat('c',64),'${ids.fastSession}','Synthetic forbidden inspection',90);
+      raise exception 'retired inspection recording unexpectedly accepted';
+    exception when insufficient_privilege then null;
     end;
   end
   $audit4_integrity$;
@@ -295,8 +198,7 @@ await sql(`
 
 const coverage = await json(`(select to_jsonb(v) from public.v_cleaning_inspection_coverage v)`);
 assert.equal(coverage.completed_session_count >= 2, true);
-assert.equal(coverage.inspected_session_count >= 2, true);
-assert.equal(Number(coverage.inspection_coverage_pct) > 0, true);
+assert.equal(await sql(`select count(*) from public.cleaning_inspections where session_id in ('${ids.fastSession}','${ids.slowSession}');`), "0", "new work cannot acquire fabricated inspection records");
 assert.equal(Number(coverage.inspection_coverage_target_pct), 0);
 assert.equal(coverage.needs_attention, false);
 assert.equal(await sql(`select setting_value #>> '{}' from public.system_settings where setting_key='inspection_policy_mode';`), "manager_spot_check");
@@ -311,20 +213,20 @@ const tammy = comparison.find((row) => row.employee_name === "Analytics Tammy");
 const sherita = comparison.find((row) => row.employee_name === "Analytics Sherita");
 assert.deepEqual({
   duration: Number(tammy.average_duration_minutes),
-  score: Number(tammy.average_inspection_score),
-  passRate: Number(tammy.inspection_pass_rate_pct),
+  score: tammy.average_inspection_score,
+  passRate: tammy.inspection_pass_rate_pct,
   durationDelta: Number(tammy.duration_delta_from_location_minutes),
-  scoreDelta: Number(tammy.inspection_score_delta_from_location),
-}, { duration: 45, score: 96, passRate: 100, durationDelta: -22.5, scoreDelta: 12 });
+  scoreDelta: tammy.inspection_score_delta_from_location,
+}, { duration: 45, score: null, passRate: null, durationDelta: -22.5, scoreDelta: null });
 assert.deepEqual({
   duration: Number(sherita.average_duration_minutes),
-  score: Number(sherita.average_inspection_score),
-  passRate: Number(sherita.inspection_pass_rate_pct),
+  score: sherita.average_inspection_score,
+  passRate: sherita.inspection_pass_rate_pct,
   durationDelta: Number(sherita.duration_delta_from_location_minutes),
-  scoreDelta: Number(sherita.inspection_score_delta_from_location),
-}, { duration: 90, score: 72, passRate: 0, durationDelta: 22.5, scoreDelta: -12 });
+  scoreDelta: sherita.inspection_score_delta_from_location,
+}, { duration: 90, score: null, passRate: null, durationDelta: 22.5, scoreDelta: null });
 assert.equal(Number(tammy.location_average_duration_minutes), 67.5);
-assert.equal(Number(tammy.location_average_inspection_score), 84);
+assert.equal(tammy.location_average_inspection_score, null, "cleaning time cannot imply an unrecorded inspection");
 
 const ticketTrend = await json(`(
   select to_jsonb(v) from public.v_maintenance_ticket_trends v
@@ -340,6 +242,14 @@ assert.deepEqual({
   fixture: ticketTrend.fixture_identifier,
 }, { total: 3, week: 3, month: 3, status: "hotspot", fixture: "Stall 2" });
 
+// A bounded OC24 changed-input lane exercises real completion time/issue
+// statistics and retired inspection writes. Default invocation retains every
+// existing Messenger/event-retention assertion below; this lane is not that
+// full-suite proof and is never reported as one.
+if(process.argv.includes('--oc24-work-stats-only')){
+ console.log('OC24_WORK_STATS_AND_NO_INSPECTION_DATABASE_PASS; Messenger/event retention tail NOT RUN');
+ process.exit(0);
+}
 const msgUserId = await sql(`select id::text from public.msg_users where is_active=true order by created_at,id limit 1;`);
 assert.match(msgUserId, /^[0-9a-f-]{36}$/i, "a canonical Messenger identity is required");
 await sql(`
@@ -399,19 +309,9 @@ assert.equal(await sql(`select count(*) from public.msg_messages where id='${ids
 
 assert.equal(await sql(`select count(*) from public.sessions where id in ('${ids.fastSession}','${ids.slowSession}');`), "2");
 assert.equal(await sql(`select count(*) from public.completion_responses where id in ('${ids.fastCompletion}','${ids.slowCompletion}');`), "2");
-assert.equal(await sql(`select count(*) from public.cleaning_inspections where id in ('${ids.fastInspection}','${ids.slowInspection}');`), "2");
-assert.equal(await sql(`select count(*) from public.cleaning_inspections where id='${ids.boundaryInspection}';`), "1");
-assert.equal(await sql(`select count(*) from public.cleaning_inspections where id='${ids.fallbackInspection}';`), "1");
-assert.equal(await sql(`
-  select (i.inspected_at=i.created_at and i.inspected_at=s.ended_at+interval '24 hours')::text
-  from public.cleaning_inspections i join public.sessions s on s.id=i.session_id
-  where i.id='${ids.boundaryInspection}';
-`), "true", "the exact boundary must use one authoritative server timestamp");
-assert.equal(await sql(`
-  select (i.inspected_at=i.created_at and i.inspected_at=c.submitted_at+interval '24 hours' and i.session_ended_at=c.submitted_at)::text
-  from public.cleaning_inspections i join public.completion_responses c on c.session_id=i.session_id
-  where i.id='${ids.fallbackInspection}';
-`), "true", "pending submissions must use the durable completion response timestamp");
+assert.equal(await sql(`select count(*) from public.cleaning_inspections where session_id in ('${ids.fastSession}','${ids.slowSession}');`), "0", "no inspection is created by unrelated retention work");
+// Preservation of pre-retirement history across the forward migration and
+// recovery is proved separately by run-oc24-owner-database-tests.mjs.
 assert.equal(await sql(`select count(*) from public.maintenance_tickets where location_id='${ids.location}';`), "3");
 
 console.log("OPERATIONAL_ANALYTICS_DATABASE_PASS");

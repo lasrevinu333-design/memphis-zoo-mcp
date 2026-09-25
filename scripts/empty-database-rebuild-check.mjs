@@ -831,7 +831,7 @@ begin
 
   v_issue_completion := public.tool_complete_session_authoritative(
     v_session_uuid,
-    '{"services_performed":["trash_removed"],"notes":"Routine cleaning completed without a maintenance issue."}'::jsonb,
+    '{"work_result":"details","services_performed":["trash_removed"],"notes":"Routine cleaning completed without a maintenance issue."}'::jsonb,
     'REBUILD-FINISH-DEVICE',
     '10000000-0000-4000-8000-000000000011',
     '00000000-0000-4000-8000-00000000f110',
@@ -842,7 +842,7 @@ begin
   end if;
   v_issue_completion := public.tool_complete_session_authoritative(
     v_session_uuid,
-    '{"services_performed":["trash_removed"],"notes":"Routine cleaning completed without a maintenance issue."}'::jsonb,
+    '{"work_result":"details","services_performed":["trash_removed"],"notes":"Routine cleaning completed without a maintenance issue."}'::jsonb,
     'REBUILD-FINISH-DEVICE',
     '10000000-0000-4000-8000-000000000011',
     '00000000-0000-4000-8000-00000000f110',
@@ -871,7 +871,7 @@ begin
   );
   v_issue_completion := public.tool_complete_session_authoritative(
     v_issue_session_uuid,
-    '{"services_performed":["trash_removed"],"notes":"Routine context.","maintenance_issues":[{"label":"Leaking toilet","fixture_identifier":"stall 2"}]}'::jsonb,
+    '{"work_result":"details","services_performed":["trash_removed"],"notes":"Routine context.","maintenance_issues":[{"label":"Leaking toilet","fixture_identifier":"stall 2"}]}'::jsonb,
     'REBUILD-FINISH-DEVICE-SECOND',
     '10000000-0000-4000-8000-000000000012',
     '00000000-0000-4000-8000-00000000f126',

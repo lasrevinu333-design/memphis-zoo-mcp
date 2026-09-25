@@ -84,39 +84,17 @@ await sql(`
     ('${ids.thirdAssignment}','${serviceDate}','${ids.thirdLocation}',1,'${ids.first}','EMPLOYEE','08:00','12:00','ASSIGNED',1,'coverage_template_unavailable:auto_reassigned','area_owner');
 `);
 
-await expectFailure(`set role anon; select public.app_apply_coverall_assignment_policy_v2('${payload()}'::jsonb);`, /permission denied/i);
-await expectFailure(`set role authenticated; select public.app_apply_coverall_assignment_policy_v2('${payload()}'::jsonb);`, /permission denied/i);
-await expectFailure(`set role service_role; select public.app_apply_coverall_assignment_policy_v2('${payload({ thirdOriginal: ids.first })}'::jsonb);`, /exact third-or-later absence/i);
-await expectFailure(`set role service_role; select public.app_apply_coverall_assignment_policy_v2('${payload({ thirdCapacity: ids.first })}'::jsonb);`, /distinct registered CoverAll/i);
-await expectFailure(`set role service_role; select public.app_apply_coverall_assignment_policy_v2('${JSON.stringify({
-  service_date: serviceDate,
-  internally_redistributed_employee_ids: [ids.first],
-  coverall_absent_employee_ids: [ids.second, ids.third],
-  coverage: [],
-}).replaceAll("'", "''")}'::jsonb);`, /Two distinct internally covered absences/i);
 
-const result = JSON.parse(await sql(`set role service_role; select public.app_apply_coverall_assignment_policy_v2('${payload()}'::jsonb)::text;`));
-assert.equal(result.ok, true);
-assert.equal(result.assigned_count, 1);
-assert.equal(result.preserved_count, 1);
-assert.equal(result.capacity_count, 1);
-assert.equal(result.policy, "first_two_internal_third_plus_distinct_coverall");
-assert.equal(await sql(`select assigned_employee_id::text from public.daily_schedule_assignments where id='${ids.firstAssignment}';`), ids.first, "the first absence remains for internal redistribution");
-assert.equal(await sql(`select assigned_employee_id::text from public.daily_schedule_assignments where id='${ids.secondAssignment}';`), ids.first, "the second absence remains for internal redistribution");
-assert.equal(await sql(`select assigned_employee_id::text from public.daily_schedule_assignments where id='${ids.thirdAssignment}';`), ids.coverAll1, "the third absence is assigned to its exact CoverAll capacity");
-assert.equal(await sql(`select assigned_employee_id::text from public.daily_schedule_assignments where id='${ids.protectedAssignment}';`), ids.first, "manager-protected work is not overwritten");
-assert.equal(await sql(`select count(*) from public.daily_work_roster where service_date='${serviceDate}' and employee_id='${ids.coverAll1}'::uuid;`), "1");
-
-const replay = JSON.parse(await sql(`set role service_role; select public.app_apply_coverall_assignment_policy_v2('${payload()}'::jsonb)::text;`));
-assert.equal(replay.ok, true);
-assert.equal(await sql(`select count(*) from public.daily_work_roster where service_date='${serviceDate}' and employee_id='${ids.coverAll1}'::uuid;`), "1", "retry remains one roster entry for the exact contractor capacity");
-assert.equal(await sql(`select count(*) from public.daily_schedule_assignments where service_date='${serviceDate}' and assigned_employee_id='${ids.coverAll1}'::uuid;`), "1", "retry remains one contractor-owned assignment for the third absence");
-
-console.log(JSON.stringify({
-  ok: true,
-  first_two_absences_internal: true,
-  third_and_later_distinct_coverall: true,
-  protected_assignments_preserved: true,
-  unauthorized_roles_denied: true,
-  replay_idempotent: true,
-}, null, 2));
+/* OC24-01 supersedes the old third-absence assignment policy. Keep the same
+   concrete assigned/protected work fixture and prove the retired API cannot
+   mutate any of it, even if the caller forges plausible contractor capacity. */
+for(const role of ['anon','authenticated','service_role','custodial_application_reader','static_weekly_control_plane','static_weekly_release_operator']){
+ await expectFailure(`set role ${role}; select public.app_apply_coverall_assignment_policy_v2('${payload()}'::jsonb);`,/permission denied/i);
+}
+await expectFailure(`select public.app_apply_coverall_assignment_policy_v2('${payload()}'::jsonb);`,/CoverAll must be added manually/i);
+for(const id of [ids.firstAssignment,ids.secondAssignment,ids.thirdAssignment,ids.protectedAssignment]){
+ assert.equal(await sql(`select assigned_employee_id::text from public.daily_schedule_assignments where id='${id}';`),ids.first,'existing assignment preserved '+id);
+}
+assert.equal(await sql(`select count(*) from public.daily_work_roster where service_date='${serviceDate}' and employee_id='${ids.coverAll1}'::uuid;`),'0','absence formula cannot silently add contractor capacity');
+assert.equal(await sql(`select count(*) from public.daily_schedule_assignments where service_date='${serviceDate}' and assigned_employee_id='${ids.coverAll1}'::uuid;`),'0','absence formula cannot move any assignments');
+console.log(JSON.stringify({ok:true,policy:'OC24-manual-contractor-only',runtimeRolesDenied:6,ownerRpcRetired:true,existingAssignmentsPreserved:4,noAutomaticCapacity:true}));

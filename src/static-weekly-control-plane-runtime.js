@@ -6,6 +6,7 @@ import { assertOpsManagerSessionSecret, createSupabaseTrustedDeviceStore, makeOp
 import { createStaticWeeklyControlPlane, createStaticWeeklyControlPlaneDatabase } from "./static-weekly-control-plane.js";
 import { assertConfiguredReleaseIdentity } from "./release-manifest.js";
 import { makeRestoreMutationGate } from "./restore-mutation-gate.js";
+import { renderCoverAllPdfPair } from "./static-weekly-coverall-print.js";
 
 const text = (value) => typeof value === "string" ? value.trim() : "";
 const fail = (code, message = code) => Object.assign(new Error(message), { code });
@@ -153,12 +154,51 @@ export function createStaticWeeklyControlPlaneRuntime({
   app.get("/healthz", liveness);
   app.get(["/health", "/ready"], readiness);
   app.get("/static-weekly/manager-snapshot", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.getManagerSnapshot({ manager: manager(req), weekStart: req.query?.week_start })));
+  app.post("/static-weekly/staffing-commands", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.beginStaffingCommand({
+    manager: manager(req),
+    commandKind: req.body?.command_kind,
+    employeeId: req.body?.employee_id,
+    startDate: req.body?.start_date,
+    endDate: req.body?.end_date,
+    absenceKind: req.body?.absence_kind,
+    targetAbsenceId: req.body?.target_absence_id,
+    clientPrepareKey: req.body?.client_prepare_key,
+    expectedRevision: req.body?.expected_revision,
+  })));
+  app.post("/static-weekly/staffing-commands/:operationId/prepare", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.prepareStaffingCommand({
+    manager: manager(req), operationId: req.params.operationId,
+  })));
+  app.get("/static-weekly/staffing-commands/pending", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.listPendingStaffingCommands({
+    manager: manager(req),
+    limit: req.query?.limit == null ? 50 : Number(req.query.limit),
+    afterCreatedAt: req.query?.after_created_at || null,
+    afterOperationId: req.query?.after_operation_id || null,
+  })));
+  app.get("/static-weekly/staffing-commands/:operationId", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.getStaffingCommand({
+    manager: manager(req), operationId: req.params.operationId,
+  })));
+  app.get("/static-weekly/staffing-commands/:operationId/delivery", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.getStaffingDeliveryStatus({
+    manager: manager(req), operationId: req.params.operationId,
+  })));
+  app.post("/static-weekly/staffing-commands/:operationId/confirm", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.acceptStaffingCommand({
+    manager: manager(req), operationId: req.params.operationId,
+    previewDigest: req.body?.preview_digest, confirmationKey: req.body?.confirmation_key,
+  })));
+  app.post("/static-weekly/staffing-commands/:operationId/cancel", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.cancelStaffingPreparation({
+    manager: manager(req), operationId: req.params.operationId,
+  })));
+  app.get("/static-weekly/coverall-print", requireManagerWrite, namedManager, respond(async(req) => {
+    const revision=text(req.query?.expected_revision);
+    if(!/^(0|[1-9][0-9]*)$/.test(revision))throw fail("coverall_print_expected_revision_required");
+    const document=await authorityControlPlane.getCoverAllPrintDocument({manager:manager(req),weekStart:req.query?.week_start,serviceDate:req.query?.service_date,expectedRevision:Number(revision),projectionId:req.query?.projection_id});
+    return renderCoverAllPdfPair(document);
+  }));
   app.post("/static-weekly/drafts/initial", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.createInitialDraft({ manager: manager(req), sourceId: req.body?.source_id, effectiveStart: req.body?.effective_start, expectedRevision: req.body?.expected_revision, idempotencyKey: req.body?.idempotency_key })));
   app.post("/static-weekly/drafts/:versionId/refresh", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.refreshInitialDraft({ manager: manager(req), draftVersionId: req.params.versionId, sourceId: req.body?.source_id, effectiveStart: req.body?.effective_start, expectedDraftRevision: req.body?.expected_draft_revision, expectedRevision: req.body?.expected_revision, idempotencyKey: req.body?.idempotency_key })));
   app.post("/static-weekly/drafts/replacement", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.createReplacementDraft({ manager: manager(req), sourcePublicationId: req.body?.source_publication_id, effectiveStart: req.body?.effective_start, expectedRevision: req.body?.expected_revision, idempotencyKey: req.body?.idempotency_key })));
   app.post("/static-weekly/drafts/:versionId/publish", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.publishDraft({ manager: manager(req), draftVersionId: req.params.versionId, expectedDraftRevision: req.body?.expected_draft_revision, expectedRevision: req.body?.expected_revision, idempotencyKey: req.body?.idempotency_key, projectionWeekStart: req.body?.week_start, publicationKind: req.body?.publication_kind || "publish", rollbackOfVersionId: req.body?.rollback_of_version_id || null })));
   app.post("/static-weekly/exceptions", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.applyException({ manager: manager(req), exceptionType: req.body?.exception_type, serviceDate: req.body?.service_date, startsAt: req.body?.starts_at || null, endsAt: req.body?.ends_at || null, baseVersionId: req.body?.base_version_id, publicationId: req.body?.publication_id, reason: req.body?.reason, payload: req.body?.payload, expectedRevision: req.body?.expected_revision, idempotencyKey: req.body?.idempotency_key, projectionWeekStart: req.body?.week_start, reversesExceptionId: req.body?.reverses_exception_id || null })));
-  app.post("/static-weekly/contractor-capacity", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.applyContractorCapacity({ manager: manager(req), serviceDate: req.body?.service_date, baseVersionId: req.body?.base_version_id, publicationId: req.body?.publication_id, slotId: req.body?.slot_id, shift: req.body?.shift, reason: req.body?.reason, expectedRevision: req.body?.expected_revision, idempotencyKey: req.body?.idempotency_key, projectionWeekStart: req.body?.week_start })));
+  app.post("/static-weekly/contractor-capacity", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.applyContractorCapacity({ manager: manager(req), serviceDate: req.body?.service_date, baseVersionId: req.body?.base_version_id, publicationId: req.body?.publication_id, slotId: req.body?.slot_id, shift: req.body?.shift, lunch: req.body?.lunch, reason: req.body?.reason, expectedRevision: req.body?.expected_revision, idempotencyKey: req.body?.idempotency_key, projectionWeekStart: req.body?.week_start })));
   app.post("/static-weekly/day-changes/batch", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.applyDayChanges({ manager: manager(req), serviceDate: req.body?.service_date, baseVersionId: req.body?.base_version_id, publicationId: req.body?.publication_id, versionId: req.body?.version_id || req.body?.base_version_id, operations: req.body?.operations, expectedRevision: req.body?.expected_revision, idempotencyKey: req.body?.idempotency_key, projectionWeekStart: req.body?.week_start })));
   app.post("/static-weekly/employees/departed", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.markEmployeeDeparted({ manager: manager(req), slotId: req.body?.slot_id, reason: req.body?.reason, expectedRevision: req.body?.expected_revision, idempotencyKey: req.body?.idempotency_key, projectionWeekStart: req.body?.week_start })));
   app.post("/static-weekly/employees/replacements", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.replaceEmployee({ manager: manager(req), slotId: req.body?.slot_id, newEmployeeName: req.body?.new_employee_name, reason: req.body?.reason, expectedRevision: req.body?.expected_revision, idempotencyKey: req.body?.idempotency_key, projectionWeekStart: req.body?.week_start })));

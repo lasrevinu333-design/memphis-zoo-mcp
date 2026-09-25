@@ -26,6 +26,8 @@ const PTO_GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/mo
 const PTO_GEMINI_MODEL = String(process.env.SCHEDULE_GEMINI_MODEL || process.env.MEMPHIS_GEMINI_MODEL || process.env.GEMINI_MODEL || "gemini-2.5-flash").trim();
 const PTO_GEMINI_TIMEOUT_MS = Math.max(1000, Number.parseInt(String(process.env.SCHEDULE_GEMINI_TIMEOUT_MS || process.env.MEMPHIS_GEMINI_TIMEOUT_MS || "12000"), 10) || 12000);
 const PTO_GEMINI_MAX_OUTPUT_TOKENS = Math.max(256, Number.parseInt(String(process.env.SCHEDULE_GEMINI_MAX_OUTPUT_TOKENS || "1200"), 10) || 1200);
+const CANONICAL_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const SHA256_HEX = /^[0-9a-f]{64}$/;
 
 const RESTROOM_REBALANCE_TIME = String(process.env.RESTROOM_REBALANCE_TIME || "09:45:00").trim() || "09:45:00";
 const RESTROOM_REBALANCE_IMPLEMENTATION_MODE = "dynamic_route_fit_load_balancing";
@@ -1902,114 +1904,22 @@ export function createScheduleRouter({
     }
     const eligibleNonManualActiveIds = await filterAbsenceEligibleEmployeeIds(nonManualActiveIds);
     const policy = partitionCustodialAbsences([...eligibleNonManualActiveIds, ...explicit]);
-    if (!policy.triggered) {
-      return {
-        triggered: false,
-        absent_count: policy.absentCount,
-        ordered_absent_employee_ids: policy.orderedAbsentEmployeeIds,
-        internally_redistributed_employee_ids: policy.internallyRedistributedEmployeeIds,
-        coverall_employee_ids: [],
-        assignments: [],
-      };
-    }
-
-    const coverallAbsentIds = policy.coverAllEmployeeIds;
-    const captured = new Map();
-    const addCapture = (row, source) => {
-      const item = normalizeAssignmentCapture(row, source);
-      if (!item) return;
-      captured.set(`${item.location_group_id}|${item.segment_number}`, item);
-    };
-
-    const baselineRows = await runReadOnlySql(`
-      select ct.location_group_id, ct.segment_number, ct.assigned_employee_id,
-             e.display_name as assigned_employee_name, lg.group_code, lg.group_name,
-             to_char(ct.coverage_start, 'HH24:MI:SS') as coverage_start,
-             to_char(least(ct.coverage_end, public.sch_get_schedule_close_time('${esc(serviceDate)}'::date)), 'HH24:MI:SS') as coverage_end
-      from public.coverage_templates ct
-      join public.location_groups lg on lg.id = ct.location_group_id and lg.active = true
-      join public.employees e on e.id = ct.assigned_employee_id
-      where ct.active = true
-        and ct.day_of_week = extract(dow from '${esc(serviceDate)}'::date)::integer
-        and ct.assigned_employee_id = any(${uuidArrayLiteral(coverallAbsentIds)})
-        and ct.coverage_start < public.sch_get_schedule_close_time('${esc(serviceDate)}'::date)
-      order by lg.group_name, ct.segment_number
-    `);
-    for (const row of Array.isArray(baselineRows) ? baselineRows : []) addCapture(row, "immutable_coverage_template_owner");
-
     return {
-      triggered: true,
+      triggered: false,
       absent_count: policy.absentCount,
       ordered_absent_employee_ids: policy.orderedAbsentEmployeeIds,
       internally_redistributed_employee_ids: policy.internallyRedistributedEmployeeIds,
-      coverall_employee_ids: coverallAbsentIds,
-      assignments: Array.from(captured.values()),
-      manager_notification: `Call CoverAll: ${policy.absentCount} custodial absences for ${serviceDate}. Zoo staff share the first two absences. CoverAll covers the 3rd absence and every later absence.`,
+      coverall_employee_ids: [],
+      assignments: [],
     };
   }
 
-  async function applyCoverAllPlan(serviceDate, plan = {}) {
-    if (!plan?.triggered) {
-      return { ...(plan || {}), applied: false, assigned_count: 0, assigned_assignments: [] };
-    }
-    if (!Array.isArray(plan.assignments)) throw new Error("CoverAll assignment evidence must be an array.");
-    if (typeof runRpc !== "function") throw new Error("CoverAll write path is not configured.");
-    const coverAllSlots = await getCoverAllSlots();
-    const absentIds = Array.isArray(plan.coverall_employee_ids) ? plan.coverall_employee_ids : [];
-    if (absentIds.length > coverAllSlots.length) {
-      throw Object.assign(new Error(`Call CoverAll for ${absentIds.length} people. Only ${coverAllSlots.length} bounded contractor-capacity slots are currently registered; no partial assignment was made.`), { status: 503, code: "coverall_capacity_insufficient" });
-    }
-    const coverage = absentIds.map((absentEmployeeId, index) => {
-      const slot = coverAllSlots[index];
-      return {
-        absent_employee_id: absentEmployeeId,
-        coverall_capacity_employee_id: slot.employee_id,
-        employee_code: slot.employee_code,
-        display_name: slot.display_name || `CoverAll ${index + 1}`,
-        assignments: plan.assignments.filter((assignment) => String(assignment?.original_employee_id || "").trim() === absentEmployeeId),
-      };
-    });
-    await runRpc("app_apply_coverall_assignment_policy_v2", {
-      p_payload: {
-        service_date: serviceDate,
-        internally_redistributed_employee_ids: plan.internally_redistributed_employee_ids,
-        coverall_absent_employee_ids: plan.coverall_employee_ids,
-        coverage: coverage.map(({ absent_employee_id, coverall_capacity_employee_id, assignments }) => ({
-          absent_employee_id,
-          coverall_capacity_employee_id,
-          assignments: assignments.map((assignment) => ({
-            location_group_id: assignment.location_group_id,
-            segment_number: assignment.segment_number,
-            coverage_start: assignment.coverage_start,
-            coverage_end: assignment.coverage_end,
-            original_employee_id: assignment.original_employee_id,
-          })),
-        })),
-      },
-    });
-
-    const assignedCapacityIds = coverage.map((item) => item.coverall_capacity_employee_id);
-    const assignedRows = await runReadOnlySql(`
-      select dsa.assigned_employee_id, e.employee_code, e.display_name as coverall_name,
-             dsa.location_group_id, lg.group_code, lg.group_name,
-             to_char(dsa.coverage_start, 'HH24:MI:SS') as coverage_start,
-             to_char(dsa.coverage_end, 'HH24:MI:SS') as coverage_end,
-             dsa.notes
-      from public.daily_schedule_assignments dsa
-      join public.employees e on e.id = dsa.assigned_employee_id
-      join public.location_groups lg on lg.id = dsa.location_group_id
-      where dsa.service_date = '${esc(serviceDate)}'::date
-        and dsa.assigned_employee_id = any(${uuidArrayLiteral(assignedCapacityIds)})
-      order by e.employee_code, dsa.coverage_start, lg.group_name
-    `);
-
-    return {
-      ...plan,
-      applied: true,
-      coverall_capacity: coverage.map(({ assignments: _assignments, ...item }) => item),
-      assigned_count: Array.isArray(assignedRows) ? assignedRows.length : 0,
-      assigned_assignments: Array.isArray(assignedRows) ? assignedRows : [],
-    };
+  async function applyCoverAllPlan(_serviceDate, plan = {}) {
+    // OC24-01: absence/PTO processing never manufactures contractor capacity.
+    // Explicit dated manager additions continue through publishCoverAllSlotsForDate.
+    if (plan?.triggered) throw Object.assign(new Error("CoverAll must be added manually."),
+      { status: 409, code: "coverall_manual_addition_required" });
+    return { ...(plan || {}), applied: false, assigned_count: 0, assigned_assignments: [] };
   }
 
   async function importPtoRows(inputRows = []) {
@@ -3040,6 +2950,22 @@ export function createScheduleRouter({
     return resolveCanonicalDevice({ runReadOnlySql, deviceIdentifier: deviceId });
   }
 
+  async function readScheduleApplication({ serviceDate, assignment, credentialId }) {
+    const devicePk = String(assignment?.canonical_device_pk || "").trim().toLowerCase();
+    const employeeId = String(assignment?.assigned_employee_id || "").trim().toLowerCase();
+    const credential = String(credentialId || "").trim().toLowerCase();
+    const epoch = Number(assignment?.assignment_epoch);
+    if (!CANONICAL_UUID.test(devicePk) || !CANONICAL_UUID.test(employeeId)
+      || !CANONICAL_UUID.test(credential) || !Number.isSafeInteger(epoch) || epoch < 1) return null;
+    return runRpc("static_weekly_v10_read_device_schedule_application", {
+      p_service_date: serviceDate,
+      p_device_id: devicePk,
+      p_credential_id: credential,
+      p_employee_id: employeeId,
+      p_assignment_epoch: epoch,
+    });
+  }
+
   function toCsvValue(value) {
     if (value == null) return "";
     const text = String(value);
@@ -3451,6 +3377,11 @@ export function createScheduleRouter({
         const pageData = Array.isArray(pageRows) && pageRows.length ? pageRows[0].data : null;
         data = combineFullDaySchedule(pageData, fullDayItems);
       }
+      const application = assignment ? await readScheduleApplication({
+        serviceDate,
+        assignment,
+        credentialId: req.memphisDeviceCredential?.credential_id,
+      }) : null;
       res.status(200).json({
         ok: true,
         data: {
@@ -3464,11 +3395,55 @@ export function createScheduleRouter({
           credential_id: req.memphisDeviceCredential?.credential_id || null,
           assignment_epoch: Number.isSafeInteger(Number(assignment?.assignment_epoch))
             && Number(assignment?.assignment_epoch)>0 ? Number(assignment.assignment_epoch) : null,
+          schedule_application: application,
         },
         meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion },
       });
     } catch (error) {
       fail(res, error, "Personal schedule summary failed");
+    }
+  });
+
+  router.post("/my-day-summary/application-receipt", requireEmployeeDevice, async (req, res) => {
+    try {
+      const body = req.body;
+      const expectedKeys = ["applied_at", "authority_revision", "intent_id", "lunch_document_identity", "projection_id", "rendered_digest"];
+      if (!body || typeof body !== "object" || Array.isArray(body)
+        || JSON.stringify(Object.keys(body).sort()) !== JSON.stringify(expectedKeys)) {
+        const error = new Error("The exact schedule application receipt is required."); error.status = 422; throw error;
+      }
+      const deviceIdentifier = String(req.memphisDevice?.canonical_device_id || req.memphisDevice?.device_id || req.header?.("x-device-id") || "").trim();
+      const assignment = await getAssignedEmployeeForDevice(deviceIdentifier);
+      const credentialId = String(req.memphisDeviceCredential?.credential_id || "").trim().toLowerCase();
+      const epoch = Number(assignment?.assignment_epoch);
+      const revision = Number(body.authority_revision);
+      if (!assignment?.device_active || !assignment?.employee_active
+        || !CANONICAL_UUID.test(String(assignment.canonical_device_pk || "").toLowerCase())
+        || !CANONICAL_UUID.test(String(assignment.assigned_employee_id || "").toLowerCase())
+        || !CANONICAL_UUID.test(credentialId) || !CANONICAL_UUID.test(String(body.intent_id || ""))
+        || !CANONICAL_UUID.test(String(body.projection_id || ""))
+        || !Number.isSafeInteger(epoch) || epoch < 1 || !Number.isSafeInteger(revision) || revision < 0
+        || !SHA256_HEX.test(String(body.lunch_document_identity || ""))
+        || !SHA256_HEX.test(String(body.rendered_digest || ""))
+        || typeof body.applied_at !== "string" || Number.isNaN(Date.parse(body.applied_at))) {
+        const error = new Error("The current assignment-bound schedule receipt is invalid."); error.status = 422; throw error;
+      }
+      const data = await runRpc("static_weekly_v10_ack_device_schedule_application", {
+        p_intent_id: body.intent_id,
+        p_device_id: assignment.canonical_device_pk,
+        p_credential_id: credentialId,
+        p_employee_id: assignment.assigned_employee_id,
+        p_assignment_epoch: epoch,
+        p_authority_revision: revision,
+        p_projection_id: body.projection_id,
+        p_lunch_document_identity: body.lunch_document_identity,
+        p_rendered_digest: body.rendered_digest,
+        p_applied_at: new Date(body.applied_at).toISOString(),
+      });
+      res.status(200).json({ ok: true, data,
+        meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+    } catch (error) {
+      fail(res, error, "Schedule application receipt failed");
     }
   });
 

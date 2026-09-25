@@ -10,9 +10,15 @@
  */
 import { createHash, randomUUID } from "node:crypto";
 import { assertOwnerRecurringWorkdays } from "./static-weekly-owner-workdays.js";
+import { createCoverAllPrintDocument } from "./static-weekly-coverall-print.js";
 import { Pool } from "pg";
 import { createStaticWeeklyDraftRpcInput } from "./static-weekly-schedule-database-adapter.js";
 import { createStaticWeeklyProjectionWithLunchRpcInput } from "./static-weekly-lunch-publication.js";
+import { createStaffingCommandRequest } from "./static-weekly-staffing-command.js";
+import { createStaffingCandidateSet } from "./static-weekly-staffing-candidates.js";
+import { createStaffingPreparationMeter, enumerateStaffingServiceWindow } from "./static-weekly-staffing-preparation.js";
+import { createStaffingWeekPreviewInput } from "./static-weekly-staffing-preview.js";
+import { canonicalJson } from "./static-weekly-schedule-model.js";
 import {
   compileAndPrepareStaticWeeklyScheduleIsolated,
   compileStaticWeeklyScheduleIsolated,
@@ -115,6 +121,12 @@ function requireIdempotencyKey(value) {
   const key = text(value);
   if (!key || key.length > 200) throw fail("static_weekly_control_plane_idempotency_required");
   return key;
+}
+
+function requireUuid(value, code) {
+  const candidate = text(value);
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(candidate)) throw fail(code);
+  return candidate;
 }
 
 function projectionIdempotencyKey(value) {
@@ -511,10 +523,11 @@ export function createStaticWeeklyControlPlane({
     return createStaticWeeklyDraftRpcInput({ result: await compileOrFail(input), expectedRevision, actor });
   }
 
-  async function prepareProjection(input, { publicationId, expectedRevision, actor }) {
+  async function prepareProjection(input, { publicationId, expectedRevision, actor, deadlineMilliseconds = null }) {
     assertOwnerRecurringWorkdays(input);
     if (compilerPreparer) {
-      return compilerPreparer(input, { kind: "projection", publicationId, expectedRevision, actor });
+      return compilerPreparer(input, { kind: "projection", publicationId, expectedRevision, actor },
+        deadlineMilliseconds == null ? {} : { deadlineMilliseconds });
     }
     return createStaticWeeklyProjectionWithLunchRpcInput({ result: await compileOrFail(input), publicationId, expectedRevision, actor });
   }
@@ -662,6 +675,183 @@ export function createStaticWeeklyControlPlane({
       requireManager(manager);
       return transaction((client) => snapshotFor(client, requireMonday(weekStart, "week start")));
     },
+    async beginStaffingCommand({ manager, ...input }) {
+      const actor = requireManager(manager);
+      return transaction(async(client) => {
+        const {rows}=await client.query("select public.sch_service_date(statement_timestamp())::text as service_date");
+        // A byte-identical begin may be an idempotent recovery after its response
+        // was lost before midnight. PostgreSQL first resolves the authenticated
+        // manager + prepare-key identity, then rejects an elapsed *new* command.
+        const request = createStaffingCommandRequest(input,{minimumServiceDate:rows[0]?.service_date,
+          allowElapsedAuthorityReplay:true});
+        return call(client, "static_weekly_v10_begin_staffing_command", [request.semanticBody,
+          request.clientPrepareKey,request.expectedRevision,actor.managerId]);
+      });
+    },
+    async prepareStaffingCommand({ manager, operationId }) {
+      const actor = requireManager(manager);
+      const operation = requireUuid(operationId, "staffing_operation_id_required");
+      return transaction(async (client) => {
+        const command = await call(client, "static_weekly_v10_read_staffing_command", [operation, actor.managerId]);
+        if (!command) throw fail("staffing_operation_unavailable");
+        if (command.state === "PREPARED") return command;
+        if (command.state !== "PREPARING") throw fail("staffing_operation_not_preparable");
+        if (text(command.prepared_by_manager_id) !== actor.managerId) throw fail("staffing_original_preparer_required");
+        const semantic = command.semantic_body;
+        const window = enumerateStaffingServiceWindow(semantic.startDate, semantic.endDate);
+        const currentTargets=await call(client,"static_weekly_v11_read_current_refresh_targets",
+          [semantic.startDate,semantic.endDate,actor.managerId]);
+        const priorByDate=new Map();
+        for(const row of Array.isArray(currentTargets)?currentTargets:[]){
+          if(!priorByDate.has(row.serviceDate))priorByDate.set(row.serviceDate,new Set());
+          priorByDate.get(row.serviceDate).add(text(row.employeeId));
+        }
+        const meter = createStaffingPreparationMeter();
+        const prepared = await prepareInsideTransaction(client, async () => {
+          const candidates = []; const weeks = []; const inputDigests = [];
+          for (const weekStart of window.weeks) {
+            const budget = meter.checkpoint();
+            const snapshot = await snapshotFor(client, weekStart);
+            if (requireRevision(snapshot?.authority_revision) !== command.expected_revision) {
+              throw fail("staffing_preparation_revision_changed");
+            }
+            const publicationId = requirePublicationId(snapshot?.current_publication?.publication_id);
+            const source = await sourceFor(client, publicationId, weekStart);
+            const overlay = createStaffingWeekPreviewInput({ operationId: operation, managerId: actor.managerId,
+              semanticBody: semantic, expectedRevision: command.expected_revision, weekStart, source,
+              currentServiceDate: command.current_service_date });
+            const projection = await prepareProjection(overlay.input, {
+              publicationId, expectedRevision: command.expected_revision,
+              actor: { ...actor, idempotencyKey: `staffing:${operation}:${weekStart}` },
+              deadlineMilliseconds: Math.max(1, Math.floor(budget.remainingMilliseconds)),
+            });
+            if (!projection.lunchDocument?.document_identity) throw fail("static_weekly_lunch_publication_missing");
+            const { lunchDocument, ...projectionPayload } = projection;
+            candidates.push({ candidateKind: "lunch", candidateKey: `week:${weekStart}`, serviceDate: weekStart,
+              payload: lunchDocument });
+            candidates.push({ candidateKind: "projection", candidateKey: `week:${weekStart}`, serviceDate: weekStart,
+              payload: projectionPayload });
+            for (const serviceDate of overlay.dates) {
+              const employees = new Set(priorByDate.get(serviceDate)||[]);
+              for(const employeeId of projection.envelope.assignments
+                .filter(row => row.service_date === serviceDate && text(row.status).toLowerCase() === "assigned" && text(row.owner_person_id))
+                .map(row => text(row.owner_person_id)))employees.add(employeeId);
+              for(const responsibility of Array.isArray(lunchDocument.responsibilities)?lunchDocument.responsibilities:[]){
+                if(responsibility?.service_date!==serviceDate)continue;
+                for(const employeeId of [responsibility.normal_owner_person_id,responsibility.coverer_person_id])if(text(employeeId))employees.add(text(employeeId));
+              }
+              employees.add(semantic.employeeId);
+              for (const employeeId of [...employees].sort()) candidates.push({ candidateKind: "schedule_refresh",
+                candidateKey: `date:${serviceDate}:employee:${employeeId}`, serviceDate,
+                payload: { employeeId, weekStart, publicationId, projectionIdentity: projection.envelope.database_projection_identity,
+                  lunchDocumentIdentity: lunchDocument.document_identity } });
+            }
+            weeks.push(overlay.publication);
+            inputDigests.push(createHash("sha256").update(canonicalJson(overlay.input)).digest("hex"));
+            meter.checkpoint();
+          }
+          const candidateSet = createStaffingCandidateSet({ window, candidates, meter });
+          const publicationVector = { expectedRevision: command.expected_revision, weeks };
+          const inputDigest = createHash("sha256").update(canonicalJson({ operationId: operation,
+            semanticDigest: command.semantic_digest, publicationVector, inputDigests })).digest("hex");
+          const previewDigest = createHash("sha256").update(canonicalJson({ operationId: operation,
+            semanticDigest: command.semantic_digest, candidateSetDigest: candidateSet.digest,
+            publicationVector, summary: candidateSet.summary })).digest("hex");
+          return { candidateSet, publicationVector, inputDigest, previewDigest };
+        });
+        const databaseCandidates = prepared.candidateSet.rows.map(({ candidateKind, candidateKey, serviceDate, payload }) => ({
+          candidateKind, candidateKey, payload, serviceDate,
+        }));
+        return call(client, "static_weekly_v10_stage_staffing_command", [operation, databaseCandidates,
+          prepared.previewDigest, prepared.inputDigest, prepared.publicationVector, actor.managerId]);
+      });
+    },
+    async stageStaffingCommand({ manager, operationId, window, candidates, previewDigest, inputDigest, publicationVector }) {
+      const actor = requireManager(manager);
+      const candidateSet = createStaffingCandidateSet({ window, candidates });
+      const requireDigest = (value, code) => {
+        const normalized = text(value);
+        if (!/^[0-9a-f]{64}$/.test(normalized)) throw fail(code);
+        return normalized;
+      };
+      if (!publicationVector || typeof publicationVector !== "object" || Array.isArray(publicationVector)) {
+        throw fail("staffing_publication_vector_required");
+      }
+      const databaseCandidates = candidateSet.rows.map(({ candidateKind, candidateKey, serviceDate, payload }) => ({
+        candidateKind, candidateKey, payload, serviceDate,
+      }));
+      return transaction((client) => call(client, "static_weekly_v10_stage_staffing_command", [
+        requireUuid(operationId, "staffing_operation_id_required"),
+        databaseCandidates,
+        requireDigest(previewDigest, "staffing_preview_digest_required"),
+        requireDigest(inputDigest, "staffing_input_digest_required"),
+        structuredClone(publicationVector),
+        actor.managerId,
+      ]));
+    },
+    async getStaffingCommand({ manager, operationId }) {
+      const actor = requireManager(manager);
+      return transaction((client) => call(client, "static_weekly_v10_read_staffing_command", [
+        requireUuid(operationId, "staffing_operation_id_required"),
+        actor.managerId,
+      ]));
+    },
+    async listPendingStaffingCommands({ manager, limit = 50, afterCreatedAt = null, afterOperationId = null }) {
+      const actor = requireManager(manager);
+      const pageLimit = Number(limit);
+      if (!Number.isSafeInteger(pageLimit) || pageLimit < 1 || pageLimit > 100) throw fail("staffing_page_limit_invalid");
+      const hasCreatedAt = text(afterCreatedAt).length > 0;
+      const hasOperationId = text(afterOperationId).length > 0;
+      if (hasCreatedAt !== hasOperationId || (hasCreatedAt && Number.isNaN(Date.parse(afterCreatedAt)))) {
+        throw fail("staffing_page_cursor_invalid");
+      }
+      return transaction((client) => call(client, "static_weekly_v10_list_pending_staffing_commands", [
+        actor.managerId,
+        pageLimit,
+        hasCreatedAt ? new Date(afterCreatedAt).toISOString() : null,
+        hasOperationId ? requireUuid(afterOperationId, "staffing_page_cursor_invalid") : null,
+      ]));
+    },
+    async getStaffingDeliveryStatus({ manager, operationId }) {
+      const actor = requireManager(manager);
+      return transaction((client) => call(client, "static_weekly_v10_read_staffing_delivery_status", [
+        requireUuid(operationId, "staffing_operation_id_required"),
+        actor.managerId,
+      ]));
+    },
+    async acceptStaffingCommand({ manager, operationId, previewDigest, confirmationKey }) {
+      const actor = requireManager(manager);
+      const digest = text(previewDigest);
+      if (!/^[0-9a-f]{64}$/.test(digest)) throw fail("staffing_preview_digest_required");
+      return transaction((client) => call(client, "static_weekly_v11_accept_staffing_command", [
+        requireUuid(operationId, "staffing_operation_id_required"),
+        digest,
+        requireUuid(confirmationKey, "staffing_confirmation_key_required"),
+        actor.managerId,
+      ]));
+    },
+    async cancelStaffingPreparation({ manager, operationId }) {
+      const actor = requireManager(manager);
+      return transaction((client) => call(client, "static_weekly_v10_cancel_staffing_preparation", [
+        requireUuid(operationId, "staffing_operation_id_required"),
+        actor.managerId,
+      ]));
+    },
+    async getCoverAllPrintDocument({ manager, weekStart, serviceDate, expectedRevision, projectionId }) {
+      requireManager(manager);
+      const week=requireMonday(weekStart,"week start"),date=requireDateInWeek(serviceDate,week,"service date");
+      const revision=requireRevision(expectedRevision);
+      return transaction(async(client)=>{
+        // Read all three immutable/current bindings in the same authority-lock
+        // boundary as schedule changes. PDF rendering runs AFTER commit.
+        await lockStaticWeeklyAuthority(client);
+        const snapshot=await snapshotFor(client,week);
+        const publicationId=requirePublicationId(snapshot?.current_publication?.publication_id);
+        const source=await sourceFor(client,publicationId,date);
+        const lunch=await call(client,"static_weekly_v8_read_lunch_document",[date]);
+        return createCoverAllPrintDocument({snapshot,source,lunch,serviceDate:date,expectedRevision:revision,projectionId:text(projectionId)});
+      });
+    },
     async createReplacementDraft({ manager, sourcePublicationId, effectiveStart, expectedRevision, idempotencyKey }) {
       const actor = requireManager(manager); const date = requireDate(effectiveStart, "effective start");
       return transaction(async (client) => {
@@ -724,19 +914,19 @@ export function createStaticWeeklyControlPlane({
         mutate: () => call(client, "static_weekly_v3_apply_exception", [text(exceptionType), date, startsAt || null, endsAt || null, text(baseVersionId), requirePublicationId(publicationId), text(reason), payload, requireRevision(expectedRevision), actor.managerId, key, reversesExceptionId || null]),
       }));
     },
-    async applyContractorCapacity({ manager, serviceDate, baseVersionId, publicationId, slotId, shift, reason, expectedRevision, idempotencyKey, projectionWeekStart }) {
-      const actor = requireManager(manager); const weekStart = projectionWeekForDate(projectionWeekStart, serviceDate); const date = requireDateInWeek(serviceDate, weekStart, "service date"); const key = requireIdempotencyKey(idempotencyKey); const effectivePublicationId = requirePublicationId(publicationId);
-      return transaction(async (client) => {
-        const source = await sourceFor(client, effectivePublicationId, date);
-        const availability = contractorAvailabilityFromSource(source, slotId, date, shift);
-        return mutateAndMaterializeCurrentProjection(client, {
-          actor,
-          publicationId: effectivePublicationId,
-          weekStart,
-          idempotencyKey: key,
-          mutate: () => call(client, "static_weekly_v3_apply_exception", ["cover_all", date, null, null, text(baseVersionId), effectivePublicationId, text(reason), { availability }, requireRevision(expectedRevision), actor.managerId, key, null]),
-        });
-      });
+    async applyContractorCapacity({ manager, serviceDate, baseVersionId, publicationId, slotId, shift, lunch, reason, expectedRevision, idempotencyKey, projectionWeekStart }) {
+      requireManager(manager);
+      const actualShift=requireWindow(shift,"actual contractor shift"),actualLunch=requireWindow(lunch,"actual contractor lunch");
+      const minutes=t=>Number(t.slice(0,2))*60+Number(t.slice(3));
+      if(minutes(actualLunch.end)-minutes(actualLunch.start)!==60||actualLunch.start<actualShift.start||actualLunch.end>actualShift.end){
+        throw fail("static_weekly_contractor_actual_lunch_required","Enter the actual one-hour CoverAll lunch within its shift; no lunch time is assumed.");
+      }
+      // Reuse the accepted complete-action receipt and one transaction for both
+      // dated facts. A retry must bind lunch as well as capacity and shift.
+      return this.applyDayChanges({manager,serviceDate,baseVersionId,publicationId,expectedRevision,idempotencyKey,projectionWeekStart,operations:[
+        {operation:"cover_all",slotId,shift:actualShift,reason},
+        {operation:"exception",exceptionType:"lunch",startsAt:actualLunch.start,endsAt:actualLunch.end,payload:{slotId},reason:"Manager recorded actual CoverAll lunch"},
+      ]});
     },
     async applyDayChanges({ manager, serviceDate, baseVersionId, publicationId, versionId = null, operations, expectedRevision, idempotencyKey, projectionWeekStart }) {
       const actor = requireManager(manager);

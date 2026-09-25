@@ -1758,7 +1758,7 @@ function normalizeGeminiRow(raw = {}, locationGroups = [], fallbackText = "", in
 
   return {
     raw_text: normalizeIntakeText(fallbackText),
-    source_index: Number.isFinite(Number(raw.source_index)) ? Number(raw.source_index) : index,
+    source_index: index,
     event_name: eventName,
     event_scope: locationSemantics.event_scope,
     primary_venue_id: locationSemantics.primary_venue_id || "",
@@ -1867,14 +1867,25 @@ export async function aiParseEventTexts({ texts, locationGroups, eventVenues = [
     });
     if (!geminiResult?.ok || !Array.isArray(geminiResult.rows)) return localRows.map((row) => decorateLocalRow(row, { providerFallback: shouldUseGemini(row) }));
 
-    const geminiRows = geminiResult.rows.map((row, idx) => {
-      const requestedSourceIndex = Number(row?.source_index);
-      const fallbackRow = aiRowBySourceIndex.get(requestedSourceIndex) || aiInputRows[idx];
+    // Provider rows must identify exactly one requested input. Never coerce null,
+    // strings or missing identities to input zero, infer by position, or let a
+    // duplicated identity silently overwrite an earlier interpretation.
+    const seenSourceIndexes = new Set();
+    if (!geminiResult.rows.length) throw new Error("Gemini returned no source-bound rows.");
+    for (const row of geminiResult.rows) {
+      if (!row || Array.isArray(row) || !Number.isSafeInteger(row.source_index)
+        || !aiRowBySourceIndex.has(row.source_index) || seenSourceIndexes.has(row.source_index)) {
+        throw new Error("Gemini returned an invalid or duplicate source identity.");
+      }
+      seenSourceIndexes.add(row.source_index);
+    }
+    const geminiRows = geminiResult.rows.map((row) => {
+      const fallbackRow = aiRowBySourceIndex.get(row.source_index);
       return normalizeGeminiRow(
         row,
         locationGroups || [],
-        fallbackRow?.text || "",
-        fallbackRow?.source_index ?? idx,
+        fallbackRow.text,
+        fallbackRow.source_index,
         eventVenues || [],
         eventDefaults || []
       );

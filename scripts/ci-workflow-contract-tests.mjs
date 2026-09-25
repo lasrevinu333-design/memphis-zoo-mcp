@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -167,6 +168,133 @@ assert.ok(
 assert.match(parsedPackageManifest.scripts["test:integrated-backend-authority-cutover:database"], / --database$/,
   "the signed release database command must not silently degrade to source-only acceptance");
 const productionRepairGate = readFileSync(resolve(workflowDirectory, "custodial-production-repair.yml"), "utf8");
+const reviewedNode = "/opt/hostedtoolcache/node/22.23.1/x64/bin/node";
+const reviewedEntrypoints = ["scripts/legacy-activation-http-tests.mjs",
+  "scripts/release-pair-consumer-regression-tests.mjs", "scripts/run-isolated-release-recorder-tests.mjs"];
+const reviewedRegressionCommand = reviewedEntrypoints.map(path => `${reviewedNode} ${path}`).join(" && ");
+const reviewedInputPaths = ["package.json", "package-lock.json", "scripts/legacy-activation-http-tests.mjs",
+  "scripts/release-pair-consumer-regression-tests.mjs", "scripts/run-isolated-release-recorder-tests.mjs",
+  "scripts/production-release-recorder-database-tests.mjs", "scripts/fixtures/exact-frontend-pair.mjs"];
+const reviewedInputChecks = reviewedInputPaths.map(path =>
+  `          ${createHash("sha256").update(readFileSync(resolve(root, path))).digest("hex")}  ${path}`);
+const reviewedCleanShell = "        shell: /usr/bin/env -i HOME=/home/runner PATH=/opt/hostedtoolcache/node/22.23.1/x64/bin:/usr/bin:/bin /bin/bash --noprofile --norc -e -o pipefail {0}";
+function assertReviewedRegressionGate(source, jobName, label) {
+  // Deliberately accept only these canonical column-zero mappings across the
+  // ENTIRE document. Reject alternate YAML spellings/tags/aliases/duplicates
+  // rather than trying to interpret a security-sensitive subset with regex.
+  const rootLines = source.split(/\r?\n/).filter(line => line && !line.startsWith(" ") && !line.startsWith("#"));
+  assert.deepEqual(rootLines.map(line => {
+    const canonical = line.match(/^(name|on|permissions|concurrency|jobs):(?:[ \t].*)?$/);
+    assert.ok(canonical, `${label} rejects noncanonical or unapproved root metadata anywhere`);
+    return canonical[1];
+  }), ["name", "on", "permissions", "concurrency", "jobs"],
+  `${label} requires the complete canonical root mapping with no duplicates or trailing overrides`);
+  assertExactCommandsInJob(source, jobName, [reviewedRegressionCommand], label);
+  const jobs = workflowJobs(source).filter(job => job.name === jobName);
+  assert.equal(jobs.length, 1, `${label} must own exactly one canonical job`);
+  const jobsBody = source.slice(source.indexOf("\njobs:\n") + "\njobs:\n".length);
+  assert.deepEqual(jobsBody.split(/\r?\n/).filter(line => /^  [^ ]/.test(line)),
+    [`  ${jobName}:`], `${label} requires its sole canonical job mapping without aliases or explicit duplicate keys`);
+  const job = jobs[0].source;
+  // This gate intentionally accepts only the repository's canonical block YAML.
+  // New job metadata must receive explicit review, not silently alter execution.
+  // Check EVERY exact job-indentation line, including after steps. Looking only
+  // for key: silently ignores YAML's standard '? key' / ': value' syntax.
+  assert.deepEqual(job.split(/\r?\n/).filter(line => /^    [^ ]/.test(line)),
+    ["    runs-on: ubuntu-24.04", `    timeout-minutes: ${jobName === "validate" ? 35 : 45}`, "    steps:"],
+    `${label} requires the complete canonical job metadata, with no trailing/explicit/merged/duplicate keys`);
+  assert.equal(job.slice(0, job.indexOf("    steps:\n") + "    steps:\n".length),
+    `  ${jobName}:\n    runs-on: ubuntu-24.04\n    timeout-minutes: ${jobName === "validate" ? 35 : 45}\n    steps:\n`,
+    `${label} must retain its exact unconditional runner/job header`);
+  const steps = [...job.matchAll(/^      - [\s\S]*?(?=^      - |^    \S|(?![\s\S]))/gm)]
+    .map(match => match[0].trimEnd());
+  const owningSteps = steps.filter(step => step.includes(reviewedRegressionCommand));
+  assert.deepEqual(steps.slice(0, 3), [
+    "      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1",
+    "      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0\n        with:\n          node-version: '22.23.1'\n          cache: npm",
+    "      - name: Install exact dependencies\n        run: npm ci --ignore-scripts",
+  ], `${label} requires the exact reviewed preparation; no arbitrary predecessor may mutate execution state`);
+  assert.equal(steps[3], owningSteps[0], `${label} must execute reviewed regressions immediately after installation`);
+  assert.deepEqual(owningSteps, [[
+    "      - name: Reviewed phone, pair, and isolated recorder regressions",
+    reviewedCleanShell,
+    "        run: |",
+    "          set -euo pipefail",
+    `          docker pull ${rehearsalPostgresImage}`,
+    "          /usr/bin/sha256sum --check --strict <<'REVIEWED_INPUTS'",
+    ...reviewedInputChecks,
+    "          REVIEWED_INPUTS",
+    `          ${reviewedRegressionCommand}`,
+  ].join("\n")], `${label} requires the exact dedicated fail-fast step, including image provision; no skip, exit, heredoc or shell wrapper`);
+}
+assertReviewedRegressionGate(schedulerGate, "validate", "foundation-security-gate.yml:validate");
+assertReviewedRegressionGate(productionRepairGate, "backend", "custodial-production-repair.yml:backend");
+assert.equal(parsedPackageManifest.scripts["test:reviewed-source-regressions"],
+  "node scripts/legacy-activation-http-tests.mjs && node scripts/release-pair-consumer-regression-tests.mjs && node scripts/run-isolated-release-recorder-tests.mjs",
+  "reviewed phone/pair/recorder regressions must execute their actual owning tests, with no source-only database substitute");
+let reviewedMutationCount = 0;
+for (const [source, job] of [[schedulerGate, "validate"], [productionRepairGate, "backend"]]) {
+  const targetStepName = "Reviewed phone, pair, and isolated recorder regressions";
+  for (const mutant of [
+    source.replace(`  ${job}:\n`, `  ${job}:\n    if: \${{ false }}\n`),
+    source.replace(`  ${job}:\n`, `  ${job}:\n    continue-on-error: true\n`),
+    source.replace(`      - name: ${targetStepName}\n`, `      - name: ${targetStepName}\n        if: \${{ false }}\n`),
+    source.replace(`      - name: ${targetStepName}\n`, `      - name: ${targetStepName}\n        continue-on-error: true\n`),
+    source.replace(`      - name: ${targetStepName}\n`, `      - name: ${targetStepName}\n        env:\n          NODE_OPTIONS: --require ./skip.cjs\n`),
+    source.replace(reviewedRegressionCommand, `exit 0\n          ${reviewedRegressionCommand}`),
+    source.replace(reviewedRegressionCommand, `if false; then\n          ${reviewedRegressionCommand}\n          fi`),
+    source.replace(reviewedRegressionCommand, `skipped() {\n          ${reviewedRegressionCommand}\n          }`),
+    source.replace(reviewedRegressionCommand, `cat <<'NEVER_RUN'\n          ${reviewedRegressionCommand}\n          NEVER_RUN`),
+    source.replace(reviewedRegressionCommand, `return 0\n          ${reviewedRegressionCommand}`),
+    source.replace(`  ${job}:\n`, `  ${job}: &merged\n`),
+    source.replace(reviewedCleanShell, "        shell: bash -c 'exit 0'"),
+    source.replace("\njobs:\n", "\nenv:\n  BASH_ENV: /tmp/skip\njobs:\n"),
+    ...["env", "defaults"].flatMap(key => [key + ":", '"' + key + '":', "'" + key + "':", key + " :", "!!str " + key + ":"]
+      .flatMap(spelling => {
+        const value = key === "env" ? "\n  BASH_ENV: /tmp/skip\n" : "\n  run:\n    shell: /bin/true {0}\n";
+        return [source + "\n" + spelling + value, source.replace("\njobs:\n", "\n" + spelling + value + "\njobs:\n")];
+      })),
+    source + "\ndefaults:\n  run:\n    shell: /bin/bash --noprofile --norc -c '/bin/bash \"$1\"; rc=$?; printf \"script-shell=/bin/true\\n\" > .npmrc; exit \"$rc\"' wrapper {0}\n",
+    source + "\npermissions:\n  contents: read\n",
+    source.replace("\njobs:\n", "\n? defaults\n: {run: {shell: /bin/true}}\njobs:\n"),
+    ...[
+      '    ? if\n    : "${{ false }}"\n',
+      '    ? defaults\n    :\n      run:\n        shell: "/bin/true {0}"\n',
+      '    "if": "${{ false }}"\n',
+      "    'defaults': {run: {shell: '/bin/true {0}'}}\n",
+      '    if : "${{ false }}"\n',
+      '    !!str if: "${{ false }}"\n',
+      '    <<: {if: false}\n',
+      '    ? [if]\n    : false\n',
+      '    &condition if: false\n',
+      '    if: *condition\n',
+      '    timeout-minutes: 35\n',
+      '    steps: []\n',
+      '    unknown: false\n',
+      '    \t? if\n    : false\n',
+    ].map(suffix => source + '\n' + suffix),
+    source + `\n  ? ${job}\n  : {if: false, runs-on: ubuntu-24.04, steps: []}\n`,
+    source.replace("        run: npm ci --ignore-scripts", "        run: npm ci"),
+    ...[
+      "node -e \"const fs=require('fs');const p=require('./package.json');p.scripts['test:reviewed-source-regressions']='true';fs.writeFileSync('package.json',JSON.stringify(p))\"",
+      'mkdir -p "$RUNNER_TEMP/bin"; printf "#!/bin/sh\\nexit 0\\n" > "$RUNNER_TEMP/bin/npm"; chmod +x "$RUNNER_TEMP/bin/npm"; echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"',
+      'echo "npm() { return 0; }" > "$RUNNER_TEMP/skip.sh"; echo "BASH_ENV=$RUNNER_TEMP/skip.sh" >> "$GITHUB_ENV"',
+      "printf 'process.exit(0);' > scripts/legacy-activation-http-tests.mjs",
+    ].map(body => source.replace(`      - name: ${targetStepName}`, `      - name: Unexpected predecessor\n        run: |\n          ${body}\n      - name: ${targetStepName}`)),
+    source.replace(reviewedInputChecks[0], reviewedInputChecks[0].replace(/[a-f0-9]/, "0")),
+    source.replace("--check --strict", "--check --status || true #"),
+  ]) {
+    assert.throws(() => assertReviewedRegressionGate(mutant, job, "independent skip/failure mutation"));
+    reviewedMutationCount += 1;
+  }
+  for (const replacement of ["", `# ${reviewedRegressionCommand}`, `${reviewedRegressionCommand} || true`,
+    `${reviewedRegressionCommand}\n          ${reviewedRegressionCommand}`]) {
+    assert.throws(() => assertReviewedRegressionGate(source.replace(reviewedRegressionCommand, replacement), job, "mutation"));
+    reviewedMutationCount += 1;
+  }
+  assert.throws(() => assertReviewedRegressionGate(source.replace(`docker pull ${rehearsalPostgresImage}`, "# missing image preparation"), job, "mutation"));
+  reviewedMutationCount += 1;
+}
 assert.match(productionRepairGate,
   /CUSTODIAL_STATIC_TRUTH_TEST_DOCKER_CONTAINER="\$container"[\s\S]*npm run --silent test:static-weekly-operational-truth-db/,
   "the complete repair gate must prove canonical operational truth against its exact rebuilt schema");
@@ -553,4 +681,8 @@ assert.match(productionReleaseRecorder, /release:production-deployment:record --
 assert.doesNotMatch(productionReleaseRecorder, /service_role|SUPABASE_SERVICE_ROLE_KEY/i,
   "release recorder workflow must not add a service-role-key bypass");
 
-console.log(JSON.stringify({ ok: true, workflows_checked: workflowNames.length }, null, 2));
+const executionBoundary = spawnSync(process.execPath, [resolve(root, "scripts/reviewed-regression-execution-tests.mjs")],
+  { cwd: root, encoding: "utf8", timeout: 45000 });
+assert.equal(executionBoundary.status, 0, executionBoundary.stdout + executionBoundary.stderr);
+console.log(executionBoundary.stdout.trim());
+console.log(JSON.stringify({ ok: true, workflows_checked: workflowNames.length, direct_and_surrounding_mutants: reviewedMutationCount }, null, 2));
