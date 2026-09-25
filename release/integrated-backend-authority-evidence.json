@@ -165,7 +165,7 @@
       {
         "path": ".github/workflows/integrated-release-attestation.yml",
         "mode": "100644",
-        "object_id": "2d65fe99854c182f2bcf914b415c258be85d56d7"
+        "object_id": "6927bb11e25249a6ca7b954927ae53df96374be5"
       },
       {
         "path": ".github/workflows/manager-inspection-readiness-monitor.yml",
@@ -610,7 +610,7 @@
       {
         "path": "scripts/ci-workflow-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "53abc8581e0033248b001a85e6879d17bf4c0bbc"
+        "object_id": "fb8d09b3b0808a64ea29a141afc9a5e9b269d8fd"
       },
       {
         "path": "scripts/cleaning-identity-gps-database-tests.mjs",
@@ -1300,7 +1300,7 @@
       {
         "path": "scripts/offline-actor-recovery-database-tests.mjs",
         "mode": "100644",
-        "object_id": "a4066ab26cca9ebe7fcd190c9c2a862c51d88a71"
+        "object_id": "d7b516e5fb66f928167df553fe93642e63571f2a"
       },
       {
         "path": "scripts/offline-actor-recovery-route-tests.mjs",
@@ -4150,7 +4150,7 @@
       {
         "path": "supabase/migrations/20260925054802_static_weekly_staffing_atomic_acceptance.sql",
         "mode": "100644",
-        "object_id": "55481d40412a86c6529e079aa8387f22baa88636"
+        "object_id": "ae2c635ae17680ef599df97f238079706a2fd30f"
       },
       {
         "path": "tmp/write_probe.txt",
