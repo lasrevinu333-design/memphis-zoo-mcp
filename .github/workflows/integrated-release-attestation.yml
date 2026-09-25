@@ -38,9 +38,12 @@ jobs:
           trap 'docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
           proof_secret='empty-rebuild-offline-authority-secret-0123456789'
           proof_digest="$(printf '%s' "$proof_secret" | sha256sum | awk '{print $1}')"
+          native_proof_secret='empty-rebuild-native-route-secret-012345678901'
+          native_proof_digest="$(printf '%s' "$native_proof_secret" | sha256sum | awk '{print $1}')"
           [[ "$proof_digest" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$native_proof_digest" =~ ^[0-9a-f]{64}$ ]]
           docker exec "$container" psql -v ON_ERROR_STOP=1 -At -U supabase_admin -d postgres \
-            -c "select public.custodial_configure_backend_execution_key('$proof_digest','integrated-release-attestation');"
+            -c "select public.custodial_configure_backend_execution_key('$proof_digest','integrated-release-attestation'); select public.custodial_configure_native_route_proof_key('$native_proof_digest','integrated-release-attestation');"
           export INTEGRATED_RELEASE_ATTESTATION_INPUT=/tmp/memphis-integrated-release-attestation.json
           umask 077
           printf '%s' "$MEMPHIS_RELEASE_ATTESTATION_JSON" > "$INTEGRATED_RELEASE_ATTESTATION_INPUT"

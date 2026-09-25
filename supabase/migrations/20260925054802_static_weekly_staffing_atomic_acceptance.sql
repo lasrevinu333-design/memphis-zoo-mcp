@@ -553,7 +553,14 @@ end $surface$;
 alter table public.custodial_release_authority_restore_inventory
  disable trigger trg_custodial_release_authority_restore_inventory_immutable;
 do $recovery$ declare obj record;next_order integer;begin
- for obj in with objects as (
+ for obj in with required_public_functions(identity,oid) as (values
+   ('public.custodial_oc24_service_trim(text)','public.custodial_oc24_service_trim(text)'::regprocedure),
+   ('public.custodial_oc24_assert_completion_selection(jsonb)','public.custodial_oc24_assert_completion_selection(jsonb)'::regprocedure),
+   ('public.custodial_oc24_completion_selection_guard()','public.custodial_oc24_completion_selection_guard()'::regprocedure),
+   ('public.custodial_oc24_legacy_replay_allowed(text,text,text,text,text,text,text,jsonb,jsonb,text)','public.custodial_oc24_legacy_replay_allowed(text,text,text,text,text,text,text,jsonb,jsonb,text)'::regprocedure),
+   ('public.custodial_oc24_inspection_recording_retired()','public.custodial_oc24_inspection_recording_retired()'::regprocedure),
+   ('public.static_weekly_assert_exception_payload(text,date,time,time,uuid,uuid,jsonb,uuid)','public.static_weekly_assert_exception_payload(text,date,time,time,uuid,uuid,jsonb,uuid)'::regprocedure)
+ ), objects as (
   select 100000 bucket,'function'::text kind,p.oid::regprocedure::text identity,pg_get_functiondef(p.oid) definition
   from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.oid in(
    'public.static_weekly_v10_staffing_guard()'::regprocedure,
@@ -565,6 +572,14 @@ do $recovery$ declare obj record;next_order integer;begin
    'public.static_weekly_v11_accept_staffing_command(uuid,text,uuid,uuid)'::regprocedure,
    'public.static_weekly_v10_read_staffing_delivery_status(uuid,uuid)'::regprocedure,
    'public.custodial_release_canary_authority_surface()'::regprocedure)
+  union all select 100000,'function',f.identity,pg_get_functiondef(f.oid)
+   from required_public_functions f
+  -- These relations and triggers were extended by later members of the same
+  -- still-unapplied 22-migration release. Capture their final definitions only
+  -- after every extension has been installed.
+  union all select 1000,'relation',r.identity,
+   public.custodial_release_authority_current_relation_definition(r.identity)
+   from (values('public.device_notification_acknowledgements'),('public.static_weekly_staffing_commands')) r(identity)
   union all select 200000,'column','public.static_weekly_staffing_commands:'||a.attname,
    public.custodial_release_authority_current_column_definition('public.static_weekly_staffing_commands:'||a.attname)
    from pg_attribute a where a.attrelid='public.static_weekly_staffing_commands'::regclass and a.attnum>0 and not a.attisdropped
@@ -583,6 +598,20 @@ do $recovery$ declare obj record;next_order integer;begin
    ||case t.tgenabled when 'O' then 'enable' when 'D' then 'disable' when 'R' then 'enable replica' when 'A' then 'enable always' end
    ||' trigger '||quote_ident(t.tgname)||';'
    from pg_trigger t where t.tgrelid='public.static_weekly_staffing_commands'::regclass and not t.tgisinternal
+  union all select 700000,'trigger',wanted.identity,
+   'drop trigger if exists '||quote_ident(t.tgname)||' on '||quote_ident(n.nspname)||'.'||quote_ident(c.relname)||'; '
+   ||pg_get_triggerdef(t.oid,true)||'; alter table '||quote_ident(n.nspname)||'.'||quote_ident(c.relname)||' '
+   ||case t.tgenabled when 'O' then 'enable' when 'D' then 'disable' when 'R' then 'enable replica' when 'A' then 'enable always' end
+   ||' trigger '||quote_ident(t.tgname)||';'
+   from pg_trigger t
+   join pg_class c on c.oid=t.tgrelid
+   join pg_namespace n on n.oid=c.relnamespace
+   join (values
+    ('public.weekly_schedule_lunch_documents.custodial_disaster_restore_mutation_fence'),
+    ('public.weekly_schedule_lunch_documents.trg_weekly_schedule_lunch_documents_immutable'),
+    ('public.weekly_roster_slot_incumbency_closures.trg_static_weekly_v8_guard_vacancy_closure')
+   ) wanted(identity) on wanted.identity=quote_ident(n.nspname)||'.'||quote_ident(c.relname)||'.'||quote_ident(t.tgname)
+   where not t.tgisinternal
   union all select 900000,'grant',p.oid::regprocedure::text,
    public.custodial_release_authority_current_grant_definition(p.oid::regprocedure::text)
    from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.oid in(
@@ -592,7 +621,7 @@ do $recovery$ declare obj record;next_order integer;begin
     'public.static_weekly_v10_read_staffing_delivery_status(uuid,uuid)'::regprocedure)
  ) select * from objects order by bucket,identity loop
   if obj.definition is null then raise exception 'missing staffing acceptance recovery object %',obj.identity;end if;
-  update public.custodial_release_authority_restore_inventory set definition_sql=obj.definition,
+  update public.custodial_release_authority_restore_inventory set object_identity=obj.identity,definition_sql=obj.definition,
    definition_sha256=public.static_weekly_digest_text(obj.definition),captured_at=statement_timestamp()
   where object_kind=obj.kind and (object_identity=obj.identity or
    case when obj.kind in ('function','grant') and object_identity like '%(%' and obj.identity like '%(%'
