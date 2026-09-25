@@ -144,7 +144,12 @@ await expectSqlFailure(
   /Cleaning corrections are append-only/,
 );
 
+// Represent one record that existed before OC24 retired inspection recording.
+// The fixture-only superuser setup is transactional and restores the ALWAYS
+// trigger before any assertion; it is not an application recording path.
 await sql(`
+  begin;
+  alter table public.cleaning_inspections disable trigger aaa_oc24_inspection_recording_retired;
   insert into public.cleaning_inspections(
     id,operation_id,request_fingerprint,session_id,inspector_manager_id,inspector_name_snapshot,
     employee_name_snapshot,location_code_snapshot,location_name_snapshot,location_id,employee_id,
@@ -155,17 +160,34 @@ await sql(`
     'placeholder','placeholder','placeholder','${ids.location1}','${ids.employee1}',clock_timestamp(),
     'manager_spot_check','custodial-v1',90,85,false,false,'[]'::jsonb
   );
+  alter table public.cleaning_inspections enable always trigger aaa_oc24_inspection_recording_retired;
+  commit;
   update public.employees set display_name='Renamed Directory Employee' where id='${ids.employee1}';
   update public.locations set location_name='Renamed Directory Location' where id='${ids.location1}';
-  update public.cleaning_inspections set notes='Rubric note updated without rebinding evidence' where id='${ids.inspection}';
 `);
 assert.equal(await sql(`
   select employee_name_snapshot||'|'||location_name_snapshot||'|'||inspector_name_snapshot
   from public.cleaning_inspections where id='${ids.inspection}';
 `), "Original Employee|Original Location|Named Test Manager");
 await expectSqlFailure(
-  `update public.cleaning_inspections set employee_name_snapshot='Rebound' where id='${ids.inspection}';`,
-  /Inspection actor, cleaning identity, and snapshots are immutable/,
+  `update public.cleaning_inspections set notes='Rewritten historical inspection' where id='${ids.inspection}';`,
+  /inspection recording is retired; historical records are preserved/,
+);
+await expectSqlFailure(`
+  insert into public.cleaning_inspections(
+    id,operation_id,request_fingerprint,session_id,inspector_manager_id,inspector_name_snapshot,
+    employee_name_snapshot,location_code_snapshot,location_name_snapshot,location_id,employee_id,
+    session_started_at,inspection_type,rubric_version,overall_score,pass_threshold,
+    critical_failure,follow_up_required,findings_json
+  ) values (
+    '00000000-0000-4000-8000-00000000c714','00000000-0000-4000-8000-00000000c715','${"b".repeat(64)}',
+    '${ids.session}','${ids.manager}','Named Test Manager','Original Employee','IDENTITY_ONE','Original Location',
+    '${ids.location1}','${ids.employee1}',clock_timestamp(),'manager_spot_check','custodial-v1',90,85,false,false,'[]'::jsonb
+  );
+`, /inspection recording is retired; historical records are preserved/);
+await expectSqlFailure(
+  `set role service_role; delete from public.cleaning_inspections where id='${ids.inspection}';`,
+  /permission denied for table cleaning_inspections/,
 );
 
 await sql(`
@@ -216,7 +238,7 @@ console.log(JSON.stringify({
   original_identity_immutable: true,
   correction_append_only: true,
   correction_replay_exact_once: true,
-  inspection_snapshot_frozen: true,
+  inspection_history_preserved_and_recording_retired: true,
   terminal_gps_advisory_only: true,
   active_gps_preserved: true,
 }, null, 2));
