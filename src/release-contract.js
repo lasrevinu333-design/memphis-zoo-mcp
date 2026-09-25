@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createPublicKey, verify } from "node:crypto";
+import { createHash, createPublicKey, verify } from "node:crypto";
 
 const FINGERPRINT = /^[a-f0-9]{64}$/;
 const COMMIT = /^[a-f0-9]{40}$/;
@@ -15,12 +15,16 @@ const ATTESTATION_KEYS = [
   "signature",
 ];
 const SIGNED_PAYLOAD_KEYS = ATTESTATION_KEYS.filter((key) => key !== "signature");
+export const RELEASE_ATTESTATION_TRUST_ROOT = Object.freeze({
+  keyId: "custodial-build52-20260915-v1",
+  publicKeySpkiSha256: "992a3be69b3340e65bae0b28b8d78ef568dfc30a0ed8120268794ea15e1b49a0",
+});
 
 export function releaseAttestationPayload(input) {
   return Object.fromEntries(SIGNED_PAYLOAD_KEYS.map((key) => [key, input?.[key]]));
 }
 
-export function assertExactReleaseAttestation(input, { publicKeyPem } = {}) {
+export function assertExactReleaseAttestation(input, { publicKeyPem, trustRoot = RELEASE_ATTESTATION_TRUST_ROOT } = {}) {
   assert.ok(input && typeof input === "object" && !Array.isArray(input), "release attestation input must be an object");
   assert.deepEqual(Object.keys(input).sort(), ATTESTATION_KEYS, "release attestation input has an unexpected shape");
   assert.equal(input.artifact, "memphis-zoo-integrated-release-attestation.v2");
@@ -33,13 +37,17 @@ export function assertExactReleaseAttestation(input, { publicKeyPem } = {}) {
   assert.match(String(input.schema_fingerprint || ""), FINGERPRINT, "release attestation schema fingerprint is invalid");
   assert.deepEqual(Object.keys(input.signature || {}).sort(), ["algorithm", "key_id", "value_base64"]);
   assert.equal(input.signature.algorithm, "ed25519");
-  assert.match(String(input.signature.key_id || ""), /^[a-z0-9][a-z0-9._-]{2,63}$/);
+  assert.equal(input.signature.key_id, trustRoot.keyId, "release attestation key identity is not the source-pinned trust root");
   assert.match(String(input.signature.value_base64 || ""), /^[A-Za-z0-9+/]+={0,2}$/);
   assert.ok(String(publicKeyPem || "").trim(), "release attestation public key is required");
+  const publicKey = createPublicKey(publicKeyPem);
+  assert.equal(publicKey.asymmetricKeyType, "ed25519", "release attestation trust root must be an Ed25519 public key");
+  assert.equal(createHash("sha256").update(publicKey.export({ type: "spki", format: "der" })).digest("hex"),
+    trustRoot.publicKeySpkiSha256, "release attestation public key is not the source-pinned trust root");
   const payload = Buffer.from(`${JSON.stringify(releaseAttestationPayload(input))}\n`, "utf8");
   const signature = Buffer.from(input.signature.value_base64, "base64");
   assert.equal(signature.length, 64, "release attestation signature must be one Ed25519 signature");
-  assert.equal(verify(null, payload, createPublicKey(publicKeyPem), signature), true,
+  assert.equal(verify(null, payload, publicKey, signature), true,
     "release attestation signature is invalid");
   return Object.freeze({ ...input });
 }

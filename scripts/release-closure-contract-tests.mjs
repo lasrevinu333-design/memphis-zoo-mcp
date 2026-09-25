@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { generateKeyPairSync, sign } from "node:crypto";
+import { createHash, generateKeyPairSync, sign } from "node:crypto";
 import { assertBackendFrontendIdentity, assertExactReleaseAttestation, assertFrontendReleaseDeclaration, assertFrontendReleaseIdentity, assertManifestContract, assertObservedSchemaIdentity, releaseAttestationPayload } from "../src/release-contract.js";
 
 const input = JSON.parse(readFileSync(new URL("../release/schema-alignment-input.json", import.meta.url), "utf8"));
@@ -60,16 +60,31 @@ assert.match(liveGate, /release_canary\?\.paused, false/g,
   "the live release gate must reject a paused canary in both health views");
 
 const { privateKey, publicKey } = generateKeyPairSync("ed25519");
+const publicKeyPem = publicKey.export({ type: "spki", format: "pem" });
+const trustRoot = { keyId: "release-contract-test",
+  publicKeySpkiSha256: createHash("sha256").update(publicKey.export({ type: "spki", format: "der" })).digest("hex") };
 const unsignedAttestation = { artifact: "memphis-zoo-integrated-release-attestation.v2", release_id: input.release_id,
   backend_commit_sha: "a".repeat(40), backend_tree_sha: "b".repeat(40), backend_evidence_blob_sha: "c".repeat(40),
   backend_evidence_sha256: "d".repeat(64), frontend_commit_sha: input.frontend_commit_sha, schema_fingerprint: "e".repeat(64),
   signature: { algorithm: "ed25519", key_id: "release-contract-test", value_base64: "" } };
 unsignedAttestation.signature.value_base64 = sign(null, Buffer.from(`${JSON.stringify(releaseAttestationPayload(unsignedAttestation))}\n`), privateKey).toString("base64");
-const attestation = assertExactReleaseAttestation(unsignedAttestation, { publicKeyPem: publicKey.export({ type: "spki", format: "pem" }) });
+const attestation = assertExactReleaseAttestation(unsignedAttestation, { publicKeyPem, trustRoot });
 assert.equal(attestation.frontend_commit_sha, input.frontend_commit_sha);
-assert.throws(() => assertExactReleaseAttestation({ ...attestation, unexpected: true }, { publicKeyPem: publicKey.export({ type: "spki", format: "pem" }) }), /unexpected shape/);
-assert.throws(() => assertExactReleaseAttestation({ ...attestation, frontend_commit_sha: "b".repeat(39) }, { publicKeyPem: publicKey.export({ type: "spki", format: "pem" }) }), /frontend commit/);
-assert.throws(() => assertExactReleaseAttestation({ ...attestation, backend_tree_sha: "f".repeat(40) }, { publicKeyPem: publicKey.export({ type: "spki", format: "pem" }) }), /signature is invalid/);
+assert.throws(() => assertExactReleaseAttestation({ ...attestation, unexpected: true }, { publicKeyPem, trustRoot }), /unexpected shape/);
+assert.throws(() => assertExactReleaseAttestation({ ...attestation, frontend_commit_sha: "b".repeat(39) }, { publicKeyPem, trustRoot }), /frontend commit/);
+assert.throws(() => assertExactReleaseAttestation({ ...attestation, backend_tree_sha: "f".repeat(40) }, { publicKeyPem, trustRoot }), /signature is invalid/);
+const { privateKey: ecPrivateKey, publicKey: ecPublicKey } = generateKeyPairSync("ec", { namedCurve: "secp224r1" });
+const ecTrustRoot = { keyId: "release-contract-test",
+  publicKeySpkiSha256: createHash("sha256").update(ecPublicKey.export({ type: "spki", format: "der" })).digest("hex") };
+const hostileEc = structuredClone(unsignedAttestation);
+for (let attempt = 0; attempt < 512; attempt += 1) {
+  const candidate = sign(null, Buffer.from(`${JSON.stringify(releaseAttestationPayload(hostileEc))}\n`), ecPrivateKey);
+  if (candidate.length === 64) { hostileEc.signature.value_base64 = candidate.toString("base64"); break; }
+}
+assert.equal(Buffer.from(hostileEc.signature.value_base64, "base64").length, 64,
+  "reviewer EC reproduction must produce a 64-byte DER signature");
+assert.throws(() => assertExactReleaseAttestation(hostileEc,
+  { publicKeyPem: ecPublicKey.export({ type: "spki", format: "pem" }), trustRoot: ecTrustRoot }), /must be an Ed25519 public key/);
 const contract = { release_id: input.release_id, api_contract_versions: input.api_contract_versions, queue_compatibility_versions: input.queue_compatibility_versions, minimum_supported: input.minimum_supported };
 assert.equal(assertManifestContract(contract, input), true);
 assert.throws(() => assertManifestContract({ ...contract, release_id: "release-spoofed" }, input), /release_id/);

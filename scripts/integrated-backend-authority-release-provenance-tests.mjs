@@ -56,7 +56,17 @@ function createFixture({ beforeCommit = null, skipEvidenceRefresh = false } = {}
   const fixture = mkdtempSync(join(tmpdir(), "integrated-backend-release-provenance-"));
   const acceptanceDirectory = mkdtempSync(join(tmpdir(), "integrated-backend-release-acceptance-"));
   try {
+    const { privateKey, publicKey } = generateKeyPairSync("ed25519");
+    const publicKeyPem = publicKey.export({ type: "spki", format: "pem" });
+    const publicKeySpkiSha256 = createHash("sha256")
+      .update(publicKey.export({ type: "spki", format: "der" })).digest("hex");
     const trackedPaths = copyCompleteTrackedWorktree(fixture);
+    const fixtureReleaseContractPath = join(fixture, "src/release-contract.js");
+    const fixtureReleaseContract = readFileSync(fixtureReleaseContractPath, "utf8")
+      .replace('keyId: "custodial-build52-20260915-v1"', 'keyId: "test-release-key"')
+      .replace('publicKeySpkiSha256: "992a3be69b3340e65bae0b28b8d78ef568dfc30a0ed8120268794ea15e1b49a0"',
+        `publicKeySpkiSha256: "${publicKeySpkiSha256}"`);
+    writeFileSync(fixtureReleaseContractPath, fixtureReleaseContract);
     const fixtureSchemaPath = join(fixture, "release/schema-alignment-input.json");
     const fixtureFrontendPath = join(fixture, "release/frontend-release-manifest.json");
     const fixtureSchema = JSON.parse(readFileSync(fixtureSchemaPath, "utf8"));
@@ -98,8 +108,6 @@ function createFixture({ beforeCommit = null, skipEvidenceRefresh = false } = {}
     const tree = git(fixture, ["rev-parse", "HEAD^{tree}"]);
     const schemaInput = JSON.parse(readFileSync(join(fixture, "release/schema-alignment-input.json"), "utf8"));
     const schemaFingerprint = readFileSync(join(fixture, "supabase/canonical/schema-fingerprint.txt"), "utf8").trim();
-    const { privateKey, publicKey } = generateKeyPairSync("ed25519");
-    const publicKeyPem = publicKey.export({ type: "spki", format: "pem" });
     const acceptancePath = join(acceptanceDirectory, "acceptance.json");
     const writeAcceptance = ({ expectedCommit = commit, expectedTree = tree, document = null } = {}) => {
       chmodSync(acceptanceDirectory, 0o755);

@@ -286,7 +286,7 @@
       "phase": "static_weekly_staffing_atomic_acceptance",
       "file": "20260925054802_static_weekly_staffing_atomic_acceptance.sql",
       "source_migration_version": "20260925054802",
-      "sha256": "80cca4e537547d1984b6ecfb6fc2ea93476915daa492be651fbd138eec141a5a"
+      "sha256": "34dbeb5ac62da3f507737d189a0f4c982a5187bdb34905cb87468f1776ed2e39"
     }
   ],
   "postconditions": [

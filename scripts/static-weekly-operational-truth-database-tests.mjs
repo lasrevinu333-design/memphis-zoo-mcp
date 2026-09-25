@@ -62,6 +62,8 @@ await sql(`
 begin;
 select set_config('app.static_weekly_publish_write','on',true);
 
+insert into public.ops_manager_managers(manager_id,display_name)
+values(${q(ids.manager)}::uuid,'Truth Manager');
 insert into public.employees(id,employee_code,display_name,active,role)
 values(${q(ids.employee)}::uuid,${q(codes.employee)},'Operational Truth Employee',true,'staff');
 insert into public.locations(id,location_code,location_name,location_type,form_type,active,sort_order)
@@ -99,10 +101,20 @@ values(${q(ids.version)}::uuid,${publishRevision},'published','publish',${q(week
 insert into public.weekly_schedule_publications(publication_id,version_id,authority_revision,publication_kind,effective_start,expected_revision,idempotency_key,actor_manager_id,actor_manager_name_snapshot,request_digest,replay_digest,content_digest,output_digest)
 values(${q(ids.publication)}::uuid,${q(ids.version)}::uuid,${publishRevision},'publish',${q(weekStart)}::date,0,${q(`truth-publish-${discriminator}`)},${q(ids.manager)}::uuid,'Truth Manager',${q(hash("5"))},${q(hash("6"))},${q(hash("7"))},${q(hash("8"))});
 insert into public.weekly_schedule_slot_availability(availability_id,version_id,slot_id,day_of_week,availability_state,shift_start,shift_end,lunch_start,lunch_end,capacity_units,max_load_points,qualification_snapshot,qualification_provenance,restriction_snapshot,restriction_provenance,slot_label_snapshot,incumbent_person_id_snapshot,incumbent_name_snapshot,content_digest)
-values(${q(ids.availability)}::uuid,${q(ids.version)}::uuid,${q(ids.slot)}::uuid,${Number(dayOfWeek)},'working','07:00','16:00','11:00','11:30',1,100,'["general"]'::jsonb,'{}'::jsonb,'[]'::jsonb,'{}'::jsonb,'Operational Truth Slot',${q(ids.employee)}::uuid,'Operational Truth Employee',${q(hash("9"))});
+values(${q(ids.availability)}::uuid,${q(ids.version)}::uuid,${q(ids.slot)}::uuid,${Number(dayOfWeek)},'working','07:00','16:00','11:00','12:00',1,100,'["general"]'::jsonb,'{}'::jsonb,'[]'::jsonb,'{}'::jsonb,'Operational Truth Slot',${q(ids.employee)}::uuid,'Operational Truth Employee',${q(hash("9"))});
 
 insert into public.weekly_schedule_compiled_projections(projection_id,publication_id,version_id,week_start,week_end,exception_set_json,exception_set_digest,compiler_version,objective_json,metrics_json,replay_digest,authority_digest,receipt_json,projection_envelope,compiled_by_manager_id)
-values(${q(ids.projection)}::uuid,${q(ids.publication)}::uuid,${q(ids.version)}::uuid,${q(weekStart)}::date,${q(weekEnd)}::date,'[]'::jsonb,public.static_weekly_digest_jsonb(public.static_weekly_accepted_exception_set(${q(ids.publication)}::uuid,${q(weekStart)}::date)),'truth.compiler.v1','{}'::jsonb,'{}'::jsonb,${q(hash("a"))},${q(hash("b"))},'{}'::jsonb,'{}'::jsonb,${q(ids.manager)}::uuid);
+values(${q(ids.projection)}::uuid,${q(ids.publication)}::uuid,${q(ids.version)}::uuid,${q(weekStart)}::date,${q(weekEnd)}::date,'[]'::jsonb,public.static_weekly_digest_jsonb(public.static_weekly_accepted_exception_set(${q(ids.publication)}::uuid,${q(weekStart)}::date)),'truth.compiler.v1','{}'::jsonb,'{}'::jsonb,${q(hash("a"))},${q(hash("b"))},'{}'::jsonb,
+ jsonb_build_object(
+  'authority',jsonb_build_object(
+   'inputDigest',${q(hash("input"))},
+   'projectionAvailability',jsonb_build_array(jsonb_build_object(
+    'serviceDate',${q(serviceDate)},'slotId',${q(ids.slot)},'dayOfWeek',${Number(dayOfWeek)},'status','working',
+    'incumbentPersonId',${q(ids.employee)},'shift',jsonb_build_object('start','07:00','end','16:00'),
+    'lunch',jsonb_build_object('start','11:00','end','12:00'),'qualifications',jsonb_build_array('general'),
+    'restrictions','[]'::jsonb)),
+   'overlayCompilerInput',jsonb_build_object('version',jsonb_build_object('assignments','[]'::jsonb))),
+  'assignments','[]'::jsonb),${q(ids.manager)}::uuid);
 insert into public.weekly_schedule_command_receipts(command_id,actor_manager_id,actor_manager_name_snapshot,command_type,idempotency_key,expected_revision,request_digest,request_canonical_json,response_json,response_digest,content_digest)
 values(${q(ids.projectionCommand)}::uuid,${q(ids.manager)}::uuid,'Truth Manager','materialize_projection',${q(`truth-project-${discriminator}`)},${publishRevision},${q(hash("c"))},'{}'::jsonb,jsonb_build_object('revision',${projectionRevision},'data',jsonb_build_object('projection_id',${q(ids.projection)})),${q(hash("d"))},${q(hash("e"))});
 
@@ -111,6 +123,39 @@ values
   (${q(ids.occurrence)}::uuid,${q(ids.projection)}::uuid,${q(ids.publication)}::uuid,${q(ids.version)}::uuid,'${serviceDate}'::date,'truth-scan-${discriminator}',${Number(dayOfWeek)},${q(ids.physical)}::uuid,${q(codes.group)},'Operational Truth Family','08:00','09:00',${q(ids.slot)}::uuid,'Operational Truth Slot',${q(ids.employee)}::uuid,'Operational Truth Employee','created',${q(ids.employee)}::uuid,'Operational Truth Employee',jsonb_build_object('work_snapshot',jsonb_build_object('serviceMode','scan_tracked','serviceEffortMinutes',10,'includedLocations',jsonb_build_array(jsonb_build_object('locationId',${q(ids.physical)},'locationNameSnapshot','Operational Truth Restroom')))),${q(hash("f"))}),
   (${q(ids.responseOccurrence)}::uuid,${q(ids.projection)}::uuid,${q(ids.publication)}::uuid,${q(ids.version)}::uuid,'${serviceDate}'::date,'truth-response-${discriminator}',${Number(dayOfWeek)},${q(ids.responsePhysical)}::uuid,${q(codes.responseGroup)},'Operational Response Family','09:00','10:00',${q(ids.slot)}::uuid,'Operational Truth Slot',${q(ids.employee)}::uuid,'Operational Truth Employee','created',${q(ids.employee)}::uuid,'Operational Truth Employee',jsonb_build_object('work_snapshot',jsonb_build_object('serviceMode','response_only_no_clean','serviceEffortMinutes',5,'includedLocations','[]'::jsonb)),${q(hash("0"))});
 
+commit;
+`);
+
+// Current governed readers fail closed unless the exact projection also owns a
+// verified immutable lunch document. This fixture has no duty intersecting the
+// one-hour lunch, so its truthful result is one NO_AREAS loan and no delegated
+// responsibility or notification intent.
+await sql(`
+begin;
+do $lunch$
+declare document jsonb;
+begin
+ document:=jsonb_build_object(
+  'schema','memphis-zoo.static-weekly-lunch-authority-document.v1',
+  'persistence_authority','NOT_PERSISTED','verification_status','VERIFIED',
+  'week_start',${q(weekStart)},'base_authority_digest',${q(hash("b"))},
+  'base_replay_digest',${q(hash("a"))},'source_input_digest',${q(hash("input"))},
+  'candidate_digest',${q(hash("lunch-candidate"))},
+  'loans',jsonb_build_array(jsonb_build_object(
+   'loan_id',${q(hash("lunch-loan"))},'service_date',${q(serviceDate)},'day_of_week',${Number(dayOfWeek)},
+   'normal_owner_slot_id',${q(ids.slot)},'normal_owner_person_id',${q(ids.employee)},
+   'coverage_start','11:00','coverage_end','12:00','status','NO_AREAS','reason',null,
+   'helper_slot_ids','[]'::jsonb,'fallback',null,'total_distance_minutes',null)),
+  'responsibilities','[]'::jsonb,'notification_intents','[]'::jsonb);
+ document:=document||jsonb_build_object('semantic_snapshot',jsonb_build_object(
+  'schema','memphis-zoo.static-weekly-lunch-semantic-snapshot.v1',
+  'loans_digest',public.static_weekly_digest_jsonb(document->'loans'),
+  'responsibilities_digest',public.static_weekly_digest_jsonb(document->'responsibilities'),
+ 'notification_intents_digest',public.static_weekly_digest_jsonb(document->'notification_intents')));
+ document:=document||jsonb_build_object('document_identity',public.static_weekly_digest_jsonb(document));
+ perform set_config('role','static_weekly_control_plane',true);
+ perform public.static_weekly_v8_materialize_lunch_document(${q(ids.projection)}::uuid,document,${q(ids.manager)}::uuid);
+end $lunch$;
 commit;
 `);
 
@@ -148,8 +193,8 @@ assert.equal(await sql(`select count(*)||'|'||min(coverage_start)||'|'||bool_and
   "2|08:00|true", "AI and analytics compatibility views consume canonical static authority");
 assert.equal(await sql(`select employee_name||'|'||shift_start||'|'||lunch_start||'|'||active::text from public.static_weekly_v6_read_roster(${q(serviceDate)}::date);`),
   "Operational Truth Employee|07:00:00|11:00:00|true", "manager roster uses static shift and lunch authority");
-assert.equal(await sql(`select schedule_authority_source||'|'||schedule_projection_status||'|'||(status_code<>'not_cleaned')::text from public.v_location_dashboard_status where location_id=${q(ids.physical)}::uuid;`),
-  "static_weekly_projection|current|true", "manager dashboard derives the scan-tracked location from current static authority");
+assert.equal(await sql(`select schedule_authority_source||'|'||schedule_projection_status||'|'||status_code from public.v_location_dashboard_status where location_id=${q(ids.physical)}::uuid;`),
+  "static_weekly_projection|current|not_cleaned", "manager dashboard derives current static authority without inventing a cleaning or check");
 assert.equal(await sql(`select schedule_authority_source||'|'||schedule_projection_status||'|'||status_code from public.v_location_dashboard_status where location_id=${q(ids.responsePhysical)}::uuid;`),
   "static_weekly_projection|current|not_cleaned", "response-only work remains visible but never becomes a cleaning obligation");
 assert.equal(await sql(`select schedule_authority_source||'|'||schedule_projection_status||'|'||status_code from public.v_location_dashboard_status where location_id=${q(ids.legacyLocation)}::uuid;`),
