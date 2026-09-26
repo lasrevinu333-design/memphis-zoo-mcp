@@ -1,7 +1,7 @@
 {
   "artifact": "integrated-backend-authority-release-evidence.v2",
   "release_id": "release-2026.07.19.custodial-v3.12",
-  "frontend_commit_sha": "35e8a60972959d4ecb47856f423bd66deaf571d6",
+  "frontend_commit_sha": "227e90929d5741e5aab799364fe06a5f8b83417c",
   "frontend_commit_state": "final_pair_bound",
   "schema_fingerprint": "34f13666aac64ba95409d4f074581a791541e6a1a09f1d560598583c05882a45",
   "schema_transition": {
@@ -480,7 +480,7 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "57c9dad8534e0b8834473b56186b0a0ff9feed66"
+        "object_id": "a258ae239918ad5c854378fd35ac9b42372f06cb"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
@@ -505,7 +505,7 @@
       {
         "path": "release/schema-alignment-input.json",
         "mode": "100644",
-        "object_id": "4dfe353089274bee27df27159f430817c9acfd17"
+        "object_id": "8f89097204a8d704fc697c492ea9307b44834564"
       },
       {
         "path": "research/european_herbalism_through_paracelsus.md",
