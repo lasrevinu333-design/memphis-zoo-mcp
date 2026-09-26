@@ -217,8 +217,14 @@ async function verifyDockerConcurrency(database) {
     values ('00000000-0000-4000-8000-00000000f211', 'GPS_HARDENING', 'GPS Hardening Test', 'restroom', 'restroom', true);
     insert into public.devices(id, device_id, device_name, active)
     values ('00000000-0000-4000-8000-00000000f212', 'GPS-HARDENING-DEVICE', 'GPS Hardening Device', true);
-    insert into public.location_proximity_settings(location_id, latitude, longitude, coordinate_source, coordinate_confidence, active)
-    values ('00000000-0000-4000-8000-00000000f211', 35.1495, -90.0490, 'empty_database_rebuild', 'test', true);
+    insert into public.location_proximity_settings(
+      location_id, latitude, longitude, coordinate_source, coordinate_confidence,
+      authority_radius_m, authority_surveyed_at, active
+    )
+    values (
+      '00000000-0000-4000-8000-00000000f211', 35.1495, -90.0490,
+      'empty_database_rebuild', 'surveyed', 175, now() - interval '1 day', true
+    );
   `);
   const gpsResults = [];
   const runIsolatedGpsEvaluation = (clientEventId, latitude, observedAtSql) => {
