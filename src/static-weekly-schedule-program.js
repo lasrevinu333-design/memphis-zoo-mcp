@@ -1366,7 +1366,12 @@ export function buildStaticWeeklySchedulingModel(problem, bindings, objective, d
     .map(([daySlot, context]) => ({ daySlot, dayOfWeek: Number(daySlot.split("\u0000")[0]), slotId: context.slot.id, context }))
     .sort((left, right) => left.dayOfWeek - right.dayOfWeek || stableCompare(left.slotId, right.slotId));
   const weeklyEntries = [...new Set(dailyEntries.map((entry) => entry.slotId))].sort(stableCompare).map((slotId) => ({ slotId, contexts: dailyEntries.filter((entry) => entry.slotId === slotId) }));
-  const dailyRankLimit = !includeDailyRanks ? 0 : objective.family === "daily_leximax" ? Math.min(dailyEntries.length, Number(objective.rank || 1) + Number(objective.rankCount || 1) - 1) : dailyEntries.length;
+  // The truncated top-k assignment becomes highly symmetric at later ranks
+  // of a dense seven-day week. Use the bounded full permutation after the
+  // first sixteen ranks while preserving the same lexicographic objective.
+  const dailyRankLimit = !includeDailyRanks ? 0 : objective.family === "daily_leximax" && Number(objective.rank || 1) <= 16
+    ? Math.min(dailyEntries.length, Number(objective.rank || 1) + Number(objective.rankCount || 1) - 1)
+    : dailyEntries.length;
   const weeklyRankLimit = !includeWeeklyRanks ? 0 : objective.family === "weekly_leximax" ? Math.min(weeklyEntries.length, Number(objective.rank || 1) + Number(objective.rankCount || 1) - 1) : weeklyEntries.length;
   const rankBinaryCount = (dailyEntries.length * dailyRankLimit) + (weeklyEntries.length * weeklyRankLimit);
   const rankIntegerCount = dailyRankLimit + weeklyRankLimit;

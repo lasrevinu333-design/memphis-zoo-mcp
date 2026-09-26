@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 import {randomUUID,createHash} from 'node:crypto';
+import {readFileSync} from 'node:fs';
 // Synthetic native-route inputs in an isolated database; never field NFC proof.
 const container=process.env.VERIFIED_VISIT_TEST_CONTAINER;
 assert.match(container??'',/^mz_verified_visit_[0-9]+$/);
@@ -22,6 +23,12 @@ const routeSecret='isolated-visit-native-route-secret-0123456789';
 const hash=value=>createHash('sha256').update(value).digest('hex');
 const json=value=>`${q(JSON.stringify(value))}::jsonb`;
 const iso=value=>new Date(value).toISOString();
+const backendSource=readFileSync(new URL('../src/index.js',import.meta.url),'utf8');
+const checkQueryStart=backendSource.indexOf('select distinct on (receipt.location_id)');
+const checkQueryEnd=backendSource.indexOf('`),',checkQueryStart);
+assert.ok(checkQueryStart>=0&&checkQueryEnd>checkQueryStart,'dashboard exact verified-check query must be present');
+const dashboardCheckSql=backendSource.slice(checkQueryStart,checkQueryEnd);
+const dashboardCheck=()=>JSON.parse(sql(`select row_to_json(result) from (${dashboardCheckSql}) result where result.location_id=${q(id.location)}::uuid;`));
 sql(`select public.custodial_configure_backend_execution_key(${q(hash(secret))},'isolated-visit-test');
 select public.custodial_configure_native_route_proof_key(${q(hash(routeSecret))},'isolated-visit-test');
 insert into public.employees(id,employee_code,display_name,active,role)
@@ -81,6 +88,10 @@ check('native start alone does not establish a cleaning',status().cleaned,null);
 check('check-only completion accepted',JSON.parse(sql(completeSql(preclean,checkOnly))).status,'closed');
 check('check-only does not fabricate first cleaning',status().cleaned,null);
 check('completed check visible as last checked',status().checked,preclean.finish);
+check('dashboard exact check-only actor',dashboardCheck().latest_verified_checker_name,'Synthetic Visit Employee');
+check('dashboard exact check-only time',iso(dashboardCheck().latest_verified_check_at),preclean.finish);
+check('dashboard exact check-only session identity',dashboardCheck().latest_verified_check_session_uuid,preclean.session);
+check('dashboard exact check-only completion identity',dashboardCheck().latest_verified_check_completion_id,preclean.completion);
 check('no recurring reminder before actual first cleaning',Number(sql(`select count(*) from
  public.mz_location_reminder_candidates(public.sch_service_date(now()),now())
  where location_id=${q(id.location)}::uuid`)),0);
@@ -106,6 +117,7 @@ const completed=JSON.parse(sql(statement));
 check('protected check completed',completed.status,'closed');
 check('actual cleaning time preserved after check',status().cleaned,cleaned.finish);
 check('last checked advances to checkout',status().checked,pending.finish);
+check('dashboard exact latest check-only identity',dashboardCheck().latest_verified_check_session_uuid,pending.session);
 check('cleaning services are not replaced with check',status().services,['Full cleaning services']);
 check('old overdue replaced by new visit cycle',reminder(oldOverdue)[0]?.status_code,'due_soon');
 assert.equal(typeof completed.session_uuid,'string');

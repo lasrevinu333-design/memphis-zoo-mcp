@@ -191,8 +191,8 @@ await expectSqlFailure(
 );
 
 await sql(`
-  insert into public.location_proximity_settings(location_id,latitude,longitude,coordinate_source,coordinate_confidence,active)
-  values ('${ids.location1}',35.1495,-90.0490,'cleaning_identity_test','test',true);
+  insert into public.location_proximity_settings(location_id,latitude,longitude,coordinate_source,coordinate_confidence,authority_radius_m,authority_surveyed_at,active)
+  values ('${ids.location1}',35.1495,-90.0490,'surveyed_cleaning_identity_test','surveyed',80,clock_timestamp(),true);
 `);
 const lateGps = JSON.parse(await sql(`
   set role service_role;

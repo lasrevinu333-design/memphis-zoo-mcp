@@ -357,9 +357,38 @@ function canonicalizeScanArguments(fn, args, device) {
   return canonicalArgs;
 }
 
+function concreteGpsCaptureTime(value) {
+  if (typeof value !== "string") return null;
+  const text = value.trim();
+  const parts = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,6}))?(Z|[+-]\d{2}:\d{2})$/.exec(text);
+  if (!parts) return null;
+  const year = Number(parts[1]);
+  const month = Number(parts[2]);
+  const day = Number(parts[3]);
+  const hour = Number(parts[4]);
+  const minute = Number(parts[5]);
+  const second = Number(parts[6]);
+  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const monthDays = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  if (year < 1 || month < 1 || month > 12 || day < 1 || day > monthDays[month - 1]
+      || hour > 23 || minute > 59 || second > 59) return null;
+  if (parts[8] !== "Z") {
+    const zoneHour = Number(parts[8].slice(1, 3));
+    const zoneMinute = Number(parts[8].slice(4, 6));
+    if (zoneHour > 14 || zoneMinute > 59 || (zoneHour === 14 && zoneMinute !== 0)) return null;
+  }
+  return Number.isFinite(Date.parse(text)) ? text : null;
+}
+
 function prepareScanRpcCall(fn, args) {
   const normalizedFn = String(fn || "").trim();
   const nextArgs = { ...args };
+  if (normalizedFn === "tool_evaluate_location_proximity_v2") {
+    // PostgreSQL accepts relative literals such as "now" as timestamptz.
+    // Such text is not a phone capture time. Settle it as unavailable instead
+    // of allowing the database cast to manufacture fresh GPS authority.
+    nextArgs.p_observed_at = concreteGpsCaptureTime(nextArgs.p_observed_at);
+  }
   if (normalizedFn === "tool_start_offline_occurrence") {
     const clientSessionId = String(nextArgs.p_client_session_id || nextArgs.client_session_id || "").trim();
     const clientStartedAt = String(nextArgs.p_client_started_at || nextArgs.started_at || "").trim();
@@ -2168,7 +2197,7 @@ async function runSystemFeedbackReminderSweep() {
 }
 
 async function runPublicDashboardSummary() {
-  const [snapshotRows, locationRows, ticketRows] = await Promise.all([
+  const [snapshotRows, locationRows, ticketRows, verifiedCheckRows] = await Promise.all([
     runReadOnlySql(`
       select snapshot_at, operational_day_start, active_sessions, pending_submit_sessions, closed_sessions_today, open_ticket_count,
              overdue_locations, due_soon_locations, in_progress_locations, active_locations, operational_day_start::text as operational_day_start_text
@@ -2177,9 +2206,10 @@ async function runPublicDashboardSummary() {
       limit 1
     `),
     runReadOnlySql(`
-      select location_code, location_name, location_type, form_type, latest_employee_name, latest_completed_at,
+      select location_id, location_code, location_name, location_type, form_type, latest_employee_name, latest_completed_at, latest_checked_at,
              latest_completed_at_display, services_performed, open_ticket_count, status_code, status_color, duration_display,
-             open_session_status, open_session_employee_name
+             open_session_status, open_session_uuid, open_session_device_identifier, open_session_employee_name,
+             open_session_started_at_display
       from public.v_location_dashboard_status
       order by case status_color when 'red' then 1 when 'yellow' then 2 when 'blue' then 3 when 'green' then 4 when 'black' then 5 else 9 end,
                open_ticket_count desc, location_name
@@ -2190,11 +2220,67 @@ async function runPublicDashboardSummary() {
       from public.v_open_maintenance_tickets
       order by date_submitted desc nulls last, created_at desc nulls last, location_code
     `),
+    runReadOnlySql(`
+      select distinct on (receipt.location_id)
+        receipt.location_id, context.native_completed_at as latest_verified_check_at,
+        employee.display_name as latest_verified_checker_name,
+        session.session_uuid as latest_verified_check_session_uuid,
+        response.client_completion_id as latest_verified_check_completion_id
+      from public.custodial_offline_reconciliation_records receipt
+      join public.custodial_offline_actor_contexts context on context.context_id=receipt.context_id
+      join public.sessions session on session.id=receipt.session_id
+      join public.completion_responses response on response.id=receipt.completion_response_id
+      join public.employees employee on employee.id=session.employee_id
+      where receipt.state='committed' and context.status='committed' and session.status='closed'
+        and receipt.occurrence_id=context.occurrence_id
+        and receipt.occurrence_fingerprint=context.occurrence_fingerprint
+        and receipt.credential_id=context.credential_id
+        and receipt.location_id=session.location_id and context.location_id=session.location_id
+        and response.location_id=session.location_id and response.session_id=session.id
+        and context.client_session_id=session.client_session_id
+        and receipt.client_session_id=session.client_session_id
+        and receipt.client_completion_id=response.client_completion_id
+        and receipt.original_employee_id=session.employee_id and context.employee_id=session.employee_id
+        and receipt.device_id=session.device_id and context.device_id=session.device_id
+        and response.device_id=session.device_id and response.submitted_by_employee_id=session.employee_id
+        and response.response_json->>'work_result'='checked_no_cleaning_needed'
+        and response.response_json->'services_performed'='[]'::jsonb
+        and receipt.payload_json->'response_json'=response.response_json
+        and context.native_start_attestation_version='custodial-native-start.v1'
+        and context.native_scan_entry_id is not null
+        and context.native_completion_attestation_version='custodial-native-completion.v2'
+        and context.native_completion_attestation_sha256 ~ '^[0-9a-f]{64}$'
+        and context.native_finish_scan_entry_id is not null
+        and context.native_finish_scan_entry_id<>context.native_scan_entry_id
+        and context.started_at=session.started_at and context.native_completed_at=session.ended_at
+        and context.native_completed_at>context.started_at
+        and context.native_completed_at>=public.operational_day_start(now())
+        and context.native_completed_at<=now() and isfinite(context.native_completed_at)
+        and exists (
+          select 1 from public.custodial_offline_scan_event_evidence evidence
+          where evidence.context_id=context.context_id
+            and evidence.reconciliation_id=receipt.reconciliation_id
+            and evidence.session_id=session.id
+            and lower(evidence.client_event_id)=context.native_finish_scan_entry_id::text
+            and evidence.event_payload->>'event_type'='scan_finish'
+            and evidence.event_payload->>'result'='ok'
+            and evidence.event_payload#>>'{payload_json,entry_source}'='native-nfc'
+            and evidence.event_payload->>'scanned_at'=
+              public.custodial_canonical_utc_millis(context.native_completed_at)
+        )
+      order by receipt.location_id, context.native_completed_at desc, receipt.reconciliation_id desc
+    `),
   ]);
 
   const snapshot = Array.isArray(snapshotRows) && snapshotRows.length ? snapshotRows[0] : {};
   const locations = Array.isArray(locationRows) ? locationRows : [];
   const tickets = Array.isArray(ticketRows) ? ticketRows : [];
+  const verifiedChecks = new Map((Array.isArray(verifiedCheckRows) ? verifiedCheckRows : [])
+    .map((row) => [String(row.location_id || "").toLowerCase(), row]));
+  const locationsWithVerifiedChecks = locations.map((row) => ({
+    ...row,
+    ...(verifiedChecks.get(String(row.location_id || "").toLowerCase()) || {}),
+  }));
   return {
     snapshot,
     meta: {
@@ -2210,8 +2296,8 @@ async function runPublicDashboardSummary() {
       },
       generated_at: new Date().toISOString(),
     },
-    restrooms: locations.filter((row) => String(row.location_type || row.form_type || "").toLowerCase() === "restroom"),
-    exhibits: locations.filter((row) => String(row.location_type || row.form_type || "").toLowerCase() !== "restroom"),
+    restrooms: locationsWithVerifiedChecks.filter((row) => String(row.location_type || row.form_type || "").toLowerCase() === "restroom"),
+    exhibits: locationsWithVerifiedChecks.filter((row) => String(row.location_type || row.form_type || "").toLowerCase() !== "restroom"),
     open_tickets: tickets,
   };
 }

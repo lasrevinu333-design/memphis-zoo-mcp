@@ -34,7 +34,7 @@ const json = (value) => `$$${JSON.stringify(value)}$$::jsonb`;
 const docker = (args, options = {}) => execFileAsync("docker", args, { maxBuffer: 64 * 1024 * 1024, ...options });
 
 function sourceInput({ exceptions = [], completeWeek = false } = {}) {
-  const availability = (slotId, dayOfWeek, anchor) => ({ slotId, dayOfWeek, status: "working", shift: { start: "07:00", end: "16:00" }, productiveCapacityProvenance: "batch-shift-v1", maxServiceEffortMinutes: 300, maxServiceEffortProvenance: "batch-capacity-v1", qualifications: ["general"], qualificationProvenance: "batch-qualification-v1", restrictions: [], restrictionProvenance: "batch-restriction-v1", acceptedRouteAnchorLocationId: anchor, acceptedRouteProvenance: "batch-route-v1" });
+  const availability = (slotId, dayOfWeek, anchor) => ({ slotId, dayOfWeek, status: "working", shift: { start: "07:00", end: "16:00" }, ...(slotId === contractorSlotId ? {} : { lunch: [{ start: "11:00", end: "12:00" }, { start: "12:00", end: "13:00" }, { start: "13:00", end: "14:00" }, { start: "14:00", end: "15:00" }][slotIds.indexOf(slotId)] }), productiveCapacityProvenance: "batch-shift-v1", maxServiceEffortMinutes: 300, maxServiceEffortProvenance: "batch-capacity-v1", qualifications: ["general"], qualificationProvenance: "batch-qualification-v1", restrictions: [], restrictionProvenance: "batch-restriction-v1", acceptedRouteAnchorLocationId: anchor, acceptedRouteProvenance: "batch-route-v1" });
   const internalSlotIds = completeWeek ? slotIds.slice(0, 3) : slotIds;
   const assignment = (slotId, dayOfWeek, index) => ({ workId: `batch-work-${dayOfWeek}-${index}`, dayOfWeek, locationId: locationIds[index], locationCodeSnapshot: `BATCH_${dayOfWeek}_${index}`, locationNameSnapshot: `Batch ${dayOfWeek} ${index}`, window: [{ start: "08:00", end: "09:00" }, { start: "09:10", end: "10:00" }, { start: "10:10", end: "11:00" }][index], ownerSlotId: slotId, serviceEffortMinutes: 20, serviceEffortProvenance: "batch-service-v1", priority: 1, priorityProvenance: "batch-priority-v1", requiredQualifications: ["general"], qualificationProvenance: "batch-work-qualification-v1", restrictions: [], restrictionProvenance: "batch-work-restriction-v1" });
   return {
@@ -149,12 +149,14 @@ const ptoOperations = [
   { operation: "exception", exceptionType: "daily_absence", reason: "Batch absence 2", payload: { slotId: slotIds[1] } },
   { operation: "exception", exceptionType: "pto", reason: "Batch PTO 3", payload: { slotId: slotIds[2] } },
   { operation: "cover_all", slotId: contractorSlotId, reason: "Batch CoverAll 1" },
+  { operation: "exception", exceptionType: "lunch", startsAt: "13:00", endsAt: "14:00", payload: { slotId: contractorSlotId }, reason: "Batch actual CoverAll lunch" },
 ];
 const alternatePtoOperations = [
   { operation: "exception", exceptionType: "pto", reason: "Alternate batch PTO", payload: { slotId: slotIds[1] } },
   { operation: "exception", exceptionType: "daily_absence", reason: "Alternate batch absence", payload: { slotId: slotIds[0] } },
   { operation: "exception", exceptionType: "pto", reason: "Alternate batch third absence", payload: { slotId: slotIds[2] } },
   { operation: "cover_all", slotId: contractorSlotId, reason: "Alternate batch CoverAll" },
+  { operation: "exception", exceptionType: "lunch", startsAt: "13:00", endsAt: "14:00", payload: { slotId: contractorSlotId }, reason: "Alternate actual CoverAll lunch" },
 ];
 const correctionOperations = slotIds.slice(0, 3).map((slotId, index) => ({ operation: "exception", exceptionType: "manager_correction", reason: `Batch correction ${index + 1}`, payload: { locks: [{ workId: `batch-work-2-${index}`, slotId }] } }));
 
@@ -217,9 +219,9 @@ try {
   const controlPlane = createStaticWeeklyControlPlane({ database: tracedDatabase(pool, trace), compiler: async (input) => { compilerCalls += 1; latestCompilation = await compileStaticWeeklySchedule(input); return latestCompilation; } });
   const originalRequest = batchRequest("outer-day-change", 2, ptoOperations);
   const original = await controlPlane.applyDayChanges(originalRequest);
-  assert.equal(original.revision, 7, "three absences, one CoverAll call, and one projection commit in one outer transaction");
-  assert.equal(original.data.mutations.length, 4);
-  assert.equal(await scalar("select current_revision::text from public.static_weekly_schedule_control where singleton"), "7");
+  assert.equal(original.revision, 8, "three absences, actual CoverAll capacity and lunch, and one projection commit in one outer transaction");
+  assert.equal(original.data.mutations.length, 5);
+  assert.equal(await scalar("select current_revision::text from public.static_weekly_schedule_control where singleton"), "8");
   const immediate = await controlPlane.applyDayChanges(originalRequest);
   assert.deepEqual(immediate, original, "immediate whole-action replay is byte-stable");
 
@@ -229,7 +231,9 @@ try {
     { label: "reorder", operations: [...ptoOperations].reverse() },
     { label: "first-position mutation", operations: [{ ...ptoOperations[0], reason: "Changed first position" }, ...ptoOperations.slice(1)] },
     { label: "second-position mutation", operations: [ptoOperations[0], { ...ptoOperations[1], reason: "Changed second position" }, ...ptoOperations.slice(2)] },
-    { label: "CoverAll shift mutation", operations: [...ptoOperations.slice(0, 3), { ...ptoOperations[3], shift: { start: "08:00", end: "17:00" } }] },
+    { label: "CoverAll shift mutation", operations: [...ptoOperations.slice(0, 3), { ...ptoOperations[3], shift: { start: "08:00", end: "17:00" } }, ptoOperations[4]] },
+    { label: "fifth-only CoverAll lunch mutation", operations: [...ptoOperations.slice(0, 4), { ...ptoOperations[4], startsAt: "14:00", endsAt: "15:00" }] },
+    { label: "fifth-only CoverAll lunch reason mutation", operations: [...ptoOperations.slice(0, 4), { ...ptoOperations[4], reason: "Changed actual CoverAll lunch reason" }] },
   ];
   for (const variant of variants) {
     const before = await scalar("select row_to_json(s)::text from (select current_revision,(select count(*) from public.weekly_schedule_exception_commands) exceptions,(select count(*) from public.weekly_schedule_command_receipts) receipts from public.static_weekly_schedule_control where singleton) s");
@@ -238,7 +242,7 @@ try {
   }
 
   const reverseOperations = original.data.mutations.map((mutation, index) => ({ operation: "exception", exceptionType: "reverse", reason: `Reverse batch PTO ${index + 1}`, payload: { reversesExceptionId: mutation.exception_id }, reversesExceptionId: mutation.exception_id }));
-  const identicalRequest = batchRequest("outer-identical-race", 7, reverseOperations);
+  const identicalRequest = batchRequest("outer-identical-race", 8, reverseOperations);
   const identical = await Promise.all(Array.from({ length: 6 }, () => controlPlane.applyDayChanges(identicalRequest)));
   for (const response of identical.slice(1)) {
     assert.equal(firstDifference(identical[0], response), null, "independent pooled sessions converge on one complete-batch response");
@@ -255,14 +259,14 @@ try {
     : { status: item.status, code: item.reason?.code || null, message: item.reason?.message || String(item.reason) });
   const conflictConnectionIds = new Set(trace.filter((entry) => entry.statement.includes("static_weekly_v4_begin_day_changes") && entry.values[7] === conflictKey).map((entry) => entry.connectionId));
   const conflictTrace = trace.filter((entry) => conflictConnectionIds.has(entry.connectionId)).map(({ connectionId, statement, startedAt, finishedAt, rows, sqlstate }) => ({ connectionId, statement, startedAt, finishedAt, rows, sqlstate }));
-  const conflictReceiptKeys = [0, 1, 2, 3].map((index) => `day-change-${createHash("sha256").update(`${conflictKey}:${index}`).digest("hex")}`);
+  const conflictReceiptKeys = [0, 1, 2, 3, 4].map((index) => `day-change-${createHash("sha256").update(`${conflictKey}:${index}`).digest("hex")}`);
   conflictReceiptKeys.push(`projection-${createHash("sha256").update(conflictKey).digest("hex")}`);
   const conflictReceipts = (await pool.query("select idempotency_key,command_type,expected_revision from public.weekly_schedule_command_receipts where actor_manager_id=$1 and idempotency_key=any($2::text[]) order by expected_revision", [actor.manager_id, conflictReceiptKeys])).rows;
   const conflictDiagnostic = JSON.stringify({ outcomes: conflictSummary, receipts: conflictReceipts, trace: conflictTrace });
   assert.equal(conflictConnectionIds.size, 2, `conflicting requests must execute through independent database sessions: ${conflictDiagnostic}`);
   assert.equal(conflicts.filter((item) => item.status === "fulfilled").length, 1, `one conflicting complete batch wins: ${conflictDiagnostic}`);
   assert.equal(conflicts.filter((item) => item.status === "rejected" && item.reason?.code === "23505").length, 1, `the other conflicting batch fails by parent idempotency identity: ${conflictDiagnostic}`);
-  assert.equal(conflictReceipts.length, 5, `only the winner's four child receipts and final projection receipt may persist: ${conflictDiagnostic}`);
+  assert.equal(conflictReceipts.length, 6, `only the winner's five child receipts and final projection receipt may persist: ${conflictDiagnostic}`);
   const conflictWinner = conflicts.find((item) => item.status === "fulfilled").value;
   const lateFailureOperations = conflictWinner.data.mutations.map((mutation, index) => ({ operation: "exception", exceptionType: "reverse", reason: `Late-failure rollback ${index + 1}`, payload: { reversesExceptionId: mutation.exception_id }, reversesExceptionId: mutation.exception_id }));
 
@@ -281,24 +285,24 @@ try {
     const compilerTrace = [];
     const compilerRejecting = createStaticWeeklyControlPlane({ database: tracedDatabase(pool, compilerTrace), compiler: async () => ({ status: "INFEASIBLE", publicationAuthority: "REJECTED", verifier: { ok: false } }) });
     await assert.rejects(() => compilerRejecting.applyDayChanges(batchRequest("outer-late-compiler", currentRevision, lateFailureOperations)), (error) => error?.code === "static_weekly_control_plane_compiler_rejected");
-    assert.equal(compilerTrace.filter((entry) => entry.statement.includes("static_weekly_v3_apply_exception") && !entry.sqlstate).length, 4, "all children succeed before compiler rejection");
+    assert.equal(compilerTrace.filter((entry) => entry.statement.includes("static_weekly_v3_apply_exception") && !entry.sqlstate).length, 5, "all children succeed before compiler rejection");
     assert.equal(await scalar("select row_to_json(s)::text from (select current_revision,(select count(*) from public.weekly_schedule_exception_commands) exceptions,(select count(*) from public.weekly_schedule_compiled_projections) projections,(select count(*) from public.weekly_schedule_command_receipts) receipts from public.static_weekly_schedule_control where singleton) s"), stableState, "compiler rejection rolls back children and receipts");
 
     const projectionTrace = [];
     const projectionFailing = createStaticWeeklyControlPlane({ database: tracedDatabase(pool, projectionTrace, { failProjection: true }), compiler: async () => baselineCompilation });
     await assert.rejects(() => projectionFailing.applyDayChanges(batchRequest("outer-late-projection", currentRevision, lateFailureOperations)), (error) => error?.code === "22012");
-    assert.equal(projectionTrace.filter((entry) => entry.statement.includes("static_weekly_v3_apply_exception") && !entry.sqlstate).length, 4, "all children succeed before projection failure");
+    assert.equal(projectionTrace.filter((entry) => entry.statement.includes("static_weekly_v3_apply_exception") && !entry.sqlstate).length, 5, "all children succeed before projection failure");
     assert.equal(await scalar("select row_to_json(s)::text from (select current_revision,(select count(*) from public.weekly_schedule_exception_commands) exceptions,(select count(*) from public.weekly_schedule_compiled_projections) projections,(select count(*) from public.weekly_schedule_command_receipts) receipts from public.static_weekly_schedule_control where singleton) s"), stableState, "projection failure rolls back children and receipts");
 
     const crashTrace = [];
     const crashing = createStaticWeeklyControlPlane({ database: tracedDatabase(pool, crashTrace, { terminateProjection: true, adminPool: pool }), compiler: async () => baselineCompilation });
     await assert.rejects(() => crashing.applyDayChanges(batchRequest("outer-connection-loss", currentRevision, lateFailureOperations)), (error) => error?.code === "static_weekly_control_plane_database_unavailable" && /No schedule change was accepted/.test(error?.message || ""), "connection loss is normalized to one retryable fail-closed authority response");
-    assert.equal(crashTrace.filter((entry) => entry.statement.includes("static_weekly_v3_apply_exception") && !entry.sqlstate).length, 4, "all children succeed before connection loss");
+    assert.equal(crashTrace.filter((entry) => entry.statement.includes("static_weekly_v3_apply_exception") && !entry.sqlstate).length, 5, "all children succeed before connection loss");
     assert.equal(await scalar("select row_to_json(s)::text from (select current_revision,(select count(*) from public.weekly_schedule_exception_commands) exceptions,(select count(*) from public.weekly_schedule_compiled_projections) projections,(select count(*) from public.weekly_schedule_command_receipts) receipts from public.static_weekly_schedule_control where singleton) s"), stableState, "connection loss rolls back the PostgreSQL transaction");
     assert.equal(await scalar("select count(*)::text from public.weekly_schedule_command_receipts where actor_manager_id='10000000-0000-4000-8000-000000000061' and (idempotency_key in (select public.static_weekly_v4_day_change_child_key('outer-connection-loss',i) from generate_series(0,25) i) or idempotency_key=public.static_weekly_v4_day_change_projection_key('outer-connection-loss'))"), "0", "connection loss leaves the complete request key reusable rather than partially claimed");
 
     const chain = JSON.parse(await scalar("select jsonb_build_object('parent_receipts',count(*) filter(where command_type='apply_day_changes'),'child_receipts',count(*) filter(where idempotency_key in (select public.static_weekly_v4_day_change_child_key('outer-day-change',i) from generate_series(0,25) i)),'projection_receipts',count(*) filter(where idempotency_key=public.static_weekly_v4_day_change_projection_key('outer-day-change')))::text from public.weekly_schedule_command_receipts where actor_manager_id='10000000-0000-4000-8000-000000000061'"));
-    assert.deepEqual(chain, { parent_receipts: 0, child_receipts: 4, projection_receipts: 1 }, "the database recognizes the existing bounded child/projection chain without duplicating a parent payload receipt");
+    assert.deepEqual(chain, { parent_receipts: 0, child_receipts: 5, projection_receipts: 1 }, "the database recognizes the existing bounded child/projection chain without duplicating a parent payload receipt");
     assert.equal(await scalar("select (position('insert into public.weekly_schedule_command_receipts' in lower(pg_get_functiondef('public.static_weekly_v4_begin_day_changes(date,date,uuid,uuid,jsonb,bigint,uuid,text)'::regprocedure)))=0)::text"), "true", "the replay gate validates existing immutable receipts without persisting another copy of batch inputs");
     assert.equal(await scalar("select (not has_function_privilege('anon','public.static_weekly_v4_begin_day_changes(date,date,uuid,uuid,jsonb,bigint,uuid,text)','EXECUTE') and not has_function_privilege('authenticated','public.static_weekly_v4_begin_day_changes(date,date,uuid,uuid,jsonb,bigint,uuid,text)','EXECUTE') and not has_function_privilege('service_role','public.static_weekly_v4_begin_day_changes(date,date,uuid,uuid,jsonb,bigint,uuid,text)','EXECUTE') and has_function_privilege('static_weekly_control_plane','public.static_weekly_v4_begin_day_changes(date,date,uuid,uuid,jsonb,bigint,uuid,text)','EXECUTE'))::text"), "true", "batch receipt functions are least-privilege");
   console.log("static weekly outer day-change real PostgreSQL tests: PASS");

@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
-import { execFile } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
+import { hostname } from "node:os";
 import { resolve } from "node:path";
 import { promisify } from "node:util";
+import { execFile } from "node:child_process";
 import pg from "pg";
 import { captureSchemaCatalog, fingerprintSchemaCatalog } from "./schema-fingerprint-catalog.mjs";
 import {
@@ -15,11 +16,21 @@ import {
   stableJsonFile,
   stableJsonFileSha256,
 } from "./disaster-recovery-crypto.mjs";
+import { assertOwnedReleaseFixture, canonicalReleaseFixtureConnection } from "./release-migration-fixture-guard.mjs";
 
 const { Client } = pg;
 const execFileAsync = promisify(execFile);
 const adminUrl = String(process.env.RELEASE_MIGRATION_TEST_DATABASE_URL || "").trim();
-if (!/(localhost|127\.0\.0\.1|test|ci)/i.test(adminUrl)) throw new Error("RELEASE_MIGRATION_TEST_DATABASE_URL must identify a disposable local/test PostgreSQL server.");
+if (process.env.RELEASE_MIGRATION_TEST_USE_OWNED_CONTAINER_DB !== "1") {
+  throw new Error("The release-plan database test requires its isolated owned-container wrapper.");
+}
+const databaseName = assertOwnedReleaseFixture({
+  databaseUrl: adminUrl,
+  containerId: process.env.RELEASE_MIGRATION_TEST_CONTAINER_ID,
+  ownerToken: process.env.RELEASE_MIGRATION_TEST_OWNER_TOKEN,
+  hostname: hostname(),
+});
+const { clientConfig, databaseUrl } = canonicalReleaseFixtureConnection(databaseName);
 const root = resolve(new URL("..", import.meta.url).pathname);
 const state = JSON.parse(readFileSync(resolve(root, "release/production-migration-state.json"), "utf8"));
 assert.deepEqual(state.pending_migrations.map(({ order, file }) => ({ order, file })), [
@@ -45,7 +56,8 @@ assert.deepEqual(state.pending_migrations.map(({ order, file }) => ({ order, fil
   { order: 20, file: "20260925020244_oc24_bound_legacy_completion_replay.sql" },
   { order: 21, file: "20260925050718_static_weekly_staffing_command_ledger.sql" },
   { order: 22, file: "20260925054802_static_weekly_staffing_atomic_acceptance.sql" },
-], "the correction release fixture must contain exactly the twenty-two candidate migrations in order");
+  { order: 23, file: "20260925190000_gps_exact_location_authority_boundary.sql" },
+], "the correction release fixture must contain exactly the twenty-three candidate migrations in order");
 assert.equal(
   state.pending_migrations.every((item) => item.source_migration_version > state.observed_production.ledger_head),
   true,
@@ -55,15 +67,7 @@ const pending = new Set(state.pending_migrations.map((item) => item.file));
 const migrationFiles = readdirSync(resolve(root, "supabase/migrations")).filter((name) => name.endsWith(".sql")).sort();
 const preMigrationFiles = migrationFiles.filter((name) => !pending.has(name));
 const outlookAdoptionSql = readFileSync(resolve(root, "supabase/migrations/20260827152000_adopt_outlook_event_sync_authority.sql"), "utf8");
-const requestedDatabaseName = String(process.env.RELEASE_MIGRATION_TEST_DATABASE_NAME || "").trim();
-if (requestedDatabaseName && !/^mz_schema_rebuild_[a-zA-Z0-9_]+$/.test(requestedDatabaseName)) {
-  throw new Error("RELEASE_MIGRATION_TEST_DATABASE_NAME must use the disposable mz_schema_rebuild_* namespace.");
-}
-const databaseName = requestedDatabaseName || `mz_schema_rebuild_release_plan_${randomUUID().replaceAll("-", "").slice(0, 12)}`;
-const admin = new Client({ connectionString: adminUrl });
-const url = new URL(adminUrl);
-url.pathname = `/${databaseName}`;
-const databaseUrl = String(url);
+const admin = new Client(clientConfig);
 const candidateCommit = "a".repeat(40);
 const candidateTree = "b".repeat(40);
 let sourceLedgerSha256 = null;
@@ -171,8 +175,10 @@ async function runPlan(extraEnv = {}) {
 }
 
 await admin.connect();
-await admin.query(`create database ${pg.escapeIdentifier(databaseName)}`);
-const db = new Client({ connectionString: databaseUrl });
+const preflight = await admin.query("select (select count(*)::integer from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind in ('r','p')) as public_tables, to_regclass('supabase_migrations.schema_migrations') is not null as ledger_present");
+assert.equal(preflight.rows[0].public_tables, 0, "owned disposable postgres must have no application tables");
+assert.equal(preflight.rows[0].ledger_present, false, "owned disposable postgres must have no migration ledger");
+const db = new Client(clientConfig);
 try {
   await db.connect();
   await db.query("set statement_timeout=0");
@@ -298,13 +304,11 @@ try {
   const afterFingerprint = fingerprintSchemaCatalog(afterCatalog);
   const canonical = JSON.parse(readFileSync(resolve(root, "supabase/canonical/schema-fingerprint-input.json"), "utf8"));
   assert.equal(afterFingerprint.fingerprint, state.target.canonical_source_schema_fingerprint,
-    `the exact twenty-two-migration correction plan must terminate at the canonical target catalog: ${JSON.stringify(firstCatalogDifference(canonical, afterFingerprint.normalized))}`);
+    `the exact twenty-three-migration correction plan must terminate at the canonical target catalog: ${JSON.stringify(firstCatalogDifference(canonical, afterFingerprint.normalized))}`);
   await assert.rejects(runPlan(), /already present|pre-migration production state|Locked source catalog/,
     "the complete plan is exactly-once and rejects replay or partial application");
   console.log("RELEASE_MIGRATION_PLAN_DATABASE_TESTS_PASS");
 } finally {
   await db.end().catch(() => {});
-  await admin.query("select pg_terminate_backend(pid) from pg_stat_activity where datname=$1 and pid<>pg_backend_pid()", [databaseName]).catch(() => {});
-  await admin.query(`drop database if exists ${pg.escapeIdentifier(databaseName)}`).catch(() => {});
   await admin.end().catch(() => {});
 }

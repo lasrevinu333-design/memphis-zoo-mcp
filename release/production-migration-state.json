@@ -58,20 +58,20 @@
     "target_schedule_slot_count_observed_at": "2026-09-19T02:19:26.738042Z"
   },
   "target": {
-    "source_migration_file": "20260925054802_static_weekly_staffing_atomic_acceptance.sql",
-    "source_migration_name": "static_weekly_staffing_atomic_acceptance",
-    "source_migration_version": "20260925054802",
+    "source_migration_file": "20260925190000_gps_exact_location_authority_boundary.sql",
+    "source_migration_name": "gps_exact_location_authority_boundary",
+    "source_migration_version": "20260925190000",
     "production_ledger_version": null,
-    "canonical_source_schema_fingerprint": "3ded1de715a3d114f3098a2818904b3c5b0d0cdde17dcbef77cc7af76c3b7deb",
+    "canonical_source_schema_fingerprint": "34f13666aac64ba95409d4f074581a791541e6a1a09f1d560598583c05882a45",
     "public_function_count": 567,
-    "production_ledger_count": 252,
-    "source_authority_migration_count": 152,
-    "pending_migration_count": 22,
+    "production_ledger_count": 253,
+    "source_authority_migration_count": 153,
+    "pending_migration_count": 23,
     "registered_source_dated_status_excluded": true,
     "expected_catalog_counts": {
       "column_grants": 43,
-      "columns": 2230,
-      "constraints": 1203,
+      "columns": 2232,
+      "constraints": 1204,
       "cron_jobs": 9,
       "default_privileges": 12,
       "extensions": 8,
@@ -96,7 +96,7 @@
   },
   "source_binding": {
     "kind": "external_exact_head_release_attestation",
-    "rule": "The production approval package binds the exact backend commit/tree, twenty-two migration blobs, generated release evidence, exact frontend commit, fresh source catalog/ledger identity, backup and rehearsal before mutation."
+    "rule": "The production approval package binds the exact backend commit/tree, twenty-three migration blobs, generated release evidence, exact frontend commit, fresh source catalog/ledger identity, backup and rehearsal before mutation."
   },
   "backup_evidence": {
     "state": "fresh_verified_backup_required_after_fresh_source_capture_and_before_mutation",
@@ -121,7 +121,7 @@
     "production migration ledger is exactly 230 rows headed by 20260920010000 event_reminder_static_weekly_authority",
     "locked production source catalog must freshly recapture and equal 750e7f040519f6d4555836cbd4d172a22f98911d5bab9918fa370238fff3f822 with the exact expected source counts before any DDL; a stale or mismatched catalog aborts the plan",
     "a fresh encrypted backup with restore verification completes after the fresh source capture and before mutation",
-    "production exposes exactly 506 public functions and 347 non-owner routine grants before the twenty-two corrections",
+    "production exposes exactly 506 public functions and 347 non-owner routine grants before the twenty-three corrections",
     "one active authority key, two active registered schedule sources, 22 roster slots, 20 incumbencies, zero draft, two published versions/publications, four projections, 1394 occurrences, 19 command receipts and authority revision 19 remain current",
     "five target schedule positions remain represented without inventing staff identities",
     "Outlook event-sync authority exists and its rows must remain unchanged by this plan",
@@ -131,7 +131,7 @@
     "ledger_head": "20260920010000",
     "ledger_count": 230,
     "schema_fingerprint": "750e7f040519f6d4555836cbd4d172a22f98911d5bab9918fa370238fff3f822",
-    "status": "fresh read-only observed source; locked source/catalog/ledger recapture remains mandatory"
+    "status": "September 22 read-only observed source; locked fresh source/catalog/ledger recapture remains mandatory before DDL"
   },
   "pending_migrations": [
     {
@@ -287,11 +287,18 @@
       "file": "20260925054802_static_weekly_staffing_atomic_acceptance.sql",
       "source_migration_version": "20260925054802",
       "sha256": "34dbeb5ac62da3f507737d189a0f4c982a5187bdb34905cb87468f1776ed2e39"
+    },
+    {
+      "order": 23,
+      "phase": "gps_exact_location_authority_boundary",
+      "file": "20260925190000_gps_exact_location_authority_boundary.sql",
+      "source_migration_version": "20260925190000",
+      "sha256": "4a524505fa7eadf9755153a1946a8e06d91dbd8ed8196a82aa9cd6f53cffbdf4"
     }
   ],
   "postconditions": [
-    "production ledger advances exactly twenty-two rows from 230 to 252, ending at 20260925054802 static_weekly_staffing_atomic_acceptance; no already-applied migration is replayed",
-    "complete public catalog and privilege fingerprint equals 3ded1de715a3d114f3098a2818904b3c5b0d0cdde17dcbef77cc7af76c3b7deb with the exact reviewed target counts",
+    "production ledger advances exactly twenty-three rows from 230 to 253, ending at 20260925190000 gps_exact_location_authority_boundary; no already-applied migration is replayed",
+    "complete public catalog and privilege fingerprint equals 34f13666aac64ba95409d4f074581a791541e6a1a09f1d560598583c05882a45 with the exact reviewed target counts",
     "production exposes exactly 567 public functions and 383 non-owner routine grants after the corrections",
     "ordinary full-attendance days retain the fixed weekly schedule; CoverAll is explicit named-manager capacity, not an automatic absence-count threshold",
     "guest reporting OFF prevents queued guest notification dispatch without deleting pending/history records; staff Feedback remains separate",

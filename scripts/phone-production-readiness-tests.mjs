@@ -72,6 +72,8 @@ assert.match(PHONE_READINESS_QUERY, /device_auth_credentials/);
 assert.match(PHONE_READINESS_QUERY, /employee_push_registrations/);
 assert.match(PHONE_READINESS_QUERY, /scan_events/);
 assert.match(PHONE_READINESS_QUERY, /device_location_proximity_status/);
+assert.match(PHONE_READINESS_QUERY, /authority_scope='surveyed_location_radius'/);
+assert.match(PHONE_READINESS_QUERY, /metadata_json->>'authoritative'='true'/);
 assert.match(PHONE_READINESS_QUERY, /device_notification_acknowledgements/);
 
 console.log("PHONE_PRODUCTION_READINESS_TESTS_PASS");

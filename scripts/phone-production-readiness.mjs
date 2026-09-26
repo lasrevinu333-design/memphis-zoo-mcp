@@ -95,9 +95,11 @@ left join lateral (
     and finish_event.scanned_at=context.native_completed_at
 ) nfc on true
 left join lateral (
-  select case when latest.result='near' then latest.observed_at end as last_proximity_at
+  select case when latest.result='near' and latest.authoritative and latest.authority_scope='surveyed_location_radius' then latest.observed_at end as last_proximity_at
   from (
     select lower(btrim(p.result)) as result,
+           p.metadata_json->>'authoritative'='true' as authoritative,
+           p.metadata_json->>'authority_scope' as authority_scope,
            coalesce(p.observed_at,p.evaluated_at) as observed_at
     from public.device_location_proximity_status p
     where p.device_id=d.id

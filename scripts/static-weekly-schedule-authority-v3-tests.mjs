@@ -9,6 +9,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { compileStaticWeeklySchedule, postgresJsonbContentDigest } from "../src/static-weekly-schedule-compiler.js";
 import { createStaticWeeklyDraftRpcInput, createStaticWeeklyProjectionRpcInput, staticWeeklyDatabaseDocumentIdentity } from "../src/static-weekly-schedule-database-adapter.js";
+import { createStaticWeeklyProjectionWithLunchRpcInput } from "../src/static-weekly-lunch-publication.js";
 import { prepareStaticWeeklyRegistrationArtifact, validateStaticWeeklyPacket } from "./static-weekly-schedule-candidate-importer.mjs";
 
 const execFileAsync = promisify(execFile);
@@ -45,7 +46,7 @@ function sourceInput({ serviceDate = initialWeek, versionId = "60000000-0000-400
   const contractor = "20000000-0000-4000-8000-000000000005";
   const locationA = "40000000-0000-4000-8000-000000000011"; const locationB = "40000000-0000-4000-8000-000000000012";
   const reminderFamily = "40000000-0000-4000-8000-000000000013";
-  const availability = (slotId, dayOfWeek, anchor) => ({ slotId, dayOfWeek, status: "working", shift: { start: "07:00", end: "16:00" }, productiveCapacityProvenance: "v3-test-shift", maxServiceEffortMinutes: 300, maxServiceEffortProvenance: "v3-test-capacity", qualifications: ["general"], qualificationProvenance: "v3-test-qualifications", restrictions: [], restrictionProvenance: "v3-test-restrictions", acceptedRouteAnchorLocationId: anchor, acceptedRouteProvenance: "v3-test-route" });
+  const availability = (slotId, dayOfWeek, anchor) => ({ slotId, dayOfWeek, status: "working", shift: { start: "07:00", end: "16:00" }, lunch: slotId === a ? { start: "12:00", end: "13:00" } : slotId === b ? { start: "13:00", end: "14:00" } : { start: "14:00", end: "15:00" }, productiveCapacityProvenance: "v3-test-shift", maxServiceEffortMinutes: 300, maxServiceEffortProvenance: "v3-test-capacity", qualifications: ["general"], qualificationProvenance: "v3-test-qualifications", restrictions: [], restrictionProvenance: "v3-test-restrictions", acceptedRouteAnchorLocationId: anchor, acceptedRouteProvenance: "v3-test-route" });
   const work = (workId, dayOfWeek, locationId, ownerSlotId) => ({
     workId, dayOfWeek, locationId, locationCodeSnapshot: `DAY_${dayOfWeek}`, locationNameSnapshot: `Area ${dayOfWeek}`,
     includedLocations: [
@@ -367,8 +368,9 @@ try {
   };
   const beforeTurnoverCompiled = await compilePublicationSource();
   assert.equal(beforeTurnoverCompiled.status, "FEASIBLE");
-  const beforeTurnoverProjection = createStaticWeeklyProjectionRpcInput({ result: beforeTurnoverCompiled, publicationId: turnoverPublicationId, expectedRevision: 12, actor: { ...manager, idempotencyKey: "v4-before-turnover-projection" } });
-  await scalar(cp("static_weekly_v3_materialize_projection", `${quote(turnoverPublicationId)},${quote(turnoverWeek)},${quote(beforeTurnoverProjection.exceptionSetDigest)},${quote(beforeTurnoverProjection.compilerVersion)},${json(beforeTurnoverProjection.objective)},${json(beforeTurnoverProjection.metrics)},${quote(beforeTurnoverProjection.replayDigest)},${json(beforeTurnoverProjection.envelope)},12,${quote(manager.managerId)},'v4-before-turnover-projection'`));
+  const beforeTurnoverProjection = createStaticWeeklyProjectionWithLunchRpcInput({ result: beforeTurnoverCompiled, publicationId: turnoverPublicationId, expectedRevision: 12, actor: { ...manager, idempotencyKey: "v4-before-turnover-projection" } });
+  const beforeTurnoverProjectionResponse = JSON.parse(await scalar(cp("static_weekly_v3_materialize_projection", `${quote(turnoverPublicationId)},${quote(turnoverWeek)},${quote(beforeTurnoverProjection.exceptionSetDigest)},${quote(beforeTurnoverProjection.compilerVersion)},${json(beforeTurnoverProjection.objective)},${json(beforeTurnoverProjection.metrics)},${quote(beforeTurnoverProjection.replayDigest)},${json(beforeTurnoverProjection.envelope)},12,${quote(manager.managerId)},'v4-before-turnover-projection'`)));
+  await scalar(cp("static_weekly_v8_materialize_lunch_document", `${quote(beforeTurnoverProjectionResponse.data.projection_id)},${json(beforeTurnoverProjection.lunchDocument)},${quote(manager.managerId)}`));
   const employeeDay = (employeeId) => `set role service_role; select public.static_weekly_v5_read_employee_day(${quote(turnoverDate)},${quote(employeeId)},statement_timestamp())::text`;
   const beforeEmployeeDay = JSON.parse(await scalar(employeeDay("30000000-0000-4000-8000-000000000001")));
   const beforeSecondaryEmployeeDay = JSON.parse(await scalar(employeeDay("30000000-0000-4000-8000-000000000003")));
@@ -430,8 +432,9 @@ try {
     "FEASIBLE",
     `one departed slot must rebalance onto the remaining verified workforce: ${JSON.stringify({ reviewWork: departedCompiled.reviewWork, candidateRejections: departedCompiled.candidateRejections })}`,
   );
-  const departedProjection = createStaticWeeklyProjectionRpcInput({ result: departedCompiled, publicationId: turnoverPublicationId, expectedRevision: 14, actor: { ...manager, idempotencyKey: "v4-departed-projection" } });
-  await scalar(cp("static_weekly_v3_materialize_projection", `${quote(turnoverPublicationId)},${quote(turnoverWeek)},${quote(departedProjection.exceptionSetDigest)},${quote(departedProjection.compilerVersion)},${json(departedProjection.objective)},${json(departedProjection.metrics)},${quote(departedProjection.replayDigest)},${json(departedProjection.envelope)},14,${quote(manager.managerId)},'v4-departed-projection'`));
+  const departedProjection = createStaticWeeklyProjectionWithLunchRpcInput({ result: departedCompiled, publicationId: turnoverPublicationId, expectedRevision: 14, actor: { ...manager, idempotencyKey: "v4-departed-projection" } });
+  const departedProjectionResponse = JSON.parse(await scalar(cp("static_weekly_v3_materialize_projection", `${quote(turnoverPublicationId)},${quote(turnoverWeek)},${quote(departedProjection.exceptionSetDigest)},${quote(departedProjection.compilerVersion)},${json(departedProjection.objective)},${json(departedProjection.metrics)},${quote(departedProjection.replayDigest)},${json(departedProjection.envelope)},14,${quote(manager.managerId)},'v4-departed-projection'`)));
+  await scalar(cp("static_weekly_v8_materialize_lunch_document", `${quote(departedProjectionResponse.data.projection_id)},${json(departedProjection.lunchDocument)},${quote(manager.managerId)}`));
   const replacement = JSON.parse(await scalar(cp("static_weekly_v4_replace_employee", `${quote(source.slots[0].id)},'Morgan','new employee hired',15,${quote(manager.managerId)},'v4-replacement'`)));
   assert.equal(replacement.revision, 16);
   assert.notEqual(replacement.data.new_employee_id, "30000000-0000-4000-8000-000000000001", "replacement must use a fresh employee identity");
@@ -459,8 +462,9 @@ try {
   const replacementCompiled = await compilePublicationSource();
   assert.equal(replacementCompiled.status, "FEASIBLE");
   assert.equal(replacementCompiled.weeklyAssignments.filter((row) => row.personId === replacement.data.new_employee_id).length > 0, true, "the replacement is immediately eligible for the stable weekly workload");
-  const replacementProjection = createStaticWeeklyProjectionRpcInput({ result: replacementCompiled, publicationId: turnoverPublicationId, expectedRevision: 16, actor: { ...manager, idempotencyKey: "v4-replacement-projection" } });
-  await scalar(cp("static_weekly_v3_materialize_projection", `${quote(turnoverPublicationId)},${quote(turnoverWeek)},${quote(replacementProjection.exceptionSetDigest)},${quote(replacementProjection.compilerVersion)},${json(replacementProjection.objective)},${json(replacementProjection.metrics)},${quote(replacementProjection.replayDigest)},${json(replacementProjection.envelope)},16,${quote(manager.managerId)},'v4-replacement-projection'`));
+  const replacementProjection = createStaticWeeklyProjectionWithLunchRpcInput({ result: replacementCompiled, publicationId: turnoverPublicationId, expectedRevision: 16, actor: { ...manager, idempotencyKey: "v4-replacement-projection" } });
+  const replacementProjectionResponse = JSON.parse(await scalar(cp("static_weekly_v3_materialize_projection", `${quote(turnoverPublicationId)},${quote(turnoverWeek)},${quote(replacementProjection.exceptionSetDigest)},${quote(replacementProjection.compilerVersion)},${json(replacementProjection.objective)},${json(replacementProjection.metrics)},${quote(replacementProjection.replayDigest)},${json(replacementProjection.envelope)},16,${quote(manager.managerId)},'v4-replacement-projection'`)));
+  await scalar(cp("static_weekly_v8_materialize_lunch_document", `${quote(replacementProjectionResponse.data.projection_id)},${json(replacementProjection.lunchDocument)},${quote(manager.managerId)}`));
   assert.equal(await scalar(`select count(*) from public.weekly_schedule_compiled_projections where publication_id=${quote(turnoverPublicationId)} and week_start=${quote(turnoverWeek)}`), "3", "each changed weekly authority appends an immutable same-week projection");
   const currentReplacementSnapshot = JSON.parse(await scalar(cp("static_weekly_v3_read_manager_snapshot", `${quote(turnoverWeek)}`)));
   assert.equal(currentReplacementSnapshot.projection_status, "current");

@@ -183,7 +183,7 @@ async function solveLexicographic(problem, deadline, authorityProgram) {
     const seconds = remaining / 1000;
     let solved;
     const workerAttestation = { schema: "memphis-zoo.static-weekly-worker-model-attestation.v1", modelDigest: model.modelDigest, modelBasisDigest: model.modelBasisDigest, priorBindingDigest: model.priorBindingDigest };
-    try { solved = await solveStaticWeeklyMip(model.lp, { deadline, timeLimitSeconds: seconds, attestation: workerAttestation }); } catch (error) { return { error: reason(error.code === "solver_timeout" ? "solver_timeout" : "solver_unavailable", { message: error.message }) }; }
+    try { solved = await solveStaticWeeklyMip(model.lp, { deadline, timeLimitSeconds: seconds, attestation: workerAttestation }); } catch (error) { return { error: reason(error.code === "solver_timeout" ? "solver_timeout" : "solver_unavailable", { message: error.message, tier: objective.name, remainingAtTierStartMilliseconds: remaining, elapsedMilliseconds: Math.floor(monotonicNowMilliseconds() - startedAt) }) }; }
     if (canonicalJson(solved.modelAttestation) !== canonicalJson(workerAttestation)) return { error: reason("worker_model_attestation_mismatch", { tier: objective.name }) };
     const primal = extractPrimal(model, solved.result); if (primal.error) return { error: { ...primal.error, tier: objective.name } };
     const canonicalFailure = validateCanonicalPrimal(model, primal.values); if (canonicalFailure) return { error: canonicalFailure };

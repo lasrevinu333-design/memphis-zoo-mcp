@@ -156,6 +156,9 @@ assert.match(packageManifest, /"test:final-closure-database-isolated":\s*"node s
 assert.equal(parsedPackageManifest.scripts["test:release-migration-plan-db-isolated"],
   "bash scripts/release-migration-plan-database-isolated-tests.sh",
   "the release migration database regression must own one disposable database container");
+assert.equal(parsedPackageManifest.scripts["test:release-migration-plan-db"],
+  parsedPackageManifest.scripts["test:release-migration-plan-db-isolated"],
+  "the raw release migration database command must not bypass the owned disposable wrapper");
 const releaseGate = readFileSync(resolve(workflowDirectory, "integrated-release-attestation.yml"), "utf8");
 assert.match(releaseGate, /test:integrated-backend-authority-cutover:database/,
   "the manual signed release gate must invoke the database-enabled cutover checker");

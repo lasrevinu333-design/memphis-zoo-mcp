@@ -21,7 +21,7 @@ const cleanup = () => { if (!owned) return; docker(['rm', '-f', container]); own
 for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => { try { cleanup(); } finally { process.exit(143); } });
 
 const files = readdirSync('supabase/migrations').filter(file => file.endsWith('.sql')).sort();
-assert.equal(files.at(-1), '20260925054802_static_weekly_staffing_atomic_acceptance.sql');
+assert.equal(files.at(-1), '20260925190000_gps_exact_location_authority_boundary.sql');
 try {
   docker(['image', 'inspect', image]);
   docker(['run', '--rm', '-d', '--network', 'none', '--name', container,
