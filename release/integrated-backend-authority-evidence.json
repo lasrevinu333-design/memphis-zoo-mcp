@@ -135,7 +135,7 @@
       {
         "path": ".github/workflows/build52-production-migration-apply.yml",
         "mode": "100644",
-        "object_id": "79d7a77e623b6399f822b77f2730b1cd31966a51"
+        "object_id": "a2c1f86a5ef06fdec385b7a7f295fdf3538cca41"
       },
       {
         "path": ".github/workflows/custodial-populated-schema-preflight.yml",
@@ -1070,7 +1070,7 @@
       {
         "path": "scripts/integrated-backend-authority-release-provenance-tests.mjs",
         "mode": "100644",
-        "object_id": "4e318f45472c3063240c17a8482e9f5fa5100a76"
+        "object_id": "11fac4501b7ead31b5e54ac7806b05a6f004f57a"
       },
       {
         "path": "scripts/integrated-backend-authority-suite-order-isolated-tests.mjs",
@@ -1561,6 +1561,16 @@
         "path": "scripts/release-migration-rehearsal-provenance.mjs",
         "mode": "100644",
         "object_id": "463925a2408056a23c4e613acd37cd3f00096b37"
+      },
+      {
+        "path": "scripts/release-migration-workflow-preflight.mjs",
+        "mode": "100644",
+        "object_id": "7eace6e7e6b19b0697750f0cbffadc970af44f36"
+      },
+      {
+        "path": "scripts/release-migration-workflow-tests.mjs",
+        "mode": "100644",
+        "object_id": "ecfdf970fcfc5bb2ac41e1e8fc733955ca8dd8ec"
       },
       {
         "path": "scripts/release-pair-consumer-regression-tests.mjs",
@@ -4538,7 +4548,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 882,
+    "authority_path_count": 884,
     "migration_path_count": 175,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
