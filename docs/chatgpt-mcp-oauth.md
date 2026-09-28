@@ -45,6 +45,10 @@ must remain an explicit coordinated recovery action.
 - Every redirect-based authorization success or error includes the exact `iss`
   parameter. The metadata advertises
   `authorization_response_iss_parameter_supported=true`.
+- The password page keeps a same-origin-only form policy. The consent page
+  additionally permits only its validated ChatGPT callback so Chromium can
+  follow the approve/deny POST's 303 redirect. Other CSP directives remain
+  unchanged. Raw HTTP tests alone do not establish browser navigation success.
 - Access-token verification requires exact `iss`, `aud`, `sub`, `client_id`,
   `exp`, `nbf`, `iat`, `scope`, signature, and client-registration validity.
 - Authorization codes are five minutes, access tokens ten minutes, rotating
@@ -66,7 +70,9 @@ security scheme and challenges before its adapter can run:
   `mcp:read` and `mcp:write`;
 - every `tools/list` descriptor carries top-level `securitySchemes` and the
   `_meta.securitySchemes` compatibility mirror;
-- every denied tool result carries `_meta["mcp/www_authenticate"]`;
+- every denied tool result carries `_meta["mcp/www_authenticate"]` with the
+  exact protected resource and required scopes, plus `error` and
+  `error_description` so OpenAI clients can open the OAuth linking UI;
 - an invalid presented HTTP credential receives `401` and the same canonical
   `WWW-Authenticate` protected-resource link.
 
