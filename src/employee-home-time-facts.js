@@ -5,7 +5,8 @@ const canonicalTime=value=>String(value??'').match(TIME)?.[1]||null;
 const same=(left,right)=>typeof left==='string'&&left.toLowerCase()===String(right||'').toLowerCase();
 function unavailable(day){return {contract_version:'employee-home-time-facts.v1',service_date:day.service_date,
   employee_id:day.employee_id||day.employee?.id,employee_name:day.employee_name||day.employee?.display_name,
-  projection_status:day.projection_status,shift:null,lunch:null,source:'static_weekly_projection',reason:'published_time_facts_unavailable'};}
+  projection_status:day.projection_status,projection_id:day.projection_id,publication_id:day.publication_id,
+  shift:null,lunch:null,source:'static_weekly_projection',reason:'published_time_facts_unavailable'};}
 export function deriveHomeTimeFacts(day,record) {
   const base=unavailable(day),r=record?.roster;
   if(!r||!same(r.employee_id,base.employee_id)||!same(r.projection_id,day.projection_id)
@@ -35,7 +36,14 @@ export function deriveHomeTimeFacts(day,record) {
         shift=normalizeWindow(payload.shift||window,'approved shift');status=payload.status||status||'working';
       }else if(e.type==='lunch')lunch=normalizeWindow(payload.lunch||window,'approved lunch');
     }
-    if(!shift||status!=='working'||blocked.some(window=>window.startMinute<=shift.startMinute&&window.endMinute>=shift.endMinute))return {...base,phase:'off_day',schedule_status:'off',shift:{active:false}};
+    // The union matters: adjacent/overlapping accepted absences can cover a
+    // whole shift even when no single exception covers it on its own.
+    let coveredUntil=shift?.startMinute;
+    for(const window of [...blocked].sort((a,b)=>a.startMinute-b.startMinute||a.endMinute-b.endMinute)){
+      if(window.startMinute>coveredUntil)break;
+      coveredUntil=Math.max(coveredUntil,window.endMinute);
+    }
+    if(!shift||status!=='working'||coveredUntil>=shift.endMinute)return {...base,phase:'off_day',schedule_status:'off',shift:{active:false}};
     if(lunch&&(lunch.startMinute<shift.startMinute||lunch.endMinute>shift.endMinute))return base;
     return {...base,reason:null,schedule_status:'scheduled',shift:{active:true,start:shift.start,end:shift.end,
       shift_start:shift.start,shift_end:shift.end,lunch_start:lunch?.start||null,lunch_end:lunch?.end||null},

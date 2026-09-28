@@ -85,10 +85,21 @@ let rebuildRequest = null;
 let dayChangesRequest = null;
 let mutationFailure = null;
 let vacancyRequest = null;
+let separationRead = null;
 let fillRequest = null;
+let recurringPreviewRequest = null;
+let recurringConfirmationRequest = null;
+let recurringStatusRequest = null;
+let recurringDeliveryRequest = null;
 const controlPlane = {
+  async getCurrentRecurringDelivery(request) { recurringDeliveryRequest=request;return {mode:'RECURRING_SCHEDULE',affectedPhonesUpdated:false,targets:[]}; },
+  async confirmRecurringStaffing(request) { recurringConfirmationRequest=request;return {state:'ACCEPTED',receipt:{accepted:true,affectedPhonesUpdated:false}}; },
+  async getRecurringConfirmationStatus(request) { recurringStatusRequest=request;return {state:'NOT_FOUND'}; },
+  async previewRecurringStaffing(request) { recurringPreviewRequest = request; return { status: "CANDIDATE_ONLY",
+    previewDigest: "a".repeat(64), admitted: false, published: false, affectedPhonesUpdated: false }; },
   async fillVacantRosterSlot(request) { fillRequest = request; return { revision: request.expectedRevision + 2, data: { phone_assignment: null } }; },
   async vacateRosterSlot(request) { vacancyRequest = request; return { revision: request.expectedRevision + 1, data: { replacement_employee_id: null } }; },
+  async readSeparation(request) { separationRead = request; return { slot_id: request.slotId, state: "PENDING_RECONCILIATION", native_inventory_state: "UNKNOWN" }; },
   async health() { return { ready: true }; },
   async getManagerSnapshot({ weekStart }) { snapshots += 1; return { schema: "memphis-zoo.static-weekly-manager-snapshot.v1", week_start: weekStart, authority_revision: 0 }; },
   async applyContractorCapacity() { mutations += 1; return { revision: mutations, data: { exception_id: `contractor-${mutations}` } }; },
@@ -178,6 +189,53 @@ try {
   assert.equal(snapshot.body.data.schema, "memphis-zoo.static-weekly-manager-snapshot.v1");
   assert.equal(snapshots, 1);
 
+  const previewUrl = `${origin}/static-weekly/recurring-adaptation/preview`;
+  const previewBody = { effective_start: "2026-10-05", expected_revision: 42,
+    full_nine_source_id: "22222222-2222-4222-8222-222222222222" };
+  let previewResponse = await fetch(previewUrl, { method: "POST",
+    headers: { "Content-Type": "application/json" }, body: JSON.stringify(previewBody) });
+  assert.equal(previewResponse.status, 401, "unauthenticated callers cannot request a roster preview");
+  assert.equal(recurringPreviewRequest, null);
+  previewResponse = await fetch(previewUrl, { method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.token}` },
+    body: JSON.stringify(previewBody) });
+  assert.equal(previewResponse.status, 200);
+  assert.equal((await previewResponse.json()).data.status, "CANDIDATE_ONLY");
+  assert.equal(recurringPreviewRequest.manager.manager_id, manager.manager_id);
+  assert.equal(recurringPreviewRequest.effectiveStart, previewBody.effective_start);
+  assert.equal(recurringPreviewRequest.expectedRevision, previewBody.expected_revision);
+  assert.equal(recurringPreviewRequest.fullNineSourceId, previewBody.full_nine_source_id);
+
+  const confirmationKey='30000000-0000-4000-8000-000000000091';
+  const confirmationUrl=`${origin}/static-weekly/recurring-adaptation/confirm`;
+  const confirmationBody={confirmation_key:confirmationKey,effective_start:'2026-10-05',expected_revision:42,preview_digest:'b'.repeat(64)};
+  let confirmationResponse=await fetch(confirmationUrl,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(confirmationBody)});
+  assert.equal(confirmationResponse.status,401);assert.equal(recurringConfirmationRequest,null);
+  confirmationResponse=await fetch(confirmationUrl,{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${session.token}`},body:JSON.stringify(confirmationBody)});
+  assert.equal(confirmationResponse.status,200);
+  assert.equal((await confirmationResponse.json()).data.receipt.affectedPhonesUpdated,false);
+  assert.deepEqual(recurringConfirmationRequest,{manager:recurringPreviewRequest.manager,confirmationKey,effectiveStart:'2026-10-05',expectedRevision:42,previewDigest:'b'.repeat(64),fullNineSourceId:null});
+  const validConfirmationRequest=recurringConfirmationRequest;
+  for(const extra of [{manager_id:'forged'},{canonical_source:{forged:true}},{decision:{forged:true}}]){
+   const denied=await fetch(confirmationUrl,{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${session.token}`},body:JSON.stringify({...confirmationBody,...extra})});
+   assert.equal(denied.status,422);assert.equal(recurringConfirmationRequest,validConfirmationRequest);
+  }
+  const statusUrl=`${origin}/static-weekly/recurring-adaptation/confirmations/${confirmationKey}`;
+  assert.equal((await fetch(statusUrl)).status,401);assert.equal(recurringStatusRequest,null);
+  const statusResponse=await fetch(statusUrl,{headers:{Authorization:`Bearer ${session.token}`}});
+  assert.equal(statusResponse.status,200);assert.equal((await statusResponse.json()).data.state,'NOT_FOUND');
+  assert.deepEqual(recurringStatusRequest,{manager:recurringPreviewRequest.manager,confirmationKey});
+  const deliveryUrl=`${origin}/static-weekly/recurring-adaptation/delivery?service_date=2026-10-05`;
+  assert.equal((await fetch(deliveryUrl)).status,401);assert.equal(recurringDeliveryRequest,null);
+  const deliveryResponse=await fetch(deliveryUrl,{headers:{Authorization:`Bearer ${session.token}`}});
+  assert.equal(deliveryResponse.status,200);assert.equal((await deliveryResponse.json()).data.affectedPhonesUpdated,false);
+  assert.deepEqual(recurringDeliveryRequest,{manager:recurringPreviewRequest.manager,serviceDate:'2026-10-05'});
+  const validDeliveryRequest=recurringDeliveryRequest;
+  for(const extra of ['&manager_id=forged','&service_date=2026-10-06','&projection_id=forged']){
+   assert.equal((await fetch(deliveryUrl+extra,{headers:{Authorization:`Bearer ${session.token}`}})).status,422);
+   assert.equal(recurringDeliveryRequest,validDeliveryRequest);
+  }
+
   const rejectedOrigin = await fetch(`${origin}/static-weekly/manager-snapshot`, {
     method: "OPTIONS",
     headers: { Origin: "https://untrusted.example", "Access-Control-Request-Method": "GET" },
@@ -214,6 +272,8 @@ try {
   assert.equal(mutations, 2, "the retired endpoint cannot reach any scheduler mutation");
 
   lookup = async () => currentTrustedDevice({ revoked_at: new Date().toISOString() });
+  assert.equal((await fetch(statusUrl,{headers:{Authorization:`Bearer ${session.token}`}})).status,401);
+  assert.equal((await fetch(confirmationUrl,{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${session.token}`},body:JSON.stringify(confirmationBody)})).status,401);
   response = await mutation();
   assert.equal(response.status, 401, "a revoked trusted-device credential must be rejected before scheduler mutation");
   assert.equal(mutations, 2);
@@ -242,7 +302,7 @@ try {
   assert.equal(response.status, 200, "the current matching manager/device association may reach the scheduler mutation boundary");
   assert.equal(mutations, 3);
 
-  mutationFailure = Object.assign(new Error("The scheduler database connection was interrupted. No schedule change was accepted."), { code: "static_weekly_control_plane_database_unavailable" });
+  mutationFailure = Object.assign(new Error("The scheduler database connection was interrupted. The outcome is unknown; check the exact operation status before retrying."), { code: "static_weekly_control_plane_database_unavailable" });
   response = await mutation();
   assert.equal(response.status, 503, "an interrupted authority connection is a retryable unavailable response, not a revision conflict");
   assert.equal(response.body.code, "static_weekly_control_plane_database_unavailable");
@@ -272,6 +332,14 @@ try {
   assert.equal(vacancyRequest.slotId, "20000000-0000-4000-8000-000000000091");
   assert.equal(vacancyRequest.sourceId, vacancyBody.source_id);
   assert.equal(vacancyRequest.manager.manager_id, manager.manager_id);
+  const separationUrl = origin + "/static-weekly/roster/20000000-0000-4000-8000-000000000091/separation";
+  const deniedRead = await fetch(separationUrl);
+  assert.equal(deniedRead.status, 401);
+  assert.equal(separationRead, null, "unauthenticated caller cannot inspect separation state");
+  const allowedRead = await fetch(separationUrl, { headers: { Authorization: "Bearer " + session.token } });
+  assert.equal(allowedRead.status, 200);
+  assert.equal((await allowedRead.json()).data.native_inventory_state, "UNKNOWN");
+  assert.equal(separationRead.manager.manager_id, manager.manager_id);
   const fillUrl = origin + "/static-weekly/roster/vacant-slots/20000000-0000-4000-8000-000000000091/fill";
   const fillBody = { source_id: vacancyBody.source_id, new_employee_name: "Synthetic Authorized Hire", effective_start: vacancyBody.effective_start,
     reason: "Synthetic fill", expected_revision: 0, idempotency_key: "runtime-source-bound-fill" };

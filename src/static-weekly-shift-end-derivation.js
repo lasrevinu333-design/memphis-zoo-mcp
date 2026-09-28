@@ -52,7 +52,8 @@ export function deriveDatedShiftEndCoverage(source,digest,canonicalizeEffective=
    const incumbent=snapshotDatedRosterSlot(slot,date,{vacancyCapable:capable.has(slot.id)});
    requireFact((incumbent.vacant===true)===(a.status==='vacant_unfilled'),'dated vacancy and availability disagree');
    datedAvailability[a.dayOfWeek]={shift:[a.shift.start,a.shift.end],lunch:[a.lunch.start,a.lunch.end],
-    status:a.status,qualifications:clone(a.qualifications),restrictions:clone(a.restrictions)};
+    status:a.status,qualifications:clone(a.qualifications),restrictions:clone(a.restrictions),
+    acceptedRouteAnchorLocationId:a.acceptedRouteAnchorLocationId||null};
    roster.push({serviceDate:date,dayOfWeek:a.dayOfWeek,slotId:slot.id,personId:incumbent.personId,
     vacant:incumbent.vacant===true,status:a.status,shift:clone(a.shift),lunch:clone(a.lunch)});
   }

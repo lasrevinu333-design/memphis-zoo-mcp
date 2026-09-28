@@ -9,7 +9,9 @@ import { createShiftEndContinuityPolicy } from "../src/static-weekly-shift-end-d
 import {validateOwnerEligibilityConfig,assertNormalOwnerEligibility,hardRestrictedSlots,verifiedBaseRestrictionInventory} from '../src/static-weekly-owner-eligibility.js';
 
 const BACKEND = path.resolve(process.cwd());
-const CONFIG_PATH = path.join(BACKEND, "config/custodial-recurring-schedule-20260924.json");
+const CONFIG_PATH = process.env.STATIC_WEEKLY_OWNER_CONFIG_PATH
+  ? path.resolve(process.env.STATIC_WEEKLY_OWNER_CONFIG_PATH)
+  : path.join(BACKEND, "config/custodial-recurring-schedule-20260924.json");
 const OUTPUT = process.argv[2];
 if (!OUTPUT) throw new Error("Usage: generate-owner-corrected-static-weekly-schedule.mjs <output-packet.json>");
 if (fs.existsSync(OUTPUT) || fs.existsSync(`${OUTPUT}.registration.json`)) throw new Error("Refusing to replace existing schedule evidence.");
@@ -25,10 +27,13 @@ function deterministicUuid(label) {
   return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
 }
 const config = readJson(CONFIG_PATH);
+const BASE_PACKET_PATH = process.env.STATIC_WEEKLY_BASE_PACKET_PATH
+  ? path.resolve(process.env.STATIC_WEEKLY_BASE_PACKET_PATH)
+  : config.basePacket.path;
 assert.equal(new Date(`${config.effectiveDate}T00:00:00Z`).getUTCDay(),1,"new recurring publication must start on a Monday");
 validateOwnerEligibilityConfig(config);
-assert.equal(fileHash(config.basePacket.path), config.basePacket.sha256, "base schedule packet hash changed");
-const base = readJson(config.basePacket.path);
+assert.equal(fileHash(BASE_PACKET_PATH), config.basePacket.sha256, "base schedule packet hash changed");
+const base = readJson(BASE_PACKET_PATH);
 assert.equal(base.packetSchema, "memphis-zoo.static-weekly.verified-schedule-packet.v1");
 const input = clone(base.compilerInput);
 const baseRestrictionInventory=verifiedBaseRestrictionInventory(input,config.basePacket.sha256);
@@ -61,7 +66,8 @@ for (const [key, row] of slotEntries) {
   }
 }
 const vacancyIds = slotEntries.filter(([,row]) => row.vacancy === true).map(([,row]) => row.slotId).sort();
-assert.deepEqual(vacancyIds, [config.slots.OPTION4.slotId,config.slots.OPTION1.slotId,config.slots.OPTION2.slotId].sort());
+assert.equal(slotEntries.length, 9, "exactly nine stable employee positions required");
+assert.ok(vacancyIds.length <= 3, "this release supports six through nine actual employees");
 const baseAssignments = clone(version.assignments);
 const phaseOf = (assignment) => assignment.window?.start === "09:45" ? "equalized" : "morning";
 const affectedDays = new Set(Object.keys(config.overrides).map(Number));
@@ -109,7 +115,10 @@ corrected.sort((a,b) => a.dayOfWeek-b.dayOfWeek || a.window.start.localeCompare(
   || a.locationCodeSnapshot.localeCompare(b.locationCodeSnapshot) || a.workId.localeCompare(b.workId));
 version.assignments = corrected;
 version.namedAbsentSlotIds = [];
-version.vacancyCapableSlotIds = [...vacancyIds];
+// Every stable employee position can become vacant on a later separation.
+// Capability is not current vacancy. Only currently unfilled positions below
+// are marked vacant in this immutable recurring source.
+version.vacancyCapableSlotIds = slotEntries.map(([, row]) => row.slotId).sort();
 version.vacantSlotIds = [...vacancyIds];
 const baseTemplateBySlot = new Map();
 for (const row of base.compilerInput.version.slotAvailability) if (!baseTemplateBySlot.has(row.slotId)) baseTemplateBySlot.set(row.slotId, row);
@@ -123,9 +132,13 @@ for (const [slotKey, owner] of slotEntries) for (const dayOfWeek of owner.workDa
   template.lunch = {start:owner.lunch[0],end:owner.lunch[1]};
   const anchor = version.assignments.find((row) => row.dayOfWeek === dayOfWeek
     && row.originSlotId === owner.slotId && row.serviceMode === "scan_tracked");
-  assert.ok(anchor, `${slotKey} weekday ${dayOfWeek} has no physical routing anchor`);
-  template.acceptedRouteAnchorLocationId = anchor.locationId;
-  template.acceptedRouteProvenance = `owner-corrected recurring assignment anchor; source=${fileHash(CONFIG_PATH)}`;
+  if (owner.vacancy !== true) {
+    assert.ok(anchor, `${slotKey} weekday ${dayOfWeek} has no physical routing anchor`);
+    template.acceptedRouteAnchorLocationId = anchor.locationId;
+    template.acceptedRouteProvenance = `owner-corrected recurring assignment anchor; source=${fileHash(CONFIG_PATH)}`;
+  } else {
+    assert.equal(anchor, undefined, `${slotKey} vacant position must not own a cleaning area`);
+  }
   version.slotAvailability.push(template);
 }
 version.slotAvailability.sort((a,b) => a.dayOfWeek-b.dayOfWeek || a.slotId.localeCompare(b.slotId));
@@ -162,8 +175,8 @@ function phaseOwnerFamilies(day, phase) {
 }
 for (const day of [...affectedDays].sort()) for (const phase of ["morning","equalized"]) {
   const byOwner = phaseOwnerFamilies(day,phase);
-  const scheduled = slotEntries.filter(([,row]) => row.workDays.includes(day)).map(([key]) => key);
-  assert.deepEqual([...byOwner.keys()].sort(), scheduled.sort(), `${day}/${phase} must use every scheduled position exactly as a position`);
+  const scheduled = slotEntries.filter(([,row]) => row.vacancy !== true && row.workDays.includes(day)).map(([key]) => key);
+  assert.deepEqual([...byOwner.keys()].sort(), scheduled.sort(), `${day}/${phase} must use every actual working employee`);
   const rows = [];
   for (const slotKey of scheduled) {
     const families = [...byOwner.get(slotKey)].sort();
@@ -244,6 +257,7 @@ const rosterSlots = slotEntries.map(([slotKey,row]) => ({
 }));
 const evidenceFiles = {
   ownerCorrectedSchedule: CONFIG_PATH,
+  ...(config.sourceHandout?.path ? { correctedSixPersonAreaMap: path.resolve(BACKEND, config.sourceHandout.path) } : {}),
   eligibilityScope: path.join(BACKEND,'src/static-weekly-owner-eligibility.js'),
   generator: path.join(BACKEND,"scripts/generate-owner-corrected-static-weekly-schedule.mjs"),
   compiler: path.join(BACKEND,"src/static-weekly-schedule-compiler.js"),
@@ -251,10 +265,13 @@ const evidenceFiles = {
   verifier: path.join(BACKEND,"src/static-weekly-schedule-verifier.js"),
   shiftEndCoverage: path.join(BACKEND,"src/static-weekly-shift-end-coverage.js"),
   shiftEndDerivation: path.join(BACKEND,"src/static-weekly-shift-end-derivation.js"),
-  baseVerifiedSchedule: config.basePacket.path,
-  ownerDirectives: "/home/eric/Documents/Codex/2026-08-27/custodial-foundation-delivery/inputs/LATEST_USER_DIRECTIVES_2026-08-27.md",
-  ownerCorrection: "/home/eric/Documents/Codex/2026-09-13/i-x20/outputs/OWNER_CORRECTION_20260920.md",
-  ownerClarificationsOC24: "/home/eric/Documents/Codex/2026-09-13/i-x20/outputs/OWNER_CLARIFICATIONS_20260924_OC24.md",
+  baseVerifiedSchedule: BASE_PACKET_PATH,
+  ownerDirectives: process.env.STATIC_WEEKLY_OWNER_DIRECTIVES_PATH
+    || "/home/eric/Documents/Codex/2026-08-27/custodial-foundation-delivery/inputs/LATEST_USER_DIRECTIVES_2026-08-27.md",
+  ownerCorrection: process.env.STATIC_WEEKLY_OWNER_CORRECTION_PATH
+    || "/home/eric/Documents/Codex/2026-09-13/i-x20/outputs/OWNER_CORRECTION_20260920.md",
+  ownerClarificationsOC24: process.env.STATIC_WEEKLY_OWNER_CLARIFICATIONS_PATH
+    || "/home/eric/Documents/Codex/2026-09-13/i-x20/outputs/OWNER_CLARIFICATIONS_20260924_OC24.md",
 };
 const packet = {
   packetSchema:"memphis-zoo.static-weekly.verified-schedule-packet.v1",
@@ -272,7 +289,7 @@ const packet = {
     compilerVersion:compiled.compilerVersion, verifierVersion:compiled.verifier.verifierVersion, verifierOk:true,
     replayDigest:compiled.replayDigest, basePacketSha256:config.basePacket.sha256,
     ownerCorrectedScheduleSha256:fileHash(CONFIG_PATH),
-    stablePositions:9, staffedPositions:6, vacantPositions:3,
+    stablePositions:9, staffedPositions:9-vacancyIds.length, vacantPositions:vacancyIds.length,
     preservedBaseDays:[...config.preserveBaseDays], affectedDays:[...affectedDays].sort(),
     scheduleLoads, shiftEndDerivation,
     continuityVerification:shiftEndDerivation.continuity, productionWritten:false,

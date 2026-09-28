@@ -9,6 +9,7 @@
  * request session and the database re-resolves its active display name.
  */
 import { createHash, randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { assertOwnerRecurringWorkdays } from "./static-weekly-owner-workdays.js";
 import { createCoverAllPrintDocument } from "./static-weekly-coverall-print.js";
 import { Pool } from "pg";
@@ -18,10 +19,16 @@ import { createStaffingCommandRequest } from "./static-weekly-staffing-command.j
 import { createStaffingCandidateSet } from "./static-weekly-staffing-candidates.js";
 import { createStaffingPreparationMeter, enumerateStaffingServiceWindow } from "./static-weekly-staffing-preparation.js";
 import { createStaffingWeekPreviewInput } from "./static-weekly-staffing-preview.js";
+import { assertRecurringManagerDecision, assertRecurringAdmissionCandidate } from "./static-weekly-recurring-preview.js";
+import { recurringPatternAuthority, assertRecurringRepairCandidate } from "./static-weekly-recurring-repair-basis.js";
+import { withRecurringDependencyStatus } from "./static-weekly-recurring-dependency-result.js";
 import { canonicalJson } from "./static-weekly-schedule-model.js";
+import { postgresJsonbContentDigest } from "./static-weekly-schedule-compiler.js";
 import {
   compileAndPrepareStaticWeeklyScheduleIsolated,
   compileStaticWeeklyScheduleIsolated,
+  prepareRecurringCandidateIsolated,
+  prepareRecurringAdmissionCandidateIsolated,
   getStaticWeeklyCompilerReadiness,
   initializeStaticWeeklyCompiler,
   shutdownStaticWeeklyCompiler,
@@ -31,13 +38,15 @@ import {
 export const STATIC_WEEKLY_CONTROL_PLANE_SCHEMA = "memphis-zoo.static-weekly-control-plane.v1";
 export const STATIC_WEEKLY_DATABASE_OPERATION_STATEMENT_TIMEOUT_MS = 120_000;
 const STATIC_WEEKLY_AUTHORITY_LOCK_IDENTITY = "memphis-static-weekly-authority";
+const APPROVED_FULL_NINE_SOURCE_ID = JSON.parse(readFileSync(new URL(
+  "../config/custodial-full-nine-family-owners-20260926.json", import.meta.url))).baseSourceId;
 
 const text = (value) => typeof value === "string" ? value.trim() : "";
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const fail = (code, message = code) => Object.assign(new Error(message), { code });
 
 function databaseConnectionFailure(error) {
-  return Object.assign(new Error("The scheduler database connection was interrupted. No schedule change was accepted."), {
+  return Object.assign(new Error("The scheduler database connection was interrupted. The outcome is unknown; check the exact operation status before retrying."), {
     code: "static_weekly_control_plane_database_unavailable",
     cause: error instanceof Error ? error : undefined,
   });
@@ -327,6 +336,8 @@ export function createStaticWeeklyControlPlane({
   database,
   compiler = compileStaticWeeklyScheduleIsolated,
   compilerPreparer = compiler === compileStaticWeeklyScheduleIsolated ? compileAndPrepareStaticWeeklyScheduleIsolated : null,
+  recurringCandidatePreparer = prepareRecurringCandidateIsolated,
+  recurringAdmissionPreparer = prepareRecurringAdmissionCandidateIsolated,
   initializeSolver = initializeStaticWeeklyCompiler,
   getSolverReadiness = getStaticWeeklyCompilerReadiness,
   shutdownCompiler = compiler === compileStaticWeeklyScheduleIsolated ? shutdownStaticWeeklyCompiler : async () => {},
@@ -419,7 +430,7 @@ export function createStaticWeeklyControlPlane({
     return execution;
   }
 
-  function transaction(work, { health = false } = {}) {
+  function transaction(work, { health = false, reconcileManagerId = null } = {}) {
     const execute = async () => {
       if (closing) throw fail("static_weekly_control_plane_closing", "The scheduler is closing and cannot open another database transaction.");
       let client;
@@ -450,7 +461,14 @@ export function createStaticWeeklyControlPlane({
           // write prepared from pre-restore state.
           await client.query("select public.custodial_begin_application_mutation()");
         }
-        const result = await work(client);
+        let result = await work(client);
+        if (reconcileManagerId !== null) {
+          // Finish the existing immutable mutation/projection/lunch receipt
+          // before advancing future validity. The deferred DB guard and this
+          // checked-out client keep both parts inside the SAME transaction.
+          const validity = await call(client, "static_weekly_v21_reconcile_dependency_changes", [reconcileManagerId]);
+          result = withRecurringDependencyStatus(result, validity);
+        }
         if (asynchronousConnectionError) throw asynchronousConnectionError;
         await client.query("commit");
         return result;
@@ -500,11 +518,86 @@ export function createStaticWeeklyControlPlane({
     return call(client, "static_weekly_v3_read_manager_snapshot", [weekStart]);
   }
 
+  async function recurringGenerationFor(client) {
+    const raw = await call(client, "static_weekly_v15_read_recurring_generation", []);
+    if (!(typeof raw === "number" || (typeof raw === "string" && /^(0|[1-9][0-9]*)$/.test(raw)))
+      || !Number.isSafeInteger(Number(raw)) || Number(raw) < 0) {
+      throw fail("static_weekly_recurring_generation_invalid", "The recurring roster generation is unavailable.");
+    }
+    return Number(raw);
+  }
+
   async function registeredSourceFor(client, sourceId, effectiveStart) {
     return call(client, "static_weekly_v3_read_authority_source", [
       requireSourceId(sourceId),
       requireMonday(effectiveStart, "effective start"),
     ]);
+  }
+
+  function approvedRecurringFullSource(sourceId) {
+    const value = text(sourceId);
+    if (value && value !== APPROVED_FULL_NINE_SOURCE_ID) {
+      throw fail("static_weekly_recurring_full_source_not_approved",
+        "The nine-position template must be the exact approved registered source.");
+    }
+    return value || null;
+  }
+
+  async function recurringBasisFor(client, { actor, date, revision, fullNineSourceId }) {
+    await lockStaticWeeklyAuthority(client);
+    const recurringGeneration = await recurringGenerationFor(client);
+    const snapshot = await snapshotFor(client, date);
+    if (requireRevision(snapshot?.authority_revision) !== revision) {
+      throw fail("static_weekly_recurring_preview_revision_changed", "The manager roster changed before preview.");
+    }
+    const publicationId = requirePublicationId(snapshot?.current_publication?.publication_id);
+    const source = await call(client, "static_weekly_v20_read_recurring_preview_basis", [actor.managerId, date]);
+    const patternAuthority = recurringPatternAuthority({ publishedSource: source, managerSnapshot: snapshot,
+      effectiveDate: date, expectedRevision: revision });
+    if (patternAuthority.publicationId !== publicationId) {
+      throw fail("static_weekly_recurring_preview_revision_changed", "The recurring repair winner changed.");
+    }
+    const fullNineSource = fullNineSourceId ? await registeredSourceFor(client, fullNineSourceId, date) : null;
+    return { snapshot, source, fullNineSource, recurringGeneration, patternAuthority };
+  }
+
+  function recurringPreparationInput(basis, date, revision) {
+    return { publishedSource: basis.source, managerSnapshot: basis.snapshot,
+      fullNineSource: basis.fullNineSource, effectiveDate: date, expectedRevision: revision };
+  }
+
+  function validateRecurringCandidate(candidate, basis, revision) {
+    if (candidate?.status !== "CANDIDATE_ONLY" || candidate?.compilerStatus !== "FEASIBLE"
+      || candidate?.publicationAuthority !== "ACCEPTABLE" || candidate?.verifierOk !== true
+      || candidate?.reviewWorkCount !== 0 || candidate?.sourceId !== basis.source.source_id
+      || candidate?.publicationId !== basis.patternAuthority.publicationId || candidate?.authorityRevision !== revision) {
+      throw fail("static_weekly_recurring_preview_rejected", "The isolated recurring preview was not bound to the exact source and revision.");
+    }
+    const digest64 = value => /^[a-f0-9]{64}$/.test(text(value));
+    if (candidate.publishedSourceDigest !== postgresJsonbContentDigest(basis.source.compiler_input)
+      || candidate.managerSnapshotDigest !== postgresJsonbContentDigest(basis.snapshot)
+      || candidate.fullNineSourceDigest !== (basis.fullNineSource ? postgresJsonbContentDigest(basis.fullNineSource.compiler_input) : null)
+      || ![candidate.candidateSourceDigest, candidate.readbackPatternDigest, candidate.modelBasisDigest,
+        candidate.assignmentWitnessDigest, candidate.finalWitnessDigest, candidate.weeklyAssignmentsDigest,
+        candidate.metricsDigest, candidate.lunchFactsDigest, candidate.openWorkDigest, candidate.shiftEndDerivationDigest].every(digest64)
+      || !Number.isSafeInteger(candidate.lunchLoanCount) || candidate.lunchLoanCount < 0
+      || !Number.isSafeInteger(candidate.openWorkCount) || candidate.openWorkCount < 0) {
+      throw fail("static_weekly_recurring_preview_rejected",
+        "The isolated recurring preview was not bound to the exact authority inputs and verified decision.");
+    }
+    try {
+      assertRecurringManagerDecision(candidate);
+      assertRecurringRepairCandidate(candidate, basis.patternAuthority);
+    } catch (error) {
+      throw fail("static_weekly_recurring_preview_rejected",
+        `The complete manager decision does not match its verified compiler result: ${error.message}`);
+    }
+  }
+
+  function recurringPreviewDigest(actor, basis, candidate) {
+    return createHash("sha256").update(canonicalJson({
+      managerId: actor.managerId, recurringGeneration: basis.recurringGeneration, candidate,
+    })).digest("hex");
   }
 
   async function compileOrFail(input) {
@@ -674,6 +767,120 @@ export function createStaticWeeklyControlPlane({
     async getManagerSnapshot({ manager, weekStart }) {
       requireManager(manager);
       return transaction((client) => snapshotFor(client, requireMonday(weekStart, "week start")));
+    },
+    async previewRecurringStaffing({ manager, effectiveStart, expectedRevision, fullNineSourceId = null }) {
+      const actor = requireManager(manager);
+      const date = requireMonday(effectiveStart, "recurring effective start");
+      const revision = requireRevision(expectedRevision);
+      const sourceId = approvedRecurringFullSource(fullNineSourceId);
+      const basis = await transaction(client => recurringBasisFor(client, { actor, date, revision, fullNineSourceId: sourceId }));
+      // Public preview does not hold an idle transaction during its solve.
+      const candidate = await recurringCandidatePreparer(recurringPreparationInput(basis, date, revision));
+      validateRecurringCandidate(candidate, basis, revision);
+      // Recheck after it completes; a later confirmation must do the same
+      // under a serial authority lock and compare this exact digest.
+      const current = await transaction(async (client) => {
+        await lockStaticWeeklyAuthority(client);
+        return { snapshot: await snapshotFor(client, date), recurringGeneration: await recurringGenerationFor(client) };
+      });
+      if (requireRevision(current.snapshot?.authority_revision) !== revision
+        || text(current.snapshot?.current_publication?.publication_id) !== candidate.publicationId
+        || current.recurringGeneration !== basis.recurringGeneration) {
+        throw fail("static_weekly_recurring_preview_revision_changed", "The manager roster changed during preview.");
+      }
+      // Hash every byte of the manager-visible candidate result, not only its
+      // final area map. This binds source/roster inputs, compiler authority and
+      // replay, metrics and the exact preview changes to the named manager.
+      const previewDigest = recurringPreviewDigest(actor, basis, candidate);
+      return { ...candidate, recurringGeneration: basis.recurringGeneration,
+        previewDigest, source: "AUTHENTICATED_MANAGER_READBACK",
+        admitted: false, published: false, affectedPhonesUpdated: false };
+    },
+    async confirmRecurringStaffing({ manager, confirmationKey, effectiveStart, expectedRevision, previewDigest, fullNineSourceId = null }) {
+      const actor = requireManager(manager);
+      const key = requireUuid(confirmationKey, "recurring_confirmation_key_required");
+      const date = requireMonday(effectiveStart, "recurring effective start");
+      const revision = requireRevision(expectedRevision);
+      const expectedDigest = text(previewDigest);
+      if (!/^[a-f0-9]{64}$/.test(expectedDigest)) throw fail("static_weekly_recurring_preview_digest_required");
+      const sourceId = approvedRecurringFullSource(fullNineSourceId);
+      return transaction(async client => {
+        // One checked-out client owns every child and the final receipt. Never
+        // invoke the public preview/publish methods from this transaction.
+        await lockStaticWeeklyAuthority(client);
+        const parent = await call(client, "static_weekly_v13_begin_recurring_confirmation",
+          [actor.managerId, key, date, revision, expectedDigest, sourceId]);
+        // Database checks identical request/manager first. Accepted retries
+        // return BEFORE current time, revision, generation or compiler checks.
+        if (parent?.state === "ACCEPTED") return parent;
+        if (parent?.state !== "RESERVED") throw fail("static_weekly_recurring_parent_unavailable");
+        requireUuid(parent.operationId, "static_weekly_recurring_parent_unavailable");
+        const basis = await recurringBasisFor(client, { actor, date, revision, fullNineSourceId: sourceId });
+        const prepared = clone(await prepareInsideTransaction(client, () =>
+          recurringAdmissionPreparer(recurringPreparationInput(basis, date, revision))));
+        try { assertRecurringAdmissionCandidate(prepared); }
+        catch (error) { throw fail("static_weekly_recurring_private_candidate_rejected", `The private recurring candidate is invalid: ${error.message}`); }
+        const candidate = prepared.candidate;
+        validateRecurringCandidate(candidate, basis, revision);
+        if (recurringPreviewDigest(actor, basis, candidate) !== expectedDigest) {
+          throw fail("static_weekly_recurring_preview_changed", "The complete recurring preview changed. Preview the current plan again before confirming.");
+        }
+        const admission = await call(client, "static_weekly_v14_admit_recurring_source",
+          [actor.managerId, key, prepared.canonicalSource, candidate.candidateSourceDigest]);
+        const admittedSourceId = requireUuid(admission?.source_id, "static_weekly_recurring_source_admission_failed");
+        const draftInput = clone(prepared.canonicalSource);
+        draftInput.version.id = randomUUID();
+        draftInput.version.publicationId = randomUUID();
+        draftInput.versions = [draftInput.version];
+        delete draftInput.version;
+        const childPrefix = `recurring:${actor.managerId}:${key}`;
+        const draftInputPrepared = await prepareInsideTransaction(client, () => prepareDraft(draftInput,
+          { expectedRevision: revision, actor: { ...actor, idempotencyKey: `${childPrefix}:draft` } }));
+        const draft = await call(client, "static_weekly_v3_create_draft", [draftInputPrepared.effectiveStart,
+          draftInputPrepared.objectiveVersion, draftInputPrepared.objective, draftInputPrepared.inputProvenance,
+          draftInputPrepared.document, revision, actor.managerId, `${childPrefix}:draft`, admittedSourceId]);
+        const publication = await call(client, "static_weekly_v3_publish_draft", [
+          requireUuid(draft?.data?.version_id, "static_weekly_recurring_draft_unavailable"),
+          requireRevision(draft?.data?.draft_revision), requireRevision(draft?.revision), actor.managerId,
+          `${childPrefix}:publish`, "supersede", null]);
+        const publicationId = requirePublicationId(publication?.data?.publication_id);
+        // Our own publication is a semantic authority change. The preview was
+        // checked before writing under the common lock; bind the dependency
+        // generation AFTER this exact parent-owned publication, not its stale
+        // pre-publication value. Other writers cannot enter this transaction.
+        const publicationGeneration = await recurringGenerationFor(client);
+        await call(client, "static_weekly_v18_bind_recurring_publication",
+          [actor.managerId, key, publicationId, publicationGeneration, candidate.decision]);
+        const projection = await materializeCurrentProjection(client, { actor, publicationId, weekStart: date,
+          expectedRevision: requireRevision(publication?.revision), idempotencyKey: `${childPrefix}:projection:${date}` });
+        const receipt = await call(client, "static_weekly_v23_finalize_recurring_confirmation", [actor.managerId, key]);
+        if (receipt?.accepted !== true || receipt.operationId !== parent.operationId
+          || receipt.managerId !== actor.managerId || receipt.confirmationKey !== key || receipt.previewDigest !== expectedDigest
+          || receipt.sourceId !== admittedSourceId || receipt.sourceDigest !== candidate.candidateSourceDigest
+          || receipt.publicationId !== publicationId || receipt.projectionId !== projection?.data?.projection_id
+          || receipt.authorityRevision !== projection?.revision || receipt.effectiveStart !== date
+          || receipt.phoneDeliveryState !== "PENDING" || receipt.affectedPhonesUpdated !== false) {
+          throw fail("static_weekly_recurring_acceptance_receipt_mismatch");
+        }
+        // Immutable original acceptance, NOT a claim about current validity or
+        // phone delivery. Later exact status/readback supplies those facts.
+        return { state: "ACCEPTED", operationId: parent.operationId, receipt };
+      });
+    },
+    async getRecurringConfirmationStatus({ manager, confirmationKey }) {
+      const actor = requireManager(manager);
+      const key = requireUuid(confirmationKey, "recurring_confirmation_key_required");
+      // Exact status is a locking DB read, not an inference from a transport
+      // timeout. The SQL reader waits for an uncertain writer before deciding
+      // ACCEPTED versus NOT_FOUND; the authenticated HTTP route never infers it.
+      return transaction((client) => call(client, "static_weekly_v13_read_recurring_confirmation", [
+        actor.managerId, key,
+      ]));
+    },
+    async getCurrentRecurringDelivery({ manager, serviceDate }) {
+      const actor = requireManager(manager);
+      const date = requireDate(serviceDate, "service date");
+      return transaction((client) => call(client, "static_weekly_v25_read_current_recurring_delivery", [date, actor.managerId]));
     },
     async beginStaffingCommand({ manager, ...input }) {
       const actor = requireManager(manager);
@@ -979,7 +1186,7 @@ export function createStaticWeeklyControlPlane({
             mutations,
           },
         };
-      });
+      }, { reconcileManagerId: actor.managerId });
     },
     async markEmployeeDeparted({ manager, slotId, reason, expectedRevision, idempotencyKey, projectionWeekStart }) {
       const actor = requireManager(manager); const weekStart = requireMonday(projectionWeekStart, "projection week start"); const key = requireIdempotencyKey(idempotencyKey);
@@ -989,7 +1196,7 @@ export function createStaticWeeklyControlPlane({
         idempotencyKey: key,
         publicationId: async () => requirePublicationId((await snapshotFor(client, weekStart))?.current_publication?.publication_id),
         mutate: () => call(client, "static_weekly_v4_mark_employee_departed", [text(slotId), text(reason), requireRevision(expectedRevision), actor.managerId, key]),
-      }));
+      }), { reconcileManagerId: actor.managerId });
     },
     async replaceEmployee({ manager, slotId, newEmployeeName, reason, expectedRevision, idempotencyKey, projectionWeekStart }) {
       const actor = requireManager(manager); const weekStart = requireMonday(projectionWeekStart, "projection week start"); const key = requireIdempotencyKey(idempotencyKey);
@@ -999,7 +1206,7 @@ export function createStaticWeeklyControlPlane({
         idempotencyKey: key,
         publicationId: async () => requirePublicationId((await snapshotFor(client, weekStart))?.current_publication?.publication_id),
         mutate: () => call(client, "static_weekly_v4_replace_employee", [text(slotId), text(newEmployeeName), text(reason), requireRevision(expectedRevision), actor.managerId, key]),
-      }));
+      }), { reconcileManagerId: actor.managerId });
     },
     async restoreExistingEmployee({ manager, sourceId, slotId, employeeId, effectiveStart, reason, expectedRevision, idempotencyKey }) {
       const actor = requireManager(manager); const key = requireIdempotencyKey(idempotencyKey);
@@ -1010,7 +1217,7 @@ export function createStaticWeeklyControlPlane({
         mutate: () => call(client, "static_weekly_v8_restore_existing_employee", [
           source, text(slotId), text(employeeId), date, text(reason), revision, actor.managerId, key,
         ]),
-      }));
+      }), { reconcileManagerId: actor.managerId });
     },
     async vacateRosterSlot({ manager, sourceId, slotId, employeeId, effectiveStart, reason, expectedRevision, idempotencyKey }) {
       const actor = requireManager(manager); const key = requireIdempotencyKey(idempotencyKey);
@@ -1041,13 +1248,19 @@ export function createStaticWeeklyControlPlane({
           actor, weekStart, idempotencyKey: key,
           publicationId: requirePublicationId(current.current_publication.publication_id), mutate: async () => mutation,
         });
-      });
+      }, { reconcileManagerId: actor.managerId });
+    },
+    async readSeparation({ manager, slotId }) {
+      const actor = requireManager(manager);
+      return transaction((client) => call(client, "custodial_v12_read_separation", [
+        text(slotId), actor.managerId,
+      ]));
     },
     async createVacantRosterSlot({ manager, slotId, slotLabel, expectedRevision, idempotencyKey }) {
       const actor = requireManager(manager); const key = requireIdempotencyKey(idempotencyKey);
       return transaction((client) => call(client, "static_weekly_v7_create_vacant_roster_slot", [
         text(slotId), text(slotLabel), requireRevision(expectedRevision), actor.managerId, key,
-      ]));
+      ]), { reconcileManagerId: actor.managerId });
     },
     async fillVacantRosterSlot({ manager, sourceId, slotId, newEmployeeName, effectiveStart, reason, expectedRevision, idempotencyKey }) {
       const actor = requireManager(manager); const key = requireIdempotencyKey(idempotencyKey);
@@ -1058,7 +1271,7 @@ export function createStaticWeeklyControlPlane({
         mutate: () => call(client, "static_weekly_v9_fill_vacant_roster_slot", [
           source, text(slotId), text(newEmployeeName), date, text(reason), revision, actor.managerId, key,
         ]),
-      }));
+      }), { reconcileManagerId: actor.managerId });
     },
     async materializeProjection({ manager, publicationId, serviceDate, expectedRevision, idempotencyKey }) {
       const actor = requireManager(manager); const weekStart = requireMonday(serviceDate, "projection start"); const effectivePublicationId = requirePublicationId(publicationId); const revision = requireRevision(expectedRevision); const key = requireIdempotencyKey(idempotencyKey);

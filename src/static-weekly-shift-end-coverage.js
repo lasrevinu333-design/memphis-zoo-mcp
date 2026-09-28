@@ -36,7 +36,14 @@ export function completeRecurringShiftEndCoverage(source,config){
   // Never extend a vacant position beyond its shift: a later hire would
   // otherwise inherit an impossible immutable baseline without any rebuild.
   for(const row of normal)row.window.end=clock(Math.min(minute(row.window.end),lastEnd));
-  const anchors=new Map(positions.map(s=>[s.slotId,normal.filter(r=>r.ownerSlotId===s.slotId).flatMap(ids)]));
+  const anchors=new Map(positions.map(s=>{
+   const owned=normal.filter(r=>r.ownerSlotId===s.slotId).flatMap(ids);
+   // A stable position with no recurring areas still needs its source-bound
+   // route anchor: it ranks an OPEN gap while vacant and a real handoff if a
+   // future employee fills it. The anchor never creates an incumbent.
+   return [s.slotId,owned.length?owned:(s.acceptedRouteAnchorLocationId
+    ?[s.acceptedRouteAnchorLocationId]:[])];
+  }));
   const current=normal.map(row=>({original:row,owner:row.ownerSlotId,rows:[row]}));
   const boundaries=[...new Set(positions.map(s=>minute(s.shift[1])))].filter(t=>t<lastEnd).sort((a,b)=>a-b);
   for(const at of boundaries){

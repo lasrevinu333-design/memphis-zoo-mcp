@@ -53,8 +53,16 @@ function authErrorResult(challenge, scopes) {
     }],
     isError: true,
   };
-  const scoped = scopedChallenge(challenge, scopes);
-  if (scoped) result._meta = { "mcp/www_authenticate": [scoped] };
+  let scoped = scopedChallenge(challenge, scopes);
+  if (scoped) {
+    // OpenAI's tool-level linking UI requires both error parameters in the
+    // challenge. Keep an existing reason and preserve the exact resource/scope.
+    if (!/\berror="/.test(scoped)) scoped += ', error="insufficient_scope"';
+    if (!/\berror_description="/.test(scoped)) {
+      scoped += ', error_description="Authorize the required Memphis Zoo MCP permissions to use this tool."';
+    }
+    result._meta = { "mcp/www_authenticate": [scoped] };
+  }
   return result;
 }
 

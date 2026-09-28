@@ -4,17 +4,24 @@ import {readdirSync,readFileSync,mkdtempSync,chmodSync,rmdirSync,unlinkSync} fro
 import {createHash} from 'node:crypto';
 const container=`mz_schema_shift_end_${process.pid}`;
 const stage=process.argv[2]??'all';
-assert.ok(['all','atomic-only','published-only','current-roster-only','legacy-only','activation-only','legacy-activation-only','legacy-observation-only'].includes(stage),'explicit bounded test stage');
+assert.ok(['all','migration-only','separation-context-only','atomic-only','published-only','current-roster-only','recurring-ledger-only','recurring-parent-only','recurring-source-only','recurring-dependency-only','recurring-binding-shape-only','recurring-terminal-boundary-only','recurring-lock-order-only','recurring-generation-only','legacy-only','activation-only','legacy-activation-only','legacy-observation-only'].includes(stage),'explicit bounded test stage');
 const publishedStage=['published-only','current-roster-only'].includes(stage);
+const socketStage=publishedStage||['recurring-ledger-only','recurring-parent-only','recurring-source-only','recurring-dependency-only','recurring-binding-shape-only','recurring-terminal-boundary-only','recurring-lock-order-only','recurring-generation-only'].includes(stage);
+const recurringSourceStage=['recurring-ledger-only','recurring-parent-only','recurring-source-only'].includes(stage);
+if(recurringSourceStage){
+ assert.ok(process.env.STATIC_WEEKLY_TEST_SIX_PACKET,'explicit preserved source fixture required before database startup');
+ assert.ok(readFileSync(process.env.STATIC_WEEKLY_TEST_SIX_PACKET).length,'preserved source fixture must be readable');
+}
 let socket=null;
 const image='supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed';
 const docker=(args,extra={})=>execFileSync('docker',args,{encoding:'utf8',timeout:120000,maxBuffer:32*1024*1024,stdio:['pipe','pipe','pipe'],...extra});
 const sql=text=>docker(['exec','-i',container,'psql','-X','-q','-At','-v','ON_ERROR_STOP=1','-U','supabase_admin','-d','postgres'],{input:text}).trim();
-const defaults="select count(*) from pg_default_acl d cross join lateral aclexplode(d.defaclacl) a where d.defaclnamespace='public'::regnamespace and d.defaclrole in ('postgres'::regrole,'supabase_admin'::regrole) and d.defaclobjtype in ('r','S') and a.grantee in ('anon'::regrole,'authenticated'::regrole,'service_role'::regrole)";
-const removeDefaultsSql=['postgres','supabase_admin'].map(owner=>`alter default privileges for role ${owner} in schema public revoke all on tables from anon,authenticated,service_role;alter default privileges for role ${owner} in schema public revoke all on sequences from anon,authenticated,service_role;`).join('\n');
+const defaults="select count(*) from pg_default_acl d cross join lateral aclexplode(d.defaclacl) a where d.defaclnamespace in (0,'public'::regnamespace) and d.defaclrole in ('postgres'::regrole,'supabase_admin'::regrole) and d.defaclobjtype in ('r','S') and a.grantee in (0,'anon'::regrole,'authenticated'::regrole,'service_role'::regrole)";
+const removeDefaultsSql=['postgres','supabase_admin'].flatMap(owner=>['',' in schema public'].map(scope=>`alter default privileges for role ${owner}${scope} revoke all on tables from public,anon,authenticated,service_role;alter default privileges for role ${owner}${scope} revoke all on sequences from public,anon,authenticated,service_role;`)).join('\n');
 const absenceGuard=`do $absence$begin if (${defaults})<>0 then raise exception 'automatic Data API table/sequence grants must be absent'; end if;end$absence$;`;
 let owned=false;const files=readdirSync('supabase/migrations').filter(f=>f.endsWith('.sql')).sort(),manifest=[];
-assert.equal(files.length,145,'exact current changed-input migration set');
+assert.equal(files.length,175,'exact current changed-input migration set');
+assert.equal(files.at(-1),'20260927075352_protected_separation_original_context.sql','exact current changed-input migration head');
 function cleanup(){if(owned){docker(['stop','-t','10',container]);
  if(docker(['ps','-a','--filter',`name=^/${container}$`,'--format','{{.Names}}']).trim())docker(['rm','-f',container]);
  owned=false;assert.equal(docker(['ps','-a','--filter',`name=^/${container}$`,'--format','{{.Names}}']).trim(),'');console.log('OWNED_CONTAINER_REMOVED',container);}
@@ -23,7 +30,7 @@ function cleanup(){if(owned){docker(['stop','-t','10',container]);
 for(const signal of ['SIGINT','SIGTERM'])process.once(signal,()=>{try{cleanup();}finally{process.exit(143);}});
 try{
  docker(['image','inspect',image]);
- if(publishedStage){socket=mkdtempSync('/tmp/mz-shift-socket-');chmodSync(socket,0o777);console.log('OWNED_SOCKET_DIRECTORY',socket,'cleanup: empty directory after exact container removal');}
+ if(socketStage){socket=mkdtempSync('/tmp/mz-shift-socket-');chmodSync(socket,0o777);console.log('OWNED_SOCKET_DIRECTORY',socket,'cleanup: empty directory after exact container removal');}
  docker(['run','-d','--network','none','--name',container,'--tmpfs','/var/lib/postgresql/data:rw,size=1g',
   ...(socket?['--mount',`type=bind,source=${socket},destination=/test-socket`]:[]),
   '-e','POSTGRES_PASSWORD=postgres','-e','PGPASSWORD=postgres',image,'-c','shared_preload_libraries=pg_cron,pg_net,pg_stat_statements',
@@ -43,13 +50,51 @@ try{
   if(manifest.length%25===0)console.log('REPLAYED_EXACT_MIGRATIONS',manifest.length);
  }
  console.log('NO_AUTOMATIC_TABLE_OR_SEQUENCE_GRANTS_REPLAY_PASS',manifest.length);
+ if(process.env.STATIC_WEEKLY_TEST_REMINDER_PROJECTION==='1'){
+  sql("begin read only;set local role custodial_application_reader;select count(*) from public.v_location_dashboard_status;select count(*) from public.mz_location_reminder_candidates(current_date,now());rollback;");
+  console.log('ACTUAL_DEDICATED_READER_EMPTY_SCHEMA_PREFLIGHT_PASS');
+ }
+ if(['recurring-ledger-only','recurring-parent-only'].includes(stage)){
+  // Challenge the detector, including PostgreSQL PUBLIC and global defaults.
+  for(const scope of ['',' in schema public'])for(const kind of ['tables','sequences']){
+   sql(`alter default privileges for role supabase_admin${scope} grant select on ${kind} to public;`);
+   assert.ok(Number(sql(defaults))>0,'global/schema PUBLIC automatic grant is detected');
+   sql(removeDefaultsSql+absenceGuard);
+  }
+  execFileSync(process.execPath,['scripts/static-weekly-recurring-ledger-database-tests.mjs'],{
+   env:{...process.env,SHIFT_END_TEST_CONTAINER:container,SHIFT_END_TEST_SOCKET:socket},stdio:'inherit',timeout:120000});
+ }
+ if(recurringSourceStage)execFileSync(process.execPath,['scripts/static-weekly-recurring-source-database-tests.mjs'],{
+   env:{...process.env,SHIFT_END_TEST_CONTAINER:container,SHIFT_END_TEST_SOCKET:socket},stdio:'inherit',timeout:120000});
+ if(['recurring-ledger-only','recurring-generation-only'].includes(stage))execFileSync(process.execPath,['scripts/static-weekly-recurring-generation-database-tests.mjs'],{
+   env:{...process.env,SHIFT_END_TEST_CONTAINER:container,SHIFT_END_TEST_SOCKET:socket},stdio:'inherit',timeout:120000});
+ if(['recurring-ledger-only','recurring-dependency-only'].includes(stage)){
+  execFileSync(process.execPath,['scripts/static-weekly-recurring-dependency-database-tests.mjs'],{
+   env:{...process.env,SHIFT_END_TEST_CONTAINER:container,SHIFT_END_TEST_SOCKET:socket},stdio:'inherit',timeout:120000});
+  execFileSync(process.execPath,['scripts/static-weekly-recurring-range-selector-tests.mjs'],{
+   env:{...process.env,SHIFT_END_TEST_CONTAINER:container,SHIFT_END_TEST_SOCKET:socket},stdio:'inherit',timeout:120000});
+ }
+ if(['recurring-ledger-only','recurring-binding-shape-only'].includes(stage))execFileSync(process.execPath,['scripts/static-weekly-recurring-display-database-tests.mjs'],{
+  env:{...process.env,SHIFT_END_TEST_CONTAINER:container,SHIFT_END_TEST_SOCKET:socket},stdio:'inherit',timeout:120000});
+ if(['recurring-ledger-only','recurring-terminal-boundary-only'].includes(stage))execFileSync(process.execPath,['scripts/static-weekly-recurring-terminal-boundary-tests.mjs'],{
+  env:{...process.env,SHIFT_END_TEST_CONTAINER:container,SHIFT_END_TEST_SOCKET:socket},stdio:'inherit',timeout:120000});
+ if(['recurring-ledger-only','recurring-lock-order-only'].includes(stage))execFileSync(process.execPath,['scripts/static-weekly-recurring-lock-order-tests.mjs'],{
+  env:{...process.env,SHIFT_END_TEST_CONTAINER:container,SHIFT_END_TEST_SOCKET:socket},stdio:'inherit',timeout:120000});
  if(stage==='all')execFileSync(process.execPath,['scripts/static-weekly-shift-end-database-tests.mjs'],{
   env:{...process.env,SHIFT_END_TEST_CONTAINER:container},stdio:'inherit',timeout:420000});
  if(['all','atomic-only'].includes(stage))execFileSync(process.execPath,['scripts/static-weekly-atomic-roster-database-tests.mjs'],{
   env:{...process.env,SHIFT_END_TEST_CONTAINER:container},stdio:'inherit',timeout:180000});
  if(publishedStage)execFileSync(process.execPath,[stage==='current-roster-only'?'scripts/static-weekly-current-roster-publication-tests.mjs':'scripts/static-weekly-published-roster-transaction-tests.mjs'],{
-  env:{...process.env,SHIFT_END_TEST_CONTAINER:container,SHIFT_END_TEST_SOCKET:socket},stdio:'inherit',timeout:900000});
+  // Finalization adds a real projection plus three independent acceptance
+  // attempts (two injected failures). Keep each production SQL/compiler
+  // deadline unchanged; bound the expanded aggregate test at twenty minutes.
+  env:{...process.env,SHIFT_END_TEST_CONTAINER:container,SHIFT_END_TEST_SOCKET:socket},stdio:'inherit',
+  timeout:process.env.STATIC_WEEKLY_TEST_RECURRING_FINALIZATION==='1'||process.env.STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION==='1'?1200000:900000});
+ if(stage==='separation-context-only')execFileSync(process.execPath,['scripts/static-weekly-vacate-roster-slot-fixture-tests.mjs'],{
+  env:{...process.env,ROSTER_PUBLICATION_TEST_CONTAINER:container,SEPARATION_CONTEXT_PROOF:'1'},stdio:'inherit',timeout:240000});
  if(stage==='legacy-only'){
+  execFileSync(process.execPath,['scripts/static-weekly-internal-employee-rpc-tests.mjs'],{
+   env:{...process.env,SHIFT_END_TEST_CONTAINER:container},stdio:'inherit',timeout:120000});
   execFileSync(process.execPath,['scripts/static-weekly-vacant-roster-slot-database-tests.mjs'],{
    env:{...process.env,SHIFT_END_TEST_CONTAINER:container},stdio:'inherit',timeout:120000});
   execFileSync(process.execPath,['scripts/static-weekly-vacate-roster-slot-fixture-tests.mjs'],{

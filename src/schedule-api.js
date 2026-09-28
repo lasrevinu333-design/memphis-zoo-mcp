@@ -2950,20 +2950,23 @@ export function createScheduleRouter({
     return resolveCanonicalDevice({ runReadOnlySql, deviceIdentifier: deviceId });
   }
 
-  async function readScheduleApplication({ serviceDate, assignment, credentialId }) {
+  async function readScheduleDelivery({ serviceDate, assignment, credentialId }) {
     const devicePk = String(assignment?.canonical_device_pk || "").trim().toLowerCase();
     const employeeId = String(assignment?.assigned_employee_id || "").trim().toLowerCase();
     const credential = String(credentialId || "").trim().toLowerCase();
     const epoch = Number(assignment?.assignment_epoch);
     if (!CANONICAL_UUID.test(devicePk) || !CANONICAL_UUID.test(employeeId)
-      || !CANONICAL_UUID.test(credential) || !Number.isSafeInteger(epoch) || epoch < 1) return null;
-    return runRpc("static_weekly_v10_read_device_schedule_application", {
-      p_service_date: serviceDate,
-      p_device_id: devicePk,
-      p_credential_id: credential,
-      p_employee_id: employeeId,
-      p_assignment_epoch: epoch,
+      || !CANONICAL_UUID.test(credential) || !Number.isSafeInteger(epoch) || epoch < 1) {
+      const error = new Error("The authenticated schedule delivery principal is unavailable."); error.status = 401; throw error;
+    }
+    const result = await runRpc("static_weekly_v24_read_device_schedule_delivery", {
+      p_date: serviceDate, p_device: devicePk, p_credential: credential, p_employee: employeeId, p_epoch: epoch,
     });
+    if (result?.schema !== "static-weekly.device-schedule-delivery.v1"
+      || !["RECURRING_TERMINAL", "RECURRING_SCHEDULE", "LEGACY_REGISTERED", "UNAVAILABLE"].includes(result.mode)) {
+      const error = new Error("The exact schedule delivery state is unavailable."); error.status = 503; throw error;
+    }
+    return result;
   }
 
   function toCsvValue(value) {
@@ -3361,7 +3364,30 @@ export function createScheduleRouter({
         resolvedEmployeeId = employeeRows[0].employee_id;
       }
 
-      let data = await loadStaticWeeklyEmployeeDay(serviceDate, resolvedEmployeeId, atSql);
+      // A terminal recurring winner must arrive before the legacy employee-day
+      // reader can turn it into a 503 and leave an old usable phone cache.
+      const delivery = assignment ? await readScheduleDelivery({ serviceDate, assignment,
+        credentialId: req.memphisDeviceCredential?.credential_id }) : null;
+      let data;
+      if (delivery?.mode === "RECURRING_TERMINAL") {
+        data = { governed: true, source: "static_weekly_projection", service_date: serviceDate,
+          employee_id: resolvedEmployeeId, employee_name: assignment.assigned_employee_name,
+          projection_status: "blocked_recurring_authority", full_day: true, raw_items: [], shift: null,
+          notice: "Your schedule needs a manager's updated plan. Your saved cleaning work is preserved." };
+      } else if (delivery?.mode === "RECURRING_SCHEDULE") {
+        const target = delivery.delivery?.target, view = delivery.delivery?.view;
+        if (!target || target.targetType !== "SCHEDULE" || !view || view.service_date !== serviceDate
+          || view.employee_id !== resolvedEmployeeId || view.publication_id !== target.publicationId
+          || view.projection_id !== target.projectionId || view.projection_status !== "current"
+          || view.full_day !== true || !Array.isArray(view.raw_items)) {
+          const error = new Error("The exact recurring schedule target is still pending reconciliation."); error.status = 503; throw error;
+        }
+        data = { ...view, governed: true, source: "static_weekly_projection",
+          projection_authority_revision: target.authorityRevision,
+          home_facts: await readHomeTimeFacts({ day: view, employeeId: resolvedEmployeeId, runReadOnlySql }) };
+      } else if (delivery?.mode === "UNAVAILABLE") {
+        const error = new Error("The current recurring schedule is not ready for this phone."); error.status = 503; throw error;
+      } else data = await loadStaticWeeklyEmployeeDay(serviceDate, resolvedEmployeeId, atSql);
       if (!data) {
         await assertScheduleReadyForRead(serviceDate);
         const [pageRows, fullDayItems] = await Promise.all([
@@ -3377,11 +3403,6 @@ export function createScheduleRouter({
         const pageData = Array.isArray(pageRows) && pageRows.length ? pageRows[0].data : null;
         data = combineFullDaySchedule(pageData, fullDayItems);
       }
-      const application = assignment ? await readScheduleApplication({
-        serviceDate,
-        assignment,
-        credentialId: req.memphisDeviceCredential?.credential_id,
-      }) : null;
       res.status(200).json({
         ok: true,
         data: {
@@ -3389,19 +3410,57 @@ export function createScheduleRouter({
           requested_device_id: assignment?.requested_device_id || deviceId || null,
           device_id: assignment?.canonical_device_id || assignment?.device_id || deviceId || null,
           canonical_device_id: assignment?.canonical_device_id || assignment?.device_id || null,
+          canonical_device_pk: assignment?.canonical_device_pk || null,
           matched_by: assignment?.matched_by || null,
           device_name: assignment?.device_name || null,
           employee_id: resolvedEmployeeId,
           credential_id: req.memphisDeviceCredential?.credential_id || null,
           assignment_epoch: Number.isSafeInteger(Number(assignment?.assignment_epoch))
             && Number(assignment?.assignment_epoch)>0 ? Number(assignment.assignment_epoch) : null,
-          schedule_application: application,
+          schedule_application: delivery?.mode === "LEGACY_REGISTERED" ? delivery.datedApplication : null,
+          recurring_delivery: delivery?.mode?.startsWith("RECURRING_") ? delivery.delivery : null,
+          schedule_delivery_mode: delivery?.mode || null,
         },
         meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion },
       });
     } catch (error) {
       fail(res, error, "Personal schedule summary failed");
     }
+  });
+
+  router.post("/my-day-summary/delivery-receipt", requireEmployeeDevice, async (req, res) => {
+    try {
+      const body = req.body;
+      const keys = ["applied_at", "authority_revision", "intent_id", "rendered_digest", "target_digest", "target_type"];
+      if (!body || typeof body !== "object" || Array.isArray(body)
+        || JSON.stringify(Object.keys(body).sort()) !== JSON.stringify(keys)
+        || typeof body.intent_id !== "string" || !CANONICAL_UUID.test(body.intent_id)
+        || !["SCHEDULE", "BLOCKED_RECURRING_AUTHORITY"].includes(body.target_type)
+        || !Number.isSafeInteger(body.authority_revision) || body.authority_revision < 1
+        || typeof body.target_digest !== "string" || !SHA256_HEX.test(body.target_digest)
+        || typeof body.rendered_digest !== "string" || !SHA256_HEX.test(body.rendered_digest)
+        || typeof body.applied_at !== "string" || !Number.isFinite(Date.parse(body.applied_at))) {
+        const error = new Error("The exact typed schedule delivery receipt is required."); error.status = 422; throw error;
+      }
+      const deviceIdentifier = String(req.memphisDevice?.canonical_device_id || req.memphisDevice?.device_id || "").trim();
+      const assignment = await getAssignedEmployeeForDevice(deviceIdentifier);
+      const credential = String(req.memphisDeviceCredential?.credential_id || "").trim().toLowerCase();
+      const epoch = Number(assignment?.assignment_epoch);
+      if (!assignment?.device_active || !assignment?.employee_active
+        || !CANONICAL_UUID.test(String(assignment.canonical_device_pk || ""))
+        || !CANONICAL_UUID.test(String(assignment.assigned_employee_id || ""))
+        || !CANONICAL_UUID.test(credential) || !Number.isSafeInteger(epoch) || epoch < 1) {
+        const error = new Error("The current authenticated delivery principal is unavailable."); error.status = 401; throw error;
+      }
+      const data = await runRpc("static_weekly_v24_ack_device_schedule_delivery", {
+        p_intent: body.intent_id, p_device: assignment.canonical_device_pk, p_credential: credential,
+        p_employee: assignment.assigned_employee_id, p_epoch: epoch, p_target_type: body.target_type,
+        p_revision: body.authority_revision, p_target_digest: body.target_digest,
+        p_rendered_digest: body.rendered_digest, p_applied_at: new Date(body.applied_at).toISOString(),
+      });
+      res.status(200).json({ ok: true, data,
+        meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+    } catch (error) { fail(res, error, "Schedule delivery receipt failed"); }
   });
 
   router.post("/my-day-summary/application-receipt", requireEmployeeDevice, async (req, res) => {

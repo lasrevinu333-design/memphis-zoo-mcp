@@ -1049,6 +1049,43 @@ export async function authenticateDeviceCredentialRequest(req, {
   };
 }
 
+// H04 status-only lane. Deliberately separate from ordinary authentication
+// and the older offline-work RPC allowlist. It cannot authorize any work.
+export async function authenticateSeparationContextRequest(req, {
+  env=process.env,store,runReadOnlySql,now=new Date(),
+}={}) {
+  const denied=()=>({ok:false,status:403,code:'separation_context_unavailable',error:'Original protected separation context could not be verified.'});
+  if(req?.method!=='GET'||new URL(req?.originalUrl||req?.url||'','https://custodial.invalid').pathname!=='/device-auth/separation-context')return denied();
+  if(!store||typeof runReadOnlySql!=='function')throw Object.assign(new Error('Separation context store unavailable'),{status:503});
+  const parts=credentialTokenParts(requestCredentialToken(req));if(!parts)return denied();
+  const {device}=await resolveDevice(req,runReadOnlySql,{allowTerminalOfflineRecovery:true});
+  if(!device||device.device_active!==true||device.employee_active!==false
+    ||!isCanonicalEmployeeKiosk(device.canonical_device_id)||!/^EMP\d+$/i.test(String(device.employee_code||''))
+    ||!UUID_PATTERN.test(device.canonical_device_pk||'')||!UUID_PATTERN.test(device.assigned_employee_id||'')
+    ||!Number.isSafeInteger(Number(device.assignment_epoch))||Number(device.assignment_epoch)<1)return denied();
+  const row=await store.findCredential(parts.credentialId),metadata=row?.metadata_json;
+  const generation=String(metadata?.credential_secret_key_id||'').trim().toLowerCase();
+  if(!row||row.credential_id!==parts.credentialId||row.device_id!==device.canonical_device_pk||row.revoked_at||!row.confirmed_at
+    ||!safeEqual(row.token_hash,tokenHash(parts.secret,env))
+    ||generation&&(!/^[0-9a-f]{64}$/.test(generation)||!safeEqual(generation,deviceCredentialSecretKeyId(env))))return denied();
+  // Current expiry is not new-work authority here. SQL admits ONLY credentials
+  // recorded valid/confirmed at the immutable separation cutoff; revocation
+  // still denies. Native request proof uses the current authenticated transport.
+  verifyNativeDeviceRequestAttestation({...req,memphisDevice:device,memphisDeviceCredential:row},{now});
+  const rows=await runReadOnlySql(`select public.custodial_v13_read_separation_context('${device.canonical_device_pk}'::uuid,'${parts.credentialId}'::uuid) as context`);
+  const context=rows?.[0]?.context;
+  if(!context||context.schema!=='custodial.separation-context.v1'||context.purpose!=='SEPARATION_STATUS_ONLY'
+    ||context.state!=='PENDING_RECONCILIATION'||context.new_work_allowed!==false||context.phone_released!==false
+    ||context.device_id!==device.canonical_device_pk||context.employee_id!==device.assigned_employee_id
+    ||context.credential_id!==parts.credentialId||context.canonical_device_id!==device.canonical_device_id
+    ||context.assignment_epoch!==Number(device.assignment_epoch)||!UUID_PATTERN.test(context.separation_id||'')
+    ||!Number.isSafeInteger(context.authority_revision)||context.authority_revision<1
+    ||typeof context.cutoff_at!=='string'||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/.test(context.cutoff_at)
+    ||!['UNKNOWN','VERIFIED_EMPTY','PROTECTED_PENDING','RECONCILED'].includes(context.native_inventory_state)
+    ||!Array.isArray(context.server_known_open_sessions))return denied();
+  return {ok:true,separation_recovery_only:true,context};
+}
+
 export function makeDeviceCredentialMiddleware(options = {}) {
   return async function requireDeviceCredential(req, res, next) {
     try {
@@ -1322,6 +1359,15 @@ export function installDeviceCredentialRoutes(app, {
     } catch (error) {
       res.status(500).json({ ok: false, error: "Device Security sessions could not be revoked." });
     }
+  });
+
+  app.get('/device-auth/separation-context',async(req,res)=>{
+    res.setHeader('Cache-Control','no-store');
+    try{
+      const result=await authenticateSeparationContextRequest(req,{env,store,runReadOnlySql});
+      if(!result.ok){res.status(result.status).json({ok:false,code:result.code,error:result.error});return;}
+      res.status(200).json({ok:true,data:result.context});
+    }catch(error){res.status(error?.status||503).json({ok:false,code:'separation_context_unavailable',error:'Original protected separation context could not be verified.'});}
   });
 
   app.get("/device-auth/status", async (req, res) => {

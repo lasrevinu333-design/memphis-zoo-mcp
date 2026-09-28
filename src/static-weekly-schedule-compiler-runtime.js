@@ -261,7 +261,7 @@ export function createStaticWeeklyCompilerRuntime({
     return record.promise;
   }
 
-  async function send(input, preparation, deadline) {
+  async function send(input, preparation, deadline, requestType = "compile") {
     await start();
     const remainingMilliseconds = Math.floor(deadline - monotonicNowMilliseconds());
     if (remainingMilliseconds <= 0) throw runtimeError("static_weekly_compiler_queue_timeout", "The isolated compiler request expired while waiting for its serialized execution slot.");
@@ -279,7 +279,7 @@ export function createStaticWeeklyCompilerRuntime({
       }, remainingMilliseconds);
       record.timer.unref?.();
       try {
-        candidate.send({ type: "compile", id, input, preparation }, (error) => {
+        candidate.send({ type: requestType, id, input, preparation }, (error) => {
           if (!error || record.settled) return;
           const cause = runtimeError("static_weekly_compiler_worker_unavailable", error.message || "The compiler request could not be sent to its process.");
           clearPending(record, reject, cause);
@@ -293,7 +293,7 @@ export function createStaticWeeklyCompilerRuntime({
     });
   }
 
-  function enqueue(input = {}, preparation = null, options = {}) {
+  function enqueue(input = {}, preparation = null, options = {}, requestType = "compile") {
     if (closed) return Promise.reject(runtimeError("static_weekly_compiler_closed", "The isolated compiler is closed."));
     if (outstanding >= maxOutstandingRequests) return Promise.reject(runtimeError("static_weekly_compiler_busy", "The isolated compiler already has its maximum bounded request queue."));
     const requestedDeadline = options?.deadlineMilliseconds == null ? requestMilliseconds : Number(options.deadlineMilliseconds);
@@ -302,7 +302,7 @@ export function createStaticWeeklyCompilerRuntime({
     }
     outstanding += 1;
     const deadline = monotonicNowMilliseconds() + requestedDeadline;
-    const run = () => send(input, preparation, deadline);
+    const run = () => send(input, preparation, deadline, requestType);
     const queued = tail.then(run, run);
     tail = queued.then(() => undefined, () => undefined);
     return queued.finally(() => { outstanding -= 1; });
@@ -318,6 +318,16 @@ export function createStaticWeeklyCompilerRuntime({
       return Promise.reject(runtimeError("static_weekly_compiler_preparation_invalid", "The isolated compiler preparation kind is invalid."));
     }
     return enqueue(input, preparation, options);
+  }
+
+  function prepareRecurringCandidate(input = {}, options = {}) {
+    return enqueue(input, null, options, "recurring-candidate");
+  }
+
+  function prepareRecurringAdmissionCandidate(input = {}, options = {}) {
+    // Private same-process call for the transaction owner. The public preview
+    // path never receives canonical source bytes or draft mutation inputs.
+    return enqueue(input, null, options, "recurring-admission-candidate");
   }
 
   function shutdown() {
@@ -342,13 +352,16 @@ export function createStaticWeeklyCompilerRuntime({
     return shutdownPromise;
   }
 
-  return { compile, compileAndPrepare, initialize: start, getReadiness: readiness, shutdown, terminateForTest: shutdown };
+  return { compile, compileAndPrepare, prepareRecurringCandidate, prepareRecurringAdmissionCandidate,
+    initialize: start, getReadiness: readiness, shutdown, terminateForTest: shutdown };
 }
 
 const productionRuntime = createStaticWeeklyCompilerRuntime();
 
 export const compileStaticWeeklyScheduleIsolated = productionRuntime.compile;
 export const compileAndPrepareStaticWeeklyScheduleIsolated = productionRuntime.compileAndPrepare;
+export const prepareRecurringCandidateIsolated = productionRuntime.prepareRecurringCandidate;
+export const prepareRecurringAdmissionCandidateIsolated = productionRuntime.prepareRecurringAdmissionCandidate;
 export const initializeStaticWeeklyCompiler = productionRuntime.initialize;
 export const getStaticWeeklyCompilerReadiness = productionRuntime.getReadiness;
 export const shutdownStaticWeeklyCompiler = productionRuntime.shutdown;

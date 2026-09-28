@@ -66,6 +66,43 @@ try {
   await sql("do $$ begin create role anon; exception when duplicate_object then null; end $$; do $$ begin create role authenticated; exception when duplicate_object then null; end $$; do $$ begin create role service_role; exception when duplicate_object then null; end $$;");
   for (const file of fs.readdirSync(migrationsDir).filter((name) => name.endsWith(".sql")).sort()) await sql(fs.readFileSync(path.join(migrationsDir, file), "utf8"));
  }
+  const legacyStatus = "public.custodial_set_employee_active(uuid,boolean,uuid,text,boolean)";
+  assert.equal(await scalar(`select exists(select 1 from aclexplode(coalesce((select proacl from pg_proc where oid='${legacyStatus}'::regprocedure), acldefault('f',(select proowner from pg_proc where oid='${legacyStatus}'::regprocedure)))) where grantee=0 and privilege_type='EXECUTE')::text`), "false",
+    "PUBLIC must have no default or explicit legacy employee-status EXECUTE privilege");
+  for (const role of ["anon", "authenticated", "service_role", "static_weekly_control_plane", "static_weekly_release_operator", "custodial_application_reader"]) {
+    assert.equal(await scalar(`select has_function_privilege('${role}', '${legacyStatus}', 'EXECUTE')::text`), "false",
+      `${role} must not bypass the Weekly Schedule turnover ledger through the legacy employee-status helper`);
+  }
+  const legacyRecovery = await scalar(`select jsonb_agg(jsonb_build_object('identity',object_identity,'stored',definition_sql,'current',public.custodial_release_authority_current_grant_definition(object_identity)))::text from public.custodial_release_authority_restore_inventory where object_kind='grant' and to_regprocedure(object_identity)='${legacyStatus}'::regprocedure`);
+  assert.ok(JSON.parse(legacyRecovery || "null")?.some((row) => row.stored === row.current),
+    `release recovery must retain the retired direct-RPC grant state: ${legacyRecovery}`);
+  await expectReject("set role service_role; select public.custodial_set_employee_active(null::uuid,false,null::uuid,null::text,true)",
+    /permission denied for function custodial_set_employee_active/i);
+  const lockedWriters = [
+    "public.static_weekly_v8_vacate_roster_slot(uuid,uuid,uuid,date,text,bigint,uuid,text)",
+    "public.static_weekly_v9_fill_vacant_roster_slot(uuid,uuid,text,date,text,bigint,uuid,text)",
+    "public.static_weekly_v8_restore_existing_employee(uuid,uuid,uuid,date,text,bigint,uuid,text)",
+    "public.static_weekly_v7_fill_vacant_roster_slot(uuid,text,date,text,bigint,uuid,text)",
+    "public.static_weekly_v4_mark_employee_departed(uuid,text,bigint,uuid,text)",
+    "public.static_weekly_v4_replace_employee(uuid,text,text,bigint,uuid,text)",
+    "public.static_weekly_v3_publish_draft(uuid,bigint,bigint,uuid,text,text,uuid)",
+    "public.static_weekly_v2_create_draft(date,text,jsonb,jsonb,jsonb,bigint,uuid,text,text)",
+    "public.static_weekly_v2_apply_exception(text,date,time,time,uuid,uuid,text,jsonb,bigint,uuid,text,text,uuid)",
+    "public.static_weekly_v10_stage_staffing_command(uuid,jsonb,text,text,jsonb,uuid)",
+    "public.static_weekly_v11_accept_staffing_command(uuid,text,uuid,uuid)",
+  ];
+  for (const signature of lockedWriters) {
+    assert.equal(await scalar(`select (position('pg_advisory_xact_lock(hashtextextended(' in pg_get_functiondef('${signature}'::regprocedure))>0)::text`), "true",
+      `${signature} must retain the shared transaction authority lock`);
+  }
+  assert.equal(await scalar("select (tgfoid='public.static_weekly_component_guard()'::regprocedure)::text from pg_trigger where tgrelid='public.weekly_schedule_slot_availability'::regclass and tgname='trg_static_weekly_weekly_schedule_slot_availability_guard' and not tgisinternal"), "true",
+    "the exact restriction/availability component trigger must be installed");
+  for (const role of ["anon", "authenticated", "service_role"]) {
+    assert.equal(await scalar(`select has_table_privilege('${role}','public.weekly_schedule_slot_availability','SELECT,INSERT,UPDATE,DELETE')::text`), "false",
+      `${role} must not write recurring restrictions outside the versioned scheduler`);
+  }
+  await expectReject("set role service_role; update public.weekly_schedule_slot_availability set restriction_snapshot='{}'::jsonb",
+    /permission denied for table weekly_schedule_slot_availability/i);
   await sql(`insert into public.ops_manager_managers(manager_id,display_name,roles,active,metadata_json,is_system_principal) values(${quote(managerId)},'Vacancy Test Manager',array['OPS_MANAGER','CUSTODIAL_MANAGER']::text[],true,'{}'::jsonb,false)`);
   const vacancyTemplateConstraint = await scalar("select pg_get_constraintdef(oid) from pg_constraint where conrelid='public.weekly_schedule_slot_availability'::regclass and conname='weekly_schedule_slot_availability_vacancy_template_check'");
   assert.match(vacancyTemplateConstraint, /lunch_start IS NOT NULL.*lunch_end IS NOT NULL.*shift_start < lunch_start.*lunch_end < shift_end/i, "an empty schedule position cannot be published without a protected lunch inside its shift");

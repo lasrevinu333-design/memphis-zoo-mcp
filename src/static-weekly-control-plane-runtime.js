@@ -108,7 +108,8 @@ export function createStaticWeeklyControlPlaneRuntime({
           "static_weekly_control_plane_busy",
           "static_weekly_control_plane_queue_timeout",
         ]).has(error?.code);
-        res.status(error?.code === "static_weekly_control_plane_compiler_rejected" ? 422 : unavailable ? 503 : 409).json({ ok: false, error: error?.message || "Static weekly control-plane request failed.", code: error?.code || "static_weekly_control_plane_failed" });
+        const invalid = ["static_weekly_control_plane_compiler_rejected", "static_weekly_recurring_confirmation_request_invalid", "static_weekly_recurring_delivery_request_invalid"].includes(error?.code);
+        res.status(invalid ? 422 : unavailable ? 503 : 409).json({ ok: false, error: error?.message || "Static weekly control-plane request failed.", code: error?.code || "static_weekly_control_plane_failed" });
       }
     };
   }
@@ -154,6 +155,32 @@ export function createStaticWeeklyControlPlaneRuntime({
   app.get("/healthz", liveness);
   app.get(["/health", "/ready"], readiness);
   app.get("/static-weekly/manager-snapshot", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.getManagerSnapshot({ manager: manager(req), weekStart: req.query?.week_start })));
+  app.post("/static-weekly/recurring-adaptation/preview", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.previewRecurringStaffing({
+    manager: manager(req), effectiveStart: req.body?.effective_start,
+    expectedRevision: req.body?.expected_revision,
+    fullNineSourceId: req.body?.full_nine_source_id || null,
+  })));
+  app.post("/static-weekly/recurring-adaptation/confirm", requireManagerWrite, namedManager, respond((req) => {
+    const body=req.body;
+    const required=["confirmation_key","effective_start","expected_revision","preview_digest"];
+    const allowed=new Set([...required,"full_nine_source_id"]);
+    if (!body || typeof body!=="object" || Array.isArray(body)
+      || required.some(key=>!Object.hasOwn(body,key)) || Object.keys(body).some(key=>!allowed.has(key))) {
+      throw fail("static_weekly_recurring_confirmation_request_invalid", "Confirmation accepts only the exact preview identity and revision; schedule facts and manager identity come from authenticated authority.");
+    }
+    return authorityControlPlane.confirmRecurringStaffing({
+      manager:manager(req),confirmationKey:body.confirmation_key,effectiveStart:body.effective_start,
+      expectedRevision:body.expected_revision,previewDigest:body.preview_digest,fullNineSourceId:body.full_nine_source_id??null,
+    });
+  }));
+  app.get("/static-weekly/recurring-adaptation/confirmations/:confirmationKey", requireManagerWrite, namedManager, respond((req) =>
+    authorityControlPlane.getRecurringConfirmationStatus({manager:manager(req),confirmationKey:req.params.confirmationKey})));
+  app.get("/static-weekly/recurring-adaptation/delivery", requireManagerWrite, namedManager, respond((req) => {
+    if (Object.keys(req.query || {}).some(key => key !== "service_date") || typeof req.query?.service_date !== "string") {
+      throw fail("static_weekly_recurring_delivery_request_invalid");
+    }
+    return authorityControlPlane.getCurrentRecurringDelivery({manager:manager(req),serviceDate:req.query.service_date});
+  }));
   app.post("/static-weekly/staffing-commands", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.beginStaffingCommand({
     manager: manager(req),
     commandKind: req.body?.command_kind,
@@ -204,6 +231,7 @@ export function createStaticWeeklyControlPlaneRuntime({
   app.post("/static-weekly/employees/replacements", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.replaceEmployee({ manager: manager(req), slotId: req.body?.slot_id, newEmployeeName: req.body?.new_employee_name, reason: req.body?.reason, expectedRevision: req.body?.expected_revision, idempotencyKey: req.body?.idempotency_key, projectionWeekStart: req.body?.week_start })));
   app.post("/static-weekly/employees/restores", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.restoreExistingEmployee({ manager: manager(req), sourceId: req.body?.source_id, slotId: req.body?.slot_id, employeeId: req.body?.employee_id, effectiveStart: req.body?.effective_start, reason: req.body?.reason, expectedRevision: req.body?.expected_revision, idempotencyKey: req.body?.idempotency_key })));
   app.post("/static-weekly/roster/:slotId/vacate", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.vacateRosterSlot({ manager: manager(req), sourceId: req.body?.source_id, slotId: req.params.slotId, employeeId: req.body?.employee_id, effectiveStart: req.body?.effective_start, reason: req.body?.reason, expectedRevision: req.body?.expected_revision, idempotencyKey: req.body?.idempotency_key })));
+  app.get("/static-weekly/roster/:slotId/separation", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.readSeparation({ manager: manager(req), slotId: req.params.slotId })));
   app.post("/static-weekly/roster/vacant-slots", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.createVacantRosterSlot({ manager: manager(req), slotId: req.body?.slot_id, slotLabel: req.body?.slot_label, expectedRevision: req.body?.expected_revision, idempotencyKey: req.body?.idempotency_key })));
   app.post("/static-weekly/roster/vacant-slots/:slotId/fill", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.fillVacantRosterSlot({ manager: manager(req), sourceId: req.body?.source_id, slotId: req.params.slotId, newEmployeeName: req.body?.new_employee_name, effectiveStart: req.body?.effective_start, reason: req.body?.reason, expectedRevision: req.body?.expected_revision, idempotencyKey: req.body?.idempotency_key })));
   app.post("/static-weekly/projections", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.materializeProjection({ manager: manager(req), publicationId: req.body?.publication_id, serviceDate: req.body?.service_date, expectedRevision: req.body?.expected_revision, idempotencyKey: req.body?.idempotency_key })));

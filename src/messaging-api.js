@@ -1510,10 +1510,16 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
         return;
       }
 
+      // Only the authenticated current principal may consume its bound ACK.
+      // Manager/legacy unbound readers never borrow another principal's ACK.
+      const reminderCredentialId = isUuid(req.memphisDeviceCredential?.credential_id)
+        ? req.memphisDeviceCredential.credential_id : null;
       const rows = await runReadOnlySql(`
         select * from (
           with assigned_locations as (
             select distinct on (assignment.location_id)
+              assignment.projection_id,
+              assignment.publication_id,
               assignment.location_group_id,
               assignment.group_code,
               assignment.group_name,
@@ -1525,6 +1531,8 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
             from public.custodial_operational_location_assignments('${esc(serviceDate)}'::date) assignment
             where assignment.assigned_employee_id = '${esc(assignment.assigned_employee_id)}'::uuid
               and assignment.assignment_status = 'ASSIGNED'
+              and assignment.projection_status = 'current'
+              and assignment.projection_id is not null
               and assignment.coverage_start <= (now() at time zone 'America/Chicago')::time
               and (now() at time zone 'America/Chicago')::time < assignment.coverage_end
             order by assignment.location_id, assignment.coverage_start,
@@ -1537,6 +1545,8 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
             '${esc(assignment.assigned_employee_id)}'::uuid as employee_id,
             ${assignment.assigned_employee_name ? `'${esc(assignment.assigned_employee_name)}'::text` : 'null::text'} as employee_name,
             ${assignment.employee_code ? `'${esc(assignment.employee_code)}'::text` : 'null::text'} as employee_code,
+            al.projection_id,
+            al.publication_id,
             al.location_group_id,
             al.group_code,
             al.group_name,
@@ -1558,7 +1568,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
             v.open_ticket_count,
             v.last_scan_at,
             v.last_scan_at_display,
-            cycle.notification_key as notification_key
+            cycle.notification_key||':projection:'||al.projection_id::text as notification_key
           from assigned_locations al
           join public.v_location_dashboard_status v on v.location_id = al.location_id
           join public.mz_location_reminder_candidates('${esc(serviceDate)}'::date,now()) cycle
@@ -1568,7 +1578,10 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
               select 1
               from public.device_notification_acknowledgements a
               where upper(btrim(a.device_identifier)) = upper(btrim('${esc(canonicalDeviceId)}'))
-                and a.notification_key = cycle.notification_key
+                and a.notification_key = cycle.notification_key||':projection:'||al.projection_id::text
+                and a.credential_id = ${reminderCredentialId ? `'${esc(reminderCredentialId)}'::uuid` : 'null::uuid'}
+                and a.assignment_epoch = '${esc(assignment.assignment_epoch)}'::bigint
+                and a.employee_id = '${esc(assignment.assigned_employee_id)}'::uuid
                 and a.acknowledged_at is not null
             )
           order by
