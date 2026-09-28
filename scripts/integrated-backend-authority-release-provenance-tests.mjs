@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import "./release-migration-workflow-tests.mjs";
 
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
