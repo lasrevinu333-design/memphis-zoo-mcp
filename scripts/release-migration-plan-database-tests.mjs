@@ -57,7 +57,29 @@ assert.deepEqual(state.pending_migrations.map(({ order, file }) => ({ order, fil
   { order: 21, file: "20260925050718_static_weekly_staffing_command_ledger.sql" },
   { order: 22, file: "20260925054802_static_weekly_staffing_atomic_acceptance.sql" },
   { order: 23, file: "20260925190000_gps_exact_location_authority_boundary.sql" },
-], "the correction release fixture must contain exactly the twenty-three candidate migrations in order");
+  { order: 24, file: "20260926143542_static_weekly_protected_separation.sql" },
+  { order: 25, file: "20260926180000_retire_direct_employee_status_rpc.sql" },
+  { order: 26, file: "20260926192656_static_weekly_recurring_confirmation_ledger.sql" },
+  { order: 27, file: "20260926193000_retire_direct_employee_mutation_helpers.sql" },
+  { order: 28, file: "20260926193651_static_weekly_recurring_source_admission.sql" },
+  { order: 29, file: "20260926194644_static_weekly_recurring_generation_fence.sql" },
+  { order: 30, file: "20260926200458_static_weekly_recurring_future_same_monday.sql" },
+  { order: 31, file: "20260926201644_static_weekly_recurring_dependency_snapshot.sql" },
+  { order: 32, file: "20260926202657_static_weekly_recurring_publication_binding.sql" },
+  { order: 33, file: "20260926204235_static_weekly_recurring_terminal_targets.sql" },
+  { order: 34, file: "20260926205849_static_weekly_recurring_blocked_authority_repair.sql" },
+  { order: 35, file: "20260926211714_static_weekly_recurring_common_lock_order.sql" },
+  { order: 36, file: "20260926220510_static_weekly_recurring_dependency_reconciliation.sql" },
+  { order: 37, file: "20260926223914_static_weekly_recurring_application_targets.sql" },
+  { order: 38, file: "20260926225613_static_weekly_recurring_atomic_finalization.sql" },
+  { order: 39, file: "20260926234537_static_weekly_authenticated_schedule_delivery.sql" },
+  { order: 40, file: "20260927001706_static_weekly_lunch_validation_materialization.sql" },
+  { order: 41, file: "20260927010911_static_weekly_current_recurring_delivery_status.sql" },
+  { order: 42, file: "20260927031806_schedule_bound_location_reminders.sql" },
+  { order: 43, file: "20260927052929_schedule_notification_admission_corrections.sql" },
+  { order: 44, file: "20260927072146_schedule_notification_exact_canary.sql" },
+  { order: 45, file: "20260927075352_protected_separation_original_context.sql" },
+], "the correction release fixture must contain exactly the forty-five candidate migrations in order");
 assert.equal(
   state.pending_migrations.every((item) => item.source_migration_version > state.observed_production.ledger_head),
   true,
@@ -304,7 +326,7 @@ try {
   const afterFingerprint = fingerprintSchemaCatalog(afterCatalog);
   const canonical = JSON.parse(readFileSync(resolve(root, "supabase/canonical/schema-fingerprint-input.json"), "utf8"));
   assert.equal(afterFingerprint.fingerprint, state.target.canonical_source_schema_fingerprint,
-    `the exact twenty-three-migration correction plan must terminate at the canonical target catalog: ${JSON.stringify(firstCatalogDifference(canonical, afterFingerprint.normalized))}`);
+    `the exact forty-five-migration correction plan must terminate at the canonical target catalog: ${JSON.stringify(firstCatalogDifference(canonical, afterFingerprint.normalized))}`);
   await assert.rejects(runPlan(), /already present|pre-migration production state|Locked source catalog/,
     "the complete plan is exactly-once and rejects replay or partial application");
   console.log("RELEASE_MIGRATION_PLAN_DATABASE_TESTS_PASS");

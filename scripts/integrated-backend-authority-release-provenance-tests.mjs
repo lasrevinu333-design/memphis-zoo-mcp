@@ -63,8 +63,8 @@ function createFixture({ beforeCommit = null, skipEvidenceRefresh = false } = {}
     const trackedPaths = copyCompleteTrackedWorktree(fixture);
     const fixtureReleaseContractPath = join(fixture, "src/release-contract.js");
     const fixtureReleaseContract = readFileSync(fixtureReleaseContractPath, "utf8")
-      .replace('keyId: "custodial-build52-20260915-v1"', 'keyId: "test-release-key"')
-      .replace('publicKeySpkiSha256: "992a3be69b3340e65bae0b28b8d78ef568dfc30a0ed8120268794ea15e1b49a0"',
+      .replace('keyId: "memphis-release-recovery-20260928-v1"', 'keyId: "test-release-key"')
+      .replace('publicKeySpkiSha256: "a0af17f2aabc006af0a5ea3d80e2ccbab0650c1689f7ed828ec7aeb1075c5190"',
         `publicKeySpkiSha256: "${publicKeySpkiSha256}"`);
     writeFileSync(fixtureReleaseContractPath, fixtureReleaseContract);
     const fixtureSchemaPath = join(fixture, "release/schema-alignment-input.json");
@@ -430,5 +430,30 @@ try {
 } finally {
   disposeFixture(symlinkTreeFixture);
 }
+
+// Bind the selected 175-file candidate to its exact pending suffix. These
+// disposable, newly signed fixtures must fail before any database operation.
+const migrationPlanCases = [
+  ["omitted pending migration", (state) => state.pending_migrations.pop(), /exactly the forty-five/],
+  ["reordered pending migrations", (state) => {
+    [state.pending_migrations[23], state.pending_migrations[24]] = [state.pending_migrations[24], state.pending_migrations[23]];
+  }, /deep-equal|deeply equal/],
+  ["duplicate pending migration", (state) => { state.pending_migrations[24] = { ...state.pending_migrations[23], order: 25 }; }, /deep-equal|deeply equal/],
+  ["changed pending digest", (state) => { state.pending_migrations[23].sha256 = "0".repeat(64); }, /pending migration digest mismatch/],
+  ["broken pending order", (state) => { state.pending_migrations[23].order = 100; }, /pending migration order is not contiguous/],
+  ["invalid source version", (state) => { state.pending_migrations[23].source_migration_version = "invalid"; }, /pending source migration version is invalid/],
+  ["changed target fingerprint", (state) => { state.target.canonical_source_schema_fingerprint = "0".repeat(64); }, /strictly equal/],
+  ["changed target ledger count", (state) => { state.target.production_ledger_count -= 1; }, /strictly equal/],
+  ["changed target function count", (state) => { state.target.public_function_count -= 1; }, /strictly equal/],
+];
+for (const [name, mutate, expected] of migrationPlanCases) {
+  expectCommittedRejected(name, (directory) => {
+    const path = join(directory, "release/production-migration-state.json");
+    const state = JSON.parse(readFileSync(path, "utf8"));
+    mutate(state);
+    writeFileSync(path, `${JSON.stringify(state, null, 2)}\n`);
+  }, expected);
+}
+console.log(JSON.stringify({ migration_plan_rejection_cases: migrationPlanCases.length, production_contacted: false }));
 
 console.log("INTEGRATED_BACKEND_AUTHORITY_RELEASE_PROVENANCE_PASS");
