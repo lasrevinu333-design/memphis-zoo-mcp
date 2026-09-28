@@ -280,7 +280,7 @@
       {
         "path": "docs/chatgpt-mcp-oauth.md",
         "mode": "100644",
-        "object_id": "c83499dd96ea8b465aa68d4a418d0cb923bc1476"
+        "object_id": "8de27c0896a5cc6850bb2e04753e9372e987ccd9"
       },
       {
         "path": "docs/custodial-readonly-database-authority.md",
@@ -1020,7 +1020,12 @@
       {
         "path": "scripts/mcp-self-contained-oauth-wire-tests.mjs",
         "mode": "100644",
-        "object_id": "e2e3b51fe228e0a96775769d2e213c31ce7dc883"
+        "object_id": "0c996d1081645df8db2329adcd9e917405ea4e15"
+      },
+      {
+        "path": "scripts/mcp-tool-login-challenge-tests.mjs",
+        "mode": "100644",
+        "object_id": "4d49c82883458e3ae7853be8f464b0d9ab166c31"
       },
       {
         "path": "scripts/mcp-transport-tool-surface-tests.mjs",
@@ -1870,7 +1875,7 @@
       {
         "path": "src/auth/mcp-self-contained-oauth.js",
         "mode": "100644",
-        "object_id": "44cd52c88fb45eb5f51dc72353f1347b9c938666"
+        "object_id": "1605633466d9d9bd2ba0ce2fd8ffcced8ef93049"
       },
       {
         "path": "src/auth/shared-access-auth.js",
@@ -2005,7 +2010,7 @@
       {
         "path": "src/mcp/register.js",
         "mode": "100644",
-        "object_id": "b834bf2bcc03c8f86f909de144969df2006198ac"
+        "object_id": "e539abf8f361956624b2eef541890fbad891b812"
       },
       {
         "path": "src/mcp/responses.js",
@@ -3493,7 +3498,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 673,
+    "authority_path_count": 674,
     "migration_path_count": 130,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."

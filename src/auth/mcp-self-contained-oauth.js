@@ -384,10 +384,18 @@ function page(title, body) {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title><style>:root{color-scheme:light dark;font-family:system-ui,sans-serif}body{margin:0;background:#0b1f16;color:#f5fff9}main{max-width:42rem;margin:8vh auto;padding:2rem;background:#123425;border:1px solid #3f765b;border-radius:1rem}h1{margin-top:0}label{display:block;margin-top:1rem;font-weight:650}input{box-sizing:border-box;width:100%;margin-top:.35rem;padding:.75rem;border-radius:.5rem;border:1px solid #79a98f;background:#fff;color:#102117}button{margin-top:1.25rem;padding:.75rem 1rem;border:0;border-radius:.5rem;background:#f4c95d;color:#1b2b21;font-weight:750;cursor:pointer}.deny{background:#d9e4dd}.warning{padding:1rem;border-radius:.5rem;background:#45291b;border:1px solid #d89658}.detail{overflow-wrap:anywhere;color:#d8eee1}.actions{display:flex;gap:.75rem;flex-wrap:wrap}.actions form{display:inline}code{overflow-wrap:anywhere}</style></head><body><main>${body}</main></body></html>`;
 }
 
-function sendHtml(res, status, html) {
+function sendHtml(res, status, html, { consentRedirectUri = null } = {}) {
+  // Chromium checks the callback reached by the consent form's 303 redirect.
+  // Permit only this request's previously validated ChatGPT callback, never a
+  // wildcard, arbitrary host, or callback on the password-entry page.
+  const callback = consentRedirectUri === null ? null : validateOpenAiRedirectUri(consentRedirectUri);
+  if (consentRedirectUri !== null && callback !== consentRedirectUri) {
+    throw new Error("Invalid OAuth consent callback policy.");
+  }
+  const formAction = callback ? `'self' ${callback}` : "'self'";
   res.setHeader("Cache-Control", "no-store");
   res.setHeader("Pragma", "no-cache");
-  res.setHeader("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'");
+  res.setHeader("Content-Security-Policy", `default-src 'none'; style-src 'unsafe-inline'; form-action ${formAction}; base-uri 'none'; frame-ancestors 'none'`);
   res.status(status).type("html").send(html);
 }
 
@@ -799,7 +807,7 @@ export function createSelfContainedMcpOAuthService({ env = process.env, now = Da
     loginLimiter.reset(req);
     const consentCsrf = random(24).toString("base64url");
     setFlowCookie(res, config, issueFlowCookie(config, "consent", requestToken, consentCsrf, current, random));
-    sendHtml(res, 200, consentPage(requestToken, consentCsrf, request));
+    sendHtml(res, 200, consentPage(requestToken, consentCsrf, request), { consentRedirectUri: request.redirect_uri });
   });
 
   router.post("/oauth/decision", (req, res) => {
