@@ -505,7 +505,7 @@
       {
         "path": "release/production-migration-state.json",
         "mode": "100644",
-        "object_id": "fc76e8fbc79f2db174302cd25391bd863a3b9f5b"
+        "object_id": "f52d6a982f882e34e669a5a0ce10c795124aad55"
       },
       {
         "path": "release/production-schema-observation-20260922.json",
@@ -1500,7 +1500,7 @@
       {
         "path": "scripts/recovery-inventory-closure-database-tests.mjs",
         "mode": "100644",
-        "object_id": "42aa32172e913e230a3fa4ea1fb54bc8dfa39fea"
+        "object_id": "175eafb38b83b8e68dc56b25712ce745997612a1"
       },
       {
         "path": "scripts/refresh-integrated-backend-authority-release.mjs",
@@ -4550,7 +4550,7 @@
       {
         "path": "supabase/migrations/20260929125440_custodial_recovery_inventory_closure.sql",
         "mode": "100644",
-        "object_id": "9e80dabea93145a8eeb63ce24fa64342499c6050"
+        "object_id": "8fb71a3ded034e352a4725d742371bfc3b0d8817"
       },
       {
         "path": "tmp/write_probe.txt",
