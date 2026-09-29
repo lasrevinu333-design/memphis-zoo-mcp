@@ -200,7 +200,7 @@
       {
         "path": ".github/workflows/production-backup-migration-rehearsal.yml",
         "mode": "100644",
-        "object_id": "e75fd1c9cb872c9e3b37002336a4ae192eeb4789"
+        "object_id": "67c966b3dda5dc8b4bb80848e8abdd14fa2fca65"
       },
       {
         "path": ".github/workflows/production-database-credential-bridge.yml",
