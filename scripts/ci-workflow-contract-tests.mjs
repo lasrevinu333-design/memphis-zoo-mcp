@@ -13,6 +13,7 @@ const workflowDirectory = resolve(root, ".github", "workflows");
 const releaseMigrationState = JSON.parse(readFileSync(resolve(root, "release", "production-migration-state.json"), "utf8"));
 const expectedProductionSource = releaseMigrationState.observed_production;
 const expectedProductionTarget = releaseMigrationState.target;
+const releaseStatePath = resolve(root, "release", "production-migration-state.json");
 const approvedActions = new Map([
   ["actions/checkout", ["3d3c42e5aac5ba805825da76410c181273ba90b1", "v7.0.1"]],
   ["actions/setup-node", ["820762786026740c76f36085b0efc47a31fe5020", "v7.0.0"]],
@@ -342,9 +343,24 @@ assert.match(independentProductionTargetStep,
   "the independent verifier must read the actual production migration ledger");
 assert.match(independentProductionTargetStep, /captureSchemaCatalog\(database\)[\s\S]*fingerprintSchemaCatalog\(normalizedCatalog\)/,
   "the independent verifier must recapture and fingerprint the actual production catalog");
-assert.doesNotMatch(independentProductionTargetStep,
-  /build52-production-migration-result\.json|\bresult_path\b|production-migration-state\.json|target_catalog_fingerprint/,
-  "the independent target decision must not trust the candidate migration result or candidate-provided target values");
+// Only the observer creates the receipt. The separate jq comparison reads
+// committed release state for EXPECTED values, never for observed values.
+const independentObserverMatch = independentProductionTargetStep.match(
+  /node --input-type=module > "\$post_apply_path" <<'NODE'\n([\s\S]*?)\n\s*NODE/,
+);
+assert.ok(independentObserverMatch, "the production observer must remain one explicit inline module");
+const independentObserverSource = independentObserverMatch[1];
+function assertIndependentObserver(source) {
+  assert.doesNotMatch(source,
+    /build52-production-migration-result\.json|\bresult_path\b|production-migration-state\.json|target_catalog_fingerprint/,
+    "observed production state must come from the actual database, not release expectations or apply output");
+}
+assertIndependentObserver(independentObserverSource);
+for (const forbidden of ["build52-production-migration-result.json", "result_path",
+  "production-migration-state.json", "target_catalog_fingerprint"]) {
+  assert.throws(() => assertIndependentObserver(independentObserverSource + `\nconst injected = ${JSON.stringify(forbidden)};`),
+    /observed production state must come from the actual database/);
+}
 assert.ok(
   build52ProductionMigrationApply.indexOf("npm run --silent release:migrations:apply")
     < build52ProductionMigrationApply.indexOf('source: "direct-production-query"'),
@@ -352,7 +368,7 @@ assert.ok(
 );
 const productionApplyCommitted = build52ProductionMigrationApply.indexOf('"stage":"production_apply_committed"');
 const independentProductionRead = build52ProductionMigrationApply.indexOf('source: "direct-production-query"');
-const independentProductionPredicate = build52ProductionMigrationApply.indexOf(`and .counts.functions == ${expectedProductionTarget.expected_catalog_counts.functions}`);
+const independentProductionPredicate = build52ProductionMigrationApply.indexOf("and .counts.functions == $state.target.expected_catalog_counts.functions");
 const productionTargetVerified = build52ProductionMigrationApply.indexOf('"stage":"production_target_independently_verified"');
 assert.ok(
   build52ProductionMigrationApply.indexOf("npm run --silent release:migrations:apply") < productionApplyCommitted
@@ -364,7 +380,7 @@ assert.ok(
 assert.match(build52ProductionMigrationApply, /build52-production-post-apply-verification\.json/,
   "the independent production verification receipt must be uploaded even when the workflow fails closed");
 const independentTargetPredicateMatch = build52ProductionMigrationApply.match(
-  /jq -e \\\n\s+'([^']*\.source == "direct-production-query"[^']*)' \\\n\s+"\$post_apply_path"/,
+  /jq -e \\\n\s+--slurpfile release_state release\/production-migration-state\.json \\\n\s+'([^']*\.source == "direct-production-query"[^']*)' \\\n\s+"\$post_apply_path"/,
 );
 assert.ok(independentTargetPredicateMatch,
   "the production workflow must retain one exact workflow-owned post-apply acceptance predicate");
@@ -382,17 +398,17 @@ const acceptedProductionTarget = {
   schema_fingerprint: expectedProductionTarget.canonical_source_schema_fingerprint,
 };
 for (const expected of [
-  `.before_ledger_count == ${expectedProductionSource.production_ledger_count}`,
-  `.before_ledger_head == "${expectedProductionSource.ledger_head}"`,
-  `.after_ledger_count == ${expectedProductionTarget.production_ledger_count}`,
-  `.after_ledger_head == "${expectedProductionTarget.source_migration_version}"`,
-  `(.applied | length) == ${expectedProductionTarget.pending_migration_count}`,
-  `.ledger_count == ${expectedProductionTarget.production_ledger_count}`,
-  `.ledger_head == "${expectedProductionTarget.source_migration_version}"`,
-  `.counts.functions == ${expectedProductionTarget.expected_catalog_counts.functions}`,
-  `.counts.routine_grants == ${expectedProductionTarget.expected_catalog_counts.routine_grants}`,
-  `.schema_fingerprint == "${expectedProductionTarget.canonical_source_schema_fingerprint}"`,
-]) assert.ok(build52ProductionMigrationApply.includes(expected), `production apply workflow drifted from release state: ${expected}`);
+  ".before_ledger_count == $state.observed_production.production_ledger_count",
+  ".before_ledger_head == $state.observed_production.ledger_head",
+  ".after_ledger_count == $state.target.production_ledger_count",
+  ".after_ledger_head == $state.target.source_migration_version",
+  ".applied == ($state.pending_migrations | map({order, version: .source_migration_version, file, sha256}))",
+  ".ledger_count == $state.target.production_ledger_count",
+  ".ledger_head == $state.target.source_migration_version",
+  ".counts.functions == $state.target.expected_catalog_counts.functions",
+  ".counts.routine_grants == $state.target.expected_catalog_counts.routine_grants",
+  ".schema_fingerprint == $state.target.canonical_source_schema_fingerprint",
+]) assert.ok(build52ProductionMigrationApply.includes(expected), `production apply workflow lost exact release-state comparison: ${expected}`);
 const productionTargetFixtureDirectory = mkdtempSync(join(tmpdir(), "custodial-b010-jq-"));
 try {
   const inlineVerifierMatch = independentProductionTargetStep.match(
@@ -416,7 +432,7 @@ try {
       `${JSON.stringify({ ...acceptedProductionTarget, ...overrides })}\n`,
       { mode: 0o600 },
     );
-    const result = spawnSync("jq", ["-e", independentTargetPredicate, productionTargetFixturePath], {
+    const result = spawnSync("jq", ["-e", "--slurpfile", "release_state", releaseStatePath, independentTargetPredicate, productionTargetFixturePath], {
       encoding: "utf8",
       timeout: 5_000,
     });
