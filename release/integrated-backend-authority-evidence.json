@@ -830,12 +830,12 @@
       {
         "path": "scripts/disaster-recovery-runtime-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "e7dea26e339b469342eefc9665de94093944b77a"
+        "object_id": "619734e120a9db526fb19d05b0422509c7bf3546"
       },
       {
         "path": "scripts/disaster-recovery-runtime-contract.mjs",
         "mode": "100644",
-        "object_id": "0c1196ab5839392404391e32be2435aa3dce8cda"
+        "object_id": "0b29040fe4f64c107c56f4d191b35e4075f98439"
       },
       {
         "path": "scripts/disaster-recovery-state.mjs",
