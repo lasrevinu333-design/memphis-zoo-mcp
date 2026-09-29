@@ -505,7 +505,7 @@
       {
         "path": "release/production-migration-state.json",
         "mode": "100644",
-        "object_id": "5a6fb8de288ac9f5e8e16faba428fad3596312a5"
+        "object_id": "5ccd80b131d3ca09f05a4561ea68de97726cbe04"
       },
       {
         "path": "release/production-schema-observation-20260922.json",
@@ -4550,7 +4550,7 @@
       {
         "path": "supabase/migrations/20260929125440_custodial_recovery_inventory_closure.sql",
         "mode": "100644",
-        "object_id": "32b9651c8aa619a83321deb20ea76bd546e1f475"
+        "object_id": "ce7705a512682ffacbed10ec3fec19e07760b14b"
       },
       {
         "path": "tmp/write_probe.txt",
