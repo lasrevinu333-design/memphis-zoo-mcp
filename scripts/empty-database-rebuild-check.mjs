@@ -1257,9 +1257,6 @@ if (dockerContainer) {
           where n.nspname='public' and c.relname=any(array[${recurringTables.map(table => `'${table}'`).join(',')}])
             and t.tgname='custodial_disaster_restore_mutation_fence' and t.tgenabled='O' and not t.tgisinternal;`).trim();
         if (fenceCount !== '10') throw new Error(`expected ten healthy recurring fences before the missing-fence restore challenge, found ${fenceCount}`);
-        for (const table of recurringTables) dockerPsql(targetDatabase,
-          `drop trigger custodial_disaster_restore_mutation_fence on public.${table};`);
-        console.log('removed all ten recurring restore fences before the actual closure migration');
         const activationProviderTables = [
           'custodial_activation_legacy_lineage_bindings',
           'custodial_assigned_activation_operations',
@@ -1277,6 +1274,17 @@ if (dockerContainer) {
           alter table public.custodial_release_authority_restore_inventory enable trigger trg_custodial_release_authority_restore_inventory_immutable;
           commit;`);
         console.log('removed three activation/provider inventory rows to reproduce the restored production ledger gap');
+        // Inventory ALTER TABLE fires the global after-DDL installer. Do it
+        // before dropping recurring fences, otherwise the fixture silently
+        // repairs the very restored-state gap it is meant to challenge.
+        for (const table of recurringTables) dockerPsql(targetDatabase,
+          `drop trigger custodial_disaster_restore_mutation_fence on public.${table};`);
+        const absentFenceCount = dockerPsql(targetDatabase, `select count(*) from pg_trigger t
+          join pg_class c on c.oid=t.tgrelid join pg_namespace n on n.oid=c.relnamespace
+          where n.nspname='public' and c.relname=any(array[${recurringTables.map(table => `'${table}'`).join(',')}])
+            and t.tgname='custodial_disaster_restore_mutation_fence' and not t.tgisinternal;`).trim();
+        if (absentFenceCount !== '0') throw new Error(`restored-fence gap was repaired before closure migration: ${absentFenceCount}`);
+        console.log('verified all ten recurring restore fences remain absent immediately before the actual closure migration');
       }
       const sql = readFileSync(resolve(migrationsDir, file), "utf8");
       dockerPsql(targetDatabase, sql);
