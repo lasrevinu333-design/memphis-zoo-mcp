@@ -42,7 +42,7 @@ lock table public.custodial_release_authority_restore_inventory in share row exc
 alter table public.custodial_release_authority_restore_inventory disable trigger trg_custodial_release_authority_restore_inventory_immutable;
 do $capture$
 declare obj record;definition text;existing_id uuid;next_order integer;affected integer;
- trigger_count integer:=0;existing_count integer:=0;added_count integer:=0;
+ trigger_count integer:=0;fence_count integer:=0;existing_count integer:=0;added_count integer:=0;
 begin
  -- Preserve each existing row's identity and replay position. New GPS columns
  -- and their bound constraint are independently recoverable, not only present
@@ -115,6 +115,46 @@ begin
     values(next_order,'grant',obj.signature::regprocedure::text,definition,public.static_weekly_digest_text(definition));
   end if;
  end loop;
+
+ -- Disaster-restore fences were installed after the recurring-table captures.
+ -- Admit only the ten exact live fence definitions missing from the inventory;
+ -- the full 21-trigger pass below still verifies every digest and enabled state.
+ for obj in select w.identity,w.expected_digest,t.tgenabled,
+   'drop trigger if exists '||quote_ident(t.tgname)||' on '||quote_ident(n.nspname)||'.'||quote_ident(c.relname)||'; '
+    ||pg_get_triggerdef(t.oid,true)||'; alter table '||quote_ident(n.nspname)||'.'||quote_ident(c.relname)||' '
+    ||case t.tgenabled when 'O' then 'enable' when 'D' then 'disable' when 'R' then 'enable replica' when 'A' then 'enable always' end
+    ||' trigger '||quote_ident(t.tgname)||';' as actual_definition
+  from (values
+   ('public.static_weekly_recurring_acceptance_proofs.custodial_disaster_restore_mutation_fence','0bb8b9a720b5cc9d3538b373df4dd6f6219233e6f99007a1cced57adfd8f84a2'),
+   ('public.static_weekly_recurring_application_intents.custodial_disaster_restore_mutation_fence','6111dc891f51deecd432ffae0807e4944f1ceb5472ac973abb1f838f30174457'),
+   ('public.static_weekly_recurring_application_receipts.custodial_disaster_restore_mutation_fence','b88ce24eb48a19eee7aeb4a7361c6701bd6060c2c5a43c426928566b6584c4f5'),
+   ('public.static_weekly_recurring_dependency_changes.custodial_disaster_restore_mutation_fence','165b3eba32e22fe7303d6d2fe7c6e45923436959b598c3fe1f3c36cb8ce47c63'),
+   ('public.static_weekly_recurring_dependency_checks.custodial_disaster_restore_mutation_fence','c52840433a75e989804a80b578052df4133ccf1c79ec3b1bbb98c70dc733e9d4'),
+   ('public.static_weekly_recurring_invalidated_principals.custodial_disaster_restore_mutation_fence','479aa8bc06f0059fb9e4808b4a44d1d07f6d1098f6e16cfd5307a7b933ae6faf'),
+   ('public.static_weekly_recurring_invalidations.custodial_disaster_restore_mutation_fence','1c67c62f769162aa919acb9e1a05db1369fdeb2f6caff27630c314e0b0659044'),
+   ('public.static_weekly_recurring_publication_bindings.custodial_disaster_restore_mutation_fence','84a75a477b3e3cded660922fd84dca687b878c39172f98a7aee2ccc25e37a1f8'),
+   ('public.static_weekly_recurring_terminal_intents.custodial_disaster_restore_mutation_fence','a27e95125b9f7994596c5625c440fd0f21333c6081b824094fa6051d95f82e8d'),
+   ('public.static_weekly_recurring_terminal_receipts.custodial_disaster_restore_mutation_fence','458793a4447d73635de8d1de733d899fec6871b897c8d177d9508db7e837d927')
+  ) w(identity,expected_digest)
+  join pg_trigger t on not t.tgisinternal and t.tgname='custodial_disaster_restore_mutation_fence'
+  join pg_class c on c.oid=t.tgrelid join pg_namespace n on n.oid=c.relnamespace
+  where w.identity=quote_ident(n.nspname)||'.'||quote_ident(c.relname)||'.'||quote_ident(t.tgname)
+  order by w.identity loop
+  if obj.tgenabled<>'O' or public.static_weekly_digest_text(obj.actual_definition) is distinct from obj.expected_digest then
+   raise exception 'refusing changed recurring restore fence: %',obj.identity;end if;
+  select inventory_id into existing_id from public.custodial_release_authority_restore_inventory
+   where object_kind='trigger' and object_identity=obj.identity;
+  if not found then
+   select coalesce(max(restore_order),700000)+1 into next_order
+    from public.custodial_release_authority_restore_inventory where restore_order>=700000 and restore_order<800000;
+   if next_order>=800000 then raise exception 'trigger recovery bucket exhausted';end if;
+   insert into public.custodial_release_authority_restore_inventory
+    (restore_order,object_kind,object_identity,definition_sql,definition_sha256)
+    values(next_order,'trigger',obj.identity,obj.actual_definition,public.static_weekly_digest_text(obj.actual_definition));
+  end if;
+  fence_count:=fence_count+1;
+ end loop;
+ if fence_count<>10 then raise exception 'expected ten exact recurring restore fences, found %',fence_count;end if;
 
  -- The newer recurring-table captures omitted the explicit trigger state
  -- suffix required by health and recovery. Capture exactly these 21 triggers
