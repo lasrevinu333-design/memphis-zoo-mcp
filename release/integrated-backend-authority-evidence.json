@@ -505,7 +505,7 @@
       {
         "path": "release/production-migration-state.json",
         "mode": "100644",
-        "object_id": "ccebfb1dfa1baf7dd6d4bca809e5a06a8950b3bb"
+        "object_id": "fc76e8fbc79f2db174302cd25391bd863a3b9f5b"
       },
       {
         "path": "release/production-schema-observation-20260922.json",
@@ -865,7 +865,7 @@
       {
         "path": "scripts/empty-database-rebuild-check.mjs",
         "mode": "100644",
-        "object_id": "de4c1a88fc2dbceb807e40bd94e1649b42bbff61"
+        "object_id": "0fcd562a9c806c8a341999142182b06d0d345ebb"
       },
       {
         "path": "scripts/event-notification-retention-contract-tests.mjs",
@@ -1500,7 +1500,7 @@
       {
         "path": "scripts/recovery-inventory-closure-database-tests.mjs",
         "mode": "100644",
-        "object_id": "6c01dc5f78d17a3bfb7e536010938ffc573cc540"
+        "object_id": "42aa32172e913e230a3fa4ea1fb54bc8dfa39fea"
       },
       {
         "path": "scripts/refresh-integrated-backend-authority-release.mjs",
@@ -4550,7 +4550,7 @@
       {
         "path": "supabase/migrations/20260929125440_custodial_recovery_inventory_closure.sql",
         "mode": "100644",
-        "object_id": "7a1b5c6fa66a36ae4cdc967497a4cba3dd639b98"
+        "object_id": "9e80dabea93145a8eeb63ce24fa64342499c6050"
       },
       {
         "path": "tmp/write_probe.txt",
