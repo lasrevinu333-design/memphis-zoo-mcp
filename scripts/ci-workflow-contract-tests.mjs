@@ -345,11 +345,17 @@ assert.match(independentProductionTargetStep, /captureSchemaCatalog\(database\)[
   "the independent verifier must recapture and fingerprint the actual production catalog");
 // Only the observer creates the receipt. The separate jq comparison reads
 // committed release state for EXPECTED values, never for observed values.
-const independentObserverMatch = independentProductionTargetStep.match(
-  /node --input-type=module > "\$post_apply_path" <<'NODE'\n([\s\S]*?)\n\s*NODE/,
-);
-assert.ok(independentObserverMatch, "the production observer must remain one explicit inline module");
-const independentObserverSource = independentObserverMatch[1];
+function extractIndependentObserver(step) {
+  // Match the COMPLETE canonical YAML heredoc closing line, never a JavaScript
+  // identifier or label whose first four characters happen to be NODE.
+  const modules = [...step.matchAll(
+    /^ {12}node --input-type=module > "\$post_apply_path" <<'NODE'\r?\n([\s\S]*?)^ {10}NODE\r?$/gm,
+  )];
+  assert.equal(modules.length, 1,
+    "the production observer must remain one explicit complete inline module");
+  return modules[0][1];
+}
+const independentObserverSource = extractIndependentObserver(independentProductionTargetStep);
 function assertIndependentObserver(source) {
   assert.doesNotMatch(source,
     /build52-production-migration-result\.json|\bresult_path\b|production-migration-state\.json|target_catalog_fingerprint/,
@@ -409,14 +415,42 @@ for (const expected of [
   ".counts.routine_grants == $state.target.expected_catalog_counts.routine_grants",
   ".schema_fingerprint == $state.target.canonical_source_schema_fingerprint",
 ]) assert.ok(build52ProductionMigrationApply.includes(expected), `production apply workflow lost exact release-state comparison: ${expected}`);
+// Exercise extraction AND contamination validation together. Appending only
+// after extraction cannot detect a truncated module, so these complete-step
+// fixtures keep each forbidden reference after a valid NODE-prefixed label.
+const observerFixtureSeam = "          const { Client } = pg;";
+assert.equal(independentProductionTargetStep.split(observerFixtureSeam).length, 2);
+let observerBoundaryRejections = 0;
+for (const label of ["NODE_SENTINEL: {}", "NODE: {}", "NODE2: {}"]) {
+  const prefixStep = independentProductionTargetStep.replace(observerFixtureSeam,
+    `          ${label}\n${observerFixtureSeam}`);
+  const prefixSource = extractIndependentObserver(prefixStep);
+  assert.ok(prefixSource.includes(label));
+  assert.ok(prefixSource.includes("process.stdout.write"), "a NODE-prefixed label must not truncate observation");
+  assertIndependentObserver(prefixSource);
+  for (const forbidden of ["build52-production-migration-result.json", "result_path",
+    "production-migration-state.json", "target_catalog_fingerprint"]) {
+    const contaminatedStep = prefixStep.replace(observerFixtureSeam,
+      `          const observerGuardProbe = ${JSON.stringify(forbidden)};\n${observerFixtureSeam}`);
+    assert.throws(() => assertIndependentObserver(extractIndependentObserver(contaminatedStep)),
+      /observed production state must come from the actual database/);
+    observerBoundaryRejections++;
+  }
+}
+for (const closingLine of ["          NODE_SUFFIX", "         NODE", "          NODE trailing"]) {
+  const unterminatedStep = independentProductionTargetStep.replace(/^ {10}NODE$/m, closingLine);
+  assert.throws(() => extractIndependentObserver(unterminatedStep), /one explicit complete inline module/);
+  observerBoundaryRejections++;
+}
+assert.throws(() => extractIndependentObserver(`${independentProductionTargetStep}\n${independentProductionTargetStep}`),
+  /one explicit complete inline module/);
+observerBoundaryRejections++;
+console.log(`INDEPENDENT_OBSERVER_FULL_BOUNDARY_REJECTIONS_PASS ${observerBoundaryRejections}`);
+
 const productionTargetFixtureDirectory = mkdtempSync(join(tmpdir(), "custodial-b010-jq-"));
 try {
-  const inlineVerifierMatch = independentProductionTargetStep.match(
-    /node --input-type=module > "\$post_apply_path" <<'NODE'\n([\s\S]*?)\n\s*NODE/,
-  );
-  assert.ok(inlineVerifierMatch, "the independent post-apply verifier must remain one auditable inline module");
   const inlineVerifierPath = join(productionTargetFixtureDirectory, "post-apply-verifier.mjs");
-  writeFileSync(inlineVerifierPath, `${inlineVerifierMatch[1].replace(/^ {10}/gm, "")}\n`, { mode: 0o600 });
+  writeFileSync(inlineVerifierPath, `${independentObserverSource.replace(/^ {10}/gm, "")}\n`, { mode: 0o600 });
   const syntaxResult = spawnSync(process.execPath, ["--check", inlineVerifierPath], {
     encoding: "utf8",
     timeout: 5_000,
