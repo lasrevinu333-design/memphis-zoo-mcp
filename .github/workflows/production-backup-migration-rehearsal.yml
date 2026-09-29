@@ -55,7 +55,7 @@ jobs:
           test -n "$REHEARSAL_DEVICE_CREDENTIAL_SECRET"
           test -n "$REHEARSAL_OPS_MANAGER_SESSION_SECRET"
           image='supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed'
-          postgrest_image='public.ecr.aws/supabase/postgrest@sha256:d2009b5c9deffc210c8a5592698472fede14fd9f6ca89823c8474ca54d58c012'
+          postgrest_image='ghcr.io/supabase/postgrest@sha256:d2009b5c9deffc210c8a5592698472fede14fd9f6ca89823c8474ca54d58c012'
           container="mz_schema_rebuild_${GITHUB_RUN_ID}"
           postgrest_container="${container}_postgrest"
           database="mz_schema_rebuild_${GITHUB_RUN_ID}"
