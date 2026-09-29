@@ -58,15 +58,15 @@
     "target_schedule_slot_count_observed_at": "2026-09-19T02:19:26.738042Z"
   },
   "target": {
-    "source_migration_file": "20260927075352_protected_separation_original_context.sql",
-    "source_migration_name": "protected_separation_original_context",
-    "source_migration_version": "20260927075352",
+    "source_migration_file": "20260929125440_custodial_recovery_inventory_closure.sql",
+    "source_migration_name": "custodial_recovery_inventory_closure",
+    "source_migration_version": "20260929125440",
     "production_ledger_version": null,
-    "canonical_source_schema_fingerprint": "5e72aa024a2ff409a3c1d25df4623e2da649cbe255f943a40d059d178ca08164",
+    "canonical_source_schema_fingerprint": "e7f955a56de17ef5f795d8e9ed9e23d8375d3f63f178a5c81e0caae037b88b93",
     "public_function_count": 606,
-    "production_ledger_count": 275,
-    "source_authority_migration_count": 175,
-    "pending_migration_count": 45,
+    "production_ledger_count": 276,
+    "source_authority_migration_count": 176,
+    "pending_migration_count": 46,
     "registered_source_dated_status_excluded": true,
     "expected_catalog_counts": {
       "extensions": 8,
@@ -87,7 +87,7 @@
       "table_grants": 1523,
       "column_grants": 43,
       "sequence_grants": 0,
-      "routine_grants": 397,
+      "routine_grants": 396,
       "type_grants": 0,
       "schema_grants": 9,
       "default_privileges": 12,
@@ -96,7 +96,7 @@
   },
   "source_binding": {
     "kind": "external_exact_head_release_attestation",
-    "rule": "The production approval package binds the exact backend commit/tree, forty-five migration blobs, generated release evidence, exact frontend commit, fresh source catalog/ledger identity, backup and rehearsal before mutation."
+    "rule": "The production approval package binds the exact backend commit/tree, forty-six migration blobs, generated release evidence, exact frontend commit, fresh source catalog/ledger identity, backup and rehearsal before mutation."
   },
   "backup_evidence": {
     "state": "fresh_verified_backup_required_after_fresh_source_capture_and_before_mutation",
@@ -121,7 +121,7 @@
     "production migration ledger is exactly 230 rows headed by 20260920010000 event_reminder_static_weekly_authority",
     "locked production source catalog must freshly recapture and equal 750e7f040519f6d4555836cbd4d172a22f98911d5bab9918fa370238fff3f822 with the exact expected source counts before any DDL; a stale or mismatched catalog aborts the plan",
     "a fresh encrypted backup with restore verification completes after the fresh source capture and before mutation",
-    "production exposes exactly 506 public functions and 347 non-owner routine grants before the forty-five corrections",
+    "production exposes exactly 506 public functions and 347 non-owner routine grants before the forty-six corrections",
     "one active authority key, two active registered schedule sources, 22 roster slots, 20 incumbencies, zero draft, two published versions/publications, four projections, 1394 occurrences, 19 command receipts and authority revision 19 remain current",
     "five target schedule positions remain represented without inventing staff identities",
     "Outlook event-sync authority exists and its rows must remain unchanged by this plan",
@@ -448,12 +448,19 @@
       "file": "20260927075352_protected_separation_original_context.sql",
       "source_migration_version": "20260927075352",
       "sha256": "2e6958276c9e5679d5b40b5cbc30d6345cfc134ac17783bb525949ecfc63f930"
+    },
+    {
+      "order": 46,
+      "phase": "custodial_recovery_inventory_closure",
+      "file": "20260929125440_custodial_recovery_inventory_closure.sql",
+      "source_migration_version": "20260929125440",
+      "sha256": "17d164d927a84ed8f668db26314996bf23251a5f2da867c12e92d804fbfc2a1a"
     }
   ],
   "postconditions": [
-    "production ledger advances exactly forty-five rows from 230 to 275, ending at 20260927075352 protected_separation_original_context; no already-applied migration is replayed",
-    "complete public catalog and privilege fingerprint equals 5e72aa024a2ff409a3c1d25df4623e2da649cbe255f943a40d059d178ca08164 with the exact reviewed target counts",
-    "production exposes exactly 606 public functions and 397 non-owner routine grants after the corrections",
+    "production ledger advances exactly forty-six rows from 230 to 276, ending at 20260929125440 custodial_recovery_inventory_closure; no already-applied migration is replayed",
+    "complete public catalog and privilege fingerprint equals e7f955a56de17ef5f795d8e9ed9e23d8375d3f63f178a5c81e0caae037b88b93 with the exact reviewed target counts",
+    "production exposes exactly 606 public functions and 396 non-owner routine grants after the corrections",
     "ordinary full-attendance days retain the fixed weekly schedule; CoverAll is explicit named-manager capacity, not an automatic absence-count threshold",
     "guest reporting OFF prevents queued guest notification dispatch without deleting pending/history records; staff Feedback remains separate",
     "employee event reminders are generated at D-3, D-2 and event day at reminder-day shift start plus 15 minutes and final delivery revalidates current event-date ownership/assignment",

@@ -55281,15 +55281,6 @@
       "schema_name": "public"
     },
     {
-      "function_name": "evaluate_location_proximity_v2",
-      "grantee": "service_role",
-      "grantor": "migration_owner",
-      "identity_arguments": "p_location_code text, p_device_identifier text, p_latitude numeric, p_longitude numeric, p_accuracy_m numeric, p_session_uuid text, p_client_event_id text, p_correlation_id text, p_observed_at timestamp with time zone",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
       "function_name": "events_app_purge_expired",
       "grantee": "service_role",
       "grantor": "migration_owner",

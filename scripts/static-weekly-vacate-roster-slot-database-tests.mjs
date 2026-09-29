@@ -7,8 +7,8 @@ const root=path.resolve(new URL('..',import.meta.url).pathname);
 const container='mz_schema_rebuild_roster_'+process.pid;
 const image='supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed';
 const migrationFiles=readdirSync(path.join(root,'supabase/migrations')).filter(x=>x.endsWith('.sql')).sort();
-assert.equal(migrationFiles.length,175,'current exact migration count for each vacancy fixture');
-assert.equal(migrationFiles.at(-1),'20260927075352_protected_separation_original_context.sql','current exact migration head');
+assert.equal(migrationFiles.length,176,'current exact migration count for each vacancy fixture');
+assert.equal(migrationFiles.at(-1),'20260929125440_custodial_recovery_inventory_closure.sql','current exact migration head');
 const docker=(args,opts={})=>execFileSync('docker',args,{encoding:'utf8',timeout:180000,maxBuffer:32*1024*1024,...opts});
 const sql=text=>docker(['exec','-i',container,'psql','-X','-q','-At','-v','ON_ERROR_STOP=1','-U','supabase_admin','-d','postgres'],{input:text});
 const defaultsSql="select count(*) from pg_default_acl d cross join lateral aclexplode(d.defaclacl) a where d.defaclnamespace in (0,'public'::regnamespace) and d.defaclobjtype in ('r','S') and a.grantee in (0,'anon'::regrole,'authenticated'::regrole,'service_role'::regrole)";
@@ -54,10 +54,10 @@ try{
   }
   if(records.length%25===0)console.log('APPLIED_SOURCE_MIGRATIONS',records.length);
  }
- assert.equal(records.length,175,'both fixtures replay the exact current migration baseline');
+ assert.equal(records.length,176,'both fixtures replay the exact current migration baseline');
  const aclDigest=sql(aclDigestSql).trim();
  console.log('OBSERVED_175_ACL_DIGEST',aclDigest);
- assert.equal(aclDigest,'1997b1679986b99ff1fe456039b837fc','current public table/sequence ACLs match the exact 175-migration no-automatic-grants replay');
+ assert.equal(aclDigest,'1997b1679986b99ff1fe456039b837fc','current public table/sequence ACLs match the exact 176-migration no-automatic-grants replay');
  for(const role of ['anon','authenticated']){
   assert.equal(sql(`select has_table_privilege('${role}','public.weekly_schedule_lunch_documents','SELECT,INSERT,UPDATE,DELETE')`).trim(),'f',`RPC-only lunch document table remains inaccessible to ${role}`);
   assert.equal(sql(`select has_any_column_privilege('${role}','public.weekly_schedule_lunch_documents','SELECT,INSERT,UPDATE,REFERENCES')`).trim(),'f',`RPC-only lunch document columns remain inaccessible to ${role}`);

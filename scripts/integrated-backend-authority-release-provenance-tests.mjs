@@ -432,10 +432,10 @@ try {
   disposeFixture(symlinkTreeFixture);
 }
 
-// Bind the selected 175-file candidate to its exact pending suffix. These
+// Bind the selected 176-file candidate to its exact pending suffix. These
 // disposable, newly signed fixtures must fail before any database operation.
 const migrationPlanCases = [
-  ["omitted pending migration", (state) => state.pending_migrations.pop(), /exactly the forty-five/],
+  ["omitted pending migration", (state) => state.pending_migrations.pop(), /exactly the forty-six/],
   ["reordered pending migrations", (state) => {
     [state.pending_migrations[23], state.pending_migrations[24]] = [state.pending_migrations[24], state.pending_migrations[23]];
   }, /deep-equal|deeply equal/],

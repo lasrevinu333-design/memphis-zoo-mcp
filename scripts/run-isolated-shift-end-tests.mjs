@@ -20,8 +20,8 @@ const defaults="select count(*) from pg_default_acl d cross join lateral aclexpl
 const removeDefaultsSql=['postgres','supabase_admin'].flatMap(owner=>['',' in schema public'].map(scope=>`alter default privileges for role ${owner}${scope} revoke all on tables from public,anon,authenticated,service_role;alter default privileges for role ${owner}${scope} revoke all on sequences from public,anon,authenticated,service_role;`)).join('\n');
 const absenceGuard=`do $absence$begin if (${defaults})<>0 then raise exception 'automatic Data API table/sequence grants must be absent'; end if;end$absence$;`;
 let owned=false;const files=readdirSync('supabase/migrations').filter(f=>f.endsWith('.sql')).sort(),manifest=[];
-assert.equal(files.length,175,'exact current changed-input migration set');
-assert.equal(files.at(-1),'20260927075352_protected_separation_original_context.sql','exact current changed-input migration head');
+assert.equal(files.length,176,'exact current changed-input migration set');
+assert.equal(files.at(-1),'20260929125440_custodial_recovery_inventory_closure.sql','exact current changed-input migration head');
 function cleanup(){if(owned){docker(['stop','-t','10',container]);
  if(docker(['ps','-a','--filter',`name=^/${container}$`,'--format','{{.Names}}']).trim())docker(['rm','-f',container]);
  owned=false;assert.equal(docker(['ps','-a','--filter',`name=^/${container}$`,'--format','{{.Names}}']).trim(),'');console.log('OWNED_CONTAINER_REMOVED',container);}
