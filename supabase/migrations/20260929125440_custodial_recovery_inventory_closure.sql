@@ -270,7 +270,9 @@ begin
     values(next_order,'trigger',obj.identity,obj.actual_definition,public.static_weekly_digest_text(obj.actual_definition));
   elsif exists(select 1 from public.custodial_release_authority_restore_inventory
       where inventory_id=existing_id and (definition_sha256 is distinct from obj.expected_digest
-       or public.static_weekly_digest_text(definition_sql) is distinct from obj.expected_digest)) then
+       or definition_sql is distinct from obj.actual_definition
+       or encode(extensions.digest(convert_to(definition_sql,'UTF8'),'sha256'),'hex')
+          is distinct from obj.expected_digest)) then
    raise exception 'refusing changed captured activation/provider restore fence: %',obj.identity;
   end if;
   fence_count:=fence_count+1;

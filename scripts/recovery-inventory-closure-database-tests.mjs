@@ -98,6 +98,34 @@ equal(sql('select mutations_paused::text from custodial_dr.restore_control where
 const closureSql = readFileSync(new URL('../supabase/migrations/20260929125440_custodial_recovery_inventory_closure.sql', import.meta.url),'utf8');
 const closurePreflight = closureSql.match(/do \$preflight\$[\s\S]*?end \$preflight\$;/)?.[0];
 assert.ok(closurePreflight,'exact closure preflight is extractable for privileged drift challenges');
+const closureCapture = closureSql.match(/do \$capture\$[\s\S]*?end \$capture\$;/)?.[0];
+assert.ok(closureCapture,'exact closure capture is extractable for existing-row integrity challenges');
+const capturedFenceIdentity = 'public.custodial_activation_legacy_lineage_bindings.custodial_disaster_restore_mutation_fence';
+const capturedFenceSql = sql(`select definition_sql from public.custodial_release_authority_restore_inventory
+  where object_kind='trigger' and object_identity=${q(capturedFenceIdentity)}`);
+const capturedFenceHash = sql(`select definition_sha256 from public.custodial_release_authority_restore_inventory
+  where object_kind='trigger' and object_identity=${q(capturedFenceIdentity)}`);
+equal(sql(`select encode(extensions.digest(convert_to(definition_sql,'UTF8'),'sha256'),'hex')
+  from public.custodial_release_authority_restore_inventory
+  where object_kind='trigger' and object_identity=${q(capturedFenceIdentity)}`),
+  capturedFenceHash,'existing activation fence replay SQL directly hashes to its pinned digest');
+function challengeExistingFence(setClause, expectedFailure) {
+  assert.throws(() => sql(`begin;
+    set local search_path=pg_catalog,public,extensions;
+    alter table public.custodial_release_authority_restore_inventory
+      disable trigger trg_custodial_release_authority_restore_inventory_immutable;
+    update public.custodial_release_authority_restore_inventory set ${setClause}
+      where object_kind='trigger' and object_identity=${q(capturedFenceIdentity)};
+    ${closureCapture}
+    rollback;`), expectedFailure,
+  'the real migration capture must refuse a changed existing activation fence row');
+  checks++;
+}
+challengeExistingFence(`definition_sql='select 1;'`, /refusing changed captured activation\/provider restore fence/);
+challengeExistingFence(`definition_sha256='${'0'.repeat(64)}'`, /refusing changed captured activation\/provider restore fence/);
+equal(sql(`select definition_sql from public.custodial_release_authority_restore_inventory
+  where object_kind='trigger' and object_identity=${q(capturedFenceIdentity)}`),
+  capturedFenceSql,'failed existing-row challenges roll back without changing replay SQL');
 for (const [routine,returnType,body] of [
   ['acquire_application_mutation_fence','bigint','return 0;'],
   ['guard_application_mutation','trigger','return null;'],
