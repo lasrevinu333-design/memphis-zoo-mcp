@@ -625,7 +625,7 @@
       {
         "path": "scripts/ci-workflow-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "76fd4b47e6686b05a18ee3583e3b2a5436fd1041"
+        "object_id": "ed1e00dd616bea8c4ae078ff58a0fe717aae450f"
       },
       {
         "path": "scripts/cleaning-identity-gps-database-tests.mjs",
