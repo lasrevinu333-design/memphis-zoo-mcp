@@ -1166,6 +1166,8 @@ if (dockerImage) {
     runDocker([
       "run",
       "-d",
+      "--network",
+      "none",
       "--name",
       dockerContainer,
       "--tmpfs",
