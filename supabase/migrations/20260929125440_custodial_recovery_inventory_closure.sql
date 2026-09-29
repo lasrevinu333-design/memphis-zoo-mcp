@@ -38,6 +38,12 @@ end $preflight$;
 revoke execute on function public.evaluate_location_proximity_v2(text,text,numeric,numeric,numeric,text,text,text,timestamp with time zone)
  from service_role;
 
+-- The source installation function is idempotent and covers every public
+-- application table. Reconcile the fences explicitly before capturing their
+-- exact definitions: an isolated restore may not have fired the DDL event
+-- trigger while recreating the pending recurring tables.
+select custodial_dr.install_application_mutation_fences();
+
 lock table public.custodial_release_authority_restore_inventory in share row exclusive mode;
 alter table public.custodial_release_authority_restore_inventory disable trigger trg_custodial_release_authority_restore_inventory_immutable;
 do $capture$

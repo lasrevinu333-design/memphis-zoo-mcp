@@ -55,6 +55,19 @@ function healthy(label) {
 }
 const initial = healthy('clean forward migration is healthy');
 equal(initial.canonical_objects_expected, 5127, 'seven missing GPS recovery objects were added, not duplicated');
+sql(`begin;
+  drop trigger custodial_disaster_restore_mutation_fence on public.static_weekly_recurring_terminal_intents;
+  select custodial_dr.install_application_mutation_fences();
+  do $installer_proof$ begin
+    if (select count(*) from pg_trigger
+      where tgrelid='public.static_weekly_recurring_terminal_intents'::regclass
+        and tgname='custodial_disaster_restore_mutation_fence'
+        and tgenabled='O' and not tgisinternal)<>1 then
+      raise exception 'explicit installer did not restore the exact recurring mutation fence';
+    end if;
+  end $installer_proof$;
+  rollback;`);
+checks++;
 const wanted = [
   ['column', 'public.location_proximity_settings:authority_radius_m'],
   ['column', 'public.location_proximity_settings:authority_surveyed_at'],
