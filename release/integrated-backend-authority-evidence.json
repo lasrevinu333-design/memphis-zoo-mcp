@@ -865,7 +865,7 @@
       {
         "path": "scripts/empty-database-rebuild-check.mjs",
         "mode": "100644",
-        "object_id": "fb9d2d900f0c08404218221eb91bdd15f6bbf8bc"
+        "object_id": "1e8334879c9333e60f375c5dcd93316b01d19187"
       },
       {
         "path": "scripts/event-notification-retention-contract-tests.mjs",
