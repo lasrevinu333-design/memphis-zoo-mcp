@@ -213,6 +213,43 @@ begin
  end loop;
  if fence_count<>10 then raise exception 'expected ten exact recurring restore fences, found %',fence_count;end if;
 
+ -- The restored production ledger can also lack three already-live activation
+ -- and provider fences. A clean replay captured them in their owning migrations,
+ -- so add only missing rows, after checking the exact enabled definitions.
+ fence_count:=0;
+ for obj in select w.identity,w.expected_digest,t.tgenabled,
+   'drop trigger if exists '||quote_ident(t.tgname)||' on '||quote_ident(n.nspname)||'.'||quote_ident(c.relname)||'; '
+    ||pg_get_triggerdef(t.oid,true)||'; alter table '||quote_ident(n.nspname)||'.'||quote_ident(c.relname)||' '
+    ||case t.tgenabled when 'O' then 'enable' when 'D' then 'disable' when 'R' then 'enable replica' when 'A' then 'enable always' end
+    ||' trigger '||quote_ident(t.tgname)||';' as actual_definition
+  from (values
+   ('public.custodial_activation_legacy_lineage_bindings.custodial_disaster_restore_mutation_fence','631407ef4816c053c6bac2b1d404fd21d5df8455292aac42a530361940cbd454'),
+   ('public.custodial_assigned_activation_operations.custodial_disaster_restore_mutation_fence','5f64cded9a19eafa8243e5466312ae9c90c8b7b6bca91c5b811ced0d790190c6'),
+   ('public.employee_native_push_generations.custodial_disaster_restore_mutation_fence','3e87d5bac94a61fcec70c9c68a615cd7160c1dddbd588702c7a97d4311f9229a')
+  ) w(identity,expected_digest)
+  join pg_trigger t on not t.tgisinternal and t.tgname='custodial_disaster_restore_mutation_fence'
+  join pg_class c on c.oid=t.tgrelid join pg_namespace n on n.oid=c.relnamespace
+  where w.identity=quote_ident(n.nspname)||'.'||quote_ident(c.relname)||'.'||quote_ident(t.tgname)
+  order by w.identity loop
+  if obj.tgenabled<>'O' or public.static_weekly_digest_text(obj.actual_definition) is distinct from obj.expected_digest then
+   raise exception 'refusing changed activation/provider restore fence: %',obj.identity;end if;
+  select inventory_id into existing_id from public.custodial_release_authority_restore_inventory
+   where object_kind='trigger' and object_identity=obj.identity;
+  if not found then
+   select coalesce(max(restore_order),700000)+1 into next_order
+    from public.custodial_release_authority_restore_inventory where restore_order>=700000 and restore_order<800000;
+   if next_order>=800000 then raise exception 'trigger recovery bucket exhausted';end if;
+   insert into public.custodial_release_authority_restore_inventory
+    (restore_order,object_kind,object_identity,definition_sql,definition_sha256)
+    values(next_order,'trigger',obj.identity,obj.actual_definition,public.static_weekly_digest_text(obj.actual_definition));
+  elsif (select definition_sha256 from public.custodial_release_authority_restore_inventory where inventory_id=existing_id)
+      is distinct from obj.expected_digest then
+   raise exception 'refusing changed captured activation/provider restore fence: %',obj.identity;
+  end if;
+  fence_count:=fence_count+1;
+ end loop;
+ if fence_count<>3 then raise exception 'expected three exact activation/provider restore fences, found %',fence_count;end if;
+
  -- The newer recurring-table captures omitted the explicit trigger state
  -- suffix required by health and recovery. Capture exactly these 21 triggers
  -- with the same serializer used by the unchanged authority health function.

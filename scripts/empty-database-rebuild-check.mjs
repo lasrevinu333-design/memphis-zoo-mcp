@@ -1252,6 +1252,23 @@ if (dockerContainer) {
         for (const table of recurringTables) dockerPsql(targetDatabase,
           `drop trigger custodial_disaster_restore_mutation_fence on public.${table};`);
         console.log('removed all ten recurring restore fences before the actual closure migration');
+        const activationProviderTables = [
+          'custodial_activation_legacy_lineage_bindings',
+          'custodial_assigned_activation_operations',
+          'employee_native_push_generations',
+        ];
+        const capturedCount = dockerPsql(targetDatabase, `select count(*) from public.custodial_release_authority_restore_inventory
+          where object_kind='trigger' and object_identity=any(array[${activationProviderTables.map(table =>
+            `'public.${table}.custodial_disaster_restore_mutation_fence'`).join(',')}]);`).trim();
+        if (capturedCount !== '3') throw new Error(`expected three captured activation/provider fences before the restored-ledger challenge, found ${capturedCount}`);
+        dockerPsql(targetDatabase, `begin;
+          alter table public.custodial_release_authority_restore_inventory disable trigger trg_custodial_release_authority_restore_inventory_immutable;
+          delete from public.custodial_release_authority_restore_inventory where object_kind='trigger'
+            and object_identity=any(array[${activationProviderTables.map(table =>
+              `'public.${table}.custodial_disaster_restore_mutation_fence'`).join(',')}]);
+          alter table public.custodial_release_authority_restore_inventory enable trigger trg_custodial_release_authority_restore_inventory_immutable;
+          commit;`);
+        console.log('removed three activation/provider inventory rows to reproduce the restored production ledger gap');
       }
       const sql = readFileSync(resolve(migrationsDir, file), "utf8");
       dockerPsql(targetDatabase, sql);

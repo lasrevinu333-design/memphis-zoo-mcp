@@ -185,9 +185,6 @@ jobs:
           echo 'rehearsal-postcondition: source-target-distinct'
           test "$target_migration_head" != "$migration_head"
           echo 'rehearsal-postcondition: backend-authority-health'
-          docker exec "$container" psql -v ON_ERROR_STOP=1 -At -U supabase_admin -d "$database" \
-            -c "select public.custodial_backend_authority_health('$REHEARSAL_CUSTODIAL_BACKEND_PROOF_SECRET')::text;" \
-            | jq -c '{ok,checks,missing_functions,mismatched_functions,missing_objects,mismatched_objects,surface_missing_objects,surface_uncovered_objects}'
           test "$(docker exec "$container" psql -v ON_ERROR_STOP=1 -At -U supabase_admin -d "$database" \
             -c "select public.custodial_backend_authority_health('$REHEARSAL_CUSTODIAL_BACKEND_PROOF_SECRET')->>'ok';" | tail -n 1)" = 'true'
           echo 'rehearsal-postcondition: active-scheduler-key-count'
@@ -239,7 +236,7 @@ jobs:
           FEEDBACK_PROBE_DATABASE_URL="$local_db_url" \
             FEEDBACK_PROBE_READER_DATABASE_URL="postgresql://custodial_readonly_runtime_20991231:${reader_password}@127.0.0.1:${port}/${database}" \
             npm run --silent test:feedback-reader-database | tee -a "$receipt"
-          printf '{"stage":"feedback_reader_database_authority_proven","writer":"app_apply_operational_command.feedback_create","reader_login":"custodial_readonly_runtime_20991231","reader_projection_columns":21,"sole_reader_policy":true,"reader_mutation_denied":true,"legacy_image_backup_hidden":true,"recovery_inventory_exact":true}\n' >> "$receipt"
+          printf '{"stage":"feedback_reader_database_authority_proven","probe":"test:feedback-reader-database","ok":true}\n' >> "$receipt"
           backend_log="${RUNNER_TEMP}/production-backup-rehearsal-backend.log"
           backend_dependencies_file="${RUNNER_TEMP}/production-backup-rehearsal-backend-dependencies.json"
           static_log="${RUNNER_TEMP}/production-backup-rehearsal-static-weekly.log"

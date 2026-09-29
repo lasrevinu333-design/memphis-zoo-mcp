@@ -55,6 +55,15 @@ function healthy(label) {
 }
 const initial = healthy('clean forward migration is healthy');
 equal(initial.canonical_objects_expected, 5127, 'seven missing GPS recovery objects were added, not duplicated');
+for (const [table, digest] of [
+  ['custodial_activation_legacy_lineage_bindings', '631407ef4816c053c6bac2b1d404fd21d5df8455292aac42a530361940cbd454'],
+  ['custodial_assigned_activation_operations', '5f64cded9a19eafa8243e5466312ae9c90c8b7b6bca91c5b811ced0d790190c6'],
+  ['employee_native_push_generations', '3e87d5bac94a61fcec70c9c68a615cd7160c1dddbd588702c7a97d4311f9229a'],
+]) {
+  equal(sql(`select count(*)::text||'|'||min(definition_sha256) from public.custodial_release_authority_restore_inventory
+    where object_kind='trigger' and object_identity=${q(`public.${table}.custodial_disaster_restore_mutation_fence`)}`),
+  `1|${digest}`, `${table} exact restored-ledger disaster fence captured once`);
+}
 sql(`begin;
   drop trigger custodial_disaster_restore_mutation_fence on public.static_weekly_recurring_terminal_intents;
   select custodial_dr.install_application_mutation_fences();

@@ -454,7 +454,7 @@
       "phase": "custodial_recovery_inventory_closure",
       "file": "20260929125440_custodial_recovery_inventory_closure.sql",
       "source_migration_version": "20260929125440",
-      "sha256": "50cd268433b9b643173d90f5f34e6fa1d31e88229c7a5ec8f9085b05539170f9"
+      "sha256": "f3dbdcb8548e4f59cc2856915527e243bd0f068ee8e0426b0566ab1a73ed2246"
     }
   ],
   "postconditions": [
