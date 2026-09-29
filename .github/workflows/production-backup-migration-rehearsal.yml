@@ -185,6 +185,9 @@ jobs:
           echo 'rehearsal-postcondition: source-target-distinct'
           test "$target_migration_head" != "$migration_head"
           echo 'rehearsal-postcondition: backend-authority-health'
+          docker exec "$container" psql -v ON_ERROR_STOP=1 -At -U supabase_admin -d "$database" \
+            -c "select public.custodial_backend_authority_health('$REHEARSAL_CUSTODIAL_BACKEND_PROOF_SECRET')::text;" \
+            | jq -c '{ok,checks,missing_functions,mismatched_functions,missing_objects,mismatched_objects,surface_missing_objects,surface_uncovered_objects}'
           test "$(docker exec "$container" psql -v ON_ERROR_STOP=1 -At -U supabase_admin -d "$database" \
             -c "select public.custodial_backend_authority_health('$REHEARSAL_CUSTODIAL_BACKEND_PROOF_SECRET')->>'ok';" | tail -n 1)" = 'true'
           echo 'rehearsal-postcondition: active-scheduler-key-count'
