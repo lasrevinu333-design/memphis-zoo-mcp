@@ -45,7 +45,7 @@ begin
   ('custodial_dr.install_application_mutation_fences()','cc53626170d5afe999ebf8795f26374bbb51da7c4d6286cfa50ea2aa5d38cc5f'),
   ('custodial_dr.install_application_mutation_fences_after_ddl()','0cc7db4f3a5deab81fc13667e38a1e176bf68cc2a1f63883e72d5038db10410b')
  ) expected(signature,digest) loop
-  select p.oid,p.prosecdef,p.proconfig,pg_get_userbyid(p.proowner) owner_name,
+  select p.oid,p.prosecdef,p.proconfig,p.proacl,p.proowner,pg_get_userbyid(p.proowner) owner_name,
    encode(extensions.digest(convert_to(pg_get_functiondef(p.oid),'UTF8'),'sha256'),'hex') digest
   into private_function from pg_proc p where p.oid=to_regprocedure(candidate.signature);
   if not found or private_function.digest is distinct from candidate.digest
@@ -60,6 +60,17 @@ begin
       or has_function_privilege('authenticated',private_function.oid,'EXECUTE')
       or has_function_privilege('service_role',private_function.oid,'EXECUTE')) then
    raise exception 'disaster fence routine unexpectedly callable: %',candidate.signature;
+  end if;
+  if exists(select 1 from aclexplode(coalesce(private_function.proacl,acldefault('f',private_function.proowner))) acl
+      left join pg_roles role_grantee on role_grantee.oid=acl.grantee
+      where acl.privilege_type='EXECUTE'
+       and (acl.grantee=0 and candidate.signature<>'custodial_dr.install_application_mutation_fences_after_ddl()'
+         or acl.grantee<>0 and coalesce(role_grantee.rolname,'') not in ('postgres','supabase_admin')))
+   or (candidate.signature<>'custodial_dr.install_application_mutation_fences_after_ddl()'
+     and exists(select 1 from pg_roles role_grantee
+      where role_grantee.rolname not in ('postgres','supabase_admin')
+       and has_function_privilege(role_grantee.oid,private_function.oid,'EXECUTE'))) then
+   raise exception 'disaster fence routine ACL changed: %',candidate.signature;
   end if;
  end loop;
  if (select count(*) from pg_event_trigger e where
@@ -78,12 +89,27 @@ end $preflight$;
 revoke execute on function custodial_dr.install_application_mutation_fences_after_ddl()
  from public,anon,authenticated,service_role;
 do $private_acl$
+declare candidate record;private_function record;
 begin
- if has_function_privilege('anon','custodial_dr.install_application_mutation_fences_after_ddl()','EXECUTE')
-   or has_function_privilege('authenticated','custodial_dr.install_application_mutation_fences_after_ddl()','EXECUTE')
-   or has_function_privilege('service_role','custodial_dr.install_application_mutation_fences_after_ddl()','EXECUTE') then
-  raise exception 'disaster fence event handler remains directly callable';
- end if;
+ for candidate in select signature from (values
+  ('custodial_dr.acquire_application_mutation_fence()'),
+  ('custodial_dr.guard_application_ddl()'),
+  ('custodial_dr.guard_application_mutation()'),
+  ('custodial_dr.install_application_mutation_fences()'),
+  ('custodial_dr.install_application_mutation_fences_after_ddl()')
+ ) wanted(signature) loop
+  select p.oid,p.proacl,p.proowner into strict private_function from pg_proc p
+   where p.oid=candidate.signature::regprocedure;
+  if exists(select 1 from aclexplode(coalesce(private_function.proacl,acldefault('f',private_function.proowner))) acl
+      left join pg_roles role_grantee on role_grantee.oid=acl.grantee
+      where acl.privilege_type='EXECUTE'
+       and (acl.grantee=0 or coalesce(role_grantee.rolname,'') not in ('postgres','supabase_admin')))
+   or exists(select 1 from pg_roles role_grantee
+      where role_grantee.rolname not in ('postgres','supabase_admin')
+       and has_function_privilege(role_grantee.oid,private_function.oid,'EXECUTE')) then
+   raise exception 'disaster fence private ACL changed: %',candidate.signature;
+  end if;
+ end loop;
 end $private_acl$;
 
 revoke execute on function public.evaluate_location_proximity_v2(text,text,numeric,numeric,numeric,text,text,text,timestamp with time zone)
@@ -242,8 +268,9 @@ begin
    insert into public.custodial_release_authority_restore_inventory
     (restore_order,object_kind,object_identity,definition_sql,definition_sha256)
     values(next_order,'trigger',obj.identity,obj.actual_definition,public.static_weekly_digest_text(obj.actual_definition));
-  elsif (select definition_sha256 from public.custodial_release_authority_restore_inventory where inventory_id=existing_id)
-      is distinct from obj.expected_digest then
+  elsif exists(select 1 from public.custodial_release_authority_restore_inventory
+      where inventory_id=existing_id and (definition_sha256 is distinct from obj.expected_digest
+       or public.static_weekly_digest_text(definition_sql) is distinct from obj.expected_digest)) then
    raise exception 'refusing changed captured activation/provider restore fence: %',obj.identity;
   end if;
   fence_count:=fence_count+1;

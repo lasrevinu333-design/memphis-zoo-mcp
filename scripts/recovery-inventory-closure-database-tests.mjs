@@ -67,31 +67,32 @@ for (const [table, digest] of [
 sql(`begin;
   drop trigger custodial_disaster_restore_mutation_fence on public.static_weekly_recurring_terminal_intents;
   select custodial_dr.install_application_mutation_fences();
-  do $installer_proof$ begin
+  do $installer_proof$ declare actual_digest text;denied boolean:=false;begin
     if (select count(*) from pg_trigger
       where tgrelid='public.static_weekly_recurring_terminal_intents'::regclass
         and tgname='custodial_disaster_restore_mutation_fence'
         and tgenabled='O' and not tgisinternal)<>1 then
       raise exception 'explicit installer did not restore the exact recurring mutation fence';
     end if;
+    select public.static_weekly_digest_text(
+      'drop trigger if exists '||quote_ident(t.tgname)||' on '||quote_ident(n.nspname)||'.'||quote_ident(c.relname)||'; '
+      ||pg_get_triggerdef(t.oid,true)||'; alter table '||quote_ident(n.nspname)||'.'||quote_ident(c.relname)||' enable trigger '
+      ||quote_ident(t.tgname)||';') into actual_digest from pg_trigger t join pg_class c on c.oid=t.tgrelid
+      join pg_namespace n on n.oid=c.relnamespace where n.nspname='public'
+      and c.relname='static_weekly_recurring_terminal_intents'
+      and t.tgname='custodial_disaster_restore_mutation_fence' and not t.tgisinternal;
+    if actual_digest is distinct from 'a27e95125b9f7994596c5625c440fd0f21333c6081b824094fa6051d95f82e8d' then
+      raise exception 'recreated recurring fence definition changed';end if;
+    update custodial_dr.restore_control set mutations_paused=true where singleton=true;
+    begin
+      delete from public.static_weekly_recurring_terminal_intents where false;
+    exception when others then
+      denied:=sqlstate='55000' and sqlerrm='disaster recovery is in progress; application mutations are paused';
+    end;
+    if not denied then raise exception 'recreated recurring fence did not reject paused zero-row DML';end if;
   end $installer_proof$;
   rollback;`);
-checks++;
-equal(sql(`select public.static_weekly_digest_text(
-  'drop trigger if exists '||quote_ident(t.tgname)||' on '||quote_ident(n.nspname)||'.'||quote_ident(c.relname)||'; '
-  ||pg_get_triggerdef(t.oid,true)||'; alter table '||quote_ident(n.nspname)||'.'||quote_ident(c.relname)||' enable trigger '
-  ||quote_ident(t.tgname)||';') from pg_trigger t join pg_class c on c.oid=t.tgrelid
-  join pg_namespace n on n.oid=c.relnamespace where n.nspname='public'
-  and c.relname='static_weekly_recurring_terminal_intents'
-  and t.tgname='custodial_disaster_restore_mutation_fence' and not t.tgisinternal;`),
-  'a27e95125b9f7994596c5625c440fd0f21333c6081b824094fa6051d95f82e8d',
-  'recreated recurring fence has exact serialized digest');
-assert.throws(() => sql(`begin;
-  update custodial_dr.restore_control set mutations_paused=true where singleton=true;
-  delete from public.static_weekly_recurring_terminal_intents where false;
-  rollback;`), /disaster recovery is in progress; application mutations are paused/,
-  'recreated fence rejects even zero-row DML while disaster restore is paused');
-checks++;
+checks+=3;
 equal(sql('select mutations_paused::text from custodial_dr.restore_control where singleton=true'),
   'false','paused-state challenge rolled back without altering restore control');
 const closureSql = readFileSync(new URL('../supabase/migrations/20260929125440_custodial_recovery_inventory_closure.sql', import.meta.url),'utf8');
@@ -110,6 +111,18 @@ for (const [routine,returnType,body] of [
     rollback;`), /disaster fence privileged predecessor changed/,
     `${routine} drift must fail in the real closure preflight`);
   checks++;
+}
+for (const routine of ['install_application_mutation_fences','install_application_mutation_fences_after_ddl']) {
+  for (const role of ['custodial_application_reader','mz_recovery_acl_probe']) {
+    assert.throws(() => sql(`begin;
+      do $probe$ begin if not exists(select 1 from pg_roles where rolname='mz_recovery_acl_probe')
+        then create role mz_recovery_acl_probe noinherit;end if;end $probe$;
+      grant execute on function custodial_dr.${routine}() to ${role};
+      ${closurePreflight}
+      rollback;`), /disaster fence routine ACL changed/,
+      `${routine} must reject unlisted ${role} direct EXECUTE before the installer`);
+    checks++;
+  }
 }
 const wanted = [
   ['column', 'public.location_proximity_settings:authority_radius_m'],

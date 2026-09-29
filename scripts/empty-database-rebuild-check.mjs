@@ -17,6 +17,14 @@ if (!adminUrl && !dockerContainer && !dockerImage) {
   process.exit(2);
 }
 
+// This release's PASS includes the missing-fence restored-state challenge.
+// The legacy direct-URL branch cannot inject and verify that challenge, so it
+// must not issue an equivalent-looking success receipt.
+if (adminUrl && !dockerContainer && !dockerImage) {
+  console.error("Direct-URL rebuild mode cannot certify the required restored-fence gap; use an isolated Docker target.");
+  process.exit(2);
+}
+
 if (adminUrl && !/(localhost|127\.0\.0\.1|memphis-rebuild|schema-rebuild|test|ci)/i.test(adminUrl)) {
   console.error("Refusing empty-database rebuild check against a URL that does not look local/test/CI.");
   process.exit(2);
