@@ -1575,7 +1575,7 @@
       {
         "path": "scripts/release-migration-workflow-tests.mjs",
         "mode": "100644",
-        "object_id": "ecfdf970fcfc5bb2ac41e1e8fc733955ca8dd8ec"
+        "object_id": "607b91ced9384480702b6cd524139240c7366a7a"
       },
       {
         "path": "scripts/release-pair-consumer-regression-tests.mjs",
