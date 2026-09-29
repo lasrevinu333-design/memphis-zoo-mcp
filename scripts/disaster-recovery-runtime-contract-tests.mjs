@@ -80,4 +80,55 @@ assert.throws(() => validateRecoveryRuntimeConfiguration({
   projectRef,
 }), /SUPABASE_URL is missing or differs/);
 assert.throws(() => validateRecoveryRuntimeConfiguration({ contract, configuration: { ...configuration, services: { ...configuration.services, backend: { ...configuration.services.backend, deployment_commit: "c".repeat(40) } } }, releaseIdentity, projectRef }), /exact live release commit/);
+const staticCommit = "c".repeat(40);
+const splitConfiguration = { ...configuration, services: {
+  ...configuration.services,
+  static_weekly_control_plane: { ...configuration.services.static_weekly_control_plane, deployment_commit: staticCommit },
+} };
+const recordedServiceIdentity = Object.fromEntries(Object.entries(splitConfiguration.services).map(([name, value]) => [
+  name, Object.fromEntries(["service_id", "deployment_id", "deployment_commit", "public_url"]
+    .map((field) => [field, value[field]])),
+]));
+const splitIdentity = { ...releaseIdentity, details_json: {
+  static_render_commit: staticCommit,
+  recovery_service_identity: recordedServiceIdentity,
+} };
+assert.deepEqual(validateRecoveryRuntimeConfiguration({ contract, configuration: splitConfiguration,
+  releaseIdentity: splitIdentity, projectRef }), splitConfiguration,
+"an independently deployed static control plane must match its complete recorded identity");
+assert.throws(() => validateRecoveryRuntimeConfiguration({ contract, configuration: splitConfiguration,
+  releaseIdentity, projectRef }), /exact live release commit/,
+"a split deployment is not accepted without its recorded static commit");
+assert.throws(() => validateRecoveryRuntimeConfiguration({ contract, configuration,
+  releaseIdentity: splitIdentity, projectRef }), /exact live release commit/,
+"the old static commit cannot be falsely substituted for the recorded one");
+assert.throws(() => validateRecoveryRuntimeConfiguration({ contract, configuration: splitConfiguration,
+  releaseIdentity: { ...releaseIdentity, details_json: { static_render_commit: "invalid" } }, projectRef }),
+  /Recorded static control-plane commit is malformed/);
+assert.throws(() => validateRecoveryRuntimeConfiguration({ contract, configuration: splitConfiguration,
+  releaseIdentity: { ...releaseIdentity, details_json: { static_render_commit: staticCommit } }, projectRef }),
+  /no recorded recovery service identity/);
+for (const value of [null, false, 0, {}, [], "", " "]) {
+  assert.throws(() => validateRecoveryRuntimeConfiguration({ contract, configuration,
+    releaseIdentity: { ...releaseIdentity, details_json: { static_render_commit: value } }, projectRef }),
+  /Recorded static control-plane commit is malformed/);
+}
+for (const field of ["deployment_id", "public_url", "service_id"]) {
+  const changed = structuredClone(splitConfiguration);
+  changed.services.static_weekly_control_plane[field] = field === "public_url"
+    ? "https://forged-static.example.test" : `forged-${field}`;
+  if (field === "service_id") changed.dependencies.static_weekly_render_service_id =
+    changed.services.static_weekly_control_plane.service_id;
+  assert.throws(() => validateRecoveryRuntimeConfiguration({ contract, configuration: changed,
+    releaseIdentity: splitIdentity, projectRef }), /differs from the recorded recovery service identity/);
+}
+const changedBackendDeployment = structuredClone(splitConfiguration);
+changedBackendDeployment.services.backend.deployment_id = "dep-forged-backend";
+assert.throws(() => validateRecoveryRuntimeConfiguration({ contract, configuration: changedBackendDeployment,
+  releaseIdentity: splitIdentity, projectRef }), /differs from the recorded recovery service identity/);
+const changedRecordedIdentity = structuredClone(splitIdentity);
+changedRecordedIdentity.details_json.recovery_service_identity.static_weekly_control_plane.deployment_id =
+  "dep-forged-static";
+assert.throws(() => validateRecoveryRuntimeConfiguration({ contract, configuration: splitConfiguration,
+  releaseIdentity: changedRecordedIdentity, projectRef }), /differs from the recorded recovery service identity/);
 console.log("DISASTER_RECOVERY_RUNTIME_CONTRACT_TESTS_PASS");
