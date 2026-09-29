@@ -44,7 +44,7 @@ const goodObserved = {format:"memphis-zoo-build52-production-post-apply.v1", ok:
   ledger_count:state.target.production_ledger_count, ledger_head:state.target.source_migration_version,
   counts:{functions:state.target.expected_catalog_counts.functions,routine_grants:state.target.expected_catalog_counts.routine_grants},
   schema_fingerprint:state.target.canonical_source_schema_fingerprint};
-check("source preflight accepts the exact checked-out target", () => assert.equal(assertReleaseWorkflowSource(root).pendingCount, 45));
+check("source preflight accepts the exact checked-out target", () => assert.equal(assertReleaseWorkflowSource(root).pendingCount, 46));
 check("preflight runs before authorization and mutation", () => {
   const first = workflow.indexOf("node scripts/release-migration-workflow-preflight.mjs");
   assert.ok(first > 0 && first < workflow.indexOf("- uses: actions/download-artifact"));
@@ -55,7 +55,7 @@ check("preflight runs before authorization and mutation", () => {
 check("both workflow jq invocations load the checked-out release state", () => {
   for (const section of [applySection, observedSection]) assert.match(section, /--slurpfile release_state release\/production-migration-state\.json/);
 });
-check("correct 45-migration apply receipt passes actual workflow jq", () => assert.equal(jqAccepts(applyPredicate,goodApply),true));
+check("correct 46-migration apply receipt passes actual workflow jq", () => assert.equal(jqAccepts(applyPredicate,goodApply),true));
 check("correct target-query receipt passes actual workflow jq", () => assert.equal(jqAccepts(observedPredicate,goodObserved),true));
 check("obsolete 23-migration apply receipt is rejected", () => {
   const old={...goodApply,after_ledger_count:253,after_ledger_head:"20260925190000",applied:applied.slice(0,23),target_catalog_fingerprint:"34f13666aac64ba95409d4f074581a791541e6a1a09f1d560598583c05882a45"};
@@ -64,6 +64,15 @@ check("obsolete 23-migration apply receipt is rejected", () => {
 check("obsolete production-query receipt is rejected", () => assert.equal(jqAccepts(observedPredicate,{...goodObserved,
   ledger_count:253,ledger_head:"20260925190000",counts:{functions:567,routine_grants:383},
   schema_fingerprint:"34f13666aac64ba95409d4f074581a791541e6a1a09f1d560598583c05882a45"}),false));
+check("previous 45-migration receipt cannot omit recovery closure", () => {
+  const previous={...goodApply,after_ledger_count:275,after_ledger_head:"20260927075352",
+    applied:applied.slice(0,45),target_catalog_fingerprint:"5e72aa024a2ff409a3c1d25df4623e2da649cbe255f943a40d059d178ca08164"};
+  assert.equal(jqAccepts(applyPredicate,previous),false);
+});
+check("previous 175-source catalog observation cannot pass new target", () => assert.equal(jqAccepts(observedPredicate,{...goodObserved,
+  ledger_count:275,ledger_head:"20260927075352",counts:{functions:606,routine_grants:397},
+  schema_fingerprint:"5e72aa024a2ff409a3c1d25df4623e2da649cbe255f943a40d059d178ca08164"}),false));
+
 const applyMutations = [
  ["false success",v=>{v.ok=false;}], ["wrong commit",v=>{v.candidate_commit="c".repeat(40);}],
  ["wrong tree",v=>{v.candidate_tree="c".repeat(40);}], ["wrong project",v=>{v.project_ref="wrong-project";}],
