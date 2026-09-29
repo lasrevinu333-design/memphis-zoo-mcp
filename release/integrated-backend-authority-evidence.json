@@ -200,7 +200,7 @@
       {
         "path": ".github/workflows/production-backup-migration-rehearsal.yml",
         "mode": "100644",
-        "object_id": "67c966b3dda5dc8b4bb80848e8abdd14fa2fca65"
+        "object_id": "e05dcef38da34744954a8505590db0bff9e4b386"
       },
       {
         "path": ".github/workflows/production-database-credential-bridge.yml",
@@ -505,7 +505,7 @@
       {
         "path": "release/production-migration-state.json",
         "mode": "100644",
-        "object_id": "7f91464437ba27b28b8cbd9986d048cc776d91a4"
+        "object_id": "ccebfb1dfa1baf7dd6d4bca809e5a06a8950b3bb"
       },
       {
         "path": "release/production-schema-observation-20260922.json",
@@ -865,7 +865,7 @@
       {
         "path": "scripts/empty-database-rebuild-check.mjs",
         "mode": "100644",
-        "object_id": "4874ec1f8a42148ec86c65ed5445168aca74e3e4"
+        "object_id": "de4c1a88fc2dbceb807e40bd94e1649b42bbff61"
       },
       {
         "path": "scripts/event-notification-retention-contract-tests.mjs",
@@ -1500,7 +1500,7 @@
       {
         "path": "scripts/recovery-inventory-closure-database-tests.mjs",
         "mode": "100644",
-        "object_id": "35dfd5b60e1c71b9013c8bef59b170b7f4f3b507"
+        "object_id": "6c01dc5f78d17a3bfb7e536010938ffc573cc540"
       },
       {
         "path": "scripts/refresh-integrated-backend-authority-release.mjs",
@@ -4550,7 +4550,7 @@
       {
         "path": "supabase/migrations/20260929125440_custodial_recovery_inventory_closure.sql",
         "mode": "100644",
-        "object_id": "2f7f75e27d7ecbcfb23d184c4685664345b62c8b"
+        "object_id": "7a1b5c6fa66a36ae4cdc967497a4cba3dd639b98"
       },
       {
         "path": "tmp/write_probe.txt",
