@@ -57,11 +57,11 @@ function homeTimes() {
       payload:{slotId:'50000000-0000-4000-8000-000000000009',lunch:{start:'13:00',end:'14:00'}}}]};
 }
 
-function buildApp(read, requireDeviceAccess) {
+function buildApp(read, requireDeviceAccess, runRpc = async () => ({})) {
   const app = express();
   app.use("/schedule-api", createScheduleRouter({
     runReadOnlySql: read,
-    runRpc: async () => ({}),
+    runRpc,
     runCommand: async () => ({}),
     buildHealthPayload: () => ({ ok: true }),
     requireAdminApiAuth: (_req, _res, next) => next(),
@@ -110,6 +110,10 @@ await withServer(buildApp(async (sql) => {
 assert.equal(currentCalls.every((sql) => sql.includes("static_weekly_v5_read_employee_day") || sql.includes("static_weekly_v6_read_roster")), true, "governed dates read only canonical published authority, not the legacy scheduler");
 
 const conflictingEmployeeId = "30000000-0000-4000-8000-000000000088";
+const authenticatedCredentialId = "40000000-0000-4000-8000-000000000099";
+const authenticatedDevicePk = "80000000-0000-4000-8000-000000000008";
+const authenticatedEpoch = 1;
+const authenticatedDeliveryCalls = [];
 let authenticatedDeviceMiddlewareCalls = 0;
 const authenticatedCalls = [];
 await withServer(buildApp(async (sql) => {
@@ -123,6 +127,7 @@ await withServer(buildApp(async (sql) => {
       device_id: "KIOSK_08",
       device_name: "Employee Phone 8",
       device_active: true,
+      assignment_epoch: authenticatedEpoch,
       assigned_employee_id: employeeId,
       assigned_employee_name: "Taylor New",
       employee_code: "EMP901",
@@ -143,7 +148,14 @@ await withServer(buildApp(async (sql) => {
 }, (req, _res, next) => {
   authenticatedDeviceMiddlewareCalls += 1;
   req.memphisDevice = { canonical_device_id: "KIOSK_08", device_id: "KIOSK_08" };
+  req.memphisDeviceCredential = { credential_id: authenticatedCredentialId };
   next();
+}, async (name, params) => {
+  authenticatedDeliveryCalls.push({ name, params });
+  assert.equal(name, "static_weekly_v24_read_device_schedule_delivery");
+  assert.deepEqual(params, { p_date: serviceDate, p_device: authenticatedDevicePk,
+    p_credential: authenticatedCredentialId, p_employee: employeeId, p_epoch: authenticatedEpoch });
+  return { schema: "static-weekly.device-schedule-delivery.v1", mode: "LEGACY_REGISTERED", datedApplication: null };
 }), async (origin) => {
   const response = await fetch(
     `${origin}/schedule-api/my-day-summary?employee_id=${conflictingEmployeeId}&service_date=${serviceDate}`,
@@ -154,11 +166,49 @@ await withServer(buildApp(async (sql) => {
   assert.equal(payload.data.employee_id, employeeId);
   assert.equal(payload.data.employee_name, "Taylor New");
   assert.equal(payload.data.canonical_device_id, "KIOSK_08");
+  assert.equal(payload.data.credential_id, authenticatedCredentialId);
+  assert.equal(payload.data.assignment_epoch, authenticatedEpoch);
+  assert.equal(payload.data.schedule_delivery_mode, "LEGACY_REGISTERED");
   assert.equal(payload.data.home_facts.employee_id,employeeId);
   assert.equal(payload.data.home_facts.lunch.start,"13:00");
 });
 assert.equal(authenticatedDeviceMiddlewareCalls, 1, "device-addressed employee reads must authenticate the phone");
+assert.equal(authenticatedDeliveryCalls.length, 1, "device reads must resolve the authenticated delivery before using the legacy registered view");
 assert.ok(authenticatedCalls.some((sql) => sql.includes("from public.device_aliases")));
+
+// The earlier positive stub omitted the credential and assignment epoch.
+// Preserve the production rejection rather than relaxing it to make tests pass.
+for (const [label, credential, epoch] of [
+  ["missing credential", undefined, authenticatedEpoch],
+  ["malformed credential", "not-a-uuid", authenticatedEpoch],
+  ["missing epoch", authenticatedCredentialId, undefined],
+  ["zero epoch", authenticatedCredentialId, 0],
+  ["fractional epoch", authenticatedCredentialId, 1.5],
+]) {
+  let deliveryCalls = 0;
+  let scheduleReads = 0;
+  await withServer(buildApp(async (sql) => {
+    if (sql.includes("from public.device_aliases")) return [{
+      canonical_device_pk: authenticatedDevicePk, canonical_device_id: "KIOSK_08", device_id: "KIOSK_08",
+      device_active: true, assigned_employee_id: employeeId, assigned_employee_name: "Taylor New",
+      employee_active: true, assignment_epoch: epoch,
+    }];
+    scheduleReads += 1;
+    throw new Error("Invalid delivery principal must not reach schedule reads");
+  }, (req, _res, next) => {
+    req.memphisDevice = { canonical_device_id: "KIOSK_08", device_id: "KIOSK_08" };
+    if (credential !== undefined) req.memphisDeviceCredential = { credential_id: credential };
+    next();
+  }, async () => { deliveryCalls += 1; throw new Error("Invalid principal must not reach delivery RPC"); }), async (origin) => {
+    const response = await fetch(`${origin}/schedule-api/my-day-summary?service_date=${serviceDate}`,
+      { headers: { "x-device-id": "KIOSK_08" } });
+    assert.equal(response.status, 401, label);
+    assert.match((await response.json()).error, /authenticated schedule delivery principal/);
+  });
+  assert.equal(deliveryCalls, 0, `${label}: no delivery RPC`);
+  assert.equal(scheduleReads, 0, `${label}: no schedule read`);
+}
+console.log("AUTHENTICATED_EMPLOYEE_DAY_PRINCIPAL_DENIALS_PASS 5");
 
 const staleCalls = [];
 await withServer(buildApp(async (sql) => {
