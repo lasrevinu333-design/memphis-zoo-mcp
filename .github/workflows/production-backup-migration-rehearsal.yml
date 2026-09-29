@@ -176,15 +176,21 @@ jobs:
           target_migration_head="$(jq -r '.target.source_migration_version' release/production-migration-state.json)"
           target_migration_count="$(jq -r '.target.production_ledger_count' release/production-migration-state.json)"
           target_fingerprint="$(tr -d '\r\n' < supabase/canonical/schema-fingerprint.txt)"
+          echo 'rehearsal-postcondition: target-ledger-head'
           test "$(docker exec "$container" psql -v ON_ERROR_STOP=1 -At -U supabase_admin -d "$database" \
             -c 'select max(version)::text from supabase_migrations.schema_migrations;' | tail -n 1)" = "$target_migration_head"
+          echo 'rehearsal-postcondition: target-ledger-count'
           test "$(docker exec "$container" psql -v ON_ERROR_STOP=1 -At -U supabase_admin -d "$database" \
             -c 'select count(*)::text from supabase_migrations.schema_migrations;' | tail -n 1)" = "$target_migration_count"
+          echo 'rehearsal-postcondition: source-target-distinct'
           test "$target_migration_head" != "$migration_head"
+          echo 'rehearsal-postcondition: backend-authority-health'
           test "$(docker exec "$container" psql -v ON_ERROR_STOP=1 -At -U supabase_admin -d "$database" \
             -c "select public.custodial_backend_authority_health('$REHEARSAL_CUSTODIAL_BACKEND_PROOF_SECRET')->>'ok';" | tail -n 1)" = 'true'
+          echo 'rehearsal-postcondition: active-scheduler-key-count'
           test "$(docker exec "$container" psql -v ON_ERROR_STOP=1 -At -U supabase_admin -d "$database" \
             -c "select count(*) from public.static_weekly_authority_attestation_keys where key_state='active' and activates_at<=now() and (verify_not_after is null or verify_not_after>now());" | tail -n 1)" = '1'
+          echo 'rehearsal-postcondition: terminal-direct-dml-denied'
           if docker exec "$container" psql -v ON_ERROR_STOP=1 -At -U supabase_admin -d "$database" \
             -c 'set role service_role; truncate public.sessions;' >/dev/null 2>&1; then
             echo 'service_role unexpectedly retained direct terminal DML' >&2

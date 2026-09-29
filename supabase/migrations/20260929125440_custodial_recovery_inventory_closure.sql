@@ -10,7 +10,7 @@ set local search_path=pg_catalog,public,extensions;
 
 -- Refuse to seal a different implementation or a changed wrapper boundary.
 do $preflight$
-declare candidate record;actual text;
+declare candidate record;actual text;private_function record;
 begin
  for candidate in select * from (values
   ('public.evaluate_location_proximity_v2(text,text,numeric,numeric,numeric,text,text,text,timestamp with time zone)',
@@ -33,7 +33,58 @@ begin
  if not exists(select 1 from pg_constraint where conrelid='public.location_proximity_settings'::regclass
     and conname='location_proximity_authority_radius_bound' and convalidated) then
   raise exception 'GPS radius constraint is not present and validated';end if;
+
+ -- The installer is SECURITY DEFINER and the recreated trigger DDL only names
+ -- its guard; it does not authenticate that guard's transitive implementation.
+ -- Pin the complete privileged call chain and both DDL event-trigger handlers
+ -- before the installer can execute against a restored database.
+ for candidate in select * from (values
+  ('custodial_dr.acquire_application_mutation_fence()','923621addfd8dac026ea7ab439366caf9baed7c5da77afabb9f263c4b129e563'),
+  ('custodial_dr.guard_application_ddl()','3461ee511455447a44f1d676102a74c8544978127cfc9645dc27e46d48f50296'),
+  ('custodial_dr.guard_application_mutation()','c951e5a94562536ef46ccd3bfc4c3dfc6df2a526f3fa75891604ca625cd7c8b7'),
+  ('custodial_dr.install_application_mutation_fences()','cc53626170d5afe999ebf8795f26374bbb51da7c4d6286cfa50ea2aa5d38cc5f'),
+  ('custodial_dr.install_application_mutation_fences_after_ddl()','0cc7db4f3a5deab81fc13667e38a1e176bf68cc2a1f63883e72d5038db10410b')
+ ) expected(signature,digest) loop
+  select p.oid,p.prosecdef,p.proconfig,pg_get_userbyid(p.proowner) owner_name,
+   encode(extensions.digest(convert_to(pg_get_functiondef(p.oid),'UTF8'),'sha256'),'hex') digest
+  into private_function from pg_proc p where p.oid=to_regprocedure(candidate.signature);
+  if not found or private_function.digest is distinct from candidate.digest
+    or private_function.prosecdef is distinct from true
+    or private_function.owner_name not in ('postgres','supabase_admin')
+    or private_function.proconfig is distinct from array['search_path=pg_catalog, custodial_dr']::text[]
+    or not has_function_privilege('supabase_admin',private_function.oid,'EXECUTE') then
+   raise exception 'disaster fence privileged predecessor changed: %',candidate.signature;
+  end if;
+  if candidate.signature<>'custodial_dr.install_application_mutation_fences_after_ddl()'
+    and (has_function_privilege('anon',private_function.oid,'EXECUTE')
+      or has_function_privilege('authenticated',private_function.oid,'EXECUTE')
+      or has_function_privilege('service_role',private_function.oid,'EXECUTE')) then
+   raise exception 'disaster fence routine unexpectedly callable: %',candidate.signature;
+  end if;
+ end loop;
+ if (select count(*) from pg_event_trigger e where
+   (e.evtname='custodial_dr_guard_application_ddl' and e.evtevent='ddl_command_start'
+     and e.evtenabled='O' and e.evtfoid='custodial_dr.guard_application_ddl()'::regprocedure and e.evttags is null)
+   or (e.evtname='custodial_dr_install_application_mutation_fences' and e.evtevent='ddl_command_end'
+     and e.evtenabled='O' and e.evtfoid='custodial_dr.install_application_mutation_fences_after_ddl()'::regprocedure
+     and e.evttags=array['CREATE TABLE','CREATE TABLE AS','ALTER TABLE']::text[]))<>2 then
+  raise exception 'disaster fence event-trigger predecessor changed';
+ end if;
 end $preflight$;
+
+-- This event-trigger-only helper inherited PostgreSQL's default PUBLIC
+-- EXECUTE. Close that unrelated direct-call surface before invoking the
+-- authenticated installer; the migration transaction rolls this back on fail.
+revoke execute on function custodial_dr.install_application_mutation_fences_after_ddl()
+ from public,anon,authenticated,service_role;
+do $private_acl$
+begin
+ if has_function_privilege('anon','custodial_dr.install_application_mutation_fences_after_ddl()','EXECUTE')
+   or has_function_privilege('authenticated','custodial_dr.install_application_mutation_fences_after_ddl()','EXECUTE')
+   or has_function_privilege('service_role','custodial_dr.install_application_mutation_fences_after_ddl()','EXECUTE') then
+  raise exception 'disaster fence event handler remains directly callable';
+ end if;
+end $private_acl$;
 
 revoke execute on function public.evaluate_location_proximity_v2(text,text,numeric,numeric,numeric,text,text,text,timestamp with time zone)
  from service_role;

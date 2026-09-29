@@ -1228,6 +1228,31 @@ if (dockerContainer) {
       dockerPsql("postgres", `create database ${quoteIdentifier(databaseName)};`);
     }
     for (const file of migrationFiles) {
+      if (file === '20260929125440_custodial_recovery_inventory_closure.sql') {
+        // Reproduce the production-backup restore's observed ten-fence gap
+        // immediately before the actual closure migration, not merely after
+        // a fully migrated clean replay.
+        const recurringTables = [
+          'static_weekly_recurring_acceptance_proofs',
+          'static_weekly_recurring_application_intents',
+          'static_weekly_recurring_application_receipts',
+          'static_weekly_recurring_dependency_changes',
+          'static_weekly_recurring_dependency_checks',
+          'static_weekly_recurring_invalidated_principals',
+          'static_weekly_recurring_invalidations',
+          'static_weekly_recurring_publication_bindings',
+          'static_weekly_recurring_terminal_intents',
+          'static_weekly_recurring_terminal_receipts',
+        ];
+        const fenceCount = dockerPsql(targetDatabase, `select count(*) from pg_trigger t
+          join pg_class c on c.oid=t.tgrelid join pg_namespace n on n.oid=c.relnamespace
+          where n.nspname='public' and c.relname=any(array[${recurringTables.map(table => `'${table}'`).join(',')}])
+            and t.tgname='custodial_disaster_restore_mutation_fence' and t.tgenabled='O' and not t.tgisinternal;`).trim();
+        if (fenceCount !== '10') throw new Error(`expected ten healthy recurring fences before the missing-fence restore challenge, found ${fenceCount}`);
+        for (const table of recurringTables) dockerPsql(targetDatabase,
+          `drop trigger custodial_disaster_restore_mutation_fence on public.${table};`);
+        console.log('removed all ten recurring restore fences before the actual closure migration');
+      }
       const sql = readFileSync(resolve(migrationsDir, file), "utf8");
       dockerPsql(targetDatabase, sql);
       console.log(`applied ${file}`);

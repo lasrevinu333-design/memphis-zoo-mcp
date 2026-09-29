@@ -68,6 +68,40 @@ sql(`begin;
   end $installer_proof$;
   rollback;`);
 checks++;
+equal(sql(`select public.static_weekly_digest_text(
+  'drop trigger if exists '||quote_ident(t.tgname)||' on '||quote_ident(n.nspname)||'.'||quote_ident(c.relname)||'; '
+  ||pg_get_triggerdef(t.oid,true)||'; alter table '||quote_ident(n.nspname)||'.'||quote_ident(c.relname)||' enable trigger '
+  ||quote_ident(t.tgname)||';') from pg_trigger t join pg_class c on c.oid=t.tgrelid
+  join pg_namespace n on n.oid=c.relnamespace where n.nspname='public'
+  and c.relname='static_weekly_recurring_terminal_intents'
+  and t.tgname='custodial_disaster_restore_mutation_fence' and not t.tgisinternal;`),
+  'a27e95125b9f7994596c5625c440fd0f21333c6081b824094fa6051d95f82e8d',
+  'recreated recurring fence has exact serialized digest');
+assert.throws(() => sql(`begin;
+  update custodial_dr.restore_control set mutations_paused=true where singleton=true;
+  delete from public.static_weekly_recurring_terminal_intents where false;
+  rollback;`), /disaster recovery is in progress; application mutations are paused/,
+  'recreated fence rejects even zero-row DML while disaster restore is paused');
+checks++;
+equal(sql('select mutations_paused::text from custodial_dr.restore_control where singleton=true'),
+  'false','paused-state challenge rolled back without altering restore control');
+const closureSql = readFileSync(new URL('../supabase/migrations/20260929125440_custodial_recovery_inventory_closure.sql', import.meta.url),'utf8');
+const closurePreflight = closureSql.match(/do \$preflight\$[\s\S]*?end \$preflight\$;/)?.[0];
+assert.ok(closurePreflight,'exact closure preflight is extractable for privileged drift challenges');
+for (const [routine,returnType,body] of [
+  ['acquire_application_mutation_fence','bigint','return 0;'],
+  ['guard_application_mutation','trigger','return null;'],
+  ['install_application_mutation_fences','void','return;'],
+]) {
+  assert.throws(() => sql(`begin;
+    create or replace function custodial_dr.${routine}() returns ${returnType}
+      language plpgsql security definer set search_path=pg_catalog,custodial_dr
+      as $changed$ begin ${body} end $changed$;
+    ${closurePreflight}
+    rollback;`), /disaster fence privileged predecessor changed/,
+    `${routine} drift must fail in the real closure preflight`);
+  checks++;
+}
 const wanted = [
   ['column', 'public.location_proximity_settings:authority_radius_m'],
   ['column', 'public.location_proximity_settings:authority_surveyed_at'],
