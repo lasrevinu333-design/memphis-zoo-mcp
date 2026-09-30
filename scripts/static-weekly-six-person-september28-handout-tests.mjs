@@ -62,41 +62,30 @@ assert.deepEqual(draft.retiredAreaFamilies, [
   'BAMBOO_SPRINGS_GIFT_SHOP', 'TRADING_POST_GIFT_SHOP',
   'ELEPHANT_TRUNK_GIFT_SHOP', 'ELEPHANT_TRUNK_RESTROOMS',
 ]);
-const fridayTransfer = ['CATHOUSE_CAFE_RESTROOMS', 'EXPO'];
-assert.deepEqual(draft.sourceHandout.boundedCorrections, [{
-  dayOfWeek: 5, phases: ['morning', 'equalized'], from: 'KAREN', to: 'KATHY',
-  families: fridayTransfer,
-  reason: 'Capacity-adjusted Friday workload correction using verified 1- and 4-minute proximity from Kathy\'s retained core route',
-}]);
-assert.deepEqual(draft.slots.KATHY.normalAssignmentFamilies, [
-  'BREEZEWAY_RESTROOMS', 'CATHOUSE_CAFE_RESTROOMS', 'COURTYARD_RESTROOMS',
-  'EAST_ADMIN', 'EXPO', 'WEST_ADMIN',
-]);
+assert.deepEqual(draft.slots.TAMMY.workDays,[1,2,3,4,5],
+ 'direct September 30 owner correction supersedes stale Sunday-to-Thursday handout');
+assert.deepEqual(draft.sourceHandout.ownerWorkweekCorrection?.affectedDays,[0,5]);
+assert.ok(draft.slots.KATHY.normalAssignmentFamilies.includes('ELEPHANT_TRUNK_RESTROOMS'));
 for (const [day, roster] of Object.entries(source.days)) {
+  if(day==='0'||day==='5')continue;
   for (const [employee, row] of Object.entries(roster)) {
-    const expectedMorning = [...row.morning];
-    const expectedChecks = [...row.checks];
-    if (day === '5' && employee === 'KAREN') {
-      for (const family of fridayTransfer) {
-        assert.ok(expectedMorning.includes(family) && expectedChecks.includes(family), `${family} came from Karen's handout`);
-        expectedMorning.splice(expectedMorning.indexOf(family), 1);
-        expectedChecks.splice(expectedChecks.indexOf(family), 1);
-      }
-    }
-    if (day === '5' && employee === 'KATHY') {
-      expectedMorning.push(...fridayTransfer);
-      expectedChecks.push(...fridayTransfer);
-    }
-    assert.deepEqual(new Set(draft.overrides[day].morning[employee]), new Set(expectedMorning), `${day}/${employee} morning`);
-    assert.deepEqual(new Set(draft.overrides[day].equalized[employee]), new Set(expectedChecks), `${day}/${employee} checks`);
+    assert.deepEqual(new Set(draft.overrides[day].morning[employee]), new Set(row.morning), `${day}/${employee} morning`);
+    assert.deepEqual(new Set(draft.overrides[day].equalized[employee]), new Set(row.checks), `${day}/${employee} checks`);
     assert.deepEqual(draft.slots[employee].shift, row.shift, `${day}/${employee} shift`);
     assert.deepEqual(draft.slots[employee].lunchByDay[day], row.lunch, `${day}/${employee} lunch`);
     assert.ok(draft.slots[employee].workDays.includes(Number(day)), `${day}/${employee} workday`);
   }
 }
 for (const employee of Object.keys(expectedStaff).flatMap((day) => expectedStaff[day])) {
+  if(employee==='TAMMY')continue;
   const scheduledDays = Object.entries(source.days).filter(([, roster]) => roster[employee]).map(([day]) => Number(day));
   assert.deepEqual(draft.slots[employee].workDays, scheduledDays, `${employee} exact workdays`);
 }
+for(const day of [0,5])for(const phase of ['morning','equalized']){
+ const rows=Object.values(draft.overrides[String(day)][phase]).flat();
+ assert.equal(rows.length,23,`${day}/${phase} all areas retained`);
+ assert.equal(new Set(rows).size,23,`${day}/${phase} each area has one owner`);
+ assert.deepEqual(new Set(rows),families,`${day}/${phase} exact physical area set retained`);
+}
 console.log(JSON.stringify({ ok: true, pages, days: 7, completeUniqueAreaFamiliesPerPhase: 23,
-  draftMatchesHandoutExceptExactFridayCorrection: true, sourcePdfSha256: source.source_pdf_sha256 }));
+  ownerCorrectedSundayFriday:true,unchangedDaysMatchHistoricalHandout:true,sourcePdfSha256: source.source_pdf_sha256 }));

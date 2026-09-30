@@ -71,11 +71,11 @@
       "name": "Tammy Miller",
       "personId": "cd97111e-cfa0-4228-b4d7-401bc7a5ac13",
       "workDays": [
-        0,
         1,
         2,
         3,
-        4
+        4,
+        5
       ],
       "shift": [
         "05:00",
@@ -114,6 +114,10 @@
         "4": [
           "08:30",
           "09:30"
+        ],
+        "5": [
+          "08:30",
+          "09:30"
         ]
       }
     },
@@ -141,6 +145,7 @@
         "CATHOUSE_CAFE_RESTROOMS",
         "COURTYARD_RESTROOMS",
         "EAST_ADMIN",
+        "ELEPHANT_TRUNK_RESTROOMS",
         "EXPO",
         "WEST_ADMIN"
       ],
@@ -484,18 +489,19 @@
   ],
   "mondayOnlyFamilies": [],
   "allowAdminMorning": true,
+  "namedShiftEndHandoffs": [
+    {
+      "dayOfWeek": 6,
+      "locationCode": "CAT_COUNTRY",
+      "at": "14:00",
+      "fromSlotId": "f22348e9-d4b9-5a7e-b8fd-d0d2c1ec534f",
+      "toSlotId": "36829381-70d7-521b-9f14-bad0af16ba87",
+      "source": "September 28 Saturday employee handout pages 23 and 25: Karen to Alijah at 14:00, then Alijah to Gregory at 16:00"
+    }
+  ],
   "overrides": {
     "0": {
       "morning": {
-        "TAMMY": [
-          "CHINA",
-          "EAST_END_RESTROOMS",
-          "TETON",
-          "ZAMBEZI",
-          "NORTH_WEST_PASSAGE",
-          "PRIMATE_CANYON",
-          "PRIMATE_PAVILLION"
-        ],
         "KAILI": [
           "BREEZEWAY_RESTROOMS",
           "COURTYARD_RESTROOMS",
@@ -503,45 +509,50 @@
           "EDUCATION",
           "HERPETARIUM",
           "EAST_ADMIN",
-          "WEST_ADMIN"
+          "WEST_ADMIN",
+          "CHINA",
+          "BONOBOS_RESTROOMS",
+          "CAT_COUNTRY"
         ],
         "ALIJAH": [
-          "BONOBOS_RESTROOMS",
           "CATHOUSE_CAFE_RESTROOMS",
-          "MEMMEX_RESTROOMS",
-          "CAT_COUNTRY",
-          "KOMODOS",
           "NOCTURNAL",
-          "TROPICAL_BIRDS"
+          "EAST_END_RESTROOMS",
+          "TETON",
+          "ZAMBEZI",
+          "NORTH_WEST_PASSAGE",
+          "PRIMATE_CANYON",
+          "PRIMATE_PAVILLION"
         ],
         "GREGORY": [
           "EXPO",
-          "AQUARIUM"
+          "AQUARIUM",
+          "MEMMEX_RESTROOMS",
+          "KOMODOS",
+          "TROPICAL_BIRDS"
         ]
       },
       "equalized": {
-        "TAMMY": [
-          "CHINA",
-          "EAST_END_RESTROOMS",
-          "TETON",
-          "NORTH_WEST_PASSAGE",
-          "PRIMATE_PAVILLION"
-        ],
         "KAILI": [
           "BREEZEWAY_RESTROOMS",
           "COURTYARD_RESTROOMS",
           "EVENT_CENTER",
           "EDUCATION",
           "EAST_ADMIN",
-          "WEST_ADMIN"
+          "WEST_ADMIN",
+          "CHINA",
+          "BONOBOS_RESTROOMS",
+          "CAT_COUNTRY"
         ],
         "ALIJAH": [
-          "BONOBOS_RESTROOMS",
           "CATHOUSE_CAFE_RESTROOMS",
           "ZAMBEZI",
-          "CAT_COUNTRY",
           "NOCTURNAL",
-          "PRIMATE_CANYON"
+          "PRIMATE_CANYON",
+          "EAST_END_RESTROOMS",
+          "TETON",
+          "NORTH_WEST_PASSAGE",
+          "PRIMATE_PAVILLION"
         ],
         "GREGORY": [
           "EXPO",
@@ -842,36 +853,37 @@
         "KAREN": [
           "EVENT_CENTER",
           "MEMMEX_RESTROOMS",
-          "ZAMBEZI",
           "AQUARIUM",
           "CAT_COUNTRY",
-          "EDUCATION",
           "HERPETARIUM",
           "KOMODOS",
           "NOCTURNAL",
+          "TROPICAL_BIRDS",
+          "EXPO"
+        ],
+        "TAMMY": [
+          "ZAMBEZI",
           "PRIMATE_CANYON",
-          "TROPICAL_BIRDS"
+          "TETON",
+          "NORTH_WEST_PASSAGE"
         ],
         "KATHY": [
           "BREEZEWAY_RESTROOMS",
           "CATHOUSE_CAFE_RESTROOMS",
           "COURTYARD_RESTROOMS",
           "EAST_ADMIN",
-          "EXPO",
           "WEST_ADMIN"
         ],
         "ALIJAH": [
+          "EDUCATION",
           "BONOBOS_RESTROOMS",
           "CHINA",
           "EAST_END_RESTROOMS",
-          "TETON",
-          "NORTH_WEST_PASSAGE",
           "PRIMATE_PAVILLION"
         ]
       },
       "equalized": {
         "KAREN": [
-          "EVENT_CENTER",
           "MEMMEX_RESTROOMS",
           "AQUARIUM",
           "CAT_COUNTRY",
@@ -882,21 +894,24 @@
           "PRIMATE_CANYON",
           "TROPICAL_BIRDS"
         ],
+        "TAMMY": [
+          "TETON",
+          "ZAMBEZI",
+          "NORTH_WEST_PASSAGE"
+        ],
         "KATHY": [
           "BREEZEWAY_RESTROOMS",
-          "CATHOUSE_CAFE_RESTROOMS",
           "COURTYARD_RESTROOMS",
           "EAST_ADMIN",
           "EXPO",
           "WEST_ADMIN"
         ],
         "ALIJAH": [
+          "EVENT_CENTER",
+          "CATHOUSE_CAFE_RESTROOMS",
           "BONOBOS_RESTROOMS",
           "CHINA",
           "EAST_END_RESTROOMS",
-          "TETON",
-          "ZAMBEZI",
-          "NORTH_WEST_PASSAGE",
           "PRIMATE_PAVILLION"
         ]
       }
@@ -972,10 +987,10 @@
   },
   "correctionNotes": [
     "Six current employees and three vacant stable positions; no vacant position owns recurring cleaning.",
-    "Workdays, shift times, and each day-specific lunch match the September 28 employee PDF.",
+    "Eric's September 30 direct correction moves Tammy from Sunday to Friday without changing her shift or lunch; Sunday and Friday ownership are rebalanced from the corrected availability.",
     "All 23 recurring area families are assigned exactly once per day and phase; three gift-shop cleaning assignments are retired.",
-    "Kathy's Tuesday Elephant Trunk employee-restroom duty is text-only pending distinct active location/tag identity; no shop floor.",
-    "Friday's Cat House Cafe restrooms and EXPO transfer from Karen to Kathy in both phases is a bounded whole-week candidate correction, not the September 28 handout; issue replacement sheets from the accepted revision, not the old handout.",
+    "Kathy's Tuesday Elephant Trunk employee-restroom duty is a post-opening reminder-only assignment pending distinct active location/tag identity; no gift-shop floor or invented NFC tag.",
+    "Sunday and Friday are newly balanced against Eric's corrected Tammy workweek, not copied from the stale September 28 handout; issue replacement sheets from the accepted revision.",
     "Handoffs and lunch relief must be reconciled with the corrected employee sheets before publication; never claim runtime match from this source alone."
   ],
   "effectiveDateNote": "Unpublished next-Monday candidate compatible with the existing weekly control-plane boundary. Not an activation, deployment or rollout date; later rollout must revalidate its actual effective week.",
@@ -983,15 +998,12 @@
     "path": "config/custodial-six-person-handout-20260928.json",
     "pdfSha256": "925751c37e454e0fadb9d88eb57a46dd6a47c1ffe19deadf85189ad9bba2f0aa",
     "jsonSha256": "4e0f1577b9f8f0b21560e059fde50d6c386aab8a4d7debe0deabb0b20010820d",
-    "precedence": "September 28 handout governs people, workdays, shifts, per-day lunches and all areas except the explicitly tested Friday Cat House Cafe restrooms and EXPO transfer; replacement sheets must precede publication; Elephant Trunk employee-restroom tag identity remains unresolved",
-    "boundedCorrections": [{
-      "dayOfWeek": 5,
-      "phases": ["morning", "equalized"],
-      "from": "KAREN",
-      "to": "KATHY",
-      "families": ["CATHOUSE_CAFE_RESTROOMS", "EXPO"],
-      "reason": "Capacity-adjusted Friday workload correction using verified 1- and 4-minute proximity from Kathy's retained core route"
-    }]
+    "precedence": "Direct September 30 Tammy Monday-Friday correction supersedes stale handout Sunday-Friday availability/ownership. Other staff shifts, days, lunches and unchanged days remain handout-bound. Kathy Tuesday employee-restroom duty is retained reminder-only. Replacement sheets must precede publication.",
+    "ownerWorkweekCorrection": {
+      "employee": "Tammy Miller",
+      "affectedDays": [0, 5],
+      "source": "Eric direct September 30 correction"
+    }
   },
   "retiredAreaFamilies": [
     "BAMBOO_SPRINGS_GIFT_SHOP",

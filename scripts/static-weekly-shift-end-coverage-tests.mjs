@@ -26,6 +26,23 @@ for(const slot of input.slots){
 assert.throws(()=>validateRecurringShiftEndCoverage(input,input,config),/coverage gap/,
  'the old all-week source must expose its missing afternoon handoffs');
 const completed=deriveDatedShiftEndCoverage(input,postgresJsonbContentDigest);
+const saturdayCatParent=input.version.assignments.find(r=>r.dayOfWeek===6
+ &&r.window.start==='09:45'&&r.locationCodeSnapshot==='CAT_COUNTRY');
+assert.ok(saturdayCatParent,'Saturday Cat Country parent required');
+const saturdayCatChain=completed.input.version.assignments.filter(r=>r.dayOfWeek===6
+ &&(r.workId===saturdayCatParent.workId||r.workId.startsWith(`${saturdayCatParent.workId}:`)))
+ .sort((a,b)=>a.window.start.localeCompare(b.window.start));
+assert.deepEqual(saturdayCatChain.map(r=>[r.ownerSlotId,r.window.start,r.window.end]),[
+ [ownerConfig.slots.KAREN.slotId,'09:45','14:00'],
+ [ownerConfig.slots.ALIJAH.slotId,'14:00','16:00'],
+ [ownerConfig.slots.GREGORY.slotId,'16:00','17:00'],
+],'named Saturday handoff must match the employee sheets without an intermediate Kathy reassignment');
+assert.equal(saturdayCatChain.reduce((n,r)=>n+r.serviceEffortMinutes,0),3,
+ 'named handoff must conserve inherited workload without an invented extra point');
+const changedNamed=structuredClone(input);
+changedNamed.version.shiftEndContinuityPolicy.namedHandoffs[0].toSlotId=ownerConfig.slots.KATHY.slotId;
+assert.throws(()=>deriveDatedShiftEndCoverage(changedNamed,postgresJsonbContentDigest),/identity mismatch/,
+ 'named employee handoff is bound by the immutable policy digest');
 for(const day of [4,5])assert.ok(completed.input.version.assignments.filter(r=>r.dayOfWeek===day)
  .every(r=>r.window.end<='16:00'),'Thursday/Friday must end at real staffed departure, not a vacant 17:00 position');
 assert.ok(completed.notes.every(n=>input.slots.find(s=>s.id===n.toSlotId)?.incumbencies.some(i=>

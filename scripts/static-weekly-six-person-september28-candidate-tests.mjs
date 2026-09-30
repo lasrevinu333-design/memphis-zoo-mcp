@@ -14,9 +14,10 @@ assert.equal(packet.effectiveDate,'2026-09-28');
 assert.equal(packet.rosterSlots.length,9);
 assert.equal(packet.rosterSlots.filter(row=>row.personId).length,6);
 assert.equal(packet.rosterSlots.filter(row=>!row.personId).length,3);
-assert.equal(assignments.length,7*2*23);
+assert.equal(assignments.length,7*2*23+1,'Tuesday employee-restroom reminder retained');
 for(let day=0;day<7;day++)for(const segment of ['morning','equalized']){
- const rows=assignments.filter(row=>row.dayOfWeek===day&&phase(row)===segment);
+ const rows=assignments.filter(row=>row.dayOfWeek===day&&phase(row)===segment
+  &&row.serviceMode!=='reminder_only');
  const expected=Object.entries(config.overrides[String(day)][segment]).flatMap(([key,families])=>
   families.map(family=>({family,slotId:config.slots[key].slotId})));
  assert.equal(rows.length,23,`${day}/${segment} must have 23 distinct families`);
@@ -35,10 +36,15 @@ for(const [key,slot] of Object.entries(config.slots))for(const day of slot.workD
 const cat=assignments.find(row=>row.dayOfWeek===6&&row.window.start==='09:45'
  &&row.locationCodeSnapshot==='CAT_COUNTRY');
 assert.equal(cat.ownerSlotId,config.slots.KAREN.slotId);
-assert.equal(cat.serviceEffortMinutes,4,'four positive Saturday shift-end segments need four points');
-assert.match(cat.serviceEffortProvenance,/four-segment continuity accounting floor/);
-assert.equal(assignments.some(row=>config.retiredAreaFamilies.includes(row.locationCodeSnapshot)),false);
+assert.equal(cat.serviceEffortMinutes,3,'named three-segment Saturday handoff retains source budget');
+const reminder=assignments.filter(row=>row.locationCodeSnapshot==='ELEPHANT_TRUNK_RESTROOMS');
+assert.equal(reminder.length,1);
+assert.equal(reminder[0].dayOfWeek,2);
+assert.equal(reminder[0].ownerSlotId,config.slots.KATHY.slotId);
+assert.equal(reminder[0].serviceMode,'reminder_only');
+assert.equal(assignments.some(row=>config.retiredAreaFamilies.includes(row.locationCodeSnapshot)
+ &&row.serviceMode!=='reminder_only'),false);
 assert.equal(assignments.some(row=>row.ownerSlotId===config.slots.ALIJAH.slotId
  &&row.locationCodeSnapshot==='HERPETARIUM'),false);
 console.log(JSON.stringify({ok:true,sourceDigest:packet.sourceDigest,assignments:assignments.length,
- staffed:6,vacant:3,saturdayCatCountryBudget:4,productionWritten:false}));
+ staffed:6,vacant:3,saturdayCatCountryBudget:3,productionWritten:false}));

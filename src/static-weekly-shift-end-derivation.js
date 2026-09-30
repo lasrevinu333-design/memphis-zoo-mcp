@@ -16,9 +16,10 @@ const dateForDay=(start,day)=>{
  return date.toISOString().slice(0,10);
 };
 
-export function createShiftEndContinuityPolicy(weights,sourceConfigurationSha256,digest){
+export function createShiftEndContinuityPolicy(weights,sourceConfigurationSha256,digest,namedHandoffs=[]){
  const body={schema:SHIFT_END_POLICY_SCHEMA,algorithm:SHIFT_END_ALGORITHM,normalPhaseStart:'09:45',
-  weights:clone(weights),provenance:`owner-configuration-sha256:${sourceConfigurationSha256}`};
+  weights:clone(weights),provenance:`owner-configuration-sha256:${sourceConfigurationSha256}`,
+  ...(namedHandoffs.length?{namedHandoffs:clone(namedHandoffs)}:{})};
  return {...body,policyDigest:digest(body)};
 }
 
@@ -27,7 +28,9 @@ export function createShiftEndContinuityPolicy(weights,sourceConfigurationSha256
 export function deriveDatedShiftEndCoverage(source,digest,canonicalizeEffective=value=>value){
  const original=canonicalJson(source),policy=source.version?.shiftEndContinuityPolicy;
  requireFact(policy&&typeof digest==='function','source-bound continuity policy is required');
- requireFact(canonicalJson(Object.keys(policy).sort())===canonicalJson(['algorithm','normalPhaseStart','policyDigest','provenance','schema','weights'].sort()),'continuity policy has unknown or missing fields');
+ const expectedKeys=['algorithm','normalPhaseStart','policyDigest','provenance','schema','weights',
+  ...(Object.hasOwn(policy,'namedHandoffs')?['namedHandoffs']:[])];
+ requireFact(canonicalJson(Object.keys(policy).sort())===canonicalJson(expectedKeys.sort()),'continuity policy has unknown or missing fields');
  const {policyDigest,...body}=policy;
  requireFact(policy.schema===SHIFT_END_POLICY_SCHEMA&&policy.algorithm===SHIFT_END_ALGORITHM
   &&policy.normalPhaseStart==='09:45'&&/^owner-configuration-sha256:[a-f0-9]{64}$/.test(policy.provenance)
@@ -35,6 +38,22 @@ export function deriveDatedShiftEndCoverage(source,digest,canonicalizeEffective=
  requireFact(policy.weights&&Object.getPrototypeOf(policy.weights)===Object.prototype
   &&Object.values(policy.weights).every(n=>typeof n==='number'&&Number.isSafeInteger(n*2)&&n>0&&n<=1000),
   'exact positive half-unit workload weights required');
+ if(Object.hasOwn(policy,'namedHandoffs')){
+  requireFact(Array.isArray(policy.namedHandoffs)&&policy.namedHandoffs.length<=14,'bounded named handoffs required');
+  const seen=new Set();
+  for(const handoff of policy.namedHandoffs){
+   requireFact(handoff&&canonicalJson(Object.keys(handoff).sort())===canonicalJson(
+    ['at','dayOfWeek','fromSlotId','locationCode','source','toSlotId'].sort()),'named handoff fields invalid');
+   requireFact(Number.isInteger(handoff.dayOfWeek)&&handoff.dayOfWeek>=0&&handoff.dayOfWeek<=6
+    &&/^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(handoff.at)
+    &&typeof handoff.locationCode==='string'&&Object.hasOwn(policy.weights,handoff.locationCode)
+    &&typeof handoff.source==='string'&&handoff.source.length>=10&&handoff.source.length<=300
+    &&typeof handoff.fromSlotId==='string'&&typeof handoff.toSlotId==='string'
+    &&handoff.fromSlotId!==handoff.toSlotId,'named handoff identity invalid');
+   const key=`${handoff.dayOfWeek}:${handoff.locationCode}:${handoff.at}`;
+   requireFact(!seen.has(key),'duplicate named handoff');seen.add(key);
+  }
+ }
  requireFact(!source.version.shiftEndDerivationApplied,'effective derived source cannot be used as an immutable template');
  requireFact(Array.isArray(source.version.assignments)&&source.version.assignments.length<=1024,'bounded recurring template required');
  const positions={},roster=[];
@@ -73,7 +92,7 @@ export function deriveDatedShiftEndCoverage(source,digest,canonicalizeEffective=
    &&row.qualificationProvenance,'canonical parent eligibility provenance required');
  }
  const completed=completeRecurringShiftEndCoverage(source,{slots:positions,weights:policy.weights,
-  sourceBoundEligibility:true,fullSegmentIdentity:true});
+  sourceBoundEligibility:true,fullSegmentIdentity:true,namedHandoffs:policy.namedHandoffs||[]});
  requireFact(completed.input.version.assignments.length<=1024,'derived work exceeds bounded program limit');
  const generated=new Set(),chains=[];
  for(const parent of source.version.assignments){
