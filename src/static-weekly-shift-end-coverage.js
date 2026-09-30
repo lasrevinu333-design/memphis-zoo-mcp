@@ -22,7 +22,7 @@ export function completeRecurringShiftEndCoverage(source,config){
  const input=clone(source),version=input.version,notes=[],openResponsibilities=[];
  assert.ok(version && !input.versions,'one canonical recurring source required');
  const distances=new Map(input.proximity.filter(e=>e.verified===true).map(e=>[`${e.fromLocationId}|${e.toLocationId}`,e.minutes]));
- const original=version.assignments,added=[];
+ const original=version.assignments,added=[],insufficientBudgets=[];
  for(let day=0;day<7;day++){
   const positions=datedPositions(input,config,day),workers=positions.filter(s=>!s.incumbent.vacant&&s.status!=='departed_named_absent');
   const slotById=new Map(positions.map(s=>[s.slotId,s]));
@@ -87,7 +87,11 @@ export function completeRecurringShiftEndCoverage(source,config){
    assert.equal(unit.rows.at(-1).window.end,clock(lastEnd),'responsibility must reach final shift end');
    if(unit.rows.length===1)continue;
    const budget=unit.original.serviceEffortMinutes;
-   assert.ok(Number.isSafeInteger(budget)&&budget>=unit.rows.length,'retained workload budget cannot cover positive handoff segments');
+   if(!Number.isSafeInteger(budget)||budget<unit.rows.length){
+    insufficientBudgets.push({day,workId:unit.original.workId,budget,segments:unit.rows.length,
+      owners:unit.rows.map(row=>row.ownerSlotId),windows:unit.rows.map(row=>row.window)});
+    continue;
+   }
    const durations=unit.rows.map(r=>minute(r.window.end)-minute(r.window.start));
    const total=durations.reduce((a,b)=>a+b,0),distributable=budget-unit.rows.length;
    const allocation=durations.map((d,index)=>({index,points:1+Math.floor(distributable*d/total),remainder:(distributable*d)%total}));
@@ -102,6 +106,8 @@ export function completeRecurringShiftEndCoverage(source,config){
    assert.equal(unit.rows.reduce((n,r)=>n+r.serviceEffortMinutes,0),budget);
   }
  }
+ assert.ok(insufficientBudgets.length===0,
+  `retained workload budget cannot cover positive handoff segments: ${JSON.stringify(insufficientBudgets)}`);
  version.assignments.push(...added);
  version.assignments.sort((a,b)=>a.dayOfWeek-b.dayOfWeek||a.window.start.localeCompare(b.window.start)||a.workId.localeCompare(b.workId));
  const validation=validateRecurringShiftEndCoverage(source,input,config);

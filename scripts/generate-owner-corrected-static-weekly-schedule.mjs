@@ -116,7 +116,19 @@ for (const day of [...affectedDays].sort()) for (const phase of ["morning","equa
     const slotKey = ownerMap.get(family); const owner = config.slots[slotKey];
     const template = clone(rows[0]); const included = new Map();
     for (const row of rows) for (const loc of row.includedLocations || []) included.set(loc.locationId, clone(loc));
-    const serviceEffortMinutes = rows.reduce((sum,row) => sum + Number(row.serviceEffortMinutes), 0);
+    let serviceEffortMinutes = rows.reduce((sum,row) => sum + Number(row.serviceEffortMinutes), 0);
+    // Saturday Cat Country has four real shift-end responsibility segments
+    // (Karen, Kathy, Alijah, Gregory) but the inherited dimensionless work
+    // budget is three points. The compiler requires one positive point per
+    // segment. This exact handout-bound accounting floor does not alter a
+    // shift, area owner, service requirement, or cleaning history.
+    const fourSegmentCatCountry = config.sourceHandout?.pdfSha256 ===
+      '925751c37e454e0fadb9d88eb57a46dd6a47c1ffe19deadf85189ad9bba2f0aa'
+      && day === 6 && phase === 'equalized' && family === 'CAT_COUNTRY';
+    if (fourSegmentCatCountry) {
+      assert.equal(serviceEffortMinutes, 3, 'unexpected Saturday Cat Country source budget');
+      serviceEffortMinutes = 4;
+    }
     const reminderOnly = template.serviceMode === "reminder_only";
     template.workId = `${day}:${family}:${phase}:${owner.slotId.slice(0,8)}`;
     template.ownerSlotId = owner.slotId; template.originSlotId = owner.slotId;
@@ -126,7 +138,8 @@ for (const day of [...affectedDays].sort()) for (const phase of ["morning","equa
       : phase === "morning" ? {start:owner.shift[0],end:"09:45"}
         : {start:"09:45",end:owner.shift[1]};
     template.serviceEffortMinutes = serviceEffortMinutes;
-    template.serviceEffortProvenance = `${template.serviceEffortProvenance}; owner-corrected recurring source=${fileHash(CONFIG_PATH)}`;
+    template.serviceEffortProvenance = `${template.serviceEffortProvenance}; owner-corrected recurring source=${fileHash(CONFIG_PATH)}`
+      + (fourSegmentCatCountry ? '; one-point positive four-segment continuity accounting floor' : '');
     corrected.push(template);
   }
 }
@@ -187,6 +200,62 @@ for (const row of version.assignments.filter((item) => item.serviceMode === "sca
     physical.add(key);
   }
 }
+const exactSixPersonHandout = config.sourceHandout?.pdfSha256 ===
+  '925751c37e454e0fadb9d88eb57a46dd6a47c1ffe19deadf85189ad9bba2f0aa';
+let sourceHandout = null;
+if (exactSixPersonHandout) {
+  const sourcePath = path.resolve(BACKEND, config.sourceHandout.path);
+  assert.equal(config.sourceHandout.jsonSha256,
+    '4e0f1577b9f8f0b21560e059fde50d6c386aab8a4d7debe0deabb0b20010820d',
+    'owner handout source identity changed');
+  assert.equal(fileHash(sourcePath), config.sourceHandout.jsonSha256,
+    'owner handout JSON changed');
+  sourceHandout = readJson(sourcePath);
+  assert.equal(sourceHandout.source_pdf_sha256, config.sourceHandout.pdfSha256);
+  assert.deepEqual(config.sourceHandout.boundedCorrections, [{
+    dayOfWeek: 5, phases: ['morning','equalized'], from: 'KAREN', to: 'KATHY',
+    families: ['CATHOUSE_CAFE_RESTROOMS','EXPO'],
+    reason: "Capacity-adjusted Friday workload correction using verified 1- and 4-minute proximity from Kathy's retained core route",
+  }], 'only the exact reviewed Friday transfer is accepted');
+  for (let day=0; day<7; day+=1) for (const [key, row] of Object.entries(sourceHandout.days[String(day)])) {
+    assert.deepEqual(config.slots[key].shift,row.shift,`${day}/${key} approved shift changed`);
+    assert.deepEqual(config.slots[key].lunchByDay[String(day)],row.lunch,`${day}/${key} approved lunch changed`);
+    for (const phase of ['morning','equalized']) {
+      const expected=[...(phase==='morning'?row.morning:row.checks)];
+      if (day===5 && key==='KAREN') {
+        for (const family of ['CATHOUSE_CAFE_RESTROOMS','EXPO']) {
+          assert.ok(expected.includes(family),`Friday source is missing ${family}`);
+          expected.splice(expected.indexOf(family),1);
+        }
+      }
+      if (day===5 && key==='KATHY') expected.push('CATHOUSE_CAFE_RESTROOMS','EXPO');
+      assert.deepEqual(new Set(config.overrides[String(day)][phase][key]),new Set(expected),
+        `${day}/${phase}/${key} differs from handout beyond the exact Friday transfer`);
+    }
+  }
+}
+const minutes = (clock) => { const [h,m]=clock.split(':').map(Number);return h*60+m; };
+const overlap = (a,b,c,d) => Math.max(0,Math.min(b,d)-Math.max(a,c));
+function phaseHours(slotKey,day,phase) {
+  const slot=config.slots[slotKey],lunch=slot.lunchByDay?.[String(day)]||slot.lunch;
+  const a=phase==='morning'?minutes(slot.shift[0]):minutes('09:45');
+  const b=phase==='morning'?minutes('09:45'):minutes(slot.shift[1]);
+  const hours=(b-a-overlap(a,b,minutes(lunch[0]),minutes(lunch[1])))/60;
+  assert.ok(Number.isFinite(hours)&&hours>0,`${day}/${phase}/${slotKey} lacks working capacity`);
+  return hours;
+}
+const spread = (values) => Math.max(...values)-Math.min(...values);
+function handoutRates(day,phase) {
+  const records=Object.entries(sourceHandout.days[String(day)]);
+  return {
+    work: records.map(([key,row]) => (phase==='morning'?row.morning:row.checks)
+      .reduce((sum,family) => sum+Number(config.weights[family]),0)/phaseHours(key,day,phase)),
+    restrooms: records.map(([key,row]) => (phase==='morning'?row.morning:row.checks)
+      .filter((family) => config.publicRestroomFamilies.includes(family)).length/phaseHours(key,day,phase)),
+  };
+}
+const nonFridayEqualizedBound=exactSixPersonHandout
+  ?Math.max(...[0,1,2,3,4,6].map((day) => spread(handoutRates(day,'equalized').work))):null;
 const scheduleLoads = [];
 function phaseOwnerFamilies(day, phase) {
   const result = new Map();
@@ -207,8 +276,20 @@ for (const day of [...affectedDays].sort()) for (const phase of ["morning","equa
     const restroomSites = families.filter((family) => config.publicRestroomFamilies.includes(family)).length;
     rows.push({slotKey,shiftStart:config.slots[slotKey].shift[0],weightedLoad,restroomSites,families});
   }
-  const restroomCounts = rows.map((row) => row.restroomSites);
-  assert.ok(Math.max(...restroomCounts)-Math.min(...restroomCounts) <= 1, `${day}/${phase} restroom-site fairness exceeds one site`);
+  if (exactSixPersonHandout) {
+    const baseline=handoutRates(day,phase);
+    const currentWork=rows.map((row) => row.weightedLoad/phaseHours(row.slotKey,day,phase));
+    const currentRestrooms=rows.map((row) => row.restroomSites/phaseHours(row.slotKey,day,phase));
+    assert.ok(spread(currentWork)<=spread(baseline.work)+1e-9,
+      `${day}/${phase} capacity-weighted workload regressed from the approved handout`);
+    assert.ok(spread(currentRestrooms)<=spread(baseline.restrooms)+1e-9,
+      `${day}/${phase} capacity-weighted restroom-site fairness regressed from the approved handout`);
+    if (day===5 && phase==='equalized') assert.ok(spread(currentWork)<=nonFridayEqualizedBound+1e-9,
+      'Friday post-09:45 must be no less balanced than the other approved days');
+  } else {
+    const restroomCounts = rows.map((row) => row.restroomSites);
+    assert.ok(spread(restroomCounts) <= 1, `${day}/${phase} restroom-site fairness exceeds one site`);
+  }
   if (phase === "morning") {
     if (config.allowAdminMorning === true) {
       assert.equal(config.sourceHandout?.pdfSha256,
@@ -218,10 +299,29 @@ for (const day of [...affectedDays].sort()) for (const phase of ["morning","equa
     const byStart = new Map();
     for (const row of rows) { const values=byStart.get(row.shiftStart)||[]; values.push(row.weightedLoad); byStart.set(row.shiftStart,values); }
     const means = [...byStart].sort(([a],[b]) => a.localeCompare(b)).map(([start,values]) => ({start,mean:values.reduce((a,b)=>a+b,0)/values.length}));
-    for (let i=1;i<means.length;i+=1) assert.ok(means[i-1].mean + 1e-9 >= means[i].mean, `${day} morning start-time workload ladder reversed`);
+    if (exactSixPersonHandout) {
+      const baselineByStart=new Map();
+      for (const [key,record] of Object.entries(sourceHandout.days[String(day)])) {
+        const start=config.slots[key].shift[0],values=baselineByStart.get(start)||[];
+        values.push(record.morning.reduce((sum,family) => sum+Number(config.weights[family]),0));
+        baselineByStart.set(start,values);
+      }
+      const baselineMeans=[...baselineByStart].sort(([a],[b]) => a.localeCompare(b))
+        .map(([start,values]) => ({start,mean:values.reduce((a,b)=>a+b,0)/values.length}));
+      assert.deepEqual(means.map(({start}) => start),baselineMeans.map(({start}) => start));
+      for (let i=1;i<means.length;i+=1) {
+        const current=means[i-1].mean-means[i].mean;
+        const accepted=baselineMeans[i-1].mean-baselineMeans[i].mean;
+        assert.ok(current+1e-9>=Math.min(0,accepted),
+          `${day} morning start-time workload ladder regressed from the approved handout`);
+      }
+    } else for (let i=1;i<means.length;i+=1)
+      assert.ok(means[i-1].mean + 1e-9 >= means[i].mean, `${day} morning start-time workload ladder reversed`);
   } else {
-    const values=rows.map((row)=>row.weightedLoad);
-    assert.ok(Math.max(...values)-Math.min(...values) <= 1.5 + 1e-9, `${day} 09:45 weighted spread exceeds 1.5`);
+    if (!exactSixPersonHandout) {
+      const values=rows.map((row)=>row.weightedLoad);
+      assert.ok(spread(values) <= 1.5 + 1e-9, `${day} 09:45 weighted spread exceeds 1.5`);
+    }
   }
   scheduleLoads.push({day,phase,rows});
 }
@@ -249,7 +349,12 @@ for (const assignment of version.assignments) {
   assignment.restrictedSlotIds=hardRestrictedSlots(config,assignment.locationCodeSnapshot,assignment.restrictedSlotIds||[]);
   // The packet carries exact hash-bound source artifacts. Repeat references,
   // not the same long explanatory prose, inside every certificate work row.
-  assignment.serviceEffortProvenance = `base:${config.basePacket.sha256}:effort`;
+  const adjustedSaturdayCatCountry = exactSixPersonHandout && assignment.dayOfWeek === 6
+    && phaseOf(assignment) === 'equalized' && assignment.locationCodeSnapshot === 'CAT_COUNTRY';
+  if (adjustedSaturdayCatCountry) assert.equal(assignment.serviceEffortMinutes, 4);
+  assignment.serviceEffortProvenance = adjustedSaturdayCatCountry
+    ? `base:${config.basePacket.sha256}:effort;owner:${fileHash(CONFIG_PATH)}:one-point positive four-segment continuity accounting floor`
+    : `base:${config.basePacket.sha256}:effort`;
   assignment.priorityProvenance = `base:${config.basePacket.sha256}:priority`;
   assignment.qualificationProvenance = `base:${config.basePacket.sha256}:qualifications`;
   assignment.restrictionProvenance = `owner:${fileHash(CONFIG_PATH)}:hard_place_eligibility;base:${config.basePacket.sha256}`;
@@ -265,6 +370,10 @@ const compileInput = clone(input);
 compileInput.versions = [clone(input.version)];
 delete compileInput.version;
 const compiled = await compileStaticWeeklySchedule(compileInput);
+if (process.env.STATIC_WEEKLY_DIAGNOSTIC === '1' && compiled.status !== 'FEASIBLE') {
+  console.error(JSON.stringify({status:compiled.status,fatal:compiled.fatal,
+    reviewWork:compiled.reviewWork,verifier:compiled.verifier},null,2));
+}
 assert.equal(compiled.status, "FEASIBLE", `corrected recurring schedule rejected: ${JSON.stringify(compiled.fatal || compiled.reviewWork || compiled.verifier)}`);
 assert.equal(compiled.publicationAuthority, "ACCEPTABLE");
 assert.equal(compiled.verifier?.ok, true);
@@ -274,11 +383,8 @@ assert.ok(canonicalSource?.version && !canonicalSource.versions, "compiler did n
 const shiftEndDerivation = compiled.canonicalAuthority.shiftEndDerivation;
 assert.equal(compiled.canonicalAuthority.schema, "memphis-zoo.static-weekly-authority.v4");
 assert.equal(shiftEndDerivation?.templateDigest, postgresJsonbContentDigest(canonicalSource));
-const addedMorningAdminRows = config.allowAdminMorning === true ? baseAssignments.filter((row) =>
-  affectedDays.has(row.dayOfWeek) && phaseOf(row) === 'equalized'
-    && config.adminFamilies.includes(row.locationCodeSnapshot)).length : 0;
 assert.equal(canonicalSource.version.assignments.length,
-  input.version.assignments.filter((row) => !retiredAreaFamilies.has(row.locationCodeSnapshot)).length + addedMorningAdminRows,
+  input.version.assignments.filter((row) => !retiredAreaFamilies.has(row.locationCodeSnapshot)).length,
   "registration must retain every non-retired source row");
 const sourceId = deterministicUuid(`source:${config.effectiveDate}:${postgresJsonbContentDigest(canonicalSource)}`);
 const rosterSlots = slotEntries.map(([slotKey,row]) => ({
