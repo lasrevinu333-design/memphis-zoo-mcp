@@ -97,7 +97,10 @@ const fullyStaffed=deriveDatedShiftEndCoverage(future,postgresJsonbContentDigest
 assert.equal(fullyStaffed.validation.staffedDepartureByDay[4],'17:00','17:00 is legitimate only after the synthetic vacancy is actually filled');
 assert.equal(fullyStaffed.validation.staffedDepartureByDay[5],'17:00');
 const turnover=structuredClone(input),late=ownerConfig.slots.OPTION1.slotId;
-turnover.slots.find(s=>s.id===late).incumbencies.push({personId:'SYNTHETIC-LATE-HIRE',displayName:'TEST ONLY',effectiveStart:'2026-10-02',effectiveEnd:null});
+// Friday hire is relative to the tested Monday, including later recurring starts.
+const hireDate=new Date(`${input.serviceDate}T12:00:00Z`);hireDate.setUTCDate(hireDate.getUTCDate()+4);
+const fridayHireDate=hireDate.toISOString().slice(0,10);
+turnover.slots.find(s=>s.id===late).incumbencies.push({personId:'SYNTHETIC-LATE-HIRE',displayName:'TEST ONLY',effectiveStart:fridayHireDate,effectiveEnd:null});
 turnover.version.vacantSlotIds=turnover.version.vacantSlotIds.filter(s=>s!==late);
 for(const row of turnover.version.slotAvailability.filter(r=>r.slotId===late&&(r.dayOfWeek===0||r.dayOfWeek>=5)))row.status='working';
 const dated=deriveDatedShiftEndCoverage(turnover,postgresJsonbContentDigest);
