@@ -69,6 +69,16 @@ const vacancyIds = slotEntries.filter(([,row]) => row.vacancy === true).map(([,r
 assert.equal(slotEntries.length, 9, "exactly nine stable employee positions required");
 assert.ok(vacancyIds.length <= 3, "this release supports six through nine actual employees");
 const baseAssignments = clone(version.assignments);
+const retiredAreaFamilies = new Set(config.retiredAreaFamilies || []);
+if (retiredAreaFamilies.size) {
+  assert.equal(config.sourceHandout?.pdfSha256,
+    '925751c37e454e0fadb9d88eb57a46dd6a47c1ffe19deadf85189ad9bba2f0aa',
+    'retiring recurring families requires the exact approved September 28 handout');
+  assert.deepEqual([...retiredAreaFamilies].sort(), [
+    'BAMBOO_SPRINGS_GIFT_SHOP', 'ELEPHANT_TRUNK_GIFT_SHOP',
+    'ELEPHANT_TRUNK_RESTROOMS', 'TRADING_POST_GIFT_SHOP',
+  ], 'only the four historical gift-shop family codes may be retired');
+}
 const phaseOf = (assignment) => assignment.window?.start === "09:45" ? "equalized" : "morning";
 const affectedDays = new Set(Object.keys(config.overrides).map(Number));
 const corrected = baseAssignments.filter((assignment) => !affectedDays.has(assignment.dayOfWeek));
@@ -86,9 +96,18 @@ function indexedOwnerMap(day, phase) {
 }
 for (const day of [...affectedDays].sort()) for (const phase of ["morning","equalized"]) {
   const source = baseAssignments.filter((row) => row.dayOfWeek === day && phaseOf(row) === phase);
+  if (phase === 'morning' && config.allowAdminMorning === true) {
+    // The reviewed base contained Admin upkeep only after 09:45. The exact
+    // September 28 handout also authorizes a first clean before opening.
+    // Reuse only the same day's physical Admin family definitions; the owned
+    // work ID/window are recreated below and cannot alias the upkeep phase.
+    source.push(...baseAssignments.filter((row) => row.dayOfWeek === day
+      && phaseOf(row) === 'equalized' && config.adminFamilies.includes(row.locationCodeSnapshot)));
+  }
   const groups = new Map();
   for (const row of source) {
     const family = row.locationCodeSnapshot;
+    if (retiredAreaFamilies.has(family)) continue;
     const rows = groups.get(family) || []; rows.push(row); groups.set(family, rows);
   }
   const ownerMap = indexedOwnerMap(day, phase);
@@ -129,7 +148,8 @@ for (const [slotKey, owner] of slotEntries) for (const dayOfWeek of owner.workDa
   template.dayOfWeek = dayOfWeek;
   template.status = owner.vacancy === true ? "vacant_unfilled" : "working";
   template.shift = {start:owner.shift[0],end:owner.shift[1]};
-  template.lunch = {start:owner.lunch[0],end:owner.lunch[1]};
+  const lunch = owner.lunchByDay?.[String(dayOfWeek)] || owner.lunch;
+  template.lunch = {start:lunch[0],end:lunch[1]};
   const anchor = version.assignments.find((row) => row.dayOfWeek === dayOfWeek
     && row.originSlotId === owner.slotId && row.serviceMode === "scan_tracked");
   if (owner.vacancy !== true) {
@@ -150,8 +170,11 @@ for (const assignment of version.assignments) {
   assertNormalOwnerEligibility(owner,assignment.locationCodeSnapshot);
 }
 for (let day=0; day<7; day+=1) for (const phase of ["morning","equalized"]) {
-  const oldFamilies = [...new Set(baseAssignments.filter((row) => row.dayOfWeek===day && phaseOf(row)===phase)
-    .map((row) => row.locationCodeSnapshot))].sort();
+  const oldSource = baseAssignments.filter((row) => row.dayOfWeek===day && phaseOf(row)===phase);
+  if (phase === 'morning' && config.allowAdminMorning === true) oldSource.push(...baseAssignments.filter((row) =>
+    row.dayOfWeek===day && phaseOf(row)==='equalized' && config.adminFamilies.includes(row.locationCodeSnapshot)));
+  const oldFamilies = [...new Set(oldSource
+    .map((row) => row.locationCodeSnapshot).filter((family) => !retiredAreaFamilies.has(family)))].sort();
   const newFamilies = [...new Set(version.assignments.filter((row) => row.dayOfWeek===day && phaseOf(row)===phase)
     .map((row) => row.locationCodeSnapshot))].sort();
   assert.deepEqual(newFamilies, oldFamilies, `${day}/${phase} gained or lost recurring location families`);
@@ -187,7 +210,11 @@ for (const day of [...affectedDays].sort()) for (const phase of ["morning","equa
   const restroomCounts = rows.map((row) => row.restroomSites);
   assert.ok(Math.max(...restroomCounts)-Math.min(...restroomCounts) <= 1, `${day}/${phase} restroom-site fairness exceeds one site`);
   if (phase === "morning") {
-    assert.equal(rows.some((row) => row.families.some((family) => config.adminFamilies.includes(family))), false, `${day} morning contains admin work`);
+    if (config.allowAdminMorning === true) {
+      assert.equal(config.sourceHandout?.pdfSha256,
+        '925751c37e454e0fadb9d88eb57a46dd6a47c1ffe19deadf85189ad9bba2f0aa',
+        'morning Admin ownership requires the exact owner-approved handout');
+    } else assert.equal(rows.some((row) => row.families.some((family) => config.adminFamilies.includes(family))), false, `${day} morning contains admin work`);
     const byStart = new Map();
     for (const row of rows) { const values=byStart.get(row.shiftStart)||[]; values.push(row.weightedLoad); byStart.set(row.shiftStart,values); }
     const means = [...byStart].sort(([a],[b]) => a.localeCompare(b)).map(([start,values]) => ({start,mean:values.reduce((a,b)=>a+b,0)/values.length}));
@@ -247,7 +274,12 @@ assert.ok(canonicalSource?.version && !canonicalSource.versions, "compiler did n
 const shiftEndDerivation = compiled.canonicalAuthority.shiftEndDerivation;
 assert.equal(compiled.canonicalAuthority.schema, "memphis-zoo.static-weekly-authority.v4");
 assert.equal(shiftEndDerivation?.templateDigest, postgresJsonbContentDigest(canonicalSource));
-assert.equal(canonicalSource.version.assignments.length, input.version.assignments.length, "registration must retain full source rows");
+const addedMorningAdminRows = config.allowAdminMorning === true ? baseAssignments.filter((row) =>
+  affectedDays.has(row.dayOfWeek) && phaseOf(row) === 'equalized'
+    && config.adminFamilies.includes(row.locationCodeSnapshot)).length : 0;
+assert.equal(canonicalSource.version.assignments.length,
+  input.version.assignments.filter((row) => !retiredAreaFamilies.has(row.locationCodeSnapshot)).length + addedMorningAdminRows,
+  "registration must retain every non-retired source row");
 const sourceId = deterministicUuid(`source:${config.effectiveDate}:${postgresJsonbContentDigest(canonicalSource)}`);
 const rosterSlots = slotEntries.map(([slotKey,row]) => ({
   slotId: row.slotId, personId: row.personId, displayName: row.name,
