@@ -24,7 +24,7 @@ Route factories for messaging, schedule, and events are re-exported from `src/ro
 | `GET` | `/.well-known/oauth-authorization-server` | RFC 8414 metadata for the self-contained Render authorization server. |
 | `POST` | `/oauth/register` | Bounded stateless DCR for validated ChatGPT HTTPS redirects and PKCE public clients. |
 | `GET` | `/oauth/authorize` | Validates the exact resource/client/redirect/scope/PKCE request and presents operator login. |
-| `POST` | `/oauth/login` | CSRF- and rate-limit-bound verification of the existing Moxie operator password. Never auto-approves. |
+| `POST` | `/oauth/login` | CSRF- and rate-limit-bound verification of the existing operator password. Never auto-approves. |
 | `POST` | `/oauth/decision` | Separate CSRF-bound approval or denial; every redirect response includes the exact issuer. |
 | `POST` | `/oauth/token` | Public-client authorization-code/PKCE exchange and rotating refresh-token exchange. |
 
@@ -133,42 +133,6 @@ Routes are mounted under:
 | `POST` | `/schedule-api/locations/:locationId/workload-settings` | Update workload settings for a location. |
 
 See `src/schedule-api.js` for remaining route-level details.
-
-## Moxie — Annie's Private Assistant
-
-Routes are mounted under:
-
-```text
-/moxie
-```
-
-| Method | Path | Purpose |
-|---|---|---|
-| `GET` | `/moxie/health` | Moxie health check. |
-| `GET` | `/moxie/login` | Login page. |
-| `POST` | `/moxie/login` | Submit password. |
-| `GET` | `/moxie/logout` | Clear session. |
-| `GET` | `/moxie/` | Chat UI (main page). |
-| `POST` | `/moxie/chat` | Send chat message to Gemini. |
-| `GET` | `/moxie/chat/state` | Get saved chat history. |
-| `PUT` | `/moxie/chat/state` | Save chat history. |
-| `GET` | `/moxie/log` | Annie's Log page (notes + reminders). |
-| `POST` | `/moxie/log/note` | Add a note. |
-| `DELETE` | `/moxie/log/note/:id` | Delete a note. |
-| `POST` | `/moxie/log/reminder` | Add a reminder. |
-| `POST` | `/moxie/log/reminder/:id/complete` | Mark reminder done. |
-| `DELETE` | `/moxie/log/reminder/:id` | Delete a reminder. |
-| `POST` | `/moxie/log/suggested/:id/confirm` | Confirm suggested reminder. |
-| `POST` | `/moxie/log/suggested/:id/dismiss` | Dismiss suggested reminder. |
-| `GET` | `/moxie/reminders` | Reminders page. |
-| `GET` | `/moxie/contacts` | Contacts page. |
-| `POST` | `/moxie/contacts` | Add a contact. |
-| `PUT` | `/moxie/contacts/:id` | Update a contact. |
-| `DELETE` | `/moxie/contacts/:id` | Delete a contact. |
-| `POST` | `/moxie/contacts/suggested/:id/confirm` | Confirm suggested contact. |
-| `POST` | `/moxie/contacts/suggested/:id/dismiss` | Dismiss suggested contact. |
-| `GET` | `/moxie/password` | Settings page. |
-| `POST` | `/moxie/password` | Change password. |
 
 ## Diagnostic routes
 

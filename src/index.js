@@ -3,7 +3,6 @@ import { createHash, createHmac, randomUUID, timingSafeEqual } from "crypto";
 import express from "express";
 import { createGeneralJsonMiddleware } from "./request-json-parser.js";
 import { parse as parseAttendanceDocument } from "parse5";
-import { fileURLToPath } from "node:url";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { createClient } from "@supabase/supabase-js";
@@ -14,7 +13,6 @@ import {
   createEventsEmployeeRouter,
   createEventsPublicRouter,
   createMessagingRouter,
-  createMoxieRouter,
   createScheduleRouter,
 } from "./routes/index.js";
 import { APP_VERSION, RELEASE_ID } from "./app-version.js";
@@ -42,7 +40,6 @@ import { createMcpServer as createCanonicalMcpServer } from "./mcp/create-mcp-se
 import { getToolManifest } from "./mcp/tool-manifest.js";
 import { validateRuntimeEnv } from "./config/env.js";
 import { authorityHttpFailure, deferJsonParserErrors, malformedScanAuthorityOutcome, rpcFailure, scanRpcHttpOutcome, sqlStateHttpStatus } from "./offline-authority-http.js";
-import { installAnnieMoxieRoutes } from "./annie-moxie-bootstrap.js";
 import { installLeadershipHttpRoutes } from "./leadership-bootstrap.js";
 import { installCustodialEmployeeAdminRoutes } from "./custodial-employee-admin.js";
 import { installManagerNotificationRoutes } from "./manager-notifications.js";
@@ -85,8 +82,6 @@ const selfContainedMcpOAuth = createSelfContainedMcpOAuthService();
 const mcpReadOnlyNoAuthEnabled = isMcpReadOnlyNoAuthEnabled(process.env);
 app.use(selfContainedMcpOAuth.router);
 
-const MOXIE_MOUNT_PATH = (String(process.env.MOXIE_PREFIX || "/moxie").trim() || "/moxie").replace(/\/+$/, "") || "/moxie";
-const MOXIE_STATIC_DIR = fileURLToPath(new URL("../public/moxie-assets/", import.meta.url));
 
 const supabaseAdmin =
   process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -2416,7 +2411,6 @@ installDeviceCredentialRoutes(app, {
 // Production integrations are installed explicitly at their canonical route
 // boundary. Startup must never depend on prototype interception or import-order
 // side effects.
-installAnnieMoxieRoutes(app, { supabase: supabaseAdmin });
 installLeadershipHttpRoutes(app, { supabase: supabaseAdmin });
 installCustodialEmployeeAdminRoutes(app, { supabase: supabaseAdmin, requireEmployeeDeviceCredential });
 const managerNotificationRuntime = installManagerNotificationRoutes(app, { supabase: supabaseAdmin });
@@ -2446,7 +2440,6 @@ app.get("/status/deep", requireOpsManagerAuth, (_req, res) => {
   });
 });
 
-app.use(MOXIE_MOUNT_PATH, createMoxieRouter({ supabase: supabaseAdmin, staticDir: MOXIE_STATIC_DIR }));
 
 app.use("/admin-api", (req, res, next) => { setAdminApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
 app.use("/dashboard-api", (req, res, next) => { setPublicDashboardCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
@@ -3301,7 +3294,6 @@ const httpServer = app.listen(port, () => {
   console.log("Admin events endpoint: /admin-api/events");
   console.log("Schedule API endpoint: /schedule-api");
   console.log("Feedback API endpoint: /feedback-api");
-  console.log(`Moxie endpoint: ${MOXIE_MOUNT_PATH}/`);
   console.log("MCP endpoint: /mcp");
   console.log("Legacy SSE endpoint: /sse");
   console.log("Legacy messages endpoint: /messages");

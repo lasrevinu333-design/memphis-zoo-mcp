@@ -62,7 +62,7 @@
     "test:gemini-console": "node scripts/gemini-console-foundation-tests.mjs",
     "test:gemini-console-db": "node scripts/gemini-console-database-tests.mjs",
     "test:device-security-app": "node scripts/device-security-app-tests.mjs",
-    "test:moxie-route": "node scripts/moxie-route-tests.mjs",
+    "test:moxie-decommission": "node scripts/moxie-decommission-tests.mjs",
     "test:schedule-source-type": "node scripts/schedule-source-type-contract-tests.mjs",
     "test:device-credentials": "node scripts/device-credential-foundation-tests.mjs",
     "test:native-phone-attestation": "node scripts/native-phone-attestation-tests.mjs",

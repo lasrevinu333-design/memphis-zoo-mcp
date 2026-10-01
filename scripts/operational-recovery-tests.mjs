@@ -102,10 +102,4 @@ assert.match(migration, /update public\.devices[\s\S]*last_seen_at = v_now/i);
 assert.match(migration, /greatest\(d\.last_seen_at, ds\.last_server_ack_at, ds\.updated_at\)/i);
 assert.match(migration, /d\.assigned_employee_id is not null/i);
 
-const moxie = readFileSync(resolve("src/routes/moxie.js"), "utf8");
-assert.match(moxie, /MOXIE_AUTH_REQUIRED/);
-assert.match(moxie, /if \(!MOXIE_AUTH_REQUIRED\) return true/);
-assert.match(moxie, /escapeHtml\(err\.message \|\| err\)/);
-assert.doesNotMatch(moxie, /Password accepted for this session/);
-
 console.log("OPERATIONAL_RECOVERY_TESTS_PASS");
