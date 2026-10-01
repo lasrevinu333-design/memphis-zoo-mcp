@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {correctAndVerifyConsumers,verifyConsumerViewState} from './fixtures/dated-consumer-cycle1-probes.mjs';
 import {execFile,spawn} from 'node:child_process';
 import {promisify} from 'node:util';
 import fs from 'node:fs';
@@ -50,7 +51,7 @@ try{
  assert.equal(ready,true,'owned local PostgreSQL starts');
  console.log('REPLAY_UNCHANGED_176_SCHEMA_MIGRATIONS_WITHOUT_AUTOMATIC_DATA_API_GRANTS');
  const noAuto=['supabase_admin','postgres'].flatMap(role=>['',' in schema public'].flatMap(scope=>['tables','sequences'].map(kind=>`alter default privileges for role ${role}${scope} revoke all on ${kind} from PUBLIC,anon,authenticated,service_role;`))).join('');
- const files=fs.readdirSync('supabase/migrations').filter(n=>n.endsWith('.sql')&&!n.startsWith('20261001130750')).sort();
+ const files=fs.readdirSync('supabase/migrations').filter(n=>n.endsWith('.sql')&&n<'20261001130750').sort();
  for(let i=0;i<files.length;i++){await sql(noAuto+fs.readFileSync(path.join('supabase/migrations',files[i]),'utf8'));if(i%30===0)console.log('SCHEMA_REPLAY',i+1,files[i]);}
  pool=new pg.Pool({host:socket,user:'supabase_admin',password:'fixture-local-only',database:'postgres',max:4,connectionTimeoutMillis:3000});
  const controller=createOctoberDatedMaterializationController({plan,store:createOctoberDatedPostgresStore({database:pool,plan})});
@@ -101,6 +102,7 @@ try{
  server=await new Promise(resolve=>{const own=app.listen(0,'127.0.0.1',()=>resolve(own));});
  const origin=`http://127.0.0.1:${server.address().port}`;
  console.log(JSON.stringify({phase:'owned-http-reader-fixture',origin}));
+ await correctAndVerifyConsumers({sql,query,read,plan,origin,check});
  let advisors;
  try{const url=new URL('postgresql://supabase_admin:fixture-local-only@localhost/postgres');url.searchParams.set('host',socket);
   const output=await run('supabase',['db','advisors','--db-url',url.href,'--type','security','--output-format','json'],{env:{...process.env,DO_NOT_TRACK:'1'},timeout:30000,maxBuffer:8*1024*1024});
@@ -177,14 +179,16 @@ try{
  // A changed dependency invalidates readers, but must not lock authorized rollback.
  await sql(`update public.employees set active=false where id=${quote(plan.rosterSlots[0].personId)};`);
  const stale=await read("select * from public.static_weekly_v6_schedule_authority_state(date '2026-10-01')");
+ await verifyConsumerViewState({sql,query,read,check,stage:'staleness'});
  check('dependency drift marks bounded reader stale',()=>assert.equal(stale[0].projection_status,'stale_dated_dependency'));
  const historical=await controller.status({manager,idempotencyKey:'sql-october-one'});
  check('historical receipt remains accessible after dependency drift',()=>assert.equal(historical.operationReceipt.publicationId,accepted.publicationId));
  const rollback=await controller.rollback({manager,expectedRevision:accepted.revision,idempotencyKey:'sql-october-rollback',publicationId:accepted.publicationId,projectionId:accepted.projectionId});
+ await verifyConsumerViewState({sql,query,read,check,stage:'rollback'});
  check('actual SQL rollback preserves immutable publications and occurrences',()=>assert.equal(rollback.state,'ROLLED_BACK'));
  const finalCounts=await json('select jsonb_build_object(\'publications\',(select count(*) from public.custodial_dated_publications),\'occurrences\',(select count(*) from public.custodial_dated_occurrences),\'activations\',(select count(*) from public.custodial_dated_activations))::text');
  check('rollback is append-only',()=>{assert.equal(finalCounts.publications,1);assert.equal(finalCounts.activations,2);assert.equal(finalCounts.occurrences,plan.days.flatMap(d=>d.assignments).length);});
- const result={status:'PASS',checks:checks.length,image,migrationCount:files.length+1,planDigest:plan.planDigest,phonePdfRevision:plan.phonePdfRevision,accepted,rollback,security:secure,scope:'actual owned network-none PostgreSQL; 176 unchanged schema migrations plus new bounded migration; explicit synthetic approved dependencies, actual employee/Home/lunch/cleaning readers; no production or phone proof',checksPassed:checks};if(process.env.DATED_POSTGRES_EVIDENCE_DIR){fs.mkdirSync(process.env.DATED_POSTGRES_EVIDENCE_DIR,{recursive:true});fs.writeFileSync(path.join(process.env.DATED_POSTGRES_EVIDENCE_DIR,'postgres-results.json'),JSON.stringify(result,null,2)+'\n',{flag:'wx'});}console.log(JSON.stringify(result));
+ const result={status:'PASS',checks:checks.length,image,migrationCount:files.length+2,planDigest:plan.planDigest,phonePdfRevision:plan.phonePdfRevision,accepted,rollback,security:secure,scope:'actual owned network-none PostgreSQL; 176 unchanged schema migrations plus new bounded migration; explicit synthetic approved dependencies, actual employee/Home/lunch/cleaning readers; no production or phone proof',checksPassed:checks};if(process.env.DATED_POSTGRES_EVIDENCE_DIR){fs.mkdirSync(process.env.DATED_POSTGRES_EVIDENCE_DIR,{recursive:true});fs.writeFileSync(path.join(process.env.DATED_POSTGRES_EVIDENCE_DIR,'postgres-results.json'),JSON.stringify(result,null,2)+'\n',{flag:'wx'});}console.log(JSON.stringify(result));
 }catch(error){console.error(error);if(error.output)console.error(error.output);if(error.error)console.error(error.error);process.exitCode=1;}
 finally{
  if(managerServer)await new Promise(resolve=>managerServer.close(resolve));if(server){await new Promise(resolve=>server.close(resolve));assert.equal(server.listening,false);}if(pool)await pool.end();if(created){await docker(['rm','-f',container]);await assert.rejects(()=>docker(['inspect',container]));}

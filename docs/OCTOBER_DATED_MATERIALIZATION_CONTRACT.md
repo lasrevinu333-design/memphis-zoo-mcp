@@ -94,3 +94,27 @@ checkout, database migration, production state, signing, phone or John draft was
 changed. The new code is unreviewed: the earlier F1 PASS applies only to its
 unchanged packet-closure scope. Coordinate shared review capacity before any
 changed-input independent review submission.
+
+Cycle-one consumer correction
+
+The independent cycle-one audit of 9ce288bc returned HOLD with four reproduced
+consumer defects. Forward migration 20261001152633 preserves that migration's
+bytes and corrects parsed view bindings/date enumeration, applies the approved
+location-aware three-hour Admin timer to actual reminder/dashboard callers, and
+restores calendar-date comparisons to the dated employee phase reader. The
+shared display model preserves response-only/no-clean mode and instruction
+before clock-based classification, including lunch and on-call loans.
+
+The preserved pre-correction display fixture and SQL fail-before evidence remain
+under the correction handoff. The same disposable database workflow retains all
+149 previous checks and adds 54 consumer checks: 203 PASS with 178 migrations.
+Fixed-time dashboard observations use the actual view and restricted reader in
+rolled-back fixture transactions so owner/RLS semantics are retained. Synthetic
+completed-cleaning evidence uses the application's valid full-cleaning selection;
+no completion guard is disabled. No provider notification or physical visit is
+claimed. The approved document, shifts, lunches, source digest, draft PDFs and
+Friday OPEN exception are byte-identical to 9ce288bc.
+
+Fresh changed-input web closure and the authorized second Astra Max cycle are
+separate remaining gates. The pending older web review of 9ce288bc cannot accept
+this correction; retain its conversation and reconcile its findings separately.

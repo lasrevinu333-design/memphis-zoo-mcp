@@ -1,7 +1,6 @@
 const SECTION_DEFINITIONS = Object.freeze({
   morning: { order: 10, title: "Morning Full Clean Schedule" },
   rebalance: { order: 20, title: "Restroom Rebalance Schedule" },
-  response: { order: 25, title: "Respond to Issues Only" },
   lunch: { order: 30, title: "1 Hour Lunch Coverage" },
   late: { order: 40, title: "Afternoon Call Coverage" },
   reminder: { order: 50, title: "Reminder Only" },
@@ -74,7 +73,6 @@ function normalizePurpose(item = {}) {
 
 export function scheduleSectionKey(item = {}) {
   const purpose = normalizePurpose(item);
-  if (item.service_mode === "response_only_no_clean" && purpose !== "lunch coverage") return "response";
   if (purpose === "reminder") return "reminder";
   if (purpose === "lunch coverage" || purpose === "lunch_coverage") return "lunch";
   if (purpose === "late coverage" || purpose === "late_coverage") return "late";
@@ -141,7 +139,6 @@ function mergeIntervals(intervals = []) {
 }
 
 function representativePurpose(sectionKey, purposes = []) {
-  if (sectionKey === "response") return "response_only_no_clean";
   if (sectionKey === "morning") return "deep_clean";
   if (sectionKey === "lunch") return "lunch_coverage";
   if (sectionKey === "late") return "late_coverage";
@@ -153,7 +150,7 @@ function representativePurpose(sectionKey, purposes = []) {
 
 function displayBucketIdentity(item, sectionKey, sourceIndex) {
   const identity = groupIdentity(item);
-  if (sectionKey !== "lunch") return `${sectionKey}|${identity}|${normalizedText(item.service_mode)}`;
+  if (sectionKey !== "lunch") return `${sectionKey}|${identity}`;
   const interval = intervalForItem(item);
   const sourceIds = ["occurrence_id", "segment_id", "id"]
     .filter(field => normalizedText(item[field]))
@@ -165,7 +162,7 @@ function displayBucketIdentity(item, sectionKey, sourceIndex) {
     return JSON.stringify([sectionKey, identity, "distinct_source_row", sourceIndex]);
   }
   return JSON.stringify([sectionKey, identity, normalizedText(item.service_date),
-    sourceIds, interval.start, interval.end, normalizedText(item.service_mode)]);
+    sourceIds, interval.start, interval.end]);
 }
 
 export function consolidateScheduleItems(items = []) {
@@ -190,9 +187,6 @@ export function consolidateScheduleItems(items = []) {
         statuses: [],
         owner_types: [],
         notes: [],
-        service_mode: item.service_mode || null,
-        on_call_only: false,
-        instructions: [],
         is_current: false,
         is_public_restroom: false,
         is_schedule_only_reminder: false,
@@ -211,8 +205,6 @@ export function consolidateScheduleItems(items = []) {
     bucket.statuses.push(item.status);
     bucket.owner_types.push(item.owner_type);
     bucket.notes.push(item.notes);
-    bucket.on_call_only = bucket.on_call_only || item.on_call_only === true;
-    bucket.instructions.push(item.instruction);
     bucket.is_current = bucket.is_current || item.is_current === true;
     bucket.is_public_restroom = bucket.is_public_restroom || item.is_public_restroom === true;
     bucket.is_schedule_only_reminder = bucket.is_schedule_only_reminder || item.is_schedule_only_reminder === true;
@@ -235,10 +227,6 @@ export function consolidateScheduleItems(items = []) {
       section_key: bucket.section_key,
       section_title: definition.title,
       section_order: definition.order,
-      service_mode: bucket.service_mode,
-      on_call_only: bucket.on_call_only,
-      instruction: bucket.service_mode === "response_only_no_clean" ? "Respond to issues only; no cleaning." : uniqueText(bucket.instructions).join(" | ") || null,
-      creates_deep_clean: bucket.service_mode === "response_only_no_clean" ? false : bucket.section_key === "morning",
       coverage_purpose: representativePurpose(bucket.section_key, purposes),
       purposes,
       source_type: uniqueText(bucket.source_types)[0] || null,
@@ -288,9 +276,6 @@ export function summarizeScheduleAreas(items = []) {
     items: section.items.map((item) => ({
       name: item.name,
       group_code: item.group_code,
-      service_mode: item.service_mode,
-      instruction: item.instruction,
-      on_call_only: item.on_call_only,
       time_label: item.time_label,
       is_current: item.is_current,
     })),
