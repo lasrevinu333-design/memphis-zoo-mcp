@@ -118,3 +118,32 @@ Friday OPEN exception are byte-identical to 9ce288bc.
 Fresh changed-input web closure and the authorized second Astra Max cycle are
 separate remaining gates. The pending older web review of 9ce288bc cannot accept
 this correction; retain its conversation and reconcile its findings separately.
+
+Old-source web HOLD reconciliation
+
+The separate web review of 9ce288bc is now final HOLD at
+https://chatgpt.com/c/6abe7148-a920-83ea-ac1d-1f1207e50684. Its compatibility-view
+finding is the same as cycle-one SCHED-C1-01. The bounded adapter now protects
+connection acquisition and checked-out asynchronous errors, discards broken
+clients, and acquires the shared restore fence before authority/source reads.
+An exact confirmation retry reauthorizes first, then returns its immutable
+receipt before mutable admission checks; a new operation retains those checks.
+
+Forward migration20261001161831 fences direct SQL callers before authority,
+binds live employee and slot codes in the dependency digest, removes the
+unneeded control-plane employee/Home reader grant and recaptures exact function
+and ACL recovery definitions for every retained inventory alias. The prior
+append-only slot trigger already rejects ordinary slot-code changes; no guard
+is disabled to manufacture that part of the finding. Privileged postgres
+administration grants remain distinct from the exact two runtime reader roles.
+
+The PostgreSQL fixture retains the first immutable synthetic publication and
+withdraws it through the authorized append-only rollback before accepting a
+second publication with the strengthened digest. Exact final counts are now
+two publications/four activation rows/two complete occurrence sets. This
+accounts for the extra fail-before publication rather than weakening history
+checks or editing an old accepted dependency digest. Real two-session probes
+cover restore versus confirm/rollback, digest staleness, runtime ACLs and exact
+recovery aliases. Frozen source/head hashes, failed fixture cleanup and final
+results accompany the correction handoff. No independent PASS, release,
+production change, phone delivery or physical acceptance is inferred.

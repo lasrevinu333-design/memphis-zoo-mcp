@@ -155,14 +155,9 @@ export function createOctoberDatedMaterializationController({plan,store}={}){
   async confirm({manager,expectedRevision,idempotencyKey,previewDigest}){
    const requested=request(manager,expectedRevision,idempotencyKey,previewDigest);
    return store.transaction(async tx=>{
-    // Reauthorize under the transaction lock, then reconcile an immutable
-    // receipt before mutable source validation. An ambiguous committed retry
-    // must remain readable after dependency/revision drift or withdrawal.
-    const authority=await tx.snapshot(requested.managerId,fixed.effectiveStart,fixed.effectiveEndExclusive,true);
-    if(authority?.authorizedManagerId!==requested.managerId)throw fail('dated_transition_manager_not_authorized');
-    const prior=await replay(tx,requested);if(prior)return prior;
     const state=await tx.snapshot(requested.managerId,fixed.effectiveStart,fixed.effectiveEndExclusive);
     validateSnapshot(state,requested.managerId,fixed);
+    const prior=await replay(tx,requested);if(prior)return prior;
     if(state.authorityRevision!==requested.expectedRevision)throw fail('dated_transition_revision_conflict');
     if(previewDigest!==previewBinding(fixed,requested.managerId,state))throw fail('dated_transition_preview_mismatch');
     if(state.hasExistingOccurrences===true)throw fail('dated_transition_existing_occurrences_require_reconciliation');

@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
+import {correctWebAuthority,withRestoreFence} from './fixtures/dated-web-authority-postgres-probes.mjs';
 import {correctAndVerifyConsumers,verifyConsumerViewState} from './fixtures/dated-consumer-cycle1-probes.mjs';
 import {execFile,spawn} from 'node:child_process';
 import {promisify} from 'node:util';
 import fs from 'node:fs';
+import {createHash} from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 import pg from 'pg';
@@ -37,6 +39,11 @@ const clock=m=>String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStar
 const display=t=>{const [h,m]=t.split(':').map(Number);return `${h%12||12}:${String(m).padStart(2,'0')} ${h<12?'AM':'PM'}`;};
 const counts=()=>json("select jsonb_build_object('publications',(select count(*) from public.custodial_dated_publications),'occurrences',(select count(*) from public.custodial_dated_occurrences),'activations',(select count(*) from public.custodial_dated_activations),'receipts',(select count(*) from public.custodial_dated_receipts),'revision',(select current_revision from public.static_weekly_schedule_control where singleton))::text");
 try{
+ const sourceHead=(await run('git',['rev-parse','HEAD'])).stdout.trim();
+ const sourceClean=!(await run('git',['status','--porcelain'])).stdout.trim();
+ const inputPaths=['src/static-weekly-dated-transition-postgres.js','src/static-weekly-dated-transition-materialization.js','scripts/static-weekly-dated-transition-postgres-tests.mjs','scripts/fixtures/dated-web-authority-postgres-probes.mjs',...fs.readdirSync('supabase/migrations').filter(n=>n.endsWith('.sql')).map(n=>'supabase/migrations/'+n)];
+ const inputDigests=Object.fromEntries(inputPaths.map(name=>[name,createHash('sha256').update(fs.readFileSync(name)).digest('hex')]));
+ if(process.env.DATED_POSTGRES_EVIDENCE_DIR){fs.mkdirSync(process.env.DATED_POSTGRES_EVIDENCE_DIR,{recursive:true});fs.writeFileSync(path.join(process.env.DATED_POSTGRES_EVIDENCE_DIR,'source-inputs.json'),JSON.stringify({sourceHead,sourceClean,inputDigests},null,2)+'\n',{flag:'wx'});}
  console.log(JSON.stringify({phase:'create-owned-network-none-postgres',container,socket,image}));
  await docker(['image','inspect',image]);
  await docker(['run','--pull=never','--rm','-d','--network=none','--cpus=1','--memory=1536m','--name',container,
@@ -71,7 +78,7 @@ try{
  for(const [code,name] of groups)await sql(`insert into public.location_groups(group_code,group_name,active) values(${quote(code)},${quote(name)},true) on conflict(group_code) do update set active=true;`);
  let rev=Number((await query('select current_revision from public.static_weekly_schedule_control where singleton')).rows[0].current_revision);
  console.log('SYNTHETIC_APPROVED_DEPENDENCIES_SEEDED',rev);
- const preview=await controller.preview({manager,expectedRevision:rev});
+ let preview=await controller.preview({manager,expectedRevision:rev});
  const empty=await counts();
  await assert.rejects(()=>sql(`set role static_weekly_control_plane;select public.custodial_dated_control('stage',${j({managerId,plan})});`),/fixture psql failed/);
  check('autocommit incomplete stage rejected by deferred completion guard',()=>{});assert.deepEqual(await counts(),empty);
@@ -96,13 +103,14 @@ try{
  const bound=await fetch(managerUrl,{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${session.token}`},body:JSON.stringify({expected_revision:rev})});const boundBody=await bound.json();
  check('default runtime composes exact configured SQL adapter',()=>{assert.equal(bound.status,200,JSON.stringify(boundBody));assert.equal(boundBody.data.previewDigest,preview.previewDigest);assert.equal(boundBody.data.phonePdfRevision,plan.phonePdfRevision);});
  await new Promise(resolve=>managerServer.close(resolve));managerServer=null;
- const accepted=await controller.confirm({manager,expectedRevision:rev,idempotencyKey:'sql-october-one',previewDigest:preview.previewDigest});
+ let accepted=await controller.confirm({manager,expectedRevision:rev,idempotencyKey:'sql-october-baseline',previewDigest:preview.previewDigest});
  check('after: real PostgreSQL accepts exact four-day authority',()=>{assert.equal(accepted.revision,rev+1);assert.equal(accepted.phonePdfRevision,plan.phonePdfRevision);assert.equal(accepted.affectedPhonesUpdated,false);});
  const app=express();app.use('/schedule-api',createScheduleRouter({runReadOnlySql:read,runRpc:async()=>{throw Error('read cannot mutate');},runCommand:async()=>{throw Error('read cannot reshuffle');},requireAdminApiAuth:(_q,_s,n)=>n(),requireOpsManagerAuth:(_q,_s,n)=>n(),appVersion:'synthetic-local-only',releaseId:'NOT_A_RELEASE',contractVersion:'synthetic-read-only',buildHealthPayload:()=>({ok:true})}));
  server=await new Promise(resolve=>{const own=app.listen(0,'127.0.0.1',()=>resolve(own));});
  const origin=`http://127.0.0.1:${server.address().port}`;
  console.log(JSON.stringify({phase:'owned-http-reader-fixture',origin}));
  await correctAndVerifyConsumers({sql,query,read,plan,origin,check});
+ ({rev,preview,accepted}=await correctWebAuthority({sql,query,read,pool,controller,plan,manager,rev,preview,accepted,check}));
  let advisors;
  try{const url=new URL('postgresql://supabase_admin:fixture-local-only@localhost/postgres');url.searchParams.set('host',socket);
   const output=await run('supabase',['db','advisors','--db-url',url.href,'--type','security','--output-format','json'],{env:{...process.env,DO_NOT_TRACK:'1'},timeout:30000,maxBuffer:8*1024*1024});
@@ -183,12 +191,16 @@ try{
  check('dependency drift marks bounded reader stale',()=>assert.equal(stale[0].projection_status,'stale_dated_dependency'));
  const historical=await controller.status({manager,idempotencyKey:'sql-october-one'});
  check('historical receipt remains accessible after dependency drift',()=>assert.equal(historical.operationReceipt.publicationId,accepted.publicationId));
- const rollback=await controller.rollback({manager,expectedRevision:accepted.revision,idempotencyKey:'sql-october-rollback',publicationId:accepted.publicationId,projectionId:accepted.projectionId});
+ const rollback=await withRestoreFence({pool,query,check,label:'rollback',operation:database=>createOctoberDatedMaterializationController({plan,store:createOctoberDatedPostgresStore({database,plan})}).rollback({manager,expectedRevision:accepted.revision,idempotencyKey:'sql-october-rollback',publicationId:accepted.publicationId,projectionId:accepted.projectionId})});
+ const withdrawnRetry=await controller.confirm({manager,expectedRevision:rev,idempotencyKey:'sql-october-one',previewDigest:preview.previewDigest});
+ check('actual exact retry survives advanced authority revision and withdrawn publication',()=>{assert.equal(withdrawnRetry.replayed,true);assert.equal(withdrawnRetry.effectivePublicationCurrent,false);});
+ const rollbackRetry=await controller.rollback({manager,expectedRevision:accepted.revision,idempotencyKey:'sql-october-rollback',publicationId:accepted.publicationId,projectionId:accepted.projectionId});
+ check('actual rollback receipt replays after dependency and revision drift',()=>assert.equal(rollbackRetry.replayed,true));
  await verifyConsumerViewState({sql,query,read,check,stage:'rollback'});
  check('actual SQL rollback preserves immutable publications and occurrences',()=>assert.equal(rollback.state,'ROLLED_BACK'));
  const finalCounts=await json('select jsonb_build_object(\'publications\',(select count(*) from public.custodial_dated_publications),\'occurrences\',(select count(*) from public.custodial_dated_occurrences),\'activations\',(select count(*) from public.custodial_dated_activations))::text');
- check('rollback is append-only',()=>{assert.equal(finalCounts.publications,1);assert.equal(finalCounts.activations,2);assert.equal(finalCounts.occurrences,plan.days.flatMap(d=>d.assignments).length);});
- const result={status:'PASS',checks:checks.length,image,migrationCount:files.length+2,planDigest:plan.planDigest,phonePdfRevision:plan.phonePdfRevision,accepted,rollback,security:secure,scope:'actual owned network-none PostgreSQL; 176 unchanged schema migrations plus new bounded migration; explicit synthetic approved dependencies, actual employee/Home/lunch/cleaning readers; no production or phone proof',checksPassed:checks};if(process.env.DATED_POSTGRES_EVIDENCE_DIR){fs.mkdirSync(process.env.DATED_POSTGRES_EVIDENCE_DIR,{recursive:true});fs.writeFileSync(path.join(process.env.DATED_POSTGRES_EVIDENCE_DIR,'postgres-results.json'),JSON.stringify(result,null,2)+'\n',{flag:'wx'});}console.log(JSON.stringify(result));
+ check('rollback is append-only',()=>{assert.equal(finalCounts.publications,2);assert.equal(finalCounts.activations,4);assert.equal(finalCounts.occurrences,2*plan.days.flatMap(d=>d.assignments).length);});
+ const result={status:'PASS',checks:checks.length,image,migrationCount:files.length+3,planDigest:plan.planDigest,phonePdfRevision:plan.phonePdfRevision,accepted,rollback,security:secure,scope:'actual owned network-none PostgreSQL; 176 unchanged schema migrations plus three forward bounded/consumer/authority migrations; explicit synthetic approved dependencies, actual employee/Home/lunch/cleaning readers; no production or phone proof',checksPassed:checks};if(process.env.DATED_POSTGRES_EVIDENCE_DIR){fs.mkdirSync(process.env.DATED_POSTGRES_EVIDENCE_DIR,{recursive:true});fs.writeFileSync(path.join(process.env.DATED_POSTGRES_EVIDENCE_DIR,'postgres-results.json'),JSON.stringify(result,null,2)+'\n',{flag:'wx'});}console.log(JSON.stringify(result));
 }catch(error){console.error(error);if(error.output)console.error(error.output);if(error.error)console.error(error.error);process.exitCode=1;}
 finally{
  if(managerServer)await new Promise(resolve=>managerServer.close(resolve));if(server){await new Promise(resolve=>server.close(resolve));assert.equal(server.listening,false);}if(pool)await pool.end();if(created){await docker(['rm','-f',container]);await assert.rejects(()=>docker(['inspect',container]));}
