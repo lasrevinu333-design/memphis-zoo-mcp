@@ -7,6 +7,7 @@ import { createStaticWeeklyControlPlane, createStaticWeeklyControlPlaneDatabase 
 import { assertConfiguredReleaseIdentity } from "./release-manifest.js";
 import { makeRestoreMutationGate } from "./restore-mutation-gate.js";
 import { renderCoverAllPdfPair } from "./static-weekly-coverall-print.js";
+import { createDatedTransitionManagerRouter } from "./static-weekly-dated-transition-manager-router.js";
 
 const text = (value) => typeof value === "string" ? value.trim() : "";
 const fail = (code, message = code) => Object.assign(new Error(message), { code });
@@ -40,6 +41,7 @@ export function createStaticWeeklyControlPlaneRuntime({
   env = process.env,
   database = null,
   controlPlane = null,
+  datedTransitionController = null,
   supabase = null,
   trustedDeviceStore = null,
   createDatabase = createStaticWeeklyControlPlaneDatabase,
@@ -154,6 +156,9 @@ export function createStaticWeeklyControlPlaneRuntime({
 
   app.get("/healthz", liveness);
   app.get(["/health", "/ready"], readiness);
+  app.use("/static-weekly/dated-transition",createDatedTransitionManagerRouter({
+    controller:datedTransitionController,requireManagerWrite,namedManager,manager,
+  }));
   app.get("/static-weekly/manager-snapshot", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.getManagerSnapshot({ manager: manager(req), weekStart: req.query?.week_start })));
   app.post("/static-weekly/recurring-adaptation/preview", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.previewRecurringStaffing({
     manager: manager(req), effectiveStart: req.body?.effective_start,
