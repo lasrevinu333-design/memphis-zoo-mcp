@@ -28,10 +28,11 @@ reconciliation; this candidate never overwrites protected occurrences.
 The runtime mounts named-manager-only preview, confirm, operation-status and
 rollback routes under `/static-weekly/dated-transition`. Client requests carry
 only identities/revision, never schedule facts, dates, shifts or employee IDs.
-The controller must be supplied by server composition. The default configuration
-returns HTTP 503 with
-`dated_transition_store_unavailable_requires_bounded_database_adapter`.
-There is no environment switch, weekly fallback or production connection added.
+Server composition loads only the exact offline verified plan and supplies the
+bounded PostgreSQL adapter when the existing authority database is a pool.
+An unapplied bounded migration fails with `dated_transition_database_adapter_unavailable`;
+an explicitly disabled or absent adapter remains HTTP 503. No new connection,
+environment switch or weekly fallback is added.
 
 Rollback binds the exact current publication and projection, appends a rollback
 receipt and preserves historical publication data and protected cleaning work.
@@ -52,17 +53,41 @@ It tests old/new state, concurrency, revocation, stale revision/dependencies,
 partial writes, wrong readback, rollback and ambiguous commit reconciliation.
 The second exercises the actual runtime, manager authentication and HTTP routes
 with synthetic authority; it needs only automatically cleaned localhost servers.
-The directly affected existing runtime regression must also pass. These are not
-PostgreSQL, production or phone proofs.
+The directly affected existing runtime regression must also pass. These fixtures are application contract proofs, distinct from the actual
+PostgreSQL fixture below. They are not production or phone proofs.
 
-The PostgreSQL bounded adapter is NOT implemented by this correction. Existing
-weekly mutators cannot be used as that adapter. Required integration work is a
-new server-only bounded database authority/read contract, preserving explicit
-grants, current manager reauthorization, existing authority locks and immutable
-history. It must bind the four persisted days to current employee schedule/Home,
-lunch, cleaning occurrence and revision/target readers. Serving a parallel JSON
-schedule without those occurrence/reader bindings would be incomplete. This
-candidate deliberately does not mount such an employee facade or claim it exists.
+The bounded PostgreSQL implementation is in
+`src/static-weekly-dated-transition-postgres.js` and forward CLI-created migration
+`20261001130750_october_bounded_dated_transition.sql`. Four internal tables have
+forced RLS and no direct runtime/client grants; UUID keys need no sequences.
+Only the existing control-plane role can call the mutation dispatcher, which
+reauthorizes the current named manager and shares the existing authority lock
+and restore mutation fence. A deferred completion trigger prevents an
+incomplete stage from becoming durable. Status and exact rollback reauthorize
+without requiring obsolete dependencies still to be eligible for a new plan.
+
+Existing typed employee, roster, assignment, lunch and authority readers overlay
+only the active October 1–4 publication. Their earlier implementations remain
+private fallbacks elsewhere and after rollback. Physical cleaning ownership
+uses the unchanged operational reader, preserving real occurrence IDs and
+splitting at the exact accepted lunch boundaries. Dated Home facts bind to the
+same publication, projection and frozen phone/PDF revision. Dependency drift
+marks reads stale rather than silently adjusting the approved schedule.
+All new relation/function/ACL recovery definitions are captured in the existing
+immutable release inventory. No phone delivery/acknowledgment is inferred.
+
+Run `node scripts/static-weekly-dated-transition-postgres-tests.mjs` using the
+installed digest-pinned Supabase PostgreSQL image. This test uses a disposable
+network-none container with no ports, explicit synthetic dependencies, all 176
+unchanged predecessor migrations, automatic public/global Data API grants
+removed, and the new migration applied solely to the fixture. It exercises
+actual restricted-role SQL and HTTP readers, exact assignment/lunch/cleaning
+rows, the retained frontend Home formatter, denied callers, manager revocation,
+partial-stage rollback, deferred completion, idempotency, staleness and exact
+function/grant recovery. The copied Home formatter in
+`scripts/fixtures/dated-home-facts.js` retains the earlier observed frontend
+bytes; it is test evidence, not a frontend implementation change. All owned
+containers, sockets and localhost servers are removed in `finally`.
 
 The exact intended release source revision remains unspecified. No shared
 checkout, database migration, production state, signing, phone or John draft was

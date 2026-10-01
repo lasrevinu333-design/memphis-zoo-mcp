@@ -9,6 +9,7 @@ import {createOctoberTransitionCandidate,compilerInput} from './static-weekly-oc
 
 export const DATED_TRANSITION_STORE_CONTRACT='custodial.dated-transition-store.v1';
 export const OCTOBER_PHONE_PDF_REVISION='ee75f76a21e0d3a82291b8c720b5548532e1f168f1941a0cd74e80662302bd08';
+export const OCTOBER_DATED_PLAN_DIGEST='89f600b965259f6bbf30488ff5eef2a6d754b3cbd0072f00419b318245e9459d';
 const DATES=['2026-10-01','2026-10-02','2026-10-03','2026-10-04'];
 const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
 const copy=structuredClone;
@@ -98,6 +99,14 @@ function validateRecord(record,plan){
 }
 const unavailable=()=>{throw fail('dated_transition_store_unavailable_requires_bounded_database_adapter');};
 
+// Runtime may load only this exact immutable plan prepared and fully verified
+// offline. It cannot accept an arbitrary serialized/rehashed candidate.
+export function loadPreparedOctoberDatedPlan(value){
+ const plan=copy(value);validatePlan(plan);
+ if(plan.planDigest!==OCTOBER_DATED_PLAN_DIGEST)throw fail('dated_transition_unapproved_plan_identity');
+ verifiedPlans.set(plan,plan.planDigest);return plan;
+}
+
 /**
  * The injected store is a server authority, not a client cache. It must provide
  * transaction(work): commit atomically, roll back errors, hold the existing
@@ -165,7 +174,7 @@ export function createOctoberDatedMaterializationController({plan,store}={}){
   async status({manager,idempotencyKey}){
    const managerId=actor(manager),operationKey=key(idempotencyKey);
    return store.transaction(async tx=>{
-    const state=await tx.snapshot(managerId,fixed.effectiveStart,fixed.effectiveEndExclusive);
+    const state=await tx.snapshot(managerId,fixed.effectiveStart,fixed.effectiveEndExclusive,true);
     if(state?.authorizedManagerId!==managerId)throw fail('dated_transition_manager_not_authorized');
     const receipt=await tx.receipt(managerId,operationKey);
     const current=await tx.current(fixed.planDigest);
@@ -177,7 +186,7 @@ export function createOctoberDatedMaterializationController({plan,store}={}){
   async rollback({manager,expectedRevision,idempotencyKey,publicationId,projectionId}){
    const requested={...request(manager,expectedRevision,idempotencyKey,null,'rollback'),publicationId,projectionId};
    return store.transaction(async tx=>{
-    const state=await tx.snapshot(requested.managerId,fixed.effectiveStart,fixed.effectiveEndExclusive);
+    const state=await tx.snapshot(requested.managerId,fixed.effectiveStart,fixed.effectiveEndExclusive,true);
     if(state?.authorizedManagerId!==requested.managerId)throw fail('dated_transition_manager_not_authorized');
     const prior=await replay(tx,requested);if(prior)return prior;
     if(state.authorityRevision!==requested.expectedRevision)throw fail('dated_transition_revision_conflict');

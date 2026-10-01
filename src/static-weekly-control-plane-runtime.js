@@ -8,6 +8,7 @@ import { assertConfiguredReleaseIdentity } from "./release-manifest.js";
 import { makeRestoreMutationGate } from "./restore-mutation-gate.js";
 import { renderCoverAllPdfPair } from "./static-weekly-coverall-print.js";
 import { createDatedTransitionManagerRouter } from "./static-weekly-dated-transition-manager-router.js";
+import { createConfiguredOctoberDatedController } from "./static-weekly-dated-transition-postgres.js";
 
 const text = (value) => typeof value === "string" ? value.trim() : "";
 const fail = (code, message = code) => Object.assign(new Error(message), { code });
@@ -41,7 +42,7 @@ export function createStaticWeeklyControlPlaneRuntime({
   env = process.env,
   database = null,
   controlPlane = null,
-  datedTransitionController = null,
+  datedTransitionController = undefined,
   supabase = null,
   trustedDeviceStore = null,
   createDatabase = createStaticWeeklyControlPlaneDatabase,
@@ -61,6 +62,8 @@ export function createStaticWeeklyControlPlaneRuntime({
     allowInsecureLoopbackRehearsal: /^(1|true|yes)$/i.test(text(env?.STATIC_WEEKLY_CONTROL_PLANE_ALLOW_INSECURE_LOOPBACK_REHEARSAL)),
   });
   const authorityControlPlane = controlPlane || createControlPlane({ database: authorityDatabase });
+  const boundedController=datedTransitionController===undefined&&typeof authorityDatabase?.connect==='function'
+    ?createConfiguredOctoberDatedController(authorityDatabase):datedTransitionController;
   const app = express();
   app.disable("x-powered-by");
   app.use((req, res, next) => {
@@ -157,7 +160,7 @@ export function createStaticWeeklyControlPlaneRuntime({
   app.get("/healthz", liveness);
   app.get(["/health", "/ready"], readiness);
   app.use("/static-weekly/dated-transition",createDatedTransitionManagerRouter({
-    controller:datedTransitionController,requireManagerWrite,namedManager,manager,
+    controller:boundedController,requireManagerWrite,namedManager,manager,
   }));
   app.get("/static-weekly/manager-snapshot", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.getManagerSnapshot({ manager: manager(req), weekStart: req.query?.week_start })));
   app.post("/static-weekly/recurring-adaptation/preview", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.previewRecurringStaffing({

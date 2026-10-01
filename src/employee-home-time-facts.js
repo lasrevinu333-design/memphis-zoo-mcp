@@ -55,6 +55,17 @@ export async function readHomeTimeFacts({day,employeeId,runReadOnlySql}) {
   const fallback=unavailable(day);
   if(!UUID.test(employeeId||'')||!UUID.test(day.projection_id||'')
     ||!/^\d{4}-\d{2}-\d{2}$/.test(day.service_date||''))return fallback;
+  if(day.authority_scope==='dated_transition'){
+    if(!UUID.test(day.publication_id||''))return fallback;
+    try{
+      const rows=await runReadOnlySql(`select public.static_weekly_v27_read_home_time_facts('${day.service_date}'::date,'${employeeId}'::uuid,'${day.publication_id}'::uuid,'${day.projection_id}'::uuid) as facts`);
+      const facts=Array.isArray(rows)&&rows.length===1?rows[0].facts:null;
+      return facts?.projection_id===day.projection_id&&facts?.publication_id===day.publication_id
+        &&facts?.employee_id===employeeId&&facts?.service_date===day.service_date
+        &&facts?.projection_status==='current'&&facts?.candidate_revision===day.candidate_revision
+        &&facts?.contract_version==='employee-home-time-facts.v1'?facts:fallback;
+    }catch{return fallback;}
+  }
   // Bind to the same already validated publication/projection as the employee day.
   // Its exception-set digest prevents an intervening unpublished change looking current.
   const sql=`select jsonb_build_object('roster',to_jsonb(r),'employee_active',emp.active,
