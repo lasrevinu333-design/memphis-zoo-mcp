@@ -224,7 +224,25 @@ try{
  reject('restored ALWAYS immutable trigger','delete from public.employee_native_provider_events',/immutable/);
  check('recovery preserves exact immutable observations',sql('select md5(jsonb_agg(to_jsonb(e) order by event_id)::text) from public.employee_native_provider_events e'),eventRows);
  check('all receipt work preserves original reservation bytes',sql('select md5(jsonb_agg(to_jsonb(r) order by job_id)::text) from public.employee_native_push_delivery_receipts r where job_id='+q(job.job_id)),originalRows);
- check('receipt storage does not synthesize operational ACK',sql('select count(*) from public.device_notification_acknowledgements'),'0');
+ //03080000 projects only actual admitted original ACKs. This fixture admits
+ //the primary ACK and exactly one concurrent e2 ACK; Open is still NOT ACK.
+ check('only two admitted original ACK projections',sql('select count(*) from public.device_notification_acknowledgements'),'2');
+ check('both ACKs bind exact native event, original job/key/actor and original server time',sql(`
+  select count(*) from public.device_notification_acknowledgements a
+  join public.employee_native_location_ack_projections p on p.acknowledgement_id=a.id
+  join public.employee_native_provider_events e on e.event_id=p.event_id
+  join public.employee_native_push_delivery_receipts r on r.job_id=e.job_id
+  where e.action='acknowledged' and a.notification_job_id=e.job_id and p.job_id=e.job_id
+   and a.notification_key=e.original_event->>'notification_key'
+   and a.device_identifier=e.original_event->>'receipt_device_id'
+   and a.employee_id=(e.original_event->>'receipt_employee_id')::uuid
+   and a.credential_id=(e.original_event->>'receipt_credential_id')::uuid
+   and a.assignment_epoch=(e.original_event->>'receipt_assignment_epoch')::bigint
+   and a.acknowledged_at=e.server_received_at and p.acknowledged_at=a.acknowledged_at
+   and r.native_payload_sha256=e.original_event->>'content_sha256'
+   and e.record_id in (${q(recordId)},${q(opened2.record_id)})`),'2');
+ check('ACK projection fabricates no receive/display/open/dismiss timestamps',sql(`select count(*) from public.device_notification_acknowledgements
+  where received_at is not null or displayed_at is not null or opened_at is not null or dismissed_at is not null`),'0');
  const fixture=writeNativeSqlFixture({envName:'NATIVE_PROVIDER_EVENTS_FIXTURE',fileName:'native-provider-events.json',payload:{provenance:'actual SQL with private synthetic time; encrypted native input fixtures are synthetic',nativePrincipal,request,admitted,replay,mixed,registered},manifest,owningMigration:'20261003050000_native_provider_events.sql',scriptPath:'scripts/native-provider-events-database-tests.mjs'});
  if(fixture)console.log('SQL_PROVIDER_EVENTS_FIXTURE',fixture.path,fixture.sha256);
  check('automatic grants remain absent',sql(defaults),'0');

@@ -93,6 +93,11 @@ jobs:
           npm run --silent test:production-schema-inspection-freshness
           npm run --silent test:ci-workflows
           npm run --silent test:isolated-restore-lease-shim
+      - name: Isolated current native LOCATION dispatch and exact ACK projection
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/native-location-dispatch-database-tests.mjs
       - name: Empty database migration rebuild and database concurrency
         shell: bash
         env:
