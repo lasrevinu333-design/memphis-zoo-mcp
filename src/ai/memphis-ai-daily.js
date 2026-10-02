@@ -8,21 +8,33 @@ export async function fetchCurrentMemphisScheduleDay(runReadOnlySql,serviceDate)
   return data;
 }
 
+// A work-state answer may use only segments from the same current governed
+// publication and projection as the day/availability readback. In particular,
+// an old OPEN row or a departed person's old assignment cannot be recast as
+// today's coverage or employee load.
+export async function fetchCurrentMemphisScheduleSegments(runReadOnlySql,serviceDate,day) {
+  if(day?.status!=='current'||!day.publication_id||!day.projection_id)return null;
+  const rows=await runReadOnlySql(`select to_jsonb(authority) as authority,
+    (select coalesce(jsonb_agg(to_jsonb(segment) order by segment.group_name,segment.coverage_start,segment.segment_number),'[]'::jsonb)
+      from public.static_weekly_v6_read_schedule_segments('${esc(serviceDate)}'::date) segment
+      where segment.publication_id=authority.publication_id
+        and segment.projection_id=authority.projection_id
+        and segment.governed=true and segment.projection_status='current') as segments
+    from public.static_weekly_v6_schedule_authority_state('${esc(serviceDate)}'::date) authority`);
+  const result=Array.isArray(rows)&&rows.length===1?rows[0]:null;
+  if(result?.authority?.governed!==true||result.authority.projection_status!=='current'
+    ||result.authority.publication_id!==day.publication_id
+    ||result.authority.projection_id!==day.projection_id
+    ||!Array.isArray(result.segments))return null;
+  const working=new Set(day.rows.filter(row=>row.working===true).map(row=>row.employee_id));
+  if(result.segments.some(row=>row.status==='ASSIGNED'&&
+    (row.owner_type!=='EMPLOYEE'||!working.has(row.assigned_employee_id))))return null;
+  return result.segments;
+}
+
 export async function fetchDailyRosterRows(runReadOnlySql, serviceDate) {
   const day=await fetchCurrentMemphisScheduleDay(runReadOnlySql,serviceDate);
   return day.status==='current'?day.rows.filter((row)=>row.working===true):[];
-}
-
-function getDayOfWeekFromIsoDate(serviceDate = "") {
-  const date = new Date(`${serviceDate}T12:00:00`);
-  return Number.isNaN(date.getTime()) ? null : date.getDay();
-}
-
-export async function fetchDailyOpsManagerRows(runReadOnlySql, serviceDate) {
-  const dayOfWeek = getDayOfWeekFromIsoDate(serviceDate);
-  if (dayOfWeek == null) return [];
-  const rows = await runReadOnlySql(`select s.display_name as employee_name, coalesce(c.role_title, 'Ops Manager') as role_title, s.shift_start, s.shift_end, c.phone from public.ops_manager_weekly_schedules s left join public.internal_ops_contacts c on c.id = s.contact_id where s.active = true and s.day_of_week = ${Number(dayOfWeek)} order by s.shift_start asc, s.display_name asc`);
-  return Array.isArray(rows) ? rows : [];
 }
 
 function detectStaffAudience(queryText = "") {
@@ -46,7 +58,7 @@ export function summarizeDailyRoster(roster = [], serviceDate = "", opsRows = []
   const custodianPeople = summarizeRosterPeople(roster, false);
   const opsPeople = summarizeRosterPeople(opsRows, true);
   if (audience === "ops") {
-    if (!opsPeople.length) return `I couldn't find any ops managers scheduled to work on ${serviceDate}.`;
+    if (!opsPeople.length) return `I can't verify day-of ops-manager staffing for ${serviceDate} from the current custodial publication.`;
     return `${serviceDate}: Ops managers: ${opsPeople.join("; ")}.`;
   }
 
@@ -55,10 +67,10 @@ export function summarizeDailyRoster(roster = [], serviceDate = "", opsRows = []
     return `${serviceDate}: Custodians: ${custodianPeople.join("; ")}. Ask who is where if you want area assignments.`;
   }
 
-  if (!custodianPeople.length && !opsPeople.length) return `I couldn't find anyone scheduled to work on ${serviceDate}.`;
+  if (!custodianPeople.length && !opsPeople.length) return `I couldn't find any custodians scheduled to work in the current publication on ${serviceDate}. Ops-manager day-of staffing is not verified here.`;
 
   const sections = [];
-  sections.push(`Ops managers: ${opsPeople.length ? opsPeople.join("; ") : "none listed"}`);
+  sections.push(`Ops managers: ${opsPeople.length ? opsPeople.join("; ") : "day-of staffing not verified"}`);
   sections.push(`Custodians: ${custodianPeople.length ? custodianPeople.join("; ") : "none listed"}`);
   return `${serviceDate}: ${sections.join(". ")}. Ask who is where if you want area assignments.`;
 }
@@ -97,7 +109,8 @@ export async function generateDailyStaffScheduleReply({ runReadOnlySql, runRpc, 
     meta:{fallback:true,mode:'local_daily_staff_schedule',service_date:serviceDate,
       projection_status:day.projection_status||'unavailable',generated_before_read:false}};
   const roster=day.rows.filter((row)=>row.working===true);
-  const opsRows = await fetchDailyOpsManagerRows(runReadOnlySql, serviceDate);
+  // No accepted day-of ops-manager publication is available in this reader.
+  const opsRows = [];
 
   return {
     text: summarizeDailyRoster(roster, serviceDate, opsRows, queryText),
