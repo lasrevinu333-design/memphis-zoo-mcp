@@ -5,6 +5,9 @@ import {postgresJsonbContentDigest as digest} from '../src/static-weekly-schedul
 import {createOpeningCoverageReport} from '../src/static-weekly-opening-coverage-report.js';
 import {loadOpeningCoverageFixture} from './static-weekly-opening-coverage-report-tests.mjs';
 import {installStaticWeeklySha256HexAccelerator} from '../src/static-weekly-schedule-model.js';
+import {contentDigest} from '../src/static-weekly-schedule-model.js';
+import {RECURRING_WEEK_COMMITMENT_SCHEMA,RECURRING_PHASE_SCOPE} from '../src/static-weekly-recurring-week-commitment.js';
+import {COMPONENT_WEIGHT_LEDGER_DIGEST} from '../src/schedule-component-weight-authority.js';
 import {createHash} from 'node:crypto';
 installStaticWeeklySha256HexAccelerator(x=>createHash('sha256').update(x).digest('hex'));
 
@@ -27,15 +30,42 @@ function candidateFor(basis){
   fixedLunch:{loans:structuredClone(actual.result.lunch.loans),responsibilities:structuredClone(actual.result.lunch.responsibilities),
    notificationIntents:structuredClone(actual.result.lunch.notification_intents)},shiftEnd:null,metrics:structuredClone(actual.result.metrics),changes:[]};
  const candidate={status:'CANDIDATE_ONLY',compilerStatus:'FEASIBLE',publicationAuthority:'ACCEPTABLE',verifierOk:true,
+  weekOptimizationScope:RECURRING_PHASE_SCOPE,staffedPositions:7,sourcePatternKind:'UNSPLIT',
   sourceId,publicationId:oldPublication,authorityRevision:basis.expectedRevision,effectiveDate:week,
   publishedSourceDigest:digest(basis.publishedSource.compiler_input),managerSnapshotDigest:digest(basis.managerSnapshot),
   fullNineSourceDigest:basis.fullNineSource?digest(basis.fullNineSource.compiler_input):null,
-  candidateSourceDigest:digest(raw),readbackPatternDigest:'c'.repeat(64),modelBasisDigest:'d'.repeat(64),
+  candidateSourceDigest:digest(raw),readbackPatternDigest:'c'.repeat(64),patternFingerprint:'b'.repeat(64),modelBasisDigest:'d'.repeat(64),
   assignmentWitnessDigest:'e'.repeat(64),finalWitnessDigest:'f'.repeat(64),weeklyAssignmentsDigest:digest(decision.assignments),
   metricsDigest:digest(decision.metrics),lunchFactsDigest:digest(decision.fixedLunch),openWorkDigest:digest(decision.gaps.open),
   shiftEndDerivationDigest:digest(null),lunchLoanCount:decision.fixedLunch.loans.length,openWorkCount:decision.gaps.open.length,reviewWorkCount:0,assignmentCount:raw.version.assignments.length,
   compilerVersion:decision.compilerVersion,decision,decisionDigest:digest(decision),changes:[],
   registrationRequired:true,managerConfirmationRequired:true};
+ // Orchestration mock only: the real isolated compiler constructs this from
+ // seven fresh terminal receipts. This fixture tests the CP binding/fencing,
+ // not solver correctness or a publication proof.
+ const commitment={schema:RECURRING_WEEK_COMMITMENT_SCHEMA,status:'PROVEN_CANDIDATE_ONLY',
+  scope:'EXACT_SELECTED_POST0945_NORMAL_WEEK_MORNING_FROM_BOUND_INPUT_FIXED',
+  sourceId:candidate.sourceId,publicationId:candidate.publicationId,
+  authorityRevision:candidate.authorityRevision,effectiveWeek:candidate.effectiveDate,
+  publishedSourceDigest:candidate.publishedSourceDigest,
+  managerSnapshotDigest:candidate.managerSnapshotDigest,
+  readbackPatternDigest:candidate.readbackPatternDigest,
+  fullNineSourceDigest:candidate.fullNineSourceDigest,
+  sourceDigest:'1'.repeat(64),sourceSqlDigest:'2'.repeat(64),configDigest:'3'.repeat(64),
+  finalPatternDigest:candidate.patternFingerprint,
+  fullOwnersDigest:'4'.repeat(64),componentLedgerDigest:COMPONENT_WEIGHT_LEDGER_DIGEST,
+  implementationDigest:RECURRING_IMPLEMENTATION_DIGEST,
+  finalSourceDigest:'5'.repeat(64),finalSourceSqlDigest:candidate.candidateSourceDigest,
+  days:Array.from({length:7},(_,dayOfWeek)=>({dayOfWeek,
+   descriptorDigest:'6'.repeat(64),originalLowerBoundDescriptorDigest:'7'.repeat(64),
+   finalCanonicalWitnessDigest:'8'.repeat(64)})),
+  canonicalHard:{witnessDigest:'8'.repeat(64)},
+  completeCompiler:{compilerVersion:candidate.compilerVersion,modelBasisDigest:candidate.modelBasisDigest,
+   finalWitnessDigest:candidate.finalWitnessDigest,assignmentDigest:candidate.assignmentWitnessDigest,
+   weeklyAssignmentsDigest:candidate.weeklyAssignmentsDigest},
+  normalMorningOptimumClaim:false,datedPriorityChange:false,physicalMinuteFeasibilityClaim:false,
+  admitted:false,published:false};
+ candidate.weekCommitment={...commitment,digest:contentDigest(commitment)};
  const reportKey=digest({sourceDigest:digest(raw),decisionDigest:candidate.decisionDigest,revision:basis.expectedRevision});
  if(!reportCache.has(reportKey))reportCache.set(reportKey,createOpeningCoverageReport({source:raw,assignments:decision.assignments,lunch:actual.result.lunch,
   context:{publicationId:oldPublication,authorityRevision:basis.expectedRevision},decisionDigest:candidate.decisionDigest}));
@@ -155,7 +185,9 @@ for(const change of ['revision','generation','preview','manager']){
  check(change+' cannot write candidate',stale.state().writes,[]);await stale.plane.close();
 }
 for(const mutate of [r=>r.canonicalSource.proximity.push({forged:true}),r=>r.candidate.decision.implementationDigest='0'.repeat(64),
- r=>r.candidate.publishedSourceDigest='0'.repeat(64),r=>r.candidate.decision.fixedLunch.loans.push({forged:true})]){
+ r=>r.candidate.publishedSourceDigest='0'.repeat(64),r=>r.candidate.decision.fixedLunch.loans.push({forged:true}),
+ r=>r.candidate.weekCommitment.days[3].descriptorDigest='0'.repeat(64),
+ r=>r.candidate.weekCommitment.sourceId=id(99)]){
  const hostile=harness({mutatePrivate:mutate}),r=await requestFor(hostile);
  await assert.rejects(()=>hostile.plane.confirmRecurringStaffing(r),/source|decision|preview|candidate/);checks++;
  check('hostile private candidate writes nothing',hostile.state().writes,[]);await hostile.plane.close();

@@ -9,7 +9,10 @@ import {createStaticWeeklyControlPlane} from '../src/static-weekly-control-plane
 import {createStaticWeeklyControlPlaneRuntime} from '../src/static-weekly-control-plane-runtime.js';
 import {createOpsManagerSession} from '../src/auth/shared-access-auth.js';
 import {postgresJsonbContentDigest as digest} from '../src/static-weekly-schedule-compiler.js';
-import {installStaticWeeklySha256HexAccelerator} from '../src/static-weekly-schedule-model.js';
+import {installStaticWeeklySha256HexAccelerator,contentDigest} from '../src/static-weekly-schedule-model.js';
+import {RECURRING_WEEK_COMMITMENT_SCHEMA,RECURRING_PHASE_SCOPE} from '../src/static-weekly-recurring-week-commitment.js';
+import {COMPONENT_WEIGHT_LEDGER_DIGEST} from '../src/schedule-component-weight-authority.js';
+import {RECURRING_IMPLEMENTATION_DIGEST} from '../src/static-weekly-recurring-preview.js';
 installStaticWeeklySha256HexAccelerator(x=>createHash('sha256').update(x).digest('hex'));
 const id=n=>`91000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 const fixture=loadOpeningCoverageFixture().baseline,source=fixture.source,week=source.serviceDate;
@@ -18,6 +21,33 @@ const actor={...manager,manager_display_name:manager.display_name,auth_mode:'tru
 let revision=7,generation=2,forge=false,accepted=false,writes=0,privateCalls=0,diagnosticMode=false;
 const snapshot=()=>({authority_revision:revision,current_publication:{publication_id:pub},projection_status:'current'});
 const published=()=>({publication_id:pub,source_id:id(3),authority_revision:revision,compiler_input:source});
+// Explicitly synthetic CP fixture: actual seven-day proof construction is
+// covered by the isolated worker, not claimed by this HTTP/report test.
+function syntheticSiblingFor(candidate){
+ const body={schema:RECURRING_WEEK_COMMITMENT_SCHEMA,status:'PROVEN_CANDIDATE_ONLY',
+  scope:'EXACT_SELECTED_POST0945_NORMAL_WEEK_MORNING_FROM_BOUND_INPUT_FIXED',
+  sourceId:candidate.sourceId,publicationId:candidate.publicationId,
+  authorityRevision:candidate.authorityRevision,effectiveWeek:candidate.effectiveDate,
+  publishedSourceDigest:candidate.publishedSourceDigest,
+  managerSnapshotDigest:candidate.managerSnapshotDigest,
+  readbackPatternDigest:candidate.readbackPatternDigest,
+  fullNineSourceDigest:candidate.fullNineSourceDigest,
+  sourceDigest:'1'.repeat(64),sourceSqlDigest:'2'.repeat(64),configDigest:'3'.repeat(64),
+  finalPatternDigest:candidate.patternFingerprint,
+  fullOwnersDigest:'4'.repeat(64),componentLedgerDigest:COMPONENT_WEIGHT_LEDGER_DIGEST,
+  implementationDigest:RECURRING_IMPLEMENTATION_DIGEST,
+  finalSourceDigest:'5'.repeat(64),finalSourceSqlDigest:candidate.candidateSourceDigest,
+  days:Array.from({length:7},(_,dayOfWeek)=>({dayOfWeek,
+   descriptorDigest:'6'.repeat(64),originalLowerBoundDescriptorDigest:'7'.repeat(64),
+   finalCanonicalWitnessDigest:'8'.repeat(64)})),
+  canonicalHard:{witnessDigest:'8'.repeat(64)},
+  completeCompiler:{compilerVersion:candidate.compilerVersion,modelBasisDigest:candidate.modelBasisDigest,
+   finalWitnessDigest:candidate.finalWitnessDigest,assignmentDigest:candidate.assignmentWitnessDigest,
+   weeklyAssignmentsDigest:candidate.weeklyAssignmentsDigest},
+  normalMorningOptimumClaim:false,datedPriorityChange:false,physicalMinuteFeasibilityClaim:false,
+  admitted:false,published:false};
+ return {...body,digest:contentDigest(body)};
+}
 function candidate(basis){
  const assignments=structuredClone(fixture.result.assignments),compiled={status:fixture.result.status,
   publicationAuthority:fixture.result.publicationAuthority,verifier:{ok:fixture.result.verifierOk},
@@ -25,13 +55,16 @@ function candidate(basis){
   compilerVersion:fixture.result.compilerVersion,timezone:fixture.result.timezone,metrics:fixture.result.metrics,canonicalAuthority:{}};
  const decision=createRecurringManagerDecision({candidateInput:source,compiled,lunch:fixture.result.lunch,changes:[]}),decisionDigest=digest(decision);
  const c={status:'CANDIDATE_ONLY',compilerStatus:'FEASIBLE',publicationAuthority:'ACCEPTABLE',verifierOk:true,
+  weekOptimizationScope:RECURRING_PHASE_SCOPE,staffedPositions:7,sourcePatternKind:'UNSPLIT',
   sourceId:id(3),publicationId:pub,authorityRevision:basis.expectedRevision,effectiveDate:week,compilerVersion:compiled.compilerVersion,
   candidateSourceDigest:digest(source),publishedSourceDigest:digest(basis.publishedSource.compiler_input),managerSnapshotDigest:digest(basis.managerSnapshot),
-  fullNineSourceDigest:null,readbackPatternDigest:'a'.repeat(64),modelBasisDigest:'b'.repeat(64),assignmentWitnessDigest:'c'.repeat(64),finalWitnessDigest:'d'.repeat(64),
+  fullNineSourceDigest:null,readbackPatternDigest:'a'.repeat(64),patternFingerprint:'b'.repeat(64),
+  modelBasisDigest:'b'.repeat(64),assignmentWitnessDigest:'c'.repeat(64),finalWitnessDigest:'d'.repeat(64),
   weeklyAssignmentsDigest:digest(assignments),metricsDigest:digest(decision.metrics),lunchFactsDigest:digest(decision.fixedLunch),
   openWorkDigest:digest(decision.gaps.open),shiftEndDerivationDigest:digest(null),lunchLoanCount:decision.fixedLunch.loans.length,
   openWorkCount:decision.gaps.open.length,reviewWorkCount:0,assignmentCount:source.version.assignments.length,
   registrationRequired:true,managerConfirmationRequired:true,changes:[],decision,decisionDigest};
+ c.weekCommitment=syntheticSiblingFor(c);
  c.openingCoverageReport=createOpeningCoverageReport({source,assignments,lunch:fixture.result.lunch,
   context:{publicationId:pub,authorityRevision:basis.expectedRevision},decisionDigest});return c;
 }

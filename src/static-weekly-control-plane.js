@@ -21,6 +21,7 @@ import { createStaffingCandidateSet } from "./static-weekly-staffing-candidates.
 import { createStaffingPreparationMeter, enumerateStaffingServiceWindow } from "./static-weekly-staffing-preparation.js";
 import { createStaffingWeekPreviewInput } from "./static-weekly-staffing-preview.js";
 import { assertRecurringManagerDecision, assertRecurringAdmissionCandidate } from "./static-weekly-recurring-preview.js";
+import { assertRecurringWeekCommitment } from "./static-weekly-recurring-week-commitment.js";
 import {OPENING_COVERAGE_ERROR,sanitizeOpeningCoverageDiagnostic} from './static-weekly-opening-coverage-report.js';
 import { recurringPatternAuthority, assertRecurringRepairCandidate } from "./static-weekly-recurring-repair-basis.js";
 import { withRecurringDependencyStatus } from "./static-weekly-recurring-dependency-result.js";
@@ -43,8 +44,9 @@ import {
 export const STATIC_WEEKLY_CONTROL_PLANE_SCHEMA = "memphis-zoo.static-weekly-control-plane.v1";
 export const STATIC_WEEKLY_DATABASE_OPERATION_STATEMENT_TIMEOUT_MS = 120_000;
 const STATIC_WEEKLY_AUTHORITY_LOCK_IDENTITY = "memphis-static-weekly-authority";
-const APPROVED_FULL_NINE_SOURCE_ID = JSON.parse(readFileSync(new URL(
-  "../config/custodial-full-nine-family-owners-20260926.json", import.meta.url))).baseSourceId;
+const APPROVED_FULL_NINE_IDENTITY = JSON.parse(readFileSync(new URL(
+  "../config/custodial-full-nine-family-owners-20260926.json", import.meta.url)));
+const APPROVED_FULL_NINE_SOURCE_ID = APPROVED_FULL_NINE_IDENTITY.baseSourceId;
 
 const text = (value) => typeof value === "string" ? value.trim() : "";
 const clone = (value) => JSON.parse(JSON.stringify(value));
@@ -643,6 +645,16 @@ export function createStaticWeeklyControlPlane({
     try {
       assertRecurringManagerDecision(candidate);
       assertRecurringRepairCandidate(candidate, basis.patternAuthority);
+      if (candidate.weekOptimizationScope === "HISTORICAL_FULL_NINE_STATIC_TEMPLATE_ONLY"
+        && basis.fullNineSource?.source_id !== APPROVED_FULL_NINE_SOURCE_ID) {
+        throw new Error("Exact approved registered full-nine source required.");
+      }
+      if (candidate.weekOptimizationScope === "HISTORICAL_FULL_NINE_STATIC_TEMPLATE_ONLY"
+        && (candidate.staticTemplateCommitment?.approvedBasePacketDigest !== APPROVED_FULL_NINE_IDENTITY.basePacketSha256
+          || candidate.staticTemplateCommitment?.approvedFullConfigDigest !== APPROVED_FULL_NINE_IDENTITY.fullConfigSha256)) {
+        throw new Error("Exact approved historical template identities required.");
+      }
+      assertRecurringWeekCommitment(candidate, basis, revision);
     } catch (error) {
       if(error?.code===OPENING_COVERAGE_ERROR&&sanitizeOpeningCoverageDiagnostic(error.openingCoverageDiagnostic))throw error;
       throw fail("static_weekly_recurring_preview_rejected",

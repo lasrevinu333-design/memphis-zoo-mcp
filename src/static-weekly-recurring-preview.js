@@ -6,6 +6,64 @@ import {assertOpeningCoverageDecisionReport,assertOpeningCoverageCanonicalReport
 
 export const RECURRING_DECISION_SCHEMA = 'memphis-zoo.recurring-manager-decision.v1';
 
+// The complete selected 09:45 week may change the preliminary adapter's
+// equalized owners. Show those final owners against the original accepted
+// 09:45 baseline, while retaining the adapter's separately verified morning
+// impact (the phase proof deliberately keeps its generated morning fixed).
+export function createRecurringFinalManagerChanges({ preliminaryChanges, phaseSource,
+  finalSource, ownerConfig }) {
+  assert.ok(Array.isArray(preliminaryChanges) && preliminaryChanges.length === 14);
+  const sourceVersion = phaseSource?.version || (phaseSource?.versions?.length === 1 ? phaseSource.versions[0] : null);
+  const finalVersion = finalSource?.version || (finalSource?.versions?.length === 1 ? finalSource.versions[0] : null);
+  assert.ok(Array.isArray(sourceVersion?.assignments) && Array.isArray(finalVersion?.assignments));
+  const keyBySlot = new Map(Object.entries(ownerConfig?.slots || {}).map(([key, slot]) => [slot.slotId, key]));
+  assert.equal(keyBySlot.size, 9, 'nine stable owner identities required');
+  const publicSites = new Set(ownerConfig.publicRestroomFamilies || []);
+  const changes = [];
+  for (let day = 0; day < 7; day += 1) for (const phase of ['morning', 'equalized']) {
+    const prior = preliminaryChanges.find(row => row.day === day && row.phase === phase);
+    assert.ok(prior && preliminaryChanges.filter(row => row.day === day && row.phase === phase).length === 1,
+      `unique preliminary manager impact required ${day}/${phase}`);
+    if (phase === 'morning') { changes.push(structuredClone(prior)); continue; }
+    const rowsFor = source => source.assignments.filter(row => row.dayOfWeek === day
+      && row.window?.start === '09:45');
+    const before = rowsFor(sourceVersion), after = rowsFor(finalVersion);
+    const owned = rows => {
+      const result = new Map();
+      for (const row of rows) {
+        const family = row.locationCodeSnapshot;
+        const owner = keyBySlot.get(row.originSlotId || row.ownerSlotId);
+        assert.ok(typeof family === 'string' && family && owner && !result.has(family),
+          `unique source family/owner required ${day}/equalized/${family}`);
+        result.set(family, owner);
+      }
+      return result;
+    };
+    const original = owned(before), final = owned(after);
+    assert.deepEqual([...original.keys()].sort(), [...final.keys()].sort(),
+      `final selected phase cannot add or remove area families ${day}`);
+    const owners = prior.employees.map(entry => entry.owner);
+    assert.equal(new Set(owners).size, owners.length);
+    assert.deepEqual(owners.slice().sort(), Object.keys(ownerConfig.slots)
+      .filter(key => ownerConfig.slots[key].vacancy !== true && ownerConfig.slots[key].workDays.includes(day)).sort(),
+    `all staffed phase owners required ${day}`);
+    const employees = owners.map(owner => {
+      const families = [...final].filter(([, assigned]) => assigned === owner).map(([family]) => family).sort();
+      const baseline = [...original].filter(([, assigned]) => assigned === owner).map(([family]) => family).sort();
+      const weightedLoad = families.reduce((sum, family) => {
+        const weight = ownerConfig.weights?.[family];
+        assert.ok(Number.isFinite(weight) && weight > 0, `explicit weight required ${family}`);
+        return sum + weight;
+      }, 0);
+      return { owner, weightedLoad, restroomSites: families.filter(family => publicSites.has(family)).length,
+        gained: families.filter(family => original.get(family) !== owner),
+        released: baseline.filter(family => final.get(family) !== owner) };
+    });
+    changes.push({ day, phase, employees });
+  }
+  return changes;
+}
+
 // Loaded once by each immutable deployed process. Bind all scheduler source,
 // its exact dependency lock and its three policy inputs, not just a manually
 // maintained version string. The result contains hashes, never source bytes.

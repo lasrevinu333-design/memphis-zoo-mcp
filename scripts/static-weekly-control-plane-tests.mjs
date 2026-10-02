@@ -13,7 +13,9 @@ import { createStaticWeeklyDraftRpcInput } from "../src/static-weekly-schedule-d
 import { compileStaticWeeklySchedule, postgresJsonbContentDigest } from "../src/static-weekly-schedule-compiler.js";
 import {createOpeningCoverageReport} from '../src/static-weekly-opening-coverage-report.js';
 import {loadOpeningCoverageFixture} from './static-weekly-opening-coverage-report-tests.mjs';
-import {installStaticWeeklySha256HexAccelerator} from '../src/static-weekly-schedule-model.js';
+import {installStaticWeeklySha256HexAccelerator,contentDigest} from '../src/static-weekly-schedule-model.js';
+import {RECURRING_WEEK_COMMITMENT_SCHEMA,RECURRING_PHASE_SCOPE} from '../src/static-weekly-recurring-week-commitment.js';
+import {COMPONENT_WEIGHT_LEDGER_DIGEST} from '../src/schedule-component-weight-authority.js';
 installStaticWeeklySha256HexAccelerator(x=>createHash('sha256').update(x).digest('hex'));
 const openingActual=loadOpeningCoverageFixture().baseline;
 
@@ -654,6 +656,34 @@ await assert.rejects(() => snapshotControlPlane.getManagerSnapshot({ manager, we
 const previewAuthority = createAuthorityDatabase({ revision: 7 });
 let previewBasis = null;
 const { RECURRING_DECISION_SCHEMA, RECURRING_IMPLEMENTATION_DIGEST } = await import('../src/static-weekly-recurring-preview.js');
+// The injected candidate is a transaction-boundary mock, not a solver proof.
+// Mirror only the sibling shape that CP must bind; the separate owning test
+// exercises construction from fresh seven-day terminal evidence.
+const syntheticSiblingFor=candidate=>{
+ const body={schema:RECURRING_WEEK_COMMITMENT_SCHEMA,status:'PROVEN_CANDIDATE_ONLY',
+  scope:'EXACT_SELECTED_POST0945_NORMAL_WEEK_MORNING_FROM_BOUND_INPUT_FIXED',
+  sourceId:candidate.sourceId,publicationId:candidate.publicationId,
+  authorityRevision:candidate.authorityRevision,effectiveWeek:candidate.effectiveDate,
+  publishedSourceDigest:candidate.publishedSourceDigest,
+  managerSnapshotDigest:candidate.managerSnapshotDigest,
+  readbackPatternDigest:candidate.readbackPatternDigest,
+  fullNineSourceDigest:candidate.fullNineSourceDigest,
+  sourceDigest:'1'.repeat(64),sourceSqlDigest:'2'.repeat(64),configDigest:'3'.repeat(64),
+  finalPatternDigest:candidate.patternFingerprint,
+  fullOwnersDigest:'4'.repeat(64),componentLedgerDigest:COMPONENT_WEIGHT_LEDGER_DIGEST,
+  implementationDigest:RECURRING_IMPLEMENTATION_DIGEST,
+  finalSourceDigest:'5'.repeat(64),finalSourceSqlDigest:candidate.candidateSourceDigest,
+  days:Array.from({length:7},(_,dayOfWeek)=>({dayOfWeek,
+   descriptorDigest:'6'.repeat(64),originalLowerBoundDescriptorDigest:'7'.repeat(64),
+   finalCanonicalWitnessDigest:'8'.repeat(64)})),
+  canonicalHard:{witnessDigest:'8'.repeat(64)},
+  completeCompiler:{compilerVersion:candidate.compilerVersion,modelBasisDigest:candidate.modelBasisDigest,
+   finalWitnessDigest:candidate.finalWitnessDigest,assignmentDigest:candidate.assignmentWitnessDigest,
+   weeklyAssignmentsDigest:candidate.weeklyAssignmentsDigest},
+  normalMorningOptimumClaim:false,datedPriorityChange:false,physicalMinuteFeasibilityClaim:false,
+  admitted:false,published:false};
+ return {...body,digest:contentDigest(body)};
+};
 const recurringMockCandidate = (basis) => {
   const decision = { schema: RECURRING_DECISION_SCHEMA, implementationDigest: RECURRING_IMPLEMENTATION_DIGEST,
     effectiveDate: basis.effectiveDate, compilerVersion: 'synthetic-recurring-compiler',
@@ -666,6 +696,7 @@ const recurringMockCandidate = (basis) => {
       notificationIntents: structuredClone(openingActual.result.lunch.notification_intents) },
     shiftEnd: null, metrics: structuredClone(openingActual.result.metrics), changes: [] };
   const candidate={ status: "CANDIDATE_ONLY", compilerStatus: "FEASIBLE",
+  weekOptimizationScope:RECURRING_PHASE_SCOPE,staffedPositions:7,sourcePatternKind:'UNSPLIT',
   publicationAuthority: "ACCEPTABLE", verifierOk: true, reviewWorkCount: 0,
   sourceId: basis.publishedSource.source_id, publicationId: basis.publishedSource.publication_id,
   authorityRevision: basis.expectedRevision,
@@ -682,6 +713,7 @@ const recurringMockCandidate = (basis) => {
   decision, decisionDigest: postgresJsonbContentDigest(decision),
   lunchLoanCount: decision.fixedLunch.loans.length, openWorkCount: decision.gaps.open.length, patternFingerprint: "b".repeat(64),
   changes: [], registrationRequired: true, managerConfirmationRequired: true };
+  candidate.weekCommitment=syntheticSiblingFor(candidate);
   candidate.openingCoverageReport=createOpeningCoverageReport({source:openingActual.source,assignments:decision.assignments,
     lunch:openingActual.result.lunch,context:{publicationId:candidate.publicationId,authorityRevision:candidate.authorityRevision},
     decisionDigest:candidate.decisionDigest});return candidate;
@@ -705,6 +737,16 @@ assert.equal(previewAuthority.queries.filter((entry) => entry.statement.includes
   "preview rechecks the authority revision after the isolated solve");
 assert.equal(previewAuthority.commits(), 2, "preview performs only two completed read transactions");
 assert.equal(previewAuthority.mutationAttempts(), 0);
+for(const mutate of [candidate=>delete candidate.weekCommitment,
+ candidate=>{candidate.weekCommitment.days[0].descriptorDigest='0'.repeat(64);},
+ candidate=>{candidate.weekCommitment.sourceId='70000000-0000-4000-8000-000000000999';
+  const {digest,...body}=candidate.weekCommitment;candidate.weekCommitment.digest=contentDigest(body);}]){
+ const denied=controlPlaneFor(createAuthorityDatabase({revision:7}),async()=>acceptedProjection,
+  {recurringCandidatePreparer:async basis=>{const candidate=recurringMockCandidate(basis);mutate(candidate);return candidate;}});
+ await assert.rejects(()=>denied.previewRecurringStaffing({manager,effectiveStart:'2026-10-05',expectedRevision:7}),
+  /complete manager decision/,'missing or forged semantic sibling cannot preview');
+ await denied.close();
+}
 const repairPatternId='70000000-0000-4000-8000-000000000882';
 const repairContext={schema:'static-weekly.recurring-repair-basis.v1',state:'REPLACING_INVALID_FUTURE',
  effectivePublicationId:publicationId,patternPublicationId:repairPatternId,patternSourceId:authoritySourceId,
@@ -716,6 +758,7 @@ const repairTransform=value=>({...value,publication_id:repairPatternId,repair_co
  repair_context_digest:postgresJsonbContentDigest(repairContext)});
 const repairCandidate=basis=>{const c={...recurringMockCandidate(basis),publicationId,patternPublicationId:repairPatternId,
  repairContext:structuredClone(basis.publishedSource.repair_context),repairContextDigest:basis.publishedSource.repair_context_digest};
+ c.weekCommitment=syntheticSiblingFor(c);
  c.openingCoverageReport=createOpeningCoverageReport({source:openingActual.source,assignments:c.decision.assignments,
   lunch:openingActual.result.lunch,context:{publicationId,authorityRevision:c.authorityRevision},decisionDigest:c.decisionDigest});return c;};
 const repairDatabase=createAuthorityDatabase({revision:7,previewSourceTransform:repairTransform});
