@@ -4,7 +4,7 @@ import {runStaticWeeklyRecurringPhaseAuthorityTests} from './static-weekly-recur
 
 const receipt = runStaticWeeklyRecurringPhaseAuthorityTests();
 assert.equal(receipt.status, 'PASS');
-assert.equal(receipt.checks, 52);
+assert.equal(receipt.checks, 55);
 assert.equal(receipt.currentPreservationHardRows, 644);
 assert.deepEqual(receipt.cases.map(x => x.minimumDoubledSpread), [0, 1, 4, 2, 1]);
 for (const key of ['solver', 'worker', 'sql', 'publication']) assert.equal(receipt[key], false);
