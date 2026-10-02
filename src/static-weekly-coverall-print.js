@@ -125,6 +125,22 @@ function assertCurrentPrintDocument(document){
  if(documentDigest!==hash(canonicalJson(canonical)))fail('coverall_print_document_digest_mismatch');
  if(document.guidanceVersion!=='custodial.coverall-guidance.v1'||document.managerContact?.authority!=='AUTHENTICATED_NAMED_MANAGER'
   ||document.managerContact.method!=='IN_PERSON'||!text(document.managerContact.name).trim()||!text(document.managerContact.managerId).trim())fail('coverall_print_issuing_manager_required');
+ if(Object.hasOwn(document,'eventBriefs')){
+  if(!Array.isArray(document.eventBriefs)||!document.eventBriefs.length||document.eventBriefs.length>16)fail('coverall_print_event_brief_invalid');
+  const {documentDigest:ignored,baseDocumentDigest,eventBriefs,...base}=document;
+  if(baseDocumentDigest!==hash(canonicalJson(base)))fail('coverall_print_event_basis_invalid');
+  const seen=new Set();
+  for(const entry of eventBriefs){
+   const key=String(entry?.capacitySlotId).toLowerCase()+'|'+String(entry?.eventId).toLowerCase();
+   if(entry?.schema!=='custodial.coverall-event-brief-confirmed.v1'||entry.status!=='CONFIRMED_FOR_EXACT_PRINT'
+    ||entry.managerId.toLowerCase()!==document.managerContact.managerId.toLowerCase()
+    ||entry.printDocumentDigest!==baseDocumentDigest||!/^[0-9a-f]{64}$/.test(text(entry.candidateDigest))
+    ||!document.contractors.some(c=>c.slotId.toLowerCase()===String(entry.capacitySlotId).toLowerCase())
+    ||entry.brief?.eventId!==entry.eventId||entry.brief?.eventRevision!==entry.eventRevision
+    ||entry.brief?.eventDate!==document.serviceDate||!Array.isArray(entry.brief?.matchedAreas)||seen.has(key))fail('coverall_print_event_brief_invalid');
+   seen.add(key);
+  }
+ }
 }
 
 function contractorLines(document,c,language){
@@ -137,6 +153,23 @@ function contractorLines(document,c,language){
  add(`${language==='es'?'Encargado que emitió el horario':'Issuing custodial manager'}: ${document.managerContact.name}`,11,true);
  add(language==='es'?'Instrucciones y comunicación':'Instructions and reporting',12,true);
  for(const instruction of instructions[language])add(instruction);
+ const selectedEvents=(document.eventBriefs||[]).filter(entry=>entry.capacitySlotId.toLowerCase()===c.slotId.toLowerCase());
+ if(selectedEvents.length){
+  add(language==='es'?'Eventos: notas autorizadas para este horario':'Events: notes approved for this handout',12,true);
+  add(language==='es'
+   ?'El encargado seleccionó estas notas. Los horarios del evento son informativos; no cambian sus áreas, horas de trabajo ni descansos. Las notas originales se conservan sin traducción automática.'
+   :'The issuing manager selected these notes. Event times are information, not new assignments or changes to your shift or breaks. Original notes are preserved without automatic translation.');
+  const codeLabels=language==='es'?{trash_boxes:'Cajas de basura',extra_cans:'Botes adicionales',restroom_checks:'Revisiones de baños'}
+   :{trash_boxes:'Trash boxes',extra_cans:'Extra cans',restroom_checks:'Restroom checks'};
+  for(const {brief} of selectedEvents){
+   add(brief.eventName,11,true,2);
+   add(`${brief.eventDate} | ${brief.startTime} - ${brief.endTime} | ${brief.displayLocation}`);
+   if(brief.custodialNoteCodes.length)add(brief.custodialNoteCodes.map(code=>codeLabels[code]).join('; '));
+   if(brief.custodialPublicNotes)add(brief.custodialPublicNotes);
+   add(language==='es'?'Áreas y períodos ya aceptados:':'Already accepted areas and periods:');
+   for(const area of brief.matchedAreas)add(`${area.group_name}: ${area.starts} - ${area.ends}${area.purpose==='lunch_coverage'?' ('+t.lunchCoverage+')':''}`);
+  }
+ }
  if(c.periods.some(p=>p.advisoryOrder?.status==='ADVISORY_VERIFIED_PROXIMITY'))add(language==='es'
   ?'El orden sugerido usa proximidad desde el inicio aceptado, no la posición actual. No son citas ni una ruta obligatoria; adapte la secuencia a las condiciones.'
   :'Suggested order uses proximity from the accepted starting area, not current position. It is not an appointment or mandatory route; adapt the sequence to conditions.');

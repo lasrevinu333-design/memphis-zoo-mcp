@@ -12,6 +12,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { assertOwnerRecurringWorkdays } from "./static-weekly-owner-workdays.js";
 import { createCoverAllPrintDocument } from "./static-weekly-coverall-print.js";
+import {listCoverAllEventBriefPreviews,confirmCoverAllEventBrief,revalidateConfirmedCoverAllEventBrief} from './coverall-event-brief.js';
 import { Pool } from "pg";
 import { createStaticWeeklyDraftRpcInput } from "./static-weekly-schedule-database-adapter.js";
 import { createStaticWeeklyProjectionWithLunchRpcInput } from "./static-weekly-lunch-publication.js";
@@ -517,6 +518,34 @@ export function createStaticWeeklyControlPlane({
 
   async function sourceFor(client, publicationId, serviceDate) {
     return call(client, "static_weekly_v3_read_publication_source", [publicationId, serviceDate]);
+  }
+
+  async function acceptedCoverAllDocument(client,{manager,weekStart,serviceDate,expectedRevision,projectionId}){
+    const issuingManager=requireManager(manager);
+    const week=requireMonday(weekStart,'week start'),date=requireDateInWeek(serviceDate,week,'service date');
+    const revision=requireRevision(expectedRevision);
+    await lockStaticWeeklyAuthority(client);
+    const snapshot=await snapshotFor(client,week);
+    const source=await sourceFor(client,requirePublicationId(snapshot?.current_publication?.publication_id),date);
+    const lunch=await call(client,'static_weekly_v8_read_lunch_document',[date]);
+    return createCoverAllPrintDocument({snapshot,source,lunch,serviceDate:date,expectedRevision:revision,projectionId:text(projectionId),issuingManager});
+  }
+  function coverAllWithBriefs(document,briefs){
+    if(!briefs.length)return document;
+    const {documentDigest,...base}=document;
+    const next={...base,baseDocumentDigest:documentDigest,eventBriefs:briefs};
+    return {...next,documentDigest:createHash('sha256').update(canonicalJson(next)).digest('hex')};
+  }
+  function coverAllSelections(value){
+    if(!Array.isArray(value)||value.length>16)throw fail('coverall_event_selection_limit');
+    const seen=new Set();
+    for(const item of value){
+      const keys=['event_id','event_revision','capacity_slot_id','preview','confirmation'];
+      if(!item||typeof item!=='object'||Array.isArray(item)||Object.keys(item).length!==keys.length||keys.some(key=>!Object.hasOwn(item,key)))throw fail('coverall_event_selection_invalid');
+      const key=String(item.capacity_slot_id)+'|'+String(item.event_id);
+      if(seen.has(key))throw fail('coverall_event_selection_duplicate');seen.add(key);
+    }
+    return value;
   }
 
   async function snapshotFor(client, weekStart) {
@@ -1049,19 +1078,43 @@ export function createStaticWeeklyControlPlane({
         actor.managerId,
       ]));
     },
-    async getCoverAllPrintDocument({ manager, weekStart, serviceDate, expectedRevision, projectionId }) {
-      const issuingManager=requireManager(manager);
-      const week=requireMonday(weekStart,"week start"),date=requireDateInWeek(serviceDate,week,"service date");
-      const revision=requireRevision(expectedRevision);
-      return transaction(async(client)=>{
-        // Read all three immutable/current bindings in the same authority-lock
-        // boundary as schedule changes. PDF rendering runs AFTER commit.
-        await lockStaticWeeklyAuthority(client);
-        const snapshot=await snapshotFor(client,week);
-        const publicationId=requirePublicationId(snapshot?.current_publication?.publication_id);
-        const source=await sourceFor(client,publicationId,date);
-        const lunch=await call(client,"static_weekly_v8_read_lunch_document",[date]);
-        return createCoverAllPrintDocument({snapshot,source,lunch,serviceDate:date,expectedRevision:revision,projectionId:text(projectionId),issuingManager});
+    async previewCoverAllEventNotes(input){
+      const actor=requireManager(input.manager);
+      return transaction(async client=>{
+        const document=await acceptedCoverAllDocument(client,input),groups=[];
+        for(const capacity of document.contractors){
+          const result=await listCoverAllEventBriefPreviews({runRpc:(name,args)=>call(client,name,args),manager:actor,
+            capacitySlotId:capacity.slotId,printDocument:document});
+          if(result.status!=='PREVIEW_ONLY'||result.limited!==false)throw fail('coverall_event_preview_unavailable',`Event preview unavailable (${result.status}); no empty or partial approval inferred.`);
+          groups.push({capacitySlotId:capacity.slotId,capacityName:capacity.name,previews:result.previews});
+        }
+        return {schema:'custodial.coverall-event-preview-page.v1',status:'PREVIEW_ONLY',disclosureApproved:false,
+          serviceDate:document.serviceDate,projectionId:document.projectionId,authorityRevision:document.authorityRevision,
+          documentDigest:document.documentDigest,groups};
+      });
+    },
+    async getCoverAllPrintDocument(input) {
+      const actor=requireManager(input.manager),selections=coverAllSelections(input.eventSelections??[]);
+      return transaction(async client=>{
+        const document=await acceptedCoverAllDocument(client,input),briefs=[];
+        for(const selected of selections)briefs.push(await confirmCoverAllEventBrief({
+          runRpc:(name,args)=>call(client,name,args),manager:actor,printDocument:document,
+          eventId:selected.event_id,eventRevision:selected.event_revision,capacitySlotId:selected.capacity_slot_id,
+          preview:selected.preview,confirmation:selected.confirmation}));
+        return coverAllWithBriefs(document,briefs);
+      });
+    },
+    async revalidateCoverAllPrintDocument(input){
+      const actor=requireManager(input.manager),original=input.document;
+      if(!original||!Array.isArray(original.eventBriefs??[])||(original.eventBriefs??[]).length>16)throw fail('coverall_event_confirmation_invalid');
+      return transaction(async client=>{
+        const document=await acceptedCoverAllDocument(client,input),briefs=[];
+        for(const confirmed of original.eventBriefs??[])briefs.push(await revalidateConfirmedCoverAllEventBrief({
+          runRpc:(name,args)=>call(client,name,args),manager:actor,printDocument:document,
+          eventId:confirmed.eventId,eventRevision:confirmed.eventRevision,capacitySlotId:confirmed.capacitySlotId,confirmed}));
+        const checked=coverAllWithBriefs(document,briefs);
+        if(checked.documentDigest!==original.documentDigest)throw fail('coverall_print_source_changed_reprepare_required');
+        return checked;
       });
     },
     async previewPlaceRepublish({ manager, sourcePublicationId, effectiveStart, expectedRevision, selection, reason }) {

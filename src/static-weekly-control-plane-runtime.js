@@ -225,9 +225,27 @@ export function createStaticWeeklyControlPlaneRuntime({
   app.get("/static-weekly/coverall-print", requireManagerWrite, namedManager, respond(async(req) => {
     const revision=text(req.query?.expected_revision);
     if(!/^(0|[1-9][0-9]*)$/.test(revision))throw fail("coverall_print_expected_revision_required");
-    const document=await authorityControlPlane.getCoverAllPrintDocument({manager:manager(req),weekStart:req.query?.week_start,serviceDate:req.query?.service_date,expectedRevision:Number(revision),projectionId:req.query?.projection_id});
-    return renderCoverAllPdfPair(document);
+    return acceptedCoverAllOutput({manager:manager(req),weekStart:req.query?.week_start,serviceDate:req.query?.service_date,expectedRevision:Number(revision),projectionId:req.query?.projection_id});
   }));
+  function exactCoverAllBody(body,withSelections=false){
+    const keys=['week_start','service_date','expected_revision','projection_id',...(withSelections?['event_selections']:[])];
+    if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).length!==keys.length
+      ||keys.some(key=>!Object.hasOwn(body,key)))throw fail('coverall_print_request_invalid');
+    return {weekStart:body.week_start,serviceDate:body.service_date,expectedRevision:body.expected_revision,
+      projectionId:body.projection_id,...(withSelections?{eventSelections:body.event_selections}:{})};
+  }
+  async function acceptedCoverAllOutput(input){
+    const document=await authorityControlPlane.getCoverAllPrintDocument(input);
+    const output=await renderCoverAllPdfPair(document);
+    // Re-read named-manager authority, accepted schedule/lunch and each selected
+    // Event after asynchronous rendering. Return no copy/PDF bytes when changed.
+    await authorityControlPlane.revalidateCoverAllPrintDocument({...input,document});
+    return output;
+  }
+  app.post('/static-weekly/coverall-event-previews',requireManagerWrite,namedManager,respond(req=>
+    authorityControlPlane.previewCoverAllEventNotes({...exactCoverAllBody(req.body),manager:manager(req)})));
+  app.post('/static-weekly/coverall-print',requireManagerWrite,namedManager,respond(req=>
+    acceptedCoverAllOutput({...exactCoverAllBody(req.body,true),manager:manager(req)})));
   app.post("/static-weekly/drafts/initial", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.createInitialDraft({ manager: manager(req), sourceId: req.body?.source_id, effectiveStart: req.body?.effective_start, expectedRevision: req.body?.expected_revision, idempotencyKey: req.body?.idempotency_key })));
   app.post("/static-weekly/drafts/:versionId/refresh", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.refreshInitialDraft({ manager: manager(req), draftVersionId: req.params.versionId, sourceId: req.body?.source_id, effectiveStart: req.body?.effective_start, expectedDraftRevision: req.body?.expected_draft_revision, expectedRevision: req.body?.expected_revision, idempotencyKey: req.body?.idempotency_key })));
   app.post("/static-weekly/drafts/replacement", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.createReplacementDraft({ manager: manager(req), sourcePublicationId: req.body?.source_publication_id, effectiveStart: req.body?.effective_start, expectedRevision: req.body?.expected_revision, idempotencyKey: req.body?.idempotency_key })));
