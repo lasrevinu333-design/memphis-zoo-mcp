@@ -1,5 +1,5 @@
 import {createHash} from 'node:crypto';
-import {canonicalJson,normalizeWindow} from './static-weekly-schedule-model.js';
+import {canonicalJson,normalizeWindow,snapshotContractorCapacity} from './static-weekly-schedule-model.js';
 
 const fail=code=>{throw Object.assign(new Error(code),{code});};
 const list=value=>Array.isArray(value)?value:fail('coverall_print_array_required');
@@ -27,6 +27,7 @@ export function createCoverAllPrintDocument({snapshot,source,lunch,serviceDate,e
  const contractors=selected.map(e=>{
   const id=e.payload?.availability?.slotId,slot=contractorSlots.get(id);
   if(!slot)fail('coverall_print_registered_capacity_required');
+  if(slot.kind==='CONTRACTOR_CAPACITY')snapshotContractorCapacity(slot,serviceDate);
   return {slotId:id,name:text(slot.label)||'CoverAll',shift:{...window(e.payload.availability.shift)},lunch:null,periods:[]};
  });
  if(new Set(contractors.map(c=>c.slotId)).size!==contractors.length)fail('coverall_print_duplicate_capacity');
@@ -35,6 +36,8 @@ export function createCoverAllPrintDocument({snapshot,source,lunch,serviceDate,e
  const segments=[];
  for(const r of rows){
   if(r.status!=='assigned')continue;
+  const capacity=contractorSlots.get(r.owner_slot_id);
+  if(capacity?.kind==='CONTRACTOR_CAPACITY'&&(r.owner_kind!=='CONTRACTOR_CAPACITY'||r.capacity_id!==capacity.id||r.owner_person_id!==null))fail('coverall_print_nonemployee_identity_mismatch');
   const w=r.work_snapshot,locations=list(w?.includedLocations),span=window(w.window);
   if(!text(r.plan_work_id)||!text(r.owner_slot_id)||!locations.length)fail('coverall_print_incomplete_assignment');
   const overrides=list(lunch.responsibilities).filter(x=>x.service_date===serviceDate&&x.normal_owner_slot_id===r.owner_slot_id)

@@ -308,6 +308,7 @@ export function canonicalOptimizerAssignmentProjection(weeklyAssignments) {
     slotId: assignment.slotId,
     personId: assignment.personId,
     displayName: assignment.displayName,
+    ...(assignment.ownerKind === 'CONTRACTOR_CAPACITY' ? { ownerKind: assignment.ownerKind, capacityId: assignment.capacityId } : {}),
     ownerDigest: assignment.ownerDigest,
     exactOwnerIdentity: assignment.exactOwnerIdentity,
     baselineSlotId: assignment.baselineSlotId,

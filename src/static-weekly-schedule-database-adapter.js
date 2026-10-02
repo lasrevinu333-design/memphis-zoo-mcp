@@ -100,6 +100,7 @@ function optimizerBinding(assignment) {
     slotId: assignment?.slotId,
     personId: assignment?.personId,
     displayName: assignment?.displayName,
+    ...(assignment?.ownerKind === 'CONTRACTOR_CAPACITY' ? { ownerKind: assignment.ownerKind, capacityId: assignment.capacityId } : {}),
     ownerDigest: assignment?.ownerDigest,
     exactOwnerIdentity: assignment?.exactOwnerIdentity,
     baselineSlotId: assignment?.baselineSlotId,
@@ -191,6 +192,7 @@ function publicCompilerAssignment(binding, work, program) {
     slotLabel: slot?.label || null,
     personId: binding.personId,
     displayName: binding.displayName,
+    ...(binding.ownerKind === 'CONTRACTOR_CAPACITY' ? { ownerKind: binding.ownerKind, capacityId: binding.capacityId } : {}),
     baselineSlotId,
     baselineSlotLabel: baseline?.slotLabel || baselineSlotId,
     baselineOwnerPersonId: baseline?.personId || null,
@@ -232,7 +234,10 @@ function activeWorkByPlanId(result, authority, program) {
       || !binding.window?.start || !binding.window?.end || !Number.isFinite(Number(binding.serviceEffortMinutes))) {
       fail("database_adapter_canonical_optimizer_assignment_invalid", { planWorkId });
     }
-    if (status === "ASSIGNED" && (!text(binding.slotId) || !text(binding.personId) || !text(binding.displayName))) fail("database_adapter_optimizer_owner_invalid", { planWorkId });
+    const capacitySlot = program.problem.slots.find(slot => slot.id === binding.slotId && slot.kind === 'CONTRACTOR_CAPACITY');
+    const capacityOwner = capacitySlot && binding.ownerKind === 'CONTRACTOR_CAPACITY' && binding.capacityId === capacitySlot.capacityId
+      && binding.personId === null && binding.displayName === null;
+    if (status === "ASSIGNED" && (!text(binding.slotId) || (!capacityOwner && (!text(binding.personId) || !text(binding.displayName))))) fail("database_adapter_optimizer_owner_invalid", { planWorkId });
     if (status !== "ASSIGNED" && (binding.slotId != null || binding.personId != null || binding.displayName != null)) fail("database_adapter_open_review_owner_invalid", { planWorkId });
     if (canonical.has(planWorkId)) fail("database_adapter_duplicate_optimizer_assignment", { planWorkId });
     canonical.set(planWorkId, binding);
@@ -423,7 +428,9 @@ function draftAssignmentRows(authority, activeWork) {
     seen.add(planWorkId);
     const assigned = assignment.status === "ASSIGNED";
     const ownerSlot = assigned ? slotMap.get(assignment.slotId) : null;
-    if (assigned && (!ownerSlot || !assignment.personId || !assignment.displayName)) fail("database_adapter_optimizer_owner_invalid", { planWorkId });
+    const capacityOwner = ownerSlot?.kind === 'CONTRACTOR_CAPACITY' && assignment.ownerKind === ownerSlot.kind
+      && assignment.capacityId === ownerSlot.capacityId && assignment.personId === null && assignment.displayName === null;
+    if (assigned && (!ownerSlot || (!capacityOwner && (!assignment.personId || !assignment.displayName)))) fail("database_adapter_optimizer_owner_invalid", { planWorkId });
     if (!assigned && (assignment.slotId != null || assignment.personId != null || assignment.displayName != null)) fail("database_adapter_open_review_owner_invalid", { planWorkId });
     return {
       work_id: text(work.workId || work.id),
@@ -449,6 +456,7 @@ function draftAssignmentRows(authority, activeWork) {
         owner_digest: assignment.ownerDigest,
         exact_owner_identity: assignment.exactOwnerIdentity,
         authority_facts: {
+          ...(capacityOwner ? { owner_kind: 'CONTRACTOR_CAPACITY', capacity_id: assignment.capacityId } : {}),
           stable_roster_slot_id: assignment.baselineSlotId,
           baseline_owner_slot_id: assignment.baselineSlotId,
           baseline_owner_person_id: assignment.baselineOwnerPersonId,
@@ -480,6 +488,7 @@ function projectionAssignmentRows(activeWork) {
       reason_code: assignment.explanation?.reasons?.[0]?.code ?? null,
       owner_slot_id: assigned ? assignment.slotId : null,
       owner_person_id: assigned ? assignment.personId : null,
+      ...(assignment.ownerKind === 'CONTRACTOR_CAPACITY' ? { owner_kind: assignment.ownerKind, capacity_id: assignment.capacityId } : {}),
       owner_digest: assignment.ownerDigest ?? null,
       exact_owner_identity: assignment.exactOwnerIdentity ?? null,
       baseline_owner_slot_id: assignment.baselineSlotId ?? null,

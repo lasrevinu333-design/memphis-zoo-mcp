@@ -12,7 +12,6 @@ import {
   normalizeWindow,
   selectEffectiveWeeklyVersion,
   serviceDateWeekday,
-  snapshotIncumbency,
   snapshotDatedRosterSlot,
   stableCompare,
   sha256Hex,
@@ -436,7 +435,7 @@ export function verifyStaticWeeklyScheduleResult(input = {}, result = {}, deadli
     if (assignment.planWorkId !== key || assignment.workId !== work.workId || Number(assignment.dayOfWeek) !== work.day || assignment.serviceDate !== occurrenceDate || assignment.locationId !== work.locationId || assignment.window?.start !== work.window?.start || assignment.window?.end !== work.window?.end || Number(assignment.serviceEffortMinutes) !== Number(work.serviceEffortMinutes)) push(violations, "immutable_work_fact_mismatch", { planWorkId: key });
     if (assignment.status === "ASSIGNED") {
       if (isDatedVacant(work.day, baselineSlotId)) push(violations, "vacant_work_was_assigned", { planWorkId: key, baselineSlotId });
-      try { optimized = snapshotIncumbency(slotById.get(text(assignment.slotId)), occurrenceDate); } catch (error) { push(violations, "optimized_identity_not_canonical", { planWorkId: key, detail: error.code || error.message }); }
+      try { optimized = snapshotDatedRosterSlot(slotById.get(text(assignment.slotId)), occurrenceDate); } catch (error) { push(violations, "optimized_identity_not_canonical", { planWorkId: key, detail: error.code || error.message }); }
     }
     const expectedOwnerDigest = postgresJsonbContentDigest({ planWorkId: key, slotId: optimized?.slotId || null, personId: optimized?.personId || null, serviceDate: occurrenceDate });
     const expectedExactOwnerIdentity = postgresJsonbContentDigest({ plan_work_id: key, service_date: occurrenceDate, optimized_owner_slot_id: optimized?.slotId || null, optimized_owner_person_id: optimized?.personId || null, baseline_owner_slot_id: baseline?.slotId || null, baseline_owner_person_id: baseline?.personId || null });
@@ -448,6 +447,9 @@ export function verifyStaticWeeklyScheduleResult(input = {}, result = {}, deadli
       actualActorPersonId: null, ownerDigest: expectedOwnerDigest, exactOwnerIdentity: expectedExactOwnerIdentity,
     };
     for (const [field, value] of Object.entries(canonicalFacts)) if ((assignment[field] ?? null) !== value) push(violations, "canonical_identity_fact_mismatch", { planWorkId: key, field });
+    if (optimized?.kind === 'CONTRACTOR_CAPACITY') {
+      if (assignment.ownerKind !== optimized.kind || assignment.capacityId !== optimized.capacityId) push(violations, 'contractor_capacity_identity_mismatch', { planWorkId: key });
+    } else if (assignment.ownerKind != null || assignment.capacityId != null) push(violations, 'unexpected_contractor_capacity_identity', { planWorkId: key });
     const canonicalStatus = assignment.status === "ASSIGNED" ? "ASSIGNED" : (isEffectiveRequired(work) ? "REVIEW" : "OPEN");
     if (assignment.status !== canonicalStatus) push(violations, "assignment_status_not_canonical", { planWorkId: key, expected: canonicalStatus, actual: assignment.status ?? null });
     if (assignment.status !== "ASSIGNED") {

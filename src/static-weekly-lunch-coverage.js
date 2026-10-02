@@ -150,7 +150,8 @@ export function deriveLunchCoverageFromPreparedProblem(problem, weeklyAssignment
     for(const [ownerSlotId,availability] of [...state.availability].sort(([a],[b])=>compare(a,b))) {
       if(availability.status!=='working')continue;
       const incumbent=problem.incumbencyByDaySlot.get(`${day}\0${ownerSlotId}`);
-      if(!incumbent?.personId)continue;
+      const capacityOwner=incumbent?.kind==='CONTRACTOR_CAPACITY';
+      if(!incumbent?.personId && !capacityOwner)continue;
       const serviceDate=weekdayDate(problem.serviceDate,day);
       if(!availability.lunch) {
         lunches.push({serviceDate,dayOfWeek:day,normalOwnerSlotId:ownerSlotId,normalOwnerPersonId:incumbent.personId,
@@ -160,6 +161,7 @@ export function deriveLunchCoverageFromPreparedProblem(problem, weeklyAssignment
       }
       const lunch=windowOf(availability.lunch);
       const base={serviceDate,dayOfWeek:day,normalOwnerSlotId:ownerSlotId,normalOwnerPersonId:incumbent.personId,
+        ...(capacityOwner?{normalOwnerCapacityId:incumbent.capacityId}:{}),
         window:{start:lunch.start,end:lunch.end},loanId:digest({policy:POLICY,input:problem.inputDigest,serviceDate,ownerSlotId,start:lunch.start,end:lunch.end})};
       if(lunch.endMinute-lunch.startMinute!==60 || !contains(windowOf(availability.shift),lunch)) {
         lunches.push({...base,status:'REVIEW_REQUIRED',reason:'scheduled_lunch_must_be_one_hour_within_shift',responsibilities:[]});continue;
@@ -170,7 +172,7 @@ export function deriveLunchCoverageFromPreparedProblem(problem, weeklyAssignment
         if(slot.id===ownerSlotId)continue;
         const context=problem.availabilityByDaySlot.get(`${day}\0${slot.id}`);
         const person=problem.incumbencyByDaySlot.get(`${day}\0${slot.id}`);
-        if(!person?.personId || !availableForLunch(context,lunch))continue;
+        if((!person?.personId && person?.kind!=='CONTRACTOR_CAPACITY') || !availableForLunch(context,lunch))continue;
         const anchors=normalAnchors(rowsBySlot.get(slot.id)||[],byWork,lunch);
         if(!anchors.length)continue;
         contexts.set(slot.id,{...context,person});
@@ -184,7 +186,9 @@ export function deriveLunchCoverageFromPreparedProblem(problem, weeklyAssignment
         const area=areas.find(area=>area.areaId===item.areaId),person=contexts.get(item.covererSlotId).person;
         return {responsibilityId:digest({loanId:base.loanId,areaId:area.areaId,covererSlotId:item.covererSlotId}),
           areaId:area.areaId,covererSlotId:item.covererSlotId,covererPersonId:person.personId,
+          ...(person.kind==='CONTRACTOR_CAPACITY'?{covererCapacityId:person.capacityId}:{}),
           normalOwnerSlotId:ownerSlotId,normalOwnerPersonId:incumbent.personId,
+          ...(capacityOwner?{normalOwnerCapacityId:incumbent.capacityId}:{}),
           coveragePurpose:'lunch_coverage',proximityEvidence:evidence.get(`${area.areaId}\0${item.covererSlotId}`),
           checkDeadlinePolicy:'inherit_existing_90_minute_deadline',createsDeepClean:false,
           segments:area.entries.map(entry=>({planWorkId:entry.row.planWorkId,workId:entry.row.workId,
@@ -193,7 +197,7 @@ export function deriveLunchCoverageFromPreparedProblem(problem, weeklyAssignment
       });
       lunches.push({...base,status:partition.status,reason:partition.reason||null,
         helperSlotIds:partition.helperSlotIds,fallback:partition.fallback||null,totalDistance:partition.totalDistance??null,
-        responsibilities,notificationIntents:partition.helperSlotIds.map(slot=>({covererSlotId:slot,
+        responsibilities,notificationIntents:partition.helperSlotIds.filter(slot=>contexts.get(slot)?.person?.personId).map(slot=>({covererSlotId:slot,
           startKey:digest({loanId:base.loanId,slot,event:'start'}),endKey:digest({loanId:base.loanId,slot,event:'end'}),
           startTime:lunch.start,endTime:lunch.end,deliveryState:'NOT_ENQUEUED'}))});
     }

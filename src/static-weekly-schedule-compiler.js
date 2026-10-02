@@ -225,6 +225,7 @@ function buildAssignments(problem, final) {
       planWorkId: item.key, workId: item.workId, dayOfWeek: item.dayOfWeek, serviceDate, locationId: item.locationId,
       window: item.window, serviceEffortMinutes: item.effort.minutes, serviceEffortProvenance: item.effort.provenance, priority: item.priority,
       status: slotId ? "ASSIGNED" : (item.required ? "REVIEW" : "OPEN"), slotId, slotLabel: slot?.label || null, personId: roster?.personId || null, displayName: roster?.displayName || null,
+      ...(roster?.kind === 'CONTRACTOR_CAPACITY' ? { ownerKind: roster.kind, capacityId: roster.capacityId } : {}),
       baselineSlotId, baselineSlotLabel: baselineRoster?.slotLabel || baselineSlotId, baselineOwnerPersonId: baselineRoster?.personId || null, baselineOwnerName: baselineRoster?.displayName || null,
       originalActorSlotId: baselineSlotId, originalActorPersonId: baselineRoster?.personId || null, originalActorName: baselineRoster?.displayName || null,
       optimizedOwnerSlotId: slotId, optimizedOwnerPersonId: roster?.personId || null, optimizedOwnerName: roster?.displayName || null,
@@ -349,6 +350,7 @@ export async function compileStaticWeeklySchedule(input = {}) {
         dayOfWeek, serviceDate: weekdayDate(problem.serviceDate, dayOfWeek), ...clone(availability),
         incumbentSlotId: incumbent?.slotId || null, incumbentSlotLabel: incumbent?.slotLabel || null,
         incumbentPersonId: incumbent?.personId || null, incumbentName: incumbent?.displayName || null,
+        ...(incumbent?.kind === 'CONTRACTOR_CAPACITY' ? { ownerKind: incumbent.kind, capacityId: incumbent.capacityId } : {}),
       };
     })).sort((left, right) => Number(left.dayOfWeek) - Number(right.dayOfWeek) || stableCompare(left.slotId, right.slotId)),
     optimizerResult: {

@@ -273,7 +273,24 @@ export function snapshotVacantRosterSlot(slot, serviceDate) {
 
 // Whole-week vacancy is a summary, not the identity for every date in a
 // turnover week. Only immutable vacancy capability permits a dated gap.
+export function snapshotContractorCapacity(slot, serviceDate) {
+  assertServiceDate(serviceDate);
+  assert(slot?.kind === 'CONTRACTOR_CAPACITY' && slot.contractorCapacity === true,
+    'Nonemployee capacity requires an explicit contractor kind.', 'invalid_contractor_capacity_kind');
+  assert(typeof slot.id === 'string' && slot.id.trim() && slot.capacityId === slot.id,
+    'Contractor capacity requires its own exact stable capacity identity.', 'invalid_contractor_capacity_identity');
+  assert(/^CoverAll0[1-8]$/.test(slot.label), 'Contractor capacity must have an approved capacity label.', 'invalid_contractor_capacity_label');
+  assert(Array.isArray(slot.incumbencies) && slot.incumbencies.length === 0,
+    'A nonemployee capacity cannot contain person incumbencies.', 'contractor_capacity_has_incumbency');
+  return { slotId: slot.id, slotLabel: slot.label, personId: null, displayName: null,
+    kind: 'CONTRACTOR_CAPACITY', capacityId: slot.id };
+}
+
 export function snapshotDatedRosterSlot(slot, serviceDate, { vacancyCapable = false, declaredVacant = false } = {}) {
+  if (slot?.kind === 'CONTRACTOR_CAPACITY') {
+    assert(!vacancyCapable && !declaredVacant, 'Contractor capacity is not an employee vacancy.', 'contractor_capacity_cannot_be_vacant');
+    return snapshotContractorCapacity(slot, serviceDate);
+  }
   if (declaredVacant) {
     assert(vacancyCapable, "A declared vacancy requires source capability.", "vacant_slot_not_vacancy_capable");
     return snapshotVacantRosterSlot(slot, serviceDate);
