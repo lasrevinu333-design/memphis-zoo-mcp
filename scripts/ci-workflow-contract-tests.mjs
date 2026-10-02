@@ -370,7 +370,7 @@ for (const replacement of ['', `// ${sanitationSourceImport}`,
 console.log('Sanitation owning source gate PASS: ' + sanitationWiringMutationCount + ' omission/suppression mutations rejected');
 const eventCountSourceImports = ["await import('./event-count-cross-surface-contract-tests.mjs');",
   "await import('./manager-notification-history-tests.mjs');",
-  "await import('./static-weekly-opening-coverage-report-tests.mjs');",
+  "await import('./static-weekly-opening-coverage-report-ci-tests.mjs');",
   "await import('./static-weekly-opening-coverage-preview-contract-tests.mjs');"];
 function assertEventCountSourceWiring(workflow, sourceSuite) {
   assertCompletionRecoveryWiring(workflow, sourceSuite);
