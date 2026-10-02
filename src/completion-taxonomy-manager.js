@@ -28,7 +28,7 @@ export function makeCompletionEvidenceReader({ runRpc, managerId, backendSecret 
       }
       return res.status(200).json({ ok: true, contract_version: "completion-evidence.v1", data });
     } catch (error) {
-      const status = error?.code === "P0002" ? 404 : error?.code === "42501" ? 403 : 503;
+      const status = error?.code === "P0002" ? 404 : error?.code === "42501" || error?.status === 403 ? 403 : 503;
       return res.status(status).json({
         ok: false,
         error: status === 404 ? "Cleaning session not found."

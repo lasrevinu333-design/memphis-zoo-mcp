@@ -24,6 +24,7 @@ import { authoritativeFeedbackPayload, makeFeedbackSubmitAuthority } from "./fee
 import { attachFeedbackDelivery } from "./feedback-delivery-status.js";
 import { feedbackTriageHandler } from "./feedback-triage.js";
 import { makeFeedbackPrivateReader, feedbackManagerPageRedirect } from "./feedback-private-reader.js";
+import { makeCompletionEvidenceReader } from "./completion-taxonomy-manager.js";
 import { createPlacesAdminRouter } from "./places-api.js";
 import { isMcpReadOnlyNoAuthEnabled, makeMcpConnectorMiddleware } from "./auth/mcp-connector-auth.js";
 import {
@@ -2198,6 +2199,7 @@ async function runPublicDashboardSummary() {
     `),
     runReadOnlySql(`
       select location_id, location_code, location_name, location_type, form_type, latest_employee_name, latest_completed_at, latest_checked_at,
+             latest_completed_session_id, latest_completed_session_uuid,
              latest_completed_at_display, services_performed, open_ticket_count, status_code, status_color, duration_display,
              open_session_status, open_session_uuid, open_session_device_identifier, open_session_employee_name,
              open_session_started_at_display
@@ -3061,6 +3063,8 @@ function optionalCorrectionTimestamp(value, label) {
   return normalized;
 }
 
+app.get("/admin-api/custodial/cleaning-sessions/:sessionUuid/completion-evidence", requireOpsManagerAuth,
+  makeCompletionEvidenceReader({ runRpc, managerId: offlineAuthorityManagerId, backendSecret: offlineAuthoritySecret }));
 app.get("/admin-api/custodial/cleaning-sessions/:sessionId/truth", requireOpsManagerAuth, async (req, res) => {
   try {
     const sessionId = String(req.params?.sessionId || "").trim();

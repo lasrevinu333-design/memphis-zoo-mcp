@@ -6,6 +6,11 @@ import {makeCompletionEvidenceReader} from '../src/completion-taxonomy-manager.j
 
 const catalogText=readFileSync(new URL('../src/completion-taxonomy-v1.json',import.meta.url),'utf8').trimEnd();
 const catalog=JSON.parse(catalogText),digest=createHash('sha256').update(catalogText).digest('hex');
+const main=readFileSync(new URL('../src/index.js',import.meta.url),'utf8');
+assert.match(main,/app\.get\("\/admin-api\/custodial\/cleaning-sessions\/:sessionUuid\/completion-evidence", requireOpsManagerAuth,\s*makeCompletionEvidenceReader\(\{ runRpc, managerId: offlineAuthorityManagerId, backendSecret: offlineAuthoritySecret \}\)\)/);
+const summary=main.slice(main.indexOf('async function runPublicDashboardSummary()'),main.indexOf('async function runPublicDashboardSummary()')+12000);
+assert.match(summary,/latest_completed_session_uuid/);
+assert.match(summary,/latest_verified_check_session_uuid/);
 assert.equal(catalog.version,'COMP011-20261003-v1');
 assert.equal(digest,'855b2adc17cb77263ffe6e467059e3a7c0e11084d267604bc0a3166a5bd3f3b3');
 for(const area of ['restroom','exhibit']){
@@ -46,6 +51,8 @@ res=makeResponse();await makeCompletionEvidenceReader({runRpc:async()=>({session
 assert.equal(res.statusCode,503);
 res=makeResponse();await makeCompletionEvidenceReader({runRpc:async()=>{throw Object.assign(new Error('private data'),{code:'42501'})},managerId:()=> 'manager-123',backendSecret:()=> 'x'})(req,res);
 assert.equal(res.statusCode,403);assert.ok(!JSON.stringify(res.body).includes('private data'));
+res=makeResponse();await makeCompletionEvidenceReader({runRpc:async()=>{throw new Error('must not call RPC')},managerId:()=>{throw Object.assign(new Error('private authority detail'),{status:403})},backendSecret:()=> 'x'})(req,res);
+assert.equal(res.statusCode,403);assert.ok(!JSON.stringify(res.body).includes('private authority detail'));
 let routedCalls=0;
 const routedReader=makeCompletionEvidenceReader({runRpc:async(_name,args)=>{routedCalls++;return {session_uuid:args.p_session_uuid,completion_recorded:true}},managerId:request=>request.memphisAuth?.manager_id,backendSecret:()=> 'synthetic-secret'});
 const server=createServer((request,response)=>{
