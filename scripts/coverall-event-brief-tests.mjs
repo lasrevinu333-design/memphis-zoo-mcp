@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {canonicalJson} from '../src/static-weekly-schedule-model.js';
-import {previewCoverAllEventBrief,confirmCoverAllEventBrief,
+import {previewCoverAllEventBrief,listCoverAllEventBriefPreviews,confirmCoverAllEventBrief,
  revalidateConfirmedCoverAllEventBrief} from '../src/coverall-event-brief.js';
 
 const ids={manager:'00000000-0000-4000-8000-000000000001',capacity:'00000000-0000-4000-8000-000000000002',
@@ -48,6 +48,48 @@ yes('only exact accepted ordinary interval survives',preview.candidate.matched_a
 yes('exact accepted lunch interval remains separate',preview.candidate.matched_areas[1].starts,'10:00');
 yes('no raw manager note or private source field',JSON.stringify(preview).includes('PRIVATE_MANAGER_NOTE'),false);
 yes('no brief before explicit manager confirmation',Object.hasOwn(preview,'brief'),false);
+const listRow={schema:'custodial.coverall-event-brief-list.v1',status:'PREVIEW_ONLY',
+ disclosure_approved:false,manager_id:ids.manager,capacity_slot_id:ids.capacity,
+ service_date:document.serviceDate,projection_id:ids.projection,publication_id:ids.publication,
+ projection_replay_digest:document.replayDigest,authority_revision:17,
+ lunch_document_identity:document.lunchDocumentIdentity,print_document_digest:printDocument.documentDigest,
+ candidate_limit:16,scan_limit:32,candidates:[structuredClone(row)]};
+let currentList=structuredClone(listRow),listCalls=0;
+const listRpc=async(name,args)=>{yes('exact typed list RPC',name,'static_weekly_coverall_event_brief_candidates');
+ yes('exact list print basis args',args,[ids.manager,ids.capacity,document.serviceDate,
+  ids.projection,17,document.lunchDocumentIdentity,printDocument.documentDigest]);
+ listCalls++;return {result:structuredClone(currentList)};};
+const listInput={runRpc:listRpc,manager:input.manager,capacitySlotId:ids.capacity,printDocument};
+const listed=await listCoverAllEventBriefPreviews(listInput);
+yes('manager list is preview-only, not handout disclosure',listed.disclosureApproved,false);
+yes('list yields same selected exact Event preview',listed.previews[0],preview);
+yes('list never infers Event-time appointment',listed.previews[0].candidate.start_time,'19:00:00');
+currentList={...listRow,candidates:[]};
+yes('honest empty is explicit complete preview list',(await listCoverAllEventBriefPreviews(listInput)).status,'PREVIEW_ONLY');
+yes('honest empty has no preview rows',(await listCoverAllEventBriefPreviews(listInput)).previews,[]);
+currentList={schema:listRow.schema,status:'STALE_PRINT_BASIS',disclosure_approved:false,candidates:[]};
+yes('stale list distinct from honest empty',(await listCoverAllEventBriefPreviews(listInput)).status,'STALE_PRINT_BASIS');
+currentList={schema:listRow.schema,status:'LIMIT_EXCEEDED',limit_reason:'same_day_scan',
+ disclosure_approved:false,candidates:[]};
+yes('limit never silently truncates',(await listCoverAllEventBriefPreviews(listInput)).limited,true);
+currentList={...listRow,candidates:[{...row,notes:'PRIVATE MANAGER SOURCE NOTE'}]};
+await denied('list rejects unexpected raw/private field',()=>listCoverAllEventBriefPreviews(listInput),'coverall_event_candidate_invalid');
+currentList={...listRow,candidates:[row,{...row}]};
+await denied('list rejects duplicate Event identity',()=>listCoverAllEventBriefPreviews(listInput),'coverall_event_list_invalid');
+currentList={...listRow,candidates:[{...row,matched_areas:[{...row.matched_areas[0],
+ starts:'09:00',ends:'10:00'}]}]};
+yes('SQL group match without exact print period is not listed',
+ (await listCoverAllEventBriefPreviews(listInput)).previews,[]);
+currentList={...listRow,print_document_digest:'c'.repeat(64)};
+await denied('list rejects changed print basis',()=>listCoverAllEventBriefPreviews(listInput),'coverall_event_list_invalid');
+currentList={...listRow,candidates:[],projection_replay_digest:'c'.repeat(64)};
+await denied('empty list cannot hide stale projection digest',()=>listCoverAllEventBriefPreviews(listInput),'coverall_event_list_invalid');
+currentList={...listRow,candidates:Array.from({length:17},(_,i)=>({...row,
+ event_id:`00000000-0000-4000-8000-${String(i+10).padStart(12,'0')}`}))};
+await denied('list refuses over-16 response',()=>listCoverAllEventBriefPreviews(listInput),'coverall_event_list_invalid');
+currentList={schema:listRow.schema,status:'CAPACITY_NOT_ACCEPTED',disclosure_approved:false,candidates:[]};
+yes('unaccepted capacity distinct from empty',(await listCoverAllEventBriefPreviews(listInput)).status,'CAPACITY_NOT_ACCEPTED');
+yes('list RPC exercised',listCalls>=9,true);
 const confirmation={decision:'CONFIRM_FOR_COVERALL_PRINT',managerId:ids.manager,capacitySlotId:ids.capacity,
  eventId:ids.event,eventRevision:3,digest:preview.digest};
 const confirmed=await confirmCoverAllEventBrief({...input,preview,confirmation});
@@ -78,4 +120,4 @@ await denied('unassigned accepted period not inferred',()=>previewCoverAllEventB
 current={schema:row.schema,status:'EVENT_NOT_CURRENT_OR_UNSCOPED',disclosure_approved:false};
 yes('noncurrent event has no notes or brief',(await previewCoverAllEventBrief(input)).status,'UNAVAILABLE');
 yes('read calls were actually exercised',calls>=9,true);
-console.log(JSON.stringify({status:'PASS',checks,scope:'pure manager confirmation/source revalidation; SQL fixture separate'}));
+console.log(JSON.stringify({status:'PASS',checks,scope:'pure manager discovery/confirmation/source revalidation; SQL fixture separate'}));

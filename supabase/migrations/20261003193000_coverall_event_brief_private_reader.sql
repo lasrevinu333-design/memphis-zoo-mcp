@@ -143,16 +143,127 @@ begin
   'matched_areas',v_areas);
 end $function$;
 
+-- Discovery is separately typed: no NULL Event shortcut into the exact
+-- single-Event reader. All rows still pass that reader's current authority,
+-- scope, Place and note classification. Limits never return a partial list as
+-- if it were the complete set of eligible Events.
+create function public.static_weekly_coverall_event_brief_candidates(
+ p_manager_id uuid,p_capacity_slot_id uuid,p_service_date date,p_projection_id uuid,
+ p_expected_authority_revision bigint,p_lunch_document_identity text,p_print_document_digest text
+) returns jsonb language plpgsql stable security definer
+set search_path=pg_catalog,public,extensions as $function$
+declare
+ v_manager public.ops_manager_managers%rowtype;
+ v_authority record;
+ v_control_revision bigint;
+ v_capacity public.static_weekly_contractor_capacity_registrations%rowtype;
+ v_lunch public.weekly_schedule_lunch_documents%rowtype;
+ v_lunch_read jsonb;
+ v_event record;
+ v_row jsonb;
+ v_rows jsonb:='[]'::jsonb;
+ v_count integer:=0;
+ v_scanned integer;
+ v_replay_digest text;
+begin
+ if p_manager_id is null or p_capacity_slot_id is null or p_service_date is null
+  or p_projection_id is null or p_expected_authority_revision is null
+  or p_expected_authority_revision<1
+  or coalesce(p_lunch_document_identity,'') !~ '^[0-9a-f]{64}$'
+  or coalesce(p_print_document_digest,'') !~ '^[0-9a-f]{64}$' then
+  raise exception using errcode='22023',message='exact manager, capacity and accepted print basis required';
+ end if;
+ select * into v_manager from public.ops_manager_managers where manager_id=p_manager_id;
+ if v_manager.manager_id is null or v_manager.active is not true or v_manager.revoked_at is not null
+  or v_manager.is_system_principal is true
+  or (v_manager.roles && array['OPS_MANAGER','CUSTODIAL_MANAGER','DIRECTOR','SECURITY_ADMIN']::text[]) is not true then
+  raise exception using errcode='42501',message='active named manager required for contractor Event list';
+ end if;
+ select current_revision into v_control_revision from public.static_weekly_schedule_control where singleton;
+ select * into v_authority from public.static_weekly_v6_schedule_authority_state(p_service_date);
+ select p.replay_digest into v_replay_digest from public.weekly_schedule_compiled_projections p
+  where p.projection_id=p_projection_id and p.publication_id=v_authority.publication_id
+   and p.version_id=v_authority.version_id;
+ if v_control_revision is distinct from p_expected_authority_revision
+  or v_authority.governed is not true or v_authority.projection_status is distinct from 'current'
+  or v_authority.projection_id is distinct from p_projection_id
+  or coalesce(v_replay_digest,'') !~ '^[0-9a-f]{64}$' then
+  return jsonb_build_object('schema','custodial.coverall-event-brief-list.v1',
+   'status','STALE_PRINT_BASIS','disclosure_approved',false,'candidates','[]'::jsonb);
+ end if;
+ select * into v_capacity from public.static_weekly_contractor_capacity_registrations
+  where capacity_slot_id=p_capacity_slot_id;
+ if v_capacity.capacity_slot_id is null or not public.static_weekly_capacity_registered(v_capacity.slot_snapshot)
+  or not exists(select 1 from jsonb_array_elements(public.static_weekly_compiler_exception_set(
+    v_authority.publication_id,v_authority.week_start)) item(value)
+    where item.value->>'type'='cover_all' and item.value->>'serviceDate'=p_service_date::text
+      and item.value#>>'{payload,availability,slotId}'=p_capacity_slot_id::text) then
+  return jsonb_build_object('schema','custodial.coverall-event-brief-list.v1',
+   'status','CAPACITY_NOT_ACCEPTED','disclosure_approved',false,'candidates','[]'::jsonb);
+ end if;
+ select * into v_lunch from public.weekly_schedule_lunch_documents where projection_id=p_projection_id;
+ v_lunch_read:=public.static_weekly_v8_read_lunch_document(p_service_date);
+ if v_lunch.projection_id is null or v_lunch.document_identity is distinct from p_lunch_document_identity
+  or v_lunch_read->>'persistence_status' is distinct from 'PERSISTED'
+  or v_lunch_read->>'document_identity' is distinct from p_lunch_document_identity
+  or v_lunch_read->>'projection_id' is distinct from p_projection_id::text then
+  return jsonb_build_object('schema','custodial.coverall-event-brief-list.v1',
+   'status','STALE_PRINT_BASIS','disclosure_approved',false,'candidates','[]'::jsonb);
+ end if;
+ select count(*) into v_scanned from (
+  select 1 from public.events_app_events e
+   where e.event_date=p_service_date and e.status='SCHEDULED'
+   order by e.start_instant_utc,e.id limit 33
+ ) bounded;
+ if v_scanned>32 then
+  return jsonb_build_object('schema','custodial.coverall-event-brief-list.v1',
+   'status','LIMIT_EXCEEDED','limit_reason','same_day_scan','disclosure_approved',false,
+   'candidates','[]'::jsonb);
+ end if;
+ for v_event in select e.id,e.revision from public.events_app_events e
+  where e.event_date=p_service_date and e.status='SCHEDULED'
+  order by e.start_instant_utc,e.id
+ loop
+  v_row:=public.static_weekly_coverall_event_brief_candidate(p_manager_id,v_event.id,
+    v_event.revision,p_capacity_slot_id,p_service_date,p_projection_id,
+    p_expected_authority_revision,p_lunch_document_identity,p_print_document_digest);
+  if v_row->>'status'='PREVIEW_ONLY' then
+   if octet_length(v_row::text)>8192 or v_count>=16 then
+    return jsonb_build_object('schema','custodial.coverall-event-brief-list.v1',
+     'status','LIMIT_EXCEEDED','limit_reason','eligible_count_or_size',
+     'disclosure_approved',false,'candidates','[]'::jsonb);
+   end if;
+   v_rows:=v_rows||jsonb_build_array(v_row);
+   v_count:=v_count+1;
+  end if;
+ end loop;
+ return jsonb_build_object('schema','custodial.coverall-event-brief-list.v1',
+  'status','PREVIEW_ONLY','disclosure_approved',false,
+  'manager_id',p_manager_id,'capacity_slot_id',p_capacity_slot_id,
+  'service_date',p_service_date,'projection_id',p_projection_id,
+  'publication_id',v_authority.publication_id,'projection_replay_digest',v_replay_digest,
+  'authority_revision',v_control_revision,'lunch_document_identity',p_lunch_document_identity,
+  'print_document_digest',p_print_document_digest,'candidate_limit',16,'scan_limit',32,
+  'candidates',v_rows);
+end $function$;
+
 revoke all on function public.static_weekly_coverall_event_brief_candidate(
  uuid,uuid,integer,uuid,date,uuid,bigint,text,text)
  from public,anon,authenticated,service_role,custodial_application_reader,
  static_weekly_control_plane,static_weekly_release_operator,static_weekly_runtime_20260823;
 grant execute on function public.static_weekly_coverall_event_brief_candidate(
  uuid,uuid,integer,uuid,date,uuid,bigint,text,text) to static_weekly_control_plane;
+revoke all on function public.static_weekly_coverall_event_brief_candidates(
+ uuid,uuid,date,uuid,bigint,text,text)
+ from public,anon,authenticated,service_role,custodial_application_reader,
+ static_weekly_control_plane,static_weekly_release_operator,static_weekly_runtime_20260823;
+grant execute on function public.static_weekly_coverall_event_brief_candidates(
+ uuid,uuid,date,uuid,bigint,text,text) to static_weekly_control_plane;
 
-do $recovery$ declare v_identity text:=
- 'public.static_weekly_coverall_event_brief_candidate(uuid,uuid,integer,uuid,date,uuid,bigint,text,text)';
- v_definition text;v_grant text;v_order integer;begin
+do $recovery$ declare v_identity text;v_definition text;v_grant text;v_order integer;begin
+ foreach v_identity in array array[
+  'public.static_weekly_coverall_event_brief_candidate(uuid,uuid,integer,uuid,date,uuid,bigint,text,text)',
+  'public.static_weekly_coverall_event_brief_candidates(uuid,uuid,date,uuid,bigint,text,text)'] loop
  v_definition:=pg_get_functiondef(v_identity::regprocedure);
  v_grant:=public.custodial_release_authority_current_grant_definition(v_identity);
  if v_definition is null or v_grant is null then raise exception 'CoverAll Event brief recovery unavailable';end if;
@@ -170,6 +281,7 @@ do $recovery$ declare v_identity text:=
  insert into public.custodial_release_authority_restore_inventory
   (restore_order,object_kind,object_identity,definition_sql,definition_sha256)
  values(v_order,'grant',v_identity,v_grant,public.static_weekly_digest_text(v_grant));
+ end loop;
  alter table public.custodial_release_authority_restore_inventory
   enable trigger trg_custodial_release_authority_restore_inventory_immutable;
 end $recovery$;

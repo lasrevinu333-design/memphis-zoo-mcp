@@ -14,6 +14,10 @@ const FIELDS=new Set(['schema','status','disclosure_approved','manager_id','capa
  'lunch_document_identity','print_document_digest','event_id','event_revision','event_name',
  'display_location','event_date','start_instant_utc','end_instant_utc','start_time','end_time',
  'custodial_note_codes','custodial_public_notes','matched_areas']);
+const LIST_FIELDS=new Set(['schema','status','disclosure_approved','manager_id','capacity_slot_id',
+ 'service_date','projection_id','publication_id','projection_replay_digest',
+ 'authority_revision','lunch_document_identity',
+ 'print_document_digest','candidate_limit','scan_limit','candidates']);
 const fail=code=>{throw Object.assign(new Error(code),{code});};
 const sha=value=>createHash('sha256').update(value).digest('hex');
 const same=(a,b)=>String(a||'').toLowerCase()===String(b||'').toLowerCase();
@@ -37,6 +41,22 @@ function printBasis(document,capacitySlotId){
   publicationId:document.publicationId,authorityRevision:document.authorityRevision,
   lunchDocumentIdentity:document.lunchDocumentIdentity,printDocumentDigest:documentDigest,
   projectionReplayDigest:document.replayDigest};
+}
+
+function managerRequired(manager){
+ if(!UUID.test(manager?.managerId)||typeof manager?.managerName!=='string'||!manager.managerName.trim()
+  ||manager?.readOnly===true||manager?.read_only===true
+  ||['operations_first','admin_api_key'].includes(manager?.auth_mode))fail('coverall_event_request_invalid');
+ return manager.managerId;
+}
+
+function previewFrom(candidate,input){
+ const digest=sha(canonicalJson(candidate));
+ return {status:'PREVIEW_ONLY',disclosureApproved:false,digest,
+  managerId:input.manager.managerId,capacitySlotId:input.capacitySlotId,
+  eventId:candidate.event_id,eventRevision:candidate.event_revision,
+  serviceDate:candidate.service_date,printDocumentDigest:candidate.print_document_digest,
+  candidate};
 }
 
 function validateCandidate(row,{managerId,eventId,eventRevision,capacitySlotId,basis}){
@@ -99,11 +119,10 @@ function validateCandidate(row,{managerId,eventId,eventRevision,capacitySlotId,b
 }
 
 async function readCandidate({runRpc,manager,eventId,eventRevision,capacitySlotId,printDocument}){
- if(typeof runRpc!=='function'||!UUID.test(manager?.managerId)||!UUID.test(eventId)
-  ||!Number.isSafeInteger(eventRevision)||eventRevision<1||!UUID.test(capacitySlotId)
-  ||typeof manager?.managerName!=='string'||!manager.managerName.trim()
-  ||manager?.readOnly===true||manager?.read_only===true
-  ||['operations_first','admin_api_key'].includes(manager?.auth_mode))fail('coverall_event_request_invalid');
+ if(typeof runRpc!=='function'||!UUID.test(eventId)
+  ||!Number.isSafeInteger(eventRevision)||eventRevision<1||!UUID.test(capacitySlotId))
+  fail('coverall_event_request_invalid');
+ managerRequired(manager);
  const basis=printBasis(printDocument,capacitySlotId);
  const args=[manager.managerId,eventId,eventRevision,capacitySlotId,basis.serviceDate,
   basis.projectionId,basis.authorityRevision,basis.lunchDocumentIdentity,basis.printDocumentDigest];
@@ -129,12 +148,70 @@ function confirmedFrom(candidate,input,candidateDigest){
 export async function previewCoverAllEventBrief(input){
  const {candidate}=await readCandidate(input);
  if(!candidate)return {status:'UNAVAILABLE',disclosureApproved:false};
- const digest=sha(canonicalJson(candidate));
- return {status:'PREVIEW_ONLY',disclosureApproved:false,digest,
-  managerId:input.manager.managerId,capacitySlotId:input.capacitySlotId,
-  eventId:input.eventId,eventRevision:input.eventRevision,
-  serviceDate:candidate.service_date,printDocumentDigest:candidate.print_document_digest,
-  candidate};
+ return previewFrom(candidate,input);
+}
+
+// A separate bounded discovery RPC lets the manager select by event title and
+// time without knowing database IDs. Each result is the same exact, safe
+// preview shape used by the single-Event confirmation path. An over-limit or
+// stale source is explicit, never misrepresented as an empty candidate list.
+export async function listCoverAllEventBriefPreviews(input){
+ if(typeof input?.runRpc!=='function'||!UUID.test(input?.capacitySlotId))
+  fail('coverall_event_request_invalid');
+ managerRequired(input.manager);
+ const basis=printBasis(input.printDocument,input.capacitySlotId);
+ const args=[input.manager.managerId,input.capacitySlotId,basis.serviceDate,basis.projectionId,
+  basis.authorityRevision,basis.lunchDocumentIdentity,basis.printDocumentDigest];
+ const result=await input.runRpc('static_weekly_coverall_event_brief_candidates',args);
+ const row=object(result)&&Object.hasOwn(result,'result')?result.result:result;
+ if(!object(row)||row.schema!=='custodial.coverall-event-brief-list.v1'
+  ||row.disclosure_approved!==false||!Array.isArray(row.candidates)
+  ||Buffer.byteLength(JSON.stringify(row),'utf8')>140000)
+  fail('coverall_event_list_invalid');
+ if(row.status!=='PREVIEW_ONLY'){
+  const limit=row.status==='LIMIT_EXCEEDED';
+  if(!['STALE_PRINT_BASIS','CAPACITY_NOT_ACCEPTED','LIMIT_EXCEEDED'].includes(row.status)
+   ||row.candidates.length!==0
+   ||Object.keys(row).sort().join('|')!==
+     (limit?['schema','status','limit_reason','disclosure_approved','candidates']:
+      ['schema','status','disclosure_approved','candidates']).sort().join('|')
+   ||(limit&&!['same_day_scan','eligible_count_or_size'].includes(row.limit_reason)))
+   fail('coverall_event_list_invalid');
+  return {schema:row.schema,status:row.status,disclosureApproved:false,
+   limited:limit,reason:limit?row.limit_reason:null,previews:[]};
+ }
+ if(Object.keys(row).some(key=>!LIST_FIELDS.has(key))||Object.keys(row).length!==LIST_FIELDS.size
+  ||!same(row.manager_id,input.manager.managerId)||!same(row.capacity_slot_id,input.capacitySlotId)
+  ||row.service_date!==basis.serviceDate||!same(row.projection_id,basis.projectionId)
+  ||!same(row.publication_id,basis.publicationId)
+  ||row.projection_replay_digest!==basis.projectionReplayDigest
+  ||Number(row.authority_revision)!==basis.authorityRevision
+  ||row.lunch_document_identity!==basis.lunchDocumentIdentity
+  ||row.print_document_digest!==basis.printDocumentDigest
+  ||row.candidate_limit!==16||row.scan_limit!==32||row.candidates.length>16)
+  fail('coverall_event_list_invalid');
+ const seen=new Set();
+ const previews=row.candidates.flatMap(candidateRow=>{
+  if(!object(candidateRow)||candidateRow.status!=='PREVIEW_ONLY'
+   ||!UUID.test(candidateRow.event_id)||!Number.isSafeInteger(candidateRow.event_revision)
+   ||candidateRow.event_revision<1||seen.has(candidateRow.event_id))
+   fail('coverall_event_list_invalid');
+  seen.add(candidateRow.event_id);
+  let candidate;
+  try{
+   candidate=validateCandidate(candidateRow,{managerId:input.manager.managerId,
+    eventId:candidateRow.event_id,eventRevision:candidateRow.event_revision,
+    capacitySlotId:input.capacitySlotId,basis});
+  }catch(error){
+   // The database knows current accepted group/physical ownership. Only the
+   // trusted print document can narrow that to the exact handout periods.
+   if(error?.code==='coverall_event_no_exact_accepted_period')return [];
+   throw error;
+  }
+  return [previewFrom(candidate,input)];
+ });
+ return {schema:row.schema,status:'PREVIEW_ONLY',disclosureApproved:false,
+  limited:false,previews};
 }
 
 export async function confirmCoverAllEventBrief(input){
