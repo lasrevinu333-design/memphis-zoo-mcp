@@ -3,6 +3,7 @@
 import {contentDigest,canonicalJson,bytewiseCompare} from './static-weekly-schedule-model.js';
 import {prepareStaticWeeklySchedulingProblem,buildStaticWeeklySchedulingModel} from './static-weekly-schedule-program.js';
 import {getScheduleComponentWeightLedger,COMPONENT_WEIGHT_UNIT} from './schedule-component-weight-authority.js';
+import {normalGeographyRestrictionApplies,validateOwnerEligibilityConfig} from './static-weekly-owner-eligibility.js';
 export const RECURRING_PHASE_SCHEMA='custodial.recurring-selected-phase-authority.v1';
 export const RECURRING_PHASE_ENUMERATION_LIMIT=64;
 const fail=(code,message)=>{throw Object.assign(new Error(message),{code});};
@@ -38,16 +39,17 @@ function packageFact(row,config){
 }
 export function createRecurringPhaseDescriptor({source,ownerConfig,dayOfWeek,selectedWorkIds=[]}){
  requireFact(source&&ownerConfig&&Array.isArray(selectedWorkIds),'Explicit source/config/selection required.');
+ if(ownerConfig.schema==='custodial.owner-corrected-recurring-schedule.v2')validateOwnerEligibilityConfig(ownerConfig);
  requireFact(Number.isInteger(dayOfWeek)&&dayOfWeek>=0&&dayOfWeek<=6,'Explicit weekday required.');
  requireFact(Array.isArray(source.exceptions)&&source.exceptions.length===0,'Dated overlays are not normal replacement scope.');
  const v=version(source);requireFact(v&&Array.isArray(v.assignments),'One canonical source required.');
  requireFact(new Set(selectedWorkIds).size===selectedWorkIds.length,'Duplicate selected work identity.');
  const p=prepared(source);
- const cfg=new Map(Object.values(ownerConfig.slots||{}).map(s=>[s.slotId,s]));
+ const cfg=new Map(Object.entries(ownerConfig.slots||{}).map(([key,s])=>[s.slotId,{...s,key}]));
  const owners=[...p.availabilityByDaySlot.values()].filter(x=>x.availability.dayOfWeek===dayOfWeek&&!x.slot.contractorCapacity)
   .map(x=>{const c=cfg.get(x.slot.id);requireFact(c&&c.vacancy!==true&&c.workDays.includes(dayOfWeek),'Current ordinary owner/config mismatch.');
    requireFact(canonicalJson(c.shift)===canonicalJson([x.availability.shift.start,x.availability.shift.end]),'Fixed shift/config mismatch.');
-   requireFact(canonicalJson(c.lunch)===canonicalJson([x.availability.lunch.start,x.availability.lunch.end]),'Fixed lunch/config mismatch.');
+   requireFact(canonicalJson(c.lunchByDay?.[String(dayOfWeek)]||c.lunch)===canonicalJson([x.availability.lunch.start,x.availability.lunch.end]),'Fixed lunch/config mismatch.');
    const incumbent=p.incumbencyByDaySlot.get(`${dayOfWeek}\0${x.slot.id}`);
    requireFact(incumbent?.personId===c.personId&&incumbent?.displayName===c.name,'Current ordinary incumbent/config mismatch.');
    return {slotId:x.slot.id,shift:clone(x.availability.shift)};}).sort((a,b)=>bytewiseCompare(a.slotId,b.slotId));
@@ -61,9 +63,12 @@ export function createRecurringPhaseDescriptor({source,ownerConfig,dayOfWeek,sel
  const selected=packages.filter(r=>selectedWorkIds.includes(r.workId)).sort((a,b)=>bytewiseCompare(a.workId,b.workId));
  const choices=selected.map(r=>({workId:r.workId,owners:owners.filter(o=>{
   const c=cfg.get(o.slotId),original=rows.find(row=>row.workId===r.workId);
+  const named=(v.shiftEndContinuityPolicy?.namedHandoffs||[]).filter(h=>h.dayOfWeek===dayOfWeek
+   &&h.locationCode===r.family&&h.at===original.window.end&&h.fromSlotId===(original.originSlotId||original.ownerSlotId));
   return !(ownerConfig.mondayOnlyFamilies?.includes(r.family)&&(original.originSlotId||original.ownerSlotId)!==o.slotId)
+   &&named.every(h=>h.fromSlotId===o.slotId&&h.at===o.shift.end)
    &&!c.hardForbiddenFamilies?.includes(r.family)
-   &&(!c.normalAssignmentFamilies||c.normalAssignmentFamilies.includes(r.family))&&o.shift.end>'09:45';
+   &&(!normalGeographyRestrictionApplies(c)||c.normalAssignmentFamilies.includes(r.family))&&o.shift.end>'09:45';
  }).map(o=>({slotId:o.slotId,window:{start:'09:45',end:o.shift.end},
   prospectiveWorkId:`${dayOfWeek}:${r.family}:equalized:${o.slotId.slice(0,8)}`}))}));
  const body={schema:RECURRING_PHASE_SCHEMA,scope:selected.length?'EXPLICIT_SELECTED_POST0945_NORMAL_REPLACEMENT':'PRESERVED_NOT_REOPTIMIZED',
@@ -74,6 +79,10 @@ export function createRecurringPhaseDescriptor({source,ownerConfig,dayOfWeek,sel
   existingNonemptyPhaseOwnerCondition:selected.length>0,
   fixedMondayOnlySourceOwners:rows.filter(r=>ownerConfig.mondayOnlyFamilies?.includes(r.locationCodeSnapshot))
    .map(r=>({workId:r.workId,slotId:r.originSlotId||r.ownerSlotId})),
+  namedHandoffPolicyDigest:v.shiftEndContinuityPolicy?.policyDigest||null,
+  directNamedHandoffOwnerBindings:rows.flatMap(r=>(v.shiftEndContinuityPolicy?.namedHandoffs||[])
+   .filter(h=>h.dayOfWeek===dayOfWeek&&h.locationCode===r.locationCodeSnapshot&&h.at===r.window.end
+    &&h.fromSlotId===(r.originSlotId||r.ownerSlotId)).map(h=>({workId:r.workId,...h}))),
   otherDaysAndMorningFixed:true,physicalMinuteFeasibilityClaim:false,
   geographyScope:'EXISTING_SOURCE_ELIGIBILITY_AND_DECLARED_FAMILY_RESTRICTIONS_NO_NEW_RADIUS'};
  return {...body,descriptorDigest:digest(body)};
@@ -192,4 +201,146 @@ export function assertRecurringPhaseMinimum({proof,...input}){
  const actual=enumerateRecurringPhaseMinimum(input);
  requireFact(canonicalJson(actual)===canonicalJson(proof),'Phase proof differs from full canonical recomputation.');
  return true;
+}
+
+// A relaxation is only a lower bound. It becomes a canonical minimum/cost/tie
+// proof when its EXACT terminal optima are attained by the full canonical
+// source witness. Otherwise this path returns UNKNOWN, never a relaxed PASS.
+const scalarExpression=terms=>terms.length?terms.map(([n,v])=>`${n<0?'-':'+'} ${Math.abs(n)} ${v}`).join(' ').replace(/^\+ /,''):'0';
+const codeUnitCompare=(a,b)=>a<b?-1:a>b?1:0;
+const pinnedPhaseSolver={package:'highs@1.15.2',packageJsonSha256:'21e76a89d13d636f56d5cdda7dde590acd48d6fb683c97a327c10d43e74d9c56',
+ wrapperJavaScriptSha256:'6d5be3ed3cbd1ce1924cc66cc9302b50753dabdb8c6e0e815845dce7f1890033',
+ wasmSha256:'7e6432b2b26f4fab9f6d9bac55da43307c7a4b1b071cb204cb4d23e1901bc4d0',embeddedRuntimeBanner:'HiGHS 1.15.1 (git hash: 04024d7)'};
+function exactDecimalEquals(raw,expected){
+ const m=/^([+-]?)(\d+)(?:\.(\d*))?(?:[eE]([+-]?\d+))?$/.exec(String(raw).trim());if(!m)return false;
+ const digits=m[2]+(m[3]||'');if(digits.length>128)return false;
+ const power=Number(m[4]||0)-(m[3]?.length||0);if(!Number.isSafeInteger(power)||Math.abs(power)>128)return false;
+ const coefficient=BigInt((m[1]==='-'?'-':'')+digits);
+ return power>=0?coefficient*10n**BigInt(power)===BigInt(expected):coefficient===BigInt(expected)*10n**BigInt(-power);
+}
+function exactIntegerViolationWithinInheritedTolerance(raw){
+ const m=/^([+-]?)(\d+)(?:\.(\d*))?(?:[eE]([+-]?\d+))?$/.exec(String(raw).trim());if(!m)return false;
+ const digits=m[2]+(m[3]||''),power=Number(m[4]||0)-(m[3]?.length||0);if(digits.length>128||!Number.isSafeInteger(power)||Math.abs(power)>128)return false;
+ const coefficient=BigInt(digits);return power+9>=0?coefficient*10n**BigInt(power+9)<=1n:coefficient<=10n**BigInt(-power-9);
+}
+function checkPhaseTerminal(solved,expected,attestation){
+ const e=solved?.evidence,r=e?.terminalReport;
+ requireFact(Object.entries(pinnedPhaseSolver).every(([key,value])=>solved?.identity?.[key]===value),'Pinned phase solver identity unavailable.');
+ requireFact(canonicalJson(solved.modelAttestation)===canonicalJson(attestation),'Phase solver/model attestation mismatch.');
+ requireFact(solved.result?.Status==='Optimal'&&e?.objectStatus==='Optimal'&&e?.reportStatus==='Optimal'
+  &&e.parserOk===true&&!e.outputTruncated&&e.reportSolutionStatus==='feasible','Exact phase terminal optimum unavailable.');
+ requireFact(solved.options?.threads===1&&solved.options.mip_rel_gap===0&&solved.options.mip_abs_gap===0
+  &&solved.options.output_flag===true&&solved.options.mip_feasibility_tolerance===1e-9,'Phase solver evidence options changed.');
+ requireFact(r?.representation==='highs-terminal-report-records-json-utf8-v1'&&r.parserVersion==='highs-terminal-report-v1'
+  &&Array.isArray(r.records)&&r.records.every(x=>['print','printErr'].includes(x.channel)&&typeof x.text==='string'),'Phase terminal representation unavailable.');
+ const representation=JSON.stringify({representation:r.representation,records:r.records.map(({channel,text})=>({channel,text}))});
+ requireFact(r.utf8Sha256===contentDigestBytes(representation)&&r.utf8Base64===Buffer.from(representation).toString('base64'),'Phase terminal bytes changed.');
+ const raw=JSON.stringify({schema:'memphis-zoo.static-weekly-raw-solver-receipt.v1',options:solved.options,terminalReport:r});
+ requireFact(e.rawReceiptDigest===contentDigestBytes(raw),'Phase raw solver receipt changed.');
+ requireFact(r.records[0]?.text==='Solving report'&&r.records.at(-1)?.text==='Writing the solution to solution.txt'
+  &&r.records.filter(x=>x.text==='Solving report').length===1&&r.records.filter(x=>x.text==='Writing the solution to solution.txt').length===1,'Phase terminal boundaries changed.');
+ const fields=[['status',/^\s*Status\s{2,}(.+)$/],['primal',/^\s*Primal bound\s{2,}(.+)$/],['dual',/^\s*Dual bound\s{2,}(.+)$/],
+  ['gap',/^\s*Gap\s{2,}(.+)$/],['solution',/^\s*Solution status\s{2,}(.+)$/],['objective',/^\s+(.+?)\s+\(objective\)\s*$/],
+  ['bound',/^\s+(.+?)\s+\(bound viol\.\)\s*$/],['integer',/^\s+(.+?)\s+\(int\. viol\.\)\s*$/],['row',/^\s+(.+?)\s+\(row viol\.\)\s*$/]];
+ let last=-1;const actual={};
+ for(const [key,pattern]of fields){const matches=r.records.flatMap((x,i)=>{const m=pattern.exec(x.text);return m?[{i,value:m[1]}]:[];});
+  requireFact(matches.length===1&&matches[0].i>last,'Missing/duplicate/reordered phase terminal field.');last=matches[0].i;actual[key]=matches[0].value;}
+ requireFact(actual.status==='Optimal'&&actual.solution==='feasible'&&actual.gap.trim().endsWith('%'),'Phase terminal status/gap invalid.');
+ for(const key of ['primal','dual','objective'])requireFact(exactDecimalEquals(actual[key],expected),'Phase terminal bound/objective mismatch.');
+ for(const key of ['bound','row'])requireFact(exactDecimalEquals(actual[key],0),'Phase terminal bound/row violation is nonzero.');
+ // Exactly the existing audited1e-9 integer tolerance, followed by complete
+ // rounded integer row verification above; never a looser feasibility test.
+ requireFact(exactIntegerViolationWithinInheritedTolerance(actual.integer),'Phase terminal integer violation exceeds inherited tolerance.');
+ const objectObjective=solved.result.ObjectiveValue;
+ // The same existing compiler/verifier redundant object-scalar tolerance.
+ // Terminal bounds/objective remain EXACT and integer witness rows checked.
+ requireFact(exactDecimalEquals(actual.gap.trim().slice(0,-1),0)&&typeof objectObjective==='number'&&Number.isFinite(objectObjective)
+  &&Math.round(objectObjective)===expected&&Math.abs(objectObjective-expected)<=1e-9
+  &&e.objectPrimalObjective===objectObjective,'Phase terminal gap/object mismatch.');
+}
+// Existing portable hash implementation; raw receipts hash BYTES, not JSON.
+import {sha256Hex as contentDigestBytes} from './static-weekly-schedule-model.js';
+
+export function solveRecurringPhaseCanonicalMinimum({source,ownerConfig,fullOwners,dayOfWeek,selectedWorkIds=[],solver}){
+ const descriptor=createRecurringPhaseDescriptor({source,ownerConfig,dayOfWeek,selectedWorkIds});
+ const basis={schema:RECURRING_PHASE_SCHEMA,descriptor,fullOwnersDigest:digest(fullOwners),published:false,sourceMutated:false,
+  proofMethod:'RELAXED_LOWER_BOUND_PLUS_MATCHING_COMPLETE_CANONICAL_WITNESS',physicalMinuteFeasibilityClaim:false};
+ if(!selectedWorkIds.length)return {...basis,status:'PRESERVED_NOT_REOPTIMIZED',minimumDoubledSpread:null,halfUnitFeasible:null,candidateSource:null};
+ const tiers=[],started=performance.now(),budgetMs=30_000;let lastSolverAttempt=null;
+ const unknown=reason=>({...basis,status:'UNKNOWN_CANONICAL_PHASE',reason,tiers,lastSolverAttempt,minimumDoubledSpread:null,halfUnitFeasible:null,candidateSource:null});
+ try{
+  requireFact(solver&&typeof solver.solve==='function','Owned pinned phase solver required.');
+  const rows=version(source).assignments,keys=Object.keys(ownerConfig.slots).sort(),keyBySlot=new Map(keys.map(k=>[ownerConfig.slots[k].slotId,k]));
+  const owners=descriptor.owners.slice().sort((a,b)=>codeUnitCompare(keyBySlot.get(a.slotId),keyBySlot.get(b.slotId)));
+  const packages=new Map(descriptor.packages.map(p=>[p.workId,p])),choices=descriptor.choices.slice().sort((a,b)=>codeUnitCompare(packages.get(a.workId).family,packages.get(b.workId).family));
+  const options=[],binary=[],bounds=[],constraints=[],bindings=[];
+  for(const [i,c]of choices.entries())for(const [j,o]of owners.entries())if(c.owners.some(x=>x.slotId===o.slotId)){
+   const pkg=packages.get(c.workId),original=rows.find(r=>r.workId===c.workId),key=keyBySlot.get(o.slotId),guided=fullOwners?.[String(dayOfWeek)]?.equalized?.[pkg.family];
+   requireFact(typeof guided==='string'&&keys.includes(guided),'Exact existing full-position guidance missing.');
+   const name=`phase_x_${i}_${j}`,cost=((original.originSlotId||original.ownerSlotId)!==o.slotId?100:0)+(guided!==key?4:0)
+    +(ownerConfig.slots[key].normalAssignmentFamilies?.includes(pkg.family)?0:2);
+   options.push({name,workId:c.workId,slotId:o.slotId,ownerIndex:j,family:pkg.family,weight:pkg.doubledWeight,cost});binary.push(name);
+  }
+  for(const [i,c]of choices.entries())constraints.push({name:`phase_cover_${i}`,terms:options.filter(o=>o.workId===c.workId).map(o=>[1,o.name]),relation:'=',value:1});
+  const fixed=descriptor.packages.filter(p=>!selectedWorkIds.includes(p.workId));
+  const loadFixed=o=>fixed.filter(p=>{const r=rows.find(x=>x.workId===p.workId);return(r.originSlotId||r.ownerSlotId)===o.slotId;}).reduce((n,p)=>n+p.doubledWeight,0);
+  const siteFixed=o=>fixed.filter(p=>ownerConfig.publicRestroomFamilies?.includes(p.family)&&rows.find(x=>x.workId===p.workId)?.originSlotId===o.slotId).length;
+  const countFixed=o=>fixed.filter(p=>{const r=rows.find(x=>x.workId===p.workId);return(r.originSlotId||r.ownerSlotId)===o.slotId;}).length;
+  const load=o=>options.filter(x=>x.slotId===o.slotId).map(x=>[x.weight,x.name]);
+  const sites=o=>options.filter(x=>x.slotId===o.slotId&&ownerConfig.publicRestroomFamilies?.includes(x.family)).map(x=>[1,x.name]);
+  for(const [i,o]of owners.entries())constraints.push({name:`phase_nonempty_${i}`,terms:options.filter(x=>x.slotId===o.slotId).map(x=>[1,x.name]),relation:'>=',value:1-countFixed(o)});
+  for(const [i,a]of owners.entries())for(const [j,b]of owners.entries())if(i!==j){
+   constraints.push({name:`phase_spread_${i}_${j}`,terms:[...load(a),...load(b).map(([n,v])=>[-n,v]),[-1,'phase_spread']],relation:'<=',value:loadFixed(b)-loadFixed(a)});
+   constraints.push({name:`phase_sites_${i}_${j}`,terms:[...sites(a),...sites(b).map(([n,v])=>[-n,v])],relation:'<=',value:1+siteFixed(b)-siteFixed(a)});
+  }
+  const maximum=descriptor.packages.reduce((n,p)=>n+p.doubledWeight,0);requireFact(Number.isSafeInteger(maximum),'Phase coefficient range unsupported.');
+  bounds.push(`0 <= phase_spread <= ${maximum}`);
+  const run=(name,terms)=>{
+   const remaining=budgetMs-(performance.now()-started);requireFact(remaining>0,'Phase total time bound exhausted.');
+   const body={descriptorDigest:descriptor.descriptorDigest,name,terms,rows:[...constraints,...bindings],binary,general:['phase_spread'],bounds};
+   const attestation={schema:'custodial.recurring-phase-lower-bound-model.v1',modelDigest:digest(body),descriptorDigest:descriptor.descriptorDigest};
+   const lp=`Minimize\n phase_objective: ${scalarExpression(terms)}\nSubject To\n${body.rows.map(r=>` ${r.name}: ${scalarExpression(r.terms)} ${r.relation} ${r.value}`).join('\n')}\nBounds\n ${bounds.join('\n ')}\nGeneral\n phase_spread\nBinary\n ${binary.join(' ')}\nEnd\n`;
+   const solved=solver.solve(lp,{timeLimitSeconds:remaining/1000,modelAttestation:attestation});
+   lastSolverAttempt={name,model:body,modelDigest:attestation.modelDigest,lpDigest:contentDigestBytes(lp),
+    status:solved?.result?.Status,rawReceiptDigest:solved?.evidence?.rawReceiptDigest,
+    terminalReport:solved?.evidence?.terminalReport,solverIdentity:solved?.identity,solverOptions:solved?.options};
+   const values=new Map([...binary,'phase_spread'].map(v=>{const x=solved?.result?.Columns?.[v]?.Primal;
+    requireFact(Number.isFinite(x)&&Math.abs(x-Math.round(x))<=1e-9,'Missing/noninteger phase primal.');return[v,Math.round(x)];}));
+   requireFact(binary.every(v=>[0,1].includes(values.get(v)))&&values.get('phase_spread')>=0&&values.get('phase_spread')<=maximum,'Phase primal bounds violated.');
+   for(const row of body.rows){const n=row.terms.reduce((x,[c,v])=>x+BigInt(c)*BigInt(values.get(v)),0n),rhs=BigInt(row.value);
+    requireFact(row.relation==='='?n===rhs:row.relation==='<='?n<=rhs:n>=rhs,'Phase primal exact row violation.');}
+   const optimum=terms.reduce((n,[c,v])=>n+c*values.get(v),0);requireFact(Number.isSafeInteger(optimum),'Phase objective range unsupported.');
+   checkPhaseTerminal(solved,optimum,attestation);
+   const receipt={name,model:body,modelDigest:attestation.modelDigest,lpDigest:contentDigestBytes(lp),objectiveValue:optimum,
+    integerWitness:[...values],rawReceiptDigest:solved.evidence.rawReceiptDigest,terminalReport:solved.evidence.terminalReport,
+    solverIdentity:solved.identity,solverOptions:solved.options};tiers.push(receipt);
+   bindings.push({name:`phase_fixed_${tiers.length}`,terms,relation:'=',value:optimum});return {values,optimum};
+  };
+  const min=run('raw_spread',[[1,'phase_spread']]);
+  const preference=run('inherited_preference',options.filter(o=>o.cost).map(o=>[o.cost,o.name]));
+  let final=preference;
+  // Smaller radix chunks preserve the identical complete code-unit lexvector
+  // while avoiding unnecessarily large floating SDK objective sums. Terminal
+  // integer bounds and inherited1e-9 tolerances are unchanged.
+  for(let offset=0;offset<choices.length;offset+=6){const chunk=choices.slice(offset,offset+6);
+   const terms=chunk.flatMap((c,i)=>options.filter(o=>o.workId===c.workId&&o.ownerIndex).map(o=>[o.ownerIndex*owners.length**(chunk.length-i-1),o.name]));
+   requireFact(terms.every(([n])=>Number.isSafeInteger(n)),'Phase tie coefficient range unsupported.');
+   final=run(`inherited_identity_${offset}`,terms);
+  }
+  const selection=options.filter(o=>final.values.get(o.name)===1).map(o=>({workId:o.workId,slotId:o.slotId}));
+  const candidateSource=createRecurringPhaseProspectiveSource({source,ownerConfig,descriptor,selection});
+  const canonical=evaluateRecurringPhaseCanonicalSource(candidateSource),ls=loads(candidateSource,descriptor);
+  const actualSpread=Math.max(...ls.map(x=>x.doubledLoad))-Math.min(...ls.map(x=>x.doubledLoad));
+  requireFact(canonical.feasible&&descriptor.choices.every(c=>!canonical.uncoveredWorkIds.includes(c.owners.find(o=>o.slotId===selection.find(s=>s.workId===c.workId)?.slotId)?.prospectiveWorkId)),
+   'Relaxed lower-bound allocation lacks matching complete canonical coverage witness.');
+  requireFact(actualSpread===min.optimum,'Canonical spread does not attain relaxed lower bound.');
+  const actualCost=options.filter(o=>final.values.get(o.name)===1).reduce((n,o)=>n+o.cost,0);
+  requireFact(actualCost===preference.optimum,'Canonical preference does not attain relaxed lower bound.');
+  const body={...basis,status:'PROVEN_CANONICAL_PHASE_MINIMUM',minimumDoubledSpread:min.optimum,halfUnitFeasible:min.optimum<=1,
+   preferenceCost:actualCost,stableIdentity:choices.map(c=>options.find(o=>o.workId===c.workId&&final.values.get(o.name)===1).ownerIndex),
+   tiers,selectedOwnership:selection,candidateSource,candidateSourceDigest:digest(candidateSource),canonicalHardWitness:canonical,
+   minimumClaimScope:'EXACT_SELECTED_PACKAGES_ONLY_OTHER_MORNING_AND_DAYS_FIXED_NOT_GLOBAL_REDESIGN',
+   independentlyMatchedCanonicalWitness:true,solver:true,admitted:false,budgetMs};
+  return {...body,proofDigest:digest(body)};
+ }catch(error){return unknown(error.message);}
 }

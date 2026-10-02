@@ -6,9 +6,10 @@ import { normalizeStaticWeeklyAuthority } from "./static-weekly-schedule-program
 import { recurringPatternAuthority } from "./static-weekly-recurring-repair-basis.js";
 import { createShiftEndContinuityPolicy } from "./static-weekly-shift-end-derivation.js";
 import { assertNormalOwnerEligibility, hardRestrictedSlots,
-  validateOwnerEligibilityConfig } from "./static-weekly-owner-eligibility.js";
+  validateOwnerEligibilityConfig,normalGeographyRestrictionApplies } from "./static-weekly-owner-eligibility.js";
 import {createRecurringPhaseDescriptor,createRecurringPhaseProspectiveSource,
-  enumerateRecurringPhaseMinimum,evaluateRecurringPhaseCanonicalSource} from './static-weekly-recurring-phase-authority.js';
+  enumerateRecurringPhaseMinimum,evaluateRecurringPhaseCanonicalSource,
+  solveRecurringPhaseCanonicalMinimum} from './static-weekly-recurring-phase-authority.js';
 
 const phaseOf = (row) => row.window?.start === "09:45" ? "equalized" : "morning";
 const expression = (terms) => terms.length
@@ -377,6 +378,7 @@ export function adaptRegisteredRecurringSource({ registeredSource, patternConfig
 
 export function deriveRecurringStaffingPattern({ currentConfig, targetSlots, fullOwners, fullConfig, highs }) {
   assert.ok(currentConfig && targetSlots && fullOwners && highs?.solve);
+  validateOwnerEligibilityConfig({...currentConfig,slots:targetSlots});
   const keys = Object.keys(currentConfig.slots).sort();
   assert.deepEqual(Object.keys(targetSlots).sort(), keys, "nine stable positions must be retained");
   assert.equal(keys.length, 9, "nine employee positions required");
@@ -443,7 +445,7 @@ export function deriveRecurringStaffingPattern({ currentConfig, targetSlots, ful
       for (let f = 0; f < families.length; f += 1) for (let o = 0; o < owners.length; o += 1) {
         const family = families[f], owner = owners[o];
         if (targetSlots[owner].hardForbiddenFamilies?.includes(family)) continue;
-        if (targetSlots[owner].normalAssignmentFamilies
+        if (normalGeographyRestrictionApplies({key:owner,...targetSlots[owner]})
           && !targetSlots[owner].normalAssignmentFamilies.includes(family)) continue;
         // Monday-only route packages stay with their actual handout owner.
         if (result.mondayOnlyFamilies.includes(family) && sourceOwner.get(family) !== owner) continue;
@@ -601,4 +603,89 @@ export function deriveCanonicalRecurringPhaseCandidate({source,currentConfig,ful
     preferenceCost:chosen.cost,stableIdentity:chosen.identity,canonicalHardWitness:canonical,
     existingPreferenceCostsPreserved:[100,4,2],datedPriorityChange:false};
   return {...body,candidateDigest:contentDigest(body)};
+}
+
+// The same existing-command scope, using an owned pinned engine. A relaxed
+// answer alone is never returned as a canonical candidate or admission.
+export function deriveScalableCanonicalRecurringPhaseCandidate({source,currentConfig,fullOwners,dayOfWeek,solver}){
+  const v=source.version||(source.versions?.length===1?source.versions[0]:null);
+  assert.ok(v&&Array.isArray(v.assignments));
+  const selectedWorkIds=v.assignments.filter(r=>r.dayOfWeek===dayOfWeek&&r.window?.start==='09:45').map(r=>r.workId);
+  return solveRecurringPhaseCanonicalMinimum({source,ownerConfig:currentConfig,fullOwners,dayOfWeek,selectedWorkIds,solver});
+}
+
+// Complete existing-command equalized scope. Morning is explicit and fixed;
+// this does not choose or claim an optimum for morning work. Rebind every day
+// against final other-day candidate bytes, keeping its ORIGINAL source day as
+// the comparison/preference baseline. Never publish a stale per-day witness.
+export function deriveScalableCanonicalRecurringWeekCandidate({source,currentConfig,fullOwners,solver}){
+  const original=source.version||(source.versions?.length===1?source.versions[0]:null);
+  assert.ok(original&&Array.isArray(original.assignments));
+  const first=[],started=performance.now(),budgetMs=30_000;
+  const boundedSolver={solve(lp,options){
+    const remaining=budgetMs-(performance.now()-started);
+    assert.ok(remaining>0,'Recurring week total time bound exhausted.');
+    return solver.solve(lp,{...options,timeLimitSeconds:Math.min(options.timeLimitSeconds,remaining/1000)});
+  }};
+  for(let dayOfWeek=0;dayOfWeek<7;dayOfWeek++){
+    const proof=deriveScalableCanonicalRecurringPhaseCandidate({source,currentConfig,fullOwners,dayOfWeek,solver:boundedSolver});first.push(proof);
+    if(proof.status!=='PROVEN_CANONICAL_PHASE_MINIMUM')return {status:'UNKNOWN_CANONICAL_RECURRING_WEEK',stage:'initial_day',dayOfWeek,
+      proofs:first,candidateSource:null,published:false,admitted:false};
+  }
+  const finalSource=structuredClone(source),finalVersion=finalSource.version||finalSource.versions[0];
+  finalVersion.assignments=original.assignments.map(row=>{
+    if(row.window?.start!=='09:45')return structuredClone(row);
+    const day=first[row.dayOfWeek],v=day.candidateSource.version||day.candidateSource.versions[0];
+    const index=original.assignments.indexOf(row);return structuredClone(v.assignments[index]);
+  });
+  const finalDigest=contentDigest(finalSource),proofs=[];
+  // These proofs were produced and checked inside THIS invocation, not supplied
+  // by a caller. The day relaxation depends only on exact current-day source
+  // rows/config/availability/options. Changing other days can shrink canonical
+  // feasibility, but cannot invalidate that unchanged relaxation's lower bound.
+  // A complete final-week canonical witness must still attain every bound.
+  for(let dayOfWeek=0;dayOfWeek<7;dayOfWeek++){
+    const basis=structuredClone(finalSource),v=basis.version||basis.versions[0];
+    v.assignments=v.assignments.map((row,index)=>row.dayOfWeek===dayOfWeek?structuredClone(original.assignments[index]):row);
+    try{
+      const prior=first[dayOfWeek],descriptor=createRecurringPhaseDescriptor({source:basis,ownerConfig:currentConfig,
+        dayOfWeek,selectedWorkIds:prior.descriptor.selectedWorkIds});
+      const dayBasis=input=>{const out=structuredClone(input),version=out.version||out.versions[0];
+        version.assignments=version.assignments.filter(row=>row.dayOfWeek===dayOfWeek);return out;};
+      assert.equal(canonicalJson(dayBasis(basis)),canonicalJson(dayBasis(source)),'day relaxation source facts changed');
+      const semantic=input=>{const out=structuredClone(input);delete out.sourceDigest;delete out.descriptorDigest;
+        delete out.fixedSourceRowsDigest;return out;};
+      assert.equal(canonicalJson(semantic(descriptor)),canonicalJson(semantic(prior.descriptor)),'day relaxation descriptor changed');
+      const candidate=createRecurringPhaseProspectiveSource({source:basis,ownerConfig:currentConfig,descriptor,selection:prior.selectedOwnership});
+      assert.equal(contentDigest(candidate),finalDigest,'bound selection does not produce exact final source');
+      const body={status:'PROVEN_CANONICAL_PHASE_MINIMUM',descriptor,candidateSourceDigest:finalDigest,
+        minimumDoubledSpread:prior.minimumDoubledSpread,halfUnitFeasible:prior.halfUnitFeasible,
+        preferenceCost:prior.preferenceCost,stableIdentity:prior.stableIdentity,
+        lowerBoundEvidence:prior,originalLowerBoundProofDigest:prior.proofDigest,
+        originalSolverSourceDigest:prior.descriptor.sourceDigest,freshCanonicalSourceBasisDigest:contentDigest(basis),
+        unchangedRelaxationDayFactsDigest:contentDigest(dayBasis(basis)),unchangedRelaxationDescriptorDigest:contentDigest(semantic(descriptor)),
+        proofMethod:'UNCHANGED_DAY_RELAXATION_BOUND_PLUS_MATCHING_FINAL_WHOLE_WEEK_CANONICAL_WITNESS',
+        freshSolverRunClaim:false,published:false,admitted:false};
+      proofs.push({...body,proofDigest:contentDigest(body)});
+    }catch(error){return {status:'UNKNOWN_CANONICAL_RECURRING_WEEK',stage:'final_other_days_rebinding',dayOfWeek,
+      reason:error.message,proofs,candidateSource:null,published:false,admitted:false};}
+  }
+  const canonical=evaluateRecurringPhaseCanonicalSource(finalSource);
+  if(!canonical.feasible)return {status:'UNKNOWN_CANONICAL_RECURRING_WEEK',stage:'final_whole_week_witness',proofs,candidateSource:null,published:false,admitted:false};
+  // Exact same selected allocation attains each recorded raw-spread, cost and
+  // stable-rank bound; no selected package may be an optional uncovered row.
+  for(const proof of proofs){
+    const prior=proof.lowerBoundEvidence;
+    if(prior.descriptor.choices.some(choice=>{
+      const selected=prior.selectedOwnership.find(row=>row.workId===choice.workId);
+      return canonical.uncoveredWorkIds.includes(choice.owners.find(owner=>owner.slotId===selected.slotId).prospectiveWorkId);
+    }))return {status:'UNKNOWN_CANONICAL_RECURRING_WEEK',stage:'final_selected_coverage',proofs,candidateSource:null,published:false,admitted:false};
+    proof.finalCanonicalWitnessDigest=canonical.witnessDigest;
+    const {proofDigest,...body}=proof;proof.proofDigest=contentDigest(body);
+  }
+  const body={status:'UNREGISTERED_CANONICAL_RECURRING_WEEK_CANDIDATE',sourceDigest:contentDigest(source),configDigest:contentDigest(currentConfig),
+    fullOwnersDigest:contentDigest(fullOwners),candidateSource:finalSource,candidateSourceDigest:finalDigest,proofs,canonicalHardWitness:canonical,
+    morningPreserved:true,originalPreferenceBaselinePreserved:true,allOtherDaysBoundToFinalCandidate:true,
+    normalMorningOptimumClaim:false,datedPriorityChange:false,published:false,admitted:false};
+  return {...body,proofDigest:contentDigest(body)};
 }

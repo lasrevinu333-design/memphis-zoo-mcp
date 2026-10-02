@@ -4,13 +4,16 @@ import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 import {performance} from 'node:perf_hooks';
 import {createHash} from 'node:crypto';
-import {contentDigest,canonicalJson} from '../src/static-weekly-schedule-model.js';
+import {contentDigest,canonicalJson,installStaticWeeklySha256HexAccelerator} from '../src/static-weekly-schedule-model.js';
 import {staticWeeklySafeName} from '../src/static-weekly-schedule-program.js';
 import {getScheduleComponentWeightLedger} from '../src/schedule-component-weight-authority.js';
-import {deriveCanonicalRecurringPhaseCandidate} from '../src/static-weekly-recurring-staffing-adaptation.js';
+import {deriveCanonicalRecurringPhaseCandidate,deriveScalableCanonicalRecurringPhaseCandidate,
+ deriveScalableCanonicalRecurringWeekCandidate,deriveRecurringStaffingPattern} from '../src/static-weekly-recurring-staffing-adaptation.js';
 import {createRecurringPhaseDescriptor,createRecurringPhaseProspectiveSource,
  evaluateRecurringPhaseCanonicalSource,enumerateRecurringPhaseMinimum,assertRecurringPhaseMinimum}
  from '../src/static-weekly-recurring-phase-authority.js';
+import {solveRecurringPhaseCanonicalMinimum} from '../src/static-weekly-recurring-phase-authority.js';
+import {assertNormalOwnerEligibility,normalGeographyRestrictionApplies,validateOwnerEligibilityConfig} from '../src/static-weekly-owner-eligibility.js';
 const ledger=new Map(getScheduleComponentWeightLedger().families.map(f=>[f.code,f]));
 const slotA='71000000-0000-4000-8000-000000000001',slotB='71000000-0000-4000-8000-000000000002';
 function fixture(codes,{capacityA=100,capacityB=100,morning=false,morningEffort=capacityA,restrictB=[],fixedPhase=[]}={}){
@@ -142,6 +145,47 @@ export function runStaticWeeklyRecurringPhaseAuthorityTests(){
   assert.equal(createHash('sha256').update(configBytes).digest('hex'),'40da4e1d4cce52b2361b5403b7e5e4477ca00def0fd3649a1d76dacb48422f30');
  });
  const packet=JSON.parse(packetBytes),current=packet.cases.baseline.input,ownerConfig=JSON.parse(configBytes);
+ check('current protected three retain exact accepted geography and all hard bans',()=>{
+  validateOwnerEligibilityConfig(ownerConfig);
+  for(const key of ['KAREN','TAMMY','KATHY']){
+   assert.equal(normalGeographyRestrictionApplies({key,...ownerConfig.slots[key]}),true);
+   const outside='NOT_AN_ACCEPTED_AREA';assert.throws(()=>assertNormalOwnerEligibility({key,...ownerConfig.slots[key]},outside));
+  }
+  for(const family of ['EAST_ADMIN','WEST_ADMIN','COURTYARD_RESTROOMS','BREEZEWAY_RESTROOMS'])assertNormalOwnerEligibility({key:'KATHY',...ownerConfig.slots.KATHY},family);
+  assert.throws(()=>assertNormalOwnerEligibility({key:'ALIJAH',...ownerConfig.slots.ALIJAH},'HERPETARIUM'));
+ });
+ check('nonprotected familiarity is preference and identity spoof cannot unlock protection',()=>{
+  assertNormalOwnerEligibility({key:'GREGORY',...ownerConfig.slots.GREGORY},'BREEZEWAY_RESTROOMS');
+  assertNormalOwnerEligibility({key:'KAILI',...ownerConfig.slots.KAILI},'NORTH_WEST_PASSAGE');
+  assert.throws(()=>normalGeographyRestrictionApplies({key:'GREGORY',...ownerConfig.slots.KAREN}));
+  assert.throws(()=>normalGeographyRestrictionApplies({key:'KAREN',...ownerConfig.slots.GREGORY}));
+  assert.throws(()=>normalGeographyRestrictionApplies({...ownerConfig.slots.KAREN,id:ownerConfig.slots.GREGORY.slotId}));
+  assert.equal(normalGeographyRestrictionApplies({...ownerConfig.slots.KAREN,slotId:ownerConfig.slots.KAREN.slotId.toUpperCase()}),true);
+ });
+ check('personal geography follows verified current people, not replacement positions or names',()=>{
+  for(const key of ['KAREN','TAMMY','KATHY']){
+   const replacement={key,...ownerConfig.slots[key],personId:'72000000-0000-4000-8000-000000000009'};
+   assert.equal(normalGeographyRestrictionApplies(replacement),false);
+   assertNormalOwnerEligibility(replacement,'NOT_AN_ACCEPTED_AREA');
+   assert.equal(normalGeographyRestrictionApplies({...replacement,name:ownerConfig.slots[key].name}),false);
+   assert.equal(normalGeographyRestrictionApplies({key,...ownerConfig.slots[key],vacancy:true,personId:null,name:null}),false);
+   assert.throws(()=>normalGeographyRestrictionApplies({key:'GREGORY',...ownerConfig.slots.GREGORY,personId:ownerConfig.slots[key].personId}));
+   const forged=structuredClone(ownerConfig);forged.slots[key].personId=replacement.personId;
+   const day=forged.slots[key].workDays[0];
+   assert.throws(()=>createRecurringPhaseDescriptor({source:current,ownerConfig:forged,dayOfWeek:day}),/incumbent\/config mismatch/);
+   const typed=structuredClone(current),row=typed.slots.find(s=>s.id===replacement.slotId);
+   row.incumbencies.find(p=>p.personId===ownerConfig.slots[key].personId).effectiveEnd='2026-10-05';
+   row.incumbencies.push({personId:replacement.personId,displayName:replacement.name,effectiveStart:'2026-10-05',effectiveEnd:null});
+   const bound=createRecurringPhaseDescriptor({source:typed,ownerConfig:forged,dayOfWeek:day});
+   assert.ok(bound.owners.some(o=>o.slotId===replacement.slotId));
+   assert.equal(row.incumbencies.length,current.slots.find(s=>s.id===replacement.slotId).incumbencies.length+1);
+  }
+  const replacement=structuredClone(ownerConfig);replacement.slots.ALIJAH.personId='72000000-0000-4000-8000-000000000009';
+  validateOwnerEligibilityConfig(replacement);
+  assert.throws(()=>assertNormalOwnerEligibility({key:'ALIJAH',...replacement.slots.ALIJAH},'HERPETARIUM'));
+  const stripped=structuredClone(ownerConfig);stripped.slots.ALIJAH.hardForbiddenFamilies=[];
+  assert.throws(()=>validateOwnerEligibilityConfig(stripped));
+ });
  const currentBefore=canonicalJson(current);
  const currentProof=enumerateRecurringPhaseMinimum({source:current,ownerConfig,dayOfWeek:1});
  check('exact current six-person source is preserved, not reoptimized',()=>{assert.equal(currentProof.status,'PRESERVED_NOT_REOPTIMIZED');
@@ -169,4 +213,156 @@ export function runStaticWeeklyRecurringPhaseAuthorityTests(){
   solver:false,worker:false,sql:false,publication:false,scope:'real canonical hard-row witnesses and complete tiny selected-phase enumeration, not whole current phase optimum or runtime manager integration'};
  console.log(JSON.stringify(receipt));return receipt;
 }
-if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url))runStaticWeeklyRecurringPhaseAuthorityTests();
+export async function runStaticWeeklyRecurringPhaseScalableTests(){
+ const started=performance.now();let checks=0;
+ const check=(name,fn)=>{fn();checks++;console.log('PASS',name);};
+ // Same byte-verified Node accelerator installed by the real fused worker.
+ // The default pure suite separately exercises the portable implementation.
+ installStaticWeeklySha256HexAccelerator(text=>createHash('sha256').update(text,'utf8').digest('hex'));
+ const {initializeStaticWeeklySolverEngine}=await import('../src/static-weekly-schedule-solver-worker.js');
+ const solver=await initializeStaticWeeklySolverEngine({maxOldGenerationSizeMb:256,maxWasmMemoryPages:1536,maxSemiSpaceSizeMb:4});
+ const tiny=fixture(['CHINA','BREEZEWAY_RESTROOMS','CAT_COUNTRY']);
+ const fullOwners={1:{equalized:Object.fromEntries(tiny.source.versions[0].assignments.map(r=>[r.locationCodeSnapshot,r.originSlotId]))}};
+ const p=solveRecurringPhaseCanonicalMinimum({...tiny,fullOwners,solver});
+ check('real pinned terminal bounds match exhaustive canonical minimum',()=>{
+  assert.equal(p.status,'PROVEN_CANONICAL_PHASE_MINIMUM',p.reason);assert.equal(p.minimumDoubledSpread,1);
+  assert.equal(p.independentlyMatchedCanonicalWitness,true);assert.equal(p.canonicalHardWitness.feasible,true);
+  assert.ok(p.tiers.length>=3&&p.tiers.every(t=>t.rawReceiptDigest&&t.terminalReport));
+ });
+ const exhaustive=deriveCanonicalRecurringPhaseCandidate({source:tiny.source,currentConfig:tiny.ownerConfig,fullOwners,dayOfWeek:1});
+ check('real scalable preference and code-unit ties match complete enumerable oracle',()=>{
+  assert.equal(p.preferenceCost,exhaustive.preferenceCost);assert.deepEqual(p.stableIdentity,exhaustive.stableIdentity);
+  assert.deepEqual(p.selectedOwnership.slice().sort((a,b)=>a.workId.localeCompare(b.workId)),exhaustive.selectedOwnership);
+ });
+ const blocked=fixture(['CHINA','BREEZEWAY_RESTROOMS','CAT_COUNTRY','PRIMATE_CANYON'],{capacityA:30,capacityB:20,morning:true,morningEffort:10});
+ const blockedGuidance={1:{equalized:Object.fromEntries(blocked.source.versions[0].assignments.filter(r=>r.window.start==='09:45').map(r=>[r.locationCodeSnapshot,r.originSlotId]))}};
+ const mismatch=solveRecurringPhaseCanonicalMinimum({...blocked,fullOwners:blockedGuidance,solver});
+ check('unmatched relaxed capacity optimum is UNKNOWN, never canonical minimum',()=>{
+  assert.equal(mismatch.status,'UNKNOWN_CANONICAL_PHASE');assert.equal(mismatch.minimumDoubledSpread,null);
+  assert.equal(mismatch.candidateSource,null);assert.ok(mismatch.tiers.length>=3);
+ });
+ const malicious={solve(lp,options){const answer=structuredClone(solver.solve(lp,options));answer.evidence.terminalReport.utf8Sha256='0'.repeat(64);return answer;}};
+ const rejected=solveRecurringPhaseCanonicalMinimum({...tiny,fullOwners,solver:malicious});
+ check('mutated actual terminal receipt cannot claim canonical optimum',()=>{
+  assert.equal(rejected.status,'UNKNOWN_CANONICAL_PHASE');assert.equal(rejected.minimumDoubledSpread,null);
+ });
+ for(const [name,mutate]of [
+  ['model identity',answer=>{answer.modelAttestation.modelDigest='0'.repeat(64);}],
+  ['SDK objective',answer=>{answer.result.ObjectiveValue+=0.01;}],
+  ['SDK status',answer=>{answer.result.Status='Time limit reached';}],
+  ['primal row',answer=>{const variable=Object.keys(answer.result.Columns).find(v=>v.startsWith('phase_x_'));answer.result.Columns[variable].Primal=0.5;}],
+ ]){
+  const hostile={solve(lp,options){const answer=structuredClone(solver.solve(lp,options));mutate(answer);return answer;}};
+  const p=solveRecurringPhaseCanonicalMinimum({...tiny,fullOwners,solver:hostile});
+  check('hostile actual '+name+' cannot admit a phase proof',()=>{
+   assert.equal(p.status,'UNKNOWN_CANONICAL_PHASE');assert.equal(p.candidateSource,null);assert.equal(p.minimumDoubledSpread,null);
+  });
+ }
+ const packet=JSON.parse(fs.readFileSync(new URL('./fixtures/static-weekly-policy-scope-receipts.json',import.meta.url)));
+ const source=packet.cases.baseline.input,currentConfig=JSON.parse(fs.readFileSync(new URL('../config/custodial-six-person-static-20261005.json',import.meta.url)));
+ const guidance=JSON.parse(fs.readFileSync(new URL('../config/custodial-full-nine-family-owners-20260926.json',import.meta.url))).owners;
+ const currentBefore=canonicalJson(source),current=deriveScalableCanonicalRecurringPhaseCandidate({source,currentConfig,fullOwners:guidance,dayOfWeek:1,solver});
+ console.log('CURRENT_PHASE_RESULT',JSON.stringify({status:current.status,reason:current.reason,minimumDoubledSpread:current.minimumDoubledSpread,
+  preferenceCost:current.preferenceCost,packages:current.descriptor.packages.length,owners:current.descriptor.owners.length,tiers:current.tiers.length,
+  canonicalRows:current.canonicalHardWitness?.hardConstraintCount}));
+ check('actual current phase exceeds finite bound yet uses bounded real source-derived solve',()=>{
+  assert.equal(current.descriptor.packages.length,23);assert.ok(current.tiers.length>0,current.reason);
+  assert.equal(canonicalJson(source),currentBefore);assert.equal(current.published,false);assert.equal(current.sourceMutated,false);
+  assert.equal(current.status,'PROVEN_CANONICAL_PHASE_MINIMUM',current.reason);
+  assert.equal(current.minimumDoubledSpread,1);assert.equal(current.preferenceCost,358);
+  assert.equal(current.canonicalHardWitness.feasible,true);assert.equal(current.canonicalHardWitness.hardConstraintCount,642);
+ });
+ const week=deriveScalableCanonicalRecurringWeekCandidate({source,currentConfig,fullOwners:guidance,solver});
+ console.log('CURRENT_WEEK_RESULT',JSON.stringify({status:week.status,stage:week.stage,dayOfWeek:week.dayOfWeek,
+  proofs:week.proofs.map(p=>({day:p.descriptor.dayOfWeek,status:p.status,reason:p.reason,solverStatus:p.lastSolverAttempt?.status,spread:p.minimumDoubledSpread,cost:p.preferenceCost}))}));
+ check('complete current week never combines stale other-day witnesses',()=>{
+  assert.equal(canonicalJson(source),currentBefore);
+  assert.equal(week.status,'UNREGISTERED_CANONICAL_RECURRING_WEEK_CANDIDATE',week.reason);
+    assert.equal(week.proofs.length,7);assert.ok(week.proofs.every(p=>p.candidateSourceDigest===week.candidateSourceDigest));
+    assert.equal(week.allOtherDaysBoundToFinalCandidate,true);assert.equal(week.canonicalHardWitness.feasible,true);
+    assert.deepEqual(week.proofs.map(p=>p.minimumDoubledSpread),[1,1,1,1,1,1,1]);
+    assert.deepEqual(week.proofs.map(p=>p.preferenceCost),[374,358,568,566,344,574,566]);
+    assert.ok(week.proofs.every(p=>p.freshSolverRunClaim===false&&p.finalCanonicalWitnessDigest===week.canonicalHardWitness.witnessDigest
+      &&p.lowerBoundEvidence.proofDigest===p.originalLowerBoundProofDigest
+      &&p.lowerBoundEvidence.tiers.every(t=>t.rawReceiptDigest&&t.terminalReport)));
+    assert.deepEqual(week.candidateSource.slots,source.slots);
+    assert.deepEqual(week.candidateSource.versions[0].slotAvailability,source.versions[0].slotAvailability);
+    assert.deepEqual(week.candidateSource.versions[0].assignments.filter(r=>r.window.start!=='09:45'),source.versions[0].assignments.filter(r=>r.window.start!=='09:45'));
+ });
+ const remainingDays=[],remainingDayProofs=[];
+ for(const dayOfWeek of [2,3,4,5,6]){
+  const p=deriveScalableCanonicalRecurringPhaseCandidate({source,currentConfig,fullOwners:guidance,dayOfWeek,solver});
+  remainingDayProofs.push(p);
+  remainingDays.push({dayOfWeek,status:p.status,reason:p.reason||null,solverStatus:p.lastSolverAttempt?.status||null,
+   minimumDoubledSpread:p.minimumDoubledSpread,preferenceCost:p.preferenceCost??null,canonicalRows:p.canonicalHardWitness?.hardConstraintCount||null});
+  check('real current weekday '+dayOfWeek+' has canonical proof or explicit non-admissible failure',()=>{
+   assert.equal(canonicalJson(source),currentBefore);
+   if(p.status==='PROVEN_CANONICAL_PHASE_MINIMUM'){
+    assert.equal(p.canonicalHardWitness.feasible,true);assert.equal(p.independentlyMatchedCanonicalWitness,true);
+    assert.ok(p.tiers.length>=3&&p.tiers.every(t=>t.rawReceiptDigest));
+   }else{assert.equal(p.status,'UNKNOWN_CANONICAL_PHASE');assert.equal(p.candidateSource,null);assert.equal(p.minimumDoubledSpread,null);assert.ok(p.reason);}
+  });
+ }
+ console.log('OTHER_CURRENT_DAYS',JSON.stringify(remainingDays));
+ const freshShapes=[],freshShapeProofs=[];
+ for(const count of [7,8]){
+  const freshSource=structuredClone(source),freshConfig=structuredClone(currentConfig),v=freshSource.versions[0];
+  for(const [i,key]of ['OPTION1','OPTION4'].slice(0,count-6).entries()){
+   const slot=freshConfig.slots[key],personId=`72000000-0000-4000-8000-00000000000${i+1}`,name=`Synthetic fresh ${key} incumbent`;
+   slot.vacancy=false;slot.personId=personId;slot.name=name;
+   freshSource.slots.find(s=>s.id===slot.slotId).incumbencies.push({personId,displayName:name,effectiveStart:'2026-10-05',effectiveEnd:null});
+   for(const a of v.slotAvailability.filter(a=>a.slotId===slot.slotId))a.status='working';
+   v.vacantSlotIds=v.vacantSlotIds.filter(id=>id!==slot.slotId);
+  }
+  const before=canonicalJson(freshSource),proof=deriveScalableCanonicalRecurringPhaseCandidate({source:freshSource,currentConfig:freshConfig,fullOwners:guidance,dayOfWeek:1,solver});
+  freshShapeProofs.push(proof);
+  freshShapes.push({classification:'EXPLICIT_SYNTHETIC_FRESH_INCUMBENTS_NOT_REGISTERED_NOT_REAL_HIRES',staffedPositions:count,
+   sourceDigest:contentDigest(freshSource),configDigest:contentDigest(freshConfig),status:proof.status,reason:proof.reason||null,
+   workingOwners:proof.descriptor.owners.length,minimumDoubledSpread:proof.minimumDoubledSpread,preferenceCost:proof.preferenceCost??null,
+   canonicalRows:proof.canonicalHardWitness?.hardConstraintCount||null,existingMorningPreservedNotProvedOptimal:true});
+  check('fresh synthetic '+count+'-person source has real scalable canonical phase proof',()=>{
+   assert.equal(proof.status,'PROVEN_CANONICAL_PHASE_MINIMUM',proof.reason);assert.equal(proof.descriptor.owners.length,count-1);
+   assert.equal(proof.canonicalHardWitness.feasible,true);assert.equal(proof.published,false);assert.equal(proof.admitted,false);
+   assert.equal(canonicalJson(freshSource),before);assert.equal(Object.values(freshConfig.slots).filter(s=>s.vacancy!==true).length,count);
+   assert.deepEqual(freshSource.slots.map(s=>s.id),source.slots.map(s=>s.id));
+   assert.deepEqual(v.assignments,source.versions[0].assignments);assert.deepEqual(freshSource.proximity,source.proximity);
+  });
+  if(count===7){
+   const highs={solve(lp,options){return solver.solve(lp,{timeLimitSeconds:options.time_limit}).result;}};
+   check('current normal morning source honestly refuses absent full-position admin guidance',()=>{
+    assert.throws(()=>deriveRecurringStaffingPattern({currentConfig,targetSlots:freshConfig.slots,fullOwners:guidance,highs}),
+     /missing nine-position guidance 0\/morning\/EAST_ADMIN/);
+   });
+   const supported=JSON.parse(fs.readFileSync(new URL('../config/custodial-six-person-static-20260926.json',import.meta.url)));
+   const supportedSlots=structuredClone(supported.slots);
+   Object.assign(supportedSlots.OPTION1,{vacancy:false,personId:freshConfig.slots.OPTION1.personId,name:freshConfig.slots.OPTION1.name});
+   const normal=deriveRecurringStaffingPattern({currentConfig:supported,targetSlots:supportedSlots,fullOwners:guidance,highs});
+   check('original normal adapter supported historical shape retains genuine restrictions, not current admission',()=>{
+    assert.equal(normal.preview.length,14);assert.deepEqual(normal.config.slots,supportedSlots);
+    for(let day=0;day<7;day++)for(const phase of ['morning','equalized']){
+     const output=normal.config.overrides[String(day)][phase];
+     assert.deepEqual(Object.values(output).flat().sort(),Object.values(supported.overrides[String(day)][phase]).flat().sort());
+     for(const [key,families]of Object.entries(output))for(const family of families)assertNormalOwnerEligibility({key,...supportedSlots[key]},family);
+    }
+    assert.equal(canonicalJson(source),currentBefore);assert.equal(canonicalJson(freshSource),before);
+   });
+  }
+ }
+ console.log('FRESH_SYNTHETIC_SHAPES',JSON.stringify(freshShapes));
+ const receipt={status:'PASS',checks,elapsedMs:Math.round(performance.now()-started),currentStatus:current.status,
+  currentReason:current.reason||null,currentMinimumDoubledSpread:current.minimumDoubledSpread,currentCanonicalHardRows:current.canonicalHardWitness?.hardConstraintCount||null,
+  currentWeekStatus:week.status,currentWeekStage:week.stage||null,currentWeekDay:week.dayOfWeek??null,
+  remainingDays,
+  freshShapes,
+  currentRoster:'EXACT_RETAINED_SIX_PERSON_SYNTHETIC_INPUT_PLUS_EXPLICIT_UNREGISTERED_SYNTHETIC_FRESH_SHAPES',solver:true,publication:false,worker:false,sql:false};
+ if(process.env.CUSTODIAL_PHASE_EVIDENCE_PATH){
+  const target=path.resolve(process.env.CUSTODIAL_PHASE_EVIDENCE_PATH);
+  fs.writeFileSync(target,JSON.stringify({schema:'custodial.recurring-phase-focused-test-evidence.v1',receipt,
+   current,week,remainingDayProofs,freshShapeProofs},null,2)+'\n',{flag:'wx'});
+ }
+ console.log(JSON.stringify(receipt));return receipt;
+}
+if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){
+ if(process.argv.includes('--scalable'))await runStaticWeeklyRecurringPhaseScalableTests();
+ else runStaticWeeklyRecurringPhaseAuthorityTests();
+}
