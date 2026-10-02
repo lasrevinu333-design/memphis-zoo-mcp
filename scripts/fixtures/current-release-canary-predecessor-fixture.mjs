@@ -13,6 +13,54 @@ const OLD='09812c2615f1f9176eadd54bfd4f60395648ea75f2cad0ebf1a6cb458f900aac';
 const LIVE='23cb9bb81091860d7e5bd6b629db2f4f385994bcdbdbf7776392128cd9b570ef';
 const CLOCK_ALIAS='custodial_native_provider_registration_clock(uuid,text,uuid,text,jsonb,boolean)';
 const CLOCK='public.'+CLOCK_ALIAS;
+// Independently pinned from root's UNVALIDATED NORMAL216 observation a21f8d6f.
+// These are six fixed serialization corrections, never arbitrary recapture.
+const SERIALIZED_GRANTS=[
+ ['canary','custodial_release_canary_authority_surface()','public.custodial_release_canary_authority_surface()',1000073,'a843e6ab1177177e039163a3d520b95d6552de8105474a48e390b25302692f48','b7d461eda320ec386b55ce3490063e09848a83723999acdd741e83cad0460498'],
+ ['incumbency','public.static_weekly_v3_assert_draft_incumbency(uuid)','static_weekly_v3_assert_draft_incumbency(uuid)',1000199,'d6f202a5c174036cf978cebd88e2274f5b54039dedf614f4808086701cb8305a','8f5efab4cf9957046185fc19bf9bfb23be3c48900e414f9422be0e05baaba1ca'],
+ ['hydrate','public.static_weekly_v4_hydrate_compiler_source(jsonb,date)','static_weekly_v4_hydrate_compiler_source(jsonb,date)',1000198,'57b252cee39b5f763518cb957528a6fea8eabae017351f0a4c7483d62df9598a','cd7d80e0f473c00254a875badd84ec701b370489bd1eb64dbe568b72784e08af'],
+ ['materialize','public.static_weekly_v2_materialize_projection(uuid,date,text,text,jsonb,jsonb,text,jsonb,bigint,uuid,text,text)','static_weekly_v2_materialize_projection(uuid,date,text,text,jsonb,jsonb,text,jsonb,bigint,uuid,text,text)',950028,'cfea7c5bfcf61a00e64b56e38e1c98f93d7a973c373205b89bc3b708aad0902b','419abb490483777437126a3593d601da11e9d3db32b777e21be802291a97ce6b'],
+ ['schedule_base','public.static_weekly_v6_read_schedule_segments_dated_base(date)','static_weekly_v6_read_schedule_segments_dated_base(date)',950168,'4bbcbf22890a56bb56ff4d05a6ba7c95bbac648b755b22291267589d8261aabd','6161a03a11c95bbe898fc4b27ae54d9ba3e66eade32fc5fc29e3b75da1f85201'],
+ ['lunch_base','public.static_weekly_v8_read_lunch_segments_dated_base(date)','static_weekly_v8_read_lunch_segments_dated_base(date)',950170,'8eb43bf71ab7c0bcb60bbf818bd54d77d43a4163fcfa19a4f3962948a7ad3f80','a38bf3e78db3a49335dd315a33ad98605deeea8638c8d6596a7bc82402795b41']
+].map(([key,identity,reset,order,prior,current])=>({key,identity,reset,order,prior,current}));
+const PRIVATE_GRANT=SERIALIZED_GRANTS[1],PRIVATE_ALIAS=PRIVATE_GRANT.reset;
+const EVENT_COLUMNS=[
+ ['start_instant_utc','106a679f7e85be9e039b7f6f07c223f81d1041868318a025d650524970945c7c'],
+ ['end_instant_utc','47396e92efba0a4cbb9ab0526e727a3f029fe33452aefdda467c97b7f3e2c732'],
+ ['superseded_by_event_id','ae183c23db1033315fe196d68acbda9677198f6cc01be57c8c6a04fdb7703293'],
+ ['superseded_at','6d31d29fd9bbd6cd61dafd1254ee7a589a37a2b363eb478f59e0592743f4abc5'],
+ ['superseded_by_manager_id','08e535a928adfa5aa4a102c36dff168ad3702da9592236d7ec6d459d521636f0'],
+ ['supersession_request_digest','85d1ad1a2143ca04759614e7912688650eb80335e22f2877cafc073386c77df0']
+].map(([name,sha256],i)=>({identity:'public.events_app_events:'+name,order:202130+i,sha256}));
+const quote=value=>"'"+String(value).replaceAll("'","''")+"'";
+const SIX_VALUES=SERIALIZED_GRANTS.map(p=>`(${quote(p.identity)},${quote(p.reset)})`).join(',');
+const COLUMN_IDENTITIES=EVENT_COLUMNS.map(p=>quote(p.identity)).join(',');
+const COLUMN_ROWS=`select jsonb_build_object('range_occupants',(select count(*) from public.custodial_release_authority_restore_inventory where restore_order between 202130 and 202135),
+ 'rows',coalesce(jsonb_agg(jsonb_build_object('identity',i.object_identity,'order',i.restore_order,'stored',i.definition_sha256,
+ 'computed',public.static_weekly_digest_text(i.definition_sql),
+ 'live',public.static_weekly_digest_text(public.custodial_release_authority_current_column_definition(i.object_identity)),
+ 'preserved_sha256',public.static_weekly_digest_text((to_jsonb(i)-'restore_order')::text)) order by i.object_identity),'[]'::jsonb))
+ from public.custodial_release_authority_restore_inventory i where object_kind='column' and object_identity in (${COLUMN_IDENTITIES})`;
+const SIX_ROWS=`select coalesce(jsonb_agg(jsonb_build_object('identity',i.object_identity,'order',i.restore_order,
+ 'stored',i.definition_sha256,'computed',public.static_weekly_digest_text(i.definition_sql),
+ 'live',public.static_weekly_digest_text(public.custodial_release_authority_current_grant_definition(i.object_identity)),
+ 'same_oid',to_regprocedure(i.object_identity)=to_regprocedure(w.old_reset),
+ 'function_sha256',case when i.object_identity='custodial_release_canary_authority_surface()' then null
+  else public.static_weekly_digest_text(pg_get_functiondef(to_regprocedure(i.object_identity))) end)
+ order by i.object_identity),'[]'::jsonb)
+ from public.custodial_release_authority_restore_inventory i join (values ${SIX_VALUES}) w(identity,old_reset)
+ on i.object_kind='grant' and i.object_identity=w.identity`;
+const POSITIVE_STATE=`select jsonb_build_object('six',(${SIX_ROWS}),'columns',(${COLUMN_ROWS}),
+ 'count',(select count(*) from public.custodial_release_authority_restore_inventory),
+ 'identity_order_sha256',(select public.static_weekly_digest_text(string_agg(jsonb_build_array(object_kind,object_identity,restore_order)::text,E'\\n' order by object_kind,object_identity)) from public.custodial_release_authority_restore_inventory where not (object_kind='column' and object_identity in (${COLUMN_IDENTITIES}))),
+ 'other_rows_sha256',(select public.static_weekly_digest_text(string_agg(to_jsonb(i)::text,E'\\n' order by object_kind,object_identity))
+  from public.custodial_release_authority_restore_inventory i where not (
+   (object_kind='grant' and object_identity in (${SERIALIZED_GRANTS.map(p=>quote(p.identity)).join(',')}))
+   or (object_kind='column' and object_identity in (${COLUMN_IDENTITIES}))
+   or (object_kind='relation' and object_identity='public.system_feedback_email_intents')
+   or (object_kind='function' and case when object_kind='function' then to_regprocedure(object_identity) end='public.custodial_release_canary_authority_surface()'::regprocedure))),
+ 'feedback_stored',(select definition_sha256 from public.custodial_release_authority_restore_inventory where object_kind='relation' and object_identity='public.system_feedback_email_intents'),
+ 'immutable',(select tgenabled::text from pg_trigger where tgrelid='public.custodial_release_authority_restore_inventory'::regclass and tgname='trg_custodial_release_authority_restore_inventory_immutable'));`;
 const digest=b=>createHash('sha256').update(b).digest('hex');
 const DOCKER=['--host','unix:///var/run/docker.sock'];
 function keys(value,expected){assert.ok(value&&typeof value==='object'&&!Array.isArray(value));assert.deepEqual(Object.keys(value).sort(),[...expected].sort());}
@@ -67,6 +115,10 @@ export function verifyCurrentReleaseCanaryPredecessor(input){
  const source=bytes.toString();assert.equal([...source.matchAll(/^begin;$/gm)].length,1);
  assert.equal([...source.matchAll(/^commit;$/gm)].length,1);assert.match(source,/\ncommit;\s*$/);
  assert.ok(source.includes(OLD)&&source.includes(LIVE),'exact pinned Feedback predecessors');
+ for(const p of SERIALIZED_GRANTS)assert.ok(source.includes(p.identity)&&source.includes(p.reset)&&source.includes(p.prior)&&source.includes(p.current),'exact six grant correction source pins');
+ for(const p of EVENT_COLUMNS)assert.ok(source.includes(p.identity)&&source.includes(p.sha256),'exact six column source pins');
+ assert.ok(source.indexOf('end $feedback_relation$;')<source.indexOf('do $grant_serialization$')&&source.indexOf('end $grant_serialization$;')<source.indexOf('do $current_surface$'),'six-grant transaction chronology');
+ assert.ok(source.indexOf('end $grant_serialization$;')<source.indexOf('do $event_column_order$')&&source.indexOf('end $event_column_order$;')<source.indexOf('do $current_surface$'),'Event column order transaction chronology');
  // The only outer transaction boundary is moved into this test transaction.
  // Any raised exception terminates psql and connection-close rolls back ALL DDL.
  const body=source.replace(/^begin;$/m,'').replace(/^commit;\s*$/m,'');
@@ -96,7 +148,44 @@ export function verifyCurrentReleaseCanaryPredecessor(input){
  const clockBefore=clockSnapshot();assert.equal(clockBefore.count,1);assert.equal(clockBefore.qualified_count,1);
  assert.equal(clockBefore.exact,true,'no preexisting clock grant fault credit');assert.equal(clockBefore.anon_execute,false);
  assert.match(clockBefore.live_sha256,/^[a-f0-9]{64}$/);assert.match(clockBefore.function_sha256,/^[a-f0-9]{64}$/);
- const rollbackExact=label=>{assert.deepEqual(snapshot(),before,label);assert.deepEqual(clockSnapshot(),clockBefore,label+' clock grant/function');};
+ const sixSnapshot=()=>JSON.parse(succeeded(run(SIX_ROWS+';'),'six exact grant preimage'));
+ const sixBefore=sixSnapshot();
+ function assertSix(rows,{corrected=false}={}){
+  assert.equal(rows.length,6,'exact six grant rows');
+  assert.deepEqual(rows.map(r=>r.identity).sort(),SERIALIZED_GRANTS.map(p=>p.identity).sort(),'six exact grant identity set');
+  for(const p of SERIALIZED_GRANTS){const r=rows.find(r=>r.identity===p.identity);assert.equal(r.order,p.order);assert.equal(r.same_oid,true);
+   assert.equal(r.stored,corrected?p.current:p.prior);assert.equal(r.computed,r.stored);assert.equal(r.live,p.current);
+   if(p.key==='canary')assert.equal(r.function_sha256,null);else assert.match(r.function_sha256,/^[a-f0-9]{64}$/);
+  }
+ }
+ assertSix(sixBefore);
+ const columnSnapshot=()=>JSON.parse(succeeded(run(COLUMN_ROWS+';'),'six Event column preimage'));
+ const columnsBefore=columnSnapshot();
+ function assertColumns(observed,{corrected=false}={}){
+  assert.equal(observed.range_occupants,6);assert.equal(observed.rows.length,6);
+  assert.deepEqual(observed.rows.map(r=>r.identity).sort(),EVENT_COLUMNS.map(p=>p.identity).sort());
+  assert.deepEqual(observed.rows.map(r=>r.order).sort((a,b)=>a-b),[202130,202131,202132,202133,202134,202135]);
+  for(const p of EVENT_COLUMNS){const r=observed.rows.find(r=>r.identity===p.identity);if(corrected)assert.equal(r.order,p.order);
+   assert.equal(r.stored,p.sha256);assert.equal(r.computed,p.sha256);assert.equal(r.live,p.sha256);assert.match(r.preserved_sha256,/^[a-f0-9]{64}$/);
+  }
+ }
+ assertColumns(columnsBefore);
+ const rollbackExact=label=>{assert.deepEqual(snapshot(),before,label);assert.deepEqual(clockSnapshot(),clockBefore,label+' clock grant/function');assert.deepEqual(sixSnapshot(),sixBefore,label+' all six live/stored grants/functions');assert.deepEqual(columnSnapshot(),columnsBefore,label+' all original column orders');};
+ function positiveSixControl(label,setup,{permutedColumns=false}={}){
+  const text=succeeded(run('begin;'+setup+'\n'+POSITIVE_STATE+'\n'+body+'\n'+POSITIVE_STATE+'\nrollback;'),label,{migrationControl:true});
+  const states=text.split('\n').filter(Boolean).map(row=>JSON.parse(row));assert.equal(states.length,2,'before and after positive control state');
+  const [initial,completed]=states;assertSix(initial.six);assertSix(completed.six,{corrected:true});
+  assertColumns(initial.columns);assertColumns(completed.columns,{corrected:true});
+  if(permutedColumns)assert.ok(initial.columns.rows.some(r=>r.order!==EVENT_COLUMNS.find(p=>p.identity===r.identity).order),'positive actually exercised column permutation');
+  assert.equal(initial.count,before.inventory_count+1,'exact one legitimate alias added for positive control');
+  for(const state of states)for(const field of ['identity_order_sha256','other_rows_sha256'])assert.match(state[field],/^[a-f0-9]{64}$/);
+  assert.equal(completed.count,initial.count);assert.equal(completed.identity_order_sha256,initial.identity_order_sha256);
+  assert.equal(completed.other_rows_sha256,initial.other_rows_sha256,'no unrelated recovery row mutation');
+  assert.equal(initial.feedback_stored,OLD);assert.equal(completed.feedback_stored,LIVE);assert.equal(initial.immutable,'O');assert.equal(completed.immutable,'O');
+  for(const row of completed.six){const original=initial.six.find(x=>x.identity===row.identity);assert.equal(row.live,original.live,'no live grant change');assert.equal(row.function_sha256,original.function_sha256,'no private function body change');}
+  for(const row of completed.columns.rows)assert.equal(row.preserved_sha256,initial.columns.rows.find(r=>r.identity===row.identity).preserved_sha256,'column metadata except order unchanged');
+  rollbackExact(label+' complete rollback');
+ }
  const off='alter table public.custodial_release_authority_restore_inventory disable trigger trg_custodial_release_authority_restore_inventory_immutable;';
  const on='alter table public.custodial_release_authority_restore_inventory enable trigger trg_custodial_release_authority_restore_inventory_immutable;';
  // This one fixed additional alias resolves to the exact same function. Its
@@ -119,8 +208,24 @@ export function verifyCurrentReleaseCanaryPredecessor(input){
  end $alias$;`+on;
  // A valid second alias must pass the WHOLE final migration first, not merely
  // be insertable. Roll back the successful control before injecting corruption.
- succeeded(run('begin;'+validAliasSetup+'\n'+body+'\nrollback;'),'valid clock grant alias final migration control',{migrationControl:true});
- rollbackExact('valid clock grant alias control rollback');
+ positiveSixControl('valid clock grant alias final migration control',validAliasSetup);
+ const privateAliasSetup=off+`do $alias$ declare ord integer;definition text;begin
+  if to_regprocedure('${PRIVATE_ALIAS}') is distinct from '${PRIVATE_GRANT.identity}'::regprocedure
+   or exists(select 1 from public.custodial_release_authority_restore_inventory where object_kind='grant' and object_identity='${PRIVATE_ALIAS}')
+   then raise exception 'private grant alias setup identity changed';end if;
+  definition:=public.custodial_release_authority_current_grant_definition('${PRIVATE_ALIAS}');
+  if definition is null then raise exception 'private grant alias definition absent';end if;
+  select n into strict ord from generate_series(900001,999998) n where not exists(select 1 from public.custodial_release_authority_restore_inventory where restore_order=n) order by n limit 1;
+  insert into public.custodial_release_authority_restore_inventory(restore_order,object_kind,object_identity,definition_sql,definition_sha256)
+   values(ord,'grant','${PRIVATE_ALIAS}',definition,public.static_weekly_digest_text(definition));
+  if not exists(select 1 from public.custodial_release_authority_restore_inventory where object_kind='grant' and object_identity='${PRIVATE_ALIAS}'
+   and definition_sql=public.custodial_release_authority_current_grant_definition(object_identity)
+   and definition_sha256=public.static_weekly_digest_text(definition_sql)) then raise exception 'private alias setup not exact';end if;
+ end $alias$;`+on;
+ const permutedColumns=off+`update public.custodial_release_authority_restore_inventory i set restore_order=w.expected_order
+  from (values ${EVENT_COLUMNS.map(p=>`(${quote(p.identity)},${404265-p.order})`).join(',')}) w(identity,expected_order)
+  where i.object_kind='column' and i.object_identity=w.identity;`+on;
+ positiveSixControl('valid six-grant private alias final migration control',privateAliasSetup+permutedColumns,{permutedColumns:true});
  const clockGrantReason='Current release required grant recovery drift: '+CLOCK_ALIAS;
  const cases=[
   {id:'captured_feedback_digest_changed',setup:off+"update public.custodial_release_authority_restore_inventory set definition_sha256=repeat('0',64) where object_kind='relation' and object_identity='public.system_feedback_email_intents';"+on,
@@ -141,7 +246,35 @@ export function verifyCurrentReleaseCanaryPredecessor(input){
    // Keep the preferred unqualified alias correct. Corrupt the other exact-OID
    // row so selecting only one good canonical alias cannot earn a pass.
    `update public.custodial_release_authority_restore_inventory set definition_sha256=repeat('0',64) where object_kind='grant' and object_identity='${CLOCK}';`+on,
-   reason:clockGrantReason}
+   reason:clockGrantReason},
+ ...SERIALIZED_GRANTS.map(p=>({id:'captured_serialized_grant_'+p.key+'_changed',setup:off+
+   `update public.custodial_release_authority_restore_inventory set definition_sha256=repeat('0',64) where object_kind='grant' and object_identity=${quote(p.identity)};`+on,
+   reason:'Current grant serialization captured predecessor changed: '+p.identity})),
+ {id:'live_serialized_private_grant_changed',setup:`grant execute on function ${PRIVATE_GRANT.identity} to anon;
+   do $live$ begin if not has_function_privilege('anon','${PRIVATE_GRANT.identity}','EXECUTE') then raise exception 'private live grant fault absent';end if;end $live$;`,
+   reason:'Current grant serialization live predecessor changed: '+PRIVATE_GRANT.identity},
+ {id:'serialized_reset_redirected_with_recomputed_digest',setup:off+
+   `do $redirect$ begin if to_regprocedure('${PRIVATE_ALIAS}')='${CLOCK}'::regprocedure then raise exception 'redirect fault target not distinct';end if;end $redirect$;
+   update public.custodial_release_authority_restore_inventory
+    set definition_sql=replace(definition_sql,quote_literal('${PRIVATE_ALIAS}'),quote_literal('${CLOCK}')),
+        definition_sha256=public.static_weekly_digest_text(replace(definition_sql,quote_literal('${PRIVATE_ALIAS}'),quote_literal('${CLOCK}')))
+    where object_kind='grant' and object_identity='${PRIVATE_GRANT.identity}';`+on,
+   reason:'Current grant serialization captured predecessor changed: '+PRIVATE_GRANT.identity},
+ {id:'second_equivalent_serialized_grant_alias_corrupted',setup:privateAliasSetup+off+
+   `update public.custodial_release_authority_restore_inventory set definition_sha256=repeat('0',64) where object_kind='grant' and object_identity='${PRIVATE_ALIAS}';`+on,
+   reason:'Current grant serialization captured alias changed: '+PRIVATE_ALIAS},
+ {id:'later_surface_failure_rolls_back_all_six_grants',setup:off+
+   "update public.custodial_release_authority_restore_inventory set definition_sha256=repeat('0',64) where object_kind='function' and case when object_kind='function' then to_regprocedure(object_identity) end='public.static_weekly_sch022_work_witness(date,jsonb)'::regprocedure;"+on,
+   reason:'Current release required function recovery drift: static_weekly_sch022_work_witness(date,jsonb)'},
+ {id:'event_column_order_ownership_changed',setup:off+
+   `update public.custodial_release_authority_restore_inventory set restore_order=202130 where object_kind='grant' and object_identity='${CLOCK}';`+on,
+   reason:'Current Event column order captured scope changed'},
+ {id:'event_column_definition_digest_changed',setup:off+
+   `update public.custodial_release_authority_restore_inventory set definition_sha256=repeat('0',64) where object_kind='column' and object_identity='public.events_app_events:start_instant_utc';`+on,
+   reason:'Current Event column order definition changed: public.events_app_events:start_instant_utc'},
+ {id:'later_surface_failure_rolls_back_column_canonicalization',setup:permutedColumns+off+
+   "update public.custodial_release_authority_restore_inventory set definition_sha256=repeat('0',64) where object_kind='function' and case when object_kind='function' then to_regprocedure(object_identity) end='public.static_weekly_sch022_work_witness(date,jsonb)'::regprocedure;"+on,
+   reason:'Current release required function recovery drift: static_weekly_sch022_work_witness(date,jsonb)'}
  ];
  const results=[];
  for(const c of cases){
@@ -157,7 +290,8 @@ export function verifyCurrentReleaseCanaryPredecessor(input){
   results.push({id:c.id,rejected:true,expected_reason:c.reason,rollback_exact:true});
  }
  inspect(target);assert.equal(digest(readFileSync(resolve(ROOT,'supabase/migrations',FINAL))),migration.sha256);
- const receipt={schema:'custodial.current-release-canary-predecessor-receipt.v1',status:'PASS',checks:7,
+ assert.equal(results.length,20,'seven original plus ten grant and three column-order challenges');
+ const receipt={schema:'custodial.current-release-canary-predecessor-receipt.v1',status:'PASS',checks:20,
   engine_executed:true,synthetic:true,production:false,target,migration,
   source_sha256:digest(readFileSync(fileURLToPath(import.meta.url))),predecessor:before,
   cases:results,successful_final_migration_applied:false,authority_configured:false,container_retained:true};

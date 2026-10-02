@@ -19,7 +19,20 @@ const PREDECESSOR_REASONS={
   later_surface_failure_rolls_back_feedback_rebind:'Current release required function recovery drift: static_weekly_sch022_work_witness(date,jsonb)',
   captured_clock_grant_digest_changed:'Current release required grant recovery drift: custodial_native_provider_registration_clock(uuid,text,uuid,text,jsonb,boolean)',
   live_clock_grant_changed:'Current release required grant recovery drift: custodial_native_provider_registration_clock(uuid,text,uuid,text,jsonb,boolean)',
-  second_equivalent_clock_grant_alias_corrupted:'Current release required grant recovery drift: custodial_native_provider_registration_clock(uuid,text,uuid,text,jsonb,boolean)'
+  second_equivalent_clock_grant_alias_corrupted:'Current release required grant recovery drift: custodial_native_provider_registration_clock(uuid,text,uuid,text,jsonb,boolean)',
+  captured_serialized_grant_canary_changed:'Current grant serialization captured predecessor changed: custodial_release_canary_authority_surface()',
+  captured_serialized_grant_incumbency_changed:'Current grant serialization captured predecessor changed: public.static_weekly_v3_assert_draft_incumbency(uuid)',
+  captured_serialized_grant_hydrate_changed:'Current grant serialization captured predecessor changed: public.static_weekly_v4_hydrate_compiler_source(jsonb,date)',
+  captured_serialized_grant_materialize_changed:'Current grant serialization captured predecessor changed: public.static_weekly_v2_materialize_projection(uuid,date,text,text,jsonb,jsonb,text,jsonb,bigint,uuid,text,text)',
+  captured_serialized_grant_schedule_base_changed:'Current grant serialization captured predecessor changed: public.static_weekly_v6_read_schedule_segments_dated_base(date)',
+  captured_serialized_grant_lunch_base_changed:'Current grant serialization captured predecessor changed: public.static_weekly_v8_read_lunch_segments_dated_base(date)',
+  live_serialized_private_grant_changed:'Current grant serialization live predecessor changed: public.static_weekly_v3_assert_draft_incumbency(uuid)',
+  serialized_reset_redirected_with_recomputed_digest:'Current grant serialization captured predecessor changed: public.static_weekly_v3_assert_draft_incumbency(uuid)',
+  second_equivalent_serialized_grant_alias_corrupted:'Current grant serialization captured alias changed: static_weekly_v3_assert_draft_incumbency(uuid)',
+  later_surface_failure_rolls_back_all_six_grants:'Current release required function recovery drift: static_weekly_sch022_work_witness(date,jsonb)',
+  event_column_order_ownership_changed:'Current Event column order captured scope changed',
+  event_column_definition_digest_changed:'Current Event column order definition changed: public.events_app_events:start_instant_utc',
+  later_surface_failure_rolls_back_column_canonicalization:'Current release required function recovery drift: static_weekly_sch022_work_witness(date,jsonb)'
 };
 const PREDECESSOR_CASES=Object.keys(PREDECESSOR_REASONS);
 export const DEFAULT_EXCEPTIONS=Object.freeze({
@@ -266,7 +279,7 @@ export async function runRecoveryReplay(plan,{root=ROOT,io=nodeIO,signal}={}){
           write(stage+'-predecessor-fixture.log',pre.stdout+pre.stderr);must(pre.status===0,'predecessor_fixture_failed');
           const proof=json(pre.stdout.trim().split('\n').at(-1),'predecessor_receipt');
           shape(proof,['schema','status','checks','engine_executed','synthetic','production','target','migration','source_sha256','predecessor','cases','successful_final_migration_applied','authority_configured','container_retained'],'predecessor_receipt_shape');
-          must(proof.schema==='custodial.current-release-canary-predecessor-receipt.v1'&&proof.status==='PASS'&&proof.checks===7&&proof.engine_executed===!fake&&proof.synthetic===true&&proof.production===false&&proof.successful_final_migration_applied===false&&proof.authority_configured===false&&proof.container_retained===true,'predecessor_receipt');
+          must(proof.schema==='custodial.current-release-canary-predecessor-receipt.v1'&&proof.status==='PASS'&&proof.checks===20&&proof.engine_executed===!fake&&proof.synthetic===true&&proof.production===false&&proof.successful_final_migration_applied===false&&proof.authority_configured===false&&proof.container_retained===true,'predecessor_receipt');
           same(proof.target,m.target,'predecessor_target');same(proof.migration,entry,'predecessor_migration');must(proof.source_sha256===m.predecessor_fixture.sha256,'predecessor_source_receipt');
           same(proof.cases?.map(x=>x.id),PREDECESSOR_CASES,'predecessor_cases');must(proof.cases.every(x=>x.rejected===true&&x.rollback_exact===true&&x.expected_reason===PREDECESSOR_REASONS[x.id]),'predecessor_rollback');
           must(proof.predecessor&&Number.isSafeInteger(proof.predecessor.inventory_count)&&proof.predecessor.inventory_count>0&&['inventory_sha256','feedback_stored','feedback_live'].every(k=>HEX.test(proof.predecessor[k]))&&proof.predecessor.immutable==='O','predecessor_preimage');

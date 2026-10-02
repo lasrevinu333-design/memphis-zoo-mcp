@@ -20,7 +20,20 @@ const predecessorReasons={
  later_surface_failure_rolls_back_feedback_rebind:'Current release required function recovery drift: static_weekly_sch022_work_witness(date,jsonb)',
  captured_clock_grant_digest_changed:'Current release required grant recovery drift: custodial_native_provider_registration_clock(uuid,text,uuid,text,jsonb,boolean)',
  live_clock_grant_changed:'Current release required grant recovery drift: custodial_native_provider_registration_clock(uuid,text,uuid,text,jsonb,boolean)',
- second_equivalent_clock_grant_alias_corrupted:'Current release required grant recovery drift: custodial_native_provider_registration_clock(uuid,text,uuid,text,jsonb,boolean)'
+ second_equivalent_clock_grant_alias_corrupted:'Current release required grant recovery drift: custodial_native_provider_registration_clock(uuid,text,uuid,text,jsonb,boolean)',
+ captured_serialized_grant_canary_changed:'Current grant serialization captured predecessor changed: custodial_release_canary_authority_surface()',
+ captured_serialized_grant_incumbency_changed:'Current grant serialization captured predecessor changed: public.static_weekly_v3_assert_draft_incumbency(uuid)',
+ captured_serialized_grant_hydrate_changed:'Current grant serialization captured predecessor changed: public.static_weekly_v4_hydrate_compiler_source(jsonb,date)',
+ captured_serialized_grant_materialize_changed:'Current grant serialization captured predecessor changed: public.static_weekly_v2_materialize_projection(uuid,date,text,text,jsonb,jsonb,text,jsonb,bigint,uuid,text,text)',
+ captured_serialized_grant_schedule_base_changed:'Current grant serialization captured predecessor changed: public.static_weekly_v6_read_schedule_segments_dated_base(date)',
+ captured_serialized_grant_lunch_base_changed:'Current grant serialization captured predecessor changed: public.static_weekly_v8_read_lunch_segments_dated_base(date)',
+ live_serialized_private_grant_changed:'Current grant serialization live predecessor changed: public.static_weekly_v3_assert_draft_incumbency(uuid)',
+ serialized_reset_redirected_with_recomputed_digest:'Current grant serialization captured predecessor changed: public.static_weekly_v3_assert_draft_incumbency(uuid)',
+ second_equivalent_serialized_grant_alias_corrupted:'Current grant serialization captured alias changed: static_weekly_v3_assert_draft_incumbency(uuid)',
+ later_surface_failure_rolls_back_all_six_grants:'Current release required function recovery drift: static_weekly_sch022_work_witness(date,jsonb)',
+ event_column_order_ownership_changed:'Current Event column order captured scope changed',
+ event_column_definition_digest_changed:'Current Event column order definition changed: public.events_app_events:start_instant_utc',
+ later_surface_failure_rolls_back_column_canonicalization:'Current release required function recovery drift: static_weekly_sch022_work_witness(date,jsonb)'
 };
 const migrations=new Map([['00000000000000_synthetic_baseline.sql',Buffer.from('select 1;')],
   ...Object.keys(DEFAULT_EXCEPTIONS).map(file=>[file,readFileSync(join(root,'supabase/migrations',file))]),
@@ -81,7 +94,7 @@ function fake(m,change=()=>undefined){
         }
       }else{
         assert.equal(command,process.execPath);
-        if(args[0]===join(root,PREDECESSOR_FIXTURE)){phase='predecessor';assert.deepEqual(JSON.parse(input),{target:m.target,migration:m.predecessor_fixture.migration});result=asJson({schema:'custodial.current-release-canary-predecessor-receipt.v1',status:'PASS',checks:7,engine_executed:false,synthetic:true,production:false,target:m.target,migration:m.predecessor_fixture.migration,source_sha256:m.predecessor_fixture.sha256,predecessor:{inventory_count:11,inventory_sha256:'a'.repeat(64),feedback_stored:'b'.repeat(64),feedback_live:'c'.repeat(64),immutable:'O'},cases:Object.entries(predecessorReasons).map(([id,expected_reason])=>({id,rejected:true,rollback_exact:true,expected_reason})),successful_final_migration_applied:false,authority_configured:false,container_retained:true})}
+        if(args[0]===join(root,PREDECESSOR_FIXTURE)){phase='predecessor';assert.deepEqual(JSON.parse(input),{target:m.target,migration:m.predecessor_fixture.migration});result=asJson({schema:'custodial.current-release-canary-predecessor-receipt.v1',status:'PASS',checks:20,engine_executed:false,synthetic:true,production:false,target:m.target,migration:m.predecessor_fixture.migration,source_sha256:m.predecessor_fixture.sha256,predecessor:{inventory_count:11,inventory_sha256:'a'.repeat(64),feedback_stored:'b'.repeat(64),feedback_live:'c'.repeat(64),immutable:'O'},cases:Object.entries(predecessorReasons).map(([id,expected_reason])=>({id,rejected:true,rollback_exact:true,expected_reason})),successful_final_migration_applied:false,authority_configured:false,container_retained:true})}
         else if(args.includes('--input-type=module')){phase='official';assert.equal(JSON.parse(args.at(-1)).id,m.target.id);result=asJson({status:'PASS',scope:'synthetic official dated exception and occurrence SCH022 paths',checks:12,target:{id:m.target.id,image:m.target.image,fixture_id:m.target.fixture_id,network:'none'},source:Object.fromEntries(['publication_id','group_id','member_id','baseline_projection_id','accepted_projection_id','repaired_projection_id'].map((k,i)=>[k,id(80+i)])),limitations:['fake only']})}
         else{
           phase='probe';assert.equal(args[0],join(root,'scripts/current-release-recovery-probe.mjs'));const bound=JSON.parse(outputs.get(args[2]));result=asJson(probeReceipt(bound));
@@ -306,24 +319,80 @@ await boundary('predecessor challenge failure cannot reach final migration','pre
 await boundary('predecessor false-looking receipt refused','predecessor',editJson(x=>{x.status='FAIL'}),/predecessor_receipt/);
 await boundary('predecessor generic PASS JSON is insufficient','predecessor',()=>asJson({status:'PASS'}),/predecessor_receipt_shape/);
 await boundary('predecessor source hash must match input pin','predecessor',editJson(x=>{x.source_sha256='0'.repeat(64)}),/predecessor_source_receipt/);
-await boundary('predecessor all seven rollback cases required','predecessor',editJson(x=>{x.cases.pop()}),/predecessor_cases/);
+await boundary('predecessor all twenty rollback cases required','predecessor',editJson(x=>{x.cases.pop()}),/predecessor_cases/);
 await boundary('historical four-case predecessor receipt cannot close new grant boundary','predecessor',editJson(x=>{x.checks=4;x.cases=x.cases.slice(0,4)}),/predecessor_receipt/);
+await boundary('historical seven-case predecessor receipt cannot close six serialization corrections','predecessor',editJson(x=>{x.checks=7;x.cases=x.cases.slice(0,7)}),/predecessor_receipt/);
+await boundary('seventeen-case receipt cannot close deterministic column order','predecessor',editJson(x=>{x.checks=17;x.cases=x.cases.slice(0,17)}),/predecessor_receipt/);
 for(const id of Object.keys(predecessorReasons).slice(4))await boundary('predecessor requires exact new case '+id,'predecessor',editJson(x=>{x.cases=x.cases.filter(c=>c.id!==id)}),/predecessor_cases/);
 await boundary('predecessor generic grant failure does not prove the owning rejection','predecessor',editJson(x=>{x.cases[4].expected_reason='ERROR:  P0001'}),/predecessor_rollback/);
 await boundary('predecessor function wording cannot stand in for grant drift','predecessor',editJson(x=>{x.cases[5].expected_reason=x.cases[5].expected_reason.replace('required grant','required function')}),/predecessor_rollback/);
-await test('seven-case predecessor keeps exact14-field receipt and fixed source-only challenge structure',async()=>{
+await test('twenty-case predecessor keeps exact14-field receipt and fixed source-only challenge structure',async()=>{
   const {m,f}=await prepared(),r=JSON.parse(f.outputs.get(join(m.output_dir,'no-auto-prepare-predecessor-fixture.log')));
-  assert.equal(Object.keys(r).length,14);assert.equal(r.checks,7);assert.equal(r.cases.length,7);
+  assert.equal(Object.keys(r).length,14);assert.equal(r.checks,20);assert.equal(r.cases.length,20);
   assert.deepEqual(r.cases.map(x=>x.expected_reason),Object.values(predecessorReasons));
   const text=readFileSync(join(root,PREDECESSOR_FIXTURE),'utf8');
-  for(const id of Object.keys(predecessorReasons))assert.ok(text.includes("id:'"+id+"'"));
-  assert.ok(text.includes("succeeded(run('begin;'+validAliasSetup+'\\n'+body+'\\nrollback;'),'valid clock grant alias final migration control',{migrationControl:true})"));
+  for(const id of Object.keys(predecessorReasons).filter(id=>!id.startsWith('captured_serialized_grant_')))assert.ok(text.includes("id:'"+id+"'"));
+  for(const key of ['canary','incumbency','hydrate','materialize','schedule_base','lunch_base'])assert.ok(text.includes("['"+key+"',"));
+  assert.ok(text.includes("id:'captured_serialized_grant_'+p.key+'_changed'"));
+  assert.ok(text.includes("positiveSixControl('valid clock grant alias final migration control',validAliasSetup)"));
   assert.ok(text.indexOf('valid clock grant alias final migration control')<text.indexOf("id:'second_equivalent_clock_grant_alias_corrupted'"));
-  assert.ok(text.includes("rollbackExact('valid clock grant alias control rollback')"));
+  assert.ok(text.includes("rollbackExact(label+' complete rollback')"));
   assert.ok(text.includes("assert.deepEqual(clockSnapshot(),clockBefore,label+' clock grant/function')"));
   assert.ok(text.includes("assert.equal(clockBefore.exact,true,'no preexisting clock grant fault credit')"));
   assert.match(text,/id:'second_equivalent_clock_grant_alias_corrupted'[\s\S]*?object_identity='\$\{CLOCK\}'/);
 });
+await test('six serialized grant identities orders and old/current hashes are independently pinned',()=>{
+  const text=readFileSync(join(root,PREDECESSOR_FIXTURE),'utf8');
+  // Evaluate only the fixture's fixed literal-array/map expression, no fixture
+  // entrypoint, subprocess, SQL, filesystem output or engine is invoked.
+  const expression=text.match(/const SERIALIZED_GRANTS=([\s\S]*?);\nconst PRIVATE_GRANT/)[1];
+  const pins=Function('return ('+expression+');')();assert.equal(pins.length,6);
+  assert.equal(hash(JSON.stringify(pins)),'7a7f1b162156299d4a9e490ef2b00d770ea68a3358b3b97acc3af979bc648bdb');
+  assert.ok(text.includes("source.includes(p.identity)&&source.includes(p.reset)&&source.includes(p.prior)&&source.includes(p.current)"));
+  assert.ok(text.includes("source.indexOf('end $grant_serialization$;')<source.indexOf('do $current_surface$')"));
+  assert.ok(text.includes("positiveSixControl('valid six-grant private alias final migration control',privateAliasSetup+permutedColumns,{permutedColumns:true})"));
+  assert.ok(text.indexOf("positiveSixControl('valid six-grant private alias final migration control'")<text.indexOf("id:'second_equivalent_serialized_grant_alias_corrupted'"));
+  assert.ok(text.includes("assert.deepEqual(sixSnapshot(),sixBefore,label+' all six live/stored grants/functions')"));
+  assert.match(text,/id:'serialized_reset_redirected_with_recomputed_digest'[\s\S]*?definition_sha256=public\.static_weekly_digest_text\(replace\(definition_sql/);
+  assert.match(text,/id:'second_equivalent_serialized_grant_alias_corrupted'[\s\S]*?object_identity='\$\{PRIVATE_ALIAS\}'/);
+  assert.ok(text.includes("assert.equal(results.length,20,'seven original plus ten grant and three column-order challenges')"));
+});
+await test('actual fixture pure positive validator preserves six hashes ACL bodies metadata and rollback',()=>{
+  const text=readFileSync(join(root,PREDECESSOR_FIXTURE),'utf8'),expression=text.match(/const SERIALIZED_GRANTS=([\s\S]*?);\nconst PRIVATE_GRANT/)[1];
+  const pins=Function('return ('+expression+');')();
+  const columns=Function('return ('+text.match(/const EVENT_COLUMNS=([\s\S]*?);\nconst quote=/)[1]+');')();
+  const assertBody=text.slice(text.indexOf(' function assertSix('),text.indexOf('\n assertSix(sixBefore);'));
+  const checkSix=Function('assert','SERIALIZED_GRANTS',assertBody+';return assertSix;')(assert,pins);
+  const columnsBody=text.slice(text.indexOf(' function assertColumns('),text.indexOf('\n assertColumns(columnsBefore);'));
+  const checkColumns=Function('assert','EVENT_COLUMNS',columnsBody+';return assertColumns;')(assert,columns);
+  const validator=text.slice(text.indexOf(' function positiveSixControl('),text.indexOf('\n const off=',text.indexOf(' function positiveSixControl(')));
+  const initial={six:pins.map(p=>({identity:p.identity,order:p.order,stored:p.prior,computed:p.prior,live:p.current,same_oid:true,function_sha256:p.key==='canary'?null:'a'.repeat(64)})),columns:{range_occupants:6,rows:columns.map(p=>({identity:p.identity,order:p.order,stored:p.sha256,computed:p.sha256,live:p.sha256,preserved_sha256:'e'.repeat(64)}))},count:12,identity_order_sha256:'b'.repeat(64),other_rows_sha256:'c'.repeat(64),feedback_stored:'old',immutable:'O'};
+  const completed=structuredClone(initial);completed.feedback_stored='live';for(const r of completed.six){r.stored=r.live;r.computed=r.live}
+  function exercise(states,options={}){const commands=[],rollbacks=[];
+    const control=Function('assert','run','succeeded','assertSix','assertColumns','EVENT_COLUMNS','rollbackExact','POSITIVE_STATE','body','before','OLD','LIVE',validator+';return positiveSixControl;')(
+      assert,sql=>{commands.push(sql);return states.map(x=>JSON.stringify(x)).join('\n')},(value,label,options)=>{assert.equal(options.migrationControl,true);return value},checkSix,checkColumns,columns,label=>rollbacks.push(label),'select fixed_fake_state;','-- fixed fake migration',{inventory_count:11},'old','live');
+    control('fixed fake positive','-- fixed fake alias setup\n',options);return{commands,rollbacks};
+  }
+  const good=exercise([initial,completed]);assert.equal(good.commands.length,1);assert.ok(good.commands[0].startsWith('begin;'));assert.ok(good.commands[0].endsWith('\nrollback;'));assert.deepEqual(good.rollbacks,['fixed fake positive complete rollback']);
+  const mutants=[
+    states=>states.pop(),states=>{states[0].count=11},states=>{states[1].count++},states=>{states[1].identity_order_sha256='d'.repeat(64)},
+    states=>{states[1].other_rows_sha256='d'.repeat(64)},states=>{states[1].other_rows_sha256='malformed'},states=>{states[1].immutable='D'},
+    states=>{states[1].feedback_stored='old'},states=>{states[1].six.pop()},states=>{states[1].six[0].order++},states=>{states[1].six[1].same_oid=false},
+    states=>{states[1].six[1].computed='0'.repeat(64)},states=>{states[1].six[1].stored=pins[1].prior},states=>{states[1].six[1].live='0'.repeat(64)},
+    states=>{states[1].six[1].function_sha256='d'.repeat(64)},states=>{states[1].six[0].function_sha256='d'.repeat(64)},states=>{states[1].six[0]={...states[1].six[1]}},
+    states=>{states[1].columns.range_occupants=7},states=>{states[1].columns.rows.pop()},states=>{states[1].columns.rows[0].order=202129},
+    states=>{states[1].columns.rows[0].live='0'.repeat(64)},states=>{states[1].columns.rows[0].preserved_sha256='f'.repeat(64)},
+    states=>{[states[1].columns.rows[0].order,states[1].columns.rows[1].order]=[states[1].columns.rows[1].order,states[1].columns.rows[0].order]}
+  ];
+  for(const mutate of mutants){const states=structuredClone([initial,completed]);mutate(states);assert.throws(()=>exercise(states));}
+  const permuted=structuredClone(initial);for(const row of permuted.columns.rows)row.order=404265-row.order;
+  assert.equal(exercise([permuted,completed],{permutedColumns:true}).rollbacks.length,1);
+  assert.throws(()=>exercise([initial,completed],{permutedColumns:true}),/actually exercised column permutation/);
+});
+await boundary('new grant correction receipt cannot omit the live ACL rejection','predecessor',editJson(x=>{x.cases.find(c=>c.id==='live_serialized_private_grant_changed').expected_reason='ERROR: P0001'}),/predecessor_rollback/);
+await boundary('new grant correction receipt cannot replace exact alias rejection with preimage rejection','predecessor',editJson(x=>{x.cases.find(c=>c.id==='second_equivalent_serialized_grant_alias_corrupted').expected_reason='Current grant serialization captured predecessor changed: static_weekly_v3_assert_draft_incumbency(uuid)'}),/predecessor_rollback/);
+await boundary('new grant correction receipt cannot reorder exact cases','predecessor',editJson(x=>{[x.cases[7],x.cases[8]]=[x.cases[8],x.cases[7]]}),/predecessor_cases/);
+await boundary('all-six later rollback must be true','predecessor',editJson(x=>{x.cases.find(c=>c.id==='later_surface_failure_rolls_back_all_six_grants').rollback_exact=false}),/predecessor_rollback/);
 await test('fixed fixture primary diagnostic keeps only first bounded ERROR line',()=>{
   const text=readFileSync(join(root,PREDECESSOR_FIXTURE),'utf8');
   const begin=text.indexOf('function primaryMigrationError('),end=text.indexOf('\nfunction succeeded(',begin);
