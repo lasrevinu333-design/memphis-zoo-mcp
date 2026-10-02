@@ -52,8 +52,19 @@ assert.throws(()=>createCoverAllCopyTexts(createCoverAllPrintDocument(missingCon
 await assert.rejects(()=>renderCoverAllPdfPair(createCoverAllPrintDocument(missingContact)),/issuing_manager_required/);checks++;
 assert.throws(()=>createCoverAllCopyTexts({...doc,managerContact:{...doc.managerContact,name:'forged'}}),/digest_mismatch/);checks++;
 check('both languages together',pair.files.map(f=>f.language),['en','es']);
-for(const file of pair.files){const bytes=Buffer.from(file.base64,'base64');check('PDF hash '+file.language,createHash('sha256').update(bytes).digest('hex'),file.sha256);const pdf=await PDFDocument.load(bytes);assert.ok(pdf.getPageCount()>0&&pdf.getPageCount()<=48);checks++;assert.ok(pdf.getSubject().includes(doc.documentDigest));checks++;}
+check('bilingual printable option',pair.bilingualFile.language,'en-es');
+for(const file of [...pair.files,pair.bilingualFile]){const bytes=Buffer.from(file.base64,'base64');check('PDF hash '+file.language,createHash('sha256').update(bytes).digest('hex'),file.sha256);const pdf=await PDFDocument.load(bytes);assert.ok(pdf.getPageCount()>0&&pdf.getPageCount()<=48);checks++;assert.ok(pdf.getSubject().includes(doc.documentDigest));checks++;if(file.language==='en-es'){check('both bilingual pages retained',pdf.getPageCount(),2);}}
 await assert.rejects(()=>renderCoverAllPdfPair({...doc,authorityRevision:8}),/digest_mismatch/);checks++;
+const noneInput=fixture();noneInput.snapshot.exceptions[0].payload.availability.breakChoice='NONE';
+Object.assign(noneInput.source.compiler_input.slots[0],{kind:'CONTRACTOR_CAPACITY',capacityId:contractor,label:'CoverAll01',incumbencies:[]});
+for(const row of noneInput.snapshot.latest_projection.assignments)if(row.owner_slot_id===contractor)Object.assign(row,{owner_kind:'CONTRACTOR_CAPACITY',capacity_id:contractor,owner_person_id:null});
+noneInput.lunch.loans=[];noneInput.lunch.responsibilities=noneInput.lunch.responsibilities.filter(r=>r.normal_owner_slot_id!==contractor);
+const nonePair=await renderCoverAllPdfPair(createCoverAllPrintDocument(noneInput));
+assert.match(nonePair.texts[0].text,/No break: explicit manager choice/);checks++;
+assert.match(nonePair.texts[1].text,/Sin descanso/);checks++;
+assert.doesNotMatch(nonePair.texts[0].text,/No contractor lunch is published/);checks++;
+const noneOut=process.env.OC24_NONE_PDF_EVIDENCE_DIR;
+if(noneOut){mkdirSync(noneOut,{recursive:true});for(const file of [...nonePair.files,nonePair.bilingualFile])writeFileSync(join(noneOut,file.filename),Buffer.from(file.base64,'base64'),{flag:'wx',mode:0o600});}
 
 // Actual control-plane transaction + HTTP/auth, with synthetic database values.
 const queries=[],f=fixture();const client={async query(q){queries.push(q);const result=q.includes('static_weekly_v3_read_manager_snapshot')?f.snapshot:q.includes('static_weekly_v3_read_publication_source')?f.source:q.includes('static_weekly_v8_read_lunch_document')?f.lunch:null;return{rows:result?[{result}]:[]}},release(){}};
@@ -73,6 +84,6 @@ try{
  assert.ok(queries.findIndex(q=>q.includes('pg_advisory_xact_lock'))<queries.findIndex(q=>q.includes('read_manager_snapshot')));checks++;
  check('PDF performs no schedule mutation',queries.some(q=>/static_weekly_v\d+_(?:apply|materialize|publish|create)/.test(q)),false);
  const out=process.env.OC24_PDF_EVIDENCE_DIR;
- if(out){mkdirSync(out,{recursive:true});for(const file of pair.files)writeFileSync(join(out,file.filename),Buffer.from(file.base64,'base64'),{flag:'wx',mode:0o600});}
+ if(out){mkdirSync(out,{recursive:true});for(const file of [...pair.files,pair.bilingualFile])writeFileSync(join(out,file.filename),Buffer.from(file.base64,'base64'),{flag:'wx',mode:0o600});}
 }finally{await new Promise(resolve=>server.close(resolve));await plane.close();}
 console.log(JSON.stringify({checks,failed:0,scope:'actual PDF/parser/HTTP/auth/transaction with synthetic database fixture; not production publication',documentDigest:doc.documentDigest,pdfs:pair.files.map(({language,filename,sha256})=>({language,filename,sha256}))}));

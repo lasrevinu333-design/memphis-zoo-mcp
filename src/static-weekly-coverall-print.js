@@ -158,8 +158,8 @@ export async function renderCoverAllPdfPair(document){
  const {documentDigest}=document;
  const {PDFDocument,StandardFonts,rgb}=await import('pdf-lib');
  const files=[];
- for(const language of ['en','es']){
-  const t=labels[language],pdf=await PDFDocument.create();
+ for(const language of ['en','es','en-es']){
+  const t=labels[language]||labels.en,pdf=await PDFDocument.create();
   pdf.setTitle(`${t.title} ${document.serviceDate}`);pdf.setLanguage(language);pdf.setSubject(`projection=${document.projectionId}; revision=${document.authorityRevision}; document=${documentDigest}`);
   const font=await pdf.embedFont(StandardFonts.Helvetica),bold=await pdf.embedFont(StandardFonts.HelveticaBold);
   let page,y=0;
@@ -170,11 +170,13 @@ export async function renderCoverAllPdfPair(document){
    for(const word of words){if(f.widthOfTextAtSize(word,size)>532)fail('coverall_pdf_unbreakable_text');const next=part?part+' '+word:word;if(f.widthOfTextAtSize(next,size)>532){draw();part=word;}else part=next;}if(part)draw();
   }
   for(const c of document.contractors){
-   newPage();for(const entry of contractorLines(document,c,language)){if(entry.strong&&y<100)newPage();line(entry.text,entry.size,entry.strong);}
+   for(const partLanguage of language==='en-es'?['en','es']:[language]){
+    newPage();for(const entry of contractorLines(document,c,partLanguage)){if(entry.strong&&y<100)newPage();line(entry.text,entry.size,entry.strong);}
+   }
   }
   pdf.getPages().forEach((p,i)=>{p.drawText(`${t.page} ${i+1}/${pdf.getPageCount()} | ${document.serviceDate} | r${document.authorityRevision}`,{x:40,y:32,size:8,font});p.drawText(documentDigest,{x:40,y:20,size:7,font});});
   const bytes=await pdf.save();if(bytes.length>2*1024*1024)fail('coverall_pdf_size_limit');
   files.push({language,filename:`CoverAll_${document.serviceDate}_r${document.authorityRevision}_${language}.pdf`,sha256:hash(bytes),base64:Buffer.from(bytes).toString('base64')});
  }
- return {schema:'custodial.coverall-pdf-pair.v1',document,files,texts:createCoverAllCopyTexts(document)};
+ return {schema:'custodial.coverall-pdf-pair.v1',document,files:files.filter(f=>f.language!=='en-es'),bilingualFile:files.find(f=>f.language==='en-es'),texts:createCoverAllCopyTexts(document)};
 }
