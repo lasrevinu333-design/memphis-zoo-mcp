@@ -1,5 +1,6 @@
 import {createHash} from 'node:crypto';
 import {canonicalJson,normalizeWindow,snapshotContractorCapacity} from './static-weekly-schedule-model.js';
+import {suggestCoverAllAreaOrder} from './coverall-advisory-order.js';
 
 const fail=code=>{throw Object.assign(new Error(code),{code});};
 const list=value=>Array.isArray(value)?value:fail('coverall_print_array_required');
@@ -50,7 +51,7 @@ export function createCoverAllPrintDocument({snapshot,source,lunch,serviceDate,e
    if(loans.length>1)fail('coverall_print_overlapping_lunch_ownership');
    const owner=loans[0]?.owner||r.owner_slot_id;
    if(!text(owner))fail('coverall_print_missing_owner');
-   segments.push({owner,start:a,end:b,area:text(w.locationNameSnapshot)||text(w.locationCodeSnapshot),
+   segments.push({owner,start:a,end:b,areaId:text(w.locationId),area:text(w.locationNameSnapshot)||text(w.locationCodeSnapshot),
     locations:locations.map(l=>({id:text(l.locationId),name:text(l.locationNameSnapshot)})),
     purpose:loans.length?'lunch_coverage':w.serviceMode==='reminder_only'?'reminder_only':'area_owner'});
   }
@@ -74,7 +75,7 @@ export function createCoverAllPrintDocument({snapshot,source,lunch,serviceDate,e
   const times=[...new Set([c.shift.startMinute,c.shift.endMinute,...own.flatMap(s=>[s.start,s.end]),...(keep0945&&c.shift.startMinute<585&&585<c.shift.endMinute?[585]:[])])].sort((a,b)=>a-b);
   for(let i=0;i<times.length-1;i++){
    const start=times[i],end=times[i+1];
-   const areas=own.filter(s=>s.start<=start&&end<=s.end).map(s=>({area:s.area,locations:s.locations,purpose:s.purpose}));
+   const areas=own.filter(s=>s.start<=start&&end<=s.end).map(s=>({areaId:s.areaId,area:s.area,locations:s.locations,purpose:s.purpose}));
    const unique=[...new Map(areas.map(a=>[canonicalJson(a),a])).values()].sort((a,b)=>canonicalJson(a).localeCompare(canonicalJson(b)));
    const prior=c.periods.at(-1);
    if(prior&&canonicalJson(prior.areas)===canonicalJson(unique)&&!(keep0945&&start===585))prior.end=clock(end);
@@ -82,6 +83,9 @@ export function createCoverAllPrintDocument({snapshot,source,lunch,serviceDate,e
   }
   const final=own.filter(s=>s.end===c.shift.endMinute);
   c.shiftEndHandoffs=final.map(s=>({area:s.area,locations:s.locations,nextOwners:[...new Set(segments.filter(next=>next.owner!==c.slotId&&next.start<=c.shift.endMinute&&c.shift.endMinute<next.end&&next.locations.some(l=>s.locations.some(old=>old.id===l.id))).map(next=>ownerName(next.owner)))]}));
+  const availability=selected.find(e=>e.payload.availability.slotId===c.slotId).payload.availability;
+  for(const period of c.periods)Object.assign(period,suggestCoverAllAreaOrder({areas:period.areas,proximity:source.compiler_input.proximity,
+   anchorLocationId:availability.acceptedRouteAnchorLocationId,anchorProvenance:availability.acceptedRouteProvenance}));
   c.shift={start:clock(c.shift.startMinute),end:clock(c.shift.endMinute)};
  }
  const document={schema:'custodial.coverall-accepted-print.v1',serviceDate,authorityRevision:expectedRevision,
@@ -133,9 +137,14 @@ function contractorLines(document,c,language){
  add(`${language==='es'?'Encargado que emitió el horario':'Issuing custodial manager'}: ${document.managerContact.name}`,11,true);
  add(language==='es'?'Instrucciones y comunicación':'Instructions and reporting',12,true);
  for(const instruction of instructions[language])add(instruction);
+ if(c.periods.some(p=>p.advisoryOrder?.status==='ADVISORY_VERIFIED_PROXIMITY'))add(language==='es'
+  ?'El orden sugerido usa proximidad desde el inicio aceptado, no la posición actual. No son citas ni una ruta obligatoria; adapte la secuencia a las condiciones.'
+  :'Suggested order uses proximity from the accepted starting area, not current position. It is not an appointment or mandatory route; adapt the sequence to conditions.');
  for(const period of c.periods){
   add(`${period.start} - ${period.end}`,13,true);
   if(!period.areas.length)add(t.empty);
+  else if(period.advisoryOrder?.status==='ADVISORY_VERIFIED_PROXIMITY')add(language==='es'?'Orden sugerido por proximidad:':'Suggested proximity order:');
+  else add(language==='es'?'Orden no comprobado; confirme con el encargado.':'Order unproven; confirm with the manager.');
   for(const a of period.areas){add(a.area,11,true);add(a.locations.map(l=>l.name).join('; '));if(a.purpose==='lunch_coverage')add(t.lunchCoverage);if(a.purpose==='reminder_only')add(t.reminder);}
  }
  add(`${t.end} - ${c.shift.end}`,13,true);

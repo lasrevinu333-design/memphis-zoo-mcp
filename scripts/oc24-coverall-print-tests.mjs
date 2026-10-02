@@ -38,6 +38,16 @@ const continuous=fixture();continuous.snapshot.latest_projection.assignments=[ro
 const flat=createCoverAllPrintDocument(continuous);
 check('unchanged area omits09:45',flat.show0945,false);check('unchanged adjacent assignment merged',flat.contractors[0].periods.length,1);
 check('unknown lunch is not fabricated',flat.contractors[0].lunch,null);
+const routedInput=fixture();Object.assign(routedInput.snapshot.exceptions[0].payload.availability,{acceptedRouteAnchorLocationId:'Area A',acceptedRouteProvenance:'Synthetic accepted starting area'});
+routedInput.source.compiler_input.proximity=[['Area A','Area B',8],['Area A','Area C',1],['Area B','Area A',8],['Area B','Area C',6],['Area C','Area A',1],['Area C','Area B',3]]
+ .map(([from,to,minutes])=>({from,to,minutes,verified:true,provenance:'Synthetic accepted edge'}));
+const routed=createCoverAllPrintDocument(routedInput),routedPeriod=routed.contractors[0].periods.find(p=>p.start==='10:00');
+check('advisory order actually enters accepted document',routedPeriod.areas.map(a=>a.area),['Area C','Area B']);
+check('advisory never changes accepted period windows',routed.contractors[0].periods.map(p=>[p.start,p.end]),doc.contractors[0].periods.map(p=>[p.start,p.end]));
+check('document binds exact directed order',routedPeriod.advisoryOrder.status,'ADVISORY_VERIFIED_PROXIMITY');
+assert.match(createCoverAllCopyTexts(routed)[0].text,/not an appointment or mandatory route/);checks++;
+assert.match(createCoverAllCopyTexts(routed)[1].text,/no la posición actual/);checks++;
+assert.notEqual(routed.documentDigest,doc.documentDigest);checks++;
 let pair=await renderCoverAllPdfPair(doc);
 check('approved issuing manager, no personal phone',doc.managerContact,{name:'Synthetic Manager',role:'Issuing custodial manager',method:'IN_PERSON',authority:'AUTHENTICATED_NAMED_MANAGER',managerId:'10000000-0000-4000-8000-000000000091'});
 check('all copy languages from same document',pair.texts.map(t=>t.language),['en','es','en-es']);
@@ -53,7 +63,10 @@ await assert.rejects(()=>renderCoverAllPdfPair(createCoverAllPrintDocument(missi
 assert.throws(()=>createCoverAllCopyTexts({...doc,managerContact:{...doc.managerContact,name:'forged'}}),/digest_mismatch/);checks++;
 check('both languages together',pair.files.map(f=>f.language),['en','es']);
 check('bilingual printable option',pair.bilingualFile.language,'en-es');
-for(const file of [...pair.files,pair.bilingualFile]){const bytes=Buffer.from(file.base64,'base64');check('PDF hash '+file.language,createHash('sha256').update(bytes).digest('hex'),file.sha256);const pdf=await PDFDocument.load(bytes);assert.ok(pdf.getPageCount()>0&&pdf.getPageCount()<=48);checks++;assert.ok(pdf.getSubject().includes(doc.documentDigest));checks++;if(file.language==='en-es'){check('both bilingual pages retained',pdf.getPageCount(),2);}}
+const pageCounts={};
+for(const file of [...pair.files,pair.bilingualFile]){const bytes=Buffer.from(file.base64,'base64');check('PDF hash '+file.language,createHash('sha256').update(bytes).digest('hex'),file.sha256);const pdf=await PDFDocument.load(bytes);assert.ok(pdf.getPageCount()>0&&pdf.getPageCount()<=48);checks++;assert.ok(pdf.getSubject().includes(doc.documentDigest));checks++;pageCounts[file.language]=pdf.getPageCount();}
+check('all standalone language pages retained in bilingual PDF',pageCounts['en-es'],pageCounts.en+pageCounts.es);
+assert.match(pair.texts[0].text,/Order unproven; confirm with the manager/);checks++;
 await assert.rejects(()=>renderCoverAllPdfPair({...doc,authorityRevision:8}),/digest_mismatch/);checks++;
 const noneInput=fixture();noneInput.snapshot.exceptions[0].payload.availability.breakChoice='NONE';
 Object.assign(noneInput.source.compiler_input.slots[0],{kind:'CONTRACTOR_CAPACITY',capacityId:contractor,label:'CoverAll01',incumbencies:[]});
