@@ -133,7 +133,7 @@ function assertCurrentPrintDocument(document){
   for(const entry of eventBriefs){
    const key=String(entry?.capacitySlotId).toLowerCase()+'|'+String(entry?.eventId).toLowerCase();
    if(entry?.schema!=='custodial.coverall-event-brief-confirmed.v1'||entry.status!=='CONFIRMED_FOR_EXACT_PRINT'
-    ||entry.managerId.toLowerCase()!==document.managerContact.managerId.toLowerCase()
+    ||text(entry.managerId).toLowerCase()!==document.managerContact.managerId.toLowerCase()
     ||entry.printDocumentDigest!==baseDocumentDigest||!/^[0-9a-f]{64}$/.test(text(entry.candidateDigest))
     ||!document.contractors.some(c=>c.slotId.toLowerCase()===String(entry.capacitySlotId).toLowerCase())
     ||entry.brief?.eventId!==entry.eventId||entry.brief?.eventRevision!==entry.eventRevision
