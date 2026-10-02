@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import {compareScheduleDisplayItems} from '../src/schedule-display-order.js';
 const [dataPath,pdfDir]=process.argv.slice(2);assert.ok(dataPath&&pdfDir);
 const data=JSON.parse(fs.readFileSync(dataPath,'utf8'));
 const qa=JSON.parse(fs.readFileSync(path.join(pdfDir,'pdf-qa-layout.json'),'utf8'));
@@ -26,6 +27,12 @@ for(const report of qa.reports){
   for(const row of day.assignments.filter(r=>r.slotId===person.slotId)){
    assert.ok(printed.includes(normalize(`${row.window.start}-${row.window.end} | ${row.workSnapshot.locationNameSnapshot}`)),`${name}/${date} exact duty absent`);duties++;
   }
+  let previous=-1;
+  for(const row of day.assignments.filter(r=>r.slotId===person.slotId).sort(compareScheduleDisplayItems)){
+   const at=printed.indexOf(normalize(`${row.window.start}-${row.window.end} | ${row.workSnapshot.locationNameSnapshot}`));
+   assert.ok(at>=previous,`${name}/${date} restroom/name display order differs`);previous=at;
+  }
+  assert.ok(!printed.includes('Initial clean'),'morning label cannot require a cleaning service');
   for(const loan of day.lunchLoans)for(const r of loan.responsibilities.filter(r=>r.covererSlotId===person.slotId)){
    const owner=data.rosterSlots.find(s=>s.slotId===loan.normalOwnerSlotId).displayName;
    const windows=new Map();

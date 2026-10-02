@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {PDFDocument,StandardFonts,rgb} from 'pdf-lib';
 import {selectOctoberCandidateDay} from '../src/static-weekly-october-transition-candidate.js';
+import {compareScheduleDisplayItems} from '../src/schedule-display-order.js';
 const [dataPath,out]=process.argv.slice(2);assert.ok(dataPath&&out,'usage: render-october-candidate-pdfs.mjs <phone-pdf-data.json> <new output directory>');
 assert.equal(fs.existsSync(out),false,'refuse to replace candidate PDFs');
 const document=JSON.parse(fs.readFileSync(dataPath,'utf8'));fs.mkdirSync(out,{recursive:true});
@@ -38,7 +39,7 @@ for(const [phase,name] of [['dated_transition','October_1-4_Transition_DRAFT.pdf
  };
  const dutyLabel=row=>{
   const mode=row.workSnapshot.serviceMode;
-  const action=mode==='reminder_only'?'One-time weekly reminder; no verified NFC tag':mode==='response_only_no_clean'?'Respond to issues only':row.window.start<'09:45'?'Initial clean':row.workId.includes(':handoff:')?'Take over checks':'Checks / issues';
+  const action=mode==='reminder_only'?'One-time weekly reminder; no verified NFC tag':mode==='response_only_no_clean'?'Respond to issues only':row.window.start<'09:45'?'Check / service as needed':row.workId.includes(':handoff:')?'Take over checks':'Checks / issues';
   return `${row.window.start}-${row.window.end} | ${row.workSnapshot.locationNameSnapshot} | ${action}`;
  };
  for(const day of document.days.filter(d=>d.phase===phase)){
@@ -53,7 +54,7 @@ for(const [phase,name] of [['dated_transition','October_1-4_Transition_DRAFT.pdf
    const open=day.assignments.filter(r=>r.status==='OPEN');
    for(const row of open)text(`STAFFING EXCEPTION: ${row.workSnapshot.locationNameSnapshot} ${row.window.start}-${row.window.end} is OPEN. No eligible scheduled coverage.`,{heading:true,color:rgb(.65,.2,.12)});
    text('YOUR ASSIGNED WORK',{heading:true});
-   const owned=day.assignments.filter(r=>r.slotId===person.slotId).sort((a,b)=>a.window.start.localeCompare(b.window.start)||a.workSnapshot.locationNameSnapshot.localeCompare(b.workSnapshot.locationNameSnapshot));
+   const owned=day.assignments.filter(r=>r.slotId===person.slotId).sort(compareScheduleDisplayItems);
    for(const row of owned)text(dutyLabel(row));
    const incoming=day.lunchLoans.flatMap(l=>l.responsibilities.map(r=>({loan:l,responsibility:r}))).filter(r=>r.responsibility.covererSlotId===person.slotId).sort((a,b)=>a.loan.window.start.localeCompare(b.loan.window.start));
    if(incoming.length){text('TEMPORARY LUNCH COVERAGE',{heading:true});

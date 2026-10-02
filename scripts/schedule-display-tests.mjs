@@ -35,7 +35,8 @@ const workStatus = summarizeEmployeeWorkStatus({
   assignments: rows.map((row) => ({ ...row, coverage_start: row.coverage_start.replace(/ AM| PM/g, ''), coverage_end: row.coverage_end.replace(/ AM| PM/g, '') })),
 });
 assert.equal((workStatus.match(/Aquarium/g) || []).length, 2, 'Memphis work-status answer should list a location once per meaningful schedule phase');
-assert.match(workStatus, /Morning Full Clean Schedule/);
+assert.match(workStatus, /Morning Assigned Areas/);
 assert.match(workStatus, /Restroom Rebalance Schedule/);
 
 console.log('SCHEDULE_DISPLAY_TESTS_PASS');
+await import('./schedule-display-order-tests.mjs');

@@ -1,5 +1,7 @@
+import {compareScheduleDisplayItems} from './schedule-display-order.js';
+
 const SECTION_DEFINITIONS = Object.freeze({
-  morning: { order: 10, title: "Morning Full Clean Schedule" },
+  morning: { order: 10, title: "Morning Assigned Areas" },
   rebalance: { order: 20, title: "Restroom Rebalance Schedule" },
   response: { order: 25, title: "Respond to Issues Only" },
   lunch: { order: 30, title: "1 Hour Lunch Coverage" },
@@ -261,12 +263,7 @@ export function consolidateScheduleItems(items = []) {
 
   displayItems.sort((left, right) => {
     if (left.section_order !== right.section_order) return left.section_order - right.section_order;
-    const leftStart = parseScheduleTimeMinutes(left.coverage_start);
-    const rightStart = parseScheduleTimeMinutes(right.coverage_start);
-    if (leftStart != null && rightStart != null && leftStart !== rightStart) return leftStart - rightStart;
-    if (leftStart != null && rightStart == null) return -1;
-    if (leftStart == null && rightStart != null) return 1;
-    return normalizedText(left.name).localeCompare(normalizedText(right.name));
+    return compareScheduleDisplayItems(left,right);
   });
 
   const sections = [];

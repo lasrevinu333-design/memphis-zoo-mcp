@@ -3121,7 +3121,7 @@ export function createScheduleRouter({
       if (purposes.some((purpose) => purpose === "late_coverage")) return "Afternoon Call Coverage";
       if (purposes.some((purpose) => purpose === "restroom_upkeep")) return "Restroom Rebalance";
       if (sortedItems.some((item) => toMinutes(item?.coverage_start) >= 585)) return "Restroom Rebalance";
-      if (data?.phase === "morning" || purposes.some((purpose) => purpose === "deep_clean")) return "Morning Full Clean Schedule";
+      if (data?.phase === "morning" || purposes.some((purpose) => purpose === "deep_clean")) return "Morning Assigned Areas";
       return "Restroom Rebalance";
     })();
     const formatDate = (value) => {
