@@ -47,6 +47,24 @@ import {
 } from "./ai/index.js";
 
 const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models";
+// This is the complete operational tool boundary. Conversation context may be saved,
+// but a generated answer cannot acquire a schedule, ticket, Event, or message writer.
+export const MEMPHIS_READ_ONLY_TOOL_NAMES = Object.freeze([
+  "get_upcoming_events", "get_area_schedule", "get_employee_work_status",
+  "get_employee_schedule", "get_my_schedule", "get_absence_coverage",
+  "get_open_segments", "get_employee_load_summary", "get_coverage_candidates",
+  "explain_open_segment", "get_employee_profile", "get_location_details",
+  "get_current_owner", "get_open_tickets", "get_dashboard_summary",
+  "get_scan_state", "list_active_employees",
+]);
+const MEMPHIS_READ_ONLY_TOOL_SET = new Set(MEMPHIS_READ_ONLY_TOOL_NAMES);
+
+export function assertMemphisReadOnlyOperationalTool(name) {
+  if (!MEMPHIS_READ_ONLY_TOOL_SET.has(name)) {
+    throw new Error("Memphis operational tool is not permitted");
+  }
+  return name;
+}
 const DEFAULT_MODEL = String(process.env.MEMPHIS_GEMINI_MODEL || process.env.GEMINI_MODEL || "gemini-2.5-flash").trim();
 const DEFAULT_SCAN_DEVICE_ID = "memphis-bot";
 const DEFAULT_WEATHER_LOCATION = SHARED_DEFAULT_WEATHER_LOCATION;
@@ -1016,6 +1034,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
   }
 
   async function executeTool(name, args = {}) {
+    assertMemphisReadOnlyOperationalTool(name);
     if (name === "get_upcoming_events") {
       const days = toSafeInt(args.days, 14, 1, 60);
       const area = String(args.area || "").trim();
