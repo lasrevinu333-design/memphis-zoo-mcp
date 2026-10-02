@@ -21,4 +21,5 @@ await import('./coverall-event-brief-tests.mjs');
 await import('./coverall-event-print-integration-tests.mjs');
 await import('./nonemployee-coverall-source-transition-tests.mjs');
 await import('./nonemployee-coverall-source-bridge-tests.mjs');
-console.log('CURRENT_SYSTEM_SOURCE_CONTRACTS_PASS: 21 explicit owning suites; no database/provider/production/phone proof');
+await import('./schedule-component-weight-authority-tests.mjs');
+console.log('CURRENT_SYSTEM_SOURCE_CONTRACTS_PASS: 22 explicit owning suites; no database/provider/production/phone proof');
