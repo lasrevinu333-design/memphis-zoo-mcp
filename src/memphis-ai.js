@@ -1068,12 +1068,14 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
           to_char(e.end_time, 'HH24:MI:SS') as end_time,
           (coalesce(e.end_date, e.event_date) > e.event_date) as spans_overnight,
           e.attendee_count,
-          e.notes
+          e.custodial_public_notes as notes
         from public.events_app_events e
         join public.location_groups lg on lg.id = e.location_group_id
         left join public.event_venues ev on ev.id = e.primary_venue_id
-        where e.event_date >= current_date
-          and e.event_date <= current_date + ${days}
+        where coalesce(e.status, 'SCHEDULED') = 'SCHEDULED'
+          and coalesce(e.needs_review, false) = false and e.event_scope <> 'UNKNOWN'
+          and coalesce(e.end_date, e.event_date) >= (now() at time zone 'America/Chicago')::date
+          and e.event_date <= (now() at time zone 'America/Chicago')::date + ${days}
           ${area ? `and (
             coalesce(nullif(e.display_location, ''), ev.display_name, lg.group_name) ilike ${sqlLikeLiteral(area)}
             or ev.venue_code ilike ${sqlLikeLiteral(area)}
