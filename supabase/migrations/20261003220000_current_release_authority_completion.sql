@@ -305,22 +305,30 @@ begin
     if callable then
       obj_oid:=to_regprocedure(wanted.identity);
       if obj_oid is null then raise exception 'Current release required function absent: %',wanted.identity;end if;
-      expected_definition:=case when wanted.kind='function' then pg_get_functiondef(obj_oid)
-        else public.custodial_release_authority_current_grant_definition(wanted.identity) end;
-      if exists(select 1 from public.custodial_release_authority_restore_inventory i
-        where i.object_kind=wanted.kind
-          and case when i.object_kind in ('function','grant') and position('(' in i.object_identity)>0
-            then to_regprocedure(i.object_identity) end=obj_oid
-          and (i.definition_sql is distinct from expected_definition
-            or i.definition_sha256 is distinct from public.static_weekly_digest_text(expected_definition))) then
-        raise exception 'Current release required function recovery drift: %',wanted.identity;
-      end if;
+      -- Grant restore SQL embeds its identity spelling verbatim. Resolve the
+      -- captured alias first; a qualified identity and its unqualified alias
+      -- name the same function, but are NOT byte-identical restore statements.
+      -- Validate EVERY stored alias against its own current serialization,
+      -- never recapture drift or select one good alias to hide another bad one.
       select i.object_identity into canonical_identity
         from public.custodial_release_authority_restore_inventory i
         where i.object_kind=wanted.kind
           and case when i.object_kind in ('function','grant') and position('(' in i.object_identity)>0
             then to_regprocedure(i.object_identity) end=obj_oid
         order by (i.object_identity=wanted.identity) desc,i.object_identity limit 1;
+      expected_definition:=case when wanted.kind='function' then pg_get_functiondef(obj_oid)
+        else public.custodial_release_authority_current_grant_definition(canonical_identity) end;
+      if exists(select 1 from public.custodial_release_authority_restore_inventory i
+        where i.object_kind=wanted.kind
+          and case when i.object_kind in ('function','grant') and position('(' in i.object_identity)>0
+            then to_regprocedure(i.object_identity) end=obj_oid
+          and (i.definition_sql is distinct from case when wanted.kind='function' then expected_definition
+                else public.custodial_release_authority_current_grant_definition(i.object_identity) end
+            or i.definition_sha256 is distinct from public.static_weekly_digest_text(
+              case when wanted.kind='function' then expected_definition
+                else public.custodial_release_authority_current_grant_definition(i.object_identity) end))) then
+        raise exception 'Current release required % recovery drift: %',wanted.kind,wanted.identity;
+      end if;
     elsif wanted.kind='trigger' then
       select 'drop trigger if exists '||quote_ident(t.tgname)||' on '||quote_ident(n.nspname)||'.'||quote_ident(c.relname)||'; '
         ||pg_get_triggerdef(t.oid,true)||'; alter table '||quote_ident(n.nspname)||'.'||quote_ident(c.relname)||' '
