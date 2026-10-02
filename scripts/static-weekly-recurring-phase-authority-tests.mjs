@@ -4,6 +4,7 @@ import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 import {performance} from 'node:perf_hooks';
 import {createHash} from 'node:crypto';
+import {loadFullNineV6Source} from './fixtures/full-nine-v6-source.mjs';
 import {contentDigest,canonicalJson,installStaticWeeklySha256HexAccelerator} from '../src/static-weekly-schedule-model.js';
 import {staticWeeklySafeName} from '../src/static-weekly-schedule-program.js';
 import {postgresJsonbContentDigest as postgresDigest} from '../src/static-weekly-schedule-compiler.js';
@@ -496,11 +497,12 @@ function fullNineSyntheticFixtureFactory(){
  const fullConfig=JSON.parse(fs.readFileSync(new URL('../config/custodial-recurring-schedule-20260924.json',import.meta.url))),
   correctionConfig=JSON.parse(fs.readFileSync(new URL('../config/custodial-six-person-static-20261005.json',import.meta.url))),
   fullIdentity=JSON.parse(fs.readFileSync(new URL('../config/custodial-full-nine-family-owners-20260926.json',import.meta.url))),fullOwners=fullIdentity.owners;
- // Existing explicitly named retained local artifact only. This runner does
- // not create an alleged production source/registration or solve nine staff.
- const bytes=fs.readFileSync(process.env.CUSTODIAL_FULL_NINE_BASE_PACKET||fullConfig.basePacket.path);
- assert.equal(createHash('sha256').update(bytes).digest('hex'),fullConfig.basePacket.sha256,'exact retained full-nine base bytes required');
- const packet=JSON.parse(bytes),rawBase=packet.compilerInput;assert.equal(postgresDigest(rawBase),fullIdentity.baseSourceDigest);
+ // Hosted loading verifies the included lossless historical compiler input,
+ // not its omitted original wrapper. An explicitly requested original has an
+ // additional whole-file check, with no fallback. Neither is current authority.
+ const packet=loadFullNineV6Source({retainedPacketPath:process.env.CUSTODIAL_FULL_NINE_BASE_PACKET||null}),rawBase=packet.compilerInput;
+ assert.equal(packet.provenance.originalPacketSha256,fullConfig.basePacket.sha256,'exact original lineage required');
+ assert.equal(packet.sourceId,fullIdentity.baseSourceId);assert.equal(postgresDigest(rawBase),fullIdentity.baseSourceDigest);
  const make=count=>{
   const base=structuredClone(rawBase),historical=structuredClone(fullConfig);
   for(const [key,slot]of Object.entries(historical.slots).filter(([,s])=>s.personId)){
@@ -656,8 +658,10 @@ export async function runRecurringFullNineReductionTests({counts=[6,7,8]}={}){
    mandatoryPreferenceReceipts:proof.mandatoryCurrentOwnerPreferenceReceipts,canonicalRows:proof.canonicalHardWitness.hardConstraintCount,
    syntheticRoster:true,sql:false,workerIpc:false,published:false});
  }
- const receipt={status:'PASS',checks,counts,elapsedMs:Math.round(performance.now()-started),baseFileSha256:fullConfig.basePacket.sha256,
-  baseSourceDigest:packet.sourceDigest,sourceProvenance:'EXACT_RETAINED_V6_BYTES_AND_ACTUAL_HISTORICAL_ADAPTER_WITH_EXPLICIT_SYNTHETIC_DATED_CURRENT_INCUMBENTS',results};
+ const receipt={status:'PASS',checks,counts,elapsedMs:Math.round(performance.now()-started),
+  originalPacketLineageSha256:packet.provenance.originalPacketSha256,includedExtractionFileSha256:packet.fixtureSha256,
+  originalWrapperVerified:packet.originalWrapperVerified,baseSourceDigest:packet.sourceDigest,
+  sourceProvenance:'PINNED_LOSSLESS_V6_COMPILER_INPUT_EXTRACTION_AND_ACTUAL_HISTORICAL_ADAPTER_WITH_EXPLICIT_SYNTHETIC_DATED_CURRENT_INCUMBENTS',results};
  if(process.env.CUSTODIAL_FULL_NINE_REDUCTION_EVIDENCE_PATH)fs.writeFileSync(path.resolve(process.env.CUSTODIAL_FULL_NINE_REDUCTION_EVIDENCE_PATH),
   JSON.stringify(receipt,null,2)+'\n',{flag:'wx'});
  console.log(JSON.stringify(receipt));return receipt;
@@ -700,7 +704,18 @@ export async function runRecurringInvocationFactTests(){
   const source=structuredClone(tiny.source);source.slots[0].incumbencies[0].displayName='changed actual source identity';
   assert.throws(()=>invocation.solve({...tiny,source,fullOwners,solver:freshSolver}));
  });
- const receipt={schema:'custodial.recurring-invocation-facts-tests.v1',checks,realTinySolverRuns:2,solverCalls,solverOptimaCached:false,canonicalWitnessCached:false,crossRequestCache:false};
+ check('source drift during genuine solve cannot use private prospective descriptor',()=>{
+  const source=structuredClone(tiny.source);let changed=false;
+  const hostile={solve(...args){const result=freshSolver.solve(...args);if(!changed){source.versions[0].assignments[0].priority++;changed=true;}return result;}};
+  const p=invocation.solve({...tiny,source,fullOwners,solver:hostile});assert.equal(p.status,'UNKNOWN_CANONICAL_PHASE');
+  assert.equal(p.candidateSource,null);assert.match(p.reason,/Descriptor\/source\/config drift/);
+ });
+ check('public prospective export always rejects arbitrary rehashed caller descriptor',()=>{
+  const descriptor=structuredClone(proof.descriptor);descriptor.choices[0].owners.pop();
+  const {descriptorDigest,...body}=descriptor;descriptor.descriptorDigest=contentDigest(body);
+  assert.throws(()=>createRecurringPhaseProspectiveSource({source:tiny.source,ownerConfig:tiny.ownerConfig,descriptor,selection:proof.selectedOwnership}));
+ });
+ const receipt={schema:'custodial.recurring-invocation-facts-tests.v1',checks,realTinySolverRuns:3,solverCalls,solverOptimaCached:false,canonicalWitnessCached:false,crossRequestCache:false};
  console.log(JSON.stringify(receipt));return receipt;
 }
 export async function runRecurringReductionInvocationMutationTests(){

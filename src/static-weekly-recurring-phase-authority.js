@@ -88,8 +88,8 @@ function descriptorWithPreparation({source,ownerConfig,dayOfWeek,selectedWorkIds
  return {...body,descriptorDigest:digest(body)};
 }
 export function createRecurringPhaseDescriptor(input){return descriptorWithPreparation(input);}
-export function createRecurringPhaseProspectiveSource({source,ownerConfig,descriptor,selection}){
- const exact=createRecurringPhaseDescriptor({source,ownerConfig,dayOfWeek:descriptor.dayOfWeek,selectedWorkIds:descriptor.selectedWorkIds});
+function prospectiveWithDescriptorVerification({source,ownerConfig,descriptor,selection},verifyDescriptor=createRecurringPhaseDescriptor){
+ const exact=verifyDescriptor({source,ownerConfig,dayOfWeek:descriptor.dayOfWeek,selectedWorkIds:descriptor.selectedWorkIds});
  requireFact(canonicalJson(exact)===canonicalJson(descriptor),'Descriptor/source/config drift.');
  requireFact(Array.isArray(selection)&&selection.length===descriptor.choices.length,'Exact selected ownership multiplicity required.');
  const map=new Map(selection.map(x=>[x.workId,x.slotId]));
@@ -102,6 +102,7 @@ export function createRecurringPhaseProspectiveSource({source,ownerConfig,descri
  }
  return out;
 }
+export function createRecurringPhaseProspectiveSource(input){return prospectiveWithDescriptorVerification(input);}
 
 // Build the actual canonical hard model with no optimization/rank tiers.
 // Exact selected owner choices make a complete integer witness; all canonical
@@ -358,7 +359,7 @@ function deepFreezeFact(x){if(x&&typeof x==='object'){for(const v of Object.valu
 // solved/checkPhaseTerminal/full-canonical result can populate its descriptor.
 // No solver optimum, terminal evidence or canonical witness is cached.
 export function createRecurringPhaseEvidenceInvocation(){
- const descriptors=new WeakMap(),preparedFacts=new Map();
+ const descriptors=new WeakMap(),originalDescriptors=new WeakMap(),preparedFacts=new Map();
  const prepareDescriptorSource=source=>{
   const key=digest(source);let fact=preparedFacts.get(key);
   if(!fact){const p=prepared(source);fact=deepFreezeFact({
@@ -368,8 +369,18 @@ export function createRecurringPhaseEvidenceInvocation(){
   });preparedFacts.set(key,fact);}
   return {availabilityByDaySlot:new Map(fact.availability),incumbencyByDaySlot:new Map(fact.incumbencies)};
  };
+ const createDescriptor=input=>{
+  const descriptor=descriptorWithPreparation(input,prepareDescriptorSource),key=digest({source:input.source,ownerConfig:input.ownerConfig,
+   selectedWorkIds:[...input.selectedWorkIds].sort(bytewiseCompare)});
+  originalDescriptors.set(descriptor,deepFreezeFact({key,descriptor:clone(descriptor)}));return descriptor;
+ };
+ const createProspective=input=>prospectiveWithDescriptorVerification(input,facts=>{
+  const key=digest({source:facts.source,ownerConfig:facts.ownerConfig,selectedWorkIds:[...facts.selectedWorkIds].sort(bytewiseCompare)}),
+   sealed=originalDescriptors.get(input.descriptor);
+  return sealed?.key===key?sealed.descriptor:createRecurringPhaseDescriptor(facts);
+ });
  return Object.freeze({
-  solve(input){const proof=solvePhaseMinimum(input,x=>descriptorWithPreparation(x,prepareDescriptorSource));
+  solve(input){const proof=solvePhaseMinimum(input,createDescriptor,createProspective);
    if(proof.status==='PROVEN_CANONICAL_PHASE_MINIMUM'){
     requireFact(proof.descriptor.sourceDigest===digest(input.source)&&proof.descriptor.configDigest===digest(input.ownerConfig),'Invocation source/config mutated during solve.');
     const key=digest({source:input.source,ownerConfig:input.ownerConfig,selectedWorkIds:[...input.selectedWorkIds].sort(bytewiseCompare)});
@@ -432,7 +443,7 @@ function checkPhaseTerminal(solved,expected,attestation){
 // Existing portable hash implementation; raw receipts hash BYTES, not JSON.
 import {sha256Hex as contentDigestBytes} from './static-weekly-schedule-model.js';
 
-function solvePhaseMinimum({source,ownerConfig,fullOwners,dayOfWeek,selectedWorkIds=[],solver},createDescriptor=createRecurringPhaseDescriptor){
+function solvePhaseMinimum({source,ownerConfig,fullOwners,dayOfWeek,selectedWorkIds=[],solver},createDescriptor=createRecurringPhaseDescriptor,createProspective=createRecurringPhaseProspectiveSource){
  const descriptor=createDescriptor({source,ownerConfig,dayOfWeek,selectedWorkIds});
  const basis={schema:RECURRING_PHASE_SCHEMA,descriptor,fullOwnersDigest:digest(fullOwners),published:false,sourceMutated:false,
   proofMethod:'RELAXED_LOWER_BOUND_PLUS_MATCHING_COMPLETE_CANONICAL_WITNESS',physicalMinuteFeasibilityClaim:false};
@@ -510,7 +521,7 @@ function solvePhaseMinimum({source,ownerConfig,fullOwners,dayOfWeek,selectedWork
    final=run(`inherited_identity_${offset}`,terms);
   }
   const selection=options.filter(o=>final.values.get(o.name)===1).map(o=>({workId:o.workId,slotId:o.slotId}));
-  const candidateSource=createRecurringPhaseProspectiveSource({source,ownerConfig,descriptor,selection});
+  const candidateSource=createProspective({source,ownerConfig,descriptor,selection});
   const canonical=evaluateRecurringPhaseCanonicalSource(candidateSource),ls=loads(candidateSource,descriptor);
   const actualSpread=Math.max(...ls.map(x=>x.doubledLoad))-Math.min(...ls.map(x=>x.doubledLoad));
   requireFact(canonical.feasible&&descriptor.choices.every(c=>!canonical.uncoveredWorkIds.includes(c.owners.find(o=>o.slotId===selection.find(s=>s.workId===c.workId)?.slotId)?.prospectiveWorkId)),
