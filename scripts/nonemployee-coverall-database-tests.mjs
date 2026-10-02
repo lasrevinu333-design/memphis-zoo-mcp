@@ -9,6 +9,7 @@ import {createStaticWeeklyControlPlane} from '../src/static-weekly-control-plane
 import {renderCoverAllPdfPair} from '../src/static-weekly-coverall-print.js';
 import {PDFDocument} from 'pdf-lib';
 import {nonemployeeCoverAllSource} from './fixtures/nonemployee-coverall-source.mjs';
+import {verifyCoverAllEventBriefSqlFixture} from './fixtures/coverall-event-brief-sql-fixture.mjs';
 import {seedCompiledEventAuthority} from './fixtures/event-static-authority-fixture.mjs';
 import {shutdownStaticWeeklyCompiler} from '../src/static-weekly-schedule-compiler-runtime.js';
 const container=`mz_schema_rebuild_nonemployee_capacity_${process.pid}`;
@@ -79,6 +80,9 @@ try{
  check('print stable nonemployee label',print.contractors[0].name,'CoverAll01');
  check('print keeps Eric personal verification',print.contractorCompletionRecorder,'ERIC_OPERLE_PERSONAL_VERIFICATION');
  check('print has actual areas',print.contractors[0].periods.some(p=>p.areas.length>0),true);
+ const eventBrief=verifyCoverAllEventBriefSqlFixture({sql,managerId:manager,printDocument:print,
+  areas,capacitySlotId:capacities[0].slot});
+ check('private CoverAll Event candidate uses actual accepted owner and same-day area',eventBrief.status,'PASS');
  const pair=await renderCoverAllPdfPair(print);mkdirSync('output/pdf',{recursive:true});mkdirSync('tmp/pdfs',{recursive:true});
  for(const file of pair.files){const bytes=Buffer.from(file.base64,'base64'),pdf=await PDFDocument.load(bytes);
   check(file.language+' PDF exact projection/revision/document subject',pdf.getSubject(),`projection=${print.projectionId}; revision=${print.authorityRevision}; document=${print.documentDigest}`);
