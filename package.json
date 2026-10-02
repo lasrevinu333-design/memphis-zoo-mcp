@@ -200,7 +200,8 @@
     "zod": "^4.1.12"
   },
   "overrides": {
-    "@hono/node-server": "2.0.12"
+    "@hono/node-server": "2.0.12",
+    "fast-uri": "3.1.8"
   },
   "devDependencies": {
     "libsodium-wrappers": "0.8.4"

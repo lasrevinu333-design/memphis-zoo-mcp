@@ -44,6 +44,8 @@ jobs:
           /opt/hostedtoolcache/node/22.23.1/x64/bin/node scripts/legacy-activation-http-tests.mjs && /opt/hostedtoolcache/node/22.23.1/x64/bin/node scripts/release-pair-consumer-regression-tests.mjs && /opt/hostedtoolcache/node/22.23.1/x64/bin/node scripts/run-isolated-release-recorder-tests.mjs
       - name: Production dependency audit
         run: npm audit --omit=dev --audit-level=high
+      - name: Installed URI dependency regression
+        run: node scripts/dependency-uri-regression-tests.mjs
       - name: Syntax
         shell: bash
         run: |
