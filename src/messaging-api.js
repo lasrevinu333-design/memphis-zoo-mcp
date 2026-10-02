@@ -1172,8 +1172,8 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       console.error("memphis ai reply failed:", error);
       return {
         reply: {
-          text: `Memphis hit an internal error while answering that. ${error?.message || "Unknown error."}`,
-          meta: { fallback: true, error: error?.message || "unknown_error", diagnostics: getGeminiDiagnosticsForMessaging() },
+          text: "I couldn't verify that answer right now. Please try again or check with a manager.",
+          meta: { fallback: true, mode: "answer_unavailable" },
         },
         routedBody: body,
       };
