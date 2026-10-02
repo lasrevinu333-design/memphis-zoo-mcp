@@ -21,6 +21,7 @@ import { observeProductionSchemaIdentity } from "./production-schema-identity.js
 import { assertOpsManagerSessionSecret, authenticateOpsAccessRequest, createSupabaseTrustedDeviceStore, installSharedAuthRoutes, makeOpsAccessMiddleware } from "./auth/shared-access-auth.js";
 import { assertServerAssignedActor, authenticatedManagerActor } from "./manager-authority.js";
 import { authoritativeFeedbackPayload, makeFeedbackSubmitAuthority } from "./feedback-authority.js";
+import { createPlacesAdminRouter } from "./places-api.js";
 import { isMcpReadOnlyNoAuthEnabled, makeMcpConnectorMiddleware } from "./auth/mcp-connector-auth.js";
 import {
   buildMcpBearerChallenge,
@@ -2450,6 +2451,7 @@ app.get("/status/deep", requireOpsManagerAuth, (_req, res) => {
 
 
 app.use("/admin-api", (req, res, next) => { setAdminApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
+app.use("/admin-api/places", createPlacesAdminRouter({ client: supabaseAdmin, requireManagerWrite: requireOpsManagerWrite }));
 app.use("/dashboard-api", (req, res, next) => { setPublicDashboardCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
 app.use("/scan-api", (req, res, next) => { setScanApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
 app.use("/messaging-api", (req, res, next) => { setMessagingApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); }, createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPayload, requireDeviceAccess: requireDeviceOrOpsAccess, requireOpsManagerAuth, registerOperationalJobHandler: registerOperationalNotificationJobHandler, appVersion: APP_VERSION, releaseId: RELEASE_ID, contractVersion: MESSAGING_CONTRACT_VERSION }));
