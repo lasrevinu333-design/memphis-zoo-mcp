@@ -24,4 +24,11 @@ const validate = ajv.compile({ $ref: 'https://example.invalid/schemas/identity' 
 check(validate({ operationId: '11111111-1111-4111-8111-111111111111' }), true);
 check(validate({ operationId: 'not-an-id' }), false);
 check(validate({ operationId: '11111111-1111-4111-8111-111111111111', extra: true }), false);
-console.log(`PASS dependency URI regression: ${checks} checks; local synthetic schema only`);
+const { Address4, Address6 } = require('ip-address');
+check(require('ip-address/package.json').version, '10.7.1');
+check(new Address6('a00::1').isInSubnet(new Address4('10.0.0.0/8')), false);
+check(new Address4('32.0.0.1').isInSubnet(new Address6('2000::/3')), false);
+check(new Address4('10.0.0.1').isInSubnet(new Address4('10.0.0.0/8')), true);
+check(new Address6('fe90::1').isLinkLocal(), true);
+check(new Address6('2001:db8::1').isLinkLocal(), false);
+console.log(`PASS dependency URI/IP regression: ${checks} checks; local synthetic schema and addresses only`);
