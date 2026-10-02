@@ -11,6 +11,8 @@ const FINAL='20261003220000_current_release_authority_completion.sql';
 const IMAGE='sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed';
 const OLD='09812c2615f1f9176eadd54bfd4f60395648ea75f2cad0ebf1a6cb458f900aac';
 const LIVE='23cb9bb81091860d7e5bd6b629db2f4f385994bcdbdbf7776392128cd9b570ef';
+const CLOCK_ALIAS='custodial_native_provider_registration_clock(uuid,text,uuid,text,jsonb,boolean)';
+const CLOCK='public.'+CLOCK_ALIAS;
 const digest=b=>createHash('sha256').update(b).digest('hex');
 const DOCKER=['--host','unix:///var/run/docker.sock'];
 function keys(value,expected){assert.ok(value&&typeof value==='object'&&!Array.isArray(value));assert.deepEqual(Object.keys(value).sort(),[...expected].sort());}
@@ -70,8 +72,45 @@ export function verifyCurrentReleaseCanaryPredecessor(input){
    where object_kind='function' and case when object_kind='function' then to_regprocedure(object_identity) end
      ='public.static_weekly_sch022_work_witness(date,jsonb)'::regprocedure;`),'required function preimage'));
  assert.ok(functionPreimage.count>0);assert.equal(functionPreimage.exact,true,'no preexisting function fault credit');
+ const clockSnapshot=()=>JSON.parse(succeeded(run(`select jsonb_build_object(
+  'count',count(*),'qualified_count',count(*) filter(where object_identity='${CLOCK}'),
+  'exact',bool_and(definition_sha256=public.static_weekly_digest_text(definition_sql)
+   and definition_sql=public.custodial_release_authority_current_grant_definition(object_identity)),
+  'live_sha256',public.static_weekly_digest_text(public.custodial_release_authority_current_grant_definition('${CLOCK}')),
+  'function_sha256',public.static_weekly_digest_text(pg_get_functiondef('${CLOCK}'::regprocedure)),
+  'anon_execute',has_function_privilege('anon','${CLOCK}','EXECUTE'))
+  from public.custodial_release_authority_restore_inventory where object_kind='grant'
+   and case when object_kind='grant' and position('(' in object_identity)>0
+    then to_regprocedure(object_identity) end='${CLOCK}'::regprocedure;`),'exact clock grant snapshot'));
+ const clockBefore=clockSnapshot();assert.equal(clockBefore.count,1);assert.equal(clockBefore.qualified_count,1);
+ assert.equal(clockBefore.exact,true,'no preexisting clock grant fault credit');assert.equal(clockBefore.anon_execute,false);
+ assert.match(clockBefore.live_sha256,/^[a-f0-9]{64}$/);assert.match(clockBefore.function_sha256,/^[a-f0-9]{64}$/);
+ const rollbackExact=label=>{assert.deepEqual(snapshot(),before,label);assert.deepEqual(clockSnapshot(),clockBefore,label+' clock grant/function');};
  const off='alter table public.custodial_release_authority_restore_inventory disable trigger trg_custodial_release_authority_restore_inventory_immutable;';
  const on='alter table public.custodial_release_authority_restore_inventory enable trigger trg_custodial_release_authority_restore_inventory_immutable;';
+ // This one fixed additional alias resolves to the exact same function. Its
+ // grant SQL deliberately uses its own spelling, just as the owning renderer does.
+ const validAliasSetup=off+`do $alias$ declare ord integer;definition text;begin
+  if to_regprocedure('${CLOCK_ALIAS}') is distinct from '${CLOCK}'::regprocedure
+   or exists(select 1 from public.custodial_release_authority_restore_inventory where object_kind='grant' and object_identity='${CLOCK_ALIAS}')
+   then raise exception 'clock grant alias setup identity changed';end if;
+  definition:=public.custodial_release_authority_current_grant_definition('${CLOCK_ALIAS}');
+  if definition is null or definition=public.custodial_release_authority_current_grant_definition('${CLOCK}')
+   then raise exception 'clock grant alias setup serialization unchanged';end if;
+  select n into strict ord from generate_series(900001,999998) n
+   where not exists(select 1 from public.custodial_release_authority_restore_inventory where restore_order=n) order by n limit 1;
+  insert into public.custodial_release_authority_restore_inventory(restore_order,object_kind,object_identity,definition_sql,definition_sha256)
+   values(ord,'grant','${CLOCK_ALIAS}',definition,public.static_weekly_digest_text(definition));
+  if (select count(*) from public.custodial_release_authority_restore_inventory where object_kind='grant'
+    and object_identity in('${CLOCK}','${CLOCK_ALIAS}') and definition_sha256=public.static_weekly_digest_text(definition_sql)
+    and definition_sql=public.custodial_release_authority_current_grant_definition(object_identity))<>2
+   then raise exception 'clock grant alias setup was not exact';end if;
+ end $alias$;`+on;
+ // A valid second alias must pass the WHOLE final migration first, not merely
+ // be insertable. Roll back the successful control before injecting corruption.
+ succeeded(run('begin;'+validAliasSetup+'\n'+body+'\nrollback;'),'valid clock grant alias final migration control');
+ rollbackExact('valid clock grant alias control rollback');
+ const clockGrantReason='Current release required grant recovery drift: '+CLOCK_ALIAS;
  const cases=[
   {id:'captured_feedback_digest_changed',setup:off+"update public.custodial_release_authority_restore_inventory set definition_sha256=repeat('0',64) where object_kind='relation' and object_identity='public.system_feedback_email_intents';"+on,
    reason:'Feedback relation captured predecessor changed'},
@@ -80,23 +119,34 @@ export function verifyCurrentReleaseCanaryPredecessor(input){
   {id:'inventory_immutability_missing',setup:off,reason:'Current release recovery inventory immutability unavailable'},
   {id:'later_surface_failure_rolls_back_feedback_rebind',setup:off+
    "update public.custodial_release_authority_restore_inventory set definition_sha256=repeat('0',64) where object_kind='function' and case when object_kind='function' then to_regprocedure(object_identity) end='public.static_weekly_sch022_work_witness(date,jsonb)'::regprocedure;"+on,
-   reason:'Current release required function recovery drift: static_weekly_sch022_work_witness(date,jsonb)'}
+   reason:'Current release required function recovery drift: static_weekly_sch022_work_witness(date,jsonb)'},
+  {id:'captured_clock_grant_digest_changed',setup:off+
+   `update public.custodial_release_authority_restore_inventory set definition_sha256=repeat('0',64) where object_kind='grant' and object_identity='${CLOCK}';`+on,
+   reason:clockGrantReason},
+  {id:'live_clock_grant_changed',setup:`grant execute on function ${CLOCK} to anon;
+   do $live$ begin if not has_function_privilege('anon','${CLOCK}','EXECUTE') then raise exception 'clock live grant setup absent';end if;end $live$;`,
+   reason:clockGrantReason},
+  {id:'second_equivalent_clock_grant_alias_corrupted',setup:validAliasSetup+off+
+   // Keep the preferred unqualified alias correct. Corrupt the other exact-OID
+   // row so selecting only one good canonical alias cannot earn a pass.
+   `update public.custodial_release_authority_restore_inventory set definition_sha256=repeat('0',64) where object_kind='grant' and object_identity='${CLOCK}';`+on,
+   reason:clockGrantReason}
  ];
  const results=[];
  for(const c of cases){
   // First prove that the fault itself is executable, then roll it back. An
   // unrelated setup error must not masquerade as the intended rejection.
   succeeded(run('begin;'+c.setup+'rollback;'),'fault setup '+c.id);
-  assert.deepEqual(snapshot(),before,'fault setup rollback '+c.id);
+  rollbackExact('fault setup rollback '+c.id);
   const result=run('begin;'+c.setup+'\n'+body+'\nrollback;');
   assert.equal(result.error,undefined,'no timeout/spawn failure '+c.id);
   assert.notEqual(result.status,0,'migration must reject '+c.id);
   assert.ok(result.stderr.includes('ERROR:  '+c.reason),'exact migration rejection '+c.id);
-  assert.deepEqual(snapshot(),before,'complete predecessor rollback '+c.id);
+  rollbackExact('complete predecessor rollback '+c.id);
   results.push({id:c.id,rejected:true,expected_reason:c.reason,rollback_exact:true});
  }
  inspect(target);assert.equal(digest(readFileSync(resolve(ROOT,'supabase/migrations',FINAL))),migration.sha256);
- const receipt={schema:'custodial.current-release-canary-predecessor-receipt.v1',status:'PASS',checks:4,
+ const receipt={schema:'custodial.current-release-canary-predecessor-receipt.v1',status:'PASS',checks:7,
   engine_executed:true,synthetic:true,production:false,target,migration,
   source_sha256:digest(readFileSync(fileURLToPath(import.meta.url))),predecessor:before,
   cases:results,successful_final_migration_applied:false,authority_configured:false,container_retained:true};

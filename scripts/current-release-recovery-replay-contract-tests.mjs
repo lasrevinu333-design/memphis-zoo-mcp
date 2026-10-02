@@ -13,6 +13,15 @@ const root=fileURLToPath(new URL('../',import.meta.url)),hash=x=>createHash('sha
 const canon=x=>JSON.stringify(stableSchemaJson(x)),id=n=>`60000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 const ok=stdout=>({status:0,stdout:String(stdout),stderr:''}),asJson=x=>ok(JSON.stringify(x));
 const sort=rows=>rows.sort((a,b)=>JSON.stringify([a.kind,a.identity])<JSON.stringify([b.kind,b.identity])?-1:1);
+const predecessorReasons={
+ captured_feedback_digest_changed:'Feedback relation captured predecessor changed',
+ live_feedback_shape_changed:'Feedback relation current predecessor changed',
+ inventory_immutability_missing:'Current release recovery inventory immutability unavailable',
+ later_surface_failure_rolls_back_feedback_rebind:'Current release required function recovery drift: static_weekly_sch022_work_witness(date,jsonb)',
+ captured_clock_grant_digest_changed:'Current release required grant recovery drift: custodial_native_provider_registration_clock(uuid,text,uuid,text,jsonb,boolean)',
+ live_clock_grant_changed:'Current release required grant recovery drift: custodial_native_provider_registration_clock(uuid,text,uuid,text,jsonb,boolean)',
+ second_equivalent_clock_grant_alias_corrupted:'Current release required grant recovery drift: custodial_native_provider_registration_clock(uuid,text,uuid,text,jsonb,boolean)'
+};
 const migrations=new Map([['00000000000000_synthetic_baseline.sql',Buffer.from('select 1;')],
   ...Object.keys(DEFAULT_EXCEPTIONS).map(file=>[file,readFileSync(join(root,'supabase/migrations',file))]),
   ['20261003220000_current_release_authority_completion.sql',Buffer.from('begin;select 1;commit;')]]);
@@ -66,7 +75,7 @@ function fake(m,change=()=>undefined){
         }
       }else{
         assert.equal(command,process.execPath);
-        if(args[0]===join(root,PREDECESSOR_FIXTURE)){phase='predecessor';assert.deepEqual(JSON.parse(input),{target:m.target,migration:m.predecessor_fixture.migration});result=asJson({schema:'custodial.current-release-canary-predecessor-receipt.v1',status:'PASS',checks:4,engine_executed:false,synthetic:true,production:false,target:m.target,migration:m.predecessor_fixture.migration,source_sha256:m.predecessor_fixture.sha256,predecessor:{inventory_count:11,inventory_sha256:'a'.repeat(64),feedback_stored:'b'.repeat(64),feedback_live:'c'.repeat(64),immutable:'O'},cases:['captured_feedback_digest_changed','live_feedback_shape_changed','inventory_immutability_missing','later_surface_failure_rolls_back_feedback_rebind'].map(id=>({id,rejected:true,rollback_exact:true,expected_reason:'explicit fake rejection'})),successful_final_migration_applied:false,authority_configured:false,container_retained:true})}
+        if(args[0]===join(root,PREDECESSOR_FIXTURE)){phase='predecessor';assert.deepEqual(JSON.parse(input),{target:m.target,migration:m.predecessor_fixture.migration});result=asJson({schema:'custodial.current-release-canary-predecessor-receipt.v1',status:'PASS',checks:7,engine_executed:false,synthetic:true,production:false,target:m.target,migration:m.predecessor_fixture.migration,source_sha256:m.predecessor_fixture.sha256,predecessor:{inventory_count:11,inventory_sha256:'a'.repeat(64),feedback_stored:'b'.repeat(64),feedback_live:'c'.repeat(64),immutable:'O'},cases:Object.entries(predecessorReasons).map(([id,expected_reason])=>({id,rejected:true,rollback_exact:true,expected_reason})),successful_final_migration_applied:false,authority_configured:false,container_retained:true})}
         else if(args.includes('--input-type=module')){phase='official';assert.equal(JSON.parse(args.at(-1)).id,m.target.id);result=asJson({status:'PASS',scope:'synthetic official dated exception and occurrence SCH022 paths',checks:12,target:{id:m.target.id,image:m.target.image,fixture_id:m.target.fixture_id,network:'none'},source:Object.fromEntries(['publication_id','group_id','member_id','baseline_projection_id','accepted_projection_id','repaired_projection_id'].map((k,i)=>[k,id(80+i)])),limitations:['fake only']})}
         else{
           phase='probe';assert.equal(args[0],join(root,'scripts/current-release-recovery-probe.mjs'));const bound=JSON.parse(outputs.get(args[2]));result=asJson(probeReceipt(bound));
@@ -168,7 +177,24 @@ await boundary('predecessor challenge failure cannot reach final migration','pre
 await boundary('predecessor false-looking receipt refused','predecessor',editJson(x=>{x.status='FAIL'}),/predecessor_receipt/);
 await boundary('predecessor generic PASS JSON is insufficient','predecessor',()=>asJson({status:'PASS'}),/predecessor_receipt_shape/);
 await boundary('predecessor source hash must match input pin','predecessor',editJson(x=>{x.source_sha256='0'.repeat(64)}),/predecessor_source_receipt/);
-await boundary('predecessor all four rollback cases required','predecessor',editJson(x=>{x.cases.pop()}),/predecessor_cases/);
+await boundary('predecessor all seven rollback cases required','predecessor',editJson(x=>{x.cases.pop()}),/predecessor_cases/);
+await boundary('historical four-case predecessor receipt cannot close new grant boundary','predecessor',editJson(x=>{x.checks=4;x.cases=x.cases.slice(0,4)}),/predecessor_receipt/);
+for(const id of Object.keys(predecessorReasons).slice(4))await boundary('predecessor requires exact new case '+id,'predecessor',editJson(x=>{x.cases=x.cases.filter(c=>c.id!==id)}),/predecessor_cases/);
+await boundary('predecessor generic grant failure does not prove the owning rejection','predecessor',editJson(x=>{x.cases[4].expected_reason='ERROR:  P0001'}),/predecessor_rollback/);
+await boundary('predecessor function wording cannot stand in for grant drift','predecessor',editJson(x=>{x.cases[5].expected_reason=x.cases[5].expected_reason.replace('required grant','required function')}),/predecessor_rollback/);
+await test('seven-case predecessor keeps exact14-field receipt and fixed source-only challenge structure',async()=>{
+  const {m,f}=await prepared(),r=JSON.parse(f.outputs.get(join(m.output_dir,'no-auto-prepare-predecessor-fixture.log')));
+  assert.equal(Object.keys(r).length,14);assert.equal(r.checks,7);assert.equal(r.cases.length,7);
+  assert.deepEqual(r.cases.map(x=>x.expected_reason),Object.values(predecessorReasons));
+  const text=readFileSync(join(root,PREDECESSOR_FIXTURE),'utf8');
+  for(const id of Object.keys(predecessorReasons))assert.ok(text.includes("id:'"+id+"'"));
+  assert.ok(text.includes("succeeded(run('begin;'+validAliasSetup+'\\n'+body+'\\nrollback;'),'valid clock grant alias final migration control')"));
+  assert.ok(text.indexOf('valid clock grant alias final migration control')<text.indexOf("id:'second_equivalent_clock_grant_alias_corrupted'"));
+  assert.ok(text.includes("rollbackExact('valid clock grant alias control rollback')"));
+  assert.ok(text.includes("assert.deepEqual(clockSnapshot(),clockBefore,label+' clock grant/function')"));
+  assert.ok(text.includes("assert.equal(clockBefore.exact,true,'no preexisting clock grant fault credit')"));
+  assert.match(text,/id:'second_equivalent_clock_grant_alias_corrupted'[\s\S]*?object_identity='\$\{CLOCK\}'/);
+});
 await boundary('predecessor cannot claim configured authority','predecessor',editJson(x=>{x.authority_configured=true}),/predecessor_receipt/);
 await boundary('predecessor unsuccessful rollback is fatal','predecessor',editJson(x=>{x.cases[0].rollback_exact=false}),/predecessor_rollback/);
 await boundary('fake predecessor cannot be promoted to engine evidence','predecessor',editJson(x=>{x.engine_executed=true}),/predecessor_receipt/);

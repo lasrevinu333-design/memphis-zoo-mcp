@@ -12,7 +12,16 @@ const ROOT=fileURLToPath(new URL('../',import.meta.url));
 const FILES=['scripts/current-release-recovery-replay.mjs','scripts/current-release-recovery-replay-contract-tests.mjs'];
 export const OFFICIAL_FIXTURE='scripts/static-weekly-splash-season-official-path-tests.mjs';
 export const PREDECESSOR_FIXTURE='scripts/fixtures/current-release-canary-predecessor-fixture.mjs';
-const PREDECESSOR_CASES=['captured_feedback_digest_changed','live_feedback_shape_changed','inventory_immutability_missing','later_surface_failure_rolls_back_feedback_rebind'];
+const PREDECESSOR_REASONS={
+  captured_feedback_digest_changed:'Feedback relation captured predecessor changed',
+  live_feedback_shape_changed:'Feedback relation current predecessor changed',
+  inventory_immutability_missing:'Current release recovery inventory immutability unavailable',
+  later_surface_failure_rolls_back_feedback_rebind:'Current release required function recovery drift: static_weekly_sch022_work_witness(date,jsonb)',
+  captured_clock_grant_digest_changed:'Current release required grant recovery drift: custodial_native_provider_registration_clock(uuid,text,uuid,text,jsonb,boolean)',
+  live_clock_grant_changed:'Current release required grant recovery drift: custodial_native_provider_registration_clock(uuid,text,uuid,text,jsonb,boolean)',
+  second_equivalent_clock_grant_alias_corrupted:'Current release required grant recovery drift: custodial_native_provider_registration_clock(uuid,text,uuid,text,jsonb,boolean)'
+};
+const PREDECESSOR_CASES=Object.keys(PREDECESSOR_REASONS);
 export const DEFAULT_EXCEPTIONS=Object.freeze({
   '20260718083100_reconstruct_public_grant_hardening.sql':'ed9aac28cb07f3565f3289d15d67458297222910ac44b1a77e8b5ae71b4c59c3',
   '20260729150527_audit_defense_in_depth_hardening.sql':'420157f3073a3ea1b0055fc6e6246374a9babf2db576cda3bc4272a01e27cc4f',
@@ -184,9 +193,9 @@ export async function runRecoveryReplay(plan,{root=ROOT,io=nodeIO,signal}={}){
           write(stage+'-predecessor-fixture.log',pre.stdout+pre.stderr);must(pre.status===0,'predecessor_fixture_failed');
           const proof=json(pre.stdout.trim().split('\n').at(-1),'predecessor_receipt');
           shape(proof,['schema','status','checks','engine_executed','synthetic','production','target','migration','source_sha256','predecessor','cases','successful_final_migration_applied','authority_configured','container_retained'],'predecessor_receipt_shape');
-          must(proof.schema==='custodial.current-release-canary-predecessor-receipt.v1'&&proof.status==='PASS'&&proof.checks===4&&proof.engine_executed===!fake&&proof.synthetic===true&&proof.production===false&&proof.successful_final_migration_applied===false&&proof.authority_configured===false&&proof.container_retained===true,'predecessor_receipt');
+          must(proof.schema==='custodial.current-release-canary-predecessor-receipt.v1'&&proof.status==='PASS'&&proof.checks===7&&proof.engine_executed===!fake&&proof.synthetic===true&&proof.production===false&&proof.successful_final_migration_applied===false&&proof.authority_configured===false&&proof.container_retained===true,'predecessor_receipt');
           same(proof.target,m.target,'predecessor_target');same(proof.migration,entry,'predecessor_migration');must(proof.source_sha256===m.predecessor_fixture.sha256,'predecessor_source_receipt');
-          same(proof.cases?.map(x=>x.id),PREDECESSOR_CASES,'predecessor_cases');must(proof.cases.every(x=>x.rejected===true&&x.rollback_exact===true&&typeof x.expected_reason==='string'&&x.expected_reason.length>0),'predecessor_rollback');
+          same(proof.cases?.map(x=>x.id),PREDECESSOR_CASES,'predecessor_cases');must(proof.cases.every(x=>x.rejected===true&&x.rollback_exact===true&&x.expected_reason===PREDECESSOR_REASONS[x.id]),'predecessor_rollback');
           must(proof.predecessor&&Number.isSafeInteger(proof.predecessor.inventory_count)&&proof.predecessor.inventory_count>0&&['inventory_sha256','feedback_stored','feedback_live'].every(k=>HEX.test(proof.predecessor[k]))&&proof.predecessor.immutable==='O','predecessor_preimage');
         }
         await sql('migration_'+String(replayed.length).padStart(4,'0'),bytes.toString(),{rawLog:true});
