@@ -53,6 +53,33 @@ begin
     $replacement$(v_record->>'end_time')::time,(v_record->>'start_instant_utc')::timestamptz,(v_record->>'end_instant_utc')::timestamptz,nullif(v_record->>'attendee_count','')::integer$replacement$);
   v_definition:=replace(v_definition,$needle$end_time=(v_record->>'end_time')::time,$needle$,
     $replacement$end_time=(v_record->>'end_time')::time,start_instant_utc=(v_record->>'start_instant_utc')::timestamptz,end_instant_utc=(v_record->>'end_instant_utc')::timestamptz,$replacement$);
+  if strpos(v_definition,$needle$if v_command='create' then$needle$)=0
+    or strpos(v_definition,$needle$update public.events_app_events set
+      event_name=$needle$)=0 then
+    raise exception 'unexpected event writer command branches; do not guess instant authority';
+  end if;
+  v_definition:=replace(v_definition,$needle$if v_command='create' then$needle$,
+    $replacement$if v_command='create' then
+    if nullif(v_record->>'start_instant_utc','') is null or nullif(v_record->>'end_instant_utc','') is null then
+      raise exception using errcode='22023',message='New event requires explicit Chicago start and end instants';
+    end if;$replacement$);
+  v_definition:=replace(v_definition,$needle$update public.events_app_events set
+      event_name=$needle$,
+    $replacement$if (nullif(v_record->>'start_instant_utc','') is null) <> (nullif(v_record->>'end_instant_utc','') is null) then
+      raise exception using errcode='22023',message='Event start and end instants must be supplied together';
+    end if;
+    if nullif(v_record->>'start_instant_utc','') is null and (
+      nullif(v_previous->>'start_instant_utc','') is not null
+      or nullif(v_previous->>'end_instant_utc','') is not null
+      or (v_previous->>'event_date')::date is distinct from (v_record->>'event_date')::date
+      or (v_previous->>'end_date')::date is distinct from (v_record->>'end_date')::date
+      or (v_previous->>'start_time')::time is distinct from (v_record->>'start_time')::time
+      or (v_previous->>'end_time')::time is distinct from (v_record->>'end_time')::time
+    ) then
+      raise exception using errcode='22023',message='Changed event time requires explicit Chicago start and end instants';
+    end if;
+    update public.events_app_events set
+      event_name=$replacement$);
   execute v_definition;
 end $event_writer$;
 
@@ -116,7 +143,9 @@ begin
     or nullif(p_record->>'end_instant_utc','') is null then
     raise exception using errcode='22023',message='resolved scheduled replacement and explicit Chicago instants are required';
   end if;
-  v_request_digest:=public.static_weekly_digest_jsonb(p_record);
+  v_request_digest:=public.static_weekly_digest_jsonb(jsonb_build_object(
+    'source_event_id',p_event_id,'expected_revision',p_expected_revision,
+    'manager_id',p_manager_id,'record',p_record));
   select * into v_old from public.events_app_events e where e.id=p_event_id for update;
   if not found then raise exception using errcode='P0002',message='source event not found'; end if;
   if v_old.status='SUPERSEDED' then

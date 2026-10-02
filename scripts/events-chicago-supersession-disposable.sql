@@ -3,6 +3,7 @@ begin;
 do $test$
 declare
   v_manager uuid;
+  v_other_manager uuid;
   v_name text;
   v_group uuid;
   v_venue uuid;
@@ -14,6 +15,7 @@ declare
   v_new uuid;
   v_op uuid:=gen_random_uuid();
   v_history integer;
+  v_legacy uuid;
 begin
   select manager_id,display_name into v_manager,v_name from public.ops_manager_managers
     where active and not is_system_principal and roles && array['OPS_MANAGER','CUSTODIAL_MANAGER','DIRECTOR','SECURITY_ADMIN']::text[]
@@ -21,6 +23,11 @@ begin
   select id,location_group_id into v_venue,v_group from public.event_venues
     where venue_code='ZOO_FOOTPRINT' and active limit 1;
   if v_manager is null or v_venue is null or v_group is null then raise exception 'disposable manager/venue fixture missing'; end if;
+  select manager_id into v_other_manager from public.ops_manager_managers
+    where active and not is_system_principal and manager_id<>v_manager
+      and roles && array['OPS_MANAGER','CUSTODIAL_MANAGER','DIRECTOR','SECURITY_ADMIN']::text[]
+    order by manager_id limit 1;
+  if v_other_manager is null then raise exception 'alternate named manager fixture missing'; end if;
   if has_function_privilege('authenticated','public.app_replace_event_authoritative(uuid,integer,jsonb,uuid)','execute')
     or has_function_privilege('anon','public.app_replace_event_authoritative(uuid,integer,jsonb,uuid)','execute')
     or has_function_privilege('custodial_application_reader','public.app_replace_event_authoritative(uuid,integer,jsonb,uuid)','execute')
@@ -41,6 +48,39 @@ begin
     or (v_source->>'end_instant_utc')::timestamptz is distinct from '2026-11-01 07:45Z'::timestamptz then
     raise exception 'fall fold instants not stored exactly';
   end if;
+  begin
+    perform public.app_apply_event_command('create',null,
+      (v_source-'id'-'revision')||jsonb_build_object('event_date','2026-03-08','end_date','2026-03-08',
+        'start_time','02:30:00','end_time','03:30:00','start_instant_utc',null,
+        'end_instant_utc',null,'operation_id',gen_random_uuid(),'actor_manager_id',v_manager),null,null);
+    raise exception 'canonical writer allowed new spring-gap event without instant';
+  exception when invalid_parameter_value then null;
+  end;
+  begin
+    perform public.app_apply_event_command('create',null,
+      (v_source-'id'-'revision')||jsonb_build_object('event_date','2026-11-01','end_date','2026-11-01',
+        'start_time','01:30:00','end_time','01:45:00','start_instant_utc',null,
+        'end_instant_utc',null,'operation_id',gen_random_uuid(),'actor_manager_id',v_manager),null,null);
+    raise exception 'canonical writer chose fall fold without instant';
+  exception when invalid_parameter_value then null;
+  end;
+  insert into public.events_app_events(event_name,location_group_id,event_scope,primary_venue_id,venue_ids,
+    display_location,event_date,end_date,start_time,end_time,status,needs_review)
+  values('Legacy Null Instant',v_group,'ZOO_WIDE',v_venue,array[v_venue],
+    'Zoo Footprint','2026-11-02','2026-11-02','09:00','10:00','SCHEDULED',false) returning id into v_legacy;
+  perform public.app_apply_event_command('update',v_legacy,
+    (select to_jsonb(e) from public.events_app_events e where e.id=v_legacy)
+      ||jsonb_build_object('actor_manager_id',v_manager,'notes','Historical row metadata correction'),null,null);
+  if (select start_instant_utc is not null from public.events_app_events where id=v_legacy) then
+    raise exception 'unchanged legacy instant was silently inferred';
+  end if;
+  begin
+    perform public.app_apply_event_command('update',v_legacy,
+      (select to_jsonb(e) from public.events_app_events e where e.id=v_legacy)
+        ||jsonb_build_object('actor_manager_id',v_manager,'start_time','09:30:00'),null,null);
+    raise exception 'legacy time changed without instant';
+  exception when invalid_parameter_value then null;
+  end;
   begin
     perform public.app_apply_event_command('create',null,
       (v_source-'id'-'revision')||jsonb_build_object('event_date','2026-03-08','end_date','2026-03-08',
@@ -76,6 +116,16 @@ begin
   v_replay:=public.app_replace_event_authoritative(v_original,1,v_replacement,v_manager);
   if coalesce((v_replay->>'replayed')::boolean,false) is not true
     or (v_replay->'replacement_event'->>'id')::uuid<>v_new then raise exception 'exact replay created a duplicate'; end if;
+  begin
+    perform public.app_replace_event_authoritative(v_original,2,v_replacement,v_manager);
+    raise exception 'changed expected revision falsely replayed';
+  exception when sqlstate '40901' then null;
+  end;
+  begin
+    perform public.app_replace_event_authoritative(v_original,1,v_replacement,v_other_manager);
+    raise exception 'changed manager falsely replayed';
+  exception when sqlstate '40901' then null;
+  end;
   begin
     perform public.app_replace_event_authoritative(v_original,1,
       v_replacement||jsonb_build_object('event_name','Changed Replay'),v_manager);
