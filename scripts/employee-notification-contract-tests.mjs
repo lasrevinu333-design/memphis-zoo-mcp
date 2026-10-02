@@ -4,11 +4,23 @@ import { readFile } from 'node:fs/promises';
 import { createContext, runInContext } from 'node:vm';
 import express from 'express';
 import {
+  buildEmployeeEventReminderBody,
   employeeNotificationInternals,
   installEmployeeNotificationRoutes,
 } from '../src/employee-notifications.js';
 
 const root = new URL('../', import.meta.url);
+const reminderBody = buildEmployeeEventReminderBody({
+  event_name: 'Members Night', display_location: 'Event Center', event_date: '2026-10-20',
+  start_time: '18:00:00', end_time: '20:30:00', attendee_count: 240,
+  notes: 'VIP itinerary and catering; request extra trash cans',
+}, 'Tammy');
+assert.match(reminderBody, /Tammy.*Members Night.*Event Center.*2026-10-20.*18:00:00.*20:30:00.*240/);
+assert.doesNotMatch(reminderBody, /VIP|itinerary|catering|trash cans/i,
+  'unclassified event notes cannot leak into employee reminder speech');
+assert.doesNotMatch(buildEmployeeEventReminderBody({ event_name: 'No count', display_location: 'Zoo Footprint',
+  event_date: '2026-10-20', start_time: '09:00:00', end_time: '10:00:00' }, 'Gregory'), /attendance/i);
+assert.throws(() => buildEmployeeEventReminderBody({ event_name: 'Incomplete' }, 'Tammy'), /missing/);
 const [source, manager, indexSource, migration, nativeKindsMigration, boundaryMigration, closureMigration] = await Promise.all([
   readFile(new URL('src/employee-notifications.js', root), 'utf8'),
   readFile(new URL('src/manager-notifications.js', root), 'utf8'),
@@ -403,7 +415,9 @@ const eventInstance = {
   credential_id: canonicalCredentialId,
   assignment_epoch: 4,
   state: 'pending',
-  events_app_events: { event_name: 'Cancelled event', display_location: 'Zoo Footprint' },
+  employees: { display_name: 'Tammy' },
+  events_app_events: { event_name: 'Cancelled event', display_location: 'Zoo Footprint',
+    event_date: '2026-10-20', start_time: '18:00:00', end_time: '20:30:00', attendee_count: 240 },
 };
 function eventInstanceQuery(row, { onUpdate = null } = {}) {
   const query = {

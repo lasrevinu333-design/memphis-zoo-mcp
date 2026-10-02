@@ -12,6 +12,25 @@ function createSupabase(env) {
   return url && key ? createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } }) : null;
 }
 function clip(value, max) { return String(value ?? '').trim().slice(0, max); }
+export function buildEmployeeEventReminderBody(event = {}, employeeName) {
+  const name = clip(employeeName, 160);
+  const title = clip(event.event_name, 180);
+  const place = clip(event.display_location, 180);
+  const date = clip(event.event_date, 40);
+  const start = clip(event.start_time, 20);
+  const end = clip(event.end_time, 20);
+  if (!name || !title || !place || !date || !start || !end) {
+    throw new Error('Event reminder is missing a named recipient or required event details.');
+  }
+  const attendance = event.attendee_count == null ? null : Number(event.attendee_count);
+  if (attendance != null && (!Number.isSafeInteger(attendance) || attendance < 0)) {
+    throw new Error('Event reminder attendance is invalid.');
+  }
+  // Generic event notes can contain VIP, catering, or itinerary information.
+  // No classified custodial-note field exists yet, so they must not be spoken.
+  return clip(`${name}, event reminder. ${title} is at ${place} on ${date}, from ${start} to ${end}.`
+    + (attendance == null ? '' : ` Expected attendance is ${attendance}.`), 1000);
+}
 function credentialId(req) {
   return String(
     req.memphisDeviceCredential?.credential_id
@@ -458,7 +477,7 @@ export function installEmployeeNotificationRoutes(app, {
       let push;
       let channelId;
       if (job.job_type === 'employee_event_push') {
-        const instanceResult = await db.from('event_push_instances').select('*,events_app_events(event_name,display_location)')
+        const instanceResult = await db.from('event_push_instances').select('*,events_app_events(event_name,display_location,event_date,start_time,end_time,attendee_count),employees(display_name)')
           .eq('instance_id', job.source_id).single();
         if (instanceResult.error) throw instanceResult.error;
         eventInstance = instanceResult.data;
@@ -468,7 +487,7 @@ export function installEmployeeNotificationRoutes(app, {
         channelId = 'employee-events';
         push = {
           title: 'Assigned event reminder',
-          body: `${event.event_name || 'Zoo event'}${event.display_location ? ` — ${event.display_location}` : ''}`,
+          body: buildEmployeeEventReminderBody(event, eventInstance.employees?.display_name),
           data_json: {
             kind: 'employee_event',
             notification_type: 'event',
