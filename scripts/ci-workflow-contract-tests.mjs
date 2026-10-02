@@ -368,6 +368,25 @@ for (const replacement of ['', `// ${sanitationSourceImport}`,
   sanitationWiringMutationCount += 1;
 }
 console.log('Sanitation owning source gate PASS: ' + sanitationWiringMutationCount + ' omission/suppression mutations rejected');
+const eventCountSourceImport = "await import('./event-count-cross-surface-contract-tests.mjs');";
+function assertEventCountSourceWiring(workflow, sourceSuite) {
+  assertCompletionRecoveryWiring(workflow, sourceSuite);
+  const lines = sourceSuite.split('\n').map(line => line.trim())
+    .filter(line => line && !line.startsWith('//'));
+  assert.equal(lines.filter(line => line === eventCountSourceImport).length, 1,
+    'the mandatory source stage must execute the saved/manager/employee Event count contract exactly once');
+}
+assertEventCountSourceWiring(productionRepairGate, currentSystemSource);
+let eventCountWiringMutationCount = 0;
+for (const replacement of ['', `// ${eventCountSourceImport}`,
+  `${eventCountSourceImport}\n${eventCountSourceImport}`,
+  `if (false) { ${eventCountSourceImport} }`,
+  "await import('./event-count-cross-surface-contract-tests.mjs').catch(() => {});"]) {
+  assert.throws(() => assertEventCountSourceWiring(productionRepairGate,
+    currentSystemSource.replace(eventCountSourceImport, replacement)));
+  eventCountWiringMutationCount += 1;
+}
+console.log('Event count owning source gate PASS: ' + eventCountWiringMutationCount + ' omission/suppression mutations rejected');
 const capacityAuthorityCommands = [
   'node scripts/nonemployee-coverall-database-tests.mjs',
   'node scripts/nonemployee-coverall-nonempty-lunch-database-tests.mjs',

@@ -6,10 +6,14 @@ import express from 'express';
 import { createEventsAdminRouter, createEventsEmployeeRouter } from '../src/events-api.js';
 
 const fixturePath = process.argv[2] === '--fixture-output' && process.argv.length === 4 ? process.argv[3] : '';
-if (!fixturePath || !isAbsolute(fixturePath)) throw new Error('Pass --fixture-output with a new absolute caller-owned file path.');
-const fixtureParent = dirname(fixturePath);
-if (realpathSync(fixtureParent) !== fixtureParent || !statSync(fixtureParent).isDirectory()) {
-  throw new Error('Fixture parent must be an existing real directory, not a symlink.');
+if (process.argv.length > 2 && (!fixturePath || !isAbsolute(fixturePath))) {
+  throw new Error('Optional --fixture-output requires a new absolute caller-owned file path.');
+}
+if (fixturePath) {
+  const fixtureParent = dirname(fixturePath);
+  if (realpathSync(fixtureParent) !== fixtureParent || !statSync(fixtureParent).isDirectory()) {
+    throw new Error('Fixture parent must be an existing real directory, not a symlink.');
+  }
 }
 
 const EVENT_ID = '81000000-0000-4000-8000-000000000003';
@@ -163,8 +167,10 @@ const fixture = {
   employee_meta: employeeReply.meta,
 };
 // No default path, no overwrite, and no symlink target. Caller owns the parent.
-const fd = openSync(fixturePath, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
-try { writeFileSync(fd, `${JSON.stringify(fixture, null, 2)}\n`); } finally { closeSync(fd); }
+if (fixturePath) {
+  const fd = openSync(fixturePath, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
+  try { writeFileSync(fd, `${JSON.stringify(fixture, null, 2)}\n`); } finally { closeSync(fd); }
+}
 console.log(JSON.stringify({ status: 'ATT003_SYNTHETIC_ROUTE_PASS', event_id: EVENT_ID, revision: 1,
   expected_guests: COUNT, separate_gate_entries: GATE_COUNT, writes: writes.length,
-  fixture_path: fixturePath, fixture_sha256: hash(fixturePath), database: false, browser: false }));
+  fixture_path: fixturePath || null, fixture_sha256: fixturePath ? hash(fixturePath) : null, database: false, browser: false }));
