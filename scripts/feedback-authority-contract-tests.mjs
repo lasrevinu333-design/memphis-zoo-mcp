@@ -59,6 +59,15 @@ const managerPayload = authoritativeFeedbackPayload({
 assert.equal(managerPayload.submitted_by, "Named Manager");
 assert.equal(managerPayload.device_id, "MANAGER_01");
 assert.equal(managerPayload.identity_verification.manager_id, managerId);
+for (const field of ['expected_manager_id','expected_credential_id']) {
+  for (const value of ['not-a-uuid',employeeId]) {
+    assert.throws(() => authoritativeFeedbackPayload({body:{hub_context:'manager',[field]:value},
+      memphisAuth:{manager_id:managerId,manager_display_name:'Named Manager',credential_id:credentialId}}),
+      error => error.status===409 && error.code==='feedback_manager_authority_changed');
+  }
+}
+assert.equal(authoritativeFeedbackPayload({body:{hub_context:'manager',expected_manager_id:managerId,expected_credential_id:credentialId},
+  memphisAuth:{manager_id:managerId,manager_display_name:'Named Manager',credential_id:credentialId}}).identity_verification.manager_id,managerId);
 
 const publicPayload = authoritativeFeedbackPayload({
   body: { hub_context: "unknown", submitted_by: "Claimed Name", device_id: "KIOSK_08" },

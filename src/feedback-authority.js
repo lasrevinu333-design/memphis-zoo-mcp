@@ -76,6 +76,14 @@ export function authoritativeFeedbackPayload(req) {
     if (!managerId || !managerName) {
       throw Object.assign(new Error("Current named manager access is required for manager feedback."), { status: 401 });
     }
+    for (const [field, actual] of [["expected_manager_id", managerId],
+      ["expected_credential_id", normalized(req.memphisAuth.credential_id).toLowerCase()]]) {
+      const expected = normalized(source[field]).toLowerCase();
+      if (expected && (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(expected) || expected !== actual)) {
+        throw Object.assign(new Error("Saved feedback belongs to a different manager authority and remains pending."),
+          { status: 409, code: "feedback_manager_authority_changed" });
+      }
+    }
     return {
       ...source,
       hub_context: "manager",
