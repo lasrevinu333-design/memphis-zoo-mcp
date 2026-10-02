@@ -133,5 +133,20 @@ try{
   const staleOpen=await mismatch.responder.generateReply({deviceId:'KIOSK_SYNTH',threadId:'t12',userMessage:'What open segments today?'});
   assert.match(staleOpen.text,/can't verify current published open segments/);checks++;
   check(current.writes.some(({name})=>/generate.*schedule/.test(name)),false,'answers never generate schedule');
+  const originalFetch=globalThis.fetch;
+  let externalCalls=0;
+  try{
+    process.env.MEMPHIS_GEMINI_API_KEY='synthetic-no-network-key';
+    globalThis.fetch=async()=>{externalCalls++;return {ok:true,json:async()=>({candidates:[{
+      content:{parts:[{text:'Paris from synthetic general-knowledge response.'}]}}]})};};
+    const operational=await current.responder.generateReply({deviceId:'KIOSK_SYNTH',threadId:'t14',
+      userMessage:'How many tickets are open?'});
+    assert.match(operational.text,/Aquarium: open maintenance issue/);checks++;
+    check(externalCalls,0,'operational how-many query never leaves for conversation model');
+    const general=await current.responder.generateReply({deviceId:'KIOSK_SYNTH',threadId:'t15',
+      userMessage:'What is the capital of France?'});
+    assert.match(general.text,/Paris from synthetic/);checks++;
+    check(externalCalls,1,'benign general knowledge remains an available separate path');
+  }finally{globalThis.fetch=originalFetch;}
   console.log('MEMPHIS_CURRENT_AUTHORITY_ROUTE_PASS',JSON.stringify({checks,network:false,synthetic:true}));
 }finally{for(const[name,value]of saved){if(value===undefined)delete process.env[name];else process.env[name]=value;}}

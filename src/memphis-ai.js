@@ -1646,10 +1646,12 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
 
     // H35: Use classified intent as the single source of truth for Gemini-vs-local decision.
     // No duplicate contact/schedule/weekly pre-checks — those are handled by generateSystemReply.
-    const explicitSystem =
-      !isGeneralKnowledgeQuestion(effectiveUserMessage) &&
-      (SYSTEM_SPECIFIC_INTENTS.has(route.intent) || route.confidence >= 0.5 ||
-       isSystemSpecificQuestion(effectiveUserMessage, threadContext) || isEmployeeAreaQuestion(effectiveUserMessage));
+    // Generic phrasing such as "how many" must not send a concrete ticket,
+    // attendance, schedule, or Event query to the external conversation model.
+    const explicitSystem = SYSTEM_SPECIFIC_INTENTS.has(route.intent)
+      || isSystemSpecificQuestion(effectiveUserMessage, threadContext)
+      || isEmployeeAreaQuestion(effectiveUserMessage)
+      || (route.confidence >= 0.5 && !isGeneralKnowledgeQuestion(effectiveUserMessage));
 
     if (!apiKey || explicitSystem) {
       const reply = await generateSystemReply(effectiveUserMessage, { deviceId, threadId, userRole: identity?.role || "" });
