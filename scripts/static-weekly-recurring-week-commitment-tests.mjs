@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { canonicalJson, contentDigest } from "../src/static-weekly-schedule-model.js";
 import { postgresJsonbContentDigest } from "../src/static-weekly-schedule-compiler.js";
@@ -7,7 +8,8 @@ import { createRecurringWeekCommitment, assertRecurringWeekCommitment,
   createRecurringFullNineTemplateCommitment, RECURRING_PHASE_SCOPE,
   RECURRING_FULL_NINE_SCOPE } from
   "../src/static-weekly-recurring-week-commitment.js";
-import { createRecurringFinalManagerChanges } from "../src/static-weekly-recurring-preview.js";
+import { createRecurringFinalManagerChanges, RECURRING_IMPLEMENTATION_MANIFEST,
+  RECURRING_IMPLEMENTATION_DIGEST } from "../src/static-weekly-recurring-preview.js";
 import { assertRecurringAdmissionCandidate } from "../src/static-weekly-recurring-preview.js";
 
 const hash = (character) => character.repeat(64);
@@ -81,6 +83,14 @@ const second = createRecurringWeekCommitment(input(fakeFreshWeek(9.217)));
 assert.equal(canonicalJson(first), canonicalJson(second),
   "fresh variable time limits must not make an identical semantic preview stale");
 let checks = 1;
+const currentHandout = RECURRING_IMPLEMENTATION_MANIFEST.filter((entry) =>
+  entry.path === "custodial-six-person-static-20261005.json");
+assert.equal(currentHandout.length, 1, "current handout policy must be in the implementation manifest");
+assert.equal(currentHandout[0].sha256, createHash("sha256").update(readFileSync(
+  new URL("../config/custodial-six-person-static-20261005.json", import.meta.url))).digest("hex"));
+assert.equal(RECURRING_IMPLEMENTATION_DIGEST,
+  postgresJsonbContentDigest(RECURRING_IMPLEMENTATION_MANIFEST));
+checks += 3;
 const basis = { source: { source_id: binding.sourceId, compiler_input: source }, snapshot,
   patternAuthority: { publicationId: binding.publicationId }, fullNineSource: null };
 const candidate = { weekCommitment: first, weekOptimizationScope: RECURRING_PHASE_SCOPE,

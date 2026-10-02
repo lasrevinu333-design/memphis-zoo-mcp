@@ -71,14 +71,17 @@ const sourceDirectory = new URL('./', import.meta.url);
 const sourceFiles = readdirSync(sourceDirectory).filter(name => name.startsWith('static-weekly-')
   && name.endsWith('.js')).sort();
 const implementationFiles = [...sourceFiles.map(name => [name, new URL(name, sourceDirectory)]),
-  ...['custodial-six-person-static-20260926.json', 'custodial-recurring-schedule-20260924.json',
+  ...['custodial-six-person-static-20260926.json', 'custodial-six-person-static-20261005.json',
+    'custodial-recurring-schedule-20260924.json',
     'custodial-full-nine-family-owners-20260926.json'].map(name => [name, new URL(`../config/${name}`, import.meta.url)]),
   ['package-lock.json', new URL('../package-lock.json', import.meta.url)],
   ['schedule-component-weight-authority.js',new URL('./schedule-component-weight-authority.js',import.meta.url)],
   ['custodial-component-weight-authority-v1.json',new URL('../config/custodial-component-weight-authority-v1.json',import.meta.url)]];
-export const RECURRING_IMPLEMENTATION_DIGEST = postgresJsonbContentDigest(
-  implementationFiles.map(([path, url]) => ({ path,
+export const RECURRING_IMPLEMENTATION_MANIFEST = Object.freeze(
+  implementationFiles.map(([path, url]) => Object.freeze({ path,
     sha256: createHash('sha256').update(readFileSync(url)).digest('hex') })));
+export const RECURRING_IMPLEMENTATION_DIGEST = postgresJsonbContentDigest(
+  RECURRING_IMPLEMENTATION_MANIFEST);
 
 export function createRecurringManagerDecision({ candidateInput, compiled, lunch, changes }) {
   assert.equal(compiled?.status, 'FEASIBLE');
