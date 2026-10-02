@@ -23,4 +23,5 @@ await import('./coverall-event-print-integration-tests.mjs');
 await import('./nonemployee-coverall-source-transition-tests.mjs');
 await import('./nonemployee-coverall-source-bridge-tests.mjs');
 await import('./schedule-component-weight-authority-tests.mjs');
-console.log('CURRENT_SYSTEM_SOURCE_CONTRACTS_PASS: 23 explicit owning suites; no database/provider/production/phone proof');
+await import('./moxie-retired-source-inventory-tests.mjs');
+console.log('CURRENT_SYSTEM_SOURCE_CONTRACTS_PASS: 24 explicit owning suites; no database/provider/production/phone proof');

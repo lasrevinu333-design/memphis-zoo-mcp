@@ -347,6 +347,27 @@ function assertCompletionRecoveryWiring(workflow, sourceSuite) {
   "the exact completion proof must follow its source contract and precede shared mutable fixtures");
 }
 assertCompletionRecoveryWiring(productionRepairGate, currentSystemSource);
+const sanitationSourceImport = "await import('./moxie-retired-source-inventory-tests.mjs');";
+function assertSanitationSourceWiring(workflow, sourceSuite) {
+  // Reuse the actual mandatory source-stage and unsuppressed-import checks.
+  // The new inventory complements rather than replaces original retirement gates.
+  assertCompletionRecoveryWiring(workflow, sourceSuite);
+  const lines = sourceSuite.split('\n').map(line => line.trim())
+    .filter(line => line && !line.startsWith('//'));
+  assert.equal(lines.filter(line => line === sanitationSourceImport).length, 1,
+    'the mandatory source stage must execute the retirement inventory exactly once');
+}
+assertSanitationSourceWiring(productionRepairGate, currentSystemSource);
+let sanitationWiringMutationCount = 0;
+for (const replacement of ['', `// ${sanitationSourceImport}`,
+  `${sanitationSourceImport}\n${sanitationSourceImport}`,
+  `if (false) { ${sanitationSourceImport} }`,
+  "await import('./moxie-retired-source-inventory-tests.mjs').catch(() => {});"]) {
+  assert.throws(() => assertSanitationSourceWiring(productionRepairGate,
+    currentSystemSource.replace(sanitationSourceImport, replacement)));
+  sanitationWiringMutationCount += 1;
+}
+console.log('Sanitation owning source gate PASS: ' + sanitationWiringMutationCount + ' omission/suppression mutations rejected');
 const capacityAuthorityCommands = [
   'node scripts/nonemployee-coverall-database-tests.mjs',
   'node scripts/nonemployee-coverall-nonempty-lunch-database-tests.mjs',
