@@ -29,4 +29,5 @@ await import('./manager-notification-history-tests.mjs');
 await import('./static-weekly-opening-coverage-report-ci-tests.mjs');
 await import('./static-weekly-opening-coverage-preview-contract-tests.mjs');
 await import('./static-weekly-policy-scope-ci-tests.mjs');
-console.log('CURRENT_SYSTEM_SOURCE_CONTRACTS_PASS: 29 explicit owning suites; no database/provider/production/phone proof');
+await import('./static-weekly-recurring-phase-authority-ci-tests.mjs');
+console.log('CURRENT_SYSTEM_SOURCE_CONTRACTS_PASS: 30 explicit owning suites; no database/provider/production/phone proof');
