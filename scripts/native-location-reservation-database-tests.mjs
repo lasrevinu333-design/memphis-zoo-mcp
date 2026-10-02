@@ -155,8 +155,9 @@ try{
  check('successor leaves original bytes intact',sql('select md5(row_to_json(r)::text) from public.employee_native_push_delivery_receipts r'),before);
  const signatures=['custodial_native_location_canonical(jsonb)','custodial_native_location_receipt_guard()','custodial_native_location_reserve_at(uuid,uuid,jsonb,timestamp with time zone)','custodial_native_location_reserve(uuid,uuid,jsonb)'];
  for(const signature of signatures)for(const kind of ['function','grant'])check('exact recovery '+kind+' '+signature,sql(`select count(*) from public.custodial_release_authority_restore_inventory where object_kind=${q(kind)} and object_identity like '%(%' and to_regprocedure(object_identity)=${q(signature)}::regprocedure and definition_sha256=public.static_weekly_digest_text(case when object_kind='function' then pg_get_functiondef(${q(signature)}::regprocedure) else public.custodial_release_authority_current_grant_definition(${q(signature)}) end)`),'1');
+ const ownedRoutineIds=signatures.map(signature=>`${q(signature)}::regprocedure`).join(',');
  const recovery=JSON.parse(sql(`select jsonb_agg(definition_sql order by restore_order) from public.custodial_release_authority_restore_inventory
-  where (object_kind in ('function','grant') and object_identity like 'custodial_native_location_%')
+  where (object_kind in ('function','grant') and to_regprocedure(object_identity)=any(array[${ownedRoutineIds}]))
    or (object_kind='trigger' and object_identity='public.employee_native_push_delivery_receipts.trg_native_location_receipt_guard')`));
  check('four functions four grants one ALWAYS trigger captured',recovery.length,9);
  sql("grant execute on function public.custodial_native_location_reserve_at(uuid,uuid,jsonb,timestamptz) to authenticated;alter table public.employee_native_push_delivery_receipts disable trigger trg_native_location_receipt_guard;");
