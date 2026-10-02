@@ -16,6 +16,97 @@ const expression = (terms) => terms.length
   ? terms.map(([n, variable]) => `${n < 0 ? "-" : "+"} ${Math.abs(n)} ${variable}`).join(" ").replace(/^\+ /, "")
   : "0";
 
+// Exact existing Oct1/Oct5 handout lineage, not a caller-controlled family
+// exception or new catalog authority. Hashes bind lossless primary/member/mode
+// tuples from the retained executed current input; names are not ID joins.
+const currentHandout={pdf:'925751c37e454e0fadb9d88eb57a46dd6a47c1ffe19deadf85189ad9bba2f0aa',
+  json:'4e0f1577b9f8f0b21560e059fde50d6c386aab8a4d7debe0deabb0b20010820d',
+  base:'2aab217b29482894b883ce36a3d7a44516d8fc4aa2b329471551b2f4c9a86981',
+  packageTuples:'675e16270eca368614a0cecd447687182a4cc3a5c52ea0184f900f128ca5ba94',
+  reminder:'9f88759ab63488bbd9f43c1c45c6e915f0a53688216ee0c78911afb8ef8baf4b',
+  namedHandoffs:'24191c9c6600786db8dd5d1487d343e8de42778ac5496c4e141c6fdbedbca0ad',
+  retired:['BAMBOO_SPRINGS_GIFT_SHOP','ELEPHANT_TRUNK_GIFT_SHOP','ELEPHANT_TRUNK_RESTROOMS','TRADING_POST_GIFT_SHOP']};
+const currentReminderId='2:ELEPHANT_TRUNK_RESTROOMS:one-time:55e5939c';
+const sorted=input=>[...input].sort();
+export function currentHandoutRecurringStructure(input,config){
+  if(!config.sourceHandout&&!config.dateAuthority)return null;
+  // September26 is an independently retained historical312/313 lineage. Its
+  // complete trusted handout descriptor, not merely absence of an Oct date,
+  // selects the unchanged legacy count/family validation below.
+  if(!config.dateAuthority&&canonicalJson(config.sourceHandout)===canonicalJson({
+    path:'config/custodial-six-person-handout-20260926.json',
+    pdfSha256:'a1f1dbb6826ba09ff3a81332632c0ba433ed6770e9fb48efc009382eccdfdeb1',
+    precedence:'areas are a geographic seed; later fixed lunches, restrictions and workload policy control'}))return null;
+  assert.equal(config.sourceHandout?.pdfSha256,currentHandout.pdf,'current handout PDF lineage changed');
+  assert.equal(config.sourceHandout?.jsonSha256,currentHandout.json,'current handout JSON lineage changed');
+  assert.equal(config.basePacket?.sha256,currentHandout.base,'current handout base lineage changed');
+  assert.equal(config.dateAuthority?.ownerEffectiveStart,'2026-10-01','current owner date lineage changed');
+  assert.equal(config.dateAuthority?.recurringEffectiveStart,'2026-10-05','current recurring date lineage changed');
+  assert.equal(config.dateAuthority?.source,'Eric direct October 1 Admin correction relayed in September 30 delegation','current owner correction lineage changed');
+  assert.equal(config.allowAdminMorning,true,'current source requires explicit allowed Admin morning lineage');
+  assert.deepEqual(sorted(config.adminFamilies||[]),['EAST_ADMIN','WEST_ADMIN'],'current Admin family scope changed');
+  assert.deepEqual(sorted(config.retiredAreaFamilies||[]),currentHandout.retired,'current retired family scope changed');
+  assert.equal(contentDigest(config.namedShiftEndHandoffs),currentHandout.namedHandoffs,'accepted current named handoff bytes missing/changed');
+  const policy=input.version?.shiftEndContinuityPolicy;
+  assert.ok(policy&&typeof policy==='object','source-bound continuity policy missing');
+  const {policyDigest,...policyBody}=policy;
+  assert.equal(policyDigest,postgresJsonbContentDigest(policyBody),'source-bound continuity policy digest changed');
+  assert.equal(canonicalJson(policy.weights),canonicalJson(config.weights),'source/config continuity weights changed');
+  assert.equal(canonicalJson(input.version?.shiftEndContinuityPolicy?.namedHandoffs||[]),canonicalJson(config.namedShiftEndHandoffs||[]),
+    'current named handoff source/config binding changed');
+  const rows=input.version?.assignments;
+  assert.ok(Array.isArray(rows),'canonical single-version current source required');
+  assert.equal(new Set(rows.map(row=>row.workId)).size,rows.length,'duplicate current source work identity');
+  const phaseByWorkId=new Map(),fixedRows=[];
+  for(const row of rows){
+    if(row.workId===currentReminderId){
+      assert.equal(contentDigest(row),currentHandout.reminder,'protected fixed Tuesday reminder bytes changed');
+      phaseByWorkId.set(row.workId,null);fixedRows.push(structuredClone(row));continue;
+    }
+    const owner=Object.values(config.slots).find(slot=>slot.slotId===row.ownerSlotId);
+    assert.ok(owner&&row.originSlotId===row.ownerSlotId&&owner.workDays.includes(row.dayOfWeek),'current recurring source owner/position changed');
+    const phase=row.window?.start==='09:45'?'equalized':row.window?.end==='09:45'?'morning':null;
+    assert.ok(phase,'unknown out-of-phase current source row');
+    assert.deepEqual(row.window,phase==='morning'?{start:owner.shift[0],end:'09:45'}:{start:'09:45',end:owner.shift[1]},
+      'current recurring source window changed');
+    assert.equal(row.workId,`${row.dayOfWeek}:${row.locationCodeSnapshot}:${phase}:${owner.slotId.slice(0,8)}`,
+      'current recurring source work identity changed');
+    phaseByWorkId.set(row.workId,phase);
+  }
+  assert.equal(fixedRows.length,1,'protected fixed Tuesday reminder missing');
+  for(let day=0;day<7;day++)for(const phase of ['morning','equalized']){
+    const chosen=rows.filter(row=>row.dayOfWeek===day&&phaseByWorkId.get(row.workId)===phase);
+    const tuples=chosen.map(row=>({family:row.locationCodeSnapshot,locationId:row.locationId,
+      memberIds:row.includedLocations?.map(member=>member.locationId),serviceMode:row.serviceMode,schedulingMode:row.schedulingMode}))
+      .sort((a,b)=>a.family<b.family?-1:a.family>b.family?1:0);
+    assert.equal(contentDigest(tuples),currentHandout.packageTuples,`current package identities/multiplicity changed ${day}/${phase}`);
+    assert.deepEqual(sorted(chosen.map(row=>row.locationCodeSnapshot)),
+      sorted(Object.values(config.overrides?.[String(day)]?.[phase]||{}).flat()),`current config/source families changed ${day}/${phase}`);
+  }
+  return {schema:'custodial.current-handout-recurring-structure.v1',sourceDigest:contentDigest(input),configDigest:contentDigest(config),
+    lineageDigest:contentDigest(currentHandout),packageTupleDigest:currentHandout.packageTuples,phaseByWorkId,fixedRows,
+    fixedRowsDigest:contentDigest(fixedRows),retiredFamilyBindings:currentHandout.retired.map(family=>({family,day:1,phase:'morning',
+      sourceHandoutJsonSha256:currentHandout.json,sourceHandoutPdfSha256:currentHandout.pdf}))};
+}
+
+export function recurringOwnerLunch(slot,day){
+  assert.ok(Number.isInteger(day)&&slot.workDays.includes(day),'fixed lunch requested outside current workdays');
+  const validTime=value=>typeof value==='string'&&/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value);
+  const validate=interval=>{assert.ok(Array.isArray(interval)&&interval.length===2&&interval.every(validTime)
+    &&interval[0]<interval[1]&&interval[0]>=slot.shift[0]&&interval[1]<=slot.shift[1],'invalid explicit fixed lunch interval');};
+  if(slot.lunchByDay!==undefined){
+    assert.ok(slot.lunchByDay&&typeof slot.lunchByDay==='object'&&!Array.isArray(slot.lunchByDay),'invalid explicit lunch day map');
+    for(const [key,value]of Object.entries(slot.lunchByDay)){
+      // Retain valid historical off-day metadata (e.g. Tammy Sunday after the
+      // owner changed her current workweek). It never creates availability:
+      // only the explicit currently working day requested above is consumed.
+      assert.ok(/^[0-6]$/.test(key),'invalid explicit fixed lunch day key');validate(value);
+    }
+  }
+  const interval=Object.hasOwn(slot.lunchByDay||{},String(day))?slot.lunchByDay[String(day)]:slot.lunch;
+  validate(interval);return {start:interval[0],end:interval[1]};
+}
+
 // The nine-person source is a POSITION pattern. Its former incumbents are never
 // imported into a new roster. A manager must separately confirm the current
 // people, protected-work transition, and publication revision.
@@ -129,11 +220,15 @@ export function currentPatternFromPublishedReadback({ publishedSource, managerSn
   const input = publishedSource.compiler_input;
   assert.ok(input && Array.isArray(input.slots) && Array.isArray(input.version?.assignments),
     "published canonical compiler source required");
+  const legacyNine=fullConfig&&Object.values(slots).filter(slot=>slot.vacancy!==true).length===9
+    &&input.version.assignments.length===313;
+  const currentStructure=legacyNine?null:currentHandoutRecurringStructure(input,templateConfig);
+  const observedPhase=row=>currentStructure?currentStructure.phaseByWorkId.get(row.workId):phaseOf(row);
   const keyBySlot = new Map(Object.entries(slots).map(([key, slot]) => [slot.slotId, key]));
   assert.equal(keyBySlot.size, 9, "nine stable employee positions required");
   assert.ok(new Set(input.slots.map((row) => row.id)).size === input.slots.length,
     "published source contains duplicate positions");
-  assert.ok([312, 313].includes(input.version.assignments.length),
+  assert.ok(currentStructure||[312, 313].includes(input.version.assignments.length),
     "published source assignment count changed");
   assert.ok(input.version.assignments.every((row) => Number.isInteger(row.dayOfWeek)
     && row.dayOfWeek >= 0 && row.dayOfWeek <= 6),
@@ -159,7 +254,7 @@ export function currentPatternFromPublishedReadback({ publishedSource, managerSn
     for (const phase of ["morning", "equalized"]) {
       const ownerByFamily = new Map();
       for (const row of input.version.assignments.filter((item) => item.dayOfWeek === day
-        && phaseOf(item) === phase)) {
+        && observedPhase(item) === phase)) {
         const key = keyBySlot.get(row.ownerSlotId);
         // A just-vacated position may still own work in the old immutable
         // publication. It is valid *prior* geography, never a candidate owner.
@@ -169,8 +264,10 @@ export function currentPatternFromPublishedReadback({ publishedSource, managerSn
         ownerByFamily.set(family, [...(ownerByFamily.get(family) || []),
           { key, effort: Number(row.serviceEffortMinutes || 0) }]);
       }
-      assert.deepEqual([...ownerByFamily.keys()].sort(),
-        Object.keys(fullOwners?.[String(day)]?.[phase] || {}).sort(),
+      const historical=Object.keys(fullOwners?.[String(day)]?.[phase]||{});
+      const expected=currentStructure?historical.filter(family=>!(day===1&&phase==='morning'&&currentHandout.retired.includes(family)))
+        .concat(phase==='morning'?templateConfig.adminFamilies:[]):historical;
+      assert.deepEqual([...ownerByFamily.keys()].sort(),sorted(expected),
         `published family coverage changed ${day}/${phase}`);
       for (const [family, owners] of ownerByFamily) {
         assert.ok(owners.length <= 2 && new Set(owners.map((owner) => owner.key)).size === owners.length,
@@ -199,7 +296,7 @@ export function currentPatternFromPublishedReadback({ publishedSource, managerSn
         }
       }
     }
-  } else {
+  } else if(!currentStructure) {
     assert.equal(input.version.assignments.length, 312,
       "published unsplit source assignment count changed");
   }
@@ -221,6 +318,10 @@ export function currentPatternFromPublishedReadback({ publishedSource, managerSn
     }
   }
   return { currentConfig: current, sourceId, publicationId,
+    ...(currentStructure?{currentStructure:{schema:currentStructure.schema,sourceDigest:currentStructure.sourceDigest,
+      configDigest:currentStructure.configDigest,lineageDigest:currentStructure.lineageDigest,
+      packageTupleDigest:currentStructure.packageTupleDigest,fixedRowsDigest:currentStructure.fixedRowsDigest,
+      retiredFamilyBindings:currentStructure.retiredFamilyBindings}}:{}),
     ...(patternAuthority.repairContext ? {patternPublicationId:patternAuthority.patternPublicationId,
       repairContext:patternAuthority.repairContext,repairContextDigest:patternAuthority.repairContextDigest} : {}),
     authorityRevision: expectedRevision, sourcePatternKind: fullNine ? "FULL_NINE" : "UNSPLIT",
@@ -238,6 +339,8 @@ export function adaptRegisteredRecurringSource({ registeredSource, patternConfig
   const input = structuredClone(actual === 9 ? fullNineSource : registeredSource);
   assert.ok(input && Array.isArray(input.slots) && Array.isArray(input.version?.assignments)
     && Array.isArray(input.version?.slotAvailability), "registered canonical source required");
+  const currentStructure=actual===9?null:currentHandoutRecurringStructure(input,patternConfig);
+  const sourcePhase=row=>currentStructure?currentStructure.phaseByWorkId.get(row.workId):phaseOf(row);
   const week = patternConfig.effectiveDate;
   assert.equal(new Date(`${week}T12:00:00Z`).getUTCDay(), 1, "candidate must start Monday");
   const bySlot = new Map(input.slots.map((row) => [row.id, row]));
@@ -261,7 +364,7 @@ export function adaptRegisteredRecurringSource({ registeredSource, patternConfig
   else assert.deepEqual([...affectedDays, ...(patternConfig.preserveBaseDays || [])].sort(),
     [0,1,2,3,4,5,6], "full-position template must account for every day");
   const original = input.version.assignments;
-  const revised = original.filter((row) => !affectedDays.includes(row.dayOfWeek));
+  const revised = original.filter((row) => !affectedDays.includes(row.dayOfWeek)||sourcePhase(row)===null);
   for (const day of affectedDays) for (const phase of ["morning", "equalized"]) {
     const assignments = patternConfig.overrides[String(day)]?.[phase];
     assert.ok(assignments, `missing candidate assignment ${day}/${phase}`);
@@ -271,7 +374,7 @@ export function adaptRegisteredRecurringSource({ registeredSource, patternConfig
       wanted.set(family, key);
     }
     const groups = new Map();
-    for (const row of original.filter((item) => item.dayOfWeek === day && phaseOf(item) === phase)) {
+    for (const row of original.filter((item) => item.dayOfWeek === day && sourcePhase(item) === phase)) {
       const family = row.locationCodeSnapshot;
       const group = groups.get(family) || []; group.push(row); groups.set(family, group);
     }
@@ -315,13 +418,17 @@ export function adaptRegisteredRecurringSource({ registeredSource, patternConfig
   input.version.vacantSlotIds = Object.values(patternConfig.slots)
     .filter((slot) => slot.vacancy === true).map((slot) => slot.slotId).sort();
   const availabilityTemplate = new Map();
-  for (const row of input.version.slotAvailability) if (!availabilityTemplate.has(row.slotId))
-    availabilityTemplate.set(row.slotId, row);
+  for (const row of input.version.slotAvailability){
+    const key=currentStructure?`${row.dayOfWeek}\0${row.slotId}`:row.slotId;
+    if(currentStructure)assert.ok(!availabilityTemplate.has(key),'duplicate registered dated availability template');
+    if(!availabilityTemplate.has(key))availabilityTemplate.set(key,row);
+  }
   input.version.slotAvailability = [
     ...input.version.slotAvailability.filter((row) => !keyBySlot.has(row.slotId)),
     ...Object.values(patternConfig.slots).flatMap((slot) => slot.workDays.map((dayOfWeek) => {
-      const template = availabilityTemplate.get(slot.slotId);
-      assert.ok(template, `registered availability template missing ${slot.slotId}`);
+      const template = availabilityTemplate.get(currentStructure?`${dayOfWeek}\0${slot.slotId}`:slot.slotId);
+      assert.ok(template, `registered dated availability template missing ${slot.slotId}/${dayOfWeek}`);
+      if(currentStructure)assert.deepEqual(template.lunch,recurringOwnerLunch(slot,dayOfWeek),'registered source fixed day lunch does not match trusted pattern');
       return { ...structuredClone(template), dayOfWeek };
     })),
   ].sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.slotId.localeCompare(b.slotId));
@@ -331,7 +438,7 @@ export function adaptRegisteredRecurringSource({ registeredSource, patternConfig
     const slot = patternConfig.slots[key];
     row.status = slot.vacancy === true ? "vacant_unfilled" : "working";
     row.shift = { start: slot.shift[0], end: slot.shift[1] };
-    row.lunch = { start: slot.lunch[0], end: slot.lunch[1] };
+    row.lunch = currentStructure?recurringOwnerLunch(slot,row.dayOfWeek):{start:slot.lunch[0],end:slot.lunch[1]};
     if (slot.vacancy !== true) {
       const anchor = input.version.assignments.find((assignment) => assignment.dayOfWeek === row.dayOfWeek
         && assignment.originSlotId === slot.slotId && assignment.serviceMode === "scan_tracked");
@@ -351,6 +458,7 @@ export function adaptRegisteredRecurringSource({ registeredSource, patternConfig
     }
   }
   for (const assignment of input.version.assignments) {
+    if(currentStructure?.phaseByWorkId.get(assignment.workId)===null)continue;
     const ownerKey = keyBySlot.get(assignment.originSlotId);
     assert.ok(ownerKey, `assignment owner outside stable positions ${assignment.workId}`);
     assertNormalOwnerEligibility({ key: ownerKey, ...patternConfig.slots[ownerKey] },
@@ -365,15 +473,68 @@ export function adaptRegisteredRecurringSource({ registeredSource, patternConfig
     assignment.restrictionProvenance = `owner:${fingerprint}:hard_place_eligibility;base:${baseHash}`;
   }
   input.version.shiftEndContinuityPolicy = createShiftEndContinuityPolicy(
-    patternConfig.weights, fingerprint, postgresJsonbContentDigest);
+    patternConfig.weights, fingerprint, postgresJsonbContentDigest,
+    currentStructure?patternConfig.namedShiftEndHandoffs||[]:[]);
   // Store and hash the same canonical collection ordering the compiler uses.
   // SQL compares the whole registered structural identity, including array
   // order. Locally sorting by label/UUID is not that canonical identity and
   // otherwise makes a correct preview impossible to admit as a draft.
   const canonicalInput = normalizeStaticWeeklyAuthority(input.version, input.slots,
     input.exceptions, input.proximity, input.serviceDate);
+  if(currentStructure)assert.equal(contentDigest(canonicalInput.version.assignments.filter(row=>row.workId===currentReminderId)),
+    currentStructure.fixedRowsDigest,'protected fixed reminder changed during candidate normalization');
   return { compilerInput: canonicalInput, patternFingerprint: fingerprint,
     status: "CANDIDATE_ONLY", registrationRequired: true, managerConfirmationRequired: true };
+}
+
+// The normal generator's pre-balanced09:45 owners are NOT the preference
+// baseline. Keep its explicit morning candidate, current roster/availability,
+// and exact original accepted09:45 work bytes for the canonical phase query.
+export function createRecurringPhaseSourceBasis({registeredSource,patternConfig}){
+  const structure=currentHandoutRecurringStructure(registeredSource,patternConfig);
+  assert.ok(structure,'canonical phase source basis requires the exact current handout lineage');
+  const generated=adaptRegisteredRecurringSource({registeredSource,patternConfig});
+  const source=structuredClone(generated.compilerInput),ownerConfig=structuredClone(patternConfig);
+  const keys=new Map(Object.entries(ownerConfig.slots).map(([key,slot])=>[slot.slotId,key]));
+  const originals=registeredSource.version.assignments.filter(row=>structure.phaseByWorkId.get(row.workId)==='equalized');
+  const originalByFamily=new Map(originals.map(row=>[`${row.dayOfWeek}\0${row.locationCodeSnapshot}`,row]));
+  source.version.assignments=source.version.assignments.map(row=>row.window.start==='09:45'
+    ?structuredClone(originalByFamily.get(`${row.dayOfWeek}\0${row.locationCodeSnapshot}`)):row);
+  for(let day=0;day<7;day++)ownerConfig.overrides[String(day)].equalized=Object.fromEntries(
+    Object.keys(ownerConfig.slots).sort().map(key=>[key,originals.filter(row=>row.dayOfWeek===day
+      &&keys.get(row.originSlotId)===key).map(row=>row.locationCodeSnapshot).sort()]).filter(([,families])=>families.length));
+  const checked=currentHandoutRecurringStructure(source,ownerConfig);
+  assert.equal(contentDigest(source.version.assignments.filter(row=>row.window.start==='09:45').sort((a,b)=>a.workId<b.workId?-1:1)),
+    contentDigest(structuredClone(originals).sort((a,b)=>a.workId<b.workId?-1:1)),'original accepted09:45 source bytes changed');
+  const body={schema:'custodial.recurring-phase-source-basis.v1',source,ownerConfig,
+    registeredSourceDigest:contentDigest(registeredSource),generatedPatternConfigDigest:contentDigest(patternConfig),
+    originalEqualizedRowsDigest:contentDigest(originals),generatedMorningRowsDigest:contentDigest(source.version.assignments
+      .filter(row=>checked.phaseByWorkId.get(row.workId)==='morning')),fixedRowsDigest:checked.fixedRowsDigest,
+    comparisonReference:'ORIGINAL_ACCEPTED_POST0945_SOURCE',morningBasis:'EXPLICIT_GENERATED_FIXED_CANDIDATE',
+    admitted:false,published:false};
+  return {...body,basisDigest:contentDigest(body)};
+}
+
+export function recurringPatternFromFinalPhaseSource({phaseSourceBasis,finalSource}){
+  const {basisDigest,...basisBody}=phaseSourceBasis;
+  assert.equal(contentDigest(basisBody),basisDigest,'phase source basis changed');
+  const source=phaseSourceBasis.source,config=structuredClone(phaseSourceBasis.ownerConfig);
+  const expected=structuredClone(source);expected.version.assignments=expected.version.assignments.filter(row=>row.window.start!=='09:45');
+  const actual=structuredClone(finalSource);actual.version.assignments=actual.version.assignments.filter(row=>row.window.start!=='09:45');
+  assert.equal(canonicalJson(actual),canonicalJson(expected),'final phase source changed fixed source/roster/availability/history');
+  const prior=new Map(source.version.assignments.filter(row=>row.window.start==='09:45')
+    .map(row=>[`${row.dayOfWeek}\0${row.locationCodeSnapshot}`,row]));
+  const fixedPhaseFacts=row=>Object.fromEntries(Object.entries(row).filter(([key])=>!['workId','ownerSlotId','originSlotId','window'].includes(key)));
+  for(const row of finalSource.version.assignments.filter(row=>row.window.start==='09:45'))
+    assert.equal(canonicalJson(fixedPhaseFacts(row)),canonicalJson(fixedPhaseFacts(prior.get(`${row.dayOfWeek}\0${row.locationCodeSnapshot}`)||{})),
+      'final phase changed protected package/workload/provenance fields');
+  const keyBySlot=new Map(Object.entries(config.slots).map(([key,slot])=>[slot.slotId,key]));
+  for(let day=0;day<7;day++)config.overrides[String(day)].equalized=Object.fromEntries(Object.keys(config.slots).sort()
+    .map(key=>[key,finalSource.version.assignments.filter(row=>row.dayOfWeek===day&&row.window.start==='09:45'
+      &&keyBySlot.get(row.originSlotId)===key).map(row=>row.locationCodeSnapshot).sort()]).filter(([,families])=>families.length));
+  currentHandoutRecurringStructure(finalSource,config);
+  return {config,configDigest:contentDigest(config),finalSourceDigest:contentDigest(finalSource),
+    phaseSourceBasisDigest:basisDigest,admitted:false,published:false};
 }
 
 // Secondary geography reference, not permission to create work. The caller's

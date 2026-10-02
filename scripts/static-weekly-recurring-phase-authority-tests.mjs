@@ -8,7 +8,9 @@ import {contentDigest,canonicalJson,installStaticWeeklySha256HexAccelerator} fro
 import {staticWeeklySafeName} from '../src/static-weekly-schedule-program.js';
 import {getScheduleComponentWeightLedger} from '../src/schedule-component-weight-authority.js';
 import {deriveCanonicalRecurringPhaseCandidate,deriveScalableCanonicalRecurringPhaseCandidate,
- deriveScalableCanonicalRecurringWeekCandidate,deriveRecurringStaffingPattern,recurringSecondaryOwnerReference} from '../src/static-weekly-recurring-staffing-adaptation.js';
+ deriveScalableCanonicalRecurringWeekCandidate,deriveRecurringStaffingPattern,recurringSecondaryOwnerReference,
+ currentPatternFromPublishedReadback,currentHandoutRecurringStructure,adaptRegisteredRecurringSource,recurringOwnerLunch,
+ createRecurringPhaseSourceBasis,recurringPatternFromFinalPhaseSource} from '../src/static-weekly-recurring-staffing-adaptation.js';
 import {createRecurringPhaseDescriptor,createRecurringPhaseProspectiveSource,
  evaluateRecurringPhaseCanonicalSource,enumerateRecurringPhaseMinimum,assertRecurringPhaseMinimum}
  from '../src/static-weekly-recurring-phase-authority.js';
@@ -413,8 +415,148 @@ export async function runRecurringAdminMorningReferenceTests(){
   JSON.stringify(receipt,null,2)+'\n',{flag:'wx'});
  console.log(JSON.stringify(receipt));return receipt;
 }
+export async function runRecurringCurrentHandoutStructureTests(){
+ const started=performance.now();let checks=0;const check=(name,fn)=>{fn();checks++;console.log('PASS',name);};
+ installStaticWeeklySha256HexAccelerator(text=>createHash('sha256').update(text,'utf8').digest('hex'));
+ const packet=JSON.parse(fs.readFileSync(new URL('./fixtures/static-weekly-policy-scope-receipts.json',import.meta.url))),
+  templateConfig=JSON.parse(fs.readFileSync(new URL('../config/custodial-six-person-static-20261005.json',import.meta.url))),
+  fullOwners=JSON.parse(fs.readFileSync(new URL('../config/custodial-full-nine-family-owners-20260926.json',import.meta.url))).owners;
+ const fullConfig=JSON.parse(fs.readFileSync(new URL('../config/custodial-recurring-schedule-20260924.json',import.meta.url)));
+ const make=count=>{
+  const source=structuredClone(packet.cases.baseline.input);source.version=source.versions[0];delete source.versions;
+  const config=structuredClone(templateConfig);
+  for(const [i,key]of ['OPTION1','OPTION4'].slice(0,count-6).entries()){
+   Object.assign(config.slots[key],{vacancy:false,personId:`72000000-0000-4000-8000-00000000000${i+1}`,name:`Synthetic fresh ${key} incumbent`});
+   source.slots.find(s=>s.id===config.slots[key].slotId).incumbencies.push({personId:config.slots[key].personId,
+    displayName:config.slots[key].name,effectiveStart:'2026-10-05',effectiveEnd:null});
+   for(const row of source.version.slotAvailability.filter(r=>r.slotId===config.slots[key].slotId))row.status='working';
+   source.version.vacantSlotIds=source.version.vacantSlotIds.filter(id=>id!==config.slots[key].slotId);
+  }
+  const managerSnapshot={week_start:'2026-10-05',authority_revision:42,current_publication:{publication_id:source.version.publicationId},
+   roster:Object.values(config.slots).map(slot=>({slot_id:slot.slotId,contractor_capacity:false,
+    incumbencies:source.slots.find(s=>s.id===slot.slotId).incumbencies.map(p=>({person_id:p.personId,person_name:p.displayName,
+     effective_start:p.effectiveStart,effective_end:p.effectiveEnd})),week_staffing:slot.vacancy===true?[]:slot.workDays.map(day=>({
+      service_date:new Date(Date.parse('2026-10-05T12:00:00Z')+((day+6)%7)*86400000).toISOString().slice(0,10),
+      person_id:slot.personId,employee_active:true}))}))};
+  return {source,config,args:{publishedSource:{source_id:'73000000-0000-4000-8000-000000000001',
+   publication_id:source.version.publicationId,authority_revision:42,compiler_input:source},managerSnapshot,
+   templateConfig,fullConfig,fullOwners,effectiveDate:'2026-10-05',expectedRevision:42}};
+ };
+ const original=make(6),before=canonicalJson(original.args),structure=currentHandoutRecurringStructure(original.source,templateConfig);
+ check('only exact retained September26 handout selects historical branch',()=>{
+  const legacy=JSON.parse(fs.readFileSync(new URL('../config/custodial-six-person-static-20260926.json',import.meta.url)));
+  assert.equal(currentHandoutRecurringStructure(original.source,legacy),null);
+  const altered=structuredClone(legacy);altered.sourceHandout.precedence+=' altered';
+  assert.throws(()=>currentHandoutRecurringStructure(original.source,altered));
+  const downgrade=structuredClone(original.args);downgrade.templateConfig=legacy;
+  assert.throws(()=>currentPatternFromPublishedReadback(downgrade),/assignment count changed/);
+ });
+ check('exact current package identities/multiplicity replace stale312 count',()=>{
+  assert.equal(original.source.version.assignments.length,323);assert.equal(structure.fixedRows.length,1);
+  assert.equal(structure.phaseByWorkId.get(structure.fixedRows[0].workId),null);assert.equal(structure.retiredFamilyBindings.length,4);
+  const bound=currentPatternFromPublishedReadback(original.args);assert.equal(bound.sourcePatternKind,'UNSPLIT');
+  assert.ok(!Object.values(bound.currentConfig.overrides['2'].morning).flat().includes('ELEPHANT_TRUNK_RESTROOMS'));
+  assert.equal(canonicalJson(original.args),before);
+ });
+ for(const [name,mutate]of [
+  ['drop package',a=>a.publishedSource.compiler_input.version.assignments.splice(0,1)],
+  ['duplicate package',a=>a.publishedSource.compiler_input.version.assignments.push(structuredClone(a.publishedSource.compiler_input.version.assignments[0]))],
+  ['different primary',a=>{a.publishedSource.compiler_input.version.assignments[0].locationId='73000000-0000-4000-8000-000000000999';}],
+  ['different member',a=>{a.publishedSource.compiler_input.version.assignments[0].includedLocations[0].locationId='73000000-0000-4000-8000-000000000999';}],
+  ['wrong service',a=>{a.publishedSource.compiler_input.version.assignments[0].serviceMode='reminder_only';}],
+  ['wrong window',a=>{a.publishedSource.compiler_input.version.assignments[0].window.start='06:01';}],
+  ['different handout',a=>{a.templateConfig.sourceHandout.pdfSha256='0'.repeat(64);}],
+  ['missing lineage',a=>{delete a.templateConfig.dateAuthority;}],
+  ['missing named handoff',a=>{delete a.publishedSource.compiler_input.version.shiftEndContinuityPolicy.namedHandoffs;}],
+  ['changed named handoff',a=>{a.templateConfig.namedShiftEndHandoffs[0].at='15:00';}],
+  ['both handoffs empty',a=>{a.templateConfig.namedShiftEndHandoffs=[];a.publishedSource.compiler_input.version.shiftEndContinuityPolicy.namedHandoffs=[];}],
+  ['policy digest',a=>{a.publishedSource.compiler_input.version.shiftEndContinuityPolicy.policyDigest='0'.repeat(64);}],
+  ['unknown retired family',a=>{a.templateConfig.retiredAreaFamilies.push('CHINA');}],
+  ['missing retired family',a=>{a.templateConfig.retiredAreaFamilies.pop();}],
+  ['unknown historical family',a=>{a.fullOwners['0'].morning.UNKNOWN='KAREN';}],
+  ['retired outside exact historical day',a=>{a.fullOwners['2'].morning.BAMBOO_SPRINGS_GIFT_SHOP='KAREN';}],
+  ['missing package guidance',a=>{delete a.fullOwners['0'].morning.CHINA;}],
+  ['roster person',a=>{a.managerSnapshot.roster.find(r=>r.slot_id===templateConfig.slots.KAREN.slotId).incumbencies[0].person_id='73000000-0000-4000-8000-000000000999';}],
+  ['roster active',a=>{a.managerSnapshot.roster.find(r=>r.slot_id===templateConfig.slots.KAREN.slotId).week_staffing[0].employee_active=false;}],
+  ['revision',a=>{a.publishedSource.authority_revision++;}],
+  ['publication',a=>{a.managerSnapshot.current_publication.publication_id='73000000-0000-4000-8000-000000000999';}],
+ ])check(`refuse current worker-data seam ${name}`,()=>{const a=structuredClone(original.args);mutate(a);assert.throws(()=>currentPatternFromPublishedReadback(a));});
+ const fixed=a=>a.publishedSource.compiler_input.version.assignments.find(row=>row.workId.includes(':one-time:'));
+ for(const [name,mutate]of [
+  ['drop',a=>{a.publishedSource.compiler_input.version.assignments=a.publishedSource.compiler_input.version.assignments.filter(row=>!row.workId.includes(':one-time:'));}],
+  ['extra field',a=>{fixed(a).unknown=true;}],['window',a=>{fixed(a).window.start='08:00';}],
+  ['priority',a=>{fixed(a).priority++;}],['mode',a=>{fixed(a).serviceMode='scan_tracked';}],
+  ['physical member',a=>{fixed(a).includedLocations=[{locationId:fixed(a).locationId,locationNameSnapshot:'fake'}];}],
+  ['owner',a=>{fixed(a).ownerSlotId=templateConfig.slots.KAREN.slotId;}],
+ ])check(`refuse protected reminder ${name}`,()=>{const a=structuredClone(original.args);mutate(a);assert.throws(()=>currentPatternFromPublishedReadback(a));});
+ check('trusted day-specific lunch preserves different days and explicit default',()=>{
+  assert.deepEqual(recurringOwnerLunch(templateConfig.slots.KATHY,2),{start:'10:30',end:'11:30'});
+  assert.deepEqual(recurringOwnerLunch(templateConfig.slots.KATHY,4),{start:'10:00',end:'11:00'});
+  const defaultSlot=structuredClone(templateConfig.slots.KATHY);delete defaultSlot.lunchByDay;
+  assert.deepEqual(recurringOwnerLunch(defaultSlot,3),{start:defaultSlot.lunch[0],end:defaultSlot.lunch[1]});
+  assert.throws(()=>recurringOwnerLunch(templateConfig.slots.TAMMY,0));
+  assert.deepEqual(templateConfig.slots.TAMMY.lunchByDay['0'],['08:30','09:30']);
+ });
+ for(const [name,mutate]of [
+  ['null day value',s=>{s.lunchByDay['2']=null;}],['missing endpoint',s=>{s.lunchByDay['2']=['10:30'];}],
+  ['invalid time',s=>{s.lunchByDay['2']=['24:00','25:00'];}],['reverse',s=>{s.lunchByDay['2']=['11:30','10:30'];}],
+  ['outside shift',s=>{s.lunchByDay['2']=['00:00','01:00'];}],['unknown day',s=>{s.lunchByDay['9']=['11:30','12:30'];}],
+  ['noncanonical day',s=>{s.lunchByDay['02']=['11:30','12:30'];}],['null map',s=>{s.lunchByDay=null;}],
+ ])check(`refuse explicit lunch ${name}`,()=>{const s=structuredClone(templateConfig.slots.KATHY);mutate(s);assert.throws(()=>recurringOwnerLunch(s,2));});
+ const {initializeStaticWeeklySolverEngine}=await import('../src/static-weekly-schedule-solver-worker.js');
+ const solver=await initializeStaticWeeklySolverEngine({maxOldGenerationSizeMb:256,maxWasmMemoryPages:1536,maxSemiSpaceSizeMb:4}),results=[];
+ for(const count of [6,7,8]){
+  const fixture=make(count),snapshotBefore=canonicalJson(fixture.args),bound=currentPatternFromPublishedReadback(fixture.args);
+  const normal=deriveRecurringStaffingPattern({currentConfig:bound.currentConfig,targetSlots:bound.currentConfig.slots,fullOwners,
+    highs:{solve(lp,options){return solver.solve(lp,{timeLimitSeconds:options.time_limit}).result;}}});
+  const adapted=adaptRegisteredRecurringSource({registeredSource:fixture.source,patternConfig:normal.config});
+  const basis=createRecurringPhaseSourceBasis({registeredSource:fixture.source,patternConfig:normal.config});
+  check(`actual worker-data helper seam ${count} preserves fixed reminder and accepted reference`,()=>{
+   assert.equal(Object.values(bound.currentConfig.slots).filter(s=>s.vacancy!==true).length,count);
+   const old=fixture.source.version.assignments.find(row=>row.workId.includes(':one-time:'));
+   assert.equal(canonicalJson(adapted.compilerInput.version.assignments.find(row=>row.workId===old.workId)),canonicalJson(old));
+   assert.equal(canonicalJson(basis.source.version.assignments.find(row=>row.workId===old.workId)),canonicalJson(old));
+   for(const slot of Object.values(normal.config.slots))for(const day of slot.workDays){
+    const row=adapted.compilerInput.version.slotAvailability.find(row=>row.dayOfWeek===day&&row.slotId===slot.slotId);
+    assert.deepEqual(row.lunch,recurringOwnerLunch(slot,day));
+   }
+   assert.equal(basis.comparisonReference,'ORIGINAL_ACCEPTED_POST0945_SOURCE');
+   assert.equal(canonicalJson(fixture.args),snapshotBefore);
+  });
+  const phase=deriveScalableCanonicalRecurringPhaseCandidate({source:basis.source,currentConfig:basis.ownerConfig,fullOwners,dayOfWeek:1,solver});
+  check(`roster-bound normal ${count} phase baseline has actual canonical minimum witness`,()=>{
+   assert.equal(phase.status,'PROVEN_CANONICAL_PHASE_MINIMUM',phase.reason);assert.equal(phase.minimumDoubledSpread,1);
+   assert.equal(phase.canonicalHardWitness.feasible,true);
+  });
+  const final=recurringPatternFromFinalPhaseSource({phaseSourceBasis:basis,finalSource:phase.candidateSource});
+  check(`final source rather than intermediate ${count} owners determines config`,()=>{
+   assert.equal(final.finalSourceDigest,phase.candidateSourceDigest);
+   for(const [key,families]of Object.entries(final.config.overrides['1'].equalized))for(const family of families)
+    assert.equal(phase.candidateSource.version.assignments.find(row=>row.dayOfWeek===1&&row.window.start==='09:45'
+     &&row.locationCodeSnapshot===family).originSlotId,final.config.slots[key].slotId);
+   const forged=structuredClone(phase.candidateSource);forged.version.assignments.find(row=>row.workId.includes(':one-time:')).priority++;
+   assert.throws(()=>recurringPatternFromFinalPhaseSource({phaseSourceBasis:basis,finalSource:forged}));
+   const changedBudget=structuredClone(phase.candidateSource);changedBudget.version.assignments.find(row=>row.window.start==='09:45').serviceEffortMinutes++;
+   assert.throws(()=>recurringPatternFromFinalPhaseSource({phaseSourceBasis:basis,finalSource:changedBudget}));
+   assert.equal(canonicalJson(basis.source.version.shiftEndContinuityPolicy.namedHandoffs),canonicalJson(fixture.source.version.shiftEndContinuityPolicy.namedHandoffs));
+  });
+  const badSource=structuredClone(fixture.source);badSource.version.slotAvailability.find(r=>r.slotId===templateConfig.slots.KATHY.slotId&&r.dayOfWeek===4).lunch={start:'10:30',end:'11:30'};
+  check(`refuse ${count} mismatched registered day lunch`,()=>assert.throws(()=>adaptRegisteredRecurringSource({registeredSource:badSource,patternConfig:normal.config})));
+  const missingLunch=structuredClone(normal.config);delete missingLunch.slots.KATHY.lunchByDay['4'];
+  check(`refuse ${count} missing authoritative explicit Thursday lunch`,()=>assert.throws(()=>adaptRegisteredRecurringSource({registeredSource:fixture.source,patternConfig:missingLunch})));
+  results.push({count,basisDigest:basis.basisDigest,sourceDigest:contentDigest(basis.source),configDigest:contentDigest(basis.ownerConfig),
+   phaseStatus:phase.status,minimumDoubledSpread:phase.minimumDoubledSpread,canonicalRows:phase.canonicalHardWitness.hardConstraintCount,
+   finalPatternConfigDigest:final.configDigest,fixedReminderDigest:contentDigest(structure.fixedRows[0]),
+   classification:'ACTUAL_PURE_WORKER_DATA_FUNCTIONS_WITH_SYNTHETIC_AUTHORITY_SHAPE_NOT_DB_HTTP_IPC_ADMISSION',published:false});
+ }
+ const receipt={status:'PASS',checks,elapsedMs:Math.round(performance.now()-started),results,workerIpc:false,sql:false,publication:false};
+ if(process.env.CUSTODIAL_PHASE_STRUCTURE_EVIDENCE_PATH)fs.writeFileSync(path.resolve(process.env.CUSTODIAL_PHASE_STRUCTURE_EVIDENCE_PATH),
+  JSON.stringify(receipt,null,2)+'\n',{flag:'wx'});
+ console.log(JSON.stringify(receipt));return receipt;
+}
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){
- if(process.argv.includes('--admin-morning'))await runRecurringAdminMorningReferenceTests();
+ if(process.argv.includes('--current-handout'))await runRecurringCurrentHandoutStructureTests();
+ else if(process.argv.includes('--admin-morning'))await runRecurringAdminMorningReferenceTests();
  else if(process.argv.includes('--scalable'))await runStaticWeeklyRecurringPhaseScalableTests();
  else runStaticWeeklyRecurringPhaseAuthorityTests();
 }
