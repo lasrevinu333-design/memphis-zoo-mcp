@@ -7,6 +7,24 @@ const PATHS=new Set(['register','status','events','inventory'].map(s=>PREFIX+'/'
 const UUID=/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/,SHA=/^[0-9a-f]{64}$/;
 const deny=(code,status=400)=>{throw Object.assign(new Error(code),{code,status});};
 const exact=(value,keys)=>value&&Object.getPrototypeOf(value)===Object.prototype&&Object.keys(value).sort().join('\0')===[...keys].sort().join('\0');
+// Integer Gregorian microseconds for comparison only. No Date/float rounding of
+// the SQL six-fraction response and no application/server wall-clock substitute.
+function micros(text){
+ const m=typeof text==='string'&&/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})\.(\d{6})Z$/.exec(text);
+ if(!m)deny('native_provider_response_invalid',503);
+ const [y,month,day,h,min,s,us]=m.slice(1).map(Number),leap=y%4===0&&(y%100!==0||y%400===0),lengths=[31,leap?29:28,31,30,31,30,31,31,30,31,30,31];
+ if(y<1||month<1||month>12||day<1||day>lengths[month-1]||h>23||min>59||s>59)deny('native_provider_response_invalid',503);
+ const prior=y-1,days=365*prior+Math.floor(prior/4)-Math.floor(prior/100)+Math.floor(prior/400)+lengths.slice(0,month-1).reduce((a,b)=>a+b,0)+day-1;
+ return ((BigInt(days)*86400n+BigInt(h*3600+min*60+s))*1000000n)+BigInt(us);
+}
+function clockResponse(value,requestId){
+ if(!exact(value,['data','clock'])||!value.data||Array.isArray(value.data)||typeof value.data!=='object'
+  ||!exact(value.clock,['native_request_id','server_now','valid_until'])||value.clock.native_request_id!==requestId)
+  deny('native_provider_response_invalid',503);
+ const sampled=micros(value.clock.server_now),horizon=micros(value.clock.valid_until)-sampled;
+ if(horizon<=0n||horizon>900000000n||micros(value.data.server_now)>sampled)deny('native_provider_response_invalid',503);
+ return value;
+}
 function binding(body,status){
  const keys=['schema','operation_id','generation_id','principal_digest','token_digest','native_app','device_id','credential_id','employee_id','assignment_epoch'];
  if(!status)keys.push('token');
@@ -52,14 +70,14 @@ export function installNativeProviderRoutes(app,{db,env=process.env,requireCurre
    const a=verifyNativeDeviceRequestAttestation(req);
    if(!db||typeof db.rpc!=='function')deny('native_provider_service_unavailable',503);
    const proof=JSON.stringify([a.version,a.credential_id,a.device_id,a.method,a.path,a.body_sha256,a.request_id,a.timestamp,a.signature]);
-   const result=await db.rpc('custodial_native_provider_registration',{
+   const result=await db.rpc('custodial_native_provider_registration_clock',{
     p_credential:credential.credentialId,p_credential_hash:deviceCredentialInternals.tokenHash(credential.secret,env),
     p_native_request:a.request_id,p_attestation_digest:createHash('sha256').update(proof).digest('hex'),p_body:body,p_status:suffix==='status',
    });
    if(result.error){const status=result.error.code==='42501'?403:result.error.code==='22023'?400:['23505','40001','P0001','P0002'].includes(result.error.code)?409:503;
     deny(status===403?'native_provider_access_denied':status===409?'native_provider_state_conflict':status===400?'native_provider_request_invalid':'native_provider_service_unavailable',status);}
-   if(!result.data||typeof result.data!=='object'||Array.isArray(result.data))deny('native_provider_response_invalid',503);
-   res.json({ok:true,data:result.data});
+   const response=clockResponse(result.data,a.request_id);
+   res.json({ok:true,data:response.data,clock:response.clock});
   }catch(error){res.status(error.status||503).json({ok:false,code:error.status?error.code:'native_provider_service_unavailable'});}
  });
  // Until their owning SQL/protocol is implemented there is no generic relay or

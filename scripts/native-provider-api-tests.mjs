@@ -12,9 +12,11 @@ const device={requested_device_id:'KIOSK_08',canonical_device_id:'KIOSK_08',cano
 const base={credential_id:cid,device_id:pk,token_hash:deviceCredentialInternals.tokenHash(secret,env),created_at:'2026-01-01T00:00:00.000Z',
  confirmed_at:'2026-01-01T00:00:00.000Z',last_used_at:new Date().toISOString(),expires_at:'2099-01-01T00:00:00.000Z',revoked_at:null,
  metadata_json:deviceCredentialInternals.deviceCredentialSecretMetadata(env)};
-let row=structuredClone(base),calls=0,lastArgs,lastFunction,checks=0,dbError=null;
+let row=structuredClone(base),calls=0,lastArgs,lastFunction,checks=0,dbError=null,dbValue=null,requestId=id(9);
+const validResponse=args=>({data:{synthetic:true,server_now:'2026-10-02T01:02:03.123455Z'},clock:{native_request_id:args.p_native_request,
+ server_now:'2026-10-02T01:02:03.123456Z',valid_until:'2026-10-02T01:17:03.123456Z'}});
 const app=express();app.use(createGeneralJsonMiddleware());
-installNativeProviderRoutes(app,{env,db:{rpc:async(fn,args)=>{calls++;lastArgs=args;lastFunction=fn;return dbError?{error:dbError}:{data:{synthetic:true}};}},
+installNativeProviderRoutes(app,{env,db:{rpc:async(fn,args)=>{calls++;lastArgs=args;lastFunction=fn;return dbError?{error:dbError}:{data:dbValue??validResponse(args)};}},
  requireCurrentCredential:makeDeviceCredentialMiddleware({env,store:{getPolicy:async()=>({mode:'enforce'}),findCredential:async n=>n===cid?row:null,touchCredential:async()=>{},audit:async()=>{}},
   runReadOnlySql:async()=>[device],requireEnrolledCredential:true})});
 app.use((err,_req,res,_next)=>res.status(err.status||500).json({code:'synthetic_error'}));
@@ -26,9 +28,9 @@ const body={schema:'custodial.native-provider-register.v1',operation_id:id(5),ge
  principal_digest:'a'.repeat(64),token_digest:crypto.createHash('sha256').update(token).digest('hex'),token,
  native_app:{package_name:'org.memphiszoo.custodial',version_name:'synthetic',version_code:53,build_id:'synthetic.custodial.df36d32368b6'}};
 function headers(bytes,p=path,t=new Date().toISOString()){
- const proof=['custodial-native-request.v1',cid,'KIOSK_08','POST',p,crypto.createHash('sha256').update(bytes).digest('hex'),id(9),t,'custodial'].join('\n');
+ const proof=['custodial-native-request.v1',cid,'KIOSK_08','POST',p,crypto.createHash('sha256').update(bytes).digest('hex'),requestId,t,'custodial'].join('\n');
  return {'content-type':'application/json',authorization:`Device ${cid}.${secret}`,'x-device-id':'KIOSK_08',origin:'https://localhost','x-memphis-app-edition':'custodial',
-  'x-memphis-native-attestation-version':'custodial-native-request.v1','x-memphis-native-request-id':id(9),'x-memphis-native-request-timestamp':t,
+  'x-memphis-native-attestation-version':'custodial-native-request.v1','x-memphis-native-request-id':requestId,'x-memphis-native-request-timestamp':t,
   'x-memphis-native-request-attestation':crypto.createHmac('sha256',secret).update(proof).digest('hex')};
 }
 async function send(value=body,p=path,edit=()=>{},method='POST'){
@@ -40,11 +42,26 @@ async function refused(name,value=body,p=path,edit=()=>{},method='POST'){
  const count=calls,r=await send(value,p,edit,method);await r.text();check(name,r.status>=400&&calls===count);
 }
 try{
- let r=await send();await r.text();check('actual current credential plus HMAC reaches typed registration',r.status===200&&lastFunction==='custodial_native_provider_registration');
+ let r=await send();const accepted=await r.json();check('actual current credential plus HMAC reaches typed clock registration',r.status===200&&lastFunction==='custodial_native_provider_registration_clock');
+ check('exact separate SQL microsecond clock is returned',accepted.clock.server_now==='2026-10-02T01:02:03.123456Z'&&accepted.clock.native_request_id===id(9)&&r.headers.get('cache-control')==='no-store');
  check('no raw credential secret goes to SQL',lastArgs.p_credential_hash===base.token_hash&&!JSON.stringify(lastArgs).includes(secret));
  check('actual verified original request identity forwarded',lastArgs.p_native_request===id(9)&&/^[a-f0-9]{64}$/.test(lastArgs.p_attestation_digest));
  const status={...body,schema:'custodial.native-provider-status.v1'};delete status.token;
  r=await send(status,prefix+'/status');await r.text();check('same typed status owner',r.status===200&&lastArgs.p_status===true&&!Object.hasOwn(lastArgs.p_body,'token'));
+ requestId=id(10);r=await send(status,prefix+'/status');const fresh=await r.json();check('same original operation gets fresh verified request nonce',r.status===200&&fresh.clock.native_request_id===id(10)&&lastArgs.p_body.operation_id===body.operation_id);
+ dbValue=validResponse({p_native_request:id(9)});r=await send(status,prefix+'/status');await r.text();check('cached prior clock cannot bind new nonce',r.status===503);dbValue=null;requestId=id(9);
+ for(const fault of ['missing','zero','negative','too_long','fraction','calendar','extra','after_clock']){
+  dbValue=validResponse({p_native_request:id(9)});
+  if(fault==='missing')delete dbValue.clock;
+  if(fault==='zero')dbValue.clock.valid_until=dbValue.clock.server_now;
+  if(fault==='negative')dbValue.clock.valid_until='2026-10-02T01:02:03.123455Z';
+  if(fault==='too_long')dbValue.clock.valid_until='2026-10-02T01:17:03.123457Z';
+  if(fault==='fraction')dbValue.clock.server_now='2026-10-02T01:02:03.123Z';
+  if(fault==='calendar')dbValue.clock.server_now='2026-02-30T01:02:03.123456Z';
+  if(fault==='extra')dbValue.clock.q_ns=0;
+  if(fault==='after_clock')dbValue.data.server_now='2026-10-02T01:02:03.123457Z';
+  r=await send();await r.text();check('SQL clock response fails closed '+fault,r.status===503);
+ }dbValue=null;
  for(const key of ['x-memphis-native-attestation-version','x-memphis-native-request-id','x-memphis-native-request-timestamp','x-memphis-native-request-attestation'])
   await refused('missing native proof '+key,body,path,h=>delete h[key]);
  await refused('wrong signed body',body,path,h=>Object.assign(h,headers(JSON.stringify({...body,principal_digest:'f'.repeat(64)}))));
