@@ -117,6 +117,36 @@ sql(`insert into public.device_auth_credentials(credential_id,device_id,token_ha
   insert into public.employee_push_registrations(registration_id,device_id,credential_id,employee_id,assignment_epoch,platform,fcm_token,token_hash)
   select ${q(randomUUID())}::uuid,id,${q(credentialId)}::uuid,assigned_employee_id,assignment_epoch,'android',${q(`synthetic-event-token-${stamp}`)},repeat('f',64)
   from public.devices where id=${q(pushDeviceId)}::uuid;`);
+// The manager preview must use the same accepted static-weekly projection as
+// actual reminders, including phone registration, without creating a job or
+// revising the event/schedule merely by looking. Use the real compiled owner,
+// not an expected-recipient stub or an ungoverned legacy assignment.
+function impactState() {
+  return JSON.parse(sql(`select jsonb_build_object(
+    'event_revision',(select revision from public.events_app_events where id=${q(event)}::uuid),
+    'schedule_revision',(select current_revision from public.static_weekly_schedule_control where singleton),
+    'push_instances',(select count(*) from public.event_push_instances),
+    'jobs',(select count(*) from public.operational_notification_jobs))::text;`));
+}
+function impact() {
+  const before = impactState();
+  const result = JSON.parse(sql(`select public.mz_preview_event_impact(to_jsonb(e),
+    ${q(managerId)}::uuid,e.id,e.revision)::text from public.events_app_events e
+    where e.id=${q(event)}::uuid;`));
+  assert.deepEqual(impactState(), before, "impact preview cannot revise event/schedule or enqueue notifications");
+  assert.equal(result.schedule_mutation, false);
+  return result;
+}
+const beforeAbsenceImpact = impact();
+record("manager_impact_previews_nonzero_compiled_recipient", beforeAbsenceImpact.recipient_count, 1);
+const shiftPreview = beforeAbsenceImpact.recipients.find((row) => row.employee_id === owner.id
+  && row.notification_kind === "shift_plus_15");
+assert.ok(shiftPreview, "actual compiled working owner must appear in manager preview");
+record("manager_impact_shows_registered_phone", shiftPreview.registered_phone_count, 1);
+record("manager_impact_matches_actual_reminder_schedule", shiftPreview.scheduled_for,
+  sql(`select to_jsonb(s.scheduled_for)::text from public.events_app_events e
+    cross join lateral public.mz_event_reminder_schedule(e.id,e.revision,${q(owner.id)}::uuid,'shift_plus_15') s
+    where e.id=${q(event)}::uuid;`).replace(/^"|"$/g,""));
 const enqueue = () => JSON.parse(sql(`select public.mz_enqueue_employee_event_pushes((${q(serviceDate)}::date+time '00:00') at time zone 'America/Chicago')::text;`));
 assert.equal(enqueue().ok, true);
 record("enqueue_creates_current_canonical_candidate", sql(`select count(*) from public.event_push_instances
@@ -136,6 +166,7 @@ async function reverse(change) {
 }
 const pto = await accepted("pto", owner);
 record("accepted_full_pto_is_ineligible", schedule(event, owner.id), []);
+record("accepted_pto_removes_manager_preview_recipient", impact().recipient_count, 0);
 assert.equal(enqueue().ok, true);
 record("enqueue_cancels_prior_candidate_after_accepted_pto", sql(`select count(*) from public.event_push_instances i
   join public.operational_notification_jobs j on j.source_id=i.instance_id and j.job_type='employee_event_push'
@@ -143,6 +174,7 @@ record("enqueue_cancels_prior_candidate_after_accepted_pto", sql(`select count(*
     and i.notification_kind='shift_plus_15' and i.state='cancelled' and j.status='dead';`), "1");
 await reverse(pto);
 record("reversed_pto_restores_canonical_eligibility", schedule(event, owner.id), at("07:15:00"));
+record("reversed_pto_restores_manager_preview_recipient", impact().recipient_count, 1);
 assert.equal(enqueue().ok, true);
 record("enqueue_restores_unclaimed_candidate_only_after_canonical_reversal", sql(`select count(*) from public.event_push_instances i
   join public.operational_notification_jobs j on j.source_id=i.instance_id and j.job_type='employee_event_push'
