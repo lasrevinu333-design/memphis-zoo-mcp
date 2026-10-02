@@ -625,6 +625,7 @@ await withServer(buildApp({ readCalls: listReadCalls }), async (baseUrl) => {
 const listSql = listReadCalls.find((sql) => /from public\.events_app_events/i.test(sql));
 assert.ok(listSql, "published event list SQL should run");
 assert.match(listSql, /e\.display_location/i, "published events should expose the canonical display location");
+assert.match(listSql, /coalesce\(e\.revision, 1\) as revision/i, "manager event readback must carry the edit revision");
 assert.match(listSql, /e\.event_scope/i, "published events should expose canonical event scope");
 assert.match(listSql, /e\.primary_venue_id/i, "published events should expose canonical venue id");
 assert.match(listSql, /e\.coverage_location_ids/i, "published events should expose coverage locations separately");
@@ -651,6 +652,17 @@ await withServer(buildApp(), async (baseUrl) => {
 
 const updateWriteCalls = [];
 await withServer(buildApp({ writeCalls: updateWriteCalls }), async (baseUrl) => {
+  for (const expected_revision of [undefined, null, 0, -1, "1", 1.5]) {
+    const response = await fetch(`${baseUrl}/admin-api/events/60000000-0000-4000-8000-000000000001`, {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ event_name: "Stale edit", event_scope: "ZOO_WIDE", event_date: "2026-07-17",
+        start_time: "18:00", end_time: "20:30", expected_revision }),
+    });
+    assert.equal(response.status, 400, "missing or malformed edit revision must fail before a write");
+  }
+});
+assert.equal(updateWriteCalls.length, 0, "invalid edit revisions cannot reach the command boundary");
+await withServer(buildApp({ writeCalls: updateWriteCalls }), async (baseUrl) => {
   const response = await fetch(`${baseUrl}/admin-api/events/60000000-0000-4000-8000-000000000001`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
@@ -660,6 +672,7 @@ await withServer(buildApp({ writeCalls: updateWriteCalls }), async (baseUrl) => 
       event_date: "2026-07-17",
       start_time: "18:00",
       end_time: "20:30",
+      expected_revision: 1,
       created_by: "contract test",
       overridden_by: "contract editor",
       actor_manager_id: "60000000-0000-4000-8000-000000000099",
@@ -674,6 +687,7 @@ const updateCall = updateWriteCalls.find((call) => call.name === "event_update")
 assert.ok(updateCall, "typed event update should run");
 assert.equal(updateCall.payload.event_id, "60000000-0000-4000-8000-000000000001");
 assert.equal(updateCall.payload.record.event_scope, "ZOO_WIDE", "event update should write canonical event scope");
+assert.equal(updateCall.payload.record.expected_revision, 1, "manager edit must bind the preview revision");
 assert.equal(updateCall.payload.record.actor_manager_id, TEST_MANAGER_ID);
 assert.equal(updateCall.payload.record.overridden_by, TEST_MANAGER_NAME);
 assert.equal(updateCall.payload.actor, TEST_MANAGER_NAME);
@@ -702,6 +716,7 @@ await withServer(buildApp({
       event_date: "2026-07-17",
       start_time: "18:00",
       end_time: "20:30",
+      expected_revision: 1,
       notes: "Updated through single-row write RPC return.",
       created_by: "contract test",
       overridden_by: "contract editor",
@@ -743,6 +758,7 @@ await withServer(buildApp({
       event_date: "2026-07-17",
       start_time: "18:00",
       end_time: "20:30",
+      expected_revision: 2,
       notes: "Updated through authoritative readback.",
       created_by: "contract test",
       overridden_by: "contract editor",

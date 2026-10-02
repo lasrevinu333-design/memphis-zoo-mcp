@@ -108,6 +108,13 @@ function toNullableInt(value) {
   return parsed;
 }
 
+function expectedEventRevision(value) {
+  if (!Number.isSafeInteger(value) || value < 1) {
+    throw new Error("A valid expected event revision is required. Refresh and review the event before saving.");
+  }
+  return value;
+}
+
 function sanitizeEventNotes(value, attendeeCount = null) {
   const raw = value == null ? "" : String(value).trim();
   if (!raw) return null;
@@ -464,6 +471,7 @@ function buildEventResponseSelectSql(whereSql, suffixSql = "") {
   return `
     select
       e.id,
+      coalesce(e.revision, 1) as revision,
       e.event_name,
       e.event_name as event_title,
       coalesce(e.event_scope, 'UNKNOWN') as event_scope,
@@ -714,6 +722,7 @@ async function updateEventRecord(runReadOnlySql, runCommand, eventId, payload, a
   const referenceData = await getEventReferenceData(runReadOnlySql);
   const record = {
     ...normalizeEventPayload({ ...payload, manually_overridden: true }, referenceData),
+    expected_revision: expectedEventRevision(payload.expected_revision),
     actor_manager_id: actor.manager_id,
     overridden_by: actor.display_name,
   };

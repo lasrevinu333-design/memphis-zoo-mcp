@@ -1237,6 +1237,14 @@ async function runEventCommand(command, payload = {}) {
   };
   const eventCommand = commands[normalized];
   if (!eventCommand) throw new Error(`Unsupported bounded event command: ${normalized}`);
+  if (eventCommand === "update") {
+    return runRpc("app_apply_event_update_cas", {
+      p_event_id: payload.event_id || null,
+      p_record: payload.record || {},
+      p_actor: payload.actor || null,
+      p_reason: payload.reason || null,
+    });
+  }
   return runRpc("app_apply_event_command", {
     p_command: eventCommand,
     p_event_id: payload.event_id || null,
