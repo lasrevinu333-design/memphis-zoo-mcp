@@ -8,7 +8,7 @@ import {contentDigest,canonicalJson,installStaticWeeklySha256HexAccelerator} fro
 import {staticWeeklySafeName} from '../src/static-weekly-schedule-program.js';
 import {getScheduleComponentWeightLedger} from '../src/schedule-component-weight-authority.js';
 import {deriveCanonicalRecurringPhaseCandidate,deriveScalableCanonicalRecurringPhaseCandidate,
- deriveScalableCanonicalRecurringWeekCandidate,deriveRecurringStaffingPattern} from '../src/static-weekly-recurring-staffing-adaptation.js';
+ deriveScalableCanonicalRecurringWeekCandidate,deriveRecurringStaffingPattern,recurringSecondaryOwnerReference} from '../src/static-weekly-recurring-staffing-adaptation.js';
 import {createRecurringPhaseDescriptor,createRecurringPhaseProspectiveSource,
  evaluateRecurringPhaseCanonicalSource,enumerateRecurringPhaseMinimum,assertRecurringPhaseMinimum}
  from '../src/static-weekly-recurring-phase-authority.js';
@@ -329,9 +329,10 @@ export async function runStaticWeeklyRecurringPhaseScalableTests(){
   });
   if(count===7){
    const highs={solve(lp,options){return solver.solve(lp,{timeLimitSeconds:options.time_limit}).result;}};
-   check('current normal morning source honestly refuses absent full-position admin guidance',()=>{
-    assert.throws(()=>deriveRecurringStaffingPattern({currentConfig,targetSlots:freshConfig.slots,fullOwners:guidance,highs}),
-     /missing nine-position guidance 0\/morning\/EAST_ADMIN/);
+   check('current normal morning source binds only exact authorized Admin secondary references',()=>{
+    const normal=deriveRecurringStaffingPattern({currentConfig,targetSlots:freshConfig.slots,fullOwners:guidance,highs});
+    assert.equal(normal.preview.flatMap(row=>row.secondaryPreferenceBindings).length,14);
+    assert.ok(normal.preview.flatMap(row=>row.secondaryPreferenceBindings).every(row=>row.kind==='AUTHORIZED_ADMIN_MORNING_CURRENT_SOURCE'));
    });
    const supported=JSON.parse(fs.readFileSync(new URL('../config/custodial-six-person-static-20260926.json',import.meta.url)));
    const supportedSlots=structuredClone(supported.slots);
@@ -362,7 +363,58 @@ export async function runStaticWeeklyRecurringPhaseScalableTests(){
  }
  console.log(JSON.stringify(receipt));return receipt;
 }
+export async function runRecurringAdminMorningReferenceTests(){
+ const started=performance.now();let checks=0;const check=(name,fn)=>{fn();checks++;console.log('PASS',name);};
+ installStaticWeeklySha256HexAccelerator(text=>createHash('sha256').update(text,'utf8').digest('hex'));
+ const currentConfig=JSON.parse(fs.readFileSync(new URL('../config/custodial-six-person-static-20261005.json',import.meta.url))),
+  guidance=JSON.parse(fs.readFileSync(new URL('../config/custodial-full-nine-family-owners-20260926.json',import.meta.url))).owners;
+ const configBefore=canonicalJson(currentConfig),guideBefore=canonicalJson(guidance);
+ for(let day=0;day<7;day++)for(const family of ['EAST_ADMIN','WEST_ADMIN']){
+  const sourceOwner=new Map(Object.entries(currentConfig.overrides[day].morning).flatMap(([key,families])=>families.map(f=>[f,key])));
+  const args={currentConfig,fullOwners:guidance,day,phase:'morning',family,sourceOwner};
+  check(`authorized exact Admin reference ${day}/${family}`,()=>{
+   assert.equal(guidance[day].morning[family],undefined);const r=recurringSecondaryOwnerReference(args);
+   assert.equal(r.owner,sourceOwner.get(family));assert.equal(r.currentConfigDigest,contentDigest(currentConfig));
+   assert.equal(r.historicalEqualizedOwner,guidance[day].equalized[family]);
+  });
+  for(const [name,mutate]of [
+   ['flag absent',a=>{delete a.currentConfig.allowAdminMorning;}],
+   ['flag false',a=>{a.currentConfig.allowAdminMorning=false;}],
+   ['family not listed',a=>{a.currentConfig.adminFamilies=[];}],
+   ['missing equalized',a=>{delete a.fullOwners[day].equalized[family];}],
+   ['bad equalized identity',a=>{a.fullOwners[day].equalized[family]='UNKNOWN';}],
+   ['missing source owner',a=>{a.sourceOwner.delete(family);}],
+   ['changed source owner',a=>{a.sourceOwner.set(family,'OPTION1');}],
+   ['unknown family',a=>{a.family='UNKNOWN';}],
+  ]){check(`denied ${name} ${day}/${family}`,()=>{const a=structuredClone(args);mutate(a);assert.throws(()=>recurringSecondaryOwnerReference(a));});}
+ }
+ const {initializeStaticWeeklySolverEngine}=await import('../src/static-weekly-schedule-solver-worker.js');
+ const solver=await initializeStaticWeeklySolverEngine({maxOldGenerationSizeMb:256,maxWasmMemoryPages:1536,maxSemiSpaceSizeMb:4}),results=[];
+ for(const count of [6,7,8]){
+  const targetSlots=structuredClone(currentConfig.slots);
+  for(const [i,key]of ['OPTION1','OPTION4'].slice(0,count-6).entries())Object.assign(targetSlots[key],{
+   vacancy:false,personId:`72000000-0000-4000-8000-00000000000${i+1}`,name:`Synthetic fresh ${key} incumbent`});
+  const result=deriveRecurringStaffingPattern({currentConfig,targetSlots,fullOwners:guidance,
+   highs:{solve(lp,options){return solver.solve(lp,{timeLimitSeconds:options.time_limit}).result;}}});
+  check(`real normal generator ${count} synthetic/current shape binds14 references without data edits`,()=>{
+   assert.equal(result.preview.length,14);assert.equal(result.preview.flatMap(r=>r.secondaryPreferenceBindings).length,14);
+   for(let day=0;day<7;day++)for(const phase of ['morning','equalized']){
+    const output=result.config.overrides[day][phase];
+    assert.deepEqual(Object.values(output).flat().sort(),Object.values(currentConfig.overrides[day][phase]).flat().sort());
+    for(const [key,families]of Object.entries(output))for(const family of families)assertNormalOwnerEligibility({key,...targetSlots[key]},family);
+   }
+   assert.equal(canonicalJson(currentConfig),configBefore);assert.equal(canonicalJson(guidance),guideBefore);
+  });
+  results.push({count,configDigest:contentDigest(result.config),secondaryPreferenceBindings:result.preview.flatMap(r=>r.secondaryPreferenceBindings),
+   claim:'ORIGINAL_NORMAL_GENERATOR_REFERENCE_REGRESSION_NOT_CANONICAL_MINIMUM_OR_WORKER_ADMISSION',admitted:false,published:false});
+ }
+ const receipt={status:'PASS',checks,elapsedMs:Math.round(performance.now()-started),results,worker:false,sql:false,publication:false};
+ if(process.env.CUSTODIAL_PHASE_ADMIN_EVIDENCE_PATH)fs.writeFileSync(path.resolve(process.env.CUSTODIAL_PHASE_ADMIN_EVIDENCE_PATH),
+  JSON.stringify(receipt,null,2)+'\n',{flag:'wx'});
+ console.log(JSON.stringify(receipt));return receipt;
+}
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){
- if(process.argv.includes('--scalable'))await runStaticWeeklyRecurringPhaseScalableTests();
+ if(process.argv.includes('--admin-morning'))await runRecurringAdminMorningReferenceTests();
+ else if(process.argv.includes('--scalable'))await runStaticWeeklyRecurringPhaseScalableTests();
  else runStaticWeeklyRecurringPhaseAuthorityTests();
 }

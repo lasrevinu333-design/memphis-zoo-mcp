@@ -376,6 +376,30 @@ export function adaptRegisteredRecurringSource({ registeredSource, patternConfig
     status: "CANDIDATE_ONLY", registrationRequired: true, managerConfirmationRequired: true };
 }
 
+// Secondary geography reference, not permission to create work. The caller's
+// current pattern is reconstructed from authenticated publication readback.
+// Only the two explicitly authorized Admin morning families may be absent
+// from the frozen historical map; all other absent references remain errors.
+export function recurringSecondaryOwnerReference({currentConfig,fullOwners,day,phase,family,sourceOwner}){
+  const historical=fullOwners?.[String(day)]?.[phase]?.[family];
+  if(historical!==undefined){
+    assert.ok(currentConfig.slots[historical],`unknown nine-position guidance ${day}/${phase}/${family}`);
+    return {owner:historical,kind:'HISTORICAL_FULL_POSITION'};
+  }
+  const prior=sourceOwner.get(family),equalized=fullOwners?.[String(day)]?.equalized?.[family];
+  assert.ok(phase==='morning'&&currentConfig.allowAdminMorning===true
+    &&['EAST_ADMIN','WEST_ADMIN'].includes(family)&&currentConfig.adminFamilies?.includes(family)
+    &&typeof equalized==='string'&&currentConfig.slots[equalized]
+    &&typeof prior==='string'&&currentConfig.slots[prior],
+  `missing nine-position guidance ${day}/${phase}/${family}`);
+  const configured=Object.entries(currentConfig.overrides?.[String(day)]?.morning||{})
+    .filter(([,families])=>families.includes(family)).map(([key])=>key);
+  assert.deepEqual(configured,[prior],`Admin morning reference differs from exact current pattern ${day}/${family}`);
+  return {owner:prior,kind:'AUTHORIZED_ADMIN_MORNING_CURRENT_SOURCE',family,day,
+    sourceOwnerSlotId:currentConfig.slots[prior].slotId,currentConfigDigest:contentDigest(currentConfig),
+    historicalEqualizedOwner:equalized};
+}
+
 export function deriveRecurringStaffingPattern({ currentConfig, targetSlots, fullOwners, fullConfig, highs }) {
   assert.ok(currentConfig && targetSlots && fullOwners && highs?.solve);
   validateOwnerEligibilityConfig({...currentConfig,slots:targetSlots});
@@ -482,11 +506,12 @@ export function deriveRecurringStaffingPattern({ currentConfig, targetSlots, ful
         }
       }
       const costs = new Map();
+      const secondaryReferences=new Map(families.map(family=>[family,recurringSecondaryOwnerReference({currentConfig,fullOwners,
+        day,phase,family,sourceOwner})]));
       for (const family of families) for (const owner of owners) {
         const variable = vars.get(`${family}\0${owner}`);
         if (!variable) continue;
-        const fullOwner = fullOwners[String(day)]?.[phase]?.[family];
-        assert.ok(fullOwner, `missing nine-position guidance ${day}/${phase}/${family}`);
+        const fullOwner = secondaryReferences.get(family).owner;
         // Preserve current geography first. Within balanced solutions, prefer
         // the approved nine-position area and that position's normal region.
         const cost = (sourceOwner.get(family) !== owner ? 100 : 0)
@@ -536,7 +561,8 @@ export function deriveRecurringStaffingPattern({ currentConfig, targetSlots, ful
       }
       assert.ok(owners.every((owner) => chosen[owner].length), `empty staffed shift ${day}/${phase}`);
       result.overrides[String(day)][phase] = chosen;
-      preview.push({ day, phase, employees: owners.map((owner) => ({ owner,
+      preview.push({ day, phase, secondaryPreferenceBindings:[...secondaryReferences.values()].filter(row=>row.kind!=='HISTORICAL_FULL_POSITION'),
+        employees: owners.map((owner) => ({ owner,
         weightedLoad: chosen[owner].reduce((n,family) => n + result.weights[family], 0),
         restroomSites: chosen[owner].filter((family) => restroom.has(family)).length,
         gained: chosen[owner].filter((family) => sourceOwner.get(family) !== owner),
