@@ -1,3 +1,6 @@
+import { z } from 'zod';
+import { feedbackRelaySchemas, FEEDBACK_RELAY_CONTRACT, FEEDBACK_RELAY_SCHEMA_SHA256 } from '../feedback-email-relay.js';
+
 export const TOOL_SAFETY = Object.freeze({
   READ: "read",
   SAFE_WRITE: "safe-write",
@@ -8,18 +11,17 @@ export const TOOL_SAFETY = Object.freeze({
 export const MCP_TOOL_MANIFEST_VERSION = "mcp-tools.v3";
 
 export const MCP_TOOL_MANIFEST = Object.freeze([
-  ...['status', 'claim', 'begin', 'receipt', 'defer', 'control'].map((verb) => ({
+  ...Object.entries(feedbackRelaySchemas).map(([verb, schema]) => ({
     name: `custodial_feedback_relay_${verb}`,
     safety: TOOL_SAFETY.SAFE_WRITE,
     status: 'current',
     description: `Private Feedback ${verb}; non-sending queue boundary, transport initially paused.`,
     requires: ['supabase'],
-    inputs: ['contract_version', ...(verb === 'status' ? [] : ['request_id']), ...({
-      begin: ['intent_id', 'claim_token', 'claim_generation', 'envelope_sha256'],
-      receipt: ['intent_id', 'attempt_id', 'envelope_sha256', 'observation'],
-      defer: ['intent_id', 'claim_token', 'claim_generation', 'reason'],
-      control: ['action', 'reason'],
-    }[verb] || [])],
+    inputs: Object.keys(schema.shape),
+    input_schema: z.toJSONSchema(schema),
+    contract_version: FEEDBACK_RELAY_CONTRACT,
+    adapter_schema_sha256: FEEDBACK_RELAY_SCHEMA_SHA256,
+    required_scopes: ['mcp:read', 'mcp:write'],
   })),
   {
     name: "ping",
@@ -213,6 +215,7 @@ export function getToolManifest({ includePlanned = true } = {}) {
   return {
     ok: true,
     version: MCP_TOOL_MANIFEST_VERSION,
+    evidence_kind: 'source_catalog_not_runtime_admission',
     generated_at: new Date().toISOString(),
     tools,
   };

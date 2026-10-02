@@ -641,6 +641,7 @@ async function recordReleaseCanaryTransportProbe(req, deviceIdentifier) {
     deviceIdentifier,
     backendCommitSha: BACKEND_COMMIT_SHA,
     releaseId: RELEASE_ID,
+    backendCommitSha: BACKEND_COMMIT_SHA,
     nativeRouteProofSecret: nativeRouteProofSecret(),
   });
   return runRpc(call.fn, call.args);

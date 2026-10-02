@@ -21,6 +21,9 @@ export function createMcpServer(options = {}) {
     name: normalizeMcpServerName(options.name || process.env.APP_NAME),
     version: options.version || "development",
     release_id: options.releaseId || options.version || "development",
+    // Diagnostic release metadata, not a signed source/deployment attestation.
+    backend_commit_sha: /^[0-9a-f]{40}$/.test(options.backendCommitSha || '')
+      ? options.backendCommitSha : null,
   };
 
   const server = new McpServer({
