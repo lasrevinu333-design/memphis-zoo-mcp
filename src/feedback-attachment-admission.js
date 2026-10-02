@@ -48,17 +48,23 @@ export async function verifyFeedbackAttachmentForRelay(prepared,{client,privateB
     if(declaredHash!==undefined&&(!HEX.test(String(declaredHash))||(pathHash&&declaredHash!==pathHash)))throw corrupt('Protected attachment digest metadata conflicts.');
     if(!pathHash&&!HEX.test(String(declaredHash||'')))throw corrupt('Legacy attachment has no immutable digest source.');
     let result;
-    try{result=await client.storage.from(bucket).download(objectPath);}catch{throw unavailable('Private attachment storage could not be read.');}
+    try{
+      // Awaiting download directly materializes the entire object as a Blob in
+      // the installed Storage SDK. Use its supported streaming builder so the
+      // byte bound is enforced while the private HTTP body is being consumed.
+      const download=client.storage.from(bucket).download(objectPath,{}, {signal:AbortSignal.timeout(10000)});
+      if(typeof download?.asStream!=='function')throw unavailable('Bounded private storage streaming is unavailable.');
+      result=await download.asStream();
+    }catch{throw unavailable('Private attachment storage could not be read.');}
     if(result?.error){
       const status=Number(result.error.status||result.error.statusCode||0);
       if(status===404||/not found/i.test(String(result.error.message||'')))throw new FeedbackAttachmentAdmissionError('missing','Protected attachment is missing.');
       throw unavailable('Private attachment storage is unavailable.');
     }
-    if(!result?.data||typeof result.data.stream!=='function')throw unavailable('Private attachment storage returned no readable object.');
-    if(Number(result.data.size)>MAX_BYTES)throw corrupt('Protected attachment object exceeds the allowed size.');
+    if(!result?.data||typeof result.data.getReader!=='function')throw unavailable('Private attachment storage returned no readable stream.');
     const chunks=[];
     let received=0;
-    const reader=result.data.stream().getReader();
+    const reader=result.data.getReader();
     try{
       while(true){
         const {done,value}=await reader.read();
@@ -70,7 +76,7 @@ export async function verifyFeedbackAttachmentForRelay(prepared,{client,privateB
     }catch(error){
       if(error instanceof FeedbackAttachmentAdmissionError)throw error;
       throw unavailable('Private attachment stream could not be read.');
-    }finally{reader.releaseLock();}
+    }finally{try{await reader.cancel();}catch{/* Preserve the owning verification error; HTTP signal still bounds transport. */}finally{reader.releaseLock();}}
     body=Buffer.concat(chunks,received);
     if(pathHash&&createHash('sha256').update(body).digest('hex')!==pathHash)throw corrupt('Canonical protected object digest mismatch.');
   }
