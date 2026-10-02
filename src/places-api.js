@@ -1,6 +1,7 @@
 import express from 'express';
 import { applyPlaceCommand,readPlacePreview } from './place-lifecycle.js';
 import {buildPlaceReconciliation,PLACE_LEGACY_PREVIEW_SQL} from './place-reconciliation.js';
+import {preparePlaceBridge,confirmPlaceBridge,readPlaceBridgeOverlay} from './place-legacy-bridge.js';
 
 export function placeHttpFailure(error){
  const code=String(error?.code||'');
@@ -45,6 +46,20 @@ export function createPlacesAdminRouter({client,requireManagerWrite,runReadOnlyS
    }
    const data=await applyPlaceCommand(req,req.body,{client});
    res.json({ok:true,request_id:req.body.request_id,outcome:data.replayed?'replayed':'applied',data,legacy_consumer_cutover:false});
+  }catch(error){const failure=placeHttpFailure(error);res.status(failure.status).json(failure.body);}
+ });
+ router.get('/bridge/overlay',async(req,res)=>{
+  try{res.json({ok:true,data:await readPlaceBridgeOverlay(req,req.query,{client})});}
+  catch(error){const failure=placeHttpFailure(error);res.status(failure.status).json(failure.body);}
+ });
+ router.post('/bridge/preview',async(req,res)=>{
+  try{res.json({ok:true,data:await preparePlaceBridge(req,req.body,{client})});}
+  catch(error){const failure=placeHttpFailure(error);res.status(failure.status).json(failure.body);}
+ });
+ router.post('/bridge/confirm',async(req,res)=>{
+  try{
+   const receipt=await confirmPlaceBridge(req,req.body,{client});
+   res.json({ok:true,...receipt,data:{...receipt.data,actor_manager_id:receipt.actor_manager_id}});
   }catch(error){const failure=placeHttpFailure(error);res.status(failure.status).json(failure.body);}
  });
  return router;
