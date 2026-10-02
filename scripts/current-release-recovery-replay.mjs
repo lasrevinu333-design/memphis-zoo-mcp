@@ -52,6 +52,76 @@ const EMPTY_SQL="select jsonb_build_object('relations',(select count(*) from pg_
 const INVENTORY_SQL="select coalesce(jsonb_agg(jsonb_build_object('kind',object_kind,'identity',object_identity,'sha256',definition_sha256,'order',restore_order)),'[]'::jsonb) from public.custodial_release_authority_restore_inventory;";
 const SURFACE_SQL="select coalesce(jsonb_agg(jsonb_build_object('kind',object_kind,'identity',object_identity)),'[]'::jsonb) from public.custodial_release_canary_authority_surface();";
 
+// Exact renderer definitions independently captured by the source-bound NORMAL
+// 216 catalog (7273e86b...). These are NOT learned from the target under test.
+export const NORMAL_RENDERER_PINS=Object.freeze(Object.fromEntries(Object.entries({
+  column:'cb75ddb8fcc66de2f6d46ad279b8b3a40ec1aaab1595ca672ec5f2868da7430d',
+  column_set:'68fb07358e10890bed08cfabebed3f3649fd9df67952109052cc9725c442cc61',
+  constraint:'4d5e7bdd3eab00cc7f9568eb7d6770d72c95fa5b5c49ae42ed2fbd666b9a511c',
+  grant:'6ea419b77106cde9611a2091e52552116607e192f961f1a88b3b591633245907',
+  index:'d223214b359ac36dace8f7f1576aad2298041f417d585f2920f39ff7caf851af',
+  policy:'0dac2e05f9a23770f1874fb19f9bfe8fdae5e56e95fe652ae981437e1c3c91c0',
+  relation:'a9f77828c5917b95f5dea85ee46bed6ef6581e203cb468a7f15647b59fd7f125',
+  relation_state:'a35b953cc1f03f29b3f282802a20d2dbc6251467ce58a92758951fea8a3770d1',
+  view:'e8635f9f0e09849b6b1e3ce1c2c71168f3a51dc5ea3b3d0e8acf1709903950ef'
+}).map(([kind,sha256])=>['public.custodial_release_authority_current_'+kind+'_definition(text)',sha256])));
+// Deliberately the same eleven-kind live rendering contract as the probe.
+// Stored SQL is evidence only; this path NEVER executes it or repairs drift.
+const NORMAL_LIVE=`case i.object_kind
+ when 'function' then pg_get_functiondef(to_regprocedure(i.object_identity))
+ when 'relation' then public.custodial_release_authority_current_relation_definition(i.object_identity)
+ when 'column' then public.custodial_release_authority_current_column_definition(i.object_identity)
+ when 'column_set' then public.custodial_release_authority_current_column_set_definition(i.object_identity)
+ when 'constraint' then public.custodial_release_authority_current_constraint_definition(i.object_identity)
+ when 'index' then public.custodial_release_authority_current_index_definition(i.object_identity)
+ when 'policy' then public.custodial_release_authority_current_policy_definition(i.object_identity)
+ when 'relation_state' then public.custodial_release_authority_current_relation_state_definition(i.object_identity)
+ when 'grant' then public.custodial_release_authority_current_grant_definition(i.object_identity)
+ when 'view' then public.custodial_release_authority_current_view_definition(i.object_identity)
+ when 'trigger' then (select 'drop trigger if exists '||quote_ident(t.tgname)||' on '||quote_ident(n.nspname)||'.'||quote_ident(c.relname)||'; '||pg_get_triggerdef(t.oid,true)||'; alter table '||quote_ident(n.nspname)||'.'||quote_ident(c.relname)||' '||case t.tgenabled when 'O' then 'enable' when 'D' then 'disable' when 'R' then 'enable replica' when 'A' then 'enable always' end||' trigger '||quote_ident(t.tgname)||';'
+ from pg_trigger t join pg_class c on c.oid=t.tgrelid join pg_namespace n on n.oid=c.relnamespace
+ where i.object_identity=quote_ident(n.nspname)||'.'||quote_ident(c.relname)||'.'||quote_ident(t.tgname) and not t.tgisinternal)
+ else null end`;
+export const NORMAL_INVENTORY_SQL=`begin isolation level repeatable read read only;
+set local search_path=pg_catalog,public;
+with live_rows as materialized (
+ select i.object_kind,i.object_identity,i.restore_order,i.definition_sql,i.definition_sha256,${NORMAL_LIVE} as live_sql
+ from public.custodial_release_authority_restore_inventory i
+)
+select jsonb_build_object(
+ 'count',(select count(*) from public.custodial_release_authority_restore_inventory),
+ 'metadata',(select coalesce(jsonb_agg(jsonb_build_object('kind',object_kind,'identity',object_identity,'order',restore_order,'sha256',definition_sha256)),'[]'::jsonb) from public.custodial_release_authority_restore_inventory),
+ 'renderers',(select jsonb_agg(jsonb_build_object('identity',identity,'sha256',encode(extensions.digest(convert_to(pg_get_functiondef(to_regprocedure(identity)),'UTF8'),'sha256'),'hex'))) from (values ${Object.keys(NORMAL_RENDERER_PINS).map(identity=>'('+q(identity)+')').join(',')}) r(identity)),
+ 'rows',(select coalesce(jsonb_agg(jsonb_build_object('kind',object_kind,'identity',object_identity,'order',restore_order,'definition_sql',definition_sql,'sha256',definition_sha256,
+   'stored_sha256',encode(extensions.digest(convert_to(definition_sql,'UTF8'),'sha256'),'hex'),'live_sql',live_sql,'live_sha256',encode(extensions.digest(convert_to(live_sql,'UTF8'),'sha256'),'hex'))),'[]'::jsonb) from live_rows));
+commit;`;
+
+function validateNormalInventory(observed){
+  shape(observed,['count','metadata','renderers','rows'],'normal_inventory_shape');
+  must(Number.isSafeInteger(observed.count)&&observed.count>0&&observed.count<=20000,'normal_inventory_count');
+  must(Array.isArray(observed.rows)&&Array.isArray(observed.metadata)&&observed.rows.length===observed.count&&observed.metadata.length===observed.count,'normal_inventory_count');
+  must(Array.isArray(observed.renderers)&&observed.renderers.length===Object.keys(NORMAL_RENDERER_PINS).length,'normal_renderer_count');
+  for(const row of observed.renderers){shape(row,['identity','sha256'],'normal_renderer_shape');must(typeof row.identity==='string'&&typeof row.sha256==='string','normal_renderer_shape')}
+  same([...observed.renderers].sort((a,b)=>a.identity<b.identity?-1:1),Object.entries(NORMAL_RENDERER_PINS).map(([identity,sha256])=>({identity,sha256})),'normal_renderer_source');
+  const validIdentity=row=>{
+    must(RECOVERY_KINDS.includes(row.kind)&&typeof row.identity==='string'&&row.identity.length>0&&row.identity.length<=500&&!/[\r\n\0]/.test(row.identity),'normal_inventory_identity');
+    must(Number.isSafeInteger(row.order)&&row.order>0,'normal_inventory_order');must(typeof row.sha256==='string'&&HEX.test(row.sha256),'normal_inventory_hash');
+  };
+  for(const row of observed.metadata){shape(row,['kind','identity','order','sha256'],'normal_inventory_metadata');validIdentity(row)}
+  for(const row of observed.rows){
+    shape(row,['kind','identity','order','definition_sql','sha256','stored_sha256','live_sql','live_sha256'],'normal_inventory_row');validIdentity(row);
+    for(const name of ['definition_sql','live_sql'])must(typeof row[name]==='string'&&row[name].length>0&&!row[name].includes('\0')&&Buffer.byteLength(row[name],'utf8')<=4*1024*1024,'normal_inventory_sql');
+    for(const name of ['stored_sha256','live_sha256'])must(typeof row[name]==='string'&&HEX.test(row[name]),'normal_inventory_hash');
+    must(hash(row.definition_sql)===row.stored_sha256&&hash(row.live_sql)===row.live_sha256,'normal_inventory_computed_hash');
+    must(row.sha256===row.stored_sha256&&row.sha256===row.live_sha256&&row.definition_sql===row.live_sql,'normal_inventory_live_integrity');
+  }
+  must(new Set(observed.rows.map(key)).size===observed.count&&new Set(observed.metadata.map(key)).size===observed.count,'normal_inventory_duplicate');
+  const rows=sort(observed.rows),metadata=sort(observed.metadata);
+  same(rows.map(({kind,identity,order,sha256})=>({kind,identity,order,sha256})),metadata,'normal_inventory_membership');
+  same([...new Set(rows.map(row=>row.kind))].sort(),RECOVERY_KINDS,'normal_inventory_all_kinds');
+  return {rows,metadata,renderers:Object.entries(NORMAL_RENDERER_PINS).map(([identity,sha256])=>({identity,sha256}))};
+}
+
 export function validateReplayPlan(m){
   shape(m,['schema','stage','lane','synthetic','production','target','source','runner_files','official_fixture','predecessor_fixture','output_dir','required_surface','protected_relations','seed','cleanup_lease','prepared','probe_manifest'],'plan_shape');
   must(m.schema==='custodial.current-recovery-replay-plan.v1'&&m.synthetic===true&&m.production===false,'synthetic_plan_required');
@@ -155,7 +225,7 @@ function assertProbeReceipt(r,m,fake){
 
 export async function runRecoveryReplay(plan,{root=ROOT,io=nodeIO,signal}={}){
   const m=validateReplayPlan(plan),fake=io!==nodeIO,stage=m.lane+'-'+m.stage,artifacts=[];
-  let leased=false,retain=false,outputReady=false,phase='preflight',pending_control=null;
+  let leased=false,retain=false,outputReady=false,phase='preflight',pending_control=null,predecessorInventoryCount=null;
   const write=(name,data)=>{must(/^[a-z0-9_.-]+$/.test(name),'artifact_name');const bytes=typeof data==='string'?data:JSON.stringify(data,null,2)+'\n';io.write(join(m.output_dir,name),bytes);const item={file:name,sha256:hash(bytes)};artifacts.push(item);return item};
   const checkSignal=()=>must(!signal?.aborted,'aborted');
   async function run(command,args,input,{cleanup=false,timeout_ms=120000}={}){if(!cleanup)checkSignal();const r=await io.run(command,args,{input,signal:cleanup?undefined:signal,timeout_ms});must(r&&Number.isInteger(r.status)&&typeof r.stdout==='string'&&typeof r.stderr==='string','subprocess_shape');return r}
@@ -200,6 +270,7 @@ export async function runRecoveryReplay(plan,{root=ROOT,io=nodeIO,signal}={}){
           same(proof.target,m.target,'predecessor_target');same(proof.migration,entry,'predecessor_migration');must(proof.source_sha256===m.predecessor_fixture.sha256,'predecessor_source_receipt');
           same(proof.cases?.map(x=>x.id),PREDECESSOR_CASES,'predecessor_cases');must(proof.cases.every(x=>x.rejected===true&&x.rollback_exact===true&&x.expected_reason===PREDECESSOR_REASONS[x.id]),'predecessor_rollback');
           must(proof.predecessor&&Number.isSafeInteger(proof.predecessor.inventory_count)&&proof.predecessor.inventory_count>0&&['inventory_sha256','feedback_stored','feedback_live'].every(k=>HEX.test(proof.predecessor[k]))&&proof.predecessor.immutable==='O','predecessor_preimage');
+          predecessorInventoryCount=proof.predecessor.inventory_count;
         }
         await sql('migration_'+String(replayed.length).padStart(4,'0'),bytes.toString(),{rawLog:true});
         if(m.lane==='no-auto'&&await sql('defaults_after_'+replayed.length,DEFAULT_SQL)!=='0'){
@@ -209,7 +280,30 @@ export async function runRecoveryReplay(plan,{root=ROOT,io=nodeIO,signal}={}){
         replayed.push(entry);
       }
       write(stage+'-ordered-replay.json',{source:m.source,replayed,automatic_grants_absent:m.lane==='no-auto',engine_executed:!fake});
-      if(m.lane==='normal')result={status:'NORMAL_CATALOG_OBSERVED_NOT_ACCEPTED',fingerprint:await catalog('replayed')};
+      if(m.lane==='normal'){
+        const fingerprint=await catalog('replayed');
+        const query_sha256=hash(NORMAL_INVENTORY_SQL),observed=await query('normal_inventory',NORMAL_INVENTORY_SQL);
+        // Preserve diagnostic source rows even when integrity validation fails.
+        // This is explicitly unvalidated and never substitutes for a receipt.
+        const raw_observation=write(stage+'-recovery-inventory-observed.json',{
+          classification:'NORMAL_INVENTORY_UNVALIDATED_OBSERVATION',source:m.source,target:m.target,query_sha256,
+          observed,engine_executed:!fake,independently_accepted:false,production:false,release_admission:false
+        });
+        const captured=validateNormalInventory(observed);
+        // The fixed final03220000 updates definitions only. Keep its validated
+        // transaction-predecessor count separate from the postmigration query.
+        must(captured.rows.length===predecessorInventoryCount,'normal_inventory_predecessor_count');
+        const inventory_sha256=hash(canon(captured.metadata));
+        const recovery_inventory=write(stage+'-recovery-inventory.json',{
+          schema:'custodial.normal-recovery-inventory-observation.v1',classification:'NORMAL_INVENTORY_OBSERVED_NOT_ACCEPTED',
+          source:m.source,runner_files:m.runner_files,target:m.target,catalog_fingerprint:fingerprint,query_sha256,
+          required_surface:m.required_surface,required_surface_sha256:hash(canon(m.required_surface)),
+          count:captured.rows.length,predecessor_inventory_count:predecessorInventoryCount,inventory_sha256,raw_observation,...captured,
+          engine_executed:!fake,execution:fake?'FAKE_SUBPROCESS_UNIT_ONLY':'OWNED_SYNTHETIC_ENGINE',
+          authority_configured:false,independently_accepted:false,production:false,release_admission:false
+        });
+        result={status:'NORMAL_CATALOG_OBSERVED_NOT_ACCEPTED',fingerprint,recovery_inventory:{...recovery_inventory,count:captured.rows.length,inventory_sha256,query_sha256}};
+      }
       else{
         phase='official_fixture';
         const code=`const {verifyStaticWeeklySplashSeasonOfficialPaths}=await import(${JSON.stringify(new URL('../'+OFFICIAL_FIXTURE,import.meta.url).href)});console.log(JSON.stringify(await verifyStaticWeeklySplashSeasonOfficialPaths({target:JSON.parse(process.argv[1])})));`;

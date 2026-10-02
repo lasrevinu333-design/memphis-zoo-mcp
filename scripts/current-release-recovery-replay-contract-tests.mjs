@@ -3,7 +3,7 @@ import {createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {DEFAULT_EXCEPTIONS,OFFICIAL_FIXTURE,PREDECESSOR_FIXTURE,SEED_TABLES,localReplaySource,runRecoveryReplay,validateReplayPlan} from './current-release-recovery-replay.mjs';
+import {DEFAULT_EXCEPTIONS,NORMAL_INVENTORY_SQL,NORMAL_RENDERER_PINS,OFFICIAL_FIXTURE,PREDECESSOR_FIXTURE,SEED_TABLES,localReplaySource,runRecoveryReplay,validateReplayPlan} from './current-release-recovery-replay.mjs';
 import {RECOVERY_KINDS} from './current-release-recovery-probe.mjs';
 import {stableSchemaJson} from './schema-fingerprint-catalog.mjs';
 
@@ -38,6 +38,8 @@ const seed={schema:'custodial.current-recovery-replay-plan.v1',stage:'prepare',l
 const inventory=sort(RECOVERY_KINDS.map((kind,i)=>({kind,identity:kind==='relation'?'public.synthetic_required':'public.synthetic_'+kind,sha256:String(i%9+1).repeat(64),order:i+1})));
 for(const row of inventory)if(['function','grant'].includes(row.kind))row.identity='public.synthetic_function()';
 const surface=inventory.map(({kind,identity})=>({kind,identity}));
+const normalRows=inventory.map(row=>{const definition_sql='-- Explicit fake-only '+row.kind+' ñ\nselect 1;';const sha256=hash(definition_sql);return{...row,definition_sql,sha256,stored_sha256:sha256,live_sql:definition_sql,live_sha256:sha256}});
+const normalSnapshot=()=>({count:normalRows.length,metadata:normalRows.map(({kind,identity,order,sha256})=>({kind,identity,order,sha256})),rows:structuredClone(normalRows),renderers:Object.entries(NORMAL_RENDERER_PINS).map(([identity,sha256])=>({identity,sha256}))});
 const resolutionRows=(required,surface,inventory)=>[['required',required],['surface',surface],['inventory',inventory]].flatMap(([origin,rows])=>rows.filter(row=>row.kind==='function'||row.kind==='grant'&&row.identity.includes('(')).map(({kind,identity})=>({origin,kind,identity,oid:'101'})));
 const protectedRows=SEED_TABLES.map(relation=>({relation,count:1,sha256:'1'.repeat(64)}));
 function probeReceipt(bound){
@@ -70,6 +72,7 @@ function fake(m,change=()=>undefined){
           else if(phase.startsWith('remove_')||phase.startsWith('migration_')||phase==='synthetic_seed')result=ok('');
           else if(phase==='seed_readback')result=asJson({active_work:true,response:true,work_ticket:true,feedback:true});
           else if(phase==='inventory_observed')result=asJson(inventory);
+          else if(phase==='normal_inventory')result=asJson(normalSnapshot());
           else if(phase==='surface_observed')result=asJson(surface);
           else if(phase==='required_membership')result=asJson(resolutionRows(m.required_surface,surface,inventory));
           else if(phase.startsWith('snapshot_'))result=asJson(protectedRows.find(x=>x.relation==='public.'+phase.slice(9)));
@@ -98,7 +101,108 @@ function verifyPlan(m,f){const plan=structuredClone(m);plan.stage='verify';plan.
 
 await test('import and local source identity use no replay or hidden container',()=>{const local=localReplaySource(root,()=>source);assert.equal(local.source,source);assert.deepEqual(local.runner_files,runner_files)});
 await test('fake no-auto prepare retains only exact lease and never adopts inventory',async()=>{const {f,receipt}=await prepared();assert.equal(receipt.status,'OBSERVED_NOT_ACCEPTED');assert.equal(receipt.engine_executed,false);assert.equal(receipt.execution,'FAKE_SUBPROCESS_UNIT_ONLY');assert.equal(receipt.release_admission,false);assert.ok(!f.calls.some(x=>x.phase==='probe'||x.phase==='cleanup_rm'));assert.ok(f.calls.findIndex(x=>x.phase==='official')<f.calls.findIndex(x=>x.phase==='synthetic_seed'));assert.equal(f.calls.filter(x=>x.phase==='predecessor').length,1);assert.ok(f.calls.findIndex(x=>x.phase==='predecessor')<f.calls.findIndex(x=>x.phase==='migration_0004'));assert.equal(receipt.inventory.length,11)});
-await test('normal lane captures separately and performs exact cleanup without probe or seeds',async()=>{const m=structuredClone(seed);m.lane='normal';m.official_fixture=null;const f=fake(m),r=await runRecoveryReplay(m,{root,io:f.io});assert.equal(r.status,'NORMAL_CATALOG_OBSERVED_NOT_ACCEPTED');assert.ok(f.calls.some(x=>x.phase==='cleanup_rm'));assert.ok(!f.calls.some(x=>/^(probe|official|synthetic_seed|remove_)/.test(x.phase)));assert.ok(f.outputs.has(join(m.output_dir,'normal-prepare-replayed-catalog.json')))});
+await test('normal lane captures separately and performs exact cleanup without probe or seeds',async()=>{const m=structuredClone(seed);m.lane='normal';m.official_fixture=null;const f=fake(m),r=await runRecoveryReplay(m,{root,io:f.io});assert.equal(r.status,'NORMAL_CATALOG_OBSERVED_NOT_ACCEPTED');assert.ok(f.calls.some(x=>x.phase==='cleanup_rm'));assert.ok(!f.calls.some(x=>/^(probe|official|synthetic_seed|remove_)/.test(x.phase)));assert.ok(f.outputs.has(join(m.output_dir,'normal-prepare-replayed-catalog.json')));assert.ok(f.outputs.has(join(m.output_dir,'normal-prepare-recovery-inventory.json')))});
+await test('normal complete inventory binds raw SQL all11 metadata query source and artifact before cleanup',async()=>{
+  const m=structuredClone(seed);m.lane='normal';m.official_fixture=null;const f=fake(m),r=await runRecoveryReplay(m,{root,io:f.io});
+  const ref=r.recovery_inventory,bytes=f.outputs.get(join(m.output_dir,ref.file)),a=JSON.parse(bytes);
+  assert.equal(ref.sha256,hash(bytes));assert.ok(r.artifacts.some(x=>x.file===ref.file&&x.sha256===ref.sha256));
+  assert.equal(a.schema,'custodial.normal-recovery-inventory-observation.v1');assert.equal(a.classification,'NORMAL_INVENTORY_OBSERVED_NOT_ACCEPTED');
+  assert.equal(a.count,11);assert.equal(a.predecessor_inventory_count,11);assert.deepEqual(a.rows,normalRows);assert.deepEqual(a.metadata,normalSnapshot().metadata);
+  assert.equal(a.inventory_sha256,hash(canon(a.metadata)));assert.equal(ref.inventory_sha256,a.inventory_sha256);assert.equal(ref.count,a.count);
+  assert.deepEqual(a.renderers,normalSnapshot().renderers);assert.equal(a.query_sha256,hash(NORMAL_INVENTORY_SQL));assert.equal(ref.query_sha256,a.query_sha256);
+  assert.deepEqual(a.source,m.source);assert.deepEqual(a.runner_files,m.runner_files);assert.deepEqual(a.target,m.target);assert.equal(a.catalog_fingerprint,r.fingerprint);
+  assert.deepEqual(a.required_surface,m.required_surface);assert.equal(a.required_surface_sha256,r.required_surface_sha256);
+  assert.equal(a.authority_configured,false);assert.equal(a.independently_accepted,false);assert.equal(a.production,false);assert.equal(a.release_admission,false);
+  assert.equal(a.engine_executed,false);assert.equal(a.execution,'FAKE_SUBPROCESS_UNIT_ONLY');
+  const rawBytes=f.outputs.get(join(m.output_dir,a.raw_observation.file)),raw=JSON.parse(rawBytes);
+  assert.equal(a.raw_observation.sha256,hash(rawBytes));assert.deepEqual(raw.observed,normalSnapshot());assert.equal(raw.classification,'NORMAL_INVENTORY_UNVALIDATED_OBSERVATION');assert.equal(raw.independently_accepted,false);
+  assert.ok(f.calls.findIndex(x=>x.phase==='normal_inventory')>f.calls.findIndex(x=>x.phase==='migration_0004'));
+  assert.ok(f.calls.findIndex(x=>x.phase==='write_'+ref.file)<f.calls.findIndex(x=>x.phase==='cleanup_rm'));
+  const input=f.calls.find(x=>x.phase==='normal_inventory').call.input;assert.ok(input.endsWith(NORMAL_INVENTORY_SQL));assert.ok(input.includes('repeatable read read only'));
+  assert.ok(!f.calls.some(x=>/^(probe|official|synthetic_seed|remove_|defaults_)/.test(x.phase)));
+});
+for(const [name,change,pattern] of [
+  ['empty inventory',x=>{x.count=0;x.rows=[];x.metadata=[]},/normal_inventory_count/],
+  ['unbounded count',x=>{x.count=20001},/normal_inventory_count/],
+  ['text count',x=>{x.count='11'},/normal_inventory_count/],
+  ['omitted complete row',x=>{x.rows.pop()},/normal_inventory_count/],
+  ['additional complete row',x=>{x.rows.push({...x.rows[0],identity:'public.unexpected'})},/normal_inventory_count/],
+  ['coherent extra row beyond predecessor count',x=>{const row={...x.rows[0],identity:'public.unexpected'};x.rows.push(row);x.metadata.push({kind:row.kind,identity:row.identity,order:row.order,sha256:row.sha256});x.count++},/normal_inventory_predecessor_count/],
+  ['missing metadata row',x=>{x.metadata.pop()},/normal_inventory_count/],
+  ['substituted extra identity',x=>{x.rows[0].identity='public.unexpected'},/normal_inventory_membership/],
+  ['missing kind despite paired count',x=>{x.rows=x.rows.filter(r=>r.kind!=='policy');x.metadata=x.metadata.filter(r=>r.kind!=='policy');x.count--},/normal_inventory_all_kinds/],
+  ['unknown kind',x=>{x.rows[0].kind='unknown'},/normal_inventory_identity/],
+  ['null row',x=>{x.rows[0]=null},/normal_inventory_row/],
+  ['metadata wrong shape',x=>{delete x.metadata[0].order},/normal_inventory_metadata/],
+  ['control character identity',x=>{x.rows[0].identity+='\n'},/normal_inventory_identity/],
+  ['noninteger order',x=>{x.rows[0].order=1.5},/normal_inventory_order/],
+  ['changed restore order',x=>{x.rows[0].order++},/normal_inventory_membership/],
+  ['zero order',x=>{x.rows[0].order=0},/normal_inventory_order/],
+  ['duplicate key',x=>{x.rows[0]={...x.rows[1]}},/normal_inventory_duplicate/],
+  ['duplicate metadata key',x=>{x.metadata[0]={...x.metadata[1]}},/normal_inventory_duplicate/],
+  ['malformed recorded hash',x=>{x.rows[0].sha256='bad'},/normal_inventory_hash/],
+  ['stale recorded hash',x=>{x.rows[0].sha256='0'.repeat(64)},/normal_inventory_live_integrity/],
+  ['metadata digest replaced',x=>{x.metadata[0].sha256='0'.repeat(64)},/normal_inventory_membership/],
+  ['stale stored computed hash',x=>{x.rows[0].stored_sha256='0'.repeat(64)},/normal_inventory_computed_hash/],
+  ['stale current computed hash',x=>{x.rows[0].live_sha256='0'.repeat(64)},/normal_inventory_computed_hash/],
+  ['stored raw bytes changed',x=>{x.rows[0].definition_sql+='x'},/normal_inventory_computed_hash/],
+  ['current raw bytes changed',x=>{x.rows[0].live_sql+='x'},/normal_inventory_computed_hash/],
+  ['authentic current digest disagrees with stored',x=>{x.rows[0].live_sql+='x';x.rows[0].live_sha256=hash(x.rows[0].live_sql)},/normal_inventory_live_integrity/],
+  ['missing live object',x=>{x.rows[0].live_sql=null;x.rows[0].live_sha256=null},/normal_inventory_sql/],
+  ['empty SQL',x=>{x.rows[0].definition_sql=''},/normal_inventory_sql/],
+  ['oversized SQL',x=>{x.rows[0].definition_sql='x'.repeat(4*1024*1024+1)},/normal_inventory_sql/],
+  ['unexpected output field',x=>{x.accepted=true},/normal_inventory_shape/],
+  ['missing renderer',x=>{x.renderers.pop()},/normal_renderer_count/],
+  ['duplicate renderer',x=>{x.renderers[0]={...x.renderers[1]}},/normal_renderer_source/],
+  ['unknown renderer',x=>{x.renderers[0].identity='public.other(text)'},/normal_renderer_source/],
+  ['drifted renderer source',x=>{x.renderers[0].sha256='0'.repeat(64)},/normal_renderer_source/]
+])await test('normal inventory rejects '+name+' and cleans without authority',async()=>{
+  const m=structuredClone(seed);m.lane='normal';m.official_fixture=null;
+  const f=fake(m,ctx=>ctx.phase==='normal_inventory'?editJson(change)(ctx.result):undefined);
+  await assert.rejects(()=>runRecoveryReplay(m,{root,io:f.io}),pattern);assert.ok(f.calls.some(x=>x.phase==='cleanup_rm'));
+  assert.ok(!f.calls.some(x=>/^(probe|official|synthetic_seed|remove_)/.test(x.phase)));assert.ok(!f.outputs.has(join(m.output_dir,'normal-prepare-receipt.json')));
+  const raw=JSON.parse(f.outputs.get(join(m.output_dir,'normal-prepare-recovery-inventory-observed.json')));
+  assert.equal(raw.classification,'NORMAL_INVENTORY_UNVALIDATED_OBSERVATION');assert.equal(raw.independently_accepted,false);
+  assert.ok(!f.outputs.has(join(m.output_dir,'normal-prepare-recovery-inventory.json')));
+});
+for(const [name,response,pattern] of [
+  ['response loss',{status:3,stdout:'',stderr:'hidden failed response'},/sql_normal_inventory/],
+  ['malformed JSON',ok('{'),/json_normal_inventory/]
+])await test('normal inventory '+name+' remains failure with exact cleanup',async()=>{
+  const m=structuredClone(seed);m.lane='normal';m.official_fixture=null;const f=fake(m,ctx=>ctx.phase==='normal_inventory'?response:undefined);
+  await assert.rejects(()=>runRecoveryReplay(m,{root,io:f.io}),pattern);assert.equal(f.calls.filter(x=>x.phase==='normal_inventory').length,1);assert.ok(f.calls.some(x=>x.phase==='cleanup_rm'));
+  assert.ok(!f.outputs.has(join(m.output_dir,'normal-prepare-receipt.json')));assert.ok([...f.outputs.values()].every(bytes=>!bytes.includes('hidden failed response')));
+});
+await test('normal artifact write failure cannot return successful preparation',async()=>{
+  const m=structuredClone(seed);m.lane='normal';m.official_fixture=null;const f=fake(m,ctx=>ctx.phase==='write_normal-prepare-recovery-inventory.json'?false:undefined);
+  await assert.rejects(()=>runRecoveryReplay(m,{root,io:f.io}),/output_write_failed/);assert.ok(f.calls.some(x=>x.phase==='cleanup_rm'));assert.ok(!f.outputs.has(join(m.output_dir,'normal-prepare-receipt.json')));
+});
+await test('normal unvalidated observation write failure aborts without accepting or retaining target',async()=>{
+  const m=structuredClone(seed);m.lane='normal';m.official_fixture=null;const f=fake(m,ctx=>ctx.phase==='write_normal-prepare-recovery-inventory-observed.json'?false:undefined);
+  await assert.rejects(()=>runRecoveryReplay(m,{root,io:f.io}),/output_write_failed/);assert.ok(f.calls.some(x=>x.phase==='cleanup_rm'));assert.ok(!f.outputs.has(join(m.output_dir,'normal-prepare-receipt.json')));
+});
+await test('normal capture normalizes observation order without changing restore order',async()=>{
+  const m=structuredClone(seed);m.lane='normal';m.official_fixture=null;
+  const f=fake(m,ctx=>ctx.phase==='normal_inventory'?editJson(x=>{x.rows.reverse();x.metadata.reverse();x.renderers.reverse()})(ctx.result):undefined);
+  const r=await runRecoveryReplay(m,{root,io:f.io}),a=JSON.parse(f.outputs.get(join(m.output_dir,r.recovery_inventory.file)));assert.deepEqual(a.rows,normalRows);
+});
+await test('no-auto and probe receipt remain outside NORMAL artifact capture',async()=>{
+  const {m,f,receipt}=await prepared();await runRecoveryReplay(verifyPlan(m,f),{root,io:f.io});assert.equal(receipt.recovery_inventory,undefined);
+  assert.ok(!f.calls.some(x=>x.phase==='normal_inventory'));assert.ok(![...f.outputs.keys()].some(x=>x.endsWith('-recovery-inventory.json')));
+});
+await test('fixed normal renderer SQL exactly preserves probe contract and cannot execute stored SQL',()=>{
+  const probe=readFileSync(new URL('./current-release-recovery-probe.mjs',import.meta.url),'utf8'),text=readFileSync(new URL('./current-release-recovery-replay.mjs',import.meta.url),'utf8');
+  const live=probe.match(/const LIVE = `([\s\S]*?)`;/)[1],normal=text.match(/const NORMAL_LIVE=`([\s\S]*?)`;/)[1];assert.equal(normal,live);
+  assert.equal(Object.keys(NORMAL_RENDERER_PINS).length,9);assert.ok(Object.values(NORMAL_RENDERER_PINS).every(x=>/^[a-f0-9]{64}$/.test(x)));
+  assert.match(NORMAL_INVENTORY_SQL,/^begin isolation level repeatable read read only;/);assert.match(NORMAL_INVENTORY_SQL,/set local search_path=pg_catalog,public;/);
+  assert.match(NORMAL_INVENTORY_SQL,/select count\(\*\) from public\.custodial_release_authority_restore_inventory/);
+  // Renderer evidence deliberately contains quoted DROP/ALTER text; only
+  // outside-literal SQL tokens could execute here. Stored strings stay data.
+  const tokens=NORMAL_INVENTORY_SQL.replace(/'(?:''|[^'])*'/g,"''");
+  assert.doesNotMatch(tokens,/\b(?:insert|update|delete|truncate|alter|execute|configure_backend_execution_key)\b/i);
+  assert.ok(NORMAL_INVENTORY_SQL.endsWith('\ncommit;'));
+  assert.equal(hash(NORMAL_INVENTORY_SQL),'4734489a6d85f774d77ca7175c9dce511a8d9560fbb01f8942c8e317dff96449');
+});
 await test('independent fake verify consumes root-bound manifest then closes exact lease',async()=>{const {m,f}=await prepared(),v=verifyPlan(m,f);const receipt=await runRecoveryReplay(v,{root,io:f.io});assert.equal(receipt.status,'SYNTHETIC_PROBE_COMPLETED_NOT_RELEASE_ADMITTED');assert.equal(receipt.engine_executed,false);assert.equal(f.calls.filter(x=>x.phase==='probe').length,1);assert.equal(f.calls.filter(x=>x.phase==='cleanup_rm').length,1)});
 await test('prepare and verify preserve original source requirements while binding captured callable aliases',async()=>{
   const m=structuredClone(seed);m.required_surface=sort([...m.required_surface,{kind:'function',identity:'synthetic_function()'},{kind:'grant',identity:'synthetic_function()'}]);
