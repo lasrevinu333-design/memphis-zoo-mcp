@@ -116,6 +116,51 @@ await boundary('nonempty catalog never reset or cleaned','empty_catalog',editJso
 await boundary('existing public function is not empty admission','empty_catalog',editJson(x=>{x.functions=1}),/empty_catalog_required/,{cleanup:false});
 await boundary('changed migration bytes fail before execution','read_00000000000000_synthetic_baseline.sql',()=>Buffer.from('different'),/migration_changed/);
 await boundary('migration failure has raw output and cleanup','migration_0000',()=>({status:3,stdout:'synthetic stdout',stderr:'ERROR: 42601'}),/sql_migration/);
+await test('hash-pinned final migration raw log keeps primary rejection without promoting success',async()=>{
+  const m=structuredClone(seed);m.lane='normal';m.official_fixture=null;
+  const primary='ERROR:  synthetic required authority member mismatch\n';
+  const f=fake(m,ctx=>ctx.phase==='migration_0004'?{status:3,stdout:'',stderr:ctx.call.args.includes('VERBOSITY=terse')?primary:'ERROR:  P0001\n'}:undefined);
+  await assert.rejects(()=>runRecoveryReplay(m,{root,io:f.io}),/sql_migration_0004/);
+  assert.equal(f.outputs.get(join(m.output_dir,'normal-prepare-migration_0004.log')),primary);
+  assert.equal(f.calls.filter(x=>x.phase==='predecessor').length,1);
+  assert.ok(!f.calls.some(x=>x.phase.startsWith('catalog_')));
+  assert.ok(f.calls.some(x=>x.phase==='cleanup_rm'));
+  for(const [path,bytes] of f.outputs)if(!path.endsWith('migration_0004.log'))assert.ok(!bytes.includes(primary.trim()));
+});
+await test('only hash-verified migration raw logs request terse mode across both replay lanes and verify',async()=>{
+  const {m,f}=await prepared();await runRecoveryReplay(verifyPlan(m,f),{root,io:f.io});
+  const normal=structuredClone(seed);normal.lane='normal';normal.official_fixture=null;
+  const n=fake(normal);await runRecoveryReplay(normal,{root,io:n.io});
+  for(const [plan,fixture] of [[m,f],[normal,n]]){
+    const commands=fixture.calls.filter(x=>x.call?.command==='docker'&&x.call.args[2]==='exec');
+    assert.equal(commands.filter(x=>/^migration_\d{4,}$/.test(x.phase)).length,plan.source.migrations.length);
+    assert.ok(commands.some(x=>!x.phase.startsWith('migration_')));
+    for(const {phase,call} of commands){
+      const migration=/^migration_\d{4,}$/.test(phase);
+      assert.deepEqual(call.args.filter(x=>x.startsWith('VERBOSITY=')),['VERBOSITY='+(migration?'terse':'sqlstate')]);
+      if(migration){
+        const entry=plan.source.migrations[Number(phase.slice(10))],bytes=migrations.get(entry.file);
+        assert.equal(hash(bytes),entry.sha256);assert.ok(call.input.endsWith('\n'+bytes.toString()));
+        assert.ok(fixture.calls.findIndex(x=>x.phase==='read_'+entry.file)<fixture.calls.findIndex(x=>x.phase===phase));
+      }
+    }
+  }
+});
+await test('nonmigration error keeps sqlstate mode and cannot leak its arbitrary stderr into artifacts',async()=>{
+  const marker='synthetic nonmigration primary text must stay private';
+  const m=structuredClone(seed),f=fake(m,ctx=>ctx.phase==='defaults_before_0'?{status:3,stdout:'',stderr:marker}:undefined);
+  await assert.rejects(()=>runRecoveryReplay(m,{root,io:f.io}),/sql_defaults_before_0/);
+  assert.ok(f.calls.find(x=>x.phase==='defaults_before_0').call.args.includes('VERBOSITY=sqlstate'));
+  assert.ok([...f.outputs.values()].every(bytes=>!bytes.includes(marker)));
+  assert.ok(!f.calls.some(x=>x.phase==='migration_0000'));assert.ok(f.calls.some(x=>x.phase==='cleanup_rm'));
+});
+await test('unverified migration bytes never reach diagnostic execution or raw log',async()=>{
+  const m=structuredClone(seed),f=fake(m,ctx=>ctx.phase==='read_00000000000000_synthetic_baseline.sql'?Buffer.from('select 2;'):undefined);
+  await assert.rejects(()=>runRecoveryReplay(m,{root,io:f.io}),/migration_changed/);
+  assert.ok(!f.calls.some(x=>x.call?.args.includes('VERBOSITY=terse')));
+  assert.ok(![...f.outputs.keys()].some(path=>/migration_\d+\.log$/.test(path)));
+  assert.ok(f.calls.some(x=>x.phase==='cleanup_rm'));
+});
 await boundary('unrecognized default widening cannot be repaired','defaults_after_0',()=>ok('1'),/unexpected_default/);
 await test('only exact three legacy exceptions can remove changed defaults',async()=>{const m=structuredClone(seed),f=fake(m,ctx=>/^defaults_after_[123]$/.test(ctx.phase)?ok('1'):undefined);await runRecoveryReplay(m,{root,io:f.io});assert.equal(f.calls.filter(x=>x.phase.startsWith('remove_known_defaults_')).length,3)});
 await test('known exception still requires zero readback',async()=>{const m=structuredClone(seed),f=fake(m,ctx=>['defaults_after_1','defaults_rechecked_1'].includes(ctx.phase)?ok('1'):undefined);await assert.rejects(()=>runRecoveryReplay(m,{root,io:f.io}),/defaults_recheck/);assert.ok(f.calls.some(x=>x.phase==='cleanup_rm'))});

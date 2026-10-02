@@ -152,7 +152,11 @@ export async function runRecoveryReplay(plan,{root=ROOT,io=nodeIO,signal}={}){
     must(x.HostConfig?.NetworkMode==='none'&&Object.keys(x.HostConfig.PortBindings||{}).length===0&&Object.values(x.NetworkSettings?.Ports||{}).every(v=>v===null)&&canon(Object.keys(x.NetworkSettings?.Networks||{}))==='["none"]','target_network');
     same(x.Config?.Labels&&Object.fromEntries(['fixture','owner','fixture-id'].map(k=>[k,x.Config.Labels['org.memphiszoo.custodial.'+k]])),{fixture:'synthetic',owner:'/root','fixture-id':m.target.fixture_id},'target_ownership');
   }
-  async function sql(name,text,{rawLog=false}={}){phase=name;const r=await run('docker',[...DOCKER,'exec','-i',m.target.id,'psql','-X','-qAt','-v','ON_ERROR_STOP=1','-v','VERBOSITY=sqlstate','-U','supabase_admin','-d','postgres'],`/* current-replay:${name} */\nset standard_conforming_strings=on;set client_min_messages=warning;set statement_timeout=90000;set lock_timeout=5000;\n${text}`);
+  async function sql(name,text,{rawLog=false}={}){phase=name;
+    // Only the hash-verified migration caller below requests raw logs. TERSE
+    // retains its primary rejection without DETAIL/HINT/CONTEXT; queries stay redacted.
+    must(!rawLog||/^migration_\d{4,}$/.test(name),'migration_log_scope');
+    const r=await run('docker',[...DOCKER,'exec','-i',m.target.id,'psql','-X','-qAt','-v','ON_ERROR_STOP=1','-v','VERBOSITY='+(rawLog?'terse':'sqlstate'),'-U','supabase_admin','-d','postgres'],`/* current-replay:${name} */\nset standard_conforming_strings=on;set client_min_messages=warning;set statement_timeout=90000;set lock_timeout=5000;\n${text}`);
     if(rawLog)write(stage+'-'+name+'.log',r.stdout+r.stderr);must(r.status===0,'sql_'+name);return r.stdout.trim();}
   const query=async(name,text)=>json(await sql(name,text),'json_'+name);
   async function snapshots(){const rows=[];for(const table of m.protected_relations)rows.push(await query('snapshot_'+table.slice(7),`select jsonb_build_object('relation',${q(table)},'count',count(*),'sha256',encode(extensions.digest(convert_to(coalesce(string_agg(to_jsonb(r)::text,E'\\n' order by to_jsonb(r)::text),''),'UTF8'),'sha256'),'hex')) from ${table} r;`));return rows}
