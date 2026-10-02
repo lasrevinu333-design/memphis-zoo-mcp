@@ -421,6 +421,7 @@ const eventClaimedJob = {
 const eventInstance = {
   instance_id: eventClaimedJob.source_id,
   event_id: '88888888-8888-4888-8888-888888888883',
+  employee_id: '88888888-8888-4888-8888-888888888884',
   event_revision: 1,
   notification_key: 'event:cancel-boundary',
   notification_kind: 'day_before',
@@ -431,6 +432,13 @@ const eventInstance = {
   events_app_events: { event_name: 'Cancelled event', display_location: 'Zoo Footprint',
     event_date: '2026-10-20', start_time: '18:00:00', end_time: '20:30:00', attendee_count: 240 },
 };
+const currentEventProjection = { current:true,event_id:eventInstance.event_id,
+  event_revision:eventInstance.event_revision,instance_id:eventInstance.instance_id,
+  employee_id:eventInstance.employee_id,notification_key:eventInstance.notification_key,
+  employee_name:'Tammy',event_name:'Current confirmed event',display_location:'Canonical Event Center',
+  event_date:'2026-10-20',start_instant_utc:'2026-10-20T23:00:00Z',
+  end_instant_utc:'2026-10-21T01:30:00Z',attendee_count:240,
+  custodial_note_codes:['trash_boxes'],custodial_public_notes:'Waxed floor: use protected route.' };
 function eventInstanceQuery(row, { onUpdate = null } = {}) {
   const query = {
     select() { return query; },
@@ -501,6 +509,7 @@ assert.equal(duplicateClaimEventSends, 0);
 assert.equal(duplicateClaimEventUpdates, 0);
 
 let crossingEventSendCount = 0;
+let crossingEventBody = '';
 const cancelledAcrossProviderRuntime = installEmployeeNotificationRoutes(express(), {
   supabase: {
     async rpc(name) {
@@ -510,6 +519,7 @@ const cancelledAcrossProviderRuntime = installEmployeeNotificationRoutes(express
       if (name === 'mz_claim_employee_event_push_delivery') {
         return { data: { ok: true, instance_id: eventInstance.instance_id, state: 'leased' }, error: null };
       }
+      if (name === 'mz_employee_event_push_current_projection') return {data:currentEventProjection,error:null};
       assert.equal(name, 'mz_record_employee_event_push_delivery');
       return { data: { current: false, recorded: false, reason: 'event_or_revision_superseded' }, error: null };
     },
@@ -520,7 +530,7 @@ const cancelledAcrossProviderRuntime = installEmployeeNotificationRoutes(express
   },
   pushRuntime: {
     configured: true,
-    async send() { crossingEventSendCount += 1; return 'provider-message-cancelled-at-boundary'; },
+    async send(push) { crossingEventSendCount += 1; crossingEventBody=push.body; return 'provider-message-cancelled-at-boundary'; },
   },
 });
 await assert.rejects(
@@ -529,6 +539,26 @@ await assert.rejects(
   'a cancellation crossing the provider boundary cannot be recorded as a successful event delivery',
 );
 assert.equal(crossingEventSendCount, 1);
+assert.match(crossingEventBody,/Canonical Event Center/);
+assert.match(crossingEventBody,/Waxed floor/);
+assert.doesNotMatch(crossingEventBody,/Cancelled event|Zoo Footprint|PRIVATE_MANAGER_SOURCE/);
+
+let staleProjectionSends=0;
+const staleProjectionRuntime=installEmployeeNotificationRoutes(express(),{
+  supabase:{
+    async rpc(name){
+      if(name==='mz_resolve_employee_push_delivery')return {data:{ok:true,registration:authorizedRegistration},error:null};
+      if(name==='mz_claim_employee_event_push_delivery')return {data:{ok:true,dispatch_authorized:true},error:null};
+      if(name==='mz_employee_event_push_current_projection')return {data:{current:false,reason:'event_place_needs_review'},error:null};
+      if(name==='mz_release_employee_event_push_delivery')return {data:{current:true,released:true},error:null};
+      throw new Error(`unexpected stale projection RPC ${name}`);
+    },
+    from(name){assert.equal(name,'event_push_instances');return eventInstanceQuery(eventInstance);},
+  },pushRuntime:{configured:true,async send(){staleProjectionSends++;return 'must-not-send';}},
+});
+await assert.rejects(()=>staleProjectionRuntime.deliverClaimedJob(eventClaimedJob),
+  error=>error?.terminal===true&&error?.code==='event_place_needs_review');
+assert.equal(staleProjectionSends,0);
 
 let releaseEventLeaseExpirySend;
 let markEventLeaseExpirySendStarted;
@@ -552,6 +582,7 @@ const eventLeaseExpiryRuntime = installEmployeeNotificationRoutes(express(), {
         preparedEventLease = args.p_lease_token;
         return { data: { ok: true, dispatch_authorized: true, instance_id: eventInstance.instance_id, state: 'leased' }, error: null };
       }
+      if (name === 'mz_employee_event_push_current_projection') return {data:currentEventProjection,error:null};
       assert.equal(name, 'mz_record_employee_event_push_delivery');
       return args.p_lease_token === currentEventLease
         ? { data: { current: true, recorded: true }, error: null }
@@ -597,6 +628,7 @@ const rotatedDuringProviderFailureRuntime = installEmployeeNotificationRoutes(ex
       if (name === 'mz_claim_employee_event_push_delivery') {
         return { data: { ok: true, instance_id: eventInstance.instance_id, state: 'leased' }, error: null };
       }
+      if (name === 'mz_employee_event_push_current_projection') return {data:currentEventProjection,error:null};
       if (name === 'mz_release_employee_event_push_delivery') {
         return { data: { current: true, released: true, state: 'failed' }, error: null };
       }
@@ -634,6 +666,7 @@ const ambiguousProviderRuntime = installEmployeeNotificationRoutes(express(), {
       if (name === 'mz_claim_employee_event_push_delivery') {
         return { data: { ok: true, instance_id: eventInstance.instance_id, state: 'leased' }, error: null };
       }
+      if (name === 'mz_employee_event_push_current_projection') return {data:currentEventProjection,error:null};
       if (name === 'mz_release_employee_event_push_delivery') {
         ambiguousReleaseCalls += 1;
         return { data: { current: true, released: true }, error: null };

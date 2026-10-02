@@ -41,6 +41,12 @@ export function buildEmployeeEventReminderBody(event = {}, employeeName) {
     + (attendance == null ? '' : ` Expected attendance is ${attendance}.`)
     + (approvedNotes.length || publicNotes ? ` Custodial preparation: ${[...approvedNotes, publicNotes].filter(Boolean).join('; ')}.` : ''), 1000);
 }
+function eventTimeWithZone(instant) {
+  const date = new Date(String(instant || ''));
+  if (Number.isNaN(date.getTime())) throw new Error('Event reminder has no confirmed time instant.');
+  return new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago',
+    hour: 'numeric', minute: '2-digit', timeZoneName: 'short' }).format(date);
+}
 function credentialId(req) {
   return String(
     req.memphisDeviceCredential?.credential_id
@@ -487,17 +493,16 @@ export function installEmployeeNotificationRoutes(app, {
       let push;
       let channelId;
       if (job.job_type === 'employee_event_push') {
-        const instanceResult = await db.from('event_push_instances').select('*,events_app_events(event_name,display_location,event_date,start_time,end_time,attendee_count,custodial_note_codes,custodial_public_notes),employees(display_name)')
+        const instanceResult = await db.from('event_push_instances').select('*')
           .eq('instance_id', job.source_id).single();
         if (instanceResult.error) throw instanceResult.error;
         eventInstance = instanceResult.data;
-        const event = eventInstance.events_app_events || {};
         credential = eventInstance.credential_id;
         assignmentEpoch = eventInstance.assignment_epoch;
         channelId = 'employee-events';
         push = {
           title: 'Assigned event reminder',
-          body: buildEmployeeEventReminderBody(event, eventInstance.employees?.display_name),
+          body: null,
           data_json: {
             kind: 'employee_event',
             notification_type: 'event',
@@ -553,6 +558,40 @@ export function installEmployeeNotificationRoutes(app, {
           return { provider_message_id: claimed.provider_message_id, replayed: true };
         }
         providerBoundaryPrepared = true;
+        // Content is read only for this exact leased instance after the
+        // database has authorized its dispatch. Raw manager/source notes and
+        // stale legacy venue display never enter the spoken payload.
+        const current = await db.rpc('mz_employee_event_push_current_projection', {
+          p_job_id: job.job_id, p_lease_token: job.lease_token,
+          p_instance_id: eventInstance.instance_id, p_credential_id: credential,
+          p_assignment_epoch: assignmentEpoch,
+        });
+        if (current.error) {
+          const error = current.error;
+          error.deliveryNotAccepted = true;
+          throw error;
+        }
+        if (current.data?.current !== true
+          || current.data.event_id !== eventInstance.event_id
+          || Number(current.data.event_revision) !== Number(eventInstance.event_revision)
+          || current.data.instance_id !== eventInstance.instance_id
+          || current.data.employee_id !== eventInstance.employee_id
+          || current.data.notification_key !== eventInstance.notification_key) {
+          const error = terminalDeliveryError(current.data?.reason || 'event_projection_identity_superseded');
+          error.deliveryNotAccepted = true;
+          throw error;
+        }
+        try {
+          push.body = buildEmployeeEventReminderBody({
+            ...current.data,
+            start_time: eventTimeWithZone(current.data.start_instant_utc),
+            end_time: eventTimeWithZone(current.data.end_instant_utc),
+          }, current.data.employee_name);
+        } catch (error) {
+          error.deliveryNotAccepted = true;
+          error.terminal = true;
+          throw error;
+        }
       } else {
         const prepared = await prepareNativeDelivery(job, credential, assignmentEpoch, registration);
         if (prepared.already_recorded === true) {
