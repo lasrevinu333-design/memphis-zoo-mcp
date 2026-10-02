@@ -2575,6 +2575,318 @@
     },
     {
       "collation_name": null,
+      "column_name": "activation_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": "gen_random_uuid()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 1,
+      "schema_name": "public",
+      "table_name": "custodial_dated_activations"
+    },
+    {
+      "collation_name": null,
+      "column_name": "publication_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 2,
+      "schema_name": "public",
+      "table_name": "custodial_dated_activations"
+    },
+    {
+      "collation_name": null,
+      "column_name": "authority_revision",
+      "comment": null,
+      "data_type": "bigint",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 3,
+      "schema_name": "public",
+      "table_name": "custodial_dated_activations"
+    },
+    {
+      "collation_name": null,
+      "column_name": "active",
+      "comment": null,
+      "data_type": "boolean",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 4,
+      "schema_name": "public",
+      "table_name": "custodial_dated_activations"
+    },
+    {
+      "collation_name": null,
+      "column_name": "manager_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 5,
+      "schema_name": "public",
+      "table_name": "custodial_dated_activations"
+    },
+    {
+      "collation_name": null,
+      "column_name": "created_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": "statement_timestamp()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 6,
+      "schema_name": "public",
+      "table_name": "custodial_dated_activations"
+    },
+    {
+      "collation_name": null,
+      "column_name": "occurrence_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": "gen_random_uuid()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 1,
+      "schema_name": "public",
+      "table_name": "custodial_dated_occurrences"
+    },
+    {
+      "collation_name": null,
+      "column_name": "publication_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 2,
+      "schema_name": "public",
+      "table_name": "custodial_dated_occurrences"
+    },
+    {
+      "collation_name": null,
+      "column_name": "service_date",
+      "comment": null,
+      "data_type": "date",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 3,
+      "schema_name": "public",
+      "table_name": "custodial_dated_occurrences"
+    },
+    {
+      "collation_name": null,
+      "column_name": "plan_work_id",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 4,
+      "schema_name": "public",
+      "table_name": "custodial_dated_occurrences"
+    },
+    {
+      "collation_name": null,
+      "column_name": "assignment",
+      "comment": null,
+      "data_type": "jsonb",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 5,
+      "schema_name": "public",
+      "table_name": "custodial_dated_occurrences"
+    },
+    {
+      "collation_name": null,
+      "column_name": "publication_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": "gen_random_uuid()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 1,
+      "schema_name": "public",
+      "table_name": "custodial_dated_publications"
+    },
+    {
+      "collation_name": null,
+      "column_name": "projection_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": "gen_random_uuid()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 2,
+      "schema_name": "public",
+      "table_name": "custodial_dated_publications"
+    },
+    {
+      "collation_name": null,
+      "column_name": "plan_digest",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 3,
+      "schema_name": "public",
+      "table_name": "custodial_dated_publications"
+    },
+    {
+      "collation_name": null,
+      "column_name": "plan",
+      "comment": null,
+      "data_type": "jsonb",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 4,
+      "schema_name": "public",
+      "table_name": "custodial_dated_publications"
+    },
+    {
+      "collation_name": null,
+      "column_name": "dependency_digest",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 5,
+      "schema_name": "public",
+      "table_name": "custodial_dated_publications"
+    },
+    {
+      "collation_name": null,
+      "column_name": "manager_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 6,
+      "schema_name": "public",
+      "table_name": "custodial_dated_publications"
+    },
+    {
+      "collation_name": null,
+      "column_name": "staged_transaction",
+      "comment": null,
+      "data_type": "xid8",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 7,
+      "schema_name": "public",
+      "table_name": "custodial_dated_publications"
+    },
+    {
+      "collation_name": null,
+      "column_name": "expected_revision",
+      "comment": null,
+      "data_type": "bigint",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 8,
+      "schema_name": "public",
+      "table_name": "custodial_dated_publications"
+    },
+    {
+      "collation_name": null,
+      "column_name": "created_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": "statement_timestamp()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 9,
+      "schema_name": "public",
+      "table_name": "custodial_dated_publications"
+    },
+    {
+      "collation_name": null,
+      "column_name": "manager_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 1,
+      "schema_name": "public",
+      "table_name": "custodial_dated_receipts"
+    },
+    {
+      "collation_name": null,
+      "column_name": "operation_key",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 2,
+      "schema_name": "public",
+      "table_name": "custodial_dated_receipts"
+    },
+    {
+      "collation_name": null,
+      "column_name": "request",
+      "comment": null,
+      "data_type": "jsonb",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 3,
+      "schema_name": "public",
+      "table_name": "custodial_dated_receipts"
+    },
+    {
+      "collation_name": null,
+      "column_name": "response",
+      "comment": null,
+      "data_type": "jsonb",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 4,
+      "schema_name": "public",
+      "table_name": "custodial_dated_receipts"
+    },
+    {
+      "collation_name": null,
       "column_name": "replacement_id",
       "comment": null,
       "data_type": "uuid",
@@ -27440,6 +27752,201 @@
       "not_null": true,
       "ordinal_position": 1,
       "schema_name": "public",
+      "table_name": "system_feedback_email_intents"
+    },
+    {
+      "collation_name": null,
+      "column_name": "feedback_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 2,
+      "schema_name": "public",
+      "table_name": "system_feedback_email_intents"
+    },
+    {
+      "collation_name": null,
+      "column_name": "operation_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 3,
+      "schema_name": "public",
+      "table_name": "system_feedback_email_intents"
+    },
+    {
+      "collation_name": null,
+      "column_name": "request_fingerprint",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 4,
+      "schema_name": "public",
+      "table_name": "system_feedback_email_intents"
+    },
+    {
+      "collation_name": null,
+      "column_name": "contract_version",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": "'custodial-feedback-relay.v1'::text",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 5,
+      "schema_name": "public",
+      "table_name": "system_feedback_email_intents"
+    },
+    {
+      "collation_name": null,
+      "column_name": "provider",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": "'outlook'::text",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 6,
+      "schema_name": "public",
+      "table_name": "system_feedback_email_intents"
+    },
+    {
+      "collation_name": null,
+      "column_name": "provider_account",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": "'eoperle@memphiszoo.org'::text",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 7,
+      "schema_name": "public",
+      "table_name": "system_feedback_email_intents"
+    },
+    {
+      "collation_name": null,
+      "column_name": "recipient",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": "'eoperle@memphiszoo.org'::text",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 8,
+      "schema_name": "public",
+      "table_name": "system_feedback_email_intents"
+    },
+    {
+      "collation_name": null,
+      "column_name": "original_actor",
+      "comment": null,
+      "data_type": "jsonb",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 9,
+      "schema_name": "public",
+      "table_name": "system_feedback_email_intents"
+    },
+    {
+      "collation_name": null,
+      "column_name": "feedback_snapshot",
+      "comment": null,
+      "data_type": "jsonb",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 10,
+      "schema_name": "public",
+      "table_name": "system_feedback_email_intents"
+    },
+    {
+      "collation_name": null,
+      "column_name": "email_subject",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 11,
+      "schema_name": "public",
+      "table_name": "system_feedback_email_intents"
+    },
+    {
+      "collation_name": null,
+      "column_name": "email_text",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 12,
+      "schema_name": "public",
+      "table_name": "system_feedback_email_intents"
+    },
+    {
+      "collation_name": null,
+      "column_name": "envelope_sha256",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 13,
+      "schema_name": "public",
+      "table_name": "system_feedback_email_intents"
+    },
+    {
+      "collation_name": null,
+      "column_name": "state",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": "'queued'::text",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 14,
+      "schema_name": "public",
+      "table_name": "system_feedback_email_intents"
+    },
+    {
+      "collation_name": null,
+      "column_name": "captured_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": "now()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 15,
+      "schema_name": "public",
+      "table_name": "system_feedback_email_intents"
+    },
+    {
+      "collation_name": null,
+      "column_name": "id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": "gen_random_uuid()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 1,
+      "schema_name": "public",
       "table_name": "system_feedback_items"
     },
     {
@@ -31943,6 +32450,110 @@
       "validated": true
     },
     {
+      "constraint_name": "custodial_dated_activations_authority_revision_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (authority_revision) REFERENCES weekly_schedule_authority_revisions(authority_revision)",
+      "schema_name": "public",
+      "table_name": "custodial_dated_activations",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_dated_activations_authority_revision_key",
+      "constraint_type": "u",
+      "definition": "UNIQUE (authority_revision)",
+      "schema_name": "public",
+      "table_name": "custodial_dated_activations",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_dated_activations_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (activation_id)",
+      "schema_name": "public",
+      "table_name": "custodial_dated_activations",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_dated_activations_publication_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (publication_id) REFERENCES custodial_dated_publications(publication_id)",
+      "schema_name": "public",
+      "table_name": "custodial_dated_activations",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_dated_occurrences_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (occurrence_id)",
+      "schema_name": "public",
+      "table_name": "custodial_dated_occurrences",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_dated_occurrences_publication_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (publication_id) REFERENCES custodial_dated_publications(publication_id)",
+      "schema_name": "public",
+      "table_name": "custodial_dated_occurrences",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_dated_occurrences_publication_id_service_date_pla_key",
+      "constraint_type": "u",
+      "definition": "UNIQUE (publication_id, service_date, plan_work_id)",
+      "schema_name": "public",
+      "table_name": "custodial_dated_occurrences",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_dated_occurrences_service_date_check",
+      "constraint_type": "c",
+      "definition": "CHECK (service_date >= '2026-10-01'::date AND service_date < '2026-10-05'::date)",
+      "schema_name": "public",
+      "table_name": "custodial_dated_occurrences",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_dated_publications_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (publication_id)",
+      "schema_name": "public",
+      "table_name": "custodial_dated_publications",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_dated_publications_plan_digest_check",
+      "constraint_type": "c",
+      "definition": "CHECK (plan_digest = '89f600b965259f6bbf30488ff5eef2a6d754b3cbd0072f00419b318245e9459d'::text)",
+      "schema_name": "public",
+      "table_name": "custodial_dated_publications",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_dated_publications_projection_id_key",
+      "constraint_type": "u",
+      "definition": "UNIQUE (projection_id)",
+      "schema_name": "public",
+      "table_name": "custodial_dated_publications",
+      "validated": true
+    },
+    {
+      "constraint_name": "dated_publication_complete",
+      "constraint_type": "t",
+      "definition": "TRIGGER DEFERRABLE INITIALLY DEFERRED",
+      "schema_name": "public",
+      "table_name": "custodial_dated_publications",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_dated_receipts_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (manager_id, operation_key)",
+      "schema_name": "public",
+      "table_name": "custodial_dated_receipts",
+      "validated": true
+    },
+    {
       "constraint_name": "custodial_device_credential_repl_predecessor_credential_id_fkey",
       "constraint_type": "f",
       "definition": "FOREIGN KEY (predecessor_credential_id) REFERENCES device_auth_credentials(credential_id)",
@@ -35135,6 +35746,14 @@
       "validated": true
     },
     {
+      "constraint_name": "events_app_events_review_isolation_check",
+      "constraint_type": "c",
+      "definition": "CHECK (status = 'NEEDS_REVIEW'::text AND event_scope = 'UNKNOWN'::text AND needs_review = true AND primary_venue_id IS NULL AND COALESCE(cardinality(venue_ids), 0) = 0 AND COALESCE(cardinality(coverage_location_ids), 0) = 0 AND COALESCE(cardinality(staffing_area_ids), 0) = 0 OR status <> 'NEEDS_REVIEW'::text AND ((status = ANY (ARRAY['CANCELLED'::text, 'ARCHIVED'::text])) OR event_scope <> 'UNKNOWN'::text AND needs_review = false))",
+      "schema_name": "public",
+      "table_name": "events_app_events",
+      "validated": true
+    },
+    {
       "constraint_name": "events_app_events_single_venue_check",
       "constraint_type": "c",
       "definition": "CHECK (event_scope <> 'SINGLE_VENUE'::text OR primary_venue_id IS NOT NULL)",
@@ -35145,7 +35764,7 @@
     {
       "constraint_name": "events_app_events_status_check",
       "constraint_type": "c",
-      "definition": "CHECK (status = ANY (ARRAY['SCHEDULED'::text, 'CANCELLED'::text, 'ARCHIVED'::text]))",
+      "definition": "CHECK (status = ANY (ARRAY['SCHEDULED'::text, 'NEEDS_REVIEW'::text, 'CANCELLED'::text, 'ARCHIVED'::text]))",
       "schema_name": "public",
       "table_name": "events_app_events",
       "validated": true
@@ -40367,6 +40986,110 @@
       "validated": true
     },
     {
+      "constraint_name": "feedback_email_intent_account",
+      "constraint_type": "c",
+      "definition": "CHECK (provider_account = 'eoperle@memphiszoo.org'::text)",
+      "schema_name": "public",
+      "table_name": "system_feedback_email_intents",
+      "validated": true
+    },
+    {
+      "constraint_name": "feedback_email_intent_actor_object",
+      "constraint_type": "c",
+      "definition": "CHECK (jsonb_typeof(original_actor) = 'object'::text)",
+      "schema_name": "public",
+      "table_name": "system_feedback_email_intents",
+      "validated": true
+    },
+    {
+      "constraint_name": "feedback_email_intent_contract",
+      "constraint_type": "c",
+      "definition": "CHECK (contract_version = 'custodial-feedback-relay.v1'::text)",
+      "schema_name": "public",
+      "table_name": "system_feedback_email_intents",
+      "validated": true
+    },
+    {
+      "constraint_name": "feedback_email_intent_envelope_hash",
+      "constraint_type": "c",
+      "definition": "CHECK (envelope_sha256 ~ '^[0-9a-f]{64}$'::text)",
+      "schema_name": "public",
+      "table_name": "system_feedback_email_intents",
+      "validated": true
+    },
+    {
+      "constraint_name": "feedback_email_intent_fingerprint",
+      "constraint_type": "c",
+      "definition": "CHECK (request_fingerprint ~ '^[0-9a-f]{64}$'::text)",
+      "schema_name": "public",
+      "table_name": "system_feedback_email_intents",
+      "validated": true
+    },
+    {
+      "constraint_name": "feedback_email_intent_initial_state",
+      "constraint_type": "c",
+      "definition": "CHECK (state = 'queued'::text)",
+      "schema_name": "public",
+      "table_name": "system_feedback_email_intents",
+      "validated": true
+    },
+    {
+      "constraint_name": "feedback_email_intent_provider",
+      "constraint_type": "c",
+      "definition": "CHECK (provider = 'outlook'::text)",
+      "schema_name": "public",
+      "table_name": "system_feedback_email_intents",
+      "validated": true
+    },
+    {
+      "constraint_name": "feedback_email_intent_recipient",
+      "constraint_type": "c",
+      "definition": "CHECK (recipient = 'eoperle@memphiszoo.org'::text)",
+      "schema_name": "public",
+      "table_name": "system_feedback_email_intents",
+      "validated": true
+    },
+    {
+      "constraint_name": "feedback_email_intent_snapshot_object",
+      "constraint_type": "c",
+      "definition": "CHECK (jsonb_typeof(feedback_snapshot) = 'object'::text)",
+      "schema_name": "public",
+      "table_name": "system_feedback_email_intents",
+      "validated": true
+    },
+    {
+      "constraint_name": "system_feedback_email_intents_feedback_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (feedback_id) REFERENCES system_feedback_items(id) ON DELETE RESTRICT",
+      "schema_name": "public",
+      "table_name": "system_feedback_email_intents",
+      "validated": true
+    },
+    {
+      "constraint_name": "system_feedback_email_intents_feedback_id_key",
+      "constraint_type": "u",
+      "definition": "UNIQUE (feedback_id)",
+      "schema_name": "public",
+      "table_name": "system_feedback_email_intents",
+      "validated": true
+    },
+    {
+      "constraint_name": "system_feedback_email_intents_operation_id_key",
+      "constraint_type": "u",
+      "definition": "UNIQUE (operation_id)",
+      "schema_name": "public",
+      "table_name": "system_feedback_email_intents",
+      "validated": true
+    },
+    {
+      "constraint_name": "system_feedback_email_intents_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (id)",
+      "schema_name": "public",
+      "table_name": "system_feedback_email_intents",
+      "validated": true
+    },
+    {
       "constraint_name": "system_feedback_items_category_check",
       "constraint_type": "c",
       "definition": "CHECK (length(btrim(category)) >= 1 AND length(btrim(category)) <= 80 AND category ~ '^[a-z0-9_]+$'::text)",
@@ -42068,6 +42791,14 @@
     },
     {
       "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.capture_system_feedback_email_intent()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_actor jsonb := new.metadata_json->'identity_verification';\n  v_image jsonb := new.metadata_json->'image_attachment';\n  v_snapshot jsonb;\n  v_subject text;\n  v_text text;\n  v_link text;\n  v_envelope jsonb;\nbegin\n  -- The old public/anonymous submission path remains saved for manager review,\n  -- but is never enrolled for email. Only the authenticated employee/manager\n  -- path may create a relay intent.\n  if new.hub_context not in ('employee', 'manager') then\n    return new;\n  end if;\n\n  if jsonb_typeof(v_actor) is distinct from 'object'\n     or v_actor->>'status' is distinct from 'verified'\n     or (new.hub_context = 'employee' and (\n       v_actor->>'kind' is distinct from 'enrolled_employee_device'\n       or coalesce(v_actor->>'employee_id', '') !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'\n       or nullif(btrim(v_actor->>'credential_id'), '') is null\n       or upper(coalesce(v_actor->>'device_id', '')) is distinct from upper(coalesce(new.device_id, ''))\n     ))\n     or (new.hub_context = 'manager' and (\n       v_actor->>'kind' is distinct from 'named_manager_session'\n       or coalesce(v_actor->>'manager_id', '') !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'\n     ))\n     or nullif(btrim(new.submitted_by), '') is null then\n    raise exception using errcode = '23514',\n      message = 'Verified feedback identity is required before email intent capture';\n  end if;\n\n  if v_image is not null and jsonb_typeof(v_image) <> 'null' then\n    -- This is a manager-authenticated application page, not a signed Storage\n    -- URL. A later claim must verify the protected object and exact reader.\n    v_link := 'https://memphis-zoo-mcp.onrender.com/system-feedback.html?hub=manager&feedback=' || new.id::text;\n  end if;\n\n  v_snapshot := jsonb_build_object(\n    'feedback_id', new.id,\n    'operation_id', new.operation_id,\n    'request_fingerprint', new.request_fingerprint,\n    'category', new.category,\n    'priority', new.priority,\n    'message', new.message,\n    'submitted_by', new.submitted_by,\n    'hub_context', new.hub_context,\n    'device_id', new.device_id,\n    'created_at', new.created_at,\n    'image_attachment', v_image\n  );\n  v_subject := 'Memphis Zoo Program Feedback [' || new.operation_id::text || ']';\n  v_text := 'Memphis Zoo Program Feedback' || E'\\n'\n    || 'Operation ID: ' || new.operation_id::text || E'\\n'\n    || 'Request fingerprint: ' || new.request_fingerprint || E'\\n'\n    || 'Feedback ID: ' || new.id::text || E'\\n'\n    || 'Submitted by: ' || new.submitted_by || E'\\n'\n    || 'Source: ' || new.hub_context || E'\\n'\n    || 'Category: ' || new.category || E'\\n'\n    || 'Priority: ' || new.priority || E'\\n'\n    || case when v_link is not null then 'Private image: ' || v_link || E'\\n' else '' end\n    || E'\\nMessage (verbatim):\\n' || new.message;\n  v_envelope := jsonb_build_object(\n    'contract_version', 'custodial-feedback-relay.v1',\n    'provider', 'outlook',\n    'provider_account', 'eoperle@memphiszoo.org',\n    'to', jsonb_build_array('eoperle@memphiszoo.org'),\n    'cc', '[]'::jsonb,\n    'bcc', '[]'::jsonb,\n    'subject', v_subject,\n    'text_content', v_text,\n    'save_to_sent_items', true\n  );\n\n  insert into public.system_feedback_email_intents(\n    feedback_id, operation_id, request_fingerprint, original_actor,\n    feedback_snapshot, email_subject, email_text, envelope_sha256\n  ) values (\n    new.id, new.operation_id, new.request_fingerprint, v_actor,\n    v_snapshot, v_subject, v_text,\n    encode(extensions.digest(convert_to(v_envelope::text, 'UTF8'), 'sha256'), 'hex')\n  );\n  return new;\nend;\n$function$\n",
+      "function_name": "capture_system_feedback_email_intent",
+      "identity_arguments": "",
+      "owner_name": "migration_owner",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
       "definition": "CREATE OR REPLACE FUNCTION public.claim_event_notification(p_event_id uuid, p_employee_id uuid, p_msg_user_id uuid, p_notification_kind text, p_scheduled_for_local text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_kind text := nullif(btrim(coalesce(p_notification_kind, '')), '');\n  v_scheduled timestamp;\n  v_existing public.events_app_notification_log%rowtype;\nbegin\n  if p_event_id is null or p_employee_id is null or p_msg_user_id is null then\n    raise exception 'event_id, employee_id, and msg_user_id are required';\n  end if;\n  if v_kind is null or length(v_kind) > 120 then\n    raise exception 'notification_kind is required and must be at most 120 characters';\n  end if;\n  begin\n    v_scheduled := p_scheduled_for_local::timestamp;\n  exception when others then\n    raise exception 'scheduled_for_local is invalid';\n  end;\n\n  perform pg_advisory_xact_lock(hashtextextended('event-reminder:' || p_event_id::text || ':' || p_employee_id::text, 0));\n\n  select log.* into v_existing\n  from public.events_app_notification_log log\n  where log.event_id = p_event_id\n    and log.employee_id = p_employee_id\n    and log.status in ('sent', 'sending')\n    and (log.status = 'sent' or log.updated_at > now() - interval '10 minutes')\n  order by case when log.status = 'sent' then 0 else 1 end, log.updated_at desc\n  limit 1;\n\n  if found then\n    return jsonb_build_object(\n      'claimed', false,\n      'reason', case when v_existing.status = 'sent' then 'event_already_notified' else 'event_notification_in_flight' end,\n      'notification_kind', v_existing.notification_kind,\n      'response_message_id', v_existing.response_message_id,\n      'status', v_existing.status\n    );\n  end if;\n\n  insert into public.events_app_notification_log(\n    event_id, employee_id, msg_user_id, notification_kind, scheduled_for_local,\n    sent_at, status, notes, created_at, updated_at\n  ) values (\n    p_event_id, p_employee_id, p_msg_user_id, v_kind, v_scheduled,\n    now(), 'sending', 'Claimed before message delivery', now(), now()\n  )\n  on conflict (event_id, employee_id, notification_kind) do update set\n    msg_user_id = excluded.msg_user_id,\n    scheduled_for_local = excluded.scheduled_for_local,\n    sent_at = now(),\n    status = 'sending',\n    response_message_id = null,\n    notes = 'Retry claimed before message delivery',\n    updated_at = now()\n  where public.events_app_notification_log.status = 'error'\n     or (public.events_app_notification_log.status = 'sending'\n         and public.events_app_notification_log.updated_at <= now() - interval '10 minutes')\n  returning * into v_existing;\n\n  if not found then\n    select log.* into v_existing\n    from public.events_app_notification_log log\n    where log.event_id = p_event_id\n      and log.employee_id = p_employee_id\n      and log.notification_kind = v_kind\n    limit 1;\n    return jsonb_build_object(\n      'claimed', false,\n      'reason', 'notification_already_claimed',\n      'response_message_id', v_existing.response_message_id,\n      'status', v_existing.status\n    );\n  end if;\n\n  return jsonb_build_object(\n    'claimed', true,\n    'reason', 'claim_created',\n    'notification_kind', v_kind,\n    'log_id', v_existing.id,\n    'status', v_existing.status\n  );\nend\n$function$\n",
       "function_name": "claim_event_notification",
       "identity_arguments": "p_event_id uuid, p_employee_id uuid, p_msg_user_id uuid, p_notification_kind text, p_scheduled_for_local text",
@@ -42399,6 +43130,70 @@
       "definition": "CREATE OR REPLACE FUNCTION public.custodial_credential_may_transmit_frozen_work(p_original_credential_id uuid, p_authenticated_credential_id uuid, p_device_id uuid, p_now timestamp with time zone DEFAULT now())\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\n  with recursive lineage(predecessor_credential_id,successor_credential_id,path) as (\n    select r.predecessor_credential_id,r.successor_credential_id,\n      array[r.predecessor_credential_id,r.successor_credential_id]::uuid[]\n    from public.custodial_device_credential_replacements r\n    where r.device_id=p_device_id and r.predecessor_credential_id=p_original_credential_id\n    union all\n    select l.predecessor_credential_id,r.successor_credential_id,l.path||r.successor_credential_id\n    from lineage l\n    join public.custodial_device_credential_replacements r\n      on r.device_id=p_device_id and r.predecessor_credential_id=l.successor_credential_id\n    where not r.successor_credential_id=any(l.path) and cardinality(l.path)<32\n  )\n  select coalesce(\n    case\n      when p_original_credential_id is null or p_authenticated_credential_id is null or p_device_id is null then false\n      when p_original_credential_id=p_authenticated_credential_id then exists(\n        select 1 from public.device_auth_credentials c\n        where c.credential_id=p_original_credential_id and c.device_id=p_device_id\n      )\n      else exists(\n        select 1\n        from public.device_auth_credentials current_credential\n        where current_credential.credential_id=p_authenticated_credential_id\n          and current_credential.device_id=p_device_id\n          and current_credential.confirmed_at is not null\n          and current_credential.revoked_at is null\n          and current_credential.expires_at>p_now\n          and exists(\n            select 1 from lineage l\n            where l.successor_credential_id=p_authenticated_credential_id\n          )\n      )\n    end,\n    false\n  )\n$function$\n",
       "function_name": "custodial_credential_may_transmit_frozen_work",
       "identity_arguments": "p_original_credential_id uuid, p_authenticated_credential_id uuid, p_device_id uuid, p_now timestamp with time zone",
+      "owner_name": "migration_owner",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.custodial_dated_assert_complete()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\nbegin\n if not exists(select 1 from public.custodial_dated_activations a join public.custodial_dated_receipts r\n  on r.response->>'publicationId'=a.publication_id::text\n  where a.publication_id=new.publication_id and a.active and r.response->>'state'='PERSISTED'\n    and r.response->>'projectionId'=new.projection_id::text and r.response->>'planDigest'=new.plan_digest\n    and (r.response->>'revision')::bigint=a.authority_revision and a.authority_revision=new.expected_revision+1)\n  or (select count(*) from public.custodial_dated_occurrences o where o.publication_id=new.publication_id)\n    <>(select sum(jsonb_array_length(d->'assignments')) from jsonb_array_elements(new.plan->'days') d) then\n  raise exception using errcode='23514',message='bounded stage must commit with complete accepted receipt and occurrences';end if;\n return new;\nend $function$\n",
+      "function_name": "custodial_dated_assert_complete",
+      "identity_arguments": "",
+      "owner_name": "migration_owner",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.custodial_dated_assert_plan(p jsonb)\n RETURNS void\n LANGUAGE plpgsql\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\nbegin\n if p->>'planDigest' is distinct from '89f600b965259f6bbf30488ff5eef2a6d754b3cbd0072f00419b318245e9459d'\n  or public.static_weekly_digest_jsonb(p-'planDigest') is distinct from p->>'planDigest'\n  or p->>'phonePdfRevision' is distinct from 'ee75f76a21e0d3a82291b8c720b5548532e1f168f1941a0cd74e80662302bd08'\n  or p->>'effectiveStart' is distinct from '2026-10-01' or p->>'effectiveEndExclusive' is distinct from '2026-10-05'\n  then raise exception using errcode='23514',message='exact approved bounded transition identity required'; end if;\nend $function$\n",
+      "function_name": "custodial_dated_assert_plan",
+      "identity_arguments": "p jsonb",
+      "owner_name": "migration_owner",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.custodial_dated_control(op text, args jsonb)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare actor jsonb;manager uuid;plan jsonb;dep text;state jsonb;r public.custodial_dated_publications%rowtype;\n request jsonb;response jsonb;rev bigint;slot jsonb;day jsonb;work jsonb;inc record;actual text;expected bigint;\nbegin\n perform public.static_weekly_v3_assert_control_plane();\n -- Direct callers use the same fence-before-authority order as the adapter.\n perform public.custodial_begin_application_mutation();\n perform pg_advisory_xact_lock(hashtextextended('memphis-static-weekly-authority',0));\n if jsonb_typeof(args) is distinct from 'object' then raise exception using errcode='22023',message='typed operation arguments required'; end if;\n manager:=nullif(args->>'managerId','')::uuid;\n if op in ('snapshot','receipt','stage','staged','finalize','rollback') then\n  actor:=public.static_weekly_v3_manager_actor(manager);\n end if;\n if op='snapshot' then\n  -- Status and exact rollback remain available after dependency drift.\n  -- This does not authorize a new stage or skip its full admission checks.\n  if args->'authorityOnly'='true'::jsonb then return jsonb_build_object('authorizedManagerId',manager,\n   'authorityRevision',(select current_revision from public.static_weekly_schedule_control where singleton));end if;\n  plan:=args->'plan';perform public.custodial_dated_assert_plan(plan);\n  if args->>'start' is distinct from '2026-10-01' or args->>'end' is distinct from '2026-10-05' then\n   raise exception using errcode='23514',message='exact bounded date range required'; end if;\n  for slot in select value from jsonb_array_elements(plan->'rosterSlots') loop\n   if not exists(select 1 from public.weekly_roster_slots s where s.slot_id::text=slot->>'slotId') then\n    raise exception using errcode='23514',message='current stable slot missing'; end if;\n   for day in select value from jsonb_array_elements(plan->'days') loop\n    select count(*)::text into actual from public.v_weekly_roster_slot_incumbency_ranges i\n      where i.slot_id::text=slot->>'slotId' and i.effective_start<=(day->>'serviceDate')::date\n      and (i.effective_end is null or (day->>'serviceDate')::date<i.effective_end);\n    if (slot->>'personId' is null and actual<>'0') or (slot->>'personId' is not null and actual<>'1') then\n     raise exception using errcode='23514',message='current incumbent/vacancy mismatch'; end if;\n    if slot->>'personId' is not null and not exists(select 1 from public.v_weekly_roster_slot_incumbency_ranges i\n     join public.employees e on e.id=i.person_id and e.active=true\n     where i.slot_id::text=slot->>'slotId' and i.person_id::text=slot->>'personId' and e.display_name=slot->>'displayName'\n      and i.effective_start<=(day->>'serviceDate')::date and (i.effective_end is null or (day->>'serviceDate')::date<i.effective_end)) then\n     raise exception using errcode='23514',message='current employee identity mismatch'; end if;\n   end loop;\n  end loop;\n  if exists(select 1 from jsonb_array_elements(plan->'days') d cross join lateral jsonb_array_elements(d->'assignments') w\n   where not exists(select 1 from public.location_groups g where g.group_code=w#>>'{workSnapshot,locationCodeSnapshot}' and g.active))\n   or exists(select 1 from jsonb_array_elements(plan->'days') d cross join lateral jsonb_array_elements(d->'assignments') w\n    cross join lateral jsonb_array_elements(w#>'{workSnapshot,includedLocations}') x\n    where not exists(select 1 from public.locations l where l.id::text=x->>'locationId' and l.active)) then\n    raise exception using errcode='23514',message='active physical location mapping required'; end if;\n  if exists(select 1 from public.weekly_schedule_exception_commands e where e.service_date>=date '2026-10-01' and e.service_date<date '2026-10-05')\n   or exists(select 1 from jsonb_array_elements(plan->'days') d cross join lateral jsonb_array_elements(d->'availability') a\n    join lateral(select s.staffing_state from public.weekly_roster_slot_staffing_states s\n     where s.slot_id::text=a->>'slotId' and s.effective_start<=(d->>'serviceDate')::date\n     order by s.effective_start desc,s.authority_revision desc limit 1) staffing on true\n    where a->>'status'='working' and staffing.staffing_state<>'working') then\n   raise exception using errcode='23514',message='current staffing/dated exceptions require reconciliation';end if;\n  return jsonb_build_object('authorizedManagerId',manager,'authorityRevision',(select current_revision from public.static_weekly_schedule_control where singleton),\n   'dependencyDigest',public.static_weekly_digest_jsonb(public.custodial_dated_dependencies(plan)),'rosterSlots',plan->'rosterSlots',\n   'approvedAvailability',(select jsonb_agg(jsonb_build_object('serviceDate',d->'serviceDate','availability',d->'availability') order by d->>'serviceDate') from jsonb_array_elements(plan->'days') d),\n   'hasExistingOccurrences',exists(select 1 from public.weekly_schedule_occurrences o where service_date>=date '2026-10-01' and service_date<date '2026-10-05')\n    or public.custodial_dated_record() is not null);\n elsif op='receipt' then\n  select jsonb_build_object('request',x.request,'response',x.response) into response from public.custodial_dated_receipts x\n    where manager_id=manager and operation_key=args->>'key';return response;\n elsif op='stage' then\n  plan:=args->'plan';perform public.custodial_dated_assert_plan(plan);\n  if public.custodial_dated_record() is not null or exists(select 1 from public.weekly_schedule_occurrences o\n    where o.service_date>=date '2026-10-01' and o.service_date<date '2026-10-05') then\n   raise exception using errcode='23514',message='existing occurrences require explicit reconciliation'; end if;\n  if exists(select 1 from public.custodial_dated_publications where staged_transaction=pg_current_xact_id()) then\n   raise exception using errcode='23514',message='one bounded stage per transaction'; end if;\n  -- Recheck identities at the writer even if the caller bypassed JS preview.\n  state:=public.custodial_dated_control('snapshot',jsonb_build_object('managerId',manager,'plan',plan,'start','2026-10-01','end','2026-10-05'));\n  insert into public.custodial_dated_publications(plan_digest,plan,dependency_digest,manager_id,staged_transaction,expected_revision)\n   values(plan->>'planDigest',plan,state->>'dependencyDigest',manager,pg_current_xact_id(),(state->>'authorityRevision')::bigint) returning * into r;\n  for day in select value from jsonb_array_elements(plan->'days') loop\n   for work in select value from jsonb_array_elements(day->'assignments') loop\n    insert into public.custodial_dated_occurrences(publication_id,service_date,plan_work_id,assignment)\n     values(r.publication_id,(day->>'serviceDate')::date,work->>'planWorkId',work);\n   end loop;\n  end loop;\n  return null;\n elsif op='staged' then\n  select * into r from public.custodial_dated_publications where staged_transaction=pg_current_xact_id() and manager_id=manager;\n  if not found then raise exception using errcode='55000',message='transaction-local stage required'; end if;\n  return jsonb_build_object('persistenceStatus','PERSISTED','publicationId',r.publication_id,'projectionId',r.projection_id,\n   'planDigest',r.plan_digest,'phonePdfRevision',r.plan->>'phonePdfRevision','days',r.plan->'days');\n elsif op in ('finalize','rollback') then\n  request:=args->'request';expected:=(request->>'expectedRevision')::bigint;\n  if request->>'managerId' is distinct from manager::text or request->>'planDigest' is distinct from '89f600b965259f6bbf30488ff5eef2a6d754b3cbd0072f00419b318245e9459d'\n   or request->>'phonePdfRevision' is distinct from 'ee75f76a21e0d3a82291b8c720b5548532e1f168f1941a0cd74e80662302bd08'\n   or nullif(btrim(request->>'idempotencyKey'),'') is null or length(request->>'idempotencyKey')>200 then\n    raise exception using errcode='23514',message='exact authorized operation identity required'; end if;\n  if op='finalize' then\n   select * into r from public.custodial_dated_publications where staged_transaction=pg_current_xact_id() and manager_id=manager;\n   if not found or r.expected_revision is distinct from expected or args#>>'{record,publicationId}' is distinct from r.publication_id::text\n     or args#>>'{record,projectionId}' is distinct from r.projection_id::text then\n    raise exception using errcode='23514',message='complete transaction-local stage identity required'; end if;\n   if request->>'operation' is distinct from 'materialize' or request->>'previewDigest' is distinct from public.static_weekly_digest_jsonb(\n     jsonb_build_object('planDigest',r.plan_digest,'managerId',manager::text,'authorityRevision',expected,'dependencyDigest',r.dependency_digest)) then\n    raise exception using errcode='23514',message='preview acceptance identity mismatch'; end if;\n  else\n   state:=public.custodial_dated_record();\n   if state is null or request->>'operation' is distinct from 'rollback'\n    or request->>'publicationId' is distinct from state->>'publicationId' or request->>'projectionId' is distinct from state->>'projectionId' then\n    raise exception using errcode='23514',message='rollback must name exact current publication'; end if;\n   select * into strict r from public.custodial_dated_publications where publication_id=(state->>'publicationId')::uuid;\n  end if;\n  rev:=public.static_weekly_advance_authority(expected,case when op='finalize' then 'materialize_projection' else 'rollback' end,\n    manager,actor->>'manager_name',gen_random_uuid(),public.static_weekly_digest_jsonb(request));\n  insert into public.custodial_dated_activations(publication_id,authority_revision,active,manager_id) values(r.publication_id,rev,op='finalize',manager);\n  response:=jsonb_build_object('state',case when op='finalize' then 'PERSISTED' else 'ROLLED_BACK' end,'revision',rev,\n   'publicationId',r.publication_id,'projectionId',r.projection_id,'planDigest',r.plan_digest,'phonePdfRevision',r.plan->>'phonePdfRevision',\n   'phoneDeliveryState','PENDING','affectedPhonesUpdated',false);\n  insert into public.custodial_dated_receipts values(manager,request->>'idempotencyKey',request,response);\n  return response;\n elsif op='current' then return public.custodial_dated_record();\n elsif op='day' then\n  state:=public.custodial_dated_record((args->>'date')::date);\n  if state->>'projectionStatus' is distinct from 'current' then return null; end if;\n  return (select d from jsonb_array_elements(state->'days') d where d->>'serviceDate'=args->>'date');\n else raise exception using errcode='22023',message='unknown bounded operation'; end if;\nend $function$\n",
+      "function_name": "custodial_dated_control",
+      "identity_arguments": "op text, args jsonb",
+      "owner_name": "migration_owner",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.custodial_dated_dependencies(p jsonb)\n RETURNS jsonb\n LANGUAGE sql\n STABLE\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\n select jsonb_build_object(\n 'employees',(select coalesce(jsonb_agg(jsonb_build_object('id',e.id,'name',e.display_name,'code',e.employee_code,'active',e.active) order by e.id),'[]')\n   from public.employees e where e.id::text in (select r->>'personId' from jsonb_array_elements(p->'rosterSlots') r)),\n 'slots',(select coalesce(jsonb_agg(jsonb_build_object('id',s.slot_id,'code',s.slot_code) order by s.slot_id),'[]')\n   from public.weekly_roster_slots s where s.slot_id::text in (select r->>'slotId' from jsonb_array_elements(p->'rosterSlots') r)),\n 'incumbents',(select coalesce(jsonb_agg(jsonb_build_object('slot',i.slot_id,'person',i.person_id,'name',i.person_name_snapshot,\n   'start',i.effective_start,'end',i.effective_end) order by i.slot_id,i.effective_start),'[]')\n   from public.v_weekly_roster_slot_incumbency_ranges i where i.slot_id::text in (select r->>'slotId' from jsonb_array_elements(p->'rosterSlots') r)\n   and i.effective_start<date '2026-10-05' and (i.effective_end is null or i.effective_end>date '2026-10-01')),\n 'staffing',(select coalesce(jsonb_agg(jsonb_build_object('slot',s.slot_id,'person',s.employee_id,'state',s.staffing_state,\n  'start',s.effective_start,'revision',s.authority_revision) order by s.slot_id,s.effective_start,s.authority_revision),'[]')\n  from public.weekly_roster_slot_staffing_states s where s.slot_id::text in (select r->>'slotId' from jsonb_array_elements(p->'rosterSlots') r)\n  and s.effective_start<date '2026-10-05'),\n 'locations',(select coalesce(jsonb_agg(jsonb_build_object('id',l.id,'name',l.location_name,'code',l.location_code,'active',l.active,'form',l.form_type) order by l.id),'[]')\n  from public.locations l where l.id::text in(select distinct x->>'locationId' from jsonb_array_elements(p->'days') d\n   cross join lateral jsonb_array_elements(d->'assignments') a cross join lateral jsonb_array_elements(a#>'{workSnapshot,includedLocations}') x)),\n 'groups',(select coalesce(jsonb_agg(jsonb_build_object('id',g.id,'code',g.group_code,'name',g.group_name,'active',g.active) order by g.id),'[]')\n  from public.location_groups g where g.group_code in(select distinct a#>>'{workSnapshot,locationCodeSnapshot}'\n   from jsonb_array_elements(p->'days') d cross join lateral jsonb_array_elements(d->'assignments') a)),\n 'exceptions',(select coalesce(jsonb_agg(jsonb_build_object('id',e.exception_id,'date',e.service_date,'revision',e.authority_revision)\n  order by e.exception_id),'[]') from public.weekly_schedule_exception_commands e where e.service_date>=date '2026-10-01' and e.service_date<date '2026-10-05'))\n $function$\n",
+      "function_name": "custodial_dated_dependencies",
+      "identity_arguments": "p jsonb",
+      "owner_name": "migration_owner",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.custodial_dated_record(p_date date DEFAULT NULL::date)\n RETURNS jsonb\n LANGUAGE sql\n STABLE\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\n select jsonb_build_object('persistenceStatus','PERSISTED','publicationId',p.publication_id,'projectionId',p.projection_id,\n 'planDigest',p.plan_digest,'phonePdfRevision',p.plan->>'phonePdfRevision','days',p.plan->'days',\n 'plan',p.plan,'revision',a.authority_revision,\n 'projectionStatus',case when public.static_weekly_digest_jsonb(public.custodial_dated_dependencies(p.plan))=p.dependency_digest then 'current' else 'stale_dated_dependency' end)\n from public.custodial_dated_publications p join lateral(select * from public.custodial_dated_activations x\n  where x.publication_id=p.publication_id order by authority_revision desc limit 1) a on a.active\n where (p_date is null or (p_date>=date '2026-10-01' and p_date<date '2026-10-05'))\n order by a.authority_revision desc limit 1\n $function$\n",
+      "function_name": "custodial_dated_record",
+      "identity_arguments": "p_date date",
+      "owner_name": "migration_owner",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.custodial_dated_reject_mutation()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'pg_catalog', 'public'\nAS $function$begin raise exception using errcode='55000',message='dated authority history is immutable';end$function$\n",
+      "function_name": "custodial_dated_reject_mutation",
+      "identity_arguments": "",
+      "owner_name": "migration_owner",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.custodial_dated_rows(kind text, p_date date)\n RETURNS jsonb\n LANGUAGE plpgsql\n STABLE\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare rec jsonb:=public.custodial_dated_record(p_date);day jsonb;result jsonb;version text;\nbegin\n if rec is null then return null; end if;\n select d into day from jsonb_array_elements(rec->'days') d where d->>'serviceDate'=p_date::text;\n version:=day->>'weeklyVersionId';\n if kind='state' then return jsonb_build_array(jsonb_build_object('service_date',p_date,'governed',true,\n  'authority_source','static_weekly_projection','projection_status',rec->>'projectionStatus','version_id',version,\n  'publication_id',rec->>'publicationId','projection_id',rec->>'projectionId','projection_authority_revision',rec->'revision',\n  'staffing_authority_revision',null,'week_start','2026-10-01'));end if;\n if rec->>'projectionStatus'<>'current' then return '[]'::jsonb;end if;\n if kind='roster' then\n  select coalesce(jsonb_agg(jsonb_build_object('employee_id',r->>'personId','employee_name',r->>'displayName',\n   'employee_code',e.employee_code,'shift_start',a#>>'{shift,start}','shift_end',a#>>'{shift,end}',\n   'lunch_start',a#>>'{lunch,start}','lunch_end',a#>>'{lunch,end}','active',coalesce(a->>'status'='working',false),\n   'source_type','static_weekly_projection','notes',null,'slot_id',r->>'slotId','slot_code',s.slot_code,\n   'slot_label',r->>'slotLabel','staffing_state',coalesce(a->>'status','unavailable'),'governed',true,\n   'projection_status','current','version_id',version,'publication_id',rec->>'publicationId','projection_id',rec->>'projectionId') order by r->>'slotId'),'[]') into result\n  from jsonb_array_elements(rec#>'{plan,rosterSlots}') r\n  join public.weekly_roster_slots s on s.slot_id::text=r->>'slotId'\n  left join public.employees e on e.id::text=r->>'personId'\n  left join lateral(select value a from jsonb_array_elements(day->'availability') where value->>'slotId'=r->>'slotId') av on true;\n  return result;\n elsif kind='segments' then\n  select coalesce(jsonb_agg(jsonb_build_object('service_date',p_date,'location_group_id',g.id,\n   'group_code',g.group_code,'group_name',a#>>'{workSnapshot,locationNameSnapshot}',\n   'included_locations',(select coalesce(jsonb_agg(x->>'locationNameSnapshot'),'[]') from jsonb_array_elements(a#>'{workSnapshot,includedLocations}') x),\n   'included_location_ids',(select coalesce(jsonb_agg(x->>'locationId'),'[]') from jsonb_array_elements(a#>'{workSnapshot,includedLocations}') x),\n   'segment_id',o.occurrence_id,'segment_number',1,'owner_type',case when a->>'status'='ASSIGNED' then 'EMPLOYEE' else 'OPEN' end,\n   'assigned_employee_id',a->>'personId','assigned_employee_name',a->>'displayName','coverage_start',a#>>'{window,start}',\n   'coverage_end',a#>>'{window,end}','status',a->>'status','load_points',a->'serviceEffortMinutes',\n   'coverage_purpose',case when a#>>'{workSnapshot,serviceMode}'='reminder_only' then 'reminder' when a#>>'{workSnapshot,serviceMode}'='response_only_no_clean' then 'response_only_no_clean' else 'area_owner' end,\n   'notes',null,'source_type','static_weekly_projection','service_mode',a#>>'{workSnapshot,serviceMode}',\n   'governed',true,'projection_status','current','version_id',version,'publication_id',rec->>'publicationId','projection_id',rec->>'projectionId') order by o.plan_work_id),'[]') into result\n  from public.custodial_dated_occurrences o cross join lateral(select o.assignment a) w\n  join public.location_groups g on g.group_code=a#>>'{workSnapshot,locationCodeSnapshot}' and g.active\n  where o.publication_id=(rec->>'publicationId')::uuid and o.service_date=p_date;\n  return result;\n elsif kind='lunch' then\n  select coalesce(jsonb_agg(jsonb_build_object('projection_id',rec->>'projectionId','loan_id',loan->>'loanId',\n   'responsibility_id',responsibility->>'responsibilityId','normal_occurrence_id',o.occurrence_id,\n   'normal_owner_id',loan->>'normalOwnerPersonId','coverer_id',responsibility->>'covererPersonId','coverer_name',e.display_name,\n   'location_group_id',g.id,'group_code',g.group_code,'group_name',o.assignment#>>'{workSnapshot,locationNameSnapshot}',\n   'included_locations',(select jsonb_agg(x->>'locationNameSnapshot') from jsonb_array_elements(segment->'includedLocations') x),\n   'included_location_ids',(select jsonb_agg(x->>'locationId') from jsonb_array_elements(segment->'includedLocations') x),\n   'included_snapshots',segment->'includedLocations','service_mode',segment->>'serviceMode',\n   'coverage_start',segment#>>'{window,start}','coverage_end',segment#>>'{window,end}')\n   order by loan->>'loanId',responsibility->>'responsibilityId',o.plan_work_id),'[]') into result\n  from jsonb_array_elements(day->'lunchLoans') loan cross join lateral jsonb_array_elements(loan->'responsibilities') responsibility\n  cross join lateral jsonb_array_elements(responsibility->'segments') segment\n  join public.custodial_dated_occurrences o on o.publication_id=(rec->>'publicationId')::uuid and o.service_date=p_date\n    and o.plan_work_id=segment->>'planWorkId'\n  join public.employees e on e.id::text=responsibility->>'covererPersonId' and e.active\n  join public.location_groups g on g.group_code=o.assignment#>>'{workSnapshot,locationCodeSnapshot}' and g.active;\n  return result;\n end if;\n raise exception using errcode='22023',message='unknown reader kind';\nend $function$\n",
+      "function_name": "custodial_dated_rows",
+      "identity_arguments": "kind text, p_date date",
+      "owner_name": "migration_owner",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.custodial_dated_service_dates()\n RETURNS TABLE(service_date date)\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\n select (d->>'serviceDate')::date from jsonb_array_elements(public.custodial_dated_record()->'days') d\n$function$\n",
+      "function_name": "custodial_dated_service_dates",
+      "identity_arguments": "",
       "owner_name": "migration_owner",
       "schema_name": "public"
     },
@@ -43363,6 +44158,14 @@
       "schema_name": "public"
     },
     {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.events_app_isolate_needs_review()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\nbegin\n  -- The earlier venue validator canonicalizes scope before this trigger runs.\n  -- A compatibility location_group_id is not an approved cleaning assignment.\n  if new.event_scope = 'UNKNOWN' or new.needs_review is true then\n    if nullif(btrim(coalesce(new.source_location_text, '')), '') is null\n       and nullif(btrim(coalesce(new.display_location, '')), '') is not null\n       and new.display_location <> 'Needs Review' then\n      new.source_location_text := new.display_location;\n    end if;\n    new.event_scope := 'UNKNOWN';\n    new.needs_review := true;\n    new.primary_venue_id := null;\n    new.venue_ids := '{}'::uuid[];\n    new.coverage_location_ids := '{}'::uuid[];\n    new.staffing_area_ids := '{}'::uuid[];\n    new.display_location := 'Needs Review';\n    if new.status not in ('CANCELLED','ARCHIVED') then\n      new.status := 'NEEDS_REVIEW';\n    end if;\n  elsif new.status = 'NEEDS_REVIEW' then\n    -- Reached only after a resolved venue passes the manager write path and\n    -- the venue validator. That update increments revision in the command.\n    new.status := 'SCHEDULED';\n  end if;\n  return new;\nend;\n$function$\n",
+      "function_name": "events_app_isolate_needs_review",
+      "identity_arguments": "",
+      "owner_name": "migration_owner",
+      "schema_name": "public"
+    },
+    {
       "comment": "Batch-purges events after the 14-day review window. Event notification and event history rows follow by cascade.",
       "definition": "CREATE OR REPLACE FUNCTION public.events_app_purge_expired(p_now timestamp with time zone DEFAULT now(), p_batch_limit integer DEFAULT 500)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_days integer := public.mz_retention_setting_int('retention_event_days',14,1,3650);\n  v_local_today date := (p_now at time zone 'America/Chicago')::date;\n  v_deleted integer := 0;\nbegin\n  if p_batch_limit is null or p_batch_limit<1 or p_batch_limit>5000 then\n    raise exception using errcode='22023',message='Event purge batch limit must be between 1 and 5000';\n  end if;\n\n  perform pg_advisory_xact_lock(hashtextextended('memphis-zoo-event-retention-v1',0));\n\n  with candidates as (\n    select e.id\n    from public.events_app_events e\n    where coalesce(e.end_date,e.event_date)<=v_local_today-v_days\n    order by coalesce(e.end_date,e.event_date),e.id\n    limit p_batch_limit\n    for update skip locked\n  ), deleted as (\n    delete from public.events_app_events e\n    using candidates c\n    where e.id=c.id\n    returning e.id\n  )\n  select count(*)::integer into v_deleted from deleted;\n\n  return jsonb_build_object(\n    'ok',true,\n    'retention_days',v_days,\n    'local_today',v_local_today,\n    'purged_at',p_now,\n    'deleted_events',v_deleted\n  );\nend\n$function$\n",
       "function_name": "events_app_purge_expired",
@@ -44196,6 +44999,14 @@
     },
     {
       "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.mz_is_approved_admin_location(p_location uuid, p_now timestamp with time zone)\n RETURNS boolean\n LANGUAGE sql\n IMMUTABLE\n SET search_path TO 'pg_catalog', 'public'\nAS $function$ select coalesce((p_now at time zone 'America/Chicago')::date>=date '2026-10-01' and p_location in('12c90b1e-d53e-47b6-860e-823ae0fee1a8'::uuid,'181a8d59-3a98-4823-8ca4-b9ecd958d90e'::uuid,'198be106-b98d-4604-b323-a0c8d5e4fd1a'::uuid,'58418743-10d7-4d22-97f8-1a33d4a969d4'::uuid,'7fdde9c1-b334-4adc-ae3e-350ff9419b2b'::uuid,'a8fa8f6b-6a90-4448-a125-ea1045fbe261'::uuid,'c33d6d08-95bb-40df-ad88-03482df6165d'::uuid,'c51107e4-2d66-487b-9765-09489e2f84c9'::uuid),false) $function$\n",
+      "function_name": "mz_is_approved_admin_location",
+      "identity_arguments": "p_location uuid, p_now timestamp with time zone",
+      "owner_name": "migration_owner",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
       "definition": "CREATE OR REPLACE FUNCTION public.mz_latest_verified_check(p_location_id uuid, p_day_start timestamp with time zone, p_now timestamp with time zone)\n RETURNS timestamp with time zone\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\n select max(context.native_completed_at)\n from public.custodial_offline_reconciliation_records receipt\n join public.custodial_offline_actor_contexts context on context.context_id=receipt.context_id\n join public.sessions session on session.id=receipt.session_id\n join public.completion_responses response on response.id=receipt.completion_response_id\n where receipt.state='committed' and context.status='committed' and session.status='closed'\n   and receipt.occurrence_id=context.occurrence_id\n   and receipt.occurrence_fingerprint=context.occurrence_fingerprint\n   and receipt.credential_id=context.credential_id\n   and receipt.location_id=p_location_id and session.location_id=p_location_id\n   and context.location_id=p_location_id and response.location_id=p_location_id\n   and response.session_id=session.id and context.client_session_id=session.client_session_id\n   and receipt.client_session_id=session.client_session_id\n   and receipt.client_completion_id=response.client_completion_id\n   and receipt.original_employee_id=session.employee_id and context.employee_id=session.employee_id\n   and receipt.device_id=session.device_id and context.device_id=session.device_id\n   and response.device_id=session.device_id and response.submitted_by_employee_id=session.employee_id\n   and response.response_json->>'work_result'='checked_no_cleaning_needed'\n   and response.response_json->'services_performed'='[]'::jsonb\n   and receipt.payload_json->'response_json'=response.response_json\n   and context.native_start_attestation_version='custodial-native-start.v1'\n   and context.native_scan_entry_id is not null\n   and context.native_completion_attestation_version='custodial-native-completion.v2'\n   and context.native_completion_attestation_sha256 ~ '^[0-9a-f]{64}$'\n   and context.native_finish_scan_entry_id is not null\n   and context.native_finish_scan_entry_id<>context.native_scan_entry_id\n   and context.started_at=session.started_at\n   and context.native_completed_at=session.ended_at\n   and context.native_completed_at>context.started_at\n   and context.native_completed_at>=p_day_start and context.native_completed_at<=p_now\n   and isfinite(context.native_completed_at)\n   and exists (\n     select 1 from public.custodial_offline_scan_event_evidence evidence\n     where evidence.context_id=context.context_id\n       and evidence.reconciliation_id=receipt.reconciliation_id\n       and evidence.session_id=session.id\n       and lower(evidence.client_event_id)=context.native_finish_scan_entry_id::text\n       and evidence.event_payload->>'event_type'='scan_finish'\n       and evidence.event_payload->>'result'='ok'\n       and evidence.event_payload#>>'{payload_json,entry_source}'='native-nfc'\n       and evidence.event_payload->>'scanned_at'=\n         public.custodial_canonical_utc_millis(context.native_completed_at)\n   );\n$function$\n",
       "function_name": "mz_latest_verified_check",
       "identity_arguments": "p_location_id uuid, p_day_start timestamp with time zone, p_now timestamp with time zone",
@@ -44204,7 +45015,7 @@
     },
     {
       "comment": null,
-      "definition": "CREATE OR REPLACE FUNCTION public.mz_location_reminder_candidates(p_service_date date, p_now timestamp with time zone DEFAULT now())\n RETURNS TABLE(location_id uuid, notification_key text, status_code text, cycle_base_at timestamp with time zone, cycle_base_evidence text, cleaned_at timestamp with time zone, due_soon_at timestamp with time zone, overdue_at timestamp with time zone)\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\n select status.location_id,\n   'location-visit:'||p_service_date::text||':'||status.location_id::text||':'||\n   cycle.status_code||':'||to_char(cycle.cycle_base_at at time zone 'UTC',\n     'YYYYMMDDHH24MISSUS')||':'||cycle.repeat_index::text,\n   cycle.status_code,cycle.cycle_base_at,cycle.cycle_base_evidence,\n   status.latest_completed_at,cycle.due_soon_at,cycle.overdue_at\n from public.v_location_dashboard_status status\n cross join lateral public.mz_verified_visit_reminder_cycle(\n   status.form_type,status.latest_completed_at,\n   public.mz_latest_verified_check(status.location_id,status.operational_day_start,p_now),p_now) cycle\n where p_service_date=public.sch_service_date(p_now)\n   and status.latest_completed_at>=status.operational_day_start\n   and cycle.status_code is not null;\n$function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.mz_location_reminder_candidates(p_service_date date, p_now timestamp with time zone DEFAULT now())\n RETURNS TABLE(location_id uuid, notification_key text, status_code text, cycle_base_at timestamp with time zone, cycle_base_evidence text, cleaned_at timestamp with time zone, due_soon_at timestamp with time zone, overdue_at timestamp with time zone)\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\n select status.location_id,\n   'location-visit:'||p_service_date::text||':'||status.location_id::text||':'||\n   cycle.status_code||':'||to_char(cycle.cycle_base_at at time zone 'UTC',\n     'YYYYMMDDHH24MISSUS')||':'||cycle.repeat_index::text,\n   cycle.status_code,cycle.cycle_base_at,cycle.cycle_base_evidence,\n   status.latest_completed_at,cycle.due_soon_at,cycle.overdue_at\n from public.v_location_dashboard_status status\n cross join lateral public.mz_verified_location_reminder_cycle(status.location_id,\n   status.form_type,status.latest_completed_at,\n   public.mz_latest_verified_check(status.location_id,status.operational_day_start,p_now),p_now) cycle\n where p_service_date=public.sch_service_date(p_now)\n   and status.latest_completed_at>=status.operational_day_start\n   and cycle.status_code is not null;\n$function$\n",
       "function_name": "mz_location_reminder_candidates",
       "identity_arguments": "p_service_date date, p_now timestamp with time zone",
       "owner_name": "migration_owner",
@@ -44319,6 +45130,14 @@
       "definition": "CREATE OR REPLACE FUNCTION public.mz_validate_employee_location_reminder(p_job_id uuid, p_lease_token uuid, p_now timestamp with time zone DEFAULT now())\n RETURNS jsonb\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare j public.operational_notification_jobs%rowtype;v_current boolean;\nbegin\n select * into j from public.operational_notification_jobs where job_id=p_job_id;\n if j.job_id is null or j.job_type is distinct from 'employee_native_push'\n    or j.status is distinct from 'leased' or j.lease_token is distinct from p_lease_token\n    or j.leased_until is null or j.leased_until<=p_now then\n   return jsonb_build_object('current',false,'reason','location_reminder_lease_superseded');\n end if;\n if j.payload_json#>>'{data_json,kind}' is distinct from 'employee_location_status'\n    or j.payload_json#>>'{data_json,reminder_contract}' is distinct from 'verified-visit-reminders.v2' then\n   return jsonb_build_object('current',false,'reason','location_reminder_contract_superseded');\n end if;\n select exists(\n   select 1 from public.mz_location_reminder_candidates(public.sch_service_date(p_now),p_now) c\n   join public.custodial_operational_location_assignments(public.sch_service_date(p_now)) a\n     on a.location_id=c.location_id\n   where c.location_id=j.source_id\n     and c.notification_key||':projection:'||a.projection_id::text=j.payload_json#>>'{data_json,notification_key}'\n     and a.projection_status='current'\n     and a.projection_id::text=j.payload_json#>>'{data_json,projection_id}'\n     and a.publication_id::text=j.payload_json#>>'{data_json,publication_id}'\n     and a.assigned_employee_id::text=j.payload_json->>'employee_id'\n     and a.assignment_status='ASSIGNED'\n     and a.coverage_start <= (p_now at time zone 'America/Chicago')::time\n     and (p_now at time zone 'America/Chicago')::time < a.coverage_end\n     and not exists (\n       select 1 from public.device_notification_acknowledgements acknowledgement\n       where upper(btrim(acknowledgement.device_identifier))=upper(btrim(j.payload_json->>'device_identifier'))\n         and acknowledgement.notification_key=j.payload_json#>>'{data_json,notification_key}'\n         and acknowledgement.credential_id::text=j.payload_json->>'credential_id'\n         and acknowledgement.assignment_epoch::text=j.payload_json->>'assignment_epoch'\n         and acknowledgement.employee_id::text=j.payload_json->>'employee_id'\n         and acknowledgement.acknowledged_at is not null\n     )\n ) into v_current;\n return jsonb_build_object('current',v_current,'reason',\n   case when v_current then null else 'location_reminder_cycle_or_responsibility_superseded' end);\nend $function$\n",
       "function_name": "mz_validate_employee_location_reminder",
       "identity_arguments": "p_job_id uuid, p_lease_token uuid, p_now timestamp with time zone",
+      "owner_name": "migration_owner",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.mz_verified_location_reminder_cycle(p_location uuid, p_form_type text, p_cleaned_at timestamp with time zone, p_checked_at timestamp with time zone, p_now timestamp with time zone)\n RETURNS TABLE(cycle_base_at timestamp with time zone, cycle_base_evidence text, due_soon_at timestamp with time zone, overdue_at timestamp with time zone, status_code text, repeat_index bigint)\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\n with original as materialized (select * from public.mz_verified_visit_reminder_cycle(p_form_type,p_cleaned_at,p_checked_at,p_now)),\n policy as materialized(select original.*,public.mz_is_approved_admin_location(p_location,p_now) admin from original),\n deadlines as(select cycle_base_at,cycle_base_evidence,\n  case when admin then cycle_base_at+interval '165 minutes' else due_soon_at end soon,\n  case when admin then cycle_base_at+interval '180 minutes' else overdue_at end overdue from policy)\n select cycle_base_at,cycle_base_evidence,soon,overdue,\n  case when p_now>=overdue then 'overdue' when p_now>=soon then 'due_soon' else null end,\n  case when p_now>=overdue then floor(extract(epoch from(p_now-overdue))/300)::bigint else 0 end from deadlines;\n$function$\n",
+      "function_name": "mz_verified_location_reminder_cycle",
+      "identity_arguments": "p_location uuid, p_form_type text, p_cleaned_at timestamp with time zone, p_checked_at timestamp with time zone, p_now timestamp with time zone",
       "owner_name": "migration_owner",
       "schema_name": "public"
     },
@@ -45916,6 +46735,14 @@
     },
     {
       "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.static_weekly_v27_read_home_time_facts(p_date date, p_employee uuid, p_publication uuid, p_projection uuid)\n RETURNS jsonb\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare rec jsonb:=public.custodial_dated_record(p_date);roster jsonb;working boolean;\nbegin\n if p_date is null or p_employee is null or p_publication is null or p_projection is null then return null;end if;\n if rec is null or rec->>'projectionStatus'<>'current' or rec->>'publicationId'<>p_publication::text or rec->>'projectionId'<>p_projection::text then return null;end if;\n select r into roster from jsonb_array_elements(public.custodial_dated_rows('roster',p_date)) r where r->>'employee_id'=p_employee::text;\n if roster is null then return null;end if;working:=roster->>'active'='true';\n return jsonb_build_object('contract_version','employee-home-time-facts.v1','service_date',p_date,'employee_id',p_employee,\n  'employee_name',roster->>'employee_name','projection_status','current','projection_id',p_projection,'publication_id',p_publication,\n  'candidate_revision',rec->>'phonePdfRevision','source','static_weekly_projection','reason',null,\n  'schedule_status',case when working then 'scheduled' else 'off' end,\n  'shift',case when working then jsonb_build_object('active',true,'start',roster->>'shift_start','end',roster->>'shift_end',\n   'shift_start',roster->>'shift_start','shift_end',roster->>'shift_end','lunch_start',roster->>'lunch_start','lunch_end',roster->>'lunch_end') else jsonb_build_object('active',false) end,\n  'lunch',case when working then jsonb_build_object('start',roster->>'lunch_start','end',roster->>'lunch_end') else null end);\nend $function$\n",
+      "function_name": "static_weekly_v27_read_home_time_facts",
+      "identity_arguments": "p_date date, p_employee uuid, p_publication uuid, p_projection uuid",
+      "owner_name": "migration_owner",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
       "definition": "CREATE OR REPLACE FUNCTION public.static_weekly_v2_apply_exception(p_exception_type text, p_service_date date, p_starts_at time without time zone, p_ends_at time without time zone, p_base_version_id uuid, p_publication_id uuid, p_reason text, p_payload jsonb, p_expected_revision bigint, p_actor_manager_id uuid, p_actor_manager_name text, p_idempotency_key text, p_reverses_exception_id uuid DEFAULT NULL::uuid)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare v_request jsonb; v_request_digest text; v_prior public.weekly_schedule_command_receipts%rowtype; v_command uuid:=gen_random_uuid(); v_exception uuid:=gen_random_uuid(); v_payload jsonb:=coalesce(p_payload,'{}'::jsonb); v_payload_digest text; v_revision bigint; v_response jsonb; v_target public.weekly_schedule_exception_commands%rowtype; v_operation text;\nbegin\n  perform public.static_weekly_assert_command_identity(p_expected_revision,p_actor_manager_id,p_actor_manager_name,p_idempotency_key,'apply_exception');\n  v_request:=jsonb_build_object('operation','apply_exception','exception_type',p_exception_type,'service_date',p_service_date,'starts_at',p_starts_at,'ends_at',p_ends_at,'base_version_id',p_base_version_id,'publication_id',p_publication_id,'reason',p_reason,'payload',v_payload,'expected_revision',p_expected_revision,'actor_manager_id',p_actor_manager_id,'actor_manager_name',p_actor_manager_name,'reverses_exception_id',p_reverses_exception_id); v_request_digest:=public.static_weekly_digest_jsonb(v_request); perform pg_advisory_xact_lock(hashtextextended('memphis-static-weekly-authority',0));\n  select * into v_prior from public.weekly_schedule_command_receipts where actor_manager_id=p_actor_manager_id and idempotency_key=p_idempotency_key; if found then if v_prior.request_digest<>v_request_digest then raise exception using errcode='23505',message='idempotency key was already used for different semantic inputs'; end if; return v_prior.response_json; end if;\n  if p_exception_type is null or p_exception_type not in ('pto','daily_absence','partial_absence','shift_override','cover_all','lunch','nine_forty_five_rebalance','event_impact','manager_correction','reverse') or p_service_date is null or p_base_version_id is null or p_publication_id is null or btrim(coalesce(p_reason,''))='' or jsonb_typeof(p_payload) is distinct from 'object' or ((p_starts_at is null)<>(p_ends_at is null)) or (p_starts_at is not null and p_starts_at>=p_ends_at) then raise exception using errcode='23514',message='complete exception semantic inputs are required'; end if;\n  if not exists(select 1 from public.weekly_schedule_publications where publication_id=p_publication_id and version_id=p_base_version_id) or public.static_weekly_effective_version(p_service_date) is distinct from p_base_version_id then raise exception using errcode='23514',message='exception must bind its effective publication and version'; end if;\n  if (p_exception_type='reverse') is distinct from (p_reverses_exception_id is not null) then raise exception using errcode='23514',message='reversal target coherence is required'; end if;\n  perform public.static_weekly_assert_exception_payload(p_exception_type,p_service_date,p_starts_at,p_ends_at,p_base_version_id,p_publication_id,v_payload,p_reverses_exception_id);\n  if p_exception_type='reverse' then select * into v_target from public.weekly_schedule_exception_commands where exception_id=p_reverses_exception_id; if not found or v_target.exception_type='reverse' or v_target.service_date is distinct from p_service_date or v_target.base_version_id is distinct from p_base_version_id or v_target.publication_id is distinct from p_publication_id or exists(select 1 from public.weekly_schedule_exception_commands where reverses_exception_id=p_reverses_exception_id) then raise exception using errcode='23514',message='reversal must target one compatible unreversed exception'; end if; end if;\n  v_payload_digest:=public.static_weekly_digest_jsonb(v_payload); v_operation:=case when p_exception_type='reverse' then 'reverse_exception' else 'apply_exception' end; v_revision:=public.static_weekly_advance_authority(p_expected_revision,v_operation,p_actor_manager_id,p_actor_manager_name,v_command,v_payload_digest);\n  insert into public.weekly_schedule_exception_commands(exception_id,authority_revision,exception_type,service_date,starts_at,ends_at,base_version_id,publication_id,reverses_exception_id,expected_revision,idempotency_key,actor_manager_id,actor_manager_name_snapshot,reason,payload_json,payload_digest) values(v_exception,v_revision,p_exception_type,p_service_date,p_starts_at,p_ends_at,p_base_version_id,p_publication_id,p_reverses_exception_id,p_expected_revision,p_idempotency_key,p_actor_manager_id,p_actor_manager_name,p_reason,v_payload,v_payload_digest);\n  v_response:=public.static_weekly_response_json(v_operation,v_revision,v_payload_digest,v_request_digest,jsonb_build_object('exception_id',v_exception,'exception_type',p_exception_type,'service_date',p_service_date,'payload_digest',v_payload_digest,'sequence',v_revision)); insert into public.weekly_schedule_command_receipts(command_id,actor_manager_id,actor_manager_name_snapshot,command_type,idempotency_key,expected_revision,request_digest,request_canonical_json,response_json,response_digest,content_digest) values(v_command,p_actor_manager_id,p_actor_manager_name,v_operation,p_idempotency_key,p_expected_revision,v_request_digest,v_request,v_response,v_response->>'output_digest',v_payload_digest); return v_response;\nend\n$function$\n",
       "function_name": "static_weekly_v2_apply_exception",
       "identity_arguments": "p_exception_type text, p_service_date date, p_starts_at time without time zone, p_ends_at time without time zone, p_base_version_id uuid, p_publication_id uuid, p_reason text, p_payload jsonb, p_expected_revision bigint, p_actor_manager_id uuid, p_actor_manager_name text, p_idempotency_key text, p_reverses_exception_id uuid",
@@ -46371,9 +47198,17 @@
       "schema_name": "public"
     },
     {
-      "comment": "Employee day v3 with accepted current lunch coverage; regular assignments and temporary loans remain separate.",
-      "definition": "CREATE OR REPLACE FUNCTION public.static_weekly_v5_read_employee_day(p_service_date date, p_employee_id uuid, p_now timestamp with time zone DEFAULT now())\n RETURNS jsonb\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n  v_result jsonb;\n  v_field text;\n  v_items jsonb;\n  v_lunch_items jsonb;\n  v_current_lunch jsonb;\nbegin\n  v_result:=public.static_weekly_v5_read_employee_day_single_location_base(p_service_date,p_employee_id,p_now);\n  foreach v_field in array array['items','all_items','current_items'] loop\n    select coalesce(jsonb_agg(\n      case when o.occurrence_id is null then item.value\n      else item.value||jsonb_build_object(\n        'service_mode',i.service_mode,\n        'included_locations',i.location_names,\n        'included_location_ids',i.location_ids,\n        'included_location_snapshots',i.location_snapshots,\n        'is_public_restroom',case when i.service_mode='scan_tracked' then i.has_public_restroom else false end\n      ) end\n      order by item.ordinality\n    ),'[]'::jsonb) into v_items\n    from jsonb_array_elements(coalesce(v_result->v_field,'[]'::jsonb)) with ordinality item(value,ordinality)\n    left join public.weekly_schedule_occurrences o on o.occurrence_id::text=item.value->>'occurrence_id'\n    left join lateral (\n      select\n        coalesce(o.authority_facts_json#>>'{work_snapshot,serviceMode}','scan_tracked') as service_mode,\n        coalesce(jsonb_agg(location.value order by location.ordinality) filter(where location.value is not null),'[]'::jsonb) as location_snapshots,\n        coalesce(jsonb_agg(to_jsonb(location.value->>'locationId') order by location.ordinality) filter(where location.value is not null),'[]'::jsonb) as location_ids,\n        coalesce(jsonb_agg(to_jsonb(location.value->>'locationNameSnapshot') order by location.ordinality) filter(where location.value is not null),'[]'::jsonb) as location_names,\n        coalesce(bool_or(lower(location.value->>'locationNameSnapshot') like '%restroom%'\n          or lower(location.value->>'locationNameSnapshot') like '%bathroom%') filter(where location.value is not null),false) as has_public_restroom\n      from jsonb_array_elements(\n        case when jsonb_typeof(o.authority_facts_json#>'{work_snapshot,includedLocations}')='array'\n          then o.authority_facts_json#>'{work_snapshot,includedLocations}' else '[]'::jsonb end\n      ) with ordinality location(value,ordinality)\n    ) i on true;\n    v_result:=jsonb_set(v_result,array[v_field],v_items,true);\n  end loop;\n  if v_result->>'governed'='true' and v_result->>'projection_status'='current' then\n    -- Same accepted reader drives employee display and operational reminder ownership.\n    select coalesce(jsonb_agg(jsonb_build_object(\n      'id',l.responsibility_id||':'||l.normal_occurrence_id::text,\n      'occurrence_id',l.normal_occurrence_id::text,'normal_occurrence_id',l.normal_occurrence_id::text,\n      'projection_id',l.projection_id::text,'service_date',p_service_date::text,\n      'loan_id',l.loan_id,'responsibility_id',l.responsibility_id,\n      'normal_owner_person_id',l.normal_owner_id::text,'coverer_person_id',l.coverer_id::text,\n      'location_group_id',l.location_group_id::text,'group_code',l.group_code,'group_name',l.group_name,\n      'location_group_code',l.group_code,'location_group_name',l.group_name,'location_name',l.group_name,\n      'included_locations',to_jsonb(l.included_locations),'included_location_ids',to_jsonb(l.included_location_ids),\n      'included_location_snapshots',l.included_snapshots,'service_mode',l.service_mode,\n      'coverage_start',to_char(l.coverage_start,'HH24:MI:SS'),'coverage_end',to_char(l.coverage_end,'HH24:MI:SS'),\n      'start_time',to_char(l.coverage_start,'HH24:MI:SS'),'end_time',to_char(l.coverage_end,'HH24:MI:SS'),\n      'coverage_purpose','lunch_coverage','purpose','lunch_coverage','section_title','Lunch coverage',\n      'source_type','static_weekly_lunch_coverage','owner_type','EMPLOYEE','status','ASSIGNED',\n      'load_points',0,'notes','Temporary responsibility; existing check deadlines unchanged.',\n      'check_deadline_policy','inherit_existing_90_minute_deadline','creates_deep_clean',false,\n      'is_public_restroom',l.service_mode='scan_tracked' and public.sch_is_public_restroom_group(l.location_group_id)\n    ) order by l.coverage_start,l.loan_id,l.responsibility_id,l.normal_occurrence_id),'[]') into v_lunch_items\n    from public.static_weekly_v8_read_lunch_segments(p_service_date) l where l.coverer_id=p_employee_id;\n    select coalesce(jsonb_agg(item order by ordinal),'[]') into v_current_lunch\n    from jsonb_array_elements(v_lunch_items) with ordinality rows(item,ordinal)\n    where (p_now at time zone 'America/Chicago')::date=p_service_date\n      and (item->>'coverage_start')::time<=(p_now at time zone 'America/Chicago')::time\n      and (p_now at time zone 'America/Chicago')::time<(item->>'coverage_end')::time;\n    v_result:=jsonb_set(v_result,'{all_items}',coalesce(v_result->'all_items','[]')||v_lunch_items);\n    v_result:=jsonb_set(v_result,'{current_items}',coalesce(v_result->'current_items','[]')||v_current_lunch);\n    v_result:=jsonb_set(v_result,'{items}',coalesce(v_result->'items','[]')||v_current_lunch);\n    v_result:=v_result||jsonb_build_object('lunch_coverage_status','PERSISTED',\n      'lunch_coverage_contract','static-weekly-lunch-consumers.v1',\n      'assignment_count',jsonb_array_length(v_result->'all_items'));\n  else\n    v_result:=v_result||jsonb_build_object('lunch_coverage_status','UNAVAILABLE');\n  end if;\n  return jsonb_set(v_result,'{contract_version}',to_jsonb('static-weekly-employee-day.v3'::text),true);\nend\n$function$\n",
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.static_weekly_v5_read_employee_day(p_service_date date, p_employee_id uuid, p_now timestamp with time zone DEFAULT now())\n RETURNS jsonb\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare rec jsonb:=public.custodial_dated_record(p_service_date);day jsonb;roster jsonb;items jsonb;loans jsonb;working boolean;current_items jsonb;phase text;\nbegin\n if rec is null then return public.static_weekly_v5_read_employee_day_dated_base(p_service_date,p_employee_id,p_now);end if;\n select d into day from jsonb_array_elements(rec->'days') d where d->>'serviceDate'=p_service_date::text;\n select r into roster from jsonb_array_elements(public.custodial_dated_rows('roster',p_service_date)) r where r->>'employee_id'=p_employee_id::text;\n if rec->>'projectionStatus'<>'current' or roster is null then\n  return jsonb_build_object('governed',true,'source','static_weekly_projection','projection_status',\n   case when roster is null then 'employee_not_in_dated_roster' else rec->>'projectionStatus' end,\n   'service_date',p_service_date,'employee_id',p_employee_id,'publication_id',rec->>'publicationId','projection_id',rec->>'projectionId');end if;\n working:=roster->>'active'='true';\n select coalesce(jsonb_agg(s||jsonb_build_object('id',s->>'segment_id','occurrence_id',s->>'segment_id',\n  'name',s->>'group_name','location_group_name',s->>'group_name','location_group_code',s->>'group_code',\n  'start_time',s->>'coverage_start','end_time',s->>'coverage_end','included_location_snapshots',o.assignment#>'{workSnapshot,includedLocations}') order by s->>'coverage_start',s->>'segment_id'),'[]') into items\n from jsonb_array_elements(public.custodial_dated_rows('segments',p_service_date)) s\n join public.custodial_dated_occurrences o on o.occurrence_id::text=s->>'segment_id'\n where s->>'assigned_employee_id'=p_employee_id::text;\n select coalesce(jsonb_agg(l||jsonb_build_object('id',(l->>'responsibility_id')||':'||(l->>'normal_occurrence_id'),\n  'occurrence_id',l->>'normal_occurrence_id','service_date',p_service_date,\n  'name',l->>'group_name','location_group_name',l->>'group_name','location_group_code',l->>'group_code',\n  'normal_owner_person_id',l->>'normal_owner_id','coverer_person_id',l->>'coverer_id',\n  'start_time',l->>'coverage_start','end_time',l->>'coverage_end',\n  'source_type','static_weekly_lunch_coverage','owner_type','EMPLOYEE',\n  'purpose','lunch_coverage','section_title','Lunch coverage','coverage_purpose','lunch_coverage',\n  'status','ASSIGNED','included_location_snapshots',l->'included_snapshots',\n  'on_call_only',coalesce(r->>'responseMode'='on_call_issues_only',false),\n  'normal_owner_name',(select person->>'displayName' from jsonb_array_elements(rec#>'{plan,rosterSlots}') person where person->>'personId'=l->>'normal_owner_id'),\n  'check_deadline_policy',coalesce(r->>'checkDeadlinePolicy','inherit_existing_90_minute_deadline'),\n  'response_mode',r->>'responseMode','instruction',r->>'instruction','creates_deep_clean',false)\n  order by l->>'coverage_start',l->>'responsibility_id'),'[]') into loans\n from jsonb_array_elements(public.custodial_dated_rows('lunch',p_service_date)) l\n join lateral(select responsibility r from jsonb_array_elements(day->'lunchLoans') loan\n  cross join lateral jsonb_array_elements(loan->'responsibilities') responsibility\n  where responsibility->>'responsibilityId'=l->>'responsibility_id') rr on true\n where l->>'coverer_id'=p_employee_id::text;\n items:=items||loans;\n select coalesce(jsonb_agg(x),'[]') into current_items from jsonb_array_elements(items) x\n  where (p_now at time zone 'America/Chicago')::date=p_service_date\n  and (x->>'coverage_start')::time<=(p_now at time zone 'America/Chicago')::time\n  and (p_now at time zone 'America/Chicago')::time<(x->>'coverage_end')::time;\n phase:=case when not working then 'off_day' when (p_now at time zone 'America/Chicago')::date<p_service_date or ((p_now at time zone 'America/Chicago')::date=p_service_date and (p_now at time zone 'America/Chicago')::time<(roster->>'shift_start')::time) then 'before_shift'\n  when (p_now at time zone 'America/Chicago')::date>p_service_date or ((p_now at time zone 'America/Chicago')::date=p_service_date and (p_now at time zone 'America/Chicago')::time>=(roster->>'shift_end')::time) then 'after_shift' else 'assigned_areas' end;\n return jsonb_build_object('contract_version','static-weekly-employee-day.v3',\n  'governed',true,'source','static_weekly_projection','authority_scope','dated_transition',\n  'projection_status','current','service_date',p_service_date,'employee_id',p_employee_id,'employee_name',roster->>'employee_name',\n  'employee',jsonb_build_object('id',p_employee_id,'display_name',roster->>'employee_name'),\n  'version_id',day->>'weeklyVersionId','publication_id',rec->>'publicationId','projection_id',rec->>'projectionId',\n  'candidate_revision',rec->>'phonePdfRevision','authority_revision',rec->'revision','phase',phase,\n  'schedule_status',case when working then 'scheduled' else 'off' end,\n  'shift',jsonb_build_object('active',working,'start',roster->>'shift_start','end',roster->>'shift_end'),\n  'all_items',items,'current_items',current_items,'items',current_items,\n  'assignment_count',jsonb_array_length(items),'lunch_coverage_contract','static-weekly-lunch-consumers.v1','lunch_coverage_status','PERSISTED');\nend $function$\n",
       "function_name": "static_weekly_v5_read_employee_day",
+      "identity_arguments": "p_service_date date, p_employee_id uuid, p_now timestamp with time zone",
+      "owner_name": "migration_owner",
+      "schema_name": "public"
+    },
+    {
+      "comment": "Employee day v3 with accepted current lunch coverage; regular assignments and temporary loans remain separate.",
+      "definition": "CREATE OR REPLACE FUNCTION public.static_weekly_v5_read_employee_day_dated_base(p_service_date date, p_employee_id uuid, p_now timestamp with time zone DEFAULT now())\n RETURNS jsonb\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n  v_result jsonb;\n  v_field text;\n  v_items jsonb;\n  v_lunch_items jsonb;\n  v_current_lunch jsonb;\nbegin\n  v_result:=public.static_weekly_v5_read_employee_day_single_location_base(p_service_date,p_employee_id,p_now);\n  foreach v_field in array array['items','all_items','current_items'] loop\n    select coalesce(jsonb_agg(\n      case when o.occurrence_id is null then item.value\n      else item.value||jsonb_build_object(\n        'service_mode',i.service_mode,\n        'included_locations',i.location_names,\n        'included_location_ids',i.location_ids,\n        'included_location_snapshots',i.location_snapshots,\n        'is_public_restroom',case when i.service_mode='scan_tracked' then i.has_public_restroom else false end\n      ) end\n      order by item.ordinality\n    ),'[]'::jsonb) into v_items\n    from jsonb_array_elements(coalesce(v_result->v_field,'[]'::jsonb)) with ordinality item(value,ordinality)\n    left join public.weekly_schedule_occurrences o on o.occurrence_id::text=item.value->>'occurrence_id'\n    left join lateral (\n      select\n        coalesce(o.authority_facts_json#>>'{work_snapshot,serviceMode}','scan_tracked') as service_mode,\n        coalesce(jsonb_agg(location.value order by location.ordinality) filter(where location.value is not null),'[]'::jsonb) as location_snapshots,\n        coalesce(jsonb_agg(to_jsonb(location.value->>'locationId') order by location.ordinality) filter(where location.value is not null),'[]'::jsonb) as location_ids,\n        coalesce(jsonb_agg(to_jsonb(location.value->>'locationNameSnapshot') order by location.ordinality) filter(where location.value is not null),'[]'::jsonb) as location_names,\n        coalesce(bool_or(lower(location.value->>'locationNameSnapshot') like '%restroom%'\n          or lower(location.value->>'locationNameSnapshot') like '%bathroom%') filter(where location.value is not null),false) as has_public_restroom\n      from jsonb_array_elements(\n        case when jsonb_typeof(o.authority_facts_json#>'{work_snapshot,includedLocations}')='array'\n          then o.authority_facts_json#>'{work_snapshot,includedLocations}' else '[]'::jsonb end\n      ) with ordinality location(value,ordinality)\n    ) i on true;\n    v_result:=jsonb_set(v_result,array[v_field],v_items,true);\n  end loop;\n  if v_result->>'governed'='true' and v_result->>'projection_status'='current' then\n    -- Same accepted reader drives employee display and operational reminder ownership.\n    select coalesce(jsonb_agg(jsonb_build_object(\n      'id',l.responsibility_id||':'||l.normal_occurrence_id::text,\n      'occurrence_id',l.normal_occurrence_id::text,'normal_occurrence_id',l.normal_occurrence_id::text,\n      'projection_id',l.projection_id::text,'service_date',p_service_date::text,\n      'loan_id',l.loan_id,'responsibility_id',l.responsibility_id,\n      'normal_owner_person_id',l.normal_owner_id::text,'coverer_person_id',l.coverer_id::text,\n      'location_group_id',l.location_group_id::text,'group_code',l.group_code,'group_name',l.group_name,\n      'location_group_code',l.group_code,'location_group_name',l.group_name,'location_name',l.group_name,\n      'included_locations',to_jsonb(l.included_locations),'included_location_ids',to_jsonb(l.included_location_ids),\n      'included_location_snapshots',l.included_snapshots,'service_mode',l.service_mode,\n      'coverage_start',to_char(l.coverage_start,'HH24:MI:SS'),'coverage_end',to_char(l.coverage_end,'HH24:MI:SS'),\n      'start_time',to_char(l.coverage_start,'HH24:MI:SS'),'end_time',to_char(l.coverage_end,'HH24:MI:SS'),\n      'coverage_purpose','lunch_coverage','purpose','lunch_coverage','section_title','Lunch coverage',\n      'source_type','static_weekly_lunch_coverage','owner_type','EMPLOYEE','status','ASSIGNED',\n      'load_points',0,'notes','Temporary responsibility; existing check deadlines unchanged.',\n      'check_deadline_policy','inherit_existing_90_minute_deadline','creates_deep_clean',false,\n      'is_public_restroom',l.service_mode='scan_tracked' and public.sch_is_public_restroom_group(l.location_group_id)\n    ) order by l.coverage_start,l.loan_id,l.responsibility_id,l.normal_occurrence_id),'[]') into v_lunch_items\n    from public.static_weekly_v8_read_lunch_segments(p_service_date) l where l.coverer_id=p_employee_id;\n    select coalesce(jsonb_agg(item order by ordinal),'[]') into v_current_lunch\n    from jsonb_array_elements(v_lunch_items) with ordinality rows(item,ordinal)\n    where (p_now at time zone 'America/Chicago')::date=p_service_date\n      and (item->>'coverage_start')::time<=(p_now at time zone 'America/Chicago')::time\n      and (p_now at time zone 'America/Chicago')::time<(item->>'coverage_end')::time;\n    v_result:=jsonb_set(v_result,'{all_items}',coalesce(v_result->'all_items','[]')||v_lunch_items);\n    v_result:=jsonb_set(v_result,'{current_items}',coalesce(v_result->'current_items','[]')||v_current_lunch);\n    v_result:=jsonb_set(v_result,'{items}',coalesce(v_result->'items','[]')||v_current_lunch);\n    v_result:=v_result||jsonb_build_object('lunch_coverage_status','PERSISTED',\n      'lunch_coverage_contract','static-weekly-lunch-consumers.v1',\n      'assignment_count',jsonb_array_length(v_result->'all_items'));\n  else\n    v_result:=v_result||jsonb_build_object('lunch_coverage_status','UNAVAILABLE');\n  end if;\n  return jsonb_set(v_result,'{contract_version}',to_jsonb('static-weekly-employee-day.v3'::text),true);\nend\n$function$\n",
+      "function_name": "static_weekly_v5_read_employee_day_dated_base",
       "identity_arguments": "p_service_date date, p_employee_id uuid, p_now timestamp with time zone",
       "owner_name": "migration_owner",
       "schema_name": "public"
@@ -46436,24 +47271,48 @@
     },
     {
       "comment": null,
-      "definition": "CREATE OR REPLACE FUNCTION public.static_weekly_v6_read_roster(p_service_date date)\n RETURNS TABLE(employee_id uuid, employee_name text, employee_code text, shift_start text, shift_end text, lunch_start text, lunch_end text, active boolean, source_type text, notes text, slot_id uuid, slot_code text, slot_label text, staffing_state text, governed boolean, projection_status text, version_id uuid, publication_id uuid, projection_id uuid)\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n  authority record;\nbegin\n  select * into strict authority\n  from public.static_weekly_v6_schedule_authority_state(p_service_date);\n\n  if authority.governed and authority.projection_status <> 'current' then\n    return;\n  end if;\n\n  if not authority.governed then\n    return query\n    select roster.employee_id, employee.display_name, employee.employee_code,\n      to_char(roster.shift_start, 'HH24:MI:SS'), to_char(roster.shift_end, 'HH24:MI:SS'),\n      null::text, null::text, roster.active, roster.source_type, roster.notes,\n      null::uuid, null::text, null::text, case when roster.active then 'working' else 'unavailable' end,\n      false, authority.projection_status, null::uuid, null::uuid, null::uuid\n    from public.daily_work_roster roster\n    join public.employees employee on employee.id = roster.employee_id\n    where roster.service_date = p_service_date;\n    return;\n  end if;\n\n  return query\n  select incumbent.person_id,\n    coalesce(employee.display_name, incumbent.person_name_snapshot),\n    employee.employee_code,\n    case when availability.shift_start is null then null else to_char(availability.shift_start, 'HH24:MI:SS') end,\n    case when availability.shift_end is null then null else to_char(availability.shift_end, 'HH24:MI:SS') end,\n    case when availability.lunch_start is null then null else to_char(availability.lunch_start, 'HH24:MI:SS') end,\n    case when availability.lunch_end is null then null else to_char(availability.lunch_end, 'HH24:MI:SS') end,\n    availability.availability_state = 'working'\n      and coalesce(staffing.staffing_state, 'working') = 'working'\n      and coalesce(employee.active, false),\n    'static_weekly_projection'::text,\n    case\n      when incumbent.person_id is null then 'Open roster slot'\n      when coalesce(staffing.staffing_state, availability.availability_state) = 'departed_named_absent'\n        then 'Departed employee placeholder; replacement not yet approved'\n      when availability.availability_state <> 'working' then initcap(replace(availability.availability_state, '_', ' '))\n      else null\n    end,\n    slot.slot_id,\n    slot.slot_code,\n    slot.slot_label,\n    coalesce(staffing.staffing_state, availability.availability_state),\n    true,\n    authority.projection_status,\n    authority.version_id,\n    authority.publication_id,\n    authority.projection_id\n  from public.weekly_roster_slots slot\n  join public.weekly_schedule_slot_availability availability\n    on availability.slot_id = slot.slot_id\n   and availability.version_id = authority.version_id\n   and availability.day_of_week = extract(dow from p_service_date)::integer\n  left join lateral (\n    select range.person_id, range.person_name_snapshot\n    from public.v_weekly_roster_slot_incumbency_ranges range\n    where range.slot_id = slot.slot_id\n      and range.effective_start <= p_service_date\n      and (range.effective_end is null or p_service_date < range.effective_end)\n    order by range.effective_start desc, range.incumbency_id desc\n    limit 1\n  ) incumbent on true\n  left join public.employees employee on employee.id = incumbent.person_id\n  left join lateral (\n    select state.staffing_state\n    from public.weekly_roster_slot_staffing_states state\n    where state.slot_id = slot.slot_id and state.effective_start <= p_service_date\n    order by state.effective_start desc, state.authority_revision desc\n    limit 1\n  ) staffing on true\n  order by availability.shift_start nulls last, slot.slot_label;\nend\n$function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.static_weekly_v6_read_roster(p_service_date date)\n RETURNS TABLE(employee_id uuid, employee_name text, employee_code text, shift_start text, shift_end text, lunch_start text, lunch_end text, active boolean, source_type text, notes text, slot_id uuid, slot_code text, slot_label text, staffing_state text, governed boolean, projection_status text, version_id uuid, publication_id uuid, projection_id uuid)\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$ declare rows jsonb;begin rows:=public.custodial_dated_rows('roster',p_service_date);if rows is null then return query select * from public.static_weekly_v6_read_roster_dated_base(p_service_date);else return query select * from jsonb_to_recordset(rows) as r(employee_id uuid,employee_name text,employee_code text,shift_start text,shift_end text,lunch_start text,lunch_end text,active boolean,source_type text,notes text,slot_id uuid,slot_code text,slot_label text,staffing_state text,governed boolean,projection_status text,version_id uuid,publication_id uuid,projection_id uuid);end if;end $function$\n",
       "function_name": "static_weekly_v6_read_roster",
       "identity_arguments": "p_service_date date",
       "owner_name": "migration_owner",
       "schema_name": "public"
     },
     {
-      "comment": "Canonical compatibility-shaped schedule rows; governed dates never read the legacy daily scheduler.",
-      "definition": "CREATE OR REPLACE FUNCTION public.static_weekly_v6_read_schedule_segments(p_service_date date)\n RETURNS TABLE(service_date date, location_group_id uuid, group_code text, group_name text, included_locations text[], included_location_ids uuid[], segment_id uuid, segment_number integer, owner_type text, assigned_employee_id uuid, assigned_employee_name text, coverage_start text, coverage_end text, status text, load_points numeric, coverage_purpose text, notes text, source_type text, service_mode text, governed boolean, projection_status text, version_id uuid, publication_id uuid, projection_id uuid)\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n  authority record;\nbegin\n  select * into strict authority\n  from public.static_weekly_v6_schedule_authority_state(p_service_date);\n\n  if authority.governed and authority.projection_status <> 'current' then\n    return;\n  end if;\n\n  if not authority.governed then\n    return query\n    select\n      p_service_date,\n      legacy.location_group_id,\n      legacy.group_code,\n      legacy.group_name,\n      legacy.included_locations,\n      coalesce((\n        select array_agg(membership.location_id order by location.sort_order, location.location_name)\n        from public.location_group_memberships membership\n        join public.locations location on location.id = membership.location_id and location.active = true\n        where membership.location_group_id = legacy.location_group_id and membership.active = true\n      ), array[]::uuid[]),\n      legacy.segment_id,\n      legacy.segment_number,\n      legacy.owner_type,\n      legacy.assigned_employee_id,\n      legacy.assigned_employee_name,\n      legacy.coverage_start,\n      legacy.coverage_end,\n      legacy.status,\n      legacy.load_points,\n      legacy.coverage_purpose,\n      legacy.notes,\n      legacy.source_type,\n      case when coalesce(legacy.coverage_purpose, '') = 'reminder'\n        then 'reminder_only' else 'scan_tracked' end,\n      false,\n      authority.projection_status,\n      null::uuid,\n      null::uuid,\n      null::uuid\n    from public.sch_get_daily_schedule_with_purpose(p_service_date) legacy;\n    return;\n  end if;\n\n  if exists (\n    select 1\n    from public.weekly_schedule_occurrences occurrence\n    left join public.location_groups location_group\n      on upper(location_group.group_code) = upper(occurrence.location_code_snapshot)\n     and location_group.active = true\n    where occurrence.projection_id = authority.projection_id\n      and occurrence.service_date = p_service_date\n      and location_group.id is null\n  ) then\n    raise exception using errcode = '23514',\n      message = 'current static-weekly projection contains an unmapped location family';\n  end if;\n\n  if exists (\n    select 1\n    from public.weekly_schedule_occurrences occurrence\n    cross join lateral jsonb_array_elements(\n      coalesce(occurrence.authority_facts_json#>'{work_snapshot,includedLocations}', '[]'::jsonb)\n    ) included\n    left join public.locations location\n      on location.id = nullif(included->>'locationId', '')::uuid\n     and location.active = true\n    where occurrence.projection_id = authority.projection_id\n      and occurrence.service_date = p_service_date\n      and occurrence.authority_facts_json#>>'{work_snapshot,serviceMode}' = 'scan_tracked'\n      and location.id is null\n  ) then\n    raise exception using errcode = '23514',\n      message = 'current static-weekly projection contains an unmapped active cleaning location';\n  end if;\n\n  return query\n  with occurrence_rows as (\n    select occurrence.*,\n      row_number() over (\n        partition by upper(occurrence.location_code_snapshot)\n        order by occurrence.coverage_start, occurrence.coverage_end,\n                 occurrence.work_id, occurrence.occurrence_id\n      )::integer as ordinal\n    from public.weekly_schedule_occurrences occurrence\n    where occurrence.projection_id = authority.projection_id\n      and occurrence.service_date = p_service_date\n      and occurrence.state in ('created', 'open', 'review')\n  )\n  select\n    p_service_date,\n    location_group.id,\n    occurrence.location_code_snapshot,\n    occurrence.location_name_snapshot,\n    coalesce((\n      select array_agg(included->>'locationNameSnapshot' order by ordinality)\n      from jsonb_array_elements(\n        coalesce(occurrence.authority_facts_json#>'{work_snapshot,includedLocations}', '[]'::jsonb)\n      ) with ordinality item(included, ordinality)\n    ), array[]::text[]),\n    coalesce((\n      select array_agg((included->>'locationId')::uuid order by ordinality)\n      from jsonb_array_elements(\n        coalesce(occurrence.authority_facts_json#>'{work_snapshot,includedLocations}', '[]'::jsonb)\n      ) with ordinality item(included, ordinality)\n    ), array[]::uuid[]),\n    occurrence.occurrence_id,\n    occurrence.ordinal,\n    case when occurrence.state = 'created' and occurrence.owner_person_id_snapshot is not null\n      then 'EMPLOYEE' else 'OPEN' end,\n    case when occurrence.state = 'created' then occurrence.owner_person_id_snapshot else null end,\n    case when occurrence.state = 'created' then occurrence.owner_name_snapshot else null end,\n    to_char(occurrence.coverage_start, 'HH24:MI:SS'),\n    to_char(occurrence.coverage_end, 'HH24:MI:SS'),\n    case occurrence.state when 'created' then 'ASSIGNED' when 'open' then 'OPEN' else 'REVIEW' end,\n    coalesce((occurrence.authority_facts_json#>>'{work_snapshot,serviceEffortMinutes}')::numeric, 0::numeric),\n    coalesce(\n      nullif(occurrence.authority_facts_json#>>'{work_snapshot,coveragePurpose}', ''),\n      case occurrence.authority_facts_json#>>'{work_snapshot,serviceMode}'\n        when 'reminder_only' then 'reminder'\n        when 'response_only_no_clean' then 'response_only'\n        else 'area_owner'\n      end\n    ),\n    occurrence.state_reason,\n    'static_weekly_projection'::text,\n    occurrence.authority_facts_json#>>'{work_snapshot,serviceMode}',\n    true,\n    authority.projection_status,\n    authority.version_id,\n    authority.publication_id,\n    authority.projection_id\n  from occurrence_rows occurrence\n  join public.location_groups location_group\n    on upper(location_group.group_code) = upper(occurrence.location_code_snapshot)\n   and location_group.active = true;\nend\n$function$\n",
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.static_weekly_v6_read_roster_dated_base(p_service_date date)\n RETURNS TABLE(employee_id uuid, employee_name text, employee_code text, shift_start text, shift_end text, lunch_start text, lunch_end text, active boolean, source_type text, notes text, slot_id uuid, slot_code text, slot_label text, staffing_state text, governed boolean, projection_status text, version_id uuid, publication_id uuid, projection_id uuid)\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n  authority record;\nbegin\n  select * into strict authority\n  from public.static_weekly_v6_schedule_authority_state(p_service_date);\n\n  if authority.governed and authority.projection_status <> 'current' then\n    return;\n  end if;\n\n  if not authority.governed then\n    return query\n    select roster.employee_id, employee.display_name, employee.employee_code,\n      to_char(roster.shift_start, 'HH24:MI:SS'), to_char(roster.shift_end, 'HH24:MI:SS'),\n      null::text, null::text, roster.active, roster.source_type, roster.notes,\n      null::uuid, null::text, null::text, case when roster.active then 'working' else 'unavailable' end,\n      false, authority.projection_status, null::uuid, null::uuid, null::uuid\n    from public.daily_work_roster roster\n    join public.employees employee on employee.id = roster.employee_id\n    where roster.service_date = p_service_date;\n    return;\n  end if;\n\n  return query\n  select incumbent.person_id,\n    coalesce(employee.display_name, incumbent.person_name_snapshot),\n    employee.employee_code,\n    case when availability.shift_start is null then null else to_char(availability.shift_start, 'HH24:MI:SS') end,\n    case when availability.shift_end is null then null else to_char(availability.shift_end, 'HH24:MI:SS') end,\n    case when availability.lunch_start is null then null else to_char(availability.lunch_start, 'HH24:MI:SS') end,\n    case when availability.lunch_end is null then null else to_char(availability.lunch_end, 'HH24:MI:SS') end,\n    availability.availability_state = 'working'\n      and coalesce(staffing.staffing_state, 'working') = 'working'\n      and coalesce(employee.active, false),\n    'static_weekly_projection'::text,\n    case\n      when incumbent.person_id is null then 'Open roster slot'\n      when coalesce(staffing.staffing_state, availability.availability_state) = 'departed_named_absent'\n        then 'Departed employee placeholder; replacement not yet approved'\n      when availability.availability_state <> 'working' then initcap(replace(availability.availability_state, '_', ' '))\n      else null\n    end,\n    slot.slot_id,\n    slot.slot_code,\n    slot.slot_label,\n    coalesce(staffing.staffing_state, availability.availability_state),\n    true,\n    authority.projection_status,\n    authority.version_id,\n    authority.publication_id,\n    authority.projection_id\n  from public.weekly_roster_slots slot\n  join public.weekly_schedule_slot_availability availability\n    on availability.slot_id = slot.slot_id\n   and availability.version_id = authority.version_id\n   and availability.day_of_week = extract(dow from p_service_date)::integer\n  left join lateral (\n    select range.person_id, range.person_name_snapshot\n    from public.v_weekly_roster_slot_incumbency_ranges range\n    where range.slot_id = slot.slot_id\n      and range.effective_start <= p_service_date\n      and (range.effective_end is null or p_service_date < range.effective_end)\n    order by range.effective_start desc, range.incumbency_id desc\n    limit 1\n  ) incumbent on true\n  left join public.employees employee on employee.id = incumbent.person_id\n  left join lateral (\n    select state.staffing_state\n    from public.weekly_roster_slot_staffing_states state\n    where state.slot_id = slot.slot_id and state.effective_start <= p_service_date\n    order by state.effective_start desc, state.authority_revision desc\n    limit 1\n  ) staffing on true\n  order by availability.shift_start nulls last, slot.slot_label;\nend\n$function$\n",
+      "function_name": "static_weekly_v6_read_roster_dated_base",
+      "identity_arguments": "p_service_date date",
+      "owner_name": "migration_owner",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.static_weekly_v6_read_schedule_segments(p_service_date date)\n RETURNS TABLE(service_date date, location_group_id uuid, group_code text, group_name text, included_locations text[], included_location_ids uuid[], segment_id uuid, segment_number integer, owner_type text, assigned_employee_id uuid, assigned_employee_name text, coverage_start text, coverage_end text, status text, load_points numeric, coverage_purpose text, notes text, source_type text, service_mode text, governed boolean, projection_status text, version_id uuid, publication_id uuid, projection_id uuid)\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$ declare rows jsonb;begin rows:=public.custodial_dated_rows('segments',p_service_date);if rows is null then return query select * from public.static_weekly_v6_read_schedule_segments_dated_base(p_service_date);else return query select * from jsonb_to_recordset(rows) as r(service_date date,location_group_id uuid,group_code text,group_name text,included_locations text[],included_location_ids uuid[],segment_id uuid,segment_number integer,owner_type text,assigned_employee_id uuid,assigned_employee_name text,coverage_start text,coverage_end text,status text,load_points numeric,coverage_purpose text,notes text,source_type text,service_mode text,governed boolean,projection_status text,version_id uuid,publication_id uuid,projection_id uuid);end if;end $function$\n",
       "function_name": "static_weekly_v6_read_schedule_segments",
       "identity_arguments": "p_service_date date",
       "owner_name": "migration_owner",
       "schema_name": "public"
     },
     {
-      "comment": "Single fail-closed source decision for static-weekly versus explicitly ungoverned legacy schedule reads.",
-      "definition": "CREATE OR REPLACE FUNCTION public.static_weekly_v6_schedule_authority_state(p_service_date date)\n RETURNS TABLE(service_date date, governed boolean, authority_source text, projection_status text, version_id uuid, publication_id uuid, projection_id uuid, projection_authority_revision bigint, staffing_authority_revision bigint, week_start date)\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n  v_version_id uuid;\n  v_publication_id uuid;\n  v_projection_id uuid;\n  v_projection_revision bigint;\n  v_staffing_revision bigint;\n  v_week_start date;\n  v_status text;\nbegin\n  if p_service_date is null then\n    raise exception using errcode = '22023', message = 'service_date is required';\n  end if;\n\n  v_version_id := public.static_weekly_effective_version(p_service_date);\n  if v_version_id is null then\n    return query select p_service_date, false, 'legacy_daily_schedule'::text,\n      'legacy_ungoverned'::text, null::uuid, null::uuid, null::uuid,\n      null::bigint, null::bigint, null::date;\n    return;\n  end if;\n\n  v_week_start := p_service_date - (extract(isodow from p_service_date)::integer - 1);\n  select p.publication_id\n    into v_publication_id\n  from public.weekly_schedule_publications p\n  where p.version_id = v_version_id\n  order by p.authority_revision desc, p.published_at desc, p.publication_id desc\n  limit 1;\n\n  if v_publication_id is null then\n    return query select p_service_date, true, 'static_weekly_projection'::text,\n      'missing_publication'::text, v_version_id, null::uuid, null::uuid,\n      null::bigint, null::bigint, v_week_start;\n    return;\n  end if;\n\n\n  if exists(select 1 from public.static_weekly_recurring_invalidations i\n    where i.publication_id=v_publication_id and i.effective_start<=p_service_date\n      and (i.effective_end is null or p_service_date<i.effective_end)) then\n    return query select p_service_date,true,'static_weekly_projection'::text,\n      'blocked_recurring_authority'::text,v_version_id,v_publication_id,null::uuid,\n      (select max(i.authority_revision) from public.static_weekly_recurring_invalidations i\n        where i.publication_id=v_publication_id and i.effective_start<=p_service_date\n          and (i.effective_end is null or p_service_date<i.effective_end)),\n      null::bigint,v_week_start;\n    return;\n  end if;\n  select projection.projection_id, (receipt.response_json->>'revision')::bigint\n    into v_projection_id, v_projection_revision\n  from public.weekly_schedule_compiled_projections projection\n  join public.weekly_schedule_command_receipts receipt\n    on receipt.command_type = 'materialize_projection'\n   and receipt.response_json#>>'{data,projection_id}' = projection.projection_id::text\n  where projection.publication_id = v_publication_id\n    and projection.week_start = v_week_start\n    and projection.exception_set_digest = public.static_weekly_digest_jsonb(\n      public.static_weekly_accepted_exception_set(v_publication_id, v_week_start)\n    )\n  order by (receipt.response_json->>'revision')::bigint desc,\n           receipt.command_id desc,\n           projection.compiled_at desc,\n           projection.projection_id desc\n  limit 1;\n\n  select max(staffing.authority_revision)\n    into v_staffing_revision\n  from public.weekly_roster_slot_staffing_states staffing\n  where staffing.effective_start <= v_week_start + 6;\n\n  if v_projection_id is null or v_projection_revision is null then\n    v_status := 'missing_projection';\n  elsif v_staffing_revision is not null and v_projection_revision <= v_staffing_revision then\n    v_status := 'stale_staffing_change';\n  else\n    v_status := 'current';\n  end if;\n\n  return query select p_service_date, true, 'static_weekly_projection'::text,\n    v_status, v_version_id, v_publication_id, v_projection_id,\n    v_projection_revision, v_staffing_revision, v_week_start;\nend\n$function$\n",
+      "comment": "Canonical compatibility-shaped schedule rows; governed dates never read the legacy daily scheduler.",
+      "definition": "CREATE OR REPLACE FUNCTION public.static_weekly_v6_read_schedule_segments_dated_base(p_service_date date)\n RETURNS TABLE(service_date date, location_group_id uuid, group_code text, group_name text, included_locations text[], included_location_ids uuid[], segment_id uuid, segment_number integer, owner_type text, assigned_employee_id uuid, assigned_employee_name text, coverage_start text, coverage_end text, status text, load_points numeric, coverage_purpose text, notes text, source_type text, service_mode text, governed boolean, projection_status text, version_id uuid, publication_id uuid, projection_id uuid)\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n  authority record;\nbegin\n  select * into strict authority\n  from public.static_weekly_v6_schedule_authority_state(p_service_date);\n\n  if authority.governed and authority.projection_status <> 'current' then\n    return;\n  end if;\n\n  if not authority.governed then\n    return query\n    select\n      p_service_date,\n      legacy.location_group_id,\n      legacy.group_code,\n      legacy.group_name,\n      legacy.included_locations,\n      coalesce((\n        select array_agg(membership.location_id order by location.sort_order, location.location_name)\n        from public.location_group_memberships membership\n        join public.locations location on location.id = membership.location_id and location.active = true\n        where membership.location_group_id = legacy.location_group_id and membership.active = true\n      ), array[]::uuid[]),\n      legacy.segment_id,\n      legacy.segment_number,\n      legacy.owner_type,\n      legacy.assigned_employee_id,\n      legacy.assigned_employee_name,\n      legacy.coverage_start,\n      legacy.coverage_end,\n      legacy.status,\n      legacy.load_points,\n      legacy.coverage_purpose,\n      legacy.notes,\n      legacy.source_type,\n      case when coalesce(legacy.coverage_purpose, '') = 'reminder'\n        then 'reminder_only' else 'scan_tracked' end,\n      false,\n      authority.projection_status,\n      null::uuid,\n      null::uuid,\n      null::uuid\n    from public.sch_get_daily_schedule_with_purpose(p_service_date) legacy;\n    return;\n  end if;\n\n  if exists (\n    select 1\n    from public.weekly_schedule_occurrences occurrence\n    left join public.location_groups location_group\n      on upper(location_group.group_code) = upper(occurrence.location_code_snapshot)\n     and location_group.active = true\n    where occurrence.projection_id = authority.projection_id\n      and occurrence.service_date = p_service_date\n      and location_group.id is null\n  ) then\n    raise exception using errcode = '23514',\n      message = 'current static-weekly projection contains an unmapped location family';\n  end if;\n\n  if exists (\n    select 1\n    from public.weekly_schedule_occurrences occurrence\n    cross join lateral jsonb_array_elements(\n      coalesce(occurrence.authority_facts_json#>'{work_snapshot,includedLocations}', '[]'::jsonb)\n    ) included\n    left join public.locations location\n      on location.id = nullif(included->>'locationId', '')::uuid\n     and location.active = true\n    where occurrence.projection_id = authority.projection_id\n      and occurrence.service_date = p_service_date\n      and occurrence.authority_facts_json#>>'{work_snapshot,serviceMode}' = 'scan_tracked'\n      and location.id is null\n  ) then\n    raise exception using errcode = '23514',\n      message = 'current static-weekly projection contains an unmapped active cleaning location';\n  end if;\n\n  return query\n  with occurrence_rows as (\n    select occurrence.*,\n      row_number() over (\n        partition by upper(occurrence.location_code_snapshot)\n        order by occurrence.coverage_start, occurrence.coverage_end,\n                 occurrence.work_id, occurrence.occurrence_id\n      )::integer as ordinal\n    from public.weekly_schedule_occurrences occurrence\n    where occurrence.projection_id = authority.projection_id\n      and occurrence.service_date = p_service_date\n      and occurrence.state in ('created', 'open', 'review')\n  )\n  select\n    p_service_date,\n    location_group.id,\n    occurrence.location_code_snapshot,\n    occurrence.location_name_snapshot,\n    coalesce((\n      select array_agg(included->>'locationNameSnapshot' order by ordinality)\n      from jsonb_array_elements(\n        coalesce(occurrence.authority_facts_json#>'{work_snapshot,includedLocations}', '[]'::jsonb)\n      ) with ordinality item(included, ordinality)\n    ), array[]::text[]),\n    coalesce((\n      select array_agg((included->>'locationId')::uuid order by ordinality)\n      from jsonb_array_elements(\n        coalesce(occurrence.authority_facts_json#>'{work_snapshot,includedLocations}', '[]'::jsonb)\n      ) with ordinality item(included, ordinality)\n    ), array[]::uuid[]),\n    occurrence.occurrence_id,\n    occurrence.ordinal,\n    case when occurrence.state = 'created' and occurrence.owner_person_id_snapshot is not null\n      then 'EMPLOYEE' else 'OPEN' end,\n    case when occurrence.state = 'created' then occurrence.owner_person_id_snapshot else null end,\n    case when occurrence.state = 'created' then occurrence.owner_name_snapshot else null end,\n    to_char(occurrence.coverage_start, 'HH24:MI:SS'),\n    to_char(occurrence.coverage_end, 'HH24:MI:SS'),\n    case occurrence.state when 'created' then 'ASSIGNED' when 'open' then 'OPEN' else 'REVIEW' end,\n    coalesce((occurrence.authority_facts_json#>>'{work_snapshot,serviceEffortMinutes}')::numeric, 0::numeric),\n    coalesce(\n      nullif(occurrence.authority_facts_json#>>'{work_snapshot,coveragePurpose}', ''),\n      case occurrence.authority_facts_json#>>'{work_snapshot,serviceMode}'\n        when 'reminder_only' then 'reminder'\n        when 'response_only_no_clean' then 'response_only'\n        else 'area_owner'\n      end\n    ),\n    occurrence.state_reason,\n    'static_weekly_projection'::text,\n    occurrence.authority_facts_json#>>'{work_snapshot,serviceMode}',\n    true,\n    authority.projection_status,\n    authority.version_id,\n    authority.publication_id,\n    authority.projection_id\n  from occurrence_rows occurrence\n  join public.location_groups location_group\n    on upper(location_group.group_code) = upper(occurrence.location_code_snapshot)\n   and location_group.active = true;\nend\n$function$\n",
+      "function_name": "static_weekly_v6_read_schedule_segments_dated_base",
+      "identity_arguments": "p_service_date date",
+      "owner_name": "migration_owner",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.static_weekly_v6_schedule_authority_state(p_service_date date)\n RETURNS TABLE(service_date date, governed boolean, authority_source text, projection_status text, version_id uuid, publication_id uuid, projection_id uuid, projection_authority_revision bigint, staffing_authority_revision bigint, week_start date)\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$ declare rows jsonb;begin rows:=public.custodial_dated_rows('state',p_service_date);if rows is null then return query select * from public.static_weekly_v6_schedule_authority_state_dated_base(p_service_date);else return query select * from jsonb_to_recordset(rows) as r(service_date date,governed boolean,authority_source text,projection_status text,version_id uuid,publication_id uuid,projection_id uuid,projection_authority_revision bigint,staffing_authority_revision bigint,week_start date);end if;end $function$\n",
       "function_name": "static_weekly_v6_schedule_authority_state",
+      "identity_arguments": "p_service_date date",
+      "owner_name": "migration_owner",
+      "schema_name": "public"
+    },
+    {
+      "comment": "Single fail-closed source decision for static-weekly versus explicitly ungoverned legacy schedule reads.",
+      "definition": "CREATE OR REPLACE FUNCTION public.static_weekly_v6_schedule_authority_state_dated_base(p_service_date date)\n RETURNS TABLE(service_date date, governed boolean, authority_source text, projection_status text, version_id uuid, publication_id uuid, projection_id uuid, projection_authority_revision bigint, staffing_authority_revision bigint, week_start date)\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n  v_version_id uuid;\n  v_publication_id uuid;\n  v_projection_id uuid;\n  v_projection_revision bigint;\n  v_staffing_revision bigint;\n  v_week_start date;\n  v_status text;\nbegin\n  if p_service_date is null then\n    raise exception using errcode = '22023', message = 'service_date is required';\n  end if;\n\n  v_version_id := public.static_weekly_effective_version(p_service_date);\n  if v_version_id is null then\n    return query select p_service_date, false, 'legacy_daily_schedule'::text,\n      'legacy_ungoverned'::text, null::uuid, null::uuid, null::uuid,\n      null::bigint, null::bigint, null::date;\n    return;\n  end if;\n\n  v_week_start := p_service_date - (extract(isodow from p_service_date)::integer - 1);\n  select p.publication_id\n    into v_publication_id\n  from public.weekly_schedule_publications p\n  where p.version_id = v_version_id\n  order by p.authority_revision desc, p.published_at desc, p.publication_id desc\n  limit 1;\n\n  if v_publication_id is null then\n    return query select p_service_date, true, 'static_weekly_projection'::text,\n      'missing_publication'::text, v_version_id, null::uuid, null::uuid,\n      null::bigint, null::bigint, v_week_start;\n    return;\n  end if;\n\n\n  if exists(select 1 from public.static_weekly_recurring_invalidations i\n    where i.publication_id=v_publication_id and i.effective_start<=p_service_date\n      and (i.effective_end is null or p_service_date<i.effective_end)) then\n    return query select p_service_date,true,'static_weekly_projection'::text,\n      'blocked_recurring_authority'::text,v_version_id,v_publication_id,null::uuid,\n      (select max(i.authority_revision) from public.static_weekly_recurring_invalidations i\n        where i.publication_id=v_publication_id and i.effective_start<=p_service_date\n          and (i.effective_end is null or p_service_date<i.effective_end)),\n      null::bigint,v_week_start;\n    return;\n  end if;\n  select projection.projection_id, (receipt.response_json->>'revision')::bigint\n    into v_projection_id, v_projection_revision\n  from public.weekly_schedule_compiled_projections projection\n  join public.weekly_schedule_command_receipts receipt\n    on receipt.command_type = 'materialize_projection'\n   and receipt.response_json#>>'{data,projection_id}' = projection.projection_id::text\n  where projection.publication_id = v_publication_id\n    and projection.week_start = v_week_start\n    and projection.exception_set_digest = public.static_weekly_digest_jsonb(\n      public.static_weekly_accepted_exception_set(v_publication_id, v_week_start)\n    )\n  order by (receipt.response_json->>'revision')::bigint desc,\n           receipt.command_id desc,\n           projection.compiled_at desc,\n           projection.projection_id desc\n  limit 1;\n\n  select max(staffing.authority_revision)\n    into v_staffing_revision\n  from public.weekly_roster_slot_staffing_states staffing\n  where staffing.effective_start <= v_week_start + 6;\n\n  if v_projection_id is null or v_projection_revision is null then\n    v_status := 'missing_projection';\n  elsif v_staffing_revision is not null and v_projection_revision <= v_staffing_revision then\n    v_status := 'stale_staffing_change';\n  else\n    v_status := 'current';\n  end if;\n\n  return query select p_service_date, true, 'static_weekly_projection'::text,\n    v_status, v_version_id, v_publication_id, v_projection_id,\n    v_projection_revision, v_staffing_revision, v_week_start;\nend\n$function$\n",
+      "function_name": "static_weekly_v6_schedule_authority_state_dated_base",
       "identity_arguments": "p_service_date date",
       "owner_name": "migration_owner",
       "schema_name": "public"
@@ -46523,9 +47382,17 @@
       "schema_name": "public"
     },
     {
-      "comment": "Current accepted lunch responsibility with original occurrence identity; missing current publication fails closed.",
-      "definition": "CREATE OR REPLACE FUNCTION public.static_weekly_v8_read_lunch_segments(p_service_date date)\n RETURNS TABLE(projection_id uuid, loan_id text, responsibility_id text, normal_occurrence_id uuid, normal_owner_id uuid, coverer_id uuid, coverer_name text, location_group_id uuid, group_code text, group_name text, included_locations text[], included_location_ids uuid[], included_snapshots jsonb, service_mode text, coverage_start time without time zone, coverage_end time without time zone)\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare authority record;document jsonb;expected_count integer;actual_count integer;\nbegin\n select * into strict authority from public.static_weekly_v6_schedule_authority_state(p_service_date);\n if not authority.governed or authority.projection_status<>'current' then return; end if;\n document:=public.static_weekly_v8_read_lunch_document(p_service_date);\n if document->>'persistence_status' is distinct from 'PERSISTED'\n  or document->>'projection_id' is distinct from authority.projection_id::text then\n  raise exception using errcode='55000',message='current lunch coverage is unavailable; republish the weekly schedule';\n end if;\n select count(*) into expected_count from jsonb_array_elements(document->'responsibilities') r\n cross join lateral jsonb_array_elements(r->'segments') s;\n return query select authority.projection_id,r->>'loan_id',r->>'responsibility_id',o.occurrence_id,\n o.owner_person_id_snapshot,(r->>'coverer_person_id')::uuid,e.display_name,g.id,g.group_code,g.group_name,\n array(select x->>'locationNameSnapshot' from jsonb_array_elements(s->'includedLocations') x),\n array(select (x->>'locationId')::uuid from jsonb_array_elements(s->'includedLocations') x),\n s->'includedLocations',s->>'serviceMode',(s#>>'{window,start}')::time,(s#>>'{window,end}')::time\n from jsonb_array_elements(document->'responsibilities') r\n cross join lateral jsonb_array_elements(r->'segments') s\n join public.weekly_schedule_occurrences o on o.projection_id=authority.projection_id\n  and o.service_date=p_service_date and o.work_id=s->>'workId'\n  and o.owner_person_id_snapshot::text=r->>'normal_owner_person_id'\n  and o.owner_slot_id::text=r->>'normal_owner_slot_id' and o.state='created'\n  and o.coverage_start<=(s#>>'{window,start}')::time\n  and o.coverage_end>=(s#>>'{window,end}')::time\n  and o.authority_facts_json#>'{work_snapshot,includedLocations}'=s->'includedLocations'\n  and o.authority_facts_json#>>'{work_snapshot,serviceMode}'=s->>'serviceMode'\n join public.employees e on e.id=(r->>'coverer_person_id')::uuid and e.active=true\n join public.location_groups g on upper(g.group_code)=upper(o.location_code_snapshot) and g.active=true\n where r->>'service_date'=p_service_date::text\n order by (s#>>'{window,start}')::time,r->>'loan_id',r->>'responsibility_id',o.occurrence_id;\n get diagnostics actual_count=row_count;\n if actual_count<>expected_count then\n  raise exception using errcode='55000',message='accepted lunch coverage no longer maps exactly to current areas and employees';\n end if;\nend $function$\n",
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.static_weekly_v8_read_lunch_segments(p_service_date date)\n RETURNS TABLE(projection_id uuid, loan_id text, responsibility_id text, normal_occurrence_id uuid, normal_owner_id uuid, coverer_id uuid, coverer_name text, location_group_id uuid, group_code text, group_name text, included_locations text[], included_location_ids uuid[], included_snapshots jsonb, service_mode text, coverage_start time without time zone, coverage_end time without time zone)\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$ declare rows jsonb;begin rows:=public.custodial_dated_rows('lunch',p_service_date);if rows is null then return query select * from public.static_weekly_v8_read_lunch_segments_dated_base(p_service_date);else return query select * from jsonb_to_recordset(rows) as r(projection_id uuid,loan_id text,responsibility_id text,normal_occurrence_id uuid,normal_owner_id uuid,coverer_id uuid,coverer_name text,location_group_id uuid,group_code text,group_name text,included_locations text[],included_location_ids uuid[],included_snapshots jsonb,service_mode text,coverage_start time without time zone,coverage_end time without time zone);end if;end $function$\n",
       "function_name": "static_weekly_v8_read_lunch_segments",
+      "identity_arguments": "p_service_date date",
+      "owner_name": "migration_owner",
+      "schema_name": "public"
+    },
+    {
+      "comment": "Current accepted lunch responsibility with original occurrence identity; missing current publication fails closed.",
+      "definition": "CREATE OR REPLACE FUNCTION public.static_weekly_v8_read_lunch_segments_dated_base(p_service_date date)\n RETURNS TABLE(projection_id uuid, loan_id text, responsibility_id text, normal_occurrence_id uuid, normal_owner_id uuid, coverer_id uuid, coverer_name text, location_group_id uuid, group_code text, group_name text, included_locations text[], included_location_ids uuid[], included_snapshots jsonb, service_mode text, coverage_start time without time zone, coverage_end time without time zone)\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare authority record;document jsonb;expected_count integer;actual_count integer;\nbegin\n select * into strict authority from public.static_weekly_v6_schedule_authority_state(p_service_date);\n if not authority.governed or authority.projection_status<>'current' then return; end if;\n document:=public.static_weekly_v8_read_lunch_document(p_service_date);\n if document->>'persistence_status' is distinct from 'PERSISTED'\n  or document->>'projection_id' is distinct from authority.projection_id::text then\n  raise exception using errcode='55000',message='current lunch coverage is unavailable; republish the weekly schedule';\n end if;\n select count(*) into expected_count from jsonb_array_elements(document->'responsibilities') r\n cross join lateral jsonb_array_elements(r->'segments') s;\n return query select authority.projection_id,r->>'loan_id',r->>'responsibility_id',o.occurrence_id,\n o.owner_person_id_snapshot,(r->>'coverer_person_id')::uuid,e.display_name,g.id,g.group_code,g.group_name,\n array(select x->>'locationNameSnapshot' from jsonb_array_elements(s->'includedLocations') x),\n array(select (x->>'locationId')::uuid from jsonb_array_elements(s->'includedLocations') x),\n s->'includedLocations',s->>'serviceMode',(s#>>'{window,start}')::time,(s#>>'{window,end}')::time\n from jsonb_array_elements(document->'responsibilities') r\n cross join lateral jsonb_array_elements(r->'segments') s\n join public.weekly_schedule_occurrences o on o.projection_id=authority.projection_id\n  and o.service_date=p_service_date and o.work_id=s->>'workId'\n  and o.owner_person_id_snapshot::text=r->>'normal_owner_person_id'\n  and o.owner_slot_id::text=r->>'normal_owner_slot_id' and o.state='created'\n  and o.coverage_start<=(s#>>'{window,start}')::time\n  and o.coverage_end>=(s#>>'{window,end}')::time\n  and o.authority_facts_json#>'{work_snapshot,includedLocations}'=s->'includedLocations'\n  and o.authority_facts_json#>>'{work_snapshot,serviceMode}'=s->>'serviceMode'\n join public.employees e on e.id=(r->>'coverer_person_id')::uuid and e.active=true\n join public.location_groups g on upper(g.group_code)=upper(o.location_code_snapshot) and g.active=true\n where r->>'service_date'=p_service_date::text\n order by (s#>>'{window,start}')::time,r->>'loan_id',r->>'responsibility_id',o.occurrence_id;\n get diagnostics actual_count=row_count;\n if actual_count<>expected_count then\n  raise exception using errcode='55000',message='accepted lunch coverage no longer maps exactly to current areas and employees';\n end if;\nend $function$\n",
+      "function_name": "static_weekly_v8_read_lunch_segments_dated_base",
       "identity_arguments": "p_service_date date",
       "owner_name": "migration_owner",
       "schema_name": "public"
@@ -47266,6 +48133,69 @@
       "is_unique": true,
       "schema_name": "public",
       "table_name": "custodial_backend_execution_config"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX custodial_dated_activations_authority_revision_key ON public.custodial_dated_activations USING btree (authority_revision)",
+      "index_name": "custodial_dated_activations_authority_revision_key",
+      "is_primary": false,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "custodial_dated_activations"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX custodial_dated_activations_pkey ON public.custodial_dated_activations USING btree (activation_id)",
+      "index_name": "custodial_dated_activations_pkey",
+      "is_primary": true,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "custodial_dated_activations"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX custodial_dated_occurrences_pkey ON public.custodial_dated_occurrences USING btree (occurrence_id)",
+      "index_name": "custodial_dated_occurrences_pkey",
+      "is_primary": true,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "custodial_dated_occurrences"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX custodial_dated_occurrences_publication_id_service_date_pla_key ON public.custodial_dated_occurrences USING btree (publication_id, service_date, plan_work_id)",
+      "index_name": "custodial_dated_occurrences_publication_id_service_date_pla_key",
+      "is_primary": false,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "custodial_dated_occurrences"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX custodial_dated_publications_pkey ON public.custodial_dated_publications USING btree (publication_id)",
+      "index_name": "custodial_dated_publications_pkey",
+      "is_primary": true,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "custodial_dated_publications"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX custodial_dated_publications_projection_id_key ON public.custodial_dated_publications USING btree (projection_id)",
+      "index_name": "custodial_dated_publications_projection_id_key",
+      "is_primary": false,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "custodial_dated_publications"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX custodial_dated_receipts_pkey ON public.custodial_dated_receipts USING btree (manager_id, operation_key)",
+      "index_name": "custodial_dated_receipts_pkey",
+      "is_primary": true,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "custodial_dated_receipts"
     },
     {
       "backs_constraint": true,
@@ -53011,6 +53941,42 @@
     },
     {
       "backs_constraint": false,
+      "definition": "CREATE INDEX feedback_email_intents_queued_idx ON public.system_feedback_email_intents USING btree (captured_at, id) WHERE (state = 'queued'::text)",
+      "index_name": "feedback_email_intents_queued_idx",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "system_feedback_email_intents"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX system_feedback_email_intents_feedback_id_key ON public.system_feedback_email_intents USING btree (feedback_id)",
+      "index_name": "system_feedback_email_intents_feedback_id_key",
+      "is_primary": false,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "system_feedback_email_intents"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX system_feedback_email_intents_operation_id_key ON public.system_feedback_email_intents USING btree (operation_id)",
+      "index_name": "system_feedback_email_intents_operation_id_key",
+      "is_primary": false,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "system_feedback_email_intents"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX system_feedback_email_intents_pkey ON public.system_feedback_email_intents USING btree (id)",
+      "index_name": "system_feedback_email_intents_pkey",
+      "is_primary": true,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "system_feedback_email_intents"
+    },
+    {
+      "backs_constraint": false,
       "definition": "CREATE INDEX idx_system_feedback_items_created_at ON public.system_feedback_items USING btree (created_at DESC)",
       "index_name": "idx_system_feedback_items_created_at",
       "is_primary": false,
@@ -54714,6 +55680,33 @@
       "schema_name": "public"
     },
     {
+      "function_name": "custodial_dated_control",
+      "grantee": "static_weekly_control_plane",
+      "grantor": "migration_owner",
+      "identity_arguments": "op text, args jsonb",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "custodial_dated_service_dates",
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "identity_arguments": "",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "custodial_dated_service_dates",
+      "grantee": "service_role",
+      "grantor": "migration_owner",
+      "identity_arguments": "",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
       "function_name": "custodial_enqueue_offline_reconciliation_disposition_notice",
       "grantee": "service_role",
       "grantor": "migration_owner",
@@ -56001,6 +56994,24 @@
       "schema_name": "public"
     },
     {
+      "function_name": "mz_is_approved_admin_location",
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "identity_arguments": "p_location uuid, p_now timestamp with time zone",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "mz_is_approved_admin_location",
+      "grantee": "service_role",
+      "grantor": "migration_owner",
+      "identity_arguments": "p_location uuid, p_now timestamp with time zone",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
       "function_name": "mz_latest_verified_check",
       "grantee": "custodial_application_reader",
       "grantor": "migration_owner",
@@ -56131,6 +57142,15 @@
       "grantee": "service_role",
       "grantor": "migration_owner",
       "identity_arguments": "p_job_id uuid, p_lease_token uuid, p_now timestamp with time zone",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "mz_verified_location_reminder_cycle",
+      "grantee": "service_role",
+      "grantor": "migration_owner",
+      "identity_arguments": "p_location uuid, p_form_type text, p_cleaned_at timestamp with time zone, p_checked_at timestamp with time zone, p_now timestamp with time zone",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -57409,6 +58429,24 @@
       "grantee": "static_weekly_control_plane",
       "grantor": "migration_owner",
       "identity_arguments": "p_date date, p_manager uuid",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "static_weekly_v27_read_home_time_facts",
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "identity_arguments": "p_date date, p_employee uuid, p_publication uuid, p_projection uuid",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "static_weekly_v27_read_home_time_facts",
+      "grantee": "service_role",
+      "grantor": "migration_owner",
+      "identity_arguments": "p_date date, p_employee uuid, p_publication uuid, p_projection uuid",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -70376,6 +71414,46 @@
       "rls_enabled": true,
       "rls_forced": true,
       "schema_name": "public",
+      "table_name": "custodial_dated_activations"
+    },
+    {
+      "comment": null,
+      "owner_name": "migration_owner",
+      "partition_key": null,
+      "relation_kind": "r",
+      "rls_enabled": true,
+      "rls_forced": true,
+      "schema_name": "public",
+      "table_name": "custodial_dated_occurrences"
+    },
+    {
+      "comment": null,
+      "owner_name": "migration_owner",
+      "partition_key": null,
+      "relation_kind": "r",
+      "rls_enabled": true,
+      "rls_forced": true,
+      "schema_name": "public",
+      "table_name": "custodial_dated_publications"
+    },
+    {
+      "comment": null,
+      "owner_name": "migration_owner",
+      "partition_key": null,
+      "relation_kind": "r",
+      "rls_enabled": true,
+      "rls_forced": true,
+      "schema_name": "public",
+      "table_name": "custodial_dated_receipts"
+    },
+    {
+      "comment": null,
+      "owner_name": "migration_owner",
+      "partition_key": null,
+      "relation_kind": "r",
+      "rls_enabled": true,
+      "rls_forced": true,
+      "schema_name": "public",
       "table_name": "custodial_device_credential_replacements"
     },
     {
@@ -72066,6 +73144,16 @@
       "rls_enabled": true,
       "rls_forced": true,
       "schema_name": "public",
+      "table_name": "system_feedback_email_intents"
+    },
+    {
+      "comment": null,
+      "owner_name": "migration_owner",
+      "partition_key": null,
+      "relation_kind": "r",
+      "rls_enabled": true,
+      "rls_forced": true,
+      "schema_name": "public",
       "table_name": "system_feedback_items"
     },
     {
@@ -72450,6 +73538,69 @@
       "schema_name": "public",
       "table_name": "custodial_backend_execution_config",
       "trigger_name": "custodial_disaster_restore_mutation_fence"
+    },
+    {
+      "definition": "CREATE TRIGGER custodial_disaster_restore_mutation_fence BEFORE INSERT OR DELETE OR UPDATE OR TRUNCATE ON custodial_dated_activations FOR EACH STATEMENT EXECUTE FUNCTION custodial_dr.guard_application_mutation()",
+      "enabled": "O",
+      "schema_name": "public",
+      "table_name": "custodial_dated_activations",
+      "trigger_name": "custodial_disaster_restore_mutation_fence"
+    },
+    {
+      "definition": "CREATE TRIGGER dated_activation_immutable BEFORE DELETE OR UPDATE ON custodial_dated_activations FOR EACH ROW EXECUTE FUNCTION custodial_dated_reject_mutation()",
+      "enabled": "O",
+      "schema_name": "public",
+      "table_name": "custodial_dated_activations",
+      "trigger_name": "dated_activation_immutable"
+    },
+    {
+      "definition": "CREATE TRIGGER custodial_disaster_restore_mutation_fence BEFORE INSERT OR DELETE OR UPDATE OR TRUNCATE ON custodial_dated_occurrences FOR EACH STATEMENT EXECUTE FUNCTION custodial_dr.guard_application_mutation()",
+      "enabled": "O",
+      "schema_name": "public",
+      "table_name": "custodial_dated_occurrences",
+      "trigger_name": "custodial_disaster_restore_mutation_fence"
+    },
+    {
+      "definition": "CREATE TRIGGER dated_occurrence_immutable BEFORE DELETE OR UPDATE ON custodial_dated_occurrences FOR EACH ROW EXECUTE FUNCTION custodial_dated_reject_mutation()",
+      "enabled": "O",
+      "schema_name": "public",
+      "table_name": "custodial_dated_occurrences",
+      "trigger_name": "dated_occurrence_immutable"
+    },
+    {
+      "definition": "CREATE TRIGGER custodial_disaster_restore_mutation_fence BEFORE INSERT OR DELETE OR UPDATE OR TRUNCATE ON custodial_dated_publications FOR EACH STATEMENT EXECUTE FUNCTION custodial_dr.guard_application_mutation()",
+      "enabled": "O",
+      "schema_name": "public",
+      "table_name": "custodial_dated_publications",
+      "trigger_name": "custodial_disaster_restore_mutation_fence"
+    },
+    {
+      "definition": "CREATE CONSTRAINT TRIGGER dated_publication_complete AFTER INSERT ON custodial_dated_publications DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION custodial_dated_assert_complete()",
+      "enabled": "O",
+      "schema_name": "public",
+      "table_name": "custodial_dated_publications",
+      "trigger_name": "dated_publication_complete"
+    },
+    {
+      "definition": "CREATE TRIGGER dated_publication_immutable BEFORE DELETE OR UPDATE ON custodial_dated_publications FOR EACH ROW EXECUTE FUNCTION custodial_dated_reject_mutation()",
+      "enabled": "O",
+      "schema_name": "public",
+      "table_name": "custodial_dated_publications",
+      "trigger_name": "dated_publication_immutable"
+    },
+    {
+      "definition": "CREATE TRIGGER custodial_disaster_restore_mutation_fence BEFORE INSERT OR DELETE OR UPDATE OR TRUNCATE ON custodial_dated_receipts FOR EACH STATEMENT EXECUTE FUNCTION custodial_dr.guard_application_mutation()",
+      "enabled": "O",
+      "schema_name": "public",
+      "table_name": "custodial_dated_receipts",
+      "trigger_name": "custodial_disaster_restore_mutation_fence"
+    },
+    {
+      "definition": "CREATE TRIGGER dated_receipt_immutable BEFORE DELETE OR UPDATE ON custodial_dated_receipts FOR EACH ROW EXECUTE FUNCTION custodial_dated_reject_mutation()",
+      "enabled": "O",
+      "schema_name": "public",
+      "table_name": "custodial_dated_receipts",
+      "trigger_name": "dated_receipt_immutable"
     },
     {
       "definition": "CREATE TRIGGER custodial_disaster_restore_mutation_fence BEFORE INSERT OR DELETE OR UPDATE OR TRUNCATE ON custodial_device_credential_replacements FOR EACH STATEMENT EXECUTE FUNCTION custodial_dr.guard_application_mutation()",
@@ -73353,6 +74504,13 @@
       "schema_name": "public",
       "table_name": "events_app_events",
       "trigger_name": "trg_events_app_validate_scope_venue"
+    },
+    {
+      "definition": "CREATE TRIGGER trg_events_app_zz_needs_review_isolation BEFORE INSERT OR UPDATE ON events_app_events FOR EACH ROW EXECUTE FUNCTION events_app_isolate_needs_review()",
+      "enabled": "O",
+      "schema_name": "public",
+      "table_name": "events_app_events",
+      "trigger_name": "trg_events_app_zz_needs_review_isolation"
     },
     {
       "definition": "CREATE TRIGGER custodial_disaster_restore_mutation_fence BEFORE INSERT OR DELETE OR UPDATE OR TRUNCATE ON events_app_notification_log FOR EACH STATEMENT EXECUTE FUNCTION custodial_dr.guard_application_mutation()",
@@ -74643,6 +75801,20 @@
       "trigger_name": "trg_static_weekly_staffing_stage_immutable"
     },
     {
+      "definition": "CREATE TRIGGER custodial_disaster_restore_mutation_fence BEFORE INSERT OR DELETE OR UPDATE OR TRUNCATE ON system_feedback_email_intents FOR EACH STATEMENT EXECUTE FUNCTION custodial_dr.guard_application_mutation()",
+      "enabled": "O",
+      "schema_name": "public",
+      "table_name": "system_feedback_email_intents",
+      "trigger_name": "custodial_disaster_restore_mutation_fence"
+    },
+    {
+      "definition": "CREATE TRIGGER capture_system_feedback_email_intent_after_insert AFTER INSERT ON system_feedback_items FOR EACH ROW EXECUTE FUNCTION capture_system_feedback_email_intent()",
+      "enabled": "O",
+      "schema_name": "public",
+      "table_name": "system_feedback_items",
+      "trigger_name": "capture_system_feedback_email_intent_after_insert"
+    },
+    {
       "definition": "CREATE TRIGGER custodial_disaster_restore_mutation_fence BEFORE INSERT OR DELETE OR UPDATE OR TRUNCATE ON system_feedback_items FOR EACH STATEMENT EXECUTE FUNCTION custodial_dr.guard_application_mutation()",
       "enabled": "O",
       "schema_name": "public",
@@ -75100,7 +76272,7 @@
     },
     {
       "comment": null,
-      "definition": " WITH op_day AS (\n         SELECT operational_day_start(now()) AS day_start,\n            sch_service_date(now()) AS service_date\n        ), authority AS (\n         SELECT state.service_date,\n            state.governed,\n            state.authority_source,\n            state.projection_status,\n            state.version_id,\n            state.publication_id,\n            state.projection_id,\n            state.projection_authority_revision,\n            state.staffing_authority_revision,\n            state.week_start\n           FROM op_day day\n             CROSS JOIN LATERAL static_weekly_v6_schedule_authority_state(day.service_date) state(service_date, governed, authority_source, projection_status, version_id, publication_id, projection_id, projection_authority_revision, staffing_authority_revision, week_start)\n        ), scheduled_baseline AS (\n         SELECT assignment.location_id,\n            min(((day.service_date + assignment.coverage_start) AT TIME ZONE 'America/Chicago'::text)) AS baseline_at\n           FROM op_day day\n             JOIN LATERAL custodial_operational_location_assignments(day.service_date) assignment(service_date, authority_source, projection_status, version_id, publication_id, projection_id, occurrence_id, location_group_id, group_code, group_name, assigned_employee_id, assigned_employee_name, assignment_status, coverage_start, coverage_end, location_id, location_code, location_name, form_type) ON true\n          GROUP BY assignment.location_id\n        ), latest_scan AS (\n         SELECT scan_events.location_id,\n            max(COALESCE(scan_events.scanned_at, scan_events.created_at)) AS last_scan_at\n           FROM scan_events\n          GROUP BY scan_events.location_id\n        ), open_session AS (\n         SELECT DISTINCT ON (work.location_id) work.location_id,\n            work.location_code,\n            work.session_id,\n            work.session_uuid,\n            work.status AS session_status,\n            work.started_at,\n            work.ended_at,\n            work.duration_minutes,\n            work.duration_display,\n            work.employee_name,\n            work.device_identifier\n           FROM custodial_open_work() work(open_work_id, source_kind, session_id, context_id, session_uuid, client_session_id, location_id, location_code, location_name, employee_id, employee_name, device_id, device_identifier, status, started_at, ended_at, duration_minutes, duration_display, created_at)\n          WHERE work.source_kind <> 'session'::text OR work.started_at >= operational_day_start(now())\n          ORDER BY work.location_id, work.started_at DESC, work.created_at DESC, work.open_work_id DESC\n        ), latest_completed AS (\n         SELECT DISTINCT ON (session.location_id) session.location_id,\n            session.id AS session_id,\n            session.session_uuid,\n            session.started_at,\n            session.ended_at,\n            session.duration_minutes,\n            session.duration_display,\n            employee.display_name AS employee_name,\n            completion.submitted_at,\n            completion.response_json,\n            COALESCE(session.ended_at, completion.submitted_at, session.started_at) AS effective_completed_at\n           FROM sessions session\n             JOIN employees employee ON employee.id = session.employee_id\n             LEFT JOIN completion_responses completion ON completion.session_id = session.id\n             CROSS JOIN op_day day\n          WHERE session.status = 'closed'::text AND (completion.response_json ->> 'work_result'::text) IS DISTINCT FROM 'checked_no_cleaning_needed'::text AND COALESCE(session.ended_at, completion.submitted_at, session.started_at) >= day.day_start\n          ORDER BY session.location_id, (COALESCE(session.ended_at, completion.submitted_at, session.started_at)) DESC, session.started_at DESC\n        ), open_tickets AS (\n         SELECT maintenance_tickets.location_id,\n            count(*) AS open_ticket_count\n           FROM maintenance_tickets\n          WHERE maintenance_tickets.status = 'open'::text\n          GROUP BY maintenance_tickets.location_id\n        ), truth AS (\n         SELECT location.id AS location_id,\n            COALESCE(open_session.location_code, location.location_code) AS location_code,\n            location.location_name,\n            location.location_type,\n            location.form_type,\n            day.day_start,\n            latest_scan.last_scan_at,\n            open_session.session_id AS open_session_id,\n            open_session.session_uuid AS open_session_uuid,\n            open_session.session_status AS open_session_status,\n            open_session.started_at AS open_session_started_at,\n            open_session.ended_at AS open_session_ended_at,\n            open_session.employee_name AS open_session_employee_name,\n            open_session.device_identifier AS open_session_device_identifier,\n            latest_completed.session_id AS latest_completed_session_id,\n            latest_completed.session_uuid AS latest_completed_session_uuid,\n            latest_completed.started_at AS latest_started_at,\n            latest_completed.ended_at AS latest_ended_at,\n            latest_completed.submitted_at AS latest_submitted_at,\n            latest_completed.effective_completed_at AS latest_completed_at,\n            latest_completed.employee_name AS latest_employee_name,\n            latest_completed.duration_minutes,\n            latest_completed.duration_display,\n            latest_completed.response_json,\n            COALESCE(open_tickets.open_ticket_count, 0::bigint) AS open_ticket_count,\n            scheduled_baseline.baseline_at,\n            mz_latest_verified_check(location.id, day.day_start, now()) AS verified_check_at,\n                CASE\n                    WHEN latest_completed.effective_completed_at IS NULL THEN NULL::timestamp with time zone\n                    ELSE GREATEST(latest_completed.effective_completed_at, mz_latest_verified_check(location.id, day.day_start, now()))\n                END AS due_baseline_at,\n            authority.authority_source AS schedule_authority_source,\n            authority.projection_status AS schedule_projection_status\n           FROM locations location\n             CROSS JOIN op_day day\n             CROSS JOIN authority\n             LEFT JOIN scheduled_baseline ON scheduled_baseline.location_id = location.id\n             LEFT JOIN latest_scan ON latest_scan.location_id = location.id\n             LEFT JOIN open_session ON open_session.location_id = location.id\n             LEFT JOIN latest_completed ON latest_completed.location_id = location.id\n             LEFT JOIN open_tickets ON open_tickets.location_id = location.id\n          WHERE location.active = true\n        )\n SELECT location_id,\n    location_code,\n    location_name,\n    location_type,\n    form_type,\n    day_start AS operational_day_start,\n    last_scan_at,\n    open_session_id,\n    open_session_uuid,\n    open_session_status,\n    open_session_started_at,\n    open_session_ended_at,\n    latest_completed_session_id,\n    latest_completed_session_uuid,\n    latest_started_at,\n    latest_ended_at,\n    latest_submitted_at,\n    latest_completed_at,\n    latest_employee_name,\n    duration_minutes,\n    duration_display,\n    COALESCE(response_json -> 'services_performed'::text, response_json -> 'servicesPerformed'::text, response_json -> 'services'::text, response_json -> 'completed_services'::text, response_json -> 'completedServices'::text, '[]'::jsonb) AS services_performed,\n    COALESCE(response_json ->> 'notes'::text, response_json ->> 'cleaning_notes'::text, response_json ->> 'cleaningNotes'::text, response_json ->> 'maintenance_notes'::text, response_json ->> 'maintenanceNotes'::text, response_json ->> 'other_service_performed'::text, response_json ->> 'otherServicePerformed'::text, response_json ->> 'note'::text) AS notes,\n    open_ticket_count,\n        CASE\n            WHEN due_baseline_at IS NULL AND (open_session_status = ANY (ARRAY['active'::text, 'pending_submit'::text])) THEN 'in_progress'::text\n            WHEN due_baseline_at IS NULL THEN 'not_cleaned'::text\n            WHEN form_type = 'restroom'::text AND now() >= (due_baseline_at + make_interval(mins => get_setting_int('restroom_overdue_minutes'::text, 90))) THEN 'overdue'::text\n            WHEN form_type = 'restroom'::text AND now() >= (due_baseline_at + make_interval(mins => get_setting_int('restroom_due_soon_minutes'::text, 75))) THEN 'due_soon'::text\n            WHEN form_type = 'exhibit'::text AND now() >= (due_baseline_at + make_interval(mins => get_setting_int('exhibit_overdue_minutes'::text, 210))) THEN 'overdue'::text\n            WHEN form_type = 'exhibit'::text AND now() >= (due_baseline_at + make_interval(mins => get_setting_int('exhibit_due_soon_minutes'::text, 195))) THEN 'due_soon'::text\n            WHEN open_session_status = ANY (ARRAY['active'::text, 'pending_submit'::text]) THEN 'in_progress'::text\n            ELSE 'okay'::text\n        END AS status_code,\n        CASE\n            WHEN due_baseline_at IS NULL AND (open_session_status = ANY (ARRAY['active'::text, 'pending_submit'::text])) THEN 'blue'::text\n            WHEN due_baseline_at IS NULL THEN 'black'::text\n            WHEN form_type = 'restroom'::text AND now() >= (due_baseline_at + make_interval(mins => get_setting_int('restroom_overdue_minutes'::text, 90))) OR form_type = 'exhibit'::text AND now() >= (due_baseline_at + make_interval(mins => get_setting_int('exhibit_overdue_minutes'::text, 210))) THEN 'red'::text\n            WHEN form_type = 'restroom'::text AND now() >= (due_baseline_at + make_interval(mins => get_setting_int('restroom_due_soon_minutes'::text, 75))) OR form_type = 'exhibit'::text AND now() >= (due_baseline_at + make_interval(mins => get_setting_int('exhibit_due_soon_minutes'::text, 195))) THEN 'yellow'::text\n            WHEN open_session_status = ANY (ARRAY['active'::text, 'pending_submit'::text]) THEN 'blue'::text\n            ELSE 'green'::text\n        END AS status_color,\n    to_char(timezone('America/Chicago'::text, day_start), 'MM/DD/YYYY HH12:MI AM'::text) || ' Central'::text AS operational_day_start_display,\n    to_char(timezone('America/Chicago'::text, last_scan_at), 'MM/DD/YYYY HH12:MI AM'::text) || ' Central'::text AS last_scan_at_display,\n    to_char(timezone('America/Chicago'::text, open_session_started_at), 'MM/DD/YYYY HH12:MI AM'::text) || ' Central'::text AS open_session_started_at_display,\n    to_char(timezone('America/Chicago'::text, open_session_ended_at), 'MM/DD/YYYY HH12:MI AM'::text) || ' Central'::text AS open_session_ended_at_display,\n    to_char(timezone('America/Chicago'::text, latest_started_at), 'MM/DD/YYYY HH12:MI AM'::text) || ' Central'::text AS latest_started_at_display,\n    to_char(timezone('America/Chicago'::text, latest_ended_at), 'MM/DD/YYYY HH12:MI AM'::text) || ' Central'::text AS latest_ended_at_display,\n    to_char(timezone('America/Chicago'::text, latest_submitted_at), 'MM/DD/YYYY HH12:MI AM'::text) || ' Central'::text AS latest_submitted_at_display,\n    to_char(timezone('America/Chicago'::text, latest_completed_at), 'MM/DD/YYYY HH12:MI AM'::text) || ' Central'::text AS latest_completed_at_display,\n    open_session_employee_name,\n    open_session_device_identifier,\n    schedule_authority_source,\n    schedule_projection_status,\n    GREATEST(latest_completed_at, verified_check_at) AS latest_checked_at\n   FROM truth;",
+      "definition": " WITH op_day AS (\n         SELECT operational_day_start(now()) AS day_start,\n            sch_service_date(now()) AS service_date\n        ), authority AS (\n         SELECT state.service_date,\n            state.governed,\n            state.authority_source,\n            state.projection_status,\n            state.version_id,\n            state.publication_id,\n            state.projection_id,\n            state.projection_authority_revision,\n            state.staffing_authority_revision,\n            state.week_start\n           FROM op_day day\n             CROSS JOIN LATERAL static_weekly_v6_schedule_authority_state(day.service_date) state(service_date, governed, authority_source, projection_status, version_id, publication_id, projection_id, projection_authority_revision, staffing_authority_revision, week_start)\n        ), scheduled_baseline AS (\n         SELECT assignment.location_id,\n            min(((day.service_date + assignment.coverage_start) AT TIME ZONE 'America/Chicago'::text)) AS baseline_at\n           FROM op_day day\n             JOIN LATERAL custodial_operational_location_assignments(day.service_date) assignment(service_date, authority_source, projection_status, version_id, publication_id, projection_id, occurrence_id, location_group_id, group_code, group_name, assigned_employee_id, assigned_employee_name, assignment_status, coverage_start, coverage_end, location_id, location_code, location_name, form_type) ON true\n          GROUP BY assignment.location_id\n        ), latest_scan AS (\n         SELECT scan_events.location_id,\n            max(COALESCE(scan_events.scanned_at, scan_events.created_at)) AS last_scan_at\n           FROM scan_events\n          GROUP BY scan_events.location_id\n        ), open_session AS (\n         SELECT DISTINCT ON (work.location_id) work.location_id,\n            work.location_code,\n            work.session_id,\n            work.session_uuid,\n            work.status AS session_status,\n            work.started_at,\n            work.ended_at,\n            work.duration_minutes,\n            work.duration_display,\n            work.employee_name,\n            work.device_identifier\n           FROM custodial_open_work() work(open_work_id, source_kind, session_id, context_id, session_uuid, client_session_id, location_id, location_code, location_name, employee_id, employee_name, device_id, device_identifier, status, started_at, ended_at, duration_minutes, duration_display, created_at)\n          WHERE work.source_kind <> 'session'::text OR work.started_at >= operational_day_start(now())\n          ORDER BY work.location_id, work.started_at DESC, work.created_at DESC, work.open_work_id DESC\n        ), latest_completed AS (\n         SELECT DISTINCT ON (session.location_id) session.location_id,\n            session.id AS session_id,\n            session.session_uuid,\n            session.started_at,\n            session.ended_at,\n            session.duration_minutes,\n            session.duration_display,\n            employee.display_name AS employee_name,\n            completion.submitted_at,\n            completion.response_json,\n            COALESCE(session.ended_at, completion.submitted_at, session.started_at) AS effective_completed_at\n           FROM sessions session\n             JOIN employees employee ON employee.id = session.employee_id\n             LEFT JOIN completion_responses completion ON completion.session_id = session.id\n             CROSS JOIN op_day day\n          WHERE session.status = 'closed'::text AND (completion.response_json ->> 'work_result'::text) IS DISTINCT FROM 'checked_no_cleaning_needed'::text AND COALESCE(session.ended_at, completion.submitted_at, session.started_at) >= day.day_start\n          ORDER BY session.location_id, (COALESCE(session.ended_at, completion.submitted_at, session.started_at)) DESC, session.started_at DESC\n        ), open_tickets AS (\n         SELECT maintenance_tickets.location_id,\n            count(*) AS open_ticket_count\n           FROM maintenance_tickets\n          WHERE maintenance_tickets.status = 'open'::text\n          GROUP BY maintenance_tickets.location_id\n        ), truth AS (\n         SELECT location.id AS location_id,\n            COALESCE(open_session.location_code, location.location_code) AS location_code,\n            location.location_name,\n            location.location_type,\n            location.form_type,\n            day.day_start,\n            latest_scan.last_scan_at,\n            open_session.session_id AS open_session_id,\n            open_session.session_uuid AS open_session_uuid,\n            open_session.session_status AS open_session_status,\n            open_session.started_at AS open_session_started_at,\n            open_session.ended_at AS open_session_ended_at,\n            open_session.employee_name AS open_session_employee_name,\n            open_session.device_identifier AS open_session_device_identifier,\n            latest_completed.session_id AS latest_completed_session_id,\n            latest_completed.session_uuid AS latest_completed_session_uuid,\n            latest_completed.started_at AS latest_started_at,\n            latest_completed.ended_at AS latest_ended_at,\n            latest_completed.submitted_at AS latest_submitted_at,\n            latest_completed.effective_completed_at AS latest_completed_at,\n            latest_completed.employee_name AS latest_employee_name,\n            latest_completed.duration_minutes,\n            latest_completed.duration_display,\n            latest_completed.response_json,\n            COALESCE(open_tickets.open_ticket_count, 0::bigint) AS open_ticket_count,\n            scheduled_baseline.baseline_at,\n            mz_latest_verified_check(location.id, day.day_start, now()) AS verified_check_at,\n                CASE\n                    WHEN latest_completed.effective_completed_at IS NULL THEN NULL::timestamp with time zone\n                    ELSE GREATEST(latest_completed.effective_completed_at, mz_latest_verified_check(location.id, day.day_start, now()))\n                END AS due_baseline_at,\n            authority.authority_source AS schedule_authority_source,\n            authority.projection_status AS schedule_projection_status\n           FROM locations location\n             CROSS JOIN op_day day\n             CROSS JOIN authority\n             LEFT JOIN scheduled_baseline ON scheduled_baseline.location_id = location.id\n             LEFT JOIN latest_scan ON latest_scan.location_id = location.id\n             LEFT JOIN open_session ON open_session.location_id = location.id\n             LEFT JOIN latest_completed ON latest_completed.location_id = location.id\n             LEFT JOIN open_tickets ON open_tickets.location_id = location.id\n          WHERE location.active = true\n        )\n SELECT location_id,\n    location_code,\n    location_name,\n    location_type,\n    form_type,\n    day_start AS operational_day_start,\n    last_scan_at,\n    open_session_id,\n    open_session_uuid,\n    open_session_status,\n    open_session_started_at,\n    open_session_ended_at,\n    latest_completed_session_id,\n    latest_completed_session_uuid,\n    latest_started_at,\n    latest_ended_at,\n    latest_submitted_at,\n    latest_completed_at,\n    latest_employee_name,\n    duration_minutes,\n    duration_display,\n    COALESCE(response_json -> 'services_performed'::text, response_json -> 'servicesPerformed'::text, response_json -> 'services'::text, response_json -> 'completed_services'::text, response_json -> 'completedServices'::text, '[]'::jsonb) AS services_performed,\n    COALESCE(response_json ->> 'notes'::text, response_json ->> 'cleaning_notes'::text, response_json ->> 'cleaningNotes'::text, response_json ->> 'maintenance_notes'::text, response_json ->> 'maintenanceNotes'::text, response_json ->> 'other_service_performed'::text, response_json ->> 'otherServicePerformed'::text, response_json ->> 'note'::text) AS notes,\n    open_ticket_count,\n        CASE\n            WHEN due_baseline_at IS NULL AND (open_session_status = ANY (ARRAY['active'::text, 'pending_submit'::text])) THEN 'in_progress'::text\n            WHEN due_baseline_at IS NULL THEN 'not_cleaned'::text\n            WHEN form_type = 'restroom'::text AND now() >= (due_baseline_at + make_interval(mins =>\n            CASE\n                WHEN mz_is_approved_admin_location(location_id, now()) THEN 180\n                ELSE get_setting_int('restroom_overdue_minutes'::text, 90)\n            END)) THEN 'overdue'::text\n            WHEN form_type = 'restroom'::text AND now() >= (due_baseline_at + make_interval(mins =>\n            CASE\n                WHEN mz_is_approved_admin_location(location_id, now()) THEN 165\n                ELSE get_setting_int('restroom_due_soon_minutes'::text, 75)\n            END)) THEN 'due_soon'::text\n            WHEN form_type = 'exhibit'::text AND now() >= (due_baseline_at + make_interval(mins =>\n            CASE\n                WHEN mz_is_approved_admin_location(location_id, now()) THEN 180\n                ELSE get_setting_int('exhibit_overdue_minutes'::text, 210)\n            END)) THEN 'overdue'::text\n            WHEN form_type = 'exhibit'::text AND now() >= (due_baseline_at + make_interval(mins =>\n            CASE\n                WHEN mz_is_approved_admin_location(location_id, now()) THEN 165\n                ELSE get_setting_int('exhibit_due_soon_minutes'::text, 195)\n            END)) THEN 'due_soon'::text\n            WHEN open_session_status = ANY (ARRAY['active'::text, 'pending_submit'::text]) THEN 'in_progress'::text\n            ELSE 'okay'::text\n        END AS status_code,\n        CASE\n            WHEN due_baseline_at IS NULL AND (open_session_status = ANY (ARRAY['active'::text, 'pending_submit'::text])) THEN 'blue'::text\n            WHEN due_baseline_at IS NULL THEN 'black'::text\n            WHEN form_type = 'restroom'::text AND now() >= (due_baseline_at + make_interval(mins =>\n            CASE\n                WHEN mz_is_approved_admin_location(location_id, now()) THEN 180\n                ELSE get_setting_int('restroom_overdue_minutes'::text, 90)\n            END)) OR form_type = 'exhibit'::text AND now() >= (due_baseline_at + make_interval(mins =>\n            CASE\n                WHEN mz_is_approved_admin_location(location_id, now()) THEN 180\n                ELSE get_setting_int('exhibit_overdue_minutes'::text, 210)\n            END)) THEN 'red'::text\n            WHEN form_type = 'restroom'::text AND now() >= (due_baseline_at + make_interval(mins =>\n            CASE\n                WHEN mz_is_approved_admin_location(location_id, now()) THEN 165\n                ELSE get_setting_int('restroom_due_soon_minutes'::text, 75)\n            END)) OR form_type = 'exhibit'::text AND now() >= (due_baseline_at + make_interval(mins =>\n            CASE\n                WHEN mz_is_approved_admin_location(location_id, now()) THEN 165\n                ELSE get_setting_int('exhibit_due_soon_minutes'::text, 195)\n            END)) THEN 'yellow'::text\n            WHEN open_session_status = ANY (ARRAY['active'::text, 'pending_submit'::text]) THEN 'blue'::text\n            ELSE 'green'::text\n        END AS status_color,\n    to_char(timezone('America/Chicago'::text, day_start), 'MM/DD/YYYY HH12:MI AM'::text) || ' Central'::text AS operational_day_start_display,\n    to_char(timezone('America/Chicago'::text, last_scan_at), 'MM/DD/YYYY HH12:MI AM'::text) || ' Central'::text AS last_scan_at_display,\n    to_char(timezone('America/Chicago'::text, open_session_started_at), 'MM/DD/YYYY HH12:MI AM'::text) || ' Central'::text AS open_session_started_at_display,\n    to_char(timezone('America/Chicago'::text, open_session_ended_at), 'MM/DD/YYYY HH12:MI AM'::text) || ' Central'::text AS open_session_ended_at_display,\n    to_char(timezone('America/Chicago'::text, latest_started_at), 'MM/DD/YYYY HH12:MI AM'::text) || ' Central'::text AS latest_started_at_display,\n    to_char(timezone('America/Chicago'::text, latest_ended_at), 'MM/DD/YYYY HH12:MI AM'::text) || ' Central'::text AS latest_ended_at_display,\n    to_char(timezone('America/Chicago'::text, latest_submitted_at), 'MM/DD/YYYY HH12:MI AM'::text) || ' Central'::text AS latest_submitted_at_display,\n    to_char(timezone('America/Chicago'::text, latest_completed_at), 'MM/DD/YYYY HH12:MI AM'::text) || ' Central'::text AS latest_completed_at_display,\n    open_session_employee_name,\n    open_session_device_identifier,\n    schedule_authority_source,\n    schedule_projection_status,\n    GREATEST(latest_completed_at, verified_check_at) AS latest_checked_at\n   FROM truth;",
       "owner_name": "migration_owner",
       "relation_kind": "v",
       "schema_name": "public",
@@ -75132,7 +76304,7 @@
     },
     {
       "comment": null,
-      "definition": " WITH authority_dates AS (\n         SELECT DISTINCT occurrence.service_date\n           FROM weekly_schedule_occurrences occurrence\n        UNION\n         SELECT DISTINCT assignment.service_date\n           FROM daily_schedule_assignments assignment\n        )\n SELECT segment.service_date,\n    segment.location_group_id,\n    segment.group_code,\n    segment.group_name,\n    segment.segment_number,\n    segment.assigned_employee_id,\n    segment.assigned_employee_name,\n    employee.employee_code,\n    \"left\"(segment.coverage_start, 5) AS coverage_start,\n    \"left\"(segment.coverage_end, 5) AS coverage_end,\n    segment.status,\n    segment.owner_type,\n    segment.load_points::numeric(10,2) AS load_points,\n    segment.source_type,\n    segment.notes\n   FROM authority_dates authority_date\n     CROSS JOIN LATERAL static_weekly_v6_read_schedule_segments(authority_date.service_date) segment(service_date, location_group_id, group_code, group_name, included_locations, included_location_ids, segment_id, segment_number, owner_type, assigned_employee_id, assigned_employee_name, coverage_start, coverage_end, status, load_points, coverage_purpose, notes, source_type, service_mode, governed, projection_status, version_id, publication_id, projection_id)\n     LEFT JOIN employees employee ON employee.id = segment.assigned_employee_id;",
+      "definition": " WITH authority_dates AS (\n         SELECT DISTINCT occurrence.service_date\n           FROM weekly_schedule_occurrences occurrence\n        UNION\n         SELECT DISTINCT assignment.service_date\n           FROM daily_schedule_assignments assignment\n        UNION\n         SELECT custodial_dated_service_dates.service_date\n           FROM custodial_dated_service_dates() custodial_dated_service_dates(service_date)\n        )\n SELECT segment.service_date,\n    segment.location_group_id,\n    segment.group_code,\n    segment.group_name,\n    segment.segment_number,\n    segment.assigned_employee_id,\n    segment.assigned_employee_name,\n    employee.employee_code,\n    \"left\"(segment.coverage_start, 5) AS coverage_start,\n    \"left\"(segment.coverage_end, 5) AS coverage_end,\n    segment.status,\n    segment.owner_type,\n    segment.load_points::numeric(10,2) AS load_points,\n    segment.source_type,\n    segment.notes\n   FROM authority_dates authority_date\n     CROSS JOIN LATERAL static_weekly_v6_read_schedule_segments(authority_date.service_date) segment(service_date, location_group_id, group_code, group_name, included_locations, included_location_ids, segment_id, segment_number, owner_type, assigned_employee_id, assigned_employee_name, coverage_start, coverage_end, status, load_points, coverage_purpose, notes, source_type, service_mode, governed, projection_status, version_id, publication_id, projection_id)\n     LEFT JOIN employees employee ON employee.id = segment.assigned_employee_id;",
       "owner_name": "migration_owner",
       "relation_kind": "v",
       "schema_name": "public",
