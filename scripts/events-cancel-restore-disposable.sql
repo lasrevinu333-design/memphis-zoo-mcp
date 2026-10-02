@@ -13,6 +13,8 @@ declare
   v_result jsonb;
   v_replay jsonb;
   v_review uuid;
+  v_retired uuid;
+  v_legacy uuid;
 begin
   select manager_id into v_manager from public.ops_manager_managers
     where active and revoked_at is null and not is_system_principal
@@ -59,6 +61,16 @@ begin
     or v_result->'event'->>'cancelled_from_status'<>'SCHEDULED' then
     raise exception 'ordinary cancellation receipt/status wrong';
   end if;
+  begin
+    update public.events_app_transition_receipts set request_digest='tampered' where operation_id=v_cancel;
+    raise exception 'receipt update was permitted';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    delete from public.events_app_transition_receipts where operation_id=v_cancel;
+    raise exception 'live receipt delete was permitted';
+  exception when insufficient_privilege then null;
+  end;
   v_replay:=public.app_transition_event_cancellation(v_id,'cancel',1,v_cancel,v_manager,'confirmed cancellation');
   if v_replay->>'replayed'<>'true' or v_replay->'event'<>v_result->'event' then
     raise exception 'same lost-response request did not replay exact event snapshot';
@@ -119,6 +131,43 @@ begin
     raise exception 'unresolved review draft became scheduled';
   exception when sqlstate '40901' then null;
   end;
+  insert into public.events_app_events(event_name,location_group_id,event_scope,primary_venue_id,venue_ids,
+    display_location,event_date,end_date,start_time,end_time,status,needs_review)
+    values('Legacy future cancellation',v_group,'ZOO_WIDE',v_venue,array[v_venue],
+      'Zoo Footprint','2026-11-02','2026-11-02','09:00','11:00','SCHEDULED',false)
+    returning id into v_legacy;
+  perform public.app_transition_event_cancellation(v_legacy,'cancel',1,gen_random_uuid(),v_manager,null);
+  begin
+    perform public.app_transition_event_cancellation(v_legacy,'restore',2,gen_random_uuid(),v_manager,null);
+    raise exception 'legacy null-instant cancellation restored without deliberate correction';
+  exception when sqlstate '40901' then null;
+  end;
+  v_result:=public.app_apply_event_update_cas(v_legacy,
+    (select to_jsonb(e) from public.events_app_events e where e.id=v_legacy)
+      ||jsonb_build_object('actor_manager_id',v_manager,'expected_revision',2,
+        'start_instant_utc','2026-11-02T15:00:00.000Z','end_instant_utc','2026-11-02T17:00:00.000Z'),
+    null,'Manager-confirmed legacy Chicago instant correction while cancelled.');
+  if v_result->>'status'<>'CANCELLED' or (v_result->>'revision')::int<>3 then
+    raise exception 'legacy correction did not retain cancelled status under revision CAS';
+  end if;
+  v_result:=public.app_transition_event_cancellation(v_legacy,'restore',3,gen_random_uuid(),v_manager,null);
+  if v_result->'event'->>'status'<>'SCHEDULED' or (v_result->'event'->>'revision')::int<>4 then
+    raise exception 'corrected legacy cancellation did not restore after separate revision confirmation';
+  end if;
+  v_event:=public.app_apply_event_command('create',null,jsonb_build_object(
+    'event_name','Disposable approved retention','location_group_id',v_group,
+    'event_scope','ZOO_WIDE','primary_venue_id',v_venue,'venue_ids',jsonb_build_array(v_venue),
+    'display_location','Zoo Footprint','event_date','2026-08-01','end_date','2026-08-01',
+    'start_time','09:00:00','end_time','11:00:00',
+    'start_instant_utc','2026-08-01T14:00:00.000Z','end_instant_utc','2026-08-01T16:00:00.000Z',
+    'operation_id',gen_random_uuid(),'actor_manager_id',v_manager),null,null);
+  v_retired:=(v_event->>'id')::uuid;
+  perform public.app_transition_event_cancellation(v_retired,'cancel',1,gen_random_uuid(),v_manager,null);
+  delete from public.events_app_events where id=v_retired;
+  if exists(select 1 from public.events_app_events where id=v_retired)
+    or exists(select 1 from public.events_app_transition_receipts where event_id=v_retired) then
+    raise exception 'approved event retention failed to cascade its old receipts';
+  end if;
   raise notice 'EVENT_CANCEL_RESTORE_PASS manager=% other=% event=%',v_manager,v_other,v_id;
 end $test$;
 rollback;

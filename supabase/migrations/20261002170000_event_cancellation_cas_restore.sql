@@ -27,6 +27,43 @@ alter table public.events_app_transition_receipts enable row level security;
 alter table public.events_app_transition_receipts force row level security;
 revoke all on public.events_app_transition_receipts from public,anon,authenticated,service_role,custodial_application_reader;
 
+-- The pre-existing approved event retention trigger deletes history only
+-- after its review window. Bind that existing boundary to the exact event
+-- before its history FK cascades transition receipts.
+do $bind_retention$
+declare v_definition text;
+begin
+  v_definition:=pg_get_functiondef('public.events_app_delete_retention_guard()'::regprocedure);
+  if strpos(v_definition,'delete from public.events_app_event_history where event_id=old.id;')=0
+    or strpos(v_definition,'app.event_retention_delete')>0 then
+    raise exception 'unexpected event retention guard shape; refusing receipt deletion bypass';
+  end if;
+  v_definition:=replace(v_definition,
+    'delete from public.events_app_event_history where event_id=old.id;',
+    'perform set_config(''app.event_retention_delete'',old.id::text,true);'||chr(10)||
+    '  delete from public.events_app_event_history where event_id=old.id;');
+  execute v_definition;
+end $bind_retention$;
+
+-- No live receipt update/delete, including privileged direct-table writes.
+create function public.app_event_transition_receipt_immutable()
+returns trigger language plpgsql set search_path=pg_catalog,public as $function$
+begin
+  if tg_op='DELETE' and current_setting('app.event_retention_delete',true)=old.event_id::text
+    and exists(select 1 from public.events_app_events e where e.id=old.event_id
+      and coalesce(e.end_date,e.event_date) <=
+        (clock_timestamp() at time zone 'America/Chicago')::date
+          - public.mz_retention_setting_int('retention_event_days',14,1,3650)) then
+    return old;
+  end if;
+  raise exception using errcode='42501',message='event transition receipt is immutable while its event is retained';
+end $function$;
+revoke all on function public.app_event_transition_receipt_immutable()
+  from public,anon,authenticated,service_role,custodial_application_reader;
+create trigger trg_app_event_transition_receipt_immutable
+before update or delete on public.events_app_transition_receipts for each row
+execute function public.app_event_transition_receipt_immutable();
+
 -- The old five-argument command remains necessary for create/update and old
 -- recovery identity, but must not remain an unconditional cancel writer.
 do $retire_old_cancel$
@@ -75,7 +112,7 @@ declare
     case when p_action='restore' then 'Manager-confirmed ordinary cancellation recovery.'
       else 'Manager-confirmed event cancellation.' end),1000);
   v_digest text;
-  v_now timestamptz:=statement_timestamp();
+  v_now timestamptz;
 begin
   if p_event_id is null or p_action not in ('cancel','restore') or p_action is null
     or p_expected_revision is null or p_expected_revision<1
@@ -95,6 +132,7 @@ begin
     'manager_id',p_manager_id,'reason',v_reason));
   select * into v_old from public.events_app_events e where e.id=p_event_id for update;
   if v_old.id is null then raise exception using errcode='P0002',message='event not found'; end if;
+  v_now:=clock_timestamp();
   select * into v_receipt from public.events_app_transition_receipts r
     where r.operation_id=p_operation_id;
   if v_receipt.operation_id is not null then
@@ -187,7 +225,9 @@ begin
     select 100000 bucket,'function'::text kind,p.oid::regprocedure::text identity,pg_get_functiondef(p.oid) definition
       from pg_proc p where p.oid=any(array[
         'public.app_apply_event_command(text,uuid,jsonb,text,text)'::regprocedure,
+        'public.events_app_delete_retention_guard()'::regprocedure,
         'public.app_event_cancellation_transition_guard()'::regprocedure,
+        'public.app_event_transition_receipt_immutable()'::regprocedure,
         'public.app_transition_event_cancellation(uuid,text,integer,uuid,uuid,text)'::regprocedure])
     union all select 1000,'relation','public.events_app_events',
       public.custodial_release_authority_current_relation_definition('public.events_app_events')
@@ -218,10 +258,17 @@ begin
       ||pg_get_triggerdef(t.oid,true)||'; alter table public.events_app_events enable trigger trg_app_event_cancellation_transition_guard;'
       from pg_trigger t where t.tgrelid='public.events_app_events'::regclass
         and t.tgname='trg_app_event_cancellation_transition_guard'
+    union all select 700000,'trigger','public.events_app_transition_receipts.trg_app_event_transition_receipt_immutable',
+      'drop trigger if exists trg_app_event_transition_receipt_immutable on public.events_app_transition_receipts; '
+      ||pg_get_triggerdef(t.oid,true)||'; alter table public.events_app_transition_receipts enable trigger trg_app_event_transition_receipt_immutable;'
+      from pg_trigger t where t.tgrelid='public.events_app_transition_receipts'::regclass
+        and t.tgname='trg_app_event_transition_receipt_immutable'
     union all select 900000,'grant',r.identity,
       public.custodial_release_authority_current_grant_definition(r.identity)
       from (values('public.app_apply_event_command(text,uuid,jsonb,text,text)'),
+        ('public.events_app_delete_retention_guard()'),
         ('public.app_event_cancellation_transition_guard()'),
+        ('public.app_event_transition_receipt_immutable()'),
         ('public.app_transition_event_cancellation(uuid,text,integer,uuid,uuid,text)'),
         ('public.events_app_transition_receipts')) r(identity)
   loop
