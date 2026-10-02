@@ -14,6 +14,7 @@ import {createGeneralJsonMiddleware} from '../src/request-json-parser.js';
 import {makeDeviceCredentialMiddleware,deviceCredentialInternals} from '../src/auth/device-credential-auth.js';
 import {installNativeProviderRoutes} from '../src/native-provider-api.js';
 import {writeNativeSqlFixture} from './fixtures/native-sql-fixture-output.mjs';
+import {nativeIntervalDatabaseCases} from './fixtures/native-provider-interval-database-cases.mjs';
 const container=`mz_schema_rebuild_provider_events_${process.pid}`;
 const image='supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed';
 const docker=(args,extra={})=>execFileSync('docker',args,{encoding:'utf8',timeout:60000,maxBuffer:32*1024*1024,stdio:['pipe','pipe','pipe'],...extra});
@@ -86,15 +87,18 @@ try{
  const result=(e=expected,time=at)=>JSON.parse(sql(call(e,time)));
  const reservation=result(),payload=validateNativeLocationReservation(reservation,{jobId:job.job_id,expected}).payload;
  const recordId=hash(payload.generation_id+'\n'+payload.receipt_job_id+'\n'+payload.notification_key);
- const event=(action,change={})=>({schema:'custodial.native-provider-event.v1',event_id:randomUUID(),record_id:recordId,action,
+ const observation=(first,elapsed=150,boot=1,last=first===null?null:first.replace(/(\d{6})Z$/,(_,n)=>String(BigInt(n)+2n).padStart(6,'0')+'Z'))=>
+  ({earliest_at:first,latest_at:last,clock_profile_id:first===null?null:'SYNTHETIC_ONLY_PC01',elapsed_realtime_ms:elapsed,boot_count:boot});
+ const event=(action,change={})=>({schema:'custodial.native-provider-event.v2',event_id:randomUUID(),record_id:recordId,action,
   ...Object.fromEntries(['generation_id','content_sha256','receipt_job_id','notification_key','receipt_credential_id','receipt_employee_id','receipt_device_id','principal_digest','token_digest'].map(k=>[k,payload[k]])),
-  receipt_assignment_epoch:1,admitted_at:'2026-10-02T15:00:02.123456Z',
-  original_observation:{authenticated_at:action==='received'?'2026-10-02T15:00:01.123456Z':'2026-10-02T15:00:03.123456Z',elapsed_realtime_ms:action==='received'?100:200,boot_count:1},...change});
- const batch=events=>({schema:'custodial.native-provider-events.v1',events});
+  receipt_assignment_epoch:1,admission_bounds:observation('2026-10-02T15:00:02.123456Z'),
+  original_observation:observation(action==='received'?'2026-10-02T15:00:01.123456Z':'2026-10-02T15:00:03.123456Z',action==='received'?100:200),...change});
+ const batch=events=>({schema:'custodial.native-provider-events.v2',events});
  const receiptTime='2026-10-02T15:00:04.123456Z';
  const query=(b,time=receiptTime,nonce=randomUUID(),proof='b'.repeat(64))=>
   'select public.custodial_native_provider_events_at('+[q(credential),q(credentialHash),q(nonce),q(proof),j(b),q(time)].join(',')+');';
  const submit=(b,time=receiptTime,nonce=randomUUID(),proof='b'.repeat(64))=>JSON.parse(sql(query(b,time,nonce,proof)));
+ const interval=nativeIntervalDatabaseCases({sql,q,j,check,reject,credential,credentialHash,body,at,event,batch,query,payload,observation});
  const received=event('received'),displayed=event('displayed'),opened=event('opened'),ack=event('acknowledged');
  const originalRows=sql('select md5(jsonb_agg(to_jsonb(r) order by job_id)::text) from public.employee_native_push_delivery_receipts r where job_id='+q(job.job_id));
  const count=()=>sql('select count(*) from public.employee_native_provider_events');
@@ -108,8 +112,8 @@ try{
  const replay=submit(request,'2026-10-02T16:00:00.123456Z');
  check('response loss drains after display expiry with original timestamp',replay.data.results.map(r=>({...r,replayed:false})),admitted.data.results);
  check('replay does not duplicate events',count(),'4');
- for(const field of ['admitted_at','original_observation']){
-  const changed=structuredClone(received);if(field==='admitted_at')changed.admitted_at='2026-10-02T15:00:02.123457Z';else changed.original_observation.elapsed_realtime_ms=101;
+ for(const field of ['admission_bounds','original_observation']){
+  const changed=structuredClone(received);if(field==='admission_bounds')changed.admission_bounds.earliest_at='2026-10-02T15:00:02.123457Z';else changed.original_observation.elapsed_realtime_ms=101;
   check('changed original '+field+' conflicts',submit(batch([changed])).data.results[0].code,'native_provider_event_conflict');
  }
  check('new UUID cannot repeat one finite transition',submit(batch([{...received,event_id:randomUUID()}])).data.results[0].code,'native_provider_event_conflict');
@@ -123,8 +127,8 @@ try{
  reject('same nonce changed observation rejected',query(batch([received]),receiptTime,nonce),/native request identity conflict/);
  reject('same nonce changed attestation rejected',query(request,receiptTime,nonce,'c'.repeat(64)),/native request identity conflict/);
  for(const changed of [{...received,action:'dismissed'},{...received,receipt_assignment_epoch:'1'},{...received,record_id:'c'.repeat(64)},
-  {...received,extra:true},{...received,admitted_at:'2026-02-30T15:00:00.000000Z'},
-  {...received,original_observation:{authenticated_at:received.admitted_at,boot_count:null,elapsed_realtime_ms:1}}])
+  {...received,extra:true},{...received,admission_bounds:observation('2026-02-30T15:00:00.000000Z')},
+  {...received,original_observation:{...received.admission_bounds,boot_count:null,elapsed_realtime_ms:1}}])
   reject('SQL strict native shape '+Object.keys(changed).join(','),query(batch([changed])));
  reject('duplicate event in batch',query(batch([received,received])),/unique native events/);
  reject('oversized batch',query(batch(Array.from({length:17},()=>received))),/exact native event batch/);
@@ -145,20 +149,20 @@ try{
  const nextLease=randomUUID();sql('update public.operational_notification_jobs set status=\'leased\',lease_token='+q(nextLease)+',leased_until='+q(at)+'::timestamptz+interval \'1 hour\' where job_id='+q(nextJob.job_id));
  const next=JSON.parse(sql('select public.custodial_native_location_reserve_at('+[q(nextJob.job_id),q(nextLease),j(expected),q(at)].join(',')+')')).payload;
  const e2=(action,changes={})=>event(action,{...Object.fromEntries(['generation_id','content_sha256','receipt_job_id','notification_key'].map(k=>[k,next[k]])),record_id:hash(next.generation_id+'\n'+next.receipt_job_id+'\n'+next.notification_key),...changes});
- const received2=e2('received',{original_observation:{authenticated_at:null,boot_count:1,elapsed_realtime_ms:100}});
- const opened2=e2('opened',{original_observation:{authenticated_at:null,boot_count:1,elapsed_realtime_ms:200}});
+ const received2=e2('received',{original_observation:observation(null,100,1)});
+ const opened2=e2('opened',{original_observation:observation(null,200,1)});
  for(const [name,e] of [
-  ['admission before reservation',e2('received',{admitted_at:'2026-10-02T14:59:59.123456Z'})],
-  ['admission after validity',e2('received',{admitted_at:'2026-10-02T15:05:00.123456Z'})],
-  ['original receive after admission',e2('received',{original_observation:{authenticated_at:'2026-10-02T15:00:03.123456Z',boot_count:1,elapsed_realtime_ms:100}})]])
+  ['admission before reservation',e2('received',{admission_bounds:observation('2026-10-02T14:59:59.123456Z')})],
+  ['admission after validity',e2('received',{admission_bounds:observation('2026-10-02T15:05:00.123456Z')})],
+  ['original receive after admission',e2('received',{original_observation:observation('2026-10-02T15:00:03.123456Z',100,1)})]])
   check(name,submit(batch([e])).data.results[0].code,'native_provider_observation_invalid');
  submit(batch([received2]));
  for(const [name,e] of [
-  ['mismatched admitted evidence',e2('opened',{admitted_at:'2026-10-02T15:00:02.123457Z'})],
-  ['same boot elapsed reversal',e2('opened',{original_observation:{authenticated_at:null,boot_count:1,elapsed_realtime_ms:99}})],
-  ['boot count reversal',e2('opened',{original_observation:{authenticated_at:null,boot_count:0,elapsed_realtime_ms:999}})],
-  ['claimed time before admission',e2('opened',{original_observation:{authenticated_at:'2026-10-02T15:00:01.123456Z',boot_count:1,elapsed_realtime_ms:200}})],
-  ['display beyond validity',e2('displayed',{original_observation:{authenticated_at:'2026-10-02T15:06:00.123456Z',boot_count:1,elapsed_realtime_ms:200}})]])
+  ['mismatched admitted evidence',e2('opened',{admission_bounds:observation('2026-10-02T15:00:02.123457Z')})],
+  ['same boot elapsed reversal',e2('opened',{original_observation:observation(null,99,1)})],
+  ['boot count reversal',e2('opened',{original_observation:observation(null,999,0)})],
+  ['claimed time before admission',e2('opened',{original_observation:observation('2026-10-02T15:00:01.123456Z',200,1)})],
+  ['display beyond validity',e2('displayed',{original_observation:observation('2026-10-02T15:06:00.123456Z',200,1)})]])
   check(name,submit(batch([e]),'2026-10-02T16:00:00.123456Z').data.results[0].code,'native_provider_observation_invalid');
  check('offline Open after expiry binds original without display',submit(batch([opened2]),'2026-10-02T16:00:00.123456Z').data.results[0].admitted_state,'ACCEPTED');
  check('Open does not synthesize display',sql('select count(*) from public.employee_native_provider_events where record_id='+q(opened2.record_id)+" and action='displayed'"),'0');
@@ -178,31 +182,39 @@ try{
  let httpSqlCalls=0;const app=express();app.use(createGeneralJsonMiddleware());
  installNativeProviderRoutes(app,{env,requireCurrentCredential:makeDeviceCredentialMiddleware({env,requireEnrolledCredential:true,
   store:{getPolicy:async()=>({mode:'enforce'}),findCredential:async id=>id===credential?authCredential:null,touchCredential:async()=>{},audit:async()=>{}},runReadOnlySql:async()=>[authDevice]}),
-  db:{rpc:async(name,args)=>{httpSqlCalls++;assert.equal(name,'custodial_native_provider_events');assert.equal(args.p_credential_hash,credentialHash);assert.match(args.p_attestation_digest,/^[0-9a-f]{64}$/);
+  db:{rpc:async(name,args)=>{httpSqlCalls++;assert.equal(args.p_credential_hash,credentialHash);assert.match(args.p_attestation_digest,/^[0-9a-f]{64}$/);
+   if(name==='custodial_native_provider_inventory_clock')return{data:JSON.parse(sql(`select public.custodial_native_provider_inventory_clock_at(${q(args.p_credential)},${q(args.p_credential_hash)},${q(args.p_native_request)},${q(args.p_attestation_digest)},${j(args.p_body)},'2026-10-02T15:00:04.123456Z','2026-10-02T15:00:04.123456Z')`))};
+   assert.equal(name,'custodial_native_provider_events');
    return{data:JSON.parse(sql(`select public.custodial_native_provider_events_at(${q(args.p_credential)},${q(args.p_credential_hash)},${q(args.p_native_request)},${q(args.p_attestation_digest)},${j(args.p_body)},'2026-10-02T15:00:04.123456Z')`))};}}});
  app.use((error,_req,res,_next)=>res.status(error.status||500).json({code:'synthetic_error'}));
  const server=await new Promise(resolve=>{const ownedServer=app.listen(0,'127.0.0.1',()=>resolve(ownedServer));});
  console.log('OWNED_EVENTS_HTTP_SQL_SERVER',server.address().port,'cleanup in finally');
  try{
   const path='/employee-notifications-api/native-provider/events';
-  const send=async(sent=request,mutate=()=>{})=>{const bytes=' \n'+JSON.stringify(sent,null,2)+'\n',requestId=randomUUID(),timestamp=new Date().toISOString();
-   const proof=['custodial-native-request.v1',credential,'KIOSK_08','POST',path,hash(bytes),requestId,timestamp,'custodial'].join('\n');
+  const send=async(sent=request,mutate=()=>{},route=path)=>{const bytes=' \n'+JSON.stringify(sent,null,2)+'\n',requestId=randomUUID(),timestamp=new Date().toISOString();
+   const proof=['custodial-native-request.v1',credential,'KIOSK_08','POST',route,hash(bytes),requestId,timestamp,'custodial'].join('\n');
    const headers={'content-type':'application/json',authorization:`Device ${credential}.${secret}`,'x-device-id':'KIOSK_08',origin:'https://localhost','x-memphis-app-edition':'custodial',
     'x-memphis-native-attestation-version':'custodial-native-request.v1','x-memphis-native-request-id':requestId,'x-memphis-native-request-timestamp':timestamp,
     'x-memphis-native-request-attestation':createHmac('sha256',secret).update(proof).digest('hex')};mutate(headers);
-   return fetch('http://127.0.0.1:'+server.address().port+path,{method:'POST',headers,body:bytes,signal:AbortSignal.timeout(10000)});};
+   return fetch('http://127.0.0.1:'+server.address().port+route,{method:'POST',headers,body:bytes,signal:AbortSignal.timeout(10000)});};
   let response=await send();check('actual HTTP raw-body HMAC SQL event200',response.status,200);
   const httpReceipt=await response.json();check('actual HTTP returns exact committed replay',httpReceipt,submit(request));
   const calls=httpSqlCalls;response=await send(request,headers=>delete headers['x-memphis-native-request-attestation']);await response.text();
   check('unsigned events rejected before SQL',[response.status,httpSqlCalls],[403,calls]);
   response=await send(batch([{...received,receipt_employee_id:other}]));await response.text();check('foreign current recipient rejected before SQL',[response.status,httpSqlCalls],[403,calls]);
+  response=await send(interval.input,()=>{},'/employee-notifications-api/native-provider/inventory');
+  check('actual HTTP raw-body HMAC fresh inventory SQL200',response.status,200);interval.http_response=await response.json();
+  check('actual HTTP inventory retains frozen page and separate SQL clock',interval.http_response.data.server_now===interval.first.data.server_now
+   &&interval.http_response.clock.server_now==='2026-10-02T15:00:04.123456Z',true);
+  const inventoryCalls=httpSqlCalls;response=await send(interval.input,headers=>delete headers['x-memphis-native-request-attestation'],'/employee-notifications-api/native-provider/inventory');await response.text();
+  check('unsigned fresh inventory rejected before SQL',[response.status,httpSqlCalls],[403,inventoryCalls]);
  }finally{server.closeAllConnections();await new Promise((resolve,reject)=>server.close(error=>error?reject(error):resolve()));console.log('OWNED_EVENTS_HTTP_SQL_SERVER_CLOSED');}
  const roles=['anon','authenticated','service_role','custodial_application_reader','static_weekly_control_plane','static_weekly_release_operator','static_weekly_runtime_20260823'];
  for(const role of roles){
   reject(role+' denied test time','set role '+role+';'+query(request),/permission denied/);
   for(const relation of ['employee_native_provider_events','employee_native_provider_event_requests'])
    reject(role+' denied direct '+relation,'set role '+role+';select * from public.'+relation,/permission denied/);
-  for(const helper of ['custodial_native_provider_event_shape('+j(received)+')','custodial_native_provider_event_time('+j(received.admitted_at)+')'])
+  for(const helper of ['custodial_native_provider_event_shape('+j(received)+')','custodial_native_provider_event_time('+j(received.admission_bounds.earliest_at)+')'])
    reject(role+' denied private helper','set role '+role+';select public.'+helper,/permission denied/);
   if(role!=='service_role')reject(role+' denied public wrapper','set role '+role+';select public.custodial_native_provider_events('+[q(credential),q(credentialHash),q(randomUUID()),q('b'.repeat(64)),j(request)].join(',')+')',/permission denied/);
  }
@@ -214,7 +226,7 @@ try{
   check(relation+' forced RLS',sql('select relrowsecurity and relforcerowsecurity from pg_class where oid='+q('public.'+relation)+'::regclass'),'t');
  }
  const eventRows=sql('select md5(jsonb_agg(to_jsonb(e) order by event_id)::text) from public.employee_native_provider_events e');
- const ownedNames=['custodial_native_provider_event_time','custodial_native_provider_event_shape','custodial_native_provider_events_at','custodial_native_provider_events'];
+ const ownedNames=['custodial_native_provider_event_time','custodial_native_provider_event_shape','custodial_native_provider_events_at','custodial_native_provider_events','custodial_native_provider_interval_observation','custodial_native_provider_observation_order','custodial_native_provider_inventory_clock_at','custodial_native_provider_inventory_clock'];
  for(const name of ownedNames)for(const kind of ['function','grant'])check('exact receipt recovery '+kind+' '+name,sql(
   'select count(*) from pg_proc p join public.custodial_release_authority_restore_inventory i on i.object_kind='+q(kind)+" and i.object_identity like '%(%' and to_regprocedure(i.object_identity)=p.oid where p.pronamespace='public'::regnamespace and p.proname="+q(name)+" and i.definition_sha256=public.static_weekly_digest_text(case when i.object_kind='function' then pg_get_functiondef(p.oid) else public.custodial_release_authority_current_grant_definition(p.oid::regprocedure::text) end)"),'1');
  const restoration=JSON.parse(sql("select jsonb_agg(definition_sql order by restore_order) from public.custodial_release_authority_restore_inventory where object_kind in ('function','grant','trigger') and (object_identity like '%employee_native_provider_event%' or object_identity like '%custodial_native_provider_event%')"));
@@ -243,7 +255,7 @@ try{
    and e.record_id in (${q(recordId)},${q(opened2.record_id)})`),'2');
  check('ACK projection fabricates no receive/display/open/dismiss timestamps',sql(`select count(*) from public.device_notification_acknowledgements
   where received_at is not null or displayed_at is not null or opened_at is not null or dismissed_at is not null`),'0');
- const fixture=writeNativeSqlFixture({envName:'NATIVE_PROVIDER_EVENTS_FIXTURE',fileName:'native-provider-events.json',payload:{provenance:'actual SQL with private synthetic time; encrypted native input fixtures are synthetic',nativePrincipal,request,admitted,replay,mixed,registered},manifest,owningMigration:'20261003050000_native_provider_events.sql',scriptPath:'scripts/native-provider-events-database-tests.mjs'});
+ const fixture=writeNativeSqlFixture({envName:'NATIVE_PROVIDER_EVENTS_FIXTURE',fileName:'native-provider-events.json',payload:{provenance:'actual SQL with private synthetic time; encrypted native input fixtures are synthetic',checks:checks+1,nativePrincipal,request,admitted,replay,mixed,registered,interval},manifest,owningMigration:'20261003150000_native_provider_interval_protocol.sql',scriptPath:'scripts/native-provider-events-database-tests.mjs'});
  if(fixture)console.log('SQL_PROVIDER_EVENTS_FIXTURE',fixture.path,fixture.sha256);
  check('automatic grants remain absent',sql(defaults),'0');
  console.log(JSON.stringify({status:'PASS',checks,migrations:manifest,automatic_grants_absent_before_and_after_each:true,actualPostgres:true,syntheticClock:true,production:false,independentAudit:false,providerClock:false,delivery:false}));

@@ -85,13 +85,13 @@ try{
   await refused('noncurrent credential '+state);
  }row=structuredClone(base);
  await refused('events cannot relay registration schema to generic SQL',body,prefix+'/events');
- const event={schema:'custodial.native-provider-event.v1',event_id:id(60),generation_id:body.generation_id,receipt_job_id:id(61),notification_key:'synthetic-event-key',
+ const event={schema:'custodial.native-provider-event.v2',event_id:id(60),generation_id:body.generation_id,receipt_job_id:id(61),notification_key:'synthetic-event-key',
   action:'received',receipt_credential_id:cid,receipt_employee_id:employee,receipt_device_id:'KIOSK_08',receipt_assignment_epoch:7,
-  principal_digest:body.principal_digest,token_digest:body.token_digest,content_sha256:'c'.repeat(64),admitted_at:'2026-10-02T01:00:00.123456Z',
-  original_observation:{authenticated_at:null,boot_count:null,elapsed_realtime_ms:null}};
+  principal_digest:body.principal_digest,token_digest:body.token_digest,content_sha256:'c'.repeat(64),admission_bounds:{earliest_at:'2026-10-02T01:00:00.123456Z',latest_at:'2026-10-02T01:00:00.123456Z',clock_profile_id:'SYNTHETIC_ONLY_PC01',elapsed_realtime_ms:150,boot_count:1},
+  original_observation:{earliest_at:null,latest_at:null,clock_profile_id:null,boot_count:null,elapsed_realtime_ms:null}};
  event.record_id=crypto.createHash('sha256').update(event.generation_id+'\n'+event.receipt_job_id+'\n'+event.notification_key).digest('hex');
- const events={schema:'custodial.native-provider-events.v1',events:[event]},eventResponse={ok:true,data:{schema:'custodial.native-provider-event-receipts.v1',results:[
-  {...event,schema:'custodial.native-provider-event-receipt.v1',admitted_state:'ACCEPTED',server_received_at:'2026-10-02T01:01:00.123456Z',replayed:false}]}};
+ const events={schema:'custodial.native-provider-events.v2',events:[event]},eventResponse={ok:true,data:{schema:'custodial.native-provider-event-receipts.v2',results:[
+  {...event,schema:'custodial.native-provider-event-receipt.v2',admitted_state:'ACCEPTED',server_received_at:'2026-10-02T01:01:00.123456Z',replayed:false}]}};
  dbValue=eventResponse;r=await send(events,prefix+'/events');const eventResult=await r.json();
  check('events current HMAC reaches exact SQL wrapper',r.status===200&&lastFunction==='custodial_native_provider_events'&&!Object.hasOwn(lastArgs,'p_status'));
  check('events echoes exact committed observations',JSON.stringify(eventResult)===JSON.stringify(eventResponse));
@@ -112,13 +112,22 @@ try{
  const inventory={schema:'custodial.native-provider-inventory-request.v1',scan_id:id(44),principal_digest:body.principal_digest,
   device_id:body.device_id,credential_id:cid,employee_id:employee,assignment_epoch:7,generation_ids:[body.generation_id],limit:32,cursor:null,ceiling:null,server_now:null};
  const inventoryData={...inventory,schema:'custodial.native-provider-inventory.v1',server_now:'2026-10-02T01:02:03.123456Z',has_more:false,rows:[]};delete inventoryData.limit;
- dbValue={ok:true,data:inventoryData};r=await send(inventory,prefix+'/inventory');const inventoryResult=await r.json();
- check('actual native HMAC inventory reaches exact service owner',r.status===200&&lastFunction==='custodial_native_location_inventory'&&!Object.hasOwn(lastArgs,'p_status'));
+ dbValue={ok:true,data:inventoryData,clock:validResponse({p_native_request:requestId}).clock};r=await send(inventory,prefix+'/inventory');const inventoryResult=await r.json();
+ check('actual native HMAC inventory reaches exact service owner',r.status===200&&lastFunction==='custodial_native_provider_inventory_clock'&&!Object.hasOwn(lastArgs,'p_status'));
  check('exact empty inventory is not invented device receipt',JSON.stringify(inventoryResult)===JSON.stringify(dbValue));
+ for(const fault of ['missing_clock','wrong_nonce','frozen_newer','extra_clock','bad_horizon']){
+  dbValue={ok:true,data:inventoryData,clock:validResponse({p_native_request:requestId}).clock};
+  if(fault==='missing_clock')delete dbValue.clock;
+  if(fault==='wrong_nonce')dbValue.clock.native_request_id=id(99);
+  if(fault==='frozen_newer')dbValue.clock.server_now='2026-10-02T01:02:03.123455Z';
+  if(fault==='extra_clock')dbValue.clock.qualified=true;
+  if(fault==='bad_horizon')dbValue.clock.valid_until='2026-10-02T01:17:03.123457Z';
+  r=await send(inventory,prefix+'/inventory');await r.text();check('fresh inventory envelope rejects '+fault,r.status===503);
+ }
  for(const change of [{scan_id:[id(44)]},{limit:33},{assignment_epoch:'7'},{generation_ids:[body.generation_id,body.generation_id]},{cursor:{reservation_at:'2026-10-02T01:02:03.123456Z',job_id:id(45)}},{extra:true}])
   await refused('strict inventory request '+Object.keys(change)[0],{...inventory,...change},prefix+'/inventory');
  for(const fault of ['foreign','has_more','unknown','malformed_time']){
-  dbValue={ok:true,data:structuredClone(inventoryData)};
+  dbValue={ok:true,data:structuredClone(inventoryData),clock:validResponse({p_native_request:requestId}).clock};
   if(fault==='foreign')dbValue.data.employee_id=id(88);if(fault==='has_more')dbValue.data.has_more=true;
   if(fault==='unknown')dbValue.data.extra='ignored';if(fault==='malformed_time')dbValue.data.server_now='2026-02-30T01:02:03.123456Z';
   r=await send(inventory,prefix+'/inventory');await r.text();check('inventory SQL response fails closed '+fault,r.status===503);

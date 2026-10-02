@@ -75,7 +75,7 @@ export function installNativeProviderRoutes(app,{db,env=process.env,requireCurre
    const a=verifyNativeDeviceRequestAttestation(req);
    if(!db||typeof db.rpc!=='function')deny('native_provider_service_unavailable',503);
    const proof=JSON.stringify([a.version,a.credential_id,a.device_id,a.method,a.path,a.body_sha256,a.request_id,a.timestamp,a.signature]);
-   const result=await db.rpc(suffix==='events'?'custodial_native_provider_events':suffix==='inventory'?'custodial_native_location_inventory':'custodial_native_provider_registration_clock',{
+   const result=await db.rpc(suffix==='events'?'custodial_native_provider_events':suffix==='inventory'?'custodial_native_provider_inventory_clock':'custodial_native_provider_registration_clock',{
     p_credential:credential.credentialId,p_credential_hash:deviceCredentialInternals.tokenHash(credential.secret,env),
     p_native_request:a.request_id,p_attestation_digest:createHash('sha256').update(proof).digest('hex'),p_body:body,...(['inventory','events'].includes(suffix)?{}:{p_status:suffix==='status'}),
    });
@@ -86,7 +86,14 @@ export function installNativeProviderRoutes(app,{db,env=process.env,requireCurre
     return res.json(response);
    }
    if(suffix==='inventory'){
-    let response;try{response=validateNativeLocationInventoryResponse(result.data,body);}catch{deny('native_provider_response_invalid',503);}
+    let response;try{
+     if(result.data?.ok===false)response=validateNativeLocationInventoryResponse(result.data,body);
+     else{
+      if(!exact(result.data,['ok','data','clock'])||result.data.ok!==true)deny('native_provider_response_invalid',503);
+      const fresh=clockResponse({data:result.data.data,clock:result.data.clock},a.request_id);
+      response={...validateNativeLocationInventoryResponse({ok:true,data:fresh.data},body),clock:fresh.clock};
+     }
+    }catch{deny('native_provider_response_invalid',503);}
     return res.status(response.ok?200:409).json(response);
    }
    const response=clockResponse(result.data,a.request_id);
