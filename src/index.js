@@ -21,6 +21,7 @@ import { observeProductionSchemaIdentity } from "./production-schema-identity.js
 import { assertOpsManagerSessionSecret, authenticateOpsAccessRequest, createSupabaseTrustedDeviceStore, installSharedAuthRoutes, makeOpsAccessMiddleware } from "./auth/shared-access-auth.js";
 import { assertServerAssignedActor, authenticatedManagerActor } from "./manager-authority.js";
 import { authoritativeFeedbackPayload, makeFeedbackSubmitAuthority } from "./feedback-authority.js";
+import { attachFeedbackDelivery } from "./feedback-delivery-status.js";
 import { createPlacesAdminRouter } from "./places-api.js";
 import { isMcpReadOnlyNoAuthEnabled, makeMcpConnectorMiddleware } from "./auth/mcp-connector-auth.js";
 import {
@@ -2748,15 +2749,14 @@ app.post("/feedback-api/submit", publicSubmissionRateLimit("feedback"), requireF
       operation_id: operationId,
       user_agent: String(req.get("user-agent") || "").slice(0, 500),
     });
-    await runOperationalCommand("feedback_dashboard_only", { id: item.id });
-    item.notification_status = "dashboard_only";
-    item.notified_ops_count = 0;
-    const notification = { ops_count: 0, errors: [], skipped: "dashboard_only" };
+    const [deliveryItem] = await attachFeedbackDelivery([item], { client: supabaseAdmin });
+    const notification = { ops_count: 0, errors: [], skipped: "messenger_disabled", email_delivery: deliveryItem.email_delivery };
     const safeItem = {
       id: item.id,
       operation_id: item.operation_id,
       status: item.status,
       notification_status: item.notification_status,
+      email_delivery: deliveryItem.email_delivery,
       created_at: item.created_at,
       newly_inserted: item.newly_inserted,
     };
@@ -2899,7 +2899,7 @@ app.get("/dashboard-api/system-feedback", requireOpsManagerAuth, async (req, res
     const priority = req.query.priority ? String(req.query.priority) : "";
     const hubContext = req.query.hub_context ? String(req.query.hub_context) : "";
     const limit = req.query.limit ? Number(req.query.limit) : 100;
-    const rows = await listSystemFeedbackItems({ status, priority, hubContext, limit });
+    const rows = await attachFeedbackDelivery(await listSystemFeedbackItems({ status, priority, hubContext, limit }), { client: supabaseAdmin });
     res.status(200).json({ ok: true, data: rows, meta: { version: APP_VERSION, release_id: RELEASE_ID, contract_version: FEEDBACK_CONTRACT_VERSION } });
   } catch (error) {
     console.error("system feedback list failed:", error);
