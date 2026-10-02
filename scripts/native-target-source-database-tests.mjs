@@ -7,6 +7,7 @@ import {nativeLocationAuthoritySource} from './fixtures/native-location-authorit
 import {createStaticWeeklyProjectionWithLunchRpcInput} from '../src/static-weekly-lunch-publication.js';
 import {validateNativeLunchDispatch} from '../src/native-lunch-dispatch.js';
 import {validateNativeLocationInventoryResponse} from '../src/native-location-lifecycle.js';
+import {writeNativeSqlFixture} from './fixtures/native-sql-fixture-output.mjs';
 
 const container=`mz_schema_rebuild_native_target_source_${process.pid}`;
 const image='supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed';
@@ -352,5 +353,49 @@ try{
   rollback;`).split('\n');
  check('newer staffing authority invalidates schedule source',stale[0],'SOURCE_STALE');
  check('newer staffing authority invalidates lunch source',stale[1],'SOURCE_STALE');
+ // Test-only cross-repository bridge: preserve the actual SQL canonical wire,
+ // independently read source/recipient expectations, and full replay provenance.
+ // No provider token/credential secret or fabricated native admission is exported.
+ if(process.env.NATIVE_LUNCH_WIRE_FIXTURE){
+  const canonicalTime=value=>sql(`select to_char(${q(value)}::timestamptz at time zone 'UTC',
+   'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`);
+  const cases=lunchPrepared.map(({event,job,atDue,permit})=>{
+   const source=lunchCases.find(item=>item.event===event).row.source;
+   const intent=event==='start'?startIntent:endIntent;
+   return {event,envelope:permit.reservation,expected:{...lunchExpected,
+    receipt_job_id:job,notification_key:source.notification_key,projection_id:source.source_id,
+    document_identity:source.source_digest,loan_id:source.loan_id,event:source.event,
+    coverer_slot_id:source.coverer_slot_id,service_date:source.service_date,
+    scheduled_time:intent.scheduled_time,scheduled_at:canonicalTime(source.valid_from),
+    reservation_at:canonicalTime(atDue),valid_until:canonicalTime(source.valid_until)}};
+  });
+  const exported=writeNativeSqlFixture({envName:'NATIVE_LUNCH_WIRE_FIXTURE',fileName:'native-lunch-wire.json',
+   payload:{schema:'custodial.native-lunch-sql-wire-fixture.v1',cases},manifest,
+   owningMigration:'20261003194000_native_lunch_delivery.sql',
+   scriptPath:'scripts/native-target-source-database-tests.mjs'});
+  console.log('NATIVE_LUNCH_SQL_WIRE_EXPORTED',JSON.stringify(exported));
+  // Parent-requested read-only diagnostic; never configure authority or repair
+  // inventory to manufacture a successful health result in this fixture.
+  try{
+   console.log('CURRENT_AUTHORITY_HEALTH_DIAGNOSTIC',sql(`select public.custodial_backend_authority_health(null)::text`));
+  }catch(error){
+   console.log('CURRENT_AUTHORITY_HEALTH_DIAGNOSTIC_UNAVAILABLE',JSON.stringify({
+    signature:'public.custodial_backend_authority_health(text)',authorityConfiguredByThisTest:false,
+    detail:String(error.stderr).trim()}));
+  }
+  console.log('CURRENT_AUTHORITY_CATALOG_DIAGNOSTIC',sql(`select jsonb_build_object(
+   'restore_counts',(select jsonb_object_agg(object_kind,n) from
+    (select object_kind,count(*) n from public.custodial_release_authority_restore_inventory group by object_kind) counts),
+   'canary_counts',(select jsonb_object_agg(object_kind,n) from
+    (select object_kind,count(*) n from public.custodial_release_canary_authority_surface() group by object_kind) counts),
+   'surface_uncovered',(select coalesce(jsonb_agg(s.object_identity order by s.object_kind,s.object_identity),'[]'::jsonb)
+    from public.custodial_release_canary_authority_surface() s where not exists(select 1
+     from public.custodial_release_authority_restore_inventory i where i.object_kind=s.object_kind and i.object_identity=s.object_identity)),
+   'function_mismatches_only',(select coalesce(jsonb_agg(i.object_identity order by i.object_identity),'[]'::jsonb)
+    from public.custodial_release_authority_restore_inventory i where i.object_kind='function'
+     and to_regprocedure(i.object_identity) is not null and encode(extensions.digest(convert_to(
+      pg_get_functiondef(to_regprocedure(i.object_identity)),'UTF8'),'sha256'),'hex')<>i.definition_sha256),
+   'complete_authority_health',false)::text`));
+ }
  console.log('NATIVE_TARGET_SOURCE_DATABASE_PASS',checks,JSON.stringify({migrations:manifest.length,manifest_sha256:createHash('sha256').update(JSON.stringify(manifest)).digest('hex'),automaticGrants:false,production:false}));
 }finally{cleanup()}
