@@ -2218,7 +2218,7 @@ async function runPublicDashboardSummary() {
                open_ticket_count desc, location_name
     `),
     runReadOnlySql(`
-      select ticket_id, location_code, location_name, maintenance_issue, reported_by, fixture_type, fixture_identifier,
+      select ticket_id, location_code, location_name, maintenance_issue, reported_by, fixture_type, fixture_identifier, issue_source,
              out_of_order, date_submitted_display, created_at_display
       from public.v_open_maintenance_tickets
       order by date_submitted desc nulls last, created_at desc nulls last, location_code
@@ -2957,24 +2957,49 @@ app.post("/admin-api/bundle", requireOpsManagerWrite, async (req, res) => {
   try { const payload = req.body && typeof req.body === "object" ? req.body : {}; const data = await runAdminBundleViaSqlRead(payload); res.status(200).json({ ok: true, data }); }
   catch (error) { console.error("admin bundle failed:", error); res.status(500).json({ ok: false, error: error.message || "Admin bundle failed" }); }
 });
-app.post("/admin-api/close-ticket", requireOpsManagerWrite, async (req, res) => {
+app.get("/admin-api/open-problems", requireOpsManagerAuth, async (req, res) => {
   try {
-    assertServerAssignedActor(req.body);
-    const ticketId = String(req.body?.ticket_id || "").trim();
-    const closeNotes = req.body?.close_notes == null ? null : String(req.body.close_notes);
-    if (!ticketId) {
-      res.status(400).json({ ok: false, error: "ticket_id is required." });
-      return;
-    }
-    await runRpc("custodial_close_maintenance_ticket_authoritative", {
-      p_ticket_id: ticketId,
-      p_closed_by: authenticatedManagerActor(req.memphisAuth),
-      p_close_notes: closeNotes,
+    const limit = Math.max(1, Math.min(200, Number.parseInt(String(req.query?.limit || "100"), 10) || 100));
+    const data = await runRpc("custodial_manager_open_problems", {
+      p_manager_id: offlineAuthorityManagerId(req), p_limit: limit,
       p_backend_execution_secret: offlineAuthoritySecret(),
     });
-    res.status(200).json({ ok: true, ticket_id: ticketId, status: "closed" });
+    res.status(200).json({ ok: true, data });
+  } catch (error) {
+    const failure = authorityHttpFailure(error, "Open problems are unavailable.");
+    res.status(failure.status).json(failure.body);
   }
-  catch (error) { console.error("close ticket failed:", error); res.status(error?.status || 500).json({ ok: false, error: error.message || "Close ticket failed" }); }
+});
+async function applyManagerTicketOutcome(req) {
+  assertServerAssignedActor(req.body);
+  const ticketId = String(req.body?.ticket_id || "").trim();
+  const outcome = String(req.body?.outcome || "").trim();
+  if (!isUuid(ticketId) || !["mark_fixed", "work_order_sent"].includes(outcome)) {
+    throw Object.assign(new Error("A ticket UUID and Mark fixed or Work order sent outcome are required."), { status: 422 });
+  }
+  const reference = req.body?.external_work_order_reference == null ? null : String(req.body.external_work_order_reference);
+  const notes = req.body?.close_notes == null ? null : String(req.body.close_notes);
+  if (outcome === "work_order_sent" && !String(reference || "").trim()) {
+    throw Object.assign(new Error("Enter the real external work-order reference before closing this reminder."), { status: 422 });
+  }
+  if (outcome === "mark_fixed" && String(reference || "").trim()) {
+    throw Object.assign(new Error("Mark fixed cannot claim an external work-order reference."), { status: 422 });
+  }
+  return runRpc("custodial_set_maintenance_ticket_outcome", {
+    p_ticket_id: ticketId,
+    p_outcome: outcome,
+    p_manager_id: offlineAuthorityManagerId(req),
+    p_external_work_order_reference: reference,
+    p_notes: notes,
+    p_backend_execution_secret: offlineAuthoritySecret(),
+  });
+}
+app.post("/admin-api/close-ticket", requireOpsManagerWrite, async (req, res) => {
+  try {
+    const data = await applyManagerTicketOutcome(req);
+    res.status(200).json({ ok: true, data });
+  }
+  catch (error) { console.error("close ticket failed:", error); res.status(error?.code === "40901" ? 409 : error?.status || 500).json({ ok: false, error: error.message || "Close ticket failed" }); }
 });
 app.get("/dashboard-api/summary", requireOpsManagerAuth, async (_req, res) => {
   try { const data = await runPublicDashboardSummary(); res.status(200).json({ ok: true, data }); }
@@ -3020,16 +3045,10 @@ app.get("/dashboard-api/work-session-alerts", requireOpsManagerAuth, async (_req
 });
 app.post("/dashboard-api/close-ticket", requireOpsManagerWrite, async (req, res) => {
   try {
-    assertServerAssignedActor(req.body);
-    const ticketId = String(req.body?.ticket_id || "").trim();
-    if (!ticketId) {
-      res.status(400).json({ ok: false, error: "ticket_id is required." });
-      return;
-    }
-    await runRpc("custodial_close_maintenance_ticket_authoritative", { p_ticket_id: ticketId, p_closed_by: authenticatedManagerActor(req.memphisAuth), p_close_notes: null, p_backend_execution_secret: offlineAuthoritySecret() });
-    res.status(200).json({ ok: true, ticket_id: ticketId, status: "closed" });
+    const data = await applyManagerTicketOutcome(req);
+    res.status(200).json({ ok: true, data });
   }
-  catch (error) { console.error("dashboard close ticket failed:", error); res.status(error?.status || 500).json({ ok: false, error: error.message || "Dashboard close ticket failed" }); }
+  catch (error) { console.error("dashboard close ticket failed:", error); res.status(error?.code === "40901" ? 409 : error?.status || 500).json({ ok: false, error: error.message || "Dashboard close ticket failed" }); }
 });
 function offlineAuthorityManagerId(req) {
   const managerId = String(req?.memphisAuth?.manager_id || "").trim();

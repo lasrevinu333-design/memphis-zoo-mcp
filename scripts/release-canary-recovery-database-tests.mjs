@@ -149,7 +149,7 @@ assert.equal(sql("select has_function_privilege('service_role','public.tool_comm
   "recovery must not revive the legacy completion writer");
 assert.equal(sql(`select count(*) from public.custodial_terminal_writer_inventory where application_callable
   and (mutates_terminal_truth or delegates_alternate_terminal_authority)
-  and proname not in ('tool_start_offline_occurrence','tool_commit_cleaning_workflow_authoritative','tool_complete_session_authoritative','custodial_close_maintenance_ticket_authoritative','custodial_finish_historical_session_authoritative');`), "0",
+  and proname not in ('tool_start_offline_occurrence','tool_commit_cleaning_workflow_authoritative','tool_complete_session_authoritative','custodial_set_maintenance_ticket_outcome','custodial_finish_historical_session_authoritative');`), "0",
   "the recovery control must not become an alternate terminal writer");
 
 const operationalViews = [

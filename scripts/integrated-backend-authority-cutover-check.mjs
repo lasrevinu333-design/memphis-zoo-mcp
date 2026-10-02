@@ -583,7 +583,7 @@ if (databaseMode) {
     to_regprocedure('public.tool_start_offline_occurrence(text,text,text,text,text,text,integer,text,text,text,text,text,text,text)'),
     to_regprocedure('public.tool_commit_cleaning_workflow_authoritative(text,text,text,text,text,text,jsonb,jsonb,text,text,text,text,text,text,text,text,text)'),
     to_regprocedure('public.tool_complete_session_authoritative(text,jsonb,text,text,text,text)'),
-    to_regprocedure('public.custodial_close_maintenance_ticket_authoritative(uuid,text,text,text)'),
+    to_regprocedure('public.custodial_set_maintenance_ticket_outcome(uuid,text,uuid,text,text,text)'),
     to_regprocedure('public.custodial_finish_historical_session_authoritative(text,text,uuid,timestamptz,text)'),
     to_regprocedure('public.custodial_backend_authority_health(text)')
   ]) p(oid) where oid is not null;`).split("\n").at(-1), "7", "the exact bounded canonical command, historical-finish, snapshot, and health surface must be present");
@@ -592,7 +592,7 @@ if (databaseMode) {
     and i.oid is distinct from to_regprocedure('public.tool_start_offline_occurrence(text,text,text,text,text,text,integer,text,text,text,text,text,text,text)')
     and i.oid is distinct from to_regprocedure('public.tool_commit_cleaning_workflow_authoritative(text,text,text,text,text,text,jsonb,jsonb,text,text,text,text,text,text,text,text,text)')
     and i.oid is distinct from to_regprocedure('public.tool_complete_session_authoritative(text,jsonb,text,text,text,text)')
-    and i.oid is distinct from to_regprocedure('public.custodial_close_maintenance_ticket_authoritative(uuid,text,text,text)')
+    and i.oid is distinct from to_regprocedure('public.custodial_set_maintenance_ticket_outcome(uuid,text,uuid,text,text,text)')
     and i.oid is distinct from to_regprocedure('public.custodial_finish_historical_session_authoritative(text,text,uuid,timestamptz,text)');`).split("\n").at(-1), "0", "service roles must not retain an alternate terminal writer by exact procedure identity");
   assert.equal(run(`select (has_function_privilege('service_role','public.purge_closed_scan_history_before(timestamp with time zone,text)'::regprocedure,'EXECUTE') or has_function_privilege('service_role','public.tool_purge_closed_scan_history_before(timestamp with time zone,text)'::regprocedure,'EXECUTE'))::text;`).split("\n").at(-1), "false", "service role must not retain either purge signature");
   const directWrite = spawnSync("docker", ["exec", container, "psql", "-v", "ON_ERROR_STOP=1", "-At", "-U", "supabase_admin", "-d", database, "-c", "set role service_role; insert into public.sessions default values;"], { encoding: "utf8" });

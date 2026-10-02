@@ -201,8 +201,9 @@ assert.match(index, /action === "resume_canary" && authoritativeHealth\?\.ok !==
   "physical canary resume must require the combined database and real scan-transport health probe");
 assert.match(index, /runCustodialOfflineReconciliationNotificationWorker/);
 assert.doesNotMatch(index, /run_application_write|force-close-session/);
-assert.match(index, /app\.post\("\/admin-api\/close-ticket"[\s\S]{0,900}runRpc\("custodial_close_maintenance_ticket_authoritative"/);
-assert.match(index, /app\.post\("\/dashboard-api\/close-ticket"[\s\S]{0,900}runRpc\("custodial_close_maintenance_ticket_authoritative"/);
+assert.match(index, /async function applyManagerTicketOutcome[\s\S]*?runRpc\("custodial_set_maintenance_ticket_outcome"/);
+assert.match(index, /app\.post\("\/admin-api\/close-ticket"[\s\S]{0,300}applyManagerTicketOutcome\(req\)/);
+assert.match(index, /app\.post\("\/dashboard-api\/close-ticket"[\s\S]{0,300}applyManagerTicketOutcome\(req\)/);
 assert.match(index, /notification_instance_key: recipient\.notification_instance_key/);
 assert.match(index, /client_message_id: recipient\.client_message_id/);
 assert.doesNotMatch(index, /custodial_issue_offline_actor_context/);

@@ -92,7 +92,12 @@ assert.throws(() => assertServerAssignedActor({ ticket_id: "ticket", closed_by: 
 
 const index = await readFile(new URL("../src/index.js", import.meta.url), "utf8");
 for (const route of ["admin-api", "dashboard-api"]) {
-  assert.match(index, new RegExp(`app\\.post\\(\"\\/${route}\\/close-ticket\"[\\s\\S]{0,1200}assertServerAssignedActor\\(req\\.body\\)[\\s\\S]{0,1200}p_closed_by: authenticatedManagerActor\\(req\\.memphisAuth\\)`));
+  assert.match(index, new RegExp(`app\\.post\\(\"\\/${route}\\/close-ticket\", requireOpsManagerWrite[\\s\\S]{0,300}applyManagerTicketOutcome\\(req\\)`));
 }
+assert.match(index, /async function applyManagerTicketOutcome\(req\)[\s\S]{0,250}assertServerAssignedActor\(req\.body\)/);
+assert.match(index, /runRpc\("custodial_set_maintenance_ticket_outcome", \{[\s\S]{0,220}p_manager_id: offlineAuthorityManagerId\(req\)/);
+assert.match(index, /outcome === "work_order_sent" && !String\(reference \|\| ""\)\.trim\(\)/);
+assert.match(index, /outcome === "mark_fixed" && String\(reference \|\| ""\)\.trim\(\)/);
+assert.doesNotMatch(index, /runRpc\("custodial_close_maintenance_ticket_authoritative"/);
 
 console.log("MANAGER_ROUTE_AUTHORITY_CONTRACT_PASS");
