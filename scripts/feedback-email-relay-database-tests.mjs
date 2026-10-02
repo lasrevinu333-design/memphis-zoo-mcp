@@ -5,6 +5,7 @@ import { readFileSync,readdirSync } from 'node:fs';
 import { randomUUID,createHash } from 'node:crypto';
 import path from 'node:path';
 import {FEEDBACK_RELAY_CONTRACT,FEEDBACK_RELAY_SCHEMA_SHA256} from '../src/feedback-email-relay.js';
+import {runFeedbackTriageDatabaseTests} from './feedback-triage-database-tests.mjs';
 const root=path.resolve(import.meta.dirname,'..');
 const image='supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed';
 const container=`mz_schema_rebuild_feedback_${process.pid}`;
@@ -268,6 +269,7 @@ try{
   check(sql('select encode(extensions.digest(convert_to(jsonb_agg(to_jsonb(r) order by id)::text,\'UTF8\'),\'sha256\'),\'hex\') from public.system_feedback_email_receipts r;'),before,'restore preserves receipts');
   check(sql(`select count(*) from public.system_feedback_email_intents where feedback_id=${q(historical.id)}`),'0','history still never enrolled');
   check(sql("select bool_and(relrowsecurity and relforcerowsecurity)::text from pg_class where relname like 'system_feedback_email_%' and relkind='r'"),'true','all mail tables FORCE RLS');
+  checks+=await runFeedbackTriageDatabaseTests({sql,parallelSql});
   console.log(JSON.stringify({status:'FEEDBACK_EMAIL_RELAY_DATABASE_PASS',checks,migrations:migrations.length,
     contract:FEEDBACK_RELAY_CONTRACT,adapter_schema_sha256:FEEDBACK_RELAY_SCHEMA_SHA256,
     forward_migration_sha256:createHash('sha256').update(readFileSync(path.join(root,'supabase/migrations/20261002220000_feedback_relay_preflight_and_reconciliation.sql'))).digest('hex'),

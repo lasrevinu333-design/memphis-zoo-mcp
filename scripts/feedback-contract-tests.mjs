@@ -5,6 +5,7 @@ import './feedback-email-relay-tests.mjs';
 import './feedback-delivery-status-tests.mjs';
 import './feedback-private-reader-tests.mjs';
 import './feedback-attachment-admission-tests.mjs';
+import './feedback-triage-tests.mjs';
 
 const repoRoot = resolve(import.meta.dirname, "..");
 const apiSource = readFileSync(resolve(repoRoot, "src/index.js"), "utf8");

@@ -22,6 +22,7 @@ import { assertOpsManagerSessionSecret, authenticateOpsAccessRequest, createSupa
 import { assertServerAssignedActor, authenticatedManagerActor } from "./manager-authority.js";
 import { authoritativeFeedbackPayload, makeFeedbackSubmitAuthority } from "./feedback-authority.js";
 import { attachFeedbackDelivery } from "./feedback-delivery-status.js";
+import { feedbackTriageHandler } from "./feedback-triage.js";
 import { makeFeedbackPrivateReader, feedbackManagerPageRedirect } from "./feedback-private-reader.js";
 import { createPlacesAdminRouter } from "./places-api.js";
 import { isMcpReadOnlyNoAuthEnabled, makeMcpConnectorMiddleware } from "./auth/mcp-connector-auth.js";
@@ -2117,7 +2118,8 @@ async function listSystemFeedbackItems({ status, priority, hubContext, limit = 1
   const rows = await runReadOnlySql(`
     select id, category, priority, message, submitted_by, hub_context, device_id, page_url,
            status, summary, notification_status, notified_ops_count, last_feedback_reminder_at,
-           feedback_reminder_count, acknowledged_at, acknowledged_by, metadata_json, created_at, updated_at
+           feedback_reminder_count, acknowledged_at, acknowledged_by, metadata_json, created_at, updated_at,
+           public.custodial_feedback_triage_version(status,updated_at) as triage_version
     from public.system_feedback_items
     ${where}
     order by created_at desc
@@ -2131,7 +2133,8 @@ async function getSystemFeedbackItemById(feedbackId) {
   const rows = await runReadOnlySql(`
     select id, category, priority, message, submitted_by, hub_context, device_id, page_url,
            status, summary, notification_status, notified_ops_count, last_feedback_reminder_at,
-           feedback_reminder_count, acknowledged_at, acknowledged_by, metadata_json, created_at, updated_at
+           feedback_reminder_count, acknowledged_at, acknowledged_by, metadata_json, created_at, updated_at,
+           public.custodial_feedback_triage_version(status,updated_at) as triage_version
     from public.system_feedback_items
     where id = ${sqlLiteral(feedbackId)}::uuid
     limit 1
@@ -2147,24 +2150,6 @@ async function acknowledgeSystemFeedbackItem(feedbackId, acknowledgedBy = "ops_m
     id: feedbackId, status: "acknowledged", actor, metadata_patch: { acknowledged_via: "feedback-api" },
   });
   return getSystemFeedbackItemById(feedbackId);
-}
-
-async function setSystemFeedbackStatus(feedbackId, status, actor = "ops_manager") {
-  if (!isUuid(feedbackId)) throw Object.assign(new Error("feedback id is invalid."), { status: 422 });
-  const normalizedStatus = String(status || "").trim().toLowerCase();
-  if (!["acknowledged", "resolved"].includes(normalizedStatus)) throw Object.assign(new Error("status must be acknowledged or resolved."), { status: 422 });
-  const changedBy = String(actor || "ops_manager").trim().slice(0, 160) || "ops_manager";
-  const before = await getSystemFeedbackItemById(feedbackId);
-  if (["closed", "resolved"].includes(before.status)) {
-    throw Object.assign(new Error("Feedback item is already resolved or unavailable."), { status: 409 });
-  }
-  await runOperationalCommand("feedback_status", {
-    id: feedbackId, status: normalizedStatus, actor: changedBy,
-    metadata_patch: { status_changed_via: "manager_feedback_inbox", status_changed_by: changedBy },
-  });
-  const changed = await getSystemFeedbackItemById(feedbackId);
-  if (changed.status !== normalizedStatus) throw Object.assign(new Error("Feedback status update did not complete."), { status: 409 });
-  return changed;
 }
 
 async function listSystemFeedbackReminderDueItems({ limit = 25 } = {}) {
@@ -2914,15 +2899,7 @@ app.get("/dashboard-api/system-feedback", requireOpsManagerAuth, async (req, res
     res.status(500).json({ ok: false, error: error?.message || "System feedback list failed" });
   }
 });
-app.post("/dashboard-api/system-feedback/:feedbackId/status", requireOpsManagerWrite, async (req, res) => {
-  try {
-    const actor = String(req.memphisAuth?.manager_display_name || req.memphisAuth?.manager_id || "authenticated_manager");
-    const item = await setSystemFeedbackStatus(String(req.params.feedbackId || ""), req.body?.status, actor);
-    res.status(200).json({ ok: true, data: item, meta: { version: APP_VERSION, release_id: RELEASE_ID, contract_version: FEEDBACK_CONTRACT_VERSION } });
-  } catch (error) {
-    res.status(error?.status || 500).json({ ok: false, error: error?.message || "Feedback status update failed" });
-  }
-});
+app.post("/dashboard-api/system-feedback/:feedbackId/status", requireOpsManagerWrite, feedbackTriageHandler({runRpc}));
 app.get("/dashboard-api/canary", async (_req, res) => {
   try { const result = await runCanaryChecks(); res.status(result.ok ? 200 : 503).json(buildHealthPayload("dashboard_canary", result)); }
   catch (error) { console.error("dashboard canary failed:", error); res.status(500).json({ ok: false, area: "dashboard_canary", version: APP_VERSION, release_id: RELEASE_ID, error: error.message || "Dashboard canary failed" }); }
