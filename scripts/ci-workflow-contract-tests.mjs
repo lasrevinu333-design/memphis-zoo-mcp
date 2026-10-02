@@ -373,7 +373,8 @@ const eventCountSourceImports = ["await import('./event-count-cross-surface-cont
   "await import('./static-weekly-opening-coverage-report-ci-tests.mjs');",
   "await import('./static-weekly-opening-coverage-preview-contract-tests.mjs');",
   "await import('./static-weekly-policy-scope-ci-tests.mjs');",
-  "await import('./static-weekly-recurring-phase-authority-ci-tests.mjs');"];
+  "await import('./static-weekly-recurring-phase-authority-ci-tests.mjs');",
+  "await import('./current-release-recovery-probe-contract-tests.mjs');"];
 function assertEventCountSourceWiring(workflow, sourceSuite) {
   assertCompletionRecoveryWiring(workflow, sourceSuite);
   const lines = sourceSuite.split('\n').map(line => line.trim())
