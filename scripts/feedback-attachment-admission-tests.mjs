@@ -1,0 +1,57 @@
+import assert from 'node:assert/strict';
+import {createHash,randomUUID} from 'node:crypto';
+import {verifyFeedbackAttachmentForRelay,FeedbackAttachmentAdmissionError} from '../src/feedback-attachment-admission.js';
+import {callFeedbackRelay,FEEDBACK_RELAY_CONTRACT,FEEDBACK_RELAY_SCHEMA_SHA256} from '../src/feedback-email-relay.js';
+
+const bytes=Buffer.concat([Buffer.from([0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a]),Buffer.from('protected fixture')]);
+const digest=createHash('sha256').update(bytes).digest('hex');
+const operation=randomUUID();
+const path=`feedback/${operation}/${digest}.png`;
+const bucket='system-feedback-private';
+let downloads=0;
+const stored={operation_id:operation,image:{type:'image/png',size:bytes.length,sha256:digest,storage_bucket:bucket,storage_path:path}};
+const client={storage:{from(name){assert.equal(name,bucket);return {download:async(p)=>{downloads++;assert.equal(p,path);return {data:new Blob([bytes])};}};}}};
+const assertDisposition=async(promise,disposition)=>assert.rejects(promise,error=>error instanceof FeedbackAttachmentAdmissionError&&error.disposition===disposition);
+assert.deepEqual(await verifyFeedbackAttachmentForRelay(stored,{client,privateBucket:bucket}),{sha256:digest,size:bytes.length,type:'image/png'});
+assert.equal(downloads,1);
+assert.deepEqual(await verifyFeedbackAttachmentForRelay({...stored,image:{...stored.image,sha256:undefined}},{client,privateBucket:bucket}),{sha256:digest,size:bytes.length,type:'image/png'},'legacy canonical path provides immutable digest');
+const inline={operation_id:operation,image:{type:'image/png',size:bytes.length,data_url:`data:image/png;base64,${bytes.toString('base64')}`}};
+assert.deepEqual(await verifyFeedbackAttachmentForRelay(inline),{sha256:digest,size:bytes.length,type:'image/png'},'legacy inline object needs no storage');
+await assertDisposition(verifyFeedbackAttachmentForRelay({...stored,image:{...stored.image,sha256:'a'.repeat(64)}},{client,privateBucket:bucket}),'corrupt');
+await assertDisposition(verifyFeedbackAttachmentForRelay({...stored,image:{...stored.image,size:bytes.length+1}},{client,privateBucket:bucket}),'corrupt');
+await assertDisposition(verifyFeedbackAttachmentForRelay({...stored,image:{...stored.image,type:'image/jpeg'}},{client,privateBucket:bucket}),'corrupt');
+await assertDisposition(verifyFeedbackAttachmentForRelay(stored,{client:{storage:{from:()=>({download:async()=>({error:{status:404}})})}},privateBucket:bucket}),'missing');
+await assertDisposition(verifyFeedbackAttachmentForRelay(stored,{client:{storage:{from:()=>({download:async()=>{throw Error('unavailable');}})}},privateBucket:bucket}),'configuration_unavailable');
+await assertDisposition(verifyFeedbackAttachmentForRelay(stored,{client:{storage:{from:()=>({download:async()=>({data:new Blob([Buffer.alloc(5*1024*1024+1)])})})}},privateBucket:bucket}),'corrupt');
+const oversizedStream={size:1,stream:()=>new ReadableStream({start(controller){controller.enqueue(Buffer.alloc(3*1024*1024));controller.enqueue(Buffer.alloc(3*1024*1024));controller.close();}})};
+await assertDisposition(verifyFeedbackAttachmentForRelay(stored,{client:{storage:{from:()=>({download:async()=>({data:oversizedStream})})}},privateBucket:bucket}),'corrupt');
+
+const extra={authInfo:{clientId:'private-fixture',scopes:['mcp:read','mcp:write'],extra:{authSource:'self_contained_oauth',issuer:'https://fixture.invalid',subject:'fixture'}}};
+const fence={contract_version:FEEDBACK_RELAY_CONTRACT,request_id:randomUUID(),intent_id:randomUUID(),claim_token:randomUUID(),claim_generation:1,envelope_sha256:'b'.repeat(64)};
+let calls=[];
+const service={storage:client.storage,rpc:async(name,args)=>{
+  calls.push({name,args});
+  if(name==='custodial_feedback_relay_attachment_internal')return {data:args.p_action==='prepare'?{status:'ready',ticket:randomUUID(),...stored}:{status:'verified'},error:null};
+  if(name==='custodial_feedback_relay_begin')return {data:{ok:true,may_send:true,attempt_id:randomUUID()},error:null};
+  throw Error(`Unexpected RPC ${name}`);
+}};
+const result=await callFeedbackRelay('begin',fence,extra,{client:service});
+assert.equal(result.may_send,true);
+assert.deepEqual(calls.map(c=>c.name),['custodial_feedback_relay_attachment_internal','custodial_feedback_relay_attachment_internal','custodial_feedback_relay_begin']);
+assert.equal(calls[1].args.p_action,'complete');
+assert.deepEqual(calls[1].args.p_args.observed,{sha256:digest,size:bytes.length,type:'image/png'});
+assert.ok(calls[0].args.p_args.adapter_schema_sha256===FEEDBACK_RELAY_SCHEMA_SHA256);
+assert.ok(!JSON.stringify(result).includes(path)&&!JSON.stringify(result).includes(bytes.toString('base64')));
+calls=[];
+const unavailableService={...service,storage:{from:()=>({download:async()=>{throw Error('offline');}})},rpc:async(name,args)=>{
+  calls.push({name,args});
+  return {data:name==='custodial_feedback_relay_attachment_internal'?(args.p_action==='prepare'?{status:'ready',ticket:randomUUID(),...stored}:{status:'paused'}):{ok:true,may_send:true},error:null};
+}};
+assert.deepEqual(await callFeedbackRelay('begin',{...fence,request_id:randomUUID()},extra,{client:unavailableService}),{ok:false,may_send:false,needs_attention:false,paused:true});
+assert.deepEqual(calls.map(c=>c.name),['custodial_feedback_relay_attachment_internal','custodial_feedback_relay_attachment_internal'],'transport outage never reaches public begin');
+assert.equal(calls[1].args.p_args.disposition,'configuration_unavailable');
+calls=[];
+const textService={rpc:async(name,args)=>{calls.push(name);return {data:name==='custodial_feedback_relay_attachment_internal'?{status:'no_attachment'}:{ok:true,may_send:true},error:null};}};
+assert.equal((await callFeedbackRelay('begin',{...fence,request_id:randomUUID()},extra,{client:textService})).may_send,true);
+assert.deepEqual(calls,['custodial_feedback_relay_attachment_internal','custodial_feedback_relay_begin'],'text-only path remains available');
+console.log(JSON.stringify({status:'FEEDBACK_ATTACHMENT_ADMISSION_TESTS_PASS',checks:18,external_schema_sha256:FEEDBACK_RELAY_SCHEMA_SHA256,provider_called:false}));

@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { resolveSupabaseClient } from './supabase/client.js';
+import {FeedbackAttachmentAdmissionError,verifyFeedbackAttachmentForRelay} from './feedback-attachment-admission.js';
 
 export const FEEDBACK_RELAY_CONTRACT = 'custodial-feedback-relay.v2';
 const contract = z.literal(FEEDBACK_RELAY_CONTRACT);
@@ -80,7 +81,41 @@ export async function callFeedbackRelay(verb, args, extra, { client } = {}) {
   }
   const principal = feedbackRelayPrincipal(extra);
   if (Buffer.byteLength(JSON.stringify(checked), 'utf8') > 32768) throw new Error('Relay request is too large.');
-  const { data, error } = await resolveSupabaseClient(client).rpc(`custodial_feedback_relay_${verb}`, {
+  const service=resolveSupabaseClient(client);
+  if(verb==='begin'){
+    const fence={intent_id:checked.intent_id,claim_token:checked.claim_token,
+      claim_generation:checked.claim_generation,envelope_sha256:checked.envelope_sha256,
+      adapter_schema_sha256:FEEDBACK_RELAY_SCHEMA_SHA256};
+    const internal=async(action,fields={})=>{
+      const {data,error}=await service.rpc('custodial_feedback_relay_attachment_internal',{
+        p_principal:principal,p_action:action,p_args:{...fence,...fields},
+      });
+      if(error)throw error;
+      if(!data||typeof data!=='object'||Array.isArray(data))throw new Error('Invalid private attachment admission response.');
+      return data;
+    };
+    const prepared=await internal('prepare');
+    if(prepared.status==='needs_attention')return {ok:false,may_send:false,needs_attention:true};
+    if(prepared.status==='ready'){
+      if(!uuid.safeParse(prepared.ticket).success)throw new Error('Invalid private attachment ticket.');
+      let observed;
+      try{
+        observed=await verifyFeedbackAttachmentForRelay(prepared,{client:service,
+          privateBucket:String(process.env.FEEDBACK_IMAGE_BUCKET||'system-feedback-private').trim()});
+      }catch(error){
+        const disposition=error instanceof FeedbackAttachmentAdmissionError?error.disposition:'configuration_unavailable';
+        const rejected=await internal('reject',{ticket:prepared.ticket,disposition});
+        if(rejected.status!=='needs_attention'&&rejected.status!=='paused')throw new Error('Invalid private attachment disposition.');
+        return {ok:false,may_send:false,needs_attention:rejected.status==='needs_attention',
+          paused:rejected.status==='paused'};
+      }
+      const verified=await internal('complete',{ticket:prepared.ticket,observed});
+      if(verified.status!=='verified')throw new Error('Private attachment admission was not verified.');
+    }else if(!['no_attachment','already_attempted'].includes(prepared.status)){
+      throw new Error('Unknown private attachment admission state.');
+    }
+  }
+  const { data, error } = await service.rpc(`custodial_feedback_relay_${verb}`, {
     p_principal: principal, p_args: { ...checked, adapter_schema_sha256: FEEDBACK_RELAY_SCHEMA_SHA256 },
   });
   if (error) throw error;

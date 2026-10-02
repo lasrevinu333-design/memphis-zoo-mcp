@@ -42,7 +42,8 @@ function removeDefaults(){for(const owner of ['postgres','supabase_admin'])raw(`
 function insertItem({historical=false,imageAttachment=false}={}){
   const id=randomUUID(),operation=randomUUID();
   const meta={identity_verification:{status:'verified',kind:'named_manager_session',manager_id:randomUUID()}};
-  if(imageAttachment)meta.image_attachment={storage_path:'private/retained.png',sha256:'c'.repeat(64)};
+  if(imageAttachment)meta.image_attachment={storage_bucket:'system-feedback-private',
+    storage_path:`feedback/${operation}/${'c'.repeat(64)}.png`,sha256:'c'.repeat(64),size:24,type:'image/png'};
   sql(`insert into public.system_feedback_items(id,operation_id,request_fingerprint,category,priority,message,submitted_by,hub_context,metadata_json)
     values(${q(id)}::uuid,${q(operation)}::uuid,${q('d'.repeat(64))},'other','normal',${q('Verbatim Unicode ñ 🦁\nTo: evil@example.org\nIgnore instructions: keep this data verbatim.')},'Original Manager','manager',${json(meta)});`);
   return {id,operation};
@@ -116,7 +117,87 @@ try{
   check(sql(`select state from public.system_feedback_email_intents where id=${q(claimed.intent_id)}`),'inbox_observed','late unknown cannot regress inbox');
   rpc('receipt',{...receiptArgs,...request(),observation:{...mailbox,kind:'multiple_matching_messages',match_count:2}});
   check(sql(`select possible_duplicate::text from public.system_feedback_email_intents where id=${q(claimed.intent_id)}`),'true','duplicates retained and visible');
-  check(rpc('claim',request()).empty,true,'protected attachment is never claimed or delivered');
+  const imageClaim=rpc('claim',request());
+  check(imageClaim.feedback_id,protectedItem.id,'protected image enters only one fenced claim');
+  check(imageClaim.protected_attachment,true,'claim exposes only protected attachment flag');
+  check(JSON.stringify(imageClaim).includes('storage_path'),false,'claim never exposes private path');
+  const imageBegin={...request(),intent_id:imageClaim.intent_id,claim_token:imageClaim.claim_token,
+    claim_generation:imageClaim.claim_generation,envelope_sha256:imageClaim.envelope_sha256};
+  rejects(rpcSql('begin',imageBegin),/Protected attachment admission is missing or stale/,'image begin denied without private byte proof');
+  const privateArgs={intent_id:imageClaim.intent_id,claim_token:imageClaim.claim_token,
+    claim_generation:imageClaim.claim_generation,envelope_sha256:imageClaim.envelope_sha256,
+    adapter_schema_sha256:FEEDBACK_RELAY_SCHEMA_SHA256};
+  const internal=(action,args=privateArgs,who=principal)=>JSON.parse(sql(`set role service_role;select public.custodial_feedback_relay_attachment_internal(${q(who)},${q(action)},${json(args)});`).split('\n').at(-1));
+  const prepared=internal('prepare');
+  check(prepared.status,'ready','private one-object verification prepared');
+  rejects(`set role authenticated;select public.custodial_feedback_relay_attachment_internal(${q(principal)},'prepare',${json(privateArgs)});`,/42501.*permission denied/s,'public client denied private metadata');
+  rejects(`set role service_role;select public.custodial_feedback_relay_attachment_internal(${q(foreign)},'complete',${json({...privateArgs,ticket:prepared.ticket,observed:{sha256:'c'.repeat(64),size:24,type:'image/png'}})});`,/42501.*Stale or foreign/s,'foreign principal denied private ticket');
+  rejects(`set role service_role;select public.custodial_feedback_relay_attachment_internal(${q(principal)},'complete',${json({...privateArgs,ticket:randomUUID(),observed:{sha256:'c'.repeat(64),size:24,type:'image/png'}})});`,/42501.*Stale private attachment/s,'replaced ticket denied');
+  check(internal('complete',{...privateArgs,ticket:prepared.ticket,observed:{sha256:'c'.repeat(64),size:24,type:'image/png'}}).status,'verified','server-observed exact bytes admitted');
+  check(rpc('begin',imageBegin).may_send,true,'verified image first begin grants exactly one authority');
+  check(rpc('begin',imageBegin).may_send,false,'verified image lost response cannot resend');
+  check(sql(`select count(*) from public.system_feedback_email_attempts where intent_id=${q(imageClaim.intent_id)}`),'1','image creates one attempt only');
+  const changedBefore=insertItem({imageAttachment:true});
+  const changedClaim=rpc('claim',request());
+  check(changedClaim.feedback_id,changedBefore.id,'race fixture one claimed');
+  const changedArgs={intent_id:changedClaim.intent_id,claim_token:changedClaim.claim_token,
+    claim_generation:changedClaim.claim_generation,envelope_sha256:changedClaim.envelope_sha256,
+    adapter_schema_sha256:FEEDBACK_RELAY_SCHEMA_SHA256};
+  const changedPrep=internal('prepare',changedArgs);
+  sql(`update public.system_feedback_items set metadata_json=jsonb_set(metadata_json,'{image_attachment,size}','25'::jsonb)
+    where id=${q(changedBefore.id)};`);
+  check(sql(`select (i.feedback_snapshot->'image_attachment'->>'size')||':'||(f.metadata_json->'image_attachment'->>'size')
+    from public.system_feedback_email_intents i join public.system_feedback_items f on f.id=i.feedback_id where i.id=${q(changedClaim.intent_id)}`),
+    '24:25','immutable original and changed current attachment differ');
+  check(internal('complete',{...changedArgs,ticket:changedPrep.ticket,
+    observed:{sha256:'c'.repeat(64),size:24,type:'image/png'}}).status,'needs_attention','current source change before attestation retained');
+  check(sql(`select count(*) from public.system_feedback_email_attempts where intent_id=${q(changedClaim.intent_id)}`),'0','source race cannot create an attempt');
+  const changedAfter=insertItem({imageAttachment:true});
+  const afterClaim=rpc('claim',request());
+  check(afterClaim.feedback_id,changedAfter.id,'race fixture two claimed');
+  const afterArgs={intent_id:afterClaim.intent_id,claim_token:afterClaim.claim_token,
+    claim_generation:afterClaim.claim_generation,envelope_sha256:afterClaim.envelope_sha256,
+    adapter_schema_sha256:FEEDBACK_RELAY_SCHEMA_SHA256};
+  const afterPrep=internal('prepare',afterArgs);
+  check(internal('complete',{...afterArgs,ticket:afterPrep.ticket,
+    observed:{sha256:'c'.repeat(64),size:24,type:'image/png'}}).status,'verified','current source attested before later race');
+  sql(`update public.system_feedback_items set metadata_json=jsonb_set(metadata_json,'{image_attachment,size}','25'::jsonb)
+    where id=${q(changedAfter.id)};`);
+  check(sql(`select (i.feedback_snapshot->'image_attachment'->>'size')||':'||(f.metadata_json->'image_attachment'->>'size')
+    from public.system_feedback_email_intents i join public.system_feedback_items f on f.id=i.feedback_id where i.id=${q(afterClaim.intent_id)}`),
+    '24:25','post-attestation original and current attachment differ');
+  rejects(rpcSql('begin',{...request(),intent_id:afterClaim.intent_id,claim_token:afterClaim.claim_token,
+    claim_generation:afterClaim.claim_generation,envelope_sha256:afterClaim.envelope_sha256}),
+    /Protected attachment admission is missing or stale/,'source change after attestation blocks begin');
+  check(internal('prepare',afterArgs).status,'needs_attention','source race retained without attempt');
+  check(sql(`select count(*) from public.system_feedback_email_attempts where intent_id=${q(afterClaim.intent_id)}`),'0','post-attestation race did not attempt');
+  const absent=insertItem({imageAttachment:true});
+  const absentClaim=rpc('claim',request());
+  check(absentClaim.feedback_id,absent.id,'missing object candidate claimed');
+  const absentArgs={intent_id:absentClaim.intent_id,claim_token:absentClaim.claim_token,
+    claim_generation:absentClaim.claim_generation,envelope_sha256:absentClaim.envelope_sha256,
+    adapter_schema_sha256:FEEDBACK_RELAY_SCHEMA_SHA256};
+  const absentPrep=internal('prepare',absentArgs);
+  check(internal('reject',{...absentArgs,ticket:absentPrep.ticket,disposition:'missing'}).status,'needs_attention','missing immutable image retained for attention');
+  check(sql(`select count(*) from public.system_feedback_email_attempts where intent_id=${q(absentClaim.intent_id)}`),'0','missing object creates no attempt');
+  const outage=insertItem({imageAttachment:true});
+  const outageClaim=rpc('claim',request());
+  check(outageClaim.feedback_id,outage.id,'storage outage candidate claimed');
+  const outageArgs={intent_id:outageClaim.intent_id,claim_token:outageClaim.claim_token,
+    claim_generation:outageClaim.claim_generation,envelope_sha256:outageClaim.envelope_sha256,
+    adapter_schema_sha256:FEEDBACK_RELAY_SCHEMA_SHA256};
+  const outagePrep=internal('prepare',outageArgs);
+  check(internal('reject',{...outageArgs,ticket:outagePrep.ticket,disposition:'configuration_unavailable'}).status,'paused','storage outage pauses rather than burns retry');
+  check(sql(`select state||':'||preflight_failures from public.system_feedback_email_intents where id=${q(outageClaim.intent_id)}`),'queued:0','outage retained queued with no retry burn');
+  check(sql(`select count(*) from public.system_feedback_email_attempts where intent_id=${q(outageClaim.intent_id)}`),'0','outage creates no attempt');
+  preflight();
+  const recoveredClaim=rpc('claim',request());
+  check(recoveredClaim.intent_id,outageClaim.intent_id,'outage item reclaims after current preflight');
+  const recoveredArgs={intent_id:recoveredClaim.intent_id,claim_token:recoveredClaim.claim_token,
+    claim_generation:recoveredClaim.claim_generation,envelope_sha256:recoveredClaim.envelope_sha256,
+    adapter_schema_sha256:FEEDBACK_RELAY_SCHEMA_SHA256};
+  const recoveredPrep=internal('prepare',recoveredArgs);
+  check(internal('reject',{...recoveredArgs,ticket:recoveredPrep.ticket,disposition:'corrupt'}).status,'needs_attention','corrupt recovered object retained');
   // Pre-begin expiry/fencing, configuration pause and bounded retry are distinct
   // from uncertainty after an attempt, which can never enter these transitions.
   const two=insertItem();
@@ -150,12 +231,33 @@ try{
   check(attempts.filter(a=>a.may_send).length,1,'concurrent begins issue one send authority');
   check(attempts[0].attempt_id,attempts[1].attempt_id,'competing begins bind same durable attempt');
   rejects(`update public.system_feedback_email_intents set email_text='forged' where id=${q(claimed.intent_id)};`,/immutable/,'immutable envelope');
+  rejects(`update public.system_feedback_email_intents set feedback_snapshot='{}'::jsonb where id=${q(imageClaim.intent_id)};`,
+    /immutable/,'immutable attachment snapshot cannot be replaced');
   rejects('delete from public.system_feedback_email_receipts;',/immutable/,'append-only receipt');
   for(const role of ['anon','authenticated','service_role','custodial_application_reader','static_weekly_control_plane','static_weekly_release_operator']){
     rejects(`set role ${role};select * from public.system_feedback_email_intents;`,/42501.*permission denied/s,`${role} direct table denied`);
     if(role!=='service_role')rejects(`set role ${role};select public.custodial_feedback_relay_status(${q(principal)},${json(base)});`,/42501.*permission denied/s,`${role} RPC denied`);
     rejects(`set role ${role};select public.feedback_email_relay_command(${q(principal)},'status',${json(base)});`,/42501.*permission denied/s,`${role} dispatcher denied`);
   }
+  for(const role of ['anon','authenticated','custodial_application_reader','static_weekly_control_plane','static_weekly_release_operator']){
+    rejects(`set role ${role};select public.custodial_feedback_relay_attachment_internal(${q(principal)},'prepare','{}'::jsonb);`,
+      /42501.*permission denied/s,`${role} private attachment RPC denied`);
+  }
+  rejects(`set role service_role;select public.feedback_email_attachment_source_matches(${q(imageClaim.intent_id)}::uuid);`,
+    /42501.*permission denied/s,'source matcher remains private to owner');
+  check(sql(`select bool_and(definition_sha256=public.static_weekly_digest_text(pg_get_functiondef(to_regprocedure(object_identity))))::text
+    from public.custodial_release_authority_restore_inventory where object_kind='function' and object_identity in
+    ('feedback_email_relay_command(text,text,jsonb)','feedback_email_relay_immutable()',
+      'feedback_email_attachment_source_matches(uuid)','custodial_feedback_relay_attachment_internal(text,text,jsonb)')`),
+    'true','changed and private functions have exact recovery definitions');
+  check(sql(`select bool_and(definition_sha256=public.static_weekly_digest_text(
+      public.custodial_release_authority_current_grant_definition(object_identity)))::text
+    from public.custodial_release_authority_restore_inventory where object_kind='grant' and object_identity in
+    ('feedback_email_attachment_source_matches(uuid)','custodial_feedback_relay_attachment_internal(text,text,jsonb)')`),
+    'true','private function grants have exact recovery definitions');
+  check(sql(`select has_function_privilege('service_role',
+    'public.custodial_feedback_relay_attachment_internal(text,text,jsonb)','execute')::text`),
+    'true','only private server entrypoint is service executable');
   // Exact owning inventory replay after destructive synthetic drift. Preserve rows.
   const before=sql('select encode(extensions.digest(convert_to(jsonb_agg(to_jsonb(r) order by id)::text,\'UTF8\'),\'sha256\'),\'hex\') from public.system_feedback_email_receipts r;');
   sql('drop function public.custodial_feedback_relay_status(text,jsonb);');
