@@ -5,6 +5,15 @@ import {fileURLToPath} from 'node:url';
 import {runStaticWeeklyRecurringPhaseAuthorityTests,
   runRecurringPrimitiveObjectiveTests, runRecurringIdentityRadixTests,
 } from './static-weekly-recurring-phase-authority-tests.mjs';
+import {runFullNineV6FixtureContractTests} from './full-nine-v6-fixture-contract-tests.mjs';
+
+const fullNineFixture = runFullNineV6FixtureContractTests();
+assert.equal(fullNineFixture.checks, 40);
+assert.equal(fullNineFixture.assignmentCount, 314);
+assert.equal(fullNineFixture.originalWrapperCompared, false);
+assert.equal(fullNineFixture.hostedVerifiesOmittedOriginalWrapper, false);
+for (const key of ['solver','workerIpc','sql','network','registration','publication'])
+  assert.equal(fullNineFixture[key], false);
 
 // Exact algebraic units and complete identity-vector ordering are mandatory,
 // not implicitly covered by prior phase fixtures or guarded exports.
