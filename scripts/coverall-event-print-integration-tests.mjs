@@ -3,6 +3,8 @@
 // real RPC/grants; this file never implies a production or physical handout.
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
+import {mkdirSync,writeFileSync} from 'node:fs';
+import {join} from 'node:path';
 import {createStaticWeeklyControlPlane} from '../src/static-weekly-control-plane.js';
 import {createStaticWeeklyControlPlaneRuntime} from '../src/static-weekly-control-plane-runtime.js';
 import {createCoverAllPrintDocument} from '../src/static-weekly-coverall-print.js';
@@ -152,6 +154,13 @@ try{
  check('all output text bound to final document digest',selected.body.data.texts.every(t=>
   t.documentDigest===selected.body.data.document.documentDigest),true);
  const originalDigest=selected.body.data.document.documentDigest;
+ if(process.env.COVERALL_EVENT_PDF_EVIDENCE_DIR){
+  const out=process.env.COVERALL_EVENT_PDF_EVIDENCE_DIR;mkdirSync(out,{recursive:true});
+  for(const file of [...selected.body.data.files,selected.body.data.bilingualFile])
+   writeFileSync(join(out,file.filename),Buffer.from(file.base64,'base64'),{flag:'wx',mode:0o600});
+  writeFileSync(join(out,'synthetic-selected-event-receipt.json'),JSON.stringify({document:selected.body.data.document,
+   files:[...selected.body.data.files,selected.body.data.bilingualFile].map(({language,filename,sha256})=>({language,filename,sha256}))},null,2)+'\n',{flag:'wx',mode:0o600});
+ }
  check('base print digest retained separately',selected.body.data.document.baseDocumentDigest,
   oldGet.body.data.document.documentDigest);
  check('selected final digest differs from base',originalDigest===oldGet.body.data.document.documentDigest,false);
