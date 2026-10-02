@@ -200,7 +200,9 @@ function mapRowsBy(rows = [], key) {
 async function getEventReferenceData(runReadOnlySql) {
   const locationGroups = await listLocationGroups(runReadOnlySql);
   const eventVenues = await listEventVenues(runReadOnlySql);
-  const defaultRules = await listEventDefaultRules(runReadOnlySql);
+  const allowedVenueIds = new Set(eventVenues.map((row) => String(row.venue_id)));
+  const defaultRules = (await listEventDefaultRules(runReadOnlySql))
+    .filter((row) => !row.primary_venue_id || allowedVenueIds.has(String(row.primary_venue_id)));
   const groupsById = mapRowsBy(locationGroups, "location_group_id");
   const venuesById = mapRowsBy(eventVenues, "venue_id");
   const zooVenue = eventVenues.find((row) => row.venue_code === "ZOO_FOOTPRINT" || row.event_scope === "ZOO_WIDE") || null;
@@ -432,6 +434,7 @@ async function listUpcomingEvents(runReadOnlySql) {
   const rows = await runReadOnlySql(buildEventResponseSelectSql(
     `coalesce(e.status, 'SCHEDULED') = 'SCHEDULED'
      and coalesce(e.needs_review, false) = false and e.event_scope <> 'UNKNOWN'
+     and (place.authority->>'admissible')::boolean is true
      and coalesce(e.end_date, e.event_date) >= (now() at time zone '${EVENTS_TIME_ZONE}')::date`,
     `order by e.event_date asc, e.start_time asc, e.event_name asc`
   ));
@@ -450,6 +453,7 @@ async function listEmployeeEvents(runReadOnlySql, { windowDays = 30, limit = 80 
   const rows = await runReadOnlySql(buildEventResponseSelectSql(
     `coalesce(e.status, 'SCHEDULED') in ('SCHEDULED', 'CANCELLED', 'SUPERSEDED')
      and coalesce(e.needs_review, false) = false and e.event_scope <> 'UNKNOWN'
+     and (place.authority->>'admissible')::boolean is true
      and coalesce(e.end_date, e.event_date) >= (now() at time zone '${EVENTS_TIME_ZONE}')::date
      and e.event_date <= (now() at time zone '${EVENTS_TIME_ZONE}')::date + ${days}`,
     `order by e.event_date asc, e.start_time asc, e.event_name asc limit ${rowLimit}`
@@ -526,7 +530,10 @@ function buildEventResponseSelectSql(whereSql, suffixSql = "") {
       e.superseded_by_manager_id,
       e.primary_venue_id,
       e.venue_ids,
-      e.display_location,
+      coalesce(nullif(place.authority->>'primary_display_name',''),e.display_location) as display_location,
+      e.display_location as source_display_location,
+      place.authority->>'mapping_status' as place_mapping_status,
+      place.authority->>'review_reason' as place_review_reason,
       e.coverage_location_ids,
       e.staffing_area_ids,
       e.source_location_text,
@@ -541,7 +548,7 @@ function buildEventResponseSelectSql(whereSql, suffixSql = "") {
       coalesce(e.event_timezone, '${EVENTS_TIME_ZONE}') as event_timezone,
       e.location_group_id,
       coalesce(ev.venue_code, lg.group_code) as venue_code,
-      coalesce(ev.display_name, nullif(e.display_location, ''), lg.group_name) as venue_name,
+      coalesce(nullif(place.authority->>'primary_display_name',''),ev.display_name, nullif(e.display_location, ''), lg.group_name) as venue_name,
       coalesce(ev.venue_code, lg.group_code) as group_code,
       coalesce(nullif(e.display_location, ''), ev.display_name, lg.group_name) as group_name,
       e.event_date,
@@ -567,6 +574,7 @@ function buildEventResponseSelectSql(whereSql, suffixSql = "") {
     from public.events_app_events e
     join public.location_groups lg on lg.id = e.location_group_id
     left join public.event_venues ev on ev.id = e.primary_venue_id
+    cross join lateral (select public.app_event_place_authority(to_jsonb(e),statement_timestamp()) as authority) place
     ${where ? `where ${where}` : ""}
     ${suffix}
   `;
@@ -658,7 +666,22 @@ async function listEventVenues(runReadOnlySql) {
     where ev.active = true
     order by case when ev.event_scope = 'ZOO_WIDE' then 0 else 1 end, ev.display_name asc
   `);
-  return Array.isArray(rows) ? rows : [];
+  const overlayRows = await runReadOnlySql(`select public.custodial_place_event_venue_overlay(statement_timestamp()) as overlay`);
+  const rawOverlay = overlayRows?.[0]?.overlay;
+  const overlay = typeof rawOverlay === "string" ? JSON.parse(rawOverlay) : rawOverlay;
+  if (!Array.isArray(rows) || !Array.isArray(overlay?.venues)) throw new Error("Current Event Venue overlay is unavailable.");
+  const overlayById = new Map(overlay.venues.map((row) => [String(row.venue_id), row]));
+  return rows.flatMap((row) => {
+    const mapped = overlayById.get(String(row.venue_id));
+    if (!mapped || !["UNMAPPED", "MAPPED"].includes(mapped.mapping_status) || mapped.event_eligible !== true) return [];
+    return [{ ...row,
+      display_name: mapped.mapping_status === "MAPPED" ? mapped.display_name : row.display_name,
+      aliases: mapped.mapping_status === "MAPPED" ? mapped.aliases : row.aliases,
+      place_mapping_status: mapped.mapping_status,
+      canonical_place_id: mapped.mapping_status === "MAPPED" ? mapped.canonical_place_id : null,
+      capability_authority: mapped.capability_authority,
+    }];
+  });
 }
 
 async function listCoverageLocationGroups(runReadOnlySql) {
@@ -1160,7 +1183,9 @@ export function createEventsAdminRouter({
       if (!texts.length) throw new Error("text or texts is required.");
       const groups = await listLocationGroups(runReadOnlySql);
       const eventVenues = await listEventVenues(runReadOnlySql);
-      const eventDefaults = await listEventDefaultRules(runReadOnlySql);
+      const allowedVenueIds = new Set(eventVenues.map((row) => String(row.venue_id)));
+      const eventDefaults = (await listEventDefaultRules(runReadOnlySql))
+        .filter((row) => !row.primary_venue_id || allowedVenueIds.has(String(row.primary_venue_id)));
       const parsed = await aiParseEventTexts({ texts, locationGroups: groups, eventVenues, eventDefaults });
       const providersUsed = Array.from(new Set(parsed.map((row) => String(row?.provider_used || row?.provider || "local-parser").trim()).filter(Boolean)));
       const fallbackCount = parsed.filter((row) => row?.provider_fallback).length;

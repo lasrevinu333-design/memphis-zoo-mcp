@@ -24,7 +24,7 @@ assert.match(outlookAuthorityMigration, /revoke all privileges[\s\S]*public, ano
 assert.match(outlookAuthorityMigration, /grant delete, insert, maintain, references, select, trigger, truncate, update[\s\S]*to service_role/i);
 assert.doesNotMatch(outlookAuthorityMigration, /grant[\s\S]*to (?:public|anon|authenticated|custodial_application_reader)/i);
 
-function buildApp({ writeCalls = [], readCalls = [], writeResults = {}, writeError = null, eventRows = [], runEventImpactPreview = null, runEventReplacement = null, runEventTransition = null } = {}) {
+function buildApp({ writeCalls = [], readCalls = [], writeResults = {}, writeError = null, eventRows = [], runEventImpactPreview = null, runEventReplacement = null, runEventTransition = null, venueOverlay = null } = {}) {
   const app = express();
   app.use(express.json());
   app.use("/admin-api/events", createEventsAdminRouter({
@@ -33,6 +33,12 @@ function buildApp({ writeCalls = [], readCalls = [], writeResults = {}, writeErr
     runEventTransition,
     runReadOnlySql: async (sql) => {
       readCalls.push(String(sql || ""));
+      if (/custodial_place_event_venue_overlay/i.test(sql)) return [{overlay:{venues:venueOverlay || [
+        {venue_id:TEST_ZOO_VENUE_ID,mapping_status:'UNMAPPED',event_eligible:true,
+          capability_authority:'LEGACY_UNMAPPED',raw_legacy:{venue_code:'ZOO_FOOTPRINT'}},
+        {venue_id:TEST_VENUE_ID,mapping_status:'UNMAPPED',event_eligible:true,
+          capability_authority:'LEGACY_UNMAPPED',raw_legacy:{venue_code:'EVENT_CENTER'}},
+      ]}}];
       if (/from public\.event_venues/i.test(sql)) {
         return [
           {
@@ -694,6 +700,8 @@ assert.match(listSql, /e\.event_scope/i, "published events should expose canonic
 assert.match(listSql, /e\.primary_venue_id/i, "published events should expose canonical venue id");
 assert.match(listSql, /e\.coverage_location_ids/i, "published events should expose coverage locations separately");
 assert.match(listSql, /left join public\.event_venues ev on ev\.id = e\.primary_venue_id/i, "published events should join canonical event venues");
+assert.match(listSql, /app_event_place_authority\(to_jsonb\(e\),statement_timestamp\(\)\)/i,
+  "Event readback must consult current Place bridge authority");
 assert.doesNotMatch(listSql, /then 'SPLASH_PAD'/, "published events must not hard-code old restroom-name display rewrites");
 assert.doesNotMatch(listSql, /then 'COURTYARD'/, "published events must not hard-code old restroom-name display rewrites");
 assert.match(listSql, /nullif\(btrim\(e\.notes\), ''\)/i, "published event list should normalize blank notes");
@@ -712,6 +720,28 @@ await withServer(buildApp(), async (baseUrl) => {
   const coveragePayload = await coverageResponse.json();
   assert.equal(coveragePayload.ok, true);
   assert.ok(coveragePayload.data.some((row) => row.group_name === "MemMex Restrooms"), "coverage selector should retain restroom groups");
+});
+
+await withServer(buildApp({venueOverlay:[
+  {venue_id:TEST_ZOO_VENUE_ID,mapping_status:'UNMAPPED',event_eligible:true,capability_authority:'LEGACY_UNMAPPED'},
+  {venue_id:TEST_VENUE_ID,mapping_status:'MAPPED',event_eligible:true,display_name:'Canonical Event Center',
+    aliases:['Explicit canonical alias'],canonical_place_id:'50000000-0000-4000-8000-000000000001',
+    capability_authority:'CANONICAL_EVENT_ONLY',raw_legacy:{display_name:'Event Center'}},
+]}),async(baseUrl)=>{
+  const response=await fetch(`${baseUrl}/admin-api/events/event-venues`);
+  const body=await response.json();
+  assert.equal(body.data.find((row)=>row.venue_id===TEST_VENUE_ID).display_name,'Canonical Event Center');
+  assert.equal(body.data.find((row)=>row.venue_id===TEST_VENUE_ID).venue_id,TEST_VENUE_ID);
+  assert.deepEqual(body.data.find((row)=>row.venue_id===TEST_VENUE_ID).aliases,['Explicit canonical alias']);
+});
+await withServer(buildApp({venueOverlay:[
+  {venue_id:TEST_ZOO_VENUE_ID,mapping_status:'UNMAPPED',event_eligible:true},
+  {venue_id:TEST_VENUE_ID,mapping_status:'NEEDS_REVIEW',event_eligible:false,review_reason:'legacy_source_drift'},
+]}),async(baseUrl)=>{
+  const response=await fetch(`${baseUrl}/admin-api/events/event-venues`);
+  const body=await response.json();
+  assert.equal(body.data.some((row)=>row.venue_id===TEST_VENUE_ID),false,
+    'drifted mapped venue cannot be offered as an Event selection');
 });
 
 const updateWriteCalls = [];
