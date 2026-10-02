@@ -18,6 +18,18 @@ const reminderBody = buildEmployeeEventReminderBody({
 assert.match(reminderBody, /Tammy.*Members Night.*Event Center.*2026-10-20.*18:00:00.*20:30:00.*240/);
 assert.doesNotMatch(reminderBody, /VIP|itinerary|catering|trash cans/i,
   'unclassified event notes cannot leak into employee reminder speech');
+const classifiedBody = buildEmployeeEventReminderBody({
+  event_name: 'Members Night', display_location: 'Event Center', event_date: '2026-10-20',
+  start_time: '18:00:00', end_time: '20:30:00', attendee_count: 240,
+  notes: 'Private VIP itinerary and catering; manager ticket details',
+  source_text: 'Do not broadcast the source email',
+  custodial_note_codes: ['trash_boxes', 'trash_boxes', 'unknown'],
+  custodial_public_notes: 'Waxed floor; use the service entrance.',
+}, 'Tammy');
+assert.match(classifiedBody, /Place trash boxes/);
+assert.match(classifiedBody, /Waxed floor; use the service entrance/);
+assert.equal((classifiedBody.match(/Place trash boxes/g) || []).length, 1);
+assert.doesNotMatch(classifiedBody, /VIP|itinerary|catering|ticket|source email|unknown/i);
 assert.doesNotMatch(buildEmployeeEventReminderBody({ event_name: 'No count', display_location: 'Zoo Footprint',
   event_date: '2026-10-20', start_time: '09:00:00', end_time: '10:00:00' }, 'Gregory'), /attendance/i);
 assert.throws(() => buildEmployeeEventReminderBody({ event_name: 'Incomplete' }, 'Tammy'), /missing/);

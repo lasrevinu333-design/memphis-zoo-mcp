@@ -24,10 +24,11 @@ assert.match(outlookAuthorityMigration, /revoke all privileges[\s\S]*public, ano
 assert.match(outlookAuthorityMigration, /grant delete, insert, maintain, references, select, trigger, truncate, update[\s\S]*to service_role/i);
 assert.doesNotMatch(outlookAuthorityMigration, /grant[\s\S]*to (?:public|anon|authenticated|custodial_application_reader)/i);
 
-function buildApp({ writeCalls = [], readCalls = [], writeResults = {}, writeError = null, eventRows = [] } = {}) {
+function buildApp({ writeCalls = [], readCalls = [], writeResults = {}, writeError = null, eventRows = [], runEventImpactPreview = null } = {}) {
   const app = express();
   app.use(express.json());
   app.use("/admin-api/events", createEventsAdminRouter({
+    runEventImpactPreview,
     runReadOnlySql: async (sql) => {
       readCalls.push(String(sql || ""));
       if (/from public\.event_venues/i.test(sql)) {
@@ -235,7 +236,8 @@ const employeeEventRows = [{
   venue_name: "Zoo Footprint",
   status: "CANCELLED",
   event_timezone: "America/Chicago",
-  notes: "Use the service entrance after 8:30 AM.",
+  notes: "Private VIP itinerary and staffing detail.",
+  custodial_public_notes: "Use the service entrance after 8:30 AM.",
 }, {
   id: "80000000-0000-4000-8000-000000000003",
   event_name: "Missing Count Event",
@@ -265,6 +267,8 @@ await withServer(buildEmployeeApp(employeeEventRows), async (baseUrl) => {
   assert.equal(payload.ok, true);
   assert.equal(payload.data[0].event_name, "Employee Event");
   assert.equal(payload.data[0].notes, "Use the service entrance after 8:30 AM.", "enrolled employees must receive operational event notes");
+  assert.doesNotMatch(JSON.stringify(payload.data), /Private VIP itinerary/, "manager/source notes must not reach employee Event readback");
+  assert.equal(payload.data[0].custodial_public_notes, "Use the service entrance after 8:30 AM.");
   assert.equal(payload.data[0].attendee_count, 0, "known zero must remain distinct from a missing expected attendee count");
   assert.equal(payload.data[0].status, "CANCELLED", "future cancelled events must remain visible to employees");
   assert.equal(payload.data[1].attendee_count, null, "missing expected attendee count must remain null");
@@ -287,6 +291,47 @@ await withServer(buildApp(), async (baseUrl) => {
     body: JSON.stringify({ include_rows: false }),
   });
   assert.equal(response.status, 404, "debug parser-test route must not be exposed by admin API");
+});
+
+const impactCalls = [];
+const impactCandidate = { event_name: "Custodial Gala", event_scope: "SINGLE_VENUE",
+  primary_venue_id: TEST_VENUE_ID, venue_ids: [TEST_VENUE_ID], location_group_id: TEST_GROUP_ID,
+  event_date: "2026-10-20", start_time: "18:00", end_time: "20:30", attendee_count: 240,
+  notes: "VIP itinerary, catering, private guest details", custodial_note_codes: ["trash_boxes"],
+  custodial_public_notes: "Waxed floor; use the service entrance." };
+await withServer(buildApp({ runEventImpactPreview: async (args) => {
+  impactCalls.push(args);
+  return { status: "projected", schedule_mutation: false, recipient_count: 1,
+    recipients: [{ employee_name: "Tammy", notification_kind: "three_days_before" }] };
+} }), async (baseUrl) => {
+  const response = await fetch(`${baseUrl}/admin-api/events/preview-impact`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(impactCandidate),
+  });
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("cache-control"), "private, no-store");
+  assert.equal((await response.json()).data.schedule_mutation, false);
+});
+assert.equal(impactCalls.length, 1);
+assert.equal(impactCalls[0].p_manager_id, TEST_MANAGER_ID);
+assert.equal(impactCalls[0].p_candidate.notes, impactCandidate.notes, "private notes remain manager-only evidence");
+assert.deepEqual(impactCalls[0].p_candidate.custodial_note_codes, ["trash_boxes"]);
+assert.equal(impactCalls[0].p_candidate.custodial_public_notes, impactCandidate.custodial_public_notes);
+await withServer(buildApp({ runEventImpactPreview: async () => { throw Object.assign(
+  new Error("Event changed since this preview. Refresh before saving."), { code: "40901" }); } }), async (baseUrl) => {
+  const response = await fetch(`${baseUrl}/admin-api/events/preview-impact`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...impactCandidate, event_id: "60000000-0000-4000-8000-000000000001", expected_revision: 1 }),
+  });
+  assert.equal(response.status, 409, "stale event impact preview must preserve SQLSTATE conflict");
+});
+await withServer(buildApp({ runEventImpactPreview: async () => { throw new Error("should not project"); } }), async (baseUrl) => {
+  for (const bad of [{ custodial_note_codes: ["private_ticket"] }, { custodial_public_notes: "x".repeat(501) }]) {
+    const response = await fetch(`${baseUrl}/admin-api/events/preview-impact`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...impactCandidate, ...bad }),
+    });
+    assert.equal(response.status, 400, "unapproved or oversize speech notes fail before projection");
+  }
 });
 
 const writeCalls = [];

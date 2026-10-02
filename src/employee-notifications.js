@@ -12,6 +12,11 @@ function createSupabase(env) {
   return url && key ? createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } }) : null;
 }
 function clip(value, max) { return String(value ?? '').trim().slice(0, max); }
+const CUSTODIAL_EVENT_SPEECH = Object.freeze({
+  trash_boxes: 'Place trash boxes',
+  extra_cans: 'Set out extra trash cans',
+  restroom_checks: 'Perform requested restroom checks',
+});
 export function buildEmployeeEventReminderBody(event = {}, employeeName) {
   const name = clip(employeeName, 160);
   const title = clip(event.event_name, 180);
@@ -26,10 +31,15 @@ export function buildEmployeeEventReminderBody(event = {}, employeeName) {
   if (attendance != null && (!Number.isSafeInteger(attendance) || attendance < 0)) {
     throw new Error('Event reminder attendance is invalid.');
   }
-  // Generic event notes can contain VIP, catering, or itinerary information.
-  // No classified custodial-note field exists yet, so they must not be spoken.
+  // Only manager-selected, fixed custodial operations are speech sources.
+  // Generic notes/source text/ticket detail can contain private VIP, catering,
+  // or itinerary content and never enter the native spoken reminder.
+  const approvedNotes = [...new Set(Array.isArray(event.custodial_note_codes) ? event.custodial_note_codes : [])]
+    .map((code) => CUSTODIAL_EVENT_SPEECH[code]).filter(Boolean);
+  const publicNotes = clip(event.custodial_public_notes, 500);
   return clip(`${name}, event reminder. ${title} is at ${place} on ${date}, from ${start} to ${end}.`
-    + (attendance == null ? '' : ` Expected attendance is ${attendance}.`), 1000);
+    + (attendance == null ? '' : ` Expected attendance is ${attendance}.`)
+    + (approvedNotes.length || publicNotes ? ` Custodial preparation: ${[...approvedNotes, publicNotes].filter(Boolean).join('; ')}.` : ''), 1000);
 }
 function credentialId(req) {
   return String(
@@ -477,7 +487,7 @@ export function installEmployeeNotificationRoutes(app, {
       let push;
       let channelId;
       if (job.job_type === 'employee_event_push') {
-        const instanceResult = await db.from('event_push_instances').select('*,events_app_events(event_name,display_location,event_date,start_time,end_time,attendee_count),employees(display_name)')
+        const instanceResult = await db.from('event_push_instances').select('*,events_app_events(event_name,display_location,event_date,start_time,end_time,attendee_count,custodial_note_codes,custodial_public_notes),employees(display_name)')
           .eq('instance_id', job.source_id).single();
         if (instanceResult.error) throw instanceResult.error;
         eventInstance = instanceResult.data;

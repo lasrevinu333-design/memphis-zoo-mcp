@@ -123,6 +123,20 @@ function sanitizeEventNotes(value, attendeeCount = null) {
   return raw;
 }
 
+const CUSTODIAL_NOTE_CODES = new Set(["trash_boxes", "extra_cans", "restroom_checks"]);
+function normalizeCustodialNoteCodes(value) {
+  if (value == null) return [];
+  if (!Array.isArray(value) || value.some((code) => !CUSTODIAL_NOTE_CODES.has(code))) {
+    throw new Error("Custodial reminder notes must be selected from the approved operations list.");
+  }
+  return [...new Set(value)];
+}
+function normalizeCustodialPublicNotes(value) {
+  const notes = value == null ? "" : String(value).trim();
+  if (notes.length > 500) throw new Error("Employee-visible custodial notes must be 500 characters or fewer.");
+  return notes;
+}
+
 const EVENT_SCOPES = new Set(["ZOO_WIDE", "SINGLE_VENUE", "MULTI_VENUE", "OFFSITE", "UNKNOWN"]);
 const PARSER_CONFIDENCE_VALUES = new Set(["high", "medium", "low"]);
 
@@ -369,6 +383,8 @@ function normalizeEventPayload(payload = {}, referenceData = {}) {
   const endTime = normalizeTimeInput(payload.end_time);
   const attendeeCount = toNullableInt(payload.attendee_count);
   const notes = sanitizeEventNotes(payload.notes, attendeeCount);
+  const custodialNoteCodes = normalizeCustodialNoteCodes(payload.custodial_note_codes);
+  const custodialPublicNotes = normalizeCustodialPublicNotes(payload.custodial_public_notes);
   const operationId = payload.operation_id == null || payload.operation_id === "" ? null : String(payload.operation_id).trim();
   const location = normalizeEventLocationPayload(payload, referenceData);
 
@@ -390,6 +406,8 @@ function normalizeEventPayload(payload = {}, referenceData = {}) {
     end_time: endTime,
     attendee_count: attendeeCount,
     notes,
+    custodial_note_codes: custodialNoteCodes,
+    custodial_public_notes: custodialPublicNotes,
     spans_overnight: spansOvernight,
     operation_id: operationId,
   };
@@ -455,6 +473,7 @@ const PUBLIC_EVENT_FIELDS = Object.freeze([
 const EMPLOYEE_EVENT_FIELDS = Object.freeze([
   ...PUBLIC_EVENT_FIELDS,
   "notes",
+  "custodial_public_notes",
 ]);
 
 function toPublicEvent(event = {}) {
@@ -462,7 +481,8 @@ function toPublicEvent(event = {}) {
 }
 
 function toEmployeeEvent(event = {}) {
-  return Object.fromEntries(EMPLOYEE_EVENT_FIELDS.map((field) => [field, event[field] ?? null]));
+  const safeEvent = { ...event, notes: event.custodial_public_notes || null };
+  return Object.fromEntries(EMPLOYEE_EVENT_FIELDS.map((field) => [field, safeEvent[field] ?? null]));
 }
 
 function buildEventResponseSelectSql(whereSql, suffixSql = "") {
@@ -512,6 +532,8 @@ function buildEventResponseSelectSql(whereSql, suffixSql = "") {
         when e.attendee_count is not null and btrim(e.notes) = e.attendee_count::text then null
         else e.notes
       end as notes,
+      e.custodial_note_codes,
+      e.custodial_public_notes,
       e.created_by,
       e.created_by_manager_id,
       e.updated_by_manager_id,
@@ -1018,6 +1040,7 @@ export function createEventsAdminRouter({
   maintenanceController,
   requireAdminApiAuth,
   requireAdminApiWrite,
+  runEventImpactPreview = null,
 }) {
   const router = express.Router();
   if (typeof requireAdminApiAuth === "function") {
@@ -1129,6 +1152,35 @@ export function createEventsAdminRouter({
       });
     } catch (error) {
       fail(res, error, "AI event parse failed", 400);
+    }
+  });
+
+  router.post("/preview-impact", async (req, res) => {
+    try {
+      const payload = req.body && typeof req.body === "object" ? req.body : {};
+      const actor = authenticatedEventActor(req);
+      const referenceData = await getEventReferenceData(runReadOnlySql);
+      const candidate = normalizeEventPayload(payload, referenceData);
+      const eventId = payload.event_id == null || payload.event_id === "" ? null : String(payload.event_id).trim();
+      if (eventId && !isUuid(eventId)) throw new Error("A valid event id is required for impact preview.");
+      const revision = eventId ? expectedEventRevision(payload.expected_revision) : null;
+      const preview = runEventImpactPreview || (async (args) => {
+        const result = await getEventsSupabaseClient().rpc("mz_preview_event_impact", args);
+        if (result.error) throw result.error;
+        return result.data;
+      });
+      const data = await preview({
+        p_candidate: candidate,
+        p_manager_id: actor.manager_id,
+        p_event_id: eventId,
+        p_expected_revision: revision,
+      });
+      res.setHeader("Cache-Control", "private, no-store");
+      res.status(200).json({ ok: true, data,
+        meta: { version: appVersion, release_id: releaseId, contract_version: EVENTS_CONTRACT_VERSION } });
+    } catch (error) {
+      fail(res, error, "Event impact preview failed",
+        String(error?.code || error?.sqlstate || "") === "40901" ? 409 : Number(error?.status) || 400);
     }
   });
 
