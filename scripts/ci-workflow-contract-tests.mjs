@@ -369,13 +369,15 @@ for (const replacement of ['', `// ${sanitationSourceImport}`,
 }
 console.log('Sanitation owning source gate PASS: ' + sanitationWiringMutationCount + ' omission/suppression mutations rejected');
 const eventCountSourceImports = ["await import('./event-count-cross-surface-contract-tests.mjs');",
-  "await import('./manager-notification-history-tests.mjs');"];
+  "await import('./manager-notification-history-tests.mjs');",
+  "await import('./static-weekly-opening-coverage-report-tests.mjs');",
+  "await import('./static-weekly-opening-coverage-preview-contract-tests.mjs');"];
 function assertEventCountSourceWiring(workflow, sourceSuite) {
   assertCompletionRecoveryWiring(workflow, sourceSuite);
   const lines = sourceSuite.split('\n').map(line => line.trim())
     .filter(line => line && !line.startsWith('//'));
   for (const statement of eventCountSourceImports) assert.equal(lines.filter(line => line === statement).length, 1,
-    'the mandatory source stage must execute the Event count and named-manager history contracts exactly once');
+    'the mandatory source stage must execute the Event count, manager history and opening-coverage contracts exactly once');
 }
 assertEventCountSourceWiring(productionRepairGate, currentSystemSource);
 let eventCountWiringMutationCount = 0;
@@ -387,7 +389,7 @@ for (const eventCountSourceImport of eventCountSourceImports) for (const replace
     currentSystemSource.replace(eventCountSourceImport, replacement)));
   eventCountWiringMutationCount += 1;
 }
-console.log('Event count and manager history owning source gates PASS: ' + eventCountWiringMutationCount + ' omission/suppression mutations rejected');
+console.log('Event count, manager history and opening-coverage source gates PASS: ' + eventCountWiringMutationCount + ' omission/suppression mutations rejected');
 const capacityAuthorityCommands = [
   'node scripts/nonemployee-coverall-database-tests.mjs',
   'node scripts/nonemployee-coverall-nonempty-lunch-database-tests.mjs',
