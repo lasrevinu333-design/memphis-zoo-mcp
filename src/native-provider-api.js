@@ -1,6 +1,7 @@
 import {createHash} from 'node:crypto';
 import {verifyNativeDeviceRequestAttestation,deviceCredentialInternals} from './auth/device-credential-auth.js';
 import {parseNativeProviderJson} from './native-provider-json.js';
+import {validateNativeLocationInventoryRequest,validateNativeLocationInventoryResponse} from './native-location-lifecycle.js';
 
 const PREFIX='/employee-notifications-api/native-provider';
 const PATHS=new Set(['register','status','events','inventory'].map(s=>PREFIX+'/'+s));
@@ -53,7 +54,7 @@ export function installNativeProviderRoutes(app,{db,env=process.env,requireCurre
   if(!PATHS.has(req.originalUrl))return res.status(400).json({ok:false,code:'native_provider_path_invalid'});
   return next();
  });
- for(const suffix of ['register','status'])app.post(PREFIX+'/'+suffix,current,async(req,res)=>{
+ for(const suffix of ['register','status','inventory'])app.post(PREFIX+'/'+suffix,current,async(req,res)=>{
   try{
    if(req.headers.origin!=='https://localhost'||req.headers['x-memphis-app-edition']!=='custodial'
     ||req.memphisDeviceAuth?.credentialed!==true||req.memphisDeviceAuth?.offline_recovery_only)
@@ -63,24 +64,28 @@ export function installNativeProviderRoutes(app,{db,env=process.env,requireCurre
    if(!credential||credential.credentialId!==req.memphisDeviceCredential?.credential_id)deny('native_provider_current_credential_required',403);
    const body=parseNativeProviderJson(req.scanAuthorityRawBody);
    if(JSON.stringify(body)!==JSON.stringify(req.body))deny('native_provider_raw_body_changed');
-   binding(body,suffix==='status');
+   if(suffix==='inventory')validateNativeLocationInventoryRequest(body);else binding(body,suffix==='status');
    if(body.credential_id!==credential.credentialId||body.device_id!==req.memphisDevice?.canonical_device_id
     ||body.employee_id!==req.memphisDevice?.assigned_employee_id||body.assignment_epoch!==Number(req.memphisDevice?.assignment_epoch))
     deny('native_provider_recipient_mismatch',403);
    const a=verifyNativeDeviceRequestAttestation(req);
    if(!db||typeof db.rpc!=='function')deny('native_provider_service_unavailable',503);
    const proof=JSON.stringify([a.version,a.credential_id,a.device_id,a.method,a.path,a.body_sha256,a.request_id,a.timestamp,a.signature]);
-   const result=await db.rpc('custodial_native_provider_registration_clock',{
+   const result=await db.rpc(suffix==='inventory'?'custodial_native_location_inventory':'custodial_native_provider_registration_clock',{
     p_credential:credential.credentialId,p_credential_hash:deviceCredentialInternals.tokenHash(credential.secret,env),
-    p_native_request:a.request_id,p_attestation_digest:createHash('sha256').update(proof).digest('hex'),p_body:body,p_status:suffix==='status',
+    p_native_request:a.request_id,p_attestation_digest:createHash('sha256').update(proof).digest('hex'),p_body:body,...(suffix==='inventory'?{}:{p_status:suffix==='status'}),
    });
    if(result.error){const status=result.error.code==='42501'?403:result.error.code==='22023'?400:['23505','40001','P0001','P0002'].includes(result.error.code)?409:503;
     deny(status===403?'native_provider_access_denied':status===409?'native_provider_state_conflict':status===400?'native_provider_request_invalid':'native_provider_service_unavailable',status);}
+   if(suffix==='inventory'){
+    let response;try{response=validateNativeLocationInventoryResponse(result.data,body);}catch{deny('native_provider_response_invalid',503);}
+    return res.status(response.ok?200:409).json(response);
+   }
    const response=clockResponse(result.data,a.request_id);
    res.json({ok:true,data:response.data,clock:response.clock});
   }catch(error){res.status(error.status||503).json({ok:false,code:error.status?error.code:'native_provider_service_unavailable'});}
  });
  // Until their owning SQL/protocol is implemented there is no generic relay or
  // permissive fallback for these exact reserved paths.
- for(const suffix of ['events','inventory'])app.post(PREFIX+'/'+suffix,current,(_req,res)=>res.status(503).json({ok:false,code:'native_provider_route_not_ready'}));
+ app.post(PREFIX+'/events',current,(_req,res)=>res.status(503).json({ok:false,code:'native_provider_route_not_ready'}));
 }

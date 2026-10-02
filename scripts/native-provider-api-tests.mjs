@@ -84,7 +84,22 @@ try{
   if(state==='wrong_device')row.device_id=id(99);if(state==='wrong_secret')row.token_hash='f'.repeat(64);
   await refused('noncurrent credential '+state);
  }row=structuredClone(base);
- for(const suffix of ['events','inventory'])await refused('unfinished '+suffix+' cannot relay to generic SQL',body,prefix+'/'+suffix);
+ await refused('unfinished events cannot relay to generic SQL',body,prefix+'/events');
+ await refused('inventory rejects registration schema before SQL',body,prefix+'/inventory');
+ const inventory={schema:'custodial.native-provider-inventory-request.v1',scan_id:id(44),principal_digest:body.principal_digest,
+  device_id:body.device_id,credential_id:cid,employee_id:employee,assignment_epoch:7,generation_ids:[body.generation_id],limit:32,cursor:null,ceiling:null,server_now:null};
+ const inventoryData={...inventory,schema:'custodial.native-provider-inventory.v1',server_now:'2026-10-02T01:02:03.123456Z',has_more:false,rows:[]};delete inventoryData.limit;
+ dbValue={ok:true,data:inventoryData};r=await send(inventory,prefix+'/inventory');const inventoryResult=await r.json();
+ check('actual native HMAC inventory reaches exact service owner',r.status===200&&lastFunction==='custodial_native_location_inventory'&&!Object.hasOwn(lastArgs,'p_status'));
+ check('exact empty inventory is not invented device receipt',JSON.stringify(inventoryResult)===JSON.stringify(dbValue));
+ for(const change of [{scan_id:[id(44)]},{limit:33},{assignment_epoch:'7'},{generation_ids:[body.generation_id,body.generation_id]},{cursor:{reservation_at:'2026-10-02T01:02:03.123456Z',job_id:id(45)}},{extra:true}])
+  await refused('strict inventory request '+Object.keys(change)[0],{...inventory,...change},prefix+'/inventory');
+ for(const fault of ['foreign','has_more','unknown','malformed_time']){
+  dbValue={ok:true,data:structuredClone(inventoryData)};
+  if(fault==='foreign')dbValue.data.employee_id=id(88);if(fault==='has_more')dbValue.data.has_more=true;
+  if(fault==='unknown')dbValue.data.extra='ignored';if(fault==='malformed_time')dbValue.data.server_now='2026-02-30T01:02:03.123456Z';
+  r=await send(inventory,prefix+'/inventory');await r.text();check('inventory SQL response fails closed '+fault,r.status===503);
+ }dbValue=null;
  const raw=' \n'+JSON.stringify(body,null,2)+'\n';r=await send(raw);await r.text();check('whitespace original bytes actually authenticate',r.status===200);
  await refused('reserialized signature cannot replace original bytes',raw,path,h=>Object.assign(h,headers(JSON.stringify(body))));
  for(const [code,expected] of [['42501',403],['23505',409],['22023',400],['XX000',503]]){

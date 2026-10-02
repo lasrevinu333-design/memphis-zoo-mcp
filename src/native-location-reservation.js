@@ -5,6 +5,7 @@ import {createHash} from 'node:crypto';
 export const NATIVE_LOCATION_SCHEMA='custodial.native-location-payload.v2';
 const recipientKeys=['assignment_epoch','credential_id','device_id','employee_id','generation_id','principal_digest','registration_id','token_digest'];
 const payloadKeys=`schema generation_id principal_digest token_digest receipt_job_id receipt_credential_id receipt_employee_id receipt_device_id receipt_assignment_epoch notification_key reservation_at valid_until content_sha256 kind notification_type title body channel_id route service_date reminder_contract cleaned_at cycle_base_at cycle_base_evidence due_soon_at overdue_at status_code location_id location_code location_name form_type group_code group_name projection_id publication_id version_id occurrence_id authority_source authority_source_id authority_source_digest coverage_end_at operational_end_at`.split(' ').sort();
+export const NATIVE_LOCATION_PAYLOAD_KEYS=Object.freeze(payloadKeys);
 const uuid=/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/;
 const digest=/^[0-9a-f]{64}$/;
 const invalid=()=>new Error('native_location_reservation_contract_invalid');
@@ -32,6 +33,7 @@ function expectedRecipient(value){
   ||! /^[1-9][0-9]{0,15}$/.test(value.assignment_epoch)||BigInt(value.assignment_epoch)>9007199254740991n)throw invalid();
  return Object.freeze({...value});
 }
+export const validateNativeLocationRecipient=expectedRecipient;
 export function validateNativeLocationReservation(value,{jobId,expected}){
  expected=expectedRecipient(expected);if(!uuid.test(jobId))throw invalid();
  if(!value||value.current!==true||!keys(value,['current','delivery_outcome_unknown','dispatch_authorized','payload',...(value.replayed?['reason']:[]),'replayed','wire'].sort())
