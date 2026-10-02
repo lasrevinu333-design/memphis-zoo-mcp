@@ -33,12 +33,12 @@ try{
  console.log('NO_AUTOMATIC_TABLE_OR_SEQUENCE_GRANTS_REPLAY_PASS',manifest.length);
  const table='public.employee_native_push_generations',device=id(1),employee=id(2),credential=id(3);
  sql(`insert into public.employees(id,employee_code,display_name,role,active) values(${q(employee)},'EMP995','Synthetic provider custodian','staff',true);
- insert into public.devices(id,device_id,device_name,active,assigned_employee_id,assignment_epoch) values(${q(device)},'PROVIDER_SYNTHETIC','Synthetic provider device',true,${q(employee)},1);
+ insert into public.devices(id,device_id,device_name,active,assigned_employee_id,assignment_epoch) values(${q(device)},'KIOSK_08','Synthetic provider device',true,${q(employee)},1);
  insert into public.device_auth_credentials(credential_id,device_id,token_hash,device_label,confirmed_at,expires_at,created_at)
  values(${q(credential)},${q(device)},repeat('c',64),'Synthetic provider credential',now()-interval '1 day',now()+interval '1 day',now()-interval '1 day');`);
  const token='synthetic-provider-token-value-0001',hash=t=>createHash('sha256').update(t).digest('hex');
  const body=(n,t=token)=>({schema:'custodial.native-provider-register.v1',operation_id:id(n),generation_id:id(n+100),
-  credential_id:credential,employee_id:employee,device_id:'PROVIDER_SYNTHETIC',assignment_epoch:1,principal_digest:'a'.repeat(64),token_digest:hash(t),token:t,
+  credential_id:credential,employee_id:employee,device_id:'KIOSK_08',assignment_epoch:1,principal_digest:'a'.repeat(64),token_digest:hash(t),token:t,
   native_app:{package_name:'org.memphiszoo.custodial',version_name:'synthetic-only',version_code:53,build_id:'synthetic.custodial.df36d32368b6'}});
  let request=1000;const rpc=(b,status=false,role='service_role',credHash='c'.repeat(64))=>`set role ${role};select public.custodial_native_provider_registration_clock(${q(credential)},${q(credHash)},${q(id(request++))},repeat('b',64),${j(b)},${status})::text`;
  let lastClock;
@@ -148,8 +148,8 @@ try{
   for(const status of [false,true]){
    const value={...body(12,token+'3')};if(status){value.schema='custodial.native-provider-status.v1';delete value.token;}
    const bytes=JSON.stringify(value),path='/employee-notifications-api/native-provider/'+(status?'status':'register'),nonce=id(status?9002:9001),timestamp=new Date().toISOString();
-   const proof=['custodial-native-request.v1',credential,'PROVIDER_SYNTHETIC','POST',path,hash(bytes),nonce,timestamp,'custodial'].join('\n');
-   const headers={'content-type':'application/json',authorization:`Device ${credential}.${secret}`,'x-device-id':'PROVIDER_SYNTHETIC',origin:'https://localhost','x-memphis-app-edition':'custodial',
+   const proof=['custodial-native-request.v1',credential,'KIOSK_08','POST',path,hash(bytes),nonce,timestamp,'custodial'].join('\n');
+   const headers={'content-type':'application/json',authorization:`Device ${credential}.${secret}`,'x-device-id':'KIOSK_08',origin:'https://localhost','x-memphis-app-edition':'custodial',
     'x-memphis-native-attestation-version':'custodial-native-request.v1','x-memphis-native-request-id':nonce,'x-memphis-native-request-timestamp':timestamp,
     'x-memphis-native-request-attestation':createHmac('sha256',secret).update(proof).digest('hex')};
    const url='http://127.0.0.1:'+server.address().port+path;
