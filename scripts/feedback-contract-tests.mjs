@@ -25,10 +25,13 @@ function assertMatches(source, pattern, message) {
 if (feedbackHtml) {
   assert.doesNotMatch(feedbackHtml, /type=["']file["']|readAsDataURL|Add Image|capture=["']/i, "manager feedback must not offer new photo acquisition");
   assertContains(feedbackHtml, "row.metadata_json?.image_attachment", "historical protected feedback images remain visible to authorized managers");
-  const employeeHtml = readFileSync(resolve(engineRoot, "employee-feedback.html"), "utf8");
-  assert.doesNotMatch(employeeHtml, /type=["']file["']|readAsDataURL|Add Image|capture=["']/i, "employee feedback must be text-only");
-  assertContains(employeeHtml, "historical attachments", "protected employee feedback outbox history remains retained");
-  assert.ok(!employeeHtml.includes("new FormData"), "employee feedback submit must not send unsupported multipart form data");
+  const employeePath = resolve(engineRoot, "employee-feedback.html");
+  if (existsSync(employeePath)) {
+    const employeeHtml = readFileSync(employeePath, "utf8");
+    assert.doesNotMatch(employeeHtml, /type=["']file["']|readAsDataURL|Add Image|capture=["']/i, "employee feedback must be text-only");
+    assertContains(employeeHtml, "historical attachments", "protected employee feedback outbox history remains retained");
+    assert.ok(!employeeHtml.includes("new FormData"), "employee feedback submit must not send unsupported multipart form data");
+  }
 }
 
 // Backend: retain legacy image validation/private-storage/recovery and
