@@ -29,3 +29,25 @@ for (const result of admin.results) {
   assert.equal(result.published, false);
 }
 for (const key of ['worker', 'sql', 'publication']) assert.equal(admin[key], false);
+
+// Exercise the actual current323 readback/adaptation/final-pattern seam, not
+// only historical templates or an imported but uncalled guarded test body.
+const currentOutput = execFileSync(process.execPath, ['--max-old-space-size=256',
+  '--wasm-max-mem-pages=1536', '--max-semi-space-size=4',
+  fileURLToPath(new URL('./static-weekly-recurring-phase-authority-tests.mjs', import.meta.url)),
+  '--current-handout'], {encoding:'utf8',timeout:60000,maxBuffer:1024*1024,
+  env:{PATH:process.env.PATH,LANG:'C.UTF-8'}});
+const current = JSON.parse(currentOutput.trim().split('\n').at(-1));
+process.stdout.write(currentOutput);
+assert.equal(current.status, 'PASS');
+assert.equal(current.checks, 54);
+assert.deepEqual(current.results.map(x => x.count), [6, 7, 8]);
+for (const result of current.results) {
+  assert.equal(result.phaseStatus, 'PROVEN_CANONICAL_PHASE_MINIMUM');
+  assert.equal(result.minimumDoubledSpread, 1);
+  assert.ok(Number.isSafeInteger(result.canonicalRows) && result.canonicalRows > 0);
+  for (const key of ['basisDigest','sourceDigest','configDigest','finalPatternConfigDigest','fixedReminderDigest'])
+    assert.match(result[key], /^[0-9a-f]{64}$/);
+  assert.equal(result.published, false);
+}
+for (const key of ['workerIpc', 'sql', 'publication']) assert.equal(current[key], false);
