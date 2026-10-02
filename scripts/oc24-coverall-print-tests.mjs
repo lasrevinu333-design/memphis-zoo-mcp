@@ -48,6 +48,8 @@ check('document binds exact directed order',routedPeriod.advisoryOrder.status,'A
 assert.match(createCoverAllCopyTexts(routed)[0].text,/not an appointment or mandatory route/);checks++;
 assert.match(createCoverAllCopyTexts(routed)[1].text,/no la posición actual/);checks++;
 assert.notEqual(routed.documentDigest,doc.documentDigest);checks++;
+const routeOut=process.env.OC24_ROUTE_PDF_EVIDENCE_DIR;
+if(routeOut){const routedPair=await renderCoverAllPdfPair(routed);mkdirSync(routeOut,{recursive:true});for(const file of [...routedPair.files,routedPair.bilingualFile])writeFileSync(join(routeOut,file.filename),Buffer.from(file.base64,'base64'),{flag:'wx',mode:0o600});}
 let pair=await renderCoverAllPdfPair(doc);
 check('approved issuing manager, no personal phone',doc.managerContact,{name:'Synthetic Manager',role:'Issuing custodial manager',method:'IN_PERSON',authority:'AUTHENTICATED_NAMED_MANAGER',managerId:'10000000-0000-4000-8000-000000000091'});
 check('all copy languages from same document',pair.texts.map(t=>t.language),['en','es','en-es']);

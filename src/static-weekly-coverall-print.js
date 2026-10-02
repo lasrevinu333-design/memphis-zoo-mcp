@@ -129,7 +129,7 @@ function assertCurrentPrintDocument(document){
 
 function contractorLines(document,c,language){
  const t=labels[language],out=[];
- const add=(text,size=10,strong=false)=>out.push({text,size,strong});
+ const add=(text,size=10,strong=false,keepNext=strong?1:0)=>out.push({text,size,strong,keepNext});
  add('MEMPHIS ZOO',10,true);add(`${t.title} - ${c.name}`,19,true);
  add(`${t.date}: ${document.serviceDate} | ${t.revision}: ${document.authorityRevision}`,11,true);
  add(`${t.shift}: ${c.shift.start} - ${c.shift.end}`,12,true);
@@ -141,7 +141,7 @@ function contractorLines(document,c,language){
   ?'El orden sugerido usa proximidad desde el inicio aceptado, no la posición actual. No son citas ni una ruta obligatoria; adapte la secuencia a las condiciones.'
   :'Suggested order uses proximity from the accepted starting area, not current position. It is not an appointment or mandatory route; adapt the sequence to conditions.');
  for(const period of c.periods){
-  add(`${period.start} - ${period.end}`,13,true);
+  add(`${period.start} - ${period.end}`,13,true,period.areas.length?3:1);
   if(!period.areas.length)add(t.empty);
   else if(period.advisoryOrder?.status==='ADVISORY_VERIFIED_PROXIMITY')add(language==='es'?'Orden sugerido por proximidad:':'Suggested proximity order:');
   else add(language==='es'?'Orden no comprobado; confirme con el encargado.':'Order unproven; confirm with the manager.');
@@ -173,14 +173,26 @@ export async function renderCoverAllPdfPair(document){
   const font=await pdf.embedFont(StandardFonts.Helvetica),bold=await pdf.embedFont(StandardFonts.HelveticaBold);
   let page,y=0;
   const newPage=()=>{if(pdf.getPageCount()>=48)fail('coverall_pdf_page_limit');page=pdf.addPage([612,792]);y=750;};
+  function wrapped(value,size=10,strong=false){
+   const f=strong?bold:font,words=String(value).replace(/[\r\n\t]/g,' ').replace(/[–—]/g,'-').split(' '),lines=[];let part='';
+   for(const word of words){if(f.widthOfTextAtSize(word,size)>532)fail('coverall_pdf_unbreakable_text');const next=part?part+' '+word:word;if(f.widthOfTextAtSize(next,size)>532){lines.push(part);part=word;}else part=next;}if(part)lines.push(part);return lines;
+  }
   function line(value,size=10,strong=false){
-   const f=strong?bold:font,words=String(value).replace(/[\r\n\t]/g,' ').replace(/[–—]/g,'-').split(' ');let part='';
-   const draw=()=>{if(y<56)newPage();page.drawText(part,{x:40,y,size,font:f,color:rgb(.08,.12,.13)});y-=size+5;};
-   for(const word of words){if(f.widthOfTextAtSize(word,size)>532)fail('coverall_pdf_unbreakable_text');const next=part?part+' '+word:word;if(f.widthOfTextAtSize(next,size)>532){draw();part=word;}else part=next;}if(part)draw();
+   const f=strong?bold:font;
+   for(const part of wrapped(value,size,strong)){if(y<56)newPage();page.drawText(part,{x:40,y,size,font:f,color:rgb(.08,.12,.13)});y-=size+5;}
   }
   for(const c of document.contractors){
    for(const partLanguage of language==='en-es'?['en','es']:[language]){
-    newPage();for(const entry of contractorLines(document,c,partLanguage)){if(entry.strong&&y<100)newPage();line(entry.text,entry.size,entry.strong);}
+    newPage();const entries=contractorLines(document,c,partLanguage);
+    for(let i=0;i<entries.length;i++){
+     const entry=entries[i];
+     // A period heading/route label must stay with the first actual area;
+     // each area heading stays with its physical-room line. Measure wrapping.
+     const kept=entries.slice(i,i+1+entry.keepNext);
+     const height=kept.reduce((sum,e)=>sum+wrapped(e.text,e.size,e.strong).length*(e.size+5),0);
+     if(entry.keepNext&&height<=694&&y-height<56)newPage();
+     line(entry.text,entry.size,entry.strong);
+    }
    }
   }
   pdf.getPages().forEach((p,i)=>{p.drawText(`${t.page} ${i+1}/${pdf.getPageCount()} | ${document.serviceDate} | r${document.authorityRevision}`,{x:40,y:32,size:8,font});p.drawText(documentDigest,{x:40,y:20,size:7,font});});
