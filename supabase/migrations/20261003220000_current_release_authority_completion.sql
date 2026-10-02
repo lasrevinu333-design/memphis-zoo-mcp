@@ -48,6 +48,115 @@ begin
     enable trigger trg_custodial_release_authority_restore_inventory_immutable;
 end $feedback_relation$;
 
+-- Six exact historical captures used an equivalent spelling of the reset
+-- argument instead of their own inventory identity. The complete NORMAL216
+-- inventory comparison exposed these rows. Repair only this representation:
+-- both full SQL hashes, restore order, resolved public OID and unchanged ACL
+-- suffix are required. Never execute the stored SQL or recapture arbitrary
+-- live permissions. Every equivalent captured alias must still match live.
+do $grant_serialization$
+declare
+  wanted record;
+  captured record;
+  alias_row record;
+  current_definition text;
+  old_prefix text;
+  new_prefix text;
+  public_oid oid;
+  prior_function text;
+  changed integer;
+begin
+  if not exists(select 1 from pg_trigger
+    where tgrelid='public.custodial_release_authority_restore_inventory'::regclass
+      and tgname='trg_custodial_release_authority_restore_inventory_immutable'
+      and tgenabled='O') then
+    raise exception 'Current grant serialization immutability unavailable';
+  end if;
+  for wanted in select * from (values
+    ('custodial_release_canary_authority_surface()',
+     'public.custodial_release_canary_authority_surface()',1000073,
+     'a843e6ab1177177e039163a3d520b95d6552de8105474a48e390b25302692f48',
+     'b7d461eda320ec386b55ce3490063e09848a83723999acdd741e83cad0460498'),
+    ('public.static_weekly_v3_assert_draft_incumbency(uuid)',
+     'static_weekly_v3_assert_draft_incumbency(uuid)',1000199,
+     'd6f202a5c174036cf978cebd88e2274f5b54039dedf614f4808086701cb8305a',
+     '8f5efab4cf9957046185fc19bf9bfb23be3c48900e414f9422be0e05baaba1ca'),
+    ('public.static_weekly_v4_hydrate_compiler_source(jsonb,date)',
+     'static_weekly_v4_hydrate_compiler_source(jsonb,date)',1000198,
+     '57b252cee39b5f763518cb957528a6fea8eabae017351f0a4c7483d62df9598a',
+     'cd7d80e0f473c00254a875badd84ec701b370489bd1eb64dbe568b72784e08af'),
+    ('public.static_weekly_v2_materialize_projection(uuid,date,text,text,jsonb,jsonb,text,jsonb,bigint,uuid,text,text)',
+     'static_weekly_v2_materialize_projection(uuid,date,text,text,jsonb,jsonb,text,jsonb,bigint,uuid,text,text)',950028,
+     'cfea7c5bfcf61a00e64b56e38e1c98f93d7a973c373205b89bc3b708aad0902b',
+     '419abb490483777437126a3593d601da11e9d3db32b777e21be802291a97ce6b'),
+    ('public.static_weekly_v6_read_schedule_segments_dated_base(date)',
+     'static_weekly_v6_read_schedule_segments_dated_base(date)',950168,
+     '4bbcbf22890a56bb56ff4d05a6ba7c95bbac648b755b22291267589d8261aabd',
+     '6161a03a11c95bbe898fc4b27ae54d9ba3e66eade32fc5fc29e3b75da1f85201'),
+    ('public.static_weekly_v8_read_lunch_segments_dated_base(date)',
+     'static_weekly_v8_read_lunch_segments_dated_base(date)',950170,
+     '8eb43bf71ab7c0bcb60bbf818bd54d77d43a4163fcfa19a4f3962948a7ad3f80',
+     'a38bf3e78db3a49335dd315a33ad98605deeea8638c8d6596a7bc82402795b41')
+  ) v(identity,old_reset_identity,expected_order,prior_sha256,current_sha256)
+  loop
+    public_oid:=to_regprocedure(case when left(wanted.identity,7)='public.'
+      then wanted.identity else 'public.'||wanted.identity end);
+    if public_oid is null or to_regprocedure(wanted.identity) is distinct from public_oid
+      or to_regprocedure(wanted.old_reset_identity) is distinct from public_oid then
+      raise exception 'Current grant serialization target changed: %',wanted.identity;
+    end if;
+    prior_function:=pg_get_functiondef(public_oid);
+    select definition_sql,definition_sha256,restore_order into strict captured
+      from public.custodial_release_authority_restore_inventory
+      where object_kind='grant' and object_identity=wanted.identity;
+    if captured.restore_order is distinct from wanted.expected_order
+      or captured.definition_sha256 is distinct from wanted.prior_sha256
+      or public.static_weekly_digest_text(captured.definition_sql) is distinct from wanted.prior_sha256 then
+      raise exception 'Current grant serialization captured predecessor changed: %',wanted.identity;
+    end if;
+    current_definition:=public.custodial_release_authority_current_grant_definition(wanted.identity);
+    if public.static_weekly_digest_text(current_definition) is distinct from wanted.current_sha256 then
+      raise exception 'Current grant serialization live predecessor changed: %',wanted.identity;
+    end if;
+    old_prefix:=format('select public.custodial_release_authority_reset_grants(%L);',wanted.old_reset_identity);
+    new_prefix:=format('select public.custodial_release_authority_reset_grants(%L);',wanted.identity);
+    if left(captured.definition_sql,length(old_prefix)) is distinct from old_prefix
+      or left(current_definition,length(new_prefix)) is distinct from new_prefix
+      or substring(captured.definition_sql from length(old_prefix)+1)
+        is distinct from substring(current_definition from length(new_prefix)+1) then
+      raise exception 'Current grant serialization is not an exact target-spelling correction: %',wanted.identity;
+    end if;
+    alter table public.custodial_release_authority_restore_inventory
+      disable trigger trg_custodial_release_authority_restore_inventory_immutable;
+    update public.custodial_release_authority_restore_inventory
+      set definition_sql=current_definition,definition_sha256=wanted.current_sha256,
+        captured_at=statement_timestamp()
+      where object_kind='grant' and object_identity=wanted.identity
+        and restore_order=wanted.expected_order and definition_sha256=wanted.prior_sha256
+        and definition_sql=captured.definition_sql;
+    get diagnostics changed=row_count;
+    if changed<>1 then raise exception 'Current grant serialization recovery scope changed: %',wanted.identity;end if;
+    alter table public.custodial_release_authority_restore_inventory
+      enable trigger trg_custodial_release_authority_restore_inventory_immutable;
+    if pg_get_functiondef(public_oid) is distinct from prior_function
+      or public.custodial_release_authority_current_grant_definition(wanted.identity)
+        is distinct from current_definition then
+      raise exception 'Current grant serialization changed live authority: %',wanted.identity;
+    end if;
+    for alias_row in select object_identity,definition_sql,definition_sha256
+      from public.custodial_release_authority_restore_inventory
+      where object_kind='grant' and case when object_kind='grant' and position('(' in object_identity)>0
+        then to_regprocedure(object_identity) end=public_oid
+    loop
+      if alias_row.definition_sha256 is distinct from public.static_weekly_digest_text(alias_row.definition_sql)
+        or alias_row.definition_sql is distinct from
+          public.custodial_release_authority_current_grant_definition(alias_row.object_identity) then
+        raise exception 'Current grant serialization captured alias changed: %',alias_row.object_identity;
+      end if;
+    end loop;
+  end loop;
+end $grant_serialization$;
+
 
 -- Independently named current-module membership, derived from the reviewed
 -- post187 source declarations, not from whichever inventory rows happen to
