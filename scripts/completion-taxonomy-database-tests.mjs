@@ -18,7 +18,9 @@ const cleanup=()=>{if(owned){docker(['rm','-f',container]);owned=false;assert.eq
 for(const signal of ['SIGINT','SIGTERM'])process.once(signal,()=>{try{cleanup()}finally{process.exit(143)}});
 const files=readdirSync('supabase/migrations').filter(file=>file.endsWith('.sql')).sort();
 assert.ok(files.includes('20261003120000_completion_taxonomy_evidence.sql'));
-assert.equal(files.at(-1),'20261003120000_completion_taxonomy_evidence.sql');
+assert.ok(files.includes('20261003143000_issue_constraint_index_recovery.sql'));
+assert.ok(files.indexOf('20261003120000_completion_taxonomy_evidence.sql') <
+  files.indexOf('20261003143000_issue_constraint_index_recovery.sql'));
 const manifest=createHash('sha256').update(files.map(file=>`${file} ${createHash('sha256').update(readFileSync(`supabase/migrations/${file}`)).digest('hex')}`).join('\n')).digest('hex');
 try{
  docker(['image','inspect',image]);
@@ -152,10 +154,8 @@ try{
  const canary='KIOSK_08';
  const pause=JSON.parse(sql(`set role service_role;select public.custodial_control_release_canary(${q(manager)},${q(randomUUID())},${q(canary)},'pause_canary','synthetic taxonomy restore proof','{"ok":false,"scope":"completion-taxonomy"}'::jsonb,${q(secret)});`));
  check('synthetic canary paused for restore',pause.canary_paused,true);
- let restored,globalRestoreHold=null;
- try{restored=JSON.parse(sql(`set role service_role;select public.custodial_control_release_canary(${q(manager)},${q(randomUUID())},${q(canary)},'restore_authority','synthetic taxonomy exact restore','{"ok":false,"scope":"completion-taxonomy"}'::jsonb,${q(secret)});`))}
- catch(error){const tail=String(error.stderr||error);if(!/cannot drop index maintenance_ticket_outcome_history_pkey because constraint maintenance_ticket_outcome_history_pkey/.test(tail))throw error;globalRestoreHold='prior_issue_manager_pkey_inventory';console.log('GLOBAL_RESTORE_HOLD',globalRestoreHold)}
- if(restored){assert.ok(restored.restored_objects>40);checks++;console.log('PASS complete authority restore executed',restored.restored_objects)}
+ const restored=JSON.parse(sql(`set role service_role;select public.custodial_control_release_canary(${q(manager)},${q(randomUUID())},${q(canary)},'restore_authority','synthetic taxonomy exact restore','{"ok":false,"scope":"completion-taxonomy"}'::jsonb,${q(secret)});`));
+ assert.ok(restored.restored_objects>40);checks++;console.log('PASS complete authority restore executed',restored.restored_objects);
  const grantIdentity='public.custodial_manager_completion_evidence(uuid,text,text)';
  const grantDefinition=sql(`select definition_sql from public.custodial_release_authority_restore_inventory where object_kind='grant' and to_regprocedure(object_identity)=${q(grantIdentity)}::regprocedure;`);
  sql(`revoke execute on function ${grantIdentity} from service_role;`);
@@ -170,6 +170,6 @@ try{
  reject('restored guard rejects tampered metadata',`update public.completion_responses set response_json=${j(invalid)} where id=${q(responseId)};`,/completion taxonomy/);
  reject('scoped restore keeps table private',"set role service_role;select * from public.custodial_completion_taxonomy_versions;",/permission denied/);
  reject('scoped restore keeps anonymous RPC denied',`set role anon;select public.custodial_manager_completion_evidence(${q(manager)},'taxonomy-session-1',${q(secret)});`,/permission denied/);
- console.log('GLOBAL_RESTORE_STATUS',globalRestoreHold||'PASS');
+ console.log('GLOBAL_RESTORE_STATUS','PASS');
  console.log('PASS_COUNT',checks);
 }finally{cleanup()}
