@@ -108,9 +108,12 @@ function availableForLunch(context, lunch) {
   const availability=context.availability;
   if (!Array.isArray(availability.qualifications) || !availability.qualificationProvenance
     || !Array.isArray(availability.restrictions) || !availability.restrictionProvenance) return false;
-  if (!availability.lunch) return false;
-  const helperLunch=windowOf(availability.lunch);
-  if(helperLunch.endMinute-helperLunch.startMinute!==60 || !contains(windowOf(availability.shift),helperLunch) || overlap(helperLunch,lunch)) return false;
+  const explicitCapacityNoBreak = context.slot?.kind === 'CONTRACTOR_CAPACITY' && availability.breakChoice === 'NONE' && availability.lunch === null;
+  if (!availability.lunch && !explicitCapacityNoBreak) return false;
+  if (availability.lunch) {
+    const helperLunch=windowOf(availability.lunch);
+    if(helperLunch.endMinute-helperLunch.startMinute!==60 || !contains(windowOf(availability.shift),helperLunch) || overlap(helperLunch,lunch)) return false;
+  }
   return !(availability.blockedWindows||[]).some(window=>overlap(windowOf(window),lunch));
 }
 
@@ -153,6 +156,10 @@ export function deriveLunchCoverageFromPreparedProblem(problem, weeklyAssignment
       const capacityOwner=incumbent?.kind==='CONTRACTOR_CAPACITY';
       if(!incumbent?.personId && !capacityOwner)continue;
       const serviceDate=weekdayDate(problem.serviceDate,day);
+      if (availability.breakChoice === 'NONE') {
+        if (!capacityOwner || availability.lunch !== null) fail('no_break_requires_typed_nonemployee_capacity');
+        continue; // Explicit manager no-break is not a fabricated lunch loan.
+      }
       if(!availability.lunch) {
         lunches.push({serviceDate,dayOfWeek:day,normalOwnerSlotId:ownerSlotId,normalOwnerPersonId:incumbent.personId,
           loanId:digest({policy:POLICY,input:problem.inputDigest,serviceDate,ownerSlotId,missingLunch:true}),window:null,

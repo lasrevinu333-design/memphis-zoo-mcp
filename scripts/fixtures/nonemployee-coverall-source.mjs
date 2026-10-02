@@ -34,3 +34,23 @@ export function nonemployeeCoverAllSource(week = '2026-10-05') {
         restrictions: [], restrictionProvenance: 'explicit synthetic work restriction' }))) }] };
   return { source: JSON.parse(JSON.stringify(source)), employees, capacities, areas };
 }
+
+// A separate real flexible-ownership case. Two normal areas remain active
+// through both lunches. The eventual explicit dated manager lock can replace
+// the second employee with capacity without inventing an employee incumbent.
+export function nonemployeeCoverAllLunchSource(week = '2026-10-05') {
+  const fixture = nonemployeeCoverAllSource(week);
+  const { source, employees, areas } = fixture;
+  source.versions[0].slotAvailability.find(a => a.slotId === employees[1].slot).qualifications = ['general'];
+  source.versions[0].assignments = areas.map((area, i) => ({
+    workId: `${area.code}-continuous`, dayOfWeek: 1, ownerSlotId: employees[i].slot,
+    locationId: area.physical, locationCodeSnapshot: area.code, locationNameSnapshot: area.name,
+    includedLocations: [{ locationId: area.physical, locationNameSnapshot: area.name }],
+    schedulingMode: 'flexible_coverage_ownership', window: { start: '09:45', end: '15:00' },
+    serviceEffortMinutes: 20, serviceEffortProvenance: 'explicit synthetic continuous-area effort',
+    priority: 2, priorityProvenance: 'explicit synthetic priority', requiredQualifications: ['general'],
+    qualificationProvenance: 'explicit synthetic work eligibility', restrictions: [],
+    restrictionProvenance: 'explicit synthetic work restriction',
+  }));
+  return fixture;
+}

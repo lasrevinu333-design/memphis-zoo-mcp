@@ -194,7 +194,9 @@ function requireDayChangeOperations(value) {
       const slotId = text(entry.slotId || entry.slot_id);
       if (!slotId) throw fail("static_weekly_control_plane_day_changes_invalid", `Day change ${index + 1} requires a contractor slot.`);
       if (entry.shift != null && (!entry.shift || typeof entry.shift !== "object" || Array.isArray(entry.shift))) throw fail("static_weekly_control_plane_day_changes_invalid", `Day change ${index + 1} has an invalid contractor shift.`);
-      return { operation: "cover_all", slotId, shift: entry.shift == null ? null : requireWindow(entry.shift, "contractor shift"), reason };
+      const breakChoice = entry.breakChoice ?? entry.break_choice;
+      if (breakChoice != null && breakChoice !== 'NONE') throw fail('static_weekly_contractor_break_choice_invalid');
+      return { operation: "cover_all", slotId, shift: entry.shift == null ? null : requireWindow(entry.shift, "contractor shift"), reason, ...(breakChoice === 'NONE' ? { breakChoice } : {}) };
     }
     throw fail("static_weekly_control_plane_day_changes_invalid", `Day change ${index + 1} has an unsupported operation.`);
   });
@@ -207,13 +209,14 @@ function requireBatchPublicationSource(source, publicationId, versionId) {
   return source;
 }
 
-function contractorAvailabilityFromSource(source, slotId, serviceDate, requestedShift) {
+function contractorAvailabilityFromSource(source, slotId, serviceDate, requestedShift, breakChoice = null) {
   const raw = source?.compiler_input;
   const id = text(slotId);
   const slot = Array.isArray(raw?.slots) ? raw.slots.find((entry) => text(entry?.id) === id && entry?.contractorCapacity === true) : null;
   const weekday = new Date(`${requireDate(serviceDate, "service date")}T00:00:00Z`).getUTCDay();
   const template = Array.isArray(slot?.contractorAvailability) ? slot.contractorAvailability.find((entry) => entry?.dayOfWeek === weekday) : null;
   if (!slot || !template) throw fail("static_weekly_control_plane_contractor_slot_required", "The selected slot is not registered contractor capacity for this service day.");
+  if (breakChoice === 'NONE' && slot.kind !== 'CONTRACTOR_CAPACITY') throw fail('static_weekly_contractor_no_break_typed_capacity_required');
   const requiredText = (field) => {
     const value = text(template[field]);
     if (!value) throw fail("static_weekly_control_plane_contractor_template_invalid", `Contractor capacity is missing ${field}.`);
@@ -225,6 +228,7 @@ function contractorAvailabilityFromSource(source, slotId, serviceDate, requested
   return {
     slotId: id,
     shift: requireWindow(requestedShift || template.shift, "contractor shift"),
+    ...(breakChoice === 'NONE' ? { breakChoice } : {}),
     productiveCapacityProvenance: requiredText("productiveCapacityProvenance"),
     maxServiceEffortMinutes: effort,
     maxServiceEffortProvenance: requiredText("maxServiceEffortProvenance"),
@@ -1163,9 +1167,16 @@ export function createStaticWeeklyControlPlane({
         mutate: () => call(client, "static_weekly_v3_apply_exception", [text(exceptionType), date, startsAt || null, endsAt || null, text(baseVersionId), requirePublicationId(publicationId), text(reason), payload, requireRevision(expectedRevision), actor.managerId, key, reversesExceptionId || null]),
       }));
     },
-    async applyContractorCapacity({ manager, serviceDate, baseVersionId, publicationId, slotId, shift, lunch, reason, expectedRevision, idempotencyKey, projectionWeekStart }) {
+    async applyContractorCapacity({ manager, serviceDate, baseVersionId, publicationId, slotId, shift, lunch, breakChoice, reason, expectedRevision, idempotencyKey, projectionWeekStart }) {
       requireManager(manager);
-      const actualShift=requireWindow(shift,"actual contractor shift"),actualLunch=requireWindow(lunch,"actual contractor lunch");
+      const actualShift=requireWindow(shift,"actual contractor shift");
+      if (breakChoice === 'NONE') {
+        if (lunch != null) throw fail('static_weekly_contractor_break_choice_invalid', 'No-break cannot also contain a lunch window.');
+        return this.applyDayChanges({manager,serviceDate,baseVersionId,publicationId,expectedRevision,idempotencyKey,projectionWeekStart,
+          operations:[{operation:'cover_all',slotId,shift:actualShift,breakChoice:'NONE',reason}]});
+      }
+      if (breakChoice != null && breakChoice !== 'SCHEDULED') throw fail('static_weekly_contractor_break_choice_invalid');
+      const actualLunch=requireWindow(lunch,"actual contractor lunch");
       const minutes=t=>Number(t.slice(0,2))*60+Number(t.slice(3));
       if(minutes(actualLunch.end)-minutes(actualLunch.start)!==60||actualLunch.start<actualShift.start||actualLunch.end>actualShift.end){
         throw fail("static_weekly_contractor_actual_lunch_required","Enter the actual one-hour CoverAll lunch within its shift; no lunch time is assumed.");
@@ -1202,7 +1213,7 @@ export function createStaticWeeklyControlPlane({
         // a malformed CoverAll entry therefore cannot leave a call-out prefix.
         const source = requireBatchPublicationSource(await sourceFor(client, effectivePublicationId, date), effectivePublicationId, effectiveVersionId);
         const commands = requestedOperations.map((operation, index) => operation.operation === "cover_all"
-          ? { ...operation, payload: { availability: contractorAvailabilityFromSource(source, operation.slotId, date, operation.shift) }, idempotencyKey: dayChangeOperationIdempotencyKey(key, index) }
+          ? { ...operation, payload: { availability: contractorAvailabilityFromSource(source, operation.slotId, date, operation.shift, operation.breakChoice) }, idempotencyKey: dayChangeOperationIdempotencyKey(key, index) }
           : { ...operation, idempotencyKey: dayChangeOperationIdempotencyKey(key, index) });
         let revision = initialRevision;
         const mutations = [];

@@ -261,7 +261,7 @@ function apply(state, item) {
   const payload = item.payload || {}; const slotId = text(payload.slotId || item.slotId); const window = item.window || payload.window;
   if (["pto", "daily_absence", "partial_absence"].includes(item.type)) { const prior = state.availability.get(slotId) || { slotId }; state.availability.set(slotId, !window ? { ...prior, status: "absent", blockedWindows: [{ start: "00:00", end: "23:59" }] } : { ...prior, blockedWindows: [...array(prior.blockedWindows), normalizeWindow(window, "absence window")] }); if (!window) state.fullDayAbsenceSlotIds.push(slotId); }
   else if (item.type === "shift_override") { const prior = state.availability.get(slotId) || { slotId }; state.availability.set(slotId, { ...prior, status: payload.status || prior.status || "working", shift: normalizeWindow(payload.shift || window, "shift override") }); }
-  else if (item.type === "cover_all") { const supplied = structuredClone(payload.availability || payload); const cover = text(supplied.slotId || slotId); state.availability.set(cover, { ...(state.availability.get(cover) || {}), ...supplied, slotId: cover, status: "working" }); state.contractorCoverageSlotIds.push(cover); }
+  else if (item.type === "cover_all") { const supplied = structuredClone(payload.availability || payload); const cover = text(supplied.slotId || slotId); if (supplied.breakChoice === 'NONE') supplied.lunch = null; state.availability.set(cover, { ...(state.availability.get(cover) || {}), ...supplied, slotId: cover, status: "working" }); state.contractorCoverageSlotIds.push(cover); }
   else if (item.type === "lunch") { const prior = state.availability.get(slotId) || { slotId }; state.availability.set(slotId, { ...prior, lunch: normalizeWindow(payload.lunch || window, "lunch") }); }
   else if (["nine_forty_five_rebalance", "manager_correction"].includes(item.type)) for (const lock of array(payload.locks || payload.assignments || (payload.workId ? [payload] : []))) state.locks.set(text(lock.workId || lock.id), text(lock.slotId || lock.ownerSlotId));
   else if (item.type === "event_impact") {
@@ -401,6 +401,9 @@ export function verifyStaticWeeklyScheduleResult(input = {}, result = {}, deadli
       const key = `${day}:${item.workId}`; if (!validWork(item)) push(violations, "missing_or_incompatible_provenance", { planWorkId: key }); expected.set(key, { ...item, key, day });
     }
     for (const [slotId, item] of state.availability) {
+      if (Object.hasOwn(item, 'breakChoice') && (item.breakChoice !== 'NONE' || item.lunch !== null
+        || slotById.get(slotId)?.kind !== 'CONTRACTOR_CAPACITY'
+        || !exceptionSet(normalizedInput.exceptions, occurrenceDate, version, violations).some(e => e.type === 'cover_all' && e.payload?.availability?.slotId === slotId && e.payload.availability.breakChoice === 'NONE'))) push(violations, 'no_break_requires_typed_nonemployee_capacity', { dayOfWeek: day, slotId });
       if (isDatedVacant(day, slotId) && item?.status !== "vacant_unfilled") push(violations, "vacant_slot_availability_mismatch", { dayOfWeek: day, slotId, status: item?.status || null });
       if (!isDatedVacant(day, slotId) && item?.status === "vacant_unfilled") push(violations, "vacant_slot_not_declared", { dayOfWeek: day, slotId });
       if (item?.status === "working" && !validEligibilityAuthority(item)) push(violations, "working_slot_missing_eligibility_provenance", { dayOfWeek: day, slotId });

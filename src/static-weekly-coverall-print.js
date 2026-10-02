@@ -28,7 +28,8 @@ export function createCoverAllPrintDocument({snapshot,source,lunch,serviceDate,e
   const id=e.payload?.availability?.slotId,slot=contractorSlots.get(id);
   if(!slot)fail('coverall_print_registered_capacity_required');
   if(slot.kind==='CONTRACTOR_CAPACITY')snapshotContractorCapacity(slot,serviceDate);
-  return {slotId:id,name:text(slot.label)||'CoverAll',shift:{...window(e.payload.availability.shift)},lunch:null,periods:[]};
+  if (e.payload.availability.breakChoice === 'NONE' && slot.kind !== 'CONTRACTOR_CAPACITY') fail('coverall_print_no_break_requires_typed_capacity');
+  return {slotId:id,name:text(slot.label)||'CoverAll',shift:{...window(e.payload.availability.shift)},lunch:null,periods:[],...(e.payload.availability.breakChoice === 'NONE'?{breakChoice:'NONE'}:{})};
  });
  if(new Set(contractors.map(c=>c.slotId)).size!==contractors.length)fail('coverall_print_duplicate_capacity');
  const rows=list(projection.assignments).filter(r=>r.service_date===serviceDate);
@@ -66,6 +67,7 @@ export function createCoverAllPrintDocument({snapshot,source,lunch,serviceDate,e
  for(const c of contractors){
   const ownLunch=list(lunch.loans).filter(l=>l.normal_owner_slot_id===c.slotId&&l.service_date===serviceDate);
   if(ownLunch.length>1)fail('coverall_print_duplicate_lunch');
+  if(c.breakChoice==='NONE'&&ownLunch.length)fail('coverall_print_no_break_conflicts_with_lunch');
   if(ownLunch.length)c.lunch={start:ownLunch[0].coverage_start,end:ownLunch[0].coverage_end};
   const own=segments.filter(s=>s.owner===c.slotId);
   if(own.some(s=>s.start<c.shift.startMinute||s.end>c.shift.endMinute))fail('coverall_print_work_outside_actual_shift');
@@ -116,7 +118,7 @@ export async function renderCoverAllPdfPair(document){
    newPage();line('MEMPHIS ZOO',10,true);line(`${t.title} - ${c.name}`,19,true);
    line(`${t.date}: ${document.serviceDate} | ${t.revision}: ${document.authorityRevision}`,11,true);
    line(`${t.shift}: ${c.shift.start} - ${c.shift.end}`,12,true);
-   line(`${t.lunch}: ${c.lunch?c.lunch.start+' - '+c.lunch.end:t.unpublished}`);line(t.note);y-=10;
+   line(`${t.lunch}: ${c.breakChoice==='NONE'?(language==='es'?'Sin descanso: elección explícita del encargado.':'No break: explicit manager choice.'):c.lunch?c.lunch.start+' - '+c.lunch.end:t.unpublished}`);line(t.note);y-=10;
    for(const period of c.periods){
     if(y<115)newPage();line(`${period.start} - ${period.end}`,13,true);
     if(!period.areas.length)line(t.empty);

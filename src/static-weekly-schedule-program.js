@@ -935,6 +935,10 @@ function applyException(state, exception) {
     state.availability.set(slotId, { ...prior, status: payload.status || prior.status || "working", shift: normalizeWindow(payload.shift || window, "shift override") });
   } else if (exception.type === "cover_all") {
     const supplied = clone(payload.availability || payload); const coverSlotId = text(supplied.slotId || slotId);
+    if (supplied.breakChoice === 'NONE') {
+      // The exact typed source is checked during problem construction below.
+      supplied.lunch = null;
+    }
     state.availability.set(coverSlotId, { ...(state.availability.get(coverSlotId) || {}), ...supplied, slotId: coverSlotId, status: "working" });
     state.contractorCoverageSlotIds.push(coverSlotId);
   } else if (exception.type === "lunch") {
@@ -1130,6 +1134,13 @@ export function prepareStaticWeeklySchedulingProblem(input, deadline = null) {
     try {
       overlays = activeExceptions(exceptions, date, version);
       overlays.forEach((item) => applyException(state, item));
+      for (const [slotId, availability] of state.availability) {
+        if (Object.hasOwn(availability, 'breakChoice') && (availability.breakChoice !== 'NONE'
+          || availability.lunch !== null || slots.find(slot => slot.id === slotId)?.kind !== 'CONTRACTOR_CAPACITY'
+          || !overlays.some(item => item.type === 'cover_all' && item.payload?.availability?.slotId === slotId && item.payload.availability.breakChoice === 'NONE'))) {
+          throw Object.assign(new Error('No-break requires explicit dated manager activation of typed nonemployee capacity.'), { code: 'no_break_requires_typed_nonemployee_capacity' });
+        }
+      }
       applyCustodialAbsenceCoveragePolicy(state, new Map(slots.map((slot) => [slot.id, slot])));
     } catch (error) { return { error: programReason(error.code || "invalid_exception_overlay", { message: error.message }) }; }
     applied.push(...state.applied); states.set(day, state);
