@@ -11,6 +11,19 @@ import {runStaticWeeklyRecurringPhaseAuthorityTests,
 assert.equal(runRecurringPrimitiveObjectiveTests(), 25);
 assert.equal(runRecurringIdentityRadixTests(), 17);
 
+const invocationOutput = execFileSync(process.execPath, ['--max-old-space-size=256',
+  '--wasm-max-mem-pages=1536', '--max-semi-space-size=4',
+  fileURLToPath(new URL('./static-weekly-recurring-phase-authority-tests.mjs', import.meta.url)),
+  '--invocation-facts'], {encoding:'utf8',timeout:60000,maxBuffer:1024*1024,
+  env:{PATH:process.env.PATH,LANG:'C.UTF-8'}});
+const invocation = JSON.parse(invocationOutput.trim().split('\n').at(-1));
+process.stdout.write(invocationOutput);
+assert.equal(invocation.checks, 14);
+assert.equal(invocation.realTinySolverRuns, 2);
+assert.equal(invocation.solverCalls, 6);
+for (const key of ['solverOptimaCached','canonicalWitnessCached','crossRequestCache'])
+  assert.equal(invocation[key], false);
+
 const receipt = runStaticWeeklyRecurringPhaseAuthorityTests();
 assert.equal(receipt.status, 'PASS');
 assert.equal(receipt.checks, 55);
