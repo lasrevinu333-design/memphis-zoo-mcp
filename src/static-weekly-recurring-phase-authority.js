@@ -208,6 +208,146 @@ export function assertRecurringPhaseMinimum({proof,...input}){
 // source witness. Otherwise this path returns UNKNOWN, never a relaxed PASS.
 const scalarExpression=terms=>terms.length?terms.map(([n,v])=>`${n<0?'-':'+'} ${Math.abs(n)} ${v}`).join(' ').replace(/^\+ /,''):'0';
 const codeUnitCompare=(a,b)=>a<b?-1:a>b?1:0;
+export const RECURRING_IDENTITY_RADIX_CHUNK_SIZE=3;
+export function createRecurringIdentityRadixLayout({ownerRadix,orderedWorkIds,chunkSize=RECURRING_IDENTITY_RADIX_CHUNK_SIZE}){
+ requireFact(Number.isSafeInteger(ownerRadix)&&ownerRadix>=1&&Number.isSafeInteger(chunkSize)&&chunkSize>=1&&chunkSize<=6,
+  'Explicit safe positive identity radix/chunk required.');
+ requireFact(Array.isArray(orderedWorkIds)&&orderedWorkIds.every(v=>typeof v==='string'&&v.length>0)
+  &&new Set(orderedWorkIds).size===orderedWorkIds.length,'Explicit unique ordered work identities required.');
+ const chunks=[];
+ for(let offset=0;offset<orderedWorkIds.length;offset+=chunkSize){const ids=orderedWorkIds.slice(offset,offset+chunkSize),
+  multipliers=ids.map((_,i)=>BigInt(ownerRadix)**BigInt(ids.length-i-1));
+  requireFact(multipliers.every(n=>n<=BigInt(Number.MAX_SAFE_INTEGER))
+   &&BigInt(ownerRadix)**BigInt(ids.length)-1n<=BigInt(Number.MAX_SAFE_INTEGER),'Identity radix objective overflow.');
+  chunks.push({offset,orderedWorkIds:ids,multipliers:multipliers.map(Number)});
+ }
+ const body={schema:'custodial.recurring-identity-radix-layout.v1',ownerRadix,orderedWorkIds:clone(orderedWorkIds),chunkSize,chunks,
+  order:'COMPLETE_EXISTING_CODE_UNIT_LEXVECTOR',prioritiesChanged:false};return {...body,layoutDigest:digest(body)};
+}
+export function assertRecurringIdentityRadixEncoding({layout,ownerIndexes,expectedOrderedWorkIds}){
+ requireFact(canonicalJson(layout.orderedWorkIds)===canonicalJson(expectedOrderedWorkIds),'Identity omission/reordering changed.');
+ const exact=createRecurringIdentityRadixLayout({ownerRadix:layout.ownerRadix,orderedWorkIds:expectedOrderedWorkIds,chunkSize:layout.chunkSize});
+ requireFact(canonicalJson(layout)===canonicalJson(exact)&&Array.isArray(ownerIndexes)&&ownerIndexes.length===expectedOrderedWorkIds.length
+  &&ownerIndexes.every(n=>Number.isSafeInteger(n)&&n>=0&&n<layout.ownerRadix),'Identity radix layout/vector changed.');
+ const chunkObjectives=layout.chunks.map(c=>c.multipliers.reduce((n,m,i)=>n+BigInt(m)*BigInt(ownerIndexes[c.offset+i]),0n));
+ let reconstructed=0n;for(const [i,c]of layout.chunks.entries())reconstructed=reconstructed*BigInt(layout.ownerRadix)**BigInt(c.orderedWorkIds.length)+chunkObjectives[i];
+ const original=ownerIndexes.reduce((n,i)=>n*BigInt(layout.ownerRadix)+BigInt(i),0n);
+ requireFact(reconstructed===original,'Identity radix exact reconstruction changed.');
+ return {chunkObjectives:chunkObjectives.map(Number),completeLexvectorInteger:String(original)};
+}
+export function assertRecurringPhaseIdentityEncoding({proof,ownerConfig}){
+ const raw=proof.lowerBoundEvidence||proof,d=raw.descriptor,keys=Object.keys(ownerConfig.slots).sort(),
+  keyBySlot=new Map(keys.map(k=>[ownerConfig.slots[k].slotId,k])),packages=new Map(d.packages.map(p=>[p.workId,p])),
+  owners=d.owners.slice().sort((a,b)=>codeUnitCompare(keyBySlot.get(a.slotId),keyBySlot.get(b.slotId))),
+  choices=d.choices.slice().sort((a,b)=>codeUnitCompare(packages.get(a.workId).family,packages.get(b.workId).family));
+ requireFact(d.configDigest===digest(ownerConfig)&&owners.every(o=>keyBySlot.has(o.slotId)),'Identity current owner/config binding changed.');
+ const layout=createRecurringIdentityRadixLayout({ownerRadix:owners.length,orderedWorkIds:choices.map(c=>c.workId)}),
+  selection=new Map(raw.selectedOwnership.map(s=>[s.workId,s.slotId]));
+ requireFact(selection.size===raw.selectedOwnership.length&&selection.size===choices.length,'Identity ownership multiplicity changed.');
+ const vector=choices.map(c=>{const slotId=selection.get(c.workId);requireFact(c.owners.some(o=>o.slotId===slotId),'Identity selection not eligible.');
+  return owners.findIndex(o=>o.slotId===slotId);});
+ const encoding=assertRecurringIdentityRadixEncoding({layout,ownerIndexes:vector,expectedOrderedWorkIds:choices.map(c=>c.workId)});
+ requireFact(canonicalJson(raw.identityLayout)===canonicalJson(layout)&&canonicalJson(raw.identityEncoding)===canonicalJson(encoding)
+  &&canonicalJson(raw.stableIdentity)===canonicalJson(vector)&&canonicalJson(proof.stableIdentity)===canonicalJson(vector),'Identity layout/vector/encoding changed.');
+ const identityTiers=raw.tiers.filter(t=>t.name.startsWith('inherited_identity_'));
+ requireFact(identityTiers.length===layout.chunks.length,'Missing/extra identity tier.');const originalTerms=[];
+ for(const [chunkIndex,chunk]of layout.chunks.entries()){
+  const terms=choices.slice(chunk.offset,chunk.offset+chunk.orderedWorkIds.length).flatMap((c,i)=>owners.flatMap((o,j)=>
+   j&&c.owners.some(x=>x.slotId===o.slotId)?[[j*chunk.multipliers[i],`phase_x_${chunk.offset+i}_${j}`]]:[]));
+  const tier=identityTiers[chunkIndex],values=new Map(tier.integerWitness);
+  requireFact(tier.name===`inherited_identity_${chunk.offset}`&&tier.model.name===tier.name&&tier.model.descriptorDigest===d.descriptorDigest
+   &&tier.modelDigest===digest(tier.model)&&canonicalJson(tier.model.terms)===canonicalJson(terms),'Identity tier model/order/coefficients changed.');
+  const objective=exactPreferenceObjective(terms,values);
+  requireFact(objective===encoding.chunkObjectives[chunkIndex]&&tier.objectiveValue===objective,'Identity raw objective/witness mismatch.');
+  for(const [i,prior]of originalTerms.entries())requireFact(tier.model.rows.some(r=>r.name===`phase_fixed_${i+3}`&&r.relation==='='
+   &&r.value===encoding.chunkObjectives[i]&&canonicalJson(r.terms)===canonicalJson(prior)),'Prior exact identity equality changed.');
+  originalTerms.push(terms);
+ }
+ return {layout,encoding};
+}
+// Positive primitive scaling is algebra only: original100/4/2 units and
+// subsequent fixed equalities remain unchanged. Never round a terminal bound.
+export function createRecurringPreferencePrimitiveObjective(terms,binary){
+ requireFact(Array.isArray(terms)&&Array.isArray(binary)&&new Set(binary).size===binary.length,'Explicit unique binary objective domain required.');
+ requireFact(binary.every(v=>typeof v==='string'&&v.length>0),'Explicit binary variable names required.');
+ const domain=new Set(binary),seen=new Set();let divisor=0n;
+ const gcd=(a,b)=>{while(b){const r=a%b;a=b;b=r;}return a;};
+ for(const t of terms){requireFact(Array.isArray(t)&&t.length===2&&Number.isSafeInteger(t[0])&&t[0]>0
+  &&typeof t[1]==='string'&&domain.has(t[1])&&!seen.has(t[1]),'Preference coefficient/identity must be unique positive safe integer binary terms.');
+  seen.add(t[1]);divisor=gcd(divisor,BigInt(t[0]));}
+ if(divisor===0n)divisor=1n;
+ const primitiveTerms=terms.map(([n,v])=>[Number(BigInt(n)/divisor),v]);
+ const body={schema:'custodial.recurring-preference-primitive-objective.v1',originalUnit:'INHERITED_PREFERENCE_100_4_2_POINTS',
+  primitiveUnit:'POSITIVE_INTEGER_GCD_SCALED_PREFERENCE_POINTS',positiveDivisor:Number(divisor),
+  originalTerms:clone(terms),primitiveTerms,originalTermsDigest:digest(terms),primitiveTermsDigest:digest(primitiveTerms),
+  sameMinimizers:true,prioritiesChanged:false,fixedEqualityUsesOriginalTerms:true};
+ return {...body,normalizationDigest:digest(body)};
+}
+function exactPreferenceObjective(terms,values){
+ const n=terms.reduce((sum,[c,v])=>{requireFact(values.has(v)&&[0,1].includes(values.get(v)),'Preference binary witness missing/nonbinary.');
+  return sum+BigInt(c)*BigInt(values.get(v));},0n);
+ requireFact(n>=0n&&n<=BigInt(Number.MAX_SAFE_INTEGER),'Preference objective reconstruction overflow.');return Number(n);
+}
+export function assertRecurringPreferencePrimitiveWitness({terms,binary,normalization,integerWitness,primitiveObjectiveValue,originalScaleObjectiveValue}){
+ const expected=createRecurringPreferencePrimitiveObjective(terms,binary);
+ requireFact(canonicalJson(normalization)===canonicalJson(expected),'Primitive transformation changed.');
+ requireFact(Array.isArray(integerWitness)&&integerWitness.every(t=>Array.isArray(t)&&t.length===2),'Explicit primitive witness required.');
+ const values=new Map(integerWitness);
+ requireFact(values.size===integerWitness.length&&[...values].every(([v,n])=>Number.isSafeInteger(n)
+  &&(binary.includes(v)?[0,1].includes(n):v==='phase_spread'&&n>=0))
+  &&binary.every(v=>values.has(v)),'Primitive witness domain/integrality changed.');
+ const primitive=exactPreferenceObjective(expected.primitiveTerms,values),original=exactPreferenceObjective(terms,values);
+ requireFact(BigInt(primitive)*BigInt(expected.positiveDivisor)===BigInt(original)
+  &&primitiveObjectiveValue===primitive&&originalScaleObjectiveValue===original,'Primitive/original objective reconstruction changed.');
+ return {normalization:expected,primitiveObjectiveValue:primitive,originalScaleObjectiveValue:original};
+}
+function inheritedPreferenceTerms({descriptor,source,ownerConfig,fullOwners}){
+ const keys=Object.keys(ownerConfig.slots).sort(),keyBySlot=new Map(keys.map(k=>[ownerConfig.slots[k].slotId,k]));
+ const owners=descriptor.owners.slice().sort((a,b)=>codeUnitCompare(keyBySlot.get(a.slotId),keyBySlot.get(b.slotId))),
+  packages=new Map(descriptor.packages.map(p=>[p.workId,p])),
+  choices=descriptor.choices.slice().sort((a,b)=>codeUnitCompare(packages.get(a.workId).family,packages.get(b.workId).family)),terms=[],binary=[];
+ for(const [i,c]of choices.entries())for(const [j,o]of owners.entries())if(c.owners.some(x=>x.slotId===o.slotId)){
+  const pkg=packages.get(c.workId),rows=version(source).assignments.filter(r=>r.workId===c.workId);
+  requireFact(rows.length===1&&rows[0].dayOfWeek===descriptor.dayOfWeek&&canonicalJson(packageFact(rows[0],ownerConfig))===canonicalJson(pkg),'Preference original source package drift.');
+  const key=keyBySlot.get(o.slotId),guided=fullOwners?.[String(descriptor.dayOfWeek)]?.equalized?.[pkg.family];
+  requireFact(typeof guided==='string'&&keys.includes(guided),'Exact existing full-position guidance missing.');
+  const cost=((rows[0].originSlotId||rows[0].ownerSlotId)!==o.slotId?100:0)+(guided!==key?4:0)
+   +(ownerConfig.slots[key].normalAssignmentFamilies?.includes(pkg.family)?0:2);
+  const name=`phase_x_${i}_${j}`;binary.push(name);if(cost)terms.push([cost,name]);
+ }return {terms,binary};
+}
+export function assertRecurringPhasePreferenceNormalization({proof,source,ownerConfig,fullOwners}){
+ const rawProof=proof.lowerBoundEvidence||proof,d=rawProof.descriptor,{descriptorDigest,...descriptorBody}=d;
+ const semantic=x=>Object.fromEntries(Object.entries(x).filter(([k])=>!['sourceDigest','descriptorDigest','fixedSourceRowsDigest'].includes(k)));
+ requireFact(digest(descriptorBody)===descriptorDigest&&d.configDigest===digest(ownerConfig)
+  &&rawProof.fullOwnersDigest===digest(fullOwners)&&canonicalJson(semantic(d))===canonicalJson(semantic(proof.descriptor))
+  &&proof.preferenceCost===rawProof.preferenceCost,'Preference descriptor/config/guidance binding changed.');
+ // Recover the exact raw invocation from its complete witness candidate plus
+ // the ORIGINAL accepted-day rows. This also checks choices/owners, rather
+ // than accepting a rehashed caller descriptor as its own authority.
+ requireFact(rawProof.candidateSource&&rawProof.candidateSourceDigest===digest(rawProof.candidateSource),'Preference raw witness source changed.');
+ const invocation=clone(rawProof.candidateSource),referenceRows=version(source).assignments,
+  originalByFamily=new Map(d.selectedWorkIds.map(id=>{const r=referenceRows.find(r=>r.workId===id);requireFact(r,'Preference original work identity missing.');return[r.locationCodeSnapshot,r];}));
+ version(invocation).assignments=version(invocation).assignments.map(r=>r.dayOfWeek===d.dayOfWeek&&r.window.start==='09:45'&&originalByFamily.has(r.locationCodeSnapshot)
+  ?clone(originalByFamily.get(r.locationCodeSnapshot)):r);
+ requireFact(canonicalJson(createRecurringPhaseDescriptor({source:invocation,ownerConfig,dayOfWeek:d.dayOfWeek,selectedWorkIds:d.selectedWorkIds}))===canonicalJson(d),
+  'Preference descriptor differs from exact original-day/fixed-other-day recomputation.');
+ const tier=rawProof.tiers?.find(t=>t.name==='inherited_preference');requireFact(tier,'Preference tier missing.');
+ const {terms,binary}=inheritedPreferenceTerms({descriptor:d,source,ownerConfig,fullOwners});
+ requireFact(canonicalJson(tier.model.binary)===canonicalJson(binary),'Preference binary domain drift.');
+ const reconstructed=assertRecurringPreferencePrimitiveWitness({terms,binary,normalization:tier.objectiveNormalization,
+  integerWitness:tier.integerWitness,primitiveObjectiveValue:tier.objectiveValue,originalScaleObjectiveValue:tier.originalScaleObjectiveValue}),
+  expected=reconstructed.normalization,primitive=reconstructed.primitiveObjectiveValue,original=reconstructed.originalScaleObjectiveValue;
+ requireFact(canonicalJson(tier.objectiveNormalization)===canonicalJson(expected)
+  &&canonicalJson(tier.model.objectiveNormalization)===canonicalJson(expected)
+  &&canonicalJson(tier.model.terms)===canonicalJson(expected.primitiveTerms)
+  &&tier.model.descriptorDigest===descriptorDigest&&tier.modelDigest===digest(tier.model),'Preference primitive model/receipt drift.');
+ requireFact(proof.preferenceCost===original,'Preference primitive/original objective mismatch.');
+ const next=rawProof.tiers[rawProof.tiers.indexOf(tier)+1];
+ requireFact(next?.model.rows.some(r=>r.name==='phase_fixed_2'&&r.relation==='='&&r.value===original
+  &&canonicalJson(r.terms)===canonicalJson(terms)),'Original-scale preference fixed equality missing.');
+ return {normalization:expected,primitiveObjectiveValue:primitive,originalScaleObjectiveValue:original};
+}
 const pinnedPhaseSolver={package:'highs@1.15.2',packageJsonSha256:'21e76a89d13d636f56d5cdda7dde590acd48d6fb683c97a327c10d43e74d9c56',
  wrapperJavaScriptSha256:'6d5be3ed3cbd1ce1924cc66cc9302b50753dabdb8c6e0e815845dce7f1890033',
  wasmSha256:'7e6432b2b26f4fab9f6d9bac55da43307c7a4b1b071cb204cb4d23e1901bc4d0',embeddedRuntimeBanner:'HiGHS 1.15.1 (git hash: 04024d7)'};
@@ -297,9 +437,12 @@ export function solveRecurringPhaseCanonicalMinimum({source,ownerConfig,fullOwne
   bounds.push(`0 <= phase_spread <= ${maximum}`);
   const run=(name,terms)=>{
    const remaining=budgetMs-(performance.now()-started);requireFact(remaining>0,'Phase total time bound exhausted.');
-   const body={descriptorDigest:descriptor.descriptorDigest,name,terms,rows:[...constraints,...bindings],binary,general:['phase_spread'],bounds};
+   const normalization=name==='inherited_preference'?createRecurringPreferencePrimitiveObjective(terms,binary):null,
+    actualTerms=normalization?.primitiveTerms||terms;
+   const body={descriptorDigest:descriptor.descriptorDigest,name,terms:actualTerms,rows:[...constraints,...bindings],binary,general:['phase_spread'],bounds,
+    ...(normalization?{objectiveNormalization:normalization}:{})};
    const attestation={schema:'custodial.recurring-phase-lower-bound-model.v1',modelDigest:digest(body),descriptorDigest:descriptor.descriptorDigest};
-   const lp=`Minimize\n phase_objective: ${scalarExpression(terms)}\nSubject To\n${body.rows.map(r=>` ${r.name}: ${scalarExpression(r.terms)} ${r.relation} ${r.value}`).join('\n')}\nBounds\n ${bounds.join('\n ')}\nGeneral\n phase_spread\nBinary\n ${binary.join(' ')}\nEnd\n`;
+   const lp=`Minimize\n phase_objective: ${scalarExpression(actualTerms)}\nSubject To\n${body.rows.map(r=>` ${r.name}: ${scalarExpression(r.terms)} ${r.relation} ${r.value}`).join('\n')}\nBounds\n ${bounds.join('\n ')}\nGeneral\n phase_spread\nBinary\n ${binary.join(' ')}\nEnd\n`;
    const solved=solver.solve(lp,{timeLimitSeconds:remaining/1000,modelAttestation:attestation});
    lastSolverAttempt={name,model:body,modelDigest:attestation.modelDigest,lpDigest:contentDigestBytes(lp),
     status:solved?.result?.Status,rawReceiptDigest:solved?.evidence?.rawReceiptDigest,
@@ -309,9 +452,16 @@ export function solveRecurringPhaseCanonicalMinimum({source,ownerConfig,fullOwne
    requireFact(binary.every(v=>[0,1].includes(values.get(v)))&&values.get('phase_spread')>=0&&values.get('phase_spread')<=maximum,'Phase primal bounds violated.');
    for(const row of body.rows){const n=row.terms.reduce((x,[c,v])=>x+BigInt(c)*BigInt(values.get(v)),0n),rhs=BigInt(row.value);
     requireFact(row.relation==='='?n===rhs:row.relation==='<='?n<=rhs:n>=rhs,'Phase primal exact row violation.');}
-   const optimum=terms.reduce((n,[c,v])=>n+c*values.get(v),0);requireFact(Number.isSafeInteger(optimum),'Phase objective range unsupported.');
-   checkPhaseTerminal(solved,optimum,attestation);
-   const receipt={name,model:body,modelDigest:attestation.modelDigest,lpDigest:contentDigestBytes(lp),objectiveValue:optimum,
+   const sum=actualTerms.reduce((n,[c,v])=>n+BigInt(c)*BigInt(values.get(v)),0n);
+   requireFact(sum>=0n&&sum<=BigInt(Number.MAX_SAFE_INTEGER),'Phase objective range unsupported.');const primitiveOptimum=Number(sum);
+   const original=terms.reduce((n,[c,v])=>n+BigInt(c)*BigInt(values.get(v)),0n),reconstructed=sum*BigInt(normalization?.positiveDivisor||1);
+   requireFact(original===reconstructed&&original<=BigInt(Number.MAX_SAFE_INTEGER),'Original-scale preference reconstruction mismatch/overflow.');const optimum=Number(original);
+   Object.assign(lastSolverAttempt,{integerWitness:[...values],expectedPrimitiveObjectiveValue:primitiveOptimum,
+    expectedOriginalScaleObjectiveValue:optimum,objectPrimalObjective:solved.evidence?.objectPrimalObjective,
+    ...(normalization?{objectiveNormalization:normalization}:{})});
+   checkPhaseTerminal(solved,primitiveOptimum,attestation);
+   const receipt={name,model:body,modelDigest:attestation.modelDigest,lpDigest:contentDigestBytes(lp),objectiveValue:primitiveOptimum,
+    ...(normalization?{objectiveNormalization:normalization,originalScaleObjectiveValue:optimum}:{}),
     integerWitness:[...values],rawReceiptDigest:solved.evidence.rawReceiptDigest,terminalReport:solved.evidence.terminalReport,
     solverIdentity:solved.identity,solverOptions:solved.options};tiers.push(receipt);
    bindings.push({name:`phase_fixed_${tiers.length}`,terms,relation:'=',value:optimum});return {values,optimum};
@@ -322,8 +472,9 @@ export function solveRecurringPhaseCanonicalMinimum({source,ownerConfig,fullOwne
   // Smaller radix chunks preserve the identical complete code-unit lexvector
   // while avoiding unnecessarily large floating SDK objective sums. Terminal
   // integer bounds and inherited1e-9 tolerances are unchanged.
-  for(let offset=0;offset<choices.length;offset+=6){const chunk=choices.slice(offset,offset+6);
-   const terms=chunk.flatMap((c,i)=>options.filter(o=>o.workId===c.workId&&o.ownerIndex).map(o=>[o.ownerIndex*owners.length**(chunk.length-i-1),o.name]));
+  const identityLayout=createRecurringIdentityRadixLayout({ownerRadix:owners.length,orderedWorkIds:choices.map(c=>c.workId)});
+  for(const layoutChunk of identityLayout.chunks){const offset=layoutChunk.offset,chunk=choices.slice(offset,offset+layoutChunk.orderedWorkIds.length);
+   const terms=chunk.flatMap((c,i)=>options.filter(o=>o.workId===c.workId&&o.ownerIndex).map(o=>[o.ownerIndex*layoutChunk.multipliers[i],o.name]));
    requireFact(terms.every(([n])=>Number.isSafeInteger(n)),'Phase tie coefficient range unsupported.');
    final=run(`inherited_identity_${offset}`,terms);
   }
@@ -336,9 +487,13 @@ export function solveRecurringPhaseCanonicalMinimum({source,ownerConfig,fullOwne
   requireFact(actualSpread===min.optimum,'Canonical spread does not attain relaxed lower bound.');
   const actualCost=options.filter(o=>final.values.get(o.name)===1).reduce((n,o)=>n+o.cost,0);
   requireFact(actualCost===preference.optimum,'Canonical preference does not attain relaxed lower bound.');
+  const stableIdentity=choices.map(c=>options.find(o=>o.workId===c.workId&&final.values.get(o.name)===1).ownerIndex),
+   identityEncoding=assertRecurringIdentityRadixEncoding({layout:identityLayout,ownerIndexes:stableIdentity,expectedOrderedWorkIds:choices.map(c=>c.workId)});
+  requireFact(canonicalJson(tiers.filter(t=>t.name.startsWith('inherited_identity_')).map(t=>t.objectiveValue))===canonicalJson(identityEncoding.chunkObjectives),
+   'Complete identity vector does not match each strict fixed radix tier.');
   const body={...basis,status:'PROVEN_CANONICAL_PHASE_MINIMUM',minimumDoubledSpread:min.optimum,halfUnitFeasible:min.optimum<=1,
-   preferenceCost:actualCost,stableIdentity:choices.map(c=>options.find(o=>o.workId===c.workId&&final.values.get(o.name)===1).ownerIndex),
-   tiers,selectedOwnership:selection,candidateSource,candidateSourceDigest:digest(candidateSource),canonicalHardWitness:canonical,
+   preferenceCost:actualCost,stableIdentity,identityEncoding,
+   tiers,identityLayout,selectedOwnership:selection,candidateSource,candidateSourceDigest:digest(candidateSource),canonicalHardWitness:canonical,
    minimumClaimScope:'EXACT_SELECTED_PACKAGES_ONLY_OTHER_MORNING_AND_DAYS_FIXED_NOT_GLOBAL_REDESIGN',
    independentlyMatchedCanonicalWitness:true,solver:true,admitted:false,budgetMs};
   return {...body,proofDigest:digest(body)};

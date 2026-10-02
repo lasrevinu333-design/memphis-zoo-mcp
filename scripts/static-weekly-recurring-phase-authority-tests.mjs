@@ -6,15 +6,19 @@ import {performance} from 'node:perf_hooks';
 import {createHash} from 'node:crypto';
 import {contentDigest,canonicalJson,installStaticWeeklySha256HexAccelerator} from '../src/static-weekly-schedule-model.js';
 import {staticWeeklySafeName} from '../src/static-weekly-schedule-program.js';
+import {postgresJsonbContentDigest as postgresDigest} from '../src/static-weekly-schedule-compiler.js';
 import {getScheduleComponentWeightLedger} from '../src/schedule-component-weight-authority.js';
 import {deriveCanonicalRecurringPhaseCandidate,deriveScalableCanonicalRecurringPhaseCandidate,
  deriveScalableCanonicalRecurringWeekCandidate,deriveRecurringStaffingPattern,recurringSecondaryOwnerReference,
  currentPatternFromPublishedReadback,currentHandoutRecurringStructure,adaptRegisteredRecurringSource,recurringOwnerLunch,
- createRecurringPhaseSourceBasis,recurringPatternFromFinalPhaseSource} from '../src/static-weekly-recurring-staffing-adaptation.js';
+ createRecurringPhaseSourceBasis,recurringPatternFromFinalPhaseSource,createFullNineReductionContext,
+ assertFullNineReductionPreferenceReceipt} from '../src/static-weekly-recurring-staffing-adaptation.js';
 import {createRecurringPhaseDescriptor,createRecurringPhaseProspectiveSource,
  evaluateRecurringPhaseCanonicalSource,enumerateRecurringPhaseMinimum,assertRecurringPhaseMinimum}
  from '../src/static-weekly-recurring-phase-authority.js';
-import {solveRecurringPhaseCanonicalMinimum} from '../src/static-weekly-recurring-phase-authority.js';
+import {solveRecurringPhaseCanonicalMinimum,createRecurringPreferencePrimitiveObjective,
+ assertRecurringPhasePreferenceNormalization,assertRecurringPreferencePrimitiveWitness,
+ createRecurringIdentityRadixLayout,assertRecurringIdentityRadixEncoding,assertRecurringPhaseIdentityEncoding} from '../src/static-weekly-recurring-phase-authority.js';
 import {assertNormalOwnerEligibility,normalGeographyRestrictionApplies,validateOwnerEligibilityConfig} from '../src/static-weekly-owner-eligibility.js';
 const ledger=new Map(getScheduleComponentWeightLedger().families.map(f=>[f.code,f]));
 const slotA='71000000-0000-4000-8000-000000000001',slotB='71000000-0000-4000-8000-000000000002';
@@ -415,6 +419,280 @@ export async function runRecurringAdminMorningReferenceTests(){
   JSON.stringify(receipt,null,2)+'\n',{flag:'wx'});
  console.log(JSON.stringify(receipt));return receipt;
 }
+export function runRecurringPrimitiveObjectiveTests(){
+ let checks=0;const check=(name,fn)=>{fn();checks++;console.log('PASS primitive',name);};
+ const terms=[[100,'a'],[4,'b'],[2,'c']],binary=['a','b','c'];
+ check('exact100/4/2 positive GCD preserves distinct original and primitive units',()=>{
+  const r=createRecurringPreferencePrimitiveObjective(terms,binary);assert.equal(r.positiveDivisor,2);
+  assert.deepEqual(r.primitiveTerms,[[50,'a'],[2,'b'],[1,'c']]);assert.deepEqual(r.originalTerms,terms);
+  assert.notEqual(r.originalUnit,r.primitiveUnit);assert.equal(r.fixedEqualityUsesOriginalTerms,true);
+  const {normalizationDigest,...body}=r;assert.equal(normalizationDigest,contentDigest(body));
+ });
+ check('empty objective is exact divisor1',()=>{const r=createRecurringPreferencePrimitiveObjective([],binary);assert.equal(r.positiveDivisor,1);assert.deepEqual(r.primitiveTerms,[]);});
+ check('coprime coefficients are unchanged',()=>{const r=createRecurringPreferencePrimitiveObjective([[100,'a'],[3,'b']],binary);assert.equal(r.positiveDivisor,1);});
+ check('safe maximal coefficient reconstructed exactly by BigInt',()=>{const r=createRecurringPreferencePrimitiveObjective([[Number.MAX_SAFE_INTEGER,'a']],binary);assert.equal(r.positiveDivisor,Number.MAX_SAFE_INTEGER);assert.deepEqual(r.primitiveTerms,[[1,'a']]);});
+ const witnessInput={terms,binary,normalization:createRecurringPreferencePrimitiveObjective(terms,binary),
+  integerWitness:[['a',1],['b',1],['c',1]],primitiveObjectiveValue:53,originalScaleObjectiveValue:106};
+ check('exact full witness reconstructs106 from53*2',()=>assert.equal(assertRecurringPreferencePrimitiveWitness(witnessInput).originalScaleObjectiveValue,106));
+ for(const [name,mutate]of [
+  ['nonprimitive divisor',x=>{x.normalization.positiveDivisor=1;}],['wrong original units',x=>{x.normalization.originalUnit='MINUTES';}],
+  ['wrong primitive',x=>{x.primitiveObjectiveValue++;}],['wrong original',x=>{x.originalScaleObjectiveValue++;}],
+  ['fractional binary witness',x=>{x.integerWitness[0][1]=0.5;}],['nonbinary witness',x=>{x.integerWitness[0][1]=2;}],
+  ['unknown witness identity',x=>{x.integerWitness.push(['extra',1]);}],['duplicate witness',x=>{x.integerWitness.push(x.integerWitness[0]);}],
+ ])check('reject witness '+name,()=>{const x=structuredClone(witnessInput);mutate(x);assert.throws(()=>assertRecurringPreferencePrimitiveWitness(x));});
+ check('reject safe coefficient sum overflow via exactBigInt reconstruction',()=>{
+  const t=[[Number.MAX_SAFE_INTEGER,'a'],[Number.MAX_SAFE_INTEGER,'b']],b=['a','b'];
+  assert.throws(()=>assertRecurringPreferencePrimitiveWitness({terms:t,binary:b,normalization:createRecurringPreferencePrimitiveObjective(t,b),
+   integerWitness:[['a',1],['b',1]],primitiveObjectiveValue:2,originalScaleObjectiveValue:Number.MAX_SAFE_INTEGER*2}));
+ });
+ for(const [name,t,b]of [
+  ['fractional',[[2.5,'a']],binary],['negative',[[-2,'a']],binary],['zero',[[0,'a']],binary],
+  ['unsafe',[[Number.MAX_SAFE_INTEGER+1,'a']],binary],['NaN',[[NaN,'a']],binary],['infinite',[[Infinity,'a']],binary],
+  ['unknown variable',[[2,'foreign']],binary],['duplicate term',[[2,'a'],[4,'a']],binary],
+  ['extra term field',[[2,'a','injected']],binary],['duplicate domain',[[2,'a']],['a','a']],
+  ['nonstring domain',[],['a',1]],
+ ])check('reject '+name,()=>assert.throws(()=>createRecurringPreferencePrimitiveObjective(t,b)));
+ console.log(JSON.stringify({schema:'custodial.recurring-primitive-objective-tests.v1',checks,solver:false,toleranceChange:false}));return checks;
+}
+export function runRecurringIdentityRadixTests(){
+ let checks=0;const check=(name,fn)=>{fn();checks++;console.log('PASS radix',name);};
+ const ids=Array.from({length:23},(_,i)=>`ordered-work-${i}`),layouts=[3,6].map(chunkSize=>createRecurringIdentityRadixLayout({ownerRadix:8,orderedWorkIds:ids,chunkSize}));
+ const value=v=>layouts.map(layout=>assertRecurringIdentityRadixEncoding({layout,ownerIndexes:v,expectedOrderedWorkIds:ids}));
+ const base=Array(23).fill(0);
+ check('exact23-digit primitive reconstruction old6/new3 identical',()=>{
+  for(const v of [base,Array(23).fill(7),ids.map((_,i)=>i%8)]){
+   const e=value(v);assert.equal(e[0].completeLexvectorInteger,e[1].completeLexvectorInteger);
+   assert.equal(e[0].chunkObjectives.length,8);assert.equal(e[1].chunkObjectives.length,4);
+  }
+ });
+ // For every first differing digit and every ordered pair of legal digits,
+ // maximal hostile suffixes cannot outweigh that earlier digit. This is the
+ // actual radix-order lemma, not comparison of a solver stub's selected result.
+ check('all23 first-difference positions preserve exact code-unit vector ordering',()=>{
+  for(let position=0;position<23;position++)for(let a=0;a<8;a++)for(let b=a+1;b<8;b++){
+   const low=Array(23).fill(7),high=Array(23).fill(0);
+   for(let i=0;i<position;i++)low[i]=high[i]=i%8;low[position]=a;high[position]=b;
+   const l=value(low),h=value(high);
+   for(let i=0;i<2;i++){
+    assert.ok(BigInt(l[i].completeLexvectorInteger)<BigInt(h[i].completeLexvectorInteger));
+    const first=l[i].chunkObjectives.findIndex((x,j)=>x!==h[i].chunkObjectives[j]);assert.ok(first>=0);
+    assert.ok(l[i].chunkObjectives[first]<h[i].chunkObjectives[first]);
+   }
+  }
+ });
+ for(const [name,mutate]of [
+  ['omitted work',x=>{x.expectedOrderedWorkIds.pop();}],['reordered work',x=>{x.expectedOrderedWorkIds.reverse();}],
+  ['omitted digit',x=>{x.ownerIndexes.pop();}],['fractional digit',x=>{x.ownerIndexes[0]=0.5;}],
+  ['out-of-range digit',x=>{x.ownerIndexes[0]=8;}],['negative digit',x=>{x.ownerIndexes[0]=-1;}],
+  ['invalid radix',x=>{x.layout.ownerRadix=0;}],['altered multiplier',x=>{x.layout.chunks[0].multipliers[0]++;}],
+  ['omitted chunk',x=>{x.layout.chunks.pop();}],['reordered chunk',x=>{x.layout.chunks.reverse();}],
+ ])check('refuse '+name,()=>{const x={layout:structuredClone(layouts[0]),ownerIndexes:[...base],expectedOrderedWorkIds:[...ids]};mutate(x);assert.throws(()=>assertRecurringIdentityRadixEncoding(x));});
+ for(const ownerRadix of [0,-1,2.5,Number.MAX_SAFE_INTEGER+1])check('refuse invalid radix '+ownerRadix,()=>assert.throws(()=>createRecurringIdentityRadixLayout({ownerRadix,orderedWorkIds:ids})));
+ check('refuse coefficient overflow',()=>assert.throws(()=>createRecurringIdentityRadixLayout({ownerRadix:Number.MAX_SAFE_INTEGER,orderedWorkIds:ids})));
+ console.log(JSON.stringify({schema:'custodial.recurring-identity-radix-tests.v1',checks,solver:false,prioritiesChanged:false}));return checks;
+}
+function fullNineSyntheticFixtureFactory(){
+ const fullConfig=JSON.parse(fs.readFileSync(new URL('../config/custodial-recurring-schedule-20260924.json',import.meta.url))),
+  correctionConfig=JSON.parse(fs.readFileSync(new URL('../config/custodial-six-person-static-20261005.json',import.meta.url))),
+  fullIdentity=JSON.parse(fs.readFileSync(new URL('../config/custodial-full-nine-family-owners-20260926.json',import.meta.url))),fullOwners=fullIdentity.owners;
+ // Existing explicitly named retained local artifact only. This runner does
+ // not create an alleged production source/registration or solve nine staff.
+ const bytes=fs.readFileSync(process.env.CUSTODIAL_FULL_NINE_BASE_PACKET||fullConfig.basePacket.path);
+ assert.equal(createHash('sha256').update(bytes).digest('hex'),fullConfig.basePacket.sha256,'exact retained full-nine base bytes required');
+ const packet=JSON.parse(bytes),rawBase=packet.compilerInput;assert.equal(postgresDigest(rawBase),fullIdentity.baseSourceDigest);
+ const make=count=>{
+  const base=structuredClone(rawBase),historical=structuredClone(fullConfig);
+  for(const [key,slot]of Object.entries(historical.slots).filter(([,s])=>s.personId)){
+   const row=base.slots.find(r=>r.id===slot.slotId);
+   if(!row.incumbencies.some(p=>p.effectiveStart<='2026-09-28'&&(!p.effectiveEnd||'2026-09-28'<p.effectiveEnd)))
+    row.incumbencies.push({personId:slot.personId,displayName:slot.name,effectiveStart:'2026-09-28',effectiveEnd:null});
+  }
+  for(const [i,key]of ['OPTION1','OPTION2','OPTION4'].entries()){
+   const slot=historical.slots[key],personId=`74000000-0000-4000-8000-00000000000${i+1}`,name=`Synthetic source-authorized ${key}`;
+   Object.assign(slot,{personId,name,vacancy:false});
+   const row=base.slots.find(r=>r.id===slot.slotId);
+   for(const old of row.incumbencies)if(old.effectiveEnd===null)old.effectiveEnd='2026-09-28';
+   row.incumbencies.push({personId,displayName:name,effectiveStart:'2026-09-28',effectiveEnd:null});
+  }
+  const accepted=adaptRegisteredRecurringSource({registeredSource:base,fullNineSource:base,patternConfig:historical}).compilerInput;
+  assert.equal(accepted.version.assignments.length,313);
+  for(const key of ['OPTION1','OPTION2','OPTION4']){
+   const retained=(count>=7&&key==='OPTION1')||(count>=8&&key==='OPTION4');
+   if(!retained)accepted.slots.find(s=>s.id===historical.slots[key].slotId).incumbencies.at(-1).effectiveEnd='2026-10-05';
+  }
+  const roster=Object.entries(correctionConfig.slots).map(([key,slot])=>{
+   const row=accepted.slots.find(s=>s.id===slot.slotId),current=row.incumbencies.find(p=>p.effectiveStart<='2026-10-05'&&(!p.effectiveEnd||'2026-10-05'<p.effectiveEnd));
+   return {slot_id:slot.slotId,contractor_capacity:false,incumbencies:row.incumbencies.map(p=>({person_id:p.personId,person_name:p.displayName,
+    effective_start:p.effectiveStart,effective_end:p.effectiveEnd})),week_staffing:current?slot.workDays.map(day=>({
+     service_date:new Date(Date.parse('2026-10-05T12:00:00Z')+((day+6)%7)*86400000).toISOString().slice(0,10),person_id:current.personId,employee_active:true})):[]};
+  });
+  return {publishedSource:{source_id:'75000000-0000-4000-8000-000000000001',publication_id:accepted.version.publicationId,
+    authority_revision:42,compiler_input:accepted},managerSnapshot:{week_start:'2026-10-05',authority_revision:42,
+     current_publication:{publication_id:accepted.version.publicationId},roster},correctionConfig,fullConfig,fullOwners,
+    fullNineSource:{source_id:fullIdentity.baseSourceId,compiler_input:base},effectiveDate:'2026-10-05',expectedRevision:42};
+ };
+ return {make,fullConfig,correctionConfig,fullOwners,packet};
+}
+export function createSyntheticFullNineReductionFixture(count){
+ assert.ok([6,7,8].includes(count),'explicit synthetic reduction count required');
+ return fullNineSyntheticFixtureFactory().make(count);
+}
+export async function runRecurringFullNineReductionTests({counts=[6,7,8]}={}){
+ assert.ok(Array.isArray(counts)&&counts.length>0&&new Set(counts).size===counts.length&&counts.every(n=>[6,7,8].includes(n)), 'explicit focused counts required');
+ const started=performance.now();let checks=0;const check=(name,fn)=>{fn();checks++;console.log('PASS',name);};
+ installStaticWeeklySha256HexAccelerator(text=>createHash('sha256').update(text,'utf8').digest('hex'));
+ runRecurringPrimitiveObjectiveTests();runRecurringIdentityRadixTests();
+ const {make,fullConfig,correctionConfig,fullOwners,packet}=fullNineSyntheticFixtureFactory(),
+  original=make(6),before=canonicalJson(original),context=createFullNineReductionContext(original);
+ check('exact source313 kind is independent of target six occupancy',()=>{
+  const bound=currentPatternFromPublishedReadback({...original,templateConfig:correctionConfig});
+  assert.equal(bound.sourcePatternKind,'FULL_NINE');assert.equal(bound.reductionContext.contextDigest,context.contextDigest);
+  assert.equal(Object.values(context.currentConfig.slots).filter(s=>!s.vacancy).length,6);assert.equal(canonicalJson(original),before);
+ });
+ check('split ledger retains all physical IDs/79 points and inherited family reference only',()=>{
+  const split=context.comparisonLedger.find(r=>r.day===0&&r.phase==='equalized'&&r.family==='ZAMBEZI');
+  assert.equal(split.originalRows.length,2);assert.equal(split.inheritedWorkloadPoints,79);
+  assert.equal(split.referenceSlotId,correctionConfig.slots.KAILI.slotId);assert.equal(new Set(split.physicalMemberIds).size,3);
+  assert.equal(contentDigest(split.originalRows),split.originalRowsDigest);
+  assert.equal(split.referenceKind,'EXISTING_DOMINANT_POINT_SHARE_FAMILY_PREFERENCE_ONLY');
+ });
+ check('new authority correction is explicit full diff, not historical facts',()=>{
+  assert.equal(context.correctionReceipt.newBytesAreHistoricalFacts,false);assert.ok(context.correctionReceipt.diff.length>0);
+  assert.equal(context.correctionReceipt.diffDigest,contentDigest(context.correctionReceipt.diff));
+  assert.equal(context.correctionReceipt.oldElephantReminder.dayOfWeek,1);
+  assert.equal(context.correctionReceipt.currentTuesdayReminder.dayOfWeek,2);
+  assert.equal(contentDigest(context.correctionReceipt.currentTuesdayReminder),'9f88759ab63488bbd9f43c1c45c6e915f0a53688216ee0c78911afb8ef8baf4b');
+  assert.equal(context.correctionReceipt.historicalNamedPolicy.namedHandoffs,undefined);
+  assert.deepEqual(context.correctionReceipt.currentNamedPolicy.namedHandoffs,correctionConfig.namedShiftEndHandoffs);
+ });
+ for(const [name,mutate]of [
+  ['base work',x=>{x.fullNineSource.compiler_input.version.assignments[0].priority++;}],
+  ['base ID',x=>{x.fullNineSource.source_id='74000000-0000-4000-8000-000000000099';}],
+  ['current correction authority',x=>{x.correctionConfig.slots.KATHY.lunchByDay['4']=['10:30','11:30'];}],
+  ['current named policy',x=>{x.correctionConfig.namedShiftEndHandoffs=[];}],
+  ['historical config',x=>{x.fullConfig.overrides['1'].equalized.KAREN.pop();}],
+  ['historical guidance',x=>{x.fullOwners['0'].equalized.ZAMBEZI='GREGORY';}],
+  ['historical extra field',x=>{x.publishedSource.compiler_input.version.assignments[0].unknown=true;}],
+  ['split drop',x=>{x.publishedSource.compiler_input.version.assignments=x.publishedSource.compiler_input.version.assignments.filter(r=>r.workId!=='0:ZAMBEZI:equalized:5d2d2a0e');}],
+  ['split member',x=>{x.publishedSource.compiler_input.version.assignments.find(r=>r.workId==='0:ZAMBEZI:equalized:5d2d2a0e').includedLocations[0].locationId=correctionConfig.slots.KATHY.slotId;}],
+  ['split points',x=>{x.publishedSource.compiler_input.version.assignments.find(r=>r.workId==='0:ZAMBEZI:equalized:5d2d2a0e').serviceEffortMinutes++;}],
+  ['split owner',x=>{x.publishedSource.compiler_input.version.assignments.find(r=>r.workId==='0:ZAMBEZI:equalized:5d2d2a0e').originSlotId=correctionConfig.slots.KATHY.slotId;}],
+  ['source person',x=>{x.publishedSource.compiler_input.slots.find(s=>s.id===correctionConfig.slots.KAREN.slotId).incumbencies.at(-1).personId='74000000-0000-4000-8000-000000000099';}],
+  ['manager active',x=>{x.managerSnapshot.roster[0].week_staffing[0].employee_active=false;}],
+  ['revision',x=>{x.managerSnapshot.authority_revision++;}],
+  ['publication',x=>{x.managerSnapshot.current_publication.publication_id='74000000-0000-4000-8000-000000000099';}],
+ ])check(`refuse full-nine reduction ${name}`,()=>{const x=structuredClone(original);mutate(x);assert.throws(()=>createFullNineReductionContext(x));});
+ const {initializeStaticWeeklySolverEngine}=await import('../src/static-weekly-schedule-solver-worker.js');
+ const solver=await initializeStaticWeeklySolverEngine({maxOldGenerationSizeMb:256,maxWasmMemoryPages:1536,maxSemiSpaceSizeMb:4}),results=[];
+ for(const count of counts){
+  const args=make(count),snapshot=canonicalJson(args),ctx=createFullNineReductionContext(args),
+   normal=deriveRecurringStaffingPattern({currentConfig:ctx.currentConfig,targetSlots:ctx.currentConfig.slots,fullOwners,fullConfig,
+    highs:{solve:(lp,options)=>solver.solve(lp,{timeLimitSeconds:options.time_limit}).result}}),
+   basis=createRecurringPhaseSourceBasis({registeredSource:args.publishedSource.compiler_input,patternConfig:normal.config,reductionContext:ctx});
+  check(`9→${count} basis preserves current fixed days/lunch/identity and historical ledger`,()=>{
+   assert.equal(canonicalJson(args),snapshot);assert.equal(basis.reductionContext.contextDigest,ctx.contextDigest);
+   for(const slot of Object.values(normal.config.slots))for(const day of slot.workDays){const a=basis.source.version.slotAvailability.find(r=>r.slotId===slot.slotId&&r.dayOfWeek===day);
+    assert.deepEqual(a.lunch,recurringOwnerLunch(slot,day));assert.deepEqual(a.shift,{start:slot.shift[0],end:slot.shift[1]});}
+   assert.equal(contentDigest(basis.source.version.assignments.find(r=>r.workId.includes(':one-time:'))),'9f88759ab63488bbd9f43c1c45c6e915f0a53688216ee0c78911afb8ef8baf4b');
+   assert.equal(basis.ownerConfig.overrides['0'].equalized.KAILI.includes('ZAMBEZI'),true);
+  });
+  const proof=deriveScalableCanonicalRecurringWeekCandidate({source:basis.source,currentConfig:basis.ownerConfig,fullOwners,solver,phaseSourceBasis:basis});
+  if(process.env.CUSTODIAL_FULL_NINE_REDUCTION_PROOFS_PATH)fs.writeFileSync(
+   path.resolve(process.env.CUSTODIAL_FULL_NINE_REDUCTION_PROOFS_PATH)+`.${count}.json`,
+   JSON.stringify({args,context:ctx,normalConfig:normal.config,basis,proof},null,2)+'\n',{flag:'wx'});
+  check(`9→${count} all seven original-reference phase bounds match complete final canonical witness`,()=>{
+   assert.equal(proof.status,'UNREGISTERED_CANONICAL_RECURRING_WEEK_CANDIDATE',JSON.stringify({stage:proof.stage,day:proof.dayOfWeek,reason:proof.reason,
+    last:proof.proofs?.at(-1)?.reason}));assert.equal(proof.proofs.length,7);assert.ok(proof.proofs.every(p=>p.status==='PROVEN_CANONICAL_PHASE_MINIMUM'));
+   assert.equal(proof.canonicalHardWitness.feasible,true);assert.equal(proof.originalPreferenceBaselinePreserved,true);
+  });
+  check(`9→${count} mandatory constant is separate from actual raw LP and recomputed`,()=>{
+ const p=proof.proofs[6],receipt=assertFullNineReductionPreferenceReceipt({phaseSourceBasis:basis,proof:p,dayOfWeek:6,fullOwners});
+   assert.equal(receipt.fixedUnavoidableOriginalOwnerChangeCost,100);assert.equal(receipt.rawSolverReceiptIncludesConstant,false);
+   assert.equal(receipt.originalScaleVariablePreferenceCost,p.preferenceCost);assert.equal(receipt.fullInheritedPreferenceCost,p.preferenceCost+100);
+   assert.equal(receipt.rawPrimitiveLpPreferenceCost*receipt.objectiveNormalization.positiveDivisor,p.preferenceCost);
+   for(const dayProof of proof.proofs){
+    const input={proof:dayProof,source:basis.source,ownerConfig:basis.ownerConfig,fullOwners},
+     transform=assertRecurringPhasePreferenceNormalization(input);
+    assert.equal(transform.originalScaleObjectiveValue,dayProof.preferenceCost);
+    for(const mutation of [
+     t=>{t.objectiveNormalization.positiveDivisor++;},t=>{t.originalScaleObjectiveValue++;},
+     t=>{t.objectiveValue++;},t=>{t.objectiveNormalization.originalUnit='MINUTES';},
+     t=>{t.objectiveNormalization.primitiveTerms[0][0]++;},
+     t=>{t.model.terms[0][0]++;},t=>{t.model.binary.push('forged_binary');},
+     t=>{t.integerWitness.push(t.integerWitness[0]);},
+    ]){
+     const altered=structuredClone(dayProof),tier=altered.lowerBoundEvidence.tiers.find(t=>t.name==='inherited_preference');mutation(tier);
+     const {normalizationDigest,...normalizationBody}=tier.objectiveNormalization;tier.objectiveNormalization.normalizationDigest=contentDigest(normalizationBody);
+     tier.modelDigest=contentDigest(tier.model);
+     assert.throws(()=>assertRecurringPhasePreferenceNormalization({...input,proof:altered}));
+    }
+    const altered=structuredClone(dayProof),raw=altered.lowerBoundEvidence,
+     tierIndex=raw.tiers.findIndex(t=>t.name==='inherited_preference'),fixed=raw.tiers[tierIndex+1].model.rows.find(r=>r.name==='phase_fixed_2');
+    fixed.value=raw.tiers[tierIndex].objectiveValue;
+    assert.throws(()=>assertRecurringPhasePreferenceNormalization({...input,proof:altered}));
+   }
+   assert.equal(receipt.bindings[0].originalReferenceSlotId,correctionConfig.slots.GREGORY.slotId);
+   assert.equal(receipt.bindings[0].mandatoryPrimarySlotId,correctionConfig.slots.KAREN.slotId);
+   for(const mutation of [r=>r.fullInheritedPreferenceCost++,r=>r.fixedUnavoidableOriginalOwnerChangeCost=0,
+    r=>r.bindings[0].originalReferenceSlotId=correctionConfig.slots.KAREN.slotId,r=>r.bindings[0].mandatoryPrimarySlotId=correctionConfig.slots.GREGORY.slotId]){
+     const altered=structuredClone(p);mutation(altered.mandatoryCurrentOwnerPreferenceReceipt);
+     const {receiptDigest,...body}=altered.mandatoryCurrentOwnerPreferenceReceipt;altered.mandatoryCurrentOwnerPreferenceReceipt.receiptDigest=contentDigest(body);
+     assert.throws(()=>assertFullNineReductionPreferenceReceipt({phaseSourceBasis:basis,proof:altered,dayOfWeek:6,fullOwners}));
+   }
+  });
+  const final=recurringPatternFromFinalPhaseSource({phaseSourceBasis:basis,finalSource:proof.candidateSource});
+  check(`9→${count} final config is actual witness source and protected source stays bound`,()=>{
+   assert.equal(final.finalSourceDigest,proof.candidateSourceDigest);const forged=structuredClone(proof.candidateSource);
+   forged.version.assignments.find(r=>r.locationCodeSnapshot==='ZAMBEZI').includedLocations.pop();
+   assert.throws(()=>recurringPatternFromFinalPhaseSource({phaseSourceBasis:basis,finalSource:forged}));
+   const drift=structuredClone(ctx);drift.correctionReceipt.currentTuesdayReminder.priority++;
+   assert.throws(()=>createRecurringPhaseSourceBasis({registeredSource:args.publishedSource.compiler_input,patternConfig:normal.config,reductionContext:drift}));
+  });
+  results.push({count,contextDigest:ctx.contextDigest,basisDigest:basis.basisDigest,sourceDigest:contentDigest(basis.source),
+   finalSourceDigest:proof.candidateSourceDigest,finalConfigDigest:final.configDigest,comparisonLedgerDigest:ctx.comparisonLedgerDigest,
+   correctionDiffDigest:ctx.correctionReceipt.diffDigest,minima:proof.proofs.map(p=>p.minimumDoubledSpread),
+   rawVariableCosts:proof.proofs.map(p=>p.preferenceCost),fullInheritedCosts:proof.mandatoryCurrentOwnerPreferenceReceipts.map(p=>p.fullInheritedPreferenceCost),
+   mandatoryPreferenceReceipts:proof.mandatoryCurrentOwnerPreferenceReceipts,canonicalRows:proof.canonicalHardWitness.hardConstraintCount,
+   syntheticRoster:true,sql:false,workerIpc:false,published:false});
+ }
+ const receipt={status:'PASS',checks,counts,elapsedMs:Math.round(performance.now()-started),baseFileSha256:fullConfig.basePacket.sha256,
+  baseSourceDigest:packet.sourceDigest,sourceProvenance:'EXACT_RETAINED_V6_BYTES_AND_ACTUAL_HISTORICAL_ADAPTER_WITH_EXPLICIT_SYNTHETIC_DATED_CURRENT_INCUMBENTS',results};
+ if(process.env.CUSTODIAL_FULL_NINE_REDUCTION_EVIDENCE_PATH)fs.writeFileSync(path.resolve(process.env.CUSTODIAL_FULL_NINE_REDUCTION_EVIDENCE_PATH),
+  JSON.stringify(receipt,null,2)+'\n',{flag:'wx'});
+ console.log(JSON.stringify(receipt));return receipt;
+}
+export function runRecurringRetainedTransformTests({files}){
+ assert.ok(Array.isArray(files)&&files.length>0,'explicit retained actual proof files required');let checks=0;
+ const check=(name,fn)=>{fn();checks++;console.log('PASS retained transform',name);};
+ installStaticWeeklySha256HexAccelerator(text=>createHash('sha256').update(text,'utf8').digest('hex'));
+ const receipts=[];
+ for(const file of files){const bytes=fs.readFileSync(file),x=JSON.parse(bytes),{basis,proof}=x,fullOwners=x.args.fullOwners;
+  assert.equal(proof.status,'UNREGISTERED_CANONICAL_RECURRING_WEEK_CANDIDATE','no retained UNKNOWN promoted');
+  assert.equal(proof.proofs.length,7);assert.equal(proof.canonicalHardWitness.feasible,true);
+  for(const [day,dayProof]of proof.proofs.entries()){
+   const input={proof:dayProof,source:basis.source,ownerConfig:basis.ownerConfig,fullOwners};
+   check(`actual ${file.split('.').at(-2)} day${day} exact primitive+radix+constant`,()=>{
+    assertRecurringPhasePreferenceNormalization(input);assertRecurringPhaseIdentityEncoding({proof:dayProof,ownerConfig:basis.ownerConfig});
+    assertFullNineReductionPreferenceReceipt({phaseSourceBasis:basis,proof:dayProof,dayOfWeek:day,fullOwners});
+   });
+   check(`day${day} hostile identity/report coefficients cannot rehash authority`,()=>{
+    for(const mutate of [
+     p=>{p.lowerBoundEvidence.identityLayout.chunks.pop();},p=>{p.lowerBoundEvidence.identityLayout.orderedWorkIds.reverse();},
+     p=>{p.lowerBoundEvidence.identityEncoding.completeLexvectorInteger='0';},p=>{p.lowerBoundEvidence.stableIdentity[0]++;},
+     p=>{p.lowerBoundEvidence.tiers.find(t=>t.name==='inherited_identity_0').model.terms[0][0]++;},
+     p=>{p.lowerBoundEvidence.tiers.find(t=>t.name==='inherited_identity_3').model.rows.find(r=>r.name==='phase_fixed_3').value++;},
+    ]){const p=structuredClone(dayProof);mutate(p);for(const t of p.lowerBoundEvidence.tiers)t.modelDigest=contentDigest(t.model);
+     assert.throws(()=>assertRecurringPhaseIdentityEncoding({proof:p,ownerConfig:basis.ownerConfig}));}
+    const changed=structuredClone(dayProof);changed.lowerBoundEvidence.descriptor.choices[0].owners.pop();
+    const {descriptorDigest,...body}=changed.lowerBoundEvidence.descriptor;changed.lowerBoundEvidence.descriptor.descriptorDigest=contentDigest(body);
+    changed.descriptor=structuredClone(changed.lowerBoundEvidence.descriptor);
+    assert.throws(()=>assertRecurringPhasePreferenceNormalization({...input,proof:changed}));
+   });
+  }
+  receipts.push({file,sha256:createHash('sha256').update(bytes).digest('hex'),wholeWeekCanonicalWitnessDigest:proof.canonicalHardWitness.witnessDigest});
+ }
+ const receipt={schema:'custodial.recurring-retained-transforms-tests.v1',checks,receipts,newSolverRuns:0,publication:false};console.log(JSON.stringify(receipt));return receipt;
+}
 export async function runRecurringCurrentHandoutStructureTests(){
  const started=performance.now();let checks=0;const check=(name,fn)=>{fn();checks++;console.log('PASS',name);};
  installStaticWeeklySha256HexAccelerator(text=>createHash('sha256').update(text,'utf8').digest('hex'));
@@ -555,7 +833,9 @@ export async function runRecurringCurrentHandoutStructureTests(){
  console.log(JSON.stringify(receipt));return receipt;
 }
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){
- if(process.argv.includes('--current-handout'))await runRecurringCurrentHandoutStructureTests();
+ if(process.argv.includes('--primitive-objective')){runRecurringPrimitiveObjectiveTests();runRecurringIdentityRadixTests();}
+ else if(process.argv.includes('--full-nine-reduction'))await runRecurringFullNineReductionTests();
+ else if(process.argv.includes('--current-handout'))await runRecurringCurrentHandoutStructureTests();
  else if(process.argv.includes('--admin-morning'))await runRecurringAdminMorningReferenceTests();
  else if(process.argv.includes('--scalable'))await runStaticWeeklyRecurringPhaseScalableTests();
  else runStaticWeeklyRecurringPhaseAuthorityTests();

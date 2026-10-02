@@ -9,7 +9,7 @@ import { assertNormalOwnerEligibility, hardRestrictedSlots,
   validateOwnerEligibilityConfig,normalGeographyRestrictionApplies } from "./static-weekly-owner-eligibility.js";
 import {createRecurringPhaseDescriptor,createRecurringPhaseProspectiveSource,
   enumerateRecurringPhaseMinimum,evaluateRecurringPhaseCanonicalSource,
-  solveRecurringPhaseCanonicalMinimum} from './static-weekly-recurring-phase-authority.js';
+  solveRecurringPhaseCanonicalMinimum,assertRecurringPhasePreferenceNormalization} from './static-weekly-recurring-phase-authority.js';
 
 const phaseOf = (row) => row.window?.start === "09:45" ? "equalized" : "morning";
 const expression = (terms) => terms.length
@@ -28,6 +28,203 @@ const currentHandout={pdf:'925751c37e454e0fadb9d88eb57a46dd6a47c1ffe19deadf85189
   retired:['BAMBOO_SPRINGS_GIFT_SHOP','ELEPHANT_TRUNK_GIFT_SHOP','ELEPHANT_TRUNK_RESTROOMS','TRADING_POST_GIFT_SHOP']};
 const currentReminderId='2:ELEPHANT_TRUNK_RESTROOMS:one-time:55e5939c';
 const sorted=input=>[...input].sort();
+const reductionAuthority={schema:'custodial.full-nine-reduction-context.v1',
+  correctionConfigDigest:'5aded7a189e3fd70faaa8062c1bea9e6f2e09749ae7c4a238acbf9e84010c11a',
+  fullConfigDigest:'64855aba8c76e1e8998c01abd8205b6f22dce60130ec9b9ac1bcfae89a2bacda',
+  fullOwnersDigest:'b5cee361cc21863eb16223992f7a7ca2bdaaaf0e02d81d1860878f2c6647024f',
+  baseSourceId:'a00cdf2a-0623-5e2d-bc65-338c1dd67202',
+  baseAssignmentsDigest:'e6019fa1b2c5e0e2852a312a5d0af69ff54985c585977c710a8e0a5791be1efd'};
+const byWork=(a,b)=>a.workId<b.workId?-1:a.workId>b.workId?1:0;
+function assertReductionContext(context){
+  assert.equal(context?.schema,reductionAuthority.schema,'typed full-nine reduction context required');
+  const {contextDigest,...body}=context;
+  assert.equal(contentDigest(body),contextDigest,'full-nine reduction context bytes changed');
+  assert.equal(context.correctionAuthorityDigest,reductionAuthority.correctionConfigDigest,'current correction authority changed');
+  assert.equal(context.fullConfigDigest,reductionAuthority.fullConfigDigest,'full-nine configuration authority changed');
+  assert.equal(context.fullOwnersDigest,reductionAuthority.fullOwnersDigest,'full-nine guidance authority changed');
+  assert.equal(contentDigest(context.acceptedSource),context.acceptedSourceDigest,'accepted comparison ledger source changed');
+  assert.equal(contentDigest(context.currentConfig.namedShiftEndHandoffs),currentHandout.namedHandoffs,'trusted current named owner authority changed');
+  assert.equal(canonicalJson(context.source.version.shiftEndContinuityPolicy.namedHandoffs),canonicalJson(context.currentConfig.namedShiftEndHandoffs),'current named source policy binding changed');
+  const bindings=mandatoryReductionBindings(context.acceptedSource,context.currentConfig);
+  assert.equal(canonicalJson(context.currentConfig.fullNineReductionBinding.mandatoryPrimaryOwnerBindings),canonicalJson(bindings),'mandatory owner/reference/constant changed');
+  assert.equal(context.currentConfig.fullNineReductionBinding.mandatoryChangeCostConstant,bindings.reduce((n,b)=>n+b.fixedChangeCost,0),'mandatory constant arithmetic changed');
+  return context;
+}
+function mandatoryReductionBindings(accepted,config){
+  return config.namedShiftEndHandoffs.map(h=>{
+    const rows=accepted.version.assignments.filter(r=>r.dayOfWeek===h.dayOfWeek&&r.window.start==='09:45'&&r.locationCodeSnapshot===h.locationCode);
+    assert.ok(rows.length,'accepted named-handoff comparison family missing');
+    const key=id=>Object.keys(config.slots).find(k=>config.slots[k].slotId===id);
+    const original=[...rows].sort((a,b)=>b.serviceEffortMinutes-a.serviceEffortMinutes||key(a.originSlotId).localeCompare(key(b.originSlotId)))[0];
+    const owner=config.slots[key(h.fromSlotId)];assert.ok(owner&&owner.shift[1]===h.at,'mandatory current primary handoff owner/time binding changed');
+    return {dayOfWeek:h.dayOfWeek,family:h.locationCode,originalReferenceSlotId:original.originSlotId,
+      mandatoryPrimarySlotId:h.fromSlotId,handoff:structuredClone(h),fixedChangeCost:original.originSlotId===h.fromSlotId?0:100,
+      proofScope:'EVERY_FEASIBLE_CANDIDATE_UNDER_EXACT_ACCEPTED_NAMED_PRIMARY_OWNER_CONSTRAINT'};
+  });
+}
+function reductionStructure(source){
+  const fixedRows=source.version.assignments.filter(r=>r.workId===currentReminderId);
+  assert.equal(fixedRows.length,1,'reduction fixed Tuesday reminder missing');
+  assert.equal(contentDigest(fixedRows[0]),currentHandout.reminder,'reduction fixed Tuesday reminder changed');
+  return {phaseByWorkId:new Map(source.version.assignments.map(r=>[r.workId,r.workId===currentReminderId?null:phaseOf(r)])),
+    fixedRows,fixedRowsDigest:contentDigest(fixedRows)};
+}
+// Lossless path-level change receipt: array ordering and absent fields are not
+// coalesced. This is private authority evidence, never an employee diagnostic.
+function sourceDiff(before,after,path='$',out=[]){
+  if(before===undefined&&after===undefined)return out;
+  if(before!==undefined&&after!==undefined&&canonicalJson(before)===canonicalJson(after))return out;
+  if(before&&after&&typeof before==='object'&&typeof after==='object'&&!Array.isArray(before)&&!Array.isArray(after)){
+    for(const key of sorted(new Set([...Object.keys(before),...Object.keys(after)])))
+      sourceDiff(before[key],after[key],`${path}.${key}`,out);
+  }else out.push({path,beforePresent:before!==undefined,afterPresent:after!==undefined,
+    ...(before!==undefined?{before:structuredClone(before)}:{}),...(after!==undefined?{after:structuredClone(after)}:{})});
+  return out;
+}
+// Validate the exact corrected313 position recipe against the immutable314
+// registered base, independently of TARGET occupancy. Original raw split rows
+// remain evidence; dominant ownership is ONLY the inherited family cost seed.
+export function createFullNineReductionContext({publishedSource,managerSnapshot,correctionConfig,fullConfig,fullOwners,
+  fullNineSource,effectiveDate,expectedRevision}){
+  assert.equal(contentDigest(correctionConfig),reductionAuthority.correctionConfigDigest,'trusted current October correction config binding missing');
+  assert.equal(contentDigest(fullConfig),reductionAuthority.fullConfigDigest,'trusted full-nine config binding missing');
+  assert.equal(contentDigest(fullOwners),reductionAuthority.fullOwnersDigest,'trusted full-nine family guidance binding missing');
+  assert.equal(fullNineSource?.source_id,reductionAuthority.baseSourceId,'trusted registered full-nine base required for reduction');
+  const base=fullNineSource.compiler_input,accepted=publishedSource?.compiler_input;
+  assert.equal(contentDigest(base?.version?.assignments),reductionAuthority.baseAssignmentsDigest,'registered full-nine base work bytes changed');
+  assert.ok(accepted?.version?.assignments?.length===313,'exact historical313 pattern required');
+  const authority=recurringPatternAuthority({publishedSource,managerSnapshot,effectiveDate,expectedRevision});
+  const targetSlots=targetSlotsFromManagerRoster({templateConfig:correctionConfig,managerSnapshot,effectiveDate,expectedRevision});
+  const staffed=Object.values(targetSlots).filter(s=>s.vacancy!==true).length;
+  assert.ok(staffed>=6&&staffed<=8,'full-nine reduction targets six to eight current people');
+  const config=structuredClone(correctionConfig);config.effectiveDate=effectiveDate;config.slots=targetSlots;
+  validateOwnerEligibilityConfig(config);
+  const policy=accepted.version.shiftEndContinuityPolicy,{policyDigest,...policyBody}=policy||{};
+  assert.ok(policy,'historical accepted continuity policy missing');
+  assert.equal(policyDigest,postgresJsonbContentDigest(policyBody),'historical accepted continuity policy changed');
+  assert.equal(canonicalJson(policy.weights),canonicalJson(fullConfig.weights),'historical accepted weights changed');
+  assert.ok(!Object.hasOwn(policy,'namedHandoffs'),'historical313 named-policy authority needs separate classification');
+  const sourceConfigSha=policy.provenance?.match(/^owner-configuration-sha256:([a-f0-9]{64})$/)?.[1];
+  assert.ok(sourceConfigSha,'historical accepted config provenance missing');
+  const baseGroups=new Map();
+  for(const row of base.version.assignments){const key=`${row.dayOfWeek}/${phaseOf(row)}/${row.locationCodeSnapshot}`;
+    baseGroups.set(key,[...(baseGroups.get(key)||[]),row]);}
+  const expectedRows=[];
+  for(const [group,rows]of baseGroups){const [dayText,phase,family]=group.split('/'),day=Number(dayText),override=fullConfig.overrides?.[dayText]?.[phase];
+    if(!override){expectedRows.push(...structuredClone(rows));continue;}
+    const ownerKey=Object.entries(override).find(([,families])=>families.includes(family))?.[0];
+    assert.ok(ownerKey,'historical override family binding missing');
+    const owner=fullConfig.slots[ownerKey],row=structuredClone(rows[0]),members=rows.flatMap(r=>r.includedLocations);
+    assert.equal(new Set(members.map(m=>m.locationId)).size,members.length,'historical split member overlap');
+    Object.assign(row,{workId:`${day}:${family}:${phase}:${owner.slotId.slice(0,8)}`,ownerSlotId:owner.slotId,originSlotId:owner.slotId,
+      includedLocations:structuredClone(members),locationId:members[0]?.locationId||row.locationId,
+      serviceEffortMinutes:rows.reduce((n,r)=>n+r.serviceEffortMinutes,0),window:row.serviceMode==='reminder_only'?{start:'08:00',end:'08:30'}:
+        phase==='morning'?{start:owner.shift[0],end:'09:45'}:{start:'09:45',end:owner.shift[1]}});expectedRows.push(row);
+  }
+  assert.equal(expectedRows.length,313,'trusted full-nine recipe changed');
+  const expected=new Map(expectedRows.map(r=>[r.workId,r]));
+  assert.equal(new Set(accepted.version.assignments.map(r=>r.workId)).size,313,'duplicate historical work identity');
+  for(const row of accepted.version.assignments){
+    const original=expected.get(row.workId);assert.ok(original,'foreign historical full-nine work identity');
+    const normalized=structuredClone(original);
+    // Both existing exact generator and runtime-adapter provenance encodings
+    // are retained. No arbitrary wildcard provenance or extra-field tolerance.
+    if(row.serviceEffortProvenance===`base:${currentHandout.base}:effort`){
+      normalized.serviceEffortProvenance=row.serviceEffortProvenance;
+      normalized.priorityProvenance=`base:${currentHandout.base}:priority`;
+      normalized.qualificationProvenance=`base:${currentHandout.base}:qualifications`;
+    }
+    const restriction=`owner:${sourceConfigSha}:hard_place_eligibility;base:${currentHandout.base}`;
+    if(row.restrictionProvenance===restriction)normalized.restrictionProvenance=restriction;
+    if(Object.hasOwn(row,'restrictedSlotIds'))normalized.restrictedSlotIds=hardRestrictedSlots(fullConfig,row.locationCodeSnapshot,original.restrictedSlotIds||[]);
+    assert.equal(canonicalJson(row),canonicalJson(normalized),'historical full-row/physical/workload/provenance drift');
+  }
+  // Target people must already be represented by the authenticated hydrated
+  // source ledger. Do not close/erase incumbencies or import historical people.
+  for(const slot of Object.values(targetSlots)){
+    const row=accepted.slots.find(r=>r.id===slot.slotId);assert.ok(row&&!row.contractorCapacity,'target stable employee source position missing');
+    const current=(row.incumbencies||[]).filter(p=>p.effectiveStart<=effectiveDate&&(!p.effectiveEnd||effectiveDate<p.effectiveEnd));
+    assert.equal(current.length,slot.vacancy===true?0:1,'target/source current incumbency binding mismatch');
+    if(!slot.vacancy)assert.deepEqual([current[0].personId,current[0].displayName],[slot.personId,slot.name],'target/source current person binding mismatch');
+  }
+  const source=structuredClone(accepted);source.serviceDate=effectiveDate;source.exceptions=[];
+  Object.assign(source.version,{effectiveStart:effectiveDate,effectiveEnd:null,status:'published',namedAbsentSlotIds:[],
+    vacantSlotIds:Object.values(targetSlots).filter(s=>s.vacancy===true).map(s=>s.slotId).sort(),
+    vacancyCapableSlotIds:Object.values(targetSlots).map(s=>s.slotId).sort()});
+  const groups=new Map();
+  for(const row of accepted.version.assignments){const key=`${row.dayOfWeek}/${phaseOf(row)}/${row.locationCodeSnapshot}`;
+    groups.set(key,[...(groups.get(key)||[]),row]);}
+  const comparisonLedger=[],rows=[];
+  const mandatoryBindings=mandatoryReductionBindings(accepted,config);
+  config.fullNineReductionBinding={schema:'custodial.full-nine-mandatory-current-owner-binding.v1',
+    acceptedSourceDigest:contentDigest(accepted),correctionAuthorityDigest:contentDigest(correctionConfig),
+    mandatoryPrimaryOwnerBindings:mandatoryBindings,mandatoryChangeCostConstant:mandatoryBindings.reduce((n,b)=>n+b.fixedChangeCost,0)};
+  config.overrides={};config.preserveBaseDays=[];
+  for(let day=0;day<7;day++)for(const phase of ['morning','equalized']){
+    config.overrides[String(day)]||={};config.overrides[String(day)][phase]={};
+    const candidates=[...groups].filter(([key])=>key.startsWith(`${day}/${phase}/`));
+    if(phase==='morning')for(const family of config.adminFamilies)candidates.push([`${day}/morning/${family}`,groups.get(`${day}/equalized/${family}`)]);
+    for(const [group,old]of candidates){const family=group.split('/')[2];if(currentHandout.retired.includes(family))continue;
+      assert.ok(old?.length,'current correction physical definition missing');
+      const dominant=[...old].sort((a,b)=>b.serviceEffortMinutes-a.serviceEffortMinutes||
+        Object.keys(targetSlots).find(k=>targetSlots[k].slotId===a.originSlotId).localeCompare(Object.keys(targetSlots).find(k=>targetSlots[k].slotId===b.originSlotId)))[0];
+      const originalKey=Object.keys(targetSlots).find(k=>targetSlots[k].slotId===dominant.originSlotId);assert.ok(originalKey,'accepted reference outside stable positions');
+      const mandatory=phase==='equalized'?mandatoryBindings.find(b=>b.dayOfWeek===day&&b.family===family):null;
+      const key=mandatory?Object.keys(targetSlots).find(k=>targetSlots[k].slotId===mandatory.mandatoryPrimarySlotId):originalKey;
+      const members=old.flatMap(r=>r.includedLocations);assert.equal(new Set(members.map(m=>m.locationId)).size,members.length,'accepted split member overlap');
+      const row=structuredClone(old[0]),owner=targetSlots[key];
+      Object.assign(row,{workId:`${day}:${family}:${phase}:${owner.slotId.slice(0,8)}`,ownerSlotId:owner.slotId,originSlotId:owner.slotId,
+        includedLocations:structuredClone(members),locationId:members[0]?.locationId||row.locationId,
+        serviceEffortMinutes:old.reduce((n,r)=>n+r.serviceEffortMinutes,0),window:phase==='morning'?{start:owner.shift[0],end:'09:45'}:{start:'09:45',end:owner.shift[1]},
+        serviceEffortProvenance:`base:${currentHandout.base}:effort`,priorityProvenance:`base:${currentHandout.base}:priority`,
+        qualificationProvenance:`base:${currentHandout.base}:qualifications`,restrictionProvenance:`owner:40da4e1d4cce52b2361b5403b7e5e4477ca00def0fd3649a1d76dacb48422f30:hard_place_eligibility;base:${currentHandout.base}`,
+        restrictedSlotIds:hardRestrictedSlots(config,family,old.flatMap(r=>r.restrictedSlotIds||[]))});
+      rows.push(row);(config.overrides[String(day)][phase][key]||=[]).push(family);
+      comparisonLedger.push({day,phase,family,originalRows:structuredClone(old),originalRowsDigest:contentDigest(old),referenceSlotId:targetSlots[originalKey].slotId,
+        comparisonSourceOwnerSlotId:owner.slotId,...(mandatory?{mandatoryCurrentOwnerBinding:mandatory}:{}),
+        referenceKind:old.length>1?'EXISTING_DOMINANT_POINT_SHARE_FAMILY_PREFERENCE_ONLY':'EXACT_ACCEPTED_OWNER',
+        physicalMemberIds:members.map(m=>m.locationId),inheritedWorkloadPoints:row.serviceEffortMinutes,
+        addedMorningByCurrentAuthority:phase==='morning'&&config.adminFamilies.includes(family)});
+    }
+  }
+  const oldReminder=accepted.version.assignments.filter(r=>r.locationCodeSnapshot==='ELEPHANT_TRUNK_RESTROOMS');
+  assert.equal(oldReminder.length,1,'historical Elephant reminder correction definition missing');
+  const reminder=structuredClone(oldReminder[0]);
+  Object.assign(reminder,{dayOfWeek:2,workId:currentReminderId,ownerSlotId:config.slots.KATHY.slotId,originSlotId:config.slots.KATHY.slotId,
+    locationNameSnapshot:'Elephant Trunk Gift Shop employee men and women restrooms',window:{start:'10:00',end:'10:30'},
+    serviceEffortProvenance:`base:${currentHandout.base}:effort`,priorityProvenance:`base:${currentHandout.base}:priority`,
+    qualificationProvenance:`base:${currentHandout.base}:qualifications`,restrictionProvenance:`owner:40da4e1d4cce52b2361b5403b7e5e4477ca00def0fd3649a1d76dacb48422f30:hard_place_eligibility;base:${currentHandout.base}`,restrictedSlotIds:[]});
+  assert.equal(contentDigest(reminder),currentHandout.reminder,'authorized Tuesday reminder derivation changed');rows.push(reminder);
+  source.version.assignments=rows.sort(byWork);
+  const availability=new Map(accepted.version.slotAvailability.map(r=>[`${r.dayOfWeek}\0${r.slotId}`,r]));
+  assert.equal(availability.size,accepted.version.slotAvailability.length,'duplicate accepted day availability');
+  source.version.slotAvailability=[...accepted.version.slotAvailability.filter(r=>!Object.values(targetSlots).some(s=>s.slotId===r.slotId)),
+    ...Object.values(targetSlots).flatMap(slot=>slot.workDays.map(day=>{
+      const old=availability.get(`${day}\0${slot.slotId}`);assert.ok(old,'current target day has no source-bound capacity template');
+      return {...structuredClone(old),status:slot.vacancy===true?'vacant_unfilled':'working',shift:{start:slot.shift[0],end:slot.shift[1]},lunch:recurringOwnerLunch(slot,day)};
+    }))];
+  source.version.shiftEndContinuityPolicy=createShiftEndContinuityPolicy(config.weights,
+    '40da4e1d4cce52b2361b5403b7e5e4477ca00def0fd3649a1d76dacb48422f30',postgresJsonbContentDigest,config.namedShiftEndHandoffs);
+  const structure=reductionStructure(source);
+  for(let day=0;day<7;day++)for(const phase of ['morning','equalized']){
+    const tuples=rows.filter(r=>r.dayOfWeek===day&&structure.phaseByWorkId.get(r.workId)===phase).map(r=>({family:r.locationCodeSnapshot,
+      locationId:r.locationId,memberIds:r.includedLocations.map(m=>m.locationId),serviceMode:r.serviceMode,schedulingMode:r.schedulingMode}))
+      .sort((a,b)=>a.family<b.family?-1:a.family>b.family?1:0);
+    assert.equal(contentDigest(tuples),currentHandout.packageTuples,'reduction current package union/identity changed');
+  }
+  const diff=sourceDiff(accepted,source),body={schema:reductionAuthority.schema,acceptedSource:structuredClone(accepted),
+    acceptedSourceDigest:contentDigest(accepted),sourceId:publishedSource.source_id,patternPublicationId:authority.patternPublicationId,
+    effectivePublicationId:authority.publicationId,authorityRevision:expectedRevision,effectiveDate,
+    managerSnapshotDigest:contentDigest(managerSnapshot),correctionAuthorityDigest:contentDigest(correctionConfig),
+    fullConfigDigest:contentDigest(fullConfig),fullOwnersDigest:contentDigest(fullOwners),registeredBaseDigest:contentDigest(base),
+    comparisonLedger,comparisonLedgerDigest:contentDigest(comparisonLedger),source,currentConfig:config,
+    correctionReceipt:{schema:'custodial.full-nine-current-owner-correction.v1',historicalRows:313,desiredRows:323,
+      historicalNamedPolicy:structuredClone(policy),currentNamedPolicy:structuredClone(source.version.shiftEndContinuityPolicy),
+      retiredRows:accepted.version.assignments.filter(r=>currentHandout.retired.includes(r.locationCodeSnapshot)),
+      oldElephantReminder:structuredClone(oldReminder[0]),currentTuesdayReminder:structuredClone(reminder),
+      diff,diffDigest:contentDigest(diff),newBytesAreHistoricalFacts:false},admitted:false,published:false};
+  return {...body,contextDigest:contentDigest(body)};
+}
 export function currentHandoutRecurringStructure(input,config){
   if(!config.sourceHandout&&!config.dateAuthority)return null;
   // September26 is an independently retained historical312/313 lineage. Its
@@ -206,7 +403,7 @@ export function targetSlotsFromManagerRoster({ templateConfig, managerSnapshot, 
 // split-family nine-position publication additionally requires the exact
 // full-nine template and dominant-owner binding before adaptation.
 export function currentPatternFromPublishedReadback({ publishedSource, managerSnapshot,
-  templateConfig, fullConfig = null, fullOwners, effectiveDate, expectedRevision }) {
+  templateConfig, fullConfig = null, fullOwners, fullNineSource = null, effectiveDate, expectedRevision }) {
   const sourceId = String(publishedSource?.source_id || "");
   const patternAuthority = recurringPatternAuthority({publishedSource,managerSnapshot,effectiveDate,expectedRevision});
   const publicationId = patternAuthority.publicationId;
@@ -220,8 +417,15 @@ export function currentPatternFromPublishedReadback({ publishedSource, managerSn
   const input = publishedSource.compiler_input;
   assert.ok(input && Array.isArray(input.slots) && Array.isArray(input.version?.assignments),
     "published canonical compiler source required");
-  const legacyNine=fullConfig&&Object.values(slots).filter(slot=>slot.vacancy!==true).length===9
-    &&input.version.assignments.length===313;
+  const legacyNine=fullConfig&&input.version.assignments.length===313;
+  if(legacyNine&&Object.values(slots).filter(slot=>slot.vacancy!==true).length<9){
+    const reductionContext=createFullNineReductionContext({publishedSource,managerSnapshot,correctionConfig:templateConfig,
+      fullConfig,fullOwners,fullNineSource,effectiveDate,expectedRevision});
+    return {currentConfig:reductionContext.currentConfig,reductionContext,sourceId,publicationId,authorityRevision:expectedRevision,
+      ...(patternAuthority.repairContext?{patternPublicationId:patternAuthority.patternPublicationId,
+        repairContext:patternAuthority.repairContext,repairContextDigest:patternAuthority.repairContextDigest}:{}),
+      sourcePatternKind:'FULL_NINE',source:'AUTHORITY_READBACK_ONLY'};
+  }
   const currentStructure=legacyNine?null:currentHandoutRecurringStructure(input,templateConfig);
   const observedPhase=row=>currentStructure?currentStructure.phaseByWorkId.get(row.workId):phaseOf(row);
   const keyBySlot = new Map(Object.entries(slots).map(([key, slot]) => [slot.slotId, key]));
@@ -332,14 +536,21 @@ export function currentPatternFromPublishedReadback({ publishedSource, managerSn
 // must authenticate its release-registered source identity; this pure helper
 // cannot do that or authorize registration/publication by itself.
 export function adaptRegisteredRecurringSource({ registeredSource, patternConfig,
-  fullNineSource = null, allowSplitSource = false }) {
+  fullNineSource = null, allowSplitSource = false, reductionContext = null }) {
   validateOwnerEligibilityConfig(patternConfig);
   const actual = Object.values(patternConfig?.slots || {}).filter((slot) => slot.vacancy !== true).length;
   assert.ok(actual >= 6 && actual <= 9, "six to nine current people required");
-  const input = structuredClone(actual === 9 ? fullNineSource : registeredSource);
+  if(reductionContext){
+    assertReductionContext(reductionContext);
+    assert.equal(contentDigest(registeredSource),reductionContext.acceptedSourceDigest,'reduction accepted source drift');
+    assert.equal(canonicalJson(patternConfig.slots),canonicalJson(reductionContext.currentConfig.slots),'reduction target identity/days/lunch/restriction drift');
+    const facts=config=>Object.fromEntries(Object.entries(config).filter(([k])=>!['overrides','correctionNotes'].includes(k)));
+    assert.equal(canonicalJson(facts(patternConfig)),canonicalJson(facts(reductionContext.currentConfig)),'reduction current correction configuration drift');
+  }
+  const input = structuredClone(reductionContext?reductionContext.source:actual === 9 ? fullNineSource : registeredSource);
   assert.ok(input && Array.isArray(input.slots) && Array.isArray(input.version?.assignments)
     && Array.isArray(input.version?.slotAvailability), "registered canonical source required");
-  const currentStructure=actual===9?null:currentHandoutRecurringStructure(input,patternConfig);
+  const currentStructure=reductionContext?reductionStructure(input):actual===9?null:currentHandoutRecurringStructure(input,patternConfig);
   const sourcePhase=row=>currentStructure?currentStructure.phaseByWorkId.get(row.workId):phaseOf(row);
   const week = patternConfig.effectiveDate;
   assert.equal(new Date(`${week}T12:00:00Z`).getUTCDay(), 1, "candidate must start Monday");
@@ -490,27 +701,42 @@ export function adaptRegisteredRecurringSource({ registeredSource, patternConfig
 // The normal generator's pre-balanced09:45 owners are NOT the preference
 // baseline. Keep its explicit morning candidate, current roster/availability,
 // and exact original accepted09:45 work bytes for the canonical phase query.
-export function createRecurringPhaseSourceBasis({registeredSource,patternConfig}){
-  const structure=currentHandoutRecurringStructure(registeredSource,patternConfig);
+export function createRecurringPhaseSourceBasis({registeredSource,patternConfig,reductionContext=null}){
+  if(reductionContext)assertReductionContext(reductionContext);
+  const referenceSource=reductionContext?reductionContext.source:registeredSource;
+  const structure=reductionContext?reductionStructure(referenceSource):currentHandoutRecurringStructure(registeredSource,patternConfig);
   assert.ok(structure,'canonical phase source basis requires the exact current handout lineage');
-  const generated=adaptRegisteredRecurringSource({registeredSource,patternConfig});
+  const generated=adaptRegisteredRecurringSource({registeredSource,patternConfig,reductionContext});
   const source=structuredClone(generated.compilerInput),ownerConfig=structuredClone(patternConfig);
   const keys=new Map(Object.entries(ownerConfig.slots).map(([key,slot])=>[slot.slotId,key]));
-  const originals=registeredSource.version.assignments.filter(row=>structure.phaseByWorkId.get(row.workId)==='equalized');
+  const originals=referenceSource.version.assignments.filter(row=>structure.phaseByWorkId.get(row.workId)==='equalized');
   const originalByFamily=new Map(originals.map(row=>[`${row.dayOfWeek}\0${row.locationCodeSnapshot}`,row]));
   source.version.assignments=source.version.assignments.map(row=>row.window.start==='09:45'
     ?structuredClone(originalByFamily.get(`${row.dayOfWeek}\0${row.locationCodeSnapshot}`)):row);
   for(let day=0;day<7;day++)ownerConfig.overrides[String(day)].equalized=Object.fromEntries(
     Object.keys(ownerConfig.slots).sort().map(key=>[key,originals.filter(row=>row.dayOfWeek===day
       &&keys.get(row.originSlotId)===key).map(row=>row.locationCodeSnapshot).sort()]).filter(([,families])=>families.length));
-  const checked=currentHandoutRecurringStructure(source,ownerConfig);
+  const checked=reductionContext?reductionStructure(source):currentHandoutRecurringStructure(source,ownerConfig);
   assert.equal(contentDigest(source.version.assignments.filter(row=>row.window.start==='09:45').sort((a,b)=>a.workId<b.workId?-1:1)),
     contentDigest(structuredClone(originals).sort((a,b)=>a.workId<b.workId?-1:1)),'original accepted09:45 source bytes changed');
+  let fixedOtherDaysSource;
+  if(reductionContext){
+    const seedOwners=new Map(generated.compilerInput.version.assignments.filter(r=>r.window.start==='09:45')
+      .map(r=>[`${r.dayOfWeek}/${r.locationCodeSnapshot}`,r]));
+    fixedOtherDaysSource=structuredClone(source);
+    fixedOtherDaysSource.version.assignments=fixedOtherDaysSource.version.assignments.map(r=>{
+      if(r.window.start!=='09:45')return r;
+      const seed=seedOwners.get(`${r.dayOfWeek}/${r.locationCodeSnapshot}`);assert.ok(seed,'generated fixed-other-day owner missing');
+      return {...r,workId:seed.workId,ownerSlotId:seed.ownerSlotId,originSlotId:seed.originSlotId,window:structuredClone(seed.window)};
+    });
+  }
   const body={schema:'custodial.recurring-phase-source-basis.v1',source,ownerConfig,
     registeredSourceDigest:contentDigest(registeredSource),generatedPatternConfigDigest:contentDigest(patternConfig),
     originalEqualizedRowsDigest:contentDigest(originals),generatedMorningRowsDigest:contentDigest(source.version.assignments
       .filter(row=>checked.phaseByWorkId.get(row.workId)==='morning')),fixedRowsDigest:checked.fixedRowsDigest,
     comparisonReference:'ORIGINAL_ACCEPTED_POST0945_SOURCE',morningBasis:'EXPLICIT_GENERATED_FIXED_CANDIDATE',
+    ...(reductionContext?{reductionContext,fixedOtherDaysSource,
+      comparisonReference:'EXPLICIT_FULL_NINE_DOMINANT_FAMILY_REFERENCE_WITH_LOSSLESS_SPLIT_LEDGER'}:{}),
     admitted:false,published:false};
   return {...body,basisDigest:contentDigest(body)};
 }
@@ -629,6 +855,12 @@ export function deriveRecurringStaffingPattern({ currentConfig, targetSlots, ful
       const all = [];
       for (let f = 0; f < families.length; f += 1) for (let o = 0; o < owners.length; o += 1) {
         const family = families[f], owner = owners[o];
+        if(result.fullNineReductionBinding){
+          assert.equal(result.fullNineReductionBinding.correctionAuthorityDigest,reductionAuthority.correctionConfigDigest,'normal reduction correction authority changed');
+          const mandatory=phase==='equalized'?result.fullNineReductionBinding.mandatoryPrimaryOwnerBindings
+            .find(b=>b.dayOfWeek===day&&b.family===family):null;
+          if(mandatory&&targetSlots[owner].slotId!==mandatory.mandatoryPrimarySlotId)continue;
+        }
         if (targetSlots[owner].hardForbiddenFamilies?.includes(family)) continue;
         if (normalGeographyRestrictionApplies({key:owner,...targetSlots[owner]})
           && !targetSlots[owner].normalAssignmentFamilies.includes(family)) continue;
@@ -794,18 +1026,79 @@ export function deriveCanonicalRecurringPhaseCandidate({source,currentConfig,ful
 
 // The same existing-command scope, using an owned pinned engine. A relaxed
 // answer alone is never returned as a canonical candidate or admission.
-export function deriveScalableCanonicalRecurringPhaseCandidate({source,currentConfig,fullOwners,dayOfWeek,solver}){
+function phaseInvocationSource({source,currentConfig,dayOfWeek,phaseSourceBasis}){
+  if(!phaseSourceBasis?.reductionContext)return source;
+  const {basisDigest,...body}=phaseSourceBasis;
+  assert.equal(contentDigest(body),basisDigest,'reduction phase basis changed');assertReductionContext(body.reductionContext);
+  assert.equal(contentDigest(source),contentDigest(body.source),'reduction comparison source changed');
+  assert.equal(contentDigest(currentConfig),contentDigest(body.ownerConfig),'reduction owner comparison config changed');
+  const seed=body.fixedOtherDaysSource;assert.ok(seed?.version,'bound current fixed-other-day feasibility scaffold missing');
+  const outside=s=>{const x=structuredClone(s);x.version.assignments=x.version.assignments.filter(r=>r.window.start!=='09:45');return x;};
+  assert.equal(canonicalJson(outside(source)),canonicalJson(outside(seed)),'fixed-other-day scaffold changed protected source facts');
+  const originals=new Map(source.version.assignments.filter(r=>r.window.start==='09:45').map(r=>[`${r.dayOfWeek}/${r.locationCodeSnapshot}`,r]));
+  const facts=r=>Object.fromEntries(Object.entries(r).filter(([k])=>!['workId','ownerSlotId','originSlotId','window'].includes(k)));
+  const seedRows=seed.version.assignments.filter(r=>r.window.start==='09:45');
+  assert.equal(seedRows.length,originals.size,'fixed-other-day scaffold multiplicity changed');
+  for(const row of seedRows)assert.equal(canonicalJson(facts(row)),canonicalJson(facts(originals.get(`${row.dayOfWeek}/${row.locationCodeSnapshot}`)||{})),
+    'fixed-other-day scaffold changed package/budget/provenance');
+  // This scaffold is NOT an accepted solution or feasibility receipt. Each
+  // actual day result below still requires the complete canonical model,
+  // including these fixed other days; final week is checked again. Repeating
+  // an extra seed-only model here cannot strengthen that witness and consumes
+  // the unchanged30s bound before the real seven phase proofs finish.
+  const seedMap=new Map(seedRows.map(r=>[`${r.dayOfWeek}/${r.locationCodeSnapshot}`,r])),out=structuredClone(source);
+  out.version.assignments=out.version.assignments.map(r=>r.window.start==='09:45'&&r.dayOfWeek!==dayOfWeek
+    ?structuredClone(seedMap.get(`${r.dayOfWeek}/${r.locationCodeSnapshot}`)):r);
+  return out;
+}
+function reductionPreferenceReceipt({phaseSourceBasis,proof,dayOfWeek,fullOwners}){
+  const context=assertReductionContext(phaseSourceBasis.reductionContext),bindings=context.currentConfig.fullNineReductionBinding
+    .mandatoryPrimaryOwnerBindings.filter(b=>b.dayOfWeek===dayOfWeek);
+  for(const binding of bindings){
+    const pkg=proof.descriptor.packages.find(p=>p.family===binding.family),choice=proof.descriptor.choices.find(c=>c.workId===pkg?.workId);
+    assert.ok(choice&&choice.owners.length===1&&choice.owners[0].slotId===binding.mandatoryPrimarySlotId,
+      'mandatory constant is not unavoidable for every canonical feasible owner option');
+    const direct=proof.descriptor.directNamedHandoffOwnerBindings.find(b=>b.workId===choice.workId);
+    assert.ok(direct,'constant lacks exact canonical named primary owner constraint');
+    const {workId,...handoff}=direct;assert.equal(canonicalJson(handoff),canonicalJson(binding.handoff),'constant named constraint identity changed');
+  }
+  const normalized=assertRecurringPhasePreferenceNormalization({proof,source:phaseSourceBasis.source,
+    ownerConfig:phaseSourceBasis.ownerConfig,fullOwners});
+  assert.equal(proof.descriptor.dayOfWeek,dayOfWeek,'preference receipt day changed');
+  assert.ok(Number.isSafeInteger(proof.preferenceCost)&&proof.preferenceCost>=0,'original variable preference bound missing');
+  const constant=bindings.reduce((n,b)=>n+b.fixedChangeCost,0),body={schema:'custodial.full-nine-mandatory-preference-cost.v1',
+    contextDigest:context.contextDigest,comparisonLedgerDigest:context.comparisonLedgerDigest,descriptorDigest:proof.descriptor.descriptorDigest,
+    dayOfWeek,bindings:structuredClone(bindings),rawPrimitiveLpPreferenceCost:normalized.primitiveObjectiveValue,
+    originalScaleVariablePreferenceCost:normalized.originalScaleObjectiveValue,objectiveNormalization:normalized.normalization,
+    fixedUnavoidableOriginalOwnerChangeCost:constant,fullInheritedPreferenceCost:proof.preferenceCost+constant,
+    rawSolverReceiptIncludesConstant:false,costRule:'EXISTING_PER_FAMILY_100_PLUS_4_PLUS_2_WITH_SEPARATE_UNAVOIDABLE_CONSTANT',
+    prioritiesChanged:false};
+  return {...body,receiptDigest:contentDigest(body)};
+}
+export function assertFullNineReductionPreferenceReceipt({phaseSourceBasis,proof,dayOfWeek,fullOwners}){
+  const expected=reductionPreferenceReceipt({phaseSourceBasis,proof,dayOfWeek,fullOwners});
+  assert.equal(canonicalJson(proof.mandatoryCurrentOwnerPreferenceReceipt),canonicalJson(expected),'mandatory preference sum/reference/receipt changed');
+  return expected;
+}
+export function deriveScalableCanonicalRecurringPhaseCandidate({source,currentConfig,fullOwners,dayOfWeek,solver,phaseSourceBasis=null}){
+  source=phaseInvocationSource({source,currentConfig,dayOfWeek,phaseSourceBasis});
   const v=source.version||(source.versions?.length===1?source.versions[0]:null);
   assert.ok(v&&Array.isArray(v.assignments));
   const selectedWorkIds=v.assignments.filter(r=>r.dayOfWeek===dayOfWeek&&r.window?.start==='09:45').map(r=>r.workId);
-  return solveRecurringPhaseCanonicalMinimum({source,ownerConfig:currentConfig,fullOwners,dayOfWeek,selectedWorkIds,solver});
+  const proof=solveRecurringPhaseCanonicalMinimum({source,ownerConfig:currentConfig,fullOwners,dayOfWeek,selectedWorkIds,solver});
+  if(phaseSourceBasis?.reductionContext&&proof.status==='PROVEN_CANONICAL_PHASE_MINIMUM'){
+    const {proofDigest,...body}=proof;
+    body.mandatoryCurrentOwnerPreferenceReceipt=reductionPreferenceReceipt({phaseSourceBasis,proof,dayOfWeek,fullOwners});
+    return {...body,proofDigest:contentDigest(body)};
+  }
+  return proof;
 }
 
 // Complete existing-command equalized scope. Morning is explicit and fixed;
 // this does not choose or claim an optimum for morning work. Rebind every day
 // against final other-day candidate bytes, keeping its ORIGINAL source day as
 // the comparison/preference baseline. Never publish a stale per-day witness.
-export function deriveScalableCanonicalRecurringWeekCandidate({source,currentConfig,fullOwners,solver}){
+export function deriveScalableCanonicalRecurringWeekCandidate({source,currentConfig,fullOwners,solver,phaseSourceBasis=null}){
   const original=source.version||(source.versions?.length===1?source.versions[0]:null);
   assert.ok(original&&Array.isArray(original.assignments));
   const first=[],started=performance.now(),budgetMs=30_000;
@@ -815,7 +1108,7 @@ export function deriveScalableCanonicalRecurringWeekCandidate({source,currentCon
     return solver.solve(lp,{...options,timeLimitSeconds:Math.min(options.timeLimitSeconds,remaining/1000)});
   }};
   for(let dayOfWeek=0;dayOfWeek<7;dayOfWeek++){
-    const proof=deriveScalableCanonicalRecurringPhaseCandidate({source,currentConfig,fullOwners,dayOfWeek,solver:boundedSolver});first.push(proof);
+    const proof=deriveScalableCanonicalRecurringPhaseCandidate({source,currentConfig,fullOwners,dayOfWeek,solver:boundedSolver,phaseSourceBasis});first.push(proof);
     if(proof.status!=='PROVEN_CANONICAL_PHASE_MINIMUM')return {status:'UNKNOWN_CANONICAL_RECURRING_WEEK',stage:'initial_day',dayOfWeek,
       proofs:first,candidateSource:null,published:false,admitted:false};
   }
@@ -853,6 +1146,7 @@ export function deriveScalableCanonicalRecurringWeekCandidate({source,currentCon
         unchangedRelaxationDayFactsDigest:contentDigest(dayBasis(basis)),unchangedRelaxationDescriptorDigest:contentDigest(semantic(descriptor)),
         proofMethod:'UNCHANGED_DAY_RELAXATION_BOUND_PLUS_MATCHING_FINAL_WHOLE_WEEK_CANONICAL_WITNESS',
         freshSolverRunClaim:false,published:false,admitted:false};
+      if(phaseSourceBasis?.reductionContext)body.mandatoryCurrentOwnerPreferenceReceipt=reductionPreferenceReceipt({phaseSourceBasis,proof:body,dayOfWeek,fullOwners});
       proofs.push({...body,proofDigest:contentDigest(body)});
     }catch(error){return {status:'UNKNOWN_CANONICAL_RECURRING_WEEK',stage:'final_other_days_rebinding',dayOfWeek,
       reason:error.message,proofs,candidateSource:null,published:false,admitted:false};}
@@ -874,5 +1168,10 @@ export function deriveScalableCanonicalRecurringWeekCandidate({source,currentCon
     fullOwnersDigest:contentDigest(fullOwners),candidateSource:finalSource,candidateSourceDigest:finalDigest,proofs,canonicalHardWitness:canonical,
     morningPreserved:true,originalPreferenceBaselinePreserved:true,allOtherDaysBoundToFinalCandidate:true,
     normalMorningOptimumClaim:false,datedPriorityChange:false,published:false,admitted:false};
+  if(phaseSourceBasis?.reductionContext){
+    body.reductionContextDigest=phaseSourceBasis.reductionContext.contextDigest;
+    body.preferenceCostMeaning='RAW_VARIABLE_LP_COST_PLUS_SEPARATE_PROVEN_UNAVOIDABLE_CONSTANT';
+    body.mandatoryCurrentOwnerPreferenceReceipts=proofs.map((proof,dayOfWeek)=>assertFullNineReductionPreferenceReceipt({phaseSourceBasis,proof,dayOfWeek,fullOwners}));
+  }
   return {...body,proofDigest:contentDigest(body)};
 }
