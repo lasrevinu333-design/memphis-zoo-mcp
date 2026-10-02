@@ -22,6 +22,7 @@ import { assertOpsManagerSessionSecret, authenticateOpsAccessRequest, createSupa
 import { assertServerAssignedActor, authenticatedManagerActor } from "./manager-authority.js";
 import { authoritativeFeedbackPayload, makeFeedbackSubmitAuthority } from "./feedback-authority.js";
 import { attachFeedbackDelivery } from "./feedback-delivery-status.js";
+import { makeFeedbackPrivateReader, feedbackManagerPageRedirect } from "./feedback-private-reader.js";
 import { createPlacesAdminRouter } from "./places-api.js";
 import { isMcpReadOnlyNoAuthEnabled, makeMcpConnectorMiddleware } from "./auth/mcp-connector-auth.js";
 import {
@@ -1901,6 +1902,7 @@ async function storeSystemFeedbackImageAttachment(feedbackId, operationId, image
     name: imageAttachment.name,
     type: imageAttachment.type,
     size: body.length,
+    sha256: imageAttachment.sha256,
     storage_bucket: FEEDBACK_IMAGE_BUCKET,
     storage_path: objectPath,
     uploaded_at: imageAttachment.uploaded_at,
@@ -2891,6 +2893,12 @@ app.post("/dashboard-api/guest-cleanliness-issues/:reportId/resolve", requireOps
     res.status(error?.status || 500).json({ ok: false, error: error?.message || "Guest report resolution failed" });
   }
 });
+// The captured immutable mail URL points to this backend. Redirect only its
+// exact UUID to the existing manager frontend; data still requires manager auth.
+app.get("/system-feedback.html", feedbackManagerPageRedirect);
+app.get("/dashboard-api/system-feedback/:feedbackId", requireOpsManagerAuth,
+  makeFeedbackPrivateReader({getItem:getSystemFeedbackItemById,
+    attachDelivery:(rows)=>attachFeedbackDelivery(rows,{client:supabaseAdmin})}));
 app.get("/dashboard-api/system-feedback", requireOpsManagerAuth, async (req, res) => {
   try {
     await ensureSystemFeedbackSchema();
