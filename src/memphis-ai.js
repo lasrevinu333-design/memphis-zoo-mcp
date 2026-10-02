@@ -406,7 +406,7 @@ function summarizeWeatherPayload(weather) {
 function summarizeEvents(events = []) {
   if (!events.length) return "I don't see any upcoming events in the system right now.";
   const eventTime=(instant,wall)=>{
-    const parsed=typeof instant==='string'?new Date(instant):null;
+    const parsed=instant instanceof Date?instant:(typeof instant==='string'?new Date(instant):null);
     if(parsed && !Number.isNaN(parsed.getTime()))return new Intl.DateTimeFormat('en-US',{
       timeZone:'America/Chicago',hour:'2-digit',minute:'2-digit',hourCycle:'h23',timeZoneName:'short',
     }).format(parsed);

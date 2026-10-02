@@ -32,7 +32,7 @@ try {
       if (sql.includes('sch_service_date')) return [{service_date:'2026-10-02'}];
       if (sql.includes('from public.events_app_events')) return [{event_name:'Fold rehearsal',
         display_location:'Event Center',event_date:'2026-11-01',end_date:'2026-11-01',
-        start_time:'01:30:00',end_time:'02:30:00',start_instant_utc:'2026-11-01T06:30:00Z',
+        start_time:'01:30:00',end_time:'02:30:00',start_instant_utc:new Date('2026-11-01T06:30:00Z'),
         end_instant_utc:'2026-11-01T08:30:00Z',attendee_count:20}];
       return [];
     },runRpc: async()=>null,
