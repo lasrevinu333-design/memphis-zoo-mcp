@@ -188,12 +188,38 @@ await test('seven-case predecessor keeps exact14-field receipt and fixed source-
   assert.deepEqual(r.cases.map(x=>x.expected_reason),Object.values(predecessorReasons));
   const text=readFileSync(join(root,PREDECESSOR_FIXTURE),'utf8');
   for(const id of Object.keys(predecessorReasons))assert.ok(text.includes("id:'"+id+"'"));
-  assert.ok(text.includes("succeeded(run('begin;'+validAliasSetup+'\\n'+body+'\\nrollback;'),'valid clock grant alias final migration control')"));
+  assert.ok(text.includes("succeeded(run('begin;'+validAliasSetup+'\\n'+body+'\\nrollback;'),'valid clock grant alias final migration control',{migrationControl:true})"));
   assert.ok(text.indexOf('valid clock grant alias final migration control')<text.indexOf("id:'second_equivalent_clock_grant_alias_corrupted'"));
   assert.ok(text.includes("rollbackExact('valid clock grant alias control rollback')"));
   assert.ok(text.includes("assert.deepEqual(clockSnapshot(),clockBefore,label+' clock grant/function')"));
   assert.ok(text.includes("assert.equal(clockBefore.exact,true,'no preexisting clock grant fault credit')"));
   assert.match(text,/id:'second_equivalent_clock_grant_alias_corrupted'[\s\S]*?object_identity='\$\{CLOCK\}'/);
+});
+await test('fixed fixture primary diagnostic keeps only first bounded ERROR line',()=>{
+  const text=readFileSync(join(root,PREDECESSOR_FIXTURE),'utf8');
+  const begin=text.indexOf('function primaryMigrationError('),end=text.indexOf('\nfunction succeeded(',begin);
+  assert.ok(begin>0&&end>begin);
+  // Execute only the exact source's pure formatter, never fixture IO or SQL.
+  const primary=Function(text.slice(begin,end)+'\nreturn primaryMigrationError;')();
+  assert.equal(primary('NOTICE: ignore\nERROR:  exact synthetic rejection\nDETAIL: private detail\nHINT: private hint\nCONTEXT: private context\nERROR: later error'),'ERROR:  exact synthetic rejection');
+  assert.equal(primary('ERROR:  rejection\r\nCONTEXT: omitted'),'ERROR:  rejection');
+  assert.equal(primary('DETAIL: not an error\nCONTEXT: omitted'),'');assert.equal(primary(undefined),'');
+  assert.equal(primary('ERROR:  '+'x'.repeat(2000)).length,512);
+  assert.doesNotMatch(primary('ERROR:  x\u0000\u001b\u007fy'),/[\x00-\x1f\x7f]/);
+});
+await test('only positive hash-bound migration control can include primary diagnostic in its failure',()=>{
+  const text=readFileSync(join(root,PREDECESSOR_FIXTURE),'utf8');
+  const begin=text.indexOf('function primaryMigrationError('),end=text.indexOf('\nfunction inspect(',begin);
+  assert.ok(begin>0&&end>begin);
+  const succeeded=Function('assert',text.slice(begin,end)+'\nreturn succeeded;')(assert);
+  const failure={error:undefined,status:3,stdout:'',stderr:'ERROR:  required grant drift\nDETAIL: hidden payload'};
+  assert.throws(()=>succeeded(failure,'fixed phase',{migrationControl:true}),error=>error.message.includes('fixed phase: ERROR:  required grant drift')&&!error.message.includes('hidden payload'));
+  assert.throws(()=>succeeded(failure,'query phase'),error=>error.message.includes('query phase')&&!error.message.includes('required grant drift'));
+  assert.equal(succeeded({...failure,status:0,stdout:'ok'},'fixed phase',{migrationControl:true}),'ok');
+  assert.equal([...text.matchAll(/migrationControl:true/g)].length,1);
+  assert.ok(text.includes("'ON_ERROR_STOP=1','-v','VERBOSITY=terse'"));
+  assert.ok(text.includes('assert.equal(digest(bytes),migration.sha256)'));
+  assert.ok(text.includes("keys(input,['target','migration'])"));
 });
 await boundary('predecessor cannot claim configured authority','predecessor',editJson(x=>{x.authority_configured=true}),/predecessor_receipt/);
 await boundary('predecessor unsuccessful rollback is fatal','predecessor',editJson(x=>{x.cases[0].rollback_exact=false}),/predecessor_rollback/);

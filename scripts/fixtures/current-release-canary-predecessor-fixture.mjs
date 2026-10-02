@@ -20,7 +20,18 @@ function command(args,input){
  return spawnSync('docker',[...DOCKER,...args],{input,encoding:'utf8',timeout:90000,maxBuffer:16*1024*1024,
   env:{PATH:process.env.PATH,LANG:'C.UTF-8'}});
 }
-function succeeded(result,label){assert.equal(result.error,undefined,label);assert.equal(result.status,0,label);return result.stdout.trim();}
+function primaryMigrationError(stderr){
+ if(typeof stderr!=='string')return '';
+ const line=stderr.split(/\r?\n/).find(value=>/^ERROR:\s/.test(value));
+ return line?line.replace(/[\x00-\x1f\x7f]/g,' ').slice(0,512):'';
+}
+function succeeded(result,label,{migrationControl=false}={}){
+ assert.equal(result.error,undefined,label);
+ // Only the fixed, hash-bound positive final-migration control may expose its
+ // first primary ERROR line. Other SQL/inspect/setup failures keep finite labels.
+ const primary=migrationControl&&result.status!==0?primaryMigrationError(result.stderr):'';
+ assert.equal(result.status,0,primary?label+': '+primary:label);return result.stdout.trim();
+}
 function inspect(target){
  const list=JSON.parse(succeeded(command(['inspect','--type','container',target.name]),'owned target inspect'));
  assert.equal(list.length,1);const x=list[0];
@@ -60,7 +71,7 @@ export function verifyCurrentReleaseCanaryPredecessor(input){
  // Any raised exception terminates psql and connection-close rolls back ALL DDL.
  const body=source.replace(/^begin;$/m,'').replace(/^commit;\s*$/m,'');
  inspect(target);
- const args=['exec','-i',target.id,'psql','-X','-qAt','-v','ON_ERROR_STOP=1','-U','supabase_admin','-d','postgres'];
+ const args=['exec','-i',target.id,'psql','-X','-qAt','-v','ON_ERROR_STOP=1','-v','VERBOSITY=terse','-U','supabase_admin','-d','postgres'];
  const run=sql=>command(args,'set client_min_messages=warning;set statement_timeout=60000;set lock_timeout=5000;\n'+sql);
  const snapshot=()=>JSON.parse(succeeded(run(SNAPSHOT),'snapshot query'));
   const before=snapshot();assert.equal(before.feedback_stored,OLD);assert.equal(before.feedback_live,LIVE);
@@ -108,7 +119,7 @@ export function verifyCurrentReleaseCanaryPredecessor(input){
  end $alias$;`+on;
  // A valid second alias must pass the WHOLE final migration first, not merely
  // be insertable. Roll back the successful control before injecting corruption.
- succeeded(run('begin;'+validAliasSetup+'\n'+body+'\nrollback;'),'valid clock grant alias final migration control');
+ succeeded(run('begin;'+validAliasSetup+'\n'+body+'\nrollback;'),'valid clock grant alias final migration control',{migrationControl:true});
  rollbackExact('valid clock grant alias control rollback');
  const clockGrantReason='Current release required grant recovery drift: '+CLOCK_ALIAS;
  const cases=[
