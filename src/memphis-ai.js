@@ -380,7 +380,7 @@ function genericConversationalFallback(text = "", threadContext = {}) {
   if (/alive|connected/.test(lower)) return "Yeah. I am here and ready for system questions.";
   if (/sparrow/.test(lower)) return "That depends. African or European?";
   if (/weather/.test(lower)) return `I could not land a clean weather answer for ${weatherLocation || DEFAULT_WEATHER_LOCATION} right now.`;
-  if (/recipe|ingredients|cook|bake|pumpkin pie|creme brulee|pretzel|pretzels/.test(lower)) return "I did not get a clean general-answer response for that recipe question. Check the Gemini/API setup and try again.";
+  if (/recipe|ingredients|cook|bake|pumpkin pie|creme brulee|pretzel|pretzels/.test(lower)) return "I could not get a reliable answer to that recipe question right now. Please try again later.";
   if (/hello|hey|hi/.test(lower)) return "Hey. What do you need?";
   if (/wrong|lying|bad answer|not right|incorrect|made up|guess/.test(lower)) return "Fair. That answer was wrong. I will re-check the specific source instead of guessing.";
   return "I do not have a clean answer for that yet. Ask me again with the specific thing to check, and I will use the matching source instead of guessing.";
@@ -685,10 +685,6 @@ function daysBetweenIsoDates(fromDate, toDate) {
   return Math.round((to.getTime() - from.getTime()) / 86400000);
 }
 
-function shiftIsoDate(serviceDate, daysToAdd = 0) {
-  return addDaysToIsoDate(serviceDate, daysToAdd);
-}
-
 function isWeeklyScheduleQuestion(text = "") {
   const raw = String(text || "");
   const lower = normalizeLoose(raw);
@@ -876,7 +872,7 @@ async function resolveLocationRow(runReadOnlySql, text = "", threadContext = {})
 async function summarizeOwnerQuestion(runReadOnlySql, runRpc, serviceDate, todayServiceDate, text = "", threadContext = {}) {
   const location = await resolveLocationRow(runReadOnlySql, text, threadContext);
   const futureOffset = daysBetweenIsoDates(todayServiceDate, serviceDate);
-  if (location?.location_code && (futureOffset == null || futureOffset <= 0)) {
+  if (location?.location_code && futureOffset === 0) {
     const ownerRows = await runReadOnlySql(`select * from public.sch_get_current_owner('${esc(location.location_code)}', now())`);
     const owner = Array.isArray(ownerRows) && ownerRows.length ? ownerRows[0] : null;
     if (owner?.owner_display_name || owner?.employee_name) {
@@ -886,7 +882,7 @@ async function summarizeOwnerQuestion(runReadOnlySql, runRpc, serviceDate, today
 
   const areaRow = await resolveAreaRow(runReadOnlySql, serviceDate, text, threadContext);
   if (!areaRow?.group_name) return "";
-  // H37: Check if the area is reminder-only before forcing schedule generation.
+  // Reminder-only areas do not gain scan tracking from conversational lookup.
   if (isReminderOnlyGroup(areaRow.group_code)) {
     return `${areaRow.group_name} is a reminder-only assignment — no scan tracking or dashboard status required.`;
   }
@@ -902,17 +898,9 @@ async function summarizeOwnerQuestion(runReadOnlySql, runRpc, serviceDate, today
     rows = await runReadOnlySql(`select * from public.v_memphis_area_schedule where service_date = '${esc(serviceDate)}'::date and (group_name ilike ${sqlLikeLiteral(areaRow.group_name)} or group_code ilike ${sqlLikeLiteral(areaRow.group_code || areaRow.group_name)}) order by coverage_start asc, segment_number asc`);
   }
   rows = Array.isArray(rows) ? rows : [];
-  let assignments = rows.filter((row) => row.employee_name || row.assigned_employee_name);
-  if (!assignments.length && futureOffset != null && futureOffset > 0 && futureOffset < 7) {
-    let fallbackRows = [];
-    if (areaRow?.location_group_id) {
-      fallbackRows = await runReadOnlySql(`select * from public.v_memphis_area_schedule where service_date = '${esc(shiftIsoDate(serviceDate, -7))}'::date and location_group_id = '${esc(areaRow.location_group_id)}'::uuid order by coverage_start asc, segment_number asc`);
-    }
-    if (!Array.isArray(fallbackRows) || !fallbackRows.length) {
-      fallbackRows = await runReadOnlySql(`select * from public.v_memphis_area_schedule where service_date = '${esc(shiftIsoDate(serviceDate, -7))}'::date and (group_name ilike ${sqlLikeLiteral(areaRow.group_name)} or group_code ilike ${sqlLikeLiteral(areaRow.group_code || areaRow.group_name)}) order by coverage_start asc, segment_number asc`);
-    }
-    assignments = (Array.isArray(fallbackRows) ? fallbackRows : []).filter((row) => row.employee_name || row.assigned_employee_name).map((row) => ({ ...row, service_date: serviceDate }));
-  }
+  // Accepted dated publication is the authority. A past pattern or missing
+  // publication cannot be relabeled for another day or resurrect old people.
+  const assignments = rows.filter((row) => row.employee_name || row.assigned_employee_name);
   if (!assignments.length) {
     if (futureOffset != null && futureOffset > 0) return `I do not see generated schedule assignments for ${areaRow.group_name} on ${serviceDate} yet.`;
     return `I could not find an assignment for ${areaRow.group_name} on ${serviceDate}.`;
@@ -1045,30 +1033,6 @@ async function tryGeminiConversation({ apiKey, userMessage, webEnabled, threadCo
 }
 
 export function createMemphisResponder({ runReadOnlySql, runRpc }) {
-  async function fetchFallbackAreaAssignments(locationGroupId, serviceDate) {
-    const fallbackDate = shiftIsoDate(serviceDate, -7);
-    const rows = await runReadOnlySql(`
-      select *
-      from public.v_memphis_area_schedule
-      where service_date = '${esc(fallbackDate)}'::date
-        and location_group_id = '${esc(locationGroupId)}'::uuid
-      order by group_name asc, segment_number asc
-    `);
-    return (Array.isArray(rows) ? rows : []).map((row) => ({ ...row, service_date: serviceDate }));
-  }
-
-  async function fetchFallbackEmployeeAssignments(employeeName, serviceDate) {
-    const fallbackDate = shiftIsoDate(serviceDate, -7);
-    const rows = await runReadOnlySql(`
-      select *
-      from public.v_memphis_employee_schedule
-      where service_date = '${esc(fallbackDate)}'::date
-        and employee_name ilike ${sqlLikeLiteral(employeeName)}
-      order by group_name asc, segment_number asc
-    `);
-    return (Array.isArray(rows) ? rows : []).map((row) => ({ ...row, service_date: serviceDate }));
-  }
-
   async function isReminderOnlyLocation(locationId, serviceDate) {
     if (!locationId) return false;
     try {
@@ -1141,7 +1105,6 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
         order by vas.group_name asc, vas.segment_number asc
       `);
       rows = Array.isArray(rows) ? rows : [];
-      if (!rows.length) rows = await fetchFallbackAreaAssignments(target.location_group_id, serviceDate);
       return { service_date: serviceDate, assignments: rows || [], group_name: target.group_name || target.group_code };
     }
 

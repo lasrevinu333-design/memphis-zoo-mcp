@@ -3,6 +3,7 @@ import express from "express";
 import { createMemphisResponder } from "../src/memphis-ai.js";
 import { createMessagingRouter } from "../src/messaging-api.js";
 import { findLocationCode, hasLocationKeyword } from "../src/ai/memphis-ai-intent.js";
+import './memphis-authoritative-date-tests.mjs';
 
 process.env.GEMINI_API_KEY = "";
 process.env.MEMPHIS_GEMINI_API_KEY = "";
