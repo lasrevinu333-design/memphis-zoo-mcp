@@ -84,7 +84,30 @@ try{
   if(state==='wrong_device')row.device_id=id(99);if(state==='wrong_secret')row.token_hash='f'.repeat(64);
   await refused('noncurrent credential '+state);
  }row=structuredClone(base);
- await refused('unfinished events cannot relay to generic SQL',body,prefix+'/events');
+ await refused('events cannot relay registration schema to generic SQL',body,prefix+'/events');
+ const event={schema:'custodial.native-provider-event.v1',event_id:id(60),generation_id:body.generation_id,receipt_job_id:id(61),notification_key:'synthetic-event-key',
+  action:'received',receipt_credential_id:cid,receipt_employee_id:employee,receipt_device_id:'KIOSK_08',receipt_assignment_epoch:7,
+  principal_digest:body.principal_digest,token_digest:body.token_digest,content_sha256:'c'.repeat(64),admitted_at:'2026-10-02T01:00:00.123456Z',
+  original_observation:{authenticated_at:null,boot_count:null,elapsed_realtime_ms:null}};
+ event.record_id=crypto.createHash('sha256').update(event.generation_id+'\n'+event.receipt_job_id+'\n'+event.notification_key).digest('hex');
+ const events={schema:'custodial.native-provider-events.v1',events:[event]},eventResponse={ok:true,data:{schema:'custodial.native-provider-event-receipts.v1',results:[
+  {...event,schema:'custodial.native-provider-event-receipt.v1',admitted_state:'ACCEPTED',server_received_at:'2026-10-02T01:01:00.123456Z',replayed:false}]}};
+ dbValue=eventResponse;r=await send(events,prefix+'/events');const eventResult=await r.json();
+ check('events current HMAC reaches exact SQL wrapper',r.status===200&&lastFunction==='custodial_native_provider_events'&&!Object.hasOwn(lastArgs,'p_status'));
+ check('events echoes exact committed observations',JSON.stringify(eventResult)===JSON.stringify(eventResponse));
+ for(const k of ['x-memphis-native-attestation-version','x-memphis-native-request-id','x-memphis-native-request-attestation'])
+  await refused('events requires native proof '+k,events,prefix+'/events',h=>delete h[k]);
+ for(const change of [{action:'dismissed'},{receipt_employee_id:id(88)},{receipt_assignment_epoch:'7'},{extra:true}])
+  await refused('events strict '+Object.keys(change)[0],{...events,events:[{...event,...change}]},prefix+'/events');
+ for(const path of [prefix+'/events/',prefix+'/EVENTS',prefix+'/%65vents',prefix+'/events?x=1'])await refused('events alias denied '+path,events,path);
+ for(const fault of ['foreign','observation','duplicate','bad_time','extra']){
+  dbValue=structuredClone(eventResponse);const item=dbValue.data.results[0];
+  if(fault==='foreign')item.receipt_employee_id=id(88);if(fault==='observation')item.original_observation.boot_count=1;
+  if(fault==='duplicate')dbValue.data.results.push({...item});if(fault==='bad_time')item.server_received_at='2026-02-30T01:00:00.000000Z';if(fault==='extra')item.extra=true;
+  r=await send(events,prefix+'/events');await r.text();check('events malformed SQL response '+fault,r.status===503);
+ }
+ dbValue={ok:true,data:{schema:eventResponse.data.schema,results:[]}};r=await send(events,prefix+'/events');
+ check('missing SQL event items are not synthesized',r.status===200&&(await r.json()).data.results.length===0);dbValue=null;
  await refused('inventory rejects registration schema before SQL',body,prefix+'/inventory');
  const inventory={schema:'custodial.native-provider-inventory-request.v1',scan_id:id(44),principal_digest:body.principal_digest,
   device_id:body.device_id,credential_id:cid,employee_id:employee,assignment_epoch:7,generation_ids:[body.generation_id],limit:32,cursor:null,ceiling:null,server_now:null};
