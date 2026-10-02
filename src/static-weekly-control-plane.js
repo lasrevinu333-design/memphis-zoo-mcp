@@ -143,6 +143,24 @@ function requireUuid(value, code) {
   return candidate;
 }
 
+function seasonWorkFromAssignments(assignments) {
+  if (!Array.isArray(assignments) || assignments.length > 10000) throw fail("static_weekly_sch022_work_unavailable");
+  return assignments.map((row) => {
+    const work = row?.workSnapshot;
+    if (!work || typeof work !== "object" || !Array.isArray(work.includedLocations)
+      || !text(work.locationCodeSnapshot) || work.includedLocations.length > 256) {
+      throw fail("static_weekly_sch022_work_unavailable", "The exact scheduled work identities are unavailable for seasonal admission.");
+    }
+    return { locationId: work.locationId || null, locationCode: work.locationCodeSnapshot,
+      includedLocationIds: work.includedLocations.map((location) => location?.locationId) };
+  });
+}
+
+function requireSeasonWitness(value) {
+  if (!/^[a-f0-9]{64}$/.test(text(value))) throw fail("static_weekly_sch022_witness_unavailable");
+  return value;
+}
+
 function projectionIdempotencyKey(value) {
   return `projection-${createHash("sha256").update(requireIdempotencyKey(value)).digest("hex")}`;
 }
@@ -634,7 +652,8 @@ export function createStaticWeeklyControlPlane({
 
   function recurringPreviewDigest(actor, basis, candidate) {
     return createHash("sha256").update(canonicalJson({
-      managerId: actor.managerId, recurringGeneration: basis.recurringGeneration, candidate,
+      managerId: actor.managerId, recurringGeneration: basis.recurringGeneration,
+      splashSeasonWitness: requireSeasonWitness(basis.splashSeasonWitness), candidate,
     })).digest("hex");
   }
 
@@ -819,13 +838,16 @@ export function createStaticWeeklyControlPlane({
       // under a serial authority lock and compare this exact digest.
       const current = await transaction(async (client) => {
         await lockStaticWeeklyAuthority(client);
-        return { snapshot: await snapshotFor(client, date), recurringGeneration: await recurringGenerationFor(client) };
+        return { snapshot: await snapshotFor(client, date), recurringGeneration: await recurringGenerationFor(client),
+          splashSeasonWitness: await call(client, "static_weekly_sch022_preview_witness", [date,
+            seasonWorkFromAssignments(candidate.decision.assignments),actor.managerId]) };
       });
       if (requireRevision(current.snapshot?.authority_revision) !== revision
         || text(current.snapshot?.current_publication?.publication_id) !== candidate.publicationId
         || current.recurringGeneration !== basis.recurringGeneration) {
         throw fail("static_weekly_recurring_preview_revision_changed", "The manager roster changed during preview.");
       }
+      basis.splashSeasonWitness = requireSeasonWitness(current.splashSeasonWitness);
       // Hash every byte of the manager-visible candidate result, not only its
       // final area map. This binds source/roster inputs, compiler authority and
       // replay, metrics and the exact preview changes to the named manager.
@@ -863,6 +885,9 @@ export function createStaticWeeklyControlPlane({
         }
         const candidate = prepared.candidate;
         validateRecurringCandidate(candidate, basis, revision);
+        basis.splashSeasonWitness = requireSeasonWitness(await call(client,
+          "static_weekly_sch022_preview_witness", [date,
+            seasonWorkFromAssignments(candidate.decision.assignments),actor.managerId]));
         if (recurringPreviewDigest(actor, basis, candidate) !== expectedDigest) {
           throw fail("static_weekly_recurring_preview_changed", "The complete recurring preview changed. Preview the current plan again before confirming.");
         }
@@ -999,22 +1024,30 @@ export function createStaticWeeklyControlPlane({
             meter.checkpoint();
           }
           const candidateSet = createStaffingCandidateSet({ window, candidates, meter });
+          const databaseCandidates = candidateSet.rows.map(({ candidateKind, candidateKey, serviceDate, payload }) => ({
+            candidateKind, candidateKey, payload, serviceDate,
+          }));
+          const seasonWitness = await call(client,"static_weekly_sch022_preview_staffing_witness",
+            [databaseCandidates,actor.managerId]);
+          const seasonWitnessDigest = requireSeasonWitness(seasonWitness?.digest);
           const publicationVector = { expectedRevision: command.expected_revision, weeks };
           const inputDigest = createHash("sha256").update(canonicalJson({ operationId: operation,
             semanticDigest: command.semantic_digest, publicationVector, inputDigests })).digest("hex");
           const previewDigest = createHash("sha256").update(canonicalJson({ operationId: operation,
             semanticDigest: command.semantic_digest, candidateSetDigest: candidateSet.digest,
-            publicationVector, summary: candidateSet.summary })).digest("hex");
-          return { candidateSet, publicationVector, inputDigest, previewDigest };
+            publicationVector, summary: candidateSet.summary, seasonWitnessDigest })).digest("hex");
+          return { candidateSet, publicationVector, inputDigest, previewDigest, seasonWitnessDigest };
         });
         const databaseCandidates = prepared.candidateSet.rows.map(({ candidateKind, candidateKey, serviceDate, payload }) => ({
           candidateKind, candidateKey, payload, serviceDate,
         }));
-        return call(client, "static_weekly_v10_stage_staffing_command", [operation, databaseCandidates,
-          prepared.previewDigest, prepared.inputDigest, prepared.publicationVector, actor.managerId]);
+        return call(client, "static_weekly_sch022_stage_staffing_command", [operation, databaseCandidates,
+          prepared.previewDigest, prepared.inputDigest, prepared.publicationVector, actor.managerId,
+          prepared.seasonWitnessDigest]);
       });
     },
-    async stageStaffingCommand({ manager, operationId, window, candidates, previewDigest, inputDigest, publicationVector }) {
+    async stageStaffingCommand({ manager, operationId, window, candidates, previewDigest, inputDigest, publicationVector,
+      seasonWitnessDigest = null }) {
       const actor = requireManager(manager);
       const candidateSet = createStaffingCandidateSet({ window, candidates });
       const requireDigest = (value, code) => {
@@ -1028,14 +1061,22 @@ export function createStaticWeeklyControlPlane({
       const databaseCandidates = candidateSet.rows.map(({ candidateKind, candidateKey, serviceDate, payload }) => ({
         candidateKind, candidateKey, payload, serviceDate,
       }));
-      return transaction((client) => call(client, "static_weekly_v10_stage_staffing_command", [
+      return transaction(async (client) => {
+        const currentWitness = await call(client,"static_weekly_sch022_preview_staffing_witness",
+          [databaseCandidates,actor.managerId]);
+        if (currentWitness?.target_week_count > 0 && seasonWitnessDigest !== currentWitness.digest) {
+          throw fail("static_weekly_sch022_witness_required", "Target-bearing staffing must retain the exact original seasonal preview witness.");
+        }
+        return call(client, "static_weekly_sch022_stage_staffing_command", [
         requireUuid(operationId, "staffing_operation_id_required"),
         databaseCandidates,
         requireDigest(previewDigest, "staffing_preview_digest_required"),
         requireDigest(inputDigest, "staffing_input_digest_required"),
         structuredClone(publicationVector),
         actor.managerId,
-      ]));
+        requireSeasonWitness(currentWitness?.digest),
+      ]);
+      });
     },
     async getStaffingCommand({ manager, operationId }) {
       const actor = requireManager(manager);

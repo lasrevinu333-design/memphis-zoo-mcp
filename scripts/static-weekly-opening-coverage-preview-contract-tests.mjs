@@ -37,6 +37,7 @@ function candidate(basis){
 }
 const database={async connect(){return {async query(sql,args=[]){const result=x=>({rows:[{result:x}]});
  if(sql.includes('static_weekly_v15_read_recurring_generation'))return result(generation);
+ if(sql.includes('static_weekly_sch022_preview_witness'))return result('9'.repeat(64));
  if(sql.includes('static_weekly_v3_read_manager_snapshot'))return result(snapshot());
  if(sql.includes('static_weekly_v20_read_recurring_preview_basis'))return result(published());
  if(sql.includes('static_weekly_v13_begin_recurring_confirmation'))return result(accepted?{state:'ACCEPTED',receipt:{accepted:true,affectedPhonesUpdated:false}}:{state:'RESERVED',operationId:id(4)});

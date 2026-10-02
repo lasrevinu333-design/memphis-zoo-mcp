@@ -62,6 +62,7 @@ function harness({failAt=null,mutatePrivate=null,commitUnknown=false}={}){
    if(sql.includes('static_weekly_v13_read_recurring_confirmation'))return result(state.receipt?
     {state:'ACCEPTED',operationId:id(9),receipt:state.receipt}:{state:'NOT_FOUND'});
    if(sql.includes('static_weekly_v15_read_recurring_generation'))return result(state.generation);
+   if(sql.includes('static_weekly_sch022_preview_witness'))return result('9'.repeat(64));
    if(sql.includes('static_weekly_v3_read_manager_snapshot'))return result({authority_revision:state.revision,
     current_publication:{publication_id:state.publication},projection_status:state.projection?'current':'missing',
     latest_projection:state.projection?{projection_id:state.projection}:null});

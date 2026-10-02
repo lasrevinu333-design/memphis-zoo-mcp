@@ -10,7 +10,8 @@ const client={async query(statement,values=[]){calls.push({statement,values});
   if(statement.includes('static_weekly_v11_read_current_refresh_targets'))return{rows:[{result:[{serviceDate:'2026-09-30',employeeId:priorOwner}]}]};
   if(statement.includes('static_weekly_v3_read_manager_snapshot'))return{rows:[{result:{authority_revision:19,current_publication:{publication_id:'70000000-0000-4000-8000-000000000001'}}}]};
   if(statement.includes('static_weekly_v3_read_publication_source'))return{rows:[{result:{authority_revision:19,publication_id:'70000000-0000-4000-8000-000000000001',version_id:'60000000-0000-4000-8000-000000000001',exceptions:[],compiler_input:{timezone:'America/Chicago',proximity:[],slots:[{id:'slot-a',incumbencies:[{personId:employee,effectiveStart:'2020-01-01',effectiveEnd:null}]}],version:{id:'version-a',slotAvailability:[]}}}}]};
-  if(statement.includes('static_weekly_v10_stage_staffing_command')){staged=values;return{rows:[{result:{operation_id:operation,state:'PREPARED'}}]};}
+  if(statement.includes('static_weekly_sch022_preview_staffing_witness'))return{rows:[{result:{digest:'f'.repeat(64),target_week_count:0}}]};
+  if(statement.includes('static_weekly_sch022_stage_staffing_command')){staged=values;return{rows:[{result:{operation_id:operation,state:'PREPARED'}}]};}
   return{rows:[]};},release(){},on(){},removeListener(){}};
 const deadlineValues=[];
 const plane=createStaticWeeklyControlPlane({database:{async connect(){return client;}},compiler:async()=>{throw Error('ordinary compiler not expected');},
@@ -30,6 +31,7 @@ assert.deepEqual(staged[1].map(row=>[row.candidateKind,row.candidateKey,row.serv
   ['schedule_refresh',`date:2026-10-02:employee:${employee}`,'2026-10-02'],
 ]);
 assert.match(staged[2],/^[0-9a-f]{64}$/);assert.match(staged[3],/^[0-9a-f]{64}$/);assert.equal(staged[4].weeks.length,1);assert.equal(staged[5],manager.manager_id);
+assert.equal(staged[6],'f'.repeat(64),'exact catalog witness crosses only the private typed stage boundary');
 assert.equal(deadlineValues.length,1);assert.ok(deadlineValues[0]>0&&deadlineValues[0]<=30000,'preparation passes the remaining total budget into the isolated compiler');
 await plane.close();
 console.log(JSON.stringify({status:'PASS',checks:10,scope:'server-owned compile to complete private staging with bounded deadline; synthetic compiler and no authoritative commit'}));

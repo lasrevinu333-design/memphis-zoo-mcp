@@ -143,6 +143,7 @@ function createAuthorityDatabase({ revision: initialRevision = 0, failReconcilia
       }
       if (statement.includes("static_weekly_v3_read_authority_source")) return { rows: [{ result: source }] };
       if (statement.includes("static_weekly_v15_read_recurring_generation")) return { rows: [{ result: generationValues[Math.min(generationReads++, generationValues.length - 1)] }] };
+      if (statement.includes("static_weekly_sch022_preview_witness")) return { rows: [{ result: "9".repeat(64) }] };
       if (statement.includes("static_weekly_v20_read_recurring_preview_basis")) return { rows: [{ result: previewSourceTransform({...source,authority_revision:revision}) }] };
       if (statement.includes("static_weekly_v3_read_publication_source")) return { rows: [{ result: source }] };
       if (statement.includes("static_weekly_v3_read_manager_snapshot")) return { rows: [{ result: { schema: "memphis-zoo.static-weekly-manager-snapshot.v1", week_start: values[0], authority_revision: revision, current_publication: published ? { publication_id: publicationId, version_id: versionId } : null, projection_status: projection ? "current" : "missing", latest_projection: projection } }] };

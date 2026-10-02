@@ -32,11 +32,13 @@ const stageResponse = { operation_id: response.operation_id, state: 'PREPARED', 
 const deliveryResponse = { operation_id: response.operation_id, targets: [] };
 const cancelResponse = { operation_id: response.operation_id, state: 'CANCELLED_BY_SUCCESSOR', cancelled: true };
 const acceptResponse = { operation_id: response.operation_id, event: 'ACCEPTED', authority_revision: 20, replayed: false };
+let seasonTargetCount = 0;
 const client = {
   async query(statement, values = []) {
     queries.push({ statement, values });
     if (statement.includes('sch_service_date')) return { rows: [{ service_date: '2026-09-25' }] };
-    if (statement.includes('static_weekly_v10_stage_staffing_command')) return { rows: [{ result: stageResponse }] };
+    if (statement.includes('static_weekly_sch022_preview_staffing_witness')) return { rows: [{ result: { digest: 'c'.repeat(64), target_week_count: seasonTargetCount } }] };
+    if (statement.includes('static_weekly_sch022_stage_staffing_command')) return { rows: [{ result: stageResponse }] };
     if (statement.includes('static_weekly_v10_read_staffing_delivery_status')) return { rows: [{ result: deliveryResponse }] };
     if (statement.includes('static_weekly_v10_cancel_staffing_preparation')) return { rows: [{ result: cancelResponse }] };
     if (statement.includes('static_weekly_v11_accept_staffing_command')) return { rows: [{ result: acceptResponse }] };
@@ -82,11 +84,23 @@ same(await plane.stageStaffingCommand({ manager, operationId: response.operation
   window: { dates: ['2026-09-28', '2026-10-05'], weeks: ['2026-09-28', '2026-10-05'] },
   candidates, previewDigest: 'a'.repeat(64), inputDigest: 'b'.repeat(64), publicationVector: { revision: 19 },
 }), stageResponse);
-const stageCall = queries.find(({ statement }) => statement.includes('static_weekly_v10_stage_staffing_command'));
-same(stageCall.values.length, 6);
+const stageCall = queries.find(({ statement }) => statement.includes('static_weekly_sch022_stage_staffing_command'));
+same(stageCall.values.length, 7);
 same(stageCall.values[0], response.operation_id);
 same(stageCall.values[1], candidates, 'only exact candidate content crosses the database boundary');
 same(stageCall.values[5], manager.manager_id, 'staging actor comes only from the trusted session');
+same(stageCall.values[6], 'c'.repeat(64), 'staged command binds the exact current catalog witness');
+seasonTargetCount = 1;
+await assert.rejects(() => plane.stageStaffingCommand({ manager, operationId: response.operation_id,
+  window: { dates: ['2026-09-28', '2026-10-05'], weeks: ['2026-09-28', '2026-10-05'] },
+  candidates, previewDigest: 'a'.repeat(64), inputDigest: 'b'.repeat(64), publicationVector: { revision: 19 },
+}), error => error?.code === 'static_weekly_sch022_witness_required'); checks++;
+same(await plane.stageStaffingCommand({ manager, operationId: response.operation_id,
+  window: { dates: ['2026-09-28', '2026-10-05'], weeks: ['2026-09-28', '2026-10-05'] },
+  candidates, previewDigest: 'a'.repeat(64), inputDigest: 'b'.repeat(64), publicationVector: { revision: 19 },
+  seasonWitnessDigest: 'c'.repeat(64),
+}), stageResponse, 'target-bearing internal stage requires the exact retained preview witness');
+seasonTargetCount = 0;
 same(await plane.getStaffingCommand({ manager, operationId: response.operation_id }), statusResponse);
 same(await plane.listPendingStaffingCommands({ manager }), pendingResponse);
 same(await plane.getStaffingDeliveryStatus({ manager, operationId: response.operation_id }), deliveryResponse);
