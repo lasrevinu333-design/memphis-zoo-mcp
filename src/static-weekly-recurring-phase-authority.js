@@ -37,14 +37,14 @@ function packageFact(row,config){
   memberIds:row.includedLocations.map(x=>x.locationId),serviceMode:row.serviceMode,
   doubledWeight:w*2,componentBinding:k?'EXACT_KNOWN_COMPONENTS':'EXPLICIT_SOURCE_PACKAGE_AND_CONFIG_AGGREGATE_ONLY'};
 }
-export function createRecurringPhaseDescriptor({source,ownerConfig,dayOfWeek,selectedWorkIds=[]}){
+function descriptorWithPreparation({source,ownerConfig,dayOfWeek,selectedWorkIds=[]},prepareDescriptorSource=prepared){
  requireFact(source&&ownerConfig&&Array.isArray(selectedWorkIds),'Explicit source/config/selection required.');
  if(ownerConfig.schema==='custodial.owner-corrected-recurring-schedule.v2')validateOwnerEligibilityConfig(ownerConfig);
  requireFact(Number.isInteger(dayOfWeek)&&dayOfWeek>=0&&dayOfWeek<=6,'Explicit weekday required.');
  requireFact(Array.isArray(source.exceptions)&&source.exceptions.length===0,'Dated overlays are not normal replacement scope.');
  const v=version(source);requireFact(v&&Array.isArray(v.assignments),'One canonical source required.');
  requireFact(new Set(selectedWorkIds).size===selectedWorkIds.length,'Duplicate selected work identity.');
- const p=prepared(source);
+ const p=prepareDescriptorSource(source);
  const cfg=new Map(Object.entries(ownerConfig.slots||{}).map(([key,s])=>[s.slotId,{...s,key}]));
  const owners=[...p.availabilityByDaySlot.values()].filter(x=>x.availability.dayOfWeek===dayOfWeek&&!x.slot.contractorCapacity)
   .map(x=>{const c=cfg.get(x.slot.id);requireFact(c&&c.vacancy!==true&&c.workDays.includes(dayOfWeek),'Current ordinary owner/config mismatch.');
@@ -87,6 +87,7 @@ export function createRecurringPhaseDescriptor({source,ownerConfig,dayOfWeek,sel
   geographyScope:'EXISTING_SOURCE_ELIGIBILITY_AND_DECLARED_FAMILY_RESTRICTIONS_NO_NEW_RADIUS'};
  return {...body,descriptorDigest:digest(body)};
 }
+export function createRecurringPhaseDescriptor(input){return descriptorWithPreparation(input);}
 export function createRecurringPhaseProspectiveSource({source,ownerConfig,descriptor,selection}){
  const exact=createRecurringPhaseDescriptor({source,ownerConfig,dayOfWeek:descriptor.dayOfWeek,selectedWorkIds:descriptor.selectedWorkIds});
  requireFact(canonicalJson(exact)===canonicalJson(descriptor),'Descriptor/source/config drift.');
@@ -316,7 +317,7 @@ function inheritedPreferenceTerms({descriptor,source,ownerConfig,fullOwners}){
   const name=`phase_x_${i}_${j}`;binary.push(name);if(cost)terms.push([cost,name]);
  }return {terms,binary};
 }
-export function assertRecurringPhasePreferenceNormalization({proof,source,ownerConfig,fullOwners}){
+function assertPreferenceNormalization({proof,source,ownerConfig,fullOwners},lookupDescriptor=null){
  const rawProof=proof.lowerBoundEvidence||proof,d=rawProof.descriptor,{descriptorDigest,...descriptorBody}=d;
  const semantic=x=>Object.fromEntries(Object.entries(x).filter(([k])=>!['sourceDigest','descriptorDigest','fixedSourceRowsDigest'].includes(k)));
  requireFact(digest(descriptorBody)===descriptorDigest&&d.configDigest===digest(ownerConfig)
@@ -330,7 +331,8 @@ export function assertRecurringPhasePreferenceNormalization({proof,source,ownerC
   originalByFamily=new Map(d.selectedWorkIds.map(id=>{const r=referenceRows.find(r=>r.workId===id);requireFact(r,'Preference original work identity missing.');return[r.locationCodeSnapshot,r];}));
  version(invocation).assignments=version(invocation).assignments.map(r=>r.dayOfWeek===d.dayOfWeek&&r.window.start==='09:45'&&originalByFamily.has(r.locationCodeSnapshot)
   ?clone(originalByFamily.get(r.locationCodeSnapshot)):r);
- requireFact(canonicalJson(createRecurringPhaseDescriptor({source:invocation,ownerConfig,dayOfWeek:d.dayOfWeek,selectedWorkIds:d.selectedWorkIds}))===canonicalJson(d),
+ const actualKey=digest({source:invocation,ownerConfig,selectedWorkIds:d.selectedWorkIds}),sealed=lookupDescriptor?.(rawProof,actualKey);
+ requireFact(canonicalJson(sealed||createRecurringPhaseDescriptor({source:invocation,ownerConfig,dayOfWeek:d.dayOfWeek,selectedWorkIds:d.selectedWorkIds}))===canonicalJson(d),
   'Preference descriptor differs from exact original-day/fixed-other-day recomputation.');
  const tier=rawProof.tiers?.find(t=>t.name==='inherited_preference');requireFact(tier,'Preference tier missing.');
  const {terms,binary}=inheritedPreferenceTerms({descriptor:d,source,ownerConfig,fullOwners});
@@ -346,7 +348,36 @@ export function assertRecurringPhasePreferenceNormalization({proof,source,ownerC
  const next=rawProof.tiers[rawProof.tiers.indexOf(tier)+1];
  requireFact(next?.model.rows.some(r=>r.name==='phase_fixed_2'&&r.relation==='='&&r.value===original
   &&canonicalJson(r.terms)===canonicalJson(terms)),'Original-scale preference fixed equality missing.');
- return {normalization:expected,primitiveObjectiveValue:primitive,originalScaleObjectiveValue:original};
+ return {normalization:expected,primitiveObjectiveValue:primitive,originalScaleObjectiveValue:original,
+  descriptorValidation:{method:sealed?'INVOCATION_LOCAL_PRIVATE_ORIGINAL_PROOF_SOURCE_HASH':'FULL_SOURCE_RECOMPUTATION',actualSourceConfigSelectionDigest:actualKey}};
+}
+export function assertRecurringPhasePreferenceNormalization(input){return assertPreferenceNormalization(input);}
+function deepFreezeFact(x){if(x&&typeof x==='object'){for(const v of Object.values(x))deepFreezeFact(v);Object.freeze(x);}return x;}
+// Facts belong to this explicit closure invocation ONLY. The private proof
+// identity cannot be serialized or supplied by a caller, and only a freshly
+// solved/checkPhaseTerminal/full-canonical result can populate its descriptor.
+// No solver optimum, terminal evidence or canonical witness is cached.
+export function createRecurringPhaseEvidenceInvocation(){
+ const descriptors=new WeakMap(),preparedFacts=new Map();
+ const prepareDescriptorSource=source=>{
+  const key=digest(source);let fact=preparedFacts.get(key);
+  if(!fact){const p=prepared(source);fact=deepFreezeFact({
+   availability:[...p.availabilityByDaySlot].map(([id,x])=>[id,{slot:{id:x.slot.id,contractorCapacity:x.slot.contractorCapacity},
+    availability:{dayOfWeek:x.availability.dayOfWeek,shift:clone(x.availability.shift),lunch:clone(x.availability.lunch)}}]),
+   incumbencies:[...p.incumbencyByDaySlot].map(([id,x])=>[id,{personId:x.personId,displayName:x.displayName}]),
+  });preparedFacts.set(key,fact);}
+  return {availabilityByDaySlot:new Map(fact.availability),incumbencyByDaySlot:new Map(fact.incumbencies)};
+ };
+ return Object.freeze({
+  solve(input){const proof=solvePhaseMinimum(input,x=>descriptorWithPreparation(x,prepareDescriptorSource));
+   if(proof.status==='PROVEN_CANONICAL_PHASE_MINIMUM'){
+    requireFact(proof.descriptor.sourceDigest===digest(input.source)&&proof.descriptor.configDigest===digest(input.ownerConfig),'Invocation source/config mutated during solve.');
+    const key=digest({source:input.source,ownerConfig:input.ownerConfig,selectedWorkIds:[...input.selectedWorkIds].sort(bytewiseCompare)});
+    descriptors.set(proof,deepFreezeFact({key,descriptor:clone(proof.descriptor)}));
+   }return proof;
+  },
+  assertPreference(input){return assertPreferenceNormalization(input,(proof,key)=>{const sealed=descriptors.get(proof);return sealed?.key===key?sealed.descriptor:null;});},
+ });
 }
 const pinnedPhaseSolver={package:'highs@1.15.2',packageJsonSha256:'21e76a89d13d636f56d5cdda7dde590acd48d6fb683c97a327c10d43e74d9c56',
  wrapperJavaScriptSha256:'6d5be3ed3cbd1ce1924cc66cc9302b50753dabdb8c6e0e815845dce7f1890033',
@@ -401,8 +432,8 @@ function checkPhaseTerminal(solved,expected,attestation){
 // Existing portable hash implementation; raw receipts hash BYTES, not JSON.
 import {sha256Hex as contentDigestBytes} from './static-weekly-schedule-model.js';
 
-export function solveRecurringPhaseCanonicalMinimum({source,ownerConfig,fullOwners,dayOfWeek,selectedWorkIds=[],solver}){
- const descriptor=createRecurringPhaseDescriptor({source,ownerConfig,dayOfWeek,selectedWorkIds});
+function solvePhaseMinimum({source,ownerConfig,fullOwners,dayOfWeek,selectedWorkIds=[],solver},createDescriptor=createRecurringPhaseDescriptor){
+ const descriptor=createDescriptor({source,ownerConfig,dayOfWeek,selectedWorkIds});
  const basis={schema:RECURRING_PHASE_SCHEMA,descriptor,fullOwnersDigest:digest(fullOwners),published:false,sourceMutated:false,
   proofMethod:'RELAXED_LOWER_BOUND_PLUS_MATCHING_COMPLETE_CANONICAL_WITNESS',physicalMinuteFeasibilityClaim:false};
  if(!selectedWorkIds.length)return {...basis,status:'PRESERVED_NOT_REOPTIMIZED',minimumDoubledSpread:null,halfUnitFeasible:null,candidateSource:null};
@@ -499,3 +530,4 @@ export function solveRecurringPhaseCanonicalMinimum({source,ownerConfig,fullOwne
   return {...body,proofDigest:digest(body)};
  }catch(error){return unknown(error.message);}
 }
+export function solveRecurringPhaseCanonicalMinimum(input){return solvePhaseMinimum(input);}

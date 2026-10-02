@@ -18,7 +18,8 @@ import {createRecurringPhaseDescriptor,createRecurringPhaseProspectiveSource,
  from '../src/static-weekly-recurring-phase-authority.js';
 import {solveRecurringPhaseCanonicalMinimum,createRecurringPreferencePrimitiveObjective,
  assertRecurringPhasePreferenceNormalization,assertRecurringPreferencePrimitiveWitness,
- createRecurringIdentityRadixLayout,assertRecurringIdentityRadixEncoding,assertRecurringPhaseIdentityEncoding} from '../src/static-weekly-recurring-phase-authority.js';
+ createRecurringIdentityRadixLayout,assertRecurringIdentityRadixEncoding,assertRecurringPhaseIdentityEncoding,
+ createRecurringPhaseEvidenceInvocation} from '../src/static-weekly-recurring-phase-authority.js';
 import {assertNormalOwnerEligibility,normalGeographyRestrictionApplies,validateOwnerEligibilityConfig} from '../src/static-weekly-owner-eligibility.js';
 const ledger=new Map(getScheduleComponentWeightLedger().families.map(f=>[f.code,f]));
 const slotA='71000000-0000-4000-8000-000000000001',slotB='71000000-0000-4000-8000-000000000002';
@@ -661,6 +662,70 @@ export async function runRecurringFullNineReductionTests({counts=[6,7,8]}={}){
   JSON.stringify(receipt,null,2)+'\n',{flag:'wx'});
  console.log(JSON.stringify(receipt));return receipt;
 }
+export async function runRecurringInvocationFactTests(){
+ installStaticWeeklySha256HexAccelerator(text=>createHash('sha256').update(text,'utf8').digest('hex'));
+ const {initializeStaticWeeklySolverEngine}=await import('../src/static-weekly-schedule-solver-worker.js'),
+  solver=await initializeStaticWeeklySolverEngine({maxOldGenerationSizeMb:256,maxWasmMemoryPages:1536,maxSemiSpaceSizeMb:4}),
+  tiny=fixture(['CHINA','BREEZEWAY_RESTROOMS','CAT_COUNTRY']),fullOwners={1:{equalized:Object.fromEntries(tiny.source.versions[0].assignments.map(r=>[r.locationCodeSnapshot,r.originSlotId]))}},
+  invocation=createRecurringPhaseEvidenceInvocation();let solverCalls=0;
+ const freshSolver={solve(...args){solverCalls++;return solver.solve(...args);}},proof=invocation.solve({...tiny,fullOwners,solver:freshSolver});
+ assert.equal(proof.status,'PROVEN_CANONICAL_PHASE_MINIMUM',proof.reason);let checks=0;
+ const check=(name,fn)=>{fn();checks++;console.log('PASS invocation facts',name);},input={proof,source:tiny.source,ownerConfig:tiny.ownerConfig,fullOwners};
+ check('original private proof reuses only exact source/config/selection descriptor',()=>{
+  assert.equal(invocation.assertPreference(input).descriptorValidation.method,'INVOCATION_LOCAL_PRIVATE_ORIGINAL_PROOF_SOURCE_HASH');
+  assertRecurringPhaseIdentityEncoding(input);
+ });
+ check('ordinary exported validator fully recomputes',()=>assert.equal(assertRecurringPhasePreferenceNormalization(input).descriptorValidation.method,'FULL_SOURCE_RECOMPUTATION'));
+ check('different invocation does not reuse prior seal',()=>assert.equal(createRecurringPhaseEvidenceInvocation().assertPreference(input).descriptorValidation.method,'FULL_SOURCE_RECOMPUTATION'));
+ check('deep-cloned proof has no original private identity',()=>assert.equal(invocation.assertPreference({...input,proof:structuredClone(proof)}).descriptorValidation.method,'FULL_SOURCE_RECOMPUTATION'));
+ check('serialized proof has no original private identity',()=>assert.equal(invocation.assertPreference({...input,proof:JSON.parse(JSON.stringify(proof))}).descriptorValidation.method,'FULL_SOURCE_RECOMPUTATION'));
+ check('no caller seal or skip API',()=>{assert.equal(invocation.seal,undefined);assert.ok(Object.isFrozen(invocation));assert.deepEqual(Object.keys(invocation).sort(),['assertPreference','solve']);});
+ for(const [name,mutate]of [
+  ['changed actual source',x=>{x.source.versions[0].assignments[0].priority++;}],
+  ['changed actual config',x=>{x.ownerConfig.weights.CHINA++;}],
+  ['mutated owner choice',x=>{x.proof.descriptor.choices[0].owners.pop();}],
+  ['mutated primitive objective',x=>{x.proof.tiers.find(t=>t.name==='inherited_preference').objectiveValue++;}],
+  ['mutated selected multiplicity',x=>{x.proof.descriptor.selectedWorkIds.pop();}],
+ ])check('reject '+name,()=>{const x=structuredClone(input);mutate(x);assert.throws(()=>invocation.assertPreference(x));});
+ check('mutation of original private proof cannot mutate deep sealed facts',()=>{
+  const original=structuredClone(proof.descriptor);proof.descriptor.choices[0].owners.pop();
+  assert.throws(()=>invocation.assertPreference(input));proof.descriptor=original;
+  assert.equal(invocation.assertPreference(input).descriptorValidation.method,'INVOCATION_LOCAL_PRIVATE_ORIGINAL_PROOF_SOURCE_HASH');
+ });
+ check('same-source prepared facts still require every fresh terminal and witness',()=>{
+  const before=solverCalls,p=invocation.solve({...tiny,fullOwners,solver:freshSolver});assert.equal(p.status,'PROVEN_CANONICAL_PHASE_MINIMUM',p.reason);
+  assert.ok(solverCalls-before>=3);assert.notEqual(p,proof);
+ });
+ check('changed actual incumbency cannot use prepared facts from unchanged source',()=>{
+  const source=structuredClone(tiny.source);source.slots[0].incumbencies[0].displayName='changed actual source identity';
+  assert.throws(()=>invocation.solve({...tiny,source,fullOwners,solver:freshSolver}));
+ });
+ const receipt={schema:'custodial.recurring-invocation-facts-tests.v1',checks,realTinySolverRuns:2,solverCalls,solverOptimaCached:false,canonicalWitnessCached:false,crossRequestCache:false};
+ console.log(JSON.stringify(receipt));return receipt;
+}
+export async function runRecurringReductionInvocationMutationTests(){
+ installStaticWeeklySha256HexAccelerator(text=>createHash('sha256').update(text,'utf8').digest('hex'));
+ const {initializeStaticWeeklySolverEngine}=await import('../src/static-weekly-schedule-solver-worker.js'),
+  solver=await initializeStaticWeeklySolverEngine({maxOldGenerationSizeMb:256,maxWasmMemoryPages:1536,maxSemiSpaceSizeMb:4});
+ let checks=0;
+ for(const rehash of [false,true]){
+  const args=createSyntheticFullNineReductionFixture(6),context=createFullNineReductionContext(args),
+   bound=currentPatternFromPublishedReadback({...args,templateConfig:args.correctionConfig}),
+   pattern=deriveRecurringStaffingPattern({currentConfig:bound.currentConfig,targetSlots:bound.currentConfig.slots,fullOwners:args.fullOwners,fullConfig:args.fullConfig,
+    highs:{solve:(lp,options)=>solver.solve(lp,{timeLimitSeconds:options.time_limit}).result}}),
+   basis=createRecurringPhaseSourceBasis({registeredSource:args.publishedSource.compiler_input,patternConfig:pattern.config,reductionContext:context});
+  let changed=false;
+  const hostile={solve(...inputs){const result=solver.solve(...inputs);if(!changed){changed=true;
+    basis.fixedOtherDaysSource.version.assignments.find(r=>r.window.start==='09:45').serviceEffortMinutes++;
+    if(rehash){const {basisDigest,...body}=basis;basis.basisDigest=contentDigest(body);}}
+   return result;}};
+  assert.throws(()=>deriveScalableCanonicalRecurringWeekCandidate({source:basis.source,currentConfig:basis.ownerConfig,
+    fullOwners:args.fullOwners,solver:hostile,phaseSourceBasis:basis}),
+    rehash?/fixed-other-day scaffold changed package\/budget\/provenance/:/reduction phase basis changed/);
+  assert.equal(changed,true);checks++;console.log('PASS invocation reduction basis mutation',rehash?'rehashed actual bytes still fully revalidated':'actual bytes invalidate exact source-keyed facts');
+ }
+ const receipt={schema:'custodial.recurring-reduction-invocation-mutations.v1',checks,realSolver:true,syntheticRoster:true,noOptimumCache:true};console.log(JSON.stringify(receipt));return receipt;
+}
 export function runRecurringRetainedTransformTests({files}){
  assert.ok(Array.isArray(files)&&files.length>0,'explicit retained actual proof files required');let checks=0;
  const check=(name,fn)=>{fn();checks++;console.log('PASS retained transform',name);};
@@ -833,7 +898,9 @@ export async function runRecurringCurrentHandoutStructureTests(){
  console.log(JSON.stringify(receipt));return receipt;
 }
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){
- if(process.argv.includes('--primitive-objective')){runRecurringPrimitiveObjectiveTests();runRecurringIdentityRadixTests();}
+ if(process.argv.includes('--invocation-basis-mutations'))await runRecurringReductionInvocationMutationTests();
+ else if(process.argv.includes('--invocation-facts'))await runRecurringInvocationFactTests();
+ else if(process.argv.includes('--primitive-objective')){runRecurringPrimitiveObjectiveTests();runRecurringIdentityRadixTests();}
  else if(process.argv.includes('--full-nine-reduction'))await runRecurringFullNineReductionTests();
  else if(process.argv.includes('--current-handout'))await runRecurringCurrentHandoutStructureTests();
  else if(process.argv.includes('--admin-morning'))await runRecurringAdminMorningReferenceTests();

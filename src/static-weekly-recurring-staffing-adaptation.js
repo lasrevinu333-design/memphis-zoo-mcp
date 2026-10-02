@@ -9,7 +9,8 @@ import { assertNormalOwnerEligibility, hardRestrictedSlots,
   validateOwnerEligibilityConfig,normalGeographyRestrictionApplies } from "./static-weekly-owner-eligibility.js";
 import {createRecurringPhaseDescriptor,createRecurringPhaseProspectiveSource,
   enumerateRecurringPhaseMinimum,evaluateRecurringPhaseCanonicalSource,
-  solveRecurringPhaseCanonicalMinimum,assertRecurringPhasePreferenceNormalization} from './static-weekly-recurring-phase-authority.js';
+  solveRecurringPhaseCanonicalMinimum,assertRecurringPhasePreferenceNormalization,
+  createRecurringPhaseEvidenceInvocation} from './static-weekly-recurring-phase-authority.js';
 
 const phaseOf = (row) => row.window?.start === "09:45" ? "equalized" : "morning";
 const expression = (terms) => terms.length
@@ -1051,7 +1052,26 @@ function phaseInvocationSource({source,currentConfig,dayOfWeek,phaseSourceBasis}
     ?structuredClone(seedMap.get(`${r.dayOfWeek}/${r.locationCodeSnapshot}`)):r);
   return out;
 }
-function reductionPreferenceReceipt({phaseSourceBasis,proof,dayOfWeek,fullOwners}){
+function freezeInvocationFact(x){if(x&&typeof x==='object'){for(const v of Object.values(x))freezeInvocationFact(v);Object.freeze(x);}return x;}
+function createScalableInvocation(){
+  const evidence=createRecurringPhaseEvidenceInvocation();let basisFact=null;
+  return Object.freeze({...evidence,sourceForDay(input){
+    if(!input.phaseSourceBasis?.reductionContext)return input.source;
+    // Actual bytes, not supplied hashes or an object-identity-only cache.
+    const key=contentDigest({source:input.source,currentConfig:input.currentConfig,phaseSourceBasis:input.phaseSourceBasis});
+    if(!basisFact||basisFact.key!==key){
+      const source=phaseInvocationSource(input);
+      basisFact=freezeInvocationFact({key,source:structuredClone(input.source),seed:structuredClone(input.phaseSourceBasis.fixedOtherDaysSource)});
+      return source;
+    }
+    const byFamily=new Map(basisFact.seed.version.assignments.filter(r=>r.window.start==='09:45').map(r=>[`${r.dayOfWeek}/${r.locationCodeSnapshot}`,r])),
+      source=structuredClone(basisFact.source);
+    source.version.assignments=source.version.assignments.map(r=>r.window.start==='09:45'&&r.dayOfWeek!==input.dayOfWeek
+      ?structuredClone(byFamily.get(`${r.dayOfWeek}/${r.locationCodeSnapshot}`)):r);
+    return source;
+  }});
+}
+function reductionPreferenceReceipt({phaseSourceBasis,proof,dayOfWeek,fullOwners,evidenceInvocation=null}){
   const context=assertReductionContext(phaseSourceBasis.reductionContext),bindings=context.currentConfig.fullNineReductionBinding
     .mandatoryPrimaryOwnerBindings.filter(b=>b.dayOfWeek===dayOfWeek);
   for(const binding of bindings){
@@ -1062,7 +1082,7 @@ function reductionPreferenceReceipt({phaseSourceBasis,proof,dayOfWeek,fullOwners
     assert.ok(direct,'constant lacks exact canonical named primary owner constraint');
     const {workId,...handoff}=direct;assert.equal(canonicalJson(handoff),canonicalJson(binding.handoff),'constant named constraint identity changed');
   }
-  const normalized=assertRecurringPhasePreferenceNormalization({proof,source:phaseSourceBasis.source,
+  const normalized=(evidenceInvocation?.assertPreference||assertRecurringPhasePreferenceNormalization)({proof,source:phaseSourceBasis.source,
     ownerConfig:phaseSourceBasis.ownerConfig,fullOwners});
   assert.equal(proof.descriptor.dayOfWeek,dayOfWeek,'preference receipt day changed');
   assert.ok(Number.isSafeInteger(proof.preferenceCost)&&proof.preferenceCost>=0,'original variable preference bound missing');
@@ -1080,19 +1100,22 @@ export function assertFullNineReductionPreferenceReceipt({phaseSourceBasis,proof
   assert.equal(canonicalJson(proof.mandatoryCurrentOwnerPreferenceReceipt),canonicalJson(expected),'mandatory preference sum/reference/receipt changed');
   return expected;
 }
-export function deriveScalableCanonicalRecurringPhaseCandidate({source,currentConfig,fullOwners,dayOfWeek,solver,phaseSourceBasis=null}){
-  source=phaseInvocationSource({source,currentConfig,dayOfWeek,phaseSourceBasis});
+function derivePhaseInInvocation({source,currentConfig,fullOwners,dayOfWeek,solver,phaseSourceBasis=null},evidenceInvocation){
+  source=evidenceInvocation.sourceForDay({source,currentConfig,dayOfWeek,phaseSourceBasis});
   const v=source.version||(source.versions?.length===1?source.versions[0]:null);
   assert.ok(v&&Array.isArray(v.assignments));
   const selectedWorkIds=v.assignments.filter(r=>r.dayOfWeek===dayOfWeek&&r.window?.start==='09:45').map(r=>r.workId);
-  const proof=solveRecurringPhaseCanonicalMinimum({source,ownerConfig:currentConfig,fullOwners,dayOfWeek,selectedWorkIds,solver});
+  const proof=evidenceInvocation.solve({source,ownerConfig:currentConfig,fullOwners,dayOfWeek,selectedWorkIds,solver});
   if(phaseSourceBasis?.reductionContext&&proof.status==='PROVEN_CANONICAL_PHASE_MINIMUM'){
     const {proofDigest,...body}=proof;
-    body.mandatoryCurrentOwnerPreferenceReceipt=reductionPreferenceReceipt({phaseSourceBasis,proof,dayOfWeek,fullOwners});
-    return {...body,proofDigest:contentDigest(body)};
+    body.mandatoryCurrentOwnerPreferenceReceipt=reductionPreferenceReceipt({phaseSourceBasis,proof,dayOfWeek,fullOwners,evidenceInvocation});
+    // Keep the same original private proof identity inside the invocation.
+    // The body receives only a new receipt/hash, not a cloned solver proof.
+    Object.assign(proof,body,{proofDigest:contentDigest(body)});return proof;
   }
   return proof;
 }
+export function deriveScalableCanonicalRecurringPhaseCandidate(input){return derivePhaseInInvocation(input,createScalableInvocation());}
 
 // Complete existing-command equalized scope. Morning is explicit and fixed;
 // this does not choose or claim an optimum for morning work. Rebind every day
@@ -1102,13 +1125,14 @@ export function deriveScalableCanonicalRecurringWeekCandidate({source,currentCon
   const original=source.version||(source.versions?.length===1?source.versions[0]:null);
   assert.ok(original&&Array.isArray(original.assignments));
   const first=[],started=performance.now(),budgetMs=30_000;
+  const evidenceInvocation=createScalableInvocation();
   const boundedSolver={solve(lp,options){
     const remaining=budgetMs-(performance.now()-started);
     assert.ok(remaining>0,'Recurring week total time bound exhausted.');
     return solver.solve(lp,{...options,timeLimitSeconds:Math.min(options.timeLimitSeconds,remaining/1000)});
   }};
   for(let dayOfWeek=0;dayOfWeek<7;dayOfWeek++){
-    const proof=deriveScalableCanonicalRecurringPhaseCandidate({source,currentConfig,fullOwners,dayOfWeek,solver:boundedSolver,phaseSourceBasis});first.push(proof);
+    const proof=derivePhaseInInvocation({source,currentConfig,fullOwners,dayOfWeek,solver:boundedSolver,phaseSourceBasis},evidenceInvocation);first.push(proof);
     if(proof.status!=='PROVEN_CANONICAL_PHASE_MINIMUM')return {status:'UNKNOWN_CANONICAL_RECURRING_WEEK',stage:'initial_day',dayOfWeek,
       proofs:first,candidateSource:null,published:false,admitted:false};
   }
@@ -1146,7 +1170,7 @@ export function deriveScalableCanonicalRecurringWeekCandidate({source,currentCon
         unchangedRelaxationDayFactsDigest:contentDigest(dayBasis(basis)),unchangedRelaxationDescriptorDigest:contentDigest(semantic(descriptor)),
         proofMethod:'UNCHANGED_DAY_RELAXATION_BOUND_PLUS_MATCHING_FINAL_WHOLE_WEEK_CANONICAL_WITNESS',
         freshSolverRunClaim:false,published:false,admitted:false};
-      if(phaseSourceBasis?.reductionContext)body.mandatoryCurrentOwnerPreferenceReceipt=reductionPreferenceReceipt({phaseSourceBasis,proof:body,dayOfWeek,fullOwners});
+      if(phaseSourceBasis?.reductionContext)body.mandatoryCurrentOwnerPreferenceReceipt=reductionPreferenceReceipt({phaseSourceBasis,proof:body,dayOfWeek,fullOwners,evidenceInvocation});
       proofs.push({...body,proofDigest:contentDigest(body)});
     }catch(error){return {status:'UNKNOWN_CANONICAL_RECURRING_WEEK',stage:'final_other_days_rebinding',dayOfWeek,
       reason:error.message,proofs,candidateSource:null,published:false,admitted:false};}
@@ -1171,7 +1195,10 @@ export function deriveScalableCanonicalRecurringWeekCandidate({source,currentCon
   if(phaseSourceBasis?.reductionContext){
     body.reductionContextDigest=phaseSourceBasis.reductionContext.contextDigest;
     body.preferenceCostMeaning='RAW_VARIABLE_LP_COST_PLUS_SEPARATE_PROVEN_UNAVOIDABLE_CONSTANT';
-    body.mandatoryCurrentOwnerPreferenceReceipts=proofs.map((proof,dayOfWeek)=>assertFullNineReductionPreferenceReceipt({phaseSourceBasis,proof,dayOfWeek,fullOwners}));
+    body.mandatoryCurrentOwnerPreferenceReceipts=proofs.map((proof,dayOfWeek)=>{
+      const receipt=reductionPreferenceReceipt({phaseSourceBasis,proof,dayOfWeek,fullOwners,evidenceInvocation});
+      assert.equal(canonicalJson(proof.mandatoryCurrentOwnerPreferenceReceipt),canonicalJson(receipt),'mandatory preference receipt changed');return receipt;
+    });
   }
   return {...body,proofDigest:contentDigest(body)};
 }
