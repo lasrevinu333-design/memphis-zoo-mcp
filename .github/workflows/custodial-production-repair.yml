@@ -54,6 +54,7 @@ jobs:
         run: |
           set -euo pipefail
           npm run --silent test:events-parser
+          node scripts/current-system-source-contract-tests.mjs
           npm run --silent test:events-api
           npm run --silent test:event-integrity
           npm run --silent test:batch2
@@ -103,6 +104,7 @@ jobs:
           container="$(sed -n 's/.*"retained_test_container":"\([^"]*\)".*/\1/p' /tmp/memphis-schema-rebuild.log | tail -n 1)"
           test -n "$container"
           trap 'docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
+          node scripts/place-preview-restricted-reader-tests.mjs "$container"
           OPERATIONS_LEADERSHIP_TEST_DOCKER_CONTAINER="$container" \
             OPERATIONS_LEADERSHIP_TEST_DATABASE=postgres \
             npm run --silent test:operations-leadership-mobile-db
