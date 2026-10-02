@@ -59,7 +59,7 @@ export function createRecurringFinalManagerChanges({ preliminaryChanges, phaseSo
         gained: families.filter(family => original.get(family) !== owner),
         released: baseline.filter(family => final.get(family) !== owner) };
     });
-    changes.push({ day, phase, employees });
+    changes.push({ ...structuredClone(prior), employees });
   }
   return changes;
 }

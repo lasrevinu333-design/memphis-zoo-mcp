@@ -3,10 +3,15 @@ import { readFileSync } from "node:fs";
 import { compileStaticWeeklySchedule } from "./static-weekly-schedule-compiler.js";
 import { postgresJsonbContentDigest } from "./static-weekly-schedule-compiler.js";
 import { adaptRegisteredRecurringSource, currentPatternFromPublishedReadback,
-  deriveRecurringStaffingPattern } from "./static-weekly-recurring-staffing-adaptation.js";
+  deriveRecurringStaffingPattern, createRecurringPhaseSourceBasis,
+  recurringPatternFromFinalPhaseSource,
+  deriveScalableCanonicalRecurringWeekCandidate } from "./static-weekly-recurring-staffing-adaptation.js";
 import { createStaticWeeklyDraftRpcInput } from "./static-weekly-schedule-database-adapter.js";
 import { createStaticWeeklyProjectionWithLunchRpcInput, createStaticWeeklyLunchPreviewDocument } from "./static-weekly-lunch-publication.js";
-import { createRecurringManagerDecision } from "./static-weekly-recurring-preview.js";
+import { createRecurringManagerDecision, createRecurringFinalManagerChanges,
+  RECURRING_IMPLEMENTATION_DIGEST } from "./static-weekly-recurring-preview.js";
+import { createRecurringWeekCommitment, createRecurringFullNineTemplateCommitment,
+  RECURRING_PHASE_SCOPE, RECURRING_FULL_NINE_SCOPE } from "./static-weekly-recurring-week-commitment.js";
 import { createOpeningCoverageReport, sanitizeOpeningCoverageDiagnostic } from './static-weekly-opening-coverage-report.js';
 import { installStaticWeeklySha256HexAccelerator } from "./static-weekly-schedule-model.js";
 import {
@@ -19,7 +24,8 @@ import { STATIC_WEEKLY_FUSED_COMPILER_RESOURCE_LIMITS } from "./static-weekly-sc
 
 installStaticWeeklySha256HexAccelerator((text) => createHash("sha256").update(text, "utf8").digest("hex"));
 
-const recurringTemplate = JSON.parse(readFileSync(new URL("../config/custodial-six-person-static-20260926.json", import.meta.url)));
+const historicalRecurringTemplate = JSON.parse(readFileSync(new URL("../config/custodial-six-person-static-20260926.json", import.meta.url)));
+const currentHandoutRecurringTemplate = JSON.parse(readFileSync(new URL("../config/custodial-six-person-static-20261005.json", import.meta.url)));
 const fullNineTemplate = JSON.parse(readFileSync(new URL("../config/custodial-recurring-schedule-20260924.json", import.meta.url)));
 const fullNineIdentity = JSON.parse(readFileSync(new URL("../config/custodial-full-nine-family-owners-20260926.json", import.meta.url)));
 const fullNineOwners = fullNineIdentity.owners;
@@ -113,6 +119,12 @@ process.on("message", async (message) => {
       send({ type: "result", id: message.id, result: prepareResult(result, message.preparation, message.input) });
     } else {
       const request = message.input || {};
+      // The current 323-row handout and retained 312/313 historical packet
+      // have separate exact source lineages. Their own adapters validate every
+      // tuple; count only selects which closed template to attempt, never a
+      // permissive fallback when either lineage is altered.
+      const recurringTemplate = request.publishedSource?.compiler_input?.version?.assignments?.length === 323
+        ? currentHandoutRecurringTemplate : historicalRecurringTemplate;
       const bound = currentPatternFromPublishedReadback({
         publishedSource: request.publishedSource,
         managerSnapshot: request.managerSnapshot,
@@ -137,12 +149,53 @@ process.on("message", async (message) => {
         throw Object.assign(new Error("The exact approved nine-position source is not registered for this preview."),
           { code: "static_weekly_recurring_full_source_not_approved" });
       }
-      const candidate = adaptRegisteredRecurringSource({
-        registeredSource: request.publishedSource.compiler_input,
-        patternConfig: solved.config,
-        fullNineSource: request.fullNineSource?.compiler_input || null,
-        allowSplitSource: bound.sourcePatternKind === "FULL_NINE",
-      });
+      let candidate, changes, phaseSourceBasis = null, finalPattern = null;
+      let weekProof = null;
+      if (staffedPositions === 9) {
+        // The exact historical full-nine source retains its split-family
+        // template. It is not a seven-day ordinary-phase minimum.
+        candidate = adaptRegisteredRecurringSource({
+          registeredSource: request.publishedSource.compiler_input,
+          patternConfig: solved.config,
+          fullNineSource: request.fullNineSource?.compiler_input || null,
+          allowSplitSource: bound.sourcePatternKind === "FULL_NINE",
+        });
+        changes = solved.preview;
+      } else {
+        if (bound.sourcePatternKind !== "UNSPLIT") {
+          throw Object.assign(new Error("A split historical publication cannot enter the current-handout canonical phase source; nine-to-eight requires a separately proved source transition."),
+            { code: "static_weekly_recurring_phase_source_unsupported" });
+        }
+        phaseSourceBasis = createRecurringPhaseSourceBasis({
+          registeredSource: request.publishedSource.compiler_input,
+          patternConfig: solved.config,
+        });
+        weekProof = deriveScalableCanonicalRecurringWeekCandidate({
+          source: phaseSourceBasis.source,
+          currentConfig: phaseSourceBasis.ownerConfig,
+          fullOwners: fullNineOwners,
+          solver: { solve: (lp, options) => solverEngine.solve(lp, {
+            ...options,
+            timeLimitSeconds: options?.timeLimitSeconds || options?.time_limit || 30,
+          }) },
+        });
+        if (weekProof?.status !== "UNREGISTERED_CANONICAL_RECURRING_WEEK_CANDIDATE") {
+          const failedDay = Number.isInteger(weekProof?.dayOfWeek) ? ` day ${weekProof.dayOfWeek}` : "";
+          throw Object.assign(new Error(`The complete seven-day recurring phase proof is unavailable at ${weekProof?.stage || "source"}${failedDay}.`),
+            { code: "static_weekly_recurring_week_proof_unavailable" });
+        }
+        finalPattern = recurringPatternFromFinalPhaseSource({
+          phaseSourceBasis, finalSource: weekProof.candidateSource,
+        });
+        candidate = { compilerInput: weekProof.candidateSource,
+          patternFingerprint: finalPattern.configDigest };
+        changes = createRecurringFinalManagerChanges({
+          preliminaryChanges: solved.preview,
+          phaseSource: phaseSourceBasis.source,
+          finalSource: candidate.compilerInput,
+          ownerConfig: finalPattern.config,
+        });
+      }
       const compileInput = structuredClone(candidate.compilerInput);
       compileInput.versions = [compileInput.version];
       delete compileInput.version;
@@ -156,22 +209,49 @@ process.on("message", async (message) => {
       const lunchFacts = { loans: lunch.loans, responsibilities: lunch.responsibilities,
         notificationIntents: lunch.notification_intents };
       const decision = createRecurringManagerDecision({ candidateInput: candidate.compilerInput,
-        compiled, lunch, changes: solved.preview });
+        compiled, lunch, changes });
       const decisionDigest = postgresJsonbContentDigest(decision);
       const openingCoverageReport = createOpeningCoverageReport({source:candidate.compilerInput,
         assignments:compiled.weeklyAssignments,lunch,decisionDigest,
         context:{publicationId:bound.publicationId,authorityRevision:bound.authorityRevision}});
+      const publishedSourceDigest = postgresJsonbContentDigest(request.publishedSource.compiler_input);
+      const managerSnapshotDigest = postgresJsonbContentDigest(request.managerSnapshot);
+      const fullNineSourceDigest = request.fullNineSource?.compiler_input
+        ? postgresJsonbContentDigest(request.fullNineSource.compiler_input) : null;
+      const readbackPatternDigest = postgresJsonbContentDigest(bound.currentConfig);
+      const binding = { sourceId: bound.sourceId, publicationId: bound.publicationId,
+        authorityRevision: bound.authorityRevision, effectiveWeek: request.effectiveDate,
+        publishedSourceDigest, managerSnapshotDigest, readbackPatternDigest,
+        fullNineSourceDigest };
+      const weekCommitment = weekProof && createRecurringWeekCommitment({
+        week: weekProof, source: phaseSourceBasis.source,
+        ownerConfig: phaseSourceBasis.ownerConfig, fullOwners: fullNineOwners,
+        sourceBasisDigest: phaseSourceBasis.basisDigest,
+        finalSource: candidate.compilerInput, finalPatternConfig: finalPattern.config,
+        compiled, implementationDigest: RECURRING_IMPLEMENTATION_DIGEST,
+        binding,
+      });
+      const staticTemplateCommitment = staffedPositions === 9
+        ? createRecurringFullNineTemplateCommitment({
+          registeredFullNineSource: request.fullNineSource.compiler_input,
+          finalSource: candidate.compilerInput, compiled,
+          implementationDigest: RECURRING_IMPLEMENTATION_DIGEST,
+          patternFingerprint: candidate.patternFingerprint,
+          binding: { ...binding, registeredFullNineSourceId: request.fullNineSource.source_id,
+            registeredFullNineSourceDigest: fullNineSourceDigest },
+          approvedIdentity: fullNineIdentity,
+        }) : undefined;
       const publicCandidate = {
         status: "CANDIDATE_ONLY", sourceId: bound.sourceId,
         publicationId: bound.publicationId, authorityRevision: bound.authorityRevision,
         ...(bound.repairContext ? {patternPublicationId:bound.patternPublicationId,
           repairContext:bound.repairContext,repairContextDigest:bound.repairContextDigest} : {}),
         sourcePatternKind: bound.sourcePatternKind,
-        publishedSourceDigest: postgresJsonbContentDigest(request.publishedSource.compiler_input),
-        managerSnapshotDigest: postgresJsonbContentDigest(request.managerSnapshot),
-        fullNineSourceDigest: request.fullNineSource?.compiler_input
-          ? postgresJsonbContentDigest(request.fullNineSource.compiler_input) : null,
-        readbackPatternDigest: postgresJsonbContentDigest(bound.currentConfig),
+        weekOptimizationScope: staffedPositions === 9 ? RECURRING_FULL_NINE_SCOPE : RECURRING_PHASE_SCOPE,
+        ...(weekCommitment ? { weekCommitment,
+          phaseSourceBasisDigest: phaseSourceBasis.basisDigest } : { staticTemplateCommitment }),
+        publishedSourceDigest, managerSnapshotDigest,
+        fullNineSourceDigest, readbackPatternDigest,
         effectiveDate: request.effectiveDate, staffedPositions,
         candidateSourceDigest: postgresJsonbContentDigest(candidate.compilerInput),
         patternFingerprint: candidate.patternFingerprint,
@@ -190,7 +270,7 @@ process.on("message", async (message) => {
         decision, decisionDigest, openingCoverageReport,
         compilerStatus: compiled.status, publicationAuthority: compiled.publicationAuthority,
         verifierOk: compiled.verifier.ok, reviewWorkCount: compiled.reviewWork.length,
-        changes: solved.preview, registrationRequired: true, managerConfirmationRequired: true,
+        changes, registrationRequired: true, managerConfirmationRequired: true,
       };
       send({ type: "result", id: message.id, result: message.type === "recurring-admission-candidate"
         ? { schema: "static-weekly.recurring-admission-candidate.v1",

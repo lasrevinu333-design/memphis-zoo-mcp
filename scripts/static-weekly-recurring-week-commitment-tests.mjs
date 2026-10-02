@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { canonicalJson, contentDigest } from "../src/static-weekly-schedule-model.js";
 import { postgresJsonbContentDigest } from "../src/static-weekly-schedule-compiler.js";
 import { createRecurringWeekCommitment, assertRecurringWeekCommitment,
@@ -7,6 +8,7 @@ import { createRecurringWeekCommitment, assertRecurringWeekCommitment,
   RECURRING_FULL_NINE_SCOPE } from
   "../src/static-weekly-recurring-week-commitment.js";
 import { createRecurringFinalManagerChanges } from "../src/static-weekly-recurring-preview.js";
+import { assertRecurringAdmissionCandidate } from "../src/static-weekly-recurring-preview.js";
 
 const hash = (character) => character.repeat(64);
 const digestObject = (body) => ({ ...body, proofDigest: contentDigest(body) });
@@ -72,7 +74,7 @@ function fakeFreshWeek(timeLimit) {
 }
 
 const input = (week) => ({ week, source, ownerConfig, fullOwners, finalSource,
-  finalPatternConfig: ownerConfig, compiled,
+  sourceBasisDigest: hash("4"), finalPatternConfig: ownerConfig, compiled,
   implementationDigest: hash("9"), binding });
 const first = createRecurringWeekCommitment(input(fakeFreshWeek(9.983)));
 const second = createRecurringWeekCommitment(input(fakeFreshWeek(9.217)));
@@ -88,7 +90,7 @@ const candidate = { weekCommitment: first, weekOptimizationScope: RECURRING_PHAS
   publishedSourceDigest: binding.publishedSourceDigest, managerSnapshotDigest: binding.managerSnapshotDigest,
   readbackPatternDigest: binding.readbackPatternDigest, fullNineSourceDigest: null,
   candidateSourceDigest: first.finalSourceSqlDigest,
-  patternFingerprint: contentDigest(ownerConfig),
+  patternFingerprint: contentDigest(ownerConfig), phaseSourceBasisDigest: hash("4"),
   decision: { implementationDigest: hash("9") }, compilerVersion: compiled.compilerVersion,
   modelBasisDigest: compiled.certificate.modelBasisDigest,
   finalWitnessDigest: compiled.certificate.finalWitness.digest,
@@ -191,3 +193,71 @@ rejected("manager changes cannot hide final family", () => {
 });
 console.log(JSON.stringify({ status: "PASS", checks, scope: "pure synthetic semantic commitment and hostile shapes",
   solver: false, worker: false, sql: false, publication: false }));
+
+if (process.argv.includes("--fused-ipc")) {
+  const { createStaticWeeklyCompilerRuntime } = await import("../src/static-weekly-schedule-compiler-runtime.js");
+  const packet = JSON.parse(readFileSync(new URL("./fixtures/static-weekly-policy-scope-receipts.json", import.meta.url)));
+  const source = structuredClone(packet.cases.baseline.input);
+  source.version = source.versions[0]; delete source.versions;
+  assert.equal(source.version.assignments.length, 323, "exact retained current-handout source required");
+  const config = JSON.parse(readFileSync(new URL("../config/custodial-six-person-static-20261005.json", import.meta.url)));
+  const fresh = config.slots.OPTION1;
+  fresh.vacancy = false;
+  fresh.personId = "72000000-0000-4000-8000-000000000001";
+  fresh.name = "Synthetic fresh OPTION1 incumbent";
+  source.slots.find((slot) => slot.id === fresh.slotId).incumbencies.push({
+    personId: fresh.personId, displayName: fresh.name,
+    effectiveStart: "2026-10-05", effectiveEnd: null });
+  for (const row of source.version.slotAvailability.filter((row) => row.slotId === fresh.slotId))
+    row.status = "working";
+  source.version.vacantSlotIds = source.version.vacantSlotIds.filter((id) => id !== fresh.slotId);
+  const managerSnapshot = {
+    week_start: "2026-10-05", authority_revision: 42,
+    current_publication: { publication_id: source.version.publicationId },
+    roster: Object.values(config.slots).map((slot) => ({
+      slot_id: slot.slotId, contractor_capacity: false,
+      incumbencies: source.slots.find((row) => row.id === slot.slotId).incumbencies.map((person) => ({
+        person_id: person.personId, person_name: person.displayName,
+        effective_start: person.effectiveStart, effective_end: person.effectiveEnd })),
+      week_staffing: slot.vacancy === true ? [] : slot.workDays.map((day) => ({
+        service_date: new Date(Date.parse("2026-10-05T12:00:00Z") + ((day + 6) % 7) * 86_400_000)
+          .toISOString().slice(0, 10),
+        person_id: slot.personId, employee_active: true })),
+    })),
+  };
+  const request = { publishedSource: { source_id: "73000000-0000-4000-8000-000000000001",
+    publication_id: source.version.publicationId, authority_revision: 42, compiler_input: source },
+    managerSnapshot, effectiveDate: "2026-10-05", expectedRevision: 42 };
+  const initial = canonicalJson(request);
+  const runtime = createStaticWeeklyCompilerRuntime();
+  const started = performance.now();
+  try {
+    const preview = await runtime.prepareRecurringCandidate(request);
+    assert.equal(preview.weekOptimizationScope, RECURRING_PHASE_SCOPE);
+    assert.equal(preview.staffedPositions, 7);
+    assert.equal(preview.assignmentCount, 323);
+    assert.equal(preview.weekCommitment.status, "PROVEN_CANDIDATE_ONLY");
+    assert.equal(preview.weekCommitment.days.length, 7);
+    assert.equal(preview.weekCommitment.normalMorningOptimumClaim, false);
+    assert.equal(preview.weekCommitment.physicalMinuteFeasibilityClaim, false);
+    const admission = await runtime.prepareRecurringAdmissionCandidate(request);
+    assertRecurringAdmissionCandidate(admission);
+    assert.equal(admission.candidate.weekCommitment.digest, preview.weekCommitment.digest,
+      "independent fresh solver terminal timings cannot change semantic preview identity");
+    assert.equal(admission.candidate.decisionDigest, preview.decisionDigest);
+    assert.equal(admission.candidate.candidateSourceDigest, preview.candidateSourceDigest);
+    assert.equal(postgresJsonbContentDigest(admission.canonicalSource), preview.candidateSourceDigest);
+    assert.equal(canonicalJson(request), initial, "source and roster request may not be mutated");
+    await assert.rejects(() => runtime.prepareRecurringCandidate({ ...request, expectedRevision: 41 }),
+      /revision changed/);
+    console.log(JSON.stringify({ status: "PASS", scope: "fresh isolated fused IPC preview/private admission",
+      checks: 14, staffedPositions: 7, sourceAssignments: 323,
+      semanticWeekDigest: preview.weekCommitment.digest,
+      finalSourceDigest: preview.candidateSourceDigest,
+      finalPatternDigest: preview.patternFingerprint,
+      elapsedMs: Math.round(performance.now() - started),
+      sql: false, publication: false, physical: false }));
+  } finally {
+    await runtime.shutdown();
+  }
+}

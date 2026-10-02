@@ -102,7 +102,7 @@ function stableDay(proof, dayOfWeek, finalDigest, finalWitnessDigest) {
 // has freshly checked all seven exact terminal receipts and its final complete
 // canonical hard-row witness. This does not assert physical-duration evidence.
 export function createRecurringWeekCommitment({ week, source, ownerConfig, fullOwners,
-  finalSource, finalPatternConfig, compiled, implementationDigest, binding }) {
+  sourceBasisDigest, finalSource, finalPatternConfig, compiled, implementationDigest, binding }) {
   assert.ok(week && source && ownerConfig && fullOwners && finalSource
     && finalPatternConfig && compiled && binding);
   exactProofDigest(week);
@@ -110,6 +110,7 @@ export function createRecurringWeekCommitment({ week, source, ownerConfig, fullO
   assert.equal(week.sourceDigest, contentDigest(source));
   assert.equal(week.configDigest, contentDigest(ownerConfig));
   assert.equal(week.fullOwnersDigest, contentDigest(fullOwners));
+  assert.ok(hex(sourceBasisDigest));
   assert.equal(week.candidateSourceDigest, contentDigest(finalSource));
   assert.equal(canonicalJson(week.candidateSource), canonicalJson(finalSource));
   assert.equal(week.morningPreserved, true);
@@ -159,6 +160,7 @@ export function createRecurringWeekCommitment({ week, source, ownerConfig, fullO
     readbackPatternDigest: binding.readbackPatternDigest,
     fullNineSourceDigest: binding.fullNineSourceDigest,
     sourceDigest: week.sourceDigest,
+    sourceBasisDigest,
     sourceSqlDigest: postgresJsonbContentDigest(source),
     configDigest: week.configDigest,
     finalPatternDigest: contentDigest(finalPatternConfig),
@@ -275,16 +277,38 @@ export function assertRecurringWeekCommitmentCandidate(candidate) {
   assert.equal(commitment.componentLedgerDigest, COMPONENT_WEIGHT_LEDGER_DIGEST);
   assert.equal(commitment.implementationDigest, candidate.decision?.implementationDigest);
   assert.equal(commitment.finalPatternDigest, candidate.patternFingerprint);
+  assert.equal(commitment.sourceBasisDigest, candidate.phaseSourceBasisDigest);
   assert.equal(commitment.completeCompiler.compilerVersion, candidate.compilerVersion);
   assert.equal(commitment.completeCompiler.modelBasisDigest, candidate.modelBasisDigest);
   assert.equal(commitment.completeCompiler.finalWitnessDigest, candidate.finalWitnessDigest);
   assert.equal(commitment.completeCompiler.assignmentDigest, candidate.assignmentWitnessDigest);
   assert.equal(commitment.completeCompiler.weeklyAssignmentsDigest, candidate.weeklyAssignmentsDigest);
+  for (const value of [commitment.sourceDigest, commitment.sourceBasisDigest,
+    commitment.sourceSqlDigest, commitment.configDigest, commitment.finalPatternDigest,
+    commitment.fullOwnersDigest, commitment.componentLedgerDigest,
+    commitment.implementationDigest, commitment.finalSourceDigest,
+    commitment.finalSourceSqlDigest, commitment.canonicalHard?.modelBasisDigest,
+    commitment.canonicalHard?.hardConstraintDigest,
+    commitment.canonicalHard?.witnessDigest,
+    commitment.completeCompiler?.canonicalInputDigest]) assert.ok(hex(value));
+  assert.ok(Number.isSafeInteger(commitment.canonicalHard.hardConstraintCount)
+    && commitment.canonicalHard.hardConstraintCount > 0);
   assert.ok(Array.isArray(commitment.days) && commitment.days.length === 7);
   assert.ok(commitment.days.every((day, index) => day.dayOfWeek === index
-    && hex(day.descriptorDigest) && hex(day.originalLowerBoundDescriptorDigest)
-    && hex(day.finalCanonicalWitnessDigest)
-    && day.finalCanonicalWitnessDigest === commitment.canonicalHard.witnessDigest));
+    && [day.descriptorDigest, day.originalLowerBoundDescriptorDigest,
+      day.originalSolverSourceDigest, day.freshCanonicalSourceBasisDigest,
+      day.unchangedRelaxationDayFactsDigest, day.unchangedRelaxationDescriptorDigest,
+      day.finalCanonicalWitnessDigest].every(hex)
+    && day.finalCanonicalWitnessDigest === commitment.canonicalHard.witnessDigest
+    && Number.isSafeInteger(day.minimumDoubledSpread) && day.minimumDoubledSpread >= 0
+    && Number.isSafeInteger(day.preferenceCost) && day.preferenceCost >= 0
+    && Array.isArray(day.stableIdentity) && Array.isArray(day.selectedOwnership)
+    && Array.isArray(day.terminalOptima) && day.terminalOptima.length >= 3
+    && day.terminalOptima[0].name === "raw_spread"
+    && day.terminalOptima[1].name === "inherited_preference"
+    && day.terminalOptima.slice(2).every((tier) => tier.name.startsWith("inherited_identity_"))
+    && day.terminalOptima.every((tier) => hex(tier.modelDigest) && hex(tier.lpDigest)
+      && Number.isSafeInteger(tier.objectiveValue))));
   assert.ok(commitment.normalMorningOptimumClaim === false
     && commitment.datedPriorityChange === false
     && commitment.physicalMinuteFeasibilityClaim === false
