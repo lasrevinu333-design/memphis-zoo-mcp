@@ -431,6 +431,54 @@ for(const command of capacityAuthorityCommands){
 assert.match(readFileSync(resolve(root,'scripts/nonemployee-coverall-database-tests.mjs'),'utf8'),
   /const eventBrief=verifyCoverAllEventBriefSqlFixture\(/,'fresh CoverAll proof must retain its actual Event SQL fixture, not only PDF mocks');
 console.log('CURRENT_CAPACITY_NATIVE_CI_WIRING_PASS:',capacityAuthorityCommands.length,'runners;',capacityWiringMutationCount,'hostile wiring mutations');
+const sixPersonStep = [
+  '      - name: Exact six-person absence and manual typed capacity compiler proof',
+  '        shell: bash', '        run: |', '          set -euo pipefail',
+  '          unset STATIC_WEEKLY_TEST_SIX_PACKET STATIC_WEEKLY_ABSENCE_PROOF_CASES',
+  '          export CI=true', '          six_person_absence_proof_dir="$(mktemp -d)"',
+  '          export STATIC_WEEKLY_ABSENCE_PROOF_OUTPUT="$six_person_absence_proof_dir/results"',
+  '          test -f scripts/fixtures/six-person-absence-source.json',
+  '          node scripts/six-person-absence-fixture-contract-tests.mjs',
+  '          node scripts/six-person-absence-permutation-tests.mjs',
+  '          node scripts/six-person-absence-receipt-tests.mjs',
+  '          test -s "$STATIC_WEEKLY_ABSENCE_PROOF_OUTPUT/summary.json"', '',
+].join('\n');
+function assertSixPersonAbsenceWiring(workflow) {
+  assertReviewedRegressionGate(workflow,'backend','exact six-person absence proof');
+  assert.equal(workflow.split(sixPersonStep).length-1,1,'owning exact-source proof is unconditional, fresh and fail-fast');
+  for(const command of ['node scripts/six-person-absence-fixture-contract-tests.mjs','node scripts/six-person-absence-permutation-tests.mjs','node scripts/six-person-absence-receipt-tests.mjs'])
+    assert.equal(workflow.split(command).length-1,1,'owning proof cannot duplicate or hide in another step');
+  assert.ok(workflow.indexOf(sixPersonStep)>workflow.indexOf(capacityAuthorityStep)
+    && workflow.indexOf(sixPersonStep)<workflow.indexOf('      - name: Empty database migration rebuild and database concurrency\n'),
+    'exact six-person compiler proof follows typed source proofs and precedes shared mutable fixtures');
+}
+assertSixPersonAbsenceWiring(productionRepairGate);
+let sixPersonMutations=0;
+for(const [before,after]of [
+ ['        shell: bash','        shell: sh'],['        run: |','        if: ${{ false }}\n        run: |'],
+ ['        run: |','        continue-on-error: true\n        run: |'],['          set -euo pipefail','          set +e'],
+ ['          export CI=true','          export CI=false'],['          six_person_absence_proof_dir="$(mktemp -d)"','          six_person_absence_proof_dir=/tmp/shared-proof'],
+ ['          unset STATIC_WEEKLY_TEST_SIX_PACKET STATIC_WEEKLY_ABSENCE_PROOF_CASES','          export STATIC_WEEKLY_ABSENCE_PROOF_CASES=baseline'],
+ ['          test -f scripts/fixtures/six-person-absence-source.json','          true'],
+ ['          test -s "$STATIC_WEEKLY_ABSENCE_PROOF_OUTPUT/summary.json"','          true'],
+ ['          node scripts/six-person-absence-fixture-contract-tests.mjs','          node scripts/six-person-absence-fixture-contract-tests.mjs || true'],
+ ['          node scripts/six-person-absence-permutation-tests.mjs','          node scripts/six-person-absence-permutation-tests.mjs || true'],
+ ['          node scripts/six-person-absence-receipt-tests.mjs','          node scripts/six-person-absence-receipt-tests.mjs || true'],
+ ['          node scripts/six-person-absence-receipt-tests.mjs','          # node scripts/six-person-absence-receipt-tests.mjs'],
+ ['          node scripts/six-person-absence-permutation-tests.mjs','          # node scripts/six-person-absence-permutation-tests.mjs'],
+ ['          node scripts/six-person-absence-permutation-tests.mjs','          node scripts/six-person-absence-permutation-tests.mjs\n          node scripts/six-person-absence-permutation-tests.mjs'],
+ ['          node scripts/six-person-absence-fixture-contract-tests.mjs\n          node scripts/six-person-absence-permutation-tests.mjs',
+  '          node scripts/six-person-absence-permutation-tests.mjs\n          node scripts/six-person-absence-fixture-contract-tests.mjs'],
+]) {assert.throws(()=>assertSixPersonAbsenceWiring(productionRepairGate.replace(sixPersonStep,sixPersonStep.replace(before,after))));sixPersonMutations++;}
+assert.throws(()=>assertSixPersonAbsenceWiring(productionRepairGate.replace(sixPersonStep,'')));sixPersonMutations++;
+const exactSixFixture=readFileSync(resolve(root,'scripts/fixtures/six-person-absence-source.json'));
+assert.equal(createHash('sha256').update(exactSixFixture).digest('hex'),'882e5895d60338313b08f28ec327f2087468261749cdbac5dc7d78ac22e20469');
+const sixProof=readFileSync(resolve(root,'scripts/six-person-absence-permutation-tests.mjs'),'utf8');
+assert.match(sixProof,/if\(process\.env\.CI==='true'\)assert\.deepEqual\(requested,Object\.keys\(cases\)/,'CI cannot narrow cases');
+assert.match(sixProof,/finally\{await runtime\.shutdown\(\)/,'owning compiler group must close even after proof failure');
+assert.match(sixProof,/verifyStaticWeeklyScheduleResult\(input,result\)/,'full solver-free verifier, not heuristic success');
+assert.match(sixProof,/loadSixPersonAbsenceSource\(/,'exact committed input is the default fixture');
+console.log('EXACT_SIX_PERSON_ABSENCE_CI_WIRING_PASS:',sixPersonMutations,'hostile wiring mutations; exact committed fixture required');
 for (const mutation of [
   productionRepairGate.replace(completionDatabaseCommand, `# ${completionDatabaseCommand}`),
   productionRepairGate.replace(completionDatabaseCommand, `${completionDatabaseCommand} || true`),

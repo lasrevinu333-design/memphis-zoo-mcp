@@ -111,6 +111,19 @@ jobs:
           node scripts/nonemployee-coverall-nonempty-lunch-database-tests.mjs
           node scripts/nonemployee-coverall-current-source-database-tests.mjs
           node scripts/native-target-source-database-tests.mjs
+      - name: Exact six-person absence and manual typed capacity compiler proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset STATIC_WEEKLY_TEST_SIX_PACKET STATIC_WEEKLY_ABSENCE_PROOF_CASES
+          export CI=true
+          six_person_absence_proof_dir="$(mktemp -d)"
+          export STATIC_WEEKLY_ABSENCE_PROOF_OUTPUT="$six_person_absence_proof_dir/results"
+          test -f scripts/fixtures/six-person-absence-source.json
+          node scripts/six-person-absence-fixture-contract-tests.mjs
+          node scripts/six-person-absence-permutation-tests.mjs
+          node scripts/six-person-absence-receipt-tests.mjs
+          test -s "$STATIC_WEEKLY_ABSENCE_PROOF_OUTPUT/summary.json"
       - name: Empty database migration rebuild and database concurrency
         shell: bash
         env:
