@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { compileStaticWeeklySchedule } from "./static-weekly-schedule-compiler.js";
 import { postgresJsonbContentDigest } from "./static-weekly-schedule-compiler.js";
 import { adaptRegisteredRecurringSource, currentPatternFromPublishedReadback,
-  deriveRecurringStaffingPattern, createRecurringPhaseSourceBasis,
+  deriveRecurringStaffingPattern, targetSlotsFromManagerRoster, createRecurringPhaseSourceBasis,
   recurringPatternFromFinalPhaseSource,
   deriveScalableCanonicalRecurringWeekCandidate } from "./static-weekly-recurring-staffing-adaptation.js";
 import { createStaticWeeklyDraftRpcInput } from "./static-weekly-schedule-database-adapter.js";
@@ -123,7 +123,14 @@ process.on("message", async (message) => {
       // have separate exact source lineages. Their own adapters validate every
       // tuple; count only selects which closed template to attempt, never a
       // permissive fallback when either lineage is altered.
-      const recurringTemplate = request.publishedSource?.compiler_input?.version?.assignments?.length === 323
+      const publishedAssignmentCount = request.publishedSource?.compiler_input?.version?.assignments?.length;
+      const datedTargetSlots = publishedAssignmentCount === 313
+        ? targetSlotsFromManagerRoster({templateConfig:currentHandoutRecurringTemplate,
+          managerSnapshot:request.managerSnapshot,effectiveDate:request.effectiveDate,
+          expectedRevision:request.expectedRevision}) : null;
+      const reducingHistoricalNine = datedTargetSlots && Object.values(datedTargetSlots)
+        .filter(slot => slot.vacancy !== true).length < 9;
+      const recurringTemplate = publishedAssignmentCount === 323 || reducingHistoricalNine
         ? currentHandoutRecurringTemplate : historicalRecurringTemplate;
       const bound = currentPatternFromPublishedReadback({
         publishedSource: request.publishedSource,
@@ -131,6 +138,7 @@ process.on("message", async (message) => {
         templateConfig: recurringTemplate,
         fullConfig: fullNineTemplate,
         fullOwners: fullNineOwners,
+        fullNineSource: request.fullNineSource || null,
         effectiveDate: request.effectiveDate,
         expectedRevision: request.expectedRevision,
       });
@@ -162,18 +170,21 @@ process.on("message", async (message) => {
         });
         changes = solved.preview;
       } else {
-        if (bound.sourcePatternKind !== "UNSPLIT") {
-          throw Object.assign(new Error("A split historical publication cannot enter the current-handout canonical phase source; nine-to-eight requires a separately proved source transition."),
+        if (bound.sourcePatternKind !== "UNSPLIT"
+          && !(bound.sourcePatternKind === "FULL_NINE" && bound.reductionContext)) {
+          throw Object.assign(new Error("The accepted recurring source has no complete canonical phase transition basis."),
             { code: "static_weekly_recurring_phase_source_unsupported" });
         }
         phaseSourceBasis = createRecurringPhaseSourceBasis({
           registeredSource: request.publishedSource.compiler_input,
           patternConfig: solved.config,
+          reductionContext: bound.reductionContext || null,
         });
         weekProof = deriveScalableCanonicalRecurringWeekCandidate({
           source: phaseSourceBasis.source,
           currentConfig: phaseSourceBasis.ownerConfig,
           fullOwners: fullNineOwners,
+          phaseSourceBasis,
           solver: { solve: (lp, options) => solverEngine.solve(lp, {
             ...options,
             timeLimitSeconds: options?.timeLimitSeconds || options?.time_limit || 30,
@@ -222,10 +233,12 @@ process.on("message", async (message) => {
       const binding = { sourceId: bound.sourceId, publicationId: bound.publicationId,
         authorityRevision: bound.authorityRevision, effectiveWeek: request.effectiveDate,
         publishedSourceDigest, managerSnapshotDigest, readbackPatternDigest,
-        fullNineSourceDigest };
+        fullNineSourceDigest, fullNineSourceId:request.fullNineSource?.source_id || null,
+        sourcePatternKind:bound.sourcePatternKind };
       const weekCommitment = weekProof && createRecurringWeekCommitment({
         week: weekProof, source: phaseSourceBasis.source,
         ownerConfig: phaseSourceBasis.ownerConfig, fullOwners: fullNineOwners,
+        phaseSourceBasis,
         sourceBasisDigest: phaseSourceBasis.basisDigest,
         finalSource: candidate.compilerInput, finalPatternConfig: finalPattern.config,
         compiled, implementationDigest: RECURRING_IMPLEMENTATION_DIGEST,
@@ -249,7 +262,10 @@ process.on("message", async (message) => {
         sourcePatternKind: bound.sourcePatternKind,
         weekOptimizationScope: staffedPositions === 9 ? RECURRING_FULL_NINE_SCOPE : RECURRING_PHASE_SCOPE,
         ...(weekCommitment ? { weekCommitment,
-          phaseSourceBasisDigest: phaseSourceBasis.basisDigest } : { staticTemplateCommitment }),
+          phaseSourceBasisDigest: phaseSourceBasis.basisDigest,
+          ...(phaseSourceBasis.reductionContext
+            ? {reductionContextDigest:phaseSourceBasis.reductionContext.contextDigest} : {})
+        } : { staticTemplateCommitment }),
         publishedSourceDigest, managerSnapshotDigest,
         fullNineSourceDigest, readbackPatternDigest,
         effectiveDate: request.effectiveDate, staffedPositions,

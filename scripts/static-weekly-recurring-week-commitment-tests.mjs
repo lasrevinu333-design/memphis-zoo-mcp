@@ -271,3 +271,53 @@ if (process.argv.includes("--fused-ipc")) {
     await runtime.shutdown();
   }
 }
+
+if (process.argv.includes("--fused-reduction-six") || process.argv.includes("--fused-reduction-eight")) {
+  const { createStaticWeeklyCompilerRuntime } = await import("../src/static-weekly-schedule-compiler-runtime.js");
+  const { createSyntheticFullNineReductionFixture } = await import(
+    "./static-weekly-recurring-phase-authority-tests.mjs");
+  const count = process.argv.includes("--fused-reduction-eight") ? 8 : 6;
+  const fixture = createSyntheticFullNineReductionFixture(count);
+  const request = { publishedSource:fixture.publishedSource, managerSnapshot:fixture.managerSnapshot,
+    fullNineSource:fixture.fullNineSource,effectiveDate:fixture.effectiveDate,
+    expectedRevision:fixture.expectedRevision };
+  assert.equal(request.publishedSource.compiler_input.version.assignments.length, 313);
+  const before = canonicalJson(request);
+  const runtime = createStaticWeeklyCompilerRuntime();
+  const started = performance.now();
+  try {
+    const preview = await runtime.prepareRecurringCandidate(request);
+    assert.equal(preview.weekOptimizationScope, RECURRING_PHASE_SCOPE);
+    assert.equal(preview.sourcePatternKind, "FULL_NINE");
+    assert.equal(preview.staffedPositions, count);
+    assert.equal(preview.assignmentCount, 323);
+    assert.equal(preview.weekCommitment.reductionContextDigest, preview.reductionContextDigest);
+    assert.ok(preview.weekCommitment.days.every((day) =>
+      /^[a-f0-9]{64}$/.test(day.mandatoryCurrentOwnerPreferenceDigest)));
+    const authorityBasis = {source:request.publishedSource,snapshot:request.managerSnapshot,
+      patternAuthority:{publicationId:request.publishedSource.publication_id},
+      fullNineSource:request.fullNineSource};
+    assert.equal(assertRecurringWeekCommitment(preview,authorityBasis,request.expectedRevision),true);
+    const changedCost = structuredClone(preview);
+    changedCost.weekCommitment.days[0].fullInheritedPreferenceCost += 100;
+    assert.throws(() => assertRecurringWeekCommitment(changedCost,authorityBasis,request.expectedRevision));
+    const wrongRegisteredBase = {...authorityBasis,fullNineSource:{...request.fullNineSource,
+      source_id:"74000000-0000-4000-8000-000000000099"}};
+    assert.throws(() => assertRecurringWeekCommitment(preview,wrongRegisteredBase,request.expectedRevision));
+    const admission = await runtime.prepareRecurringAdmissionCandidate(request);
+    assertRecurringAdmissionCandidate(admission);
+    assert.equal(admission.candidate.weekCommitment.digest, preview.weekCommitment.digest,
+      "fresh private reduction must bind the same complete semantic week");
+    assert.equal(admission.candidate.decisionDigest, preview.decisionDigest);
+    assert.equal(admission.candidate.candidateSourceDigest, preview.candidateSourceDigest);
+    assert.equal(postgresJsonbContentDigest(admission.canonicalSource), preview.candidateSourceDigest);
+    assert.equal(canonicalJson(request), before, "historical source and current roster may not be rewritten");
+    console.log(JSON.stringify({status:"PASS",scope:`fresh isolated historical-nine to current-${count} fused IPC preview/private admission`,
+      checks:16,staffedPositions:count,sourceAssignments:313,candidateAssignments:323,
+      semanticWeekDigest:preview.weekCommitment.digest,finalSourceDigest:preview.candidateSourceDigest,
+      reductionContextDigest:preview.reductionContextDigest,
+      elapsedMs:Math.round(performance.now()-started),sql:false,publication:false,physical:false}));
+  } finally {
+    await runtime.shutdown();
+  }
+}

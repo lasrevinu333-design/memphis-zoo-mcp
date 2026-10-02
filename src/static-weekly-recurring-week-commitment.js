@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import { canonicalJson, contentDigest } from "./static-weekly-schedule-model.js";
 import { postgresJsonbContentDigest } from "./static-weekly-schedule-compiler.js";
 import { COMPONENT_WEIGHT_LEDGER_DIGEST } from "./schedule-component-weight-authority.js";
+import { assertRecurringPhasePreferenceNormalization,
+  assertRecurringPhaseIdentityEncoding } from "./static-weekly-recurring-phase-authority.js";
+import { assertFullNineReductionPreferenceReceipt } from "./static-weekly-recurring-staffing-adaptation.js";
 
 export const RECURRING_WEEK_COMMITMENT_SCHEMA = "custodial.recurring-week-semantic-commitment.v1";
 export const RECURRING_FULL_NINE_TEMPLATE_COMMITMENT_SCHEMA =
@@ -38,7 +41,8 @@ function assertOnlyEqualizedOwnershipChanged(source, finalSource) {
     "phase witness changed nonselected canonical source facts");
 }
 
-function stableDay(proof, dayOfWeek, finalDigest, finalWitnessDigest) {
+function stableDay(proof, dayOfWeek, finalDigest, finalWitnessDigest,
+  {phaseSourceBasis = null, fullOwners = null} = {}) {
   exactProofDigest(proof);
   const lower = proof.lowerBoundEvidence;
   exactProofDigest(lower);
@@ -80,7 +84,48 @@ function stableDay(proof, dayOfWeek, finalDigest, finalWitnessDigest) {
   assert.equal(tiers[1].name, "inherited_preference");
   assert.ok(tiers.slice(2).every((tier) => tier.name.startsWith("inherited_identity_")));
   assert.equal(tiers[0].objectiveValue, proof.minimumDoubledSpread);
-  assert.equal(tiers[1].objectiveValue, proof.preferenceCost);
+  let verifiedPreference = null, verifiedIdentity = null, mandatoryPreference = null;
+  if (phaseSourceBasis) {
+    if (phaseSourceBasis.reductionContext) {
+      // The reduction validator recomputes the primitive/original transform
+      // and mandatory constant from the source. Do not repeat that expensive
+      // descriptor reconstruction for the same fresh day.
+      mandatoryPreference = assertFullNineReductionPreferenceReceipt({phaseSourceBasis,proof,
+        dayOfWeek,fullOwners});
+      const lowerReceipt = lower.mandatoryCurrentOwnerPreferenceReceipt;
+      assert.equal(lowerReceipt?.descriptorDigest, lower.descriptor.descriptorDigest);
+      const {receiptDigest:lowerReceiptDigest,...lowerReceiptBody} = lowerReceipt;
+      assert.equal(lowerReceiptDigest, contentDigest(lowerReceiptBody));
+      const stableReceipt = ({descriptorDigest,receiptDigest,...body}) => body;
+      // The rebound descriptor has a different source digest because all
+      // other days are final. Its original day source and cost arithmetic are
+      // unchanged; only that descriptor/receipt digest is allowed to differ.
+      assert.equal(canonicalJson(stableReceipt(mandatoryPreference)),
+        canonicalJson(stableReceipt(lowerReceipt)));
+      verifiedPreference = {normalization:mandatoryPreference.objectiveNormalization,
+        primitiveObjectiveValue:mandatoryPreference.rawPrimitiveLpPreferenceCost,
+        originalScaleObjectiveValue:mandatoryPreference.originalScaleVariablePreferenceCost};
+    } else {
+      verifiedPreference = assertRecurringPhasePreferenceNormalization({proof,
+        source:phaseSourceBasis.source,ownerConfig:phaseSourceBasis.ownerConfig,fullOwners});
+      assert.equal(proof.mandatoryCurrentOwnerPreferenceReceipt, undefined);
+      assert.equal(lower.mandatoryCurrentOwnerPreferenceReceipt, undefined);
+    }
+    verifiedIdentity = assertRecurringPhaseIdentityEncoding({proof,
+      ownerConfig:phaseSourceBasis.ownerConfig});
+    assert.equal(tiers[1].objectiveValue, verifiedPreference.primitiveObjectiveValue);
+    assert.equal(proof.preferenceCost, verifiedPreference.originalScaleObjectiveValue);
+    assert.equal(lower.identityLayout?.layoutDigest, verifiedIdentity.layout.layoutDigest);
+    assert.equal(canonicalJson(lower.identityEncoding), canonicalJson(verifiedIdentity.encoding));
+    if (mandatoryPreference) {
+      assert.equal(mandatoryPreference.rawPrimitiveLpPreferenceCost,
+        verifiedPreference.primitiveObjectiveValue);
+      assert.equal(mandatoryPreference.originalScaleVariablePreferenceCost,
+        verifiedPreference.originalScaleObjectiveValue);
+    }
+  } else {
+    assert.equal(tiers[1].objectiveValue, proof.preferenceCost);
+  }
   return {
     dayOfWeek,
     descriptorDigest: proof.descriptor.descriptorDigest,
@@ -95,6 +140,14 @@ function stableDay(proof, dayOfWeek, finalDigest, finalWitnessDigest) {
     selectedOwnership: structuredClone(lower.selectedOwnership),
     terminalOptima: tiers,
     finalCanonicalWitnessDigest: proof.finalCanonicalWitnessDigest,
+    ...(verifiedPreference ? {preferenceNormalizationDigest:contentDigest(verifiedPreference.normalization),
+      primitivePreferenceCost:verifiedPreference.primitiveObjectiveValue,
+      originalScaleVariablePreferenceCost:verifiedPreference.originalScaleObjectiveValue} : {}),
+    ...(verifiedIdentity ? {identityLayoutDigest:verifiedIdentity.layout.layoutDigest,
+      identityEncodingDigest:contentDigest(verifiedIdentity.encoding)} : {}),
+    ...(mandatoryPreference ? {mandatoryCurrentOwnerPreferenceDigest:mandatoryPreference.receiptDigest,
+      fixedUnavoidableOriginalOwnerChangeCost:mandatoryPreference.fixedUnavoidableOriginalOwnerChangeCost,
+      fullInheritedPreferenceCost:mandatoryPreference.fullInheritedPreferenceCost} : {}),
   };
 }
 
@@ -102,7 +155,8 @@ function stableDay(proof, dayOfWeek, finalDigest, finalWitnessDigest) {
 // has freshly checked all seven exact terminal receipts and its final complete
 // canonical hard-row witness. This does not assert physical-duration evidence.
 export function createRecurringWeekCommitment({ week, source, ownerConfig, fullOwners,
-  sourceBasisDigest, finalSource, finalPatternConfig, compiled, implementationDigest, binding }) {
+  sourceBasisDigest, phaseSourceBasis = null, finalSource, finalPatternConfig, compiled,
+  implementationDigest, binding }) {
   assert.ok(week && source && ownerConfig && fullOwners && finalSource
     && finalPatternConfig && compiled && binding);
   exactProofDigest(week);
@@ -111,6 +165,23 @@ export function createRecurringWeekCommitment({ week, source, ownerConfig, fullO
   assert.equal(week.configDigest, contentDigest(ownerConfig));
   assert.equal(week.fullOwnersDigest, contentDigest(fullOwners));
   assert.ok(hex(sourceBasisDigest));
+  const reduced = Boolean(phaseSourceBasis?.reductionContext);
+  if (phaseSourceBasis) {
+    assert.equal(phaseSourceBasis.basisDigest, sourceBasisDigest);
+    assert.equal(contentDigest(phaseSourceBasis.source), contentDigest(source));
+    assert.equal(contentDigest(phaseSourceBasis.ownerConfig), contentDigest(ownerConfig));
+  }
+  if (reduced) {
+    assert.equal(binding.sourcePatternKind, "FULL_NINE");
+    assert.ok(hex(binding.fullNineSourceDigest));
+    assert.ok(typeof binding.fullNineSourceId === "string" && binding.fullNineSourceId);
+    assert.equal(week.reductionContextDigest, phaseSourceBasis.reductionContext.contextDigest);
+    assert.ok(Array.isArray(week.mandatoryCurrentOwnerPreferenceReceipts)
+      && week.mandatoryCurrentOwnerPreferenceReceipts.length === 7);
+  } else if (phaseSourceBasis) {
+    assert.equal(binding.sourcePatternKind, "UNSPLIT");
+    assert.equal(week.reductionContextDigest, undefined);
+  }
   assert.equal(week.candidateSourceDigest, contentDigest(finalSource));
   assert.equal(canonicalJson(week.candidateSource), canonicalJson(finalSource));
   assert.equal(week.morningPreserved, true);
@@ -131,7 +202,11 @@ export function createRecurringWeekCommitment({ week, source, ownerConfig, fullO
   assert.deepEqual(hard.violations, []);
   assert.ok(Array.isArray(week.proofs) && week.proofs.length === 7);
   const days = week.proofs.map((proof, index) => stableDay(proof, index,
-    week.candidateSourceDigest, hard.witnessDigest));
+    week.candidateSourceDigest, hard.witnessDigest, {phaseSourceBasis,fullOwners}));
+  if (reduced) for (let index = 0; index < 7; index += 1) {
+    assert.equal(week.mandatoryCurrentOwnerPreferenceReceipts[index].receiptDigest,
+      days[index].mandatoryCurrentOwnerPreferenceDigest);
+  }
   assert.equal(compiled.status, "FEASIBLE");
   assert.equal(compiled.publicationAuthority, "ACCEPTABLE");
   assert.equal(compiled.verifier?.ok, true);
@@ -170,6 +245,12 @@ export function createRecurringWeekCommitment({ week, source, ownerConfig, fullO
     finalSourceDigest: week.candidateSourceDigest,
     finalSourceSqlDigest: postgresJsonbContentDigest(finalSource),
     days,
+    ...(reduced ? {sourcePatternKind:"FULL_NINE",
+      registeredFullNineSourceId:binding.fullNineSourceId,
+      reductionContextDigest:phaseSourceBasis.reductionContext.contextDigest,
+      comparisonLedgerDigest:phaseSourceBasis.reductionContext.comparisonLedgerDigest,
+      comparisonReference:phaseSourceBasis.comparisonReference,
+      originalSplitHistoryRewritten:false} : {}),
     canonicalHard: { modelBasisDigest: hard.modelBasisDigest,
       hardConstraintDigest: hard.hardConstraintDigest,
       hardConstraintCount: hard.hardConstraintCount,
@@ -258,7 +339,7 @@ export function assertRecurringWeekCommitmentCandidate(candidate) {
   assert.ok(Number.isInteger(candidate.staffedPositions)
     && candidate.staffedPositions >= 6 && candidate.staffedPositions <= 8,
   "phase commitment requires six to eight current employees");
-  assert.equal(candidate.sourcePatternKind, "UNSPLIT");
+  assert.ok(candidate.sourcePatternKind === "UNSPLIT" || candidate.sourcePatternKind === "FULL_NINE");
   assert.equal(candidate.staticTemplateCommitment, undefined);
   const commitment = candidate?.weekCommitment;
   assert.ok(commitment && commitment.schema === RECURRING_WEEK_COMMITMENT_SCHEMA);
@@ -278,6 +359,26 @@ export function assertRecurringWeekCommitmentCandidate(candidate) {
   assert.equal(commitment.implementationDigest, candidate.decision?.implementationDigest);
   assert.equal(commitment.finalPatternDigest, candidate.patternFingerprint);
   assert.equal(commitment.sourceBasisDigest, candidate.phaseSourceBasisDigest);
+  if (candidate.sourcePatternKind === "FULL_NINE") {
+    assert.ok(hex(candidate.fullNineSourceDigest));
+    assert.ok(hex(candidate.reductionContextDigest));
+    assert.equal(commitment.sourcePatternKind, "FULL_NINE");
+    assert.ok(typeof commitment.registeredFullNineSourceId === "string"
+      && commitment.registeredFullNineSourceId);
+    assert.equal(commitment.reductionContextDigest, candidate.reductionContextDigest);
+    assert.ok(hex(commitment.comparisonLedgerDigest));
+    assert.equal(commitment.comparisonReference,
+      "EXPLICIT_FULL_NINE_DOMINANT_FAMILY_REFERENCE_WITH_LOSSLESS_SPLIT_LEDGER");
+    assert.equal(commitment.originalSplitHistoryRewritten, false);
+    assert.ok(commitment.days.every((day) => hex(day.mandatoryCurrentOwnerPreferenceDigest)
+      && Number.isSafeInteger(day.fixedUnavoidableOriginalOwnerChangeCost)
+      && day.fixedUnavoidableOriginalOwnerChangeCost >= 0
+      && day.fullInheritedPreferenceCost === day.originalScaleVariablePreferenceCost
+        + day.fixedUnavoidableOriginalOwnerChangeCost));
+  } else {
+    assert.equal(commitment.reductionContextDigest, undefined);
+    assert.equal(candidate.reductionContextDigest, undefined);
+  }
   assert.equal(commitment.completeCompiler.compilerVersion, candidate.compilerVersion);
   assert.equal(commitment.completeCompiler.modelBasisDigest, candidate.modelBasisDigest);
   assert.equal(commitment.completeCompiler.finalWitnessDigest, candidate.finalWitnessDigest);
@@ -372,6 +473,9 @@ export function assertRecurringWeekCommitment(candidate, basis, revision) {
   if (candidate.weekOptimizationScope === RECURRING_PHASE_SCOPE) {
     assert.equal(commitment.fullNineSourceDigest, basis.fullNineSource
       ? postgresJsonbContentDigest(basis.fullNineSource.compiler_input) : null);
+    if (candidate.sourcePatternKind === "FULL_NINE") {
+      assert.equal(commitment.registeredFullNineSourceId, basis.fullNineSource?.source_id);
+    }
   }
   return true;
 }
