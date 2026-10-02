@@ -146,10 +146,13 @@ async function withServer(app, fn) {
   }
 }
 
-function buildPublicApp(eventRows = []) {
+function buildPublicApp(eventRows = [], readCalls = []) {
   const app = express();
   app.use("/dashboard-api/events", createEventsPublicRouter({
-    runReadOnlySql: async (sql) => /from public\.events_app_events/i.test(sql) ? eventRows : [],
+    runReadOnlySql: async (sql) => {
+      readCalls.push(String(sql));
+      return /from public\.events_app_events/i.test(sql) ? eventRows : [];
+    },
     runCommand: async () => [],
     buildHealthPayload: (area, extra) => ({ ok: true, area, ...extra }),
     appVersion: "test",
@@ -159,10 +162,13 @@ function buildPublicApp(eventRows = []) {
   return app;
 }
 
-function buildEmployeeApp(eventRows = []) {
+function buildEmployeeApp(eventRows = [], readCalls = []) {
   const app = express();
   app.use("/employee-events-api", createEventsEmployeeRouter({
-    runReadOnlySql: async (sql) => /from public\.events_app_events/i.test(sql) ? eventRows : [],
+    runReadOnlySql: async (sql) => {
+      readCalls.push(String(sql));
+      return /from public\.events_app_events/i.test(sql) ? eventRows : [];
+    },
     appVersion: "test",
     releaseId: "test",
     requireDeviceAccess: (req, res, next) => {
@@ -497,6 +503,79 @@ assert.ok(zooWideCreateCall, "zoo-wide typed event creation should run");
 assert.equal(zooWideCreateCall.payload.record.event_scope, "ZOO_WIDE");
 assert.equal(zooWideCreateCall.payload.record.display_location, "Zoo Footprint");
 assert.equal(zooWideCreateCall.payload.record.operation_id, "50000000-0000-4000-8000-000000000001", "operation identity is explicit in the typed command");
+
+const reviewWriteCalls = [];
+await withServer(buildApp({ writeCalls: reviewWriteCalls, writeResults: {
+  events_app_create: {
+    id: "50000000-0000-4000-8000-000000000011",
+    event_name: "Unresolved Gala",
+    status: "NEEDS_REVIEW",
+    event_scope: "UNKNOWN",
+    needs_review: true,
+    source_location_text: "  West Service Terrace (TBD)  ",
+    coverage_location_ids: [],
+    staffing_area_ids: [],
+  },
+} }), async (baseUrl) => {
+  const response = await fetch(`${baseUrl}/admin-api/events/`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      event_name: "Unresolved Gala", event_scope: "UNKNOWN",
+      source_location_text: "  West Service Terrace (TBD)  ",
+      source_text: "Subject: Unresolved Gala\nVenue: West Service Terrace (TBD)",
+      event_date: "2026-10-20", start_time: "19:00", end_time: "21:00",
+      operation_id: "50000000-0000-4000-8000-000000000012",
+    }),
+  });
+  assert.equal(response.status, 200, "unresolved intake saves for manager review");
+  const body = await response.json();
+  assert.equal(body.data.status, "NEEDS_REVIEW");
+  assert.equal(body.data.source_location_text, "  West Service Terrace (TBD)  ");
+});
+const reviewRecord = reviewWriteCalls.find((call) => call.name === "event_create")?.payload.record;
+assert.ok(reviewRecord);
+assert.equal(reviewRecord.status, "NEEDS_REVIEW");
+assert.equal(reviewRecord.event_scope, "UNKNOWN");
+assert.equal(reviewRecord.needs_review, true);
+assert.equal(reviewRecord.display_location, "Needs Review");
+assert.equal(reviewRecord.location_group_id, TEST_ZOO_GROUP_ID, "compatibility FK is not cleaning coverage");
+assert.equal(reviewRecord.primary_venue_id, null);
+assert.deepEqual(reviewRecord.venue_ids, []);
+assert.deepEqual(reviewRecord.coverage_location_ids, []);
+assert.deepEqual(reviewRecord.staffing_area_ids, []);
+assert.equal(reviewRecord.source_location_text, "  West Service Terrace (TBD)  ", "raw unknown venue wording must survive normalization");
+assert.equal(reviewRecord.source_text, "Subject: Unresolved Gala\nVenue: West Service Terrace (TBD)");
+
+const managerReviewReadCalls = [];
+await withServer(buildApp({ readCalls: managerReviewReadCalls, eventRows: [{
+  id: "50000000-0000-4000-8000-000000000011", status: "NEEDS_REVIEW",
+  event_scope: "UNKNOWN", needs_review: true,
+  source_location_text: "West Service Terrace (TBD)",
+}] }), async (baseUrl) => {
+  const response = await fetch(`${baseUrl}/admin-api/events/`);
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.data[0].status, "NEEDS_REVIEW");
+  assert.equal(body.data[0].source_location_text, "West Service Terrace (TBD)");
+});
+assert.match(managerReviewReadCalls.find((sql) => /from public\.events_app_events/i.test(sql)), /e\.status = 'NEEDS_REVIEW'/);
+
+const publicReviewReadCalls = [], employeeReviewReadCalls = [];
+await withServer(buildPublicApp([], publicReviewReadCalls), async (baseUrl) => {
+  assert.equal((await fetch(`${baseUrl}/dashboard-api/events`)).status, 200);
+});
+await withServer(buildEmployeeApp([], employeeReviewReadCalls), async (baseUrl) => {
+  assert.equal((await fetch(`${baseUrl}/employee-events-api`, {
+    headers: { "x-test-device-credential": "valid-enrolled-phone" },
+  })).status, 200);
+});
+for (const [audience, calls] of [["public", publicReviewReadCalls], ["employee", employeeReviewReadCalls]]) {
+  const sql = calls.find((statement) => /from public\.events_app_events/i.test(statement));
+  assert.match(sql, /coalesce\(e\.needs_review, false\) = false/, `${audience} SQL must suppress unresolved rows`);
+  assert.match(sql, /e\.event_scope <> 'UNKNOWN'/, `${audience} SQL must suppress unknown scope`);
+  assert.doesNotMatch(sql, /e\.status = 'NEEDS_REVIEW'/, `${audience} SQL must not admit review status`);
+}
 
 await withServer(buildApp(), async (baseUrl) => {
   const response = await fetch(`${baseUrl}/admin-api/events/`, {

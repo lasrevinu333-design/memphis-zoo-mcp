@@ -196,8 +196,10 @@ function normalizeEventLocationPayload(payload = {}, referenceData = {}) {
   const legacyLocationGroupId = String(payload.location_group_id || "").trim();
   const displayLocationInput = normalizeDisplayLocation(payload.display_location || payload.location_group_name);
   const parserConfidence = normalizeParserConfidence(payload.parser_confidence || payload.confidence);
-  const sourceLocationText = normalizeDisplayLocation(payload.source_location_text || payload.location_group_name || "");
-  const sourceText = String(payload.source_text || payload.raw_text || "").trim() || null;
+  const rawSourceLocationText = String(payload.source_location_text ?? payload.location_group_name ?? "");
+  const sourceLocationText = rawSourceLocationText.trim() ? rawSourceLocationText : null;
+  const originalSourceText = String(payload.source_text || payload.raw_text || "");
+  const sourceText = originalSourceText.trim() ? originalSourceText : null;
   const sourceFormat = String(payload.source_format || "").trim() || null;
   const manuallyOverridden = Boolean(payload.manually_overridden);
   const eventTimezone = String(payload.event_timezone || EVENTS_TIME_ZONE).trim() || EVENTS_TIME_ZONE;
@@ -288,9 +290,16 @@ function normalizeEventLocationPayload(payload = {}, referenceData = {}) {
   } else {
     scope = "UNKNOWN";
     needsReview = true;
-    displayLocation = displayLocation || "Needs Review";
-    finalLegacyLocationGroupId = String(finalLegacyLocationGroupId || referenceData.zooVenue?.location_group_id || "").trim();
-    parseReasons.push("Event venue/scope is unresolved and requires manager review.");
+    const compatibilityGroupId = String(referenceData.zooVenue?.location_group_id || "").trim();
+    if (primaryVenueId || normalizedVenueIds.length || coverageLocationIds.length || staffingAreaIds.length
+      || (legacyLocationGroupId && legacyLocationGroupId !== compatibilityGroupId)) {
+      throw new Error("Needs Review events cannot assign a venue, cleaning coverage, staffing area, or location group.");
+    }
+    primaryVenue = null;
+    normalizedVenueIds = [];
+    displayLocation = "Needs Review";
+    finalLegacyLocationGroupId = compatibilityGroupId;
+    parseReasons.push("Event venue/scope is unresolved; saved for manager review without operational coverage.");
   }
 
   const legacyGroup = referenceData.groupsById?.get(finalLegacyLocationGroupId);
@@ -310,9 +319,9 @@ function normalizeEventLocationPayload(payload = {}, referenceData = {}) {
     primary_venue_id: primaryVenue?.venue_id || null,
     venue_ids: normalizedVenueIds,
     display_location: displayLocation,
-    coverage_location_ids: coverageLocationIds,
-    staffing_area_ids: staffingAreaIds,
-    source_location_text: sourceLocationText || null,
+    coverage_location_ids: needsReview ? [] : coverageLocationIds,
+    staffing_area_ids: needsReview ? [] : staffingAreaIds,
+    source_location_text: sourceLocationText,
     parser_confidence: parserConfidence,
     needs_review: needsReview,
     parse_reason: parseReasons.filter(Boolean).join(" "),
@@ -357,9 +366,6 @@ function normalizeEventPayload(payload = {}, referenceData = {}) {
   const location = normalizeEventLocationPayload(payload, referenceData);
 
   if (!eventName) throw new Error("event_name is required.");
-  if (location.needs_review || location.event_scope === "UNKNOWN") {
-    throw new Error("Event scope or venue requires review before saving. Select Zoo Footprint or an eligible event venue.");
-  }
   if (!isIsoDate(eventDate)) throw new Error("event_date must be YYYY-MM-DD.");
   if (endTime === startTime) throw new Error("end_time must differ from start_time.");
   if (operationId && !isUuid(operationId)) throw new Error("operation_id must be a valid UUID when supplied.");
@@ -370,6 +376,7 @@ function normalizeEventPayload(payload = {}, referenceData = {}) {
   return {
     event_name: eventName,
     ...location,
+    status: location.needs_review ? "NEEDS_REVIEW" : "SCHEDULED",
     event_date: eventDate,
     end_date: endDate,
     start_time: startTime,
@@ -384,6 +391,7 @@ function normalizeEventPayload(payload = {}, referenceData = {}) {
 async function listUpcomingEvents(runReadOnlySql) {
   const rows = await runReadOnlySql(buildEventResponseSelectSql(
     `coalesce(e.status, 'SCHEDULED') = 'SCHEDULED'
+     and coalesce(e.needs_review, false) = false and e.event_scope <> 'UNKNOWN'
      and coalesce(e.end_date, e.event_date) >= (now() at time zone '${EVENTS_TIME_ZONE}')::date`,
     `order by e.event_date asc, e.start_time asc, e.event_name asc`
   ));
@@ -401,9 +409,22 @@ async function listEmployeeEvents(runReadOnlySql, { windowDays = 30, limit = 80 
   const rowLimit = boundedWholeNumber(limit, 80, 1, 200);
   const rows = await runReadOnlySql(buildEventResponseSelectSql(
     `coalesce(e.status, 'SCHEDULED') in ('SCHEDULED', 'CANCELLED')
+     and coalesce(e.needs_review, false) = false and e.event_scope <> 'UNKNOWN'
      and coalesce(e.end_date, e.event_date) >= (now() at time zone '${EVENTS_TIME_ZONE}')::date
      and e.event_date <= (now() at time zone '${EVENTS_TIME_ZONE}')::date + ${days}`,
     `order by e.event_date asc, e.start_time asc, e.event_name asc limit ${rowLimit}`
+  ));
+  return Array.isArray(rows) ? rows : [];
+}
+
+async function listManagerEvents(runReadOnlySql) {
+  const rows = await runReadOnlySql(buildEventResponseSelectSql(
+    `(e.status = 'NEEDS_REVIEW' or
+      (e.status = 'SCHEDULED' and coalesce(e.needs_review, false) = false
+       and e.event_scope <> 'UNKNOWN'
+       and coalesce(e.end_date, e.event_date) >= (now() at time zone '${EVENTS_TIME_ZONE}')::date))`,
+    `order by case when e.status = 'NEEDS_REVIEW' then 0 else 1 end,
+      e.event_date asc, e.start_time asc, e.event_name asc limit 500`
   ));
   return Array.isArray(rows) ? rows : [];
 }
@@ -458,6 +479,8 @@ function buildEventResponseSelectSql(whereSql, suffixSql = "") {
       e.coverage_location_ids,
       e.staffing_area_ids,
       e.source_location_text,
+      e.source_text,
+      e.source_format,
       e.parser_confidence,
       coalesce(e.needs_review, false) as needs_review,
       e.parse_reason,
@@ -994,7 +1017,7 @@ export function createEventsAdminRouter({
 
   router.get("/", async (_req, res) => {
     try {
-      const events = await listUpcomingEvents(runReadOnlySql);
+      const events = await listManagerEvents(runReadOnlySql);
       res.status(200).json({
         ok: true,
         data: events,
