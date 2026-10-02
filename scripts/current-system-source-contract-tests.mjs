@@ -25,4 +25,5 @@ await import('./nonemployee-coverall-source-bridge-tests.mjs');
 await import('./schedule-component-weight-authority-tests.mjs');
 await import('./moxie-retired-source-inventory-tests.mjs');
 await import('./event-count-cross-surface-contract-tests.mjs');
-console.log('CURRENT_SYSTEM_SOURCE_CONTRACTS_PASS: 25 explicit owning suites; no database/provider/production/phone proof');
+await import('./manager-notification-history-tests.mjs');
+console.log('CURRENT_SYSTEM_SOURCE_CONTRACTS_PASS: 26 explicit owning suites; no database/provider/production/phone proof');

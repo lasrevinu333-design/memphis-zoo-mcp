@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
 import express from 'express';
 import { createOpsManagerSession, makeOpsAccessMiddleware } from '../src/auth/shared-access-auth.js';
 import { makeManagerNotificationHistoryHandler } from '../src/manager-notification-history.js';
@@ -38,9 +40,17 @@ const db = { from(table) {
 } };
 const app = express();
 app.use(express.json());
-app.get('/manager-notifications-api/history',
-  makeOpsAccessMiddleware({ env, trustedDeviceStore: { find: async id => id === credentialId ? trusted : null } }),
-  makeManagerNotificationHistoryHandler({ db }));
+// Execute the exact production mount statement with the real auth middleware;
+// do not boot index.js and its production/provider startup side effects.
+const source = readFileSync(new URL('../src/index.js', import.meta.url), 'utf8');
+const mount = "app.get('/manager-notifications-api/history', requireOpsManagerAuth, makeManagerNotificationHistoryHandler({ db: supabaseAdmin }));";
+assert.equal(source.split(mount).length, 2, 'one exact named-manager history mount');
+assert.ok(source.includes('import { makeManagerNotificationHistoryHandler } from "./manager-notification-history.js";'));
+assert.ok(source.indexOf('const managerNotificationRuntime = installManagerNotificationRoutes(') < source.indexOf(mount),
+  'existing notification CORS must be installed first');
+vm.runInNewContext(mount, { app, supabaseAdmin: db, makeManagerNotificationHistoryHandler,
+  requireOpsManagerAuth: makeOpsAccessMiddleware({ env, trustedDeviceStore: { find: async id => id === credentialId ? trusted : null } }),
+}, { timeout: 1000 });
 const server = app.listen(0, '127.0.0.1');
 await new Promise(resolve => server.once('listening', resolve));
 const origin = `http://127.0.0.1:${server.address().port}`;

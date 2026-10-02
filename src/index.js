@@ -25,6 +25,7 @@ import { attachFeedbackDelivery } from "./feedback-delivery-status.js";
 import { feedbackTriageHandler } from "./feedback-triage.js";
 import { makeFeedbackPrivateReader, feedbackManagerPageRedirect } from "./feedback-private-reader.js";
 import { makeCompletionEvidenceReader } from "./completion-taxonomy-manager.js";
+import { makeManagerNotificationHistoryHandler } from "./manager-notification-history.js";
 import { createPlacesAdminRouter } from "./places-api.js";
 import { isMcpReadOnlyNoAuthEnabled, makeMcpConnectorMiddleware } from "./auth/mcp-connector-auth.js";
 import {
@@ -2413,6 +2414,7 @@ installDeviceCredentialRoutes(app, {
 installLeadershipHttpRoutes(app, { supabase: supabaseAdmin });
 installCustodialEmployeeAdminRoutes(app, { supabase: supabaseAdmin, requireEmployeeDeviceCredential });
 const managerNotificationRuntime = installManagerNotificationRoutes(app, { supabase: supabaseAdmin });
+app.get('/manager-notifications-api/history', requireOpsManagerAuth, makeManagerNotificationHistoryHandler({ db: supabaseAdmin }));
 installEmployeeNotificationRoutes(app, {
   supabase: supabaseAdmin,
   pushRuntime: managerNotificationRuntime,
