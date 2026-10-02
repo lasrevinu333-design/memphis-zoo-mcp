@@ -1178,9 +1178,11 @@ export function createEventsAdminRouter({
     try {
       const body = req.body && typeof req.body === "object" ? req.body : {};
       const texts = Array.isArray(body.texts)
-        ? body.texts.map((text) => String(text || "").trim()).filter(Boolean)
-        : [String(body.text || "").trim()].filter(Boolean);
-      if (!texts.length) throw new Error("text or texts is required.");
+        ? body.texts.map((text) => String(text ?? ""))
+        : [String(body.text ?? "")];
+      // The parser owns blank-row filtering and original input indices. Preserve
+      // source bytes here: normalized interpretation must not replace evidence.
+      if (!texts.some((text) => text.trim())) throw new Error("text or texts is required.");
       const groups = await listLocationGroups(runReadOnlySql);
       const eventVenues = await listEventVenues(runReadOnlySql);
       const allowedVenueIds = new Set(eventVenues.map((row) => String(row.venue_id)));

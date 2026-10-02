@@ -1012,4 +1012,51 @@ await withServer(buildApp({ runEventReplacement: async () => { throw Object.assi
   assert.equal(response.status, 409, "stale replacement must preserve exact SQLSTATE conflict");
 });
 
+// Exercise the actual HTTP parser and canonical save normalizer together. The AI
+// provider and command store are synthetic; no external call/database PASS is claimed.
+const originalFetchForSource = globalThis.fetch;
+const originalEventAiKey = process.env.EVENTS_GEMINI_API_KEY;
+const rawPaste = '  Event Name: Evening source test\r\nEvent Date: Oct 20 2026\r\nEvent Area: Event Center\r\nStarts at 6pm\r\n  ';
+let sourceProviderCalls = 0;
+process.env.EVENTS_GEMINI_API_KEY = 'synthetic-http-source-provenance';
+globalThis.fetch = async (input, ...args) => {
+  if (String(input).startsWith('https://generativelanguage.googleapis.com/')) {
+    sourceProviderCalls++;
+    return {ok:true,status:200,json:async()=>({candidates:[{content:{parts:[{text:JSON.stringify({rows:[{
+      source_index:1,start_time:'18:00:00',warnings:[],confidence:'high',
+    }]})}]}}]})};
+  }
+  assert.match(String(input), /^http:\/\/127\.0\.0\.1:/, 'only owned local HTTP or synthetic AI');
+  return originalFetchForSource(input, ...args);
+};
+try {
+  const calls = [];
+  await withServer(buildApp({writeCalls:calls}), async baseUrl => {
+    const parseResponse = await fetch(`${baseUrl}/admin-api/events/parse-ai`, {method:'POST',
+      headers:{'Content-Type':'application/json'},body:JSON.stringify({texts:[' \n',rawPaste,'  ']})});
+    assert.equal(parseResponse.status,200);
+    const parsed = await parseResponse.json();
+    assert.equal(parsed.data.length,1);
+    assert.equal(parsed.data[0].source_index,1,'blank inputs never renumber the original source');
+    assert.equal(parsed.data[0].raw_text,rawPaste,'HTTP preserves original whitespace and CRLF bytes');
+    assert.equal(sourceProviderCalls,1,'uncertain intake actually reaches bounded synthetic AI');
+    assert.equal(parsed.data[0].start_time,'18:00:00','grounded AI interpretation reaches preview');
+    assert.equal(parsed.data[0].end_time,'','AI did not invent an end');
+    assert.equal(calls.length,0,'parse does not save or schedule');
+    const saved = await fetch(`${baseUrl}/admin-api/events/`,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({...parsed.data[0],end_time:'19:00',source_text:parsed.data[0].raw_text,
+        source_format:'paste',manually_overridden:true,operation_id:'81000000-0000-4000-8000-000000000001'})});
+    assert.equal(saved.status,200);
+    const record=calls.find(call=>call.name==='event_create')?.payload.record;
+    assert.equal(record.source_text,rawPaste,'canonical command preserves exact evidence after authorized correction');
+    assert.equal(record.created_by,TEST_MANAGER_NAME);
+    assert.equal(record.start_time,'18:00:00');
+    assert.equal(record.end_time,'19:00:00');
+  });
+} finally {
+  globalThis.fetch=originalFetchForSource;
+  if(originalEventAiKey===undefined)delete process.env.EVENTS_GEMINI_API_KEY;
+  else process.env.EVENTS_GEMINI_API_KEY=originalEventAiKey;
+}
+
 console.log("events api contract tests passed");
