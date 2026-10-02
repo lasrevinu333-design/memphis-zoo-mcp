@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import './feedback-email-relay-tests.mjs';
+import './feedback-delivery-status-tests.mjs';
 
 const repoRoot = resolve(import.meta.dirname, "..");
 const apiSource = readFileSync(resolve(repoRoot, "src/index.js"), "utf8");

@@ -2,14 +2,14 @@ import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { resolveSupabaseClient } from './supabase/client.js';
 
-export const FEEDBACK_RELAY_CONTRACT = 'custodial-feedback-relay.v1';
+export const FEEDBACK_RELAY_CONTRACT = 'custodial-feedback-relay.v2';
 const contract = z.literal(FEEDBACK_RELAY_CONTRACT);
 const uuid = z.string().uuid();
 const hash = z.string().regex(/^[0-9a-f]{64}$/);
 const base = { contract_version: contract, request_id: uuid };
 const fence = { intent_id: uuid, claim_token: uuid, claim_generation: z.number().int().positive().max(999999999) };
 const observation = z.object({
-  kind: z.enum(['connector_accepted', 'outcome_unknown', 'sent_observed', 'inbox_observed', 'multiple_matching_messages']),
+  kind: z.enum(['connector_accepted', 'outcome_unknown', 'sent_observed', 'inbox_observed', 'multiple_matching_messages', 'reconciliation_not_found']),
   provider_account: z.literal('eoperle@memphiszoo.org'),
   to: z.tuple([z.literal('eoperle@memphiszoo.org')]), cc: z.tuple([]), bcc: z.tuple([]),
   subject: z.string().max(200), operation_id: uuid, feedback_id: uuid, request_fingerprint: hash,
@@ -18,6 +18,19 @@ const observation = z.object({
   internet_message_id: z.string().min(1).max(512).optional(),
   observed_at: z.string().datetime({ offset: true }).optional(), result_sha256: hash.optional(),
   match_count: z.number().int().min(2).max(999999).optional(),
+  reconciliation_token: uuid.optional(),
+}).strict();
+
+// These are bounded, authenticated connected-agent observations, not Microsoft
+// attestations. The server-issued challenge prevents old/cross-principal reads
+// or a bare “resume” assertion from opening the gate. No secret is transported.
+const preflight = z.object({
+  challenge_id: uuid, challenge_nonce: uuid,
+  provider_account: z.literal('eoperle@memphiszoo.org'),
+  profile_observed_at: z.string().datetime({ offset: true }), profile_result_sha256: hash,
+  sent_folder_id: z.string().min(1).max(512), inbox_folder_id: z.string().min(1).max(512),
+  sent_read_at: z.string().datetime({ offset: true }), sent_result_sha256: hash,
+  inbox_read_at: z.string().datetime({ offset: true }), inbox_result_sha256: hash,
 }).strict();
 
 export const feedbackRelaySchemas = Object.freeze({
@@ -27,8 +40,16 @@ export const feedbackRelaySchemas = Object.freeze({
   receipt: z.object({ ...base, intent_id: uuid, attempt_id: uuid, envelope_sha256: hash, observation }).strict(),
   defer: z.object({ ...base, ...fence, reason: z.enum(['missing_profile', 'auth_unavailable',
     'configuration_unavailable', 'attachment_unavailable', 'transient_preflight']) }).strict(),
-  control: z.object({ ...base, action: z.enum(['pause', 'resume_preflight_verified']), reason: z.string().min(1).max(300) }).strict(),
+  control: z.object({ ...base, action: z.enum(['pause', 'prepare_preflight', 'resume_preflight_verified']),
+    reason: z.string().min(1).max(300), preflight: preflight.optional() }).strict(),
 });
+
+export const FEEDBACK_RELAY_SCHEMA_SHA256 = createHash('sha256').update(JSON.stringify(
+  Object.entries(feedbackRelaySchemas).map(([verb, schema]) => ({
+    name: `custodial_feedback_relay_${verb}`, inputSchema: z.toJSONSchema(schema),
+    scopes: ['mcp:read', 'mcp:write'], contract: FEEDBACK_RELAY_CONTRACT,
+  })),
+)).digest('hex');
 
 export function feedbackRelayPrincipal(extra) {
   const auth = extra?.authInfo;
@@ -54,10 +75,13 @@ export function feedbackRelayPrincipal(extra) {
 export async function callFeedbackRelay(verb, args, extra, { client } = {}) {
   if (!Object.hasOwn(feedbackRelaySchemas, verb)) throw new Error('Unknown relay operation.');
   const checked = feedbackRelaySchemas[verb].parse(args);
+  if (verb === 'control' && ((checked.action === 'resume_preflight_verified') !== Boolean(checked.preflight))) {
+    throw new Error('Only resume requires the exact fresh preflight observation.');
+  }
   const principal = feedbackRelayPrincipal(extra);
   if (Buffer.byteLength(JSON.stringify(checked), 'utf8') > 32768) throw new Error('Relay request is too large.');
   const { data, error } = await resolveSupabaseClient(client).rpc(`custodial_feedback_relay_${verb}`, {
-    p_principal: principal, p_args: checked,
+    p_principal: principal, p_args: { ...checked, adapter_schema_sha256: FEEDBACK_RELAY_SCHEMA_SHA256 },
   });
   if (error) throw error;
   if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('Invalid private relay response.');

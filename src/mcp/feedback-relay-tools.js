@@ -7,7 +7,7 @@ export function registerFeedbackRelayTools(server, { includeWrites = true, clien
   if (!includeWrites) return;
   for (const [verb, schema] of Object.entries(feedbackRelaySchemas)) {
     registerMcpTool(server, `custodial_feedback_relay_${verb}`, {
-      description: `Private Feedback ${verb} operation. Non-sending durable queue boundary; transport starts paused.`,
+      description: `Private Feedback ${verb} operation (custodial-feedback-relay.v2). Durable queue boundary with authenticated preflight observations; transport starts paused. This tool never sends email.`,
       inputSchema: schema,
     }, async (args, extra) => jsonResponse(await callFeedbackRelay(verb, args, extra, { client })));
   }

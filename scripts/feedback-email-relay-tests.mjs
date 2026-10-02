@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { feedbackRelayPrincipal, feedbackRelaySchemas, callFeedbackRelay, FEEDBACK_RELAY_CONTRACT } from '../src/feedback-email-relay.js';
+import { feedbackRelayPrincipal, feedbackRelaySchemas, callFeedbackRelay, FEEDBACK_RELAY_CONTRACT, FEEDBACK_RELAY_SCHEMA_SHA256 } from '../src/feedback-email-relay.js';
 import { registerFeedbackRelayTools } from '../src/mcp/feedback-relay-tools.js';
 import { configureMcpToolAuth } from '../src/mcp/register.js';
 import { MCP_TOOL_MANIFEST, TOOL_SAFETY } from '../src/mcp/tool-manifest.js';
@@ -24,7 +24,10 @@ const client={rpc:async(name,input)=>{calls.push({name,input});return {data:{ok:
 assert.deepEqual(await callFeedbackRelay('claim',args,extra,{client}),{ok:true,paused:true});
 assert.equal(calls[0].name,'custodial_feedback_relay_claim');
 assert.equal(calls[0].input.p_principal,principal);
-assert.deepEqual(calls[0].input.p_args,args);
+assert.deepEqual(calls[0].input.p_args,{...args,adapter_schema_sha256:FEEDBACK_RELAY_SCHEMA_SHA256});
+await assert.rejects(()=>callFeedbackRelay('control',{...args,action:'resume_preflight_verified',reason:'bare assertion'},extra,{client}),/exact fresh preflight/);
+await assert.rejects(()=>callFeedbackRelay('status',{contract_version:'custodial-feedback-relay.v1'},extra,{client}));
+await assert.rejects(()=>callFeedbackRelay('claim',{...args,adapter_schema_sha256:'a'.repeat(64)},extra,{client}));
 await assert.rejects(()=>callFeedbackRelay('claim',{...args,sql:'select private'},extra,{client}));
 assert.equal(calls.length,1);
 await assert.rejects(()=>callFeedbackRelay('send',args,extra,{client}),/Unknown/);

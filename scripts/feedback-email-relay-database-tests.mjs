@@ -4,6 +4,7 @@ import { execFileSync, spawn } from 'node:child_process';
 import { readFileSync,readdirSync } from 'node:fs';
 import { randomUUID,createHash } from 'node:crypto';
 import path from 'node:path';
+import {FEEDBACK_RELAY_CONTRACT,FEEDBACK_RELAY_SCHEMA_SHA256} from '../src/feedback-email-relay.js';
 const root=path.resolve(import.meta.dirname,'..');
 const image='supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed';
 const container=`mz_schema_rebuild_feedback_${process.pid}`;
@@ -12,7 +13,7 @@ const raw=text=>docker(['exec','-i',container,'psql','-X','-q','-At','-v','ON_ER
 const sql=text=>raw(text).trim();
 const q=value=>`'${String(value).replaceAll("'","''")}'`;
 const json=value=>`${q(JSON.stringify(value))}::jsonb`;
-const base={contract_version:'custodial-feedback-relay.v1'};
+const base={contract_version:FEEDBACK_RELAY_CONTRACT,adapter_schema_sha256:FEEDBACK_RELAY_SCHEMA_SHA256};
 const principal=`relay:${'a'.repeat(64)}`, foreign=`relay:${'b'.repeat(64)}`;
 let checks=0,owned=false;
 function check(actual,expected,name){assert.deepEqual(actual,expected,name);checks++;}
@@ -28,6 +29,14 @@ function parallelSql(statement){
   });
 }
 const request=()=>({request_id:randomUUID()});
+function preflight(){
+  const ch=rpc('control',{...request(),action:'prepare_preflight',reason:'synthetic profile and folder fixture'});
+  const observed=sql(`select to_char(clock_timestamp() at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"');`);
+  return rpc('control',{...request(),action:'resume_preflight_verified',reason:'synthetic observations, no Outlook call',
+    preflight:{challenge_id:ch.challenge_id,challenge_nonce:ch.challenge_nonce,provider_account:'eoperle@memphiszoo.org',
+      profile_observed_at:observed,profile_result_sha256:'a'.repeat(64),sent_folder_id:'fixture-sent',inbox_folder_id:'fixture-inbox',
+      sent_read_at:observed,sent_result_sha256:'b'.repeat(64),inbox_read_at:observed,inbox_result_sha256:'c'.repeat(64)}});
+}
 const defaults="select count(*) from pg_default_acl d cross join lateral aclexplode(d.defaclacl) a where d.defaclnamespace='public'::regnamespace and d.defaclrole in ('postgres'::regrole,'supabase_admin'::regrole) and d.defaclobjtype in ('r','S') and a.grantee in ('anon'::regrole,'authenticated'::regrole,'service_role'::regrole)";
 function removeDefaults(){for(const owner of ['postgres','supabase_admin'])raw(`alter default privileges for role ${owner} in schema public revoke all on tables from anon,authenticated,service_role; alter default privileges for role ${owner} in schema public revoke all on sequences from anon,authenticated,service_role;`);}
 function insertItem({historical=false,imageAttachment=false}={}){
@@ -71,10 +80,8 @@ try{
   check(status.transport_verified,false,'transport is not invented');
   check(status.protected_attachment_pending,1,'private attachments retained, not claimed');
   check(rpc('claim',request()).paused,true,'paused claim returns no work');
-  rejects(rpcSql('control',{...request(),action:'resume_preflight_verified',reason:'caller says profile is good'}),/55000.*Real transport/s,'caller cannot fabricate preflight');
-  // Fixture-owner gate only. There is no runtime setter/deployment claim.
-  sql(`update public.system_feedback_email_relay_config set transport_verified_at=now(),transport_principal=${q(principal)},transport_account='eoperle@memphiszoo.org';`);
-  rpc('control',{...request(),action:'resume_preflight_verified',reason:'synthetic fixture verified'});
+  rejects(rpcSql('control',{...request(),action:'resume_preflight_verified',reason:'caller says profile is good'}),/22023.*Missing or unknown/s,'bare assertion is not preflight');
+  preflight(); // Actual supported control shape, explicitly synthetic reads.
   const claimed=rpc('claim',request());
   check(claimed.operation_id,one.operation,'exact operation');
   check(claimed.feedback_id,one.id,'exact item');
@@ -89,7 +96,7 @@ try{
   check(rpc('begin',beginArgs).may_send,false,'lost begin response replays without send authority');
   check(rpc('begin',{...beginArgs,...request()}).may_send,false,'new request cannot send same attempt again');
   rejects(rpcSql('defer',{...request(),intent_id:claimed.intent_id,claim_token:claimed.claim_token,claim_generation:claimed.claim_generation,reason:'transient_preflight'}),/Only a current pre-begin/,'unknown attempt cannot requeue');
-  sql(`update public.system_feedback_email_intents set claim_until=now()-interval '1 day' where id=${q(claimed.intent_id)};`);
+  sql(`update public.system_feedback_email_intents set claim_until=now()-interval '1 day',next_reconcile_at=now()-interval '1 second' where id=${q(claimed.intent_id)};`);
   check(rpc('claim',request()).mode,'reconcile','expired begun claim never sends again');
   const receiptArgs={...request(),intent_id:claimed.intent_id,attempt_id:began.attempt_id,envelope_sha256:claimed.envelope_sha256,
     observation:{kind:'outcome_unknown',provider_account:'eoperle@memphiszoo.org',to:['eoperle@memphiszoo.org'],cc:[],bcc:[],
@@ -127,7 +134,7 @@ try{
   rpc('defer',{...request(),intent_id:prep.intent_id,claim_token:prep.claim_token,claim_generation:prep.claim_generation,reason:'auth_unavailable'});
   check(sql(`select preflight_failures from public.system_feedback_email_intents where id=${q(prep.intent_id)}`),'0','missing config does not consume retry budget');
   check(rpc('claim',request()).paused,true,'configuration failure visibly pauses');
-  rpc('control',{...request(),action:'resume_preflight_verified',reason:'synthetic fixture preflight restored'});
+  preflight();
   for(let i=1;i<=3;i++){
     prep=rpc('claim',request());
     rpc('defer',{...request(),intent_id:prep.intent_id,claim_token:prep.claim_token,claim_generation:prep.claim_generation,reason:'transient_preflight'});
@@ -160,6 +167,8 @@ try{
   check(sql(`select count(*) from public.system_feedback_email_intents where feedback_id=${q(historical.id)}`),'0','history still never enrolled');
   check(sql("select bool_and(relrowsecurity and relforcerowsecurity)::text from pg_class where relname like 'system_feedback_email_%' and relkind='r'"),'true','all mail tables FORCE RLS');
   console.log(JSON.stringify({status:'FEEDBACK_EMAIL_RELAY_DATABASE_PASS',checks,migrations:migrations.length,
+    contract:FEEDBACK_RELAY_CONTRACT,adapter_schema_sha256:FEEDBACK_RELAY_SCHEMA_SHA256,
+    forward_migration_sha256:createHash('sha256').update(readFileSync(path.join(root,'supabase/migrations/20261002220000_feedback_relay_preflight_and_reconciliation.sql'))).digest('hex'),
     migration_sha256:createHash('sha256').update(readFileSync(path.join(root,'supabase/migrations/20261002070000_feedback_email_relay_boundary.sql'))).digest('hex'),
     absentAutomaticGrants:true,productionWritten:false,transportInvoked:false,independentAudit:false}));
 }finally{
