@@ -1,0 +1,247 @@
+import {createHash,randomUUID} from 'node:crypto';
+import {spawn} from 'node:child_process';
+import {constants,closeSync,fsyncSync,lstatSync,openSync,readFileSync,realpathSync,writeFileSync} from 'node:fs';
+import {dirname,isAbsolute,join,resolve} from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {localRecoverySource,RECOVERY_KINDS,validateRecoveryManifest} from './current-release-recovery-probe.mjs';
+import {captureSchemaCatalog,fingerprintSchemaCatalog,stableSchemaJson} from './schema-fingerprint-catalog.mjs';
+
+// Root supplies an owned empty fixture. This module never starts a container,
+// discovers a production endpoint, writes canonical source or adopts a catalog.
+const ROOT=fileURLToPath(new URL('../',import.meta.url));
+const FILES=['scripts/current-release-recovery-replay.mjs','scripts/current-release-recovery-replay-contract-tests.mjs'];
+export const OFFICIAL_FIXTURE='scripts/static-weekly-splash-season-official-path-tests.mjs';
+export const PREDECESSOR_FIXTURE='scripts/fixtures/current-release-canary-predecessor-fixture.mjs';
+const PREDECESSOR_CASES=['captured_feedback_digest_changed','live_feedback_shape_changed','inventory_immutability_missing','later_surface_failure_rolls_back_feedback_rebind'];
+export const DEFAULT_EXCEPTIONS=Object.freeze({
+  '20260718083100_reconstruct_public_grant_hardening.sql':'ed9aac28cb07f3565f3289d15d67458297222910ac44b1a77e8b5ae71b4c59c3',
+  '20260729150527_audit_defense_in_depth_hardening.sql':'420157f3073a3ea1b0055fc6e6246374a9babf2db576cda3bc4272a01e27cc4f',
+  '20260815160613_normalize_managed_production_schema_security.sql':'fcc15cab9a3c492f9958d91643e5c88f88f0917b31a3507d340c6fab67cb011a'
+});
+const INPUT_PINS=Object.freeze({
+  'scripts/native-target-source-database-tests.mjs':'6f4fc7e3e28554abedfb11c8a2f79aef00c3c88ca127a6dd46799d21a215f6bf',
+  'scripts/schema-fingerprint-catalog.mjs':'6fed4619b8db241a8b346861e028a2c0f933299622b1b8d934b2c3c193506794',
+  'scripts/completion-taxonomy-database-tests.mjs':'e4fac36778571c306bf1740c766015ca7b1a804b191e910979c5d392a8c1ac56',
+  'scripts/feedback-delivery-status-database-tests.mjs':'3f4261c6f2dc829bf0d4120d3a23a81af54eeb73dcd01c93d801a05f1bf25556'
+});
+export const SEED_TABLES=Object.freeze(['public.completion_responses','public.devices','public.employees','public.locations','public.maintenance_tickets','public.ops_manager_managers','public.sessions','public.system_feedback_email_intents','public.system_feedback_items']);
+const HEX=/^[0-9a-f]{64}$/,UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const SEED_KEYS=['manager','employee','device','location','session','completion','completion_operation','work_ticket','feedback','feedback_operation'];
+const hash=x=>createHash('sha256').update(x).digest('hex');
+const canon=x=>JSON.stringify(stableSchemaJson(x));
+const q=x=>"'"+String(x).replaceAll("'","''")+"'";
+const key=x=>JSON.stringify([x.kind,x.identity]);
+const sort=rows=>[...rows].sort((a,b)=>key(a)<key(b)?-1:key(a)>key(b)?1:0);
+const must=(x,code)=>{if(!x)throw new Error(code)};
+const same=(a,b,code)=>must(canon(a)===canon(b),code);
+const shape=(x,keys,code)=>{must(x&&typeof x==='object'&&!Array.isArray(x),code);same(Object.keys(x).sort(),[...keys].sort(),code)};
+const json=(text,code)=>{try{return JSON.parse(text)}catch{throw new Error(code)}};
+const DOCKER=['--host','unix:///var/run/docker.sock'];
+const DEFAULT_SQL="select count(*) from pg_default_acl d cross join lateral aclexplode(d.defaclacl) a where d.defaclnamespace in (0,'public'::regnamespace) and d.defaclrole in ('postgres'::regrole,'supabase_admin'::regrole) and d.defaclobjtype in ('r','S') and a.grantee in (0,'anon'::regrole,'authenticated'::regrole,'service_role'::regrole);";
+const REVOKE_SQL=['postgres','supabase_admin'].flatMap(owner=>['',' in schema public'].map(scope=>`alter default privileges for role ${owner}${scope} revoke all on tables from public,anon,authenticated,service_role;alter default privileges for role ${owner}${scope} revoke all on sequences from public,anon,authenticated,service_role;`)).join('\n');
+const EMPTY_SQL="select jsonb_build_object('relations',(select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public'),'functions',(select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public'),'types',(select count(*) from pg_type t join pg_namespace n on n.oid=t.typnamespace where n.nspname='public'));";
+const INVENTORY_SQL="select coalesce(jsonb_agg(jsonb_build_object('kind',object_kind,'identity',object_identity,'sha256',definition_sha256,'order',restore_order)),'[]'::jsonb) from public.custodial_release_authority_restore_inventory;";
+const SURFACE_SQL="select coalesce(jsonb_agg(jsonb_build_object('kind',object_kind,'identity',object_identity)),'[]'::jsonb) from public.custodial_release_canary_authority_surface();";
+
+export function validateReplayPlan(m){
+  shape(m,['schema','stage','lane','synthetic','production','target','source','runner_files','official_fixture','predecessor_fixture','output_dir','required_surface','protected_relations','seed','cleanup_lease','prepared','probe_manifest'],'plan_shape');
+  must(m.schema==='custodial.current-recovery-replay-plan.v1'&&m.synthetic===true&&m.production===false,'synthetic_plan_required');
+  must(['prepare','verify'].includes(m.stage)&&['normal','no-auto'].includes(m.lane)&&!(m.stage==='verify'&&m.lane==='normal'),'lane_stage');
+  shape(m.target,['name','id','image','fixture_id','database'],'target_shape');
+  must(/^mz_schema_rebuild_[a-zA-Z0-9_]+$/.test(m.target.name)&&HEX.test(m.target.id)&&/^sha256:[0-9a-f]{64}$/.test(m.target.image)&&UUID.test(m.target.fixture_id)&&m.target.fixture_id[14]==='4'&&m.target.database==='postgres','target_identity');
+  must(isAbsolute(m.output_dir)&&resolve(m.output_dir)===m.output_dir,'output_directory');
+  same(m.runner_files?.map(x=>x.file),FILES,'runner_file_set');
+  for(const x of m.runner_files){shape(x,['file','sha256'],'runner_file');must(HEX.test(x.sha256),'runner_hash')}
+  shape(m.cleanup_lease,['owner','container_id','fixture_id','remove_on_terminal','retain_on_prepared'],'cleanup_lease');
+  same(m.cleanup_lease,{owner:'/root',container_id:m.target.id,fixture_id:m.target.fixture_id,remove_on_terminal:true,retain_on_prepared:true},'cleanup_lease_binding');
+  must(Array.isArray(m.required_surface)&&m.required_surface.length>0,'literal_required_surface');
+  for(const row of m.required_surface){shape(row,['kind','identity'],'required_surface_shape');must(RECOVERY_KINDS.includes(row.kind)&&typeof row.identity==='string'&&row.identity.length>0&&row.identity.length<=500&&!/[\r\n\0]/.test(row.identity),'required_identity')}
+  same(sort(m.required_surface),m.required_surface,'required_order');must(new Set(m.required_surface.map(key)).size===m.required_surface.length,'required_duplicate');
+  must(Array.isArray(m.protected_relations)&&m.protected_relations.every(x=>/^public\.[a-z][a-z0-9_]{0,62}$/.test(x)&&!/custodial_(backend_execution_config|release_canary_|release_authority_)/.test(x)),'protected_relations');
+  same(m.protected_relations,[...new Set(m.protected_relations)].sort(),'protected_order');
+  for(const table of SEED_TABLES)must(m.protected_relations.includes(table),'seed_protection_required');
+  shape(m.seed,SEED_KEYS,'seed_shape');must(Object.values(m.seed).every(x=>UUID.test(x))&&new Set(Object.values(m.seed)).size===SEED_KEYS.length,'seed_identity');
+  if(m.lane==='no-auto'){shape(m.official_fixture,['file','sha256'],'official_fixture');must(m.official_fixture.file===OFFICIAL_FIXTURE&&HEX.test(m.official_fixture.sha256),'official_fixture_pin')}
+  else must(m.official_fixture===null,'normal_catalog_only');
+  shape(m.predecessor_fixture,['file','sha256','migration'],'predecessor_fixture');
+  must(m.predecessor_fixture.file===PREDECESSOR_FIXTURE&&HEX.test(m.predecessor_fixture.sha256),'predecessor_source_pin');
+  shape(m.predecessor_fixture.migration,['file','sha256'],'predecessor_migration');
+  must(m.predecessor_fixture.migration.file==='20261003220000_current_release_authority_completion.sql'&&HEX.test(m.predecessor_fixture.migration.sha256),'predecessor_migration_identity');
+  same(m.predecessor_fixture.migration,m.source?.migrations?.at(-1),'final_migration_position');
+  if(m.stage==='prepare')must(m.prepared===null&&m.probe_manifest===null,'prepare_never_adopts_manifest');
+  else{
+    shape(m.prepared,['file','sha256'],'prepared_reference');must(m.prepared.file==='no-auto-prepare-receipt.json'&&HEX.test(m.prepared.sha256),'prepared_reference');
+    validateRecoveryManifest(m.probe_manifest);
+    same(m.probe_manifest.target,m.target,'probe_target');same(m.probe_manifest.source,m.source,'probe_source');
+    same(m.probe_manifest.required_surface,m.required_surface,'probe_required_surface');
+    same(m.probe_manifest.protected_rows.map(x=>x.relation),m.protected_relations,'probe_protected_scope');
+    must(m.probe_manifest.manager_id===m.seed.manager,'probe_original_manager');
+  }
+  return m;
+}
+
+export function localReplaySource(root=ROOT,sourceReader=localRecoverySource){
+  for(const [path,digest] of Object.entries(INPUT_PINS))must(hash(readFileSync(join(root,path)))===digest,'reused_source_pin');
+  for(const [file,digest] of Object.entries(DEFAULT_EXCEPTIONS))must(hash(readFileSync(join(root,'supabase/migrations',file)))===digest,'default_exception_source_pin');
+  return {source:sourceReader(root),runner_files:FILES.map(file=>({file,sha256:hash(readFileSync(join(root,file)))}))};
+}
+
+const nodeIO={
+  source:root=>localReplaySource(root),read:path=>{const s=lstatSync(path);must(s.isFile()&&!s.isSymbolicLink(),'regular_input_required');return readFileSync(path)},
+  outputDirectory(path){const s=lstatSync(path);must(s.isDirectory()&&!s.isSymbolicLink()&&realpathSync(path)===path&&s.uid===process.getuid()&&(s.mode&0o077)===0,'private_output_directory')},
+  write(path,bytes){let fd,dir;try{fd=openSync(path,constants.O_CREAT|constants.O_EXCL|constants.O_NOFOLLOW|constants.O_WRONLY,0o600);writeFileSync(fd,bytes);fsyncSync(fd);dir=openSync(dirname(path),constants.O_RDONLY|constants.O_DIRECTORY|constants.O_NOFOLLOW);fsyncSync(dir)}finally{if(fd!==undefined)closeSync(fd);if(dir!==undefined)closeSync(dir)}},
+  run(command,args,{input,signal,timeout_ms=120000}={}){return new Promise((done,reject)=>{
+    let stdout='',stderr='',settled=false;const child=spawn(command,args,{cwd:ROOT,env:{PATH:process.env.PATH,LANG:'C.UTF-8'},detached:true,stdio:['pipe','pipe','pipe']});
+    const kill=()=>{try{process.kill(-child.pid,'SIGKILL')}catch{}};
+    const timer=setTimeout(kill,timeout_ms);
+    const abort=()=>kill();signal?.addEventListener('abort',abort,{once:true});
+    for(const [stream,name] of [[child.stdout,'stdout'],[child.stderr,'stderr']])stream.setEncoding('utf8').on('data',chunk=>{if(name==='stdout')stdout+=chunk;else stderr+=chunk;if(stdout.length+stderr.length>64*1024*1024)kill()});
+    child.once('error',error=>{if(!settled){settled=true;clearTimeout(timer);signal?.removeEventListener('abort',abort);reject(new Error('subprocess_spawn_failed'))}});
+    child.once('close',(status)=>{if(!settled){settled=true;clearTimeout(timer);signal?.removeEventListener('abort',abort);done({status:Number.isInteger(status)?status:-1,stdout,stderr})}});
+    child.stdin.on('error',()=>{});child.stdin.end(input);if(signal?.aborted)kill();
+  })}
+};
+
+function seedSQL(m){
+  const s=m.seed,suffix=m.target.fixture_id.replaceAll('-','').slice(0,16),code='RECOVERY_'+suffix;
+  const response={form_type:'restroom',work_result:'details',attention_needed:false,services_performed:['Synthetic protected custom work'],maintenance_issues_found:[],note:'Synthetic historical protected draft; NOT verified cleaning'};
+  const identity={identity_verification:{status:'verified',kind:'named_manager_session',manager_id:s.manager}};
+  return `begin;
+insert into public.ops_manager_managers(manager_id,display_name,roles,active,is_system_principal) values(${q(s.manager)},'Synthetic Recovery Manager',array['OPS_MANAGER','DIRECTOR'],true,false);
+insert into public.employees(id,employee_code,display_name,active,role) values(${q(s.employee)},${q(code)},'Synthetic Recovery Employee',true,'staff');
+insert into public.locations(id,location_code,location_name,location_type,form_type,active) values(${q(s.location)},${q(code)},'Synthetic Protected Restroom','restroom','restroom',true);
+insert into public.devices(id,device_id,device_name,active,assigned_employee_id) values(${q(s.device)},${q(code)},'Synthetic Recovery Device',true,${q(s.employee)});
+insert into public.sessions(id,session_uuid,client_session_id,location_id,employee_id,device_id,status,started_at) values(${q(s.session)},${q(s.session)},${q(s.session)},${q(s.location)},${q(s.employee)},${q(s.device)},'active',now()-interval '10 minutes');
+insert into public.completion_responses(id,session_id,location_id,submitted_by_employee_id,device_id,response_json,client_completion_id) values(${q(s.completion)},${q(s.session)},${q(s.location)},${q(s.employee)},${q(s.device)},${q(JSON.stringify(response))}::jsonb,${q(s.completion_operation)});
+insert into public.maintenance_tickets(id,location_id,issue_source,status,issue_summary) values(${q(s.work_ticket)},${q(s.location)},'manager_report','open','Synthetic pending protected work');
+insert into public.system_feedback_items(id,operation_id,request_fingerprint,category,priority,message,submitted_by,hub_context,metadata_json) values(${q(s.feedback)},${q(s.feedback_operation)},repeat('9',64),'other','normal','Synthetic protected feedback ñ','Synthetic Recovery Manager','manager',${q(JSON.stringify(identity))}::jsonb);
+commit;`;
+}
+
+function assertProbeReceipt(r,m,fake){
+  const expected=m.probe_manifest;
+  must(r.schema==='custodial.current-release-recovery-probe-receipt.v1'&&r.engine_executed===!fake&&r.execution===(fake?'FAKE_SUBPROCESS_UNIT_ONLY':'OWNED_SYNTHETIC_ENGINE')&&r.production===false&&r.release_admission===false,'probe_execution_scope');
+  same(r.source,m.source,'probe_receipt_source');must(r.manifest_sha256===hash(canon(expected)),'probe_manifest_receipt');
+  same(r.target,{name:m.target.name,id:m.target.id,image:m.target.image,network:'none',fixture_id:m.target.fixture_id},'probe_receipt_target');
+  must(r.inventory_count===expected.inventory.length&&r.inventory_sha256===hash(canon(expected.inventory))&&r.surface_count===expected.surface.length&&r.restored_objects===expected.inventory.length&&r.canary_left_paused===true&&r.automatic_grants_absent===true,'probe_restore_receipt');
+  same(r.protected_rows,expected.protected_rows,'probe_protected_receipt');
+  for(const h of [r.health_before,r.health_after]){
+    must(h?.ok===true&&h.authority==='offline-authority.v5'&&h.canonical_objects_expected===expected.inventory.length&&h.canary_surface_objects_expected===expected.surface.length,'probe_health');
+    same(Object.keys(h.checks||{}).sort(),expected.health_checks,'probe_health_checks');must(Object.values(h.checks).every(x=>x===true),'probe_health_checks');
+    for(const k of ['missing_objects','mismatched_objects','surface_missing_objects','surface_uncovered_objects'])same(h[k],[],'probe_health_findings');
+  }
+  same(r.rollback_faults,[...expected.faults.map(x=>({...x,fault:'captured_digest_mismatch',rollback_readback:true})),{...expected.omitted_surface,fault:'required_surface_inventory_omission',rollback_readback:true}],'probe_rollback_receipts');
+  must(Array.isArray(r.controls)&&r.controls.length===2,'probe_controls');
+  for(const [i,c] of r.controls.entries()){
+    must(c.manager_id===m.seed.manager&&UUID.test(c.request_id)&&UUID.test(c.audit_id)&&c.device_identifier==='KIOSK_08'&&c.action===(i===0?'pause_canary':'restore_authority')&&c.reason==='synthetic current-source recovery probe','probe_original_control');
+    same(c.authoritative_health,{ok:false,scope:'current-source-synthetic'},'probe_original_control');
+    same(c.result,{device_identifier:'KIOSK_08',canary_paused:true,restored_objects:i===0?0:expected.inventory.length},'probe_original_control');
+  }
+  const denied=['anon','authenticated','service_role','custodial_application_reader','static_weekly_control_plane','static_weekly_release_operator'];
+  same(r.caller_checks,{intended_health_role:'service_role',denied_configuration_roles:denied,denied_health_roles:denied.filter(x=>x!=='service_role'),wrong_health_proof_denied:true},'probe_caller_receipts');
+}
+
+export async function runRecoveryReplay(plan,{root=ROOT,io=nodeIO,signal}={}){
+  const m=validateReplayPlan(plan),fake=io!==nodeIO,stage=m.lane+'-'+m.stage,artifacts=[];
+  let leased=false,retain=false,outputReady=false,phase='preflight',pending_control=null;
+  const write=(name,data)=>{must(/^[a-z0-9_.-]+$/.test(name),'artifact_name');const bytes=typeof data==='string'?data:JSON.stringify(data,null,2)+'\n';io.write(join(m.output_dir,name),bytes);const item={file:name,sha256:hash(bytes)};artifacts.push(item);return item};
+  const checkSignal=()=>must(!signal?.aborted,'aborted');
+  async function run(command,args,input,{cleanup=false,timeout_ms=120000}={}){if(!cleanup)checkSignal();const r=await io.run(command,args,{input,signal:cleanup?undefined:signal,timeout_ms});must(r&&Number.isInteger(r.status)&&typeof r.stdout==='string'&&typeof r.stderr==='string','subprocess_shape');return r}
+  async function inspect({cleanup=false}={}){const r=await run('docker',[...DOCKER,'inspect','--type','container',m.target.id],undefined,{cleanup});must(r.status===0,'target_inspect_failed');const rows=json(r.stdout,'target_inspect_json');must(Array.isArray(rows)&&rows.length===1,'one_target');const x=rows[0];
+    must(x.Id===m.target.id&&x.Name==='/'+m.target.name&&x.Image===m.target.image&&(cleanup||x.State?.Running===true),'target_mismatch');
+    must(x.HostConfig?.NetworkMode==='none'&&Object.keys(x.HostConfig.PortBindings||{}).length===0&&Object.values(x.NetworkSettings?.Ports||{}).every(v=>v===null)&&canon(Object.keys(x.NetworkSettings?.Networks||{}))==='["none"]','target_network');
+    same(x.Config?.Labels&&Object.fromEntries(['fixture','owner','fixture-id'].map(k=>[k,x.Config.Labels['org.memphiszoo.custodial.'+k]])),{fixture:'synthetic',owner:'/root','fixture-id':m.target.fixture_id},'target_ownership');
+  }
+  async function sql(name,text,{rawLog=false}={}){phase=name;const r=await run('docker',[...DOCKER,'exec','-i',m.target.id,'psql','-X','-qAt','-v','ON_ERROR_STOP=1','-v','VERBOSITY=sqlstate','-U','supabase_admin','-d','postgres'],`/* current-replay:${name} */\nset standard_conforming_strings=on;set client_min_messages=warning;set statement_timeout=90000;set lock_timeout=5000;\n${text}`);
+    if(rawLog)write(stage+'-'+name+'.log',r.stdout+r.stderr);must(r.status===0,'sql_'+name);return r.stdout.trim();}
+  const query=async(name,text)=>json(await sql(name,text),'json_'+name);
+  async function snapshots(){const rows=[];for(const table of m.protected_relations)rows.push(await query('snapshot_'+table.slice(7),`select jsonb_build_object('relation',${q(table)},'count',count(*),'sha256',encode(extensions.digest(convert_to(coalesce(string_agg(to_jsonb(r)::text,E'\\n' order by to_jsonb(r)::text),''),'UTF8'),'sha256'),'hex')) from ${table} r;`));return rows}
+  async function catalog(name){let i=0;const values=await captureSchemaCatalog({query:async sql=>({rows:await query('catalog_'+name+'_'+(++i),`select coalesce(jsonb_agg(to_jsonb(q)),'[]'::jsonb) from (${sql}) q;`)})});const captured=fingerprintSchemaCatalog(values);write(stage+'-'+name+'-catalog.json',{classification:m.lane==='normal'?'NORMAL_SOURCE_CATALOG_OBSERVATION':'NO_AUTO_SOURCE_CATALOG_OBSERVATION',...captured});return captured.fingerprint}
+  async function cleanup(){await inspect({cleanup:true});const result=await run('docker',[...DOCKER,'rm','-f',m.target.id],undefined,{cleanup:true});must(result.status===0,'cleanup_remove_failed');const absent=await run('docker',[...DOCKER,'ps','-a','--no-trunc','--filter','id='+m.target.id,'--format','{{.ID}}'],undefined,{cleanup:true});must(absent.status===0&&absent.stdout.trim()==='','cleanup_not_confirmed');leased=false;write(stage+'-cleanup.json',{container_id:m.target.id,fixture_id:m.target.fixture_id,removed:true,engine_executed:!fake})}
+  let result,error;
+  try{
+    same(io.source(root),{source:m.source,runner_files:m.runner_files},'source_manifest');
+    must(m.output_dir!==resolve(root)&&!m.output_dir.startsWith(resolve(root)+'/'),'output_outside_candidate');
+    io.outputDirectory(m.output_dir);outputReady=true;await inspect();
+    if(m.lane==='no-auto')must(hash(io.read(join(root,OFFICIAL_FIXTURE)))===m.official_fixture.sha256,'official_fixture_changed');
+    must(hash(io.read(join(root,PREDECESSOR_FIXTURE)))===m.predecessor_fixture.sha256,'predecessor_fixture_changed');
+    if(m.stage==='prepare'){
+      // No cleanup authority is adopted before empty-catalog admission. A
+      // rejected nonempty target is never reset, truncated, or removed.
+      same(await query('empty_catalog',EMPTY_SQL),{relations:0,functions:0,types:0},'empty_catalog_required');leased=true;
+      write(stage+'-admission.json',{source:m.source,target:m.target,cleanup_lease:m.cleanup_lease,empty_catalog:true,engine_executed:!fake});
+      if(m.lane==='no-auto')await sql('remove_initial_defaults',REVOKE_SQL);
+      const replayed=[];
+      for(const entry of m.source.migrations){
+        const bytes=io.read(join(root,'supabase/migrations',entry.file));must(hash(bytes)===entry.sha256,'migration_changed');
+        if(m.lane==='no-auto')must(await sql('defaults_before_'+replayed.length,DEFAULT_SQL)==='0','defaults_before');
+        if(entry.file===m.predecessor_fixture.migration.file){
+          phase='predecessor_fixture';const pre=await run(process.execPath,[join(root,PREDECESSOR_FIXTURE)],JSON.stringify({target:m.target,migration:entry}),{timeout_ms:300000});
+          write(stage+'-predecessor-fixture.log',pre.stdout+pre.stderr);must(pre.status===0,'predecessor_fixture_failed');
+          const proof=json(pre.stdout.trim().split('\n').at(-1),'predecessor_receipt');
+          shape(proof,['schema','status','checks','engine_executed','synthetic','production','target','migration','source_sha256','predecessor','cases','successful_final_migration_applied','authority_configured','container_retained'],'predecessor_receipt_shape');
+          must(proof.schema==='custodial.current-release-canary-predecessor-receipt.v1'&&proof.status==='PASS'&&proof.checks===4&&proof.engine_executed===!fake&&proof.synthetic===true&&proof.production===false&&proof.successful_final_migration_applied===false&&proof.authority_configured===false&&proof.container_retained===true,'predecessor_receipt');
+          same(proof.target,m.target,'predecessor_target');same(proof.migration,entry,'predecessor_migration');must(proof.source_sha256===m.predecessor_fixture.sha256,'predecessor_source_receipt');
+          same(proof.cases?.map(x=>x.id),PREDECESSOR_CASES,'predecessor_cases');must(proof.cases.every(x=>x.rejected===true&&x.rollback_exact===true&&typeof x.expected_reason==='string'&&x.expected_reason.length>0),'predecessor_rollback');
+          must(proof.predecessor&&Number.isSafeInteger(proof.predecessor.inventory_count)&&proof.predecessor.inventory_count>0&&['inventory_sha256','feedback_stored','feedback_live'].every(k=>HEX.test(proof.predecessor[k]))&&proof.predecessor.immutable==='O','predecessor_preimage');
+        }
+        await sql('migration_'+String(replayed.length).padStart(4,'0'),bytes.toString(),{rawLog:true});
+        if(m.lane==='no-auto'&&await sql('defaults_after_'+replayed.length,DEFAULT_SQL)!=='0'){
+          must(DEFAULT_EXCEPTIONS[entry.file]===entry.sha256&&!/create\s+(?:unlogged\s+)?table|create\s+sequence/i.test(bytes.toString()),'unexpected_default_grant_change');
+          await sql('remove_known_defaults_'+replayed.length,REVOKE_SQL);must(await sql('defaults_rechecked_'+replayed.length,DEFAULT_SQL)==='0','defaults_recheck');
+        }
+        replayed.push(entry);
+      }
+      write(stage+'-ordered-replay.json',{source:m.source,replayed,automatic_grants_absent:m.lane==='no-auto',engine_executed:!fake});
+      if(m.lane==='normal')result={status:'NORMAL_CATALOG_OBSERVED_NOT_ACCEPTED',fingerprint:await catalog('replayed')};
+      else{
+        phase='official_fixture';
+        const code=`const {verifyStaticWeeklySplashSeasonOfficialPaths}=await import(${JSON.stringify(new URL('../'+OFFICIAL_FIXTURE,import.meta.url).href)});console.log(JSON.stringify(await verifyStaticWeeklySplashSeasonOfficialPaths({target:JSON.parse(process.argv[1])})));`;
+        const official=await run(process.execPath,['--input-type=module','-e',code,JSON.stringify(m.target)],undefined,{timeout_ms:300000});
+        write(stage+'-official-fixture.log',official.stdout+official.stderr);must(official.status===0,'official_fixture_failed');
+        const officialReceipt=json(official.stdout.trim().split('\n').at(-1),'official_fixture_receipt');
+        must(officialReceipt.status==='PASS'&&Number.isSafeInteger(officialReceipt.checks)&&officialReceipt.checks>0,'official_fixture_receipt');
+        same(officialReceipt.target,{id:m.target.id,image:m.target.image,fixture_id:m.target.fixture_id,network:'none'},'official_fixture_target');
+        must(officialReceipt.scope==='synthetic official dated exception and occurrence SCH022 paths'&&Array.isArray(officialReceipt.limitations),'official_fixture_scope');
+        shape(officialReceipt.source,['publication_id','group_id','member_id','baseline_projection_id','accepted_projection_id','repaired_projection_id'],'official_fixture_source');
+        must(Object.values(officialReceipt.source).every(x=>UUID.test(x)),'official_fixture_source');
+        await sql('synthetic_seed',seedSQL(m));
+        same(await query('seed_readback',`select jsonb_build_object('active_work',exists(select 1 from public.sessions where id=${q(m.seed.session)} and employee_id=${q(m.seed.employee)} and device_id=${q(m.seed.device)} and status='active'),'response',exists(select 1 from public.completion_responses where id=${q(m.seed.completion)} and session_id=${q(m.seed.session)} and client_completion_id=${q(m.seed.completion_operation)}),'work_ticket',exists(select 1 from public.maintenance_tickets where id=${q(m.seed.work_ticket)} and status='open'),'feedback',exists(select 1 from public.system_feedback_items f join public.system_feedback_email_intents i on i.feedback_id=f.id where f.id=${q(m.seed.feedback)} and f.operation_id=${q(m.seed.feedback_operation)} and i.state='queued' and i.attempt_id is null));`),{active_work:true,response:true,work_ticket:true,feedback:true},'seed_original_identity');
+        const inventory=sort(await query('inventory_observed',INVENTORY_SQL)),surface=sort(await query('surface_observed',SURFACE_SQL));
+        write(stage+'-observed-inventory.json',inventory);write(stage+'-observed-surface.json',surface);
+        same([...new Set(inventory.map(x=>x.kind))].sort(),RECOVERY_KINDS,'all_inventory_kinds_required');
+        const missing=m.required_surface.filter(wanted=>!surface.some(x=>key(x)===key(wanted))||!inventory.some(x=>key(x)===key(wanted)));
+        write(stage+'-required-membership.json',{required:m.required_surface,missing,independently_accepted:false});must(missing.length===0,'required_source_member_missing');
+        const protected_rows=await snapshots();write(stage+'-observed-protected.json',protected_rows);must(protected_rows.every((x,i)=>x.relation===m.protected_relations[i]&&Number.isSafeInteger(x.count)&&x.count>=0&&HEX.test(x.sha256)),'snapshot_shape');
+        for(const table of SEED_TABLES)must(protected_rows.find(x=>x.relation===table)?.count>0,'seed_snapshot_populated');
+        result={status:'OBSERVED_NOT_ACCEPTED',inventory,surface,protected_rows,required_surface:m.required_surface,seed:m.seed,manager_id:m.seed.manager,official_receipt:officialReceipt,fingerprint:await catalog('prepared'),cleanup_lease:m.cleanup_lease};
+      }
+    }else{
+      const bytes=io.read(join(m.output_dir,m.prepared.file));must(hash(bytes)===m.prepared.sha256,'prepared_hash');const prior=json(bytes.toString(),'prepared_json');
+      must(prior.status==='OBSERVED_NOT_ACCEPTED'&&prior.stage==='no-auto-prepare'&&prior.engine_executed===!fake,'prepared_classification');
+      same(prior.source,m.source,'prepared_source');same(prior.target,m.target,'prepared_target');same(prior.seed,m.seed,'prepared_seed');same(prior.required_surface,m.required_surface,'prepared_required');same(prior.cleanup_lease,m.cleanup_lease,'prepared_lease');
+      same(prior.runner_files,m.runner_files,'prepared_runner');same(prior.predecessor_fixture,m.predecessor_fixture,'prepared_predecessor');same(prior.official_fixture,m.official_fixture,'prepared_official_fixture');
+      same(prior.inventory,m.probe_manifest.inventory,'independent_inventory_binding');same(prior.surface,m.probe_manifest.surface,'independent_surface_binding');same(prior.protected_rows,m.probe_manifest.protected_rows,'independent_protected_binding');
+      leased=true;const protectedBefore=await snapshots();same(protectedBefore,m.probe_manifest.protected_rows,'prepared_rows_changed');
+      const manifest=write(stage+'-root-bound-probe-manifest.json',m.probe_manifest);phase='probe';
+      const proof=await run(process.execPath,[join(root,'scripts/current-release-recovery-probe.mjs'),'--manifest',join(m.output_dir,manifest.file)],undefined,{timeout_ms:900000});
+      write(stage+'-probe.stdout.log',proof.stdout);write(stage+'-probe.stderr.log',proof.stderr);
+      if(proof.status!==0){try{pending_control=JSON.parse(proof.stderr.trim()).pending_control||null}catch{}throw new Error('probe_failed')}
+      const receipt=json(proof.stdout.trim(),'probe_receipt');assertProbeReceipt(receipt,m,fake);
+      same(await snapshots(),protectedBefore,'post_probe_protected_rows');const fingerprint=await catalog('restored');must(fingerprint===prior.fingerprint,'restored_catalog_changed');
+      result={status:'SYNTHETIC_PROBE_COMPLETED_NOT_RELEASE_ADMITTED',probe_receipt:receipt,fingerprint,protected_rows:protectedBefore};
+    }
+    await inspect();same(io.source(root),{source:m.source,runner_files:m.runner_files},'source_changed_during_run');checkSignal();
+    result={schema:'custodial.current-recovery-replay-receipt.v1',...result,stage,source:m.source,runner_files:m.runner_files,target:m.target,official_fixture:m.official_fixture,predecessor_fixture:m.predecessor_fixture,engine_executed:!fake,execution:fake?'FAKE_SUBPROCESS_UNIT_ONLY':'OWNED_SYNTHETIC_ENGINE',production:false,release_admission:false,artifacts:[...artifacts]};
+    write(stage+'-receipt.json',result);retain=m.stage==='prepare'&&m.lane==='no-auto';
+  }catch(caught){error=caught;if(outputReady)try{write(stage+'-failure-'+randomUUID()+'.json',{schema:'custodial.current-recovery-replay-failure.v1',code:/^[a-z0-9_]+$/.test(caught.message)?caught.message:'runner_failed',phase,target:m.target,source:m.source,engine_executed:!fake,pending_control,release_admission:false})}catch{}}
+  finally{if(leased&&!retain){try{await cleanup()}catch(cleanupError){error=error||cleanupError;try{write(stage+'-cleanup-failure-'+randomUUID()+'.json',{code:'cleanup_not_confirmed',container_id:m.target.id,fixture_id:m.target.fixture_id,original_error:error.message,release_admission:false})}catch{}}}}
+  if(error)throw error;return result;
+}
+
+if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
+  const abort=new AbortController();const stop=()=>abort.abort();process.once('SIGINT',stop);process.once('SIGTERM',stop);
+  try{must(process.argv.length===4&&process.argv[2]==='--plan','usage_local_plan_only');const path=process.argv[3];must(!/^[a-z]+:\/\//i.test(path),'plan_url_forbidden');const bytes=readFileSync(path);must(bytes.length<=8*1024*1024,'plan_size');console.log(JSON.stringify(await runRecoveryReplay(json(bytes.toString(),'plan_json'),{signal:abort.signal})));}
+  catch(error){console.error(JSON.stringify({schema:'custodial.current-recovery-replay-cli-failure.v1',code:/^[a-z0-9_]+$/.test(error.message)?error.message:'runner_failed',release_admission:false}));process.exitCode=1}
+  finally{process.removeListener('SIGINT',stop);process.removeListener('SIGTERM',stop)}
+}
