@@ -302,6 +302,69 @@ for (const [source, job] of [[schedulerGate, "validate"], [productionRepairGate,
   assert.throws(() => assertReviewedRegressionGate(source.replace(`docker pull ${rehearsalPostgresImage}`, "# missing image preparation"), job, "mutation"));
   reviewedMutationCount += 1;
 }
+const currentSystemSource = readFileSync(resolve(root, "scripts/current-system-source-contract-tests.mjs"), "utf8");
+const completionSourceImport = "await import('./completion-taxonomy-contract-tests.mjs');";
+const completionDatabaseCommand = "node scripts/completion-taxonomy-database-tests.mjs";
+const completionStep = [
+  "      - name: Current completion taxonomy and full recovery on clean no-auto-grants database",
+  "        shell: bash",
+  "        run: |",
+  "          set -euo pipefail",
+  `          ${completionDatabaseCommand}`,
+  "",
+].join("\n");
+function assertCompletionRecoveryWiring(workflow, sourceSuite) {
+  const sourceLines = sourceSuite.split("\n").map(line => line.trim())
+    .filter(line => line && !line.startsWith("//"));
+  assert.ok(sourceLines.every(line => /^await import\('\.\/[a-z0-9-]+\.mjs'\);$/.test(line)
+    || /^console\.log\('CURRENT_SYSTEM_SOURCE_CONTRACTS_PASS:/.test(line)),
+  "the complete source suite must keep every owning import top-level, without conditional or catch wrappers");
+  assert.equal(sourceLines.filter(line => line === completionSourceImport).length, 1,
+    "the complete source suite must import the mounted exact-session manager reader once");
+  assertExactCommandsInJob(workflow, "backend", [
+    "node scripts/current-system-source-contract-tests.mjs",
+    completionDatabaseCommand,
+  ], "custodial-production-repair.yml:backend completion recovery");
+  const job = workflowJobs(workflow).find(({ name }) => name === "backend");
+  assert.ok(job, "the complete backend job must exist");
+  const stepName = "      - name: Current completion taxonomy and full recovery on clean no-auto-grants database\n";
+  const start = job.source.indexOf(stepName);
+  assert.ok(start >= 0 && job.source.indexOf(stepName, start + 1) < 0,
+    "the clean completion database step must occur exactly once");
+  const next = job.source.indexOf("      - ", start + stepName.length);
+  assert.equal(job.source.slice(start, next < 0 ? undefined : next), completionStep,
+    "the exact completion database step must be unconditional, fail-fast and unwrapped");
+  const commands = workflowCommands(workflow, "backend");
+  const sourceCommand = commands.find(({ command }) => command === "node scripts/current-system-source-contract-tests.mjs");
+  const databaseCommand = commands.find(({ command }) => command === completionDatabaseCommand);
+  const nativeCommand = commands.find(({ command }) => command === "node scripts/native-location-dispatch-database-tests.mjs");
+  const sharedRebuild = commands.find(({ command }) => command.startsWith("npm run --silent test:empty-db-rebuild | tee "));
+  assert.ok(sourceCommand && databaseCommand && nativeCommand && sharedRebuild,
+    "source, clean completion, native and shared database stages must all remain executable");
+  assert.ok(sourceCommand.stepIndex < databaseCommand.stepIndex &&
+    databaseCommand.stepIndex < nativeCommand.stepIndex &&
+    nativeCommand.stepIndex < sharedRebuild.stepIndex,
+  "the exact completion proof must follow its source contract and precede shared mutable fixtures");
+}
+assertCompletionRecoveryWiring(productionRepairGate, currentSystemSource);
+for (const mutation of [
+  productionRepairGate.replace(completionDatabaseCommand, `# ${completionDatabaseCommand}`),
+  productionRepairGate.replace(completionDatabaseCommand, `${completionDatabaseCommand} || true`),
+  productionRepairGate.replace(completionDatabaseCommand, `${completionDatabaseCommand}\n          ${completionDatabaseCommand}`),
+  productionRepairGate.replace(completionStep, completionStep.replace("        shell: bash", "        if: ${{ false }}\n        shell: bash")),
+  productionRepairGate.replace(completionStep, completionStep.replace("        shell: bash", "        continue-on-error: true\n        shell: bash")),
+  productionRepairGate.replace(completionStep, completionStep.replace("          set -euo pipefail", "          set +e")),
+  productionRepairGate.replace(completionStep, "").replace(
+    "      - name: Empty database migration rebuild and database concurrency\n",
+    completionStep + "      - name: Empty database migration rebuild and database concurrency\n"),
+]) assert.throws(() => assertCompletionRecoveryWiring(mutation, currentSystemSource),
+  "completion database bypass, duplicate or order mutation must fail");
+assert.throws(() => assertCompletionRecoveryWiring(productionRepairGate,
+  currentSystemSource.replace(completionSourceImport, `// ${completionSourceImport}`)),
+"removing the complete source contract must fail");
+assert.throws(() => assertCompletionRecoveryWiring(productionRepairGate,
+  currentSystemSource.replace(completionSourceImport, `if (false) {\n${completionSourceImport}\n}`)),
+"a conditional complete-source import must fail");
 assert.match(productionRepairGate,
   /CUSTODIAL_STATIC_TRUTH_TEST_DOCKER_CONTAINER="\$container"[\s\S]*npm run --silent test:static-weekly-operational-truth-db/,
   "the complete repair gate must prove canonical operational truth against its exact rebuilt schema");

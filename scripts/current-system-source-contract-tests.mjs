@@ -10,4 +10,5 @@ await import('./native-provider-json-tests.mjs');
 await import('./native-provider-events-tests.mjs');
 await import('./native-location-lifecycle-tests.mjs');
 await import('./native-location-dispatch-contract-tests.mjs');
-console.log('CURRENT_SYSTEM_SOURCE_CONTRACTS_PASS: 10 explicit owning suites; no database/provider/production/phone proof');
+await import('./completion-taxonomy-contract-tests.mjs');
+console.log('CURRENT_SYSTEM_SOURCE_CONTRACTS_PASS: 11 explicit owning suites; no database/provider/production/phone proof');
