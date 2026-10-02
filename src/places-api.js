@@ -2,6 +2,7 @@ import express from 'express';
 import { applyPlaceCommand,readPlacePreview } from './place-lifecycle.js';
 import {buildPlaceReconciliation,PLACE_LEGACY_PREVIEW_SQL} from './place-reconciliation.js';
 import {preparePlaceBridge,confirmPlaceBridge,readPlaceBridgeOverlay} from './place-legacy-bridge.js';
+import {preparePlaceSource,confirmPlaceSource,readPlaceSource} from './place-operational-bridge.js';
 
 export function placeHttpFailure(error){
  const code=String(error?.code||'');
@@ -61,6 +62,18 @@ export function createPlacesAdminRouter({client,requireManagerWrite,runReadOnlyS
    const receipt=await confirmPlaceBridge(req,req.body,{client});
    res.json({ok:true,...receipt,data:{...receipt.data,actor_manager_id:receipt.actor_manager_id}});
   }catch(error){const failure=placeHttpFailure(error);res.status(failure.status).json(failure.body);}
+ });
+ router.get('/source/overlay',async(req,res)=>{
+  try{res.json({ok:true,data:await readPlaceSource(req,req.query,{client})});}
+  catch(error){const failure=placeHttpFailure(error);res.status(failure.status).json(failure.body);}
+ });
+ router.post('/source/preview',async(req,res)=>{
+  try{res.json({ok:true,data:await preparePlaceSource(req,req.body,{client})});}
+  catch(error){const failure=placeHttpFailure(error);res.status(failure.status).json(failure.body);}
+ });
+ router.post('/source/confirm',async(req,res)=>{
+  try{const receipt=await confirmPlaceSource(req,req.body,{client});res.json({ok:true,...receipt,data:{...receipt.data,actor_manager_id:receipt.actor_manager_id}});}
+  catch(error){const failure=placeHttpFailure(error);res.status(failure.status).json(failure.body);}
  });
  return router;
 }
