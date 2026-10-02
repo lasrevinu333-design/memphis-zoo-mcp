@@ -1,10 +1,13 @@
 import {canonicalJson, assertServiceDate, snapshotContractorCapacity} from './static-weekly-schedule-model.js';
 import {postgresJsonbContentDigest} from './static-weekly-schedule-compiler.js';
+import {canonicalAuthorityInput} from './static-weekly-schedule-program.js';
 
 const fail = code => {throw Object.assign(new Error(code), {code});};
 const uuid = value => {if(typeof value!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value))fail('capacity_transition_uuid_required');return value;};
 const hash = value => {if(typeof value!=='string'||!/^[0-9a-f]{64}$/.test(value))fail('capacity_transition_source_witness_required');return value;};
 const same = (a,b) => canonicalJson(a)===canonicalJson(b);
+const sameMultiset = (a,b) => Array.isArray(a)&&Array.isArray(b)
+ &&same(a.map(canonicalJson).sort(),b.map(canonicalJson).sort());
 
 /** Pure, nonmutating source candidate. The basis is a SERVER-owned authority
  * read, never HTTP compiler data. This helper alone cannot register/publish.
@@ -49,7 +52,7 @@ export function createContractorCapacityTransitionCandidate({basis,selection,eff
  };
  const version=structuredClone(source.version);
  for(const [key,value] of Object.entries(version))if(!['id','publicationId','effectiveStart','effectiveEnd','slotAvailability'].includes(key)&&referencesLegacy(value))fail('capacity_transition_legacy_duty_or_policy_reference_requires_reconciliation');
- const candidate=structuredClone(source);
+ let candidate=structuredClone(source);
  candidate.slots=source.slots.map(slot=>{
   const mapping=mapped.get(slot.id);if(!mapping)return structuredClone(slot);
   if(!Array.isArray(slot.contractorAvailability)||!slot.contractorAvailability.length)fail('capacity_transition_inherited_template_required');
@@ -64,6 +67,15 @@ export function createContractorCapacityTransitionCandidate({basis,selection,eff
  });
  version.id=uuid(candidateVersionId);version.publicationId=uuid(candidatePublicationId);version.effectiveStart=date;version.effectiveEnd=null;version.status='published';
  candidate.version=version;candidate.serviceDate=date;
+ // New UUIDs change the existing canonical normalizer's collection ordering.
+ // Normalize through that ONE authority, but permit ONLY slot/availability
+ // permutations here. Any other normalization difference requires review.
+ const normalized=canonicalAuthorityInput(candidate.version,candidate.slots,candidate.exceptions,candidate.proximity,date);
+ const permitted=structuredClone(candidate);permitted.slots=normalized.slots;permitted.version.slotAvailability=normalized.version.slotAvailability;
+ if(!sameMultiset(candidate.slots,normalized.slots)
+  ||!sameMultiset(candidate.version.slotAvailability,normalized.version.slotAvailability)
+  ||!same(permitted,normalized))fail('capacity_transition_noncanonical_source_requires_reconciliation');
+ candidate=normalized;
  if(!same(candidate.slots.filter(s=>s.contractorCapacity!==true),ordinary)
   ||!same(candidate.version.assignments,source.version.assignments)
   ||!same(candidate.version.slotAvailability.filter(s=>!newIds.has(s.slotId)),source.version.slotAvailability.filter(s=>!mapped.has(s.slotId))))fail('capacity_transition_unintended_employee_or_duty_change');
@@ -75,5 +87,5 @@ export function createContractorCapacityTransitionCandidate({basis,selection,eff
   candidateSource:candidate,candidateDigest:postgresJsonbContentDigest(candidate),
   unchangedPositionIds:ordinary.map(s=>s.id),historicalCapacitySlotIds:legacy.map(s=>s.id),newCapacityIds:[...newIds],
   historicalPersonRowsChanged:false,employeeRowsCreated:0,
-  remainingGate:'SERVER_BASIS_PREVIEW_AND_APPEND_ONLY_CURRENT_AUTHORITY_ADMISSION_NOT_IMPLEMENTED'};
+  remainingGate:'PURE_CANDIDATE_IS_NOT_ADMISSION_OR_PHONE_READBACK'};
 }

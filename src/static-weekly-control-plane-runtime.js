@@ -260,6 +260,28 @@ export function createStaticWeeklyControlPlaneRuntime({
     return authorityControlPlane.previewPlaceRepublish({manager:manager(req),sourcePublicationId:b.source_publication_id,
       effectiveStart:b.effective_start,expectedRevision:b.expected_revision,selection:b.selection,reason:b.reason});
   }));
+  function exactCapacityBody(body,keys) {
+    if(!body||typeof body!=="object"||Array.isArray(body)||Object.keys(body).length!==keys.length
+      ||keys.some(key=>!Object.hasOwn(body,key)))throw fail("capacity_source_request_invalid",
+      "Capacity admission accepts only exact mapping/preview identity; no client source, person or manager identity.");
+    return body;
+  }
+  app.post("/static-weekly/coverall/source-basis",requireManagerWrite,namedManager,respond(req=>{
+    const b=exactCapacityBody(req.body,["source_publication_id","effective_start","expected_revision"]);
+    return authorityControlPlane.getCapacitySourceBasis({manager:manager(req),sourcePublicationId:b.source_publication_id,
+      effectiveStart:b.effective_start,expectedRevision:b.expected_revision});
+  }));
+  app.post("/static-weekly/coverall/source-preview",requireManagerWrite,namedManager,respond(req=>{
+    const b=exactCapacityBody(req.body,["source_publication_id","effective_start","expected_revision","selection","reason"]);
+    return authorityControlPlane.previewCapacitySource({manager:manager(req),sourcePublicationId:b.source_publication_id,
+      effectiveStart:b.effective_start,expectedRevision:b.expected_revision,selection:b.selection,reason:b.reason});
+  }));
+  app.post("/static-weekly/coverall/source-confirm",requireManagerWrite,namedManager,respond(req=>{
+    const b=exactCapacityBody(req.body,["operation_id","preview_id"]);
+    return authorityControlPlane.confirmCapacitySource({manager:manager(req),operationId:b.operation_id,previewId:b.preview_id});
+  }));
+  app.get("/static-weekly/coverall/source-operations/:operationId",requireManagerWrite,namedManager,respond(req=>
+    authorityControlPlane.getCapacitySourceStatus({manager:manager(req),operationId:req.params.operationId})));
   app.post("/static-weekly/places/confirm", requireManagerWrite, namedManager, respond(req => {
     const b=exactPlaceBody(req.body,["operation_id","preview_id"]);
     return authorityControlPlane.confirmPlaceRepublish({manager:manager(req),operationId:b.operation_id,previewId:b.preview_id});

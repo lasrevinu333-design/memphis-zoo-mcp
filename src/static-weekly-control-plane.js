@@ -24,6 +24,8 @@ import { assertRecurringManagerDecision, assertRecurringAdmissionCandidate } fro
 import { recurringPatternAuthority, assertRecurringRepairCandidate } from "./static-weekly-recurring-repair-basis.js";
 import { withRecurringDependencyStatus } from "./static-weekly-recurring-dependency-result.js";
 import { placePublicationInput, placePublicationSummary } from "./place-operational-adapter.js";
+import {capacitySourceBasisSummary,capacitySourcePublicationInput,capacitySourcePreviewSummary} from "./static-weekly-contractor-source-bridge.js";
+import {createContractorCapacityTransitionCandidate} from "./static-weekly-contractor-source-transition.js";
 import { canonicalJson } from "./static-weekly-schedule-model.js";
 import { postgresJsonbContentDigest } from "./static-weekly-schedule-compiler.js";
 import {
@@ -1116,6 +1118,53 @@ export function createStaticWeeklyControlPlane({
         if(checked.documentDigest!==original.documentDigest)throw fail('coverall_print_source_changed_reprepare_required');
         return checked;
       });
+    },
+    async getCapacitySourceBasis({manager,sourcePublicationId,effectiveStart,expectedRevision}) {
+      const actor=requireManager(manager);
+      const basis=await transaction(client=>call(client,"static_weekly_capacity_source_basis",[
+        actor.managerId,requirePublicationId(sourcePublicationId),requireMonday(effectiveStart,"effective start"),requireRevision(expectedRevision),
+      ]));
+      return capacitySourceBasisSummary(basis);
+    },
+    async previewCapacitySource({manager,sourcePublicationId,effectiveStart,expectedRevision,selection,reason}) {
+      const actor=requireManager(manager);
+      const date=requireMonday(effectiveStart,"effective start"),revision=requireRevision(expectedRevision),publication=requirePublicationId(sourcePublicationId);
+      const preview=await transaction(async client=>{
+        const basis=await call(client,"static_weekly_capacity_source_basis",[actor.managerId,publication,date,revision]);
+        const candidate=createContractorCapacityTransitionCandidate({basis,selection,effectiveStart:date,expectedRevision:revision,
+          reason:text(reason),candidateVersionId:randomUUID(),candidatePublicationId:randomUUID()});
+        return call(client,"static_weekly_capacity_source_preview",[actor.managerId,publication,date,revision,
+          JSON.stringify(selection),text(reason),JSON.stringify(candidate.candidateSource)]);
+      });
+      await prepareDraft(capacitySourcePublicationInput(preview),{expectedRevision:preview.expected_revision,
+        actor:{...actor,idempotencyKey:`capacity-preview:${preview.preview_id}`}});
+      return capacitySourcePreviewSummary(preview);
+    },
+    async confirmCapacitySource({manager,operationId,previewId}) {
+      const actor=requireManager(manager),operation=requireUuid(operationId,"capacity_source_operation_required"),
+        preview=requireUuid(previewId,"capacity_source_preview_required");
+      return transaction(async client=>{
+        await lockStaticWeeklyAuthority(client);
+        const prepared=await call(client,"static_weekly_capacity_source_begin",[actor.managerId,operation,preview]);
+        if(prepared?.replayed===true)return {...prepared.receipt,replayed:true};
+        const draft=await prepareInsideTransaction(client,()=>prepareDraft(capacitySourcePublicationInput(prepared),{
+          expectedRevision:prepared.expected_revision,actor:{...actor,idempotencyKey:`capacity-source:${operation}:draft`},
+        }));
+        const created=await call(client,"static_weekly_v3_create_draft",[draft.effectiveStart,draft.objectiveVersion,
+          draft.objective,draft.inputProvenance,draft.document,draft.expectedRevision,actor.managerId,draft.idempotencyKey,prepared.source_id]);
+        const publication=await call(client,"static_weekly_v3_publish_draft",[created.data.version_id,1,created.revision,
+          actor.managerId,`capacity-source:${operation}:publish`,"supersede",null]);
+        const publicationId=requirePublicationId(publication.data.publication_id);
+        const projection=await materializeCurrentProjection(client,{actor,publicationId,weekStart:prepared.effective_start,
+          expectedRevision:publication.revision,idempotencyKey:`capacity-source:${operation}:projection:${prepared.effective_start}`});
+        return call(client,"static_weekly_capacity_source_finalize",[actor.managerId,operation,publicationId,projection.data.projection_id]);
+      });
+    },
+    async getCapacitySourceStatus({manager,operationId}) {
+      const actor=requireManager(manager);
+      return transaction(client=>call(client,"static_weekly_capacity_source_status",[
+        actor.managerId,requireUuid(operationId,"capacity_source_operation_required"),
+      ]));
     },
     async previewPlaceRepublish({ manager, sourcePublicationId, effectiveStart, expectedRevision, selection, reason }) {
       const actor = requireManager(manager);
