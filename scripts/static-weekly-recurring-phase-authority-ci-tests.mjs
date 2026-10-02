@@ -27,9 +27,9 @@ const invocationOutput = execFileSync(process.execPath, ['--max-old-space-size=2
   env:{PATH:process.env.PATH,LANG:'C.UTF-8'}});
 const invocation = JSON.parse(invocationOutput.trim().split('\n').at(-1));
 process.stdout.write(invocationOutput);
-assert.equal(invocation.checks, 14);
-assert.equal(invocation.realTinySolverRuns, 2);
-assert.equal(invocation.solverCalls, 6);
+assert.equal(invocation.checks, 16);
+assert.equal(invocation.realTinySolverRuns, 3);
+assert.equal(invocation.solverCalls, 9);
 for (const key of ['solverOptimaCached','canonicalWitnessCached','crossRequestCache'])
   assert.equal(invocation[key], false);
 
@@ -80,3 +80,29 @@ for (const result of current.results) {
   assert.equal(result.published, false);
 }
 for (const key of ['workerIpc', 'sql', 'publication']) assert.equal(current[key], false);
+
+// Run the actual three downward transition shapes against the included exact
+// historical input. A fixture hash or an uncalled export is not this proof.
+// This outer limit covers three complete helpers plus hostile revalidation;
+// it does not increase any product solver or isolated-request deadline.
+const reductionOutput = execFileSync(process.execPath, ['--max-old-space-size=256',
+  '--wasm-max-mem-pages=1536', '--max-semi-space-size=4',
+  fileURLToPath(new URL('./static-weekly-recurring-phase-authority-tests.mjs', import.meta.url)),
+  '--full-nine-reduction'], {encoding:'utf8',timeout:900000,maxBuffer:2*1024*1024,
+  env:{PATH:process.env.PATH,LANG:'C.UTF-8'}});
+const reduction = JSON.parse(reductionOutput.trim().split('\n').at(-1));
+process.stdout.write(reductionOutput);
+assert.equal(reduction.status, 'PASS');
+assert.equal(reduction.checks, 30);
+assert.deepEqual(reduction.counts, [6, 7, 8]);
+assert.equal(reduction.originalWrapperVerified, false);
+assert.equal(reduction.includedExtractionFileSha256,
+  'a1b43408c9b61ba4bb93ae3d0f78dcab3efdde9ffd4fa7a945005d2ae045ab04');
+assert.equal(reduction.baseSourceDigest,
+  'b2b0c7951b427a9f04b7d504d26591eb0e25f514c8e8652b1e6a5628d498abdc');
+assert.deepEqual(reduction.results.map(result => result.count), [6, 7, 8]);
+for (const result of reduction.results) {
+  assert.ok(Number.isSafeInteger(result.canonicalRows) && result.canonicalRows > 0);
+  assert.equal(result.syntheticRoster, true);
+  for (const key of ['workerIpc', 'sql', 'published']) assert.equal(result[key], false);
+}
