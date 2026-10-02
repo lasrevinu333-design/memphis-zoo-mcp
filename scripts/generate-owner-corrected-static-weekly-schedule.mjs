@@ -7,6 +7,7 @@ import { compileStaticWeeklySchedule, postgresJsonbContentDigest } from "../src/
 import { prepareStaticWeeklyRegistrationArtifact } from "./static-weekly-schedule-candidate-importer.mjs";
 import { createShiftEndContinuityPolicy } from "../src/static-weekly-shift-end-derivation.js";
 import {validateOwnerEligibilityConfig,assertNormalOwnerEligibility,hardRestrictedSlots,verifiedBaseRestrictionInventory} from '../src/static-weekly-owner-eligibility.js';
+import {validateScheduleComponentWeightSource,validateScheduleComponentWeightPacket} from '../src/schedule-component-weight-authority.js';
 
 const BACKEND = path.resolve(process.cwd());
 const CONFIG_PATH = process.env.STATIC_WEEKLY_OWNER_CONFIG_PATH
@@ -14,7 +15,7 @@ const CONFIG_PATH = process.env.STATIC_WEEKLY_OWNER_CONFIG_PATH
   : path.join(BACKEND, "config/custodial-recurring-schedule-20260924.json");
 const OUTPUT = process.argv[2];
 if (!OUTPUT) throw new Error("Usage: generate-owner-corrected-static-weekly-schedule.mjs <output-packet.json>");
-if (fs.existsSync(OUTPUT) || fs.existsSync(`${OUTPUT}.registration.json`)) throw new Error("Refusing to replace existing schedule evidence.");
+if (fs.existsSync(OUTPUT) || fs.existsSync(`${OUTPUT}.registration.json`) || fs.existsSync(`${OUTPUT}.component-weights.json`)) throw new Error("Refusing to replace existing schedule evidence.");
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const fileHash = (file) => sha256(fs.readFileSync(file));
@@ -361,6 +362,10 @@ for (const assignment of version.assignments) {
 // after roster hydration; later fills never require a replacement source.
 version.shiftEndContinuityPolicy = createShiftEndContinuityPolicy(config.weights, fileHash(CONFIG_PATH),
   postgresJsonbContentDigest,config.namedShiftEndHandoffs||[]);
+// Current selected complete packages only. Historical split-package imports
+// are not reinterpreted. This receipt never alters compiler input or budgets.
+const componentWeightInputReceipt = exactSixPersonHandout
+  ? validateScheduleComponentWeightSource({source:input,ownerConfig:config}) : null;
 const compileInput = clone(input);
 compileInput.versions = [clone(input.version)];
 delete compileInput.version;
@@ -438,6 +443,8 @@ const packet = {
   }
 };
 assert.equal(postgresJsonbContentDigest(packet.compilerInput), packet.sourceDigest);
+const componentWeightPacketReceipt = exactSixPersonHandout
+  ? validateScheduleComponentWeightPacket({packet,ownerConfig:config}) : null;
 const registration = await prepareStaticWeeklyRegistrationArtifact(packet);
 assert.equal(registration.ok, true, `registration refused: ${registration.errors.join(",")}`);
 assert.equal(registration.admissibleForRegistration, true);
@@ -445,4 +452,10 @@ assert.equal(registration.registration.sourceDigest, packet.sourceDigest);
 fs.writeFileSync(`${OUTPUT}.pre-handoff.json`, `${JSON.stringify({compilerInput:input,classification:"UNPUBLISHED_SOURCE_TEMPLATE"},null,2)}\n`, {mode:0o600,flag:"wx"});
 fs.writeFileSync(OUTPUT, `${JSON.stringify(packet,null,2)}\n`, {mode:0o600,flag:"wx"});
 fs.writeFileSync(`${OUTPUT}.registration.json`, `${JSON.stringify(registration.registration,null,2)}\n`, {mode:0o600,flag:"wx"});
+if (componentWeightInputReceipt) fs.writeFileSync(`${OUTPUT}.component-weights.json`, `${JSON.stringify({
+  schema:'custodial.selected-source-component-weight-sidecar.v1',
+  input:componentWeightInputReceipt,packet:componentWeightPacketReceipt,
+  ownerConfigFileSha256:fileHash(CONFIG_PATH),packetFileSha256:fileHash(OUTPUT),
+  classification:'LOCAL_SOURCE_VALIDATION_NOT_PUBLICATION_OR_PHYSICAL_MINUTE_FEASIBILITY',
+},null,2)}\n`, {mode:0o600,flag:"wx"});
 process.stdout.write(`${JSON.stringify({output:OUTPUT,packetSha256:fileHash(OUTPUT),registrationSha256:fileHash(`${OUTPUT}.registration.json`),sourceId,sourceDigest:packet.sourceDigest,replayDigest:compiled.replayDigest,verification:packet.verification})}\n`);

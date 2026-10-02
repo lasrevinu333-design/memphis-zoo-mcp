@@ -1,0 +1,297 @@
+{
+  "schema": "custodial.schedule-component-weight-authority.v1",
+  "revision": 1,
+  "scope": "CURRENT_SELECTED_TEN_CLAUSE_COMPONENT_PACKAGES",
+  "componentWeightUnit": "dimensionless_owner_component_weight",
+  "inheritedEffortUnit": "dimensionless_production_workload_points",
+  "physicalDurationUnit": "NOT_ESTABLISHED",
+  "authority": {
+    "ownerDirective": "Eric direct August27 component exceptions and default1; later staffing/Admin changes retain weights",
+    "ownerDirectiveSha256": "58da4821337334ba23aa029504e5255a33962d5c66f40b9c28d925f1f40d2e1e",
+    "memberInventorySourceDigest": "ac98f94d0c28a9cd493898bef2463059ef59a80bfcac1f8d0a455ddf6901571a",
+    "memberInventoryPacketSha256": "c318fbe200e41eeffcf6b5a6bfc1f55014bed7d7e3d35ff2f6dd35859b3abcfd",
+    "historicalPayloadRewrite": false,
+    "pointsToMinutesConversion": false
+  },
+  "families": [
+    {
+      "requirementId": "SCH-028",
+      "code": "TETON",
+      "primaryLocationId": "e127dc20-98ea-4c21-9a8d-5274d29f8508",
+      "serviceMode": "scan_tracked",
+      "aggregateWeight": 4,
+      "components": [
+        {
+          "locationId": "e127dc20-98ea-4c21-9a8d-5274d29f8508",
+          "referenceName": "Teton",
+          "weight": 2,
+          "provenance": "August27 explicit component exception",
+          "bindingKind": "EXISTING_PHYSICAL_MEMBER"
+        },
+        {
+          "locationId": "a269e6f3-dbdc-481a-aa0b-fb3cdfde8606",
+          "referenceName": "Teton Men's Restroom",
+          "weight": 1,
+          "provenance": "August27 default1",
+          "bindingKind": "EXISTING_PHYSICAL_MEMBER"
+        },
+        {
+          "locationId": "7f890aeb-87df-4255-9116-9d465b4b5121",
+          "referenceName": "Teton Women's Restroom",
+          "weight": 1,
+          "provenance": "August27 default1",
+          "bindingKind": "EXISTING_PHYSICAL_MEMBER"
+        }
+      ]
+    },
+    {
+      "requirementId": "SCH-029",
+      "code": "ZAMBEZI",
+      "primaryLocationId": "ca8da3d2-57e0-40be-ae23-f06810ca835b",
+      "serviceMode": "scan_tracked",
+      "aggregateWeight": 4,
+      "components": [
+        {
+          "locationId": "ca8da3d2-57e0-40be-ae23-f06810ca835b",
+          "referenceName": "Zambezi",
+          "weight": 2,
+          "provenance": "August27 explicit component exception",
+          "bindingKind": "EXISTING_PHYSICAL_MEMBER"
+        },
+        {
+          "locationId": "1886dfe1-4ba4-47dc-8bb9-c2e26df0aa31",
+          "referenceName": "Zambezi Men's Restroom",
+          "weight": 1,
+          "provenance": "August27 default1",
+          "bindingKind": "EXISTING_PHYSICAL_MEMBER"
+        },
+        {
+          "locationId": "56a18f41-be6c-4bbe-a138-4a3df040b0a9",
+          "referenceName": "Zambezi Women's Restroom",
+          "weight": 1,
+          "provenance": "August27 default1",
+          "bindingKind": "EXISTING_PHYSICAL_MEMBER"
+        }
+      ]
+    },
+    {
+      "requirementId": "SCH-030",
+      "code": "CAT_COUNTRY",
+      "primaryLocationId": "6bab7a02-7053-4dc3-88b2-784b15e48d4a",
+      "serviceMode": "response_only_no_clean",
+      "aggregateWeight": 0.5,
+      "components": [
+        {
+          "locationId": "6bab7a02-7053-4dc3-88b2-784b15e48d4a",
+          "referenceName": "Cat Country",
+          "weight": 0.5,
+          "provenance": "August27 explicit component exception",
+          "bindingKind": "RESPONSE_ONLY_AREA"
+        }
+      ]
+    },
+    {
+      "requirementId": "SCH-031",
+      "code": "PRIMATE_CANYON",
+      "primaryLocationId": "0da4b781-f2d2-49c5-af9a-a81e607a85e2",
+      "serviceMode": "response_only_no_clean",
+      "aggregateWeight": 0.5,
+      "components": [
+        {
+          "locationId": "0da4b781-f2d2-49c5-af9a-a81e607a85e2",
+          "referenceName": "Primate Canyon",
+          "weight": 0.5,
+          "provenance": "August27 explicit component exception",
+          "bindingKind": "RESPONSE_ONLY_AREA"
+        }
+      ]
+    },
+    {
+      "requirementId": "SCH-032",
+      "code": "CHINA",
+      "primaryLocationId": "cde94274-5631-401d-9d57-812e6b47f5ee",
+      "serviceMode": "scan_tracked",
+      "aggregateWeight": 2,
+      "components": [
+        {
+          "locationId": "cde94274-5631-401d-9d57-812e6b47f5ee",
+          "referenceName": "China",
+          "weight": 1,
+          "provenance": "August27 default1",
+          "bindingKind": "EXISTING_PHYSICAL_MEMBER"
+        },
+        {
+          "locationId": "ae049ef7-66d8-4ab7-94e1-48189ab03ab0",
+          "referenceName": "China Men's Restroom",
+          "weight": 0.5,
+          "provenance": "August27 explicit component exception",
+          "bindingKind": "EXISTING_PHYSICAL_MEMBER"
+        },
+        {
+          "locationId": "efece506-df23-42f7-837e-7df4cd0bcb06",
+          "referenceName": "China Women's Restroom",
+          "weight": 0.5,
+          "provenance": "August27 explicit component exception",
+          "bindingKind": "EXISTING_PHYSICAL_MEMBER"
+        }
+      ]
+    },
+    {
+      "requirementId": "SCH-033",
+      "code": "EAST_ADMIN",
+      "primaryLocationId": "7fdde9c1-b334-4adc-ae3e-350ff9419b2b",
+      "serviceMode": "scan_tracked",
+      "aggregateWeight": 2,
+      "components": [
+        {
+          "locationId": "7fdde9c1-b334-4adc-ae3e-350ff9419b2b",
+          "referenceName": "East Admin Building",
+          "weight": 1,
+          "provenance": "August27 default1",
+          "bindingKind": "EXISTING_PHYSICAL_MEMBER"
+        },
+        {
+          "locationId": "181a8d59-3a98-4823-8ca4-b9ecd958d90e",
+          "referenceName": "East Admin Men's Restroom",
+          "weight": 0.5,
+          "provenance": "August27 explicit component exception",
+          "bindingKind": "EXISTING_PHYSICAL_MEMBER"
+        },
+        {
+          "locationId": "198be106-b98d-4604-b323-a0c8d5e4fd1a",
+          "referenceName": "East Admin Women's Restroom",
+          "weight": 0.5,
+          "provenance": "August27 explicit component exception",
+          "bindingKind": "EXISTING_PHYSICAL_MEMBER"
+        }
+      ]
+    },
+    {
+      "requirementId": "SCH-034",
+      "code": "WEST_ADMIN",
+      "primaryLocationId": "58418743-10d7-4d22-97f8-1a33d4a969d4",
+      "serviceMode": "scan_tracked",
+      "aggregateWeight": 4,
+      "components": [
+        {
+          "locationId": "58418743-10d7-4d22-97f8-1a33d4a969d4",
+          "referenceName": "West Admin Building",
+          "weight": 1,
+          "provenance": "August27 default1",
+          "bindingKind": "EXISTING_PHYSICAL_MEMBER"
+        },
+        {
+          "locationId": "12c90b1e-d53e-47b6-860e-823ae0fee1a8",
+          "referenceName": "West Admin Downstairs Men's Restroom",
+          "weight": 1,
+          "provenance": "August27 default1",
+          "bindingKind": "EXISTING_PHYSICAL_MEMBER"
+        },
+        {
+          "locationId": "c51107e4-2d66-487b-9765-09489e2f84c9",
+          "referenceName": "West Admin Downstairs Women's Restroom",
+          "weight": 1,
+          "provenance": "August27 default1",
+          "bindingKind": "EXISTING_PHYSICAL_MEMBER"
+        },
+        {
+          "locationId": "a8fa8f6b-6a90-4448-a125-ea1045fbe261",
+          "referenceName": "West Admin Upstairs Men's Restroom",
+          "weight": 0.5,
+          "provenance": "August27 explicit component exception",
+          "bindingKind": "EXISTING_PHYSICAL_MEMBER"
+        },
+        {
+          "locationId": "c33d6d08-95bb-40df-ad88-03482df6165d",
+          "referenceName": "West Admin Upstairs Women's Restroom",
+          "weight": 0.5,
+          "provenance": "August27 explicit component exception",
+          "bindingKind": "EXISTING_PHYSICAL_MEMBER"
+        }
+      ]
+    },
+    {
+      "requirementId": "SCH-035",
+      "code": "EVENT_CENTER",
+      "primaryLocationId": "a6ae6887-394a-42e2-b406-8d3c99395be6",
+      "serviceMode": "scan_tracked",
+      "aggregateWeight": 2,
+      "components": [
+        {
+          "locationId": "a6ae6887-394a-42e2-b406-8d3c99395be6",
+          "referenceName": "Event Center",
+          "weight": 1,
+          "provenance": "August27 default1",
+          "bindingKind": "EXISTING_PHYSICAL_MEMBER"
+        },
+        {
+          "locationId": "0ae9d4a9-1c0b-432d-aac1-2d9eb3fafa1e",
+          "referenceName": "Event Center Left Restroom",
+          "weight": 0.5,
+          "provenance": "August27 explicit component exception",
+          "bindingKind": "EXISTING_PHYSICAL_MEMBER"
+        },
+        {
+          "locationId": "4c54e3f9-de0b-4fe6-8116-2e32c0d3cc4d",
+          "referenceName": "Event Center Right Restroom",
+          "weight": 0.5,
+          "provenance": "August27 explicit component exception",
+          "bindingKind": "EXISTING_PHYSICAL_MEMBER"
+        }
+      ]
+    },
+    {
+      "requirementId": "SCH-036",
+      "code": "BREEZEWAY_RESTROOMS",
+      "primaryLocationId": "403edde1-f4c5-4c57-8d9d-b2c2703667f4",
+      "serviceMode": "scan_tracked",
+      "aggregateWeight": 1,
+      "components": [
+        {
+          "locationId": "403edde1-f4c5-4c57-8d9d-b2c2703667f4",
+          "referenceName": "Breezeway Men's Restroom",
+          "weight": 0.5,
+          "provenance": "August27 explicit component exception",
+          "bindingKind": "EXISTING_PHYSICAL_MEMBER"
+        },
+        {
+          "locationId": "2e728747-5681-4641-a22a-15922ab22845",
+          "referenceName": "Breezeway Women's Restroom",
+          "weight": 0.5,
+          "provenance": "August27 explicit component exception",
+          "bindingKind": "EXISTING_PHYSICAL_MEMBER"
+        }
+      ]
+    },
+    {
+      "requirementId": "SCH-037",
+      "code": "EXPO",
+      "primaryLocationId": "81c5cf06-3808-4da9-88d3-408ecc3d9afd",
+      "serviceMode": "scan_tracked",
+      "aggregateWeight": 3.5,
+      "components": [
+        {
+          "locationId": "81c5cf06-3808-4da9-88d3-408ecc3d9afd",
+          "referenceName": "Expo",
+          "weight": 1.5,
+          "provenance": "August27 explicit component exception",
+          "bindingKind": "EXISTING_PHYSICAL_MEMBER"
+        },
+        {
+          "locationId": "021b598d-dedf-4de8-8d91-df6d8617d826",
+          "referenceName": "Expo Men's Restroom",
+          "weight": 1,
+          "provenance": "August27 default1",
+          "bindingKind": "EXISTING_PHYSICAL_MEMBER"
+        },
+        {
+          "locationId": "9e4f0ebd-7a0d-462f-aa8f-3aca2da98f14",
+          "referenceName": "Expo Women's Restroom",
+          "weight": 1,
+          "provenance": "August27 default1",
+          "bindingKind": "EXISTING_PHYSICAL_MEMBER"
+        }
+      ]
+    }
+  ]
+}
