@@ -231,6 +231,23 @@ export function createStaticWeeklyControlPlaneRuntime({
   app.post("/static-weekly/drafts/initial", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.createInitialDraft({ manager: manager(req), sourceId: req.body?.source_id, effectiveStart: req.body?.effective_start, expectedRevision: req.body?.expected_revision, idempotencyKey: req.body?.idempotency_key })));
   app.post("/static-weekly/drafts/:versionId/refresh", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.refreshInitialDraft({ manager: manager(req), draftVersionId: req.params.versionId, sourceId: req.body?.source_id, effectiveStart: req.body?.effective_start, expectedDraftRevision: req.body?.expected_draft_revision, expectedRevision: req.body?.expected_revision, idempotencyKey: req.body?.idempotency_key })));
   app.post("/static-weekly/drafts/replacement", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.createReplacementDraft({ manager: manager(req), sourcePublicationId: req.body?.source_publication_id, effectiveStart: req.body?.effective_start, expectedRevision: req.body?.expected_revision, idempotencyKey: req.body?.idempotency_key })));
+  function exactPlaceBody(body, keys) {
+    if (!body || typeof body!=="object" || Array.isArray(body) || Object.keys(body).length!==keys.length
+      || keys.some(key=>!Object.hasOwn(body,key))) throw fail("place_publication_request_invalid",
+      "Place adoption accepts only selected original identities and exact preview/operation inputs; no client schedule or manager identity.");
+    return body;
+  }
+  app.post("/static-weekly/places/preview", requireManagerWrite, namedManager, respond(req => {
+    const b=exactPlaceBody(req.body,["source_publication_id","effective_start","expected_revision","selection","reason"]);
+    return authorityControlPlane.previewPlaceRepublish({manager:manager(req),sourcePublicationId:b.source_publication_id,
+      effectiveStart:b.effective_start,expectedRevision:b.expected_revision,selection:b.selection,reason:b.reason});
+  }));
+  app.post("/static-weekly/places/confirm", requireManagerWrite, namedManager, respond(req => {
+    const b=exactPlaceBody(req.body,["operation_id","preview_id"]);
+    return authorityControlPlane.confirmPlaceRepublish({manager:manager(req),operationId:b.operation_id,previewId:b.preview_id});
+  }));
+  app.get("/static-weekly/places/operations/:operationId", requireManagerWrite, namedManager, respond(req =>
+    authorityControlPlane.getPlaceRepublishStatus({manager:manager(req),operationId:req.params.operationId})));
   app.post("/static-weekly/drafts/:versionId/publish", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.publishDraft({ manager: manager(req), draftVersionId: req.params.versionId, expectedDraftRevision: req.body?.expected_draft_revision, expectedRevision: req.body?.expected_revision, idempotencyKey: req.body?.idempotency_key, projectionWeekStart: req.body?.week_start, publicationKind: req.body?.publication_kind || "publish", rollbackOfVersionId: req.body?.rollback_of_version_id || null })));
   app.post("/static-weekly/exceptions", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.applyException({ manager: manager(req), exceptionType: req.body?.exception_type, serviceDate: req.body?.service_date, startsAt: req.body?.starts_at || null, endsAt: req.body?.ends_at || null, baseVersionId: req.body?.base_version_id, publicationId: req.body?.publication_id, reason: req.body?.reason, payload: req.body?.payload, expectedRevision: req.body?.expected_revision, idempotencyKey: req.body?.idempotency_key, projectionWeekStart: req.body?.week_start, reversesExceptionId: req.body?.reverses_exception_id || null })));
   app.post("/static-weekly/contractor-capacity", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.applyContractorCapacity({ manager: manager(req), serviceDate: req.body?.service_date, baseVersionId: req.body?.base_version_id, publicationId: req.body?.publication_id, slotId: req.body?.slot_id, shift: req.body?.shift, lunch: req.body?.lunch, reason: req.body?.reason, expectedRevision: req.body?.expected_revision, idempotencyKey: req.body?.idempotency_key, projectionWeekStart: req.body?.week_start })));

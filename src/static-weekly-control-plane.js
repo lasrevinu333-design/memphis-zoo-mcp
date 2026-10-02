@@ -22,6 +22,7 @@ import { createStaffingWeekPreviewInput } from "./static-weekly-staffing-preview
 import { assertRecurringManagerDecision, assertRecurringAdmissionCandidate } from "./static-weekly-recurring-preview.js";
 import { recurringPatternAuthority, assertRecurringRepairCandidate } from "./static-weekly-recurring-repair-basis.js";
 import { withRecurringDependencyStatus } from "./static-weekly-recurring-dependency-result.js";
+import { placePublicationInput, placePublicationSummary } from "./place-operational-adapter.js";
 import { canonicalJson } from "./static-weekly-schedule-model.js";
 import { postgresJsonbContentDigest } from "./static-weekly-schedule-compiler.js";
 import {
@@ -1058,6 +1059,47 @@ export function createStaticWeeklyControlPlane({
         const lunch=await call(client,"static_weekly_v8_read_lunch_document",[date]);
         return createCoverAllPrintDocument({snapshot,source,lunch,serviceDate:date,expectedRevision:revision,projectionId:text(projectionId)});
       });
+    },
+    async previewPlaceRepublish({ manager, sourcePublicationId, effectiveStart, expectedRevision, selection, reason }) {
+      const actor = requireManager(manager);
+      const date = requireMonday(effectiveStart, "effective start");
+      const preview = await transaction(client => call(client, "custodial_place_operational_preview", [
+        actor.managerId, requirePublicationId(sourcePublicationId), date, requireRevision(expectedRevision),
+        JSON.stringify(selection), text(reason),
+      ]));
+      // The selected source is server-derived, never an HTTP compiler document.
+      // Preparation does not reserve/publish or run recurring staffing repair.
+      await prepareDraft(placePublicationInput(preview), {expectedRevision: preview.expected_revision,
+        actor:{...actor,idempotencyKey:`place-preview:${preview.preview_id}`}});
+      return {...placePublicationSummary(preview), expires_at:preview.expires_at, compiler_verified:true};
+    },
+    async confirmPlaceRepublish({ manager, operationId, previewId }) {
+      const actor = requireManager(manager);
+      const operation = requireUuid(operationId, "place_operation_id_required");
+      const preview = requireUuid(previewId, "place_preview_id_required");
+      return transaction(async client => {
+        await lockStaticWeeklyAuthority(client);
+        const prepared = await call(client, "custodial_place_operational_begin", [actor.managerId, operation, preview]);
+        // Complete original receipt wins before mutable expiry/source checks.
+        if (prepared?.replayed === true) return {...prepared.receipt,replayed:true};
+        const draft = await prepareInsideTransaction(client, () => prepareDraft(placePublicationInput(prepared), {
+          expectedRevision: prepared.expected_revision, actor:{...actor,idempotencyKey:`place:${operation}:draft`},
+        }));
+        const created = await call(client, "static_weekly_v3_create_draft", [draft.effectiveStart,draft.objectiveVersion,
+          draft.objective,draft.inputProvenance,draft.document,draft.expectedRevision,actor.managerId,draft.idempotencyKey,prepared.source_id]);
+        const publication = await call(client, "static_weekly_v3_publish_draft", [created.data.version_id,1,
+          created.revision,actor.managerId,`place:${operation}:publish`,"supersede",null]);
+        const publicationId = requirePublicationId(publication.data.publication_id);
+        const projection = await materializeCurrentProjection(client, {actor,publicationId,weekStart:prepared.effective_start,
+          expectedRevision:publication.revision,idempotencyKey:`place:${operation}:projection:${prepared.effective_start}`});
+        return call(client,"custodial_place_operational_finalize",[actor.managerId,operation,publicationId,projection.data.projection_id]);
+      });
+    },
+    async getPlaceRepublishStatus({ manager, operationId }) {
+      const actor = requireManager(manager);
+      return transaction(client => call(client,"custodial_place_operational_status",[
+        actor.managerId,requireUuid(operationId,"place_operation_id_required"),
+      ]));
     },
     async createReplacementDraft({ manager, sourcePublicationId, effectiveStart, expectedRevision, idempotencyKey }) {
       const actor = requireManager(manager); const date = requireDate(effectiveStart, "effective start");
