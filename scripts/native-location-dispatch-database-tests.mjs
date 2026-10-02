@@ -44,7 +44,13 @@ try{
  const manager=randomUUID(),device=randomUUID(),credential=randomUUID();
  const env={NODE_ENV:'test',DEVICE_CREDENTIAL_SECRET:'synthetic-location-inventory-fixture-root-long-enough'};
  const secret='syntheticInventoryNativeSecret-abcdefghijklmnopqrstuvwxyz1234567890',credentialHash=deviceCredentialInternals.tokenHash(secret,env);
- const serviceDate='2026-10-02',at=serviceDate+'T15:00:00.123456Z',week=eventAuthorityWeekStart(serviceDate);
+ // Registration samples the real database clock; every synthetic dispatch
+ // instant must remain after that immutable activation, even on later CI days.
+ const today=new Date(),daysUntilFriday=(5-today.getUTCDay()+7)%7||7;
+ const serviceDate=new Date(Date.UTC(today.getUTCFullYear(),today.getUTCMonth(),today.getUTCDate()+daysUntilFriday))
+  .toISOString().slice(0,10);
+ const onDate=time=>serviceDate+'T'+time+'Z';
+ const at=onDate('15:00:00.123456'),week=eventAuthorityWeekStart(serviceDate);
  const {source,slots,places}=nativeLocationAuthoritySource(week,5);
  const extraPlaces=Array.from({length:8},(_,i)=>({id:randomUUID(),group:randomUUID(),code:'PROVIDER_X'+i,name:'Synthetic inventory location '+i}));
  for(const [i,place] of extraPlaces.entries())places['X'+i]=place;
@@ -75,13 +81,15 @@ try{
  const body={schema:'custodial.native-provider-register.v1',operation_id:randomUUID(),generation_id:randomUUID(),credential_id:credential,employee_id:employee,device_id:'KIOSK_08',assignment_epoch:1,principal_digest:principalDigest,token_digest:hash(token),token,
   native_app:{package_name:'org.memphiszoo.custodial',version_name:'synthetic',version_code:53,build_id:'synthetic.custodial.df36d32368b6'}};
  const registered=JSON.parse(sql(`set role service_role;select public.custodial_native_provider_registration(${q(credential)},${q(credentialHash)},${q(randomUUID())},repeat('b',64),${j(body)},false);`));
+ check('synthetic activation precedes fixed dispatch instant',sql(`select (activated_at<${q(at)}::timestamptz)::text
+  from public.employee_native_push_generations where generation_id=${q(body.generation_id)}`),'true');
  const expected={assignment_epoch:'1',credential_id:credential,device_id:'KIOSK_08',employee_id:employee,generation_id:body.generation_id,principal_digest:body.principal_digest,registration_id:registered.registration_id,token_digest:body.token_digest};
  sql(`set role service_role;select public.mz_enqueue_employee_location_pushes(${q(at)});`);
  const job=JSON.parse(sql(`select to_jsonb(j) from public.operational_notification_jobs j where payload_json->>'credential_id'=${q(credential)} and source_id=${q(location)};`)),lease=randomUUID();
  assert.ok(job?.job_id);sql(`update public.operational_notification_jobs set status='leased',lease_token=${q(lease)},leased_until=${q(at)}::timestamptz+interval '1 hour' where job_id=${q(job.job_id)};`);
  const claimed={...job,lease_token:lease};
 
- const later='2026-10-02T15:00:04.123456Z',admissionAt='2026-10-02T15:00:00.123457Z',requests=[];let prepares=0,lastPermit=null;
+ const later=onDate('15:00:04.123456'),admissionAt=onDate('15:00:00.123457'),requests=[];let prepares=0,lastPermit=null;
  const defaultFetch=async(url,options)=>{requests.push({url,options,body:JSON.parse(options.body)});return new Response(JSON.stringify({name:'projects/synthetic-project/messages/exact-original'}));};
  const runtime=(fetchImpl=defaultFetch)=>({prepareNativeLocationSender:async()=>{prepares++;return prepareNativeLocationDataSender({projectId:'synthetic-project',accessToken:'synthetic-oauth-not-a-real-secret',fetchImpl});}});
  const dbFor=({lostPrepare=false,lostOutcome=false,failOutcome=false,beforePrepare=null}={})=>({rpc:async(name,args)=>{
@@ -170,11 +178,15 @@ try{
 
  // Exact admitted original observations project ACK only, inside receipt txn.
  const recordId=hash(payload.generation_id+'\n'+payload.receipt_job_id+'\n'+payload.notification_key);
- const event=(action,change={})=>({schema:'custodial.native-provider-event.v1',event_id:randomUUID(),record_id:recordId,action,
+ const observation=(instant,elapsed)=>({earliest_at:instant,latest_at:instant,
+  clock_profile_id:'SYNTHETIC_ONLY_PC01',elapsed_realtime_ms:elapsed,boot_count:1});
+ const event=(action,change={})=>({schema:'custodial.native-provider-event.v2',event_id:randomUUID(),record_id:recordId,action,
   ...Object.fromEntries(['generation_id','content_sha256','receipt_job_id','notification_key','receipt_credential_id','receipt_employee_id','receipt_device_id','principal_digest','token_digest'].map(k=>[k,payload[k]])),
-  receipt_assignment_epoch:1,admitted_at:'2026-10-02T15:00:02.123456Z',original_observation:{authenticated_at:action==='received'?'2026-10-02T15:00:01.123456Z':'2026-10-02T15:00:03.123456Z',elapsed_realtime_ms:action==='received'?100:200,boot_count:1},...change});
+  receipt_assignment_epoch:1,admission_bounds:observation(onDate('15:00:02.123456'),100),
+  original_observation:observation(action==='received'?onDate('15:00:01.123456'):onDate('15:00:03.123456'),
+   action==='received'?90:200),...change});
  const received=event('received'),opened=event('opened'),ack=event('acknowledged');
- const batch=events=>({schema:'custodial.native-provider-events.v1',events});
+ const batch=events=>({schema:'custodial.native-provider-events.v2',events});
  const receiptQuery=(events,time=later)=>'select public.custodial_native_provider_events_at('+[q(credential),q(credentialHash),q(randomUUID()),q('b'.repeat(64)),j(batch(events)),q(time)].join(',')+')';
  const submit=(events,time=later)=>JSON.parse(sql(receiptQuery(events,time)));
  check('before ACK current reservation remains live',sql('select public.custodial_native_location_live('+[q(job.job_id),j(payload),q(later)].join(',')+')'),'t');
@@ -189,7 +201,7 @@ try{
  check('ACK uses server receipt instant not claimed client wall time',sql('select public.custodial_native_location_utc(acknowledged_at) from public.device_notification_acknowledgements'),later);
  check('exact legacy suppression reader now sees ACK',sql('select public.custodial_native_location_live('+[q(job.job_id),j(payload),q(later)].join(',')+')'),'f');
  const projectionBefore=sql('select md5(jsonb_agg(to_jsonb(a) order by event_id)::text) from public.employee_native_location_ack_projections a');
- check('after-expiry ACK replay keeps original observation',submit([ack],'2026-10-02T16:00:00.123456Z').data.results[0].server_received_at,later);
+ check('after-expiry ACK replay keeps original observation',submit([ack],onDate('16:00:00.123456')).data.results[0].server_received_at,later);
  check('projection immutable on replay',sql('select md5(jsonb_agg(to_jsonb(a) order by event_id)::text) from public.employee_native_location_ack_projections a'),projectionBefore);
  check('legacy record byte-preserved on replay',JSON.parse(sql('select to_jsonb(a) from public.device_notification_acknowledgements a')),legacy);
  check('ACK never resets verified cleaning baseline',sql('select md5(jsonb_agg(to_jsonb(s) order by id)::text) from public.sessions s'),cleaningBefore);
@@ -200,7 +212,7 @@ try{
  const cr=ce('received'),ca=ce('acknowledged');
  reject('ACK collision aborts entire receipt transaction','begin;insert into public.device_notification_acknowledgements(device_identifier,notification_key,notification_type,credential_id,assignment_epoch,employee_id,notification_job_id) values('+[q('KIOSK_08'),q(collision.notification_key),q('location_status'),q(credential),'1',q(other),q(job.job_id)].join(',')+');'+receiptQuery([cr,ca])+';rollback;',/legacy ACK original actor\/job conflict/);
  check('failed ACK transaction did not retire receipt',sql('select count(*) from public.employee_native_provider_events where event_id in ('+q(cr.event_id)+','+q(ca.event_id)+')'),'0');
- const successorTime='2026-10-02T15:05:00.123457Z';
+ const successorTime=onDate('15:05:00.123457');
  sql('set role service_role;select public.mz_enqueue_employee_location_pushes('+q(successorTime)+')');
  const successor=JSON.parse(sql('select to_jsonb(j) from public.operational_notification_jobs j where source_id='+q(location)+' and job_id<>'+q(job.job_id)+" and payload_json->>'credential_id'="+q(credential)));
  const successorLease=randomUUID();sql("update public.operational_notification_jobs set status='leased',lease_token="+q(successorLease)+',leased_until='+q(successorTime)+"::timestamptz+interval '1 hour' where job_id="+q(successor.job_id));
@@ -211,7 +223,7 @@ try{
  const successorPayload=successorReplies.find(v=>v.dispatch_authorized).reservation.payload;
  check('next five-minute cadence uses distinct original key',successorPayload.notification_key!==payload.notification_key,true);
  check('old ACK cannot suppress actual next canonical episode',sql('select public.custodial_native_location_live('+[q(successor.job_id),j(successorPayload),q(successorTime)].join(',')+')'),'t');
- const retired="update public.employee_native_push_generations set dispatch_retired_at='2026-10-02T15:00:01.123456Z' where generation_id="+q(body.generation_id);
+ const retired="update public.employee_native_push_generations set dispatch_retired_at="+q(onDate('15:00:01.123456'))+" where generation_id="+q(body.generation_id);
  check('retired same-principal original outcome remains readable',JSON.parse(sql('begin;'+retired+';select public.custodial_native_location_dispatch_status('+q(job.job_id)+');rollback;')).binding,binding);
  check('retired same-principal ACK replay remains original',JSON.parse(sql('begin;'+retired+';'+receiptQuery([ack])+';rollback;')).data.results[0].replayed,true);
 

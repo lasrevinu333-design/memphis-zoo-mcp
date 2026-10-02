@@ -1,6 +1,7 @@
 import {createHash} from 'node:crypto';
 import {isDeepStrictEqual} from 'node:util';
 import {canonicalNativeLocation,NATIVE_LOCATION_PAYLOAD_KEYS,validateNativeLocationRecipient,validateNativeLocationReservation} from './native-location-reservation.js';
+import {NATIVE_LUNCH_SCHEMA,validateNativeLunchPayload} from './native-lunch-reservation.js';
 
 const uuid=/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/,sha=/^[0-9a-f]{64}$/;
 const exact=(v,fields)=>v&&Object.getPrototypeOf(v)===Object.prototype&&isDeepStrictEqual(Object.keys(v).sort(),[...fields].sort());
@@ -86,9 +87,14 @@ export function validateNativeLocationInventoryResponse(value,request){
  if(d.ceiling&&d.ceiling.reservation_at>d.server_now)fail();let last=q.cursor;
  for(const row of d.rows){
   if(!exact(row,['payload','provider_outcome'])||!['prepared','delivery_outcome_unknown','provider_accepted'].includes(row.provider_outcome))fail();const p=row.payload;
-  if(!exact(p,NATIVE_LOCATION_PAYLOAD_KEYS)||Object.values(p).some(v=>typeof v!=='string')||p.schema!=='custodial.native-location-payload.v2'||!q.generation_ids.includes(p.generation_id)
-   ||p.principal_digest!==q.principal_digest||p.receipt_device_id!==q.device_id||p.receipt_credential_id!==q.credential_id||p.receipt_employee_id!==q.employee_id||p.receipt_assignment_epoch!==String(q.assignment_epoch)
+  if(p?.schema===NATIVE_LUNCH_SCHEMA){
+   try{validateNativeLunchPayload(p,{jobId:p.receipt_job_id,expected:{generation_id:p.generation_id,
+    principal_digest:q.principal_digest,credential_id:q.credential_id,employee_id:q.employee_id,
+    device_id:q.device_id,assignment_epoch:String(q.assignment_epoch)}})}catch{fail()}
+  }else if(!exact(p,NATIVE_LOCATION_PAYLOAD_KEYS)||Object.values(p).some(v=>typeof v!=='string')||p.schema!=='custodial.native-location-payload.v2'
    ||!sha.test(p.content_sha256)||digest(canonicalNativeLocation(p,{excludeHash:true}))!==p.content_sha256||Buffer.byteLength(canonicalNativeLocation(p))>3500)fail();
+  if(!q.generation_ids.includes(p.generation_id)||p.principal_digest!==q.principal_digest||p.receipt_device_id!==q.device_id
+   ||p.receipt_credential_id!==q.credential_id||p.receipt_employee_id!==q.employee_id||p.receipt_assignment_epoch!==String(q.assignment_epoch))fail();
   const now=tuple({reservation_at:p.reservation_at,job_id:p.receipt_job_id});timestamp(p.valid_until);
   if(now.reservation_at>d.server_now||p.valid_until<=d.server_now||!d.ceiling||compare(now,d.ceiling)>0||(last&&compare(now,last)<=0))fail();last=now;
  }

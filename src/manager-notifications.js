@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { makeOpsAccessMiddleware } from "./auth/shared-access-auth.js";
 import { prepareNativeLocationDataSender } from './native-location-dispatch.js';
+import { prepareNativeLunchDataSender } from './native-lunch-dispatch.js';
 
 const DEFAULT_TIME_ZONE = "America/Chicago";
 const DEFAULT_SWEEP_MS = 15_000;
@@ -399,7 +400,12 @@ export function createPushRuntime({ db, env }) {
     const token = await accessToken(PUSH_SCOPE);
     return prepareNativeLocationDataSender({ projectId: account.project_id, accessToken: token });
   }
-  return { configured: Boolean(account), projectId: account?.project_id || null, getClientConfig, send, sweep, prepareNativeLocationSender };
+  async function prepareNativeLunchSender() {
+    const token = await accessToken(PUSH_SCOPE);
+    return prepareNativeLunchDataSender({ projectId: account.project_id, accessToken: token });
+  }
+  return { configured: Boolean(account), projectId: account?.project_id || null, getClientConfig, send, sweep,
+    prepareNativeLocationSender, prepareNativeLunchSender };
 }
 
 export function installManagerNotificationRoutes(app, { env = process.env, supabase = null } = {}) {
