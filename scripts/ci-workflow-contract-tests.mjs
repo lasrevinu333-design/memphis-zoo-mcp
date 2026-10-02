@@ -371,13 +371,14 @@ console.log('Sanitation owning source gate PASS: ' + sanitationWiringMutationCou
 const eventCountSourceImports = ["await import('./event-count-cross-surface-contract-tests.mjs');",
   "await import('./manager-notification-history-tests.mjs');",
   "await import('./static-weekly-opening-coverage-report-ci-tests.mjs');",
-  "await import('./static-weekly-opening-coverage-preview-contract-tests.mjs');"];
+  "await import('./static-weekly-opening-coverage-preview-contract-tests.mjs');",
+  "await import('./static-weekly-policy-scope-ci-tests.mjs');"];
 function assertEventCountSourceWiring(workflow, sourceSuite) {
   assertCompletionRecoveryWiring(workflow, sourceSuite);
   const lines = sourceSuite.split('\n').map(line => line.trim())
     .filter(line => line && !line.startsWith('//'));
   for (const statement of eventCountSourceImports) assert.equal(lines.filter(line => line === statement).length, 1,
-    'the mandatory source stage must execute the Event count, manager history and opening-coverage contracts exactly once');
+    'the mandatory source stage must execute the Event count, manager history, opening-coverage and called policy-scope contracts exactly once');
 }
 assertEventCountSourceWiring(productionRepairGate, currentSystemSource);
 let eventCountWiringMutationCount = 0;
