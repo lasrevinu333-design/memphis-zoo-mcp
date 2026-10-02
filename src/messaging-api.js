@@ -104,6 +104,22 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       || /^00000000-0000-0000-0000-000000000000$/i.test(String(value || "").trim());
   }
 
+  function deletionReceiptInstant(value) {
+    if (typeof value !== "string") return null;
+    const parts = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,6}))?(Z|([+-])(\d{2}):(\d{2}))$/);
+    if (!parts) return null;
+    const [, yearText, monthText, dayText, hourText, minuteText, secondText, fraction = "", , , offsetHourText, offsetMinuteText] = parts;
+    const year = Number(yearText), month = Number(monthText), day = Number(dayText);
+    const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+    const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    if (year < 1 || month < 1 || month > 12 || day < 1 || day > days[month - 1]
+        || Number(hourText) > 23 || Number(minuteText) > 59 || Number(secondText) > 59
+        || (offsetHourText && (Number(offsetHourText) > 23 || Number(offsetMinuteText) > 59))) return null;
+    const milliseconds = Date.parse(fraction ? value.replace(`.${fraction}`, "") : value);
+    if (!Number.isFinite(milliseconds)) return null;
+    return BigInt(milliseconds) * 1000n + BigInt(fraction.padEnd(6, "0") || "0");
+  }
+
   function assertMessageBodyWithinLimit(body) {
     // Keep the HTTP boundary aligned with the RPC's trimmed message payload.
     // This runs before identity resolution too, because manager identity
@@ -1859,6 +1875,12 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       const deviceId = String(req.body?.device_id || req.body?.deviceId || "").trim();
       const claimedUserId = String(req.body?.user_id || req.body?.userId || "").trim();
       const viewer = await resolveViewerContext({ deviceId, managerSession: req.memphisAuth || null });
+      const authenticatedUserId = String(viewer.identity?.msg_user_id || "").trim();
+      if (!authenticatedUserId
+          || authenticatedUserId.toLowerCase() !== String(viewer.effectiveUserId || "").toLowerCase()) {
+        res.status(403).json({ ok: false, error: "An authenticated Messenger user is required for conversation removal." });
+        return;
+      }
       if (claimedUserId && claimedUserId !== viewer.effectiveUserId) {
         res.status(403).json({ ok: false, error: "Deletion user ID must match the authenticated viewer." });
         return;
@@ -1882,22 +1904,27 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       }
       const data = await runRpc("msg_delete_thread", {
         p_thread_id: threadId,
-        p_request_user_id: viewer.effectiveUserId,
+        p_request_user_id: authenticatedUserId,
         p_operation_id: operationId,
       });
-      const deleted = Array.isArray(data) ? data[0] : data;
-      if (!deleted
+      const deleted = Array.isArray(data) ? (data.length === 1 ? data[0] : null) : data;
+      const deletedAt = deletionReceiptInstant(deleted?.deleted_at);
+      const deletedThrough = deletionReceiptInstant(deleted?.deleted_through);
+      if (!deleted || typeof deleted !== "object"
+          || deleted.ok !== true
           || deleted.deleted !== true
-          || String(deleted.thread_id || "") !== threadId
+          || String(deleted.thread_id || "").toLowerCase() !== threadId.toLowerCase()
+          || String(deleted.operation_id || "").toLowerCase() !== operationId.toLowerCase()
+          || (Object.hasOwn(deleted, "user_id")
+            && String(deleted.user_id || "").toLowerCase() !== authenticatedUserId.toLowerCase())
           || deleted.deletion_scope !== "user"
-          || !deleted.deleted_at
-          || !deleted.deleted_through) {
-        res.status(502).json({ ok: false, error: "The database did not confirm user-scoped conversation removal." });
+          || deletedAt === null || deletedThrough === null || deletedThrough < deletedAt) {
+        res.status(502).json({ ok: false, error: "The database did not confirm this exact user-scoped conversation removal." });
         return;
       }
       res.status(200).json({
         ok: true,
-        data: deleted,
+        data: { ...deleted, user_id: authenticatedUserId },
         meta: messagingMeta({
           deletion: "current_user_only",
           authoritative: true,
