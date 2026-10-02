@@ -5,6 +5,7 @@ import { createMessagingRouter } from "../src/messaging-api.js";
 import { findLocationCode, hasLocationKeyword } from "../src/ai/memphis-ai-intent.js";
 import './memphis-authoritative-date-tests.mjs';
 import './memphis-event-read-tests.mjs';
+import './memphis-current-authority-route-tests.mjs';
 
 process.env.GEMINI_API_KEY = "";
 process.env.MEMPHIS_GEMINI_API_KEY = "";
@@ -163,6 +164,13 @@ for (const testCase of replyCases) {
 }
 
 const eventCenterThreadId = "00000000-0000-0000-0000-000000000002";
+const eventCenterPublicationId = "33333333-3333-4333-8333-333333333333";
+const eventCenterProjectionId = "44444444-4444-4444-8444-444444444444";
+const eventCenterEmployees = [
+  { employee_id: "55555555-5555-4555-8555-555555555555", employee_name: "Aquarium Keeper", working: true, shift_start: "07:00", shift_end: "15:00" },
+  { employee_id: "66666666-6666-4666-8666-666666666666", employee_name: "Karen Robinson", working: true, shift_start: "07:00", shift_end: "15:00" },
+  { employee_id: "77777777-7777-4777-8777-777777777777", employee_name: "Michael McWright", working: true, shift_start: "15:00", shift_end: "21:00" },
+];
 const eventCenterResponder = createMemphisResponder({
   runReadOnlySql: async (sql) => {
     const query = String(sql || "");
@@ -175,10 +183,13 @@ const eventCenterResponder = createMemphisResponder({
         { location_group_id: "22222222-2222-2222-2222-222222222222", group_name: "Event Center", group_code: "EC", aliases: ["event center", "ec"] },
       ];
     }
-    if (query.includes("from public.v_memphis_area_schedule")) {
-      const dateMatch = query.match(/service_date = '([^']+)'::date/);
+    if (query.includes("custodial_memphis_schedule_day")) {
+      return [{ data: { schema: "memphis.schedule-day.v1", status: "current", projection_status: "current",
+        publication_id: eventCenterPublicationId, projection_id: eventCenterProjectionId, rows: eventCenterEmployees } }];
+    }
+    if (query.includes("static_weekly_v6_schedule_authority_state")) {
+      const dateMatch = query.match(/static_weekly_v6_schedule_authority_state\('([^']+)'::date/);
       const serviceDate = dateMatch?.[1] || SERVICE_DATE;
-      const eventCenterOnly = query.includes("22222222-2222-2222-2222-222222222222") || query.includes("Event Center") || query.includes("EC");
       const rows = [
         { service_date: serviceDate, location_group_id: "11111111-1111-1111-1111-111111111111", employee_name: "Aquarium Keeper", group_name: "Aquarium", group_code: "AQU", coverage_start: "07:00:00", coverage_end: "15:00:00", segment_number: 1 },
         { service_date: serviceDate, location_group_id: "22222222-2222-2222-2222-222222222222", employee_name: "Karen Robinson", group_name: "Event Center", group_code: "EC", coverage_start: "07:00:00", coverage_end: "15:00:00", segment_number: 1 },
@@ -186,7 +197,10 @@ const eventCenterResponder = createMemphisResponder({
         { service_date: serviceDate, location_group_id: "22222222-2222-2222-2222-222222222222", employee_name: "Karen Robinson", group_name: "Event Center", group_code: "EC", coverage_start: "10:00:00", coverage_end: "12:00:00", segment_number: 3 },
         { service_date: serviceDate, location_group_id: "22222222-2222-2222-2222-222222222222", employee_name: "Michael McWright", group_name: "Event Center", group_code: "EC", coverage_start: "15:00:00", coverage_end: "21:00:00", segment_number: 4 },
       ];
-      return eventCenterOnly ? rows.filter((row) => row.group_name === "Event Center") : rows;
+      return [{ authority: { governed: true, projection_status: "current", publication_id: eventCenterPublicationId,
+        projection_id: eventCenterProjectionId }, assignments: rows.map(row => ({ ...row,
+          assigned_employee_id: eventCenterEmployees.find(employee => employee.employee_name === row.employee_name).employee_id,
+          assigned_employee_name: row.employee_name, owner_type: "EMPLOYEE", status: "ASSIGNED" })) }];
     }
     if (query.includes("from public.events_app_events")) return [];
     return [];
@@ -205,7 +219,8 @@ assert.ok(!eventCenterWeekly.text.includes("Aquarium Keeper"), "Event Center wee
 assert.equal((eventCenterWeekly.text.match(/Karen Robinson 07:00-15:00/g) || []).length, 7, "Event Center weekly answer should collapse exact duplicate person/time segments per day");
 assert.equal((eventCenterWeekly.text.match(/Karen Robinson 10:00-12:00/g) || []).length, 7, "Event Center weekly answer should preserve distinct time blocks for the same person");
 assert.ok(eventCenterWeekly.text.length <= 1900, `Event Center weekly answer should fit message body limits, got ${eventCenterWeekly.text.length}`);
-assert.match(eventCenterWeekly.text, /unless absence, PTO, or Coverall/i, "Event Center weekly answer should state normal schedule exception policy");
+assert.match(eventCenterWeekly.text, /Current published Event Center assignments for these dates/i, "Event Center weekly answer must identify the actual dated publication rather than a presumed baseline");
+assert.doesNotMatch(eventCenterWeekly.text, /normal weekly|unless absence|PTO/i, "Event Center weekly answer must not invent exceptions to the current published assignments");
 
 const eventCenterToday = await eventCenterResponder.generateReply({
   userMessage: "What custodians are assigned to event center today?",
