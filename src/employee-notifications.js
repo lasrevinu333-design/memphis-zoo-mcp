@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 import { makeDeviceCredentialMiddleware } from './auth/device-credential-auth.js';
+import { deliverNativeLocationJob } from './native-location-dispatch.js';
 
 const runtimeByApp = new WeakMap();
 const API_PREFIX = '/employee-notifications-api';
@@ -484,6 +485,10 @@ export function installEmployeeNotificationRoutes(app, {
   });
 
   async function deliverClaimedJob(job) {
+    if (job?.job_type === 'employee_native_push' && job.payload_json?.data_json?.kind === 'employee_location_status'
+      && !Object.hasOwn(job.payload_json.data_json, 'test_delivery')) {
+      return deliverNativeLocationJob({ db, pushRuntime, job });
+    }
     let registration = null;
     let eventInstance = null;
     let credential = null;
