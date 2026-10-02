@@ -614,8 +614,21 @@ export function createStaticWeeklyControlPlane({
     if (patternAuthority.publicationId !== publicationId) {
       throw fail("static_weekly_recurring_preview_revision_changed", "The recurring repair winner changed.");
     }
-    const fullNineSource = fullNineSourceId ? await registeredSourceFor(client, fullNineSourceId, date) : null;
-    return { snapshot, source, fullNineSource, recurringGeneration, patternAuthority };
+    // The historical split publication needs its exact registered base even
+    // when the manager is reducing current positions and did not supply an
+    // internal source ID. Fetch only the pinned source, under this authority
+    // lock. Keep the request's explicit ID separate for replay/preview binding.
+    const sourceRows = source?.compiler_input?.version?.assignments;
+    const registeredFullNineSourceId = fullNineSourceId
+      || (Array.isArray(sourceRows) && sourceRows.length === 313 ? APPROVED_FULL_NINE_SOURCE_ID : null);
+    const fullNineSource = registeredFullNineSourceId
+      ? await registeredSourceFor(client, registeredFullNineSourceId, date) : null;
+    if (registeredFullNineSourceId && fullNineSource?.source_id !== registeredFullNineSourceId) {
+      throw fail("static_weekly_recurring_full_source_not_approved",
+        "The exact registered nine-position source is unavailable or changed.");
+    }
+    return { snapshot, source, fullNineSource, requestedFullNineSourceId: fullNineSourceId || null,
+      recurringGeneration, patternAuthority };
   }
 
   function recurringPreparationInput(basis, date, revision) {
@@ -646,7 +659,8 @@ export function createStaticWeeklyControlPlane({
       assertRecurringManagerDecision(candidate);
       assertRecurringRepairCandidate(candidate, basis.patternAuthority);
       if (candidate.weekOptimizationScope === "HISTORICAL_FULL_NINE_STATIC_TEMPLATE_ONLY"
-        && basis.fullNineSource?.source_id !== APPROVED_FULL_NINE_SOURCE_ID) {
+        && (basis.requestedFullNineSourceId !== APPROVED_FULL_NINE_SOURCE_ID
+          || basis.fullNineSource?.source_id !== APPROVED_FULL_NINE_SOURCE_ID)) {
         throw new Error("Exact approved registered full-nine source required.");
       }
       if (candidate.weekOptimizationScope === "HISTORICAL_FULL_NINE_STATIC_TEMPLATE_ONLY"
@@ -665,6 +679,7 @@ export function createStaticWeeklyControlPlane({
   function recurringPreviewDigest(actor, basis, candidate) {
     return createHash("sha256").update(canonicalJson({
       managerId: actor.managerId, recurringGeneration: basis.recurringGeneration,
+      requestedFullNineSourceId: basis.requestedFullNineSourceId,
       splashSeasonWitness: requireSeasonWitness(basis.splashSeasonWitness), candidate,
     })).digest("hex");
   }

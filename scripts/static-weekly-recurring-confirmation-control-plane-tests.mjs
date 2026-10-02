@@ -9,11 +9,14 @@ import {contentDigest} from '../src/static-weekly-schedule-model.js';
 import {RECURRING_WEEK_COMMITMENT_SCHEMA,RECURRING_PHASE_SCOPE} from '../src/static-weekly-recurring-week-commitment.js';
 import {COMPONENT_WEIGHT_LEDGER_DIGEST} from '../src/schedule-component-weight-authority.js';
 import {createHash} from 'node:crypto';
+import {readFileSync} from 'node:fs';
 installStaticWeeklySha256HexAccelerator(x=>createHash('sha256').update(x).digest('hex'));
 
 // Transaction orchestration only. SQL, compiler, HTTP and physical proofs are
 // separately required; this mock never supplies release authority.
 const id=n=>`81000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
+const approvedFullNineSourceId=JSON.parse(readFileSync(new URL(
+ '../config/custodial-full-nine-family-owners-20260926.json',import.meta.url))).baseSourceId;
 const manager={manager_id:id(1),manager_display_name:'Second authorized synthetic manager',auth_mode:'trusted_device'};
 const week='2026-10-05',key=id(2),oldPublication=id(3),sourceId=id(4),newSourceId=id(5),publicationId=id(6),projectionId=id(7);
 // The former empty source was sufficient for transaction orchestration but
@@ -80,8 +83,11 @@ function candidateFor(basis){
  candidate.openingCoverageReport=structuredClone(reportCache.get(reportKey));
  return candidate;
 }
-function harness({failAt=null,mutatePrivate=null,commitUnknown=false}={}){
+function harness({failAt=null,mutatePrivate=null,commitUnknown=false,publishedAssignmentsCount=323,
+ forceStaticTemplateCandidate=false,registeredSourceId=approvedFullNineSourceId}={}){
  let state={revision:7,generation:2,publication:oldPublication,projection:null,receipt:null,writes:[]};
+ const publishedSource=structuredClone(raw);
+ publishedSource.version.assignments=publishedSource.version.assignments.slice(0,publishedAssignmentsCount);
  let backup,connections=0,checkedOut=0,privateCompiles=0,draftCompiles=0,projectionCompiles=0,beginRequest=null;
  const queries=[];let clientSerial=0;
  const database={async connect(){connections++;checkedOut++;assert.equal(checkedOut,1,'only ONE checked-out client');
@@ -105,7 +111,9 @@ function harness({failAt=null,mutatePrivate=null,commitUnknown=false}={}){
     current_publication:{publication_id:state.publication},projection_status:state.projection?'current':'missing',
     latest_projection:state.projection?{projection_id:state.projection}:null});
    if(sql.includes('static_weekly_v20_read_recurring_preview_basis'))return result({source_id:sourceId,
-    publication_id:oldPublication,authority_revision:state.revision,compiler_input:structuredClone(raw)});
+    publication_id:oldPublication,authority_revision:state.revision,compiler_input:structuredClone(publishedSource)});
+   if(sql.includes('static_weekly_v3_read_authority_source'))return result({source_id:registeredSourceId,
+    compiler_input:structuredClone(raw)});
    if(sql.includes('static_weekly_v3_read_publication_source'))return result({compiler_input:structuredClone(raw),exceptions:[]});
    if(sql.includes('static_weekly_v14_admit_recurring_source')){
     assert.equal(args[0],manager.manager_id);assert.equal(args[1],key);assert.deepEqual(args[2],raw);assert.equal(args[3],digest(raw));
@@ -143,7 +151,11 @@ function harness({failAt=null,mutatePrivate=null,commitUnknown=false}={}){
   },release(){checkedOut--;}};
  },async end(){assert.equal(checkedOut,0);}};
  const plane=createStaticWeeklyControlPlane({database,shutdownCompiler:async()=>{},
-  recurringCandidatePreparer:async basis=>candidateFor(basis),
+  recurringCandidatePreparer:async basis=>{
+   const result=candidateFor(basis);
+   if(forceStaticTemplateCandidate)result.weekOptimizationScope='HISTORICAL_FULL_NINE_STATIC_TEMPLATE_ONLY';
+   return result;
+  },
   recurringAdmissionPreparer:async basis=>{privateCompiles++;const reply={schema:'static-weekly.recurring-admission-candidate.v1',
    candidate:candidateFor(basis),canonicalSource:structuredClone(raw)};mutatePrivate?.(reply);return reply;},
   compilerPreparer:async(input,options)=>{
@@ -159,6 +171,33 @@ function harness({failAt=null,mutatePrivate=null,commitUnknown=false}={}){
 }
 let checks=0;
 const check=(label,actual,expected)=>{assert.deepEqual(actual,expected,label);checks++;};
+// CP source binding only: the injected candidate is deliberately a synthetic
+// orchestration fixture, not a proved split-source reduction. The real worker
+// independently validates the exact 313-row lineage and current roster.
+const source313=harness({publishedAssignmentsCount:313});
+const autoSourcePreview=await source313.plane.previewRecurringStaffing({manager,effectiveStart:week,expectedRevision:7});
+const authorityReads=source313.queries.filter(row=>row.sql.includes('static_weekly_v3_read_authority_source'));
+check('split publication privately fetches only pinned full source under lock',
+ authorityReads.map(row=>row.args),[[approvedFullNineSourceId,week]]);
+check('preview binds fetched exact registered source bytes',autoSourcePreview.fullNineSourceDigest,digest(raw));
+const explicitSourcePreview=await source313.plane.previewRecurringStaffing({manager,effectiveStart:week,
+ expectedRevision:7,fullNineSourceId:approvedFullNineSourceId});
+assert.notEqual(autoSourcePreview.previewDigest,explicitSourcePreview.previewDigest,
+ 'implicit pinned fetch and explicit manager request cannot share a confirmation digest');checks++;
+await assert.rejects(()=>source313.plane.previewRecurringStaffing({manager,effectiveStart:week,
+ expectedRevision:7,fullNineSourceId:id(99)}),error=>error.code==='static_weekly_recurring_full_source_not_approved');checks++;
+check('source-binding preview never writes',source313.state().writes,[]);
+await source313.plane.close();
+const missingPinned=harness({publishedAssignmentsCount:313,registeredSourceId:id(98)});
+await assert.rejects(()=>missingPinned.plane.previewRecurringStaffing({manager,effectiveStart:week,
+ expectedRevision:7}),error=>error.code==='static_weekly_recurring_full_source_not_approved');checks++;
+check('wrong registered-source readback never writes',missingPinned.state().writes,[]);
+await missingPinned.plane.close();
+const staticNoId=harness({publishedAssignmentsCount:313,forceStaticTemplateCandidate:true});
+await assert.rejects(()=>staticNoId.plane.previewRecurringStaffing({manager,effectiveStart:week,
+ expectedRevision:7}),error=>error.code==='static_weekly_recurring_preview_rejected');checks++;
+check('historical static-nine still requires explicit source request',staticNoId.state().writes,[]);
+await staticNoId.plane.close();
 const requestFor=async h=>{const preview=await h.plane.previewRecurringStaffing({manager,effectiveStart:week,expectedRevision:7});
  return{manager,effectiveStart:week,expectedRevision:7,confirmationKey:key,previewDigest:preview.previewDigest};};
 const h=harness(),request=await requestFor(h),before=h.connections(),start=h.queries.length;
