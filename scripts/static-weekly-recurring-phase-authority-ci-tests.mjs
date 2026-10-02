@@ -2,7 +2,14 @@
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
-import {runStaticWeeklyRecurringPhaseAuthorityTests} from './static-weekly-recurring-phase-authority-tests.mjs';
+import {runStaticWeeklyRecurringPhaseAuthorityTests,
+  runRecurringPrimitiveObjectiveTests, runRecurringIdentityRadixTests,
+} from './static-weekly-recurring-phase-authority-tests.mjs';
+
+// Exact algebraic units and complete identity-vector ordering are mandatory,
+// not implicitly covered by prior phase fixtures or guarded exports.
+assert.equal(runRecurringPrimitiveObjectiveTests(), 25);
+assert.equal(runRecurringIdentityRadixTests(), 17);
 
 const receipt = runStaticWeeklyRecurringPhaseAuthorityTests();
 assert.equal(receipt.status, 'PASS');
