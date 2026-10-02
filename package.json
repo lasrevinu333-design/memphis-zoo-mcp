@@ -15,6 +15,7 @@
     "preflight:static-weekly-source": "node scripts/static-weekly-schedule-candidate-importer.mjs",
     "smoke": "node scripts/smoke.mjs",
     "test:events-parser": "node scripts/events-parser-tests.mjs",
+    "test:events-chicago-time": "node scripts/events-chicago-time-tests.mjs",
     "test:events-api": "node scripts/events-api-contract-tests.mjs",
     "test:event-integrity": "node scripts/event-notification-retention-contract-tests.mjs",
     "test:event-integrity-db": "node scripts/event-notification-retention-database-tests.mjs",

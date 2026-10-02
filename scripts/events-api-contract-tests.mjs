@@ -24,11 +24,12 @@ assert.match(outlookAuthorityMigration, /revoke all privileges[\s\S]*public, ano
 assert.match(outlookAuthorityMigration, /grant delete, insert, maintain, references, select, trigger, truncate, update[\s\S]*to service_role/i);
 assert.doesNotMatch(outlookAuthorityMigration, /grant[\s\S]*to (?:public|anon|authenticated|custodial_application_reader)/i);
 
-function buildApp({ writeCalls = [], readCalls = [], writeResults = {}, writeError = null, eventRows = [], runEventImpactPreview = null } = {}) {
+function buildApp({ writeCalls = [], readCalls = [], writeResults = {}, writeError = null, eventRows = [], runEventImpactPreview = null, runEventReplacement = null } = {}) {
   const app = express();
   app.use(express.json());
   app.use("/admin-api/events", createEventsAdminRouter({
     runEventImpactPreview,
+    runEventReplacement,
     runReadOnlySql: async (sql) => {
       readCalls.push(String(sql || ""));
       if (/from public\.event_venues/i.test(sql)) {
@@ -239,6 +240,16 @@ const employeeEventRows = [{
   notes: "Private VIP itinerary and staffing detail.",
   custodial_public_notes: "Use the service entrance after 8:30 AM.",
 }, {
+  id: "80000000-0000-4000-8000-000000000004",
+  event_name: "Superseded Event",
+  event_date: "2026-11-01", end_date: "2026-11-01",
+  start_time: "01:30:00", end_time: "01:45:00",
+  start_instant_utc: "2026-11-01T06:30:00.000Z",
+  end_instant_utc: "2026-11-01T07:45:00.000Z",
+  superseded_by_event_id: "80000000-0000-4000-8000-000000000003",
+  status: "SUPERSEDED", event_timezone: "America/Chicago",
+  notes: "Private manager source details", custodial_public_notes: "Use trash boxes.",
+}, {
   id: "80000000-0000-4000-8000-000000000003",
   event_name: "Missing Count Event",
   event_title: "Missing Count Event",
@@ -255,7 +266,8 @@ const employeeEventRows = [{
   notes: null,
 }];
 
-await withServer(buildEmployeeApp(employeeEventRows), async (baseUrl) => {
+const employeeEventReadCalls = [];
+await withServer(buildEmployeeApp(employeeEventRows, employeeEventReadCalls), async (baseUrl) => {
   const denied = await fetch(`${baseUrl}/employee-events-api`);
   assert.equal(denied.status, 401, "Employee Events must reject a request without enrolled-phone authority");
 
@@ -271,7 +283,10 @@ await withServer(buildEmployeeApp(employeeEventRows), async (baseUrl) => {
   assert.equal(payload.data[0].custodial_public_notes, "Use the service entrance after 8:30 AM.");
   assert.equal(payload.data[0].attendee_count, 0, "known zero must remain distinct from a missing expected attendee count");
   assert.equal(payload.data[0].status, "CANCELLED", "future cancelled events must remain visible to employees");
-  assert.equal(payload.data[1].attendee_count, null, "missing expected attendee count must remain null");
+  assert.equal(payload.data[1].status, "SUPERSEDED", "employee feed must distinguish a superseded original");
+  assert.equal(payload.data[1].superseded_by_event_id, "80000000-0000-4000-8000-000000000003");
+  assert.equal(payload.data[1].start_instant_utc, "2026-11-01T06:30:00.000Z");
+  assert.equal(payload.data[2].attendee_count, null, "missing expected attendee count must remain null");
   assert.equal(allowed.headers.get("cache-control"), "private, no-store");
   assert.equal(payload.meta.canonical_device_id, "KIOSK_08");
   assert.equal(payload.meta.employee_id, "employee-karen");
@@ -283,6 +298,8 @@ await withServer(buildEmployeeApp(employeeEventRows), async (baseUrl) => {
     "coverage_location_ids", "staffing_area_ids", "source_location_text",
   ]) assert.equal(privateField in payload.data[0], false, `employee event leaked manager-only field ${privateField}`);
 });
+assert.match(employeeEventReadCalls.join("\n"), /'SCHEDULED', 'CANCELLED', 'SUPERSEDED'/,
+  "employee event reader must include visibly superseded future originals");
 
 await withServer(buildApp(), async (baseUrl) => {
   const response = await fetch(`${baseUrl}/admin-api/events/parse-test`, {
@@ -905,5 +922,48 @@ assert.deepEqual(scanAlertCalls[0], {
 }, "scan alert authority should receive the complete bounded alert policy");
 assert.equal(rpcCalls.some((call) => call.name === "sch_queue_due_scan_alerts"), false,
   "the generic service-role RPC path must not call the legacy invoker alert function directly");
+
+const replacementCalls = [];
+const replacementSourceId = "80000000-0000-4000-8000-000000000099";
+const replacementOperationId = "80000000-0000-4000-8000-000000000098";
+const replacementCandidate = { ...impactCandidate, event_date: "2026-11-01", end_date: "2026-11-01",
+  start_time: "01:30", end_time: "01:45", start_instant_utc: "2026-11-01T06:30:00.000Z",
+  end_instant_utc: "2026-11-01T07:45:00.000Z", operation_id: replacementOperationId,
+  expected_revision: 4 };
+await withServer(buildApp({ runEventReplacement: async (args) => {
+  replacementCalls.push(args);
+  return { old_event: { id: replacementSourceId, status: "SUPERSEDED", revision: 5 },
+    replacement_event: { id: "80000000-0000-4000-8000-000000000097", status: "SCHEDULED" }, replayed: false };
+} }), async (baseUrl) => {
+  const route = `${baseUrl}/admin-api/events/${replacementSourceId}/replace`;
+  const ambiguous = await fetch(route, { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...replacementCandidate, start_instant_utc: null }) });
+  assert.equal(ambiguous.status, 422);
+  const ambiguity = await ambiguous.json();
+  assert.equal(ambiguity.code, "AMBIGUOUS_EVENT_TIME");
+  assert.equal(ambiguity.details.choices.start.length, 2);
+  const gap = await fetch(route, { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...replacementCandidate, event_date: "2026-03-08", end_date: "2026-03-08",
+      start_time: "02:30", end_time: "03:30", start_instant_utc: null, end_instant_utc: null }) });
+  assert.equal(gap.status, 422);
+  assert.equal((await gap.json()).code, "NONEXISTENT_EVENT_TIME");
+  const response = await fetch(route, { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(replacementCandidate) });
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).data.old_event.status, "SUPERSEDED");
+  assert.equal(replacementCalls.length, 1, "invalid or ambiguous input may not reach the writer");
+  assert.equal(replacementCalls[0].p_event_id, replacementSourceId);
+  assert.equal(replacementCalls[0].p_expected_revision, 4);
+  assert.equal(replacementCalls[0].p_manager_id, TEST_MANAGER_ID);
+  assert.equal(replacementCalls[0].p_record.start_instant_utc, "2026-11-01T06:30:00.000Z");
+  assert.equal(replacementCalls[0].p_record.end_instant_utc, "2026-11-01T07:45:00.000Z");
+});
+await withServer(buildApp({ runEventReplacement: async () => { throw Object.assign(
+  new Error("Event changed since this preview."), { code: "40901" }); } }), async (baseUrl) => {
+  const response = await fetch(`${baseUrl}/admin-api/events/${replacementSourceId}/replace`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(replacementCandidate),
+  });
+  assert.equal(response.status, 409, "stale replacement must preserve exact SQLSTATE conflict");
+});
 
 console.log("events api contract tests passed");

@@ -1,6 +1,7 @@
 import express from "express";
 import { createClient } from "@supabase/supabase-js";
 import { aiParseEventTexts } from "./events-ai-parser.js";
+import { resolveChicagoEventInterval } from "./events-time.js";
 
 const EVENTS_SUPABASE_CLIENT =
   process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -24,7 +25,12 @@ const SCAN_ALERT_COOLDOWN_MINUTES = 30;
 const SCAN_ALERT_MANAGER_ESCALATION_GRACE_MINUTES = 30;
 
 function fail(res, error, fallback = "Events request failed", statusCode = 400) {
-  res.status(statusCode).json({ ok: false, error: error?.message || fallback });
+  const response = { ok: false, error: error?.message || fallback };
+  if (["AMBIGUOUS_EVENT_TIME", "NONEXISTENT_EVENT_TIME", "INVALID_EVENT_INSTANT", "INVALID_EVENT_INTERVAL"].includes(error?.code)) {
+    response.code = error.code;
+    response.details = error.details || null;
+  }
+  res.status(error?.status || statusCode).json(response);
 }
 
 function sqlLiteral(value) {
@@ -390,11 +396,18 @@ function normalizeEventPayload(payload = {}, referenceData = {}) {
 
   if (!eventName) throw new Error("event_name is required.");
   if (!isIsoDate(eventDate)) throw new Error("event_date must be YYYY-MM-DD.");
-  if (endTime === startTime) throw new Error("end_time must differ from start_time.");
+  const explicitEndDate = String(payload.end_date || "").trim();
   if (operationId && !isUuid(operationId)) throw new Error("operation_id must be a valid UUID when supplied.");
 
-  const spansOvernight = endTime < startTime;
-  const endDate = spansOvernight ? addDaysToIsoDate(eventDate, 1) : eventDate;
+  if (explicitEndDate && !isIsoDate(explicitEndDate)) throw new Error("end_date must be YYYY-MM-DD when supplied.");
+  const endDate = explicitEndDate || (endTime < startTime ? addDaysToIsoDate(eventDate, 1) : eventDate);
+  if (endDate < eventDate || endDate > addDaysToIsoDate(eventDate, 1)) {
+    throw new Error("Event end date must be the event date or the next day.");
+  }
+  const interpretation = resolveChicagoEventInterval({ event_date: eventDate, end_date: endDate,
+    start_time: startTime, end_time: endTime,
+    start_instant_utc: payload.start_instant_utc, end_instant_utc: payload.end_instant_utc });
+  const spansOvernight = endDate > eventDate;
 
   return {
     event_name: eventName,
@@ -404,6 +417,8 @@ function normalizeEventPayload(payload = {}, referenceData = {}) {
     end_date: endDate,
     start_time: startTime,
     end_time: endTime,
+    start_instant_utc: interpretation.start.instant_utc,
+    end_instant_utc: interpretation.end.instant_utc,
     attendee_count: attendeeCount,
     notes,
     custodial_note_codes: custodialNoteCodes,
@@ -433,7 +448,7 @@ async function listEmployeeEvents(runReadOnlySql, { windowDays = 30, limit = 80 
   const days = boundedWholeNumber(windowDays, 30, 1, 90);
   const rowLimit = boundedWholeNumber(limit, 80, 1, 200);
   const rows = await runReadOnlySql(buildEventResponseSelectSql(
-    `coalesce(e.status, 'SCHEDULED') in ('SCHEDULED', 'CANCELLED')
+    `coalesce(e.status, 'SCHEDULED') in ('SCHEDULED', 'CANCELLED', 'SUPERSEDED')
      and coalesce(e.needs_review, false) = false and e.event_scope <> 'UNKNOWN'
      and coalesce(e.end_date, e.event_date) >= (now() at time zone '${EVENTS_TIME_ZONE}')::date
      and e.event_date <= (now() at time zone '${EVENTS_TIME_ZONE}')::date + ${days}`,
@@ -445,7 +460,7 @@ async function listEmployeeEvents(runReadOnlySql, { windowDays = 30, limit = 80 
 async function listManagerEvents(runReadOnlySql) {
   const rows = await runReadOnlySql(buildEventResponseSelectSql(
     `(e.status = 'NEEDS_REVIEW' or
-      (e.status = 'SCHEDULED' and coalesce(e.needs_review, false) = false
+      (e.status in ('SCHEDULED','CANCELLED','SUPERSEDED') and coalesce(e.needs_review, false) = false
        and e.event_scope <> 'UNKNOWN'
        and coalesce(e.end_date, e.event_date) >= (now() at time zone '${EVENTS_TIME_ZONE}')::date))`,
     `order by case when e.status = 'NEEDS_REVIEW' then 0 else 1 end,
@@ -472,6 +487,9 @@ const PUBLIC_EVENT_FIELDS = Object.freeze([
 
 const EMPLOYEE_EVENT_FIELDS = Object.freeze([
   ...PUBLIC_EVENT_FIELDS,
+  "start_instant_utc",
+  "end_instant_utc",
+  "superseded_by_event_id",
   "notes",
   "custodial_public_notes",
 ]);
@@ -501,6 +519,9 @@ function buildEventResponseSelectSql(whereSql, suffixSql = "") {
       e.cancelled_by_manager_id,
       e.cancellation_reason,
       e.archived_at,
+      e.superseded_by_event_id,
+      e.superseded_at,
+      e.superseded_by_manager_id,
       e.primary_venue_id,
       e.venue_ids,
       e.display_location,
@@ -525,6 +546,8 @@ function buildEventResponseSelectSql(whereSql, suffixSql = "") {
       e.end_date,
       to_char(e.start_time, 'HH24:MI:SS') as start_time,
       to_char(e.end_time, 'HH24:MI:SS') as end_time,
+      e.start_instant_utc,
+      e.end_instant_utc,
       (e.end_date > e.event_date) as spans_overnight,
       e.attendee_count,
       case
@@ -1041,6 +1064,7 @@ export function createEventsAdminRouter({
   requireAdminApiAuth,
   requireAdminApiWrite,
   runEventImpactPreview = null,
+  runEventReplacement = null,
 }) {
   const router = express.Router();
   if (typeof requireAdminApiAuth === "function") {
@@ -1177,7 +1201,9 @@ export function createEventsAdminRouter({
       });
       res.setHeader("Cache-Control", "private, no-store");
       res.status(200).json({ ok: true, data,
-        meta: { version: appVersion, release_id: releaseId, contract_version: EVENTS_CONTRACT_VERSION } });
+        meta: { version: appVersion, release_id: releaseId, contract_version: EVENTS_CONTRACT_VERSION,
+          time_interpretation: { time_zone: EVENTS_TIME_ZONE,
+            start_instant_utc: candidate.start_instant_utc, end_instant_utc: candidate.end_instant_utc } } });
     } catch (error) {
       fail(res, error, "Event impact preview failed",
         String(error?.code || error?.sqlstate || "") === "40901" ? 409 : Number(error?.status) || 400);
@@ -1228,6 +1254,37 @@ export function createEventsAdminRouter({
       });
     } catch (error) {
       fail(res, error, "Update event failed",
+        String(error?.code || error?.sqlstate || "") === "40901" ? 409 : Number(error?.status) || 400);
+    }
+  });
+
+  router.post("/:eventId/replace", typeof requireAdminApiWrite === "function" ? requireAdminApiWrite : (_req, _res, next) => next(), async (req, res) => {
+    try {
+      if (!isUuid(req.params.eventId)) throw new Error("A valid source event id is required.");
+      const payload = req.body && typeof req.body === "object" ? req.body : {};
+      const actor = authenticatedEventActor(req);
+      const expectedRevision = expectedEventRevision(payload.expected_revision);
+      const referenceData = await getEventReferenceData(runReadOnlySql);
+      const candidate = normalizeEventPayload(payload, referenceData);
+      if (candidate.status !== "SCHEDULED" || !candidate.operation_id) {
+        throw new Error("Replacement requires a resolved scheduled event and unique operation id.");
+      }
+      const replacement = runEventReplacement || (async (args) => {
+        const result = await getEventsSupabaseClient().rpc("app_replace_event_authoritative", args);
+        if (result.error) throw result.error;
+        return result.data;
+      });
+      const data = await replacement({ p_event_id: req.params.eventId,
+        p_expected_revision: expectedRevision,
+        p_record: { ...candidate, created_by: actor.display_name,
+          actor_manager_id: actor.manager_id, manually_overridden: true },
+        p_manager_id: actor.manager_id });
+      maintenanceController?.kick("events_admin_replace_after");
+      res.setHeader("Cache-Control", "private, no-store");
+      res.status(200).json({ ok: true, data,
+        meta: { version: appVersion, release_id: releaseId, contract_version: EVENTS_CONTRACT_VERSION } });
+    } catch (error) {
+      fail(res, error, "Replace event failed",
         String(error?.code || error?.sqlstate || "") === "40901" ? 409 : Number(error?.status) || 400);
     }
   });
