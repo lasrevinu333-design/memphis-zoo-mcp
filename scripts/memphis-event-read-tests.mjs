@@ -19,10 +19,27 @@ try {
   assert.match(captured,/e\.status[^\n]*= 'SCHEDULED'/,'Upcoming answer cannot include cancelled/superseded events'); checks++;
   assert.match(captured,/e\.needs_review[^\n]*= false/); checks++;
   assert.match(captured,/e\.event_scope <> 'UNKNOWN'/); checks++;
+  assert.match(captured,/app_event_place_authority\(to_jsonb\(e\),statement_timestamp\(\)\)/); checks++;
+  assert.match(captured,/place\.authority->>'admissible'\)::boolean is true/); checks++;
   assert.match(captured,/coalesce\(e\.end_date, e\.event_date\) >=/,'Retain overnight events that began yesterday'); checks++;
   assert.match(captured,/at time zone 'America\/Chicago'/); checks++;
   assert.doesNotMatch(captured,/\be\.notes\b|\be\.source_text\b|\be\.source_location_text\b/,'Do not fetch manager-only raw notes/source into employee assistant'); checks++;
   assert.match(captured,/e\.custodial_public_notes/); checks++;
+  assert.match(captured,/e\.start_instant_utc/); checks++;
+  assert.match(captured,/e\.end_instant_utc/); checks++;
+  const timed = createMemphisResponder({
+    runReadOnlySql: async sql => {
+      if (sql.includes('sch_service_date')) return [{service_date:'2026-10-02'}];
+      if (sql.includes('from public.events_app_events')) return [{event_name:'Fold rehearsal',
+        display_location:'Event Center',event_date:'2026-11-01',end_date:'2026-11-01',
+        start_time:'01:30:00',end_time:'02:30:00',start_instant_utc:'2026-11-01T06:30:00Z',
+        end_instant_utc:'2026-11-01T08:30:00Z',attendee_count:20}];
+      return [];
+    },runRpc: async()=>null,
+  });
+  const timedReply=await timed.generateReply({userMessage:'What events are coming up?'});
+  assert.match(timedReply.text,/01:30 CDT/); checks++;
+  assert.match(timedReply.text,/02:30 CST/); checks++;
   const container = process.env.CUSTODIAL_SYNTHETIC_MEMPHIS_DB;
   if (container) {
     assert.match(container,/^mz_schema_rebuild_[a-zA-Z0-9_]+$/);
@@ -64,7 +81,7 @@ try {
     assert.doesNotMatch(JSON.stringify(rows),/PRIVATE_MANAGER_SOURCE_DO_NOT_FETCH/); checks++;
   }
   console.log(JSON.stringify({status:'PASS_MEMPHIS_EVENT_READ_LOCAL',checks,actualResponder:true,actualRestrictedSql:Boolean(container),
-    production:false,notProven:['Place overlay adoption','deployed authenticated employee call','independent review']}));
+    production:false,notProven:['live mapped venue drift route','deployed authenticated employee call','independent review']}));
 } finally {
   for(const [name,value] of saved){if(value===undefined) delete process.env[name];else process.env[name]=value;}
 }

@@ -30,17 +30,30 @@ const runReadOnlySql = async (sql) => {
   if (sql.includes("from public.v_memphis_employee_schedule") && sql.includes("'2026-05-11'::date")) {
     return [{ group_name: "Teton", coverage_start: "06:00", coverage_end: "15:00", employee_name: "Tammy" }];
   }
-  if (sql.includes("public.sch_get_employee_work_status") && sql.includes("'2026-05-12'::date")) {
-    return [{ data: {
-      ok: true,
-      employee_id: "22222222-2222-4222-8222-222222222222",
-      employee_name: "Tammy",
-      service_date: "2026-05-12",
-      weekday: "Tuesday",
-      work_status: "working_assigned",
-      shift: { shift_start: "06:00", shift_end: "15:00", lunch: "10:00-10:30" },
-      assignments: [{ group_name: "Aquarium", coverage_start: "06:00", coverage_end: "15:00" }],
-    } }];
+  if (sql.includes("public.custodial_memphis_schedule_day") && /'2026-05-1[12]'::date/.test(sql)) {
+    return [{ data: {schema:'memphis.schedule-day.v1',status:'current',projection_status:'current',
+      publication_id:'33333333-3333-4333-8333-333333333333',projection_id:'44444444-4444-4444-8444-444444444444',
+      rows:[{employee_id:'22222222-2222-4222-8222-222222222222',employee_name:'Tammy',working:true,
+        shift_start:'06:00',shift_end:'15:00'},
+        {employee_id:'55555555-5555-4555-8555-555555555555',employee_name:'Tester Tomorrow',working:true,
+          shift_start:'06:00',shift_end:'15:00'},
+        {employee_id:'66666666-6666-4666-8666-666666666666',employee_name:'Tester Today',working:true,
+          shift_start:'06:00',shift_end:'15:00'}]} }];
+  }
+  if(sql.includes('public.static_weekly_v6_schedule_authority_state') && sql.includes('location_group_id')) {
+    const tomorrow=sql.includes("'2026-05-12'::date");
+    return [{authority:{governed:true,projection_status:'current',
+      publication_id:'33333333-3333-4333-8333-333333333333',projection_id:'44444444-4444-4444-8444-444444444444'},
+      assignments:[{location_group_id:'11111111-1111-4111-8111-111111111111',group_name:'Komodos',
+        assigned_employee_id:tomorrow?'55555555-5555-4555-8555-555555555555':'66666666-6666-4666-8666-666666666666',
+        assigned_employee_name:tomorrow?'Tester Tomorrow':'Tester Today',coverage_start:'06:00',coverage_end:'15:00',
+        current_at_query:true}]}];
+  }
+  if(sql.includes('public.static_weekly_v6_schedule_authority_state') && sql.includes("'2026-05-12'::date")) {
+    return [{authority:{governed:true,projection_status:'current',
+      publication_id:'33333333-3333-4333-8333-333333333333',projection_id:'44444444-4444-4444-8444-444444444444'},
+      assignments:[{group_name:'Aquarium',coverage_start:'06:00',coverage_end:'15:00',
+        assigned_employee_name:'Tammy'}]}];
   }
   if (sql.includes("public.sch_resolve_employee_ref") && sql.includes("Tammy")) {
     return [{ data: {

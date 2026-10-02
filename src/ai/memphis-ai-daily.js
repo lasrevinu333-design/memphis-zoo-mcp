@@ -1,33 +1,16 @@
 import { esc } from "./memphis-ai-utils.js";
 
-export async function ensureDailySchedule(_runRpc, serviceDate, { force = false } = {}) {
-  return {
-    ok: true,
-    skipped: true,
-    reason: "memphis_ai_read_only_no_schedule_generation",
-    service_date: serviceDate,
-    force_requested: Boolean(force),
-  };
-}
-
-export async function fetchDailyAreaScheduleRows(runReadOnlySql, serviceDate) {
-  const rows = await runReadOnlySql(`select * from public.v_memphis_area_schedule where service_date = '${esc(serviceDate)}'::date order by group_name asc, coverage_start asc, segment_number asc`);
-  return Array.isArray(rows) ? rows : [];
-}
-
-function wait(ms = 300) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+export async function fetchCurrentMemphisScheduleDay(runReadOnlySql,serviceDate) {
+  const rows=await runReadOnlySql(`select public.custodial_memphis_schedule_day('${esc(serviceDate)}'::date) as data`);
+  const data=Array.isArray(rows)&&rows.length===1?rows[0].data:null;
+  if (data?.schema!=='memphis.schedule-day.v1' || !['current','unavailable'].includes(data.status)
+    || !Array.isArray(data.rows)) return {status:'unavailable',rows:[],projection_status:'invalid_authority_response'};
+  return data;
 }
 
 export async function fetchDailyRosterRows(runReadOnlySql, serviceDate) {
-  const rows = await runReadOnlySql(`select dwr.service_date, e.display_name as employee_name, dwr.shift_start, dwr.shift_end, dwr.active, dwr.source_type from public.daily_work_roster dwr join public.employees e on e.id = dwr.employee_id where dwr.service_date = '${esc(serviceDate)}'::date and dwr.active = true order by dwr.shift_start asc, e.display_name asc`);
-  const rosterRows = Array.isArray(rows) ? rows : [];
-  if (rosterRows.length) return rosterRows;
-
-  const day = getDayOfWeekFromIsoDate(serviceDate);
-  if (day == null) return [];
-  const templateRows = await runReadOnlySql(`select '${esc(serviceDate)}'::date as service_date, e.display_name as employee_name, est.shift_start, est.shift_end, est.active, 'shift_template' as source_type from public.employee_shift_templates est join public.employees e on e.id = est.employee_id where est.active = true and e.active = true and est.day_of_week = ${Number(day)} order by est.shift_start asc, e.display_name asc`);
-  return Array.isArray(templateRows) ? templateRows : [];
+  const day=await fetchCurrentMemphisScheduleDay(runReadOnlySql,serviceDate);
+  return day.status==='current'?day.rows.filter((row)=>row.working===true):[];
 }
 
 function getDayOfWeekFromIsoDate(serviceDate = "") {
@@ -40,54 +23,6 @@ export async function fetchDailyOpsManagerRows(runReadOnlySql, serviceDate) {
   if (dayOfWeek == null) return [];
   const rows = await runReadOnlySql(`select s.display_name as employee_name, coalesce(c.role_title, 'Ops Manager') as role_title, s.shift_start, s.shift_end, c.phone from public.ops_manager_weekly_schedules s left join public.internal_ops_contacts c on c.id = s.contact_id where s.active = true and s.day_of_week = ${Number(dayOfWeek)} order by s.shift_start asc, s.display_name asc`);
   return Array.isArray(rows) ? rows : [];
-}
-
-export async function fetchDailyAbsenceRows(runReadOnlySql, serviceDate) {
-  const rows = await runReadOnlySql(`
-    select distinct on (employee_id) employee_name, absence_type, notes
-    from (
-      select
-        e.id as employee_id,
-        e.display_name as employee_name,
-        lower(coalesce(dao.absence_type, 'absent')) as absence_type,
-        dao.notes,
-        case lower(coalesce(dao.absence_type, '')) when 'manual_override' then 3 when 'pto' then 2 else 1 end as priority
-      from public.daily_absence_overrides dao
-      join public.employees e on e.id = dao.employee_id
-      where dao.absence_date = '${esc(serviceDate)}'::date
-        and dao.active = true
-
-      union all
-
-      select
-        e.id as employee_id,
-        e.display_name as employee_name,
-        'pto' as absence_type,
-        p.notes,
-        2 as priority
-      from public.employee_planned_time_off p
-      join public.employees e on e.id = p.employee_id
-      where p.active = true
-        and p.start_date <= '${esc(serviceDate)}'::date
-        and p.end_date >= '${esc(serviceDate)}'::date
-
-      union all
-
-      select
-        e.id as employee_id,
-        e.display_name as employee_name,
-        lower(coalesce(ep.absence_type, 'pto')) as absence_type,
-        ep.notes,
-        2 as priority
-      from public.employee_pto ep
-      join public.employees e on e.id = ep.employee_id
-      where ep.active = true
-        and ep.start_date <= '${esc(serviceDate)}'::date
-        and ep.end_date >= '${esc(serviceDate)}'::date
-    ) absences
-    order by employee_id, priority desc, employee_name
-  `);
-  return Array.isArray(rows) ? rows.sort((a, b) => String(a.employee_name || '').localeCompare(String(b.employee_name || ''))) : [];
 }
 
 function detectStaffAudience(queryText = "") {
@@ -106,34 +41,18 @@ function summarizeRosterPeople(rows = [], includeRole = false) {
   });
 }
 
-function displayAbsenceType(type = "") {
-  const normalized = String(type || "").trim().toLowerCase();
-  if (!normalized) return "";
-  if (normalized === "manual_override") return "absent";
-  if (normalized === "pto") return "PTO";
-  if (normalized === "sick") return "sick";
-  if (normalized === "callout" || normalized === "call_out") return "absent";
-  return normalized.replace(/_/g, " " );
-}
-
-export function summarizeDailyRoster(roster = [], serviceDate = "", opsRows = [], queryText = "", absenceRows = []) {
+export function summarizeDailyRoster(roster = [], serviceDate = "", opsRows = [], queryText = "") {
   const audience = detectStaffAudience(queryText);
   const custodianPeople = summarizeRosterPeople(roster, false);
   const opsPeople = summarizeRosterPeople(opsRows, true);
-  const absentPeople = Array.isArray(absenceRows) ? absenceRows.map((row) => {
-    const label = displayAbsenceType(row.absence_type);
-    return `${row.employee_name}${label ? ` (${label})` : ""}`;
-  }).filter(Boolean) : [];
-  const absenceSuffix = absentPeople.length ? ` Out today: ${absentPeople.join("; ")}.` : "";
-
   if (audience === "ops") {
     if (!opsPeople.length) return `I couldn't find any ops managers scheduled to work on ${serviceDate}.`;
-    return `${serviceDate}: Ops managers: ${opsPeople.join("; ")}.${absenceSuffix}`;
+    return `${serviceDate}: Ops managers: ${opsPeople.join("; ")}.`;
   }
 
   if (audience === "custodians") {
     if (!custodianPeople.length) return `I couldn't find any custodians scheduled to work on ${serviceDate}.`;
-    return `${serviceDate}: Custodians: ${custodianPeople.join("; ")}. Ask who is where if you want area assignments.${absenceSuffix}`;
+    return `${serviceDate}: Custodians: ${custodianPeople.join("; ")}. Ask who is where if you want area assignments.`;
   }
 
   if (!custodianPeople.length && !opsPeople.length) return `I couldn't find anyone scheduled to work on ${serviceDate}.`;
@@ -141,7 +60,7 @@ export function summarizeDailyRoster(roster = [], serviceDate = "", opsRows = []
   const sections = [];
   sections.push(`Ops managers: ${opsPeople.length ? opsPeople.join("; ") : "none listed"}`);
   sections.push(`Custodians: ${custodianPeople.length ? custodianPeople.join("; ") : "none listed"}`);
-  return `${serviceDate}: ${sections.join(". ")}. Ask who is where if you want area assignments.${absenceSuffix}`;
+  return `${serviceDate}: ${sections.join(". ")}. Ask who is where if you want area assignments.`;
 }
 
 export function summarizeDailyAssignments(assignments = [], serviceDate = "") {
@@ -173,24 +92,21 @@ export function summarizeDailyAssignments(assignments = [], serviceDate = "") {
 }
 
 export async function generateDailyStaffScheduleReply({ runReadOnlySql, runRpc, serviceDate, queryText = "" } = {}) {
-  let generatedBeforeRead = false;
-  let roster = await fetchDailyRosterRows(runReadOnlySql, serviceDate);
-  if (!roster.length) {
-    await ensureDailySchedule(runRpc, serviceDate);
-    generatedBeforeRead = true;
-    await wait(450);
-    roster = await fetchDailyRosterRows(runReadOnlySql, serviceDate);
-  }
+  const day = await fetchCurrentMemphisScheduleDay(runReadOnlySql,serviceDate);
+  if (day.status!=='current') return {text:`I can't verify a current published custodial schedule for ${serviceDate}.`,
+    meta:{fallback:true,mode:'local_daily_staff_schedule',service_date:serviceDate,
+      projection_status:day.projection_status||'unavailable',generated_before_read:false}};
+  const roster=day.rows.filter((row)=>row.working===true);
   const opsRows = await fetchDailyOpsManagerRows(runReadOnlySql, serviceDate);
-  const absenceRows = await fetchDailyAbsenceRows(runReadOnlySql, serviceDate);
 
   return {
-    text: summarizeDailyRoster(roster, serviceDate, opsRows, queryText, absenceRows),
+    text: summarizeDailyRoster(roster, serviceDate, opsRows, queryText),
     meta: {
       fallback: true,
       mode: "local_daily_staff_schedule",
       service_date: serviceDate,
-      generated_before_read: generatedBeforeRead,
+      generated_before_read: false,
+      projection_id:day.projection_id||null,
     },
   };
 }

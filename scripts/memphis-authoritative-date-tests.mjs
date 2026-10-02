@@ -8,6 +8,10 @@ const saved = new Map(keyNames.map(name => [name, process.env[name]]));
 const originalFetch = globalThis.fetch;
 const TODAY = '2026-10-02';
 const GROUP = '10000000-0000-4000-8000-000000000001';
+const LOCATION = '10000000-0000-4000-8000-000000000006';
+const EMPLOYEE = '10000000-0000-4000-8000-000000000003';
+const PUBLICATION = '10000000-0000-4000-8000-000000000004';
+const PROJECTION = '10000000-0000-4000-8000-000000000005';
 let checks = 0;
 try {
   for (const name of keyNames) process.env[name] = '';
@@ -20,14 +24,18 @@ try {
         if (sql.includes('sch_service_date')) return [{ service_date: TODAY }];
         if (sql.includes('msg_get_user_by_device')) return [{ role: 'employee', display_name: 'Synthetic Custodian' }];
         if (sql.includes('from public.location_groups')) return [{ location_group_id: GROUP, group_code: 'AQU', group_name: 'Aquarium', aliases: ['Aquarium'] }];
-        if (sql.includes('from public.locations')) return physical ? [{ location_code: 'AQU', location_name: 'Aquarium', group_names: ['Aquarium'] }] : [];
-        if (sql.includes('sch_get_current_owner')) return [{ owner_display_name: 'Current Instant Owner', coverage_start: '07:00', coverage_end: '15:00' }];
-        if (sql.includes('public.v_memphis_area_schedule')) {
-          const queriedDate = sql.match(/service_date\s*=\s*'([^']+)'/)?.[1];
-          if (queriedDate === date && !current) return [];
-          return [{ service_date: queriedDate, location_group_id: GROUP, group_code: 'AQU', group_name: 'Aquarium',
-            employee_name: queriedDate === date ? 'Accepted Dated Owner' : 'Departed Historical Owner',
-            coverage_start: '07:00', coverage_end: '15:00', segment_number: 1 }];
+        if (sql.includes('from public.locations')) return physical ? [{id:LOCATION, location_code: 'AQU', location_name: 'Aquarium', group_names: ['Aquarium'] }] : [];
+        if (sql.includes('custodial_memphis_schedule_day')) return [{data:{schema:'memphis.schedule-day.v1',
+          status:current?'current':'unavailable',projection_status:current?'current':'missing_projection',
+          publication_id:PUBLICATION,projection_id:PROJECTION,
+          rows:current?[{employee_id:EMPLOYEE,employee_name:'Accepted Dated Owner',working:true,
+            shift_start:'07:00',shift_end:'15:00'}]:[]}}];
+        if (sql.includes('static_weekly_v6_schedule_authority_state')) {
+          return [{authority:{governed:true,projection_status:'current',publication_id:PUBLICATION,projection_id:PROJECTION},
+            assignments:[{service_date:date,location_group_id:GROUP,group_code:'AQU',group_name:'Aquarium',
+              assigned_employee_id:EMPLOYEE,assigned_employee_name:'Accepted Dated Owner',current_at_query:true,
+              included_location_ids:[LOCATION],
+              coverage_start:'07:00',coverage_end:'15:00',segment_number:1}]}];
         }
         return [];
       },
@@ -41,8 +49,8 @@ try {
     const { reply, queries } = await ask(prompt);
     assert.doesNotMatch(reply.text, /Departed Historical Owner/, 'Missing accepted date must not resurrect last-week assignment'); checks++;
     assert.match(reply.text, /2026-10-03/); checks++;
-    assert.match(reply.text, /do not see|could not|couldn't/i); checks++;
-    assert.ok(queries.filter(sql => sql.includes('public.v_memphis_area_schedule')).every(sql => sql.includes("'2026-10-03'")), 'Only requested-date schedule rows may be read'); checks++;
+    assert.match(reply.text, /can't verify/i); checks++;
+    assert.ok(queries.filter(sql => sql.includes('custodial_memphis_schedule_day')).every(sql => sql.includes("'2026-10-03'")), 'Only requested-date authority may be read'); checks++;
     const accepted = await ask(prompt, { current: true });
     assert.match(accepted.reply.text, /Accepted Dated Owner/); checks++;
     assert.doesNotMatch(accepted.reply.text, /Departed Historical Owner/); checks++;
@@ -53,8 +61,11 @@ try {
     assert.doesNotMatch(reply.text, /Current Instant Owner/); checks++;
     assert.ok(!queries.some(sql => sql.includes('sch_get_current_owner')), 'Current owner cannot answer a different service date'); checks++;
   }
-  const today = await ask('Who has Aquarium today?', { date: TODAY, physical: true });
-  assert.match(today.reply.text, /Current Instant Owner/); checks++;
+  const today = await ask('Who has Aquarium today?', { date: TODAY, physical: true, current: true });
+  assert.match(today.reply.text, /Accepted Dated Owner/); checks++;
+  assert.ok(!today.queries.some(sql=>sql.includes('sch_get_current_owner')),'Legacy current-owner shortcut must not run');checks++;
+  const exactLocation=await ask('Who has AQU today?',{date:TODAY,physical:true,current:true});
+  assert.match(exactLocation.reply.text,/Accepted Dated Owner/);checks++;
   const recipe = await ask('Give me a dinner recipe for pretzels');
   assert.doesNotMatch(recipe.reply.text, /Gemini|API|credentials?|token|setup/i, 'Employee fallback must not direct configuration changes'); checks++;
   assert.match(recipe.reply.text, /could not|couldn't|unavailable|not.*answer/i); checks++;
