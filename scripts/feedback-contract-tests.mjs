@@ -18,21 +18,22 @@ function assertMatches(source, pattern, message) {
   assert.match(source, pattern, message);
 }
 
-// Frontend: validate the sibling Engine fixture when it is available. The backend
-// contract suite remains independently runnable in CI; Engine owns its own complete
-// frontend regression gate.
+// Frontend: owner deferred NEW Feedback photos. Preserve read-only historical
+// attachment visibility without exposing capture or upload on either page.
+// The backend contract suite remains independently runnable in CI; Engine owns
+// its complete frontend regression gate.
 if (feedbackHtml) {
-  assertMatches(feedbackHtml, /type=["']file["'][^>]+accept=["']image\//i, "feedback form should expose an image-only file input");
-  assertMatches(feedbackHtml, /Add Image/i, "feedback form should expose the image upload action");
-  assertContains(feedbackHtml, "image_attachment", "feedback submit payload should include optional image_attachment");
-  assertContains(feedbackHtml, "readAsDataURL", "feedback image upload should encode the selected image for JSON submit");
-  assertContains(feedbackHtml, "'Content-Type': 'application/json'", "feedback should submit image metadata as JSON");
-  assert.ok(!feedbackHtml.includes("new FormData"), "feedback submit must not send unsupported multipart form data");
+  assert.doesNotMatch(feedbackHtml, /type=["']file["']|readAsDataURL|Add Image|capture=["']/i, "manager feedback must not offer new photo acquisition");
+  assertContains(feedbackHtml, "row.metadata_json?.image_attachment", "historical protected feedback images remain visible to authorized managers");
+  const employeeHtml = readFileSync(resolve(engineRoot, "employee-feedback.html"), "utf8");
+  assert.doesNotMatch(employeeHtml, /type=["']file["']|readAsDataURL|Add Image|capture=["']/i, "employee feedback must be text-only");
+  assertContains(employeeHtml, "historical attachments", "protected employee feedback outbox history remains retained");
+  assert.ok(!employeeHtml.includes("new FormData"), "employee feedback submit must not send unsupported multipart form data");
 }
 
-// Backend: image attachment must be validated, stored privately, referenced by
-// metadata, recoverable from a private backup, and retrievable only through the
-// authorized application route.
+// Backend: retain legacy image validation/private-storage/recovery and
+// authorized retrieval for historical records; this does not enable new UI
+// capture in the current program.
 assertContains(apiSource, "validateSystemFeedbackImageAttachment", "backend should validate optional feedback image attachments");
 assertContains(apiSource, "persistedSystemFeedbackImageMetadata", "backend should exclude internal upload state from persisted metadata");
 assertContains(apiSource, "removeUnreferencedSystemFeedbackImage", "backend should clean a newly uploaded object when database persistence fails");
