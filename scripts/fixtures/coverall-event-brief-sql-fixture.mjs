@@ -109,7 +109,7 @@ export function verifyCoverAllEventBriefSqlFixture({sql,managerId,printDocument,
      ${q(printDocument.lunchDocumentIdentity)},${q(printDocument.documentDigest)}`],
   ]){
    assert.equal(result(sql(`select has_function_privilege(${q(role)},
-    ${q(`public.${functionName}(${signature})`)},'EXECUTE')::text;`)),'f',
+    ${q(`public.${functionName}(${signature})`)},'EXECUTE')::text;`)),'false',
     `${role} must not execute ${functionName}`);
    assert.throws(()=>sql(`set role ${role};select public.${functionName}(${args});`),error=>
      /permission denied/i.test(String(error?.stderr||error?.message||error)),
@@ -118,10 +118,10 @@ export function verifyCoverAllEventBriefSqlFixture({sql,managerId,printDocument,
  }
  assert.equal(result(sql(`select has_function_privilege('static_weekly_control_plane',
   'public.static_weekly_coverall_event_brief_candidate(uuid,uuid,integer,uuid,date,uuid,bigint,text,text)',
-  'EXECUTE')::text;`)),'t');
+  'EXECUTE')::text;`)),'true');
  assert.equal(result(sql(`select has_function_privilege('static_weekly_control_plane',
   'public.static_weekly_coverall_event_brief_candidates(uuid,uuid,date,uuid,bigint,text,text)',
-  'EXECUTE')::text;`)),'t');
+  'EXECUTE')::text;`)),'true');
  assert.equal(result(sql(`select count(*) from public.custodial_release_authority_restore_inventory
   where object_identity in(
    'public.static_weekly_coverall_event_brief_candidate(uuid,uuid,integer,uuid,date,uuid,bigint,text,text)',
