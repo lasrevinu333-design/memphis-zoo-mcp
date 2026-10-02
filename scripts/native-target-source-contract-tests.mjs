@@ -56,6 +56,10 @@ for(const kind of ['MESSAGE','SCHEDULE','LUNCH']){
   status:'SOURCE_STALE',delivery_admitted:false};
  pass(`${kind} stale evidence stays non-admitting`,validateNativeTargetSourceProjection(unavailable,context(kind))===unavailable);
 }
+for(const epoch of [true,'7',null,[],[7],{},0,-1,1.5,Number.MAX_SAFE_INTEGER+1]){
+ assert.throws(()=>validateNativeTargetSourceProjection(row('MESSAGE',{recipient:{...recipient,msg_user_id:msgUser,assignment_epoch:epoch}}),context('MESSAGE')),/native_target_source_response_invalid/);
+ pass('noninteger or coerced epoch rejected '+JSON.stringify(epoch),true);
+}
 for(const [name,args] of [['unknown kind',{...context('EVENT')}],['invalid source',{...context('MESSAGE'),sourceKey:'no'}],
  ['missing runner',{...context('LUNCH'),runRpc:null}]]){
  await assert.rejects(readNativeTargetSource({runRpc:async()=>row('MESSAGE'),...args}),/native_target_source_request_invalid/);

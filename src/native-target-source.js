@@ -36,7 +36,7 @@ export function validateNativeTargetSourceProjection(value,{kind,sourceKey,emplo
   ||String(recipient.generation_id||'').toLowerCase()!==generationId.toLowerCase()
   ||!UUID.test(recipient.device_id)||!UUID.test(recipient.credential_id)
   ||typeof recipient.device_identifier!=='string'||!recipient.device_identifier
-  ||!Number.isSafeInteger(Number(recipient.assignment_epoch))||Number(recipient.assignment_epoch)<1
+  ||!Number.isSafeInteger(recipient.assignment_epoch)||recipient.assignment_epoch<1
   ||!SHA.test(recipient.principal_digest)||!SHA.test(recipient.token_digest)
   ||!UUID.test(source.source_id)||typeof source.source_revision!=='string'||!source.source_revision
   ||(source.valid_from!==null&&instantMicros(source.valid_from)===null)
