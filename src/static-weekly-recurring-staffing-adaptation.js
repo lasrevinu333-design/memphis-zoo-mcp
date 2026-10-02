@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { canonicalJson } from "./static-weekly-schedule-model.js";
+import { canonicalJson, contentDigest } from "./static-weekly-schedule-model.js";
 import { postgresJsonbContentDigest } from "./static-weekly-schedule-compiler.js";
 import { normalizeStaticWeeklyAuthority } from "./static-weekly-schedule-program.js";
 import { recurringPatternAuthority } from "./static-weekly-recurring-repair-basis.js";
 import { createShiftEndContinuityPolicy } from "./static-weekly-shift-end-derivation.js";
 import { assertNormalOwnerEligibility, hardRestrictedSlots,
   validateOwnerEligibilityConfig } from "./static-weekly-owner-eligibility.js";
+import {createRecurringPhaseDescriptor,createRecurringPhaseProspectiveSource,
+  enumerateRecurringPhaseMinimum,evaluateRecurringPhaseCanonicalSource} from './static-weekly-recurring-phase-authority.js';
 
 const phaseOf = (row) => row.window?.start === "09:45" ? "equalized" : "morning";
 const expression = (terms) => terms.length
@@ -546,4 +548,57 @@ export function deriveRecurringStaffingPattern({ currentConfig, targetSlots, ful
     "Publication must be independently reviewed, revision-bound, protected-work safe and explicitly manager-confirmed."
   ];
   return { config: result, preview };
+}
+
+// Pure bounded phase adapter for the EXISTING deliberate recurring-replacement
+// command. Scope is derived from its complete candidate, never an employee
+// selector or a caller-controlled canonical owner unlock. Runtime command/CP
+// coupling remains separate until authority/source/receipt hooks are bound.
+export function deriveCanonicalRecurringPhaseCandidate({source,currentConfig,fullOwners,dayOfWeek}) {
+  const sourceVersion=source.version||(source.versions?.length===1?source.versions[0]:null);
+  assert.ok(sourceVersion&&Array.isArray(sourceVersion.assignments));
+  const selectedWorkIds=sourceVersion.assignments.filter(row=>row.dayOfWeek===dayOfWeek
+    &&row.window?.start==='09:45').map(row=>row.workId);
+  const input={source,ownerConfig:currentConfig,dayOfWeek,selectedWorkIds};
+  const proof=enumerateRecurringPhaseMinimum(input);
+  const basis={sourceDigest:contentDigest(source),configDigest:contentDigest(currentConfig),
+    fullOwnersDigest:contentDigest(fullOwners),dayOfWeek,phase:'equalized',
+    scope:'DERIVED_FROM_COMPLETE_RECURRING_REPLACEMENT_CANDIDATE_OTHER_DAYS_AND_MORNING_FIXED',
+    publication:false,admitted:false};
+  if(proof.status!=='PROVEN_MINIMUM_COMPLETE_SELECTED_SCOPE')return {...basis,status:proof.status,proof,candidateSource:null};
+  const descriptor=createRecurringPhaseDescriptor(input);
+  const keys=Object.keys(currentConfig.slots).sort();
+  const keyBySlot=new Map(keys.map(key=>[currentConfig.slots[key].slotId,key]));
+  const ownerKeys=keys.filter(key=>descriptor.owners.some(o=>o.slotId===currentConfig.slots[key].slotId));
+  const byId=new Map(descriptor.packages.map(p=>[p.workId,p]));
+  const sourceOwner=new Map(sourceVersion.assignments.map(r=>[r.workId,keyBySlot.get(r.originSlotId||r.ownerSlotId)]));
+  const candidates=proof.receipts.filter(r=>r.canonicalFeasible&&r.publicSiteValid&&r.nonemptyPhaseOwners&&r.selectedPackagesCovered&&r.doubledSpread===proof.minimumDoubledSpread)
+    .map(r=>{
+      // Match the inherited families.sort() code-unit ordering, not a locale.
+      const byFamily=[...r.selection].sort((a,b)=>{
+        const x=byId.get(a.workId).family,y=byId.get(b.workId).family;return x<y?-1:x>y?1:0;
+      });
+      let cost=0;
+      const identity=[];
+      for(const row of byFamily){
+        const family=byId.get(row.workId).family,owner=keyBySlot.get(row.slotId),fullOwner=fullOwners[String(dayOfWeek)]?.equalized?.[family];
+        assert.ok(fullOwner,'Exact existing full-position guidance required for phase preference.');
+        // Exact inherited 100/4/2 preference and owner-key identity order.
+        cost+=(sourceOwner.get(row.workId)!==owner?100:0)+(fullOwner!==owner?4:0)
+          +(currentConfig.slots[owner].normalAssignmentFamilies?.includes(family)?0:2);
+        identity.push(ownerKeys.indexOf(owner));
+      }
+      return {receipt:r,cost,identity};
+    });
+  candidates.sort((a,b)=>a.cost-b.cost||a.identity.reduce((delta,x,i)=>delta||x-b.identity[i],0));
+  assert.ok(candidates.length);
+  const chosen=candidates[0],candidateSource=createRecurringPhaseProspectiveSource({...input,descriptor,selection:chosen.receipt.selection});
+  const canonical=evaluateRecurringPhaseCanonicalSource(candidateSource);
+  assert.equal(canonical.feasible,true);
+  assert.equal(canonical.sourceDigest,chosen.receipt.sourceDigest);
+  const body={...basis,status:'UNREGISTERED_CANONICAL_PHASE_CANDIDATE',proof,candidateSource,
+    candidateSourceDigest:contentDigest(candidateSource),selectedOwnership:chosen.receipt.selection,
+    preferenceCost:chosen.cost,stableIdentity:chosen.identity,canonicalHardWitness:canonical,
+    existingPreferenceCostsPreserved:[100,4,2],datedPriorityChange:false};
+  return {...body,candidateDigest:contentDigest(body)};
 }
