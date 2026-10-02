@@ -1235,7 +1235,6 @@ async function runEventCommand(command, payload = {}) {
   const commands = {
     event_create: "create",
     event_update: "update",
-    event_cancel: "cancel",
   };
   const eventCommand = commands[normalized];
   if (!eventCommand) throw new Error(`Unsupported bounded event command: ${normalized}`);

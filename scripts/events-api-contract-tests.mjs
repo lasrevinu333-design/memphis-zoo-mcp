@@ -24,12 +24,13 @@ assert.match(outlookAuthorityMigration, /revoke all privileges[\s\S]*public, ano
 assert.match(outlookAuthorityMigration, /grant delete, insert, maintain, references, select, trigger, truncate, update[\s\S]*to service_role/i);
 assert.doesNotMatch(outlookAuthorityMigration, /grant[\s\S]*to (?:public|anon|authenticated|custodial_application_reader)/i);
 
-function buildApp({ writeCalls = [], readCalls = [], writeResults = {}, writeError = null, eventRows = [], runEventImpactPreview = null, runEventReplacement = null } = {}) {
+function buildApp({ writeCalls = [], readCalls = [], writeResults = {}, writeError = null, eventRows = [], runEventImpactPreview = null, runEventReplacement = null, runEventTransition = null } = {}) {
   const app = express();
   app.use(express.json());
   app.use("/admin-api/events", createEventsAdminRouter({
     runEventImpactPreview,
     runEventReplacement,
+    runEventTransition,
     runReadOnlySql: async (sql) => {
       readCalls.push(String(sql || ""));
       if (/from public\.event_venues/i.test(sql)) {
@@ -847,16 +848,13 @@ await withServer(buildApp({
 
 const cancelWriteCalls = [];
 await withServer(buildApp({
-  writeCalls: cancelWriteCalls,
-  writeResults: {
-    events_app_cancel: {
-      id: "60000000-0000-4000-8000-000000000003",
-      status: "CANCELLED",
-      cancelled_by: TEST_MANAGER_NAME,
-      cancelled_by_manager_id: TEST_MANAGER_ID,
-    },
+  runEventTransition: async (args) => {
+    cancelWriteCalls.push(args);
+    return { event: { id: args.p_event_id,status: args.p_action === "cancel" ? "CANCELLED" : "SCHEDULED",
+      cancelled_by_manager_id: args.p_manager_id },operation_id: args.p_operation_id,replayed:false };
   },
 }), async (baseUrl) => {
+  const operationId = "70000000-0000-4000-8000-000000000003";
   const response = await fetch(`${baseUrl}/admin-api/events/60000000-0000-4000-8000-000000000003`, {
     method: "DELETE",
     headers: { "Content-Type": "application/json" },
@@ -864,18 +862,36 @@ await withServer(buildApp({
       cancelled_by: "Forged Canceller",
       actor: "Forged Actor",
       actor_manager_id: "60000000-0000-4000-8000-000000000099",
+      expected_revision: 3, operation_id: operationId,
       reason: "Verified cancellation reason",
     }),
   });
   assert.equal(response.status, 200);
-  assert.equal((await response.json()).data.cancelled_by_manager_id, TEST_MANAGER_ID);
+  assert.equal((await response.json()).data.event.cancelled_by_manager_id, TEST_MANAGER_ID);
+  const restore = await fetch(`${baseUrl}/admin-api/events/60000000-0000-4000-8000-000000000003/restore`,{
+    method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({expected_revision:4,
+      operation_id:"70000000-0000-4000-8000-000000000004",actor_manager_id:"60000000-0000-4000-8000-000000000099"}) });
+  assert.equal(restore.status,200);
+  assert.equal((await restore.json()).data.event.status,"SCHEDULED");
+  const omitted = await fetch(`${baseUrl}/admin-api/events/60000000-0000-4000-8000-000000000003`,{
+    method:"DELETE",headers:{"Content-Type":"application/json"},body:JSON.stringify({expected_revision:5}) });
+  assert.equal(omitted.status,400,"unconditional cancellation is no longer reachable");
 });
-const cancelCall = cancelWriteCalls.find((call) => call.name === "event_cancel");
-assert.deepEqual(cancelCall.payload.record, { actor_manager_id: TEST_MANAGER_ID });
-assert.equal(cancelCall.payload.actor, TEST_MANAGER_NAME);
-assert.equal(cancelCall.payload.reason, "Verified cancellation reason");
-assert.doesNotMatch(JSON.stringify(cancelCall.payload), /Forged|000000000099/,
+assert.equal(cancelWriteCalls.length,2);
+assert.equal(cancelWriteCalls[0].p_action,"cancel");
+assert.equal(cancelWriteCalls[0].p_manager_id,TEST_MANAGER_ID);
+assert.equal(cancelWriteCalls[0].p_expected_revision,3);
+assert.equal(cancelWriteCalls[0].p_reason,"Verified cancellation reason");
+assert.equal(cancelWriteCalls[1].p_action,"restore");
+assert.equal(cancelWriteCalls[1].p_manager_id,TEST_MANAGER_ID);
+assert.doesNotMatch(JSON.stringify(cancelWriteCalls), /Forged|000000000099/,
   "client cancellation actor fields must not reach event mutation authority");
+await withServer(buildApp({runEventTransition:async () => { throw Object.assign(new Error("stale event"),{code:"40901"}); }}),async (baseUrl) => {
+  const response = await fetch(`${baseUrl}/admin-api/events/60000000-0000-4000-8000-000000000003/restore`,{
+    method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({expected_revision:4,
+      operation_id:"70000000-0000-4000-8000-000000000004"}) });
+  assert.equal(response.status,409,"SQLSTATE 40901 must become HTTP conflict");
+});
 
 const notificationReadCalls = [];
 const notificationWriteCalls = [];

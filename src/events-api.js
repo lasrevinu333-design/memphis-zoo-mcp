@@ -460,6 +460,7 @@ async function listEmployeeEvents(runReadOnlySql, { windowDays = 30, limit = 80 
 async function listManagerEvents(runReadOnlySql) {
   const rows = await runReadOnlySql(buildEventResponseSelectSql(
     `(e.status = 'NEEDS_REVIEW' or
+      (e.status = 'CANCELLED' and coalesce(e.needs_review,false) = true) or
       (e.status in ('SCHEDULED','CANCELLED','SUPERSEDED') and coalesce(e.needs_review, false) = false
        and e.event_scope <> 'UNKNOWN'
        and coalesce(e.end_date, e.event_date) >= (now() at time zone '${EVENTS_TIME_ZONE}')::date))`,
@@ -518,6 +519,7 @@ function buildEventResponseSelectSql(whereSql, suffixSql = "") {
       e.cancelled_by,
       e.cancelled_by_manager_id,
       e.cancellation_reason,
+      e.cancelled_from_status,
       e.archived_at,
       e.superseded_by_event_id,
       e.superseded_at,
@@ -783,18 +785,17 @@ async function updateEventRecord(runReadOnlySql, runCommand, eventId, payload, a
   throw new Error("Event not found.");
 }
 
-async function deleteEventRecord(runCommand, eventId, actor, reason = "Event cancelled from Event Input Console.") {
+async function transitionEventRecord(runEventTransition, eventId, action, payload, actor) {
   const normalizedId = String(eventId || "").trim();
   if (!isUuid(normalizedId)) throw new Error("A valid event id is required.");
-  const rows = normalizeWriteResultRows(await runCommand("event_cancel", {
-    event_id: normalizedId,
-    record: { actor_manager_id: actor.manager_id },
-    actor: actor.display_name,
-    reason: String(reason || "Event cancelled.").slice(0, 1000),
-  }));
-  const row = rows.find((item) => item?.id);
-  if (!row) throw Object.assign(new Error("Event not found."), { status: 404 });
-  return { ...row, deleted: false, cancelled: true };
+  const expectedRevision = expectedEventRevision(payload.expected_revision);
+  const operationId = String(payload.operation_id || "").trim();
+  if (!isUuid(operationId)) throw new Error("A stable UUID operation id is required for event transition.");
+  const reason = action === "cancel" ? String(payload.reason || "Event cancelled from Event Input Console.").slice(0, 1000)
+    : "Manager-confirmed ordinary cancellation recovery.";
+  return runEventTransition({ p_event_id: normalizedId, p_action: action,
+    p_expected_revision: expectedRevision, p_operation_id: operationId,
+    p_manager_id: actor.manager_id, p_reason: reason });
 }
 
 async function enqueueNativeEventNotifications(runRpc) {
@@ -1065,6 +1066,7 @@ export function createEventsAdminRouter({
   requireAdminApiWrite,
   runEventImpactPreview = null,
   runEventReplacement = null,
+  runEventTransition = null,
 }) {
   const router = express.Router();
   if (typeof requireAdminApiAuth === "function") {
@@ -1289,14 +1291,17 @@ export function createEventsAdminRouter({
     }
   });
 
+  const transition = runEventTransition || (async (args) => {
+    const result = await getEventsSupabaseClient().rpc("app_transition_event_cancellation", args);
+    if (result.error) throw result.error;
+    return result.data;
+  });
+
   router.delete("/:eventId", typeof requireAdminApiWrite === "function" ? requireAdminApiWrite : (_req, _res, next) => next(), async (req, res) => {
     try {
-      const result = await deleteEventRecord(
-        runCommand,
-        req.params.eventId,
-        authenticatedEventActor(req),
-        req.body?.reason || "Event cancelled from Event Input Console.",
-      );
+      const result = await transitionEventRecord(transition,req.params.eventId,"cancel",
+        req.body && typeof req.body === "object" ? req.body : {},authenticatedEventActor(req));
+      if (!result?.replayed) maintenanceController?.kick("events_admin_cancel_after");
       res.status(200).json({
         ok: true,
         data: result,
@@ -1307,7 +1312,22 @@ export function createEventsAdminRouter({
         },
       });
     } catch (error) {
-      fail(res, error, "Delete event failed", Number(error?.status) || 400);
+      fail(res, error, "Cancel event failed",
+        String(error?.code || error?.sqlstate || "") === "40901" ? 409 : Number(error?.status) || 400);
+    }
+  });
+
+  router.post("/:eventId/restore", typeof requireAdminApiWrite === "function" ? requireAdminApiWrite : (_req, _res, next) => next(), async (req,res) => {
+    try {
+      const result = await transitionEventRecord(transition,req.params.eventId,"restore",
+        req.body && typeof req.body === "object" ? req.body : {},authenticatedEventActor(req));
+      if (!result?.replayed) maintenanceController?.kick("events_admin_restore_after");
+      res.setHeader("Cache-Control","private, no-store");
+      res.status(200).json({ ok:true,data:result,
+        meta:{version:appVersion,release_id:releaseId,contract_version:EVENTS_CONTRACT_VERSION} });
+    } catch (error) {
+      fail(res,error,"Restore event failed",
+        String(error?.code || error?.sqlstate || "") === "40901" ? 409 : Number(error?.status) || 400);
     }
   });
 
