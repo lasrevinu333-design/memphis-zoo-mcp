@@ -347,6 +347,90 @@ function assertCompletionRecoveryWiring(workflow, sourceSuite) {
   "the exact completion proof must follow its source contract and precede shared mutable fixtures");
 }
 assertCompletionRecoveryWiring(productionRepairGate, currentSystemSource);
+const capacityAuthorityCommands = [
+  'node scripts/nonemployee-coverall-database-tests.mjs',
+  'node scripts/nonemployee-coverall-nonempty-lunch-database-tests.mjs',
+  'node scripts/nonemployee-coverall-current-source-database-tests.mjs',
+  'node scripts/native-target-source-database-tests.mjs',
+];
+const capacityAuthorityStepName = '      - name: Fresh nonemployee CoverAll, current source, and native target authorities\n';
+const capacityAuthorityStep = [capacityAuthorityStepName.trimEnd(), reviewedCleanShell,
+  '        run: |', '          set -euo pipefail',
+  ...capacityAuthorityCommands.map(command => '          ' + command), '',
+].join('\n');
+const capacitySourceImports=[
+  "await import('./nonemployee-coverall-source-transition-tests.mjs');",
+  "await import('./nonemployee-coverall-source-bridge-tests.mjs');",
+  "await import('./native-target-source-contract-tests.mjs');",
+];
+function assertCapacityAuthorityWiring(workflow,sourceSuite=currentSystemSource) {
+  // Retain the existing immutable image preparation, unconditional job header
+  // and canonical metadata protections, rather than invent a parallel gate.
+  assertReviewedRegressionGate(workflow, 'backend', 'current capacity/native authority gate');
+  const imports=sourceSuite.split('\n').map(line=>line.trim()).filter(line=>line&&!line.startsWith('//'));
+  assert.ok(imports.every(line=>/^await import\('\.\/[a-z0-9-]+\.mjs'\);$/.test(line)
+    ||/^console\.log\('CURRENT_SYSTEM_SOURCE_CONTRACTS_PASS:/.test(line)),
+    'owning source imports remain top-level and unsuppressed');
+  for(const statement of capacitySourceImports)assert.equal(imports.filter(line=>line===statement).length,1,
+    'owning current-source/bridge/native source contracts execute once, not just their DB fixtures');
+  assertExactCommandsInJob(workflow, 'backend', capacityAuthorityCommands, 'current capacity/native authority gate');
+  const job=workflowJobs(workflow).find(({name})=>name==='backend');
+  const start=job.source.indexOf(capacityAuthorityStepName);
+  assert.ok(start>=0&&job.source.indexOf(capacityAuthorityStepName,start+1)<0,'one owning authority step required');
+  const next=job.source.indexOf('      - ',start+capacityAuthorityStepName.length);
+  assert.equal(job.source.slice(start,next<0?undefined:next),capacityAuthorityStep,
+    'authority runners must be exact, unconditional, environment-clean and fail-fast; no skip/retention/wrapper');
+  const commands=workflowCommands(workflow,'backend');
+  const stages=capacityAuthorityCommands.map(command=>commands.find(item=>item.command===command));
+  const source=commands.find(item=>item.command==='node scripts/current-system-source-contract-tests.mjs');
+  const native=commands.find(item=>item.command==='node scripts/native-location-dispatch-database-tests.mjs');
+  const shared=commands.find(item=>item.command.startsWith('npm run --silent test:empty-db-rebuild | tee '));
+  assert.ok(source&&native&&shared&&source.stepIndex<native.stepIndex&&native.stepIndex<stages[0].stepIndex
+    &&stages.at(-1).stepIndex<shared.stepIndex,'fresh owning proofs follow source/native checks and precede shared mutable fixtures');
+  assert.ok(stages.every((item,i)=>item.stepIndex===stages[0].stepIndex&&(!i||item.lineIndex>stages[i-1].lineIndex)),
+    'fresh CoverAll/Event, nonempty typed lunch, current-source bridge and native targets must retain exact sequential order');
+}
+assertCapacityAuthorityWiring(productionRepairGate);
+let capacityWiringMutationCount=0;
+for(const command of capacityAuthorityCommands)for(const replacement of [
+  '# '+command,command+' || true',command+'; exit 0',
+  command+'\n          '+command,'if false; then '+command+'; fi',
+  'CAPACITY_KEEP_FAILED_DB_FOR_DIAGNOSTIC=1 '+command,
+]){
+  assert.throws(()=>assertCapacityAuthorityWiring(productionRepairGate.replace(command,replacement)),
+    'missing/duplicate/skip/ignore-error/retention mutations must fail for every owning runner');capacityWiringMutationCount++;
+}
+for(const [old,replacement] of [
+  ['        run: |','        if: ${{ false }}\n        run: |'],
+  ['        run: |','        continue-on-error: true\n        run: |'],
+  ['          set -euo pipefail','          set +e'],
+  [reviewedCleanShell,'        shell: bash'],
+  ['          '+capacityAuthorityCommands[0]+'\n          '+capacityAuthorityCommands[1],
+   '          '+capacityAuthorityCommands[1]+'\n          '+capacityAuthorityCommands[0]],
+]){
+  assert.throws(()=>assertCapacityAuthorityWiring(productionRepairGate.replace(capacityAuthorityStep,
+    capacityAuthorityStep.replace(old,replacement))),'conditional/env/failfast/order mutation must fail');capacityWiringMutationCount++;
+}
+assert.throws(()=>assertCapacityAuthorityWiring(productionRepairGate.replace(capacityAuthorityStep,'')
+  .replace('      - name: Isolated current weekly event authority\n',capacityAuthorityStep+'      - name: Isolated current weekly event authority\n')),
+  'owning proofs may not move behind shared mutable fixtures');capacityWiringMutationCount++;
+for(const statement of capacitySourceImports)for(const replacement of ['',`// ${statement}`,
+  `${statement}\n${statement}`,`if(false){${statement}}`,`try{${statement}}catch{}`]){
+  assert.throws(()=>assertCapacityAuthorityWiring(productionRepairGate,currentSystemSource.replace(statement,replacement)),
+    'owning source import removal/duplication/conditional/error suppression must fail');capacityWiringMutationCount++;
+}
+for(const command of capacityAuthorityCommands){
+  const source=readFileSync(resolve(root,command.slice('node '.length)),'utf8');
+  assert.match(source,/const container=`mz_schema_rebuild_[a-z_]+_\$\{process\.pid\}`;/,'each owning runner creates its own process-bound fixture');
+  assert.match(source,/docker\(\['run','--rm','-d'/,'each owning runner creates a fresh disposable database');
+  assert.match(source,/readdirSync\('supabase\/migrations'\)\.filter\([^\n]+\.sort\(\)/,'each owning runner consumes sorted current source migrations');
+  assert.ok(source.includes(rehearsalPostgresImage),'each owning runner uses the existing digest-pinned image');
+  assert.match(source,/finally\{[\s\S]*?(?:cleanup\(\)|docker\(\['rm','-f',container\]\))/,'each owning runner owns exact finally cleanup');
+  assert.doesNotMatch(source,/process\.env\.[A-Z_]*(?:DOCKER_CONTAINER|DATABASE_URL)/,'these fixtures must not adopt a supplied/shared/production database');
+}
+assert.match(readFileSync(resolve(root,'scripts/nonemployee-coverall-database-tests.mjs'),'utf8'),
+  /const eventBrief=verifyCoverAllEventBriefSqlFixture\(/,'fresh CoverAll proof must retain its actual Event SQL fixture, not only PDF mocks');
+console.log('CURRENT_CAPACITY_NATIVE_CI_WIRING_PASS:',capacityAuthorityCommands.length,'runners;',capacityWiringMutationCount,'hostile wiring mutations');
 for (const mutation of [
   productionRepairGate.replace(completionDatabaseCommand, `# ${completionDatabaseCommand}`),
   productionRepairGate.replace(completionDatabaseCommand, `${completionDatabaseCommand} || true`),

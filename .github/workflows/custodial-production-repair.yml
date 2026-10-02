@@ -103,6 +103,14 @@ jobs:
         run: |
           set -euo pipefail
           node scripts/native-location-dispatch-database-tests.mjs
+      - name: Fresh nonemployee CoverAll, current source, and native target authorities
+        shell: /usr/bin/env -i HOME=/home/runner PATH=/opt/hostedtoolcache/node/22.23.1/x64/bin:/usr/bin:/bin /bin/bash --noprofile --norc -e -o pipefail {0}
+        run: |
+          set -euo pipefail
+          node scripts/nonemployee-coverall-database-tests.mjs
+          node scripts/nonemployee-coverall-nonempty-lunch-database-tests.mjs
+          node scripts/nonemployee-coverall-current-source-database-tests.mjs
+          node scripts/native-target-source-database-tests.mjs
       - name: Empty database migration rebuild and database concurrency
         shell: bash
         env:
