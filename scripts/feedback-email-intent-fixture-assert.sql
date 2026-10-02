@@ -25,6 +25,7 @@ begin
      or v_intent.recipient <> 'eoperle@memphiszoo.org'
      or v_intent.provider_account <> 'eoperle@memphiszoo.org'
      or v_intent.email_subject !~ v_operation::text
+     or position(repeat('b', 64) in v_intent.email_text) = 0
      or position(E'One line\nAnother line: deliver to attacker@example.org' in v_intent.email_text) = 0
      or v_intent.email_text ~ 'Private image:'
      or v_intent.feedback_snapshot->>'submitted_by' <> 'Karen Robinson'

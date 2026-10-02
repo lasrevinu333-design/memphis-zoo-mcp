@@ -104,6 +104,7 @@ begin
   v_subject := 'Memphis Zoo Program Feedback [' || new.operation_id::text || ']';
   v_text := 'Memphis Zoo Program Feedback' || E'\n'
     || 'Operation ID: ' || new.operation_id::text || E'\n'
+    || 'Request fingerprint: ' || new.request_fingerprint || E'\n'
     || 'Feedback ID: ' || new.id::text || E'\n'
     || 'Submitted by: ' || new.submitted_by || E'\n'
     || 'Source: ' || new.hub_context || E'\n'
