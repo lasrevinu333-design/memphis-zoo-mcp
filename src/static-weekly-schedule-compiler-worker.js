@@ -7,6 +7,7 @@ import { adaptRegisteredRecurringSource, currentPatternFromPublishedReadback,
 import { createStaticWeeklyDraftRpcInput } from "./static-weekly-schedule-database-adapter.js";
 import { createStaticWeeklyProjectionWithLunchRpcInput, createStaticWeeklyLunchPreviewDocument } from "./static-weekly-lunch-publication.js";
 import { createRecurringManagerDecision } from "./static-weekly-recurring-preview.js";
+import { createOpeningCoverageReport, sanitizeOpeningCoverageDiagnostic } from './static-weekly-opening-coverage-report.js';
 import { installStaticWeeklySha256HexAccelerator } from "./static-weekly-schedule-model.js";
 import {
   getStaticWeeklySolverReadiness,
@@ -27,6 +28,8 @@ function serializedError(error) {
   return {
     code: String(error?.code || "static_weekly_compiler_worker_failed"),
     message: String(error?.message || "The isolated static weekly compiler failed."),
+    ...(sanitizeOpeningCoverageDiagnostic(error?.openingCoverageDiagnostic)
+      ? {openingCoverageDiagnostic:sanitizeOpeningCoverageDiagnostic(error.openingCoverageDiagnostic)} : {}),
   };
 }
 
@@ -35,7 +38,7 @@ function send(message) {
   process.send(message);
 }
 
-function prepareResult(result, preparation) {
+function prepareResult(result, preparation, source) {
   if (!preparation) return result;
   if (result?.status !== "FEASIBLE" || result?.publicationAuthority !== "ACCEPTABLE" || result?.verifier?.ok !== true) {
     const error = new Error("Canonical source did not produce a publishable verified schedule.");
@@ -43,19 +46,24 @@ function prepareResult(result, preparation) {
     throw error;
   }
   if (preparation.kind === "draft") {
-    return createStaticWeeklyDraftRpcInput({
+    const prepared = createStaticWeeklyDraftRpcInput({
       result,
       expectedRevision: preparation.expectedRevision,
       actor: preparation.actor,
     });
+    return {...prepared,openingCoverageReport:createOpeningCoverageReport({source,assignments:result.weeklyAssignments,
+      lunch:createStaticWeeklyLunchPreviewDocument(result),context:{publicationId:source.version?.publicationId||source.versions?.[0]?.publicationId||null,
+        authorityRevision:preparation.expectedRevision}})};
   }
   if (preparation.kind === "projection") {
-    return createStaticWeeklyProjectionWithLunchRpcInput({
+    const prepared = createStaticWeeklyProjectionWithLunchRpcInput({
       result,
       publicationId: preparation.publicationId,
       expectedRevision: preparation.expectedRevision,
       actor: preparation.actor,
     });
+    return {...prepared,openingCoverageReport:createOpeningCoverageReport({source,assignments:result.weeklyAssignments,
+      lunch:prepared.lunchDocument,context:{publicationId:preparation.publicationId,authorityRevision:preparation.expectedRevision}})};
   }
   const error = new Error("The isolated compiler preparation kind is invalid.");
   error.code = "static_weekly_compiler_preparation_invalid";
@@ -102,7 +110,7 @@ process.on("message", async (message) => {
   try {
     if (message.type === "compile") {
       const result = await compileStaticWeeklySchedule(message.input);
-      send({ type: "result", id: message.id, result: prepareResult(result, message.preparation) });
+      send({ type: "result", id: message.id, result: prepareResult(result, message.preparation, message.input) });
     } else {
       const request = message.input || {};
       const bound = currentPatternFromPublishedReadback({
@@ -149,6 +157,10 @@ process.on("message", async (message) => {
         notificationIntents: lunch.notification_intents };
       const decision = createRecurringManagerDecision({ candidateInput: candidate.compilerInput,
         compiled, lunch, changes: solved.preview });
+      const decisionDigest = postgresJsonbContentDigest(decision);
+      const openingCoverageReport = createOpeningCoverageReport({source:candidate.compilerInput,
+        assignments:compiled.weeklyAssignments,lunch,decisionDigest,
+        context:{publicationId:bound.publicationId,authorityRevision:bound.authorityRevision}});
       const publicCandidate = {
         status: "CANDIDATE_ONLY", sourceId: bound.sourceId,
         publicationId: bound.publicationId, authorityRevision: bound.authorityRevision,
@@ -175,7 +187,7 @@ process.on("message", async (message) => {
         openWorkDigest: postgresJsonbContentDigest(compiled.openWork),
         openWorkCount: compiled.openWork.length,
         shiftEndDerivationDigest: postgresJsonbContentDigest(compiled.canonicalAuthority.shiftEndDerivation || null),
-        decision, decisionDigest: postgresJsonbContentDigest(decision),
+        decision, decisionDigest, openingCoverageReport,
         compilerStatus: compiled.status, publicationAuthority: compiled.publicationAuthority,
         verifierOk: compiled.verifier.ok, reviewWorkCount: compiled.reviewWork.length,
         changes: solved.preview, registrationRequired: true, managerConfirmationRequired: true,

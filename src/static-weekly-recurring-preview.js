@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFileSync, readdirSync } from 'node:fs';
 import { postgresJsonbContentDigest } from './static-weekly-schedule-compiler.js';
+import {assertOpeningCoverageDecisionReport,assertOpeningCoverageCanonicalReport} from './static-weekly-opening-coverage-report.js';
 
 export const RECURRING_DECISION_SCHEMA = 'memphis-zoo.recurring-manager-decision.v1';
 
@@ -14,7 +15,9 @@ const sourceFiles = readdirSync(sourceDirectory).filter(name => name.startsWith(
 const implementationFiles = [...sourceFiles.map(name => [name, new URL(name, sourceDirectory)]),
   ...['custodial-six-person-static-20260926.json', 'custodial-recurring-schedule-20260924.json',
     'custodial-full-nine-family-owners-20260926.json'].map(name => [name, new URL(`../config/${name}`, import.meta.url)]),
-  ['package-lock.json', new URL('../package-lock.json', import.meta.url)]];
+  ['package-lock.json', new URL('../package-lock.json', import.meta.url)],
+  ['schedule-component-weight-authority.js',new URL('./schedule-component-weight-authority.js',import.meta.url)],
+  ['custodial-component-weight-authority-v1.json',new URL('../config/custodial-component-weight-authority-v1.json',import.meta.url)]];
 export const RECURRING_IMPLEMENTATION_DIGEST = postgresJsonbContentDigest(
   implementationFiles.map(([path, url]) => ({ path,
     sha256: createHash('sha256').update(readFileSync(url)).digest('hex') })));
@@ -53,6 +56,7 @@ export function createRecurringManagerDecision({ candidateInput, compiled, lunch
 // Recheck the public display payload against the independently returned
 // compiler witnesses before binding it into the named manager preview.
 export function assertRecurringManagerDecision(candidate) {
+  assertOpeningCoverageDecisionReport(candidate);
   const decision = candidate?.decision;
   assert.equal(decision?.schema, RECURRING_DECISION_SCHEMA, 'complete recurring decision required');
   assert.equal(decision.implementationDigest, RECURRING_IMPLEMENTATION_DIGEST,
@@ -98,4 +102,5 @@ export function assertRecurringAdmissionCandidate(reply) {
   assert.equal(reply.candidate.status, 'CANDIDATE_ONLY');
   assert.equal(reply.candidate.registrationRequired, true);
   assert.equal(reply.candidate.managerConfirmationRequired, true);
+  assertOpeningCoverageCanonicalReport(reply.candidate,source);
 }

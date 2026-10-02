@@ -11,6 +11,11 @@ import { resolve } from "node:path";
 import { createStaticWeeklyControlPlane, STATIC_WEEKLY_DATABASE_OPERATION_STATEMENT_TIMEOUT_MS } from "../src/static-weekly-control-plane.js";
 import { createStaticWeeklyDraftRpcInput } from "../src/static-weekly-schedule-database-adapter.js";
 import { compileStaticWeeklySchedule, postgresJsonbContentDigest } from "../src/static-weekly-schedule-compiler.js";
+import {createOpeningCoverageReport} from '../src/static-weekly-opening-coverage-report.js';
+import {loadOpeningCoverageFixture} from './static-weekly-opening-coverage-report-tests.mjs';
+import {installStaticWeeklySha256HexAccelerator} from '../src/static-weekly-schedule-model.js';
+installStaticWeeklySha256HexAccelerator(x=>createHash('sha256').update(x).digest('hex'));
+const openingActual=loadOpeningCoverageFixture().baseline;
 
 const root = resolve(new URL("..", import.meta.url).pathname);
 const controlPlaneSource = readFileSync(resolve(root, "src/static-weekly-control-plane.js"), "utf8");
@@ -651,12 +656,15 @@ const { RECURRING_DECISION_SCHEMA, RECURRING_IMPLEMENTATION_DIGEST } = await imp
 const recurringMockCandidate = (basis) => {
   const decision = { schema: RECURRING_DECISION_SCHEMA, implementationDigest: RECURRING_IMPLEMENTATION_DIGEST,
     effectiveDate: basis.effectiveDate, compilerVersion: 'synthetic-recurring-compiler',
-    candidateSourceDigest: 'a'.repeat(64), recurringAvailabilityDigest: '6'.repeat(64), geographyDigest: '7'.repeat(64),
-    assignments: [{ workId: 'synthetic-assigned', status: 'ASSIGNED' }],
-    gaps: { open: [{ workId: 'synthetic-open' }], review: [] },
-    fixedLunch: { loans: [{ id: 'synthetic-loan' }], responsibilities: [], notificationIntents: [] },
-    shiftEnd: null, metrics: {}, changes: [] };
-  return { status: "CANDIDATE_ONLY", compilerStatus: "FEASIBLE",
+    candidateSourceDigest: postgresJsonbContentDigest(openingActual.source),
+    recurringAvailabilityDigest: postgresJsonbContentDigest(openingActual.source.version.slotAvailability),
+    geographyDigest: postgresJsonbContentDigest(openingActual.source.proximity),
+    assignments: structuredClone(openingActual.result.assignments),
+    gaps: { open: structuredClone(openingActual.result.assignments.filter(r=>openingActual.result.open.includes(r.planWorkId))), review: [] },
+    fixedLunch: { loans: structuredClone(openingActual.result.lunch.loans), responsibilities: structuredClone(openingActual.result.lunch.responsibilities),
+      notificationIntents: structuredClone(openingActual.result.lunch.notification_intents) },
+    shiftEnd: null, metrics: structuredClone(openingActual.result.metrics), changes: [] };
+  const candidate={ status: "CANDIDATE_ONLY", compilerStatus: "FEASIBLE",
   publicationAuthority: "ACCEPTABLE", verifierOk: true, reviewWorkCount: 0,
   sourceId: basis.publishedSource.source_id, publicationId: basis.publishedSource.publication_id,
   authorityRevision: basis.expectedRevision,
@@ -664,15 +672,18 @@ const recurringMockCandidate = (basis) => {
   managerSnapshotDigest: postgresJsonbContentDigest(basis.managerSnapshot),
   fullNineSourceDigest: basis.fullNineSource
     ? postgresJsonbContentDigest(basis.fullNineSource.compiler_input) : null,
-  candidateSourceDigest: "a".repeat(64), readbackPatternDigest: "c".repeat(64),
+  candidateSourceDigest: decision.candidateSourceDigest, readbackPatternDigest: "c".repeat(64),
   modelBasisDigest: "d".repeat(64), assignmentWitnessDigest: "e".repeat(64),
   finalWitnessDigest: "f".repeat(64), weeklyAssignmentsDigest: postgresJsonbContentDigest(decision.assignments),
   metricsDigest: postgresJsonbContentDigest(decision.metrics), lunchFactsDigest: postgresJsonbContentDigest(decision.fixedLunch),
   openWorkDigest: postgresJsonbContentDigest(decision.gaps.open), shiftEndDerivationDigest: postgresJsonbContentDigest(decision.shiftEnd),
   effectiveDate: basis.effectiveDate, compilerVersion: decision.compilerVersion,
   decision, decisionDigest: postgresJsonbContentDigest(decision),
-  lunchLoanCount: 1, openWorkCount: 1, patternFingerprint: "b".repeat(64),
+  lunchLoanCount: decision.fixedLunch.loans.length, openWorkCount: decision.gaps.open.length, patternFingerprint: "b".repeat(64),
   changes: [], registrationRequired: true, managerConfirmationRequired: true };
+  candidate.openingCoverageReport=createOpeningCoverageReport({source:openingActual.source,assignments:decision.assignments,
+    lunch:openingActual.result.lunch,context:{publicationId:candidate.publicationId,authorityRevision:candidate.authorityRevision},
+    decisionDigest:candidate.decisionDigest});return candidate;
 };
 const previewControlPlane = controlPlaneFor(previewAuthority, async () => acceptedProjection, {
   recurringCandidatePreparer: async (basis) => {
@@ -702,8 +713,10 @@ const repairContext={schema:'static-weekly.recurring-repair-basis.v1',state:'REP
  managerConfirmationRequired:true,published:false};
 const repairTransform=value=>({...value,publication_id:repairPatternId,repair_context:repairContext,
  repair_context_digest:postgresJsonbContentDigest(repairContext)});
-const repairCandidate=basis=>({...recurringMockCandidate(basis),publicationId,patternPublicationId:repairPatternId,
- repairContext:structuredClone(basis.publishedSource.repair_context),repairContextDigest:basis.publishedSource.repair_context_digest});
+const repairCandidate=basis=>{const c={...recurringMockCandidate(basis),publicationId,patternPublicationId:repairPatternId,
+ repairContext:structuredClone(basis.publishedSource.repair_context),repairContextDigest:basis.publishedSource.repair_context_digest};
+ c.openingCoverageReport=createOpeningCoverageReport({source:openingActual.source,assignments:c.decision.assignments,
+  lunch:openingActual.result.lunch,context:{publicationId,authorityRevision:c.authorityRevision},decisionDigest:c.decisionDigest});return c;};
 const repairDatabase=createAuthorityDatabase({revision:7,previewSourceTransform:repairTransform});
 const repairPlane=controlPlaneFor(repairDatabase,async()=>acceptedProjection,{recurringCandidatePreparer:async basis=>repairCandidate(basis)});
 const repairedPreview=await repairPlane.previewRecurringStaffing({manager,effectiveStart:'2026-10-05',expectedRevision:7});

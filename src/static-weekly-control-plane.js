@@ -21,6 +21,7 @@ import { createStaffingCandidateSet } from "./static-weekly-staffing-candidates.
 import { createStaffingPreparationMeter, enumerateStaffingServiceWindow } from "./static-weekly-staffing-preparation.js";
 import { createStaffingWeekPreviewInput } from "./static-weekly-staffing-preview.js";
 import { assertRecurringManagerDecision, assertRecurringAdmissionCandidate } from "./static-weekly-recurring-preview.js";
+import {OPENING_COVERAGE_ERROR,sanitizeOpeningCoverageDiagnostic} from './static-weekly-opening-coverage-report.js';
 import { recurringPatternAuthority, assertRecurringRepairCandidate } from "./static-weekly-recurring-repair-basis.js";
 import { withRecurringDependencyStatus } from "./static-weekly-recurring-dependency-result.js";
 import { placePublicationInput, placePublicationSummary } from "./place-operational-adapter.js";
@@ -625,6 +626,7 @@ export function createStaticWeeklyControlPlane({
       assertRecurringManagerDecision(candidate);
       assertRecurringRepairCandidate(candidate, basis.patternAuthority);
     } catch (error) {
+      if(error?.code===OPENING_COVERAGE_ERROR&&sanitizeOpeningCoverageDiagnostic(error.openingCoverageDiagnostic))throw error;
       throw fail("static_weekly_recurring_preview_rejected",
         `The complete manager decision does not match its verified compiler result: ${error.message}`);
     }
@@ -855,7 +857,10 @@ export function createStaticWeeklyControlPlane({
         const prepared = clone(await prepareInsideTransaction(client, () =>
           recurringAdmissionPreparer(recurringPreparationInput(basis, date, revision))));
         try { assertRecurringAdmissionCandidate(prepared); }
-        catch (error) { throw fail("static_weekly_recurring_private_candidate_rejected", `The private recurring candidate is invalid: ${error.message}`); }
+        catch (error) {
+          if(error?.code===OPENING_COVERAGE_ERROR&&sanitizeOpeningCoverageDiagnostic(error.openingCoverageDiagnostic))throw error;
+          throw fail("static_weekly_recurring_private_candidate_rejected", `The private recurring candidate is invalid: ${error.message}`);
+        }
         const candidate = prepared.candidate;
         validateRecurringCandidate(candidate, basis, revision);
         if (recurringPreviewDigest(actor, basis, candidate) !== expectedDigest) {

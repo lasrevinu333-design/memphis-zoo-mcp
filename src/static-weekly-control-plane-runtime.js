@@ -9,6 +9,7 @@ import { makeRestoreMutationGate } from "./restore-mutation-gate.js";
 import { renderCoverAllPdfPair } from "./static-weekly-coverall-print.js";
 import { createDatedTransitionManagerRouter } from "./static-weekly-dated-transition-manager-router.js";
 import { createConfiguredOctoberDatedController } from "./static-weekly-dated-transition-postgres.js";
+import {OPENING_COVERAGE_ERROR,sanitizeOpeningCoverageDiagnostic} from './static-weekly-opening-coverage-report.js';
 
 const text = (value) => typeof value === "string" ? value.trim() : "";
 const fail = (code, message = code) => Object.assign(new Error(message), { code });
@@ -113,8 +114,12 @@ export function createStaticWeeklyControlPlaneRuntime({
           "static_weekly_control_plane_busy",
           "static_weekly_control_plane_queue_timeout",
         ]).has(error?.code);
-        const invalid = ["static_weekly_control_plane_compiler_rejected", "static_weekly_recurring_confirmation_request_invalid", "static_weekly_recurring_delivery_request_invalid"].includes(error?.code);
-        res.status(invalid ? 422 : unavailable ? 503 : 409).json({ ok: false, error: error?.message || "Static weekly control-plane request failed.", code: error?.code || "static_weekly_control_plane_failed" });
+        const invalid = ["static_weekly_control_plane_compiler_rejected", "static_weekly_recurring_confirmation_request_invalid", "static_weekly_recurring_delivery_request_invalid",OPENING_COVERAGE_ERROR].includes(error?.code);
+        const diagnostic=error?.code===OPENING_COVERAGE_ERROR?sanitizeOpeningCoverageDiagnostic(error.openingCoverageDiagnostic):null;
+        res.status(invalid ? 422 : unavailable ? 503 : 409).json({ ok: false, error: diagnostic
+          ?'Opening planned coverage has inconsistent essential source facts. Nothing was admitted or published.'
+          :error?.message || "Static weekly control-plane request failed.", code: error?.code || "static_weekly_control_plane_failed",
+          ...(diagnostic?{openingCoverageDiagnostic:diagnostic}:{}) });
       }
     };
   }
@@ -163,11 +168,16 @@ export function createStaticWeeklyControlPlaneRuntime({
     controller:boundedController,requireManagerWrite,namedManager,manager,
   }));
   app.get("/static-weekly/manager-snapshot", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.getManagerSnapshot({ manager: manager(req), weekStart: req.query?.week_start })));
-  app.post("/static-weekly/recurring-adaptation/preview", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.previewRecurringStaffing({
+  app.post("/static-weekly/recurring-adaptation/preview", requireManagerWrite, namedManager, respond((req) => {
+    const body=req.body,allowed=new Set(['effective_start','expected_revision','full_nine_source_id']);
+    if(!body||typeof body!=='object'||Array.isArray(body)||!Object.hasOwn(body,'effective_start')
+      ||!Object.hasOwn(body,'expected_revision')||Object.keys(body).some(key=>!allowed.has(key)))
+      throw fail('static_weekly_recurring_confirmation_request_invalid','Preview accepts only source/revision selectors, never supplied schedule, report, compiler or manager facts.');
+    return authorityControlPlane.previewRecurringStaffing({
     manager: manager(req), effectiveStart: req.body?.effective_start,
     expectedRevision: req.body?.expected_revision,
     fullNineSourceId: req.body?.full_nine_source_id || null,
-  })));
+  });}));
   app.post("/static-weekly/recurring-adaptation/confirm", requireManagerWrite, namedManager, respond((req) => {
     const body=req.body;
     const required=["confirmation_key","effective_start","expected_revision","preview_digest"];

@@ -12,6 +12,7 @@ import { fork } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { REQUEST_DEADLINE_MILLISECONDS } from "./static-weekly-schedule-program.js";
 import { STATIC_WEEKLY_FUSED_COMPILER_RESOURCE_LIMITS } from "./static-weekly-schedule-runtime-policy.js";
+import {sanitizeOpeningCoverageDiagnostic} from './static-weekly-opening-coverage-report.js';
 
 export const STATIC_WEEKLY_COMPILER_RUNTIME_LIMITS = Object.freeze({
   initializationMilliseconds: 30_000,
@@ -33,7 +34,10 @@ function runtimeError(code, message) {
 }
 
 function workerFailure(message, fallbackCode = "static_weekly_compiler_worker_failed") {
-  return runtimeError(message?.code || fallbackCode, message?.message || "The isolated static weekly compiler failed.");
+  const error=runtimeError(message?.code || fallbackCode, message?.message || "The isolated static weekly compiler failed.");
+  const diagnostic=sanitizeOpeningCoverageDiagnostic(message?.openingCoverageDiagnostic);
+  if(diagnostic)error.openingCoverageDiagnostic=diagnostic;
+  return error;
 }
 
 function productionWorkerUrl() {

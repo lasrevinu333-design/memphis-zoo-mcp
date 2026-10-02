@@ -2,30 +2,45 @@ import assert from 'node:assert/strict';
 import {createStaticWeeklyControlPlane} from '../src/static-weekly-control-plane.js';
 import {RECURRING_DECISION_SCHEMA,RECURRING_IMPLEMENTATION_DIGEST} from '../src/static-weekly-recurring-preview.js';
 import {postgresJsonbContentDigest as digest} from '../src/static-weekly-schedule-compiler.js';
+import {createOpeningCoverageReport} from '../src/static-weekly-opening-coverage-report.js';
+import {loadOpeningCoverageFixture} from './static-weekly-opening-coverage-report-tests.mjs';
+import {installStaticWeeklySha256HexAccelerator} from '../src/static-weekly-schedule-model.js';
+import {createHash} from 'node:crypto';
+installStaticWeeklySha256HexAccelerator(x=>createHash('sha256').update(x).digest('hex'));
 
 // Transaction orchestration only. SQL, compiler, HTTP and physical proofs are
 // separately required; this mock never supplies release authority.
 const id=n=>`81000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 const manager={manager_id:id(1),manager_display_name:'Second authorized synthetic manager',auth_mode:'trusted_device'};
 const week='2026-10-05',key=id(2),oldPublication=id(3),sourceId=id(4),newSourceId=id(5),publicationId=id(6),projectionId=id(7);
-const raw={serviceDate:week,timezone:'America/Chicago',slots:[],proximity:[],exceptions:[],
- version:{id:id(8),publicationId:oldPublication,effectiveStart:week,effectiveEnd:null,status:'published',
-  namedAbsentSlotIds:[],slotAvailability:[],assignments:[{workId:'synthetic-work'}]}};
+// The former empty source was sufficient for transaction orchestration but
+// cannot witness canonical report authority. Reuse lossless executed LOCAL
+// selection facts; SQL child responses remain explicitly orchestration mocks.
+const actual=loadOpeningCoverageFixture().baseline,raw=structuredClone(actual.source);
+raw.version.id=id(8);raw.version.publicationId=oldPublication;
+const reportCache=new Map();
 function candidateFor(basis){
  const decision={schema:RECURRING_DECISION_SCHEMA,implementationDigest:RECURRING_IMPLEMENTATION_DIGEST,
   effectiveDate:week,compilerVersion:'synthetic-only',candidateSourceDigest:digest(raw),
-  recurringAvailabilityDigest:digest([]),geographyDigest:digest([]),assignments:[{workId:'synthetic-work',status:'ASSIGNED'}],
-  gaps:{open:[],review:[]},fixedLunch:{loans:[],responsibilities:[],notificationIntents:[]},shiftEnd:null,metrics:{},changes:[]};
- return{status:'CANDIDATE_ONLY',compilerStatus:'FEASIBLE',publicationAuthority:'ACCEPTABLE',verifierOk:true,
+  recurringAvailabilityDigest:digest(raw.version.slotAvailability),geographyDigest:digest(raw.proximity),assignments:structuredClone(actual.result.assignments),
+  gaps:{open:structuredClone(actual.result.assignments.filter(r=>actual.result.open.includes(r.planWorkId))),review:[]},
+  fixedLunch:{loans:structuredClone(actual.result.lunch.loans),responsibilities:structuredClone(actual.result.lunch.responsibilities),
+   notificationIntents:structuredClone(actual.result.lunch.notification_intents)},shiftEnd:null,metrics:structuredClone(actual.result.metrics),changes:[]};
+ const candidate={status:'CANDIDATE_ONLY',compilerStatus:'FEASIBLE',publicationAuthority:'ACCEPTABLE',verifierOk:true,
   sourceId,publicationId:oldPublication,authorityRevision:basis.expectedRevision,effectiveDate:week,
   publishedSourceDigest:digest(basis.publishedSource.compiler_input),managerSnapshotDigest:digest(basis.managerSnapshot),
   fullNineSourceDigest:basis.fullNineSource?digest(basis.fullNineSource.compiler_input):null,
   candidateSourceDigest:digest(raw),readbackPatternDigest:'c'.repeat(64),modelBasisDigest:'d'.repeat(64),
   assignmentWitnessDigest:'e'.repeat(64),finalWitnessDigest:'f'.repeat(64),weeklyAssignmentsDigest:digest(decision.assignments),
   metricsDigest:digest(decision.metrics),lunchFactsDigest:digest(decision.fixedLunch),openWorkDigest:digest(decision.gaps.open),
-  shiftEndDerivationDigest:digest(null),lunchLoanCount:0,openWorkCount:0,reviewWorkCount:0,assignmentCount:1,
+  shiftEndDerivationDigest:digest(null),lunchLoanCount:decision.fixedLunch.loans.length,openWorkCount:decision.gaps.open.length,reviewWorkCount:0,assignmentCount:raw.version.assignments.length,
   compilerVersion:decision.compilerVersion,decision,decisionDigest:digest(decision),changes:[],
   registrationRequired:true,managerConfirmationRequired:true};
+ const reportKey=digest({sourceDigest:digest(raw),decisionDigest:candidate.decisionDigest,revision:basis.expectedRevision});
+ if(!reportCache.has(reportKey))reportCache.set(reportKey,createOpeningCoverageReport({source:raw,assignments:decision.assignments,lunch:actual.result.lunch,
+  context:{publicationId:oldPublication,authorityRevision:basis.expectedRevision},decisionDigest:candidate.decisionDigest}));
+ candidate.openingCoverageReport=structuredClone(reportCache.get(reportKey));
+ return candidate;
 }
 function harness({failAt=null,mutatePrivate=null,commitUnknown=false}={}){
  let state={revision:7,generation:2,publication:oldPublication,projection:null,receipt:null,writes:[]};
