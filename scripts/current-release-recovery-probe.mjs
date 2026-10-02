@@ -43,6 +43,49 @@ function entries(rows, fields, code) {
   same(rows,sorted(rows),code + '_order');
 }
 
+const callable=row=>row.kind==='function'||(row.kind==='grant'&&row.identity.includes('('));
+const resolutionKey=row=>JSON.stringify([row.origin,row.kind,row.identity]);
+function membershipRequests(required,surface,inventory) {
+  const lists=[['required',required],['surface',surface],['inventory',inventory.map(({kind,identity})=>({kind,identity}))]];
+  for(const [origin,rows] of lists)entries(rows,['kind','identity'],'membership_'+origin);
+  for(const row of surface)requireThat(inventory.some(x=>key(x)===key(row)),'surface_inventory_coverage');
+  for(const row of required)if(!callable(row))requireThat(surface.some(x=>key(x)===key(row))&&inventory.some(x=>key(x)===key(row)),'required_source_member_missing');
+  return lists.flatMap(([origin,rows])=>rows.filter(callable).map(({kind,identity})=>({origin,kind,identity})))
+    .sort((a,b)=>resolutionKey(a)<resolutionKey(b)?-1:resolutionKey(a)>resolutionKey(b)?1:0);
+}
+
+// Only data literals enter this fixed read-only catalog query. Original source
+// requirements never come from whichever surface/inventory entries survived.
+export function requiredMembershipQuery(required,surface,inventory) {
+  const requests=membershipRequests(required,surface,inventory);
+  return `begin read only;set local search_path=pg_catalog,public;
+with requested as (select * from pg_catalog.jsonb_to_recordset(${q(JSON.stringify(requests))}::jsonb)
+ as r(origin text,kind text,identity text))
+select coalesce(jsonb_agg(jsonb_build_object('origin',origin,'kind',kind,'identity',identity,
+ 'oid',pg_catalog.to_regprocedure(identity)::oid::text) order by origin,kind,identity),'[]'::jsonb) from requested;
+commit;`;
+}
+
+export function assertRequiredMembership(required,surface,inventory,observed) {
+  const requests=membershipRequests(required,surface,inventory);
+  requireThat(Array.isArray(observed)&&observed.length===requests.length,'required_resolution_count');
+  const byIdentity=new Map(),resolved=new Map();
+  for(const row of observed){
+    exactKeys(row,['origin','kind','identity','oid'],'required_resolution_shape');
+    requireThat(typeof row.oid==='string'&&/^[1-9][0-9]{0,9}$/.test(row.oid)&&Number(row.oid)<=4294967295,'required_resolution_oid');
+    requireThat(!resolved.has(resolutionKey(row)),'required_resolution_duplicate');
+    if(byIdentity.has(row.identity))requireThat(byIdentity.get(row.identity)===row.oid,'required_resolution_inconsistent');
+    byIdentity.set(row.identity,row.oid);resolved.set(resolutionKey(row),row.oid);
+  }
+  same([...resolved.keys()].sort(),requests.map(resolutionKey).sort(),'required_resolution_tuple_set');
+  for(const row of required)if(callable(row)){
+    const oid=resolved.get(resolutionKey({origin:'required',...row}));
+    for(const [origin,rows] of [['surface',surface],['inventory',inventory]])
+      requireThat(rows.some(x=>x.kind===row.kind&&callable(x)&&resolved.get(resolutionKey({origin,kind:x.kind,identity:x.identity}))===oid),'required_source_member_missing');
+  }
+  return observed;
+}
+
 export function validateRecoveryManifest(m) {
   exactKeys(m,['schema','synthetic','production','target','source','inventory','surface','required_surface','health_checks','protected_rows','faults','omitted_surface','manager_id'],'manifest_shape');
   requireThat(m.schema === 'custodial.current-release-recovery-probe-manifest.v1' && m.synthetic === true && m.production === false,'synthetic_manifest_required');
@@ -67,7 +110,9 @@ export function validateRecoveryManifest(m) {
   entries(m.surface,['kind','identity'],'surface');
   entries(m.required_surface,['kind','identity'],'required_surface');
   for (const row of m.surface) requireThat(m.inventory.some(x=>key(x)===key(row)),'surface_inventory_coverage');
-  for (const row of m.required_surface) requireThat(m.surface.some(x=>key(x)===key(row)),'required_surface_coverage');
+  // Callable spelling is not coverage: current OID binding is mandatory before
+  // any authority setup below. Noncallables still require literal coverage now.
+  for (const row of m.required_surface) if(!callable(row))requireThat(m.surface.some(x=>key(x)===key(row)),'required_surface_coverage');
   requireThat(Array.isArray(m.health_checks) && m.health_checks.length > 0
     && m.health_checks.every(x=>/^[a-z][a-z0-9_]+$/.test(x)),'health_checks');
   same(m.health_checks,[...new Set(m.health_checks)].sort(),'health_checks_order');
@@ -77,6 +122,7 @@ export function validateRecoveryManifest(m) {
   for (const row of m.faults) requireThat(m.inventory.some(x=>key(x)===key(row)),'fault_inventory_identity');
   exactKeys(m.omitted_surface,['kind','identity'],'omitted_surface');
   requireThat(m.required_surface.some(x=>key(x)===key(m.omitted_surface)),'required_omission_identity');
+  requireThat(m.surface.some(x=>key(x)===key(m.omitted_surface))&&m.inventory.some(x=>key(x)===key(m.omitted_surface)),'required_omission_exact_member');
   requireThat(Array.isArray(m.protected_rows) && m.protected_rows.length > 0 && m.protected_rows.length <= 100,'protected_rows');
   for (const row of m.protected_rows) {
     exactKeys(row,['relation','count','sha256'],'protected_row_shape');
@@ -183,6 +229,8 @@ export function runCurrentReleaseRecoveryProbe(input,{root=ROOT,run=realRun}={})
     same(observed,m.protected_rows,'protected_rows_changed');return observed;
   }
   defaults('defaults_before');inventory('inventory_before');surface('surface_before');protectedRows('protected_before');
+  const requiredBefore=assertRequiredMembership(m.required_surface,m.surface,m.inventory,
+    json('required_before',requiredMembershipQuery(m.required_surface,m.surface,m.inventory)));
   requireThat(sql('manager',`select count(*) from public.ops_manager_managers where manager_id=${q(m.manager_id)}::uuid and active and revoked_at is null and roles && array['DIRECTOR','SECURITY_ADMIN']::text[];`)==='1','existing_synthetic_manager_required');
   // No direct configuration-table update, disabled verifier or provider key.
   const secret='synthetic-current-recovery-'+randomUUID();
@@ -237,11 +285,14 @@ export function runCurrentReleaseRecoveryProbe(input,{root=ROOT,run=realRun}={})
   requireThat(restored?.canary_paused===true && restored.restored_objects===m.inventory.length,'restore_receipt_mismatch');
   const after=json('health_after',healthSql);assertHealth(after,m);
   inventory('inventory_after');surface('surface_after');const protectedAfter=protectedRows('protected_after');
+  const requiredAfter=assertRequiredMembership(m.required_surface,m.surface,m.inventory,
+    json('required_after',requiredMembershipQuery(m.required_surface,m.surface,m.inventory)));
   callers('callers_after');defaults('defaults_after');
   requireThat(sql('paused_after',`select public.custodial_release_canary_is_paused('KIOSK_08',${q(secret)});`)==='t','canary_not_left_paused');
   same(inspectTarget(run,m.target),target,'target_changed');same(localRecoverySource(root,run),m.source,'source_changed_during_probe');
   return {schema:'custodial.current-release-recovery-probe-receipt.v1',execution:fake?'FAKE_SUBPROCESS_UNIT_ONLY':'OWNED_SYNTHETIC_ENGINE',engine_executed:!fake,
     production:false,release_admission:false,manifest_sha256:hash(canonical(m)),source:m.source,target,controls,
+    required_surface:m.required_surface,required_surface_sha256:hash(canonical(m.required_surface)),required_membership:{before:requiredBefore,after:requiredAfter},
     inventory_count:m.inventory.length,inventory_sha256:hash(canonical(m.inventory)),surface_count:m.surface.length,
     health_before:before,health_after:after,protected_rows:protectedAfter,rollback_faults:phases,
     restored_objects:restored.restored_objects,canary_left_paused:true,automatic_grants_absent:true,

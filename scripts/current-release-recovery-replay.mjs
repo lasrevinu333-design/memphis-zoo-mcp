@@ -3,7 +3,7 @@ import {spawn} from 'node:child_process';
 import {constants,closeSync,fsyncSync,lstatSync,openSync,readFileSync,realpathSync,writeFileSync} from 'node:fs';
 import {dirname,isAbsolute,join,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {localRecoverySource,RECOVERY_KINDS,validateRecoveryManifest} from './current-release-recovery-probe.mjs';
+import {assertRequiredMembership,localRecoverySource,RECOVERY_KINDS,requiredMembershipQuery,validateRecoveryManifest} from './current-release-recovery-probe.mjs';
 import {captureSchemaCatalog,fingerprintSchemaCatalog,stableSchemaJson} from './schema-fingerprint-catalog.mjs';
 
 // Root supplies an owned empty fixture. This module never starts a container,
@@ -131,6 +131,9 @@ function assertProbeReceipt(r,m,fake){
   const expected=m.probe_manifest;
   must(r.schema==='custodial.current-release-recovery-probe-receipt.v1'&&r.engine_executed===!fake&&r.execution===(fake?'FAKE_SUBPROCESS_UNIT_ONLY':'OWNED_SYNTHETIC_ENGINE')&&r.production===false&&r.release_admission===false,'probe_execution_scope');
   same(r.source,m.source,'probe_receipt_source');must(r.manifest_sha256===hash(canon(expected)),'probe_manifest_receipt');
+  same(r.required_surface,m.required_surface,'probe_original_requirements');must(r.required_surface_sha256===hash(canon(m.required_surface)),'probe_requirement_digest');
+  shape(r.required_membership,['before','after'],'probe_required_membership');
+  for(const rows of [r.required_membership.before,r.required_membership.after])assertRequiredMembership(m.required_surface,expected.surface,expected.inventory,rows);
   same(r.target,{name:m.target.name,id:m.target.id,image:m.target.image,network:'none',fixture_id:m.target.fixture_id},'probe_receipt_target');
   must(r.inventory_count===expected.inventory.length&&r.inventory_sha256===hash(canon(expected.inventory))&&r.surface_count===expected.surface.length&&r.restored_objects===expected.inventory.length&&r.canary_left_paused===true&&r.automatic_grants_absent===true,'probe_restore_receipt');
   same(r.protected_rows,expected.protected_rows,'probe_protected_receipt');
@@ -223,16 +226,19 @@ export async function runRecoveryReplay(plan,{root=ROOT,io=nodeIO,signal}={}){
         const inventory=sort(await query('inventory_observed',INVENTORY_SQL)),surface=sort(await query('surface_observed',SURFACE_SQL));
         write(stage+'-observed-inventory.json',inventory);write(stage+'-observed-surface.json',surface);
         same([...new Set(inventory.map(x=>x.kind))].sort(),RECOVERY_KINDS,'all_inventory_kinds_required');
-        const missing=m.required_surface.filter(wanted=>!surface.some(x=>key(x)===key(wanted))||!inventory.some(x=>key(x)===key(wanted)));
-        write(stage+'-required-membership.json',{required:m.required_surface,missing,independently_accepted:false});must(missing.length===0,'required_source_member_missing');
+        const required_resolution=await query('required_membership',requiredMembershipQuery(m.required_surface,surface,inventory));
+        write(stage+'-required-membership.json',{required:m.required_surface,required_sha256:hash(canon(m.required_surface)),resolution:required_resolution,independently_accepted:false});
+        assertRequiredMembership(m.required_surface,surface,inventory,required_resolution);
         const protected_rows=await snapshots();write(stage+'-observed-protected.json',protected_rows);must(protected_rows.every((x,i)=>x.relation===m.protected_relations[i]&&Number.isSafeInteger(x.count)&&x.count>=0&&HEX.test(x.sha256)),'snapshot_shape');
         for(const table of SEED_TABLES)must(protected_rows.find(x=>x.relation===table)?.count>0,'seed_snapshot_populated');
-        result={status:'OBSERVED_NOT_ACCEPTED',inventory,surface,protected_rows,required_surface:m.required_surface,seed:m.seed,manager_id:m.seed.manager,official_receipt:officialReceipt,fingerprint:await catalog('prepared'),cleanup_lease:m.cleanup_lease};
+        result={status:'OBSERVED_NOT_ACCEPTED',inventory,surface,protected_rows,required_surface:m.required_surface,required_surface_sha256:hash(canon(m.required_surface)),required_resolution,seed:m.seed,manager_id:m.seed.manager,official_receipt:officialReceipt,fingerprint:await catalog('prepared'),cleanup_lease:m.cleanup_lease};
       }
     }else{
       const bytes=io.read(join(m.output_dir,m.prepared.file));must(hash(bytes)===m.prepared.sha256,'prepared_hash');const prior=json(bytes.toString(),'prepared_json');
       must(prior.status==='OBSERVED_NOT_ACCEPTED'&&prior.stage==='no-auto-prepare'&&prior.engine_executed===!fake,'prepared_classification');
       same(prior.source,m.source,'prepared_source');same(prior.target,m.target,'prepared_target');same(prior.seed,m.seed,'prepared_seed');same(prior.required_surface,m.required_surface,'prepared_required');same(prior.cleanup_lease,m.cleanup_lease,'prepared_lease');
+      must(prior.required_surface_sha256===hash(canon(m.required_surface)),'prepared_requirement_digest');
+      assertRequiredMembership(m.required_surface,prior.surface,prior.inventory,prior.required_resolution);
       same(prior.runner_files,m.runner_files,'prepared_runner');same(prior.predecessor_fixture,m.predecessor_fixture,'prepared_predecessor');same(prior.official_fixture,m.official_fixture,'prepared_official_fixture');
       same(prior.inventory,m.probe_manifest.inventory,'independent_inventory_binding');same(prior.surface,m.probe_manifest.surface,'independent_surface_binding');same(prior.protected_rows,m.probe_manifest.protected_rows,'independent_protected_binding');
       leased=true;const protectedBefore=await snapshots();same(protectedBefore,m.probe_manifest.protected_rows,'prepared_rows_changed');
@@ -245,7 +251,7 @@ export async function runRecoveryReplay(plan,{root=ROOT,io=nodeIO,signal}={}){
       result={status:'SYNTHETIC_PROBE_COMPLETED_NOT_RELEASE_ADMITTED',probe_receipt:receipt,fingerprint,protected_rows:protectedBefore};
     }
     await inspect();same(io.source(root),{source:m.source,runner_files:m.runner_files},'source_changed_during_run');checkSignal();
-    result={schema:'custodial.current-recovery-replay-receipt.v1',...result,stage,source:m.source,runner_files:m.runner_files,target:m.target,official_fixture:m.official_fixture,predecessor_fixture:m.predecessor_fixture,engine_executed:!fake,execution:fake?'FAKE_SUBPROCESS_UNIT_ONLY':'OWNED_SYNTHETIC_ENGINE',production:false,release_admission:false,artifacts:[...artifacts]};
+    result={schema:'custodial.current-recovery-replay-receipt.v1',...result,stage,source:m.source,runner_files:m.runner_files,target:m.target,required_surface:m.required_surface,required_surface_sha256:hash(canon(m.required_surface)),official_fixture:m.official_fixture,predecessor_fixture:m.predecessor_fixture,engine_executed:!fake,execution:fake?'FAKE_SUBPROCESS_UNIT_ONLY':'OWNED_SYNTHETIC_ENGINE',production:false,release_admission:false,artifacts:[...artifacts]};
     write(stage+'-receipt.json',result);retain=m.stage==='prepare'&&m.lane==='no-auto';
   }catch(caught){error=caught;if(outputReady)try{write(stage+'-failure-'+randomUUID()+'.json',{schema:'custodial.current-recovery-replay-failure.v1',code:/^[a-z0-9_]+$/.test(caught.message)?caught.message:'runner_failed',phase,target:m.target,source:m.source,engine_executed:!fake,pending_control,release_admission:false})}catch{}}
   finally{if(leased&&!retain){try{await cleanup()}catch(cleanupError){error=error||cleanupError;try{write(stage+'-cleanup-failure-'+randomUUID()+'.json',{code:'cleanup_not_confirmed',container_id:m.target.id,fixture_id:m.target.fixture_id,original_error:error.message,release_admission:false})}catch{}}}}

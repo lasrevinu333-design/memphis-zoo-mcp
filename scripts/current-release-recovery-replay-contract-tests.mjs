@@ -36,12 +36,14 @@ const seed={schema:'custodial.current-recovery-replay-plan.v1',stage:'prepare',l
  protected_relations:[...SEED_TABLES],seed:Object.fromEntries(['manager','employee','device','location','session','completion','completion_operation','work_ticket','feedback','feedback_operation'].map((key,i)=>[key,id(i+2)])),
  cleanup_lease:{owner:'/root',container_id:'e'.repeat(64),fixture_id:id(1),remove_on_terminal:true,retain_on_prepared:true},prepared:null,probe_manifest:null};
 const inventory=sort(RECOVERY_KINDS.map((kind,i)=>({kind,identity:kind==='relation'?'public.synthetic_required':'public.synthetic_'+kind,sha256:String(i%9+1).repeat(64),order:i+1})));
+for(const row of inventory)if(['function','grant'].includes(row.kind))row.identity='public.synthetic_function()';
 const surface=inventory.map(({kind,identity})=>({kind,identity}));
+const resolutionRows=(required,surface,inventory)=>[['required',required],['surface',surface],['inventory',inventory]].flatMap(([origin,rows])=>rows.filter(row=>row.kind==='function'||row.kind==='grant'&&row.identity.includes('(')).map(({kind,identity})=>({origin,kind,identity,oid:'101'})));
 const protectedRows=SEED_TABLES.map(relation=>({relation,count:1,sha256:'1'.repeat(64)}));
 function probeReceipt(bound){
   const health={ok:true,authority:'offline-authority.v5',canonical_objects_expected:bound.inventory.length,canary_surface_objects_expected:bound.surface.length,checks:Object.fromEntries(bound.health_checks.map(k=>[k,true])),missing_objects:[],mismatched_objects:[],surface_missing_objects:[],surface_uncovered_objects:[]};
   const denied=['anon','authenticated','service_role','custodial_application_reader','static_weekly_control_plane','static_weekly_release_operator'];
-  return {schema:'custodial.current-release-recovery-probe-receipt.v1',engine_executed:false,execution:'FAKE_SUBPROCESS_UNIT_ONLY',production:false,release_admission:false,source:bound.source,manifest_sha256:hash(canon(bound)),target:{id:bound.target.id,name:bound.target.name,image:bound.target.image,network:'none',fixture_id:bound.target.fixture_id},inventory_count:bound.inventory.length,inventory_sha256:hash(canon(bound.inventory)),surface_count:bound.surface.length,restored_objects:bound.inventory.length,canary_left_paused:true,automatic_grants_absent:true,protected_rows:bound.protected_rows,health_before:health,health_after:structuredClone(health),rollback_faults:[...bound.faults.map(x=>({...x,fault:'captured_digest_mismatch',rollback_readback:true})),{...bound.omitted_surface,fault:'required_surface_inventory_omission',rollback_readback:true}],
+  return {schema:'custodial.current-release-recovery-probe-receipt.v1',engine_executed:false,execution:'FAKE_SUBPROCESS_UNIT_ONLY',production:false,release_admission:false,source:bound.source,manifest_sha256:hash(canon(bound)),required_surface:bound.required_surface,required_surface_sha256:hash(canon(bound.required_surface)),required_membership:{before:resolutionRows(bound.required_surface,bound.surface,bound.inventory),after:resolutionRows(bound.required_surface,bound.surface,bound.inventory)},target:{id:bound.target.id,name:bound.target.name,image:bound.target.image,network:'none',fixture_id:bound.target.fixture_id},inventory_count:bound.inventory.length,inventory_sha256:hash(canon(bound.inventory)),surface_count:bound.surface.length,restored_objects:bound.inventory.length,canary_left_paused:true,automatic_grants_absent:true,protected_rows:bound.protected_rows,health_before:health,health_after:structuredClone(health),rollback_faults:[...bound.faults.map(x=>({...x,fault:'captured_digest_mismatch',rollback_readback:true})),{...bound.omitted_surface,fault:'required_surface_inventory_omission',rollback_readback:true}],
     controls:['pause_canary','restore_authority'].map((action,i)=>({manager_id:bound.manager_id,request_id:id(60+i),audit_id:id(70+i),device_identifier:'KIOSK_08',action,reason:'synthetic current-source recovery probe',authoritative_health:{ok:false,scope:'current-source-synthetic'},result:{device_identifier:'KIOSK_08',canary_paused:true,restored_objects:i?bound.inventory.length:0}})),
     caller_checks:{intended_health_role:'service_role',denied_configuration_roles:denied,denied_health_roles:denied.filter(x=>x!=='service_role'),wrong_health_proof_denied:true}};
 }
@@ -69,6 +71,7 @@ function fake(m,change=()=>undefined){
           else if(phase==='seed_readback')result=asJson({active_work:true,response:true,work_ticket:true,feedback:true});
           else if(phase==='inventory_observed')result=asJson(inventory);
           else if(phase==='surface_observed')result=asJson(surface);
+          else if(phase==='required_membership')result=asJson(resolutionRows(m.required_surface,surface,inventory));
           else if(phase.startsWith('snapshot_'))result=asJson(protectedRows.find(x=>x.relation==='public.'+phase.slice(9)));
           else if(phase.startsWith('catalog_'))result=asJson([]);
           else assert.fail('Unexpected fake SQL phase '+phase);
@@ -91,12 +94,34 @@ let checks=0;async function test(name,fn){await fn();checks++;console.log('PASS'
 async function rejectPlan(name,change,pattern){await test(name,async()=>{const m=structuredClone(seed);change(m);const f=fake(m);await assert.rejects(()=>runRecoveryReplay(m,{root,io:f.io}),pattern);assert.equal(f.calls.length,0)})}
 async function boundary(name,phase,change,pattern,{cleanup=true}={}){await test(name,async()=>{const m=structuredClone(seed),f=fake(m,ctx=>ctx.phase===phase?change(ctx.result,ctx):undefined);await assert.rejects(()=>runRecoveryReplay(m,{root,io:f.io}),pattern);assert.equal(f.calls.some(x=>x.phase==='cleanup_rm'),cleanup)})}
 async function prepared(change){const m=structuredClone(seed),f=fake(m,change);const receipt=await runRecoveryReplay(m,{root,io:f.io});return{m,f,receipt}}
-function verifyPlan(m,f){const plan=structuredClone(m);plan.stage='verify';plan.prepared={file:'no-auto-prepare-receipt.json',sha256:hash(f.outputs.get(join(m.output_dir,'no-auto-prepare-receipt.json')))};plan.probe_manifest={schema:'custodial.current-release-recovery-probe-manifest.v1',synthetic:true,production:false,target:plan.target,source:plan.source,inventory,surface,required_surface:plan.required_surface,health_checks:['canary_authority_surface_captured','restore_inventory_exact'],protected_rows:protectedRows,faults:inventory.map(({kind,identity})=>({kind,identity})),omitted_surface:plan.required_surface[0],manager_id:plan.seed.manager};return plan}
+function verifyPlan(m,f){const plan=structuredClone(m);plan.stage='verify';plan.prepared={file:'no-auto-prepare-receipt.json',sha256:hash(f.outputs.get(join(m.output_dir,'no-auto-prepare-receipt.json')))};plan.probe_manifest={schema:'custodial.current-release-recovery-probe-manifest.v1',synthetic:true,production:false,target:plan.target,source:plan.source,inventory,surface,required_surface:plan.required_surface,health_checks:['canary_authority_surface_captured','restore_inventory_exact'],protected_rows:protectedRows,faults:inventory.map(({kind,identity})=>({kind,identity})),omitted_surface:plan.required_surface.find(x=>x.kind==='relation'),manager_id:plan.seed.manager};return plan}
 
 await test('import and local source identity use no replay or hidden container',()=>{const local=localReplaySource(root,()=>source);assert.equal(local.source,source);assert.deepEqual(local.runner_files,runner_files)});
 await test('fake no-auto prepare retains only exact lease and never adopts inventory',async()=>{const {f,receipt}=await prepared();assert.equal(receipt.status,'OBSERVED_NOT_ACCEPTED');assert.equal(receipt.engine_executed,false);assert.equal(receipt.execution,'FAKE_SUBPROCESS_UNIT_ONLY');assert.equal(receipt.release_admission,false);assert.ok(!f.calls.some(x=>x.phase==='probe'||x.phase==='cleanup_rm'));assert.ok(f.calls.findIndex(x=>x.phase==='official')<f.calls.findIndex(x=>x.phase==='synthetic_seed'));assert.equal(f.calls.filter(x=>x.phase==='predecessor').length,1);assert.ok(f.calls.findIndex(x=>x.phase==='predecessor')<f.calls.findIndex(x=>x.phase==='migration_0004'));assert.equal(receipt.inventory.length,11)});
 await test('normal lane captures separately and performs exact cleanup without probe or seeds',async()=>{const m=structuredClone(seed);m.lane='normal';m.official_fixture=null;const f=fake(m),r=await runRecoveryReplay(m,{root,io:f.io});assert.equal(r.status,'NORMAL_CATALOG_OBSERVED_NOT_ACCEPTED');assert.ok(f.calls.some(x=>x.phase==='cleanup_rm'));assert.ok(!f.calls.some(x=>/^(probe|official|synthetic_seed|remove_)/.test(x.phase)));assert.ok(f.outputs.has(join(m.output_dir,'normal-prepare-replayed-catalog.json')))});
 await test('independent fake verify consumes root-bound manifest then closes exact lease',async()=>{const {m,f}=await prepared(),v=verifyPlan(m,f);const receipt=await runRecoveryReplay(v,{root,io:f.io});assert.equal(receipt.status,'SYNTHETIC_PROBE_COMPLETED_NOT_RELEASE_ADMITTED');assert.equal(receipt.engine_executed,false);assert.equal(f.calls.filter(x=>x.phase==='probe').length,1);assert.equal(f.calls.filter(x=>x.phase==='cleanup_rm').length,1)});
+await test('prepare and verify preserve original source requirements while binding captured callable aliases',async()=>{
+  const m=structuredClone(seed);m.required_surface=sort([...m.required_surface,{kind:'function',identity:'synthetic_function()'},{kind:'grant',identity:'synthetic_function()'}]);
+  const original=structuredClone(m.required_surface),f=fake(m),r=await runRecoveryReplay(m,{root,io:f.io});
+  assert.deepEqual(r.required_surface,original);assert.equal(r.required_surface_sha256,hash(canon(original)));assert.deepEqual(m.required_surface,original);
+  const artifact=JSON.parse(f.outputs.get(join(m.output_dir,'no-auto-prepare-required-membership.json')));assert.deepEqual(artifact.required,original);assert.equal(artifact.required_sha256,r.required_surface_sha256);assert.equal(artifact.independently_accepted,false);
+  const verified=await runRecoveryReplay(verifyPlan(m,f),{root,io:f.io});assert.deepEqual(verified.required_surface,original);assert.deepEqual(verified.probe_receipt.required_surface,original);assert.equal(verified.required_surface_sha256,hash(canon(original)));
+});
+for(const [name,change,pattern] of [
+  ['null resolution',x=>{x[0].oid=null},/required_resolution_oid/],
+  ['duplicate resolution',x=>{x[0]={...x[1]}},/required_resolution_duplicate/],
+  ['unknown resolution kind',x=>{x[0].kind='unknown'},/required_resolution_tuple_set/],
+  ['missing resolution',x=>{x.pop()},/required_resolution_count/]
+])await boundary('prepare rejects '+name,'required_membership',editJson(change),pattern);
+await boundary('prepare resolution response loss cannot retain successful lease','required_membership',()=>({status:3,stdout:'',stderr:'ERROR:08006'}),/sql_required_membership/);
+await test('prepared original requirement hash cannot be replaced',async()=>{
+  const {m,f}=await prepared(),v=verifyPlan(m,f),path=join(m.output_dir,v.prepared.file),prior=JSON.parse(f.outputs.get(path));prior.required_surface_sha256='0'.repeat(64);f.outputs.set(path,JSON.stringify(prior));v.prepared.sha256=hash(f.outputs.get(path));
+  await assert.rejects(()=>runRecoveryReplay(v,{root,io:f.io}),/prepared_requirement_digest/);assert.ok(!f.calls.some(x=>x.phase==='probe'));
+});
+await test('prepared resolution cannot substitute a malformed source binding',async()=>{
+  const {m,f}=await prepared(),v=verifyPlan(m,f),path=join(m.output_dir,v.prepared.file),prior=JSON.parse(f.outputs.get(path));prior.required_resolution[0].oid=null;f.outputs.set(path,JSON.stringify(prior));v.prepared.sha256=hash(f.outputs.get(path));
+  await assert.rejects(()=>runRecoveryReplay(v,{root,io:f.io}),/required_resolution_oid/);assert.ok(!f.calls.some(x=>x.phase==='probe'));
+});
 
 await rejectPlan('production plan refused',m=>m.production=true,/synthetic/);
 await rejectPlan('arbitrary SQL input refused',m=>m.sql='drop database x',/plan_shape/);
@@ -245,7 +270,11 @@ for(const [label,change,pattern] of [
   ['truthy health string',x=>x.health_after.checks.restore_inventory_exact='true',/probe_health_checks/],
   ['missing rollback kind',x=>x.rollback_faults.pop(),/probe_rollback_receipts/],
   ['wrong original actor',x=>x.controls[1].manager_id=id(99),/probe_original_control/],
-  ['denied caller not checked',x=>x.caller_checks.wrong_health_proof_denied=false,/probe_caller_receipts/]
+  ['denied caller not checked',x=>x.caller_checks.wrong_health_proof_denied=false,/probe_caller_receipts/],
+  ['replaced source requirements',x=>x.required_surface=[],/probe_original_requirements/],
+  ['wrong source requirement hash',x=>x.required_surface_sha256='0'.repeat(64),/probe_requirement_digest/],
+  ['missing before-authority resolution',x=>delete x.required_membership.before,/probe_required_membership/],
+  ['invalid postrestore resolution',x=>x.required_membership.after[0].oid=null,/required_resolution_oid/]
 ])await test('probe receipt rejects '+label,async()=>{let active=false;const {m,f}=await prepared(ctx=>active&&ctx.phase==='probe'?editJson(change)(ctx.result):undefined);active=true;await assert.rejects(()=>runRecoveryReplay(verifyPlan(m,f),{root,io:f.io}),pattern);assert.ok(f.calls.some(x=>x.phase==='cleanup_rm'))});
 await test('probe loss is never rerun; pending original request stays in durable failure',async()=>{let loss=false;const {m,f}=await prepared(ctx=>loss&&ctx.phase==='probe'?{status:1,stdout:'',stderr:JSON.stringify({pending_control:{request_id:id(50),action:'restore_authority'}})}:undefined);loss=true;await assert.rejects(()=>runRecoveryReplay(verifyPlan(m,f),{root,io:f.io}),/probe_failed/);assert.equal(f.calls.filter(x=>x.phase==='probe').length,1);assert.ok([...f.outputs.values()].some(x=>x.includes(id(50))));assert.ok(f.calls.some(x=>x.phase==='cleanup_rm'))});
 await test('cleanup uncertainty cannot return overall success',async()=>{const m=structuredClone(seed);m.lane='normal';m.official_fixture=null;const f=fake(m,ctx=>ctx.phase==='cleanup_absent'?ok(m.target.id):undefined);await assert.rejects(()=>runRecoveryReplay(m,{root,io:f.io}),/cleanup_not_confirmed/);assert.ok([...f.outputs.keys()].some(x=>x.includes('cleanup-failure')))});

@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
-import {RECOVERY_KINDS,localRecoverySource,runCurrentReleaseRecoveryProbe,validateRecoveryManifest} from './current-release-recovery-probe.mjs';
+import {assertRequiredMembership,RECOVERY_KINDS,localRecoverySource,requiredMembershipQuery,runCurrentReleaseRecoveryProbe,validateRecoveryManifest} from './current-release-recovery-probe.mjs';
 
 // Every subprocess below is an explicit in-memory fake. This suite never invokes
 // Docker, psql, git, a URL or an authority function. It is NOT engine evidence.
@@ -15,14 +16,16 @@ function gitFake(command,args) {
   assert.equal(args[2],'rev-parse');return ok((args[3]==='HEAD'?'a':'b').repeat(40));
 }
 const source=localRecoverySource(root,gitFake);
+const fixtureIdentity=kind=>['function','grant'].includes(kind)?'public.probe_function()':'public.probe_'+kind;
+const resolutionRows=(required,surface,inventory)=>[['required',required],['surface',surface],['inventory',inventory]].flatMap(([origin,rows])=>rows.filter(row=>row.kind==='function'||row.kind==='grant'&&row.identity.includes('(')).map(({kind,identity})=>({origin,kind,identity,oid:'101'})));
 const seed={schema:'custodial.current-release-recovery-probe-manifest.v1',synthetic:true,production:false,
   target:{name:'mz_schema_rebuild_current_probe_unit',id:'c'.repeat(64),image:'sha256:'+'d'.repeat(64),database:'postgres',fixture_id:'10000000-0000-4000-8000-000000000001'},
-  source,inventory:RECOVERY_KINDS.map((kind,i)=>({kind,identity:'public.probe_'+kind,sha256:String((i%9)+1).repeat(64),order:i+1})),
-  surface:RECOVERY_KINDS.map(kind=>({kind,identity:'public.probe_'+kind})),
+  source,inventory:RECOVERY_KINDS.map((kind,i)=>({kind,identity:fixtureIdentity(kind),sha256:String((i%9)+1).repeat(64),order:i+1})),
+  surface:RECOVERY_KINDS.map(kind=>({kind,identity:fixtureIdentity(kind)})),
   required_surface:[{kind:'relation',identity:'public.probe_relation'}],
   health_checks:['canary_authority_surface_captured','canary_authority_surface_live','restore_inventory_exact','restore_inventory_present'],
   protected_rows:[{relation:'public.synthetic_protected',count:2,sha256:'e'.repeat(64)}],
-  faults:RECOVERY_KINDS.map(kind=>({kind,identity:'public.probe_'+kind})),
+  faults:RECOVERY_KINDS.map(kind=>({kind,identity:fixtureIdentity(kind)})),
   omitted_surface:{kind:'relation',identity:'public.probe_relation'},manager_id:'20000000-0000-4000-8000-000000000001'};
 sort(seed.inventory);sort(seed.surface);sort(seed.faults);
 function health(m,kind='healthy',identity) {
@@ -53,6 +56,7 @@ function fake(m,mutate=()=>undefined) {
         else if(phase==='manager')result=ok('1');
         else if(phase==='paused_after')result=ok('t');
         else if(phase==='configure')result=ok('');
+        else if(phase==='required_before'||phase==='required_after')result=asJson(resolutionRows(m.required_surface,m.surface,m.inventory));
         else if(phase.startsWith('inventory')||phase.startsWith('rollback'))result=asJson(m.inventory.map(x=>({...x,stored_sha256:x.sha256,live_sha256:x.sha256})));
         else if(phase.startsWith('surface_'))result=asJson(m.surface);
         else if(phase.startsWith('protected_'))result=asJson(m.protected_rows[0]);
@@ -98,6 +102,67 @@ test('complete fake extension traverses eleven digest faults, omission, actual-c
   assert.ok(f.calls.every(x=>!x.args.includes('run')&&!x.args.includes('rm')),'probe never launches or destroys container');
 });
 test('manifest key order does not change structural meaning',()=>{const m=JSON.parse(JSON.stringify(seed,(_,x)=>x&&typeof x==='object'&&!Array.isArray(x)?Object.fromEntries(Object.entries(x).reverse()):x));validateRecoveryManifest(m);const f=fake(m);assert.equal(runCurrentReleaseRecoveryProbe(m,{root,run:f.run}).engine_executed,false);});
+test('source-required callable spelling is retained while current OID binds captured aliases',()=>{
+  const m=structuredClone(seed);
+  for(const rows of [m.inventory,m.surface,m.faults])for(const row of rows)if(['function','grant'].includes(row.kind))row.identity='public.probe_function()';
+  m.required_surface=sort([...m.required_surface,{kind:'function',identity:'probe_function()'},{kind:'grant',identity:'probe_function()'}]);
+  const original=JSON.stringify(m.required_surface),f=fake(m),r=runCurrentReleaseRecoveryProbe(m,{root,run:f.run});
+  assert.equal(JSON.stringify(m.required_surface),original);assert.deepEqual(r.required_surface,m.required_surface);
+  assert.equal(r.required_surface_sha256,createHash('sha256').update(JSON.stringify(m.required_surface.map(({identity,kind})=>({identity,kind})))).digest('hex'));
+  assert.ok(f.calls.findIndex(x=>x.input?.includes('current-recovery:required_before'))<f.calls.findIndex(x=>x.input?.includes('current-recovery:configure')));
+  assert.ok(f.calls.some(x=>x.input?.includes('current-recovery:required_after')));
+  assert.equal(r.engine_executed,false);
+});
+function aliasedManifest(){const m=structuredClone(seed);m.required_surface=sort([...m.required_surface,{kind:'function',identity:'probe_function()'},{kind:'grant',identity:'probe_function()'}]);return m;}
+function resolutionBoundary(name,change,pattern=/required_/,phase='required_before'){
+  test(name,()=>{const m=aliasedManifest(),f=fake(m,ctx=>ctx.phase===phase?change(ctx.result,ctx):undefined);
+    assert.throws(()=>runCurrentReleaseRecoveryProbe(m,{root,run:f.run}),pattern);
+    if(phase==='required_before')assert.ok(!f.calls.some(x=>/current-recovery:(?:configure|manager|pause_canary|restore_authority)/.test(x.input||'')),'failed resolution cannot reach authority/manager/control');
+  });
+}
+for(const [label,change] of [
+  ['null OID',x=>{x[0].oid=null}],['zero OID',x=>{x[0].oid='0'}],['negative OID',x=>{x[0].oid='-1'}],
+  ['overflow OID',x=>{x[0].oid='4294967296'}],['numeric instead of text OID',x=>{x[0].oid=101}],
+  ['malformed OID',x=>{x[0].oid='101;select 1'}],['unknown kind',x=>{x[0].kind='unknown'}],
+  ['wrong kind',x=>{x[0].kind='relation'}],['unknown origin',x=>{x[0].origin='learned'}],
+  ['wrong exact identity',x=>{x[0].identity='another()'}],['missing tuple',x=>{x.pop()}],
+  ['extra tuple',x=>{x.push({...x[0],identity:'other()'})}],['duplicate tuple',x=>{x[0]={...x[1]}}],
+  ['extra response field',x=>{x[0].accepted=true}],['null row',x=>{x[0]=null}],
+  ['different overload OID',x=>{for(const r of x)if(r.origin==='required')r.oid='202'}],
+  ['inconsistent same identity OID',x=>{x.find(r=>r.origin==='surface').oid='202'}]
+])resolutionBoundary('resolution rejects '+label+' before authority',editJson(change));
+resolutionBoundary('resolution response loss is fatal before authority',()=>({status:3,stdout:'',stderr:'ERROR: 08006'}),/sql_required_before/);
+resolutionBoundary('malformed resolution JSON is fatal before authority',()=>ok('{bad'),/json_required_before/);
+resolutionBoundary('malformed signature SQL rejection is fatal before authority',()=>({status:3,stdout:'',stderr:'ERROR: 22P02'}),/sql_required_before/);
+resolutionBoundary('postrestore resolution is checked again',editJson(x=>{x[0].oid=null}),/required_resolution_oid/,'required_after');
+test('fresh postrestore OIDs may change only when complete current signature binding still agrees',()=>{
+  const m=aliasedManifest(),f=fake(m,ctx=>ctx.phase==='required_after'?editJson(x=>{for(const r of x)r.oid='202'})(ctx.result):undefined);
+  const r=runCurrentReleaseRecoveryProbe(m,{root,run:f.run});assert.ok(r.required_membership.before.every(x=>x.oid==='101'));assert.ok(r.required_membership.after.every(x=>x.oid==='202'));
+});
+for(const [label,change,pattern] of [
+  ['missing inventory side',m=>{m.inventory=m.inventory.filter(x=>x.kind!=='function')},/surface_inventory/],
+  ['missing surface side',m=>{m.surface=m.surface.filter(x=>x.kind!=='function')},/required_source_member_missing/],
+  ['same OID wrong-kind only',m=>{m.surface=m.surface.filter(x=>x.kind!=='grant')},/required_source_member_missing/],
+  ['noncallable qualified-name alias',m=>{m.required_surface.find(x=>x.kind==='relation').identity='probe_relation'},/required_source_member_missing/]
+])test('membership refuses '+label,()=>{const m=aliasedManifest();change(m);assert.throws(()=>assertRequiredMembership(m.required_surface,m.surface,m.inventory,resolutionRows(m.required_surface,m.surface,m.inventory)),pattern)});
+test('same-name overload is not signature equivalence',()=>{
+  const m=aliasedManifest();for(const rows of [m.inventory,m.surface])rows.find(x=>x.kind==='function').identity='public.probe_function(text)';
+  const rows=resolutionRows(m.required_surface,m.surface,m.inventory);for(const r of rows)if(r.identity.endsWith('(text)'))r.oid='202';
+  assert.throws(()=>assertRequiredMembership(m.required_surface,m.surface,m.inventory,rows),/required_source_member_missing/);
+});
+test('literal source spelling still requires live nonnull resolution',()=>{
+  const m=aliasedManifest();m.required_surface=m.required_surface.map(x=>x.kind==='relation'?x:{...x,identity:'public.probe_function()'});sort(m.required_surface);
+  const f=fake(m,ctx=>ctx.phase==='required_before'?editJson(x=>{for(const r of x)r.oid=null})(ctx.result):undefined);
+  assert.throws(()=>runCurrentReleaseRecoveryProbe(m,{root,run:f.run}),/required_resolution_oid/);assert.ok(!f.calls.some(x=>x.input?.includes('current-recovery:configure')));
+});
+test('callable omission cannot silently target a surviving alias',()=>{const m=aliasedManifest();m.omitted_surface={kind:'function',identity:'probe_function()'};const f=fake(m);assert.throws(()=>runCurrentReleaseRecoveryProbe(m,{root,run:f.run}),/required_omission_exact_member/);assert.equal(f.calls.length,0)});
+test('resolver query is fixed read-only and quotes all identity data',()=>{
+  const m=aliasedManifest(),identity="public.\"probe'$_name\"()";
+  for(const rows of [m.required_surface,m.surface,m.inventory]){rows.find(x=>x.kind==='function').identity=identity;sort(rows);}
+  const sql=requiredMembershipQuery(m.required_surface,m.surface,m.inventory);
+  assert.match(sql,/^begin read only;set local search_path=pg_catalog,public;/);assert.match(sql,/pg_catalog\.to_regprocedure\(identity\)::oid::text/);
+  assert.ok(sql.includes("probe''$_name"));assert.match(sql,/\ncommit;$/);assert.doesNotMatch(sql,/\b(?:execute|insert|update|delete|grant|alter)\s/i);
+});
 rejected('proposal is not executable',m=>{m.executable=false},/manifest_shape/);
 rejected('production designation denied',m=>{m.production=true},/synthetic/);
 rejected('URL target denied',m=>{m.target.name='https://db.example'},/local_owned/);
