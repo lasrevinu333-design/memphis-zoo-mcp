@@ -157,6 +157,68 @@ begin
   end loop;
 end $grant_serialization$;
 
+-- 02140000's UNION ALL capture did not order its six new Event columns.
+-- Two independently replayed lanes exposed permutations within these six
+-- reserved orders. Bind only that exact set to physical declaration order;
+-- do not normalize unrelated recovery order or rewrite any column definition.
+do $event_column_order$
+declare
+  wanted record;
+  captured record;
+  orders integer[];
+  changed integer;
+  identities constant text[]:=array[
+    'public.events_app_events:start_instant_utc',
+    'public.events_app_events:end_instant_utc',
+    'public.events_app_events:superseded_by_event_id',
+    'public.events_app_events:superseded_at',
+    'public.events_app_events:superseded_by_manager_id',
+    'public.events_app_events:supersession_request_digest'];
+begin
+  if not exists(select 1 from pg_trigger
+    where tgrelid='public.custodial_release_authority_restore_inventory'::regclass
+      and tgname='trg_custodial_release_authority_restore_inventory_immutable'
+      and tgenabled='O') then
+    raise exception 'Current Event column order immutability unavailable';
+  end if;
+  select array_agg(restore_order order by restore_order) into orders
+    from public.custodial_release_authority_restore_inventory
+    where object_kind='column' and object_identity=any(identities);
+  if orders is distinct from array[202130,202131,202132,202133,202134,202135]
+    or (select count(*) from public.custodial_release_authority_restore_inventory
+        where restore_order between 202130 and 202135)<>6 then
+    raise exception 'Current Event column order captured scope changed';
+  end if;
+  for wanted in select * from (values
+    ('public.events_app_events:start_instant_utc','106a679f7e85be9e039b7f6f07c223f81d1041868318a025d650524970945c7c'),
+    ('public.events_app_events:end_instant_utc','47396e92efba0a4cbb9ab0526e727a3f029fe33452aefdda467c97b7f3e2c732'),
+    ('public.events_app_events:superseded_by_event_id','ae183c23db1033315fe196d68acbda9677198f6cc01be57c8c6a04fdb7703293'),
+    ('public.events_app_events:superseded_at','6d31d29fd9bbd6cd61dafd1254ee7a589a37a2b363eb478f59e0592743f4abc5'),
+    ('public.events_app_events:superseded_by_manager_id','08e535a928adfa5aa4a102c36dff168ad3702da9592236d7ec6d459d521636f0'),
+    ('public.events_app_events:supersession_request_digest','85d1ad1a2143ca04759614e7912688650eb80335e22f2877cafc073386c77df0')
+  ) v(identity,expected_sha256)
+  loop
+    select definition_sql,definition_sha256 into strict captured
+      from public.custodial_release_authority_restore_inventory
+      where object_kind='column' and object_identity=wanted.identity;
+    if captured.definition_sha256 is distinct from wanted.expected_sha256
+      or public.static_weekly_digest_text(captured.definition_sql) is distinct from wanted.expected_sha256
+      or public.static_weekly_digest_text(public.custodial_release_authority_current_column_definition(wanted.identity))
+        is distinct from wanted.expected_sha256 then
+      raise exception 'Current Event column order definition changed: %',wanted.identity;
+    end if;
+  end loop;
+  alter table public.custodial_release_authority_restore_inventory
+    disable trigger trg_custodial_release_authority_restore_inventory_immutable;
+  update public.custodial_release_authority_restore_inventory
+    set restore_order=202129+array_position(identities,object_identity)
+    where object_kind='column' and object_identity=any(identities);
+  get diagnostics changed=row_count;
+  if changed<>6 then raise exception 'Current Event column order update scope changed';end if;
+  alter table public.custodial_release_authority_restore_inventory
+    enable trigger trg_custodial_release_authority_restore_inventory_immutable;
+end $event_column_order$;
+
 
 -- Independently named current-module membership, derived from the reviewed
 -- post187 source declarations, not from whichever inventory rows happen to
