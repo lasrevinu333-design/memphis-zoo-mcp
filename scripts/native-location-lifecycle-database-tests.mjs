@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {execFileSync,execFile} from 'node:child_process';
 import {promisify} from 'node:util';
-import {readdirSync,readFileSync,writeFileSync} from 'node:fs';
+import {readdirSync,readFileSync} from 'node:fs';
 import {createHash,randomUUID} from 'node:crypto';
 import {seedCompiledEventAuthority,eventAuthorityWeekStart} from './fixtures/event-static-authority-fixture.mjs';
 import {nativeLocationAuthoritySource} from './fixtures/native-location-authority.mjs';
@@ -13,6 +13,7 @@ import {createHmac} from 'node:crypto';
 import {createGeneralJsonMiddleware} from '../src/request-json-parser.js';
 import {makeDeviceCredentialMiddleware,deviceCredentialInternals} from '../src/auth/device-credential-auth.js';
 import {installNativeProviderRoutes} from '../src/native-provider-api.js';
+import {writeNativeSqlFixture} from './fixtures/native-sql-fixture-output.mjs';
 const container=`mz_schema_rebuild_location_lifecycle_${process.pid}`;
 const image='supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed';
 const docker=(args,extra={})=>execFileSync('docker',args,{encoding:'utf8',timeout:60000,maxBuffer:32*1024*1024,stdio:['pipe','pipe','pipe'],...extra});
@@ -27,7 +28,7 @@ const reject=(name,query,pattern=/ERROR/)=>{let error;try{sql(query);}catch(e){e
 const cleanup=()=>{if(owned){docker(['rm','-f',container]);owned=false;assert.equal(docker(['ps','-a','--filter',`name=^/${container}$`,'--format','{{.Names}}']).trim(),'');console.log('OWNED_CONTAINER_REMOVED',container);}};
 for(const signal of ['SIGINT','SIGTERM'])process.once(signal,()=>{try{cleanup();}finally{process.exit(143);}});
 const files=readdirSync('supabase/migrations').filter(f=>f.endsWith('.sql')).sort(),manifest=[];
-assert.equal(files.at(-1),'20261003010000_native_location_lifecycle.sql');
+assert.ok(files.includes('20261003010000_native_location_lifecycle.sql'),'owning migration must be replayed');
 try{
  docker(['image','inspect',image]);
  docker(['run','--rm','-d','--network','none','--name',container,'--tmpfs','/var/lib/postgresql/data:rw,size=1g',
@@ -252,7 +253,7 @@ try{
  reject('restored private table grant denies anon','set role anon;select * from public.employee_native_location_outcomes',/permission denied/);
  reject('restored ALWAYS outcome guard','delete from public.employee_native_location_outcomes',/immutable/);
  check('recovery retains exact original receipt bytes',sql('select md5(jsonb_agg(to_jsonb(r) order by job_id)::text) from public.employee_native_push_delivery_receipts r'),originalRows);
- if(process.env.NATIVE_LOCATION_INVENTORY_FIXTURE){assert.match(process.env.NATIVE_LOCATION_INVENTORY_FIXTURE,/^\/home\/eric\/Documents\/Codex\/2026-10-02\/native-provider-worker\/evidence\/lifecycle\/[A-Za-z0-9._-]+\.json$/);
-  writeFileSync(process.env.NATIVE_LOCATION_INVENTORY_FIXTURE,JSON.stringify({provenance:'actual SQL private synthetic clock; accepted compiled source; no provider send',nativePrincipal,request:invBody,page1,continuation,page2,restarts},null,2)+'\n');}
+ const fixture=writeNativeSqlFixture({envName:'NATIVE_LOCATION_INVENTORY_FIXTURE',fileName:'native-location-inventory.json',payload:{provenance:'actual SQL private synthetic clock; accepted compiled source; no provider send',nativePrincipal,request:invBody,page1,continuation,page2,restarts},manifest,owningMigration:'20261003010000_native_location_lifecycle.sql',scriptPath:'scripts/native-location-lifecycle-database-tests.mjs'});
+ if(fixture)console.log('SQL_INVENTORY_FIXTURE',fixture.path,fixture.sha256);
  assert.equal(sql(defaults),'0');console.log(JSON.stringify({status:'PASS',checks,migrations:manifest,automatic_grants_absent_before_and_after_each:true,actualPostgres:true,syntheticClock:true,production:false,independentAudit:false,providerClock:false,delivery:false}));
 }finally{cleanup();}

@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import {execFileSync,execFile} from 'node:child_process';
 import {promisify} from 'node:util';
-import {readdirSync,readFileSync,writeFileSync} from 'node:fs';
+import {readdirSync,readFileSync} from 'node:fs';
 import {createHash,randomUUID} from 'node:crypto';
 import {seedCompiledEventAuthority,eventAuthorityWeekStart} from './fixtures/event-static-authority-fixture.mjs';
 import {nativeLocationAuthoritySource} from './fixtures/native-location-authority.mjs';
 import {createStaticWeeklyProjectionWithLunchRpcInput} from '../src/static-weekly-lunch-publication.js';
 import {reserveNativeLocation,canonicalNativeLocation,validateNativeLocationReservation} from '../src/native-location-reservation.js';
+import {writeNativeSqlFixture} from './fixtures/native-sql-fixture-output.mjs';
 const container=`mz_schema_rebuild_native_location_${process.pid}`;
 const image='supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed';
 const docker=(args,extra={})=>execFileSync('docker',args,{encoding:'utf8',timeout:60000,maxBuffer:32*1024*1024,stdio:['pipe','pipe','pipe'],...extra});
@@ -21,7 +22,7 @@ const reject=(name,query,pattern=/ERROR/)=>{let error;try{sql(query);}catch(e){e
 const cleanup=()=>{if(owned){docker(['rm','-f',container]);owned=false;assert.equal(docker(['ps','-a','--filter',`name=^/${container}$`,'--format','{{.Names}}']).trim(),'');console.log('OWNED_CONTAINER_REMOVED',container);}};
 for(const signal of ['SIGINT','SIGTERM'])process.once(signal,()=>{try{cleanup();}finally{process.exit(143);}});
 const files=readdirSync('supabase/migrations').filter(f=>f.endsWith('.sql')).sort(),manifest=[];
-assert.equal(files.at(-1),'20261002180000_native_provider_location_reservation.sql');
+assert.ok(files.includes('20261002180000_native_provider_location_reservation.sql'),'owning migration must be replayed');
 try{
  docker(['image','inspect',image]);
  docker(['run','--rm','-d','--network','none','--name',container,'--tmpfs','/var/lib/postgresql/data:rw,size=1g',
@@ -165,7 +166,7 @@ try{
  check('restored ALWAYS trigger',sql("select tgenabled from pg_trigger where tgrelid='public.employee_native_push_delivery_receipts'::regclass and tgname='trg_native_location_receipt_guard'"),'A');
  reject('restored immutable guard still rejects mutation',`update public.employee_native_push_delivery_receipts set native_payload=jsonb_set(native_payload,'{body}','"changed"')`,/immutable/);
  check('recovery preserves all original receipt bytes',sql('select md5(row_to_json(r)::text) from public.employee_native_push_delivery_receipts r'),before);
- if(process.env.NATIVE_LOCATION_WIRE_FIXTURE){assert.match(process.env.NATIVE_LOCATION_WIRE_FIXTURE,/^\/home\/eric\/Documents\/Codex\/2026-10-02\/native-provider-worker\/evidence\/reservation\/[A-Za-z0-9._-]+\.json$/);
-  writeFileSync(process.env.NATIVE_LOCATION_WIRE_FIXTURE,JSON.stringify({provenance:'actual isolated SQL reserve -> strict Node adapter; fixed synthetic server time; no live delivery',migrationSha256:manifest.at(-1).sha256,expected,envelope:first},null,2)+'\n');console.log('SQL_WIRE_FIXTURE',process.env.NATIVE_LOCATION_WIRE_FIXTURE);}
+ const fixture=writeNativeSqlFixture({envName:'NATIVE_LOCATION_WIRE_FIXTURE',fileName:'native-location-wire.json',payload:{provenance:'actual isolated SQL reserve -> strict Node adapter; fixed synthetic server time; no live delivery',expected,envelope:first},manifest,owningMigration:'20261002180000_native_provider_location_reservation.sql',scriptPath:'scripts/native-location-reservation-database-tests.mjs'});
+ if(fixture)console.log('SQL_WIRE_FIXTURE',fixture.path,fixture.sha256);
  assert.equal(sql(defaults),'0');console.log(JSON.stringify({status:'PASS',checks,migrations:manifest,automatic_grants_absent_before_and_after_each:true,actualPostgres:true,syntheticClock:true,production:false,independentAudit:false,providerClock:false,delivery:false}));
 }finally{cleanup();}
