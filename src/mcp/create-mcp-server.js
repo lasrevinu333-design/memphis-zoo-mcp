@@ -5,6 +5,7 @@ import { textResponse } from "./responses.js";
 import { registerGithubTools } from "./github-tools.js";
 import { registerSupabaseTools } from "./supabase-tools.js";
 import { registerServerTools } from "./server-tools.js";
+import { registerFeedbackRelayTools } from "./feedback-relay-tools.js";
 
 const DEFAULT_MCP_SERVER_NAME = "memphis-zoo-mcp";
 
@@ -55,6 +56,7 @@ export function createMcpServer(options = {}) {
   });
   registerGithubTools(server, { includeWrites: includePrivilegedTools });
   registerSupabaseTools(server, { includeWrites: includePrivilegedTools });
+  registerFeedbackRelayTools(server, { includeWrites: includePrivilegedTools });
 
   finalizeMcpToolAuth(server);
   return server;

@@ -8,6 +8,19 @@ export const TOOL_SAFETY = Object.freeze({
 export const MCP_TOOL_MANIFEST_VERSION = "mcp-tools.v3";
 
 export const MCP_TOOL_MANIFEST = Object.freeze([
+  ...['status', 'claim', 'begin', 'receipt', 'defer', 'control'].map((verb) => ({
+    name: `custodial_feedback_relay_${verb}`,
+    safety: TOOL_SAFETY.SAFE_WRITE,
+    status: 'current',
+    description: `Private Feedback ${verb}; non-sending queue boundary, transport initially paused.`,
+    requires: ['supabase'],
+    inputs: ['contract_version', ...(verb === 'status' ? [] : ['request_id']), ...({
+      begin: ['intent_id', 'claim_token', 'claim_generation', 'envelope_sha256'],
+      receipt: ['intent_id', 'attempt_id', 'envelope_sha256', 'observation'],
+      defer: ['intent_id', 'claim_token', 'claim_generation', 'reason'],
+      control: ['action', 'reason'],
+    }[verb] || [])],
+  })),
   {
     name: "ping",
     safety: TOOL_SAFETY.READ,
