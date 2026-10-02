@@ -1175,7 +1175,8 @@ export function createEventsAdminRouter({
         },
       });
     } catch (error) {
-      fail(res, error, "Update event failed", Number(error?.status) || 400);
+      fail(res, error, "Update event failed",
+        String(error?.code || error?.sqlstate || "") === "40901" ? 409 : Number(error?.status) || 400);
     }
   });
 

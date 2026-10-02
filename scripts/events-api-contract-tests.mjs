@@ -24,7 +24,7 @@ assert.match(outlookAuthorityMigration, /revoke all privileges[\s\S]*public, ano
 assert.match(outlookAuthorityMigration, /grant delete, insert, maintain, references, select, trigger, truncate, update[\s\S]*to service_role/i);
 assert.doesNotMatch(outlookAuthorityMigration, /grant[\s\S]*to (?:public|anon|authenticated|custodial_application_reader)/i);
 
-function buildApp({ writeCalls = [], readCalls = [], writeResults = {}, eventRows = [] } = {}) {
+function buildApp({ writeCalls = [], readCalls = [], writeResults = {}, writeError = null, eventRows = [] } = {}) {
   const app = express();
   app.use(express.json());
   app.use("/admin-api/events", createEventsAdminRouter({
@@ -119,6 +119,7 @@ function buildApp({ writeCalls = [], readCalls = [], writeResults = {}, eventRow
     },
     runCommand: async (name, payload) => {
       writeCalls.push({ name, payload });
+      if (writeError) throw writeError;
       const legacyName = { event_create: "events_app_create", event_update: "events_app_update", event_cancel: "events_app_cancel" }[name];
       return Object.prototype.hasOwnProperty.call(writeResults, legacyName) ? writeResults[legacyName] : [];
     },
@@ -662,6 +663,16 @@ await withServer(buildApp({ writeCalls: updateWriteCalls }), async (baseUrl) => 
   }
 });
 assert.equal(updateWriteCalls.length, 0, "invalid edit revisions cannot reach the command boundary");
+await withServer(buildApp({ writeError: Object.assign(new Error("Event changed since this preview. Refresh and review before saving."),
+  { code: "40901" }) }), async (baseUrl) => {
+  const response = await fetch(`${baseUrl}/admin-api/events/60000000-0000-4000-8000-000000000001`, {
+    method: "PUT", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ event_name: "Stale edit", event_scope: "ZOO_WIDE", event_date: "2026-07-17",
+      start_time: "18:00", end_time: "20:30", expected_revision: 1 }),
+  });
+  assert.equal(response.status, 409, "PostgREST SQLSTATE 40901 must remain an HTTP conflict without a status property");
+  assert.match((await response.json()).error, /changed since this preview/i);
+});
 await withServer(buildApp({ writeCalls: updateWriteCalls }), async (baseUrl) => {
   const response = await fetch(`${baseUrl}/admin-api/events/60000000-0000-4000-8000-000000000001`, {
     method: "PUT",
