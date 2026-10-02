@@ -85,7 +85,7 @@ function affectedComponents(value = "") {
     ["messaging", /messag|inbox|thread|unread/], ["scans", /scan|cleaning|nfc|qr/],
     ["scheduling", /schedule|pto|absence/], ["events", /event|venue/],
     ["authentication", /auth|login|manager access/], ["gemini_console", /gemini|console/],
-    ["moxie", /moxie|annie/], ["feedback", /feedback|guest report/],
+    ["feedback", /feedback|guest report/],
   ];
   for (const [name, pattern] of map) if (pattern.test(text)) components.push(name);
   return components.length ? components : ["custodial_program"];
