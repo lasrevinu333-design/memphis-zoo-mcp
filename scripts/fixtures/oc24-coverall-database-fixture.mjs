@@ -99,7 +99,7 @@ export async function coverallPrintDatabaseProof({sql,container,socketDir}){
   check('PDF same accepted projection',doc.projectionId,snapshot.latest_projection.projection_id);
   check('PDF actual contractor shift',doc.contractors[0].shift,{start:'07:00',end:'15:00'});
   check('PDF actual contractor lunch',doc.contractors[0].lunch,{start:'11:00',end:'12:00'});
-  check('PDF recorder remains unspecified',doc.contractorCompletionRecorder,'NOT_SPECIFIED');
+  check('September27 owner personally verifies contractor completion',doc.contractorCompletionRecorder,'ERIC_OPERLE_PERSONAL_VERIFICATION');
   assert.ok(doc.contractors[0].periods.some(p=>p.areas.length),'real compiler assigned manual capacity');checks++;
   assert.ok(doc.contractors[0].shiftEndHandoffs.length>0,'actual handoff at contractor departure');checks++;
   check('shift-end coverage names actual remaining workers',doc.contractors[0].shiftEndHandoffs.every(h=>h.nextOwners.length>0&&h.nextOwners.every(n=>people.slice(0,4).some(p=>p.name===n))),true);

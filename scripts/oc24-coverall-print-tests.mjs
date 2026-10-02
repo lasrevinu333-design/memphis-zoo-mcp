@@ -30,7 +30,7 @@ check('09:45 changed ownership',c.periods.find(p=>p.start==='09:45').areas[0].ar
 check('lunch relief does not imply full round',c.periods.find(p=>p.start==='10:00').areas.find(a=>a.area==='Area C').purpose,'lunch_coverage');
 check('own lunch removes work temporarily',c.periods.find(p=>p.start==='12:00').areas,[]);
 check('15:00 actual successor',c.shiftEndHandoffs[0].nextOwners,['Synthetic closer']);
-check('no completion recorder invented',doc.contractorCompletionRecorder,'NOT_SPECIFIED');
+check('September27 owner personally verifies contractor completion',doc.contractorCompletionRecorder,'ERIC_OPERLE_PERSONAL_VERIFICATION');
 for(const mutate of [f=>f.snapshot.authority_revision++,f=>f.snapshot.projection_status='stale_staffing_change',f=>f.lunch.projection_id='wrong',f=>f.source.version_id='wrong',f=>f.snapshot.exceptions=[],f=>f.snapshot.exceptions.push(f.snapshot.exceptions[0]),f=>f.snapshot.exceptions[0].payload.availability.shift.end='14:00']){
  const f=fixture();mutate(f);assert.throws(()=>createCoverAllPrintDocument(f));checks++;
 }

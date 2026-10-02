@@ -81,7 +81,9 @@ export function createCoverAllPrintDocument({snapshot,source,lunch,serviceDate,e
  }
  const document={schema:'custodial.coverall-accepted-print.v1',serviceDate,authorityRevision:expectedRevision,
   publicationId:publication.publication_id,projectionId,replayDigest:projection.replay_digest,lunchDocumentIdentity:lunch.document_identity,
-  show0945:keep0945,contractors,contractorCompletionRecorder:'NOT_SPECIFIED'};
+  // September27 owner decision: Eric verifies the contractor's work himself.
+  // This metadata does not invent a contractor account, phone or NFC workflow.
+  show0945:keep0945,contractors,contractorCompletionRecorder:'ERIC_OPERLE_PERSONAL_VERIFICATION'};
  return {...document,documentDigest:hash(canonicalJson(document))};
 }
 
