@@ -1,5 +1,6 @@
 import express from 'express';
 import { applyPlaceCommand,readPlacePreview } from './place-lifecycle.js';
+import {buildPlaceReconciliation,PLACE_LEGACY_PREVIEW_SQL} from './place-reconciliation.js';
 
 export function placeHttpFailure(error){
  const code=String(error?.code||'');
@@ -11,7 +12,7 @@ export function placeHttpFailure(error){
   error:'The place outcome is not confirmed. Retain the same saved request and reconcile it before creating another command.'}};
 }
 
-export function createPlacesAdminRouter({client,requireManagerWrite}={}){
+export function createPlacesAdminRouter({client,requireManagerWrite,runReadOnlySql}={}){
  if(typeof requireManagerWrite!=='function')throw new TypeError('Place administration requires the existing manager write guard.');
  const router=express.Router();
  router.use(requireManagerWrite,(req,res,next)=>{
@@ -27,6 +28,15 @@ export function createPlacesAdminRouter({client,requireManagerWrite}={}){
    const data=await readPlacePreview(req,req.query,{client});
    res.json({ok:true,data});
   }catch(error){const failure=placeHttpFailure(error);res.status(failure.status).json(failure.body);}
+ });
+ router.get('/reconciliation',async(req,res)=>{
+  try{
+   if(Object.keys(req.query).length){res.status(422).json({ok:false,error:'Catalog preview accepts no caller SQL or mapping parameters.'});return;}
+   if(typeof runReadOnlySql!=='function'){res.status(503).json({ok:false,error:'Legacy catalog reader unavailable. No import or inferred mapping is available.'});return;}
+   const registry=await readPlacePreview(req,{},{client});
+   const rows=await runReadOnlySql(PLACE_LEGACY_PREVIEW_SQL);
+   res.json({ok:true,data:buildPlaceReconciliation(rows,registry)});
+  }catch{res.status(503).json({ok:false,code:'catalog_preview_unavailable',error:'Legacy catalog preview could not be verified. Existing catalogs, identities and saved work are unchanged.'});}
  });
  router.post('/commands',async(req,res)=>{
   try{

@@ -5,6 +5,7 @@ import {readFileSync} from 'node:fs';
 import {createOpsManagerSession,makeOpsAccessMiddleware} from '../src/auth/shared-access-auth.js';
 import {createPlacesAdminRouter,placeHttpFailure} from '../src/places-api.js';
 import {makeRestoreMutationGate} from '../src/restore-mutation-gate.js';
+import {buildPlaceReconciliation,PLACE_LEGACY_PREVIEW_SQL} from '../src/place-reconciliation.js';
 
 const env={NODE_ENV:'production',OPS_MANAGER_AUTH_REQUIRED:'true',OPS_MANAGER_SESSION_SECRET:'place-http-synthetic-test-secret-only'};
 const manager={manager_id:randomUUID(),display_name:'Synthetic Custodial Manager',roles:['CUSTODIAL_MANAGER','OPS_MANAGER'],active:true,revoked_at:null};
@@ -23,7 +24,8 @@ const client={rpc:async(name,args)=>{
 }};
 const writeGuard=makeOpsAccessMiddleware({env,requireWrite:true,trustedDeviceStore:store});
 const app=express();app.use(express.json({limit:'64kb'}));app.use(makeRestoreMutationGate({supabase:client,required:true,serviceName:'synthetic-place-http'}));
-app.use('/admin-api/places',createPlacesAdminRouter({client,requireManagerWrite:writeGuard}));
+let catalogReads=0;
+app.use('/admin-api/places',createPlacesAdminRouter({client,requireManagerWrite:writeGuard,runReadOnlySql:async query=>{check(query,PLACE_LEGACY_PREVIEW_SQL,'server-owned static query only');catalogReads++;return [{legacy_kind:'event_venue',legacy_id:randomUUID(),legacy_code:'EVENT_ONLY_TEST',display_name:'Legacy Test',active:true,source_flags:{eligible_event_venue:true},aliases:['Test'],source_relationships:{location_group_id:null}}];}}));
 app.use('/unconfigured',createPlacesAdminRouter({client:null,requireManagerWrite:writeGuard}));
 const server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));const base=`http://127.0.0.1:${server.address().port}`;
 let checks=0;const check=(a,b,label)=>{assert.deepEqual(a,b,label);checks++;};
@@ -37,6 +39,11 @@ try{
  check((await request(undefined,{bearer:token({authMode:'operations_first',credentialId:null})})).status,403,'unnamed/open session denied');
  check((await request(undefined,{bearer:token({accessLevel:'read_only'})})).status,403,'read-only management denied');
  let result=await request();check(result.status,200,'trusted named manager preview');check(result.cache,'no-store','private read no cache');check(calls.at(-1).args,{p_manager:manager.manager_id},'preview identity only from guard');
+ result=await request('/admin-api/places/reconciliation');check(result.status,200,'manager read-only legacy preview');check(result.body.data.records[0].disposition,'UNMAPPED','no name-based canonical inference');check(result.body.data.import_available,false,'no silent import');check(result.body.data.consumer_cutover,false,'no operational adoption claim');
+ check(result.body.data.complete_manifest,false,'bounded separate reads cannot authorize import');check(result.body.data.reader_limit_metadata_available,false,'reader cap metadata not silently claimed');
+ check((await request('/admin-api/places/reconciliation?sql=delete')).status,422,'caller SQL denied');check(catalogReads,1,'caller SQL never reaches reader');
+ const legacyId=randomUUID(),canonicalId=randomUUID();const linked=buildPlaceReconciliation([{legacy_kind:'physical_location',legacy_id:legacyId},{legacy_kind:'event_venue',legacy_id:legacyId}],{places:[{place_id:canonicalId,physical_location_id:legacyId}]});
+ check(linked.records[0].disposition,'PHYSICAL_ID_LINK_PRESENT','exact FK relationship preserved');check(linked.records[0].needs_review,true,'FK alone is not imported/cut over');check(linked.records[1].disposition,'UNMAPPED','same UUID in another namespace never joins');
  check((await request('/admin-api/places/preview?manager_id=forged')).status,422,'forged query field rejected');
  result=await request('/admin-api/places/commands',{body:command});check(result.status,200,'authenticated actual HTTP command');check(result.body.request_id,command.request_id,'exact response request');check(result.body.data.actor_manager_id,manager.manager_id,'response manager binding');
  const rpc=calls.find(c=>c.name==='custodial_place_command');check(rpc.args.p_manager,manager.manager_id,'RPC server manager');check(rpc.args.p_expected_revision,2,'exact CAS');check(rpc.args.p_request,command.request_id,'exact stable request');
@@ -51,6 +58,6 @@ try{
  check((await request('/unconfigured/preview')).status,503,'missing service client fail closed');
  paused=true;const count=calls.filter(c=>c.name==='custodial_place_command').length;check((await request('/admin-api/places/commands',{body:command})).status,503,'actual restore guard pause');check(calls.filter(c=>c.name==='custodial_place_command').length,count,'pause never changes place');
  check(placeHttpFailure({message:'unrecognized'}).body.command_rejected,false,'unexpected failure conservatively unconfirmed');
- const index=readFileSync(new URL('../src/index.js',import.meta.url),'utf8');assert.match(index,/app\.use\("\/admin-api\/places", createPlacesAdminRouter\(\{ client: supabaseAdmin, requireManagerWrite: requireOpsManagerWrite \}\)\)/);checks++;
+ const index=readFileSync(new URL('../src/index.js',import.meta.url),'utf8');assert.match(index,/app\.use\("\/admin-api\/places", createPlacesAdminRouter\(\{ client: supabaseAdmin, requireManagerWrite: requireOpsManagerWrite, runReadOnlySql \}\)\)/);checks++;
  console.log(JSON.stringify({status:'PLACE_HTTP_AUTH_GUARD_RPC_CONTRACT_PASS',checks,actualHttp:true,actualExistingAuth:true,database:'mock RPC; unchanged foundation has separate480-check DB proof',productionWritten:false}));
 }finally{await new Promise(r=>server.close(r));}
