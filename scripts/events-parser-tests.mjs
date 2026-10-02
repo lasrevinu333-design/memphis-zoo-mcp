@@ -529,11 +529,13 @@ try {
   assert.doesNotMatch(capturedPrompt, /"source_index":0,"text":"Event Area: Event Center"/);
   assert.equal(rows[0].event_name, "Baby Day");
   assert.equal(rows[0].provider_used, "local-parser");
-  assert.equal(rows[1].event_name, "End of Summer Bash");
-  assert.equal(rows[1].provider_used, "local-parser+gemini-fill");
-  assert.equal(rows[1].start_time, "10:00:00");
-  assert.equal(rows[1].end_time, "11:00:00");
-  assert.equal(rows[1].attendee_count, "42");
+  assert.notEqual(rows[1].event_name, "End of Summer Bash", "provider title absent from raw source must not become an accepted event");
+  assert.equal(rows[1].event_date, "", "provider date absent from raw source must remain unresolved");
+  assert.equal(rows[1].start_time, "", "provider start absent from raw source must remain unresolved");
+  assert.equal(rows[1].end_time, "", "provider end absent from raw source must remain unresolved");
+  assert.equal(rows[1].attendee_count, null, "provider guest count absent from raw source must remain unresolved");
+  assert.ok(rows[1].warnings.includes("missing_date"));
+  assert.ok(rows[1].warnings.includes("missing_time"));
 } finally {
   global.fetch = originalFetch;
   if (originalGeminiApiKey == null) delete process.env.EVENTS_GEMINI_API_KEY;
@@ -542,3 +544,4 @@ try {
 
 console.log("events parser golden tests passed");
 await import("./events-ai-source-identity-tests.mjs");
+await import("./events-ai-provenance-tests.mjs");

@@ -1714,22 +1714,48 @@ function recomputeRowMetadata(row = {}, locationGroups = []) {
   };
 }
 
-function normalizeGeminiRow(raw = {}, locationGroups = [], fallbackText = "", index = 0, eventVenues = [], eventDefaults = []) {
-  const matchedById = raw.location_group_id
+function sourceSupportsLabeledTime(sourceText = "", candidateTime = "", kind = "start") {
+  if (!candidateTime) return false;
+  const label = kind === "end" ? "(?:end|ends|ending|finish|finishes|stop|stops)" : "(?:start|starts|starting|begin|begins|beginning)";
+  const time = "(noon|midnight|\\d{1,2}(?::\\d{2})?\\s*(?:a\\.?m\\.?|p\\.?m\\.?|am|pm|a|p)|\\d{1,2}:\\d{2}(?::\\d{2})?)";
+  const pattern = new RegExp(`\\b${label}\\b\\s*(?:at|:)?\\s*${time}\\b`, "ig");
+  return [...String(sourceText || "").matchAll(pattern)]
+    .some((match) => materializeTime(extractTimeParts(match[1])) === candidateTime);
+}
+
+function normalizeGeminiRow(raw = {}, locationGroups = [], fallbackText = "", index = 0, eventVenues = [], eventDefaults = [], localRow = {}) {
+  const sourceWords = normalizeLoose(fallbackText);
+  const sourceMentions = (value) => {
+    const words = normalizeLoose(value);
+    return Boolean(words && new RegExp(`(?:^|\\s)${escapeRegex(words)}(?:\\s|$)`).test(sourceWords));
+  };
+  const claimedGroup = raw.location_group_id
     ? (locationGroups || []).find((group) => String(group.location_group_id || "") === String(raw.location_group_id || "")) || null
     : null;
-  const matchedGroup = matchedById || matchLocationGroup(locationGroups, raw.location_group_name || fallbackText);
-  const eventDate = normalizePossibleDate(raw.event_date);
-  const timePair = normalizeTimePair(raw.start_time, raw.end_time);
+  const matchedById = claimedGroup && [claimedGroup.group_name, claimedGroup.group_code, ...(claimedGroup.included_locations || []), ...(claimedGroup.aliases || [])].some(sourceMentions)
+    ? claimedGroup : null;
+  const matchedGroup = matchedById || matchLocationGroup(locationGroups, fallbackText);
+  // The provider interprets source evidence; it is not a source of new event
+  // facts. Unknown date, time and attendance stay unknown for manager review.
+  const proposedDate = normalizePossibleDate(raw.event_date);
+  const eventDate = proposedDate && proposedDate === localRow.event_date ? proposedDate : (localRow.event_date || "");
+  const proposedTimes = normalizeTimePair(raw.start_time, raw.end_time);
+  const timePair = {
+    start_time: proposedTimes.start_time === localRow.start_time || sourceSupportsLabeledTime(fallbackText, proposedTimes.start_time, "start") ? proposedTimes.start_time : (localRow.start_time || ""),
+    end_time: proposedTimes.end_time === localRow.end_time || sourceSupportsLabeledTime(fallbackText, proposedTimes.end_time, "end") ? proposedTimes.end_time : (localRow.end_time || ""),
+  };
   const attendeeRaw = raw.attendee_count == null || raw.attendee_count === "" ? null : Number.parseInt(String(raw.attendee_count), 10);
-  const attendeeCount = Number.isFinite(attendeeRaw) ? String(attendeeRaw) : null;
-  const eventName = cleanEventName(raw.event_name || "", matchedGroup);
-  const notes = cleanNotes(raw.notes || "", eventName, matchedGroup);
-  const areaCandidates = rankLocationGroups(locationGroups, raw.location_group_name || fallbackText, 3);
+  const proposedCount = Number.isFinite(attendeeRaw) ? String(attendeeRaw) : null;
+  const attendeeCount = proposedCount != null && proposedCount === localRow.attendee_count ? proposedCount : (localRow.attendee_count ?? null);
+  const proposedName = cleanEventName(raw.event_name || "", matchedGroup);
+  const eventName = sourceMentions(proposedName) ? proposedName : (localRow.event_name || "");
+  const proposedNotes = cleanNotes(raw.notes || "", eventName, matchedGroup);
+  const notes = sourceMentions(proposedNotes) ? proposedNotes : (localRow.notes || "");
+  const areaCandidates = rankLocationGroups(locationGroups, localRow.source_location_text || fallbackText, 3);
   const locationSemantics = buildLocationSemantics({
     eventName,
     rawText: fallbackText,
-    areaText: raw.location_group_name || raw.display_location || "",
+    areaText: localRow.source_location_text || fallbackText,
     matchedGroup,
     areaCandidates,
     locationGroups,
@@ -1757,7 +1783,7 @@ function normalizeGeminiRow(raw = {}, locationGroups = [], fallbackText = "", in
   const field_confidence = buildFieldConfidence({ eventName, locationGroupId: locationSemantics.location_group_id || "", eventDate, startTime: timePair.start_time, endTime: timePair.end_time, attendeeCount, areaCandidates, warnings });
 
   return {
-    raw_text: normalizeIntakeText(fallbackText),
+    raw_text: fallbackText,
     source_index: index,
     event_name: eventName,
     event_scope: locationSemantics.event_scope,
@@ -1778,8 +1804,8 @@ function normalizeGeminiRow(raw = {}, locationGroups = [], fallbackText = "", in
     attendee_count: attendeeCount,
     notes,
     created_by: "Input Console Parse",
-    confidence: ["high", "medium", "low"].includes(String(raw.confidence || "").toLowerCase()) ? String(raw.confidence).toLowerCase() : (warnings.length ? "medium" : "high"),
-    review_notes: raw.review_notes == null ? (warnings.length ? warnings.join(", ") : null) : String(raw.review_notes || "").trim() || null,
+    confidence: warnings.length ? "medium" : (String(raw.confidence || "").toLowerCase() === "low" ? "low" : "high"),
+    review_notes: warnings.length ? warnings.join(", ") : null,
     warnings,
     area_candidates: compactAreaCandidates(areaCandidates),
     event_venue_candidates: locationSemantics.event_venue_candidates || [],
@@ -1811,7 +1837,7 @@ function chooseBestRow(localRow, geminiRow, locationGroups = []) {
   const localCriticalMissing = localWarnings.filter((w) => criticalWarnings.includes(w));
   const geminiCriticalMissing = geminiWarnings.filter((w) => criticalWarnings.includes(w));
 
-  if (geminiCriticalMissing.length < localCriticalMissing.length) {
+  if (geminiCriticalMissing.length <= localCriticalMissing.length) {
     const merged = recomputeRowMetadata({
       ...localRow,
       event_name: localRow.event_name || geminiRow.event_name || "",
@@ -1835,28 +1861,31 @@ function chooseBestRow(localRow, geminiRow, locationGroups = []) {
       provider_fallback: false,
       gemini_candidate: geminiRow,
     }, locationGroups);
-    return merged;
+    const addedSourceFact = ["event_name", "event_scope", "primary_venue_id", "display_location", "location_group_id", "event_date", "start_time", "end_time", "attendee_count", "notes"]
+      .some((field) => !localRow[field] && Boolean(merged[field]));
+    if (addedSourceFact) return merged;
   }
 
-  const localFilled = [localRow.event_name, localRow.event_scope !== "UNKNOWN" ? localRow.event_scope : "", localRow.display_location !== "Needs Review" ? localRow.display_location : "", localRow.location_group_id, localRow.event_date, localRow.start_time, localRow.end_time].filter(Boolean).length;
-  const geminiFilled = [geminiRow.event_name, geminiRow.event_scope !== "UNKNOWN" ? geminiRow.event_scope : "", geminiRow.display_location !== "Needs Review" ? geminiRow.display_location : "", geminiRow.location_group_id, geminiRow.event_date, geminiRow.start_time, geminiRow.end_time].filter(Boolean).length;
-  if (localFilled < 3 && geminiFilled > localFilled) return geminiRow;
   return localRow;
 }
 
 export async function aiParseEventTexts({ texts, locationGroups, eventVenues = [], eventDefaults = [] }) {
   const rows = texts
-    .map((text, index) => ({ index, text: String(text || "").trim() }))
-    .filter((row) => row.text);
+    .map((text, index) => ({ index, text: String(text ?? "") }))
+    .filter((row) => row.text.trim());
 
-  const localRows = rows.map((row) => decorateLocalRow(parseOneEventText(row.text, locationGroups || [], row.index, eventVenues || [], eventDefaults || [])));
+  const localRows = rows.map((row) => decorateLocalRow({
+    ...parseOneEventText(row.text, locationGroups || [], row.index, eventVenues || [], eventDefaults || []),
+    raw_text: row.text,
+  }));
   const rowsNeedingAi = localRows.filter(shouldUseGemini);
   if (!rowsNeedingAi.length) return localRows;
 
   try {
+    const originalTextByIndex = new Map(rows.map((row) => [row.index, row.text]));
     const aiInputRows = rowsNeedingAi.map((row) => ({
       source_index: row.source_index,
-      text: row.raw_text,
+      text: originalTextByIndex.get(row.source_index),
     }));
     const aiRowBySourceIndex = new Map(aiInputRows.map((row) => [row.source_index, row]));
     const geminiResult = await tryGeminiParseTexts({
@@ -1881,13 +1910,15 @@ export async function aiParseEventTexts({ texts, locationGroups, eventVenues = [
     }
     const geminiRows = geminiResult.rows.map((row) => {
       const fallbackRow = aiRowBySourceIndex.get(row.source_index);
+      const localRow = localRows.find((candidate) => candidate.source_index === row.source_index);
       return normalizeGeminiRow(
         row,
         locationGroups || [],
         fallbackRow.text,
         fallbackRow.source_index,
         eventVenues || [],
-        eventDefaults || []
+        eventDefaults || [],
+        localRow
       );
     });
     const bySourceIndex = new Map(geminiRows.map((row) => [row.source_index, row]));
