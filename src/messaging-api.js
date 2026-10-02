@@ -1095,10 +1095,17 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     return parts.join(". " ) + ".";
   }
 
-  async function directContactReply(body = "") {
+  async function directContactReply(body = "", userId = "") {
     if (!isDirectContactPrompt(body)) return null;
+    // OC24-13 applies to this shortcut as well as the regular AI contact
+    // formatter. Resolve the actual saved message sender against the current
+    // named-manager registry; message metadata/device labels are not roles.
+    const leadership = await getLeadershipProfileForMessagingUser(userId);
+    const includePhone = isUuid(leadership?.manager_id)
+      && Array.isArray(leadership?.manager_roles)
+      && leadership.manager_roles.some(role => ["OPS_MANAGER", "CUSTODIAL_MANAGER", "DIRECTOR", "SECURITY_ADMIN"].includes(role));
     const contacts = await runReadOnlySql(`
-      select display_name, role_title, department, phone, active, sort_order
+      select display_name, role_title, department, ${includePhone ? "phone" : "null::text as phone"}, active, sort_order
       from public.internal_ops_contacts
       where active = true
       order by sort_order asc, display_name asc
@@ -1107,9 +1114,9 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       .map((contact) => ({ contact, score: scoreContactPrompt(body, contact) }))
       .sort((a, b) => b.score - a.score || Number(a.contact.sort_order || 999) - Number(b.contact.sort_order || 999));
     const best = ranked[0];
-    if (best && best.score >= 70) return summarizeDirectContact(best.contact, true);
+    if (best && best.score >= 70) return summarizeDirectContact(best.contact, includePhone);
     if (/\b(manager|managers|director|contact|phone|number)\b/i.test(String(body || ""))) {
-      return ranked.slice(0, 6).map((row) => summarizeDirectContact(row.contact, true)).join(" " );
+      return ranked.slice(0, 6).map((row) => summarizeDirectContact(row.contact, includePhone)).join(" " );
     }
     return null;
   }
@@ -1158,7 +1165,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
 
   async function buildMemphisReply({ userId = "", deviceId = "", threadId = "", body = "" } = {}) {
     try {
-      const directContact = await directContactReply(body);
+      const directContact = await directContactReply(body, userId);
       if (directContact) {
         return {
           reply: { text: directContact, meta: { fallback: true, mode: "direct_internal_contact" } },

@@ -3,7 +3,7 @@ import {writeFileSync,mkdirSync} from 'node:fs';
 import {join} from 'node:path';
 import {createHash} from 'node:crypto';
 import {PDFDocument} from 'pdf-lib';
-import {createCoverAllPrintDocument,renderCoverAllPdfPair} from '../src/static-weekly-coverall-print.js';
+import {createCoverAllPrintDocument,renderCoverAllPdfPair,createCoverAllCopyTexts} from '../src/static-weekly-coverall-print.js';
 import {createStaticWeeklyControlPlane} from '../src/static-weekly-control-plane.js';
 import {createStaticWeeklyControlPlaneRuntime} from '../src/static-weekly-control-plane-runtime.js';
 import {createOpsManagerSession} from '../src/auth/shared-access-auth.js';
@@ -11,7 +11,7 @@ const day='2026-09-28',projectionId='71000000-0000-4000-8000-000000000009',publi
 const contractor='20000000-0000-4000-8000-000000000099';
 const row=(id,area,owner,start,end)=>({plan_work_id:id,service_date:day,day_of_week:1,status:'assigned',owner_slot_id:owner,
  work_snapshot:{window:{start,end},serviceMode:'scan_tracked',locationId:area,locationNameSnapshot:area,locationCodeSnapshot:area,includedLocations:[{locationId:area,locationNameSnapshot:area+' restroom'}]}});
-const fixture=()=>({serviceDate:day,expectedRevision:7,projectionId,
+const fixture=()=>({serviceDate:day,expectedRevision:7,projectionId,issuingManager:{managerId:'10000000-0000-4000-8000-000000000091',managerName:'Synthetic Manager'},
  snapshot:{authority_revision:7,projection_status:'current',current_publication:{publication_id:publicationId,version_id:versionId},
   exceptions:[{type:'cover_all',serviceDate:day,payload:{availability:{slotId:contractor,shift:{start:'07:00',end:'15:00'}}}}],
   roster:[{slot_id:'worker',slot_label:'Synthetic employee',incumbencies:[]},{slot_id:'closer',slot_label:'Synthetic closer',incumbencies:[]}],
@@ -39,6 +39,18 @@ const flat=createCoverAllPrintDocument(continuous);
 check('unchanged area omits09:45',flat.show0945,false);check('unchanged adjacent assignment merged',flat.contractors[0].periods.length,1);
 check('unknown lunch is not fabricated',flat.contractors[0].lunch,null);
 let pair=await renderCoverAllPdfPair(doc);
+check('approved issuing manager, no personal phone',doc.managerContact,{name:'Synthetic Manager',role:'Issuing custodial manager',method:'IN_PERSON',authority:'AUTHENTICATED_NAMED_MANAGER',managerId:'10000000-0000-4000-8000-000000000091'});
+check('all copy languages from same document',pair.texts.map(t=>t.language),['en','es','en-es']);
+for(const entry of pair.texts){assert.equal(entry.documentDigest,doc.documentDigest);checks++;assert.equal(createHash('sha256').update(entry.text).digest('hex'),entry.sha256);checks++;assert.ok(entry.text.includes('Synthetic Manager'));checks++;assert.ok(entry.text.includes(doc.projectionId));checks++;}
+assert.match(pair.texts[0].text,/missing supplies directly to the issuing custodial manager/);checks++;
+assert.match(pair.texts[0].text,/Eric Operle/);checks++;
+assert.match(pair.texts[1].text,/suministros/);checks++;
+assert.match(pair.texts[1].text,/Eric Operle/);checks++;
+assert.doesNotMatch(JSON.stringify(pair),/tel:|mailto:|555-/);checks++;
+const missingContact=fixture();delete missingContact.issuingManager;
+assert.throws(()=>createCoverAllCopyTexts(createCoverAllPrintDocument(missingContact)),/issuing_manager_required/);checks++;
+await assert.rejects(()=>renderCoverAllPdfPair(createCoverAllPrintDocument(missingContact)),/issuing_manager_required/);checks++;
+assert.throws(()=>createCoverAllCopyTexts({...doc,managerContact:{...doc.managerContact,name:'forged'}}),/digest_mismatch/);checks++;
 check('both languages together',pair.files.map(f=>f.language),['en','es']);
 for(const file of pair.files){const bytes=Buffer.from(file.base64,'base64');check('PDF hash '+file.language,createHash('sha256').update(bytes).digest('hex'),file.sha256);const pdf=await PDFDocument.load(bytes);assert.ok(pdf.getPageCount()>0&&pdf.getPageCount()<=48);checks++;assert.ok(pdf.getSubject().includes(doc.documentDigest));checks++;}
 await assert.rejects(()=>renderCoverAllPdfPair({...doc,authorityRevision:8}),/digest_mismatch/);checks++;
@@ -56,7 +68,7 @@ try{
  for(const access of [null,'read_only','full_access']){
   const token=access?createOpsManagerSession({credentialId:device.credential_id,deviceId:device.device_id,manager,authMode:'trusted_device',accessLevel:access,maximumAccessLevel:'full_access',env}).token:null;
   const res=await fetch(base,{headers:token?{Authorization:'Bearer '+token}:{}});check('auth '+access,res.status,access==='full_access'?200:access===null?401:403);
-  if(access==='full_access'){pair=(await res.json()).data;check('HTTP exact revision',pair.document.authorityRevision,7);check('HTTP same projection',pair.document.projectionId,projectionId);}
+  if(access==='full_access'){pair=(await res.json()).data;check('HTTP exact revision',pair.document.authorityRevision,7);check('HTTP same projection',pair.document.projectionId,projectionId);check('HTTP issuer from authenticated session',pair.document.managerContact.managerId,manager.manager_id);check('HTTP text/PDF same canonical digest',pair.texts.every(t=>t.documentDigest===pair.document.documentDigest),true);}
  }
  assert.ok(queries.findIndex(q=>q.includes('pg_advisory_xact_lock'))<queries.findIndex(q=>q.includes('read_manager_snapshot')));checks++;
  check('PDF performs no schedule mutation',queries.some(q=>/static_weekly_v\d+_(?:apply|materialize|publish|create)/.test(q)),false);

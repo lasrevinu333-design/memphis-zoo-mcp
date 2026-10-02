@@ -1050,7 +1050,7 @@ export function createStaticWeeklyControlPlane({
       ]));
     },
     async getCoverAllPrintDocument({ manager, weekStart, serviceDate, expectedRevision, projectionId }) {
-      requireManager(manager);
+      const issuingManager=requireManager(manager);
       const week=requireMonday(weekStart,"week start"),date=requireDateInWeek(serviceDate,week,"service date");
       const revision=requireRevision(expectedRevision);
       return transaction(async(client)=>{
@@ -1061,7 +1061,7 @@ export function createStaticWeeklyControlPlane({
         const publicationId=requirePublicationId(snapshot?.current_publication?.publication_id);
         const source=await sourceFor(client,publicationId,date);
         const lunch=await call(client,"static_weekly_v8_read_lunch_document",[date]);
-        return createCoverAllPrintDocument({snapshot,source,lunch,serviceDate:date,expectedRevision:revision,projectionId:text(projectionId)});
+        return createCoverAllPrintDocument({snapshot,source,lunch,serviceDate:date,expectedRevision:revision,projectionId:text(projectionId),issuingManager});
       });
     },
     async previewPlaceRepublish({ manager, sourcePublicationId, effectiveStart, expectedRevision, selection, reason }) {

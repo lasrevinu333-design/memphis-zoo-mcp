@@ -12,4 +12,6 @@ await import('./native-provider-events-tests.mjs');
 await import('./native-location-lifecycle-tests.mjs');
 await import('./native-location-dispatch-contract-tests.mjs');
 await import('./completion-taxonomy-contract-tests.mjs');
-console.log('CURRENT_SYSTEM_SOURCE_CONTRACTS_PASS: 12 explicit owning suites; no database/provider/production/phone proof');
+await import('./oc24-coverall-print-tests.mjs');
+await import('./memphis-direct-contact-privacy-tests.mjs');
+console.log('CURRENT_SYSTEM_SOURCE_CONTRACTS_PASS: 14 explicit owning suites; no database/provider/production/phone proof');

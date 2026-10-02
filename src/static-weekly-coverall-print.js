@@ -10,7 +10,7 @@ const window=value=>normalizeWindow(value,'accepted CoverAll print window');
 
 // Presentation only. All assignments, temporary loans and dated capacity come
 // from one accepted projection read under the existing authority lock.
-export function createCoverAllPrintDocument({snapshot,source,lunch,serviceDate,expectedRevision,projectionId}){
+export function createCoverAllPrintDocument({snapshot,source,lunch,serviceDate,expectedRevision,projectionId,issuingManager=null}){
  const projection=snapshot?.latest_projection,publication=snapshot?.current_publication;
  if(!Number.isSafeInteger(expectedRevision)||snapshot?.authority_revision!==expectedRevision
   ||snapshot?.projection_status!=='current'||!projectionId||projection?.projection_id!==projectionId
@@ -88,7 +88,12 @@ export function createCoverAllPrintDocument({snapshot,source,lunch,serviceDate,e
   publicationId:publication.publication_id,projectionId,replayDigest:projection.replay_digest,lunchDocumentIdentity:lunch.document_identity,
   // September27 owner decision: Eric verifies the contractor's work himself.
   // This metadata does not invent a contractor account, phone or NFC workflow.
-  show0945:keep0945,contractors,contractorCompletionRecorder:'ERIC_OPERLE_PERSONAL_VERIFICATION'};
+  show0945:keep0945,contractors,contractorCompletionRecorder:'ERIC_OPERLE_PERSONAL_VERIFICATION',
+  guidanceVersion:'custodial.coverall-guidance.v1',
+  managerContact:issuingManager&&typeof issuingManager.managerId==='string'&&typeof issuingManager.managerName==='string'
+   &&issuingManager.managerId.trim()&&issuingManager.managerName.trim()
+   ?{name:issuingManager.managerName.trim(),role:'Issuing custodial manager',method:'IN_PERSON',
+    authority:'AUTHENTICATED_NAMED_MANAGER',managerId:issuingManager.managerId}:null};
  return {...document,documentDigest:hash(canonicalJson(document))};
 }
 
@@ -97,10 +102,60 @@ const labels={
  es:{title:'Asignaciones de CoverAll',revision:'Revisión aceptada',date:'Fecha de servicio',shift:'Turno',lunch:'Almuerzo',unpublished:'No hay almuerzo del contratista publicado; confirme con el encargado.',empty:'No hay áreas asignadas en este período.',lunchCoverage:'Cobertura temporal de almuerzo',reminder:'Trabajo de recordatorio',end:'Cobertura al terminar el turno',none:'No hay responsable posterior en este horario aceptado.',note:'Siga estos horarios de cobertura. El relevo de almuerzo no añade una limpieza completa.',page:'Página'},
 };
 
-export async function renderCoverAllPdfPair(document){
+const instructions={
+ en:['Check the condition, supplies, fixtures and trash at your assigned locations. Perform the full cleaning OR only the individual services actually needed; do not invent a cleaning service when only a check is needed.',
+  'Follow the accepted time windows and temporary lunch coverage. Taking over lunch relief does not require an extra full cleaning round.',
+  'Report problems, unsafe conditions, out-of-order fixtures and missing supplies directly to the issuing custodial manager. State the location and what you observed; ask for approved product or procedure guidance when needed.',
+  'Contact the issuing custodial manager in person. This schedule does not publish personal phone numbers or require a contractor phone, app account, NFC scan or employee login.',
+  'Eric Operle personally verifies CoverAll completion. Do not record contractor work as if it were performed by an employee.'],
+ es:['Revise el estado, los suministros, las instalaciones y la basura en los lugares asignados. Haga la limpieza completa O solo los servicios individuales realmente necesarios; no invente un servicio de limpieza cuando solo haga falta una revisión.',
+  'Respete los horarios aceptados y la cobertura temporal de almuerzo. El relevo de almuerzo no requiere otra ronda de limpieza completa.',
+  'Informe directamente al encargado que emitió el horario sobre problemas, condiciones inseguras, instalaciones fuera de servicio y suministros faltantes. Indique el lugar y lo observado; pida instrucciones aprobadas sobre productos o procedimientos cuando sea necesario.',
+  'Hable en persona con el encargado que emitió el horario. Este documento no publica teléfonos personales ni requiere teléfono de contratista, cuenta de aplicación, lectura NFC o inicio de sesión de empleado.',
+  'Eric Operle verifica personalmente la finalización del trabajo de CoverAll. No registre el trabajo del contratista como si lo hubiera realizado un empleado.'],
+};
+
+function assertCurrentPrintDocument(document){
  if(document?.schema!=='custodial.coverall-accepted-print.v1')fail('coverall_print_document_required');
  const {documentDigest,...canonical}=document;
  if(documentDigest!==hash(canonicalJson(canonical)))fail('coverall_print_document_digest_mismatch');
+ if(document.guidanceVersion!=='custodial.coverall-guidance.v1'||document.managerContact?.authority!=='AUTHENTICATED_NAMED_MANAGER'
+  ||document.managerContact.method!=='IN_PERSON'||!text(document.managerContact.name).trim()||!text(document.managerContact.managerId).trim())fail('coverall_print_issuing_manager_required');
+}
+
+function contractorLines(document,c,language){
+ const t=labels[language],out=[];
+ const add=(text,size=10,strong=false)=>out.push({text,size,strong});
+ add('MEMPHIS ZOO',10,true);add(`${t.title} - ${c.name}`,19,true);
+ add(`${t.date}: ${document.serviceDate} | ${t.revision}: ${document.authorityRevision}`,11,true);
+ add(`${t.shift}: ${c.shift.start} - ${c.shift.end}`,12,true);
+ add(`${t.lunch}: ${c.breakChoice==='NONE'?(language==='es'?'Sin descanso: elección explícita del encargado.':'No break: explicit manager choice.'):c.lunch?c.lunch.start+' - '+c.lunch.end:t.unpublished}`);
+ add(`${language==='es'?'Encargado que emitió el horario':'Issuing custodial manager'}: ${document.managerContact.name}`,11,true);
+ add(language==='es'?'Instrucciones y comunicación':'Instructions and reporting',12,true);
+ for(const instruction of instructions[language])add(instruction);
+ for(const period of c.periods){
+  add(`${period.start} - ${period.end}`,13,true);
+  if(!period.areas.length)add(t.empty);
+  for(const a of period.areas){add(a.area,11,true);add(a.locations.map(l=>l.name).join('; '));if(a.purpose==='lunch_coverage')add(t.lunchCoverage);if(a.purpose==='reminder_only')add(t.reminder);}
+ }
+ add(`${t.end} - ${c.shift.end}`,13,true);
+ for(const h of c.shiftEndHandoffs)add(`${h.area}: ${h.nextOwners.length?h.nextOwners.join(', '):t.none}`);
+ return out;
+}
+
+export function createCoverAllCopyTexts(document){
+ assertCurrentPrintDocument(document);
+ const texts=['en','es'].map(language=>{
+  const body=document.contractors.map(c=>contractorLines(document,c,language).map(line=>line.text).join('\n')).join('\n\n');
+  return {language,documentDigest:document.documentDigest,text:`${body}\n\nProjection: ${document.projectionId}\n${document.documentDigest}`};
+ });
+ texts.push({language:'en-es',documentDigest:document.documentDigest,text:texts.map(entry=>entry.text).join('\n\n---\n\n')});
+ return texts.map(entry=>({...entry,sha256:hash(entry.text)}));
+}
+
+export async function renderCoverAllPdfPair(document){
+ assertCurrentPrintDocument(document);
+ const {documentDigest}=document;
  const {PDFDocument,StandardFonts,rgb}=await import('pdf-lib');
  const files=[];
  for(const language of ['en','es']){
@@ -115,21 +170,11 @@ export async function renderCoverAllPdfPair(document){
    for(const word of words){if(f.widthOfTextAtSize(word,size)>532)fail('coverall_pdf_unbreakable_text');const next=part?part+' '+word:word;if(f.widthOfTextAtSize(next,size)>532){draw();part=word;}else part=next;}if(part)draw();
   }
   for(const c of document.contractors){
-   newPage();line('MEMPHIS ZOO',10,true);line(`${t.title} - ${c.name}`,19,true);
-   line(`${t.date}: ${document.serviceDate} | ${t.revision}: ${document.authorityRevision}`,11,true);
-   line(`${t.shift}: ${c.shift.start} - ${c.shift.end}`,12,true);
-   line(`${t.lunch}: ${c.breakChoice==='NONE'?(language==='es'?'Sin descanso: elección explícita del encargado.':'No break: explicit manager choice.'):c.lunch?c.lunch.start+' - '+c.lunch.end:t.unpublished}`);line(t.note);y-=10;
-   for(const period of c.periods){
-    if(y<115)newPage();line(`${period.start} - ${period.end}`,13,true);
-    if(!period.areas.length)line(t.empty);
-    for(const a of period.areas){line(a.area,11,true);line(a.locations.map(l=>l.name).join('; '));if(a.purpose==='lunch_coverage')line(t.lunchCoverage);if(a.purpose==='reminder_only')line(t.reminder);}y-=7;
-   }
-   if(y<115)newPage();line(`${t.end} - ${c.shift.end}`,13,true);
-   for(const h of c.shiftEndHandoffs)line(`${h.area}: ${h.nextOwners.length?h.nextOwners.join(', '):t.none}`);
+   newPage();for(const entry of contractorLines(document,c,language)){if(entry.strong&&y<100)newPage();line(entry.text,entry.size,entry.strong);}
   }
   pdf.getPages().forEach((p,i)=>{p.drawText(`${t.page} ${i+1}/${pdf.getPageCount()} | ${document.serviceDate} | r${document.authorityRevision}`,{x:40,y:32,size:8,font});p.drawText(documentDigest,{x:40,y:20,size:7,font});});
   const bytes=await pdf.save();if(bytes.length>2*1024*1024)fail('coverall_pdf_size_limit');
   files.push({language,filename:`CoverAll_${document.serviceDate}_r${document.authorityRevision}_${language}.pdf`,sha256:hash(bytes),base64:Buffer.from(bytes).toString('base64')});
  }
- return {schema:'custodial.coverall-pdf-pair.v1',document,files};
+ return {schema:'custodial.coverall-pdf-pair.v1',document,files,texts:createCoverAllCopyTexts(document)};
 }
