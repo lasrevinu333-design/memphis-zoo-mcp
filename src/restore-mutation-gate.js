@@ -59,8 +59,9 @@ async function heartbeatMutationLease({ supabase, requestId }) {
 }
 
 async function releaseMutationLease({ supabase, requestId }) {
-  const { error } = await supabase.rpc("custodial_release_application_mutation_lease", { p_request_id: requestId });
+  const { data, error } = await supabase.rpc("custodial_release_application_mutation_lease", { p_request_id: requestId });
   if (error) throw error;
+  if (data !== true) throw new Error("The exact application mutation lease release was not confirmed.");
 }
 
 function leaseLostError(cause) {
@@ -197,19 +198,50 @@ export function makeRestoreMutationGate({
       requestSignal?.addEventListener("abort", abortFromRequest, { once: true });
       if (requestSignal?.aborted) abortFromRequest();
       let disconnectTerminationTimer = null;
-      let settled = false;
+      let settlementPromise = null;
+      let settlementObserved = false;
       const settleMutation = () => {
-        if (settled) return Promise.resolve();
-        settled = true;
+        if (settlementPromise) return settlementPromise;
         requestSignal?.removeEventListener("abort", abortFromRequest);
         if (disconnectTerminationTimer) clearTimeout(disconnectTerminationTimer);
         lease.abort(new Error("The mutation response settled; no trailing external work remains authorized."));
-        return lease.release().catch(() => logger.error("Failed to release application mutation lease.", { request_id: leaseId, service_name: serviceName }));
+        settlementPromise = Promise.resolve().then(() => lease.release());
+        return settlementPromise;
       };
+      const observeSettlement = () => {
+        if (settlementObserved) return;
+        settlementObserved = true;
+        void settleMutation().catch(() =>
+          logger.error("Failed to release application mutation lease.", { request_id: leaseId, service_name: serviceName }));
+      };
+      const unknownRelease = () => Object.assign(new Error(
+        "The manager operation settled, but its restore lease release is unconfirmed. Check the exact status before retrying."),
+      { code: "static_weekly_recurring_mutation_lease_release_unknown" });
+      async function settleBeforeSuccess() {
+        // The route's SQL/COMMIT has already settled. Do not write a success
+        // response until the exact lease release is also known successful.
+        const released = settleMutation();
+        if (!requestSignal) throw unknownRelease();
+        let onAbort;
+        const aborted = new Promise((_, reject) => {
+          onAbort = () => reject(unknownRelease());
+          requestSignal.addEventListener("abort", onAbort, { once: true });
+          if (requestSignal.aborted) onAbort();
+        });
+        try {
+          await Promise.race([released, aborted]);
+          if (requestSignal.aborted) throw unknownRelease();
+        } catch {
+          throw unknownRelease();
+        } finally {
+          requestSignal.removeEventListener("abort", onAbort);
+        }
+      }
       req.restoreMutationLease = Object.freeze({
         requestId: leaseId,
         signal: lease.signal,
         assertActive: lease.assertActive,
+        settleBeforeSuccess,
       });
       // A disconnected Node response does not subsequently emit `finish`, even
       // when the route's awaited work later settles. Wrap end as the route
@@ -223,13 +255,13 @@ export function makeRestoreMutationGate({
           try {
             return originalEnd.apply(this, args);
           } finally {
-            void settleMutation();
+            observeSettlement();
           }
         };
       }
-      const releaseOnFinishedResponse = settleMutation;
+      const releaseOnFinishedResponse = observeSettlement;
       const abortOnDisconnectedResponse = () => {
-        if (res.writableFinished || settled) return;
+        if (res.writableFinished || settlementPromise) return;
         lease.abort();
         if (!disconnectTerminationTimer) {
           disconnectTerminationTimer = setTimeout(() => {
@@ -245,7 +277,8 @@ export function makeRestoreMutationGate({
       res.once?.("finish", releaseOnFinishedResponse);
       res.once?.("close", abortOnDisconnectedResponse);
       if (requestSignal?.aborted) {
-        await settleMutation();
+        try { await settleMutation(); }
+        catch { logger.error("Failed to release application mutation lease.", { request_id: leaseId, service_name: serviceName }); }
         unavailable(res, "static_weekly_recurring_operation_deadline_exceeded",
           "Manager operation expired before authority work began. Check its exact status before retrying.");
         return;

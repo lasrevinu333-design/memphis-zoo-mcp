@@ -109,7 +109,12 @@ const controlPlane = {
 };
 const runtime = createStaticWeeklyControlPlaneRuntime({
   env,
-  supabase: { async rpc() { return { data: { mutations_paused: false, state: "READY", authority_generation: 0, restore_id: null }, error: null }; } },
+  supabase: { async rpc(name) {
+    if (name === 'custodial_release_application_mutation_lease'
+      || name === 'custodial_heartbeat_application_mutation_lease') return { data: true, error: null };
+    assert.equal(name, 'custodial_begin_application_mutation_lease');
+    return { data: { mutations_paused: false, state: "READY", authority_generation: 0, restore_id: null }, error: null };
+  } },
   trustedDeviceStore: store,
   database: {},
   controlPlane,

@@ -244,10 +244,27 @@ assert.equal((await invoke(makeRestoreMutationGate({ supabase: null, required: f
   const res=response();await gate({method:'POST'},res,()=>{});
   res.end();
   assert.equal(res.writableFinished,true,'the HTTP response can finish before its release RPC settles');
+  await Promise.resolve();
   assert.equal(calls.filter(row=>row.name==='custodial_release_application_mutation_lease').length,1,
     'release is invoked but not yet known successful');
   finishRelease({data:true,error:null});
   await new Promise(resolve=>setImmediate(resolve));
+}
+{
+  const controller=new AbortController(),calls=[];
+  const gate=makeRestoreMutationGate({supabase:{async rpc(name,args){calls.push({name,args});
+    if(name==='custodial_begin_application_mutation_lease')return{data:{mutations_paused:false,authority_generation:1},error:null};
+    if(name==='custodial_release_application_mutation_lease')return{data:true,error:null};
+    throw Error(`unexpected ${name}`);}},requestId:()=>"00000000-0000-4000-8000-000000000205"});
+  const req={method:'POST',staticWeeklyManagerOperation:{signal:controller.signal}},res=response();
+  await gate(req,res,()=>{});
+  await req.restoreMutationLease.settleBeforeSuccess();
+  res.end();res.end();
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(calls.filter(row=>row.name==='custodial_release_application_mutation_lease').length,1,
+    'pre-success settlement and repeated response end share exactly one release RPC');
+  assert.equal(calls.at(-1).args.p_request_id,calls[0].args.p_request_id,
+    'the release remains bound to the original admitted lease ID');
 }
 
 console.log("RESTORE_MUTATION_GATE_TESTS_PASS");

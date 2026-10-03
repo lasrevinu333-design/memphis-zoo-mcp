@@ -118,7 +118,20 @@ export function createStaticWeeklyControlPlaneRuntime({
   }
   function respond(operation) {
     return async (req, res) => {
-      try { res.status(200).json({ ok: true, data: await operation(req) }); }
+      try {
+        const data = await operation(req);
+        // Only the two bounded recurring POSTs carry this context. Their
+        // transaction has settled here; the exact restore lease must also be
+        // confirmed released before any success bytes leave the server.
+        if (req.staticWeeklyManagerOperation) {
+          if (typeof req.restoreMutationLease?.settleBeforeSuccess !== 'function') {
+            throw fail('static_weekly_recurring_mutation_lease_release_unknown',
+              'The manager operation cannot confirm its exact restore lease release. Check the exact status before retrying.');
+          }
+          await req.restoreMutationLease.settleBeforeSuccess();
+        }
+        res.status(200).json({ ok: true, data });
+      }
       catch (error) {
         const unavailable = new Set([
           "static_weekly_control_plane_database_unavailable",
@@ -128,6 +141,7 @@ export function createStaticWeeklyControlPlaneRuntime({
           "static_weekly_recurring_operation_deadline_exceeded",
           "static_weekly_recurring_operation_aborted",
           "static_weekly_recurring_confirmation_outcome_unknown",
+          "static_weekly_recurring_mutation_lease_release_unknown",
           "static_weekly_compiler_request_aborted",
         ]).has(error?.code);
         const invalid = ["static_weekly_control_plane_compiler_rejected", "static_weekly_recurring_confirmation_request_invalid", "static_weekly_recurring_delivery_request_invalid",OPENING_COVERAGE_ERROR].includes(error?.code);

@@ -18,9 +18,9 @@ function clock(){let now=1,timer=null,starts=0;return{now:()=>now,setTimer:(call
  get starts(){return starts;},
  expire(){assert.ok(timer,'request timer must have started');now+=55_000;timer.callback();}};}
 async function until(predicate){for(let i=0;i<100&&!predicate();i++)await new Promise(resolve=>setImmediate(resolve));assert.ok(predicate(),'expected route stage was not reached');}
-async function fixture({rpc,find}){
+async function fixture({rpc,find,confirm}){
  const timer=clock(),calls=[],plane={async previewRecurringStaffing(input){calls.push({kind:'preview',input});return{status:'CANDIDATE_ONLY'};},
-  async confirmRecurringStaffing(input){calls.push({kind:'confirm',input});return{status:'ACCEPTED'};},async health(){return{ready:true};}};
+  async confirmRecurringStaffing(input){calls.push({kind:'confirm',input});return confirm?confirm(input):{status:'ACCEPTED'};},async health(){return{ready:true};}};
  const runtime=createStaticWeeklyControlPlaneRuntime({env,supabase:{rpc},trustedDeviceStore:{find},database:{},controlPlane:plane,
   managerOperationClock:{now:timer.now,setTimer:timer.setTimer,clearTimer:timer.clearTimer}});
  const server=http.createServer(runtime.app),incoming=[];
@@ -138,6 +138,90 @@ async function post(origin,path='/static-weekly/recurring-adaptation/preview',re
    same(f.timer.starts,starts,`unrelated ${method} ${path} starts no manager clock`);
    same(f.calls.length,calls,`unrelated ${method} ${path} reaches no product handler`);
   }
+ }finally{await f.close();}
+}
+{
+ let finishRelease,releaseCalls=0,responseSettled=false;
+ const releasePending=new Promise(resolve=>{finishRelease=resolve;});
+ const f=await fixture({rpc:async(name)=>{
+  if(name==='custodial_begin_application_mutation_lease')return{data:{mutations_paused:false,authority_generation:1},error:null};
+  if(name==='custodial_release_application_mutation_lease'){releaseCalls++;return releasePending;}
+  throw Error(`unexpected ${name}`);},find:async()=>trustedRow()});
+ try{
+  const pending=post(f.origin).then(result=>{responseSettled=true;return result;});
+  await until(()=>releaseCalls===1);
+  await new Promise(resolve=>setImmediate(resolve));
+  same(f.calls.length,1,'SQL-equivalent product promise settles before lease release begins');
+  same(responseSettled,false,'recurring success bytes wait for exact lease release');
+  finishRelease({data:true,error:null});
+  const result=await pending;
+  same(result.status,200,'confirmed release permits the successful preview envelope');
+  same(result.data.ok,true,'success remains typed only after release settles');
+  same(releaseCalls,1,'response end and finish do not release the lease twice');
+ }finally{await f.close();}
+}
+{
+ let releaseCalls=0;
+ const f=await fixture({rpc:async(name)=>{
+  if(name==='custodial_begin_application_mutation_lease')return{data:{mutations_paused:false,authority_generation:1},error:null};
+  if(name==='custodial_release_application_mutation_lease'){releaseCalls++;return{data:null,error:new Error('synthetic release failure')};}
+  throw Error(`unexpected ${name}`);},find:async()=>trustedRow()});
+ try{
+  const result=await post(f.origin);
+  same(result.status,503,'rejected exact release is never returned as success');
+  same(result.data.code,'static_weekly_recurring_mutation_lease_release_unknown','release rejection is typed UNKNOWN');
+  same(releaseCalls,1,'rejected release is not blindly replayed at response end');
+ }finally{await f.close();}
+}
+{
+ let releaseCalls=0;
+ const f=await fixture({rpc:async(name)=>{
+  if(name==='custodial_begin_application_mutation_lease')return{data:{mutations_paused:false,authority_generation:1},error:null};
+  if(name==='custodial_release_application_mutation_lease'){releaseCalls++;return{data:false,error:null};}
+  throw Error(`unexpected ${name}`);},find:async()=>trustedRow()});
+ try{
+  const result=await post(f.origin);
+  same(result.status,503,'release RPC false cannot be treated as exact successful deletion');
+  same(result.data.code,'static_weekly_recurring_mutation_lease_release_unknown','false release result is typed UNKNOWN');
+  same(releaseCalls,1,'false release is not blindly retried with a new identity');
+ }finally{await f.close();}
+}
+{
+ let finishRelease,releaseCalls=0;
+ const releasePending=new Promise(resolve=>{finishRelease=resolve;});
+ const f=await fixture({rpc:async(name)=>{
+  if(name==='custodial_begin_application_mutation_lease')return{data:{mutations_paused:false,authority_generation:1},error:null};
+  if(name==='custodial_release_application_mutation_lease'){releaseCalls++;return releasePending;}
+  throw Error(`unexpected ${name}`);},find:async()=>trustedRow()});
+ try{
+  const pending=post(f.origin);
+  await until(()=>releaseCalls===1);f.timer.expire();
+  const result=await pending;
+  same(result.status,503,'never-settling release fails at the same original ingress timer');
+  same(result.data.code,'static_weekly_recurring_mutation_lease_release_unknown','pending release is typed UNKNOWN');
+  finishRelease({data:true,error:null});
+  await new Promise(resolve=>setImmediate(resolve));
+  same(result.data.ok,false,'late release cannot upgrade the already-failed response');
+  same(releaseCalls,1,'late release does not trigger a second RPC');
+ }finally{await f.close();}
+}
+{
+ let releaseCalls=0;
+ const f=await fixture({rpc:async(name)=>{
+  if(name==='custodial_begin_application_mutation_lease')return{data:{mutations_paused:false,authority_generation:1},error:null};
+  if(name==='custodial_release_application_mutation_lease'){releaseCalls++;return{data:true,error:null};}
+  throw Error(`unexpected ${name}`);},find:async()=>trustedRow(),confirm:async()=>{
+   throw Object.assign(new Error('The COMMIT outcome is unknown; read the exact status.'),
+    {code:'static_weekly_recurring_confirmation_outcome_unknown'});
+  }});
+ try{
+  const result=await post(f.origin,'/static-weekly/recurring-adaptation/confirm',JSON.stringify({
+   confirmation_key:'10000000-0000-4000-8000-000000000099',effective_start:'2026-10-05',
+   expected_revision:1,preview_digest:'a'.repeat(64)}));
+  same(result.status,503,'COMMIT-unknown remains unavailable, not 200');
+  same(result.data.code,'static_weekly_recurring_confirmation_outcome_unknown','COMMIT-unknown identity is preserved');
+  await until(()=>releaseCalls===1);
+  same(releaseCalls,1,'unknown COMMIT still releases only its settled exact mutation lease');
  }finally{await f.close();}
 }
 console.log(JSON.stringify({status:'PASS',checks,scope:'loopback first-origin body/lease/auth expiration; synthetic store/lease and control plane, no SQL/solver/phone'}));
