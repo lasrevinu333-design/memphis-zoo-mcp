@@ -4,6 +4,7 @@ import {fileURLToPath} from 'node:url';
 import {deriveNativeScheduleOccurrence as derive,NATIVE_SCHEDULE_SOURCE_LIMITS as limits} from '../src/native-schedule-occurrence.js';
 import {prepareNativeScheduleOccurrence as prepare,nativeScheduleSnapshotSql} from '../src/native-schedule-preparation.js';
 import {nativeScheduleOccurrenceFixture,syntheticId as id} from './fixtures/native-schedule-occurrence-source.mjs';
+import {runNativeScheduleDatedReaderTests} from './native-schedule-dated-reader-tests.mjs';
 const clone=x=>structuredClone(x);
 export async function runNativeScheduleOccurrenceTests(){
  let checks=0;const equal=(a,b,n)=>{assert.deepEqual(a,b,n);checks++;};
@@ -87,7 +88,7 @@ export async function runNativeScheduleOccurrenceTests(){
   }
   x.snapshot.lunch=[{projection_id:s.projection_id,loan_id:'synthetic-loan',responsibility_id:'synthetic-responsibility',normal_occurrence_id:s.segment_id,
    normal_owner_id:s.assigned_employee_id,coverer_id:coverer,location_group_id:s.location_group_id,included_location_ids:[...s.included_location_ids],
-   service_mode:mode,coverage_start:'09:45:00',coverage_end:'10:00:00'}];
+   included_snapshots_empty:mode!=='scan_tracked',service_mode:mode,coverage_start:'09:45:00',coverage_end:'10:00:00'}];
   return x;
  }
  for(const mode of ['scan_tracked','reminder_only','response_only_no_clean']){
@@ -141,6 +142,7 @@ export async function runNativeScheduleOccurrenceTests(){
  equal(targetSql.includes('from public.weekly_schedule_occurrences'),true);equal(targetSql.includes('from public.custodial_dated_occurrences'),false);
  const source=fs.readFileSync(new URL('../src/native-schedule-preparation.js',import.meta.url),'utf8');
  equal(/fetch\(|execute\(|sendMessage\(|Date\.now/.test(source),false);
- return {status:'PASS',checks,scope:'source-only SCHEDULE 09:45 occurrence adapter; synthetic read edges',sql_executed:false,solver_executed:false,delivery_admitted:false};
+ const dated=await runNativeScheduleDatedReaderTests();
+ return {status:'PASS',checks:checks+dated.checks,original_checks:checks,dated_checks:dated.checks,scope:'source-only SCHEDULE 09:45 occurrence adapter; synthetic read edges',sql_executed:false,solver_executed:false,delivery_admitted:false};
 }
 if(process.argv[1]===fileURLToPath(import.meta.url))console.log(JSON.stringify(await runNativeScheduleOccurrenceTests()));

@@ -42,7 +42,7 @@ const ids=value=>Array.isArray(value)&&value.length<=NATIVE_SCHEDULE_SOURCE_LIMI
 const bindingKeys=['service_date','projection_status','version_id','publication_id','projection_id'];
 const segmentKeys=[...bindingKeys,'segment_id','location_group_id','included_location_ids','owner_type','assigned_employee_id','coverage_start','coverage_end','status','source_type','service_mode','governed'];
 const physicalKeys=[...bindingKeys,'occurrence_id','location_group_id','location_id','assigned_employee_id','coverage_start','coverage_end','assignment_status','authority_source'];
-const lunchKeys=['projection_id','loan_id','responsibility_id','normal_occurrence_id','normal_owner_id','coverer_id','location_group_id','included_location_ids','service_mode','coverage_start','coverage_end'];
+const lunchKeys=['projection_id','loan_id','responsibility_id','normal_occurrence_id','normal_owner_id','coverer_id','location_group_id','included_location_ids','included_snapshots_empty','service_mode','coverage_start','coverage_end'];
 const recipientKeys=['employee_id','device_id','device_identifier','credential_id','assignment_epoch','generation_id','principal_digest','token_digest'];
 const targetKeys=['source_id','source_revision','source_digest','publication_id','version_id','service_date','assignment_occurrence_id','delivery_occurrence_id','delivery_key','valid_from','valid_until'];
 function target(value,request){
@@ -81,7 +81,16 @@ export function deriveNativeScheduleOccurrence({request,snapshot,targetBefore,ta
   requireValue(a.governed===true&&a.projection_status==='current'&&a.authority_source==='static_weekly_projection','SOURCE_NOT_CURRENT');
   requireValue(a.service_date===request.serviceDate&&a.projection_id===t.source_id&&a.publication_id===t.publication_id
    &&a.version_id===t.version_id&&a.projection_authority_revision===t.source_revision,'SOURCE_BINDING_MISMATCH');
-  const segments=rows(snapshot.segments),physical=rows(snapshot.physical),lunch=rows(snapshot.lunch),byId=new Map();
+  const segments=rows(snapshot.segments),physical=rows(snapshot.physical),rawLunch=rows(snapshot.lunch),byId=new Map();
+  const lunch=rawLunch.map(l=>{
+   requireValue(exact(l,lunchKeys)&&typeof l.included_snapshots_empty==='boolean'&&modes.has(l.service_mode));
+   // Keep raw NULL and the reader's explicit empty-snapshot witness in source
+   // evidence. Only the semantic view normalizes this known nonphysical case.
+   if(l.service_mode==='scan_tracked')requireValue(l.included_snapshots_empty===false);
+   else requireValue(l.included_snapshots_empty===true);
+   return l.service_mode!=='scan_tracked'&&l.included_location_ids===null
+    ?{...l,included_location_ids:[]}:l;
+  });
   const binding=row=>requireValue(bindingKeys.every(k=>row[k]===a[k]),'SOURCE_BINDING_MISMATCH');
   unique(segments,s=>s.segment_id,'SOURCE_AMBIGUOUS');
   for(const s of segments){
@@ -89,8 +98,11 @@ export function deriveNativeScheduleOccurrence({request,snapshot,targetBefore,ta
    requireValue(id(s.segment_id)&&id(s.location_group_id)&&ids(s.included_location_ids)&&modes.has(s.service_mode)
     &&s.source_type==='static_weekly_projection'&&s.governed===true);
    requireValue(s.service_mode==='scan_tracked'?s.included_location_ids.length>0:s.included_location_ids.length===0,'SOURCE_INCOMPLETE');
-   requireValue(s.status==='ASSIGNED'&&((s.owner_type==='EMPLOYEE'&&id(s.assigned_employee_id))
-    ||(s.owner_type==='COVERALL'&&s.assigned_employee_id===null)),'SOURCE_AMBIGUOUS');
+   // An authoritative OPEN gap is no employee's coverage, not an unknown
+   // person or a manufactured assignment. Preserve the exact raw disposition.
+   requireValue((s.status==='ASSIGNED'&&((s.owner_type==='EMPLOYEE'&&id(s.assigned_employee_id))
+    ||(s.owner_type==='COVERALL'&&s.assigned_employee_id===null)))
+    ||(s.status==='OPEN'&&s.owner_type==='OPEN'&&s.assigned_employee_id===null),'SOURCE_AMBIGUOUS');
    byId.set(s.segment_id,s);
   }
   const anchor=byId.get(request.sourceKey);
@@ -102,7 +114,7 @@ export function deriveNativeScheduleOccurrence({request,snapshot,targetBefore,ta
     &&id(l.normal_occurrence_id)&&id(l.location_group_id)&&ids(l.included_location_ids)&&modes.has(l.service_mode)
     &&(l.coverer_id===null||id(l.coverer_id)));
    const s=byId.get(l.normal_occurrence_id),w=window(l);
-   requireValue(s&&l.normal_owner_id===s.assigned_employee_id&&l.location_group_id===s.location_group_id
+   requireValue(s&&s.status==='ASSIGNED'&&l.normal_owner_id===s.assigned_employee_id&&l.location_group_id===s.location_group_id
     &&l.service_mode===s.service_mode&&same([...l.included_location_ids].sort(),[...s.included_location_ids].sort())
     &&w.start>=window(s).start&&w.end<=window(s).end,'SOURCE_BINDING_MISMATCH');
    if(!loans.has(s.segment_id))loans.set(s.segment_id,[]);loans.get(s.segment_id).push(l);
@@ -151,7 +163,7 @@ export function deriveNativeScheduleOccurrence({request,snapshot,targetBefore,ta
   const logicalKey='schedule-ownership:'+request.serviceDate+':'+employee+':'+NATIVE_SCHEDULE_BOUNDARY;
   const semantic={service_date:request.serviceDate,employee_id:employee,boundary_local:NATIVE_SCHEDULE_BOUNDARY,
    before_units:beforeKeys,after_units:afterKeys};
-  const sourceEvidence={authority:a,segments:sorted(segments),physical:sorted(physical),lunch:sorted(lunch),target:targetBefore};
+  const sourceEvidence={authority:a,segments:sorted(segments),physical:sorted(physical),lunch:sorted(rawLunch),target:targetBefore};
   const occurrence=changed.length?{logical_key:logicalKey,semantic_sha256:digest(semantic),source_sha256:digest(sourceEvidence),
    service_date:request.serviceDate,boundary_local:NATIVE_SCHEDULE_BOUNDARY,employee_id:employee,
    recipient:structuredClone(targetBefore.recipient),source:structuredClone(t),before_units:beforeKeys,after_units:afterKeys,

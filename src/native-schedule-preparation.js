@@ -23,7 +23,8 @@ export function nativeScheduleSnapshotSql(serviceDate){
   from public.custodial_operational_location_assignments(${day}) limit ${limit}) r),
  'lunch',(select coalesce(jsonb_agg(to_jsonb(r)),'[]'::jsonb) from (
   select projection_id,loan_id,responsibility_id,normal_occurrence_id,normal_owner_id,coverer_id,location_group_id,
-   included_location_ids,service_mode,coverage_start::text,coverage_end::text
+   included_location_ids,included_snapshots='[]'::jsonb as included_snapshots_empty,
+   service_mode,coverage_start::text,coverage_end::text
   from public.static_weekly_v8_read_lunch_segments(${day}) limit ${limit}) r)) as data`;
 }
 
