@@ -27,3 +27,30 @@ export function verifyOperationDeadlineWiring(source,root){
  for(const p of Object.keys(files)){assert.throws(()=>validate(source,wrapper,{...files,[p]:files[p]+'\n// unbound\n'}));hostile++;}
  assert.equal(hostile,13);console.log('Absolute operation deadline wiring PASS: 13 omission/execution/source mutants rejected; prior51 guards preserved');return prior;
 }
+
+// TEST-ONLY reconstruction for retained representation proofs. This never
+// changes/imports/replaces the running product or grants its historical limit.
+// The called65 deadline suite separately proves the selected current boundary.
+export function reconstructProgramBeforeOperationDeadline(current){
+ assert.equal(sha(current),'b2e70ef652ec4aef05252d1890136f9fa66a5fa2ac97aba40d6b76d0815be068','exact current60s program required');
+ let prior=current;
+ for(const[from,to]of [
+  [
+    "// October3 controlling owner ceiling: ONE absolute60s program operation,\n// including preparation/solve/independent verification, not a renewed tier or\n// stage allowance. Caller/runtime owns the earlier user-operation origin and\n// passes only its remaining time. Strict authority/optimality checks remain;\n// timeout is failure/UNKNOWN, never a feasible or accepted fallback.\nexport const REQUEST_DEADLINE_MILLISECONDS = 60_000;",
+    "// One compiler request performs a bounded sequence of independently bounded\n// solver tiers and then regenerates/verifies the complete witness twice.  Do\n// not reuse the 30-second *per-tier* worker limit as the deadline for that\n// whole sequence: production authority currently requires 111 exact tiers.\n// The admitted V10 schedule completes locally inside two minutes but exceeds\n// that parent bound on the Render Starter CPU. Five minutes remains a finite,\n// fail-closed request boundary while preserving each worker's stricter\n// 30-second ceiling and the control plane's one-request serialization.\nexport const REQUEST_DEADLINE_MILLISECONDS = 300_000;"
+  ],
+  [
+    "  if (!Number.isSafeInteger(milliseconds) || milliseconds < 1 || milliseconds > REQUEST_DEADLINE_MILLISECONDS) {\n    throw Object.assign(new RangeError('Static weekly operation deadline must be within the absolute60s ceiling.'), {code:'solver_timeout'});\n  }\n",
+    ""
+  ],
+  [
+    "  if (!Number.isFinite(deadline)) throw Object.assign(new Error('Static weekly request deadline is invalid.'), {code:'solver_timeout'});\n",
+    ""
+  ]
+]){
+  assert.equal(prior.split(from).length,2,'exact one selected deadline-only source change');
+  prior=prior.replace(from,to);
+ }
+ assert.equal(sha(prior),'6feeea1894da194d26b315d4f923b88bcd39d901f0df812466446d6b3d4b76b9','all prior representation-proof bytes must be recovered');
+ return prior;
+}

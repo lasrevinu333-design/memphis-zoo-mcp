@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { verifyNativeScheduleSourceWiring } from './native-schedule-source-ci-wiring.mjs';
-import { verifyOperationDeadlineWiring } from './static-weekly-operation-deadline-ci-wiring.mjs';
+import { verifyOperationDeadlineWiring, reconstructProgramBeforeOperationDeadline } from './static-weekly-operation-deadline-ci-wiring.mjs';
 import { verifyCredentialObservationWiring } from './native-provider-credential-observation-ci-wiring.mjs';
 import { verifyBoundedProofWiring } from './bounded-node-proof-ci-wiring.mjs';
 
@@ -554,14 +554,18 @@ function assertConstraintsCalledWiring(sourceSuite,wrapper,owningTest,program) {
   // may differ in the retained415 representation proof; keep every prior byte.
   const currentVerifierPin="const verifierSha='1700488fafa6e7683aed9ba11e1d6b0eb9800ed4a19d2713410a987417bfcabf';";
   assert.equal(owningTest.split(currentVerifierPin).length,2,'exact one current verifier dependency pin');
-  const predecessorTest=owningTest.replace(currentVerifierPin,
+  const deadlineImport="import {reconstructProgramBeforeOperationDeadline} from './static-weekly-operation-deadline-ci-wiring.mjs';\n";
+  const deadlineRead="const text=reconstructProgramBeforeOperationDeadline(readFileSync(sourceUrl,'utf8'));";
+  assert.equal(owningTest.split(deadlineImport).length,2);
+  assert.equal(owningTest.split(deadlineRead).length,2);
+  const predecessorTest=owningTest.replace(deadlineImport,'').replace(deadlineRead,"const text=readFileSync(sourceUrl,'utf8');").replace(currentVerifierPin,
     "const verifierSha='4ffdc408d4cc6414c3ec9779d3b70ecc0ef61244dd17b6554d72ebef61074740';");
   assert.equal(createHash('sha256').update(predecessorTest).digest('hex'),
     '46d7989e74f51d4d8028324bd676153330e68f0719c42ec96c11bfc063003607',
     'all prior constraint/evaluation/hostile/generated proof bytes required after exact dependency reversal');
-  assert.equal(createHash('sha256').update(program).digest('hex'),
+  assert.equal(createHash('sha256').update(reconstructProgramBeforeOperationDeadline(program)).digest('hex'),
     '6feeea1894da194d26b315d4f923b88bcd39d901f0df812466446d6b3d4b76b9',
-    'exact current single-expression product delta, not a historical source rebind');
+    'exact digest-site predecessor recovered after independently checked current deadline delta');
 }
 assertConstraintsCalledWiring(currentSystemSource,constraintsWrapper,constraintsTest,constraintsProgram);
 let constraintsMutationCount=0;

@@ -8,6 +8,7 @@ import {spawnSync} from 'node:child_process';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {canonicalJson,contentDigest,installStaticWeeklySha256HexAccelerator} from '../src/static-weekly-schedule-model.js';
 import * as current from '../src/static-weekly-schedule-program.js';
+import {reconstructProgramBeforeOperationDeadline} from './static-weekly-operation-deadline-ci-wiring.mjs';
 import {createCurrentMorningIntegrationRequest} from './static-weekly-recurring-morning-integration-tests.mjs';
 
 // Owning representation proof only. No solver, worker, acceptance, SQL or
@@ -22,7 +23,7 @@ const policyFixtureSha='197d8eb0078f2bc9acb3cfb667c64874c8e41944f600bbaa026675d4
 const sourceUrl=new URL('../src/static-weekly-schedule-program.js',import.meta.url);
 const oldSite='sha256Hex(canonicalJson(constraints.map((constraint) => ({ name: constraint.name, terms: constraint.terms, relation: constraint.relation, value: constraint.value }))))';
 const newSite='contentDigest(constraints.map((constraint) => ({ name: constraint.name, terms: constraint.terms, relation: constraint.relation, value: constraint.value })))';
-const text=readFileSync(sourceUrl,'utf8');
+const text=reconstructProgramBeforeOperationDeadline(readFileSync(sourceUrl,'utf8'));
 function reverseSingleSite(value){
  assert.equal(sha(value),productSha,'Exact current source required before reversal');
  assert.equal(value.split(newSite).length,2,'Exactly one intended replacement');
