@@ -118,6 +118,13 @@ const runtime = createStaticWeeklyControlPlaneRuntime({
   trustedDeviceStore: store,
   database: {},
   controlPlane,
+  recurringOperationAdmission: ({action}) => action(),
+  recurringOperationRunner: ({kind,manager,body,signal,deadlineAt}) => kind === "preview"
+    ? controlPlane.previewRecurringStaffing({manager,effectiveStart:body.effective_start,
+      expectedRevision:body.expected_revision,fullNineSourceId:body.full_nine_source_id??null,signal,deadlineAt})
+    : controlPlane.confirmRecurringStaffing({manager,confirmationKey:body.confirmation_key,
+      effectiveStart:body.effective_start,expectedRevision:body.expected_revision,
+      previewDigest:body.preview_digest,fullNineSourceId:body.full_nine_source_id??null,signal,deadlineAt}),
 });
 const server = createServer(runtime.app);
 await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));

@@ -73,6 +73,7 @@ function leaseLostError(cause) {
 
 function maintainMutationLease({ supabase, requestId, serviceName, heartbeatMilliseconds, logger }) {
   let released = false;
+  let retainedUnproven = false;
   let lostError = null;
   const controller = new AbortController();
   let rejectLoss;
@@ -96,6 +97,8 @@ function maintainMutationLease({ supabase, requestId, serviceName, heartbeatMill
   }, heartbeatMilliseconds);
   timer.unref?.();
   async function release() {
+    if (retainedUnproven) throw Object.assign(new Error("The unproven recurring operation lease remains a restore blocker."),
+      { code: "static_weekly_recurring_operation_custody_unknown" });
     if (released) return;
     released = true;
     clearInterval(timer);
@@ -104,11 +107,19 @@ function maintainMutationLease({ supabase, requestId, serviceName, heartbeatMill
   function abort(cause = new Error("The client disconnected before the mutation completed.")) {
     if (!controller.signal.aborted) controller.abort(cause);
   }
+  function retainUnproven(cause = new Error("The operation group could not be proven absent.")) {
+    if (released) throw Object.assign(new Error("The recurring operation lease already began release."),
+      { code: "static_weekly_recurring_operation_custody_unknown" });
+    if (retainedUnproven) return;
+    retainedUnproven = true;
+    clearInterval(timer);
+    abort(cause);
+  }
   function assertActive() {
     if (lostError) throw lostError;
     if (controller.signal.aborted) throw controller.signal.reason || new Error("The mutation operation was aborted.");
   }
-  return { release, lost, abort, signal: controller.signal, assertActive };
+  return { release, lost, abort, retainUnproven, signal: controller.signal, assertActive };
 }
 
 export async function withApplicationMutationLease({
@@ -200,7 +211,11 @@ export function makeRestoreMutationGate({
       let disconnectTerminationTimer = null;
       let settlementPromise = null;
       let settlementObserved = false;
+      let unprovenRecurringCustody = false;
       const settleMutation = () => {
+        if (unprovenRecurringCustody) return Promise.reject(Object.assign(
+          new Error("The recurring operation group remains unproven; exact status and recovery reconciliation are required."),
+          { code: "static_weekly_recurring_operation_custody_unknown" }));
         if (settlementPromise) return settlementPromise;
         requestSignal?.removeEventListener("abort", abortFromRequest);
         if (disconnectTerminationTimer) clearTimeout(disconnectTerminationTimer);
@@ -209,6 +224,7 @@ export function makeRestoreMutationGate({
         return settlementPromise;
       };
       const observeSettlement = () => {
+        if (unprovenRecurringCustody) return;
         if (settlementObserved) return;
         settlementObserved = true;
         void settleMutation().catch(() =>
@@ -218,6 +234,9 @@ export function makeRestoreMutationGate({
         "The manager operation settled, but its restore lease release is unconfirmed. Check the exact status before retrying."),
       { code: "static_weekly_recurring_mutation_lease_release_unknown" });
       async function settleBeforeSuccess() {
+        if (unprovenRecurringCustody) throw Object.assign(new Error(
+          "The recurring operation group remains unproven; no success response is authorized."),
+        { code: "static_weekly_recurring_operation_custody_unknown" });
         // The route's SQL/COMMIT has already settled. Do not write a success
         // response until the exact lease release is also known successful.
         const released = settleMutation();
@@ -237,11 +256,23 @@ export function makeRestoreMutationGate({
           requestSignal.removeEventListener("abort", onAbort);
         }
       }
+      function retainUnprovenRecurringCustody() {
+        if (!requestSignal) throw new Error("Unproven custody retention is restricted to a bounded recurring request.");
+        if (settlementPromise || settlementObserved) throw Object.assign(new Error(
+          "The recurring restore lease already began settlement; its outcome is unknown."),
+        { code: "static_weekly_recurring_operation_custody_unknown" });
+        if (unprovenRecurringCustody) return;
+        unprovenRecurringCustody = true;
+        requestSignal.removeEventListener("abort", abortFromRequest);
+        if (disconnectTerminationTimer) clearTimeout(disconnectTerminationTimer);
+        lease.retainUnproven();
+      }
       req.restoreMutationLease = Object.freeze({
         requestId: leaseId,
         signal: lease.signal,
         assertActive: lease.assertActive,
         settleBeforeSuccess,
+        ...(requestSignal ? { retainUnprovenRecurringCustody } : {}),
       });
       // A disconnected Node response does not subsequently emit `finish`, even
       // when the route's awaited work later settles. Wrap end as the route
@@ -261,6 +292,7 @@ export function makeRestoreMutationGate({
       }
       const releaseOnFinishedResponse = observeSettlement;
       const abortOnDisconnectedResponse = () => {
+        if (unprovenRecurringCustody) return;
         if (res.writableFinished || settlementPromise) return;
         lease.abort();
         if (!disconnectTerminationTimer) {

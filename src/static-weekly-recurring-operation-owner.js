@@ -185,6 +185,8 @@ export async function runOwnedRecurringOperation({
         if (!message || message.nonce !== nonce || message.sourceDigest !== sourceDigest) return fail(custodyError(
           "static_weekly_operation_protocol_invalid", "The owned operation response did not match its source and nonce."));
         if (message.type === "ready") {
+          if (Object.keys(message).sort().join(",") !== "nonce,sourceDigest,type") return fail(custodyError(
+            "static_weekly_operation_protocol_invalid", "Operation readiness contains an unexpected field."));
           if (ready || acceptedResult !== null) return fail(custodyError("static_weekly_operation_protocol_invalid", "Operation readiness was duplicated or followed a result."));
           ready = true;
           try { candidate.send({ type: "run", nonce, sourceDigest, input: closedInput, remainingMilliseconds: Math.max(1, Math.floor(deadlineAt - now() - CLEANUP_RESERVE_MS)) }); }
@@ -193,14 +195,22 @@ export async function runOwnedRecurringOperation({
         }
         if (message.type !== "result" || !ready || acceptedResult !== null || !new Set(["ok", "failed", "unknown"]).has(message.status)) return fail(custodyError(
           "static_weekly_operation_protocol_invalid", "The owned operation returned an invalid typed result."));
+        const expectedFields = message.status === "ok" ? ["nonce", "receipt", "sourceDigest", "status", "type"]
+          : [...(Object.hasOwn(message, "failureCode") ? ["failureCode"] : []), "nonce", "sourceDigest", "status", "type"];
+        if (Object.keys(message).sort().join(",") !== expectedFields.join(",")
+          || (message.failureCode !== undefined && (typeof message.failureCode !== "string"
+            || !/^static_weekly_[a-z0-9_]{1,100}$/.test(message.failureCode)))) return fail(custodyError(
+          "static_weekly_operation_protocol_invalid", "The owned operation result contains an unexpected field."));
         if (message.status === "ok" && (!message.receipt || typeof message.receipt !== "object" || Array.isArray(message.receipt))) return fail(custodyError(
           "static_weekly_operation_protocol_invalid", "The owned operation omitted its typed receipt."));
         let closedReceipt = null;
         if (message.status === "ok") {
           try { closedReceipt = validateReceipt(message.receipt); }
           catch { return fail(custodyError("static_weekly_operation_protocol_invalid", "The operation receipt failed its closed schema.")); }
+          if (now() >= deadlineAt - CLEANUP_RESERVE_MS) return fail(custodyError(
+            "static_weekly_operation_deadline", "The complete receipt exceeded the original operation deadline."));
         }
-        acceptedResult = { status: message.status, receipt: closedReceipt };
+        acceptedResult = { status: message.status, receipt: closedReceipt, failureCode: message.failureCode || null };
       });
       candidate.once("error", () => fail(custodyError("static_weekly_operation_child_failed", "The owned operation child failed.")));
       candidate.once("exit", () => {
@@ -230,9 +240,24 @@ export async function runOwnedRecurringOperation({
     try { candidate.disconnect?.(); } catch { /* group absence, not channel state, controls the outcome */ }
     if (cleanupError) throw cleanupError;
   }
-  if (terminalError) throw terminalError;
-  if (acceptedResult?.status !== "ok") throw custodyError(
-    acceptedResult?.status === "unknown" ? "static_weekly_operation_outcome_unknown" : "static_weekly_operation_failed",
-    "The owned operation did not return an accepted receipt.");
+  if (terminalError) {
+    // The owning route may release its exact restore lease only after the
+    // child close and complete process-group absence have both been proved.
+    // This is not proof that an interrupted COMMIT did or did not occur.
+    terminalError.groupAbsent = true;
+    throw terminalError;
+  }
+  if (now() >= deadlineAt) {
+    const error = custodyError("static_weekly_operation_deadline", "The owned operation cleanup exceeded its original deadline.");
+    error.groupAbsent = true;
+    throw error;
+  }
+  if (acceptedResult?.status !== "ok") {
+    const error = custodyError(
+      acceptedResult?.failureCode || (acceptedResult?.status === "unknown" ? "static_weekly_operation_outcome_unknown" : "static_weekly_operation_failed"),
+      "The owned operation did not return an accepted receipt.");
+    error.groupAbsent = true;
+    throw error;
+  }
   return { identity, receipt: acceptedResult.receipt, groupAbsent: true };
 }

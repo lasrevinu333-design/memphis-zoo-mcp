@@ -22,6 +22,13 @@ async function fixture({rpc,find,confirm}){
  const timer=clock(),calls=[],plane={async previewRecurringStaffing(input){calls.push({kind:'preview',input});return{status:'CANDIDATE_ONLY'};},
   async confirmRecurringStaffing(input){calls.push({kind:'confirm',input});return confirm?confirm(input):{status:'ACCEPTED'};},async health(){return{ready:true};}};
  const runtime=createStaticWeeklyControlPlaneRuntime({env,supabase:{rpc},trustedDeviceStore:{find},database:{},controlPlane:plane,
+  recurringOperationAdmission:({action})=>action(),
+  recurringOperationRunner:({kind,manager,body,signal,deadlineAt})=>kind==='preview'
+   ?plane.previewRecurringStaffing({manager,effectiveStart:body.effective_start,
+     expectedRevision:body.expected_revision,fullNineSourceId:body.full_nine_source_id??null,signal,deadlineAt})
+   :plane.confirmRecurringStaffing({manager,confirmationKey:body.confirmation_key,
+     effectiveStart:body.effective_start,expectedRevision:body.expected_revision,
+     previewDigest:body.preview_digest,fullNineSourceId:body.full_nine_source_id??null,signal,deadlineAt}),
   managerOperationClock:{now:timer.now,setTimer:timer.setTimer,clearTimer:timer.clearTimer}});
  const server=http.createServer(runtime.app),incoming=[];
  server.prependListener('request',request=>incoming.push(request));

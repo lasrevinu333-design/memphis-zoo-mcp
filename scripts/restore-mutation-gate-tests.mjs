@@ -267,4 +267,34 @@ assert.equal((await invoke(makeRestoreMutationGate({ supabase: null, required: f
     'the release remains bound to the original admitted lease ID');
 }
 
+{
+  const controller = new AbortController(), calls = [], terminated = [];
+  const gate = makeRestoreMutationGate({ supabase: { async rpc(name, args) {
+    calls.push({ name, args });
+    if (name === "custodial_begin_application_mutation_lease") return { data: { mutations_paused: false, authority_generation: 1 }, error: null };
+    if (name === "custodial_heartbeat_application_mutation_lease") return { data: true, error: null };
+    if (name === "custodial_release_application_mutation_lease") return { data: true, error: null };
+    throw new Error(`Unexpected RPC ${name}`);
+  } }, requestId: () => "00000000-0000-4000-8000-000000000206",
+  heartbeatMilliseconds: 5, disconnectTerminationMilliseconds: 2,
+  terminateUnsettledProcess: fact => terminated.push(fact) });
+  const req = { method: "POST", staticWeeklyManagerOperation: { signal: controller.signal } }, res = response();
+  let passed = false;
+  await gate(req, res, () => { passed = true; });
+  assert.equal(passed, true);
+  req.restoreMutationLease.retainUnprovenRecurringCustody();
+  assert.equal(req.restoreMutationLease.signal.aborted, true, "unproven child custody aborts local mutation work");
+  await assert.rejects(req.restoreMutationLease.settleBeforeSuccess(), error =>
+    error?.code === "static_weekly_recurring_operation_custody_unknown", "late receipt cannot upgrade an unproven group");
+  res.emit("close");
+  res.end(); res.end();
+  controller.abort();
+  await new Promise(resolve => setTimeout(resolve, 18));
+  assert.equal(calls.filter(row => row.name === "custodial_release_application_mutation_lease").length, 0,
+    "response finish and stale operation results cannot erase the exact unknown lease row");
+  assert.equal(calls.filter(row => row.name === "custodial_heartbeat_application_mutation_lease").length, 0,
+    "unproven custody stops heartbeat instead of extending the lease indefinitely");
+  assert.deepEqual(terminated, [], "the recurring unknown row replaces only the legacy process-wide disconnected terminator");
+}
+
 console.log("RESTORE_MUTATION_GATE_TESTS_PASS");

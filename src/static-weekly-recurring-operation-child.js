@@ -13,6 +13,7 @@ export async function executeRecurringOperationInChild(input, { signal, remainin
   if (!Number.isSafeInteger(remainingMilliseconds) || remainingMilliseconds < 1 || remainingMilliseconds > 60_000) {
     throw privateError("static_weekly_operation_deadline_invalid");
   }
+  const deadlineAt = performance.now() + remainingMilliseconds;
   // Lazy imports keep the pre-work source/nonce gate before any CP, database,
   // solver or provider initialization. The isolated runtime inherits this
   // exact child process group; the HTTP parent owns group reaping.
@@ -35,7 +36,6 @@ export async function executeRecurringOperationInChild(input, { signal, remainin
     transactionConcurrency: 1,
     maxQueuedTransactions: 1,
   });
-  const deadlineAt = performance.now() + remainingMilliseconds;
   let result;
   let operationError = null;
   try {
@@ -102,19 +102,29 @@ export function createRecurringOperationChildProtocol({
     let input;
     try { input = assertClosedRecurringOperationInput(message.input); }
     catch { await finish(null); return; }
+    try { if (sourceManifest()?.digest !== sourceDigest) { await finish(null); return; } }
+    catch { await finish(null); return; }
     state = "running";
     controller = new AbortController();
+    const childDeadlineAt = performance.now() + message.remainingMilliseconds;
     timer = setTimer(() => controller.abort(privateError("static_weekly_operation_deadline")), message.remainingMilliseconds);
     timer?.unref?.();
     let response;
     try {
       const receipt = await execute(input, { signal: controller.signal, remainingMilliseconds: message.remainingMilliseconds });
+      if (sourceManifest()?.digest !== sourceDigest) throw privateError("static_weekly_operation_source_changed");
+      const closedReceipt = assertClosedRecurringOperationReceipt(receipt, input);
+      if (controller.signal.aborted || performance.now() >= childDeadlineAt) throw privateError("static_weekly_operation_deadline");
       response = { type: "result", nonce, sourceDigest, status: "ok",
-        receipt: assertClosedRecurringOperationReceipt(receipt, input) };
+        receipt: closedReceipt };
     } catch (error) {
+      const failureCode = typeof error?.code === "string" && /^static_weekly_[a-z0-9_]{1,100}$/.test(error.code)
+        ? error.code : null;
       response = { type: "result", nonce, sourceDigest,
         status: controller.signal.aborted || error?.code === "static_weekly_recurring_confirmation_outcome_unknown"
-          || error?.code === "static_weekly_operation_outcome_unknown" ? "unknown" : "failed" };
+          || error?.code === "static_weekly_operation_outcome_unknown"
+          || error?.code === "static_weekly_operation_deadline" ? "unknown" : "failed",
+        ...(failureCode ? { failureCode } : {}) };
     }
     await finish(response);
   };

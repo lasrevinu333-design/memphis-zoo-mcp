@@ -82,10 +82,35 @@ await invalid.receive({ type: "init", nonce: NONCE, sourceDigest: source.digest 
 await invalid.receive({ type: "run", nonce: NONCE, sourceDigest: source.digest, input: { ...input, access_token: "secret" }, remainingMilliseconds: 100 });
 assert.equal(invalid.calls, 0); assert.equal(invalid.closed, 1);
 
+let sourceReads = 0, driftWork = 0, driftClosed = 0;
+const drift = createRecurringOperationChildProtocol({
+  sourceManifest: () => ({ digest: ++sourceReads === 1 ? source.digest : "0".repeat(64) }),
+  execute: async () => { driftWork++; return preview; }, send: async () => {}, close: async () => { driftClosed++; },
+});
+await drift({ type: "init", nonce: NONCE, sourceDigest: source.digest });
+await drift({ type: "run", nonce: NONCE, sourceDigest: source.digest, input, remainingMilliseconds: 100 });
+assert.equal(driftWork, 0, "source change between readiness and work cannot begin a CP/database action");
+assert.equal(driftClosed, 1);
+
 const unknown = protocol({ execute: async () => { throw Object.assign(new Error("raw secret"), { code: "static_weekly_recurring_confirmation_outcome_unknown" }); } });
 await unknown.receive({ type: "init", nonce: NONCE, sourceDigest: source.digest });
 await unknown.receive({ type: "run", nonce: NONCE, sourceDigest: source.digest, input, remainingMilliseconds: 100 });
-assert.deepEqual(unknown.messages[1], { type: "result", nonce: NONCE, sourceDigest: source.digest, status: "unknown" });
+assert.deepEqual(unknown.messages[1], { type: "result", nonce: NONCE, sourceDigest: source.digest,
+  status: "unknown", failureCode: "static_weekly_recurring_confirmation_outcome_unknown" });
 assert.equal(JSON.stringify(unknown.messages).includes("raw secret"), false);
+
+const cap = 32 * 1024 * 1024;
+const oversizedBase = { kind: "preview", data: { ...preview.data, proof: "" } };
+const oversized = { kind: "preview", data: { ...preview.data,
+  proof: "x".repeat(cap - Buffer.byteLength(JSON.stringify(oversizedBase)) + 1) } };
+assert.equal(Buffer.byteLength(JSON.stringify(oversized)), cap + 1, "the hostile receipt is exactly one byte above the private cap");
+assert.throws(() => assertClosedRecurringOperationReceipt(oversized, input),
+  "one byte beyond the finite private receipt cap refuses a truncated proof");
+const tooLarge = protocol({ execute: async () => oversized });
+await tooLarge.receive({ type: "init", nonce: NONCE, sourceDigest: source.digest });
+await tooLarge.receive({ type: "run", nonce: NONCE, sourceDigest: source.digest, input, remainingMilliseconds: 10_000 });
+assert.equal(tooLarge.closed, 1, "oversized result still closes the owned child protocol");
+assert.equal(tooLarge.messages[1].status, "failed");
+assert.equal(tooLarge.messages[1].receipt, undefined, "oversized source data never enters public IPC");
 
 console.log("static-weekly recurring private child/source/envelope checks PASS");

@@ -3,7 +3,10 @@
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const DIGEST = /^[a-f0-9]{64}$/;
 const MAX_INPUT_BYTES = 64 * 1024;
-const MAX_RESULT_BYTES = 2 * 1024 * 1024;
+// The retained full recurring compiler result is 22,739,579 bytes. A 2 MiB
+// IPC limit would silently reject a legitimate complete preview; keep a
+// finite envelope above that witnessed size without truncating proof fields.
+const MAX_RESULT_BYTES = 32 * 1024 * 1024;
 
 function invalid() { throw Object.assign(new Error("The private recurring-operation envelope is invalid."), {
   code: "static_weekly_operation_protocol_invalid",

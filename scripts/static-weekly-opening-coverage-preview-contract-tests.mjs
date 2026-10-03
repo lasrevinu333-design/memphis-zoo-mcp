@@ -158,7 +158,16 @@ const store={async find(){return revoked?null:{credential_id:'opening-credential
   created_at:new Date(Date.now()-1000).toISOString(),expires_at:new Date(Date.now()+60000).toISOString(),manager_id:manager.manager_id,manager};}};
 const session=createOpsManagerSession({credentialId:'opening-credential',deviceId:'opening-device',manager,authMode:'trusted_device',accessLevel:'full_access',maximumAccessLevel:'full_access',env});
 const runtime=createStaticWeeklyControlPlaneRuntime({env,database:{},datedTransitionController:null,controlPlane:plane,trustedDeviceStore:store,
- supabase:{async rpc(){return {data:{mutations_paused:false,state:'READY',authority_generation:0,restore_id:null},error:null};}}});
+ recurringOperationAdmission:({action})=>action(),
+ recurringOperationRunner:({kind,manager:actor,body,signal,deadlineAt})=>{
+  assert.equal(kind,'preview','this opening-coverage fixture invokes only the actual preview method');
+  return plane.previewRecurringStaffing({manager:actor,effectiveStart:body.effective_start,
+   expectedRevision:body.expected_revision,fullNineSourceId:body.full_nine_source_id??null,signal,deadlineAt});
+ },
+ supabase:{async rpc(name){
+  if(name==='custodial_release_application_mutation_lease'||name==='custodial_heartbeat_application_mutation_lease')return{data:true,error:null};
+  assert.equal(name,'custodial_begin_application_mutation_lease');
+  return {data:{mutations_paused:false,state:'READY',authority_generation:0,restore_id:null},error:null};}}});
 const server=createServer(runtime.app);await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const url=`http://127.0.0.1:${server.address().port}/static-weekly/recurring-adaptation/preview`;
 async function http(body,authorized=true){const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json',...(authorized?{Authorization:`Bearer ${session.token}`}:{})},body:JSON.stringify(body)});return {status:r.status,body:await r.json()};}

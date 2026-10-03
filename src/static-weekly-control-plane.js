@@ -528,6 +528,34 @@ export function createStaticWeeklyControlPlane({
     return execution;
   }
 
+  async function runExternalRecurringOperation({ signal = null, deadlineAt, action }) {
+    if (typeof action !== "function" || !Number.isFinite(deadlineAt)) throw fail("static_weekly_recurring_operation_deadline_invalid");
+    operationRemaining(deadlineAt, signal);
+    let grant, release;
+    const granted = new Promise((resolve) => { grant = resolve; });
+    const held = new Promise((resolve) => { release = resolve; });
+    // This is the SAME three-active/sixteen-queued admission used by every
+    // ordinary authority transaction. A detached child does not gain a
+    // second, parallel concurrency budget or borrow the health slot.
+    const admitted = admitTransaction(async () => { grant(); await held; }, signal);
+    admitted.catch(() => {});
+    await Promise.race([granted, admitted.then(
+      () => { throw fail("static_weekly_control_plane_closing"); },
+      (error) => { throw error; })]);
+    let safeToRelease = true;
+    try {
+      operationRemaining(deadlineAt, signal);
+      return await action();
+    } catch (error) {
+      if (error?.code === "static_weekly_recurring_operation_custody_unknown") safeToRelease = false;
+      throw error;
+    } finally {
+      if (safeToRelease) { release(); await admitted; }
+      // On unproved process-group custody the slot and exact restore lease
+      // remain held. The existing expired-row reconciliation controls recovery.
+    }
+  }
+
   function transaction(work, { health = false, reconcileManagerId = null, signal = null, deadlineAt = null } = {}) {
     const execute = async () => {
       assertOperationActive(signal);
@@ -981,6 +1009,7 @@ export function createStaticWeeklyControlPlane({
   }
 
   return {
+    runExternalRecurringOperation,
     schema: STATIC_WEEKLY_CONTROL_PLANE_SCHEMA,
     health() {
       return admitHealthCheck(async () => {
