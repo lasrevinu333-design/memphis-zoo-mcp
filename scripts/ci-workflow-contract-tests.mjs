@@ -376,6 +376,7 @@ const eventCountSourceImports = ["await import('./event-count-cross-surface-cont
   "await import('./static-weekly-recurring-phase-authority-ci-tests.mjs');",
   "await import('./static-weekly-recurring-week-commitment-tests.mjs');",
   "await import('./static-weekly-morning-planning-authority-ci-tests.mjs');",
+  "await import('./static-weekly-recurring-morning-solver-ci-tests.mjs');",
   "await import('./current-release-recovery-probe-contract-tests.mjs');",
   "await import('./current-release-recovery-replay-contract-tests.mjs');"];
 function assertEventCountSourceWiring(workflow, sourceSuite) {

@@ -32,6 +32,7 @@ await import('./static-weekly-policy-scope-ci-tests.mjs');
 await import('./static-weekly-recurring-phase-authority-ci-tests.mjs');
 await import('./static-weekly-recurring-week-commitment-tests.mjs');
 await import('./static-weekly-morning-planning-authority-ci-tests.mjs');
+await import('./static-weekly-recurring-morning-solver-ci-tests.mjs');
 await import('./current-release-recovery-probe-contract-tests.mjs');
 await import('./current-release-recovery-replay-contract-tests.mjs');
-console.log('CURRENT_SYSTEM_SOURCE_CONTRACTS_PASS: 34 explicit owning suites; no database/provider/production/phone proof');
+console.log('CURRENT_SYSTEM_SOURCE_CONTRACTS_PASS: 35 explicit owning suites; no database/provider/production/phone proof');
