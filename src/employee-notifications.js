@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 import { createClient } from '@supabase/supabase-js';
 import { makeDeviceCredentialMiddleware } from './auth/device-credential-auth.js';
 import { deliverNativeLocationJob } from './native-location-dispatch.js';
@@ -14,6 +15,43 @@ function createSupabase(env) {
   return url && key ? createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } }) : null;
 }
 function clip(value, max) { return String(value ?? '').trim().slice(0, max); }
+function isOriginalMessageJob(job) {
+  return job?.job_type === 'employee_native_push'
+    && (job.payload_json?.data_json?.kind === 'employee_message'
+      || String(job.job_key || '').startsWith('employee-message-push:'))
+    && job.payload_json?.data_json?.test_delivery !== true;
+}
+function authorizedMessagePush(projection, job, registration) {
+  const fields = ['schema', 'job_id', 'job_key', 'lease_token', 'source_id', 'message_id', 'thread_id',
+    'recipient_user_id', 'employee_id', 'device_id', 'device_identifier', 'credential_id', 'assignment_epoch',
+    'registration_id', 'token_hash', 'logical_key', 'source_revision', 'payload'];
+  const payload = job.payload_json;
+  const tokenHash = crypto.createHash('sha256').update(String(registration?.fcm_token || '')).digest('hex');
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  const same = (field, value) => projection?.[field] === value;
+  if (!projection || typeof projection !== 'object' || Array.isArray(projection)
+    || !isDeepStrictEqual(Object.keys(projection).sort(), [...fields].sort())
+    || !same('schema', 'custodial.employee-message-admission.v1')
+    || !['job_id','job_key','lease_token','source_id'].every(field => same(field, job[field]))
+    || !['employee_id','device_id','device_identifier','credential_id','assignment_epoch'].every(field => same(field, payload[field]))
+    || !same('message_id', job.source_id) || !same('message_id', payload.data_json?.message_id)
+    || !same('thread_id', payload.data_json?.thread_id) || !uuid.test(projection.recipient_user_id)
+    || !same('registration_id', registration?.registration_id) || !same('token_hash', tokenHash)
+    || !same('logical_key', `message:${job.source_id}:recipient:${projection.recipient_user_id}`)
+    || !/^[0-9a-f]{64}$/.test(projection.source_revision)
+    || !isDeepStrictEqual(projection.payload, payload)
+    || payload.channel_id !== 'employee-messages' || payload.data_json?.kind !== 'employee_message'
+    || payload.data_json.notification_type !== 'message'
+    || payload.data_json.notification_key !== `message:${job.source_id}`
+    || payload.data_json.route !== `messages.html?hub=employee&thread_id=${projection.thread_id}`) {
+    // The SQL prepare may already have committed. Do not invent a release or
+    // a fresh attempt from a malformed/lost authority response.
+    throw deferredDeliveryError('employee_message_projection_unresolved');
+  }
+  const original = structuredClone(projection.payload);
+  return { title: clip(original.title, 180) || 'Memphis Zoo',
+    body: clip(original.body, 1000) || 'You have a new notification.', data_json: original.data_json };
+}
 const CUSTODIAL_EVENT_SPEECH = Object.freeze({
   trash_boxes: 'Place trash boxes',
   extra_cans: 'Set out extra trash cans',
@@ -486,6 +524,10 @@ export function installEmployeeNotificationRoutes(app, {
   });
 
   async function deliverClaimedJob(job) {
+    // Snapshot only the real MESSAGE lane before any await. Other kind and
+    // explicit manager-test behavior remains unchanged.
+    const originalMessage = isOriginalMessageJob(job);
+    if (originalMessage) job = structuredClone(job);
     if (job?.job_type === 'employee_native_push' && job.payload_json?.data_json?.kind === 'employee_lunch_coverage'
       && !Object.hasOwn(job.payload_json.data_json, 'test_delivery')) {
       return deliverNativeLunchJob({ db, pushRuntime, job });
@@ -608,6 +650,10 @@ export function installEmployeeNotificationRoutes(app, {
           return { provider_message_id: prepared.provider_message_id, replayed: true };
         }
         providerBoundaryPrepared = true;
+        if (originalMessage) {
+          push = authorizedMessagePush(prepared.message_projection, job, registration);
+          channelId = 'employee-messages';
+        }
       }
       // Carry the same immutable recipient/job identity through the handset
       // outbox. A saved receipt must never be relabelled after recovery or a
