@@ -430,16 +430,22 @@ export function createStaticWeeklyCompilerRuntime({
       state = "closed";
       const cause = runtimeError("static_weekly_compiler_closed", "The isolated compiler was closed by the production runtime.");
       const candidate = worker;
+      let activeInitialization = null;
       if (initialization?.candidate === candidate && !initialization.settled) {
-        const active = initialization;
-        active.settled = true;
-        clearTimeout(active.timer);
+        activeInitialization = initialization;
+        activeInitialization.settled = true;
+        clearTimeout(activeInitialization.timer);
         initialization = null;
-        active.reject(cause);
       }
-      if (pending?.candidate === candidate) clearPending(pending, pending.reject, cause);
-      await discard(candidate, cause);
+      const activePending = pending?.candidate === candidate ? pending : null;
+      if (activePending) clearPending(activePending, () => {}, cause);
+      let cleanupError = null;
+      try { await discard(candidate, cause); }
+      catch (error) { cleanupError = error; }
+      activeInitialization?.reject(cleanupError || cause);
+      activePending?.reject(cleanupError || cause);
       await tail;
+      if (cleanupError) throw cleanupError;
       state = "closed";
     })();
     return shutdownPromise;

@@ -58,4 +58,18 @@ try {
 } finally {
   await initialization.shutdown();
 }
+const shutting = createStaticWeeklyCompilerRuntime({ workerUrl: fixture, initializationMilliseconds: 1_000,
+  requestMilliseconds: 1_000, resourceLimits });
+try {
+  await shutting.initialize();
+  const pid = shutting.getReadiness().worker.nestedPid;
+  const pending = shutting.compile({ behavior: "hang" });
+  await new Promise(resolve => setTimeout(resolve, 20));
+  const closing = shutting.shutdown();
+  await assert.rejects(pending, error => error?.code === "static_weekly_compiler_closed"); checks++;
+  await closing;
+  await reaped(pid);
+} finally {
+  await shutting.shutdown();
+}
 console.log(JSON.stringify({ status: "PASS", checks, scope: "fixture compiler abort and exact child-group teardown; no production solver or SQL" }));
