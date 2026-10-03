@@ -10,6 +10,7 @@
  */
 import { createHash, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { MANAGER_OPERATION_MILLISECONDS, CLEANUP_RESERVE_MILLISECONDS } from "./static-weekly-manager-operation.js";
 import { assertOwnerRecurringWorkdays } from "./static-weekly-owner-workdays.js";
 import { createCoverAllPrintDocument } from "./static-weekly-coverall-print.js";
 import {listCoverAllEventBriefPreviews,confirmCoverAllEventBrief,revalidateConfirmedCoverAllEventBrief} from './coverall-event-brief.js';
@@ -45,8 +46,8 @@ import {
 
 export const STATIC_WEEKLY_CONTROL_PLANE_SCHEMA = "memphis-zoo.static-weekly-control-plane.v1";
 export const STATIC_WEEKLY_DATABASE_OPERATION_STATEMENT_TIMEOUT_MS = 60_000;
-export const STATIC_WEEKLY_MANAGER_OPERATION_DEADLINE_MS = 60_000;
-export const STATIC_WEEKLY_MANAGER_CLEANUP_RESERVE_MS = 5_000;
+export const STATIC_WEEKLY_MANAGER_OPERATION_DEADLINE_MS = MANAGER_OPERATION_MILLISECONDS;
+export const STATIC_WEEKLY_MANAGER_CLEANUP_RESERVE_MS = CLEANUP_RESERVE_MILLISECONDS;
 const STATIC_WEEKLY_AUTHORITY_LOCK_IDENTITY = "memphis-static-weekly-authority";
 const APPROVED_FULL_NINE_IDENTITY = JSON.parse(readFileSync(new URL(
   "../config/custodial-full-nine-family-owners-20260926.json", import.meta.url)));

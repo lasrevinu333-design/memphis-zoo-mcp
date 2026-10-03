@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
 function unavailable(res, code, error, state = null) {
+  if (res.headersSent || res.writableEnded) return;
   res.status(503).json({
     ok: false,
     code,
@@ -23,6 +24,32 @@ async function beginMutationLease({ supabase, serviceName, requestId }) {
     throw new Error("The restore mutation lease response is invalid.");
   }
   return data;
+}
+
+async function beginMutationLeaseWithinRequest({ supabase, serviceName, requestId, signal, logger }) {
+  if (!signal) return beginMutationLease({ supabase, serviceName, requestId });
+  if (signal.aborted) throw signal.reason || new Error("Manager request expired before mutation admission.");
+  const pending = beginMutationLease({ supabase, serviceName, requestId });
+  let onAbort;
+  const aborted = new Promise((_, reject) => {
+    onAbort = () => reject(signal.reason || new Error("Manager request expired before mutation admission."));
+    signal.addEventListener("abort", onAbort, { once: true });
+    if (signal.aborted) onAbort();
+  });
+  try {
+    await Promise.race([pending, aborted]);
+    if (signal.aborted) throw signal.reason || new Error("Manager request expired before mutation admission.");
+  } catch (error) {
+    if (signal.aborted) {
+      // The RPC can commit its lease after the client has stopped waiting.
+      // Release only this exact request ID if its begin later proves success.
+      void pending.then(() => releaseMutationLease({ supabase, requestId }).catch(() =>
+        logger.error("Late mutation lease release failed; recovery must reconcile the retained lease.", { request_id: requestId, service_name: serviceName })), () => {});
+    }
+    throw error;
+  } finally {
+    signal.removeEventListener("abort", onAbort);
+  }
 }
 
 async function heartbeatMutationLease({ supabase, requestId }) {
@@ -149,9 +176,16 @@ export function makeRestoreMutationGate({
 
     try {
       const leaseId = requestId();
+      const requestSignal = req.staticWeeklyManagerOperation?.signal || null;
       try {
-        await beginMutationLease({ supabase, serviceName, requestId: leaseId });
+        await beginMutationLeaseWithinRequest({ supabase, serviceName, requestId: leaseId,
+          signal: requestSignal, logger });
       } catch (error) {
+        if (requestSignal?.aborted) {
+          unavailable(res, "static_weekly_recurring_operation_deadline_exceeded",
+            "Manager operation expired before mutation admission. Check its exact status before retrying.");
+          return;
+        }
         if (/mutations are paused|recovery is in progress/i.test(String(error?.message || error?.details || ""))) {
           unavailable(res, "disaster_restore_in_progress", "Saved work is protected. The system is recovering and is not accepting changes yet.");
           return;
@@ -159,11 +193,15 @@ export function makeRestoreMutationGate({
         throw error;
       }
       const lease = maintainMutationLease({ supabase, requestId: leaseId, serviceName, heartbeatMilliseconds, logger });
+      const abortFromRequest = () => lease.abort(requestSignal?.reason);
+      requestSignal?.addEventListener("abort", abortFromRequest, { once: true });
+      if (requestSignal?.aborted) abortFromRequest();
       let disconnectTerminationTimer = null;
       let settled = false;
       const settleMutation = () => {
         if (settled) return Promise.resolve();
         settled = true;
+        requestSignal?.removeEventListener("abort", abortFromRequest);
         if (disconnectTerminationTimer) clearTimeout(disconnectTerminationTimer);
         lease.abort(new Error("The mutation response settled; no trailing external work remains authorized."));
         return lease.release().catch(() => logger.error("Failed to release application mutation lease.", { request_id: leaseId, service_name: serviceName }));
@@ -206,6 +244,12 @@ export function makeRestoreMutationGate({
       };
       res.once?.("finish", releaseOnFinishedResponse);
       res.once?.("close", abortOnDisconnectedResponse);
+      if (requestSignal?.aborted) {
+        await settleMutation();
+        unavailable(res, "static_weekly_recurring_operation_deadline_exceeded",
+          "Manager operation expired before authority work began. Check its exact status before retrying.");
+        return;
+      }
       next();
     } catch {
       unavailable(res, "restore_gate_unavailable", "Saved work is protected. This service cannot confirm that changes are currently allowed.");

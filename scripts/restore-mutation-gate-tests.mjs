@@ -163,4 +163,40 @@ assert.equal(missing.res.body.code, "restore_gate_unavailable");
 
 assert.equal((await invoke(makeRestoreMutationGate({ supabase: null, required: false }))).passed, true);
 
+{
+  const controller = new AbortController(),calls=[];
+  let finishBegin;
+  const lateBegin = new Promise(resolve=>{finishBegin=resolve;});
+  const gate=makeRestoreMutationGate({supabase:{async rpc(name,args){calls.push({name,args});
+    if(name==='custodial_begin_application_mutation_lease')return lateBegin;
+    if(name==='custodial_release_application_mutation_lease')return{data:true,error:null};
+    throw Error(`unexpected ${name}`);}},requestId:()=>"00000000-0000-4000-8000-000000000201"});
+  const req={method:'POST',staticWeeklyManagerOperation:{signal:controller.signal}},res=response();let passed=false;
+  const pending=gate(req,res,()=>{passed=true;});
+  await Promise.resolve();controller.abort(new Error('synthetic deadline'));
+  await pending;
+  assert.equal(passed,false,'expired lease admission never reaches manager auth or product handler');
+  assert.equal(res.statusCode,503,'expired pending lease is not a successful mutation');
+  finishBegin({data:{mutations_paused:false,authority_generation:1},error:null});
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.deepEqual(calls.map(row=>row.name),['custodial_begin_application_mutation_lease','custodial_release_application_mutation_lease'],
+    'late successful begin releases only its original request ID');
+  assert.equal(calls[1].args.p_request_id,calls[0].args.p_request_id);
+}
+{
+  const controller=new AbortController(),calls=[];
+  const gate=makeRestoreMutationGate({supabase:{async rpc(name,args){calls.push({name,args});
+    if(name==='custodial_begin_application_mutation_lease')return{data:{mutations_paused:false,authority_generation:1},error:null};
+    if(name==='custodial_release_application_mutation_lease')return{data:true,error:null};
+    if(name==='custodial_heartbeat_application_mutation_lease')return{data:true,error:null};
+    throw Error(`unexpected ${name}`);}},requestId:()=>"00000000-0000-4000-8000-000000000202"});
+  const req={method:'POST',staticWeeklyManagerOperation:{signal:controller.signal}},res=response();let passed=false;
+  await gate(req,res,()=>{passed=true;});assert.equal(passed,true);
+  controller.abort(new Error('synthetic expired auth'));assert.equal(req.restoreMutationLease.signal.aborted,true,
+    'the same ingress deadline aborts the acquired restore lease');
+  res.end();await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(calls.filter(row=>row.name==='custodial_release_application_mutation_lease').length,1,
+    'settled response releases only its exact lease once');
+}
+
 console.log("RESTORE_MUTATION_GATE_TESTS_PASS");

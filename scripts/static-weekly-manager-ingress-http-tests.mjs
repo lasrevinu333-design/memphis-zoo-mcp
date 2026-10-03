@@ -1,0 +1,78 @@
+import assert from 'node:assert/strict';
+import http from 'node:http';
+import {createOpsManagerSession} from '../src/auth/shared-access-auth.js';
+import {createStaticWeeklyControlPlaneRuntime} from '../src/static-weekly-control-plane-runtime.js';
+
+const env={NODE_ENV:'test',SUPABASE_URL:'https://manager-ingress-test.invalid',SUPABASE_SERVICE_ROLE_KEY:'test-only-role',
+ OPS_MANAGER_SESSION_SECRET:'manager-ingress-test-only-secret-0123456789'};
+const manager={manager_id:'10000000-0000-4000-8000-000000000091',display_name:'Synthetic Manager',roles:['OPS_MANAGER'],active:true};
+const credentialId='ingress-credential',deviceId='ingress-device';
+const token=createOpsManagerSession({credentialId,deviceId,manager,authMode:'trusted_device',accessLevel:'full_access',maximumAccessLevel:'full_access',env}).token;
+const trustedRow=()=>({credential_id:credentialId,device_id:deviceId,max_access_level:'full_access',manager_id:manager.manager_id,manager,
+ created_at:new Date(Date.now()-1000).toISOString(),expires_at:new Date(Date.now()+60_000).toISOString(),revoked_at:null});
+const body=JSON.stringify({effective_start:'2026-10-05',expected_revision:1});
+let checks=0;
+const same=(actual,expected,label)=>{assert.deepEqual(actual,expected,label);checks++;};
+function clock(){let now=1,timer=null;return{now:()=>now,setTimer:(callback,delay)=>{timer={callback,delay};return timer;},
+ clearTimer:candidate=>{if(timer===candidate)timer=null;},get timer(){return timer;},expire(){assert.ok(timer,'request timer must have started');now+=55_000;timer.callback();}};}
+async function until(predicate){for(let i=0;i<100&&!predicate();i++)await new Promise(resolve=>setImmediate(resolve));assert.ok(predicate(),'expected route stage was not reached');}
+async function fixture({rpc,find}){
+ const timer=clock(),calls=[],plane={async previewRecurringStaffing(input){calls.push(input);return{status:'CANDIDATE_ONLY'};},async health(){return{ready:true};}};
+ const runtime=createStaticWeeklyControlPlaneRuntime({env,supabase:{rpc},trustedDeviceStore:{find},database:{},controlPlane:plane,
+  managerOperationClock:{now:timer.now,setTimer:timer.setTimer,clearTimer:timer.clearTimer}});
+ const server=http.createServer(runtime.app);await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+ const origin=`http://127.0.0.1:${server.address().port}`;
+ return{timer,calls,origin,close:()=>new Promise(resolve=>server.close(resolve))};
+}
+async function post(origin){const response=await fetch(`${origin}/static-weekly/recurring-adaptation/preview`,{
+ method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body});return{status:response.status,data:await response.json()};}
+{
+ let releaseBegin;const begin=new Promise(resolve=>{releaseBegin=resolve;});const rpcCalls=[];
+ const f=await fixture({rpc:async(name,args)=>{rpcCalls.push({name,args});
+   if(name==='custodial_begin_application_mutation_lease')return begin;
+   if(name==='custodial_release_application_mutation_lease')return{data:true,error:null};
+   throw Error(`unexpected ${name}`);},find:async()=>trustedRow()});
+ try{
+  const pending=post(f.origin);await until(()=>f.timer.timer&&rpcCalls.length===1);f.timer.expire();
+  const result=await pending;same(result.status,503,'stalled lease begin fails before the original minute');
+  same(result.data.code,'static_weekly_recurring_operation_deadline_exceeded','body remains typed and non-success');
+  same(f.calls.length,0,'late lease cannot reach private compiler');
+  releaseBegin({data:{mutations_paused:false,authority_generation:1},error:null});
+  await until(()=>rpcCalls.length===2);
+  same(rpcCalls[1].name,'custodial_release_application_mutation_lease','late lease success is released by exact ID');
+  same(rpcCalls[1].args.p_request_id,rpcCalls[0].args.p_request_id,'late cleanup never touches another lease');
+ }finally{await f.close();}
+}
+{
+ let releaseFind;const find=new Promise(resolve=>{releaseFind=resolve;});let entered=false,releaseCount=0;
+ const f=await fixture({rpc:async(name)=>{
+  if(name==='custodial_begin_application_mutation_lease')return{data:{mutations_paused:false,authority_generation:1},error:null};
+  if(name==='custodial_release_application_mutation_lease'){releaseCount++;return{data:true,error:null};}
+  throw Error(`unexpected ${name}`);},find:async()=>{entered=true;return find;}});
+ try{
+  const pending=post(f.origin);await until(()=>entered);f.timer.expire();const result=await pending;
+  same(result.status,503,'stalled current-device lookup fails within original request');
+  same(f.calls.length,0,'expired auth cannot reach product action');
+  releaseFind(trustedRow());await until(()=>releaseCount===1);
+  same(f.calls.length,0,'late valid manager lookup cannot resurrect a timed-out action');
+  same(releaseCount,1,'timed-out auth response releases only its acquired restore lease');
+ }finally{await f.close();}
+}
+{
+ let leaseCalls=0,authCalls=0;
+ const f=await fixture({rpc:async(name)=>{leaseCalls++;if(name==='custodial_begin_application_mutation_lease')return{data:{mutations_paused:false,authority_generation:1},error:null};
+  if(name==='custodial_release_application_mutation_lease')return{data:true,error:null};throw Error(`unexpected ${name}`);},find:async()=>{authCalls++;return trustedRow();}});
+ let request;
+ try{
+  const response=new Promise((resolve,reject)=>{request=http.request(`${f.origin}/static-weekly/recurring-adaptation/preview`,{
+   method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json','Content-Length':body.length+20}},res=>{
+    let raw='';res.on('data',chunk=>raw+=chunk);res.on('end',()=>resolve({status:res.statusCode,data:JSON.parse(raw)}));});
+   request.on('error',reject);request.write(body.slice(0,1));});
+  await until(()=>f.timer.timer);f.timer.expire();const result=await response;
+  same(result.status,503,'partial body expiry fails before restore or auth');
+  same(leaseCalls,0,'partial body never acquires mutation lease');
+  same(authCalls,0,'partial body never authenticates into a write');
+  same(f.calls.length,0,'partial body never reaches product handler');
+ }finally{request?.destroy();await f.close();}
+}
+console.log(JSON.stringify({status:'PASS',checks,scope:'loopback first-origin body/lease/auth expiration; synthetic store/lease and control plane, no SQL/solver/phone'}));

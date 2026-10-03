@@ -3,8 +3,8 @@ import { pathToFileURL } from "node:url";
 import express from "express";
 import { createClient } from "@supabase/supabase-js";
 import { assertOpsManagerSessionSecret, createSupabaseTrustedDeviceStore, makeOpsAccessMiddleware } from "./auth/shared-access-auth.js";
-import { createStaticWeeklyControlPlane, createStaticWeeklyControlPlaneDatabase,
-  STATIC_WEEKLY_MANAGER_OPERATION_DEADLINE_MS } from "./static-weekly-control-plane.js";
+import { createStaticWeeklyControlPlane, createStaticWeeklyControlPlaneDatabase } from "./static-weekly-control-plane.js";
+import { beginBoundedManagerRequest } from "./static-weekly-manager-operation.js";
 import { assertConfiguredReleaseIdentity } from "./release-manifest.js";
 import { makeRestoreMutationGate } from "./restore-mutation-gate.js";
 import { renderCoverAllPdfPair } from "./static-weekly-coverall-print.js";
@@ -50,6 +50,7 @@ export function createStaticWeeklyControlPlaneRuntime({
   createDatabase = createStaticWeeklyControlPlaneDatabase,
   createControlPlane = createStaticWeeklyControlPlane,
   createSupabaseClient = createClient,
+  managerOperationClock = null,
 } = {}) {
   const releaseIdentity = assertConfiguredReleaseIdentity();
   const { url, key } = requireTrustedDeviceConfiguration(env);
@@ -74,6 +75,7 @@ export function createStaticWeeklyControlPlaneRuntime({
     if (req.method === "OPTIONS") { res.sendStatus(204); return; }
     next();
   });
+  app.use((req,res,next)=>{beginBoundedManagerRequest(req,res,managerOperationClock||undefined);next();});
   app.use(express.json({ limit: "128kb" }));
   app.use(makeRestoreMutationGate({ supabase: trustedSupabase, required: true, serviceName: "memphis-zoo-static-weekly-control-plane" }));
 
@@ -84,6 +86,7 @@ export function createStaticWeeklyControlPlaneRuntime({
     supabase: trustedSupabase,
     requireTrustedDeviceStore: true,
     requireCurrentManagerAssociation: true,
+    operationSignalForRequest: req => req.staticWeeklyManagerOperation?.signal || null,
   });
 
   function namedManager(req, res, next) {
@@ -174,7 +177,7 @@ export function createStaticWeeklyControlPlaneRuntime({
   }));
   app.get("/static-weekly/manager-snapshot", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.getManagerSnapshot({ manager: manager(req), weekStart: req.query?.week_start })));
   app.post("/static-weekly/recurring-adaptation/preview", requireManagerWrite, namedManager, respond((req) => {
-    const deadlineAt = performance.now() + STATIC_WEEKLY_MANAGER_OPERATION_DEADLINE_MS;
+    const deadlineAt = req.staticWeeklyManagerOperation.deadlineAt;
     const body=req.body,allowed=new Set(['effective_start','expected_revision','full_nine_source_id']);
     if(!body||typeof body!=='object'||Array.isArray(body)||!Object.hasOwn(body,'effective_start')
       ||!Object.hasOwn(body,'expected_revision')||Object.keys(body).some(key=>!allowed.has(key)))
@@ -186,7 +189,7 @@ export function createStaticWeeklyControlPlaneRuntime({
     signal:req.restoreMutationLease.signal,deadlineAt,
   });}));
   app.post("/static-weekly/recurring-adaptation/confirm", requireManagerWrite, namedManager, respond((req) => {
-    const deadlineAt = performance.now() + STATIC_WEEKLY_MANAGER_OPERATION_DEADLINE_MS;
+    const deadlineAt = req.staticWeeklyManagerOperation.deadlineAt;
     const body=req.body;
     const required=["confirmation_key","effective_start","expected_revision","preview_digest"];
     const allowed=new Set([...required,"full_nine_source_id"]);
