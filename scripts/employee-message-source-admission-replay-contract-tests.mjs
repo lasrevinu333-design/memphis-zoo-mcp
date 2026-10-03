@@ -3,6 +3,7 @@ import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
+import {messageDeletedSourceMutation} from './employee-message-source-admission-database-tests.mjs';
 import {assertMessageManifest,readMessageSource,assertMessageTarget,compareMessageDelta,cleanupMessageTarget,
  MESSAGE_FILE,MESSAGE_SHA,MESSAGE_MANIFEST,MESSAGE_IDENTITY,PREPARE_PRIOR,PREPARE_CURRENT,PREPARE_GRANT} from './employee-message-source-admission-replay.mjs';
 
@@ -36,6 +37,20 @@ rejects(()=>assertMessageTarget(observed,{...target,name:'arbitrary'}));
 const stopped=clone(observed);stopped.State.Running=false;equal(assertMessageTarget(stopped,target,{allowStopped:true}),target);
 
 const canonical=JSON.parse(readFileSync(new URL('../supabase/canonical/schema-fingerprint-input.json',import.meta.url)));
+const deletedConstraint=canonical.constraints.find(x=>x.table_name==='msg_messages'&&x.constraint_name==='msg_messages_deletion_state_chk');
+equal(deletedConstraint.definition,"CHECK (is_deleted IS FALSE AND deleted_at IS NULL AND purge_after IS NULL OR is_deleted IS TRUE AND deleted_at IS NOT NULL AND purge_after = (deleted_at + '14 days'::interval))");
+const deletionSource=readFileSync(new URL('../supabase/migrations/20260718184652_messenger_delete_retention_shared_identity.sql',import.meta.url),'utf8');
+assert.ok(deletionSource.includes("(is_deleted is true and deleted_at is not null and purge_after = deleted_at + interval '14 days')"));checks++;
+const messageId='71000000-0000-4000-8000-000000000007';
+equal(messageDeletedSourceMutation(messageId),`update public.msg_messages set is_deleted=true,deleted_at=now(),purge_after=now()+interval '14 days' where id='${messageId}'`);
+rejects(()=>messageDeletedSourceMutation("bad'; drop table public.msg_messages;"));
+// Source-level truth table for this exact existing CHECK, not SQL execution.
+const validDeletedRow=({deleted,at,purge})=>deleted===false&&at===null&&purge===null
+ ||deleted===true&&Number.isFinite(at)&&Number.isFinite(purge)&&purge===at+14*86400000;
+equal(validDeletedRow({deleted:true,at:null,purge:null}),false,'actual fail-before fixture state violates the owning CHECK');
+const at=Date.parse('2026-10-03T00:00:00Z');
+equal(validDeletedRow({deleted:true,at,purge:at+14*86400000}),true,'coherent fixture required fields');
+for(const row of [{deleted:true,at,purge:at+13*86400000},{deleted:true,at,purge:null},{deleted:false,at,purge:at+14*86400000}])equal(validDeletedRow(row),false);
 const beforeDefinition=canonical.functions.find(f=>f.function_name==='mz_prepare_employee_native_push_delivery').definition;
 equal(hash(beforeDefinition),PREPARE_PRIOR);
 const migration=readFileSync(new URL('../supabase/migrations/'+MESSAGE_FILE,import.meta.url),'utf8');

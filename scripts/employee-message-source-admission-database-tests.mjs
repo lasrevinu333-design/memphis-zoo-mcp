@@ -2,6 +2,14 @@ import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import {loadMessageDispatcher} from './employee-message-source-admission-tests.mjs';
 
+// Synthetic source state, not a client-authorized deletion operation. Preserve
+// the existing 20260718184652 deletion-state CHECK; do not disable a constraint
+// merely to reach the admission refusal under test.
+export function messageDeletedSourceMutation(messageId){
+ assert.match(messageId,/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+ return `update public.msg_messages set is_deleted=true,deleted_at=now(),purge_after=now()+interval '14 days' where id='${messageId}'`;
+}
+
 // Additive fixture export only. Importing this file launches nothing. An owning
 // exact-source/no-auto-grants/network-none runner must supply its verified SQL
 // capability after replay. This module is not that runner or global recovery.
@@ -61,7 +69,7 @@ export async function verifyEmployeeMessageSourceAdmissionDatabase({sql,target})
   check(name+' protected/queued bytes after rollback',await sql(snapshot),before);
  }
  for(const [name,mutation] of [
-  ['deleted',`update public.msg_messages set is_deleted=true where id=${q(message)}`],
+  ['deleted',messageDeletedSourceMutation(message)],
   ['inactive thread',`update public.msg_threads set is_active=false where id=${q(thread)}`],
   ['departed membership',`update public.msg_thread_participants set left_at=now() where thread_id=${q(thread)} and user_id=${q(recipient)}`],
   ['inactive recipient',`update public.msg_users set is_active=false where id=${q(recipient)}`],
