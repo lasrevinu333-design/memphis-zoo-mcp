@@ -5,12 +5,14 @@ import { postgresJsonbContentDigest } from "./static-weekly-schedule-compiler.js
 import { adaptRegisteredRecurringSource, currentPatternFromPublishedReadback,
   deriveRecurringStaffingPattern, targetSlotsFromManagerRoster, createRecurringPhaseSourceBasis,
   recurringPatternFromFinalPhaseSource,
+  createRecurringMorningWeekSourceBasis,deriveVerifiedRecurringMorningWeekCandidate,recurringManagerChangesFromSources,
   deriveScalableCanonicalRecurringWeekCandidate } from "./static-weekly-recurring-staffing-adaptation.js";
 import { createStaticWeeklyDraftRpcInput } from "./static-weekly-schedule-database-adapter.js";
 import { createStaticWeeklyProjectionWithLunchRpcInput, createStaticWeeklyLunchPreviewDocument } from "./static-weekly-lunch-publication.js";
 import { createRecurringManagerDecision, createRecurringFinalManagerChanges,
   RECURRING_IMPLEMENTATION_DIGEST } from "./static-weekly-recurring-preview.js";
 import { createRecurringWeekCommitment, createRecurringFullNineTemplateCommitment,
+  createRecurringMorningCommitment,assertRecurringMorningCommitmentCandidate,RECURRING_MORNING_SCOPE,
   RECURRING_PHASE_SCOPE, RECURRING_FULL_NINE_SCOPE } from "./static-weekly-recurring-week-commitment.js";
 import { createOpeningCoverageReport, sanitizeOpeningCoverageDiagnostic } from './static-weekly-opening-coverage-report.js';
 import { installStaticWeeklySha256HexAccelerator } from "./static-weekly-schedule-model.js";
@@ -142,7 +144,7 @@ process.on("message", async (message) => {
         effectiveDate: request.effectiveDate,
         expectedRevision: request.expectedRevision,
       });
-      const solved = deriveRecurringStaffingPattern({
+      const solveHistoricalPattern = () => deriveRecurringStaffingPattern({
         currentConfig: bound.currentConfig,
         targetSlots: bound.currentConfig.slots,
         fullOwners: fullNineOwners,
@@ -158,8 +160,9 @@ process.on("message", async (message) => {
           { code: "static_weekly_recurring_full_source_not_approved" });
       }
       let candidate, changes, phaseSourceBasis = null, finalPattern = null;
-      let weekProof = null;
+      let weekProof = null,morningBasis=null,morningWeek=null;
       if (staffedPositions === 9) {
+        const solved=solveHistoricalPattern();
         // The exact historical full-nine source retains its split-family
         // template. It is not a seven-day ordinary-phase minimum.
         candidate = adaptRegisteredRecurringSource({
@@ -175,10 +178,15 @@ process.on("message", async (message) => {
           throw Object.assign(new Error("The accepted recurring source has no complete canonical phase transition basis."),
             { code: "static_weekly_recurring_phase_source_unsupported" });
         }
+        morningBasis=createRecurringMorningWeekSourceBasis({registeredSource:request.publishedSource.compiler_input,currentConfig:bound.currentConfig});
+        morningWeek=deriveVerifiedRecurringMorningWeekCandidate({basis:morningBasis,fullOwners:fullNineOwners,solver:solverEngine});
+        if(morningWeek.status!=='UNREGISTERED_VERIFIED_RECURRING_MORNING_WEEK')throw Object.assign(
+          new Error(`The complete original-source morning proof is unavailable at ${morningWeek.stage} day ${morningWeek.dayOfWeek}.`),
+          {code:'static_weekly_recurring_morning_proof_unavailable'});
         phaseSourceBasis = createRecurringPhaseSourceBasis({
           registeredSource: request.publishedSource.compiler_input,
-          patternConfig: solved.config,
-          reductionContext: bound.reductionContext || null,
+          patternConfig: bound.currentConfig,
+          morningWeek,morningBasis,fullOwners:fullNineOwners,
         });
         weekProof = deriveScalableCanonicalRecurringWeekCandidate({
           source: phaseSourceBasis.source,
@@ -201,7 +209,7 @@ process.on("message", async (message) => {
         candidate = { compilerInput: weekProof.candidateSource,
           patternFingerprint: finalPattern.configDigest };
         changes = createRecurringFinalManagerChanges({
-          preliminaryChanges: solved.preview,
+          preliminaryChanges: recurringManagerChangesFromSources({originalSource:morningBasis.source,finalSource:candidate.compilerInput,currentConfig:finalPattern.config}),
           phaseSource: phaseSourceBasis.source,
           finalSource: candidate.compilerInput,
           ownerConfig: finalPattern.config,
@@ -244,6 +252,8 @@ process.on("message", async (message) => {
         compiled, implementationDigest: RECURRING_IMPLEMENTATION_DIGEST,
         binding,
       });
+      const morningCommitment=morningWeek&&createRecurringMorningCommitment({morningWeek,morningBasis,phaseSourceBasis,fullOwners:fullNineOwners,
+        finalSource:candidate.compilerInput,lateCommitment:weekCommitment,binding});
       const staticTemplateCommitment = staffedPositions === 9
         ? createRecurringFullNineTemplateCommitment({
           registeredFullNineSource: request.fullNineSource.compiler_input,
@@ -262,6 +272,7 @@ process.on("message", async (message) => {
         sourcePatternKind: bound.sourcePatternKind,
         weekOptimizationScope: staffedPositions === 9 ? RECURRING_FULL_NINE_SCOPE : RECURRING_PHASE_SCOPE,
         ...(weekCommitment ? { weekCommitment,
+          morningCommitment,morningOptimizationScope:RECURRING_MORNING_SCOPE,morningSourceBasisDigest:morningBasis.basisDigest,
           phaseSourceBasisDigest: phaseSourceBasis.basisDigest,
           ...(phaseSourceBasis.reductionContext
             ? {reductionContextDigest:phaseSourceBasis.reductionContext.contextDigest} : {})
@@ -288,6 +299,7 @@ process.on("message", async (message) => {
         verifierOk: compiled.verifier.ok, reviewWorkCount: compiled.reviewWork.length,
         changes, registrationRequired: true, managerConfirmationRequired: true,
       };
+      if(morningCommitment)assertRecurringMorningCommitmentCandidate(publicCandidate);
       send({ type: "result", id: message.id, result: message.type === "recurring-admission-candidate"
         ? { schema: "static-weekly.recurring-admission-candidate.v1",
           candidate: publicCandidate, canonicalSource: candidate.compilerInput }

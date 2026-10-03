@@ -4,13 +4,15 @@ import { postgresJsonbContentDigest } from "./static-weekly-schedule-compiler.js
 import { COMPONENT_WEIGHT_LEDGER_DIGEST } from "./schedule-component-weight-authority.js";
 import { assertRecurringPhasePreferenceNormalization,
   assertRecurringPhaseIdentityEncoding } from "./static-weekly-recurring-phase-authority.js";
-import { assertFullNineReductionPreferenceReceipt } from "./static-weekly-recurring-staffing-adaptation.js";
+import { assertFullNineReductionPreferenceReceipt,assertRecurringMorningWeekCandidate,
+ recurringMorningWeekSemanticFacts } from "./static-weekly-recurring-staffing-adaptation.js";
 
 export const RECURRING_WEEK_COMMITMENT_SCHEMA = "custodial.recurring-week-semantic-commitment.v1";
 export const RECURRING_FULL_NINE_TEMPLATE_COMMITMENT_SCHEMA =
   "custodial.recurring-full-nine-static-template-commitment.v1";
 export const RECURRING_PHASE_SCOPE = "PROVEN_CANONICAL_7_DAY_PHASE";
 export const RECURRING_FULL_NINE_SCOPE = "HISTORICAL_FULL_NINE_STATIC_TEMPLATE_ONLY";
+export const RECURRING_MORNING_SCOPE = 'VERIFIED_ORIGINAL_SOURCE_7_DAY_MORNING_AND_LATE_CHAIN';
 const hex = (value) => typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
 const version = (source) => source?.version || (source?.versions?.length === 1 ? source.versions[0] : null);
 const withoutDigest = ({ digest, ...body }) => body;
@@ -39,6 +41,55 @@ function assertOnlyEqualizedOwnershipChanged(source, finalSource) {
   }
   assert.equal(canonicalJson(restored), canonicalJson(source),
     "phase witness changed nonselected canonical source facts");
+}
+
+// Separate sibling: the original equalized-only source validator above remains
+// strict. This binds original morning -> proved morning -> final late chain,
+// independently checks fresh raw reports, and never exposes those private bytes.
+export function createRecurringMorningCommitment({morningWeek,morningBasis,phaseSourceBasis,fullOwners,finalSource,lateCommitment,binding}){
+ const canonical=assertRecurringMorningWeekCandidate({week:morningWeek,basis:morningBasis,fullOwners,finalSource});
+ assertOnlyEqualizedOwnershipChanged(morningWeek.candidateSource,finalSource);
+ const facts=recurringMorningWeekSemanticFacts(morningWeek);
+ assert.equal(phaseSourceBasis.morningSourceBasisDigest,morningBasis.basisDigest);
+ assert.equal(phaseSourceBasis.morningWeekSemanticDigest,contentDigest(facts));
+ assert.equal(canonicalJson(phaseSourceBasis.source),canonicalJson(morningWeek.candidateSource));
+ assert.equal(lateCommitment.sourceBasisDigest,phaseSourceBasis.basisDigest);
+ assert.equal(lateCommitment.finalSourceDigest,contentDigest(finalSource));
+ assert.equal(lateCommitment.canonicalHard.witnessDigest,canonical.witnessDigest);
+ const body={schema:'custodial.recurring-morning-combined-commitment.v1',scope:RECURRING_MORNING_SCOPE,status:'PROVEN_CANDIDATE_ONLY',
+  sourceId:binding.sourceId,publicationId:binding.publicationId,authorityRevision:binding.authorityRevision,effectiveWeek:binding.effectiveWeek,
+  publishedSourceDigest:binding.publishedSourceDigest,managerSnapshotDigest:binding.managerSnapshotDigest,readbackPatternDigest:binding.readbackPatternDigest,
+  originalMorningSourceDigest:morningBasis.registeredSourceDigest,morningSourceBasisDigest:morningBasis.basisDigest,
+  morningFacts:facts,morningFactsDigest:contentDigest(facts),morningCandidateSourceDigest:morningWeek.candidateSourceDigest,
+  phaseSourceBasisDigest:phaseSourceBasis.basisDigest,lateCommitmentDigest:lateCommitment.digest,
+  finalSourceDigest:contentDigest(finalSource),finalSourceSqlDigest:postgresJsonbContentDigest(finalSource),
+  finalCanonicalWitnessDigest:canonical.witnessDigest,sharedMorningAdmissionBudgetMs:morningWeek.solverAdmissionBudgetMs,
+  originalAnchorsPreserved:true,originalLateReferencePreserved:true,sourceRequiredPlannedMorningOptimum:true,
+  openingReadinessProven:false,physicalMinuteFeasibilityClaim:false,acceptedStaticChanged:false,datedPriorityChange:false,admitted:false,published:false};
+ return {...body,digest:contentDigest(body)};
+}
+export function assertRecurringMorningCommitmentCandidate(candidate){
+ assert.equal(candidate.morningOptimizationScope,RECURRING_MORNING_SCOPE);
+ const m=candidate.morningCommitment,l=candidate.weekCommitment;
+ assert.equal(m?.schema,'custodial.recurring-morning-combined-commitment.v1');assert.equal(m.digest,contentDigest(withoutDigest(m)));
+ assert.equal(m.scope,RECURRING_MORNING_SCOPE);assert.equal(m.status,'PROVEN_CANDIDATE_ONLY');
+ for(const k of ['sourceId','publicationId','authorityRevision','publishedSourceDigest','managerSnapshotDigest','readbackPatternDigest'])assert.equal(m[k],candidate[k]);
+ assert.equal(m.effectiveWeek,candidate.effectiveDate);assert.equal(m.finalSourceSqlDigest,candidate.candidateSourceDigest);
+ assert.equal(m.lateCommitmentDigest,l.digest);assert.equal(m.phaseSourceBasisDigest,l.sourceBasisDigest);
+ assert.equal(m.finalSourceDigest,l.finalSourceDigest);assert.equal(m.morningCandidateSourceDigest,l.sourceDigest);
+ assert.equal(m.finalCanonicalWitnessDigest,l.canonicalHard.witnessDigest);assert.equal(m.morningSourceBasisDigest,candidate.morningSourceBasisDigest);
+ assert.equal(m.morningFactsDigest,contentDigest(m.morningFacts));assert.equal(m.morningFacts.sourceBasisDigest,m.morningSourceBasisDigest);
+ assert.equal(m.morningFacts.candidateSourceDigest,m.morningCandidateSourceDigest);
+ assert.equal(m.morningFacts.originalSourceDigest,m.originalMorningSourceDigest);assert.equal(m.sharedMorningAdmissionBudgetMs,30_000);
+ assert.ok(Array.isArray(m.morningFacts.days)&&m.morningFacts.days.length===7);
+ for(const [day,d]of m.morningFacts.days.entries()){
+  assert.equal(d.dayOfWeek,day);assert.ok(hex(d.contractDigest));assert.ok(d.metrics.coverage.every(n=>n===0));
+  assert.ok(Array.isArray(d.selection)&&d.selection.length>0&&new Set(d.selection.map(s=>s.workId)).size===d.selection.length);
+  assert.ok(d.terminalOptima.length>=6&&d.terminalOptima.every(t=>hex(t.modelDigest)&&hex(t.lpDigest)&&Number.isSafeInteger(t.primitiveObjective)&&Number.isSafeInteger(t.originalObjective)));
+ }
+ assert.ok(m.originalAnchorsPreserved===true&&m.originalLateReferencePreserved===true&&m.sourceRequiredPlannedMorningOptimum===true
+  &&m.openingReadinessProven===false&&m.physicalMinuteFeasibilityClaim===false&&m.acceptedStaticChanged===false&&m.datedPriorityChange===false&&m.admitted===false&&m.published===false);
+ return true;
 }
 
 function stableDay(proof, dayOfWeek, finalDigest, finalWitnessDigest,
@@ -461,6 +512,7 @@ export function assertRecurringWeekCommitment(candidate, basis, revision) {
     assertRecurringFullNineTemplateCommitmentCandidate(candidate, basis);
   } else {
     assertRecurringWeekCommitmentCandidate(candidate);
+    assertRecurringMorningCommitmentCandidate(candidate);
   }
   const commitment = candidate.weekOptimizationScope === RECURRING_FULL_NINE_SCOPE
     ? candidate.staticTemplateCommitment : candidate.weekCommitment;

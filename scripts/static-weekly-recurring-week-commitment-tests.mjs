@@ -6,6 +6,7 @@ import { canonicalJson, contentDigest } from "../src/static-weekly-schedule-mode
 import { postgresJsonbContentDigest } from "../src/static-weekly-schedule-compiler.js";
 import { createRecurringWeekCommitment, assertRecurringWeekCommitment,
   createRecurringFullNineTemplateCommitment, RECURRING_PHASE_SCOPE,
+  RECURRING_MORNING_SCOPE,
   RECURRING_FULL_NINE_SCOPE } from
   "../src/static-weekly-recurring-week-commitment.js";
 import { createRecurringFinalManagerChanges, RECURRING_IMPLEMENTATION_MANIFEST,
@@ -106,11 +107,32 @@ const candidate = { weekCommitment: first, weekOptimizationScope: RECURRING_PHAS
   finalWitnessDigest: compiled.certificate.finalWitness.digest,
   assignmentWitnessDigest: compiled.certificate.assignmentDigest,
   weeklyAssignmentsDigest: first.completeCompiler.weeklyAssignmentsDigest };
+// This existing test is explicitly a synthetic shape/binding test, not engine
+// evidence. Add the mandatory morning sibling shape so ALL original hostile
+// late bindings still reach their owning checks rather than failing on absence.
+const morningFacts={sourceBasisDigest:hash('a'),originalSourceDigest:contentDigest(source),candidateSourceDigest:first.sourceDigest,
+ days:Array.from({length:7},(_,dayOfWeek)=>({dayOfWeek,contractDigest:hash('b'),metrics:{coverage:[0]},selection:[{workId:`morning-${dayOfWeek}`,slotId:'new'}],
+  terminalOptima:Array.from({length:6},(_,i)=>({name:`synthetic-${i}`,modelDigest:hash('c'),lpDigest:hash('d'),primitiveObjective:0,originalObjective:0}))}))};
+const morningBody={schema:'custodial.recurring-morning-combined-commitment.v1',scope:RECURRING_MORNING_SCOPE,status:'PROVEN_CANDIDATE_ONLY',
+ sourceId:candidate.sourceId,publicationId:candidate.publicationId,authorityRevision:candidate.authorityRevision,effectiveWeek:candidate.effectiveDate,
+ publishedSourceDigest:candidate.publishedSourceDigest,managerSnapshotDigest:candidate.managerSnapshotDigest,readbackPatternDigest:candidate.readbackPatternDigest,
+ originalMorningSourceDigest:contentDigest(source),morningSourceBasisDigest:hash('a'),morningFacts,morningFactsDigest:contentDigest(morningFacts),
+ morningCandidateSourceDigest:first.sourceDigest,phaseSourceBasisDigest:first.sourceBasisDigest,lateCommitmentDigest:first.digest,
+ finalSourceDigest:first.finalSourceDigest,finalSourceSqlDigest:first.finalSourceSqlDigest,finalCanonicalWitnessDigest:first.canonicalHard.witnessDigest,
+ sharedMorningAdmissionBudgetMs:30_000,originalAnchorsPreserved:true,originalLateReferencePreserved:true,sourceRequiredPlannedMorningOptimum:true,
+ openingReadinessProven:false,physicalMinuteFeasibilityClaim:false,acceptedStaticChanged:false,datedPriorityChange:false,admitted:false,published:false};
+candidate.morningOptimizationScope=RECURRING_MORNING_SCOPE;candidate.morningSourceBasisDigest=hash('a');
+candidate.morningCommitment={...morningBody,digest:contentDigest(morningBody)};
 assert.equal(assertRecurringWeekCommitment(candidate, basis, 7), true); checks += 1;
 function rejected(label, work) {
   assert.throws(work, undefined, label); checks += 1;
 }
 const clone = structuredClone;
+rejected('missing mandatory morning sibling',()=>{const x=clone(candidate);delete x.morningCommitment;assertRecurringWeekCommitment(x,basis,7);});
+rejected('forged self-rehashed morning final chain',()=>{const x=clone(candidate);x.morningCommitment.finalSourceDigest=hash('0');
+ x.morningCommitment.digest=contentDigest((({digest,...body})=>body)(x.morningCommitment));assertRecurringWeekCommitment(x,basis,7);});
+rejected('missing morning day even when rehashed',()=>{const x=clone(candidate);x.morningCommitment.morningFacts.days.pop();
+ x.morningCommitment.morningFactsDigest=contentDigest(x.morningCommitment.morningFacts);x.morningCommitment.digest=contentDigest((({digest,...body})=>body)(x.morningCommitment));assertRecurringWeekCommitment(x,basis,7);});
 const changed = (week, mutation) => {
   const candidateWeek = clone(week); mutation(candidateWeek);
   return candidateWeek;
