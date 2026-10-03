@@ -47,6 +47,19 @@ function assertReductionContext(context){
   assert.equal(context.fullConfigDigest,reductionAuthority.fullConfigDigest,'full-nine configuration authority changed');
   assert.equal(context.fullOwnersDigest,reductionAuthority.fullOwnersDigest,'full-nine guidance authority changed');
   assert.equal(contentDigest(context.acceptedSource),context.acceptedSourceDigest,'accepted comparison ledger source changed');
+  assert.equal(contentDigest(context.dayAvailabilityReferences),context.dayAvailabilityReferencesDigest,
+    'original/current same-day availability provenance changed');
+  if(context.registeredCorrectionSource){
+    assert.equal(contentDigest(context.registeredCorrectionSource),context.registeredCorrectionSourceDigest,
+      'registered current correction source bytes changed');
+    assert.equal(postgresJsonbContentDigest(context.registeredCorrectionSource),context.correctionWitness?.hydratedDigest,
+      'registered current correction witness bytes changed');
+    const {digest:witnessDigest,...witnessBody}=context.correctionWitness;
+    assert.equal(postgresJsonbContentDigest(witnessBody),witnessDigest,'locked current correction witness digest changed');
+    assert.equal(contentDigest(context.correctionTemplateConfig),context.correctionAuthorityDigest,
+      'trusted correction template bytes changed');
+    currentHandoutRecurringStructure(context.registeredCorrectionSource,context.correctionTemplateConfig);
+  }
   assert.equal(contentDigest(context.currentConfig.namedShiftEndHandoffs),currentHandout.namedHandoffs,'trusted current named owner authority changed');
   assert.equal(canonicalJson(context.source.version.shiftEndContinuityPolicy.namedHandoffs),canonicalJson(context.currentConfig.namedShiftEndHandoffs),'current named source policy binding changed');
   const bindings=mandatoryReductionBindings(context.acceptedSource,context.currentConfig);
@@ -89,15 +102,41 @@ function sourceDiff(before,after,path='$',out=[]){
 // registered base, independently of TARGET occupancy. Original raw split rows
 // remain evidence; dominant ownership is ONLY the inherited family cost seed.
 export function createFullNineReductionContext({publishedSource,managerSnapshot,correctionConfig,fullConfig,fullOwners,
-  fullNineSource,effectiveDate,expectedRevision}){
+  fullNineSource,correctionSource=null,correctionWitness=null,effectiveDate,expectedRevision}){
   assert.equal(contentDigest(correctionConfig),reductionAuthority.correctionConfigDigest,'trusted current October correction config binding missing');
   assert.equal(contentDigest(fullConfig),reductionAuthority.fullConfigDigest,'trusted full-nine config binding missing');
   assert.equal(contentDigest(fullOwners),reductionAuthority.fullOwnersDigest,'trusted full-nine family guidance binding missing');
   assert.equal(fullNineSource?.source_id,reductionAuthority.baseSourceId,'trusted registered full-nine base required for reduction');
   const base=fullNineSource.compiler_input,accepted=publishedSource?.compiler_input;
+  const registeredCorrection=correctionSource?.compiler_input;
+  if(correctionSource||correctionWitness){
+    assert.ok(registeredCorrection&&correctionWitness,'locked registered current correction source and witness required together');
+    const {digest:witnessDigest,...witnessBody}=correctionWitness;
+    assert.equal(postgresJsonbContentDigest(witnessBody),witnessDigest,'locked current correction witness digest changed');
+    assert.equal(correctionWitness.schema,'memphis-zoo.recurring-current-correction-witness.v1',
+      'typed locked current correction witness required');
+    assert.equal(correctionSource.source_id,correctionWitness.sourceId,'current correction registered identity changed');
+    assert.notEqual(correctionSource.source_id,publishedSource.source_id,'current correction cannot impersonate historical publication');
+    assert.notEqual(correctionSource.source_id,fullNineSource.source_id,'current correction cannot impersonate historical base');
+    assert.equal(postgresJsonbContentDigest(registeredCorrection),correctionWitness.hydratedDigest,'current correction hydrated bytes changed');
+    assert.equal(correctionWitness.effectiveWeek,effectiveDate,'current correction target week changed');
+    assert.equal(correctionWitness.authorityRevision,expectedRevision,'current correction roster revision changed');
+    assert.equal(correctionWitness.patternSourceId,publishedSource.source_id,'current correction historical source binding changed');
+    assert.equal(correctionWitness.patternPublicationId,publishedSource.publication_id,
+      'current correction historical publication binding changed');
+    assert.equal(correctionWitness.managerSnapshotDigest,postgresJsonbContentDigest(managerSnapshot),
+      'current correction manager roster snapshot changed');
+    const active=managerSnapshot?.sources?.filter(row=>row.source_id===correctionSource.source_id);
+    assert.equal(active?.length,1,'current correction active registry identity missing or duplicated');
+    assert.equal(active[0].source_digest,correctionWitness.canonicalDigest,
+      'current correction registered raw digest changed');
+    currentHandoutRecurringStructure(registeredCorrection,correctionConfig);
+  }
   assert.equal(contentDigest(base?.version?.assignments),reductionAuthority.baseAssignmentsDigest,'registered full-nine base work bytes changed');
   assert.ok(accepted?.version?.assignments?.length===313,'exact historical313 pattern required');
   const authority=recurringPatternAuthority({publishedSource,managerSnapshot,effectiveDate,expectedRevision});
+  if(correctionWitness)assert.equal(correctionWitness.effectivePublicationId,authority.publicationId,
+    'current correction effective publication binding changed');
   const targetSlots=targetSlotsFromManagerRoster({templateConfig:correctionConfig,managerSnapshot,effectiveDate,expectedRevision});
   const staffed=Object.values(targetSlots).filter(s=>s.vacancy!==true).length;
   assert.ok(staffed>=6&&staffed<=8,'full-nine reduction targets six to eight current people');
@@ -152,6 +191,18 @@ export function createFullNineReductionContext({publishedSource,managerSnapshot,
     if(!slot.vacancy)assert.deepEqual([current[0].personId,current[0].displayName],[slot.personId,slot.name],'target/source current person binding mismatch');
   }
   const source=structuredClone(accepted);source.serviceDate=effectiveDate;source.exceptions=[];
+  if(registeredCorrection){
+    assert.equal(registeredCorrection.serviceDate,effectiveDate,'registered correction service date changed');
+    assert.deepEqual(registeredCorrection.slots.map(s=>s.id).sort(),accepted.slots.map(s=>s.id).sort(),
+      'registered correction stable positions changed');
+    for(const slot of Object.values(targetSlots)){
+      const row=registeredCorrection.slots.find(s=>s.id===slot.slotId);
+      const active=(row?.incumbencies||[]).filter(p=>p.effectiveStart<=effectiveDate&&(!p.effectiveEnd||effectiveDate<p.effectiveEnd));
+      assert.equal(active.length,slot.vacancy===true?0:1,'registered correction current roster occupancy changed');
+      if(!slot.vacancy)assert.deepEqual([active[0].personId,active[0].displayName],[slot.personId,slot.name],
+        'registered correction current person changed');
+    }
+  }
   Object.assign(source.version,{effectiveStart:effectiveDate,effectiveEnd:null,status:'published',namedAbsentSlotIds:[],
     vacantSlotIds:Object.values(targetSlots).filter(s=>s.vacancy===true).map(s=>s.slotId).sort(),
     vacancyCapableSlotIds:Object.values(targetSlots).map(s=>s.slotId).sort()});
@@ -174,7 +225,13 @@ export function createFullNineReductionContext({publishedSource,managerSnapshot,
         Object.keys(targetSlots).find(k=>targetSlots[k].slotId===a.originSlotId).localeCompare(Object.keys(targetSlots).find(k=>targetSlots[k].slotId===b.originSlotId)))[0];
       const originalKey=Object.keys(targetSlots).find(k=>targetSlots[k].slotId===dominant.originSlotId);assert.ok(originalKey,'accepted reference outside stable positions');
       const mandatory=phase==='equalized'?mandatoryBindings.find(b=>b.dayOfWeek===day&&b.family===family):null;
-      const key=mandatory?Object.keys(targetSlots).find(k=>targetSlots[k].slotId===mandatory.mandatoryPrimarySlotId):originalKey;
+      const correctedAdmin=phase==='morning'&&config.adminFamilies.includes(family)
+        ?registeredCorrection?.version.assignments.filter(r=>r.dayOfWeek===day&&r.locationCodeSnapshot===family&&r.window.end==='09:45') : null;
+      if(correctedAdmin)assert.equal(correctedAdmin.length,1,'exact registered Admin morning owner missing');
+      const correctedAdminKey=correctedAdmin?Object.keys(targetSlots).find(k=>targetSlots[k].slotId===correctedAdmin[0].originSlotId):null;
+      if(correctedAdmin)assert.ok(correctedAdminKey,'registered Admin morning owner outside stable positions');
+      const key=mandatory?Object.keys(targetSlots).find(k=>targetSlots[k].slotId===mandatory.mandatoryPrimarySlotId):
+        (correctedAdminKey||originalKey);
       const members=old.flatMap(r=>r.includedLocations);assert.equal(new Set(members.map(m=>m.locationId)).size,members.length,'accepted split member overlap');
       const row=structuredClone(old[0]),owner=targetSlots[key];
       Object.assign(row,{workId:`${day}:${family}:${phase}:${owner.slotId.slice(0,8)}`,ownerSlotId:owner.slotId,originSlotId:owner.slotId,
@@ -184,9 +241,10 @@ export function createFullNineReductionContext({publishedSource,managerSnapshot,
         qualificationProvenance:`base:${currentHandout.base}:qualifications`,restrictionProvenance:`owner:40da4e1d4cce52b2361b5403b7e5e4477ca00def0fd3649a1d76dacb48422f30:hard_place_eligibility;base:${currentHandout.base}`,
         restrictedSlotIds:hardRestrictedSlots(config,family,old.flatMap(r=>r.restrictedSlotIds||[]))});
       rows.push(row);(config.overrides[String(day)][phase][key]||=[]).push(family);
-      comparisonLedger.push({day,phase,family,originalRows:structuredClone(old),originalRowsDigest:contentDigest(old),referenceSlotId:targetSlots[originalKey].slotId,
+      comparisonLedger.push({day,phase,family,originalRows:structuredClone(old),originalRowsDigest:contentDigest(old),referenceSlotId:targetSlots[correctedAdminKey||originalKey].slotId,
         comparisonSourceOwnerSlotId:owner.slotId,...(mandatory?{mandatoryCurrentOwnerBinding:mandatory}:{}),
-        referenceKind:old.length>1?'EXISTING_DOMINANT_POINT_SHARE_FAMILY_PREFERENCE_ONLY':'EXACT_ACCEPTED_OWNER',
+        referenceKind:correctedAdminKey?'AUTHORIZED_ADMIN_MORNING_CURRENT_SOURCE':old.length>1?'EXISTING_DOMINANT_POINT_SHARE_FAMILY_PREFERENCE_ONLY':'EXACT_ACCEPTED_OWNER',
+        ...(correctedAdmin?{currentCorrectionRowDigest:contentDigest(correctedAdmin[0])}:{}),
         physicalMemberIds:members.map(m=>m.locationId),inheritedWorkloadPoints:row.serviceEffortMinutes,
         addedMorningByCurrentAuthority:phase==='morning'&&config.adminFamilies.includes(family)});
     }
@@ -199,13 +257,42 @@ export function createFullNineReductionContext({publishedSource,managerSnapshot,
     serviceEffortProvenance:`base:${currentHandout.base}:effort`,priorityProvenance:`base:${currentHandout.base}:priority`,
     qualificationProvenance:`base:${currentHandout.base}:qualifications`,restrictionProvenance:`owner:40da4e1d4cce52b2361b5403b7e5e4477ca00def0fd3649a1d76dacb48422f30:hard_place_eligibility;base:${currentHandout.base}`,restrictedSlotIds:[]});
   assert.equal(contentDigest(reminder),currentHandout.reminder,'authorized Tuesday reminder derivation changed');rows.push(reminder);
+  if(registeredCorrection){
+    const correctedMorning=new Map(registeredCorrection.version.assignments
+      .filter(r=>r.window?.end==='09:45').map(r=>[`${r.dayOfWeek}\0${r.locationCodeSnapshot}`,r]));
+    const generatedMorning=rows.filter(r=>r.window?.end==='09:45');
+    assert.equal(correctedMorning.size,generatedMorning.length,'registered correction morning multiplicity changed');
+    const protectedPackage=row=>({family:row.locationCodeSnapshot,day:row.dayOfWeek,
+      locationId:row.locationId,memberIds:row.includedLocations.map(m=>m.locationId).sort(),
+      serviceMode:row.serviceMode,schedulingMode:row.schedulingMode,
+      serviceEffortMinutes:row.serviceEffortMinutes,priority:row.priority});
+    rows.splice(0,rows.length,...rows.map(row=>{
+      if(row.window?.end!=='09:45')return row;
+      const corrected=correctedMorning.get(`${row.dayOfWeek}\0${row.locationCodeSnapshot}`);
+      assert.ok(corrected,'registered correction morning package missing');
+      assert.equal(canonicalJson(protectedPackage(row)),canonicalJson(protectedPackage(corrected)),
+        'registered correction changed protected morning package facts');
+      return structuredClone(corrected);
+    }));
+    const keyBySlot=new Map(Object.entries(targetSlots).map(([key,slot])=>[slot.slotId,key]));
+    for(let day=0;day<7;day++)config.overrides[String(day)].morning=Object.fromEntries(Object.keys(targetSlots).sort()
+      .map(key=>[key,rows.filter(r=>r.dayOfWeek===day&&r.window?.end==='09:45'&&keyBySlot.get(r.originSlotId)===key)
+        .map(r=>r.locationCodeSnapshot).sort()]).filter(([,families])=>families.length));
+  }
   source.version.assignments=rows.sort(byWork);
   const availability=new Map(accepted.version.slotAvailability.map(r=>[`${r.dayOfWeek}\0${r.slotId}`,r]));
   assert.equal(availability.size,accepted.version.slotAvailability.length,'duplicate accepted day availability');
+  const currentAvailability=registeredCorrection?new Map(registeredCorrection.version.slotAvailability.map(r=>[`${r.dayOfWeek}\0${r.slotId}`,r])):null;
+  if(currentAvailability)assert.equal(currentAvailability.size,registeredCorrection.version.slotAvailability.length,'duplicate registered current day availability');
+  const dayAvailabilityReferences=[];
   source.version.slotAvailability=[...accepted.version.slotAvailability.filter(r=>!Object.values(targetSlots).some(s=>s.slotId===r.slotId)),
     ...Object.values(targetSlots).flatMap(slot=>slot.workDays.map(day=>{
-      const old=availability.get(`${day}\0${slot.slotId}`);assert.ok(old,'current target day has no source-bound capacity template');
-      return {...structuredClone(old),status:slot.vacancy===true?'vacant_unfilled':'working',shift:{start:slot.shift[0],end:slot.shift[1]},lunch:recurringOwnerLunch(slot,day)};
+      const original=availability.get(`${day}\0${slot.slotId}`),current=currentAvailability?.get(`${day}\0${slot.slotId}`);
+      if(currentAvailability)assert.ok(current,'registered current target day availability missing');
+      const reference=original||current;assert.ok(reference,'current target day has no source-bound capacity template');
+      dayAvailabilityReferences.push({day,slotId:slot.slotId,kind:original?'ORIGINAL_ACCEPTED_SAME_DAY':'CURRENT_CORRECTION_NEW_DAY',
+        sourceDigest:contentDigest(reference),...(current?{currentCorrectionDigest:contentDigest(current)}:{})});
+      return {...structuredClone(reference),status:slot.vacancy===true?'vacant_unfilled':'working',shift:{start:slot.shift[0],end:slot.shift[1]},lunch:recurringOwnerLunch(slot,day)};
     }))];
   source.version.shiftEndContinuityPolicy=createShiftEndContinuityPolicy(config.weights,
     '40da4e1d4cce52b2361b5403b7e5e4477ca00def0fd3649a1d76dacb48422f30',postgresJsonbContentDigest,config.namedShiftEndHandoffs);
@@ -222,6 +309,10 @@ export function createFullNineReductionContext({publishedSource,managerSnapshot,
     managerSnapshotDigest:contentDigest(managerSnapshot),correctionAuthorityDigest:contentDigest(correctionConfig),
     fullConfigDigest:contentDigest(fullConfig),fullOwnersDigest:contentDigest(fullOwners),registeredBaseDigest:contentDigest(base),
     comparisonLedger,comparisonLedgerDigest:contentDigest(comparisonLedger),source,currentConfig:config,
+    dayAvailabilityReferences,dayAvailabilityReferencesDigest:contentDigest(dayAvailabilityReferences),
+    ...(registeredCorrection?{registeredCorrectionSource:structuredClone(registeredCorrection),
+      correctionTemplateConfig:structuredClone(correctionConfig),
+      registeredCorrectionSourceDigest:contentDigest(registeredCorrection),correctionWitness:structuredClone(correctionWitness)}:{}),
     correctionReceipt:{schema:'custodial.full-nine-current-owner-correction.v1',historicalRows:313,desiredRows:323,
       historicalNamedPolicy:structuredClone(policy),currentNamedPolicy:structuredClone(source.version.shiftEndContinuityPolicy),
       retiredRows:accepted.version.assignments.filter(r=>currentHandout.retired.includes(r.locationCodeSnapshot)),
@@ -407,7 +498,8 @@ export function targetSlotsFromManagerRoster({ templateConfig, managerSnapshot, 
 // split-family nine-position publication additionally requires the exact
 // full-nine template and dominant-owner binding before adaptation.
 export function currentPatternFromPublishedReadback({ publishedSource, managerSnapshot,
-  templateConfig, fullConfig = null, fullOwners, fullNineSource = null, effectiveDate, expectedRevision }) {
+  templateConfig, fullConfig = null, fullOwners, fullNineSource = null,
+  correctionSource = null, correctionWitness = null, effectiveDate, expectedRevision }) {
   const sourceId = String(publishedSource?.source_id || "");
   const patternAuthority = recurringPatternAuthority({publishedSource,managerSnapshot,effectiveDate,expectedRevision});
   const publicationId = patternAuthority.publicationId;
@@ -424,7 +516,7 @@ export function currentPatternFromPublishedReadback({ publishedSource, managerSn
   const legacyNine=fullConfig&&input.version.assignments.length===313;
   if(legacyNine&&Object.values(slots).filter(slot=>slot.vacancy!==true).length<9){
     const reductionContext=createFullNineReductionContext({publishedSource,managerSnapshot,correctionConfig:templateConfig,
-      fullConfig,fullOwners,fullNineSource,effectiveDate,expectedRevision});
+      fullConfig,fullOwners,fullNineSource,correctionSource,correctionWitness,effectiveDate,expectedRevision});
     return {currentConfig:reductionContext.currentConfig,reductionContext,sourceId,publicationId,authorityRevision:expectedRevision,
       ...(patternAuthority.repairContext?{patternPublicationId:patternAuthority.patternPublicationId,
         repairContext:patternAuthority.repairContext,repairContextDigest:patternAuthority.repairContextDigest}:{}),
@@ -707,7 +799,14 @@ export function adaptRegisteredRecurringSource({ registeredSource, patternConfig
 // and exact original accepted09:45 work bytes for the canonical phase query.
 export function createRecurringPhaseSourceBasis({registeredSource,patternConfig,reductionContext=null,morningWeek=null,morningBasis=null,fullOwners=null}){
   if(morningWeek){
-    assert.ok(morningBasis&&fullOwners&&!reductionContext,'explicit current morning source basis required');
+    assert.ok(morningBasis&&fullOwners,'explicit current morning source basis required');
+    if(reductionContext){
+      assertReductionContext(reductionContext);
+      assert.equal(morningBasis.reductionContextDigest,reductionContext.contextDigest,
+        'morning and late historical/current correction contexts differ');
+      assert.equal(contentDigest(registeredSource),reductionContext.acceptedSourceDigest,
+        'historical late comparison source changed');
+    }
     assertRecurringMorningWeekCandidate({week:morningWeek,basis:morningBasis,fullOwners});
     assert.equal(contentDigest(registeredSource),morningBasis.registeredSourceDigest,'morning original source changed');
     assert.equal(contentDigest(patternConfig),morningBasis.ownerConfigDigest,'morning current configuration changed');
@@ -716,12 +815,34 @@ export function createRecurringPhaseSourceBasis({registeredSource,patternConfig,
     for(let day=0;day<7;day++)ownerConfig.overrides[String(day)].morning=Object.fromEntries(Object.keys(ownerConfig.slots).sort()
       .map(key=>[key,source.version.assignments.filter(row=>row.dayOfWeek===day&&row.window.end==='09:45'&&keyBySlot.get(row.originSlotId)===key)
         .map(row=>row.locationCodeSnapshot).sort()]).filter(([,families])=>families.length));
-    const structure=currentHandoutRecurringStructure(source,ownerConfig),originals=registeredSource.version.assignments.filter(r=>r.window.start==='09:45');
+    const structure=currentHandoutRecurringStructure(source,ownerConfig),
+      lateReference=reductionContext?.source||registeredSource,
+      originals=lateReference.version.assignments.filter(r=>r.window.start==='09:45');
     assert.equal(canonicalJson(source.version.assignments.filter(r=>r.window.start==='09:45')),canonicalJson(originals),'original accepted late reference changed');
+    let fixedOtherDaysSource;
+    if(reductionContext){
+      const seed=adaptRegisteredRecurringSource({registeredSource,patternConfig,reductionContext}).compilerInput;
+      const seedRows=new Map(seed.version.assignments.filter(r=>r.window.start==='09:45')
+        .map(r=>[`${r.dayOfWeek}\0${r.locationCodeSnapshot}`,r]));
+      fixedOtherDaysSource=structuredClone(source);
+      fixedOtherDaysSource.version.assignments=fixedOtherDaysSource.version.assignments.map(row=>{
+        if(row.window.start!=='09:45')return row;
+        const chosen=seedRows.get(`${row.dayOfWeek}\0${row.locationCodeSnapshot}`);
+        assert.ok(chosen,'reduction late feasibility scaffold missing package');
+        return {...row,workId:chosen.workId,ownerSlotId:chosen.ownerSlotId,
+          originSlotId:chosen.originSlotId,window:structuredClone(chosen.window)};
+      });
+    }
     const body={schema:'custodial.recurring-phase-source-basis.v1',source,ownerConfig,
       registeredSourceDigest:contentDigest(registeredSource),generatedPatternConfigDigest:contentDigest(patternConfig),
+      ...(reductionContext?{reductionContext,
+        fixedOtherDaysSource,
+        historicalAcceptedSourceDigest:reductionContext.acceptedSourceDigest,
+        currentCorrectionSourceDigest:reductionContext.registeredCorrectionSourceDigest,
+        correctionWitnessDigest:reductionContext.correctionWitness.digest}:{}),
       originalEqualizedRowsDigest:contentDigest(originals),generatedMorningRowsDigest:contentDigest(source.version.assignments.filter(r=>r.window.end==='09:45')),
-      fixedRowsDigest:structure.fixedRowsDigest,comparisonReference:'ORIGINAL_ACCEPTED_POST0945_SOURCE',
+      fixedRowsDigest:structure.fixedRowsDigest,
+      comparisonReference:reductionContext?'EXPLICIT_FULL_NINE_DOMINANT_FAMILY_REFERENCE_WITH_LOSSLESS_SPLIT_LEDGER':'ORIGINAL_ACCEPTED_POST0945_SOURCE',
       morningBasis:'VERIFIED_ORIGINAL_SOURCE_MORNING_OBJECTIVE',morningSourceBasisDigest:morningBasis.basisDigest,
       morningWeekSemanticDigest:contentDigest(recurringMorningWeekSemanticFacts(morningWeek)),admitted:false,published:false};
     return {...body,basisDigest:contentDigest(body)};
@@ -769,7 +890,8 @@ export function createRecurringPhaseSourceBasis({registeredSource,patternConfig,
 // A changed roster/split historical source needs a separate typed original /
 // target feasibility context; never substitute a coarse generator as100-cost
 // or geographic origin. Missing binding is a capability refusal, not policy.
-export function createRecurringMorningWeekSourceBasis({registeredSource,currentConfig,targetEffectiveDate=currentConfig?.effectiveDate}){
+export function createRecurringMorningWeekSourceBasis({registeredSource,currentConfig,
+ reductionContext=null,targetEffectiveDate=currentConfig?.effectiveDate}){
  // The private worker supplies the already-bound command date independently
  // of config. A pure caller supplies facts, not authentication or publication.
  assertServiceDate(targetEffectiveDate,'recurring target effective date');
@@ -783,14 +905,26 @@ export function createRecurringMorningWeekSourceBasis({registeredSource,currentC
  // recurring candidate. Retain the complete original, including all overlays.
  normalizeStaticWeeklyAuthority(registeredSource.version,registeredSource.slots,registeredSource.exceptions,
   registeredSource.proximity,registeredSource.serviceDate);
- const structure=currentHandoutRecurringStructure(registeredSource,currentConfig);
+ if(reductionContext){
+  assertReductionContext(reductionContext);
+  assert.equal(contentDigest(registeredSource),reductionContext.acceptedSourceDigest,
+   'historical morning source differs from accepted reduction reference');
+  assert.equal(contentDigest(currentConfig),contentDigest(reductionContext.currentConfig),
+   'reduction current owner configuration changed');
+  assert.ok(reductionContext.registeredCorrectionSource&&reductionContext.correctionWitness,
+   'reduction requires independently registered current correction source');
+ }
+ const targetRegisteredSource=reductionContext?reductionContext.source:registeredSource;
+ const structure=currentHandoutRecurringStructure(targetRegisteredSource,currentConfig);
  assert.ok(structure,'current source-bound morning lineage required');
- const originalRegisteredSource=structuredClone(registeredSource),source=structuredClone(registeredSource),
+ const originalRegisteredSource=structuredClone(registeredSource),source=structuredClone(targetRegisteredSource),
   ownerConfig=structuredClone(currentConfig),days=[];
  source.serviceDate=targetEffectiveDate;source.exceptions=[];
  Object.assign(source.version,{effectiveStart:targetEffectiveDate,effectiveEnd:null,status:'published',namedAbsentSlotIds:[]});
- // No person/availability graft. Prove every current ordinary incumbent for
- // every date in the explicit target week, preserving the original history.
+ // Ordinary current-source path changes only the calendar header. The typed
+ // reduction path was constructed separately from an exact registered current
+ // correction while retaining the complete historical source and split ledger.
+ // Both must prove every current incumbent for the explicit target week.
  for(let dayOfWeek=0;dayOfWeek<7;dayOfWeek++){
   const date=new Date(Date.parse(`${targetEffectiveDate}T12:00:00Z`)+((dayOfWeek+6)%7)*86400000).toISOString().slice(0,10);
   for(const slot of Object.values(ownerConfig.slots)){
@@ -811,7 +945,11 @@ export function createRecurringMorningWeekSourceBasis({registeredSource,currentC
    targetSourceDigest:contentDigest(source),targetSourceSqlDigest:postgresJsonbContentDigest(source),
    originalHeader,targetHeader,originalHeaderDigest:contentDigest(originalHeader),targetHeaderDigest:contentDigest(targetHeader),
    originalDatedOverlayCount:originalRegisteredSource.exceptions.length,removedOnlyDatedOverlays:true,
-   recurringRowsAnchorsAvailabilityAndHistoryPreserved:true,newTargetBytesAreHistoricalFacts:false,admitted:false,published:false},
+   recurringRowsAnchorsAvailabilityAndHistoryPreserved:!reductionContext,
+   ...(reductionContext?{typedHistoricalAndCurrentCorrectionTransition:true,
+    reductionContextDigest:reductionContext.contextDigest,
+    originalSameDayOrCurrentCorrectionNewDayDigest:reductionContext.dayAvailabilityReferencesDigest}:{}),
+   newTargetBytesAreHistoricalFacts:false,admitted:false,published:false},
   calendarTransition={...receiptBody,receiptDigest:contentDigest(receiptBody)};
  for(let dayOfWeek=0;dayOfWeek<7;dayOfWeek++){
   const selectedWorkIds=source.version.assignments.filter(r=>r.dayOfWeek===dayOfWeek&&structure.phaseByWorkId.get(r.workId)==='morning').map(r=>r.workId);
@@ -820,19 +958,30 @@ export function createRecurringMorningWeekSourceBasis({registeredSource,currentC
  const body={schema:'custodial.original-recurring-morning-source-basis.v1',originalRegisteredSource,source,ownerConfig,days,calendarTransition,
   registeredSourceDigest:contentDigest(registeredSource),ownerConfigDigest:contentDigest(currentConfig),
   fixedRowsDigest:structure.fixedRowsDigest,comparisonReference:'ORIGINAL_ACCEPTED_MORNING_ROWS_AND_DIRECTED_ANCHORS',
-  sourceAndTargetRosterKind:'UNCHANGED_CURRENT_INCUMBENTS',targetSeedIsOriginalSource:canonicalJson(source)===canonicalJson(originalRegisteredSource),admitted:false,published:false};
+  sourceAndTargetRosterKind:'UNCHANGED_CURRENT_INCUMBENTS',targetSeedIsOriginalSource:canonicalJson(source)===canonicalJson(originalRegisteredSource),
+  ...(reductionContext?{reductionContext,reductionContextDigest:reductionContext.contextDigest,
+   comparisonReference:'HISTORICAL_ORIGINAL_SAME_DAY_OR_TYPED_CURRENT_CORRECTION_NEW_DAY',
+   dayAvailabilityReferences:structuredClone(reductionContext.dayAvailabilityReferences)}:{}),
+  admitted:false,published:false};
  return {...body,basisDigest:contentDigest(body)};
 }
 export function assertRecurringMorningWeekSourceBasis(basis){
  const {basisDigest,...body}=basis;assert.equal(contentDigest(body),basisDigest,'morning source basis changed');
  assert.equal(canonicalJson(createRecurringMorningWeekSourceBasis({registeredSource:basis.originalRegisteredSource,currentConfig:basis.ownerConfig,
-  targetEffectiveDate:basis.calendarTransition.targetEffectiveDate})),canonicalJson(basis),'morning source basis independent reconstruction changed');
+  reductionContext:basis.reductionContext||null,targetEffectiveDate:basis.calendarTransition.targetEffectiveDate})),canonicalJson(basis),'morning source basis independent reconstruction changed');
  return true;
 }
 function morningInput(basis,fullOwners,dayOfWeek,source=basis.source){
  return {planningInput:{source,ownerConfig:basis.ownerConfig,
   bindings:{sourceDigest:postgresJsonbContentDigest(source),ownerConfigDigest:postgresJsonbContentDigest(basis.ownerConfig)},
-  scope:'NEW_RECURRING_MORNING_DESIGN',dayOfWeek,selectedWorkIds:basis.days[dayOfWeek].selectedWorkIds},fullOwners};
+  scope:'NEW_RECURRING_MORNING_DESIGN',dayOfWeek,selectedWorkIds:basis.days[dayOfWeek].selectedWorkIds},fullOwners,
+  ...(basis.reductionContext?{originalReference:{schema:'custodial.original-target-morning-reference.v1',
+    reductionContextDigest:basis.reductionContextDigest,
+    historicalSource:basis.originalRegisteredSource,
+    currentCorrectionSource:basis.reductionContext.registeredCorrectionSource,
+    dayAvailabilityReferences:basis.dayAvailabilityReferences,
+    morningComparisonLedger:basis.reductionContext.comparisonLedger.filter(row=>row.phase==='morning')}}:{}),
+ };
 }
 function exactMorningWeekDigest(week){const {proofDigest,...body}=week;assert.equal(contentDigest(body),proofDigest,'morning week proof bytes changed');}
 export function recurringMorningWeekSemanticFacts(week){
@@ -844,7 +993,12 @@ export function recurringMorningWeekSemanticFacts(week){
    metrics:structuredClone(p.metrics),selection:structuredClone(p.selection),
    identityLayout:structuredClone(p.identityLayout),terminalOptima:p.tiers.map(t=>({name:t.name,modelDigest:t.modelDigest,lpDigest:t.lpDigest,
     primitiveObjective:t.objectiveValue,originalObjective:t.originalObjectiveValue}))})),
-  originalAnchorsPreserved:true,originalLateReferencePreserved:true,physicalMinuteFeasibilityClaim:false,openingReadinessProven:false};
+  originalAnchorsPreserved:!week.originalTargetReferenceDigest,
+  ...(week.originalTargetReferenceDigest?{originalTargetReferenceDigest:week.originalTargetReferenceDigest,
+    sourceBoundOriginalSameDayOrCurrentCorrectionNewDay:true}:{}),
+  originalLateReferencePreserved:!week.originalTargetReferenceDigest,
+  ...(week.originalTargetReferenceDigest?{typedHistoricalLateLedgerPreserved:true}:{}),
+  physicalMinuteFeasibilityClaim:false,openingReadinessProven:false};
 }
 function assertMorningSelectionOnly(basis,week){
  const restored=structuredClone(week.candidateSource),original=basis.source.version.assignments,rows=restored.version.assignments;
@@ -875,6 +1029,8 @@ export function assertRecurringMorningWeekCandidate({week,basis,fullOwners,final
  assert.equal(week.originalSourceDigest,basis.registeredSourceDigest,'original morning source binding changed');
  assert.equal(week.targetCalendarReceiptDigest,basis.calendarTransition.receiptDigest,'target calendar receipt changed');
  assert.equal(week.targetEffectiveDate,basis.calendarTransition.targetEffectiveDate,'target morning week changed');
+ assert.equal(week.originalTargetReferenceDigest,basis.reductionContext?.contextDigest,
+  'historical/current morning reference binding changed');
  assert.equal(week.candidateSourceDigest,contentDigest(week.candidateSource),'morning candidate source bytes changed');
  assert.equal(week.proofs.length,7);assertMorningSelectionOnly(basis,week);
  const canonical=evaluateRecurringPhaseCanonicalSource(finalSource);assert.equal(canonical.feasible,true,'combined morning final canonical witness unavailable');
@@ -910,8 +1066,10 @@ export function deriveVerifiedRecurringMorningWeekCandidate({basis,fullOwners,so
  const result={schema:'custodial.verified-original-recurring-morning-week.v1',status:'UNREGISTERED_VERIFIED_RECURRING_MORNING_WEEK',
   sourceBasisDigest:basis.basisDigest,originalSourceDigest:basis.registeredSourceDigest,fullOwnersDigest:contentDigest(fullOwners),
   targetCalendarReceiptDigest:basis.calendarTransition.receiptDigest,targetEffectiveDate:basis.calendarTransition.targetEffectiveDate,
+  ...(basis.reductionContext?{originalTargetReferenceDigest:basis.reductionContext.contextDigest}:{}),
   candidateSource,candidateSourceDigest:contentDigest(candidateSource),proofs,canonicalHardWitness:canonical,
-  originalAnchorsPreserved:true,originalLateReferencePreserved:true,solverAdmissionBudgetMs:budgetMs,
+  originalAnchorsPreserved:!basis.reductionContext,originalLateReferencePreserved:!basis.reductionContext,
+  ...(basis.reductionContext?{typedHistoricalLateLedgerPreserved:true}:{}),solverAdmissionBudgetMs:budgetMs,
   physicalMinuteFeasibilityClaim:false,openingReadinessProven:false,admitted:false,published:false};
  const week={...result,proofDigest:contentDigest(result)};
  // Fresh solver proofs just produced inside this invocation; public consumers

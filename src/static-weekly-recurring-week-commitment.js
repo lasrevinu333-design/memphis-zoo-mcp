@@ -58,6 +58,15 @@ export function createRecurringMorningCommitment({morningWeek,morningBasis,phase
  assert.equal(lateCommitment.sourceBasisDigest,phaseSourceBasis.basisDigest);
  assert.equal(lateCommitment.finalSourceDigest,contentDigest(finalSource));
  assert.equal(lateCommitment.canonicalHard.witnessDigest,canonical.witnessDigest);
+ const reduced=Boolean(morningBasis.reductionContext);
+ if(reduced){
+  assert.equal(binding.correctionSourceDigest,postgresJsonbContentDigest(morningBasis.reductionContext.registeredCorrectionSource),
+    'distinct current correction source changed');
+  assert.equal(binding.correctionWitnessDigest,morningBasis.reductionContext.correctionWitness.digest,
+    'distinct current correction locked witness changed');
+  assert.equal(lateCommitment.correctionWitnessDigest,binding.correctionWitnessDigest,
+    'morning and late correction witness differ');
+ }
  const body={schema:'custodial.recurring-morning-combined-commitment.v1',scope:RECURRING_MORNING_SCOPE,status:'PROVEN_CANDIDATE_ONLY',
   sourceId:binding.sourceId,publicationId:binding.publicationId,authorityRevision:binding.authorityRevision,effectiveWeek:binding.effectiveWeek,
   publishedSourceDigest:binding.publishedSourceDigest,managerSnapshotDigest:binding.managerSnapshotDigest,readbackPatternDigest:binding.readbackPatternDigest,
@@ -68,12 +77,17 @@ export function createRecurringMorningCommitment({morningWeek,morningBasis,phase
   originalCalendarHeaderDigest:morningBasis.calendarTransition.originalHeaderDigest,
   targetCalendarHeaderDigest:morningBasis.calendarTransition.targetHeaderDigest,
   originalDatedOverlayCount:morningBasis.calendarTransition.originalDatedOverlayCount,
-  datedOverlaysRetainedInOriginalOnly:true,recurringRowsAnchorsAvailabilityAndHistoryPreserved:true,
+  datedOverlaysRetainedInOriginalOnly:true,recurringRowsAnchorsAvailabilityAndHistoryPreserved:!reduced,
+  ...(reduced?{correctionSourceDigest:binding.correctionSourceDigest,correctionWitnessDigest:binding.correctionWitnessDigest,
+    originalSameDayOrCurrentCorrectionNewDayDigest:morningBasis.reductionContext.dayAvailabilityReferencesDigest,
+    historicalAcceptedSourceDigest:morningBasis.reductionContext.acceptedSourceDigest,
+    historicalSplitLedgerDigest:morningBasis.reductionContext.comparisonLedgerDigest,
+    typedHistoricalLateLedgerPreserved:true}:{}),
   morningFacts:facts,morningFactsDigest:contentDigest(facts),morningCandidateSourceDigest:morningWeek.candidateSourceDigest,
   phaseSourceBasisDigest:phaseSourceBasis.basisDigest,lateCommitmentDigest:lateCommitment.digest,
   finalSourceDigest:contentDigest(finalSource),finalSourceSqlDigest:postgresJsonbContentDigest(finalSource),
   finalCanonicalWitnessDigest:canonical.witnessDigest,sharedMorningAdmissionBudgetMs:morningWeek.solverAdmissionBudgetMs,
-  originalAnchorsPreserved:true,originalLateReferencePreserved:true,sourceRequiredPlannedMorningOptimum:true,
+  originalAnchorsPreserved:!reduced,originalLateReferencePreserved:!reduced,sourceRequiredPlannedMorningOptimum:true,
   openingReadinessProven:false,physicalMinuteFeasibilityClaim:false,acceptedStaticChanged:false,datedPriorityChange:false,admitted:false,published:false};
  return {...body,digest:contentDigest(body)};
 }
@@ -89,7 +103,17 @@ export function assertRecurringMorningCommitmentCandidate(candidate){
  assert.equal(m.morningFacts.targetCalendarReceiptDigest,m.targetCalendarReceiptDigest);
  assert.ok([m.targetCalendarReceiptDigest,m.originalCalendarHeaderDigest,m.targetCalendarHeaderDigest].every(hex));
  assert.ok(Number.isSafeInteger(m.originalDatedOverlayCount)&&m.originalDatedOverlayCount>=0
-  &&m.datedOverlaysRetainedInOriginalOnly===true&&m.recurringRowsAnchorsAvailabilityAndHistoryPreserved===true);
+  &&m.datedOverlaysRetainedInOriginalOnly===true
+  &&m.recurringRowsAnchorsAvailabilityAndHistoryPreserved===(candidate.sourcePatternKind!=='FULL_NINE'));
+ if(candidate.sourcePatternKind==='FULL_NINE'){
+  assert.ok(hex(candidate.correctionSourceDigest)&&hex(candidate.correctionWitnessDigest),
+   'historical/current reduction requires the registered correction source and witness');
+  assert.equal(m.correctionSourceDigest,candidate.correctionSourceDigest);
+  assert.equal(m.correctionWitnessDigest,candidate.correctionWitnessDigest);
+  assert.ok([m.originalSameDayOrCurrentCorrectionNewDayDigest,m.historicalAcceptedSourceDigest,
+    m.historicalSplitLedgerDigest].every(hex));
+  assert.equal(m.typedHistoricalLateLedgerPreserved,true);
+ }
  assert.equal(m.lateCommitmentDigest,l.digest);assert.equal(m.phaseSourceBasisDigest,l.sourceBasisDigest);
  assert.equal(m.finalSourceDigest,l.finalSourceDigest);assert.equal(m.morningCandidateSourceDigest,l.sourceDigest);
  assert.equal(m.finalCanonicalWitnessDigest,l.canonicalHard.witnessDigest);assert.equal(m.morningSourceBasisDigest,candidate.morningSourceBasisDigest);
@@ -102,7 +126,8 @@ export function assertRecurringMorningCommitmentCandidate(candidate){
   assert.ok(Array.isArray(d.selection)&&d.selection.length>0&&new Set(d.selection.map(s=>s.workId)).size===d.selection.length);
   assert.ok(d.terminalOptima.length>=6&&d.terminalOptima.every(t=>hex(t.modelDigest)&&hex(t.lpDigest)&&Number.isSafeInteger(t.primitiveObjective)&&Number.isSafeInteger(t.originalObjective)));
  }
- assert.ok(m.originalAnchorsPreserved===true&&m.originalLateReferencePreserved===true&&m.sourceRequiredPlannedMorningOptimum===true
+ assert.ok(m.originalAnchorsPreserved===(candidate.sourcePatternKind!=='FULL_NINE')
+  &&m.originalLateReferencePreserved===(candidate.sourcePatternKind!=='FULL_NINE')&&m.sourceRequiredPlannedMorningOptimum===true
   &&m.openingReadinessProven===false&&m.physicalMinuteFeasibilityClaim===false&&m.acceptedStaticChanged===false&&m.datedPriorityChange===false&&m.admitted===false&&m.published===false);
  return true;
 }
@@ -246,6 +271,9 @@ export function createRecurringWeekCommitment({ week, source, ownerConfig, fullO
     assert.ok(hex(binding.fullNineSourceDigest));
     assert.ok(typeof binding.fullNineSourceId === "string" && binding.fullNineSourceId);
     assert.equal(week.reductionContextDigest, phaseSourceBasis.reductionContext.contextDigest);
+    assert.equal(binding.correctionSourceDigest,
+      postgresJsonbContentDigest(phaseSourceBasis.reductionContext.registeredCorrectionSource));
+    assert.equal(binding.correctionWitnessDigest,phaseSourceBasis.reductionContext.correctionWitness.digest);
     assert.ok(Array.isArray(week.mandatoryCurrentOwnerPreferenceReceipts)
       && week.mandatoryCurrentOwnerPreferenceReceipts.length === 7);
   } else if (phaseSourceBasis) {
@@ -316,6 +344,8 @@ export function createRecurringWeekCommitment({ week, source, ownerConfig, fullO
     finalSourceSqlDigest: postgresJsonbContentDigest(finalSource),
     days,
     ...(reduced ? {sourcePatternKind:"FULL_NINE",
+      correctionSourceDigest:binding.correctionSourceDigest,
+      correctionWitnessDigest:binding.correctionWitnessDigest,
       registeredFullNineSourceId:binding.fullNineSourceId,
       reductionContextDigest:phaseSourceBasis.reductionContext.contextDigest,
       comparisonLedgerDigest:phaseSourceBasis.reductionContext.comparisonLedgerDigest,
@@ -432,10 +462,14 @@ export function assertRecurringWeekCommitmentCandidate(candidate) {
   if (candidate.sourcePatternKind === "FULL_NINE") {
     assert.ok(hex(candidate.fullNineSourceDigest));
     assert.ok(hex(candidate.reductionContextDigest));
+    assert.ok(hex(candidate.correctionSourceDigest) && hex(candidate.correctionWitnessDigest),
+      "historical/current reduction correction binding is missing");
     assert.equal(commitment.sourcePatternKind, "FULL_NINE");
     assert.ok(typeof commitment.registeredFullNineSourceId === "string"
       && commitment.registeredFullNineSourceId);
     assert.equal(commitment.reductionContextDigest, candidate.reductionContextDigest);
+    assert.equal(commitment.correctionSourceDigest,candidate.correctionSourceDigest);
+    assert.equal(commitment.correctionWitnessDigest,candidate.correctionWitnessDigest);
     assert.ok(hex(commitment.comparisonLedgerDigest));
     assert.equal(commitment.comparisonReference,
       "EXPLICIT_FULL_NINE_DOMINANT_FAMILY_REFERENCE_WITH_LOSSLESS_SPLIT_LEDGER");
@@ -546,6 +580,9 @@ export function assertRecurringWeekCommitment(candidate, basis, revision) {
       ? postgresJsonbContentDigest(basis.fullNineSource.compiler_input) : null);
     if (candidate.sourcePatternKind === "FULL_NINE") {
       assert.equal(commitment.registeredFullNineSourceId, basis.fullNineSource?.source_id);
+      assert.equal(commitment.correctionSourceDigest,basis.correctionSource
+        ?postgresJsonbContentDigest(basis.correctionSource.compiler_input):null);
+      assert.equal(commitment.correctionWitnessDigest,basis.correctionWitness?.digest||null);
     }
   }
   return true;

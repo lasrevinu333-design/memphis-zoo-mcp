@@ -21,7 +21,7 @@ function scalar(terms){return terms.length?terms.map(([c,v])=>`${c<0?'-':'+'} ${
 function exactKeys(x,keys){fail(x&&same(Object.keys(x).sort(),keys.sort()),'exact_input_fields');}
 
 export function createRecurringMorningObjectiveContract(input){
- exactKeys(input,['planningInput','fullOwners']);
+ exactKeys(input,input?.originalReference?['planningInput','fullOwners','originalReference']:['planningInput','fullOwners']);
  const p=input.planningInput,descriptor=createMorningPlanningDescriptor(p);
  if(descriptor.scope==='ACCEPTED_PATTERN_PRESERVED')return freeze({schema:RECURRING_MORNING_SCHEMA,
   status:'PRESERVED_NOT_REOPTIMIZED',descriptor,objectiveApplied:false,admitted:false,published:false});
@@ -37,6 +37,43 @@ export function createRecurringMorningObjectiveContract(input){
  const choices=packages.filter(x=>selected.has(x.workId)).sort((a,b)=>a.family<b.family?-1:a.family>b.family?1:bytewiseCompare(a.workId,b.workId));
  const options=[],missingEdges=[],secondaryOwnerReferences=[];
  const sourceOwner=new Map(packages.map(p=>[p.family,descriptor.baselineRoster.find(o=>o.slotId===p.baselineOwner.slotId)?.key]));
+ const originalPreferenceOwners=new Map();
+ const originalReference=input.originalReference;
+ if(originalReference){
+  exactKeys(originalReference,['schema','reductionContextDigest','historicalSource','currentCorrectionSource',
+   'dayAvailabilityReferences','morningComparisonLedger']);
+  fail(originalReference.schema==='custodial.original-target-morning-reference.v1'&&
+   /^[a-f0-9]{64}$/.test(originalReference.reductionContextDigest),'original_target_reference_schema');
+  const historical=originalReference.historicalSource,current=originalReference.currentCorrectionSource;
+  fail(Array.isArray(historical?.version?.slotAvailability)&&Array.isArray(current?.version?.slotAvailability),
+   'original_target_availability_sources_missing');
+  for(const owner of owners){
+   const key=`${descriptor.dayOfWeek}\0${owner.slotId}`;
+   const old=historical.version.slotAvailability.filter(r=>`${r.dayOfWeek}\0${r.slotId}`===key),
+    now=current.version.slotAvailability.filter(r=>`${r.dayOfWeek}\0${r.slotId}`===key),
+    refs=originalReference.dayAvailabilityReferences.filter(r=>`${r.day}\0${r.slotId}`===key);
+   fail(old.length<=1&&now.length===1&&refs.length===1,'original_target_day_reference_multiplicity');
+   const expected=old[0]||now[0],kind=old.length?'ORIGINAL_ACCEPTED_SAME_DAY':'CURRENT_CORRECTION_NEW_DAY';
+   fail(refs[0].kind===kind&&refs[0].sourceDigest===contentDigest(expected),
+    'original_target_day_reference_provenance');
+   fail(owner.baselineAvailability.acceptedRouteAnchorLocationId===expected.acceptedRouteAnchorLocationId&&
+    owner.baselineAvailability.acceptedRouteProvenance===expected.acceptedRouteProvenance,
+    'original_target_directed_anchor_changed');
+  }
+  for(const pkg of packages){
+   const ledger=originalReference.morningComparisonLedger.filter(r=>r.day===descriptor.dayOfWeek&&r.family===pkg.family);
+   fail(ledger.length===1&&descriptor.baselineRoster.some(o=>o.slotId===ledger[0].referenceSlotId),
+    'original_target_100_reference_changed');
+   originalPreferenceOwners.set(pkg.workId,ledger[0].referenceSlotId);
+   const admin=ledger[0].referenceKind==='AUTHORIZED_ADMIN_MORNING_CURRENT_SOURCE';
+   const rows=(admin?current:historical).version.assignments.filter(r=>r.dayOfWeek===descriptor.dayOfWeek&&
+    r.locationCodeSnapshot===pkg.family&&r.window?.end==='09:45');
+   if(admin)fail(rows.length===1&&rows[0].originSlotId===ledger[0].referenceSlotId&&
+    contentDigest(rows[0])===ledger[0].currentCorrectionRowDigest,'original_target_admin_source_owner_changed');
+   else fail(rows.length>=1&&rows.some(r=>r.originSlotId===ledger[0].referenceSlotId)&&
+    canonicalJson(rows)===canonicalJson(ledger[0].originalRows),'original_target_historical_owner_changed');
+  }
+ }
  for(const pkg of packages){
   const row=pkg.sourceRow,known=ledger.get(pkg.family),owner=descriptor.baselineRoster.find(o=>o.slotId===pkg.baselineOwner.slotId);
   fail(row.window.start===owner?.baselineAvailability?.shift.start&&row.window.end==='09:45','non_structural_morning_window');
@@ -78,7 +115,8 @@ export function createRecurringMorningObjectiveContract(input){
     prospectiveWorkId:`${descriptor.dayOfWeek}:${pkg.family}:morning:${owner.slotId.slice(0,8)}`,
     doubledAggregateWeight:integer(pkg.configAggregateWeight*2),geographyCost:nonphysical?0:edge.minutes,
     originalAnchorLocationId:anchor,edgeProvenance:nonphysical?'nonphysical_schedule_reminder':edge.provenance,
-    preferenceCost:(pkg.baselineOwner.slotId!==owner.slotId?100:0)+(guided!==owner.key?4:0)+(c.normalAssignmentFamilies?.includes(pkg.family)?0:2),
+    preferenceCost:((originalPreferenceOwners.get(pkg.workId)||pkg.baselineOwner.slotId)!==owner.slotId?100:0)
+      +(guided!==owner.key?4:0)+(c.normalAssignmentFamilies?.includes(pkg.family)?0:2),
     window:{start:av.shift.start,end:'09:45'}});
   }
  }
@@ -97,7 +135,10 @@ export function createRecurringMorningObjectiveContract(input){
   owners,choices,options,fixedLoads,fixedCounts,priorityOrder,secondaryOwnerReferences,
   aggregateWeightUnit:'AUTHORIZED_AGGREGATE_SCHEDULE_WORKLOAD_WEIGHT',componentWeightUnit:descriptor.componentWeightUnit,
   startAdvantageRule:'ONE_AGGREGATE_WEIGHT_PER_SOURCE_START_HOUR_EXACT_HALF_UNIT_LATTICE',integerWeightScale:2,
-  geographyReference:'FROZEN_ORIGINAL_SOURCE_DAY_POSITION_ANCHOR_NOT_CANDIDATE_ANCHOR',
+  geographyReference:originalReference?'ORIGINAL_SAME_DAY_OR_TYPED_CURRENT_CORRECTION_NEW_DAY_NOT_CANDIDATE_ANCHOR':
+   'FROZEN_ORIGINAL_SOURCE_DAY_POSITION_ANCHOR_NOT_CANDIDATE_ANCHOR',
+  ...(originalReference?{originalReferenceDigest:contentDigest(originalReference),
+   originalReductionContextDigest:originalReference.reductionContextDigest}:{}),
   missingCriticalClassification:true,physicalMinuteFeasibilityClaim:false,compulsoryFull:false,
   admitted:false,published:false,acceptedStaticChanged:false,datedOptimizerChanged:false};
  return freeze({...body,contractDigest:contentDigest(body)});

@@ -148,6 +148,8 @@ process.on("message", async (message) => {
         fullConfig: fullNineTemplate,
         fullOwners: fullNineOwners,
         fullNineSource: request.fullNineSource || null,
+        correctionSource:request.correctionSource||null,
+        correctionWitness:request.correctionWitness||null,
         effectiveDate: request.effectiveDate,
         expectedRevision: request.expectedRevision,
       });
@@ -185,8 +187,12 @@ process.on("message", async (message) => {
           throw Object.assign(new Error("The accepted recurring source has no complete canonical phase transition basis."),
             { code: "static_weekly_recurring_phase_source_unsupported" });
         }
+        if(bound.sourcePatternKind==='FULL_NINE'&&(!request.correctionSource||!request.correctionWitness
+          || bound.reductionContext?.correctionWitness?.digest!==request.correctionWitness.digest))
+          throw Object.assign(new Error('The distinct registered current correction source is unavailable for this historical transition.'),
+            {code:'static_weekly_recurring_correction_binding_required'});
         morningBasis=createRecurringMorningWeekSourceBasis({registeredSource:request.publishedSource.compiler_input,currentConfig:bound.currentConfig,
-          targetEffectiveDate:request.effectiveDate});
+          reductionContext:bound.reductionContext||null,targetEffectiveDate:request.effectiveDate});
         morningWeek=deriveVerifiedRecurringMorningWeekCandidate({basis:morningBasis,fullOwners:fullNineOwners,solver:solverEngine});
         if(morningWeek.status!=='UNREGISTERED_VERIFIED_RECURRING_MORNING_WEEK')throw Object.assign(
           new Error(`The complete original-source morning proof is unavailable at ${morningWeek.stage} day ${morningWeek.dayOfWeek}.`),
@@ -194,6 +200,7 @@ process.on("message", async (message) => {
         phaseSourceBasis = createRecurringPhaseSourceBasis({
           registeredSource: request.publishedSource.compiler_input,
           patternConfig: bound.currentConfig,
+          reductionContext:bound.reductionContext||null,
           morningWeek,morningBasis,fullOwners:fullNineOwners,
         });
         weekProof = deriveScalableCanonicalRecurringWeekCandidate({
@@ -245,12 +252,15 @@ process.on("message", async (message) => {
       const managerSnapshotDigest = postgresJsonbContentDigest(request.managerSnapshot);
       const fullNineSourceDigest = request.fullNineSource?.compiler_input
         ? postgresJsonbContentDigest(request.fullNineSource.compiler_input) : null;
+      const correctionSourceDigest=request.correctionSource?.compiler_input
+        ?postgresJsonbContentDigest(request.correctionSource.compiler_input):null;
+      const correctionWitnessDigest=request.correctionWitness?.digest||null;
       const readbackPatternDigest = postgresJsonbContentDigest(bound.currentConfig);
       const binding = { sourceId: bound.sourceId, publicationId: bound.publicationId,
         authorityRevision: bound.authorityRevision, effectiveWeek: request.effectiveDate,
         publishedSourceDigest, managerSnapshotDigest, readbackPatternDigest,
         fullNineSourceDigest, fullNineSourceId:request.fullNineSource?.source_id || null,
-        sourcePatternKind:bound.sourcePatternKind };
+        sourcePatternKind:bound.sourcePatternKind,correctionSourceDigest,correctionWitnessDigest };
       const weekCommitment = weekProof && createRecurringWeekCommitment({
         week: weekProof, source: phaseSourceBasis.source,
         ownerConfig: phaseSourceBasis.ownerConfig, fullOwners: fullNineOwners,
@@ -286,7 +296,9 @@ process.on("message", async (message) => {
             ? {reductionContextDigest:phaseSourceBasis.reductionContext.contextDigest} : {})
         } : { staticTemplateCommitment }),
         publishedSourceDigest, managerSnapshotDigest,
-        fullNineSourceDigest, readbackPatternDigest,
+        fullNineSourceDigest,
+        ...(correctionWitnessDigest?{correctionSourceDigest,correctionWitnessDigest}:{}),
+        readbackPatternDigest,
         effectiveDate: request.effectiveDate, staffedPositions,
         candidateSourceDigest: postgresJsonbContentDigest(candidate.compilerInput),
         patternFingerprint: candidate.patternFingerprint,

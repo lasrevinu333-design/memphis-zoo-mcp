@@ -22,6 +22,8 @@ import { createStaffingPreparationMeter, enumerateStaffingServiceWindow } from "
 import { createStaffingWeekPreviewInput } from "./static-weekly-staffing-preview.js";
 import { assertRecurringManagerDecision, assertRecurringAdmissionCandidate } from "./static-weekly-recurring-preview.js";
 import { assertRecurringWeekCommitment } from "./static-weekly-recurring-week-commitment.js";
+import {createRecurringCorrectionBinding,recurringCorrectionWitness,
+  requireMatchingRecurringCorrectionWitness} from './static-weekly-recurring-correction-binding.js';
 import {OPENING_COVERAGE_ERROR,sanitizeOpeningCoverageDiagnostic} from './static-weekly-opening-coverage-report.js';
 import { recurringPatternAuthority, assertRecurringRepairCandidate } from "./static-weekly-recurring-repair-basis.js";
 import { withRecurringDependencyStatus } from "./static-weekly-recurring-dependency-result.js";
@@ -376,8 +378,10 @@ export function createStaticWeeklyControlPlane({
   transactionAdmissionMilliseconds = STATIC_WEEKLY_COMPILER_RUNTIME_LIMITS.requestMilliseconds,
   operationStatementMilliseconds = STATIC_WEEKLY_DATABASE_OPERATION_STATEMENT_TIMEOUT_MS,
   healthTransactionMilliseconds = 5_000,
+  recurringCorrectionSourceBinding = null,
 } = {}) {
   if (!database?.connect) throw fail("static_weekly_control_plane_database_required");
+  const correctionBinding = createRecurringCorrectionBinding(recurringCorrectionSourceBinding);
   if (!Number.isSafeInteger(transactionKeepaliveMs) || transactionKeepaliveMs < 1 || transactionKeepaliveMs > 10_000) {
     throw fail("static_weekly_control_plane_keepalive_invalid");
   }
@@ -627,13 +631,40 @@ export function createStaticWeeklyControlPlane({
       throw fail("static_weekly_recurring_full_source_not_approved",
         "The exact registered nine-position source is unavailable or changed.");
     }
-    return { snapshot, source, fullNineSource, requestedFullNineSourceId: fullNineSourceId || null,
+    // The correction is a different registered CURRENT source only for a
+    // reduction. The exact historical nine-position static template remains
+    // usable without depending on that separately registered correction.
+    let needsCorrection=false;
+    if(correctionBinding&&Array.isArray(sourceRows)&&sourceRows.length===313){
+      const ordinary=source.compiler_input.slots?.filter(s=>s.contractorCapacity!==true&&!s.kind);
+      if(!Array.isArray(ordinary)||ordinary.length!==9)throw fail('static_weekly_recurring_correction_roster_invalid');
+      let staffed=0;
+      for(const slot of ordinary){
+        const matches=snapshot.roster?.filter(r=>r.slot_id===slot.id);
+        if(matches?.length!==1||matches[0].contractor_capacity===true)
+          throw fail('static_weekly_recurring_correction_roster_invalid');
+        const active=(matches[0].incumbencies||[]).filter(p=>p.effective_start<=date&&(!p.effective_end||date<p.effective_end));
+        if(active.length>1)throw fail('static_weekly_recurring_correction_roster_invalid');
+        staffed+=active.length;
+      }
+      needsCorrection=staffed<9;
+    }
+    const correctionSource = needsCorrection
+      ? await registeredSourceFor(client, correctionBinding.sourceId, date) : null;
+    if(correctionSource&&correctionSource.source_id===fullNineSource?.source_id)
+      throw fail('static_weekly_recurring_correction_source_not_distinct');
+    const correctionWitness = correctionSource ? recurringCorrectionWitness({binding:correctionBinding,
+      snapshot,patternSource:source,correctionSource,effectiveWeek:date,expectedRevision:revision,
+      recurringGeneration,effectivePublicationId:publicationId}) : null;
+    return { snapshot, source, fullNineSource, correctionSource, correctionWitness,
+      requestedFullNineSourceId: fullNineSourceId || null,
       recurringGeneration, patternAuthority };
   }
 
   function recurringPreparationInput(basis, date, revision) {
     return { publishedSource: basis.source, managerSnapshot: basis.snapshot,
-      fullNineSource: basis.fullNineSource, effectiveDate: date, expectedRevision: revision };
+      fullNineSource: basis.fullNineSource, correctionSource:basis.correctionSource,
+      correctionWitness:basis.correctionWitness,effectiveDate: date, expectedRevision: revision };
   }
 
   function validateRecurringCandidate(candidate, basis, revision) {
@@ -647,6 +678,12 @@ export function createStaticWeeklyControlPlane({
     if (candidate.publishedSourceDigest !== postgresJsonbContentDigest(basis.source.compiler_input)
       || candidate.managerSnapshotDigest !== postgresJsonbContentDigest(basis.snapshot)
       || candidate.fullNineSourceDigest !== (basis.fullNineSource ? postgresJsonbContentDigest(basis.fullNineSource.compiler_input) : null)
+      || (basis.correctionSource
+        ?candidate.correctionSourceDigest !== postgresJsonbContentDigest(basis.correctionSource.compiler_input)
+        :candidate.correctionSourceDigest!=null)
+      || (basis.correctionWitness
+        ?candidate.correctionWitnessDigest!==basis.correctionWitness.digest
+        :candidate.correctionWitnessDigest!=null)
       || ![candidate.candidateSourceDigest, candidate.readbackPatternDigest, candidate.modelBasisDigest,
         candidate.assignmentWitnessDigest, candidate.finalWitnessDigest, candidate.weeklyAssignmentsDigest,
         candidate.metricsDigest, candidate.lunchFactsDigest, candidate.openWorkDigest, candidate.shiftEndDerivationDigest].every(digest64)
@@ -680,6 +717,7 @@ export function createStaticWeeklyControlPlane({
     return createHash("sha256").update(canonicalJson({
       managerId: actor.managerId, recurringGeneration: basis.recurringGeneration,
       requestedFullNineSourceId: basis.requestedFullNineSourceId,
+      ...(basis.correctionWitness?{correctionWitnessDigest:basis.correctionWitness.digest}:{}),
       splashSeasonWitness: requireSeasonWitness(basis.splashSeasonWitness), candidate,
     })).digest("hex");
   }
@@ -865,7 +903,12 @@ export function createStaticWeeklyControlPlane({
       // under a serial authority lock and compare this exact digest.
       const current = await transaction(async (client) => {
         await lockStaticWeeklyAuthority(client);
-        return { snapshot: await snapshotFor(client, date), recurringGeneration: await recurringGenerationFor(client),
+        const snapshot=await snapshotFor(client,date),recurringGeneration=await recurringGenerationFor(client);
+        const correctionSource=basis.correctionWitness?await registeredSourceFor(client,basis.correctionWitness.sourceId,date):null;
+        const correctionWitness=correctionSource?recurringCorrectionWitness({binding:correctionBinding,snapshot,
+          patternSource:basis.source,correctionSource,effectiveWeek:date,expectedRevision:revision,
+          recurringGeneration,effectivePublicationId:basis.patternAuthority.publicationId}):null;
+        return { snapshot,recurringGeneration,correctionWitness,
           splashSeasonWitness: await call(client, "static_weekly_sch022_preview_witness", [date,
             JSON.stringify(seasonWorkFromAssignments(candidate.decision.assignments)),actor.managerId]) };
       });
@@ -874,6 +917,7 @@ export function createStaticWeeklyControlPlane({
         || current.recurringGeneration !== basis.recurringGeneration) {
         throw fail("static_weekly_recurring_preview_revision_changed", "The manager roster changed during preview.");
       }
+      if(basis.correctionWitness)requireMatchingRecurringCorrectionWitness(basis.correctionWitness,current.correctionWitness);
       basis.splashSeasonWitness = requireSeasonWitness(current.splashSeasonWitness);
       // Hash every byte of the manager-visible candidate result, not only its
       // final area map. This binds source/roster inputs, compiler authority and
