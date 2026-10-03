@@ -82,8 +82,11 @@ export async function runRecurringChromiumConfirmationStage({pool,week,originalM
  assert.match(env.CUSTODIAL_RECURRING_BROWSER_RUN_ID??'',/^[a-f0-9]{32}$/,
   'exact synthetic Chromium process marker required');
  const launcher=chromium??await loadPinnedRecurringChromium(env);
+ const profile=env.STATIC_WEEKLY_TEST_CURRENT_219==='1'?'current-manager-219':'current-manager-218';
+ assert.ok(env.STATIC_WEEKLY_TEST_CURRENT_219!=='1'||env.STATIC_WEEKLY_TEST_CURRENT_218!=='1',
+  'only one exact current manager browser profile');
  privateJson(join(evidence,'browser-stage-start.json'),{schema:'custodial.synthetic-browser-stage-start.v1',
-  ...pids,childPid:process.pid,source:'current-manager-218-single-confirmation',production:false});
+  ...pids,childPid:process.pid,source:profile+'-single-confirmation',production:false});
  emit('BROWSER_TRANSPORT_STAGE_ENTERED');
  let browserServer=null,browser=null,context=null,result,primary=null,cleanupFailure=null,
   contextClosed=false,browserClosed=false,serverClosed=false,processIdentity=null;

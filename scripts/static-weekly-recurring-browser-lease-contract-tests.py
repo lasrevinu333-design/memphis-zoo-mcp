@@ -16,6 +16,10 @@ launcher = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(launcher)
 
 assert launcher.STAGE == 'current-manager-218'
+assert launcher.STAGE_219 == 'current-manager-219'
+assert launcher.PROFILE_SCHEMAS == {
+    'current-manager-218': 'custodial.recurring-browser-218-plan.v1',
+    'current-manager-219': 'custodial.recurring-browser-219-plan.v1'}
 assert 'fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed' in launcher.IMAGE
 assert len(launcher.BACKEND_MEMBERS) == len(set(launcher.BACKEND_MEMBERS))
 bound = {'childPid': 333, 'stageParentPid': 222, 'leaseParentPid': 111,
@@ -60,6 +64,23 @@ with tempfile.TemporaryDirectory(prefix='mz-browser-launcher-pure-') as director
         raise AssertionError('incorrect plan SHA accepted')
     except ValueError as error:
         assert 'plan SHA mismatch' in str(error)
+    base_plan = {key: '0' * 40 if key.endswith(('_head', '_tree')) else '0' * 64
+        for key in launcher.PLAN_KEYS}
+    base_plan.update(schema='custodial.recurring-browser-218-plan.v1',stage='current-manager-219')
+    wrong_profile = own / 'wrong-profile.json'
+    launcher.private_json(wrong_profile, base_plan)
+    try:
+        launcher.load_plan(wrong_profile, launcher.digest(wrong_profile))
+        raise AssertionError('219 stage accepted 218 plan schema')
+    except ValueError as error:
+        assert 'exact manager 218/219 browser profiles' in str(error)
+    wrong_stage = own / 'wrong-stage.json'
+    launcher.private_json(wrong_stage, {**base_plan, 'stage': 'current-manager-220'})
+    try:
+        launcher.load_plan(wrong_stage, launcher.digest(wrong_stage))
+        raise AssertionError('unapproved stage accepted')
+    except ValueError as error:
+        assert 'exact manager 218/219 browser profiles' in str(error)
 
     output = io.StringIO()
     child = subprocess.Popen([sys.executable, '-c', 'print("bounded source child")'],
@@ -119,9 +140,12 @@ with tempfile.TemporaryDirectory(prefix='mz-browser-launcher-pure-') as director
 source = SOURCE.read_text()
 for required in ('BrowserLeaseClient()', 'client.acquire(', 'client.renew(',
         'client.check(', 'client.close_targets_and_release(',
-        "['node', 'scripts/run-isolated-shift-end-tests.mjs', STAGE]",
+        "['node', 'scripts/run-isolated-shift-end-tests.mjs', profile]",
         "'STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION_BROWSER': '1'",
         "'CUSTODIAL_RECURRING_BROWSER_LEASE_PARENT_PID': str(os.getpid())",
+        "'scripts/fixtures/current-manager-219-source.mjs'",
+        "'scripts/static-weekly-current-manager-219-manifest-tests.mjs'",
+        'assertCurrentManager219MigrationSet();',
         'browser-stage-cleanup.json', 'owned_container_absent(child.pid)',
         'browser-process.json', 'stop_exact_marked_processes(',
         'child_process_group_absent', 'source-receipt.json'):

@@ -8,6 +8,8 @@ import {fileURLToPath,pathToFileURL} from 'node:url';
 import {assertCurrentManagerMigrationSet,assertCurrentManager217MigrationSet,assertCurrentManager218MigrationSet,
  loadCurrentManagerPublicationFixture,CURRENT_MANAGER_MIGRATION_MANIFEST,CURRENT_MANAGER_217_MIGRATION_MANIFEST,
  CURRENT_MANAGER_217_MIGRATION,CURRENT_MANAGER_218_MIGRATION_MANIFEST,CURRENT_MANAGER_218_MIGRATION} from './fixtures/current-manager-publication-source.mjs';
+import {assertCurrentManager219MigrationSet,CURRENT_MANAGER_219_MESSAGE_MIGRATION} from './fixtures/current-manager-219-source.mjs';
+import {runCurrentManager219ManifestTests} from './static-weekly-current-manager-219-manifest-tests.mjs';
 import {validateSixPersonAbsenceFixtureBytes} from './fixtures/six-person-absence-source.mjs';
 import {validateFullNineV6FixtureBytes} from './fixtures/full-nine-v6-source.mjs';
 import {deriveDatedShiftEndCoverage} from '../src/static-weekly-shift-end-derivation.js';
@@ -17,24 +19,27 @@ import {assertStoredNamedSourceBoundary} from './static-weekly-named-handoff-con
 
 let checks=0;const check=(name,fn)=>{fn();checks++;console.log('PASS',name);};
 const f=loadCurrentManagerPublicationFixture(),p=f.packet;
-check('exact218 manifest extends pinned old217 and 216, separately from old176',()=>{
- const files=assertCurrentManager218MigrationSet();assert.equal(files.length,218);
- assert.deepEqual(files.at(-1),CURRENT_MANAGER_218_MIGRATION);
- assert.deepEqual(files.at(-2),CURRENT_MANAGER_217_MIGRATION);
- assert.equal(createHash('sha256').update(JSON.stringify(files.slice(0,216))).digest('hex'),CURRENT_MANAGER_MIGRATION_MANIFEST);
- assert.equal(createHash('sha256').update(JSON.stringify(files.slice(0,217))).digest('hex'),CURRENT_MANAGER_217_MIGRATION_MANIFEST);
- assert.equal(createHash('sha256').update(JSON.stringify(files)).digest('hex'),CURRENT_MANAGER_218_MIGRATION_MANIFEST);
+check('exact219 manifest and independently executed hostile insertion contracts',()=>{
+ const result=runCurrentManager219ManifestTests();assert.equal(result.status,'PASS');assert.ok(result.checks>=26);
+ const files=assertCurrentManager219MigrationSet();assert.equal(files.length,219);
+ const prior=files.filter(row=>row.file!==CURRENT_MANAGER_219_MESSAGE_MIGRATION.file);
+ assert.deepEqual(prior.at(-1),CURRENT_MANAGER_218_MIGRATION);
+ assert.deepEqual(prior.at(-2),CURRENT_MANAGER_217_MIGRATION);
+ assert.equal(createHash('sha256').update(JSON.stringify(prior.slice(0,216))).digest('hex'),CURRENT_MANAGER_MIGRATION_MANIFEST);
+ assert.equal(createHash('sha256').update(JSON.stringify(prior.slice(0,217))).digest('hex'),CURRENT_MANAGER_217_MIGRATION_MANIFEST);
+ assert.equal(createHash('sha256').update(JSON.stringify(prior)).digest('hex'),CURRENT_MANAGER_218_MIGRATION_MANIFEST);
 });
-check('historical216 and 217 identities explicitly refuse the changed218 manifest',()=>{
+check('historical216, 217 and 218 identities explicitly refuse the changed219 manifest',()=>{
  assert.throws(()=>assertCurrentManagerMigrationSet(),/all216 migrations/);
  assert.throws(()=>assertCurrentManager217MigrationSet(),/all217 migrations/);
+ assert.throws(()=>assertCurrentManager218MigrationSet(),/all218 migrations/);
 });
-check('218 rejects a changed predecessor and an unapproved extra migration, not count-only acceptance',()=>{
+check('retained218 predecessor rejects changed bytes and extras, not count-only acceptance',()=>{
  const directory=mkdtempSync(join(tmpdir(),'mz-manager218-manifest-')),
   migrations=join(directory,'supabase','migrations'),source=new URL('../supabase/migrations/',import.meta.url);
  try{
   mkdirSync(migrations,{recursive:true});
-  for(const file of readdirSync(source).filter(name=>name.endsWith('.sql')))
+  for(const file of readdirSync(source).filter(name=>name.endsWith('.sql')&&name!==CURRENT_MANAGER_219_MESSAGE_MIGRATION.file))
    symlinkSync(fileURLToPath(new URL(file,source)),join(migrations,file));
   const root=pathToFileURL(directory+'/'),prior=join(migrations,CURRENT_MANAGER_217_MIGRATION.file);
   unlinkSync(prior);
@@ -110,29 +115,36 @@ check('current stage invokes publication caller and mandatory confirmation, not 
  assert.ok(runner.includes("STATIC_WEEKLY_TEST_CURRENT_216:'1',STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION:'1'"));
  assert.ok(runner.includes("STATIC_WEEKLY_TEST_CURRENT_217:'1',STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION:'1'"));
  assert.ok(runner.includes("STATIC_WEEKLY_TEST_CURRENT_218:'1',STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION:'1'"));
+ assert.ok(runner.includes("STATIC_WEEKLY_TEST_CURRENT_219:'1',STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION:'1'"));
  assert.ok(runner.includes("if(currentManager218Stage){assertCurrentManager218MigrationSet();loadCurrentManagerPublicationFixture();}"));
+ assert.ok(runner.includes("if(currentManager219Stage){assertCurrentManager219MigrationSet();loadCurrentManagerPublicationFixture();}"));
  assert.ok(publication.includes('currentManager218Browser?runRecurringChromiumConfirmationStage:'));
  assert.ok(publication.includes('currentManager218Http?testRecurringConfirmationHttp:testRecurringConfirmation)({pool,week,originalManagerId:managerId,check})'));
  assert.ok(publication.includes('if(currentManager218Stage)assertCurrentManager218MigrationSet();'));
- assert.ok(publication.includes('if(currentManager217Stage||currentManager218Stage)await testNamedHandoffSql({pool,authority:projection.authority,check,'));
+ assert.ok(publication.includes('if(currentManager219Stage)assertCurrentManager219MigrationSet();'));
+ assert.ok(publication.includes('if(currentManager217Stage||currentManager218Stage||currentManager219Stage)await testNamedHandoffSql({pool,authority:projection.authority,check,'));
  assert.ok(publication.includes('versionId:published.data.version_id,publicationId:published.data.publication_id'));
 });
-check('HTTP SQL confirmation is one explicit 218-only alternative writer, default direct path unchanged',()=>{
+check('HTTP SQL confirmation is one explicit 218/219 alternative writer, default direct path unchanged',()=>{
  assert.ok(runner.includes("const currentManager218Http=process.env.STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION_HTTP==='1'"));
  assert.ok(runner.includes('!currentManager218Http||currentManager218Stage'));
  assert.ok(runner.includes("...(currentManager218Stage?{STATIC_WEEKLY_TEST_CURRENT_218:'1',STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION:'1'}:{})"));
  assert.ok(publication.includes('!currentManager218Http||currentManager218Stage'));
  assert.ok(publication.includes('currentManager218Http?testRecurringConfirmationHttp:testRecurringConfirmation'));
+ assert.ok(runner.includes('!currentManager218Http||currentManager218Stage||currentManager219Stage'));
+ assert.ok(publication.includes('!currentManager218Http||currentManager218Stage||currentManager219Stage'));
  assert.equal(publication.match(/recurringConfirmationProof=await/g)?.length,1);
 });
-check('Chromium SQL confirmation is one explicit 218-only alternative, never a second writer',()=>{
+check('Chromium SQL confirmation is one explicit 218/219 alternative, never a second writer',()=>{
  assert.ok(runner.includes("const currentManager218Browser=process.env.STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION_BROWSER==='1'"));
  assert.ok(runner.includes('!(currentManager218Http&&currentManager218Browser)'));
  assert.ok(runner.includes('!currentManager218Browser||currentManager218Stage'));
+ assert.ok(runner.includes('!currentManager218Browser||currentManager218Stage||currentManager219Stage'));
  assert.ok(runner.includes('CUSTODIAL_RECURRING_BROWSER_LEASE_PARENT_PID')&&runner.includes('===process.ppid'));
  assert.ok(runner.includes('CUSTODIAL_RECURRING_BROWSER_STAGE_PARENT_PID:String(process.pid)'));
  assert.ok(publication.includes('currentManager218Browser?runRecurringChromiumConfirmationStage:'));
  assert.ok(publication.includes('!(currentManager218Http&&currentManager218Browser)'));
+ assert.ok(publication.includes('!currentManager218Browser||currentManager218Stage||currentManager219Stage'));
  assert.equal(publication.match(/recurringConfirmationProof=await/g)?.length,1);
 });
 const httpHelper=readFileSync(new URL('./static-weekly-recurring-confirmation-http-integration.mjs',import.meta.url),'utf8');
@@ -161,6 +173,8 @@ for(const [label,stage,env,pattern] of [
   {STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION_BROWSER:'1',STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION_HTTP:'1'},/only one authenticated HTTP confirmation transport/],
  ['browser selector requires direct live driver parent','current-manager-218',
   {STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION_BROWSER:'1',CUSTODIAL_RECURRING_BROWSER_LEASE_PARENT_PID:'9'},/direct child of live guarded lease driver/],
+ ['219 browser selector requires direct live driver parent','current-manager-219',
+  {STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION_BROWSER:'1',CUSTODIAL_RECURRING_BROWSER_LEASE_PARENT_PID:'9'},/direct child of live guarded lease driver/],
 ])check(label+' before Docker or SQL',()=>{
  const denied=spawnSync(process.execPath,[new URL('./run-isolated-shift-end-tests.mjs',import.meta.url).pathname,stage],
   {encoding:'utf8',timeout:5000,env:{...process.env,...env}});
@@ -172,9 +186,17 @@ check('old176 contract, exact image, isolation/default grants and cleanup remain
   "supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed",
   "'--network','none'",'absenceGuard','finally{cleanup();}'])assert.ok(runner.includes(text),text);
 });
+check('219 stage is explicit single publisher under exact manifest, never a count override',()=>{
+ assert.ok(runner.includes("const currentManager219Stage=stage==='current-manager-219'"));
+ assert.ok(runner.includes('if(currentManager219Stage){assertCurrentManager219MigrationSet();loadCurrentManagerPublicationFixture();}'));
+ assert.ok(runner.includes('currentManager219Stage?219:currentManager218Stage||dualSource218Stage?218:'));
+ assert.ok(runner.includes("currentManager219Stage||currentManager218Stage||dualSource218Stage?'20261004000000_native_provider_event_decision_lookup.sql'"));
+ assert.ok(publication.includes('const currentManager219Stage=process.env.STATIC_WEEKLY_TEST_CURRENT_219'));
+ assert.equal(publication.match(/recurringConfirmationProof=await/g)?.length,1);
+});
 check('current stage registers original only as immutable source and preserves source digest',()=>{
  assert.ok(publication.includes("check('registered original314 exact digest without historical person import'"));
  assert.ok(publication.includes("check('full source remains unchanged in database'"));
 });
 console.log(JSON.stringify({status:'PASS',checks,scope:'current-manager fixture and executable-route preflight only',
- migrationCount:218,originalRows:314,currentRows:323,derivedRows:494,solver:false,database:false,publication:false,production:false}));
+ migrationCount:219,originalRows:314,currentRows:323,derivedRows:494,solver:false,database:false,publication:false,production:false}));

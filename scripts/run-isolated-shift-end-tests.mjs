@@ -3,22 +3,24 @@ import {execFileSync} from 'node:child_process';
 import {readdirSync,readFileSync,mkdtempSync,chmodSync,rmdirSync,unlinkSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {assertCurrentManagerMigrationSet,assertCurrentManager217MigrationSet,assertCurrentManager218MigrationSet,loadCurrentManagerPublicationFixture} from './fixtures/current-manager-publication-source.mjs';
+import {assertCurrentManager219MigrationSet} from './fixtures/current-manager-219-source.mjs';
 const container=`mz_schema_shift_end_${process.pid}`;
 const stage=process.argv[2]??'all';
-assert.ok(['all','migration-only','separation-context-only','atomic-only','published-only','current-roster-only','current-manager-216','current-manager-217','current-manager-218','dual-source-217','dual-source-218','recurring-ledger-only','recurring-parent-only','recurring-source-only','recurring-dependency-only','recurring-binding-shape-only','recurring-terminal-boundary-only','recurring-lock-order-only','recurring-generation-only','legacy-only','activation-only','legacy-activation-only','legacy-observation-only'].includes(stage),'explicit bounded test stage');
+assert.ok(['all','migration-only','separation-context-only','atomic-only','published-only','current-roster-only','current-manager-216','current-manager-217','current-manager-218','current-manager-219','dual-source-217','dual-source-218','recurring-ledger-only','recurring-parent-only','recurring-source-only','recurring-dependency-only','recurring-binding-shape-only','recurring-terminal-boundary-only','recurring-lock-order-only','recurring-generation-only','legacy-only','activation-only','legacy-observation-only'].includes(stage),'explicit bounded test stage');
 const currentManager216Stage=stage==='current-manager-216';
 const currentManager217Stage=stage==='current-manager-217';
 const currentManager218Stage=stage==='current-manager-218';
+const currentManager219Stage=stage==='current-manager-219';
 const currentManager218Http=process.env.STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION_HTTP==='1';
 const currentManager218Browser=process.env.STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION_BROWSER==='1';
 assert.ok(process.env.STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION_HTTP==null||currentManager218Http,
  'recurring HTTP SQL variant accepts only explicit 1');
 assert.ok(process.env.STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION_BROWSER==null||currentManager218Browser,
  'recurring browser SQL variant accepts only explicit 1');
-assert.ok(!currentManager218Http||currentManager218Stage,
- 'authenticated HTTP SQL confirmation variant belongs only to exact current-manager-218');
-assert.ok(!currentManager218Browser||currentManager218Stage,
- 'authenticated browser SQL confirmation variant belongs only to exact current-manager-218');
+assert.ok(!currentManager218Http||currentManager218Stage||currentManager219Stage,
+ 'authenticated HTTP SQL confirmation variant belongs only to exact current-manager-218 or current-manager-219');
+assert.ok(!currentManager218Browser||currentManager218Stage||currentManager219Stage,
+ 'authenticated browser SQL confirmation variant belongs only to exact current-manager-218 or current-manager-219');
 assert.ok(!(currentManager218Http&&currentManager218Browser),'only one authenticated HTTP confirmation transport');
 if(currentManager218Browser){
  assert.ok(Number(process.env.CUSTODIAL_RECURRING_BROWSER_LEASE_PARENT_PID)===process.ppid,
@@ -28,12 +30,13 @@ if(currentManager218Browser){
 }
 const dualSource217Stage=stage==='dual-source-217';
 const dualSource218Stage=stage==='dual-source-218';
-const currentManagerStage=currentManager216Stage||currentManager217Stage||currentManager218Stage;
-const publishedStage=['published-only','current-roster-only','current-manager-216','current-manager-217','current-manager-218'].includes(stage);
+const currentManagerStage=currentManager216Stage||currentManager217Stage||currentManager218Stage||currentManager219Stage;
+const publishedStage=['published-only','current-roster-only','current-manager-216','current-manager-217','current-manager-218','current-manager-219'].includes(stage);
 if(currentManager216Stage){assertCurrentManagerMigrationSet();loadCurrentManagerPublicationFixture();}
 if(currentManager217Stage){assertCurrentManager217MigrationSet();loadCurrentManagerPublicationFixture();}
 if(dualSource217Stage){assertCurrentManager217MigrationSet();loadCurrentManagerPublicationFixture();}
 if(currentManager218Stage){assertCurrentManager218MigrationSet();loadCurrentManagerPublicationFixture();}
+if(currentManager219Stage){assertCurrentManager219MigrationSet();loadCurrentManagerPublicationFixture();}
 if(dualSource218Stage){assertCurrentManager218MigrationSet();loadCurrentManagerPublicationFixture();}
 const socketStage=publishedStage||dualSource217Stage||dualSource218Stage||['recurring-ledger-only','recurring-parent-only','recurring-source-only','recurring-dependency-only','recurring-binding-shape-only','recurring-terminal-boundary-only','recurring-lock-order-only','recurring-generation-only'].includes(stage);
 const recurringSourceStage=['recurring-ledger-only','recurring-parent-only','recurring-source-only'].includes(stage);
@@ -49,9 +52,9 @@ const defaults="select count(*) from pg_default_acl d cross join lateral aclexpl
 const removeDefaultsSql=['postgres','supabase_admin'].flatMap(owner=>['',' in schema public'].map(scope=>`alter default privileges for role ${owner}${scope} revoke all on tables from public,anon,authenticated,service_role;alter default privileges for role ${owner}${scope} revoke all on sequences from public,anon,authenticated,service_role;`)).join('\n');
 const absenceGuard=`do $absence$begin if (${defaults})<>0 then raise exception 'automatic Data API table/sequence grants must be absent'; end if;end$absence$;`;
 let owned=false;const files=readdirSync('supabase/migrations').filter(f=>f.endsWith('.sql')).sort(),manifest=[];
-assert.equal(files.length,currentManager218Stage||dualSource218Stage?218:
+assert.equal(files.length,currentManager219Stage?219:currentManager218Stage||dualSource218Stage?218:
  currentManager217Stage||dualSource217Stage?217:currentManager216Stage?216:176,'exact stage-specific migration set');
-assert.equal(files.at(-1),currentManager218Stage||dualSource218Stage?'20261004000000_native_provider_event_decision_lookup.sql':
+assert.equal(files.at(-1),currentManager219Stage||currentManager218Stage||dualSource218Stage?'20261004000000_native_provider_event_decision_lookup.sql':
  currentManager217Stage||dualSource217Stage?'20261003230000_static_weekly_named_handoff_derivation.sql':
  currentManager216Stage?'20261003220000_current_release_authority_completion.sql':
  '20260929125440_custodial_recovery_inventory_closure.sql','exact stage-specific migration head');
@@ -125,7 +128,8 @@ try{
    ...(currentManager218Browser?{CUSTODIAL_RECURRING_BROWSER_STAGE_PARENT_PID:String(process.pid)}:{}),
    ...(currentManager216Stage?{STATIC_WEEKLY_TEST_CURRENT_216:'1',STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION:'1'}:{}),
    ...(currentManager217Stage?{STATIC_WEEKLY_TEST_CURRENT_217:'1',STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION:'1'}:{}),
-   ...(currentManager218Stage?{STATIC_WEEKLY_TEST_CURRENT_218:'1',STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION:'1'}:{})},stdio:'inherit',
+   ...(currentManager218Stage?{STATIC_WEEKLY_TEST_CURRENT_218:'1',STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION:'1'}:{}),
+   ...(currentManager219Stage?{STATIC_WEEKLY_TEST_CURRENT_219:'1',STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION:'1'}:{})},stdio:'inherit',
   timeout:currentManagerStage||process.env.STATIC_WEEKLY_TEST_RECURRING_FINALIZATION==='1'||process.env.STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION==='1'?1200000:900000});
  if(dualSource217Stage)execFileSync(process.execPath,['scripts/static-weekly-dual-source-current-correction-sql-tests.mjs'],{
   env:{...process.env,SHIFT_END_TEST_CONTAINER:container,SHIFT_END_TEST_SOCKET:socket,

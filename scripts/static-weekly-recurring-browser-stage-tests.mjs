@@ -58,6 +58,13 @@ try{
   cleanup.remainingContexts,cleanup.fixtureReturned],[true,true,true,true,true,true,true,0,true]);
  assert.equal(JSON.parse(readFileSync(join(good,'browser-process.json'))).runId,'a'.repeat(32));
  assert.equal(statSync(join(good,'browser-process.json')).mode&0o777,0o600);
+
+ const next=directory();
+ await runRecurringChromiumConfirmationStage({...fixtureArgs,
+  env:{...makeEnv(next),STATIC_WEEKLY_TEST_CURRENT_219:'1'},chromium,
+  actualParentPid:parent,emit:()=>{},readIdentity,runFixture:async()=>({synthetic219:true})});
+ assert.equal(JSON.parse(readFileSync(join(next,'browser-stage-start.json'))).source,
+  'current-manager-219-single-confirmation');
  assert.equal(statSync(join(good,'browser-stage-cleanup.json')).mode&0o777,0o600);
 
  const thrown=directory(),original=new Error('original fixture failure');
@@ -65,7 +72,7 @@ try{
   actualParentPid:parent,emit:()=>{},readIdentity,
   runFixture:async()=>{throw original;}}),error=>error===original);
  assert.equal(JSON.parse(readFileSync(join(thrown,'browser-stage-cleanup.json'))).fixtureReturned,false);
- assert.deepEqual([contextsClosed,browsersClosed],[2,2]);
+ assert.deepEqual([contextsClosed,browsersClosed],[3,3]);
 
  const launchFailure=directory(),launchError=new Error('synthetic launch refusal');
  await assert.rejects(()=>runRecurringChromiumConfirmationStage({...fixtureArgs,env:makeEnv(launchFailure),
@@ -105,7 +112,7 @@ try{
  const denied=directory();
  await assert.rejects(()=>runRecurringChromiumConfirmationStage({...fixtureArgs,env:makeEnv(denied),
   chromium,actualParentPid:parent+1,emit:()=>{},runFixture:async()=>assert.fail()}));
- assert.equal(launched,5,'invalid parent refuses before browser launch');
+ assert.equal(launched,6,'invalid parent refuses before browser launch');
  assert.throws(()=>recurringBrowserEvidenceDir({...makeEnv(denied),CUSTODIAL_RECURRING_BROWSER_EVIDENCE_DIR:'relative'}));
 
  const fake=directory(),packageDir=join(fake,'node_modules','playwright');

@@ -16,6 +16,7 @@ import {testRecurringConfirmationHttp} from './static-weekly-recurring-confirmat
 import {runRecurringChromiumConfirmationStage} from './static-weekly-recurring-browser-stage.mjs';
 import {testLunchMaterialization} from './static-weekly-lunch-materialization-integration.mjs';
 import {assertCurrentManagerMigrationSet,assertCurrentManager217MigrationSet,assertCurrentManager218MigrationSet,loadCurrentManagerPublicationFixture} from './fixtures/current-manager-publication-source.mjs';
+import {assertCurrentManager219MigrationSet} from './fixtures/current-manager-219-source.mjs';
 import {testNamedHandoffSql} from './static-weekly-named-handoff-contract-tests.mjs';
 
 const container=process.env.SHIFT_END_TEST_CONTAINER,socket=process.env.SHIFT_END_TEST_SOCKET;
@@ -27,23 +28,25 @@ assert.ok(inspection.Mounts.some(m=>m.Source===socket&&m.Destination==='/test-so
 const currentManager216Stage=process.env.STATIC_WEEKLY_TEST_CURRENT_216==='1';
 const currentManager217Stage=process.env.STATIC_WEEKLY_TEST_CURRENT_217==='1';
 const currentManager218Stage=process.env.STATIC_WEEKLY_TEST_CURRENT_218==='1';
+const currentManager219Stage=process.env.STATIC_WEEKLY_TEST_CURRENT_219==='1';
 const currentManager218Http=process.env.STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION_HTTP==='1';
 const currentManager218Browser=process.env.STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION_BROWSER==='1';
 assert.ok(process.env.STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION_HTTP==null||currentManager218Http,
  'recurring HTTP SQL variant accepts only explicit 1');
 assert.ok(process.env.STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION_BROWSER==null||currentManager218Browser,
  'recurring browser SQL variant accepts only explicit 1');
-assert.ok(!currentManager218Http||currentManager218Stage,
- 'authenticated HTTP SQL confirmation variant belongs only to exact current-manager-218');
-assert.ok(!currentManager218Browser||currentManager218Stage,
- 'authenticated browser SQL confirmation variant belongs only to exact current-manager-218');
+assert.ok(!currentManager218Http||currentManager218Stage||currentManager219Stage,
+ 'authenticated HTTP SQL confirmation variant belongs only to exact current-manager-218 or current-manager-219');
+assert.ok(!currentManager218Browser||currentManager218Stage||currentManager219Stage,
+ 'authenticated browser SQL confirmation variant belongs only to exact current-manager-218 or current-manager-219');
 assert.ok(!(currentManager218Http&&currentManager218Browser),'only one authenticated HTTP confirmation transport');
-assert.ok([currentManager216Stage,currentManager217Stage,currentManager218Stage].filter(Boolean).length<=1,
+assert.ok([currentManager216Stage,currentManager217Stage,currentManager218Stage,currentManager219Stage].filter(Boolean).length<=1,
  'only one pinned current-manager stage may run');
-const currentManagerStage=currentManager216Stage||currentManager217Stage||currentManager218Stage;
+const currentManagerStage=currentManager216Stage||currentManager217Stage||currentManager218Stage||currentManager219Stage;
 if(currentManager216Stage)assertCurrentManagerMigrationSet();
 if(currentManager217Stage)assertCurrentManager217MigrationSet();
 if(currentManager218Stage)assertCurrentManager218MigrationSet();
+if(currentManager219Stage)assertCurrentManager219MigrationSet();
 if(currentManagerStage)assert.equal(process.env.STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION,'1','current manager proof must execute confirmation');
 else assert.ok(process.env.STATIC_WEEKLY_CONTINUITY_TEMPLATE,'explicit immutable local source');
 const bytes=currentManagerStage?loadCurrentManagerPublicationFixture().bytes:readFileSync(process.env.STATIC_WEEKLY_CONTINUITY_TEMPLATE),packet=JSON.parse(bytes),source=packet.compilerInput;
@@ -108,7 +111,7 @@ try{
  const draft=await plane.createInitialDraft({manager,sourceId:packet.sourceId,effectiveStart:week,expectedRevision:await revision(),idempotencyKey:'synthetic-full-source-draft'});
  const published=await plane.publishDraft({manager,draftVersionId:draft.data.version_id,expectedDraftRevision:1,expectedRevision:draft.revision,idempotencyKey:'synthetic-full-source-publish',projectionWeekStart:week});
  const projection=await query('select projection_envelope as result from public.weekly_schedule_compiled_projections where projection_id=$1',[published.data.projection_id]);
- if(currentManager217Stage||currentManager218Stage)await testNamedHandoffSql({pool,authority:projection.authority,check,
+ if(currentManager217Stage||currentManager218Stage||currentManager219Stage)await testNamedHandoffSql({pool,authority:projection.authority,check,
   versionId:published.data.version_id,publicationId:published.data.publication_id});
  check('published source retains exact recurring assignments',projection.authority.compilerInput.version.assignments.length,sourceRows);
  check('current dated derivation has exact responsibility segments',projection.authority.overlayCompilerInput.version.assignments.length,derivedRows);

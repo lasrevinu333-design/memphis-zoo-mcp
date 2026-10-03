@@ -1,4 +1,4 @@
-"""Test-only exact 218 manager SQL fixture with guarded isolated Chromium.
+"""Test-only exact 218/219 manager SQL fixture with guarded isolated Chromium.
 
 --preflight performs source/dependency checks only. --run requires the live
 supported BrowserLeaseClient; it never uses shared user Chrome or a phone.
@@ -21,6 +21,9 @@ import time
 sys.path.insert(0, '/opt/forge-control-plane/runtime/site-packages')
 
 STAGE = 'current-manager-218'
+STAGE_219 = 'current-manager-219'
+PROFILE_SCHEMAS = {STAGE: 'custodial.recurring-browser-218-plan.v1',
+    STAGE_219: 'custodial.recurring-browser-219-plan.v1'}
 IMAGE = 'supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed'
 BACKEND_MEMBERS = (
     'scripts/run-isolated-shift-end-tests.mjs',
@@ -83,8 +86,8 @@ def load_plan(plan_path, expected_sha):
     plan = json.loads(Path(plan_path).read_text())
     if not isinstance(plan, dict) or frozenset(plan) != PLAN_KEYS:
         raise ValueError('exact plan schema keys')
-    if plan['schema'] != 'custodial.recurring-browser-218-plan.v1' or plan['stage'] != STAGE:
-        raise ValueError('only exact manager 218 browser profile is supported')
+    if plan['stage'] not in PROFILE_SCHEMAS or plan['schema'] != PROFILE_SCHEMAS[plan['stage']]:
+        raise ValueError('only exact manager 218/219 browser profiles are supported')
     for field in ('backend_head', 'backend_tree', 'frontend_head', 'frontend_tree'):
         if not GIT.fullmatch(plan[field]):
             raise ValueError('exact Git identity required: ' + field)
@@ -109,12 +112,19 @@ def load_plan(plan_path, expected_sha):
             raise ValueError('installed browser dependency changed: ' + field)
     if json.loads((frontend / 'node_modules/playwright/package.json').read_text()).get('version') != '1.61.1':
         raise ValueError('supported Playwright version changed')
-    members = {name: digest(backend / name) for name in BACKEND_MEMBERS}
+    member_paths = BACKEND_MEMBERS + ((
+        'scripts/fixtures/current-manager-219-source.mjs',
+        'scripts/static-weekly-current-manager-219-manifest-tests.mjs')
+        if plan['stage'] == STAGE_219 else ())
+    members = {name: digest(backend / name) for name in member_paths}
     if IMAGE not in (backend / 'scripts/run-isolated-shift-end-tests.mjs').read_text():
         raise ValueError('pinned network-none database image changed')
-    subprocess.check_output(['node', '--input-type=module', '-e',
+    check_source = ("import {assertCurrentManager219MigrationSet} from './scripts/fixtures/current-manager-219-source.mjs';"
+        "assertCurrentManager219MigrationSet();" if plan['stage'] == STAGE_219 else
         "import {assertCurrentManager218MigrationSet} from './scripts/fixtures/current-manager-publication-source.mjs';"
-        "assertCurrentManager218MigrationSet();"], cwd=backend, text=True, timeout=30)
+        "assertCurrentManager218MigrationSet();")
+    subprocess.check_output(['node', '--input-type=module', '-e', check_source],
+        cwd=backend, text=True, timeout=30)
     return plan, backend, frontend, output_parent, members
 
 
@@ -262,19 +272,20 @@ def classify_stage_cleanup(cleanup, stage_pid, lease_pid):
 def run(plan_path, expected_sha):
     from forge.browser import BrowserLeaseClient, CleanupTracker
     plan, backend, frontend, parent, members = load_plan(plan_path, expected_sha)
-    output = Path(tempfile.mkdtemp(prefix='recurring-browser-218-', dir=parent))
+    profile = plan['stage']
+    output = Path(tempfile.mkdtemp(prefix='recurring-browser-' + profile[-3:] + '-', dir=parent))
     os.chmod(output, 0o700)
     client = BrowserLeaseClient()
     if client.status().get('lease') is not None:
         raise RuntimeError('exclusive browser lease unavailable; no launch')
-    lease = client.acquire('Custodial synthetic manager 218 Chromium transport',
+    lease = client.acquire('Custodial synthetic manager ' + profile[-3:] + ' Chromium transport',
         '/root/events_modules', ttl_seconds=600, wait_seconds=0)
     tracker = CleanupTracker.from_snapshot([])
-    receipt = {'schema': 'custodial.recurring-browser-218-execution.v1',
+    receipt = {'schema': 'custodial.recurring-browser-' + profile[-3:] + '-execution.v1',
         'plan_sha256': expected_sha, 'backend_head': plan['backend_head'],
         'backend_tree': plan['backend_tree'], 'frontend_head': plan['frontend_head'],
         'frontend_tree': plan['frontend_tree'], 'backend_member_sha256': members,
-        'image': IMAGE, 'stage': STAGE, 'started_at': stamp(),
+        'image': IMAGE, 'stage': profile, 'started_at': stamp(),
         'lease_owner': lease.owner, 'lease_session_id': lease.session_id,
         'lease_generation_id': lease.generation_id, 'shared_browser_accessed': False,
         'production': False, 'phone_accessed': False, 'independent_audit': False}
@@ -329,7 +340,7 @@ def run(plan_path, expected_sha):
             'CUSTODIAL_RECURRING_BROWSER_PLAYWRIGHT_PACKAGE_SHA256': plan['playwright_package_sha256'],
             'CUSTODIAL_RECURRING_BROWSER_PACKAGE_LOCK_SHA256': plan['frontend_lock_sha256'],
             'STATIC_WEEKLY_CONTINUITY_EVIDENCE': str(output / 'fixture-result.json')})
-        child = subprocess.Popen(['node', 'scripts/run-isolated-shift-end-tests.mjs', STAGE],
+        child = subprocess.Popen(['node', 'scripts/run-isolated-shift-end-tests.mjs', profile],
             cwd=backend, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             text=False, start_new_session=True)
         receipt['child_pid'] = child.pid
@@ -446,7 +457,7 @@ def main():
     args = parser.parse_args()
     if args.mode == 'preflight':
         plan, backend, frontend, _, members = load_plan(args.plan, args.plan_sha256)
-        print(json.dumps({'status': 'SOURCE_PREFLIGHT_ONLY', 'stage': STAGE,
+        print(json.dumps({'status': 'SOURCE_PREFLIGHT_ONLY', 'stage': plan['stage'],
             'backend_head': plan['backend_head'], 'frontend_head': plan['frontend_head'],
             'backend_member_sha256': members, 'browser': False, 'database': False}, sort_keys=True))
         return 0
