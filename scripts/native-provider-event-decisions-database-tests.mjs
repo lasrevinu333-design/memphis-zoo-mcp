@@ -34,7 +34,7 @@ export const DECISION_INPUT_PINS=Object.freeze({
  'src/native-provider-events.js':'928debaeaf0af1c76c1bf3ff62d42c5f6665c6682eadd96da1ef494c86e33047',
  'src/native-lunch-reservation.js':'9d256fb50f7a374a7e85210afdd1fef4869a884c9c9f2a8071530a722914a3b2',
  'src/native-location-reservation.js':'bfba6b5909b628a8307373ea2785da0a8132038026c5360f7a4262ce569cdcf2',
- 'scripts/fixtures/current-manager-publication-source.mjs':'3698ae207ad9c27f71f85c4747f605dad67f6d10e0872a5585cd40dd1f308e12',
+ 'scripts/fixtures/current-manager-publication-source.mjs':'fb8ac53c6c6925ce63385bd13b0f68cc27572c0976efa1943bd7cee32eafaad1',
 });
 const EXCEPTIONS=Object.freeze({
  '20260718083100_reconstruct_public_grant_hardening.sql':'ed9aac28cb07f3565f3289d15d67458297222910ac44b1a77e8b5ae71b4c59c3',
