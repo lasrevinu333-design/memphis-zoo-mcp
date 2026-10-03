@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
-import {readFileSync} from 'node:fs';
+import {readFileSync,readdirSync} from 'node:fs';
 import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {DEFAULT_EXCEPTIONS,NORMAL_INVENTORY_SQL,NORMAL_RENDERER_PINS,OFFICIAL_FIXTURE,PREDECESSOR_FIXTURE,SEED_TABLES,localReplaySource,runRecoveryReplay,validateReplayPlan} from './current-release-recovery-replay.mjs';
+import {DEFAULT_EXCEPTIONS,NORMAL_INVENTORY_SQL,NORMAL_RENDERER_PINS,OFFICIAL_FIXTURE,PREDECESSOR_FIXTURE,RECOVERY_FORWARD_218,SEED_TABLES,localReplaySource,runRecoveryReplay,validateReplayPlan} from './current-release-recovery-replay.mjs';
 import {RECOVERY_KINDS} from './current-release-recovery-probe.mjs';
 import {stableSchemaJson} from './schema-fingerprint-catalog.mjs';
 
@@ -37,7 +37,12 @@ const predecessorReasons={
 };
 const migrations=new Map([['00000000000000_synthetic_baseline.sql',Buffer.from('select 1;')],
   ...Object.keys(DEFAULT_EXCEPTIONS).map(file=>[file,readFileSync(join(root,'supabase/migrations',file))]),
-  ['20261003220000_current_release_authority_completion.sql',Buffer.from('begin;select 1;commit;')]]);
+  ['20261003220000_current_release_authority_completion.sql',readFileSync(join(root,'supabase/migrations/20261003220000_current_release_authority_completion.sql'))]]);
+const forwardMigrations=new Map(readdirSync(join(root,'supabase/migrations')).filter(file=>file.endsWith('.sql')).sort()
+  .map(file=>[file,readFileSync(join(root,'supabase/migrations',file))]));
+const forwardSource={commit:'a'.repeat(40),tree:'b'.repeat(40),migrations:[...forwardMigrations].map(([file,bytes])=>({file,sha256:hash(bytes)})),
+  probe_files:[{file:'scripts/current-release-recovery-probe.mjs',sha256:'c'.repeat(64)},{file:'scripts/current-release-recovery-probe-contract-tests.mjs',sha256:'d'.repeat(64)}]};
+assert.deepEqual(forwardSource.migrations.slice(-3),RECOVERY_FORWARD_218);
 const source={commit:'a'.repeat(40),tree:'b'.repeat(40),migrations:[...migrations].map(([file,b])=>({file,sha256:hash(b)})),
   probe_files:[{file:'scripts/current-release-recovery-probe.mjs',sha256:'c'.repeat(64)},{file:'scripts/current-release-recovery-probe-contract-tests.mjs',sha256:'d'.repeat(64)}]};
 const runner_files=['scripts/current-release-recovery-replay.mjs','scripts/current-release-recovery-replay-contract-tests.mjs'].map(file=>({file,sha256:hash(readFileSync(join(root,file)))}));
@@ -53,6 +58,26 @@ for(const row of inventory)if(['function','grant'].includes(row.kind))row.identi
 const surface=inventory.map(({kind,identity})=>({kind,identity}));
 const normalRows=inventory.map(row=>{const definition_sql='-- Explicit fake-only '+row.kind+' ñ\nselect 1;';const sha256=hash(definition_sql);return{...row,definition_sql,sha256,stored_sha256:sha256,live_sql:definition_sql,live_sha256:sha256}});
 const normalSnapshot=()=>({count:normalRows.length,metadata:normalRows.map(({kind,identity,order,sha256})=>({kind,identity,order,sha256})),rows:structuredClone(normalRows),renderers:Object.entries(NORMAL_RENDERER_PINS).map(([identity,sha256])=>({identity,sha256}))});
+const forwardNamed='public.static_weekly_v9_assert_shift_end_derivation(jsonb)';
+const forwardNative='public.custodial_native_provider_event_decisions(uuid,text,uuid,text,text,jsonb)';
+const forwardCanary='custodial_release_canary_authority_surface()';
+const forwardNamedGrant="select public.custodial_release_authority_reset_grants('public.static_weekly_v9_assert_shift_end_derivation(jsonb)'); grant execute on function static_weekly_v9_assert_shift_end_derivation(jsonb) to postgres;";
+const forwardCanaryGrant="select public.custodial_release_authority_reset_grants('custodial_release_canary_authority_surface()'); grant execute on function custodial_release_canary_authority_surface() to public; grant execute on function custodial_release_canary_authority_surface() to postgres; grant execute on function custodial_release_canary_authority_surface() to service_role;";
+const forwardRows=structuredClone(normalRows);
+function changeFakeRow(row,identity,definition_sql){row.identity=identity;row.definition_sql=definition_sql;row.live_sql=definition_sql;row.sha256=hash(definition_sql);row.stored_sha256=row.sha256;row.live_sha256=row.sha256}
+changeFakeRow(forwardRows.find(x=>x.kind==='function'),forwardNamed,'CREATE OR REPLACE FUNCTION public.static_weekly_v9_assert_shift_end_derivation(jsonb) RETURNS void AS $$ select 1 $$ LANGUAGE sql;');
+changeFakeRow(forwardRows.find(x=>x.kind==='grant'),forwardNamed,forwardNamedGrant);
+function fakeForwardRow(kind,identity,order,definition_sql){const sha256=hash(definition_sql);return {kind,identity,order,definition_sql,sha256,stored_sha256:sha256,live_sql:definition_sql,live_sha256:sha256}}
+forwardRows.push(fakeForwardRow('function',forwardCanary,100071,`CREATE OR REPLACE FUNCTION public.custodial_release_canary_authority_surface() AS $function$ values ('function','${forwardNative}','original accepted native event lookup'), ('grant','${forwardNative}','server-only original event lookup ACL'); $function$`));
+forwardRows.push(fakeForwardRow('grant',forwardCanary,1000073,forwardCanaryGrant));
+forwardRows.push(fakeForwardRow('function',forwardNative,100478,'CREATE OR REPLACE FUNCTION public.custodial_native_provider_event_decisions(uuid,text,uuid,text,text,jsonb) RETURNS jsonb AS $$ select null $$ LANGUAGE sql;'));
+forwardRows.push(fakeForwardRow('grant',forwardNative,900318,`select public.custodial_release_authority_reset_grants('${forwardNative}'); grant execute on function custodial_native_provider_event_decisions(uuid,text,uuid,text,text,jsonb) to service_role;`));
+const forwardInventory=sort(forwardRows.map(({kind,identity,order,sha256})=>({kind,identity,order,sha256})));
+const forwardSurface=sort([...surface.filter(x=>!['function','grant'].includes(x.kind)),
+  {kind:'function',identity:forwardNamed},{kind:'grant',identity:forwardNamed},
+  {kind:'function',identity:forwardCanary},{kind:'grant',identity:forwardCanary},
+  {kind:'function',identity:forwardNative},{kind:'grant',identity:forwardNative}]);
+const forwardSnapshot=()=>({count:forwardRows.length,metadata:forwardRows.map(({kind,identity,order,sha256})=>({kind,identity,order,sha256})),rows:structuredClone(forwardRows),renderers:Object.entries(NORMAL_RENDERER_PINS).map(([identity,sha256])=>({identity,sha256}))});
 const resolutionRows=(required,surface,inventory)=>[['required',required],['surface',surface],['inventory',inventory]].flatMap(([origin,rows])=>rows.filter(row=>row.kind==='function'||row.kind==='grant'&&row.identity.includes('(')).map(({kind,identity})=>({origin,kind,identity,oid:'101'})));
 const protectedRows=SEED_TABLES.map(relation=>({relation,count:1,sha256:'1'.repeat(64)}));
 function probeReceipt(bound){
@@ -64,12 +89,12 @@ function probeReceipt(bound){
 }
 
 function fake(m,change=()=>undefined){
-  const calls=[],outputs=new Map();let sourceCalls=0;
+  const calls=[],outputs=new Map(),forward=m.source.migrations.length===218;let sourceCalls=0;
   function mutate(phase,result,extra={}){calls.push({phase,...extra});return change({phase,result,calls,outputs,...extra})??result}
   const io={
     source(){sourceCalls++;return mutate('source_'+sourceCalls,{source:m.source,runner_files:m.runner_files})},
     outputDirectory(path){assert.equal(path,m.output_dir);if(mutate('output',true)===false)throw new Error('private_output_directory')},
-    read(path){let value;if(outputs.has(path))value=Buffer.from(outputs.get(path));else if(path===join(root,OFFICIAL_FIXTURE))value=Buffer.from('fake official');else if(path===join(root,PREDECESSOR_FIXTURE))value=Buffer.from('fake predecessor');else value=migrations.get(path.split('/').at(-1));assert.ok(value,'fake read must be exact known path');return mutate('read_'+path.split('/').at(-1),value)},
+    read(path){let value;if(outputs.has(path))value=Buffer.from(outputs.get(path));else if(path===join(root,OFFICIAL_FIXTURE))value=Buffer.from('fake official');else if(path===join(root,PREDECESSOR_FIXTURE))value=Buffer.from('fake predecessor');else value=(forward?forwardMigrations:migrations).get(path.split('/').at(-1));assert.ok(value,'fake read must be exact known path');return mutate('read_'+path.split('/').at(-1),value)},
     write(path,bytes){assert.ok(path.startsWith(m.output_dir+'/'));assert.ok(!outputs.has(path),'exclusive fake artifact cannot overwrite');const result=mutate('write_'+path.split('/').at(-1),true,{path,bytes});if(result===false)throw new Error('output_write_failed');outputs.set(path,bytes)},
     async run(command,args,{input,signal}={}){
       let phase,result;const call={command,args,input,signal};
@@ -84,17 +109,17 @@ function fake(m,change=()=>undefined){
           else if(phase.startsWith('defaults_'))result=ok('0');
           else if(phase.startsWith('remove_')||phase.startsWith('migration_')||phase==='synthetic_seed')result=ok('');
           else if(phase==='seed_readback')result=asJson({active_work:true,response:true,work_ticket:true,feedback:true});
-          else if(phase==='inventory_observed')result=asJson(inventory);
-          else if(phase==='normal_inventory')result=asJson(normalSnapshot());
-          else if(phase==='surface_observed')result=asJson(surface);
-          else if(phase==='required_membership')result=asJson(resolutionRows(m.required_surface,surface,inventory));
+          else if(phase==='inventory_observed')result=asJson(forward?forwardInventory:inventory);
+          else if(phase==='normal_inventory')result=asJson(forward?forwardSnapshot():normalSnapshot());
+          else if(phase==='surface_observed')result=asJson(forward?forwardSurface:surface);
+          else if(phase==='required_membership')result=asJson(resolutionRows(m.required_surface,forward?forwardSurface:surface,forward?forwardInventory:inventory));
           else if(phase.startsWith('snapshot_'))result=asJson(protectedRows.find(x=>x.relation==='public.'+phase.slice(9)));
           else if(phase.startsWith('catalog_'))result=asJson([]);
           else assert.fail('Unexpected fake SQL phase '+phase);
         }
       }else{
         assert.equal(command,process.execPath);
-        if(args[0]===join(root,PREDECESSOR_FIXTURE)){phase='predecessor';assert.deepEqual(JSON.parse(input),{target:m.target,migration:m.predecessor_fixture.migration});result=asJson({schema:'custodial.current-release-canary-predecessor-receipt.v1',status:'PASS',checks:20,engine_executed:false,synthetic:true,production:false,target:m.target,migration:m.predecessor_fixture.migration,source_sha256:m.predecessor_fixture.sha256,predecessor:{inventory_count:11,inventory_sha256:'a'.repeat(64),feedback_stored:'b'.repeat(64),feedback_live:'c'.repeat(64),immutable:'O'},cases:Object.entries(predecessorReasons).map(([id,expected_reason])=>({id,rejected:true,rollback_exact:true,expected_reason})),successful_final_migration_applied:false,authority_configured:false,container_retained:true})}
+        if(args[0]===join(root,PREDECESSOR_FIXTURE)){phase='predecessor';assert.deepEqual(JSON.parse(input),{target:m.target,migration:m.predecessor_fixture.migration});result=asJson({schema:'custodial.current-release-canary-predecessor-receipt.v1',status:'PASS',checks:20,engine_executed:false,synthetic:true,production:false,target:m.target,migration:m.predecessor_fixture.migration,source_sha256:m.predecessor_fixture.sha256,predecessor:{inventory_count:forward?forwardRows.length-2:11,inventory_sha256:'a'.repeat(64),feedback_stored:'b'.repeat(64),feedback_live:'c'.repeat(64),immutable:'O'},cases:Object.entries(predecessorReasons).map(([id,expected_reason])=>({id,rejected:true,rollback_exact:true,expected_reason})),successful_final_migration_applied:false,authority_configured:false,container_retained:true})}
         else if(args.includes('--input-type=module')){phase='official';assert.equal(JSON.parse(args.at(-1)).id,m.target.id);result=asJson({status:'PASS',scope:'synthetic official dated exception and occurrence SCH022 paths',checks:12,target:{id:m.target.id,image:m.target.image,fixture_id:m.target.fixture_id,network:'none'},source:Object.fromEntries(['publication_id','group_id','member_id','baseline_projection_id','accepted_projection_id','repaired_projection_id'].map((k,i)=>[k,id(80+i)])),limitations:['fake only']})}
         else{
           phase='probe';assert.equal(args[0],join(root,'scripts/current-release-recovery-probe.mjs'));const bound=JSON.parse(outputs.get(args[2]));result=asJson(probeReceipt(bound));
@@ -111,8 +136,69 @@ async function rejectPlan(name,change,pattern){await test(name,async()=>{const m
 async function boundary(name,phase,change,pattern,{cleanup=true}={}){await test(name,async()=>{const m=structuredClone(seed),f=fake(m,ctx=>ctx.phase===phase?change(ctx.result,ctx):undefined);await assert.rejects(()=>runRecoveryReplay(m,{root,io:f.io}),pattern);assert.equal(f.calls.some(x=>x.phase==='cleanup_rm'),cleanup)})}
 async function prepared(change){const m=structuredClone(seed),f=fake(m,change);const receipt=await runRecoveryReplay(m,{root,io:f.io});return{m,f,receipt}}
 function verifyPlan(m,f){const plan=structuredClone(m);plan.stage='verify';plan.prepared={file:'no-auto-prepare-receipt.json',sha256:hash(f.outputs.get(join(m.output_dir,'no-auto-prepare-receipt.json')))};plan.probe_manifest={schema:'custodial.current-release-recovery-probe-manifest.v1',synthetic:true,production:false,target:plan.target,source:plan.source,inventory,surface,required_surface:plan.required_surface,health_checks:['canary_authority_surface_captured','restore_inventory_exact'],protected_rows:protectedRows,faults:inventory.map(({kind,identity})=>({kind,identity})),omitted_surface:plan.required_surface.find(x=>x.kind==='relation'),manager_id:plan.seed.manager};return plan}
+function forwardPlan(lane='normal'){
+ const m=structuredClone(seed);m.source=structuredClone(forwardSource);m.predecessor_fixture.migration=m.source.migrations.at(-3);
+ m.lane=lane;if(lane==='normal')m.official_fixture=null;
+ m.required_surface=sort([...m.required_surface,{kind:'function',identity:forwardNative},{kind:'grant',identity:forwardNative}]);
+ return m;
+}
 
 await test('import and local source identity use no replay or hidden container',()=>{const local=localReplaySource(root,()=>source);assert.equal(local.source,source);assert.deepEqual(local.runner_files,runner_files)});
+await test('exact 218 successor retains the 216 predecessor and independently required new identities',async()=>{
+ const m=forwardPlan(),f=fake(m),r=await runRecoveryReplay(m,{root,io:f.io});
+ assert.equal(r.status,'NORMAL_CATALOG_OBSERVED_NOT_ACCEPTED');
+ assert.equal(r.recovery_inventory.count,forwardRows.length);
+ const saved=JSON.parse(f.outputs.get(join(m.output_dir,r.recovery_inventory.file)));
+ assert.equal(saved.predecessor_inventory_count,forwardRows.length-2);
+ assert.deepEqual(saved.required_surface,m.required_surface);
+ assert.ok(f.calls.findIndex(x=>x.phase==='predecessor')<f.calls.findIndex(x=>x.phase==='migration_0215'));
+ assert.ok(f.calls.findIndex(x=>x.phase==='migration_0215')<f.calls.findIndex(x=>x.phase==='migration_0216'));
+ assert.ok(f.calls.findIndex(x=>x.phase==='migration_0216')<f.calls.findIndex(x=>x.phase==='migration_0217'));
+ assert.equal(f.calls.filter(x=>x.phase.startsWith('migration_')).length,218);
+ assert.ok(f.calls.some(x=>x.phase==='cleanup_rm'));
+});
+await test('exact 218 no-auto preparation retains new source membership without adopting survivor hashes',async()=>{
+ const m=forwardPlan('no-auto'),f=fake(m),r=await runRecoveryReplay(m,{root,io:f.io});
+ assert.equal(r.status,'OBSERVED_NOT_ACCEPTED');
+ assert.equal(r.inventory.length,forwardRows.length);
+ for(const kind of ['function','grant'])assert.ok(r.inventory.some(x=>x.kind===kind&&x.identity===forwardNative));
+ assert.deepEqual(r.required_surface,m.required_surface);
+ assert.equal(f.calls.filter(x=>x.phase==='predecessor').length,1);
+ assert.ok(!f.calls.some(x=>x.phase==='cleanup_rm'));
+});
+await test('218 no-auto refuses a missing literal native grant before retaining its target',async()=>{
+ const m=forwardPlan('no-auto'),f=fake(m,ctx=>ctx.phase==='surface_observed'?editJson(x=>{
+  const index=x.findIndex(row=>row.kind==='grant'&&row.identity===forwardNative);assert.ok(index>=0);x.splice(index,1);
+ })(ctx.result):undefined);
+ await assert.rejects(()=>runRecoveryReplay(m,{root,io:f.io}),/normal_inventory_forward_surface/);
+ assert.ok(f.calls.some(x=>x.phase==='cleanup_rm'));
+ assert.ok(!f.outputs.has(join(m.output_dir,'no-auto-prepare-receipt.json')));
+});
+for(const [name,change,pattern=/final_migration_position/] of [
+ ['changed 216 prefix',x=>{x.source.migrations[0].sha256='0'.repeat(64)}],
+ ['missing successor',x=>{x.source.migrations.pop()}],
+ ['reordered successors',x=>{[x.source.migrations[216],x.source.migrations[217]]=[x.source.migrations[217],x.source.migrations[216]]}],
+ ['changed 217 bytes',x=>{x.source.migrations[216].sha256='0'.repeat(64)}],
+ ['changed 218 bytes',x=>{x.source.migrations[217].sha256='0'.repeat(64)}],
+ ['unknown successor',x=>{x.source.migrations[217]={file:'20261004000100_unknown.sql',sha256:'0'.repeat(64)}}],
+ ['predecessor moved',x=>{x.predecessor_fixture.migration=x.source.migrations.at(-1)},/predecessor_migration_identity/]
+])await test('218 source rejects '+name+' before resource ownership',async()=>{
+ const m=forwardPlan();change(m);const f=fake(m);
+ await assert.rejects(()=>runRecoveryReplay(m,{root,io:f.io}),pattern);
+ assert.equal(f.calls.length,0);
+});
+for(const [name,change,pattern] of [
+ ['missing native grant',x=>{x.rows=x.rows.filter(r=>!(r.kind==='grant'&&r.identity===forwardNative));x.metadata=x.metadata.filter(r=>!(r.kind==='grant'&&r.identity===forwardNative));x.count--},/normal_inventory_forward_count/],
+ ['added unrelated survivor',x=>{const row={...x.rows[0],identity:'public.unrelated'};x.rows.push(row);x.metadata.push({kind:row.kind,identity:row.identity,order:row.order,sha256:row.sha256});x.count++},/normal_inventory_forward_count/],
+ ['stale named function',x=>{const row=x.rows.find(r=>r.kind==='function'&&r.identity===forwardNamed);row.sha256='1d76c69cc34df8ffb18d9b07711da15c1dfed8c44c7f9b5fed5e5e8b63d93e85'},/normal_inventory_live_integrity/],
+ ['native public grant',x=>{const row=x.rows.find(r=>r.kind==='grant'&&r.identity===forwardNative);row.definition_sql+=' grant execute on function custodial_native_provider_event_decisions(uuid,text,uuid,text,text,jsonb) to public;';row.live_sql=row.definition_sql;row.sha256=hash(row.definition_sql);row.stored_sha256=row.sha256;row.live_sha256=row.sha256;x.metadata.find(r=>r.kind===row.kind&&r.identity===row.identity).sha256=row.sha256},/normal_inventory_forward_native/],
+ ['canary omits new grant',x=>{const row=x.rows.find(r=>r.kind==='function'&&r.identity===forwardCanary);row.definition_sql=row.definition_sql.replace(`, ('grant','${forwardNative}','server-only original event lookup ACL')`,'');row.live_sql=row.definition_sql;row.sha256=hash(row.definition_sql);row.stored_sha256=row.sha256;row.live_sha256=row.sha256;x.metadata.find(r=>r.kind===row.kind&&r.identity===row.identity).sha256=row.sha256},/normal_inventory_forward_surface/]
+])await test('218 NORMAL rejects '+name+' and cleans owned fixture',async()=>{
+ const m=forwardPlan(),f=fake(m,ctx=>ctx.phase==='normal_inventory'?editJson(change)(ctx.result):undefined);
+ await assert.rejects(()=>runRecoveryReplay(m,{root,io:f.io}),pattern);
+ assert.ok(f.calls.some(x=>x.phase==='cleanup_rm'));
+ assert.ok(!f.outputs.has(join(m.output_dir,'normal-prepare-receipt.json')));
+});
 await test('fake no-auto prepare retains only exact lease and never adopts inventory',async()=>{const {f,receipt}=await prepared();assert.equal(receipt.status,'OBSERVED_NOT_ACCEPTED');assert.equal(receipt.engine_executed,false);assert.equal(receipt.execution,'FAKE_SUBPROCESS_UNIT_ONLY');assert.equal(receipt.release_admission,false);assert.ok(!f.calls.some(x=>x.phase==='probe'||x.phase==='cleanup_rm'));assert.ok(f.calls.findIndex(x=>x.phase==='official')<f.calls.findIndex(x=>x.phase==='synthetic_seed'));assert.equal(f.calls.filter(x=>x.phase==='predecessor').length,1);assert.ok(f.calls.findIndex(x=>x.phase==='predecessor')<f.calls.findIndex(x=>x.phase==='migration_0004'));assert.equal(receipt.inventory.length,11)});
 await test('normal lane captures separately and performs exact cleanup without probe or seeds',async()=>{const m=structuredClone(seed);m.lane='normal';m.official_fixture=null;const f=fake(m),r=await runRecoveryReplay(m,{root,io:f.io});assert.equal(r.status,'NORMAL_CATALOG_OBSERVED_NOT_ACCEPTED');assert.ok(f.calls.some(x=>x.phase==='cleanup_rm'));assert.ok(!f.calls.some(x=>/^(probe|official|synthetic_seed|remove_)/.test(x.phase)));assert.ok(f.outputs.has(join(m.output_dir,'normal-prepare-replayed-catalog.json')));assert.ok(f.outputs.has(join(m.output_dir,'normal-prepare-recovery-inventory.json')))});
 await test('normal complete inventory binds raw SQL all11 metadata query source and artifact before cleanup',async()=>{

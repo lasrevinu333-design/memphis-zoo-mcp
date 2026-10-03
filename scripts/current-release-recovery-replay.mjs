@@ -35,6 +35,54 @@ const PREDECESSOR_REASONS={
   later_surface_failure_rolls_back_column_canonicalization:'Current release required function recovery drift: static_weekly_sch022_work_witness(date,jsonb)'
 };
 const PREDECESSOR_CASES=Object.keys(PREDECESSOR_REASONS);
+// The 216 challenge remains immediately before its original forward migration.
+// Only this exact source successor pair may follow it; arbitrary newer SQL is
+// not treated as another final migration or accepted by a count-only bump.
+export const RECOVERY_FORWARD_218=Object.freeze([
+  {file:'20261003220000_current_release_authority_completion.sql',sha256:'33ca9d153233441b542d62e0f76d1ffa3b07788cf7e9fccd0c4b993b719abb27'},
+  {file:'20261003230000_static_weekly_named_handoff_derivation.sql',sha256:'ef4c6fc1183002af23797b5ac226660a3b1c2b85f3a543df75c1afa61d8fd500'},
+  {file:'20261004000000_native_provider_event_decision_lookup.sql',sha256:'ab4e6eb848bd214f8616fb52f094829786df9a9a81d2eb8d00d247b1f28e52fd'}
+]);
+const FORWARD_NATIVE_ID='public.custodial_native_provider_event_decisions(uuid,text,uuid,text,text,jsonb)';
+const FORWARD_NAMED_ID='public.static_weekly_v9_assert_shift_end_derivation(jsonb)';
+const FORWARD_CANARY_ID='custodial_release_canary_authority_surface()';
+const FORWARD_NAMED_OLD_SHA='1d76c69cc34df8ffb18d9b07711da15c1dfed8c44c7f9b5fed5e5e8b63d93e85';
+const FORWARD_NAMED_GRANT_SHA='6c98e2028e3b34c63a955250a5669ff7747deaca0fd10b893af6aab885167788';
+const FORWARD_CANARY_OLD_SHA='661cd2a5aecc83d0244920466b161b6fc52d22143074a037148660abed351471';
+const FORWARD_CANARY_GRANT_SHA='b7d461eda320ec386b55ce3490063e09848a83723999acdd741e83cad0460498';
+const RECOVERY_216_PREFIX_SHA='5d529ec0c3edac509ae4fc77817600b9024366fd43a3963f2551a5835523fa99';
+export function recoveryForwardProfile(migrations,predecessor){
+  const tail=migrations?.slice(-3);
+  if(canon(migrations?.at(-1))===canon(RECOVERY_FORWARD_218[0]) &&
+      canon(predecessor)===canon(RECOVERY_FORWARD_218[0]))return 'HISTORICAL_216';
+  if(migrations?.length===218 && hash(canon(migrations.slice(0,216)))===RECOVERY_216_PREFIX_SHA &&
+      canon(tail)===canon(RECOVERY_FORWARD_218) &&
+      canon(predecessor)===canon(RECOVERY_FORWARD_218[0]))return 'EXACT_FORWARD_218';
+  throw new Error('final_migration_position');
+}
+function assertForwardMembership(rows,predecessorCount,surface){
+  must(rows.length===predecessorCount+2,'normal_inventory_forward_count');
+  const only=(kind,identity)=>{const matches=rows.filter(x=>x.kind===kind&&x.identity===identity);must(matches.length===1,'normal_inventory_forward_identity');return matches[0]};
+  const named=only('function',FORWARD_NAMED_ID),namedGrant=only('grant',FORWARD_NAMED_ID);
+  must(named.sha256!==FORWARD_NAMED_OLD_SHA&&namedGrant.sha256===FORWARD_NAMED_GRANT_SHA,'normal_inventory_forward_named');
+  const native=only('function',FORWARD_NATIVE_ID),nativeGrant=only('grant',FORWARD_NATIVE_ID);
+  const canary=only('function',FORWARD_CANARY_ID),canaryGrant=only('grant',FORWARD_CANARY_ID);
+  must(canary.sha256!==FORWARD_CANARY_OLD_SHA&&canaryGrant.sha256===FORWARD_CANARY_GRANT_SHA,
+    'normal_inventory_forward_canary');
+  if(surface)for(const kind of ['function','grant'])must(surface.filter(x=>x.kind===kind&&x.identity===FORWARD_NATIVE_ID).length===1,
+    'normal_inventory_forward_surface');
+  return {native,nativeGrant,canary};
+}
+function assertForwardNormalInventory(rows,predecessorCount){
+  const {native,nativeGrant,canary}=assertForwardMembership(rows,predecessorCount);
+  must(native.definition_sql.includes('custodial_native_provider_event_decisions(')&&
+    nativeGrant.definition_sql.startsWith(`select public.custodial_release_authority_reset_grants('${FORWARD_NATIVE_ID}'); `),
+    'normal_inventory_forward_native');
+  same([...nativeGrant.definition_sql.matchAll(/\bgrant execute on function [^;]+ to ([a-z_]+);/g)].map(x=>x[1]),
+    ['service_role'],'normal_inventory_forward_native');
+  for(const kind of ['function','grant'])must(canary.definition_sql.includes(
+    `('${kind}','${FORWARD_NATIVE_ID}','`),'normal_inventory_forward_surface');
+}
 export const DEFAULT_EXCEPTIONS=Object.freeze({
   '20260718083100_reconstruct_public_grant_hardening.sql':'ed9aac28cb07f3565f3289d15d67458297222910ac44b1a77e8b5ae71b4c59c3',
   '20260729150527_audit_defense_in_depth_hardening.sql':'420157f3073a3ea1b0055fc6e6246374a9babf2db576cda3bc4272a01e27cc4f',
@@ -159,7 +207,8 @@ export function validateReplayPlan(m){
   must(m.predecessor_fixture.file===PREDECESSOR_FIXTURE&&HEX.test(m.predecessor_fixture.sha256),'predecessor_source_pin');
   shape(m.predecessor_fixture.migration,['file','sha256'],'predecessor_migration');
   must(m.predecessor_fixture.migration.file==='20261003220000_current_release_authority_completion.sql'&&HEX.test(m.predecessor_fixture.migration.sha256),'predecessor_migration_identity');
-  same(m.predecessor_fixture.migration,m.source?.migrations?.at(-1),'final_migration_position');
+  const profile=recoveryForwardProfile(m.source?.migrations,m.predecessor_fixture.migration);
+  if(profile==='EXACT_FORWARD_218')same(m.source.migrations.slice(-3),RECOVERY_FORWARD_218,'forward_migration_suffix');
   if(m.stage==='prepare')must(m.prepared===null&&m.probe_manifest===null,'prepare_never_adopts_manifest');
   else{
     shape(m.prepared,['file','sha256'],'prepared_reference');must(m.prepared.file==='no-auto-prepare-receipt.json'&&HEX.test(m.prepared.sha256),'prepared_reference');
@@ -238,6 +287,7 @@ function assertProbeReceipt(r,m,fake){
 
 export async function runRecoveryReplay(plan,{root=ROOT,io=nodeIO,signal}={}){
   const m=validateReplayPlan(plan),fake=io!==nodeIO,stage=m.lane+'-'+m.stage,artifacts=[];
+  const forwardProfile=recoveryForwardProfile(m.source.migrations,m.predecessor_fixture.migration);
   let leased=false,retain=false,outputReady=false,phase='preflight',pending_control=null,predecessorInventoryCount=null;
   const write=(name,data)=>{must(/^[a-z0-9_.-]+$/.test(name),'artifact_name');const bytes=typeof data==='string'?data:JSON.stringify(data,null,2)+'\n';io.write(join(m.output_dir,name),bytes);const item={file:name,sha256:hash(bytes)};artifacts.push(item);return item};
   const checkSignal=()=>must(!signal?.aborted,'aborted');
@@ -305,7 +355,8 @@ export async function runRecoveryReplay(plan,{root=ROOT,io=nodeIO,signal}={}){
         const captured=validateNormalInventory(observed);
         // The fixed final03220000 updates definitions only. Keep its validated
         // transaction-predecessor count separate from the postmigration query.
-        must(captured.rows.length===predecessorInventoryCount,'normal_inventory_predecessor_count');
+        if(forwardProfile==='HISTORICAL_216')must(captured.rows.length===predecessorInventoryCount,'normal_inventory_predecessor_count');
+        else assertForwardNormalInventory(captured.rows,predecessorInventoryCount);
         const inventory_sha256=hash(canon(captured.metadata));
         const recovery_inventory=write(stage+'-recovery-inventory.json',{
           schema:'custodial.normal-recovery-inventory-observation.v1',classification:'NORMAL_INVENTORY_OBSERVED_NOT_ACCEPTED',
@@ -333,6 +384,7 @@ export async function runRecoveryReplay(plan,{root=ROOT,io=nodeIO,signal}={}){
         const inventory=sort(await query('inventory_observed',INVENTORY_SQL)),surface=sort(await query('surface_observed',SURFACE_SQL));
         write(stage+'-observed-inventory.json',inventory);write(stage+'-observed-surface.json',surface);
         same([...new Set(inventory.map(x=>x.kind))].sort(),RECOVERY_KINDS,'all_inventory_kinds_required');
+        if(forwardProfile==='EXACT_FORWARD_218')assertForwardMembership(inventory,predecessorInventoryCount,surface);
         const required_resolution=await query('required_membership',requiredMembershipQuery(m.required_surface,surface,inventory));
         write(stage+'-required-membership.json',{required:m.required_surface,required_sha256:hash(canon(m.required_surface)),resolution:required_resolution,independently_accepted:false});
         assertRequiredMembership(m.required_surface,surface,inventory,required_resolution);
