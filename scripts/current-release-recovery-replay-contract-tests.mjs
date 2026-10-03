@@ -3,7 +3,7 @@ import {createHash} from 'node:crypto';
 import {readFileSync,readdirSync} from 'node:fs';
 import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {DEFAULT_EXCEPTIONS,NORMAL_INVENTORY_SQL,NORMAL_RENDERER_PINS,OFFICIAL_FIXTURE,PREDECESSOR_FIXTURE,RECOVERY_FORWARD_218,SEED_TABLES,localReplaySource,runRecoveryReplay,validateReplayPlan} from './current-release-recovery-replay.mjs';
+import {DEFAULT_EXCEPTIONS,NORMAL_INVENTORY_SQL,NORMAL_RENDERER_PINS,OFFICIAL_FIXTURE,PREDECESSOR_FIXTURE,RECOVERY_FORWARD_218,RECOVERY_MESSAGE_219,SEED_TABLES,localReplaySource,recoveryForwardProfile,runRecoveryReplay,validateReplayPlan} from './current-release-recovery-replay.mjs';
 import {RECOVERY_KINDS} from './current-release-recovery-probe.mjs';
 import {stableSchemaJson} from './schema-fingerprint-catalog.mjs';
 
@@ -40,7 +40,8 @@ const migrations=new Map([['00000000000000_synthetic_baseline.sql',Buffer.from('
   ['20261003220000_current_release_authority_completion.sql',readFileSync(join(root,'supabase/migrations/20261003220000_current_release_authority_completion.sql'))]]);
 const forwardMigrations=new Map(readdirSync(join(root,'supabase/migrations')).filter(file=>file.endsWith('.sql')).sort()
   .map(file=>[file,readFileSync(join(root,'supabase/migrations',file))]));
-const forwardSource={commit:'a'.repeat(40),tree:'b'.repeat(40),migrations:[...forwardMigrations].map(([file,bytes])=>({file,sha256:hash(bytes)})),
+const current219Migrations=[...forwardMigrations].map(([file,bytes])=>({file,sha256:hash(bytes)}));
+const forwardSource={commit:'a'.repeat(40),tree:'b'.repeat(40),migrations:current219Migrations.filter(x=>x.file!==RECOVERY_MESSAGE_219.file),
   probe_files:[{file:'scripts/current-release-recovery-probe.mjs',sha256:'c'.repeat(64)},{file:'scripts/current-release-recovery-probe-contract-tests.mjs',sha256:'d'.repeat(64)}]};
 assert.deepEqual(forwardSource.migrations.slice(-3),RECOVERY_FORWARD_218);
 const source={commit:'a'.repeat(40),tree:'b'.repeat(40),migrations:[...migrations].map(([file,b])=>({file,sha256:hash(b)})),
@@ -98,7 +99,7 @@ function probeReceipt(bound){
 }
 
 function fake(m,change=()=>undefined){
-  const calls=[],outputs=new Map(),forward=m.source.migrations.length===218;let sourceCalls=0;
+  const calls=[],outputs=new Map(),forward=[218,219].includes(m.source.migrations.length);let sourceCalls=0;
   function mutate(phase,result,extra={}){calls.push({phase,...extra});return change({phase,result,calls,outputs,...extra})??result}
   const io={
     source(){sourceCalls++;return mutate('source_'+sourceCalls,{source:m.source,runner_files:m.runner_files})},
@@ -156,6 +157,37 @@ function forwardPlan(lane='normal'){
 }
 
 await test('import and local source identity use no replay or hidden container',()=>{const local=localReplaySource(root,()=>source);assert.equal(local.source,source);assert.deepEqual(local.runner_files,runner_files)});
+for(const lane of ['normal','no-auto'])await test('exact MESSAGE219 '+lane+' preserves predecessor and successor checks',async()=>{
+ const m=forwardPlan(lane);m.source.migrations=structuredClone(current219Migrations);
+ assert.equal(recoveryForwardProfile(m.source.migrations,m.predecessor_fixture.migration),'EXACT_MESSAGE_219');
+ const f=fake(m),r=await runRecoveryReplay(m,{root,io:f.io});
+ assert.equal(r.status,lane==='normal'?'NORMAL_CATALOG_OBSERVED_NOT_ACCEPTED':'OBSERVED_NOT_ACCEPTED');
+ assert.equal(f.calls.filter(x=>x.phase.startsWith('migration_')).length,219);
+ const phases=f.calls.map(x=>x.phase);
+ assert.ok(phases.indexOf('migration_0205')<phases.indexOf('predecessor'));
+ assert.ok(phases.indexOf('predecessor')<phases.indexOf('migration_0216'));
+ assert.ok(phases.indexOf('migration_0216')<phases.indexOf('forward_inventory_preimage'));
+ assert.ok(phases.indexOf('forward_inventory_preimage')<phases.indexOf('migration_0217'));
+ assert.ok(phases.indexOf('migration_0217')<phases.indexOf('migration_0218'));
+ assert.equal(f.calls.some(x=>x.phase==='probe'),false,'preparation never configures authority');
+ assert.equal(f.calls.some(x=>x.phase==='cleanup_rm'),lane==='normal');
+});
+for(const [name,edit] of [
+ ['MESSAGE hash',x=>x.source.migrations[205].sha256='0'.repeat(64)],
+ ['MESSAGE filename',x=>x.source.migrations[205].file='20261003121758_employee_message_source_admission.sql'],
+ ['predecessor hash',x=>x.source.migrations[204].sha256='0'.repeat(64)],
+ ['later hash',x=>x.source.migrations[206].sha256='0'.repeat(64)],
+ ['final head',x=>x.source.migrations.at(-1).sha256='0'.repeat(64)],
+ ['historical fallback head',x=>x.source.migrations[x.source.migrations.length-1]={...RECOVERY_FORWARD_218[0]}],
+ ['reordered',x=>x.source.migrations.reverse()],
+ ['duplicated MESSAGE',x=>x.source.migrations[204]={...x.source.migrations[205]}],
+ ['omitted old row',x=>x.source.migrations.splice(3,1)],
+ ['extra old row',x=>x.source.migrations.push({...x.source.migrations[3]})],
+ ['wrong predecessor boundary',x=>x.predecessor_fixture.migration={...x.source.migrations.at(-1)}]
+])await test('219 rejects '+name+' before resource ownership',async()=>{
+ const m=forwardPlan();m.source.migrations=structuredClone(current219Migrations);edit(m);const f=fake(m);
+ await assert.rejects(()=>runRecoveryReplay(m,{root,io:f.io}));assert.equal(f.calls.length,0);
+});
 await test('exact 218 successor retains the 216 predecessor and independently required new identities',async()=>{
  const m=forwardPlan(),f=fake(m),r=await runRecoveryReplay(m,{root,io:f.io});
  assert.equal(r.status,'NORMAL_CATALOG_OBSERVED_NOT_ACCEPTED');

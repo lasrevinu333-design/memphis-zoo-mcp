@@ -51,8 +51,23 @@ const FORWARD_NAMED_GRANT_SHA='6c98e2028e3b34c63a955250a5669ff7747deaca0fd10b893
 const FORWARD_CANARY_OLD_SHA='661cd2a5aecc83d0244920466b161b6fc52d22143074a037148660abed351471';
 const FORWARD_CANARY_GRANT_SHA='b7d461eda320ec386b55ce3490063e09848a83723999acdd741e83cad0460498';
 const RECOVERY_216_PREFIX_SHA='5d529ec0c3edac509ae4fc77817600b9024366fd43a3963f2551a5835523fa99';
+export const RECOVERY_MESSAGE_219=Object.freeze({
+  file:'20261003121757_employee_message_source_admission.sql',
+  sha256:'20ff06f8c0c5e82814189e1e2969b928ffa48eb1181098a73156962dc9ac1e7f'
+});
+const RECOVERY_219_SHA='4795b9525622e1512005f85ae1c5994971dccc3d54a987a743bdcfef8bf9ce32';
+const RECOVERY_218_SHA='24503cfe852d7668ac94744b2f9ed21d8d2556906b917c7016e0f6c2d3b8d7a1';
 export function recoveryForwardProfile(migrations,predecessor){
   const tail=migrations?.slice(-3);
+  // Explicit current profile never falls back to the historical fixture path.
+  if(migrations?.length===219){
+    if(hash(canon(migrations))===RECOVERY_219_SHA &&
+        canon(migrations[205])===canon(RECOVERY_MESSAGE_219) &&
+        hash(canon(migrations.filter(x=>x.file!==RECOVERY_MESSAGE_219.file)))===RECOVERY_218_SHA &&
+        canon(tail)===canon(RECOVERY_FORWARD_218) &&
+        canon(predecessor)===canon(RECOVERY_FORWARD_218[0]))return 'EXACT_MESSAGE_219';
+    throw new Error('final_migration_position');
+  }
   if(canon(migrations?.at(-1))===canon(RECOVERY_FORWARD_218[0]) &&
       canon(predecessor)===canon(RECOVERY_FORWARD_218[0]))return 'HISTORICAL_216';
   if(migrations?.length===218 && hash(canon(migrations.slice(0,216)))===RECOVERY_216_PREFIX_SHA &&
@@ -243,7 +258,7 @@ export function validateReplayPlan(m){
   shape(m.predecessor_fixture.migration,['file','sha256'],'predecessor_migration');
   must(m.predecessor_fixture.migration.file==='20261003220000_current_release_authority_completion.sql'&&HEX.test(m.predecessor_fixture.migration.sha256),'predecessor_migration_identity');
   const profile=recoveryForwardProfile(m.source?.migrations,m.predecessor_fixture.migration);
-  if(profile==='EXACT_FORWARD_218')same(m.source.migrations.slice(-3),RECOVERY_FORWARD_218,'forward_migration_suffix');
+  if(profile!=='HISTORICAL_216')same(m.source.migrations.slice(-3),RECOVERY_FORWARD_218,'forward_migration_suffix');
   if(m.stage==='prepare')must(m.prepared===null&&m.probe_manifest===null,'prepare_never_adopts_manifest');
   else{
     shape(m.prepared,['file','sha256'],'prepared_reference');must(m.prepared.file==='no-auto-prepare-receipt.json'&&HEX.test(m.prepared.sha256),'prepared_reference');
@@ -358,7 +373,7 @@ export async function runRecoveryReplay(plan,{root=ROOT,io=nodeIO,signal}={}){
       const replayed=[];
       for(const entry of m.source.migrations){
         const bytes=io.read(join(root,'supabase/migrations',entry.file));must(hash(bytes)===entry.sha256,'migration_changed');
-        if(forwardProfile==='EXACT_FORWARD_218'&&entry.file===RECOVERY_FORWARD_218[1].file){
+        if(forwardProfile!=='HISTORICAL_216'&&entry.file===RECOVERY_FORWARD_218[1].file){
           same(replayed.at(-1),RECOVERY_FORWARD_218[0],'forward_preimage_position');
           forwardPreimage=sort(await query('forward_inventory_preimage',INVENTORY_SQL));
           forwardSurfacePreimage=sort(await query('forward_surface_preimage',SURFACE_SQL));
@@ -432,7 +447,7 @@ export async function runRecoveryReplay(plan,{root=ROOT,io=nodeIO,signal}={}){
         const inventory=sort(await query('inventory_observed',INVENTORY_SQL)),surface=sort(await query('surface_observed',SURFACE_SQL));
         write(stage+'-observed-inventory.json',inventory);write(stage+'-observed-surface.json',surface);
         same([...new Set(inventory.map(x=>x.kind))].sort(),RECOVERY_KINDS,'all_inventory_kinds_required');
-        if(forwardProfile==='EXACT_FORWARD_218'){
+        if(forwardProfile!=='HISTORICAL_216'){
           assertForwardMembership(inventory,predecessorInventoryCount,surface);
           assertForwardDelta(forwardPreimage,inventory,forwardSurfacePreimage,surface);
         }
