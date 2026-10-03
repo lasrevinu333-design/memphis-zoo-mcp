@@ -1055,7 +1055,7 @@ export function createStaticWeeklyControlPlane({
             candidateKind, candidateKey, payload, serviceDate,
           }));
           const seasonWitness = await call(client,"static_weekly_sch022_preview_staffing_witness",
-            [databaseCandidates,actor.managerId]);
+            [JSON.stringify(databaseCandidates),actor.managerId]);
           const seasonWitnessDigest = requireSeasonWitness(seasonWitness?.digest);
           const publicationVector = { expectedRevision: command.expected_revision, weeks };
           const inputDigest = createHash("sha256").update(canonicalJson({ operationId: operation,
@@ -1068,7 +1068,7 @@ export function createStaticWeeklyControlPlane({
         const databaseCandidates = prepared.candidateSet.rows.map(({ candidateKind, candidateKey, serviceDate, payload }) => ({
           candidateKind, candidateKey, payload, serviceDate,
         }));
-        return call(client, "static_weekly_sch022_stage_staffing_command", [operation, databaseCandidates,
+        return call(client, "static_weekly_sch022_stage_staffing_command", [operation, JSON.stringify(databaseCandidates),
           prepared.previewDigest, prepared.inputDigest, prepared.publicationVector, actor.managerId,
           prepared.seasonWitnessDigest]);
       });
@@ -1090,13 +1090,13 @@ export function createStaticWeeklyControlPlane({
       }));
       return transaction(async (client) => {
         const currentWitness = await call(client,"static_weekly_sch022_preview_staffing_witness",
-          [databaseCandidates,actor.managerId]);
+          [JSON.stringify(databaseCandidates),actor.managerId]);
         if (currentWitness?.target_week_count > 0 && seasonWitnessDigest !== currentWitness.digest) {
           throw fail("static_weekly_sch022_witness_required", "Target-bearing staffing must retain the exact original seasonal preview witness.");
         }
         return call(client, "static_weekly_sch022_stage_staffing_command", [
         requireUuid(operationId, "staffing_operation_id_required"),
-        databaseCandidates,
+        JSON.stringify(databaseCandidates),
         requireDigest(previewDigest, "staffing_preview_digest_required"),
         requireDigest(inputDigest, "staffing_input_digest_required"),
         structuredClone(publicationVector),

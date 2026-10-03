@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
+import {createRequire} from 'node:module';
 import {createStaticWeeklyControlPlane} from '../src/static-weekly-control-plane.js';
+const require=createRequire(import.meta.url);
+const {prepareValue}=require('pg/lib/utils');
 const manager={manager_id:'10000000-0000-4000-8000-000000000001',manager_display_name:'Named Manager',auth_mode:'trusted_device',trusted_device:true,read_only:false};
 const employee='20000000-0000-4000-8000-000000000001',operation='30000000-0000-4000-8000-000000000001';
 const priorOwner='20000000-0000-4000-8000-000000000002',lunchOnly='20000000-0000-4000-8000-000000000003';
@@ -21,8 +24,14 @@ const plane=createStaticWeeklyControlPlane({database:{async connect(){return cli
       envelope:{database_projection_identity:'d'.repeat(64),assignments},expectedRevision:preparation.expectedRevision,actorManagerId:manager.manager_id,actorManagerName:manager.manager_display_name,idempotencyKey:preparation.actor.idempotencyKey,
       lunchDocument:{document_identity:'e'.repeat(64),responsibilities:[{service_date:'2026-09-30',normal_owner_person_id:employee,coverer_person_id:lunchOnly}]}};},initializeSolver:async()=>{},getSolverReadiness:()=>({available:true})});
 const result=await plane.prepareStaffingCommand({manager,operationId:operation});assert.equal(result.state,'PREPARED');
-assert.ok(staged,'complete candidate set must cross only the typed staging RPC');assert.equal(staged[0],operation);assert.equal(staged[1].length,7);
-assert.deepEqual(staged[1].map(row=>[row.candidateKind,row.candidateKey,row.serviceDate]),[
+assert.ok(staged,'complete candidate set must cross only the typed staging RPC');assert.equal(staged[0],operation);
+assert.equal(typeof staged[1],'string','stage candidates must cross as JSONB text, not a PostgreSQL array');
+const stagedCandidates=JSON.parse(prepareValue(staged[1]));assert.equal(stagedCandidates.length,7);
+const witnessCall=calls.find(row=>row.statement.includes('static_weekly_sch022_preview_staffing_witness'));
+assert.ok(witnessCall,'preparation must obtain the exact seasonal witness');
+assert.equal(typeof witnessCall.values[0],'string','preview candidates must cross as JSONB text');
+assert.deepEqual(JSON.parse(prepareValue(witnessCall.values[0])),stagedCandidates,'preview and staged candidates must be identical');
+assert.deepEqual(stagedCandidates.map(row=>[row.candidateKind,row.candidateKey,row.serviceDate]),[
   ['lunch','week:2026-09-28','2026-09-28'],['projection','week:2026-09-28','2026-09-28'],
   ['schedule_refresh',`date:2026-09-30:employee:${employee}`,'2026-09-30'],
   ['schedule_refresh',`date:2026-09-30:employee:${priorOwner}`,'2026-09-30'],

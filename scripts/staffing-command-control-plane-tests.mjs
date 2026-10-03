@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { createRequire } from 'node:module';
 import { createStaticWeeklyControlPlane } from '../src/static-weekly-control-plane.js';
+const require = createRequire(import.meta.url);
+const { prepareValue } = require('pg/lib/utils');
 
 let checks = 0;
 const same = (actual, expected, message) => { assert.deepEqual(actual, expected, message); checks++; };
@@ -87,7 +90,12 @@ same(await plane.stageStaffingCommand({ manager, operationId: response.operation
 const stageCall = queries.find(({ statement }) => statement.includes('static_weekly_sch022_stage_staffing_command'));
 same(stageCall.values.length, 7);
 same(stageCall.values[0], response.operation_id);
-same(stageCall.values[1], candidates, 'only exact candidate content crosses the database boundary');
+same(typeof stageCall.values[1], 'string', 'jsonb candidates cross as JSON text, not a PostgreSQL array');
+same(JSON.parse(prepareValue(stageCall.values[1])), candidates, 'only exact candidate content crosses the database boundary');
+const witnessCalls = queries.filter(({ statement }) => statement.includes('static_weekly_sch022_preview_staffing_witness'));
+same(witnessCalls.length, 1, 'stage obtains one current seasonal witness');
+same(typeof witnessCalls[0].values[0], 'string', 'seasonal witness takes JSONB text');
+same(JSON.parse(prepareValue(witnessCalls[0].values[0])), candidates, 'seasonal witness retains exact candidate content');
 same(stageCall.values[5], manager.manager_id, 'staging actor comes only from the trusted session');
 same(stageCall.values[6], 'c'.repeat(64), 'staged command binds the exact current catalog witness');
 seasonTargetCount = 1;
@@ -100,6 +108,15 @@ same(await plane.stageStaffingCommand({ manager, operationId: response.operation
   candidates, previewDigest: 'a'.repeat(64), inputDigest: 'b'.repeat(64), publicationVector: { revision: 19 },
   seasonWitnessDigest: 'c'.repeat(64),
 }), stageResponse, 'target-bearing internal stage requires the exact retained preview witness');
+const allStageCalls = queries.filter(({ statement }) => statement.includes('static_weekly_sch022_stage_staffing_command'));
+same(allStageCalls.length, 2, 'missing witness does not stage; valid witness stages');
+same(JSON.parse(prepareValue(allStageCalls[1].values[1])), candidates, 'target-bearing retry retains exact candidate JSONB');
+const allWitnessCalls = queries.filter(({ statement }) => statement.includes('static_weekly_sch022_preview_staffing_witness'));
+same(allWitnessCalls.length, 3, 'ordinary, missing-witness and target-bearing stage each recheck current season');
+for (const witnessCall of allWitnessCalls) {
+  same(typeof witnessCall.values[0], 'string', 'every seasonal witness uses JSONB text');
+  same(JSON.parse(prepareValue(witnessCall.values[0])), candidates, 'every seasonal witness retains exact candidates');
+}
 seasonTargetCount = 0;
 same(await plane.getStaffingCommand({ manager, operationId: response.operation_id }), statusResponse);
 same(await plane.listPendingStaffingCommands({ manager }), pendingResponse);
