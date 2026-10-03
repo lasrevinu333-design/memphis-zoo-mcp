@@ -310,12 +310,13 @@ if (process.argv.includes("--fused-ipc")) {
 
 if (process.argv.includes("--fused-reduction-six") || process.argv.includes("--fused-reduction-eight")) {
   const { createStaticWeeklyCompilerRuntime } = await import("../src/static-weekly-schedule-compiler-runtime.js");
-  const { createSyntheticFullNineReductionFixture } = await import(
-    "./static-weekly-recurring-phase-authority-tests.mjs");
+  const { createSyntheticRegisteredCurrentCorrectionReductionFixture } = await import(
+    "./fixtures/registered-current-correction-reduction.mjs");
   const count = process.argv.includes("--fused-reduction-eight") ? 8 : 6;
-  const fixture = createSyntheticFullNineReductionFixture(count);
+  const fixture = createSyntheticRegisteredCurrentCorrectionReductionFixture(count);
   const request = { publishedSource:fixture.publishedSource, managerSnapshot:fixture.managerSnapshot,
-    fullNineSource:fixture.fullNineSource,effectiveDate:fixture.effectiveDate,
+    fullNineSource:fixture.fullNineSource,correctionSource:fixture.correctionSource,
+    correctionWitness:fixture.correctionWitness,effectiveDate:fixture.effectiveDate,
     expectedRevision:fixture.expectedRevision };
   assert.equal(request.publishedSource.compiler_input.version.assignments.length, 313);
   const before = canonicalJson(request);
@@ -328,11 +329,15 @@ if (process.argv.includes("--fused-reduction-six") || process.argv.includes("--f
     assert.equal(preview.staffedPositions, count);
     assert.equal(preview.assignmentCount, 323);
     assert.equal(preview.weekCommitment.reductionContextDigest, preview.reductionContextDigest);
+    assert.equal(preview.correctionSourceDigest,postgresJsonbContentDigest(request.correctionSource.compiler_input));
+    assert.equal(preview.correctionWitnessDigest,request.correctionWitness.digest);
+    assert.equal(preview.weekCommitment.correctionWitnessDigest,request.correctionWitness.digest);
     assert.ok(preview.weekCommitment.days.every((day) =>
       /^[a-f0-9]{64}$/.test(day.mandatoryCurrentOwnerPreferenceDigest)));
     const authorityBasis = {source:request.publishedSource,snapshot:request.managerSnapshot,
       patternAuthority:{publicationId:request.publishedSource.publication_id},
-      fullNineSource:request.fullNineSource};
+      fullNineSource:request.fullNineSource,correctionSource:request.correctionSource,
+      correctionWitness:request.correctionWitness};
     assert.equal(assertRecurringWeekCommitment(preview,authorityBasis,request.expectedRevision),true);
     const changedCost = structuredClone(preview);
     changedCost.weekCommitment.days[0].fullInheritedPreferenceCost += 100;
@@ -340,6 +345,8 @@ if (process.argv.includes("--fused-reduction-six") || process.argv.includes("--f
     const wrongRegisteredBase = {...authorityBasis,fullNineSource:{...request.fullNineSource,
       source_id:"74000000-0000-4000-8000-000000000099"}};
     assert.throws(() => assertRecurringWeekCommitment(preview,wrongRegisteredBase,request.expectedRevision));
+    assert.throws(() => assertRecurringWeekCommitment(preview,{...authorityBasis,
+      correctionWitness:{...request.correctionWitness,digest:'a'.repeat(64)}},request.expectedRevision));
     const admission = await runtime.prepareRecurringAdmissionCandidate(request);
     assertRecurringAdmissionCandidate(admission);
     assert.equal(admission.candidate.weekCommitment.digest, preview.weekCommitment.digest,
