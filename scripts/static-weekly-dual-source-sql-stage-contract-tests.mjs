@@ -5,6 +5,7 @@ import {readFileSync,mkdtempSync,mkdirSync,symlinkSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
+import {runInNewContext} from 'node:vm';
 import {createDualSourceRegisteredCorrectionSqlSource} from './fixtures/dual-source-registered-correction-sql-source.mjs';
 import {assertCurrentManager218MigrationSet,CURRENT_MANAGER_218_MIGRATION_MANIFEST}
  from './fixtures/current-manager-publication-source.mjs';
@@ -17,6 +18,24 @@ const check=(name,fn)=>{fn();checks++;console.log('PASS',name);};
 const fixture=createDualSourceRegisteredCorrectionSqlSource();
 const runner=readFileSync(new URL('./run-isolated-shift-end-tests.mjs',import.meta.url),'utf8');
 const child=readFileSync(new URL('./static-weekly-dual-source-current-correction-sql-tests.mjs',import.meta.url),'utf8');
+const publishedStart=runner.indexOf(' if(publishedStage)runRecurringClockedChild(');
+const publishedEnd=runner.indexOf('\n if(dualSource217Stage)',publishedStart);
+assert.ok(publishedStart>=0&&publishedEnd>publishedStart,'real published child delegation block required');
+const publishedDelegation=runner.slice(publishedStart,publishedEnd);
+function invokePublishedDelegation(source,{childError=null}={}){
+ const calls={wrapper:0,child:0,args:null,options:null,clock:null};
+ const clock=Object.freeze({deadlineMilliseconds:1200000});
+ const context={publishedStage:true,publishedChildClock:clock,stage:'current-manager-219',
+  currentManagerStage:true,currentManager216Stage:false,currentManager217Stage:false,
+  currentManager218Stage:false,currentManager219Stage:true,currentManager218Browser:false,
+  container:'synthetic-container',socket:'/synthetic-socket',
+  process:{execPath:'/exact/node',env:{PARENT_MARKER:'retained'}},
+  runRecurringClockedChild(work,boundClock){calls.wrapper++;calls.clock=boundClock;return work();},
+  execFileSync(...args){calls.child++;calls.args=args[0];calls.options=args[2];
+   calls.argv=args[1];if(childError)throw childError;return 'exact-child-result';}};
+ const value=runInNewContext(source,context);
+ return {calls,value,clock};
+}
 check('disposable fixture keeps original314, historical313 and current323 separate',()=>{
  assert.deepEqual([fixture.original.compilerInput.version.assignments.length,
   fixture.historical.compilerInput.version.assignments.length,fixture.correction.compilerInput.version.assignments.length],
@@ -70,7 +89,8 @@ check('new219 stage pins exact predecessor and preserves older stage branches',(
  assert.match(runner,/files\.length,currentManager219Stage\|\|dualSource219Stage\?219:currentManager218Stage\|\|dualSource218Stage\?218/);
  assert.match(runner,/20261003230000_static_weekly_named_handoff_derivation\.sql/);
  assert.match(runner,/20261004000000_native_provider_event_decision_lookup\.sql/);
- assert.match(runner,/if\(publishedStage\)execFileSync/);
+ assert.match(runner,/createRecurringClockRecorder\(\{deadlineMilliseconds:1200000/);
+ assert.match(runner,/if\(publishedStage\)runRecurringClockedChild\(\(\)=>execFileSync/);
  assert.match(runner,/if\(dualSource217Stage\)execFileSync\(process\.execPath,\['scripts\/static-weekly-dual-source-current-correction-sql-tests\.mjs'\]/);
  assert.match(runner,/if\(dualSource218Stage\)execFileSync\(process\.execPath,\['scripts\/static-weekly-dual-source-current-correction-sql-tests\.mjs'\]/);
  assert.match(runner,/if\(dualSource219Stage\)execFileSync\(process\.execPath,\['scripts\/static-weekly-dual-source-current-correction-sql-tests\.mjs'\]/);
@@ -79,6 +99,32 @@ check('new219 stage pins exact predecessor and preserves older stage branches',(
  assert.match(child,/if\(dual218\)assertCurrentManager218MigrationSet\(\)/);
  assert.match(child,/if\(dual219\)assertCurrentManager219MigrationSet\(\)/);
  assert.match(child,/assert\.equal\(\[dual217,dual218,dual219\]\.filter\(Boolean\)\.length,1/);
+});
+check('published wrapper actually delegates one exact current-manager child and preserves failures',()=>{
+ const {calls,clock}=invokePublishedDelegation(publishedDelegation);
+ assert.equal(calls.wrapper,1);assert.equal(calls.child,1);
+ assert.equal(calls.clock,clock);
+ assert.equal(calls.args,'/exact/node');
+ assert.deepEqual(Array.from(calls.argv),['scripts/static-weekly-current-roster-publication-tests.mjs']);
+ assert.equal(calls.options.timeout,1200000);
+ assert.equal(calls.options.stdio,'inherit');
+ assert.deepEqual(JSON.parse(JSON.stringify(calls.options.env)),{
+  PARENT_MARKER:'retained',SHIFT_END_TEST_CONTAINER:'synthetic-container',
+  SHIFT_END_TEST_SOCKET:'/synthetic-socket',STATIC_WEEKLY_TEST_CURRENT_219:'1',
+  STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION:'1'});
+ const original=new Error('exact child failure');
+ assert.throws(()=>invokePublishedDelegation(publishedDelegation,{childError:original}),error=>error===original);
+});
+check('published delegation rejects mention-only and changed child/timeout mutations',()=>{
+ const mentionOnly='if(publishedStage)runRecurringClockedChild(()=>undefined,publishedChildClock); // execFileSync token';
+ assert.throws(()=>assert.equal(invokePublishedDelegation(mentionOnly).calls.child,1,
+  'published child must actually execute'),/published child must actually execute/);
+ const wrongChild=publishedDelegation.replace('scripts/static-weekly-current-roster-publication-tests.mjs',
+  'scripts/wrong-child.mjs');
+ assert.notDeepEqual(Array.from(invokePublishedDelegation(wrongChild).calls.argv),
+  ['scripts/static-weekly-current-roster-publication-tests.mjs']);
+ const wrongTimeout=publishedDelegation.replace('?1200000:900000','?999:900000');
+ assert.notEqual(invokePublishedDelegation(wrongTimeout).calls.options.timeout,1200000);
 });
 check('old stage and malformed child selectors refuse changed219 source before Docker',()=>{
  const env={...process.env};
