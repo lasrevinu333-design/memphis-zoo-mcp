@@ -6,7 +6,7 @@ import {createOpeningCoverageReport} from '../src/static-weekly-opening-coverage
 import {loadOpeningCoverageFixture} from './static-weekly-opening-coverage-report-tests.mjs';
 import {installStaticWeeklySha256HexAccelerator} from '../src/static-weekly-schedule-model.js';
 import {contentDigest} from '../src/static-weekly-schedule-model.js';
-import {RECURRING_WEEK_COMMITMENT_SCHEMA,RECURRING_PHASE_SCOPE} from '../src/static-weekly-recurring-week-commitment.js';
+import {RECURRING_WEEK_COMMITMENT_SCHEMA,RECURRING_PHASE_SCOPE,RECURRING_MORNING_SCOPE} from '../src/static-weekly-recurring-week-commitment.js';
 import {COMPONENT_WEIGHT_LEDGER_DIGEST} from '../src/schedule-component-weight-authority.js';
 import {createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
@@ -77,6 +77,29 @@ function candidateFor(basis){
   normalMorningOptimumClaim:false,datedPriorityChange:false,physicalMinuteFeasibilityClaim:false,
   admitted:false,published:false};
  candidate.weekCommitment={...commitment,digest:contentDigest(commitment)};
+ // Mandatory sibling SHAPE for this injected orchestration mock, never an
+ // actual solver/SQL receipt. Preserve all transaction and original late
+ // checks while exercising current morning binding and rejection controls.
+ const morningFacts={sourceBasisDigest:'a'.repeat(64),originalSourceDigest:contentDigest(basis.publishedSource.compiler_input),
+  candidateSourceDigest:commitment.sourceDigest,targetEffectiveDate:week,targetCalendarReceiptDigest:'b'.repeat(64),
+  days:Array.from({length:7},(_,dayOfWeek)=>({dayOfWeek,contractDigest:'c'.repeat(64),metrics:{coverage:[0]},
+   selection:[{workId:`synthetic-morning-${dayOfWeek}`,slotId:'synthetic'}],
+   terminalOptima:Array.from({length:6},(_,i)=>({name:`synthetic-${i}`,modelDigest:'d'.repeat(64),lpDigest:'e'.repeat(64),primitiveObjective:0,originalObjective:0}))}))};
+ const morning={schema:'custodial.recurring-morning-combined-commitment.v1',scope:RECURRING_MORNING_SCOPE,status:'PROVEN_CANDIDATE_ONLY',
+  sourceId:candidate.sourceId,publicationId:candidate.publicationId,authorityRevision:candidate.authorityRevision,effectiveWeek:week,
+  publishedSourceDigest:candidate.publishedSourceDigest,managerSnapshotDigest:candidate.managerSnapshotDigest,readbackPatternDigest:candidate.readbackPatternDigest,
+  originalMorningSourceDigest:morningFacts.originalSourceDigest,morningSourceBasisDigest:morningFacts.sourceBasisDigest,
+  originalMorningSourceSqlDigest:candidate.publishedSourceDigest,targetCalendarReceiptDigest:morningFacts.targetCalendarReceiptDigest,
+  targetEffectiveDate:week,originalCalendarHeaderDigest:'f'.repeat(64),targetCalendarHeaderDigest:'f'.repeat(64),originalDatedOverlayCount:0,
+  datedOverlaysRetainedInOriginalOnly:true,recurringRowsAnchorsAvailabilityAndHistoryPreserved:true,
+  morningFacts,morningFactsDigest:contentDigest(morningFacts),morningCandidateSourceDigest:commitment.sourceDigest,
+  phaseSourceBasisDigest:commitment.sourceBasisDigest,lateCommitmentDigest:candidate.weekCommitment.digest,
+  finalSourceDigest:commitment.finalSourceDigest,finalSourceSqlDigest:commitment.finalSourceSqlDigest,finalCanonicalWitnessDigest:commitment.canonicalHard.witnessDigest,
+  sharedMorningAdmissionBudgetMs:30000,originalAnchorsPreserved:true,originalLateReferencePreserved:true,sourceRequiredPlannedMorningOptimum:true,
+  openingReadinessProven:false,physicalMinuteFeasibilityClaim:false,acceptedStaticChanged:false,datedPriorityChange:false,admitted:false,published:false};
+ candidate.morningOptimizationScope=RECURRING_MORNING_SCOPE;
+ candidate.morningSourceBasisDigest=morningFacts.sourceBasisDigest;
+ candidate.morningCommitment={...morning,digest:contentDigest(morning)};
  const reportKey=digest({sourceDigest:digest(raw),decisionDigest:candidate.decisionDigest,revision:basis.expectedRevision});
  if(!reportCache.has(reportKey))reportCache.set(reportKey,createOpeningCoverageReport({source:raw,assignments:decision.assignments,lunch:actual.result.lunch,
   context:{publicationId:oldPublication,authorityRevision:basis.expectedRevision},decisionDigest:candidate.decisionDigest}));
@@ -234,7 +257,15 @@ for(const change of ['revision','generation','preview','manager']){
 for(const mutate of [r=>r.canonicalSource.proximity.push({forged:true}),r=>r.candidate.decision.implementationDigest='0'.repeat(64),
  r=>r.candidate.publishedSourceDigest='0'.repeat(64),r=>r.candidate.decision.fixedLunch.loans.push({forged:true}),
  r=>r.candidate.weekCommitment.days[3].descriptorDigest='0'.repeat(64),
- r=>r.candidate.weekCommitment.sourceId=id(99)]){
+ r=>r.candidate.weekCommitment.sourceId=id(99),
+ r=>{delete r.candidate.morningCommitment;},
+ r=>{r.candidate.morningCommitment.targetEffectiveDate='2026-10-12';
+  const {digest:old,...body}=r.candidate.morningCommitment;r.candidate.morningCommitment.digest=contentDigest(body);},
+ r=>{r.candidate.morningCommitment.finalSourceDigest='0'.repeat(64);
+  const {digest:old,...body}=r.candidate.morningCommitment;r.candidate.morningCommitment.digest=contentDigest(body);},
+ r=>{r.candidate.morningCommitment.morningFacts.days.pop();
+  r.candidate.morningCommitment.morningFactsDigest=contentDigest(r.candidate.morningCommitment.morningFacts);
+  const {digest:old,...body}=r.candidate.morningCommitment;r.candidate.morningCommitment.digest=contentDigest(body);}]){
  const hostile=harness({mutatePrivate:mutate}),r=await requestFor(hostile);
  await assert.rejects(()=>hostile.plane.confirmRecurringStaffing(r),/source|decision|preview|candidate/);checks++;
  check('hostile private candidate writes nothing',hostile.state().writes,[]);await hostile.plane.close();
