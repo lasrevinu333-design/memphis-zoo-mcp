@@ -7,6 +7,7 @@ import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "n
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { verifyNativeScheduleSourceWiring } from './native-schedule-source-ci-wiring.mjs';
 
 const root = resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
 const workflowDirectory = resolve(root, ".github", "workflows");
@@ -302,7 +303,8 @@ for (const [source, job] of [[schedulerGate, "validate"], [productionRepairGate,
   assert.throws(() => assertReviewedRegressionGate(source.replace(`docker pull ${rehearsalPostgresImage}`, "# missing image preparation"), job, "mutation"));
   reviewedMutationCount += 1;
 }
-const currentSystemSource = readFileSync(resolve(root, "scripts/current-system-source-contract-tests.mjs"), "utf8");
+const currentSystemSource = verifyNativeScheduleSourceWiring(
+  readFileSync(resolve(root, "scripts/current-system-source-contract-tests.mjs"), "utf8"), root);
 const completionSourceImport = "await import('./completion-taxonomy-contract-tests.mjs');";
 const completionDatabaseCommand = "node scripts/completion-taxonomy-database-tests.mjs";
 const completionStep = [
