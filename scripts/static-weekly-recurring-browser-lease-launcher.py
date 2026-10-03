@@ -25,7 +25,24 @@ STAGE_219 = 'current-manager-219'
 PROFILE_SCHEMAS = {STAGE: 'custodial.recurring-browser-218-plan.v1',
     STAGE_219: 'custodial.recurring-browser-219-plan.v1'}
 IMAGE = 'supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed'
+INSTALLED_BACKEND = Path('/home/eric/Documents/Codex/2026-09-13/i-x20/work/autonomous-repair-20260923/release-integration-20261002/backend')
+BACKEND_LOCK_SHA256 = '2085bec2833f5e08e3314aa12003b2a8e0863b07837742384e92072b77beb6b1'
+# Only packages reached by this fixture's SQL reader, authenticated runtime,
+# and fused solver. Their transitive imports resolve inside the pinned installed
+# package trees. No npm install, network lookup, or top-level dependency symlink.
+BACKEND_PACKAGES = {
+    'pg': 'bab5faf4410151a463078fffa326d10979150bfc330f0a29bd08948378ed3421',
+    'highs': '21e76a89d13d636f56d5cdda7dde590acd48d6fb683c97a327c10d43e74d9c56',
+    'express': '2980b885bad92f757a2d44674e905cf875867d5685111d8ab8f285635b11367d',
+    'dotenv': '7e57c7c7b3c5fe5dd127091aeacadec3e144fd290988c61c184876c1b8bda819',
+    '@supabase/supabase-js': '11d42f0c4a030fe450aeb9e3dd0085afff5c46ae9d071f25cdd8d0923bd852c4',
+}
+HIGHS_RUNTIME_PINS = {
+    'build/highs.js': '6d5be3ed3cbd1ce1924cc66cc9302b50753dabdb8c6e0e815845dce7f1890033',
+    'build/highs.wasm': '7e6432b2b26f4fab9f6d9bac55da43307c7a4b1b071cb204cb4d23e1901bc4d0',
+}
 BACKEND_MEMBERS = (
+    'package-lock.json',
     'scripts/run-isolated-shift-end-tests.mjs',
     'scripts/static-weekly-current-roster-publication-tests.mjs',
     'scripts/static-weekly-recurring-confirmation-http-integration.mjs',
@@ -46,6 +63,96 @@ def stamp():
 
 def digest(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def validate_backend_dependency_source(backend, installed=INSTALLED_BACKEND):
+    """Read-only lock/content validation; preflight never creates dependencies."""
+    lock_path = backend / 'package-lock.json'
+    installed_lock = installed / 'package-lock.json'
+    if digest(lock_path) != BACKEND_LOCK_SHA256 or digest(installed_lock) != BACKEND_LOCK_SHA256:
+        raise ValueError('exact backend and installed dependency lock changed')
+    lock = json.loads(lock_path.read_text())
+    source = installed / 'node_modules'
+    if source.is_symlink() or not source.is_dir():
+        raise ValueError('installed backend dependency source is not a real directory')
+    for package, package_sha in BACKEND_PACKAGES.items():
+        target = source / package
+        package_file = target / 'package.json'
+        if target.is_symlink() or not target.is_dir() or digest(package_file) != package_sha:
+            raise ValueError('exact installed backend package changed: ' + package)
+        expected = lock['packages']['node_modules/' + package]['version']
+        if json.loads(package_file.read_text()).get('version') != expected:
+            raise ValueError('installed backend package version changed: ' + package)
+    for name, expected in HIGHS_RUNTIME_PINS.items():
+        if digest(source / 'highs' / name) != expected:
+            raise ValueError('pinned fused solver asset changed: ' + name)
+    return source
+
+
+def cleanup_backend_dependencies(layout):
+    """Remove only the exact links and directories created by this invocation."""
+    if layout is None:
+        return 'NOT_CREATED'
+    # Validate the complete owned tree before unlinking even one member. A
+    # substituted link or unexpected file must not cause partial cleanup.
+    for directory in layout['directories']:
+        if not directory.is_dir() or directory.is_symlink():
+            raise RuntimeError('owned backend dependency directory changed before cleanup')
+        expected = {member.name for member, _ in layout['links'] if member.parent == directory}
+        expected.update(child.name for child in layout['directories'] if child.parent == directory)
+        if {child.name for child in directory.iterdir()} != expected:
+            raise RuntimeError('owned backend dependency directory changed before cleanup')
+    for member, target in layout['links']:
+        if not member.is_symlink() or os.readlink(member) != str(target):
+            raise RuntimeError('owned backend package link changed before cleanup')
+    for member, target in reversed(layout['links']):
+        if not member.is_symlink() or os.readlink(member) != str(target):
+            raise RuntimeError('owned backend package link changed during cleanup')
+        member.unlink()
+    for directory in reversed(layout['directories']):
+        if not directory.is_dir() or directory.is_symlink() or list(directory.iterdir()):
+            raise RuntimeError('owned backend dependency directory changed before cleanup')
+        directory.rmdir()
+    return 'EXACT_OWNED_LINKS_AND_DIRECTORIES_REMOVED'
+
+
+def install_backend_dependencies(backend, installed=INSTALLED_BACKEND, smoke=True, clean=None):
+    """Use a real ignored node_modules directory, never an untracked root link."""
+    source = validate_backend_dependency_source(backend, installed)
+    root = backend / 'node_modules'
+    if os.path.lexists(root):
+        raise ValueError('backend dependency directory must not preexist')
+    layout = {'directories': [], 'links': [], 'packages': tuple(BACKEND_PACKAGES)}
+    try:
+        root.mkdir(mode=0o700)
+        layout['directories'].append(root)
+        scope = root / '@supabase'
+        scope.mkdir(mode=0o700)
+        layout['directories'].append(scope)
+        for package in BACKEND_PACKAGES:
+            member = root / package
+            target = source / package
+            member.symlink_to(target, target_is_directory=True)
+            layout['links'].append((member, target))
+        clean = clean or (lambda: git(backend, 'status', '--porcelain') == '')
+        if not clean():
+            raise ValueError('real ignored backend dependencies changed clean source')
+        if smoke:
+            code = (
+                "import {createRequire} from 'node:module';"
+                "for(const name of ['pg','express','dotenv/config','@supabase/supabase-js'])"
+                " await import(name);"
+                "await import('./src/static-weekly-control-plane-runtime.js');"
+                "await import('./scripts/static-weekly-recurring-confirmation-http-integration.mjs');"
+                "const require=createRequire(process.cwd()+'/package.json');"
+                "require.resolve('highs');"
+            )
+            subprocess.check_output(['node', '--input-type=module', '-e', code], cwd=backend,
+                text=True, timeout=20, stderr=subprocess.STDOUT)
+        return layout
+    except BaseException:
+        cleanup_backend_dependencies(layout)
+        raise
 
 
 def private_json(path, value):
@@ -102,6 +209,9 @@ def load_plan(plan_path, expected_sha):
            git(root, 'rev-parse', 'HEAD^{tree}') != plan[label + '_tree'] or \
            git(root, 'status', '--porcelain'):
             raise ValueError(label + ' exact source identity or cleanliness changed')
+    if os.path.lexists(backend / 'node_modules'):
+        raise ValueError('backend dependency directory must not preexist')
+    validate_backend_dependency_source(backend)
     dependencies = (
         (frontend / 'node_modules/playwright/index.mjs', 'playwright_index_sha256'),
         (frontend / 'node_modules/playwright/package.json', 'playwright_package_sha256'),
@@ -290,6 +400,7 @@ def run(plan_path, expected_sha):
         'lease_generation_id': lease.generation_id, 'shared_browser_accessed': False,
         'production': False, 'phone_accessed': False, 'independent_audit': False}
     child = None
+    dependency_layout = None
     run_id = secrets.token_hex(16)
     receipt['browser_run_id'] = run_id
     released = False
@@ -325,6 +436,13 @@ def run(plan_path, expected_sha):
         signal.signal(signum, interrupt)
     execution_error = None
     try:
+        dependency_layout = install_backend_dependencies(backend)
+        receipt['backend_dependency_layout'] = {
+            'kind': 'OWNED_REAL_IGNORED_DIRECTORY_EXACT_PACKAGE_LINKS',
+            'packages': list(dependency_layout['packages']),
+            'source_lock_sha256': BACKEND_LOCK_SHA256,
+            'installed_source': str(INSTALLED_BACKEND),
+        }
         private_json(output / 'source-receipt.json', receipt)
         print('RECURRING_BROWSER_OUTPUT=' + str(output), flush=True)
         if not client.check(lease):
@@ -384,6 +502,11 @@ def run(plan_path, expected_sha):
                 run_id, browser_record, child.pid if child else None, os.getpid())
         except BaseException as error:
             failures.append('exact_browser_cleanup:' + type(error).__name__)
+        try:
+            receipt['backend_dependency_cleanup'] = cleanup_backend_dependencies(dependency_layout)
+        except BaseException as error:
+            receipt['backend_dependency_cleanup'] = 'UNPROVEN'
+            failures.append('backend_dependency_cleanup:' + type(error).__name__)
         receipt['child_process_group_absent'] = child is None or group_absent(child.pid)
         if not receipt['child_process_group_absent']:
             failures.append('child_group_still_present')

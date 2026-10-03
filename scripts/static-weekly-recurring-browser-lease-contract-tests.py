@@ -4,6 +4,7 @@ import io
 import json
 import os
 import secrets
+import shutil
 from pathlib import Path
 import subprocess
 import sys
@@ -22,6 +23,8 @@ assert launcher.PROFILE_SCHEMAS == {
     'current-manager-219': 'custodial.recurring-browser-219-plan.v1'}
 assert 'fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed' in launcher.IMAGE
 assert len(launcher.BACKEND_MEMBERS) == len(set(launcher.BACKEND_MEMBERS))
+assert launcher.BACKEND_LOCK_SHA256 == '2085bec2833f5e08e3314aa12003b2a8e0863b07837742384e92072b77beb6b1'
+assert set(launcher.BACKEND_PACKAGES) == {'pg', 'highs', 'express', 'dotenv', '@supabase/supabase-js'}
 bound = {'childPid': 333, 'stageParentPid': 222, 'leaseParentPid': 111,
     'remainingContexts': 0, 'sharedUserBrowserAccessed': False,
     'launched': True, 'contextCreated': True, 'contextClosed': True, 'browserClosed': True,
@@ -74,6 +77,60 @@ with tempfile.TemporaryDirectory(prefix='mz-browser-launcher-pure-') as director
         raise AssertionError('219 stage accepted 218 plan schema')
     except ValueError as error:
         assert 'exact manager 218/219 browser profiles' in str(error)
+
+    # Backend module setup is an ignored real directory with only exact
+    # caller-owned links. This test never imports a SQL child or starts Docker.
+    test_backend = own / 'backend'
+    test_backend.mkdir()
+    shutil.copyfile(SOURCE.parent.parent / 'package-lock.json', test_backend / 'package-lock.json')
+    assert launcher.validate_backend_dependency_source(test_backend) == launcher.INSTALLED_BACKEND / 'node_modules'
+    assert not os.path.lexists(test_backend / 'node_modules')
+    (test_backend / 'node_modules').symlink_to(own, target_is_directory=True)
+    try:
+        launcher.install_backend_dependencies(test_backend, smoke=False, clean=lambda: True)
+        raise AssertionError('preexisting top-level dependency symlink accepted')
+    except ValueError as error:
+        assert 'must not preexist' in str(error)
+    (test_backend / 'node_modules').unlink()
+    layout = launcher.install_backend_dependencies(test_backend, smoke=False, clean=lambda: True)
+    try:
+        assert (test_backend / 'node_modules').is_dir() and not (test_backend / 'node_modules').is_symlink()
+        assert (test_backend / 'node_modules/@supabase').is_dir()
+        assert len(layout['links']) == 5
+        for member, target in layout['links']:
+            assert member.is_symlink() and os.readlink(member) == str(target)
+        try:
+            launcher.install_backend_dependencies(test_backend, smoke=False, clean=lambda: True)
+            raise AssertionError('preexisting dependency layout accepted')
+        except ValueError as error:
+            assert 'must not preexist' in str(error)
+        member, target = layout['links'][0]
+        member.unlink()
+        member.symlink_to(own, target_is_directory=True)
+        try:
+            launcher.cleanup_backend_dependencies(layout)
+            raise AssertionError('replaced dependency link silently removed')
+        except RuntimeError as error:
+            assert 'changed before cleanup' in str(error)
+        assert all(other.is_symlink() for other, _ in layout['links'][1:]), 'refusal must not partially unlink'
+        member.unlink()
+        member.symlink_to(target, target_is_directory=True)
+    finally:
+        assert launcher.cleanup_backend_dependencies(layout) == 'EXACT_OWNED_LINKS_AND_DIRECTORIES_REMOVED'
+    assert not os.path.lexists(test_backend / 'node_modules')
+    try:
+        launcher.install_backend_dependencies(test_backend, smoke=False, clean=lambda: False)
+        raise AssertionError('dirty source accepted after dependency setup')
+    except ValueError as error:
+        assert 'changed clean source' in str(error)
+    assert not os.path.lexists(test_backend / 'node_modules'), 'partial setup must clean exact owned links'
+    with (test_backend / 'package-lock.json').open('ab') as stream:
+        stream.write(b' ')
+    try:
+        launcher.validate_backend_dependency_source(test_backend)
+        raise AssertionError('changed source lock accepted')
+    except ValueError as error:
+        assert 'dependency lock changed' in str(error)
     wrong_stage = own / 'wrong-stage.json'
     launcher.private_json(wrong_stage, {**base_plan, 'stage': 'current-manager-220'})
     try:
@@ -137,6 +194,17 @@ with tempfile.TemporaryDirectory(prefix='mz-browser-launcher-pure-') as director
             owned.terminate()
             owned.wait(timeout=3)
 
+real_backend = SOURCE.parent.parent
+before = subprocess.check_output(['git', 'status', '--porcelain'], cwd=real_backend, text=True)
+assert not os.path.lexists(real_backend / 'node_modules')
+real_layout = launcher.install_backend_dependencies(real_backend, clean=lambda: True)
+try:
+    assert len(real_layout['links']) == 5, 'actual reachable fixture package closure'
+finally:
+    assert launcher.cleanup_backend_dependencies(real_layout) == 'EXACT_OWNED_LINKS_AND_DIRECTORIES_REMOVED'
+assert not os.path.lexists(real_backend / 'node_modules')
+assert subprocess.check_output(['git', 'status', '--porcelain'], cwd=real_backend, text=True) == before
+
 source = SOURCE.read_text()
 for required in ('BrowserLeaseClient()', 'client.acquire(', 'client.renew(',
         'client.check(', 'client.close_targets_and_release(',
@@ -148,6 +216,7 @@ for required in ('BrowserLeaseClient()', 'client.acquire(', 'client.renew(',
         'assertCurrentManager219MigrationSet();',
         'browser-stage-cleanup.json', 'owned_container_absent(child.pid)',
         'browser-process.json', 'stop_exact_marked_processes(',
+        'install_backend_dependencies(backend)', 'cleanup_backend_dependencies(dependency_layout)',
         'child_process_group_absent', 'source-receipt.json'):
     assert required in source, required
 print('PASS recurring browser lease launcher pure source, private receipt, and silent-child bound contracts')
