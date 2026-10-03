@@ -7,7 +7,8 @@ import {createStaticWeeklyControlPlaneRuntime} from '../src/static-weekly-contro
 import {compileAndPrepareStaticWeeklyScheduleIsolated} from '../src/static-weekly-schedule-compiler-runtime.js';
 import {postgresJsonbContentDigest as digest} from '../src/static-weekly-schedule-compiler.js';
 import {recurringHttpSqlBoundary,captureRecurringHttpTransportFailure,
- rethrowOriginalTransportError,recurringHttpCompilerProbe} from './static-weekly-recurring-http-boundary.mjs';
+ rethrowOriginalTransportError,recurringHttpCompilerProbe,
+ createRecurringClockRecorder} from './static-weekly-recurring-http-boundary.mjs';
 
 // Invoked only after the explicit current-manager-218/219 fixture has published its exact
 // baseline in the network-none, no-auto-grants disposable database. This is
@@ -38,10 +39,11 @@ export async function testRecurringConfirmationHttp({pool,week,originalManagerId
   'publications',(select count(*) from public.weekly_schedule_publications),
   'proofs',(select count(*) from public.static_weekly_recurring_acceptance_proofs),
   'targets',(select count(*) from public.static_weekly_recurring_application_intents)) as result`);
- let checkedOut=0,maxCheckedOut=0,loseCommit=false,traceConfirm=false,confirmStart=0;
+ let checkedOut=0,maxCheckedOut=0,loseCommit=false,traceConfirm=false,confirmStart=0,confirmClock=null;
  const trace=(phase)=>{if(traceConfirm)console.log('ACTUAL_RECURRING_HTTP_CONFIRM_BOUNDARY',phase,Math.round(performance.now()-confirmStart));};
  const transportFailure=(phase,error)=>{
   if(!traceConfirm)return;
+  confirmClock?.mark('confirm_transport_failure','ERROR');
   // Synchronous, bounded, nonsecret output survives even if cleanup waits for
   // an in-flight transaction. The sidecar is optional and never overwritten.
   captureRecurringHttpTransportFailure(error,{phase,elapsedMilliseconds:Math.round(performance.now()-confirmStart),
@@ -50,6 +52,7 @@ export async function testRecurringConfirmationHttp({pool,week,originalManagerId
     process.env.STATIC_WEEKLY_CONTINUITY_EVIDENCE+'.first-confirm-transport.json',JSON.stringify(fact)+'\n',{flag:'wx',mode:0o600});}});
  };
  const onProcessExit=(code)=>{
+  if(traceConfirm)confirmClock?.mark('confirm_process_exit','PROCESS_EXIT');
   if(traceConfirm)try{writeSync(1,`ACTUAL_RECURRING_HTTP_CONFIRM_BOUNDARY process_exit_code:${Number.isSafeInteger(code)?code:'OTHER'} ${Math.round(performance.now()-confirmStart)}\n`);}catch{}
  };
  const database={async connect(){trace('sql_connect_start');checkedOut++;maxCheckedOut=Math.max(maxCheckedOut,checkedOut);
@@ -80,9 +83,9 @@ export async function testRecurringConfirmationHttp({pool,week,originalManagerId
   server.prependListener('request',(req,res)=>{
    if(!traceConfirm||req.method!=='POST'||req.url!=='/static-weekly/recurring-adaptation/confirm')return;
    trace('http_server_request_received');
-   res.once('finish',()=>{trace(`http_server_response_finished:${res.statusCode}`);
+   res.once('finish',()=>{confirmClock?.mark('confirm_response_finished','FINISHED');trace(`http_server_response_finished:${res.statusCode}`);
     queueMicrotask(()=>trace(`restore_gate_signal_after_finish:${req.restoreMutationLease?.signal?.aborted===true?'ABORTED':'NOT_OBSERVED'}`));});
-   res.once('close',()=>{trace(`http_server_response_closed:${res.writableFinished?'FINISHED':'UNFINISHED'}`);
+   res.once('close',()=>{confirmClock?.mark('confirm_response_closed',res.writableFinished?'FINISHED':'UNFINISHED');trace(`http_server_response_closed:${res.writableFinished?'FINISHED':'UNFINISHED'}`);
     // The gate's own close listener is registered later in middleware; inspect
     // only after every synchronous close listener has run.
     queueMicrotask(()=>trace(`restore_gate_signal_after_close:${req.restoreMutationLease?.signal?.aborted===true?'ABORTED':req.restoreMutationLease?'LIVE':'MISSING'}`));});
@@ -131,8 +134,14 @@ export async function testRecurringConfirmationHttp({pool,week,originalManagerId
   for(const extra of [{manager_id:originalManagerId},{candidate_source:{forged:true}},{decision:{forged:true}}])
    check('HTTP confirmation rejects caller-supplied authority',(await request('POST',confirmRoute,{...confirmBody,...extra})).status,422);
   const before=await counts();loseCommit=true;confirmStart=performance.now();traceConfirm=true;
+  confirmClock=createRecurringClockRecorder({emit:fact=>writeSync(1,
+   `ACTUAL_RECURRING_HTTP_CONFIRM_CLOCK ${JSON.stringify(fact)}\n`)});
+  confirmClock.mark('confirm_origin','STARTED');
   process.once('exit',onProcessExit);
-  const uncertain=await request('POST',confirmRoute,confirmBody);
+  let uncertain;
+  try{uncertain=await request('POST',confirmRoute,confirmBody);
+   confirmClock.mark('confirm_request_terminal','RETURNED');}
+  catch(error){confirmClock.mark('confirm_request_terminal','THREW');throw error;}
   trace('http_first_confirm_returned');traceConfirm=false;process.removeListener('exit',onProcessExit);
   check('lost COMMIT HTTP response is unavailable, not accepted',uncertain.status,503);
   check('lost COMMIT mapped to exact unavailable code',uncertain.body.code,'static_weekly_control_plane_database_unavailable');
@@ -189,6 +198,7 @@ export async function testRecurringConfirmationHttp({pool,week,originalManagerId
    JSON.stringify(confirmationProof)+'\n',{flag:'wx'});
   return confirmationProof;
  }finally{
+  confirmClock?.mark('confirm_fixture_finally','ENTERED');
   try{if(requestAdapter?.close)await requestAdapter.close();}
   finally{
    try{if(server?.listening)await new Promise((resolve,reject)=>server.close(error=>error?reject(error):resolve()));}

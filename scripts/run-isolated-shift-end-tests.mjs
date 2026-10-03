@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
-import {readdirSync,readFileSync,mkdtempSync,chmodSync,rmdirSync,unlinkSync} from 'node:fs';
+import {readdirSync,readFileSync,mkdtempSync,chmodSync,rmdirSync,unlinkSync,writeSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {assertCurrentManagerMigrationSet,assertCurrentManager217MigrationSet,assertCurrentManager218MigrationSet,loadCurrentManagerPublicationFixture} from './fixtures/current-manager-publication-source.mjs';
 import {assertCurrentManager219MigrationSet} from './fixtures/current-manager-219-source.mjs';
+import {createRecurringClockRecorder,runRecurringClockedChild} from './static-weekly-recurring-http-boundary.mjs';
 const container=`mz_schema_shift_end_${process.pid}`;
 const stage=process.argv[2]??'all';
 assert.ok(['all','migration-only','separation-context-only','atomic-only','published-only','current-roster-only','current-manager-216','current-manager-217','current-manager-218','current-manager-219','dual-source-217','dual-source-218','dual-source-219','recurring-ledger-only','recurring-parent-only','recurring-source-only','recurring-dependency-only','recurring-binding-shape-only','recurring-terminal-boundary-only','recurring-lock-order-only','recurring-generation-only','legacy-only','activation-only','legacy-observation-only'].includes(stage),'explicit bounded test stage');
@@ -122,7 +123,9 @@ try{
   env:{...process.env,SHIFT_END_TEST_CONTAINER:container},stdio:'inherit',timeout:420000});
  if(['all','atomic-only'].includes(stage))execFileSync(process.execPath,['scripts/static-weekly-atomic-roster-database-tests.mjs'],{
   env:{...process.env,SHIFT_END_TEST_CONTAINER:container},stdio:'inherit',timeout:180000});
- if(publishedStage)execFileSync(process.execPath,[stage==='current-roster-only'||currentManagerStage?'scripts/static-weekly-current-roster-publication-tests.mjs':'scripts/static-weekly-published-roster-transaction-tests.mjs'],{
+ const publishedChildClock=currentManagerStage?createRecurringClockRecorder({deadlineMilliseconds:1200000,
+  emit:fact=>writeSync(1,`CURRENT_MANAGER_PUBLISHED_CHILD_CLOCK ${JSON.stringify(fact)}\n`)}):null;
+ if(publishedStage)runRecurringClockedChild(()=>execFileSync(process.execPath,[stage==='current-roster-only'||currentManagerStage?'scripts/static-weekly-current-roster-publication-tests.mjs':'scripts/static-weekly-published-roster-transaction-tests.mjs'],{
   // Finalization adds a real projection plus three independent acceptance
   // attempts (two injected failures). Keep each production SQL/compiler
   // deadline unchanged; bound the expanded aggregate test at twenty minutes.
@@ -132,7 +135,7 @@ try{
    ...(currentManager217Stage?{STATIC_WEEKLY_TEST_CURRENT_217:'1',STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION:'1'}:{}),
    ...(currentManager218Stage?{STATIC_WEEKLY_TEST_CURRENT_218:'1',STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION:'1'}:{}),
    ...(currentManager219Stage?{STATIC_WEEKLY_TEST_CURRENT_219:'1',STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION:'1'}:{})},stdio:'inherit',
-  timeout:currentManagerStage||process.env.STATIC_WEEKLY_TEST_RECURRING_FINALIZATION==='1'||process.env.STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION==='1'?1200000:900000});
+  timeout:currentManagerStage||process.env.STATIC_WEEKLY_TEST_RECURRING_FINALIZATION==='1'||process.env.STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION==='1'?1200000:900000}),publishedChildClock);
  if(dualSource217Stage)execFileSync(process.execPath,['scripts/static-weekly-dual-source-current-correction-sql-tests.mjs'],{
   env:{...process.env,SHIFT_END_TEST_CONTAINER:container,SHIFT_END_TEST_SOCKET:socket,
    STATIC_WEEKLY_TEST_DUAL_SOURCE_217:'1'},stdio:'inherit',timeout:1200000});

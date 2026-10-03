@@ -1,6 +1,44 @@
 // Diagnostics for the disposable authenticated HTTP-to-SQL fixture only.
 // Never return SQL values, arguments, credential data or error text.
 import {types} from 'node:util';
+
+// Test-only finite clock facts. Node's monotonic clock is anchored at its
+// timeOrigin, so independently bounded fixture processes can align phases
+// without recording SQL arguments, request bodies, or credentials.
+const CLOCK_PHASES=new Set(['published_child_spawn','published_child_terminal',
+ 'confirm_origin','confirm_response_finished','confirm_response_closed',
+ 'confirm_request_terminal','confirm_transport_failure','confirm_fixture_finally',
+ 'confirm_process_exit']);
+const CLOCK_OUTCOMES=new Set(['STARTED','RETURNED','THREW','FINISHED','UNFINISHED',
+ 'ERROR','ENTERED','PROCESS_EXIT']);
+export function createRecurringClockRecorder({now=()=>performance.timeOrigin+performance.now(),
+ emit=()=>{},deadlineMilliseconds=null}={}) {
+ let origin=null;
+ return Object.freeze({mark(phase,outcome) {
+  if(!CLOCK_PHASES.has(phase)||!CLOCK_OUTCOMES.has(outcome))return null;
+  let epoch;
+  try{epoch=Math.round(now());}catch{return null;}
+  if(!Number.isSafeInteger(epoch)||epoch<0)return null;
+  if(origin===null)origin=epoch;
+  const fact={phase,outcome,epochMilliseconds:epoch,originEpochMilliseconds:origin,
+   elapsedMilliseconds:epoch-origin,
+   ...(Number.isSafeInteger(deadlineMilliseconds)&&deadlineMilliseconds>0
+    ?{deadlineEpochMilliseconds:origin+deadlineMilliseconds}:{})};
+  if(!Number.isSafeInteger(fact.deadlineEpochMilliseconds??0))return null;
+  try{emit(fact);}catch{}
+  return fact;
+ }});
+}
+
+export function runRecurringClockedChild(work,clock) {
+ if(typeof work!=='function')throw new TypeError('bounded child work required');
+ const mark=(phase,outcome)=>{try{clock?.mark?.(phase,outcome);}catch{}};
+ mark('published_child_spawn','STARTED');
+ let outcome='RETURNED';
+ try{return work();}
+ catch(error){outcome='THREW';throw error;}
+ finally{mark('published_child_terminal',outcome);}
+}
 export function recurringHttpSqlBoundary(sql) {
  if(sql==='begin'||sql==='commit'||sql==='rollback')return sql;
  if(sql==='set local role static_weekly_control_plane')return 'set_local_role';
