@@ -451,13 +451,13 @@ const recurringCorrectionWrapper = readFileSync(resolve(root,
   'scripts/static-weekly-recurring-correction-ci-tests.mjs'),'utf8');
 function assertRecurringCorrectionCalledWiring(wrapper) {
   assert.match(wrapper,/\['static-weekly-recurring-correction-binding-tests\.mjs', 28\]/);
-  assert.match(wrapper,/\['static-weekly-recurring-dual-source-contract-tests\.mjs', 26\]/);
+  assert.match(wrapper,/\['static-weekly-recurring-dual-source-contract-tests\.mjs', 34\]/);
   assert.match(wrapper,/\['static-weekly-recurring-correction-control-plane-tests\.mjs', 9\]/);
   assert.match(wrapper,/^for \(const \[name, expected\] of cases\) \{$/m);
   assert.match(wrapper,/^  const output = execFileSync\(process\.execPath,\n    \[fileURLToPath\(new URL\('\.\/' \+ name, import\.meta\.url\)\)\],\n    \{encoding:'utf8', timeout:45000, maxBuffer:1024\*1024,\n      env:\{PATH:process\.env\.PATH, LANG:'C\.UTF-8'\}\}\);$/m);
   assert.match(wrapper,/^  assert\.equal\(receipt\.status, 'PASS'\);$/m);
   assert.match(wrapper,/^  assert\.equal\(receipt\.checks, expected\);$/m);
-  assert.match(wrapper,/^assert\.deepEqual\(receipts\.map\(row=>row\.checks\), \[28,26,9\]\);$/m);
+  assert.match(wrapper,/^assert\.deepEqual\(receipts\.map\(row=>row\.checks\), \[28,34,9\]\);$/m);
   assert.doesNotMatch(wrapper,/\b(?:if|catch|try)\s*\(|\.catch\s*\(|process\.env\.(?:SKIP|CUSTODIAL)|\|\|\s*true/);
 }
 assertRecurringCorrectionCalledWiring(recurringCorrectionWrapper);
@@ -465,7 +465,7 @@ let recurringCorrectionMutationCount=0;
 for (const [from,to] of [
   ['const output = execFileSync(', '// const output = execFileSync('],
   ["'static-weekly-recurring-correction-binding-tests.mjs', 28", "'static-weekly-recurring-correction-binding-tests.mjs', 0"],
-  ["'static-weekly-recurring-dual-source-contract-tests.mjs', 26", "'static-weekly-recurring-dual-source-contract-tests.mjs', 0"],
+  ["'static-weekly-recurring-dual-source-contract-tests.mjs', 34", "'static-weekly-recurring-dual-source-contract-tests.mjs', 0"],
   ["'static-weekly-recurring-correction-control-plane-tests.mjs', 9", "'static-weekly-recurring-correction-control-plane-tests.mjs', 0"],
   ['timeout:45000', 'timeout:450000'],
   ["env:{PATH:process.env.PATH, LANG:'C.UTF-8'}", 'env:process.env'],

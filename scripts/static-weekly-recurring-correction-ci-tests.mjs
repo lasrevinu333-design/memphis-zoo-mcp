@@ -6,7 +6,7 @@ import {fileURLToPath} from 'node:url';
 
 const cases = [
   ['static-weekly-recurring-correction-binding-tests.mjs', 28],
-  ['static-weekly-recurring-dual-source-contract-tests.mjs', 26],
+  ['static-weekly-recurring-dual-source-contract-tests.mjs', 34],
   ['static-weekly-recurring-correction-control-plane-tests.mjs', 9],
 ];
 const receipts = [];
@@ -21,7 +21,7 @@ for (const [name, expected] of cases) {
   assert.equal(receipt.checks, expected);
   receipts.push({name, checks:receipt.checks});
 }
-assert.deepEqual(receipts.map(row=>row.checks), [28,26,9]);
+assert.deepEqual(receipts.map(row=>row.checks), [28,34,9]);
 console.log(JSON.stringify({suite:'recurring-correction-called-ci', status:'PASS',
-  checks:63, receipts, solver:false, sql:false, publication:false,
+  checks:71, receipts, solver:false, sql:false, publication:false,
   production:false, sourceRegistration:false}));
