@@ -9,6 +9,11 @@ assert.ok(['all','migration-only','separation-context-only','atomic-only','publi
 const currentManager216Stage=stage==='current-manager-216';
 const currentManager217Stage=stage==='current-manager-217';
 const currentManager218Stage=stage==='current-manager-218';
+const currentManager218Http=process.env.STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION_HTTP==='1';
+assert.ok(process.env.STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION_HTTP==null||currentManager218Http,
+ 'recurring HTTP SQL variant accepts only explicit 1');
+assert.ok(!currentManager218Http||currentManager218Stage,
+ 'authenticated HTTP SQL confirmation variant belongs only to exact current-manager-218');
 const dualSource217Stage=stage==='dual-source-217';
 const dualSource218Stage=stage==='dual-source-218';
 const currentManagerStage=currentManager216Stage||currentManager217Stage||currentManager218Stage;

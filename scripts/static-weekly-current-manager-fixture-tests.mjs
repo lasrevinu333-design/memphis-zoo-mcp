@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {spawnSync} from 'node:child_process';
 import {readFileSync,readdirSync,mkdtempSync,mkdirSync,symlinkSync,unlinkSync,writeFileSync,rmSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {tmpdir} from 'node:os';
@@ -110,10 +111,37 @@ check('current stage invokes publication caller and mandatory confirmation, not 
  assert.ok(runner.includes("STATIC_WEEKLY_TEST_CURRENT_217:'1',STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION:'1'"));
  assert.ok(runner.includes("STATIC_WEEKLY_TEST_CURRENT_218:'1',STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION:'1'"));
  assert.ok(runner.includes("if(currentManager218Stage){assertCurrentManager218MigrationSet();loadCurrentManagerPublicationFixture();}"));
- assert.ok(publication.includes('recurringConfirmationProof=await testRecurringConfirmation({pool,week,originalManagerId:managerId,check})'));
+ assert.ok(publication.includes('currentManager218Http?testRecurringConfirmationHttp:testRecurringConfirmation)({pool,week,originalManagerId:managerId,check})'));
  assert.ok(publication.includes('if(currentManager218Stage)assertCurrentManager218MigrationSet();'));
  assert.ok(publication.includes('if(currentManager217Stage||currentManager218Stage)await testNamedHandoffSql({pool,authority:projection.authority,check,'));
  assert.ok(publication.includes('versionId:published.data.version_id,publicationId:published.data.publication_id'));
+});
+check('HTTP SQL confirmation is one explicit 218-only alternative writer, default direct path unchanged',()=>{
+ assert.ok(runner.includes("const currentManager218Http=process.env.STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION_HTTP==='1'"));
+ assert.ok(runner.includes('!currentManager218Http||currentManager218Stage'));
+ assert.ok(runner.includes("...(currentManager218Stage?{STATIC_WEEKLY_TEST_CURRENT_218:'1',STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION:'1'}:{})"));
+ assert.ok(publication.includes('!currentManager218Http||currentManager218Stage'));
+ assert.ok(publication.includes('currentManager218Http?testRecurringConfirmationHttp:testRecurringConfirmation'));
+ assert.equal(publication.match(/recurringConfirmationProof=await/g)?.length,1);
+});
+const httpHelper=readFileSync(new URL('./static-weekly-recurring-confirmation-http-integration.mjs',import.meta.url),'utf8');
+const {testRecurringConfirmationHttp}=await import('./static-weekly-recurring-confirmation-http-integration.mjs');
+check('HTTP SQL variant retains real route, auth, exact lost response and saved status checks',()=>{
+ assert.equal(typeof testRecurringConfirmationHttp,'function');
+ for(const phrase of ['createStaticWeeklyControlPlane({database','createStaticWeeklyControlPlaneRuntime({env,database,controlPlane:plane,supabase,trustedDeviceStore})',
+  'createOpsManagerSession','server.listen(0','lost COMMIT HTTP response is unavailable','HTTP exact-key SQL recovery',
+  'HTTP concurrent retries append nothing','different manager sees no private operation','revoked current credential cannot read status',
+  'HTTP durable target manifest covers seven dates','no phone is claimed updated'])assert.ok(httpHelper.includes(phrase),phrase);
+ assert.ok(!httpHelper.includes('affectedPhonesUpdated:true'));
+});
+for(const [label,stage,value,pattern] of [
+ ['HTTP selector refuses historical217','current-manager-217','1',/belongs only to exact current-manager-218/],
+ ['HTTP selector refuses implicit false','current-manager-218','0',/accepts only explicit 1/]
+])check(label+' before Docker or SQL',()=>{
+ const denied=spawnSync(process.execPath,[new URL('./run-isolated-shift-end-tests.mjs',import.meta.url).pathname,stage],
+  {encoding:'utf8',timeout:5000,env:{...process.env,STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION_HTTP:value}});
+ assert.equal(denied.error,undefined);assert.notEqual(denied.status,0);
+ assert.match(denied.stderr,pattern);assert.doesNotMatch(denied.stdout,/OWNED_CONTAINER|REPLAYED_EXACT_MIGRATIONS/);
 });
 check('old176 contract, exact image, isolation/default grants and cleanup remain',()=>{
  for(const text of ["currentManager217Stage||dualSource217Stage?217:currentManager216Stage?216:176","20260929125440_custodial_recovery_inventory_closure.sql",
