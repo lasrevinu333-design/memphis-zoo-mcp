@@ -388,11 +388,15 @@ export function createStaticWeeklyControlPlaneDatabase({
   caPem = process.env.STATIC_WEEKLY_CONTROL_PLANE_DATABASE_CA_PEM,
   allowInsecureLoopbackRehearsal,
   pool = null,
+  maxConnections = 4,
 } = {}) {
   if (pool) return pool;
+  if (!Number.isSafeInteger(maxConnections) || maxConnections < 1 || maxConnections > 4) {
+    throw fail("static_weekly_control_plane_database_pool_invalid");
+  }
   const database = new Pool({
     ...staticWeeklyDatabaseConnectionOptions({ connectionString, caPem, allowInsecureLoopbackRehearsal }),
-    max: 4,
+    max: maxConnections,
     idleTimeoutMillis: 10_000,
     connectionTimeoutMillis: 10_000,
     application_name: "memphis-static-weekly-control-plane",
