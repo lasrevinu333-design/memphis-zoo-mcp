@@ -9,7 +9,7 @@ import { adaptRegisteredRecurringSource, currentPatternFromPublishedReadback,
   createRecurringMorningWeekSourceBasis,deriveVerifiedRecurringMorningWeekCandidate,recurringManagerChangesFromSources,
   deriveScalableCanonicalRecurringWeekCandidate } from "./static-weekly-recurring-staffing-adaptation.js";
 import { createStaticWeeklyDraftRpcInput } from "./static-weekly-schedule-database-adapter.js";
-import { createStaticWeeklyProjectionWithLunchRpcInput, createStaticWeeklyLunchPreviewDocument } from "./static-weekly-lunch-publication.js";
+import { createStaticWeeklyProjectionWithLunchRpcInput, createStaticWeeklyLunchPreviewDocument, createFreshVerifiedStaticWeeklyLunchPreviewDocument } from "./static-weekly-lunch-publication.js";
 import { createRecurringManagerDecision, createRecurringFinalManagerChanges,
   RECURRING_IMPLEMENTATION_DIGEST } from "./static-weekly-recurring-preview.js";
 import { createRecurringWeekCommitment, createRecurringFullNineTemplateCommitment,
@@ -239,7 +239,7 @@ process.on("message", async (message) => {
         throw Object.assign(new Error("Recurring staffing candidate failed the canonical compiler."),
           { code: "static_weekly_recurring_candidate_rejected" });
       }
-      const lunch = createStaticWeeklyLunchPreviewDocument(compiled);
+      const lunch = createFreshVerifiedStaticWeeklyLunchPreviewDocument(compiled);
       const lunchFacts = { loans: lunch.loans, responsibilities: lunch.responsibilities,
         notificationIntents: lunch.notification_intents };
       const decision = createRecurringManagerDecision({ candidateInput: candidate.compilerInput,

@@ -1,4 +1,6 @@
 import { postgresJsonbContentDigest } from './static-weekly-schedule-compiler.js';
+import { canonicalJson } from './static-weekly-schedule-model.js';
+import { createIndependentlyVerifiedStaticWeeklyLunchCandidate } from './static-weekly-schedule-verifier.js';
 import {
   createStaticWeeklyLunchCoverageCandidate,
   verifyStaticWeeklyLunchCoverageCandidate,
@@ -81,6 +83,26 @@ export function createStaticWeeklyLunchAuthorityDocument({ input, result, candid
   const exactCandidate = candidate || createStaticWeeklyLunchCoverageCandidate(input, result);
   const verification = verifyStaticWeeklyLunchCoverageCandidate(input, result, exactCandidate);
   if (!verification.ok) fail('lunch_authority_candidate_verification_failed', { reason: verification.reason || null });
+  return finishLunchAuthorityDocument(exactCandidate, result);
+}
+
+// Private worker fresh construction retains TWO full independent verifier
+// invocations and the complete A/B candidate equality comparison.
+export function createFreshVerifiedStaticWeeklyLunchAuthorityDocument({ input, result } = {}) {
+  if (!input || !result) fail('lunch_authority_base_required');
+  const exactCandidate = createIndependentlyVerifiedStaticWeeklyLunchCandidate(input, result);
+  let verification;
+  try {
+    const expected = createIndependentlyVerifiedStaticWeeklyLunchCandidate(input, result);
+    verification = { ok: canonicalJson(expected) === canonicalJson(exactCandidate), expectedDigest: expected.candidateDigest };
+  } catch (error) {
+    verification = { ok: false, reason: error.code || 'lunch_candidate_invalid' };
+  }
+  if (!verification.ok) fail('lunch_authority_candidate_verification_failed', { reason: verification.reason || null });
+  return finishLunchAuthorityDocument(exactCandidate, result);
+}
+
+function finishLunchAuthorityDocument(exactCandidate, result) {
   if (exactCandidate.publicationAuthority !== 'NOT_PUBLISHED' || exactCandidate.status !== 'PLANNED') {
     fail('lunch_authority_candidate_not_publishable');
   }

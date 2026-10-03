@@ -19,6 +19,7 @@ import {
   windowsOverlap,
 } from "./static-weekly-schedule-model.js";
 import { STATIC_WEEKLY_FLEXIBLE_COVERAGE_MODE, STATIC_WEEKLY_ROUTE_CANONICALITY_SCHEMA, STATIC_WEEKLY_SERVICE_MODES, canonicalOptimizerAssignmentProjection, canonicalProgramMatches, canonicalSolverAuthorityCertificate, canonicalSolverAuthorityTierProjection, generateStaticWeeklySchedulingProgram, iterateStaticWeeklySchedulingWitnessTiers, normalizeStaticWeeklyIncludedLocations, postgresJsonbContentDigest, remainingStaticWeeklyMilliseconds } from "./static-weekly-schedule-program.js";
+import { LUNCH_COVERAGE_SCHEMA, deriveLunchCoverageFromPreparedProblem, lunchCoverageContentDigest } from "./static-weekly-lunch-derivation.js";
 
 const array = (value) => Array.isArray(value) ? value : [];
 const text = (value) => String(value ?? "").trim();
@@ -323,6 +324,22 @@ function exactTerms(terms, values) {
 }
 
 export function verifyStaticWeeklyScheduleResult(input = {}, result = {}, deadline = null, { allowProvisionalExecutionReceipt = false } = {}) {
+  return verifyStaticWeeklyScheduleResultInternal(input, result, deadline, allowProvisionalExecutionReceipt, false);
+}
+
+// Source/result only: no callback, carried program, prepared graph, validation
+// receipt or caller-selectable provisional mode may enter this typed path.
+// Every existing independent verifier check executes before lunch derivation.
+export function createIndependentlyVerifiedStaticWeeklyLunchCandidate(input, result) {
+  const fail = code => { throw Object.assign(new Error(code), { code }); };
+  if (!result?.canonicalAuthority || !result.authorityDigest || !result.replayDigest) fail('lunch_complete_base_authority_required');
+  const candidate = verifyStaticWeeklyScheduleResultInternal(input, result, null, false, true);
+  // All early verifier failures return their original verification shape.
+  if (candidate?.schema !== LUNCH_COVERAGE_SCHEMA) fail('lunch_base_schedule_not_verified');
+  return candidate;
+}
+
+function verifyStaticWeeklyScheduleResultInternal(input, result, deadline, allowProvisionalExecutionReceipt, deriveVerifiedLunch) {
   const violations = [];
   const deadlineFailure = (stage) => ({ ok: false, violations: [{ code: "solver_timeout", stage }], metrics: null, digest: contentDigest({ input, result, timeout: stage }), verifierVersion: VERIFIER_VERSION });
   const expired = () => {
@@ -758,7 +775,7 @@ export function verifyStaticWeeklyScheduleResult(input = {}, result = {}, deadli
   };
   if (authority && postgresJsonbContentDigest(authority.optimizerResult?.metrics) !== postgresJsonbContentDigest(metrics)) push(violations, "canonical_duty_metrics_mismatch");
   const digest = contentDigest({ verifierVersion: VERIFIER_VERSION, assignments: assignments.map((item) => ({ planWorkId: item.planWorkId, status: item.status, slotId: item.slotId })), metrics, violations });
-  return {
+  const verification = {
     ok: violations.length === 0, violations, metrics, digest, verifierVersion: VERIFIER_VERSION,
     evidence: {
       independent: "canonical input, dated identity, coverage, eligibility, combined route, travel, service, duty, and objective values were recomputed without trusting optimizer owner branches",
@@ -766,4 +783,16 @@ export function verifyStaticWeeklyScheduleResult(input = {}, result = {}, deadli
       independentlyProvesOptimality: false,
     },
   };
+  if (!deriveVerifiedLunch) return verification;
+  const fail = code => { throw Object.assign(new Error(code), { code }); };
+  if (!verification.ok || result.status !== 'FEASIBLE' || result.publicationAuthority !== 'ACCEPTABLE') fail('lunch_base_schedule_not_verified');
+  if (regenerated.problem.inputDigest !== result.inputDigest) fail('lunch_base_schedule_identity_mismatch');
+  // This graph was reconstructed in THIS invocation, never supplied by an
+  // optimizer or earlier verification. No graph escapes this private finish.
+  const candidate = {
+    ...deriveLunchCoverageFromPreparedProblem(regenerated.problem, result.weeklyAssignments),
+    baseAuthorityDigest: result.authorityDigest,
+    baseReplayDigest: result.replayDigest,
+  };
+  return { ...candidate, candidateDigest: lunchCoverageContentDigest(candidate) };
 }
