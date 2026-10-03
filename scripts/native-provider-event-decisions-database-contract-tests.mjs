@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import * as fixtureApi from './fixtures/native-provider-event-decisions-database-cases.mjs';
-import {assertDecisionMigrationManifest,readDecisionSource,assertDecisionTarget,compareDecisionRecoverySets,
+import {assertDecisionMigrationManifest,readDecisionSource,assertDecisionTarget,compareDecisionRecoverySets,buildDecisionRecoveryProtocol,parseDecisionRecoveryProtocol,
  DECISION_IMAGE,DECISION_RPC,DECISION_HEAD,DECISION_217,DECISION_218,DECISION_INPUT_PINS} from './native-provider-event-decisions-database-tests.mjs';
 
 // Only actual source reads, pure hostile-data cases and --source-check. No
@@ -71,6 +72,53 @@ for(const mutate of [x=>x.inventory.pop(),x=>x.inventory.push({...other,object_i
  x=>x.inventory[2].object_kind='view',x=>x.inventory[3].object_identity='public.other()',x=>x.surface[1].object_kind='view'])
  check('recovery delta mutation refused',()=>{const bad=structuredClone(after);mutate(bad);assert.throws(()=>compareDecisionRecoverySets(before,bad));});
 const runnerPath=fileURLToPath(new URL('./native-provider-event-decisions-database-tests.mjs',import.meta.url)),runner=readFileSync(runnerPath,'utf8');
+const digest=value=>createHash('sha256').update(value).digest('hex');
+const recoveryGrant="select public.custodial_release_authority_reset_grants('"+DECISION_RPC+"'); grant execute on function custodial_native_provider_event_decisions(uuid,text,uuid,text,text,jsonb) to postgres; grant execute on function custodial_native_provider_event_decisions(uuid,text,uuid,text,text,jsonb) to service_role;";
+const recoveryRows=['function','grant'].map(object_kind=>{const definition_sql=object_kind==='grant'?recoveryGrant:'-- synthetic captured function bytes; never executed by this test\n';return {object_kind,object_identity:DECISION_RPC,definition_sql,definition_sha256:digest(definition_sql)};});
+const recoverySchema='custodial.native-event-decision-scoped-recovery-observation.v1';
+const control={statement:'public.custodial_release_authority_reset_grants(text)',result:'EMPTY_VOID_RECORD',grant_sha256:'a45510c8ae211642dbd8fe79ba48f12be93f7c5a248a0184cc8b63959d0da6bc'};
+const protectedNames=['devices','employees','device_auth_credentials','employee_push_registrations','employee_native_push_generations','employee_native_push_delivery_receipts',
+ 'employee_native_provider_events','employee_native_provider_event_requests','operational_notification_jobs','device_notification_acknowledgements',
+ 'sessions','completion_responses','maintenance_tickets','system_feedback_items','system_feedback_email_intents'];
+const recoverySnapshot=Object.fromEntries(protectedNames.map(k=>[k,{count:1,sha256:'c'.repeat(64)}]));
+const envelope=(phase,value)=>({schema:recoverySchema,phase,value});
+const protocol=[envelope('FAULTED',{function:'a'.repeat(64),grant:'b'.repeat(64)}),envelope('GRANT_REPLAY_CONTROL',control),'',
+ envelope('RESTORED',{function:'c'.repeat(64),grant:'d'.repeat(64)}),envelope('PROTECTED',recoverySnapshot)];
+const encodeProtocol=rows=>rows.map(row=>typeof row==='string'?row:JSON.stringify(row)).join('\n')+'\n';
+check('source-derived void record reproduces prior JSON-only parser failure, not engine proof',()=>{const prior=[protocol[0].value,'',protocol[3].value,recoverySnapshot].map(x=>typeof x==='string'?x:JSON.stringify(x)).join('\n');assert.throws(()=>prior.split('\n').map(JSON.parse),{name:'SyntaxError',message:'Unexpected end of JSON input'});});
+check('fixed four labelled observations and positioned void control parse without dropping data',()=>assert.deepEqual(parseDecisionRecoveryProtocol(encodeProtocol(protocol)),[protocol[0].value,protocol[3].value,recoverySnapshot]));
+for(const [name,mutate] of [
+ ['missing void record',x=>x.splice(2,1)],['extra void record',x=>x.splice(2,0,'')],['nonempty void record',x=>x[2]='null'],
+ ['whitespace is not void',x=>x[2]=' '],['missing observation',x=>x.pop()],['additional observation',x=>x.push(x[4])],
+ ['reordered labels',x=>[x[0],x[3]]=[x[3],x[0]]],['duplicate label',x=>x[3]=x[0]],['reordered void control',x=>[x[1],x[2]]=[x[2],x[1]]],
+ ['malformed JSON',x=>x[3]='{'],['unlabelled null',x=>x[0]=null],['unlabelled array',x=>x[0]=[]],
+ ['wrong schema',x=>x[0].schema='other'],['extra envelope field',x=>x[0].extra=true],['missing value',x=>delete x[0].value],
+ ['wrong reset target',x=>x[1].value.statement='other(text)'],['wrong grant identity',x=>x[1].value.grant_sha256='0'.repeat(64)],
+ ['control result mismatch',x=>x[1].value.result='IGNORED'],['extra control field',x=>x[1].value.extra=true],
+ ['fault digest malformed',x=>x[0].value.function='bad'],['missing restored grant',x=>delete x[3].value.grant],
+ ['extra live digest',x=>x[3].value.other='a'.repeat(64)],['missing protected table',x=>delete x[4].value.sessions],
+ ['extra protected table',x=>x[4].value.other={count:0,sha256:'a'.repeat(64)}],['negative count',x=>x[4].value.sessions.count=-1],
+ ['unsafe count',x=>x[4].value.sessions.count=Number.MAX_SAFE_INTEGER+1],['string count',x=>x[4].value.sessions.count='1'],
+ ['protected digest malformed',x=>x[4].value.sessions.sha256=null],['extra protected field',x=>x[4].value.sessions.extra=true],
+ ['raw error line',x=>x[3]='ERROR: synthetic failure']])check('recovery protocol rejects '+name,()=>{const bad=structuredClone(protocol);mutate(bad);assert.throws(()=>parseDecisionRecoveryProtocol(encodeProtocol(bad)));});
+for(const bad of [encodeProtocol(protocol).slice(0,-1),encodeProtocol(protocol)+'\n','\n'+encodeProtocol(protocol),encodeProtocol(protocol).replaceAll('\n','\r\n'),'x'.repeat(65537),null])
+ check('recovery framing rejects missing/extra terminator, CRLF, overflow and nonstring',()=>assert.throws(()=>parseDecisionRecoveryProtocol(bad)));
+check('recovery builder replays exact captured bytes once in one rollback transaction',()=>{const text=buildDecisionRecoveryProtocol(...recoveryRows);assert.ok(text.startsWith('begin;'));assert.ok(text.endsWith('rollback;'));assert.doesNotMatch(text,/\bcommit;/i);for(const r of recoveryRows)assert.equal(text.split(r.definition_sql).length,2);const offsets=['synthetic new-RPC body fault','FAULTED',recoveryRows[0].definition_sql,'GRANT_REPLAY_CONTROL',recoveryGrant,'RESTORED','PROTECTED','rollback;'].map(x=>text.indexOf(x));assert.ok(offsets.every((n,i)=>n>=0&&(i===0||n>offsets[i-1])));});
+for(const [name,mutate] of [['wrong kind',x=>x[0].object_kind='grant'],['wrong object',x=>x[1].object_identity='public.other()'],
+ ['function bytes drift',x=>x[0].definition_sql+='changed'],['grant bytes drift',x=>x[1].definition_sql+='select 1;'],
+ ['self-consistent but unapproved grant',x=>{x[1].definition_sql=x[1].definition_sql.replace('to service_role','to anon');x[1].definition_sha256=digest(x[1].definition_sql);}],
+ ['self-consistent extra SELECT',x=>{x[1].definition_sql+='select 1;';x[1].definition_sha256=digest(x[1].definition_sql);} ]])
+ check('fixed recovery SQL rejects '+name,()=>{const bad=structuredClone(recoveryRows);mutate(bad);assert.throws(()=>buildDecisionRecoveryProtocol(...bad));});
+check('void protocol is bound to exact current historical helper and renderer sources',()=>{const u4=readFileSync(new URL('../supabase/migrations/20260813210000_custodial_u4_ops_closure.sql',import.meta.url),'utf8');assert.equal(digest(u4),'3fc7573beac21cf090fbf059c33ef59b472e88770382f7ff28d9f556a1e29f0b');assert.match(u4,/function public\.custodial_release_authority_reset_grants\(p_object_identity text\)\s+returns void/);assert.equal(digest(recoveryGrant),control.grant_sha256);});
+check('raw scoped transcript and hashes persist UNVALIDATED before strict parser',()=>{assert.ok(runner.includes('recoveryStdout=sql(recoverySql,{raw:true})'));assert.ok(runner.includes('return raw?stdout:stdout.trim()'));assert.equal((runner.match(/\{raw:true\}/g)||[]).length,1);assert.ok(runner.indexOf("save('scoped-recovery-UNVALIDATED.stdout',recoveryStdout)")<runner.indexOf('const recovered=parseDecisionRecoveryProtocol(recoveryStdout)'));assert.ok(runner.includes("classification:'UNVALIDATED_SYNTHETIC_SCOPED_RECOVERY_OUTPUT'"));assert.ok(runner.includes('stdout_sha256:hash(recoveryStdout)'));assert.doesNotMatch(runner,/filter\(Boolean\)|catch\s*\{\s*return\s*\[\]/);});
+check('all original fault, repair, protected and rollback comparisons remain mandatory',()=>{for(const exact of [
+ 'assert.equal(recovered.length,3);assert.notEqual(recovered[0].function,originalLive.function);assert.notEqual(recovered[0].grant,originalLive.grant)',
+ "check('exact new function and grant definitions restore after actual scoped fault',recovered[1],originalLive)",
+ "check('scoped restore preserves protected rows BEFORE rollback',recovered[2],protectedBefore)",
+ "check('scoped recovery rollback exact live definitions',JSON.parse(sql(live)),originalLive)",
+ "check('all218 inventory rows exactly preserved after scoped recovery',JSON.parse(sql(INVENTORY)),after.inventory)",
+ "check('all218 surface members exactly preserved',JSON.parse(sql(SURFACE)),after.surface)",
+ "check('all protected records exactly preserved',JSON.parse(sql(SNAPSHOT)),protectedBefore)"] )assert.ok(runner.includes(exact),exact);});
 check('fixed owning bootstrap and pre-assertion finite observation are not optional',()=>{assert.match(runner,/'-U','supabase_admin','-d','postgres'/);assert.ok(runner.includes("observeAccess:value=>save('access-matrix-observed.json',value)"));assert.ok(fixture.includes("assert.equal(typeof observeAccess,'function'"));assert.ok(fixture.indexOf("observeAccess({classification:'UNVALIDATED_SYNTHETIC_ACCESS_OBSERVATION',authority})")<fixture.indexOf("check('exact source ACL/RLS"));});
 for(const [name,pattern] of [
  ['explicit source/execute distinction',/process\.argv\[2\]==='--source-check'[\s\S]+assert\.equal\(process\.argv\[2\],'--execute'\)/],

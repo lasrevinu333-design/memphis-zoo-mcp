@@ -50,6 +50,51 @@ const PROTECTED=['devices','employees','device_auth_credentials','employee_push_
  'employee_native_provider_events','employee_native_provider_event_requests','operational_notification_jobs','device_notification_acknowledgements',
  'sessions','completion_responses','maintenance_tickets','system_feedback_items','system_feedback_email_intents'];
 const SNAPSHOT='select jsonb_build_object('+PROTECTED.map(t=>`${q(t)},(select jsonb_build_object('count',count(*),'sha256',public.static_weekly_digest_text(coalesce(jsonb_agg(to_jsonb(r) order by to_jsonb(r)::text),'[]'::jsonb)::text)) from public.${t} r)`).join(',')+');';
+const RECOVERY_SCHEMA='custodial.native-event-decision-scoped-recovery-observation.v1';
+const RECOVERY_GRANT_SHA='a45510c8ae211642dbd8fe79ba48f12be93f7c5a248a0184cc8b63959d0da6bc';
+const RECOVERY_GRANT_SQL=`select public.custodial_release_authority_reset_grants('${DECISION_RPC}'); grant execute on function custodial_native_provider_event_decisions(uuid,text,uuid,text,text,jsonb) to postgres; grant execute on function custodial_native_provider_event_decisions(uuid,text,uuid,text,text,jsonb) to service_role;`;
+const RECOVERY_CONTROL=Object.freeze({statement:'public.custodial_release_authority_reset_grants(text)',result:'EMPTY_VOID_RECORD',grant_sha256:RECOVERY_GRANT_SHA});
+const RECOVERY_LIVE=`select jsonb_build_object('function',public.static_weekly_digest_text(pg_get_functiondef(${q(DECISION_RPC)}::regprocedure)),'grant',public.static_weekly_digest_text(public.custodial_release_authority_current_grant_definition(${q(DECISION_RPC)})));`;
+const RECOVERY_FAULT="create or replace function public.custodial_native_provider_event_decisions(p_credential uuid,p_credential_hash text,p_native_request uuid,p_attestation_digest text,p_raw_body_sha256 text,p_body jsonb) returns jsonb language plpgsql volatile security definer set search_path=pg_catalog,public as $fault$begin raise exception 'synthetic new-RPC body fault';end $fault$;grant execute on function "+DECISION_RPC+' to anon;';
+
+// This fixed fixture executes the ORIGINAL captured function and grant bytes.
+// The source-pinned grant's one SELECT returns void (U4 reset_grants), so psql
+// -qAt emits one empty record. Account for it explicitly; never filter output.
+export function buildDecisionRecoveryProtocol(fn,grant){
+ for(const [row,kind] of [[fn,'function'],[grant,'grant']]){
+  assert.equal(row.object_kind,kind);assert.equal(row.object_identity,DECISION_RPC);
+  assert.equal(typeof row.definition_sql,'string');assert.match(row.definition_sha256,hex);assert.equal(hash(row.definition_sql),row.definition_sha256);
+ }
+ assert.equal(grant.definition_sql,RECOVERY_GRANT_SQL);assert.equal(grant.definition_sha256,RECOVERY_GRANT_SHA);
+ const observation=(phase,query)=>`select jsonb_build_object('schema',${q(RECOVERY_SCHEMA)},'phase',${q(phase)},'value',v) from (${query.slice(0,-1)}) observed(v);`;
+ return 'begin;'+RECOVERY_FAULT+observation('FAULTED',RECOVERY_LIVE)+fn.definition_sql+';'
+  +observation('GRANT_REPLAY_CONTROL','select '+j(RECOVERY_CONTROL)+';')+grant.definition_sql+';'
+  +observation('RESTORED',RECOVERY_LIVE)+observation('PROTECTED',SNAPSHOT)+'rollback;';
+}
+export function parseDecisionRecoveryProtocol(stdout){
+ assert.equal(typeof stdout,'string');assert.ok(stdout.length<=65536,'bounded recovery transcript');
+ assert.ok(stdout.endsWith('\n'),'exact psql record terminator');assert.ok(!stdout.includes('\r'),'LF record protocol');
+ const lines=stdout.slice(0,-1).split('\n');assert.equal(lines.length,5,'four labelled observations and one void control record');
+ assert.equal(lines[2],'','only the exact reset-grants SELECT may emit void');
+ const values=new Map();
+ for(const [index,phase] of [[0,'FAULTED'],[1,'GRANT_REPLAY_CONTROL'],[3,'RESTORED'],[4,'PROTECTED']]){
+  const row=JSON.parse(lines[index]);assert.ok(row&&typeof row==='object'&&!Array.isArray(row));
+  assert.deepEqual(Object.keys(row).sort(),['phase','schema','value']);assert.equal(row.schema,RECOVERY_SCHEMA);assert.equal(row.phase,phase);
+  values.set(phase,row.value);
+ }
+ assert.deepEqual(values.get('GRANT_REPLAY_CONTROL'),RECOVERY_CONTROL);
+ for(const phase of ['FAULTED','RESTORED']){
+  const row=values.get(phase);assert.ok(row&&typeof row==='object'&&!Array.isArray(row));
+  assert.deepEqual(Object.keys(row).sort(),['function','grant']);for(const digest of Object.values(row))assert.match(digest,hex);
+ }
+ const snapshot=values.get('PROTECTED');assert.ok(snapshot&&typeof snapshot==='object'&&!Array.isArray(snapshot));
+ assert.deepEqual(Object.keys(snapshot).sort(),[...PROTECTED].sort());
+ for(const row of Object.values(snapshot)){
+  assert.ok(row&&typeof row==='object'&&!Array.isArray(row));assert.deepEqual(Object.keys(row).sort(),['count','sha256']);
+  assert.ok(Number.isSafeInteger(row.count)&&row.count>=0);assert.match(row.sha256,hex);
+ }
+ return [values.get('FAULTED'),values.get('RESTORED'),snapshot];
+}
 
 export function assertDecisionMigrationManifest(rows){
  assert.ok(Array.isArray(rows));assert.equal(rows.length,218,'exact218 required');
@@ -111,8 +156,8 @@ async function execute(output){
  const docker=(args,input)=>execFileSync('docker',['--host','unix:///var/run/docker.sock',...args],{encoding:'utf8',input,timeout:60000,maxBuffer:32*1024*1024,stdio:['pipe','pipe','pipe']});
  const inspect=()=>{const rows=JSON.parse(docker(['inspect',target.id??target.name]));assert.equal(rows.length,1);return rows[0];};
  const log=(label,stdout,stderr='')=>save(String(sequence++).padStart(4,'0')+'-'+label+'.log',stdout+(stderr?'\nSTDERR\n'+stderr:''));
- const sql=text=>{assertDecisionTarget(inspect(),target);try{return docker(['exec','-i',target.id,'psql','-X','-qAt','-v','ON_ERROR_STOP=1','-v','VERBOSITY=terse','-U','supabase_admin','-d','postgres'],
-  'set standard_conforming_strings=on;set client_min_messages=warning;set statement_timeout=30000;set lock_timeout=5000;'+text).trim();}
+ const sql=(text,{raw=false}={})=>{assertDecisionTarget(inspect(),target);try{const stdout=docker(['exec','-i',target.id,'psql','-X','-qAt','-v','ON_ERROR_STOP=1','-v','VERBOSITY=terse','-U','supabase_admin','-d','postgres'],
+  'set standard_conforming_strings=on;set client_min_messages=warning;set statement_timeout=30000;set lock_timeout=5000;'+text);return raw?stdout:stdout.trim();}
   catch(error){log('sql-failure','',String(error.stderr??''));throw error;}};
  const check=(name,actual,expected)=>{assert.deepEqual(actual,expected,name);checks++;console.log('PASS',name);};
  const reject=(name,text,pattern=/ERROR/)=>{let failure;try{sql(text);}catch(e){failure=e;}assert.ok(failure,name);assert.match(String(failure.stderr),pattern,name);checks++;console.log('PASS',name);};
@@ -235,10 +280,14 @@ commit;`);
   // Existing global paused-controller/full inventory authority is NOT invoked.
   phase='scoped_recovery';const newRows=after.inventory.filter(x=>x.object_identity===DECISION_RPC);assert.equal(newRows.length,2);
   const fn=newRows.find(x=>x.object_kind==='function'),grant=newRows.find(x=>x.object_kind==='grant');
-  const live=`select jsonb_build_object('function',public.static_weekly_digest_text(pg_get_functiondef(${q(DECISION_RPC)}::regprocedure)),'grant',public.static_weekly_digest_text(public.custodial_release_authority_current_grant_definition(${q(DECISION_RPC)})));`;
+  const live=RECOVERY_LIVE;
   const originalLive=JSON.parse(sql(live));check('scoped recovery starts at source-captured bytes',originalLive,{function:fn.definition_sha256,grant:grant.definition_sha256});
-  const fault="create or replace function public.custodial_native_provider_event_decisions(p_credential uuid,p_credential_hash text,p_native_request uuid,p_attestation_digest text,p_raw_body_sha256 text,p_body jsonb) returns jsonb language plpgsql volatile security definer set search_path=pg_catalog,public as $fault$begin raise exception 'synthetic new-RPC body fault';end $fault$;grant execute on function "+DECISION_RPC+' to anon;';
-  const recovered=sql('begin;'+fault+live+fn.definition_sql+';'+grant.definition_sql+';'+live+SNAPSHOT+'rollback;').split('\n').map(JSON.parse);
+  const recoverySql=buildDecisionRecoveryProtocol(fn,grant),recoveryStdout=sql(recoverySql,{raw:true});
+  save('scoped-recovery-UNVALIDATED.stdout',recoveryStdout);
+  save('scoped-recovery-UNVALIDATED.json',{classification:'UNVALIDATED_SYNTHETIC_SCOPED_RECOVERY_OUTPUT',source:identity,
+   sql_sha256:hash(recoverySql),stdout_sha256:hash(recoveryStdout),function_sha256:fn.definition_sha256,grant_sha256:grant.definition_sha256,
+   lines:recoveryStdout.split('\n').map((line,index)=>({index,bytes:Buffer.byteLength(line),sha256:hash(line)}))});
+  const recovered=parseDecisionRecoveryProtocol(recoveryStdout);
   assert.equal(recovered.length,3);assert.notEqual(recovered[0].function,originalLive.function);assert.notEqual(recovered[0].grant,originalLive.grant);
   check('exact new function and grant definitions restore after actual scoped fault',recovered[1],originalLive);
   check('scoped restore preserves protected rows BEFORE rollback',recovered[2],protectedBefore);
