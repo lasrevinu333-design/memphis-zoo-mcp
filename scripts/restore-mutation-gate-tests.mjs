@@ -199,4 +199,55 @@ assert.equal((await invoke(makeRestoreMutationGate({ supabase: null, required: f
     'settled response releases only its exact lease once');
 }
 
+{
+  // A deadline abort alone does not prove the handler or its SQL has settled.
+  // This captures the current boundary, not a successful one-minute cleanup.
+  const controller=new AbortController(),calls=[],terminated=[];
+  const gate=makeRestoreMutationGate({supabase:{async rpc(name,args){calls.push({name,args});
+    if(name==='custodial_begin_application_mutation_lease')return{data:{mutations_paused:false,authority_generation:1},error:null};
+    if(name==='custodial_heartbeat_application_mutation_lease')return{data:true,error:null};
+    if(name==='custodial_release_application_mutation_lease')return{data:true,error:null};
+    throw Error(`unexpected ${name}`);}},requestId:()=>"00000000-0000-4000-8000-000000000203",
+    heartbeatMilliseconds:5,disconnectTerminationMilliseconds:2,
+    terminateUnsettledProcess:fact=>terminated.push(fact)});
+  const req={method:'POST',staticWeeklyManagerOperation:{signal:controller.signal}},res=response();let passed=false;
+  await gate(req,res,()=>{passed=true;});assert.equal(passed,true);
+  controller.abort(new Error('synthetic ingress expiry'));
+  await new Promise(resolve=>setTimeout(resolve,18));
+  assert.equal(req.restoreMutationLease.signal.aborted,true,'ingress expiry aborts the acquired lease signal');
+  assert.equal(res.writableFinished,undefined,'an uncooperative still-connected handler has not finished its response');
+  assert.equal(terminated.length,0,'historical disconnected-only terminator does not run for a connected stall');
+  assert.ok(calls.some(row=>row.name==='custodial_heartbeat_application_mutation_lease'),
+    'the retained lease keeps heartbeating while the handler outcome is unsettled');
+  assert.equal(calls.some(row=>row.name==='custodial_release_application_mutation_lease'),false,
+    'the unsettled handler cannot release its protected lease');
+  res.emit('close');
+  await new Promise(resolve=>setTimeout(resolve,8));
+  assert.deepEqual(terminated,[{requestId:'00000000-0000-4000-8000-000000000203',
+    serviceName:'memphis-zoo-backend',exitCode:70}],
+    'only a disconnected response arms the old process-wide termination hook');
+  res.end();
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(calls.filter(row=>row.name==='custodial_release_application_mutation_lease').length,1,
+    'the synthetic test settles and releases its exact lease after observing the gap');
+}
+
+{
+  let finishRelease;
+  const releasePending=new Promise(resolve=>{finishRelease=resolve;});
+  const calls=[];
+  const gate=makeRestoreMutationGate({supabase:{async rpc(name,args){calls.push({name,args});
+    if(name==='custodial_begin_application_mutation_lease')return{data:{mutations_paused:false,authority_generation:1},error:null};
+    if(name==='custodial_heartbeat_application_mutation_lease')return{data:true,error:null};
+    if(name==='custodial_release_application_mutation_lease')return releasePending;
+    throw Error(`unexpected ${name}`);}},requestId:()=>"00000000-0000-4000-8000-000000000204"});
+  const res=response();await gate({method:'POST'},res,()=>{});
+  res.end();
+  assert.equal(res.writableFinished,true,'the HTTP response can finish before its release RPC settles');
+  assert.equal(calls.filter(row=>row.name==='custodial_release_application_mutation_lease').length,1,
+    'release is invoked but not yet known successful');
+  finishRelease({data:true,error:null});
+  await new Promise(resolve=>setImmediate(resolve));
+}
+
 console.log("RESTORE_MUTATION_GATE_TESTS_PASS");
