@@ -10,10 +10,22 @@ const currentManager216Stage=stage==='current-manager-216';
 const currentManager217Stage=stage==='current-manager-217';
 const currentManager218Stage=stage==='current-manager-218';
 const currentManager218Http=process.env.STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION_HTTP==='1';
+const currentManager218Browser=process.env.STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION_BROWSER==='1';
 assert.ok(process.env.STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION_HTTP==null||currentManager218Http,
  'recurring HTTP SQL variant accepts only explicit 1');
+assert.ok(process.env.STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION_BROWSER==null||currentManager218Browser,
+ 'recurring browser SQL variant accepts only explicit 1');
 assert.ok(!currentManager218Http||currentManager218Stage,
  'authenticated HTTP SQL confirmation variant belongs only to exact current-manager-218');
+assert.ok(!currentManager218Browser||currentManager218Stage,
+ 'authenticated browser SQL confirmation variant belongs only to exact current-manager-218');
+assert.ok(!(currentManager218Http&&currentManager218Browser),'only one authenticated HTTP confirmation transport');
+if(currentManager218Browser){
+ assert.ok(Number(process.env.CUSTODIAL_RECURRING_BROWSER_LEASE_PARENT_PID)===process.ppid,
+  'browser stage must be direct child of live guarded lease driver');
+ assert.ok(process.env.CUSTODIAL_RECURRING_BROWSER_EVIDENCE_DIR,
+  'browser stage requires caller-owned private evidence directory');
+}
 const dualSource217Stage=stage==='dual-source-217';
 const dualSource218Stage=stage==='dual-source-218';
 const currentManagerStage=currentManager216Stage||currentManager217Stage||currentManager218Stage;
@@ -110,6 +122,7 @@ try{
   // attempts (two injected failures). Keep each production SQL/compiler
   // deadline unchanged; bound the expanded aggregate test at twenty minutes.
   env:{...process.env,SHIFT_END_TEST_CONTAINER:container,SHIFT_END_TEST_SOCKET:socket,
+   ...(currentManager218Browser?{CUSTODIAL_RECURRING_BROWSER_STAGE_PARENT_PID:String(process.pid)}:{}),
    ...(currentManager216Stage?{STATIC_WEEKLY_TEST_CURRENT_216:'1',STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION:'1'}:{}),
    ...(currentManager217Stage?{STATIC_WEEKLY_TEST_CURRENT_217:'1',STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION:'1'}:{}),
    ...(currentManager218Stage?{STATIC_WEEKLY_TEST_CURRENT_218:'1',STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION:'1'}:{})},stdio:'inherit',

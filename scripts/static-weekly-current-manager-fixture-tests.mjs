@@ -111,6 +111,7 @@ check('current stage invokes publication caller and mandatory confirmation, not 
  assert.ok(runner.includes("STATIC_WEEKLY_TEST_CURRENT_217:'1',STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION:'1'"));
  assert.ok(runner.includes("STATIC_WEEKLY_TEST_CURRENT_218:'1',STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION:'1'"));
  assert.ok(runner.includes("if(currentManager218Stage){assertCurrentManager218MigrationSet();loadCurrentManagerPublicationFixture();}"));
+ assert.ok(publication.includes('currentManager218Browser?runRecurringChromiumConfirmationStage:'));
  assert.ok(publication.includes('currentManager218Http?testRecurringConfirmationHttp:testRecurringConfirmation)({pool,week,originalManagerId:managerId,check})'));
  assert.ok(publication.includes('if(currentManager218Stage)assertCurrentManager218MigrationSet();'));
  assert.ok(publication.includes('if(currentManager217Stage||currentManager218Stage)await testNamedHandoffSql({pool,authority:projection.authority,check,'));
@@ -122,6 +123,16 @@ check('HTTP SQL confirmation is one explicit 218-only alternative writer, defaul
  assert.ok(runner.includes("...(currentManager218Stage?{STATIC_WEEKLY_TEST_CURRENT_218:'1',STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION:'1'}:{})"));
  assert.ok(publication.includes('!currentManager218Http||currentManager218Stage'));
  assert.ok(publication.includes('currentManager218Http?testRecurringConfirmationHttp:testRecurringConfirmation'));
+ assert.equal(publication.match(/recurringConfirmationProof=await/g)?.length,1);
+});
+check('Chromium SQL confirmation is one explicit 218-only alternative, never a second writer',()=>{
+ assert.ok(runner.includes("const currentManager218Browser=process.env.STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION_BROWSER==='1'"));
+ assert.ok(runner.includes('!(currentManager218Http&&currentManager218Browser)'));
+ assert.ok(runner.includes('!currentManager218Browser||currentManager218Stage'));
+ assert.ok(runner.includes('CUSTODIAL_RECURRING_BROWSER_LEASE_PARENT_PID')&&runner.includes('===process.ppid'));
+ assert.ok(runner.includes('CUSTODIAL_RECURRING_BROWSER_STAGE_PARENT_PID:String(process.pid)'));
+ assert.ok(publication.includes('currentManager218Browser?runRecurringChromiumConfirmationStage:'));
+ assert.ok(publication.includes('!(currentManager218Http&&currentManager218Browser)'));
  assert.equal(publication.match(/recurringConfirmationProof=await/g)?.length,1);
 });
 const httpHelper=readFileSync(new URL('./static-weekly-recurring-confirmation-http-integration.mjs',import.meta.url),'utf8');
@@ -140,6 +151,19 @@ for(const [label,stage,value,pattern] of [
 ])check(label+' before Docker or SQL',()=>{
  const denied=spawnSync(process.execPath,[new URL('./run-isolated-shift-end-tests.mjs',import.meta.url).pathname,stage],
   {encoding:'utf8',timeout:5000,env:{...process.env,STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION_HTTP:value}});
+ assert.equal(denied.error,undefined);assert.notEqual(denied.status,0);
+ assert.match(denied.stderr,pattern);assert.doesNotMatch(denied.stdout,/OWNED_CONTAINER|REPLAYED_EXACT_MIGRATIONS/);
+});
+for(const [label,stage,env,pattern] of [
+ ['browser selector refuses historical217','current-manager-217',{STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION_BROWSER:'1'},/belongs only to exact current-manager-218/],
+ ['browser selector refuses implicit false','current-manager-218',{STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION_BROWSER:'0'},/accepts only explicit 1/],
+ ['browser and Node HTTP selectors cannot create two writers','current-manager-218',
+  {STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION_BROWSER:'1',STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION_HTTP:'1'},/only one authenticated HTTP confirmation transport/],
+ ['browser selector requires direct live driver parent','current-manager-218',
+  {STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION_BROWSER:'1',CUSTODIAL_RECURRING_BROWSER_LEASE_PARENT_PID:'9'},/direct child of live guarded lease driver/],
+])check(label+' before Docker or SQL',()=>{
+ const denied=spawnSync(process.execPath,[new URL('./run-isolated-shift-end-tests.mjs',import.meta.url).pathname,stage],
+  {encoding:'utf8',timeout:5000,env:{...process.env,...env}});
  assert.equal(denied.error,undefined);assert.notEqual(denied.status,0);
  assert.match(denied.stderr,pattern);assert.doesNotMatch(denied.stdout,/OWNED_CONTAINER|REPLAYED_EXACT_MIGRATIONS/);
 });
