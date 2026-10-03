@@ -13,7 +13,8 @@ import {testRecurringDependencyReconciliation} from './static-weekly-recurring-r
 import {testRecurringApplicationTargets} from './static-weekly-recurring-application-integration.mjs';
 import {testRecurringConfirmation} from './static-weekly-recurring-confirmation-integration.mjs';
 import {testLunchMaterialization} from './static-weekly-lunch-materialization-integration.mjs';
-import {assertCurrentManagerMigrationSet,loadCurrentManagerPublicationFixture} from './fixtures/current-manager-publication-source.mjs';
+import {assertCurrentManagerMigrationSet,assertCurrentManager217MigrationSet,loadCurrentManagerPublicationFixture} from './fixtures/current-manager-publication-source.mjs';
+import {testNamedHandoffSql} from './static-weekly-named-handoff-contract-tests.mjs';
 
 const container=process.env.SHIFT_END_TEST_CONTAINER,socket=process.env.SHIFT_END_TEST_SOCKET;
 assert.match(container??'',/^mz_schema_shift_end_[0-9]+$/);
@@ -21,8 +22,13 @@ assert.match(socket??'',/^\/tmp\/mz-shift-socket-[a-zA-Z0-9]+$/);
 const inspection=JSON.parse(execFileSync('docker',['inspect',container],{encoding:'utf8',timeout:10000}))[0];
 assert.equal(inspection.HostConfig.NetworkMode,'none');assert.equal(Object.keys(inspection.HostConfig.PortBindings??{}).length,0);
 assert.ok(inspection.Mounts.some(m=>m.Source===socket&&m.Destination==='/test-socket'));
-const currentManagerStage=process.env.STATIC_WEEKLY_TEST_CURRENT_216==='1';
-if(currentManagerStage){assertCurrentManagerMigrationSet();assert.equal(process.env.STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION,'1','current manager proof must execute confirmation');}
+const currentManager216Stage=process.env.STATIC_WEEKLY_TEST_CURRENT_216==='1';
+const currentManager217Stage=process.env.STATIC_WEEKLY_TEST_CURRENT_217==='1';
+assert.ok(!(currentManager216Stage&&currentManager217Stage),'only one pinned current-manager stage may run');
+const currentManagerStage=currentManager216Stage||currentManager217Stage;
+if(currentManager216Stage)assertCurrentManagerMigrationSet();
+if(currentManager217Stage)assertCurrentManager217MigrationSet();
+if(currentManagerStage)assert.equal(process.env.STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION,'1','current manager proof must execute confirmation');
 else assert.ok(process.env.STATIC_WEEKLY_CONTINUITY_TEMPLATE,'explicit immutable local source');
 const bytes=currentManagerStage?loadCurrentManagerPublicationFixture().bytes:readFileSync(process.env.STATIC_WEEKLY_CONTINUITY_TEMPLATE),packet=JSON.parse(bytes),source=packet.compilerInput;
 assert.equal(digest(source),packet.sourceDigest);
@@ -86,6 +92,7 @@ try{
  const draft=await plane.createInitialDraft({manager,sourceId:packet.sourceId,effectiveStart:week,expectedRevision:await revision(),idempotencyKey:'synthetic-full-source-draft'});
  const published=await plane.publishDraft({manager,draftVersionId:draft.data.version_id,expectedDraftRevision:1,expectedRevision:draft.revision,idempotencyKey:'synthetic-full-source-publish',projectionWeekStart:week});
  const projection=await query('select projection_envelope as result from public.weekly_schedule_compiled_projections where projection_id=$1',[published.data.projection_id]);
+ if(currentManager217Stage)await testNamedHandoffSql({pool,authority:projection.authority,check});
  check('published source retains exact recurring assignments',projection.authority.compilerInput.version.assignments.length,sourceRows);
  check('current dated derivation has exact responsibility segments',projection.authority.overlayCompilerInput.version.assignments.length,derivedRows);
  // The approved v2 adapter stores the exception-free DERIVED baseline in

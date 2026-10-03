@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
-import {assertCurrentManagerMigrationSet,loadCurrentManagerPublicationFixture,CURRENT_MANAGER_MIGRATION_MANIFEST} from './fixtures/current-manager-publication-source.mjs';
+import {assertCurrentManagerMigrationSet,assertCurrentManager217MigrationSet,loadCurrentManagerPublicationFixture,
+ CURRENT_MANAGER_MIGRATION_MANIFEST,CURRENT_MANAGER_217_MIGRATION_MANIFEST,CURRENT_MANAGER_217_MIGRATION} from './fixtures/current-manager-publication-source.mjs';
 import {validateSixPersonAbsenceFixtureBytes} from './fixtures/six-person-absence-source.mjs';
 import {validateFullNineV6FixtureBytes} from './fixtures/full-nine-v6-source.mjs';
 import {deriveDatedShiftEndCoverage} from '../src/static-weekly-shift-end-derivation.js';
@@ -9,9 +10,14 @@ import {postgresJsonbContentDigest} from '../src/static-weekly-schedule-program.
 
 let checks=0;const check=(name,fn)=>{fn();checks++;console.log('PASS',name);};
 const f=loadCurrentManagerPublicationFixture(),p=f.packet;
-check('exact216 manifest pinned separately from old176',()=>{
- const files=assertCurrentManagerMigrationSet();assert.equal(files.length,216);
- assert.equal(createHash('sha256').update(JSON.stringify(files)).digest('hex'),CURRENT_MANAGER_MIGRATION_MANIFEST);
+check('exact217 manifest extends pinned old216, separately from old176',()=>{
+ const files=assertCurrentManager217MigrationSet();assert.equal(files.length,217);
+ assert.deepEqual(files.at(-1),CURRENT_MANAGER_217_MIGRATION);
+ assert.equal(createHash('sha256').update(JSON.stringify(files.slice(0,216))).digest('hex'),CURRENT_MANAGER_MIGRATION_MANIFEST);
+ assert.equal(createHash('sha256').update(JSON.stringify(files)).digest('hex'),CURRENT_MANAGER_217_MIGRATION_MANIFEST);
+});
+check('historical216 identity explicitly refuses the changed217 manifest',()=>{
+ assert.throws(()=>assertCurrentManagerMigrationSet(),/all216 migrations/);
 });
 check('current323 and accepted original314 remain separate',()=>{
  assert.equal(p.compilerInput.version.assignments.length,323);assert.equal(p.original.compilerInput.version.assignments.length,314);
@@ -45,10 +51,12 @@ const publication=readFileSync(new URL('./static-weekly-current-roster-publicati
 check('current stage invokes publication caller and mandatory confirmation, not export-only Node',()=>{
  assert.ok(runner.includes("stage==='current-roster-only'||currentManagerStage?'scripts/static-weekly-current-roster-publication-tests.mjs'"));
  assert.ok(runner.includes("STATIC_WEEKLY_TEST_CURRENT_216:'1',STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION:'1'"));
+ assert.ok(runner.includes("STATIC_WEEKLY_TEST_CURRENT_217:'1',STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION:'1'"));
  assert.ok(publication.includes('recurringConfirmationProof=await testRecurringConfirmation({pool,week,originalManagerId:managerId,check})'));
+ assert.ok(publication.includes('if(currentManager217Stage)await testNamedHandoffSql({pool,authority:projection.authority,check})'));
 });
 check('old176 contract, exact image, isolation/default grants and cleanup remain',()=>{
- for(const text of ["currentManagerStage?216:176","20260929125440_custodial_recovery_inventory_closure.sql",
+ for(const text of ["currentManager217Stage?217:currentManager216Stage?216:176","20260929125440_custodial_recovery_inventory_closure.sql",
   "supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed",
   "'--network','none'",'absenceGuard','finally{cleanup();}'])assert.ok(runner.includes(text),text);
 });
@@ -57,4 +65,4 @@ check('current stage registers original only as immutable source and preserves s
  assert.ok(publication.includes("check('full source remains unchanged in database'"));
 });
 console.log(JSON.stringify({status:'PASS',checks,scope:'current-manager fixture and executable-route preflight only',
- migrationCount:216,originalRows:314,currentRows:323,derivedRows:494,solver:false,database:false,publication:false,production:false}));
+ migrationCount:217,originalRows:314,currentRows:323,derivedRows:494,solver:false,database:false,publication:false,production:false}));

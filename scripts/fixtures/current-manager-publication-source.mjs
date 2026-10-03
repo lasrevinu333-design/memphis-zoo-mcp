@@ -7,12 +7,30 @@ import {postgresJsonbContentDigest} from '../../src/static-weekly-schedule-progr
 
 const sha=bytes=>createHash('sha256').update(bytes).digest('hex');
 export const CURRENT_MANAGER_MIGRATION_MANIFEST='5d529ec0c3edac509ae4fc77817600b9024366fd43a3963f2551a5835523fa99';
-export function assertCurrentManagerMigrationSet(root=new URL('../../',import.meta.url)) {
+export const CURRENT_MANAGER_217_MIGRATION_MANIFEST='e07cee99644bc1d22f61e89e5e14f383b4c250cb0cb012e723a318a89bf5da87';
+export const CURRENT_MANAGER_217_MIGRATION={
+  file:'20261003230000_static_weekly_named_handoff_derivation.sql',
+  sha256:'ef4c6fc1183002af23797b5ac226660a3b1c2b85f3a543df75c1afa61d8fd500',
+};
+function currentMigrationManifest(root){
   const directory=new URL('supabase/migrations/',root);
-  const manifest=readdirSync(directory).filter(file=>file.endsWith('.sql')).sort()
+  return readdirSync(directory).filter(file=>file.endsWith('.sql')).sort()
     .map(file=>({file,sha256:sha(readFileSync(new URL(file,directory)))}));
+}
+export function assertCurrentManagerMigrationSet(root=new URL('../../',import.meta.url)) {
+  const manifest=currentMigrationManifest(root);
   assert.equal(manifest.length,216,'current manager fixture requires all216 migrations');
   assert.equal(sha(JSON.stringify(manifest)),CURRENT_MANAGER_MIGRATION_MANIFEST,'exact216 migration bytes changed');
+  return manifest;
+}
+export function assertCurrentManager217MigrationSet(root=new URL('../../',import.meta.url)) {
+  const manifest=currentMigrationManifest(root);
+  assert.equal(manifest.length,217,'named-handoff manager fixture requires all217 migrations');
+  assert.deepEqual(manifest.at(-1),CURRENT_MANAGER_217_MIGRATION,'exact named-handoff forward migration required');
+  assert.equal(sha(JSON.stringify(manifest.slice(0,216))),CURRENT_MANAGER_MIGRATION_MANIFEST,
+    'the 216 exact predecessor migrations changed');
+  assert.equal(sha(JSON.stringify(manifest)),CURRENT_MANAGER_217_MIGRATION_MANIFEST,
+    'the complete 217 ordered migration bytes changed');
   return manifest;
 }
 
