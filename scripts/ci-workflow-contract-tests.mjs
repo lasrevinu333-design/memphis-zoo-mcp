@@ -374,6 +374,7 @@ const eventCountSourceImports = ["await import('./event-count-cross-surface-cont
   "await import('./static-weekly-opening-coverage-preview-contract-tests.mjs');",
   "await import('./static-weekly-policy-scope-ci-tests.mjs');",
   "await import('./static-weekly-recurring-phase-authority-ci-tests.mjs');",
+  "await import('./static-weekly-identity-auxiliary-ci-tests.mjs');",
   "await import('./static-weekly-recurring-week-commitment-tests.mjs');",
   "await import('./static-weekly-morning-planning-authority-ci-tests.mjs');",
   "await import('./static-weekly-recurring-morning-solver-ci-tests.mjs');",
