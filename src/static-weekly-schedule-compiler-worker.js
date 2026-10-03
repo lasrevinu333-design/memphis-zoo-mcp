@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { types as nativeTypes } from "node:util";
 import { readFileSync } from "node:fs";
 import { compileStaticWeeklySchedule } from "./static-weekly-schedule-compiler.js";
 import { postgresJsonbContentDigest } from "./static-weekly-schedule-compiler.js";
@@ -24,7 +25,13 @@ import {
 import { initializeStaticWeeklySolverEngine } from "./static-weekly-schedule-solver-worker.js";
 import { STATIC_WEEKLY_FUSED_COMPILER_RESOURCE_LIMITS } from "./static-weekly-schedule-runtime-policy.js";
 
-installStaticWeeklySha256HexAccelerator((text) => createHash("sha256").update(text, "utf8").digest("hex"));
+installStaticWeeklySha256HexAccelerator((text) => createHash("sha256").update(text, "utf8").digest("hex"), {
+  schema:'memphis-zoo.sha256-incremental-native.v1',isProxy:nativeTypes.isProxy,
+  create() { const hash=createHash('sha256');let finished=false;return {
+    writeUtf8(text) { if(finished)throw new Error('sha256_sink_finished');hash.update(text,'utf8'); },
+    finishHex() { if(finished)throw new Error('sha256_sink_finished');finished=true;return hash.digest('hex'); },
+  }; },
+});
 
 const historicalRecurringTemplate = JSON.parse(readFileSync(new URL("../config/custodial-six-person-static-20260926.json", import.meta.url)));
 const currentHandoutRecurringTemplate = JSON.parse(readFileSync(new URL("../config/custodial-six-person-static-20261005.json", import.meta.url)));

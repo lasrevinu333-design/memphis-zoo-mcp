@@ -159,6 +159,79 @@ export function canonicalJson(value) {
 // implementation before its first compile; every other runtime continues to
 // exercise this portable reference implementation.
 let SHA256_HEX_ACCELERATOR = null;
+let SHA256_INCREMENTAL_CAPABILITY = null;
+const ARRAY_MAP = Array.prototype.map;
+const ARRAY_JOIN = Array.prototype.join;
+const DIGEST_CHUNK_CHARACTERS = 16_384;
+
+// Only inert admitted JSON graphs take the incremental route. Exotic caller
+// values retain the exact legacy serializer (including map/species, getters,
+// Proxy traps and errors). The private Node worker supplies a trap-free Proxy
+// predicate; browser/string-only installations do not change behavior.
+function inertDigestGraph(value, isProxy, active = new WeakSet()) {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') return true;
+  if (typeof value === 'number') return Number.isFinite(value);
+  if (typeof value !== 'object' || isProxy(value) || active.has(value)) return false;
+  const proto = Object.getPrototypeOf(value), array = Array.isArray(value);
+  if (array ? proto !== Array.prototype : proto !== Object.prototype && proto !== null) return false;
+  if (array && (Object.getOwnPropertyDescriptor(Array.prototype,'map')?.value !== ARRAY_MAP
+    || Object.getOwnPropertyDescriptor(Array.prototype,'join')?.value !== ARRAY_JOIN
+    || Object.getOwnPropertyDescriptor(Array.prototype,'constructor')?.value !== Array
+    || Object.getOwnPropertyDescriptor(Array,Symbol.species)?.get !== ARRAY_SPECIES_GETTER)) return false;
+  const descriptors = Object.getOwnPropertyDescriptors(value);
+  if (Reflect.ownKeys(descriptors).some(key => typeof key !== 'string')) return false;
+  if (array && (Reflect.ownKeys(descriptors).length !== value.length+1 || Object.keys(value).length !== value.length || Object.keys(value).some((key,index) => key !== String(index)))) return false;
+  active.add(value);
+  try {
+    for (const [key, descriptor] of Object.entries(descriptors)) {
+      if (array && key === 'length') continue;
+      if (!('value' in descriptor)) return false;
+      if (descriptor.enumerable && !inertDigestGraph(descriptor.value,isProxy,active)) return false;
+    }
+    return true;
+  } finally { active.delete(value); }
+}
+const ARRAY_SPECIES_GETTER = Object.getOwnPropertyDescriptor(Array,Symbol.species)?.get;
+
+function writeCanonicalJsonTokens(value, emit) {
+  if (value === null) { emit('null'); return; }
+  if (typeof value === 'boolean') { emit(value ? 'true' : 'false'); return; }
+  if (typeof value !== 'object') { emit(typeof value === 'number' && Object.is(value,-0) ? '0' : JSON.stringify(value)); return; }
+  if (Array.isArray(value)) {
+    emit('['); for (let i=0;i<value.length;i++) { if(i) emit(','); writeCanonicalJsonTokens(value[i],emit); } emit(']'); return;
+  }
+  emit('{'); const keys=Object.keys(value).sort(stableCompare);
+  for(let i=0;i<keys.length;i++) { if(i) emit(','); const key=keys[i]; emit(JSON.stringify(key)); emit(':'); writeCanonicalJsonTokens(value[key],emit); } emit('}');
+}
+
+// This renderer helper changes representation only, not a digest authority.
+// No source, digest, witness or solver result survives a call. Native sinks are
+// fresh and private; chunks never bisect a UTF-16 surrogate pair.
+export function canonicalValueDigest(value, writeTokens, canonicalText) {
+  const capability=SHA256_INCREMENTAL_CAPABILITY;
+  if (!capability) return sha256Hex(canonicalText(value));
+  let inert=false;
+  try { inert=inertDigestGraph(value,capability.isProxy); }
+  catch(error) { if(!(error instanceof RangeError))throw error; }
+  // A deeper-than-checker graph still takes the original validation/error
+  // path. Eligibility is not authority admission and never accepts an error.
+  if(!inert)return sha256Hex(canonicalText(value));
+  const sink=capability.create();
+  assert(sink && Reflect.ownKeys(sink).length===2 && Object.keys(sink).sort().join(',')==='finishHex,writeUtf8'
+    && typeof sink.writeUtf8 === 'function' && typeof sink.finishHex === 'function', 'Invalid fresh incremental SHA sink.', 'sha256_incremental_invalid');
+  let pending='';
+  const emit=token=>{
+    for(let offset=0;offset<token.length;) {
+      let end=Math.min(token.length,offset+DIGEST_CHUNK_CHARACTERS-pending.length);
+      if(end<token.length && end>offset && token.charCodeAt(end-1)>=0xd800 && token.charCodeAt(end-1)<=0xdbff && token.charCodeAt(end)>=0xdc00 && token.charCodeAt(end)<=0xdfff) end--;
+      if(end===offset) { sink.writeUtf8(pending); pending=''; continue; }
+      pending+=token.slice(offset,end); offset=end;
+      if(pending.length>=DIGEST_CHUNK_CHARACTERS-1) { sink.writeUtf8(pending); pending=''; }
+    }
+  };
+  writeTokens(value,emit); if(pending) sink.writeUtf8(pending);
+  const result=sink.finishHex(); assert(typeof result==='string' && /^[0-9a-f]{64}$/.test(result), 'Invalid incremental SHA result.', 'sha256_incremental_invalid'); return result;
+}
 
 function portableSha256Hex(text) {
   const bytes = UTF8_ENCODER.encode(text);
@@ -197,7 +270,7 @@ function portableSha256Hex(text) {
   return state.map((part) => part.toString(16).padStart(8, "0")).join("");
 }
 
-export function installStaticWeeklySha256HexAccelerator(implementation) {
+export function installStaticWeeklySha256HexAccelerator(implementation, incremental = null) {
   assert(SHA256_HEX_ACCELERATOR == null, "The static-weekly SHA-256 accelerator may be installed only once.", "sha256_accelerator_already_installed");
   assert(typeof implementation === "function", "The static-weekly SHA-256 accelerator must be a synchronous function.", "sha256_accelerator_invalid");
   const vectors = [
@@ -210,6 +283,25 @@ export function installStaticWeeklySha256HexAccelerator(implementation) {
     const accelerated = implementation(input);
     assert((known == null || portable === known) && accelerated === portable && implementation(input) === accelerated && /^[0-9a-f]{64}$/.test(accelerated), "The static-weekly SHA-256 accelerator disagrees with the portable authority.", "sha256_accelerator_disagreement");
   }
+  if (incremental !== null) {
+    assert(incremental && incremental.schema === 'memphis-zoo.sha256-incremental-native.v1'
+      && Reflect.ownKeys(incremental).length===3 && Object.keys(incremental).sort().join(',') === 'create,isProxy,schema'
+      && typeof incremental.create === 'function' && typeof incremental.isProxy === 'function', 'Invalid incremental SHA capability.', 'sha256_incremental_invalid');
+    const probe={}, proxy=new Proxy(probe,{});
+    assert(incremental.isProxy(proxy) === true && incremental.isProxy(probe) === false, 'Incremental Proxy guard disagrees.', 'sha256_incremental_invalid');
+    const seenSinks=new Set();
+    for (const [input] of [...vectors, ['a'.repeat(16_383)+'📱\ud800end',null]]) {
+      const sink=incremental.create();
+      assert(sink && !seenSinks.has(sink) && Reflect.ownKeys(sink).length===2 && Object.keys(sink).sort().join(',')==='finishHex,writeUtf8'
+        && typeof sink.writeUtf8 === 'function' && typeof sink.finishHex === 'function', 'Incremental sinks must be fresh.', 'sha256_incremental_invalid');
+      seenSinks.add(sink);
+      const split=input.length>16_000 ? 16_383 : 1;
+      let end=split; if(end<input.length && input.charCodeAt(end-1)>=0xd800 && input.charCodeAt(end-1)<=0xdbff && input.charCodeAt(end)>=0xdc00 && input.charCodeAt(end)<=0xdfff) end--;
+      sink.writeUtf8(input.slice(0,end)); sink.writeUtf8(input.slice(end));
+      assert(sink.finishHex()===portableSha256Hex(input), 'Incremental SHA disagrees.', 'sha256_accelerator_disagreement');
+    }
+    SHA256_INCREMENTAL_CAPABILITY=Object.freeze({schema:incremental.schema,create:incremental.create,isProxy:incremental.isProxy});
+  }
   SHA256_HEX_ACCELERATOR = implementation;
 }
 
@@ -221,7 +313,7 @@ export function sha256Hex(text) {
 }
 
 export function contentDigest(value) {
-  return sha256Hex(canonicalJson(value));
+  return canonicalValueDigest(value,writeCanonicalJsonTokens,canonicalJson);
 }
 
 export function validateEffectiveRanges(versions = []) {

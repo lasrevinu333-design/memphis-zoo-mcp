@@ -13,6 +13,7 @@ import {
   assertServiceDate,
   bytewiseCompare,
   canonicalJson,
+  canonicalValueDigest,
   contentDigest,
   normalizeWindow,
   selectEffectiveWeeklyVersion,
@@ -492,7 +493,18 @@ export function postgresJsonbCanonicalText(value) {
 // separators for this bounded JSON contract.  The database recomputes this
 // value with static_weekly_digest_jsonb; it is deliberately separate from the
 // portable replay digest (which remains canonicalJson based).
-export function postgresJsonbContentDigest(value) { return sha256Hex(postgresJsonbCanonicalText(value)); }
+function writePostgresJsonbTokens(value,emit) {
+  if(value === null) { emit('null'); return; }
+  if(typeof value === 'boolean') { emit(value ? 'true' : 'false'); return; }
+  if(typeof value !== 'object') { emit(typeof value === 'number' ? postgresJsonbNumberText(value) : JSON.stringify(value)); return; }
+  if(Array.isArray(value)) { emit('['); for(let i=0;i<value.length;i++) { if(i) emit(', '); writePostgresJsonbTokens(value[i],emit); } emit(']'); return; }
+  const encoder=new TextEncoder(),keys=Object.keys(value).map(key=>({key,bytes:encoder.encode(key)})).sort((a,b)=>{
+    const length=a.bytes.length-b.bytes.length;if(length)return length;
+    for(let i=0;i<a.bytes.length;i++)if(a.bytes[i]!==b.bytes[i])return a.bytes[i]<b.bytes[i]?-1:1;return 0;
+  });
+  emit('{');for(let i=0;i<keys.length;i++) { if(i)emit(', ');const key=keys[i].key;emit(JSON.stringify(key));emit(': ');writePostgresJsonbTokens(value[key],emit); }emit('}');
+}
+export function postgresJsonbContentDigest(value) { return canonicalValueDigest(value,writePostgresJsonbTokens,postgresJsonbCanonicalText); }
 
 function greatestCommonDivisor(left, right) {
   let a = BigInt(left); let b = BigInt(right);
