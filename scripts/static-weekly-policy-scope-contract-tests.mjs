@@ -32,6 +32,7 @@ const sourcePins={
 // representation contracts; below both complete retained descriptors/model
 // bases must still equal freshly generated current programs, not just a hash.
 const currentSourcePins=Object.freeze({...sourcePins,
+ 'src/static-weekly-schedule-verifier.js':'1700488fafa6e7683aed9ba11e1d6b0eb9800ed4a19d2713410a987417bfcabf',
  'src/static-weekly-schedule-program.js':'6feeea1894da194d26b315d4f923b88bcd39d901f0df812466446d6b3d4b76b9',
  'src/static-weekly-schedule-compiler.js':'593893e4daac566fa665bb987af17ce803414c92ebd59abf6e8a24aed2361f1a',
  'src/static-weekly-schedule-model.js':'23fd769ded7a126c6dc61c0421a7a2bb96e0073cbae048440910de192d16738e'

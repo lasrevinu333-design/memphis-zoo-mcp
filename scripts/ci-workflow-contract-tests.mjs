@@ -543,9 +543,16 @@ function assertConstraintsCalledWiring(sourceSuite,wrapper,owningTest,program) {
   assert.equal(createHash('sha256').update(wrapper).digest('hex'),
     'badd465184b9a73db531963ca30efe3788027c525c210b53ae1420adc4a59b11',
     'exact unconditional called415 wrapper with128/8/1536/4096/60s and five modes required');
-  assert.equal(createHash('sha256').update(owningTest).digest('hex'),
+  // The mandatory lunch suite independently reconstructs all five predecessor
+  // modules and actually proves both verifier passes. Only this dependency pin
+  // may differ in the retained415 representation proof; keep every prior byte.
+  const currentVerifierPin="const verifierSha='1700488fafa6e7683aed9ba11e1d6b0eb9800ed4a19d2713410a987417bfcabf';";
+  assert.equal(owningTest.split(currentVerifierPin).length,2,'exact one current verifier dependency pin');
+  const predecessorTest=owningTest.replace(currentVerifierPin,
+    "const verifierSha='4ffdc408d4cc6414c3ec9779d3b70ecc0ef61244dd17b6554d72ebef61074740';");
+  assert.equal(createHash('sha256').update(predecessorTest).digest('hex'),
     '46d7989e74f51d4d8028324bd676153330e68f0719c42ec96c11bfc063003607',
-    'exact final-source constraint/evaluation/hostile/generated proof required');
+    'all prior constraint/evaluation/hostile/generated proof bytes required after exact dependency reversal');
   assert.equal(createHash('sha256').update(program).digest('hex'),
     '6feeea1894da194d26b315d4f923b88bcd39d901f0df812466446d6b3d4b76b9',
     'exact current single-expression product delta, not a historical source rebind');
@@ -590,6 +597,7 @@ for(const [from,to] of [
   ['assert.equal(sha(value),productSha','assert.equal(sha(value),sha(value)'],
   ["const predecessorSha='b29306b218a68d1907bf0db3795460be90ac65f55566d69117b51ca0ce80c44d'","const predecessorSha='forged'"],
   ['equal(right.trace,left.trace,','equal(right.trace,right.trace,'],
+  ["const verifierSha='1700488fafa6e7683aed9ba11e1d6b0eb9800ed4a19d2713410a987417bfcabf';","const verifierSha='4ffdc408d4cc6414c3ec9779d3b70ecc0ef61244dd17b6554d72ebef61074740';"],
 ]) {
   const mutant=constraintsTest.replace(from,to);assert.notEqual(mutant,constraintsTest);
   assert.throws(()=>assertConstraintsCalledWiring(currentSystemSource,constraintsWrapper,mutant,constraintsProgram));constraintsMutationCount++;

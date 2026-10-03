@@ -15,5 +15,9 @@ assert.equal(receipt.currentSourcePins['src/static-weekly-schedule-model.js'],
   '23fd769ded7a126c6dc61c0421a7a2bb96e0073cbae048440910de192d16738e');
 assert.equal(receipt.currentSourcePins['src/static-weekly-schedule-compiler.js'],
   '593893e4daac566fa665bb987af17ce803414c92ebd59abf6e8a24aed2361f1a');
+assert.equal(receipt.currentSourcePins['src/static-weekly-schedule-verifier.js'],
+  '1700488fafa6e7683aed9ba11e1d6b0eb9800ed4a19d2713410a987417bfcabf');
+assert.equal(receipt.sourcePins['src/static-weekly-schedule-verifier.js'],
+  '4ffdc408d4cc6414c3ec9779d3b70ecc0ef61244dd17b6554d72ebef61074740');
 assert.equal(receipt.independentlyProvesOptimality, false);
 for (const key of ['solver', 'worker', 'sql', 'publication']) assert.equal(receipt[key], false);
