@@ -40,7 +40,7 @@ const capture = (fn) => { try { return {text: fn()}; } catch (error) { return {e
 export function runStaticWeeklyPostgresKeyOrderTests() {
   let checks = 0;
   const pins = {
-    'src/static-weekly-schedule-model.js':'3dc26cf30b1c707f120c5385c6b80acd327f222689cdcae36cd23ac0cf251fec',
+    'src/static-weekly-schedule-model.js':'23fd769ded7a126c6dc61c0421a7a2bb96e0073cbae048440910de192d16738e',
     'scripts/static-weekly-recurring-morning-integration-tests.mjs':'b88670b8da89b5cfd96156fe1ae4fddb9ea03e1019da707442b3e48f4c37b871',
     'scripts/fixtures/six-person-absence-source.json':'882e5895d60338313b08f28ec327f2087468261749cdbac5dc7d78ac22e20469',
     'config/custodial-six-person-static-20261005.json':'40da4e1d4cce52b2361b5403b7e5e4477ca00def0fd3649a1d76dacb48422f30',
