@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {recurringHttpSqlBoundary} from './static-weekly-recurring-http-boundary.mjs';
+import {recurringHttpSqlBoundary,recurringHttpTransportFailure} from './static-weekly-recurring-http-boundary.mjs';
 
 const cases=[
  ['begin','begin'],['commit','commit'],['rollback','rollback'],
@@ -14,4 +14,12 @@ const cases=[
  ['select public.static_weekly_v13_begin_recurring_confirmation_suffix($1) as result','static_weekly_v13_begin_recurring_confirmation_suffix'],
 ];
 for(const [sql,wanted] of cases)assert.equal(recurringHttpSqlBoundary(sql),wanted);
-console.log('PASS recurring HTTP SQL boundary classifier',cases.length);
+const cause=Object.assign(new Error('private https://secret.invalid?token=hidden'),{name:'HeadersTimeoutError',code:'UND_ERR_HEADERS_TIMEOUT'});
+const failure=Object.assign(new TypeError('private bearer hidden',{cause}),{code:'ETIMEDOUT'});
+assert.deepEqual(recurringHttpTransportFailure(failure),{name:'TypeError',code:'ETIMEDOUT',
+ causeName:'HeadersTimeoutError',causeCode:'UND_ERR_HEADERS_TIMEOUT'});
+assert.deepEqual(recurringHttpTransportFailure({name:'private bearer hidden',code:'TOKEN_HIDDEN',
+ cause:{name:'private url',code:'PRIVATE_TOKEN'}}),{name:'OTHER',code:'OTHER',causeName:'OTHER',causeCode:'OTHER'});
+assert.deepEqual(recurringHttpTransportFailure(null),{name:'OTHER',code:'OTHER',causeName:'OTHER',causeCode:'OTHER'});
+assert.doesNotMatch(JSON.stringify(recurringHttpTransportFailure(failure)),/secret|hidden|https/);
+console.log('PASS recurring HTTP bounded boundary and transport classifiers',cases.length+4);
