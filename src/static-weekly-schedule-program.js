@@ -103,15 +103,12 @@ const EPSILON = 1e-9;
 // HiGHS' integer-as-double coefficients fail closed before a model is built.
 export const STATIC_WEEKLY_EQUITY_SCALE = "exact-lossless-common-denominator";
 export const MAX_SAFE_EXACT_INTEGER = BigInt(Number.MAX_SAFE_INTEGER);
-// One compiler request performs a bounded sequence of independently bounded
-// solver tiers and then regenerates/verifies the complete witness twice.  Do
-// not reuse the 30-second *per-tier* worker limit as the deadline for that
-// whole sequence: production authority currently requires 111 exact tiers.
-// The admitted V10 schedule completes locally inside two minutes but exceeds
-// that parent bound on the Render Starter CPU. Five minutes remains a finite,
-// fail-closed request boundary while preserving each worker's stricter
-// 30-second ceiling and the control plane's one-request serialization.
-export const REQUEST_DEADLINE_MILLISECONDS = 300_000;
+// October3 controlling owner ceiling: ONE absolute60s program operation,
+// including preparation/solve/independent verification, not a renewed tier or
+// stage allowance. Caller/runtime owns the earlier user-operation origin and
+// passes only its remaining time. Strict authority/optimality checks remain;
+// timeout is failure/UNKNOWN, never a feasible or accepted fallback.
+export const REQUEST_DEADLINE_MILLISECONDS = 60_000;
 // HiGHS terminal reports use bounded scientific formatting.  Keep every
 // staged objective below this exact-print envelope so report attestation can
 // equal the independently recomputed integer without relying on rounded text.
@@ -366,9 +363,13 @@ export function monotonicNowMilliseconds() {
   return typeof performance?.now === "function" ? performance.now() : Number(process.hrtime.bigint() / 1_000_000n);
 }
 export function createStaticWeeklyDeadline(milliseconds = REQUEST_DEADLINE_MILLISECONDS) {
+  if (!Number.isSafeInteger(milliseconds) || milliseconds < 1 || milliseconds > REQUEST_DEADLINE_MILLISECONDS) {
+    throw Object.assign(new RangeError('Static weekly operation deadline must be within the absolute60s ceiling.'), {code:'solver_timeout'});
+  }
   return monotonicNowMilliseconds() + milliseconds;
 }
 export function remainingStaticWeeklyMilliseconds(deadline) {
+  if (!Number.isFinite(deadline)) throw Object.assign(new Error('Static weekly request deadline is invalid.'), {code:'solver_timeout'});
   const remaining = Math.floor(deadline - monotonicNowMilliseconds());
   if (remaining <= 0) throw Object.assign(new Error("Static weekly request deadline expired."), { code: "solver_timeout" });
   return remaining;

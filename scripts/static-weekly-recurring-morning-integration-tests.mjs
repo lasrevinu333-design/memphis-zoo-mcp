@@ -136,27 +136,36 @@ export function createCurrentMorningIntegrationRequest({count=6,targetEffectiveD
  return {request,fixture};
 }
 export async function runRecurringMorningFusedSixTest({count=6,targetEffectiveDate='2026-10-05'}={}){
+ // ONE attempt origin before fixture construction/import/queue/init. A second
+ // fresh preparation receives only remaining time, never another60s allowance.
+ const started=performance.now(),absoluteDeadline=started+60_000,abort=new AbortController(),
+  deadlineError=()=>Object.assign(new Error('Absolute60s scheduler acceptance attempt expired.'),{code:'solver_timeout'}),
+  remaining=()=>{const n=Math.floor(absoluteDeadline-performance.now());if(n<=0||abort.signal.aborted)throw deadlineError();return n;},
+  timer=setTimeout(()=>abort.abort(deadlineError()),60_000);let runtime,receipt;
+ try{
  const {request,fixture}=createCurrentMorningIntegrationRequest({count,targetEffectiveDate}),
   {createStaticWeeklyCompilerRuntime}=await import('../src/static-weekly-schedule-compiler-runtime.js'),
   {assertRecurringMorningCommitmentCandidate}=await import('../src/static-weekly-recurring-week-commitment.js'),
   {assertRecurringAdmissionCandidate}=await import('../src/static-weekly-recurring-preview.js'),
-  before=canonicalJson(request),runtime=createStaticWeeklyCompilerRuntime(),started=performance.now();
- try{
-  const preview=await runtime.prepareRecurringCandidate(request);assert.equal(assertRecurringMorningCommitmentCandidate(preview),true);
+  before=canonicalJson(request);runtime=createStaticWeeklyCompilerRuntime();
+  const options=()=>({deadlineMilliseconds:remaining(),signal:abort.signal});
+  const preview=await runtime.prepareRecurringCandidate(request,options());assert.equal(assertRecurringMorningCommitmentCandidate(preview),true);
   assert.equal(preview.staffedPositions,count);assert.equal(preview.morningCommitment.morningFacts.days.length,7);
-  const admission=await runtime.prepareRecurringAdmissionCandidate(request);assertRecurringAdmissionCandidate(admission);
+  const admission=await runtime.prepareRecurringAdmissionCandidate(request,options());assertRecurringAdmissionCandidate(admission);
   assert.equal(assertRecurringMorningCommitmentCandidate(admission.candidate),true);
   assert.equal(preview.morningCommitment.digest,admission.candidate.morningCommitment.digest);
   assert.equal(preview.weekCommitment.digest,admission.candidate.weekCommitment.digest);
   assert.equal(preview.decisionDigest,admission.candidate.decisionDigest);
   assert.equal(preview.candidateSourceDigest,admission.candidate.candidateSourceDigest);
   assert.equal(canonicalJson(request),before);
-  await assert.rejects(()=>runtime.prepareRecurringCandidate({...request,expectedRevision:41}),/revision changed/);
+  await assert.rejects(()=>runtime.prepareRecurringCandidate({...request,expectedRevision:41},options()),/revision changed/);
+  remaining();
   if(process.env.CUSTODIAL_MORNING_FUSED_PROOF_PATH)fs.writeFileSync(process.env.CUSTODIAL_MORNING_FUSED_PROOF_PATH,JSON.stringify({request,preview,admission,typedSourceDifferences:fixture.differences,productionRosterClaim:false},null,2)+'\n',{flag:'wx'});
-  const receipt={status:'PASS',checks:11,staffedPositions:count,morningDays:7,lateDays:7,sourceAssignments:323,
+  receipt={status:'PASS',checks:11,staffedPositions:count,morningDays:7,lateDays:7,sourceAssignments:323,
    morningDigest:preview.morningCommitment.digest,lateDigest:preview.weekCommitment.digest,decisionDigest:preview.decisionDigest,
-   elapsedMs:Math.round(performance.now()-started),actualFreshPrivateWorker:true,sql:false,publication:false};console.log(JSON.stringify(receipt));return receipt;
- }finally{await runtime.shutdown();}
+   absoluteAttemptMilliseconds:60_000,actualFreshPrivateWorker:true,sql:false,publication:false};
+ }finally{try{await runtime?.shutdown();}finally{clearTimeout(timer);}}
+ remaining();receipt.elapsedMs=Math.round(performance.now()-started);console.log(JSON.stringify(receipt));return receipt;
 }
 // Owning diagnostic ONLY: preserve the same current-source/calendar binding,
 // reconstruct the seven-day morning seed once, inspect ONLY initial late days
