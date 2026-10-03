@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { z } from 'zod';
 import { feedbackRelayPrincipal, feedbackRelaySchemas, callFeedbackRelay, FEEDBACK_RELAY_CONTRACT, FEEDBACK_RELAY_SCHEMA_SHA256 } from '../src/feedback-email-relay.js';
 import { registerFeedbackRelayTools } from '../src/mcp/feedback-relay-tools.js';
@@ -10,6 +11,47 @@ const authInfo = { clientId:'fixture-client', scopes:['mcp:read','mcp:write'],
   extra:{ authSource:'self_contained_oauth',issuer:'https://fixture.invalid',subject:'fixture-owner' } };
 const extra={authInfo};
 const args={contract_version:FEEDBACK_RELAY_CONTRACT,request_id:randomUUID()};
+const sql=readFileSync(new URL('../supabase/migrations/20261002220000_feedback_relay_preflight_and_reconciliation.sql',import.meta.url),'utf8');
+const sqlCommandPatterns=[...sql.matchAll(/p_args->>'(?:request_id|intent_id)' !~\*\s*'([^']+)'/g)].map(match=>match[1]);
+assert.equal(sqlCommandPatterns.length,2,'bind both current SQL command UUID checks');
+assert.equal(sqlCommandPatterns[0],sqlCommandPatterns[1]);
+const publishedCommandPattern=sqlCommandPatterns[0].replaceAll('[0-9a-f]','[0-9a-fA-F]').replace('[89ab]','[89abAB]');
+const commandUuidSchemas=[feedbackRelaySchemas.claim.shape.request_id,
+  feedbackRelaySchemas.begin.shape.request_id,feedbackRelaySchemas.begin.shape.intent_id,
+  feedbackRelaySchemas.receipt.shape.request_id,feedbackRelaySchemas.receipt.shape.intent_id,
+  feedbackRelaySchemas.defer.shape.request_id,feedbackRelaySchemas.defer.shape.intent_id,
+  feedbackRelaySchemas.control.shape.request_id];
+for(const schema of commandUuidSchemas){
+  const json=z.toJSONSchema(schema);
+  assert.equal(json.pattern,publishedCommandPattern,'published UUID pattern must match SQL v2');
+  assert.equal(json.format,'uuid');
+}
+for(const [value,accepted] of [
+  ['01234567-89ab-1def-8abc-0123456789ab',true],
+  ['01234567-89ab-4def-8abc-0123456789ab',true],
+  ['01234567-89ab-5def-8abc-0123456789ab',true],
+  ['01234567-89AB-4DEF-8ABC-0123456789AB',true],
+  ['01234567-89ab-6def-8abc-0123456789ab',false],
+  ['01234567-89ab-7def-8abc-0123456789ab',false],
+  ['01234567-89ab-8def-8abc-0123456789ab',false],
+  ['00000000-0000-0000-0000-000000000000',false],
+  ['ffffffff-ffff-ffff-ffff-ffffffffffff',false],
+  ['01234567-89ab-4def-7abc-0123456789ab',false],
+]){
+  for(const schema of commandUuidSchemas)assert.equal(schema.safeParse(value).success,accepted,value);
+  assert.equal(new RegExp(sqlCommandPatterns[0],'i').test(value),accepted,`SQL regex ${value}`);
+}
+assert.match(sql,/claim_token=gen_random_uuid\(\)/);
+assert.match(sql,/item\.claim_token::text is distinct from p_args->>'claim_token'/);
+const claimSchema=feedbackRelaySchemas.begin.shape.claim_token;
+assert.equal(z.toJSONSchema(claimSchema).pattern,
+  '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$');
+assert.equal(claimSchema.safeParse(randomUUID()).success,true);
+assert.equal(claimSchema.safeParse('01234567-89AB-4DEF-8ABC-0123456789AB').success,false);
+assert.equal(claimSchema.safeParse('01234567-89ab-7def-8abc-0123456789ab').success,false);
+assert.equal(feedbackRelaySchemas.defer.shape.claim_token,claimSchema);
+assert.notEqual(FEEDBACK_RELAY_SCHEMA_SHA256,'31bfaed4bab5f1977596f2ed02fe98c97c613820a31a402fd9b79bd9d6eba371',
+  'changed wire schema requires a new binding, never the old digest');
 const principal=feedbackRelayPrincipal(extra);
 assert.match(principal,/^relay:[0-9a-f]{64}$/);
 assert.equal(principal,feedbackRelayPrincipal({authInfo:{...authInfo,token:'different-hidden-token'}}));
@@ -89,3 +131,5 @@ await unknownSource.close();
 assert.equal(Object.keys(sdk.createMcpServer({readOnly:true})._registeredTools).filter(n=>n.startsWith('custodial_feedback_relay_')).length,0);
 await live.close();
 console.log('FEEDBACK_EMAIL_RELAY_ADAPTER_PASS (principal, strict input, six guarded tools, read-only omission; no transport)');
+console.log(JSON.stringify({contract:FEEDBACK_RELAY_CONTRACT,adapter_schema_sha256:FEEDBACK_RELAY_SCHEMA_SHA256,
+  sql_command_uuid_versions:'1-5',claim_token:'server-issued lowercase v4'}));

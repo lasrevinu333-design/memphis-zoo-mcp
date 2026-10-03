@@ -6,9 +6,18 @@ import {FeedbackAttachmentAdmissionError,verifyFeedbackAttachmentForRelay} from 
 export const FEEDBACK_RELAY_CONTRACT = 'custodial-feedback-relay.v2';
 const contract = z.literal(FEEDBACK_RELAY_CONTRACT);
 const uuid = z.string().uuid();
+// The v2 SQL command accepts UUID versions 1–5 for request/intent IDs, not
+// Zod's broader 1–8/nil/max syntax. Keep the published wire schema exact.
+const commandUuid = z.string().regex(
+  /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/,
+).meta({ format: 'uuid' });
+// Claims are issued by gen_random_uuid() and compared as exact lowercase text.
+const claimToken = z.string().regex(
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+).meta({ format: 'uuid' });
 const hash = z.string().regex(/^[0-9a-f]{64}$/);
-const base = { contract_version: contract, request_id: uuid };
-const fence = { intent_id: uuid, claim_token: uuid, claim_generation: z.number().int().positive().max(999999999) };
+const base = { contract_version: contract, request_id: commandUuid };
+const fence = { intent_id: commandUuid, claim_token: claimToken, claim_generation: z.number().int().positive().max(999999999) };
 const observation = z.object({
   kind: z.enum(['connector_accepted', 'outcome_unknown', 'sent_observed', 'inbox_observed', 'multiple_matching_messages', 'reconciliation_not_found']),
   provider_account: z.literal('eoperle@memphiszoo.org'),
@@ -38,7 +47,7 @@ export const feedbackRelaySchemas = Object.freeze({
   status: z.object({ contract_version: contract }).strict(),
   claim: z.object(base).strict(),
   begin: z.object({ ...base, ...fence, envelope_sha256: hash }).strict(),
-  receipt: z.object({ ...base, intent_id: uuid, attempt_id: uuid, envelope_sha256: hash, observation }).strict(),
+  receipt: z.object({ ...base, intent_id: commandUuid, attempt_id: uuid, envelope_sha256: hash, observation }).strict(),
   defer: z.object({ ...base, ...fence, reason: z.enum(['missing_profile', 'auth_unavailable',
     'configuration_unavailable', 'attachment_unavailable', 'transient_preflight']) }).strict(),
   control: z.object({ ...base, action: z.enum(['pause', 'prepare_preflight', 'resume_preflight_verified']),
