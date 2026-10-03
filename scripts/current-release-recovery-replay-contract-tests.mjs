@@ -64,6 +64,9 @@ const forwardCanary='custodial_release_canary_authority_surface()';
 const forwardNamedGrant="select public.custodial_release_authority_reset_grants('public.static_weekly_v9_assert_shift_end_derivation(jsonb)'); grant execute on function static_weekly_v9_assert_shift_end_derivation(jsonb) to postgres;";
 const forwardCanaryGrant="select public.custodial_release_authority_reset_grants('custodial_release_canary_authority_surface()'); grant execute on function custodial_release_canary_authority_surface() to public; grant execute on function custodial_release_canary_authority_surface() to postgres; grant execute on function custodial_release_canary_authority_surface() to service_role;";
 const forwardRows=structuredClone(normalRows);
+// Existing recovery orders are not globally unique. Preserve a shared
+// historical order in the fake preimage; identity remains the unique key.
+forwardRows.find(x=>x.kind==='column').order=forwardRows.find(x=>x.kind==='relation').order;
 function changeFakeRow(row,identity,definition_sql){row.identity=identity;row.definition_sql=definition_sql;row.live_sql=definition_sql;row.sha256=hash(definition_sql);row.stored_sha256=row.sha256;row.live_sha256=row.sha256}
 const forwardNamedRow=forwardRows.find(x=>x.kind==='function');changeFakeRow(forwardNamedRow,forwardNamed,'CREATE OR REPLACE FUNCTION public.static_weekly_v9_assert_shift_end_derivation(jsonb) RETURNS void AS $$ select 1 $$ LANGUAGE sql;');forwardNamedRow.order=100201;
 const forwardNamedGrantRow=forwardRows.find(x=>x.kind==='grant');changeFakeRow(forwardNamedGrantRow,forwardNamed,forwardNamedGrant);forwardNamedGrantRow.order=950022;
@@ -71,7 +74,7 @@ function fakeForwardRow(kind,identity,order,definition_sql){const sha256=hash(de
 forwardRows.push(fakeForwardRow('function',forwardCanary,100071,`CREATE OR REPLACE FUNCTION public.custodial_release_canary_authority_surface() AS $function$ values ('function','${forwardNative}','original accepted native event lookup'), ('grant','${forwardNative}','server-only original event lookup ACL'); $function$`));
 forwardRows.push(fakeForwardRow('grant',forwardCanary,1000073,forwardCanaryGrant));
 forwardRows.push(fakeForwardRow('function',forwardNative,100001,'CREATE OR REPLACE FUNCTION public.custodial_native_provider_event_decisions(uuid,text,uuid,text,text,jsonb) RETURNS jsonb AS $$ select null $$ LANGUAGE sql;'));
-forwardRows.push(fakeForwardRow('grant',forwardNative,900001,`select public.custodial_release_authority_reset_grants('${forwardNative}'); grant execute on function custodial_native_provider_event_decisions(uuid,text,uuid,text,text,jsonb) to service_role;`));
+forwardRows.push(fakeForwardRow('grant',forwardNative,900001,`select public.custodial_release_authority_reset_grants('${forwardNative}'); grant execute on function custodial_native_provider_event_decisions(uuid,text,uuid,text,text,jsonb) to postgres; grant execute on function custodial_native_provider_event_decisions(uuid,text,uuid,text,text,jsonb) to service_role;`));
 const forwardInventory=sort(forwardRows.map(({kind,identity,order,sha256})=>({kind,identity,order,sha256})));
 const forwardPreimage=sort(forwardInventory.filter(x=>x.identity!==forwardNative).map(x=>{
  if(x.kind==='function'&&x.identity===forwardNamed)return {...x,sha256:'1d76c69cc34df8ffb18d9b07711da15c1dfed8c44c7f9b5fed5e5e8b63d93e85'};
@@ -191,6 +194,25 @@ await test('218 pre-217 predecessor drift fails before applying either successor
  assert.ok(f.calls.some(x=>x.phase==='cleanup_rm'));
  assert.ok(!f.calls.some(x=>x.phase==='migration_0216'||x.phase==='migration_0217'));
 });
+await test('218 preimage accepts historical shared restore orders but not duplicate identities',async()=>{
+ assert.ok(new Set(forwardPreimage.map(x=>x.order)).size<forwardPreimage.length);
+ assert.equal(new Set(forwardPreimage.map(x=>JSON.stringify([x.kind,x.identity]))).size,forwardPreimage.length);
+ const m=forwardPlan(),f=fake(m,ctx=>ctx.phase==='forward_inventory_preimage'?editJson(x=>{
+  const duplicate=x.find(row=>row.kind==='column');
+  Object.assign(duplicate,x.find(row=>row.kind==='relation'));
+ })(ctx.result):undefined);
+ await assert.rejects(()=>runRecoveryReplay(m,{root,io:f.io}),/forward_preimage_unique/);
+ assert.ok(f.calls.some(x=>x.phase==='cleanup_rm'));
+ assert.ok(!f.calls.some(x=>x.phase==='migration_0216'||x.phase==='migration_0217'));
+});
+await test('218 preimage altered source-bound order refuses before successor',async()=>{
+ const m=forwardPlan(),f=fake(m,ctx=>ctx.phase==='forward_inventory_preimage'?editJson(x=>{
+  x.find(row=>row.kind==='function'&&row.identity===forwardNamed).order++;
+ })(ctx.result):undefined);
+ await assert.rejects(()=>runRecoveryReplay(m,{root,io:f.io}),/forward_preimage_source/);
+ assert.ok(f.calls.some(x=>x.phase==='cleanup_rm'));
+ assert.ok(!f.calls.some(x=>x.phase==='migration_0216'||x.phase==='migration_0217'));
+});
 await test('218 no-auto rejects unrelated definition changes despite same row count',async()=>{
  const m=forwardPlan('no-auto'),f=fake(m,ctx=>ctx.phase==='inventory_observed'?editJson(x=>{
   x.find(row=>row.kind==='relation').sha256='0'.repeat(64);
@@ -212,12 +234,23 @@ for(const [name,change,pattern=/final_migration_position/] of [
  await assert.rejects(()=>runRecoveryReplay(m,{root,io:f.io}),pattern);
  assert.equal(f.calls.length,0);
 });
+function changeNativeGrant(x,update){const row=x.rows.find(r=>r.kind==='grant'&&r.identity===forwardNative);
+ row.definition_sql=update(row.definition_sql);row.live_sql=row.definition_sql;row.sha256=hash(row.definition_sql);
+ row.stored_sha256=row.sha256;row.live_sha256=row.sha256;
+ x.metadata.find(r=>r.kind===row.kind&&r.identity===row.identity).sha256=row.sha256;}
 for(const [name,change,pattern] of [
  ['missing native grant',x=>{x.rows=x.rows.filter(r=>!(r.kind==='grant'&&r.identity===forwardNative));x.metadata=x.metadata.filter(r=>!(r.kind==='grant'&&r.identity===forwardNative));x.count--},/normal_inventory_forward_count/],
  ['added unrelated survivor',x=>{const row={...x.rows[0],identity:'public.unrelated'};x.rows.push(row);x.metadata.push({kind:row.kind,identity:row.identity,order:row.order,sha256:row.sha256});x.count++},/normal_inventory_forward_count/],
  ['stale named function',x=>{const row=x.rows.find(r=>r.kind==='function'&&r.identity===forwardNamed);row.sha256='1d76c69cc34df8ffb18d9b07711da15c1dfed8c44c7f9b5fed5e5e8b63d93e85'},/normal_inventory_live_integrity/],
  ['native public grant',x=>{const row=x.rows.find(r=>r.kind==='grant'&&r.identity===forwardNative);row.definition_sql+=' grant execute on function custodial_native_provider_event_decisions(uuid,text,uuid,text,text,jsonb) to public;';row.live_sql=row.definition_sql;row.sha256=hash(row.definition_sql);row.stored_sha256=row.sha256;row.live_sha256=row.sha256;x.metadata.find(r=>r.kind===row.kind&&r.identity===row.identity).sha256=row.sha256},/normal_inventory_forward_native/],
+ ['native postgres grant omitted',x=>changeNativeGrant(x,s=>s.replace(/ grant execute on function [^;]+ to postgres;/,'')),/normal_inventory_forward_native/],
+ ['native service grant omitted',x=>changeNativeGrant(x,s=>s.replace(/ grant execute on function [^;]+ to service_role;/,'')),/normal_inventory_forward_native/],
+ ['native grant roles substituted',x=>changeNativeGrant(x,s=>s.replace(' to postgres;',' to authenticated;')),/normal_inventory_forward_native/],
+ ['native grant order swapped',x=>changeNativeGrant(x,s=>s.replace(/( grant execute on function [^;]+ to postgres;)( grant execute on function [^;]+ to service_role;)/,'$2$1')),/normal_inventory_forward_native/],
+ ['native admin grant added',x=>changeNativeGrant(x,s=>s+' grant execute on function custodial_native_provider_event_decisions(uuid,text,uuid,text,text,jsonb) to static_weekly_control_plane;'),/normal_inventory_forward_native/],
+ ['native grant option changed',x=>changeNativeGrant(x,s=>s.replace(' to service_role;',' to service_role with grant option;')),/normal_inventory_forward_native/],
  ['native wrong free order',x=>{const row=x.rows.find(r=>r.kind==='function'&&r.identity===forwardNative);row.order++;x.metadata.find(r=>r.kind===row.kind&&r.identity===row.identity).order=row.order},/forward_delta_free_order/],
+ ['native grant wrong free order',x=>{const row=x.rows.find(r=>r.kind==='grant'&&r.identity===forwardNative);row.order++;x.metadata.find(r=>r.kind===row.kind&&r.identity===row.identity).order=row.order},/forward_delta_free_order/],
  ['unrelated live-consistent definition change',x=>{const row=x.rows.find(r=>r.kind==='relation');row.definition_sql+=' -- unrelated rewrite';row.live_sql=row.definition_sql;row.sha256=hash(row.definition_sql);row.stored_sha256=row.sha256;row.live_sha256=row.sha256;x.metadata.find(r=>r.kind===row.kind&&r.identity===row.identity).sha256=row.sha256},/forward_delta_unrelated_definition/],
  ['canary omits new grant',x=>{const row=x.rows.find(r=>r.kind==='function'&&r.identity===forwardCanary);row.definition_sql=row.definition_sql.replace(`, ('grant','${forwardNative}','server-only original event lookup ACL')`,'');row.live_sql=row.definition_sql;row.sha256=hash(row.definition_sql);row.stored_sha256=row.sha256;row.live_sha256=row.sha256;x.metadata.find(r=>r.kind===row.kind&&r.identity===row.identity).sha256=row.sha256},/normal_inventory_forward_surface/]
 ])await test('218 NORMAL rejects '+name+' and cleans owned fixture',async()=>{

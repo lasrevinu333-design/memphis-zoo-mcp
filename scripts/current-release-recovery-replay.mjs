@@ -79,7 +79,7 @@ function assertForwardNormalInventory(rows,predecessorCount){
     nativeGrant.definition_sql.startsWith(`select public.custodial_release_authority_reset_grants('${FORWARD_NATIVE_ID}'); `),
     'normal_inventory_forward_native');
   same([...nativeGrant.definition_sql.matchAll(/\bgrant execute on function [^;]+ to ([a-z_]+);/g)].map(x=>x[1]),
-    ['service_role'],'normal_inventory_forward_native');
+    ['postgres','service_role'],'normal_inventory_forward_native');
   for(const kind of ['function','grant'])must(canary.definition_sql.includes(
     `('${kind}','${FORWARD_NATIVE_ID}','`),'normal_inventory_forward_surface');
 }
@@ -91,7 +91,10 @@ function assertForwardPreimage(rows,predecessorCount){
     ['function',FORWARD_CANARY_ID,100071,FORWARD_CANARY_OLD_SHA],
     ['grant',FORWARD_CANARY_ID,1000073,FORWARD_CANARY_GRANT_SHA]
   ];
-  must(new Set(rows.map(key)).size===rows.length&&new Set(rows.map(x=>x.order)).size===rows.length,'forward_preimage_unique');
+  // Older captured objects can legitimately share restore_order. The full
+  // (kind, identity) key is unique; only newly allocated orders use the global
+  // occupied-order set in the forward migration and delta check below.
+  must(new Set(rows.map(key)).size===rows.length,'forward_preimage_unique');
   for(const [kind,identity,order,sha256] of expected){const found=rows.filter(x=>x.kind===kind&&x.identity===identity);
     must(found.length===1&&found[0].order===order&&found[0].sha256===sha256,'forward_preimage_source');}
   must(rows.every(x=>x.identity!==FORWARD_NATIVE_ID),'forward_preimage_native_absent');
