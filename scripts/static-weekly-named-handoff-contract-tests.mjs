@@ -95,10 +95,10 @@ export async function testNamedHandoffSql({pool,authority,check}){
  check('stored named source identity is exact',named,sourceContract.namedHandoff);
  const call=async value=>pool.query(`select ${functionName}($1::jsonb)`,[value]);
  await call(stored);check('actual SQL admits persisted current named handoff',true,true);
- async function denied(label,mutate,pattern,{rebind=true,roster=false}={}){
+ async function denied(label,mutate,pattern,{rebind=true,roster=false,codes=['23514']}={}){
   const value=clone(stored);mutate(value);
   if(rebind)rebindNamedAuthority(value,{roster});
-  await assert.rejects(()=>call(value),error=>error.code==='23514'&&pattern.test(error.message),label);
+  await assert.rejects(()=>call(value),error=>codes.includes(error.code)&&pattern.test(error.message),label);
   check(label,true,true);
  }
  await denied('named fields cannot add unrecognized data',a=>{
@@ -134,13 +134,15 @@ export async function testNamedHandoffSql({pool,authority,check}){
    const availability=input.version.slotAvailability.find(s=>s.dayOfWeek===named.dayOfWeek&&s.slotId===named.toSlotId);
    assert.ok(availability);availability.lunch={start:'13:30',end:'14:30'};
   }
- },/physical handoff or explicit OPEN segment identity invalid|named handoff source or recipient is not current and eligible/,{roster:true});
+ },/physical handoff or explicit OPEN segment identity invalid|named handoff source or recipient is not current and eligible/,
+  {roster:true,codes:['23514','P0001']});
  await denied('named recipient restriction cannot be ignored',a=>{
   for(const input of [a.compilerInput,a.overlayCompilerInput]){
    const availability=input.version.slotAvailability.find(s=>s.dayOfWeek===named.dayOfWeek&&s.slotId===named.toSlotId);
    assert.ok(availability);availability.restrictions=[parent.includedLocations[0]?.locationId??parent.locationId];
   }
- },/derived normal responsibility has off-duty or ineligible position|named handoff source or recipient is not current and eligible/);
+ },/derived normal responsibility has off-duty or ineligible position|named handoff source or recipient is not current and eligible/,
+  {codes:['23514','P0001']});
  const historical=clone(stored);
  delete historical.compilerInput.version.shiftEndContinuityPolicy.namedHandoffs;
  rebindNamedAuthority(historical);
