@@ -4,7 +4,7 @@ import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 import {canonicalJson,contentDigest,installStaticWeeklySha256HexAccelerator} from '../src/static-weekly-schedule-model.js';
 import {createMorningSolverTestInput} from './static-weekly-recurring-morning-solver-tests.mjs';
-import {createRecurringMorningWeekSourceBasis,deriveVerifiedRecurringMorningWeekCandidate,assertRecurringMorningWeekCandidate,
+import {createRecurringMorningWeekSourceBasis,assertRecurringMorningWeekSourceBasis,deriveVerifiedRecurringMorningWeekCandidate,assertRecurringMorningWeekCandidate,
  createRecurringPhaseSourceBasis,deriveScalableCanonicalRecurringWeekCandidate,recurringPatternFromFinalPhaseSource,
  recurringMorningWeekSemanticFacts} from '../src/static-weekly-recurring-staffing-adaptation.js';
 const clone=structuredClone;
@@ -49,6 +49,46 @@ export function runRecurringMorningIntegrationPureTests(){
  }
  const result={status:'PASS',checks,sourceOnly:true,solver:false,wholeWeekProof:false,sourceBasisDigest:basis.basisDigest};console.log(JSON.stringify(result));return result;
 }
+export function runRecurringMorningTargetCalendarTests(){
+ accelerate();let checks=0;const input=createMorningSolverTestInput(),original=input.planningInput.source,
+  config=input.planningInput.ownerConfig,before=canonicalJson(input),originalDigest=contentDigest(original);
+ for(const targetEffectiveDate of ['2026-10-12','2026-10-19']){
+  const currentConfig={...clone(config),effectiveDate:targetEffectiveDate},basis=createRecurringMorningWeekSourceBasis({registeredSource:original,currentConfig,targetEffectiveDate});
+  assert.equal(assertRecurringMorningWeekSourceBasis(basis),true);checks++;
+  assert.equal(basis.source.serviceDate,targetEffectiveDate);assert.equal(basis.source.version.effectiveStart,targetEffectiveDate);checks++;
+  assert.deepEqual(basis.originalRegisteredSource,original);assert.equal(basis.registeredSourceDigest,originalDigest);checks++;
+  assert.deepEqual(basis.source.version.assignments,original.version.assignments);checks++;
+  assert.deepEqual(basis.source.version.slotAvailability,original.version.slotAvailability);checks++;
+  assert.deepEqual(basis.source.slots,original.slots);assert.deepEqual(basis.source.proximity,original.proximity);checks++;
+  assert.equal(basis.targetSeedIsOriginalSource,false);assert.equal(basis.calendarTransition.newTargetBytesAreHistoricalFacts,false);checks++;
+ }
+ const overlaid=clone(original),slotId=config.slots.KAREN.slotId;
+ overlaid.exceptions=[{id:'synthetic-calendar-original-pto',type:'pto',serviceDate:'2026-10-05',
+  baseVersionId:original.version.id,publicationId:original.version.publicationId,actorId:'synthetic-manager',reason:'synthetic original dated overlay',
+  idempotencyKey:'synthetic-calendar-original-pto',expectedRevision:42,payload:{slotId}}];
+ const nextConfig={...clone(config),effectiveDate:'2026-10-12'},overlaidBefore=canonicalJson(overlaid),
+  basis=createRecurringMorningWeekSourceBasis({registeredSource:overlaid,currentConfig:nextConfig,targetEffectiveDate:'2026-10-12'});
+ assert.deepEqual(basis.originalRegisteredSource.exceptions,overlaid.exceptions);checks++;
+ assert.deepEqual(basis.source.exceptions,[]);assert.deepEqual(basis.source.version.namedAbsentSlotIds,[]);checks++;
+ assert.equal(basis.calendarTransition.originalDatedOverlayCount,1);assert.equal(canonicalJson(overlaid),overlaidBefore);checks++;
+ for(const bad of ['2026-02-30','2026-10-06','2026-09-28',null]){
+  assert.throws(()=>createRecurringMorningWeekSourceBasis({registeredSource:original,currentConfig:{...clone(config),effectiveDate:bad},targetEffectiveDate:bad}));checks++;
+ }
+ assert.throws(()=>createRecurringMorningWeekSourceBasis({registeredSource:original,currentConfig:nextConfig,targetEffectiveDate:'2026-10-19'}),/target\/config date changed/);checks++;
+ const expired=clone(original);expired.slots.find(s=>s.id===slotId).incumbencies.at(-1).effectiveEnd='2026-10-13';
+ assert.throws(()=>createRecurringMorningWeekSourceBasis({registeredSource:expired,currentConfig:nextConfig}),/target current source incumbent changed/);checks++;
+ const malformed=clone(original);malformed.exceptions=[{type:'pto'}];
+ assert.throws(()=>createRecurringMorningWeekSourceBasis({registeredSource:malformed,currentConfig:nextConfig}));checks++;
+ for(const mutate of [b=>{b.source.slots[0].label='forged history';},b=>{b.source.version.slotAvailability[0].acceptedRouteAnchorLocationId='forged';},
+  b=>{b.originalRegisteredSource.exceptions[0].reason='changed original dated evidence';},b=>{b.calendarTransition.originalHeader.serviceDate='2026-09-28';},
+  b=>{b.calendarTransition.targetEffectiveDate='2026-10-19';},b=>{b.ownerConfig.effectiveDate='2026-10-19';}]){
+  const hostile=clone(basis);mutate(hostile);const {basisDigest,...body}=hostile;hostile.basisDigest=contentDigest(body);
+  assert.throws(()=>assertRecurringMorningWeekSourceBasis(hostile));checks++;
+ }
+ assert.equal(canonicalJson(input),before);checks++;
+ const result={status:'PASS',checks,targetWeeks:['2026-10-12','2026-10-19'],originalDigest,originalDatedEvidenceRetained:true,
+  sourceOnly:true,solver:false,wholeWeekOptimum:false,production:false,publication:false};console.log(JSON.stringify(result));return result;
+}
 export async function runRecurringMorningIntegrationWeekTests({combined=false}={}){
  accelerate();const input=createMorningSolverTestInput(),source=input.planningInput.source,config=input.planningInput.ownerConfig,before=canonicalJson(input),
   basis=createRecurringMorningWeekSourceBasis({registeredSource:source,currentConfig:config}),
@@ -86,16 +126,16 @@ export async function runRecurringMorningIntegrationWeekTests({combined=false}={
  const result={status:'PASS',checks,scope:combined?'current-six actual morning + late final canonical':'current-six seven-day morning canonical',
   sharedAdmissionBudgetMs:30_000,selectedPackages:161,days:7,elapsedMs:Math.round(performance.now()-started),workerIpc:false,sql:false,published:false};console.log(JSON.stringify(result));return result;
 }
-export async function runRecurringMorningFusedSixTest({count=6}={}){
+export async function runRecurringMorningFusedSixTest({count=6,targetEffectiveDate='2026-10-05'}={}){
  const fixture=createCurrentMorningIntegrationFixture(count),input=fixture.input,source=input.planningInput.source,config=input.planningInput.ownerConfig,
   {createStaticWeeklyCompilerRuntime}=await import('../src/static-weekly-schedule-compiler-runtime.js'),
   {assertRecurringMorningCommitmentCandidate}=await import('../src/static-weekly-recurring-week-commitment.js'),
   {assertRecurringAdmissionCandidate}=await import('../src/static-weekly-recurring-preview.js');
- const managerSnapshot={week_start:'2026-10-05',authority_revision:42,current_publication:{publication_id:source.version.publicationId},
+ const managerSnapshot={week_start:targetEffectiveDate,authority_revision:42,current_publication:{publication_id:source.version.publicationId},
   roster:Object.values(config.slots).map(s=>({slot_id:s.slotId,contractor_capacity:false,
    incumbencies:source.slots.find(r=>r.id===s.slotId).incumbencies.map(p=>({person_id:p.personId,person_name:p.displayName,effective_start:p.effectiveStart,effective_end:p.effectiveEnd})),
-   week_staffing:s.vacancy?[]:s.workDays.map(d=>({service_date:new Date(Date.parse('2026-10-05T12:00:00Z')+((d+6)%7)*86400000).toISOString().slice(0,10),person_id:s.personId,employee_active:true}))}))};
- const request={publishedSource:{source_id:'73000000-0000-4000-8000-000000000001',publication_id:source.version.publicationId,authority_revision:42,compiler_input:source},managerSnapshot,effectiveDate:'2026-10-05',expectedRevision:42},
+   week_staffing:s.vacancy?[]:s.workDays.map(d=>({service_date:new Date(Date.parse(`${targetEffectiveDate}T12:00:00Z`)+((d+6)%7)*86400000).toISOString().slice(0,10),person_id:s.personId,employee_active:true}))}))};
+ const request={publishedSource:{source_id:'73000000-0000-4000-8000-000000000001',publication_id:source.version.publicationId,authority_revision:42,compiler_input:source},managerSnapshot,effectiveDate:targetEffectiveDate,expectedRevision:42},
   before=canonicalJson(request),runtime=createStaticWeeklyCompilerRuntime(),started=performance.now();
  try{
   const preview=await runtime.prepareRecurringCandidate(request);assert.equal(assertRecurringMorningCommitmentCandidate(preview),true);
@@ -115,7 +155,9 @@ export async function runRecurringMorningFusedSixTest({count=6}={}){
  }finally{await runtime.shutdown();}
 }
 if(process.argv[1]===fileURLToPath(import.meta.url)){
- if(process.argv.includes('--fused-six')||process.argv.includes('--fused-seven')||process.argv.includes('--fused-eight'))await runRecurringMorningFusedSixTest({count:process.argv.includes('--fused-eight')?8:process.argv.includes('--fused-seven')?7:6});
+ if(process.argv.includes('--target-calendar'))runRecurringMorningTargetCalendarTests();
+ else if(process.argv.includes('--fused-six')||process.argv.includes('--fused-seven')||process.argv.includes('--fused-eight'))await runRecurringMorningFusedSixTest({count:process.argv.includes('--fused-eight')?8:process.argv.includes('--fused-seven')?7:6,
+  targetEffectiveDate:process.argv.includes('--target-next-week')?'2026-10-12':'2026-10-05'});
  else if(process.argv.includes('--week')||process.argv.includes('--combined'))await runRecurringMorningIntegrationWeekTests({combined:process.argv.includes('--combined')});
  else runRecurringMorningIntegrationPureTests();
 }

@@ -111,12 +111,16 @@ const candidate = { weekCommitment: first, weekOptimizationScope: RECURRING_PHAS
 // evidence. Add the mandatory morning sibling shape so ALL original hostile
 // late bindings still reach their owning checks rather than failing on absence.
 const morningFacts={sourceBasisDigest:hash('a'),originalSourceDigest:contentDigest(source),candidateSourceDigest:first.sourceDigest,
+ targetEffectiveDate:candidate.effectiveDate,targetCalendarReceiptDigest:hash('e'),
  days:Array.from({length:7},(_,dayOfWeek)=>({dayOfWeek,contractDigest:hash('b'),metrics:{coverage:[0]},selection:[{workId:`morning-${dayOfWeek}`,slotId:'new'}],
   terminalOptima:Array.from({length:6},(_,i)=>({name:`synthetic-${i}`,modelDigest:hash('c'),lpDigest:hash('d'),primitiveObjective:0,originalObjective:0}))}))};
 const morningBody={schema:'custodial.recurring-morning-combined-commitment.v1',scope:RECURRING_MORNING_SCOPE,status:'PROVEN_CANDIDATE_ONLY',
  sourceId:candidate.sourceId,publicationId:candidate.publicationId,authorityRevision:candidate.authorityRevision,effectiveWeek:candidate.effectiveDate,
  publishedSourceDigest:candidate.publishedSourceDigest,managerSnapshotDigest:candidate.managerSnapshotDigest,readbackPatternDigest:candidate.readbackPatternDigest,
  originalMorningSourceDigest:contentDigest(source),morningSourceBasisDigest:hash('a'),morningFacts,morningFactsDigest:contentDigest(morningFacts),
+ originalMorningSourceSqlDigest:binding.publishedSourceDigest,targetCalendarReceiptDigest:hash('e'),targetEffectiveDate:candidate.effectiveDate,
+ originalCalendarHeaderDigest:hash('f'),targetCalendarHeaderDigest:hash('f'),originalDatedOverlayCount:0,
+ datedOverlaysRetainedInOriginalOnly:true,recurringRowsAnchorsAvailabilityAndHistoryPreserved:true,
  morningCandidateSourceDigest:first.sourceDigest,phaseSourceBasisDigest:first.sourceBasisDigest,lateCommitmentDigest:first.digest,
  finalSourceDigest:first.finalSourceDigest,finalSourceSqlDigest:first.finalSourceSqlDigest,finalCanonicalWitnessDigest:first.canonicalHard.witnessDigest,
  sharedMorningAdmissionBudgetMs:30_000,originalAnchorsPreserved:true,originalLateReferencePreserved:true,sourceRequiredPlannedMorningOptimum:true,

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { canonicalJson, contentDigest } from "./static-weekly-schedule-model.js";
+import { canonicalJson, contentDigest, assertServiceDate, serviceDateWeekday,
+ snapshotDatedRosterSlot } from "./static-weekly-schedule-model.js";
 import { postgresJsonbContentDigest } from "./static-weekly-schedule-compiler.js";
 import { normalizeStaticWeeklyAuthority } from "./static-weekly-schedule-program.js";
 import { recurringPatternAuthority } from "./static-weekly-recurring-repair-basis.js";
@@ -768,19 +769,65 @@ export function createRecurringPhaseSourceBasis({registeredSource,patternConfig,
 // A changed roster/split historical source needs a separate typed original /
 // target feasibility context; never substitute a coarse generator as100-cost
 // or geographic origin. Missing binding is a capability refusal, not policy.
-export function createRecurringMorningWeekSourceBasis({registeredSource,currentConfig}){
+export function createRecurringMorningWeekSourceBasis({registeredSource,currentConfig,targetEffectiveDate=currentConfig?.effectiveDate}){
+ // The private worker supplies the already-bound command date independently
+ // of config. A pure caller supplies facts, not authentication or publication.
+ assertServiceDate(targetEffectiveDate,'recurring target effective date');
+ assert.equal(serviceDateWeekday(targetEffectiveDate),1,'recurring target Monday required');
+ assert.equal(targetEffectiveDate,currentConfig?.effectiveDate,'recurring target/config date changed');
+ assertServiceDate(registeredSource?.serviceDate,'original recurring service date');
+ assert.ok(targetEffectiveDate>=registeredSource.serviceDate&&targetEffectiveDate>=currentConfig.dateAuthority?.recurringEffectiveStart,
+  'recurring target precedes original/current correction authority');
+ assert.ok(registeredSource.version&&!registeredSource.versions&&Array.isArray(registeredSource.exceptions),'exact original recurring source shape required');
+ // Validate original dated facts BEFORE removing them from the deliberate new
+ // recurring candidate. Retain the complete original, including all overlays.
+ normalizeStaticWeeklyAuthority(registeredSource.version,registeredSource.slots,registeredSource.exceptions,
+  registeredSource.proximity,registeredSource.serviceDate);
  const structure=currentHandoutRecurringStructure(registeredSource,currentConfig);
  assert.ok(structure,'current source-bound morning lineage required');
- const source=structuredClone(registeredSource),ownerConfig=structuredClone(currentConfig),days=[];
+ const originalRegisteredSource=structuredClone(registeredSource),source=structuredClone(registeredSource),
+  ownerConfig=structuredClone(currentConfig),days=[];
+ source.serviceDate=targetEffectiveDate;source.exceptions=[];
+ Object.assign(source.version,{effectiveStart:targetEffectiveDate,effectiveEnd:null,status:'published',namedAbsentSlotIds:[]});
+ // No person/availability graft. Prove every current ordinary incumbent for
+ // every date in the explicit target week, preserving the original history.
+ for(let dayOfWeek=0;dayOfWeek<7;dayOfWeek++){
+  const date=new Date(Date.parse(`${targetEffectiveDate}T12:00:00Z`)+((dayOfWeek+6)%7)*86400000).toISOString().slice(0,10);
+  for(const slot of Object.values(ownerConfig.slots)){
+   const raw=source.slots.find(s=>s.id===slot.slotId);
+   assert.ok(raw&&!raw.contractorCapacity&&!raw.kind,'target ordinary source position required');
+   const person=snapshotDatedRosterSlot(raw,date,{vacancyCapable:source.version.vacancyCapableSlotIds.includes(slot.slotId),
+    declaredVacant:source.version.vacantSlotIds.includes(slot.slotId)});
+   assert.equal(person.personId,slot.personId??null,'target current source incumbent changed');
+   assert.equal(person.displayName,slot.name??null,'target current source name changed');
+   assert.equal(Boolean(person.vacant),Boolean(slot.vacancy),'target current source vacancy changed');
+  }
+ }
+ const header=s=>({serviceDate:s.serviceDate,effectiveStart:s.version.effectiveStart,effectiveEnd:s.version.effectiveEnd,
+  status:s.version.status,namedAbsentSlotIds:structuredClone(s.version.namedAbsentSlotIds),exceptions:structuredClone(s.exceptions)});
+ const originalHeader=header(originalRegisteredSource),targetHeader=header(source),
+  receiptBody={schema:'custodial.recurring-target-calendar-basis.v1',targetEffectiveDate,
+   originalSourceDigest:contentDigest(originalRegisteredSource),originalSourceSqlDigest:postgresJsonbContentDigest(originalRegisteredSource),
+   targetSourceDigest:contentDigest(source),targetSourceSqlDigest:postgresJsonbContentDigest(source),
+   originalHeader,targetHeader,originalHeaderDigest:contentDigest(originalHeader),targetHeaderDigest:contentDigest(targetHeader),
+   originalDatedOverlayCount:originalRegisteredSource.exceptions.length,removedOnlyDatedOverlays:true,
+   recurringRowsAnchorsAvailabilityAndHistoryPreserved:true,newTargetBytesAreHistoricalFacts:false,admitted:false,published:false},
+  calendarTransition={...receiptBody,receiptDigest:contentDigest(receiptBody)};
  for(let dayOfWeek=0;dayOfWeek<7;dayOfWeek++){
   const selectedWorkIds=source.version.assignments.filter(r=>r.dayOfWeek===dayOfWeek&&structure.phaseByWorkId.get(r.workId)==='morning').map(r=>r.workId);
   days.push({dayOfWeek,selectedWorkIds});
  }
- const body={schema:'custodial.original-recurring-morning-source-basis.v1',source,ownerConfig,days,
+ const body={schema:'custodial.original-recurring-morning-source-basis.v1',originalRegisteredSource,source,ownerConfig,days,calendarTransition,
   registeredSourceDigest:contentDigest(registeredSource),ownerConfigDigest:contentDigest(currentConfig),
   fixedRowsDigest:structure.fixedRowsDigest,comparisonReference:'ORIGINAL_ACCEPTED_MORNING_ROWS_AND_DIRECTED_ANCHORS',
-  sourceAndTargetRosterKind:'UNCHANGED_CURRENT_INCUMBENTS',targetSeedIsOriginalSource:true,admitted:false,published:false};
+  sourceAndTargetRosterKind:'UNCHANGED_CURRENT_INCUMBENTS',targetSeedIsOriginalSource:canonicalJson(source)===canonicalJson(originalRegisteredSource),admitted:false,published:false};
  return {...body,basisDigest:contentDigest(body)};
+}
+export function assertRecurringMorningWeekSourceBasis(basis){
+ const {basisDigest,...body}=basis;assert.equal(contentDigest(body),basisDigest,'morning source basis changed');
+ assert.equal(canonicalJson(createRecurringMorningWeekSourceBasis({registeredSource:basis.originalRegisteredSource,currentConfig:basis.ownerConfig,
+  targetEffectiveDate:basis.calendarTransition.targetEffectiveDate})),canonicalJson(basis),'morning source basis independent reconstruction changed');
+ return true;
 }
 function morningInput(basis,fullOwners,dayOfWeek,source=basis.source){
  return {planningInput:{source,ownerConfig:basis.ownerConfig,
@@ -792,6 +839,7 @@ export function recurringMorningWeekSemanticFacts(week){
  exactMorningWeekDigest(week);
  return {schema:'custodial.recurring-morning-deterministic-facts.v1',sourceBasisDigest:week.sourceBasisDigest,
   originalSourceDigest:week.originalSourceDigest,fullOwnersDigest:week.fullOwnersDigest,candidateSourceDigest:week.candidateSourceDigest,
+  targetCalendarReceiptDigest:week.targetCalendarReceiptDigest,targetEffectiveDate:week.targetEffectiveDate,
   days:week.proofs.map(p=>({dayOfWeek:p.contract.descriptor.dayOfWeek,contractDigest:p.contract.contractDigest,
    metrics:structuredClone(p.metrics),selection:structuredClone(p.selection),
    identityLayout:structuredClone(p.identityLayout),terminalOptima:p.tiers.map(t=>({name:t.name,modelDigest:t.modelDigest,lpDigest:t.lpDigest,
@@ -821,10 +869,13 @@ function morningDayContractFacts(contract){
 // canonical witness is freshly built once; no terminal/optimum cache or client
 // skip option. Changed other-day ownership never changes original day origin.
 export function assertRecurringMorningWeekCandidate({week,basis,fullOwners,finalSource=week.candidateSource}){
- const {basisDigest,...basisBody}=basis;assert.equal(contentDigest(basisBody),basisDigest,'morning source basis changed');
- assert.equal(canonicalJson(createRecurringMorningWeekSourceBasis({registeredSource:basis.source,currentConfig:basis.ownerConfig})),canonicalJson(basis),'morning source basis independent reconstruction changed');
+ assertRecurringMorningWeekSourceBasis(basis);
  exactMorningWeekDigest(week);assert.equal(week.status,'UNREGISTERED_VERIFIED_RECURRING_MORNING_WEEK');
  assert.equal(week.sourceBasisDigest,basis.basisDigest);assert.equal(week.fullOwnersDigest,contentDigest(fullOwners));
+ assert.equal(week.originalSourceDigest,basis.registeredSourceDigest,'original morning source binding changed');
+ assert.equal(week.targetCalendarReceiptDigest,basis.calendarTransition.receiptDigest,'target calendar receipt changed');
+ assert.equal(week.targetEffectiveDate,basis.calendarTransition.targetEffectiveDate,'target morning week changed');
+ assert.equal(week.candidateSourceDigest,contentDigest(week.candidateSource),'morning candidate source bytes changed');
  assert.equal(week.proofs.length,7);assertMorningSelectionOnly(basis,week);
  const canonical=evaluateRecurringPhaseCanonicalSource(finalSource);assert.equal(canonical.feasible,true,'combined morning final canonical witness unavailable');
  for(let day=0;day<7;day++){
@@ -841,7 +892,7 @@ export function assertRecurringMorningWeekCandidate({week,basis,fullOwners,final
  return canonical;
 }
 export function deriveVerifiedRecurringMorningWeekCandidate({basis,fullOwners,solver}){
- const {basisDigest,...body}=basis;assert.equal(contentDigest(body),basisDigest,'morning source basis changed');
+ assertRecurringMorningWeekSourceBasis(basis);
  const proofs=[],started=performance.now(),budgetMs=30_000,boundedSolver={solve(lp,options){
   const remaining=budgetMs-(performance.now()-started);assert.ok(remaining>0,'Recurring morning week time bound exhausted');
   return solver.solve(lp,{...options,timeLimitSeconds:Math.min(options.timeLimitSeconds,remaining/1000)});
@@ -858,6 +909,7 @@ export function deriveVerifiedRecurringMorningWeekCandidate({basis,fullOwners,so
  if(!canonical.feasible)return {status:'UNKNOWN_CANONICAL_RECURRING_MORNING_WEEK',stage:'combined_morning_witness',proofs,candidateSource:null,admitted:false,published:false};
  const result={schema:'custodial.verified-original-recurring-morning-week.v1',status:'UNREGISTERED_VERIFIED_RECURRING_MORNING_WEEK',
   sourceBasisDigest:basis.basisDigest,originalSourceDigest:basis.registeredSourceDigest,fullOwnersDigest:contentDigest(fullOwners),
+  targetCalendarReceiptDigest:basis.calendarTransition.receiptDigest,targetEffectiveDate:basis.calendarTransition.targetEffectiveDate,
   candidateSource,candidateSourceDigest:contentDigest(candidateSource),proofs,canonicalHardWitness:canonical,
   originalAnchorsPreserved:true,originalLateReferencePreserved:true,solverAdmissionBudgetMs:budgetMs,
   physicalMinuteFeasibilityClaim:false,openingReadinessProven:false,admitted:false,published:false};

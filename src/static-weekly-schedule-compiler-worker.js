@@ -178,7 +178,8 @@ process.on("message", async (message) => {
           throw Object.assign(new Error("The accepted recurring source has no complete canonical phase transition basis."),
             { code: "static_weekly_recurring_phase_source_unsupported" });
         }
-        morningBasis=createRecurringMorningWeekSourceBasis({registeredSource:request.publishedSource.compiler_input,currentConfig:bound.currentConfig});
+        morningBasis=createRecurringMorningWeekSourceBasis({registeredSource:request.publishedSource.compiler_input,currentConfig:bound.currentConfig,
+          targetEffectiveDate:request.effectiveDate});
         morningWeek=deriveVerifiedRecurringMorningWeekCandidate({basis:morningBasis,fullOwners:fullNineOwners,solver:solverEngine});
         if(morningWeek.status!=='UNREGISTERED_VERIFIED_RECURRING_MORNING_WEEK')throw Object.assign(
           new Error(`The complete original-source morning proof is unavailable at ${morningWeek.stage} day ${morningWeek.dayOfWeek}.`),

@@ -50,6 +50,8 @@ export function createRecurringMorningCommitment({morningWeek,morningBasis,phase
  const canonical=assertRecurringMorningWeekCandidate({week:morningWeek,basis:morningBasis,fullOwners,finalSource});
  assertOnlyEqualizedOwnershipChanged(morningWeek.candidateSource,finalSource);
  const facts=recurringMorningWeekSemanticFacts(morningWeek);
+ assert.equal(morningBasis.calendarTransition.targetEffectiveDate,binding.effectiveWeek,'morning target command date changed');
+ assert.equal(postgresJsonbContentDigest(morningBasis.originalRegisteredSource),binding.publishedSourceDigest,'original registered morning SQL binding changed');
  assert.equal(phaseSourceBasis.morningSourceBasisDigest,morningBasis.basisDigest);
  assert.equal(phaseSourceBasis.morningWeekSemanticDigest,contentDigest(facts));
  assert.equal(canonicalJson(phaseSourceBasis.source),canonicalJson(morningWeek.candidateSource));
@@ -60,6 +62,13 @@ export function createRecurringMorningCommitment({morningWeek,morningBasis,phase
   sourceId:binding.sourceId,publicationId:binding.publicationId,authorityRevision:binding.authorityRevision,effectiveWeek:binding.effectiveWeek,
   publishedSourceDigest:binding.publishedSourceDigest,managerSnapshotDigest:binding.managerSnapshotDigest,readbackPatternDigest:binding.readbackPatternDigest,
   originalMorningSourceDigest:morningBasis.registeredSourceDigest,morningSourceBasisDigest:morningBasis.basisDigest,
+  originalMorningSourceSqlDigest:morningBasis.calendarTransition.originalSourceSqlDigest,
+  targetCalendarReceiptDigest:morningBasis.calendarTransition.receiptDigest,
+  targetEffectiveDate:morningBasis.calendarTransition.targetEffectiveDate,
+  originalCalendarHeaderDigest:morningBasis.calendarTransition.originalHeaderDigest,
+  targetCalendarHeaderDigest:morningBasis.calendarTransition.targetHeaderDigest,
+  originalDatedOverlayCount:morningBasis.calendarTransition.originalDatedOverlayCount,
+  datedOverlaysRetainedInOriginalOnly:true,recurringRowsAnchorsAvailabilityAndHistoryPreserved:true,
   morningFacts:facts,morningFactsDigest:contentDigest(facts),morningCandidateSourceDigest:morningWeek.candidateSourceDigest,
   phaseSourceBasisDigest:phaseSourceBasis.basisDigest,lateCommitmentDigest:lateCommitment.digest,
   finalSourceDigest:contentDigest(finalSource),finalSourceSqlDigest:postgresJsonbContentDigest(finalSource),
@@ -75,6 +84,12 @@ export function assertRecurringMorningCommitmentCandidate(candidate){
  assert.equal(m.scope,RECURRING_MORNING_SCOPE);assert.equal(m.status,'PROVEN_CANDIDATE_ONLY');
  for(const k of ['sourceId','publicationId','authorityRevision','publishedSourceDigest','managerSnapshotDigest','readbackPatternDigest'])assert.equal(m[k],candidate[k]);
  assert.equal(m.effectiveWeek,candidate.effectiveDate);assert.equal(m.finalSourceSqlDigest,candidate.candidateSourceDigest);
+ assert.equal(m.targetEffectiveDate,candidate.effectiveDate);assert.equal(m.originalMorningSourceSqlDigest,candidate.publishedSourceDigest);
+ assert.equal(m.morningFacts.targetEffectiveDate,m.targetEffectiveDate);
+ assert.equal(m.morningFacts.targetCalendarReceiptDigest,m.targetCalendarReceiptDigest);
+ assert.ok([m.targetCalendarReceiptDigest,m.originalCalendarHeaderDigest,m.targetCalendarHeaderDigest].every(hex));
+ assert.ok(Number.isSafeInteger(m.originalDatedOverlayCount)&&m.originalDatedOverlayCount>=0
+  &&m.datedOverlaysRetainedInOriginalOnly===true&&m.recurringRowsAnchorsAvailabilityAndHistoryPreserved===true);
  assert.equal(m.lateCommitmentDigest,l.digest);assert.equal(m.phaseSourceBasisDigest,l.sourceBasisDigest);
  assert.equal(m.finalSourceDigest,l.finalSourceDigest);assert.equal(m.morningCandidateSourceDigest,l.sourceDigest);
  assert.equal(m.finalCanonicalWitnessDigest,l.canonicalHard.witnessDigest);assert.equal(m.morningSourceBasisDigest,candidate.morningSourceBasisDigest);
