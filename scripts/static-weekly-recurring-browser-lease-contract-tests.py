@@ -85,6 +85,15 @@ with tempfile.TemporaryDirectory(prefix='mz-browser-launcher-pure-') as director
     shutil.copyfile(SOURCE.parent.parent / 'package-lock.json', test_backend / 'package-lock.json')
     assert launcher.validate_backend_dependency_source(test_backend) == launcher.INSTALLED_BACKEND / 'node_modules'
     assert not os.path.lexists(test_backend / 'node_modules')
+    dotenv_file = test_backend / '.env'
+    dotenv_file.touch()
+    try:
+        launcher.install_backend_dependencies(test_backend, smoke=True, clean=lambda: True)
+        raise AssertionError('ignored dotenv source reached import smoke')
+    except ValueError as error:
+        assert 'must not load configuration' in str(error)
+    assert dotenv_file.exists() and not os.path.lexists(test_backend / 'node_modules')
+    dotenv_file.unlink()  # exact empty marker created by this test
     (test_backend / 'node_modules').symlink_to(own, target_is_directory=True)
     try:
         launcher.install_backend_dependencies(test_backend, smoke=False, clean=lambda: True)

@@ -145,6 +145,8 @@ def install_backend_dependencies(backend, installed=INSTALLED_BACKEND, smoke=Tru
         layout=None):
     """Use a real ignored node_modules directory, never an untracked root link."""
     source = validate_backend_dependency_source(backend, installed)
+    if smoke and os.path.lexists(backend / '.env'):
+        raise ValueError('backend dotenv file present; import smoke must not load configuration')
     root = backend / 'node_modules'
     if os.path.lexists(root):
         raise ValueError('backend dependency directory must not preexist')
