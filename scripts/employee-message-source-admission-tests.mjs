@@ -4,6 +4,8 @@ import {isDeepStrictEqual} from 'node:util';
 import {readFile,readdir} from 'node:fs/promises';
 import {runInNewContext} from 'node:vm';
 import {fileURLToPath} from 'node:url';
+import {readMessagePreparePredecessor} from './fixtures/employee-message-prepare-predecessor.mjs';
+import {runMessagePreparePredecessorTests} from './employee-message-prepare-predecessor-tests.mjs';
 
 // Execute the actual owning dispatcher, with only external imports/scheduler
 // stubbed. This is a no-network source proof, not a SQL or provider receipt.
@@ -137,8 +139,10 @@ export async function runEmployeeMessageMigrationSourceTests(){
   const bytes=await readFile(new URL(file,dir));check(sha(bytes),hash,'unchanged later source '+file);
   check(bytes.includes('mz_prepare_employee_native_push_delivery'),false,'no later prepare writer '+file);
  }
- const canonical=JSON.parse(await readFile(new URL('../supabase/canonical/schema-fingerprint-input.json',import.meta.url),'utf8'));
- const prior=canonical.functions.find(f=>f.function_name==='mz_prepare_employee_native_push_delivery').definition;
+ const predecessorChecks=runMessagePreparePredecessorTests();
+ check(predecessorChecks.status,'PASS','owning historical predecessor hostile suite invoked');
+ const predecessor=readMessagePreparePredecessor();
+ const prior=predecessor.prior;
  check(sha(prior),'33d72de69db3e6735bec2827642bea966b89920d4c7b7bf338d73b7aca907ff2','exact last rendered prepare predecessor');
  const sql=await readFile(new URL(migrationName,dir),'utf8');
  function sourceContract(text){
@@ -178,6 +182,7 @@ export async function runEmployeeMessageMigrationSourceTests(){
   return next;
  }
  const next=sourceContract(sql);checks++;
+ check(next,predecessor.current,'existing finite source reconstruction matches independently pinned current body');
  for(const [before,after] of [
   ['v_message_receipt.acknowledged_at is not null','false'],
   ['and left_at is null for share;','for share;'],
@@ -188,7 +193,7 @@ export async function runEmployeeMessageMigrationSourceTests(){
  ]){assert.notEqual(sql.replaceAll(before,after),sql);assert.throws(()=>sourceContract(sql.replaceAll(before,after)));checks++;}
  assert.throws(()=>sourceContract(sql+'\ngrant execute on function public.fake() to public;'));checks++;
  return {status:'PASS',checks,scope:'portable finite source delta and 13 later-migration hashes only; SQL not executed',
-  migration:migrationName,sha256:sha(sql),predecessor_sha256:sha(prior),expected_definition_sha256:sha(next)};
+  migration:migrationName,sha256:sha(sql),predecessor_sha256:sha(prior),expected_definition_sha256:sha(next),predecessor_checks:predecessorChecks};
 }
 if(process.argv[1]===fileURLToPath(import.meta.url)){
  console.log(JSON.stringify(await runEmployeeMessageSourceAdmissionTests()));

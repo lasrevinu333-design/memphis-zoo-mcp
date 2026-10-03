@@ -4,6 +4,7 @@ import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {messageDeletedSourceMutation} from './employee-message-source-admission-database-tests.mjs';
+import {readMessagePreparePredecessor} from './fixtures/employee-message-prepare-predecessor.mjs';
 import {assertMessageManifest,readMessageSource,assertMessageTarget,compareMessageDelta,cleanupMessageTarget,
  MESSAGE_FILE,MESSAGE_SHA,MESSAGE_MANIFEST,MESSAGE_IDENTITY,PREPARE_PRIOR,PREPARE_CURRENT,PREPARE_GRANT} from './employee-message-source-admission-replay.mjs';
 
@@ -51,7 +52,8 @@ equal(validDeletedRow({deleted:true,at:null,purge:null}),false,'actual fail-befo
 const at=Date.parse('2026-10-03T00:00:00Z');
 equal(validDeletedRow({deleted:true,at,purge:at+14*86400000}),true,'coherent fixture required fields');
 for(const row of [{deleted:true,at,purge:at+13*86400000},{deleted:true,at,purge:null},{deleted:false,at,purge:at+14*86400000}])equal(validDeletedRow(row),false);
-const beforeDefinition=canonical.functions.find(f=>f.function_name==='mz_prepare_employee_native_push_delivery').definition;
+const predecessor=readMessagePreparePredecessor();
+const beforeDefinition=predecessor.prior;
 equal(hash(beforeDefinition),PREPARE_PRIOR);
 const migration=readFileSync(new URL('../supabase/migrations/'+MESSAGE_FILE,import.meta.url),'utf8');
 const oldDecl=migration.match(/ old_decl text:='([^']*)';/)[1],oldInsert=migration.match(/ old_insert text:='([^']*)';/)[1];
@@ -60,8 +62,10 @@ const addition=migration.match(/ addition text:=\$message\$([\s\S]*?)\$message\$
 const newReturn=migration.match(/\$new\$([\s\S]*?)\$new\$\);/)[1];
 const afterDefinition=beforeDefinition.replace(oldDecl,oldDecl+' v_message_projection jsonb;').replace(oldInsert,addition+oldInsert).replace(oldReturn,newReturn);
 equal(hash(afterDefinition),PREPARE_CURRENT);
+equal(afterDefinition,predecessor.current);
 const grant=`select public.custodial_release_authority_reset_grants('${MESSAGE_IDENTITY}'); grant execute on function ${MESSAGE_IDENTITY} to postgres; grant execute on function ${MESSAGE_IDENTITY} to service_role;`;
 equal(hash(grant),PREPARE_GRANT);
+equal(grant,predecessor.grant);
 const row=(kind,sql,order)=>({inventory_id:'00000000-0000-4000-8000-'+String(order).padStart(12,'0'),object_kind:kind,
  object_identity:MESSAGE_IDENTITY,restore_order:order,definition_sql:sql,definition_sha256:hash(sql),captured_at:'2026-10-03T11:00:00.000000Z'});
 const before={inventory:[row('function',beforeDefinition,100116),row('grant',grant,1000137)],
