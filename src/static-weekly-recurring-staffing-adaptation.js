@@ -794,6 +794,47 @@ export function adaptRegisteredRecurringSource({ registeredSource, patternConfig
     status: "CANDIDATE_ONLY", registrationRequired: true, managerConfirmationRequired: true };
 }
 
+// A different day's fixed rows are only a canonical-feasibility scaffold.
+// Historical accepted late rows remain the original-owner/100-cost reference;
+// their former owners may be vacant in the current target week. The registered
+// current correction supplies a feasible owner, never a new preference seed.
+export function createReductionFixedOtherDaysSource({source,ownerConfig,reductionContext}){
+ assertReductionContext(reductionContext);
+ assert.ok(reductionContext.registeredCorrectionSource&&reductionContext.correctionWitness,
+  'distinct registered current correction required for fixed-day scaffold');
+ const key=row=>`${row.dayOfWeek}\0${row.locationCodeSnapshot}`;
+ const originalRows=reductionContext.source.version.assignments.filter(row=>row.window?.start==='09:45');
+ const sourceRows=source?.version?.assignments?.filter(row=>row.window?.start==='09:45');
+ assert.equal(canonicalJson(sourceRows),canonicalJson(originalRows),
+  'morning candidate changed historical late comparison rows');
+ const correctedRows=reductionContext.registeredCorrectionSource.version.assignments
+  .filter(row=>row.window?.start==='09:45');
+ const corrected=new Map(correctedRows.map(row=>[key(row),row]));
+ assert.equal(corrected.size,correctedRows.length,'duplicate current correction late family');
+ assert.equal(corrected.size,originalRows.length,'current correction late family count changed');
+ const slots=new Map(Object.values(ownerConfig.slots).map(slot=>[slot.slotId,slot]));
+ const fixedFacts=row=>Object.fromEntries(Object.entries(row)
+  .filter(([name])=>!['workId','ownerSlotId','originSlotId','window'].includes(name)));
+ const result=structuredClone(source),used=new Set();
+ result.version.assignments=result.version.assignments.map(row=>{
+  if(row.window?.start!=='09:45')return row;
+  const identity=key(row),current=corrected.get(identity);
+  assert.ok(current&&!used.has(identity),`registered current late family missing or repeated: ${identity}`);
+  used.add(identity);
+  assert.equal(canonicalJson(fixedFacts(row)),canonicalJson(fixedFacts(current)),
+   `registered current correction changed protected late work facts: ${identity}`);
+  const owner=slots.get(current.originSlotId);
+  assert.ok(owner&&owner.vacancy!==true&&owner.workDays.includes(row.dayOfWeek)
+   &&current.ownerSlotId===owner.slotId&&current.window.end===owner.shift[1]
+   &&!row.restrictedSlotIds.includes(owner.slotId),
+   `registered current late owner unavailable: ${identity}`);
+  return {...row,workId:current.workId,ownerSlotId:current.ownerSlotId,
+   originSlotId:current.originSlotId,window:structuredClone(current.window)};
+ });
+ assert.equal(used.size,corrected.size,'registered current late family left unmatched');
+ return result;
+}
+
 // The normal generator's pre-balanced09:45 owners are NOT the preference
 // baseline. Keep its explicit morning candidate, current roster/availability,
 // and exact original accepted09:45 work bytes for the canonical phase query.
@@ -821,17 +862,7 @@ export function createRecurringPhaseSourceBasis({registeredSource,patternConfig,
     assert.equal(canonicalJson(source.version.assignments.filter(r=>r.window.start==='09:45')),canonicalJson(originals),'original accepted late reference changed');
     let fixedOtherDaysSource;
     if(reductionContext){
-      const seed=adaptRegisteredRecurringSource({registeredSource,patternConfig,reductionContext}).compilerInput;
-      const seedRows=new Map(seed.version.assignments.filter(r=>r.window.start==='09:45')
-        .map(r=>[`${r.dayOfWeek}\0${r.locationCodeSnapshot}`,r]));
-      fixedOtherDaysSource=structuredClone(source);
-      fixedOtherDaysSource.version.assignments=fixedOtherDaysSource.version.assignments.map(row=>{
-        if(row.window.start!=='09:45')return row;
-        const chosen=seedRows.get(`${row.dayOfWeek}\0${row.locationCodeSnapshot}`);
-        assert.ok(chosen,'reduction late feasibility scaffold missing package');
-        return {...row,workId:chosen.workId,ownerSlotId:chosen.ownerSlotId,
-          originSlotId:chosen.originSlotId,window:structuredClone(chosen.window)};
-      });
+      fixedOtherDaysSource=createReductionFixedOtherDaysSource({source,ownerConfig,reductionContext});
     }
     const body={schema:'custodial.recurring-phase-source-basis.v1',source,ownerConfig,
       registeredSourceDigest:contentDigest(registeredSource),generatedPatternConfigDigest:contentDigest(patternConfig),

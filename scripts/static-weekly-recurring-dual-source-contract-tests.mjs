@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import {createSyntheticRegisteredCurrentCorrectionReductionFixture} from './fixtures/registered-current-correction-reduction.mjs';
 import {createFullNineReductionContext,currentPatternFromPublishedReadback,createRecurringMorningWeekSourceBasis,
-  assertRecurringMorningWeekSourceBasis} from '../src/static-weekly-recurring-staffing-adaptation.js';
+  assertRecurringMorningWeekSourceBasis,createReductionFixedOtherDaysSource} from '../src/static-weekly-recurring-staffing-adaptation.js';
 import {createRecurringMorningObjectiveContract} from '../src/static-weekly-recurring-morning-solver.js';
+import {evaluateRecurringPhaseCanonicalSource} from '../src/static-weekly-recurring-phase-authority.js';
 import {postgresJsonbContentDigest as digest} from '../src/static-weekly-schedule-compiler.js';
 
 let checks=0;
@@ -31,6 +32,50 @@ check(context.comparisonLedger.some(r=>r.referenceKind==='AUTHORIZED_ADMIN_MORNI
  'Admin current-correction owner is classified separately from historical family');
 check(context.comparisonLedger.some(r=>r.referenceKind==='EXISTING_DOMINANT_POINT_SHARE_FAMILY_PREFERENCE_ONLY'),
  'historical split family ledger is retained');
+// Fail-before source: old Sunday Aquarium belongs to now-vacant OPTION2.
+// The fixed-other-day canonical scaffold must use the separately registered
+// current correction owner, while original work and preference stay historic.
+const historicalBefore=JSON.stringify(input.publishedSource.compiler_input),
+ currentBefore=JSON.stringify(input.correctionSource.compiler_input),
+ comparisonBefore=JSON.stringify(context.comparisonLedger),
+ availabilityBefore=JSON.stringify(context.dayAvailabilityReferences);
+const scaffold=createReductionFixedOtherDaysSource({source:basis.source,
+ ownerConfig:basis.ownerConfig,reductionContext:context});
+const late=(input,day,family)=>input.version.assignments.find(r=>r.dayOfWeek===day&&
+ r.locationCodeSnapshot===family&&r.window?.start==='09:45');
+const oldAquarium=late(basis.source,0,'AQUARIUM'),currentAquarium=late(input.correctionSource.compiler_input,0,'AQUARIUM'),
+ scaffoldAquarium=late(scaffold,0,'AQUARIUM');
+check(oldAquarium.originSlotId!==currentAquarium.originSlotId&&
+ basis.ownerConfig.slots.OPTION2.vacancy===true&&
+ scaffoldAquarium.originSlotId===currentAquarium.originSlotId,
+ 'Sunday Aquarium uses current feasible owner only in fixed-other-day scaffold');
+check(late(basis.source,0,'AQUARIUM').originSlotId===oldAquarium.originSlotId&&
+ context.comparisonLedger.some(r=>r.day===0&&r.phase==='equalized'&&r.family==='AQUARIUM'&&
+  r.referenceSlotId===oldAquarium.originSlotId),
+ 'historical Aquarium owner and 100-cost comparison remain unchanged');
+const lateFacts=row=>Object.fromEntries(Object.entries(row).filter(([key])=>
+ !['workId','ownerSlotId','originSlotId','window'].includes(key)));
+check(JSON.stringify(lateFacts(scaffoldAquarium))===JSON.stringify(lateFacts(oldAquarium)),
+ 'scaffold preserves complete nonowner protected late work fields');
+check(evaluateRecurringPhaseCanonicalSource(scaffold).feasible===true,
+ 'registered current owner scaffold has a fresh complete canonical feasibility witness without solving');
+check(JSON.stringify(input.publishedSource.compiler_input)===historicalBefore&&
+ JSON.stringify(input.correctionSource.compiler_input)===currentBefore&&
+ JSON.stringify(context.comparisonLedger)===comparisonBefore&&
+ JSON.stringify(context.dayAvailabilityReferences)===availabilityBefore,
+ 'scaffold changes no historical or current registered source, original-owner ledger, or availability provenance');
+const drifted=structuredClone(context);drifted.registeredCorrectionSource.version.assignments.find(r=>
+ r.dayOfWeek===0&&r.locationCodeSnapshot==='AQUARIUM'&&r.window.start==='09:45').priority++;
+rejects(()=>createReductionFixedOtherDaysSource({source:basis.source,ownerConfig:basis.ownerConfig,
+ reductionContext:drifted}),'changed registered current correction work refuses scaffold');
+const unavailable=structuredClone(context);unavailable.registeredCorrectionSource.version.assignments.find(r=>
+ r.dayOfWeek===0&&r.locationCodeSnapshot==='AQUARIUM'&&r.window.start==='09:45').originSlotId=
+ basis.ownerConfig.slots.OPTION2.slotId;
+rejects(()=>createReductionFixedOtherDaysSource({source:basis.source,ownerConfig:basis.ownerConfig,
+ reductionContext:unavailable}),'vacant corrected owner refuses scaffold');
+const oldChanged=structuredClone(basis.source);late(oldChanged,0,'AQUARIUM').originSlotId=currentAquarium.originSlotId;
+rejects(()=>createReductionFixedOtherDaysSource({source:oldChanged,ownerConfig:basis.ownerConfig,
+ reductionContext:context}),'rewritten historical late owner refuses scaffold');
 
 for(let day=0;day<7;day++){
  const source=basis.source,ownerConfig=basis.ownerConfig,
