@@ -375,6 +375,7 @@ const eventCountSourceImports = ["await import('./event-count-cross-surface-cont
   "await import('./static-weekly-policy-scope-ci-tests.mjs');",
   "await import('./static-weekly-postgres-key-order-ci-tests.mjs');",
   "await import('./static-weekly-digest-stream-ci-tests.mjs');",
+  "await import('./static-weekly-replay-digest-stream-ci-tests.mjs');",
   "await import('./static-weekly-current-manager-fixture-tests.mjs');",
   "await import('./static-weekly-dual-source-sql-stage-contract-tests.mjs');",
   "await import('./static-weekly-recurring-phase-authority-ci-tests.mjs');",
@@ -411,14 +412,15 @@ const digestStreamWrapper = readFileSync(resolve(root,'scripts/static-weekly-dig
 function assertDigestStreamCalledWiring(sourceSuite, wrapper) {
   assertEventCountSourceWiring(productionRepairGate,sourceSuite);
   const imports=sourceSuite.split('\n').map(line=>line.trim()).filter(line=>/^await import\(/.test(line));
-  assert.equal(imports.length,42,'preserve all39 prior owning suites plus digest-stream, correction and dual-source SQL-stage contracts');
+  assert.equal(imports.length,43,'preserve all39 prior owning suites plus digest-stream, replay-digest-stream, correction and dual-source SQL-stage contracts');
   assert.equal(imports.filter(line=>line===digestStreamSourceImport).length,1);
   assert.equal(createHash('sha256').update(imports.filter(line=>line!==digestStreamSourceImport&&
+    line!=="await import('./static-weekly-replay-digest-stream-ci-tests.mjs');"&&
     line!=="await import('./static-weekly-dual-source-sql-stage-contract-tests.mjs');"&&
     line!=="await import('./static-weekly-recurring-correction-ci-tests.mjs');").join('\n')+'\n').digest('hex'),
     '1fb01bf2b017ab8473f459ede8516c6bd3011ff0bf99f157181843bfa9f855ab',
     'all39 prior import identities/order must remain exact, not a substituted same-count suite');
-  assert.match(sourceSuite,/CURRENT_SYSTEM_SOURCE_CONTRACTS_PASS: 42 explicit owning suites/);
+  assert.match(sourceSuite,/CURRENT_SYSTEM_SOURCE_CONTRACTS_PASS: 43 explicit owning suites/);
   assert.match(wrapper,/^const output = execFileSync\(process\.execPath, \['--max-old-space-size=128',\n  '--max-semi-space-size=8', '--wasm-max-mem-pages=1536', '--stack-size=4096',\n  fileURLToPath\(new URL\('\.\/static-weekly-digest-stream-tests\.mjs', import\.meta\.url\)\)\],\n  \{encoding:'utf8',timeout:60000,maxBuffer:1024\*1024,\n    env:\{PATH:process\.env\.PATH,LANG:'C\.UTF-8'\}\}\);$/m);
   assert.match(wrapper,/^assert\.equal\(receipt\.status, 'PASS'\);$/m);
   assert.match(wrapper,/^assert\.equal\(receipt\.checks, 1009\);$/m);
@@ -436,7 +438,7 @@ for(const replacement of ['',`// ${digestStreamSourceImport}`,`${digestStreamSou
 for(const sourceMutant of [currentSystemSource.replace("await import('./events-chicago-time-tests.mjs');","await import('./unknown-replacement-tests.mjs');"),
   currentSystemSource.replace("await import('./events-chicago-time-tests.mjs');\nawait import('./messaging-durability-contract-tests.mjs');",
     "await import('./messaging-durability-contract-tests.mjs');\nawait import('./events-chicago-time-tests.mjs');"),
-  currentSystemSource.replace('42 explicit owning suites','41 explicit owning suites')]) {
+  currentSystemSource.replace('43 explicit owning suites','42 explicit owning suites')]) {
   assert.throws(()=>assertDigestStreamCalledWiring(sourceMutant,digestStreamWrapper));digestStreamWiringMutationCount++;
 }
 for(const [from,to]of [['const output = execFileSync(','// const output = execFileSync('],
@@ -449,6 +451,31 @@ for(const [from,to]of [['const output = execFileSync(','// const output = execFi
   assert.throws(()=>assertDigestStreamCalledWiring(currentSystemSource,digestStreamWrapper.replace(from,to)));digestStreamWiringMutationCount++;
 }
 console.log('Digest-stream called source gate PASS: '+digestStreamWiringMutationCount+' omission/suppression/limit/receipt mutations rejected');
+const replayDigestWrapper = readFileSync(resolve(root,'scripts/static-weekly-replay-digest-stream-ci-tests.mjs'),'utf8');
+function assertReplayDigestCalledWiring(wrapper) {
+  assert.match(wrapper,/^const output = execFileSync\(process\.execPath, \['--max-old-space-size=128',\n  '--max-semi-space-size=8', '--wasm-max-mem-pages=1536', '--stack-size=4096',\n  fileURLToPath\(new URL\('\.\/static-weekly-replay-digest-stream-tests\.mjs', import\.meta\.url\)\)\],\n  \{encoding:'utf8',timeout:60000,maxBuffer:1024\*1024,\n    env:\{PATH:process\.env\.PATH,LANG:'C\.UTF-8'\}\}\);$/m);
+  assert.match(wrapper,/^assert\.equal\(receipt\.status, 'PASS'\);$/m);
+  assert.match(wrapper,/^assert\.equal\(receipt\.checks, 186\);$/m);
+  assert.match(wrapper,/^assert\.equal\(receipt\.sourceDeltaOnlyReplayDigest, true\);$/m);
+  assert.match(wrapper,/^assert\.equal\(receipt\.actualPreviewExecuted, false\);$/m);
+  assert.match(wrapper,/^assert\.deepEqual\(receipt\.results\.map\(result=>result\.mode\), \['portable','string-only','incremental','allocation-legacy','allocation-stream'\]\);$/m);
+  assert.match(wrapper,/^assert\.deepEqual\(receipt\.results\.map\(result=>result\.checks\), \[59,59,61,3,3\]\);$/m);
+  assert.doesNotMatch(wrapper,/\b(?:if|catch|try)\s*\(|\.catch\s*\(|\.then\s*\(|process\.env\.(?:SKIP|CUSTODIAL)|\|\|\s*true/);
+}
+assertReplayDigestCalledWiring(replayDigestWrapper);
+let replayDigestWiringMutationCount=0;
+for(const [from,to]of [['const output = execFileSync(','// const output = execFileSync('],
+  ['receipt.status, \'PASS\'','receipt.status, \'FAIL\''],['receipt.checks, 186','receipt.checks, 0'],
+  ['timeout:60000','timeout:600000'],["'--max-old-space-size=128'","'--max-old-space-size=256'"],
+  ["'./static-weekly-replay-digest-stream-tests.mjs'","'./static-weekly-replay-digest-stream-ci-tests.mjs'"],
+  ['[59,59,61,3,3]','[59,59,61,3,0]'],['receipt.sourceDeltaOnlyReplayDigest, true','receipt.sourceDeltaOnlyReplayDigest, false'],
+  ['receipt.actualPreviewExecuted, false','receipt.actualPreviewExecuted, true'],
+  ['process.stdout.write(output);','if (false) { process.stdout.write(output); }'],
+  ["env:{PATH:process.env.PATH,LANG:'C.UTF-8'}","env:process.env"]]){
+  assert.notEqual(replayDigestWrapper.replace(from,to),replayDigestWrapper);
+  assert.throws(()=>assertReplayDigestCalledWiring(replayDigestWrapper.replace(from,to)));replayDigestWiringMutationCount++;
+}
+console.log('Replay-digest called source gate PASS: '+replayDigestWiringMutationCount+' limit/receipt/suppression mutations rejected');
 const recurringCorrectionWrapper = readFileSync(resolve(root,
   'scripts/static-weekly-recurring-correction-ci-tests.mjs'),'utf8');
 function assertRecurringCorrectionCalledWiring(wrapper) {
