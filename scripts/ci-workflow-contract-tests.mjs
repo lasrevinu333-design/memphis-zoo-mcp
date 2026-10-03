@@ -416,11 +416,13 @@ const digestStreamWrapper = readFileSync(resolve(root,'scripts/static-weekly-dig
 function assertDigestStreamCalledWiring(sourceSuite, wrapper) {
   assertEventCountSourceWiring(productionRepairGate,sourceSuite);
   const imports=sourceSuite.split('\n').map(line=>line.trim()).filter(line=>/^await import\(/.test(line));
-  assert.equal(imports.length,47,'preserve all46 prior owning suites plus constraints-digest-stream');
+  assert.equal(imports.length,49,'preserve all47 prior owning suites plus two MESSAGE suites');
   assert.equal(imports.filter(line=>line===digestStreamSourceImport).length,1);
   assert.equal(createHash('sha256').update(imports.filter(line=>line!==digestStreamSourceImport&&
     line!=="await import('./native-provider-event-decisions-tests.mjs');"&&
     line!=="await import('./native-provider-event-decisions-database-contract-tests.mjs');"&&
+    line!=="await import('./employee-message-source-admission-ci-tests.mjs');"&&
+    line!=="await import('./employee-message-source-admission-replay-contract-tests.mjs');"&&
     line!=="await import('./static-weekly-replay-digest-stream-ci-tests.mjs');"&&
     line!=="await import('./static-weekly-model-basis-digest-stream-ci-tests.mjs');"&&
     line!=="await import('./static-weekly-model-constraints-digest-stream-ci-tests.mjs');"&&
@@ -428,7 +430,7 @@ function assertDigestStreamCalledWiring(sourceSuite, wrapper) {
     line!=="await import('./static-weekly-recurring-correction-ci-tests.mjs');").join('\n')+'\n').digest('hex'),
     '1fb01bf2b017ab8473f459ede8516c6bd3011ff0bf99f157181843bfa9f855ab',
     'all39 prior import identities/order must remain exact, not a substituted same-count suite');
-  assert.match(sourceSuite,/CURRENT_SYSTEM_SOURCE_CONTRACTS_PASS: 47 explicit owning suites/);
+  assert.match(sourceSuite,/CURRENT_SYSTEM_SOURCE_CONTRACTS_PASS: 49 explicit owning suites/);
   assert.match(wrapper,/^const output = execFileSync\(process\.execPath, \['--max-old-space-size=128',\n  '--max-semi-space-size=8', '--wasm-max-mem-pages=1536', '--stack-size=4096',\n  fileURLToPath\(new URL\('\.\/static-weekly-digest-stream-tests\.mjs', import\.meta\.url\)\)\],\n  \{encoding:'utf8',timeout:60000,maxBuffer:1024\*1024,\n    env:\{PATH:process\.env\.PATH,LANG:'C\.UTF-8'\}\}\);$/m);
   assert.match(wrapper,/^assert\.equal\(receipt\.status, 'PASS'\);$/m);
   assert.match(wrapper,/^assert\.equal\(receipt\.checks, 1009\);$/m);
@@ -446,7 +448,7 @@ for(const replacement of ['',`// ${digestStreamSourceImport}`,`${digestStreamSou
 for(const sourceMutant of [currentSystemSource.replace("await import('./events-chicago-time-tests.mjs');","await import('./unknown-replacement-tests.mjs');"),
   currentSystemSource.replace("await import('./events-chicago-time-tests.mjs');\nawait import('./messaging-durability-contract-tests.mjs');",
     "await import('./messaging-durability-contract-tests.mjs');\nawait import('./events-chicago-time-tests.mjs');"),
-  currentSystemSource.replace('47 explicit owning suites','46 explicit owning suites')]) {
+  currentSystemSource.replace('49 explicit owning suites','48 explicit owning suites')]) {
   assert.throws(()=>assertDigestStreamCalledWiring(sourceMutant,digestStreamWrapper));digestStreamWiringMutationCount++;
 }
 for(const [from,to]of [['const output = execFileSync(','// const output = execFileSync('],
@@ -528,12 +530,14 @@ const constraintsProgram=readFileSync(resolve(root,'src/static-weekly-schedule-p
 function assertConstraintsCalledWiring(sourceSuite,wrapper,owningTest,program) {
   assertCompletionRecoveryWiring(productionRepairGate,sourceSuite);
   const imports=sourceSuite.split('\n').map(line=>line.trim()).filter(line=>/^await import\(/.test(line));
-  assert.equal(imports.length,47,'exact47 owning inventory required');
+  assert.equal(imports.length,49,'exact49 owning inventory required');
   assert.equal(imports.filter(line=>line===constraintsImport).length,1,'constraints proof executes exactly once');
-  assert.equal(createHash('sha256').update(imports.filter(line=>line!==constraintsImport).join('\n')+'\n').digest('hex'),
+  assert.equal(createHash('sha256').update(imports.filter(line=>line!==constraintsImport&&
+    line!=="await import('./employee-message-source-admission-ci-tests.mjs');"&&
+    line!=="await import('./employee-message-source-admission-replay-contract-tests.mjs');").join('\n')+'\n').digest('hex'),
     'c6b25145804175f4534888097ee828eb9a2926afb33bb46b049986273c7a7319',
     'all46 prior identities/order remain immutable');
-  assert.match(sourceSuite,/CURRENT_SYSTEM_SOURCE_CONTRACTS_PASS: 47 explicit owning suites/);
+  assert.match(sourceSuite,/CURRENT_SYSTEM_SOURCE_CONTRACTS_PASS: 49 explicit owning suites/);
   assert.equal(createHash('sha256').update(wrapper).digest('hex'),
     'badd465184b9a73db531963ca30efe3788027c525c210b53ae1420adc4a59b11',
     'exact unconditional called415 wrapper with128/8/1536/4096/60s and five modes required');
@@ -551,7 +555,7 @@ for(const replacement of ['',`// ${constraintsImport}`,`${constraintsImport}\n${
   const mutant=currentSystemSource.replace(constraintsImport,replacement);assert.notEqual(mutant,currentSystemSource);
   assert.throws(()=>assertConstraintsCalledWiring(mutant,constraintsWrapper,constraintsTest,constraintsProgram));constraintsMutationCount++;
 }
-for(const mutant of [currentSystemSource.replace('47 explicit owning suites','46 explicit owning suites'),
+for(const mutant of [currentSystemSource.replace('49 explicit owning suites','48 explicit owning suites'),
   currentSystemSource.replace("await import('./events-chicago-time-tests.mjs');","await import('./unknown-replacement-tests.mjs');"),
   currentSystemSource.replace("await import('./events-chicago-time-tests.mjs');\nawait import('./messaging-durability-contract-tests.mjs');",
     "await import('./messaging-durability-contract-tests.mjs');\nawait import('./events-chicago-time-tests.mjs');")]) {
@@ -594,6 +598,65 @@ for(const mutant of [constraintsProgram.replace('digest: contentDigest(constrain
   assert.throws(()=>assertConstraintsCalledWiring(currentSystemSource,constraintsWrapper,constraintsTest,mutant));constraintsMutationCount++;
 }
 console.log('Model-constraints called source gate PASS: '+constraintsMutationCount+' inventory/omission/suppression/limits/receipt/source mutations rejected');
+// MESSAGE source admission is called, not merely imported. The reconstructed
+// predecessor retains all 47 prior statements byte-for-byte and in order.
+const messageSourceImports = [
+  "await import('./employee-message-source-admission-ci-tests.mjs');",
+  "await import('./employee-message-source-admission-replay-contract-tests.mjs');",
+];
+const messageCalledWrapper=readFileSync(resolve(root,'scripts/employee-message-source-admission-ci-tests.mjs'),'utf8');
+const messageOwningTest=readFileSync(resolve(root,'scripts/employee-message-source-admission-tests.mjs'),'utf8');
+const messageReplayTest=readFileSync(resolve(root,'scripts/employee-message-source-admission-replay-contract-tests.mjs'),'utf8');
+function assertMessageCalledWiring(sourceSuite,wrapper,owningTest,replayTest) {
+  assertCompletionRecoveryWiring(productionRepairGate,sourceSuite);
+  const lines=sourceSuite.split('\n');
+  for(const statement of messageSourceImports) assert.equal(lines.filter(line=>line===statement).length,1);
+  const predecessor=lines.filter(line=>!messageSourceImports.includes(line)).join('\n')
+    .replace('49 explicit owning suites','47 explicit owning suites');
+  assert.equal(createHash('sha256').update(predecessor).digest('hex'),
+    '8cca7de9489f5eb36a520480a6c372baf74934588cb481f6c2e25e9b62bd7400',
+    'all47 prior source-stage statements and order must remain exact');
+  assert.equal(createHash('sha256').update(wrapper).digest('hex'),
+    '707e5cff3fa9a99d73e70e8450bb421e244746f5774e57eb3b726bc48fa8e170',
+    'exact unconditional called256/38/nested67 receipt checks required');
+  assert.equal(createHash('sha256').update(owningTest).digest('hex'),
+    'de184a6de014bbedcb5a03ba7f6da4b654b5abdc268d13876a581cdef354177d',
+    'exact dispatcher, migration and called historical-preimage assertions required');
+  assert.equal(createHash('sha256').update(replayTest).digest('hex'),
+    '7616b8a72b0e8e891719b0ab1e449c45386ad5050b8731d11c4bcacad0f0372d',
+    'exact81 replay preparation checks required; no database claim');
+}
+assertMessageCalledWiring(currentSystemSource,messageCalledWrapper,messageOwningTest,messageReplayTest);
+let messageWiringMutationCount=0;
+for(const statement of messageSourceImports) for(const replacement of ['',`// ${statement}`,
+  `${statement}\n${statement}`,`if(false) { ${statement} }`,statement.replace(');',').catch(() => {});')]) {
+  const mutant=currentSystemSource.replace(statement,replacement);assert.notEqual(mutant,currentSystemSource);
+  assert.throws(()=>assertMessageCalledWiring(mutant,messageCalledWrapper,messageOwningTest,messageReplayTest));
+  messageWiringMutationCount++;
+}
+for(const [from,to] of [['49 explicit owning suites','48 explicit owning suites'],
+  ["await import('./events-chicago-time-tests.mjs');","await import('./unknown-replacement-tests.mjs');"],
+  ["await import('./events-chicago-time-tests.mjs');\nawait import('./messaging-durability-contract-tests.mjs');",
+   "await import('./messaging-durability-contract-tests.mjs');\nawait import('./events-chicago-time-tests.mjs');"]]) {
+  const mutant=currentSystemSource.replace(from,to);assert.notEqual(mutant,currentSystemSource);
+  assert.throws(()=>assertMessageCalledWiring(mutant,messageCalledWrapper,messageOwningTest,messageReplayTest));messageWiringMutationCount++;
+}
+for(const [from,to] of [
+  ['await runEmployeeMessageSourceAdmissionTests()','{status:\'PASS\',checks:256}'],
+  ['await runEmployeeMessageMigrationSourceTests()','{status:\'PASS\',checks:38,predecessor_checks:{status:\'PASS\',checks:67}}'],
+  ['dispatcher.checks,256','dispatcher.checks,0'],['migration.checks,38','migration.checks,0'],
+  ['migration.predecessor_checks.checks,67','migration.predecessor_checks.checks,0'],
+  ["assert.equal(dispatcher.status,'PASS');","// suppressed status"],
+  ['sql:false','sql:true']]) {
+  const mutant=messageCalledWrapper.replace(from,to);assert.notEqual(mutant,messageCalledWrapper);
+  assert.throws(()=>assertMessageCalledWiring(currentSystemSource,mutant,messageOwningTest,messageReplayTest));messageWiringMutationCount++;
+}
+for(const which of ['owning','replay']) {
+  assert.throws(()=>assertMessageCalledWiring(currentSystemSource,messageCalledWrapper,
+    which==='owning'?messageOwningTest+'\n// unbound drift\n':messageOwningTest,
+    which==='replay'?messageReplayTest+'\n// unbound drift\n':messageReplayTest));messageWiringMutationCount++;
+}
+console.log('MESSAGE called source gate PASS: '+messageWiringMutationCount+' execution/omission/order/receipt/source mutations rejected');
 const recurringCorrectionWrapper = readFileSync(resolve(root,
   'scripts/static-weekly-recurring-correction-ci-tests.mjs'),'utf8');
 function assertRecurringCorrectionCalledWiring(wrapper) {
