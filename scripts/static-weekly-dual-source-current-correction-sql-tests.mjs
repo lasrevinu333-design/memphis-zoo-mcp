@@ -28,7 +28,23 @@ const pool=new Pool({host:socket,database:'postgres',user:'supabase_admin',passw
 pool.on('error',error=>console.error('SYNTHETIC_DUAL_SOURCE_POOL_ERROR',error.code));
 const binding=createRecurringCorrectionBinding({schema:RECURRING_CORRECTION_BINDING_SCHEMA,
  sourceId:fixture.correction.sourceId,canonicalDigest:fixture.correction.sourceDigest});
-const plane=createStaticWeeklyControlPlane({database:pool,recurringCorrectionSourceBinding:binding});
+let connections=0,active=0,maxActive=0,loseCommit=false;
+// The database transaction really commits first; only its response is lost.
+// Keep this injection at the production control-plane connection boundary,
+// never inside a mocked SQL receipt or a second independent client.
+const database={async connect(){
+ connections++;active++;maxActive=Math.max(maxActive,active);
+ const client=await pool.connect();
+ return {on:client.on.bind(client),removeListener:client.removeListener.bind(client),
+  async query(sql,args){
+   const result=await client.query(sql,args);
+   if(sql==='commit'&&loseCommit){loseCommit=false;
+    throw Object.assign(new Error('synthetic lost COMMIT response after database acceptance'),{code:'08006'});
+   }
+   return result;
+  },release(error){active--;client.release(error);}};
+ },async end(){}};
+const plane=createStaticWeeklyControlPlane({database,recurringCorrectionSourceBinding:binding});
 let checks=0;
 const check=(name,actual,expected)=>{assert.deepEqual(actual,expected,name);checks++;console.log('PASS',name);};
 const first=async(text,args=[])=>(await pool.query(text,args)).rows[0]?.result;
@@ -153,19 +169,37 @@ try{
  check('preview changes no authority revision',await revision(),beforePreview);
  const confirmationKey='30000000-0000-4000-8000-000000000282',request={manager:second,
   effectiveStart:week,expectedRevision:beforePreview,confirmationKey,previewDigest:preview.previewDigest};
- const receipt=await plane.confirmRecurringStaffing(request);
- check('second manager accepted exact displayed digest',receipt.receipt?.previewDigest,preview.previewDigest);
- check('accepted actor bound to named second manager',receipt.receipt?.managerId,second.manager_id);
- check('phone delivery remains pending',
-  [receipt.receipt?.accepted,receipt.receipt?.phoneDeliveryState,receipt.receipt?.affectedPhonesUpdated],
-  [true,'PENDING',false]);
+ const beforeConfirmationConnections=connections;loseCommit=true;
+ await assert.rejects(()=>plane.confirmRecurringStaffing(request),
+  error=>error.code==='static_weekly_control_plane_database_unavailable');
+ checks++;console.log('PASS lost COMMIT response reported as unknown, not false rejection');
+ check('lost response uses one checked-out confirmation client',connections-beforeConfirmationConnections,1);
+ check('confirmation creates no nested client before recovery',maxActive,1);
+ check('injected response loss was consumed',loseCommit,false);
  const status=await plane.getRecurringConfirmationStatus({manager:second,confirmationKey});
- check('exact manager status recovers accepted receipt',status.receipt,receipt.receipt);
+ check('exact manager status resolves committed lost response',status.state,'ACCEPTED');
+ const accepted=status.receipt;
+ check('second manager accepted exact displayed digest',accepted?.previewDigest,preview.previewDigest);
+ check('accepted actor bound to named second manager',accepted?.managerId,second.manager_id);
+ check('phone delivery remains pending',
+  [accepted?.accepted,accepted?.phoneDeliveryState,accepted?.affectedPhonesUpdated],
+  [true,'PENDING',false]);
+ const bound=await first('select decision_json as result from public.static_weekly_recurring_publication_bindings where publication_id=$1',
+  [accepted.publicationId]);
+ check('committed decision remains the exact displayed dual-source preview',bound,preview.decision);
+ const proof=await first('select to_jsonb(p) as result from public.static_weekly_recurring_acceptance_proofs p where operation_id=$1',
+  [accepted.operationId]);
+ check('committed dual-source acceptance has seven dated targets',new Set(proof.target_manifest.map(item=>item.serviceDate)).size,7);
  const after=await first(`select jsonb_build_object('parents',(select count(*) from public.static_weekly_recurring_confirmations),
   'sources',(select count(*) from public.static_weekly_authority_source_documents),
   'publications',(select count(*) from public.weekly_schedule_publications),
   'proofs',(select count(*) from public.static_weekly_recurring_acceptance_proofs)) as result`);
- check('same original request replays exact receipt',(await plane.confirmRecurringStaffing(request)).receipt,receipt.receipt);
+ const retries=await Promise.all([plane.confirmRecurringStaffing(request),plane.confirmRecurringStaffing(request)]);
+ for(const retry of retries)check('concurrent original request returns exact accepted receipt',retry.receipt,accepted);
+ check('concurrent retries append no parents/sources/publications/proofs',await first(`select jsonb_build_object('parents',(select count(*) from public.static_weekly_recurring_confirmations),
+  'sources',(select count(*) from public.static_weekly_authority_source_documents),
+  'publications',(select count(*) from public.weekly_schedule_publications),
+  'proofs',(select count(*) from public.static_weekly_recurring_acceptance_proofs)) as result`),after);
  await assert.rejects(()=>plane.confirmRecurringStaffing({...request,previewDigest:'0'.repeat(64)}),/idempotency conflict/);
  checks++;
  check('changed request cannot append accepted state',await first(`select jsonb_build_object('parents',(select count(*) from public.static_weekly_recurring_confirmations),
@@ -178,10 +212,22 @@ try{
  check('other manager cannot read second manager operation',(await plane.getRecurringConfirmationStatus({manager,confirmationKey})).state,'NOT_FOUND');
  for(const role of ['anon','authenticated','service_role'])check('direct role denied official vacancy '+role,
   await first("select has_function_privilege($1,'public.static_weekly_v8_vacate_roster_slot(uuid,uuid,uuid,date,text,bigint,uuid,text)','execute') as result",[role]),false);
+ for(const role of ['anon','authenticated','service_role']){
+  const former=fixture.former[0],deniedRevision=await revision();
+  await assert.rejects(()=>rpc(role,'static_weekly_v8_vacate_roster_slot',[
+   fixture.correction.sourceId,former.slotId,former.personId,fixture.syntheticServiceDate,
+   'Denied direct role',deniedRevision,second.manager_id,'denied-direct-'+role]),
+   error=>error.code==='42501'&&/permission denied/i.test(error.message));
+  checks++;console.log('PASS actual denied direct vacancy RPC '+role);
+ }
+ check('denied direct roles append no accepted state',await first(`select jsonb_build_object('parents',(select count(*) from public.static_weekly_recurring_confirmations),
+  'sources',(select count(*) from public.static_weekly_authority_source_documents),
+  'publications',(select count(*) from public.weekly_schedule_publications),
+  'proofs',(select count(*) from public.static_weekly_recurring_acceptance_proofs)) as result`),after);
  console.log(JSON.stringify({status:'PASS_DUAL_SOURCE_217_SYNTHETIC_SQL',checks,week,
   historicalSourceId:fixture.historical.sourceId,correctionSourceId:fixture.correction.sourceId,
-  historicalPublicationId:historicalPublication.data.publication_id,operationId:receipt.receipt?.operationId,
+  historicalPublicationId:historicalPublication.data.publication_id,operationId:accepted.operationId,
   sourceDigests:[fixture.historical.sourceDigest,fixture.correction.sourceDigest],
-  scope:'original valid historical313 publication, three official immediate vacancies, distinct registered current323 correction, second named manager preview-confirm-replay; no missing-day availability SQL claim',
+  scope:'original valid historical313 publication, three official immediate vacancies, distinct registered current323 correction, second named manager preview-lost-COMMIT-status-concurrent-replay-denied-role; no missing-day availability SQL claim',
   phone:'PENDING',production:false,independentAudit:false}));
-}finally{await plane.close();await pool.end();}
+}finally{try{await plane.close();}finally{await pool.end();}}

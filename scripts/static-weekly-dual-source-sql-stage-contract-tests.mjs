@@ -59,5 +59,16 @@ check('child invokes real official source and manager paths without missing-day 
  assert.match(child,/createDualSourceRegisteredCorrectionSqlSource\(\)/);
  assert.match(child,/finally\{await closeClock\(originalClock\);\}/);
 });
+check('child executes lost-COMMIT response, concurrent retries and denied roles rather than inspecting ACL only',()=>{
+ assert.match(child,/const result=await client\.query\(sql,args\);/);
+ assert.match(child,/if\(sql==='commit'&&loseCommit\)/);
+ assert.match(child,/loseCommit=true;/);
+ assert.match(child,/static_weekly_control_plane_database_unavailable/);
+ assert.match(child,/getRecurringConfirmationStatus\(\{manager:second,confirmationKey\}\)/);
+ assert.match(child,/Promise\.all\(\[plane\.confirmRecurringStaffing\(request\),plane\.confirmRecurringStaffing\(request\)\]\)/);
+ assert.match(child,/concurrent retries append no parents\/sources\/publications\/proofs/);
+ assert.match(child,/rpc\(role,'static_weekly_v8_vacate_roster_slot'/);
+ assert.match(child,/error\.code==='42501'&&\/permission denied\/i\.test\(error\.message\)/);
+});
 console.log(JSON.stringify({status:'PASS_DUAL_SOURCE_217_SOURCE_ONLY',checks,digests:[fixture.historical.sourceDigest,
  fixture.correction.sourceDigest],database:'NOT_RUN',solver:'NOT_RUN',production:false}));
