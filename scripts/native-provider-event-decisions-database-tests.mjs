@@ -9,13 +9,16 @@ import {writeNativeSqlFixture} from './fixtures/native-sql-fixture-output.mjs';
 
 // Explicit CLI execution only. Import/source-contract tests NEVER launch Docker.
 // This is F6 fixture preparation, not a replacement for current-manager217 or
-// the independently bound global218 paused-controller restore/canonical proof.
+// the independently bound global paused-controller restore/canonical proof.
 const ROOT=fileURLToPath(new URL('../',import.meta.url));
 export const DECISION_IMAGE='supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed';
 const IMAGE_ID=DECISION_IMAGE.slice(DECISION_IMAGE.indexOf('@')+1);
 export const DECISION_HEAD='20261004000000_native_provider_event_decision_lookup.sql';
 export const DECISION_217='e07cee99644bc1d22f61e89e5e14f383b4c250cb0cb012e723a318a89bf5da87';
 export const DECISION_218='24503cfe852d7668ac94744b2f9ed21d8d2556906b917c7016e0f6c2d3b8d7a1';
+export const DECISION_219='4795b9525622e1512005f85ae1c5994971dccc3d54a987a743bdcfef8bf9ce32';
+export const DECISION_MESSAGE_FILE='20261003121757_employee_message_source_admission.sql';
+export const DECISION_MESSAGE_SHA='20ff06f8c0c5e82814189e1e2969b928ffa48eb1181098a73156962dc9ac1e7f';
 export const DECISION_RPC='public.custodial_native_provider_event_decisions(uuid,text,uuid,text,text,jsonb)';
 const CANARY='custodial_release_canary_authority_surface()';
 const CANARY_PRIOR='661cd2a5aecc83d0244920466b161b6fc52d22143074a037148660abed351471';
@@ -109,11 +112,43 @@ export function assertDecisionMigrationManifest(rows){
  assert.deepEqual(rows[217],{file:DECISION_HEAD,sha256:'ab4e6eb848bd214f8616fb52f094829786df9a9a81d2eb8d00d247b1f28e52fd'});
  assert.equal(hash(JSON.stringify(rows)),DECISION_218,'complete218 ordered bytes');return rows;
 }
-export function readDecisionSource(root=ROOT){
+// Explicit current profile, not a count override or observed-survivor baseline.
+// The historical verifier above and its 217/218 constants remain unchanged.
+export function assertCurrentDecisionMigrationManifest(rows){
+ assert.ok(Array.isArray(rows));assert.equal(rows.length,219,'exact current219 required');
+ assert.deepEqual(rows.filter(r=>r?.file===DECISION_MESSAGE_FILE),[{file:DECISION_MESSAGE_FILE,sha256:DECISION_MESSAGE_SHA}]);
+ assertDecisionMigrationManifest(rows.filter(r=>r?.file!==DECISION_MESSAGE_FILE));
+ assert.deepEqual(rows.map(r=>r.file),[...new Set(rows.map(r=>r.file))].sort());
+ assert.equal(rows.findIndex(r=>r.file===DECISION_MESSAGE_FILE),205,'exact source-created position and13 later files');
+ assert.equal(hash(JSON.stringify(rows)),DECISION_219,'complete current219 ordered bytes');return rows;
+}
+export function decisionMigrationProfile(rows,profile='CURRENT_219'){
+ assert.ok(profile==='HISTORICAL_218'||profile==='CURRENT_219','explicit supported source profile required');
+ if(profile==='HISTORICAL_218')assertDecisionMigrationManifest(rows);else assertCurrentDecisionMigrationManifest(rows);
+ return {migration_profile:profile,manifest_sha256:profile==='HISTORICAL_218'?DECISION_218:DECISION_219,
+  lookup_boundary:{file:DECISION_HEAD,sha256:'ab4e6eb848bd214f8616fb52f094829786df9a9a81d2eb8d00d247b1f28e52fd',
+   predecessor_count:profile==='HISTORICAL_218'?217:218,
+   predecessor_manifest_sha256:profile==='HISTORICAL_218'?DECISION_217:'af2f80877b572e24e8046df0a45d838dd5fddbc69a02d1050988ac400d2fbaf5'}};
+}
+export function assertDecisionLookupBoundary(rows,index,profile){
+ const binding=decisionMigrationProfile(rows,profile).lookup_boundary;
+ assert.equal(index,binding.predecessor_count,'snapshot immediately before exact lookup head');
+ assert.equal(index,rows.length-1,'lookup is last in this exact profile');
+ assert.deepEqual(rows[index],{file:binding.file,sha256:binding.sha256});
+ assert.equal(hash(JSON.stringify(rows.slice(0,index))),binding.predecessor_manifest_sha256);return binding;
+}
+export function assertDecisionLookupPredecessor(snapshot){
+ assert.ok(Array.isArray(snapshot?.inventory)&&Array.isArray(snapshot?.surface));
+ const rows=snapshot.inventory.filter(r=>r.object_kind==='function'&&r.object_identity===CANARY);
+ assert.equal(rows.length,1,'exact unique source-pinned canary predecessor');
+ assert.equal(rows[0].definition_sha256,CANARY_PRIOR);assert.equal(hash(rows[0].definition_sql),CANARY_PRIOR);
+}
+export function readDecisionSource(root=ROOT,{profile='CURRENT_219'}={}){
  const directory=join(root,'supabase/migrations');
- const migrations=assertDecisionMigrationManifest(readdirSync(directory).filter(x=>x.endsWith('.sql')).sort().map(file=>({file,sha256:hash(readFileSync(join(directory,file)))})));
+ const migrations=readdirSync(directory).filter(x=>x.endsWith('.sql')).sort().map(file=>({file,sha256:hash(readFileSync(join(directory,file)))}));
+ const binding=decisionMigrationProfile(migrations,profile);
  const inputs=Object.entries(DECISION_INPUT_PINS).map(([file,sha256])=>{assert.equal(hash(readFileSync(join(root,file))),sha256,file);return {file,sha256};});
- return {migrations,manifest_sha256:DECISION_218,inputs};
+ return {migrations,...binding,inputs};
 }
 export function assertDecisionTarget(row,target,{allowStopped=false}={}){
  assert.match(target.id,hex);assert.match(target.fixture_id,/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
@@ -139,7 +174,7 @@ export function compareDecisionRecoverySets(before,after){
  const additions=['function','grant'].map(object_kind=>({object_kind,object_identity:DECISION_RPC}));
  const isNew=r=>additions.some(a=>key(a)===key(r)),isCanary=r=>r.object_kind==='function'&&r.object_identity===CANARY;
  assert.equal(before.inventory.filter(isNew).length,0);assert.equal(after.inventory.filter(isNew).length,2);
- assert.deepEqual(sorted(before.inventory.filter(r=>!isCanary(r))),sorted(after.inventory.filter(r=>!isCanary(r)&&!isNew(r))),'all other217 inventory rows byte-exact');
+ assert.deepEqual(sorted(before.inventory.filter(r=>!isCanary(r))),sorted(after.inventory.filter(r=>!isCanary(r)&&!isNew(r))),'all other predecessor inventory rows byte-exact');
  assert.deepEqual({...oldCanary[0],definition_sql:null,definition_sha256:null,captured_at:null},
   {...newCanary[0],definition_sql:null,definition_sha256:null,captured_at:null},'canary identity/order immutable');
  assert.equal(after.inventory.length,before.inventory.length+2);assert.equal(after.surface.length,before.surface.length+2);
@@ -199,16 +234,21 @@ async function execute(output){
   sql(REMOVE_DEFAULTS+ABSENT);let predecessor;phase='migrations';
   for(const [index,m]of source.migrations.entries()){
    const bytes=readFileSync(join(ROOT,'supabase/migrations',m.file));assert.equal(hash(bytes),m.sha256);
-   if(index===217){predecessor={inventory:JSON.parse(sql(INVENTORY)),surface:JSON.parse(sql(SURFACE))};
-    const row=predecessor.inventory.find(x=>x.object_kind==='function'&&x.object_identity===CANARY);
-    assert.equal(row?.definition_sha256,CANARY_PRIOR);assert.equal(hash(row.definition_sql),CANARY_PRIOR);save('predecessor217.json',predecessor);}
+   if(m.file===DECISION_HEAD){
+    const boundary=assertDecisionLookupBoundary(source.migrations,index,source.migration_profile);
+    assert.deepEqual(boundary,source.lookup_boundary);
+    predecessor={inventory:JSON.parse(sql(INVENTORY)),surface:JSON.parse(sql(SURFACE))};
+    assertDecisionLookupPredecessor(predecessor);
+    save('lookup-boundary.json',{migration_profile:source.migration_profile,...boundary});
+    save('predecessor'+boundary.predecessor_count+'.json',predecessor);}
    if(EXCEPTIONS[m.file]){assert.equal(m.sha256,EXCEPTIONS[m.file]);assert.doesNotMatch(bytes.toString(),/create\s+(?:unlogged\s+)?table|create\s+sequence/i);}
    let stdout;try{stdout=sql(ABSENT+'\n'+bytes+'\n'+(EXCEPTIONS[m.file]?REMOVE_DEFAULTS:'')+'\n'+ABSENT);}
    catch(error){save('failed-migration.json',{file:m.file,sha256:m.sha256,index,applied_predecessors:index,status:'FAIL'});console.error('FAILED_MIGRATION',m.file);throw error;}
    log('migration-'+String(index).padStart(4,'0'),stdout);
    if((index+1)%25===0)console.log('REPLAYED_EXACT_MIGRATIONS',index+1);await new Promise(r=>setImmediate(r));
   }
-  const after={inventory:JSON.parse(sql(INVENTORY)),surface:JSON.parse(sql(SURFACE))};const delta=compareDecisionRecoverySets(predecessor,after);save('after218.json',after);
+  assert.ok(predecessor,'exact lookup predecessor must have been captured');
+  const after={inventory:JSON.parse(sql(INVENTORY)),surface:JSON.parse(sql(SURFACE))};const delta=compareDecisionRecoverySets(predecessor,after);save('after'+source.migrations.length+'.json',after);
   phase='synthetic_seed';const {nativeProviderEventDecisionDatabaseCases}=await import('./fixtures/native-provider-event-decisions-database-cases.mjs');
   const {deviceCredentialInternals,makeDeviceCredentialMiddleware}=await import('../src/auth/device-credential-auth.js');
   const {validateNativeProviderEventsRequest,validateNativeProviderEventsResponse}=await import('../src/native-provider-events.js');
@@ -318,8 +358,8 @@ commit;`);
   check('scoped recovery rollback exact live definitions',JSON.parse(sql(live)),originalLive);
   for(const role of ['anon','authenticated','custodial_application_reader','static_weekly_control_plane','static_weekly_release_operator'])
    reject('restored exact lookup ACL denies '+role,'set role '+role+';select public.custodial_native_provider_event_decisions(null,null,null,null,null,null);',/permission denied/);
-  check('all218 inventory rows exactly preserved after scoped recovery',JSON.parse(sql(INVENTORY)),after.inventory);
-  check('all218 surface members exactly preserved',JSON.parse(sql(SURFACE)),after.surface);
+  check('all current inventory rows exactly preserved after scoped recovery',JSON.parse(sql(INVENTORY)),after.inventory);
+  check('all current surface members exactly preserved',JSON.parse(sql(SURFACE)),after.surface);
   check('all protected records exactly preserved',JSON.parse(sql(SNAPSHOT)),protectedBefore);check('automatic grants still absent',sql(DEFAULTS),'0');
   phase='final_source';assert.deepEqual(readDecisionSource(),source);assert.equal(git('rev-parse','HEAD'),identity.commit);assert.equal(git('status','--porcelain'),'');
   receipt={schema:'custodial.native-event-decision-engine-receipt.v1',status:'PASS',checks,source:{...identity,...source},target,delta,

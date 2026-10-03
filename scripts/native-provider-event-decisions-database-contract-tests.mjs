@@ -5,8 +5,9 @@ import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import * as fixtureApi from './fixtures/native-provider-event-decisions-database-cases.mjs';
 import {validateNativeDecisionInput,nativeDecisionSeed,assertNativeDecisionHttpCapture,NATIVE_DECISION_INPUT_SCHEMA,NATIVE_DECISION_PATH} from './fixtures/native-provider-event-decision-native-wire.mjs';
-import {assertDecisionMigrationManifest,readDecisionSource,assertDecisionTarget,compareDecisionRecoverySets,buildDecisionRecoveryProtocol,parseDecisionRecoveryProtocol,
- DECISION_IMAGE,DECISION_RPC,DECISION_HEAD,DECISION_217,DECISION_218,DECISION_INPUT_PINS} from './native-provider-event-decisions-database-tests.mjs';
+import {assertDecisionMigrationManifest,assertCurrentDecisionMigrationManifest,decisionMigrationProfile,assertDecisionLookupBoundary,assertDecisionLookupPredecessor,
+ readDecisionSource,assertDecisionTarget,compareDecisionRecoverySets,buildDecisionRecoveryProtocol,parseDecisionRecoveryProtocol,
+ DECISION_IMAGE,DECISION_RPC,DECISION_HEAD,DECISION_217,DECISION_218,DECISION_219,DECISION_MESSAGE_FILE,DECISION_MESSAGE_SHA,DECISION_INPUT_PINS} from './native-provider-event-decisions-database-tests.mjs';
 
 // Only actual source reads, pure hostile-data cases and --source-check. No
 // database/container/HTTP/solver process or forged engine receipt is permitted.
@@ -50,6 +51,7 @@ for(const mutate of [x=>x.data.native_request_id=uid(41),x=>x.data.request_body_
  x=>x.data.results[0].receipt.replayed=false,x=>x.data.results[0].receipt.original_observation.boot_count=8,x=>x.data.results[0].receipt.receipt_job_id=uid(90)])
  check('pure hostile raw response derivative rejects even with recomputed transport checksum',()=>{const bad=httpCapture(modelPrepared),value=JSON.parse(Buffer.from(bad.body_base64,'base64'));mutate(value);const raw=JSON.stringify(value);bad.body_base64=Buffer.from(raw).toString('base64');bad.body_sha256=wireSha(raw);assert.throws(()=>assertNativeDecisionHttpCapture(modelPrepared,bad));});
 const source=readDecisionSource();
+const historicalMigrations=source.migrations.filter(r=>r.file!==DECISION_MESSAGE_FILE);
 // Retained actual first218 engine stderr (run actual218-Jj4seo). This literal
 // is PostgreSQL evidence of rejection, not a synthetic engine PASS receipt.
 const dismissedPrimary='ERROR:  exact finite native event required\n';
@@ -83,10 +85,31 @@ const dismissal=fixture.match(/reject\('SQL rejects local Dismiss as unsupported
 check('dismissed case has a standalone exact primary matcher',()=>{assert.ok(dismissal);assert.equal(dismissal[1],'^ERROR: {1,2}exact finite native event required\\n?$');assert.match(dismissedPrimary,new RegExp(dismissal[1]));});
 check('dismissed exact matcher rejects unrelated or extended failures',()=>{const exact=new RegExp(dismissal[1]);for(const error of ['ERROR: permission denied\n','ERROR: exact native original event query required\n','prefix '+dismissedPrimary,dismissedPrimary+'CONTEXT: unaccepted detail\n',dismissedPrimary.replace('required','required but different')])assert.doesNotMatch(error,exact);});
 check('six original generic malformed-shape expectations remain separate',()=>{const loop=fixture.match(/for\(const b of \[([\s\S]*?)\]\)\s*reject\('SQL strict decision query shape',[^\n]+,\/exact native\|unique original\/\);/);assert.ok(loop);assert.equal((loop[1].match(/\{\.\.\.input/g)||[]).length,6);assert.doesNotMatch(loop[1],/dismissed/);});
-check('actual exact218 and independently pinned217 prefix',()=>{assert.equal(source.migrations.length,218);assert.equal(source.manifest_sha256,DECISION_218);assert.equal(source.migrations.at(-1).file,DECISION_HEAD);assert.equal(DECISION_217,'e07cee99644bc1d22f61e89e5e14f383b4c250cb0cb012e723a318a89bf5da87');});
+check('historical exact218 and independently pinned217 prefix remain strict',()=>{assertDecisionMigrationManifest(historicalMigrations);assert.equal(historicalMigrations.length,218);assert.equal(decisionMigrationProfile(historicalMigrations,'HISTORICAL_218').manifest_sha256,DECISION_218);assert.equal(historicalMigrations.at(-1).file,DECISION_HEAD);assert.equal(DECISION_217,'e07cee99644bc1d22f61e89e5e14f383b4c250cb0cb012e723a318a89bf5da87');});
 for(const mutate of [x=>x.pop(),x=>x.push({...x.at(-1),file:'20261005000000_unowned.sql'}),x=>x.reverse(),x=>x[0].sha256='0'.repeat(64),
  x=>x[216].sha256='0'.repeat(64),x=>x[217].sha256='0'.repeat(64),x=>x[217].file='20261003000000_wrong_order.sql',x=>x[5]={...x[4]},
- x=>x[0].extra=true,x=>x[0].file='../supabase.sql',x=>x[0].sha256=null])check('manifest mutation fails closed',()=>{const bad=structuredClone(source.migrations);mutate(bad);assert.throws(()=>assertDecisionMigrationManifest(bad));});
+ x=>x[0].extra=true,x=>x[0].file='../supabase.sql',x=>x[0].sha256=null])check('historical manifest mutation fails closed',()=>{const bad=structuredClone(historicalMigrations);mutate(bad);assert.throws(()=>assertDecisionMigrationManifest(bad));assert.throws(()=>decisionMigrationProfile(bad,'HISTORICAL_218'));});
+check('actual current219 binds full bytes plus only the exact additive MESSAGE row',()=>{assertCurrentDecisionMigrationManifest(source.migrations);assert.equal(source.migrations.length,219);assert.equal(source.manifest_sha256,DECISION_219);assert.equal(source.migration_profile,'CURRENT_219');assert.deepEqual(source.migrations[205],{file:DECISION_MESSAGE_FILE,sha256:DECISION_MESSAGE_SHA});assert.deepEqual(decisionMigrationProfile(source.migrations),{migration_profile:source.migration_profile,manifest_sha256:source.manifest_sha256,lookup_boundary:source.lookup_boundary});});
+check('historical and current profiles cannot silently substitute for one another',()=>{assert.throws(()=>assertDecisionMigrationManifest(source.migrations));assert.throws(()=>assertCurrentDecisionMigrationManifest(historicalMigrations));assert.throws(()=>decisionMigrationProfile(historicalMigrations));assert.throws(()=>decisionMigrationProfile(source.migrations,'HISTORICAL_218'));});
+for(const profile of [null,'',218,219,'AUTO','HISTORICAL_217','CURRENT_220',{}])
+ check('unknown profile rejects instead of guessing from count',()=>assert.throws(()=>decisionMigrationProfile(source.migrations,profile)));
+for(const [name,mutate] of [
+ ['missing MESSAGE',x=>x.splice(205,1)],['duplicate MESSAGE',x=>x.push({...x[205]})],['missing old row',x=>x.splice(30,1)],
+ ['extra row',x=>x.push({file:'20261005000000_unowned.sql',sha256:'a'.repeat(64)})],['wrong order',x=>x.reverse()],
+ ['wrong old bytes',x=>x[30].sha256='0'.repeat(64)],['wrong MESSAGE bytes',x=>x[205].sha256='0'.repeat(64)],
+ ['renamed MESSAGE',x=>x[205].file='20261003121758_employee_message_source_admission.sql'],['extra MESSAGE field',x=>x[205].extra=true],
+ ['wrong head bytes',x=>x[218].sha256='0'.repeat(64)],['head renamed',x=>x[218].file='20261004000001_other.sql'],
+ ['head not last',x=>[x[217],x[218]]=[x[218],x[217]]],['duplicate old identity',x=>x[4]={...x[5]}],
+ ['old extra field',x=>x[0].extra=true],['malformed hash',x=>x[0].sha256=null],['malformed row',x=>x[205]=null],
+ ['path escape',x=>x[0].file='../source.sql'],
+ ])check('current219 hostile '+name+' is rejected by invoked validator and profile',()=>{const bad=structuredClone(source.migrations);mutate(bad);assert.throws(()=>assertCurrentDecisionMigrationManifest(bad));assert.throws(()=>decisionMigrationProfile(bad,'CURRENT_219'));});
+for(const [profile,rows,count,prefix] of [
+ ['HISTORICAL_218',historicalMigrations,217,DECISION_217],
+ ['CURRENT_219',source.migrations,218,'af2f80877b572e24e8046df0a45d838dd5fddbc69a02d1050988ac400d2fbaf5'],
+ ]){
+ check(profile+' exact head boundary binds predecessor count and full prefix',()=>{const binding=assertDecisionLookupBoundary(rows,count,profile);assert.deepEqual(binding,{file:DECISION_HEAD,sha256:'ab4e6eb848bd214f8616fb52f094829786df9a9a81d2eb8d00d247b1f28e52fd',predecessor_count:count,predecessor_manifest_sha256:prefix});});
+ for(const index of [count-1,count+1,0,null,String(count)])check(profile+' rejects misplaced predecessor snapshot',()=>assert.throws(()=>assertDecisionLookupBoundary(rows,index,profile)));
+}
 check('immutable five-file source and authenticated dependencies pinned',()=>{for(const file of ['src/native-provider-api.js','src/native-provider-event-decisions.js','scripts/fixtures/native-provider-event-decisions-database-cases.mjs','src/auth/device-credential-auth.js','src/request-json-parser.js'])assert.match(DECISION_INPUT_PINS[file],/^[0-9a-f]{64}$/);});
 const target={id:'a'.repeat(64),fixture_id:'12345678-1234-4234-8234-123456789012'};target.name='mz_schema_rebuild_native_decisions_'+target.fixture_id.replaceAll('-','');
 const row={Id:target.id,Name:'/'+target.name,Image:DECISION_IMAGE.split('@')[1],State:{Running:true},HostConfig:{NetworkMode:'none',PortBindings:{}},
@@ -111,6 +134,24 @@ for(const mutate of [x=>x.inventory.pop(),x=>x.inventory.push({...other,object_i
  x=>x.inventory[2].object_kind='view',x=>x.inventory[3].object_identity='public.other()',x=>x.surface[1].object_kind='view'])
  check('recovery delta mutation refused',()=>{const bad=structuredClone(after);mutate(bad);assert.throws(()=>compareDecisionRecoverySets(before,bad));});
 const runnerPath=fileURLToPath(new URL('./native-provider-event-decisions-database-tests.mjs',import.meta.url)),runner=readFileSync(runnerPath,'utf8');
+check('historical218 verifier bytes and constants are preserved exactly without Git-object dependency',()=>{
+ const start=runner.indexOf('export function assertDecisionMigrationManifest(rows){'),end=runner.indexOf('// Explicit current profile',start);
+ assert.ok(start>0&&end>start);assert.equal(wireSha(runner.slice(start,end)),'c169cb9c47828cb46dfb662fe756a9197b013466ea1b5f92f85ebd522a6c23f5');
+ assert.equal(DECISION_218,'24503cfe852d7668ac94744b2f9ed21d8d2556906b917c7016e0f6c2d3b8d7a1');
+});
+const currentCanonical=JSON.parse(readFileSync(new URL('../supabase/canonical/schema-fingerprint-input.json',import.meta.url)));
+const currentCanary=currentCanonical.functions.find(f=>f.function_name==='custodial_release_canary_authority_surface').definition;
+const lookupSource=readFileSync(new URL('../supabase/migrations/'+DECISION_HEAD,import.meta.url),'utf8');
+const additionsEscaped=lookupSource.match(/ additions text:=E'([^\n]*)';/)[1];
+const additionsText=additionsEscaped.replaceAll("''","'").replaceAll('\\n','\n');
+const originalCanary=currentCanary.replace('  values\n'+additionsText,'  values');
+const predecessor={inventory:[{object_kind:'function',object_identity:'custodial_release_canary_authority_surface()',definition_sql:originalCanary,definition_sha256:wireSha(originalCanary)}],surface:[]};
+check('source-derived exact original canary is accepted by invoked predecessor guard',()=>{assert.equal(wireSha(currentCanary),'4f2cac31af750c5bc10a50445583b27ae2c6e67b0f66fe72c078b53c533d00db');assert.notEqual(originalCanary,currentCanary);assert.equal(wireSha(originalCanary),'661cd2a5aecc83d0244920466b161b6fc52d22143074a037148660abed351471');assertDecisionLookupPredecessor(predecessor);});
+for(const mutate of [x=>x.inventory.pop(),x=>x.inventory.push({...x.inventory[0]}),x=>x.inventory[0].object_kind='grant',
+ x=>x.inventory[0].object_identity='public.other()',x=>x.inventory[0].definition_sha256='0'.repeat(64),x=>x.inventory[0].definition_sql+=' ',
+ x=>{x.inventory[0].definition_sql+=' ';x.inventory[0].definition_sha256=wireSha(x.inventory[0].definition_sql);},x=>delete x.surface])
+ check('missing duplicate or changed canary predecessor fails before migration',()=>{const bad=structuredClone(predecessor);mutate(bad);assert.throws(()=>assertDecisionLookupPredecessor(bad));});
+check('actual runner snapshots by exact head with mandatory boundary and canary guards',()=>{assert.ok(runner.includes('if(m.file===DECISION_HEAD){'));assert.ok(runner.includes('assertDecisionLookupBoundary(source.migrations,index,source.migration_profile)'));assert.ok(runner.includes('assertDecisionLookupPredecessor(predecessor)'));assert.ok(runner.includes("save('lookup-boundary.json',{migration_profile:source.migration_profile,...boundary})"));assert.doesNotMatch(runner,/if\(index===217\)/);assert.ok(runner.includes("save('after'+source.migrations.length+'.json',after)"));});
 check('native fixture validation is before target creation or any SQL',()=>assert.ok(runner.indexOf('readNativeDecisionInput(nativePath,')<runner.indexOf("docker(['run'")));
 check('actual bytes enter HMAC and fetch unchanged with no JSON reserialization in native mode',()=>{assert.ok(runner.includes("const bytes=prepared?prepared.raw:' \\n'+JSON.stringify(input,null,2)+'\\n'"));assert.ok(runner.includes("hash(bytes),requestId,timestamp"));assert.ok(runner.includes("headers,body:bytes"));assert.ok(runner.includes('Buffer.from(await r.arrayBuffer())'));});
 check('unknown native original is actually sent through the same authenticated route',()=>{assert.ok(runner.includes('await send(()=>{},nativePrepared.missing.body,nativePrepared.missing)'));assert.ok(runner.includes('assertNativeDecisionHttpCapture(nativePrepared.missing,unresolved.capture,{missing:true})'));});
@@ -161,8 +202,8 @@ check('all original fault, repair, protected and rollback comparisons remain man
  "check('exact new function and grant definitions restore after actual scoped fault',recovered[1],originalLive)",
  "check('scoped restore preserves protected rows BEFORE rollback',recovered[2],protectedBefore)",
  "check('scoped recovery rollback exact live definitions',JSON.parse(sql(live)),originalLive)",
- "check('all218 inventory rows exactly preserved after scoped recovery',JSON.parse(sql(INVENTORY)),after.inventory)",
- "check('all218 surface members exactly preserved',JSON.parse(sql(SURFACE)),after.surface)",
+ "check('all current inventory rows exactly preserved after scoped recovery',JSON.parse(sql(INVENTORY)),after.inventory)",
+ "check('all current surface members exactly preserved',JSON.parse(sql(SURFACE)),after.surface)",
  "check('all protected records exactly preserved',JSON.parse(sql(SNAPSHOT)),protectedBefore)"] )assert.ok(runner.includes(exact),exact);});
 check('fixed owning bootstrap and pre-assertion finite observation are not optional',()=>{assert.match(runner,/'-U','supabase_admin','-d','postgres'/);assert.ok(runner.includes("observeAccess:value=>save('access-matrix-observed.json',value)"));assert.ok(fixture.includes("assert.equal(typeof observeAccess,'function'"));assert.ok(fixture.indexOf("observeAccess({classification:'UNVALIDATED_SYNTHETIC_ACCESS_OBSERVATION',authority})")<fixture.indexOf("check('exact source ACL/RLS"));});
 for(const [name,pattern] of [
@@ -187,5 +228,5 @@ for(const [name,pattern] of [
  ])check(name,()=>assert.match(runner,pattern));
 check('no accepted-event INSERT or original migration rewrite',()=>{assert.doesNotMatch(runner,/insert into public\.employee_native_provider_events\b/i);assert.doesNotMatch(runner,/writeFileSync\([^\n]*(?:migration|supabase)/);});
 check('no solver browser JVM full controller or runtime activation',()=>assert.doesNotMatch(runner,/custodial_configure_backend_execution_key|custodial_control_release_canary|seedCompiledEventAuthority|spawn\([^\n]*(?:java|playwright)|run-isolated-shift-end-tests/));
-check('actual CLI source check runs without engine',()=>{const value=JSON.parse(execFileSync(process.execPath,[runnerPath,'--source-check'],{encoding:'utf8',timeout:10000,maxBuffer:2*1024*1024}));assert.equal(value.scope,'SOURCE_ONLY_NO_ENGINE');assert.equal(value.status,'PASS');assert.deepEqual(value.migrations,source.migrations);});
+check('actual CLI source check runs current219 without engine or historical attribution',()=>{const value=JSON.parse(execFileSync(process.execPath,[runnerPath,'--source-check'],{encoding:'utf8',timeout:10000,maxBuffer:2*1024*1024}));assert.equal(value.scope,'SOURCE_ONLY_NO_ENGINE');assert.equal(value.status,'PASS');assert.deepEqual(value.migrations,source.migrations);assert.equal(value.migration_profile,'CURRENT_219');assert.equal(value.manifest_sha256,DECISION_219);assert.deepEqual(value.lookup_boundary,source.lookup_boundary);});
 console.log(JSON.stringify({status:'PASS',checks,scope:'SOURCE_CONTRACT_AND_PURE_HOSTILE_DATA_ONLY',actualSourceCheck:true,databaseExecuted:false,containerCreated:false,httpExecuted:false,engineEvidence:false}));
