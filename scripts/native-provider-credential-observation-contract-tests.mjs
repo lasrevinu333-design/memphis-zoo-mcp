@@ -7,8 +7,10 @@ import {CREDENTIAL_OBSERVATION_QUERY as QUERY,CREDENTIAL_OBSERVATION as OBSERVAT
  validateNativeProviderCredentialObservationQuery as query,validateNativeProviderCredentialObservation as validate,
  lookupNativeProviderCredentialObservation as lookup,createNativeProviderCredentialObservationHandler as handler} from '../src/native-provider-credential-observation.js';
 import {runCredentialObservationSqlContractTests} from './native-provider-credential-observation-sql-contract-tests.mjs';
+import {runCredentialObservationHttpTests} from './native-provider-credential-observation-http-tests.mjs';
 
-// Actual existing HMAC implementation; synthetic data, no network/server/SQL.
+// First section: actual HMAC with synthetic data, no network/server/SQL.
+// The mandatory awaited HTTP section below owns only a loopback test listener.
 const id=n=>`78000000-0000-4000-8000-${String(n).padStart(12,'0')}`,sha=x=>createHash('sha256').update(x).digest('hex');
 const env={NODE_ENV:'test',DEVICE_CREDENTIAL_SECRET:'SYNTHETIC_ONLY_credential_observation_server_key'};
 const secret='SYNTHETIC_ONLY_credentialObservationabcdefghijklmnopqrstuvwxyz0123456789';
@@ -155,8 +157,9 @@ export async function runCredentialObservationContractTests(){
  const prior=response(p),next=fixture({dbHook:async()=>({data:prior})}),out=await call(request({requestId:id(77)}),next);next.intact();
  check('fresh nonce cannot reuse prior cached observation',out.statusCode===503);
  const sqlChecks=runCredentialObservationSqlContractTests();
- console.log(JSON.stringify({status:'PASS',hmac_handler_contract_checks:checks,sql_source_checks:sqlChecks,sql_executed:false,network:false,mounted:false,
+ const http=await runCredentialObservationHttpTests();
+ console.log(JSON.stringify({status:'PASS',hmac_handler_contract_checks:checks,sql_source_checks:sqlChecks,http_checks:http.checks,sql_executed:false,network:'LOOPBACK_SYNTHETIC_ONLY',mounted:false,
   limitations:['SQL proposal and race/recovery cases not executed','native caller/credential stop not implemented','CURRENT_AS_OF grants no future authority']}));
- return{checks,sqlChecks};
+ return{checks,sqlChecks,http};
 }
 if(process.argv[1]===fileURLToPath(import.meta.url))await runCredentialObservationContractTests();

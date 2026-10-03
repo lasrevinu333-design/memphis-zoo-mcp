@@ -11,6 +11,7 @@ import { verifyNativeScheduleSourceWiring } from './native-schedule-source-ci-wi
 import { verifyOperationDeadlineWiring, reconstructProgramBeforeOperationDeadline } from './static-weekly-operation-deadline-ci-wiring.mjs';
 import { verifyCredentialObservationWiring } from './native-provider-credential-observation-ci-wiring.mjs';
 import { verifyBoundedProofWiring } from './bounded-node-proof-ci-wiring.mjs';
+import { verifyManagerIngressWiring } from './static-weekly-manager-ingress-ci-wiring.mjs';
 
 const root = resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
 const workflowDirectory = resolve(root, ".github", "workflows");
@@ -308,7 +309,7 @@ for (const [source, job] of [[schedulerGate, "validate"], [productionRepairGate,
 }
 verifyBoundedProofWiring(root);
 const currentSystemSource = verifyNativeScheduleSourceWiring(
-  verifyOperationDeadlineWiring(verifyCredentialObservationWiring(readFileSync(resolve(root, "scripts/current-system-source-contract-tests.mjs"), "utf8"), root), root), root);
+  verifyOperationDeadlineWiring(verifyCredentialObservationWiring(verifyManagerIngressWiring(readFileSync(resolve(root, "scripts/current-system-source-contract-tests.mjs"), "utf8"), root), root), root), root);
 const completionSourceImport = "await import('./completion-taxonomy-contract-tests.mjs');";
 const completionDatabaseCommand = "node scripts/completion-taxonomy-database-tests.mjs";
 const completionStep = [

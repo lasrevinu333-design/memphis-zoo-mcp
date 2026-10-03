@@ -3,4 +3,11 @@ import {runCredentialObservationContractTests} from './native-provider-credentia
 const receipt=await runCredentialObservationContractTests();
 assert.equal(receipt.checks,199);
 assert.equal(receipt.sqlChecks,25);
+assert.equal(receipt.http.checks,106);
+assert.equal(receipt.http.loopback_http,true);
+assert.equal(receipt.http.listener_closed,true);
+assert.equal(receipt.http.remaining_sockets,0);
+assert.equal(receipt.http.sql_executed,false);
+assert.equal(receipt.http.production_mount,false);
+assert.ok(receipt.http.elapsed_ms<30000);
 console.log(JSON.stringify({suite:'native-credential-observation-source',status:'PASS',...receipt,sql_executed:false,mounted:false}));
