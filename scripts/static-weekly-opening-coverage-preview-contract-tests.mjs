@@ -10,7 +10,7 @@ import {createStaticWeeklyControlPlaneRuntime} from '../src/static-weekly-contro
 import {createOpsManagerSession} from '../src/auth/shared-access-auth.js';
 import {postgresJsonbContentDigest as digest} from '../src/static-weekly-schedule-compiler.js';
 import {installStaticWeeklySha256HexAccelerator,contentDigest} from '../src/static-weekly-schedule-model.js';
-import {RECURRING_WEEK_COMMITMENT_SCHEMA,RECURRING_PHASE_SCOPE} from '../src/static-weekly-recurring-week-commitment.js';
+import {RECURRING_WEEK_COMMITMENT_SCHEMA,RECURRING_PHASE_SCOPE,RECURRING_MORNING_SCOPE} from '../src/static-weekly-recurring-week-commitment.js';
 import {COMPONENT_WEIGHT_LEDGER_DIGEST} from '../src/schedule-component-weight-authority.js';
 import {RECURRING_IMPLEMENTATION_DIGEST} from '../src/static-weekly-recurring-preview.js';
 installStaticWeeklySha256HexAccelerator(x=>createHash('sha256').update(x).digest('hex'));
@@ -55,6 +55,35 @@ function syntheticSiblingFor(candidate){
   admitted:false,published:false};
  return {...body,digest:contentDigest(body)};
 }
+// Synthetic sibling SHAPE only, matching the current mandatory CP fixture.
+// This report/HTTP test never claims a fresh morning solve or publication.
+function syntheticMorningFor(candidate,basis){
+ const late=candidate.weekCommitment;
+ const morningFacts={sourceBasisDigest:'a'.repeat(64),originalSourceDigest:contentDigest(basis.publishedSource.compiler_input),
+  candidateSourceDigest:late.sourceDigest,targetEffectiveDate:week,targetCalendarReceiptDigest:'b'.repeat(64),
+  days:Array.from({length:7},(_,dayOfWeek)=>({dayOfWeek,contractDigest:'c'.repeat(64),metrics:{coverage:[0]},
+   selection:[{workId:`synthetic-morning-${dayOfWeek}`,slotId:'synthetic'}],
+   terminalOptima:Array.from({length:6},(_,i)=>({name:`synthetic-${i}`,modelDigest:'d'.repeat(64),
+    lpDigest:'e'.repeat(64),primitiveObjective:0,originalObjective:0}))}))};
+ const body={schema:'custodial.recurring-morning-combined-commitment.v1',scope:RECURRING_MORNING_SCOPE,
+  status:'PROVEN_CANDIDATE_ONLY',sourceId:candidate.sourceId,publicationId:candidate.publicationId,
+  authorityRevision:candidate.authorityRevision,effectiveWeek:week,
+  publishedSourceDigest:candidate.publishedSourceDigest,managerSnapshotDigest:candidate.managerSnapshotDigest,
+  readbackPatternDigest:candidate.readbackPatternDigest,originalMorningSourceDigest:morningFacts.originalSourceDigest,
+  morningSourceBasisDigest:morningFacts.sourceBasisDigest,originalMorningSourceSqlDigest:candidate.publishedSourceDigest,
+  targetCalendarReceiptDigest:morningFacts.targetCalendarReceiptDigest,targetEffectiveDate:week,
+  originalCalendarHeaderDigest:'f'.repeat(64),targetCalendarHeaderDigest:'f'.repeat(64),originalDatedOverlayCount:0,
+  datedOverlaysRetainedInOriginalOnly:true,recurringRowsAnchorsAvailabilityAndHistoryPreserved:true,
+  morningFacts,morningFactsDigest:contentDigest(morningFacts),morningCandidateSourceDigest:late.sourceDigest,
+  phaseSourceBasisDigest:late.sourceBasisDigest,lateCommitmentDigest:late.digest,
+  finalSourceDigest:late.finalSourceDigest,finalSourceSqlDigest:late.finalSourceSqlDigest,
+  finalCanonicalWitnessDigest:late.canonicalHard.witnessDigest,sharedMorningAdmissionBudgetMs:30000,
+  originalAnchorsPreserved:true,originalLateReferencePreserved:true,sourceRequiredPlannedMorningOptimum:true,
+  openingReadinessProven:false,physicalMinuteFeasibilityClaim:false,acceptedStaticChanged:false,
+  datedPriorityChange:false,admitted:false,published:false};
+ return {scope:RECURRING_MORNING_SCOPE,sourceBasisDigest:morningFacts.sourceBasisDigest,
+  commitment:{...body,digest:contentDigest(body)}};
+}
 function candidate(basis){
  const assignments=structuredClone(fixture.result.assignments),compiled={status:fixture.result.status,
   publicationAuthority:fixture.result.publicationAuthority,verifier:{ok:fixture.result.verifierOk},
@@ -73,6 +102,10 @@ function candidate(basis){
   openWorkCount:decision.gaps.open.length,reviewWorkCount:0,assignmentCount:source.version.assignments.length,
   registrationRequired:true,managerConfirmationRequired:true,changes:[],decision,decisionDigest};
  c.weekCommitment=syntheticSiblingFor(c);
+ const morning=syntheticMorningFor(c,basis);
+ c.morningOptimizationScope=morning.scope;
+ c.morningSourceBasisDigest=morning.sourceBasisDigest;
+ c.morningCommitment=morning.commitment;
  c.openingCoverageReport=createOpeningCoverageReport({source,assignments,lunch:fixture.result.lunch,
   context:{publicationId:pub,authorityRevision:basis.expectedRevision},decisionDigest});return c;
 }
@@ -91,7 +124,12 @@ const plane=createStaticWeeklyControlPlane({database,shutdownCompiler:async()=>{
  recurringAdmissionPreparer:async basis=>{privateCalls++;const c=candidate(basis);
   if(forge==='DIRECT_PREPARATION'){const unchecked=c.openingCoverageReport;delete c.openingCoverageReport;
    return {schema:'static-weekly.recurring-admission-candidate.v1',candidate:c,canonicalSource:source,openingCoverageReport:unchecked};}
-  if(forge){c.openingCoverageReport.rows[0].knownComponentWeight++;
+  if(forge==='MORNING_MISSING')delete c.morningCommitment;
+  if(forge==='MORNING_CHANGED'){
+   c.morningCommitment.finalSourceDigest='0'.repeat(64);
+   const {digest:old,...body}=c.morningCommitment;c.morningCommitment.digest=contentDigest(body);
+  }
+  if(forge===true){c.openingCoverageReport.rows[0].knownComponentWeight++;
    const {reportDigest,...body}=c.openingCoverageReport;c.openingCoverageReport.reportDigest=digest(body);}
   return {schema:'static-weekly.recurring-admission-candidate.v1',candidate:c,canonicalSource:source};}});
 let checks=0;const check=(a,b)=>{assert.deepEqual(a,b);checks++;};
@@ -100,6 +138,11 @@ check(preview.published,false);check(preview.affectedPhonesUpdated,false);check(
 const request={...input,confirmationKey:id(5),previewDigest:preview.previewDigest};
 forge=true;await assert.rejects(()=>plane.confirmRecurringStaffing(request),e=>e.code===OPENING_COVERAGE_ERROR);checks++;check(writes,0);
 forge='DIRECT_PREPARATION';await assert.rejects(()=>plane.confirmRecurringStaffing(request),e=>e.code===OPENING_COVERAGE_ERROR);checks++;check(writes,0);
+for(const missingOrChanged of ['MORNING_MISSING','MORNING_CHANGED']){
+ forge=missingOrChanged;
+ await assert.rejects(()=>plane.confirmRecurringStaffing(request),e=>e.code==='static_weekly_recurring_preview_rejected');checks++;
+ check(writes,0);
+}
 forge=false;revision=8;await assert.rejects(()=>plane.confirmRecurringStaffing(request),/changed before preview/);checks++;check(writes,0);revision=7;
 await assert.rejects(()=>plane.confirmRecurringStaffing(request),/TEST_STOP_AFTER_VERIFIED_SOURCE_ADMISSION_BOUNDARY/);checks++;check(writes,1);
 // The marker deliberately stops before SQL writes; it is a source-boundary
