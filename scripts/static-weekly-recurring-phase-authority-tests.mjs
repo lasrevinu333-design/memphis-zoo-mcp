@@ -912,8 +912,14 @@ export async function runRecurringCurrentHandoutStructureTests(){
   JSON.stringify(receipt,null,2)+'\n',{flag:'wx'});
  console.log(JSON.stringify(receipt));return receipt;
 }
+export async function runRecurringIdentityUnitContractTests(){
+ const {runStaticWeeklyIdentityAuxiliaryTests,runStaticWeeklyIdentityPhaseValidationTests}=await import('./static-weekly-identity-auxiliary-tests.mjs');
+ const pure=runStaticWeeklyIdentityAuxiliaryTests(),typed=runStaticWeeklyIdentityPhaseValidationTests();
+ assert.equal(pure.checks,52);assert.equal(typed,9);return {pure:pure.checks,typed,solver:false};
+}
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){
- if(process.argv.includes('--invocation-basis-mutations'))await runRecurringReductionInvocationMutationTests();
+ if(process.argv.includes('--identity-unit'))await runRecurringIdentityUnitContractTests();
+ else if(process.argv.includes('--invocation-basis-mutations'))await runRecurringReductionInvocationMutationTests();
  else if(process.argv.includes('--invocation-facts'))await runRecurringInvocationFactTests();
  else if(process.argv.includes('--primitive-objective')){runRecurringPrimitiveObjectiveTests();runRecurringIdentityRadixTests();}
  else if(process.argv.includes('--full-nine-reduction'))await runRecurringFullNineReductionTests();

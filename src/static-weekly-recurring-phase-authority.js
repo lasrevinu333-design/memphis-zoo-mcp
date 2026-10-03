@@ -237,6 +237,68 @@ export function assertRecurringIdentityRadixEncoding({layout,ownerIndexes,expect
  requireFact(reconstructed===original,'Identity radix exact reconstruction changed.');
  return {chunkObjectives:chunkObjectives.map(Number),completeLexvectorInteger:String(original)};
 }
+function phaseModelLp(m){return `Minimize\n phase_objective: ${scalarExpression(m.terms)}\nSubject To\n${m.rows.map(r=>` ${r.name}: ${scalarExpression(r.terms)} ${r.relation} ${r.value}`).join('\n')}\nBounds\n ${m.bounds.join('\n ')}\nGeneral\n ${m.general.join(' ')}\nBinary\n ${m.binary.join(' ')}\nEnd\n`;}
+// A bijective INTEGER extension, not rounding or a changed lexicographic
+// objective. The original complete model is an independently supplied basis.
+export function createRecurringIdentityUnitObjective({model,layout,choices,owners,offset}){
+ requireFact(Array.isArray(owners)&&Array.isArray(choices)&&new Set(owners.map(o=>o.slotId)).size===owners.length
+  &&new Set(choices.map(c=>c.workId)).size===choices.length&&choices.every(c=>Array.isArray(c.owners)
+   &&new Set(c.owners.map(o=>o.slotId)).size===c.owners.length&&c.owners.every(o=>owners.some(x=>x.slotId===o.slotId))),
+  'Explicit unique identity owner/choice domain required.');
+ const exact=createRecurringIdentityRadixLayout({ownerRadix:owners.length,orderedWorkIds:choices.map(c=>c.workId)});
+ requireFact(canonicalJson(layout)===canonicalJson(exact),'Identity unit layout/order changed.');
+ const chunk=layout.chunks.find(c=>c.offset===offset);requireFact(chunk,'Exact identity chunk required.');
+ const terms=choices.slice(offset,offset+chunk.orderedWorkIds.length).flatMap((c,i)=>owners.flatMap((o,j)=>
+  j&&c.owners.some(x=>x.slotId===o.slotId)?[[j*chunk.multipliers[i],`phase_x_${offset+i}_${j}`]]:[]));
+ const binary=choices.flatMap((c,i)=>owners.flatMap((o,j)=>c.owners.some(x=>x.slotId===o.slotId)?[`phase_x_${i}_${j}`]:[]));
+ requireFact(model.name===`inherited_identity_${offset}`&&canonicalJson(model.terms)===canonicalJson(terms)
+  &&canonicalJson(model.binary)===canonicalJson(binary)&&canonicalJson(model.general)===canonicalJson(['phase_spread']),
+  'Original identity terms/domain/order changed.');
+ const variables=new Set([...binary,...model.general]);
+ requireFact(variables.size===binary.length+model.general.length&&new Set(model.rows.map(r=>r.name)).size===model.rows.length,
+  'Duplicate original identity domain/constraint.');
+ for(const [i,c]of choices.entries()){
+  const cover={name:`phase_cover_${i}`,terms:owners.flatMap((o,j)=>c.owners.some(x=>x.slotId===o.slotId)?[[1,`phase_x_${i}_${j}`]]:[]),relation:'=',value:1};
+  requireFact(cover.terms.length>0&&canonicalJson(model.rows.find(r=>r.name===cover.name))===canonicalJson(cover),'Exact identity onehot domain required.');
+ }
+ for(const r of model.rows){requireFact(['=','<=','>='].includes(r.relation)&&Number.isSafeInteger(r.value)
+  &&r.terms.every(t=>Array.isArray(t)&&t.length===2&&Number.isSafeInteger(t[0])&&variables.has(t[1])),'Unsafe/unbound original identity row.');}
+ requireFact(model.bounds.length===1&&/^0 <= phase_spread <= \d+$/.test(model.bounds[0])
+  &&Number.isSafeInteger(Number(model.bounds[0].split(' ').at(-1))),'Original identity bound changed/unsafe.');
+ const maximum=BigInt(owners.length)**BigInt(chunk.orderedWorkIds.length)-1n;
+ requireFact(maximum<=BigInt(Number.MAX_SAFE_INTEGER)&&terms.every(([n])=>Number.isSafeInteger(n)&&n>0),'Unsafe identity objective range.');
+ const variable=`phase_identity_objective_${offset}`,rowName=`phase_identity_objective_binding_${offset}`;
+ requireFact(!variables.has(variable)&&!model.rows.some(r=>r.name===rowName),'Identity auxiliary collision.');
+ const out=clone(model);out.terms=[[1,variable]];
+ out.rows.push({name:rowName,terms:[...clone(terms),[-1,variable]],relation:'=',value:0});
+ out.general.push(variable);out.bounds.push(`0 <= ${variable} <= ${maximum}`);
+ const lp=phaseModelLp(out),body={schema:'custodial.recurring-identity-integer-objective.v1',
+  originalModelDigest:digest(model),originalLpDigest:contentDigestBytes(phaseModelLp(model)),originalTerms:clone(terms),
+  layoutDigest:layout.layoutDigest,offset,orderedChunkWorkIds:clone(chunk.orderedWorkIds),
+  variable,variableKind:'INTEGER',minimum:0,maximum:Number(maximum),definingRow:clone(out.rows.at(-1)),unitTerms:[[1,variable]],
+  transformedModelDigest:digest(out),transformedLpDigest:contentDigestBytes(lp),
+  priorRowsAndFixedEqualitiesPreserved:true,originalScaleObjectiveUnchanged:true,policyOrLimitsChanged:false};
+ return {model:out,lp,representation:{...body,representationDigest:digest(body)}};
+}
+export function assertRecurringIdentityUnitRepresentation({received,...context}){
+ const exact=createRecurringIdentityUnitObjective(context);
+ requireFact(canonicalJson(received)===canonicalJson(exact),'Identity unit representation differs from complete independent model recomputation.');
+ return exact;
+}
+export function assertRecurringIdentityUnitWitness({received,integerWitness,objectiveValue,...context}){
+ const exact=assertRecurringIdentityUnitRepresentation({received,...context}),m=exact.model;
+ requireFact(Array.isArray(integerWitness)&&integerWitness.every(t=>Array.isArray(t)&&t.length===2),'Explicit identity integer witness required.');
+ const values=new Map(integerWitness),variables=[...m.binary,...m.general];
+ requireFact(values.size===integerWitness.length&&values.size===variables.length&&variables.every(v=>Number.isSafeInteger(values.get(v)))
+  &&m.binary.every(v=>[0,1].includes(values.get(v))),'Identity witness domain/integrality changed.');
+ for(const bound of m.bounds){const match=/^(\d+) <= (\w+) <= (\d+)$/.exec(bound);
+  requireFact(match&&values.has(match[2])&&BigInt(values.get(match[2]))>=BigInt(match[1])&&BigInt(values.get(match[2]))<=BigInt(match[3]),'Identity integer bound violated.');}
+ for(const r of m.rows){const n=r.terms.reduce((n,[c,v])=>n+BigInt(c)*BigInt(values.get(v)),0n),rhs=BigInt(r.value);
+  requireFact(r.relation==='='?n===rhs:r.relation==='<='?n<=rhs:n>=rhs,'Identity exact original/auxiliary row violated.');}
+ const original=exactPreferenceObjective(context.model.terms,values),unit=values.get(exact.representation.variable);
+ requireFact(original===unit&&objectiveValue===original,'Identity original/unit objective reconstruction changed.');
+ return {representation:exact.representation,originalObjectiveValue:original};
+}
 export function assertRecurringPhaseIdentityEncoding({proof,ownerConfig}){
  const raw=proof.lowerBoundEvidence||proof,d=raw.descriptor,keys=Object.keys(ownerConfig.slots).sort(),
   keyBySlot=new Map(keys.map(k=>[ownerConfig.slots[k].slotId,k])),packages=new Map(d.packages.map(p=>[p.workId,p])),
@@ -252,20 +314,32 @@ export function assertRecurringPhaseIdentityEncoding({proof,ownerConfig}){
  requireFact(canonicalJson(raw.identityLayout)===canonicalJson(layout)&&canonicalJson(raw.identityEncoding)===canonicalJson(encoding)
   &&canonicalJson(raw.stableIdentity)===canonicalJson(vector)&&canonicalJson(proof.stableIdentity)===canonicalJson(vector),'Identity layout/vector/encoding changed.');
  const identityTiers=raw.tiers.filter(t=>t.name.startsWith('inherited_identity_'));
- requireFact(identityTiers.length===layout.chunks.length,'Missing/extra identity tier.');const originalTerms=[];
+ requireFact(identityTiers.length===layout.chunks.length,'Missing/extra identity tier.');const originalTerms=[],representations=[];
+ const first=raw.tiers[0],preference=raw.tiers[1];
+ requireFact(first?.name==='raw_spread'&&preference?.name==='inherited_preference','Original identity predecessor tiers required.');
+ const fixed=[{name:'phase_fixed_1',terms:clone(first.model.terms),relation:'=',value:first.objectiveValue},
+  {name:'phase_fixed_2',terms:clone(preference.objectiveNormalization.originalTerms),relation:'=',value:preference.originalScaleObjectiveValue}];
  for(const [chunkIndex,chunk]of layout.chunks.entries()){
   const terms=choices.slice(chunk.offset,chunk.offset+chunk.orderedWorkIds.length).flatMap((c,i)=>owners.flatMap((o,j)=>
    j&&c.owners.some(x=>x.slotId===o.slotId)?[[j*chunk.multipliers[i],`phase_x_${chunk.offset+i}_${j}`]]:[]));
   const tier=identityTiers[chunkIndex],values=new Map(tier.integerWitness);
   requireFact(tier.name===`inherited_identity_${chunk.offset}`&&tier.model.name===tier.name&&tier.model.descriptorDigest===d.descriptorDigest
-   &&tier.modelDigest===digest(tier.model)&&canonicalJson(tier.model.terms)===canonicalJson(terms),'Identity tier model/order/coefficients changed.');
+   &&tier.modelDigest===digest(tier.model),'Identity tier model/order/coefficients changed.');
+  const model={...clone(first.model),name:tier.name,terms,rows:[...clone(first.model.rows),...clone(fixed)]};
+  requireFact(model.descriptorDigest===d.descriptorDigest,'Original identity predecessor descriptor changed.');
+  const reconstructed=assertRecurringIdentityUnitWitness({model,layout,choices,owners,offset:chunk.offset,
+   received:{model:tier.model,lp:phaseModelLp(tier.model),representation:tier.identityObjectiveRepresentation},
+   integerWitness:tier.integerWitness,objectiveValue:tier.objectiveValue});
+  requireFact(tier.lpDigest===contentDigestBytes(phaseModelLp(tier.model)),'Identity LP digest changed.');
+  representations.push(reconstructed.representation);
   const objective=exactPreferenceObjective(terms,values);
   requireFact(objective===encoding.chunkObjectives[chunkIndex]&&tier.objectiveValue===objective,'Identity raw objective/witness mismatch.');
   for(const [i,prior]of originalTerms.entries())requireFact(tier.model.rows.some(r=>r.name===`phase_fixed_${i+3}`&&r.relation==='='
    &&r.value===encoding.chunkObjectives[i]&&canonicalJson(r.terms)===canonicalJson(prior)),'Prior exact identity equality changed.');
   originalTerms.push(terms);
+  fixed.push({name:`phase_fixed_${chunkIndex+3}`,terms:clone(terms),relation:'=',value:objective});
  }
- return {layout,encoding};
+ return {layout,encoding,representations};
 }
 // Positive primitive scaling is algebra only: original100/4/2 units and
 // subsequent fixed equalities remain unchanged. Never round a terminal bound.
@@ -477,33 +551,40 @@ function solvePhaseMinimum({source,ownerConfig,fullOwners,dayOfWeek,selectedWork
   }
   const maximum=descriptor.packages.reduce((n,p)=>n+p.doubledWeight,0);requireFact(Number.isSafeInteger(maximum),'Phase coefficient range unsupported.');
   bounds.push(`0 <= phase_spread <= ${maximum}`);
-  const run=(name,terms)=>{
+  const identityLayout=createRecurringIdentityRadixLayout({ownerRadix:owners.length,orderedWorkIds:choices.map(c=>c.workId)});
+  const run=(name,terms,identityOffset=null)=>{
    const remaining=budgetMs-(performance.now()-started);requireFact(remaining>0,'Phase total time bound exhausted.');
    const normalization=name==='inherited_preference'?createRecurringPreferencePrimitiveObjective(terms,binary):null,
     actualTerms=normalization?.primitiveTerms||terms;
-   const body={descriptorDigest:descriptor.descriptorDigest,name,terms:actualTerms,rows:[...constraints,...bindings],binary,general:['phase_spread'],bounds,
+   const originalBody={descriptorDigest:descriptor.descriptorDigest,name,terms:actualTerms,rows:[...constraints,...bindings],binary,general:['phase_spread'],bounds,
     ...(normalization?{objectiveNormalization:normalization}:{})};
+   const identity=identityOffset===null?null:createRecurringIdentityUnitObjective({model:originalBody,layout:identityLayout,choices,owners,offset:identityOffset}),
+    body=identity?.model||originalBody;
    const attestation={schema:'custodial.recurring-phase-lower-bound-model.v1',modelDigest:digest(body),descriptorDigest:descriptor.descriptorDigest};
-   const lp=`Minimize\n phase_objective: ${scalarExpression(actualTerms)}\nSubject To\n${body.rows.map(r=>` ${r.name}: ${scalarExpression(r.terms)} ${r.relation} ${r.value}`).join('\n')}\nBounds\n ${bounds.join('\n ')}\nGeneral\n phase_spread\nBinary\n ${binary.join(' ')}\nEnd\n`;
-   const solved=solver.solve(lp,{timeLimitSeconds:remaining/1000,modelAttestation:attestation});
+   const lp=identity?.lp||phaseModelLp(body);
+   const solveRemaining=budgetMs-(performance.now()-started);requireFact(solveRemaining>0,'Phase total time bound exhausted.');
+   const solved=solver.solve(lp,{timeLimitSeconds:solveRemaining/1000,modelAttestation:attestation});
    lastSolverAttempt={name,model:body,modelDigest:attestation.modelDigest,lpDigest:contentDigestBytes(lp),
     status:solved?.result?.Status,rawReceiptDigest:solved?.evidence?.rawReceiptDigest,
     terminalReport:solved?.evidence?.terminalReport,solverIdentity:solved?.identity,solverOptions:solved?.options};
-   const values=new Map([...binary,'phase_spread'].map(v=>{const x=solved?.result?.Columns?.[v]?.Primal;
+   const values=new Map([...body.binary,...body.general].map(v=>{const x=solved?.result?.Columns?.[v]?.Primal;
     requireFact(Number.isFinite(x)&&Math.abs(x-Math.round(x))<=1e-9,'Missing/noninteger phase primal.');return[v,Math.round(x)];}));
    requireFact(binary.every(v=>[0,1].includes(values.get(v)))&&values.get('phase_spread')>=0&&values.get('phase_spread')<=maximum,'Phase primal bounds violated.');
    for(const row of body.rows){const n=row.terms.reduce((x,[c,v])=>x+BigInt(c)*BigInt(values.get(v)),0n),rhs=BigInt(row.value);
     requireFact(row.relation==='='?n===rhs:row.relation==='<='?n<=rhs:n>=rhs,'Phase primal exact row violation.');}
-   const sum=actualTerms.reduce((n,[c,v])=>n+BigInt(c)*BigInt(values.get(v)),0n);
+   const sum=body.terms.reduce((n,[c,v])=>n+BigInt(c)*BigInt(values.get(v)),0n);
    requireFact(sum>=0n&&sum<=BigInt(Number.MAX_SAFE_INTEGER),'Phase objective range unsupported.');const primitiveOptimum=Number(sum);
    const original=terms.reduce((n,[c,v])=>n+BigInt(c)*BigInt(values.get(v)),0n),reconstructed=sum*BigInt(normalization?.positiveDivisor||1);
    requireFact(original===reconstructed&&original<=BigInt(Number.MAX_SAFE_INTEGER),'Original-scale preference reconstruction mismatch/overflow.');const optimum=Number(original);
+   if(identity)assertRecurringIdentityUnitWitness({model:originalBody,layout:identityLayout,choices,owners,offset:identityOffset,
+    received:identity,integerWitness:[...values],objectiveValue:optimum});
    Object.assign(lastSolverAttempt,{integerWitness:[...values],expectedPrimitiveObjectiveValue:primitiveOptimum,
     expectedOriginalScaleObjectiveValue:optimum,objectPrimalObjective:solved.evidence?.objectPrimalObjective,
-    ...(normalization?{objectiveNormalization:normalization}:{})});
+    ...(normalization?{objectiveNormalization:normalization}:{}),...(identity?{identityObjectiveRepresentation:identity.representation}:{})});
    checkPhaseTerminal(solved,primitiveOptimum,attestation);
    const receipt={name,model:body,modelDigest:attestation.modelDigest,lpDigest:contentDigestBytes(lp),objectiveValue:primitiveOptimum,
     ...(normalization?{objectiveNormalization:normalization,originalScaleObjectiveValue:optimum}:{}),
+    ...(identity?{identityObjectiveRepresentation:identity.representation}:{}),
     integerWitness:[...values],rawReceiptDigest:solved.evidence.rawReceiptDigest,terminalReport:solved.evidence.terminalReport,
     solverIdentity:solved.identity,solverOptions:solved.options};tiers.push(receipt);
    bindings.push({name:`phase_fixed_${tiers.length}`,terms,relation:'=',value:optimum});return {values,optimum};
@@ -514,11 +595,10 @@ function solvePhaseMinimum({source,ownerConfig,fullOwners,dayOfWeek,selectedWork
   // Smaller radix chunks preserve the identical complete code-unit lexvector
   // while avoiding unnecessarily large floating SDK objective sums. Terminal
   // integer bounds and inherited1e-9 tolerances are unchanged.
-  const identityLayout=createRecurringIdentityRadixLayout({ownerRadix:owners.length,orderedWorkIds:choices.map(c=>c.workId)});
   for(const layoutChunk of identityLayout.chunks){const offset=layoutChunk.offset,chunk=choices.slice(offset,offset+layoutChunk.orderedWorkIds.length);
    const terms=chunk.flatMap((c,i)=>options.filter(o=>o.workId===c.workId&&o.ownerIndex).map(o=>[o.ownerIndex*layoutChunk.multipliers[i],o.name]));
    requireFact(terms.every(([n])=>Number.isSafeInteger(n)),'Phase tie coefficient range unsupported.');
-   final=run(`inherited_identity_${offset}`,terms);
+   final=run(`inherited_identity_${offset}`,terms,offset);
   }
   const selection=options.filter(o=>final.values.get(o.name)===1).map(o=>({workId:o.workId,slotId:o.slotId}));
   const candidateSource=createProspective({source,ownerConfig,descriptor,selection});

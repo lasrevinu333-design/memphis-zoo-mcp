@@ -191,6 +191,8 @@ function stableDay(proof, dayOfWeek, finalDigest, finalWitnessDigest,
     }
   } else {
     assert.equal(tiers[1].objectiveValue, proof.preferenceCost);
+    assert.ok(lower.tiers.every(t=>t.identityObjectiveRepresentation===undefined),
+      "identity representation requires independent source/config-bound validation");
   }
   return {
     dayOfWeek,
@@ -210,7 +212,9 @@ function stableDay(proof, dayOfWeek, finalDigest, finalWitnessDigest,
       primitivePreferenceCost:verifiedPreference.primitiveObjectiveValue,
       originalScaleVariablePreferenceCost:verifiedPreference.originalScaleObjectiveValue} : {}),
     ...(verifiedIdentity ? {identityLayoutDigest:verifiedIdentity.layout.layoutDigest,
-      identityEncodingDigest:contentDigest(verifiedIdentity.encoding)} : {}),
+      identityEncodingDigest:contentDigest(verifiedIdentity.encoding),
+      identityObjectiveRepresentations:structuredClone(verifiedIdentity.representations),
+      identityObjectiveRepresentationsDigest:contentDigest(verifiedIdentity.representations)} : {}),
     ...(mandatoryPreference ? {mandatoryCurrentOwnerPreferenceDigest:mandatoryPreference.receiptDigest,
       fixedUnavoidableOriginalOwnerChangeCost:mandatoryPreference.fixedUnavoidableOriginalOwnerChangeCost,
       fullInheritedPreferenceCost:mandatoryPreference.fullInheritedPreferenceCost} : {}),

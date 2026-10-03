@@ -227,6 +227,16 @@ rejected("manager changes cannot hide final family", () => {
   createRecurringFinalManagerChanges({ preliminaryChanges, phaseSource: impactSource,
     finalSource: wrong, ownerConfig: impactConfig });
 });
+for(const representation of [{representationDigest:hash('a')},{variable:'phase_identity_objective_0',variableKind:'INTEGER',minimum:0,maximum:215}]){
+ rejected('unbound self-rehashed identity representation cannot enter semantic commitment',()=>{
+  const week=fakeFreshWeek(9),day=week.proofs[0],lower=day.lowerBoundEvidence;
+  lower.tiers[2].identityObjectiveRepresentation=representation;
+  const {proofDigest:oldLower,...lowerBody}=lower;day.lowerBoundEvidence=digestObject(lowerBody);
+  day.originalLowerBoundProofDigest=day.lowerBoundEvidence.proofDigest;
+  const {proofDigest:oldDay,...dayBody}=day;week.proofs[0]=digestObject(dayBody);
+  const {proofDigest:oldWeek,...weekBody}=week;createRecurringWeekCommitment(input(digestObject(weekBody)));
+ });
+}
 console.log(JSON.stringify({ status: "PASS", checks, scope: "pure synthetic semantic commitment and hostile shapes",
   solver: false, worker: false, sql: false, publication: false }));
 
