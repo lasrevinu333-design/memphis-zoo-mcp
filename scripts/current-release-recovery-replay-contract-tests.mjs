@@ -65,18 +65,24 @@ const forwardNamedGrant="select public.custodial_release_authority_reset_grants(
 const forwardCanaryGrant="select public.custodial_release_authority_reset_grants('custodial_release_canary_authority_surface()'); grant execute on function custodial_release_canary_authority_surface() to public; grant execute on function custodial_release_canary_authority_surface() to postgres; grant execute on function custodial_release_canary_authority_surface() to service_role;";
 const forwardRows=structuredClone(normalRows);
 function changeFakeRow(row,identity,definition_sql){row.identity=identity;row.definition_sql=definition_sql;row.live_sql=definition_sql;row.sha256=hash(definition_sql);row.stored_sha256=row.sha256;row.live_sha256=row.sha256}
-changeFakeRow(forwardRows.find(x=>x.kind==='function'),forwardNamed,'CREATE OR REPLACE FUNCTION public.static_weekly_v9_assert_shift_end_derivation(jsonb) RETURNS void AS $$ select 1 $$ LANGUAGE sql;');
-changeFakeRow(forwardRows.find(x=>x.kind==='grant'),forwardNamed,forwardNamedGrant);
+const forwardNamedRow=forwardRows.find(x=>x.kind==='function');changeFakeRow(forwardNamedRow,forwardNamed,'CREATE OR REPLACE FUNCTION public.static_weekly_v9_assert_shift_end_derivation(jsonb) RETURNS void AS $$ select 1 $$ LANGUAGE sql;');forwardNamedRow.order=100201;
+const forwardNamedGrantRow=forwardRows.find(x=>x.kind==='grant');changeFakeRow(forwardNamedGrantRow,forwardNamed,forwardNamedGrant);forwardNamedGrantRow.order=950022;
 function fakeForwardRow(kind,identity,order,definition_sql){const sha256=hash(definition_sql);return {kind,identity,order,definition_sql,sha256,stored_sha256:sha256,live_sql:definition_sql,live_sha256:sha256}}
 forwardRows.push(fakeForwardRow('function',forwardCanary,100071,`CREATE OR REPLACE FUNCTION public.custodial_release_canary_authority_surface() AS $function$ values ('function','${forwardNative}','original accepted native event lookup'), ('grant','${forwardNative}','server-only original event lookup ACL'); $function$`));
 forwardRows.push(fakeForwardRow('grant',forwardCanary,1000073,forwardCanaryGrant));
-forwardRows.push(fakeForwardRow('function',forwardNative,100478,'CREATE OR REPLACE FUNCTION public.custodial_native_provider_event_decisions(uuid,text,uuid,text,text,jsonb) RETURNS jsonb AS $$ select null $$ LANGUAGE sql;'));
-forwardRows.push(fakeForwardRow('grant',forwardNative,900318,`select public.custodial_release_authority_reset_grants('${forwardNative}'); grant execute on function custodial_native_provider_event_decisions(uuid,text,uuid,text,text,jsonb) to service_role;`));
+forwardRows.push(fakeForwardRow('function',forwardNative,100001,'CREATE OR REPLACE FUNCTION public.custodial_native_provider_event_decisions(uuid,text,uuid,text,text,jsonb) RETURNS jsonb AS $$ select null $$ LANGUAGE sql;'));
+forwardRows.push(fakeForwardRow('grant',forwardNative,900001,`select public.custodial_release_authority_reset_grants('${forwardNative}'); grant execute on function custodial_native_provider_event_decisions(uuid,text,uuid,text,text,jsonb) to service_role;`));
 const forwardInventory=sort(forwardRows.map(({kind,identity,order,sha256})=>({kind,identity,order,sha256})));
+const forwardPreimage=sort(forwardInventory.filter(x=>x.identity!==forwardNative).map(x=>{
+ if(x.kind==='function'&&x.identity===forwardNamed)return {...x,sha256:'1d76c69cc34df8ffb18d9b07711da15c1dfed8c44c7f9b5fed5e5e8b63d93e85'};
+ if(x.kind==='function'&&x.identity===forwardCanary)return {...x,sha256:'661cd2a5aecc83d0244920466b161b6fc52d22143074a037148660abed351471'};
+ return x;
+}));
 const forwardSurface=sort([...surface.filter(x=>!['function','grant'].includes(x.kind)),
   {kind:'function',identity:forwardNamed},{kind:'grant',identity:forwardNamed},
   {kind:'function',identity:forwardCanary},{kind:'grant',identity:forwardCanary},
   {kind:'function',identity:forwardNative},{kind:'grant',identity:forwardNative}]);
+const forwardSurfacePreimage=forwardSurface.filter(x=>x.identity!==forwardNative);
 const forwardSnapshot=()=>({count:forwardRows.length,metadata:forwardRows.map(({kind,identity,order,sha256})=>({kind,identity,order,sha256})),rows:structuredClone(forwardRows),renderers:Object.entries(NORMAL_RENDERER_PINS).map(([identity,sha256])=>({identity,sha256}))});
 const resolutionRows=(required,surface,inventory)=>[['required',required],['surface',surface],['inventory',inventory]].flatMap(([origin,rows])=>rows.filter(row=>row.kind==='function'||row.kind==='grant'&&row.identity.includes('(')).map(({kind,identity})=>({origin,kind,identity,oid:'101'})));
 const protectedRows=SEED_TABLES.map(relation=>({relation,count:1,sha256:'1'.repeat(64)}));
@@ -112,6 +118,9 @@ function fake(m,change=()=>undefined){
           else if(phase==='inventory_observed')result=asJson(forward?forwardInventory:inventory);
           else if(phase==='normal_inventory')result=asJson(forward?forwardSnapshot():normalSnapshot());
           else if(phase==='surface_observed')result=asJson(forward?forwardSurface:surface);
+          else if(phase==='forward_inventory_preimage')result=asJson(forwardPreimage);
+          else if(phase==='forward_surface_preimage')result=asJson(forwardSurfacePreimage);
+          else if(phase==='forward_surface_final')result=asJson(forwardSurface);
           else if(phase==='required_membership')result=asJson(resolutionRows(m.required_surface,forward?forwardSurface:surface,forward?forwardInventory:inventory));
           else if(phase.startsWith('snapshot_'))result=asJson(protectedRows.find(x=>x.relation==='public.'+phase.slice(9)));
           else if(phase.startsWith('catalog_'))result=asJson([]);
@@ -174,6 +183,22 @@ await test('218 no-auto refuses a missing literal native grant before retaining 
  assert.ok(f.calls.some(x=>x.phase==='cleanup_rm'));
  assert.ok(!f.outputs.has(join(m.output_dir,'no-auto-prepare-receipt.json')));
 });
+await test('218 pre-217 predecessor drift fails before applying either successor',async()=>{
+ const m=forwardPlan(),f=fake(m,ctx=>ctx.phase==='forward_inventory_preimage'?editJson(x=>{
+  x.find(row=>row.kind==='function'&&row.identity===forwardNamed).sha256='0'.repeat(64);
+ })(ctx.result):undefined);
+ await assert.rejects(()=>runRecoveryReplay(m,{root,io:f.io}),/forward_preimage_source/);
+ assert.ok(f.calls.some(x=>x.phase==='cleanup_rm'));
+ assert.ok(!f.calls.some(x=>x.phase==='migration_0216'||x.phase==='migration_0217'));
+});
+await test('218 no-auto rejects unrelated definition changes despite same row count',async()=>{
+ const m=forwardPlan('no-auto'),f=fake(m,ctx=>ctx.phase==='inventory_observed'?editJson(x=>{
+  x.find(row=>row.kind==='relation').sha256='0'.repeat(64);
+ })(ctx.result):undefined);
+ await assert.rejects(()=>runRecoveryReplay(m,{root,io:f.io}),/forward_delta_unrelated_definition/);
+ assert.ok(f.calls.some(x=>x.phase==='cleanup_rm'));
+ assert.ok(!f.outputs.has(join(m.output_dir,'no-auto-prepare-receipt.json')));
+});
 for(const [name,change,pattern=/final_migration_position/] of [
  ['changed 216 prefix',x=>{x.source.migrations[0].sha256='0'.repeat(64)}],
  ['missing successor',x=>{x.source.migrations.pop()}],
@@ -192,6 +217,8 @@ for(const [name,change,pattern] of [
  ['added unrelated survivor',x=>{const row={...x.rows[0],identity:'public.unrelated'};x.rows.push(row);x.metadata.push({kind:row.kind,identity:row.identity,order:row.order,sha256:row.sha256});x.count++},/normal_inventory_forward_count/],
  ['stale named function',x=>{const row=x.rows.find(r=>r.kind==='function'&&r.identity===forwardNamed);row.sha256='1d76c69cc34df8ffb18d9b07711da15c1dfed8c44c7f9b5fed5e5e8b63d93e85'},/normal_inventory_live_integrity/],
  ['native public grant',x=>{const row=x.rows.find(r=>r.kind==='grant'&&r.identity===forwardNative);row.definition_sql+=' grant execute on function custodial_native_provider_event_decisions(uuid,text,uuid,text,text,jsonb) to public;';row.live_sql=row.definition_sql;row.sha256=hash(row.definition_sql);row.stored_sha256=row.sha256;row.live_sha256=row.sha256;x.metadata.find(r=>r.kind===row.kind&&r.identity===row.identity).sha256=row.sha256},/normal_inventory_forward_native/],
+ ['native wrong free order',x=>{const row=x.rows.find(r=>r.kind==='function'&&r.identity===forwardNative);row.order++;x.metadata.find(r=>r.kind===row.kind&&r.identity===row.identity).order=row.order},/forward_delta_free_order/],
+ ['unrelated live-consistent definition change',x=>{const row=x.rows.find(r=>r.kind==='relation');row.definition_sql+=' -- unrelated rewrite';row.live_sql=row.definition_sql;row.sha256=hash(row.definition_sql);row.stored_sha256=row.sha256;row.live_sha256=row.sha256;x.metadata.find(r=>r.kind===row.kind&&r.identity===row.identity).sha256=row.sha256},/forward_delta_unrelated_definition/],
  ['canary omits new grant',x=>{const row=x.rows.find(r=>r.kind==='function'&&r.identity===forwardCanary);row.definition_sql=row.definition_sql.replace(`, ('grant','${forwardNative}','server-only original event lookup ACL')`,'');row.live_sql=row.definition_sql;row.sha256=hash(row.definition_sql);row.stored_sha256=row.sha256;row.live_sha256=row.sha256;x.metadata.find(r=>r.kind===row.kind&&r.identity===row.identity).sha256=row.sha256},/normal_inventory_forward_surface/]
 ])await test('218 NORMAL rejects '+name+' and cleans owned fixture',async()=>{
  const m=forwardPlan(),f=fake(m,ctx=>ctx.phase==='normal_inventory'?editJson(change)(ctx.result):undefined);
