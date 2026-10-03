@@ -77,6 +77,14 @@ export function createStaticWeeklyControlPlaneRuntime({
   });
   app.use((req,res,next)=>{beginBoundedManagerRequest(req,res,managerOperationClock||undefined);next();});
   app.use(express.json({ limit: "128kb" }));
+  app.use((error,req,res,next)=>{
+    // The first-origin timer may have already sent a typed 503 while an
+    // incomplete body was still in express.json. Closing that one request
+    // intentionally makes raw-body report request.aborted after the response.
+    if (res.writableEnded && req.staticWeeklyManagerOperation?.signal.aborted
+      && error?.type === 'request.aborted') return;
+    next(error);
+  });
   app.use(makeRestoreMutationGate({ supabase: trustedSupabase, required: true, serviceName: "memphis-zoo-static-weekly-control-plane" }));
 
   const requireManagerWrite = makeOpsAccessMiddleware({

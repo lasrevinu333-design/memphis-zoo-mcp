@@ -16,8 +16,14 @@ function fixture(path='/static-weekly/recurring-adaptation/confirm',method='POST
 }
 same(MANAGER_OPERATION_MILLISECONDS,60_000,'one absolute manager request budget');
 same(CLEANUP_RESERVE_MILLISECONDS,5_000,'cleanup reserve is inside, not after, the original budget');
-for(const [path,method] of [['/static-weekly/recurring-adaptation/confirm','GET'],['/static-weekly/manager-snapshot','POST']]){
+for(const [path,method] of [['/static-weekly/recurring-adaptation/confirm','GET'],['/static-weekly/manager-snapshot','POST'],
+ ['/static-weekly/recurring-adaptation/preview//','POST'],['/static-weekly/recurring-adaptation/preview-extra','POST']]){
  const f=fixture(path,method);same(f.context,null,'unrelated route gets no hidden timer');same(f.timer,null,'unrelated route has no timer');
+}
+for(const path of ['/static-weekly/recurring-adaptation/PREVIEW', '/static-weekly/recurring-adaptation/preview/',
+ '/static-weekly/recurring-adaptation/CONFIRM', '/static-weekly/recurring-adaptation/confirm/']){
+ const f=fixture(path);same(f.context?.deadlineAt,60_100,`Express-equivalent ${path} starts the bounded operation`);
+ f.finish();
 }
 {
  const f=fixture();same(f.context.deadlineAt,60_100,'origin is captured before later middleware');

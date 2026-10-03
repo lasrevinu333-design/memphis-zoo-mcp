@@ -8,7 +8,10 @@ const boundedRecurringPaths = new Set([
 export function beginBoundedManagerRequest(req, res, {
   now = () => performance.now(), setTimer = setTimeout, clearTimer = clearTimeout,
 } = {}) {
-  if (req.method !== "POST" || !boundedRecurringPaths.has(req.path)) return null;
+  // Express defaults to case-insensitive, non-strict route matching. Its
+  // handlers accept mixed case and one optional trailing slash as well.
+  const routePath = typeof req.path === "string" ? req.path.replace(/\/$/, "").toLowerCase() : "";
+  if (req.method !== "POST" || !boundedRecurringPaths.has(routePath)) return null;
   const controller = new AbortController();
   const deadlineAt = now() + MANAGER_OPERATION_MILLISECONDS;
   const abort = () => controller.abort(Object.assign(new Error(
@@ -18,9 +21,14 @@ export function beginBoundedManagerRequest(req, res, {
     abort();
     // Before the mutation gate has acquired a lease there is no SQL work to
     // abandon. A late lease-begin response is reconciled by that gate.
-    if (!req.restoreMutationLease && !res.headersSent && !res.writableEnded)
+    if (!req.restoreMutationLease && !res.headersSent && !res.writableEnded) {
+      // An incomplete JSON body may still be held by the body parser. Send the
+      // typed failure first, then close only this request's socket so its
+      // parser and listeners cannot later resume into the mutation gate.
+      if (!req.complete) res.once?.("finish", () => req.destroy?.());
       res.status(503).json({ok:false,code:"static_weekly_recurring_operation_deadline_exceeded",
         error:"Manager operation expired before admission. Check the saved status before retrying."});
+    }
   }, MANAGER_OPERATION_MILLISECONDS - CLEANUP_RESERVE_MILLISECONDS);
   timer.unref?.();
   const cleanup = () => clearTimer(timer);

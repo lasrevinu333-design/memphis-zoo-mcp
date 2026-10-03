@@ -13,20 +13,26 @@ const trustedRow=()=>({credential_id:credentialId,device_id:deviceId,max_access_
 const body=JSON.stringify({effective_start:'2026-10-05',expected_revision:1});
 let checks=0;
 const same=(actual,expected,label)=>{assert.deepEqual(actual,expected,label);checks++;};
-function clock(){let now=1,timer=null;return{now:()=>now,setTimer:(callback,delay)=>{timer={callback,delay};return timer;},
+function clock(){let now=1,timer=null,starts=0;return{now:()=>now,setTimer:(callback,delay)=>{starts++;timer={callback,delay};return timer;},
  clearTimer:candidate=>{if(timer===candidate)timer=null;},get timer(){return timer;},elapse:milliseconds=>{now+=milliseconds;},
+ get starts(){return starts;},
  expire(){assert.ok(timer,'request timer must have started');now+=55_000;timer.callback();}};}
 async function until(predicate){for(let i=0;i<100&&!predicate();i++)await new Promise(resolve=>setImmediate(resolve));assert.ok(predicate(),'expected route stage was not reached');}
 async function fixture({rpc,find}){
- const timer=clock(),calls=[],plane={async previewRecurringStaffing(input){calls.push(input);return{status:'CANDIDATE_ONLY'};},async health(){return{ready:true};}};
+ const timer=clock(),calls=[],plane={async previewRecurringStaffing(input){calls.push({kind:'preview',input});return{status:'CANDIDATE_ONLY'};},
+  async confirmRecurringStaffing(input){calls.push({kind:'confirm',input});return{status:'ACCEPTED'};},async health(){return{ready:true};}};
  const runtime=createStaticWeeklyControlPlaneRuntime({env,supabase:{rpc},trustedDeviceStore:{find},database:{},controlPlane:plane,
   managerOperationClock:{now:timer.now,setTimer:timer.setTimer,clearTimer:timer.clearTimer}});
- const server=http.createServer(runtime.app);await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+ const server=http.createServer(runtime.app),incoming=[];
+ server.prependListener('request',request=>incoming.push(request));
+ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
  const origin=`http://127.0.0.1:${server.address().port}`;
- return{timer,calls,origin,close:()=>new Promise(resolve=>server.close(resolve))};
+ return{timer,calls,incoming,origin,close:()=>new Promise(resolve=>server.close(resolve))};
 }
-async function post(origin){const response=await fetch(`${origin}/static-weekly/recurring-adaptation/preview`,{
- method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body});return{status:response.status,data:await response.json()};}
+async function post(origin,path='/static-weekly/recurring-adaptation/preview',requestBody=body,method='POST'){
+ const response=await fetch(`${origin}${path}`,{
+ method,headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},...(method==='POST'?{body:requestBody}:{})});
+ const raw=await response.text();return{status:response.status,data:raw.startsWith('{')?JSON.parse(raw):raw};}
 {
  let releaseBegin;const begin=new Promise(resolve=>{releaseBegin=resolve;});const rpcCalls=[];
  const f=await fixture({rpc:async(name,args)=>{rpcCalls.push({name,args});
@@ -65,12 +71,23 @@ async function post(origin){const response=await fetch(`${origin}/static-weekly/
   if(name==='custodial_release_application_mutation_lease')return{data:true,error:null};throw Error(`unexpected ${name}`);},find:async()=>{authCalls++;return trustedRow();}});
  let request;
  try{
+  let requestClosed=false;
   const response=new Promise((resolve,reject)=>{request=http.request(`${f.origin}/static-weekly/recurring-adaptation/preview`,{
    method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json','Content-Length':body.length+20}},res=>{
     let raw='';res.on('data',chunk=>raw+=chunk);res.on('end',()=>resolve({status:res.statusCode,data:JSON.parse(raw)}));});
-   request.on('error',reject);request.write(body.slice(0,1));});
+   request.on('close',()=>{requestClosed=true;});request.on('error',reject);request.write(body.slice(0,1));});
   await until(()=>f.timer.timer);f.timer.expire();const result=await response;
   same(result.status,503,'partial body expiry fails before restore or auth');
+  await until(()=>requestClosed);
+  same(request.destroyed,true,'timed-out partial-body connection closes after its 503 response');
+  await until(()=>f.incoming.at(-1)?.destroyed);
+  same(f.incoming.at(-1).complete,false,'server never treats the partial body as a complete request');
+  same(f.incoming.at(-1).listenerCount('data'),0,'body parser has no pending data listener after owned abort');
+  same(f.incoming.at(-1).listenerCount('aborted'),0,'body parser has no pending abort listener after owned abort');
+  same(f.incoming.at(-1).listenerCount('close'),0,'body parser has no pending close listener after owned abort');
+  same(f.incoming.at(-1).listeners('end').map(listener=>listener.name),['clearIncoming'],
+   'only the Node incoming-message end finalizer remains, not the body parser');
+  same(f.timer.timer,null,'timed-out partial-body timer is cleared after response');
   same(leaseCalls,0,'partial body never acquires mutation lease');
   same(authCalls,0,'partial body never authenticates into a write');
   same(f.calls.length,0,'partial body never reaches product handler');
@@ -85,8 +102,42 @@ async function post(origin){const response=await fetch(`${origin}/static-weekly/
  try{
   const result=await post(f.origin);same(result.status,200,'current named manager still reaches the exact preview');
   same(f.calls.length,1,'successful admission invokes only one preview');
-  same(f.calls[0].deadlineAt,60_001,'auth time does not reset the captured ingress deadline');
+  same(f.calls[0].input.deadlineAt,60_001,'auth time does not reset the captured ingress deadline');
   same(f.timer.timer,null,'successful response clears its first-origin timer');
+ }finally{await f.close();}
+}
+{
+ let f;
+ f=await fixture({rpc:async(name)=>{
+  if(name==='custodial_begin_application_mutation_lease')return{data:{mutations_paused:false,authority_generation:1},error:null};
+  if(name==='custodial_release_application_mutation_lease')return{data:true,error:null};
+  throw Error(`unexpected ${name}`);},find:async()=>trustedRow()});
+ try{
+  const confirmBody=JSON.stringify({confirmation_key:'10000000-0000-4000-8000-000000000099',effective_start:'2026-10-05',
+   expected_revision:1,preview_digest:'a'.repeat(64)});
+  for(const [path,kind,payload] of [
+   ['/static-weekly/recurring-adaptation/PREVIEW','preview',body],
+   ['/static-weekly/recurring-adaptation/preview/','preview',body],
+   ['/static-weekly/recurring-adaptation/CONFIRM','confirm',confirmBody],
+   ['/static-weekly/recurring-adaptation/confirm/','confirm',confirmBody],
+  ]){
+   const starts=f.timer.starts,calls=f.calls.length,result=await post(f.origin,path,payload);
+   same(result.status,200,`Express-served ${path} remains admitted`);
+   same(f.timer.starts,starts+1,`Express-served ${path} starts the first-origin clock`);
+   same(f.calls.length,calls+1,`Express-served ${path} reaches one product handler`);
+   same(f.calls.at(-1).kind,kind,`Express-served ${path} reaches its matching handler`);
+  }
+  for(const [path,method] of [
+   ['/static-weekly/recurring-adaptation/preview//','POST'],
+   ['/static-weekly/recurring-adaptation/preview-extra','POST'],
+   ['/static-weekly/recurring-adaptation/other','POST'],
+   ['/static-weekly/recurring-adaptation/preview','GET'],
+  ]){
+   const starts=f.timer.starts,calls=f.calls.length,result=await post(f.origin,path,body,method);
+   same(result.status,404,`unrelated ${method} ${path} remains unmatched`);
+   same(f.timer.starts,starts,`unrelated ${method} ${path} starts no manager clock`);
+   same(f.calls.length,calls,`unrelated ${method} ${path} reaches no product handler`);
+  }
  }finally{await f.close();}
 }
 console.log(JSON.stringify({status:'PASS',checks,scope:'loopback first-origin body/lease/auth expiration; synthetic store/lease and control plane, no SQL/solver/phone'}));
