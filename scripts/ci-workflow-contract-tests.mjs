@@ -378,6 +378,7 @@ const eventCountSourceImports = ["await import('./event-count-cross-surface-cont
   "await import('./static-weekly-postgres-key-order-ci-tests.mjs');",
   "await import('./static-weekly-digest-stream-ci-tests.mjs');",
   "await import('./static-weekly-replay-digest-stream-ci-tests.mjs');",
+  "await import('./static-weekly-model-basis-digest-stream-ci-tests.mjs');",
   "await import('./static-weekly-current-manager-fixture-tests.mjs');",
   "await import('./static-weekly-dual-source-sql-stage-contract-tests.mjs');",
   "await import('./static-weekly-recurring-phase-authority-ci-tests.mjs');",
@@ -414,17 +415,18 @@ const digestStreamWrapper = readFileSync(resolve(root,'scripts/static-weekly-dig
 function assertDigestStreamCalledWiring(sourceSuite, wrapper) {
   assertEventCountSourceWiring(productionRepairGate,sourceSuite);
   const imports=sourceSuite.split('\n').map(line=>line.trim()).filter(line=>/^await import\(/.test(line));
-  assert.equal(imports.length,45,'preserve all39 prior owning suites plus digest-stream, replay-digest-stream, correction, dual-source SQL-stage and two native-decision contracts');
+  assert.equal(imports.length,46,'preserve all39 prior owning suites plus digest-stream, replay-digest-stream, model-basis-digest-stream, correction, dual-source SQL-stage and two native-decision contracts');
   assert.equal(imports.filter(line=>line===digestStreamSourceImport).length,1);
   assert.equal(createHash('sha256').update(imports.filter(line=>line!==digestStreamSourceImport&&
     line!=="await import('./native-provider-event-decisions-tests.mjs');"&&
     line!=="await import('./native-provider-event-decisions-database-contract-tests.mjs');"&&
     line!=="await import('./static-weekly-replay-digest-stream-ci-tests.mjs');"&&
+    line!=="await import('./static-weekly-model-basis-digest-stream-ci-tests.mjs');"&&
     line!=="await import('./static-weekly-dual-source-sql-stage-contract-tests.mjs');"&&
     line!=="await import('./static-weekly-recurring-correction-ci-tests.mjs');").join('\n')+'\n').digest('hex'),
     '1fb01bf2b017ab8473f459ede8516c6bd3011ff0bf99f157181843bfa9f855ab',
     'all39 prior import identities/order must remain exact, not a substituted same-count suite');
-  assert.match(sourceSuite,/CURRENT_SYSTEM_SOURCE_CONTRACTS_PASS: 45 explicit owning suites/);
+  assert.match(sourceSuite,/CURRENT_SYSTEM_SOURCE_CONTRACTS_PASS: 46 explicit owning suites/);
   assert.match(wrapper,/^const output = execFileSync\(process\.execPath, \['--max-old-space-size=128',\n  '--max-semi-space-size=8', '--wasm-max-mem-pages=1536', '--stack-size=4096',\n  fileURLToPath\(new URL\('\.\/static-weekly-digest-stream-tests\.mjs', import\.meta\.url\)\)\],\n  \{encoding:'utf8',timeout:60000,maxBuffer:1024\*1024,\n    env:\{PATH:process\.env\.PATH,LANG:'C\.UTF-8'\}\}\);$/m);
   assert.match(wrapper,/^assert\.equal\(receipt\.status, 'PASS'\);$/m);
   assert.match(wrapper,/^assert\.equal\(receipt\.checks, 1009\);$/m);
@@ -442,7 +444,7 @@ for(const replacement of ['',`// ${digestStreamSourceImport}`,`${digestStreamSou
 for(const sourceMutant of [currentSystemSource.replace("await import('./events-chicago-time-tests.mjs');","await import('./unknown-replacement-tests.mjs');"),
   currentSystemSource.replace("await import('./events-chicago-time-tests.mjs');\nawait import('./messaging-durability-contract-tests.mjs');",
     "await import('./messaging-durability-contract-tests.mjs');\nawait import('./events-chicago-time-tests.mjs');"),
-  currentSystemSource.replace('45 explicit owning suites','44 explicit owning suites')]) {
+  currentSystemSource.replace('46 explicit owning suites','45 explicit owning suites')]) {
   assert.throws(()=>assertDigestStreamCalledWiring(sourceMutant,digestStreamWrapper));digestStreamWiringMutationCount++;
 }
 for(const [from,to]of [['const output = execFileSync(','// const output = execFileSync('],
@@ -480,6 +482,41 @@ for(const [from,to]of [['const output = execFileSync(','// const output = execFi
   assert.throws(()=>assertReplayDigestCalledWiring(replayDigestWrapper.replace(from,to)));replayDigestWiringMutationCount++;
 }
 console.log('Replay-digest called source gate PASS: '+replayDigestWiringMutationCount+' limit/receipt/suppression mutations rejected');
+// The immutable, finite owning wrapper pins execution, limits and all five
+// mode receipts; its test source is pinned independently. No export-only PASS.
+const modelBasisWrapper = readFileSync(resolve(root,'scripts/static-weekly-model-basis-digest-stream-ci-tests.mjs'),'utf8');
+const modelBasisTest = readFileSync(resolve(root,'scripts/static-weekly-model-basis-digest-stream-tests.mjs'),'utf8');
+function assertModelBasisCalledWiring(wrapper, owningTest) {
+  assert.equal(createHash('sha256').update(wrapper).digest('hex'),
+    'afc696b23ddff7135a434644b604f606cf7d9c96f340349d4fb3e2e0a4a7a2f0',
+    'exact isolated called wrapper, clean environment, five modes and finite limits required');
+  assert.equal(createHash('sha256').update(owningTest).digest('hex'),
+    'dda95abfd6435dd8e8bcab7ec59775a9483b75061bcb84641927783150ad4f17',
+    'exact one-site reverse-bound portable/string/incremental and complete model comparison required');
+}
+assertModelBasisCalledWiring(modelBasisWrapper,modelBasisTest);
+let modelBasisMutationCount=0;
+for (const [from,to] of [
+  ['const output = execFileSync(', '// const output = execFileSync('],
+  ['receipt.status, \'PASS\'', 'receipt.status, \'SKIP\''],
+  ['receipt.checks, 365','receipt.checks, 0'],
+  ['timeout:60000','timeout:600000'],
+  ["'--max-old-space-size=128'","'--max-old-space-size=256'"],
+  ["'--wasm-max-mem-pages=1536'","'--wasm-max-mem-pages=3072'"],
+  ["'./static-weekly-model-basis-digest-stream-tests.mjs'","'./static-weekly-model-basis-digest-stream-ci-tests.mjs'"],
+  ['[101,101,151,5,5]','[101,101,151,5,0]'],
+  ["receipt.productDelta, 'ONE_MODEL_BASIS_DIGEST_SITE'","receipt.productDelta, 'ANY'"],
+  ['process.stdout.write(output);','if (false) { process.stdout.write(output); }'],
+  ["env:{PATH:process.env.PATH,LANG:'C.UTF-8'}","env:process.env"],
+]) {
+  const mutant=modelBasisWrapper.replace(from,to);
+  assert.notEqual(mutant,modelBasisWrapper);
+  assert.throws(()=>assertModelBasisCalledWiring(mutant,modelBasisTest));
+  modelBasisMutationCount++;
+}
+assert.throws(()=>assertModelBasisCalledWiring(modelBasisWrapper,modelBasisTest.replace('equal(newProgram,oldProgram,','equal(newProgram,newProgram,')));
+modelBasisMutationCount++;
+console.log('Model-basis called source gate PASS: '+modelBasisMutationCount+' execution/limit/receipt/source mutations rejected');
 const recurringCorrectionWrapper = readFileSync(resolve(root,
   'scripts/static-weekly-recurring-correction-ci-tests.mjs'),'utf8');
 function assertRecurringCorrectionCalledWiring(wrapper) {
