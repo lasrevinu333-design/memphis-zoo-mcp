@@ -20,7 +20,7 @@ import {assertStoredNamedSourceBoundary} from './static-weekly-named-handoff-con
 let checks=0;const check=(name,fn)=>{fn();checks++;console.log('PASS',name);};
 const f=loadCurrentManagerPublicationFixture(),p=f.packet;
 check('exact219 manifest and independently executed hostile insertion contracts',()=>{
- const result=runCurrentManager219ManifestTests();assert.equal(result.status,'PASS');assert.ok(result.checks>=26);
+ const result=runCurrentManager219ManifestTests();assert.equal(result.status,'PASS');assert.equal(result.checks,26);
  const files=assertCurrentManager219MigrationSet();assert.equal(files.length,219);
  const prior=files.filter(row=>row.file!==CURRENT_MANAGER_219_MESSAGE_MIGRATION.file);
  assert.deepEqual(prior.at(-1),CURRENT_MANAGER_218_MIGRATION);

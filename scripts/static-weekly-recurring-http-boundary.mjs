@@ -35,3 +35,26 @@ export function rethrowOriginalTransportError(error,capture) {
  try{capture(error);}catch{}
  throw error;
 }
+
+// Disposable fixture observation only. Preserve the exact default preparer,
+// its input/options identities, call count and returned object/error. The
+// diagnostic sink is never part of scheduler authority or success.
+export function recurringHttpCompilerProbe(prepare,trace) {
+ if(typeof prepare!=='function')throw new TypeError('compiler preparer required');
+ const emit=phase=>{try{trace?.(phase);}catch{}};
+ return async function observedPrepare(input,args,options) {
+  let kind='other';
+  try{if(args?.kind==='draft')kind='draft';else if(args?.kind==='projection')kind='projection';}catch{}
+  emit(`compiler_prepare_start:${kind}`);
+  try {
+   const result=arguments.length===2?await prepare(input,args):await prepare(input,args,options);
+   let hasLunch=false;
+   try{hasLunch=kind==='projection'&&Boolean(result?.lunchDocument?.document_identity);}catch{}
+   emit(`compiler_prepare_complete:${kind}:${hasLunch?'lunch_present':'lunch_absent'}`);
+   return result;
+  } catch(error) {
+   emit(`compiler_prepare_rejected:${kind}`);
+   throw error;
+  }
+ };
+}

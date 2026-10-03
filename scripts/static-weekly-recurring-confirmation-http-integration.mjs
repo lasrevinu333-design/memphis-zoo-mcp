@@ -4,11 +4,12 @@ import {createServer} from 'node:http';
 import {createOpsManagerSession} from '../src/auth/shared-access-auth.js';
 import {createStaticWeeklyControlPlane} from '../src/static-weekly-control-plane.js';
 import {createStaticWeeklyControlPlaneRuntime} from '../src/static-weekly-control-plane-runtime.js';
+import {compileAndPrepareStaticWeeklyScheduleIsolated} from '../src/static-weekly-schedule-compiler-runtime.js';
 import {postgresJsonbContentDigest as digest} from '../src/static-weekly-schedule-compiler.js';
 import {recurringHttpSqlBoundary,captureRecurringHttpTransportFailure,
- rethrowOriginalTransportError} from './static-weekly-recurring-http-boundary.mjs';
+ rethrowOriginalTransportError,recurringHttpCompilerProbe} from './static-weekly-recurring-http-boundary.mjs';
 
-// Invoked only after the current-manager-218 fixture has published its exact
+// Invoked only after the explicit current-manager-218/219 fixture has published its exact
 // baseline in the network-none, no-auto-grants disposable database. This is
 // the alternate writer to the direct confirmation integration, never a second
 // confirmation against the same revision. No real trusted device or phone is
@@ -60,7 +61,8 @@ export async function testRecurringConfirmationHttp({pool,week,originalManagerId
     if(boundary)trace(`sql_complete:${boundary}`);
     if(sql==='commit'&&loseCommit){loseCommit=false;trace('synthetic_commit_response_lost');throw Object.assign(new Error('synthetic lost COMMIT response after acceptance'),{code:'08006'});}
     return result;},release(error){trace('sql_client_release');checkedOut--;client.release(error);}};},async end(){}};
- const plane=createStaticWeeklyControlPlane({database,shutdownCompiler:async()=>{}});
+ const plane=createStaticWeeklyControlPlane({database,shutdownCompiler:async()=>{},
+  compilerPreparer:recurringHttpCompilerProbe(compileAndPrepareStaticWeeklyScheduleIsolated,trace)});
  const leaseCalls=[];
  const supabase={async rpc(name,args){
   leaseCalls.push({name,args});

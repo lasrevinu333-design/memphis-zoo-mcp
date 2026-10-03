@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {recurringHttpSqlBoundary,recurringHttpTransportFailure,captureRecurringHttpTransportFailure,
- rethrowOriginalTransportError} from './static-weekly-recurring-http-boundary.mjs';
+ rethrowOriginalTransportError,recurringHttpCompilerProbe} from './static-weekly-recurring-http-boundary.mjs';
 
 const cases=[
  ['begin','begin'],['commit','commit'],['rollback','rollback'],
@@ -36,4 +36,27 @@ assert.throws(()=>rethrowOriginalTransportError(hostile,()=>{throw Error('diagno
 assert.throws(()=>rethrowOriginalTransportError(hostile,()=>captureRecurringHttpTransportFailure(hostile,{
  phase:'body',elapsedMilliseconds:1,emit(){throw Error('emitter failed');},persist(){throw Error('sidecar failed');}})),error=>error===hostile);
 assert.doesNotMatch(JSON.stringify(fact),/private|token|URL/);
-console.log('PASS recurring HTTP bounded boundary, transport, and non-authoritative capture',cases.length+10);
+const events=[],input={secret:'must-not-print'},args={kind:'projection',operationId:'synthetic'},
+ options={deadlineMilliseconds:315000},result={lunchDocument:{document_identity:'synthetic-private'}};
+let count=0;
+const observed=recurringHttpCompilerProbe(async function(...received){
+ count++;assert.equal(received.length,3);assert.equal(received[0],input);
+ assert.equal(received[1],args);assert.equal(received[2],options);return result;
+},phase=>events.push(phase));
+assert.equal(await observed(input,args,options),result);
+assert.equal(count,1);
+assert.deepEqual(events,['compiler_prepare_start:projection','compiler_prepare_complete:projection:lunch_present']);
+assert.doesNotMatch(JSON.stringify(events),/secret|synthetic-private|operationId/);
+const draftArgs={kind:'draft'};let draftArity=null;
+const draft=recurringHttpCompilerProbe(async function(...received){draftArity=received.length;return {ok:true};},()=>{throw Error('diagnostic sink failed');});
+assert.deepEqual(await draft(input,draftArgs),{ok:true});assert.equal(draftArity,2);
+const original=new Error('private compiler error'),rejected=[];
+const broken=recurringHttpCompilerProbe(async()=>{throw original;},phase=>rejected.push(phase));
+await assert.rejects(()=>broken(input,args,options),error=>error===original);
+assert.deepEqual(rejected,['compiler_prepare_start:projection','compiler_prepare_rejected:projection']);
+const hostileResult={get lunchDocument(){throw Error('diagnostic getter failed');}};
+assert.equal(await recurringHttpCompilerProbe(async()=>hostileResult,()=>{throw Error('trace failed');})(input,args,options),hostileResult);
+const hostileArgs={get kind(){throw Error('private kind getter');}};
+assert.equal(await recurringHttpCompilerProbe(async(_,received)=>{assert.equal(received,hostileArgs);return result;},()=>{})(input,hostileArgs),result);
+assert.throws(()=>recurringHttpCompilerProbe(null,()=>{}),/compiler preparer required/);
+console.log('PASS recurring HTTP bounded SQL, transport and compiler-preparation observation',cases.length+18);
