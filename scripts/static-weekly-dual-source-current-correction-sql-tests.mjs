@@ -3,18 +3,24 @@ import {execFileSync} from 'node:child_process';
 import {Pool} from 'pg';
 import {createDualSourceRegisteredCorrectionSqlSource} from './fixtures/dual-source-registered-correction-sql-source.mjs';
 import {assertCurrentManager217MigrationSet,assertCurrentManager218MigrationSet} from './fixtures/current-manager-publication-source.mjs';
+import {assertCurrentManager219MigrationSet} from './fixtures/current-manager-219-source.mjs';
 import {createStaticWeeklyControlPlane} from '../src/static-weekly-control-plane.js';
 import {createRecurringCorrectionBinding,RECURRING_CORRECTION_BINDING_SCHEMA} from '../src/static-weekly-recurring-correction-binding.js';
 
-// Invoked only by the exact dual-source-217 or dual-source-218 runner stage,
+// Invoked only by the exact dual-source-217/218/219 runner stage,
 // after its complete ordered no-auto-grants replay. No production source ID is
 // created. This stage is distinct from current-manager-217 and does not change
 // its historical 216/217 fixture or assertions.
 const dual217=process.env.STATIC_WEEKLY_TEST_DUAL_SOURCE_217==='1';
 const dual218=process.env.STATIC_WEEKLY_TEST_DUAL_SOURCE_218==='1';
-assert.notEqual(dual217,dual218,'exactly one pinned dual-source stage required');
+const dual219=process.env.STATIC_WEEKLY_TEST_DUAL_SOURCE_219==='1';
+for(const name of ['STATIC_WEEKLY_TEST_DUAL_SOURCE_217','STATIC_WEEKLY_TEST_DUAL_SOURCE_218',
+ 'STATIC_WEEKLY_TEST_DUAL_SOURCE_219'])assert.ok(process.env[name]==null||process.env[name]==='1',
+ 'dual-source stage accepts only explicit 1');
+assert.equal([dual217,dual218,dual219].filter(Boolean).length,1,'exactly one pinned dual-source stage required');
 if(dual217)assertCurrentManager217MigrationSet();
 if(dual218)assertCurrentManager218MigrationSet();
+if(dual219)assertCurrentManager219MigrationSet();
 const container=process.env.SHIFT_END_TEST_CONTAINER,socket=process.env.SHIFT_END_TEST_SOCKET;
 assert.match(container??'',/^mz_schema_shift_end_[0-9]+$/);
 assert.match(socket??'',/^\/tmp\/mz-shift-socket-[a-zA-Z0-9]+$/);
@@ -227,7 +233,7 @@ try{
   'sources',(select count(*) from public.static_weekly_authority_source_documents),
   'publications',(select count(*) from public.weekly_schedule_publications),
   'proofs',(select count(*) from public.static_weekly_recurring_acceptance_proofs)) as result`),after);
- console.log(JSON.stringify({status:dual218?'PASS_DUAL_SOURCE_218_SYNTHETIC_SQL':'PASS_DUAL_SOURCE_217_SYNTHETIC_SQL',checks,week,
+ console.log(JSON.stringify({status:dual219?'PASS_DUAL_SOURCE_219_SYNTHETIC_SQL':dual218?'PASS_DUAL_SOURCE_218_SYNTHETIC_SQL':'PASS_DUAL_SOURCE_217_SYNTHETIC_SQL',checks,week,
   historicalSourceId:fixture.historical.sourceId,correctionSourceId:fixture.correction.sourceId,
   historicalPublicationId:historicalPublication.data.publication_id,operationId:accepted.operationId,
   sourceDigests:[fixture.historical.sourceDigest,fixture.correction.sourceDigest],

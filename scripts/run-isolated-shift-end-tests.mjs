@@ -6,7 +6,7 @@ import {assertCurrentManagerMigrationSet,assertCurrentManager217MigrationSet,ass
 import {assertCurrentManager219MigrationSet} from './fixtures/current-manager-219-source.mjs';
 const container=`mz_schema_shift_end_${process.pid}`;
 const stage=process.argv[2]??'all';
-assert.ok(['all','migration-only','separation-context-only','atomic-only','published-only','current-roster-only','current-manager-216','current-manager-217','current-manager-218','current-manager-219','dual-source-217','dual-source-218','recurring-ledger-only','recurring-parent-only','recurring-source-only','recurring-dependency-only','recurring-binding-shape-only','recurring-terminal-boundary-only','recurring-lock-order-only','recurring-generation-only','legacy-only','activation-only','legacy-observation-only'].includes(stage),'explicit bounded test stage');
+assert.ok(['all','migration-only','separation-context-only','atomic-only','published-only','current-roster-only','current-manager-216','current-manager-217','current-manager-218','current-manager-219','dual-source-217','dual-source-218','dual-source-219','recurring-ledger-only','recurring-parent-only','recurring-source-only','recurring-dependency-only','recurring-binding-shape-only','recurring-terminal-boundary-only','recurring-lock-order-only','recurring-generation-only','legacy-only','activation-only','legacy-observation-only'].includes(stage),'explicit bounded test stage');
 const currentManager216Stage=stage==='current-manager-216';
 const currentManager217Stage=stage==='current-manager-217';
 const currentManager218Stage=stage==='current-manager-218';
@@ -30,6 +30,7 @@ if(currentManager218Browser){
 }
 const dualSource217Stage=stage==='dual-source-217';
 const dualSource218Stage=stage==='dual-source-218';
+const dualSource219Stage=stage==='dual-source-219';
 const currentManagerStage=currentManager216Stage||currentManager217Stage||currentManager218Stage||currentManager219Stage;
 const publishedStage=['published-only','current-roster-only','current-manager-216','current-manager-217','current-manager-218','current-manager-219'].includes(stage);
 if(currentManager216Stage){assertCurrentManagerMigrationSet();loadCurrentManagerPublicationFixture();}
@@ -38,7 +39,8 @@ if(dualSource217Stage){assertCurrentManager217MigrationSet();loadCurrentManagerP
 if(currentManager218Stage){assertCurrentManager218MigrationSet();loadCurrentManagerPublicationFixture();}
 if(currentManager219Stage){assertCurrentManager219MigrationSet();loadCurrentManagerPublicationFixture();}
 if(dualSource218Stage){assertCurrentManager218MigrationSet();loadCurrentManagerPublicationFixture();}
-const socketStage=publishedStage||dualSource217Stage||dualSource218Stage||['recurring-ledger-only','recurring-parent-only','recurring-source-only','recurring-dependency-only','recurring-binding-shape-only','recurring-terminal-boundary-only','recurring-lock-order-only','recurring-generation-only'].includes(stage);
+if(dualSource219Stage){assertCurrentManager219MigrationSet();loadCurrentManagerPublicationFixture();}
+const socketStage=publishedStage||dualSource217Stage||dualSource218Stage||dualSource219Stage||['recurring-ledger-only','recurring-parent-only','recurring-source-only','recurring-dependency-only','recurring-binding-shape-only','recurring-terminal-boundary-only','recurring-lock-order-only','recurring-generation-only'].includes(stage);
 const recurringSourceStage=['recurring-ledger-only','recurring-parent-only','recurring-source-only'].includes(stage);
 if(recurringSourceStage){
  assert.ok(process.env.STATIC_WEEKLY_TEST_SIX_PACKET,'explicit preserved source fixture required before database startup');
@@ -52,9 +54,9 @@ const defaults="select count(*) from pg_default_acl d cross join lateral aclexpl
 const removeDefaultsSql=['postgres','supabase_admin'].flatMap(owner=>['',' in schema public'].map(scope=>`alter default privileges for role ${owner}${scope} revoke all on tables from public,anon,authenticated,service_role;alter default privileges for role ${owner}${scope} revoke all on sequences from public,anon,authenticated,service_role;`)).join('\n');
 const absenceGuard=`do $absence$begin if (${defaults})<>0 then raise exception 'automatic Data API table/sequence grants must be absent'; end if;end$absence$;`;
 let owned=false;const files=readdirSync('supabase/migrations').filter(f=>f.endsWith('.sql')).sort(),manifest=[];
-assert.equal(files.length,currentManager219Stage?219:currentManager218Stage||dualSource218Stage?218:
+assert.equal(files.length,currentManager219Stage||dualSource219Stage?219:currentManager218Stage||dualSource218Stage?218:
  currentManager217Stage||dualSource217Stage?217:currentManager216Stage?216:176,'exact stage-specific migration set');
-assert.equal(files.at(-1),currentManager219Stage||currentManager218Stage||dualSource218Stage?'20261004000000_native_provider_event_decision_lookup.sql':
+assert.equal(files.at(-1),currentManager219Stage||dualSource219Stage||currentManager218Stage||dualSource218Stage?'20261004000000_native_provider_event_decision_lookup.sql':
  currentManager217Stage||dualSource217Stage?'20261003230000_static_weekly_named_handoff_derivation.sql':
  currentManager216Stage?'20261003220000_current_release_authority_completion.sql':
  '20260929125440_custodial_recovery_inventory_closure.sql','exact stage-specific migration head');
@@ -137,6 +139,9 @@ try{
  if(dualSource218Stage)execFileSync(process.execPath,['scripts/static-weekly-dual-source-current-correction-sql-tests.mjs'],{
   env:{...process.env,SHIFT_END_TEST_CONTAINER:container,SHIFT_END_TEST_SOCKET:socket,
    STATIC_WEEKLY_TEST_DUAL_SOURCE_218:'1'},stdio:'inherit',timeout:1200000});
+ if(dualSource219Stage)execFileSync(process.execPath,['scripts/static-weekly-dual-source-current-correction-sql-tests.mjs'],{
+  env:{...process.env,SHIFT_END_TEST_CONTAINER:container,SHIFT_END_TEST_SOCKET:socket,
+   STATIC_WEEKLY_TEST_DUAL_SOURCE_219:'1'},stdio:'inherit',timeout:1200000});
  if(stage==='separation-context-only')execFileSync(process.execPath,['scripts/static-weekly-vacate-roster-slot-fixture-tests.mjs'],{
   env:{...process.env,ROSTER_PUBLICATION_TEST_CONTAINER:container,SEPARATION_CONTEXT_PROOF:'1'},stdio:'inherit',timeout:240000});
  if(stage==='legacy-only'){

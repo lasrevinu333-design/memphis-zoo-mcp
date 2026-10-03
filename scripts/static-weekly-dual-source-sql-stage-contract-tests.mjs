@@ -1,7 +1,15 @@
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {spawnSync} from 'node:child_process';
+import {createHash} from 'node:crypto';
+import {readFileSync,mkdtempSync,mkdirSync,symlinkSync,rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {fileURLToPath,pathToFileURL} from 'node:url';
 import {createDualSourceRegisteredCorrectionSqlSource} from './fixtures/dual-source-registered-correction-sql-source.mjs';
-import {assertCurrentManager218MigrationSet} from './fixtures/current-manager-publication-source.mjs';
+import {assertCurrentManager218MigrationSet,CURRENT_MANAGER_218_MIGRATION_MANIFEST}
+ from './fixtures/current-manager-publication-source.mjs';
+import {assertCurrentManager219Manifest,assertCurrentManager219MigrationSet,CURRENT_MANAGER_219_MESSAGE_MIGRATION}
+ from './fixtures/current-manager-219-source.mjs';
 import {postgresJsonbContentDigest as digest} from '../src/static-weekly-schedule-compiler.js';
 
 let checks=0;
@@ -30,22 +38,68 @@ check('valid accepted historical assignment and availability remain unmodified',
   assert.ok(fixture.correction.compilerInput.version.vacantSlotIds.includes(former.slotId));
  }
 });
-check('new218 stage pins exact predecessor and preserves older stage branches',()=>{
- assert.equal(assertCurrentManager218MigrationSet().length,218);
+check('new219 stage pins exact predecessor and preserves older stage branches',()=>{
+ const rows=assertCurrentManager219MigrationSet();
+ assert.equal(rows.length,219);
+ const predecessor=rows.filter(row=>row.file!==CURRENT_MANAGER_219_MESSAGE_MIGRATION.file);
+ assert.equal(rows.length-predecessor.length,1,'only the exact MESSAGE row may be removed');
+ assert.equal(createHash('sha256').update(JSON.stringify(predecessor)).digest('hex'),CURRENT_MANAGER_218_MIGRATION_MANIFEST);
+ const oldTree=mkdtempSync(join(tmpdir(),'mz-dual-source-218-predecessor-'));
+ try {
+  mkdirSync(join(oldTree,'supabase','migrations'),{recursive:true});
+  for(const row of predecessor)symlinkSync(fileURLToPath(new URL('../supabase/migrations/'+row.file,import.meta.url)),
+   join(oldTree,'supabase','migrations',row.file));
+  assert.deepEqual(assertCurrentManager218MigrationSet(pathToFileURL(oldTree+'/')),predecessor);
+ } finally {rmSync(oldTree,{recursive:true});}
+ for(const mutate of [
+  r=>r.pop(),
+  r=>r.push({file:'20261004010000_unapproved.sql',sha256:'0'.repeat(64)}),
+  r=>r.find(row=>row.file===CURRENT_MANAGER_219_MESSAGE_MIGRATION.file).sha256='0'.repeat(64),
+  r=>r[0].sha256='0'.repeat(64),
+  r=>[r[1],r[2]]=[r[2],r[1]],
+  r=>r[2]={...r[1]},
+ ]){const bad=structuredClone(rows);mutate(bad);assert.throws(()=>assertCurrentManager219Manifest(bad));}
  assert.match(runner,/const currentManager217Stage=stage==='current-manager-217'/);
  assert.match(runner,/const dualSource217Stage=stage==='dual-source-217'/);
  assert.match(runner,/const currentManager218Stage=stage==='current-manager-218'/);
  assert.match(runner,/const dualSource218Stage=stage==='dual-source-218'/);
+ assert.match(runner,/const dualSource219Stage=stage==='dual-source-219'/);
+ assert.match(runner,/if\(dualSource219Stage\)\{assertCurrentManager219MigrationSet\(\);loadCurrentManagerPublicationFixture\(\);\}/);
  assert.match(runner,/if\(dualSource217Stage\)\{assertCurrentManager217MigrationSet\(\);loadCurrentManagerPublicationFixture\(\);\}/);
  assert.match(runner,/if\(dualSource218Stage\)\{assertCurrentManager218MigrationSet\(\);loadCurrentManagerPublicationFixture\(\);\}/);
- assert.match(runner,/files\.length,currentManager218Stage\|\|dualSource218Stage\?218/);
+ assert.match(runner,/files\.length,currentManager219Stage\|\|dualSource219Stage\?219:currentManager218Stage\|\|dualSource218Stage\?218/);
  assert.match(runner,/20261003230000_static_weekly_named_handoff_derivation\.sql/);
  assert.match(runner,/20261004000000_native_provider_event_decision_lookup\.sql/);
  assert.match(runner,/if\(publishedStage\)execFileSync/);
  assert.match(runner,/if\(dualSource217Stage\)execFileSync\(process\.execPath,\['scripts\/static-weekly-dual-source-current-correction-sql-tests\.mjs'\]/);
  assert.match(runner,/if\(dualSource218Stage\)execFileSync\(process\.execPath,\['scripts\/static-weekly-dual-source-current-correction-sql-tests\.mjs'\]/);
+ assert.match(runner,/if\(dualSource219Stage\)execFileSync\(process\.execPath,\['scripts\/static-weekly-dual-source-current-correction-sql-tests\.mjs'\]/);
  assert.match(runner,/STATIC_WEEKLY_TEST_DUAL_SOURCE_218:'1'/);
+ assert.match(runner,/STATIC_WEEKLY_TEST_DUAL_SOURCE_219:'1'/);
  assert.match(child,/if\(dual218\)assertCurrentManager218MigrationSet\(\)/);
+ assert.match(child,/if\(dual219\)assertCurrentManager219MigrationSet\(\)/);
+ assert.match(child,/assert\.equal\(\[dual217,dual218,dual219\]\.filter\(Boolean\)\.length,1/);
+});
+check('old stage and malformed child selectors refuse changed219 source before Docker',()=>{
+ const env={...process.env};
+ for(const name of ['STATIC_WEEKLY_TEST_DUAL_SOURCE_217','STATIC_WEEKLY_TEST_DUAL_SOURCE_218',
+  'STATIC_WEEKLY_TEST_DUAL_SOURCE_219'])delete env[name];
+ const old=spawnSync(process.execPath,[new URL('./run-isolated-shift-end-tests.mjs',import.meta.url).pathname,'dual-source-218'],
+  {encoding:'utf8',timeout:5000,env});
+ assert.equal(old.error,undefined);assert.notEqual(old.status,0);
+ assert.match(old.stderr,/current manager 218 fixture requires all218 migrations/);
+ assert.doesNotMatch(old.stdout,/OWNED_CONTAINER|REPLAYED_EXACT_MIGRATIONS/);
+ for(const [flags,pattern] of [
+  [{},/exactly one pinned dual-source stage required/],
+  [{STATIC_WEEKLY_TEST_DUAL_SOURCE_219:'0'},/dual-source stage accepts only explicit 1/],
+  [{STATIC_WEEKLY_TEST_DUAL_SOURCE_218:'1',STATIC_WEEKLY_TEST_DUAL_SOURCE_219:'1'},/exactly one pinned dual-source stage required/],
+ ]){
+  const denied=spawnSync(process.execPath,[new URL('./static-weekly-dual-source-current-correction-sql-tests.mjs',import.meta.url).pathname],
+   {encoding:'utf8',timeout:5000,env:{...env,...flags}});
+  assert.equal(denied.error,undefined);assert.notEqual(denied.status,0);
+  assert.match(denied.stderr,pattern);
+  assert.doesNotMatch(denied.stdout,/OWNED_CONTAINER|REPLAYED_EXACT_MIGRATIONS/);
+ }
 });
 check('new stage retains network-none, full replay, default-grant absence and owned cleanup',()=>{
  assert.match(runner,/--network','none'/);
@@ -79,5 +133,5 @@ check('child executes lost-COMMIT response, concurrent retries and denied roles 
  assert.match(child,/rpc\(role,'static_weekly_v8_vacate_roster_slot'/);
  assert.match(child,/error\.code==='42501'&&\/permission denied\/i\.test\(error\.message\)/);
 });
-console.log(JSON.stringify({status:'PASS_DUAL_SOURCE_218_SOURCE_ONLY',checks,digests:[fixture.historical.sourceDigest,
+console.log(JSON.stringify({status:'PASS_DUAL_SOURCE_219_SOURCE_ONLY',checks,digests:[fixture.historical.sourceDigest,
  fixture.correction.sourceDigest],database:'NOT_RUN',solver:'NOT_RUN',production:false}));

@@ -189,8 +189,8 @@ check('old176 contract, exact image, isolation/default grants and cleanup remain
 check('219 stage is explicit single publisher under exact manifest, never a count override',()=>{
  assert.ok(runner.includes("const currentManager219Stage=stage==='current-manager-219'"));
  assert.ok(runner.includes('if(currentManager219Stage){assertCurrentManager219MigrationSet();loadCurrentManagerPublicationFixture();}'));
- assert.ok(runner.includes('currentManager219Stage?219:currentManager218Stage||dualSource218Stage?218:'));
- assert.ok(runner.includes("currentManager219Stage||currentManager218Stage||dualSource218Stage?'20261004000000_native_provider_event_decision_lookup.sql'"));
+ assert.ok(runner.includes('currentManager219Stage||dualSource219Stage?219:currentManager218Stage||dualSource218Stage?218:'));
+ assert.ok(runner.includes("currentManager219Stage||dualSource219Stage||currentManager218Stage||dualSource218Stage?'20261004000000_native_provider_event_decision_lookup.sql'"));
  assert.ok(publication.includes('const currentManager219Stage=process.env.STATIC_WEEKLY_TEST_CURRENT_219'));
  assert.equal(publication.match(/recurringConfirmationProof=await/g)?.length,1);
 });
