@@ -14,7 +14,7 @@ import { compileStaticWeeklySchedule, postgresJsonbContentDigest } from "../src/
 import {createOpeningCoverageReport} from '../src/static-weekly-opening-coverage-report.js';
 import {loadOpeningCoverageFixture} from './static-weekly-opening-coverage-report-tests.mjs';
 import {installStaticWeeklySha256HexAccelerator,contentDigest} from '../src/static-weekly-schedule-model.js';
-import {RECURRING_WEEK_COMMITMENT_SCHEMA,RECURRING_PHASE_SCOPE} from '../src/static-weekly-recurring-week-commitment.js';
+import {RECURRING_WEEK_COMMITMENT_SCHEMA,RECURRING_PHASE_SCOPE,RECURRING_MORNING_SCOPE} from '../src/static-weekly-recurring-week-commitment.js';
 import {COMPONENT_WEIGHT_LEDGER_DIGEST} from '../src/schedule-component-weight-authority.js';
 installStaticWeeklySha256HexAccelerator(x=>createHash('sha256').update(x).digest('hex'));
 const openingActual=loadOpeningCoverageFixture().baseline;
@@ -691,6 +691,33 @@ const syntheticSiblingFor=candidate=>{
   admitted:false,published:false};
  return {...body,digest:contentDigest(body)};
 };
+const syntheticMorningSiblingFor=candidate=>{
+ const late=candidate.weekCommitment;
+ const facts={sourceBasisDigest:'a'.repeat(64),originalSourceDigest:candidate.publishedSourceDigest,
+  candidateSourceDigest:late.sourceDigest,targetEffectiveDate:candidate.effectiveDate,
+  targetCalendarReceiptDigest:'b'.repeat(64),
+  days:Array.from({length:7},(_,dayOfWeek)=>({dayOfWeek,contractDigest:'c'.repeat(64),metrics:{coverage:[0]},
+   selection:[{workId:`synthetic-morning-${dayOfWeek}`,slotId:'synthetic'}],
+   terminalOptima:Array.from({length:6},(_,index)=>({name:`synthetic-${index}`,
+    modelDigest:'d'.repeat(64),lpDigest:'e'.repeat(64),primitiveObjective:0,originalObjective:0}))}))};
+ const body={schema:'custodial.recurring-morning-combined-commitment.v1',scope:RECURRING_MORNING_SCOPE,
+  status:'PROVEN_CANDIDATE_ONLY',sourceId:candidate.sourceId,publicationId:candidate.publicationId,
+  authorityRevision:candidate.authorityRevision,effectiveWeek:candidate.effectiveDate,
+  publishedSourceDigest:candidate.publishedSourceDigest,managerSnapshotDigest:candidate.managerSnapshotDigest,
+  readbackPatternDigest:candidate.readbackPatternDigest,originalMorningSourceDigest:facts.originalSourceDigest,
+  morningSourceBasisDigest:facts.sourceBasisDigest,originalMorningSourceSqlDigest:candidate.publishedSourceDigest,
+  targetCalendarReceiptDigest:facts.targetCalendarReceiptDigest,targetEffectiveDate:candidate.effectiveDate,
+  originalCalendarHeaderDigest:'f'.repeat(64),targetCalendarHeaderDigest:'f'.repeat(64),originalDatedOverlayCount:0,
+  datedOverlaysRetainedInOriginalOnly:true,recurringRowsAnchorsAvailabilityAndHistoryPreserved:true,
+  morningFacts:facts,morningFactsDigest:contentDigest(facts),morningCandidateSourceDigest:late.sourceDigest,
+  phaseSourceBasisDigest:late.sourceBasisDigest,lateCommitmentDigest:late.digest,
+  finalSourceDigest:late.finalSourceDigest,finalSourceSqlDigest:candidate.candidateSourceDigest,
+  finalCanonicalWitnessDigest:late.canonicalHard.witnessDigest,sharedMorningAdmissionBudgetMs:30000,
+  originalAnchorsPreserved:true,originalLateReferencePreserved:true,sourceRequiredPlannedMorningOptimum:true,
+  openingReadinessProven:false,physicalMinuteFeasibilityClaim:false,acceptedStaticChanged:false,
+  datedPriorityChange:false,admitted:false,published:false};
+ return {...body,digest:contentDigest(body)};
+};
 const recurringMockCandidate = (basis) => {
   const decision = { schema: RECURRING_DECISION_SCHEMA, implementationDigest: RECURRING_IMPLEMENTATION_DIGEST,
     effectiveDate: basis.effectiveDate, compilerVersion: 'synthetic-recurring-compiler',
@@ -722,6 +749,9 @@ const recurringMockCandidate = (basis) => {
   lunchLoanCount: decision.fixedLunch.loans.length, openWorkCount: decision.gaps.open.length, patternFingerprint: "b".repeat(64),
   changes: [], registrationRequired: true, managerConfirmationRequired: true };
   candidate.weekCommitment=syntheticSiblingFor(candidate);
+  candidate.morningOptimizationScope=RECURRING_MORNING_SCOPE;
+  candidate.morningSourceBasisDigest='a'.repeat(64);
+  candidate.morningCommitment=syntheticMorningSiblingFor(candidate);
   candidate.openingCoverageReport=createOpeningCoverageReport({source:openingActual.source,assignments:decision.assignments,
     lunch:openingActual.result.lunch,context:{publicationId:candidate.publicationId,authorityRevision:candidate.authorityRevision},
     decisionDigest:candidate.decisionDigest});return candidate;
@@ -738,6 +768,10 @@ assert.equal(recurringPreview.status, "CANDIDATE_ONLY");
 assert.equal(recurringPreview.source, "AUTHENTICATED_MANAGER_READBACK");
 assert.equal(recurringPreview.published, false);
 assert.equal(recurringPreview.recurringGeneration, 0);
+assert.equal(recurringPreview.morningOptimizationScope,RECURRING_MORNING_SCOPE,
+  'synthetic preview includes the current mandatory morning-chain scope');
+assert.equal(recurringPreview.morningCommitment.lateCommitmentDigest,recurringPreview.weekCommitment.digest,
+  'the synthetic morning-chain sibling binds the complete late sibling');
 assert.match(recurringPreview.previewDigest, /^[a-f0-9]{64}$/);
 assert.equal(previewBasis.publishedSource.publication_id, publicationId);
 assert.equal(previewBasis.managerSnapshot.authority_revision, 7);
@@ -746,6 +780,9 @@ assert.equal(previewAuthority.queries.filter((entry) => entry.statement.includes
 assert.equal(previewAuthority.commits(), 2, "preview performs only two completed read transactions");
 assert.equal(previewAuthority.mutationAttempts(), 0);
 for(const mutate of [candidate=>delete candidate.weekCommitment,
+ candidate=>delete candidate.morningCommitment,
+ candidate=>{candidate.morningCommitment.finalSourceSqlDigest='0'.repeat(64);
+  const {digest,...body}=candidate.morningCommitment;candidate.morningCommitment.digest=contentDigest(body);},
  candidate=>{candidate.weekCommitment.days[0].descriptorDigest='0'.repeat(64);},
  candidate=>{candidate.weekCommitment.sourceId='70000000-0000-4000-8000-000000000999';
   const {digest,...body}=candidate.weekCommitment;candidate.weekCommitment.digest=contentDigest(body);}]){
@@ -767,6 +804,7 @@ const repairTransform=value=>({...value,publication_id:repairPatternId,repair_co
 const repairCandidate=basis=>{const c={...recurringMockCandidate(basis),publicationId,patternPublicationId:repairPatternId,
  repairContext:structuredClone(basis.publishedSource.repair_context),repairContextDigest:basis.publishedSource.repair_context_digest};
  c.weekCommitment=syntheticSiblingFor(c);
+ c.morningCommitment=syntheticMorningSiblingFor(c);
  c.openingCoverageReport=createOpeningCoverageReport({source:openingActual.source,assignments:c.decision.assignments,
   lunch:openingActual.result.lunch,context:{publicationId,authorityRevision:c.authorityRevision},decisionDigest:c.decisionDigest});return c;};
 const repairDatabase=createAuthorityDatabase({revision:7,previewSourceTransform:repairTransform});
