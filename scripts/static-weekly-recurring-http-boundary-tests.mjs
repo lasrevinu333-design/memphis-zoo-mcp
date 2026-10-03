@@ -101,21 +101,38 @@ assert.equal(runRecurringClockedChild(()=>{childCalls++;assert.deepEqual(exactAr
 assert.equal(childCalls,1);
 assert.equal(runRecurringClockedChild(()=>childValue,null),childValue,'non-manager child path unchanged');
 assert.deepEqual(clockFacts,[
- {phase:'published_child_spawn',outcome:'STARTED',epochMilliseconds:1_000_000,
-  originEpochMilliseconds:1_000_000,elapsedMilliseconds:0,deadlineEpochMilliseconds:2_200_000},
+ {phase:'published_child_pre_call',outcome:'STARTED',epochMilliseconds:1_000_000,
+  originEpochMilliseconds:1_000_000,elapsedMilliseconds:0,estimatedDeadlineEpochMilliseconds:2_200_000},
  {phase:'published_child_terminal',outcome:'RETURNED',epochMilliseconds:1_000_125,
-  originEpochMilliseconds:1_000_000,elapsedMilliseconds:125,deadlineEpochMilliseconds:2_200_000}]);
+  originEpochMilliseconds:1_000_000,elapsedMilliseconds:125,estimatedDeadlineEpochMilliseconds:2_200_000}]);
 const thrown=new Error('original child failure'),failedFacts=[];
 const failedClock=createRecurringClockRecorder({now:(()=>{let t=5_000;return()=>t++;})(),
  deadlineMilliseconds:1_200_000,emit:fact=>failedFacts.push(fact)});
 assert.throws(()=>runRecurringClockedChild(()=>{throw thrown;},failedClock),error=>error===thrown);
 assert.deepEqual(failedFacts.map(f=>[f.phase,f.outcome]),
- [['published_child_spawn','STARTED'],['published_child_terminal','THREW']]);
+ [['published_child_pre_call','STARTED'],['published_child_terminal','THREW']]);
 assert.throws(()=>runRecurringClockedChild(()=>{throw thrown;},{mark(){throw Error('clock sink failed');}}),
  error=>error===thrown);
 assert.equal(runRecurringClockedChild(()=>childValue,{mark(){throw Error('clock sink failed');}}),childValue);
 assert.equal(createRecurringClockRecorder({now(){throw Error('clock unavailable');}}).mark('confirm_origin','STARTED'),null);
 assert.equal(createRecurringClockRecorder({now:()=>Infinity}).mark('confirm_origin','STARTED'),null);
+const backwards=[900,899,901],backwardFacts=[];
+const backwardClock=createRecurringClockRecorder({now:()=>backwards.shift(),emit:fact=>backwardFacts.push(fact)});
+assert.ok(backwardClock.mark('confirm_origin','STARTED'));
+assert.equal(backwardClock.mark('confirm_response_closed','UNFINISHED'),null);
+assert.equal(backwardClock.mark('confirm_request_terminal','RETURNED').elapsedMilliseconds,1);
+assert.equal(backwardFacts.length,2,'backward wall-anchored observation is not emitted');
+const overflowing=createRecurringClockRecorder({now:()=>Number.MAX_SAFE_INTEGER-1,
+ deadlineMilliseconds:1200000});
+assert.equal(overflowing.mark('published_child_pre_call','STARTED'),null);
+const overflowThenValid=[Number.MAX_SAFE_INTEGER-1,1000];
+const retryAfterOverflow=createRecurringClockRecorder({now:()=>overflowThenValid.shift(),
+ deadlineMilliseconds:1200000});
+assert.equal(retryAfterOverflow.mark('published_child_pre_call','STARTED'),null);
+assert.equal(retryAfterOverflow.mark('published_child_terminal','RETURNED').originEpochMilliseconds,1000,
+ 'rejected overflowing origin must not pin later observations');
+assert.equal(createRecurringClockRecorder({now:()=>NaN}).mark('confirm_origin','STARTED'),null);
+assert.equal(createRecurringClockRecorder({now:()=>({valueOf(){throw Error('coercion');}})}).mark('confirm_origin','STARTED'),null);
 const finite=[];const confirmClock=createRecurringClockRecorder({now:(()=>{let t=42_000;return()=>t+=10;})(),
  emit:fact=>{finite.push(fact);throw Error('stdout unavailable');}});
 confirmClock.mark('confirm_origin','STARTED');

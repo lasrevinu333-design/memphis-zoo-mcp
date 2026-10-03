@@ -2,10 +2,10 @@
 // Never return SQL values, arguments, credential data or error text.
 import {types} from 'node:util';
 
-// Test-only finite clock facts. Node's monotonic clock is anchored at its
-// timeOrigin, so independently bounded fixture processes can align phases
-// without recording SQL arguments, request bodies, or credentials.
-const CLOCK_PHASES=new Set(['published_child_spawn','published_child_terminal',
+// Test-only wall-anchored observations, not clock authority or exact
+// cross-process synchronization. The parent mark precedes execFileSync; its
+// derived deadline is an estimate, not the OS child's timeout origin.
+const CLOCK_PHASES=new Set(['published_child_pre_call','published_child_terminal',
  'confirm_origin','confirm_response_finished','confirm_response_closed',
  'confirm_request_terminal','confirm_transport_failure','confirm_fixture_finally',
  'confirm_process_exit']);
@@ -16,15 +16,21 @@ export function createRecurringClockRecorder({now=()=>performance.timeOrigin+per
  let origin=null;
  return Object.freeze({mark(phase,outcome) {
   if(!CLOCK_PHASES.has(phase)||!CLOCK_OUTCOMES.has(outcome))return null;
-  let epoch;
-  try{epoch=Math.round(now());}catch{return null;}
+  let raw;
+  try{raw=now();}catch{return null;}
+  if(typeof raw!=='number')return null;
+  const epoch=Math.round(raw);
   if(!Number.isSafeInteger(epoch)||epoch<0)return null;
-  if(origin===null)origin=epoch;
-  const fact={phase,outcome,epochMilliseconds:epoch,originEpochMilliseconds:origin,
-   elapsedMilliseconds:epoch-origin,
-   ...(Number.isSafeInteger(deadlineMilliseconds)&&deadlineMilliseconds>0
-    ?{deadlineEpochMilliseconds:origin+deadlineMilliseconds}:{})};
-  if(!Number.isSafeInteger(fact.deadlineEpochMilliseconds??0))return null;
+  const first=origin===null?epoch:origin;
+  const elapsed=epoch-first;
+  if(!Number.isSafeInteger(elapsed)||elapsed<0)return null;
+  const estimatedDeadline=Number.isSafeInteger(deadlineMilliseconds)&&deadlineMilliseconds>0
+   ?first+deadlineMilliseconds:null;
+  if(estimatedDeadline!==null&&!Number.isSafeInteger(estimatedDeadline))return null;
+  const fact={phase,outcome,epochMilliseconds:epoch,originEpochMilliseconds:first,
+   elapsedMilliseconds:elapsed,
+   ...(estimatedDeadline!==null?{estimatedDeadlineEpochMilliseconds:estimatedDeadline}:{})};
+  if(origin===null)origin=first;
   try{emit(fact);}catch{}
   return fact;
  }});
@@ -33,7 +39,7 @@ export function createRecurringClockRecorder({now=()=>performance.timeOrigin+per
 export function runRecurringClockedChild(work,clock) {
  if(typeof work!=='function')throw new TypeError('bounded child work required');
  const mark=(phase,outcome)=>{try{clock?.mark?.(phase,outcome);}catch{}};
- mark('published_child_spawn','STARTED');
+ mark('published_child_pre_call','STARTED');
  let outcome='RETURNED';
  try{return work();}
  catch(error){outcome='THREW';throw error;}
