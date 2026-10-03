@@ -409,10 +409,10 @@ export async function compileStaticWeeklySchedule(input = {}) {
   result.canonicalAuthority.databaseContentIdentity = postgresJsonbContentDigest(authorityWithoutIdentity);
   result.authorityDigest = postgresJsonbContentDigest(result.canonicalAuthority);
   const replay = replayProjection(result);
-  const canonicalReplay = canonicalJson(replay);
-  // Keep only the digest. Returning canonicalReplay duplicated the complete
-  // result byte-for-byte after its size check and defeated the envelope cap.
-  return { ...result, replayDigest: sha256Hex(canonicalReplay) };
+  // Preserve the exact canonical replay identity without retaining a second
+  // whole-result string solely for hashing. The existing digest helper keeps
+  // its legacy serializer fallback where incremental hashing is unavailable.
+  return { ...result, replayDigest: contentDigest(replay) };
 }
 
 export async function verifyStaticWeeklyReplay(input, expectedDigest) {
