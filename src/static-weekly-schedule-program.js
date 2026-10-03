@@ -472,8 +472,19 @@ export function postgresJsonbCanonicalText(value) {
   // locale/numeric comparator can disagree for keys such as `tier_10` and
   // `tier_2`, which would make a JavaScript digest bind a different document
   // than PostgreSQL's exact JSONB boundary.
-  const utf8Length = (entry) => new TextEncoder().encode(entry).length;
-  const keys = Object.keys(value || {}).sort((left, right) => utf8Length(left) - utf8Length(right) || bytewiseCompare(left, right));
+  // Encode each string key once in this object only.  These records contain
+  // no values and never survive the call; recursive values/getters are still
+  // read in the same stable sorted order (including equal replacement-byte
+  // encodings for distinct lone-surrogate keys).
+  const encoder = new TextEncoder();
+  const keys = Object.keys(value || {}).map((key) => ({ key, bytes: encoder.encode(key) })).sort((left, right) => {
+    const lengthDifference = left.bytes.length - right.bytes.length;
+    if (lengthDifference) return lengthDifference;
+    for (let index = 0; index < left.bytes.length; index += 1) {
+      if (left.bytes[index] !== right.bytes[index]) return left.bytes[index] < right.bytes[index] ? -1 : 1;
+    }
+    return 0;
+  }).map((entry) => entry.key);
   return `{${keys.map((key) => `${JSON.stringify(key)}: ${postgresJsonbCanonicalText(value[key])}`).join(", ")}}`;
 }
 
