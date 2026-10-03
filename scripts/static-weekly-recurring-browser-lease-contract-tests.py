@@ -91,6 +91,11 @@ with tempfile.TemporaryDirectory(prefix='mz-browser-launcher-pure-') as director
         raise AssertionError('preexisting top-level dependency symlink accepted')
     except ValueError as error:
         assert 'must not preexist' in str(error)
+    never_created = launcher.new_backend_dependency_layout(test_backend)
+    preexisting_receipt, preexisting_failures = {}, []
+    launcher.record_backend_dependency_cleanup(never_created, preexisting_receipt, preexisting_failures)
+    assert preexisting_receipt['backend_dependency_cleanup'] == 'UNPROVEN'
+    assert preexisting_failures == ['backend_dependency_cleanup:RuntimeError']
     (test_backend / 'node_modules').unlink()
     layout = launcher.install_backend_dependencies(test_backend, smoke=False, clean=lambda: True)
     try:
@@ -124,6 +129,33 @@ with tempfile.TemporaryDirectory(prefix='mz-browser-launcher-pure-') as director
     except ValueError as error:
         assert 'changed clean source' in str(error)
     assert not os.path.lexists(test_backend / 'node_modules'), 'partial setup must clean exact owned links'
+    # A setup error remains the original error even when an unexpected file
+    # blocks cleanup. The caller retains the layout and cannot claim absent.
+    retained = launcher.new_backend_dependency_layout(test_backend)
+    foreign = test_backend / 'node_modules' / 'unexpected-from-test'
+    class SetupFailure(RuntimeError):
+        pass
+    original = SetupFailure('synthetic setup failure')
+    def fail_after_foreign_file():
+        foreign.write_text('synthetic')
+        raise original
+    try:
+        launcher.install_backend_dependencies(test_backend, smoke=False,
+            clean=fail_after_foreign_file, layout=retained)
+        raise AssertionError('setup error swallowed')
+    except SetupFailure as error:
+        assert error is original
+    assert retained['created'] and not retained['cleaned']
+    assert retained['setup_cleanup_error'] == 'RuntimeError'
+    assert len(retained['links']) == 5 and all(member.is_symlink() for member, _ in retained['links'])
+    failed_receipt, failed_cleanup = {}, []
+    launcher.record_backend_dependency_cleanup(retained, failed_receipt, failed_cleanup)
+    assert failed_receipt['backend_dependency_cleanup'] == 'UNPROVEN'
+    assert failed_cleanup == ['backend_dependency_cleanup:RuntimeError']
+    assert foreign.read_text() == 'synthetic', 'foreign file must not be removed'
+    foreign.unlink()  # exact file created by this synthetic test only
+    assert launcher.cleanup_backend_dependencies(retained) == 'EXACT_OWNED_LINKS_AND_DIRECTORIES_REMOVED'
+    assert not os.path.lexists(test_backend / 'node_modules')
     with (test_backend / 'package-lock.json').open('ab') as stream:
         stream.write(b' ')
     try:
@@ -197,7 +229,21 @@ with tempfile.TemporaryDirectory(prefix='mz-browser-launcher-pure-') as director
 real_backend = SOURCE.parent.parent
 before = subprocess.check_output(['git', 'status', '--porcelain'], cwd=real_backend, text=True)
 assert not os.path.lexists(real_backend / 'node_modules')
-real_layout = launcher.install_backend_dependencies(real_backend, clean=lambda: True)
+previous_node_options = os.environ.get('NODE_OPTIONS')
+previous_dotenv_path = os.environ.get('DOTENV_CONFIG_PATH')
+os.environ['NODE_OPTIONS'] = '--invalid-test-only-node-option'
+os.environ['DOTENV_CONFIG_PATH'] = '/definitely-not-this-test-dotenv-file'
+try:
+    real_layout = launcher.install_backend_dependencies(real_backend, clean=lambda: True)
+finally:
+    if previous_node_options is None:
+        os.environ.pop('NODE_OPTIONS', None)
+    else:
+        os.environ['NODE_OPTIONS'] = previous_node_options
+    if previous_dotenv_path is None:
+        os.environ.pop('DOTENV_CONFIG_PATH', None)
+    else:
+        os.environ['DOTENV_CONFIG_PATH'] = previous_dotenv_path
 try:
     assert len(real_layout['links']) == 5, 'actual reachable fixture package closure'
 finally:
@@ -216,7 +262,9 @@ for required in ('BrowserLeaseClient()', 'client.acquire(', 'client.renew(',
         'assertCurrentManager219MigrationSet();',
         'browser-stage-cleanup.json', 'owned_container_absent(child.pid)',
         'browser-process.json', 'stop_exact_marked_processes(',
-        'install_backend_dependencies(backend)', 'cleanup_backend_dependencies(dependency_layout)',
+        'install_backend_dependencies(backend, layout=dependency_layout)',
+        'record_backend_dependency_cleanup(dependency_layout, receipt, failures)',
+        "env={'PATH': '/usr/bin:/bin', 'LANG': 'C.UTF-8'}",
         'child_process_group_absent', 'source-receipt.json'):
     assert required in source, required
 print('PASS recurring browser lease launcher pure source, private receipt, and silent-child bound contracts')

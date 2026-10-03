@@ -89,10 +89,25 @@ def validate_backend_dependency_source(backend, installed=INSTALLED_BACKEND):
     return source
 
 
+def new_backend_dependency_layout(backend):
+    """Give the caller custody before the first filesystem mutation."""
+    return {'root': backend / 'node_modules', 'created': False, 'cleaned': False,
+        'directories': [], 'links': [], 'packages': tuple(BACKEND_PACKAGES),
+        'setup_cleanup_error': None}
+
+
 def cleanup_backend_dependencies(layout):
     """Remove only the exact links and directories created by this invocation."""
     if layout is None:
         return 'NOT_CREATED'
+    if not layout['created']:
+        if os.path.lexists(layout['root']):
+            raise RuntimeError('unowned backend dependency root exists after setup')
+        return 'NOT_CREATED'
+    if layout['cleaned']:
+        if os.path.lexists(layout['root']):
+            raise RuntimeError('cleaned backend dependency root reappeared')
+        return 'EXACT_OWNED_LINKS_AND_DIRECTORIES_REMOVED'
     # Validate the complete owned tree before unlinking even one member. A
     # substituted link or unexpected file must not cause partial cleanup.
     for directory in layout['directories']:
@@ -113,18 +128,32 @@ def cleanup_backend_dependencies(layout):
         if not directory.is_dir() or directory.is_symlink() or list(directory.iterdir()):
             raise RuntimeError('owned backend dependency directory changed before cleanup')
         directory.rmdir()
+    layout['cleaned'] = True
     return 'EXACT_OWNED_LINKS_AND_DIRECTORIES_REMOVED'
 
 
-def install_backend_dependencies(backend, installed=INSTALLED_BACKEND, smoke=True, clean=None):
+def record_backend_dependency_cleanup(layout, receipt, failures):
+    """Never report absent after a caller-owned partial setup failed cleanup."""
+    try:
+        receipt['backend_dependency_cleanup'] = cleanup_backend_dependencies(layout)
+    except BaseException as error:
+        receipt['backend_dependency_cleanup'] = 'UNPROVEN'
+        failures.append('backend_dependency_cleanup:' + type(error).__name__)
+
+
+def install_backend_dependencies(backend, installed=INSTALLED_BACKEND, smoke=True, clean=None,
+        layout=None):
     """Use a real ignored node_modules directory, never an untracked root link."""
     source = validate_backend_dependency_source(backend, installed)
     root = backend / 'node_modules'
     if os.path.lexists(root):
         raise ValueError('backend dependency directory must not preexist')
-    layout = {'directories': [], 'links': [], 'packages': tuple(BACKEND_PACKAGES)}
+    layout = layout if layout is not None else new_backend_dependency_layout(backend)
+    if layout['root'] != root or layout['created'] or layout['directories'] or layout['links']:
+        raise ValueError('backend dependency layout must be fresh and caller bound')
     try:
         root.mkdir(mode=0o700)
+        layout['created'] = True
         layout['directories'].append(root)
         scope = root / '@supabase'
         scope.mkdir(mode=0o700)
@@ -147,11 +176,15 @@ def install_backend_dependencies(backend, installed=INSTALLED_BACKEND, smoke=Tru
                 "const require=createRequire(process.cwd()+'/package.json');"
                 "require.resolve('highs');"
             )
-            subprocess.check_output(['node', '--input-type=module', '-e', code], cwd=backend,
+            subprocess.check_output(['/usr/bin/node', '--input-type=module', '-e', code], cwd=backend,
+                env={'PATH': '/usr/bin:/bin', 'LANG': 'C.UTF-8'},
                 text=True, timeout=20, stderr=subprocess.STDOUT)
         return layout
     except BaseException:
-        cleanup_backend_dependencies(layout)
+        try:
+            cleanup_backend_dependencies(layout)
+        except BaseException as cleanup_error:
+            layout['setup_cleanup_error'] = type(cleanup_error).__name__
         raise
 
 
@@ -400,7 +433,7 @@ def run(plan_path, expected_sha):
         'lease_generation_id': lease.generation_id, 'shared_browser_accessed': False,
         'production': False, 'phone_accessed': False, 'independent_audit': False}
     child = None
-    dependency_layout = None
+    dependency_layout = new_backend_dependency_layout(backend)
     run_id = secrets.token_hex(16)
     receipt['browser_run_id'] = run_id
     released = False
@@ -436,7 +469,7 @@ def run(plan_path, expected_sha):
         signal.signal(signum, interrupt)
     execution_error = None
     try:
-        dependency_layout = install_backend_dependencies(backend)
+        install_backend_dependencies(backend, layout=dependency_layout)
         receipt['backend_dependency_layout'] = {
             'kind': 'OWNED_REAL_IGNORED_DIRECTORY_EXACT_PACKAGE_LINKS',
             'packages': list(dependency_layout['packages']),
@@ -502,11 +535,9 @@ def run(plan_path, expected_sha):
                 run_id, browser_record, child.pid if child else None, os.getpid())
         except BaseException as error:
             failures.append('exact_browser_cleanup:' + type(error).__name__)
-        try:
-            receipt['backend_dependency_cleanup'] = cleanup_backend_dependencies(dependency_layout)
-        except BaseException as error:
-            receipt['backend_dependency_cleanup'] = 'UNPROVEN'
-            failures.append('backend_dependency_cleanup:' + type(error).__name__)
+        if dependency_layout['setup_cleanup_error'] is not None:
+            receipt['backend_dependency_setup_cleanup_error'] = dependency_layout['setup_cleanup_error']
+        record_backend_dependency_cleanup(dependency_layout, receipt, failures)
         receipt['child_process_group_absent'] = child is None or group_absent(child.pid)
         if not receipt['child_process_group_absent']:
             failures.append('child_group_still_present')
