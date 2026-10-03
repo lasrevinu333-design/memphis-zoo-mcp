@@ -6,7 +6,7 @@ import {canonicalJson,contentDigest,installStaticWeeklySha256HexAccelerator} fro
 import {createMorningSolverTestInput} from './static-weekly-recurring-morning-solver-tests.mjs';
 import {createRecurringMorningWeekSourceBasis,assertRecurringMorningWeekSourceBasis,deriveVerifiedRecurringMorningWeekCandidate,assertRecurringMorningWeekCandidate,
  createRecurringPhaseSourceBasis,deriveScalableCanonicalRecurringWeekCandidate,recurringPatternFromFinalPhaseSource,
- recurringMorningWeekSemanticFacts} from '../src/static-weekly-recurring-staffing-adaptation.js';
+ recurringMorningWeekSemanticFacts,currentPatternFromPublishedReadback} from '../src/static-weekly-recurring-staffing-adaptation.js';
 const clone=structuredClone;
 let accelerated=false;const accelerate=()=>{if(!accelerated){installStaticWeeklySha256HexAccelerator(x=>createHash('sha256').update(x).digest('hex'));accelerated=true;}};
 export function createCurrentMorningIntegrationFixture(count=6){
@@ -126,16 +126,20 @@ export async function runRecurringMorningIntegrationWeekTests({combined=false}={
  const result={status:'PASS',checks,scope:combined?'current-six actual morning + late final canonical':'current-six seven-day morning canonical',
   sharedAdmissionBudgetMs:30_000,selectedPackages:161,days:7,elapsedMs:Math.round(performance.now()-started),workerIpc:false,sql:false,published:false};console.log(JSON.stringify(result));return result;
 }
-export async function runRecurringMorningFusedSixTest({count=6,targetEffectiveDate='2026-10-05'}={}){
+export function createCurrentMorningIntegrationRequest({count=6,targetEffectiveDate='2026-10-05'}={}){
  const fixture=createCurrentMorningIntegrationFixture(count),input=fixture.input,source=input.planningInput.source,config=input.planningInput.ownerConfig,
-  {createStaticWeeklyCompilerRuntime}=await import('../src/static-weekly-schedule-compiler-runtime.js'),
-  {assertRecurringMorningCommitmentCandidate}=await import('../src/static-weekly-recurring-week-commitment.js'),
-  {assertRecurringAdmissionCandidate}=await import('../src/static-weekly-recurring-preview.js');
- const managerSnapshot={week_start:targetEffectiveDate,authority_revision:42,current_publication:{publication_id:source.version.publicationId},
+  managerSnapshot={week_start:targetEffectiveDate,authority_revision:42,current_publication:{publication_id:source.version.publicationId},
   roster:Object.values(config.slots).map(s=>({slot_id:s.slotId,contractor_capacity:false,
    incumbencies:source.slots.find(r=>r.id===s.slotId).incumbencies.map(p=>({person_id:p.personId,person_name:p.displayName,effective_start:p.effectiveStart,effective_end:p.effectiveEnd})),
    week_staffing:s.vacancy?[]:s.workDays.map(d=>({service_date:new Date(Date.parse(`${targetEffectiveDate}T12:00:00Z`)+((d+6)%7)*86400000).toISOString().slice(0,10),person_id:s.personId,employee_active:true}))}))};
- const request={publishedSource:{source_id:'73000000-0000-4000-8000-000000000001',publication_id:source.version.publicationId,authority_revision:42,compiler_input:source},managerSnapshot,effectiveDate:targetEffectiveDate,expectedRevision:42},
+ const request={publishedSource:{source_id:'73000000-0000-4000-8000-000000000001',publication_id:source.version.publicationId,authority_revision:42,compiler_input:source},managerSnapshot,effectiveDate:targetEffectiveDate,expectedRevision:42};
+ return {request,fixture};
+}
+export async function runRecurringMorningFusedSixTest({count=6,targetEffectiveDate='2026-10-05'}={}){
+ const {request,fixture}=createCurrentMorningIntegrationRequest({count,targetEffectiveDate}),
+  {createStaticWeeklyCompilerRuntime}=await import('../src/static-weekly-schedule-compiler-runtime.js'),
+  {assertRecurringMorningCommitmentCandidate}=await import('../src/static-weekly-recurring-week-commitment.js'),
+  {assertRecurringAdmissionCandidate}=await import('../src/static-weekly-recurring-preview.js'),
   before=canonicalJson(request),runtime=createStaticWeeklyCompilerRuntime(),started=performance.now();
  try{
   const preview=await runtime.prepareRecurringCandidate(request);assert.equal(assertRecurringMorningCommitmentCandidate(preview),true);
@@ -154,8 +158,40 @@ export async function runRecurringMorningFusedSixTest({count=6,targetEffectiveDa
    elapsedMs:Math.round(performance.now()-started),actualFreshPrivateWorker:true,sql:false,publication:false};console.log(JSON.stringify(receipt));return receipt;
  }finally{await runtime.shutdown();}
 }
+// Owning diagnostic ONLY: preserve the same current-source/calendar binding,
+// reconstruct the seven-day morning seed once, inspect ONLY initial late days
+// 0..2 under the SAME shared30s budget, and stop before any fourth-day solve.
+// It never publishes, validates a whole week, or turns UNKNOWN into test PASS.
+export async function runRecurringMorningEightDiagnostic(){
+ accelerate();const started=performance.now(),{request,fixture}=createCurrentMorningIntegrationRequest({count:8,targetEffectiveDate:'2026-10-12'}),
+  bound=currentPatternFromPublishedReadback({...request,templateConfig:fixture.original.planningInput.ownerConfig,fullOwners:fixture.input.fullOwners}),
+  basis=createRecurringMorningWeekSourceBasis({registeredSource:request.publishedSource.compiler_input,currentConfig:bound.currentConfig,targetEffectiveDate:request.effectiveDate}),
+  {initializeStaticWeeklySolverEngine}=await import('../src/static-weekly-schedule-solver-worker.js'),
+  solver=await initializeStaticWeeklySolverEngine({maxOldGenerationSizeMb:128,maxSemiSpaceSizeMb:8,maxWasmMemoryPages:1536}),
+  morning=deriveVerifiedRecurringMorningWeekCandidate({basis,fullOwners:fixture.input.fullOwners,solver});
+ assert.equal(morning.status,'UNREGISTERED_VERIFIED_RECURRING_MORNING_WEEK','diagnostic morning seed unavailable; no guessed seed');
+ const morningElapsedMs=Math.round(performance.now()-started),phaseBasis=createRecurringPhaseSourceBasis({registeredSource:request.publishedSource.compiler_input,
+  patternConfig:bound.currentConfig,morningWeek:morning,morningBasis:basis,fullOwners:fixture.input.fullOwners}),seen=new Set(),calls=[];
+ const late=deriveScalableCanonicalRecurringWeekCandidate({source:phaseBasis.source,currentConfig:phaseBasis.ownerConfig,fullOwners:fixture.input.fullOwners,
+  phaseSourceBasis:phaseBasis,solver:{solve(lp,options){
+   const descriptor=options.modelAttestation?.descriptorDigest;assert.ok(descriptor,'diagnostic requires actual pinned phase attestation');
+   if(!seen.has(descriptor)&&seen.size===3)throw new Error('DIAGNOSTIC_STOP_BEFORE_FOURTH_DAY_SOLVE_NOT_A_WEEK_PROOF');
+   seen.add(descriptor);const t=performance.now(),result=solver.solve(lp,{...options,timeLimitSeconds:options.timeLimitSeconds||options.time_limit||30});
+   calls.push({descriptorDigest:descriptor,modelDigest:options.modelAttestation.modelDigest,elapsedMs:Math.round(performance.now()-t),
+    timeLimitSeconds:result.options?.time_limit,status:result.result?.Status,rawReceiptDigest:result.evidence?.rawReceiptDigest});return result;
+  }}});
+ const receipt={status:'DIAGNOSTIC_ONLY_NO_ACCEPTANCE',request,basisDigest:basis.basisDigest,morningStatus:morning.status,morningProofDigest:morning.proofDigest,
+  morningFacts:recurringMorningWeekSemanticFacts(morning),morningElapsedMs,phaseBasis,late,calls,totalElapsedMs:Math.round(performance.now()-started),
+  resourceLimits:{maxOldGenerationSizeMb:128,maxSemiSpaceSizeMb:8,maxWasmMemoryMb:96,stackSizeKb:4096,sharedMorningBudgetMs:30000,sharedLateBudgetMs:30000},
+  productionRosterClaim:false,publication:false,sql:false,wholeWeekProof:false,solverOptimumReused:false};
+ if(process.env.CUSTODIAL_MORNING_DIAGNOSTIC_PROOF_PATH)fs.writeFileSync(process.env.CUSTODIAL_MORNING_DIAGNOSTIC_PROOF_PATH,JSON.stringify(receipt,null,2)+'\n',{flag:'wx'});
+ console.log(JSON.stringify({status:receipt.status,lateStatus:late.status,stage:late.stage,dayOfWeek:late.dayOfWeek,
+  reason:late.reason||late.proofs.at(-1)?.reason,lowerBoundReason:late.proofs.at(-1)?.lowerBoundEvidence?.reason,
+  morningElapsedMs,solverCalls:calls.length,totalElapsedMs:receipt.totalElapsedMs,wholeWeekProof:false}));return receipt;
+}
 if(process.argv[1]===fileURLToPath(import.meta.url)){
- if(process.argv.includes('--target-calendar'))runRecurringMorningTargetCalendarTests();
+ if(process.argv.includes('--diagnose-eight'))await runRecurringMorningEightDiagnostic();
+ else if(process.argv.includes('--target-calendar'))runRecurringMorningTargetCalendarTests();
  else if(process.argv.includes('--fused-six')||process.argv.includes('--fused-seven')||process.argv.includes('--fused-eight'))await runRecurringMorningFusedSixTest({count:process.argv.includes('--fused-eight')?8:process.argv.includes('--fused-seven')?7:6,
   targetEffectiveDate:process.argv.includes('--target-next-week')?'2026-10-12':'2026-10-05'});
  else if(process.argv.includes('--week')||process.argv.includes('--combined'))await runRecurringMorningIntegrationWeekTests({combined:process.argv.includes('--combined')});
