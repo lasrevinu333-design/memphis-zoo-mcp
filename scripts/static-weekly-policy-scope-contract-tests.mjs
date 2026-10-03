@@ -23,6 +23,16 @@ const sourcePins={
  'src/static-weekly-schedule-verifier.js':'4ffdc408d4cc6414c3ec9779d3b70ecc0ef61244dd17b6554d72ebef61074740',
  'config/custodial-six-person-static-20261005.json':'40da4e1d4cce52b2361b5403b7e5e4477ca00def0fd3649a1d76dacb48422f30'
 };
+// The retained fixture above remains bound to its ORIGINAL executed source.
+// d85e4b7 changed only PostgreSQL key encoding; 054f181 added the byte-identical
+// incremental digest path. Keep historical pins immutable and bind current
+// generation separately. The called key-order/stream suites prove their
+// representation contracts; below both complete retained descriptors/model
+// bases must still equal freshly generated current programs, not just a hash.
+const currentSourcePins=Object.freeze({...sourcePins,
+ 'src/static-weekly-schedule-program.js':'619fee19eb136aaddc46ec1be15acc4be5bf7b853267aa60bfe5675d726dcddf',
+ 'src/static-weekly-schedule-model.js':'23fd769ded7a126c6dc61c0421a7a2bb96e0073cbae048440910de192d16738e'
+});
 const retainedPins={
  baseline:{
   input:'87df062ab96741f774e12d6f2736a51f2424d13053cfbeef3e9966f90e1366f3',
@@ -142,9 +152,10 @@ export function runStaticWeeklyPolicyScopeContractTests(){
  const check=(name,fn)=>{fn();checks++;console.log('PASS',name);};
  const bytes=fs.readFileSync(fixtureUrl),packet=JSON.parse(bytes);
  check('exact committed fixture and extraction schema',()=>{assert.equal(sha(bytes),EXPECTED_FIXTURE_SHA256);assert.equal(packet.schema,fixtureSchema);});
- check('exact two cases and immutable source pins',()=>{
+ check('exact two cases, immutable historical pins and explicit current source pins',()=>{
   assert.deepEqual(Object.keys(packet.cases),['baseline','one']);assert.deepEqual(packet.sourcePins,sourcePins);
-  for(const [file,digest]of Object.entries(sourcePins))assert.equal(sha(fs.readFileSync(new URL('../'+file,import.meta.url))),digest,file);
+  assert.deepEqual(Object.keys(currentSourcePins),Object.keys(sourcePins));
+  for(const [file,digest]of Object.entries(currentSourcePins))assert.equal(sha(fs.readFileSync(new URL('../'+file,import.meta.url))),digest,file);
  });
  check('optimality and whole-clause limits stay explicit',()=>{
   assert.equal(packet.limitations.independentlyProvesOptimality,false);
@@ -231,7 +242,9 @@ export function runStaticWeeklyPolicyScopeContractTests(){
  });
  check('exactly two pure null-witness program generations ran',()=>assert.equal(generations,2));
  const receipt={status:'PASS',checks,generations,elapsedMs:Math.round(performance.now()-started),
-  fixtureSha256:sha(bytes),sourcePins,caseTierCounts:Object.fromEntries(Object.entries(programs).map(([n,p])=>[n,p.descriptor.tiers.length])),
+  fixtureSha256:sha(bytes),sourcePins,currentSourcePins,
+  sourcePinScope:'sourcePins are immutable retained execution; currentSourcePins bind fresh generation; no new solver proof',
+  caseTierCounts:Object.fromEntries(Object.entries(programs).map(([n,p])=>[n,p.descriptor.tiers.length])),
   independentlyProvesOptimality:false,solver:false,worker:false,sql:false,publication:false,
   scope:'Exact static-preservation versus dated-absence canonical policy/order/binding regression only; remaining SCH012 design/013/014/016/022 gaps retained'};
  console.log(JSON.stringify(receipt));return receipt;
