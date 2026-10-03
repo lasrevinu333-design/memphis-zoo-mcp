@@ -10,7 +10,7 @@ assert.equal(receipt.fixtureSha256, '197d8eb0078f2bc9acb3cfb667c64874c8e41944f60
 assert.equal(receipt.sourcePins['src/static-weekly-schedule-program.js'],
   '885825644a37ae8e601e1639d987d0016d61d9a1beff49e6e0340342391f1186');
 assert.equal(receipt.currentSourcePins['src/static-weekly-schedule-program.js'],
-  '6feeea1894da194d26b315d4f923b88bcd39d901f0df812466446d6b3d4b76b9');
+  'b2e70ef652ec4aef05252d1890136f9fa66a5fa2ac97aba40d6b76d0815be068');
 assert.equal(receipt.currentSourcePins['src/static-weekly-schedule-model.js'],
   '23fd769ded7a126c6dc61c0421a7a2bb96e0073cbae048440910de192d16738e');
 assert.equal(receipt.currentSourcePins['src/static-weekly-schedule-compiler.js'],

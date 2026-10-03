@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {reconstructProgramBeforeOperationDeadline} from './static-weekly-operation-deadline-ci-wiring.mjs';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
@@ -108,7 +109,7 @@ export async function runLunchFusedSeedConstructionTests() {
     ['src/static-weekly-schedule-model.js','23fd769ded7a126c6dc61c0421a7a2bb96e0073cbae048440910de192d16738e'],
     ['src/static-weekly-schedule-program.js','6feeea1894da194d26b315d4f923b88bcd39d901f0df812466446d6b3d4b76b9'],
     ['src/static-weekly-schedule-compiler.js','593893e4daac566fa665bb987af17ce803414c92ebd59abf6e8a24aed2361f1a'],
-  ]) check('unchanged independently bound dependency '+path,sha(source(path))===pin);
+  ]) check('unchanged independently bound dependency '+path,sha(path==='src/static-weekly-schedule-program.js'?reconstructProgramBeforeOperationDeadline(source(path)):source(path))===pin);
   for (const key of Object.keys(predecessor)) {
     const altered = {...current,[key]:current[key]+'\n// unexplained drift\n'};
     assert.throws(()=>assertCurrentPins(altered),/reviewed current source pin/);

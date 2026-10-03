@@ -501,7 +501,12 @@ function assertModelBasisCalledWiring(wrapper, owningTest) {
   assert.equal(createHash('sha256').update(wrapper).digest('hex'),
     '43d1eeed288c6ec1e23174d8cd8a7154648783b84e20c7c6adf05239324a5a0a',
     'exact isolated called wrapper, clean environment, five modes and finite limits required');
-  assert.equal(createHash('sha256').update(owningTest).digest('hex'),
+  const deadlineImport="import {reconstructProgramBeforeOperationDeadline} from './static-weekly-operation-deadline-ci-wiring.mjs';\n";
+  const deadlineRead="const text=reconstructProgramBeforeOperationDeadline(readFileSync(sourceUrl,'utf8'));";
+  assert.equal(owningTest.split(deadlineImport).length,2,'one exact deadline binding import');
+  assert.equal(owningTest.split(deadlineRead).length,2,'one exact deadline-only reconstruction');
+  const retainedTest=owningTest.replace(deadlineImport,'').replace(deadlineRead,"const text=readFileSync(sourceUrl,'utf8');");
+  assert.equal(createHash('sha256').update(retainedTest).digest('hex'),
     '4c66d380be77faea13dc1cd2fe965982a9d7a131c33458acd099d66458073ccd',
     'exact two-link full-hash predecessor chain and complete model comparison required');
 }
@@ -686,7 +691,12 @@ function assertLunchFusionCalledWiring(sourceSuite,wrapper,owningTest) {
   assert.equal(createHash('sha256').update(wrapper).digest('hex'),
     'a03960ac51fc0729716385390e8e59259fd2a16e10bf6e52caad89e0d5c3ae49',
     'called actual canonical proof with fixed child limits and complete35/114/two-pass receipts required');
-  assert.equal(createHash('sha256').update(owningTest).digest('hex'),
+  const deadlineImport="import {reconstructProgramBeforeOperationDeadline} from './static-weekly-operation-deadline-ci-wiring.mjs';\n";
+  const deadlineRead="sha(path==='src/static-weekly-schedule-program.js'?reconstructProgramBeforeOperationDeadline(source(path)):source(path))";
+  assert.equal(owningTest.split(deadlineImport).length,2,'one exact deadline binding import');
+  assert.equal(owningTest.split(deadlineRead).length,2,'one exact deadline-only dependency reconstruction');
+  const retainedTest=owningTest.replace(deadlineImport,'').replace(deadlineRead,'sha(source(path))');
+  assert.equal(createHash('sha256').update(retainedTest).digest('hex'),
     '572ec3caa9d48658f3e20230bcef25c8f3517612a740da08c4deb9bb1cb3c7f8',
     'exact pure predecessor and actual canonical identity/mutation proof required');
 }

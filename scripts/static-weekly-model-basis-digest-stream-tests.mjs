@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {reconstructProgramBeforeOperationDeadline} from './static-weekly-operation-deadline-ci-wiring.mjs';
 import {createHash} from 'node:crypto';
 import {types,isDeepStrictEqual} from 'node:util';
 import {readFileSync,mkdtempSync,writeFileSync,unlinkSync,rmdirSync} from 'node:fs';
@@ -20,7 +21,7 @@ const policyFixtureSha='197d8eb0078f2bc9acb3cfb667c64874c8e41944f600bbaa026675d4
 const sourceUrl=new URL('../src/static-weekly-schedule-program.js',import.meta.url);
 const oldSite='  const modelBasisDigest = sha256Hex(canonicalJson(modelBasis));';
 const newSite='  const modelBasisDigest = contentDigest(modelBasis);';
-const text=readFileSync(sourceUrl,'utf8');
+const text=reconstructProgramBeforeOperationDeadline(readFileSync(sourceUrl,'utf8'));
 const currentSha='6feeea1894da194d26b315d4f923b88bcd39d901f0df812466446d6b3d4b76b9';
 const constraintsPredecessorSha='b29306b218a68d1907bf0db3795460be90ac65f55566d69117b51ca0ce80c44d';
 const constraintsOldSite='sha256Hex(canonicalJson(constraints.map((constraint) => ({ name: constraint.name, terms: constraint.terms, relation: constraint.relation, value: constraint.value }))))';

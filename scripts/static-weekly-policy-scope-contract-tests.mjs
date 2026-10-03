@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {reconstructProgramBeforeOperationDeadline} from './static-weekly-operation-deadline-ci-wiring.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
@@ -33,7 +34,7 @@ const sourcePins={
 // bases must still equal freshly generated current programs, not just a hash.
 const currentSourcePins=Object.freeze({...sourcePins,
  'src/static-weekly-schedule-verifier.js':'1700488fafa6e7683aed9ba11e1d6b0eb9800ed4a19d2713410a987417bfcabf',
- 'src/static-weekly-schedule-program.js':'6feeea1894da194d26b315d4f923b88bcd39d901f0df812466446d6b3d4b76b9',
+ 'src/static-weekly-schedule-program.js':'b2e70ef652ec4aef05252d1890136f9fa66a5fa2ac97aba40d6b76d0815be068',
  'src/static-weekly-schedule-compiler.js':'593893e4daac566fa665bb987af17ce803414c92ebd59abf6e8a24aed2361f1a',
  'src/static-weekly-schedule-model.js':'23fd769ded7a126c6dc61c0421a7a2bb96e0073cbae048440910de192d16738e'
 });
@@ -160,6 +161,9 @@ export function runStaticWeeklyPolicyScopeContractTests(){
   assert.deepEqual(Object.keys(packet.cases),['baseline','one']);assert.deepEqual(packet.sourcePins,sourcePins);
   assert.deepEqual(Object.keys(currentSourcePins),Object.keys(sourcePins));
   for(const [file,digest]of Object.entries(currentSourcePins))assert.equal(sha(fs.readFileSync(new URL('../'+file,import.meta.url))),digest,file);
+  // Prove the complete deadline-only delta; historical fixture pins stay
+  // untouched, and the actual imports above still execute the current60s code.
+  reconstructProgramBeforeOperationDeadline(fs.readFileSync(new URL('../src/static-weekly-schedule-program.js',import.meta.url),'utf8'));
  });
  check('optimality and whole-clause limits stay explicit',()=>{
   assert.equal(packet.limitations.independentlyProvesOptimality,false);
