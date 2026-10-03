@@ -1,6 +1,10 @@
 import { createHash, createHmac, randomBytes, randomInt, randomUUID, timingSafeEqual } from "node:crypto";
 import argon2 from "argon2";
 import { isCanonicalEmployeeKiosk, normalizeDeviceIdentifier, resolveActiveAssignedDevice, resolveCanonicalDevice } from "../device-identity.js";
+// BEGIN native credential observation imports (ordinary auth is unchanged).
+import { isDeepStrictEqual } from "node:util";
+import { parseNativeProviderJson } from "../native-provider-json.js";
+// END native credential observation imports.
 
 const DEVICE_COOKIE_NAME = "memphis_device_credential";
 const DEVICE_SECURITY_COOKIE_NAME = "memphis_device_security_session";
@@ -1085,6 +1089,70 @@ export async function authenticateSeparationContextRequest(req, {
     ||!Array.isArray(context.server_known_open_sessions))return denied();
   return {ok:true,separation_recovery_only:true,context};
 }
+
+// BEGIN native credential observation proof. This is NOT authentication middleware.
+export async function authenticateNativeProviderCredentialObservationRequest(req, {
+  env=process.env, store, runReadOnlySql, now=new Date(),
+}={}) {
+  const deny=(status=403,code='native_credential_observation_proof_invalid')=>{
+    throw Object.assign(new Error(code),{status,code});
+  };
+  const exact=(v,keys)=>v&&Object.getPrototypeOf(v)===Object.prototype
+    &&isDeepStrictEqual(Object.keys(v).sort(),[...keys].sort());
+  // Snapshot ALL transport inputs before the first await. No request/context
+  // mutation, query/body identity fallback, cookie or ordinary credential flag.
+  if(req?.method!=='POST'||req?.originalUrl!=='/employee-notifications-api/native-provider/credential-observation')deny();
+  const headers=Object.freeze({...req.headers});
+  for(const key of ['authorization','origin','x-device-id','x-memphis-app-edition','x-memphis-native-attestation-version',
+    'x-memphis-native-request-id','x-memphis-native-request-timestamp','x-memphis-native-request-attestation'])
+    if(typeof headers[key]!=='string')deny();
+  if(headers.origin!=='https://localhost'||headers['x-memphis-app-edition']!=='custodial'
+    ||typeof headers.authorization!=='string'||!/^Device \S+$/.test(headers.authorization))deny();
+  if(!Buffer.isBuffer(req.scanAuthorityRawBody))deny(400);
+  const raw=Buffer.from(req.scanAuthorityRawBody),parsed=parseNativeProviderJson(raw);
+  if(!isDeepStrictEqual(parsed,req.body)||!exact(parsed,['schema','requester'])
+    ||parsed.schema!=='custodial.native-provider-credential-observation-query.v1')deny(400);
+  const r=parsed.requester,keys=['current_generation_id','credential_id','employee_id','device_id','assignment_epoch','principal_digest','token_digest'];
+  if(!exact(r,keys))deny(400);
+  for(const k of ['current_generation_id','credential_id','employee_id'])
+    if(typeof r[k]!=='string'||!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(r[k]))deny(400);
+  for(const k of ['principal_digest','token_digest'])if(typeof r[k]!=='string'||!/^[0-9a-f]{64}$/.test(r[k]))deny(400);
+  if(typeof r.device_id!=='string'||!/^KIOSK_(?:0[2-9]|10)$/.test(r.device_id)
+    ||!Number.isSafeInteger(r.assignment_epoch)||r.assignment_epoch<1||headers['x-device-id']!==r.device_id)deny(400);
+  const body=Object.freeze({schema:parsed.schema,requester:Object.freeze({...r})});
+  const parts=credentialTokenParts(authorizationDeviceToken({headers}));
+  if(!parts||parts.credentialId!==r.credential_id)deny();
+  const clock=new Date(now.getTime());if(!Number.isFinite(clock.getTime()))deny();
+  const credentialHash=tokenHash(parts.secret,env),credentialSecretKeyId=deviceCredentialSecretKeyId(env);
+  if(!store||typeof store.findCredential!=='function'||typeof runReadOnlySql!=='function')deny(503,'native_credential_observation_unavailable');
+  const captured={method:'POST',originalUrl:req.originalUrl,headers,body,scanAuthorityRawBody:raw};
+  let device,row;
+  try {
+    const {device:found}=await resolveDevice(captured,runReadOnlySql,{allowTerminalOfflineRecovery:true});
+    device=found&&structuredClone(found);
+  } catch { deny(503,'native_credential_observation_unavailable'); }
+  if(!device||device.canonical_device_id!==r.device_id||!UUID_PATTERN.test(device.canonical_device_pk||'')
+    ||device.device_active!==true||device.employee_active!==true||!/^EMP\d+$/i.test(String(device.employee_code||''))
+    ||device.assigned_employee_id!==r.employee_id||Number(device.assignment_epoch)!==r.assignment_epoch)deny();
+  try {
+    const foundRow=await store.findCredential(parts.credentialId);row=foundRow&&structuredClone(foundRow);
+  } catch { deny(503,'native_credential_observation_unavailable'); }
+  const metadata=row?.metadata_json;
+  if(!row||row.credential_id!==parts.credentialId||row.device_id!==device.canonical_device_pk||!row.confirmed_at
+    ||!safeEqual(row.token_hash,credentialHash)||metadata!==null&&metadata!==undefined
+      &&(!metadata||Object.getPrototypeOf(metadata)!==Object.prototype))deny();
+  if(metadata&&Object.hasOwn(metadata,'credential_secret_key_id')
+    &&(typeof metadata.credential_secret_key_id!=='string'||!/^[0-9a-f]{64}$/.test(metadata.credential_secret_key_id)
+      ||!safeEqual(metadata.credential_secret_key_id,credentialSecretKeyId)))deny();
+  // Deliberately no expiry/revocation interpretation here: locked SQL observes
+  // those exact facts. No getPolicy/touch/audit/confirmation or general access.
+  const a=verifyNativeDeviceRequestAttestation({...captured,memphisDevice:device,memphisDeviceCredential:row},{now:clock});
+  const transcript=JSON.stringify([a.version,a.credential_id,a.device_id,a.method,a.path,a.body_sha256,a.request_id,a.timestamp,a.signature]);
+  return Object.freeze({purpose:'NATIVE_CREDENTIAL_OBSERVATION_ONLY',body,
+    credentialId:parts.credentialId,credentialHash,credentialSecretKeyId,nativeRequestId:a.request_id,
+    attestationDigest:createHash('sha256').update(transcript).digest('hex'),rawBodySha256:a.body_sha256});
+}
+// END native credential observation proof.
 
 export function makeDeviceCredentialMiddleware(options = {}) {
   return async function requireDeviceCredential(req, res, next) {
