@@ -13,7 +13,7 @@ import {recurringHttpSqlBoundary,captureRecurringHttpTransportFailure,
 // the alternate writer to the direct confirmation integration, never a second
 // confirmation against the same revision. No real trusted device or phone is
 // represented by the synthetic credential below.
-export async function testRecurringConfirmationHttp({pool,week,originalManagerId,check}) {
+export async function testRecurringConfirmationHttp({pool,week,originalManagerId,check,requestAdapterFactory=null}) {
  const secondManager={manager_id:'10000000-0000-4000-8000-000000000273',
   display_name:'Second synthetic recurring HTTP manager',roles:['OPS_MANAGER','CUSTODIAL_MANAGER'],active:true};
  await pool.query("insert into public.ops_manager_managers(manager_id,display_name,roles,active,is_system_principal) values($1,$2,array['OPS_MANAGER','CUSTODIAL_MANAGER'],true,false)",
@@ -71,7 +71,7 @@ export async function testRecurringConfirmationHttp({pool,week,originalManagerId
   if(name==='custodial_release_application_mutation_lease'||name==='custodial_heartbeat_application_mutation_lease')return{data:true,error:null};
   throw new Error(`Unexpected synthetic restore lease call: ${name}`);
  }};
- let server=null;
+ let server=null,requestAdapter=null;
  try{
   const runtime=createStaticWeeklyControlPlaneRuntime({env,database,controlPlane:plane,supabase,trustedDeviceStore});
   server=createServer(runtime.app);await new Promise((resolve,reject)=>server.listen(0,'127.0.0.1',error=>error?reject(error):resolve()));
@@ -86,8 +86,22 @@ export async function testRecurringConfirmationHttp({pool,week,originalManagerId
     queueMicrotask(()=>trace(`restore_gate_signal_after_close:${req.restoreMutationLease?.signal?.aborted===true?'ABORTED':req.restoreMutationLease?'LIVE':'MISSING'}`));});
   });
   const origin=`http://127.0.0.1:${server.address().port}`;
+  if(requestAdapterFactory){
+   requestAdapter=await requestAdapterFactory({origin});
+   assert.equal(typeof requestAdapter?.request,'function','browser request adapter must expose request');
+  }
   const request=async(method,route,body,authorization=managerToken)=>{
    if(traceConfirm)trace('http_client_request_start');
+   if(requestAdapter){
+    try{
+     const reply=await requestAdapter.request({origin,method,route,body,authorization});
+     assert.ok(Number.isInteger(reply?.status)&&reply.status>=100&&reply.status<=599,'browser HTTP status');
+     assert.ok(reply.body&&typeof reply.body==='object'&&!Array.isArray(reply.body),'browser JSON envelope');
+     if(traceConfirm)trace(`http_client_response_headers:${reply.status}`);
+     if(traceConfirm)trace('http_client_response_body_complete');
+     return reply;
+    }catch(error){rethrowOriginalTransportError(error,()=>transportFailure('browser_adapter',error));}
+   }
    let response;
    try{response=await fetch(origin+route,{method,headers:{...(authorization?{Authorization:`Bearer ${authorization}`}:{ }),
     ...(body===undefined?{}:{'Content-Type':'application/json'})},...(body===undefined?{}:{body:JSON.stringify(body)})});}
@@ -173,8 +187,13 @@ export async function testRecurringConfirmationHttp({pool,week,originalManagerId
    JSON.stringify(confirmationProof)+'\n',{flag:'wx'});
   return confirmationProof;
  }finally{
-  if(server?.listening)await new Promise((resolve,reject)=>server.close(error=>error?reject(error):resolve()));
-  await plane.close();
-  assert.equal(checkedOut,0,'all SQL clients released');
+  try{if(requestAdapter?.close)await requestAdapter.close();}
+  finally{
+   try{if(server?.listening)await new Promise((resolve,reject)=>server.close(error=>error?reject(error):resolve()));}
+   finally{
+    await plane.close();
+    assert.equal(checkedOut,0,'all SQL clients released');
+   }
+  }
  }
 }
