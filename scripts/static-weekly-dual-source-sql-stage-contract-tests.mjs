@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createDualSourceRegisteredCorrectionSqlSource} from './fixtures/dual-source-registered-correction-sql-source.mjs';
+import {assertCurrentManager218MigrationSet} from './fixtures/current-manager-publication-source.mjs';
 import {postgresJsonbContentDigest as digest} from '../src/static-weekly-schedule-compiler.js';
 
 let checks=0;
@@ -29,14 +30,22 @@ check('valid accepted historical assignment and availability remain unmodified',
   assert.ok(fixture.correction.compilerInput.version.vacantSlotIds.includes(former.slotId));
  }
 });
-check('new stage pins exact217 and preserves older stage branches',()=>{
+check('new218 stage pins exact predecessor and preserves older stage branches',()=>{
+ assert.equal(assertCurrentManager218MigrationSet().length,218);
  assert.match(runner,/const currentManager217Stage=stage==='current-manager-217'/);
  assert.match(runner,/const dualSource217Stage=stage==='dual-source-217'/);
+ assert.match(runner,/const currentManager218Stage=stage==='current-manager-218'/);
+ assert.match(runner,/const dualSource218Stage=stage==='dual-source-218'/);
  assert.match(runner,/if\(dualSource217Stage\)\{assertCurrentManager217MigrationSet\(\);loadCurrentManagerPublicationFixture\(\);\}/);
- assert.match(runner,/files\.length,currentManager217Stage\|\|dualSource217Stage\?217/);
+ assert.match(runner,/if\(dualSource218Stage\)\{assertCurrentManager218MigrationSet\(\);loadCurrentManagerPublicationFixture\(\);\}/);
+ assert.match(runner,/files\.length,currentManager218Stage\|\|dualSource218Stage\?218/);
  assert.match(runner,/20261003230000_static_weekly_named_handoff_derivation\.sql/);
+ assert.match(runner,/20261004000000_native_provider_event_decision_lookup\.sql/);
  assert.match(runner,/if\(publishedStage\)execFileSync/);
  assert.match(runner,/if\(dualSource217Stage\)execFileSync\(process\.execPath,\['scripts\/static-weekly-dual-source-current-correction-sql-tests\.mjs'\]/);
+ assert.match(runner,/if\(dualSource218Stage\)execFileSync\(process\.execPath,\['scripts\/static-weekly-dual-source-current-correction-sql-tests\.mjs'\]/);
+ assert.match(runner,/STATIC_WEEKLY_TEST_DUAL_SOURCE_218:'1'/);
+ assert.match(child,/if\(dual218\)assertCurrentManager218MigrationSet\(\)/);
 });
 check('new stage retains network-none, full replay, default-grant absence and owned cleanup',()=>{
  assert.match(runner,/--network','none'/);
@@ -70,5 +79,5 @@ check('child executes lost-COMMIT response, concurrent retries and denied roles 
  assert.match(child,/rpc\(role,'static_weekly_v8_vacate_roster_slot'/);
  assert.match(child,/error\.code==='42501'&&\/permission denied\/i\.test\(error\.message\)/);
 });
-console.log(JSON.stringify({status:'PASS_DUAL_SOURCE_217_SOURCE_ONLY',checks,digests:[fixture.historical.sourceDigest,
+console.log(JSON.stringify({status:'PASS_DUAL_SOURCE_218_SOURCE_ONLY',checks,digests:[fixture.historical.sourceDigest,
  fixture.correction.sourceDigest],database:'NOT_RUN',solver:'NOT_RUN',production:false}));

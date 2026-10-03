@@ -12,6 +12,11 @@ export const CURRENT_MANAGER_217_MIGRATION={
   file:'20261003230000_static_weekly_named_handoff_derivation.sql',
   sha256:'ef4c6fc1183002af23797b5ac226660a3b1c2b85f3a543df75c1afa61d8fd500',
 };
+export const CURRENT_MANAGER_218_MIGRATION_MANIFEST='24503cfe852d7668ac94744b2f9ed21d8d2556906b917c7016e0f6c2d3b8d7a1';
+export const CURRENT_MANAGER_218_MIGRATION={
+  file:'20261004000000_native_provider_event_decision_lookup.sql',
+  sha256:'ab4e6eb848bd214f8616fb52f094829786df9a9a81d2eb8d00d247b1f28e52fd',
+};
 function currentMigrationManifest(root){
   const directory=new URL('supabase/migrations/',root);
   return readdirSync(directory).filter(file=>file.endsWith('.sql')).sort()
@@ -31,6 +36,16 @@ export function assertCurrentManager217MigrationSet(root=new URL('../../',import
     'the 216 exact predecessor migrations changed');
   assert.equal(sha(JSON.stringify(manifest)),CURRENT_MANAGER_217_MIGRATION_MANIFEST,
     'the complete 217 ordered migration bytes changed');
+  return manifest;
+}
+export function assertCurrentManager218MigrationSet(root=new URL('../../',import.meta.url)) {
+  const manifest=currentMigrationManifest(root);
+  assert.equal(manifest.length,218,'current manager 218 fixture requires all218 migrations');
+  assert.deepEqual(manifest.at(-1),CURRENT_MANAGER_218_MIGRATION,'exact native event decision forward migration required');
+  assert.equal(sha(JSON.stringify(manifest.slice(0,217))),CURRENT_MANAGER_217_MIGRATION_MANIFEST,
+    'the complete 217 ordered predecessor migration bytes changed');
+  assert.equal(sha(JSON.stringify(manifest)),CURRENT_MANAGER_218_MIGRATION_MANIFEST,
+    'the complete 218 ordered migration bytes changed');
   return manifest;
 }
 

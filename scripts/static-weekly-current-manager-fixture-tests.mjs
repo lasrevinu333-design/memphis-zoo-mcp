@@ -1,8 +1,12 @@
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readFileSync,readdirSync,mkdtempSync,mkdirSync,symlinkSync,unlinkSync,writeFileSync,rmSync} from 'node:fs';
 import {createHash} from 'node:crypto';
-import {assertCurrentManagerMigrationSet,assertCurrentManager217MigrationSet,loadCurrentManagerPublicationFixture,
- CURRENT_MANAGER_MIGRATION_MANIFEST,CURRENT_MANAGER_217_MIGRATION_MANIFEST,CURRENT_MANAGER_217_MIGRATION} from './fixtures/current-manager-publication-source.mjs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {fileURLToPath,pathToFileURL} from 'node:url';
+import {assertCurrentManagerMigrationSet,assertCurrentManager217MigrationSet,assertCurrentManager218MigrationSet,
+ loadCurrentManagerPublicationFixture,CURRENT_MANAGER_MIGRATION_MANIFEST,CURRENT_MANAGER_217_MIGRATION_MANIFEST,
+ CURRENT_MANAGER_217_MIGRATION,CURRENT_MANAGER_218_MIGRATION_MANIFEST,CURRENT_MANAGER_218_MIGRATION} from './fixtures/current-manager-publication-source.mjs';
 import {validateSixPersonAbsenceFixtureBytes} from './fixtures/six-person-absence-source.mjs';
 import {validateFullNineV6FixtureBytes} from './fixtures/full-nine-v6-source.mjs';
 import {deriveDatedShiftEndCoverage} from '../src/static-weekly-shift-end-derivation.js';
@@ -12,14 +16,39 @@ import {assertStoredNamedSourceBoundary} from './static-weekly-named-handoff-con
 
 let checks=0;const check=(name,fn)=>{fn();checks++;console.log('PASS',name);};
 const f=loadCurrentManagerPublicationFixture(),p=f.packet;
-check('exact217 manifest extends pinned old216, separately from old176',()=>{
- const files=assertCurrentManager217MigrationSet();assert.equal(files.length,217);
- assert.deepEqual(files.at(-1),CURRENT_MANAGER_217_MIGRATION);
+check('exact218 manifest extends pinned old217 and 216, separately from old176',()=>{
+ const files=assertCurrentManager218MigrationSet();assert.equal(files.length,218);
+ assert.deepEqual(files.at(-1),CURRENT_MANAGER_218_MIGRATION);
+ assert.deepEqual(files.at(-2),CURRENT_MANAGER_217_MIGRATION);
  assert.equal(createHash('sha256').update(JSON.stringify(files.slice(0,216))).digest('hex'),CURRENT_MANAGER_MIGRATION_MANIFEST);
- assert.equal(createHash('sha256').update(JSON.stringify(files)).digest('hex'),CURRENT_MANAGER_217_MIGRATION_MANIFEST);
+ assert.equal(createHash('sha256').update(JSON.stringify(files.slice(0,217))).digest('hex'),CURRENT_MANAGER_217_MIGRATION_MANIFEST);
+ assert.equal(createHash('sha256').update(JSON.stringify(files)).digest('hex'),CURRENT_MANAGER_218_MIGRATION_MANIFEST);
 });
-check('historical216 identity explicitly refuses the changed217 manifest',()=>{
+check('historical216 and 217 identities explicitly refuse the changed218 manifest',()=>{
  assert.throws(()=>assertCurrentManagerMigrationSet(),/all216 migrations/);
+ assert.throws(()=>assertCurrentManager217MigrationSet(),/all217 migrations/);
+});
+check('218 rejects a changed predecessor and an unapproved extra migration, not count-only acceptance',()=>{
+ const directory=mkdtempSync(join(tmpdir(),'mz-manager218-manifest-')),
+  migrations=join(directory,'supabase','migrations'),source=new URL('../supabase/migrations/',import.meta.url);
+ try{
+  mkdirSync(migrations,{recursive:true});
+  for(const file of readdirSync(source).filter(name=>name.endsWith('.sql')))
+   symlinkSync(fileURLToPath(new URL(file,source)),join(migrations,file));
+  const root=pathToFileURL(directory+'/'),prior=join(migrations,CURRENT_MANAGER_217_MIGRATION.file);
+  unlinkSync(prior);
+  writeFileSync(prior,readFileSync(new URL(CURRENT_MANAGER_217_MIGRATION.file,source))+'\n-- hostile predecessor delta\n');
+  assert.throws(()=>assertCurrentManager218MigrationSet(root),/217 ordered predecessor migration bytes changed/);
+  unlinkSync(prior);symlinkSync(fileURLToPath(new URL(CURRENT_MANAGER_217_MIGRATION.file,source)),prior);
+  const latest=join(migrations,CURRENT_MANAGER_218_MIGRATION.file);
+  unlinkSync(latest);
+  writeFileSync(latest,readFileSync(new URL(CURRENT_MANAGER_218_MIGRATION.file,source))+'\n-- hostile latest delta\n');
+  assert.throws(()=>assertCurrentManager218MigrationSet(root),/exact native event decision forward migration required/);
+  unlinkSync(latest);symlinkSync(fileURLToPath(new URL(CURRENT_MANAGER_218_MIGRATION.file,source)),latest);
+  const extra=join(migrations,'20261004000001_unapproved_extra.sql');
+  writeFileSync(extra,'select 1;\n');
+  assert.throws(()=>assertCurrentManager218MigrationSet(root),/all218 migrations/);
+ }finally{rmSync(directory,{recursive:true});}
 });
 check('current323 and accepted original314 remain separate',()=>{
  assert.equal(p.compilerInput.version.assignments.length,323);assert.equal(p.original.compilerInput.version.assignments.length,314);
@@ -79,8 +108,11 @@ check('current stage invokes publication caller and mandatory confirmation, not 
  assert.ok(runner.includes("stage==='current-roster-only'||currentManagerStage?'scripts/static-weekly-current-roster-publication-tests.mjs'"));
  assert.ok(runner.includes("STATIC_WEEKLY_TEST_CURRENT_216:'1',STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION:'1'"));
  assert.ok(runner.includes("STATIC_WEEKLY_TEST_CURRENT_217:'1',STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION:'1'"));
+ assert.ok(runner.includes("STATIC_WEEKLY_TEST_CURRENT_218:'1',STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION:'1'"));
+ assert.ok(runner.includes("if(currentManager218Stage){assertCurrentManager218MigrationSet();loadCurrentManagerPublicationFixture();}"));
  assert.ok(publication.includes('recurringConfirmationProof=await testRecurringConfirmation({pool,week,originalManagerId:managerId,check})'));
- assert.ok(publication.includes('if(currentManager217Stage)await testNamedHandoffSql({pool,authority:projection.authority,check,'));
+ assert.ok(publication.includes('if(currentManager218Stage)assertCurrentManager218MigrationSet();'));
+ assert.ok(publication.includes('if(currentManager217Stage||currentManager218Stage)await testNamedHandoffSql({pool,authority:projection.authority,check,'));
  assert.ok(publication.includes('versionId:published.data.version_id,publicationId:published.data.publication_id'));
 });
 check('old176 contract, exact image, isolation/default grants and cleanup remain',()=>{
@@ -93,4 +125,4 @@ check('current stage registers original only as immutable source and preserves s
  assert.ok(publication.includes("check('full source remains unchanged in database'"));
 });
 console.log(JSON.stringify({status:'PASS',checks,scope:'current-manager fixture and executable-route preflight only',
- migrationCount:217,originalRows:314,currentRows:323,derivedRows:494,solver:false,database:false,publication:false,production:false}));
+ migrationCount:218,originalRows:314,currentRows:323,derivedRows:494,solver:false,database:false,publication:false,production:false}));
