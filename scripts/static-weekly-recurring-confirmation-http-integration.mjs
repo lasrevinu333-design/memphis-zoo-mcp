@@ -5,6 +5,7 @@ import {createOpsManagerSession} from '../src/auth/shared-access-auth.js';
 import {createStaticWeeklyControlPlane} from '../src/static-weekly-control-plane.js';
 import {createStaticWeeklyControlPlaneRuntime} from '../src/static-weekly-control-plane-runtime.js';
 import {postgresJsonbContentDigest as digest} from '../src/static-weekly-schedule-compiler.js';
+import {recurringHttpSqlBoundary} from './static-weekly-recurring-http-boundary.mjs';
 
 // Invoked only after the current-manager-218 fixture has published its exact
 // baseline in the network-none, no-auto-grants disposable database. This is
@@ -35,16 +36,24 @@ export async function testRecurringConfirmationHttp({pool,week,originalManagerId
   'publications',(select count(*) from public.weekly_schedule_publications),
   'proofs',(select count(*) from public.static_weekly_recurring_acceptance_proofs),
   'targets',(select count(*) from public.static_weekly_recurring_application_intents)) as result`);
- let checkedOut=0,maxCheckedOut=0,loseCommit=false;
- const database={async connect(){checkedOut++;maxCheckedOut=Math.max(maxCheckedOut,checkedOut);
-  const client=await pool.connect();return{on:client.on.bind(client),removeListener:client.removeListener.bind(client),
-   async query(sql,args){const result=await client.query(sql,args);
-    if(sql==='commit'&&loseCommit){loseCommit=false;throw Object.assign(new Error('synthetic lost COMMIT response after acceptance'),{code:'08006'});}
-    return result;},release(error){checkedOut--;client.release(error);}};},async end(){}};
+ let checkedOut=0,maxCheckedOut=0,loseCommit=false,traceConfirm=false,confirmStart=0;
+ const trace=(phase)=>{if(traceConfirm)console.log('ACTUAL_RECURRING_HTTP_CONFIRM_BOUNDARY',phase,Math.round(performance.now()-confirmStart));};
+ const database={async connect(){trace('sql_connect_start');checkedOut++;maxCheckedOut=Math.max(maxCheckedOut,checkedOut);
+  const client=await pool.connect();trace('sql_connect_acquired');return{on:client.on.bind(client),removeListener:client.removeListener.bind(client),
+   async query(sql,args){const boundary=recurringHttpSqlBoundary(sql);
+    if(boundary)trace(`sql_start:${boundary}`);
+    let result;
+    try{result=await client.query(sql,args);}catch(error){if(boundary)trace(`sql_rejected:${boundary}`);throw error;}
+    if(boundary)trace(`sql_complete:${boundary}`);
+    if(sql==='commit'&&loseCommit){loseCommit=false;trace('synthetic_commit_response_lost');throw Object.assign(new Error('synthetic lost COMMIT response after acceptance'),{code:'08006'});}
+    return result;},release(error){trace('sql_client_release');checkedOut--;client.release(error);}};},async end(){}};
  const plane=createStaticWeeklyControlPlane({database,shutdownCompiler:async()=>{}});
  const leaseCalls=[];
  const supabase={async rpc(name,args){
   leaseCalls.push({name,args});
+  if(name==='custodial_begin_application_mutation_lease')trace('restore_lease_begin');
+  if(name==='custodial_release_application_mutation_lease')trace('restore_lease_release');
+  if(name==='custodial_heartbeat_application_mutation_lease')trace('restore_lease_heartbeat');
   if(name==='custodial_begin_application_mutation_lease')return{data:{mutations_paused:false,state:'READY',authority_generation:0,restore_id:null},error:null};
   if(name==='custodial_release_application_mutation_lease'||name==='custodial_heartbeat_application_mutation_lease')return{data:true,error:null};
   throw new Error(`Unexpected synthetic restore lease call: ${name}`);
@@ -53,11 +62,21 @@ export async function testRecurringConfirmationHttp({pool,week,originalManagerId
  try{
   const runtime=createStaticWeeklyControlPlaneRuntime({env,database,controlPlane:plane,supabase,trustedDeviceStore});
   server=createServer(runtime.app);await new Promise((resolve,reject)=>server.listen(0,'127.0.0.1',error=>error?reject(error):resolve()));
+  server.prependListener('request',(req,res)=>{
+   if(!traceConfirm||req.method!=='POST'||req.url!=='/static-weekly/recurring-adaptation/confirm')return;
+   trace('http_server_request_received');
+   res.once('finish',()=>trace(`http_server_response_finished:${res.statusCode}`));
+   res.once('close',()=>trace('http_server_response_closed'));
+  });
   const origin=`http://127.0.0.1:${server.address().port}`;
   const request=async(method,route,body,authorization=managerToken)=>{
+   if(traceConfirm)trace('http_client_request_start');
    const response=await fetch(origin+route,{method,headers:{...(authorization?{Authorization:`Bearer ${authorization}`}:{ }),
     ...(body===undefined?{}:{'Content-Type':'application/json'})},...(body===undefined?{}:{body:JSON.stringify(body)})});
-   return {status:response.status,body:await response.json()};
+   if(traceConfirm)trace(`http_client_response_headers:${response.status}`);
+   const reply=await response.json();
+   if(traceConfirm)trace('http_client_response_body_complete');
+   return {status:response.status,body:reply};
   };
   const previewRoute='/static-weekly/recurring-adaptation/preview',confirmRoute='/static-weekly/recurring-adaptation/confirm';
   const revision=await q('select current_revision::integer as result from public.static_weekly_schedule_control where singleton');
@@ -75,8 +94,9 @@ export async function testRecurringConfirmationHttp({pool,week,originalManagerId
   check('HTTP confirmation refuses read-only manager',(await request('POST',confirmRoute,confirmBody,readOnlyToken)).status,403);
   for(const extra of [{manager_id:originalManagerId},{candidate_source:{forged:true}},{decision:{forged:true}}])
    check('HTTP confirmation rejects caller-supplied authority',(await request('POST',confirmRoute,{...confirmBody,...extra})).status,422);
-  const before=await counts();loseCommit=true;
+  const before=await counts();loseCommit=true;confirmStart=performance.now();traceConfirm=true;
   const uncertain=await request('POST',confirmRoute,confirmBody);
+  trace('http_first_confirm_returned');traceConfirm=false;
   check('lost COMMIT HTTP response is unavailable, not accepted',uncertain.status,503);
   check('lost COMMIT mapped to exact unavailable code',uncertain.body.code,'static_weekly_control_plane_database_unavailable');
   check('one SQL client per confirmation transaction',maxCheckedOut,1);
