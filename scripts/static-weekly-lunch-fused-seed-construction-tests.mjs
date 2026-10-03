@@ -216,4 +216,141 @@ export async function runLunchFusedSeedConstructionTests() {
   return result;
 }
 
-if (process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href) await runLunchFusedSeedConstructionTests();
+// Prepared but separately resource-coordinated actual canonical proof mode.
+// This uses the exact pre-existing synthetic fixture, not an invented result,
+// copied certificate, optimizer stub or presumed verifier success.
+export async function runLunchFusedSeedCanonicalFourTests() {
+  const pure = await runLunchFusedSeedConstructionTests();
+  let checks = 0;
+  const check = (name,predicate) => { assert.ok(predicate,name); checks++; };
+  const mark = stage => console.log(JSON.stringify({classification:'BOUNDED_SYNTHETIC_CANONICAL_PROOF',stage}));
+  const fixtureText = source('scripts/static-weekly-lunch-authority-adapter-tests.mjs');
+  check('exact original canonical fixture producer',sha(fixtureText)==='8025947cf18698bb97288fbd2eb9c08f6d0908f9d602bdcc57de52fc0c6803e0');
+  const fixtureFunctions = fixtureText.match(/^function fixture\(\) \{[\s\S]*?^\}\n/gm);
+  check('unique pinned self-contained four-person fixture',fixtureFunctions?.length===1);
+  const input = new Function('return ('+fixtureFunctions[0]+')')()();
+  const inputBefore = structuredClone(input);
+  const {compileStaticWeeklySchedule,postgresJsonbContentDigest} = await import('../src/static-weekly-schedule-compiler.js');
+  const {shutdownStaticWeeklyCompiler} = await import('../src/static-weekly-schedule-compiler-runtime.js');
+  const {current,old} = reconstructPredecessors();
+  assertCurrentPins(current);
+  const verifierAbsolute = new URL('../'+paths.verifier,import.meta.url).href;
+  const coverageAbsolute = new URL('../'+paths.coverage,import.meta.url).href;
+  const adapterAbsolute = new URL('../'+paths.adapter,import.meta.url).href;
+  const originalVerifierUrl = referenceUrl(old.verifier,paths.verifier);
+  const originalCoverageUrl = referenceUrl(old.coverage,paths.coverage,{[verifierAbsolute]:originalVerifierUrl});
+  const originalAdapterUrl = referenceUrl(old.adapter,paths.adapter,{[coverageAbsolute]:originalCoverageUrl});
+  const originalPublicationUrl = referenceUrl(old.publication,paths.publication,{[adapterAbsolute]:originalAdapterUrl});
+  const originalCoverage = await import(originalCoverageUrl);
+  const originalAdapter = await import(originalAdapterUrl);
+  const originalPublication = await import(originalPublicationUrl);
+
+  // Closed source-pinned TEST-ONLY invocation/terminal/derivation counters.
+  // They delegate the unchanged checks/arguments/errors and never supply a
+  // program, witness or authority. No such hooks exist in product modules.
+  let observed = replaceOne(current.verifier,
+    'function verifyStaticWeeklyScheduleResultInternal(input, result, deadline, allowProvisionalExecutionReceipt, deriveVerifiedLunch) {\n',
+    'function verifyStaticWeeklyScheduleResultInternal(input, result, deadline, allowProvisionalExecutionReceipt, deriveVerifiedLunch) {\n  proofCounters.verifierCalls++;\n');
+  observed = replaceOne(observed,
+    'function verifyTerminalAttestation(attestation, expectedValue, solverIdentity, options) {\n',
+    'function verifyTerminalAttestation(attestation, expectedValue, solverIdentity, options) {\n  proofCounters.terminalCalls++;\n');
+  observed = replaceOne(observed,
+    '    ...deriveLunchCoverageFromPreparedProblem(regenerated.problem, result.weeklyAssignments),',
+    '    ...(proofCounters.derivations++, deriveLunchCoverageFromPreparedProblem(regenerated.problem, result.weeklyAssignments)),');
+  observed += '\nconst proofCounters = {verifierCalls:0,terminalCalls:0,derivations:0};\nexport function observedLunchProofCounts(){return {...proofCounters};}\n';
+  const observedVerifierUrl = referenceUrl(observed,paths.verifier);
+  const observedAdapterUrl = referenceUrl(current.adapter,paths.adapter,{[verifierAbsolute]:observedVerifierUrl});
+  const observedVerifier = await import(observedVerifierUrl);
+  const observedAdapter = await import(observedAdapterUrl);
+  const difference = (after,before) => Object.fromEntries(Object.keys(after).map(key=>[key,after[key]-before[key]]));
+  try {
+    mark('actual_canonical_compile.begin');
+    const result = await compileStaticWeeklySchedule(input);
+    mark('actual_canonical_compile.returned');
+    check('actual engine compile accepted only on real returned evidence',result.status==='FEASIBLE' && result.publicationAuthority==='ACCEPTABLE' && result.verifier?.ok===true);
+    const resultBefore=structuredClone(result),tiers=result.solver.tiers.length;
+    check('actual base carries nonempty canonical terminal tiers',Number.isSafeInteger(tiers)&&tiers>0);
+    mark('complete_old_public_fused_comparison.begin');
+    const oldCandidate=originalCoverage.createStaticWeeklyLunchCoverageCandidate(input,result);
+    const publicCandidate=currentCoverage.createStaticWeeklyLunchCoverageCandidate(input,result);
+    const fusedCandidate=currentVerifier.createIndependentlyVerifiedStaticWeeklyLunchCandidate(input,result);
+    check('complete old/public candidate equality',isDeepStrictEqual(oldCandidate,publicCandidate));
+    check('complete old/fused candidate equality',isDeepStrictEqual(oldCandidate,fusedCandidate));
+    const oldDocument=originalAdapter.createStaticWeeklyLunchAuthorityDocument({input,result});
+    const publicDocument=currentAdapter.createStaticWeeklyLunchAuthorityDocument({input,result});
+    const fusedDocument=currentAdapter.createFreshVerifiedStaticWeeklyLunchAuthorityDocument({input,result});
+    check('complete old/public document equality',isDeepStrictEqual(oldDocument,publicDocument));
+    check('complete old/fused document equality',isDeepStrictEqual(oldDocument,fusedDocument));
+    check('authority/replay bindings retain exact compiled identities',fusedDocument.base_authority_digest===result.authorityDigest && fusedDocument.base_replay_digest===result.replayDigest);
+    check('candidate/document identity exact',fusedDocument.candidate_digest===oldCandidate.candidateDigest && fusedDocument.document_identity===oldDocument.document_identity);
+    check('supplied valid candidate remains exact document',isDeepStrictEqual(publicDocument,currentAdapter.createStaticWeeklyLunchAuthorityDocument({input,result,candidate:oldCandidate})));
+    check('complete old/public/fresh publication preview equality',isDeepStrictEqual(originalPublication.createStaticWeeklyLunchPreviewDocument(result),currentPublication.createStaticWeeklyLunchPreviewDocument(result)) && isDeepStrictEqual(publicDocument,currentPublication.createFreshVerifiedStaticWeeklyLunchPreviewDocument(result)));
+    const countBefore=observedVerifier.observedLunchProofCounts();
+    const observedDocument=observedAdapter.createFreshVerifiedStaticWeeklyLunchAuthorityDocument({input,result});
+    const counts=difference(observedVerifier.observedLunchProofCounts(),countBefore);
+    check('observer preserves complete exact document',isDeepStrictEqual(observedDocument,fusedDocument));
+    check('two complete independent passes demonstrated',counts.verifierCalls===2 && counts.terminalCalls===2*tiers && counts.derivations===2);
+    mark('complete_old_public_fused_comparison.returned');
+
+    const negatives=[
+      ['changed assignment',r=>{r.weeklyAssignments[0].slotId='forged-owner';}],
+      ['changed input identity',r=>{r.inputDigest='f'.repeat(64);} ],
+      ['changed authority identity',r=>{r.authorityDigest='f'.repeat(64);} ],
+      ['changed integer witness',r=>{r.certificate.finalWitness.values[0][1]+=1;} ],
+      ['first terminal report mutation',r=>{r.solver.tiers[0].attestation.terminalReport.utf8Sha256='f'.repeat(64);} ],
+      ['last terminal report mutation',r=>{r.solver.tiers.at(-1).attestation.terminalReport.utf8Sha256='f'.repeat(64);} ],
+    ];
+    for (const [name,mutate] of negatives) {
+      const forged=structuredClone(result);mutate(forged);
+      const oldOutcome=capture(()=>originalAdapter.createStaticWeeklyLunchAuthorityDocument({input,result:forged}));
+      const publicOutcome=capture(()=>currentAdapter.createStaticWeeklyLunchAuthorityDocument({input,result:forged}));
+      const fusedOutcome=capture(()=>currentAdapter.createFreshVerifiedStaticWeeklyLunchAuthorityDocument({input,result:forged}));
+      check('old/public rejection exact '+name,isDeepStrictEqual(oldOutcome,publicOutcome)&&oldOutcome.outcome==='threw');
+      check('fused mandatory validation rejects '+name,fusedOutcome.outcome==='threw'&&fusedOutcome.code==='lunch_base_schedule_not_verified');
+    }
+    const badCandidate=structuredClone(oldCandidate);badCandidate.lunches[0].window.end='13:30';
+    check('supplied candidate cannot bypass public verifier',currentCoverage.verifyStaticWeeklyLunchCoverageCandidate(input,result,badCandidate).ok===false);
+    check('supplied candidate cannot bypass public document adapter',capture(()=>currentAdapter.createStaticWeeklyLunchAuthorityDocument({input,result,candidate:badCandidate})).code==='lunch_authority_candidate_verification_failed');
+    const badDocument=structuredClone(fusedDocument);badDocument.responsibilities[0].coverer_person_id='forged-person';
+    check('supplied document independently rejected',currentAdapter.verifyStaticWeeklyLunchAuthorityDocument({input,result,document:badDocument}).ok===false);
+
+    // Calibrate only the actual first typed invocation's authority reads. Then
+    // mutate AFTER A, before B, rather than guessing a magic read count.
+    let singleReads=0;
+    const firstView={...result};
+    Object.defineProperty(firstView,'canonicalAuthority',{get(){singleReads++;return result.canonicalAuthority;}});
+    check('first-pass read calibration preserves candidate',isDeepStrictEqual(observedVerifier.createIndependentlyVerifiedStaticWeeklyLunchCandidate(input,firstView),oldCandidate));
+    check('first pass observed actual field access',singleReads>0);
+    for (const kind of ['source','result']) {
+      const mutableInput=structuredClone(input),view={...result};
+      let reads=0;
+      const changedAuthority=structuredClone(result.canonicalAuthority);changedAuthority.inputDigest='f'.repeat(64);
+      Object.defineProperty(view,'canonicalAuthority',{get(){
+        reads++;
+        if(reads>singleReads && kind==='source') mutableInput.versions[0].slotAvailability[0].lunch={start:'13:00',end:'14:00'};
+        return reads>singleReads && kind==='result'?changedAuthority:result.canonicalAuthority;
+      }});
+      const before=observedVerifier.observedLunchProofCounts();
+      const outcome=capture(()=>observedAdapter.createFreshVerifiedStaticWeeklyLunchAuthorityDocument({input:mutableInput,result:view}));
+      const mutationCounts=difference(observedVerifier.observedLunchProofCounts(),before);
+      check('second full pass rejects intervening '+kind+' mutation',outcome.code==='lunch_authority_candidate_verification_failed' && outcome.reason==='lunch_base_schedule_not_verified' && mutationCounts.verifierCalls===2 && mutationCounts.derivations===1);
+    }
+    check('all original source bytes/values retained',isDeepStrictEqual(input,inputBefore));
+    check('all original complete result bytes/values retained',isDeepStrictEqual(result,resultBefore));
+    const receipt={classification:'BOUNDED_SYNTHETIC_CANONICAL_FOUR_PROOF',checks,pureChecks:pure.checks,
+      fixtureProducerSha256:sha(fixtureText),rawFixtureInputDigest:postgresJsonbContentDigest(input),canonicalInputDigest:result.inputDigest,
+      authorityDigest:result.authorityDigest,replayDigest:result.replayDigest,
+      candidateDigest:oldCandidate.candidateDigest,documentIdentity:oldDocument.document_identity,
+      actualCanonicalTiers:tiers,observedDefaultCounts:counts,
+      independentlyProvesOptimality:false,actualStaffingRuntimeAcceptance:false,
+      sqlRuns:0,productionWrites:0,timingBenefitEstablished:false};
+    console.log(JSON.stringify(receipt));return receipt;
+  } finally {
+    await shutdownStaticWeeklyCompiler();
+  }
+}
+
+if (process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href) {
+  if(process.argv.includes('--canonical-four')) await runLunchFusedSeedCanonicalFourTests();
+  else await runLunchFusedSeedConstructionTests();
+}
