@@ -3,7 +3,8 @@ import { pathToFileURL } from "node:url";
 import express from "express";
 import { createClient } from "@supabase/supabase-js";
 import { assertOpsManagerSessionSecret, createSupabaseTrustedDeviceStore, makeOpsAccessMiddleware } from "./auth/shared-access-auth.js";
-import { createStaticWeeklyControlPlane, createStaticWeeklyControlPlaneDatabase } from "./static-weekly-control-plane.js";
+import { createStaticWeeklyControlPlane, createStaticWeeklyControlPlaneDatabase,
+  STATIC_WEEKLY_MANAGER_OPERATION_DEADLINE_MS } from "./static-weekly-control-plane.js";
 import { assertConfiguredReleaseIdentity } from "./release-manifest.js";
 import { makeRestoreMutationGate } from "./restore-mutation-gate.js";
 import { renderCoverAllPdfPair } from "./static-weekly-coverall-print.js";
@@ -113,6 +114,10 @@ export function createStaticWeeklyControlPlaneRuntime({
           "static_weekly_control_plane_closing",
           "static_weekly_control_plane_busy",
           "static_weekly_control_plane_queue_timeout",
+          "static_weekly_recurring_operation_deadline_exceeded",
+          "static_weekly_recurring_operation_aborted",
+          "static_weekly_recurring_confirmation_outcome_unknown",
+          "static_weekly_compiler_request_aborted",
         ]).has(error?.code);
         const invalid = ["static_weekly_control_plane_compiler_rejected", "static_weekly_recurring_confirmation_request_invalid", "static_weekly_recurring_delivery_request_invalid",OPENING_COVERAGE_ERROR].includes(error?.code);
         const diagnostic=error?.code===OPENING_COVERAGE_ERROR?sanitizeOpeningCoverageDiagnostic(error.openingCoverageDiagnostic):null;
@@ -169,6 +174,7 @@ export function createStaticWeeklyControlPlaneRuntime({
   }));
   app.get("/static-weekly/manager-snapshot", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.getManagerSnapshot({ manager: manager(req), weekStart: req.query?.week_start })));
   app.post("/static-weekly/recurring-adaptation/preview", requireManagerWrite, namedManager, respond((req) => {
+    const deadlineAt = performance.now() + STATIC_WEEKLY_MANAGER_OPERATION_DEADLINE_MS;
     const body=req.body,allowed=new Set(['effective_start','expected_revision','full_nine_source_id']);
     if(!body||typeof body!=='object'||Array.isArray(body)||!Object.hasOwn(body,'effective_start')
       ||!Object.hasOwn(body,'expected_revision')||Object.keys(body).some(key=>!allowed.has(key)))
@@ -177,8 +183,10 @@ export function createStaticWeeklyControlPlaneRuntime({
     manager: manager(req), effectiveStart: req.body?.effective_start,
     expectedRevision: req.body?.expected_revision,
     fullNineSourceId: req.body?.full_nine_source_id || null,
+    signal:req.restoreMutationLease.signal,deadlineAt,
   });}));
   app.post("/static-weekly/recurring-adaptation/confirm", requireManagerWrite, namedManager, respond((req) => {
+    const deadlineAt = performance.now() + STATIC_WEEKLY_MANAGER_OPERATION_DEADLINE_MS;
     const body=req.body;
     const required=["confirmation_key","effective_start","expected_revision","preview_digest"];
     const allowed=new Set([...required,"full_nine_source_id"]);
@@ -189,6 +197,7 @@ export function createStaticWeeklyControlPlaneRuntime({
     return authorityControlPlane.confirmRecurringStaffing({
       manager:manager(req),confirmationKey:body.confirmation_key,effectiveStart:body.effective_start,
       expectedRevision:body.expected_revision,previewDigest:body.preview_digest,fullNineSourceId:body.full_nine_source_id??null,
+      signal:req.restoreMutationLease.signal,deadlineAt,
     });
   }));
   app.get("/static-weekly/recurring-adaptation/confirmations/:confirmationKey", requireManagerWrite, namedManager, respond((req) =>

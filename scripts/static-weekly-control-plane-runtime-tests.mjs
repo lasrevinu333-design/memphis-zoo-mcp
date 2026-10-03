@@ -205,6 +205,9 @@ try {
   assert.equal(recurringPreviewRequest.effectiveStart, previewBody.effective_start);
   assert.equal(recurringPreviewRequest.expectedRevision, previewBody.expected_revision);
   assert.equal(recurringPreviewRequest.fullNineSourceId, previewBody.full_nine_source_id);
+  assert.equal(recurringPreviewRequest.signal instanceof AbortSignal,true,'preview receives the restore mutation signal');
+  assert.equal(recurringPreviewRequest.signal.aborted,true,'preview cannot continue after response settlement');
+  assert.equal(recurringPreviewRequest.deadlineAt<=performance.now()+60_000,true,'preview has one absolute minute');
 
   const confirmationKey='30000000-0000-4000-8000-000000000091';
   const confirmationUrl=`${origin}/static-weekly/recurring-adaptation/confirm`;
@@ -214,7 +217,12 @@ try {
   confirmationResponse=await fetch(confirmationUrl,{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${session.token}`},body:JSON.stringify(confirmationBody)});
   assert.equal(confirmationResponse.status,200);
   assert.equal((await confirmationResponse.json()).data.receipt.affectedPhonesUpdated,false);
-  assert.deepEqual(recurringConfirmationRequest,{manager:recurringPreviewRequest.manager,confirmationKey,effectiveStart:'2026-10-05',expectedRevision:42,previewDigest:'b'.repeat(64),fullNineSourceId:null});
+  const {signal: confirmationSignal,deadlineAt: confirmationDeadlineAt,...confirmedFields}=recurringConfirmationRequest;
+  assert.deepEqual(confirmedFields,{manager:recurringPreviewRequest.manager,confirmationKey,effectiveStart:'2026-10-05',expectedRevision:42,previewDigest:'b'.repeat(64),fullNineSourceId:null});
+  assert.equal(confirmationSignal instanceof AbortSignal,true,'the exact restore mutation lease abort signal reaches confirmation');
+  assert.equal(confirmationSignal.aborted,true,'a settled response revokes trailing mutation authority');
+  assert.equal(Number.isFinite(confirmationDeadlineAt),true,'the route supplies one monotonic absolute operation deadline');
+  assert.equal(confirmationDeadlineAt<=performance.now()+60_000,true,'the route never grants over one minute');
   const validConfirmationRequest=recurringConfirmationRequest;
   for(const extra of [{manager_id:'forged'},{canonical_source:{forged:true}},{decision:{forged:true}}]){
    const denied=await fetch(confirmationUrl,{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${session.token}`},body:JSON.stringify({...confirmationBody,...extra})});

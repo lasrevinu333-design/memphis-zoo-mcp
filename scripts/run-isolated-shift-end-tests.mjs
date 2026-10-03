@@ -123,28 +123,27 @@ try{
   env:{...process.env,SHIFT_END_TEST_CONTAINER:container},stdio:'inherit',timeout:420000});
  if(['all','atomic-only'].includes(stage))execFileSync(process.execPath,['scripts/static-weekly-atomic-roster-database-tests.mjs'],{
   env:{...process.env,SHIFT_END_TEST_CONTAINER:container},stdio:'inherit',timeout:180000});
- const publishedChildClock=currentManagerStage?createRecurringClockRecorder({deadlineMilliseconds:1200000,
+ const publishedChildClock=currentManagerStage?createRecurringClockRecorder({deadlineMilliseconds:60000,
   emit:fact=>writeSync(1,`CURRENT_MANAGER_PUBLISHED_CHILD_CLOCK ${JSON.stringify(fact)}\n`)}):null;
  if(publishedStage)runRecurringClockedChild(()=>execFileSync(process.execPath,[stage==='current-roster-only'||currentManagerStage?'scripts/static-weekly-current-roster-publication-tests.mjs':'scripts/static-weekly-published-roster-transaction-tests.mjs'],{
-  // Finalization adds a real projection plus three independent acceptance
-  // attempts (two injected failures). Keep each production SQL/compiler
-  // deadline unchanged; bound the expanded aggregate test at twenty minutes.
+  // The entire diagnostic/acceptance child has one absolute one-minute bound.
+  // A later stage or retry never renews it; timeout is failure, not receipt.
   env:{...process.env,SHIFT_END_TEST_CONTAINER:container,SHIFT_END_TEST_SOCKET:socket,
    ...(currentManager218Browser?{CUSTODIAL_RECURRING_BROWSER_STAGE_PARENT_PID:String(process.pid)}:{}),
    ...(currentManager216Stage?{STATIC_WEEKLY_TEST_CURRENT_216:'1',STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION:'1'}:{}),
    ...(currentManager217Stage?{STATIC_WEEKLY_TEST_CURRENT_217:'1',STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION:'1'}:{}),
    ...(currentManager218Stage?{STATIC_WEEKLY_TEST_CURRENT_218:'1',STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION:'1'}:{}),
    ...(currentManager219Stage?{STATIC_WEEKLY_TEST_CURRENT_219:'1',STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION:'1'}:{})},stdio:'inherit',
-  timeout:currentManagerStage||process.env.STATIC_WEEKLY_TEST_RECURRING_FINALIZATION==='1'||process.env.STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION==='1'?1200000:900000}),publishedChildClock);
+  timeout:60000}),publishedChildClock);
  if(dualSource217Stage)execFileSync(process.execPath,['scripts/static-weekly-dual-source-current-correction-sql-tests.mjs'],{
   env:{...process.env,SHIFT_END_TEST_CONTAINER:container,SHIFT_END_TEST_SOCKET:socket,
-   STATIC_WEEKLY_TEST_DUAL_SOURCE_217:'1'},stdio:'inherit',timeout:1200000});
+   STATIC_WEEKLY_TEST_DUAL_SOURCE_217:'1'},stdio:'inherit',timeout:60000});
  if(dualSource218Stage)execFileSync(process.execPath,['scripts/static-weekly-dual-source-current-correction-sql-tests.mjs'],{
   env:{...process.env,SHIFT_END_TEST_CONTAINER:container,SHIFT_END_TEST_SOCKET:socket,
-   STATIC_WEEKLY_TEST_DUAL_SOURCE_218:'1'},stdio:'inherit',timeout:1200000});
+   STATIC_WEEKLY_TEST_DUAL_SOURCE_218:'1'},stdio:'inherit',timeout:60000});
  if(dualSource219Stage)execFileSync(process.execPath,['scripts/static-weekly-dual-source-current-correction-sql-tests.mjs'],{
   env:{...process.env,SHIFT_END_TEST_CONTAINER:container,SHIFT_END_TEST_SOCKET:socket,
-   STATIC_WEEKLY_TEST_DUAL_SOURCE_219:'1'},stdio:'inherit',timeout:1200000});
+   STATIC_WEEKLY_TEST_DUAL_SOURCE_219:'1'},stdio:'inherit',timeout:60000});
  if(stage==='separation-context-only')execFileSync(process.execPath,['scripts/static-weekly-vacate-roster-slot-fixture-tests.mjs'],{
   env:{...process.env,ROSTER_PUBLICATION_TEST_CONTAINER:container,SEPARATION_CONTEXT_PROOF:'1'},stdio:'inherit',timeout:240000});
  if(stage==='legacy-only'){

@@ -26,7 +26,7 @@ const ordinaryApiSource = readFileSync(resolve(root, "src/index.js"), "utf8");
 
 assert.doesNotMatch(controlPlaneSource, /STATIC_WEEKLY_AUTHORITY_ATTESTATION_SECRET|createHmac\s*\(/, "the control plane must never hold an application HMAC secret");
 assert.match(controlPlaneSource, /set local role static_weekly_control_plane/, "all database authority calls must enter the constrained control-plane role");
-assert.equal(STATIC_WEEKLY_DATABASE_OPERATION_STATEMENT_TIMEOUT_MS, 120_000, "production-sized signed schedule validation receives one bounded database statement budget inside the overall request deadline");
+assert.equal(STATIC_WEEKLY_DATABASE_OPERATION_STATEMENT_TIMEOUT_MS, 60_000, "one SQL statement cannot exceed the owner's absolute minute; recurring requests further shrink each statement to the remaining time");
 assert.doesNotMatch(controlPlaneSource, /static_weekly_v2_/, "the control plane may invoke only the v3 authority boundary");
 assert.match(controlPlaneSource, /static_weekly_v3_read_authority_source/, "first-publication drafts must load a release-registered source of record server-side");
 assert.match(controlPlaneSource, /source\.source_id/, "draft creation must bind the immutable server-side source identity to PostgreSQL");
@@ -529,7 +529,7 @@ const applied = await controlPlane.applyException({
 });
 assert.equal(applied.revision, 2, "a successful staffing mutation returns the final projection revision");
 assert.equal(applied.data.current_projection.projection_id, "projection-2", "a successful staffing mutation returns the current projection");
-assert.deepEqual(authority.queries.map((entry) => entry.statement), ["begin", "set local role static_weekly_control_plane", "set local statement_timeout = '120000ms'", "select public.custodial_begin_application_mutation()", "select public.static_weekly_v3_apply_exception($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) as result", "select public.static_weekly_v3_read_publication_source($1,$2) as result", "select public.static_weekly_v3_materialize_projection($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) as result", "select public.static_weekly_v8_materialize_lunch_document($1,$2,$3) as result", "select public.static_weekly_v3_read_manager_snapshot($1) as result", "commit"], "a generation fence, mutation, canonical compile, current projection, and confirmation share one bounded transaction");
+assert.deepEqual(authority.queries.map((entry) => entry.statement), ["begin", "set local role static_weekly_control_plane", "set local statement_timeout = '60000ms'", "select public.custodial_begin_application_mutation()", "select public.static_weekly_v3_apply_exception($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) as result", "select public.static_weekly_v3_read_publication_source($1,$2) as result", "select public.static_weekly_v3_materialize_projection($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) as result", "select public.static_weekly_v8_materialize_lunch_document($1,$2,$3) as result", "select public.static_weekly_v3_read_manager_snapshot($1) as result", "commit"], "a generation fence, mutation, canonical compile, current projection, and confirmation share one bounded transaction");
 assert.equal(authority.queries[4].values[9], manager.manager_id, "the trusted manager ID is the only actor value passed to PostgreSQL");
 assert.equal(authority.queries[4].values.includes(manager.manager_display_name), false, "PostgreSQL must derive the actor name from its manager registry");
 assert.match(authority.queries[6].values[10], /^projection-[0-9a-f]{64}$/, "the projection subcommand uses a derived idempotency key");
@@ -611,7 +611,7 @@ assert.deepEqual(dayChangesReplay, dayChanges, "replaying an accepted daily batc
 assert.equal(dayChangesAuthority.mutationAttempts(), 3, "replaying a daily batch does not apply any child mutation again");
 assert.equal(dayChangesAuthority.revision(), 4, "replaying a daily batch does not advance authority revision");
 const replayQueries = dayChangesAuthority.queries.slice(dayChangesAuthority.queries.findLastIndex((entry) => entry.statement === "begin"));
-assert.deepEqual(replayQueries.map((entry) => entry.statement), ["begin", "set local role static_weekly_control_plane", "set local statement_timeout = '120000ms'", "select public.custodial_begin_application_mutation()", "select pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended($1,0))", "select public.static_weekly_v4_begin_day_changes($1,$2,$3,$4,$5,$6,$7,$8) as result", "select public.static_weekly_v21_reconcile_dependency_changes($1) as result", "commit"], "accepted whole-action replay is generation-fenced and authority-locked; its immutable receipt is preserved and current future validity is checked before commit");
+assert.deepEqual(replayQueries.map((entry) => entry.statement), ["begin", "set local role static_weekly_control_plane", "set local statement_timeout = '60000ms'", "select public.custodial_begin_application_mutation()", "select pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended($1,0))", "select public.static_weekly_v4_begin_day_changes($1,$2,$3,$4,$5,$6,$7,$8) as result", "select public.static_weekly_v21_reconcile_dependency_changes($1) as result", "commit"], "accepted whole-action replay is generation-fenced and authority-locked; its immutable receipt is preserved and current future validity is checked before commit");
 
 const invalidDayChangesAuthority = createAuthorityDatabase();
 await assert.rejects(() => controlPlaneFor(invalidDayChangesAuthority).applyDayChanges({
@@ -650,7 +650,7 @@ const snapshotAuthority = createAuthorityDatabase({ revision: 7 });
 const snapshotControlPlane = controlPlaneFor(snapshotAuthority);
 const snapshot = await snapshotControlPlane.getManagerSnapshot({ manager, weekStart: "2026-10-05" });
 assert.equal(snapshot.authority_revision, 7);
-assert.deepEqual(snapshotAuthority.queries.map((entry) => entry.statement), ["begin", "set local role static_weekly_control_plane", "set local statement_timeout = '120000ms'", "select public.custodial_begin_application_mutation()", "select public.static_weekly_v3_read_manager_snapshot($1) as result", "commit"]);
+assert.deepEqual(snapshotAuthority.queries.map((entry) => entry.statement), ["begin", "set local role static_weekly_control_plane", "set local statement_timeout = '60000ms'", "select public.custodial_begin_application_mutation()", "select public.static_weekly_v3_read_manager_snapshot($1) as result", "commit"]);
 await assert.rejects(() => snapshotControlPlane.getManagerSnapshot({ manager, weekStart: "2026-10-06" }), /Monday-aligned/i, "projection workflows reject non-Monday week identity before a transaction starts");
 
 const previewAuthority = createAuthorityDatabase({ revision: 7 });

@@ -110,15 +110,17 @@ function candidateFor(basis){
  return candidate;
 }
 function harness({failAt=null,mutatePrivate=null,commitUnknown=false,publishedAssignmentsCount=323,
- forceStaticTemplateCandidate=false,registeredSourceId=approvedFullNineSourceId}={}){
+ forceStaticTemplateCandidate=false,registeredSourceId=approvedFullNineSourceId,onQuery=null,onPrivatePrepare=null,
+ connectGate=null,onClientEnd=null}={}){
  let state={revision:7,generation:2,publication:oldPublication,projection:null,receipt:null,writes:[]};
  const publishedSource=structuredClone(raw);
  publishedSource.version.assignments=publishedSource.version.assignments.slice(0,publishedAssignmentsCount);
  let backup,connections=0,checkedOut=0,privateCompiles=0,draftCompiles=0,projectionCompiles=0,beginRequest=null;
- const queries=[];let clientSerial=0;
- const database={async connect(){connections++;checkedOut++;assert.equal(checkedOut,1,'only ONE checked-out client');
+ const queries=[];let clientSerial=0,endedClients=0;
+ const database={async connect(){if(connectGate)await connectGate;connections++;checkedOut++;assert.equal(checkedOut,1,'only ONE checked-out client');
   const clientId=++clientSerial;
   return{async query(sql,args=[]){queries.push({sql,args:structuredClone(args),clientId});
+   if(onQuery)await onQuery(sql,args);
    if(sql==='begin'){backup=structuredClone(state);return{rows:[]};}
    if(sql==='rollback'){if(backup)state=backup;backup=null;return{rows:[]};}
    if(sql==='commit'){backup=null;if(commitUnknown)throw Object.assign(new Error('connection terminated after commit'),{code:'08006'});return{rows:[]};}
@@ -174,7 +176,7 @@ function harness({failAt=null,mutatePrivate=null,commitUnknown=false,publishedAs
      accepted:true,phoneDeliveryState:'PENDING',affectedPhonesUpdated:false};return result(state.receipt);
    }
    return{rows:[]};
-  },release(){checkedOut--;}};
+  },end(){endedClients++;onClientEnd?.();return Promise.resolve();},release(){checkedOut--;}};
  },async end(){assert.equal(checkedOut,0);}};
  const plane=createStaticWeeklyControlPlane({database,shutdownCompiler:async()=>{},
   recurringCandidatePreparer:async basis=>{
@@ -182,7 +184,7 @@ function harness({failAt=null,mutatePrivate=null,commitUnknown=false,publishedAs
    if(forceStaticTemplateCandidate)result.weekOptimizationScope='HISTORICAL_FULL_NINE_STATIC_TEMPLATE_ONLY';
    return result;
   },
-  recurringAdmissionPreparer:async basis=>{privateCompiles++;const reply={schema:'static-weekly.recurring-admission-candidate.v1',
+  recurringAdmissionPreparer:async(basis,options)=>{privateCompiles++;if(onPrivatePrepare)await onPrivatePrepare(options);const reply={schema:'static-weekly.recurring-admission-candidate.v1',
    candidate:candidateFor(basis),canonicalSource:structuredClone(raw)};mutatePrivate?.(reply);return reply;},
   compilerPreparer:async(input,options)=>{
    if(options.kind==='draft'){draftCompiles++;assert.deepEqual(input.versions[0].assignments,raw.version.assignments);
@@ -191,7 +193,8 @@ function harness({failAt=null,mutatePrivate=null,commitUnknown=false,publishedAs
     objective:{},metrics:{},replayDigest:'replay',envelope:{authority_digest:'authority'},expectedRevision:options.expectedRevision,
     idempotencyKey:options.actor.idempotencyKey,lunchDocument:{document_identity:'lunch-id',base_replay_digest:'replay',base_authority_digest:'authority'}};
   }});
- return{plane,queries,state:()=>state,connections:()=>connections,counts:()=>[privateCompiles,draftCompiles,projectionCompiles],
+ return{plane,queries,state:()=>state,connections:()=>connections,checkout:()=>checkedOut,endedClients:()=>endedClients,
+  counts:()=>[privateCompiles,draftCompiles,projectionCompiles],
   changeRevision:()=>{state.revision++;},changeGeneration:()=>{state.generation++;},
   setCommitUnknown:value=>{commitUnknown=value;}};
 }
@@ -246,6 +249,11 @@ const requestFor=async h=>{const preview=await h.plane.previewRecurringStaffing(
  return{manager,effectiveStart:week,expectedRevision:7,confirmationKey:key,previewDigest:preview.previewDigest};};
 const h=harness(),request=await requestFor(h),before=h.connections(),start=h.queries.length;
 const receipt=await h.plane.confirmRecurringStaffing(request);
+const statementBudgets=h.queries.slice(start).filter(row=>row.sql.startsWith('set local statement_timeout'))
+ .map(row=>Number(/'([0-9]+)ms'/.exec(row.sql)?.[1]));
+assert.ok(statementBudgets.length>3,'every new authority statement must inherit the same absolute operation budget');
+assert.ok(statementBudgets.every((value,index)=>Number.isSafeInteger(value)&&value>0&&value<=60_000
+ &&(index===0||value<=statementBudgets[index-1])),'SQL statements may only consume the shrinking initial minute');checks++;
 assertSeasonWitnessJsonb('manager confirmation',h.queries.slice(start));
 check('one client for complete confirmation',h.connections()-before,1);
 check('one transaction for all parent children',new Set(h.queries.slice(start).map(x=>x.clientId)).size,1);
@@ -301,4 +309,87 @@ const exactStatus=await uncertain.plane.getRecurringConfirmationStatus({manager,
 check('unknown outcome resolves by exact durable status',exactStatus.receipt,uncertain.state().receipt);
 check('unknown outcome recovery does not recompile',uncertain.counts(),[1,1,1]);
 await uncertain.plane.close();
+const expired=harness(),expiredRequest=await requestFor(expired);
+const expiredBegins=expired.queries.filter(row=>row.sql==='begin').length;
+await assert.rejects(()=>expired.plane.confirmRecurringStaffing({...expiredRequest,deadlineAt:performance.now()-1}),
+ error=>error.code==='static_weekly_recurring_operation_deadline_exceeded');checks++;
+check('expired absolute deadline starts no new SQL transaction',expired.queries.filter(row=>row.sql==='begin').length,expiredBegins);
+await expired.plane.close();
+let releaseCheckout;
+const checkoutGate=new Promise(resolve=>{releaseCheckout=resolve;});
+const waitingCheckout=harness({connectGate:checkoutGate}),checkoutAbort=new AbortController();
+const checkoutOutcome=assert.rejects(()=>waitingCheckout.plane.previewRecurringStaffing({manager,
+ effectiveStart:week,expectedRevision:7,signal:checkoutAbort.signal}),
+ error=>error.code==='static_weekly_recurring_operation_aborted');
+await new Promise(resolve=>setImmediate(resolve));
+checkoutAbort.abort(new Error('synthetic pool checkout interruption'));
+await checkoutOutcome;checks++;
+releaseCheckout();
+await new Promise(resolve=>setImmediate(resolve));
+check('late pool checkout never begins a transaction',waitingCheckout.queries,[]);
+check('late pool checkout returns only its exact client',waitingCheckout.checkout(),0);
+await waitingCheckout.plane.close();
+let beginEntered,releaseBegin;
+const beginStarted=new Promise(resolve=>{beginEntered=resolve;});
+const beginGate=new Promise(resolve=>{releaseBegin=resolve;});
+const waitingBegin=harness({onQuery:async sql=>{if(sql==='begin'){beginEntered();await beginGate;}},
+ onClientEnd:()=>releaseBegin()}),beginAbort=new AbortController();
+const beginOutcome=assert.rejects(()=>waitingBegin.plane.previewRecurringStaffing({manager,
+ effectiveStart:week,expectedRevision:7,signal:beginAbort.signal}),
+ error=>error.code==='static_weekly_recurring_operation_aborted');
+await beginStarted;
+beginAbort.abort(new Error('synthetic BEGIN interruption'));
+await beginOutcome;checks++;
+check('BEGIN interruption invokes exact client termination',waitingBegin.endedClients(),1);
+check('BEGIN interruption releases only after driver settlement',waitingBegin.checkout(),0);
+await waitingBegin.plane.close();
+const duringPrivate=new AbortController();
+const privateAbort=harness({onPrivatePrepare:async options=>{
+ assert.equal(options.signal instanceof AbortSignal,true);
+ assert.equal(options.signal.aborted,false);
+ assert.equal(options.deadlineMilliseconds<=60_000,true);
+ duringPrivate.abort(new Error('synthetic private cancellation'));
+}}),privateRequest=await requestFor(privateAbort);
+await assert.rejects(()=>privateAbort.plane.confirmRecurringStaffing({...privateRequest,signal:duringPrivate.signal}),
+ error=>error.code==='static_weekly_recurring_operation_aborted'
+   && error.cause?.message==='synthetic private cancellation');checks++;
+check('private cancellation rolls back without a durable write',privateAbort.state().writes,[]);
+await privateAbort.plane.close();
+let enteredSql,releaseSql;
+const sqlEntered=new Promise(resolve=>{enteredSql=resolve;});
+const sqlReleased=new Promise(resolve=>{releaseSql=resolve;});
+const duringSql=new AbortController();
+const heldSql=harness({onQuery:async sql=>{
+ if(sql.includes('static_weekly_v3_create_draft')){enteredSql();await sqlReleased;}
+}}),heldRequest=await requestFor(heldSql);
+const heldOutcome=assert.rejects(()=>heldSql.plane.confirmRecurringStaffing({...heldRequest,signal:duringSql.signal}),
+ error=>error.code==='static_weekly_recurring_operation_aborted'
+   && error.cause?.message==='synthetic SQL cancellation');
+await sqlEntered;
+duringSql.abort(new Error('synthetic SQL cancellation'));
+check('abort does not release or roll back an unsettled SQL statement',heldSql.queries.at(-1).sql.includes('static_weekly_v3_create_draft'),true);
+releaseSql();await heldOutcome;checks++;
+check('settled aborted SQL cannot commit a receipt',heldSql.state().receipt,null);
+check('settled aborted SQL rolls back before client release',heldSql.queries.at(-1).sql,'rollback');
+await heldSql.plane.close();
+let enteredCommit,releaseCommit;
+const commitEntered=new Promise(resolve=>{enteredCommit=resolve;});
+const commitReleased=new Promise(resolve=>{releaseCommit=resolve;});
+const duringCommit=new AbortController();
+let pauseConfirmationCommit=false;
+const committedUnknown=harness({onQuery:async sql=>{
+ if(pauseConfirmationCommit&&sql==='commit'){enteredCommit();await commitReleased;}
+}}),commitRequest=await requestFor(committedUnknown);
+pauseConfirmationCommit=true;
+const unknownAfterAbort=assert.rejects(()=>committedUnknown.plane.confirmRecurringStaffing({
+ ...commitRequest,signal:duringCommit.signal}),error=>error.code==='static_weekly_recurring_confirmation_outcome_unknown');
+await commitEntered;
+duringCommit.abort(new Error('synthetic close during commit'));
+releaseCommit();await unknownAfterAbort;checks++;
+check('late COMMIT keeps its durable receipt but cannot return PASS',committedUnknown.state().receipt?.accepted,true);
+check('late COMMIT is never described as rolled back',committedUnknown.queries.at(-1).sql,'commit');
+check('exact status resolves the unknown response after commit',
+ (await committedUnknown.plane.getRecurringConfirmationStatus({manager,confirmationKey:key})).receipt,
+ committedUnknown.state().receipt);
+await committedUnknown.plane.close();
 console.log(JSON.stringify({status:'PASS',checks,scope:'mock single-client recurring confirmation ordering, rollback, exact retry and hostile inputs; not SQL/HTTP/phone proof'}));

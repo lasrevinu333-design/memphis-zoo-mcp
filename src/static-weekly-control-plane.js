@@ -44,7 +44,8 @@ import {
 } from "./static-weekly-schedule-compiler-runtime.js";
 
 export const STATIC_WEEKLY_CONTROL_PLANE_SCHEMA = "memphis-zoo.static-weekly-control-plane.v1";
-export const STATIC_WEEKLY_DATABASE_OPERATION_STATEMENT_TIMEOUT_MS = 120_000;
+export const STATIC_WEEKLY_DATABASE_OPERATION_STATEMENT_TIMEOUT_MS = 60_000;
+export const STATIC_WEEKLY_MANAGER_OPERATION_DEADLINE_MS = 60_000;
 const STATIC_WEEKLY_AUTHORITY_LOCK_IDENTITY = "memphis-static-weekly-authority";
 const APPROVED_FULL_NINE_IDENTITY = JSON.parse(readFileSync(new URL(
   "../config/custodial-full-nine-family-owners-20260926.json", import.meta.url)));
@@ -53,6 +54,49 @@ const APPROVED_FULL_NINE_SOURCE_ID = APPROVED_FULL_NINE_IDENTITY.baseSourceId;
 const text = (value) => typeof value === "string" ? value.trim() : "";
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const fail = (code, message = code) => Object.assign(new Error(message), { code });
+
+function assertOperationActive(signal) {
+  if (signal?.aborted) {
+    const error = fail("static_weekly_recurring_operation_aborted",
+      "The recurring operation was interrupted; check its exact status before retrying.");
+    if (signal.reason instanceof Error) error.cause = signal.reason;
+    throw error;
+  }
+}
+
+function operationRemaining(deadlineAt, signal) {
+  assertOperationActive(signal);
+  const remaining = Math.floor(deadlineAt - performance.now());
+  if (remaining < 1) throw fail("static_weekly_recurring_operation_deadline_exceeded",
+    "The recurring operation exceeded its one-minute deadline; check its exact status before retrying.");
+  return remaining;
+}
+
+async function acquireOperationClient(database, signal) {
+  if (!signal) return database.connect();
+  assertOperationActive(signal);
+  const connecting = Promise.resolve().then(() => database.connect());
+  let onAbort;
+  const aborted = new Promise((_, reject) => {
+    onAbort = () => {
+      try { assertOperationActive(signal); }
+      catch (error) { reject(error); }
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+  try {
+    const client = await Promise.race([connecting, aborted]);
+    assertOperationActive(signal);
+    return client;
+  } catch (error) {
+    // A checkout can settle after the request has failed. It never starts a
+    // transaction; return ONLY that exact late client to its owning pool.
+    void connecting.then(client => client.release(error), () => {});
+    throw error;
+  } finally {
+    signal.removeEventListener("abort", onAbort);
+  }
+}
 
 function databaseConnectionFailure(error) {
   return Object.assign(new Error("The scheduler database connection was interrupted. The outcome is unknown; check the exact operation status before retrying."), {
@@ -394,7 +438,7 @@ export function createStaticWeeklyControlPlane({
   if (!Number.isSafeInteger(transactionAdmissionMilliseconds) || transactionAdmissionMilliseconds < 1) {
     throw fail("static_weekly_control_plane_transaction_deadline_invalid");
   }
-  if (!Number.isSafeInteger(operationStatementMilliseconds) || operationStatementMilliseconds < 30_000 || operationStatementMilliseconds > 180_000) {
+  if (!Number.isSafeInteger(operationStatementMilliseconds) || operationStatementMilliseconds < 30_000 || operationStatementMilliseconds > STATIC_WEEKLY_MANAGER_OPERATION_DEADLINE_MS) {
     throw fail("static_weekly_control_plane_statement_deadline_invalid");
   }
   if (!Number.isSafeInteger(healthTransactionMilliseconds) || healthTransactionMilliseconds < 1 || healthTransactionMilliseconds > 10_000) {
@@ -427,13 +471,28 @@ export function createStaticWeeklyControlPlane({
     });
   }
 
-  function admitTransaction(work) {
+  function admitTransaction(work, signal = null) {
+    assertOperationActive(signal);
     if (closing) return Promise.reject(fail("static_weekly_control_plane_closing", "The scheduler is closing and cannot admit another operation."));
     if (transactionQueue.length >= maxQueuedTransactions) {
       return Promise.reject(fail("static_weekly_control_plane_busy", "The scheduler already has its maximum bounded operation queue."));
     }
     return new Promise((resolve, reject) => {
-      const record = { work, resolve, reject, timer: null };
+      const record = { work, resolve, reject, timer: null, onAbort: null };
+      if (signal) {
+        record.onAbort = () => {
+          const index = transactionQueue.indexOf(record);
+          if (index < 0) return;
+          transactionQueue.splice(index, 1);
+          clearTimeout(record.timer);
+          reject(signal.reason instanceof Error ? signal.reason : fail("static_weekly_recurring_operation_aborted"));
+        };
+        signal.addEventListener("abort", record.onAbort, { once: true });
+        if (signal.aborted) { signal.removeEventListener("abort", record.onAbort); reject(signal.reason); return; }
+      }
+      const priorResolve = record.resolve, priorReject = record.reject;
+      record.resolve = (value) => { signal?.removeEventListener("abort", record.onAbort); priorResolve(value); };
+      record.reject = (error) => { signal?.removeEventListener("abort", record.onAbort); priorReject(error); };
       if (activeTransactions < transactionConcurrency) {
         beginAdmittedTransaction(record);
         return;
@@ -441,7 +500,7 @@ export function createStaticWeeklyControlPlane({
       record.timer = setTimeout(() => {
         const index = transactionQueue.indexOf(record);
         if (index >= 0) transactionQueue.splice(index, 1);
-        reject(fail("static_weekly_control_plane_queue_timeout", "The scheduler operation expired before a database transaction was opened."));
+        record.reject(fail("static_weekly_control_plane_queue_timeout", "The scheduler operation expired before a database transaction was opened."));
       }, transactionAdmissionMilliseconds);
       record.timer.unref?.();
       transactionQueue.push(record);
@@ -463,38 +522,76 @@ export function createStaticWeeklyControlPlane({
     return execution;
   }
 
-  function transaction(work, { health = false, reconcileManagerId = null } = {}) {
+  function transaction(work, { health = false, reconcileManagerId = null, signal = null, deadlineAt = null } = {}) {
     const execute = async () => {
+      assertOperationActive(signal);
       if (closing) throw fail("static_weekly_control_plane_closing", "The scheduler is closing and cannot open another database transaction.");
       let client;
       try {
-        client = await database.connect();
+        client = await acquireOperationClient(database, signal);
       } catch (error) {
         if (isDatabaseConnectionFailure(error)) throw databaseConnectionFailure(error);
         throw error;
       }
       let asynchronousConnectionError = null;
       let discardClientError = null;
+      let commitCompleted = false;
+      let commitStarted = false;
       const onConnectionError = (error) => { asynchronousConnectionError ||= error instanceof Error ? error : new Error("Database connection unavailable."); };
+      const onAbort = () => {
+        // pg Client.end() destroys its socket when a query is active. Awaited
+        // query settlement below remains the transaction/lease boundary.
+        discardClientError ||= fail("static_weekly_recurring_operation_aborted");
+        try { void client.end?.()?.catch?.((error) => { asynchronousConnectionError ||= error; }); }
+        catch (error) { asynchronousConnectionError ||= error; }
+      };
       // pg-pool intentionally removes its idle error listener while a client
       // is checked out. The transaction owner must therefore catch the
       // client's asynchronous error event itself or Node terminates the whole
       // control-plane process before rollback/fail-closed handling can run.
       client.on?.("error", onConnectionError);
+      signal?.addEventListener?.("abort", onAbort, { once: true });
+      if (signal?.aborted) onAbort();
       try {
+        assertOperationActive(signal);
         await client.query("begin");
+        assertOperationActive(signal);
         // The login identity is provisioned separately and granted this NOLOGIN
         // capability group. Ordinary service-role credentials lack membership.
         await client.query("set local role static_weekly_control_plane");
-        await client.query(`set local statement_timeout = '${health ? healthTransactionMilliseconds : operationStatementMilliseconds}ms'`);
+        assertOperationActive(signal);
+        await client.query(`set local statement_timeout = '${health ? healthTransactionMilliseconds
+          : deadlineAt == null ? operationStatementMilliseconds
+            : Math.min(operationStatementMilliseconds, operationRemaining(deadlineAt, signal))}ms'`);
+        assertOperationActive(signal);
         if (!health) {
           // Acquire the shared disaster-recovery generation fence before any
           // source read or isolated compile. A restore therefore drains this
           // complete transaction and a later generation can never accept a
           // write prepared from pre-restore state.
           await client.query("select public.custodial_begin_application_mutation()");
+          assertOperationActive(signal);
         }
-        let result = await work(client);
+        // Every in-flight SQL statement is awaited to settlement. Aborting
+        // never releases a checked-out client or promises a rollback while a
+        // query may still be changing state.
+        const workClient = signal ? Object.assign(Object.create(client), {
+          query: async (...args) => {
+            assertOperationActive(signal);
+            // A fresh SQL statement does not get a fresh minute. Its server
+            // timeout is reduced to the remainder of this SAME request clock.
+            if (deadlineAt != null) {
+              await client.query(`set local statement_timeout = '${Math.min(operationStatementMilliseconds,
+                operationRemaining(deadlineAt, signal))}ms'`);
+              assertOperationActive(signal);
+            }
+            const result = await client.query(...args);
+            assertOperationActive(signal);
+            return result;
+          },
+        }) : client;
+        let result = await work(workClient);
+        assertOperationActive(signal);
         if (reconcileManagerId !== null) {
           // Finish the existing immutable mutation/projection/lunch receipt
           // before advancing future validity. The deferred DB guard and this
@@ -503,9 +600,25 @@ export function createStaticWeeklyControlPlane({
           result = withRecurringDependencyStatus(result, validity);
         }
         if (asynchronousConnectionError) throw asynchronousConnectionError;
+        assertOperationActive(signal);
+        if (deadlineAt != null) {
+          await client.query(`set local statement_timeout = '${Math.min(operationStatementMilliseconds,
+            operationRemaining(deadlineAt, signal))}ms'`);
+          assertOperationActive(signal);
+        }
+        commitStarted = true;
         await client.query("commit");
+        commitCompleted = true;
+        if (signal?.aborted) throw fail("static_weekly_recurring_confirmation_outcome_unknown",
+          "The response was interrupted during commit; read the exact confirmation status before retrying.");
         return result;
       } catch (error) {
+        if (commitCompleted) throw error;
+        if (commitStarted && signal?.aborted) {
+          discardClientError = error instanceof Error ? error : new Error("Commit outcome unknown after abort.");
+          throw fail("static_weekly_recurring_confirmation_outcome_unknown",
+            "The transaction was interrupted during commit; read the exact confirmation status before retrying.");
+        }
         let rollbackError = null;
         await client.query("rollback").catch((candidate) => { rollbackError = candidate; });
         const connectionError = asynchronousConnectionError
@@ -517,6 +630,7 @@ export function createStaticWeeklyControlPlane({
         }
         throw error;
       } finally {
+        signal?.removeEventListener?.("abort", onAbort);
         client.removeListener?.("error", onConnectionError);
         // Passing an error tells pg-pool to destroy a broken client rather than
         // return it to the pool for another authority transaction.
@@ -526,7 +640,7 @@ export function createStaticWeeklyControlPlane({
     // The pool has four connections. Ordinary operations may occupy at most
     // three; one coalesced and separately bounded health transaction retains
     // the fourth slot while compiles or idempotent replays are queued.
-    return health ? execute() : admitTransaction(execute);
+    return health ? execute() : admitTransaction(execute, signal);
   }
 
   async function call(client, functionName, args) {
@@ -722,29 +836,34 @@ export function createStaticWeeklyControlPlane({
     })).digest("hex");
   }
 
-  async function compileOrFail(input) {
-    const result = await compiler(input);
+  async function compileOrFail(input, options = {}) {
+    const result = await compiler(input, options);
     if (result?.status !== "FEASIBLE" || result?.publicationAuthority !== "ACCEPTABLE" || result?.verifier?.ok !== true) {
       throw fail("static_weekly_control_plane_compiler_rejected", "Canonical source did not produce a publishable verified schedule.");
     }
     return result;
   }
 
-  async function prepareDraft(input, { expectedRevision, actor }) {
+  async function prepareDraft(input, { expectedRevision, actor, signal = null, deadlineAt = null }) {
     assertOwnerRecurringWorkdays(input);
     if (compilerPreparer) {
-      return compilerPreparer(input, { kind: "draft", expectedRevision, actor });
+      return compilerPreparer(input, { kind: "draft", expectedRevision, actor },
+        deadlineAt == null ? {} : { signal, deadlineMilliseconds: operationRemaining(deadlineAt, signal) });
     }
-    return createStaticWeeklyDraftRpcInput({ result: await compileOrFail(input), expectedRevision, actor });
+    return createStaticWeeklyDraftRpcInput({ result: await compileOrFail(input,
+      deadlineAt == null ? {} : { signal, deadlineMilliseconds: operationRemaining(deadlineAt, signal) }), expectedRevision, actor });
   }
 
-  async function prepareProjection(input, { publicationId, expectedRevision, actor, deadlineMilliseconds = null }) {
+  async function prepareProjection(input, { publicationId, expectedRevision, actor, deadlineMilliseconds = null,
+    signal = null, deadlineAt = null }) {
     assertOwnerRecurringWorkdays(input);
     if (compilerPreparer) {
       return compilerPreparer(input, { kind: "projection", publicationId, expectedRevision, actor },
-        deadlineMilliseconds == null ? {} : { deadlineMilliseconds });
+        deadlineAt == null ? deadlineMilliseconds == null ? {} : { deadlineMilliseconds }
+          : { signal, deadlineMilliseconds: operationRemaining(deadlineAt, signal) });
     }
-    return createStaticWeeklyProjectionWithLunchRpcInput({ result: await compileOrFail(input), publicationId, expectedRevision, actor });
+    return createStaticWeeklyProjectionWithLunchRpcInput({ result: await compileOrFail(input,
+      deadlineAt == null ? {} : { signal, deadlineMilliseconds: operationRemaining(deadlineAt, signal) }), publicationId, expectedRevision, actor });
   }
 
   async function prepareInsideTransaction(client, work) {
@@ -779,14 +898,15 @@ export function createStaticWeeklyControlPlane({
     }
   }
 
-  async function materializeCurrentProjection(client, { actor, publicationId, weekStart, expectedRevision, idempotencyKey }) {
+  async function materializeCurrentProjection(client, { actor, publicationId, weekStart, expectedRevision, idempotencyKey,
+    signal = null, deadlineAt = null }) {
     const source = await sourceFor(client, requirePublicationId(publicationId), weekStart);
     const effectivePublicationId = requirePublicationId(publicationId);
     const revision = requireRevision(expectedRevision);
     const preparedActor = { ...actor, idempotencyKey: requireIdempotencyKey(idempotencyKey) };
     const projection = await prepareInsideTransaction(client, () => prepareProjection(
       compilerInputFromPublishedSource(source, weekStart),
-      { publicationId: effectivePublicationId, expectedRevision: revision, actor: preparedActor },
+      { publicationId: effectivePublicationId, expectedRevision: revision, actor: preparedActor, signal, deadlineAt },
     ));
     if (!projection.lunchDocument?.document_identity
       || projection.lunchDocument.base_replay_digest !== projection.replayDigest
@@ -890,14 +1010,33 @@ export function createStaticWeeklyControlPlane({
       requireManager(manager);
       return transaction((client) => snapshotFor(client, requireMonday(weekStart, "week start")));
     },
-    async previewRecurringStaffing({ manager, effectiveStart, expectedRevision, fullNineSourceId = null }) {
+    async previewRecurringStaffing({ manager, effectiveStart, expectedRevision, fullNineSourceId = null,
+      signal = null, deadlineAt = null }) {
+      const enteredAt = performance.now();
+      const expiresAt = deadlineAt == null ? enteredAt + STATIC_WEEKLY_MANAGER_OPERATION_DEADLINE_MS
+        : Math.min(Number(deadlineAt), enteredAt + STATIC_WEEKLY_MANAGER_OPERATION_DEADLINE_MS);
+      if (!Number.isFinite(expiresAt)) throw fail("static_weekly_recurring_operation_deadline_invalid");
+      const controller = new AbortController();
+      const relayAbort = () => controller.abort(signal?.reason);
+      signal?.addEventListener?.("abort", relayAbort, { once: true });
+      if (signal?.aborted) relayAbort();
+      const timeout = setTimeout(() => controller.abort(fail("static_weekly_recurring_operation_deadline_exceeded",
+        "The recurring operation exceeded its one-minute deadline; preview the current plan again.")),
+      Math.max(1, expiresAt - performance.now()));
+      timeout.unref?.();
+      try {
+      operationRemaining(expiresAt, controller.signal);
       const actor = requireManager(manager);
       const date = requireMonday(effectiveStart, "recurring effective start");
       const revision = requireRevision(expectedRevision);
       const sourceId = approvedRecurringFullSource(fullNineSourceId);
-      const basis = await transaction(client => recurringBasisFor(client, { actor, date, revision, fullNineSourceId: sourceId }));
+      const basis = await transaction(client => recurringBasisFor(client, { actor, date, revision, fullNineSourceId: sourceId }),
+        { signal: controller.signal, deadlineAt: expiresAt });
       // Public preview does not hold an idle transaction during its solve.
-      const candidate = await recurringCandidatePreparer(recurringPreparationInput(basis, date, revision));
+      const candidate = await recurringCandidatePreparer(recurringPreparationInput(basis, date, revision), {
+        signal: controller.signal, deadlineMilliseconds: operationRemaining(expiresAt, controller.signal),
+      });
+      operationRemaining(expiresAt, controller.signal);
       validateRecurringCandidate(candidate, basis, revision);
       // Recheck after it completes; a later confirmation must do the same
       // under a serial authority lock and compare this exact digest.
@@ -911,7 +1050,7 @@ export function createStaticWeeklyControlPlane({
         return { snapshot,recurringGeneration,correctionWitness,
           splashSeasonWitness: await call(client, "static_weekly_sch022_preview_witness", [date,
             JSON.stringify(seasonWorkFromAssignments(candidate.decision.assignments)),actor.managerId]) };
-      });
+      }, { signal: controller.signal, deadlineAt: expiresAt });
       if (requireRevision(current.snapshot?.authority_revision) !== revision
         || text(current.snapshot?.current_publication?.publication_id) !== candidate.publicationId
         || current.recurringGeneration !== basis.recurringGeneration) {
@@ -923,11 +1062,31 @@ export function createStaticWeeklyControlPlane({
       // final area map. This binds source/roster inputs, compiler authority and
       // replay, metrics and the exact preview changes to the named manager.
       const previewDigest = recurringPreviewDigest(actor, basis, candidate);
+      operationRemaining(expiresAt, controller.signal);
       return { ...candidate, recurringGeneration: basis.recurringGeneration,
         previewDigest, source: "AUTHENTICATED_MANAGER_READBACK",
         admitted: false, published: false, affectedPhonesUpdated: false };
+      } finally {
+        clearTimeout(timeout);
+        signal?.removeEventListener?.("abort", relayAbort);
+      }
     },
-    async confirmRecurringStaffing({ manager, confirmationKey, effectiveStart, expectedRevision, previewDigest, fullNineSourceId = null }) {
+    async confirmRecurringStaffing({ manager, confirmationKey, effectiveStart, expectedRevision, previewDigest,
+      fullNineSourceId = null, signal = null, deadlineAt = null }) {
+      const enteredAt = performance.now();
+      const expiresAt = deadlineAt == null ? enteredAt + STATIC_WEEKLY_MANAGER_OPERATION_DEADLINE_MS
+        : Math.min(Number(deadlineAt), enteredAt + STATIC_WEEKLY_MANAGER_OPERATION_DEADLINE_MS);
+      if (!Number.isFinite(expiresAt)) throw fail("static_weekly_recurring_operation_deadline_invalid");
+      const controller = new AbortController();
+      const relayAbort = () => controller.abort(signal?.reason);
+      signal?.addEventListener?.("abort", relayAbort, { once: true });
+      if (signal?.aborted) relayAbort();
+      const timeout = setTimeout(() => controller.abort(fail("static_weekly_recurring_operation_deadline_exceeded",
+        "The recurring operation exceeded its one-minute deadline; check its exact status before retrying.")),
+      Math.max(1, expiresAt - performance.now()));
+      timeout.unref?.();
+      try {
+      operationRemaining(expiresAt, controller.signal);
       const actor = requireManager(manager);
       const key = requireUuid(confirmationKey, "recurring_confirmation_key_required");
       const date = requireMonday(effectiveStart, "recurring effective start");
@@ -935,7 +1094,7 @@ export function createStaticWeeklyControlPlane({
       const expectedDigest = text(previewDigest);
       if (!/^[a-f0-9]{64}$/.test(expectedDigest)) throw fail("static_weekly_recurring_preview_digest_required");
       const sourceId = approvedRecurringFullSource(fullNineSourceId);
-      return transaction(async client => {
+      const confirmation = await transaction(async client => {
         // One checked-out client owns every child and the final receipt. Never
         // invoke the public preview/publish methods from this transaction.
         await lockStaticWeeklyAuthority(client);
@@ -948,7 +1107,9 @@ export function createStaticWeeklyControlPlane({
         requireUuid(parent.operationId, "static_weekly_recurring_parent_unavailable");
         const basis = await recurringBasisFor(client, { actor, date, revision, fullNineSourceId: sourceId });
         const prepared = clone(await prepareInsideTransaction(client, () =>
-          recurringAdmissionPreparer(recurringPreparationInput(basis, date, revision))));
+          recurringAdmissionPreparer(recurringPreparationInput(basis, date, revision), {
+            signal: controller.signal, deadlineMilliseconds: operationRemaining(expiresAt, controller.signal),
+          })));
         try { assertRecurringAdmissionCandidate(prepared); }
         catch (error) {
           if(error?.code===OPENING_COVERAGE_ERROR&&sanitizeOpeningCoverageDiagnostic(error.openingCoverageDiagnostic))throw error;
@@ -972,7 +1133,8 @@ export function createStaticWeeklyControlPlane({
         delete draftInput.version;
         const childPrefix = `recurring:${actor.managerId}:${key}`;
         const draftInputPrepared = await prepareInsideTransaction(client, () => prepareDraft(draftInput,
-          { expectedRevision: revision, actor: { ...actor, idempotencyKey: `${childPrefix}:draft` } }));
+          { expectedRevision: revision, actor: { ...actor, idempotencyKey: `${childPrefix}:draft` },
+            signal: controller.signal, deadlineAt: expiresAt }));
         const draft = await call(client, "static_weekly_v3_create_draft", [draftInputPrepared.effectiveStart,
           draftInputPrepared.objectiveVersion, draftInputPrepared.objective, draftInputPrepared.inputProvenance,
           draftInputPrepared.document, revision, actor.managerId, `${childPrefix}:draft`, admittedSourceId]);
@@ -989,7 +1151,8 @@ export function createStaticWeeklyControlPlane({
         await call(client, "static_weekly_v18_bind_recurring_publication",
           [actor.managerId, key, publicationId, publicationGeneration, candidate.decision]);
         const projection = await materializeCurrentProjection(client, { actor, publicationId, weekStart: date,
-          expectedRevision: requireRevision(publication?.revision), idempotencyKey: `${childPrefix}:projection:${date}` });
+          expectedRevision: requireRevision(publication?.revision), idempotencyKey: `${childPrefix}:projection:${date}`,
+          signal: controller.signal, deadlineAt: expiresAt });
         const receipt = await call(client, "static_weekly_v23_finalize_recurring_confirmation", [actor.managerId, key]);
         if (receipt?.accepted !== true || receipt.operationId !== parent.operationId
           || receipt.managerId !== actor.managerId || receipt.confirmationKey !== key || receipt.previewDigest !== expectedDigest
@@ -1002,7 +1165,16 @@ export function createStaticWeeklyControlPlane({
         // Immutable original acceptance, NOT a claim about current validity or
         // phone delivery. Later exact status/readback supplies those facts.
         return { state: "ACCEPTED", operationId: parent.operationId, receipt };
-      });
+      }, { signal: controller.signal, deadlineAt: expiresAt });
+      if (controller.signal.aborted || performance.now() >= expiresAt) {
+        throw fail("static_weekly_recurring_confirmation_outcome_unknown",
+          "The confirmation outlived its one-minute response deadline; read its exact status before retrying.");
+      }
+      return confirmation;
+      } finally {
+        clearTimeout(timeout);
+        signal?.removeEventListener?.("abort", relayAbort);
+      }
     },
     async getRecurringConfirmationStatus({ manager, confirmationKey }) {
       const actor = requireManager(manager);

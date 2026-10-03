@@ -25,6 +25,24 @@ assert 'fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed' in lau
 assert len(launcher.BACKEND_MEMBERS) == len(set(launcher.BACKEND_MEMBERS))
 assert launcher.BACKEND_LOCK_SHA256 == '2085bec2833f5e08e3314aa12003b2a8e0863b07837742384e92072b77beb6b1'
 assert set(launcher.BACKEND_PACKAGES) == {'pg', 'highs', 'express', 'dotenv', '@supabase/supabase-js'}
+launcher_source = SOURCE.read_text()
+assert 'bounded_stream(child, log, started + 60, on_line, renew_if_due)' in launcher_source
+assert 'manager_stall_expired(last_progress, time.monotonic())' in launcher_source
+assert launcher.manager_stall_expired(100.0, 144.999) is False
+assert launcher.manager_stall_expired(100.0, 145.0) is True
+for line in ('restore_lease_heartbeat', 'select 1', 'ACTUAL_RECURRING_HTTP_CONFIRM_BOUNDARY sql_start:static_weekly_v3_create_draft 5\n',
+        'ACTUAL_RECURRING_HTTP_CONFIRM_BOUNDARY compiler_prepare_start:draft 5\n',
+        'REPLAYED_EXACT_MIGRATIONS 0\n', 'REPLAYED_EXACT_MIGRATIONS 300\n'):
+    assert launcher.meaningful_manager_progress(line, 0) == (False, 0), line
+assert launcher.meaningful_manager_progress('REPLAYED_EXACT_MIGRATIONS 25\n', 0) == (True, 25)
+assert launcher.meaningful_manager_progress('REPLAYED_EXACT_MIGRATIONS 25\n', 25) == (False, 25)
+assert launcher.meaningful_manager_progress('REPLAYED_EXACT_MIGRATIONS 50\n', 25) == (True, 50)
+for phase in ('compiler_prepare_complete:draft:lunch_not_applicable',
+        'compiler_prepare_complete:projection:lunch_present',
+        'sql_complete:static_weekly_v14_admit_recurring_source',
+        'sql_complete:static_weekly_v23_finalize_recurring_confirmation'):
+    assert launcher.meaningful_manager_progress('ACTUAL_RECURRING_HTTP_CONFIRM_BOUNDARY '+phase+' 123\n', 0) == (True, 0)
+assert launcher.meaningful_manager_progress('ACTUAL_RECURRING_HTTP_CONFIRM_BOUNDARY sql_complete:select1 1\n', 0) == (False, 0)
 bound = {'childPid': 333, 'stageParentPid': 222, 'leaseParentPid': 111,
     'remainingContexts': 0, 'sharedUserBrowserAccessed': False,
     'launched': True, 'contextCreated': True, 'contextClosed': True, 'browserClosed': True,

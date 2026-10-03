@@ -16,7 +16,9 @@ import {sanitizeOpeningCoverageDiagnostic} from './static-weekly-opening-coverag
 
 export const STATIC_WEEKLY_COMPILER_RUNTIME_LIMITS = Object.freeze({
   initializationMilliseconds: 30_000,
-  requestMilliseconds: REQUEST_DEADLINE_MILLISECONDS + 15_000,
+  // The complete queued/initializing/executing request shares the owner's
+  // absolute one-minute operation cap. Initialization gets no fresh allowance.
+  requestMilliseconds: Math.min(REQUEST_DEADLINE_MILLISECONDS, 60_000),
   maxOutstandingRequests: 8,
   // The production service is a 512 MiB Render Starter instance. The original
   // Earlier three-process envelopes either exceeded the Starter instance or
@@ -30,6 +32,12 @@ export const STATIC_WEEKLY_COMPILER_RUNTIME_LIMITS = Object.freeze({
 function runtimeError(code, message) {
   const error = new Error(message);
   error.code = code;
+  return error;
+}
+
+function abortError(signal) {
+  const error = runtimeError("static_weekly_compiler_request_aborted", "The isolated compiler request was aborted before its result could be used.");
+  if (signal?.reason instanceof Error) error.cause = signal.reason;
   return error;
 }
 
@@ -110,6 +118,7 @@ export function createStaticWeeklyCompilerRuntime({
 } = {}) {
   if (!Number.isSafeInteger(initializationMilliseconds) || initializationMilliseconds < 1) throw new Error("Compiler process initialization timeout must be a positive integer.");
   if (!Number.isSafeInteger(requestMilliseconds) || requestMilliseconds < 1) throw new Error("Compiler process request timeout must be a positive integer.");
+  if (requestMilliseconds > 60_000) throw new Error("Compiler process request timeout cannot exceed the one-minute operation cap.");
   if (!Number.isSafeInteger(maxOutstandingRequests) || maxOutstandingRequests < 1) throw new Error("Compiler process outstanding-request limit must be a positive integer.");
   for (const [name, value] of Object.entries(resourceLimits)) {
     if (!Number.isSafeInteger(value) || value < 1) throw new Error(`Compiler process ${name} must be a positive integer.`);
@@ -148,6 +157,7 @@ export function createStaticWeeklyCompilerRuntime({
     if (!record || record.settled) return;
     record.settled = true;
     if (record.timer) clearTimeout(record.timer);
+    record.signal?.removeEventListener?.("abort", record.onAbort);
     if (pending === record) pending = null;
     unrefWorkerProcess(record.candidate);
     settle(value);
@@ -187,8 +197,10 @@ export function createStaticWeeklyCompilerRuntime({
     void discard(candidate, cause);
   }
 
-  async function start() {
+  async function start(signal = null, deadline = null) {
     await teardown;
+    if (signal?.aborted) throw abortError(signal);
+    if (deadline != null && deadline <= monotonicNowMilliseconds()) throw runtimeError("static_weekly_compiler_queue_timeout", "The isolated compiler request expired before initialization.");
     if (closed) throw runtimeError("static_weekly_compiler_closed", "The isolated compiler is closed.");
     if (state === "ready" && worker && workerEvidence) return readiness();
     if (initialization) return initialization.promise;
@@ -265,8 +277,39 @@ export function createStaticWeeklyCompilerRuntime({
     return record.promise;
   }
 
-  async function send(input, preparation, deadline, requestType = "compile") {
-    await start();
+  async function send(input, preparation, deadline, requestType = "compile", signal = null) {
+    if (signal?.aborted) throw abortError(signal);
+    if (deadline <= monotonicNowMilliseconds()) throw runtimeError("static_weekly_compiler_queue_timeout", "The isolated compiler request expired while waiting for its serialized execution slot.");
+    let initialTimer = null, rejectAbort;
+    const aborted = new Promise((_, reject) => { rejectAbort = reject; });
+    const onAbortDuringStart = () => {
+      const cause = abortError(signal);
+      if (initialization?.candidate) failActive(initialization.candidate, cause);
+      rejectAbort(cause);
+    };
+    signal?.addEventListener?.("abort", onAbortDuringStart, { once: true });
+    try {
+      const remaining = Math.max(1, Math.floor(deadline - monotonicNowMilliseconds()));
+      const expired = new Promise((_, reject) => {
+        initialTimer = setTimeout(() => {
+          const cause = runtimeError("static_weekly_compiler_queue_timeout", "The isolated compiler request expired during initialization.");
+          if (initialization?.candidate) failActive(initialization.candidate, cause);
+          reject(cause);
+        }, remaining);
+        initialTimer.unref?.();
+      });
+      await Promise.race([start(signal, deadline), aborted, expired]);
+    } catch (error) {
+      await teardown;
+      throw error;
+    } finally {
+      if (initialTimer) clearTimeout(initialTimer);
+      signal?.removeEventListener?.("abort", onAbortDuringStart);
+    }
+    if (signal?.aborted) {
+      if (worker) await discard(worker, abortError(signal));
+      throw abortError(signal);
+    }
     const remainingMilliseconds = Math.floor(deadline - monotonicNowMilliseconds());
     if (remainingMilliseconds <= 0) throw runtimeError("static_weekly_compiler_queue_timeout", "The isolated compiler request expired while waiting for its serialized execution slot.");
     const candidate = worker;
@@ -274,12 +317,22 @@ export function createStaticWeeklyCompilerRuntime({
     refWorkerProcess(candidate);
     const id = ++sequence;
     return new Promise((resolve, reject) => {
-      const record = { id, candidate, settled: false, timer: null, resolve, reject };
+      const record = { id, candidate, settled: false, timer: null, resolve, reject, signal, onAbort: null };
       pending = record;
+      record.onAbort = () => {
+        if (record.settled) return;
+        const cause = abortError(signal);
+        // A running solve is not just ignored: reap its exact detached
+        // compiler/solver group before reporting cooperative cancellation.
+        clearPending(record, () => {}, cause);
+        void discard(candidate, cause).then(() => reject(cause), () => reject(cause));
+      };
+      signal?.addEventListener?.("abort", record.onAbort, { once: true });
+      if (signal?.aborted) { record.onAbort(); return; }
       record.timer = setTimeout(() => {
         const cause = runtimeError("static_weekly_compiler_worker_timeout", "The isolated compiler exceeded the complete request deadline.");
-        clearPending(record, reject, cause);
-        void discard(candidate, cause);
+        clearPending(record, () => {}, cause);
+        void discard(candidate, cause).then(() => reject(cause), () => reject(cause));
       }, remainingMilliseconds);
       record.timer.unref?.();
       try {
@@ -304,9 +357,14 @@ export function createStaticWeeklyCompilerRuntime({
     if (!Number.isSafeInteger(requestedDeadline) || requestedDeadline < 1 || requestedDeadline > requestMilliseconds) {
       return Promise.reject(runtimeError("static_weekly_compiler_request_deadline_invalid", "The isolated compiler request deadline is invalid."));
     }
+    const signal = options?.signal ?? null;
+    if (signal && (typeof signal.addEventListener !== "function" || typeof signal.removeEventListener !== "function" || typeof signal.aborted !== "boolean")) {
+      return Promise.reject(runtimeError("static_weekly_compiler_abort_signal_invalid", "The isolated compiler abort signal is invalid."));
+    }
+    if (signal?.aborted) return Promise.reject(abortError(signal));
     outstanding += 1;
     const deadline = monotonicNowMilliseconds() + requestedDeadline;
-    const run = () => send(input, preparation, deadline, requestType);
+    const run = () => send(input, preparation, deadline, requestType, signal);
     const queued = tail.then(run, run);
     tail = queued.then(() => undefined, () => undefined);
     return queued.finally(() => { outstanding -= 1; });

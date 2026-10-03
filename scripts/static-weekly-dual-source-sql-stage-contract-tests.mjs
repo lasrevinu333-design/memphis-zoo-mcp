@@ -24,7 +24,7 @@ assert.ok(publishedStart>=0&&publishedEnd>publishedStart,'real published child d
 const publishedDelegation=runner.slice(publishedStart,publishedEnd);
 function invokePublishedDelegation(source,{childError=null}={}){
  const calls={wrapper:0,child:0,args:null,options:null,clock:null};
- const clock=Object.freeze({deadlineMilliseconds:1200000});
+ const clock=Object.freeze({deadlineMilliseconds:60000});
  const context={publishedStage:true,publishedChildClock:clock,stage:'current-manager-219',
   currentManagerStage:true,currentManager216Stage:false,currentManager217Stage:false,
   currentManager218Stage:false,currentManager219Stage:true,currentManager218Browser:false,
@@ -89,7 +89,7 @@ check('new219 stage pins exact predecessor and preserves older stage branches',(
  assert.match(runner,/files\.length,currentManager219Stage\|\|dualSource219Stage\?219:currentManager218Stage\|\|dualSource218Stage\?218/);
  assert.match(runner,/20261003230000_static_weekly_named_handoff_derivation\.sql/);
  assert.match(runner,/20261004000000_native_provider_event_decision_lookup\.sql/);
- assert.match(runner,/createRecurringClockRecorder\(\{deadlineMilliseconds:1200000/);
+ assert.match(runner,/createRecurringClockRecorder\(\{deadlineMilliseconds:60000/);
  assert.match(runner,/if\(publishedStage\)runRecurringClockedChild\(\(\)=>execFileSync/);
  assert.match(runner,/if\(dualSource217Stage\)execFileSync\(process\.execPath,\['scripts\/static-weekly-dual-source-current-correction-sql-tests\.mjs'\]/);
  assert.match(runner,/if\(dualSource218Stage\)execFileSync\(process\.execPath,\['scripts\/static-weekly-dual-source-current-correction-sql-tests\.mjs'\]/);
@@ -106,7 +106,7 @@ check('published wrapper actually delegates one exact current-manager child and 
  assert.equal(calls.clock,clock);
  assert.equal(calls.args,'/exact/node');
  assert.deepEqual(Array.from(calls.argv),['scripts/static-weekly-current-roster-publication-tests.mjs']);
- assert.equal(calls.options.timeout,1200000);
+ assert.equal(calls.options.timeout,60000);
  assert.equal(calls.options.stdio,'inherit');
  assert.deepEqual(JSON.parse(JSON.stringify(calls.options.env)),{
   PARENT_MARKER:'retained',SHIFT_END_TEST_CONTAINER:'synthetic-container',
@@ -123,8 +123,8 @@ check('published delegation rejects mention-only and changed child/timeout mutat
   'scripts/wrong-child.mjs');
  assert.notDeepEqual(Array.from(invokePublishedDelegation(wrongChild).calls.argv),
   ['scripts/static-weekly-current-roster-publication-tests.mjs']);
- const wrongTimeout=publishedDelegation.replace('?1200000:900000','?999:900000');
- assert.notEqual(invokePublishedDelegation(wrongTimeout).calls.options.timeout,1200000);
+ const wrongTimeout=publishedDelegation.replace('timeout:60000','timeout:999');
+ assert.notEqual(invokePublishedDelegation(wrongTimeout).calls.options.timeout,60000);
 });
 check('old stage and malformed child selectors refuse changed219 source before Docker',()=>{
  const env={...process.env};

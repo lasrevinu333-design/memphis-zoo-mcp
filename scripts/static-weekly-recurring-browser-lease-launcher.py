@@ -8,8 +8,8 @@ import datetime
 import hashlib
 import json
 import os
-from pathlib import Path
 import re
+from pathlib import Path
 import secrets
 import selectors
 import signal
@@ -297,6 +297,31 @@ def bounded_stream(child, log, deadline, on_line, on_tick):
                 on_line(line.decode('utf8', errors='replace') + '\n', log)
 
 
+def meaningful_manager_progress(line, last_migration=0):
+    """Finite completed work only; a heartbeat, query start, or line spam is not progress."""
+    match = re.fullmatch(r'REPLAYED_EXACT_MIGRATIONS ([0-9]+)\n?', line)
+    if match:
+        count = int(match.group(1))
+        valid = count > last_migration and count <= 219 and count % 25 == 0
+        return (valid, count if valid else last_migration)
+    if line.startswith('ACTUAL_RECURRING_HTTP_CONFIRM_BOUNDARY '):
+        phase = line.split(' ', 2)[1]
+        if phase in {'compiler_prepare_complete:draft:lunch_not_applicable',
+                'compiler_prepare_complete:projection:lunch_present',
+                'sql_complete:static_weekly_v14_admit_recurring_source',
+                'sql_complete:static_weekly_v3_create_draft',
+                'sql_complete:static_weekly_v3_publish_draft',
+                'sql_complete:static_weekly_v3_materialize_projection',
+                'sql_complete:static_weekly_v8_materialize_lunch_document',
+                'sql_complete:static_weekly_v23_finalize_recurring_confirmation'}:
+            return (True, last_migration)
+    return (False, last_migration)
+
+
+def manager_stall_expired(last_progress, now):
+    return now - last_progress >= 45
+
+
 def group_absent(pid):
     try:
         os.killpg(pid, 0)
@@ -443,11 +468,16 @@ def run(plan_path, expected_sha):
     cleaned = 0
     renew_at = time.monotonic() + 240
     started = time.monotonic()
+    last_progress = started
+    replayed_migrations = 0
 
     def on_line(line, log):
-        nonlocal entered, cleaned
+        nonlocal entered, cleaned, last_progress, replayed_migrations
         log.write(line)
         log.flush()
+        progress, replayed_migrations = meaningful_manager_progress(line, replayed_migrations)
+        if progress:
+            last_progress = time.monotonic()
         if line.strip() == 'BROWSER_TRANSPORT_STAGE_ENTERED':
             entered += 1
         if line.strip() == 'BROWSER_TRANSPORT_STAGE_CLEANUP':
@@ -458,6 +488,8 @@ def run(plan_path, expected_sha):
 
     def renew_if_due():
         nonlocal lease, renew_at
+        if manager_stall_expired(last_progress, time.monotonic()):
+            raise TimeoutError('manager diagnostic attempt stalled without a completed authority stage')
         if time.monotonic() >= renew_at:
             lease = client.renew(lease, ttl_seconds=600)
             renew_at = time.monotonic() + 240
@@ -482,6 +514,8 @@ def run(plan_path, expected_sha):
         print('RECURRING_BROWSER_OUTPUT=' + str(output), flush=True)
         if not client.check(lease):
             raise RuntimeError('live supported browser lease check failed before child launch')
+        if time.monotonic() >= started + 60:
+            raise TimeoutError('manager diagnostic attempt exceeded its absolute minute before child launch')
         env = {key: os.environ[key] for key in ('PATH', 'LANG', 'LC_ALL', 'HOME',
             'XDG_RUNTIME_DIR', 'PLAYWRIGHT_BROWSERS_PATH') if key in os.environ}
         env.update({'STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION_BROWSER': '1',
@@ -500,7 +534,7 @@ def run(plan_path, expected_sha):
         receipt['child_process_group'] = child.pid
         with (output / 'raw.log').open('x', encoding='utf8') as log:
             os.chmod(output / 'raw.log', 0o600)
-            bounded_stream(child, log, started + 1800, on_line, renew_if_due)
+            bounded_stream(child, log, started + 60, on_line, renew_if_due)
         code = child.wait(timeout=10)
         receipt['exit_code'] = code
     except BaseException as error:

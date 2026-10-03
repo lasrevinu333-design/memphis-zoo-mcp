@@ -39,7 +39,7 @@ assert.throws(()=>rethrowOriginalTransportError(hostile,()=>captureRecurringHttp
  phase:'body',elapsedMilliseconds:1,emit(){throw Error('emitter failed');},persist(){throw Error('sidecar failed');}})),error=>error===hostile);
 assert.doesNotMatch(JSON.stringify(fact),/private|token|URL/);
 const events=[],input={secret:'must-not-print'},args={kind:'projection',operationId:'synthetic'},
- options={deadlineMilliseconds:315000},result={lunchDocument:{document_identity:'synthetic-private'}};
+ options={deadlineMilliseconds:60000},result={lunchDocument:{document_identity:'synthetic-private'}};
 let count=0;
 const observed=recurringHttpCompilerProbe(async function(...received){
  count++;assert.equal(received.length,3);assert.equal(received[0],input);
@@ -89,25 +89,25 @@ assert.deepEqual(proxyEvents,['compiler_prepare_start:other','compiler_prepare_c
 assert.equal(await recurringHttpCompilerProbe(async()=>hostileResult,()=>{throw Error('trace failed');})(input,args,options),hostileResult);
 assert.throws(()=>recurringHttpCompilerProbe(null,()=>{}),/compiler preparer required/);
 const clockFacts=[],ticks=[1_000_000,1_000_125];
-const stageClock=createRecurringClockRecorder({now:()=>ticks.shift(),deadlineMilliseconds:1_200_000,
+const stageClock=createRecurringClockRecorder({now:()=>ticks.shift(),deadlineMilliseconds:60_000,
  emit:fact=>clockFacts.push(fact)});
 const exactArgs=['scripts/static-weekly-current-roster-publication-tests.mjs'];
-const exactOptions={timeout:1_200_000,env:{STAGE:'synthetic'},stdio:'inherit'};
+const exactOptions={timeout:60_000,env:{STAGE:'synthetic'},stdio:'inherit'};
 let childCalls=0;
 const childValue={status:'unchanged'};
 assert.equal(runRecurringClockedChild(()=>{childCalls++;assert.deepEqual(exactArgs,
  ['scripts/static-weekly-current-roster-publication-tests.mjs']);
- assert.deepEqual(exactOptions,{timeout:1_200_000,env:{STAGE:'synthetic'},stdio:'inherit'});return childValue;},stageClock),childValue);
+ assert.deepEqual(exactOptions,{timeout:60_000,env:{STAGE:'synthetic'},stdio:'inherit'});return childValue;},stageClock),childValue);
 assert.equal(childCalls,1);
 assert.equal(runRecurringClockedChild(()=>childValue,null),childValue,'non-manager child path unchanged');
 assert.deepEqual(clockFacts,[
  {phase:'published_child_pre_call',outcome:'STARTED',epochMilliseconds:1_000_000,
-  originEpochMilliseconds:1_000_000,elapsedMilliseconds:0,estimatedDeadlineEpochMilliseconds:2_200_000},
+  originEpochMilliseconds:1_000_000,elapsedMilliseconds:0,estimatedDeadlineEpochMilliseconds:1_060_000},
  {phase:'published_child_terminal',outcome:'RETURNED',epochMilliseconds:1_000_125,
-  originEpochMilliseconds:1_000_000,elapsedMilliseconds:125,estimatedDeadlineEpochMilliseconds:2_200_000}]);
+  originEpochMilliseconds:1_000_000,elapsedMilliseconds:125,estimatedDeadlineEpochMilliseconds:1_060_000}]);
 const thrown=new Error('original child failure'),failedFacts=[];
 const failedClock=createRecurringClockRecorder({now:(()=>{let t=5_000;return()=>t++;})(),
- deadlineMilliseconds:1_200_000,emit:fact=>failedFacts.push(fact)});
+ deadlineMilliseconds:60_000,emit:fact=>failedFacts.push(fact)});
 assert.throws(()=>runRecurringClockedChild(()=>{throw thrown;},failedClock),error=>error===thrown);
 assert.deepEqual(failedFacts.map(f=>[f.phase,f.outcome]),
  [['published_child_pre_call','STARTED'],['published_child_terminal','THREW']]);
@@ -123,11 +123,11 @@ assert.equal(backwardClock.mark('confirm_response_closed','UNFINISHED'),null);
 assert.equal(backwardClock.mark('confirm_request_terminal','RETURNED').elapsedMilliseconds,1);
 assert.equal(backwardFacts.length,2,'backward wall-anchored observation is not emitted');
 const overflowing=createRecurringClockRecorder({now:()=>Number.MAX_SAFE_INTEGER-1,
- deadlineMilliseconds:1200000});
+ deadlineMilliseconds:60000});
 assert.equal(overflowing.mark('published_child_pre_call','STARTED'),null);
 const overflowThenValid=[Number.MAX_SAFE_INTEGER-1,1000];
 const retryAfterOverflow=createRecurringClockRecorder({now:()=>overflowThenValid.shift(),
- deadlineMilliseconds:1200000});
+ deadlineMilliseconds:60000});
 assert.equal(retryAfterOverflow.mark('published_child_pre_call','STARTED'),null);
 assert.equal(retryAfterOverflow.mark('published_child_terminal','RETURNED').originEpochMilliseconds,1000,
  'rejected overflowing origin must not pin later observations');
@@ -149,10 +149,10 @@ const httpSource=readFileSync(new URL('./static-weekly-recurring-confirmation-ht
 const compilerRuntimeSource=readFileSync(new URL('../src/static-weekly-schedule-compiler-runtime.js',import.meta.url),'utf8');
 const programSource=readFileSync(new URL('../src/static-weekly-schedule-program.js',import.meta.url),'utf8');
 const launcherSource=readFileSync(new URL('./static-weekly-recurring-browser-lease-launcher.py',import.meta.url),'utf8');
-assert.match(runnerSource,/timeout:currentManagerStage\|\|process\.env\.STATIC_WEEKLY_TEST_RECURRING_FINALIZATION==='1'\|\|process\.env\.STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION==='1'\?1200000:900000/);
-assert.match(programSource,/REQUEST_DEADLINE_MILLISECONDS = 300_000/);
-assert.match(compilerRuntimeSource,/requestMilliseconds: REQUEST_DEADLINE_MILLISECONDS \+ 15_000/);
-assert.match(launcherSource,/bounded_stream\(child, log, started \+ 1800/);
+assert.match(runnerSource,/timeout:60000\}\),publishedChildClock/);
+assert.match(programSource,/REQUEST_DEADLINE_MILLISECONDS = (?:300_000|60_000)/);
+assert.match(compilerRuntimeSource,/requestMilliseconds: Math\.min\(REQUEST_DEADLINE_MILLISECONDS, 60_000\)/);
+assert.match(launcherSource,/bounded_stream\(child, log, started \+ 60/);
 assert.match(runnerSource,/runRecurringClockedChild\(\(\)=>execFileSync\(process\.execPath/);
 assert.match(runnerSource,/catch\(error\)\{console\.error\('FAILED_TEST_STAGE',stage,error\.stderr\?\.toString\(\)\|\|error\.stack\);throw error;\}finally\{cleanup\(\);\}/);
 for(const phase of ['confirm_origin','confirm_response_closed','confirm_request_terminal','confirm_fixture_finally',
