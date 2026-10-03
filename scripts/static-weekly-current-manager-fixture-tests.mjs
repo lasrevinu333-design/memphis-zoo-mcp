@@ -7,6 +7,8 @@ import {validateSixPersonAbsenceFixtureBytes} from './fixtures/six-person-absenc
 import {validateFullNineV6FixtureBytes} from './fixtures/full-nine-v6-source.mjs';
 import {deriveDatedShiftEndCoverage} from '../src/static-weekly-shift-end-derivation.js';
 import {postgresJsonbContentDigest} from '../src/static-weekly-schedule-program.js';
+import {normalizeStaticWeeklyAuthority} from '../src/static-weekly-schedule-program.js';
+import {assertStoredNamedSourceBoundary} from './static-weekly-named-handoff-contract-tests.mjs';
 
 let checks=0;const check=(name,fn)=>{fn();checks++;console.log('PASS',name);};
 const f=loadCurrentManagerPublicationFixture(),p=f.packet;
@@ -40,6 +42,31 @@ check('current dated coverage has exact494 segments without rewriting323',()=>{
  assert.equal(d.effectiveInput.version.assignments.length,494);assert.equal(d.receipt.parentChains.length,323);
  assert.equal(JSON.stringify(p.compilerInput),before);
 });
+check('registered source to dated draft permits only exact roster and lifecycle deltas',()=>{
+ const registered=structuredClone(p.compilerInput),hydrated=structuredClone(registered);
+ const versionId='10000000-0000-4000-8000-000000000217';
+ const publicationId='20000000-0000-4000-8000-000000000217';
+ const serviceDate=p.compilerInput.serviceDate;
+ const version={...structuredClone(hydrated.version),id:versionId,publicationId,
+  status:'published',effectiveStart:serviceDate,effectiveEnd:null};
+ const stored=normalizeStaticWeeklyAuthority(version,hydrated.slots,[],hydrated.proximity,serviceDate);
+ const boundary=()=>assertStoredNamedSourceBoundary({registeredSource:registered,hydratedSource:hydrated,
+  storedInput:stored,versionId,publicationId,serviceDate});
+ assert.equal(boundary().registeredDigest,p.sourceDigest);
+ for(const mutate of [
+  x=>x.version.assignments[0].workId='invented-work',
+  x=>x.version.shiftEndContinuityPolicy.namedHandoffs[0].at='14:01',
+  x=>x.version.publicationId='30000000-0000-4000-8000-000000000217',
+  x=>x.proximity.pop(),
+ ]){
+  const bad=structuredClone(stored);mutate(bad);
+  assert.throws(()=>assertStoredNamedSourceBoundary({registeredSource:registered,hydratedSource:hydrated,
+   storedInput:bad,versionId,publicationId,serviceDate}));
+ }
+ const wrongHydration=structuredClone(hydrated);wrongHydration.version.assignments[0].workId='invented-work';
+ assert.throws(()=>assertStoredNamedSourceBoundary({registeredSource:registered,hydratedSource:wrongHydration,
+  storedInput:stored,versionId,publicationId,serviceDate}),/hydration changed/);
+});
 for(const [name,file,validate] of [
  ['current','./fixtures/six-person-absence-source.json',validateSixPersonAbsenceFixtureBytes],
  ['original','./fixtures/full-nine-v6-source.json',validateFullNineV6FixtureBytes]]) {
@@ -53,7 +80,8 @@ check('current stage invokes publication caller and mandatory confirmation, not 
  assert.ok(runner.includes("STATIC_WEEKLY_TEST_CURRENT_216:'1',STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION:'1'"));
  assert.ok(runner.includes("STATIC_WEEKLY_TEST_CURRENT_217:'1',STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION:'1'"));
  assert.ok(publication.includes('recurringConfirmationProof=await testRecurringConfirmation({pool,week,originalManagerId:managerId,check})'));
- assert.ok(publication.includes('if(currentManager217Stage)await testNamedHandoffSql({pool,authority:projection.authority,check})'));
+ assert.ok(publication.includes('if(currentManager217Stage)await testNamedHandoffSql({pool,authority:projection.authority,check,'));
+ assert.ok(publication.includes('versionId:published.data.version_id,publicationId:published.data.publication_id'));
 });
 check('old176 contract, exact image, isolation/default grants and cleanup remain',()=>{
  for(const text of ["currentManager217Stage?217:currentManager216Stage?216:176","20260929125440_custodial_recovery_inventory_closure.sql",

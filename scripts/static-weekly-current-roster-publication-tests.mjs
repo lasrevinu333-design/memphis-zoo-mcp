@@ -92,7 +92,8 @@ try{
  const draft=await plane.createInitialDraft({manager,sourceId:packet.sourceId,effectiveStart:week,expectedRevision:await revision(),idempotencyKey:'synthetic-full-source-draft'});
  const published=await plane.publishDraft({manager,draftVersionId:draft.data.version_id,expectedDraftRevision:1,expectedRevision:draft.revision,idempotencyKey:'synthetic-full-source-publish',projectionWeekStart:week});
  const projection=await query('select projection_envelope as result from public.weekly_schedule_compiled_projections where projection_id=$1',[published.data.projection_id]);
- if(currentManager217Stage)await testNamedHandoffSql({pool,authority:projection.authority,check});
+ if(currentManager217Stage)await testNamedHandoffSql({pool,authority:projection.authority,check,
+  versionId:published.data.version_id,publicationId:published.data.publication_id});
  check('published source retains exact recurring assignments',projection.authority.compilerInput.version.assignments.length,sourceRows);
  check('current dated derivation has exact responsibility segments',projection.authority.overlayCompilerInput.version.assignments.length,derivedRows);
  // The approved v2 adapter stores the exception-free DERIVED baseline in

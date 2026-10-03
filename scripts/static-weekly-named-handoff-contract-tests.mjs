@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {postgresJsonbContentDigest as digest} from '../src/static-weekly-schedule-program.js';
+import {normalizeStaticWeeklyAuthority} from '../src/static-weekly-schedule-program.js';
 import {deriveDatedShiftEndCoverage} from '../src/static-weekly-shift-end-derivation.js';
 import {loadCurrentManagerPublicationFixture} from './fixtures/current-manager-publication-source.mjs';
 
@@ -11,6 +12,42 @@ const clone=value=>structuredClone(value);
 const file=url=>readFileSync(fileURLToPath(url),'utf8');
 const currentFixture=()=>loadCurrentManagerPublicationFixture().packet;
 const namedHandoff=source=>source.version.shiftEndContinuityPolicy.namedHandoffs[0];
+
+// SQL v3_read_authority_source uses v4_hydrate_compiler_source. Only its
+// dated incumbent/status/vacancy facts may differ from the registered source;
+// replacementDraftInput then supplies one fresh version/publication lifecycle.
+// The compiler's one canonical normalizer is the final equality boundary.
+export function assertStoredNamedSourceBoundary({registeredSource,hydratedSource,storedInput,
+ versionId,publicationId,serviceDate}){
+ assert.ok(registeredSource&&hydratedSource&&storedInput&&versionId&&publicationId&&serviceDate);
+ const allowed=clone(registeredSource);
+ assert.equal(allowed.slots.length,hydratedSource.slots.length);
+ allowed.serviceDate=serviceDate;
+ allowed.slots=allowed.slots.map((slot,index)=>{
+  const hydrated=hydratedSource.slots[index];
+  assert.equal(hydrated.id,slot.id,'hydration cannot reorder or replace stable slots');
+  return {...slot,incumbencies:clone(hydrated.incumbencies)};
+ });
+ assert.equal(allowed.version.slotAvailability.length,hydratedSource.version.slotAvailability.length);
+ allowed.version.vacantSlotIds=clone(hydratedSource.version.vacantSlotIds);
+ allowed.version.slotAvailability=allowed.version.slotAvailability.map((item,index)=>{
+  const hydrated=hydratedSource.version.slotAvailability[index];
+  assert.deepEqual([hydrated.dayOfWeek,hydrated.slotId],[item.dayOfWeek,item.slotId],
+   'hydration cannot reorder or replace dated stable availability');
+  return {...item,status:hydrated.status};
+ });
+ assert.deepEqual(hydratedSource,allowed,'hydration changed a fact outside its dated roster boundary');
+ const version={...clone(hydratedSource.version),id:versionId,publicationId,
+  status:'published',effectiveStart:serviceDate,effectiveEnd:null};
+ const expected=normalizeStaticWeeklyAuthority(version,hydratedSource.slots,[],hydratedSource.proximity,serviceDate);
+ assert.deepEqual(storedInput,expected,'stored compiler input changed more than exact hydrated/lifecycle/canonical facts');
+ assert.deepEqual(storedInput.version.assignments,registeredSource.version.assignments,
+  'publication must not change any registered ordinary work');
+ assert.deepEqual(storedInput.version.shiftEndContinuityPolicy,registeredSource.version.shiftEndContinuityPolicy,
+  'publication must not rewrite source-bound named handoffs');
+ return {registeredDigest:digest(registeredSource),hydratedDigest:digest(hydratedSource),
+  storedDigest:digest(storedInput),versionId,publicationId,serviceDate};
+}
 
 // Cheap pinned source/contract proof. The SQL fixture below is run separately
 // against the persisted current-manager projection, never an invented row.
@@ -85,13 +122,36 @@ function rebindNamedAuthority(authority,{roster=false}={}){
 
 // Call immediately after the exact current323 draft is published and its
 // stored projection.authority is read. The caller owns synthetic DB lifecycle.
-export async function testNamedHandoffSql({pool,authority,check}){
- assert.ok(pool&&authority&&typeof check==='function');
+export async function testNamedHandoffSql({pool,authority,check,versionId,publicationId}){
+ assert.ok(pool&&authority&&typeof check==='function'&&versionId&&publicationId);
  const sourceContract=assertNamedHandoffSourceContract(),stored=clone(authority),
   named=namedHandoff(stored.compilerInput),parent=stored.compilerInput.version.assignments.find(r=>
    r.workId===sourceContract.parentWorkId&&r.dayOfWeek===named.dayOfWeek);
  assert.ok(parent);
- check('stored source is exact current323 fixture',digest(stored.compilerInput),sourceContract.sourceDigest);
+ const fixture=currentFixture(),registeredRows=await pool.query(`select canonical_source,source_digest,active,retired_at
+  from public.static_weekly_authority_source_documents where source_id=$1`,[sourceContract.sourceId]);
+ assert.equal(registeredRows.rows.length,1,'the exact current source must be registered once');
+ const registered=registeredRows.rows[0];
+ check('registered canonical source remains exact current323 fixture',registered.canonical_source,fixture.compilerInput);
+ check('registered source digest remains exact',registered.source_digest,sourceContract.sourceDigest);
+ check('registered source active and not retired',[registered.active,registered.retired_at],[true,null]);
+ const versionRows=await pool.query(`select authority_source_id,lifecycle_state,effective_start::text service_date
+  from public.weekly_schedule_versions where version_id=$1`,[versionId]);
+ assert.equal(versionRows.rows.length,1,'one persisted version must bind the registered source');
+ check('published version binds exact registered current source',versionRows.rows[0].authority_source_id,sourceContract.sourceId);
+ check('published version/date remain current',[versionRows.rows[0].lifecycle_state,versionRows.rows[0].service_date],
+  ['published',fixture.compilerInput.serviceDate]);
+ const publicationRows=await pool.query(`select publication_id from public.weekly_schedule_publications
+  where publication_id=$1 and version_id=$2`,[publicationId,versionId]);
+ assert.equal(publicationRows.rows.length,1,'the actual publication must bind this exact version');
+ check('stored compiler version/publication IDs are the accepted pair',
+  [stored.compilerInput.version.id,stored.compilerInput.version.publicationId],[versionId,publicationId]);
+ const hydrated=(await pool.query(`select public.static_weekly_v4_hydrate_compiler_source($1::jsonb,$2::date) value`,
+  [registered.canonical_source,fixture.compilerInput.serviceDate])).rows[0].value;
+ const binding=assertStoredNamedSourceBoundary({registeredSource:registered.canonical_source,hydratedSource:hydrated,
+  storedInput:stored.compilerInput,versionId,publicationId,serviceDate:fixture.compilerInput.serviceDate});
+ check('actual stored source differs only by dated roster, publication identity and canonical normalization',
+  binding.storedDigest,digest(stored.compilerInput));
  check('stored named source identity is exact',named,sourceContract.namedHandoff);
  const call=async value=>pool.query(`select ${functionName}($1::jsonb)`,[value]);
  await call(stored);check('actual SQL admits persisted current named handoff',true,true);
