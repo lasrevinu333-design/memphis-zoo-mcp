@@ -104,7 +104,7 @@ declare
     and named_to#>>'{shift,start}'<=named->>'at'
     and named->>'at'<named_to#>>'{shift,end}'
     and not (named_to#>>'{lunch,start}'<=named->>'at' and named->>'at'<named_to#>>'{lunch,end}')
-    and named_to_availability->'qualifications' @> named_parent->'requiredQualifications'
+    and (named_to_availability->'qualifications') @> (named_parent->'requiredQualifications')
     and not ((named_parent->'restrictedSlotIds') ? (named->>'toSlotId'))
     and not exists(select 1 from jsonb_array_elements(case
       when jsonb_array_length(named_parent->'includedLocations')>0 then named_parent->'includedLocations'
