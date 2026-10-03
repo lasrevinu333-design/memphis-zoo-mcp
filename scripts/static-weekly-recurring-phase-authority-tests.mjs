@@ -913,9 +913,9 @@ export async function runRecurringCurrentHandoutStructureTests(){
  console.log(JSON.stringify(receipt));return receipt;
 }
 export async function runRecurringIdentityUnitContractTests(){
- const {runStaticWeeklyIdentityAuxiliaryTests,runStaticWeeklyIdentityPhaseValidationTests}=await import('./static-weekly-identity-auxiliary-tests.mjs');
- const pure=runStaticWeeklyIdentityAuxiliaryTests(),typed=runStaticWeeklyIdentityPhaseValidationTests();
- assert.equal(pure.checks,52);assert.equal(typed,9);return {pure:pure.checks,typed,solver:false};
+ const {runStaticWeeklyIdentityAuxiliaryTests,runStaticWeeklyIdentityPhaseValidationTests,runStaticWeeklyIdentityPrivateSharingTests}=await import('./static-weekly-identity-auxiliary-tests.mjs');
+ const pure=runStaticWeeklyIdentityAuxiliaryTests(),typed=runStaticWeeklyIdentityPhaseValidationTests(),sharing=runStaticWeeklyIdentityPrivateSharingTests();
+ assert.equal(pure.checks,52);assert.equal(typed,9);assert.equal(sharing,21);return {pure:pure.checks,typed,sharing,solver:false};
 }
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){
  if(process.argv.includes('--identity-unit'))await runRecurringIdentityUnitContractTests();

@@ -240,7 +240,7 @@ export function assertRecurringIdentityRadixEncoding({layout,ownerIndexes,expect
 function phaseModelLp(m){return `Minimize\n phase_objective: ${scalarExpression(m.terms)}\nSubject To\n${m.rows.map(r=>` ${r.name}: ${scalarExpression(r.terms)} ${r.relation} ${r.value}`).join('\n')}\nBounds\n ${m.bounds.join('\n ')}\nGeneral\n ${m.general.join(' ')}\nBinary\n ${m.binary.join(' ')}\nEnd\n`;}
 // A bijective INTEGER extension, not rounding or a changed lexicographic
 // objective. The original complete model is an independently supplied basis.
-export function createRecurringIdentityUnitObjective({model,layout,choices,owners,offset}){
+function identityUnitObjectiveWithCopy({model,layout,choices,owners,offset},copyOriginal=clone){
  requireFact(Array.isArray(owners)&&Array.isArray(choices)&&new Set(owners.map(o=>o.slotId)).size===owners.length
   &&new Set(choices.map(c=>c.workId)).size===choices.length&&choices.every(c=>Array.isArray(c.owners)
    &&new Set(c.owners.map(o=>o.slotId)).size===c.owners.length&&c.owners.every(o=>owners.some(x=>x.slotId===o.slotId))),
@@ -269,7 +269,7 @@ export function createRecurringIdentityUnitObjective({model,layout,choices,owner
  requireFact(maximum<=BigInt(Number.MAX_SAFE_INTEGER)&&terms.every(([n])=>Number.isSafeInteger(n)&&n>0),'Unsafe identity objective range.');
  const variable=`phase_identity_objective_${offset}`,rowName=`phase_identity_objective_binding_${offset}`;
  requireFact(!variables.has(variable)&&!model.rows.some(r=>r.name===rowName),'Identity auxiliary collision.');
- const out=clone(model);out.terms=[[1,variable]];
+ const out=copyOriginal(model);out.terms=[[1,variable]];
  out.rows.push({name:rowName,terms:[...clone(terms),[-1,variable]],relation:'=',value:0});
  out.general.push(variable);out.bounds.push(`0 <= ${variable} <= ${maximum}`);
  const lp=phaseModelLp(out),body={schema:'custodial.recurring-identity-integer-objective.v1',
@@ -279,6 +279,15 @@ export function createRecurringIdentityUnitObjective({model,layout,choices,owner
   transformedModelDigest:digest(out),transformedLpDigest:contentDigestBytes(lp),
   priorRowsAndFixedEqualitiesPreserved:true,originalScaleObjectiveUnchanged:true,policyOrLimitsChanged:false};
  return {model:out,lp,representation:{...body,representationDigest:digest(body)}};
+}
+export function createRecurringIdentityUnitObjective(context){return identityUnitObjectiveWithCopy(context);}
+// Never an exposed caller option or cache. All shared rows were independently
+// constructed inside this solve invocation, then recursively frozen. Public
+// construction/validation still defensively copy the complete original model.
+function privateIdentityUnitObjective(context){
+ requireFact(context.model.rows.every(r=>Object.isFrozen(r)&&Object.isFrozen(r.terms)&&r.terms.every(Object.isFrozen)),
+  'Private identity rows must be owned immutable facts.');
+ return identityUnitObjectiveWithCopy(context,m=>({...m,rows:[...m.rows],binary:[...m.binary],general:[...m.general],bounds:[...m.bounds]}));
 }
 export function assertRecurringIdentityUnitRepresentation({received,...context}){
  const exact=createRecurringIdentityUnitObjective(context);
@@ -551,6 +560,7 @@ function solvePhaseMinimum({source,ownerConfig,fullOwners,dayOfWeek,selectedWork
   }
   const maximum=descriptor.packages.reduce((n,p)=>n+p.doubledWeight,0);requireFact(Number.isSafeInteger(maximum),'Phase coefficient range unsupported.');
   bounds.push(`0 <= phase_spread <= ${maximum}`);
+  for(const row of constraints)deepFreezeFact(row);
   const identityLayout=createRecurringIdentityRadixLayout({ownerRadix:owners.length,orderedWorkIds:choices.map(c=>c.workId)});
   const run=(name,terms,identityOffset=null)=>{
    const remaining=budgetMs-(performance.now()-started);requireFact(remaining>0,'Phase total time bound exhausted.');
@@ -558,7 +568,7 @@ function solvePhaseMinimum({source,ownerConfig,fullOwners,dayOfWeek,selectedWork
     actualTerms=normalization?.primitiveTerms||terms;
    const originalBody={descriptorDigest:descriptor.descriptorDigest,name,terms:actualTerms,rows:[...constraints,...bindings],binary,general:['phase_spread'],bounds,
     ...(normalization?{objectiveNormalization:normalization}:{})};
-   const identity=identityOffset===null?null:createRecurringIdentityUnitObjective({model:originalBody,layout:identityLayout,choices,owners,offset:identityOffset}),
+   const identity=identityOffset===null?null:privateIdentityUnitObjective({model:originalBody,layout:identityLayout,choices,owners,offset:identityOffset}),
     body=identity?.model||originalBody;
    const attestation={schema:'custodial.recurring-phase-lower-bound-model.v1',modelDigest:digest(body),descriptorDigest:descriptor.descriptorDigest};
    const lp=identity?.lp||phaseModelLp(body);
@@ -587,7 +597,7 @@ function solvePhaseMinimum({source,ownerConfig,fullOwners,dayOfWeek,selectedWork
     ...(identity?{identityObjectiveRepresentation:identity.representation}:{}),
     integerWitness:[...values],rawReceiptDigest:solved.evidence.rawReceiptDigest,terminalReport:solved.evidence.terminalReport,
     solverIdentity:solved.identity,solverOptions:solved.options};tiers.push(receipt);
-   bindings.push({name:`phase_fixed_${tiers.length}`,terms,relation:'=',value:optimum});return {values,optimum};
+   bindings.push(deepFreezeFact({name:`phase_fixed_${tiers.length}`,terms:clone(terms),relation:'=',value:optimum}));return {values,optimum};
   };
   const min=run('raw_spread',[[1,'phase_spread']]);
   const preference=run('inherited_preference',options.filter(o=>o.cost).map(o=>[o.cost,o.name]));

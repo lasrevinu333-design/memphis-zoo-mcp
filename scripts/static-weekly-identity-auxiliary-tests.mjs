@@ -145,6 +145,45 @@ export function runStaticWeeklyIdentityPhaseValidationTests(){
  }
  console.log(JSON.stringify({status:'PASS_TYPED_PHASE_VALIDATOR_ONLY',checks,solver:false,originalUnknownPreserved:true}));return checks;
 }
+export function runStaticWeeklyIdentityPrivateSharingTests(){
+ const bytes=fs.readFileSync(new URL('../src/static-weekly-recurring-phase-authority.js',import.meta.url)),source=bytes.toString(),
+  start=source.indexOf('function identityUnitObjectiveWithCopy('),end=source.indexOf('export function assertRecurringIdentityUnitRepresentation(',start);
+ assert.ok(start>=0&&end>start);const fragment=source.slice(start,end).replace('export function createRecurringIdentityUnitObjective','function createRecurringIdentityUnitObjective'),
+  requireFact=(ok,message)=>assert.ok(ok,message),privateConstructor=new Function('createRecurringIdentityRadixLayout','requireFact','canonicalJson','clone','digest','phaseModelLp','contentDigestBytes',
+   fragment+'\nreturn privateIdentityUnitObjective;')(createRecurringIdentityRadixLayout,requireFact,canonicalJson,clone,digest,lpFor,sha),
+  freeze=x=>{if(x&&typeof x==='object'){Object.values(x).forEach(freeze);Object.freeze(x);}return x;};
+ // Test-only extraction of literal local product code, never fixture code or
+ // a product export/skip flag. Context is an independently owned test copy.
+ let checks=0;const {context}=loadContext(),trusted=clone(context),owned=clone(context),baseline=represent(trusted);
+ assert.throws(()=>privateConstructor(owned));checks++;
+ owned.model.rows.forEach(freeze);const received=privateConstructor(owned);
+ assert.deepEqual(received,baseline);checks++;
+ assert.equal(digest(received.model),'69f1490bb93787b0d32488aa1ae3ab0f284143a79bb494dc3464fa4bd7c495ea');checks++;
+ assert.equal(sha(received.lp),'618b0b99e58492c04efd7e45d652df9b345a7dd870ac65fa49704095ffc6c650');checks++;
+ assert.equal(received.model.rows[0],owned.model.rows[0]);checks++;
+ assert.notEqual(received.model.rows,owned.model.rows);checks++;
+ assert.ok(received.model.rows.slice(0,-1).every(r=>Object.isFrozen(r)&&Object.isFrozen(r.terms)&&r.terms.every(Object.isFrozen)));checks++;
+ assert.throws(()=>owned.model.rows[0].terms[0][0]++);assertRepresentation(received,trusted);assert.deepEqual(owned.model,trusted.model);checks++;
+ for(const mutate of [x=>x.model.rows[0].value++,x=>x.model.rows[0].terms[0][0]++,x=>x.model.rows[0].terms.push([1,'unknown'])]){
+  assert.throws(()=>mutate(received));assertRepresentation(received,trusted);assert.deepEqual(owned.model,trusted.model);checks++;
+ }
+ for(const mutate of [x=>x.model.rows.reverse(),x=>x.model.binary.reverse(),x=>x.model.bounds[0]='0 <= phase_spread <= 999',
+  x=>x.model.terms[0][0]=2,x=>x.representation.originalTerms.pop(),x=>x.representation.definingRow.terms.pop()]){
+  const o=clone(context);o.model.rows.forEach(freeze);const x=privateConstructor(o),before=canonicalJson(o);
+  mutate(x);assert.equal(canonicalJson(o),before);assert.throws(()=>assertRepresentation(x,trusted));
+  x.representation.transformedModelDigest=digest(x.model);x.lp=lpFor(x.model);x.representation.transformedLpDigest=sha(x.lp);
+  const {representationDigest,...body}=x.representation;x.representation.representationDigest=digest(body);
+  assert.throws(()=>assertRepresentation(x,trusted));checks++;
+ }
+ for(const mutate of [c=>c.model.rows[0].value++,c=>c.model.rows[0].terms[0][0]++,c=>c.model.binary.reverse()]){
+  const caller=clone(context),publicResult=represent(caller);mutate(caller);
+  assert.deepEqual(publicResult,baseline);assertRepresentation(publicResult,trusted);checks++;
+ }
+ const publicMutable=represent(context);publicMutable.model.rows[0].value++;
+ assert.deepEqual(context,trusted);assert.throws(()=>assertRepresentation(publicMutable,trusted));checks++;
+ console.log(JSON.stringify({status:'PASS_PRIVATE_OWNED_IMMUTABLE_ROW_SHARING_ONLY',checks,solver:false,
+  modelLpAndRepresentationBytesUnchanged:true,privateConstructorFragmentSha256:sha(fragment),sourceSha256:sha(bytes)}));return checks;
+}
 export async function runStaticWeeklyRetainedIdentitySolve(){const {context,fixture}=loadContext(),transformed=represent(context);
  assertRepresentation(transformed,context);const strict=strictChecker(),
   {initializeStaticWeeklySolverEngine}=await import('../src/static-weekly-schedule-solver-worker.js'),
@@ -172,5 +211,5 @@ export async function runStaticWeeklyRetainedIdentitySolve(){const {context,fixt
 }
 if(process.argv[1]===fileURLToPath(import.meta.url)){
  if(process.argv.includes('--solve')){const r=await runStaticWeeklyRetainedIdentitySolve();assert.equal(r.status,'STRICT_EXACT_RETAINED_TIER_PROVEN_ONLY',r.reason);}
- else {runStaticWeeklyIdentityAuxiliaryTests();runStaticWeeklyIdentityPhaseValidationTests();}
+ else {runStaticWeeklyIdentityAuxiliaryTests();runStaticWeeklyIdentityPhaseValidationTests();runStaticWeeklyIdentityPrivateSharingTests();}
 }
