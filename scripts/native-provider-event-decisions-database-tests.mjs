@@ -26,7 +26,7 @@ const sorted=rows=>[...rows].sort((a,b)=>key(a)<key(b)?-1:key(a)>key(b)?1:0);
 export const DECISION_INPUT_PINS=Object.freeze({
  'src/native-provider-api.js':'d330398f959ca4c5682ca6195152b9d0d82d72704fc853af8fe5c3361e93b1e6',
  'src/native-provider-event-decisions.js':'b79128fbcecddff73116b3720e6954f2b876fce5567c54c84a4b1c9ccbd18efe',
- 'scripts/fixtures/native-provider-event-decisions-database-cases.mjs':'2849d8e928829f81ade07b2a07a65ade996638dda59aeb2be2e923e8c02cd25e',
+ 'scripts/fixtures/native-provider-event-decisions-database-cases.mjs':'0e2c9505f50471ec963e0f0ab9d5203733eecdbb3c347d9e2d887d8918299214',
  'src/auth/device-credential-auth.js':'a94b58013f872b9ee439f9d960bee3d9230a370bd73967980ef5a8b8a7a3de86',
  'src/device-identity.js':'240170fedc316004e22dfa9501f658d1582cb184bcaa936530d40361b8a66288',
  'src/request-json-parser.js':'c7d44c3795c3642246fb7db8090958842bbb3de8ce9406b05a5849cf30993689',

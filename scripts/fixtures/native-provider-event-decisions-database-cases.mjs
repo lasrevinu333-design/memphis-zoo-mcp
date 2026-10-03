@@ -5,6 +5,32 @@ import {validateNativeProviderEventDecisions} from '../../src/native-provider-ev
 const digest=value=>createHash('sha256').update(value).digest('hex');
 export const NATIVE_EVENT_DECISION_RPC='public.custodial_native_provider_event_decisions(uuid,text,uuid,text,text,jsonb)';
 export const NATIVE_EVENT_DECISION_MIGRATION='20261004000000_native_provider_event_decision_lookup.sql';
+const directTables=['employee_native_provider_events','employee_native_provider_event_requests','employee_native_push_delivery_receipts'];
+// Aug13 U4: existing delivery table FORCE-RLS/client revoked. Aug20 133000:
+// trusted NOLOGIN/NOBYPASSRLS application reader receives SELECT, no row policy.
+// Oct3 050000 explicitly revokes that role on the two NEW event tables.
+// Never confuse successful LIMIT0 (privilege) with visibility of a receipt.
+export const NATIVE_EVENT_DECISION_DENIED_READS=Object.freeze([
+ ...['anon','authenticated','service_role','static_weekly_control_plane','static_weekly_release_operator','static_weekly_runtime_20260823'].flatMap(role=>directTables.map(table=>Object.freeze([role,table]))),
+ ...directTables.slice(0,2).map(table=>Object.freeze(['custodial_application_reader',table])),
+]);
+const deliveryGrantSha='7aced0abd578cfce5bd83b2763e395a3618390790319a4c85d17eb7f7a48ee07';
+/** Pure checker reused by hostile-data tests; only the owning SQL fixture below
+ * supplies actual catalog, owner-visible count and SET ROLE reader row count. */
+export function assertNativeEventDecisionAccess(value){
+ assert.deepEqual(Object.keys(value).sort(),['delivery_recovery','reader','relations','rpc','visibility']);
+ assert.deepEqual(value.reader,{name:'custodial_application_reader',superuser:false,create_db:false,create_role:false,inherit:false,login:false,replication:false,bypassrls:false});
+ const aclSort=rows=>[...rows].sort((a,b)=>`${a.grantee}:${a.privilege}:${a.grantable}`.localeCompare(`${b.grantee}:${b.privilege}:${b.grantable}`));
+ const ownerAcl=['DELETE','INSERT','MAINTAIN','REFERENCES','SELECT','TRIGGER','TRUNCATE','UPDATE'].map(privilege=>({grantee:'postgres',privilege,grantable:false}));
+ const expected=directTables.map(name=>({identity:'public.'+name,owner:'postgres',rls:true,force_rls:true,policies:[],
+  acl:aclSort([...ownerAcl,...(name==='employee_native_push_delivery_receipts'?[{grantee:'custodial_application_reader',privilege:'SELECT',grantable:false}]:[])])}));
+ const relationSort=rows=>[...rows].sort((a,b)=>a.identity.localeCompare(b.identity));
+ assert.deepEqual(relationSort(value.relations.map(r=>({...r,acl:aclSort(r.acl)}))),relationSort(expected));
+ assert.deepEqual({...value.rpc,acl:aclSort(value.rpc.acl)},{identity:NATIVE_EVENT_DECISION_RPC,owner:'postgres',acl:aclSort(['postgres','service_role'].map(grantee=>({grantee,privilege:'EXECUTE',grantable:false})))});
+ assert.deepEqual(Object.keys(value.visibility).sort(),['owner_rows','reader_rows']);assert.ok(Number.isSafeInteger(value.visibility.owner_rows)&&value.visibility.owner_rows>0);assert.equal(value.visibility.reader_rows,0);
+ assert.deepEqual(value.delivery_recovery,{identity:'public.employee_native_push_delivery_receipts',recorded_sha256:deliveryGrantSha,stored_sha256:deliveryGrantSha,current_sha256:deliveryGrantSha,definition_equal:true});
+ return true;
+}
 const tables=['devices','employees','device_auth_credentials','employee_push_registrations','employee_native_push_generations',
  'employee_native_push_delivery_receipts','employee_native_provider_events','employee_native_provider_event_requests',
  'operational_notification_jobs','device_notification_acknowledgements','sessions','system_feedback_items',
@@ -111,9 +137,20 @@ export function nativeProviderEventDecisionDatabaseCases({scope,sql,q,j,check,re
 
  for(const role of ['anon','authenticated','custodial_application_reader','static_weekly_control_plane','static_weekly_release_operator','static_weekly_runtime_20260823'])
   reject(role+' denied lookup RPC','set role '+role+';'+call(),/permission denied/);
- for(const role of ['anon','authenticated','service_role','custodial_application_reader','static_weekly_control_plane','static_weekly_release_operator','static_weekly_runtime_20260823'])
-  for(const table of ['employee_native_provider_events','employee_native_provider_event_requests','employee_native_push_delivery_receipts'])
-   reject(role+' denied direct original read '+table,'set role '+role+';select * from public.'+table+' limit 0;',/permission denied/);
+ for(const [role,table] of NATIVE_EVENT_DECISION_DENIED_READS)
+  reject(role+' denied direct original read '+table,'set role '+role+';select * from public.'+table+' limit 0;',/permission denied/);
+ // Complete source-derived ACL/role/RLS matrix, not learned from surviving
+ // privileges. The old reader grant also matches the retained NORMAL216 exact
+ // grant row900047; no runtime grant or policy is modified for this proof.
+ const acl=(column,owner)=>`(select jsonb_agg(jsonb_build_object('grantee',case when a.grantee=0 then 'PUBLIC' else pg_get_userbyid(a.grantee) end,'privilege',a.privilege_type,'grantable',a.is_grantable)) from aclexplode(coalesce(${column},acldefault(${owner}))) a)`;
+ const authority=JSON.parse(sql(`select jsonb_build_object(
+ 'reader',(select jsonb_build_object('name',rolname,'superuser',rolsuper,'create_db',rolcreatedb,'create_role',rolcreaterole,'inherit',rolinherit,'login',rolcanlogin,'replication',rolreplication,'bypassrls',rolbypassrls) from pg_roles where rolname='custodial_application_reader'),
+ 'relations',(select jsonb_agg(jsonb_build_object('identity','public.'||c.relname,'owner',pg_get_userbyid(c.relowner),'rls',c.relrowsecurity,'force_rls',c.relforcerowsecurity,'policies',(select coalesce(jsonb_agg(p.polname order by p.polname),'[]'::jsonb) from pg_policy p where p.polrelid=c.oid),'acl',${acl('c.relacl',"'r',c.relowner")})) from pg_class c where c.oid in (${directTables.map(t=>q('public.'+t)+'::regclass').join(',')})),
+ 'rpc',(select jsonb_build_object('identity',${q(NATIVE_EVENT_DECISION_RPC)},'owner',pg_get_userbyid(p.proowner),'acl',${acl('p.proacl',"'f',p.proowner")}) from pg_proc p where p.oid=${q(NATIVE_EVENT_DECISION_RPC)}::regprocedure),
+ 'delivery_recovery',(select jsonb_build_object('identity',object_identity,'recorded_sha256',definition_sha256,'stored_sha256',public.static_weekly_digest_text(definition_sql),'current_sha256',public.static_weekly_digest_text(public.custodial_release_authority_current_grant_definition(object_identity)),'definition_equal',definition_sql=public.custodial_release_authority_current_grant_definition(object_identity)) from public.custodial_release_authority_restore_inventory where object_kind='grant' and object_identity='public.employee_native_push_delivery_receipts'));`));
+ authority.visibility={owner_rows:Number(sql('select count(*) from public.employee_native_push_delivery_receipts;')),
+  reader_rows:Number(sql('set role custodial_application_reader;select count(*) from public.employee_native_push_delivery_receipts;'))};
+ check('exact source ACL/RLS and non-bypass reader preserve zero row visibility',assertNativeEventDecisionAccess(authority),true);
  check('new wrapper has exactly owner and explicit service EXECUTE',sql(`select coalesce(bool_and(a.grantee in (p.proowner,'service_role'::regrole) and a.privilege_type='EXECUTE'),false) from pg_proc p cross join lateral aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a where p.oid=${q(NATIVE_EVENT_DECISION_RPC)}::regprocedure;`),'t');
  check('lookup definition contains no record-writing or mutation authority',sql(`select position('custodial_begin_application_mutation(' in pg_get_functiondef(${q(NATIVE_EVENT_DECISION_RPC)}::regprocedure))=0;`),'t');
  for(const kind of ['function','grant']){
@@ -126,6 +163,6 @@ export function nativeProviderEventDecisionDatabaseCases({scope,sql,q,j,check,re
  check('inventory immutable trigger remains enabled',sql("select tgenabled from pg_trigger where tgrelid='public.custodial_release_authority_restore_inventory'::regclass and tgname='trg_custodial_release_authority_restore_inventory_immutable';"),'O');
  unchanged('role/recovery readbacks');
  return {schema:'custodial.native-provider-event-decision-db-fixture.v1',scope,request:input,response:accepted,retry,rotatedRequest:rotatedInput,
-  rotatedResponse:rotatedResult,actualSql:true,actualHttp:false,fullControllerRestore:false,terminalDisposition:false,activation:false,
+  rotatedResponse:rotatedResult,accessMatrix:authority,actualSql:true,actualHttp:false,fullControllerRestore:false,terminalDisposition:false,activation:false,
   limitations:['Full218 no-auto replay and normal controller restore remain owning-runner gates, not inferred from this fixture.']};
 }
