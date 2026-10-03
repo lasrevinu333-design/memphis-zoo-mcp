@@ -3,9 +3,10 @@ import {verifyNativeDeviceRequestAttestation,deviceCredentialInternals} from './
 import {parseNativeProviderJson} from './native-provider-json.js';
 import {validateNativeLocationInventoryRequest,validateNativeLocationInventoryResponse} from './native-location-lifecycle.js';
 import {validateNativeProviderEventsRequest,validateNativeProviderEventsResponse} from './native-provider-events.js';
+import {validateNativeProviderEventDecisionQuery,lookupNativeProviderEventDecisions} from './native-provider-event-decisions.js';
 
 const PREFIX='/employee-notifications-api/native-provider';
-const PATHS=new Set(['register','status','events','inventory'].map(s=>PREFIX+'/'+s));
+const PATHS=new Set(['register','status','events','inventory','event-decisions'].map(s=>PREFIX+'/'+s));
 const UUID=/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/,SHA=/^[0-9a-f]{64}$/;
 const deny=(code,status=400)=>{throw Object.assign(new Error(code),{code,status});};
 const exact=(value,keys)=>value&&Object.getPrototypeOf(value)===Object.prototype&&Object.keys(value).sort().join('\0')===[...keys].sort().join('\0');
@@ -55,7 +56,7 @@ export function installNativeProviderRoutes(app,{db,env=process.env,requireCurre
   if(!PATHS.has(req.originalUrl))return res.status(400).json({ok:false,code:'native_provider_path_invalid'});
   return next();
  });
- for(const suffix of ['register','status','inventory','events'])app.post(PREFIX+'/'+suffix,current,async(req,res)=>{
+ for(const suffix of ['register','status','inventory','events','event-decisions'])app.post(PREFIX+'/'+suffix,current,async(req,res)=>{
   try{
    if(req.headers.origin!=='https://localhost'||req.headers['x-memphis-app-edition']!=='custodial'
     ||req.memphisDeviceAuth?.credentialed!==true||req.memphisDeviceAuth?.offline_recovery_only)
@@ -65,9 +66,10 @@ export function installNativeProviderRoutes(app,{db,env=process.env,requireCurre
    if(!credential||credential.credentialId!==req.memphisDeviceCredential?.credential_id)deny('native_provider_current_credential_required',403);
    let body=parseNativeProviderJson(req.scanAuthorityRawBody);
    if(JSON.stringify(body)!==JSON.stringify(req.body))deny('native_provider_raw_body_changed');
-   if(suffix==='events')body=validateNativeProviderEventsRequest(body);
+   if(suffix==='event-decisions')body=validateNativeProviderEventDecisionQuery(body);
+   else if(suffix==='events')body=validateNativeProviderEventsRequest(body);
    else if(suffix==='inventory')validateNativeLocationInventoryRequest(body);else binding(body,suffix==='status');
-   const recipient=suffix==='events'?{credential_id:body.events[0].receipt_credential_id,device_id:body.events[0].receipt_device_id,
+   const recipient=suffix==='event-decisions'?body.requester:suffix==='events'?{credential_id:body.events[0].receipt_credential_id,device_id:body.events[0].receipt_device_id,
     employee_id:body.events[0].receipt_employee_id,assignment_epoch:body.events[0].receipt_assignment_epoch}:body;
    if(recipient.credential_id!==credential.credentialId||recipient.device_id!==req.memphisDevice?.canonical_device_id
     ||recipient.employee_id!==req.memphisDevice?.assigned_employee_id||recipient.assignment_epoch!==Number(req.memphisDevice?.assignment_epoch))
@@ -75,6 +77,10 @@ export function installNativeProviderRoutes(app,{db,env=process.env,requireCurre
    const a=verifyNativeDeviceRequestAttestation(req);
    if(!db||typeof db.rpc!=='function')deny('native_provider_service_unavailable',503);
    const proof=JSON.stringify([a.version,a.credential_id,a.device_id,a.method,a.path,a.body_sha256,a.request_id,a.timestamp,a.signature]);
+   if(suffix==='event-decisions')return res.json(await lookupNativeProviderEventDecisions({db,body,context:{
+    credentialId:credential.credentialId,credentialHash:deviceCredentialInternals.tokenHash(credential.secret,env),nativeRequestId:a.request_id,
+    attestationDigest:createHash('sha256').update(proof).digest('hex'),rawBodySha256:a.body_sha256,
+   }}));
    const result=await db.rpc(suffix==='events'?'custodial_native_provider_events':suffix==='inventory'?'custodial_native_provider_inventory_clock':'custodial_native_provider_registration_clock',{
     p_credential:credential.credentialId,p_credential_hash:deviceCredentialInternals.tokenHash(credential.secret,env),
     p_native_request:a.request_id,p_attestation_digest:createHash('sha256').update(proof).digest('hex'),p_body:body,...(['inventory','events'].includes(suffix)?{}:{p_status:suffix==='status'}),
