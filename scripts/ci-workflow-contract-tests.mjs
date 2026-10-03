@@ -9,6 +9,7 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { verifyNativeScheduleSourceWiring } from './native-schedule-source-ci-wiring.mjs';
 import { verifyOperationDeadlineWiring } from './static-weekly-operation-deadline-ci-wiring.mjs';
+import { verifyCredentialObservationWiring } from './native-provider-credential-observation-ci-wiring.mjs';
 
 const root = resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
 const workflowDirectory = resolve(root, ".github", "workflows");
@@ -305,7 +306,7 @@ for (const [source, job] of [[schedulerGate, "validate"], [productionRepairGate,
   reviewedMutationCount += 1;
 }
 const currentSystemSource = verifyNativeScheduleSourceWiring(
-  verifyOperationDeadlineWiring(readFileSync(resolve(root, "scripts/current-system-source-contract-tests.mjs"), "utf8"), root), root);
+  verifyOperationDeadlineWiring(verifyCredentialObservationWiring(readFileSync(resolve(root, "scripts/current-system-source-contract-tests.mjs"), "utf8"), root), root), root);
 const completionSourceImport = "await import('./completion-taxonomy-contract-tests.mjs');";
 const completionDatabaseCommand = "node scripts/completion-taxonomy-database-tests.mjs";
 const completionStep = [
