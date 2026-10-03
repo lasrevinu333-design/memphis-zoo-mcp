@@ -26,7 +26,7 @@ const sorted=rows=>[...rows].sort((a,b)=>key(a)<key(b)?-1:key(a)>key(b)?1:0);
 export const DECISION_INPUT_PINS=Object.freeze({
  'src/native-provider-api.js':'d330398f959ca4c5682ca6195152b9d0d82d72704fc853af8fe5c3361e93b1e6',
  'src/native-provider-event-decisions.js':'b79128fbcecddff73116b3720e6954f2b876fce5567c54c84a4b1c9ccbd18efe',
- 'scripts/fixtures/native-provider-event-decisions-database-cases.mjs':'0e2c9505f50471ec963e0f0ab9d5203733eecdbb3c347d9e2d887d8918299214',
+ 'scripts/fixtures/native-provider-event-decisions-database-cases.mjs':'9d8fe70719950f82c21dcb975edd28c73a666488926d97b947dca33926137634',
  'src/auth/device-credential-auth.js':'a94b58013f872b9ee439f9d960bee3d9230a370bd73967980ef5a8b8a7a3de86',
  'src/device-identity.js':'240170fedc316004e22dfa9501f658d1582cb184bcaa936530d40361b8a66288',
  'src/request-json-parser.js':'c7d44c3795c3642246fb7db8090958842bbb3de8ce9406b05a5849cf30993689',
@@ -202,7 +202,8 @@ commit;`);
   check('all originals genuinely admitted',admitted.data.results.every(x=>x.admitted_state==='ACCEPTED'&&!x.replayed),true);
   save('synthetic-admission.json',{classification:'SYNTHETIC_PRODUCER_INPUTS_ACTUAL_SQL_EVENT_ADMISSION',times,payload,request,admitted,producer_proof:false,native_receipt_proof:false});
   const protectedBefore=JSON.parse(sql(SNAPSHOT));for(const table of ['sessions','completion_responses','maintenance_tickets','system_feedback_items','employee_native_provider_events'])assert.ok(protectedBefore[table].count>0);
-  phase='sql_cases';const decisions=nativeProviderEventDecisionDatabaseCases({scope:'network-none-synthetic-no-auto-grants',sql,q,j,check,reject,credential,credentialHash,body,request,admitted});
+  phase='sql_cases';const decisions=nativeProviderEventDecisionDatabaseCases({scope:'network-none-synthetic-no-auto-grants',sql,q,j,check,reject,credential,credentialHash,body,request,admitted,
+   observeAccess:value=>save('access-matrix-observed.json',value)});
   save('decision-fixture.json',decisions);check('all SQL cases preserve protected rows',JSON.parse(sql(SNAPSHOT)),protectedBefore);
 
   phase='http';const express=(await import('express')).default,{createGeneralJsonMiddleware}=await import('../src/request-json-parser.js'),{installNativeProviderRoutes}=await import('../src/native-provider-api.js');
