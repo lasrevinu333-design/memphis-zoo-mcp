@@ -46,6 +46,7 @@ import {
 export const STATIC_WEEKLY_CONTROL_PLANE_SCHEMA = "memphis-zoo.static-weekly-control-plane.v1";
 export const STATIC_WEEKLY_DATABASE_OPERATION_STATEMENT_TIMEOUT_MS = 60_000;
 export const STATIC_WEEKLY_MANAGER_OPERATION_DEADLINE_MS = 60_000;
+export const STATIC_WEEKLY_MANAGER_CLEANUP_RESERVE_MS = 5_000;
 const STATIC_WEEKLY_AUTHORITY_LOCK_IDENTITY = "memphis-static-weekly-authority";
 const APPROVED_FULL_NINE_IDENTITY = JSON.parse(readFileSync(new URL(
   "../config/custodial-full-nine-family-owners-20260926.json", import.meta.url)));
@@ -1022,7 +1023,7 @@ export function createStaticWeeklyControlPlane({
       if (signal?.aborted) relayAbort();
       const timeout = setTimeout(() => controller.abort(fail("static_weekly_recurring_operation_deadline_exceeded",
         "The recurring operation exceeded its one-minute deadline; preview the current plan again.")),
-      Math.max(1, expiresAt - performance.now()));
+      Math.max(1, expiresAt - performance.now() - STATIC_WEEKLY_MANAGER_CLEANUP_RESERVE_MS));
       timeout.unref?.();
       try {
       operationRemaining(expiresAt, controller.signal);
@@ -1083,7 +1084,7 @@ export function createStaticWeeklyControlPlane({
       if (signal?.aborted) relayAbort();
       const timeout = setTimeout(() => controller.abort(fail("static_weekly_recurring_operation_deadline_exceeded",
         "The recurring operation exceeded its one-minute deadline; check its exact status before retrying.")),
-      Math.max(1, expiresAt - performance.now()));
+      Math.max(1, expiresAt - performance.now() - STATIC_WEEKLY_MANAGER_CLEANUP_RESERVE_MS));
       timeout.unref?.();
       try {
       operationRemaining(expiresAt, controller.signal);

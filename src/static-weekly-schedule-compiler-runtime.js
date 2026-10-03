@@ -9,6 +9,7 @@
  * without paying for a redundant nested V8 runtime.
  */
 import { fork } from "node:child_process";
+import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { REQUEST_DEADLINE_MILLISECONDS } from "./static-weekly-schedule-program.js";
 import { STATIC_WEEKLY_FUSED_COMPILER_RESOURCE_LIMITS } from "./static-weekly-schedule-runtime-policy.js";
@@ -68,38 +69,62 @@ function compilerExecArgv(resourceLimits) {
   ];
 }
 
+const COMPILER_CLEANUP_RESERVE_MS = 2_000;
+
+function liveProcessGroupMembers(groupId) {
+  try { process.kill(-groupId, 0); }
+  catch (error) { if (error?.code === "ESRCH") return 0; throw error; }
+  // A leader's exit event alone says nothing about a nested solver. Linux may
+  // also retain a dead zombie in the group briefly; count only live members.
+  let live = 0;
+  for (const name of readdirSync("/proc")) {
+    if (!/^\d+$/.test(name)) continue;
+    let stat;
+    try { stat = readFileSync(`/proc/${name}/stat`, "utf8"); }
+    catch (error) { if (error?.code === "ENOENT" || error?.code === "ESRCH") continue; throw error; }
+    const tail = stat.slice(stat.lastIndexOf(")") + 2).split(" ");
+    if (Number(tail[2]) === groupId && tail[0] !== "Z" && tail[0] !== "X") live++;
+  }
+  return live;
+}
+
 const MAX_DIAGNOSTIC_STDERR_BYTES = 8 * 1024;
 function appendDiagnosticStderr(current, chunk) {
   const combined = Buffer.concat([Buffer.from(current || "", "utf8"), Buffer.from(chunk)]);
   return combined.subarray(Math.max(0, combined.length - MAX_DIAGNOSTIC_STDERR_BYTES)).toString("utf8");
 }
 
-function terminateProcessGroup(candidate) {
+function terminateProcessGroup(candidate, cleanupDeadline = monotonicNowMilliseconds() + COMPILER_CLEANUP_RESERVE_MS) {
   if (!candidate) return Promise.resolve();
   const pid = Number(candidate.pid);
   if (!Number.isSafeInteger(pid) || pid <= 1) return Promise.reject(runtimeError("static_weekly_compiler_worker_identity_invalid", "The isolated compiler process identity was invalid."));
   refWorkerProcess(candidate);
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     let settled = false;
-    const finish = () => {
+    const finish = (error = null) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      candidate.removeListener("exit", finish);
       unrefWorkerProcess(candidate);
-      resolve();
+      if (error) reject(error); else resolve();
     };
-    const timer = setTimeout(finish, 2_000);
-    timer.unref?.();
-    candidate.once("exit", finish);
+    let timer;
+    const verify = () => {
+      try {
+        if (liveProcessGroupMembers(pid) === 0) return finish();
+        if (monotonicNowMilliseconds() >= cleanupDeadline) return finish(runtimeError(
+          "static_weekly_compiler_reap_unproven", "The exact compiler process group did not terminate before the operation deadline."));
+        timer = setTimeout(verify, 10);
+      } catch { finish(runtimeError("static_weekly_compiler_reap_unproven", "The exact compiler process group could not be verified absent.")); }
+    };
     try {
       // The compiler is a detached group leader, so one exact kill owns the
       // complete fused compiler/solver boundary and any unexpected descendant.
       process.kill(-pid, "SIGKILL");
     } catch {
-      try { candidate.kill("SIGKILL"); } catch { finish(); }
+      try { candidate.kill("SIGKILL"); } catch { /* absence still must be verified */ }
     }
-    if (candidate.exitCode != null || candidate.signalCode != null) finish();
+    verify();
   });
 }
 
@@ -170,7 +195,7 @@ export function createStaticWeeklyCompilerRuntime({
     candidate?.removeAllListeners?.("close");
   }
 
-  function discard(candidate, cause) {
+  function discard(candidate, cause, cleanupDeadline = null) {
     if (!candidate) return Promise.resolve();
     if (teardownCandidate === candidate) return teardown;
     if (worker === candidate) worker = null;
@@ -179,7 +204,7 @@ export function createStaticWeeklyCompilerRuntime({
     lastError = cause;
     detach(candidate);
     teardownCandidate = candidate;
-    teardown = terminateProcessGroup(candidate).finally(() => {
+    teardown = terminateProcessGroup(candidate, cleanupDeadline ?? monotonicNowMilliseconds() + COMPILER_CLEANUP_RESERVE_MS).finally(() => {
       if (teardownCandidate === candidate) teardownCandidate = null;
     });
     return teardown;
@@ -193,8 +218,11 @@ export function createStaticWeeklyCompilerRuntime({
       initialization = null;
       active.reject(cause);
     }
-    if (pending?.candidate === candidate) clearPending(pending, pending.reject, cause);
-    void discard(candidate, cause);
+    const activePending = pending?.candidate === candidate ? pending : null;
+    if (activePending) clearPending(activePending, () => {}, cause);
+    const cleanup = discard(candidate, cause, activePending?.cleanupDeadline);
+    if (activePending) void cleanup.then(() => activePending.reject(cause), activePending.reject);
+    else void cleanup.catch(() => {});
   }
 
   async function start(signal = null, deadline = null) {
@@ -277,9 +305,9 @@ export function createStaticWeeklyCompilerRuntime({
     return record.promise;
   }
 
-  async function send(input, preparation, deadline, requestType = "compile", signal = null) {
+  async function send(input, preparation, deadline, workDeadline, requestType = "compile", signal = null) {
     if (signal?.aborted) throw abortError(signal);
-    if (deadline <= monotonicNowMilliseconds()) throw runtimeError("static_weekly_compiler_queue_timeout", "The isolated compiler request expired while waiting for its serialized execution slot.");
+    if (workDeadline <= monotonicNowMilliseconds()) throw runtimeError("static_weekly_compiler_queue_timeout", "The isolated compiler request expired before its cleanup reserve.");
     let initialTimer = null, rejectAbort;
     const aborted = new Promise((_, reject) => { rejectAbort = reject; });
     const onAbortDuringStart = () => {
@@ -289,7 +317,7 @@ export function createStaticWeeklyCompilerRuntime({
     };
     signal?.addEventListener?.("abort", onAbortDuringStart, { once: true });
     try {
-      const remaining = Math.max(1, Math.floor(deadline - monotonicNowMilliseconds()));
+      const remaining = Math.max(1, Math.floor(workDeadline - monotonicNowMilliseconds()));
       const expired = new Promise((_, reject) => {
         initialTimer = setTimeout(() => {
           const cause = runtimeError("static_weekly_compiler_queue_timeout", "The isolated compiler request expired during initialization.");
@@ -298,9 +326,10 @@ export function createStaticWeeklyCompilerRuntime({
         }, remaining);
         initialTimer.unref?.();
       });
-      await Promise.race([start(signal, deadline), aborted, expired]);
+      await Promise.race([start(signal, workDeadline), aborted, expired]);
     } catch (error) {
-      await teardown;
+      try { await teardown; }
+      catch (cleanupError) { throw cleanupError; }
       throw error;
     } finally {
       if (initialTimer) clearTimeout(initialTimer);
@@ -310,14 +339,14 @@ export function createStaticWeeklyCompilerRuntime({
       if (worker) await discard(worker, abortError(signal));
       throw abortError(signal);
     }
-    const remainingMilliseconds = Math.floor(deadline - monotonicNowMilliseconds());
+    const remainingMilliseconds = Math.floor(workDeadline - monotonicNowMilliseconds());
     if (remainingMilliseconds <= 0) throw runtimeError("static_weekly_compiler_queue_timeout", "The isolated compiler request expired while waiting for its serialized execution slot.");
     const candidate = worker;
     if (!candidate || state !== "ready") throw runtimeError("static_weekly_compiler_worker_unavailable", "The isolated compiler process is unavailable.");
     refWorkerProcess(candidate);
     const id = ++sequence;
     return new Promise((resolve, reject) => {
-      const record = { id, candidate, settled: false, timer: null, resolve, reject, signal, onAbort: null };
+      const record = { id, candidate, settled: false, timer: null, resolve, reject, signal, onAbort: null, cleanupDeadline: deadline };
       pending = record;
       record.onAbort = () => {
         if (record.settled) return;
@@ -325,27 +354,27 @@ export function createStaticWeeklyCompilerRuntime({
         // A running solve is not just ignored: reap its exact detached
         // compiler/solver group before reporting cooperative cancellation.
         clearPending(record, () => {}, cause);
-        void discard(candidate, cause).then(() => reject(cause), () => reject(cause));
+        void discard(candidate, cause, deadline).then(() => reject(cause), reject);
       };
       signal?.addEventListener?.("abort", record.onAbort, { once: true });
       if (signal?.aborted) { record.onAbort(); return; }
       record.timer = setTimeout(() => {
         const cause = runtimeError("static_weekly_compiler_worker_timeout", "The isolated compiler exceeded the complete request deadline.");
         clearPending(record, () => {}, cause);
-        void discard(candidate, cause).then(() => reject(cause), () => reject(cause));
+        void discard(candidate, cause, deadline).then(() => reject(cause), reject);
       }, remainingMilliseconds);
       record.timer.unref?.();
       try {
         candidate.send({ type: requestType, id, input, preparation }, (error) => {
           if (!error || record.settled) return;
           const cause = runtimeError("static_weekly_compiler_worker_unavailable", error.message || "The compiler request could not be sent to its process.");
-          clearPending(record, reject, cause);
-          void discard(candidate, cause);
+          clearPending(record, () => {}, cause);
+          void discard(candidate, cause, deadline).then(() => reject(cause), reject);
         });
       } catch (error) {
         const cause = runtimeError("static_weekly_compiler_worker_unavailable", error?.message || "The compiler request could not be sent to its process.");
-        clearPending(record, reject, cause);
-        void discard(candidate, cause);
+        clearPending(record, () => {}, cause);
+        void discard(candidate, cause, deadline).then(() => reject(cause), reject);
       }
     });
   }
@@ -364,7 +393,9 @@ export function createStaticWeeklyCompilerRuntime({
     if (signal?.aborted) return Promise.reject(abortError(signal));
     outstanding += 1;
     const deadline = monotonicNowMilliseconds() + requestedDeadline;
-    const run = () => send(input, preparation, deadline, requestType, signal);
+    const cleanupReserve = Math.min(COMPILER_CLEANUP_RESERVE_MS, Math.max(1, Math.floor(requestedDeadline / 10)));
+    const workDeadline = deadline - cleanupReserve;
+    const run = () => send(input, preparation, deadline, workDeadline, requestType, signal);
     const queued = tail.then(run, run);
     tail = queued.then(() => undefined, () => undefined);
     return queued.finally(() => { outstanding -= 1; });

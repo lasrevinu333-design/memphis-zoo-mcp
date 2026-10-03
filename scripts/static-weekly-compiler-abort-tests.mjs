@@ -38,6 +38,13 @@ try {
     error => error?.code === "static_weekly_compiler_request_aborted"); checks++;
   await assert.rejects(runtime.compile({ value: "bad-signal" }, { signal: {} }),
     error => error?.code === "static_weekly_compiler_abort_signal_invalid"); checks++;
+  const expiringPid = runtime.getReadiness().worker.nestedPid;
+  const expiryStarted = performance.now();
+  await assert.rejects(runtime.compile({ behavior: "hang" }, { deadlineMilliseconds: 120 }),
+    error => error?.code === "static_weekly_compiler_worker_timeout"); checks++;
+  assert.ok(performance.now() - expiryStarted < 300,
+    "cleanup reserve must not append the former two seconds to the caller deadline"); checks++;
+  await reaped(expiringPid);
 } finally {
   await runtime.shutdown();
 }
