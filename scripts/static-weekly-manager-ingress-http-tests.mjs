@@ -14,7 +14,8 @@ const body=JSON.stringify({effective_start:'2026-10-05',expected_revision:1});
 let checks=0;
 const same=(actual,expected,label)=>{assert.deepEqual(actual,expected,label);checks++;};
 function clock(){let now=1,timer=null;return{now:()=>now,setTimer:(callback,delay)=>{timer={callback,delay};return timer;},
- clearTimer:candidate=>{if(timer===candidate)timer=null;},get timer(){return timer;},expire(){assert.ok(timer,'request timer must have started');now+=55_000;timer.callback();}};}
+ clearTimer:candidate=>{if(timer===candidate)timer=null;},get timer(){return timer;},elapse:milliseconds=>{now+=milliseconds;},
+ expire(){assert.ok(timer,'request timer must have started');now+=55_000;timer.callback();}};}
 async function until(predicate){for(let i=0;i<100&&!predicate();i++)await new Promise(resolve=>setImmediate(resolve));assert.ok(predicate(),'expected route stage was not reached');}
 async function fixture({rpc,find}){
  const timer=clock(),calls=[],plane={async previewRecurringStaffing(input){calls.push(input);return{status:'CANDIDATE_ONLY'};},async health(){return{ready:true};}};
@@ -74,5 +75,18 @@ async function post(origin){const response=await fetch(`${origin}/static-weekly/
   same(authCalls,0,'partial body never authenticates into a write');
   same(f.calls.length,0,'partial body never reaches product handler');
  }finally{request?.destroy();await f.close();}
+}
+{
+ let f;
+ f=await fixture({rpc:async(name)=>{
+  if(name==='custodial_begin_application_mutation_lease')return{data:{mutations_paused:false,authority_generation:1},error:null};
+  if(name==='custodial_release_application_mutation_lease')return{data:true,error:null};
+  throw Error(`unexpected ${name}`);},find:async()=>{f.timer.elapse(12_345);return trustedRow();}});
+ try{
+  const result=await post(f.origin);same(result.status,200,'current named manager still reaches the exact preview');
+  same(f.calls.length,1,'successful admission invokes only one preview');
+  same(f.calls[0].deadlineAt,60_001,'auth time does not reset the captured ingress deadline');
+  same(f.timer.timer,null,'successful response clears its first-origin timer');
+ }finally{await f.close();}
 }
 console.log(JSON.stringify({status:'PASS',checks,scope:'loopback first-origin body/lease/auth expiration; synthetic store/lease and control plane, no SQL/solver/phone'}));
