@@ -1,11 +1,12 @@
 // Mandatory local source proof; not runtime recurring admission or publication.
 import assert from 'node:assert/strict';
-import {execFileSync} from 'node:child_process';
+import {runBoundedNodeProof} from './bounded-node-proof.mjs';
 import {fileURLToPath} from 'node:url';
 import {runStaticWeeklyRecurringPhaseAuthorityTests,
   runRecurringPrimitiveObjectiveTests, runRecurringIdentityRadixTests,
 } from './static-weekly-recurring-phase-authority-tests.mjs';
 import {runFullNineV6FixtureContractTests} from './full-nine-v6-fixture-contract-tests.mjs';
+await import('./bounded-node-proof-tests.mjs');
 
 const fullNineFixture = runFullNineV6FixtureContractTests();
 assert.equal(fullNineFixture.checks, 40);
@@ -20,11 +21,12 @@ for (const key of ['solver','workerIpc','sql','network','registration','publicat
 assert.equal(runRecurringPrimitiveObjectiveTests(), 25);
 assert.equal(runRecurringIdentityRadixTests(), 17);
 
-const invocationOutput = execFileSync(process.execPath, ['--max-old-space-size=256',
+// Independent test entries may sequence. Each complete entry, including all its
+// stages/tiers and child cleanup, has ONE <=60s clock; no per-stage renewal.
+const invocationOutput = (await runBoundedNodeProof({args:['--max-old-space-size=256',
   '--wasm-max-mem-pages=1536', '--max-semi-space-size=4',
   fileURLToPath(new URL('./static-weekly-recurring-phase-authority-tests.mjs', import.meta.url)),
-  '--invocation-facts'], {encoding:'utf8',timeout:60000,maxBuffer:1024*1024,
-  env:{PATH:process.env.PATH,LANG:'C.UTF-8'}});
+  '--invocation-facts'],maxBuffer:1024*1024})).stdout;
 const invocation = JSON.parse(invocationOutput.trim().split('\n').at(-1));
 process.stdout.write(invocationOutput);
 assert.equal(invocation.checks, 16);
@@ -42,11 +44,10 @@ for (const key of ['solver', 'worker', 'sql', 'publication']) assert.equal(recei
 
 // This export actually invokes the pinned solver for the three normal-pattern
 // reference regressions; importing its main-guarded file alone is insufficient.
-const output = execFileSync(process.execPath, ['--max-old-space-size=256',
+const output = (await runBoundedNodeProof({args:['--max-old-space-size=256',
   '--wasm-max-mem-pages=1536', '--max-semi-space-size=4',
   fileURLToPath(new URL('./static-weekly-recurring-phase-authority-tests.mjs', import.meta.url)),
-  '--admin-morning'], {encoding:'utf8',timeout:60000,maxBuffer:1024*1024,
-  env:{PATH:process.env.PATH,LANG:'C.UTF-8'}});
+  '--admin-morning'],maxBuffer:1024*1024})).stdout;
 const admin = JSON.parse(output.trim().split('\n').at(-1));
 process.stdout.write(output);
 assert.equal(admin.status, 'PASS');
@@ -61,11 +62,10 @@ for (const key of ['worker', 'sql', 'publication']) assert.equal(admin[key], fal
 
 // Exercise the actual current323 readback/adaptation/final-pattern seam, not
 // only historical templates or an imported but uncalled guarded test body.
-const currentOutput = execFileSync(process.execPath, ['--max-old-space-size=256',
+const currentOutput = (await runBoundedNodeProof({args:['--max-old-space-size=256',
   '--wasm-max-mem-pages=1536', '--max-semi-space-size=4',
   fileURLToPath(new URL('./static-weekly-recurring-phase-authority-tests.mjs', import.meta.url)),
-  '--current-handout'], {encoding:'utf8',timeout:60000,maxBuffer:1024*1024,
-  env:{PATH:process.env.PATH,LANG:'C.UTF-8'}});
+  '--current-handout'],maxBuffer:1024*1024})).stdout;
 const current = JSON.parse(currentOutput.trim().split('\n').at(-1));
 process.stdout.write(currentOutput);
 assert.equal(current.status, 'PASS');
@@ -83,13 +83,12 @@ for (const key of ['workerIpc', 'sql', 'publication']) assert.equal(current[key]
 
 // Run the actual three downward transition shapes against the included exact
 // historical input. A fixture hash or an uncalled export is not this proof.
-// This outer limit covers three complete helpers plus hostile revalidation;
-// it does not increase any product solver or isolated-request deadline.
-const reductionOutput = execFileSync(process.execPath, ['--max-old-space-size=256',
+// Keep all6/7/8 helpers plus hostile revalidation in this SAME bounded attempt.
+// The old900s allowance is removed; failure at the cap is not acceptance.
+const reductionOutput = (await runBoundedNodeProof({args:['--max-old-space-size=256',
   '--wasm-max-mem-pages=1536', '--max-semi-space-size=4',
   fileURLToPath(new URL('./static-weekly-recurring-phase-authority-tests.mjs', import.meta.url)),
-  '--full-nine-reduction'], {encoding:'utf8',timeout:900000,maxBuffer:2*1024*1024,
-  env:{PATH:process.env.PATH,LANG:'C.UTF-8'}});
+  '--full-nine-reduction'],maxBuffer:2*1024*1024})).stdout;
 const reduction = JSON.parse(reductionOutput.trim().split('\n').at(-1));
 process.stdout.write(reductionOutput);
 assert.equal(reduction.status, 'PASS');

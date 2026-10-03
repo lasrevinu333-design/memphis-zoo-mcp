@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 import { verifyNativeScheduleSourceWiring } from './native-schedule-source-ci-wiring.mjs';
 import { verifyOperationDeadlineWiring } from './static-weekly-operation-deadline-ci-wiring.mjs';
 import { verifyCredentialObservationWiring } from './native-provider-credential-observation-ci-wiring.mjs';
+import { verifyBoundedProofWiring } from './bounded-node-proof-ci-wiring.mjs';
 
 const root = resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
 const workflowDirectory = resolve(root, ".github", "workflows");
@@ -305,6 +306,7 @@ for (const [source, job] of [[schedulerGate, "validate"], [productionRepairGate,
   assert.throws(() => assertReviewedRegressionGate(source.replace(`docker pull ${rehearsalPostgresImage}`, "# missing image preparation"), job, "mutation"));
   reviewedMutationCount += 1;
 }
+verifyBoundedProofWiring(root);
 const currentSystemSource = verifyNativeScheduleSourceWiring(
   verifyOperationDeadlineWiring(verifyCredentialObservationWiring(readFileSync(resolve(root, "scripts/current-system-source-contract-tests.mjs"), "utf8"), root), root), root);
 const completionSourceImport = "await import('./completion-taxonomy-contract-tests.mjs');";
