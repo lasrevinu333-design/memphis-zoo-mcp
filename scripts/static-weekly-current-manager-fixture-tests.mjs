@@ -84,7 +84,7 @@ check('current stage invokes publication caller and mandatory confirmation, not 
  assert.ok(publication.includes('versionId:published.data.version_id,publicationId:published.data.publication_id'));
 });
 check('old176 contract, exact image, isolation/default grants and cleanup remain',()=>{
- for(const text of ["currentManager217Stage?217:currentManager216Stage?216:176","20260929125440_custodial_recovery_inventory_closure.sql",
+ for(const text of ["currentManager217Stage||dualSource217Stage?217:currentManager216Stage?216:176","20260929125440_custodial_recovery_inventory_closure.sql",
   "supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed",
   "'--network','none'",'absenceGuard','finally{cleanup();}'])assert.ok(runner.includes(text),text);
 });

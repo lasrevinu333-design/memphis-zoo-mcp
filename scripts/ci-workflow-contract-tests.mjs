@@ -376,6 +376,7 @@ const eventCountSourceImports = ["await import('./event-count-cross-surface-cont
   "await import('./static-weekly-postgres-key-order-ci-tests.mjs');",
   "await import('./static-weekly-digest-stream-ci-tests.mjs');",
   "await import('./static-weekly-current-manager-fixture-tests.mjs');",
+  "await import('./static-weekly-dual-source-sql-stage-contract-tests.mjs');",
   "await import('./static-weekly-recurring-phase-authority-ci-tests.mjs');",
   "await import('./static-weekly-identity-auxiliary-ci-tests.mjs');",
   "await import('./static-weekly-recurring-week-commitment-tests.mjs');",
@@ -410,13 +411,14 @@ const digestStreamWrapper = readFileSync(resolve(root,'scripts/static-weekly-dig
 function assertDigestStreamCalledWiring(sourceSuite, wrapper) {
   assertEventCountSourceWiring(productionRepairGate,sourceSuite);
   const imports=sourceSuite.split('\n').map(line=>line.trim()).filter(line=>/^await import\(/.test(line));
-  assert.equal(imports.length,41,'preserve all39 prior owning suites plus digest-stream and correction wrappers');
+  assert.equal(imports.length,42,'preserve all39 prior owning suites plus digest-stream, correction and dual-source SQL-stage contracts');
   assert.equal(imports.filter(line=>line===digestStreamSourceImport).length,1);
   assert.equal(createHash('sha256').update(imports.filter(line=>line!==digestStreamSourceImport&&
+    line!=="await import('./static-weekly-dual-source-sql-stage-contract-tests.mjs');"&&
     line!=="await import('./static-weekly-recurring-correction-ci-tests.mjs');").join('\n')+'\n').digest('hex'),
     '1fb01bf2b017ab8473f459ede8516c6bd3011ff0bf99f157181843bfa9f855ab',
     'all39 prior import identities/order must remain exact, not a substituted same-count suite');
-  assert.match(sourceSuite,/CURRENT_SYSTEM_SOURCE_CONTRACTS_PASS: 41 explicit owning suites/);
+  assert.match(sourceSuite,/CURRENT_SYSTEM_SOURCE_CONTRACTS_PASS: 42 explicit owning suites/);
   assert.match(wrapper,/^const output = execFileSync\(process\.execPath, \['--max-old-space-size=128',\n  '--max-semi-space-size=8', '--wasm-max-mem-pages=1536', '--stack-size=4096',\n  fileURLToPath\(new URL\('\.\/static-weekly-digest-stream-tests\.mjs', import\.meta\.url\)\)\],\n  \{encoding:'utf8',timeout:60000,maxBuffer:1024\*1024,\n    env:\{PATH:process\.env\.PATH,LANG:'C\.UTF-8'\}\}\);$/m);
   assert.match(wrapper,/^assert\.equal\(receipt\.status, 'PASS'\);$/m);
   assert.match(wrapper,/^assert\.equal\(receipt\.checks, 1009\);$/m);
@@ -434,7 +436,7 @@ for(const replacement of ['',`// ${digestStreamSourceImport}`,`${digestStreamSou
 for(const sourceMutant of [currentSystemSource.replace("await import('./events-chicago-time-tests.mjs');","await import('./unknown-replacement-tests.mjs');"),
   currentSystemSource.replace("await import('./events-chicago-time-tests.mjs');\nawait import('./messaging-durability-contract-tests.mjs');",
     "await import('./messaging-durability-contract-tests.mjs');\nawait import('./events-chicago-time-tests.mjs');"),
-  currentSystemSource.replace('41 explicit owning suites','40 explicit owning suites')]) {
+  currentSystemSource.replace('42 explicit owning suites','41 explicit owning suites')]) {
   assert.throws(()=>assertDigestStreamCalledWiring(sourceMutant,digestStreamWrapper));digestStreamWiringMutationCount++;
 }
 for(const [from,to]of [['const output = execFileSync(','// const output = execFileSync('],
