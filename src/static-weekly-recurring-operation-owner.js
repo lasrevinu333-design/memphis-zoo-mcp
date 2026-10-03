@@ -37,6 +37,11 @@ function liveGroupMembers(groupId) {
   return members;
 }
 
+function groupExists(groupId) {
+  try { process.kill(-groupId, 0); return true; }
+  catch (error) { if (error?.code === "ESRCH") return false; throw error; }
+}
+
 function assertOriginalLeader(identity) {
   const current = processStat(identity.pid);
   if (current && current.startTicks !== identity.startTicks) throw custodyError(
@@ -60,7 +65,7 @@ export async function reapRecurringOperationGroup(identity, {
 } = {}) {
   if (!Number.isFinite(deadlineAt)) throw custodyError("static_weekly_operation_deadline_invalid", "The operation cleanup deadline is invalid.");
   let members = inspectRecurringOperationGroup(identity);
-  if (members.length === 0) return { groupAbsent: true, memberCount: 0 };
+  if (members.length === 0 && !groupExists(identity.pid)) return { groupAbsent: true, memberCount: 0 };
   // Linux retains a process-group ID while any member exists. The leader's
   // original start identity is checked before every signal, including when
   // the leader has exited but inherited descendants remain.
@@ -70,7 +75,7 @@ export async function reapRecurringOperationGroup(identity, {
     "static_weekly_operation_reap_unproven", "The exact owned operation group could not be signaled."); }
   do {
     members = inspectRecurringOperationGroup(identity);
-    if (members.length === 0) return { groupAbsent: true, memberCount: 0 };
+    if (members.length === 0 && !groupExists(identity.pid)) return { groupAbsent: true, memberCount: 0 };
     if (now() >= deadlineAt) break;
     await wait(Math.min(CLEANUP_POLL_MS, Math.max(1, deadlineAt - now())));
   } while (true);
@@ -86,8 +91,10 @@ export async function runOwnedRecurringOperation({
   validateReceipt,
   deadlineAt,
   signal = null,
+  onLaunch,
   onCustody = () => {},
   now = () => performance.now(),
+  observeIdentity = processStat,
   launch = (file) => fork(file, [], { detached: true, serialization: "advanced", stdio: ["ignore", "ignore", "ignore", "ipc"] }),
   reap = reapRecurringOperationGroup,
 } = {}) {
@@ -97,9 +104,10 @@ export async function runOwnedRecurringOperation({
     "static_weekly_operation_child_source_changed", "The operation child bytes differ from their pinned source digest.");
   if (!/^[a-f0-9]{64}$/.test(sourceDigest || "")) throw custodyError(
     "static_weekly_operation_source_invalid", "The operation source digest is invalid.");
-  if (!Number.isFinite(deadlineAt) || deadlineAt <= now()) throw custodyError(
+  if (!Number.isFinite(deadlineAt) || deadlineAt - now() <= CLEANUP_RESERVE_MS) throw custodyError(
     "static_weekly_operation_deadline_invalid", "The original operation deadline has expired.");
   if (signal?.aborted) throw custodyError("static_weekly_operation_aborted", "The operation was aborted before launch.");
+  if (typeof onLaunch !== "function") throw custodyError("static_weekly_operation_launch_recorder_missing", "A synchronous provisional launch recorder is required.");
   if (typeof validateInput !== "function" || typeof validateReceipt !== "function") throw custodyError(
     "static_weekly_operation_schema_missing", "Closed operation input and receipt validators are required.");
   const closedInput = validateInput(input);
@@ -110,11 +118,41 @@ export async function runOwnedRecurringOperation({
   const nonce = randomBytes(24).toString("hex");
   const candidate = launch(fileURLToPath(childFile));
   const pid = Number(candidate?.pid);
-  const stat = Number.isSafeInteger(pid) && pid > 1 ? processStat(pid) : null;
+  const provisional = Object.freeze({ pid, sourceDigest, nonce, state: "provisional" });
+  let childExited = false;
+  let childClosed = false;
+  const closed = new Promise((resolve) => candidate.once("close", () => { childClosed = true; resolve(); }));
+  candidate.once("exit", () => { childExited = true; });
+  try {
+    const acknowledged = onLaunch(provisional);
+    if (acknowledged && typeof acknowledged.then === "function") throw new Error("Provisional custody acknowledgement must be synchronous.");
+  } catch {
+    throw custodyError("static_weekly_operation_launch_unrecorded", "The provisional operation launch could not be recorded; no work was sent.");
+  }
+  // The detached PGID may not be visible at the instant fork returns. Observe
+  // it for a bounded part of the original clock; never guess a group from PID.
+  let stat = null;
+  const identityObservationDeadline = Math.min(deadlineAt - CLEANUP_RESERVE_MS, now() + 100);
+  while (Number.isSafeInteger(pid) && pid > 1 && now() < identityObservationDeadline) {
+    stat = observeIdentity(pid);
+    if (stat?.groupId === pid && /^\d+$/.test(stat.startTicks || "")) break;
+    if (childExited || childClosed) break;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
   if (!stat || stat.groupId !== pid || !/^\d+$/.test(stat.startTicks || "")) {
-    // If launch returned a process without a verifiable group, there is no
-    // safe authority to signal it here. The caller must retain its lease.
-    throw custodyError("static_weekly_operation_identity_unproven", "The launched operation group could not be identified.");
+    // A provisional PID is not signal authority. No work IPC has been sent;
+    // the caller keeps its lease and the exact launch/exit facts for recovery.
+    if (!childClosed) {
+      try { candidate.send?.({ type: "cancel-before-work", nonce, sourceDigest }); }
+      catch { /* the channel is not group signal authority */ }
+      const remaining = Math.max(0, Math.floor(Math.min(deadlineAt - CLEANUP_RESERVE_MS, now() + 250) - now()));
+      if (remaining > 0) await Promise.race([closed, new Promise((resolve) => setTimeout(resolve, remaining))]);
+    }
+    const error = custodyError("static_weekly_operation_identity_unproven", "The launched operation group could not be identified before its original deadline.");
+    error.provisional = provisional;
+    error.childExited = childExited;
+    error.childClosed = childClosed;
+    throw error;
   }
   const identity = Object.freeze({ pid, startTicks: stat.startTicks, sourceDigest, nonce });
   // Custody is published before any work IPC, including the crash-before-ready
@@ -163,10 +201,12 @@ export async function runOwnedRecurringOperation({
           catch { return fail(custodyError("static_weekly_operation_protocol_invalid", "The operation receipt failed its closed schema.")); }
         }
         acceptedResult = { status: message.status, receipt: closedReceipt };
-        finish();
       });
       candidate.once("error", () => fail(custodyError("static_weekly_operation_child_failed", "The owned operation child failed.")));
-      candidate.once("exit", () => { if (acceptedResult === null) fail(custodyError("static_weekly_operation_child_exited", "The owned operation child exited without a typed result.")); });
+      candidate.once("exit", () => {
+        if (acceptedResult === null) fail(custodyError("static_weekly_operation_child_exited", "The owned operation child exited without a typed result."));
+        else finish();
+      });
       if (signal?.aborted) onAbort();
       else {
         try { candidate.send({ type: "init", nonce, sourceDigest }); }
@@ -178,7 +218,14 @@ export async function runOwnedRecurringOperation({
     clearTimeout(timer);
     signal?.removeEventListener?.("abort", onAbort);
     let cleanupError = null;
-    try { await reap(identity, { deadlineAt, now }); }
+    try {
+      await reap(identity, { deadlineAt, now });
+      if (!childClosed) {
+        const remaining = Math.max(0, Math.floor(deadlineAt - now()));
+        if (remaining > 0) await Promise.race([closed, new Promise((resolve) => setTimeout(resolve, remaining))]);
+        if (!childClosed) throw custodyError("static_weekly_operation_reap_unproven", "The owned child exit and reaping were not observed before the original deadline.");
+      }
+    }
     catch (error) { cleanupError = error; }
     try { candidate.disconnect?.(); } catch { /* group absence, not channel state, controls the outcome */ }
     if (cleanupError) throw cleanupError;

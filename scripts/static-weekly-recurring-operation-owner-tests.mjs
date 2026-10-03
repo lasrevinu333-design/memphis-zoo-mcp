@@ -13,6 +13,7 @@ const fixture = new URL("./fixtures/static-weekly-recurring-operation-owner-chil
 const digest = (url) => createHash("sha256").update(readFileSync(fileURLToPath(url))).digest("hex");
 const sourceDigest = "a".repeat(64);
 const schemas = {
+  onLaunch: () => {},
   validateInput: (input) => {
     assert.equal(new Set(["synthetic", "synthetic-compiler"]).has(input?.kind), true);
     assert.deepEqual(Object.keys(input), ["kind"]);
@@ -45,6 +46,27 @@ const call = (mode, overrides = {}) => runOwnedRecurringOperation({
 await assert.rejects(call("normal", { childDigest: "0".repeat(64) }), (error) =>
   error?.code === "static_weekly_operation_child_source_changed", "changed child bytes are refused before launch");
 assert.equal(launches.length, 0);
+let provisional;
+await assert.rejects(call("crash-before-fork", {
+  observeIdentity: () => null,
+  onLaunch: (identity) => { provisional = identity; },
+}), (error) => {
+  assert.equal(error?.code, "static_weekly_operation_identity_unproven");
+  assert.equal(error.provisional, provisional);
+  assert.equal(error.childClosed, true, "early exited child has an observed close before refusal");
+  return true;
+});
+assert.equal(provisional.state, "provisional", "the launch PID is retained before any group authority exists");
+let unobservedGroupSignaled = false;
+await assert.rejects(call("hang", {
+  observeIdentity: () => null,
+  reap: async () => { unobservedGroupSignaled = true; },
+}), (error) => {
+  assert.equal(error?.code, "static_weekly_operation_identity_unproven");
+  assert.equal(error.childClosed, true, "a child without observed PGID honors private pre-work cancellation and closes");
+  return true;
+});
+assert.equal(unobservedGroupSignaled, false, "provisional PID never authorizes process-group signaling");
 function live(pid) {
   try {
     const raw = readFileSync(`/proc/${pid}/stat`, "utf8");
@@ -89,8 +111,8 @@ await assert.rejects(runOwnedRecurringOperation({
   deadlineAt: performance.now() + 4_000,
   launch: launchMode("crash-after-compiler-fork-before-report"),
   onCustody: (identity) => { beforeReportIdentity = identity; },
-}), (error) => error?.code === "static_weekly_operation_child_exited");
-assert.equal(inspectRecurringOperationGroup(beforeReportIdentity).length, 0, "unreported compiler and descendant are reaped after operation-child crash");
+}), (error) => ["static_weekly_operation_child_exited", "static_weekly_operation_reap_unproven"].includes(error?.code));
+assert.equal(inspectRecurringOperationGroup(beforeReportIdentity).length, 0, "an unreported compiler lineage has no live work; a lingering zombie PGID remains unproven");
 
 let rejectedCustody;
 await assert.rejects(call("normal", { onCustody: (identity) => {
@@ -100,11 +122,11 @@ await assert.rejects(call("normal", { onCustody: (identity) => {
 assert.equal(inspectRecurringOperationGroup(rejectedCustody).length, 0, "a failed custody record never begins child work and reaps the group");
 assert.equal(live(custody.pid), false);
 
-for (const mode of ["crash-before-fork", "crash-after-fork-before-report", "crash-after-report", "wrong-source", "duplicate-ready"]) {
+for (const mode of ["crash-before-fork", "crash-after-report", "wrong-source", "duplicate-ready", "duplicate-result"]) {
   let identity;
   await assert.rejects(call(mode, { onCustody: (value) => { identity = value; } }), (error) =>
-    ["static_weekly_operation_child_exited", "static_weekly_operation_protocol_invalid"].includes(error?.code), `${mode} fails without an accepted result`);
-  assert.equal(inspectRecurringOperationGroup(identity).length, 0, `${mode} reaps the entire inherited group`);
+    ["static_weekly_operation_child_exited", "static_weekly_operation_protocol_invalid", "static_weekly_operation_reap_unproven"].includes(error?.code), `${mode} fails without an accepted result`);
+  assert.equal(inspectRecurringOperationGroup(identity).length, 0, `${mode} leaves no live inherited work`);
 }
 
 const controller = new AbortController();
@@ -117,15 +139,23 @@ assert.equal(inspectRecurringOperationGroup(hangingIdentity).length, 0, "abort r
 
 let deadlineIdentity;
 await assert.rejects(call("hang", { deadlineAt: performance.now() + 100, onCustody: (identity) => { deadlineIdentity = identity; } }), (error) =>
-  error?.code === "static_weekly_operation_deadline");
-assert.equal(inspectRecurringOperationGroup(deadlineIdentity).length, 0, "absolute deadline reaps the owned group");
+  error?.code === "static_weekly_operation_deadline_invalid");
+assert.equal(deadlineIdentity, undefined, "an attempt without its cleanup reserve is refused before launch");
+let boundedIdentity;
+const boundedStart = performance.now();
+await assert.rejects(call("hang", {
+  deadlineAt: boundedStart + 2_300,
+  onCustody: (identity) => { boundedIdentity = identity; },
+}), (error) => error?.code === "static_weekly_operation_deadline");
+assert.equal(inspectRecurringOperationGroup(boundedIdentity).length, 0);
+assert.equal(performance.now() < boundedStart + 2_300, true, "work expiry and group cleanup consume the same original deadline");
 
 const unrelated = fork(new URL("./fixtures/static-weekly-recurring-operation-owner-child.mjs", import.meta.url), [], {
   detached: true, serialization: "advanced", stdio: ["ignore", "ignore", "ignore", "ipc"],
   env: { ...process.env, STATIC_WEEKLY_OWNER_TEST_MODE: "hang" },
 });
 try {
-  await assert.rejects(call("crash-after-fork-before-report"), (error) => error?.code === "static_weekly_operation_child_exited");
+  await assert.rejects(call("crash-before-fork"), (error) => error?.code === "static_weekly_operation_child_exited");
   assert.equal(live(unrelated.pid), true, "another detached group remains untouched");
 } finally {
   process.kill(-unrelated.pid, "SIGKILL");
@@ -140,8 +170,11 @@ await assert.rejects(reapRecurringOperationGroup({ pid: process.pid, startTicks:
   signalGroup: () => { signaled = true; },
 }), (error) => error?.code === "static_weekly_operation_pid_reused");
 assert.equal(signaled, false, "a reused or foreign PID is never signaled");
+const cleanupDeadline = performance.now() + 3_500;
 await assert.rejects(call("normal", {
+  deadlineAt: cleanupDeadline,
   reap: async (identity, options) => {
+    assert.equal(options.deadlineAt, cleanupDeadline, "cleanup receives the original absolute deadline, not a renewed interval");
     await reapRecurringOperationGroup(identity, options);
     throw Object.assign(new Error("synthetic unproven cleanup receipt"), { code: "static_weekly_operation_reap_unproven" });
   },

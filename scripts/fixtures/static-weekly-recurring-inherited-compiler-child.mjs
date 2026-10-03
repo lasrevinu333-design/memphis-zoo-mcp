@@ -29,7 +29,14 @@ process.on("message", async (message) => {
   const result = await runtime.compile({ value: "synthetic-inherited" });
   const compilerGroupId = groupId(readiness.worker.processId);
   const descendantGroupId = groupId(readiness.worker.nestedPid);
-  if (mode === "shutdown-before-result") await runtime.shutdown();
+  process.kill(readiness.worker.nestedPid, "SIGKILL");
+  const cleanupDeadline = performance.now() + 1_000;
+  while (performance.now() < cleanupDeadline) {
+    try { groupId(readiness.worker.nestedPid); }
+    catch (error) { if (error?.code === "ENOENT") break; throw error; }
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  await runtime.shutdown();
   process.send?.({
     type: "result", nonce: message.nonce, sourceDigest: message.sourceDigest,
     status: "ok", receipt: {
@@ -40,5 +47,5 @@ process.on("message", async (message) => {
       descendantGroupId,
       result: result.value,
     },
-  });
+  }, () => process.exit(0));
 });
