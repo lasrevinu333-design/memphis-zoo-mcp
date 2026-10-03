@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import {recurringHttpSqlBoundary,recurringHttpTransportFailure} from './static-weekly-recurring-http-boundary.mjs';
+import {recurringHttpSqlBoundary,recurringHttpTransportFailure,captureRecurringHttpTransportFailure,
+ rethrowOriginalTransportError} from './static-weekly-recurring-http-boundary.mjs';
 
 const cases=[
  ['begin','begin'],['commit','commit'],['rollback','rollback'],
@@ -22,4 +23,17 @@ assert.deepEqual(recurringHttpTransportFailure({name:'private bearer hidden',cod
  cause:{name:'private url',code:'PRIVATE_TOKEN'}}),{name:'OTHER',code:'OTHER',causeName:'OTHER',causeCode:'OTHER'});
 assert.deepEqual(recurringHttpTransportFailure(null),{name:'OTHER',code:'OTHER',causeName:'OTHER',causeCode:'OTHER'});
 assert.doesNotMatch(JSON.stringify(recurringHttpTransportFailure(failure)),/secret|hidden|https/);
-console.log('PASS recurring HTTP bounded boundary and transport classifiers',cases.length+4);
+const hostile=new Error('private token and URL');
+Object.defineProperties(hostile,{name:{get(){throw Error('private name getter');}},code:{get(){throw Error('private code getter');}},
+ cause:{get(){throw Error('private cause getter');}}});
+assert.deepEqual(recurringHttpTransportFailure(hostile),{name:'OTHER',code:'OTHER',causeName:'OTHER',causeCode:'OTHER'});
+let emitted=0,persisted=0;
+const fact=captureRecurringHttpTransportFailure(hostile,{phase:'headers',elapsedMilliseconds:302513,
+ emit(){emitted++;throw Error('emitter unavailable');},persist(){persisted++;throw Error('sidecar unavailable');}});
+assert.deepEqual(fact,{phase:'headers',elapsedMilliseconds:302513,name:'OTHER',code:'OTHER',causeName:'OTHER',causeCode:'OTHER'});
+assert.deepEqual([emitted,persisted],[1,1]);
+assert.throws(()=>rethrowOriginalTransportError(hostile,()=>{throw Error('diagnostic failed');}),error=>error===hostile);
+assert.throws(()=>rethrowOriginalTransportError(hostile,()=>captureRecurringHttpTransportFailure(hostile,{
+ phase:'body',elapsedMilliseconds:1,emit(){throw Error('emitter failed');},persist(){throw Error('sidecar failed');}})),error=>error===hostile);
+assert.doesNotMatch(JSON.stringify(fact),/private|token|URL/);
+console.log('PASS recurring HTTP bounded boundary, transport, and non-authoritative capture',cases.length+10);

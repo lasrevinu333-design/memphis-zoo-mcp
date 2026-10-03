@@ -5,7 +5,8 @@ import {createOpsManagerSession} from '../src/auth/shared-access-auth.js';
 import {createStaticWeeklyControlPlane} from '../src/static-weekly-control-plane.js';
 import {createStaticWeeklyControlPlaneRuntime} from '../src/static-weekly-control-plane-runtime.js';
 import {postgresJsonbContentDigest as digest} from '../src/static-weekly-schedule-compiler.js';
-import {recurringHttpSqlBoundary,recurringHttpTransportFailure} from './static-weekly-recurring-http-boundary.mjs';
+import {recurringHttpSqlBoundary,captureRecurringHttpTransportFailure,
+ rethrowOriginalTransportError} from './static-weekly-recurring-http-boundary.mjs';
 
 // Invoked only after the current-manager-218 fixture has published its exact
 // baseline in the network-none, no-auto-grants disposable database. This is
@@ -40,14 +41,12 @@ export async function testRecurringConfirmationHttp({pool,week,originalManagerId
  const trace=(phase)=>{if(traceConfirm)console.log('ACTUAL_RECURRING_HTTP_CONFIRM_BOUNDARY',phase,Math.round(performance.now()-confirmStart));};
  const transportFailure=(phase,error)=>{
   if(!traceConfirm)return;
-  const fact={phase,elapsedMilliseconds:Math.round(performance.now()-confirmStart),...recurringHttpTransportFailure(error)};
   // Synchronous, bounded, nonsecret output survives even if cleanup waits for
   // an in-flight transaction. The sidecar is optional and never overwritten.
-  try{writeSync(1,`ACTUAL_RECURRING_HTTP_TRANSPORT_FAILURE ${JSON.stringify(fact)}\n`);}catch{}
-  if(process.env.STATIC_WEEKLY_CONTINUITY_EVIDENCE){
-   try{writeFileSync(process.env.STATIC_WEEKLY_CONTINUITY_EVIDENCE+'.first-confirm-transport.json',JSON.stringify(fact)+'\n',{flag:'wx',mode:0o600});}
-   catch{trace('transport_failure_sidecar_unavailable');}
-  }
+  captureRecurringHttpTransportFailure(error,{phase,elapsedMilliseconds:Math.round(performance.now()-confirmStart),
+   emit:fact=>writeSync(1,`ACTUAL_RECURRING_HTTP_TRANSPORT_FAILURE ${JSON.stringify(fact)}\n`),
+   persist:fact=>{if(process.env.STATIC_WEEKLY_CONTINUITY_EVIDENCE)writeFileSync(
+    process.env.STATIC_WEEKLY_CONTINUITY_EVIDENCE+'.first-confirm-transport.json',JSON.stringify(fact)+'\n',{flag:'wx',mode:0o600});}});
  };
  const onProcessExit=(code)=>{
   if(traceConfirm)try{writeSync(1,`ACTUAL_RECURRING_HTTP_CONFIRM_BOUNDARY process_exit_code:${Number.isSafeInteger(code)?code:'OTHER'} ${Math.round(performance.now()-confirmStart)}\n`);}catch{}
@@ -92,10 +91,10 @@ export async function testRecurringConfirmationHttp({pool,week,originalManagerId
    let response;
    try{response=await fetch(origin+route,{method,headers:{...(authorization?{Authorization:`Bearer ${authorization}`}:{ }),
     ...(body===undefined?{}:{'Content-Type':'application/json'})},...(body===undefined?{}:{body:JSON.stringify(body)})});}
-   catch(error){transportFailure('headers',error);throw error;}
+   catch(error){rethrowOriginalTransportError(error,()=>transportFailure('headers',error));}
    if(traceConfirm)trace(`http_client_response_headers:${response.status}`);
    let reply;
-   try{reply=await response.json();}catch(error){transportFailure('body',error);throw error;}
+   try{reply=await response.json();}catch(error){rethrowOriginalTransportError(error,()=>transportFailure('body',error));}
    if(traceConfirm)trace('http_client_response_body_complete');
    return {status:response.status,body:reply};
   };

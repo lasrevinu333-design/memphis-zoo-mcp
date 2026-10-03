@@ -17,6 +17,21 @@ const ERROR_CODES=new Set(['UND_ERR_HEADERS_TIMEOUT','UND_ERR_BODY_TIMEOUT','UND
 // these finite diagnostic tokens may leave the disposable test process.
 export function recurringHttpTransportFailure(error) {
  const token=(value,allowed)=>typeof value==='string'&&allowed.has(value)?value:'OTHER';
- return {name:token(error?.name,ERROR_NAMES),code:token(error?.code,ERROR_CODES),
-  causeName:token(error?.cause?.name,ERROR_NAMES),causeCode:token(error?.cause?.code,ERROR_CODES)};
+ const read=(value,key)=>{try{return value?.[key];}catch{return undefined;}};
+ const cause=read(error,'cause');
+ return {name:token(read(error,'name'),ERROR_NAMES),code:token(read(error,'code'),ERROR_CODES),
+  causeName:token(read(cause,'name'),ERROR_NAMES),causeCode:token(read(cause,'code'),ERROR_CODES)};
+}
+
+export function captureRecurringHttpTransportFailure(error,{phase,elapsedMilliseconds,emit,persist}) {
+ let fact;
+ try{fact={phase,elapsedMilliseconds,...recurringHttpTransportFailure(error)};}catch{return null;}
+ try{emit?.(fact);}catch{}
+ try{persist?.(fact);}catch{}
+ return fact;
+}
+
+export function rethrowOriginalTransportError(error,capture) {
+ try{capture(error);}catch{}
+ throw error;
 }
