@@ -88,6 +88,17 @@ function liveProcessGroupMembers(groupId) {
   return live;
 }
 
+function processIdentity(pid) {
+  try {
+    const stat = readFileSync(`/proc/${pid}/stat`, "utf8");
+    const tail = stat.slice(stat.lastIndexOf(")") + 2).split(" ");
+    return { state: tail[0], groupId: Number(tail[2]), startTicks: tail[19] };
+  } catch (error) {
+    if (error?.code === "ENOENT" || error?.code === "ESRCH") return null;
+    throw error;
+  }
+}
+
 const MAX_DIAGNOSTIC_STDERR_BYTES = 8 * 1024;
 function appendDiagnosticStderr(current, chunk) {
   const combined = Buffer.concat([Buffer.from(current || "", "utf8"), Buffer.from(chunk)]);
@@ -128,12 +139,50 @@ function terminateProcessGroup(candidate, cleanupDeadline = monotonicNowMillisec
   });
 }
 
+function terminateInheritedWorker(candidate, startTicks, cleanupDeadline = monotonicNowMilliseconds() + COMPILER_CLEANUP_RESERVE_MS) {
+  if (!candidate) return Promise.resolve();
+  const pid = Number(candidate.pid);
+  if (!Number.isSafeInteger(pid) || pid <= 1 || typeof startTicks !== "string") return Promise.reject(runtimeError(
+    "static_weekly_compiler_worker_identity_invalid", "The inherited compiler process identity was invalid."));
+  refWorkerProcess(candidate);
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let timer;
+    const finish = (error = null) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      unrefWorkerProcess(candidate);
+      if (error) reject(error); else resolve();
+    };
+    const verify = () => {
+      try {
+        const identity = processIdentity(pid);
+        if (!identity || identity.state === "Z" || identity.state === "X") return finish();
+        if (identity.startTicks !== startTicks) return finish(runtimeError(
+          "static_weekly_compiler_reap_unproven", "The inherited compiler PID was reused before absence could be proved."));
+        if (monotonicNowMilliseconds() >= cleanupDeadline) return finish(runtimeError(
+          "static_weekly_compiler_reap_unproven", "The inherited compiler did not terminate before the operation deadline."));
+        timer = setTimeout(verify, 10);
+      } catch { finish(runtimeError("static_weekly_compiler_reap_unproven", "The inherited compiler could not be verified absent.")); }
+    };
+    try {
+      const identity = processIdentity(pid);
+      if (identity && identity.startTicks !== startTicks) return finish(runtimeError(
+        "static_weekly_compiler_reap_unproven", "The inherited compiler PID identity changed before cleanup."));
+      if (identity && identity.state !== "Z" && identity.state !== "X") process.kill(pid, "SIGKILL");
+    } catch { /* absence still has to be proved */ }
+    verify();
+  });
+}
+
 export function createStaticWeeklyCompilerRuntime({
   workerUrl = productionWorkerUrl(),
   initializationMilliseconds = STATIC_WEEKLY_COMPILER_RUNTIME_LIMITS.initializationMilliseconds,
   requestMilliseconds = STATIC_WEEKLY_COMPILER_RUNTIME_LIMITS.requestMilliseconds,
   maxOutstandingRequests = STATIC_WEEKLY_COMPILER_RUNTIME_LIMITS.maxOutstandingRequests,
   exposeProcessIdentityForTest = false,
+  workerDetached = true,
   resourceLimits = {
     maxOldGenerationSizeMb: STATIC_WEEKLY_COMPILER_RUNTIME_LIMITS.maxOldGenerationSizeMb,
     maxSemiSpaceSizeMb: STATIC_WEEKLY_COMPILER_RUNTIME_LIMITS.maxSemiSpaceSizeMb,
@@ -149,6 +198,9 @@ export function createStaticWeeklyCompilerRuntime({
     if (!Number.isSafeInteger(value) || value < 1) throw new Error(`Compiler process ${name} must be a positive integer.`);
   }
   if (typeof exposeProcessIdentityForTest !== "boolean") throw new Error("Compiler process identity exposure must be a boolean test option.");
+  if (typeof workerDetached !== "boolean") throw new Error("Compiler process detached mode must be a boolean option.");
+  if (!workerDetached && processIdentity(process.pid)?.groupId !== process.pid) throw new Error(
+    "An inherited compiler requires an operation-owned process-group leader.");
 
   let state = "uninitialized";
   let worker = null;
@@ -163,6 +215,7 @@ export function createStaticWeeklyCompilerRuntime({
   let closed = false;
   let shutdownPromise = null;
   let teardownCandidate = null;
+  const inheritedWorkerStarts = new WeakMap();
   let teardown = Promise.resolve();
 
   function readiness() {
@@ -204,7 +257,9 @@ export function createStaticWeeklyCompilerRuntime({
     lastError = cause;
     detach(candidate);
     teardownCandidate = candidate;
-    teardown = terminateProcessGroup(candidate, cleanupDeadline ?? monotonicNowMilliseconds() + COMPILER_CLEANUP_RESERVE_MS).finally(() => {
+    teardown = (workerDetached
+      ? terminateProcessGroup(candidate, cleanupDeadline ?? monotonicNowMilliseconds() + COMPILER_CLEANUP_RESERVE_MS)
+      : terminateInheritedWorker(candidate, inheritedWorkerStarts.get(candidate), cleanupDeadline ?? monotonicNowMilliseconds() + COMPILER_CLEANUP_RESERVE_MS)).finally(() => {
       if (teardownCandidate === candidate) teardownCandidate = null;
     });
     return teardown;
@@ -238,12 +293,20 @@ export function createStaticWeeklyCompilerRuntime({
     workerEvidence = null;
     const candidateGeneration = ++generation;
     const candidate = fork(fileURLToPath(workerUrl), [], {
-      detached: true,
+      detached: workerDetached,
       execArgv: compilerExecArgv(resourceLimits),
       env: { ...process.env, MEMPHIS_STATIC_WEEKLY_COMPILER_WORKER: "1" },
       serialization: "advanced",
       stdio: ["ignore", "ignore", "pipe", "ipc"],
     });
+    if (!workerDetached) {
+      const identity = processIdentity(candidate.pid);
+      if (!identity || identity.groupId !== process.pid || typeof identity.startTicks !== "string") {
+        try { candidate.kill("SIGKILL"); } catch { /* parent operation group retains final custody */ }
+        throw runtimeError("static_weekly_compiler_worker_identity_invalid", "The inherited compiler did not join the operation-owned process group.");
+      }
+      inheritedWorkerStarts.set(candidate, identity.startTicks);
+    }
     let diagnosticStderr = "";
     candidate.stderr?.on("data", (chunk) => { diagnosticStderr = appendDiagnosticStderr(diagnosticStderr, chunk); });
     refWorkerProcess(candidate);
