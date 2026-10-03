@@ -1,5 +1,6 @@
 // Diagnostics for the disposable authenticated HTTP-to-SQL fixture only.
 // Never return SQL values, arguments, credential data or error text.
+import {types} from 'node:util';
 export function recurringHttpSqlBoundary(sql) {
  if(sql==='begin'||sql==='commit'||sql==='rollback')return sql;
  if(sql==='set local role static_weekly_control_plane')return 'set_local_role';
@@ -36,6 +37,22 @@ export function rethrowOriginalTransportError(error,capture) {
  throw error;
 }
 
+const UNKNOWN_DATA=Symbol('unknown diagnostic data');
+const MISSING_DATA=Symbol('missing diagnostic data');
+function ownPlainData(value,key) {
+ if(value===null||typeof value!=='object')return UNKNOWN_DATA;
+ try {
+  // A proxy's descriptor/prototype traps can mutate scheduling inputs. Node's
+  // native proxy check does not invoke those traps, so leave it unclassified.
+  if(types.isProxy(value))return UNKNOWN_DATA;
+  const prototype=Object.getPrototypeOf(value);
+  if(prototype!==Object.prototype&&prototype!==null)return UNKNOWN_DATA;
+  const descriptor=Object.getOwnPropertyDescriptor(value,key);
+  if(!descriptor)return MISSING_DATA;
+  return Object.hasOwn(descriptor,'value')?descriptor.value:UNKNOWN_DATA;
+ } catch{return UNKNOWN_DATA;}
+}
+
 // Disposable fixture observation only. Preserve the exact default preparer,
 // its input/options identities, call count and returned object/error. The
 // diagnostic sink is never part of scheduler authority or success.
@@ -44,13 +61,21 @@ export function recurringHttpCompilerProbe(prepare,trace) {
  const emit=phase=>{try{trace?.(phase);}catch{}};
  return async function observedPrepare(input,args,options) {
   let kind='other';
-  try{if(args?.kind==='draft')kind='draft';else if(args?.kind==='projection')kind='projection';}catch{}
+  const observedKind=ownPlainData(args,'kind');
+  if(observedKind==='draft'||observedKind==='projection')kind=observedKind;
   emit(`compiler_prepare_start:${kind}`);
   try {
    const result=arguments.length===2?await prepare(input,args):await prepare(input,args,options);
-   let hasLunch=false;
-   try{hasLunch=kind==='projection'&&Boolean(result?.lunchDocument?.document_identity);}catch{}
-   emit(`compiler_prepare_complete:${kind}:${hasLunch?'lunch_present':'lunch_absent'}`);
+   let lunch='lunch_not_applicable';
+   if(kind==='projection') {
+    const document=ownPlainData(result,'lunchDocument');
+    if(document===MISSING_DATA||document===null||document===undefined)lunch='lunch_absent';
+    else {
+     const identity=ownPlainData(document,'document_identity');
+     lunch=typeof identity==='string'&&identity.length>0?'lunch_present':'lunch_unknown';
+    }
+   }
+   emit(`compiler_prepare_complete:${kind}:${lunch}`);
    return result;
   } catch(error) {
    emit(`compiler_prepare_rejected:${kind}`);

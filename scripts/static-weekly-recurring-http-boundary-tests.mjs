@@ -55,8 +55,35 @@ const broken=recurringHttpCompilerProbe(async()=>{throw original;},phase=>reject
 await assert.rejects(()=>broken(input,args,options),error=>error===original);
 assert.deepEqual(rejected,['compiler_prepare_start:projection','compiler_prepare_rejected:projection']);
 const hostileResult={get lunchDocument(){throw Error('diagnostic getter failed');}};
+let resultGetterReads=0;
+const accessorResult={get lunchDocument(){resultGetterReads++;throw Error('diagnostic getter failed');}};
+const accessorResultEvents=[];
+assert.equal(await recurringHttpCompilerProbe(async()=>accessorResult,phase=>accessorResultEvents.push(phase))(input,args,options),accessorResult);
+assert.equal(resultGetterReads,0);
+assert.deepEqual(accessorResultEvents,['compiler_prepare_start:projection','compiler_prepare_complete:projection:lunch_unknown']);
+let documentGetterReads=0;
+const accessorDocument={lunchDocument:{get document_identity(){documentGetterReads++;return 'private identity';}}};
+assert.equal(await recurringHttpCompilerProbe(async()=>accessorDocument,()=>{})(input,args,options),accessorDocument);
+assert.equal(documentGetterReads,0);
+let argsGetterReads=0,prepareCalls=0;
+const hostileArgs={get kind(){argsGetterReads++;return 'projection';}};
+const hostileEvents=[];
+assert.equal(await recurringHttpCompilerProbe(async(_,received)=>{
+ prepareCalls++;assert.equal(received,hostileArgs);assert.equal(received.kind,'projection');return result;
+},phase=>hostileEvents.push(phase))(input,hostileArgs),result);
+assert.equal(prepareCalls,1);assert.equal(argsGetterReads,1);
+assert.deepEqual(hostileEvents,['compiler_prepare_start:other','compiler_prepare_complete:other:lunch_not_applicable']);
+let proxyTraps=0;
+const proxiedArgs=new Proxy({kind:'projection'},{
+ getPrototypeOf(target){proxyTraps++;return Reflect.getPrototypeOf(target);},
+ getOwnPropertyDescriptor(target,key){proxyTraps++;return Reflect.getOwnPropertyDescriptor(target,key);},
+ get(target,key,receiver){proxyTraps++;return Reflect.get(target,key,receiver);}
+});
+const proxyEvents=[];
+assert.equal(await recurringHttpCompilerProbe(async(_,received)=>{assert.equal(received,proxiedArgs);return result;},
+ phase=>proxyEvents.push(phase))(input,proxiedArgs),result);
+assert.equal(proxyTraps,0);
+assert.deepEqual(proxyEvents,['compiler_prepare_start:other','compiler_prepare_complete:other:lunch_not_applicable']);
 assert.equal(await recurringHttpCompilerProbe(async()=>hostileResult,()=>{throw Error('trace failed');})(input,args,options),hostileResult);
-const hostileArgs={get kind(){throw Error('private kind getter');}};
-assert.equal(await recurringHttpCompilerProbe(async(_,received)=>{assert.equal(received,hostileArgs);return result;},()=>{})(input,hostileArgs),result);
 assert.throws(()=>recurringHttpCompilerProbe(null,()=>{}),/compiler preparer required/);
-console.log('PASS recurring HTTP bounded SQL, transport and compiler-preparation observation',cases.length+18);
+console.log('PASS recurring HTTP bounded SQL, transport and compiler-preparation observation',cases.length+26);
