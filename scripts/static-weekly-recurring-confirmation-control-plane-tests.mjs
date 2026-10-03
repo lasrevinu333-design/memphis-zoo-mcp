@@ -10,6 +10,9 @@ import {RECURRING_WEEK_COMMITMENT_SCHEMA,RECURRING_PHASE_SCOPE,RECURRING_MORNING
 import {COMPONENT_WEIGHT_LEDGER_DIGEST} from '../src/schedule-component-weight-authority.js';
 import {createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
+import {createRequire} from 'node:module';
+const require=createRequire(import.meta.url);
+const {prepareValue}=require('pg/lib/utils');
 installStaticWeeklySha256HexAccelerator(x=>createHash('sha256').update(x).digest('hex'));
 
 // Transaction orchestration only. SQL, compiler, HTTP and physical proofs are
@@ -198,7 +201,25 @@ const check=(label,actual,expected)=>{assert.deepEqual(actual,expected,label);ch
 // orchestration fixture, not a proved split-source reduction. The real worker
 // independently validates the exact 313-row lineage and current roster.
 const source313=harness({publishedAssignmentsCount:313});
+const driverWorkExample=seasonWorkFromCandidate(actual.result.assignments);
+assert.notEqual(prepareValue(driverWorkExample),JSON.stringify(driverWorkExample),
+ 'node-postgres formats a JavaScript array as PostgreSQL array text, not JSONB text');checks++;
 const autoSourcePreview=await source313.plane.previewRecurringStaffing({manager,effectiveStart:week,expectedRevision:7});
+function assertSeasonWitnessJsonb(label,queries){
+ const calls=queries.filter(row=>row.sql.includes('static_weekly_sch022_preview_witness'));
+ assert.ok(calls.length>0,`${label} must invoke the exact seasonal witness`);
+ for(const row of calls){
+  assert.equal(typeof row.args[1],'string',`${label} must send JSON text, not a node-postgres array`);
+  const work=JSON.parse(prepareValue(row.args[1]));
+  assert.ok(Array.isArray(work)&&work.length>0,`${label} must retain typed scheduled work`);
+  assert.deepEqual(work,seasonWorkFromCandidate(actual.result.assignments),`${label} must retain exact work identities`);
+  checks++;
+ }
+}
+function seasonWorkFromCandidate(assignments){return assignments.map(row=>({
+ locationId:row.workSnapshot.locationId||null,locationCode:row.workSnapshot.locationCodeSnapshot,
+ includedLocationIds:row.workSnapshot.includedLocations.map(location=>location.locationId)}));}
+assertSeasonWitnessJsonb('manager preview',source313.queries);
 const authorityReads=source313.queries.filter(row=>row.sql.includes('static_weekly_v3_read_authority_source'));
 check('split publication privately fetches only pinned full source under lock',
  authorityReads.map(row=>row.args),[[approvedFullNineSourceId,week]]);
@@ -225,6 +246,7 @@ const requestFor=async h=>{const preview=await h.plane.previewRecurringStaffing(
  return{manager,effectiveStart:week,expectedRevision:7,confirmationKey:key,previewDigest:preview.previewDigest};};
 const h=harness(),request=await requestFor(h),before=h.connections(),start=h.queries.length;
 const receipt=await h.plane.confirmRecurringStaffing(request);
+assertSeasonWitnessJsonb('manager confirmation',h.queries.slice(start));
 check('one client for complete confirmation',h.connections()-before,1);
 check('one transaction for all parent children',new Set(h.queries.slice(start).map(x=>x.clientId)).size,1);
 check('all owning writes in order',h.state().writes,['source','draft','publication','binding','projection','lunch','targets-and-receipt']);

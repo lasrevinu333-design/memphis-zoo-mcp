@@ -867,7 +867,7 @@ export function createStaticWeeklyControlPlane({
         await lockStaticWeeklyAuthority(client);
         return { snapshot: await snapshotFor(client, date), recurringGeneration: await recurringGenerationFor(client),
           splashSeasonWitness: await call(client, "static_weekly_sch022_preview_witness", [date,
-            seasonWorkFromAssignments(candidate.decision.assignments),actor.managerId]) };
+            JSON.stringify(seasonWorkFromAssignments(candidate.decision.assignments)),actor.managerId]) };
       });
       if (requireRevision(current.snapshot?.authority_revision) !== revision
         || text(current.snapshot?.current_publication?.publication_id) !== candidate.publicationId
@@ -914,7 +914,7 @@ export function createStaticWeeklyControlPlane({
         validateRecurringCandidate(candidate, basis, revision);
         basis.splashSeasonWitness = requireSeasonWitness(await call(client,
           "static_weekly_sch022_preview_witness", [date,
-            seasonWorkFromAssignments(candidate.decision.assignments),actor.managerId]));
+            JSON.stringify(seasonWorkFromAssignments(candidate.decision.assignments)),actor.managerId]));
         if (recurringPreviewDigest(actor, basis, candidate) !== expectedDigest) {
           throw fail("static_weekly_recurring_preview_changed", "The complete recurring preview changed. Preview the current plan again before confirming.");
         }
