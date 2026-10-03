@@ -373,6 +373,8 @@ const eventCountSourceImports = ["await import('./event-count-cross-surface-cont
   "await import('./static-weekly-opening-coverage-report-ci-tests.mjs');",
   "await import('./static-weekly-opening-coverage-preview-contract-tests.mjs');",
   "await import('./static-weekly-policy-scope-ci-tests.mjs');",
+  "await import('./static-weekly-postgres-key-order-ci-tests.mjs');",
+  "await import('./static-weekly-current-manager-fixture-tests.mjs');",
   "await import('./static-weekly-recurring-phase-authority-ci-tests.mjs');",
   "await import('./static-weekly-identity-auxiliary-ci-tests.mjs');",
   "await import('./static-weekly-recurring-week-commitment-tests.mjs');",

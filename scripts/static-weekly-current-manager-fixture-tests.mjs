@@ -1,0 +1,60 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {createHash} from 'node:crypto';
+import {assertCurrentManagerMigrationSet,loadCurrentManagerPublicationFixture,CURRENT_MANAGER_MIGRATION_MANIFEST} from './fixtures/current-manager-publication-source.mjs';
+import {validateSixPersonAbsenceFixtureBytes} from './fixtures/six-person-absence-source.mjs';
+import {validateFullNineV6FixtureBytes} from './fixtures/full-nine-v6-source.mjs';
+import {deriveDatedShiftEndCoverage} from '../src/static-weekly-shift-end-derivation.js';
+import {postgresJsonbContentDigest} from '../src/static-weekly-schedule-program.js';
+
+let checks=0;const check=(name,fn)=>{fn();checks++;console.log('PASS',name);};
+const f=loadCurrentManagerPublicationFixture(),p=f.packet;
+check('exact216 manifest pinned separately from old176',()=>{
+ const files=assertCurrentManagerMigrationSet();assert.equal(files.length,216);
+ assert.equal(createHash('sha256').update(JSON.stringify(files)).digest('hex'),CURRENT_MANAGER_MIGRATION_MANIFEST);
+});
+check('current323 and accepted original314 remain separate',()=>{
+ assert.equal(p.compilerInput.version.assignments.length,323);assert.equal(p.original.compilerInput.version.assignments.length,314);
+ assert.notEqual(p.sourceId,p.original.sourceId);assert.notEqual(p.sourceDigest,p.original.sourceDigest);assert.equal(p.original.registration,false);
+});
+check('fixture is deterministic and has no admitted claim',()=>{
+ assert.deepEqual(loadCurrentManagerPublicationFixture().bytes,f.bytes);
+ assert.equal(p.classification,'SYNTHETIC_CURRENT323_PLUS_IMMUTABLE_ORIGINAL314_NOT_PRODUCTION_REGISTRATION');
+});
+check('six current people and three stable vacancies; no old-person resurrection',()=>{
+ assert.equal(p.rosterSlots.filter(s=>s.personId).length,6);assert.equal(p.rosterSlots.filter(s=>!s.personId).length,3);
+ assert.equal(new Set(p.rosterSlots.map(s=>s.slotId)).size,9);
+});
+check('Karen immutable days and current Gregory lunch retained',()=>{
+ assert.deepEqual(f.config.slots.KAREN.workDays,[1,2,3,5,6]);
+ assert.deepEqual(f.config.slots.GREGORY.lunch,['12:30','13:30']);
+});
+check('current dated coverage has exact494 segments without rewriting323',()=>{
+ const before=JSON.stringify(p.compilerInput),d=deriveDatedShiftEndCoverage(p.compilerInput,postgresJsonbContentDigest);
+ assert.equal(d.effectiveInput.version.assignments.length,494);assert.equal(d.receipt.parentChains.length,323);
+ assert.equal(JSON.stringify(p.compilerInput),before);
+});
+for(const [name,file,validate] of [
+ ['current','./fixtures/six-person-absence-source.json',validateSixPersonAbsenceFixtureBytes],
+ ['original','./fixtures/full-nine-v6-source.json',validateFullNineV6FixtureBytes]]) {
+ for(const mutate of [j=>j.compilerInput.version.assignments.pop(),j=>j.compilerInput.serviceDate='2099-01-01',j=>j.sourceDigest='0'.repeat(64)])
+  check(`${name} changed bytes rejected`,()=>{const j=JSON.parse(readFileSync(new URL(file,import.meta.url)));mutate(j);assert.throws(()=>validate(Buffer.from(JSON.stringify(j)+'\n')));});
+}
+const runner=readFileSync(new URL('./run-isolated-shift-end-tests.mjs',import.meta.url),'utf8');
+const publication=readFileSync(new URL('./static-weekly-current-roster-publication-tests.mjs',import.meta.url),'utf8');
+check('current stage invokes publication caller and mandatory confirmation, not export-only Node',()=>{
+ assert.ok(runner.includes("stage==='current-roster-only'||currentManagerStage?'scripts/static-weekly-current-roster-publication-tests.mjs'"));
+ assert.ok(runner.includes("STATIC_WEEKLY_TEST_CURRENT_216:'1',STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION:'1'"));
+ assert.ok(publication.includes('recurringConfirmationProof=await testRecurringConfirmation({pool,week,originalManagerId:managerId,check})'));
+});
+check('old176 contract, exact image, isolation/default grants and cleanup remain',()=>{
+ for(const text of ["currentManagerStage?216:176","20260929125440_custodial_recovery_inventory_closure.sql",
+  "supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed",
+  "'--network','none'",'absenceGuard','finally{cleanup();}'])assert.ok(runner.includes(text),text);
+});
+check('current stage registers original only as immutable source and preserves source digest',()=>{
+ assert.ok(publication.includes("check('registered original314 exact digest without historical person import'"));
+ assert.ok(publication.includes("check('full source remains unchanged in database'"));
+});
+console.log(JSON.stringify({status:'PASS',checks,scope:'current-manager fixture and executable-route preflight only',
+ migrationCount:216,originalRows:314,currentRows:323,derivedRows:494,solver:false,database:false,publication:false,production:false}));

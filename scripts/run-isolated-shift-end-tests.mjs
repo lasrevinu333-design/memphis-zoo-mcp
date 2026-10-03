@@ -2,10 +2,13 @@ import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 import {readdirSync,readFileSync,mkdtempSync,chmodSync,rmdirSync,unlinkSync} from 'node:fs';
 import {createHash} from 'node:crypto';
+import {assertCurrentManagerMigrationSet,loadCurrentManagerPublicationFixture} from './fixtures/current-manager-publication-source.mjs';
 const container=`mz_schema_shift_end_${process.pid}`;
 const stage=process.argv[2]??'all';
-assert.ok(['all','migration-only','separation-context-only','atomic-only','published-only','current-roster-only','recurring-ledger-only','recurring-parent-only','recurring-source-only','recurring-dependency-only','recurring-binding-shape-only','recurring-terminal-boundary-only','recurring-lock-order-only','recurring-generation-only','legacy-only','activation-only','legacy-activation-only','legacy-observation-only'].includes(stage),'explicit bounded test stage');
-const publishedStage=['published-only','current-roster-only'].includes(stage);
+assert.ok(['all','migration-only','separation-context-only','atomic-only','published-only','current-roster-only','current-manager-216','recurring-ledger-only','recurring-parent-only','recurring-source-only','recurring-dependency-only','recurring-binding-shape-only','recurring-terminal-boundary-only','recurring-lock-order-only','recurring-generation-only','legacy-only','activation-only','legacy-activation-only','legacy-observation-only'].includes(stage),'explicit bounded test stage');
+const currentManagerStage=stage==='current-manager-216';
+const publishedStage=['published-only','current-roster-only','current-manager-216'].includes(stage);
+if(currentManagerStage){assertCurrentManagerMigrationSet();loadCurrentManagerPublicationFixture();}
 const socketStage=publishedStage||['recurring-ledger-only','recurring-parent-only','recurring-source-only','recurring-dependency-only','recurring-binding-shape-only','recurring-terminal-boundary-only','recurring-lock-order-only','recurring-generation-only'].includes(stage);
 const recurringSourceStage=['recurring-ledger-only','recurring-parent-only','recurring-source-only'].includes(stage);
 if(recurringSourceStage){
@@ -20,8 +23,8 @@ const defaults="select count(*) from pg_default_acl d cross join lateral aclexpl
 const removeDefaultsSql=['postgres','supabase_admin'].flatMap(owner=>['',' in schema public'].map(scope=>`alter default privileges for role ${owner}${scope} revoke all on tables from public,anon,authenticated,service_role;alter default privileges for role ${owner}${scope} revoke all on sequences from public,anon,authenticated,service_role;`)).join('\n');
 const absenceGuard=`do $absence$begin if (${defaults})<>0 then raise exception 'automatic Data API table/sequence grants must be absent'; end if;end$absence$;`;
 let owned=false;const files=readdirSync('supabase/migrations').filter(f=>f.endsWith('.sql')).sort(),manifest=[];
-assert.equal(files.length,176,'exact current changed-input migration set');
-assert.equal(files.at(-1),'20260929125440_custodial_recovery_inventory_closure.sql','exact current changed-input migration head');
+assert.equal(files.length,currentManagerStage?216:176,'exact stage-specific migration set');
+assert.equal(files.at(-1),currentManagerStage?'20261003220000_current_release_authority_completion.sql':'20260929125440_custodial_recovery_inventory_closure.sql','exact stage-specific migration head');
 function cleanup(){if(owned){docker(['stop','-t','10',container]);
  if(docker(['ps','-a','--filter',`name=^/${container}$`,'--format','{{.Names}}']).trim())docker(['rm','-f',container]);
  owned=false;assert.equal(docker(['ps','-a','--filter',`name=^/${container}$`,'--format','{{.Names}}']).trim(),'');console.log('OWNED_CONTAINER_REMOVED',container);}
@@ -84,12 +87,13 @@ try{
   env:{...process.env,SHIFT_END_TEST_CONTAINER:container},stdio:'inherit',timeout:420000});
  if(['all','atomic-only'].includes(stage))execFileSync(process.execPath,['scripts/static-weekly-atomic-roster-database-tests.mjs'],{
   env:{...process.env,SHIFT_END_TEST_CONTAINER:container},stdio:'inherit',timeout:180000});
- if(publishedStage)execFileSync(process.execPath,[stage==='current-roster-only'?'scripts/static-weekly-current-roster-publication-tests.mjs':'scripts/static-weekly-published-roster-transaction-tests.mjs'],{
+ if(publishedStage)execFileSync(process.execPath,[stage==='current-roster-only'||currentManagerStage?'scripts/static-weekly-current-roster-publication-tests.mjs':'scripts/static-weekly-published-roster-transaction-tests.mjs'],{
   // Finalization adds a real projection plus three independent acceptance
   // attempts (two injected failures). Keep each production SQL/compiler
   // deadline unchanged; bound the expanded aggregate test at twenty minutes.
-  env:{...process.env,SHIFT_END_TEST_CONTAINER:container,SHIFT_END_TEST_SOCKET:socket},stdio:'inherit',
-  timeout:process.env.STATIC_WEEKLY_TEST_RECURRING_FINALIZATION==='1'||process.env.STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION==='1'?1200000:900000});
+  env:{...process.env,SHIFT_END_TEST_CONTAINER:container,SHIFT_END_TEST_SOCKET:socket,
+   ...(currentManagerStage?{STATIC_WEEKLY_TEST_CURRENT_216:'1',STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION:'1'}:{})},stdio:'inherit',
+  timeout:currentManagerStage||process.env.STATIC_WEEKLY_TEST_RECURRING_FINALIZATION==='1'||process.env.STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION==='1'?1200000:900000});
  if(stage==='separation-context-only')execFileSync(process.execPath,['scripts/static-weekly-vacate-roster-slot-fixture-tests.mjs'],{
   env:{...process.env,ROSTER_PUBLICATION_TEST_CONTAINER:container,SEPARATION_CONTEXT_PROOF:'1'},stdio:'inherit',timeout:240000});
  if(stage==='legacy-only'){

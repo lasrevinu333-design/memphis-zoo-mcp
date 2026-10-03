@@ -13,6 +13,7 @@ import {testRecurringDependencyReconciliation} from './static-weekly-recurring-r
 import {testRecurringApplicationTargets} from './static-weekly-recurring-application-integration.mjs';
 import {testRecurringConfirmation} from './static-weekly-recurring-confirmation-integration.mjs';
 import {testLunchMaterialization} from './static-weekly-lunch-materialization-integration.mjs';
+import {assertCurrentManagerMigrationSet,loadCurrentManagerPublicationFixture} from './fixtures/current-manager-publication-source.mjs';
 
 const container=process.env.SHIFT_END_TEST_CONTAINER,socket=process.env.SHIFT_END_TEST_SOCKET;
 assert.match(container??'',/^mz_schema_shift_end_[0-9]+$/);
@@ -20,14 +21,16 @@ assert.match(socket??'',/^\/tmp\/mz-shift-socket-[a-zA-Z0-9]+$/);
 const inspection=JSON.parse(execFileSync('docker',['inspect',container],{encoding:'utf8',timeout:10000}))[0];
 assert.equal(inspection.HostConfig.NetworkMode,'none');assert.equal(Object.keys(inspection.HostConfig.PortBindings??{}).length,0);
 assert.ok(inspection.Mounts.some(m=>m.Source===socket&&m.Destination==='/test-socket'));
-assert.ok(process.env.STATIC_WEEKLY_CONTINUITY_TEMPLATE,'explicit immutable local source');
-const bytes=readFileSync(process.env.STATIC_WEEKLY_CONTINUITY_TEMPLATE),packet=JSON.parse(bytes),source=packet.compilerInput;
+const currentManagerStage=process.env.STATIC_WEEKLY_TEST_CURRENT_216==='1';
+if(currentManagerStage){assertCurrentManagerMigrationSet();assert.equal(process.env.STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION,'1','current manager proof must execute confirmation');}
+else assert.ok(process.env.STATIC_WEEKLY_CONTINUITY_TEMPLATE,'explicit immutable local source');
+const bytes=currentManagerStage?loadCurrentManagerPublicationFixture().bytes:readFileSync(process.env.STATIC_WEEKLY_CONTINUITY_TEMPLATE),packet=JSON.parse(bytes),source=packet.compilerInput;
 assert.equal(digest(source),packet.sourceDigest);
 const sourceRows=source.version.assignments.length;
-assert.ok([312,313].includes(sourceRows),'only the reviewed original or six-person source is in scope');
-const derivedRows=packet.verification.shiftEndDerivation.parentChains
+assert.ok(currentManagerStage?sourceRows===323:[312,313].includes(sourceRows),'only the exact selected source lineage is in scope');
+const derivedRows=currentManagerStage?packet.expectedDerivedRows:packet.verification.shiftEndDerivation.parentChains
  .reduce((count,chain)=>count+chain.segments.length,0);
-assert.equal(derivedRows,sourceRows===312?454:458,'exact source-specific derivation count');
+assert.equal(derivedRows,currentManagerStage?494:sourceRows===312?454:458,'exact source-specific derivation count');
 assert.equal(source.version.vacantSlotIds.length,3);
 const pool=new Pool({host:socket,database:'postgres',user:'supabase_admin',password:'postgres',max:3,connectionTimeoutMillis:5000});
 pool.on('error',e=>console.error('SYNTHETIC_POOL_ERROR',e.code));
@@ -64,6 +67,10 @@ try{
   }
  }
  await release('static_weekly_v3_configure_initial_authority_key',['static-weekly-authority-hmac-v2','synthetic-current-roster-not-production-0123456789','Synthetic full-source proof']);
+ if(currentManagerStage){
+  await release('static_weekly_v3_register_authority_source',[packet.original.sourceId,packet.original.compilerInput,'Immutable original V6 input; isolated source registration only']);
+  check('registered original314 exact digest without historical person import',await query('select source_digest as result from public.static_weekly_authority_source_documents where source_id=$1',[packet.original.sourceId]),packet.original.sourceDigest);
+ }
  const bootstrap=structuredClone(source),vacancies=new Set(source.version.vacantSlotIds),initial='50000000-0000-4000-8000-000000000131';
  bootstrap.slots=bootstrap.slots.filter(s=>!vacancies.has(s.id));
  bootstrap.version.vacantSlotIds=[];bootstrap.version.vacancyCapableSlotIds=[];
@@ -298,7 +305,7 @@ try{
  check('failed tamper leaves exact accepted lunch', (await cp('static_weekly_v8_read_lunch_document',[week])).document_identity,lunch.document_identity);
  check('full source remains unchanged in database',await query('select source_digest as result from public.static_weekly_authority_source_documents where source_id=$1',[packet.sourceId]),packet.sourceDigest);
  check('accepted relational baseline remains byte-identical',await query('select md5(jsonb_agg(to_jsonb(a) order by assignment_id)::text) as result from public.weekly_schedule_slot_assignments a where version_id=$1',[published.data.version_id]),relationalDigest);
- assert.deepEqual(readFileSync(process.env.STATIC_WEEKLY_CONTINUITY_TEMPLATE),bytes);
+ assert.deepEqual(currentManagerStage?loadCurrentManagerPublicationFixture().bytes:readFileSync(process.env.STATIC_WEEKLY_CONTINUITY_TEMPLATE),bytes);
  if(process.env.STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION==='1')recurringConfirmationProof=await testRecurringConfirmation({pool,week,originalManagerId:managerId,check});
  const evidence={classification:'SYNTHETIC_LOCAL_NOT_ADMITTED',sourcePacketSha256:createHash('sha256').update(bytes).digest('hex'),source,projection,lunch,replay,recurringPreview,recurringAdmissionProof,recurringConfirmationProof,lunchMaterializationProof,checks,production:false,independentAudit:false};
  if(process.env.STATIC_WEEKLY_CONTINUITY_EVIDENCE)writeFileSync(process.env.STATIC_WEEKLY_CONTINUITY_EVIDENCE,JSON.stringify(evidence)+'\n',{flag:'wx'});
