@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import re
+import secrets
 import selectors
 import signal
 import subprocess
@@ -156,6 +157,88 @@ def owned_container_absent(pid):
     return result == ''
 
 
+def read_process_identity(pid):
+    """Linux PID plus birth, boot, owner and executable; PID alone is never custody."""
+    try:
+        stat_text = Path(f'/proc/{pid}/stat').read_text()
+        fields = stat_text[stat_text.rfind(')') + 2:].split()
+        process_dir = Path(f'/proc/{pid}')
+        if fields[0] == 'Z':
+            return None
+        return {'pid': pid, 'startTicks': fields[19], 'processGroup': int(fields[2]),
+            'bootId': Path('/proc/sys/kernel/random/boot_id').read_text().strip(),
+            'uid': process_dir.stat().st_uid, 'executable': str((process_dir / 'exe').resolve(strict=True))}
+    except FileNotFoundError:
+        return None
+
+
+def exact_marked_processes(run_id):
+    marker = ('CUSTODIAL_RECURRING_BROWSER_RUN_ID=' + run_id).encode()
+    found = []
+    for proc in Path('/proc').iterdir():
+        if not proc.name.isdecimal():
+            continue
+        try:
+            pid = int(proc.name)
+            if proc.stat().st_uid != os.getuid():
+                continue
+            # Read the exact fresh nonce first. Some pre-existing same-UID
+            # services disallow their exe inspection; they predate this nonce.
+            if marker not in (proc / 'environ').read_bytes().split(b'\0'):
+                continue
+            identity = read_process_identity(pid)
+            if identity is not None and identity['uid'] == os.getuid():
+                found.append(identity)
+        except FileNotFoundError:
+            continue
+        except PermissionError:
+            continue  # inaccessible pre-existing process cannot inherit a fresh nonce
+    return found
+
+
+def identical_process(wanted):
+    current = read_process_identity(wanted['pid'])
+    return current is not None and all(current.get(key) == wanted.get(key)
+        for key in ('pid', 'startTicks', 'bootId', 'uid', 'executable'))
+
+
+def stop_exact_marked_processes(run_id, browser_record, stage_pid, lease_pid):
+    """Bounded fallback only for this synthetic run, after the SQL process group ends."""
+    marker_processes = exact_marked_processes(run_id)
+    if browser_record is not None:
+        if (browser_record.get('runId') != run_id or browser_record.get('stageParentPid') != stage_pid
+                or browser_record.get('leaseParentPid') != lease_pid or browser_record.get('production') is not False
+                or browser_record.get('uid') != os.getuid()):
+            raise RuntimeError('browser sidecar identity or parent mismatch')
+        expected = {key: browser_record.get(key) for key in
+            ('pid', 'startTicks', 'bootId', 'uid', 'executable')}
+        current = read_process_identity(expected['pid']) if isinstance(expected['pid'], int) else None
+        if current is not None and not identical_process(expected):
+            raise RuntimeError('recorded browser PID birth or executable changed')
+        if current is not None and expected not in [
+                {key: item.get(key) for key in expected} for item in marker_processes]:
+            raise RuntimeError('recorded browser lacks exact synthetic process marker')
+    signalled = []
+    for identity in marker_processes:
+        if identical_process(identity):
+            os.kill(identity['pid'], signal.SIGTERM)
+            signalled.append(identity)
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline and any(identical_process(item) for item in signalled):
+        time.sleep(0.1)
+    for identity in signalled:
+        if identical_process(identity):
+            os.kill(identity['pid'], signal.SIGKILL)
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline and exact_marked_processes(run_id):
+        time.sleep(0.1)
+    remaining = exact_marked_processes(run_id)
+    if remaining or (browser_record is not None and identical_process(browser_record)):
+        raise RuntimeError('exact synthetic browser process remains after bounded cleanup')
+    return {'matched_before': len(marker_processes), 'signalled': len(signalled),
+        'remaining': 0, 'recorded_browser_gone': browser_record is None or not identical_process(browser_record)}
+
+
 def classify_stage_cleanup(cleanup, stage_pid, lease_pid):
     if (not isinstance(cleanup, dict) or not isinstance(cleanup.get('childPid'), int)
             or cleanup['childPid'] <= 1 or cleanup.get('stageParentPid') != stage_pid
@@ -165,10 +248,13 @@ def classify_stage_cleanup(cleanup, stage_pid, lease_pid):
     if cleanup.get('launched') is False and cleanup.get('contextCreated') is False:
         return 'NOT_LAUNCHED'
     if (cleanup.get('launched') is True and cleanup.get('contextCreated') is False
-            and cleanup.get('browserClosed') is True):
+            and cleanup.get('serverClosed') is True and cleanup.get('processGone') is True
+            and cleanup.get('processIdentityRecorded') is True):
         return 'LAUNCHED_NO_CONTEXT_CLOSED'
     if (cleanup.get('launched') is True and cleanup.get('contextCreated') is True
-            and cleanup.get('contextClosed') is True and cleanup.get('browserClosed') is True):
+            and cleanup.get('contextClosed') is True and cleanup.get('browserClosed') is True
+            and cleanup.get('serverClosed') is True and cleanup.get('processGone') is True
+            and cleanup.get('processIdentityRecorded') is True):
         return 'PROVEN'
     return 'UNPROVEN'
 
@@ -193,6 +279,8 @@ def run(plan_path, expected_sha):
         'lease_generation_id': lease.generation_id, 'shared_browser_accessed': False,
         'production': False, 'phone_accessed': False, 'independent_audit': False}
     child = None
+    run_id = secrets.token_hex(16)
+    receipt['browser_run_id'] = run_id
     released = False
     entered = 0
     cleaned = 0
@@ -224,6 +312,7 @@ def run(plan_path, expected_sha):
 
     for signum in (signal.SIGINT, signal.SIGTERM):
         signal.signal(signum, interrupt)
+    execution_error = None
     try:
         private_json(output / 'source-receipt.json', receipt)
         print('RECURRING_BROWSER_OUTPUT=' + str(output), flush=True)
@@ -234,6 +323,7 @@ def run(plan_path, expected_sha):
         env.update({'STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION_BROWSER': '1',
             'CUSTODIAL_RECURRING_BROWSER_LEASE_PARENT_PID': str(os.getpid()),
             'CUSTODIAL_RECURRING_BROWSER_EVIDENCE_DIR': str(output),
+            'CUSTODIAL_RECURRING_BROWSER_RUN_ID': run_id,
             'CUSTODIAL_RECURRING_BROWSER_FRONTEND_ROOT': str(frontend),
             'CUSTODIAL_RECURRING_BROWSER_PLAYWRIGHT_INDEX_SHA256': plan['playwright_index_sha256'],
             'CUSTODIAL_RECURRING_BROWSER_PLAYWRIGHT_PACKAGE_SHA256': plan['playwright_package_sha256'],
@@ -249,59 +339,102 @@ def run(plan_path, expected_sha):
             bounded_stream(child, log, started + 1800, on_line, renew_if_due)
         code = child.wait(timeout=10)
         receipt['exit_code'] = code
+    except BaseException as error:
+        execution_error = error
     finally:
-        if child is not None and child.poll() is None:
-            os.killpg(child.pid, signal.SIGTERM)
+        failures = []
+        try:
+            if child is not None and child.poll() is None:
+                os.killpg(child.pid, signal.SIGTERM)
+                try:
+                    child.wait(timeout=15)
+                except subprocess.TimeoutExpired:
+                    os.killpg(child.pid, signal.SIGKILL)
+                    child.wait(timeout=5)
+        except BaseException as error:
+            failures.append('child_cleanup:' + type(error).__name__)
+        receipt['child_exited'] = child is None or child.poll() is not None
+        receipt['child_process_group_absent'] = child is None or group_absent(child.pid)
+        try:
+            receipt['owned_container_absent'] = child is None or owned_container_absent(child.pid)
+        except BaseException as error:
+            receipt['owned_container_absent'] = False
+            failures.append('container_check:' + type(error).__name__)
+        browser_path = output / 'browser-process.json'
+        browser_record = None
+        if browser_path.exists():
             try:
-                child.wait(timeout=15)
-            except subprocess.TimeoutExpired:
-                os.killpg(child.pid, signal.SIGKILL)
-                child.wait(timeout=5)
-        if child is not None:
-            receipt['child_exited'] = child.poll() is not None
-            receipt['child_process_group_absent'] = group_absent(child.pid)
-            receipt['owned_container_absent'] = owned_container_absent(child.pid)
-        else:
-            receipt['child_exited'] = True
-            receipt['child_process_group_absent'] = True
-            receipt['owned_container_absent'] = True
+                browser_record = json.loads(browser_path.read_text())
+                receipt['browser_process_sha256'] = digest(browser_path)
+            except BaseException as error:
+                failures.append('browser_sidecar:' + type(error).__name__)
+        try:
+            receipt['exact_browser_cleanup'] = stop_exact_marked_processes(
+                run_id, browser_record, child.pid if child else None, os.getpid())
+        except BaseException as error:
+            failures.append('exact_browser_cleanup:' + type(error).__name__)
+        receipt['child_process_group_absent'] = child is None or group_absent(child.pid)
+        if not receipt['child_process_group_absent']:
+            failures.append('child_group_still_present')
         cleanup_path = output / 'browser-stage-cleanup.json'
         if entered:
             if entered != 1 or cleaned != 1 or not cleanup_path.exists():
                 receipt['browser_cleanup_state'] = 'UNPROVEN'
             else:
-                cleanup = json.loads(cleanup_path.read_text())
-                receipt['browser_cleanup_sha256'] = digest(cleanup_path)
-                receipt['browser_cleanup_state'] = classify_stage_cleanup(cleanup, child.pid, os.getpid())
+                try:
+                    cleanup = json.loads(cleanup_path.read_text())
+                    receipt['browser_cleanup_sha256'] = digest(cleanup_path)
+                    receipt['browser_cleanup_state'] = classify_stage_cleanup(cleanup, child.pid, os.getpid())
+                except BaseException as error:
+                    receipt['browser_cleanup_state'] = 'UNPROVEN'
+                    failures.append('cleanup_receipt:' + type(error).__name__)
         else:
             receipt['browser_cleanup_state'] = 'NOT_ENTERED'
         safe = (receipt.get('child_exited') is True
             and receipt.get('child_process_group_absent') is True
             and receipt.get('owned_container_absent') is True
-            and receipt['browser_cleanup_state'] in ('PROVEN', 'NOT_ENTERED',
-                'NOT_LAUNCHED', 'LAUNCHED_NO_CONTEXT_CLOSED'))
-        if safe and client.check(lease):
-            client.close_targets_and_release(lease, tracker,
-                close_target=lambda target: None, list_target_ids=lambda: [])
-            released = True
+            and receipt.get('exact_browser_cleanup', {}).get('remaining') == 0
+            and not failures)
+        if safe:
+            try:
+                if client.check(lease):
+                    client.close_targets_and_release(lease, tracker,
+                        close_target=lambda target: None, list_target_ids=lambda: [])
+                    released = True
+            except BaseException as error:
+                failures.append('normal_lease_release:' + type(error).__name__)
         receipt['lease_released'] = released
         receipt['finished_at'] = stamp()
         receipt['elapsed_seconds'] = round(time.monotonic() - started, 3)
         if (output / 'raw.log').exists():
             receipt['raw_log_sha256'] = digest(output / 'raw.log')
-        receipt['backend_source_unchanged'] = (git(backend, 'rev-parse', 'HEAD') == plan['backend_head']
-            and git(backend, 'rev-parse', 'HEAD^{tree}') == plan['backend_tree']
-            and not git(backend, 'status', '--porcelain')
-            and all(digest(backend / name) == wanted for name, wanted in members.items()))
-        receipt['frontend_source_unchanged'] = (git(frontend, 'rev-parse', 'HEAD') == plan['frontend_head']
-            and git(frontend, 'rev-parse', 'HEAD^{tree}') == plan['frontend_tree']
-            and not git(frontend, 'status', '--porcelain'))
+        try:
+            receipt['backend_source_unchanged'] = (git(backend, 'rev-parse', 'HEAD') == plan['backend_head']
+                and git(backend, 'rev-parse', 'HEAD^{tree}') == plan['backend_tree']
+                and not git(backend, 'status', '--porcelain')
+                and all(digest(backend / name) == wanted for name, wanted in members.items()))
+            receipt['frontend_source_unchanged'] = (git(frontend, 'rev-parse', 'HEAD') == plan['frontend_head']
+                and git(frontend, 'rev-parse', 'HEAD^{tree}') == plan['frontend_tree']
+                and not git(frontend, 'status', '--porcelain'))
+        except BaseException as error:
+            receipt['backend_source_unchanged'] = False
+            receipt['frontend_source_unchanged'] = False
+            failures.append('source_recheck:' + type(error).__name__)
+        receipt['cleanup_failure_classes'] = failures
+        receipt['execution_error_class'] = type(execution_error).__name__ if execution_error else None
         receipt['status'] = ('PASS_SYNTHETIC_CHROMIUM_HTTP_SQL' if released and entered == 1
             and receipt.get('exit_code') == 0 and receipt['browser_cleanup_state'] == 'PROVEN'
             and receipt['backend_source_unchanged'] and receipt['frontend_source_unchanged']
+            and not failures and execution_error is None
             else 'FAIL_OR_INCOMPLETE')
-        private_json(output / 'execution-receipt.json', receipt)
+        try:
+            private_json(output / 'execution-receipt.json', receipt)
+        except BaseException as error:
+            if execution_error is None:
+                execution_error = error
         print('RECURRING_BROWSER_STATUS=' + receipt['status'], flush=True)
+    if execution_error is not None:
+        raise execution_error
     return 0 if receipt['status'] == 'PASS_SYNTHETIC_CHROMIUM_HTTP_SQL' else 1
 
 

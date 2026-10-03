@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
-import {readFileSync,realpathSync,lstatSync,openSync,writeSync,closeSync} from 'node:fs';
+import {readFileSync,realpathSync,lstatSync,statSync,openSync,writeSync,closeSync} from 'node:fs';
 import {join} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {runRecurringBrowserTransportSqlFixture} from './static-weekly-recurring-browser-transport.mjs';
@@ -35,7 +35,8 @@ export async function loadPinnedRecurringChromium(env) {
  const pkg=JSON.parse(readFileSync(packageFile,'utf8'));
  assert.equal(pkg.name,'playwright');assert.equal(pkg.version,'1.61.1','supported installed Playwright version');
  const module=await import(pathToFileURL(index).href);
- assert.equal(typeof module.chromium?.launch,'function','installed Chromium launcher');
+ assert.equal(typeof module.chromium?.launchServer,'function','installed Chromium server launcher');
+ assert.equal(typeof module.chromium?.connect,'function','installed Chromium server connector');
  return module.chromium;
 }
 
@@ -55,20 +56,54 @@ function privateJson(path,value) {
  try{writeSync(fd,JSON.stringify(value)+'\n');}finally{closeSync(fd);}
 }
 
+export function recurringBrowserProcessIdentity(pid) {
+ assert.ok(Number.isSafeInteger(pid)&&pid>1,'owned browser PID');
+ let stat;
+ try{stat=readFileSync(`/proc/${pid}/stat`,'utf8');}
+ catch(error){if(error?.code==='ENOENT')return null;throw error;}
+ const end=stat.lastIndexOf(')');
+ assert.ok(end>0,'owned browser proc stat');
+ const fields=stat.slice(end+2).trim().split(/\s+/);
+ const startTicks=fields[19],processGroup=Number(fields[2]);
+ assert.match(startTicks??'',/^\d+$/,'owned browser process start ticks');
+ assert.ok(Number.isSafeInteger(processGroup)&&processGroup>1,'owned browser process group');
+ return {pid,startTicks,processGroup,bootId:readFileSync('/proc/sys/kernel/random/boot_id','utf8').trim(),
+  uid:statSync(`/proc/${pid}`).uid,executable:realpathSync(`/proc/${pid}/exe`)};
+}
+
 // Called once at the existing confirmation assignment, never after the direct
 // or Node HTTP variant. The lease stays in the supported parent process.
 export async function runRecurringChromiumConfirmationStage({pool,week,originalManagerId,check,
  env=process.env,chromium=null,runFixture=runRecurringBrowserTransportSqlFixture,
- actualParentPid=process.ppid,emit=message=>writeSync(1,message+'\n')}) {
+ actualParentPid=process.ppid,emit=message=>writeSync(1,message+'\n'),
+ readIdentity=recurringBrowserProcessIdentity}) {
  const pids=assertRecurringBrowserStageParent(env,actualParentPid);
  const evidence=recurringBrowserEvidenceDir(env);
+ assert.match(env.CUSTODIAL_RECURRING_BROWSER_RUN_ID??'',/^[a-f0-9]{32}$/,
+  'exact synthetic Chromium process marker required');
  const launcher=chromium??await loadPinnedRecurringChromium(env);
  privateJson(join(evidence,'browser-stage-start.json'),{schema:'custodial.synthetic-browser-stage-start.v1',
   ...pids,childPid:process.pid,source:'current-manager-218-single-confirmation',production:false});
  emit('BROWSER_TRANSPORT_STAGE_ENTERED');
- let browser=null,context=null,result,primary=null,cleanupFailure=null,contextClosed=false,browserClosed=false;
+ let browserServer=null,browser=null,context=null,result,primary=null,cleanupFailure=null,
+  contextClosed=false,browserClosed=false,serverClosed=false,processIdentity=null;
  try{
-  browser=await launcher.launch({headless:true});
+  browserServer=await launcher.launchServer({headless:true,host:'127.0.0.1',port:0,
+   env:{...process.env,CUSTODIAL_RECURRING_BROWSER_RUN_ID:env.CUSTODIAL_RECURRING_BROWSER_RUN_ID}});
+  const processHandle=browserServer.process();
+  processIdentity=readIdentity(processHandle?.pid);
+  assert.ok(processIdentity&&processIdentity.pid===processHandle?.pid&&
+   processIdentity.uid===process.getuid()&&/^\d+$/.test(processIdentity.startTicks??'')&&
+   typeof processIdentity.bootId==='string'&&processIdentity.bootId.length>0&&
+   typeof processIdentity.executable==='string'&&processIdentity.executable.startsWith('/'),
+   'fresh owned Chromium process identity required');
+  privateJson(join(evidence,'browser-process.json'),{schema:'custodial.synthetic-browser-process.v1',
+   ...pids,stageChildPid:process.pid,runId:env.CUSTODIAL_RECURRING_BROWSER_RUN_ID,
+   ...processIdentity,production:false});
+  const endpoint=new URL(browserServer.wsEndpoint());
+  assert.equal(endpoint.protocol,'ws:','isolated browser server websocket');
+  assert.equal(endpoint.hostname,'127.0.0.1','isolated browser server stays on loopback');
+  browser=await launcher.connect(browserServer.wsEndpoint());
   assert.equal(browser.browserType().name(),'chromium','only isolated Chromium is supported');
   context=await browser.newContext({serviceWorkers:'block',acceptDownloads:false,permissions:[]});
   assert.deepEqual(context.pages(),[],'isolated browser context must start empty');
@@ -76,16 +111,38 @@ export async function runRecurringChromiumConfirmationStage({pool,week,originalM
  }catch(error){primary=error;}
  try{if(context){await context.close();contextClosed=true;}}catch(error){cleanupFailure=error;}
  try{if(browser){await browser.close();browserClosed=true;}}catch(error){cleanupFailure??=error;}
- const remainingContexts=browserClosed?0:browser?.contexts?.().length??0;
+ try{if(browserServer){await browserServer.close();serverClosed=true;}}catch(error){cleanupFailure??=error;}
+ if(browserServer&&!serverClosed){
+  try{await browserServer.kill();serverClosed=true;}catch(error){cleanupFailure??=error;}
+ }
+ let processGone=processIdentity===null;
+ if(processIdentity){
+  for(let attempt=0;attempt<20;attempt++){
+   let current;
+   try{current=readIdentity(processIdentity.pid);}catch(error){cleanupFailure??=error;break;}
+   if(!current){processGone=true;break;}
+   if(current.startTicks!==processIdentity.startTicks||current.bootId!==processIdentity.bootId){
+    processGone=true;break;
+   }
+   await new Promise(resolve=>setTimeout(resolve,100));
+  }
+ }
+ let remainingContexts=0;
+ if(!browserClosed){
+  try{remainingContexts=browser?.contexts?.().length??0;}
+  catch(error){remainingContexts=-1;cleanupFailure??=error;}
+ }
  try{privateJson(join(evidence,'browser-stage-cleanup.json'),{
   schema:'custodial.synthetic-browser-stage-cleanup.v1',...pids,childPid:process.pid,
-  launched:browser!==null,contextCreated:context!==null,contextClosed,browserClosed,
+  launched:browserServer!==null,contextCreated:context!==null,contextClosed,browserClosed,
+  serverClosed,processIdentityRecorded:processIdentity!==null,processGone,
   remainingContexts,fixtureReturned:primary===null,cleanupErrorClass:cleanupFailure?.name??null,
   production:false,phoneAccessed:false,sharedUserBrowserAccessed:false});}
  catch(error){cleanupFailure??=error;}
- emit('BROWSER_TRANSPORT_STAGE_CLEANUP');
+ try{emit('BROWSER_TRANSPORT_STAGE_CLEANUP');}catch(error){cleanupFailure??=error;}
  if(primary)throw primary;
  if(cleanupFailure)throw cleanupFailure;
- assert.ok(browserClosed&&contextClosed&&remainingContexts===0,'isolated Chromium cleanup required');
+ assert.ok(browserClosed&&contextClosed&&serverClosed&&processGone&&remainingContexts===0,
+  'isolated Chromium cleanup required');
  return result;
 }

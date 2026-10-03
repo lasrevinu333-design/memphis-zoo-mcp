@@ -3,6 +3,7 @@ import importlib.util
 import io
 import json
 import os
+import secrets
 from pathlib import Path
 import subprocess
 import sys
@@ -19,9 +20,13 @@ assert 'fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed' in lau
 assert len(launcher.BACKEND_MEMBERS) == len(set(launcher.BACKEND_MEMBERS))
 bound = {'childPid': 333, 'stageParentPid': 222, 'leaseParentPid': 111,
     'remainingContexts': 0, 'sharedUserBrowserAccessed': False,
-    'launched': True, 'contextCreated': True, 'contextClosed': True, 'browserClosed': True}
+    'launched': True, 'contextCreated': True, 'contextClosed': True, 'browserClosed': True,
+    'serverClosed': True, 'processGone': True, 'processIdentityRecorded': True}
 assert launcher.classify_stage_cleanup(bound, 222, 111) == 'PROVEN'
 assert launcher.classify_stage_cleanup({**bound, 'contextClosed': False}, 222, 111) == 'UNPROVEN'
+assert launcher.classify_stage_cleanup({**bound, 'processGone': False}, 222, 111) == 'UNPROVEN'
+assert launcher.classify_stage_cleanup({**bound, 'serverClosed': False}, 222, 111) == 'UNPROVEN'
+assert launcher.classify_stage_cleanup({**bound, 'processIdentityRecorded': False}, 222, 111) == 'UNPROVEN'
 assert launcher.classify_stage_cleanup({**bound, 'remainingContexts': 1}, 222, 111) == 'UNPROVEN'
 assert launcher.classify_stage_cleanup({**bound, 'sharedUserBrowserAccessed': True}, 222, 111) == 'UNPROVEN'
 assert launcher.classify_stage_cleanup({**bound, 'stageParentPid': 444}, 222, 111) == 'UNPROVEN'
@@ -79,6 +84,38 @@ with tempfile.TemporaryDirectory(prefix='mz-browser-launcher-pure-') as director
         silent.terminate()
         silent.wait(timeout=3)
 
+    # The fallback may touch only a fresh, exact synthetic process marker plus
+    # the matching PID birth/boot/UID/executable. No browser or lease is used.
+    marker = secrets.token_hex(16)
+    marked_env = {**os.environ, 'CUSTODIAL_RECURRING_BROWSER_RUN_ID': marker}
+    owned = subprocess.Popen([sys.executable, '-c', 'import time;time.sleep(30)'],
+        env=marked_env, start_new_session=True)
+    try:
+        identity = launcher.read_process_identity(owned.pid)
+        assert identity is not None and identity['uid'] == os.getuid()
+        assert identity in launcher.exact_marked_processes(marker)
+        sidecar = {**identity, 'runId': marker, 'stageParentPid': 222,
+            'leaseParentPid': 111, 'production': False}
+        wrong = {**sidecar, 'startTicks': '0'}
+        try:
+            launcher.stop_exact_marked_processes(marker, wrong, 222, 111)
+            raise AssertionError('reused or mismatched PID identity accepted')
+        except RuntimeError:
+            assert owned.poll() is None
+        try:
+            launcher.stop_exact_marked_processes(marker, {**sidecar, 'runId': 'b' * 32}, 222, 111)
+            raise AssertionError('foreign marker accepted')
+        except RuntimeError:
+            assert owned.poll() is None
+        stopped = launcher.stop_exact_marked_processes(marker, sidecar, 222, 111)
+        owned.wait(timeout=3)
+        assert stopped['matched_before'] >= 1 and stopped['remaining'] == 0
+        assert launcher.read_process_identity(owned.pid) is None
+    finally:
+        if owned.poll() is None:
+            owned.terminate()
+            owned.wait(timeout=3)
+
 source = SOURCE.read_text()
 for required in ('BrowserLeaseClient()', 'client.acquire(', 'client.renew(',
         'client.check(', 'client.close_targets_and_release(',
@@ -86,6 +123,7 @@ for required in ('BrowserLeaseClient()', 'client.acquire(', 'client.renew(',
         "'STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION_BROWSER': '1'",
         "'CUSTODIAL_RECURRING_BROWSER_LEASE_PARENT_PID': str(os.getpid())",
         'browser-stage-cleanup.json', 'owned_container_absent(child.pid)',
+        'browser-process.json', 'stop_exact_marked_processes(',
         'child_process_group_absent', 'source-receipt.json'):
     assert required in source, required
 print('PASS recurring browser lease launcher pure source, private receipt, and silent-child bound contracts')
