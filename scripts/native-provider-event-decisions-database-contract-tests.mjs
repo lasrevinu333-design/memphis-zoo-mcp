@@ -9,6 +9,15 @@ import {assertDecisionMigrationManifest,readDecisionSource,assertDecisionTarget,
 // database/container/HTTP/solver process or forged engine receipt is permitted.
 let checks=0;const check=(name,fn)=>{fn();checks++;console.log('PASS',name);};
 const source=readDecisionSource();
+// Retained actual first218 engine stderr (run actual218-Jj4seo). This literal
+// is PostgreSQL evidence of rejection, not a synthetic engine PASS receipt.
+const dismissedPrimary='ERROR:  exact finite native event required\n';
+const fixture=readFileSync(new URL('./fixtures/native-provider-event-decisions-database-cases.mjs',import.meta.url),'utf8');
+check('retained dismissed primary reproduces original generic matcher failure',()=>assert.doesNotMatch(dismissedPrimary,/exact native|unique original/));
+const dismissal=fixture.match(/reject\('SQL rejects local Dismiss as unsupported event',[^\n]+,\/([^\n]+)\/\);/);
+check('dismissed case has a standalone exact primary matcher',()=>{assert.ok(dismissal);assert.equal(dismissal[1],'^ERROR: {1,2}exact finite native event required\\n?$');assert.match(dismissedPrimary,new RegExp(dismissal[1]));});
+check('dismissed exact matcher rejects unrelated or extended failures',()=>{const exact=new RegExp(dismissal[1]);for(const error of ['ERROR: permission denied\n','ERROR: exact native original event query required\n','prefix '+dismissedPrimary,dismissedPrimary+'CONTEXT: unaccepted detail\n',dismissedPrimary.replace('required','required but different')])assert.doesNotMatch(error,exact);});
+check('six original generic malformed-shape expectations remain separate',()=>{const loop=fixture.match(/for\(const b of \[([\s\S]*?)\]\)\s*reject\('SQL strict decision query shape',[^\n]+,\/exact native\|unique original\/\);/);assert.ok(loop);assert.equal((loop[1].match(/\{\.\.\.input/g)||[]).length,6);assert.doesNotMatch(loop[1],/dismissed/);});
 check('actual exact218 and independently pinned217 prefix',()=>{assert.equal(source.migrations.length,218);assert.equal(source.manifest_sha256,DECISION_218);assert.equal(source.migrations.at(-1).file,DECISION_HEAD);assert.equal(DECISION_217,'e07cee99644bc1d22f61e89e5e14f383b4c250cb0cb012e723a318a89bf5da87');});
 for(const mutate of [x=>x.pop(),x=>x.push({...x.at(-1),file:'20261005000000_unowned.sql'}),x=>x.reverse(),x=>x[0].sha256='0'.repeat(64),
  x=>x[216].sha256='0'.repeat(64),x=>x[217].sha256='0'.repeat(64),x=>x[217].file='20261003000000_wrong_order.sql',x=>x[5]={...x[4]},

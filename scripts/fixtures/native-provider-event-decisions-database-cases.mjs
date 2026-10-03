@@ -85,8 +85,9 @@ export function nativeProviderEventDecisionDatabaseCases({scope,sql,q,j,check,re
  }
  for(const b of [{...input,extra:true},{...input,events:[]},{...input,events:Array(17).fill(first)},
   {...input,events:[first,first]},{...input,requester:{...requester,extra:true}},
-  {...input,requester:{...requester,assignment_epoch:'1'}},{...input,events:[{...first,action:'dismissed'}]}])
+  {...input,requester:{...requester,assignment_epoch:'1'}}])
   reject('SQL strict decision query shape','begin;'+setup+call(b)+'rollback;',/exact native|unique original/);
+ reject('SQL rejects local Dismiss as unsupported event','begin;'+setup+call({...input,events:[{...first,action:'dismissed'}]})+'rollback;',/^ERROR: {1,2}exact finite native event required\n?$/);
  for(const options of [{proof:''},{rawHash:''},{rawHash:'A'.repeat(64)}])
   reject('SQL exact fresh proof context shape','begin;'+setup+call(input,options)+'rollback;',/exact native original event query/);
  unchanged('all negative cases');
