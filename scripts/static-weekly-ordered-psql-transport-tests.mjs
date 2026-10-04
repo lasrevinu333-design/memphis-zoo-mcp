@@ -18,7 +18,8 @@ const entries=[
 const {input,manifest}=orderedPsqlFrames(entries);
 check(()=>assert.equal(manifest.length,3));
 check(()=>assert.ok(input.startsWith('FRAME 0 ')));
-check(()=>assert.doesNotMatch(ORDERED_PSQL_SHELL,/\b(?:export\s+)?LC_ALL\s*=/));
+check(()=>assert.equal((ORDERED_PSQL_SHELL.match(/\bLC_ALL=/g)??[]).length,1));
+check(()=>assert.match(ORDERED_PSQL_SHELL,/LC_ALL=C grep -qzE/));
 const migrationsDir=fileURLToPath(new URL('../supabase/migrations/',import.meta.url));
 const migrationFiles=readdirSync(migrationsDir).filter(file=>file.endsWith('.sql')).sort();
 const full=orderedPsqlFrames(migrationFiles.map(file=>({file,batch:readFileSync(join(migrationsDir,file))})));
@@ -34,6 +35,9 @@ const checkpointSource=readFileSync(new URL('./static-weekly-current-manager-own
 check(()=>assert.match(runnerSource,/if\(ownedManager219Stage\)orderedEntries\.push/));
 check(()=>assert.match(runnerSource,/else\{\s*try\{sql\(absenceGuard\+'\\n'\+bytes/));
 check(()=>assert.match(runnerSource,/ORDERED_PSQL_SHELL,'replay',String\(orderedEntries\.length\)/));
+check(()=>assert.match(runnerSource,/lastVerifiedFile:partial\?\.completed>0/));
+check(()=>assert.match(runnerSource,/nextPendingFile:pendingIndex==null\?null/));
+check(()=>assert.match(runnerSource,/sqlStartedForPendingFile:'UNPROVEN'/));
 check(()=>assert.match(checkpointSource,/scripts\/static-weekly-ordered-psql-transport\.mjs/));
 check(()=>assert.throws(()=>orderedPsqlFrames([entries[1],entries[0]]),/strict migration order/));
 check(()=>assert.throws(()=>orderedPsqlFrames([entries[0],entries[0]]),/strict migration order/));
@@ -94,6 +98,27 @@ if [ "$FAKE_PSQL_FAIL_INDEX" = "$n" ]; then printf 'private psql failure\n' >&2;
  check(()=>assert.equal(result.failed,true));
  check(()=>assert.equal(parseOrderedPsqlReceipt(result.stdout,entries,{allowFailure:true}).failed?.code,'INDEX'));
  check(()=>assert.equal(readdirSync(dir).filter(f=>/^input-\d+\.sql$/.test(f)).length,1));
+ const firstHeader=/^FRAME 0 ([a-f0-9]{64}) (\d+)\n/.exec(input);
+ check(()=>assert.ok(firstHeader));
+ for(const [changedLength,expectedCode] of [[Number(firstHeader[2])-1,'SIZE'],[Number(firstHeader[2])+1,'SIZE'],[2097153,'LINES']]){
+  result=run(input.replace(firstHeader[0],`FRAME 0 ${firstHeader[1]} ${changedLength}\n`));
+  check(()=>assert.equal(result.failed,true));
+  check(()=>assert.equal(parseOrderedPsqlReceipt(result.stdout,entries,{allowFailure:true}).failed?.code,expectedCode));
+  check(()=>assert.equal(readdirSync(dir).filter(f=>/^input-\d+\.sql$/.test(f)).length,0));
+ }
+ const firstBody=entries[0].batch.toString('base64');
+ result=run(input.replace(firstBody,'@'+firstBody.slice(1)));
+ check(()=>assert.equal(result.failed,true));
+ check(()=>assert.equal(parseOrderedPsqlReceipt(result.stdout,entries,{allowFailure:true}).failed?.code,'BASE64'));
+ check(()=>assert.equal(readdirSync(dir).filter(f=>/^input-\d+\.sql$/.test(f)).length,0));
+ result=run(input.replace(firstBody,firstBody.slice(0,3)+'\n'+firstBody.slice(4)));
+ check(()=>assert.equal(result.failed,true));
+ check(()=>assert.equal(parseOrderedPsqlReceipt(result.stdout,entries,{allowFailure:true}).failed?.code,'BASE64'));
+ check(()=>assert.equal(readdirSync(dir).filter(f=>/^input-\d+\.sql$/.test(f)).length,0));
+ result=run(input.slice(0,firstHeader[0].length+Math.floor(Number(firstHeader[2])/2)));
+ check(()=>assert.equal(result.failed,true));
+ check(()=>assert.equal(parseOrderedPsqlReceipt(result.stdout,entries,{allowFailure:true}).failed?.code,'EOF'));
+ check(()=>assert.equal(readdirSync(dir).filter(f=>/^input-\d+\.sql$/.test(f)).length,0));
  result=run(input.slice(0,input.lastIndexOf('FRAME 2 ')));
  check(()=>assert.equal(result.failed,true));
  check(()=>assert.equal(parseOrderedPsqlReceipt(result.stdout,entries,{allowFailure:true}).failed?.code,'COUNT'));

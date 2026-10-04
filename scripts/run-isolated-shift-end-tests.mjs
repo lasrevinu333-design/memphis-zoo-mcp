@@ -136,10 +136,12 @@ try{
   }catch(error){
    let partial=null;
    try{partial=parseOrderedPsqlReceipt(String(error.stdout??''),orderedEntries,{allowFailure:true});}catch{}
-   const index=partial?.failed?.index??partial?.incomplete?.index??(partial&&partial.completed<files.length?partial.completed:null);
-   console.error('ORDERED_REPLAY_FAILURE',JSON.stringify({file:index==null?null:files[index],
+   const pendingIndex=partial&&partial.completed<files.length?partial.completed:null;
+   console.error('ORDERED_REPLAY_FAILURE',JSON.stringify({lastVerifiedFile:partial?.completed>0?files[partial.completed-1]:null,
+    nextPendingFile:pendingIndex==null?null:files[pendingIndex],
     completed:partial?.completed??0,code:partial?.failed?.code??error.code??'UNPROVEN',
     remainingAtChannelCall,remainingAfterFailureMilliseconds:Math.max(0,Math.floor(50_000-performance.now())),
+    incomplete:partial?.incomplete??null,sqlStartedForPendingFile:'UNPROVEN',
     truncatedProtocolLine:partial?.truncatedProtocolLine??false,
     envelopes:(partial?.envelopes??[]).map(row=>({...row,
      remainingUpperBoundMilliseconds:row.endTick===null?null:Math.max(0,remainingAtChannelCall-row.cumulativeSinceChannelReadyMilliseconds)})),

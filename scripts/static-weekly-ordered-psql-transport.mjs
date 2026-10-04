@@ -6,6 +6,7 @@ import {createHash} from 'node:crypto';
 const DIGEST=/^[a-f0-9]{64}$/;
 const MAX_INPUT=16*1024*1024;
 const MAX_RECEIPT=64*1024;
+const MAX_FRAME_BASE64=2*1024*1024;
 // These exact existing replay SQL strings remain the before/after policy for
 // each fresh psql, including the three historical default-grant restorers.
 export const DEFAULT_GRANTS_QUERY="select count(*) from pg_default_acl d cross join lateral aclexplode(d.defaclacl) a where d.defaclnamespace in (0,'public'::regnamespace) and d.defaclrole in ('postgres'::regrole,'supabase_admin'::regrole) and d.defaclobjtype in ('r','S') and a.grantee in (0,'anon'::regrole,'authenticated'::regrole,'service_role'::regrole)";
@@ -30,33 +31,29 @@ target=$1
 case "$target" in ''|*[!0-9]*) fail COUNT;; esac
 [ "$target" -gt 0 ] && [ "$target" -le 4096 ] || fail COUNT
 printf 'READY %s\n' "$(tick)"
-while IFS=' ' read -r tag index digest lines || [ -n "$tag" ]; do
+while IFS=' ' read -r tag index digest encodedLength || [ -n "$tag" ]; do
   [ "$expected" -lt "$target" ] || fail EXTRA
   [ "$tag" = FRAME ] || fail FRAME
   case "$index" in ''|*[!0-9]*) fail HEADER;; esac
-  case "$lines" in ''|*[!0-9]*) fail HEADER;; esac
+  case "$encodedLength" in ''|*[!0-9]*) fail HEADER;; esac
   case "$digest" in ''|*[!0-9a-f]*) fail DIGEST;; esac
   [ "$index" = "$expected" ] || fail INDEX
   dlen=${'$'}{#digest}
   [ "$dlen" -eq 64 ] || fail DIGEST
-  [ "$lines" -gt 0 ] && [ "$lines" -le 4096 ] || fail LINES
-  : > "$tmp/b64"
-  n=0
-  while [ "$n" -lt "$lines" ]; do
-    IFS= read -r line || fail EOF
-    case "$line" in *[!A-Za-z0-9+/=]*|'') fail BASE64;; esac
-    llen=${'$'}{#line}
-    [ "$llen" -le 4096 ] || fail SIZE
-    printf '%s\n' "$line" >> "$tmp/b64"
-    n=$((n+1))
-  done
+  [ "$encodedLength" -gt 0 ] && [ "$encodedLength" -le 2097152 ] || fail LINES
+  dd iflag=count_bytes,fullblock count="$encodedLength" of="$tmp/b64" status=none 2> "$tmp/err" || fail EOF
+  [ "$(stat -c %s "$tmp/b64")" -eq "$encodedLength" ] || fail EOF
+  IFS= read -r separator || fail EOF
+  [ -z "$separator" ] || fail SIZE
+  LC_ALL=C grep -qzE '^[A-Za-z0-9+/=]+$' "$tmp/b64" || fail BASE64
   base64 -d "$tmp/b64" > "$tmp/sql" 2> "$tmp/err" || fail DECODE
-  actual=$(sha256sum "$tmp/sql" | cut -d' ' -f1)
+  actual=$(sha256sum "$tmp/sql"); actual=${'$'}{actual%% *}
   [ "$actual" = "$digest" ] || fail HASH
   printf 'BEGIN %s %s\n' "$expected" "$(tick)"
   if (ulimit -f 65536 && psql -X -q -At -v ON_ERROR_STOP=1 -U supabase_admin -d postgres < "$tmp/sql" > "$tmp/out" 2> "$tmp/err"); then
-    outsize=$(wc -c < "$tmp/out"); errsize=$(wc -c < "$tmp/err")
-    [ "$outsize" -le 33554432 ] && [ "$errsize" -le 33554432 ] || fail SIZE
+    sizes=$(stat -c %s "$tmp/out" "$tmp/err") || fail SIZE
+    set -- $sizes
+    [ "$#" -eq 2 ] && [ "$1" -le 33554432 ] && [ "$2" -le 33554432 ] || fail SIZE
     printf 'OK %s %s\n' "$expected" "$(tick)"
   else
     status=$?
@@ -92,8 +89,8 @@ export function orderedPsqlFrames(entries){
   assert.ok(file>previous,'strict migration order and unique filenames');previous=file;
   assert.ok(Buffer.isBuffer(batch)&&batch.length>0,'exact SQL batch bytes');
   const digest=sha(batch),base64=batch.toString('base64');
-  const chunks=base64.match(/.{1,4096}/g);
-  input+=`FRAME ${index} ${digest} ${chunks.length}\n${chunks.join('\n')}\n`;
+  assert.ok(base64.length>0&&base64.length<=MAX_FRAME_BASE64,'bounded encoded frame');
+  input+=`FRAME ${index} ${digest} ${base64.length}\n${base64}\n`;
   assert.ok(Buffer.byteLength(input)<=MAX_INPUT,'bounded channel input');
   return {file,sha256:digest};
  });
