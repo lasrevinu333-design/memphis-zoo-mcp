@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import {performance} from 'node:perf_hooks';
+import {runBoundedNodeProof} from './bounded-node-proof.mjs';
+const deadline=performance.now()-process.uptime()*1000+60000;
+const budget=Math.floor(deadline-performance.now())-1000;
+assert.ok(budget>5000&&budget<=60000);
+const result=await runBoundedNodeProof({args:['--max-old-space-size=128','--max-semi-space-size=8','--wasm-max-mem-pages=1536','--stack-size=4096','scripts/static-weekly-fixed-rank-link-tests.mjs'],absoluteMilliseconds:budget,cleanupReserveMilliseconds:5000});
+const receipt=JSON.parse(result.stdout.trim().split('\n').at(-1));
+assert.equal(receipt.status,'PASS');
+assert.equal(receipt.checks,79);
+assert.equal(receipt.completeTruthCases,16584);
+assert.equal(receipt.actualPrivateCaptureChecked,false);
+for(const field of ['solver','engine','publication','independentlyProvesOptimality'])assert.equal(receipt[field],false);
+assert.equal(receipt.allocationBenefitUnmeasured,true);
+assert.ok(performance.now()<deadline);
+console.log(JSON.stringify({suite:'static-weekly-fixed-rank-links',...receipt}));

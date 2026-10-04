@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {resolve} from 'node:path';
 import {createHash} from 'node:crypto';
+import {restoreFixedRankProgramForRetainedProof} from './static-weekly-fixed-rank-link-ci-wiring.mjs';
 const sha=x=>createHash('sha256').update(x).digest('hex');
 const statement="await import('./static-weekly-operation-deadline-ci-tests.mjs');";
 const pins={
@@ -20,7 +21,7 @@ function validate(source,wrapper,files){
 }
 export function verifyOperationDeadlineWiring(source,root){
  const wrapper=readFileSync(resolve(root,'scripts/static-weekly-operation-deadline-ci-tests.mjs'),'utf8');
- const files=Object.fromEntries(Object.keys(pins).map(p=>[p,readFileSync(resolve(root,p),'utf8')]));
+ const files=Object.fromEntries(Object.keys(pins).map(p=>{const bytes=readFileSync(resolve(root,p),'utf8');return[p,p==='src/static-weekly-schedule-program.js'?restoreFixedRankProgramForRetainedProof(bytes):bytes];}));
  const prior=validate(source,wrapper,files);let hostile=0;
  for(const replacement of ['',`// ${statement}`,statement+'\n'+statement,`if(false){${statement}}`,statement.replace('await ',''),statement.replace(');',').catch(()=>{});')]){assert.throws(()=>validate(source.replace(statement,replacement),wrapper,files));hostile++;}
  for(const[from,to]of [['await runStaticWeeklyOperationDeadlineTests()','{}'],['receipt.checks,65','receipt.checks,0'],['receipt.absoluteMilliseconds,60000','receipt.absoluteMilliseconds,315000'],['receipt.actual_solver,false','receipt.actual_solver,true']]){assert.throws(()=>validate(source,wrapper.replace(from,to),files));hostile++;}
@@ -32,6 +33,7 @@ export function verifyOperationDeadlineWiring(source,root){
 // changes/imports/replaces the running product or grants its historical limit.
 // The called65 deadline suite separately proves the selected current boundary.
 export function reconstructProgramBeforeOperationDeadline(current){
+ current=restoreFixedRankProgramForRetainedProof(current);
  assert.equal(sha(current),'b2e70ef652ec4aef05252d1890136f9fa66a5fa2ac97aba40d6b76d0815be068','exact current60s program required');
  let prior=current;
  for(const[from,to]of [
