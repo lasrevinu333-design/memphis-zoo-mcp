@@ -4,7 +4,8 @@ import { canonicalJson, contentDigest, assertServiceDate, serviceDateWeekday,
  snapshotDatedRosterSlot } from "./static-weekly-schedule-model.js";
 import { postgresJsonbContentDigest } from "./static-weekly-schedule-compiler.js";
 import { normalizeStaticWeeklyAuthority, prepareStaticWeeklySchedulingProblem,
-  remainingStaticWeeklyMilliseconds } from "./static-weekly-schedule-program.js";
+  remainingStaticWeeklyMilliseconds, buildStaticWeeklySchedulingModel, weekdayDate } from "./static-weekly-schedule-program.js";
+import {deriveLunchCoverageFromPreparedProblem} from './static-weekly-lunch-derivation.js';
 import { recurringPatternAuthority } from "./static-weekly-recurring-repair-basis.js";
 import { createShiftEndContinuityPolicy } from "./static-weekly-shift-end-derivation.js";
 import { assertNormalOwnerEligibility, hardRestrictedSlots,
@@ -66,11 +67,14 @@ export function mapApprovedStaticTemplateCandidate({ templates, admittedBindings
   const scopeDays = selection.kind === 'DATED_ABSENCE' ? [day] : [0,1,2,3,4,5,6];
   const ordinary = target.roster.filter(p => p.personId && p.kind !== 'CONTRACTOR_CAPACITY');
   require(new Set(ordinary.map(p => p.personId)).size === ordinary.length, 'static_template_duplicate_person');
-  // A normal not_working day is NOT an absence and does not select a smaller
-  // recurring pattern. Only the explicitly dated full-day absence is removed.
+  // Weekly employment selects a weekly pattern, preserving ordinary days off.
+  // A changed DATED operation instead uses the independently effective working
+  // capacity for that date, including hours/partial availability, not a count
+  // obtained merely by subtracting explicit absence commands.
   const fullAbsences = new Set(target.states.get(day).fullDayAbsenceSlotIds);
   const available = ordinary.filter(p => !target.version.namedAbsentSlotIds?.includes(p.slotId)
-    && (selection.kind !== 'DATED_ABSENCE' || !fullAbsences.has(p.slotId)));
+    && (selection.kind !== 'DATED_ABSENCE' || (!fullAbsences.has(p.slotId)
+      && target.availabilityByDaySlot.has(`${day}\u0000${p.slotId}`))));
   require(Array.isArray(selection.availablePersonIds)
     && new Set(selection.availablePersonIds).size === selection.availablePersonIds.length
     && canonicalJson(sorted(selection.availablePersonIds)) === canonicalJson(sorted(available.map(p => p.personId))),
@@ -232,6 +236,144 @@ export function mapApprovedStaticTemplateCandidate({ templates, admittedBindings
     publicationStatus: 'TYPED_STATIC_FEASIBILITY_INTEGRATION_REQUIRED',
     patternPublicationStatus: binding.patternPublicationStatus || 'NOT_ASSERTED' };
   return { candidateSource, mappedRows, receipt: { ...body, digest: contentDigest(body) } };
+}
+
+// Distinct STATIC feasibility, not a forged optimized solver certificate.
+// Both invocations below reconstruct their own source, candidate universe,
+// complete hard model, fixed witness and lunch plan. No prepared graph escapes.
+export function prepareApprovedStaticTemplateProjection(args) {
+  const fail = code => { throw Object.assign(new Error(code), {code}); };
+  const tick = () => { if (args.deadline != null) remainingStaticWeeklyMilliseconds(args.deadline); };
+  function derive() {
+    tick();
+    const mapping = mapApprovedStaticTemplateCandidate(args);
+    const wire = structuredClone(mapping.candidateSource);
+    if (wire.version && !wire.versions) {wire.versions=[wire.version];delete wire.version;}
+    const problem = prepareStaticWeeklySchedulingProblem(wire,args.deadline);
+    if(problem.error)fail('static_template_feasibility_source_invalid');
+    const model = buildStaticWeeklySchedulingModel(problem,[],
+      {name:'approved_static_fixed_feasibility',family:'approved_static_fixed_feasibility',terms:[]},args.deadline);
+    if(model.error)fail('static_template_feasibility_model_invalid');
+    if(model.general.size || model.priorBindings.length)fail('static_template_unexpected_rank_or_binding');
+    const values = new Map([...model.binary].map(name=>[name,0]));
+    const version= mapping.candidateSource.version || mapping.candidateSource.versions.find(v=>v.id===problem.version.id);
+    const rowOwners=new Map(version.assignments.map(row=>[`${row.dayOfWeek}:${row.workId}`,row.ownerSlotId]));
+    const assignments=[];
+    for(const item of problem.work){
+      tick();
+      const slotId=rowOwners.get(item.key) || item.originSlotId;
+      const variable=model.x.get(`${item.key}\u0000${slotId}`);
+      if(!variable){
+        // Preserve an already-authorized explicitly permitted OPEN derived
+        // vacancy row. This is not permission to drop required work, choose a
+        // new owner, or relabel ordinary best-effort work as permitted-open.
+        if(item.required!==false || item.coverageClass!=='permitted_open')fail('static_template_fixed_owner_ineligible');
+        values.set(model.uncovered.get(item.key),1);
+        assignments.push({planWorkId:item.key,workId:item.workId,dayOfWeek:item.dayOfWeek,
+          serviceDate:weekdayDate(problem.serviceDate,item.dayOfWeek),locationId:item.locationId,
+          slotId:null,personId:null,displayName:null,status:'OPEN',coverageClass:item.coverageClass,
+          window:structuredClone(item.window),serviceMode:item.serviceMode,
+          serviceEffortMinutes:item.effort.minutes,includedLocations:structuredClone(item.includedLocations)});
+        continue;
+      }
+      const person=problem.incumbencyByDaySlot.get(`${item.dayOfWeek}\u0000${slotId}`);
+      if(!person?.personId || person.kind==='CONTRACTOR_CAPACITY')fail('static_template_fixed_person_unavailable');
+      values.set(variable,1);
+      assignments.push({planWorkId:item.key,workId:item.workId,dayOfWeek:item.dayOfWeek,
+        serviceDate:weekdayDate(problem.serviceDate,item.dayOfWeek),locationId:item.locationId,
+        slotId,personId:person.personId,displayName:person.displayName,status:'ASSIGNED',
+        window:structuredClone(item.window),serviceMode:item.serviceMode,
+        serviceEffortMinutes:item.effort.minutes,includedLocations:structuredClone(item.includedLocations)});
+    }
+    for(const group of model.routeGroups){
+      tick();values.set(group.base,1);
+      const middle=group.nodes.filter(node=>!['start','end'].includes(node.kind)&&values.get(node.active)===1)
+        .sort((a,b)=>a.startMinute-b.startMinute || a.endMinute-b.endMinute || (a.id<b.id?-1:a.id>b.id?1:0));
+      const path=[group.nodes.find(n=>n.kind==='start'),...middle,group.nodes.find(n=>n.kind==='end')];
+      for(let i=1;i<path.length;i++){
+        const arcs=group.arcs.filter(a=>a.from===path[i-1]&&a.to===path[i]);
+        if(arcs.length!==1)fail('static_template_fixed_route_incompatible');
+        values.set(arcs[0].name,1);
+      }
+    }
+    for(const row of model.modelBasis.constraints.rows){
+      tick();
+      if(!Number.isSafeInteger(row.value)||row.terms.some(([n,v])=>!Number.isSafeInteger(n)||!values.has(v)))
+        fail('static_template_hard_row_not_exact');
+      const actual=row.terms.reduce((n,[coefficient,v])=>n+BigInt(coefficient)*BigInt(values.get(v)),0n),bound=BigInt(row.value);
+      if(!(row.relation==='='?actual===bound:row.relation==='<='?actual<=bound:row.relation==='>='&&actual>=bound))
+        fail('static_template_hard_constraint_violation');
+    }
+    const lunch=deriveLunchCoverageFromPreparedProblem(problem,assignments);
+    if(lunch.status!=='PLANNED')fail('static_template_lunch_coverage_incompatible');
+    const byWork=new Map(problem.work.map(work=>[work.key,work]));
+    const projectionAssignments=assignments.map(row=>{
+      const work=byWork.get(row.planWorkId),baseline=problem.incumbencyByDaySlot.get(`${row.dayOfWeek}\u0000${work.originSlotId}`);
+      return {plan_work_id:row.planWorkId,work_id:row.workId,day_of_week:row.dayOfWeek,service_date:row.serviceDate,
+        status:row.status.toLowerCase(),reason_code:row.status==='OPEN'?'permitted_open':null,
+        owner_slot_id:row.slotId,owner_person_id:row.personId,
+        owner_digest:postgresJsonbContentDigest({planWorkId:row.planWorkId,slotId:row.slotId,personId:row.personId,serviceDate:row.serviceDate}),
+        exact_owner_identity:postgresJsonbContentDigest({plan_work_id:row.planWorkId,service_date:row.serviceDate,
+          optimized_owner_slot_id:row.slotId,optimized_owner_person_id:row.personId,
+          baseline_owner_slot_id:work.originSlotId||null,baseline_owner_person_id:baseline?.personId||null}),
+        baseline_owner_slot_id:work.originSlotId||null,baseline_owner_person_id:baseline?.personId||null,
+        baseline_owner_name:baseline?.displayName||null,original_actor_person_id:baseline?.personId||null,
+        original_actor_name:baseline?.displayName||null,
+        // Legacy relational names describe the selected effective owner. The
+        // typed authority explicitly makes no optimization claim.
+        optimized_owner_slot_id:row.slotId,optimized_owner_person_id:row.personId,
+        work_snapshot:{workId:work.workId,dayOfWeek:work.dayOfWeek,originSlotId:work.originSlotId||null,
+          locationId:work.locationId,locationCodeSnapshot:work.locationCodeSnapshot,
+          locationNameSnapshot:work.locationNameSnapshot,serviceMode:work.serviceMode,
+          includedLocations:structuredClone(work.includedLocations),window:{start:work.window.start,end:work.window.end},
+          serviceEffortMinutes:work.effort.minutes,serviceEffortProvenance:work.effort.provenance,
+          priority:work.priority,priorityProvenance:work.priorityProvenance??null,required:work.required,
+          coveragePolicy:work.coveragePolicy??null,bestEffortCoverage:work.coverageClass==='best_effort',
+          coveragePolicyOrder:work.coverageOrder,coveragePolicyProvenance:work.coveragePolicyProvenance??null,
+          requiredQualifications:structuredClone(work.requiredQualifications),qualificationProvenance:work.qualificationProvenance,
+          restrictions:structuredClone(work.restrictions),restrictionProvenance:work.restrictionProvenance,
+          restrictedSlotIds:structuredClone(work.restrictedSlotIds||[]),manualLock:Boolean(work.manualLock),
+          manualLockSlotId:work.manualLock||null,overlayWork:Boolean(work.overlayWork)},
+        explanation:{contract:'fixed_approved_pattern',hardConstraints:'satisfied',reasons:row.status==='OPEN'?[{code:'permitted_open'}]:[]}};
+    });
+    const baseAuthorityDigest=postgresJsonbContentDigest({schema:'custodial.approved-static-feasibility-base.v1',
+      mapping:mapping.receipt,inputDigest:problem.inputDigest,basisDigest:model.modelBasisDigest,
+      witnessDigest:contentDigest([...values])});
+    const baseReplayDigest=postgresJsonbContentDigest({projectionAssignments,lunch});
+    const loans=lunch.lunches.map(loan=>({loan_id:loan.loanId,service_date:loan.serviceDate,day_of_week:loan.dayOfWeek,
+      normal_owner_slot_id:loan.normalOwnerSlotId,normal_owner_person_id:loan.normalOwnerPersonId,
+      coverage_start:loan.window?.start??null,coverage_end:loan.window?.end??null,status:loan.status,
+      reason:loan.reason??null,helper_slot_ids:loan.helperSlotIds||[],fallback:loan.fallback??null,total_distance_minutes:loan.totalDistance??null}));
+    const responsibilities=lunch.lunches.flatMap(loan=>loan.responsibilities.map(r=>({responsibility_id:r.responsibilityId,
+      loan_id:loan.loanId,service_date:loan.serviceDate,day_of_week:loan.dayOfWeek,
+      normal_owner_slot_id:r.normalOwnerSlotId,normal_owner_person_id:r.normalOwnerPersonId,
+      coverer_slot_id:r.covererSlotId,coverer_person_id:r.covererPersonId,coverage_purpose:r.coveragePurpose,
+      coverage_start:loan.window.start,coverage_end:loan.window.end,check_deadline_policy:r.checkDeadlinePolicy,
+      creates_deep_clean:r.createsDeepClean,proximity_evidence:r.proximityEvidence||[],segments:r.segments||[]})));
+    const notificationIntents=lunch.lunches.flatMap(loan=>loan.notificationIntents.flatMap(r=>['start','end'].map(event=>({
+      notification_key:event==='start'?r.startKey:r.endKey,loan_id:loan.loanId,service_date:loan.serviceDate,event,
+      scheduled_time:event==='start'?r.startTime:r.endTime,coverer_slot_id:r.covererSlotId,delivery_state:r.deliveryState}))));
+    const lunchDocument={schema:'memphis-zoo.static-weekly-lunch-authority-document.v1',persistence_authority:'NOT_PERSISTED',
+      verification_status:'VERIFIED',week_start:lunch.weekStart,base_authority_digest:baseAuthorityDigest,
+      base_replay_digest:baseReplayDigest,source_input_digest:problem.inputDigest,candidate_digest:contentDigest(lunch),
+      loans,responsibilities,notification_intents:notificationIntents,
+      semantic_snapshot:{schema:'memphis-zoo.static-weekly-lunch-semantic-snapshot.v1',loans_digest:postgresJsonbContentDigest(loans),
+        responsibilities_digest:postgresJsonbContentDigest(responsibilities),notification_intents_digest:postgresJsonbContentDigest(notificationIntents)}};
+    lunchDocument.document_identity=postgresJsonbContentDigest(lunchDocument);
+    const body={schema:'custodial.approved-static-feasibility.v1',
+      contract:'FIXED_APPROVED_PATTERN_COMPLETE_HARD_CONSTRAINTS_NOT_OPTIMALITY',
+      mapping: mapping.receipt,sourceDigest:contentDigest(args.currentSource),
+      candidateSource:mapping.candidateSource,assignments,projectionAssignments,lunchDocument,baseAuthorityDigest,baseReplayDigest,
+      inputDigest:problem.inputDigest,basisDigest:model.modelBasisDigest,
+      hardConstraintDigest:model.modelBasis.constraints.digest,
+      hardConstraintCount:model.modelBasis.constraints.count,
+      witnessDigest:contentDigest([...values]),lunch,
+      solverInvoked:false,optimized:false,publicationAuthority:'NOT_PUBLISHED'};
+    return {...body,digest:postgresJsonbContentDigest(body)};
+  }
+  const original=derive(),independent=derive();
+  if(canonicalJson(original)!==canonicalJson(independent))fail('static_template_independent_feasibility_changed');
+  tick();return original;
 }
 function assertReductionContext(context){
   assert.equal(context?.schema,reductionAuthority.schema,'typed full-nine reduction context required');

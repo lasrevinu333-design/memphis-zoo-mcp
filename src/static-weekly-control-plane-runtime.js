@@ -117,9 +117,19 @@ export function createStaticWeeklyControlPlaneRuntime({
       "The shared recurring authority admission is unavailable; no child work was started.");
     return admission({ signal: req.staticWeeklyManagerOperation.signal,
       deadlineAt: req.staticWeeklyManagerOperation.deadlineAt,
-      action: () => runRecurringWithRestoreCustody({
-      run: recurringOperationRunner, request: req, kind, body, manager: manager(req),
-      }),
+      // Static owner policy replaces optimizer reconstruction at this changed
+      // recurring boundary. Catalog/source facts come only from the named
+      // manager database connection, never supplied preview rows. A missing
+      // approved pattern is an explicit refusal, not a full-solver fallback.
+      action: () => {
+        if(body.full_nine_source_id!=null)throw fail('static_template_legacy_source_selector_not_supported');
+        const input={manager:manager(req),serviceDate:body.effective_start,
+          expectedRevision:body.expected_revision,templateId:body.template_id??null,
+          signal:req.staticWeeklyManagerOperation.signal,deadlineAt:req.staticWeeklyManagerOperation.deadlineAt};
+        if(kind==='preview')return authorityControlPlane.previewApprovedStaticPattern(input);
+        return authorityControlPlane.confirmApprovedStaticPattern({...input,
+          previewDigest:body.preview_digest,idempotencyKey:body.confirmation_key});
+      },
     });
   };
   function releaseIdentityPayload() {
@@ -232,7 +242,7 @@ export function createStaticWeeklyControlPlaneRuntime({
   }));
   app.get("/static-weekly/manager-snapshot", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.getManagerSnapshot({ manager: manager(req), weekStart: req.query?.week_start })));
   app.post("/static-weekly/recurring-adaptation/preview", requireManagerWrite, namedManager, respond((req) => {
-    const body=req.body,allowed=new Set(['effective_start','expected_revision','full_nine_source_id']);
+    const body=req.body,allowed=new Set(['effective_start','expected_revision','full_nine_source_id','template_id']);
     if(!body||typeof body!=='object'||Array.isArray(body)||!Object.hasOwn(body,'effective_start')
       ||!Object.hasOwn(body,'expected_revision')||Object.keys(body).some(key=>!allowed.has(key)))
       throw fail('static_weekly_recurring_confirmation_request_invalid','Preview accepts only source/revision selectors, never supplied schedule, report, compiler or manager facts.');
@@ -241,7 +251,7 @@ export function createStaticWeeklyControlPlaneRuntime({
   app.post("/static-weekly/recurring-adaptation/confirm", requireManagerWrite, namedManager, respond((req) => {
     const body=req.body;
     const required=["confirmation_key","effective_start","expected_revision","preview_digest"];
-    const allowed=new Set([...required,"full_nine_source_id"]);
+    const allowed=new Set([...required,"full_nine_source_id","template_id"]);
     if (!body || typeof body!=="object" || Array.isArray(body)
       || required.some(key=>!Object.hasOwn(body,key)) || Object.keys(body).some(key=>!allowed.has(key))) {
       throw fail("static_weekly_recurring_confirmation_request_invalid", "Confirmation accepts only the exact preview identity and revision; schedule facts and manager identity come from authenticated authority.");

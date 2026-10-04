@@ -4,7 +4,7 @@ import {createHash} from 'node:crypto';
 import {isDeepStrictEqual} from 'node:util';
 import {contentDigest,installStaticWeeklySha256HexAccelerator} from '../src/static-weekly-schedule-model.js';
 import {createStaticWeeklyDeadline,prepareStaticWeeklySchedulingProblem} from '../src/static-weekly-schedule-program.js';
-import {mapApprovedStaticTemplateCandidate as map} from '../src/static-weekly-recurring-staffing-adaptation.js';
+import {mapApprovedStaticTemplateCandidate as map,prepareApprovedStaticTemplateProjection} from '../src/static-weekly-recurring-staffing-adaptation.js';
 import {loadSixPersonAbsenceSource} from './fixtures/six-person-absence-source.mjs';
 import {loadFullNineV6Source} from './fixtures/full-nine-v6-source.mjs';
 
@@ -112,7 +112,19 @@ check('approved nine-position pattern preserves unchanged assignment geometry',(
 const nineToSix=args(source,nineConfig);nineToSix.currentSource=clone(nineSource);nineToSix.selection.kind='DATED_ABSENCE';
 nineToSix.currentSource.exceptions=['OPTION1','OPTION2','OPTION4'].map((key,index)=>({id:`synthetic-extra-absence-${index}`,sequence:index+1,type:'daily_absence',serviceDate:'2026-10-05',baseVersionId:source.version.id,publicationId:source.version.publicationId,actorId:'synthetic-manager',reason:'Explicit synthetic dated absence',idempotencyKey:`synthetic-extra-absence-${index}`,expectedRevision:1,payload:{slotId:nineConfig.slots[key].slotId}}));
 check('nine employed, three explicit dated absences selects admitted six not nine',()=>{const x=map(nineToSix);assert.equal(x.receipt.staffingCount,6);assert.deepEqual(x.mappedRows,source.version.assignments.filter(r=>r.dayOfWeek===1));assert.deepEqual(x.candidateSource.exceptions,nineToSix.currentSource.exceptions);});
-check('same nine roster ordinary days off cannot falsely select six',()=>{const a=clone(nineToSix);a.currentSource.exceptions=[];assert.throws(()=>map(a),{code:'static_template_available_people_mismatch'});});
+check('changed dated nine roster uses actual working availability even without explicit absences',()=>{const a=clone(nineToSix);a.currentSource.exceptions=[];assert.equal(map(a).receipt.staffingCount,6);});
+check('unchanged weekly nine pattern keeps ordinary days off',()=>{const a=clone(nineArgs);assert.equal(map(a).receipt.staffingCount,9);});
+check('partial dated working hours count only when fresh proven capacity exists, then compatibility still checks full role',()=>{
+ const a=clone(base);a.selection.kind='DATED_ABSENCE';
+ const row=a.currentSource.version.slotAvailability.find(r=>r.dayOfWeek===1&&r.slotId===kaili);row.shift={start:'10:00',end:'17:00'};
+ assert.throws(()=>map(a),{code:'static_template_no_compatible_person_slot_mapping'});
+});
+check('static feasibility checks complete hard rows and independent lunch without optimizer tiers',()=>{
+ const x=prepareApprovedStaticTemplateProjection(base);
+ assert.equal(x.schema,'custodial.approved-static-feasibility.v1');assert.equal(x.assignments.length,42);
+ assert.equal(x.solverInvoked,false);assert.equal(x.optimized,false);assert.ok(x.hardConstraintCount>42);
+ assert.equal(x.lunch.status,'PLANNED');assert.equal(Object.hasOwn(x,'solver'),false);
+});
 
 // Actual retained corrected six-pattern rows, not extrapolation from tiny rows.
 // The fixture's legacy contractor capacity has no owned work. Removing only
@@ -127,6 +139,11 @@ for(const key of ['namedAbsentSlotIds','vacancyCapableSlotIds','vacantSlotIds'])
 const actualArgs=args(actual),actualBefore=clone(actual),real=map(actualArgs);
 check('actual artifact-bound operational six returns all 323 approved rows unchanged',()=>{assert.equal(real.mappedRows.length,323);assert.ok(isDeepStrictEqual(real.mappedRows,actual.version.assignments));assert.ok(isDeepStrictEqual(real.candidateSource,actualBefore));});
 check('future local six publication is not falsely claimed',()=>{assert.equal(config.dateAuthority.classification,'UNPUBLISHED_LOCAL_CANDIDATE');assert.equal(real.receipt.published,false);});
+check('actual six fixed pattern independently satisfies hard model and lunch, without a solver',()=>{
+ const x=prepareApprovedStaticTemplateProjection(actualArgs);
+ assert.equal(x.mapping.mappedRowsDigest,real.receipt.mappedRowsDigest);assert.ok(x.assignments.length>=323);
+ assert.equal(x.lunch.status,'PLANNED');assert.equal(x.solverInvoked,false);
+});
 const originalPath=process.env.CUSTODIAL_FULL_NINE_BASE_PACKET||null;
 const historical=loadFullNineV6Source({retainedPacketPath:originalPath});
 check('historical approved V6 wrapper and 314-row geometry bind exactly, not new nine generation',()=>{

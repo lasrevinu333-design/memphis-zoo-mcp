@@ -33,6 +33,8 @@ import {capacitySourceBasisSummary,capacitySourcePublicationInput,capacitySource
 import {createContractorCapacityTransitionCandidate} from "./static-weekly-contractor-source-transition.js";
 import { canonicalJson } from "./static-weekly-schedule-model.js";
 import { postgresJsonbContentDigest } from "./static-weekly-schedule-compiler.js";
+import {prepareApprovedStaticTemplateProjection} from './static-weekly-recurring-staffing-adaptation.js';
+import {prepareStaticWeeklySchedulingProblem} from './static-weekly-schedule-program.js';
 import {
   compileAndPrepareStaticWeeklyScheduleIsolated,
   compileStaticWeeklyScheduleIsolated,
@@ -727,6 +729,109 @@ export function createStaticWeeklyControlPlane({
     return call(client, "static_weekly_v3_read_manager_snapshot", [weekStart]);
   }
 
+  async function approvedStaticPreparation(client,{actor,publicationId,date,kind,templateId,revision,deadlineAt,signal}) {
+    operationRemaining(deadlineAt,signal);
+    const basis=await call(client,'static_weekly_read_approved_template_basis',
+      [actor.managerId,publicationId,date,kind,templateId,revision]);
+    if(basis?.schema!=='custodial.approved-static-template-basis.v1'
+      || basis.publicationId!==publicationId || basis.serviceDate!==date || basis.kind!==kind
+      || basis.authorityRevision!==revision || !Number.isSafeInteger(basis.generation) || basis.generation<0
+      || !Array.isArray(basis.templates) || !Array.isArray(basis.admittedBindings)
+      || basis.templates.length>4 || basis.admittedBindings.length>4
+      || basis.templateCatalogDigest!==postgresJsonbContentDigest({templates:basis.templates,
+        admittedBindings:basis.admittedBindings,ownerConfig:basis.ownerConfig}))
+      throw fail('static_template_trusted_basis_invalid');
+    const source=clone(basis.currentSource);
+    if(source.serviceDate!==date)throw fail('static_template_trusted_basis_invalid');
+    const wire=clone(source);if(wire.version&&!wire.versions){wire.versions=[wire.version];delete wire.version;}
+    const target=prepareStaticWeeklySchedulingProblem(wire,deadlineAt);
+    if(target.error)throw fail('static_template_target_authority_invalid');
+    const day=new Date(`${date}T00:00:00Z`).getUTCDay();
+    const available=target.roster.filter(p=>p.personId&&p.kind!=='CONTRACTOR_CAPACITY'
+      && !target.version.namedAbsentSlotIds?.includes(p.slotId)
+      && (kind!=='DATED_ABSENCE'||target.availabilityByDaySlot.has(`${day}\u0000${p.slotId}`)));
+    const choices=basis.templates.filter(t=>t.staffingCount===available.length&&(!templateId||t.templateId===templateId));
+    if(choices.length!==1)throw fail('static_template_missing_approved_pattern');
+    const selection={schema:'custodial.static-template-selection.v1',kind,templateId:choices[0].templateId,
+      serviceDate:date,availablePersonIds:available.map(p=>p.personId)};
+    operationRemaining(deadlineAt,signal);
+    const feasibility=prepareApprovedStaticTemplateProjection({templates:basis.templates,
+      admittedBindings:basis.admittedBindings,currentSource:source,currentOwnerConfig:basis.ownerConfig,
+      selection,deadline:deadlineAt});
+    operationRemaining(deadlineAt,signal);
+    const body={schema:'custodial.approved-static-materialization.v1',managerId:actor.managerId,
+      sourcePublicationId:publicationId,serviceDate:date,kind,expectedRevision:revision,
+      generation:basis.generation,templateCatalogDigest:basis.templateCatalogDigest,feasibility};
+    const previewDigest=postgresJsonbContentDigest(body);
+    return {...body,previewDigest};
+  }
+
+  async function approvedStaticOperation({manager,publicationId,serviceDate,kind='RECURRING_STAFFING',
+    templateId=null,expectedRevision,previewDigest=null,idempotencyKey=null,signal=null,deadlineAt=null},confirm) {
+    const entered=performance.now(),expires=deadlineAt==null?entered+STATIC_WEEKLY_MANAGER_OPERATION_DEADLINE_MS:
+      Math.min(Number(deadlineAt),entered+STATIC_WEEKLY_MANAGER_OPERATION_DEADLINE_MS);
+    if(!Number.isFinite(expires))throw fail('static_weekly_recurring_operation_deadline_invalid');
+    const actor=requireManager(manager),requestedPublication=publicationId==null?null:requirePublicationId(publicationId),revision=requireRevision(expectedRevision);
+    const date=kind==='RECURRING_STAFFING'?requireMonday(serviceDate,'static effective start'):requireDate(serviceDate,'static service date');
+    if(!['RECURRING_STAFFING','DATED_ABSENCE'].includes(kind))throw fail('static_template_selection_kind_invalid');
+    if(templateId!==null&&(typeof templateId!=='string'||!templateId.trim()||templateId.length>128))throw fail('static_template_selection_invalid');
+    const controller=new AbortController(),relay=()=>controller.abort(signal?.reason);
+    signal?.addEventListener?.('abort',relay,{once:true});if(signal?.aborted)relay();
+    const timeout=setTimeout(()=>controller.abort(fail('static_weekly_recurring_operation_deadline_exceeded')),
+      Math.max(1,expires-performance.now()-STATIC_WEEKLY_MANAGER_CLEANUP_RESERVE_MS));timeout.unref?.();
+    try {
+      return await transaction(async client=>{
+        await lockStaticWeeklyAuthority(client);
+        const request={publicationId:requestedPublication,serviceDate:date,kind,templateId,
+          expectedRevision:revision,previewDigest:confirm?text(previewDigest):null,
+          idempotencyKey:confirm?requireIdempotencyKey(idempotencyKey):null};
+        if(confirm){
+          const original=await call(client,'static_weekly_read_approved_template_confirmation',[actor.managerId,request.idempotencyKey]);
+          if(original){
+            if(canonicalJson(original.request)!==canonicalJson(request)||original.receipt?.status!=='PERSISTED_CURRENT')
+              throw fail('static_template_confirmation_identity_conflict');
+            return {...original.receipt,replayed:true,status:'ACCEPTED_ORIGINAL_RECEIPT',currentReadbackNotRepeated:true};
+          }
+        }
+        const week=new Date(`${date}T00:00:00Z`);week.setUTCDate(week.getUTCDate()-((week.getUTCDay()+6)%7));
+        const before=await snapshotFor(client,week.toISOString().slice(0,10));
+        if(before?.authority_revision!==revision)throw fail('static_template_revision_changed');
+        const publication=requirePublicationId(before?.current_publication?.publication_id);
+        if(requestedPublication&&requestedPublication!==publication)throw fail('static_template_current_publication_changed');
+        const prepared=await approvedStaticPreparation(client,{actor,publicationId:publication,date,kind,templateId,
+          revision,deadlineAt:expires,signal:controller.signal});
+        if(!confirm)return {schema:'custodial.approved-static-preview.v1',status:'PREVIEW_ONLY',
+          previewDigest:prepared.previewDigest,authorityRevision:revision,sourcePublicationId:publication,
+          serviceDate:date,kind,templateId:prepared.feasibility.mapping.templateId,
+          mapping:prepared.feasibility.mapping,assignments:prepared.feasibility.assignments,
+          lunch:prepared.feasibility.lunch,solverInvoked:false,published:false};
+        if(!/^[a-f0-9]{64}$/.test(text(previewDigest))||previewDigest!==prepared.previewDigest)
+          throw fail('static_template_preview_changed');
+        const key=requireIdempotencyKey(idempotencyKey);
+        operationRemaining(expires,controller.signal);
+        const accepted=await call(client,'static_weekly_materialize_approved_template',
+          [actor.managerId,publication,date,kind,revision,prepared.generation,key,previewDigest,{...prepared,request}]);
+        if(accepted?.ok!==true||accepted.persistence_status!=='PERSISTED'
+          || !/^[a-f0-9]{64}$/.test(text(accepted.lunch_document_identity))
+          || accepted.feasibility_digest!==prepared.feasibility.digest
+          || (kind==='DATED_ABSENCE'&&accepted.publication_id!==publication))
+          throw fail('static_template_materialization_not_persisted');
+        requirePublicationId(accepted.publication_id);requireUuid(accepted.projection_id,'static_template_materialization_not_persisted');
+        const current=await snapshotFor(client,week.toISOString().slice(0,10));
+        const lunch=await call(client,'static_weekly_v8_read_lunch_document',[date]);
+        if(current?.projection_status!=='current'||current.authority_revision!==accepted.authority_revision
+          || current.current_publication?.publication_id!==accepted.publication_id
+          || current.latest_projection?.projection_id!==accepted.projection_id
+          || lunch?.persistence_status!=='PERSISTED'||lunch.projection_id!==accepted.projection_id
+          || lunch.document_identity!==accepted.lunch_document_identity)
+          throw fail('static_template_current_readback_mismatch');
+        operationRemaining(expires,controller.signal);
+        return {schema:'custodial.approved-static-confirmation.v1',status:'PERSISTED_CURRENT',
+          ...accepted,revision:accepted.authority_revision,previewDigest,solverInvoked:false};
+      },{signal:controller.signal,deadlineAt:expires,reconcileManagerId:confirm?actor.managerId:null});
+    } finally {clearTimeout(timeout);signal?.removeEventListener?.('abort',relay);}
+  }
+
   async function recurringGenerationFor(client) {
     const raw = await call(client, "static_weekly_v15_read_recurring_generation", []);
     if (!(typeof raw === "number" || (typeof raw === "string" && /^(0|[1-9][0-9]*)$/.test(raw)))
@@ -1045,6 +1150,8 @@ export function createStaticWeeklyControlPlane({
       requireManager(manager);
       return transaction((client) => snapshotFor(client, requireMonday(weekStart, "week start")));
     },
+    async previewApprovedStaticPattern(input) { return approvedStaticOperation(input,false); },
+    async confirmApprovedStaticPattern(input) { return approvedStaticOperation(input,true); },
     async previewRecurringStaffing({ manager, effectiveStart, expectedRevision, fullNineSourceId = null,
       signal = null, deadlineAt = null }) {
       const enteredAt = performance.now();
