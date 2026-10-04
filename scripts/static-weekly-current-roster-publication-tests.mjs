@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import {readFileSync,writeFileSync,readdirSync} from 'node:fs';
+import {readFileSync,writeFileSync,readdirSync,lstatSync,realpathSync,openSync,fstatSync,readSync,closeSync,constants,mkdtempSync,chmodSync,unlinkSync,rmdirSync} from 'node:fs';
+import {resolve,dirname,join} from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {Pool} from 'pg';
@@ -22,13 +23,141 @@ import {assertCurrentManager219MigrationSet,assertCurrentManager219Manifest} fro
 import {testNamedHandoffSql} from './static-weekly-named-handoff-contract-tests.mjs';
 import {createCurrentManager219OwnedCheckpoint} from './static-weekly-current-manager-owned-checkpoint.mjs';
 
+// Closed, test-only import custody. Raw accepted JSON never passes through
+// JSON.parse/stringify; PostgreSQL checks the complete typed row round trip.
+const INITIAL_IMPORT_TABLES=Object.freeze({
+ static_weekly_authority_source_documents:'source_id',
+ weekly_schedule_authority_revisions:'authority_revision',
+ weekly_schedule_versions:'version_id',weekly_schedule_publications:'publication_id',
+ weekly_schedule_effective_range_closures:'range_closure_id',
+ static_weekly_schedule_control:'singleton'
+});
+const INITIAL_IMPORT_ORDER=['static_weekly_authority_source_documents','weekly_schedule_authority_revisions',
+ 'weekly_schedule_versions','weekly_schedule_publications','weekly_schedule_effective_range_closures','static_weekly_schedule_control'];
+const INITIAL_IMPORT_COUNTS=[2,2,2,2,1,1];
+function readInitialPrivateBytes(file,expected,remaining){
+ remaining();assert.equal(resolve(file),file);const dir=dirname(file),ds=lstatSync(dir);
+ assert.ok(ds.isDirectory()&&!ds.isSymbolicLink());assert.equal(realpathSync(dir),dir);
+ assert.equal(ds.uid,process.getuid());assert.equal(ds.mode&511,448);
+ const s=lstatSync(file);assert.ok(s.isFile()&&!s.isSymbolicLink());assert.equal(s.nlink,1);
+ assert.equal(s.uid,process.getuid());assert.ok([256,384].includes(s.mode&511));
+ assert.ok(Number.isSafeInteger(expected.bytes)&&expected.bytes>0&&expected.bytes<=8*1024*1024);
+ assert.equal(s.size,expected.bytes);assert.match(expected.sha256,/^[a-f0-9]{64}$/);
+ const fd=openSync(file,constants.O_RDONLY|constants.O_NOFOLLOW);
+ try{const opened=fstatSync(fd);assert.equal(opened.dev,s.dev);assert.equal(opened.ino,s.ino);
+  const data=Buffer.alloc(s.size);let n=0;while(n<data.length){remaining();const count=readSync(fd,data,n,data.length-n,null);assert.ok(count>0);n+=count;}
+  assert.equal(createHash('sha256').update(data).digest('hex'),expected.sha256);
+  return new TextDecoder('utf-8',{fatal:true}).decode(data);
+ }finally{closeSync(fd);}
+}
+function initialImportRecords(manifest){
+ assert.equal(manifest.schema,'custodial.approved-initial-historical-import.v1');
+ assert.ok(Array.isArray(manifest.files)&&manifest.files.length>=3&&manifest.files.length<=8);
+ let bytes=0,index=0;const counts=INITIAL_IMPORT_COUNTS.map(()=>0);
+ for(const file of manifest.files){
+  assert.ok(Number.isSafeInteger(file.bytes)&&file.bytes>0&&file.bytes<=8*1024*1024);
+  bytes+=file.bytes;assert.ok(bytes<=32*1024*1024,'aggregate private import cap before allocation');
+  assert.equal(resolve(file.path),file.path);assert.match(file.sha256,/^[a-f0-9]{64}$/);
+  assert.ok(Array.isArray(file.records)&&file.records.length>0&&file.records.length<=5);
+  for(const r of file.records){
+   assert.ok(Object.hasOwn(INITIAL_IMPORT_TABLES,r.table));
+   const next=INITIAL_IMPORT_ORDER.indexOf(r.table);assert.ok(next>=index,'foreign-key import order');index=next;counts[index]+=r.count;
+   assert.ok(Array.isArray(r.path)&&r.path.length>0&&r.path.length<=4&&r.path.every(x=>typeof x==='string'&&/^[a-zA-Z0-9_]+$/.test(x)));
+   assert.ok(['row','rows'].includes(r.shape));assert.ok(Number.isSafeInteger(r.count)&&r.count>0&&r.count<=32);
+   if(r.shape==='row')assert.equal(r.count,1);
+  }
+ }
+ assert.deepEqual(counts,INITIAL_IMPORT_COUNTS,'exact captured sources/revisions/versions/publications/closure/control only');
+ return manifest;
+}
+async function importInitialHistoricalRows(client,manifest,remaining){
+ initialImportRecords(manifest);remaining();await client.query('begin');
+ try{
+  await client.query("set local search_path=pg_catalog,public; set local timezone='UTC'; set local app.static_weekly_publish_write='on'");
+  for(const file of manifest.files){
+   const raw=readInitialPrivateBytes(file.path,file,remaining);
+   for(const r of file.records){
+    remaining();const table='public.'+r.table,key=INITIAL_IMPORT_TABLES[r.table];
+    const incoming=r.shape==='row'?'jsonb_build_array($1::jsonb #> $2::text[])':'$1::jsonb #> $2::text[]';
+    const identity=await client.query(`select jsonb_typeof(${incoming})='array' and jsonb_array_length(${incoming})=$3::integer as valid`,[raw,r.path,r.count]);
+    assert.equal(identity.rows[0]?.valid,true,'closed raw imported record count/shape');
+    // Reject unknown/missing columns or any cast that changes original JSONB
+    // evidence; numeric values remain PostgreSQL numeric throughout.
+    const exact=await client.query(`select bool_and(jsonb_typeof(row)='object' and to_jsonb(jsonb_populate_record(null::${table},row))=row) as valid from jsonb_array_elements(${incoming}) row`,[raw,r.path]);
+    assert.equal(exact.rows[0]?.valid,true,'lossless complete typed historical row required');
+    const sql=r.table==='static_weekly_schedule_control'
+     ? `update ${table} stored set (current_revision,updated_at,updated_by_manager_id,updated_by_manager_name_snapshot)=(select current_revision,updated_at,updated_by_manager_id,updated_by_manager_name_snapshot from jsonb_populate_record(null::${table},(${incoming})->0)) where stored.singleton and stored.current_revision=$3::bigint`
+     : `insert into ${table} select (jsonb_populate_record(null::${table},row)).* from jsonb_array_elements(${incoming}) row`;
+    if(r.table==='static_weekly_schedule_control')assert.ok(Number.isSafeInteger(manifest.fixtureRevision)&&manifest.fixtureRevision>=0);
+    const inserted=await client.query(sql,[raw,r.path,...(r.table==='static_weekly_schedule_control'?[manifest.fixtureRevision]:[])]);
+    assert.equal(inserted.rowCount,r.count,'exact captured records inserted once');
+    const readback=await client.query(`select count(*)::integer as count from jsonb_array_elements(${incoming}) row join ${table} stored on to_jsonb(stored)->'${key}'=row->'${key}' where to_jsonb(stored)=row`,[raw,r.path]);
+    assert.equal(readback.rows[0]?.count,r.count,'whole raw historical row independently read back');
+   }
+  }
+  remaining();await client.query('commit');
+ }catch(error){let rollbackFailed=false;try{await client.query('rollback');}catch{rollbackFailed=true;}
+  throw Object.assign(new Error('approved_initial_historical_import_failed'),{code:'APPROVED_INITIAL_IMPORT_FAILED',rollbackFailed});}
+}
+async function initialImportSelfTest(){
+ const dir=mkdtempSync('/tmp/mz-approved-initial-import-proof-');chmodSync(dir,448);const file=join(dir,'row.json');
+ const raw='[{"version_row":{"n":9007199254740993,"z":-0,"text":"\\ud800"}}]\n';
+ writeFileSync(file,raw,{flag:'wx',mode:384});const expected={path:file,bytes:Buffer.byteLength(raw),sha256:createHash('sha256').update(raw).digest('hex')};let checks=0;
+ try{
+  assert.equal(readInitialPrivateBytes(file,expected,()=>{}),raw);checks++;
+  assert.throws(()=>readInitialPrivateBytes(file,{...expected,bytes:9*1024*1024},()=>{}));checks++;
+  assert.throws(()=>readInitialPrivateBytes(file,{...expected,sha256:'0'.repeat(64)},()=>{}));checks++;
+  assert.throws(()=>readInitialPrivateBytes(file,expected,()=>{throw Error('deadline');}),/deadline/);checks++;
+  const f={...expected,records:[{table:'weekly_schedule_versions',path:['0','version_row'],shape:'row',count:1}]};
+  const m={schema:'custodial.approved-initial-historical-import.v1',fixtureRevision:3,files:INITIAL_IMPORT_ORDER.map((table,i)=>({...expected,
+   records:[{table,path:['0','row'],shape:'rows',count:INITIAL_IMPORT_COUNTS[i]}]}))};
+  initialImportRecords(m);checks++;
+  assert.throws(()=>initialImportRecords({...m,files:m.files.map(x=>({...x,bytes:8*1024*1024}))}),/aggregate/);checks++;
+  assert.throws(()=>initialImportRecords({...m,files:[{...f,records:[{...f.records[0],table:'employees'}]},f,f]}));checks++;
+  assert.throws(()=>initialImportRecords({...m,files:[{...f,records:[{...f.records[0],path:['0',"bad'path"]}]},f,f]}));checks++;
+  for(const failAt of [null,'insert into','whole']){
+   const calls=[];const client={query:async(sql,args)=>{calls.push(sql);if(args?.[0])assert.equal(args[0],raw);
+    if(failAt==='insert into'&&sql.startsWith(failAt))throw Error('PRIVATE INPUT MUST NOT ESCAPE');
+    const table=INITIAL_IMPORT_ORDER.find(t=>sql.includes('public.'+t));const count=INITIAL_IMPORT_COUNTS[INITIAL_IMPORT_ORDER.indexOf(table)];
+    if(sql.startsWith('select count'))return {rows:[{count:failAt==='whole'?0:count}]};
+    if(sql.startsWith('select'))return {rows:[{valid:true}]};return {rowCount:count};}};
+   if(failAt){await assert.rejects(importInitialHistoricalRows(client,m,()=>{}),{code:'APPROVED_INITIAL_IMPORT_FAILED'});assert.equal(calls.at(-1),'rollback');}
+   else{await importInitialHistoricalRows(client,m,()=>{});assert.equal(calls.at(-1),'commit');assert.ok(calls.some(x=>x.includes('jsonb_populate_record')));}
+   checks++;
+  }
+  assert.throws(()=>initialImportRecords({...m,files:m.files.toReversed()}),/order/);checks++;
+  assert.throws(()=>initialImportRecords({...m,files:m.files.map(x=>({...x,bytes:NaN}))}));checks++;
+  assert.throws(()=>initialImportRecords({...m,files:m.files.map(x=>({...x,records:x.records.map(r=>({...r,count:r.count+1}))}))}));checks++;
+  assert.equal(INITIAL_IMPORT_TABLES.weekly_schedule_effective_range_closures,'range_closure_id');checks++;
+  console.log(JSON.stringify({status:'PASS',checks,scope:'PRIVATE_RAW_CUSTODY_FAKE_SQL_ONLY',rawNumericTextPreserved:true,sqlExecuted:false}));
+ }finally{unlinkSync(file);rmdirSync(dir);}
+}
+if(process.argv.includes('--approved-import-selftest')){await initialImportSelfTest();process.exit(0);}
+
 const container=process.env.SHIFT_END_TEST_CONTAINER,socket=process.env.SHIFT_END_TEST_SOCKET;
 const approvedInitialMode=process.argv.includes('--approved-initial');
-assert.match(container??'',/^mz_schema_shift_end_[0-9]+$/);
-assert.match(socket??'',/^\/tmp\/mz-shift-socket-[a-zA-Z0-9]+$/);
+const approvedImportMode=process.argv.includes('--approved-initial-import');
+assert.ok(!approvedImportMode||approvedInitialMode,'raw historical import belongs only to fixed approved initial mode');
+let importCustody=null,operationDatabase='postgres';
+if(approvedImportMode){
+ const raw=process.env.STATIC_WEEKLY_APPROVED_INITIAL_RESTORE_JSON||'';assert.ok(Buffer.byteLength(raw)<=4096);
+ importCustody=JSON.parse(raw);assert.equal(importCustody.schema,'custodial.approved-initial-restore-custody.v1');
+ assert.match(container??'',/^mz_schema219_offline_restore_[0-9]+_[a-f0-9]{8}$/);
+ assert.match(socket??'',/^\/tmp\/mz-schema219-offline-restore-socket-[a-zA-Z0-9]+$/);
+ assert.match(importCustody.containerId,/^[a-f0-9]{64}$/);
+ assert.equal(importCustody.containerName,container);assert.equal(importCustody.socket,socket);
+ assert.match(importCustody.operationDatabase,/^mz_schema_rebuild_operation_[a-f0-9]{8}$/);operationDatabase=importCustody.operationDatabase;
+ assert.ok(Number.isSafeInteger(importCustody.originUnixMs)&&Date.now()-importCustody.originUnixMs>=0&&Date.now()-importCustody.originUnixMs<60000);
+ assert.ok(Date.parse(importCustody.createdAt)>=importCustody.originUnixMs);
+}else{
+ assert.match(container??'',/^mz_schema_shift_end_[0-9]+$/);
+ assert.match(socket??'',/^\/tmp\/mz-shift-socket-[a-zA-Z0-9]+$/);
+}
 const inspection=JSON.parse(execFileSync('docker',['inspect',container],{encoding:'utf8',timeout:10000}))[0];
 assert.equal(inspection.HostConfig.NetworkMode,'none');assert.equal(Object.keys(inspection.HostConfig.PortBindings??{}).length,0);
 assert.ok(inspection.Mounts.some(m=>m.Source===socket&&m.Destination==='/test-socket'));
+if(importCustody){assert.equal(inspection.Id,importCustody.containerId);assert.equal(inspection.Created,importCustody.createdAt);
+ assert.equal(inspection.Name,'/'+container);assert.equal(inspection.State.Running,true);}
 const currentManager216Stage=process.env.STATIC_WEEKLY_TEST_CURRENT_216==='1';
 const currentManager217Stage=process.env.STATIC_WEEKLY_TEST_CURRENT_217==='1';
 const currentManager218Stage=process.env.STATIC_WEEKLY_TEST_CURRENT_218==='1';
@@ -75,7 +204,7 @@ const derivedRows=currentManagerStage||approvedInitialMode?packet.expectedDerive
  .reduce((count,chain)=>count+chain.segments.length,0);
 assert.equal(derivedRows,currentManagerStage||approvedInitialMode?494:sourceRows===312?454:458,'exact source-specific derivation count');
 assert.equal(source.version.vacantSlotIds.length,3);
-const pool=new Pool({host:socket,database:'postgres',user:'supabase_admin',password:'postgres',max:3,connectionTimeoutMillis:5000});
+const pool=new Pool({host:socket,database:operationDatabase,user:'supabase_admin',password:'postgres',max:3,connectionTimeoutMillis:5000});
 pool.on('error',e=>console.error('SYNTHETIC_POOL_ERROR',e.code));
 const preparations=[];
 // The new stage is itself a detached, identity-checked group leader. Its
@@ -95,6 +224,41 @@ async function rpc(role,name,args=[]){const c=await pool.connect();try{await c.q
 const cp=(name,args)=>rpc('static_weekly_control_plane',name,args),release=(name,args)=>rpc('static_weekly_release_operator',name,args);
 const revision=()=>query('select current_revision::integer as result from public.static_weekly_schedule_control where singleton');
 let checks=0,recurringPreview=null,recurringAdmissionProof=null,recurringConfirmationProof=null,lunchMaterializationProof=null;const check=(name,a,b)=>{assert.deepEqual(a,b,name);checks++;console.log('PASS',name);};
+async function setupApprovedCurrentSix(prior,remaining){
+ // Separate current roster, never historical-person reactivation. These are
+ // the existing fixture's release/CP bootstrap commands, not a draft compiler.
+ remaining();assert.equal(await revision(),0,'fresh inert operation clone only');
+ assert.equal(await query('select count(*)::integer as result from public.weekly_roster_slots'),0);
+ assert.equal(await query('select count(*)::integer as result from public.weekly_schedule_publications'),0);
+ await pool.query("insert into public.ops_manager_managers(manager_id,display_name,roles,active,is_system_principal) values($1,$2,array['OPS_MANAGER','CUSTODIAL_MANAGER'],true,false)",
+  [prior.managerId,'Isolated Approved Initial Manager']);
+ const initialEmployees=await query('select count(*)::integer as result from public.employees');let number=820;
+ for(const s of source.slots.filter(s=>!s.contractorCapacity))for(const p of s.incumbencies.filter(p=>p.effectiveStart<=source.serviceDate&&(!p.effectiveEnd||source.serviceDate<p.effectiveEnd))){
+  remaining();await pool.query("insert into public.employees(id,employee_code,display_name,role,active) values($1,$2,$3,'staff',true)",[p.personId,'EMP'+number++,p.displayName]);
+  await pool.query("insert into public.msg_users(employee_id,display_name,role,is_active) values($1,$2,'employee',true)",[p.personId,p.displayName]);
+ }
+ const families=new Map(),places=new Set();
+ for(const row of source.version.assignments){const f=families.get(row.locationCodeSnapshot)||{id:row.locationId,name:row.locationNameSnapshot,locations:new Map()};
+  for(const l of row.includedLocations||[])f.locations.set(l.locationId,l.locationNameSnapshot);families.set(row.locationCodeSnapshot,f);}
+ for(const [code,f] of families){
+  remaining();await pool.query('insert into public.location_groups(id,group_code,group_name,active) values($1,$2,$3,true)',[f.id,code,f.name]);
+  for(const [id,name] of f.locations){if(!places.has(id)){
+   const type=/restroom/i.test(name)?'restroom':'exhibit';
+   await pool.query('insert into public.locations(id,location_code,location_name,location_type,form_type,active) values($1,$2,$3,$4,$4,true)',[id,'SYNTH_'+id,name,type]);places.add(id);}
+   await pool.query('insert into public.location_group_memberships(location_group_id,location_id,active) values($1,$2,true)',[f.id,id]);}
+ }
+ remaining();await release('static_weekly_v3_configure_initial_authority_key',['static-weekly-authority-hmac-v2','synthetic-current-roster-not-production-0123456789','Isolated fixed approved source only']);
+ const bootstrap=structuredClone(source),vacancies=new Set(source.version.vacantSlotIds),initial='50000000-0000-4000-8000-000000000131';
+ bootstrap.slots=bootstrap.slots.filter(s=>!vacancies.has(s.id));bootstrap.version.vacantSlotIds=[];bootstrap.version.vacancyCapableSlotIds=[];
+ bootstrap.version.slotAvailability=bootstrap.version.slotAvailability.filter(a=>!vacancies.has(a.slotId));
+ bootstrap.version.assignments=bootstrap.version.assignments.filter(a=>!vacancies.has(a.ownerSlotId));
+ await release('static_weekly_v3_register_authority_source',[initial,bootstrap,'Isolated current occupied initialization only']);
+ await release('static_weekly_v6_initialize_registered_roster',[initial,prior.managerId,'Isolated current six initialization']);
+ for(const id of vacancies){remaining();await cp('static_weekly_v7_create_vacant_roster_slot',[id,source.slots.find(s=>s.id===id).label,await revision(),prior.managerId,'isolated-initial-vacancy-'+id]);}
+ remaining();await release('static_weekly_v3_register_authority_source',[packet.sourceId,source,'Exact corrected current recurring source; isolated only']);
+ check('only six current employees added, not historical people',await query('select count(*)::integer as result from public.employees'),initialEmployees+6);
+ return await revision();
+}
 async function runApprovedInitial(){
  // The outer root-owned launcher binds exact219 prefix plus this forward SQL,
  // image/roles/source and a legitimate retained historical publication. This
@@ -108,6 +272,24 @@ async function runApprovedInitial(){
  for(const key of ['sourceId','versionId','publicationId','managerId'])assert.match(prior[key]||'',/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
  assert.match(prior.documentDigest||'',/^[0-9a-f]{64}$/);
  assert.ok(Number.isSafeInteger(prior.authorityRevision)&&prior.authorityRevision>=0);
+ if(approvedImportMode){
+  const file=process.env.STATIC_WEEKLY_APPROVED_INITIAL_IMPORT_MANIFEST;
+  const expected={bytes:Number(process.env.STATIC_WEEKLY_APPROVED_INITIAL_IMPORT_MANIFEST_BYTES),sha256:process.env.STATIC_WEEKLY_APPROVED_INITIAL_IMPORT_MANIFEST_SHA256};
+  assert.ok(Number.isSafeInteger(expected.bytes)&&expected.bytes>0&&expected.bytes<=16384,'finite root-bound manifest');
+  const manifest=initialImportRecords(JSON.parse(readInitialPrivateBytes(file,expected,remaining)));
+  const actual=new Map(manifest.files.map(f=>[f.path.split('/').at(-1),f.sha256]));
+  for(const [name,sha] of [
+   ['authority-sources.lossless.json','642c945a57e7ab1b9f17f061fc87420f7b2835c702bd3e6d75d1efec3b1720e2'],
+   ['publication-metadata.lossless.json','731130f504ba670f7d8557c4d64a4ebf35d45fa22b9760b3a09998131767eaa7'],
+   ['predecessor-version.lossless.json','ce6dbe67178bb94836c0d152e2fdc7efbc15be91890a55d127c987ecf686c88f'],
+   ['latest-version.lossless.json','c39727694cdd56560165ab4d664638d5e92089057a8996241f995ea147f86825'],
+   ['control.lossless.json','780b7c6f42f62ef41b29a71908dc541a8d5b1333a3481339980f8b07cebb1de4']
+  ])assert.equal(actual.get(name),sha,'exact genuine historical lossless export');
+  assert.equal(manifest.priorPublicationId,prior.publicationId);assert.equal(manifest.priorVersionId,prior.versionId);
+  assert.equal(manifest.priorDocumentDigest,prior.documentDigest);assert.equal(manifest.controlRevision,prior.authorityRevision);
+  const fixtureRevision=await setupApprovedCurrentSix(prior,remaining);assert.equal(manifest.fixtureRevision,fixtureRevision);
+  const client=await pool.connect();try{await importInitialHistoricalRows(client,manifest,remaining);}finally{client.release();}
+ }
  const previous=await query('select jsonb_build_object(\'sourceId\',v.authority_source_id,\'versionId\',v.version_id,\'publicationId\',p.publication_id,\'effectiveStart\',p.effective_start,\'documentDigest\',public.static_weekly_digest_jsonb(v.draft_document)) as result from public.weekly_schedule_publications p join public.weekly_schedule_versions v using(version_id) where p.publication_id=$1',[prior.publicationId]);
  check('actual prior historical publication/source/document custody, not empty database',previous,
   {sourceId:prior.sourceId,versionId:prior.versionId,publicationId:prior.publicationId,effectiveStart:prior.effectiveStart,documentDigest:prior.documentDigest});
