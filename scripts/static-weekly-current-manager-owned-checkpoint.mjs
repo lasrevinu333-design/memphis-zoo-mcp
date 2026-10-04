@@ -16,6 +16,7 @@ const CURRENT_MANAGER='10000000-0000-4000-8000-000000000131';
 const SECOND_MANAGER='10000000-0000-4000-8000-000000000273';
 const ROOT=new URL('../',import.meta.url);
 const requiredFiles=['scripts/run-isolated-shift-end-tests.mjs',
+ 'scripts/static-weekly-ordered-psql-transport.mjs',
  'scripts/static-weekly-current-roster-publication-tests.mjs',
  'scripts/fixtures/current-manager-publication-source.mjs',
  'scripts/fixtures/current-manager-219-source.mjs',
