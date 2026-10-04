@@ -331,9 +331,11 @@ begin
    needle:='p_document#>''{authority,optimizerResult,objective}''';
    if (length(changed)-length(replace(changed,needle,'')))/length(needle)<>1 then raise exception 'initial objective seam changed';end if;
    changed:=replace(changed,needle,'p_document->''objective''');
-   needle:='p_input_provenance->>''adapter_schema'' is distinct from ''memphis-zoo.static-weekly-database-adapter.v1''';
+   -- September 24 made the installed writer bind provenance to the exact
+   -- independently validated document. Preserve that stronger current guard;
+   -- the initial-document validator above admits only the registered baseline.
+   needle:='p_input_provenance->>''adapter_schema'' is distinct from p_document#>>''{adapter,schema}''';
    if (length(changed)-length(replace(changed,needle,'')))/length(needle)<>1 then raise exception 'initial adapter provenance seam changed';end if;
-   changed:=replace(changed,needle,'p_input_provenance->>''adapter_schema'' is distinct from ''custodial.approved-static-baseline-adapter.v1''');
   end if;
   if old_name='static_weekly_v2_materialize_projection' then
    needle:='p_assignments#>>''{authority,schema}''=''memphis-zoo.static-weekly-authority.v4''';
@@ -345,8 +347,6 @@ begin
   reversed:=replace(reversed,'static_weekly_assert_approved_initial_projection','static_weekly_assert_projection_envelope_attested');
   if old_name='static_weekly_v2_create_draft' then
    reversed:=replace(reversed,'p_document->''objective''','p_document#>''{authority,optimizerResult,objective}''');
-   reversed:=replace(reversed,'p_input_provenance->>''adapter_schema'' is distinct from ''custodial.approved-static-baseline-adapter.v1''',
-    'p_input_provenance->>''adapter_schema'' is distinct from ''memphis-zoo.static-weekly-database-adapter.v1''');
   end if;
   if old_name='static_weekly_v2_materialize_projection' then reversed:=replace(reversed,
    'p_assignments#>>''{authority,schema}''=''custodial.approved-static-authority.v1''',
