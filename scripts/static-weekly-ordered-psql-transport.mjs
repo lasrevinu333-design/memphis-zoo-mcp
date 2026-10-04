@@ -17,7 +17,6 @@ export const RESTORE_DEFAULT_GRANTS_FILES=new Set([
  '20260815160613_normalize_managed_production_schema_security.sql',
 ]);
 export const ORDERED_PSQL_SHELL=String.raw`set -eu
-export LC_ALL=C
 tmp=$(mktemp -d /tmp/mz-ordered-psql.XXXXXX) || exit 91
 cleanup() { rm -f "$tmp/sql" "$tmp/b64" "$tmp/out" "$tmp/err"; rmdir "$tmp"; }
 trap cleanup EXIT

@@ -18,6 +18,7 @@ const entries=[
 const {input,manifest}=orderedPsqlFrames(entries);
 check(()=>assert.equal(manifest.length,3));
 check(()=>assert.ok(input.startsWith('FRAME 0 ')));
+check(()=>assert.doesNotMatch(ORDERED_PSQL_SHELL,/\b(?:export\s+)?LC_ALL\s*=/));
 const migrationsDir=fileURLToPath(new URL('../supabase/migrations/',import.meta.url));
 const migrationFiles=readdirSync(migrationsDir).filter(file=>file.endsWith('.sql')).sort();
 const full=orderedPsqlFrames(migrationFiles.map(file=>({file,batch:readFileSync(join(migrationsDir,file))})));
@@ -49,13 +50,15 @@ try{
 set -eu
 n=$(find "$FAKE_PSQL_DIR" -name 'input-*.sql' | wc -l)
 cat > "$FAKE_PSQL_DIR/input-$n.sql"
+printf '%s\n%s\n' "$LC_ALL" "$LANG" > "$FAKE_PSQL_DIR/locale-$n.txt"
 printf 'private psql output\n'
 if [ "$FAKE_PSQL_FAIL_INDEX" = "$n" ]; then printf 'private psql failure\n' >&2; exit 3; fi
 `);
  chmodSync(fake,0o700);
  const run=(payload,failIndex)=>{
-  for(const file of readdirSync(dir).filter(f=>/^input-\d+\.sql$/.test(f)))rmSync(join(dir,file));
-  const env={PATH:`${dir}:${process.env.PATH}`,FAKE_PSQL_DIR:dir,FAKE_PSQL_FAIL_INDEX:failIndex==null?'':String(failIndex)};
+  for(const file of readdirSync(dir).filter(f=>/^(?:input-\d+\.sql|locale-\d+\.txt)$/.test(f)))rmSync(join(dir,file));
+  const env={PATH:`${dir}:${process.env.PATH}`,FAKE_PSQL_DIR:dir,FAKE_PSQL_FAIL_INDEX:failIndex==null?'':String(failIndex),
+   LC_ALL:'en_US.utf8',LANG:'en_GB.utf8'};
   try{return {stdout:execFileSync('sh',['-c',ORDERED_PSQL_SHELL,'replay',String(payload===guarded.input?219:3)],
    {input:payload,env,encoding:'utf8',timeout:30000,maxBuffer:64*1024}),failed:false};}
   catch(error){return {stdout:String(error.stdout??''),failed:true};}
@@ -64,6 +67,8 @@ if [ "$FAKE_PSQL_FAIL_INDEX" = "$n" ]; then printf 'private psql failure\n' >&2;
  check(()=>assert.equal(result.failed,false));
  check(()=>assert.equal(parseOrderedPsqlReceipt(result.stdout,migrationFiles.map(file=>({file}))).completed,219));
  check(()=>assert.equal(readdirSync(dir).filter(f=>/^input-\d+\.sql$/.test(f)).length,219));
+ for(let i=0;i<migrationFiles.length;i++)check(()=>assert.equal(readFileSync(join(dir,`locale-${i}.txt`),'utf8'),
+  'en_US.utf8\nen_GB.utf8\n'));
  for(let i=0;i<migrationFiles.length;i++)check(()=>assert.deepEqual(readFileSync(join(dir,`input-${i}.sql`)),
   orderedSqlBatch({absenceGuard:ABSENCE_GUARD,bytes:readFileSync(join(migrationsDir,migrationFiles[i])),
    restoreDefaultsSql:RESTORE_DEFAULT_GRANTS_FILES.has(migrationFiles[i])?REMOVE_DEFAULT_GRANTS_SQL:''})));
