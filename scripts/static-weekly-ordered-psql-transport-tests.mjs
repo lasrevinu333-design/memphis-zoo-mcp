@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {execFileSync,spawn,spawnSync} from 'node:child_process';
-import {mkdtempSync,readFileSync,readdirSync,writeFileSync,chmodSync,rmSync,rmdirSync} from 'node:fs';
+import {mkdtempSync,readFileSync,readdirSync,writeFileSync,chmodSync,rmSync,rmdirSync,existsSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -9,7 +9,8 @@ import {ORDERED_PSQL_SHELL,orderedSqlBatch,orderedPsqlFrames,parseOrderedPsqlRec
  ABSENCE_GUARD,REMOVE_DEFAULT_GRANTS_SQL,RESTORE_DEFAULT_GRANTS_FILES} from './static-weekly-ordered-psql-transport.mjs';
 
 let checks=0;
-const attemptStart=performance.now();
+// performance.now() is measured from this Node process start, before imports.
+const attemptStart=0;
 const check=(fn)=>{fn();checks++;};
 const name=n=>`2026100400000${n}_synthetic_${n}.sql`;
 const entries=[
@@ -183,10 +184,12 @@ if [ "$FAKE_PSQL_FAIL_INDEX" = "$n" ]; then printf 'private psql failure\n' >&2;
  if(process.argv.includes('--pinned-image')){
   const image='supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed';
   const remain=(reserve=0)=>Math.max(0,Math.floor(60000-reserve-(performance.now()-attemptStart)));
+  const bounded=(limit,reserve=0)=>{const left=remain(reserve);assert.ok(left>0,'absolute utility deadline exhausted');return Math.min(limit,left);};
   check(()=>assert.ok(remain(10000)>0,'one 60-second utility attempt includes cleanup reserve'));
   const localImage=spawnSync('docker',['image','inspect',image,'--format','{{.Id}}'],
-   {encoding:'utf8',timeout:Math.min(5000,remain(10000))});
+   {encoding:'utf8',timeout:bounded(5000,10000)});
   check(()=>assert.equal(localImage.status,0,'pinned image must already be local; no pull'));
+  const imageId=localImage.stdout.trim();
   const bootstrap=String.raw`set -eu
 mkdir /tmp/mz-fake-psql
 printf '#!/bin/sh\ncat > /dev/null\n' > /tmp/mz-fake-psql/psql
@@ -197,26 +200,42 @@ sh -c "$1" replay 3`;
   const runPinned=(payload,index)=>{
    const container=`mz_ordered_psql_utility_${process.pid}_${index}`;
    const label=`${process.pid}-${index}`;
+   const cidFile=join(dir,`cid-${index}`);
    const before=execFileSync('docker',['ps','-a','--filter',`name=^/${container}$`,'--format','{{.Names}}'],
-    {encoding:'utf8',timeout:Math.min(5000,remain(10000))}).trim();
+    {encoding:'utf8',timeout:bounded(5000,10000)}).trim();
    check(()=>assert.equal(before,'','refuse a preexisting container name'));
-   const args=['run','-i','--rm','--network','none','--name',container,'--label',`mz.ordered.utility=${label}`,
+   const args=['run','-i','--rm','--network','none','--name',container,'--cidfile',cidFile,
+    '--label',`mz.ordered.utility=${label}`,
     '--entrypoint','sh',image,
     '-c',bootstrap,'fake',ORDERED_PSQL_SHELL];
-   check(()=>assert.ok(remain(10000)>0,'utility work cannot consume cleanup reserve'));
-   const result=spawnSync('docker',args,{input:payload,encoding:'utf8',
-    timeout:Math.min(15000,remain(10000)),maxBuffer:128*1024});
-   let leftover=execFileSync('docker',['ps','-a','--filter',`name=^/${container}$`,'--format','{{.Names}}'],
-    {encoding:'utf8',timeout:Math.min(5000,remain())}).trim();
-   if(leftover){
-    const owner=execFileSync('docker',['inspect','--format','{{index .Config.Labels "mz.ordered.utility"}}',container],
-     {encoding:'utf8',timeout:Math.min(5000,remain())}).trim();
-    check(()=>assert.equal(owner,label,'refuse foreign container cleanup'));
-    execFileSync('docker',['stop','-t','0',container],{encoding:'utf8',timeout:Math.min(5000,remain())});
-    leftover=execFileSync('docker',['ps','-a','--filter',`name=^/${container}$`,'--format','{{.Names}}'],
-     {encoding:'utf8',timeout:Math.min(5000,remain())}).trim();
+   let result,originalError=null,cleanupError=null;
+   try{
+    result=spawnSync('docker',args,{input:payload,encoding:'utf8',
+     timeout:bounded(15000,10000),maxBuffer:128*1024});
+   }catch(error){originalError=error;}
+   finally{
+    try{
+     let leftover=execFileSync('docker',['ps','-a','--filter',`name=^/${container}$`,'--format','{{.Names}}'],
+      {encoding:'utf8',timeout:bounded(5000)}).trim();
+     if(leftover){
+      assert.ok(existsSync(cidFile),'owned container ID must have been captured before cleanup');
+      const expectedId=readFileSync(cidFile,'utf8').trim();
+      const inspection=JSON.parse(execFileSync('docker',['inspect',container,'--format','{{json .}}'],
+       {encoding:'utf8',timeout:bounded(5000)}));
+      assert.equal(inspection.Id,expectedId,'exact created container ID');
+      assert.equal(inspection.Name,`/${container}`,'exact created name');
+      assert.equal(inspection.Image,imageId,'pinned image identity');
+      assert.equal(inspection.Config?.Labels?.['mz.ordered.utility'],label,'owned utility label');
+      assert.equal(inspection.HostConfig?.NetworkMode,'none','network-none container');
+      execFileSync('docker',['stop','-t','0',container],{encoding:'utf8',timeout:bounded(5000)});
+      leftover=execFileSync('docker',['ps','-a','--filter',`name=^/${container}$`,'--format','{{.Names}}'],
+       {encoding:'utf8',timeout:bounded(5000)}).trim();
+     }
+     check(()=>assert.equal(leftover,'','exact owned image utility container cleaned'));
+    }catch(error){cleanupError=error;}
    }
-   check(()=>assert.equal(leftover,'','exact owned image utility container cleaned'));
+   if(cleanupError)throw originalError?new AggregateError([originalError,cleanupError],'utility and cleanup failed'):cleanupError;
+   if(originalError)throw originalError;
    check(()=>assert.equal(result.error,undefined,'bounded pinned-image command'));
    return result;
   };
