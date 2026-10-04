@@ -110,6 +110,9 @@ pass('new explicit stage retains historical stages and one source-origin cap',()
  assert.match(runner,/50_000-performance\.now\(\)/);
  assert.match(runner,/performance\.now\(\)<60_000/);
  assert.match(runner,/NO_AUTOMATIC_TABLE_OR_SEQUENCE_GRANTS_REPLAY_PASS/);
+ assert.match(runner,/work deadline elapsed during readiness/);
+ assert.match(runner,/if\(ownedManager219Stage&&50_000-performance\.now\(\)<1\)throw error/);
+ assert.match(runner,/Math\.min\(500,Math\.max\(0,50_000-performance\.now\(\)\)\)/);
  assert.match(runner,/const publishedStage=\[[^\]]+\]\.includes\(stage\)/);
  assert.doesNotMatch(runner.match(/const publishedStage=([^\n]+)/)?.[1]||'',/current-manager-owned-219/);
 });

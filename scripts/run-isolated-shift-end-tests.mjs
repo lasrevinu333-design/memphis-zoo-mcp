@@ -90,7 +90,18 @@ try{
   '-e','POSTGRES_PASSWORD=postgres','-e','PGPASSWORD=postgres',image,'-c','shared_preload_libraries=pg_cron,pg_net,pg_stat_statements',
   ...(socket?['-c','unix_socket_directories=/var/run/postgresql,/test-socket']:[])]);owned=true;
  console.log(JSON.stringify({owned:container,cleanup:'exact container in finally',image,network:'none',production:false}));
- let ready=0;for(let n=0;n<60&&ready<4;n++){try{sql('select 1');ready++;}catch{ready=0;}await new Promise(r=>setTimeout(r,500));}assert.equal(ready,4);
+ let ready=0;for(let n=0;n<60&&ready<4;n++){
+  // An unavailable database is ordinary during startup; an expired absolute
+  // work clock is not. Never swallow that deadline as another readiness miss.
+  if(ownedManager219Stage&&50_000-performance.now()<1)throw new Error('Owned current219 work deadline elapsed during readiness');
+  try{sql('select 1');ready++;}catch(error){
+   if(ownedManager219Stage&&50_000-performance.now()<1)throw error;
+   ready=0;
+  }
+  if(ready<4){const wait=ownedManager219Stage?Math.min(500,Math.max(0,50_000-performance.now())):500;
+   if(wait<1)throw new Error('Owned current219 work deadline elapsed during readiness');
+   await new Promise(r=>setTimeout(r,wait));}
+ }assert.equal(ready,4);
  sql(removeDefaultsSql+absenceGuard);
  for(const file of files){
   const bytes=readFileSync('supabase/migrations/'+file);
