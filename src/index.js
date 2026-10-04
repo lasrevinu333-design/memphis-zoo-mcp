@@ -18,7 +18,7 @@ import {
 import { APP_VERSION, RELEASE_ID } from "./app-version.js";
 import { assertConfiguredReleaseIdentity, buildReleaseManifest } from "./release-manifest.js";
 import { observeProductionSchemaIdentity } from "./production-schema-identity.js";
-import { assertOpsManagerSessionSecret, authenticateOpsAccessRequest, createSupabaseTrustedDeviceStore, installSharedAuthRoutes, makeOpsAccessMiddleware } from "./auth/shared-access-auth.js";
+import { assertOpsManagerSessionSecret, authenticateOpsAccessRequest, authenticatePresentedOpsAccessRequest, createSupabaseTrustedDeviceStore, installSharedAuthRoutes, makeOpsAccessMiddleware } from "./auth/shared-access-auth.js";
 import { assertServerAssignedActor, authenticatedManagerActor } from "./manager-authority.js";
 import { authoritativeFeedbackPayload, makeFeedbackSubmitAuthority } from "./feedback-authority.js";
 import { attachFeedbackDelivery } from "./feedback-delivery-status.js";
@@ -224,7 +224,8 @@ const requireEmployeeDeviceCredential = makeDeviceCredentialMiddleware({
 });
 const requireFeedbackSubmitAuthority = makeFeedbackSubmitAuthority({
   requireEmployeeDeviceCredential,
-  requireOpsManagerAuth,
+  requireOpsManagerWrite,
+  authenticatePresentedOpsAccessRequest,
 });
 
 function requireDeviceOrOpsAccess(req, res, next) {

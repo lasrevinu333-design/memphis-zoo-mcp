@@ -80,6 +80,9 @@ assert.deepEqual(publicPayload.identity_verification, { status: "unverified", ki
 let employeeMiddlewareCalls = 0;
 let managerMiddlewareCalls = 0;
 let nextCalls = 0;
+assert.throws(() => makeFeedbackSubmitAuthority(), /Employee device middleware/);
+assert.throws(() => makeFeedbackSubmitAuthority({requireEmployeeDeviceCredential(){}}), /Manager write middleware/);
+assert.throws(() => makeFeedbackSubmitAuthority({requireEmployeeDeviceCredential(){},requireOpsManagerWrite(){}}), /Presented manager credential detection/);
 const middleware = makeFeedbackSubmitAuthority({
   requireEmployeeDeviceCredential(req, _res, next) {
     employeeMiddlewareCalls += 1;
@@ -87,7 +90,8 @@ const middleware = makeFeedbackSubmitAuthority({
     req.memphisDeviceCredential = { credential_id: credentialId };
     next();
   },
-  requireOpsManagerAuth(_req, _res, next) { managerMiddlewareCalls += 1; next(); },
+  requireOpsManagerWrite(_req, _res, next) { managerMiddlewareCalls += 1; next(); },
+  authenticatePresentedOpsAccessRequest() { return {presented:false}; },
 });
 const response = { status() { return this; }, json() { throw new Error("unexpected rejection"); } };
 middleware({ body: { hub_context: "employee" } }, response, () => { nextCalls += 1; });
@@ -104,7 +108,8 @@ makeFeedbackSubmitAuthority({
     req.memphisDeviceAuth = { credentialed: false, legacy: true };
     next();
   },
-  requireOpsManagerAuth() { throw new Error("manager middleware not expected"); },
+  requireOpsManagerWrite() { throw new Error("manager middleware not expected"); },
+  authenticatePresentedOpsAccessRequest() { return {presented:false}; },
 })({ body: { hub_context: "employee" } }, {
   status(value) { rejectedStatus = value; return this; },
   json(value) { rejectedCode = value.code; },
@@ -131,4 +136,6 @@ assert.doesNotMatch(
   "feedback persistence must not copy caller identity fields directly",
 );
 
+assert.match(index, /makeFeedbackSubmitAuthority\(\{\s*requireEmployeeDeviceCredential,\s*requireOpsManagerWrite,\s*authenticatePresentedOpsAccessRequest,\s*\}\)/);
+await import('./feedback-manager-write-route-tests.mjs');
 console.log("FEEDBACK_AUTHORITY_CONTRACT_PASS");

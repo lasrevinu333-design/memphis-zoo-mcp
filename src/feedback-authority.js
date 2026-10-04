@@ -8,30 +8,36 @@ export function requestedFeedbackHub(req) {
   return "public";
 }
 
-export function makeFeedbackSubmitAuthority({ requireEmployeeDeviceCredential, requireOpsManagerAuth } = {}) {
+export function makeFeedbackSubmitAuthority({ requireEmployeeDeviceCredential, requireOpsManagerWrite, authenticatePresentedOpsAccessRequest } = {}) {
   if (typeof requireEmployeeDeviceCredential !== "function") throw new TypeError("Employee device middleware is required.");
-  if (typeof requireOpsManagerAuth !== "function") throw new TypeError("Manager middleware is required.");
+  if (typeof requireOpsManagerWrite !== "function") throw new TypeError("Manager write middleware is required.");
+  if (typeof authenticatePresentedOpsAccessRequest !== "function") throw new TypeError("Presented manager credential detection is required.");
   return function requireFeedbackSubmitAuthority(req, res, next) {
     const hub = requestedFeedbackHub(req);
-    if (hub === "employee") {
-      requireEmployeeDeviceCredential(req, res, () => {
-        if (req.memphisDeviceAuth?.credentialed !== true || !req.memphisDeviceCredential?.credential_id) {
-          res.status(401).json({
-            ok: false,
-            code: "device_credential_required",
-            error: "This phone must finish enrollment before feedback can be sent.",
-          });
-          return;
-        }
-        next();
-      });
-      return;
+    // A selector cannot downgrade a presented manager credential into an
+    // anonymous or employee mutation. The existing write guard revalidates
+    // its current named-manager association, revocation and access level.
+    if (hub === "manager" || authenticatePresentedOpsAccessRequest(req).presented) {
+      return requireOpsManagerWrite(req, res, authorizeSelectedHub);
     }
-    if (hub === "manager") {
-      requireOpsManagerAuth(req, res, next);
-      return;
+    return authorizeSelectedHub();
+
+    function authorizeSelectedHub() {
+      if (hub === "employee") {
+        return requireEmployeeDeviceCredential(req, res, () => {
+          if (req.memphisDeviceAuth?.credentialed !== true || !req.memphisDeviceCredential?.credential_id) {
+            res.status(401).json({
+              ok: false,
+              code: "device_credential_required",
+              error: "This phone must finish enrollment before feedback can be sent.",
+            });
+            return;
+          }
+          next();
+        });
+      }
+      next();
     }
-    next();
   };
 }
 
