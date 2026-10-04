@@ -45,7 +45,9 @@ while IFS=' ' read -r tag index digest encodedLength || [ -n "$tag" ]; do
   [ "$(stat -c %s "$tmp/b64")" -eq "$encodedLength" ] || fail EOF
   IFS= read -r separator || fail EOF
   [ -z "$separator" ] || fail SIZE
-  LC_ALL=C grep -qzE '^[A-Za-z0-9+/=]+$' "$tmp/b64" || fail BASE64
+  LC_ALL=C tr -d 'A-Za-z0-9+/=' < "$tmp/b64" > "$tmp/err" 2>/dev/null || fail ALPHABET_UTILITY
+  invalidBytes=$(stat -c %s "$tmp/err") || fail ALPHABET_UTILITY
+  [ "$invalidBytes" -eq 0 ] || fail BASE64
   base64 -d "$tmp/b64" > "$tmp/sql" 2> "$tmp/err" || fail DECODE
   actual=$(sha256sum "$tmp/sql"); actual=${'$'}{actual%% *}
   [ "$actual" = "$digest" ] || fail HASH
@@ -129,7 +131,7 @@ export function parseOrderedPsqlReceipt(output,entries,{allowFailure=false}={}){
    cumulativeSinceChannelReadyMilliseconds:Math.round((endTick-readyTick)*1000)});
   completed++;cursor++;
  }
- match=/^FAIL (\d+) (FRAME|HEADER|INDEX|DIGEST|LINES|EOF|BASE64|SIZE|DECODE|HASH|PSQL_EXIT_1|PSQL_EXIT_2|PSQL_EXIT_3|PSQL_EXIT_OTHER|COUNT|EXTRA) ([0-9]+(?:\.[0-9]+)?)$/.exec(rows[cursor]??'');
+ match=/^FAIL (\d+) (FRAME|HEADER|INDEX|DIGEST|LINES|EOF|ALPHABET_UTILITY|BASE64|SIZE|DECODE|HASH|PSQL_EXIT_1|PSQL_EXIT_2|PSQL_EXIT_3|PSQL_EXIT_OTHER|COUNT|EXTRA) ([0-9]+(?:\.[0-9]+)?)$/.exec(rows[cursor]??'');
  if(match){assert.ok(allowFailure,'failed channel cannot pass');assert.equal(Number(match[1]),completed);
   const tick=parseTick(match[3]);assert.ok(tick>=previousTick,'ordered monotonic failure');failed={index:completed,code:match[2],tick};cursor++;}
  let doneTick=null;

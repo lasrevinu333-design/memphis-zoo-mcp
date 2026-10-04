@@ -1,13 +1,15 @@
 import assert from 'node:assert/strict';
-import {execFileSync,spawn} from 'node:child_process';
+import {execFileSync,spawn,spawnSync} from 'node:child_process';
 import {mkdtempSync,readFileSync,readdirSync,writeFileSync,chmodSync,rmSync,rmdirSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {performance} from 'node:perf_hooks';
 import {ORDERED_PSQL_SHELL,orderedSqlBatch,orderedPsqlFrames,parseOrderedPsqlReceipt,
  ABSENCE_GUARD,REMOVE_DEFAULT_GRANTS_SQL,RESTORE_DEFAULT_GRANTS_FILES} from './static-weekly-ordered-psql-transport.mjs';
 
 let checks=0;
+const attemptStart=performance.now();
 const check=(fn)=>{fn();checks++;};
 const name=n=>`2026100400000${n}_synthetic_${n}.sql`;
 const entries=[
@@ -19,7 +21,7 @@ const {input,manifest}=orderedPsqlFrames(entries);
 check(()=>assert.equal(manifest.length,3));
 check(()=>assert.ok(input.startsWith('FRAME 0 ')));
 check(()=>assert.equal((ORDERED_PSQL_SHELL.match(/\bLC_ALL=/g)??[]).length,1));
-check(()=>assert.match(ORDERED_PSQL_SHELL,/LC_ALL=C grep -qzE/));
+check(()=>assert.match(ORDERED_PSQL_SHELL,/LC_ALL=C tr -d 'A-Za-z0-9\+\/=+'/));
 const migrationsDir=fileURLToPath(new URL('../supabase/migrations/',import.meta.url));
 const migrationFiles=readdirSync(migrationsDir).filter(file=>file.endsWith('.sql')).sort();
 const full=orderedPsqlFrames(migrationFiles.map(file=>({file,batch:readFileSync(join(migrationsDir,file))})));
@@ -111,6 +113,23 @@ if [ "$FAKE_PSQL_FAIL_INDEX" = "$n" ]; then printf 'private psql failure\n' >&2;
  check(()=>assert.equal(result.failed,true));
  check(()=>assert.equal(parseOrderedPsqlReceipt(result.stdout,entries,{allowFailure:true}).failed?.code,'BASE64'));
  check(()=>assert.equal(readdirSync(dir).filter(f=>/^input-\d+\.sql$/.test(f)).length,0));
+ for(const invalid of ['\0','\r',' ']){
+  result=run(input.replace(firstBody,invalid+firstBody.slice(1)));
+  check(()=>assert.equal(result.failed,true));
+  check(()=>assert.equal(parseOrderedPsqlReceipt(result.stdout,entries,{allowFailure:true}).failed?.code,'BASE64'));
+  check(()=>assert.equal(readdirSync(dir).filter(f=>/^input-\d+\.sql$/.test(f)).length,0));
+ }
+ result=run(input.replace(firstBody,'='+firstBody.slice(1)));
+ check(()=>assert.equal(result.failed,true));
+ check(()=>assert.ok(['DECODE','HASH'].includes(parseOrderedPsqlReceipt(result.stdout,entries,{allowFailure:true}).failed?.code)));
+ check(()=>assert.equal(readdirSync(dir).filter(f=>/^input-\d+\.sql$/.test(f)).length,0));
+ const failedTr=join(dir,'tr');
+ writeFileSync(failedTr,'#!/bin/sh\nexit 42\n');chmodSync(failedTr,0o700);
+ result=run(input);
+ check(()=>assert.equal(result.failed,true));
+ check(()=>assert.equal(parseOrderedPsqlReceipt(result.stdout,entries,{allowFailure:true}).failed?.code,'ALPHABET_UTILITY'));
+ check(()=>assert.equal(readdirSync(dir).filter(f=>/^input-\d+\.sql$/.test(f)).length,0));
+ rmSync(failedTr);
  result=run(input.replace(firstBody,firstBody.slice(0,3)+'\n'+firstBody.slice(4)));
  check(()=>assert.equal(result.failed,true));
  check(()=>assert.equal(parseOrderedPsqlReceipt(result.stdout,entries,{allowFailure:true}).failed?.code,'BASE64'));
@@ -161,6 +180,55 @@ if [ "$FAKE_PSQL_FAIL_INDEX" = "$n" ]; then printf 'private psql failure\n' >&2;
  check(()=>assert.ok(signalExit.code===143||signalExit.signal==='SIGTERM'));
  check(()=>assert.ok(!signalOutput.includes('DONE')));
  check(()=>assert.deepEqual(readdirSync('/tmp').filter(file=>file.startsWith('mz-ordered-psql.')&&!beforeTemp.has(file)),[]));
+ if(process.argv.includes('--pinned-image')){
+  const image='supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed';
+  const remain=(reserve=0)=>Math.max(0,Math.floor(60000-reserve-(performance.now()-attemptStart)));
+  check(()=>assert.ok(remain(10000)>0,'one 60-second utility attempt includes cleanup reserve'));
+  const localImage=spawnSync('docker',['image','inspect',image,'--format','{{.Id}}'],
+   {encoding:'utf8',timeout:Math.min(5000,remain(10000))});
+  check(()=>assert.equal(localImage.status,0,'pinned image must already be local; no pull'));
+  const bootstrap=String.raw`set -eu
+mkdir /tmp/mz-fake-psql
+printf '#!/bin/sh\ncat > /dev/null\n' > /tmp/mz-fake-psql/psql
+chmod 700 /tmp/mz-fake-psql/psql
+PATH=/tmp/mz-fake-psql:$PATH
+export PATH
+sh -c "$1" replay 3`;
+  const runPinned=(payload,index)=>{
+   const container=`mz_ordered_psql_utility_${process.pid}_${index}`;
+   const label=`${process.pid}-${index}`;
+   const before=execFileSync('docker',['ps','-a','--filter',`name=^/${container}$`,'--format','{{.Names}}'],
+    {encoding:'utf8',timeout:Math.min(5000,remain(10000))}).trim();
+   check(()=>assert.equal(before,'','refuse a preexisting container name'));
+   const args=['run','-i','--rm','--network','none','--name',container,'--label',`mz.ordered.utility=${label}`,
+    '--entrypoint','sh',image,
+    '-c',bootstrap,'fake',ORDERED_PSQL_SHELL];
+   check(()=>assert.ok(remain(10000)>0,'utility work cannot consume cleanup reserve'));
+   const result=spawnSync('docker',args,{input:payload,encoding:'utf8',
+    timeout:Math.min(15000,remain(10000)),maxBuffer:128*1024});
+   let leftover=execFileSync('docker',['ps','-a','--filter',`name=^/${container}$`,'--format','{{.Names}}'],
+    {encoding:'utf8',timeout:Math.min(5000,remain())}).trim();
+   if(leftover){
+    const owner=execFileSync('docker',['inspect','--format','{{index .Config.Labels "mz.ordered.utility"}}',container],
+     {encoding:'utf8',timeout:Math.min(5000,remain())}).trim();
+    check(()=>assert.equal(owner,label,'refuse foreign container cleanup'));
+    execFileSync('docker',['stop','-t','0',container],{encoding:'utf8',timeout:Math.min(5000,remain())});
+    leftover=execFileSync('docker',['ps','-a','--filter',`name=^/${container}$`,'--format','{{.Names}}'],
+     {encoding:'utf8',timeout:Math.min(5000,remain())}).trim();
+   }
+   check(()=>assert.equal(leftover,'','exact owned image utility container cleaned'));
+   check(()=>assert.equal(result.error,undefined,'bounded pinned-image command'));
+   return result;
+  };
+  let pinned=runPinned(input,0);
+  check(()=>assert.equal(pinned.status,0,`pinned valid protocol: ${pinned.stderr}`));
+  check(()=>assert.equal(parseOrderedPsqlReceipt(pinned.stdout,entries).completed,3));
+  pinned=runPinned(input.replace(firstBody,'\0'+firstBody.slice(1)),1);
+  check(()=>assert.notEqual(pinned.status,0,'pinned NUL must fail'));
+  check(()=>assert.equal(parseOrderedPsqlReceipt(pinned.stdout,entries,{allowFailure:true}).failed?.code,'BASE64'));
+  check(()=>assert.ok(remain()>0,'one absolute utility attempt, including cleanup, stayed within 60 seconds'));
+  console.log('PINNED_IMAGE_BUSYBOX_FAKE_PSQL_PASS',JSON.stringify({image,network:'none',cases:2}));
+ }
 }finally{
  for(const file of readdirSync(dir))rmSync(join(dir,file));
  rmdirSync(dir);
