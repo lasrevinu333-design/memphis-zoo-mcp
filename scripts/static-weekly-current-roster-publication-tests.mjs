@@ -287,8 +287,11 @@ async function runApprovedInitial(){
   ])assert.equal(actual.get(name),sha,'exact genuine historical lossless export');
   assert.equal(manifest.priorPublicationId,prior.publicationId);assert.equal(manifest.priorVersionId,prior.versionId);
   assert.equal(manifest.priorDocumentDigest,prior.documentDigest);assert.equal(manifest.controlRevision,prior.authorityRevision);
-  const fixtureRevision=await setupApprovedCurrentSix(prior,remaining);assert.equal(manifest.fixtureRevision,fixtureRevision);
-  const client=await pool.connect();try{await importInitialHistoricalRows(client,manifest,remaining);}finally{client.release();}
+  const fixtureRevision=await setupApprovedCurrentSix(prior,remaining);
+  assert.ok(Number.isSafeInteger(fixtureRevision)&&fixtureRevision>=0,'fresh fixture revision readback');
+  // CAS against the actual fresh operation database, never an invented fixture
+  // revision in the export manifest. Captured historical control19 stays exact.
+  const client=await pool.connect();try{await importInitialHistoricalRows(client,{...manifest,fixtureRevision},remaining);}finally{client.release();}
  }
  const previous=await query('select jsonb_build_object(\'sourceId\',v.authority_source_id,\'versionId\',v.version_id,\'publicationId\',p.publication_id,\'effectiveStart\',p.effective_start,\'documentDigest\',public.static_weekly_digest_jsonb(v.draft_document)) as result from public.weekly_schedule_publications p join public.weekly_schedule_versions v using(version_id) where p.publication_id=$1',[prior.publicationId]);
  check('actual prior historical publication/source/document custody, not empty database',previous,
@@ -319,6 +322,9 @@ async function runApprovedInitial(){
  await release('static_weekly_register_approved_initial_baseline',[packet.sourceId,templateId,JSON.stringify(feasibility)]);
  check('artifact/snapshot registration alone does not publish',await revision(),prior.authorityRevision);
  const input={manager,sourceId:packet.sourceId,effectiveStart:source.serviceDate,templateId,expectedRevision:prior.authorityRevision,deadlineAt};
+ const beforeDenied=await query('select jsonb_build_object(\'revision\',(select current_revision from public.static_weekly_schedule_control where singleton),\'publications\',(select count(*) from public.weekly_schedule_publications),\'projections\',(select count(*) from public.weekly_schedule_compiled_projections),\'lunches\',(select count(*) from public.weekly_schedule_lunch_documents)) as result');
+ await assert.rejects(cp('static_weekly_materialize_approved_initial_baseline',[prior.managerId,packet.sourceId,source.serviceDate,prior.authorityRevision,0,'isolated-malformed-must-rollback',{}]));
+ check('malformed confirmation rollback leaves authority/publication/projection/lunch unchanged',await query('select jsonb_build_object(\'revision\',(select current_revision from public.static_weekly_schedule_control where singleton),\'publications\',(select count(*) from public.weekly_schedule_publications),\'projections\',(select count(*) from public.weekly_schedule_compiled_projections),\'lunches\',(select count(*) from public.weekly_schedule_lunch_documents)) as result'),beforeDenied);
  const preview=await plane.previewApprovedInitialBaseline(input);
  check('actual static preview no publication or solver', [preview.status,preview.solverInvoked,await revision()],['PREVIEW_ONLY',false,prior.authorityRevision]);
  const accepted=await plane.publishApprovedInitialBaseline({...input,previewDigest:preview.previewDigest,idempotencyKey:'isolated-approved-initial-six'});
