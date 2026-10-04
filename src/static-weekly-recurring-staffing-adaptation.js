@@ -3,7 +3,8 @@ import { createHash } from "node:crypto";
 import { canonicalJson, contentDigest, assertServiceDate, serviceDateWeekday,
  snapshotDatedRosterSlot } from "./static-weekly-schedule-model.js";
 import { postgresJsonbContentDigest } from "./static-weekly-schedule-compiler.js";
-import { normalizeStaticWeeklyAuthority } from "./static-weekly-schedule-program.js";
+import { normalizeStaticWeeklyAuthority, prepareStaticWeeklySchedulingProblem,
+  remainingStaticWeeklyMilliseconds } from "./static-weekly-schedule-program.js";
 import { recurringPatternAuthority } from "./static-weekly-recurring-repair-basis.js";
 import { createShiftEndContinuityPolicy } from "./static-weekly-shift-end-derivation.js";
 import { assertNormalOwnerEligibility, hardRestrictedSlots,
@@ -39,6 +40,191 @@ const reductionAuthority={schema:'custodial.full-nine-reduction-context.v1',
   baseSourceId:'a00cdf2a-0623-5e2d-bc65-338c1dd67202',
   baseAssignmentsDigest:'e6019fa1b2c5e0e2852a312a5d0af69ff54985c585977c710a8e0a5791be1efd'};
 const byWork=(a,b)=>a.workId<b.workId?-1:a.workId>b.workId?1:0;
+
+// Fixed-pattern mapping is a DIFFERENT contract from the historical optimizer.
+// The admittedBindings argument belongs to the authenticated source boundary,
+// never to a manager command. This helper produces no publication/solver seal.
+// In particular, an APPROVED string on a workbook/config is not admission.
+export function mapApprovedStaticTemplateCandidate({ templates, admittedBindings,
+  currentSource, currentOwnerConfig, selection, deadline = null }) {
+  const refuse = code => Object.assign(new Error(code), { code });
+  const require = (value, code) => { if (!value) throw refuse(code); };
+  const tick = () => { if (deadline !== null) remainingStaticWeeklyMilliseconds(deadline); };
+  const problemFor = input => {
+    const wire = structuredClone(input);
+    if (wire.version && !wire.versions) { wire.versions = [wire.version]; delete wire.version; }
+    return prepareStaticWeeklySchedulingProblem(wire, deadline);
+  };
+  tick();
+  require(selection?.schema === 'custodial.static-template-selection.v1', 'static_template_selection_invalid');
+  require(['RECURRING_STAFFING', 'DATED_ABSENCE'].includes(selection.kind), 'static_template_selection_kind_invalid');
+  const date = assertServiceDate(selection.serviceDate);
+  require(currentSource?.serviceDate === date, 'static_template_target_date_mismatch');
+  const target = problemFor(currentSource);
+  require(!target.error, 'static_template_target_authority_invalid');
+  const day = serviceDateWeekday(date);
+  const scopeDays = selection.kind === 'DATED_ABSENCE' ? [day] : [0,1,2,3,4,5,6];
+  const ordinary = target.roster.filter(p => p.personId && p.kind !== 'CONTRACTOR_CAPACITY');
+  require(new Set(ordinary.map(p => p.personId)).size === ordinary.length, 'static_template_duplicate_person');
+  // A normal not_working day is NOT an absence and does not select a smaller
+  // recurring pattern. Only the explicitly dated full-day absence is removed.
+  const fullAbsences = new Set(target.states.get(day).fullDayAbsenceSlotIds);
+  const available = ordinary.filter(p => !target.version.namedAbsentSlotIds?.includes(p.slotId)
+    && (selection.kind !== 'DATED_ABSENCE' || !fullAbsences.has(p.slotId)));
+  require(Array.isArray(selection.availablePersonIds)
+    && new Set(selection.availablePersonIds).size === selection.availablePersonIds.length
+    && canonicalJson(sorted(selection.availablePersonIds)) === canonicalJson(sorted(available.map(p => p.personId))),
+  'static_template_available_people_mismatch');
+  const count = available.length;
+  const choices = (templates || []).filter(t => t.templateId === selection.templateId && t.staffingCount === count);
+  require(choices.length === 1, 'static_template_missing_approved_pattern');
+  const template = choices[0], digest = contentDigest(template.source);
+  const admissions = (admittedBindings || []).filter(b => b.schema === 'custodial.approved-static-template-binding.v1'
+    && b.templateId === template.templateId && b.staffingCount === count && b.sourceDigest === digest
+    && b.patternAuthority === 'OWNER_APPROVED_OPERATIONAL_PATTERN'
+    && typeof b.artifactSha256 === 'string' && /^[a-f0-9]{64}$/.test(b.artifactSha256));
+  require(admissions.length === 1, 'static_template_not_independently_admitted');
+  const binding = admissions[0];
+  require(binding.ownerConfigDigest === contentDigest(currentOwnerConfig), 'static_template_owner_config_not_bound');
+  validateOwnerEligibilityConfig(currentOwnerConfig);
+  require(Array.isArray(template.source.exceptions) && template.source.exceptions.length === 0,
+    'static_template_dated_overlay_not_pattern');
+  const approvedInput = structuredClone(template.source);
+  approvedInput.serviceDate = date;
+  const approved = problemFor(approvedInput);
+  require(!approved.error, 'static_template_approved_authority_invalid');
+  const sourceVersion = approvedInput.version || approvedInput.versions?.find(v => v.id === approved.version.id);
+  const currentVersion = currentSource.version || currentSource.versions?.find(v => v.id === target.version.id);
+  require(sourceVersion && currentVersion, 'static_template_version_missing');
+  const patternPeople = approved.roster.filter(p => p.personId && p.kind !== 'CONTRACTOR_CAPACITY');
+  require(patternPeople.length === count && new Set(patternPeople.map(p => p.personId)).size === count,
+    'static_template_staffing_count_mismatch');
+  const patternSlots = sorted(patternPeople.map(p => p.slotId));
+  const actualById = new Map(available.map(p => [p.slotId, p]));
+  require(available.every(p => scopeDays.every(d => target.incumbencyByDaySlot.get(`${d}\u0000${p.slotId}`)?.personId === p.personId)),
+    'static_template_scope_incumbency_changed');
+  const templateRows = sourceVersion.assignments.filter(r => scopeDays.includes(r.dayOfWeek));
+  require(templateRows.every(r => patternSlots.includes(r.ownerSlotId)), 'static_template_nonemployee_owner');
+  require(new Set(templateRows.map(r => `${r.dayOfWeek}:${r.workId}`)).size === templateRows.length,
+    'static_template_duplicate_work');
+  // Compare the independently effective physical responsibility domain before
+  // replacing any current row. Slot/group/work IDs are not this domain: an
+  // approved six pattern can group the same split nine-person members. Member
+  // multiplicity, total effort and every required coverage/eligibility fact
+  // remain exact. A new current event/task cannot disappear into a stale plan.
+  function coverageDomain(problem) {
+    const groups = new Map();
+    for (const row of problem.work.filter(r => scopeDays.includes(r.dayOfWeek))) {
+      const phase = row.window.end === '09:45' ? 'morning'
+        : row.window.start === '09:45' ? 'equalized' : {start:row.window.start,end:row.window.end};
+      const key = canonicalJson({day:row.dayOfWeek,family:row.locationCodeSnapshot,phase,
+        mode:row.serviceMode ?? null,schedulingMode:row.schedulingMode ?? null,required:row.sourceRequired,
+        priority:row.priority,qualifications:row.requiredQualifications,restrictions:row.restrictions,
+        restrictedSlotIds:row.restrictedSlotIds,coveragePolicy:row.coveragePolicy ?? null,
+        coverageOrder:row.coveragePolicyOrder ?? null,custodialCoverageMode:row.custodialCoverageMode ?? null});
+      if (!groups.has(key)) groups.set(key,{facts:key,members:[],effort:0});
+      const group = groups.get(key);
+      group.members.push(...(row.includedLocations?.length ? row.includedLocations :
+        [{locationId:row.locationId,locationNameSnapshot:row.locationNameSnapshot}]).map(m => canonicalJson(m)));
+      require(Number.isSafeInteger(row.serviceEffortMinutes) && Number.isSafeInteger(group.effort + row.serviceEffortMinutes),
+        'static_template_physical_effort_invalid');
+      group.effort += row.serviceEffortMinutes;
+    }
+    return [...groups.values()].map(g=>({...g,members:sorted(g.members)})).sort((a,b)=>a.facts<b.facts?-1:a.facts>b.facts?1:0);
+  }
+  const coverage = coverageDomain(approved);
+  require(canonicalJson(coverage) === canonicalJson(coverageDomain(target)), 'static_template_current_coverage_incompatible');
+  // These constraints refer to slot identities outside the work rows. They
+  // cannot silently survive an arbitrary role substitution. Until the typed
+  // projection seam can rebind their provenance, only identical policies fit.
+  require(canonicalJson(sourceVersion.shiftEndContinuityPolicy ?? null)
+    === canonicalJson(currentVersion.shiftEndContinuityPolicy ?? null), 'static_template_policy_incompatible');
+  require(canonicalJson(approvedInput.proximity) === canonicalJson(currentSource.proximity),
+    'static_template_directed_geography_incompatible');
+  const compatibilityInput = structuredClone(currentSource);
+  const compatibilityVersion = compatibilityInput.version || compatibilityInput.versions.find(v => v.id === target.version.id);
+  compatibilityVersion.assignments = [...currentVersion.assignments.filter(r => !scopeDays.includes(r.dayOfWeek)), ...templateRows];
+  const compatibility = problemFor(compatibilityInput);
+  require(!compatibility.error, 'static_template_compatibility_authority_invalid');
+  const capacitySame = (left, right) => left && right && !left.capacity.error && !right.capacity.error
+    && canonicalJson(left.capacity) === canonicalJson(right.capacity)
+    && canonicalJson(left.availability.lunch ?? null) === canonicalJson(right.availability.lunch ?? null)
+    && canonicalJson(left.availability.blockedWindows || []) === canonicalJson(right.availability.blockedWindows || []);
+  const candidates = new Map();
+  for (const role of patternSlots) {
+    tick();
+    const rows = templateRows.filter(r => r.ownerSlotId === role);
+    const compatible = [];
+    for (const actual of available) {
+      let fits = true;
+      const configOwner = Object.entries(currentOwnerConfig.slots).find(([,s]) => s.slotId === actual.slotId);
+      require(configOwner && configOwner[1].personId === actual.personId && configOwner[1].vacancy !== true,
+        'static_template_current_person_config_mismatch');
+      for (const row of rows) {
+        try { assertNormalOwnerEligibility({ key: configOwner[0], ...configOwner[1] }, row.locationCodeSnapshot); }
+        catch { fits = false; break; }
+        const originalContext = approved.availabilityByDaySlot.get(`${row.dayOfWeek}\u0000${role}`);
+        const actualContext = target.availabilityByDaySlot.get(`${row.dayOfWeek}\u0000${actual.slotId}`);
+        // Equal approved duty/route/lunch capacity makes the fixed pattern's
+        // load/travel proof transferable, not a points-to-minutes invention.
+        // The candidate universe freshly applies the actual restrictions,
+        // qualifications, current locks and dated overlays for every row.
+        if (!capacitySame(originalContext, actualContext)
+          || !compatibility.candidates.some(c => c.item.key === `${row.dayOfWeek}:${row.workId}` && c.slot.id === actual.slotId)
+          || !approved.candidates.some(c => c.item.key === `${row.dayOfWeek}:${row.workId}` && c.slot.id === role)) {
+          fits = false; break;
+        }
+      }
+      if (fits) compatible.push(actual.slotId);
+    }
+    compatible.sort((a,b) => Number(b === role) - Number(a === role) || (a < b ? -1 : a > b ? 1 : 0));
+    candidates.set(role, compatible);
+  }
+  // At most nine approved employee roles. Exact bounded matching, with same
+  // slot first; no geography/objective regeneration and no solver fallback.
+  require(count >= 6 && count <= 9, 'static_template_missing_approved_pattern');
+  const mapping = new Map(), used = new Set();
+  function match(index) {
+    tick();
+    if (index === patternSlots.length) return true;
+    const role = patternSlots[index];
+    for (const actual of candidates.get(role)) {
+      if (used.has(actual)) continue;
+      used.add(actual); mapping.set(role, actual);
+      if (match(index + 1)) return true;
+      used.delete(actual); mapping.delete(role);
+    }
+    return false;
+  }
+  require(match(0), 'static_template_no_compatible_person_slot_mapping');
+  const mappedRows = templateRows.map(row => ({ ...structuredClone(row), ownerSlotId: mapping.get(row.ownerSlotId) }));
+  const sourceRows = currentVersion.assignments;
+  const unaffected = sourceRows.filter(r => !scopeDays.includes(r.dayOfWeek));
+  const unchanged = canonicalJson(mappedRows) === canonicalJson(sourceRows.filter(r => scopeDays.includes(r.dayOfWeek)));
+  // A mapped candidate is not an optimized compiler result or a publication.
+  // Unchanged source is returned exactly (including array order/absent fields).
+  const candidateSource = structuredClone(currentSource);
+  if (!unchanged) {
+    const candidateVersion = candidateSource.version || candidateSource.versions.find(v => v.id === target.version.id);
+    const first = sourceRows.findIndex(r => scopeDays.includes(r.dayOfWeek));
+    const before = first < 0 ? unaffected.length : sourceRows.slice(0,first).length;
+    candidateVersion.assignments = [...unaffected.slice(0,before), ...mappedRows, ...unaffected.slice(before)];
+  }
+  const body = { schema: 'custodial.approved-static-template-mapping.v1',
+    contract: 'FIXED_APPROVED_GEOMETRY_COMPATIBILITY_NOT_GLOBAL_OPTIMALITY',
+    templateId: template.templateId, templateDigest: digest, admissionDigest: contentDigest(binding),
+    currentSourceDigest: contentDigest(currentSource), selectionDigest: contentDigest(selection),
+    physicalCoverageDigest: contentDigest(coverage),
+    staffingCount: count, scopeDays, serviceDate: date,
+    slotMapping: patternSlots.map(patternSlotId => ({ patternSlotId, actualSlotId: mapping.get(patternSlotId),
+      actualPersonId: actualById.get(mapping.get(patternSlotId)).personId })),
+    mappedRowsDigest: contentDigest(mappedRows), unaffectedRowsDigest: contentDigest(unaffected),
+    candidateDigest: contentDigest(candidateSource), unchanged,
+    admitted: false, published: false, solverInvoked: false,
+    publicationStatus: 'TYPED_STATIC_FEASIBILITY_INTEGRATION_REQUIRED',
+    patternPublicationStatus: binding.patternPublicationStatus || 'NOT_ASSERTED' };
+  return { candidateSource, mappedRows, receipt: { ...body, digest: contentDigest(body) } };
+}
 function assertReductionContext(context){
   assert.equal(context?.schema,reductionAuthority.schema,'typed full-nine reduction context required');
   const {contextDigest,...body}=context;
