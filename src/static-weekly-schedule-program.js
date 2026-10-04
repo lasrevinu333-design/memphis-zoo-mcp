@@ -1339,6 +1339,36 @@ function groupedObjectiveError(objective, base, width) {
   return null;
 }
 
+// Once every daily rank is independently fixed to an endpoint of the same
+// single-binary load M*x, its two big-M links are exactly one binary matching
+// inequality. This does not fix x, remove a rank, or change its tie objective.
+// Any shape outside this narrow generated contract retains the original rows.
+function fixedBinaryDailyRankValues(prefix, loads, ranks, maximum, bindings, assignmentVariables) {
+  if (prefix !== "daily_rank" || !ranks.length || ranks.length !== loads.length || !Number.isSafeInteger(maximum) || maximum <= 0) return null;
+  const variables = new Set();
+  for (const entry of loads) {
+    if (entry.constant !== 0 || entry.upper !== maximum || entry.terms.length !== 1) return null;
+    const [coefficient, variable] = entry.terms[0];
+    if (coefficient !== maximum || !assignmentVariables.has(variable) || variables.has(variable)) return null;
+    variables.add(variable);
+  }
+  const rankSet = new Set(ranks), names = new Set(), values = [];
+  for (const binding of bindings) {
+    if (names.has(binding.name)) return null;
+    names.add(binding.name);
+    const related = binding.name.startsWith("daily_service_effort_utilization_rank_");
+    if (!related) {
+      if (binding.terms.some(([, variable]) => rankSet.has(variable))) return null;
+      continue;
+    }
+    const index = values.length;
+    if (index >= ranks.length || binding.name !== `daily_service_effort_utilization_rank_${index + 1}` || binding.terms.length !== 1 || binding.terms[0][0] !== 1 || binding.terms[0][1] !== ranks[index] || (binding.value !== 0 && binding.value !== maximum)) return null;
+    if (index && values[index - 1] < binding.value) return null;
+    values.push(binding.value);
+  }
+  return values.length === ranks.length ? values : null;
+}
+
 export function buildStaticWeeklySchedulingModel(problem, bindings, objective, deadline = null) {
   if (deadline != null) remainingStaticWeeklyMilliseconds(deadline);
   // Rank permutations are optimization machinery, not hard scheduling rows.
@@ -1455,7 +1485,16 @@ export function buildStaticWeeklySchedulingModel(problem, bindings, objective, d
     const permutations = loads.map((entry, itemIndex) => ranks.map((rank, rankIndex) => `p_${prefix}_${itemIndex + 1}_${rankIndex + 1}`)); permutations.flat().forEach((name) => binary.add(name));
     loads.forEach((entry, itemIndex) => constraints.push({ name: `${prefix}_item_${itemIndex + 1}`, terms: permutations[itemIndex].map((name) => [1, name]), relation: limit === loads.length ? "=" : "<=", value: 1 }));
     ranks.forEach((rank, rankIndex) => constraints.push({ name: `${prefix}_rank_${rankIndex + 1}`, terms: permutations.map((row) => [1, row[rankIndex]]), relation: "=", value: 1 }));
-    loads.forEach((entry, itemIndex) => ranks.forEach((rank, rankIndex) => { const permutation = permutations[itemIndex][rankIndex]; constraints.push({ name: `${prefix}_link_lo_${itemIndex + 1}_${rankIndex + 1}`, terms: [[1, rank], ...entry.terms.map(([coefficient, variable]) => [-coefficient, variable]), [-maximum, permutation]], relation: ">=", value: entry.constant - maximum }); constraints.push({ name: `${prefix}_link_hi_${itemIndex + 1}_${rankIndex + 1}`, terms: [[1, rank], ...entry.terms.map(([coefficient, variable]) => [-coefficient, variable]), [maximum, permutation]], relation: "<=", value: entry.constant + maximum }); }));
+    const fixedValues = fixedBinaryDailyRankValues(prefix, loads, ranks, maximum, bindings, new Set(x.values()));
+    loads.forEach((entry, itemIndex) => ranks.forEach((rank, rankIndex) => { const permutation = permutations[itemIndex][rankIndex];
+      if (fixedValues) {
+        const variable = entry.terms[0][1], high = fixedValues[rankIndex] === maximum;
+        constraints.push({ name: `${prefix}_link_match_${itemIndex + 1}_${rankIndex + 1}`, terms: [[1, permutation], [high ? -1 : 1, variable]], relation: "<=", value: high ? 0 : 1 });
+      } else {
+        constraints.push({ name: `${prefix}_link_lo_${itemIndex + 1}_${rankIndex + 1}`, terms: [[1, rank], ...entry.terms.map(([coefficient, variable]) => [-coefficient, variable]), [-maximum, permutation]], relation: ">=", value: entry.constant - maximum });
+        constraints.push({ name: `${prefix}_link_hi_${itemIndex + 1}_${rankIndex + 1}`, terms: [[1, rank], ...entry.terms.map(([coefficient, variable]) => [-coefficient, variable]), [maximum, permutation]], relation: "<=", value: entry.constant + maximum });
+      }
+    }));
     ranks.slice(0, -1).forEach((rank, rankIndex) => constraints.push({ name: `${prefix}_descending_${rankIndex + 1}`, terms: [[1, rank], [-1, ranks[rankIndex + 1]]], relation: ">=", value: 0 }));
     if (limit && limit < loads.length) loads.forEach((entry, itemIndex) => constraints.push({ name: `${prefix}_top_${itemIndex + 1}`, terms: [[-1, ranks.at(-1)], ...entry.terms, ...permutations[itemIndex].map((name) => [-maximum, name])], relation: "<=", value: -entry.constant }));
     return { prefix, loads, maximum, ranks, permutations, fixed: false };
