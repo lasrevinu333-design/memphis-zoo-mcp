@@ -58,14 +58,15 @@ export function mapApprovedStaticTemplateCandidate({ templates, admittedBindings
   };
   tick();
   require(selection?.schema === 'custodial.static-template-selection.v1', 'static_template_selection_invalid');
-  require(['RECURRING_STAFFING', 'DATED_ABSENCE'].includes(selection.kind), 'static_template_selection_kind_invalid');
+  require(['INITIAL_BASELINE', 'RECURRING_STAFFING', 'DATED_ABSENCE'].includes(selection.kind), 'static_template_selection_kind_invalid');
   const date = assertServiceDate(selection.serviceDate);
   require(currentSource?.serviceDate === date, 'static_template_target_date_mismatch');
   const target = problemFor(currentSource);
   require(!target.error, 'static_template_target_authority_invalid');
   const day = serviceDateWeekday(date);
   const scopeDays = selection.kind === 'DATED_ABSENCE' ? [day] : [0,1,2,3,4,5,6];
-  const ordinary = target.roster.filter(p => p.personId && p.kind !== 'CONTRACTOR_CAPACITY');
+  const ordinary = target.roster.filter(p => p.personId && p.kind !== 'CONTRACTOR_CAPACITY'
+    && !target.slots.find(s=>s.id===p.slotId)?.contractorCapacity);
   require(new Set(ordinary.map(p => p.personId)).size === ordinary.length, 'static_template_duplicate_person');
   // Weekly employment selects a weekly pattern, preserving ordinary days off.
   // A changed DATED operation instead uses the independently effective working
@@ -336,9 +337,51 @@ export function prepareApprovedStaticTemplateProjection(args) {
           manualLockSlotId:work.manualLock||null,overlayWork:Boolean(work.overlayWork)},
         explanation:{contract:'fixed_approved_pattern',hardConstraints:'satisfied',reasons:row.status==='OPEN'?[{code:'permitted_open'}]:[]}};
     });
-    const baseAuthorityDigest=postgresJsonbContentDigest({schema:'custodial.approved-static-feasibility-base.v1',
-      mapping:mapping.receipt,inputDigest:problem.inputDigest,basisDigest:model.modelBasisDigest,
-      witnessDigest:contentDigest([...values])});
+    const projectionAvailability=[...problem.states.entries()].flatMap(([dayOfWeek,state])=>
+      [...state.availability.values()].map(availability=>{
+        const incumbent=problem.incumbencyByDaySlot.get(`${dayOfWeek}\u0000${availability.slotId}`)||null;
+        return {dayOfWeek,serviceDate:weekdayDate(problem.serviceDate,dayOfWeek),...structuredClone(availability),
+          incumbentSlotId:incumbent?.slotId||null,incumbentSlotLabel:incumbent?.slotLabel||null,
+          incumbentPersonId:incumbent?.personId||null,incumbentName:incumbent?.displayName||null,
+          ...(incumbent?.kind==='CONTRACTOR_CAPACITY'?{ownerKind:incumbent.kind,capacityId:incumbent.capacityId}:{})};
+      })).sort((a,b)=>a.dayOfWeek-b.dayOfWeek||(a.slotId<b.slotId?-1:a.slotId>b.slotId?1:0));
+    const slotsById=new Map(problem.slots.map(slot=>[slot.id,slot]));
+    // Ordinary staff relational rows retain the original 323 parent pattern.
+    // Unowned historical contractor-capacity slots remain in the immutable
+    // source, never become employees or loan coverers by normalization.
+    const slotAvailability=projectionAvailability.filter(a=>!slotsById.get(a.slotId)?.contractorCapacity).map(a=>({
+      slot_id:a.slotId,day_of_week:a.dayOfWeek,availability_state:a.status,
+      shift_start:a.shift?.start??null,shift_end:a.shift?.end??null,
+      lunch_start:a.lunch?.start??null,lunch_end:a.lunch?.end??null,
+      capacity_units:a.productiveCapacityMinutes??null,max_load_points:a.maxServiceEffortMinutes??null,
+      qualification_snapshot:structuredClone(a.qualifications||[]),qualification_provenance:{source:a.qualificationProvenance||null},
+      restriction_snapshot:structuredClone(a.restrictions||[]),restriction_provenance:{source:a.restrictionProvenance||null},
+      slot_label_snapshot:slotsById.get(a.slotId).label,
+      incumbent_person_id_snapshot:a.incumbentPersonId,incumbent_name_snapshot:a.incumbentName}));
+    const baselineAssignments=version.assignments.map(row=>{
+      const slot=slotsById.get(row.ownerSlotId),person=problem.incumbencyByDaySlot.get(`${row.dayOfWeek}\u0000${row.ownerSlotId}`);
+      if(!slot||slot.contractorCapacity||!person?.personId)fail('static_template_baseline_owner_invalid');
+      return {work_id:row.workId,day_of_week:row.dayOfWeek,status:'assigned',location_id:row.locationId,
+        location_code_snapshot:row.locationCodeSnapshot,location_name_snapshot:row.locationNameSnapshot,
+        coverage_start:row.window.start,coverage_end:row.window.end,owner_slot_id:row.ownerSlotId,
+        owner_slot_label_snapshot:slot.label,owner_person_id_snapshot:person.personId,owner_name_snapshot:person.displayName,
+        required_qualifications_snapshot:structuredClone(row.requiredQualifications||[]),restriction_snapshot:structuredClone(row.restrictions||[]),
+        workload_points:row.serviceEffortMinutes,workload_provenance:{source:row.serviceEffortProvenance||null},
+        manual_lock:Boolean(row.manualLock),payload_json:{plan_work_id:`${row.dayOfWeek}:${row.workId}`,status:'assigned',
+          authority_facts:{stable_roster_slot_id:row.originSlotId||row.ownerSlotId,
+            baseline_owner_slot_id:row.ownerSlotId,baseline_owner_person_id:person.personId,baseline_owner_name:person.displayName,
+            original_actor_person_id:person.personId,original_actor_name:person.displayName,
+            optimized_owner_slot_id:row.ownerSlotId,optimized_owner_person_id:person.personId,
+            service_mode:row.serviceMode,included_locations:structuredClone(row.includedLocations||[])}}};
+    });
+    const staticAuthority={schema:'custodial.approved-static-authority.v1',effectiveDate:problem.serviceDate,
+      compilerInput:problem.baselineCanonicalInput,overlayCompilerInput:problem.canonicalInput,
+      inputDigest:problem.inputDigest,baselineInputDigest:problem.baselineInputDigest,
+      derivedBaselineDigest:postgresJsonbContentDigest(problem.derivedBaselineCanonicalInput),
+      shiftEndDerivation:problem.shiftEndDerivation,projectionAvailability,
+      mapping:mapping.receipt,basisDigest:model.modelBasisDigest,witnessDigest:contentDigest([...values]),
+      solverInvoked:false,optimized:false};
+    const baseAuthorityDigest=postgresJsonbContentDigest(staticAuthority);
     const baseReplayDigest=postgresJsonbContentDigest({projectionAssignments,lunch});
     const loans=lunch.lunches.map(loan=>({loan_id:loan.loanId,service_date:loan.serviceDate,day_of_week:loan.dayOfWeek,
       normal_owner_slot_id:loan.normalOwnerSlotId,normal_owner_person_id:loan.normalOwnerPersonId,
@@ -363,13 +406,46 @@ export function prepareApprovedStaticTemplateProjection(args) {
     const body={schema:'custodial.approved-static-feasibility.v1',
       contract:'FIXED_APPROVED_PATTERN_COMPLETE_HARD_CONSTRAINTS_NOT_OPTIMALITY',
       mapping: mapping.receipt,sourceDigest:contentDigest(args.currentSource),
+      currentSourceDigest:postgresJsonbContentDigest(args.currentSource),
       candidateSource:mapping.candidateSource,assignments,projectionAssignments,lunchDocument,baseAuthorityDigest,baseReplayDigest,
+      compilerInput:problem.baselineCanonicalInput,overlayCompilerInput:problem.canonicalInput,
+      baselineAssignments,slotAvailability,
+      projectionAvailability,shiftEndDerivation:problem.shiftEndDerivation,
+      derivedBaselineDigest:postgresJsonbContentDigest(problem.derivedBaselineCanonicalInput),
+      baselineInputDigest:problem.baselineInputDigest,
       inputDigest:problem.inputDigest,basisDigest:model.modelBasisDigest,
       hardConstraintDigest:model.modelBasis.constraints.digest,
       hardConstraintCount:model.modelBasis.constraints.count,
       witnessDigest:contentDigest([...values]),lunch,
       solverInvoked:false,optimized:false,publicationAuthority:'NOT_PUBLISHED'};
-    return {...body,digest:postgresJsonbContentDigest(body)};
+    const feasibility={...body,digest:postgresJsonbContentDigest(body)};
+    if(args.selection.kind==='INITIAL_BASELINE'){
+      if(!mapping.receipt.unchanged || canonicalJson(mapping.candidateSource)!==canonicalJson(args.currentSource)
+        || args.currentSource.exceptions.length || problem.baselineCanonicalInput.version.effectiveStart!==problem.serviceDate)
+        fail('static_template_initial_baseline_must_be_exact');
+      const adapter={schema:'custodial.approved-static-baseline-adapter.v1',version:'approved-static-fixed-v1'};
+      const receipt={schema:'custodial.approved-static-feasibility-receipt.v1',feasibilityDigest:feasibility.digest,
+        hardConstraintCount:model.modelBasis.constraints.count,hardConstraintDigest:model.modelBasis.constraints.digest,
+        independentDerivations:2,solverInvoked:false,optimized:false};
+      const objective={contract:'FIXED_APPROVED_PATTERN_NOT_OPTIMALITY'};
+      const document={adapter,authority:staticAuthority,receipt,objective,slot_availability:slotAvailability,assignments:baselineAssignments,
+        objective_inputs:[{input_key:'approved_static_feasibility',input_value:receipt,
+          provenance:{adapter_schema:adapter.schema,independently_verified:true}}],
+        semantic_snapshot:{schema:'custodial.approved-static-recurring-snapshot.v1',recurring_source:problem.baselineCanonicalInput},
+        validation:{status:'FEASIBLE',publication_authority:'FIXED_APPROVED',compiler_version:adapter.version,
+          input_digest:problem.inputDigest,baseline_input_digest:problem.baselineInputDigest,
+          authority_digest:baseAuthorityDigest,replay_digest:baseReplayDigest}};
+      document.validation.database_document_identity=postgresJsonbContentDigest(document);
+      const projection={adapter,service_date:problem.serviceDate,week_start:problem.serviceDate,
+        week_end:weekdayDate(problem.serviceDate,0),authority:staticAuthority,receipt,
+        authority_digest:baseAuthorityDigest,replay_digest:baseReplayDigest,compiler_version:adapter.version,
+        objective,metrics:{hardConstraints:model.modelBasis.constraints.count,violations:0},applied_exceptions:[],
+        assignments:projectionAssignments,semantic_snapshot:{schema:'custodial.approved-static-projection-snapshot.v1',
+          sourceDigest:postgresJsonbContentDigest(args.currentSource),feasibilityDigest:feasibility.digest}};
+      projection.database_projection_identity=postgresJsonbContentDigest(projection);
+      return {...feasibility,initialBaseline:{schema:'custodial.approved-static-initial-baseline.v1',document,projection,objective,lunchDocument}};
+    }
+    return feasibility;
   }
   const original=derive(),independent=derive();
   if(canonicalJson(original)!==canonicalJson(independent))fail('static_template_independent_feasibility_changed');

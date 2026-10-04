@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
-import {readFileSync,writeFileSync} from 'node:fs';
+import {readFileSync,writeFileSync,readdirSync} from 'node:fs';
 import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {Pool} from 'pg';
 import {createStaticWeeklyControlPlane} from '../src/static-weekly-control-plane.js';
-import {currentPatternFromPublishedReadback} from '../src/static-weekly-recurring-staffing-adaptation.js';
+import {currentPatternFromPublishedReadback,prepareApprovedStaticTemplateProjection} from '../src/static-weekly-recurring-staffing-adaptation.js';
+import {contentDigest,installStaticWeeklySha256HexAccelerator} from '../src/static-weekly-schedule-model.js';
 import {assertRecurringManagerDecision,assertRecurringAdmissionCandidate,RECURRING_DECISION_SCHEMA} from '../src/static-weekly-recurring-preview.js';
 import {compileAndPrepareStaticWeeklyScheduleIsolated,prepareRecurringAdmissionCandidateIsolated} from '../src/static-weekly-schedule-compiler-runtime.js';
 import {createStaticWeeklyCompilerRuntime} from '../src/static-weekly-schedule-compiler-runtime.js';
@@ -17,11 +18,12 @@ import {testRecurringConfirmationHttp} from './static-weekly-recurring-confirmat
 import {runRecurringChromiumConfirmationStage} from './static-weekly-recurring-browser-stage.mjs';
 import {testLunchMaterialization} from './static-weekly-lunch-materialization-integration.mjs';
 import {assertCurrentManagerMigrationSet,assertCurrentManager217MigrationSet,assertCurrentManager218MigrationSet,loadCurrentManagerPublicationFixture} from './fixtures/current-manager-publication-source.mjs';
-import {assertCurrentManager219MigrationSet} from './fixtures/current-manager-219-source.mjs';
+import {assertCurrentManager219MigrationSet,assertCurrentManager219Manifest} from './fixtures/current-manager-219-source.mjs';
 import {testNamedHandoffSql} from './static-weekly-named-handoff-contract-tests.mjs';
 import {createCurrentManager219OwnedCheckpoint} from './static-weekly-current-manager-owned-checkpoint.mjs';
 
 const container=process.env.SHIFT_END_TEST_CONTAINER,socket=process.env.SHIFT_END_TEST_SOCKET;
+const approvedInitialMode=process.argv.includes('--approved-initial');
 assert.match(container??'',/^mz_schema_shift_end_[0-9]+$/);
 assert.match(socket??'',/^\/tmp\/mz-shift-socket-[a-zA-Z0-9]+$/);
 const inspection=JSON.parse(execFileSync('docker',['inspect',container],{encoding:'utf8',timeout:10000}))[0];
@@ -47,19 +49,31 @@ assert.ok(!(currentManager218Http&&currentManager218Browser),'only one authentic
 assert.ok([currentManager216Stage,currentManager217Stage,currentManager218Stage,currentManager219Stage].filter(Boolean).length<=1,
  'only one pinned current-manager stage may run');
 const currentManagerStage=currentManager216Stage||currentManager217Stage||currentManager218Stage||currentManager219Stage;
+if(approvedInitialMode){
+ assert.equal(currentManagerStage,false,'static initial has its own exact219-prefix-plus-forward-module binding, not an optimized stage label');
+ assert.equal(ownedCheckpointMode,false);
+ assert.equal(inspection.Config.Image,'supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed');
+ const dir=new URL('../supabase/migrations/',import.meta.url),forward='20261004140657_approved_static_template_authority.sql';
+ const rows=readdirSync(dir).filter(file=>file.endsWith('.sql')).sort().map(file=>({file,
+  sha256:createHash('sha256').update(readFileSync(new URL(file,dir))).digest('hex')}));
+ assert.equal(rows.length,220,'only authoritative219 prefix plus exact initial forward module');
+ assertCurrentManager219Manifest(rows.filter(row=>row.file!==forward));
+ assert.equal(rows.at(-1).file,forward);
+ assert.equal(rows.at(-1).sha256,process.env.STATIC_WEEKLY_APPROVED_INITIAL_SQL_SHA256,'root-owned launcher must bind exact reviewed forward SQL');
+}
 if(currentManager216Stage)assertCurrentManagerMigrationSet();
 if(currentManager217Stage)assertCurrentManager217MigrationSet();
 if(currentManager218Stage)assertCurrentManager218MigrationSet();
 if(currentManager219Stage)assertCurrentManager219MigrationSet();
 if(currentManagerStage&&!ownedCheckpointMode)assert.equal(process.env.STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION,'1','current manager proof must execute confirmation');
-if(!currentManagerStage)assert.ok(process.env.STATIC_WEEKLY_CONTINUITY_TEMPLATE,'explicit immutable local source');
-const bytes=currentManagerStage?loadCurrentManagerPublicationFixture().bytes:readFileSync(process.env.STATIC_WEEKLY_CONTINUITY_TEMPLATE),packet=JSON.parse(bytes),source=packet.compilerInput;
+if(!currentManagerStage&&!approvedInitialMode)assert.ok(process.env.STATIC_WEEKLY_CONTINUITY_TEMPLATE,'explicit immutable local source');
+const bytes=currentManagerStage||approvedInitialMode?loadCurrentManagerPublicationFixture().bytes:readFileSync(process.env.STATIC_WEEKLY_CONTINUITY_TEMPLATE),packet=JSON.parse(bytes),source=packet.compilerInput;
 assert.equal(digest(source),packet.sourceDigest);
 const sourceRows=source.version.assignments.length;
-assert.ok(currentManagerStage?sourceRows===323:[312,313].includes(sourceRows),'only the exact selected source lineage is in scope');
-const derivedRows=currentManagerStage?packet.expectedDerivedRows:packet.verification.shiftEndDerivation.parentChains
+assert.ok(currentManagerStage||approvedInitialMode?sourceRows===323:[312,313].includes(sourceRows),'only the exact selected source lineage is in scope');
+const derivedRows=currentManagerStage||approvedInitialMode?packet.expectedDerivedRows:packet.verification.shiftEndDerivation.parentChains
  .reduce((count,chain)=>count+chain.segments.length,0);
-assert.equal(derivedRows,currentManagerStage?494:sourceRows===312?454:458,'exact source-specific derivation count');
+assert.equal(derivedRows,currentManagerStage||approvedInitialMode?494:sourceRows===312?454:458,'exact source-specific derivation count');
 assert.equal(source.version.vacantSlotIds.length,3);
 const pool=new Pool({host:socket,database:'postgres',user:'supabase_admin',password:'postgres',max:3,connectionTimeoutMillis:5000});
 pool.on('error',e=>console.error('SYNTHETIC_POOL_ERROR',e.code));
@@ -68,7 +82,9 @@ const preparations=[];
 // compiler/solver must inherit that same group for absolute-deadline cleanup.
 const ownedCompiler=ownedCheckpointMode?createStaticWeeklyCompilerRuntime({workerDetached:false}):null;
 const plane=createStaticWeeklyControlPlane({database:pool,
+ ...(approvedInitialMode?{compiler:()=>{throw Error('FORBIDDEN_STATIC_INITIAL_SOLVER');}}:{}),
  ...(ownedCompiler?{shutdownCompiler:ownedCompiler.shutdown}:{}),compilerPreparer:async(...args)=>{
+ if(approvedInitialMode)throw Error('FORBIDDEN_STATIC_INITIAL_SOLVER');
  const result=await (ownedCompiler?.compileAndPrepare||compileAndPrepareStaticWeeklyScheduleIsolated)(...args);
  preparations.push(result);return result;
 }});
@@ -79,7 +95,83 @@ async function rpc(role,name,args=[]){const c=await pool.connect();try{await c.q
 const cp=(name,args)=>rpc('static_weekly_control_plane',name,args),release=(name,args)=>rpc('static_weekly_release_operator',name,args);
 const revision=()=>query('select current_revision::integer as result from public.static_weekly_schedule_control where singleton');
 let checks=0,recurringPreview=null,recurringAdmissionProof=null,recurringConfirmationProof=null,lunchMaterializationProof=null;const check=(name,a,b)=>{assert.deepEqual(a,b,name);checks++;console.log('PASS',name);};
+async function runApprovedInitial(){
+ // The outer root-owned launcher binds exact219 prefix plus this forward SQL,
+ // image/roles/source and a legitimate retained historical publication. This
+ // mode refuses an empty DB; it never manufactures historical certificates.
+ const external=Number(process.env.STATIC_WEEKLY_APPROVED_INITIAL_ABSOLUTE_DEADLINE_UNIX_MS);
+ assert.ok(Number.isSafeInteger(external)&&external>Date.now()&&external-Date.now()<=60000,'one inherited absolute60 origin required');
+ const deadlineAt=Math.min(60000,performance.now()+external-Date.now());
+ const remaining=()=>{const ms=Math.floor(deadlineAt-performance.now());assert.ok(ms>0,'initial fixture absolute deadline exhausted');return ms;};
+ const prior=JSON.parse(process.env.STATIC_WEEKLY_APPROVED_INITIAL_PRIOR_JSON||'null');
+ assert.ok(prior&&typeof prior==='object','exact legitimate prior publication custody required');
+ for(const key of ['sourceId','versionId','publicationId','managerId'])assert.match(prior[key]||'',/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+ assert.match(prior.documentDigest||'',/^[0-9a-f]{64}$/);
+ assert.ok(Number.isSafeInteger(prior.authorityRevision)&&prior.authorityRevision>=0);
+ const previous=await query('select jsonb_build_object(\'sourceId\',v.authority_source_id,\'versionId\',v.version_id,\'publicationId\',p.publication_id,\'effectiveStart\',p.effective_start,\'documentDigest\',public.static_weekly_digest_jsonb(v.draft_document)) as result from public.weekly_schedule_publications p join public.weekly_schedule_versions v using(version_id) where p.publication_id=$1',[prior.publicationId]);
+ check('actual prior historical publication/source/document custody, not empty database',previous,
+  {sourceId:prior.sourceId,versionId:prior.versionId,publicationId:prior.publicationId,effectiveStart:prior.effectiveStart,documentDigest:prior.documentDigest});
+ assert.ok(prior.effectiveStart<source.serviceDate);
+ check('preexisting exact expected authority revision',await revision(),prior.authorityRevision);
+ installStaticWeeklySha256HexAccelerator(x=>createHash('sha256').update(x).digest('hex'));
+ const configBytes=readFileSync(new URL('../config/custodial-six-person-static-20261005.json',import.meta.url));
+ assert.equal(createHash('sha256').update(configBytes).digest('hex'),'40da4e1d4cce52b2361b5403b7e5e4477ca00def0fd3649a1d76dacb48422f30');
+ const ownerConfig=JSON.parse(configBytes),manager={manager_id:prior.managerId,manager_display_name:'Isolated Approved Initial Manager',auth_mode:'trusted_device',trusted_device:true,read_only:false};
+ remaining();
+ const registered=await cp('static_weekly_v3_read_authority_source',[packet.sourceId,source.serviceDate]);
+ check('exact current323 registered immutable source digest',await query('select source_digest as result from public.static_weekly_authority_source_documents where source_id=$1',[packet.sourceId]),packet.sourceDigest);
+ const currentSource=registered.compiler_input;
+ assert.equal(registered.source_id,packet.sourceId);assert.equal(currentSource.serviceDate,'2026-10-05');
+ const templateId='owner-corrected-six-initial',roleSlotIds=Object.values(ownerConfig.slots).filter(s=>!s.vacancy).map(s=>s.slotId).sort();
+ const template={templateId,staffingCount:6,source:currentSource,roleSlotIds};
+ const binding={schema:'custodial.approved-static-template-binding.v1',templateId,staffingCount:6,
+  sourceDigest:contentDigest(currentSource),roleSlotIdsDigest:contentDigest(roleSlotIds),patternAuthority:'OWNER_APPROVED_OPERATIONAL_PATTERN',
+  artifactSha256:createHash('sha256').update(configBytes).digest('hex'),ownerConfigDigest:contentDigest(ownerConfig),patternPublicationStatus:'UNPUBLISHED_LOCAL_CANDIDATE'};
+ const approvalEvidence={classification:'OWNER_APPROVED_OPERATIONAL_PATTERN',artifactSha256:binding.artifactSha256,
+  sourceReference:'config/custodial-six-person-static-20261005.json',ownerDecisionReference:'OWNER_STATIC_TEMPLATE_MAPPING_AND_EIGHT_DRAFT_20261004.json'};
+ await release('static_weekly_register_approved_template',[packet.sourceId,JSON.stringify(template),JSON.stringify(binding),JSON.stringify(ownerConfig),JSON.stringify(approvalEvidence)]);
+ remaining();
+ const feasibility=prepareApprovedStaticTemplateProjection({templates:[template],admittedBindings:[binding],currentSource,currentOwnerConfig:ownerConfig,
+  selection:{schema:'custodial.static-template-selection.v1',kind:'INITIAL_BASELINE',templateId,serviceDate:source.serviceDate,
+   availablePersonIds:Object.values(ownerConfig.slots).filter(s=>!s.vacancy).map(s=>s.personId)},deadline:deadlineAt});
+ await release('static_weekly_register_approved_initial_baseline',[packet.sourceId,templateId,JSON.stringify(feasibility)]);
+ check('artifact/snapshot registration alone does not publish',await revision(),prior.authorityRevision);
+ const input={manager,sourceId:packet.sourceId,effectiveStart:source.serviceDate,templateId,expectedRevision:prior.authorityRevision,deadlineAt};
+ const preview=await plane.previewApprovedInitialBaseline(input);
+ check('actual static preview no publication or solver', [preview.status,preview.solverInvoked,await revision()],['PREVIEW_ONLY',false,prior.authorityRevision]);
+ const accepted=await plane.publishApprovedInitialBaseline({...input,previewDigest:preview.previewDigest,idempotencyKey:'isolated-approved-initial-six'});
+ check('actual static accepted receipt',accepted.status,'PERSISTED_CURRENT');
+ const lineage=await query('select jsonb_build_object(\'priorVersion\',prior_version_id,\'kind\',publication_kind) as result from public.weekly_schedule_publications where publication_id=$1',[accepted.publication_id]);
+ check('actual prior publication supersession not empty-first-publish',lineage,{priorVersion:prior.versionId,kind:'supersede'});
+ check('original historical document unchanged',await query('select public.static_weekly_digest_jsonb(draft_document) as result from public.weekly_schedule_versions where version_id=$1',[prior.versionId]),prior.documentDigest);
+ const versionId=await query('select version_id as result from public.weekly_schedule_publications where publication_id=$1',[accepted.publication_id]);
+ check('static relational original parents323',await query('select count(*)::int as result from public.weekly_schedule_slot_assignments where version_id=$1',[versionId]),323);
+ check('derived relational dated occurrences494',await query('select count(*)::int as result from public.weekly_schedule_occurrences where projection_id=$1',[accepted.projection_id]),494);
+ const lunch=await query('select document_json as result from public.weekly_schedule_lunch_documents where projection_id=$1',[accepted.projection_id]);
+ check('actual persisted lunch loans30',lunch.loans.length,30);
+ const identities=new Set(Object.values(ownerConfig.slots).filter(s=>!s.vacancy).map(s=>s.personId));
+ assert.ok(lunch.responsibilities.every(r=>identities.has(r.coverer_person_id)&&r.creates_deep_clean===false));checks++;
+ for(let offset=0;offset<7;offset++){
+  remaining();const date=new Date(Date.parse(source.serviceDate+'T12:00:00Z')+offset*86400000).toISOString().slice(0,10);
+  const status=await query('select projection_status as result from public.static_weekly_v6_schedule_authority_state($1::date)',[date]);
+  const persisted=await cp('static_weekly_v8_read_lunch_document',[date]);
+  check(date+' stored current projection+lunch', [status,persisted.persistence_status,persisted.projection_id,persisted.document_identity],
+   ['current','PERSISTED',accepted.projection_id,lunch.document_identity]);
+  for(const personId of identities){
+   remaining();
+   const r=await rpc('custodial_application_reader','static_weekly_v5_read_employee_day',[date,personId,date+'T15:00:00Z']);
+   assert.equal(r.governed,true);assert.equal(r.projection_status,'current');
+   assert.equal(r.projection_id,accepted.projection_id);assert.equal(r.employee_id,personId);
+  }
+  checks++;
+ }
+ check('no compiler preparation invoked',preparations.length,0);
+ remaining();console.log(JSON.stringify({status:'PASS',checks,scope:'ISOLATED_FIXED_APPROVED_INITIAL_SIX_OVER_HISTORICAL_PUBLICATION',
+  sourceDigest:packet.sourceDigest,feasibilityDigest:feasibility.digest,projectionId:accepted.projection_id,lunchIdentity:lunch.document_identity,
+  originalParents:323,datedOccurrences:494,solverInvoked:false,production:false,independentAudit:false}));
+}
 try{
+ if(approvedInitialMode){await runApprovedInitial();}else{
  const initialEmployees=await query('select count(*)::integer as result from public.employees');
  const week=source.serviceDate,managerId='10000000-0000-4000-8000-000000000131';
  const manager={manager_id:managerId,manager_display_name:'Synthetic Full Source Manager',auth_mode:'trusted_device',trusted_device:true,read_only:false};
@@ -377,5 +469,6 @@ try{
  const evidence={classification:'SYNTHETIC_LOCAL_NOT_ADMITTED',sourcePacketSha256:createHash('sha256').update(bytes).digest('hex'),source,projection,lunch,replay,recurringPreview,recurringAdmissionProof,recurringConfirmationProof,lunchMaterializationProof,checks,production:false,independentAudit:false};
  if(process.env.STATIC_WEEKLY_CONTINUITY_EVIDENCE)writeFileSync(process.env.STATIC_WEEKLY_CONTINUITY_EVIDENCE,JSON.stringify(evidence)+'\n',{flag:'wx'});
  console.log(JSON.stringify({status:'PASS',checks,sourceDigest:packet.sourceDigest,loans:30,immutableRows:sourceRows,derivedRows,production:false,independentAudit:false}));
+ }
  }
 }finally{await plane.close();}

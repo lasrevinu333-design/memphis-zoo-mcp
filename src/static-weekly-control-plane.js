@@ -832,6 +832,84 @@ export function createStaticWeeklyControlPlane({
     } finally {clearTimeout(timeout);signal?.removeEventListener?.('abort',relay);}
   }
 
+  // First fixed-approved baseline admission is not a staffing-change command
+  // and does not borrow an optimized certificate. Source/catalog/roster are
+  // server reads; only the distinct initial SQL boundary may publish it.
+  async function approvedInitialOperation({manager,sourceId,effectiveStart,templateId,
+    expectedRevision,previewDigest=null,idempotencyKey=null,signal=null,deadlineAt=null},confirm){
+    const entered=performance.now(),expires=deadlineAt==null?entered+STATIC_WEEKLY_MANAGER_OPERATION_DEADLINE_MS:
+      Math.min(Number(deadlineAt),entered+STATIC_WEEKLY_MANAGER_OPERATION_DEADLINE_MS);
+    if(!Number.isFinite(expires))throw fail('static_weekly_recurring_operation_deadline_invalid');
+    const actor=requireManager(manager),id=requireSourceId(sourceId),date=requireMonday(effectiveStart,'effective start'),
+      revision=requireRevision(expectedRevision);
+    if(typeof templateId!=='string'||!templateId.trim()||templateId.length>128)throw fail('static_template_selection_invalid');
+    const controller=new AbortController(),relay=()=>controller.abort(signal?.reason);
+    signal?.addEventListener?.('abort',relay,{once:true});if(signal?.aborted)relay();
+    const timeout=setTimeout(()=>controller.abort(fail('static_weekly_recurring_operation_deadline_exceeded')),
+      Math.max(1,expires-performance.now()-STATIC_WEEKLY_MANAGER_CLEANUP_RESERVE_MS));timeout.unref?.();
+    try{return await transaction(async client=>{
+      operationRemaining(expires,controller.signal);
+      await lockStaticWeeklyAuthority(client);
+      const request={sourceId:id,effectiveStart:date,templateId,expectedRevision:revision,
+        previewDigest:confirm?text(previewDigest):null,idempotencyKey:confirm?requireIdempotencyKey(idempotencyKey):null};
+      if(confirm){
+        const prior=await call(client,'static_weekly_read_approved_initial_confirmation',[actor.managerId,request.idempotencyKey]);
+        if(prior){
+          if(canonicalJson(prior.request)!==canonicalJson(request)||prior.receipt?.status!=='PERSISTED_CURRENT')
+            throw fail('static_template_confirmation_identity_conflict');
+          return {...prior.receipt,replayed:true,status:'ACCEPTED_ORIGINAL_RECEIPT',currentReadbackNotRepeated:true};
+        }
+      }
+      const snapshot=await snapshotFor(client,date);
+      if(snapshot?.authority_revision!==revision)throw fail('static_template_revision_changed');
+      const registered=await registeredSourceFor(client,id,date);
+      if(!registered?.compiler_input||typeof registered.compiler_input!=='object')throw fail('static_template_initial_source_invalid');
+      const source=clone(registered?.compiler_input);
+      if(registered?.source_id!==id||source?.serviceDate!==date||source.version?.effectiveStart!==date
+        || !Array.isArray(source.exceptions)||source.exceptions.length||registered.exceptions?.length)
+        throw fail('static_template_initial_source_invalid');
+      const basis=await call(client,'static_weekly_read_approved_initial_basis',[actor.managerId,id,date,revision,templateId]);
+      if(basis?.schema!=='custodial.approved-static-initial-basis.v1'||basis.sourceId!==id||basis.serviceDate!==date
+        ||basis.authorityRevision!==revision||!Number.isSafeInteger(basis.generation)||basis.generation<0
+        ||!Array.isArray(basis.templates)||basis.templates.length!==1||!Array.isArray(basis.admittedBindings)||basis.admittedBindings.length!==1
+        ||basis.currentSourceDigest!==postgresJsonbContentDigest(source)||canonicalJson(basis.currentSource)!==canonicalJson(source)
+        ||basis.templateCatalogDigest!==postgresJsonbContentDigest({templates:basis.templates,
+          admittedBindings:basis.admittedBindings,ownerConfig:basis.ownerConfig}))
+        throw fail('static_template_trusted_basis_invalid');
+      const configPeople=Object.values(basis.ownerConfig?.slots||{}).filter(s=>!s.vacancy).map(s=>s.personId);
+      const feasibility=prepareApprovedStaticTemplateProjection({templates:basis.templates,admittedBindings:basis.admittedBindings,
+        currentSource:source,currentOwnerConfig:basis.ownerConfig,selection:{schema:'custodial.static-template-selection.v1',
+          kind:'INITIAL_BASELINE',templateId,serviceDate:date,availablePersonIds:configPeople},deadline:expires});
+      if(!feasibility.initialBaseline||!feasibility.mapping.unchanged||feasibility.currentSourceDigest!==basis.currentSourceDigest)
+        throw fail('static_template_initial_baseline_must_be_exact');
+      const body={schema:'custodial.approved-static-initial-materialization.v1',managerId:actor.managerId,sourceId:id,
+        effectiveStart:date,expectedRevision:revision,generation:basis.generation,
+        templateCatalogDigest:basis.templateCatalogDigest,feasibility};
+      const digest=postgresJsonbContentDigest(body);
+      operationRemaining(expires,controller.signal);
+      if(!confirm)return {schema:'custodial.approved-static-initial-preview.v1',status:'PREVIEW_ONLY',previewDigest:digest,
+        sourceId:id,effectiveStart:date,authorityRevision:revision,assignments:feasibility.assignments,
+        lunch:feasibility.lunch,mapping:feasibility.mapping,solverInvoked:false,published:false};
+      if(!/^[a-f0-9]{64}$/.test(text(previewDigest))||previewDigest!==digest)throw fail('static_template_preview_changed');
+      const accepted=await call(client,'static_weekly_materialize_approved_initial_baseline',
+        [actor.managerId,id,date,revision,basis.generation,request.idempotencyKey,{...body,previewDigest:digest,request}]);
+      if(accepted?.ok!==true||accepted.persistence_status!=='PERSISTED'||accepted.feasibility_digest!==feasibility.digest
+        ||accepted.source_id!==id||!Number.isSafeInteger(accepted.authority_revision)
+        ||!accepted.lunch_document_identity||accepted.lunch_document_identity!==feasibility.lunchDocument.document_identity)
+        throw fail('static_template_materialization_not_persisted');
+      requirePublicationId(accepted.publication_id);requireUuid(accepted.projection_id,'static_template_materialization_not_persisted');
+      const current=await snapshotFor(client,date),lunch=await call(client,'static_weekly_v8_read_lunch_document',[date]);
+      if(current?.projection_status!=='current'||current.authority_revision!==accepted.authority_revision
+        ||current.current_publication?.publication_id!==accepted.publication_id||current.latest_projection?.projection_id!==accepted.projection_id
+        ||lunch?.persistence_status!=='PERSISTED'||lunch.projection_id!==accepted.projection_id
+        ||lunch.document_identity!==accepted.lunch_document_identity)throw fail('static_template_current_readback_mismatch');
+      operationRemaining(expires,controller.signal);
+      return {schema:'custodial.approved-static-initial-confirmation.v1',status:'PERSISTED_CURRENT',...accepted,
+        revision:accepted.authority_revision,previewDigest:digest,solverInvoked:false};
+    },{signal:controller.signal,deadlineAt:expires,reconcileManagerId:confirm?actor.managerId:null});
+    }finally{clearTimeout(timeout);signal?.removeEventListener?.('abort',relay);}
+  }
+
   async function recurringGenerationFor(client) {
     const raw = await call(client, "static_weekly_v15_read_recurring_generation", []);
     if (!(typeof raw === "number" || (typeof raw === "string" && /^(0|[1-9][0-9]*)$/.test(raw)))
@@ -1152,6 +1230,8 @@ export function createStaticWeeklyControlPlane({
     },
     async previewApprovedStaticPattern(input) { return approvedStaticOperation(input,false); },
     async confirmApprovedStaticPattern(input) { return approvedStaticOperation(input,true); },
+    async previewApprovedInitialBaseline(input) { return approvedInitialOperation(input,false); },
+    async publishApprovedInitialBaseline(input) { return approvedInitialOperation(input,true); },
     async previewRecurringStaffing({ manager, effectiveStart, expectedRevision, fullNineSourceId = null,
       signal = null, deadlineAt = null }) {
       const enteredAt = performance.now();
