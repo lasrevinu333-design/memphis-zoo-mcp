@@ -96,10 +96,14 @@ export function mapApprovedStaticTemplateCandidate({ templates, admittedBindings
   const sourceVersion = approvedInput.version || approvedInput.versions?.find(v => v.id === approved.version.id);
   const currentVersion = currentSource.version || currentSource.versions?.find(v => v.id === target.version.id);
   require(sourceVersion && currentVersion, 'static_template_version_missing');
-  const patternPeople = approved.roster.filter(p => p.personId && p.kind !== 'CONTRACTOR_CAPACITY');
-  require(patternPeople.length === count && new Set(patternPeople.map(p => p.personId)).size === count,
-    'static_template_staffing_count_mismatch');
-  const patternSlots = sorted(patternPeople.map(p => p.slotId));
+  // Approved positions are not historical people. A historical vacancy does
+  // not revoke its fixed role geometry, and filling a role never resurrects
+  // the person carried in an old packet. Bind the role list independently.
+  const patternSlots = sorted(template.roleSlotIds || []);
+  require(patternSlots.length === count && new Set(patternSlots).size === count
+    && binding.roleSlotIdsDigest === contentDigest(patternSlots)
+    && patternSlots.every(id => approved.slots.some(s => s.id === id && !s.contractorCapacity)),
+    'static_template_approved_role_binding_invalid');
   const actualById = new Map(available.map(p => [p.slotId, p]));
   require(available.every(p => scopeDays.every(d => target.incumbencyByDaySlot.get(`${d}\u0000${p.slotId}`)?.personId === p.personId)),
     'static_template_scope_incumbency_changed');
@@ -117,10 +121,11 @@ export function mapApprovedStaticTemplateCandidate({ templates, admittedBindings
     for (const row of problem.work.filter(r => scopeDays.includes(r.dayOfWeek))) {
       const phase = row.window.end === '09:45' ? 'morning'
         : row.window.start === '09:45' ? 'equalized' : {start:row.window.start,end:row.window.end};
+      const declared = problem.states.get(row.dayOfWeek).work.find(r => r.workId === row.workId);
       const key = canonicalJson({day:row.dayOfWeek,family:row.locationCodeSnapshot,phase,
         mode:row.serviceMode ?? null,schedulingMode:row.schedulingMode ?? null,required:row.sourceRequired,
-        priority:row.priority,qualifications:row.requiredQualifications,restrictions:row.restrictions,
-        restrictedSlotIds:row.restrictedSlotIds,coveragePolicy:row.coveragePolicy ?? null,
+        priority:declared?.priority ?? row.priority,qualifications:row.requiredQualifications,restrictions:row.restrictions,
+        restrictedSlotIds:row.restrictedSlotIds || [],coveragePolicy:row.coveragePolicy ?? null,
         coverageOrder:row.coveragePolicyOrder ?? null,custodialCoverageMode:row.custodialCoverageMode ?? null});
       if (!groups.has(key)) groups.set(key,{facts:key,members:[],effort:0});
       const group = groups.get(key);
@@ -146,10 +151,14 @@ export function mapApprovedStaticTemplateCandidate({ templates, admittedBindings
   compatibilityVersion.assignments = [...currentVersion.assignments.filter(r => !scopeDays.includes(r.dayOfWeek)), ...templateRows];
   const compatibility = problemFor(compatibilityInput);
   require(!compatibility.error, 'static_template_compatibility_authority_invalid');
-  const capacitySame = (left, right) => left && right && !left.capacity.error && !right.capacity.error
-    && canonicalJson(left.capacity) === canonicalJson(right.capacity)
-    && canonicalJson(left.availability.lunch ?? null) === canonicalJson(right.availability.lunch ?? null)
-    && canonicalJson(left.availability.blockedWindows || []) === canonicalJson(right.availability.blockedWindows || []);
+  const roleProfile = a => ({shift:a.shift ?? null,lunch:a.lunch ?? null,
+    blockedWindows:a.blockedWindows || [],maxServiceEffortMinutes:a.maxServiceEffortMinutes ?? a.maxLoadPoints ?? null,
+    maxDutyMinutes:a.maxDutyMinutes ?? a.max_duty_minutes ?? null,
+    acceptedRoute:a.acceptedRoute ?? null,
+    startLocationId:a.acceptedRouteStartLocationId ?? a.acceptedRouteAnchorLocationId ?? a.routeAnchorLocationId ?? null,
+    acceptedRouteStops:a.acceptedRouteStops ?? null});
+  const capacitySame = (roleAvailability, current) => roleAvailability && current && !current.capacity.error
+    && canonicalJson(roleProfile(roleAvailability)) === canonicalJson(roleProfile(current.availability));
   const candidates = new Map();
   for (const role of patternSlots) {
     tick();
@@ -163,15 +172,14 @@ export function mapApprovedStaticTemplateCandidate({ templates, admittedBindings
       for (const row of rows) {
         try { assertNormalOwnerEligibility({ key: configOwner[0], ...configOwner[1] }, row.locationCodeSnapshot); }
         catch { fits = false; break; }
-        const originalContext = approved.availabilityByDaySlot.get(`${row.dayOfWeek}\u0000${role}`);
+        const roleAvailability = approved.states.get(row.dayOfWeek).availability.get(role);
         const actualContext = target.availabilityByDaySlot.get(`${row.dayOfWeek}\u0000${actual.slotId}`);
         // Equal approved duty/route/lunch capacity makes the fixed pattern's
         // load/travel proof transferable, not a points-to-minutes invention.
         // The candidate universe freshly applies the actual restrictions,
         // qualifications, current locks and dated overlays for every row.
-        if (!capacitySame(originalContext, actualContext)
-          || !compatibility.candidates.some(c => c.item.key === `${row.dayOfWeek}:${row.workId}` && c.slot.id === actual.slotId)
-          || !approved.candidates.some(c => c.item.key === `${row.dayOfWeek}:${row.workId}` && c.slot.id === role)) {
+        if (!capacitySame(roleAvailability, actualContext)
+          || !compatibility.candidates.some(c => c.item.key === `${row.dayOfWeek}:${row.workId}` && c.slot.id === actual.slotId)) {
           fits = false; break;
         }
       }

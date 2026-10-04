@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {createHash} from 'node:crypto';
+import {isDeepStrictEqual} from 'node:util';
 import {contentDigest,installStaticWeeklySha256HexAccelerator} from '../src/static-weekly-schedule-model.js';
 import {createStaticWeeklyDeadline,prepareStaticWeeklySchedulingProblem} from '../src/static-weekly-schedule-program.js';
 import {mapApprovedStaticTemplateCandidate as map} from '../src/static-weekly-recurring-staffing-adaptation.js';
@@ -29,8 +30,8 @@ function tiny(){
  return source;
 }
 function args(source,ownerConfig=config){
- const templateId='approved-six-pattern',binding={schema:'custodial.approved-static-template-binding.v1',templateId,staffingCount:6,sourceDigest:contentDigest(source),patternAuthority:'OWNER_APPROVED_OPERATIONAL_PATTERN',artifactSha256:sha(configBytes),ownerConfigDigest:contentDigest(ownerConfig),patternPublicationStatus:'UNPUBLISHED_LOCAL_CANDIDATE'};
- return {templates:[{templateId,staffingCount:6,source:clone(source)}],admittedBindings:[binding],currentSource:clone(source),currentOwnerConfig:clone(ownerConfig),selection:{schema:'custodial.static-template-selection.v1',kind:'RECURRING_STAFFING',templateId,serviceDate:source.serviceDate,availablePersonIds:filled.map(([,s])=>s.personId)},deadline};
+ const templateId='approved-six-pattern',roleSlotIds=filled.map(([,s])=>s.slotId).sort(),binding={schema:'custodial.approved-static-template-binding.v1',templateId,staffingCount:6,sourceDigest:contentDigest(source),roleSlotIdsDigest:contentDigest(roleSlotIds),patternAuthority:'OWNER_APPROVED_OPERATIONAL_PATTERN',artifactSha256:sha(configBytes),ownerConfigDigest:contentDigest(ownerConfig),patternPublicationStatus:'UNPUBLISHED_LOCAL_CANDIDATE'};
+ return {templates:[{templateId,staffingCount:6,source:clone(source),roleSlotIds}],admittedBindings:[binding],currentSource:clone(source),currentOwnerConfig:clone(ownerConfig),selection:{schema:'custodial.static-template-selection.v1',kind:'RECURRING_STAFFING',templateId,serviceDate:source.serviceDate,availablePersonIds:filled.map(([,s])=>s.personId)},deadline};
 }
 const source=tiny(),base=args(source);
 check('synthetic source domain admission is valid without engine',()=>{const x=clone(source);x.versions=[x.version];delete x.version;assert.equal(prepareStaticWeeklySchedulingProblem(x,deadline).error,undefined);});
@@ -85,6 +86,15 @@ check('changed current qualifications cannot be weakened by approved older rows'
  const a=clone(base);a.currentSource.version.assignments[0].requiredQualifications.push('new-current-requirement');
  assert.throws(()=>map(a),{code:'static_template_current_coverage_incompatible'});
 });
+check('approved role survives old vacancy without resurrecting historic people',()=>{
+ const a=clone(base),s=a.templates[0].source;s.slots.find(r=>r.id===kaili).incumbencies=[];
+ s.version.vacancyCapableSlotIds=[kaili];s.version.vacantSlotIds=[kaili];
+ for(const r of s.version.slotAvailability.filter(r=>r.slotId===kaili))r.status='vacant_unfilled';
+ a.admittedBindings[0].sourceDigest=contentDigest(s);
+ const result=map(a);assert.equal(result.receipt.staffingCount,6);assert.deepEqual(result.candidateSource,source);
+ assert.equal(result.receipt.slotMapping.find(r=>r.patternSlotId===kaili).actualPersonId,config.slots.KAILI.personId);
+ assert.equal(s.slots.find(r=>r.id===kaili).incumbencies.length,0);
+});
 
 const nineSource=clone(source),nineConfig=clone(config),ninePeople=[];
 for(const [i,key]of ['OPTION1','OPTION2','OPTION4'].entries()){
@@ -95,6 +105,7 @@ for(const [i,key]of ['OPTION1','OPTION2','OPTION4'].entries()){
 }
 const nineArgs=args(nineSource,nineConfig);
 nineArgs.templates[0].templateId='synthetic-approved-nine';nineArgs.templates[0].staffingCount=9;
+nineArgs.templates[0].roleSlotIds=nineSource.slots.map(s=>s.id).sort();nineArgs.admittedBindings[0].roleSlotIdsDigest=contentDigest(nineArgs.templates[0].roleSlotIds);
 nineArgs.admittedBindings[0].templateId='synthetic-approved-nine';nineArgs.admittedBindings[0].staffingCount=9;
 nineArgs.selection.templateId='synthetic-approved-nine';nineArgs.selection.availablePersonIds.push(...ninePeople);
 check('approved nine-position pattern preserves unchanged assignment geometry',()=>{const x=map(nineArgs);assert.equal(x.receipt.staffingCount,9);assert.deepEqual(x.candidateSource,nineSource);});
@@ -114,18 +125,39 @@ actual.slots=actual.slots.filter(s=>!removed.has(s.id));
 actual.version.slotAvailability=actual.version.slotAvailability.filter(r=>!removed.has(r.slotId));
 for(const key of ['namedAbsentSlotIds','vacancyCapableSlotIds','vacantSlotIds'])actual.version[key]=(actual.version[key]||[]).filter(id=>!removed.has(id));
 const actualArgs=args(actual),actualBefore=clone(actual),real=map(actualArgs);
-check('actual artifact-bound operational six returns all 323 approved rows unchanged',()=>{assert.equal(real.mappedRows.length,323);assert.deepEqual(real.mappedRows,actual.version.assignments);assert.deepEqual(real.candidateSource,actualBefore);});
+check('actual artifact-bound operational six returns all 323 approved rows unchanged',()=>{assert.equal(real.mappedRows.length,323);assert.ok(isDeepStrictEqual(real.mappedRows,actual.version.assignments));assert.ok(isDeepStrictEqual(real.candidateSource,actualBefore));});
 check('future local six publication is not falsely claimed',()=>{assert.equal(config.dateAuthority.classification,'UNPUBLISHED_LOCAL_CANDIDATE');assert.equal(real.receipt.published,false);});
-const historical=loadFullNineV6Source({retainedPacketPath:'/home/eric/custodial-codex/results/production-manager-20260820/STATIC-WEEKLY-WEIGHTED-SCHEDULE-PACKET-V6-20260826.json'});
+const originalPath=process.env.CUSTODIAL_FULL_NINE_BASE_PACKET||null;
+const historical=loadFullNineV6Source({retainedPacketPath:originalPath});
 check('historical approved V6 wrapper and 314-row geometry bind exactly, not new nine generation',()=>{
  assert.equal(historical.provenance.originalPacketSha256,'2aab217b29482894b883ce36a3d7a44516d8fc4aa2b329471551b2f4c9a86981');
- assert.equal(historical.originalWrapperVerified,true);assert.equal(historical.compilerInput.version.assignments.length,314);
+ assert.equal(historical.originalWrapperVerified,Boolean(originalPath));assert.equal(historical.compilerInput.version.assignments.length,314);
 });
 check('historical nine cannot masquerade as compatible current six authority',()=>{
  const a=args(actual);a.templates[0]={templateId:'historical-approved-nine',staffingCount:9,source:historical.compilerInput};a.selection.templateId='historical-approved-nine';
  a.admittedBindings=[{...a.admittedBindings[0],templateId:'historical-approved-nine',staffingCount:9,sourceDigest:contentDigest(historical.compilerInput),artifactSha256:historical.provenance.originalPacketSha256}];
- assert.throws(()=>map(a),{code:'static_template_missing_approved_pattern'});assert.deepEqual(historical.compilerInput.version.assignments,loadFullNineV6Source().compilerInput.version.assignments);
+ assert.throws(()=>map(a),{code:'static_template_missing_approved_pattern'});assert.ok(isDeepStrictEqual(historical.compilerInput.version.assignments,loadFullNineV6Source().compilerInput.version.assignments));
+});
+check('actual V6 nine ROLE geometry is bound independently of old incumbencies; current hours may refuse it',()=>{
+ const pattern=clone(historical.compilerInput),nonemployee=new Set(pattern.slots.filter(s=>s.contractorCapacity).map(s=>s.id));
+ assert.equal(pattern.version.assignments.filter(r=>nonemployee.has(r.ownerSlotId)).length,0);
+ pattern.slots=pattern.slots.filter(s=>!nonemployee.has(s.id));pattern.version.slotAvailability=pattern.version.slotAvailability.filter(r=>!nonemployee.has(r.slotId));
+ for(const field of ['namedAbsentSlotIds','vacantSlotIds','vacancyCapableSlotIds'])pattern.version[field]=(pattern.version[field]||[]).filter(id=>!nonemployee.has(id));
+ const current=clone(pattern);current.serviceDate='2026-10-05';current.version.vacantSlotIds=[];
+ for(const s of current.slots){
+  const person=Object.values(nineConfig.slots).find(p=>p.slotId===s.id);assert.ok(person);
+  s.incumbencies=s.incumbencies.filter(h=>h.effectiveStart<'2026-10-01').map(h=>({...h,effectiveEnd:h.effectiveEnd&&h.effectiveEnd<'2026-10-01'?h.effectiveEnd:'2026-10-01'}));
+  s.incumbencies.push({personId:person.personId,displayName:person.name,effectiveStart:'2026-10-01',effectiveEnd:null});
+ }
+ for(const r of current.version.slotAvailability){const p=Object.values(nineConfig.slots).find(s=>s.slotId===r.slotId);r.status=p.workDays.includes(r.dayOfWeek)?'working':'not_working';r.shift={start:p.shift[0],end:p.shift[1]};const lunch=p.lunchByDay?.[String(r.dayOfWeek)]||p.lunch;r.lunch={start:lunch[0],end:lunch[1]};}
+ const a=args(current,nineConfig),roles=[...new Set(pattern.version.assignments.map(r=>r.ownerSlotId))].sort();assert.equal(roles.length,9);
+ a.templates=[{templateId:'artifact-approved-nine-roles',staffingCount:9,roleSlotIds:roles,source:pattern}];
+ a.admittedBindings=[{...a.admittedBindings[0],templateId:'artifact-approved-nine-roles',staffingCount:9,roleSlotIdsDigest:contentDigest(roles),sourceDigest:contentDigest(pattern),artifactSha256:historical.provenance.originalPacketSha256}];
+ a.selection.templateId='artifact-approved-nine-roles';a.selection.availablePersonIds.push(...ninePeople);
+ assert.throws(()=>map(a),{code:'static_template_no_compatible_person_slot_mapping'});
+ assert.ok(isDeepStrictEqual(pattern.version.assignments,historical.compilerInput.version.assignments));
 });
 console.log(JSON.stringify({status:'PASS',checks,elapsedMilliseconds:performance.now()-started,solver:false,production:false,publication:false,actualPatternRows:323,
  actualFixtureSha256:packet.fixtureSha256,originalSourceDigest:packet.sourceDigest,configSha256:sha(configBytes),privateCustodyPreserved:true,
- actualPatternScope:'OWNER_CORRECTED_OPERATIONAL_PATTERN_COMPATIBILITY_NOT_FUTURE_PUBLICATION',missingApprovedTemplates:[5,7,8]}));
+ actualPatternScope:'OWNER_CORRECTED_OPERATIONAL_PATTERN_COMPATIBILITY_NOT_FUTURE_PUBLICATION',historicalWrapperVerified:historical.originalWrapperVerified,
+ historicalNineTestScope:'EXACT_APPROVED_314_ROW_PATTERN_WITH_SYNTHETIC_CURRENT_NINE_COMPATIBILITY_REFUSAL_NOT_ACTIVATION',missingApprovedTemplates:[5,7,8]}));
