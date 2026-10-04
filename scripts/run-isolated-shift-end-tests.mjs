@@ -7,11 +7,12 @@ import {assertCurrentManager219MigrationSet} from './fixtures/current-manager-21
 import {createRecurringClockRecorder,runRecurringClockedChild} from './static-weekly-recurring-http-boundary.mjs';
 const container=`mz_schema_shift_end_${process.pid}`;
 const stage=process.argv[2]??'all';
-assert.ok(['all','migration-only','separation-context-only','atomic-only','published-only','current-roster-only','current-manager-216','current-manager-217','current-manager-218','current-manager-219','dual-source-217','dual-source-218','dual-source-219','recurring-ledger-only','recurring-parent-only','recurring-source-only','recurring-dependency-only','recurring-binding-shape-only','recurring-terminal-boundary-only','recurring-lock-order-only','recurring-generation-only','legacy-only','activation-only','legacy-observation-only'].includes(stage),'explicit bounded test stage');
+assert.ok(['all','migration-only','separation-context-only','atomic-only','published-only','current-roster-only','current-manager-216','current-manager-217','current-manager-218','current-manager-219','current-manager-owned-219','dual-source-217','dual-source-218','dual-source-219','recurring-ledger-only','recurring-parent-only','recurring-source-only','recurring-dependency-only','recurring-binding-shape-only','recurring-terminal-boundary-only','recurring-lock-order-only','recurring-generation-only','legacy-only','activation-only','legacy-observation-only'].includes(stage),'explicit bounded test stage');
+const ownedManager219Stage=stage==='current-manager-owned-219';
 const currentManager216Stage=stage==='current-manager-216';
 const currentManager217Stage=stage==='current-manager-217';
 const currentManager218Stage=stage==='current-manager-218';
-const currentManager219Stage=stage==='current-manager-219';
+const currentManager219Stage=stage==='current-manager-219'||ownedManager219Stage;
 const currentManager218Http=process.env.STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION_HTTP==='1';
 const currentManager218Browser=process.env.STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION_BROWSER==='1';
 assert.ok(process.env.STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION_HTTP==null||currentManager218Http,
@@ -41,7 +42,7 @@ if(currentManager218Stage){assertCurrentManager218MigrationSet();loadCurrentMana
 if(currentManager219Stage){assertCurrentManager219MigrationSet();loadCurrentManagerPublicationFixture();}
 if(dualSource218Stage){assertCurrentManager218MigrationSet();loadCurrentManagerPublicationFixture();}
 if(dualSource219Stage){assertCurrentManager219MigrationSet();loadCurrentManagerPublicationFixture();}
-const socketStage=publishedStage||dualSource217Stage||dualSource218Stage||dualSource219Stage||['recurring-ledger-only','recurring-parent-only','recurring-source-only','recurring-dependency-only','recurring-binding-shape-only','recurring-terminal-boundary-only','recurring-lock-order-only','recurring-generation-only'].includes(stage);
+const socketStage=publishedStage||ownedManager219Stage||dualSource217Stage||dualSource218Stage||dualSource219Stage||['recurring-ledger-only','recurring-parent-only','recurring-source-only','recurring-dependency-only','recurring-binding-shape-only','recurring-terminal-boundary-only','recurring-lock-order-only','recurring-generation-only'].includes(stage);
 const recurringSourceStage=['recurring-ledger-only','recurring-parent-only','recurring-source-only'].includes(stage);
 if(recurringSourceStage){
  assert.ok(process.env.STATIC_WEEKLY_TEST_SIX_PACKET,'explicit preserved source fixture required before database startup');
@@ -49,21 +50,35 @@ if(recurringSourceStage){
 }
 let socket=null;
 const image='supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed';
-const docker=(args,extra={})=>execFileSync('docker',args,{encoding:'utf8',timeout:120000,maxBuffer:32*1024*1024,stdio:['pipe','pipe','pipe'],...extra});
+const docker=(args,extra={})=>{
+ const remaining=50_000-performance.now();
+ if(ownedManager219Stage&&remaining<1)throw new Error('Owned current219 work deadline elapsed before Docker/SQL operation');
+ return execFileSync('docker',args,{encoding:'utf8',timeout:120000,
+  maxBuffer:32*1024*1024,stdio:['pipe','pipe','pipe'],...extra,
+  ...(ownedManager219Stage?{timeout:Math.floor(Math.min(remaining,extra.timeout??120000))}:{})});
+};
+const dockerCleanup=(args)=>{
+ const remaining=60_000-performance.now();
+ if(ownedManager219Stage&&remaining<1)throw new Error('Owned current219 cleanup deadline elapsed; exact container absence unproven');
+ return execFileSync('docker',args,{encoding:'utf8',
+  timeout:ownedManager219Stage?Math.floor(Math.min(5000,remaining)):120000,
+  maxBuffer:32*1024*1024,stdio:['pipe','pipe','pipe']});
+};
 const sql=text=>docker(['exec','-i',container,'psql','-X','-q','-At','-v','ON_ERROR_STOP=1','-U','supabase_admin','-d','postgres'],{input:text}).trim();
 const defaults="select count(*) from pg_default_acl d cross join lateral aclexplode(d.defaclacl) a where d.defaclnamespace in (0,'public'::regnamespace) and d.defaclrole in ('postgres'::regrole,'supabase_admin'::regrole) and d.defaclobjtype in ('r','S') and a.grantee in (0,'anon'::regrole,'authenticated'::regrole,'service_role'::regrole)";
 const removeDefaultsSql=['postgres','supabase_admin'].flatMap(owner=>['',' in schema public'].map(scope=>`alter default privileges for role ${owner}${scope} revoke all on tables from public,anon,authenticated,service_role;alter default privileges for role ${owner}${scope} revoke all on sequences from public,anon,authenticated,service_role;`)).join('\n');
 const absenceGuard=`do $absence$begin if (${defaults})<>0 then raise exception 'automatic Data API table/sequence grants must be absent'; end if;end$absence$;`;
 let owned=false;const files=readdirSync('supabase/migrations').filter(f=>f.endsWith('.sql')).sort(),manifest=[];
+let finalStageReceipt=null;
 assert.equal(files.length,currentManager219Stage||dualSource219Stage?219:currentManager218Stage||dualSource218Stage?218:
  currentManager217Stage||dualSource217Stage?217:currentManager216Stage?216:176,'exact stage-specific migration set');
 assert.equal(files.at(-1),currentManager219Stage||dualSource219Stage||currentManager218Stage||dualSource218Stage?'20261004000000_native_provider_event_decision_lookup.sql':
  currentManager217Stage||dualSource217Stage?'20261003230000_static_weekly_named_handoff_derivation.sql':
  currentManager216Stage?'20261003220000_current_release_authority_completion.sql':
  '20260929125440_custodial_recovery_inventory_closure.sql','exact stage-specific migration head');
-function cleanup(){if(owned){docker(['stop','-t','10',container]);
- if(docker(['ps','-a','--filter',`name=^/${container}$`,'--format','{{.Names}}']).trim())docker(['rm','-f',container]);
- owned=false;assert.equal(docker(['ps','-a','--filter',`name=^/${container}$`,'--format','{{.Names}}']).trim(),'');console.log('OWNED_CONTAINER_REMOVED',container);}
+function cleanup(){if(owned){dockerCleanup(['stop','-t',ownedManager219Stage?'0':'10',container]);
+ if(dockerCleanup(['ps','-a','--filter',`name=^/${container}$`,'--format','{{.Names}}']).trim())dockerCleanup(['rm','-f',container]);
+ owned=false;assert.equal(dockerCleanup(['ps','-a','--filter',`name=^/${container}$`,'--format','{{.Names}}']).trim(),'');console.log('OWNED_CONTAINER_REMOVED',container);}
  if(socket){for(const file of readdirSync(socket)){assert.ok(['.s.PGSQL.5432','.s.PGSQL.5432.lock'].includes(file),'only owned PostgreSQL socket remnants');unlinkSync(socket+'/'+file);}
  rmdirSync(socket);console.log('OWNED_SOCKET_DIRECTORY_REMOVED',socket);socket=null;}}
 for(const signal of ['SIGINT','SIGTERM'])process.once(signal,()=>{try{cleanup();}finally{process.exit(143);}});
@@ -89,6 +104,16 @@ try{
   if(manifest.length%25===0)console.log('REPLAYED_EXACT_MIGRATIONS',manifest.length);
  }
  console.log('NO_AUTOMATIC_TABLE_OR_SEQUENCE_GRANTS_REPLAY_PASS',manifest.length);
+ if(ownedManager219Stage){
+  const exact=JSON.parse(docker(['inspect',container]))[0];
+  assert.match(exact.Id,/^[a-f0-9]{64}$/);
+  assert.equal(exact.HostConfig.NetworkMode,'none');
+  assert.ok(exact.Mounts.some(m=>m.Source===socket&&m.Destination==='/test-socket'));
+  const {runCurrentManagerOwned219Stage}=await import('./static-weekly-current-manager-owned-stage.mjs');
+  const receipt=await runCurrentManagerOwned219Stage({container,socket,containerId:exact.Id,docker,sql});
+  assert.equal(receipt.status,'PASS');
+  finalStageReceipt=receipt;
+ }
  if(process.env.STATIC_WEEKLY_TEST_REMINDER_PROJECTION==='1'){
   sql("begin read only;set local role custodial_application_reader;select count(*) from public.v_location_dashboard_status;select count(*) from public.mz_location_reminder_candidates(current_date,now());rollback;");
   console.log('ACTUAL_DEDICATED_READER_EMPTY_SCHEMA_PREFLIGHT_PASS');
@@ -161,5 +186,10 @@ try{
  if(stage==='legacy-observation-only')execFileSync(process.execPath,['scripts/legacy-activation-database-tests.mjs'],{
   env:{...process.env,SHIFT_END_TEST_CONTAINER:container},stdio:'inherit',timeout:240000});
  assert.equal(sql(defaults),'0');
- console.log(JSON.stringify({status:'PASS',stage,migrations:manifest,automatic_grants_absent_before_and_after_each:true,production:false,independent_audit:false}));
 }catch(error){console.error('FAILED_TEST_STAGE',stage,error.stderr?.toString()||error.stack);throw error;}finally{cleanup();}
+if(ownedManager219Stage){
+ assert.ok(performance.now()<60_000,'original process-start sixty seconds includes exact container/socket cleanup');
+ assert.equal(finalStageReceipt?.status,'PASS','owned operation receipt required after cleanup');
+ console.log('OWNED_CURRENT_MANAGER_219_RECEIPT',JSON.stringify(finalStageReceipt));
+}
+console.log(JSON.stringify({status:'PASS',stage,migrations:manifest,automatic_grants_absent_before_and_after_each:true,production:false,independent_audit:false}));

@@ -7,6 +7,7 @@ import {createStaticWeeklyControlPlane} from '../src/static-weekly-control-plane
 import {currentPatternFromPublishedReadback} from '../src/static-weekly-recurring-staffing-adaptation.js';
 import {assertRecurringManagerDecision,assertRecurringAdmissionCandidate,RECURRING_DECISION_SCHEMA} from '../src/static-weekly-recurring-preview.js';
 import {compileAndPrepareStaticWeeklyScheduleIsolated,prepareRecurringAdmissionCandidateIsolated} from '../src/static-weekly-schedule-compiler-runtime.js';
+import {createStaticWeeklyCompilerRuntime} from '../src/static-weekly-schedule-compiler-runtime.js';
 import {postgresJsonbContentDigest as digest} from '../src/static-weekly-schedule-program.js';
 import {testRecurringTerminalTargets} from './static-weekly-recurring-terminal-integration.mjs';
 import {testRecurringDependencyReconciliation} from './static-weekly-recurring-reconciliation-integration.mjs';
@@ -18,6 +19,7 @@ import {testLunchMaterialization} from './static-weekly-lunch-materialization-in
 import {assertCurrentManagerMigrationSet,assertCurrentManager217MigrationSet,assertCurrentManager218MigrationSet,loadCurrentManagerPublicationFixture} from './fixtures/current-manager-publication-source.mjs';
 import {assertCurrentManager219MigrationSet} from './fixtures/current-manager-219-source.mjs';
 import {testNamedHandoffSql} from './static-weekly-named-handoff-contract-tests.mjs';
+import {createCurrentManager219OwnedCheckpoint} from './static-weekly-current-manager-owned-checkpoint.mjs';
 
 const container=process.env.SHIFT_END_TEST_CONTAINER,socket=process.env.SHIFT_END_TEST_SOCKET;
 assert.match(container??'',/^mz_schema_shift_end_[0-9]+$/);
@@ -29,6 +31,8 @@ const currentManager216Stage=process.env.STATIC_WEEKLY_TEST_CURRENT_216==='1';
 const currentManager217Stage=process.env.STATIC_WEEKLY_TEST_CURRENT_217==='1';
 const currentManager218Stage=process.env.STATIC_WEEKLY_TEST_CURRENT_218==='1';
 const currentManager219Stage=process.env.STATIC_WEEKLY_TEST_CURRENT_219==='1';
+const ownedCheckpointMode=process.env.STATIC_WEEKLY_TEST_OWNED_CHECKPOINT_219==='1';
+assert.ok(!ownedCheckpointMode||currentManager219Stage,'owned checkpoint requires the exact current219 fixture');
 const currentManager218Http=process.env.STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION_HTTP==='1';
 const currentManager218Browser=process.env.STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION_BROWSER==='1';
 assert.ok(process.env.STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION_HTTP==null||currentManager218Http,
@@ -47,8 +51,8 @@ if(currentManager216Stage)assertCurrentManagerMigrationSet();
 if(currentManager217Stage)assertCurrentManager217MigrationSet();
 if(currentManager218Stage)assertCurrentManager218MigrationSet();
 if(currentManager219Stage)assertCurrentManager219MigrationSet();
-if(currentManagerStage)assert.equal(process.env.STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION,'1','current manager proof must execute confirmation');
-else assert.ok(process.env.STATIC_WEEKLY_CONTINUITY_TEMPLATE,'explicit immutable local source');
+if(currentManagerStage&&!ownedCheckpointMode)assert.equal(process.env.STATIC_WEEKLY_TEST_RECURRING_CONFIRMATION,'1','current manager proof must execute confirmation');
+if(!currentManagerStage)assert.ok(process.env.STATIC_WEEKLY_CONTINUITY_TEMPLATE,'explicit immutable local source');
 const bytes=currentManagerStage?loadCurrentManagerPublicationFixture().bytes:readFileSync(process.env.STATIC_WEEKLY_CONTINUITY_TEMPLATE),packet=JSON.parse(bytes),source=packet.compilerInput;
 assert.equal(digest(source),packet.sourceDigest);
 const sourceRows=source.version.assignments.length;
@@ -60,8 +64,13 @@ assert.equal(source.version.vacantSlotIds.length,3);
 const pool=new Pool({host:socket,database:'postgres',user:'supabase_admin',password:'postgres',max:3,connectionTimeoutMillis:5000});
 pool.on('error',e=>console.error('SYNTHETIC_POOL_ERROR',e.code));
 const preparations=[];
-const plane=createStaticWeeklyControlPlane({database:pool,compilerPreparer:async(...args)=>{
- const result=await compileAndPrepareStaticWeeklyScheduleIsolated(...args);preparations.push(result);return result;
+// The new stage is itself a detached, identity-checked group leader. Its
+// compiler/solver must inherit that same group for absolute-deadline cleanup.
+const ownedCompiler=ownedCheckpointMode?createStaticWeeklyCompilerRuntime({workerDetached:false}):null;
+const plane=createStaticWeeklyControlPlane({database:pool,
+ ...(ownedCompiler?{shutdownCompiler:ownedCompiler.shutdown}:{}),compilerPreparer:async(...args)=>{
+ const result=await (ownedCompiler?.compileAndPrepare||compileAndPrepareStaticWeeklyScheduleIsolated)(...args);
+ preparations.push(result);return result;
 }});
 const query=async(sql,args=[])=>{const r=await pool.query(sql,args);return r.rows[0]?.result;};
 async function rpc(role,name,args=[]){const c=await pool.connect();try{await c.query('begin');await c.query('set local role '+role);
@@ -123,6 +132,7 @@ try{
  if(process.env.STATIC_WEEKLY_TEST_LUNCH_MATERIALIZATION==='1')lunchMaterializationProof=await testLunchMaterialization({pool,projectionId:published.data.projection_id,lunch,check});
  check('actual persisted current-six lunch count',lunch.loans.length,30);
  check('actual persisted current-six no unresolved lunch',lunch.loans.filter(l=>l.status==='REVIEW_REQUIRED').length,0);
+ const dateReadback=[];
  for(let offset=0;offset<7;offset++){
   const day=new Date(Date.parse(week+'T12:00:00Z')+offset*86400000),date=day.toISOString().slice(0,10),dow=day.getUTCDay();
   const roster=await query('select coalesce(jsonb_agg(to_jsonb(r)),\'[]\') as result from public.static_weekly_v6_read_roster($1::date) r',[date]);
@@ -133,8 +143,36 @@ try{
   const doc=await cp('static_weekly_v8_read_lunch_document',[date]);
   check(date+' official lunch bound to accepted projection',doc.projection_id,published.data.projection_id);
   check(date+' fixed employee lunches only',doc.loans.length,staff.length);
-  check(date+' current database authority',await query('select projection_status as result from public.static_weekly_v6_schedule_authority_state($1::date)',[date]),'current');
+  const projectionStatus=await query('select projection_status as result from public.static_weekly_v6_schedule_authority_state($1::date)',[date]);
+  check(date+' current database authority',projectionStatus,'current');
+  dateReadback.push({date,projectionId:published.data.projection_id,projectionStatus,
+   lunchIdentity:doc.document_identity,rosterCount:roster.length,loanCount:doc.loans.length});
  }
+ if(ownedCheckpointMode){
+  const output=process.env.STATIC_WEEKLY_TEST_OWNED_CHECKPOINT_OUTPUT;
+  assert.match(output??'',/^\/tmp\/mz-manager-owned-[A-Za-z0-9]+\/checkpoint\.json$/,
+   'caller-owned checkpoint output only');
+  check('checkpoint original source remains exact registered SQL bytes',
+   await query('select source_digest as result from public.static_weekly_authority_source_documents where source_id=$1',[packet.original.sourceId]),packet.original.sourceDigest);
+  check('checkpoint current source remains exact registered SQL bytes',
+   await query('select source_digest as result from public.static_weekly_authority_source_documents where source_id=$1',[packet.sourceId]),packet.sourceDigest);
+  const publication={managerId,secondManagerId:'10000000-0000-4000-8000-000000000273',week,
+   currentSourceId:packet.sourceId,currentSourceDigest:packet.sourceDigest,
+   originalSourceId:packet.original.sourceId,originalSourceDigest:packet.original.sourceDigest,
+   versionId:published.data.version_id,publicationId:published.data.publication_id,
+   projectionId:published.data.projection_id,authorityRevision:await revision(),
+   projectionStatus:'current',acceptedRows:derivedRows,relationalDigest,
+   lunchIdentity:lunch.document_identity,lunchLoans:lunch.loans.length,dates:dateReadback,
+   defaultApiGrants:Number(execFileSync('docker',['exec','-i',container,'psql','-X','-q','-At','-v','ON_ERROR_STOP=1',
+    '-U','supabase_admin','-d','postgres','-c',"select count(*) from pg_default_acl d cross join lateral aclexplode(d.defaclacl) a where d.defaclnamespace in (0,'public'::regnamespace) and d.defaclrole in ('postgres'::regrole,'supabase_admin'::regrole) and d.defaclobjtype in ('r','S') and a.grantee in (0,'anon'::regrole,'authenticated'::regrole,'service_role'::regrole)"],{encoding:'utf8',timeout:5000}).trim()),
+   confirmationStatus:'NOT_YET_ATTEMPTED'};
+  const checkpoint=createCurrentManager219OwnedCheckpoint({publication,environment:{
+   containerName:container,containerId:inspection.Id,
+   image:'supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed',
+   network:inspection.HostConfig.NetworkMode,socket,socketMount:'/test-socket',database:'postgres'}});
+  writeFileSync(output,JSON.stringify(checkpoint)+'\n',{flag:'wx',mode:0o600});
+  console.log('OWNED_219_PERSISTED_CHECKPOINT_SOURCE_BOUND',checkpoint.digest,checks);
+ }else{
  const registered=await cp('static_weekly_v3_read_publication_source',[published.data.publication_id,week]);
  if(sourceRows===312){
   const snapshot=await cp('static_weekly_v3_read_manager_snapshot',[week]);
@@ -339,4 +377,5 @@ try{
  const evidence={classification:'SYNTHETIC_LOCAL_NOT_ADMITTED',sourcePacketSha256:createHash('sha256').update(bytes).digest('hex'),source,projection,lunch,replay,recurringPreview,recurringAdmissionProof,recurringConfirmationProof,lunchMaterializationProof,checks,production:false,independentAudit:false};
  if(process.env.STATIC_WEEKLY_CONTINUITY_EVIDENCE)writeFileSync(process.env.STATIC_WEEKLY_CONTINUITY_EVIDENCE,JSON.stringify(evidence)+'\n',{flag:'wx'});
  console.log(JSON.stringify({status:'PASS',checks,sourceDigest:packet.sourceDigest,loans:30,immutableRows:sourceRows,derivedRows,production:false,independentAudit:false}));
+ }
 }finally{await plane.close();}

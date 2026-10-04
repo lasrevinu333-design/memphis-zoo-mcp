@@ -18,7 +18,12 @@ const ROOT=new URL('../',import.meta.url);
 const requiredFiles=['scripts/run-isolated-shift-end-tests.mjs',
  'scripts/static-weekly-current-roster-publication-tests.mjs',
  'scripts/fixtures/current-manager-publication-source.mjs',
- 'scripts/fixtures/current-manager-219-source.mjs'];
+ 'scripts/fixtures/current-manager-219-source.mjs',
+ 'scripts/static-weekly-current-manager-owned-checkpoint.mjs',
+ 'scripts/static-weekly-current-manager-owned-checkpoint-child.mjs',
+ 'scripts/static-weekly-current-manager-owned-stage.mjs',
+ 'scripts/static-weekly-recurring-confirmation-http-integration.mjs',
+ 'scripts/static-weekly-recurring-http-boundary.mjs'];
 
 function closed(value,keys,label){
  assert.ok(value&&typeof value==='object'&&!Array.isArray(value),`${label} must be an object`);

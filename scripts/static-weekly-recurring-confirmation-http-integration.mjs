@@ -15,11 +15,10 @@ import {recurringHttpSqlBoundary,captureRecurringHttpTransportFailure,
 // the alternate writer to the direct confirmation integration, never a second
 // confirmation against the same revision. No real trusted device or phone is
 // represented by the synthetic credential below.
-export async function testRecurringConfirmationHttp({pool,week,originalManagerId,check,requestAdapterFactory=null}) {
+export async function testRecurringConfirmationHttp({pool,week,originalManagerId,check,requestAdapterFactory=null,
+ managerOperationClock=null,attemptRemainingMilliseconds=null}) {
  const secondManager={manager_id:'10000000-0000-4000-8000-000000000273',
   display_name:'Second synthetic recurring HTTP manager',roles:['OPS_MANAGER','CUSTODIAL_MANAGER'],active:true};
- await pool.query("insert into public.ops_manager_managers(manager_id,display_name,roles,active,is_system_principal) values($1,$2,array['OPS_MANAGER','CUSTODIAL_MANAGER'],true,false)",
-  [secondManager.manager_id,secondManager.display_name]);
  const env={NODE_ENV:'test',SUPABASE_URL:'https://scheduler-http-synthetic.invalid',
   SUPABASE_SERVICE_ROLE_KEY:'scheduler-http-synthetic-not-production',
   OPS_MANAGER_SESSION_SECRET:'scheduler-http-synthetic-session-secret-0123456789'};
@@ -33,7 +32,19 @@ export async function testRecurringConfirmationHttp({pool,week,originalManagerId
   credentialId:credential,deviceId:device,manager,authMode:'trusted_device',
   accessLevel:access,maximumAccessLevel:access,env}).token;
  const managerToken=token(secondManager),readOnlyToken=token(secondManager,credentialId,deviceId,'read_only');
- const q=async(sql,args=[])=>(await pool.query(sql,args)).rows[0]?.result;
+ const remaining=()=>{
+  if(!attemptRemainingMilliseconds)return null;
+  const value=attemptRemainingMilliseconds();
+  assert.ok(Number.isSafeInteger(value)&&value>0&&value<=60000,'HTTP SQL test shares the original attempt');
+  return value;
+ };
+ await (attemptRemainingMilliseconds
+  ?pool.query({text:"insert into public.ops_manager_managers(manager_id,display_name,roles,active,is_system_principal) values($1,$2,array['OPS_MANAGER','CUSTODIAL_MANAGER'],true,false)",
+   values:[secondManager.manager_id,secondManager.display_name],query_timeout:remaining()})
+  :pool.query("insert into public.ops_manager_managers(manager_id,display_name,roles,active,is_system_principal) values($1,$2,array['OPS_MANAGER','CUSTODIAL_MANAGER'],true,false)",
+   [secondManager.manager_id,secondManager.display_name]));
+ const q=async(sql,args=[])=>(await (attemptRemainingMilliseconds
+  ?pool.query({text:sql,values:args,query_timeout:remaining()}):pool.query(sql,args))).rows[0]?.result;
  const counts=()=>q(`select jsonb_build_object('parents',(select count(*) from public.static_weekly_recurring_confirmations),
   'sources',(select count(*) from public.static_weekly_authority_source_documents),
   'publications',(select count(*) from public.weekly_schedule_publications),
@@ -56,11 +67,13 @@ export async function testRecurringConfirmationHttp({pool,week,originalManagerId
   if(traceConfirm)try{writeSync(1,`ACTUAL_RECURRING_HTTP_CONFIRM_BOUNDARY process_exit_code:${Number.isSafeInteger(code)?code:'OTHER'} ${Math.round(performance.now()-confirmStart)}\n`);}catch{}
  };
  const database={async connect(){trace('sql_connect_start');checkedOut++;maxCheckedOut=Math.max(maxCheckedOut,checkedOut);
-  const client=await pool.connect();trace('sql_connect_acquired');return{on:client.on.bind(client),removeListener:client.removeListener.bind(client),
+  remaining();const client=await pool.connect();trace('sql_connect_acquired');return{on:client.on.bind(client),removeListener:client.removeListener.bind(client),
    async query(sql,args){const boundary=recurringHttpSqlBoundary(sql);
     if(boundary)trace(`sql_start:${boundary}`);
     let result;
-    try{result=await client.query(sql,args);}catch(error){if(boundary)trace(`sql_rejected:${boundary}`);throw error;}
+    try{result=await (attemptRemainingMilliseconds
+     ?client.query({text:sql,values:args,query_timeout:remaining()}):client.query(sql,args));}
+    catch(error){if(boundary)trace(`sql_rejected:${boundary}`);throw error;}
     if(boundary)trace(`sql_complete:${boundary}`);
     if(sql==='commit'&&loseCommit){loseCommit=false;trace('synthetic_commit_response_lost');throw Object.assign(new Error('synthetic lost COMMIT response after acceptance'),{code:'08006'});}
     return result;},release(error){trace('sql_client_release');checkedOut--;client.release(error);}};},async end(){}};
@@ -78,7 +91,8 @@ export async function testRecurringConfirmationHttp({pool,week,originalManagerId
  }};
  let server=null,requestAdapter=null;
  try{
-  const runtime=createStaticWeeklyControlPlaneRuntime({env,database,controlPlane:plane,supabase,trustedDeviceStore});
+  const runtime=createStaticWeeklyControlPlaneRuntime({env,database,controlPlane:plane,supabase,trustedDeviceStore,
+   managerOperationClock});
   server=createServer(runtime.app);await new Promise((resolve,reject)=>server.listen(0,'127.0.0.1',error=>error?reject(error):resolve()));
   server.prependListener('request',(req,res)=>{
    if(!traceConfirm||req.method!=='POST'||req.url!=='/static-weekly/recurring-adaptation/confirm')return;
