@@ -52,7 +52,7 @@ const runRpc=async(name,args)=>{
 const app=express();app.use(express.json());
 app.use('/schedule-api',createScheduleRouter({runReadOnlySql:read,runRpc,runCommand:async()=>({}),
   buildHealthPayload:()=>({ok:true}),requireAdminApiAuth:(_q,_s,n)=>n(),requireOpsManagerAuth:(_q,_s,n)=>n(),
-  requireDeviceAccess:(req,_res,next)=>{req.memphisDevice={canonical_device_id:'KIOSK_08',device_id:'KIOSK_08'};
+  requireDeviceAccess:(req,_res,next)=>{req.memphisDevice={canonical_device_id:'KIOSK_08',device_id:'KIOSK_08',assigned_employee_id:employee,assignment_epoch:7};
     req.memphisDeviceCredential={credential_id:credential};next();},appVersion:'test',releaseId:'test',contractVersion:'test'}));
 const server=await new Promise(resolve=>{const instance=app.listen(0,'127.0.0.1',()=>resolve(instance));});
 let checks=0;const same=(actual,expected,message)=>{assert.deepEqual(actual,expected,message);checks++;};
