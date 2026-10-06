@@ -3364,6 +3364,11 @@ export function createScheduleRouter({
         resolvedEmployeeId = employeeRows[0].employee_id;
       }
 
+      if (req.memphisDevice && (req.memphisDevice.assigned_employee_id !== resolvedEmployeeId
+          || Number(req.memphisDevice.assignment_epoch) !== Number(assignment?.assignment_epoch))) {
+        res.status(403).json({ ok: false, error: "Device assignment changed. Refresh the current identity." });
+        return;
+      }
       // A terminal recurring winner must arrive before the legacy employee-day
       // reader can turn it into a 503 and leave an old usable phone cache.
       const delivery = assignment ? await readScheduleDelivery({ serviceDate, assignment,
@@ -3421,7 +3426,15 @@ export function createScheduleRouter({
           recurring_delivery: delivery?.mode?.startsWith("RECURRING_") ? delivery.delivery : null,
           schedule_delivery_mode: delivery?.mode || null,
         },
-        meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion },
+        meta: {
+          version: appVersion, release_id: releaseId, contract_version: contractVersion,
+          generated_at: new Date().toISOString(),
+          canonical_device_id: assignment?.canonical_device_id || deviceId || null,
+          employee_id: resolvedEmployeeId,
+          assignment_epoch: Number.isSafeInteger(Number(assignment?.assignment_epoch))
+            ? Number(assignment.assignment_epoch) : null,
+          credential_id: req.memphisDeviceCredential?.credential_id || null,
+        },
       });
     } catch (error) {
       fail(res, error, "Personal schedule summary failed");

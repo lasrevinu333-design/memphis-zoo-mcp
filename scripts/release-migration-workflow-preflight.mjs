@@ -4,6 +4,7 @@ import { lstatSync, readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { SCHEMA_CATALOG_NAMES, fingerprintSchemaCatalog } from "./schema-fingerprint-catalog.mjs";
+import { readMigrationReplayPlan } from "./migration-replay-order.mjs";
 
 // This reads checked-out source only. It has no database or provider client.
 // Run before authorization or mutation so an incompatible target fails early.
@@ -28,13 +29,24 @@ export function assertReleaseWorkflowSource(root) {
   const files = readdirSync(resolve(root, "supabase/migrations")).filter((file) => file.endsWith(".sql")).sort();
   for (const file of files) assert.match(file, /^[0-9]{14}_[a-z][a-z0-9_]*\.sql$/);
   assert.equal(new Set(files.map((file) => file.slice(0, 14))).size, files.length, "Migration versions must be unique");
-  const applied = files.filter((file) => file.slice(0, 14) <= source.ledger_head);
-  const pending = files.filter((file) => file.slice(0, 14) > source.ledger_head);
-  assert.ok(pending.length > 0, "A migration release requires a nonempty pending suffix");
+  // Independently developed migrations can predate the current live ledger
+  // head. Only the byte-bound complete source prefix establishes their phase;
+  // sorting timestamps is never proof that a migration was installed.
+  const plan = readMigrationReplayPlan(root);
+  assert.equal(state.source_binding?.source_replay_manifest, "supabase/canonical/migration-replay-order.json");
+  assert.equal(state.source_binding?.source_replay_manifest_sha256, plan.manifestSha256,
+    "The release must bind the exact reviewed migration phases");
+  assert.equal(plan.baseSourceCommit, state.source_binding?.source_prefix_commit,
+    "The installed source prefix must have an explicit immutable commit");
+  const applied = plan.files.slice(0, plan.baseCount);
+  const pending = plan.files.slice(plan.baseCount);
+  assert.deepEqual([...plan.files].sort(), files, "Replay phases must cover the exact migration source");
+  assert.ok(pending.length > 0, "A migration release requires a nonempty pending phase");
+  assert.equal(pending.length, plan.forwardCount);
   assert.equal(applied.length, source.source_authority_migration_count);
   assert.equal(applied.at(-1), `${source.ledger_head}_${source.source_migration_name}.sql`);
   assert.ok(Array.isArray(state.pending_migrations));
-  assert.deepEqual(state.pending_migrations.map(({ file }) => file), pending, "Pending migrations must equal the complete ordered source suffix");
+  assert.deepEqual(state.pending_migrations.map(({ file }) => file), pending, "Pending migrations must equal the complete ordered unapplied phase");
   for (const [index, item] of state.pending_migrations.entries()) {
     assert.equal(item.order, index + 1, "Pending migration order must be contiguous");
     assert.equal(item.source_migration_version, item.file.slice(0, 14), "Pending version must match its filename");

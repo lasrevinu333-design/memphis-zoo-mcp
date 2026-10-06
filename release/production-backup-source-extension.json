@@ -9,9 +9,9 @@
     "migration_head": "20260920010000",
     "migration_manifest_sha256": "8af6170072e7971f0526538f9477f6ef2063a046190cf414b04db31b9c81ea3e"
   },
-  "observed_ledger_count": 233,
-  "observed_ledger_head": "20261006162427",
-  "observed_catalog_fingerprint": "440c5cfa077055cae5ec41537496f50f2d99ec7cc91c5cdf5cc5ead8d44268a5",
+  "observed_ledger_count": 234,
+  "observed_ledger_head": "20261006203931",
+  "observed_catalog_fingerprint": "1e16187577e00c47c3520688cb32c06cfcf52a870982e566820e0a6a1e66e3da",
   "extensions": [
     {
       "ledger_version": "20261006034155",
@@ -30,6 +30,12 @@
       "ledger_name": "custodial_shared_events_recovery_binding",
       "source_file": "20261006162427_custodial_shared_events_recovery_binding.sql",
       "sql_sha256": "c889928458f5b8e70b860c41f707e8c1438d88270dc60b68cea32c6f06bc2537"
+    },
+    {
+      "ledger_version": "20261006203931",
+      "ledger_name": "custodial_delegated_coverall",
+      "source_file": "20261006203931_custodial_delegated_coverall.sql",
+      "sql_sha256": "2f84424673d75eb2986a2c5d4b51c51baf4cbcb869def741aa5f5c84b5b3e475"
     }
   ]
 }

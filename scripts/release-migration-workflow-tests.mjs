@@ -4,6 +4,7 @@ import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:f
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { assertReleaseWorkflowSource } from "./release-migration-workflow-preflight.mjs";
+import { readMigrationReplayPlan } from "./migration-replay-order.mjs";
 
 const root = resolve(new URL("..", import.meta.url).pathname);
 const workflow = readFileSync(join(root, ".github/workflows/build52-production-migration-apply.yml"), "utf8");
@@ -12,6 +13,7 @@ const state = JSON.parse(readFileSync(statePath, "utf8"));
 const candidate = "a".repeat(40);
 const tree = "b".repeat(40);
 const cases = [];
+const sourcePlan = readMigrationReplayPlan(root);
 function check(name, action) { action(); cases.push(name); }
 function predicate(section) {
   const start = section.indexOf("'($release_state[0]) as $state") + 1;
@@ -44,7 +46,17 @@ const goodObserved = {format:"memphis-zoo-build52-production-post-apply.v1", ok:
   ledger_count:state.target.production_ledger_count, ledger_head:state.target.source_migration_version,
   counts:{functions:state.target.expected_catalog_counts.functions,routine_grants:state.target.expected_catalog_counts.routine_grants},
   schema_fingerprint:state.target.canonical_source_schema_fingerprint};
-check("source preflight accepts the exact checked-out target", () => assert.equal(assertReleaseWorkflowSource(root).pendingCount, 46));
+check("source preflight accepts the exact checked-out phase-bound target", () => {
+  const result=assertReleaseWorkflowSource(root);
+  assert.equal(result.pendingCount,sourcePlan.forwardCount);
+  assert.equal(state.observed_production.source_authority_migration_count,sourcePlan.baseCount);
+  assert.equal(state.pending_migrations[0].file,sourcePlan.files[sourcePlan.baseCount]);
+});
+check("uninstalled older-date migrations remain pending rather than silently skipped", () => {
+  const older=state.pending_migrations.filter(row=>row.source_migration_version<state.observed_production.ledger_head);
+  assert.ok(older.length>0,"This merged-source regression must exercise nonchronological deployment order");
+  assert.equal(assertReleaseWorkflowSource(root).pendingCount,state.pending_migrations.length);
+});
 check("preflight runs before authorization and mutation", () => {
   const first = workflow.indexOf("node scripts/release-migration-workflow-preflight.mjs");
   assert.ok(first > 0 && first < workflow.indexOf("- uses: actions/download-artifact"));
@@ -55,7 +67,7 @@ check("preflight runs before authorization and mutation", () => {
 check("both workflow jq invocations load the checked-out release state", () => {
   for (const section of [applySection, observedSection]) assert.match(section, /--slurpfile release_state release\/production-migration-state\.json/);
 });
-check("correct 46-migration apply receipt passes actual workflow jq", () => assert.equal(jqAccepts(applyPredicate,goodApply),true));
+check("complete phase-bound apply receipt passes actual workflow jq", () => assert.equal(jqAccepts(applyPredicate,goodApply),true));
 check("correct target-query receipt passes actual workflow jq", () => assert.equal(jqAccepts(observedPredicate,goodObserved),true));
 check("obsolete 23-migration apply receipt is rejected", () => {
   const old={...goodApply,after_ledger_count:253,after_ledger_head:"20260925190000",applied:applied.slice(0,23),target_catalog_fingerprint:"34f13666aac64ba95409d4f074581a791541e6a1a09f1d560598583c05882a45"};
@@ -100,7 +112,7 @@ for(const [name,mutate] of observedMutations) check(`production-query receipt re
 const fixture=mkdtempSync(join(tmpdir(),"custodial-workflow-preflight-"));
 try {
  for(const path of ["release/production-migration-state.json","release/frontend-release-manifest.json",
-  "supabase/canonical/schema-fingerprint.txt","supabase/canonical/schema-fingerprint-input.json","supabase/migrations"])
+  "supabase/canonical/schema-fingerprint.txt","supabase/canonical/schema-fingerprint-input.json","supabase/canonical/migration-replay-order.json","supabase/migrations"])
   cpSync(join(root,path),join(fixture,path),{recursive:true});
  const fixtureState=join(fixture,"release/production-migration-state.json");
  for(const [name,mutate] of [
@@ -110,10 +122,34 @@ try {
   ["wrong migration digest",v=>{v.pending_migrations[0].sha256="0".repeat(64);}],
   ["wrong migration version",v=>{v.pending_migrations[0].source_migration_version="0".repeat(14);}],
   ["wrong phase",v=>{v.pending_migrations[0].phase="wrong_phase";}],
+  ["wrong reviewed replay hash",v=>{v.source_binding.source_replay_manifest_sha256="0".repeat(64);}],
+  ["wrong source-prefix commit",v=>{v.source_binding.source_prefix_commit="0".repeat(40);}],
+  ["wrong source-prefix count",v=>{v.observed_production.source_authority_migration_count+=1;}],
+  ["substituted replay path",v=>{v.source_binding.source_replay_manifest="other-manifest.json";}],
   ["wrong fingerprint",v=>{v.target.canonical_source_schema_fingerprint="0".repeat(64);}],
   ["incomplete target counts",v=>{delete v.target.expected_catalog_counts.functions;}],
  ]) check(`pre-mutation source check rejects ${name}`,()=>{
   const bad=structuredClone(state);mutate(bad);writeFileSync(fixtureState,JSON.stringify(bad));
+  assert.throws(()=>assertReleaseWorkflowSource(fixture));
+ });
+ writeFileSync(fixtureState,JSON.stringify(state));
+ const manifestPath=join(fixture,"supabase/canonical/migration-replay-order.json");
+ const manifest=JSON.parse(readFileSync(manifestPath,"utf8"));
+ for(const [name,mutate] of [
+  ["missing applied prefix entry",v=>v.phases[0].files.pop()],
+  ["pending entry moved into applied phase",v=>v.phases[0].files.push(v.phases[1].files.shift())],
+  ["altered phase identity",v=>{v.phases[0].kind="inferred_from_timestamp";}],
+  ["reordered applied phase",v=>v.phases[0].files.reverse()],
+  ["reordered pending phase",v=>v.phases[1].files.reverse()],
+  ["replay declaration claiming permission to deploy",v=>{v.production_execution_authorized=true;}],
+ ])check(`source preflight rejects ${name}`,()=>{
+  const bad=structuredClone(manifest);mutate(bad);writeFileSync(manifestPath,JSON.stringify(bad));
+  assert.throws(()=>assertReleaseWorkflowSource(fixture));
+ });
+ writeFileSync(manifestPath,readFileSync(join(root,"supabase/canonical/migration-replay-order.json")));
+ const prefixFile=join(fixture,"supabase/migrations",sourcePlan.files[0]);
+ check("applied-prefix SQL byte tampering is rejected as well as pending tampering",()=>{
+  writeFileSync(prefixFile,readFileSync(prefixFile,"utf8")+"\n-- tampered fixture\n");
   assert.throws(()=>assertReleaseWorkflowSource(fixture));
  });
 } finally { rmSync(fixture,{recursive:true,force:true}); }

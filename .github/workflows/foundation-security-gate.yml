@@ -63,6 +63,9 @@ jobs:
           set -euo pipefail
           npm run --silent test:auth
           npm run --silent test:backup-source-binding
+          node --test scripts/device-profile-epoch-tests.mjs scripts/employee-schedule-identity-tests.mjs
+          node scripts/manager-scheduler-http-tests.mjs
+          node scripts/manager-scheduler-database-tests.mjs
           npm run --silent test:owner-access
           npm run --silent test:foundation-containment
           npm run --silent test:readonly-database-authority

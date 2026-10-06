@@ -132,6 +132,11 @@ for (const name of workflowNames) {
 }
 
 const schedulerGate = readFileSync(resolve(workflowDirectory, "foundation-security-gate.yml"), "utf8");
+assertExactCommandsInJob(schedulerGate,"validate",[
+  "node --test scripts/device-profile-epoch-tests.mjs scripts/employee-schedule-identity-tests.mjs",
+  "node scripts/manager-scheduler-http-tests.mjs",
+  "node scripts/manager-scheduler-database-tests.mjs",
+],"Current scheduler permissions and assignment identity must remain called, not only archived");
 const packageManifest = readFileSync(resolve(root, "package.json"), "utf8");
 const parsedPackageManifest = JSON.parse(packageManifest);
 assert.match(schedulerGate, /^on:\n\s+pull_request:\s*\n\s+push:\s*$/m, "the scheduler authority gate must run for every pull request and every pushed branch");

@@ -1,6 +1,6 @@
 {
   "schema": "custodial.migration-replay-order.v1",
-  "base_source_commit": "ac579d7b0cf12e6a437ffd9e6c2fec47a4f61dfa",
+  "base_source_commit": "b227a0a99e627224ec5948c18a914b48f461f0fe",
   "production_execution_authorized": false,
   "reason": "Retain the previously verified main source prefix, then apply every forward scheduler migration. Source-creation timestamps from independently developed branches are not their actual deployment order.",
   "phases": [
@@ -538,6 +538,10 @@
         {
           "name": "20261006162427_custodial_shared_events_recovery_binding.sql",
           "sha256": "c889928458f5b8e70b860c41f707e8c1438d88270dc60b68cea32c6f06bc2537"
+        },
+        {
+          "name": "20261006203931_custodial_delegated_coverall.sql",
+          "sha256": "2f84424673d75eb2986a2c5d4b51c51baf4cbcb869def741aa5f5c84b5b3e475"
         }
       ]
     },
@@ -911,6 +915,10 @@
         {
           "name": "20261006190426_manager_scheduler_recovery_binding.sql",
           "sha256": "7a57b1b3607d27bd298646f72bc65917cb522e26a2c6169bb610ec79500c6209"
+        },
+        {
+          "name": "20261006211215_preserved_coverall_validator_recovery.sql",
+          "sha256": "2a47538c6c202482711e0ff80516c8a62a7acdf993302b3b3ef3dc0d3a237399"
         }
       ]
     }

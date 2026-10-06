@@ -35,15 +35,15 @@ const { clientConfig, databaseUrl } = canonicalReleaseFixtureConnection(database
 const root = resolve(new URL("..", import.meta.url).pathname);
 const state = JSON.parse(readFileSync(resolve(root, "release/production-migration-state.json"), "utf8"));
 const replayManifest=JSON.parse(readFileSync(resolve(root,"supabase/canonical/migration-replay-order.json"),"utf8"));
-assert.equal(replayManifest.phases[0].files.length,133,"exact installed-source fixture prefix");
-assert.equal(replayManifest.phases[1].files.length,92,"exact pending source inventory");
+assert.equal(replayManifest.phases[0].files.length,134,"exact installed-source fixture prefix");
+assert.equal(replayManifest.phases[1].files.length,93,"exact pending source inventory");
 assert.equal(replayManifest.production_execution_authorized,false,"source manifest is not execution approval");
 assert.deepEqual(state.pending_migrations.map(({order,file,sha256})=>({order,file,sha256})),
  replayManifest.phases[1].files.map((item,index)=>({order:index+1,file:item.name,sha256:item.sha256})),
  "the pending declaration must equal all exact forward files, including earlier-dated uninstalled files");
-assert.equal(state.observed_production.ledger_head,"20261006162427");
-assert.equal(state.observed_production.production_ledger_count,233);
-assert.equal(state.target.production_ledger_count,325);
+assert.equal(state.observed_production.ledger_head,"20261006203931");
+assert.equal(state.observed_production.production_ledger_count,234);
+assert.equal(state.target.production_ledger_count,327);
 const sourceVersions=new Set(replayManifest.phases[0].files.map(item=>item.name.slice(0,14)));
 assert.ok(state.pending_migrations.every(item=>!sourceVersions.has(item.source_migration_version)),
  "no pending migration may repeat an installed-source version");
@@ -290,7 +290,7 @@ try {
   const afterFingerprint = fingerprintSchemaCatalog(afterCatalog);
   const canonical = JSON.parse(readFileSync(resolve(root, "supabase/canonical/schema-fingerprint-input.json"), "utf8"));
   assert.equal(afterFingerprint.fingerprint, state.target.canonical_source_schema_fingerprint,
-    `the exact forty-six-migration correction plan must terminate at the canonical target catalog: ${JSON.stringify(firstCatalogDifference(canonical, afterFingerprint.normalized))}`);
+    `the exact ninety-three-migration correction plan must terminate at the canonical target catalog: ${JSON.stringify(firstCatalogDifference(canonical, afterFingerprint.normalized))}`);
   await assert.rejects(runPlan(), /already present|pre-migration production state|Locked source catalog/,
     "the complete plan is exactly-once and rejects replay or partial application");
   console.log("RELEASE_MIGRATION_PLAN_DATABASE_TESTS_PASS");
