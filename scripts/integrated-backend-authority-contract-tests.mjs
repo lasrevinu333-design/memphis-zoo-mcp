@@ -50,6 +50,7 @@ const eventReminderWorkdayAndOwnerContractFile = "20260918012000_event_reminder_
 const eventReminderWorkdayAndOwnerContract = readFileSync(`supabase/migrations/${eventReminderWorkdayAndOwnerContractFile}`, "utf8");
 const eventReminderStaticWeeklyAuthorityFile = "20260920010000_event_reminder_static_weekly_authority.sql";
 const custodialOwnerDelegatedActionsFile = "20261006031304_custodial_owner_delegated_actions.sql";
+const sharedEventsOutlookFile = "20261006113610_custodial_shared_events_outlook.sql";
 const eventReminderStaticWeeklyAuthority = readFileSync(`supabase/migrations/${eventReminderStaticWeeklyAuthorityFile}`, "utf8");
 const index = readFileSync("src/index.js", "utf8");
 const ownerAccessApi = readFileSync("src/owner-access-api.js", "utf8");
@@ -73,6 +74,7 @@ const exactPendingReleaseMigrations = [
   eventReminderWorkdayAndOwnerContractFile,
   eventReminderStaticWeeklyAuthorityFile,
   custodialOwnerDelegatedActionsFile,
+  sharedEventsOutlookFile,
 ];
 const exactMigrationFiles = readdirSync("supabase/migrations").filter((name) => /^[0-9]{14}_.+\.sql$/.test(name)).sort();
 const exactMigrationCount = exactMigrationFiles.length;
@@ -187,13 +189,13 @@ assert.match(schemaFingerprintRefresh, /target\?\.canonical_source_schema_finger
 assert.match(populatedPreflightWorkflow, /release:populated-schema:preflight/);
 assert.match(releaseInput.cutover.phase_order[1], /exact observed production ledger head.*catalog\/privilege fingerprint.*zero target-position collisions/i);
 assert.match(releaseInput.cutover.phase_order[2], /fresh post-capture backup receipt.*exact pending-migration digest.*exact source attestation/i);
-assert.match(releaseInput.cutover.phase_order[3], /five exact ordered pending migrations.*two-internal-absence alignment.*pausing guest notifications while disabled.*event-reminder workday\/current-owner contract.*current static-weekly event-reminder authority.*ledger to advance exactly five entries.*do not replay historical production migrations/i);
+assert.match(releaseInput.cutover.phase_order[3], /six exact ordered pending migrations.*two-internal-absence alignment.*pausing guest notifications while disabled.*event-reminder workday\/current-owner contract.*current static-weekly event-reminder authority.*ledger to advance exactly six entries.*do not replay historical production migrations/i);
 assert.match(releaseInput.cutover.phase_order[4], /retain the current immutable weighted-schedule publication by default.*only when a named manager approves a replacement.*derive exactly one replacement draft from the current publication.*expected-revision and idempotency guards.*do not create a competing draft.*preserve the current publication/i);
 assert.equal(releaseInput.cutover.production_migration_state, "release/production-migration-state.json");
 assert.match(releaseInput.cutover.production_migration_evidence.github_actions,
   /repository.*workflow ref.*workflow commit.*run ID.*run-attempt.*cannot contain task-local fields/i);
 assert.match(releaseInput.cutover.production_migration_evidence.task_local,
-  /host networking.*db\.rqquvtjdmugpigbndmne\.supabase\.co.*verify-full.*encrypted archive stays local.*same isolated restore.*five-migration.*runtime.*write.*replay.*cleanup/i);
+  /host networking.*db\.rqquvtjdmugpigbndmne\.supabase\.co.*verify-full.*encrypted archive stays local.*same isolated restore.*six-migration.*runtime.*write.*replay.*cleanup/i);
 assert.match(releaseInput.cutover.production_migration_evidence.authorization_and_apply,
   /archive.*receipt\/result.*candidate commit\/tree.*runner.*signer IDs.*source\/target migration and catalog.*zero leases.*timestamps.*dedicated ephemeral verification key.*never the archive or rehearsal.*sanitized result and receipt hashes/i);
 assert.equal(productionMigrationState.artifact, "production-migration-state.v2");
@@ -224,20 +226,20 @@ assert.equal(productionMigrationState.observed_production.vacancy_functions_pres
 assert.equal(productionMigrationState.observed_production.hydrated_initial_draft_reader_present, true);
 assert.equal(productionMigrationState.observed_production.registered_source_dated_status_excluded, true);
 assert.equal(productionMigrationState.observed_production.outlook_event_sync_table_present, true);
-assert.equal(productionMigrationState.target.source_migration_file, custodialOwnerDelegatedActionsFile);
-assert.equal(productionMigrationState.target.source_migration_name, "custodial_owner_delegated_actions");
-assert.equal(productionMigrationState.target.source_migration_version, "20261006031304");
+assert.equal(productionMigrationState.target.source_migration_file, sharedEventsOutlookFile);
+assert.equal(productionMigrationState.target.source_migration_name, "custodial_shared_events_outlook");
+assert.equal(productionMigrationState.target.source_migration_version, "20261006113610");
 assert.equal(productionMigrationState.target.production_ledger_version, null);
 assert.equal(productionMigrationState.target.canonical_source_schema_fingerprint, canonicalFingerprint);
-assert.equal(productionMigrationState.target.public_function_count, 510);
-assert.equal(productionMigrationState.target.production_ledger_count, 231);
+assert.equal(productionMigrationState.target.public_function_count, 511);
+assert.equal(productionMigrationState.target.production_ledger_count, 232);
 assert.equal(productionMigrationState.target.source_authority_migration_count, exactMigrationCount);
 assert.equal(productionMigrationState.target.pending_migration_count, exactPendingReleaseMigrations.length);
 assert.equal(productionMigrationState.target.registered_source_dated_status_excluded, true);
-assert.equal(productionMigrationState.target.expected_catalog_counts.functions, 510);
+assert.equal(productionMigrationState.target.expected_catalog_counts.functions, 511);
 assert.equal(productionMigrationState.target.expected_catalog_counts.triggers, 310);
 assert.equal(productionMigrationState.target.expected_catalog_counts.policies, 42);
-assert.equal(productionMigrationState.target.expected_catalog_counts.routine_grants, 353);
+assert.equal(productionMigrationState.target.expected_catalog_counts.routine_grants, 354);
 assert.equal(productionMigrationState.target.expected_catalog_counts.schema_grants, 9);
 assert.match(releaseHealthIdentityProjection, /bb04f7c05f72d959b4aba5a3a047adad1163eaf6b88aeeebd5d0f9f6a3b10baf/);
 assert.match(releaseHealthIdentityProjection, /c\.relname in \('devices','employees','device_aliases'\)/);
@@ -312,7 +314,7 @@ assert.match(outlookEventSyncAuthority, /revoke all privileges on table public\.
 assert.doesNotMatch(outlookEventSyncAuthority, /grant\s+[^;]+\s+to\s+(?:anon|authenticated|custodial_application_reader)\b/i);
 assert.equal(releaseEvidence.compatibility_window.accepted_engine.scan, "scan.v2");
 assert.equal(releaseEvidence.compatibility_window.required_engine.scan, "scan.v4.snapshot-bound-authority");
-assert.equal(releaseEvidence.migrations.at(-1).name, custodialOwnerDelegatedActionsFile);
+assert.equal(releaseEvidence.migrations.at(-1).name, sharedEventsOutlookFile);
 assert.match(applicationReaderReleaseRecovery, /application_reader_identity_projection_bounded/i);
 assert.match(applicationReaderReleaseRecovery, /custodial_application_reader_device_identity/i);
 assert.match(applicationReaderReleaseRecovery, /' grant '\|\|g\.privilege_type\|\|' \('\|\|quote_ident\(a\.attname\)/i);
@@ -355,7 +357,7 @@ assert.match(releaseEvidence.compatibility_window.native_start_operational_truth
 assert.match(dayChangeReconciliation, /static_weekly_v4_begin_day_changes/);
 assert.equal(releaseEvidence.artifact, "integrated-backend-authority-release-evidence.v2");
 assert.equal(releaseEvidence.release_id, "release-2026.07.19.custodial-v3.12");
-assert.equal(releaseEvidence.frontend_commit_sha, "635ba1b2b73bef36ad5c87964a1bb18f050d37ce");
+assert.equal(releaseEvidence.frontend_commit_sha, "212396e762f48d5debadbe056cd3ed8f1071c81d");
 assert.equal(releaseEvidence.frontend_commit_state, "final_pair_bound");
 assert.equal(releaseEvidence.schema_fingerprint, canonicalFingerprint);
 assert.equal(releaseEvidence.cutover.source_identity.kind, "external_signed_release_attestation");
@@ -372,7 +374,7 @@ assert.equal(releaseEvidence.authority_content_identity.expected_tree_inventory.
 assert.equal(releaseEvidence.authority_content_identity.authority_path_count, releaseEvidence.authority_content_identity.expected_tree_inventory.length);
 assert.equal(releaseEvidence.authority_content_identity.migration_path_count, exactMigrationCount);
 assert.equal(releaseEvidence.migrations.length, exactMigrationCount);
-assert.equal(releaseEvidence.migrations.at(-1).name, custodialOwnerDelegatedActionsFile);
+assert.equal(releaseEvidence.migrations.at(-1).name, sharedEventsOutlookFile);
 assert.match(releaseEvidence.compatibility_window.credential_replacement_lineage_phase,
   /append-only same-device predecessor-to-successor transport lineage.*original actor, device, credential, or work evidence/i);
 assert.equal(Object.hasOwn(releaseEvidence.authority_content_identity, "value"), false, "generated evidence must not self-assert a worktree-derived content hash");

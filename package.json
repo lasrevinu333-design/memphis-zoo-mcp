@@ -14,8 +14,7 @@
     "start:static-weekly-control-plane": "node src/static-weekly-control-plane-runtime.js",
     "preflight:static-weekly-source": "node scripts/static-weekly-schedule-candidate-importer.mjs",
     "smoke": "node scripts/smoke.mjs",
-    "test:events-parser": "node scripts/events-parser-tests.mjs",
-    "test:events-api": "node scripts/events-api-contract-tests.mjs",
+    "test:events-api": "node --test scripts/shared-events-feed-tests.mjs",
     "test:event-integrity": "node scripts/event-notification-retention-contract-tests.mjs",
     "test:event-integrity-db": "node scripts/event-notification-retention-database-tests.mjs",
     "test:event-static-authority-db": "node scripts/event-static-authority-database-tests.mjs",
@@ -159,7 +158,10 @@
     "test:audit-guest-disabled": "node scripts/audit-guest-disabled-tests.mjs",
     "test:coverall-bilingual": "node scripts/coverall-bilingual-tests.mjs",
     "test:owner-access": "npm run --silent test:manager-auth && node scripts/map-owner-session-http-tests.mjs && node scripts/feedback-acknowledgment-auth-tests.mjs && node scripts/static-weekly-control-plane-tests.mjs && node scripts/static-weekly-control-plane-runtime-tests.mjs && node scripts/owner-actions-database-tests.mjs && node scripts/release-attestation-path-tests.mjs && npm run --silent test:custodial-employee-phones && node scripts/proxy-address-regression-tests.mjs",
-    "test:release-attestation-paths": "node scripts/release-attestation-path-tests.mjs"
+    "test:release-attestation-paths": "node scripts/release-attestation-path-tests.mjs",
+    "test:shared-events": "node --test scripts/shared-events-feed-tests.mjs",
+    "test:outlook-events:db": "node scripts/outlook-event-sync-database-tests.mjs",
+    "test:combined-release": "npm run --silent test:owner-access && npm run --silent test:shared-events && node scripts/events-chicago-time-tests.mjs && npm run --silent test:outlook-events:db"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",

@@ -1,0 +1,21 @@
+{
+  "recorded_at": "2026-10-06T11:49:35.660195+00:00",
+  "project_id": "rqquvtjdmugpigbndmne",
+  "database_migration_applied": true,
+  "migration_version": "20261006113610",
+  "cli_created_filename": "20261006111328_custodial_shared_events_outlook.sql",
+  "source_filename": "20261006113610_custodial_shared_events_outlook.sql",
+  "migration_sha256": "9172c433894853a0ccc378036f9d2d633422991d3ee30dca6007b1b81eeac001",
+  "live_function_definition_sha256": "943393c799426d0430a44b0056db6b292d171f5e637c66f059fac4beff65a067",
+  "live_function_body_sha256": "2a1d9f60fba0015eaa9d7eff823c249f88bf7449ab6f859f129a639a9abab4ef",
+  "service_role_execute": true,
+  "anon_execute": false,
+  "authenticated_execute": false,
+  "actual_service_role_restore_admission_rollback_probe": "NEEDS_REVIEW; event_id null; transaction rolled back",
+  "retained_probe_rows": 0,
+  "collector_cursor": null,
+  "last_import_at": null,
+  "application_deployed": false,
+  "phone_changed": false,
+  "private_key_accessed": false
+}

@@ -1,3 +1,6 @@
+import { listSharedEvents } from "./events-api.js";
+import { makeSharedManagerEventsHandler, retiredEventIntake } from "./shared-events-feed.js";
+import { makeOperationsBoardHandler } from "./operations-board.js";
 import "dotenv/config";
 import { createHash, createHmac, randomUUID, timingSafeEqual } from "crypto";
 import express from "express";
@@ -8,7 +11,6 @@ import { createClient } from "@supabase/supabase-js";
 import {
   EVENTS_CONTRACT_VERSION,
   createEventMaintenanceController,
-  createEventsAdminRouter,
   createEventsEmployeeRouter,
   createEventsPublicRouter,
   createMessagingRouter,
@@ -1170,24 +1172,6 @@ async function runOperationalCommand(command, payload = {}) {
   });
 }
 
-async function runEventCommand(command, payload = {}) {
-  const normalized = String(command || "").trim();
-  const commands = {
-    event_create: "create",
-    event_update: "update",
-    event_cancel: "cancel",
-  };
-  const eventCommand = commands[normalized];
-  if (!eventCommand) throw new Error(`Unsupported bounded event command: ${normalized}`);
-  return runRpc("app_apply_event_command", {
-    p_command: eventCommand,
-    p_event_id: payload.event_id || null,
-    p_record: payload.record || {},
-    p_actor: payload.actor || null,
-    p_reason: payload.reason || null,
-  });
-}
-
 async function runScheduleCommand(command, payload = {}) {
   return runRpc("app_apply_schedule_command", {
     p_command: String(command || "").trim(),
@@ -1207,7 +1191,6 @@ async function runScanAlertQueue({ limit, dryRun, cooldownMinutes, managerEscala
 
 const eventMaintenanceController = createEventMaintenanceController({
   runReadOnlySql,
-  runCommand: runEventCommand,
   runRpc,
   runScanAlertQueue,
 });
@@ -2350,7 +2333,7 @@ app.use(
     frontendCommit: buildReleaseManifest({ appVersion: APP_VERSION, releaseId: RELEASE_ID }).frontend.commit_sha,
   }),
 );
-app.use("/dashboard-api/events", createEventsPublicRouter({ runReadOnlySql, runCommand: runEventCommand, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, maintenanceController: eventMaintenanceController }));
+app.use("/dashboard-api/events", createEventsPublicRouter({ runReadOnlySql, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, maintenanceController: eventMaintenanceController }));
 app.use(
   "/employee-events-api",
   (req, res, next) => {
@@ -2366,9 +2349,10 @@ app.use(
     appVersion: APP_VERSION,
     releaseId: RELEASE_ID,
     requireDeviceAccess: requireEmployeeDeviceCredential,
+    readSyncStatus: readOutlookEventSyncStatus,
   }),
 );
-app.use("/admin-api/events", createEventsAdminRouter({ runReadOnlySql, runCommand: runEventCommand, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, maintenanceController: eventMaintenanceController, requireAdminApiAuth: requireOpsManagerAuth, requireAdminApiWrite: requireOpsManagerWrite }));
+app.use("/admin-api/events", retiredEventIntake);
 app.use(["/version", "/release-manifest", "/scheduler-runtime-config", "/healthz", "/health", "/health/dependencies"], (req, res, next) => {
   setPublicDashboardCors(res, req);
   if (req.method === "OPTIONS") {
@@ -2833,6 +2817,13 @@ app.post("/admin-api/bundle", requireOpsManagerWrite, async (req, res) => {
   catch (error) { console.error("admin bundle failed:", error); res.status(500).json({ ok: false, error: error.message || "Admin bundle failed" }); }
 });
 installOwnerAccessRoutes(app, { store: opsTrustedDeviceStore, runRpc, backendSecret: offlineAuthoritySecret });
+async function readOutlookEventSyncStatus() {
+  const result = await supabaseAdmin.rpc("custodial_outlook_event_sync_v1", {p_action:"status",p_observation:{}});
+  if (result.error) return null;
+  return result.data;
+}
+app.get("/dashboard-api/events-feed", requireOpsManagerAuth, makeSharedManagerEventsHandler({readEvents: () => listSharedEvents(runReadOnlySql),readSyncStatus:readOutlookEventSyncStatus}));
+app.get("/dashboard-api/operations", requireOpsManagerAuth, makeOperationsBoardHandler({readEvents: () => listSharedEvents(runReadOnlySql)}));
 app.get("/dashboard-api/summary", requireOpsManagerAuth, async (_req, res) => {
   try { const data = await runPublicDashboardSummary(); res.status(200).json({ ok: true, data }); }
   catch (error) { console.error("dashboard summary failed:", error); res.status(500).json({ ok: false, error: error.message || "Dashboard summary failed" }); }

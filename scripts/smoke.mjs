@@ -6,7 +6,6 @@ import { createMemphisResponder } from "../src/services/index.js";
 import {
   createMessagingRouter,
   createScheduleRouter,
-  createEventsAdminRouter,
   createEventsEmployeeRouter,
   createEventsPublicRouter,
   createEventMaintenanceController,
@@ -120,7 +119,6 @@ assert.equal(typeof responder.generateReply, "function");
 
 assert.equal(typeof createMessagingRouter, "function");
 assert.equal(typeof createScheduleRouter, "function");
-assert.equal(typeof createEventsAdminRouter, "function");
 assert.equal(typeof createEventsEmployeeRouter, "function");
 assert.equal(typeof createEventsPublicRouter, "function");
 assert.equal(typeof createEventMaintenanceController, "function");
