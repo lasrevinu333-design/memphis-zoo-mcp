@@ -57,15 +57,15 @@
     "outlook_event_sync_table_present": true
   },
   "target": {
-    "source_migration_file": "20261006162427_custodial_shared_events_recovery_binding.sql",
-    "source_migration_name": "custodial_shared_events_recovery_binding",
-    "source_migration_version": "20261006162427",
+    "source_migration_file": "20261006203931_custodial_delegated_coverall.sql",
+    "source_migration_name": "custodial_delegated_coverall",
+    "source_migration_version": "20261006203931",
     "production_ledger_version": null,
-    "canonical_source_schema_fingerprint": "440c5cfa077055cae5ec41537496f50f2d99ec7cc91c5cdf5cc5ead8d44268a5",
-    "public_function_count": 511,
-    "production_ledger_count": 233,
-    "source_authority_migration_count": 133,
-    "pending_migration_count": 7,
+    "canonical_source_schema_fingerprint": "1e16187577e00c47c3520688cb32c06cfcf52a870982e566820e0a6a1e66e3da",
+    "public_function_count": 512,
+    "production_ledger_count": 234,
+    "source_authority_migration_count": 134,
+    "pending_migration_count": 8,
     "registered_source_dated_status_excluded": true,
     "expected_catalog_counts": {
       "column_grants": 43,
@@ -74,14 +74,14 @@
       "cron_jobs": 9,
       "default_privileges": 12,
       "extensions": 8,
-      "functions": 511,
+      "functions": 512,
       "indexes": 663,
       "owned_scheduler_role_memberships": 3,
       "owned_scheduler_roles": 3,
       "policies": 42,
       "privilege_bearing_roles": 4,
       "role_memberships": 25,
-      "routine_grants": 354,
+      "routine_grants": 355,
       "schema_grants": 9,
       "sequence_grants": 0,
       "sequences": 0,
@@ -95,7 +95,7 @@
   },
   "source_binding": {
     "kind": "external_exact_head_release_attestation",
-    "rule": "This historical replay plan applies only from the dated observed_production snapshot, not from arbitrary current production. An exact source catalog/ledger match, backup, rehearsal and externally signed approval remain required before the seven ordered migrations. The October 6 owner-access and shared-Events functions are already installed on the live project and must not be blindly reapplied."
+    "rule": "This historical replay plan applies only from the dated observed_production snapshot, not from arbitrary current production. An exact source catalog/ledger match, backup, rehearsal and externally signed approval remain required before the eight ordered migrations. The October 6 owner-access and shared-Events functions are already installed on the live project and must not be blindly reapplied."
   },
   "backup_evidence": {
     "state": "fresh_verified_backup_required_after_fresh_source_capture_and_before_mutation",
@@ -181,12 +181,19 @@
       "file": "20261006162427_custodial_shared_events_recovery_binding.sql",
       "source_migration_version": "20261006162427",
       "sha256": "c889928458f5b8e70b860c41f707e8c1438d88270dc60b68cea32c6f06bc2537"
+    },
+    {
+      "order": 8,
+      "phase": "custodial_delegated_coverall",
+      "file": "20261006203931_custodial_delegated_coverall.sql",
+      "source_migration_version": "20261006203931",
+      "sha256": "2f84424673d75eb2986a2c5d4b51c51baf4cbcb869def741aa5f5c84b5b3e475"
     }
   ],
   "postconditions": [
-    "From the declared historical source only, the ledger advances exactly seven rows from 226 to 233, ending at 20261006162427 custodial_shared_events_recovery_binding; already-applied or mismatched sources are rejected.",
-    "Complete target public catalog and privilege fingerprint equals 440c5cfa077055cae5ec41537496f50f2d99ec7cc91c5cdf5cc5ead8d44268a5 with the independently rebuilt source counts.",
-    "Target exposes exactly 511 public functions and 354 non-owner routine grants.",
+    "From the declared historical source only, the ledger advances exactly eight rows from 226 to 234, ending at 20261006203931 custodial_delegated_coverall; already-applied or mismatched sources are rejected.",
+    "Complete target public catalog and privilege fingerprint equals 1e16187577e00c47c3520688cb32c06cfcf52a870982e566820e0a6a1e66e3da with the independently rebuilt 134-migration source counts.",
+    "Target exposes exactly 512 public functions and 355 non-owner routine grants.",
     "first two simultaneous absences remain internal and each third-or-later absence consumes exactly one distinct registered CoverAll capacity, preserving manager overrides/history",
     "guest reporting OFF prevents queued guest notification dispatch without deleting pending/history records; staff Feedback remains separate",
     "employee event reminders are generated at D-3, D-2 and event day at reminder-day shift start plus 15 minutes and final delivery revalidates current event-date ownership/assignment",

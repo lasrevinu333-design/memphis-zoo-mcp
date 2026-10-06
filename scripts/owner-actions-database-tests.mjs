@@ -2,7 +2,7 @@
 // No production connection, password, user, ticket, or schedule is used.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 const name = 'mz_owner_actions_' + randomUUID().replaceAll('-', '').slice(0, 12);
 const image = 'supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed';
@@ -73,6 +73,14 @@ try {
       ('${otherTicket}',NULL,NULL,'${place}',NULL,NULL,'other','open');
   `);
   sql(migration);
+  const contractorSlot='91000000-0000-4000-8000-00000000f001';
+  sql(`CREATE FUNCTION public.static_weekly_v3_assert_control_plane() RETURNS void LANGUAGE plpgsql AS $$ BEGIN IF current_setting('role',true) IS DISTINCT FROM 'static_weekly_control_plane' THEN RAISE EXCEPTION 'wrong runtime role'; END IF; END $$;
+    CREATE FUNCTION public.static_weekly_v3_read_publication_source(uuid,date) RETURNS jsonb LANGUAGE plpgsql AS $$ BEGIN
+     IF $1<>'${publication}'::uuid THEN RAISE EXCEPTION 'unknown publication';END IF;
+     RETURN '${JSON.stringify({compiler_input:{slots:[{id:contractorSlot,contractorCapacity:true,contractorAvailability:[{dayOfWeek:1}]}]}})}'::jsonb;
+    END $$;`);
+  sql(readFileSync(new URL('../supabase/migrations/20261006203931_custodial_delegated_coverall.sql',import.meta.url),'utf8'));
+
   accepted('owner general writes',`SELECT (${actor('write',owner,ownerCredential,'full_access')}->>'owner');`,'true');
   accepted('delegate reads',`SELECT (${actor('read')}->>'owner');`,'false');
   rejected('delegate general writes denied',`SELECT ${actor('write')};`);
@@ -99,9 +107,34 @@ try {
   accepted('delegate absence while owner away',`SELECT (${actor('manage_absences')}->>'owner');`,'false');
   for(const type of ['daily_absence','pto','partial_absence']) { sql(`SET ROLE static_weekly_control_plane; ${operation(type)}`);results.push({label:type+' allowed through scheduler database role',pass:true}); }
   for(const type of ['cover_all','shift_override','manager_correction']) rejected(type+' denied for delegate',operation(type),'static_weekly_control_plane');
+
+  const pair=[{operation:'cover_all',slotId:contractorSlot,shift:{start:'07:00',end:'16:00'},reason:'confirmed contractor'},
+    {operation:'exception',exceptionType:'lunch',startsAt:'11:00',endsAt:'12:00',reason:'actual lunch',payload:{slotId:contractorSlot},reversesExceptionId:null}];
+  const check=(operations,pub=publication)=>`SELECT public.custodial_authorize_coverage_operations_v2('${viewer}','${viewerCredential}','fixture-browser','read_only','2026-10-05','${pub}','${JSON.stringify(operations)}'::jsonb)->>'owner';`;
+  assert.equal(sql(`SET ROLE static_weekly_control_plane; ${check(pair)}`).trim().split('\n').at(-1),'false');results.push({label:'delegate can add registered CoverAll and actual lunch',pass:true});
+  for(const [label,value]of[
+   ['missing lunch',[pair[0]]],['unrelated staff lunch',[pair[1]]],['duplicate capacity',[...pair,pair[0]]],
+   ['short lunch',[pair[0],{...pair[1],endsAt:'11:30'}]],['outside shift',[pair[0],{...pair[1],startsAt:'16:00',endsAt:'17:00'}]],
+   ['fabricated slot',pair.map(x=>x.operation==='cover_all'?{...x,slotId:employee}:{...x,payload:{slotId:employee}})],
+   ['injected capacity authority',[{...pair[0],roles:['OWNER']},pair[1]]],
+   ['missing shift',[{...pair[0],shift:null},pair[1]]],
+   ['direct arbitrary coverall exception',[{operation:'exception',exceptionType:'cover_all',payload:{availability:{slotId:contractorSlot}}}]],
+   ['unrelated lunch payload',[pair[0],{...pair[1],payload:{slotId:contractorSlot,otherEmployee:employee}}]],
+   ['general roster operation',[{operation:'replace_employee',slotId:employee}]]
+  ])rejected('CoverAll: '+label,check(value),'static_weekly_control_plane');
+  rejected('unknown current publication',check(pair,'99000000-0000-4000-8000-000000000009'),'static_weekly_control_plane');
+  for(const role of ['anon','authenticated','service_role'])rejected(role+' cannot directly call v2 scheduler authority',check(pair),role);
+  const mixed=[...pair,{operation:'exception',exceptionType:'daily_absence',payload:{slotId:employee}}];
+  assert.equal(sql(`SET ROLE static_weekly_control_plane; ${check(mixed)}`).trim().split('\n').at(-1),'false');results.push({label:'absence and CoverAll remain one allowed batch',pass:true});
+  if(process.env.COVERAGE_CATALOG_OUTPUT){
+   const catalog=sql(`SELECT jsonb_build_object('function',jsonb_build_object('schema_name','public','function_name',p.proname,'identity_arguments',pg_get_function_identity_arguments(p.oid),'owner_name','migration_owner','definition',pg_get_functiondef(p.oid),'comment',NULL),
+    'grants',(SELECT jsonb_agg(jsonb_build_object('schema_name','public','function_name',p.proname,'identity_arguments',pg_get_function_identity_arguments(p.oid),'grantee',r.rolname,'grantor','migration_owner','privilege_type',a.privilege_type,'is_grantable',a.is_grantable)) FROM aclexplode(p.proacl) a JOIN pg_roles r ON r.oid=a.grantee WHERE r.rolname NOT IN ('postgres','supabase_admin')))
+    FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.proname='custodial_authorize_coverage_operations_v2';`).trim();
+   writeFileSync(process.env.COVERAGE_CATALOG_OUTPUT,catalog+'\n');
+  }
   rejected('delegate cannot change coverage window',`SELECT public.custodial_owner_coverage_v1('${viewer}','${viewerCredential}','fixture-browser','read_only','${JSON.stringify(away)}','fixture-backend-proof');`);
   accepted('owner resumes control without losing own access',`SELECT (${coverage({enabled:false,expected_revision:1})}->>'enabled');`,'false');
   rejected('delegation ends immediately',`SELECT ${actor('manage_absences')};`);
   accepted('owner control remains full when available',`SELECT (${actor('write',owner,ownerCredential,'full_access')}->>'owner');`,'true');
-  console.log(JSON.stringify({result:'OWNER_ACTIONS_POSTGRES_PASS',cases:results.length,results,scope:'Unmodified new migration in a disposable PostgreSQL database; synthetic rows and fixtures for unchanged backend-secret and legacy-close dependencies; no production data or scheduler compilation.'},null,2));
+  console.log(JSON.stringify({result:'OWNER_ACTIONS_POSTGRES_PASS',cases:results.length,results,scope:'Actual v1 and v2 migrations in disposable PostgreSQL; synthetic rows and source-read fixtures; no production data or scheduler compilation.'},null,2));
 } finally { try { docker(['rm','-f',name]); } catch {} }

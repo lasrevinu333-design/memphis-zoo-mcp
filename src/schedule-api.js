@@ -3435,6 +3435,11 @@ export function createScheduleRouter({
         resolvedEmployeeId = employeeRows[0].employee_id;
       }
 
+      if (req.memphisDevice && (req.memphisDevice.assigned_employee_id !== resolvedEmployeeId
+          || Number(req.memphisDevice.assignment_epoch) !== Number(assignment?.assignment_epoch))) {
+        res.status(403).json({ ok: false, error: "Device assignment changed. Refresh the current identity." });
+        return;
+      }
       let data = await loadStaticWeeklyEmployeeDay(serviceDate, resolvedEmployeeId, atSql);
       if (!data) {
         await assertScheduleReadyForRead(serviceDate);
@@ -3461,7 +3466,15 @@ export function createScheduleRouter({
           matched_by: assignment?.matched_by || null,
           device_name: assignment?.device_name || null,
         },
-        meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion },
+        meta: {
+          version: appVersion, release_id: releaseId, contract_version: contractVersion,
+          generated_at: new Date().toISOString(),
+          canonical_device_id: assignment?.canonical_device_id || deviceId || null,
+          employee_id: resolvedEmployeeId,
+          assignment_epoch: Number.isSafeInteger(Number(assignment?.assignment_epoch))
+            ? Number(assignment.assignment_epoch) : null,
+          credential_id: req.memphisDeviceCredential?.credential_id || null,
+        },
       });
     } catch (error) {
       fail(res, error, "Personal schedule summary failed");

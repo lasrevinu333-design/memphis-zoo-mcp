@@ -475,7 +475,7 @@ export function createStaticWeeklyControlPlane({
   async function authorizeAbsenceOperations(client, manager, serviceDate, publicationId, operations) {
     // Re-resolve the current credential and the owner-controlled absence window
     // in the SAME transaction as the exception and compiled projection.
-    return call(client, "custodial_authorize_absence_operations_v1", [
+    return call(client, "custodial_authorize_coverage_operations_v2", [
       manager.manager_id, manager.credential_id, manager.device_id, manager.access_level,
       serviceDate, publicationId, JSON.stringify(operations),
     ]);
