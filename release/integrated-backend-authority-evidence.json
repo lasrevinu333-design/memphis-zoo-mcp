@@ -385,12 +385,12 @@
       {
         "path": "package-lock.json",
         "mode": "100644",
-        "object_id": "b5fd81abe51d3b79b11b8d3c92020b1d81504727"
+        "object_id": "0db3552bbc704140c69023a14f04f8cb9f8f0138"
       },
       {
         "path": "package.json",
         "mode": "100644",
-        "object_id": "52380003abd6c57ef7f2f216379b0183b129eefa"
+        "object_id": "7b116252e36c98318d02b227ef1771a2251c94a3"
       },
       {
         "path": "public/moxie-assets/contacts-creekside-animal.png",
@@ -438,6 +438,11 @@
         "object_id": "3e06fc6aaea8f2af937b1436560fc5805dcf2652"
       },
       {
+        "path": "release/dependency-and-release-correction-verification.json",
+        "mode": "100644",
+        "object_id": "6736f345436a4703b3568912779a915c506c181f"
+      },
+      {
         "path": "release/disaster-recovery-runtime-contract.json",
         "mode": "100644",
         "object_id": "40c824d5870979e290164fe348e64be3c2b52e98"
@@ -465,7 +470,7 @@
       {
         "path": "release/production-migration-state.json",
         "mode": "100644",
-        "object_id": "bd8553b7b23117f42dbbe5f52937a3fbb34dc415"
+        "object_id": "5a6845722d5ad300fd4ba08376d932de91be323f"
       },
       {
         "path": "release/reviewed-migrations/20260809125735_cleaning_inspection_24_hour_freshness.sql",
@@ -660,7 +665,7 @@
       {
         "path": "scripts/custodial-employee-admin-authorization-tests.mjs",
         "mode": "100644",
-        "object_id": "06a2c2e8997d50ab684ceb176ccf854cb9039d3c"
+        "object_id": "d95ec4c3e9e042aaef7bc201827e560b3d73cbca"
       },
       {
         "path": "scripts/custodial-employee-phone-contract-tests.mjs",
@@ -690,7 +695,7 @@
       {
         "path": "scripts/custodial-repair-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "b40e8f8cc5330b240fb39c2f1ce368de4f0d4c4e"
+        "object_id": "9ec0716699d4902b5d26cd85187aa966204a3778"
       },
       {
         "path": "scripts/custodial-u4-migration-convergence-tests.mjs",
@@ -945,7 +950,7 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "f6c6c2b992954e138a9887b313df539970d7378c"
+        "object_id": "032b413f8300acb71723cf6575587a8f71f77020"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
@@ -1160,7 +1165,7 @@
       {
         "path": "scripts/operations-leadership-mobile-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "711671e3c875177b33b054e20fa3bd48af68ab70"
+        "object_id": "6b105fc651c01ff1113c11b815f1ba4af294eed1"
       },
       {
         "path": "scripts/operations-leadership-mobile-database-tests.mjs",
@@ -1263,6 +1268,11 @@
         "object_id": "cf51272ffa46e264e7c22948f570dd7add968fd8"
       },
       {
+        "path": "scripts/proxy-address-regression-tests.mjs",
+        "mode": "100644",
+        "object_id": "32a807cb40e921b06e9de6270654b6be79dba337"
+      },
+      {
         "path": "scripts/read-only-database-authority-tests.mjs",
         "mode": "100644",
         "object_id": "0fb1282d3458a1e7de359fb64e29c5c735f8b0a1"
@@ -1295,7 +1305,7 @@
       {
         "path": "scripts/release-closure-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "f2a20d50cf6b9782919f6f501afbc3cc3207d221"
+        "object_id": "5b668e428fb62d9040c1079e62f19e540c5b1002"
       },
       {
         "path": "scripts/release-migration-authorization-tests.mjs",
@@ -1310,7 +1320,7 @@
       {
         "path": "scripts/release-migration-plan-database-tests.mjs",
         "mode": "100644",
-        "object_id": "b3adf52fd57da81df13ad9d24ca803d7601a82b9"
+        "object_id": "5b294378e41ec39979ee1c71f2eeb686e76bcbe0"
       },
       {
         "path": "scripts/release-migration-rehearsal-provenance.mjs",
@@ -1945,7 +1955,7 @@
       {
         "path": "src/custodial-employee-admin.js",
         "mode": "100644",
-        "object_id": "19500b8be7ee9827edd6c0cdc0f9a3dc89172996"
+        "object_id": "455d67fee55fa29189b37908a4ec58927aba83e2"
       },
       {
         "path": "src/device-identity.js",
@@ -3553,7 +3563,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 685,
+    "authority_path_count": 687,
     "migration_path_count": 131,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
