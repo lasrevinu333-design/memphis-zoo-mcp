@@ -1015,7 +1015,7 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "41183455f16d4301ce1d90d80eecf6d88a475fcd"
+        "object_id": "86835412f20312aa196ce34764d8f43705f8e498"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
