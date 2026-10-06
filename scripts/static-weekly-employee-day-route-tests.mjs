@@ -147,7 +147,7 @@ await withServer(buildApp(async (sql) => {
   throw new Error(`unexpected authenticated employee-day query: ${sql}`);
 }, (req, _res, next) => {
   authenticatedDeviceMiddlewareCalls += 1;
-  req.memphisDevice = { canonical_device_id: "KIOSK_08", device_id: "KIOSK_08" };
+  req.memphisDevice = { canonical_device_id: "KIOSK_08", device_id: "KIOSK_08", assigned_employee_id: employeeId, assignment_epoch: authenticatedEpoch };
   req.memphisDeviceCredential = { credential_id: authenticatedCredentialId };
   next();
 }, async (name, params) => {
@@ -196,14 +196,17 @@ for (const [label, credential, epoch] of [
     scheduleReads += 1;
     throw new Error("Invalid delivery principal must not reach schedule reads");
   }, (req, _res, next) => {
-    req.memphisDevice = { canonical_device_id: "KIOSK_08", device_id: "KIOSK_08" };
+    req.memphisDevice = { canonical_device_id: "KIOSK_08", device_id: "KIOSK_08", assigned_employee_id: employeeId, assignment_epoch: epoch };
     if (credential !== undefined) req.memphisDeviceCredential = { credential_id: credential };
     next();
   }, async () => { deliveryCalls += 1; throw new Error("Invalid principal must not reach delivery RPC"); }), async (origin) => {
     const response = await fetch(`${origin}/schedule-api/my-day-summary?service_date=${serviceDate}`,
       { headers: { "x-device-id": "KIOSK_08" } });
-    assert.equal(response.status, 401, label);
-    assert.match((await response.json()).error, /authenticated schedule delivery principal/);
+    // A missing epoch fails the earlier fresh-assignment identity check;
+    // invalid delivery credentials/epochs still fail before any schedule read.
+    assert.equal(response.status, epoch === undefined ? 403 : 401, label);
+    assert.match((await response.json()).error, epoch === undefined
+      ? /Device assignment changed/ : /authenticated schedule delivery principal/);
   });
   assert.equal(deliveryCalls, 0, `${label}: no delivery RPC`);
   assert.equal(scheduleReads, 0, `${label}: no schedule read`);
