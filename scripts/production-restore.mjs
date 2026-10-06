@@ -5,6 +5,7 @@ import { createReadStream, openAsBlob, readFileSync, statSync } from "node:fs";
 import { join, resolve, sep } from "node:path";
 import { createInterface } from "node:readline";
 import pg from "pg";
+import {verifyArchivedSchemaExtension} from "./backup-release-schema-binding.mjs";
 import { createClient } from "@supabase/supabase-js";
 import {
   requireSigningKey,
@@ -120,6 +121,15 @@ if (summary.format === "memphis-zoo-disaster-recovery.v4") {
   }
   if (!Array.isArray(cronJobs) || cronJobs.length !== Number(summary.source_identity.cron_job_count)) {
     throw new Error("Signed cron inventory count is inconsistent.");
+  }
+  if(summary.source_identity.release?.migration_head!==summary.source_identity.migration_head){
+    for(const [name,field]of [["source-schema-binding.json","source_schema_binding_sha256"],["source-catalog.json","source_catalog_sha256"]]){
+      const path=verifiedArchivePath("inventory/"+name,"Source schema binding");
+      if(await sha256File(path)!==summary.source_identity[field])throw new Error("Signed source schema extension inventory mismatch.");
+    }
+    verifyArchivedSchemaExtension({summary,ledger,
+      binding:JSON.parse(readFileSync(join(sourceDir,"inventory","source-schema-binding.json"),"utf8")),
+      catalog:JSON.parse(readFileSync(join(sourceDir,"inventory","source-catalog.json"),"utf8"))});
   }
   archivedCronJobs = cronJobs;
 }

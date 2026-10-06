@@ -918,8 +918,12 @@ assert.match(eventAuthoritySteps[0], /EVENT_STATIC_AUTHORITY_TEST_DOCKER_CONTAIN
   "the event proof must consume its exact retained disposable database");
 assert.equal(parsedPackageManifest.scripts["test:event-static-authority-db"], "node scripts/event-static-authority-database-tests.mjs");
 const populatedSchemaPreflight = readFileSync(resolve(workflowDirectory, "custodial-populated-schema-preflight.yml"), "utf8");
-assert.match(populatedSchemaPreflight, /test -n "\$SCHEMA_FINGERPRINT_MCP_URL"/,
-  "the production schema preflight must reject a missing read-only MCP endpoint");
+assert.match(populatedSchemaPreflight, /test -n "\$SCHEMA_FINGERPRINT_DATABASE_URL".*test -f "\$SCHEMA_FINGERPRINT_DATABASE_CA_PATH"/,
+  "production schema preflight requires the configured connection and trusted CA");
+const catalogReadOnlySource=readFileSync(resolve(root,"scripts/schema-catalog-readonly-client.mjs"),"utf8");
+assert.match(catalogReadOnlySource,/begin isolation level repeatable read read only deferrable/,
+  "production catalog reader must use database-enforced read-only isolation");
+assert.match(catalogReadOnlySource,/rejectUnauthorized:true/,"catalog preflight must retain TLS verification");
 assert.match(populatedSchemaPreflight, /set -euo pipefail[\s\S]*release:populated-schema:preflight \| tee[\s\S]*test -s \/tmp\/custodial-populated-schema-preflight\.json/,
   "the production schema preflight must preserve command failure and require a non-empty receipt");
 const productionBackupRehearsal = readFileSync(resolve(workflowDirectory, "production-backup-migration-rehearsal.yml"), "utf8");

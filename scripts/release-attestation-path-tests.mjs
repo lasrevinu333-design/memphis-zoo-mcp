@@ -31,13 +31,21 @@ try {
   }));
   writeFileSync(join(repo, 'supabase/canonical/schema-fingerprint.txt'), '2'.repeat(64) + '\n');
   writeFileSync(join(repo, 'release/integrated-backend-authority-evidence.json'), '{"synthetic":true}\n');
+  // Pin ONLY the disposable copied contract to its generated synthetic key.
+  // The real source-pinned production contract is never modified or weakened.
+  const key = join(dir, 'synthetic-only.pem');
+  const { privateKey,publicKey } = generateKeyPairSync('ed25519');
+  writeFileSync(key, privateKey.export({ type: 'pkcs8', format: 'pem' }), { mode: 0o600 });
+  const copiedContract=join(repo,'src/release-contract.js');
+  let contract=readFileSync(copiedContract,'utf8');
+  const anchor=/export const RELEASE_ATTESTATION_TRUST_ROOT = Object\.freeze\(\{[\s\S]*?\}\);/;
+  assert.equal((contract.match(new RegExp(anchor.source,'g'))||[]).length,1);
+  contract=contract.replace(anchor,`export const RELEASE_ATTESTATION_TRUST_ROOT = Object.freeze(${JSON.stringify({keyId:'synthetic-test-only',publicKeySpkiSha256:createHash('sha256').update(publicKey.export({type:'spki',format:'der'})).digest('hex')})});`);
+  writeFileSync(copiedContract,contract);
   git('init', '--quiet');
   git('add', '.');
   git('-c', 'user.name=Synthetic Signer Test', '-c', 'user.email=fixture@example.invalid',
     '-c', 'core.hooksPath=/dev/null', 'commit', '--quiet', '-m', 'Synthetic test input');
-  const key = join(dir, 'synthetic-only.pem');
-  const { privateKey } = generateKeyPairSync('ed25519');
-  writeFileSync(key, privateKey.export({ type: 'pkcs8', format: 'pem' }), { mode: 0o600 });
   const invoke = (keyPath, output, keyId = 'synthetic-test-only') => execute(process.execPath, [
     'scripts/create-release-attestation.mjs', '--private-key', keyPath,
     '--output', output, '--key-id', keyId,
@@ -49,7 +57,7 @@ try {
   assert.doesNotMatch(result.stdout + result.stderr, /BEGIN PRIVATE KEY/);
   results.push({ name: 'regular private fixture key signs and verifies synthetic release', pass: true });
 
-  const cases = [];
+  const cases = [{name:'reject another key identity even with matching signing material',key,keyId:'wrong-synthetic-key',error:/source-pinned trust root/}];
   const link = join(dir, 'linked-test-key.pem'); symlinkSync(key, link);
   cases.push({ name: 'reject symlink before resolving its target', key: link, error: /must not be a symlink/ });
   const brokenLink = join(dir, 'broken-test-key.pem'); symlinkSync(join(dir, 'missing-key.pem'), brokenLink);
@@ -84,6 +92,7 @@ try {
     cases: results.length, passed: results.length - failed.length, failed: failed.length, results,
     source_sha256: createHash('sha256').update(readFileSync(join(source, 'scripts/create-release-attestation.mjs'))).digest('hex'),
     production_key_accessed: false, production_attestation_created: false,
+    synthetic_contract_trust_root_only:true,production_contract_sha256:createHash('sha256').update(readFileSync(join(source,'src/release-contract.js'))).digest('hex'),
     scope: 'Exact helper with synthetic Git input and disposable test keys; not production signing authorization.' }, null, 2));
   process.exitCode = failed.length ? 1 : 0;
 } finally { rmSync(dir, { recursive: true, force: true }); }

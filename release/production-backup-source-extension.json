@@ -1,0 +1,35 @@
+{
+  "schema": "custodial.backup-schema-extension-declaration.v1",
+  "project_ref": "rqquvtjdmugpigbndmne",
+  "production_mutation_authorized": false,
+  "deployed_release": {
+    "release_id": "release-2026.07.19.custodial-v3.12",
+    "backend_commit": "fc2b989d19246ffd447c4c7cfb2590ac19bbcd27",
+    "frontend_commit": "6fae503111ef21c40a309913965c3b963043aa01",
+    "migration_head": "20260920010000",
+    "migration_manifest_sha256": "8af6170072e7971f0526538f9477f6ef2063a046190cf414b04db31b9c81ea3e"
+  },
+  "observed_ledger_count": 233,
+  "observed_ledger_head": "20261006162427",
+  "observed_catalog_fingerprint": "440c5cfa077055cae5ec41537496f50f2d99ec7cc91c5cdf5cc5ead8d44268a5",
+  "extensions": [
+    {
+      "ledger_version": "20261006034155",
+      "ledger_name": "custodial_owner_delegated_actions",
+      "source_file": "20261006031304_custodial_owner_delegated_actions.sql",
+      "sql_sha256": "4da5a15f22065b9467136eb4a622fa58a9559758c16edd844228f33a84223cf1"
+    },
+    {
+      "ledger_version": "20261006113610",
+      "ledger_name": "custodial_shared_events_outlook",
+      "source_file": "20261006113610_custodial_shared_events_outlook.sql",
+      "sql_sha256": "9172c433894853a0ccc378036f9d2d633422991d3ee30dca6007b1b81eeac001"
+    },
+    {
+      "ledger_version": "20261006162427",
+      "ledger_name": "custodial_shared_events_recovery_binding",
+      "source_file": "20261006162427_custodial_shared_events_recovery_binding.sql",
+      "sql_sha256": "c889928458f5b8e70b860c41f707e8c1438d88270dc60b68cea32c6f06bc2537"
+    }
+  ]
+}

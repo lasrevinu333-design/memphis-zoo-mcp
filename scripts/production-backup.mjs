@@ -17,6 +17,8 @@ import { Readable } from "node:stream";
 import { finished, pipeline } from "node:stream/promises";
 import { promisify } from "node:util";
 import pg from "pg";
+import {captureCatalogFromSnapshot} from "./schema-catalog-readonly-client.mjs";
+import {bindBackupSchemaExtension} from "./backup-release-schema-binding.mjs";
 import {
   archiveSignatureBinding,
   requireSigningKey,
@@ -180,6 +182,7 @@ let extensionInventory = [];
 let snapshot = null;
 let migrationHead = null;
 let releaseIdentity = null;
+let sourceSchemaBinding = null;
 
 await client.connect();
 try {
@@ -233,7 +236,14 @@ try {
     throw new Error("The production release identity is incomplete or malformed.");
   }
   if (String(releaseIdentity.migration_head) !== migrationHead) {
-    throw new Error("The live release migration head does not equal the captured production migration ledger head.");
+    // Preserve both true identities; admit only the exact previously applied
+    // source extension, never an arbitrary drift or invented deployed release.
+    const catalog=await captureCatalogFromSnapshot(client);
+    const declaration=JSON.parse(readFileSync(new URL("../release/production-backup-source-extension.json",import.meta.url),"utf8"));
+    sourceSchemaBinding=bindBackupSchemaExtension({projectRef,releaseIdentity,migrationLedger,catalog,declaration,
+      readSource:filename=>readFileSync(new URL("../supabase/migrations/"+filename,import.meta.url))});
+    writeJson(join(backupDir,"inventory","source-catalog.json"),catalog);
+    writeJson(join(backupDir,"inventory","source-schema-binding.json"),sourceSchemaBinding);
   }
   const runtimeContract = loadRecoveryRuntimeContract(runtimeContractPath);
   const runtimeConfiguration = validateRecoveryRuntimeConfiguration({
@@ -375,6 +385,7 @@ const summary = {
     backup_tool_commit: backupToolCommit,
     backup_tool_tree: backupToolTree,
     migration_head: migrationHead,
+    ...(sourceSchemaBinding?{source_schema_binding_sha256:await sha256File(join(backupDir,"inventory","source-schema-binding.json")),source_catalog_sha256:await sha256File(join(backupDir,"inventory","source-catalog.json"))}:{}),
     database_catalog_sha256: databaseCatalogSha256,
     application_schema_sha256: applicationSchemaSha256,
     migration_ledger_sha256: migrationLedgerSha256,
@@ -387,7 +398,7 @@ const summary = {
     pg_dump_image: pgDumpImage,
     release: releaseIdentity,
   },
-  schema_restore_source: "signed application-schema.sql followed by production-restore.mjs; repository migrations are forward-only after the archived head",
+  schema_restore_source: "signed application-schema.sql followed by production-restore.mjs; only the exact separately authorized pending migration list may follow restoration; filenames older than the ledger head are not presumed applied",
 };
 writeJson(join(backupDir, "backup-summary.json"), summary);
 

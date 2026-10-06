@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import {readCatalogReadOnly} from "./schema-catalog-readonly-client.mjs";
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -10,7 +11,8 @@ import { SCHEMA_CATALOG_QUERIES, captureSchemaCatalog, fingerprintSchemaCatalog 
 const container=String(process.env.SCHEMA_FINGERPRINT_DOCKER_CONTAINER||"").trim();
 const database=String(process.env.SCHEMA_FINGERPRINT_DATABASE||"").trim();
 const mcpUrl=String(process.env.SCHEMA_FINGERPRINT_MCP_URL||"").trim();
-if(!mcpUrl&&(!/^(postgres|mz_schema_rebuild_[a-zA-Z0-9_]+)$/.test(database)||!/^mz_schema_rebuild_[a-zA-Z0-9_]+$/.test(container)))throw new Error("A disposable mz_schema_rebuild Docker container/database or SCHEMA_FINGERPRINT_MCP_URL is required.");
+const databaseUrl=String(process.env.SCHEMA_FINGERPRINT_DATABASE_URL||"").trim();
+if(!databaseUrl&&!mcpUrl&&(!/^(postgres|mz_schema_rebuild_[a-zA-Z0-9_]+)$/.test(database)||!/^mz_schema_rebuild_[a-zA-Z0-9_]+$/.test(container)))throw new Error("A disposable mz_schema_rebuild Docker container/database or SCHEMA_FINGERPRINT_MCP_URL is required.");
 if(mcpUrl&&!/^https:\/\//i.test(mcpUrl)&&!/^http:\/\/(127\.0\.0\.1|localhost)(?::\d+)?\//i.test(mcpUrl))throw new Error("SCHEMA_FINGERPRINT_MCP_URL must use HTTPS or local HTTP.");
 const root=resolve(new URL("..",import.meta.url).pathname);
 const inputPath=resolve(root,"supabase/canonical/schema-fingerprint-input.json");
@@ -21,6 +23,8 @@ const preflightOnly=args.length===1&&args[0]==="--preflight";
 const observedProductionPreflightOnly=args.length===1&&args[0]==="--observed-production-preflight";
 const targetPreflightOnly=args.length===1&&args[0]==="--target-preflight";
 if(args.length>0&&!checkOnly&&!preflightOnly&&!observedProductionPreflightOnly&&!targetPreflightOnly)throw new Error("Usage: refresh-schema-fingerprint.mjs [--check|--preflight|--observed-production-preflight|--target-preflight]");
+if(databaseUrl&&(mcpUrl||container||database))throw new Error("Select exactly one catalog source.");
+if(databaseUrl&&!preflightOnly&&!observedProductionPreflightOnly&&!targetPreflightOnly)throw new Error("Connected PostgreSQL is permitted only for read-only preflight, never source fingerprint rewriting.");
 const queryNames=new Map(Object.entries(SCHEMA_CATALOG_QUERIES).map(([name,sql])=>[sql,name]));
 
 function queryDocker(sql,name){
@@ -53,7 +57,7 @@ async function query(sql,name="schema inventory"){
   return normalizeObjectComments(payload.rows);
 }
 
-const inventory=await captureSchemaCatalog({query:async(sql)=>({rows:await query(sql,queryNames.get(sql)||"schema inventory")})});
+const inventory=databaseUrl?await readCatalogReadOnly({connectionString:databaseUrl,caPem:readFileSync(resolve(String(process.env.SCHEMA_FINGERPRINT_DATABASE_CA_PATH||"")),"utf8")}):await captureSchemaCatalog({query:async(sql)=>({rows:await query(sql,queryNames.get(sql)||"schema inventory")})});
 if(mcpClient)await mcpClient.close();
 const {normalized,fingerprint}=fingerprintSchemaCatalog(inventory);
 const inputText=`${JSON.stringify(normalized,null,2)}\n`;

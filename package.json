@@ -190,7 +190,8 @@
     "test:outlook-events:db": "node scripts/outlook-event-sync-database-tests.mjs",
     "test:combined-release": "npm run --silent test:owner-access && npm run --silent test:shared-events && node scripts/events-chicago-time-tests.mjs && npm run --silent test:outlook-events:db",
     "test:manager-scheduler": "node scripts/manager-scheduler-http-tests.mjs && node scripts/manager-scheduler-database-tests.mjs && node scripts/static-weekly-approved-initial-http-tests.mjs && node scripts/static-weekly-manager-read-tests.mjs",
-    "test:manager-scheduler:database": "node scripts/manager-scheduler-dated-integration-tests.mjs"
+    "test:manager-scheduler:database": "node scripts/manager-scheduler-dated-integration-tests.mjs",
+    "test:backup-source-binding": "node --test scripts/backup-release-schema-binding-tests.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.31.0",
