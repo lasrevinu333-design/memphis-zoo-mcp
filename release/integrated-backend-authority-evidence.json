@@ -1015,12 +1015,12 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "4b440c155dd8e8c1d0cd29565ec5b5277da32838"
+        "object_id": "41183455f16d4301ce1d90d80eecf6d88a475fcd"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
         "mode": "100644",
-        "object_id": "c5074164f90c14300fac044f4fed27baed296721"
+        "object_id": "bd34854caa8c0e023e3bccb81ff0a7dbacc646ae"
       },
       {
         "path": "scripts/integrated-backend-authority-release-provenance-tests.mjs",
