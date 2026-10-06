@@ -1,7 +1,7 @@
 {
   "artifact": "integrated-backend-authority-release-evidence.v2",
   "release_id": "release-2026.07.19.custodial-v3.12",
-  "frontend_commit_sha": "e0924ab81312c497e494e28ae84a6902aabf649c",
+  "frontend_commit_sha": "5c1d9345cda9ff504e66b38f29139614d26b6f2a",
   "frontend_commit_state": "final_pair_bound",
   "schema_fingerprint": "0ada8fc717b3d5abde78b466ff25af576bed89035f272ad240d14058fc65690f",
   "schema_transition": {
@@ -145,7 +145,7 @@
       {
         "path": ".github/workflows/custodial-production-repair.yml",
         "mode": "100644",
-        "object_id": "3e6fb32f5b0b7788a11220a97e5b860a23684bed"
+        "object_id": "027887a9373f80b9f75b30bd36e89ffd8d50d784"
       },
       {
         "path": ".github/workflows/device-credential-foundation.yml",
@@ -160,7 +160,7 @@
       {
         "path": ".github/workflows/foundation-security-gate.yml",
         "mode": "100644",
-        "object_id": "2f868387641117527f059879b9865322809790e4"
+        "object_id": "c55e8b27737bdad2b46896556c0c0798f460121b"
       },
       {
         "path": ".github/workflows/integrated-release-attestation.yml",
@@ -515,7 +515,7 @@
       {
         "path": "package.json",
         "mode": "100644",
-        "object_id": "f400f51c9f3675e83b1b907230be8976273904d8"
+        "object_id": "4b3ca81aafdb2f9bb9787c52c5338e1d6bce7d53"
       },
       {
         "path": "release/combined-release-verification.json",
@@ -540,7 +540,7 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "0e170d90487f0c47e87be292eb725b74775a38e4"
+        "object_id": "e6537a104525fc1164d7c6ab724bef341611010f"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
@@ -585,7 +585,7 @@
       {
         "path": "release/schema-alignment-input.json",
         "mode": "100644",
-        "object_id": "67c52e957f1debd0f9182a2e2f639fc8f7dbf74c"
+        "object_id": "26a72c4d01089ed6d202b49eeb1f1a6f66250930"
       },
       {
         "path": "release/shared-events-database-receipt.json",
@@ -705,7 +705,7 @@
       {
         "path": "scripts/backup-release-schema-binding-tests.mjs",
         "mode": "100644",
-        "object_id": "aab2fb6ea5943b0abc56ab085fb17733e78602d3"
+        "object_id": "2936f9666f8ef7bde53eca3e48f7789e62436e55"
       },
       {
         "path": "scripts/backup-release-schema-binding.mjs",
@@ -810,7 +810,7 @@
       {
         "path": "scripts/coverall-event-print-integration-tests.mjs",
         "mode": "100644",
-        "object_id": "efe887ff971023da2c2051ccad6df72a9835a6a0"
+        "object_id": "05a7fab8fe5a85ca54a21296e53fbdd51923acc8"
       },
       {
         "path": "scripts/create-abandoned-mutation-lease-reconciliation.mjs",
@@ -2080,7 +2080,7 @@
       {
         "path": "scripts/oc24-coverall-print-tests.mjs",
         "mode": "100644",
-        "object_id": "4d5d24d7411cc44325f9a818472e965afba3a6db"
+        "object_id": "b58948c915b01bd0e0d3797f08c7e0721f6c3cba"
       },
       {
         "path": "scripts/oc24-gregory-lunch-analysis.mjs",
@@ -2540,7 +2540,7 @@
       {
         "path": "scripts/schema-catalog-readonly-client.mjs",
         "mode": "100644",
-        "object_id": "f76c04dc98df48b22f81b57dcb6f8c31e3c3dc74"
+        "object_id": "6e160cd0789af68a88880995155bccf3e58fe285"
       },
       {
         "path": "scripts/schema-fingerprint-catalog.mjs",
@@ -2855,7 +2855,7 @@
       {
         "path": "scripts/static-weekly-day-changes-database-tests.mjs",
         "mode": "100644",
-        "object_id": "c325dc761d93bfde44b85469123ba668ddb8d0fb"
+        "object_id": "239045cc3d5dde387360f0c2e32b2103f77a739f"
       },
       {
         "path": "scripts/static-weekly-digest-stream-ci-tests.mjs",
@@ -3450,7 +3450,7 @@
       {
         "path": "scripts/static-weekly-schedule-authority-closure-tests.mjs",
         "mode": "100644",
-        "object_id": "06460b4b02ad81da1916ed465197b04aaaa9386c"
+        "object_id": "85259e0c7146a83c1a27305b6440e25cf9938a54"
       },
       {
         "path": "scripts/static-weekly-schedule-authority-v3-tests.mjs",
@@ -4365,12 +4365,12 @@
       {
         "path": "src/static-weekly-control-plane-runtime.js",
         "mode": "100644",
-        "object_id": "e0c32a65b569db26978134c28b042eb65f4cecad"
+        "object_id": "f8c638ad6c90162527ffc0332e6c254426132513"
       },
       {
         "path": "src/static-weekly-control-plane.js",
         "mode": "100644",
-        "object_id": "947985a84fda744339c28ec4cd4a1cc2b554aa0c"
+        "object_id": "646dbcfee50d2240ce67dfdd3c6548e6f9232798"
       },
       {
         "path": "src/static-weekly-coverall-print.js",
