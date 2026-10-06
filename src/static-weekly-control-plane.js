@@ -10,6 +10,7 @@
  */
 import { createHash, randomUUID } from "node:crypto";
 import { Pool } from "pg";
+import { hasManagerPermission } from "./auth/manager-permissions.js";
 import { createStaticWeeklyDraftRpcInput, createStaticWeeklyProjectionRpcInput } from "./static-weekly-schedule-database-adapter.js";
 import {
   compileAndPrepareStaticWeeklyScheduleIsolated,
@@ -46,9 +47,9 @@ function isDatabaseConnectionFailure(error) {
     || message.includes("timeout exceeded when trying to connect");
 }
 
-function requireManager(manager) {
+function requireManager(manager, action = "write") {
   const managerId = text(manager?.manager_id || manager?.managerId);
-  if (!managerId || !text(manager?.manager_display_name || manager?.managerName) || manager?.read_only || manager?.auth_mode === "operations_first" || manager?.auth_mode === "admin_api_key") {
+  if (!managerId || !text(manager?.manager_display_name || manager?.managerName) || (action === "write" ? manager?.read_only : !hasManagerPermission(manager, action)) || manager?.auth_mode === "operations_first" || manager?.auth_mode === "admin_api_key") {
     throw fail("static_weekly_named_manager_required", "A trusted, write-enabled named manager session is required.");
   }
   return {
@@ -471,6 +472,15 @@ export function createStaticWeeklyControlPlane({
     return rows[0]?.result;
   }
 
+  async function authorizeAbsenceOperations(client, manager, serviceDate, publicationId, operations) {
+    // Re-resolve the current credential and the owner-controlled absence window
+    // in the SAME transaction as the exception and compiled projection.
+    return call(client, "custodial_authorize_absence_operations_v1", [
+      manager.manager_id, manager.credential_id, manager.device_id, manager.access_level,
+      serviceDate, publicationId, JSON.stringify(operations),
+    ]);
+  }
+
   async function lockStaticWeeklyAuthority(client) {
     await client.query(
       "select pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended($1,0))",
@@ -623,7 +633,7 @@ export function createStaticWeeklyControlPlane({
       });
     },
     async getManagerSnapshot({ manager, weekStart }) {
-      requireManager(manager);
+      requireManager(manager, "read");
       return transaction((client) => snapshotFor(client, requireMonday(weekStart, "week start")));
     },
     async createReplacementDraft({ manager, sourcePublicationId, effectiveStart, expectedRevision, idempotencyKey }) {
@@ -679,14 +689,21 @@ export function createStaticWeeklyControlPlane({
       }));
     },
     async applyException({ manager, exceptionType, serviceDate, startsAt = null, endsAt = null, baseVersionId, publicationId, reason, payload, expectedRevision, idempotencyKey, projectionWeekStart, reversesExceptionId = null }) {
-      const actor = requireManager(manager); const weekStart = projectionWeekForDate(projectionWeekStart, serviceDate); const date = requireDateInWeek(serviceDate, weekStart, "service date"); const key = requireIdempotencyKey(idempotencyKey);
-      return transaction((client) => mutateAndMaterializeCurrentProjection(client, {
+      const actor = requireManager(manager, manager.read_only ? "manage_absences" : "write"); const weekStart = projectionWeekForDate(projectionWeekStart, serviceDate); const date = requireDateInWeek(serviceDate, weekStart, "service date"); const key = requireIdempotencyKey(idempotencyKey);
+      const operations = [{ operation: "exception", exceptionType, startsAt, endsAt, reason, payload, reversesExceptionId }];
+      return transaction(async (client) => {
+        await lockStaticWeeklyAuthority(client);
+        await authorizeAbsenceOperations(client, manager, date, publicationId, operations);
+        const result = await mutateAndMaterializeCurrentProjection(client, {
         actor,
         publicationId: requirePublicationId(publicationId),
         weekStart,
         idempotencyKey: key,
         mutate: () => call(client, "static_weekly_v3_apply_exception", [text(exceptionType), date, startsAt || null, endsAt || null, text(baseVersionId), requirePublicationId(publicationId), text(reason), payload, requireRevision(expectedRevision), actor.managerId, key, reversesExceptionId || null]),
-      }));
+        });
+        await authorizeAbsenceOperations(client, manager, date, publicationId, operations);
+        return result;
+      });
     },
     async applyContractorCapacity({ manager, serviceDate, baseVersionId, publicationId, slotId, shift, reason, expectedRevision, idempotencyKey, projectionWeekStart }) {
       const actor = requireManager(manager); const weekStart = projectionWeekForDate(projectionWeekStart, serviceDate); const date = requireDateInWeek(serviceDate, weekStart, "service date"); const key = requireIdempotencyKey(idempotencyKey); const effectivePublicationId = requirePublicationId(publicationId);
@@ -703,7 +720,7 @@ export function createStaticWeeklyControlPlane({
       });
     },
     async applyDayChanges({ manager, serviceDate, baseVersionId, publicationId, versionId = null, operations, expectedRevision, idempotencyKey, projectionWeekStart }) {
-      const actor = requireManager(manager);
+      const actor = requireManager(manager, manager.read_only ? "manage_absences" : "write");
       const weekStart = projectionWeekForDate(projectionWeekStart, serviceDate);
       const date = requireDateInWeek(serviceDate, weekStart, "service date");
       const key = requireIdempotencyKey(idempotencyKey);
@@ -721,6 +738,7 @@ export function createStaticWeeklyControlPlane({
         // the winner commits. The gate reauthorizes the current manager and
         // reacquires the same lock defensively; it remains held through commit.
         await lockStaticWeeklyAuthority(client);
+        await authorizeAbsenceOperations(client, manager, date, effectivePublicationId, requestedOperations);
         const batch = await call(client, "static_weekly_v4_begin_day_changes", [date, weekStart, effectiveVersionId, effectivePublicationId, JSON.stringify(requestedOperations), initialRevision, actor.managerId, key]);
         if (batch?.replayed === true) return batch.response;
         // Resolve and validate every operation before invoking the first writer;
@@ -745,6 +763,7 @@ export function createStaticWeeklyControlPlane({
           expectedRevision: revision,
           idempotencyKey: projectionIdempotencyKey(key),
         });
+        await authorizeAbsenceOperations(client, manager, date, effectivePublicationId, requestedOperations);
         return {
           ...projection,
           operation: "apply_day_changes",

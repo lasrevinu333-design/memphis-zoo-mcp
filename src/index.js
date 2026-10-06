@@ -20,6 +20,7 @@ import { assertConfiguredReleaseIdentity, buildReleaseManifest } from "./release
 import { observeProductionSchemaIdentity } from "./production-schema-identity.js";
 import { assertOpsManagerSessionSecret, authenticateOpsAccessRequest, createSupabaseTrustedDeviceStore, installSharedAuthRoutes, makeOpsAccessMiddleware } from "./auth/shared-access-auth.js";
 import { assertServerAssignedActor, authenticatedManagerActor } from "./manager-authority.js";
+import { installOwnerAccessRoutes } from "./owner-access-api.js";
 import { authoritativeFeedbackPayload, makeFeedbackSubmitAuthority } from "./feedback-authority.js";
 import { isMcpReadOnlyNoAuthEnabled, makeMcpConnectorMiddleware } from "./auth/mcp-connector-auth.js";
 import {
@@ -745,6 +746,7 @@ function getSupabaseConfig() {
 const ALLOWED_CORS_ORIGINS = String(process.env.ALLOWED_CORS_ORIGINS || "")
   .split(",").map((s) => s.trim()).filter(Boolean);
 const DEFAULT_CORS_ORIGINS = [
+  "https://memphis-zoo-infrastructure-map.lasrevinu333.chatgpt.site",
   "https://memphis-zoo-mcp.onrender.com",
   "https://lasrevinu333-design.github.io",
   "https://nousresearch.github.io",
@@ -915,6 +917,7 @@ function requireFeedbackSignedLinkOrOps(purpose) {
       next();
       return;
     }
+    if (purpose === "ack") return requireOpsManagerWrite(req, res, next);
     const result = authenticateOpsAccessRequest(req);
     if (!result.ok) {
       res.status(result.status || 401).json({ ok: false, error: result.error || "Unauthorized" });
@@ -2829,25 +2832,7 @@ app.post("/admin-api/bundle", requireOpsManagerWrite, async (req, res) => {
   try { const payload = req.body && typeof req.body === "object" ? req.body : {}; const data = await runAdminBundleViaSqlRead(payload); res.status(200).json({ ok: true, data }); }
   catch (error) { console.error("admin bundle failed:", error); res.status(500).json({ ok: false, error: error.message || "Admin bundle failed" }); }
 });
-app.post("/admin-api/close-ticket", requireOpsManagerWrite, async (req, res) => {
-  try {
-    assertServerAssignedActor(req.body);
-    const ticketId = String(req.body?.ticket_id || "").trim();
-    const closeNotes = req.body?.close_notes == null ? null : String(req.body.close_notes);
-    if (!ticketId) {
-      res.status(400).json({ ok: false, error: "ticket_id is required." });
-      return;
-    }
-    await runRpc("custodial_close_maintenance_ticket_authoritative", {
-      p_ticket_id: ticketId,
-      p_closed_by: authenticatedManagerActor(req.memphisAuth),
-      p_close_notes: closeNotes,
-      p_backend_execution_secret: offlineAuthoritySecret(),
-    });
-    res.status(200).json({ ok: true, ticket_id: ticketId, status: "closed" });
-  }
-  catch (error) { console.error("close ticket failed:", error); res.status(error?.status || 500).json({ ok: false, error: error.message || "Close ticket failed" }); }
-});
+installOwnerAccessRoutes(app, { store: opsTrustedDeviceStore, runRpc, backendSecret: offlineAuthoritySecret });
 app.get("/dashboard-api/summary", requireOpsManagerAuth, async (_req, res) => {
   try { const data = await runPublicDashboardSummary(); res.status(200).json({ ok: true, data }); }
   catch (error) { console.error("dashboard summary failed:", error); res.status(500).json({ ok: false, error: error.message || "Dashboard summary failed" }); }
@@ -2889,19 +2874,6 @@ app.get("/dashboard-api/work-session-alerts", requireOpsManagerAuth, async (_req
     console.error("work session alert lookup failed:", error);
     res.status(500).json({ ok: false, error: error.message || "Work session alert lookup failed" });
   }
-});
-app.post("/dashboard-api/close-ticket", requireOpsManagerWrite, async (req, res) => {
-  try {
-    assertServerAssignedActor(req.body);
-    const ticketId = String(req.body?.ticket_id || "").trim();
-    if (!ticketId) {
-      res.status(400).json({ ok: false, error: "ticket_id is required." });
-      return;
-    }
-    await runRpc("custodial_close_maintenance_ticket_authoritative", { p_ticket_id: ticketId, p_closed_by: authenticatedManagerActor(req.memphisAuth), p_close_notes: null, p_backend_execution_secret: offlineAuthoritySecret() });
-    res.status(200).json({ ok: true, ticket_id: ticketId, status: "closed" });
-  }
-  catch (error) { console.error("dashboard close ticket failed:", error); res.status(error?.status || 500).json({ ok: false, error: error.message || "Dashboard close ticket failed" }); }
 });
 function offlineAuthorityManagerId(req) {
   const managerId = String(req?.memphisAuth?.manager_id || "").trim();

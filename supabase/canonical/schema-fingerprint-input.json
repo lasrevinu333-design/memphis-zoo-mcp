@@ -36363,6 +36363,14 @@
     },
     {
       "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.custodial_action_actor_v1(p_manager_id uuid, p_credential_id uuid, p_device_id text, p_session_access text, p_action text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\nDECLARE m public.ops_manager_managers%ROWTYPE;\n        c public.ops_manager_trusted_devices%ROWTYPE;\n        o public.ops_manager_managers%ROWTYPE;\n        away jsonb; is_owner boolean;\nBEGIN\n  IF p_action IS NULL OR p_action NOT IN ('read','write','close_scan_tickets','manage_absences') THEN\n    RAISE EXCEPTION USING errcode='42501', message='Unknown manager action';\n  END IF;\n  SELECT * INTO c FROM public.ops_manager_trusted_devices\n    WHERE credential_id=p_credential_id FOR SHARE;\n  SELECT * INTO m FROM public.ops_manager_managers\n    WHERE manager_id=p_manager_id FOR SHARE;\n  IF c.credential_id IS NULL OR m.manager_id IS NULL OR c.manager_id IS DISTINCT FROM m.manager_id\n     OR c.device_id IS DISTINCT FROM p_device_id OR c.revoked_at IS NOT NULL\n     OR c.expires_at<=clock_timestamp() OR c.created_at>clock_timestamp()\n     OR NOT m.active OR m.revoked_at IS NOT NULL OR m.is_system_principal\n     OR NOT (m.roles && ARRAY['OPS_MANAGER','CUSTODIAL_MANAGER','DIRECTOR','SECURITY_ADMIN']) THEN\n    RAISE EXCEPTION USING errcode='42501', message='A current named manager credential is required';\n  END IF;\n  is_owner:=coalesce(m.system_key='eric_custodial_manager'\n    AND p_session_access='full_access' AND c.max_access_level='full_access',false);\n  IF p_action<>'read' AND m.system_key='eric_custodial_manager' AND NOT is_owner THEN\n    RAISE EXCEPTION USING errcode='42501', message='Use a current full-control owner sign-in';\n  END IF;\n  IF p_action='write' AND NOT is_owner THEN\n    RAISE EXCEPTION USING errcode='42501', message='This action is owner-only';\n  END IF;\n  IF p_action='manage_absences' AND NOT is_owner THEN\n    SELECT * INTO o FROM public.ops_manager_managers\n      WHERE system_key='eric_custodial_manager' AND active AND revoked_at IS NULL\n        AND NOT is_system_principal FOR SHARE;\n    away:=o.metadata_json->'custodial_absence_coverage_v1';\n    IF o.manager_id IS NULL OR away->>'enabled' IS DISTINCT FROM 'true'\n       OR (away->>'starts_at') IS NULL OR (away->>'ends_at') IS NULL\n       OR (away->>'starts_at')::timestamptz>clock_timestamp()\n       OR (away->>'ends_at')::timestamptz<=clock_timestamp() THEN\n      RAISE EXCEPTION USING errcode='42501', message='Absence coverage is not currently delegated by the owner';\n    END IF;\n  END IF;\n  RETURN jsonb_build_object('manager_id',m.manager_id,'manager_name',m.display_name,\n    'owner',is_owner,'credential_id',c.credential_id,'device_id',c.device_id);\nEND $function$\n",
+      "function_name": "custodial_action_actor_v1",
+      "identity_arguments": "p_manager_id uuid, p_credential_id uuid, p_device_id text, p_session_access text, p_action text",
+      "owner_name": "migration_owner",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
       "definition": "CREATE OR REPLACE FUNCTION public.custodial_append_session_correction(p_operation_id uuid, p_session_id uuid, p_manager_id uuid, p_reason text, p_backend_execution_secret text, p_corrected_employee_id uuid DEFAULT NULL::uuid, p_corrected_location_id uuid DEFAULT NULL::uuid, p_corrected_device_id uuid DEFAULT NULL::uuid, p_corrected_started_at timestamp with time zone DEFAULT NULL::timestamp with time zone, p_corrected_ended_at timestamp with time zone DEFAULT NULL::timestamp with time zone)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_fingerprint text;\n  v_existing public.custodial_session_corrections%rowtype;\n  v_current record;\n  v_manager_name text;\n  v_employee record;\n  v_location record;\n  v_device record;\n  v_employee_id uuid;\n  v_location_id uuid;\n  v_device_id uuid;\n  v_started_at timestamptz;\n  v_ended_at timestamptz;\n  v_changed_fields text[];\n  v_inserted public.custodial_session_corrections%rowtype;\nbegin\n  perform public.custodial_require_backend_execution_secret(p_backend_execution_secret);\n  if p_operation_id is null or p_session_id is null or p_manager_id is null\n     or length(btrim(coalesce(p_reason,''))) not between 1 and 1000 then\n    raise exception using errcode='22023', message='Correction operation, session, named manager, and reason are required';\n  end if;\n\n  v_fingerprint := encode(extensions.digest(convert_to(jsonb_build_object(\n    'operation_id',p_operation_id,'session_id',p_session_id,'manager_id',p_manager_id,\n    'reason',btrim(p_reason),'employee_id',p_corrected_employee_id,'location_id',p_corrected_location_id,\n    'device_id',p_corrected_device_id,'started_at',p_corrected_started_at,'ended_at',p_corrected_ended_at\n  )::text,'UTF8'),'sha256'),'hex');\n\n  select * into v_existing\n  from public.custodial_session_corrections c\n  where c.operation_id = p_operation_id;\n  if found then\n    if v_existing.request_fingerprint is distinct from v_fingerprint then\n      raise exception using errcode='23505', message='Correction operation was already used for a different request';\n    end if;\n    return jsonb_build_object('correction_id',v_existing.correction_id,'session_id',v_existing.session_id,\n      'operation_id',v_existing.operation_id,'replayed',true,'changed_fields',v_existing.changed_fields,\n      'created_at',v_existing.created_at);\n  end if;\n\n  select m.display_name into v_manager_name\n  from public.ops_manager_managers m\n  where m.manager_id = p_manager_id\n    and m.active = true and m.revoked_at is null and m.is_system_principal = false\n    and m.roles && array['OPS_MANAGER','CUSTODIAL_MANAGER','DIRECTOR','SECURITY_ADMIN']::text[];\n  if not found then\n    raise exception using errcode='42501', message='An active named manager is required to correct a cleaning record';\n  end if;\n\n  select\n    coalesce(c.effective_employee_id,s.employee_id) employee_id,\n    coalesce(c.effective_location_id,s.location_id) location_id,\n    coalesce(c.effective_device_id,s.device_id) device_id,\n    coalesce(c.effective_started_at,s.started_at) started_at,\n    coalesce(c.effective_ended_at,s.ended_at) ended_at\n  into v_current\n  from public.sessions s\n  left join lateral (\n    select c.* from public.custodial_session_corrections c\n    where c.session_id = s.id\n    order by c.created_at desc,c.correction_id desc\n    limit 1\n  ) c on true\n  where s.id = p_session_id\n  for update of s;\n  if not found then\n    raise exception using errcode='P0002', message='Cleaning session was not found';\n  end if;\n\n  v_employee_id := coalesce(p_corrected_employee_id,v_current.employee_id);\n  v_location_id := coalesce(p_corrected_location_id,v_current.location_id);\n  v_device_id := coalesce(p_corrected_device_id,v_current.device_id);\n  v_started_at := coalesce(p_corrected_started_at,v_current.started_at);\n  v_ended_at := coalesce(p_corrected_ended_at,v_current.ended_at);\n\n  v_changed_fields := array_remove(array[\n    case when v_employee_id is distinct from v_current.employee_id then 'employee' end,\n    case when v_location_id is distinct from v_current.location_id then 'location' end,\n    case when v_device_id is distinct from v_current.device_id then 'device' end,\n    case when v_started_at is distinct from v_current.started_at then 'started_at' end,\n    case when v_ended_at is distinct from v_current.ended_at then 'ended_at' end\n  ],null);\n  if cardinality(v_changed_fields) = 0 then\n    raise exception using errcode='22023', message='Correction must change at least one manager-visible fact';\n  end if;\n  if v_ended_at is not null and v_ended_at < v_started_at then\n    raise exception using errcode='22023', message='Corrected cleaning end time cannot precede its start time';\n  end if;\n\n  select e.id,e.display_name into v_employee from public.employees e where e.id = v_employee_id;\n  select l.id,l.location_code,l.location_name into v_location from public.locations l where l.id = v_location_id;\n  select d.id,d.device_id,d.device_name,d.assignment_epoch into v_device from public.devices d where d.id = v_device_id;\n  if v_employee.id is null or v_location.id is null or v_device.id is null then\n    raise exception using errcode='23503', message='Corrected employee, location, and phone must exist';\n  end if;\n\n  insert into public.custodial_session_corrections(\n    operation_id,request_fingerprint,session_id,corrected_by_manager_id,corrected_by_manager_name_snapshot,\n    reason,changed_fields,effective_employee_id,effective_employee_name_snapshot,effective_location_id,\n    effective_location_code_snapshot,effective_location_name_snapshot,effective_device_id,\n    effective_device_identifier_snapshot,effective_device_name_snapshot,effective_assignment_epoch_snapshot,\n    effective_started_at,effective_ended_at\n  ) values (\n    p_operation_id,v_fingerprint,p_session_id,p_manager_id,v_manager_name,btrim(p_reason),v_changed_fields,\n    v_employee.id,v_employee.display_name,v_location.id,v_location.location_code,v_location.location_name,\n    v_device.id,v_device.device_id,v_device.device_name,v_device.assignment_epoch,v_started_at,v_ended_at\n  ) returning * into v_inserted;\n\n  return jsonb_build_object('correction_id',v_inserted.correction_id,'session_id',v_inserted.session_id,\n    'operation_id',v_inserted.operation_id,'replayed',false,'changed_fields',v_inserted.changed_fields,\n    'created_at',v_inserted.created_at);\nend\n$function$\n",
       "function_name": "custodial_append_session_correction",
       "identity_arguments": "p_operation_id uuid, p_session_id uuid, p_manager_id uuid, p_reason text, p_backend_execution_secret text, p_corrected_employee_id uuid, p_corrected_location_id uuid, p_corrected_device_id uuid, p_corrected_started_at timestamp with time zone, p_corrected_ended_at timestamp with time zone",
@@ -36390,6 +36398,14 @@
       "definition": "CREATE OR REPLACE FUNCTION public.custodial_assign_employee_device(p_device_identifier text, p_employee_id uuid, p_changed_by_manager_id uuid, p_reason text, p_move_existing boolean, p_expected_owner_provided boolean, p_expected_current_employee_id uuid)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare v_identifier text:=upper(regexp_replace(btrim(coalesce(p_device_identifier,'')),'^KIOSK[-_ ]?','KIOSK_','i'));\n  v_current_employee_id uuid;\nbegin\n  perform public.custodial_assert_manager(p_changed_by_manager_id);\n  if v_identifier ~ '^KIOSK_[2-9]$' then v_identifier:='KIOSK_0'||substring(v_identifier from 7); end if;\n  if p_expected_owner_provided is null then raise exception using errcode='22023',message='expected-owner presence must be explicit'; end if;\n  perform pg_advisory_xact_lock(hashtextextended('custodial-device-assignment:'||v_identifier,0));\n  select d.assigned_employee_id into v_current_employee_id from public.devices d\n  where upper(d.device_id)=v_identifier and d.active=true for update;\n  if not found then raise exception using errcode='P0002',message='Active employee kiosk not found.'; end if;\n  if p_expected_owner_provided and v_current_employee_id is distinct from p_expected_current_employee_id then\n    raise exception using errcode='40001',message='This phone assignment changed. Refresh and try again.';\n  end if;\n  return public.custodial_assign_employee_device(\n    v_identifier,p_employee_id,p_changed_by_manager_id,p_reason,p_move_existing\n  );\nend\n$function$\n",
       "function_name": "custodial_assign_employee_device",
       "identity_arguments": "p_device_identifier text, p_employee_id uuid, p_changed_by_manager_id uuid, p_reason text, p_move_existing boolean, p_expected_owner_provided boolean, p_expected_current_employee_id uuid",
+      "owner_name": "migration_owner",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.custodial_authorize_absence_operations_v1(p_manager_id uuid, p_credential_id uuid, p_device_id text, p_session_access text, p_service_date date, p_publication_id uuid, p_operations jsonb)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\nDECLARE actor jsonb; item jsonb; kind text; target public.weekly_schedule_exception_commands%ROWTYPE;\nBEGIN\n  actor:=public.custodial_action_actor_v1(p_manager_id,p_credential_id,p_device_id,p_session_access,'manage_absences');\n  IF (actor->>'owner')::boolean THEN RETURN actor; END IF;\n  IF jsonb_typeof(p_operations) IS DISTINCT FROM 'array' OR jsonb_array_length(p_operations) NOT BETWEEN 1 AND 25 THEN\n    RAISE EXCEPTION USING errcode='22023',message='One to 25 absence operations are required';\n  END IF;\n  FOR item IN SELECT value FROM jsonb_array_elements(p_operations) LOOP\n    kind:=coalesce(item->>'exceptionType',item->>'exception_type');\n    IF item->>'operation' IS DISTINCT FROM 'exception' OR kind NOT IN ('daily_absence','partial_absence','pto','reverse') OR kind IS NULL THEN\n      RAISE EXCEPTION USING errcode='42501',message='Only absence changes are delegated';\n    END IF;\n    IF kind='reverse' THEN\n      SELECT * INTO target FROM public.weekly_schedule_exception_commands\n        WHERE exception_id=(item#>>'{payload,reversesExceptionId}')::uuid FOR SHARE;\n      IF target.exception_id IS NULL OR target.exception_type NOT IN ('daily_absence','partial_absence','pto')\n         OR target.service_date IS DISTINCT FROM p_service_date OR target.publication_id IS DISTINCT FROM p_publication_id THEN\n        RAISE EXCEPTION USING errcode='42501',message='Only an absence on this published service date may be reversed';\n      END IF;\n    END IF;\n  END LOOP;\n  RETURN actor;\nEND $function$\n",
+      "function_name": "custodial_authorize_absence_operations_v1",
+      "identity_arguments": "p_manager_id uuid, p_credential_id uuid, p_device_id text, p_session_access text, p_service_date date, p_publication_id uuid, p_operations jsonb",
       "owner_name": "migration_owner",
       "schema_name": "public"
     },
@@ -36470,6 +36486,14 @@
       "definition": "CREATE OR REPLACE FUNCTION public.custodial_close_maintenance_ticket_authoritative(p_ticket_id uuid, p_closed_by text, p_close_notes text, p_backend_execution_secret text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare v_closed_by text := nullif(left(btrim(coalesce(p_closed_by,'')),200),'');\nbegin\n  perform public.custodial_require_backend_execution_secret(p_backend_execution_secret);\n  if p_ticket_id is null or v_closed_by is null then raise exception using errcode='22023',message='ticket identity and named closer are required'; end if;\n  return public.close_maintenance_ticket(p_ticket_id,v_closed_by,nullif(left(btrim(coalesce(p_close_notes,'')),1000),''));\nend\n$function$\n",
       "function_name": "custodial_close_maintenance_ticket_authoritative",
       "identity_arguments": "p_ticket_id uuid, p_closed_by text, p_close_notes text, p_backend_execution_secret text",
+      "owner_name": "migration_owner",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.custodial_close_scan_ticket_v1(p_manager_id uuid, p_credential_id uuid, p_device_id text, p_session_access text, p_ticket_id uuid, p_close_notes text, p_backend_execution_secret text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\nDECLARE actor jsonb; ticket public.maintenance_tickets%ROWTYPE; provenance_id uuid; result jsonb;\nBEGIN\n  PERFORM public.custodial_require_backend_execution_secret(p_backend_execution_secret);\n  actor:=public.custodial_action_actor_v1(p_manager_id,p_credential_id,p_device_id,p_session_access,'close_scan_tickets');\n  SELECT * INTO ticket FROM public.maintenance_tickets WHERE id=p_ticket_id FOR UPDATE;\n  IF ticket.id IS NULL THEN RAISE EXCEPTION USING errcode='P0002',message='Ticket not found'; END IF;\n  IF NOT (actor->>'owner')::boolean THEN\n    SELECT s.id INTO provenance_id\n      FROM public.completion_responses r JOIN public.sessions s ON s.id=r.session_id\n      WHERE r.id=ticket.completion_response_id AND s.id=ticket.session_id\n        AND ticket.issue_source='completion_form'\n        AND ticket.location_id=r.location_id AND r.location_id=s.location_id\n        AND ticket.device_id=r.device_id AND r.device_id=s.device_id\n        AND ticket.reported_by_employee_id=r.submitted_by_employee_id AND r.submitted_by_employee_id=s.employee_id\n      FOR SHARE OF r,s;\n    IF provenance_id IS NULL THEN\n      RAISE EXCEPTION USING errcode='42501',message='Delegated closure requires a verified scan-session ticket';\n    END IF;\n  END IF;\n  IF ticket.status='closed' THEN\n    RETURN jsonb_build_object('ticket_id',ticket.id,'status',ticket.status,'closed_by',ticket.closed_by,\n      'closed_at',ticket.closed_at,'closed_via',ticket.closed_via,'replayed',true);\n  END IF;\n  result:=public.custodial_close_maintenance_ticket_authoritative(ticket.id,\n    'manager:'||p_manager_id::text||':'||left(actor->>'manager_name',155),left(p_close_notes,1000),p_backend_execution_secret);\n  INSERT INTO public.ops_manager_auth_events(credential_id,device_id,event_type,success,detail_json)\n    VALUES(p_credential_id,p_device_id,'scan_ticket_closed',true,jsonb_build_object('ticket_id',ticket.id,'manager_id',p_manager_id,'owner',(actor->>'owner')::boolean));\n  RETURN result;\nEND $function$\n",
+      "function_name": "custodial_close_scan_ticket_v1",
+      "identity_arguments": "p_manager_id uuid, p_credential_id uuid, p_device_id text, p_session_access text, p_ticket_id uuid, p_close_notes text, p_backend_execution_secret text",
       "owner_name": "migration_owner",
       "schema_name": "public"
     },
@@ -36726,6 +36750,14 @@
       "definition": "CREATE OR REPLACE FUNCTION public.custodial_ops_manager_notification_recipient_is_current(p_credential_id uuid, p_manager_id uuid, p_now timestamp with time zone DEFAULT now())\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\n  select exists (\n    select 1\n    from public.ops_manager_push_devices pd\n    join public.ops_manager_trusted_devices td\n      on td.credential_id=pd.credential_id and td.manager_id=pd.manager_id\n    join public.ops_manager_managers m on m.manager_id=pd.manager_id\n    where pd.credential_id=p_credential_id and pd.manager_id=p_manager_id\n      and pd.enabled=true and pd.revoked_at is null\n      and td.revoked_at is null and td.expires_at>p_now\n      and m.active=true and m.revoked_at is null and m.is_system_principal=false\n  );\n$function$\n",
       "function_name": "custodial_ops_manager_notification_recipient_is_current",
       "identity_arguments": "p_credential_id uuid, p_manager_id uuid, p_now timestamp with time zone",
+      "owner_name": "migration_owner",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.custodial_owner_coverage_v1(p_manager_id uuid, p_credential_id uuid, p_device_id text, p_session_access text, p_change jsonb, p_backend_execution_secret text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\nDECLARE actor jsonb; owner_row public.ops_manager_managers%ROWTYPE;\n        state jsonb; revision bigint; until_at timestamptz;\nBEGIN\n  PERFORM public.custodial_require_backend_execution_secret(p_backend_execution_secret);\n  actor:=public.custodial_action_actor_v1(p_manager_id,p_credential_id,p_device_id,p_session_access,\n    CASE WHEN p_change IS NULL THEN 'read' ELSE 'write' END);\n  SELECT * INTO owner_row FROM public.ops_manager_managers\n    WHERE system_key='eric_custodial_manager' FOR UPDATE;\n  IF owner_row.manager_id IS NULL THEN RAISE EXCEPTION USING errcode='42501',message='Owner registry unavailable'; END IF;\n  state:=coalesce(owner_row.metadata_json->'custodial_absence_coverage_v1','{}'::jsonb);\n  revision:=coalesce((state->>'revision')::bigint,0);\n  IF p_change IS NOT NULL THEN\n    IF jsonb_typeof(p_change)<>'object' OR p_change - ARRAY['enabled','ends_at','reason','expected_revision']<>'{}'::jsonb\n       OR jsonb_typeof(p_change->'enabled') IS DISTINCT FROM 'boolean'\n       OR (p_change->>'expected_revision')::bigint IS DISTINCT FROM revision THEN\n      RAISE EXCEPTION USING errcode='40001',message='Coverage settings changed; refresh before saving';\n    END IF;\n    IF (p_change->>'enabled')::boolean THEN\n      until_at:=(p_change->>'ends_at')::timestamptz;\n      IF until_at IS NULL OR until_at<=clock_timestamp() OR until_at>clock_timestamp()+interval '366 days' THEN\n        RAISE EXCEPTION USING errcode='22023',message='A future coverage end within one year is required';\n      END IF;\n    END IF;\n    state:=jsonb_build_object('enabled',(p_change->>'enabled')::boolean,\n      'starts_at',clock_timestamp(),'ends_at',until_at,'reason',left(coalesce(p_change->>'reason',''),500),\n      'revision',revision+1,'changed_by',p_manager_id);\n    UPDATE public.ops_manager_managers SET metadata_json=jsonb_set(metadata_json,'{custodial_absence_coverage_v1}',state,true)\n      WHERE manager_id=owner_row.manager_id;\n    INSERT INTO public.ops_manager_auth_events(credential_id,device_id,event_type,success,detail_json)\n      VALUES(p_credential_id,p_device_id,'owner_absence_coverage_changed',true,state);\n  END IF;\n  RETURN jsonb_build_object('enabled',coalesce((state->>'enabled')::boolean,false)\n      AND coalesce((state->>'starts_at')::timestamptz<=clock_timestamp(),false)\n      AND coalesce((state->>'ends_at')::timestamptz>clock_timestamp(),false),\n    'starts_at',state->'starts_at','ends_at',state->'ends_at','reason',state->'reason',\n    'revision',coalesce((state->>'revision')::bigint,0),'owner_control_unchanged',true);\nEND $function$\n",
+      "function_name": "custodial_owner_coverage_v1",
+      "identity_arguments": "p_manager_id uuid, p_credential_id uuid, p_device_id text, p_session_access text, p_change jsonb, p_backend_execution_secret text",
       "owner_name": "migration_owner",
       "schema_name": "public"
     },
@@ -47122,6 +47154,24 @@
       "schema_name": "public"
     },
     {
+      "function_name": "custodial_action_actor_v1",
+      "grantee": "service_role",
+      "grantor": "migration_owner",
+      "identity_arguments": "p_manager_id uuid, p_credential_id uuid, p_device_id text, p_session_access text, p_action text",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "custodial_action_actor_v1",
+      "grantee": "static_weekly_control_plane",
+      "grantor": "migration_owner",
+      "identity_arguments": "p_manager_id uuid, p_credential_id uuid, p_device_id text, p_session_access text, p_action text",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
       "function_name": "custodial_append_session_correction",
       "grantee": "service_role",
       "grantor": "migration_owner",
@@ -47153,6 +47203,24 @@
       "grantee": "service_role",
       "grantor": "migration_owner",
       "identity_arguments": "p_device_identifier text, p_employee_id uuid, p_changed_by_manager_id uuid, p_reason text, p_move_existing boolean, p_expected_owner_provided boolean, p_expected_current_employee_id uuid",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "custodial_authorize_absence_operations_v1",
+      "grantee": "service_role",
+      "grantor": "migration_owner",
+      "identity_arguments": "p_manager_id uuid, p_credential_id uuid, p_device_id text, p_session_access text, p_service_date date, p_publication_id uuid, p_operations jsonb",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "custodial_authorize_absence_operations_v1",
+      "grantee": "static_weekly_control_plane",
+      "grantor": "migration_owner",
+      "identity_arguments": "p_manager_id uuid, p_credential_id uuid, p_device_id text, p_session_access text, p_service_date date, p_publication_id uuid, p_operations jsonb",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -47261,6 +47329,15 @@
       "grantee": "service_role",
       "grantor": "migration_owner",
       "identity_arguments": "p_ticket_id uuid, p_closed_by text, p_close_notes text, p_backend_execution_secret text",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "custodial_close_scan_ticket_v1",
+      "grantee": "service_role",
+      "grantor": "migration_owner",
+      "identity_arguments": "p_manager_id uuid, p_credential_id uuid, p_device_id text, p_session_access text, p_ticket_id uuid, p_close_notes text, p_backend_execution_secret text",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -47477,6 +47554,15 @@
       "grantee": "service_role",
       "grantor": "migration_owner",
       "identity_arguments": "p_credential_id uuid, p_manager_id uuid, p_now timestamp with time zone",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "custodial_owner_coverage_v1",
+      "grantee": "service_role",
+      "grantor": "migration_owner",
+      "identity_arguments": "p_manager_id uuid, p_credential_id uuid, p_device_id text, p_session_access text, p_change jsonb, p_backend_execution_secret text",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"

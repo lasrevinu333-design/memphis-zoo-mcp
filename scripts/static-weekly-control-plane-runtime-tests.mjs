@@ -13,7 +13,7 @@ const env = {
   SUPABASE_SERVICE_ROLE_KEY: "scheduler-runtime-test-service-role-key",
   OPS_MANAGER_SESSION_SECRET: "scheduler-runtime-test-session-secret-0123456789",
 };
-const manager = { manager_id: "10000000-0000-4000-8000-000000000091", display_name: "Runtime Named Manager", roles: ["OPS_MANAGER"], active: true };
+const manager = { manager_id: "10000000-0000-4000-8000-000000000091", display_name: "Runtime Named Manager", system_key: "eric_custodial_manager", is_system_principal: false, roles: ["OPS_MANAGER"], active: true };
 const credentialId = "runtime-credential";
 const deviceId = "runtime-device";
 const session = createOpsManagerSession({ credentialId, deviceId, manager, authMode: "trusted_device", accessLevel: "full_access", maximumAccessLevel: "full_access", env });

@@ -12,6 +12,8 @@ const allowedOrigin = "https://lasrevinu333-design.github.io";
 const admin = {
   manager_id: "00000000-0000-4000-8000-000000000001",
   display_name: "Eric Operle",
+  system_key: "eric_custodial_manager",
+  is_system_principal: false,
   roles: ["OPS_MANAGER", "CUSTODIAL_MANAGER", "SECURITY_ADMIN"],
   active: true,
   revoked_at: null,
@@ -19,6 +21,8 @@ const admin = {
 const namedManager = {
   manager_id: "00000000-0000-4000-8000-000000000002",
   display_name: "Brandy Gull",
+  system_key: "brandy_gull_horticulture_manager",
+  is_system_principal: false,
   roles: ["OPS_MANAGER"],
   active: true,
   revoked_at: null,
