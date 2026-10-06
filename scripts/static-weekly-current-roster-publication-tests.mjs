@@ -70,34 +70,41 @@ function initialImportRecords(manifest){
  assert.deepEqual(counts,INITIAL_IMPORT_COUNTS,'exact captured sources/revisions/versions/publications/closure/control only');
  return manifest;
 }
+function safeInitialImportDiagnostic(error,{phase,table,recordIndex}){
+ const token=value=>typeof value==='string'&&/^[a-zA-Z_][a-zA-Z0-9_]{0,62}$/.test(value)?value:null;
+ return {phase,table:Object.hasOwn(INITIAL_IMPORT_TABLES,table)?table:null,recordIndex,
+  sqlstate:typeof error?.code==='string'&&/^[0-9A-Z]{5}$/.test(error.code)?error.code:null,
+  assertion:error?.code==='ERR_ASSERTION',schema:token(error?.schema),column:token(error?.column),
+  constraint:token(error?.constraint)};
+}
 async function importInitialHistoricalRows(client,manifest,remaining){
- initialImportRecords(manifest);remaining();await client.query('begin');
- try{
+ initialImportRecords(manifest);remaining();let phase='begin',table=null,recordIndex=0;
+ try{await client.query('begin');
   await client.query("set local search_path=pg_catalog,public; set local timezone='UTC'; set local app.static_weekly_publish_write='on'");
   for(const file of manifest.files){
    const raw=readInitialPrivateBytes(file.path,file,remaining);
    for(const r of file.records){
-    remaining();const table='public.'+r.table,key=INITIAL_IMPORT_TABLES[r.table];
+    remaining();table=r.table;recordIndex++;phase='shape';const sqlTable='public.'+table,key=INITIAL_IMPORT_TABLES[table];
     const incoming=r.shape==='row'?'jsonb_build_array($1::jsonb #> $2::text[])':'$1::jsonb #> $2::text[]';
     const identity=await client.query(`select jsonb_typeof(${incoming})='array' and jsonb_array_length(${incoming})=$3::integer as valid`,[raw,r.path,r.count]);
     assert.equal(identity.rows[0]?.valid,true,'closed raw imported record count/shape');
     // Reject unknown/missing columns or any cast that changes original JSONB
     // evidence; numeric values remain PostgreSQL numeric throughout.
-    const exact=await client.query(`select bool_and(jsonb_typeof(row)='object' and to_jsonb(jsonb_populate_record(null::${table},row))=row) as valid from jsonb_array_elements(${incoming}) row`,[raw,r.path]);
+    phase='typed_row';const exact=await client.query(`select bool_and(jsonb_typeof(row)='object' and to_jsonb(jsonb_populate_record(null::${sqlTable},row))=row) as valid from jsonb_array_elements(${incoming}) row`,[raw,r.path]);
     assert.equal(exact.rows[0]?.valid,true,'lossless complete typed historical row required');
     const sql=r.table==='static_weekly_schedule_control'
-     ? `update ${table} stored set (current_revision,updated_at,updated_by_manager_id,updated_by_manager_name_snapshot)=(select current_revision,updated_at,updated_by_manager_id,updated_by_manager_name_snapshot from jsonb_populate_record(null::${table},(${incoming})->0)) where stored.singleton and stored.current_revision=$3::bigint`
-     : `insert into ${table} select (jsonb_populate_record(null::${table},row)).* from jsonb_array_elements(${incoming}) row`;
+     ? `update ${sqlTable} stored set (current_revision,updated_at,updated_by_manager_id,updated_by_manager_name_snapshot)=(select current_revision,updated_at,updated_by_manager_id,updated_by_manager_name_snapshot from jsonb_populate_record(null::${sqlTable},(${incoming})->0)) where stored.singleton and stored.current_revision=$3::bigint`
+     : `insert into ${sqlTable} select (jsonb_populate_record(null::${sqlTable},row)).* from jsonb_array_elements(${incoming}) row`;
     if(r.table==='static_weekly_schedule_control')assert.ok(Number.isSafeInteger(manifest.fixtureRevision)&&manifest.fixtureRevision>=0);
-    const inserted=await client.query(sql,[raw,r.path,...(r.table==='static_weekly_schedule_control'?[manifest.fixtureRevision]:[])]);
+    phase='insert';const inserted=await client.query(sql,[raw,r.path,...(r.table==='static_weekly_schedule_control'?[manifest.fixtureRevision]:[])]);
     assert.equal(inserted.rowCount,r.count,'exact captured records inserted once');
-    const readback=await client.query(`select count(*)::integer as count from jsonb_array_elements(${incoming}) row join ${table} stored on to_jsonb(stored)->'${key}'=row->'${key}' where to_jsonb(stored)=row`,[raw,r.path]);
+    phase='readback';const readback=await client.query(`select count(*)::integer as count from jsonb_array_elements(${incoming}) row join ${sqlTable} stored on to_jsonb(stored)->'${key}'=row->'${key}' where to_jsonb(stored)=row`,[raw,r.path]);
     assert.equal(readback.rows[0]?.count,r.count,'whole raw historical row independently read back');
    }
   }
-  remaining();await client.query('commit');
+  phase='commit';remaining();await client.query('commit');
  }catch(error){let rollbackFailed=false;try{await client.query('rollback');}catch{rollbackFailed=true;}
-  throw Object.assign(new Error('approved_initial_historical_import_failed'),{code:'APPROVED_INITIAL_IMPORT_FAILED',rollbackFailed});}
+  throw Object.assign(new Error('approved_initial_historical_import_failed'),{code:'APPROVED_INITIAL_IMPORT_FAILED',rollbackFailed,diagnostic:safeInitialImportDiagnostic(error,{phase,table,recordIndex})});}
 }
 async function initialImportSelfTest(){
  const dir=mkdtempSync('/tmp/mz-approved-initial-import-proof-');chmodSync(dir,448);const file=join(dir,'row.json');
@@ -129,6 +136,15 @@ async function initialImportSelfTest(){
   assert.throws(()=>initialImportRecords({...m,files:m.files.map(x=>({...x,bytes:NaN}))}));checks++;
   assert.throws(()=>initialImportRecords({...m,files:m.files.map(x=>({...x,records:x.records.map(r=>({...r,count:r.count+1}))}))}));checks++;
   assert.equal(INITIAL_IMPORT_TABLES.weekly_schedule_effective_range_closures,'range_closure_id');checks++;
+  const diagnostic=safeInitialImportDiagnostic({code:'23503',schema:'public',column:'actor_manager_id',constraint:'fixture_actor_fkey',message:'PRIVATE ROW',detail:'PRIVATE DETAIL',where:'PRIVATE SQL'},
+   {phase:'insert',table:'weekly_schedule_publications',recordIndex:4});
+  assert.equal(diagnostic.sqlstate,'23503');assert.equal(diagnostic.constraint,'fixture_actor_fkey');
+  assert.doesNotMatch(JSON.stringify(diagnostic),/PRIVATE/);checks++;
+  const rejectedDiagnostic=safeInitialImportDiagnostic({code:'unsafe',schema:'secret/path',column:'raw row text',constraint:'private value with spaces'},
+   {phase:'typed_row',table:'employees',recordIndex:1});
+  assert.equal(rejectedDiagnostic.table,null);assert.equal(rejectedDiagnostic.sqlstate,null);assert.equal(rejectedDiagnostic.constraint,null);checks++;
+  const fake={query:async sql=>{if(sql==='begin'||sql==='rollback')return{};throw Object.assign(Error('DO NOT LOG THIS'),{code:'23503',constraint:'fixture_actor_fkey'});}};
+  await assert.rejects(importInitialHistoricalRows(fake,m,()=>{}),e=>e.code==='APPROVED_INITIAL_IMPORT_FAILED'&&e.rollbackFailed===false&&e.diagnostic.sqlstate==='23503'&&!JSON.stringify(e).includes('DO NOT LOG'));checks++;
   console.log(JSON.stringify({status:'PASS',checks,scope:'PRIVATE_RAW_CUSTODY_FAKE_SQL_ONLY',rawNumericTextPreserved:true,sqlExecuted:false}));
  }finally{unlinkSync(file);rmdirSync(dir);}
 }
