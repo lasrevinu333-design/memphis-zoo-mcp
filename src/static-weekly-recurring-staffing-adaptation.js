@@ -226,7 +226,11 @@ export function mapApprovedStaticTemplateCandidate({ templates, admittedBindings
   const body = { schema: 'custodial.approved-static-template-mapping.v1',
     contract: 'FIXED_APPROVED_GEOMETRY_COMPATIBILITY_NOT_GLOBAL_OPTIMALITY',
     templateId: template.templateId, templateDigest: digest, admissionDigest: contentDigest(binding),
-    currentSourceDigest: contentDigest(currentSource), selectionDigest: contentDigest(selection),
+    currentSourceDigest: contentDigest(currentSource),
+    // The selected people are an already validated unordered set. PostgreSQL
+    // JSONB may reorder ownerConfig object keys; that must not invalidate the
+    // same independently approved geometry when read back for confirmation.
+    selectionDigest: contentDigest({...selection,availablePersonIds:sorted(selection.availablePersonIds)}),
     physicalCoverageDigest: contentDigest(coverage),
     staffingCount: count, scopeDays, serviceDate: date,
     slotMapping: patternSlots.map(patternSlotId => ({ patternSlotId, actualSlotId: mapping.get(patternSlotId),
@@ -358,7 +362,10 @@ export function prepareApprovedStaticTemplateProjection(args) {
       restriction_snapshot:structuredClone(a.restrictions||[]),restriction_provenance:{source:a.restrictionProvenance||null},
       slot_label_snapshot:slotsById.get(a.slotId).label,
       incumbent_person_id_snapshot:a.incumbentPersonId,incumbent_name_snapshot:a.incumbentName}));
+    const normalizedBaselineByWork=new Map(problem.baselineCanonicalInput.version.assignments.map(row=>[`${row.dayOfWeek}:${row.workId}`,row]));
     const baselineAssignments=version.assignments.map(row=>{
+      const normalizedRow=normalizedBaselineByWork.get(`${row.dayOfWeek}:${row.workId}`);
+      if(!normalizedRow)fail('static_template_baseline_work_invalid');
       const slot=slotsById.get(row.ownerSlotId),person=problem.incumbencyByDaySlot.get(`${row.dayOfWeek}\u0000${row.ownerSlotId}`);
       if(!slot||slot.contractorCapacity||!person?.personId)fail('static_template_baseline_owner_invalid');
       return {work_id:row.workId,day_of_week:row.dayOfWeek,status:'assigned',location_id:row.locationId,
@@ -372,7 +379,7 @@ export function prepareApprovedStaticTemplateProjection(args) {
             baseline_owner_slot_id:row.ownerSlotId,baseline_owner_person_id:person.personId,baseline_owner_name:person.displayName,
             original_actor_person_id:person.personId,original_actor_name:person.displayName,
             optimized_owner_slot_id:row.ownerSlotId,optimized_owner_person_id:person.personId,
-            service_mode:row.serviceMode,included_locations:structuredClone(row.includedLocations||[])}}};
+            service_mode:normalizedRow.serviceMode,included_locations:structuredClone(normalizedRow.includedLocations)}}};
     });
     const staticAuthority={schema:'custodial.approved-static-authority.v1',effectiveDate:problem.serviceDate,
       compilerInput:problem.baselineCanonicalInput,overlayCompilerInput:problem.canonicalInput,

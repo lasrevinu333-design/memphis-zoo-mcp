@@ -37,6 +37,11 @@ const source=tiny(),base=args(source);
 check('synthetic source domain admission is valid without engine',()=>{const x=clone(source);x.versions=[x.version];delete x.version;assert.equal(prepareStaticWeeklySchedulingProblem(x,deadline).error,undefined);});
 const same=map(base);
 check('unchanged assignments and complete source are byte/order unchanged',()=>{assert.deepEqual(same.candidateSource,source);assert.equal(same.receipt.unchanged,true);});
+check('available people are an unordered set across database JSON object key order',()=>{
+ const reordered=clone(base);reordered.selection.availablePersonIds.reverse();
+ assert.deepEqual(map(reordered),same,'reordering the same people cannot change the admitted feasibility identity');
+ for(let i=1;i<base.selection.availablePersonIds.length;i++){const a=clone(base);a.selection.availablePersonIds=[...a.selection.availablePersonIds.slice(i),...a.selection.availablePersonIds.slice(0,i)];assert.deepEqual(map(a),same);}
+});
 check('distinct compatibility contract cannot claim solver/publication',()=>{assert.equal(same.receipt.solverInvoked,false);assert.equal(same.receipt.admitted,false);assert.equal(same.receipt.published,false);assert.equal(same.receipt.patternPublicationStatus,'UNPUBLISHED_LOCAL_CANDIDATE');});
 check('caller approval label alone is refused',()=>{const a=clone(base);a.admittedBindings=[];assert.throws(()=>map(a),{code:'static_template_not_independently_admitted'});});
 check('changed template bytes are refused rather than reapproved',()=>{const a=clone(base);a.templates[0].source.version.assignments[0].serviceEffortMinutes++;assert.throws(()=>map(a),{code:'static_template_not_independently_admitted'});});
@@ -124,6 +129,8 @@ check('static feasibility checks complete hard rows and independent lunch withou
  assert.equal(x.schema,'custodial.approved-static-feasibility.v1');assert.equal(x.assignments.length,42);
  assert.equal(x.solverInvoked,false);assert.equal(x.optimized,false);assert.ok(x.hardConstraintCount>42);
  assert.equal(x.lunch.status,'PLANNED');assert.equal(Object.hasOwn(x,'solver'),false);
+ assert.ok(x.baselineAssignments.every(r=>r.payload_json.authority_facts.service_mode==='scan_tracked'));
+ assert.ok(x.baselineAssignments.every(r=>r.payload_json.authority_facts.included_locations.length===1));
 });
 
 // Actual retained corrected six-pattern rows, not extrapolation from tiny rows.
