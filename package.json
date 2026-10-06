@@ -165,7 +165,7 @@
     "test:integration-repairs": "node --test scripts/employee-schedule-identity-tests.mjs scripts/device-profile-epoch-tests.mjs && node scripts/owner-actions-database-tests.mjs"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@modelcontextprotocol/sdk": "1.31.0",
     "@supabase/supabase-js": "^2.103.2",
     "argon2": "^0.44.0",
     "dotenv": "^17.2.3",

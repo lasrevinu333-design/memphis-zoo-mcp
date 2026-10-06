@@ -1,0 +1,29 @@
+{
+  "version_before": "1.30.0",
+  "version_after": "1.31.0",
+  "advisory": "GHSA-6qxp-vccf-f47h",
+  "tests": [
+    {
+      "name": "sdk-dependency-security",
+      "exit_code": 0,
+      "counts": {
+        "info": 0,
+        "low": 0,
+        "moderate": 5,
+        "high": 0,
+        "critical": 0,
+        "total": 5
+      }
+    },
+    {
+      "name": "sdk-transport-compatibility",
+      "exit_code": 0,
+      "pass_markers": []
+    }
+  ],
+  "runtime_oauth_client_provider_usage_found": false,
+  "other_dependency_versions_changed": false,
+  "live_services_changed": false,
+  "failed_predecessor_ci_run": 37530056754,
+  "test_log_sha256": "b5e7b26a9b527559d003d04c97ec17c5c03aaa501896a790c2151b39a7875f33"
+}
