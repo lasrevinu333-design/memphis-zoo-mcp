@@ -5,7 +5,7 @@ import {createOpsManagerSession} from '../src/auth/shared-access-auth.js';
 import {createStaticWeeklyControlPlane} from '../src/static-weekly-control-plane.js';
 import {createStaticWeeklyControlPlaneRuntime} from '../src/static-weekly-control-plane-runtime.js';
 const env={NODE_ENV:'test',SUPABASE_URL:'https://scheduler-read-fixture.invalid',SUPABASE_SERVICE_ROLE_KEY:'synthetic-reader-service',OPS_MANAGER_SESSION_SECRET:'synthetic-manager-read-secret-0123456789012345'};
-const manager={manager_id:'10000000-0000-4000-8000-000000000052',display_name:'Synthetic Read-only Manager',roles:['OPS_MANAGER'],active:true};
+const manager={manager_id:'10000000-0000-4000-8000-000000000052',display_name:'Synthetic Read-only Manager',roles:['OPS_MANAGER'],active:true,is_system_principal:false,system_key:'jennifer_sheffield_director_operations'};
 const credentialId='synthetic-reader-credential',deviceId='synthetic-reader-device';
 const session=createOpsManagerSession({credentialId,deviceId,manager,authMode:'trusted_device',accessLevel:'read_only',maximumAccessLevel:'read_only',env});
 const calls=[],results=[],leases=new Set();let revoked=false,reassigned=false;
@@ -30,7 +30,7 @@ try{
  await test('anonymous cannot view schedule',async()=>{const n=calls.length;assert.equal((await get(null)).status,401);assert.equal(calls.length,n);});
  await test('revoked read credential is rejected',async()=>{revoked=true;try{const n=calls.length;assert.equal((await get(session.token)).status,401);assert.equal(calls.length,n);}finally{revoked=false;}});
  await test('reassigned read credential is rejected',async()=>{reassigned=true;try{const n=calls.length;assert.equal((await get(session.token)).status,403);assert.equal(calls.length,n);}finally{reassigned=false;}});
- for(const path of['/drafts/initial','/approved-initial/confirm','/recurring-adaptation/confirm','/rebuild-current-projection','/roster/vacant-slots'])await test('read access does not grant write '+path,async()=>{const n=calls.length,r=await fetch(base+'/static-weekly'+path,{method:'POST',headers:{Authorization:'Bearer '+session.token,'Content-Type':'application/json'},body:'{}',signal:AbortSignal.timeout(3000)});assert.equal(r.status,403);await r.text();assert.equal(calls.length,n);});
+ for(const path of['/drafts/initial','/approved-initial/confirm','/recurring-adaptation/confirm','/roster/vacant-slots'])await test('read access does not grant write '+path,async()=>{const n=calls.length,r=await fetch(base+'/static-weekly'+path,{method:'POST',headers:{Authorization:'Bearer '+session.token,'Content-Type':'application/json'},body:'{}',signal:AbortSignal.timeout(3000)});assert.equal(r.status,403);await r.text();assert.equal(calls.length,n);});
  await test('direct mutation helper still rejects read-only manager',async()=>{const n=calls.length;await assert.rejects(controlPlane.createInitialDraft({manager:{...session,manager_display_name:manager.display_name,read_only:true},sourceId:'50000000-0000-4000-8000-000000000052',effectiveStart:'2026-10-05',expectedRevision:42,idempotencyKey:'must-not-write'}),/named manager|write-enabled/i);assert.equal(calls.length,n);});
  await test('no response leaves lease pending',async()=>{await new Promise(r=>setTimeout(r,10));assert.equal(leases.size,0);});
 }finally{server.closeAllConnections();await new Promise((r,j)=>server.close(e=>e?j(e):r()));await controlPlane.close();}

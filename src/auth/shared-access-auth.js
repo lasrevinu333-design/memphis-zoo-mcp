@@ -1,5 +1,6 @@
 import { createHash, createHmac, randomBytes, randomInt, randomUUID, timingSafeEqual } from "node:crypto";
 import { isMapDashboardSession, verifyCurrentMapDashboardSession, verifyMapManagerAccessToken } from "./map-manager-identity.js";
+import { isActiveNamedManager, isCustodialOwner, projectManagerSession, hasManagerPermission } from "./manager-permissions.js";
 
 const MEMPHIS_TIME_ZONE = "America/Chicago";
 const OPS_ACCESS_TOKEN_VERSION = 2;
@@ -142,6 +143,8 @@ function managerPublicView(row, devices = [], enrollmentCodes = []) {
   if (!row) return null;
   const roles = normalizeManagerRoles(row.roles);
   return {
+    system_key: row.system_key || null,
+    is_system_principal: row.is_system_principal === false ? false : row.is_system_principal === true ? true : null,
     manager_id: String(row.manager_id || ""),
     display_name: String(row.display_name || ""),
     contact_label: row.contact_label || null,
@@ -431,6 +434,8 @@ function parseOpsToken(token, { env = process.env, now = new Date() } = {}) {
     operational_day: String(payload.operational_day || getCSTDate(now)),
     expires_at: new Date(expiresAt).toISOString(),
     auth_mode: String(payload.auth_mode || "trusted_device"),
+    identity_source: payload.identity_source === "memphis_map" ? "memphis_map" : null,
+    permissions: payload.permissions || null,
     access_level: accessLevel,
     read_only: accessLevel === "read_only",
     trusted_device: payload.auth_mode === "trusted_device",
@@ -447,9 +452,12 @@ export function createOpsManagerSession({
   authMode = "trusted_device",
   accessLevel = "read_only",
   maximumAccessLevel = "full_access",
+  identitySource = null,
 } = {}) {
-  const normalizedAccessLevel = clampAccessLevel(accessLevel, maximumAccessLevel);
-  const roles = normalizeManagerRoles(manager?.roles || []);
+  const projected = manager ? projectManagerSession({ access_level: clampAccessLevel(accessLevel, maximumAccessLevel) }, manager,
+    { maximumAccessLevel, credentialBound: Boolean(credentialId) }) : null;
+  const normalizedAccessLevel = projected?.access_level || clampAccessLevel(accessLevel, maximumAccessLevel);
+  const roles = projected?.roles || normalizeManagerRoles(manager?.roles || []);
   const expiresAt = now.getTime() + getAccessTtlMs(env);
   const payload = {
     v: OPS_ACCESS_TOKEN_VERSION,
@@ -461,6 +469,8 @@ export function createOpsManagerSession({
     device_id: normalizeDeviceId(deviceId || "manager-device"),
     operational_day: getCSTDate(now),
     auth_mode: String(authMode || "trusted_device"),
+    identity_source: identitySource === "memphis_map" ? "memphis_map" : null,
+    permissions: projected?.permissions || null,
     access_level: normalizedAccessLevel,
     iat: now.getTime(),
     exp: expiresAt,
@@ -475,6 +485,8 @@ export function createOpsManagerSession({
     device_id: payload.device_id,
     operational_day: payload.operational_day,
     auth_mode: payload.auth_mode,
+    identity_source: payload.identity_source,
+    permissions: payload.permissions,
     access_level: payload.access_level,
     read_only: payload.access_level === "read_only",
     trusted_device: payload.auth_mode === "trusted_device",
@@ -567,7 +579,7 @@ function awaitReadOnlyAuthWithSignal(work, signal) {
   }), aborted]).finally(() => signal.removeEventListener("abort", onAbort));
 }
 
-export function makeOpsAccessMiddleware({ env = process.env, requireWrite = false, trustedDeviceStore = null, supabase = null, requireTrustedDeviceStore = true, requireCurrentManagerAssociation = true, operationSignalForRequest = null } = {}) {
+export function makeOpsAccessMiddleware({ env = process.env, requireWrite = false, trustedDeviceStore = null, supabase = null, requireTrustedDeviceStore = true, requireCurrentManagerAssociation = true, operationSignalForRequest = null, requiredPermission = null } = {}) {
   const store = trustedDeviceStore || createSupabaseTrustedDeviceStore(supabase);
   return async function requireOpsAccess(req, res, next) {
     const signal = operationSignalForRequest?.(req) || null;
@@ -609,6 +621,10 @@ export function makeOpsAccessMiddleware({ env = process.env, requireWrite = fals
     }
     if (requireWrite && session?.read_only) {
       res.status(403).json({ ok: false, error: "Read-only Ops Manager session cannot make changes." });
+      return;
+    }
+    if (requiredPermission && !hasManagerPermission(session, requiredPermission)) {
+      res.status(403).json({ ok: false, error: "This manager does not have permission for this operation." });
       return;
     }
     req.memphisAuth = session;
@@ -704,6 +720,7 @@ function isAllowedManagerInviteOrigin(req, env = process.env, { requireOrigin = 
   const allowed = new Set([
     "https://lasrevinu333-design.github.io",
     "https://memphis-zoo-mcp.onrender.com",
+    "https://memphis-zoo-infrastructure-map.lasrevinu333.chatgpt.site",
     "https://localhost",
     "http://localhost",
     "capacitor://localhost",
@@ -869,6 +886,7 @@ function normalizeStoreRow(row) {
     manager,
     shared_enrollment_window_id: row.shared_enrollment_window_id || null,
     platform_summary: row.platform_summary || row.metadata_json?.platform_summary || null,
+    metadata_json: row.metadata_json && typeof row.metadata_json === "object" && !Array.isArray(row.metadata_json) ? row.metadata_json : {},
     created_at: row.created_at || null,
     last_used_at: row.last_used_at || null,
     expires_at: row.expires_at || null,
@@ -910,8 +928,8 @@ async function verifySessionAgainstTrustedDeviceStore(session, {
   store,
   env = process.env,
   now = new Date(),
-  requireTrustedDeviceStore = false,
-  requireCurrentManagerAssociation = false,
+  requireTrustedDeviceStore = true,
+  requireCurrentManagerAssociation = true,
 } = {}) {
   if (!session?.trusted_device) {
     if (requireTrustedDeviceStore || requireCurrentManagerAssociation) {
@@ -936,7 +954,7 @@ async function verifySessionAgainstTrustedDeviceStore(session, {
   if (row.manager_id && !row.manager) {
     return { ok: false, status: 403, error: "This manager record is unavailable." };
   }
-  if (row.manager && (!row.manager.active || row.manager.revoked_at)) {
+  if (row.manager && !isActiveNamedManager(row.manager)) {
     return { ok: false, status: 403, error: "This manager is no longer active." };
   }
   if (requireCurrentManagerAssociation) {
@@ -950,10 +968,13 @@ async function verifySessionAgainstTrustedDeviceStore(session, {
       return { ok: false, status: 403, error: "This manager device assignment changed. Sign in again." };
     }
   }
+  if (session.identity_source === "memphis_map" && row.metadata_json?.identity_source !== "memphis_map") {
+    return { ok: false, status: 401, error: "This Map session is no longer bound to its verified sign-in." };
+  }
   const accessLevel = clampAccessLevel(session.access_level, row.max_access_level);
   return {
     ok: true,
-    session: {
+    session: projectManagerSession({
       ...session,
       manager_id: row.manager?.manager_id || row.manager_id || session.manager_id || "",
       manager_display_name: row.manager?.display_name || session.manager_display_name || "",
@@ -962,7 +983,7 @@ async function verifySessionAgainstTrustedDeviceStore(session, {
       credential_id: row.credential_id,
       access_level: accessLevel,
       read_only: accessLevel === "read_only",
-    },
+    }, row.manager, { maximumAccessLevel: row.max_access_level, credentialBound: true }),
     row,
   };
 }
@@ -973,7 +994,7 @@ export function createSupabaseTrustedDeviceStore(supabase) {
     if (!managerId) return null;
     const { data, error } = await supabase
       .from("ops_manager_managers")
-      .select("manager_id,display_name,contact_label,roles,active,revoked_at,revoked_reason,created_at,last_access_at")
+      .select("manager_id,display_name,contact_label,roles,active,revoked_at,revoked_reason,created_at,last_access_at,system_key,is_system_principal")
       .eq("manager_id", managerId)
       .maybeSingle();
     if (error) throw error;
@@ -990,7 +1011,7 @@ export function createSupabaseTrustedDeviceStore(supabase) {
     async getManagerBySystemKey(systemKey) {
       const { data, error } = await supabase
         .from("ops_manager_managers")
-        .select("manager_id,display_name,contact_label,roles,active,revoked_at,revoked_reason,created_at,last_access_at,system_key")
+        .select("manager_id,display_name,contact_label,roles,active,revoked_at,revoked_reason,created_at,last_access_at,system_key,is_system_principal")
         .eq("system_key", String(systemKey || ""))
         .maybeSingle();
       if (error) throw error;
@@ -1103,7 +1124,7 @@ export function createSupabaseTrustedDeviceStore(supabase) {
       const { data, error } = await supabase
         .from("ops_manager_managers")
         .insert(insert)
-        .select("manager_id,display_name,contact_label,roles,active,revoked_at,revoked_reason,created_at,last_access_at")
+        .select("manager_id,display_name,contact_label,roles,active,revoked_at,revoked_reason,created_at,last_access_at,system_key,is_system_principal")
         .single();
       if (error) throw error;
       return managerPublicView(data);
@@ -1118,7 +1139,7 @@ export function createSupabaseTrustedDeviceStore(supabase) {
         .from("ops_manager_managers")
         .update(update)
         .eq("manager_id", managerId)
-        .select("manager_id,display_name,contact_label,roles,active,revoked_at,revoked_reason,created_at,last_access_at")
+        .select("manager_id,display_name,contact_label,roles,active,revoked_at,revoked_reason,created_at,last_access_at,system_key,is_system_principal")
         .maybeSingle();
       if (error) throw error;
       return managerPublicView(data);
@@ -1128,7 +1149,7 @@ export function createSupabaseTrustedDeviceStore(supabase) {
         .from("ops_manager_managers")
         .update({ active: false, revoked_at: new Date().toISOString(), revoked_by_manager_id: revokedByManagerId, revoked_reason: String(reason || "manager_revoked").slice(0, 160) })
         .eq("manager_id", managerId)
-        .select("manager_id,display_name,contact_label,roles,active,revoked_at,revoked_reason,created_at,last_access_at")
+        .select("manager_id,display_name,contact_label,roles,active,revoked_at,revoked_reason,created_at,last_access_at,system_key,is_system_principal")
         .maybeSingle();
       if (error) throw error;
       return managerPublicView(data);
@@ -1136,7 +1157,7 @@ export function createSupabaseTrustedDeviceStore(supabase) {
     async listManagers() {
       const { data: managers, error } = await supabase
         .from("ops_manager_managers")
-        .select("manager_id,display_name,contact_label,roles,active,revoked_at,revoked_reason,created_at,last_access_at")
+        .select("manager_id,display_name,contact_label,roles,active,revoked_at,revoked_reason,created_at,last_access_at,system_key,is_system_principal")
         .order("display_name", { ascending: true });
       if (error) throw error;
       const devices = await this.listTrustedDevices();
@@ -1367,7 +1388,7 @@ export function createSupabaseTrustedDeviceStore(supabase) {
       const { data, error } = await supabase
         .from("ops_manager_trusted_devices")
         .insert(record)
-        .select("credential_id,device_id,device_label,token_hash,max_access_level,created_at,last_used_at,expires_at,revoked_at,revoked_reason")
+        .select("credential_id,device_id,device_label,token_hash,max_access_level,manager_id,metadata_json,created_at,last_used_at,expires_at,revoked_at,revoked_reason")
         .single();
       if (error) throw error;
       return normalizeStoreRow(data);
@@ -1375,7 +1396,7 @@ export function createSupabaseTrustedDeviceStore(supabase) {
     async find(credentialId) {
       const { data, error } = await supabase
         .from("ops_manager_trusted_devices")
-        .select("credential_id,device_id,device_label,token_hash,max_access_level,manager_id,platform_summary,created_at,last_used_at,expires_at,revoked_at,revoked_reason")
+        .select("credential_id,device_id,device_label,token_hash,max_access_level,manager_id,platform_summary,metadata_json,created_at,last_used_at,expires_at,revoked_at,revoked_reason")
         .eq("credential_id", credentialId)
         .maybeSingle();
       if (error) throw error;
@@ -1499,6 +1520,13 @@ async function verifyTrustedDevice(req, { store, env = process.env, now = new Da
   if (!row.token_hash || !safeEqual(expectedHash, row.token_hash)) {
     return { ok: false, status: 401, error: "This device is not enrolled for Ops Manager access." };
   }
+  if (!isActiveNamedManager(row.manager) || String(row.manager_id || "") !== String(row.manager.manager_id || "")) {
+    return { ok: false, status: 403, error: "This named manager access is no longer active." };
+  }
+  if (row.metadata_json?.identity_source === "memphis_map"
+      && row.metadata_json.manager_system_key !== row.manager.system_key) {
+    return { ok: false, status: 403, error: "This Map manager assignment changed. Sign in again." };
+  }
   return { ok: true, row, credentialId: parts.credentialId };
 }
 
@@ -1530,7 +1558,7 @@ async function authenticateTrustedManagerDevice(req, { store, env = process.env,
     if (!explicit.session?.trusted_device) {
       return { ok: false, status: 403, error: "A trusted Ops Manager device is required." };
     }
-    const trustedState = await verifySessionAgainstTrustedDeviceStore(explicit.session, { store: activeStore, env, now });
+    const trustedState = await verifySessionAgainstTrustedDeviceStore(explicit.session, { store: activeStore, env, now, requireTrustedDeviceStore: true, requireCurrentManagerAssociation: true });
     if (!trustedState.ok) return trustedState;
     session = trustedState.session;
     trustedRow = trustedState.row;
@@ -2545,32 +2573,54 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
   app.post("/auth-api/map-session", async (req, res) => {
     try {
       const activeStore = trustedDeviceStoreOrThrow(store);
-      if (typeof activeStore.getManagerBySystemKey !== "function") {
-        throw Object.assign(new Error("Named manager lookup is unavailable."), { status: 503 });
+      if (typeof activeStore.getManagerBySystemKey !== "function" || typeof activeStore.enroll !== "function") {
+        throw Object.assign(new Error("Named Map session storage is unavailable."), { status: 503 });
       }
       const identity = await verifyMapManagerAccessToken(req.body?.access_token, { env });
       const manager = await activeStore.getManagerBySystemKey(identity.system_key);
-      if (!manager?.active || manager.revoked_at) {
-        throw Object.assign(new Error("This manager dashboard access is no longer active."), { status: 403 });
+      if (!isActiveNamedManager(manager) || manager.system_key !== identity.system_key) {
+        throw Object.assign(new Error("This manager access is no longer active."), { status: 403 });
       }
-      const dashboardManager = { ...manager, roles: ["OPS_MANAGER"] };
+      const now = new Date();
+      const credentialId = randomUUID();
+      const trustSecret = randomBytes(32).toString("base64url");
+      const mapTrustTtlMs = Math.min(getTrustTtlMs(env), 12 * 60 * 60 * 1000);
+      const deviceId = requestDeviceId(req) || "map-dashboard";
+      const accessLevel = isCustodialOwner(manager) ? "full_access" : "read_only";
+      await activeStore.enroll({
+        credential_id: credentialId,
+        manager_id: manager.manager_id,
+        device_id: deviceId,
+        device_label: `Memphis Map · ${manager.display_name}`.slice(0, 160),
+        // Use the existing HttpOnly device-trust boundary, bounded to one workday.
+        // No password or bearer token is persisted in browser script storage.
+        token_hash: trustTokenHash(trustSecret, env),
+        max_access_level: accessLevel,
+        created_at: now.toISOString(),
+        expires_at: new Date(now.getTime() + mapTrustTtlMs).toISOString(),
+        metadata_json: { identity_source: "memphis_map", provider_user_id: identity.provider_user_id,
+          manager_system_key: identity.system_key },
+      });
       const session = createOpsManagerSession({
-        deviceId: requestDeviceId(req) || "map-dashboard",
-        manager: dashboardManager,
-        accessLevel: "read_only",
-        maximumAccessLevel: "read_only",
-        authMode: `map_identity:${identity.system_key}`,
-        env,
+        credentialId, deviceId, manager, now, env,
+        accessLevel, maximumAccessLevel: accessLevel,
+        authMode: "trusted_device", identitySource: "memphis_map",
       });
-      res.status(200).json({
-        ok: true,
-        data: {
-          session,
-          manager: dashboardManager,
-          operational_day: getCSTDate(),
-          identity_source: "memphis_map",
-        },
-      });
+      const current = await verifySessionAgainstTrustedDeviceStore(session, { store: activeStore, env, now,
+        requireTrustedDeviceStore: true, requireCurrentManagerAssociation: true });
+      if (!current.ok) {
+        throw Object.assign(new Error(current.error || "Map session validation failed."), { status: current.status || 403 });
+      }
+      await auditTrustedDevice(activeStore, authEvent(req, {
+        credentialId, deviceId, eventType: "map_manager_session_issued", success: true,
+        detail: { manager_id: manager.manager_id, access_level: current.session.access_level }, env,
+      }));
+      setCookieHeader(res, `${OPS_TRUST_COOKIE}=${encodeURIComponent(`${credentialId}.${trustSecret}`)}; ${cookieAttributes(env).replace(/Max-Age=\d+/, `Max-Age=${Math.floor(mapTrustTtlMs / 1000)}`)}`);
+      res.status(200).json({ ok: true, data: {
+        session: current.session,
+        manager: { ...manager, roles: current.session.roles },
+        operational_day: getCSTDate(), identity_source: "memphis_map",
+      } });
     } catch (error) {
       sendAuthError(res, error, "Memphis Map manager sign-in failed.");
     }
@@ -2623,6 +2673,7 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
         credentialId: trusted.credentialId,
         deviceId: trusted.row.device_id,
         manager: trusted.row.manager,
+        identitySource: trusted.row.metadata_json?.identity_source === "memphis_map" ? "memphis_map" : null,
         accessLevel: requested,
         maximumAccessLevel: trusted.row.max_access_level,
         authMode: "trusted_device",
@@ -2664,6 +2715,23 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
       if (!isAllowedManagerInviteOrigin(req, env, { requireOrigin: true })) {
         res.status(403).json({ ok: false, error: "Manager access is not allowed from this app origin." });
         return;
+      }
+      const explicit = authenticatePresentedOpsAccessRequest(req, { env });
+      if (explicit.presented) {
+        if (!explicit.ok) {
+          res.status(explicit.status || 401).json({ ok: false, error: explicit.error });
+          return;
+        }
+        if (explicit.session.identity_source === "memphis_map") {
+          const activeStore = trustedDeviceStoreOrThrow(store);
+          const current = await verifySessionAgainstTrustedDeviceStore(explicit.session, { store: activeStore, env,
+            requireTrustedDeviceStore: true, requireCurrentManagerAssociation: true });
+          if (!current.ok) { res.status(current.status || 401).json({ ok: false, error: current.error }); return; }
+          await activeStore.revoke(current.session.credential_id, "map_session_logout");
+          clearTrustCookie(res, env);
+          res.status(200).json({ ok: true, data: { logged_out: true, identity_source: "memphis_map" } });
+          return;
+        }
       }
       const parts = trustTokenParts(trustCookieValue(req));
       if (!parts) {

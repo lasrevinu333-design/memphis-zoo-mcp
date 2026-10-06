@@ -108,6 +108,21 @@ export function createStaticWeeklyControlPlaneRuntime({
     requireTrustedDeviceStore:true,requireCurrentManagerAssociation:true,
     operationSignalForRequest:req=>req.staticWeeklyManagerOperation?.signal||null,
   });
+  const schedulerPermission = (requiredPermission) => makeOpsAccessMiddleware({
+    env, trustedDeviceStore: trustedStore, supabase: trustedSupabase,
+    requireTrustedDeviceStore:true, requireCurrentManagerAssociation:true, requiredPermission,
+    operationSignalForRequest:req=>req.staticWeeklyManagerOperation?.signal||null,
+  });
+  const requireManagerAbsence = schedulerPermission("manage_absences");
+  const requireManagerCoverAll = schedulerPermission("manage_coverall");
+  const requireManagerRegenerate = schedulerPermission("regenerate_routes");
+  function namedSchedulerManager(req,res,next) {
+    const session=req.memphisAuth;
+    if (!session?.trusted_device || session.auth_mode!=="trusted_device" || !session.manager_id || !session.credential_id) {
+      res.status(403).json({ok:false,error:"A current named manager credential is required."});return;
+    }
+    next();
+  }
   function namedReadManager(req,res,next) {
     const session=req.memphisAuth;
     const trustedDevice=session?.trusted_device&&session.auth_mode==="trusted_device";
@@ -207,7 +222,7 @@ export function createStaticWeeklyControlPlaneRuntime({
         ]).has(responseError?.code);
         const invalid = ["static_weekly_control_plane_compiler_rejected", "static_weekly_recurring_confirmation_request_invalid", "static_weekly_recurring_delivery_request_invalid",APPROVED_INITIAL_REQUEST_ERROR,OPENING_COVERAGE_ERROR].includes(responseError?.code);
         const diagnostic=responseError?.code===OPENING_COVERAGE_ERROR?sanitizeOpeningCoverageDiagnostic(responseError.openingCoverageDiagnostic):null;
-        res.status(invalid ? 422 : unavailable ? 503 : 409).json({ ok: false, error: diagnostic
+        res.status(responseError?.code === "42501" ? 403 : invalid ? 422 : unavailable ? 503 : 409).json({ ok: false, error: diagnostic
           ?'Opening planned coverage has inconsistent essential source facts. Nothing was admitted or published.'
           :responseError?.message || "Static weekly control-plane request failed.", code: responseError?.code || "static_weekly_control_plane_failed",
           ...(diagnostic?{openingCoverageDiagnostic:diagnostic}:{}) });
@@ -258,6 +273,7 @@ export function createStaticWeeklyControlPlaneRuntime({
   app.use("/static-weekly/dated-transition",createDatedTransitionManagerRouter({
     controller:boundedController,requireManagerWrite,namedManager,manager,
   }));
+  app.get("/static-weekly/approved-choices",requireManagerWrite,namedManager,respond(req=>authorityControlPlane.getApprovedScheduleChoices({manager:manager(req)})));
   app.get("/static-weekly/manager-snapshot", requireManagerRead, namedReadManager, respond((req) => authorityControlPlane.getManagerSnapshot({ manager: manager(req), weekStart: req.query?.week_start })));
   // Distinct fixed-pattern baseline: never fall back to the historical draft
   // optimizer. The same first-ingress deadline and restore-lease settlement
@@ -396,9 +412,9 @@ export function createStaticWeeklyControlPlaneRuntime({
   app.get("/static-weekly/places/operations/:operationId", requireManagerWrite, namedManager, respond(req =>
     authorityControlPlane.getPlaceRepublishStatus({manager:manager(req),operationId:req.params.operationId})));
   app.post("/static-weekly/drafts/:versionId/publish", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.publishDraft({ manager: manager(req), draftVersionId: req.params.versionId, expectedDraftRevision: req.body?.expected_draft_revision, expectedRevision: req.body?.expected_revision, idempotencyKey: req.body?.idempotency_key, projectionWeekStart: req.body?.week_start, publicationKind: req.body?.publication_kind || "publish", rollbackOfVersionId: req.body?.rollback_of_version_id || null })));
-  app.post("/static-weekly/exceptions", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.applyException({ manager: manager(req), exceptionType: req.body?.exception_type, serviceDate: req.body?.service_date, startsAt: req.body?.starts_at || null, endsAt: req.body?.ends_at || null, baseVersionId: req.body?.base_version_id, publicationId: req.body?.publication_id, reason: req.body?.reason, payload: req.body?.payload, expectedRevision: req.body?.expected_revision, idempotencyKey: req.body?.idempotency_key, projectionWeekStart: req.body?.week_start, reversesExceptionId: req.body?.reverses_exception_id || null })));
-app.post("/static-weekly/contractor-capacity", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.applyContractorCapacity({ manager: manager(req), serviceDate: req.body?.service_date, baseVersionId: req.body?.base_version_id, publicationId: req.body?.publication_id, slotId: req.body?.slot_id, shift: req.body?.shift, lunch: req.body?.lunch, breakChoice: req.body?.break_choice, reason: req.body?.reason, expectedRevision: req.body?.expected_revision, idempotencyKey: req.body?.idempotency_key, projectionWeekStart: req.body?.week_start })));
-  app.post("/static-weekly/day-changes/batch", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.applyDayChanges({ manager: manager(req), serviceDate: req.body?.service_date, baseVersionId: req.body?.base_version_id, publicationId: req.body?.publication_id, versionId: req.body?.version_id || req.body?.base_version_id, operations: req.body?.operations, expectedRevision: req.body?.expected_revision, idempotencyKey: req.body?.idempotency_key, projectionWeekStart: req.body?.week_start })));
+  app.post("/static-weekly/exceptions", requireManagerAbsence, namedSchedulerManager, respond((req) => authorityControlPlane.applyException({ manager: manager(req), signal:req.restoreMutationLease.signal, deadlineAt:req.staticWeeklyManagerOperation.deadlineAt, exceptionType: req.body?.exception_type, serviceDate: req.body?.service_date, startsAt: req.body?.starts_at || null, endsAt: req.body?.ends_at || null, baseVersionId: req.body?.base_version_id, publicationId: req.body?.publication_id, reason: req.body?.reason, payload: req.body?.payload, expectedRevision: req.body?.expected_revision, idempotencyKey: req.body?.idempotency_key, projectionWeekStart: req.body?.week_start, reversesExceptionId: req.body?.reverses_exception_id || null })));
+app.post("/static-weekly/contractor-capacity", requireManagerCoverAll, namedSchedulerManager, respond((req) => authorityControlPlane.applyContractorCapacity({ manager: manager(req), signal:req.restoreMutationLease.signal, deadlineAt:req.staticWeeklyManagerOperation.deadlineAt, serviceDate: req.body?.service_date, baseVersionId: req.body?.base_version_id, publicationId: req.body?.publication_id, slotId: req.body?.slot_id, shift: req.body?.shift, lunch: req.body?.lunch, breakChoice: req.body?.break_choice, reason: req.body?.reason, expectedRevision: req.body?.expected_revision, idempotencyKey: req.body?.idempotency_key, projectionWeekStart: req.body?.week_start })));
+  app.post("/static-weekly/day-changes/batch", requireManagerAbsence, namedSchedulerManager, respond((req) => authorityControlPlane.applyDayChanges({ manager: manager(req), signal:req.restoreMutationLease.signal, deadlineAt:req.staticWeeklyManagerOperation.deadlineAt, serviceDate: req.body?.service_date, baseVersionId: req.body?.base_version_id, publicationId: req.body?.publication_id, versionId: req.body?.version_id || req.body?.base_version_id, operations: req.body?.operations, expectedRevision: req.body?.expected_revision, idempotencyKey: req.body?.idempotency_key, projectionWeekStart: req.body?.week_start })));
   app.post("/static-weekly/employees/departed", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.markEmployeeDeparted({ manager: manager(req), slotId: req.body?.slot_id, reason: req.body?.reason, expectedRevision: req.body?.expected_revision, idempotencyKey: req.body?.idempotency_key, projectionWeekStart: req.body?.week_start })));
   app.post("/static-weekly/employees/replacements", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.replaceEmployee({ manager: manager(req), slotId: req.body?.slot_id, newEmployeeName: req.body?.new_employee_name, reason: req.body?.reason, expectedRevision: req.body?.expected_revision, idempotencyKey: req.body?.idempotency_key, projectionWeekStart: req.body?.week_start })));
   app.post("/static-weekly/employees/restores", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.restoreExistingEmployee({ manager: manager(req), sourceId: req.body?.source_id, slotId: req.body?.slot_id, employeeId: req.body?.employee_id, effectiveStart: req.body?.effective_start, reason: req.body?.reason, expectedRevision: req.body?.expected_revision, idempotencyKey: req.body?.idempotency_key })));
@@ -406,8 +422,8 @@ app.post("/static-weekly/contractor-capacity", requireManagerWrite, namedManager
   app.get("/static-weekly/roster/:slotId/separation", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.readSeparation({ manager: manager(req), slotId: req.params.slotId })));
   app.post("/static-weekly/roster/vacant-slots", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.createVacantRosterSlot({ manager: manager(req), slotId: req.body?.slot_id, slotLabel: req.body?.slot_label, expectedRevision: req.body?.expected_revision, idempotencyKey: req.body?.idempotency_key })));
   app.post("/static-weekly/roster/vacant-slots/:slotId/fill", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.fillVacantRosterSlot({ manager: manager(req), sourceId: req.body?.source_id, slotId: req.params.slotId, newEmployeeName: req.body?.new_employee_name, effectiveStart: req.body?.effective_start, reason: req.body?.reason, expectedRevision: req.body?.expected_revision, idempotencyKey: req.body?.idempotency_key })));
-  app.post("/static-weekly/projections", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.materializeProjection({ manager: manager(req), publicationId: req.body?.publication_id, serviceDate: req.body?.service_date, expectedRevision: req.body?.expected_revision, idempotencyKey: req.body?.idempotency_key })));
-  app.post("/static-weekly/rebuild-current-projection", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.rebuildCurrentProjection({ manager: manager(req), weekStart: req.body?.week_start, expectedRevision: req.body?.expected_revision, idempotencyKey: req.body?.idempotency_key })));
+  app.post("/static-weekly/projections", requireManagerRegenerate, namedSchedulerManager, respond((req) => authorityControlPlane.materializeProjection({ manager: manager(req), signal:req.restoreMutationLease.signal, deadlineAt:req.staticWeeklyManagerOperation.deadlineAt, publicationId: req.body?.publication_id, serviceDate: req.body?.service_date, expectedRevision: req.body?.expected_revision, idempotencyKey: req.body?.idempotency_key })));
+  app.post("/static-weekly/rebuild-current-projection", requireManagerRegenerate, namedSchedulerManager, respond((req) => authorityControlPlane.rebuildCurrentProjection({ manager: manager(req), signal:req.restoreMutationLease.signal, deadlineAt:req.staticWeeklyManagerOperation.deadlineAt, weekStart: req.body?.week_start, expectedRevision: req.body?.expected_revision, idempotencyKey: req.body?.idempotency_key })));
 
   return { app, controlPlane: authorityControlPlane, database: authorityDatabase, trustedDeviceStore: trustedStore, releaseIdentity };
 }

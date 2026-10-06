@@ -3,7 +3,7 @@ import {createServer} from 'node:http';
 import {createOpsManagerSession} from '../src/auth/shared-access-auth.js';
 import {createStaticWeeklyControlPlaneRuntime} from '../src/static-weekly-control-plane-runtime.js';
 const env={NODE_ENV:'test',SUPABASE_URL:'https://initial-scheduler-fixture.invalid',SUPABASE_SERVICE_ROLE_KEY:'synthetic-service-only',OPS_MANAGER_SESSION_SECRET:'synthetic-approved-initial-session-secret-0123456789'};
-const manager={manager_id:'10000000-0000-4000-8000-000000000051',display_name:'Synthetic Initial Owner',roles:['OPS_MANAGER','CUSTODIAL_MANAGER'],active:true};
+const manager={manager_id:'10000000-0000-4000-8000-000000000051',display_name:'Synthetic Initial Owner',roles:['OPS_MANAGER','CUSTODIAL_MANAGER'],active:true,is_system_principal:false,system_key:'eric_custodial_manager'};
 const credentialId='synthetic-initial-credential',deviceId='synthetic-initial-device';
 const issue=level=>createOpsManagerSession({credentialId,deviceId,manager,authMode:'trusted_device',accessLevel:level,maximumAccessLevel:'full_access',env});
 const session=issue('full_access'),readonly=issue('read_only'),timerCallbacks=new Map(),timers=new Set(),leases=new Set(),calls=[],results=[];

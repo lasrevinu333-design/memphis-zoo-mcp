@@ -1,3 +1,4 @@
+import { hasManagerPermission } from "./auth/manager-permissions.js";
 /*
  * Separately deployed static-weekly scheduler control plane.
  *
@@ -120,9 +121,11 @@ function isDatabaseConnectionFailure(error) {
     || message.includes("timeout exceeded when trying to connect");
 }
 
-function requireManager(manager, { readOnlyOperation = false } = {}) {
+function requireManager(manager, options = {}) {
+  const readOnlyOperation = options?.readOnlyOperation === true;
+  const delegated = typeof options === "string" ? options : null;
   const managerId = text(manager?.manager_id || manager?.managerId);
-  if (!managerId || !text(manager?.manager_display_name || manager?.managerName) || (!readOnlyOperation && manager?.read_only) || manager?.auth_mode === "operations_first" || manager?.auth_mode === "admin_api_key") {
+  if (!managerId || !text(manager?.manager_display_name || manager?.managerName) || (!readOnlyOperation && (delegated ? !hasManagerPermission(manager, delegated) : manager?.read_only)) || manager?.auth_mode === "operations_first" || manager?.auth_mode === "admin_api_key") {
     throw fail("static_weekly_named_manager_required", "A trusted, write-enabled named manager session is required.");
   }
   return {
@@ -686,6 +689,15 @@ export function createStaticWeeklyControlPlane({
     return rows[0]?.result;
   }
 
+  async function authorizeAbsenceOperations(client, manager, serviceDate, publicationId, operations) {
+    return call(client,"custodial_authorize_absence_operations_v1",[
+      manager.manager_id,manager.credential_id,manager.device_id,manager.access_level,
+      serviceDate,publicationId,JSON.stringify(operations)]);
+  }
+  async function authorizeRouteRegeneration(client,manager,weekStart,publicationId) {
+    return call(client,"custodial_authorize_route_regeneration_v1",[
+      manager.manager_id,manager.credential_id,manager.device_id,manager.access_level,weekStart,publicationId]);
+  }
   async function lockStaticWeeklyAuthority(client) {
     await client.query(
       "select pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended($1,0))",
@@ -888,7 +900,7 @@ export function createStaticWeeklyControlPlane({
       const digest=postgresJsonbContentDigest(body);
       operationRemaining(expires,controller.signal);
       if(!confirm)return {schema:'custodial.approved-static-initial-preview.v1',status:'PREVIEW_ONLY',previewDigest:digest,
-        sourceId:id,effectiveStart:date,authorityRevision:revision,assignments:feasibility.assignments,
+        sourceId:id,effectiveStart:date,serviceDate:date,templateId,authorityRevision:revision,assignments:feasibility.assignments,
         lunch:feasibility.lunch,mapping:feasibility.mapping,solverInvoked:false,published:false};
       if(!/^[a-f0-9]{64}$/.test(text(previewDigest))||previewDigest!==digest)throw fail('static_template_preview_changed');
       const accepted=await call(client,'static_weekly_materialize_approved_initial_baseline',
@@ -1227,6 +1239,11 @@ export function createStaticWeeklyControlPlane({
     async getManagerSnapshot({ manager, weekStart }) {
       requireManager(manager, { readOnlyOperation: true });
       return transaction((client) => snapshotFor(client, requireMonday(weekStart, "week start")));
+    },
+    async getApprovedScheduleChoices({manager}) {
+      requireManager(manager);
+      return transaction(client=>call(client,"custodial_read_approved_schedule_choices_v1",[
+        manager.manager_id,manager.credential_id,manager.device_id,manager.access_level]));
     },
     async previewApprovedStaticPattern(input) { return approvedStaticOperation(input,false); },
     async confirmApprovedStaticPattern(input) { return approvedStaticOperation(input,true); },
@@ -1770,22 +1787,18 @@ export function createStaticWeeklyControlPlane({
         mutate: () => call(client, "static_weekly_v3_publish_draft", [text(draftVersionId), requireRevision(expectedDraftRevision), requireRevision(expectedRevision), actor.managerId, key, text(publicationKind), rollbackOfVersionId || null]),
       }));
     },
-    async applyException({ manager, exceptionType, serviceDate, startsAt = null, endsAt = null, baseVersionId, publicationId, reason, payload, expectedRevision, idempotencyKey, projectionWeekStart, reversesExceptionId = null }) {
-      const actor = requireManager(manager); const weekStart = projectionWeekForDate(projectionWeekStart, serviceDate); const date = requireDateInWeek(serviceDate, weekStart, "service date"); const key = requireIdempotencyKey(idempotencyKey);
-      return transaction((client) => mutateAndMaterializeCurrentProjection(client, {
-        actor,
-        publicationId: requirePublicationId(publicationId),
-        weekStart,
-        idempotencyKey: key,
-        mutate: () => call(client, "static_weekly_v3_apply_exception", [text(exceptionType), date, startsAt || null, endsAt || null, text(baseVersionId), requirePublicationId(publicationId), text(reason), payload, requireRevision(expectedRevision), actor.managerId, key, reversesExceptionId || null]),
-      }));
+    async applyException({manager,exceptionType,serviceDate,startsAt=null,endsAt=null,baseVersionId,publicationId,
+      reason,payload,expectedRevision,idempotencyKey,projectionWeekStart,reversesExceptionId=null,signal=null,deadlineAt=null}) {
+      requireManager(manager,"manage_absences");
+      return this.applyDayChanges({manager,serviceDate,baseVersionId,publicationId,expectedRevision,idempotencyKey,
+        projectionWeekStart,signal,deadlineAt,operations:[{operation:"exception",exceptionType,startsAt,endsAt,reason,payload,reversesExceptionId}]});
     },
-    async applyContractorCapacity({ manager, serviceDate, baseVersionId, publicationId, slotId, shift, lunch, breakChoice, reason, expectedRevision, idempotencyKey, projectionWeekStart }) {
-      requireManager(manager);
+    async applyContractorCapacity({ manager, serviceDate, baseVersionId, publicationId, slotId, shift, lunch, breakChoice, reason, expectedRevision, idempotencyKey, projectionWeekStart,signal=null,deadlineAt=null }) {
+      requireManager(manager,"manage_coverall");
       const actualShift=requireWindow(shift,"actual contractor shift");
       if (breakChoice === 'NONE') {
         if (lunch != null) throw fail('static_weekly_contractor_break_choice_invalid', 'No-break cannot also contain a lunch window.');
-        return this.applyDayChanges({manager,serviceDate,baseVersionId,publicationId,expectedRevision,idempotencyKey,projectionWeekStart,
+        return this.applyDayChanges({manager,serviceDate,baseVersionId,publicationId,expectedRevision,idempotencyKey,projectionWeekStart,signal,deadlineAt,
           operations:[{operation:'cover_all',slotId,shift:actualShift,breakChoice:'NONE',reason}]});
       }
       if (breakChoice != null && breakChoice !== 'SCHEDULED') throw fail('static_weekly_contractor_break_choice_invalid');
@@ -1796,13 +1809,13 @@ export function createStaticWeeklyControlPlane({
       }
       // Reuse the accepted complete-action receipt and one transaction for both
       // dated facts. A retry must bind lunch as well as capacity and shift.
-      return this.applyDayChanges({manager,serviceDate,baseVersionId,publicationId,expectedRevision,idempotencyKey,projectionWeekStart,operations:[
+      return this.applyDayChanges({manager,serviceDate,baseVersionId,publicationId,expectedRevision,idempotencyKey,projectionWeekStart,signal,deadlineAt,operations:[
         {operation:"cover_all",slotId,shift:actualShift,reason},
         {operation:"exception",exceptionType:"lunch",startsAt:actualLunch.start,endsAt:actualLunch.end,payload:{slotId},reason:"Manager recorded actual CoverAll lunch"},
       ]});
     },
-    async applyDayChanges({ manager, serviceDate, baseVersionId, publicationId, versionId = null, operations, expectedRevision, idempotencyKey, projectionWeekStart }) {
-      const actor = requireManager(manager);
+    async applyDayChanges({ manager, serviceDate, baseVersionId, publicationId, versionId = null, operations, expectedRevision, idempotencyKey, projectionWeekStart, signal=null, deadlineAt=null }) {
+      const actor = requireManager(manager,"manage_absences");
       const weekStart = projectionWeekForDate(projectionWeekStart, serviceDate);
       const date = requireDateInWeek(serviceDate, weekStart, "service date");
       const key = requireIdempotencyKey(idempotencyKey);
@@ -1820,6 +1833,7 @@ export function createStaticWeeklyControlPlane({
         // the winner commits. The gate reauthorizes the current manager and
         // reacquires the same lock defensively; it remains held through commit.
         await lockStaticWeeklyAuthority(client);
+        await authorizeAbsenceOperations(client,manager,date,effectivePublicationId,requestedOperations);
         const batch = await call(client, "static_weekly_v4_begin_day_changes", [date, weekStart, effectiveVersionId, effectivePublicationId, JSON.stringify(requestedOperations), initialRevision, actor.managerId, key]);
         if (batch?.replayed === true) return batch.response;
         // Resolve and validate every operation before invoking the first writer;
@@ -1842,8 +1856,9 @@ export function createStaticWeeklyControlPlane({
           publicationId: effectivePublicationId,
           weekStart,
           expectedRevision: revision,
-          idempotencyKey: projectionIdempotencyKey(key),
+          idempotencyKey: projectionIdempotencyKey(key),signal,deadlineAt,
         });
+        await authorizeAbsenceOperations(client,manager,date,effectivePublicationId,requestedOperations);
         return {
           ...projection,
           operation: "apply_day_changes",
@@ -1852,7 +1867,7 @@ export function createStaticWeeklyControlPlane({
             mutations,
           },
         };
-      }, { reconcileManagerId: actor.managerId });
+      }, { reconcileManagerId: actor.managerId, signal, deadlineAt });
     },
     async markEmployeeDeparted({ manager, slotId, reason, expectedRevision, idempotencyKey, projectionWeekStart }) {
       const actor = requireManager(manager); const weekStart = requireMonday(projectionWeekStart, "projection week start"); const key = requireIdempotencyKey(idempotencyKey);
@@ -1939,10 +1954,12 @@ export function createStaticWeeklyControlPlane({
         ]),
       }), { reconcileManagerId: actor.managerId });
     },
-    async materializeProjection({ manager, publicationId, serviceDate, expectedRevision, idempotencyKey }) {
-      const actor = requireManager(manager); const weekStart = requireMonday(serviceDate, "projection start"); const effectivePublicationId = requirePublicationId(publicationId); const revision = requireRevision(expectedRevision); const key = requireIdempotencyKey(idempotencyKey);
+    async materializeProjection({ manager, publicationId, serviceDate, expectedRevision, idempotencyKey, signal=null, deadlineAt=null }) {
+      const actor = requireManager(manager,"regenerate_routes"); const weekStart = requireMonday(serviceDate, "projection start"); const effectivePublicationId = requirePublicationId(publicationId); const revision = requireRevision(expectedRevision); const key = requireIdempotencyKey(idempotencyKey);
       return transaction(async (client) => {
+        await lockStaticWeeklyAuthority(client);
         await client.query("select pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended($1,0))", ["memphis-static-weekly-authority"]);
+        await authorizeRouteRegeneration(client,manager,weekStart,effectivePublicationId);
         const current = await snapshotFor(client, weekStart);
         if (current?.projection_status === "current" && text(current?.current_publication?.publication_id) === effectivePublicationId && text(current?.latest_projection?.week_start) === weekStart) {
           // The legacy split caller may replay the atomic publication, but a
@@ -1966,21 +1983,28 @@ export function createStaticWeeklyControlPlane({
             },
           };
         }
-        return materializeCurrentProjection(client, { actor, publicationId: effectivePublicationId, weekStart, expectedRevision: revision, idempotencyKey: key });
-      });
+        const result=await materializeCurrentProjection(client, { actor, publicationId: effectivePublicationId, weekStart, expectedRevision: revision, idempotencyKey: key,signal,deadlineAt });
+        await authorizeRouteRegeneration(client,manager,weekStart,effectivePublicationId);
+        return result;
+      }, {signal,deadlineAt,reconcileManagerId:actor.managerId});
     },
-    async rebuildCurrentProjection({ manager, weekStart, expectedRevision, idempotencyKey }) {
-      const actor = requireManager(manager); const projectionWeekStart = requireMonday(weekStart, "projection week start"); const key = requireIdempotencyKey(idempotencyKey);
+    async rebuildCurrentProjection({ manager, weekStart, expectedRevision, idempotencyKey, signal=null, deadlineAt=null }) {
+      const actor = requireManager(manager,"regenerate_routes"); const projectionWeekStart = requireMonday(weekStart, "projection week start"); const key = requireIdempotencyKey(idempotencyKey);
       return transaction(async (client) => {
+        await lockStaticWeeklyAuthority(client);
         const snapshot = await snapshotFor(client, projectionWeekStart);
-        return materializeCurrentProjection(client, {
+        const effectivePublicationId=requirePublicationId(snapshot?.current_publication?.publication_id);
+        await authorizeRouteRegeneration(client,manager,projectionWeekStart,effectivePublicationId);
+        const result=await materializeCurrentProjection(client, {
           actor,
           publicationId: requirePublicationId(snapshot?.current_publication?.publication_id),
           weekStart: projectionWeekStart,
           expectedRevision: requireRevision(expectedRevision),
-          idempotencyKey: projectionIdempotencyKey(key),
+          idempotencyKey: projectionIdempotencyKey(key),signal,deadlineAt,
         });
-      });
+        await authorizeRouteRegeneration(client,manager,projectionWeekStart,effectivePublicationId);
+        return result;
+      }, {signal,deadlineAt,reconcileManagerId:actor.managerId});
     },
     async close() {
       if (closePromise) return closePromise;

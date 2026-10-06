@@ -1,6 +1,11 @@
 export const MANAGER_OPERATION_MILLISECONDS = 60_000;
 export const CLEANUP_RESERVE_MILLISECONDS = 5_000;
 const boundedRecurringPaths = new Set([
+  "/static-weekly/exceptions",
+  "/static-weekly/contractor-capacity",
+  "/static-weekly/day-changes/batch",
+  "/static-weekly/rebuild-current-projection",
+  "/static-weekly/projections",
   "/static-weekly/recurring-adaptation/preview",
   "/static-weekly/recurring-adaptation/confirm",
   "/static-weekly/approved-initial/preview",
