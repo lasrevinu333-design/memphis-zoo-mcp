@@ -50,6 +50,7 @@ jobs:
         run: |
           set -euo pipefail
           npm run --silent test:auth
+          npm run --silent test:owner-access
           npm run --silent test:foundation-containment
           npm run --silent test:readonly-database-authority
           npm run --silent test:operations-leadership-mobile
