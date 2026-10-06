@@ -158,7 +158,8 @@
     "test:audit-two-absence-policy": "node scripts/audit-two-absence-policy-tests.mjs",
     "test:audit-guest-disabled": "node scripts/audit-guest-disabled-tests.mjs",
     "test:coverall-bilingual": "node scripts/coverall-bilingual-tests.mjs",
-    "test:owner-access": "npm run --silent test:manager-auth && node scripts/map-owner-session-http-tests.mjs && node scripts/feedback-acknowledgment-auth-tests.mjs && node scripts/static-weekly-control-plane-tests.mjs && node scripts/static-weekly-control-plane-runtime-tests.mjs && node scripts/owner-actions-database-tests.mjs"
+    "test:owner-access": "npm run --silent test:manager-auth && node scripts/map-owner-session-http-tests.mjs && node scripts/feedback-acknowledgment-auth-tests.mjs && node scripts/static-weekly-control-plane-tests.mjs && node scripts/static-weekly-control-plane-runtime-tests.mjs && node scripts/owner-actions-database-tests.mjs && node scripts/release-attestation-path-tests.mjs",
+    "test:release-attestation-paths": "node scripts/release-attestation-path-tests.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
