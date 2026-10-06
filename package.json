@@ -193,7 +193,7 @@
     "test:manager-scheduler:database": "node scripts/manager-scheduler-dated-integration-tests.mjs"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@modelcontextprotocol/sdk": "1.31.0",
     "@supabase/supabase-js": "^2.103.2",
     "argon2": "^0.44.0",
     "dotenv": "^17.2.3",
