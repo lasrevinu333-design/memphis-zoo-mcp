@@ -29,6 +29,7 @@ assert.deepEqual(state.pending_migrations.map(({ order, file }) => ({ order, fil
   { order: 4, file: "20260920010000_event_reminder_static_weekly_authority.sql" },
   { order: 5, file: "20261006031304_custodial_owner_delegated_actions.sql" },
   { order: 6, file: "20261006113610_custodial_shared_events_outlook.sql" },
+  { order: 7, file: "20261006162427_custodial_shared_events_recovery_binding.sql" },
 ], "the correction release fixture must contain exactly the six release migrations in order");
 assert.equal(
   state.pending_migrations.every((item) => item.source_migration_version > state.observed_production.ledger_head),

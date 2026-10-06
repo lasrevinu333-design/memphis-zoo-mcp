@@ -51,6 +51,7 @@ const eventReminderWorkdayAndOwnerContract = readFileSync(`supabase/migrations/$
 const eventReminderStaticWeeklyAuthorityFile = "20260920010000_event_reminder_static_weekly_authority.sql";
 const custodialOwnerDelegatedActionsFile = "20261006031304_custodial_owner_delegated_actions.sql";
 const sharedEventsOutlookFile = "20261006113610_custodial_shared_events_outlook.sql";
+const sharedEventsRecoveryFile = "20261006162427_custodial_shared_events_recovery_binding.sql";
 const eventReminderStaticWeeklyAuthority = readFileSync(`supabase/migrations/${eventReminderStaticWeeklyAuthorityFile}`, "utf8");
 const index = readFileSync("src/index.js", "utf8");
 const ownerAccessApi = readFileSync("src/owner-access-api.js", "utf8");
@@ -75,6 +76,7 @@ const exactPendingReleaseMigrations = [
   eventReminderStaticWeeklyAuthorityFile,
   custodialOwnerDelegatedActionsFile,
   sharedEventsOutlookFile,
+  sharedEventsRecoveryFile,
 ];
 const exactMigrationFiles = readdirSync("supabase/migrations").filter((name) => /^[0-9]{14}_.+\.sql$/.test(name)).sort();
 const exactMigrationCount = exactMigrationFiles.length;
@@ -189,7 +191,7 @@ assert.match(schemaFingerprintRefresh, /target\?\.canonical_source_schema_finger
 assert.match(populatedPreflightWorkflow, /release:populated-schema:preflight/);
 assert.match(releaseInput.cutover.phase_order[1], /exact observed production ledger head.*catalog\/privilege fingerprint.*zero target-position collisions/i);
 assert.match(releaseInput.cutover.phase_order[2], /fresh post-capture backup receipt.*exact pending-migration digest.*exact source attestation/i);
-assert.match(releaseInput.cutover.phase_order[3], /six exact ordered pending migrations.*two-internal-absence alignment.*pausing guest notifications while disabled.*event-reminder workday\/current-owner contract.*current static-weekly event-reminder authority.*ledger to advance exactly six entries.*do not replay historical production migrations/i);
+assert.match(releaseInput.cutover.phase_order[3], /seven exact ordered pending migrations.*two-internal-absence alignment.*pausing guest notifications while disabled.*event-reminder workday\/current-owner contract.*current static-weekly event-reminder authority.*ledger to advance exactly seven entries.*do not replay historical production migrations/i);
 assert.match(releaseInput.cutover.phase_order[4], /retain the current immutable weighted-schedule publication by default.*only when a named manager approves a replacement.*derive exactly one replacement draft from the current publication.*expected-revision and idempotency guards.*do not create a competing draft.*preserve the current publication/i);
 assert.equal(releaseInput.cutover.production_migration_state, "release/production-migration-state.json");
 assert.match(releaseInput.cutover.production_migration_evidence.github_actions,
@@ -226,13 +228,13 @@ assert.equal(productionMigrationState.observed_production.vacancy_functions_pres
 assert.equal(productionMigrationState.observed_production.hydrated_initial_draft_reader_present, true);
 assert.equal(productionMigrationState.observed_production.registered_source_dated_status_excluded, true);
 assert.equal(productionMigrationState.observed_production.outlook_event_sync_table_present, true);
-assert.equal(productionMigrationState.target.source_migration_file, sharedEventsOutlookFile);
-assert.equal(productionMigrationState.target.source_migration_name, "custodial_shared_events_outlook");
-assert.equal(productionMigrationState.target.source_migration_version, "20261006113610");
+assert.equal(productionMigrationState.target.source_migration_file, sharedEventsRecoveryFile);
+assert.equal(productionMigrationState.target.source_migration_name, "custodial_shared_events_recovery_binding");
+assert.equal(productionMigrationState.target.source_migration_version, "20261006162427");
 assert.equal(productionMigrationState.target.production_ledger_version, null);
 assert.equal(productionMigrationState.target.canonical_source_schema_fingerprint, canonicalFingerprint);
 assert.equal(productionMigrationState.target.public_function_count, 511);
-assert.equal(productionMigrationState.target.production_ledger_count, 232);
+assert.equal(productionMigrationState.target.production_ledger_count, 233);
 assert.equal(productionMigrationState.target.source_authority_migration_count, exactMigrationCount);
 assert.equal(productionMigrationState.target.pending_migration_count, exactPendingReleaseMigrations.length);
 assert.equal(productionMigrationState.target.registered_source_dated_status_excluded, true);
@@ -314,7 +316,7 @@ assert.match(outlookEventSyncAuthority, /revoke all privileges on table public\.
 assert.doesNotMatch(outlookEventSyncAuthority, /grant\s+[^;]+\s+to\s+(?:anon|authenticated|custodial_application_reader)\b/i);
 assert.equal(releaseEvidence.compatibility_window.accepted_engine.scan, "scan.v2");
 assert.equal(releaseEvidence.compatibility_window.required_engine.scan, "scan.v4.snapshot-bound-authority");
-assert.equal(releaseEvidence.migrations.at(-1).name, sharedEventsOutlookFile);
+assert.equal(releaseEvidence.migrations.at(-1).name, sharedEventsRecoveryFile);
 assert.match(applicationReaderReleaseRecovery, /application_reader_identity_projection_bounded/i);
 assert.match(applicationReaderReleaseRecovery, /custodial_application_reader_device_identity/i);
 assert.match(applicationReaderReleaseRecovery, /' grant '\|\|g\.privilege_type\|\|' \('\|\|quote_ident\(a\.attname\)/i);
@@ -374,7 +376,7 @@ assert.equal(releaseEvidence.authority_content_identity.expected_tree_inventory.
 assert.equal(releaseEvidence.authority_content_identity.authority_path_count, releaseEvidence.authority_content_identity.expected_tree_inventory.length);
 assert.equal(releaseEvidence.authority_content_identity.migration_path_count, exactMigrationCount);
 assert.equal(releaseEvidence.migrations.length, exactMigrationCount);
-assert.equal(releaseEvidence.migrations.at(-1).name, sharedEventsOutlookFile);
+assert.equal(releaseEvidence.migrations.at(-1).name, sharedEventsRecoveryFile);
 assert.match(releaseEvidence.compatibility_window.credential_replacement_lineage_phase,
   /append-only same-device predecessor-to-successor transport lineage.*original actor, device, credential, or work evidence/i);
 assert.equal(Object.hasOwn(releaseEvidence.authority_content_identity, "value"), false, "generated evidence must not self-assert a worktree-derived content hash");

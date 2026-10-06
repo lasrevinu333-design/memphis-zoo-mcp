@@ -57,15 +57,15 @@
     "outlook_event_sync_table_present": true
   },
   "target": {
-    "source_migration_file": "20261006113610_custodial_shared_events_outlook.sql",
-    "source_migration_name": "custodial_shared_events_outlook",
-    "source_migration_version": "20261006113610",
+    "source_migration_file": "20261006162427_custodial_shared_events_recovery_binding.sql",
+    "source_migration_name": "custodial_shared_events_recovery_binding",
+    "source_migration_version": "20261006162427",
     "production_ledger_version": null,
     "canonical_source_schema_fingerprint": "440c5cfa077055cae5ec41537496f50f2d99ec7cc91c5cdf5cc5ead8d44268a5",
     "public_function_count": 511,
-    "production_ledger_count": 232,
-    "source_authority_migration_count": 132,
-    "pending_migration_count": 6,
+    "production_ledger_count": 233,
+    "source_authority_migration_count": 133,
+    "pending_migration_count": 7,
     "registered_source_dated_status_excluded": true,
     "expected_catalog_counts": {
       "column_grants": 43,
@@ -95,7 +95,7 @@
   },
   "source_binding": {
     "kind": "external_exact_head_release_attestation",
-    "rule": "This historical replay plan applies only from the dated observed_production snapshot, not from arbitrary current production. An exact source catalog/ledger match, backup, rehearsal and externally signed approval remain required before the six ordered migrations. The October 6 owner-access and shared-Events functions are already installed on the live project and must not be blindly reapplied."
+    "rule": "This historical replay plan applies only from the dated observed_production snapshot, not from arbitrary current production. An exact source catalog/ledger match, backup, rehearsal and externally signed approval remain required before the seven ordered migrations. The October 6 owner-access and shared-Events functions are already installed on the live project and must not be blindly reapplied."
   },
   "backup_evidence": {
     "state": "fresh_verified_backup_required_after_fresh_source_capture_and_before_mutation",
@@ -174,10 +174,17 @@
       "file": "20261006113610_custodial_shared_events_outlook.sql",
       "source_migration_version": "20261006113610",
       "sha256": "9172c433894853a0ccc378036f9d2d633422991d3ee30dca6007b1b81eeac001"
+    },
+    {
+      "order": 7,
+      "phase": "custodial_shared_events_recovery_binding",
+      "file": "20261006162427_custodial_shared_events_recovery_binding.sql",
+      "source_migration_version": "20261006162427",
+      "sha256": "c889928458f5b8e70b860c41f707e8c1438d88270dc60b68cea32c6f06bc2537"
     }
   ],
   "postconditions": [
-    "From the declared historical source only, the ledger advances exactly six rows from 226 to 232, ending at 20261006113610 custodial_shared_events_outlook; already-applied or mismatched sources are rejected.",
+    "From the declared historical source only, the ledger advances exactly seven rows from 226 to 233, ending at 20261006162427 custodial_shared_events_recovery_binding; already-applied or mismatched sources are rejected.",
     "Complete target public catalog and privilege fingerprint equals 440c5cfa077055cae5ec41537496f50f2d99ec7cc91c5cdf5cc5ead8d44268a5 with the independently rebuilt source counts.",
     "Target exposes exactly 511 public functions and 354 non-owner routine grants.",
     "first two simultaneous absences remain internal and each third-or-later absence consumes exactly one distinct registered CoverAll capacity, preserving manager overrides/history",
@@ -187,6 +194,7 @@
     "existing publications, schedule history, employees, cleaning/ticket/inspection history, event history and production-only authority are not deleted or rewritten",
     "no unexpected catalog, privilege, configuration or row diff exists",
     "The four owner-access functions deny anonymous/authenticated-browser execution and preserve current manager, scan-ticket provenance and delegated-absence boundaries.",
-    "Shared Events adds only the four declared event columns and source-bound Outlook writer; event records/history and owner overrides are preserved; browser writer invocation remains denied."
+    "Shared Events adds only the four declared event columns and source-bound Outlook writer; event records/history and owner overrides are preserved; browser writer invocation remains denied.",
+    "Recovery inventory extends exactly the declared Shared Events relation, column set, four columns and Outlook-writer/function-grant records; unrelated inventory and its immutable guard are preserved."
   ]
 }
