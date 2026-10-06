@@ -270,9 +270,17 @@ async function setupApprovedCurrentSix(prior,remaining){
  bootstrap.version.assignments=bootstrap.version.assignments.filter(a=>!vacancies.has(a.ownerSlotId));
  await release('static_weekly_v3_register_authority_source',[initial,bootstrap,'Isolated current occupied initialization only']);
  await release('static_weekly_v6_initialize_registered_roster',[initial,prior.managerId,'Isolated current six initialization']);
- for(const id of vacancies){remaining();await cp('static_weekly_v7_create_vacant_roster_slot',[id,source.slots.find(s=>s.id===id).label,await revision(),prior.managerId,'isolated-initial-vacancy-'+id]);}
- remaining();await release('static_weekly_v3_register_authority_source',[packet.sourceId,source,'Exact corrected current recurring source; isolated only']);
  check('only six current employees added, not historical people',await query('select count(*)::integer as result from public.employees'),initialEmployees+6);
+ return await revision();
+}
+async function finishApprovedCurrentSixRoster(prior,remaining){
+ // Restore the captured authority timeline first. New fixture vacancy commands
+ // then append above it; they must never claim the historical revisions 1..3.
+ const before=await revision();assert.ok(before>=prior.authorityRevision);
+ for(const id of source.version.vacantSlotIds){remaining();await cp('static_weekly_v7_create_vacant_roster_slot',
+  [id,source.slots.find(s=>s.id===id).label,await revision(),prior.managerId,'isolated-initial-vacancy-'+id]);}
+ remaining();await release('static_weekly_v3_register_authority_source',[packet.sourceId,source,'Exact corrected current recurring source; isolated only']);
+ check('new vacancy commands append after historical control',await revision(),before+source.version.vacantSlotIds.length);
  return await revision();
 }
 async function runApprovedInitial(){
@@ -288,6 +296,7 @@ async function runApprovedInitial(){
  for(const key of ['sourceId','versionId','publicationId','managerId'])assert.match(prior[key]||'',/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
  assert.match(prior.documentDigest||'',/^[0-9a-f]{64}$/);
  assert.ok(Number.isSafeInteger(prior.authorityRevision)&&prior.authorityRevision>=0);
+ let expectedAuthorityRevision=prior.authorityRevision;
  if(approvedImportMode){
   const file=process.env.STATIC_WEEKLY_APPROVED_INITIAL_IMPORT_MANIFEST;
   const expected={bytes:Number(process.env.STATIC_WEEKLY_APPROVED_INITIAL_IMPORT_MANIFEST_BYTES),sha256:process.env.STATIC_WEEKLY_APPROVED_INITIAL_IMPORT_MANIFEST_SHA256};
@@ -308,12 +317,14 @@ async function runApprovedInitial(){
   // CAS against the actual fresh operation database, never an invented fixture
   // revision in the export manifest. Captured historical control19 stays exact.
   const client=await pool.connect();try{await importInitialHistoricalRows(client,{...manifest,fixtureRevision},remaining);}finally{client.release();}
+  check('captured historical control restored before new vacancy commands',await revision(),prior.authorityRevision);
+  expectedAuthorityRevision=await finishApprovedCurrentSixRoster(prior,remaining);
  }
  const previous=await query('select jsonb_build_object(\'sourceId\',v.authority_source_id,\'versionId\',v.version_id,\'publicationId\',p.publication_id,\'effectiveStart\',p.effective_start,\'documentDigest\',public.static_weekly_digest_jsonb(v.draft_document)) as result from public.weekly_schedule_publications p join public.weekly_schedule_versions v using(version_id) where p.publication_id=$1',[prior.publicationId]);
  check('actual prior historical publication/source/document custody, not empty database',previous,
   {sourceId:prior.sourceId,versionId:prior.versionId,publicationId:prior.publicationId,effectiveStart:prior.effectiveStart,documentDigest:prior.documentDigest});
  assert.ok(prior.effectiveStart<source.serviceDate);
- check('preexisting exact expected authority revision',await revision(),prior.authorityRevision);
+ check('current expected authority follows preserved history and appended vacancy commands',await revision(),expectedAuthorityRevision);
  installStaticWeeklySha256HexAccelerator(x=>createHash('sha256').update(x).digest('hex'));
  const configBytes=readFileSync(new URL('../config/custodial-six-person-static-20261005.json',import.meta.url));
  assert.equal(createHash('sha256').update(configBytes).digest('hex'),'40da4e1d4cce52b2361b5403b7e5e4477ca00def0fd3649a1d76dacb48422f30');
@@ -336,13 +347,13 @@ async function runApprovedInitial(){
   selection:{schema:'custodial.static-template-selection.v1',kind:'INITIAL_BASELINE',templateId,serviceDate:source.serviceDate,
    availablePersonIds:Object.values(ownerConfig.slots).filter(s=>!s.vacancy).map(s=>s.personId)},deadline:deadlineAt});
  await release('static_weekly_register_approved_initial_baseline',[packet.sourceId,templateId,JSON.stringify(feasibility)]);
- check('artifact/snapshot registration alone does not publish',await revision(),prior.authorityRevision);
- const input={manager,sourceId:packet.sourceId,effectiveStart:source.serviceDate,templateId,expectedRevision:prior.authorityRevision,deadlineAt};
+ check('artifact/snapshot registration alone does not publish',await revision(),expectedAuthorityRevision);
+ const input={manager,sourceId:packet.sourceId,effectiveStart:source.serviceDate,templateId,expectedRevision:expectedAuthorityRevision,deadlineAt};
  const beforeDenied=await query('select jsonb_build_object(\'revision\',(select current_revision from public.static_weekly_schedule_control where singleton),\'publications\',(select count(*) from public.weekly_schedule_publications),\'projections\',(select count(*) from public.weekly_schedule_compiled_projections),\'lunches\',(select count(*) from public.weekly_schedule_lunch_documents)) as result');
- await assert.rejects(cp('static_weekly_materialize_approved_initial_baseline',[prior.managerId,packet.sourceId,source.serviceDate,prior.authorityRevision,0,'isolated-malformed-must-rollback',{}]));
+ await assert.rejects(cp('static_weekly_materialize_approved_initial_baseline',[prior.managerId,packet.sourceId,source.serviceDate,expectedAuthorityRevision,0,'isolated-malformed-must-rollback',{}]));
  check('malformed confirmation rollback leaves authority/publication/projection/lunch unchanged',await query('select jsonb_build_object(\'revision\',(select current_revision from public.static_weekly_schedule_control where singleton),\'publications\',(select count(*) from public.weekly_schedule_publications),\'projections\',(select count(*) from public.weekly_schedule_compiled_projections),\'lunches\',(select count(*) from public.weekly_schedule_lunch_documents)) as result'),beforeDenied);
  const preview=await plane.previewApprovedInitialBaseline(input);
- check('actual static preview no publication or solver', [preview.status,preview.solverInvoked,await revision()],['PREVIEW_ONLY',false,prior.authorityRevision]);
+ check('actual static preview no publication or solver', [preview.status,preview.solverInvoked,await revision()],['PREVIEW_ONLY',false,expectedAuthorityRevision]);
  const accepted=await plane.publishApprovedInitialBaseline({...input,previewDigest:preview.previewDigest,idempotencyKey:'isolated-approved-initial-six'});
  check('actual static accepted receipt',accepted.status,'PERSISTED_CURRENT');
  const lineage=await query('select jsonb_build_object(\'priorVersion\',prior_version_id,\'kind\',publication_kind) as result from public.weekly_schedule_publications where publication_id=$1',[accepted.publication_id]);
