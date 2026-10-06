@@ -111,6 +111,7 @@ assert.equal(currentCalls.every((sql) => sql.includes("static_weekly_v5_read_emp
 
 const conflictingEmployeeId = "30000000-0000-4000-8000-000000000088";
 let authenticatedDeviceMiddlewareCalls = 0;
+let authenticatedAssignmentEpoch = 2;
 const authenticatedCalls = [];
 await withServer(buildApp(async (sql) => {
   authenticatedCalls.push(sql);
@@ -123,6 +124,7 @@ await withServer(buildApp(async (sql) => {
       device_id: "KIOSK_08",
       device_name: "Employee Phone 8",
       device_active: true,
+      assignment_epoch: 2,
       assigned_employee_id: employeeId,
       assigned_employee_name: "Taylor New",
       employee_code: "EMP901",
@@ -142,7 +144,8 @@ await withServer(buildApp(async (sql) => {
   throw new Error(`unexpected authenticated employee-day query: ${sql}`);
 }, (req, _res, next) => {
   authenticatedDeviceMiddlewareCalls += 1;
-  req.memphisDevice = { canonical_device_id: "KIOSK_08", device_id: "KIOSK_08" };
+  req.memphisDevice = { canonical_device_id: "KIOSK_08", device_id: "KIOSK_08", assigned_employee_id: employeeId, assignment_epoch: authenticatedAssignmentEpoch };
+  req.memphisDeviceCredential = { credential_id: "91000000-0000-4000-8000-000000000099" };
   next();
 }), async (origin) => {
   const response = await fetch(
@@ -156,8 +159,15 @@ await withServer(buildApp(async (sql) => {
   assert.equal(payload.data.canonical_device_id, "KIOSK_08");
   assert.equal(payload.data.home_facts.employee_id,employeeId);
   assert.equal(payload.data.home_facts.lunch.start,"13:00");
+  assert.equal(payload.meta.assignment_epoch,2);
+  assert.equal(payload.meta.credential_id,"91000000-0000-4000-8000-000000000099");
+  const readsBefore=authenticatedCalls.filter(sql=>sql.includes("static_weekly_v5_read_employee_day")).length;
+  authenticatedAssignmentEpoch=3;
+  const changed=await fetch(`${origin}/schedule-api/my-day-summary?service_date=${serviceDate}`,{headers:{"x-device-id":"KIOSK_08"}});
+  assert.equal(changed.status,403,"mismatched current authenticated assignment must fail before schedule data is read");
+  assert.equal(authenticatedCalls.filter(sql=>sql.includes("static_weekly_v5_read_employee_day")).length,readsBefore);
 });
-assert.equal(authenticatedDeviceMiddlewareCalls, 1, "device-addressed employee reads must authenticate the phone");
+assert.equal(authenticatedDeviceMiddlewareCalls, 2, "device-addressed employee reads must authenticate the phone");
 assert.ok(authenticatedCalls.some((sql) => sql.includes("from public.device_aliases")));
 
 const staleCalls = [];
