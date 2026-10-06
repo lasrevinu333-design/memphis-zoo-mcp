@@ -1595,7 +1595,7 @@
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
         "mode": "100644",
-        "object_id": "99222f15b3068b3b9f92cde6855e0d8ba6b378d1"
+        "object_id": "2f22c38a563017a232678d00a0964faae4eb06a2"
       },
       {
         "path": "scripts/integrated-backend-authority-release-provenance-tests.mjs",
@@ -3895,7 +3895,7 @@
       {
         "path": "src/auth/device-credential-auth.js",
         "mode": "100644",
-        "object_id": "5a4065648f029eb88d05001f79546ecb1ebfa245"
+        "object_id": "c365a1fcac43345af0ba1fb07ff8b204aa886688"
       },
       {
         "path": "src/auth/manager-permissions.js",
