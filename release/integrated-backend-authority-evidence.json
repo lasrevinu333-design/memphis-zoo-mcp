@@ -85,7 +85,7 @@
       "prepare distinct CUSTODIAL_BACKEND_PROOF_SECRET, CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET, and DEVICE_CREDENTIAL_SECRET values (minimum 32 characters each); preserve all phone-local work and require manager-code recovery for any active credential from a different secret generation without exposing any secret",
       "capture the production catalog through the read-only Supabase boundary and require the exact observed production ledger head, catalog/privilege fingerprint, object counts, static-weekly state, and zero target-position collisions recorded in release/production-migration-state.json",
       "verify production project, fresh post-capture backup receipt, observed production identity, exact pending-migration digest, and exact source attestation against release/production-migration-state.json; either retain the existing exact GitHub run provenance or use one UUID-bound task-local encrypted archive and signed full rehearsal whose receipt and result hashes, runner hash, candidate commit/tree, archive digest, signer key IDs, zero leases, and ordered timestamps are carried into a short-lived authorization without uploading production contents",
-      "after explicit production-change admission, select exactly one evidence mode and apply through the GitHub production-migration gate only: GitHub evidence retains its strict run provenance, while task-local evidence uses a dedicated ephemeral verification key plus the hash-bound authorization secret and cannot download backup or rehearsal artifacts; apply only the six exact ordered pending migrations for two-internal-absence alignment, pausing guest notifications while disabled, the event-reminder workday/current-owner contract, current static-weekly event-reminder authority, owner/delegate access controls, and the additive shared-Events Outlook writer; require the production ledger to advance exactly six entries and the complete catalog delta to match the reviewed postconditions; do not replay historical production migrations or rewrite production event rows This replay plan is restricted to the declared historical source; current production must not replay migrations already applied.",
+      "after explicit production-change admission, select exactly one evidence mode and apply through the GitHub production-migration gate only: GitHub evidence retains its strict run provenance, while task-local evidence uses a dedicated ephemeral verification key plus the hash-bound authorization secret and cannot download backup or rehearsal artifacts; apply only the seven exact ordered pending migrations for two-internal-absence alignment, pausing guest notifications while disabled, the event-reminder workday/current-owner contract, current static-weekly event-reminder authority, owner/delegate access controls, the additive shared-Events Outlook writer, and its exact recovery bindings; require the production ledger to advance exactly seven entries and the complete catalog delta to match the reviewed postconditions; do not replay historical production migrations or rewrite production event rows This replay plan is restricted to the declared historical source; current production must not replay migrations already applied.",
       "after schema admission, retain the current immutable weighted-schedule publication by default; only when a named manager approves a replacement, derive exactly one replacement draft from the current publication, verify and publish it through the static-weekly control plane with expected-revision and idempotency guards; do not create a competing draft, and preserve the current publication until the replacement publication and projection are complete",
       "deploy the canonical-only backend only after all authoritative procedures above are present and verified; missing canonical writers fail closed",
       "require a green authority health gate and direct-DML denial probes before routing traffic"
@@ -480,7 +480,7 @@
       {
         "path": "release/integrated-backend-authority-input.json",
         "mode": "100644",
-        "object_id": "6d653bbcd5e04d3a491f48b31c4441025e1fd086"
+        "object_id": "ca4e5966821dada39e48804bd04f4139da169544"
       },
       {
         "path": "release/owner-access-schema-delta.json",
@@ -500,7 +500,7 @@
       {
         "path": "release/production-migration-state.json",
         "mode": "100644",
-        "object_id": "8f6aaa781ad9ee50cb1c7237828487f667e57897"
+        "object_id": "575c20d42e690a0f77f137e595974b5f4c94ff4f"
       },
       {
         "path": "release/reviewed-migrations/20260809125735_cleaning_inspection_24_hour_freshness.sql",
@@ -516,6 +516,11 @@
         "path": "release/shared-events-database-receipt.json",
         "mode": "100644",
         "object_id": "ac102ca0c5cbc84ec19f7670cef48832d2a9ef92"
+      },
+      {
+        "path": "release/shared-events-recovery-verification.json",
+        "mode": "100644",
+        "object_id": "8427ac4d449aab5c9a39bab10658cac04a11694b"
       },
       {
         "path": "release/shared-events-schema-delta.json",
@@ -900,7 +905,7 @@
       {
         "path": "scripts/final-closure-database-isolated-tests.mjs",
         "mode": "100644",
-        "object_id": "ff47a5b85f33e3325e6510084cc3c972b5efcec3"
+        "object_id": "609219fd62cbe2bfbce11ec380df423af61fe5e5"
       },
       {
         "path": "scripts/final-operational-correction-database-tests.mjs",
@@ -990,12 +995,12 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "96246373c7407e0d88f420d4b30aa2f2ec110b75"
+        "object_id": "5adc55de19826b4b3b58f724530570d1da783195"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
         "mode": "100644",
-        "object_id": "c7a29fd9d9f20738e75bf79ac291a528f1678d8c"
+        "object_id": "c5074164f90c14300fac044f4fed27baed296721"
       },
       {
         "path": "scripts/integrated-backend-authority-release-provenance-tests.mjs",
@@ -1365,7 +1370,7 @@
       {
         "path": "scripts/release-migration-plan-database-tests.mjs",
         "mode": "100644",
-        "object_id": "8e56774496ab10bfbc2bcf62e5134f703aae3195"
+        "object_id": "2608d6b2443e2ab1907811e6554ba7176ae8505f"
       },
       {
         "path": "scripts/release-migration-rehearsal-provenance.mjs",
@@ -1466,6 +1471,11 @@
         "path": "scripts/shared-events-feed-tests.mjs",
         "mode": "100644",
         "object_id": "bd5b0b0a82361eda9da9953b077165a809ea59e9"
+      },
+      {
+        "path": "scripts/shared-events-recovery-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "da05b5579476d05b090cd26461e57b00c334ad5e"
       },
       {
         "path": "scripts/smoke-ai-intent.mjs",
@@ -3623,13 +3633,18 @@
         "object_id": "efe1ab69549f787917f187211f4d1fe21db0e478"
       },
       {
+        "path": "supabase/migrations/20261006162427_custodial_shared_events_recovery_binding.sql",
+        "mode": "100644",
+        "object_id": "c35aaff789432b776e196e01fe283b7e14c37a74"
+      },
+      {
         "path": "tmp/write_probe.txt",
         "mode": "100644",
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 700,
-    "migration_path_count": 132,
+    "authority_path_count": 703,
+    "migration_path_count": 133,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
   },
@@ -4035,6 +4050,9 @@
     },
     {
       "name": "20261006113610_custodial_shared_events_outlook.sql"
+    },
+    {
+      "name": "20261006162427_custodial_shared_events_recovery_binding.sql"
     }
   ],
   "release_boundary": "Prepare distinct minimum-32-character backend, native-route, and employee-device credential secrets before cutover; configure database digests immediately after the migrations that create each configuration function, retain the bridge backend artifact through the scan-snapshot phase, require manager-code recovery without phone-local work loss for any device-credential generation mismatch, and require the executable health/restoration probes before traffic changes."
