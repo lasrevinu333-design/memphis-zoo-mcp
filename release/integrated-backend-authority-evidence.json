@@ -390,7 +390,7 @@
       {
         "path": "package.json",
         "mode": "100644",
-        "object_id": "63aa6948f18ee81042e9e30be384b73b78c5bb93"
+        "object_id": "52380003abd6c57ef7f2f216379b0183b129eefa"
       },
       {
         "path": "public/moxie-assets/contacts-creekside-animal.png",
@@ -476,6 +476,11 @@
         "path": "release/schema-alignment-input.json",
         "mode": "100644",
         "object_id": "36e2457e4ef4da21c7912494f392905840f673c6"
+      },
+      {
+        "path": "release/signer-path-correction-verification.json",
+        "mode": "100644",
+        "object_id": "8d52e05b56f78dae5e9df3b681736553a74a67a7"
       },
       {
         "path": "research/european_herbalism_through_paracelsus.md",
@@ -610,7 +615,7 @@
       {
         "path": "scripts/create-release-attestation.mjs",
         "mode": "100644",
-        "object_id": "f8286e751a6f1451437b9e5f505c0baecee2da11"
+        "object_id": "204b9b2f517647e1504dc740ac433bfd0ed2b4d6"
       },
       {
         "path": "scripts/create-release-migration-authorization.mjs",
@@ -1276,6 +1281,11 @@
         "path": "scripts/refresh-schema-fingerprint.mjs",
         "mode": "100644",
         "object_id": "5674e9b554bd248d092118bc9a7684df9251c1da"
+      },
+      {
+        "path": "scripts/release-attestation-path-tests.mjs",
+        "mode": "100644",
+        "object_id": "6c012119298e7531720ba118edfacb948c798572"
       },
       {
         "path": "scripts/release-canary-recovery-database-tests.mjs",
@@ -3543,7 +3553,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 683,
+    "authority_path_count": 685,
     "migration_path_count": 131,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
