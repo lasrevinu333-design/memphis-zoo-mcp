@@ -140,12 +140,12 @@
       {
         "path": ".github/workflows/custodial-populated-schema-preflight.yml",
         "mode": "100644",
-        "object_id": "ad8b37f899866384ab4ad510b9d8e8fa0c750227"
+        "object_id": "0ddd451f49d484162b7424ecc01b4390787ce0e9"
       },
       {
         "path": ".github/workflows/custodial-production-repair.yml",
         "mode": "100644",
-        "object_id": "13fe2b2000f2cf0d5f0e3a4a8daae1392f58f259"
+        "object_id": "3e6fb32f5b0b7788a11220a97e5b860a23684bed"
       },
       {
         "path": ".github/workflows/device-credential-foundation.yml",
@@ -160,7 +160,7 @@
       {
         "path": ".github/workflows/foundation-security-gate.yml",
         "mode": "100644",
-        "object_id": "61aa6ca2ebf7c22d540f0d5fac3c56d88d60b55b"
+        "object_id": "2f868387641117527f059879b9865322809790e4"
       },
       {
         "path": ".github/workflows/integrated-release-attestation.yml",
@@ -515,7 +515,7 @@
       {
         "path": "package.json",
         "mode": "100644",
-        "object_id": "ec9fe4223ff373de593bd6471b4a6953dbe11606"
+        "object_id": "f400f51c9f3675e83b1b907230be8976273904d8"
       },
       {
         "path": "release/combined-release-verification.json",
@@ -561,6 +561,11 @@
         "path": "release/owner-database-fixture-correction-verification.json",
         "mode": "100644",
         "object_id": "922c4bea94ddcf75d3c34bd194162d7f0d375244"
+      },
+      {
+        "path": "release/production-backup-source-extension.json",
+        "mode": "100644",
+        "object_id": "45a80306d8ff2c388bc9b32325b23c2cfbb3ff6e"
       },
       {
         "path": "release/production-migration-state.json",
@@ -698,6 +703,16 @@
         "object_id": "9cec14e875700a13142c8aba767634ebfa81b085"
       },
       {
+        "path": "scripts/backup-release-schema-binding-tests.mjs",
+        "mode": "100644",
+        "object_id": "aab2fb6ea5943b0abc56ab085fb17733e78602d3"
+      },
+      {
+        "path": "scripts/backup-release-schema-binding.mjs",
+        "mode": "100644",
+        "object_id": "03939026a204cf73b4d41d367e49b10ed16f4ae4"
+      },
+      {
         "path": "scripts/batch-2-event-messenger-cutover-database-tests.mjs",
         "mode": "100644",
         "object_id": "41c7abfe7f887e9ba984d65b9ceacc410a342a55"
@@ -745,7 +760,7 @@
       {
         "path": "scripts/ci-workflow-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "7367602a07958c629b1453bd5c88934a172c810f"
+        "object_id": "f3575ee922cf5ca6fe116599ef9fba105aded461"
       },
       {
         "path": "scripts/cleaning-identity-gps-database-tests.mjs",
@@ -2215,7 +2230,7 @@
       {
         "path": "scripts/production-backup.mjs",
         "mode": "100644",
-        "object_id": "cbc87a6e7c9a7c57e1f6edc84a162bb504d73776"
+        "object_id": "106e0b8945c69b5080ce604b6a28a8ddbb221562"
       },
       {
         "path": "scripts/production-database-credential-bridge.mjs",
@@ -2260,7 +2275,7 @@
       {
         "path": "scripts/production-restore.mjs",
         "mode": "100644",
-        "object_id": "ac0c983710d43931092d0e2cfe553c097097eb52"
+        "object_id": "a0f04ca295b73af4f56cfec8e4f336400223b295"
       },
       {
         "path": "scripts/production-runtime-contract-tests.mjs",
@@ -2325,12 +2340,12 @@
       {
         "path": "scripts/refresh-schema-fingerprint.mjs",
         "mode": "100644",
-        "object_id": "5674e9b554bd248d092118bc9a7684df9251c1da"
+        "object_id": "cb9a589b82fac479d78a3a82f10d7d9b3ca9c7d9"
       },
       {
         "path": "scripts/release-attestation-path-tests.mjs",
         "mode": "100644",
-        "object_id": "6c012119298e7531720ba118edfacb948c798572"
+        "object_id": "94a78f5d86ed9aa3cb80f867b5c8f2a2f0772df7"
       },
       {
         "path": "scripts/release-canary-recovery-database-tests.mjs",
@@ -2521,6 +2536,11 @@
         "path": "scripts/scheduler-overhaul-contract-tests.mjs",
         "mode": "100644",
         "object_id": "d76c66450696dcaaadb78d1686299139375423d3"
+      },
+      {
+        "path": "scripts/schema-catalog-readonly-client.mjs",
+        "mode": "100644",
+        "object_id": "f76c04dc98df48b22f81b57dcb6f8c31e3c3dc74"
       },
       {
         "path": "scripts/schema-fingerprint-catalog.mjs",
@@ -6363,7 +6383,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 1247,
+    "authority_path_count": 1251,
     "migration_path_count": 225,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
