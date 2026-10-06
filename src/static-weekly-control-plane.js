@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { hasManagerPermission } from "./auth/manager-permissions.js";
 /*
  * Separately deployed static-weekly scheduler control plane.
@@ -456,6 +457,24 @@ export function createStaticWeeklyControlPlane({
     throw fail("static_weekly_control_plane_health_deadline_invalid");
   }
 
+  // Carry the request through queueing and nested asynchronous helpers without
+  // sharing mutable credentials between concurrent manager operations.
+  const managerRequest = new AsyncLocalStorage();
+  async function runManagerOperation({manager,signal,deadlineAt,permission="write"},work) {
+    if(typeof work!=="function" || !signal || !Number.isFinite(deadlineAt))
+      throw fail("static_weekly_recurring_operation_deadline_invalid");
+    operationRemaining(deadlineAt,signal);
+    return managerRequest.run(Object.freeze({manager:Object.freeze({...manager}),signal,deadlineAt,permission}),work);
+  }
+  async function verifyRequestActor(client,context){
+    if(!context)return;
+    const manager=context.manager;
+    const actor=await call(client,"custodial_action_actor_v1",[
+      manager.manager_id,manager.credential_id,manager.device_id,manager.access_level,context.permission]);
+    if(actor?.manager_id!==manager.manager_id || actor?.credential_id!==manager.credential_id
+      ||actor?.device_id!==manager.device_id || (context.permission==="write"&&actor.owner!==true))
+      throw fail("42501","Current manager authority is required at the scheduler transaction boundary.");
+  }
   let closing = false;
   let closePromise = null;
   let activeTransactions = 0;
@@ -562,6 +581,11 @@ export function createStaticWeeklyControlPlane({
   }
 
   function transaction(work, { health = false, reconcileManagerId = null, signal = null, deadlineAt = null } = {}) {
+    const request = health ? null : managerRequest.getStore();
+    if(request){
+      signal = signal ? AbortSignal.any([request.signal,signal]) : request.signal;
+      deadlineAt = deadlineAt==null ? request.deadlineAt : Math.min(deadlineAt,request.deadlineAt);
+    }
     const execute = async () => {
       assertOperationActive(signal);
       if (closing) throw fail("static_weekly_control_plane_closing", "The scheduler is closing and cannot open another database transaction.");
@@ -629,6 +653,9 @@ export function createStaticWeeklyControlPlane({
             return result;
           },
         }) : client;
+        // The existing SQL actor check locks the manager and credential until
+        // commit/rollback, defining an order relative to concurrent revocation.
+        await verifyRequestActor(workClient,request);
         let result = await work(workClient);
         assertOperationActive(signal);
         if (reconcileManagerId !== null) {
@@ -645,6 +672,8 @@ export function createStaticWeeklyControlPlane({
             operationRemaining(deadlineAt, signal))}ms'`);
           assertOperationActive(signal);
         }
+        await verifyRequestActor(workClient,request);
+        assertOperationActive(signal);
         commitStarted = true;
         await client.query("commit");
         commitCompleted = true;
@@ -1207,6 +1236,7 @@ export function createStaticWeeklyControlPlane({
   }
 
   return {
+    runManagerOperation,
     runExternalRecurringOperation,
     schema: STATIC_WEEKLY_CONTROL_PLANE_SCHEMA,
     health() {

@@ -1,16 +1,6 @@
 export const MANAGER_OPERATION_MILLISECONDS = 60_000;
 export const CLEANUP_RESERVE_MILLISECONDS = 5_000;
-const boundedRecurringPaths = new Set([
-  "/static-weekly/exceptions",
-  "/static-weekly/contractor-capacity",
-  "/static-weekly/day-changes/batch",
-  "/static-weekly/rebuild-current-projection",
-  "/static-weekly/projections",
-  "/static-weekly/recurring-adaptation/preview",
-  "/static-weekly/recurring-adaptation/confirm",
-  "/static-weekly/approved-initial/preview",
-  "/static-weekly/approved-initial/confirm",
-]);
+
 
 export function beginBoundedManagerRequest(req, res, {
   now = () => performance.now(), setTimer = setTimeout, clearTimer = clearTimeout,
@@ -18,7 +8,7 @@ export function beginBoundedManagerRequest(req, res, {
   // Express defaults to case-insensitive, non-strict route matching. Its
   // handlers accept mixed case and one optional trailing slash as well.
   const routePath = typeof req.path === "string" ? req.path.replace(/\/$/, "").toLowerCase() : "";
-  if (req.method !== "POST" || !boundedRecurringPaths.has(routePath)) return null;
+  if (req.method !== "POST" || !routePath.startsWith("/static-weekly/")) return null;
   const controller = new AbortController();
   const deadlineAt = now() + MANAGER_OPERATION_MILLISECONDS;
   const abort = () => controller.abort(Object.assign(new Error(

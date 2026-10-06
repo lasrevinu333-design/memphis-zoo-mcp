@@ -146,26 +146,21 @@ export function createStaticWeeklyControlPlaneRuntime({
 
   function manager(req) { return req.memphisAuth; }
   const runOwnedRecurring = (req, kind, body) => {
-    const admission = recurringOperationAdmission || authorityControlPlane.runExternalRecurringOperation?.bind(authorityControlPlane);
-    if (typeof admission !== "function") throw fail("static_weekly_control_plane_busy",
-      "The shared recurring authority admission is unavailable; no child work was started.");
-    return admission({ signal: req.restoreMutationLease.signal,
-      deadlineAt: req.staticWeeklyManagerOperation.deadlineAt,
-      // Static owner policy replaces optimizer reconstruction at this changed
-      // recurring boundary. Catalog/source facts come only from the named
-      // manager database connection, never supplied preview rows. A missing
-      // approved pattern is an explicit refusal, not a full-solver fallback.
-      action: () => {
-        if(body.full_nine_source_id!=null)throw fail('static_template_legacy_source_selector_not_supported');
-        const input={manager:manager(req),serviceDate:body.effective_start,
-          expectedRevision:body.expected_revision,templateId:body.template_id??null,
-          signal:req.restoreMutationLease.signal,deadlineAt:req.staticWeeklyManagerOperation.deadlineAt};
-        if(kind==='preview')return authorityControlPlane.previewApprovedStaticPattern(input);
-        return authorityControlPlane.confirmApprovedStaticPattern({...input,
-          previewDigest:body.preview_digest,idempotencyKey:body.confirmation_key});
-      },
-    });
+    // Fixed approved patterns already acquire the control plane's single
+    // transaction queue. Holding an external-child slot around that same
+    // transaction can exhaust all three slots with three simultaneous callers.
+    // Do not acquire a second slot or invoke the retired optimizer path.
+    if(body.full_nine_source_id!=null)throw fail('static_template_legacy_source_selector_not_supported');
+    const method=kind==='preview'?'previewApprovedStaticPattern':'confirmApprovedStaticPattern';
+    if(typeof authorityControlPlane[method]!=="function")throw fail('static_weekly_control_plane_busy',
+      'The approved pattern authority is unavailable; no work was started.');
+    const input={manager:manager(req),serviceDate:body.effective_start,
+      expectedRevision:body.expected_revision,templateId:body.template_id??null,
+      signal:req.restoreMutationLease.signal,deadlineAt:req.staticWeeklyManagerOperation.deadlineAt};
+    return authorityControlPlane[method](kind==='preview'?input:{...input,
+      previewDigest:body.preview_digest,idempotencyKey:body.confirmation_key});
   };
+
   function releaseIdentityPayload() {
     return releaseIdentity ? {
       release_id: releaseIdentity.release_id,
@@ -177,8 +172,17 @@ export function createStaticWeeklyControlPlaneRuntime({
   }
   function respond(operation) {
     return async (req, res) => {
+      let data, operationCompleted=false;
       try {
-        const data = await operation(req);
+        const route=String(req.path||"").replace(/\/$/,"").toLowerCase();
+        const permission=route==="/static-weekly/contractor-capacity"?"manage_coverall":
+          ["/static-weekly/exceptions","/static-weekly/day-changes/batch"].includes(route)?"manage_absences":
+          ["/static-weekly/projections","/static-weekly/rebuild-current-projection"].includes(route)?"regenerate_routes":"write";
+        if(req.staticWeeklyManagerOperation && typeof authorityControlPlane.runManagerOperation==="function") {
+          data=await authorityControlPlane.runManagerOperation({manager:manager(req),permission,
+            signal:req.restoreMutationLease.signal,deadlineAt:req.staticWeeklyManagerOperation.deadlineAt},()=>operation(req));
+        }else{data=await operation(req);}
+        operationCompleted=true;
         // Only the explicitly bounded manager POSTs carry this context. Their
         // transaction has settled here; the exact restore lease must also be
         // confirmed released before any success bytes leave the server.
@@ -226,6 +230,8 @@ export function createStaticWeeklyControlPlaneRuntime({
         res.status(responseError?.code === "42501" ? 403 : invalid ? 422 : unavailable ? 503 : 409).json({ ok: false, error: diagnostic
           ?'Opening planned coverage has inconsistent essential source facts. Nothing was admitted or published.'
           :responseError?.message || "Static weekly control-plane request failed.", code: responseError?.code || "static_weekly_control_plane_failed",
+          ...(operationCompleted?{operation_outcome:"accepted",accepted_result:data}:
+            unavailable?{operation_outcome:"unknown"}:{operation_outcome:"rejected"}),
           ...(diagnostic?{openingCoverageDiagnostic:diagnostic}:{}) });
       }
     };
