@@ -1,7 +1,7 @@
 {
   "artifact": "integrated-backend-authority-release-evidence.v2",
   "release_id": "release-2026.07.19.custodial-v3.12",
-  "frontend_commit_sha": "74edc22417103800ae3083fa7e03d357a33d6b9c",
+  "frontend_commit_sha": "8f59f3ad5eb0791f2a4dcced20ac5258407cc76a",
   "frontend_commit_state": "final_pair_bound",
   "schema_fingerprint": "1e16187577e00c47c3520688cb32c06cfcf52a870982e566820e0a6a1e66e3da",
   "schema_transition": {
@@ -405,7 +405,7 @@
       {
         "path": "package.json",
         "mode": "100644",
-        "object_id": "ad6260620053f396d0c0557f0cb30d308d8d14f3"
+        "object_id": "39e81ad43297bff6773185cd1c7ee773eb67f52b"
       },
       {
         "path": "public/moxie-assets/contacts-creekside-animal.png",
@@ -475,7 +475,7 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "2b0873f0b871bbfebca0f7ad1377bec13cc3a39b"
+        "object_id": "47c4e53cbb5c685b4818d718516d4c2690ae3045"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
@@ -485,7 +485,7 @@
       {
         "path": "release/integration-repairs-verification.json",
         "mode": "100644",
-        "object_id": "43bef8f206a9f7d23ed47b1ad66844a374b5f1a3"
+        "object_id": "fa7ac1f1292f2f0a3c60a6e0f7c40fa95814a45f"
       },
       {
         "path": "release/owner-access-schema-delta.json",
@@ -515,7 +515,7 @@
       {
         "path": "release/schema-alignment-input.json",
         "mode": "100644",
-        "object_id": "2ff4047f8fd5ab5bab5318feb6ea124287a2fd81"
+        "object_id": "9744358fa6678c27361838309077de9b2dc1a9dd"
       },
       {
         "path": "release/shared-events-database-receipt.json",
@@ -776,6 +776,11 @@
         "path": "scripts/device-popup-fully-kiosk-test.mjs",
         "mode": "100644",
         "object_id": "c189e773763ffa928dd6471cc135a52dadb2a0e8"
+      },
+      {
+        "path": "scripts/device-profile-epoch-tests.mjs",
+        "mode": "100644",
+        "object_id": "6f9a116991c465af7047b9843f8c0ed1b944dcbb"
       },
       {
         "path": "scripts/device-security-app-tests.mjs",
@@ -1980,7 +1985,7 @@
       {
         "path": "src/auth/device-credential-auth.js",
         "mode": "100644",
-        "object_id": "028e4c2cdc7b3f4546da8df564b7495aac8f5438"
+        "object_id": "dd445ea0dfb25b6403f8a3b6928fc44e5657d7f1"
       },
       {
         "path": "src/auth/manager-permissions.js",
@@ -3658,7 +3663,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 706,
+    "authority_path_count": 707,
     "migration_path_count": 134,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
