@@ -1461,8 +1461,6 @@ export function installDeviceCredentialRoutes(app, {
           assignment_epoch: authenticated && Number.isSafeInteger(Number(result.device.assignment_epoch))
             && Number(result.device.assignment_epoch)>0 ? Number(result.device.assignment_epoch) : null,
           employee_role: authenticated ? (result.device.role || null) : null,
-          assignment_epoch: authenticated && Number.isSafeInteger(Number(result.device.assignment_epoch))
-            && Number(result.device.assignment_epoch) >= 1 ? Number(result.device.assignment_epoch) : null,
           credential_id: authenticated ? (result.credential?.credential_id || null) : null,
           credential_expires_at: authenticated ? (result.credential?.expires_at || null) : null,
         },
