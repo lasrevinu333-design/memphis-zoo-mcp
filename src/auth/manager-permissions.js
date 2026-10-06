@@ -40,7 +40,9 @@ export function projectManagerSession(session, manager, { maximumAccessLevel = '
       owner: full,
       close_scan_tickets: full || delegate,
       manage_absences: full || delegate,
-      absence_coverage_required: delegate,
+      manage_coverall: full || delegate,
+      regenerate_routes: full || delegate,
+      absence_coverage_required: false,
     },
   };
 }
@@ -52,6 +54,6 @@ export function hasManagerPermission(session, action) {
   if (permission?.schema !== MANAGER_PERMISSION_SCHEMA || permission.read !== true) return false;
   if (action === 'read') return true;
   if (action === 'write') return permission.owner === true && session.read_only === false;
-  if (!['close_scan_tickets', 'manage_absences'].includes(action)) return false;
+  if (!['close_scan_tickets', 'manage_absences', 'manage_coverall', 'regenerate_routes'].includes(action)) return false;
   return permission[action] === true;
 }

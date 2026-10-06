@@ -473,7 +473,7 @@ export function createStaticWeeklyControlPlane({
   }
 
   async function authorizeAbsenceOperations(client, manager, serviceDate, publicationId, operations) {
-    // Re-resolve the current credential and the owner-controlled absence window
+    // Re-resolve the current credential and bounded dated-action permissions
     // in the SAME transaction as the exception and compiled projection.
     return call(client, "custodial_authorize_absence_operations_v1", [
       manager.manager_id, manager.credential_id, manager.device_id, manager.access_level,
@@ -481,6 +481,10 @@ export function createStaticWeeklyControlPlane({
     ]);
   }
 
+  async function authorizeRouteRegeneration(client,manager,weekStart,publicationId) {
+    return call(client,"custodial_authorize_route_regeneration_v1",[
+      manager.manager_id,manager.credential_id,manager.device_id,manager.access_level,weekStart,publicationId]);
+  }
   async function lockStaticWeeklyAuthority(client) {
     await client.query(
       "select pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended($1,0))",
@@ -688,39 +692,20 @@ export function createStaticWeeklyControlPlane({
         mutate: () => call(client, "static_weekly_v3_publish_draft", [text(draftVersionId), requireRevision(expectedDraftRevision), requireRevision(expectedRevision), actor.managerId, key, text(publicationKind), rollbackOfVersionId || null]),
       }));
     },
-    async applyException({ manager, exceptionType, serviceDate, startsAt = null, endsAt = null, baseVersionId, publicationId, reason, payload, expectedRevision, idempotencyKey, projectionWeekStart, reversesExceptionId = null }) {
-      const actor = requireManager(manager, manager.read_only ? "manage_absences" : "write"); const weekStart = projectionWeekForDate(projectionWeekStart, serviceDate); const date = requireDateInWeek(serviceDate, weekStart, "service date"); const key = requireIdempotencyKey(idempotencyKey);
-      const operations = [{ operation: "exception", exceptionType, startsAt, endsAt, reason, payload, reversesExceptionId }];
-      return transaction(async (client) => {
-        await lockStaticWeeklyAuthority(client);
-        await authorizeAbsenceOperations(client, manager, date, publicationId, operations);
-        const result = await mutateAndMaterializeCurrentProjection(client, {
-        actor,
-        publicationId: requirePublicationId(publicationId),
-        weekStart,
-        idempotencyKey: key,
-        mutate: () => call(client, "static_weekly_v3_apply_exception", [text(exceptionType), date, startsAt || null, endsAt || null, text(baseVersionId), requirePublicationId(publicationId), text(reason), payload, requireRevision(expectedRevision), actor.managerId, key, reversesExceptionId || null]),
-        });
-        await authorizeAbsenceOperations(client, manager, date, publicationId, operations);
-        return result;
-      });
+    async applyException({manager,exceptionType,serviceDate,startsAt=null,endsAt=null,baseVersionId,publicationId,
+      reason,payload,expectedRevision,idempotencyKey,projectionWeekStart,reversesExceptionId=null,signal=null,deadlineAt=null}) {
+      requireManager(manager,"manage_absences");
+      return this.applyDayChanges({manager,serviceDate,baseVersionId,publicationId,expectedRevision,idempotencyKey,
+        projectionWeekStart,signal,deadlineAt,operations:[{operation:"exception",exceptionType,startsAt,endsAt,reason,payload,reversesExceptionId}]});
     },
-    async applyContractorCapacity({ manager, serviceDate, baseVersionId, publicationId, slotId, shift, reason, expectedRevision, idempotencyKey, projectionWeekStart }) {
-      const actor = requireManager(manager); const weekStart = projectionWeekForDate(projectionWeekStart, serviceDate); const date = requireDateInWeek(serviceDate, weekStart, "service date"); const key = requireIdempotencyKey(idempotencyKey); const effectivePublicationId = requirePublicationId(publicationId);
-      return transaction(async (client) => {
-        const source = await sourceFor(client, effectivePublicationId, date);
-        const availability = contractorAvailabilityFromSource(source, slotId, date, shift);
-        return mutateAndMaterializeCurrentProjection(client, {
-          actor,
-          publicationId: effectivePublicationId,
-          weekStart,
-          idempotencyKey: key,
-          mutate: () => call(client, "static_weekly_v3_apply_exception", ["cover_all", date, null, null, text(baseVersionId), effectivePublicationId, text(reason), { availability }, requireRevision(expectedRevision), actor.managerId, key, null]),
-        });
-      });
+    async applyContractorCapacity({manager,serviceDate,baseVersionId,publicationId,slotId,shift,reason,
+      expectedRevision,idempotencyKey,projectionWeekStart}) {
+      requireManager(manager,"manage_coverall");
+      return this.applyDayChanges({manager,serviceDate,baseVersionId,publicationId,expectedRevision,idempotencyKey,
+        projectionWeekStart,operations:[{operation:"cover_all",slotId,shift,reason}]});
     },
     async applyDayChanges({ manager, serviceDate, baseVersionId, publicationId, versionId = null, operations, expectedRevision, idempotencyKey, projectionWeekStart }) {
-      const actor = requireManager(manager, manager.read_only ? "manage_absences" : "write");
+      const actor = requireManager(manager,"manage_absences");
       const weekStart = projectionWeekForDate(projectionWeekStart, serviceDate);
       const date = requireDateInWeek(serviceDate, weekStart, "service date");
       const key = requireIdempotencyKey(idempotencyKey);
@@ -808,8 +793,10 @@ export function createStaticWeeklyControlPlane({
       ]));
     },
     async materializeProjection({ manager, publicationId, serviceDate, expectedRevision, idempotencyKey }) {
-      const actor = requireManager(manager); const weekStart = requireMonday(serviceDate, "projection start"); const effectivePublicationId = requirePublicationId(publicationId); const revision = requireRevision(expectedRevision); const key = requireIdempotencyKey(idempotencyKey);
+      const actor = requireManager(manager,"regenerate_routes"); const weekStart = requireMonday(serviceDate, "projection start"); const effectivePublicationId = requirePublicationId(publicationId); const revision = requireRevision(expectedRevision); const key = requireIdempotencyKey(idempotencyKey);
       return transaction(async (client) => {
+        await lockStaticWeeklyAuthority(client);
+        await authorizeRouteRegeneration(client,manager,weekStart,effectivePublicationId);
         const current = await snapshotFor(client, weekStart);
         if (current?.projection_status === "current" && text(current?.current_publication?.publication_id) === effectivePublicationId && text(current?.latest_projection?.week_start) === weekStart) {
           return {
@@ -823,20 +810,27 @@ export function createStaticWeeklyControlPlane({
             },
           };
         }
-        return materializeCurrentProjection(client, { actor, publicationId: effectivePublicationId, weekStart, expectedRevision: revision, idempotencyKey: key });
+        const result=await materializeCurrentProjection(client, { actor, publicationId: effectivePublicationId, weekStart, expectedRevision: revision, idempotencyKey: key });
+        await authorizeRouteRegeneration(client,manager,weekStart,effectivePublicationId);
+        return result;
       });
     },
     async rebuildCurrentProjection({ manager, weekStart, expectedRevision, idempotencyKey }) {
-      const actor = requireManager(manager); const projectionWeekStart = requireMonday(weekStart, "projection week start"); const key = requireIdempotencyKey(idempotencyKey);
+      const actor = requireManager(manager,"regenerate_routes"); const projectionWeekStart = requireMonday(weekStart, "projection week start"); const key = requireIdempotencyKey(idempotencyKey);
       return transaction(async (client) => {
+        await lockStaticWeeklyAuthority(client);
         const snapshot = await snapshotFor(client, projectionWeekStart);
-        return materializeCurrentProjection(client, {
+        const effectivePublicationId=requirePublicationId(snapshot?.current_publication?.publication_id);
+        await authorizeRouteRegeneration(client,manager,projectionWeekStart,effectivePublicationId);
+        const result=await materializeCurrentProjection(client, {
           actor,
           publicationId: requirePublicationId(snapshot?.current_publication?.publication_id),
           weekStart: projectionWeekStart,
           expectedRevision: requireRevision(expectedRevision),
           idempotencyKey: projectionIdempotencyKey(key),
         });
+        await authorizeRouteRegeneration(client,manager,projectionWeekStart,effectivePublicationId);
+        return result;
       });
     },
     async close() {

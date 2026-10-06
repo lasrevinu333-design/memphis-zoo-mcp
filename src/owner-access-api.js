@@ -40,6 +40,14 @@ export function installOwnerAccessRoutes(app, { store, runRpc, backendSecret, en
       throw error(422, 'Supply the current coverage revision and a valid end time.');
     return coverage(req, body);
   }));
+  app.get('/dashboard-api/ticket-capabilities', close, respond(req => {
+    if (Object.keys(req.query||{}).some(key=>key!=='ids') || typeof req.query?.ids!=='string')
+      throw error(422,'Only the requested ticket identifiers are accepted.');
+    const ids=req.query.ids ? req.query.ids.split(',') : [];
+    if(ids.length>100 || ids.some(id=>!uuid.test(id)) || new Set(ids.map(id=>id.toLowerCase())).size!==ids.length)
+      throw error(422,'Supply at most 100 unique ticket identifiers.');
+    return runRpc('custodial_ticket_capabilities_v1',{...managerActionArguments(req),p_ticket_ids:ids});
+  }));
   app.post(['/admin-api/close-ticket', '/dashboard-api/close-ticket'], close, respond(async req => {
     assertServerAssignedActor(req.body);
     const body = exactBody(req.body, ['ticket_id', 'close_notes']);
