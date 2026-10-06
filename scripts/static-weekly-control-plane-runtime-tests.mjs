@@ -93,9 +93,9 @@ let recurringStatusRequest = null;
 let recurringDeliveryRequest = null;
 const controlPlane = {
   async getCurrentRecurringDelivery(request) { recurringDeliveryRequest=request;return {mode:'RECURRING_SCHEDULE',affectedPhonesUpdated:false,targets:[]}; },
-  async confirmRecurringStaffing(request) { recurringConfirmationRequest=request;return {state:'ACCEPTED',receipt:{accepted:true,affectedPhonesUpdated:false}}; },
+  async confirmApprovedStaticPattern(request) { recurringConfirmationRequest=request;return {state:'ACCEPTED',receipt:{accepted:true,affectedPhonesUpdated:false}}; },
   async getRecurringConfirmationStatus(request) { recurringStatusRequest=request;return {state:'NOT_FOUND'}; },
-  async previewRecurringStaffing(request) { recurringPreviewRequest = request; return { status: "CANDIDATE_ONLY",
+  async previewApprovedStaticPattern(request) { recurringPreviewRequest = request; return { status: "CANDIDATE_ONLY",
     previewDigest: "a".repeat(64), admitted: false, published: false, affectedPhonesUpdated: false }; },
   async fillVacantRosterSlot(request) { fillRequest = request; return { revision: request.expectedRevision + 2, data: { phone_assignment: null } }; },
   async vacateRosterSlot(request) { vacancyRequest = request; return { revision: request.expectedRevision + 1, data: { replacement_employee_id: null } }; },
@@ -119,12 +119,7 @@ const runtime = createStaticWeeklyControlPlaneRuntime({
   database: {},
   controlPlane,
   recurringOperationAdmission: ({action}) => action(),
-  recurringOperationRunner: ({kind,manager,body,signal,deadlineAt}) => kind === "preview"
-    ? controlPlane.previewRecurringStaffing({manager,effectiveStart:body.effective_start,
-      expectedRevision:body.expected_revision,fullNineSourceId:body.full_nine_source_id??null,signal,deadlineAt})
-    : controlPlane.confirmRecurringStaffing({manager,confirmationKey:body.confirmation_key,
-      effectiveStart:body.effective_start,expectedRevision:body.expected_revision,
-      previewDigest:body.preview_digest,fullNineSourceId:body.full_nine_source_id??null,signal,deadlineAt}),
+
 });
 const server = createServer(runtime.app);
 await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -203,7 +198,7 @@ try {
 
   const previewUrl = `${origin}/static-weekly/recurring-adaptation/preview`;
   const previewBody = { effective_start: "2026-10-05", expected_revision: 42,
-    full_nine_source_id: "22222222-2222-4222-8222-222222222222" };
+    template_id: "owner-corrected-six-initial" };
   let previewResponse = await fetch(previewUrl, { method: "POST",
     headers: { "Content-Type": "application/json" }, body: JSON.stringify(previewBody) });
   assert.equal(previewResponse.status, 401, "unauthenticated callers cannot request a roster preview");
@@ -214,12 +209,19 @@ try {
   assert.equal(previewResponse.status, 200);
   assert.equal((await previewResponse.json()).data.status, "CANDIDATE_ONLY");
   assert.equal(recurringPreviewRequest.manager.manager_id, manager.manager_id);
-  assert.equal(recurringPreviewRequest.effectiveStart, previewBody.effective_start);
+  assert.equal(recurringPreviewRequest.serviceDate, previewBody.effective_start);
   assert.equal(recurringPreviewRequest.expectedRevision, previewBody.expected_revision);
-  assert.equal(recurringPreviewRequest.fullNineSourceId, previewBody.full_nine_source_id);
+  assert.equal(recurringPreviewRequest.templateId, previewBody.template_id);
   assert.equal(recurringPreviewRequest.signal instanceof AbortSignal,true,'preview receives the restore mutation signal');
   assert.equal(recurringPreviewRequest.signal.aborted,true,'preview cannot continue after response settlement');
   assert.equal(recurringPreviewRequest.deadlineAt<=performance.now()+60_000,true,'preview has one absolute minute');
+
+  const fixedPreviewRequest=recurringPreviewRequest;
+  const forbiddenLegacy=await fetch(previewUrl,{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${session.token}`},
+    body:JSON.stringify({...previewBody,full_nine_source_id:'22222222-2222-4222-8222-222222222222'})});
+  assert.equal(forbiddenLegacy.status,409,'the retired optimizer source selector cannot enter fixed-pattern preview');
+  assert.equal((await forbiddenLegacy.json()).code,'static_template_legacy_source_selector_not_supported');
+  assert.equal(recurringPreviewRequest,fixedPreviewRequest,'no approved-template call or solver fallback occurs');
 
   const confirmationKey='30000000-0000-4000-8000-000000000091';
   const confirmationUrl=`${origin}/static-weekly/recurring-adaptation/confirm`;
@@ -230,7 +232,7 @@ try {
   assert.equal(confirmationResponse.status,200);
   assert.equal((await confirmationResponse.json()).data.receipt.affectedPhonesUpdated,false);
   const {signal: confirmationSignal,deadlineAt: confirmationDeadlineAt,...confirmedFields}=recurringConfirmationRequest;
-  assert.deepEqual(confirmedFields,{manager:recurringPreviewRequest.manager,confirmationKey,effectiveStart:'2026-10-05',expectedRevision:42,previewDigest:'b'.repeat(64),fullNineSourceId:null});
+  assert.deepEqual(confirmedFields,{manager:recurringPreviewRequest.manager,idempotencyKey:confirmationKey,serviceDate:'2026-10-05',expectedRevision:42,previewDigest:'b'.repeat(64),templateId:null});
   assert.equal(confirmationSignal instanceof AbortSignal,true,'the exact restore mutation lease abort signal reaches confirmation');
   assert.equal(confirmationSignal.aborted,true,'a settled response revokes trailing mutation authority');
   assert.equal(Number.isFinite(confirmationDeadlineAt),true,'the route supplies one monotonic absolute operation deadline');

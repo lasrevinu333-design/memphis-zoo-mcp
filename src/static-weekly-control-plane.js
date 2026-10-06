@@ -120,9 +120,9 @@ function isDatabaseConnectionFailure(error) {
     || message.includes("timeout exceeded when trying to connect");
 }
 
-function requireManager(manager) {
+function requireManager(manager, { readOnlyOperation = false } = {}) {
   const managerId = text(manager?.manager_id || manager?.managerId);
-  if (!managerId || !text(manager?.manager_display_name || manager?.managerName) || manager?.read_only || manager?.auth_mode === "operations_first" || manager?.auth_mode === "admin_api_key") {
+  if (!managerId || !text(manager?.manager_display_name || manager?.managerName) || (!readOnlyOperation && manager?.read_only) || manager?.auth_mode === "operations_first" || manager?.auth_mode === "admin_api_key") {
     throw fail("static_weekly_named_manager_required", "A trusted, write-enabled named manager session is required.");
   }
   return {
@@ -1225,7 +1225,7 @@ export function createStaticWeeklyControlPlane({
       });
     },
     async getManagerSnapshot({ manager, weekStart }) {
-      requireManager(manager);
+      requireManager(manager, { readOnlyOperation: true });
       return transaction((client) => snapshotFor(client, requireMonday(weekStart, "week start")));
     },
     async previewApprovedStaticPattern(input) { return approvedStaticOperation(input,false); },

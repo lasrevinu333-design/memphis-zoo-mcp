@@ -3,6 +3,8 @@ export const CLEANUP_RESERVE_MILLISECONDS = 5_000;
 const boundedRecurringPaths = new Set([
   "/static-weekly/recurring-adaptation/preview",
   "/static-weekly/recurring-adaptation/confirm",
+  "/static-weekly/approved-initial/preview",
+  "/static-weekly/approved-initial/confirm",
 ]);
 
 export function beginBoundedManagerRequest(req, res, {

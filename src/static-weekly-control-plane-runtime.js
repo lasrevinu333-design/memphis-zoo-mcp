@@ -5,6 +5,8 @@ import { createClient } from "@supabase/supabase-js";
 import { assertOpsManagerSessionSecret, createSupabaseTrustedDeviceStore, makeOpsAccessMiddleware } from "./auth/shared-access-auth.js";
 import { createStaticWeeklyControlPlane, createStaticWeeklyControlPlaneDatabase } from "./static-weekly-control-plane.js";
 import { beginBoundedManagerRequest } from "./static-weekly-manager-operation.js";
+import {approvedInitialRequest,APPROVED_INITIAL_REQUEST_ERROR} from "./static-weekly-approved-initial-request.js";
+import {isMapDashboardSession} from "./auth/map-manager-identity.js";
 import { createRecurringOperationRunner } from "./static-weekly-recurring-operation-runner.js";
 import { runRecurringWithRestoreCustody } from "./static-weekly-recurring-operation-handler.js";
 import { assertConfiguredReleaseIdentity } from "./release-manifest.js";
@@ -101,6 +103,22 @@ export function createStaticWeeklyControlPlaneRuntime({
     operationSignalForRequest: req => req.staticWeeklyManagerOperation?.signal || null,
   });
 
+  const requireManagerRead = makeOpsAccessMiddleware({
+    env,requireWrite:false,trustedDeviceStore:trustedStore,supabase:trustedSupabase,
+    requireTrustedDeviceStore:true,requireCurrentManagerAssociation:true,
+    operationSignalForRequest:req=>req.staticWeeklyManagerOperation?.signal||null,
+  });
+  function namedReadManager(req,res,next) {
+    const session=req.memphisAuth;
+    const trustedDevice=session?.trusted_device&&session.auth_mode==="trusted_device";
+    // The preceding read middleware has already verified the signed Map token
+    // and its current protected registry mapping; it never grants write access.
+    if((!trustedDevice&&!isMapDashboardSession(session))||!session.manager_id||!session.manager_display_name) {
+      res.status(403).json({ok:false,error:"A current trusted named manager is required to read the schedule."});return;
+    }
+    next();
+  }
+
   function namedManager(req, res, next) {
     const session = req.memphisAuth;
     if (!session?.trusted_device || !session.manager_id || !session.manager_display_name || session.read_only || session.auth_mode !== "trusted_device") {
@@ -115,7 +133,7 @@ export function createStaticWeeklyControlPlaneRuntime({
     const admission = recurringOperationAdmission || authorityControlPlane.runExternalRecurringOperation?.bind(authorityControlPlane);
     if (typeof admission !== "function") throw fail("static_weekly_control_plane_busy",
       "The shared recurring authority admission is unavailable; no child work was started.");
-    return admission({ signal: req.staticWeeklyManagerOperation.signal,
+    return admission({ signal: req.restoreMutationLease.signal,
       deadlineAt: req.staticWeeklyManagerOperation.deadlineAt,
       // Static owner policy replaces optimizer reconstruction at this changed
       // recurring boundary. Catalog/source facts come only from the named
@@ -125,7 +143,7 @@ export function createStaticWeeklyControlPlaneRuntime({
         if(body.full_nine_source_id!=null)throw fail('static_template_legacy_source_selector_not_supported');
         const input={manager:manager(req),serviceDate:body.effective_start,
           expectedRevision:body.expected_revision,templateId:body.template_id??null,
-          signal:req.staticWeeklyManagerOperation.signal,deadlineAt:req.staticWeeklyManagerOperation.deadlineAt};
+          signal:req.restoreMutationLease.signal,deadlineAt:req.staticWeeklyManagerOperation.deadlineAt};
         if(kind==='preview')return authorityControlPlane.previewApprovedStaticPattern(input);
         return authorityControlPlane.confirmApprovedStaticPattern({...input,
           previewDigest:body.preview_digest,idempotencyKey:body.confirmation_key});
@@ -145,7 +163,7 @@ export function createStaticWeeklyControlPlaneRuntime({
     return async (req, res) => {
       try {
         const data = await operation(req);
-        // Only the two bounded recurring POSTs carry this context. Their
+        // Only the explicitly bounded manager POSTs carry this context. Their
         // transaction has settled here; the exact restore lease must also be
         // confirmed released before any success bytes leave the server.
         if (req.staticWeeklyManagerOperation) {
@@ -187,7 +205,7 @@ export function createStaticWeeklyControlPlaneRuntime({
           "static_weekly_operation_reap_unproven",
           "static_weekly_compiler_request_aborted",
         ]).has(responseError?.code);
-        const invalid = ["static_weekly_control_plane_compiler_rejected", "static_weekly_recurring_confirmation_request_invalid", "static_weekly_recurring_delivery_request_invalid",OPENING_COVERAGE_ERROR].includes(responseError?.code);
+        const invalid = ["static_weekly_control_plane_compiler_rejected", "static_weekly_recurring_confirmation_request_invalid", "static_weekly_recurring_delivery_request_invalid",APPROVED_INITIAL_REQUEST_ERROR,OPENING_COVERAGE_ERROR].includes(responseError?.code);
         const diagnostic=responseError?.code===OPENING_COVERAGE_ERROR?sanitizeOpeningCoverageDiagnostic(responseError.openingCoverageDiagnostic):null;
         res.status(invalid ? 422 : unavailable ? 503 : 409).json({ ok: false, error: diagnostic
           ?'Opening planned coverage has inconsistent essential source facts. Nothing was admitted or published.'
@@ -240,7 +258,19 @@ export function createStaticWeeklyControlPlaneRuntime({
   app.use("/static-weekly/dated-transition",createDatedTransitionManagerRouter({
     controller:boundedController,requireManagerWrite,namedManager,manager,
   }));
-  app.get("/static-weekly/manager-snapshot", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.getManagerSnapshot({ manager: manager(req), weekStart: req.query?.week_start })));
+  app.get("/static-weekly/manager-snapshot", requireManagerRead, namedReadManager, respond((req) => authorityControlPlane.getManagerSnapshot({ manager: manager(req), weekStart: req.query?.week_start })));
+  // Distinct fixed-pattern baseline: never fall back to the historical draft
+  // optimizer. The same first-ingress deadline and restore-lease settlement
+  // cover authentication, source reads, publication and response delivery.
+  for (const [action,method] of [["preview","previewApprovedInitialBaseline"],["confirm","publishApprovedInitialBaseline"]]) {
+    app.post(`/static-weekly/approved-initial/${action}`,requireManagerWrite,namedManager,respond(req=>{
+      const input=approvedInitialRequest(req.body,{confirm:action==="confirm"});
+      const operation=req.staticWeeklyManagerOperation;
+      if(!operation||!req.restoreMutationLease?.signal||typeof authorityControlPlane[method]!=="function")
+        throw fail("static_weekly_control_plane_database_unavailable","Approved initial schedule service is unavailable.");
+      return authorityControlPlane[method]({...input,manager:manager(req),signal:req.restoreMutationLease.signal,deadlineAt:operation.deadlineAt});
+    }));
+  }
   app.post("/static-weekly/recurring-adaptation/preview", requireManagerWrite, namedManager, respond((req) => {
     const body=req.body,allowed=new Set(['effective_start','expected_revision','full_nine_source_id','template_id']);
     if(!body||typeof body!=='object'||Array.isArray(body)||!Object.hasOwn(body,'effective_start')

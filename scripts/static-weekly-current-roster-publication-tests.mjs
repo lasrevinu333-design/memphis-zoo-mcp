@@ -1,3 +1,4 @@
+import {approvedInitialHttpTransport} from './fixtures/approved-initial-http-transport.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync,writeFileSync,readdirSync,lstatSync,realpathSync,openSync,fstatSync,readSync,closeSync,constants,mkdtempSync,chmodSync,unlinkSync,rmdirSync} from 'node:fs';
 import {resolve,dirname,join} from 'node:path';
@@ -352,9 +353,17 @@ async function runApprovedInitial(){
  const beforeDenied=await query('select jsonb_build_object(\'revision\',(select current_revision from public.static_weekly_schedule_control where singleton),\'publications\',(select count(*) from public.weekly_schedule_publications),\'projections\',(select count(*) from public.weekly_schedule_compiled_projections),\'lunches\',(select count(*) from public.weekly_schedule_lunch_documents)) as result');
  await assert.rejects(cp('static_weekly_materialize_approved_initial_baseline',[prior.managerId,packet.sourceId,source.serviceDate,expectedAuthorityRevision,0,'isolated-malformed-must-rollback',{}]));
  check('malformed confirmation rollback leaves authority/publication/projection/lunch unchanged',await query('select jsonb_build_object(\'revision\',(select current_revision from public.static_weekly_schedule_control where singleton),\'publications\',(select count(*) from public.weekly_schedule_publications),\'projections\',(select count(*) from public.weekly_schedule_compiled_projections),\'lunches\',(select count(*) from public.weekly_schedule_lunch_documents)) as result'),beforeDenied);
- const preview=await plane.previewApprovedInitialBaseline(input);
- check('actual static preview no publication or solver', [preview.status,preview.solverInvoked,await revision()],['PREVIEW_ONLY',false,expectedAuthorityRevision]);
- const accepted=await plane.publishApprovedInitialBaseline({...input,previewDigest:preview.previewDigest,idempotencyKey:'isolated-approved-initial-six'});
+ let preview,accepted,transport=null,httpEvidence=null;
+ try{
+  if(process.argv.includes('--approved-initial-http'))transport=await approvedInitialHttpTransport({database:pool,controlPlane:plane,manager,deadlineAt});
+  preview=transport?await transport.preview(input):await plane.previewApprovedInitialBaseline(input);
+  check('actual static preview no publication or solver', [preview.status,preview.solverInvoked,await revision()],['PREVIEW_ONLY',false,expectedAuthorityRevision]);
+  const confirmation={...input,previewDigest:preview.previewDigest,idempotencyKey:'isolated-approved-initial-six'};
+  accepted=transport?await transport.confirm(confirmation):await plane.publishApprovedInitialBaseline(confirmation);
+  if(transport){httpEvidence=transport.evidence();check('signed HTTP verifies current manager twice',httpEvidence.registryChecks,2);
+   check('both SQL-backed restore leases settled', [httpEvidence.requests,httpEvidence.leaseCount,httpEvidence.activeLeases],[2,2,0]);}
+ }finally{if(transport)await transport.close();}
+ if(httpEvidence)console.log('APPROVED_INITIAL_HTTP_TRANSPORT',JSON.stringify(httpEvidence));
  check('actual static accepted receipt',accepted.status,'PERSISTED_CURRENT');
  const lineage=await query('select jsonb_build_object(\'priorVersion\',prior_version_id,\'kind\',publication_kind) as result from public.weekly_schedule_publications where publication_id=$1',[accepted.publication_id]);
  check('actual prior publication supersession not empty-first-publish',lineage,{priorVersion:prior.versionId,kind:'supersede'});
