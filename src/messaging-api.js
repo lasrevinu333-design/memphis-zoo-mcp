@@ -248,6 +248,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       manager_roles: Array.isArray(leadershipProfile?.manager_roles) ? leadershipProfile.manager_roles : [],
       canonical_device_id: String(managerSession?.device_id || managerSession?.credential_id || "manager-session"),
       identity_source: "trusted_manager_session",
+      read_only: managerSession.read_only === true,
     };
   }
 
