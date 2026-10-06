@@ -318,7 +318,7 @@ assert.match(outlookEventSyncAuthority, /revoke all privileges on table public\.
 assert.doesNotMatch(outlookEventSyncAuthority, /grant\s+[^;]+\s+to\s+(?:anon|authenticated|custodial_application_reader)\b/i);
 assert.equal(releaseEvidence.compatibility_window.accepted_engine.scan, "scan.v2");
 assert.equal(releaseEvidence.compatibility_window.required_engine.scan, "scan.v4.snapshot-bound-authority");
-assert.equal(releaseEvidence.migrations.at(-1).name, sharedEventsRecoveryFile);
+assert.equal(releaseEvidence.migrations.at(-1).name, delegatedCoverallFile);
 assert.match(applicationReaderReleaseRecovery, /application_reader_identity_projection_bounded/i);
 assert.match(applicationReaderReleaseRecovery, /custodial_application_reader_device_identity/i);
 assert.match(applicationReaderReleaseRecovery, /' grant '\|\|g\.privilege_type\|\|' \('\|\|quote_ident\(a\.attname\)/i);
@@ -378,7 +378,7 @@ assert.equal(releaseEvidence.authority_content_identity.expected_tree_inventory.
 assert.equal(releaseEvidence.authority_content_identity.authority_path_count, releaseEvidence.authority_content_identity.expected_tree_inventory.length);
 assert.equal(releaseEvidence.authority_content_identity.migration_path_count, exactMigrationCount);
 assert.equal(releaseEvidence.migrations.length, exactMigrationCount);
-assert.equal(releaseEvidence.migrations.at(-1).name, sharedEventsRecoveryFile);
+assert.equal(releaseEvidence.migrations.at(-1).name, delegatedCoverallFile);
 assert.match(releaseEvidence.compatibility_window.credential_replacement_lineage_phase,
   /append-only same-device predecessor-to-successor transport lineage.*original actor, device, credential, or work evidence/i);
 assert.equal(Object.hasOwn(releaseEvidence.authority_content_identity, "value"), false, "generated evidence must not self-assert a worktree-derived content hash");
