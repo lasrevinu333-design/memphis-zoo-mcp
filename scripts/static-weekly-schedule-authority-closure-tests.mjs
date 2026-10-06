@@ -149,7 +149,13 @@ try {
   pool = createDockerPool();
   await pool.query("do $$ begin create role anon; exception when duplicate_object then null; end $$; do $$ begin create role authenticated; exception when duplicate_object then null; end $$; do $$ begin create role service_role; exception when duplicate_object then null; end $$;");
   for (const name of fs.readdirSync(migrationsDir).filter((entry) => entry.endsWith(".sql")).sort()) await pool.query(fs.readFileSync(path.join(migrationsDir, name), "utf8"));
-  await pool.query("insert into public.ops_manager_managers(manager_id,display_name,roles,active,metadata_json,is_system_principal) values($1,$2,array['OPS_MANAGER']::text[],true,'{}'::jsonb,false)", [manager.manager_id, manager.manager_display_name]);
+  // This lifecycle exercises owner-only edits. Resolve the fixture's seeded
+  // owner and persist the current credential required by the application policy.
+  const owner = outputJson((await dockerSql("select jsonb_build_object('manager_id',manager_id,'display_name',display_name)::text from public.ops_manager_managers where system_key='eric_custodial_manager' and active and not is_system_principal")).stdout);
+  assert.ok(owner?.manager_id, "disposable schema must contain its protected owner");
+  Object.assign(manager, { manager_id: owner.manager_id, manager_display_name: owner.display_name,
+    credential_id: "90000000-0000-4000-8000-000000000071", device_id: "CLOSURE_OWNER_BROWSER", access_level: "full_access" });
+  await pool.query("insert into public.ops_manager_trusted_devices(credential_id,manager_id,device_id,device_label,token_hash,max_access_level,created_at,expires_at) values($1,$2,$3,'Disposable closure owner',repeat('a',64),'full_access',now(),now()+interval '1 hour')", [manager.credential_id,manager.manager_id,manager.device_id]);
   await roleCall("static_weekly_release_operator", "static_weekly_v3_configure_initial_authority_key", ["static-weekly-authority-hmac-v1", "closure-initial-authority-secret-012345678901234567890", "closure-suite"]);
 
   const registeredInput = sourceInput();
