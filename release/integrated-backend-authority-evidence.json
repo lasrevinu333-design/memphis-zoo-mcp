@@ -755,7 +755,7 @@
       {
         "path": "scripts/custodial-repair-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "8bd538179d4e7b85c32c661ec9aa270f01dc0e6b"
+        "object_id": "b4d3ce2e3c0519cb109e710e1966ce3fecbb00f1"
       },
       {
         "path": "scripts/custodial-u4-migration-convergence-tests.mjs",
@@ -1015,7 +1015,7 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "5adc55de19826b4b3b58f724530570d1da783195"
+        "object_id": "4b440c155dd8e8c1d0cd29565ec5b5277da32838"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
@@ -1230,7 +1230,7 @@
       {
         "path": "scripts/operations-leadership-mobile-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "6956e8506be0f804ce7f286f7c25c6316d7cfb42"
+        "object_id": "8ed83268d465b0418841175144d7f0263b242942"
       },
       {
         "path": "scripts/operations-leadership-mobile-database-tests.mjs",
@@ -1375,7 +1375,7 @@
       {
         "path": "scripts/release-closure-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "e4156b27056ab8d17249e564e69f1685153e02de"
+        "object_id": "8b59808a10c3c7cc5ff78174d4dbc69abff38a0b"
       },
       {
         "path": "scripts/release-migration-authorization-tests.mjs",
