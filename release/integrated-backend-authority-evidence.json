@@ -85,7 +85,7 @@
       "prepare distinct CUSTODIAL_BACKEND_PROOF_SECRET, CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET, and DEVICE_CREDENTIAL_SECRET values (minimum 32 characters each); preserve all phone-local work and require manager-code recovery for any active credential from a different secret generation without exposing any secret",
       "capture the production catalog through the read-only Supabase boundary and require the exact observed production ledger head, catalog/privilege fingerprint, object counts, static-weekly state, and zero target-position collisions recorded in release/production-migration-state.json",
       "verify production project, fresh post-capture backup receipt, observed production identity, exact pending-migration digest, and exact source attestation against release/production-migration-state.json; either retain the existing exact GitHub run provenance or use one UUID-bound task-local encrypted archive and signed full rehearsal whose receipt and result hashes, runner hash, candidate commit/tree, archive digest, signer key IDs, zero leases, and ordered timestamps are carried into a short-lived authorization without uploading production contents",
-      "After explicit source-bound production-change admission, apply only the 92 exact ordered pending migrations declared by release/production-migration-state.json and the hash-bound replay manifest: retain the already installed 133-source prefix, accept no missing/modified/duplicate member, reject any preexisting pending ledger version, and verify the ledger advances exactly 92 entries. The source ordering includes earlier-dated files never installed in production. Preserve all existing rows and source histories; do not replay historical production migrations or rewrite production event rows. Keep the unchanged encrypted-backup, signed-rehearsal, exact candidate authorization, serializable transaction, restore-mutation fence, source/target catalog and rollback requirements.",
+      "After explicit source-bound production-change admission, apply only the 93 exact ordered pending migrations declared by release/production-migration-state.json and the hash-bound replay manifest: retain the already installed 134-source prefix, accept no missing/modified/duplicate member, reject any preexisting pending ledger version, and verify the ledger advances exactly 93 entries. The source ordering includes earlier-dated files never installed in production. Preserve all existing rows and source histories; do not replay historical production migrations or rewrite production event rows. Keep the unchanged encrypted-backup, signed-rehearsal, exact candidate authorization, serializable transaction, restore-mutation fence, source/target catalog and rollback requirements.",
       "Retain the current immutable weekly publication by default. A full authenticated owner may preview and publish a registered approved initial or recurring fixed pattern with expected-revision, exact preview digest and durable operation identity; other managers may atomically apply dated absences/CoverAll and regenerate routes. Never invent approval or use an optimizer to replace an approved baseline. Preserve the current publication until its accepted replacement and all projections/lunch responsibilities are confirmed.",
       "deploy the canonical-only backend only after all authoritative procedures above are present and verified; missing canonical writers fail closed",
       "require a green authority health gate and direct-DML denial probes before routing traffic"
@@ -545,7 +545,7 @@
       {
         "path": "release/integrated-backend-authority-input.json",
         "mode": "100644",
-        "object_id": "fab33b72f01c1a8fd827a2685c622d14121623aa"
+        "object_id": "275b21558c397885e3298c1b2f60bc77797c879b"
       },
       {
         "path": "release/owner-access-schema-delta.json",
@@ -1595,7 +1595,7 @@
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
         "mode": "100644",
-        "object_id": "2f22c38a563017a232678d00a0964faae4eb06a2"
+        "object_id": "b172a21812fd956148449ecc992f4b2b06b17167"
       },
       {
         "path": "scripts/integrated-backend-authority-release-provenance-tests.mjs",
