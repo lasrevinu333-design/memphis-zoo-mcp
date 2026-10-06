@@ -346,7 +346,7 @@ export function createStaticWeeklyControlPlaneRuntime({
   app.post("/static-weekly/staffing-commands/:operationId/cancel", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.cancelStaffingPreparation({
     manager: manager(req), operationId: req.params.operationId,
   })));
-  app.get("/static-weekly/coverall-print", requireManagerWrite, namedManager, respond(async(req) => {
+  app.get("/static-weekly/coverall-print", requireManagerCoverAll, namedSchedulerManager, respond(async(req) => {
     const revision=text(req.query?.expected_revision);
     if(!/^(0|[1-9][0-9]*)$/.test(revision))throw fail("coverall_print_expected_revision_required");
     return acceptedCoverAllOutput({manager:manager(req),weekStart:req.query?.week_start,serviceDate:req.query?.service_date,expectedRevision:Number(revision),projectionId:req.query?.projection_id});

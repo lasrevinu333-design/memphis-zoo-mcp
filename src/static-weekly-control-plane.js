@@ -710,7 +710,10 @@ export function createStaticWeeklyControlPlane({
   }
 
   async function acceptedCoverAllDocument(client,{manager,weekStart,serviceDate,expectedRevision,projectionId}){
-    const issuingManager=requireManager(manager);
+    const issuingManager=requireManager(manager,"manage_coverall");
+    const verifiedActor=await call(client,"custodial_action_actor_v1",[
+      manager.manager_id,manager.credential_id,manager.device_id,manager.access_level,"manage_coverall"]);
+    if(verifiedActor?.manager_id!==manager.manager_id)throw fail("42501","Current CoverAll manager identity is required.");
     const week=requireMonday(weekStart,'week start'),date=requireDateInWeek(serviceDate,week,'service date');
     const revision=requireRevision(expectedRevision);
     await lockStaticWeeklyAuthority(client);
@@ -1624,7 +1627,10 @@ export function createStaticWeeklyControlPlane({
       });
     },
     async getCoverAllPrintDocument(input) {
-      const actor=requireManager(input.manager),selections=coverAllSelections(input.eventSelections??[]);
+      const selections=coverAllSelections(input.eventSelections??[]);
+      // Viewing the accepted route is delegated. Adding selected event notes
+      // remains the separate, explicit owner-only disclosure action.
+      const actor=selections.length?requireManager(input.manager):requireManager(input.manager,"manage_coverall");
       return transaction(async client=>{
         const document=await acceptedCoverAllDocument(client,input),briefs=[];
         for(const selected of selections)briefs.push(await confirmCoverAllEventBrief({
@@ -1635,7 +1641,8 @@ export function createStaticWeeklyControlPlane({
       });
     },
     async revalidateCoverAllPrintDocument(input){
-      const actor=requireManager(input.manager),original=input.document;
+      const original=input.document;
+      const actor=original?.eventBriefs?.length?requireManager(input.manager):requireManager(input.manager,"manage_coverall");
       if(!original||!Array.isArray(original.eventBriefs??[])||(original.eventBriefs??[]).length>16)throw fail('coverall_event_confirmation_invalid');
       return transaction(async client=>{
         const document=await acceptedCoverAllDocument(client,input),briefs=[];

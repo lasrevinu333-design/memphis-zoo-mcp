@@ -4,6 +4,8 @@ import {migrationReplayNames} from './migration-replay-order.mjs';
 // deliberately traverses the deployed control-plane read -> compile -> adapter
 // -> SQL path against one fresh worker-owned PostgreSQL instance.
 import assert from "node:assert/strict";
+import {Pool} from "pg";
+import {projectManagerSession} from "../src/auth/manager-permissions.js";
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import fs from "node:fs";
@@ -83,31 +85,6 @@ function outputJson(output) {
   return JSON.parse(text);
 }
 
-function createDockerPool() {
-  const client = {
-    role: null,
-    async query(statement, values = []) {
-      const trimmed = String(statement).trim();
-      if (/^begin$/i.test(trimmed)) return { rows: [] };
-      const roleMatch = trimmed.match(/^set local role (static_weekly_(?:control_plane|release_operator))$/i);
-      if (roleMatch) { this.role = roleMatch[1]; return { rows: [] }; }
-      if (/^(commit|rollback)$/i.test(trimmed)) { this.role = null; return { rows: [] }; }
-      const rendered = bind(trimmed, values);
-      const prefix = this.role ? `set role ${this.role}; ` : "";
-      const output = (await dockerSql(`${prefix}${rendered}`)).stdout;
-      if (/\bas result\b/i.test(rendered)) return { rows: [{ result: outputJson(output) }] };
-      if (/\bas state\b/i.test(rendered)) return { rows: [{ state: outputJson(output) }] };
-      return { rows: [] };
-    },
-    release() {},
-  };
-  return {
-    async connect() { return client; },
-    async query(statement, values = []) { return client.query(statement, values); },
-    async end() {},
-  };
-}
-
 async function catalogClient() {
   return {
     async query(statement) {
@@ -144,18 +121,22 @@ async function expectNoMutation(action, pattern, label) {
 try {
   const postgresImage = process.env.SCHEMA_REBUILD_DOCKER_IMAGE || "supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed";
   await docker(["image", "inspect", postgresImage]);
-  await docker(["run", "--rm", "-d", "--name", container, "--tmpfs", "/var/lib/postgresql/data:rw,size=1g", "-e", "POSTGRES_PASSWORD=postgres", postgresImage, "-c", "shared_preload_libraries=pg_cron,pg_net,pg_stat_statements"]);
+  await docker(["run", "--rm", "-d", "--name", container, "-p", "127.0.0.1::5432", "--tmpfs", "/var/lib/postgresql/data:rw,size=1g", "-e", "POSTGRES_PASSWORD=postgres", postgresImage, "-c", "shared_preload_libraries=pg_cron,pg_net,pg_stat_statements", "-c", "listen_addresses=*", "-c", "cron.launch_active_jobs=off"]);
   await eventually(() => dockerSql("select 1"));
   await new Promise((resolve) => setTimeout(resolve, 10_000));
-  pool = createDockerPool();
+  await dockerSql("alter role supabase_admin password 'postgres'");
+  const port=Number((await docker(["port",container,"5432/tcp"])).stdout.trim().split(":").at(-1));
+  assert.ok(Number.isInteger(port)&&port>0,"exact task-owned loopback database port");
+  pool=new Pool({connectionString:`postgresql://supabase_admin:postgres@127.0.0.1:${port}/postgres`,max:4,connectionTimeoutMillis:10000,idleTimeoutMillis:2000});
   await pool.query("do $$ begin create role anon; exception when duplicate_object then null; end $$; do $$ begin create role authenticated; exception when duplicate_object then null; end $$; do $$ begin create role service_role; exception when duplicate_object then null; end $$;");
   for (const name of migrationReplayNames(process.cwd())) await pool.query(fs.readFileSync(path.join(migrationsDir, name), "utf8"));
   // This lifecycle exercises owner-only edits. Resolve the fixture's seeded
   // owner and persist the current credential required by the application policy.
-  const owner = outputJson((await dockerSql("select jsonb_build_object('manager_id',manager_id,'display_name',display_name)::text from public.ops_manager_managers where system_key='eric_custodial_manager' and active and not is_system_principal")).stdout);
+  const owner = outputJson((await dockerSql("select jsonb_build_object('manager_id',manager_id,'display_name',display_name,'roles',roles,'active',active,'revoked_at',revoked_at,'system_key',system_key,'is_system_principal',is_system_principal)::text from public.ops_manager_managers where system_key='eric_custodial_manager' and active and not is_system_principal")).stdout);
   assert.ok(owner?.manager_id, "disposable schema must contain its protected owner");
   Object.assign(manager, { manager_id: owner.manager_id, manager_display_name: owner.display_name,
     credential_id: "90000000-0000-4000-8000-000000000071", device_id: "CLOSURE_OWNER_BROWSER", access_level: "full_access" });
+  Object.assign(manager,projectManagerSession(manager,owner,{maximumAccessLevel:"full_access",credentialBound:true}));
   await pool.query("insert into public.ops_manager_trusted_devices(credential_id,manager_id,device_id,device_label,token_hash,max_access_level,created_at,expires_at) values($1,$2,$3,'Disposable closure owner',repeat('a',64),'full_access',now(),now()+interval '1 hour')", [manager.credential_id,manager.manager_id,manager.device_id]);
   await roleCall("static_weekly_release_operator", "static_weekly_v3_configure_initial_authority_key", ["static-weekly-authority-hmac-v1", "closure-initial-authority-secret-012345678901234567890", "closure-suite"]);
 
@@ -243,7 +224,7 @@ try {
     }
   }
   await controlPlane.close();
-  await pool.end(); pool = null;
+  pool = null; // controlPlane.close owns and settles this exact pool.
 } finally {
   if (pool) await pool.end().catch(() => {});
   await docker(["rm", "-f", container]).catch(() => {});

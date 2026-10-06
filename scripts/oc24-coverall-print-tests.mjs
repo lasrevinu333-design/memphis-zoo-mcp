@@ -82,11 +82,11 @@ const noneOut=process.env.OC24_NONE_PDF_EVIDENCE_DIR;
 if(noneOut){mkdirSync(noneOut,{recursive:true});for(const file of [...nonePair.files,nonePair.bilingualFile])writeFileSync(join(noneOut,file.filename),Buffer.from(file.base64,'base64'),{flag:'wx',mode:0o600});}
 
 // Actual control-plane transaction + HTTP/auth, with synthetic database values.
-const queries=[],f=fixture();const client={async query(q){queries.push(q);const result=q.includes('static_weekly_v3_read_manager_snapshot')?f.snapshot:q.includes('static_weekly_v3_read_publication_source')?f.source:q.includes('static_weekly_v8_read_lunch_document')?f.lunch:null;return{rows:result?[{result}]:[]}},release(){}};
+const queries=[],f=fixture();const client={async query(q){queries.push(q);const result=q.includes('custodial_action_actor_v1')?{manager_id:manager.manager_id}:q.includes('static_weekly_v3_read_manager_snapshot')?f.snapshot:q.includes('static_weekly_v3_read_publication_source')?f.source:q.includes('static_weekly_v8_read_lunch_document')?f.lunch:null;return{rows:result?[{result}]:[]}},release(){}};
 const plane=createStaticWeeklyControlPlane({database:{async connect(){return client}},compiler:async()=>{throw Error('PDF must not compile/change schedules')},initializeSolver:async()=>{},getSolverReadiness:()=>({available:true})});
 const env={NODE_ENV:'test',SUPABASE_URL:'https://oc24.invalid',SUPABASE_SERVICE_ROLE_KEY:'synthetic',OPS_MANAGER_SESSION_SECRET:'oc24-synthetic-test-manager-secret-0123456789'};
-const manager={manager_id:'10000000-0000-4000-8000-000000000091',display_name:'Synthetic Manager',roles:['OPS_MANAGER'],active:true};
-const device={credential_id:'oc24-print-credential',device_id:'oc24-print-device',manager_id:manager.manager_id,manager,max_access_level:'full_access',created_at:new Date().toISOString(),expires_at:new Date(Date.now()+600000).toISOString()};
+const manager={manager_id:'10000000-0000-4000-8000-000000000091',display_name:'Synthetic Manager',roles:['OPS_MANAGER'],active:true,is_system_principal:false,system_key:'eric_custodial_manager'};
+const device={credential_id:'90000000-0000-4000-8000-000000000092',device_id:'oc24-print-device',manager_id:manager.manager_id,manager,max_access_level:'full_access',created_at:new Date().toISOString(),expires_at:new Date(Date.now()+600000).toISOString()};
 const runtime=createStaticWeeklyControlPlaneRuntime({env,database:{},controlPlane:plane,trustedDeviceStore:{async find(){return device}},supabase:{async rpc(){return{data:{mutations_paused:false,state:'READY'},error:null}}}});
 const server=runtime.app.listen(0,'127.0.0.1');await new Promise(resolve=>server.once('listening',resolve));
 try{

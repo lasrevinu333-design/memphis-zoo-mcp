@@ -39,13 +39,13 @@ const fixture=()=>({
   document_identity:'b'.repeat(64),service_date:day,loans:[],responsibilities:[]},
 });
 const state=fixture();
-const manager={manager_id:id.manager,display_name:'Synthetic named manager',roles:['OPS_MANAGER'],active:true};
+const manager={manager_id:id.manager,display_name:'Synthetic named manager',roles:['OPS_MANAGER'],active:true,is_system_principal:false,system_key:'eric_custodial_manager'};
 const issuer={managerId:id.manager,managerName:manager.display_name};
 const acceptedPrint=()=>createCoverAllPrintDocument({snapshot:state.snapshot,source:state.source,
  lunch:state.lunch,serviceDate:day,expectedRevision:7,projectionId:id.projection,issuingManager:issuer});
 let eventRevision=3,eventStatus='SCHEDULED',eventNotes=SAFE,singleReads=0,mutateOnSingleRead=0;
 let snapshotReads=0,mutateOnSnapshotRead=0;
-let queryLog=[];
+let queryLog=[],actorReads=0,revokeOnActorRead=0;
 const candidate=(print)=>({schema:'custodial.coverall-event-brief-candidate.v1',
  status:'PREVIEW_ONLY',disclosure_approved:false,manager_id:id.manager,capacity_slot_id:id.capacity,
  service_date:day,projection_id:id.projection,publication_id:id.publication,
@@ -63,6 +63,11 @@ const unavailable=status=>({schema:'custodial.coverall-event-brief-candidate.v1'
 const client={
  async query(statement,values=[]){
   const q=String(statement);queryLog.push(q);
+  if(q.includes('custodial_action_actor_v1')){
+   actorReads++;if(actorReads===revokeOnActorRead)device.revoked_at=new Date().toISOString();
+   if(device.revoked_at||values[0]!==device.manager_id)throw Object.assign(Error('Current manager revoked'),{code:'42501'});
+   return {rows:[{result:{manager_id:values[0],manager_name:device.manager.display_name}}]};
+  }
   if(q.includes('static_weekly_v3_read_manager_snapshot')){
    snapshotReads++;
    if(snapshotReads===mutateOnSnapshotRead)state.snapshot.authority_revision++;
@@ -96,13 +101,13 @@ const plane=createStaticWeeklyControlPlane({database,
 const env={NODE_ENV:'test',SUPABASE_URL:'https://coverall-event-print.invalid',
  SUPABASE_SERVICE_ROLE_KEY:'synthetic-no-real-key',
  OPS_MANAGER_SESSION_SECRET:'synthetic-coverall-event-print-secret-0123456789'};
-const device={credential_id:'synthetic-print-credential',device_id:'synthetic-print-device',
+const device={credential_id:'90000000-0000-4000-8000-000000000091',device_id:'synthetic-print-device',
  manager_id:id.manager,manager,max_access_level:'full_access',
  created_at:new Date(Date.now()-60000).toISOString(),
  expires_at:new Date(Date.now()+600000).toISOString()};
 const trusted={async find(key){return key===device.credential_id?device:null}};
-const supabase={async rpc(){return {data:{mutations_paused:false,state:'READY',authority_generation:0,
- restore_id:null},error:null}}};
+const activeLeases=new Set();
+const supabase={async rpc(name,args){if(name==='custodial_begin_application_mutation_lease'){activeLeases.add(args.p_request_id);return {data:{mutations_paused:false,state:'READY',authority_generation:0,restore_id:null},error:null};}if(name==='custodial_release_application_mutation_lease'){activeLeases.delete(args.p_request_id);return {data:true,error:null};}if(name==='custodial_heartbeat_application_mutation_lease')return {data:true,error:null};throw Error('Unexpected synthetic restore operation');}};
 const runtime=createStaticWeeklyControlPlaneRuntime({env,database,controlPlane:plane,
  datedTransitionController:null,trustedDeviceStore:trusted,supabase});
 const server=runtime.app.listen(0,'127.0.0.1');
@@ -143,6 +148,22 @@ try{
  check('default GET remains available',oldGet.status,200);
  check('default GET has no Event brief',oldGet.body.data.document.eventBriefs,undefined);
  check('default GET omits even safe Event note',JSON.stringify(oldGet.body).includes(SAFE),false);
+ const ownerDevice={...device};
+ const delegatedManager={...manager,manager_id:id.foreign,display_name:'Synthetic CoverAll Delegate',system_key:'synthetic_delegate'};
+ Object.assign(device,{manager_id:delegatedManager.manager_id,manager:delegatedManager});
+ const delegated=createOpsManagerSession({credentialId:device.credential_id,deviceId:device.device_id,manager:delegatedManager,authMode:'trusted_device',accessLevel:'read_only',maximumAccessLevel:'full_access',env}).token;
+ try{
+  const delegatedGet=await request(`${printPath}?week_start=${week}&service_date=${day}&expected_revision=7&projection_id=${id.projection}`,{method:'GET',auth:delegated});
+  check('delegate can read accepted CoverAll PDF route',delegatedGet.status,200);
+  check('delegate print has no selected event disclosure',delegatedGet.body.data.document.eventBriefs,undefined);
+  check('delegate print binds its actual named issuer',delegatedGet.body.data.document.managerContact.managerId,id.foreign);
+  check('delegate cannot approve event disclosure',(await request(printPath,{auth:delegated,payload:{...body(),event_selections:[]}})).status,403);
+  revokeOnActorRead=actorReads+2;
+  const revokedOutput=await request(`${printPath}?week_start=${week}&service_date=${day}&expected_revision=7&projection_id=${id.projection}`,{method:'GET',auth:delegated});
+  check('revocation during PDF rendering rejects handout',revokedOutput.status,403);
+  check('revoked response has no PDF bytes',Boolean(revokedOutput.body.data?.files),false);
+ }finally{Object.assign(device,ownerDevice);delete device.revoked_at;revokeOnActorRead=0;}
+
  const plain=await request(printPath,{payload:{...body(),event_selections:[]}});
  check('unselected POST prints base only',plain.status,200);
  check('unselected POST has no Event notes',JSON.stringify(plain.body).includes(SAFE),false);
@@ -203,4 +224,5 @@ try{
 }finally{
  await new Promise(resolve=>server.close(resolve));
  await plane.close();
+ await new Promise(resolve=>setTimeout(resolve,10));assert.equal(activeLeases.size,0,"all synthetic restore leases settled");
 }

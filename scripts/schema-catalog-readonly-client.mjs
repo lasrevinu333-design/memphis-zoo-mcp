@@ -14,10 +14,15 @@ export function catalogConnectionOptions({connectionString,caPem}) {
     statement_timeout:15000,query_timeout:20000};
 }
 
+// Exact projection of the existing metadata helper, read with the backup
+// account's already granted cron-table access. row_security=off makes a
+// filtered/insufficiently privileged read fail instead of passing as empty.
+export const NATIVE_CRON_CATALOG_SQL='select j.jobname,j.schedule,j.command,j.database,j.username,j.active from cron.job j order by j.jobname';
 export async function captureCatalogFromSnapshot(client) {
+  await client.query('set local row_security = off');
   const inventory={};
   for(const [name,sql] of Object.entries(SCHEMA_CATALOG_QUERIES)){
-    const response=await client.query(sql);
+    const response=await client.query(name==='cron_jobs'?NATIVE_CRON_CATALOG_SQL:sql);
     assert.ok(Array.isArray(response?.rows),`Catalog result unavailable: ${name}`);
     inventory[name]=response.rows.map(row=>{if(!Object.hasOwn(row,'object_comment'))return row;const next={...row,comment:row.object_comment};delete next.object_comment;return next;});
   }
