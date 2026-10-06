@@ -145,7 +145,7 @@
       {
         "path": ".github/workflows/custodial-production-repair.yml",
         "mode": "100644",
-        "object_id": "31fe93789648d437f6a34e4adb7c43f36f29b1ba"
+        "object_id": "13fe2b2000f2cf0d5f0e3a4a8daae1392f58f259"
       },
       {
         "path": ".github/workflows/device-credential-foundation.yml",
@@ -160,7 +160,7 @@
       {
         "path": ".github/workflows/foundation-security-gate.yml",
         "mode": "100644",
-        "object_id": "6a40794847e590db1f49ba02a87e6b36f2bb2f9b"
+        "object_id": "61aa6ca2ebf7c22d540f0d5fac3c56d88d60b55b"
       },
       {
         "path": ".github/workflows/integrated-release-attestation.yml",
@@ -510,12 +510,12 @@
       {
         "path": "package-lock.json",
         "mode": "100644",
-        "object_id": "963edf56509d900d8ef8169bc045c8ae9adf33d4"
+        "object_id": "a6f4248e1353a0dbe05769b98771a88d390a1481"
       },
       {
         "path": "package.json",
         "mode": "100644",
-        "object_id": "d583cb20c824c96c49ea4dec0ccdbf3c2b7aacc6"
+        "object_id": "ec9fe4223ff373de593bd6471b4a6953dbe11606"
       },
       {
         "path": "release/combined-release-verification.json",
