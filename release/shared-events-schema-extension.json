@@ -1,0 +1,13 @@
+{
+  "mode": "incremental_extension_of_existing_canonical_catalog",
+  "prior_fingerprint": "09cad1cd3941e367192c5939c220823713ec0161affc7f4db656d1452b3e41ae",
+  "target_fingerprint": "440c5cfa077055cae5ec41537496f50f2d99ec7cc91c5cdf5cc5ead8d44268a5",
+  "added_columns": 4,
+  "added_functions": 1,
+  "added_service_grants": 1,
+  "unchanged_prior_catalog_verified": true,
+  "live_function_definition_sha256": "943393c799426d0430a44b0056db6b292d171f5e637c66f059fac4beff65a067",
+  "full_history_replayed": false,
+  "production_function_installed": true,
+  "application_deployed": false
+}

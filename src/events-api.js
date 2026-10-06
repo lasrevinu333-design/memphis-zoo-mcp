@@ -1,20 +1,6 @@
 import express from "express";
-import { createClient } from "@supabase/supabase-js";
-import { aiParseEventTexts } from "./events-ai-parser.js";
-
-const EVENTS_SUPABASE_CLIENT =
-  process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
-    ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
-        auth: { persistSession: false, autoRefreshToken: false },
-      })
-    : null;
-
-function getEventsSupabaseClient() {
-  if (!EVENTS_SUPABASE_CLIENT) {
-    throw new Error("Supabase is not configured. Check SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in .env.");
-  }
-  return EVENTS_SUPABASE_CLIENT;
-}
+import { sharedEventFeed, employeeVisibleEvents } from "./shared-events-feed.js";
+import { resolveChicagoEventInterval } from "./events-time.js";
 
 const EVENTS_TIME_ZONE = "America/Chicago";
 const EVENTS_CONTRACT_VERSION = "events.v3";
@@ -24,7 +10,12 @@ const SCAN_ALERT_COOLDOWN_MINUTES = 30;
 const SCAN_ALERT_MANAGER_ESCALATION_GRACE_MINUTES = 30;
 
 function fail(res, error, fallback = "Events request failed", statusCode = 400) {
-  res.status(statusCode).json({ ok: false, error: error?.message || fallback });
+  const response = { ok: false, error: error?.message || fallback };
+  if (["AMBIGUOUS_EVENT_TIME", "NONEXISTENT_EVENT_TIME", "INVALID_EVENT_INSTANT", "INVALID_EVENT_INTERVAL"].includes(error?.code)) {
+    response.code = error.code;
+    response.details = error.details || null;
+  }
+  res.status(error?.status || statusCode).json(response);
 }
 
 function sqlLiteral(value) {
@@ -46,15 +37,6 @@ function isUuid(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     String(value || "").trim()
   );
-}
-
-function authenticatedEventActor(req) {
-  const managerId = String(req?.memphisAuth?.manager_id || "").trim();
-  const displayName = String(req?.memphisAuth?.manager_display_name || "").replace(/\s+/g, " ").trim();
-  if (!isUuid(managerId) || !displayName) {
-    throw Object.assign(new Error("Authenticated named manager identity is required."), { status: 403 });
-  }
-  return { manager_id: managerId, display_name: displayName.slice(0, 200) };
 }
 
 function normalizeTimeInput(value) {
@@ -116,6 +98,20 @@ function sanitizeEventNotes(value, attendeeCount = null) {
   return raw;
 }
 
+const CUSTODIAL_NOTE_CODES = new Set(["trash_boxes", "extra_cans", "restroom_checks"]);
+function normalizeCustodialNoteCodes(value) {
+  if (value == null) return [];
+  if (!Array.isArray(value) || value.some((code) => !CUSTODIAL_NOTE_CODES.has(code))) {
+    throw new Error("Custodial reminder notes must be selected from the approved operations list.");
+  }
+  return [...new Set(value)];
+}
+function normalizeCustodialPublicNotes(value) {
+  const notes = value == null ? "" : String(value).trim();
+  if (notes.length > 500) throw new Error("Employee-visible custodial notes must be 500 characters or fewer.");
+  return notes;
+}
+
 const EVENT_SCOPES = new Set(["ZOO_WIDE", "SINGLE_VENUE", "MULTI_VENUE", "OFFSITE", "UNKNOWN"]);
 const PARSER_CONFIDENCE_VALUES = new Set(["high", "medium", "low"]);
 
@@ -173,7 +169,9 @@ function mapRowsBy(rows = [], key) {
 async function getEventReferenceData(runReadOnlySql) {
   const locationGroups = await listLocationGroups(runReadOnlySql);
   const eventVenues = await listEventVenues(runReadOnlySql);
-  const defaultRules = await listEventDefaultRules(runReadOnlySql);
+  const allowedVenueIds = new Set(eventVenues.map((row) => String(row.venue_id)));
+  const defaultRules = (await listEventDefaultRules(runReadOnlySql))
+    .filter((row) => !row.primary_venue_id || allowedVenueIds.has(String(row.primary_venue_id)));
   const groupsById = mapRowsBy(locationGroups, "location_group_id");
   const venuesById = mapRowsBy(eventVenues, "venue_id");
   const zooVenue = eventVenues.find((row) => row.venue_code === "ZOO_FOOTPRINT" || row.event_scope === "ZOO_WIDE") || null;
@@ -196,8 +194,10 @@ function normalizeEventLocationPayload(payload = {}, referenceData = {}) {
   const legacyLocationGroupId = String(payload.location_group_id || "").trim();
   const displayLocationInput = normalizeDisplayLocation(payload.display_location || payload.location_group_name);
   const parserConfidence = normalizeParserConfidence(payload.parser_confidence || payload.confidence);
-  const sourceLocationText = normalizeDisplayLocation(payload.source_location_text || payload.location_group_name || "");
-  const sourceText = String(payload.source_text || payload.raw_text || "").trim() || null;
+  const rawSourceLocationText = String(payload.source_location_text ?? payload.location_group_name ?? "");
+  const sourceLocationText = rawSourceLocationText.trim() ? rawSourceLocationText : null;
+  const originalSourceText = String(payload.source_text || payload.raw_text || "");
+  const sourceText = originalSourceText.trim() ? originalSourceText : null;
   const sourceFormat = String(payload.source_format || "").trim() || null;
   const manuallyOverridden = Boolean(payload.manually_overridden);
   const eventTimezone = String(payload.event_timezone || EVENTS_TIME_ZONE).trim() || EVENTS_TIME_ZONE;
@@ -288,9 +288,16 @@ function normalizeEventLocationPayload(payload = {}, referenceData = {}) {
   } else {
     scope = "UNKNOWN";
     needsReview = true;
-    displayLocation = displayLocation || "Needs Review";
-    finalLegacyLocationGroupId = String(finalLegacyLocationGroupId || referenceData.zooVenue?.location_group_id || "").trim();
-    parseReasons.push("Event venue/scope is unresolved and requires manager review.");
+    const compatibilityGroupId = String(referenceData.zooVenue?.location_group_id || "").trim();
+    if (primaryVenueId || normalizedVenueIds.length || coverageLocationIds.length || staffingAreaIds.length
+      || (legacyLocationGroupId && legacyLocationGroupId !== compatibilityGroupId)) {
+      throw new Error("Needs Review events cannot assign a venue, cleaning coverage, staffing area, or location group.");
+    }
+    primaryVenue = null;
+    normalizedVenueIds = [];
+    displayLocation = "Needs Review";
+    finalLegacyLocationGroupId = compatibilityGroupId;
+    parseReasons.push("Event venue/scope is unresolved; saved for manager review without operational coverage.");
   }
 
   const legacyGroup = referenceData.groupsById?.get(finalLegacyLocationGroupId);
@@ -310,9 +317,9 @@ function normalizeEventLocationPayload(payload = {}, referenceData = {}) {
     primary_venue_id: primaryVenue?.venue_id || null,
     venue_ids: normalizedVenueIds,
     display_location: displayLocation,
-    coverage_location_ids: coverageLocationIds,
-    staffing_area_ids: staffingAreaIds,
-    source_location_text: sourceLocationText || null,
+    coverage_location_ids: needsReview ? [] : coverageLocationIds,
+    staffing_area_ids: needsReview ? [] : staffingAreaIds,
+    source_location_text: sourceLocationText,
     parser_confidence: parserConfidence,
     needs_review: needsReview,
     parse_reason: parseReasons.filter(Boolean).join(" "),
@@ -353,29 +360,40 @@ function normalizeEventPayload(payload = {}, referenceData = {}) {
   const endTime = normalizeTimeInput(payload.end_time);
   const attendeeCount = toNullableInt(payload.attendee_count);
   const notes = sanitizeEventNotes(payload.notes, attendeeCount);
+  const custodialNoteCodes = normalizeCustodialNoteCodes(payload.custodial_note_codes);
+  const custodialPublicNotes = normalizeCustodialPublicNotes(payload.custodial_public_notes);
   const operationId = payload.operation_id == null || payload.operation_id === "" ? null : String(payload.operation_id).trim();
   const location = normalizeEventLocationPayload(payload, referenceData);
 
   if (!eventName) throw new Error("event_name is required.");
-  if (location.needs_review || location.event_scope === "UNKNOWN") {
-    throw new Error("Event scope or venue requires review before saving. Select Zoo Footprint or an eligible event venue.");
-  }
   if (!isIsoDate(eventDate)) throw new Error("event_date must be YYYY-MM-DD.");
-  if (endTime === startTime) throw new Error("end_time must differ from start_time.");
+  const explicitEndDate = String(payload.end_date || "").trim();
   if (operationId && !isUuid(operationId)) throw new Error("operation_id must be a valid UUID when supplied.");
 
-  const spansOvernight = endTime < startTime;
-  const endDate = spansOvernight ? addDaysToIsoDate(eventDate, 1) : eventDate;
+  if (explicitEndDate && !isIsoDate(explicitEndDate)) throw new Error("end_date must be YYYY-MM-DD when supplied.");
+  const endDate = explicitEndDate || (endTime < startTime ? addDaysToIsoDate(eventDate, 1) : eventDate);
+  if (endDate < eventDate || endDate > addDaysToIsoDate(eventDate, 1)) {
+    throw new Error("Event end date must be the event date or the next day.");
+  }
+  const interpretation = resolveChicagoEventInterval({ event_date: eventDate, end_date: endDate,
+    start_time: startTime, end_time: endTime,
+    start_instant_utc: payload.start_instant_utc, end_instant_utc: payload.end_instant_utc });
+  const spansOvernight = endDate > eventDate;
 
   return {
     event_name: eventName,
     ...location,
+    status: location.needs_review ? "NEEDS_REVIEW" : "SCHEDULED",
     event_date: eventDate,
     end_date: endDate,
     start_time: startTime,
     end_time: endTime,
+    start_instant_utc: interpretation.start.instant_utc,
+    end_instant_utc: interpretation.end.instant_utc,
     attendee_count: attendeeCount,
     notes,
+    custodial_note_codes: custodialNoteCodes,
+    custodial_public_notes: custodialPublicNotes,
     spans_overnight: spansOvernight,
     operation_id: operationId,
   };
@@ -384,6 +402,8 @@ function normalizeEventPayload(payload = {}, referenceData = {}) {
 async function listUpcomingEvents(runReadOnlySql) {
   const rows = await runReadOnlySql(buildEventResponseSelectSql(
     `coalesce(e.status, 'SCHEDULED') = 'SCHEDULED'
+     and coalesce(e.needs_review, false) = false and e.event_scope <> 'UNKNOWN'
+     and (lg.active is true and (e.primary_venue_id is null or ev.active is true))
      and coalesce(e.end_date, e.event_date) >= (now() at time zone '${EVENTS_TIME_ZONE}')::date`,
     `order by e.event_date asc, e.start_time asc, e.event_name asc`
   ));
@@ -396,16 +416,18 @@ function boundedWholeNumber(value, fallback, minimum, maximum) {
   return Math.min(maximum, Math.max(minimum, Number(raw)));
 }
 
-async function listEmployeeEvents(runReadOnlySql, { windowDays = 30, limit = 80 } = {}) {
-  const days = boundedWholeNumber(windowDays, 30, 1, 90);
-  const rowLimit = boundedWholeNumber(limit, 80, 1, 200);
+export async function listSharedEvents(runReadOnlySql) {
   const rows = await runReadOnlySql(buildEventResponseSelectSql(
-    `coalesce(e.status, 'SCHEDULED') in ('SCHEDULED', 'CANCELLED')
-     and coalesce(e.end_date, e.event_date) >= (now() at time zone '${EVENTS_TIME_ZONE}')::date
-     and e.event_date <= (now() at time zone '${EVENTS_TIME_ZONE}')::date + ${days}`,
-    `order by e.event_date asc, e.start_time asc, e.event_name asc limit ${rowLimit}`
+    `(e.status = 'NEEDS_REVIEW' or
+      (e.status = 'CANCELLED' and coalesce(e.needs_review,false) = true) or
+      (e.status in ('SCHEDULED','CANCELLED','SUPERSEDED') and coalesce(e.needs_review, false) = false
+       and e.event_scope <> 'UNKNOWN'
+       and coalesce(e.end_date, e.event_date) >= (now() at time zone '${EVENTS_TIME_ZONE}')::date))`,
+    `order by case when e.status = 'NEEDS_REVIEW' then 0 else 1 end,
+      e.event_date asc, e.start_time asc, e.event_name asc limit 501`
   ));
-  return Array.isArray(rows) ? rows : [];
+  if (!Array.isArray(rows) || rows.length > 500) throw new Error("Complete bounded event source unavailable.");
+  return rows;
 }
 
 const PUBLIC_EVENT_FIELDS = Object.freeze([
@@ -426,7 +448,13 @@ const PUBLIC_EVENT_FIELDS = Object.freeze([
 
 const EMPLOYEE_EVENT_FIELDS = Object.freeze([
   ...PUBLIC_EVENT_FIELDS,
+  "revision",
+  "custodial_note_codes",
+  "start_instant_utc",
+  "end_instant_utc",
+  "superseded_by_event_id",
   "notes",
+  "custodial_public_notes",
 ]);
 
 function toPublicEvent(event = {}) {
@@ -434,84 +462,24 @@ function toPublicEvent(event = {}) {
 }
 
 function toEmployeeEvent(event = {}) {
-  return Object.fromEntries(EMPLOYEE_EVENT_FIELDS.map((field) => [field, event[field] ?? null]));
+  const safeEvent = { ...event, notes: event.custodial_public_notes || null };
+  return Object.fromEntries(EMPLOYEE_EVENT_FIELDS.map((field) => [field, safeEvent[field] ?? null]));
 }
 
 function buildEventResponseSelectSql(whereSql, suffixSql = "") {
-  const where = String(whereSql || "").trim();
-  const suffix = String(suffixSql || "").trim();
-  return `
-    select
-      e.id,
-      e.event_name,
-      e.event_name as event_title,
-      coalesce(e.event_scope, 'UNKNOWN') as event_scope,
-      coalesce(e.status, 'SCHEDULED') as status,
-      e.cancelled_at,
-      e.cancelled_by,
-      e.cancelled_by_manager_id,
-      e.cancellation_reason,
-      e.archived_at,
-      e.primary_venue_id,
-      e.venue_ids,
-      e.display_location,
-      e.coverage_location_ids,
-      e.staffing_area_ids,
-      e.source_location_text,
-      e.parser_confidence,
-      coalesce(e.needs_review, false) as needs_review,
-      e.parse_reason,
-      coalesce(e.manually_overridden, false) as manually_overridden,
-      e.overridden_by,
-      e.overridden_at,
-      coalesce(e.event_timezone, '${EVENTS_TIME_ZONE}') as event_timezone,
-      e.location_group_id,
-      coalesce(ev.venue_code, lg.group_code) as venue_code,
-      coalesce(ev.display_name, nullif(e.display_location, ''), lg.group_name) as venue_name,
-      coalesce(ev.venue_code, lg.group_code) as group_code,
-      coalesce(nullif(e.display_location, ''), ev.display_name, lg.group_name) as group_name,
-      e.event_date,
-      e.end_date,
-      to_char(e.start_time, 'HH24:MI:SS') as start_time,
-      to_char(e.end_time, 'HH24:MI:SS') as end_time,
-      (e.end_date > e.event_date) as spans_overnight,
-      e.attendee_count,
-      case
-        when nullif(btrim(e.notes), '') is null then null
-        when e.attendee_count is not null and btrim(e.notes) = e.attendee_count::text then null
-        else e.notes
-      end as notes,
-      e.created_by,
-      e.created_by_manager_id,
-      e.updated_by_manager_id,
-      e.created_at,
-      e.updated_at
-    from public.events_app_events e
-    join public.location_groups lg on lg.id = e.location_group_id
-    left join public.event_venues ev on ev.id = e.primary_venue_id
-    ${where ? `where ${where}` : ""}
-    ${suffix}
-  `;
-}
-
-async function readEventByOperationId(runReadOnlySql, operationId) {
-  const normalizedId = String(operationId || "").trim();
-  if (!isUuid(normalizedId)) return null;
-  const rows = await runReadOnlySql(buildEventResponseSelectSql(
-    `e.operation_id = ${sqlLiteral(normalizedId)}::uuid`,
-    "limit 1"
-  ));
-  return Array.isArray(rows) && rows[0]?.id ? rows[0] : null;
-}
-
-async function readEventById(runReadOnlySql, eventId) {
-  const normalizedId = String(eventId || "").trim();
-  if (!isUuid(normalizedId)) return null;
-  const rows = await runReadOnlySql(buildEventResponseSelectSql(
-    `e.id = ${sqlLiteral(normalizedId)}::uuid`,
-    "limit 1"
-  ));
-  return Array.isArray(rows) && rows[0]?.id ? rows[0] : null;
+  return `select e.id,coalesce(e.revision,1) as revision,e.event_name,e.event_name as event_title,
+    e.event_scope,e.status,e.audience_scope,e.audience_employee_ids,
+    (lg.active is true and (e.primary_venue_id is null or ev.active is true)) as place_admissible,
+    e.display_location,coalesce(ev.display_name,e.display_location,lg.group_name) as venue_name,
+    e.location_group_id,e.primary_venue_id,e.venue_ids,e.coverage_location_ids,e.staffing_area_ids,
+    e.event_date,e.end_date,to_char(e.start_time,'HH24:MI:SS') as start_time,
+    to_char(e.end_time,'HH24:MI:SS') as end_time,e.start_instant_utc,e.end_instant_utc,
+    (e.end_date>e.event_date) as spans_overnight,e.event_timezone,e.attendee_count,
+    coalesce(e.needs_review,false) as needs_review,e.custodial_note_codes,e.custodial_public_notes,
+    null::uuid as superseded_by_event_id,e.updated_at
+    from public.events_app_events e join public.location_groups lg on lg.id=e.location_group_id
+    left join public.event_venues ev on ev.id=e.primary_venue_id
+    ${whereSql ? `where ${whereSql}` : ''} ${suffixSql}`;
 }
 
 async function listLocationGroups(runReadOnlySql) {
@@ -580,7 +548,8 @@ async function listEventVenues(runReadOnlySql) {
     where ev.active = true
     order by case when ev.event_scope = 'ZOO_WIDE' then 0 else 1 end, ev.display_name asc
   `);
-  return Array.isArray(rows) ? rows : [];
+  if (!Array.isArray(rows)) throw new Error("Event venue reference unavailable.");
+  return rows;
 }
 
 async function listCoverageLocationGroups(runReadOnlySql) {
@@ -606,118 +575,6 @@ async function listEventDefaultRules(runReadOnlySql) {
     order by length(edr.normalized_match) desc, edr.match_text asc
   `);
   return Array.isArray(rows) ? rows : [];
-}
-
-async function getUpcomingEventScheduleStates(runReadOnlySql) {
-  const rows = await runReadOnlySql(`
-    select
-      e.event_date,
-      count(distinct e.id)::int as event_count,
-      (
-        select count(*)::int
-        from public.daily_schedule_assignments dsa
-        where dsa.service_date = e.event_date
-      ) as schedule_assignment_count,
-      (
-        select count(*)::int
-        from public.daily_group_assignments dga
-        where dga.assignment_date = e.event_date
-          and dga.active = true
-          and dga.assigned_employee_id is not null
-      ) as group_assignment_count
-    from public.events_app_events e
-    where e.event_date <= ((now() at time zone '${EVENTS_TIME_ZONE}')::date + 1)
-      and coalesce(e.end_date, e.event_date) >= (now() at time zone '${EVENTS_TIME_ZONE}')::date
-    group by e.event_date
-    order by e.event_date asc
-  `);
-  return Array.isArray(rows) ? rows : [];
-}
-
-async function ensureUpcomingEventScheduleState({ runReadOnlySql, runRpc }) {
-  const eventScheduleStates = await getUpcomingEventScheduleStates(runReadOnlySql);
-  return {
-    ok: true,
-    skipped: true,
-    reason: "events_are_reminders_only",
-    checked_dates: eventScheduleStates.length,
-    generated_dates: [],
-  };
-
-  if (typeof runRpc !== "function") {
-    return { ok: true, skipped: true, reason: "runRpc_missing", generated_dates: [] };
-  }
-
-  const states = await getUpcomingEventScheduleStates(runReadOnlySql);
-  const generatedDates = [];
-
-  for (const state of states) {
-    if (Number(state?.schedule_assignment_count || 0) > 0) continue;
-    const eventDate = String(state?.event_date || "").trim();
-    if (!eventDate) continue;
-    await runRpc("sch_generate_daily_schedule", { p_service_date: eventDate, p_force: false });
-    generatedDates.push(eventDate);
-  }
-
-  return { ok: true, checked_dates: states.length, generated_dates: generatedDates };
-}
-
-function normalizeWriteResultRows(result) {
-  if (Array.isArray(result)) return result.filter(Boolean);
-  if (result && typeof result === "object") return [result];
-  return [];
-}
-
-async function createEventRecord(runReadOnlySql, runCommand, payload, actor) {
-  const referenceData = await getEventReferenceData(runReadOnlySql);
-  const normalized = normalizeEventPayload(payload, referenceData);
-  const record = {
-    ...normalized,
-    actor_manager_id: actor.manager_id,
-    created_by: actor.display_name,
-    overridden_by: normalized.manually_overridden ? actor.display_name : null,
-  };
-  const rows = normalizeWriteResultRows(await runCommand("event_create", { record, actor: actor.display_name }));
-  const writeRow = rows.find((row) => row?.id);
-  if (writeRow) return { ...record, ...writeRow };
-  const authoritativeRow = await readEventByOperationId(runReadOnlySql, record.operation_id);
-  if (authoritativeRow) return { ...record, ...authoritativeRow };
-  return record;
-}
-
-async function updateEventRecord(runReadOnlySql, runCommand, eventId, payload, actor) {
-  const normalizedId = String(eventId || "").trim();
-  if (!isUuid(normalizedId)) throw new Error("A valid event id is required.");
-  const referenceData = await getEventReferenceData(runReadOnlySql);
-  const record = {
-    ...normalizeEventPayload({ ...payload, manually_overridden: true }, referenceData),
-    actor_manager_id: actor.manager_id,
-    overridden_by: actor.display_name,
-  };
-  const rows = normalizeWriteResultRows(await runCommand("event_update", {
-    event_id: normalizedId, record,
-    actor: actor.display_name,
-    reason: record.parse_reason || "Event updated from Event Input Console.",
-  }));
-  const writeRow = rows.find((row) => row?.id);
-  if (writeRow) return { ...record, ...writeRow, previous_record: undefined };
-  const authoritativeRow = await readEventById(runReadOnlySql, normalizedId);
-  if (authoritativeRow) return { ...record, ...authoritativeRow, previous_record: undefined };
-  throw new Error("Event not found.");
-}
-
-async function deleteEventRecord(runCommand, eventId, actor, reason = "Event cancelled from Event Input Console.") {
-  const normalizedId = String(eventId || "").trim();
-  if (!isUuid(normalizedId)) throw new Error("A valid event id is required.");
-  const rows = normalizeWriteResultRows(await runCommand("event_cancel", {
-    event_id: normalizedId,
-    record: { actor_manager_id: actor.manager_id },
-    actor: actor.display_name,
-    reason: String(reason || "Event cancelled.").slice(0, 1000),
-  }));
-  const row = rows.find((item) => item?.id);
-  if (!row) throw Object.assign(new Error("Event not found."), { status: 404 });
-  return { ...row, deleted: false, cancelled: true };
 }
 
 async function enqueueNativeEventNotifications(runRpc) {
@@ -755,7 +612,7 @@ async function queueDueScanAlerts(runScanAlertQueue) {
   }
 }
 
-export function createEventMaintenanceController({ runReadOnlySql, runCommand, runRpc, runScanAlertQueue }) {
+export function createEventMaintenanceController({ runRpc, runScanAlertQueue }) {
   let lastRunAt = 0;
   let running = false;
   let lastStartedAt = null;
@@ -833,7 +690,6 @@ export function createEventMaintenanceController({ runReadOnlySql, runCommand, r
 
 export function createEventsPublicRouter({
   runReadOnlySql,
-  runCommand,
   buildHealthPayload,
   appVersion,
   releaseId,
@@ -937,6 +793,7 @@ export function createEventsEmployeeRouter({
   appVersion,
   releaseId,
   requireDeviceAccess,
+  readSyncStatus = null,
 }) {
   if (typeof requireDeviceAccess !== "function") {
     throw new Error("Employee Events requires enrolled-device authentication.");
@@ -947,16 +804,21 @@ export function createEventsEmployeeRouter({
 
   router.get("/", async (req, res) => {
     try {
-      const events = (await listEmployeeEvents(runReadOnlySql, {
-        windowDays: req.query.window_days,
-        limit: req.query.limit,
-      })).map(toEmployeeEvent);
       const device = req.memphisDevice || {};
       const credential = req.memphisDeviceCredential || {};
+      const employeeId = device.assigned_employee_id || device.employee_id || null;
+      if (!isUuid(employeeId) || !isUuid(credential.credential_id)) {
+        return res.status(403).json({ok:false,error:"Current enrolled employee identity required."});
+      }
+      const rows = await listSharedEvents(runReadOnlySql);
+      const events = employeeVisibleEvents(rows, employeeId).map(toEmployeeEvent);
+      const syncStatus = typeof readSyncStatus === "function" ? await readSyncStatus().catch(() => null) : null;
+      const feed = sharedEventFeed(rows, { employeeId, syncStatus });
       res.setHeader("Cache-Control", "private, no-store");
       res.status(200).json({
         ok: true,
         data: events,
+        feed,
         meta: {
           version: appVersion,
           release_id: releaseId,
@@ -977,199 +839,4 @@ export function createEventsEmployeeRouter({
   return router;
 }
 
-export function createEventsAdminRouter({
-  runReadOnlySql,
-  runCommand,
-  buildHealthPayload,
-  appVersion,
-  releaseId,
-  maintenanceController,
-  requireAdminApiAuth,
-  requireAdminApiWrite,
-}) {
-  const router = express.Router();
-  if (typeof requireAdminApiAuth === "function") {
-    router.use(requireAdminApiAuth);
-  }
-
-  router.get("/", async (_req, res) => {
-    try {
-      const events = await listUpcomingEvents(runReadOnlySql);
-      res.status(200).json({
-        ok: true,
-        data: events,
-        meta: {
-          version: appVersion,
-          release_id: releaseId,
-          contract_version: EVENTS_CONTRACT_VERSION,
-          timezone: EVENTS_TIME_ZONE,
-        },
-      });
-    } catch (error) {
-      fail(res, error, "Admin events list failed", 500);
-    }
-  });
-
-  router.get("/health", (_req, res) => {
-    res.status(200).json(
-      buildHealthPayload("events_admin", {
-        contract_version: EVENTS_CONTRACT_VERSION,
-        timezone: EVENTS_TIME_ZONE,
-      })
-    );
-  });
-
-  router.get("/location-groups", async (_req, res) => {
-    try {
-      const rows = await listLocationGroups(runReadOnlySql);
-      res.status(200).json({
-        ok: true,
-        data: rows,
-        meta: {
-          version: appVersion,
-          release_id: releaseId,
-          contract_version: EVENTS_CONTRACT_VERSION,
-        },
-      });
-    } catch (error) {
-      fail(res, error, "Location groups failed", 500);
-    }
-  });
-
-  router.get("/event-venues", async (_req, res) => {
-    try {
-      const rows = await listEventVenues(runReadOnlySql);
-      res.status(200).json({
-        ok: true,
-        data: rows,
-        meta: {
-          version: appVersion,
-          release_id: releaseId,
-          contract_version: EVENTS_CONTRACT_VERSION,
-        },
-      });
-    } catch (error) {
-      fail(res, error, "Event venues failed", 500);
-    }
-  });
-
-  router.get("/coverage-locations", async (_req, res) => {
-    try {
-      const rows = await listCoverageLocationGroups(runReadOnlySql);
-      res.status(200).json({
-        ok: true,
-        data: rows,
-        meta: {
-          version: appVersion,
-          release_id: releaseId,
-          contract_version: EVENTS_CONTRACT_VERSION,
-        },
-      });
-    } catch (error) {
-      fail(res, error, "Coverage locations failed", 500);
-    }
-  });
-
-  router.post("/parse-ai", async (req, res) => {
-    try {
-      const body = req.body && typeof req.body === "object" ? req.body : {};
-      const texts = Array.isArray(body.texts)
-        ? body.texts.map((text) => String(text || "").trim()).filter(Boolean)
-        : [String(body.text || "").trim()].filter(Boolean);
-      if (!texts.length) throw new Error("text or texts is required.");
-      const groups = await listLocationGroups(runReadOnlySql);
-      const eventVenues = await listEventVenues(runReadOnlySql);
-      const eventDefaults = await listEventDefaultRules(runReadOnlySql);
-      const parsed = await aiParseEventTexts({ texts, locationGroups: groups, eventVenues, eventDefaults });
-      const providersUsed = Array.from(new Set(parsed.map((row) => String(row?.provider_used || row?.provider || "local-parser").trim()).filter(Boolean)));
-      const fallbackCount = parsed.filter((row) => row?.provider_fallback).length;
-      res.status(200).json({
-        ok: true,
-        data: parsed,
-        meta: {
-          version: appVersion,
-          release_id: releaseId,
-          contract_version: EVENTS_CONTRACT_VERSION,
-          provider: providersUsed.length === 1 ? providersUsed[0] : "hybrid",
-          providers_used: providersUsed,
-          fallback_count: fallbackCount,
-        },
-      });
-    } catch (error) {
-      fail(res, error, "AI event parse failed", 400);
-    }
-  });
-
-  router.post("/", typeof requireAdminApiWrite === "function" ? requireAdminApiWrite : (_req, _res, next) => next(), async (req, res) => {
-    try {
-      const record = await createEventRecord(
-        runReadOnlySql,
-        runCommand,
-        req.body && typeof req.body === "object" ? req.body : {},
-        authenticatedEventActor(req),
-      );
-      maintenanceController?.kick("events_admin_create_after");
-      res.status(200).json({
-        ok: true,
-        data: record,
-        meta: {
-          version: appVersion,
-          release_id: releaseId,
-          contract_version: EVENTS_CONTRACT_VERSION,
-        },
-      });
-    } catch (error) {
-      fail(res, error, "Create event failed", Number(error?.status) || 400);
-    }
-  });
-
-  router.put("/:eventId", typeof requireAdminApiWrite === "function" ? requireAdminApiWrite : (_req, _res, next) => next(), async (req, res) => {
-    try {
-      const record = await updateEventRecord(
-        runReadOnlySql,
-        runCommand,
-        req.params.eventId,
-        req.body && typeof req.body === "object" ? req.body : {},
-        authenticatedEventActor(req),
-      );
-      maintenanceController?.kick("events_admin_update_after");
-      res.status(200).json({
-        ok: true,
-        data: record,
-        meta: {
-          version: appVersion,
-          release_id: releaseId,
-          contract_version: EVENTS_CONTRACT_VERSION,
-        },
-      });
-    } catch (error) {
-      fail(res, error, "Update event failed", Number(error?.status) || 400);
-    }
-  });
-
-  router.delete("/:eventId", typeof requireAdminApiWrite === "function" ? requireAdminApiWrite : (_req, _res, next) => next(), async (req, res) => {
-    try {
-      const result = await deleteEventRecord(
-        runCommand,
-        req.params.eventId,
-        authenticatedEventActor(req),
-        req.body?.reason || "Event cancelled from Event Input Console.",
-      );
-      res.status(200).json({
-        ok: true,
-        data: result,
-        meta: {
-          version: appVersion,
-          release_id: releaseId,
-          contract_version: EVENTS_CONTRACT_VERSION,
-        },
-      });
-    } catch (error) {
-      fail(res, error, "Delete event failed", Number(error?.status) || 400);
-    }
-  });
-
-  return router;
-}
-
-export { EVENTS_CONTRACT_VERSION };
+export { EVENTS_CONTRACT_VERSION, normalizeEventPayload, getEventReferenceData };
