@@ -85,7 +85,7 @@
       "prepare distinct CUSTODIAL_BACKEND_PROOF_SECRET, CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET, and DEVICE_CREDENTIAL_SECRET values (minimum 32 characters each); preserve all phone-local work and require manager-code recovery for any active credential from a different secret generation without exposing any secret",
       "capture the production catalog through the read-only Supabase boundary and require the exact observed production ledger head, catalog/privilege fingerprint, object counts, static-weekly state, and zero target-position collisions recorded in release/production-migration-state.json",
       "verify production project, fresh post-capture backup receipt, observed production identity, exact pending-migration digest, and exact source attestation against release/production-migration-state.json; either retain the existing exact GitHub run provenance or use one UUID-bound task-local encrypted archive and signed full rehearsal whose receipt and result hashes, runner hash, candidate commit/tree, archive digest, signer key IDs, zero leases, and ordered timestamps are carried into a short-lived authorization without uploading production contents",
-      "after explicit production-change admission, select exactly one evidence mode and apply through the GitHub production-migration gate only: GitHub evidence retains its strict run provenance, while task-local evidence uses a dedicated ephemeral verification key plus the hash-bound authorization secret and cannot download backup or rehearsal artifacts; apply only the four exact ordered pending migrations for two-internal-absence alignment, pausing guest notifications while disabled, the event-reminder workday/current-owner contract, and current static-weekly event-reminder authority; require the production ledger to advance exactly four entries and the complete catalog delta to match the reviewed postconditions; do not replay historical production migrations or rewrite production event rows",
+      "after explicit production-change admission, select exactly one evidence mode and apply through the GitHub production-migration gate only: GitHub evidence retains its strict run provenance, while task-local evidence uses a dedicated ephemeral verification key plus the hash-bound authorization secret and cannot download backup or rehearsal artifacts; apply only the five exact ordered pending migrations for two-internal-absence alignment, pausing guest notifications while disabled, the event-reminder workday/current-owner contract, current static-weekly event-reminder authority, and owner/delegate access controls; require the production ledger to advance exactly five entries and the complete catalog delta to match the reviewed postconditions; do not replay historical production migrations or rewrite production event rows This replay plan is restricted to the declared historical source; current production must not replay migrations already applied.",
       "after schema admission, retain the current immutable weighted-schedule publication by default; only when a named manager approves a replacement, derive exactly one replacement draft from the current publication, verify and publish it through the static-weekly control plane with expected-revision and idempotency guards; do not create a competing draft, and preserve the current publication until the replacement publication and projection are complete",
       "deploy the canonical-only backend only after all authoritative procedures above are present and verified; missing canonical writers fail closed",
       "require a green authority health gate and direct-DML denial probes before routing traffic"
@@ -93,7 +93,7 @@
     "production_migration_state": "release/production-migration-state.json",
     "production_migration_evidence": {
       "github_actions": "The original exact repository, workflow ref, workflow commit, run ID, and run-attempt provenance remains mandatory and cannot contain task-local fields.",
-      "task_local": "The backup may use Docker host networking only from explicit task-local mode and only for db.rqquvtjdmugpigbndmne.supabase.co, preserving PGSSLMODE=verify-full and the pinned CA. The encrypted archive stays local; one clean-tree rehearsal runs the same isolated restore, four-migration, runtime, write, replay, and cleanup gates and emits a signed local-only receipt and attestation.",
+      "task_local": "The backup may use Docker host networking only from explicit task-local mode and only for db.rqquvtjdmugpigbndmne.supabase.co, preserving PGSSLMODE=verify-full and the pinned CA. The encrypted archive stays local; one clean-tree rehearsal runs the same isolated restore, five-migration, runtime, write, replay, and cleanup gates and emits a signed local-only receipt and attestation.",
       "authorization_and_apply": "A short-lived signed authorization binds the exact archive, rehearsal receipt/result, candidate commit/tree, runner, signer IDs, source/target migration and catalog identities, zero leases, and timestamps. The GitHub apply workflow consumes only its canonical JSON hash and a dedicated ephemeral verification key in explicit task-local mode, never the archive or rehearsal; only sanitized result and receipt hashes may be retained."
     },
     "rollback": {
@@ -160,7 +160,7 @@
       {
         "path": ".github/workflows/foundation-security-gate.yml",
         "mode": "100644",
-        "object_id": "ba66cb116430c9ccea3bf907cc58f7c57211c977"
+        "object_id": "19e427e96e083746f1445c416494c47ac8a8fefd"
       },
       {
         "path": ".github/workflows/integrated-release-attestation.yml",
@@ -438,6 +438,11 @@
         "object_id": "3e06fc6aaea8f2af937b1436560fc5805dcf2652"
       },
       {
+        "path": "release/cutover-declaration-correction-verification.json",
+        "mode": "100644",
+        "object_id": "742310709b507dcab7caeb3f75b63fa42757f36a"
+      },
+      {
         "path": "release/dependency-and-release-correction-verification.json",
         "mode": "100644",
         "object_id": "6736f345436a4703b3568912779a915c506c181f"
@@ -455,7 +460,7 @@
       {
         "path": "release/integrated-backend-authority-input.json",
         "mode": "100644",
-        "object_id": "8ef372fc71a9b4a3e9aa991d97b4d3b3b4caca2f"
+        "object_id": "05ce81144b89c33c63d9bcea0c5edca8ba1beaaa"
       },
       {
         "path": "release/owner-access-schema-delta.json",
@@ -955,12 +960,12 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "032b413f8300acb71723cf6575587a8f71f77020"
+        "object_id": "7469ec0458f8a0f3caf2dfa2aa5219ce4a25ff07"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
         "mode": "100644",
-        "object_id": "64e09cd42bb15efacaeaa340a23d80d9de4c69d7"
+        "object_id": "c4e8d13aacb41d641cd7ad69a3c5f7c44316c32c"
       },
       {
         "path": "scripts/integrated-backend-authority-release-provenance-tests.mjs",
@@ -3568,7 +3573,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 688,
+    "authority_path_count": 689,
     "migration_path_count": 131,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
