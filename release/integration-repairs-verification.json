@@ -2,7 +2,7 @@
   "scope": "INT-01 through INT-05 and local event-expiration presentation; not physical-phone or hosted release acceptance.",
   "recorded_at_utc": "2026-10-06T20:50:54.270706+00:00",
   "base_backend": "ac579d7b0cf12e6a437ffd9e6c2fec47a4f61dfa",
-  "frontend_commit": "74edc22417103800ae3083fa7e03d357a33d6b9c",
+  "frontend_commit": "8f59f3ad5eb0791f2a4dcced20ac5258407cc76a",
   "client_cases": 58,
   "server_identity_cases": 5,
   "postgres_action_cases": 45,
@@ -15,8 +15,10 @@
     "all-client-repair-tests.log": "e6f255c44a28ded6a1a250e70ed00f48b09afc1589649e7533efc3608a34d306",
     "coverage-postgres.log": "a429634953e43f19b96c910d5df4256e57045115993cda33b1d70c8c0e7d2823",
     "schedule-server-identity.log": "b49dba9c5ef9fe813ebedfd2826d3a8e94dceca0333bbacd09370cdf8d402997",
-    "134-migration-rebuild.log": "1c1306794900155bad89359e7171ab2b6228b4d72d6c3b6c2e2df3b483371491"
+    "134-migration-rebuild.log": "1c1306794900155bad89359e7171ab2b6228b4d72d6c3b6c2e2df3b483371491",
+    "device-profile-epoch.log": "8dc1c059176b47d77e48151df5f0228909e2f70dbce739e1175f8314bdeec210"
   },
   "native_phone_tests": false,
-  "application_deployed": false
+  "application_deployed": false,
+  "device_profile_cases": 7
 }

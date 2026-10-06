@@ -162,7 +162,7 @@
     "test:shared-events": "node --test scripts/shared-events-feed-tests.mjs",
     "test:outlook-events:db": "node scripts/outlook-event-sync-database-tests.mjs",
     "test:combined-release": "npm run --silent test:owner-access && npm run --silent test:shared-events && node scripts/events-chicago-time-tests.mjs && npm run --silent test:outlook-events:db",
-    "test:integration-repairs": "node --test scripts/employee-schedule-identity-tests.mjs && node scripts/owner-actions-database-tests.mjs"
+    "test:integration-repairs": "node --test scripts/employee-schedule-identity-tests.mjs scripts/device-profile-epoch-tests.mjs && node scripts/owner-actions-database-tests.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
