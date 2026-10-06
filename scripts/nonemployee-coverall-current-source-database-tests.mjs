@@ -1,3 +1,4 @@
+import {migrationReplayNames} from './migration-replay-order.mjs';
 // Disposable historical fixture only: never converts production people or
 // assumes that the live source contains this explicit legacy pool.
 import assert from 'node:assert/strict';
@@ -35,7 +36,7 @@ for(const signal of ['SIGINT','SIGTERM'])process.once(signal,()=>{try{if(owned)d
 try{
  docker(['image','inspect',image]);docker(['run','--rm','-d','--name',container,'-p','127.0.0.1::5432','--tmpfs','/var/lib/postgresql/data:rw,size=1g','-e','POSTGRES_PASSWORD=postgres',image,'-c','listen_addresses=*','-c','shared_preload_libraries=pg_cron,pg_net,pg_stat_statements','-c','cron.database_name=postgres']);owned=true;console.log('OWNED_CONTAINER',container);
  let ready=0;for(let i=0;i<100&&ready<5;i++){try{sql('select 1');ready++;}catch{ready=0;}await new Promise(r=>setTimeout(r,500));}assert.equal(ready,5);removeDefaults();
- const files=readdirSync('supabase/migrations').filter(f=>f.endsWith('.sql')).sort();
+ const files=migrationReplayNames(process.cwd());
  const executedManifest=[];
  for(const file of files){check('absent defaults before '+file,sql(defaults),'0');
   if(file==='20261003190000_static_weekly_capacity_current_source_bridge.sql'){

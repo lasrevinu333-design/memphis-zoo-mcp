@@ -1,3 +1,4 @@
+import {migrationReplayNames} from './migration-replay-order.mjs';
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 import {readFileSync,readdirSync,writeFileSync} from 'node:fs';
@@ -6,7 +7,7 @@ import path from 'node:path';
 const root=path.resolve(new URL('..',import.meta.url).pathname);
 const container='mz_schema_rebuild_roster_'+process.pid;
 const image='supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed';
-const migrationFiles=readdirSync(path.join(root,'supabase/migrations')).filter(x=>x.endsWith('.sql')).sort();
+const migrationFiles=migrationReplayNames(root);
 assert.equal(migrationFiles.length,176,'current exact migration count for each vacancy fixture');
 assert.equal(migrationFiles.at(-1),'20260929125440_custodial_recovery_inventory_closure.sql','current exact migration head');
 const docker=(args,opts={})=>execFileSync('docker',args,{encoding:'utf8',timeout:180000,maxBuffer:32*1024*1024,...opts});

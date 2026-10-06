@@ -1,3 +1,4 @@
+import {migrationReplayNames} from './migration-replay-order.mjs';
 // Full exact replay in a network-isolated owned PostgreSQL container. No send.
 import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
@@ -60,7 +61,7 @@ try{
   let ready=0;for(let i=0;i<120&&ready<5;i++){try{sql('select 1');ready++;}catch{ready=0;}await new Promise(r=>setTimeout(r,500));}
   check(ready,5,'ready');
   removeDefaults();
-  const migrations=readdirSync(path.join(root,'supabase/migrations')).filter(f=>f.endsWith('.sql')).sort();
+  const migrations=migrationReplayNames(root);
   let historical;
   for(const [i,file] of migrations.entries()){
     check(sql(defaults),'0',`defaults absent before ${file}`);

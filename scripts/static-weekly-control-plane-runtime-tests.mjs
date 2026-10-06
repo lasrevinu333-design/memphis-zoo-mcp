@@ -13,7 +13,7 @@ const env = {
   SUPABASE_SERVICE_ROLE_KEY: "scheduler-runtime-test-service-role-key",
   OPS_MANAGER_SESSION_SECRET: "scheduler-runtime-test-session-secret-0123456789",
 };
-const manager = { manager_id: "10000000-0000-4000-8000-000000000091", display_name: "Runtime Named Manager", roles: ["OPS_MANAGER"], active: true };
+const manager = { manager_id: "10000000-0000-4000-8000-000000000091", display_name: "Runtime Named Manager", system_key: "eric_custodial_manager", is_system_principal: false, roles: ["OPS_MANAGER"], active: true };
 const credentialId = "runtime-credential";
 const deviceId = "runtime-device";
 const session = createOpsManagerSession({ credentialId, deviceId, manager, authMode: "trusted_device", accessLevel: "full_access", maximumAccessLevel: "full_access", env });
@@ -283,7 +283,10 @@ try {
   assert.equal(response.status, 200, "a valid trusted named-manager credential may invoke rebuild-only projection recovery");
   assert.equal(response.body.data.revision, 1);
   assert.equal(rebuilds, 1);
-  assert.deepEqual(rebuildRequest, { manager: exceptionRequest.manager, weekStart: "2026-10-05", expectedRevision: 0, idempotencyKey: "runtime-rebuild" }, "the named recovery endpoint passes only its manager authority and rebuild command identity");
+  const {signal:rebuildSignal,deadlineAt:rebuildDeadline,...rebuildFields}=rebuildRequest;
+  assert.deepEqual(rebuildFields,{manager:exceptionRequest.manager,weekStart:"2026-10-05",expectedRevision:0,idempotencyKey:"runtime-rebuild"},"only the current actor and original command identities are accepted");
+  assert.ok(rebuildSignal instanceof AbortSignal&&rebuildSignal.aborted,"settled regeneration authority is revoked");
+  assert.ok(Number.isFinite(rebuildDeadline)&&rebuildDeadline<=performance.now()+60000,"regeneration uses its original bounded ingress deadline");
 
   const retiredIncumbency = await fetch(`${origin}/static-weekly/incumbencies`, {
     method: "POST",

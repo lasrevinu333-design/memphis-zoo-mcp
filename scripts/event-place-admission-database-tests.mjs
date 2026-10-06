@@ -1,3 +1,4 @@
+import {migrationReplayNames} from './migration-replay-order.mjs';
 // Disposable, network-isolated actual PostgreSQL proof for Event adoption of the Place overlay.
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
@@ -29,7 +30,7 @@ try {
   check(Object.keys(info.HostConfig.PortBindings??{}).length,0,'no published ports');
   let ready=0;for(let i=0;i<120&&ready<5;i++){try{sql('select 1');ready++;}catch{ready=0;}await new Promise(resolve=>setTimeout(resolve,500));}
   check(ready,5,'PostgreSQL ready');removeDefaults();
-  const migrations=readdirSync(path.join(root,'supabase/migrations')).filter(name=>name.endsWith('.sql')).sort();
+  const migrations=migrationReplayNames(root);
   for(const [index,name] of migrations.entries()){
     try{raw(readFileSync(path.join(root,'supabase/migrations',name),'utf8'));}
     catch(error){throw new Error(`Migration ${name} failed: ${error.stderr||error.message}`);}

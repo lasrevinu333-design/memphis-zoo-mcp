@@ -31,14 +31,14 @@ assert.doesNotMatch(controlPlaneSource, /static_weekly_v2_/, "the control plane 
 assert.match(controlPlaneSource, /static_weekly_v3_read_authority_source/, "first-publication drafts must load a release-registered source of record server-side");
 assert.match(controlPlaneSource, /source\.source_id/, "draft creation must bind the immutable server-side source identity to PostgreSQL");
 assert.match(controlPlaneSource, /compileAndPrepareStaticWeeklyScheduleIsolated/, "production must isolate both compilation and database-adapter preparation so the transaction owner can keep its database lease alive");
-assert.match(runtimeSource, /requireManagerWrite, namedManager/, "every scheduler mutation route must require a trusted named manager writer");
-assert.match(runtimeSource, /\/static-weekly\/manager-snapshot[^\n]+requireManagerWrite, namedManager/, "the scheduler snapshot must use the same current named-manager association gate as mutations");
+assert.match(runtimeSource, /requireManagerWrite, namedManager/, "owner-only scheduler mutations retain the full owner gate");
+assert.match(runtimeSource, /\/static-weekly\/manager-snapshot[^\n]+requireManagerRead, namedReadManager/, "the scheduler snapshot must use the same current named-manager association gate as mutations");
 assert.match(runtimeSource, /\/static-weekly\/drafts\/initial/, "the separately deployed control plane must expose a deployable first-draft path without accepting source facts");
 assert.match(runtimeSource, /\/static-weekly\/drafts\/:versionId\/refresh[^\n]+requireManagerWrite, namedManager/, "a roster change before first publication must refresh the same draft through the trusted named-manager boundary");
 assert.match(runtimeSource, /\/static-weekly\/employees\/departed/, "the control plane must expose one bounded departure transaction");
 assert.match(runtimeSource, /\/static-weekly\/employees\/replacements/, "the control plane must expose one bounded fresh-start replacement transaction");
 assert.match(runtimeSource, /\/static-weekly\/rebuild-current-projection/, "the control plane must expose the named rebuild-only recovery command");
-assert.match(runtimeSource, /\/static-weekly\/day-changes\/batch[^\n]+requireManagerWrite, namedManager/, "the bounded daily batch route must require a trusted named manager writer");
+assert.match(runtimeSource, /\/static-weekly\/day-changes\/batch[^\n]+requireManagerAbsence, namedSchedulerManager/, "the bounded daily batch route must require a trusted named manager writer");
 assert.match(controlPlaneSource, /async applyDayChanges\(/, "the control plane must own the daily batch transaction rather than split it across HTTP requests");
 assert.match(controlPlaneSource, /pg_advisory_xact_lock\(pg_catalog\.hashtextextended\(\$1,0\)\)/, "the outer batch must acquire the database transaction lock before starting the receipt-gate statement snapshot");
 assert.match(controlPlaneSource, /dayChangeOperationIdempotencyKey/, "daily batch child mutations must use deterministic idempotency keys");
@@ -52,7 +52,7 @@ assert.throws(() => createStaticWeeklyControlPlane({ database: { connect() {} },
 assert.throws(() => createStaticWeeklyControlPlane({ database: { connect() {} }, operationStatementMilliseconds: 180_001 }), /statement_deadline_invalid/, "the production statement budget remains bounded below the outer request deadline");
 
 const solverIdentity = { package: "highs@1.15.2" };
-const manager = { manager_id: "10000000-0000-4000-8000-000000000001", manager_display_name: "Named Manager", auth_mode: "trusted_device", trusted_device: true, read_only: false };
+const manager = { manager_id: "10000000-0000-4000-8000-000000000001", manager_display_name: "Named Manager", auth_mode: "trusted_device", trusted_device: true, read_only: false,access_level:"full_access",credential_id:"11000000-0000-4000-8000-000000000001",device_id:"synthetic-control-owner",permissions:{schema:"custodial.manager-permissions.v1",read:true,owner:true,manage_absences:true,manage_coverall:true,regenerate_routes:true} };
 const authoritySourceId = "50000000-0000-4000-8000-000000000001";
 const publicationId = "70000000-0000-4000-8000-000000000001";
 const versionId = "60000000-0000-4000-8000-000000000001";
@@ -529,10 +529,10 @@ const applied = await controlPlane.applyException({
 });
 assert.equal(applied.revision, 2, "a successful staffing mutation returns the final projection revision");
 assert.equal(applied.data.current_projection.projection_id, "projection-2", "a successful staffing mutation returns the current projection");
-assert.deepEqual(authority.queries.map((entry) => entry.statement), ["begin", "set local role static_weekly_control_plane", "set local statement_timeout = '60000ms'", "select public.custodial_begin_application_mutation()", "select public.static_weekly_v3_apply_exception($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) as result", "select public.static_weekly_v3_read_publication_source($1,$2) as result", "select public.static_weekly_v3_materialize_projection($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) as result", "select public.static_weekly_v8_materialize_lunch_document($1,$2,$3) as result", "select public.static_weekly_v3_read_manager_snapshot($1) as result", "commit"], "a generation fence, mutation, canonical compile, current projection, and confirmation share one bounded transaction");
-assert.equal(authority.queries[4].values[9], manager.manager_id, "the trusted manager ID is the only actor value passed to PostgreSQL");
-assert.equal(authority.queries[4].values.includes(manager.manager_display_name), false, "PostgreSQL must derive the actor name from its manager registry");
-assert.match(authority.queries[6].values[10], /^projection-[0-9a-f]{64}$/, "the projection subcommand uses a derived idempotency key");
+assert.deepEqual(authority.queries.map(entry=>entry.statement),["begin", "set local role static_weekly_control_plane", "set local statement_timeout = '60000ms'", "select public.custodial_begin_application_mutation()", "select pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended($1,0))", "select public.custodial_authorize_absence_operations_v1($1,$2,$3,$4,$5,$6,$7) as result", "select public.static_weekly_v4_begin_day_changes($1,$2,$3,$4,$5,$6,$7,$8) as result", "select public.static_weekly_v3_read_publication_source($1,$2) as result", "select public.static_weekly_v3_apply_exception($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) as result", "select public.static_weekly_v3_read_publication_source($1,$2) as result", "select public.static_weekly_v3_materialize_projection($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) as result", "select public.static_weekly_v8_materialize_lunch_document($1,$2,$3) as result", "select public.static_weekly_v3_read_manager_snapshot($1) as result", "select public.custodial_authorize_absence_operations_v1($1,$2,$3,$4,$5,$6,$7) as result", "select public.static_weekly_v21_reconcile_dependency_changes($1) as result", "commit"],"one original generation fence, authority lock, current delegated checks before and after, complete-action receipt, mutation, lunch and projection share one transaction");
+assert.equal(authority.queries.find(q=>q.statement.includes("static_weekly_v3_apply_exception")).values[9], manager.manager_id, "the trusted manager ID is the only actor value passed to PostgreSQL");
+assert.equal(authority.queries.find(q=>q.statement.includes("static_weekly_v3_apply_exception")).values.includes(manager.manager_display_name), false, "PostgreSQL must derive the actor name from its manager registry");
+assert.match(authority.queries.find(q=>q.statement.includes("static_weekly_v3_materialize_projection")).values[10], /^projection-[0-9a-f]{64}$/, "the projection subcommand uses a derived idempotency key");
 
 const contractor = await controlPlane.applyContractorCapacity({
   manager, serviceDate: "2026-10-06", baseVersionId: versionId, publicationId, slotId: contractorSlot,
@@ -611,7 +611,7 @@ assert.deepEqual(dayChangesReplay, dayChanges, "replaying an accepted daily batc
 assert.equal(dayChangesAuthority.mutationAttempts(), 3, "replaying a daily batch does not apply any child mutation again");
 assert.equal(dayChangesAuthority.revision(), 4, "replaying a daily batch does not advance authority revision");
 const replayQueries = dayChangesAuthority.queries.slice(dayChangesAuthority.queries.findLastIndex((entry) => entry.statement === "begin"));
-assert.deepEqual(replayQueries.map((entry) => entry.statement), ["begin", "set local role static_weekly_control_plane", "set local statement_timeout = '60000ms'", "select public.custodial_begin_application_mutation()", "select pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended($1,0))", "select public.static_weekly_v4_begin_day_changes($1,$2,$3,$4,$5,$6,$7,$8) as result", "select public.static_weekly_v21_reconcile_dependency_changes($1) as result", "commit"], "accepted whole-action replay is generation-fenced and authority-locked; its immutable receipt is preserved and current future validity is checked before commit");
+assert.deepEqual(replayQueries.map((entry) => entry.statement), ["begin", "set local role static_weekly_control_plane", "set local statement_timeout = '60000ms'", "select public.custodial_begin_application_mutation()", "select pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended($1,0))", "select public.custodial_authorize_absence_operations_v1($1,$2,$3,$4,$5,$6,$7) as result", "select public.static_weekly_v4_begin_day_changes($1,$2,$3,$4,$5,$6,$7,$8) as result", "select public.static_weekly_v21_reconcile_dependency_changes($1) as result", "commit"], "accepted whole-action replay is generation-fenced and authority-locked; its immutable receipt is preserved and current future validity is checked before commit");
 
 const invalidDayChangesAuthority = createAuthorityDatabase();
 await assert.rejects(() => controlPlaneFor(invalidDayChangesAuthority).applyDayChanges({

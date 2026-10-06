@@ -103,7 +103,7 @@ BEGIN
  END LOOP;
  RETURN actor;
 END $fn$;
-REVOKE ALL ON FUNCTION public.custodial_authorize_absence_operations_v1(uuid,uuid,text,text,date,uuid,jsonb) FROM PUBLIC,anon,authenticated;
+REVOKE ALL ON FUNCTION public.custodial_authorize_absence_operations_v1(uuid,uuid,text,text,date,uuid,jsonb) FROM PUBLIC,anon,authenticated,service_role;
 GRANT EXECUTE ON FUNCTION public.custodial_authorize_absence_operations_v1(uuid,uuid,text,text,date,uuid,jsonb) TO static_weekly_control_plane;
 
 -- Rebuild authorization does not accept a draft, a template or browser rows.
@@ -199,12 +199,61 @@ BEGIN
      AND t.device_id=r.device_id AND r.device_id=s.device_id
      AND t.reported_by_employee_id=r.submitted_by_employee_id AND r.submitted_by_employee_id=s.employee_id) AS scan_origin
   FROM requested LEFT JOIN public.maintenance_tickets t ON t.id=requested.id
- ) SELECT coalesce(jsonb_agg(jsonb_build_object('ticket_id',id,'found',found,'status',status,
-   'scan_session_verified',scan_origin,'can_close',coalesce(status='open' AND ((actor->>'owner')::boolean OR scan_origin),false)) ORDER BY id),'[]'::jsonb)
- INTO rows FROM checked;
+ ) SELECT coalesce(jsonb_agg(jsonb_build_object('ticket_id',c.id,'found',c.found,'status',c.status,
+   'scan_session_verified',c.scan_origin,'can_close',coalesce(c.status='open' AND ((actor->>'owner')::boolean OR c.scan_origin),false)) ORDER BY c.id),'[]'::jsonb)
+ INTO rows FROM checked c;
  RETURN jsonb_build_object('schema','custodial.ticket-capabilities.v1','manager_id',p_manager_id,'credential_id',p_credential_id,
   'generated_at',clock_timestamp(),'tickets',rows);
 END $fn$;
 REVOKE ALL ON FUNCTION public.custodial_ticket_capabilities_v1(uuid,uuid,text,text,uuid[]) FROM PUBLIC,anon,authenticated,static_weekly_control_plane;
 GRANT EXECUTE ON FUNCTION public.custodial_ticket_capabilities_v1(uuid,uuid,text,text,uuid[]) TO service_role;
+
+-- Do not regress the advanced issue-outcome history into an undifferentiated
+-- legacy close. The caller explicitly chooses fixed or an ALREADY submitted
+-- work order; this operation never creates an external work order.
+CREATE OR REPLACE FUNCTION public.custodial_close_scan_ticket_outcome_v1(
+ p_manager_id uuid,p_credential_id uuid,p_device_id text,p_session_access text,
+ p_ticket_id uuid,p_outcome text,p_external_work_order_reference text,p_close_notes text,p_backend_execution_secret text
+) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public
+AS $fn$
+DECLARE actor jsonb;ticket public.maintenance_tickets%rowtype;provenance_id uuid;result jsonb;
+ requested_reference text:=nullif(btrim(coalesce(p_external_work_order_reference,'')),'');
+ requested_notes text:=nullif(btrim(coalesce(p_close_notes,'')),'');
+BEGIN
+ PERFORM public.custodial_require_backend_execution_secret(p_backend_execution_secret);
+ actor:=public.custodial_action_actor_v1(p_manager_id,p_credential_id,p_device_id,p_session_access,'close_scan_tickets');
+ IF p_outcome IS NULL OR p_outcome NOT IN ('mark_fixed','work_order_sent')
+  OR (p_outcome='work_order_sent' AND (requested_reference IS NULL OR length(requested_reference)>120))
+  OR (p_outcome='mark_fixed' AND requested_reference IS NOT NULL)
+  OR length(coalesce(requested_notes,''))>1000 THEN
+  RAISE EXCEPTION USING errcode='22023',message='Choose fixed or provide the reference for an already submitted work order';END IF;
+ SELECT * INTO ticket FROM public.maintenance_tickets WHERE id=p_ticket_id FOR UPDATE;
+ IF ticket.id IS NULL THEN RAISE EXCEPTION USING errcode='P0002',message='Ticket not found';END IF;
+ IF NOT (actor->>'owner')::boolean THEN
+  SELECT s.id INTO provenance_id FROM public.completion_responses r JOIN public.sessions s ON s.id=r.session_id
+   WHERE r.id=ticket.completion_response_id AND s.id=ticket.session_id AND ticket.issue_source='completion_form'
+    AND ticket.location_id=r.location_id AND r.location_id=s.location_id
+    AND ticket.device_id=r.device_id AND r.device_id=s.device_id
+    AND ticket.reported_by_employee_id=r.submitted_by_employee_id AND r.submitted_by_employee_id=s.employee_id FOR SHARE OF r,s;
+  IF provenance_id IS NULL THEN RAISE EXCEPTION USING errcode='42501',message='Delegated closure requires a verified scan-session ticket';END IF;
+ END IF;
+ IF ticket.status='closed' THEN
+  IF ticket.resolution_outcome IS DISTINCT FROM p_outcome OR ticket.external_work_order_reference IS DISTINCT FROM requested_reference
+   OR nullif(btrim(coalesce(ticket.close_notes,'')),'') IS DISTINCT FROM requested_notes THEN
+   RAISE EXCEPTION USING errcode='40901',message='Ticket already has a different recorded outcome; refresh instead of replacing history';END IF;
+  RETURN jsonb_build_object('ticket_id',ticket.id,'status','closed','closed_at',ticket.closed_at,'closed_by',ticket.closed_by,
+   'outcome',ticket.resolution_outcome,'external_work_order_reference',ticket.external_work_order_reference,
+   'actor_manager_id',ticket.resolution_actor_manager_id,'replayed',true);
+ END IF;
+ result:=public.custodial_set_maintenance_ticket_outcome(p_ticket_id,p_outcome,p_manager_id,requested_reference,requested_notes,p_backend_execution_secret);
+ INSERT INTO public.ops_manager_auth_events(credential_id,device_id,event_type,success,detail_json)
+  VALUES(p_credential_id,p_device_id,'scan_ticket_outcome_recorded',true,jsonb_build_object('ticket_id',p_ticket_id,
+   'manager_id',p_manager_id,'outcome',p_outcome,'owner',(actor->>'owner')::boolean));
+ RETURN result||jsonb_build_object('closed_at',result->'recorded_at','closed_by',result->'actor_name','replayed',false);
+END $fn$;
+REVOKE ALL ON FUNCTION public.custodial_close_scan_ticket_outcome_v1(uuid,uuid,text,text,uuid,text,text,text,text)
+ FROM PUBLIC,anon,authenticated,static_weekly_control_plane;
+GRANT EXECUTE ON FUNCTION public.custodial_close_scan_ticket_outcome_v1(uuid,uuid,text,text,uuid,text,text,text,text) TO service_role;
+-- Preserve earlier function definitions/history, but expose only the typed writer.
+REVOKE ALL ON FUNCTION public.custodial_close_scan_ticket_v1(uuid,uuid,text,text,uuid,text,text) FROM PUBLIC,anon,authenticated,service_role,static_weekly_control_plane;
 COMMIT;

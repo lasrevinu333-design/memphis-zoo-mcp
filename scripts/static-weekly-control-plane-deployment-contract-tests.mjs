@@ -50,7 +50,7 @@ assert.doesNotMatch(runtimeIdentity, /password\s+'[^']+'/i, "source must not con
 // regression from silently recreating the Render OOM.
 assert.deepEqual(STATIC_WEEKLY_COMPILER_RUNTIME_LIMITS, {
   initializationMilliseconds: 30_000,
-  requestMilliseconds: 315_000,
+  requestMilliseconds: 60_000,
   maxOutstandingRequests: 8,
   maxOldGenerationSizeMb: 128,
   maxSemiSpaceSizeMb: 8,

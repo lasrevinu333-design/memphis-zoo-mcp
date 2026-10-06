@@ -1,0 +1,27 @@
+{
+  "scope": "Owner/delegate Map login and existing-session permission repair, scan-ticket closure and explicitly owner-delegated absence actions. Not whole-program native acceptance.",
+  "recorded_at": "2026-10-06T03:54:07.176789+00:00",
+  "source_base_commit": "fc2b989d19246ffd447c4c7cfb2590ac19bbcd27",
+  "frontend_commit": "635ba1b2b73bef36ad5c87964a1bb18f050d37ce",
+  "required_owner_system_key": "eric_custodial_manager",
+  "normal_targeted_suite": "npm run --silent test:owner-access",
+  "suite_exit_code": 0,
+  "test_log_sha256": "dc59d0cb8ba0a978f0850599ab5e719230bffb548492eebbbaa12a58007bc6fb",
+  "tests": {
+    "existing_manager_suites": 4,
+    "map_login_session_http_cases": 63,
+    "feedback_ack_http_cases": 23,
+    "new_function_postgresql_cases": 28,
+    "existing_scheduler_suites": 2,
+    "frontend_vm_cases": 12
+  },
+  "new_migration_applied_to_production": true,
+  "new_function_definitions_hash_matched": 4,
+  "anonymous_and_browser_function_execute_denied": true,
+  "production_password_login_performed": false,
+  "rendered_browser_acceptance_performed": false,
+  "whole_historical_schema_rebuild_completed": false,
+  "independent_auditor_started": false,
+  "unrelated_program_phone_data_modified": false,
+  "frontend_controls": "Server authorization enforces the permission policy; existing scheduler and dashboard buttons are retained. Owner absence coverage has a new dedicated page."
+}

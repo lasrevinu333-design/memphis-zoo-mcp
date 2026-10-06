@@ -8,7 +8,7 @@ import {makeRestoreMutationGate} from '../src/restore-mutation-gate.js';
 import {buildPlaceReconciliation,PLACE_LEGACY_PREVIEW_SQL} from '../src/place-reconciliation.js';
 
 const env={NODE_ENV:'production',OPS_MANAGER_AUTH_REQUIRED:'true',OPS_MANAGER_SESSION_SECRET:'place-http-synthetic-test-secret-only'};
-const manager={manager_id:randomUUID(),display_name:'Synthetic Custodial Manager',roles:['CUSTODIAL_MANAGER','OPS_MANAGER'],active:true,revoked_at:null};
+const manager={manager_id:randomUUID(),display_name:'Synthetic Custodial Manager',roles:['CUSTODIAL_MANAGER','OPS_MANAGER'],active:true,revoked_at:null,is_system_principal:false,system_key:'eric_custodial_manager'};
 const credential=randomUUID(),device='PLACE_HTTP_SYNTHETIC';
 const row={credential_id:credential,device_id:device,device_label:'Synthetic Device',token_hash:'test-hash',max_access_level:'full_access',manager_id:manager.manager_id,manager,created_at:new Date().toISOString(),expires_at:new Date(Date.now()+86400000).toISOString(),revoked_at:null};
 const store={find:async id=>id===credential?structuredClone(row):null};

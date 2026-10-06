@@ -4,9 +4,32 @@ set local statement_timeout='120s';
 
 -- Keep historical civil labels intact. New manager writes additionally pin
 -- chosen UTC instants; null means a legacy row not yet explicitly interpreted.
+-- Shared Events integration precondition: this still-unapplied staged
+-- migration may follow the already deployed Outlook fields. Never adopt an
+-- unrelated column/type or rewrite existing event text/times.
+do $shared_fields$
+declare expected record;actual record;present integer:=0;
+begin
+ for expected in select * from jsonb_each_text('{"start_instant_utc":"timestamp with time zone","end_instant_utc":"timestamp with time zone"}'::jsonb) loop
+  select a.attname,format_type(a.atttypid,a.atttypmod) as data_type into actual
+   from pg_attribute a where a.attrelid='public.events_app_events'::regclass
+    and a.attname=expected.key and not a.attisdropped;
+  if found then
+   present:=present+1;
+   if actual.data_type is distinct from expected.value then raise exception 'Unexpected shared Event field type: %',expected.key;end if;
+  end if;
+ end loop;
+ if present not in (0,2) then raise exception 'Shared Event field pair is incomplete';end if;
+ if present=2 and (to_regprocedure('public.custodial_outlook_event_sync_v1(text,jsonb)') is null or
+  encode(extensions.digest(convert_to(pg_get_functiondef('public.custodial_outlook_event_sync_v1(text,jsonb)'::regprocedure),'UTF8'),'sha256'),'hex')
+   is distinct from '943393c799426d0430a44b0056db6b292d171f5e637c66f059fac4beff65a067') then
+  raise exception 'Existing shared Event fields are not from the admitted Outlook writer';
+ end if;
+end $shared_fields$;
+
 alter table public.events_app_events
-  add column start_instant_utc timestamptz,
-  add column end_instant_utc timestamptz,
+  add column if not exists start_instant_utc timestamptz,
+  add column if not exists end_instant_utc timestamptz,
   add column superseded_by_event_id uuid references public.events_app_events(id) on delete restrict,
   add column superseded_at timestamptz,
   add column superseded_by_manager_id uuid references public.ops_manager_managers(manager_id) on delete restrict,

@@ -1,0 +1,28 @@
+{
+  "recorded_at": "2026-10-06T15:00:46.479436+00:00",
+  "owner_parent": "b0b0eb6cc2e939a043db63a042a63b15b412795f",
+  "events_parent": "8aaa09d0f34c94401a5390d9254333ace596e609",
+  "frontend_commit": "212396e762f48d5debadbe056cd3ed8f1071c81d",
+  "combined_test_exit": 0,
+  "tests": {
+    "map_session_http": 63,
+    "feedback_ack_http": 23,
+    "owner_postgres_actions": 28,
+    "signer_synthetic_paths": 9,
+    "proxy_addr": 7,
+    "shared_events_feed_http": 29,
+    "outlook_writer_postgres": 31
+  },
+  "frontend_tests": {
+    "shared_and_map_vm": 39,
+    "owner_vm": 12,
+    "rendered_browser": 8,
+    "shell_units": 33
+  },
+  "frontend_audit_total": 0,
+  "live_database_replayed": false,
+  "production_signed": false,
+  "production_deployed": false,
+  "combined_log_sha256": "a81ef3f1b432561ea028240d1738545a7e949dce4be87c494bdc8c984d9980f5",
+  "notes": "Historical exact-replay declarations extended to include the already-installed shared Events addition. Existing old-source snapshot, backup, replay, signing and privilege checks are retained."
+}

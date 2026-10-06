@@ -1,3 +1,4 @@
+import {migrationReplayNames} from './migration-replay-order.mjs';
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 import {readdirSync,readFileSync} from 'node:fs';
@@ -16,7 +17,7 @@ const removeDefaults=()=>{for(const owner of ['postgres','supabase_admin'])for(c
 let owned=false,checks=0;
 const cleanup=()=>{if(owned){docker(['rm','-f',container]);owned=false;assert.equal(docker(['ps','-a','--filter',`name=^/${container}$`,'--format','{{.Names}}']).trim(),'');console.log('OWNED_CONTAINER_REMOVED',container)}};
 for(const signal of ['SIGINT','SIGTERM'])process.once(signal,()=>{try{cleanup()}finally{process.exit(143)}});
-const files=readdirSync('supabase/migrations').filter(file=>file.endsWith('.sql')).sort();
+const files=migrationReplayNames(process.cwd());
 assert.ok(files.includes('20261003120000_completion_taxonomy_evidence.sql'));
 assert.ok(files.includes('20261003143000_issue_constraint_index_recovery.sql'));
 assert.ok(files.indexOf('20261003120000_completion_taxonomy_evidence.sql') <

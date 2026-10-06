@@ -30,6 +30,7 @@ function requireTrustedDeviceConfiguration(env) {
 function allowedOrigins(env) {
   return new Set([
     "https://lasrevinu333-design.github.io",
+    "https://memphis-zoo-infrastructure-map.lasrevinu333.chatgpt.site",
     "https://localhost",
     "capacitor://localhost",
     ...text(env?.STATIC_WEEKLY_CONTROL_PLANE_ALLOWED_ORIGINS || env?.ALLOWED_CORS_ORIGINS).split(",").map((value) => value.trim()).filter(Boolean),

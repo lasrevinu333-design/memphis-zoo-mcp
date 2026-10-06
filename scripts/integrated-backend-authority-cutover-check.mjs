@@ -276,74 +276,51 @@ const input = parseJsonBlob(blobByPath.get(releaseInputPath), "release authority
 const productionMigrationState = parseJsonBlob(blobByPath.get(productionMigrationStatePath), "production migration state");
 assert.equal(productionMigrationState.mode, "migration_required");
 assert.ok(Array.isArray(productionMigrationState.pending_migrations));
-assert.equal(productionMigrationState.pending_migrations.length, 46, "the candidate must identify exactly the forty-six ordered Sep22-29 corrections");
-const pendingReleaseMigrations = productionMigrationState.pending_migrations.map(({ file }) => file);
-assert.deepEqual(pendingReleaseMigrations, [
-  lunchDeliveryFailureManagerAlert,
-  completedCleaningReminderCycles,
-  verifiedVisitReminderState,
-  lunchPublicationFile,
-  lunchProducerFile,
-  restoreExistingEmployeeFile,
-  vacateRosterSlotFile,
-  visitorAttendanceFile,
-  "20260924022250_release_selection_and_occurrence_guards.sql",
-  "20260924023930_notification_receipt_and_lunch_integrity.sql",
-  "20260924032226_bind_release_selection_guard_recovery.sql",
-  "20260924042758_static_weekly_canonical_shift_end_derivation.sql",
-  "20260924044035_static_weekly_atomic_roster_completion.sql",
-  "20260924053507_assigned_phone_activation_transport.sql",
-  "20260924080839_custodial_legacy_installation_observation.sql",
-  "20260924161004_owner_oc24_cleaning_and_inspection_boundaries.sql",
-  "20260924172500_oc24_manual_contractor_lunch.sql",
-  "20260924201258_native_provider_durable_authority.sql",
-  "20260925015905_oc24_completion_selection_normalization.sql",
-  "20260925020244_oc24_bound_legacy_completion_replay.sql",
-  "20260925050718_static_weekly_staffing_command_ledger.sql",
-  "20260925054802_static_weekly_staffing_atomic_acceptance.sql",
-  "20260925190000_gps_exact_location_authority_boundary.sql",
-  "20260926143542_static_weekly_protected_separation.sql",
-  "20260926180000_retire_direct_employee_status_rpc.sql",
-  "20260926192656_static_weekly_recurring_confirmation_ledger.sql",
-  "20260926193000_retire_direct_employee_mutation_helpers.sql",
-  "20260926193651_static_weekly_recurring_source_admission.sql",
-  "20260926194644_static_weekly_recurring_generation_fence.sql",
-  "20260926200458_static_weekly_recurring_future_same_monday.sql",
-  "20260926201644_static_weekly_recurring_dependency_snapshot.sql",
-  "20260926202657_static_weekly_recurring_publication_binding.sql",
-  "20260926204235_static_weekly_recurring_terminal_targets.sql",
-  "20260926205849_static_weekly_recurring_blocked_authority_repair.sql",
-  "20260926211714_static_weekly_recurring_common_lock_order.sql",
-  "20260926220510_static_weekly_recurring_dependency_reconciliation.sql",
-  "20260926223914_static_weekly_recurring_application_targets.sql",
-  "20260926225613_static_weekly_recurring_atomic_finalization.sql",
-  "20260926234537_static_weekly_authenticated_schedule_delivery.sql",
-  "20260927001706_static_weekly_lunch_validation_materialization.sql",
-  "20260927010911_static_weekly_current_recurring_delivery_status.sql",
-  "20260927031806_schedule_bound_location_reminders.sql",
-  "20260927052929_schedule_notification_admission_corrections.sql",
-  "20260927072146_schedule_notification_exact_canary.sql",
-  "20260927075352_protected_separation_original_context.sql",
-  "20260929125440_custodial_recovery_inventory_closure.sql",
-]);
-assert.equal(Object.hasOwn(productionMigrationState, "applied_release_migrations"), false,
-  "captured state must use the exact ledger head instead of a duplicate partial applied-migration list");
-const orderedMigrationFiles = expectedBlobs
-  .map(({ path }) => path.match(/^supabase\/migrations\/([^/]+\.sql)$/)?.[1] || null)
-  .filter(Boolean)
-  .sort();
-assert.equal(orderedMigrationFiles.length, expectedMigrationCount, "complete signed migration inventory is required");
-assert.equal(new Set(orderedMigrationFiles.map((file) => file.slice(0, 14))).size, orderedMigrationFiles.length,
-  "signed migration inventory contains a duplicate migration version");
+// Ordering is an immutable signed-source declaration, not inference from dates.
+// The current production prefix already includes later-dated Owner/Events fixes;
+// older-dated scheduler files can still be genuinely pending.
+const replayPath = "supabase/canonical/migration-replay-order.json";
+const replayBlob = blobByPath.get(replayPath);
+const replay = parseJsonBlob(replayBlob, "exact production-prefix replay order");
+assert.equal(replay.schema, "custodial.migration-replay-order.v1");
+assert.equal(replay.base_source_commit, "ac579d7b0cf12e6a437ffd9e6c2fec47a4f61dfa");
+assert.equal(replay.production_execution_authorized, false, "source order cannot grant production approval");
+assert.equal(replay.phases?.length, 2);
+assert.equal(replay.phases[0].kind, "verified_main_source_prefix");
+assert.equal(replay.phases[1].kind, "forward_source_after_prefix");
+assert.equal(replay.phases[0].files?.length, 133);
+assert.equal(replay.phases[1].files?.length, 92);
+assert.equal(expectedMigrationCount, 225);
+assert.equal(productionMigrationState.source_binding?.source_replay_manifest, replayPath);
+assert.equal(hash(replayBlob.bytes), productionMigrationState.source_binding?.source_replay_manifest_sha256);
+const orderedMigrationFiles = [];
+const seenMigrationNames = new Set();
+const seenMigrationVersions = new Set();
+for (const phase of replay.phases) {
+  let previous = "";
+  for (const item of phase.files) {
+    assert.deepEqual(Object.keys(item).sort(), ["name", "sha256"]);
+    assert.match(item.name, /^[0-9]{14}_[a-z][a-z0-9_]*\.sql$/);
+    assert.match(item.sha256, /^[a-f0-9]{64}$/);
+    assert.ok(item.name > previous && !seenMigrationNames.has(item.name), "replay phase must be unique and sorted");
+    assert.ok(!seenMigrationVersions.has(item.name.slice(0,14)), "duplicate migration version");
+    const blob = blobByPath.get(`supabase/migrations/${item.name}`);
+    assert.ok(blob, "manifest member must be present in exact signed tree");
+    assert.equal(hash(blob.bytes), item.sha256, `signed migration content mismatch: ${item.name}`);
+    previous = item.name;seenMigrationNames.add(item.name);seenMigrationVersions.add(item.name.slice(0,14));
+    orderedMigrationFiles.push(item.name);
+  }
+}
+assert.deepEqual([...orderedMigrationFiles].sort(), expectedBlobs
+  .map(({path})=>path.match(/^supabase\/migrations\/([^/]+\.sql)$/)?.[1]).filter(Boolean).sort(),
+  "replay manifest must equal the entire signed migration inventory");
+const appliedReleaseMigrations = replay.phases[0].files.map(item=>item.name);
+const pendingReleaseMigrations = replay.phases[1].files.map(item=>item.name);
+assert.deepEqual(productionMigrationState.pending_migrations.map(item=>item.file), pendingReleaseMigrations);
+assert.equal(productionMigrationState.observed_production?.source_authority_migration_count, appliedReleaseMigrations.length);
 const observedLedgerHead = String(productionMigrationState.observed_production?.ledger_head || "");
-const appliedReleaseMigrations = orderedMigrationFiles.filter((file) => file.slice(0, 14) <= observedLedgerHead);
-const unappliedReleaseMigrations = orderedMigrationFiles.filter((file) => file.slice(0, 14) > observedLedgerHead);
-assert.equal(appliedReleaseMigrations.length, productionMigrationState.observed_production?.source_authority_migration_count,
-  "captured source migration count does not equal the complete signed applied prefix");
-assert.equal(appliedReleaseMigrations.at(-1), `${observedLedgerHead}_${productionMigrationState.observed_production?.source_migration_name}.sql`,
-  "captured ledger head is not the final migration in the complete signed applied prefix");
-assert.deepEqual(unappliedReleaseMigrations, pendingReleaseMigrations,
-  "every signed migration after the captured ledger head must be an exact ordered pending migration");
+assert.equal(appliedReleaseMigrations.at(-1), `${observedLedgerHead}_${productionMigrationState.observed_production?.source_migration_name}.sql`);
+assert.equal(Object.hasOwn(productionMigrationState, "applied_release_migrations"), false);
 const releaseEvidence = parseJsonBlob(evidenceBlob, "release evidence");
 const index = blobByPath.get("src/index.js").bytes.toString("utf8");
 const deviceCredentialAuth = blobByPath.get("src/auth/device-credential-auth.js").bytes.toString("utf8");
@@ -381,8 +358,8 @@ assert.match(input.backend_contract.device_credential_secret_gate, /Every active
 assert.ok(Array.isArray(input.cutover.phase_order) && input.cutover.phase_order.length >= 7);
 assert.match(input.cutover.phase_order[1], /exact observed production ledger head.*catalog\/privilege fingerprint.*zero target-position collisions/i);
 assert.match(input.cutover.phase_order[2], /fresh post-capture backup receipt.*exact pending-migration digest.*exact source attestation/i);
-assert.match(input.cutover.phase_order[3], /forty-six exact ordered pending migrations.*lunch-delivery manager alerts.*completed-cleaning reminder compatibility.*verified-visit five-minute overdue authority.*atomic static-weekly lunch publication.*durable lunch start\/end notification production.*existing-employee identity restoration.*dated roster-slot vacancy.*aggregate visitor-attendance reading.*release-selection and occurrence guards.*independent notification receipt and lunch integrity.*release-selector recovery bindings.*canonical dated shift-end derivation.*atomic roster completion.*assigned-phone activation transport.*legacy-installation observation.*owner cleaning and inspection boundaries.*manual contractor lunch authority.*durable native provider authority.*completion-selection normalization.*bound legacy completion replay.*durable staffing command ledger.*atomic staffing acceptance.*exact-location GPS authority boundary.*ledger to advance exactly forty-six entries.*do not replay historical production migrations/i);
-assert.match(input.cutover.phase_order[4], /retain the current immutable weighted-schedule publication by default.*only when a named manager approves a replacement.*derive exactly one replacement draft from the current publication.*expected-revision and idempotency guards.*do not create a competing draft.*preserve the current publication/i);
+assert.match(input.cutover.phase_order[3], /92 exact ordered pending migrations.*retai[n]*.*133-source prefix.*preexisting pending ledger version.*ledger advances exactly 92 entries.*do not replay historical production migrations.*encrypted-backup.*signed-rehearsal.*serializable transaction.*restore-mutation fence/i);
+assert.match(input.cutover.phase_order[4], /Retain the current immutable weekly publication.*full authenticated owner.*registered approved initial or recurring fixed pattern.*expected-revision.*other managers.*dated absences.*regenerate routes.*Never invent approval.*Preserve the current publication/i);
 assert.ok(input.cutover.rollback.restoration_checks.some((value) => /retired 09:45 background writer.*manager-approved schedule or absence publication/i.test(value)));
 assert.ok(input.cutover.rollback.restoration_checks.some((value) => /every active employee-device credential.*manager-code recovery.*legacy secret fallback/i.test(value)));
 assert.equal(input.cutover.production_migration_state, productionMigrationStatePath);
@@ -391,29 +368,29 @@ assert.equal(productionMigrationState.project_ref, "rqquvtjdmugpigbndmne");
 assert.match(String(productionMigrationState.observed_production?.ledger_head || ""), /^[0-9]{14}$/);
 assert.match(String(productionMigrationState.observed_production?.source_migration_name || ""), /^[a-z][a-z0-9_]*$/);
 assert.match(String(productionMigrationState.observed_production?.catalog_privilege_fingerprint || ""), /^[a-f0-9]{64}$/);
-assert.equal(productionMigrationState.observed_production?.ledger_head, "20260920010000");
-assert.equal(productionMigrationState.observed_production?.source_migration_name, "event_reminder_static_weekly_authority");
-assert.equal(productionMigrationState.observed_production?.catalog_privilege_fingerprint, "750e7f040519f6d4555836cbd4d172a22f98911d5bab9918fa370238fff3f822");
-assert.equal(productionMigrationState.observed_production?.production_ledger_count, 230);
+assert.equal(productionMigrationState.observed_production?.ledger_head, "20261006162427");
+assert.equal(productionMigrationState.observed_production?.source_migration_name, "custodial_shared_events_recovery_binding");
+assert.equal(productionMigrationState.observed_production?.catalog_privilege_fingerprint, "440c5cfa077055cae5ec41537496f50f2d99ec7cc91c5cdf5cc5ead8d44268a5");
+assert.equal(productionMigrationState.observed_production?.production_ledger_count, 233);
 assert.equal(productionMigrationState.observed_production?.source_authority_migration_count, expectedMigrationCount - pendingReleaseMigrations.length);
 assert.equal(productionMigrationState.observed_production?.vacancy_functions_present, true);
 assert.equal(productionMigrationState.observed_production?.hydrated_initial_draft_reader_present, true);
 assert.equal(productionMigrationState.observed_production?.registered_source_dated_status_excluded, true);
 assert.equal(productionMigrationState.observed_production?.outlook_event_sync_table_present, true);
-assert.equal(productionMigrationState.target?.source_migration_file, "20260929125440_custodial_recovery_inventory_closure.sql");
-assert.equal(productionMigrationState.target?.source_migration_name, "custodial_recovery_inventory_closure");
-assert.equal(productionMigrationState.target?.source_migration_version, "20260929125440");
+assert.equal(productionMigrationState.target?.source_migration_file, "20261006190426_manager_scheduler_recovery_binding.sql");
+assert.equal(productionMigrationState.target?.source_migration_name, "manager_scheduler_recovery_binding");
+assert.equal(productionMigrationState.target?.source_migration_version, "20261006190426");
 assert.equal(productionMigrationState.target?.production_ledger_version, null);
 assert.equal(productionMigrationState.target?.canonical_source_schema_fingerprint, schemaFingerprint);
-assert.equal(productionMigrationState.target?.public_function_count, 606);
-assert.equal(productionMigrationState.target?.production_ledger_count, 276);
+assert.equal(productionMigrationState.target?.public_function_count, 792);
+assert.equal(productionMigrationState.target?.production_ledger_count, 325);
 assert.equal(productionMigrationState.target?.source_authority_migration_count, expectedMigrationCount);
 assert.equal(productionMigrationState.target?.pending_migration_count, pendingReleaseMigrations.length);
 assert.equal(productionMigrationState.target?.registered_source_dated_status_excluded, true);
-assert.equal(productionMigrationState.target?.expected_catalog_counts?.functions, 606);
-assert.equal(productionMigrationState.target?.expected_catalog_counts?.triggers, 388);
+assert.equal(productionMigrationState.target?.expected_catalog_counts?.functions, 792);
+assert.equal(productionMigrationState.target?.expected_catalog_counts?.triggers, 488);
 assert.equal(productionMigrationState.target?.expected_catalog_counts?.policies, 44);
-assert.equal(productionMigrationState.target?.expected_catalog_counts?.routine_grants, 396);
+assert.equal(productionMigrationState.target?.expected_catalog_counts?.routine_grants, 492);
 assert.equal(productionMigrationState.target?.expected_catalog_counts?.schema_grants, 9);
 assert.match(releaseHealthIdentityProjectionText, /c\.relname in \('devices','employees','device_aliases'\)/);
 assert.match(releaseHealthIdentityProjectionText, /Release health recovery inventory row is missing or duplicated/);

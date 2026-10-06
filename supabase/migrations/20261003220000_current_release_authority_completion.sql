@@ -184,10 +184,21 @@ begin
   select array_agg(restore_order order by restore_order) into orders
     from public.custodial_release_authority_restore_inventory
     where object_kind='column' and object_identity=any(identities);
-  if orders is distinct from array[202130,202131,202132,202133,202134,202135]
+  -- Both source lineages are exact: the staged-only six-column capture, and
+  -- the deployed Shared Events prefix whose two UTC columns were already
+  -- bound in 201743/201744. Keep those six existing slots; never take another
+  -- object's restore slot or rewrite a column definition.
+  if (orders is distinct from array[202130,202131,202132,202133,202134,202135]
+      and orders is distinct from array[201743,201744,202132,202133,202134,202135])
     or (select count(*) from public.custodial_release_authority_restore_inventory
-        where restore_order between 202130 and 202135)<>6 then
+        where restore_order=any(orders))<>6 then
     raise exception 'Current Event column order captured scope changed';
+  end if;
+  if orders=array[201743,201744,202132,202133,202134,202135] and
+    (to_regprocedure('public.custodial_outlook_event_sync_v1(text,jsonb)') is null or
+     public.static_weekly_digest_text(pg_get_functiondef('public.custodial_outlook_event_sync_v1(text,jsonb)'::regprocedure))
+      is distinct from '943393c799426d0430a44b0056db6b292d171f5e637c66f059fac4beff65a067') then
+    raise exception 'Current Event column order has no admitted Shared Events prefix';
   end if;
   for wanted in select * from (values
     ('public.events_app_events:start_instant_utc','106a679f7e85be9e039b7f6f07c223f81d1041868318a025d650524970945c7c'),
@@ -211,7 +222,7 @@ begin
   alter table public.custodial_release_authority_restore_inventory
     disable trigger trg_custodial_release_authority_restore_inventory_immutable;
   update public.custodial_release_authority_restore_inventory
-    set restore_order=202129+array_position(identities,object_identity)
+    set restore_order=orders[array_position(identities,object_identity)]
     where object_kind='column' and object_identity=any(identities);
   get diagnostics changed=row_count;
   if changed<>6 then raise exception 'Current Event column order update scope changed';end if;

@@ -1,21 +1,6 @@
 import express from "express";
-import { createClient } from "@supabase/supabase-js";
-import { aiParseEventTexts } from "./events-ai-parser.js";
+import { sharedEventFeed, employeeVisibleEvents } from "./shared-events-feed.js";
 import { resolveChicagoEventInterval } from "./events-time.js";
-
-const EVENTS_SUPABASE_CLIENT =
-  process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
-    ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
-        auth: { persistSession: false, autoRefreshToken: false },
-      })
-    : null;
-
-function getEventsSupabaseClient() {
-  if (!EVENTS_SUPABASE_CLIENT) {
-    throw new Error("Supabase is not configured. Check SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in .env.");
-  }
-  return EVENTS_SUPABASE_CLIENT;
-}
 
 const EVENTS_TIME_ZONE = "America/Chicago";
 const EVENTS_CONTRACT_VERSION = "events.v3";
@@ -52,15 +37,6 @@ function isUuid(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     String(value || "").trim()
   );
-}
-
-function authenticatedEventActor(req) {
-  const managerId = String(req?.memphisAuth?.manager_id || "").trim();
-  const displayName = String(req?.memphisAuth?.manager_display_name || "").replace(/\s+/g, " ").trim();
-  if (!isUuid(managerId) || !displayName) {
-    throw Object.assign(new Error("Authenticated named manager identity is required."), { status: 403 });
-  }
-  return { manager_id: managerId, display_name: displayName.slice(0, 200) };
 }
 
 function normalizeTimeInput(value) {
@@ -112,13 +88,6 @@ function toNullableInt(value) {
     throw new Error("attendee_count must be a whole number or blank.");
   }
   return parsed;
-}
-
-function expectedEventRevision(value) {
-  if (!Number.isSafeInteger(value) || value < 1) {
-    throw new Error("A valid expected event revision is required. Refresh and review the event before saving.");
-  }
-  return value;
 }
 
 function sanitizeEventNotes(value, attendeeCount = null) {
@@ -434,7 +403,7 @@ async function listUpcomingEvents(runReadOnlySql) {
   const rows = await runReadOnlySql(buildEventResponseSelectSql(
     `coalesce(e.status, 'SCHEDULED') = 'SCHEDULED'
      and coalesce(e.needs_review, false) = false and e.event_scope <> 'UNKNOWN'
-     and (place.authority->>'admissible')::boolean is true
+     and coalesce((place.authority->>'admissible')::boolean,false)
      and coalesce(e.end_date, e.event_date) >= (now() at time zone '${EVENTS_TIME_ZONE}')::date`,
     `order by e.event_date asc, e.start_time asc, e.event_name asc`
   ));
@@ -447,21 +416,7 @@ function boundedWholeNumber(value, fallback, minimum, maximum) {
   return Math.min(maximum, Math.max(minimum, Number(raw)));
 }
 
-async function listEmployeeEvents(runReadOnlySql, { windowDays = 30, limit = 80 } = {}) {
-  const days = boundedWholeNumber(windowDays, 30, 1, 90);
-  const rowLimit = boundedWholeNumber(limit, 80, 1, 200);
-  const rows = await runReadOnlySql(buildEventResponseSelectSql(
-    `coalesce(e.status, 'SCHEDULED') in ('SCHEDULED', 'CANCELLED', 'SUPERSEDED')
-     and coalesce(e.needs_review, false) = false and e.event_scope <> 'UNKNOWN'
-     and (place.authority->>'admissible')::boolean is true
-     and coalesce(e.end_date, e.event_date) >= (now() at time zone '${EVENTS_TIME_ZONE}')::date
-     and e.event_date <= (now() at time zone '${EVENTS_TIME_ZONE}')::date + ${days}`,
-    `order by e.event_date asc, e.start_time asc, e.event_name asc limit ${rowLimit}`
-  ));
-  return Array.isArray(rows) ? rows : [];
-}
-
-async function listManagerEvents(runReadOnlySql) {
+export async function listSharedEvents(runReadOnlySql) {
   const rows = await runReadOnlySql(buildEventResponseSelectSql(
     `(e.status = 'NEEDS_REVIEW' or
       (e.status = 'CANCELLED' and coalesce(e.needs_review,false) = true) or
@@ -469,9 +424,10 @@ async function listManagerEvents(runReadOnlySql) {
        and e.event_scope <> 'UNKNOWN'
        and coalesce(e.end_date, e.event_date) >= (now() at time zone '${EVENTS_TIME_ZONE}')::date))`,
     `order by case when e.status = 'NEEDS_REVIEW' then 0 else 1 end,
-      e.event_date asc, e.start_time asc, e.event_name asc limit 500`
+      e.event_date asc, e.start_time asc, e.event_name asc limit 501`
   ));
-  return Array.isArray(rows) ? rows : [];
+  if (!Array.isArray(rows) || rows.length > 500) throw new Error("Complete bounded event source unavailable.");
+  return rows;
 }
 
 const PUBLIC_EVENT_FIELDS = Object.freeze([
@@ -492,6 +448,8 @@ const PUBLIC_EVENT_FIELDS = Object.freeze([
 
 const EMPLOYEE_EVENT_FIELDS = Object.freeze([
   ...PUBLIC_EVENT_FIELDS,
+  "revision",
+  "custodial_note_codes",
   "start_instant_utc",
   "end_instant_utc",
   "superseded_by_event_id",
@@ -509,95 +467,21 @@ function toEmployeeEvent(event = {}) {
 }
 
 function buildEventResponseSelectSql(whereSql, suffixSql = "") {
-  const where = String(whereSql || "").trim();
-  const suffix = String(suffixSql || "").trim();
-  return `
-    select
-      e.id,
-      coalesce(e.revision, 1) as revision,
-      e.event_name,
-      e.event_name as event_title,
-      coalesce(e.event_scope, 'UNKNOWN') as event_scope,
-      coalesce(e.status, 'SCHEDULED') as status,
-      e.cancelled_at,
-      e.cancelled_by,
-      e.cancelled_by_manager_id,
-      e.cancellation_reason,
-      e.cancelled_from_status,
-      e.archived_at,
-      e.superseded_by_event_id,
-      e.superseded_at,
-      e.superseded_by_manager_id,
-      e.primary_venue_id,
-      e.venue_ids,
-      coalesce(nullif(place.authority->>'primary_display_name',''),e.display_location) as display_location,
-      e.display_location as source_display_location,
-      place.authority->>'mapping_status' as place_mapping_status,
-      place.authority->>'review_reason' as place_review_reason,
-      e.coverage_location_ids,
-      e.staffing_area_ids,
-      e.source_location_text,
-      e.source_text,
-      e.source_format,
-      e.parser_confidence,
-      coalesce(e.needs_review, false) as needs_review,
-      e.parse_reason,
-      coalesce(e.manually_overridden, false) as manually_overridden,
-      e.overridden_by,
-      e.overridden_at,
-      coalesce(e.event_timezone, '${EVENTS_TIME_ZONE}') as event_timezone,
-      e.location_group_id,
-      coalesce(ev.venue_code, lg.group_code) as venue_code,
-      coalesce(nullif(place.authority->>'primary_display_name',''),ev.display_name, nullif(e.display_location, ''), lg.group_name) as venue_name,
-      coalesce(ev.venue_code, lg.group_code) as group_code,
-      coalesce(nullif(e.display_location, ''), ev.display_name, lg.group_name) as group_name,
-      e.event_date,
-      e.end_date,
-      to_char(e.start_time, 'HH24:MI:SS') as start_time,
-      to_char(e.end_time, 'HH24:MI:SS') as end_time,
-      e.start_instant_utc,
-      e.end_instant_utc,
-      (e.end_date > e.event_date) as spans_overnight,
-      e.attendee_count,
-      case
-        when nullif(btrim(e.notes), '') is null then null
-        when e.attendee_count is not null and btrim(e.notes) = e.attendee_count::text then null
-        else e.notes
-      end as notes,
-      e.custodial_note_codes,
-      e.custodial_public_notes,
-      e.created_by,
-      e.created_by_manager_id,
-      e.updated_by_manager_id,
-      e.created_at,
-      e.updated_at
-    from public.events_app_events e
-    join public.location_groups lg on lg.id = e.location_group_id
-    left join public.event_venues ev on ev.id = e.primary_venue_id
+  return `select e.id,coalesce(e.revision,1) as revision,e.event_name,e.event_name as event_title,
+    e.event_scope,e.status,e.audience_scope,e.audience_employee_ids,
+    coalesce((place.authority->>'admissible')::boolean,false) as place_admissible,
+    coalesce(nullif(place.authority->>'primary_display_name',''),e.display_location) as display_location,
+    coalesce(nullif(place.authority->>'primary_display_name',''),ev.display_name,e.display_location,lg.group_name) as venue_name,
+    e.location_group_id,e.primary_venue_id,e.venue_ids,e.coverage_location_ids,e.staffing_area_ids,
+    e.event_date,e.end_date,to_char(e.start_time,'HH24:MI:SS') as start_time,
+    to_char(e.end_time,'HH24:MI:SS') as end_time,e.start_instant_utc,e.end_instant_utc,
+    (e.end_date>e.event_date) as spans_overnight,e.event_timezone,e.attendee_count,
+    coalesce(e.needs_review,false) as needs_review,e.custodial_note_codes,e.custodial_public_notes,
+    e.superseded_by_event_id,e.updated_at
+    from public.events_app_events e join public.location_groups lg on lg.id=e.location_group_id
+    left join public.event_venues ev on ev.id=e.primary_venue_id
     cross join lateral (select public.app_event_place_authority(to_jsonb(e),statement_timestamp()) as authority) place
-    ${where ? `where ${where}` : ""}
-    ${suffix}
-  `;
-}
-
-async function readEventByOperationId(runReadOnlySql, operationId) {
-  const normalizedId = String(operationId || "").trim();
-  if (!isUuid(normalizedId)) return null;
-  const rows = await runReadOnlySql(buildEventResponseSelectSql(
-    `e.operation_id = ${sqlLiteral(normalizedId)}::uuid`,
-    "limit 1"
-  ));
-  return Array.isArray(rows) && rows[0]?.id ? rows[0] : null;
-}
-
-async function readEventById(runReadOnlySql, eventId) {
-  const normalizedId = String(eventId || "").trim();
-  if (!isUuid(normalizedId)) return null;
-  const rows = await runReadOnlySql(buildEventResponseSelectSql(
-    `e.id = ${sqlLiteral(normalizedId)}::uuid`,
-    "limit 1"
-  ));
-  return Array.isArray(rows) && rows[0]?.id ? rows[0] : null;
+    ${whereSql ? `where ${whereSql}` : ''} ${suffixSql}`;
 }
 
 async function listLocationGroups(runReadOnlySql) {
@@ -709,118 +593,6 @@ async function listEventDefaultRules(runReadOnlySql) {
   return Array.isArray(rows) ? rows : [];
 }
 
-async function getUpcomingEventScheduleStates(runReadOnlySql) {
-  const rows = await runReadOnlySql(`
-    select
-      e.event_date,
-      count(distinct e.id)::int as event_count,
-      (
-        select count(*)::int
-        from public.daily_schedule_assignments dsa
-        where dsa.service_date = e.event_date
-      ) as schedule_assignment_count,
-      (
-        select count(*)::int
-        from public.daily_group_assignments dga
-        where dga.assignment_date = e.event_date
-          and dga.active = true
-          and dga.assigned_employee_id is not null
-      ) as group_assignment_count
-    from public.events_app_events e
-    where e.event_date <= ((now() at time zone '${EVENTS_TIME_ZONE}')::date + 1)
-      and coalesce(e.end_date, e.event_date) >= (now() at time zone '${EVENTS_TIME_ZONE}')::date
-    group by e.event_date
-    order by e.event_date asc
-  `);
-  return Array.isArray(rows) ? rows : [];
-}
-
-async function ensureUpcomingEventScheduleState({ runReadOnlySql, runRpc }) {
-  const eventScheduleStates = await getUpcomingEventScheduleStates(runReadOnlySql);
-  return {
-    ok: true,
-    skipped: true,
-    reason: "events_are_reminders_only",
-    checked_dates: eventScheduleStates.length,
-    generated_dates: [],
-  };
-
-  if (typeof runRpc !== "function") {
-    return { ok: true, skipped: true, reason: "runRpc_missing", generated_dates: [] };
-  }
-
-  const states = await getUpcomingEventScheduleStates(runReadOnlySql);
-  const generatedDates = [];
-
-  for (const state of states) {
-    if (Number(state?.schedule_assignment_count || 0) > 0) continue;
-    const eventDate = String(state?.event_date || "").trim();
-    if (!eventDate) continue;
-    await runRpc("sch_generate_daily_schedule", { p_service_date: eventDate, p_force: false });
-    generatedDates.push(eventDate);
-  }
-
-  return { ok: true, checked_dates: states.length, generated_dates: generatedDates };
-}
-
-function normalizeWriteResultRows(result) {
-  if (Array.isArray(result)) return result.filter(Boolean);
-  if (result && typeof result === "object") return [result];
-  return [];
-}
-
-async function createEventRecord(runReadOnlySql, runCommand, payload, actor) {
-  const referenceData = await getEventReferenceData(runReadOnlySql);
-  const normalized = normalizeEventPayload(payload, referenceData);
-  const record = {
-    ...normalized,
-    actor_manager_id: actor.manager_id,
-    created_by: actor.display_name,
-    overridden_by: normalized.manually_overridden ? actor.display_name : null,
-  };
-  const rows = normalizeWriteResultRows(await runCommand("event_create", { record, actor: actor.display_name }));
-  const writeRow = rows.find((row) => row?.id);
-  if (writeRow) return { ...record, ...writeRow };
-  const authoritativeRow = await readEventByOperationId(runReadOnlySql, record.operation_id);
-  if (authoritativeRow) return { ...record, ...authoritativeRow };
-  return record;
-}
-
-async function updateEventRecord(runReadOnlySql, runCommand, eventId, payload, actor) {
-  const normalizedId = String(eventId || "").trim();
-  if (!isUuid(normalizedId)) throw new Error("A valid event id is required.");
-  const referenceData = await getEventReferenceData(runReadOnlySql);
-  const record = {
-    ...normalizeEventPayload({ ...payload, manually_overridden: true }, referenceData),
-    expected_revision: expectedEventRevision(payload.expected_revision),
-    actor_manager_id: actor.manager_id,
-    overridden_by: actor.display_name,
-  };
-  const rows = normalizeWriteResultRows(await runCommand("event_update", {
-    event_id: normalizedId, record,
-    actor: actor.display_name,
-    reason: record.parse_reason || "Event updated from Event Input Console.",
-  }));
-  const writeRow = rows.find((row) => row?.id);
-  if (writeRow) return { ...record, ...writeRow, previous_record: undefined };
-  const authoritativeRow = await readEventById(runReadOnlySql, normalizedId);
-  if (authoritativeRow) return { ...record, ...authoritativeRow, previous_record: undefined };
-  throw new Error("Event not found.");
-}
-
-async function transitionEventRecord(runEventTransition, eventId, action, payload, actor) {
-  const normalizedId = String(eventId || "").trim();
-  if (!isUuid(normalizedId)) throw new Error("A valid event id is required.");
-  const expectedRevision = expectedEventRevision(payload.expected_revision);
-  const operationId = String(payload.operation_id || "").trim();
-  if (!isUuid(operationId)) throw new Error("A stable UUID operation id is required for event transition.");
-  const reason = action === "cancel" ? String(payload.reason || "Event cancelled from Event Input Console.").slice(0, 1000)
-    : "Manager-confirmed ordinary cancellation recovery.";
-  return runEventTransition({ p_event_id: normalizedId, p_action: action,
-    p_expected_revision: expectedRevision, p_operation_id: operationId,
-    p_manager_id: actor.manager_id, p_reason: reason });
-}
-
 async function enqueueNativeEventNotifications(runRpc) {
   if (typeof runRpc !== "function") {
     return { ok: true, skipped: true, reason: "runRpc_missing", enqueued: 0 };
@@ -856,7 +628,7 @@ async function queueDueScanAlerts(runScanAlertQueue) {
   }
 }
 
-export function createEventMaintenanceController({ runReadOnlySql, runCommand, runRpc, runScanAlertQueue }) {
+export function createEventMaintenanceController({ runRpc, runScanAlertQueue }) {
   let lastRunAt = 0;
   let running = false;
   let lastStartedAt = null;
@@ -934,7 +706,6 @@ export function createEventMaintenanceController({ runReadOnlySql, runCommand, r
 
 export function createEventsPublicRouter({
   runReadOnlySql,
-  runCommand,
   buildHealthPayload,
   appVersion,
   releaseId,
@@ -1038,6 +809,7 @@ export function createEventsEmployeeRouter({
   appVersion,
   releaseId,
   requireDeviceAccess,
+  readSyncStatus = null,
 }) {
   if (typeof requireDeviceAccess !== "function") {
     throw new Error("Employee Events requires enrolled-device authentication.");
@@ -1048,16 +820,21 @@ export function createEventsEmployeeRouter({
 
   router.get("/", async (req, res) => {
     try {
-      const events = (await listEmployeeEvents(runReadOnlySql, {
-        windowDays: req.query.window_days,
-        limit: req.query.limit,
-      })).map(toEmployeeEvent);
       const device = req.memphisDevice || {};
       const credential = req.memphisDeviceCredential || {};
+      const employeeId = device.assigned_employee_id || device.employee_id || null;
+      if (!isUuid(employeeId) || !isUuid(credential.credential_id)) {
+        return res.status(403).json({ok:false,error:"Current enrolled employee identity required."});
+      }
+      const rows = await listSharedEvents(runReadOnlySql);
+      const events = employeeVisibleEvents(rows, employeeId).map(toEmployeeEvent);
+      const syncStatus = typeof readSyncStatus === "function" ? await readSyncStatus().catch(() => null) : null;
+      const feed = sharedEventFeed(rows, { employeeId, syncStatus });
       res.setHeader("Cache-Control", "private, no-store");
       res.status(200).json({
         ok: true,
         data: events,
+        feed,
         meta: {
           version: appVersion,
           release_id: releaseId,
@@ -1078,287 +855,4 @@ export function createEventsEmployeeRouter({
   return router;
 }
 
-export function createEventsAdminRouter({
-  runReadOnlySql,
-  runCommand,
-  buildHealthPayload,
-  appVersion,
-  releaseId,
-  maintenanceController,
-  requireAdminApiAuth,
-  requireAdminApiWrite,
-  runEventImpactPreview = null,
-  runEventReplacement = null,
-  runEventTransition = null,
-}) {
-  const router = express.Router();
-  if (typeof requireAdminApiAuth === "function") {
-    router.use(requireAdminApiAuth);
-  }
-
-  router.get("/", async (_req, res) => {
-    try {
-      const events = await listManagerEvents(runReadOnlySql);
-      res.status(200).json({
-        ok: true,
-        data: events,
-        meta: {
-          version: appVersion,
-          release_id: releaseId,
-          contract_version: EVENTS_CONTRACT_VERSION,
-          timezone: EVENTS_TIME_ZONE,
-        },
-      });
-    } catch (error) {
-      fail(res, error, "Admin events list failed", 500);
-    }
-  });
-
-  router.get("/health", (_req, res) => {
-    res.status(200).json(
-      buildHealthPayload("events_admin", {
-        contract_version: EVENTS_CONTRACT_VERSION,
-        timezone: EVENTS_TIME_ZONE,
-      })
-    );
-  });
-
-  router.get("/location-groups", async (_req, res) => {
-    try {
-      const rows = await listLocationGroups(runReadOnlySql);
-      res.status(200).json({
-        ok: true,
-        data: rows,
-        meta: {
-          version: appVersion,
-          release_id: releaseId,
-          contract_version: EVENTS_CONTRACT_VERSION,
-        },
-      });
-    } catch (error) {
-      fail(res, error, "Location groups failed", 500);
-    }
-  });
-
-  router.get("/event-venues", async (_req, res) => {
-    try {
-      const rows = await listEventVenues(runReadOnlySql);
-      res.status(200).json({
-        ok: true,
-        data: rows,
-        meta: {
-          version: appVersion,
-          release_id: releaseId,
-          contract_version: EVENTS_CONTRACT_VERSION,
-        },
-      });
-    } catch (error) {
-      fail(res, error, "Event venues failed", 500);
-    }
-  });
-
-  router.get("/coverage-locations", async (_req, res) => {
-    try {
-      const rows = await listCoverageLocationGroups(runReadOnlySql);
-      res.status(200).json({
-        ok: true,
-        data: rows,
-        meta: {
-          version: appVersion,
-          release_id: releaseId,
-          contract_version: EVENTS_CONTRACT_VERSION,
-        },
-      });
-    } catch (error) {
-      fail(res, error, "Coverage locations failed", 500);
-    }
-  });
-
-  router.post("/parse-ai", async (req, res) => {
-    try {
-      const body = req.body && typeof req.body === "object" ? req.body : {};
-      const texts = Array.isArray(body.texts)
-        ? body.texts.map((text) => String(text ?? ""))
-        : [String(body.text ?? "")];
-      // The parser owns blank-row filtering and original input indices. Preserve
-      // source bytes here: normalized interpretation must not replace evidence.
-      if (!texts.some((text) => text.trim())) throw new Error("text or texts is required.");
-      const groups = await listLocationGroups(runReadOnlySql);
-      const eventVenues = await listEventVenues(runReadOnlySql);
-      const allowedVenueIds = new Set(eventVenues.map((row) => String(row.venue_id)));
-      const eventDefaults = (await listEventDefaultRules(runReadOnlySql))
-        .filter((row) => !row.primary_venue_id || allowedVenueIds.has(String(row.primary_venue_id)));
-      const parsed = await aiParseEventTexts({ texts, locationGroups: groups, eventVenues, eventDefaults });
-      const providersUsed = Array.from(new Set(parsed.map((row) => String(row?.provider_used || row?.provider || "local-parser").trim()).filter(Boolean)));
-      const fallbackCount = parsed.filter((row) => row?.provider_fallback).length;
-      res.status(200).json({
-        ok: true,
-        data: parsed,
-        meta: {
-          version: appVersion,
-          release_id: releaseId,
-          contract_version: EVENTS_CONTRACT_VERSION,
-          provider: providersUsed.length === 1 ? providersUsed[0] : "hybrid",
-          providers_used: providersUsed,
-          fallback_count: fallbackCount,
-        },
-      });
-    } catch (error) {
-      fail(res, error, "AI event parse failed", 400);
-    }
-  });
-
-  router.post("/preview-impact", async (req, res) => {
-    try {
-      const payload = req.body && typeof req.body === "object" ? req.body : {};
-      const actor = authenticatedEventActor(req);
-      const referenceData = await getEventReferenceData(runReadOnlySql);
-      const candidate = normalizeEventPayload(payload, referenceData);
-      const eventId = payload.event_id == null || payload.event_id === "" ? null : String(payload.event_id).trim();
-      if (eventId && !isUuid(eventId)) throw new Error("A valid event id is required for impact preview.");
-      const revision = eventId ? expectedEventRevision(payload.expected_revision) : null;
-      const preview = runEventImpactPreview || (async (args) => {
-        const result = await getEventsSupabaseClient().rpc("mz_preview_event_impact", args);
-        if (result.error) throw result.error;
-        return result.data;
-      });
-      const data = await preview({
-        p_candidate: candidate,
-        p_manager_id: actor.manager_id,
-        p_event_id: eventId,
-        p_expected_revision: revision,
-      });
-      res.setHeader("Cache-Control", "private, no-store");
-      res.status(200).json({ ok: true, data,
-        meta: { version: appVersion, release_id: releaseId, contract_version: EVENTS_CONTRACT_VERSION,
-          time_interpretation: { time_zone: EVENTS_TIME_ZONE,
-            start_instant_utc: candidate.start_instant_utc, end_instant_utc: candidate.end_instant_utc } } });
-    } catch (error) {
-      fail(res, error, "Event impact preview failed",
-        String(error?.code || error?.sqlstate || "") === "40901" ? 409 : Number(error?.status) || 400);
-    }
-  });
-
-  router.post("/", typeof requireAdminApiWrite === "function" ? requireAdminApiWrite : (_req, _res, next) => next(), async (req, res) => {
-    try {
-      const record = await createEventRecord(
-        runReadOnlySql,
-        runCommand,
-        req.body && typeof req.body === "object" ? req.body : {},
-        authenticatedEventActor(req),
-      );
-      maintenanceController?.kick("events_admin_create_after");
-      res.status(200).json({
-        ok: true,
-        data: record,
-        meta: {
-          version: appVersion,
-          release_id: releaseId,
-          contract_version: EVENTS_CONTRACT_VERSION,
-        },
-      });
-    } catch (error) {
-      fail(res, error, "Create event failed", Number(error?.status) || 400);
-    }
-  });
-
-  router.put("/:eventId", typeof requireAdminApiWrite === "function" ? requireAdminApiWrite : (_req, _res, next) => next(), async (req, res) => {
-    try {
-      const record = await updateEventRecord(
-        runReadOnlySql,
-        runCommand,
-        req.params.eventId,
-        req.body && typeof req.body === "object" ? req.body : {},
-        authenticatedEventActor(req),
-      );
-      maintenanceController?.kick("events_admin_update_after");
-      res.status(200).json({
-        ok: true,
-        data: record,
-        meta: {
-          version: appVersion,
-          release_id: releaseId,
-          contract_version: EVENTS_CONTRACT_VERSION,
-        },
-      });
-    } catch (error) {
-      fail(res, error, "Update event failed",
-        String(error?.code || error?.sqlstate || "") === "40901" ? 409 : Number(error?.status) || 400);
-    }
-  });
-
-  router.post("/:eventId/replace", typeof requireAdminApiWrite === "function" ? requireAdminApiWrite : (_req, _res, next) => next(), async (req, res) => {
-    try {
-      if (!isUuid(req.params.eventId)) throw new Error("A valid source event id is required.");
-      const payload = req.body && typeof req.body === "object" ? req.body : {};
-      const actor = authenticatedEventActor(req);
-      const expectedRevision = expectedEventRevision(payload.expected_revision);
-      const referenceData = await getEventReferenceData(runReadOnlySql);
-      const candidate = normalizeEventPayload(payload, referenceData);
-      if (candidate.status !== "SCHEDULED" || !candidate.operation_id) {
-        throw new Error("Replacement requires a resolved scheduled event and unique operation id.");
-      }
-      const replacement = runEventReplacement || (async (args) => {
-        const result = await getEventsSupabaseClient().rpc("app_replace_event_authoritative", args);
-        if (result.error) throw result.error;
-        return result.data;
-      });
-      const data = await replacement({ p_event_id: req.params.eventId,
-        p_expected_revision: expectedRevision,
-        p_record: { ...candidate, created_by: actor.display_name,
-          actor_manager_id: actor.manager_id, manually_overridden: true },
-        p_manager_id: actor.manager_id });
-      maintenanceController?.kick("events_admin_replace_after");
-      res.setHeader("Cache-Control", "private, no-store");
-      res.status(200).json({ ok: true, data,
-        meta: { version: appVersion, release_id: releaseId, contract_version: EVENTS_CONTRACT_VERSION } });
-    } catch (error) {
-      fail(res, error, "Replace event failed",
-        String(error?.code || error?.sqlstate || "") === "40901" ? 409 : Number(error?.status) || 400);
-    }
-  });
-
-  const transition = runEventTransition || (async (args) => {
-    const result = await getEventsSupabaseClient().rpc("app_transition_event_cancellation", args);
-    if (result.error) throw result.error;
-    return result.data;
-  });
-
-  router.delete("/:eventId", typeof requireAdminApiWrite === "function" ? requireAdminApiWrite : (_req, _res, next) => next(), async (req, res) => {
-    try {
-      const result = await transitionEventRecord(transition,req.params.eventId,"cancel",
-        req.body && typeof req.body === "object" ? req.body : {},authenticatedEventActor(req));
-      if (!result?.replayed) maintenanceController?.kick("events_admin_cancel_after");
-      res.status(200).json({
-        ok: true,
-        data: result,
-        meta: {
-          version: appVersion,
-          release_id: releaseId,
-          contract_version: EVENTS_CONTRACT_VERSION,
-        },
-      });
-    } catch (error) {
-      fail(res, error, "Cancel event failed",
-        String(error?.code || error?.sqlstate || "") === "40901" ? 409 : Number(error?.status) || 400);
-    }
-  });
-
-  router.post("/:eventId/restore", typeof requireAdminApiWrite === "function" ? requireAdminApiWrite : (_req, _res, next) => next(), async (req,res) => {
-    try {
-      const result = await transitionEventRecord(transition,req.params.eventId,"restore",
-        req.body && typeof req.body === "object" ? req.body : {},authenticatedEventActor(req));
-      if (!result?.replayed) maintenanceController?.kick("events_admin_restore_after");
-      res.setHeader("Cache-Control","private, no-store");
-      res.status(200).json({ ok:true,data:result,
-        meta:{version:appVersion,release_id:releaseId,contract_version:EVENTS_CONTRACT_VERSION} });
-    } catch (error) {
-      fail(res,error,"Restore event failed",
-        String(error?.code || error?.sqlstate || "") === "40901" ? 409 : Number(error?.status) || 400);
-    }
-  });
-
-  return router;
-}
-
-export { EVENTS_CONTRACT_VERSION };
+export { EVENTS_CONTRACT_VERSION, normalizeEventPayload, getEventReferenceData };

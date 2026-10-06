@@ -15,6 +15,8 @@ const allowedOrigin = "https://localhost";
 const manager = {
   manager_id: "00000000-0000-4000-8000-000000000002",
   display_name: "Named Manager",
+  system_key: "brandy_gull_horticulture_manager",
+  is_system_principal: false,
   roles: ["OPS_MANAGER"],
   active: true,
   revoked_at: null,

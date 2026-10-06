@@ -349,7 +349,9 @@ export function installCustodialEmployeeAdminRoutes(app, { env = process.env, su
       ? next()
       : res.status(403).json({ ok: false, error: "Custodial Manager access is required." })
   ));
-  const requireCustodialRead = requireCustodialRole(requireManagerRead);
+  // The snapshot contains assignment/status data, never enrollment secrets.
+  // All current named managers may read it; only owner writers can change it.
+  const requireCustodialRead = requireManagerRead;
   const requireCustodialWrite = requireCustodialRole(requireManagerWrite);
 
   for (const prefix of ["/custodial-admin-api", "/custodial-device-auth", "/leadership-api/phone-assignments"]) {

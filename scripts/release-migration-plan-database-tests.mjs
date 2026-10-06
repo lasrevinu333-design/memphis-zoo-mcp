@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {migrationReplayNames} from './migration-replay-order.mjs';
 
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
@@ -33,61 +34,23 @@ const databaseName = assertOwnedReleaseFixture({
 const { clientConfig, databaseUrl } = canonicalReleaseFixtureConnection(databaseName);
 const root = resolve(new URL("..", import.meta.url).pathname);
 const state = JSON.parse(readFileSync(resolve(root, "release/production-migration-state.json"), "utf8"));
-assert.deepEqual(state.pending_migrations.map(({ order, file }) => ({ order, file })), [
-  { order: 1, file: "20260922050000_lunch_delivery_failure_manager_alert.sql" },
-  { order: 2, file: "20260922070000_completed_cleaning_reminder_cycles.sql" },
-  { order: 3, file: "20260922090000_verified_visit_reminder_state.sql" },
-  { order: 4, file: "20260922163000_static_weekly_lunch_publication.sql" },
-  { order: 5, file: "20260922200000_lunch_notification_producer.sql" },
-  { order: 6, file: "20260922235500_static_weekly_existing_employee_restore.sql" },
-  { order: 7, file: "20260923065000_static_weekly_vacate_roster_slot.sql" },
-  { order: 8, file: "20260923121151_visitor_attendance_reader.sql" },
-  { order: 9, file: "20260924022250_release_selection_and_occurrence_guards.sql" },
-  { order: 10, file: "20260924023930_notification_receipt_and_lunch_integrity.sql" },
-  { order: 11, file: "20260924032226_bind_release_selection_guard_recovery.sql" },
-  { order: 12, file: "20260924042758_static_weekly_canonical_shift_end_derivation.sql" },
-  { order: 13, file: "20260924044035_static_weekly_atomic_roster_completion.sql" },
-  { order: 14, file: "20260924053507_assigned_phone_activation_transport.sql" },
-  { order: 15, file: "20260924080839_custodial_legacy_installation_observation.sql" },
-  { order: 16, file: "20260924161004_owner_oc24_cleaning_and_inspection_boundaries.sql" },
-  { order: 17, file: "20260924172500_oc24_manual_contractor_lunch.sql" },
-  { order: 18, file: "20260924201258_native_provider_durable_authority.sql" },
-  { order: 19, file: "20260925015905_oc24_completion_selection_normalization.sql" },
-  { order: 20, file: "20260925020244_oc24_bound_legacy_completion_replay.sql" },
-  { order: 21, file: "20260925050718_static_weekly_staffing_command_ledger.sql" },
-  { order: 22, file: "20260925054802_static_weekly_staffing_atomic_acceptance.sql" },
-  { order: 23, file: "20260925190000_gps_exact_location_authority_boundary.sql" },
-  { order: 24, file: "20260926143542_static_weekly_protected_separation.sql" },
-  { order: 25, file: "20260926180000_retire_direct_employee_status_rpc.sql" },
-  { order: 26, file: "20260926192656_static_weekly_recurring_confirmation_ledger.sql" },
-  { order: 27, file: "20260926193000_retire_direct_employee_mutation_helpers.sql" },
-  { order: 28, file: "20260926193651_static_weekly_recurring_source_admission.sql" },
-  { order: 29, file: "20260926194644_static_weekly_recurring_generation_fence.sql" },
-  { order: 30, file: "20260926200458_static_weekly_recurring_future_same_monday.sql" },
-  { order: 31, file: "20260926201644_static_weekly_recurring_dependency_snapshot.sql" },
-  { order: 32, file: "20260926202657_static_weekly_recurring_publication_binding.sql" },
-  { order: 33, file: "20260926204235_static_weekly_recurring_terminal_targets.sql" },
-  { order: 34, file: "20260926205849_static_weekly_recurring_blocked_authority_repair.sql" },
-  { order: 35, file: "20260926211714_static_weekly_recurring_common_lock_order.sql" },
-  { order: 36, file: "20260926220510_static_weekly_recurring_dependency_reconciliation.sql" },
-  { order: 37, file: "20260926223914_static_weekly_recurring_application_targets.sql" },
-  { order: 38, file: "20260926225613_static_weekly_recurring_atomic_finalization.sql" },
-  { order: 39, file: "20260926234537_static_weekly_authenticated_schedule_delivery.sql" },
-  { order: 40, file: "20260927001706_static_weekly_lunch_validation_materialization.sql" },
-  { order: 41, file: "20260927010911_static_weekly_current_recurring_delivery_status.sql" },
-  { order: 42, file: "20260927031806_schedule_bound_location_reminders.sql" },
-  { order: 43, file: "20260927052929_schedule_notification_admission_corrections.sql" },
-  { order: 44, file: "20260927072146_schedule_notification_exact_canary.sql" },
-  { order: 45, file: "20260927075352_protected_separation_original_context.sql" },
-  { order: 46, file: "20260929125440_custodial_recovery_inventory_closure.sql" },
-], "the correction release fixture must contain exactly the forty-six candidate migrations in order");
-assert.equal(
-  state.pending_migrations.every((item) => item.source_migration_version > state.observed_production.ledger_head),
-  true,
-  "all reviewed correction migrations must advance beyond the admitted production head",
-);
+const replayManifest=JSON.parse(readFileSync(resolve(root,"supabase/canonical/migration-replay-order.json"),"utf8"));
+assert.equal(replayManifest.phases[0].files.length,133,"exact installed-source fixture prefix");
+assert.equal(replayManifest.phases[1].files.length,92,"exact pending source inventory");
+assert.equal(replayManifest.production_execution_authorized,false,"source manifest is not execution approval");
+assert.deepEqual(state.pending_migrations.map(({order,file,sha256})=>({order,file,sha256})),
+ replayManifest.phases[1].files.map((item,index)=>({order:index+1,file:item.name,sha256:item.sha256})),
+ "the pending declaration must equal all exact forward files, including earlier-dated uninstalled files");
+assert.equal(state.observed_production.ledger_head,"20261006162427");
+assert.equal(state.observed_production.production_ledger_count,233);
+assert.equal(state.target.production_ledger_count,325);
+const sourceVersions=new Set(replayManifest.phases[0].files.map(item=>item.name.slice(0,14)));
+assert.ok(state.pending_migrations.every(item=>!sourceVersions.has(item.source_migration_version)),
+ "no pending migration may repeat an installed-source version");
+assert.ok(state.pending_migrations.some(item=>item.source_migration_version<state.observed_production.ledger_head),
+ "fixture must exercise the legitimate backdated-pending case, not silently restore timestamp inference");
 const pending = new Set(state.pending_migrations.map((item) => item.file));
-const migrationFiles = readdirSync(resolve(root, "supabase/migrations")).filter((name) => name.endsWith(".sql")).sort();
+const migrationFiles = migrationReplayNames(root);
 const preMigrationFiles = migrationFiles.filter((name) => !pending.has(name));
 const outlookAdoptionSql = readFileSync(resolve(root, "supabase/migrations/20260827152000_adopt_outlook_event_sync_authority.sql"), "utf8");
 const admin = new Client(clientConfig);

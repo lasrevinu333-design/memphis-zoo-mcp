@@ -92,7 +92,7 @@ await timeoutRuntime.terminateForTest();
 await assertReaped(postTimeoutNestedPid, "shutdown after timeout recovery must reap the replacement process group");
 
 const productionRuntime = createStaticWeeklyCompilerRuntime();
-const productionInput = {
+let productionInput = {
   serviceDate: "2026-08-10",
   timezone: "America/Chicago",
   exceptions: [],
@@ -105,15 +105,23 @@ const productionInput = {
     effectiveStart: "2026-08-03",
     effectiveEnd: null,
     objective: { requireVerifiedProximity: true },
-    slotAvailability: ["a", "b"].map((slotId, index) => ({ slotId, dayOfWeek: 1, status: "working", shift: { start: "07:00", end: "16:00" }, productiveCapacityProvenance: "runtime-shift", maxServiceEffortMinutes: 300, maxServiceEffortProvenance: "runtime-capacity", qualifications: ["general"], qualificationProvenance: "runtime-qualification", restrictions: [], restrictionProvenance: "runtime-restriction", acceptedRouteAnchorLocationId: index ? "B" : "A", acceptedRouteProvenance: "runtime-route" })),
+    slotAvailability: ["a", "b"].map((slotId, index) => ({ slotId, dayOfWeek: 1, status: "working", shift: { start: "07:00", end: "16:00" }, lunch: index ? {start:"12:00",end:"13:00"} : {start:"11:00",end:"12:00"}, productiveCapacityProvenance: "runtime-shift", maxServiceEffortMinutes: 300, maxServiceEffortProvenance: "runtime-capacity", qualifications: ["general"], qualificationProvenance: "runtime-qualification", restrictions: [], restrictionProvenance: "runtime-restriction", acceptedRouteAnchorLocationId: index ? "B" : "A", acceptedRouteProvenance: "runtime-route" })),
     assignments: [
       { workId: "runtime-one", dayOfWeek: 1, locationId: "A", window: { start: "08:00", end: "09:00" }, ownerSlotId: "a", serviceEffortMinutes: 20, serviceEffortProvenance: "runtime-effort", priority: 1, priorityProvenance: "runtime-priority", requiredQualifications: ["general"], qualificationProvenance: "runtime-work-qualification", restrictions: [], restrictionProvenance: "runtime-work-restriction" },
       { workId: "runtime-two", dayOfWeek: 1, locationId: "B", window: { start: "09:10", end: "10:00" }, ownerSlotId: "b", serviceEffortMinutes: 20, serviceEffortProvenance: "runtime-effort", priority: 1, priorityProvenance: "runtime-priority", requiredQualifications: ["general"], qualificationProvenance: "runtime-work-qualification", restrictions: [], restrictionProvenance: "runtime-work-restriction" },
     ],
   }],
 };
+// The production adapter now binds typed publication/physical identities.
+// Preserve the same two-worker/two-location topology using synthetic UUIDs.
+const fixtureIdentities={a:'20000000-0000-4000-8000-000000000061',b:'20000000-0000-4000-8000-000000000062',
+ 'person-a':'30000000-0000-4000-8000-000000000061','person-b':'30000000-0000-4000-8000-000000000062',
+ A:'40000000-0000-4000-8000-000000000061',B:'40000000-0000-4000-8000-000000000062',
+ 'runtime-test-week':'60000000-0000-4000-8000-000000000061','runtime-test-publication':'70000000-0000-4000-8000-000000000061'};
+productionInput=JSON.parse(JSON.stringify(productionInput),(_key,value)=>typeof value==='string'&&Object.hasOwn(fixtureIdentities,value)?fixtureIdentities[value]:value);
 let productionTicks = 0;
 const productionPulse = setInterval(() => { productionTicks += 1; }, 10);
+try {
 const productionResult = await productionRuntime.compileAndPrepare(productionInput, {
   kind: "draft",
   expectedRevision: 0,
@@ -132,6 +140,6 @@ assert.equal(productionResult.document?.validation?.status, "FEASIBLE", "the rea
 assert.equal(productionTicks > 0, true, "the real production compiler and database-adapter process path leaves the HTTP event loop responsive");
 assert.equal(productionRuntime.getReadiness().worker.nestedSolverProcess, false, "production uses one fused compiler-plus-HiGHS isolate without a redundant solver process");
 assert.equal(productionRuntime.getReadiness().worker.solver.worker.runtime, "in-process within isolated compiler child");
-await productionRuntime.shutdown();
+} finally { clearInterval(productionPulse); await productionRuntime.shutdown(); }
 
 console.log("static weekly complete-compiler worker isolation and recovery tests: PASS");

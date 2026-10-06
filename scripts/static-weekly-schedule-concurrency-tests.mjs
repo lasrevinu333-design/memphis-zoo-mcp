@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {migrationReplayNames} from './migration-replay-order.mjs';
 // Independent-session race and rollback probes for the full I2 backend chain.
 import assert from "node:assert/strict";
 import { execFile, spawn } from "node:child_process";
@@ -11,7 +12,7 @@ import { createStaticWeeklyDraftRpcInput, createStaticWeeklyProjectionRpcInput }
 const execFileAsync = promisify(execFile);
 const container = `mz_static_weekly_i2_race_${process.pid}`;
 const migrationsDir = path.resolve(process.cwd(), "supabase/migrations");
-const migrations = fs.readdirSync(migrationsDir).filter((name) => name.endsWith(".sql")).sort().map((name) => path.resolve(migrationsDir, name));
+const migrations = migrationReplayNames(process.cwd()).map((name) => path.resolve(migrationsDir, name));
 const one = { id: "10000000-0000-4000-8000-000000000001", name: "Manager One" };
 const two = { id: "10000000-0000-4000-8000-000000000002", name: "Manager Two" };
 const quote = (value) => `'${String(value).replaceAll("'", "''")}'`;

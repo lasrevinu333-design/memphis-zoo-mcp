@@ -9,7 +9,7 @@ const pins={
  'scripts/static-weekly-manager-auth-deadline-tests.mjs':'8f1975218389748f47d1d8b53317ae94b655e48bca83fabfacaa1f9df3288261',
  'scripts/static-weekly-manager-ingress-http-tests.mjs':'b6ce7cc8876ba6bbc403e3cb931af4881a4fd557ccf63ae5179e718a8a62d38a',
  'scripts/restore-mutation-gate-tests.mjs':'b70a07230f37968699a4eeaa1e43ab115b5a05439898390a46418263ea78b993',
- 'scripts/static-weekly-control-plane-runtime-tests.mjs':'c57ed5068694eea7e9da9c5ea58ba425e9a84a34761c221a24024e4fecbc3c91',
+ 'scripts/static-weekly-control-plane-runtime-tests.mjs':'56956fb6bbde77e3daa60141fd5dba598b556b75156621e9c4056cfc6260963a',
  'scripts/static-weekly-recurring-operation-owner-tests.mjs':'af1a6223804c83650e538de749b2254b2517fc63cee2438957d83177f0adff5c',
  'scripts/static-weekly-recurring-operation-child-tests.mjs':'a9664a1daf527d8cbd657064b144eaaeaaea4fb95ae474244059ba63308d2576',
  'scripts/static-weekly-recurring-operation-handler-tests.mjs':'1598500497210ee0a62ba8e88c0bcc2d7022b4ebb554233e5eb4da8006d799e8',

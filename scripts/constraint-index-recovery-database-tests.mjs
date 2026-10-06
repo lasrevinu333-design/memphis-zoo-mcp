@@ -1,3 +1,4 @@
+import {migrationReplayNames} from './migration-replay-order.mjs';
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 import {createHash, randomUUID} from 'node:crypto';
@@ -41,7 +42,7 @@ join public.custodial_release_authority_restore_inventory ci on ci.object_kind='
 where i.object_kind='index'`;
 const inventoryDigest = () => sql("select public.static_weekly_digest_text(string_agg(restore_order::text||'|'||object_kind||'|'||object_identity||'|'||definition_sha256,E'\\n' order by restore_order,object_identity)) from public.custodial_release_authority_restore_inventory;");
 const migrationName = '20261003143000_issue_constraint_index_recovery.sql';
-const files = readdirSync('supabase/migrations').filter(file => file.endsWith('.sql')).sort();
+const files = migrationReplayNames(process.cwd());
 assert.equal(files.at(-1), migrationName);
 const predecessors = files.filter(file => file !== migrationName);
 const manifest = createHash('sha256').update(predecessors.map(file => `${file} ${createHash('sha256').update(readFileSync(`supabase/migrations/${file}`)).digest('hex')}`).join('\n')).digest('hex');

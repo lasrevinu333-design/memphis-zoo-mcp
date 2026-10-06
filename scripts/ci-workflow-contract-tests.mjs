@@ -830,7 +830,9 @@ for(const command of capacityAuthorityCommands){
   const source=readFileSync(resolve(root,command.slice('node '.length)),'utf8');
   assert.match(source,/const container=`mz_schema_rebuild_[a-z_]+_\$\{process\.pid\}`;/,'each owning runner creates its own process-bound fixture');
   assert.match(source,/docker\(\['run','--rm','-d'/,'each owning runner creates a fresh disposable database');
-  assert.match(source,/readdirSync\('supabase\/migrations'\)\.filter\([^\n]+\.sort\(\)/,'each owning runner consumes sorted current source migrations');
+  assert.match(source,/import \{migrationReplayNames\} from '\.\/migration-replay-order\.mjs'/,'each current runner imports the hash-bound complete source order');
+  assert.match(source,/migrationReplayNames\((?:process\.cwd\(\)|root)\)/,'each current runner actually consumes the declared production-prefix order');
+  assert.doesNotMatch(source,/readdirSync\('supabase\/migrations'\)\.filter\([^\n]+\.sort\(\)/,'lexical timestamps cannot substitute for the applied-source prefix');
   assert.ok(source.includes(rehearsalPostgresImage),'each owning runner uses the existing digest-pinned image');
   assert.match(source,/finally\{[\s\S]*?(?:cleanup\(\)|docker\(\['rm','-f',container\]\))/,'each owning runner owns exact finally cleanup');
   assert.doesNotMatch(source,/process\.env\.[A-Z_]*(?:DOCKER_CONTAINER|DATABASE_URL)/,'these fixtures must not adopt a supplied/shared/production database');

@@ -1,3 +1,4 @@
+import {migrationReplayNames} from './migration-replay-order.mjs';
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 import {readFileSync,readdirSync,mkdtempSync,mkdirSync,chmodSync,rmSync,existsSync} from 'node:fs';
@@ -35,7 +36,7 @@ try{
  assert.equal(sql("select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind='r'").trim(),'0');
  sql("do $$ begin create role anon; exception when duplicate_object then null; end $$; do $$ begin create role authenticated; exception when duplicate_object then null; end $$; do $$ begin create role service_role; exception when duplicate_object then null; end $$;");
  removeDefaults();let applied=0;
- for(const file of readdirSync(path.join(root,'supabase/migrations')).filter(x=>x.endsWith('.sql')).sort()){
+ for(const file of migrationReplayNames(root)){
   assert.equal(sql(defaults).trim(),'0','defaults absent before '+file);
   const bytes=readFileSync(path.join(root,'supabase/migrations',file));sql(bytes);applied++;
   if(sql(defaults).trim()!=='0'){

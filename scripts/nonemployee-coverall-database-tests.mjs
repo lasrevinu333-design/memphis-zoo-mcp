@@ -1,3 +1,4 @@
+import {migrationReplayNames} from './migration-replay-order.mjs';
 // Exact disposable replay, absent client defaults and official fresh-source
 // admission. Never production and never historical fake-incumbent conversion.
 import assert from 'node:assert/strict';
@@ -27,7 +28,7 @@ for(const signal of ['SIGINT','SIGTERM'])process.once(signal,()=>{try{if(owned)d
 try{
  docker(['image','inspect',image]);docker(['run','--rm','-d','--name',container,'-p','127.0.0.1::5432','--tmpfs','/var/lib/postgresql/data:rw,size=1g','-e','POSTGRES_PASSWORD=postgres',image,'-c','listen_addresses=*','-c','shared_preload_libraries=pg_cron,pg_net,pg_stat_statements','-c','cron.database_name=postgres']);owned=true;console.log('OWNED_CONTAINER',container);
  let ready=0;for(let i=0;i<100&&ready<5;i++){try{sql('select 1');ready++;}catch{ready=0;}await new Promise(r=>setTimeout(r,500));}assert.equal(ready,5);removeDefaults();
- const files=readdirSync('supabase/migrations').filter(f=>f.endsWith('.sql')).sort();
+ const files=migrationReplayNames(process.cwd());
  for(const file of files){assert.equal(sql(defaults),'0','absent defaults before '+file);checks++;
   if(file==='20261003140000_static_weekly_nonemployee_contractor_capacity.sql')employeeChecks=sql(employeeConstraintSql);
   const bytes=readFileSync('supabase/migrations/'+file,'utf8');try{sql(bytes);}catch(e){console.error('FAILED_MIGRATION',file,String(e.stderr));throw e;}

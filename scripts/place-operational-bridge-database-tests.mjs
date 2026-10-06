@@ -1,3 +1,4 @@
+import {migrationReplayNames} from './migration-replay-order.mjs';
 // Disposable actual SQL proof. No production connection, ports or credentials.
 import assert from 'node:assert/strict';
 import {execFileSync,spawn} from 'node:child_process';
@@ -33,7 +34,7 @@ try{
  console.log('OWNED_PLACE_BRIDGE_CONTAINER',container);
  const info=JSON.parse(docker(['inspect',container]))[0];check(info.HostConfig.NetworkMode,'none','isolated network');check(Object.keys(info.HostConfig.PortBindings??{}).length,0,'no ports');
  let ready=0;for(let i=0;i<120&&ready<5;i++){try{sql('select 1');ready++;}catch{ready=0;}await new Promise(r=>setTimeout(r,500));}check(ready,5,'ready');removeDefaults();
- const migrations=readdirSync(path.join(root,'supabase/migrations')).filter(f=>f.endsWith('.sql')).sort(),appliedHashes=new Map();
+ const migrations=migrationReplayNames(root),appliedHashes=new Map();
  for(const [i,file] of migrations.entries()){
   check(sql(defaults),'0',`default absence before ${file}`);const bytes=readFileSync(path.join(root,'supabase/migrations',file));appliedHashes.set(file,createHash('sha256').update(bytes).digest('hex'));raw(bytes);
   if(Number(sql(defaults))){assert.ok(['20260718083100_reconstruct_public_grant_hardening.sql','20260729150527_audit_defense_in_depth_hardening.sql','20260815160613_normalize_managed_production_schema_security.sql'].includes(file));assert.doesNotMatch(bytes.toString(),/create\s+(?:unlogged\s+)?table|create\s+sequence/i);removeDefaults();}

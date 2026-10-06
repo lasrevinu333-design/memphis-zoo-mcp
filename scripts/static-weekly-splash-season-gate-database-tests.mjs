@@ -1,3 +1,4 @@
+import {migrationReplayNames} from './migration-replay-order.mjs';
 // Disposable SCH-022 SQL proof. No production connection, provider or phone.
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
@@ -33,7 +34,7 @@ try{
  console.log('OWNED_CONTAINER',container);
  let ready=0;for(let i=0;i<100&&ready<5;i++){try{sql('select 1');ready++;}catch{ready=0;}await new Promise(resolve=>setTimeout(resolve,500));}assert.equal(ready,5);
  removeDefaults();
- const files=readdirSync('supabase/migrations').filter(name=>name.endsWith('.sql')).sort();
+ const files=migrationReplayNames(process.cwd());
  const manifest=[];
  for(const [index,file] of files.entries()){
   assert.equal(sql(defaults),'0','absent automatic grants before '+file);

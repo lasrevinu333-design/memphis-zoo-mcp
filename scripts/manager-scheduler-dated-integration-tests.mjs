@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {migrationReplayNames} from './migration-replay-order.mjs';
 // Real-PostgreSQL evidence for the outer, transaction-owning daily batch and
 // its database-authoritative complete-chain replay contract.
 import assert from "node:assert/strict";
@@ -17,7 +18,7 @@ const execFileAsync = promisify(execFile);
 const phase=(...x)=>console.log("TRACE",Math.round(performance.now()),...x);
 const container = `mz_static_weekly_day_changes_${process.pid}`;
 const migrationsDir = path.resolve(process.cwd(), "supabase/migrations");
-const migrations = fs.readdirSync(migrationsDir).filter((name) => name.endsWith(".sql")).sort().map((name) => path.join(migrationsDir, name));
+const migrations = migrationReplayNames(process.cwd()).map((name) => path.join(migrationsDir, name));
 const image = process.env.SCHEMA_REBUILD_DOCKER_IMAGE || "supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed";
 const actor = { manager_id: "10000000-0000-4000-8000-000000000061", manager_display_name: "Batch Manager", credential_id:"11000000-0000-4000-8000-000000000061",device_id:"batch-manager-device",access_level:"read_only",read_only:true,auth_mode:"trusted_device",trusted_device:true,permissions:{schema:"custodial.manager-permissions.v1",read:true,owner:false,manage_absences:true,manage_coverall:true,regenerate_routes:true,close_scan_tickets:true} };
 const publicationId = "70000000-0000-4000-8000-000000000061";

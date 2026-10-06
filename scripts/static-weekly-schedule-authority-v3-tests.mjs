@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {migrationReplayNames} from './migration-replay-order.mjs';
 // Complete authority regression suite. It uses one disposable PostgreSQL
 // container and intentionally attacks the ordinary service role before proving
 // the separately provisioned control-plane role can complete the same flow.
@@ -123,7 +124,7 @@ try {
   for (let attempt = 0; attempt < 120; attempt += 1) { try { await sql("select 1"); await new Promise((resolve) => setTimeout(resolve, 1_000)); await sql("select 1"); ready = true; break; } catch { await new Promise((resolve) => setTimeout(resolve, 500)); } }
   assert.equal(ready, true, "owned PostgreSQL must start before migrations run");
   await sql("do $$ begin create role anon; exception when duplicate_object then null; end $$; do $$ begin create role authenticated; exception when duplicate_object then null; end $$; do $$ begin create role service_role; exception when duplicate_object then null; end $$;");
-  for (const file of fs.readdirSync(migrationsDir).filter((name) => name.endsWith(".sql")).sort()) await sql(fs.readFileSync(path.join(migrationsDir, file), "utf8"));
+  for (const file of migrationReplayNames(process.cwd())) await sql(fs.readFileSync(path.join(migrationsDir, file), "utf8"));
   await sql(`insert into public.ops_manager_managers(manager_id,display_name,roles,active,metadata_json,is_system_principal) values(${quote(manager.managerId)},${quote(manager.managerName)},array['OPS_MANAGER','CUSTODIAL_MANAGER']::text[],true,'{}'::jsonb,false)`);
   await sql(`
     insert into public.employees(id,employee_code,display_name,active,role) values

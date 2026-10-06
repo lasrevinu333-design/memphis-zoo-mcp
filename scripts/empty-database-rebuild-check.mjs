@@ -1,3 +1,4 @@
+import {migrationReplayNames} from './migration-replay-order.mjs';
 import { randomUUID } from "node:crypto";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
@@ -32,7 +33,7 @@ if (adminUrl && !/(localhost|127\.0\.0\.1|memphis-rebuild|schema-rebuild|test|ci
 
 const root = resolve(new URL("..", import.meta.url).pathname);
 const migrationsDir = resolve(root, "supabase/migrations");
-const migrationFiles = readdirSync(migrationsDir).filter((name) => name.endsWith(".sql")).sort();
+const migrationFiles = migrationReplayNames(process.cwd());
 const retirementCorrectionPath = resolve(migrationsDir, "20260810130000_harden_named_manager_retired_archive_and_concurrency.sql");
 const retirementCorrection = readFileSync(retirementCorrectionPath, "utf8");
 const retirementCorrectionBody = retirementCorrection

@@ -1,3 +1,4 @@
+import {migrationReplayNames} from './migration-replay-order.mjs';
 // Actual named-manager HTTP -> checked-out SQL transaction -> compiler/verifier
 // -> existing publication/projection/lunch -> exact receipt. Disposable only.
 import assert from 'node:assert/strict';
@@ -30,7 +31,7 @@ try{
  // The preserved October predecessor hash is captured against the supported
  // Supabase postgres database, not a newly invented schema/search-path setup.
  database=db;removeDefaults();
- const files=readdirSync('supabase/migrations').filter(f=>f.endsWith('.sql')).sort(),manifest=new Map();
+ const files=migrationReplayNames(process.cwd()),manifest=new Map();
  for(const file of files){check('absent defaults before '+file,sql(defaults),'0');const bytes=readFileSync('supabase/migrations/'+file);manifest.set(file,hash(bytes));
   if(file==='20261003030000_place_operational_name_adoption.sql')preAdoptionCore=sql("select md5(string_agg(pg_get_functiondef(oid),E'\\n' order by oid::regprocedure::text)) from pg_proc where pronamespace='public'::regnamespace and proname in('tool_start_offline_occurrence','tool_finish_session','tool_complete_session','tool_commit_cleaning_workflow_authoritative','custodial_start_offline_occurrence')");
   try{sql(bytes.toString());}catch(e){console.error('FAILED_MIGRATION',file,String(e.stderr));throw e;}

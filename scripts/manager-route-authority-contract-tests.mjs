@@ -18,6 +18,8 @@ const deviceId = "MANAGER_AUTHORITY_PHONE";
 const manager = {
   manager_id: managerId,
   display_name: "Named Manager",
+  system_key: "eric_custodial_manager",
+  is_system_principal: false,
   roles: ["CUSTODIAL_MANAGER"],
   active: true,
   revoked_at: null,
@@ -40,6 +42,7 @@ const app = express();
 app.get("/human-manager-route", makeOpsAccessMiddleware({ env, trustedDeviceStore: store }), (req, res) => {
   res.json({ ok: true, manager_id: req.memphisAuth.manager_id });
 });
+app.get("/owner-write-route", makeOpsAccessMiddleware({ env, trustedDeviceStore: store, requireWrite: true }), (_req,res)=>res.json({ok:true}));
 const server = app.listen(0, "127.0.0.1");
 await new Promise((resolve) => server.once("listening", resolve));
 const base = `http://127.0.0.1:${server.address().port}`;
@@ -75,6 +78,15 @@ try {
   assert.equal(result.status, 200);
   assert.equal(result.body.manager_id, managerId);
 
+  let writeResult = await fetch(`${base}/owner-write-route`, {headers:{authorization:`Bearer ${trustedToken}`}});
+  assert.equal(writeResult.status,200,'protected owner can write');
+  // The already issued full-access token remains signed, but a current delegate
+  // registry entry must never retain owner writes through its old enrollment.
+  trustedRow.manager = {...manager,system_key:'brandy_gull_horticulture_manager'};
+  writeResult = await fetch(`${base}/owner-write-route`, {headers:{authorization:`Bearer ${trustedToken}`}});
+  assert.equal(writeResult.status,403,'old full-access token is clamped by current delegate policy');
+  assert.equal((await get(trustedToken)).status,200,'delegate keeps read access');
+  trustedRow.manager = manager;
   trustedRow.manager_id = replacementManagerId;
   trustedRow.manager = { ...manager, manager_id: replacementManagerId };
   result = await get(trustedToken);
@@ -91,13 +103,14 @@ assert.doesNotThrow(() => assertServerAssignedActor({ ticket_id: "ticket" }));
 assert.throws(() => assertServerAssignedActor({ ticket_id: "ticket", closed_by: "substitute" }), /assigned from the authenticated manager session/i);
 
 const index = await readFile(new URL("../src/index.js", import.meta.url), "utf8");
-for (const route of ["admin-api", "dashboard-api"]) {
-  assert.match(index, new RegExp(`app\\.post\\(\"\\/${route}\\/close-ticket\", requireOpsManagerWrite[\\s\\S]{0,300}applyManagerTicketOutcome\\(req\\)`));
-}
-assert.match(index, /async function applyManagerTicketOutcome\(req\)[\s\S]{0,250}assertServerAssignedActor\(req\.body\)/);
-assert.match(index, /runRpc\("custodial_set_maintenance_ticket_outcome", \{[\s\S]{0,220}p_manager_id: offlineAuthorityManagerId\(req\)/);
-assert.match(index, /outcome === "work_order_sent" && !String\(reference \|\| ""\)\.trim\(\)/);
-assert.match(index, /outcome === "mark_fixed" && String\(reference \|\| ""\)\.trim\(\)/);
-assert.doesNotMatch(index, /runRpc\("custodial_close_maintenance_ticket_authoritative"/);
+const actions = await readFile(new URL('../src/owner-access-api.js',import.meta.url),'utf8');
+const migration = await readFile(new URL('../supabase/migrations/20261006031304_custodial_owner_delegated_actions.sql',import.meta.url),'utf8');
+assert.match(index,/installOwnerAccessRoutes\(app, \{ store: opsTrustedDeviceStore, runRpc, backendSecret: offlineAuthoritySecret \}\)/);
+for(const route of ['admin-api','dashboard-api'])assert.ok(actions.includes('/'+route+'/close-ticket'));
+assert.match(actions,/assertServerAssignedActor\(req.body\)/);
+assert.match(actions,/requiredPermission: 'close_scan_tickets'/);
+assert.match(actions,/managerActionArguments\(req\)/);
+assert.ok(migration.includes("'manager:'||p_manager_id::text||':'||left(actor->>'manager_name',155)"),'ticket actor is server-derived in the database writer');
+
 
 console.log("MANAGER_ROUTE_AUTHORITY_CONTRACT_PASS");

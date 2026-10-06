@@ -1,0 +1,27 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync,symlinkSync} from 'node:fs';
+import {tmpdir} from 'node:os';import {join} from 'node:path';import {createHash} from 'node:crypto';
+import {readMigrationReplayPlan,migrationReplayNames} from './migration-replay-order.mjs';
+const hash=x=>createHash('sha256').update(x).digest('hex');
+const names=['00000000000000_baseline.sql','20261006113610_deployed_main.sql','20261002090000_forward_scheduler.sql'];
+function fixture(){const root=mkdtempSync(join(tmpdir(),'custodial-order-test-'));mkdirSync(join(root,'supabase/migrations'),{recursive:true});mkdirSync(join(root,'supabase/canonical'),{recursive:true});const rows=names.map((name,i)=>{const text=`select ${i};\n`;writeFileSync(join(root,'supabase/migrations',name),text);return{name,sha256:hash(text)};});const doc={schema:'custodial.migration-replay-order.v1',base_source_commit:'a'.repeat(40),production_execution_authorized:false,phases:[{kind:'verified_main_source_prefix',files:rows.slice(0,2)},{kind:'forward_source_after_prefix',files:rows.slice(2)}]};const file=join(root,'supabase/canonical/migration-replay-order.json');const save=()=>writeFileSync(file,JSON.stringify(doc));save();return{root,doc,file,save,close:()=>rmSync(root,{recursive:true,force:true})};}
+const change=(label,edit)=>test(label,()=>{const f=fixture();try{edit(f);assert.throws(()=>readMigrationReplayPlan(f.root),error=>error.code==='migration_replay_order_invalid');}finally{f.close();}});
+test('main prefix remains before earlier-created forward source',()=>{const f=fixture();try{const p=readMigrationReplayPlan(f.root);assert.deepEqual(p.files,names);assert.equal(p.baseCount,2);assert.equal(p.forwardCount,1);assert.equal(p.manifestSha256,hash(readFileSync(f.file)));assert.deepEqual(migrationReplayNames(f.root),names);}finally{f.close();}});
+change('missing manifest cannot silently revert to filename ordering',f=>rmSync(f.file));
+change('malformed manifest fails closed',f=>writeFileSync(f.file,'{'));
+change('unsupported schema rejected',f=>{f.doc.schema='other';f.save();});
+change('manifest cannot claim production authorization',f=>{f.doc.production_execution_authorized=true;f.save();});
+change('source commit identity required',f=>{f.doc.base_source_commit=null;f.save();});
+change('duplicate across phases rejected',f=>{f.doc.phases[1].files.push(f.doc.phases[0].files[0]);f.save();});
+change('omitted migration rejected',f=>{f.doc.phases[0].files.pop();f.save();});
+change('extra local migration rejected',f=>writeFileSync(join(f.root,'supabase/migrations/20261007000000_unlisted.sql'),'select 7;'));
+change('changed source bytes rejected',f=>writeFileSync(join(f.root,'supabase/migrations',names[0]),'select 99;'));
+change('missing declared source rejected',f=>rmSync(join(f.root,'supabase/migrations',names[0])));
+change('path escape rejected',f=>{f.doc.phases[1].files[0].name='../outside.sql';f.save();});
+change('phase internal disorder rejected',f=>{f.doc.phases[0].files.reverse();f.save();});
+change('unknown phase kind rejected',f=>{f.doc.phases[1].kind='skip_missing';f.save();});
+change('empty phase rejected',f=>{f.doc.phases[1].files=[];f.save();});
+change('symlink migration rejected',f=>{const file=join(f.root,'supabase/migrations',names[0]),target=join(f.root,'target.sql');writeFileSync(target,readFileSync(file));rmSync(file);symlinkSync(target,file);});
+change('symlink manifest rejected',f=>{const target=join(f.root,'manifest-copy.json');writeFileSync(target,readFileSync(f.file));rmSync(f.file);symlinkSync(target,f.file);});
+test('actual integrated source covers every migration without duplicates',()=>{const p=readMigrationReplayPlan();assert.equal(p.baseCount,133);assert.ok(p.forwardCount>=91);assert.equal(new Set(p.files).size,p.files.length);assert.equal(p.files[132],'20261006162427_custodial_shared_events_recovery_binding.sql');assert.ok(p.files.indexOf('20261002110000_event_impact_preview_and_custodial_notes.sql')>132);});

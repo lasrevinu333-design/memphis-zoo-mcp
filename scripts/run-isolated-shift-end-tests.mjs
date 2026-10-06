@@ -1,3 +1,4 @@
+import {migrationReplayNames} from './migration-replay-order.mjs';
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 import {readdirSync,readFileSync,mkdtempSync,chmodSync,rmdirSync,unlinkSync,writeSync} from 'node:fs';
@@ -69,7 +70,7 @@ const dockerCleanup=(args)=>{
 };
 const sql=text=>docker(['exec','-i',container,'psql','-X','-q','-At','-v','ON_ERROR_STOP=1','-U','supabase_admin','-d','postgres'],{input:text}).trim();
 const defaults=DEFAULT_GRANTS_QUERY,removeDefaultsSql=REMOVE_DEFAULT_GRANTS_SQL,absenceGuard=ABSENCE_GUARD;
-let owned=false;const files=readdirSync('supabase/migrations').filter(f=>f.endsWith('.sql')).sort(),manifest=[];
+let owned=false;const files=migrationReplayNames(process.cwd()),manifest=[];
 let finalStageReceipt=null;
 assert.equal(files.length,currentManager219Stage||dualSource219Stage?219:currentManager218Stage||dualSource218Stage?218:
  currentManager217Stage||dualSource217Stage?217:currentManager216Stage?216:176,'exact stage-specific migration set');

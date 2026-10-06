@@ -1,3 +1,6 @@
+import { listSharedEvents } from "./events-api.js";
+import { makeSharedManagerEventsHandler, retiredEventIntake } from "./shared-events-feed.js";
+import { makeOperationsBoardHandler } from "./operations-board.js";
 import "dotenv/config";
 import { createHash, createHmac, randomUUID, timingSafeEqual } from "crypto";
 import express from "express";
@@ -9,7 +12,6 @@ import { createClient } from "@supabase/supabase-js";
 import {
   EVENTS_CONTRACT_VERSION,
   createEventMaintenanceController,
-  createEventsAdminRouter,
   createEventsEmployeeRouter,
   createEventsPublicRouter,
   createMessagingRouter,
@@ -20,6 +22,7 @@ import { assertConfiguredReleaseIdentity, buildReleaseManifest } from "./release
 import { observeProductionSchemaIdentity } from "./production-schema-identity.js";
 import { assertOpsManagerSessionSecret, authenticateOpsAccessRequest, authenticatePresentedOpsAccessRequest, createSupabaseTrustedDeviceStore, installSharedAuthRoutes, makeOpsAccessMiddleware } from "./auth/shared-access-auth.js";
 import { assertServerAssignedActor, authenticatedManagerActor } from "./manager-authority.js";
+import { installOwnerAccessRoutes } from "./owner-access-api.js";
 import { authoritativeFeedbackPayload, makeFeedbackSubmitAuthority } from "./feedback-authority.js";
 import { attachFeedbackDelivery } from "./feedback-delivery-status.js";
 import { feedbackTriageHandler } from "./feedback-triage.js";
@@ -775,6 +778,7 @@ function getSupabaseConfig() {
 const ALLOWED_CORS_ORIGINS = String(process.env.ALLOWED_CORS_ORIGINS || "")
   .split(",").map((s) => s.trim()).filter(Boolean);
 const DEFAULT_CORS_ORIGINS = [
+  "https://memphis-zoo-infrastructure-map.lasrevinu333.chatgpt.site",
   "https://memphis-zoo-mcp.onrender.com",
   "https://lasrevinu333-design.github.io",
   "https://memphis-zoo-infrastructure-map.lasrevinu333.chatgpt.site",
@@ -946,6 +950,7 @@ function requireFeedbackSignedLinkOrOps(purpose) {
       next();
       return;
     }
+    if (purpose === "ack") return requireOpsManagerWrite(req, res, next);
     const result = authenticateOpsAccessRequest(req);
     if (!result.ok) {
       res.status(result.status || 401).json({ ok: false, error: result.error || "Unauthorized" });
@@ -1235,31 +1240,6 @@ async function runOperationalCommand(command, payload = {}) {
   });
 }
 
-async function runEventCommand(command, payload = {}) {
-  const normalized = String(command || "").trim();
-  const commands = {
-    event_create: "create",
-    event_update: "update",
-  };
-  const eventCommand = commands[normalized];
-  if (!eventCommand) throw new Error(`Unsupported bounded event command: ${normalized}`);
-  if (eventCommand === "update") {
-    return runRpc("app_apply_event_update_cas", {
-      p_event_id: payload.event_id || null,
-      p_record: payload.record || {},
-      p_actor: payload.actor || null,
-      p_reason: payload.reason || null,
-    });
-  }
-  return runRpc("app_apply_event_command", {
-    p_command: eventCommand,
-    p_event_id: payload.event_id || null,
-    p_record: payload.record || {},
-    p_actor: payload.actor || null,
-    p_reason: payload.reason || null,
-  });
-}
-
 async function runScheduleCommand(command, payload = {}) {
   return runRpc("app_apply_schedule_command", {
     p_command: String(command || "").trim(),
@@ -1279,7 +1259,6 @@ async function runScanAlertQueue({ limit, dryRun, cooldownMinutes, managerEscala
 
 const eventMaintenanceController = createEventMaintenanceController({
   runReadOnlySql,
-  runCommand: runEventCommand,
   runRpc,
   runScanAlertQueue,
 });
@@ -2466,7 +2445,7 @@ app.use(
     frontendCommit: buildReleaseManifest({ appVersion: APP_VERSION, releaseId: RELEASE_ID }).frontend.commit_sha,
   }),
 );
-app.use("/dashboard-api/events", createEventsPublicRouter({ runReadOnlySql, runCommand: runEventCommand, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, maintenanceController: eventMaintenanceController }));
+app.use("/dashboard-api/events", createEventsPublicRouter({ runReadOnlySql, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, maintenanceController: eventMaintenanceController }));
 app.use(
   "/employee-events-api",
   (req, res, next) => {
@@ -2482,9 +2461,10 @@ app.use(
     appVersion: APP_VERSION,
     releaseId: RELEASE_ID,
     requireDeviceAccess: requireEmployeeDeviceCredential,
+    readSyncStatus: readOutlookEventSyncStatus,
   }),
 );
-app.use("/admin-api/events", createEventsAdminRouter({ runReadOnlySql, runCommand: runEventCommand, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, maintenanceController: eventMaintenanceController, requireAdminApiAuth: requireOpsManagerAuth, requireAdminApiWrite: requireOpsManagerWrite }));
+app.use("/admin-api/events", retiredEventIntake);
 app.use(["/version", "/release-manifest", "/scheduler-runtime-config", "/healthz", "/health", "/health/dependencies"], (req, res, next) => {
   setPublicDashboardCors(res, req);
   if (req.method === "OPTIONS") {
@@ -2949,50 +2929,14 @@ app.post("/admin-api/bundle", requireOpsManagerWrite, async (req, res) => {
   try { const payload = req.body && typeof req.body === "object" ? req.body : {}; const data = await runAdminBundleViaSqlRead(payload); res.status(200).json({ ok: true, data }); }
   catch (error) { console.error("admin bundle failed:", error); res.status(500).json({ ok: false, error: error.message || "Admin bundle failed" }); }
 });
-app.get("/admin-api/open-problems", requireOpsManagerAuth, async (req, res) => {
-  try {
-    const limit = Math.max(1, Math.min(200, Number.parseInt(String(req.query?.limit || "100"), 10) || 100));
-    const data = await runRpc("custodial_manager_open_problems", {
-      p_manager_id: offlineAuthorityManagerId(req), p_limit: limit,
-      p_backend_execution_secret: offlineAuthoritySecret(),
-    });
-    res.status(200).json({ ok: true, data });
-  } catch (error) {
-    const failure = authorityHttpFailure(error, "Open problems are unavailable.");
-    res.status(failure.status).json(failure.body);
-  }
-});
-async function applyManagerTicketOutcome(req) {
-  assertServerAssignedActor(req.body);
-  const ticketId = String(req.body?.ticket_id || "").trim();
-  const outcome = String(req.body?.outcome || "").trim();
-  if (!isUuid(ticketId) || !["mark_fixed", "work_order_sent"].includes(outcome)) {
-    throw Object.assign(new Error("A ticket UUID and Mark fixed or Work order sent outcome are required."), { status: 422 });
-  }
-  const reference = req.body?.external_work_order_reference == null ? null : String(req.body.external_work_order_reference);
-  const notes = req.body?.close_notes == null ? null : String(req.body.close_notes);
-  if (outcome === "work_order_sent" && !String(reference || "").trim()) {
-    throw Object.assign(new Error("Enter the real external work-order reference before closing this reminder."), { status: 422 });
-  }
-  if (outcome === "mark_fixed" && String(reference || "").trim()) {
-    throw Object.assign(new Error("Mark fixed cannot claim an external work-order reference."), { status: 422 });
-  }
-  return runRpc("custodial_set_maintenance_ticket_outcome", {
-    p_ticket_id: ticketId,
-    p_outcome: outcome,
-    p_manager_id: offlineAuthorityManagerId(req),
-    p_external_work_order_reference: reference,
-    p_notes: notes,
-    p_backend_execution_secret: offlineAuthoritySecret(),
-  });
+installOwnerAccessRoutes(app, { store: opsTrustedDeviceStore, runRpc, backendSecret: offlineAuthoritySecret });
+async function readOutlookEventSyncStatus() {
+  const result = await supabaseAdmin.rpc("custodial_outlook_event_sync_v1", {p_action:"status",p_observation:{}});
+  if (result.error) return null;
+  return result.data;
 }
-app.post("/admin-api/close-ticket", requireOpsManagerWrite, async (req, res) => {
-  try {
-    const data = await applyManagerTicketOutcome(req);
-    res.status(200).json({ ok: true, data });
-  }
-  catch (error) { console.error("close ticket failed:", error); res.status(error?.code === "40901" ? 409 : error?.status || 500).json({ ok: false, error: error.message || "Close ticket failed" }); }
-});
+app.get("/dashboard-api/events-feed", requireOpsManagerAuth, makeSharedManagerEventsHandler({readEvents: () => listSharedEvents(runReadOnlySql),readSyncStatus:readOutlookEventSyncStatus}));
+app.get("/dashboard-api/operations", requireOpsManagerAuth, makeOperationsBoardHandler({readEvents: () => listSharedEvents(runReadOnlySql)}));
 app.get("/dashboard-api/summary", requireOpsManagerAuth, async (_req, res) => {
   try { const data = await runPublicDashboardSummary(); res.status(200).json({ ok: true, data }); }
   catch (error) { console.error("dashboard summary failed:", error); res.status(500).json({ ok: false, error: error.message || "Dashboard summary failed" }); }
@@ -3034,13 +2978,6 @@ app.get("/dashboard-api/work-session-alerts", requireOpsManagerAuth, async (_req
     console.error("work session alert lookup failed:", error);
     res.status(500).json({ ok: false, error: error.message || "Work session alert lookup failed" });
   }
-});
-app.post("/dashboard-api/close-ticket", requireOpsManagerWrite, async (req, res) => {
-  try {
-    const data = await applyManagerTicketOutcome(req);
-    res.status(200).json({ ok: true, data });
-  }
-  catch (error) { console.error("dashboard close ticket failed:", error); res.status(error?.code === "40901" ? 409 : error?.status || 500).json({ ok: false, error: error.message || "Dashboard close ticket failed" }); }
 });
 function offlineAuthorityManagerId(req) {
   const managerId = String(req?.memphisAuth?.manager_id || "").trim();

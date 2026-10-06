@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {migrationReplayNames} from './migration-replay-order.mjs';
 
 import assert from "node:assert/strict";
 import { execFile, execFileSync, spawn } from "node:child_process";
@@ -64,7 +65,7 @@ try {
   }
   assert.equal(ready, true, "disposable PostgreSQL must start before vacancy authority tests");
   await sql("do $$ begin create role anon; exception when duplicate_object then null; end $$; do $$ begin create role authenticated; exception when duplicate_object then null; end $$; do $$ begin create role service_role; exception when duplicate_object then null; end $$;");
-  for (const file of fs.readdirSync(migrationsDir).filter((name) => name.endsWith(".sql")).sort()) await sql(fs.readFileSync(path.join(migrationsDir, file), "utf8"));
+  for (const file of migrationReplayNames(process.cwd())) await sql(fs.readFileSync(path.join(migrationsDir, file), "utf8"));
  }
   const legacyStatus = "public.custodial_set_employee_active(uuid,boolean,uuid,text,boolean)";
   assert.equal(await scalar(`select exists(select 1 from aclexplode(coalesce((select proacl from pg_proc where oid='${legacyStatus}'::regprocedure), acldefault('f',(select proowner from pg_proc where oid='${legacyStatus}'::regprocedure)))) where grantee=0 and privilege_type='EXECUTE')::text`), "false",

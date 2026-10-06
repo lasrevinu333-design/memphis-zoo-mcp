@@ -49,8 +49,13 @@ const pauseGuestNotificationsWhenDisabled = readFileSync(`supabase/migrations/${
 const eventReminderWorkdayAndOwnerContractFile = "20260918012000_event_reminder_workday_and_owner_contract.sql";
 const eventReminderWorkdayAndOwnerContract = readFileSync(`supabase/migrations/${eventReminderWorkdayAndOwnerContractFile}`, "utf8");
 const eventReminderStaticWeeklyAuthorityFile = "20260920010000_event_reminder_static_weekly_authority.sql";
+const custodialOwnerDelegatedActionsFile = "20261006031304_custodial_owner_delegated_actions.sql";
+const sharedEventsOutlookFile = "20261006113610_custodial_shared_events_outlook.sql";
+const sharedEventsRecoveryFile = "20261006162427_custodial_shared_events_recovery_binding.sql";
 const eventReminderStaticWeeklyAuthority = readFileSync(`supabase/migrations/${eventReminderStaticWeeklyAuthorityFile}`, "utf8");
 const index = readFileSync("src/index.js", "utf8");
+const ownerAccessApi = readFileSync("src/owner-access-api.js", "utf8");
+const ownerActionsSql = readFileSync(`supabase/migrations/${custodialOwnerDelegatedActionsFile}`, "utf8");
 const scanAuthorityCutover = readFileSync("src/scan-authority-cutover.js", "utf8");
 const schedulerControlPlane = readFileSync("src/static-weekly-control-plane.js", "utf8");
 const auth = readFileSync("src/auth/device-credential-auth.js", "utf8");
@@ -201,9 +206,17 @@ assert.match(index, /action === "resume_canary" && authoritativeHealth\?\.ok !==
   "physical canary resume must require the combined database and real scan-transport health probe");
 assert.match(index, /runCustodialOfflineReconciliationNotificationWorker/);
 assert.doesNotMatch(index, /run_application_write|force-close-session/);
-assert.match(index, /async function applyManagerTicketOutcome[\s\S]*?runRpc\("custodial_set_maintenance_ticket_outcome"/);
-assert.match(index, /app\.post\("\/admin-api\/close-ticket"[\s\S]{0,300}applyManagerTicketOutcome\(req\)/);
-assert.match(index, /app\.post\("\/dashboard-api\/close-ticket"[\s\S]{0,300}applyManagerTicketOutcome\(req\)/);
+assert.ok(index.includes("installOwnerAccessRoutes(app, { store: opsTrustedDeviceStore, runRpc, backendSecret: offlineAuthoritySecret })"),
+  "both ticket routes must be installed with current named-manager storage and backend authority");
+assert.ok(ownerAccessApi.includes("app.post(['/admin-api/close-ticket', '/dashboard-api/close-ticket'], close,"),
+  "both ticket-close aliases must use the same permission-checked route");
+assert.ok(ownerAccessApi.includes("requiredPermission: 'close_scan_tickets'") && ownerAccessApi.includes("assertServerAssignedActor(req.body)")
+  && ownerAccessApi.includes("runRpc('custodial_close_scan_ticket_outcome_v1'") && ownerAccessApi.includes("...managerActionArguments(req)"),
+  "ticket closure must preserve delegated permission, current actor and authoritative SQL boundaries");
+assert.ok(ownerActionsSql.includes("public.custodial_close_maintenance_ticket_authoritative(ticket.id")
+  && ownerActionsSql.includes("Delegated closure requires a verified scan-session ticket")
+  && ownerActionsSql.includes("custodial_require_backend_execution_secret(p_backend_execution_secret)"),
+  "new provenance validation must retain the original authoritative ticket writer and backend proof");
 assert.match(index, /notification_instance_key: recipient\.notification_instance_key/);
 assert.match(index, /client_message_id: recipient\.client_message_id/);
 assert.doesNotMatch(index, /custodial_issue_offline_actor_context/);

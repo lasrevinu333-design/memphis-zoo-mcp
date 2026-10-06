@@ -1,0 +1,918 @@
+{
+  "schema": "custodial.migration-replay-order.v1",
+  "base_source_commit": "ac579d7b0cf12e6a437ffd9e6c2fec47a4f61dfa",
+  "production_execution_authorized": false,
+  "reason": "Retain the previously verified main source prefix, then apply every forward scheduler migration. Source-creation timestamps from independently developed branches are not their actual deployment order.",
+  "phases": [
+    {
+      "kind": "verified_main_source_prefix",
+      "files": [
+        {
+          "name": "00000000000000_production_baseline.sql",
+          "sha256": "decf8dcdceb1f722ec966d16addd8c47d7ceaca9a21f1464a26bf8cbfee7d7fb"
+        },
+        {
+          "name": "20260717161000_custodial_foundation_repair_delta.sql",
+          "sha256": "6e24f20512de2e3e1212ec105bda30031b5597c54a1b6210e759539ca8fe3ad3"
+        },
+        {
+          "name": "20260717170136_custodial_foundation_repair_device_eval_fix.sql",
+          "sha256": "b812b7795bca30a73897866b5865681b2fe18d93ed3f5e27f57c1177fac1120d"
+        },
+        {
+          "name": "20260717175320_ops_manager_pairing_links.sql",
+          "sha256": "a1b411e02020330bea9c9f3bd279240c6b3a5335c2f7b53968c585e54aaada6b"
+        },
+        {
+          "name": "20260717200242_manager_passwordless_onboarding_security_app.sql",
+          "sha256": "8f8423ebd06b08443a5ca214ab2c5912cd7917fc3fbf80f5a964ad6db2f26019"
+        },
+        {
+          "name": "20260717210744_device_security_code_rpc_qualification.sql",
+          "sha256": "8ccb7d4061bc0b67f52cbbb3b1eae03c1e828230efd05c38b4e54518338a07a0"
+        },
+        {
+          "name": "20260717235932_ops_manager_one_time_codes.sql",
+          "sha256": "71af1217a5663fe7b6683be32f3ca9d7e3d0c9a486d1277282ebf844031832c2"
+        },
+        {
+          "name": "20260718021910_event_input_console_scope_venue_taxonomy.sql",
+          "sha256": "6f83136ac91184190dd6d42533d68cce0e5800d6d1504a00148c57196d4c487b"
+        },
+        {
+          "name": "20260718022648_event_input_console_verified_venue_backfill_20260718.sql",
+          "sha256": "ab24e5b9a3a154d1729d294e41f101b4ee8e1c49e9d5568c5fdd6f2ad6f34bb6"
+        },
+        {
+          "name": "20260718055946_ops_manager_shared_48_hour_enrollment.sql",
+          "sha256": "5e1a6383e61632934d86ea68dbc7206c8579e99abc20c08e97cba47e31396783"
+        },
+        {
+          "name": "20260718071500_ops_manager_shared_enrollment_fk_indexes.sql",
+          "sha256": "d3c178d34f7bc042e88f86e47dd9b97e0de4638807fa10e833289d509de25372"
+        },
+        {
+          "name": "20260718075000_gemini_console_professional_foundation.sql",
+          "sha256": "69d246862facff02a8a798215a1f541cf00def7311515c40573d2bf5a0aa7dea"
+        },
+        {
+          "name": "20260718083000_schema_authority_cron_jobs.sql",
+          "sha256": "9f9539445178cee7a1b8d551d2cfeb6ec0ec76234a675123780d957c7c003e73"
+        },
+        {
+          "name": "20260718083100_reconstruct_public_grant_hardening.sql",
+          "sha256": "ed9aac28cb07f3565f3289d15d67458297222910ac44b1a77e8b5ae71b4c59c3"
+        },
+        {
+          "name": "20260718084600_schema_authority_comments.sql",
+          "sha256": "0cf5e24ebee7118310d403231e12b69b87bb8fbd82aa4d3c95fa0777503bf3b6"
+        },
+        {
+          "name": "20260718103215_custodial_v3_reliability_and_retention.sql",
+          "sha256": "bc96269db052387256979c61ba5dadf001a753f4be1ce00cc2cbec5bcdffd22e"
+        },
+        {
+          "name": "20260718104747_restore_members_night_retention_recovery.sql",
+          "sha256": "ef8f382688922a6b6a30ac138a45d8049479ae6f43c0afe98897f5f4f5cd2429"
+        },
+        {
+          "name": "20260718130700_prevent_cleaning_notes_false_maintenance_tickets.sql",
+          "sha256": "00b1736fa1a8f3ce4de836a58da232d0dfa56d264d0f60b42be79a8e674eba06"
+        },
+        {
+          "name": "20260718141948_moxie_password_rotation.sql",
+          "sha256": "3bf371a96fe523fdc38015979b2a4c8d1f1cf0f46c0b2ad4b37cdcc39bfd10a0"
+        },
+        {
+          "name": "20260718152337_ops_manager_shared_messenger.sql",
+          "sha256": "8bee083ba9f66f8bfa6f37711941a90751d0e5101047e429a6ab479bb30a29c2"
+        },
+        {
+          "name": "20260718172800_professional_employee_messenger.sql",
+          "sha256": "a6da82b63fba61e7ec81288afaa675d6db88a9ac6986824ef3d405447f9f9139"
+        },
+        {
+          "name": "20260718184652_messenger_delete_retention_shared_identity.sql",
+          "sha256": "c6d9f2e1eb9beb1b48d12b35c3160c7d6fb570b795328e33f76775c5a05234e3"
+        },
+        {
+          "name": "20260718195210_messenger_delete_actor_fk_indexes.sql",
+          "sha256": "6419d1f4794234b18b2a3a24f6091309db585d4d3c080b81498bc49bce4f4bde"
+        },
+        {
+          "name": "20260719231728_gps_proximity_motion_hardening.sql",
+          "sha256": "ce9cdcd8d6c3a0d96640fa665b77096da277c92858c59b3367eba8d6fe16c7c1"
+        },
+        {
+          "name": "20260721190000_operations_leadership_mobile_foundation.sql",
+          "sha256": "0fa077078369d0aa2317d29f19ca6d7b4be1fafc5186002461acdc2b67634015"
+        },
+        {
+          "name": "20260721203000_manager_mobile_notifications.sql",
+          "sha256": "e5f62382bc079f51c4d032221cf79ff4060757842fd75884013e767d4a503e3a"
+        },
+        {
+          "name": "20260722143000_custodial_employee_phone_foundation.sql",
+          "sha256": "b54cdaef08f1b4258cc493292500929a6ce8cbd5f447b3e52815037fec3a18a6"
+        },
+        {
+          "name": "20260722143100_custodial_employee_phone_assignment.sql",
+          "sha256": "c8e753fadf572102b6d29e8f4f72a1be0c60166233ac49e9f1467f59ddb2f04f"
+        },
+        {
+          "name": "20260722143200_custodial_employee_status_management.sql",
+          "sha256": "b150e1ed42918f92ce5333dee47ec81f303f82a627396d4a964dcfe0e1098bc3"
+        },
+        {
+          "name": "20260722143300_retire_forced_operations_leadership_thread.sql",
+          "sha256": "af2701e1465776b10711f4909d88de783906f4c521cf8c3ada20b605973abd2b"
+        },
+        {
+          "name": "20260722224000_event_notification_retention_integrity.sql",
+          "sha256": "5885fc109f6315c1b952c3092437fcacd95567ccaad79d459d327efb6f0d549a"
+        },
+        {
+          "name": "20260722233500_operational_retention_and_analytics.sql",
+          "sha256": "5994c7e805fd0fb9fa3c8a898f69419c4b35e44035cd2571058e3a00bd5032a1"
+        },
+        {
+          "name": "20260722233600_event_retention_history_guard.sql",
+          "sha256": "a6eca8b9c4f5248bcc3d67771d584dcca0d3ac5579d81f0b34edad78dc4df711"
+        },
+        {
+          "name": "20260723111020_v17_trigger_privilege_hardening.sql",
+          "sha256": "8593176ec87629d0ca15b3b32aa814d6dddb80e7651e870bf6e8abffb7198fd3"
+        },
+        {
+          "name": "20260724010000_native_employee_event_delivery.sql",
+          "sha256": "8f6557ded3e82e749e8b0b63806cfd2f657c883ae1566fea4157552aeec95797"
+        },
+        {
+          "name": "20260724020000_event_messenger_cutover_deletion_semantics.sql",
+          "sha256": "796855768336a80a6d97bb790c05608c30d64786b95cbebf1dbf8a5c321a5ea3"
+        },
+        {
+          "name": "20260724023000_msg_thread_deletion_operations_user_index.sql",
+          "sha256": "f01533a9afcc1fcdab06ba2eb508164de8a78cf51d60151782ea274aac54a778"
+        },
+        {
+          "name": "20260729150527_audit_defense_in_depth_hardening.sql",
+          "sha256": "420157f3073a3ea1b0055fc6e6246374a9babf2db576cda3bc4272a01e27cc4f"
+        },
+        {
+          "name": "20260729203938_third_audit_recovery_gemini_gps.sql",
+          "sha256": "1a1bf9596e8dc813451475a3727b365b01199f7dce6ffb4c61ef48fedaf8b4b8"
+        },
+        {
+          "name": "20260729215914_audit4_attendance_inspection_integrity.sql",
+          "sha256": "d56b21de71a1709b12ff6f482e6dae96f17ad2ccbd34c014d7a8dd8378098023"
+        },
+        {
+          "name": "20260729225858_audit5_feedback_guest_approval_lifecycle.sql",
+          "sha256": "5e5c11f38b449bc988f64875acf534406b01d4dda6332c29c1f43c19a0ce916a"
+        },
+        {
+          "name": "20260730142940_audit6_coverall_assignment_link_security.sql",
+          "sha256": "8e3c51cec409ec3f629bab7cb6e386bdb574294bd213866e64c69424234ff869"
+        },
+        {
+          "name": "20260730143853_audit6_coverall_assignment_link_service_policy.sql",
+          "sha256": "2842209a168ba9eb328d5a16279fc4d01679dadd168954a011c1b6b929aac8ab"
+        },
+        {
+          "name": "20260730183500_disaster_recovery_backup_reader.sql",
+          "sha256": "7d65c3f3a518347bd6277722001fadddf1976da08042a76b1f9004bfffac7b1b"
+        },
+        {
+          "name": "20260730221607_production_availability_warm_bridge.sql",
+          "sha256": "79f94041a548ab7357e32ff87f00a4a4e4dbd7c2845d74750ea48e3ec9966d69"
+        },
+        {
+          "name": "20260730222357_index_remaining_foreign_keys.sql",
+          "sha256": "a38e5a226b60159fc89f3a106ca7753b3a943339f376875ff66de789f990740d"
+        },
+        {
+          "name": "20260731003221_deactivate_render_free_tier_warm_bridge.sql",
+          "sha256": "a9d7082101bdcef3f27bea1fde78728b70c834abbcbd1abc3f1e0c2aa3e070ff"
+        },
+        {
+          "name": "20260731141831_inspection_spot_check_policy.sql",
+          "sha256": "1cb39c82d5e4d22f43ee830ec1a56e7639de1733d67ffc6433602265113c534b"
+        },
+        {
+          "name": "20260731211500_native_employee_message_location_push.sql",
+          "sha256": "2346ecfcb0e66fafad46f1851b98fbece5542271a4f48842e35d012117f8b65b"
+        },
+        {
+          "name": "20260801131340_custodial_atomic_offline_completion_identity.sql",
+          "sha256": "bee53b2acea9ab6e0d56e930b0a33db8269d87b14e63df1a4ae97326ee68f51b"
+        },
+        {
+          "name": "20260801134430_reconcile_canonical_schema_security_metadata.sql",
+          "sha256": "d20ebb49c76ddd801ed7b8ee381fe79fcaf902f935e39f4b1408d36e19945e38"
+        },
+        {
+          "name": "20260801164407_custodial_enrollment_resume_and_push_revocation.sql",
+          "sha256": "c7e62361943578a47d13ad5117b070cfd9686468ddea0d26ee4bc3732ae3a765"
+        },
+        {
+          "name": "20260801195620_custodial_device_removal_operation.sql",
+          "sha256": "f23a5cd53292af904b27d5979c5af2e05bf8c85cc1de64c361f246bb68de8166"
+        },
+        {
+          "name": "20260809125735_cleaning_inspection_24_hour_freshness.sql",
+          "sha256": "5629870fc9bfece9cec6f8a8182cca579c4070a8e9552039d4a1bb3035ae2052"
+        },
+        {
+          "name": "20260810120000_retire_named_manager_shared_room_authority.sql",
+          "sha256": "7d1c2e952ebe09a5350c72d0e396db5bd611f1a077971e6fc40ed0fdb3b54d3a"
+        },
+        {
+          "name": "20260810130000_harden_named_manager_retired_archive_and_concurrency.sql",
+          "sha256": "0b78e7a84fcb03bc1b58e0c4f07ac4ff0de826cd192256cb7bd214ea2598ebc0"
+        },
+        {
+          "name": "20260810140000_finalize_named_manager_messenger_retirement_integrity.sql",
+          "sha256": "5bc2f12e1ebb0de1a4ab43df82f03d52e8dd6f8f3a432e78622b09b4bbc0a860"
+        },
+        {
+          "name": "20260810143000_offline_actor_occurrence_reconciliation.sql",
+          "sha256": "6419d791845b257271c880f768dc8c9e8d6b6bc89b7296509d24650b313a7988"
+        },
+        {
+          "name": "20260810150000_enforce_integrated_backend_authority.sql",
+          "sha256": "ed21f67236622e924979be1bacc3578c932af3284cd1dd86fd2b6a091d89cf1f"
+        },
+        {
+          "name": "20260810160000_close_offline_authority_integrity_gaps.sql",
+          "sha256": "9f735a259cc103735e41aaab40339a57f135714205e4055fa0f1a650516d9a8e"
+        },
+        {
+          "name": "20260810170000_finish_offline_authority_operational_closure.sql",
+          "sha256": "a860643a26c27319635ccb258de1f79a28e9fec9575d41226baf9799a9ea0275"
+        },
+        {
+          "name": "20260810190000_final_integrated_backend_operational_correction.sql",
+          "sha256": "b7db33e260ccb34b478a406cf31a86aec1fcc5f4cbe59a7666bfe93607bb214c"
+        },
+        {
+          "name": "20260810200000_static_weekly_scheduler_authority_integrated.sql",
+          "sha256": "22936a91bfd7cf0c2a87a7c7fed6b287b53b7b61674a6adf62b41d3986a034a9"
+        },
+        {
+          "name": "20260810210000_static_weekly_scheduler_three_high_foundation_correction.sql",
+          "sha256": "b1c5f73ae49f29eaf3fe1f4c5608c8fc755ea74472479b7c7d80cd9668c9a37e"
+        },
+        {
+          "name": "20260810220000_static_weekly_scheduler_complete_authority_correction.sql",
+          "sha256": "76aa63cc7169d7d622870c7a70f479e88bc326f1358a118db317130ac3b54392"
+        },
+        {
+          "name": "20260810230000_static_weekly_scheduler_authority_closure_correction.sql",
+          "sha256": "b82af008a1e45646c945b684417d112d1c11ae72569457736d6c63c94ce32b74"
+        },
+        {
+          "name": "20260812032055_static_weekly_manager_snapshot.sql",
+          "sha256": "dff09dc30f34206d66f888bc8db2680fc34ec452d2421923b9eb2b84a17831d7"
+        },
+        {
+          "name": "20260812130000_static_weekly_employee_turnover.sql",
+          "sha256": "a02b7af05b89489f4887a0655be79231321ee88234c87ff93c2e8293f3d6f7e8"
+        },
+        {
+          "name": "20260813035530_offline_scan_authority_snapshot.sql",
+          "sha256": "48d3272976876e418696fb7cc3294dce7ecb2fa6911b4468a56652ee6eb11cf9"
+        },
+        {
+          "name": "20260813050000_offline_snapshot_operational_truth_closure.sql",
+          "sha256": "1afd5feef8ba060989d79aa40770a18ebf2a2470d4f2136df8b920bc3ffce159"
+        },
+        {
+          "name": "20260813060000_release_canary_operational_recovery.sql",
+          "sha256": "215aff4e59fb80713a13e14212ab1949af6a22513568d59eec61c5debfeb1ced"
+        },
+        {
+          "name": "20260813070000_operational_service_date_foundation.sql",
+          "sha256": "ee84f1d9ef3eb31746f3b61050bef4a9629331c3f72a1fde82db8b2e8123c5c6"
+        },
+        {
+          "name": "20260813141806_custodial_operational_boundary_closure.sql",
+          "sha256": "6c4c0d7e0f386d9307b9c08e10cbd3269c35cbe8a7902c1eb68b8d8ba90fe16a"
+        },
+        {
+          "name": "20260813173000_device_sync_actor_groups.sql",
+          "sha256": "9bef89e40a690c30c7dd6cf07ffc682fa9a560f1859f3ad6e3e49535ee1d8de1"
+        },
+        {
+          "name": "20260813190000_release_phone_transport_and_offline_activation_closure.sql",
+          "sha256": "98f40bc9bdf6a848ba1f07567b9b5ed8aff32441bb2dd89d7ac5b34c91026ab6"
+        },
+        {
+          "name": "20260813210000_custodial_u4_ops_closure.sql",
+          "sha256": "3fc7573beac21cf090fbf059c33ef59b472e88770382f7ff28d9f556a1e29f0b"
+        },
+        {
+          "name": "20260814224034_reconcile_static_weekly_day_change_receipts.sql",
+          "sha256": "bb2acc717fab50bf1c255038a2b1d2706dcd7be98c4751b8dd9b2f8446dafe48"
+        },
+        {
+          "name": "20260815160613_normalize_managed_production_schema_security.sql",
+          "sha256": "fcc15cab9a3c492f9958d91643e5c88f88f0917b31a3507d340c6fab67cb011a"
+        },
+        {
+          "name": "20260815163346_restore_explicit_public_schema_usage.sql",
+          "sha256": "3a3e8f394066a08baf0e9d986613829ccd025ba112bca223870f21e45ef9060f"
+        },
+        {
+          "name": "20260820120831_contain_release_recovery_ddl_authority.sql",
+          "sha256": "2b0ce3fad9200db8b8275b78313d5aefb5c618a0d7550eaa6239343016790506"
+        },
+        {
+          "name": "20260820121025_revoke_residual_public_security_definer_execute.sql",
+          "sha256": "e4822a4386491178a3d7e347dfa1c348465108bd52c88c2a63d4266f9929cbfa"
+        },
+        {
+          "name": "20260820121117_revoke_public_trigger_function_rpc_execute.sql",
+          "sha256": "203f69719dd0729fc336d9f21c33a8e16e2b2cc45d230808431e10e65409585f"
+        },
+        {
+          "name": "20260820125325_custodial_disaster_restore_generation_authority.sql",
+          "sha256": "315853219694bc7c05e26fd83b10f673acd561a4507bafb4229fa861cf004715"
+        },
+        {
+          "name": "20260820133000_create_application_read_authority.sql",
+          "sha256": "46635ef8ad01fce1b8540545961c60e75be0f8a524fc7213ed08aca60a0dc5e0"
+        },
+        {
+          "name": "20260820133100_retire_owner_sql_proxy.sql",
+          "sha256": "064a882c50bce17a2451ad223c306eaea9d36e1cca527449ce4f4afc3220a7b3"
+        },
+        {
+          "name": "20260820143000_bound_ops_manager_device_trust.sql",
+          "sha256": "0eeee019d724b4bba79170ebe223ec6cee5d3e5dec921f436447e310a1d3530f"
+        },
+        {
+          "name": "20260820143200_finalize_function_authority_recovery.sql",
+          "sha256": "d202ce1aca1d933130dc5a506ad4997be186218f7ce47e5b73aafa9fe2dfdb8e"
+        },
+        {
+          "name": "20260820153000_append_only_cleaning_identity_corrections.sql",
+          "sha256": "37638e894bcd36a2b3d31b4f54a243d833d33fad923ca923e7d5821c46a8e3fe"
+        },
+        {
+          "name": "20260820154000_late_gps_is_advisory_only.sql",
+          "sha256": "b6708def2b7a24178fbbc944d4ccba18fa82a54c1e24b2530d78c1738d75db0c"
+        },
+        {
+          "name": "20260820154500_precise_terminal_writer_detection.sql",
+          "sha256": "b0b58afbda38eef898c16473c28135a621b9bb18baad31024d4dd86d234c4a12"
+        },
+        {
+          "name": "20260820155000_rebind_release_recovery_inventory_to_current_authority.sql",
+          "sha256": "9e79fca19dc8a6b65578b3b9c7a8698be970ded9bbd760eaef3424db8b0136e6"
+        },
+        {
+          "name": "20260822142500_grant_readonly_cron_catalog_observation.sql",
+          "sha256": "b732a81250383882d2b462339d3e6b6175c950ebd6c45eaedffe48e40ebe2e13"
+        },
+        {
+          "name": "20260822150000_fence_application_reader_relation_authority.sql",
+          "sha256": "2baaca12c5b9a4b27cbdcc3a395401e569e093cd73d0ae9594e36164388fc050"
+        },
+        {
+          "name": "20260822153000_bridge_cron_identity_and_rebind_recovery_acl.sql",
+          "sha256": "07b87d6aa82b63293f8b8c7161ab367c06b68e988df2a3e0fc5231f2b2e2aa0d"
+        },
+        {
+          "name": "20260822170000_repair_runtime_read_and_scan_alert_authority.sql",
+          "sha256": "c6c11be7788e8f4044935c89f2ff1812da6bced6586f13c0bf3f98d3968ec486"
+        },
+        {
+          "name": "20260822222500_correct_coverall_second_absence_policy.sql",
+          "sha256": "e794b31f26a115de0ee598848893322f0c423e02fa8d62e90e895107c15475d8"
+        },
+        {
+          "name": "20260823024500_provision_static_weekly_runtime_identity.sql",
+          "sha256": "8b94b9a65bb58fb8739d171e19082398e7368cb8dc39684c7efec741649a5602"
+        },
+        {
+          "name": "20260823060000_static_weekly_family_location_truth.sql",
+          "sha256": "ba48a19ad89c695b85dcc514f6130fa771773162808b8950906cc08aeeb5cd3b"
+        },
+        {
+          "name": "20260823070000_static_weekly_service_mode_truth.sql",
+          "sha256": "42f6936a8ae372c3fb35c0a266171a50cbaaa6d9dedce1889a088c865d131009"
+        },
+        {
+          "name": "20260823071000_static_weekly_solver_certificate_v5_authority.sql",
+          "sha256": "3ecd564f96f90df360788b75226cac7ba5016cc688e1c41aa9c723189bb938b2"
+        },
+        {
+          "name": "20260823113624_static_weekly_end_of_day_window_parity.sql",
+          "sha256": "85e03f3801ca78de5096039276291c6c3e23137dd32cea36d5058fe00754fd26"
+        },
+        {
+          "name": "20260823143000_static_weekly_registered_roster_bootstrap.sql",
+          "sha256": "e126b5d8da98ba33097142646e5f82ea2c8f7dc518a1250a55d8dc5d63cda9b0"
+        },
+        {
+          "name": "20260824130000_static_weekly_memory_bounded_document_authority.sql",
+          "sha256": "c08e330d8611adeb3a2bbc5d43d2b3c608f281ba55b3a85ec8a8cdabd194f5e0"
+        },
+        {
+          "name": "20260824130500_static_weekly_memory_bounded_validator_and_receipt.sql",
+          "sha256": "a92d355c21e064417a947d42c9d11350204dbe3d3d021b494a8893e797dc4e2a"
+        },
+        {
+          "name": "20260824131000_static_weekly_manager_snapshot_authority_source.sql",
+          "sha256": "9d8e6af42a7bc55ce4300aea93591c0cddcac3223983b8a92c92f526d6d2a230"
+        },
+        {
+          "name": "20260824131500_static_weekly_compact_document_consumers.sql",
+          "sha256": "e9424e5d641b06c2b7840d1c0bc2470233a0bd72639c1744f67fe1188334b59e"
+        },
+        {
+          "name": "20260824132000_static_weekly_initial_contractor_snapshot.sql",
+          "sha256": "40da636d025b0a5f5a4f8e23b6824e5a2f6a018e95b3121e9703314ecbb4a30c"
+        },
+        {
+          "name": "20260824170000_static_weekly_projection_compact_snapshot.sql",
+          "sha256": "03bb41c732c73f8ac2b82f406d36b03df025e1ad72bf0f05ab1853d1d324d3fd"
+        },
+        {
+          "name": "20260824213000_static_weekly_operational_truth_cutover.sql",
+          "sha256": "ba2385840aa68073b0df771994ac97eceac9257323e81542861393613d2695e9"
+        },
+        {
+          "name": "20260825134500_scan_alert_runtime_authority_closure.sql",
+          "sha256": "5d3b2bef6d70a501528494fe040c81654ea8aee74513d0f9c90cabce5c47a1ca"
+        },
+        {
+          "name": "20260825173000_restore_application_reader_device_identity.sql",
+          "sha256": "d5cbc80464a802d6abc201bc9dcc22ad8c024c4c19906bc7e4bd836e27c1b62d"
+        },
+        {
+          "name": "20260825173500_fence_application_reader_device_credentials.sql",
+          "sha256": "c47e59dd68b836c68227a1c18be069621aa454f770d3c6d7c04a96ba085f2fa3"
+        },
+        {
+          "name": "20260825174500_rebind_application_reader_release_recovery.sql",
+          "sha256": "68f082382e9d9f05664e034716851121485d95d586b36c6b0714111b314be736"
+        },
+        {
+          "name": "20260826020000_preserve_offline_work_across_manager_credential_recovery.sql",
+          "sha256": "c002a6969cffb359c61250c4b41414fc29a35a3ab1b0ea021aaf7ccbf54fc868"
+        },
+        {
+          "name": "20260826114516_retire_legacy_daily_schedule_writers_after_static_weekly_cutover.sql",
+          "sha256": "62329525c73705bb253fc87cd2c31c9b29ecb89a5cce14b550d4b04dce727cbf"
+        },
+        {
+          "name": "20260826155000_restore_application_reader_messenger_runtime.sql",
+          "sha256": "eb8188ba7b0bfb8ff7ed310bf0697d7dc7d6af848a350d843c86b5b64e1ddd3a"
+        },
+        {
+          "name": "20260826160000_restore_application_reader_employee_events_runtime.sql",
+          "sha256": "5058addb210be6f20f96646d0050cf7d928edde9e5f8bfd0f571965089666379"
+        },
+        {
+          "name": "20260827010500_static_weekly_vacant_roster_slots.sql",
+          "sha256": "0486d6d3d17e505e06ba21bdd1197009cc1305f6b8b1df3114adf60d93e45f1e"
+        },
+        {
+          "name": "20260827024500_static_weekly_initial_draft_roster_hydration.sql",
+          "sha256": "be0ee60af8b1f6d9fad011625098657b2e268d43a5300b25f188bb57c9a18d07"
+        },
+        {
+          "name": "20260827033500_static_weekly_registered_source_dated_status.sql",
+          "sha256": "886a3aedc334ee3f9fdf681a15cd930eb07ec005f74462cf1a2dbf2040568590"
+        },
+        {
+          "name": "20260827150000_disaster_recovery_global_mutation_fence.sql",
+          "sha256": "468d9ca9f2c685fa220ac88d36debd55d1258dade93bac692b06e1e9c6a19bd2"
+        },
+        {
+          "name": "20260827151000_restore_application_reader_feedback_runtime.sql",
+          "sha256": "85e463dc262b0001182969db7dfd6efb2bebcdd64368c784332659b1c2c3b8c5"
+        },
+        {
+          "name": "20260827152000_adopt_outlook_event_sync_authority.sql",
+          "sha256": "27ee85fc8dba1365cbdcd7143d941242d7c281a072aa8d19b4db6375bde9de52"
+        },
+        {
+          "name": "20260827153000_scope_release_health_identity_projection.sql",
+          "sha256": "f821899197b375bbd1a96dfeef11034a3e1ec5313a4b387c8a91e7a8e14cbc1a"
+        },
+        {
+          "name": "20260914051527_messaging_read_horizon_and_send_idempotency.sql",
+          "sha256": "923cf50c1a0f4f3e971f20e01204cd882da53d2312d95c77cba2b34302cc667f"
+        },
+        {
+          "name": "20260916010000_project_native_start_into_operational_truth.sql",
+          "sha256": "1c0ea0f3e131a100baa118ee08ef422d71a927b9968a37f04cb5ff888c0dfda2"
+        },
+        {
+          "name": "20260918010000_align_two_internal_absences.sql",
+          "sha256": "78ae02d5b2d3cd989361abe40b9d99066011bc2059b6d04fd4fc5f5e37949905"
+        },
+        {
+          "name": "20260918011000_pause_guest_notifications_when_disabled.sql",
+          "sha256": "d9f8bef965e092cf8b17fd9c37685c67c95bd57e4bcf8ac2d9f4d0a065f7baec"
+        },
+        {
+          "name": "20260918012000_event_reminder_workday_and_owner_contract.sql",
+          "sha256": "1ebd66aa0b6d4eb0212bc8e80d4dd1878a36363ec4f7e1d34a96a92a0317b2b2"
+        },
+        {
+          "name": "20260920010000_event_reminder_static_weekly_authority.sql",
+          "sha256": "58e03f2e327916b53191ead3ade40ba9373b580ccc1ad4116893bc5d8ead63c4"
+        },
+        {
+          "name": "20261006031304_custodial_owner_delegated_actions.sql",
+          "sha256": "4da5a15f22065b9467136eb4a622fa58a9559758c16edd844228f33a84223cf1"
+        },
+        {
+          "name": "20261006113610_custodial_shared_events_outlook.sql",
+          "sha256": "9172c433894853a0ccc378036f9d2d633422991d3ee30dca6007b1b81eeac001"
+        },
+        {
+          "name": "20261006162427_custodial_shared_events_recovery_binding.sql",
+          "sha256": "c889928458f5b8e70b860c41f707e8c1438d88270dc60b68cea32c6f06bc2537"
+        }
+      ]
+    },
+    {
+      "kind": "forward_source_after_prefix",
+      "files": [
+        {
+          "name": "20260922050000_lunch_delivery_failure_manager_alert.sql",
+          "sha256": "e5ac20bf41779c54c4b9145b5f56d10b62ef8ce850c3b6132ddc55a4f07e70f2"
+        },
+        {
+          "name": "20260922070000_completed_cleaning_reminder_cycles.sql",
+          "sha256": "e288d359cfbccc7e89e8ddbd395c4bb705235f4f4a1766838436b2986f36f712"
+        },
+        {
+          "name": "20260922090000_verified_visit_reminder_state.sql",
+          "sha256": "273f8786beaf5567382f08b411816cc4fc688324c480bab7da672dba9ee730e2"
+        },
+        {
+          "name": "20260922163000_static_weekly_lunch_publication.sql",
+          "sha256": "738e6bf8032cbefe9643888196262305e729c13467c533138e228ffc5afc16ab"
+        },
+        {
+          "name": "20260922200000_lunch_notification_producer.sql",
+          "sha256": "578017a8fdd5402d9d592b14651c89ef89a5a9023888f39f3b715edb45388145"
+        },
+        {
+          "name": "20260922235500_static_weekly_existing_employee_restore.sql",
+          "sha256": "c28bbb6ec36824c9100bbb18cdc8e07d69dcb45a82e26596b59726f86c31398b"
+        },
+        {
+          "name": "20260923065000_static_weekly_vacate_roster_slot.sql",
+          "sha256": "9246b744dc81004e885e788d7e2a00ec5fa7286a8d6d2a2ab79e9c97d3728834"
+        },
+        {
+          "name": "20260923121151_visitor_attendance_reader.sql",
+          "sha256": "f50364935b636627a0c3691841e0b932913ae2bcd1e661c87cf6cb169bcafbe0"
+        },
+        {
+          "name": "20260924022250_release_selection_and_occurrence_guards.sql",
+          "sha256": "2e98f268ed876ec16064af02c8b4daafb8c4e44835101bd99796d968e602931d"
+        },
+        {
+          "name": "20260924023930_notification_receipt_and_lunch_integrity.sql",
+          "sha256": "7156b75a986f329139c8edf5b8efc257be568480ee5e9beaaac094420f5b9cbc"
+        },
+        {
+          "name": "20260924032226_bind_release_selection_guard_recovery.sql",
+          "sha256": "244a0de60deae538b0c3c76d15b51bb9e983044c5466660d0d4e537d04e16ad6"
+        },
+        {
+          "name": "20260924042758_static_weekly_canonical_shift_end_derivation.sql",
+          "sha256": "a07dfc4fbb29c7c762daebad7f6e12725cebc7c395bb24b3dd38085c92f46ce5"
+        },
+        {
+          "name": "20260924044035_static_weekly_atomic_roster_completion.sql",
+          "sha256": "b08cd44d3e9a656bfacb6f8066bac7d27118ecae8c98566910f5e7ebc65555e0"
+        },
+        {
+          "name": "20260924053507_assigned_phone_activation_transport.sql",
+          "sha256": "c53fa85013799b9b5333e7272bd664fdec059fdba56de0f5ac9e8632b8e14372"
+        },
+        {
+          "name": "20260924080839_custodial_legacy_installation_observation.sql",
+          "sha256": "b10bdd8df2acdf1e35e9fe7e0fc34137f912508ab56bd326042a309d978530e3"
+        },
+        {
+          "name": "20260924161004_owner_oc24_cleaning_and_inspection_boundaries.sql",
+          "sha256": "4f4c956efc50e147e30c00a840e535623f4f841ea2e3bc0fae102cd885bc93d8"
+        },
+        {
+          "name": "20260924172500_oc24_manual_contractor_lunch.sql",
+          "sha256": "7b9a36d1469a2920f3a45dd19112c44f1a13bbbf0c09951c17426f42aa7eeaa5"
+        },
+        {
+          "name": "20260924201258_native_provider_durable_authority.sql",
+          "sha256": "fe4f617f2531cfc941624660138bbba2c3dff983e87cb04dafe04ff58dee7538"
+        },
+        {
+          "name": "20260925015905_oc24_completion_selection_normalization.sql",
+          "sha256": "769070342011d4ceb28e5dfbbfd2e436e5a98dc7d02d160ac47e2d75fa120316"
+        },
+        {
+          "name": "20260925020244_oc24_bound_legacy_completion_replay.sql",
+          "sha256": "a52245120109a50240a02b33de477281c47c389a028580820cdfea4fbcb1194d"
+        },
+        {
+          "name": "20260925050718_static_weekly_staffing_command_ledger.sql",
+          "sha256": "acc2e14294425d221af49f8567d6995f3bed0b3c015ffa54b76a6809e4770a24"
+        },
+        {
+          "name": "20260925054802_static_weekly_staffing_atomic_acceptance.sql",
+          "sha256": "34dbeb5ac62da3f507737d189a0f4c982a5187bdb34905cb87468f1776ed2e39"
+        },
+        {
+          "name": "20260925190000_gps_exact_location_authority_boundary.sql",
+          "sha256": "4a524505fa7eadf9755153a1946a8e06d91dbd8ed8196a82aa9cd6f53cffbdf4"
+        },
+        {
+          "name": "20260926143542_static_weekly_protected_separation.sql",
+          "sha256": "5a9123649c92635091854a66ad06404a5dcbc8a6b0b63b7b8b0dd8894de58032"
+        },
+        {
+          "name": "20260926180000_retire_direct_employee_status_rpc.sql",
+          "sha256": "dd2c306b679d48e015e839d1efd8f339aada7b7082e18e502344c15a7d06bc2b"
+        },
+        {
+          "name": "20260926192656_static_weekly_recurring_confirmation_ledger.sql",
+          "sha256": "f41b7f8c118dbf324088ee09b33e8efa3d5805d7909f5d8265a2c94bba035022"
+        },
+        {
+          "name": "20260926193000_retire_direct_employee_mutation_helpers.sql",
+          "sha256": "682966928d90687ea78e9a905c781438efabf5323dd6c712b7711d6668c4d597"
+        },
+        {
+          "name": "20260926193651_static_weekly_recurring_source_admission.sql",
+          "sha256": "373e8b08a8637915b4daa815f3dbef2a9107ef437b8ec1c64f1ae9dc3a35cd71"
+        },
+        {
+          "name": "20260926194644_static_weekly_recurring_generation_fence.sql",
+          "sha256": "f55c95b9a88d0042fdb419511a96b800f1461a5db1da3247190b8b1959a35102"
+        },
+        {
+          "name": "20260926200458_static_weekly_recurring_future_same_monday.sql",
+          "sha256": "9d96dd9a8ec118c4640949d20daf1e26c3cf920eba0b24e12828aeaaf8ff5dfa"
+        },
+        {
+          "name": "20260926201644_static_weekly_recurring_dependency_snapshot.sql",
+          "sha256": "92dc22d9eeb0e88c97752d156da5c098b3974f7d84f9b72cd02fa6f515965437"
+        },
+        {
+          "name": "20260926202657_static_weekly_recurring_publication_binding.sql",
+          "sha256": "42973f964f0dad31a5db6924136037864895bd3bbb6ba0896acf8e3dff86658a"
+        },
+        {
+          "name": "20260926204235_static_weekly_recurring_terminal_targets.sql",
+          "sha256": "bd2ee52ece3ceb29bc769110e7cf27bd4a1f7e0505e6aa280a236e2e55829778"
+        },
+        {
+          "name": "20260926205849_static_weekly_recurring_blocked_authority_repair.sql",
+          "sha256": "165d2d8c31b3632ac769ec44cd12944763200c462d6b83418ba1016b42c65bfd"
+        },
+        {
+          "name": "20260926211714_static_weekly_recurring_common_lock_order.sql",
+          "sha256": "53ce7d4c5151a18d0fb4d0a52b793c424d06b67f09b2551bea19bb202c4729f0"
+        },
+        {
+          "name": "20260926220510_static_weekly_recurring_dependency_reconciliation.sql",
+          "sha256": "46d5ff181cdaa82054eb9d46bdcdddf0b0285ec55db533a626c695a6d01a80c9"
+        },
+        {
+          "name": "20260926223914_static_weekly_recurring_application_targets.sql",
+          "sha256": "9fb269ef1e617d1e937674ee3f7fb093cadc02fba16b9aec1199e4e0c45aaf25"
+        },
+        {
+          "name": "20260926225613_static_weekly_recurring_atomic_finalization.sql",
+          "sha256": "00d217074b423fe02e05ee95a5175b9840b3f66b8db418cbe7d51bafe37fdd14"
+        },
+        {
+          "name": "20260926234537_static_weekly_authenticated_schedule_delivery.sql",
+          "sha256": "b51016c329b64713fccaa5d8670e9feac9817b3b793c44be96041638335faf3e"
+        },
+        {
+          "name": "20260927001706_static_weekly_lunch_validation_materialization.sql",
+          "sha256": "021b00a7765ab5424eae57f91de57ea14b975f104cdc3c3c512ca49522c36ab9"
+        },
+        {
+          "name": "20260927010911_static_weekly_current_recurring_delivery_status.sql",
+          "sha256": "0e482db72f32d3e645a86a527a51f402e9883db2d9cdaebf2db0ea1daab3d3ed"
+        },
+        {
+          "name": "20260927031806_schedule_bound_location_reminders.sql",
+          "sha256": "3ac8bb9fc3374f33721d987ec6bd6551e719d622c376d1f9d7edefa639df9aa2"
+        },
+        {
+          "name": "20260927052929_schedule_notification_admission_corrections.sql",
+          "sha256": "14f0413bfe7cef39cd17c548c1044e7bda50f71f56619f4ad4a780f3fe16dcd1"
+        },
+        {
+          "name": "20260927072146_schedule_notification_exact_canary.sql",
+          "sha256": "2d20c35105aaf2e6cfde58eec4590c10b995d41103aff0f7bd7a57a7e294e216"
+        },
+        {
+          "name": "20260927075352_protected_separation_original_context.sql",
+          "sha256": "2e6958276c9e5679d5b40b5cbc30d6345cfc134ac17783bb525949ecfc63f930"
+        },
+        {
+          "name": "20260929125440_custodial_recovery_inventory_closure.sql",
+          "sha256": "4631cebc6d4afd048fabca05244be481359cb27b20cdeb160c04c97f05ed7dd9"
+        },
+        {
+          "name": "20261001130750_october_bounded_dated_transition.sql",
+          "sha256": "2c260b0bf1e6cd5e119348ea8e442c71f074f389af9f851b0e7852ddfd894e20"
+        },
+        {
+          "name": "20261001152633_october_dated_consumer_corrections.sql",
+          "sha256": "6a15cf945b69429d5fe3243e0bf9112ef4940d104b6c3c6c71db6683c769eb0b"
+        },
+        {
+          "name": "20261001161831_october_dated_review_authority_corrections.sql",
+          "sha256": "0a6a72072e40a82f1a45b0b8b284e8970f68fcfdaa96b7ed143add547045d06f"
+        },
+        {
+          "name": "20261002050000_feedback_email_intent_capture.sql",
+          "sha256": "62b6d5300c9a524ed773f05a0a294d2fb7e61a4cd269e4c2fe6ff9f95db2d90d"
+        },
+        {
+          "name": "20261002060000_event_needs_review_isolation.sql",
+          "sha256": "ac1b6000c5e5f52266bd5fc57cb1d82ebdbb5e22618befcb5a18848ee34c90a6"
+        },
+        {
+          "name": "20261002070000_feedback_email_relay_boundary.sql",
+          "sha256": "21a75ed75caa204d8f94c7fde7096c03ea675855259361b06c6cd0caadcb6cd4"
+        },
+        {
+          "name": "20261002080000_event_manager_revision_compare_and_swap.sql",
+          "sha256": "8f11bd7bc52cf973f7bb3abbc3d387531f2c23f81114708522503c76b7604e46"
+        },
+        {
+          "name": "20261002090000_manager_issue_outcomes.sql",
+          "sha256": "4e2032be8225a87bd5612824d9b26c7d4197d2a950e1e6411d9faecd59220017"
+        },
+        {
+          "name": "20261002100000_place_lifecycle_authority.sql",
+          "sha256": "ced37a6298b0d80188675ffe2d6c31c0df1454cb228037ff0c091c7a03e7b5aa"
+        },
+        {
+          "name": "20261002110000_event_impact_preview_and_custodial_notes.sql",
+          "sha256": "385c296e8353e493a4fa483f7cfaaff1a8106a834c25e684264dae61ff78a078"
+        },
+        {
+          "name": "20261002120000_october_dated_recovery_inventory_rebind.sql",
+          "sha256": "3ba81c38118b4b56543d2f89135bbdb7a6652c700c78b5dedcf898b3e60f6000"
+        },
+        {
+          "name": "20261002130000_native_provider_clock_transport.sql",
+          "sha256": "741b231b014d6123dffc5b537ecb1b44a840bd65eca8e1d4a033bdbeb64cf777"
+        },
+        {
+          "name": "20261002140000_event_supersession_and_chicago_instants.sql",
+          "sha256": "e0eccd95d775c0a1e2c829ea50010cb0ca5bdf4b2eb8b3535f43508732fffdb5"
+        },
+        {
+          "name": "20261002150000_feedback_delivery_readback.sql",
+          "sha256": "acbf3c651f2134cadf960bf66db816cdab8c90bda7c83974a30d65cf5bed2468"
+        },
+        {
+          "name": "20261002160000_place_event_venue_bridge.sql",
+          "sha256": "6ce6a61985d99ed56c54c128b2dad28c08eadba952ee6e5b674d2c4ca6657422"
+        },
+        {
+          "name": "20261002170000_event_cancellation_cas_restore.sql",
+          "sha256": "4f4b506f239c3f41d430b34f9f39a16847fc7becb8e665dc5147e499a5866217"
+        },
+        {
+          "name": "20261002180000_native_provider_location_reservation.sql",
+          "sha256": "5ac7d3eb62a415edaed19feb3c1e2552cf95a6e75c1121a1cfe5d1e883d9fcf0"
+        },
+        {
+          "name": "20261002200000_place_operational_metadata_bridge.sql",
+          "sha256": "00c5852cabd0e9b296064a6ae38853fba011a6b3571c279fc7f66ad4a4f911e4"
+        },
+        {
+          "name": "20261002210000_event_place_overlay_admission.sql",
+          "sha256": "2897af88ae8499a4e2b16c3e88bd072887d6b068a7c3a446ea41a5662b48ddd5"
+        },
+        {
+          "name": "20261002220000_feedback_relay_preflight_and_reconciliation.sql",
+          "sha256": "2273f6e05074d74e8c51322217c6ccf6f71ac42cbc72a3e2de589159618f4ede"
+        },
+        {
+          "name": "20261002230000_feedback_protected_attachment_admission.sql",
+          "sha256": "34b0658726218d3db75d9d9d979a3ab6ea3143d8a7f53b1bfc2bf8da18eeaf6d"
+        },
+        {
+          "name": "20261003000000_memphis_current_schedule_day.sql",
+          "sha256": "fb42ea74db34f71fecdc4e6eaaed7aeec239091099969bb755864b53192a4534"
+        },
+        {
+          "name": "20261003010000_native_location_lifecycle.sql",
+          "sha256": "e0512cb5dcc284b18a92b666c495ada7cf956c2f4cce2b3753e7acbd066b0211"
+        },
+        {
+          "name": "20261003030000_place_operational_name_adoption.sql",
+          "sha256": "b59b337e081f23b8feb72130fae70e85d4dfd623723b8ca289946a6bbbefb572"
+        },
+        {
+          "name": "20261003050000_native_provider_events.sql",
+          "sha256": "cb665620d9612b0f6e7e4d15ace7aebc55a8a473ddf7ee88524bb4ca149d1e17"
+        },
+        {
+          "name": "20261003060000_event_notification_current_projection.sql",
+          "sha256": "31641c1a4363f289bc2bfa59793444102da5a7bf6e6d0621d010b54c224c2370"
+        },
+        {
+          "name": "20261003070000_feedback_triage_receipts.sql",
+          "sha256": "d9d19c2400c3d98f3819976ae557efc3e1cc5efcba4e6addc0c01d02dcdac234"
+        },
+        {
+          "name": "20261003080000_native_location_dispatch_and_ack.sql",
+          "sha256": "d9713b8df261c5a9e2dd32493d6e3b3ae4094755abed4fee8ea65bed13233cfc"
+        },
+        {
+          "name": "20261003120000_completion_taxonomy_evidence.sql",
+          "sha256": "a732bcd9077aa98b263a39e7ce29edd61a084db843c0ef02b84f6c2cd78890bf"
+        },
+        {
+          "name": "20261003121757_employee_message_source_admission.sql",
+          "sha256": "20ff06f8c0c5e82814189e1e2969b928ffa48eb1181098a73156962dc9ac1e7f"
+        },
+        {
+          "name": "20261003140000_static_weekly_nonemployee_contractor_capacity.sql",
+          "sha256": "8ae8467900940a76b296030f630fbc610b7d21d619661a13d8caee32c4d8ddca"
+        },
+        {
+          "name": "20261003143000_issue_constraint_index_recovery.sql",
+          "sha256": "651d9c0562fc6fce55d1a76553e3f1016ef2bf52d879773101e551923b757276"
+        },
+        {
+          "name": "20261003150000_native_provider_interval_protocol.sql",
+          "sha256": "cb94f7cd6dd949407a936a2c6915bd0ef0972fb79a1cf89b2e480d628c50b194"
+        },
+        {
+          "name": "20261003160000_static_weekly_contractor_capacity_extension.sql",
+          "sha256": "3c6ec864d7b2bdd6264e44225a9c3e25c98a6fe522645bfdc5fad020e5877ac7"
+        },
+        {
+          "name": "20261003170000_native_target_source_projection.sql",
+          "sha256": "e9d998154190b1156009311c9c241b418b15c4d9c029c22186c49df5cf691b5c"
+        },
+        {
+          "name": "20261003190000_static_weekly_capacity_current_source_bridge.sql",
+          "sha256": "4454a7048e7845f39bb372397dd52bcb247de5fa68ec81f3fad01cc6186aa716"
+        },
+        {
+          "name": "20261003193000_coverall_event_brief_private_reader.sql",
+          "sha256": "c4b3ef269efad069b684ccfb2ebaf72923f87200d0093a3e5c46daba930ea318"
+        },
+        {
+          "name": "20261003194000_native_lunch_delivery.sql",
+          "sha256": "22ef0f716accbd8c2222a117ba876a04631163399ec5619418ddc2e0835f156b"
+        },
+        {
+          "name": "20261003210000_static_weekly_splash_season_gate.sql",
+          "sha256": "2f17a1d235f7da72cd0db6372a76793b6860490bf5fb2688240dc883102a78bd"
+        },
+        {
+          "name": "20261003211000_static_weekly_splash_source_retention.sql",
+          "sha256": "c03305a1da6f03db6e5a737e9605cb28b594703c5a3f14778b2575fdeb124eba"
+        },
+        {
+          "name": "20261003220000_current_release_authority_completion.sql",
+          "sha256": "8d8d60f1b10427f5c184488a9faa5e4f4bbb9ac2f11526ff921bb8c2eac70898"
+        },
+        {
+          "name": "20261003230000_static_weekly_named_handoff_derivation.sql",
+          "sha256": "ef4c6fc1183002af23797b5ac226660a3b1c2b85f3a543df75c1afa61d8fd500"
+        },
+        {
+          "name": "20261004000000_native_provider_event_decision_lookup.sql",
+          "sha256": "ab4e6eb848bd214f8616fb52f094829786df9a9a81d2eb8d00d247b1f28e52fd"
+        },
+        {
+          "name": "20261004140657_approved_static_template_authority.sql",
+          "sha256": "23f311b1d506c0d5ad3c0f04554a2388956f4fd8539af42e96107b1c07afa5b4"
+        },
+        {
+          "name": "20261006172928_custodial_manager_scheduler_permissions.sql",
+          "sha256": "f4cf312cd905e82181e4b376948c0fb309fd70c575a066934f843e41a17c8d12"
+        },
+        {
+          "name": "20261006190426_manager_scheduler_recovery_binding.sql",
+          "sha256": "7a57b1b3607d27bd298646f72bc65917cb522e26a2c6169bb610ec79500c6209"
+        }
+      ]
+    }
+  ]
+}
