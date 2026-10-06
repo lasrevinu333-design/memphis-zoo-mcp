@@ -1,16 +1,16 @@
 {
   "artifact": "integrated-backend-authority-release-evidence.v2",
   "release_id": "release-2026.07.19.custodial-v3.12",
-  "frontend_commit_sha": "635ba1b2b73bef36ad5c87964a1bb18f050d37ce",
+  "frontend_commit_sha": "d068106ca216d76fa04310e0a4adc40e9f3b27df",
   "frontend_commit_state": "final_pair_bound",
-  "schema_fingerprint": "09cad1cd3941e367192c5939c220823713ec0161affc7f4db656d1452b3e41ae",
+  "schema_fingerprint": "440c5cfa077055cae5ec41537496f50f2d99ec7cc91c5cdf5cc5ead8d44268a5",
   "schema_transition": {
-    "transition_id": "custodial-owner-access-20261006",
+    "transition_id": "custodial-owner-shared-events-20261006",
     "from_fingerprint": "750e7f040519f6d4555836cbd4d172a22f98911d5bab9918fa370238fff3f822",
-    "to_fingerprint": "09cad1cd3941e367192c5939c220823713ec0161affc7f4db656d1452b3e41ae",
+    "to_fingerprint": "440c5cfa077055cae5ec41537496f50f2d99ec7cc91c5cdf5cc5ead8d44268a5",
     "expires_at": "2026-10-13T23:59:59Z"
   },
-  "frontend_source_fingerprint": "09cad1cd3941e367192c5939c220823713ec0161affc7f4db656d1452b3e41ae",
+  "frontend_source_fingerprint": "440c5cfa077055cae5ec41537496f50f2d99ec7cc91c5cdf5cc5ead8d44268a5",
   "backend_contract": {
     "scan": "scan.v4.snapshot-bound-authority",
     "authority": "offline-authority.v5",
@@ -145,7 +145,7 @@
       {
         "path": ".github/workflows/custodial-production-repair.yml",
         "mode": "100644",
-        "object_id": "5c08cec12192bd8bf4fde36bdc95438e899aebb7"
+        "object_id": "47433fc962901cc53605bdfe81d6ebd7c6cf9dc9"
       },
       {
         "path": ".github/workflows/device-credential-foundation.yml",
@@ -278,6 +278,11 @@
         "object_id": "936586f668d82a5e63a386cf4726e7db10bb9f03"
       },
       {
+        "path": "docs/OUTLOOK_SHARED_EVENTS.md",
+        "mode": "100644",
+        "object_id": "aeffefc820ea414b04bc4e1f768b5f07031665e4"
+      },
+      {
         "path": "docs/chatgpt-mcp-oauth.md",
         "mode": "100644",
         "object_id": "8de27c0896a5cc6850bb2e04753e9372e987ccd9"
@@ -353,6 +358,16 @@
         "object_id": "9722b2951005ddb1447f08e6c01ea5edfe233121"
       },
       {
+        "path": "docs/retired-event-console/events-api-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "9e2d4dbe014a35ce5f86de4d7502530056be1306"
+      },
+      {
+        "path": "docs/retired-event-console/events-parser-tests.mjs",
+        "mode": "100644",
+        "object_id": "4fb026c3bfa386f8c6235e7f8721fa4f5499e16c"
+      },
+      {
         "path": "docs/routes.md",
         "mode": "100644",
         "object_id": "63d1bc65893bc8f8f40fc51d6a45f89c4a823b43"
@@ -390,7 +405,7 @@
       {
         "path": "package.json",
         "mode": "100644",
-        "object_id": "63aa6948f18ee81042e9e30be384b73b78c5bb93"
+        "object_id": "748a819bd7a40e8760a95b67bb5dd2f0f7112b79"
       },
       {
         "path": "public/moxie-assets/contacts-creekside-animal.png",
@@ -445,7 +460,7 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "ce325e25e21fef50427ae1ec213e5dbf4c9381d3"
+        "object_id": "eb3121a0fb1a91d77659a656c991fe7ad02e8b33"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
@@ -475,7 +490,22 @@
       {
         "path": "release/schema-alignment-input.json",
         "mode": "100644",
-        "object_id": "36e2457e4ef4da21c7912494f392905840f673c6"
+        "object_id": "d1713271de2b4867f3931478e15c0eae024b2247"
+      },
+      {
+        "path": "release/shared-events-database-receipt.json",
+        "mode": "100644",
+        "object_id": "ac102ca0c5cbc84ec19f7670cef48832d2a9ef92"
+      },
+      {
+        "path": "release/shared-events-schema-delta.json",
+        "mode": "100644",
+        "object_id": "e8fdfbe202ddf50bd159215f0d2e6681b8fe4be5"
+      },
+      {
+        "path": "release/shared-events-schema-extension.json",
+        "mode": "100644",
+        "object_id": "220e84c9b62f224a4790c438ca1e705a24d69b32"
       },
       {
         "path": "research/european_herbalism_through_paracelsus.md",
@@ -813,14 +843,9 @@
         "object_id": "57aaa622b9491f28d28d0fb62ce552d188e46c54"
       },
       {
-        "path": "scripts/events-api-contract-tests.mjs",
+        "path": "scripts/events-chicago-time-tests.mjs",
         "mode": "100644",
-        "object_id": "9e2d4dbe014a35ce5f86de4d7502530056be1306"
-      },
-      {
-        "path": "scripts/events-parser-tests.mjs",
-        "mode": "100644",
-        "object_id": "4fb026c3bfa386f8c6235e7f8721fa4f5499e16c"
+        "object_id": "dab67b08a9371ff067fe75c234e69bbc9872f2e8"
       },
       {
         "path": "scripts/extract-weighted-static-weekly-pdf.mjs",
@@ -1163,6 +1188,11 @@
         "object_id": "836ed2c94152af66871c5557d493e5761f7e9b95"
       },
       {
+        "path": "scripts/outlook-event-sync-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "e784e03fd42692ad1b1fad2891fc16a90f5f761d"
+      },
+      {
         "path": "scripts/owner-actions-database-tests.mjs",
         "mode": "100644",
         "object_id": "6b6b99bc1fb1f6ef3fdb912ab6ad8fb98154676f"
@@ -1398,6 +1428,11 @@
         "object_id": "b69adfd3286a2d26dcd9251d956faa05a499f646"
       },
       {
+        "path": "scripts/shared-events-feed-tests.mjs",
+        "mode": "100644",
+        "object_id": "bd5b0b0a82361eda9da9953b077165a809ea59e9"
+      },
+      {
         "path": "scripts/smoke-ai-intent.mjs",
         "mode": "100644",
         "object_id": "9b7c69d485f70f64093aeeaaa14c33ddae4955f1"
@@ -1415,7 +1450,7 @@
       {
         "path": "scripts/smoke.mjs",
         "mode": "100644",
-        "object_id": "a1c788e86057ab9f942a2980f74f52e0920c2c55"
+        "object_id": "acef7f2cc3df8b3c677906444536c2100d0cd7f7"
       },
       {
         "path": "scripts/sql/check-alijah-herpetarium-rule.sql",
@@ -1953,14 +1988,14 @@
         "object_id": "3f58e2f73be3161e62697ae756bb76c6b46e9bcf"
       },
       {
-        "path": "src/events-ai-parser.js",
-        "mode": "100644",
-        "object_id": "bfec9715b13edff18ff9b644c3948aeb8f9761d5"
-      },
-      {
         "path": "src/events-api.js",
         "mode": "100644",
-        "object_id": "ad2c278d74514800a6c2e7ed364ac5b9e01d9f85"
+        "object_id": "8e2a00dbb21b9000c60380caf8593db958c838b7"
+      },
+      {
+        "path": "src/events-time.js",
+        "mode": "100644",
+        "object_id": "987744239be0e7c7003e8efe947bf4edea440203"
       },
       {
         "path": "src/feedback-authority.js",
@@ -2010,7 +2045,7 @@
       {
         "path": "src/index.js",
         "mode": "100644",
-        "object_id": "1b09f496455a9c827690eeca97f37c3380ebcc99"
+        "object_id": "def72e62698f5aa27fab4fa08d765fea1d43a8f2"
       },
       {
         "path": "src/integrated-backend-authority-release-evidence.js",
@@ -2098,6 +2133,11 @@
         "object_id": "cc646ddc24280980107d7feef837dd9b98dfea57"
       },
       {
+        "path": "src/operations-board.js",
+        "mode": "100644",
+        "object_id": "87ed02725756d903e4f28c767a1f4cd493ceec12"
+      },
+      {
         "path": "src/owner-access-api.js",
         "mode": "100644",
         "object_id": "7f80c1c6c5f1177f38d7190b78beec14a31a7c63"
@@ -2130,7 +2170,7 @@
       {
         "path": "src/routes/index.js",
         "mode": "100644",
-        "object_id": "34a56b24bf07fb467f245f4dfbc5c20107d3af6f"
+        "object_id": "338684243ea0fc3768fea4c1d7d9ad4840a2efb8"
       },
       {
         "path": "src/routes/moxie-templates.js",
@@ -2171,6 +2211,11 @@
         "path": "src/services/index.js",
         "mode": "100644",
         "object_id": "eac65dfc558d5ed30d97087b86e5074a0ca490dc"
+      },
+      {
+        "path": "src/shared-events-feed.js",
+        "mode": "100644",
+        "object_id": "e8e138a2601092d00a9b8e40f95f438a6ce43965"
       },
       {
         "path": "src/static-weekly-control-plane-runtime.js",
@@ -2285,12 +2330,12 @@
       {
         "path": "supabase/canonical/schema-fingerprint-input.json",
         "mode": "100644",
-        "object_id": "d8cf1d8919589ab2e9b06bd27500f83d2c7edd48"
+        "object_id": "dbd93de8e744a1bc898a45da3af5b79eaa169548"
       },
       {
         "path": "supabase/canonical/schema-fingerprint.txt",
         "mode": "100644",
-        "object_id": "e24c3a859d49424514714307d98cbfe481eda637"
+        "object_id": "f1b0d1539675dc5b104ffdd7c179bdb807aa837b"
       },
       {
         "path": "supabase/config.toml",
@@ -3538,13 +3583,18 @@
         "object_id": "e6bc4d5ad8685ec908f4750baadaf6da470f1049"
       },
       {
+        "path": "supabase/migrations/20261006113610_custodial_shared_events_outlook.sql",
+        "mode": "100644",
+        "object_id": "efe1ab69549f787917f187211f4d1fe21db0e478"
+      },
+      {
         "path": "tmp/write_probe.txt",
         "mode": "100644",
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 683,
-    "migration_path_count": 131,
+    "authority_path_count": 693,
+    "migration_path_count": 132,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
   },
@@ -3947,6 +3997,9 @@
     },
     {
       "name": "20261006031304_custodial_owner_delegated_actions.sql"
+    },
+    {
+      "name": "20261006113610_custodial_shared_events_outlook.sql"
     }
   ],
   "release_boundary": "Prepare distinct minimum-32-character backend, native-route, and employee-device credential secrets before cutover; configure database digests immediately after the migrations that create each configuration function, retain the bridge backend artifact through the scan-snapshot phase, require manager-code recovery without phone-local work loss for any device-credential generation mismatch, and require the executable health/restoration probes before traffic changes."
