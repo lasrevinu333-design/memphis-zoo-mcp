@@ -100,7 +100,7 @@ try{
  const query=(b,time=receiptTime,nonce=randomUUID(),proof='b'.repeat(64))=>
   'select public.custodial_native_provider_events_at('+[q(credential),q(credentialHash),q(nonce),q(proof),j(b),q(time)].join(',')+');';
  const submit=(b,time=receiptTime,nonce=randomUUID(),proof='b'.repeat(64))=>JSON.parse(sql(query(b,time,nonce,proof)));
- const interval=nativeIntervalDatabaseCases({sql,q,j,check,reject,credential,credentialHash,body,at,event,batch,query,payload,observation});
+ const interval=nativeIntervalDatabaseCases({sql,q,j,check,reject,credential,credentialHash,body,at,event,batch,query,payload,observation,offsetMicros:fixtureClock.offsetMicros});
  const received=event('received'),displayed=event('displayed'),opened=event('opened'),ack=event('acknowledged');
  const originalRows=sql('select md5(jsonb_agg(to_jsonb(r) order by job_id)::text) from public.employee_native_push_delivery_receipts r where job_id='+q(job.job_id));
  const count=()=>sql('select count(*) from public.employee_native_provider_events');
