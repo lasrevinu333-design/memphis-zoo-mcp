@@ -123,9 +123,17 @@ const laterPins=Object.freeze({
  '20261003194000_native_lunch_delivery.sql':'22ef0f716accbd8c2222a117ba876a04631163399ec5619418ddc2e0835f156b',
  '20261003210000_static_weekly_splash_season_gate.sql':'2f17a1d235f7da72cd0db6372a76793b6860490bf5fb2688240dc883102a78bd',
  '20261003211000_static_weekly_splash_source_retention.sql':'c03305a1da6f03db6e5a737e9605cb28b594703c5a3f14778b2575fdeb124eba',
- '20261003220000_current_release_authority_completion.sql':'33ca9d153233441b542d62e0f76d1ffa3b07788cf7e9fccd0c4b993b719abb27',
+ '20261003220000_current_release_authority_completion.sql':'8d8d60f1b10427f5c184488a9faa5e4f4bbb9ac2f11526ff921bb8c2eac70898',
  '20261003230000_static_weekly_named_handoff_derivation.sql':'ef4c6fc1183002af23797b5ac226660a3b1c2b85f3a543df75c1afa61d8fd500',
  '20261004000000_native_provider_event_decision_lookup.sql':'ab4e6eb848bd214f8616fb52f094829786df9a9a81d2eb8d00d247b1f28e52fd',
+ '20261004140657_approved_static_template_authority.sql':'23f311b1d506c0d5ad3c0f04554a2388956f4fd8539af42e96107b1c07afa5b4',
+ '20261006031304_custodial_owner_delegated_actions.sql':'4da5a15f22065b9467136eb4a622fa58a9559758c16edd844228f33a84223cf1',
+ '20261006113610_custodial_shared_events_outlook.sql':'9172c433894853a0ccc378036f9d2d633422991d3ee30dca6007b1b81eeac001',
+ '20261006162427_custodial_shared_events_recovery_binding.sql':'c889928458f5b8e70b860c41f707e8c1438d88270dc60b68cea32c6f06bc2537',
+ '20261006172928_custodial_manager_scheduler_permissions.sql':'f4cf312cd905e82181e4b376948c0fb309fd70c575a066934f843e41a17c8d12',
+ '20261006190426_manager_scheduler_recovery_binding.sql':'7a57b1b3607d27bd298646f72bc65917cb522e26a2c6169bb610ec79500c6209',
+ '20261006203931_custodial_delegated_coverall.sql':'2f84424673d75eb2986a2c5d4b51c51baf4cbcb869def741aa5f5c84b5b3e475',
+ '20261006211215_preserved_coverall_validator_recovery.sql':'2a47538c6c202482711e0ff80516c8a62a7acdf993302b3b3ef3dc0d3a237399',
 });
 const sha=x=>crypto.createHash('sha256').update(x).digest('hex');
 // This pins source ordering/finite textual delta, not PostgreSQL execution or
@@ -192,7 +200,7 @@ export async function runEmployeeMessageMigrationSourceTests(){
   ["get diagnostics n=row_count;if n<>1 then raise exception 'MESSAGE prepare recovery update count changed';end if;",'null;'],
  ]){assert.notEqual(sql.replaceAll(before,after),sql);assert.throws(()=>sourceContract(sql.replaceAll(before,after)));checks++;}
  assert.throws(()=>sourceContract(sql+'\ngrant execute on function public.fake() to public;'));checks++;
- return {status:'PASS',checks,scope:'portable finite source delta and 13 later-migration hashes only; SQL not executed',
+ return {status:'PASS',checks,scope:'portable finite source delta and 21 later-migration hashes only; SQL not executed',
   migration:migrationName,sha256:sha(sql),predecessor_sha256:sha(prior),expected_definition_sha256:sha(next),predecessor_checks:predecessorChecks};
 }
 if(process.argv[1]===fileURLToPath(import.meta.url)){
