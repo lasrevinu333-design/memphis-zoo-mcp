@@ -40,8 +40,13 @@ try{
  }
  console.log('NO_AUTOMATIC_TABLE_OR_SEQUENCE_GRANTS_REPLAY_PASS',manifest.length);
  const manager=randomUUID(),device=randomUUID(),credential=randomUUID();
- const serviceDate='2026-10-02',at=serviceDate+'T15:00:00.123456Z',week=eventAuthorityWeekStart(serviceDate);
- const {source,slots,places}=nativeLocationAuthoritySource(week,5),employee=slots[0].person,other=slots[1].person,location=places.W.id;
+ // Real registration records its actual activation time. A synthetic reserve
+ // must follow that activation, not permanently travel back to October 2.
+ // Choose tomorrow at 10:00 Chicago; keep exact microseconds and all relative
+ // five-minute expiry boundaries, including when daylight saving changes.
+ const fixtureClock=JSON.parse(sql(`with day as(select (clock_timestamp() at time zone 'America/Chicago')::date+1 as d), instant as(select d,(d+time '10:00:00.123456') at time zone 'America/Chicago' as at from day) select jsonb_build_object('date',d,'dow',extract(dow from d)::integer,'at',to_char(at at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),'next',to_char((at+interval '1 second') at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),'end',to_char((at+interval '5 minutes') at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"')) from instant;`));
+ const serviceDate=fixtureClock.date,at=fixtureClock.at,week=eventAuthorityWeekStart(serviceDate);
+ const {source,slots,places}=nativeLocationAuthoritySource(week,fixtureClock.dow),employee=slots[0].person,other=slots[1].person,location=places.W.id;
  sql(`insert into public.ops_manager_managers(manager_id,display_name) values(${q(manager)},'Synthetic location manager');`);
  for(const [index,slot] of slots.entries())sql(`insert into public.employees(id,employee_code,display_name,role,active) values(${q(slot.person)},${q('EMP99'+index)},${q(slot.name)},'staff',true)`);
  for(const place of Object.values(places))sql(`insert into public.locations(id,location_code,location_name,location_type,form_type) values(${q(place.id)},${q(place.code)},${q(place.name)},'restroom','restroom');
@@ -64,7 +69,9 @@ try{
  const registered=JSON.parse(sql(`set role service_role;select public.custodial_native_provider_registration(${q(credential)},repeat('c',64),${q(randomUUID())},repeat('b',64),${j(body)},false);`));
  const expected={assignment_epoch:'1',credential_id:credential,device_id:'KIOSK_08',employee_id:employee,generation_id:body.generation_id,principal_digest:body.principal_digest,registration_id:registered.registration_id,token_digest:body.token_digest};
  sql(`set role service_role;select public.mz_enqueue_employee_location_pushes(${q(at)});`);
- const job=JSON.parse(sql(`select to_jsonb(j) from public.operational_notification_jobs j where payload_json->>'credential_id'=${q(credential)};`)),lease=randomUUID();
+ const jobText=sql(`select to_jsonb(j) from public.operational_notification_jobs j where payload_json->>'credential_id'=${q(credential)};`);
+ assert.ok(jobText,'Actual enqueuer must create the current assigned recipient job; no fabricated notification fallback');
+ const job=JSON.parse(jobText),lease=randomUUID();
  assert.ok(job?.job_id);sql(`update public.operational_notification_jobs set status='leased',lease_token=${q(lease)},leased_until=${q(at)}::timestamptz+interval '1 hour' where job_id=${q(job.job_id)};`);
  const call=(e=expected,time=at)=>`select public.custodial_native_location_reserve_at(${q(job.job_id)},${q(lease)},${j(e)},${q(time)})`;
  const result=(e=expected,time=at)=>JSON.parse(sql(call(e,time)));
@@ -112,8 +119,8 @@ try{
  check('personalized authoritative employee and location text',packet.payload.body,slots[0].name+', '+places.W.name+' on your assigned route is overdue and needs attention now.');
  check('exact source version',packet.payload.version_id,authority.versionId);
  check('exact projection publication occurrence',[packet.payload.projection_id,packet.payload.publication_id,packet.payload.occurrence_id],[assignment.projection_id,assignment.publication_id,assignment.occurrence_id]);
- check('unchanged five minute bucket end',packet.payload.valid_until,'2026-10-02T15:05:00.123456Z');
- const second=result(expected,'2026-10-02T15:00:01.123456Z');
+ check('unchanged five minute bucket end',packet.payload.valid_until,fixtureClock.end);
+ const second=result(expected,fixtureClock.next);
  check('lost response original replay cannot resend',second.dispatch_authorized,false);
  check('lost response is explicit unknown',second.delivery_outcome_unknown,true);
  check('replay bytes immutable',second.wire,first.wire);
@@ -130,7 +137,7 @@ try{
   ['retirement',`update public.employee_native_push_generations set dispatch_retired_at=${q(at)} where generation_id=${q(body.generation_id)}`],
   ['wrong projection',`update public.operational_notification_jobs set payload_json=jsonb_set(payload_json,'{data_json,projection_id}',to_jsonb(${q(randomUUID())}::text)) where job_id=${q(job.job_id)}`]
  ])check('retry after '+name+' refused',changed(statement).dispatch_authorized,false);
- check('expired bucket cannot replay as current',result(expected,'2026-10-02T15:05:00.123456Z').current,false);
+ check('expired bucket cannot replay as current',result(expected,fixtureClock.end).current,false);
  const before=sql('select md5(row_to_json(r)::text) from public.employee_native_push_delivery_receipts r');
  reject('immutable original payload',`update public.employee_native_push_delivery_receipts set native_payload=jsonb_set(native_payload,'{body}','"changed"')`,/immutable/);
  reject('legacy release cannot erase protected evidence',`set role service_role;select public.mz_release_employee_native_push_delivery(${q(job.job_id)},${q(lease)},${q(credential)},1,${q(registered.registration_id)},${q(body.token_digest)})`,/immutable/);
