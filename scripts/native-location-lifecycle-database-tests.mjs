@@ -1,3 +1,4 @@
+import {nativeProviderTestClock} from './fixtures/native-provider-test-clock.mjs';
 import {migrationReplayNames} from './migration-replay-order.mjs';
 import assert from 'node:assert/strict';
 import {execFileSync,execFile} from 'node:child_process';
@@ -48,8 +49,8 @@ try{
  const manager=randomUUID(),device=randomUUID(),credential=randomUUID();
  const env={NODE_ENV:'test',DEVICE_CREDENTIAL_SECRET:'synthetic-location-inventory-fixture-root-long-enough'};
  const secret='syntheticInventoryNativeSecret-abcdefghijklmnopqrstuvwxyz1234567890',credentialHash=deviceCredentialInternals.tokenHash(secret,env);
- const serviceDate='2026-10-02',at=serviceDate+'T15:00:00.123456Z',week=eventAuthorityWeekStart(serviceDate);
- const {source,slots,places}=nativeLocationAuthoritySource(week,5);
+ const fixtureClock=nativeProviderTestClock(sql),serviceDate=fixtureClock.serviceDate,at=fixtureClock.at,week=eventAuthorityWeekStart(serviceDate);
+ const {source,slots,places}=nativeLocationAuthoritySource(week,fixtureClock.dayOfWeek);
  const extraPlaces=Array.from({length:40},(_,i)=>({id:randomUUID(),group:randomUUID(),code:'PROVIDER_X'+i,name:'Synthetic inventory location '+i}));
  for(const [i,place] of extraPlaces.entries())places['X'+i]=place;
  source.versions[0].assignments.find(work=>work.workId==='W').includedLocations.push(...extraPlaces.map(place=>({locationId:place.id,locationNameSnapshot:place.name})));
@@ -136,7 +137,7 @@ try{
  const bindingFor=id=>{const p=reservations.get(id).payload;return Object.fromEntries([
   ...['receipt_job_id','generation_id','reservation_at','content_sha256','token_digest','principal_digest','receipt_credential_id','receipt_assignment_epoch','receipt_employee_id','receipt_device_id'].map(k=>[k,p[k]]),
   ['lease_token',lease],['registration_id',registered.registration_id]]);};
- const outcome=(binding,evidence)=>`select public.custodial_native_location_outcome_at(${j(binding)},${j(evidence)},'2026-10-02T15:00:01.123456Z')`;
+ const outcome=(binding,evidence)=>`select public.custodial_native_location_outcome_at(${j(binding)},${j(evidence)},${q(fixtureClock.offsetMicros(1000000))})`;
  const unknown={operation_id:randomUUID(),outcome:'delivery_outcome_unknown',provider_message_id:null,error_code:'synthetic_response_lost'};
  const statusQuery=(binding=bindingFor(job.job_id))=>`select public.custodial_native_location_outcome_status(${j(binding)})`;
  check('readback before provider result is prepared',JSON.parse(sql(statusQuery())).provider_outcome,'prepared');
@@ -159,7 +160,7 @@ try{
  reject('different terminal outcome cannot overwrite acceptance',outcome(bindingFor(job.job_id),{...unknown,operation_id:randomUUID(),outcome:'known_nonacceptance'}),/final outcome/);
  const invBody={schema:'custodial.native-provider-inventory-request.v1',scan_id:randomUUID(),principal_digest:expected.principal_digest,
   device_id:expected.device_id,credential_id:credential,employee_id:employee,assignment_epoch:1,generation_ids:[body.generation_id],limit:32,cursor:null,ceiling:null,server_now:null};
- const invQuery=(request=invBody,time='2026-10-02T15:00:02.123456Z')=>`select public.custodial_native_location_inventory_at(${q(credential)},${q(credentialHash)},${q(randomUUID())},repeat('b',64),${j(request)},${q(time)})`;
+ const invQuery=(request=invBody,time=fixtureClock.offsetMicros(2000000))=>`select public.custodial_native_location_inventory_at(${q(credential)},${q(credentialHash)},${q(randomUUID())},repeat('b',64),${j(request)},${q(time)})`;
  const inv=(request=invBody,time)=>JSON.parse(sql(invQuery(request,time)));
  for(const role of ['anon','authenticated','service_role','custodial_application_reader','static_weekly_control_plane','static_weekly_release_operator','static_weekly_runtime_20260823']){
   reject(role+' cannot nominate inventory clock',`set role ${role};${invQuery()}`,/permission denied/);
@@ -193,7 +194,7 @@ try{
  check('page response loss replay retains cursor/window',inv(continuation),page2);
  check('new arrivals excluded even from initial-page retry',inv().data.ceiling,page1.data.ceiling);
  const restarts=[];
- for(const change of [{cursor:{...continuation.cursor,job_id:randomUUID()}},{ceiling:{...continuation.ceiling,job_id:randomUUID()}},{server_now:'2026-10-02T15:00:03.123456Z'}]){
+ for(const change of [{cursor:{...continuation.cursor,job_id:randomUUID()}},{ceiling:{...continuation.ceiling,job_id:randomUUID()}},{server_now:fixtureClock.offsetMicros(3000000)}]){
   const request={...continuation,...change},bad=inv(request);check('exact invalid cursor restart '+Object.keys(change)[0],bad.error,'custodial_native_provider_cursor_invalid');
   check('restart echoes exact original requested bounds',[bad.cursor,bad.ceiling,bad.server_now],[request.cursor,request.ceiling,request.server_now]);
   restarts.push({request,response:bad});
@@ -201,7 +202,7 @@ try{
  for(const change of [{principal_digest:'d'.repeat(64)},{employee_id:other},{assignment_epoch:2},{generation_ids:[randomUUID()]},{generation_ids:[body.generation_id,body.generation_id]},{extra:true},{limit:33}])
   reject('foreign/malformed inventory '+Object.keys(change)[0],invQuery({...invBody,...change}));
  check('fresh scan includes new arrivals under new ceiling',inv({...invBody,scan_id:randomUUID()}).data.has_more,true);
- check('expired bucket returns no current rows',inv({...invBody,scan_id:randomUUID()},'2026-10-02T15:05:00.123456Z').data.rows.length,0);
+ check('expired bucket returns no current rows',inv({...invBody,scan_id:randomUUID()},fixtureClock.offsetMicros(300000000)).data.rows.length,0);
  const originalRows=sql('select md5(jsonb_agg(to_jsonb(r) order by job_id)::text) from public.employee_native_push_delivery_receipts r');
  const authDevice={requested_device_id:'KIOSK_08',canonical_device_id:'KIOSK_08',canonical_device_pk:device,device_id:'KIOSK_08',device_name:'Synthetic',
   device_active:true,assignment_valid:true,employee_active:true,employee_code:'EMP990',role:'staff',assignment_epoch:1,assigned_employee_id:employee,assigned_employee_name:'Synthetic'};
@@ -211,7 +212,7 @@ try{
  installNativeProviderRoutes(app,{env,requireCurrentCredential:makeDeviceCredentialMiddleware({env,requireEnrolledCredential:true,
   store:{getPolicy:async()=>({mode:'enforce'}),findCredential:async id=>id===credential?authCredential:null,touchCredential:async()=>{},audit:async()=>{}},runReadOnlySql:async()=>[authDevice]}),
   db:{rpc:async(name,args)=>{httpSqlCalls++;assert.equal(name,'custodial_native_location_inventory');assert.equal(args.p_credential_hash,credentialHash);assert.match(args.p_attestation_digest,/^[0-9a-f]{64}$/);
-   return{data:JSON.parse(sql(`select public.custodial_native_location_inventory_at(${q(args.p_credential)},${q(args.p_credential_hash)},${q(args.p_native_request)},${q(args.p_attestation_digest)},${j(args.p_body)},'2026-10-02T15:00:02.123456Z')`))};}}});
+   return{data:JSON.parse(sql(`select public.custodial_native_location_inventory_at(${q(args.p_credential)},${q(args.p_credential_hash)},${q(args.p_native_request)},${q(args.p_attestation_digest)},${j(args.p_body)},${q(fixtureClock.offsetMicros(2000000))})`))};}}});
  app.use((error,_req,res,_next)=>res.status(error.status||500).json({code:'synthetic_error'}));
  const server=await new Promise(resolve=>{const ownedServer=app.listen(0,'127.0.0.1',()=>resolve(ownedServer));});
  console.log('OWNED_INVENTORY_HTTP_SQL_SERVER',server.address().port,'cleanup in finally');
@@ -231,10 +232,10 @@ try{
   check('unsigned inventory rejected before SQL',[response.status,httpSqlCalls],[403,calls]);
   response=await send({...invBody,employee_id:other});await response.text();check('foreign current recipient rejected before SQL',[response.status,httpSqlCalls],[403,calls]);
  }finally{server.closeAllConnections();await new Promise((resolve,reject)=>server.close(error=>error?reject(error):resolve()));console.log('OWNED_INVENTORY_HTTP_SQL_SERVER_CLOSED');}
- const retiredQuery=`begin;update public.employee_native_push_generations set dispatch_retired_at='2026-10-02T15:00:01.123456Z' where generation_id=${q(body.generation_id)};`;
+ const retiredQuery=`begin;update public.employee_native_push_generations set dispatch_retired_at=${q(fixtureClock.offsetMicros(1000000))} where generation_id=${q(body.generation_id)};`;
  check('original pre-retirement reservations recover unchanged',JSON.parse(sql(retiredQuery+invQuery()+`;rollback;`)),inv());
  check('exact provider outcome replay survives retirement',JSON.parse(sql(retiredQuery+outcome(bindingFor(job.job_id),accepted)+`;rollback;`)).replayed,true);
- reject('revoked generation cannot recover',`begin;update public.employee_native_push_generations set dispatch_retired_at='2026-10-02T15:00:01.123456Z',revoked_at='2026-10-02T15:00:01.123456Z' where generation_id=${q(body.generation_id)};${invQuery()}`);
+ reject('revoked generation cannot recover',`begin;update public.employee_native_push_generations set dispatch_retired_at=${q(fixtureClock.offsetMicros(1000000))},revoked_at=${q(fixtureClock.offsetMicros(1000000))} where generation_id=${q(body.generation_id)};${invQuery()}`);
  reject('reassigned phone cannot recover',`begin;update public.devices set assigned_employee_id=${q(other)} where id=${q(device)};${invQuery()}`);
  for(const rel of ['employee_native_location_outcomes','employee_native_location_inventory_scans'])for(const role of ['anon','authenticated','service_role','custodial_application_reader','static_weekly_control_plane','static_weekly_release_operator','static_weekly_runtime_20260823'])
   reject(role+' direct populated '+rel+' denied',`set role ${role};select * from public.${rel}`,/permission denied/);

@@ -64,8 +64,8 @@ try{
   values(${q(employee)},'EMP994','Synthetic target employee','staff',true);
   insert into public.devices(id,device_id,device_name,active,assigned_employee_id,assignment_epoch)
   values(${q(device)},'KIOSK_08','Synthetic target phone',true,${q(employee)},1);
-  insert into public.device_auth_credentials(credential_id,device_id,token_hash,created_at,confirmed_at,expires_at)
-  values(${q(credential)},${q(device)},repeat('c',64),${q(serviceDate)}::date-interval '1 day',${q(serviceDate)}::date-interval '1 day',greatest(now(),${q(serviceDate)}::date)+interval '2 days');
+  insert into public.device_auth_credentials(credential_id,device_id,token_hash,confirmed_at,expires_at)
+  values(${q(credential)},${q(device)},repeat('c',64),now()-interval '1 day',${q(serviceDate)}::date+interval '2 days');
   set role service_role;
   select public.mz_register_employee_push(${q(credential)},${q(token)},${q(tokenHash)},'android','synthetic-only','synthetic.custodial.df36d32368b6');`);
  const registration=sql(`select registration_id from public.employee_push_registrations where credential_id=${q(credential)} and active`);
@@ -168,9 +168,9 @@ try{
  if(lunchEmployee!==employee){
   sql(`insert into public.devices(id,device_id,device_name,active,assigned_employee_id,assignment_epoch)
    values(${q(lunchDevice)},${q(lunchDeviceIdentifier)},'Synthetic lunch coverer phone',true,${q(lunchEmployee)},1);
-   insert into public.device_auth_credentials(credential_id,device_id,token_hash,created_at,confirmed_at,expires_at)
-   values(${q(lunchCredential)},${q(lunchDevice)},${q(lunchCredentialHash)},${q(serviceDate)}::date-interval '1 day',${q(serviceDate)}::date-interval '1 day',
-    greatest(now(),${q(serviceDate)}::date)+interval '2 days');
+   insert into public.device_auth_credentials(credential_id,device_id,token_hash,confirmed_at,expires_at)
+   values(${q(lunchCredential)},${q(lunchDevice)},${q(lunchCredentialHash)},now()-interval '1 day',
+    ${q(serviceDate)}::date+interval '2 days');
    set role service_role;select public.mz_register_employee_push(${q(lunchCredential)},${q(lunchToken)},
     ${q(lunchTokenHash)},'android','synthetic-only','synthetic.custodial.df36d32368b6');`);
   lunchRegistration=sql(`select registration_id from public.employee_push_registrations

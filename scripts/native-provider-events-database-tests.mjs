@@ -1,3 +1,4 @@
+import {nativeProviderTestClock} from './fixtures/native-provider-test-clock.mjs';
 import {migrationReplayNames} from './migration-replay-order.mjs';
 import assert from 'node:assert/strict';
 import {execFileSync,execFile} from 'node:child_process';
@@ -49,8 +50,8 @@ try{
  const manager=randomUUID(),device=randomUUID(),credential=randomUUID();
  const env={NODE_ENV:'test',DEVICE_CREDENTIAL_SECRET:'synthetic-location-inventory-fixture-root-long-enough'};
  const secret='syntheticInventoryNativeSecret-abcdefghijklmnopqrstuvwxyz1234567890',credentialHash=deviceCredentialInternals.tokenHash(secret,env);
- const serviceDate='2026-10-02',at=serviceDate+'T15:00:00.123456Z',week=eventAuthorityWeekStart(serviceDate);
- const {source,slots,places}=nativeLocationAuthoritySource(week,5);
+ const fixtureClock=nativeProviderTestClock(sql),serviceDate=fixtureClock.serviceDate,at=fixtureClock.at,week=eventAuthorityWeekStart(serviceDate);
+ const {source,slots,places}=nativeLocationAuthoritySource(week,fixtureClock.dayOfWeek);
  const extraPlaces=Array.from({length:2},(_,i)=>({id:randomUUID(),group:randomUUID(),code:'PROVIDER_X'+i,name:'Synthetic inventory location '+i}));
  for(const [i,place] of extraPlaces.entries())places['X'+i]=place;
  source.versions[0].assignments.find(work=>work.workId==='W').includedLocations.push(...extraPlaces.map(place=>({locationId:place.id,locationNameSnapshot:place.name})));
@@ -92,10 +93,10 @@ try{
   ({earliest_at:first,latest_at:last,clock_profile_id:first===null?null:'SYNTHETIC_ONLY_PC01',elapsed_realtime_ms:elapsed,boot_count:boot});
  const event=(action,change={})=>({schema:'custodial.native-provider-event.v2',event_id:randomUUID(),record_id:recordId,action,
   ...Object.fromEntries(['generation_id','content_sha256','receipt_job_id','notification_key','receipt_credential_id','receipt_employee_id','receipt_device_id','principal_digest','token_digest'].map(k=>[k,payload[k]])),
-  receipt_assignment_epoch:1,admission_bounds:observation('2026-10-02T15:00:02.123456Z'),
-  original_observation:observation(action==='received'?'2026-10-02T15:00:01.123456Z':'2026-10-02T15:00:03.123456Z',action==='received'?100:200),...change});
+  receipt_assignment_epoch:1,admission_bounds:observation(fixtureClock.offsetMicros(2000000)),
+  original_observation:observation(action==='received'?fixtureClock.offsetMicros(1000000):fixtureClock.offsetMicros(3000000),action==='received'?100:200),...change});
  const batch=events=>({schema:'custodial.native-provider-events.v2',events});
- const receiptTime='2026-10-02T15:00:04.123456Z';
+ const receiptTime=fixtureClock.offsetMicros(4000000);
  const query=(b,time=receiptTime,nonce=randomUUID(),proof='b'.repeat(64))=>
   'select public.custodial_native_provider_events_at('+[q(credential),q(credentialHash),q(nonce),q(proof),j(b),q(time)].join(',')+');';
  const submit=(b,time=receiptTime,nonce=randomUUID(),proof='b'.repeat(64))=>JSON.parse(sql(query(b,time,nonce,proof)));
@@ -110,11 +111,11 @@ try{
  const admitted=submit(request);validateNativeProviderEventsResponse(admitted,request);
  check('out of order batch admits exact four transitions',admitted.data.results.map(r=>r.action),['received','displayed','opened','acknowledged']);
  check('all admitted without provider accepted prerequisite',admitted.data.results.every(r=>r.admitted_state==='ACCEPTED'&&!r.replayed),true);
- const replay=submit(request,'2026-10-02T16:00:00.123456Z');
+ const replay=submit(request,fixtureClock.offsetMicros(3600000000));
  check('response loss drains after display expiry with original timestamp',replay.data.results.map(r=>({...r,replayed:false})),admitted.data.results);
  check('replay does not duplicate events',count(),'4');
  for(const field of ['admission_bounds','original_observation']){
-  const changed=structuredClone(received);if(field==='admission_bounds')changed.admission_bounds.earliest_at='2026-10-02T15:00:02.123457Z';else changed.original_observation.elapsed_realtime_ms=101;
+  const changed=structuredClone(received);if(field==='admission_bounds')changed.admission_bounds.earliest_at=fixtureClock.offsetMicros(2000001);else changed.original_observation.elapsed_realtime_ms=101;
   check('changed original '+field+' conflicts',submit(batch([changed])).data.results[0].code,'native_provider_event_conflict');
  }
  check('new UUID cannot repeat one finite transition',submit(batch([{...received,event_id:randomUUID()}])).data.results[0].code,'native_provider_event_conflict');
@@ -141,9 +142,9 @@ try{
   ['reassignment','update public.devices set assigned_employee_id='+q(other)+' where id='+q(device)],
   ['epoch change','update public.devices set assignment_epoch=2 where id='+q(device)]])
   reject(name+' denies even exact replay','begin;'+statement+';'+query(request)+'rollback;',/current event credential/);
- const retired='update public.employee_native_push_generations set dispatch_retired_at=\'2026-10-02T15:00:01.123456Z\' where generation_id='+q(body.generation_id);
- check('same-principal pre-retirement replay after expiry',JSON.parse(sql('begin;'+retired+';'+query(request,'2026-10-02T16:00:00.123456Z')+'rollback;')).data.results.every(r=>r.replayed),true);
- check('revoked generation cannot settle',JSON.parse(sql('begin;'+retired+';update public.employee_native_push_generations set revoked_at=\'2026-10-02T15:00:01.123456Z\' where generation_id='+q(body.generation_id)+';'+query(request)+'rollback;')).data.results.every(r=>r.admitted_state==='REJECTED'),true);
+ const retired='update public.employee_native_push_generations set dispatch_retired_at='+q(fixtureClock.offsetMicros(1000000))+' where generation_id='+q(body.generation_id);
+ check('same-principal pre-retirement replay after expiry',JSON.parse(sql('begin;'+retired+';'+query(request,fixtureClock.offsetMicros(3600000000))+'rollback;')).data.results.every(r=>r.replayed),true);
+ check('revoked generation cannot settle',JSON.parse(sql('begin;'+retired+';update public.employee_native_push_generations set revoked_at='+q(fixtureClock.offsetMicros(1000000))+' where generation_id='+q(body.generation_id)+';'+query(request)+'rollback;')).data.results.every(r=>r.admitted_state==='REJECTED'),true);
  // A separate actual reservation proves Open does not manufacture displayed,
  // unknown original arrival observations and exact transition chronology.
  const nextJob=JSON.parse(sql('select to_jsonb(j) from public.operational_notification_jobs j where source_id='+q(extraPlaces[0].id)+' and payload_json->>\'credential_id\'='+q(credential)));
@@ -153,19 +154,19 @@ try{
  const received2=e2('received',{original_observation:observation(null,100,1)});
  const opened2=e2('opened',{original_observation:observation(null,200,1)});
  for(const [name,e] of [
-  ['admission before reservation',e2('received',{admission_bounds:observation('2026-10-02T14:59:59.123456Z')})],
-  ['admission after validity',e2('received',{admission_bounds:observation('2026-10-02T15:05:00.123456Z')})],
-  ['original receive after admission',e2('received',{original_observation:observation('2026-10-02T15:00:03.123456Z',100,1)})]])
+  ['admission before reservation',e2('received',{admission_bounds:observation(fixtureClock.offsetMicros(-1000000))})],
+  ['admission after validity',e2('received',{admission_bounds:observation(fixtureClock.offsetMicros(300000000))})],
+  ['original receive after admission',e2('received',{original_observation:observation(fixtureClock.offsetMicros(3000000),100,1)})]])
   check(name,submit(batch([e])).data.results[0].code,'native_provider_observation_invalid');
  submit(batch([received2]));
  for(const [name,e] of [
-  ['mismatched admitted evidence',e2('opened',{admission_bounds:observation('2026-10-02T15:00:02.123457Z')})],
+  ['mismatched admitted evidence',e2('opened',{admission_bounds:observation(fixtureClock.offsetMicros(2000001))})],
   ['same boot elapsed reversal',e2('opened',{original_observation:observation(null,99,1)})],
   ['boot count reversal',e2('opened',{original_observation:observation(null,999,0)})],
-  ['claimed time before admission',e2('opened',{original_observation:observation('2026-10-02T15:00:01.123456Z',200,1)})],
-  ['display beyond validity',e2('displayed',{original_observation:observation('2026-10-02T15:06:00.123456Z',200,1)})]])
-  check(name,submit(batch([e]),'2026-10-02T16:00:00.123456Z').data.results[0].code,'native_provider_observation_invalid');
- check('offline Open after expiry binds original without display',submit(batch([opened2]),'2026-10-02T16:00:00.123456Z').data.results[0].admitted_state,'ACCEPTED');
+  ['claimed time before admission',e2('opened',{original_observation:observation(fixtureClock.offsetMicros(1000000),200,1)})],
+  ['display beyond validity',e2('displayed',{original_observation:observation(fixtureClock.offsetMicros(360000000),200,1)})]])
+  check(name,submit(batch([e]),fixtureClock.offsetMicros(3600000000)).data.results[0].code,'native_provider_observation_invalid');
+ check('offline Open after expiry binds original without display',submit(batch([opened2]),fixtureClock.offsetMicros(3600000000)).data.results[0].admitted_state,'ACCEPTED');
  check('Open does not synthesize display',sql('select count(*) from public.employee_native_provider_events where record_id='+q(opened2.record_id)+" and action='displayed'"),'0');
  const concurrent=await Promise.all([e2('acknowledged'),e2('acknowledged')].map(async e=>{
   const {stdout}=await promisify(execFile)('docker',['exec','-i',container,'psql','-X','-q','-At','-v','ON_ERROR_STOP=1','-U','supabase_admin','-d','postgres','-c',query(batch([e]))],
@@ -184,9 +185,9 @@ try{
  installNativeProviderRoutes(app,{env,requireCurrentCredential:makeDeviceCredentialMiddleware({env,requireEnrolledCredential:true,
   store:{getPolicy:async()=>({mode:'enforce'}),findCredential:async id=>id===credential?authCredential:null,touchCredential:async()=>{},audit:async()=>{}},runReadOnlySql:async()=>[authDevice]}),
   db:{rpc:async(name,args)=>{httpSqlCalls++;assert.equal(args.p_credential_hash,credentialHash);assert.match(args.p_attestation_digest,/^[0-9a-f]{64}$/);
-   if(name==='custodial_native_provider_inventory_clock')return{data:JSON.parse(sql(`select public.custodial_native_provider_inventory_clock_at(${q(args.p_credential)},${q(args.p_credential_hash)},${q(args.p_native_request)},${q(args.p_attestation_digest)},${j(args.p_body)},'2026-10-02T15:00:04.123456Z','2026-10-02T15:00:04.123456Z')`))};
+   if(name==='custodial_native_provider_inventory_clock')return{data:JSON.parse(sql(`select public.custodial_native_provider_inventory_clock_at(${q(args.p_credential)},${q(args.p_credential_hash)},${q(args.p_native_request)},${q(args.p_attestation_digest)},${j(args.p_body)},${q(fixtureClock.offsetMicros(4000000))},${q(fixtureClock.offsetMicros(4000000))})`))};
    assert.equal(name,'custodial_native_provider_events');
-   return{data:JSON.parse(sql(`select public.custodial_native_provider_events_at(${q(args.p_credential)},${q(args.p_credential_hash)},${q(args.p_native_request)},${q(args.p_attestation_digest)},${j(args.p_body)},'2026-10-02T15:00:04.123456Z')`))};}}});
+   return{data:JSON.parse(sql(`select public.custodial_native_provider_events_at(${q(args.p_credential)},${q(args.p_credential_hash)},${q(args.p_native_request)},${q(args.p_attestation_digest)},${j(args.p_body)},${q(fixtureClock.offsetMicros(4000000))})`))};}}});
  app.use((error,_req,res,_next)=>res.status(error.status||500).json({code:'synthetic_error'}));
  const server=await new Promise(resolve=>{const ownedServer=app.listen(0,'127.0.0.1',()=>resolve(ownedServer));});
  console.log('OWNED_EVENTS_HTTP_SQL_SERVER',server.address().port,'cleanup in finally');
@@ -206,7 +207,7 @@ try{
   response=await send(interval.input,()=>{},'/employee-notifications-api/native-provider/inventory');
   check('actual HTTP raw-body HMAC fresh inventory SQL200',response.status,200);interval.http_response=await response.json();
   check('actual HTTP inventory retains frozen page and separate SQL clock',interval.http_response.data.server_now===interval.first.data.server_now
-   &&interval.http_response.clock.server_now==='2026-10-02T15:00:04.123456Z',true);
+   &&interval.http_response.clock.server_now===fixtureClock.offsetMicros(4000000),true);
   const inventoryCalls=httpSqlCalls;response=await send(interval.input,headers=>delete headers['x-memphis-native-request-attestation'],'/employee-notifications-api/native-provider/inventory');await response.text();
   check('unsigned fresh inventory rejected before SQL',[response.status,httpSqlCalls],[403,inventoryCalls]);
  }finally{server.closeAllConnections();await new Promise((resolve,reject)=>server.close(error=>error?reject(error):resolve()));console.log('OWNED_EVENTS_HTTP_SQL_SERVER_CLOSED');}
