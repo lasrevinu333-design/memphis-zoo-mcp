@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {migrationReplayNames} from './migration-replay-order.mjs';
 import {createHash,createHmac,randomUUID} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import {readFileSync,readdirSync,lstatSync,realpathSync,writeFileSync} from 'node:fs';
@@ -122,7 +123,24 @@ export function assertCurrentDecisionMigrationManifest(rows){
  assert.equal(rows.findIndex(r=>r.file===DECISION_MESSAGE_FILE),205,'exact source-created position and13 later files');
  assert.equal(hash(JSON.stringify(rows)),DECISION_219,'complete current219 ordered bytes');return rows;
 }
+// Distinct integrated source profile. Historical 218/219 validators and pins
+// stay intact. No count override, chronology sort or observed-survivor baseline.
+export const DECISION_INTEGRATED_227='df6373a06e51e1477e0304dc0460be2e600d6240a5107719cc536b0c0cf21a34';
+export function assertIntegratedDecisionMigrationManifest(rows){
+ assert.ok(Array.isArray(rows));assert.equal(rows.length,227,'exact integrated227 required');
+ for(const row of rows){assert.deepEqual(Object.keys(row).sort(),['file','sha256']);assert.match(row.file,/^\d{14}_[a-zA-Z0-9_]+\.sql$/);assert.match(row.sha256,hex);}
+ assert.equal(new Set(rows.map(r=>r.file)).size,227,'no duplicate source members');
+ assert.equal(hash(JSON.stringify(rows)),DECISION_INTEGRATED_227,'complete phase-ordered integrated227 bytes');
+ assert.deepEqual(rows[222],{file:DECISION_HEAD,sha256:'ab4e6eb848bd214f8616fb52f094829786df9a9a81d2eb8d00d247b1f28e52fd'});
+ return rows;
+}
 export function decisionMigrationProfile(rows,profile='CURRENT_219'){
+ if(profile==='INTEGRATED_227'){
+  assertIntegratedDecisionMigrationManifest(rows);
+  return {migration_profile:profile,manifest_sha256:DECISION_INTEGRATED_227,
+   lookup_boundary:{file:DECISION_HEAD,sha256:'ab4e6eb848bd214f8616fb52f094829786df9a9a81d2eb8d00d247b1f28e52fd',
+    predecessor_count:222,predecessor_manifest_sha256:'0dfaf9d66a9be9bc389cfa9f981f400ed2e2e9e123a1ba9dbd2a13a231c1811f',following_migrations:4}};
+ }
  assert.ok(profile==='HISTORICAL_218'||profile==='CURRENT_219','explicit supported source profile required');
  if(profile==='HISTORICAL_218')assertDecisionMigrationManifest(rows);else assertCurrentDecisionMigrationManifest(rows);
  return {migration_profile:profile,manifest_sha256:profile==='HISTORICAL_218'?DECISION_218:DECISION_219,
@@ -133,7 +151,7 @@ export function decisionMigrationProfile(rows,profile='CURRENT_219'){
 export function assertDecisionLookupBoundary(rows,index,profile){
  const binding=decisionMigrationProfile(rows,profile).lookup_boundary;
  assert.equal(index,binding.predecessor_count,'snapshot immediately before exact lookup head');
- assert.equal(index,rows.length-1,'lookup is last in this exact profile');
+ assert.equal(index,rows.length-1-(binding.following_migrations||0),'lookup boundary and retained suffix are exact');
  assert.deepEqual(rows[index],{file:binding.file,sha256:binding.sha256});
  assert.equal(hash(JSON.stringify(rows.slice(0,index))),binding.predecessor_manifest_sha256);return binding;
 }
@@ -145,9 +163,11 @@ export function assertDecisionLookupPredecessor(snapshot){
 }
 export function readDecisionSource(root=ROOT,{profile='CURRENT_219'}={}){
  const directory=join(root,'supabase/migrations');
- const migrations=readdirSync(directory).filter(x=>x.endsWith('.sql')).sort().map(file=>({file,sha256:hash(readFileSync(join(directory,file)))}));
+ const names=profile==='INTEGRATED_227'?migrationReplayNames(root):readdirSync(directory).filter(x=>x.endsWith('.sql')).sort();
+ const migrations=names.map(file=>({file,sha256:hash(readFileSync(join(directory,file)))}));
  const binding=decisionMigrationProfile(migrations,profile);
- const inputs=Object.entries(DECISION_INPUT_PINS).map(([file,sha256])=>{assert.equal(hash(readFileSync(join(root,file))),sha256,file);return {file,sha256};});
+ const pins=profile==='INTEGRATED_227'?{...DECISION_INPUT_PINS,'src/auth/device-credential-auth.js':'6421105294f101041bdaaab2a6c2597107e87df9d099c1d656d446b64f5af1ea'}:DECISION_INPUT_PINS;
+ const inputs=Object.entries(pins).map(([file,sha256])=>{assert.equal(hash(readFileSync(join(root,file))),sha256,file);return {file,sha256};});
  return {migrations,...binding,inputs};
 }
 export function assertDecisionTarget(row,target,{allowStopped=false}={}){
@@ -183,8 +203,8 @@ export function compareDecisionRecoverySets(before,after){
  return {added:additions,changed:[{object_kind:'function',object_identity:CANARY}],all_other_predecessor_rows_exact:true};
 }
 
-async function execute(output){
- const source=readDecisionSource(),git=(...a)=>execFileSync('git',a,{cwd:ROOT,encoding:'utf8'}).trim();
+async function execute(output,profile='CURRENT_219'){
+ const source=readDecisionSource(ROOT,{profile}),git=(...a)=>execFileSync('git',a,{cwd:ROOT,encoding:'utf8'}).trim();
  assert.equal(git('status','--porcelain'),'','clean committed source required');
  const identity={commit:git('rev-parse','HEAD'),tree:git('rev-parse','HEAD^{tree}')};
  const nativePath=process.env.NATIVE_PROVIDER_EVENT_DECISION_INPUT;
@@ -231,7 +251,7 @@ async function execute(output){
    '-c','shared_preload_libraries=pg_cron,pg_net,pg_stat_statements']).trim();created=true;createdEver=true;assert.match(target.id,hex);
   assertDecisionTarget(inspect(),target);save('target.json',target);
   let ready=0;for(let n=0;n<60&&ready<4;n++){try{sql('select 1;');ready++;}catch{ready=0;}await new Promise(r=>setTimeout(r,500));}assert.equal(ready,4);
-  sql(REMOVE_DEFAULTS+ABSENT);let predecessor;phase='migrations';
+  sql(REMOVE_DEFAULTS+ABSENT);let predecessor,lookupAfter;phase='migrations';
   for(const [index,m]of source.migrations.entries()){
    const bytes=readFileSync(join(ROOT,'supabase/migrations',m.file));assert.equal(hash(bytes),m.sha256);
    if(m.file===DECISION_HEAD){
@@ -244,11 +264,12 @@ async function execute(output){
    if(EXCEPTIONS[m.file]){assert.equal(m.sha256,EXCEPTIONS[m.file]);assert.doesNotMatch(bytes.toString(),/create\s+(?:unlogged\s+)?table|create\s+sequence/i);}
    let stdout;try{stdout=sql(ABSENT+'\n'+bytes+'\n'+(EXCEPTIONS[m.file]?REMOVE_DEFAULTS:'')+'\n'+ABSENT);}
    catch(error){save('failed-migration.json',{file:m.file,sha256:m.sha256,index,applied_predecessors:index,status:'FAIL'});console.error('FAILED_MIGRATION',m.file);throw error;}
+   if(m.file===DECISION_HEAD){lookupAfter={inventory:JSON.parse(sql(INVENTORY)),surface:JSON.parse(sql(SURFACE))};compareDecisionRecoverySets(predecessor,lookupAfter);save('lookup-after.json',lookupAfter);}
    log('migration-'+String(index).padStart(4,'0'),stdout);
    if((index+1)%25===0)console.log('REPLAYED_EXACT_MIGRATIONS',index+1);await new Promise(r=>setImmediate(r));
   }
   assert.ok(predecessor,'exact lookup predecessor must have been captured');
-  const after={inventory:JSON.parse(sql(INVENTORY)),surface:JSON.parse(sql(SURFACE))};const delta=compareDecisionRecoverySets(predecessor,after);save('after'+source.migrations.length+'.json',after);
+  const after={inventory:JSON.parse(sql(INVENTORY)),surface:JSON.parse(sql(SURFACE))};const delta=compareDecisionRecoverySets(predecessor,lookupAfter||after);save('after'+source.migrations.length+'.json',after);
   phase='synthetic_seed';const {nativeProviderEventDecisionDatabaseCases}=await import('./fixtures/native-provider-event-decisions-database-cases.mjs');
   const {deviceCredentialInternals,makeDeviceCredentialMiddleware}=await import('../src/auth/device-credential-auth.js');
   const {validateNativeProviderEventsRequest,validateNativeProviderEventsResponse}=await import('../src/native-provider-events.js');
@@ -333,7 +354,7 @@ commit;`);
     const unresolved=await send(()=>{},nativePrepared.missing.body,nativePrepared.missing);
     check('actual current HMAC missing original remains unresolved',unresolved.status,200);
     assertNativeDecisionHttpCapture(nativePrepared.missing,unresolved.capture,{missing:true});
-    nativeWire={schema:NATIVE_DECISION_WIRE_SCHEMA,synthetic:true,production:false,actual_sql:true,actual_http_hmac:true,
+    nativeWire={schema:NATIVE_DECISION_WIRE_SCHEMA,migration_profile:source.migration_profile,synthetic:true,production:false,actual_sql:true,actual_http_hmac:true,
      native_input:nativePrepared.input,native_input_sha256:nativePrepared.input_sha256,first:response.capture,retry:retry.capture,unresolved:unresolved.capture,
      producer_proof:false,qualified_clock:false,delivery:false,policy_selection:false};
    }
@@ -361,7 +382,7 @@ commit;`);
   check('all current inventory rows exactly preserved after scoped recovery',JSON.parse(sql(INVENTORY)),after.inventory);
   check('all current surface members exactly preserved',JSON.parse(sql(SURFACE)),after.surface);
   check('all protected records exactly preserved',JSON.parse(sql(SNAPSHOT)),protectedBefore);check('automatic grants still absent',sql(DEFAULTS),'0');
-  phase='final_source';assert.deepEqual(readDecisionSource(),source);assert.equal(git('rev-parse','HEAD'),identity.commit);assert.equal(git('status','--porcelain'),'');
+  phase='final_source';assert.deepEqual(readDecisionSource(ROOT,{profile}),source);assert.equal(git('rev-parse','HEAD'),identity.commit);assert.equal(git('status','--porcelain'),'');
   receipt={schema:'custodial.native-event-decision-engine-receipt.v1',status:'PASS',checks,source:{...identity,...source},target,delta,
    actual_sql:true,actual_http_hmac:true,automatic_grants_absent_before_after_each:true,scoped_body_acl_recovery:true,global_controller_restore:false,
    producer_inputs:'EXPLICIT_SYNTHETIC_HISTORICAL',native_receipt_proof:false,delivery:false,policy_selection:false,independent_audit:false,release_admission:false};
@@ -380,5 +401,5 @@ commit;`);
 
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
  if(process.argv.length===3&&process.argv[2]==='--source-check')console.log(JSON.stringify({status:'PASS',scope:'SOURCE_ONLY_NO_ENGINE',...readDecisionSource()}));
- else{assert.equal(process.argv.length,4,'use --source-check or --execute PRIVATE_EMPTY_OUTPUT_DIRECTORY');assert.equal(process.argv[2],'--execute');await execute(process.argv[3]);}
+ else{assert.equal(process.argv.length,4,'use --source-check or explicit --execute/--execute-integrated PRIVATE_EMPTY_OUTPUT_DIRECTORY');assert.ok(['--execute','--execute-integrated'].includes(process.argv[2]));await execute(process.argv[3],process.argv[2]==='--execute-integrated'?'INTEGRATED_227':'CURRENT_219');}
 }
