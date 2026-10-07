@@ -29,7 +29,7 @@ const runReadOnlySql = async (sql) => {
     const id = query.includes(REQUESTED_THREAD_ID) ? REQUESTED_THREAD_ID : THREAD_ID;
     return [{ id, thread_type: 'bot', title: 'Memphis', is_active: true, has_memphis_bot: true }];
   }
-  if (/from public\.msg_thread_participants/i.test(query) && /select 1/i.test(query)) return [{ one: 1 }];
+  if (/^\s*select\s+1\s+from public\.msg_thread_participants/i.test(query)) return [{ one: 1 }];
   if (/msg_get_memphis_user_id/i.test(query)) return [{ memphis_user_id: BOT_ID }];
   if (failContacts && /from public\.internal_ops_contacts/i.test(query)) {
     throw new Error('private SQL diagnostic: service credential and table name');

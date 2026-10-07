@@ -185,8 +185,17 @@ function classifyMemphisIntentLocal(text = "", threadContext = {}) {
   return route;
 }
 
+export function boundMemphisReply(reply = {}) {
+  const text = String(reply?.text || "I could not verify an answer right now.").trim();
+  const points = Array.from(text);
+  if (points.length <= 2000) return {...reply, text};
+  const note = "\n\n[Answer shortened. Ask about one part for more detail.]";
+  return {...reply, text:points.slice(0, 2000 - Array.from(note).length).join('') + note,
+    meta:{...reply.meta, truncated:true, warnings:[...(reply.meta?.warnings || []), 'message_length_limit']}};
+}
+
 function annotateMemphisReply(reply = {}, route = {}, sources = [], warnings = []) {
-  return {
+  return boundMemphisReply({
     ...(reply || {}),
     meta: {
       ...(reply?.meta && typeof reply.meta === "object" ? reply.meta : {}),
@@ -197,7 +206,7 @@ function annotateMemphisReply(reply = {}, route = {}, sources = [], warnings = [
       sources: Array.from(new Set([...(Array.isArray(sources) ? sources : []), ...((Array.isArray(reply?.meta?.sources) ? reply.meta.sources : []))].filter(Boolean))),
       warnings: Array.from(new Set([...(Array.isArray(warnings) ? warnings : []), ...((Array.isArray(reply?.meta?.warnings) ? reply.meta.warnings : []))].filter(Boolean))),
     },
-  };
+  });
 }
 
 
@@ -205,9 +214,12 @@ function annotateMemphisReply(reply = {}, route = {}, sources = [], warnings = [
 
 async function fetchWithTimeout(url, options = {}, timeoutMs = GEMINI_TIMEOUT_MS) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), Math.max(1000, Number(timeoutMs) || 12000));
+  const timeout = setTimeout(() => controller.abort(), Math.min(12000, Math.max(1000, Number(timeoutMs) || 12000)));
   try {
-    return await fetch(url, { ...options, signal: controller.signal });
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    // The deadline includes the body. Receiving headers does not finish a request.
+    const payload = await response.json().catch(() => null);
+    return {response, payload};
   } finally {
     clearTimeout(timeout);
   }
@@ -231,11 +243,11 @@ function isGreetingOnly(text = "") {
 }
 
 function isSelfIdentityQuestion(text = "") {
-  return /^(who am i|what is my name|what's my name|whats my name)$/i.test(String(text || "").trim());
+  return /^(who am i|what is my name|what's my name|whats my name)$/i.test(String(text || "").trim().replace(/[?!.]+$/, "").trim());
 }
 
 function isMemphisIdentityQuestion(text = "") {
-  return /^(what is your name|what's your name|whats your name|your name|who are you|what are you)$/i.test(String(text || "").trim());
+  return /^(what is your name|what's your name|whats your name|your name|who are you|what are you)$/i.test(String(text || "").trim().replace(/[?!.]+$/, "").trim());
 }
 
 function isConversationalOpener(text = "") {
@@ -665,8 +677,8 @@ async function fetchThreadContext(runReadOnlySql, threadId) {
   return await sharedFetchThreadContext(runReadOnlySql, threadId);
 }
 
-async function fetchRecentThreadMessages(runReadOnlySql, threadId, limit = 10) {
-  return await sharedFetchRecentThreadMessages(runReadOnlySql, threadId, limit);
+async function fetchRecentThreadMessages(runReadOnlySql, threadId, limit = 10, userId = "", sourceMessageId = "") {
+  return await sharedFetchRecentThreadMessages(runReadOnlySql, threadId, limit, userId, sourceMessageId);
 }
 
 function formatRecentThreadMessages(messages = []) {
@@ -972,7 +984,7 @@ async function tryGeminiConversation({ apiKey, userMessage, webEnabled, threadCo
   const priorHint = threadContext?.last_subject_type === "weather" ? `Previous exchange was about weather in ${threadContext?.context_json?.weather_location || DEFAULT_WEATHER_LOCATION}.` : "";
   const systemInstruction = [
     "You are Memphis, a conversational assistant for Memphis Zoo operations.",
-    "Be human, natural, concise, and useful.",
+    "Be human, natural, concise, and useful. Keep the final answer under 1800 characters; ask which part needs detail rather than overflowing a message.",
     "For casual chat, greetings, follow-up questions, or broad reasoning, answer directly and conversationally.",
     "If the question is general knowledge, food, cooking, a recipe, definitions, history, science, or practical advice, answer it directly instead of saying it is outside zoo operations.",
     "When recent thread context is provided, use it to understand follow-ups, callbacks, jokes, quotes, and implied references.",
@@ -993,7 +1005,12 @@ async function tryGeminiConversation({ apiKey, userMessage, webEnabled, threadCo
     : userMessage;
   const contents = [];
   // Add recent thread messages as proper user/model turns for context.
-  for (const msg of (Array.isArray(recentMessages) ? recentMessages : []).slice(-10)) {
+  const priorMessages = (Array.isArray(recentMessages) ? recentMessages : []).slice(-10);
+  // The just-saved user message may be present in legacy history callers.
+  // Do not feed that same final user turn twice to the model.
+  if (priorMessages.at(-1)?.message_type === 'text'
+      && String(priorMessages.at(-1)?.body || '').trim() === String(userMessage || '').trim()) priorMessages.pop();
+  for (const msg of priorMessages) {
     const body = String(msg?.body || "").replace(/\s+/g, " ").trim();
     if (!body) continue;
     const role = msg.message_type === "bot_response" ? "model" : "user";
@@ -1001,19 +1018,24 @@ async function tryGeminiConversation({ apiKey, userMessage, webEnabled, threadCo
   }
   // Add the current user message as a separate user turn with a clear separator.
   contents.push({ role: "user", parts: [{ text: `--- Current user message ---\n${sanitizeUserMessageForPrompt(promptBase)}` }] });
-  const response = await fetchWithTimeout(`${GEMINI_BASE_URL}/${encodeURIComponent(DEFAULT_MODEL)}:generateContent`, {
+  const {response, payload} = await fetchWithTimeout(`${GEMINI_BASE_URL}/${encodeURIComponent(DEFAULT_MODEL)}:generateContent`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: systemInstruction }] },
       contents,
-      generationConfig: { temperature: generalKnowledge ? 0.55 : 0.65, maxOutputTokens: GEMINI_MAX_OUTPUT_TOKENS },
+      generationConfig: { temperature: generalKnowledge ? 0.55 : 0.65, maxOutputTokens: GEMINI_MAX_OUTPUT_TOKENS,
+        ...(/^gemini-2\.5-flash(?:-lite)?$/.test(DEFAULT_MODEL) ? {thinkingConfig:{thinkingBudget:0}} : {}) },
     }),
   });
-  const payload = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(payload?.error?.message || payload?.message || `Gemini HTTP ${response.status}`);
-  const parts = payload?.candidates?.[0]?.content?.parts || [];
-  return parts.filter((part) => typeof part?.text === "string" && part.text.trim()).map((part) => part.text.trim()).join("\n\n").trim();
+  if (!response.ok) throw new Error(`Gemini request failed (HTTP ${response.status}).`);
+  const candidate = payload?.candidates?.[0];
+  if (candidate?.finishReason && candidate.finishReason !== 'STOP') {
+    throw new Error('Gemini did not return a completed answer.');
+  }
+  const parts = candidate?.content?.parts || [];
+  return parts.filter((part) => part?.thought !== true && typeof part?.text === "string" && part.text.trim())
+    .map((part) => part.text.trim()).join("\n\n").trim();
 }
 
 export function createMemphisResponder({ runReadOnlySql, runRpc }) {
@@ -1064,6 +1086,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
           and coalesce(e.needs_review, false) = false and e.event_scope <> 'UNKNOWN'
           and (place.authority->>'admissible')::boolean is true
           and coalesce(e.end_date, e.event_date) >= (now() at time zone 'America/Chicago')::date
+          and (e.end_instant_utc is null or e.end_instant_utc > now())
           and e.event_date <= (now() at time zone 'America/Chicago')::date + ${days}
           ${area ? `and (
             coalesce(nullif(place.authority->>'primary_display_name',''),nullif(e.display_location, ''), ev.display_name, lg.group_name) ilike ${sqlLikeLiteral(area)}
@@ -1338,7 +1361,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     throw new Error(`Unknown Memphis tool: ${name}`);
   }
 
-  async function generateSystemReply(userMessage, { deviceId = "", threadId = "", userRole = "" } = {}) {
+  async function generateSystemReply(userMessage, { deviceId = "", threadId = "", userRole = "", userIdentity = null } = {}) {
     const isManager = String(userRole || "").trim().toLowerCase() === "manager";
     const threadContext = await fetchThreadContext(runReadOnlySql, threadId);
     const rewrittenMessage = rewriteFollowUpWithContext(userMessage, threadContext);
@@ -1417,7 +1440,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     if (isSelfIdentityQuestion(text)) {
       const assignedEmployee = deviceId ? await fetchAssignedEmployeeForDevice(runReadOnlySql, deviceId) : null;
       const identity = deviceId ? await fetchDeviceIdentity(runReadOnlySql, deviceId) : null;
-      const name = assignedEmployee?.assigned_employee_name || identity?.display_name || identity?.user_name || "";
+      const name = userIdentity?.display_name || assignedEmployee?.assigned_employee_name || identity?.display_name || identity?.user_name || "";
       if (name) {
         await saveThreadContext(runRpc, threadId, { last_intent: "self_identity", last_employee_name: name, last_subject_type: "employee", context_json: mergeContextJson(threadContext, { last_question_shape: "self_identity", last_subject_kind: "employee", last_subject_label: name }) });
         return { text: `You are ${name}.`, meta: { fallback: true, mode: "local_self_identity" } };
@@ -1631,7 +1654,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     "tickets", "scan_state", "dashboard", "events"
   ]);
 
-  async function generateReply({ deviceId = "", userId = "", userMessage = "", threadId = "" }) {
+  async function generateReply({ deviceId = "", userId = "", userMessage = "", threadId = "", sourceMessageId = "" }) {
     const _userId = String(userId || "").trim();
 
     const threadContext = await fetchThreadContext(runReadOnlySql, threadId);
@@ -1639,9 +1662,29 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     const effectiveUserMessage = String(rewrittenMessage || "").trim() || userMessage;
 
     const apiKey = getGeminiApiKey(["MEMPHIS_GEMINI_API_KEY"]);
-    const identity = await fetchDeviceIdentity(runReadOnlySql, deviceId);
+    let identity = await fetchDeviceIdentity(runReadOnlySql, deviceId);
+    if (_userId && identity?.msg_user_id !== _userId) {
+      // A named manager session device is not an employee kiosk assignment.
+      // Re-resolve the saved sender against the same current manager registry
+      // used by the authenticated messaging routes; never trust request roles.
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(_userId)) {
+        throw new Error('Memphis sender identity is invalid.');
+      }
+      const managers = await runReadOnlySql(`select u.id as msg_user_id, m.manager_id,
+        m.display_name, m.roles as manager_roles
+        from public.msg_users u join public.ops_manager_managers m on m.manager_id=u.ops_manager_id
+        where u.id='${esc(_userId)}'::uuid and u.is_active=true and m.active=true
+          and m.revoked_at is null and m.is_system_principal=false`);
+      const manager = managers?.length === 1 ? managers[0] : null;
+      if (!manager || manager.msg_user_id !== _userId || !manager.manager_id
+          || !Array.isArray(manager.manager_roles)
+          || !manager.manager_roles.some(role => ['OPS_MANAGER','CUSTODIAL_MANAGER','DIRECTOR','SECURITY_ADMIN'].includes(role))) {
+        throw new Error('Memphis could not verify the current message sender.');
+      }
+      identity = {...manager, role:'manager'};
+    }
     const webEnabled = allowWebSearch({ deviceId, identityRole: identity?.role || "" });
-    const recentMessages = await fetchRecentThreadMessages(runReadOnlySql, threadId, 10);
+    const recentMessages = await fetchRecentThreadMessages(runReadOnlySql, threadId, 10, _userId || identity?.msg_user_id || '', sourceMessageId);
     const route = classifyMemphisIntentLocal(effectiveUserMessage, threadContext);
     if (route.clarification && route.confidence < 0.35) {
       return annotateMemphisReply({ text: route.clarification, meta: { fallback: true, mode: "local_clarification" } }, route, [], ["low_intent_confidence"]);
@@ -1673,7 +1716,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       || (route.confidence >= 0.5 && !isGeneralKnowledgeQuestion(effectiveUserMessage));
 
     if (!apiKey || explicitSystem) {
-      const reply = await generateSystemReply(effectiveUserMessage, { deviceId, threadId, userRole: identity?.role || "" });
+      const reply = await generateSystemReply(effectiveUserMessage, { deviceId, threadId, userRole: identity?.role || "", userIdentity: identity });
       return annotateMemphisReply(reply, route, reply?.meta?.sources || []);
     }
 
@@ -1702,13 +1745,14 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       console.error("memphis conversation gemini path failed:", error);
     }
 
-    const reply = await generateSystemReply(effectiveUserMessage, { deviceId, threadId, userRole: identity?.role || "" });
+    const reply = await generateSystemReply(effectiveUserMessage, { deviceId, threadId, userRole: identity?.role || "", userIdentity: identity });
     return annotateMemphisReply(reply, route, reply?.meta?.sources || []);
   }
 
   async function diagnoseMessage({ deviceId = "", userMessage = "", threadId = "" } = {}) {
     const threadContext = await fetchThreadContext(runReadOnlySql, threadId);
-    const recentMessages = await fetchRecentThreadMessages(runReadOnlySql, threadId, 6);
+    const identity = await fetchDeviceIdentity(runReadOnlySql, deviceId);
+    const recentMessages = await fetchRecentThreadMessages(runReadOnlySql, threadId, 6, identity?.msg_user_id || '');
     const rewritten_message = rewriteFollowUpWithContext(userMessage, threadContext);
     const route = classifyMemphisIntentLocal(rewritten_message, threadContext);
     const todayServiceDate = await getDefaultServiceDate(runReadOnlySql);

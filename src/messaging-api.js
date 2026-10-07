@@ -5,6 +5,7 @@ import { getGeminiDiagnostics } from "./utils/gemini-config.js";
 import { createMemphisResponder } from "./services/index.js";
 import { resolveCanonicalDevice } from "./device-identity.js";
 import { nativeNotificationReceiptArguments } from "./native-notification-receipt.js";
+import { boundMemphisReply } from "./memphis-ai.js";
 
 export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPayload, requireDeviceAccess, requireOpsManagerAuth: suppliedOpsManagerAuth, registerOperationalJobHandler, appVersion, releaseId, contractVersion }) {
   const router = express.Router();
@@ -1166,7 +1167,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     return raw;
   }
 
-  async function buildMemphisReply({ userId = "", deviceId = "", threadId = "", body = "" } = {}) {
+  async function buildMemphisReply({ userId = "", deviceId = "", threadId = "", body = "", sourceMessageId = "" } = {}) {
     try {
       const directContact = await directContactReply(body, userId);
       if (directContact) {
@@ -1182,7 +1183,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
         };
       }
       const routedBody = normalizeMemphisPromptForLocalRouting(body);
-      let reply = await memphisResponder.generateReply({ userId, deviceId, threadId, userMessage: routedBody });
+      let reply = await memphisResponder.generateReply({ userId, deviceId, threadId, userMessage: routedBody, sourceMessageId });
       if (routedBody !== body) {
         reply = {
           ...reply,
@@ -1320,10 +1321,20 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
         and m.is_deleted is false
         and t.is_active is true
         and t.system_key is distinct from 'ops_manager_shared_chat_v1'
+        and exists(select 1 from public.msg_thread_participants participant
+          join public.msg_users sender on sender.id=participant.user_id and sender.is_active=true
+          where participant.thread_id=t.id and participant.user_id=m.sender_user_id
+            and participant.left_at is null)
+        and coalesce(m.sent_at,m.created_at)>coalesce((
+          select max(visibility.hidden_before) from public.msg_thread_visibility visibility
+          where visibility.thread_id=t.id and visibility.user_id=m.sender_user_id
+            and visibility.device_identifier is null),'-infinity'::timestamptz)
       limit 1
     `);
     const source = Array.isArray(sourceRows) && sourceRows.length ? sourceRows[0] : null;
-    if (!source) throw new Error("Memphis source message no longer exists.");
+    // A deleted/hidden message or retired participant is not a reason to
+    // recreate the conversation or retry it until a dead letter is generated.
+    if (!source) return {bot_message:null, skipped:true, reason:'source_not_visible'};
     const replyKey = `memphis-reply:${source.id}`;
     const existing = await findMemphisBotMessage(replyKey);
     if (existing) return { bot_message: existing, replayed: true };
@@ -1336,18 +1347,20 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       deviceId: source.device_id,
       threadId: source.thread_id,
       body: source.body,
+      sourceMessageId: source.id,
     });
+    const boundedReply = boundMemphisReply(reply);
     const botMessage = await runRpc("msg_send_message", {
       p_thread_id: source.thread_id,
       p_sender_user_id: memphisUserId,
-      p_body: String(reply?.text || "Memphis could not produce an answer."),
+      p_body: boundedReply.text,
       p_message_type: "bot_response",
       p_metadata_json: {
         channel: "memphis",
         ai: true,
         client_message_id: replyKey,
         reply_to_message_id: source.id,
-        ...(reply?.meta && typeof reply.meta === "object" ? reply.meta : {}),
+        ...(boundedReply.meta && typeof boundedReply.meta === "object" ? boundedReply.meta : {}),
       },
       p_client_message_id: replyKey,
     });

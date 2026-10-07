@@ -31,7 +31,7 @@
     "test:custodial-coverage-policy-db": "node scripts/custodial-coverage-policy-database-tests.mjs",
     "test:restroom-rebalance-route": "node scripts/restroom-rebalance-route-tests.mjs",
     "test:ai-intent": "node scripts/smoke-ai-intent.mjs",
-    "test:messaging": "node scripts/memphis-messaging-regression-tests.mjs",
+    "test:messaging": "node scripts/memphis-messaging-regression-tests.mjs && node scripts/memphis-chatbot-boundary-tests.mjs",
     "test:auth": "node scripts/mcp-connector-auth-tests.mjs && node scripts/mcp-self-contained-oauth-wire-tests.mjs && node scripts/mcp-transport-tool-surface-tests.mjs && node scripts/operations-leadership-mobile-contract-tests.mjs && node scripts/manager-named-enrollment-http-tests.mjs && node scripts/manager-credential-boundary-tests.mjs && node scripts/manager-route-authority-contract-tests.mjs",
     "test:manager-auth": "node scripts/operations-leadership-mobile-contract-tests.mjs && node scripts/manager-named-enrollment-http-tests.mjs && node scripts/manager-credential-boundary-tests.mjs && node scripts/manager-route-authority-contract-tests.mjs",
     "test:mcp-auth": "node scripts/mcp-connector-auth-tests.mjs && node scripts/mcp-self-contained-oauth-wire-tests.mjs && node scripts/mcp-transport-tool-surface-tests.mjs",

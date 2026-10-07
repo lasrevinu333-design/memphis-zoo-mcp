@@ -14,23 +14,34 @@ export async function fetchThreadContext(runReadOnlySql, threadId) {
   return Array.isArray(rows) && rows.length && rows[0].data ? rows[0].data : {};
 }
 
-export async function fetchRecentThreadMessages(runReadOnlySql, threadId, limit = 10) {
+export async function fetchRecentThreadMessages(runReadOnlySql, threadId, limit = 10, userId = "", sourceMessageId = "") {
   const normalized = String(threadId || "").trim();
-  if (!normalized) return [];
+  const viewer = String(userId || "").trim();
+  const source = String(sourceMessageId || "").trim();
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!uuid.test(normalized) || !uuid.test(viewer) || (source && !uuid.test(source))) return [];
   const safeLimit = Math.min(Math.max(Number.parseInt(String(limit), 10) || 10, 2), 20);
   const rows = await runReadOnlySql(`
-    select message_type, body
+    select id, message_type, body
     from (
-      select sent_at, message_type, body
-      from public.msg_messages
-      where thread_id = '${esc(normalized)}'::uuid
-        and message_type in ('text', 'bot_response')
-        and body is not null
-        and trim(body) <> ''
-      order by sent_at desc
-      limit ${safeLimit}
-    ) recent
-    order by sent_at asc
+      select m.id, coalesce(m.sent_at,m.created_at) as sent_at, m.message_type, m.body
+      from public.msg_messages m
+      join public.msg_threads t on t.id=m.thread_id
+      where m.thread_id = '${esc(normalized)}'::uuid
+        and t.is_active=true and m.is_deleted is false
+        and exists(select 1 from public.msg_thread_participants p
+          where p.thread_id=t.id and p.user_id='${esc(viewer)}'::uuid and p.left_at is null)
+        and coalesce(m.sent_at,m.created_at)>coalesce((
+          select max(v.hidden_before) from public.msg_thread_visibility v
+          where v.thread_id=t.id and v.user_id='${esc(viewer)}'::uuid
+            and v.device_identifier is null),'-infinity'::timestamptz)
+        and m.message_type in ('text', 'bot_response') and m.body is not null and trim(m.body) <> ''
+        ${source ? `and (coalesce(m.sent_at,m.created_at),m.id)<(
+          select coalesce(original.sent_at,original.created_at),original.id from public.msg_messages original
+          where original.id='${esc(source)}'::uuid and original.thread_id=t.id
+            and original.sender_user_id='${esc(viewer)}'::uuid and original.is_deleted is false)` : ''}
+      order by coalesce(m.sent_at,m.created_at) desc,m.id desc limit ${safeLimit}
+    ) recent order by sent_at asc,id asc
   `);
   return Array.isArray(rows) ? rows : [];
 }
