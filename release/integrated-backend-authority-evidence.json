@@ -515,7 +515,7 @@
       {
         "path": "package.json",
         "mode": "100644",
-        "object_id": "4b3ca81aafdb2f9bb9787c52c5338e1d6bce7d53"
+        "object_id": "6b5ff6aff46aaec383e7ba386bd00a699574f656"
       },
       {
         "path": "release/combined-release-verification.json",
@@ -1768,6 +1768,11 @@
         "object_id": "c8c08c21d85e3613ca8541769bf5f6b173c392e0"
       },
       {
+        "path": "scripts/memphis-chatbot-boundary-tests.mjs",
+        "mode": "100644",
+        "object_id": "789691a8771a45879ed0552c3bd4acf2ac805177"
+      },
+      {
         "path": "scripts/memphis-contact-privacy-tests.mjs",
         "mode": "100644",
         "object_id": "e4402f62416c9b640505e0799085ef60d9ed6d34"
@@ -1800,7 +1805,7 @@
       {
         "path": "scripts/memphis-messaging-route-recovery-tests.mjs",
         "mode": "100644",
-        "object_id": "5c10a7dd5f9626ff9af09897e19b78fdb5989d38"
+        "object_id": "040c5b6a8f15ff3fdaafd87e7c7d916f189c3f40"
       },
       {
         "path": "scripts/memphis-provenance-boundary-tests.mjs",
@@ -3860,7 +3865,7 @@
       {
         "path": "src/ai/memphis-ai-thread-context.js",
         "mode": "100644",
-        "object_id": "4f2da8b8fcd6fd224042f4df24dc73ff61aeebec"
+        "object_id": "f153f20e17294799c089bfdd8b18d51bc3cf2946"
       },
       {
         "path": "src/ai/memphis-ai-utils.js",
@@ -4140,12 +4145,12 @@
       {
         "path": "src/memphis-ai.js",
         "mode": "100644",
-        "object_id": "123f0df2e21614e6d5eddea3c163f8dcfa189767"
+        "object_id": "d2480ce48f8a710d4c9130768a1412ef4e0265e1"
       },
       {
         "path": "src/messaging-api.js",
         "mode": "100644",
-        "object_id": "060576ccd839ed01554859325b01ecb911011d0a"
+        "object_id": "ba1ef15a9317c30d82a31ba27f4e7e6007298211"
       },
       {
         "path": "src/native-location-dispatch.js",
@@ -6408,7 +6413,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 1256,
+    "authority_path_count": 1257,
     "migration_path_count": 227,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
