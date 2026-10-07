@@ -1,7 +1,7 @@
 {
   "artifact": "integrated-backend-authority-release-evidence.v2",
   "release_id": "release-2026.07.19.custodial-v3.12",
-  "frontend_commit_sha": "60401528b40f6d727512bf91bc5e414638444935",
+  "frontend_commit_sha": "23dfef13fd2632419a3e1b944fccbff588a5a2ce",
   "frontend_commit_state": "final_pair_bound",
   "schema_fingerprint": "436f5ddf8a60984babfebdf2a9c0b0521f6edd6ea7023c927c0f2b50794e1af4",
   "schema_transition": {
@@ -540,7 +540,7 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "973be131c8eb03e1e50a1cb3b6f32cd7cd6d2881"
+        "object_id": "45e1e0a6d20fbcc386e6f93582bcadf71fbd72e9"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
@@ -585,7 +585,7 @@
       {
         "path": "release/schema-alignment-input.json",
         "mode": "100644",
-        "object_id": "db36a1bee9b8231280e09bf234ca9e7168a33b0d"
+        "object_id": "7c8eb13379ebc6d64c772462b97e3f431c7bdf5c"
       },
       {
         "path": "release/shared-events-database-receipt.json",
@@ -2001,6 +2001,11 @@
         "path": "scripts/native-provider-json-tests.mjs",
         "mode": "100644",
         "object_id": "76f8a5e383ae649691b53704dd049c63669b6d7b"
+      },
+      {
+        "path": "scripts/native-provider-production-binding-tests.mjs",
+        "mode": "100644",
+        "object_id": "e78c032813eaa9cd9e7bb73910754a0fa1f3ee00"
       },
       {
         "path": "scripts/native-schedule-dated-reader-tests.mjs",
@@ -4075,7 +4080,7 @@
       {
         "path": "src/index.js",
         "mode": "100644",
-        "object_id": "0fcf54a5b3413610f1b778c5a7d4f7907e403542"
+        "object_id": "b7915085faa88f09730e517455ba82fa895b8f05"
       },
       {
         "path": "src/integrated-backend-authority-release-evidence.js",
@@ -6418,7 +6423,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 1258,
+    "authority_path_count": 1259,
     "migration_path_count": 227,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
