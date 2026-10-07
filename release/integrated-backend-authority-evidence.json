@@ -1,7 +1,7 @@
 {
   "artifact": "integrated-backend-authority-release-evidence.v2",
   "release_id": "release-2026.07.19.custodial-v3.12",
-  "frontend_commit_sha": "6861dde994b018888f5823eff269a84e9a506a8a",
+  "frontend_commit_sha": "60401528b40f6d727512bf91bc5e414638444935",
   "frontend_commit_state": "final_pair_bound",
   "schema_fingerprint": "436f5ddf8a60984babfebdf2a9c0b0521f6edd6ea7023c927c0f2b50794e1af4",
   "schema_transition": {
@@ -540,7 +540,7 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "7a8af564df06e3f5528dd95fc0a15d3082914f43"
+        "object_id": "973be131c8eb03e1e50a1cb3b6f32cd7cd6d2881"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
@@ -585,7 +585,7 @@
       {
         "path": "release/schema-alignment-input.json",
         "mode": "100644",
-        "object_id": "93a6dbf4ab73fabba9e372d4db720c94d9912ed0"
+        "object_id": "db36a1bee9b8231280e09bf234ca9e7168a33b0d"
       },
       {
         "path": "release/shared-events-database-receipt.json",
@@ -1410,7 +1410,12 @@
       {
         "path": "scripts/fixtures/native-provider-interval-database-cases.mjs",
         "mode": "100644",
-        "object_id": "57208795fb7c5b1329acf853828caa86f4f3af76"
+        "object_id": "0813efaadda110bfa990ee9704250d4416753c35"
+      },
+      {
+        "path": "scripts/fixtures/native-provider-test-clock.mjs",
+        "mode": "100644",
+        "object_id": "5b939322097bb76460ded44dd72e9370a1c2fa22"
       },
       {
         "path": "scripts/fixtures/native-schedule-dated-reader-source.mjs",
@@ -1895,7 +1900,7 @@
       {
         "path": "scripts/native-location-lifecycle-database-tests.mjs",
         "mode": "100644",
-        "object_id": "83ed7a5a27f244858e5acea0678c54b7b142afb2"
+        "object_id": "0b357944194907cb34128366a12e759c57c0b1f7"
       },
       {
         "path": "scripts/native-location-lifecycle-tests.mjs",
@@ -1905,7 +1910,7 @@
       {
         "path": "scripts/native-location-reservation-database-tests.mjs",
         "mode": "100644",
-        "object_id": "8b8becc905a44ba4861f344609e3ac0eb04976d5"
+        "object_id": "1bc036fa4f9ed294053e48efb6d3fc16c8cd915c"
       },
       {
         "path": "scripts/native-lunch-contract-tests.mjs",
@@ -1965,7 +1970,7 @@
       {
         "path": "scripts/native-provider-event-decisions-database-tests.mjs",
         "mode": "100644",
-        "object_id": "e7147393e517e7a85feda153a8edb14525acc46a"
+        "object_id": "8f7e0e3d7fecd96f7b688127ed2292b9e61d95c5"
       },
       {
         "path": "scripts/native-provider-event-decisions-tests.mjs",
@@ -1975,7 +1980,7 @@
       {
         "path": "scripts/native-provider-events-database-tests.mjs",
         "mode": "100644",
-        "object_id": "cfe11ab71b911c08404e647f8a4d9a38a60a93d7"
+        "object_id": "51eeefcf4c466023b56576bc2872c10903bb17cb"
       },
       {
         "path": "scripts/native-provider-events-tests.mjs",
@@ -1986,6 +1991,11 @@
         "path": "scripts/native-provider-generation-database-tests.mjs",
         "mode": "100644",
         "object_id": "2ef1029451409a0b428fbfa647125a15e80dc101"
+      },
+      {
+        "path": "scripts/native-provider-integrated-profile-tests.mjs",
+        "mode": "100644",
+        "object_id": "fcf02f7acd147f7e5f21f5b1a2b64a6efd77439d"
       },
       {
         "path": "scripts/native-provider-json-tests.mjs",
@@ -6408,7 +6418,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 1256,
+    "authority_path_count": 1258,
     "migration_path_count": 227,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
