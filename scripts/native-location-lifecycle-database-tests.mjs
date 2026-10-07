@@ -211,8 +211,8 @@ try{
  let httpSqlCalls=0;const app=express();app.use(createGeneralJsonMiddleware());
  installNativeProviderRoutes(app,{env,requireCurrentCredential:makeDeviceCredentialMiddleware({env,requireEnrolledCredential:true,
   store:{getPolicy:async()=>({mode:'enforce'}),findCredential:async id=>id===credential?authCredential:null,touchCredential:async()=>{},audit:async()=>{}},runReadOnlySql:async()=>[authDevice]}),
-  db:{rpc:async(name,args)=>{httpSqlCalls++;assert.equal(name,'custodial_native_location_inventory');assert.equal(args.p_credential_hash,credentialHash);assert.match(args.p_attestation_digest,/^[0-9a-f]{64}$/);
-   return{data:JSON.parse(sql(`select public.custodial_native_location_inventory_at(${q(args.p_credential)},${q(args.p_credential_hash)},${q(args.p_native_request)},${q(args.p_attestation_digest)},${j(args.p_body)},${q(fixtureClock.offsetMicros(2000000))})`))};}}});
+  db:{rpc:async(name,args)=>{httpSqlCalls++;assert.equal(name,'custodial_native_provider_inventory_clock');assert.equal(args.p_credential_hash,credentialHash);assert.match(args.p_attestation_digest,/^[0-9a-f]{64}$/);
+   return{data:JSON.parse(sql(`select public.custodial_native_provider_inventory_clock_at(${q(args.p_credential)},${q(args.p_credential_hash)},${q(args.p_native_request)},${q(args.p_attestation_digest)},${j(args.p_body)},${q(fixtureClock.offsetMicros(2000000))},${q(fixtureClock.offsetMicros(2000000))})`))};}}});
  app.use((error,_req,res,_next)=>res.status(error.status||500).json({code:'synthetic_error'}));
  const server=await new Promise(resolve=>{const ownedServer=app.listen(0,'127.0.0.1',()=>resolve(ownedServer));});
  console.log('OWNED_INVENTORY_HTTP_SQL_SERVER',server.address().port,'cleanup in finally');
@@ -223,10 +223,16 @@ try{
    const headers={'content-type':'application/json',authorization:`Device ${credential}.${secret}`,'x-device-id':'KIOSK_08',origin:'https://localhost','x-memphis-app-edition':'custodial',
     'x-memphis-native-attestation-version':'custodial-native-request.v1','x-memphis-native-request-id':requestId,'x-memphis-native-request-timestamp':timestamp,
     'x-memphis-native-request-attestation':createHmac('sha256',secret).update(proof).digest('hex')};mutate(headers);
-   return fetch('http://127.0.0.1:'+server.address().port+path,{method:'POST',headers,body:bytes,signal:AbortSignal.timeout(10000)});};
+   const response=await fetch('http://127.0.0.1:'+server.address().port+path,{method:'POST',headers,body:bytes,signal:AbortSignal.timeout(10000)});response.fixtureRequestId=requestId;return response;};
   let response=await send();check('actual HTTP raw-body HMAC SQL inventory200',response.status,200);
-  check('actual HTTP delivers same current filtered SQL page',await response.json(),inv());
-  response=await send(continuation);check('actual HTTP continuation bound',await response.json(),page2);
+  const firstHttp=await response.json();
+  check('actual HTTP envelope keeps separate clock and frozen page',Object.keys(firstHttp).sort(),['clock','data','ok']);
+  check('actual HTTP delivers same current filtered SQL page',{ok:firstHttp.ok,data:firstHttp.data},inv());
+  check('actual HTTP clock binds exact signed request',firstHttp.clock.native_request_id,response.fixtureRequestId);
+  check('actual HTTP clock is the actual injected SQL reading',firstHttp.clock.server_now,fixtureClock.offsetMicros(2000000));
+  response=await send(continuation);const continuationHttp=await response.json();
+  check('actual HTTP continuation bound',{ok:continuationHttp.ok,data:continuationHttp.data},page2);
+  check('continuation clock binds its own signed request',continuationHttp.clock.native_request_id,response.fixtureRequestId);
   response=await send(restarts[0].request);check('actual HTTP exact invalid cursor409',response.status,409);check('actual HTTP restart exact echo',await response.json(),restarts[0].response);
   const calls=httpSqlCalls;response=await send(invBody,headers=>delete headers['x-memphis-native-request-attestation']);await response.text();
   check('unsigned inventory rejected before SQL',[response.status,httpSqlCalls],[403,calls]);
