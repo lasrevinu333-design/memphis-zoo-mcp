@@ -1,7 +1,7 @@
 {
   "artifact": "integrated-backend-authority-release-evidence.v2",
   "release_id": "release-2026.07.19.custodial-v3.12",
-  "frontend_commit_sha": "35a2f5e37604e7956501195a2d95b775cef30d04",
+  "frontend_commit_sha": "6861dde994b018888f5823eff269a84e9a506a8a",
   "frontend_commit_state": "final_pair_bound",
   "schema_fingerprint": "436f5ddf8a60984babfebdf2a9c0b0521f6edd6ea7023c927c0f2b50794e1af4",
   "schema_transition": {
@@ -540,7 +540,7 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "e963256eb9fff42d2073404d90303664cf8f6c1e"
+        "object_id": "7a8af564df06e3f5528dd95fc0a15d3082914f43"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
@@ -585,7 +585,7 @@
       {
         "path": "release/schema-alignment-input.json",
         "mode": "100644",
-        "object_id": "0eba2aa44706dc358d66008c0be7684af76743ad"
+        "object_id": "93a6dbf4ab73fabba9e372d4db720c94d9912ed0"
       },
       {
         "path": "release/shared-events-database-receipt.json",
@@ -1085,7 +1085,7 @@
       {
         "path": "scripts/employee-message-source-admission-tests.mjs",
         "mode": "100644",
-        "object_id": "22438dcb7ee01c13847842a138bd0d91a5d620ab"
+        "object_id": "8baf951a0916e1d06040cb79f76447bb3c31f211"
       },
       {
         "path": "scripts/employee-notification-contract-tests.mjs",
@@ -4145,7 +4145,7 @@
       {
         "path": "src/messaging-api.js",
         "mode": "100644",
-        "object_id": "1a78647b5788b507d07eeb951806d2e02e17a973"
+        "object_id": "060576ccd839ed01554859325b01ecb911011d0a"
       },
       {
         "path": "src/native-location-dispatch.js",
