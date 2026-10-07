@@ -67,7 +67,7 @@ try{
  const assignment=JSON.parse(sql(`select to_jsonb(a) from public.custodial_operational_location_assignments(${q(serviceDate)}) a where location_id=${q(location)} and coverage_start<='10:00' and coverage_end>'10:00';`));
  assert.equal(assignment.projection_id,authority.projectionIds[week]);
  sql(`insert into public.devices(id,device_id,device_name,active,assigned_employee_id,assignment_epoch) values(${q(device)},'KIOSK_08','Synthetic native location device',true,${q(employee)},1);
- insert into public.device_auth_credentials(credential_id,device_id,token_hash,confirmed_at,expires_at) values(${q(credential)},${q(device)},${q(credentialHash)},now()-interval '1 day',${q(at)}::timestamptz+interval '1 day');
+ insert into public.device_auth_credentials(credential_id,device_id,token_hash,created_at,confirmed_at,expires_at) values(${q(credential)},${q(device)},${q(credentialHash)},${q(at)}::timestamptz-interval '1 day',${q(at)}::timestamptz-interval '1 day',greatest(now(),${q(at)}::timestamptz)+interval '1 day');
  insert into public.sessions(id,session_uuid,location_id,employee_id,device_id,status,started_at,ended_at,duration_minutes)
  values(${q(randomUUID())},${q(randomUUID())},${q(location)},${q(employee)},${q(device)},'closed',${q(at)}::timestamptz-interval '2 hours 10 minutes',${q(at)}::timestamptz-interval '2 hours',10);`);
  for(const place of extraPlaces)sql(`insert into public.sessions(id,session_uuid,location_id,employee_id,device_id,status,started_at,ended_at,duration_minutes)
