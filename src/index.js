@@ -53,6 +53,7 @@ import { installLeadershipHttpRoutes } from "./leadership-bootstrap.js";
 import { installCustodialEmployeeAdminRoutes } from "./custodial-employee-admin.js";
 import { installManagerNotificationRoutes } from "./manager-notifications.js";
 import { installEmployeeNotificationRoutes } from "./employee-notifications.js";
+import { installNativeProviderRoutes } from "./native-provider-api.js";
 import { installOperationalAnalyticsRoutes } from "./operational-analytics-api.js";
 import { normalizeAttendanceRecord, toNullableNonNegativeInteger, canonicalAttendanceTimestamp, isCurrentAttendanceTimestamp, parseAttendanceDisplayInteger } from "./attendance-state.js";
 import { makeVisitorAttendanceCollectorHandler } from "./visitor-attendance-collector.js";
@@ -2401,6 +2402,13 @@ installEmployeeNotificationRoutes(app, {
   runReadOnlySql: async (sql) => runSupabaseReadOnlySql({ sql }).then((result) => result.rows),
   requireManager: requireOpsManagerWrite,
   registerOperationalJobHandler: registerOperationalNotificationJobHandler,
+});
+// The strict native protocol shares the established employee API boundary and
+// global restore admission. A manager login or legacy device fallback is never
+// accepted here; each native request still requires the exact device HMAC.
+installNativeProviderRoutes(app, {
+  db: supabaseAdmin,
+  requireCurrentCredential: requireEmployeeDeviceCredential,
 });
 installOperationalAnalyticsRoutes(app, { supabase: supabaseAdmin });
 app.get("/mcp-tools.json", requireOpsManagerAuth, (_req, res) => {
