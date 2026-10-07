@@ -11,7 +11,7 @@ import { hasManagerPermission } from "./auth/manager-permissions.js";
  */
 import { createHash, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { MANAGER_OPERATION_MILLISECONDS, CLEANUP_RESERVE_MILLISECONDS } from "./static-weekly-manager-operation.js";
+import { MANAGER_OPERATION_MILLISECONDS, CLEANUP_RESERVE_MILLISECONDS, currentManagerTransaction, effectiveManagerBounds } from "./static-weekly-manager-operation.js";
 import { assertOwnerRecurringWorkdays } from "./static-weekly-owner-workdays.js";
 import { createCoverAllPrintDocument } from "./static-weekly-coverall-print.js";
 import {listCoverAllEventBriefPreviews,confirmCoverAllEventBrief,revalidateConfirmedCoverAllEventBrief} from './coverall-event-brief.js';
@@ -562,6 +562,9 @@ export function createStaticWeeklyControlPlane({
   }
 
   function transaction(work, { health = false, reconcileManagerId = null, signal = null, deadlineAt = null } = {}) {
+    const requestContext=health?null:currentManagerTransaction();
+    if(!health)({signal,deadlineAt}=effectiveManagerBounds(signal,deadlineAt));
+
     const execute = async () => {
       assertOperationActive(signal);
       if (closing) throw fail("static_weekly_control_plane_closing", "The scheduler is closing and cannot open another database transaction.");
@@ -629,6 +632,17 @@ export function createStaticWeeklyControlPlane({
             return result;
           },
         }) : client;
+        const validateRequestActor=async()=>{
+          if(!requestContext)return;
+          const {manager:m,permission}=requestContext;
+          const actor=await call(workClient,"custodial_action_actor_v1",[m.manager_id,m.credential_id,m.device_id,m.access_level,permission]);
+          if(actor?.manager_id!==m.manager_id||actor?.credential_id!==m.credential_id||actor?.device_id!==m.device_id
+            ||(permission==='write'&&actor?.owner!==true))throw fail("42501","Current manager credential is not authorized for this transaction.");
+        };
+        // The existing SQL helper holds current credential/manager row locks
+        // through COMMIT. Revocation wins before admission or waits for this
+        // already admitted transaction; the two cannot interleave a write.
+        await validateRequestActor();
         let result = await work(workClient);
         assertOperationActive(signal);
         if (reconcileManagerId !== null) {
@@ -638,6 +652,7 @@ export function createStaticWeeklyControlPlane({
           const validity = await call(client, "static_weekly_v21_reconcile_dependency_changes", [reconcileManagerId]);
           result = withRecurringDependencyStatus(result, validity);
         }
+        await validateRequestActor();
         if (asynchronousConnectionError) throw asynchronousConnectionError;
         assertOperationActive(signal);
         if (deadlineAt != null) {
@@ -1077,6 +1092,7 @@ export function createStaticWeeklyControlPlane({
   }
 
   async function prepareDraft(input, { expectedRevision, actor, signal = null, deadlineAt = null }) {
+    ({signal,deadlineAt}=effectiveManagerBounds(signal,deadlineAt));
     assertOwnerRecurringWorkdays(input);
     if (compilerPreparer) {
       return compilerPreparer(input, { kind: "draft", expectedRevision, actor },
@@ -1088,6 +1104,7 @@ export function createStaticWeeklyControlPlane({
 
   async function prepareProjection(input, { publicationId, expectedRevision, actor, deadlineMilliseconds = null,
     signal = null, deadlineAt = null }) {
+    ({signal,deadlineAt}=effectiveManagerBounds(signal,deadlineAt));
     assertOwnerRecurringWorkdays(input);
     if (compilerPreparer) {
       return compilerPreparer(input, { kind: "projection", publicationId, expectedRevision, actor },

@@ -1,3 +1,4 @@
+import {runWithManagerTransaction} from './static-weekly-manager-operation.js';
 import express from 'express';
 
 // Schedule facts are server-owned. Never fall back to the weekly mutators.
@@ -14,8 +15,13 @@ export function createDatedTransitionManagerRouter({controller,requireManagerWri
     res.status(503).json({ok:false,code:'dated_transition_store_unavailable_requires_bounded_database_adapter'});return;
    }
    const principal=manager(req);
-   const data=await work(req,{managerId:principal?.manager_id});res.json({ok:true,data});
+   const data=await runWithManagerTransaction(req,()=>work(req,{managerId:principal?.manager_id}));
+   if(req.staticWeeklyManagerOperation)await req.restoreMutationLease.settleBeforeSuccess();
+   res.json({ok:true,data});
   }catch(error){
+   if(req.staticWeeklyManagerOperation){try{await req.restoreMutationLease.settleBeforeSuccess();}catch(settlementError){error=settlementError;}}
+   if(error?.code==='42501'){res.status(403).json({ok:false,code:'dated_transition_not_authorized'});return;}
+   if(error?.code?.startsWith('static_weekly_')){res.status(503).json({ok:false,code:'dated_transition_outcome_unknown',error:'The request outcome or recovery settlement is unconfirmed. Check the original operation before retrying.'});return;}
    const code=typeof error?.code==='string'&&error.code.startsWith('dated_transition_')
     ?error.code:'dated_transition_invalid_request_or_state';
    const status=code.includes('unavailable')?503:code.includes('not_authorized')?403:

@@ -4,7 +4,7 @@ import express from "express";
 import { createClient } from "@supabase/supabase-js";
 import { assertOpsManagerSessionSecret, createSupabaseTrustedDeviceStore, makeOpsAccessMiddleware } from "./auth/shared-access-auth.js";
 import { createStaticWeeklyControlPlane, createStaticWeeklyControlPlaneDatabase } from "./static-weekly-control-plane.js";
-import { beginBoundedManagerRequest } from "./static-weekly-manager-operation.js";
+import { beginBoundedManagerRequest, runWithManagerTransaction } from "./static-weekly-manager-operation.js";
 import {approvedInitialRequest,APPROVED_INITIAL_REQUEST_ERROR} from "./static-weekly-approved-initial-request.js";
 import {isMapDashboardSession} from "./auth/map-manager-identity.js";
 import { createRecurringOperationRunner } from "./static-weekly-recurring-operation-runner.js";
@@ -178,7 +178,7 @@ export function createStaticWeeklyControlPlaneRuntime({
   function respond(operation) {
     return async (req, res) => {
       try {
-        const data = await operation(req);
+        const data = await runWithManagerTransaction(req,()=>operation(req));
         // Only the explicitly bounded manager POSTs carry this context. Their
         // transaction has settled here; the exact restore lease must also be
         // confirmed released before any success bytes leave the server.
