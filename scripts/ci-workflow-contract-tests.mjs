@@ -936,6 +936,8 @@ assert.match(catalogReadOnlySource,/rejectUnauthorized:true/,"catalog preflight 
 assert.match(populatedSchemaPreflight, /set -euo pipefail[\s\S]*release:populated-schema:preflight \| tee[\s\S]*test -s \/tmp\/custodial-populated-schema-preflight\.json/,
   "the production schema preflight must preserve command failure and require a non-empty receipt");
 const productionBackupRehearsal = readFileSync(resolve(workflowDirectory, "production-backup-migration-rehearsal.yml"), "utf8");
+const fullCandidateMigrationInvoker = readFileSync(resolve(root,"scripts/run-release-migration-full-candidate.mjs"),"utf8");
+const ownedMigrationCommandProducer = readFileSync(resolve(root,"scripts/run-release-migration-target-capture.mjs"),"utf8");
 const localProductionBackupRehearsal = readFileSync(resolve(root, "scripts/run-production-backup-migration-rehearsal.sh"), "utf8");
 const build52ProductionMigrationApply = readFileSync(resolve(workflowDirectory, "build52-production-migration-apply.yml"), "utf8");
 const build52ProductionMigrationApplyJob = workflowJobs(build52ProductionMigrationApply)
@@ -1120,7 +1122,7 @@ assert.ok(
   Math.max(...workflowRunSteps(productionBackupRehearsalJob.source).map((source) => source.replace(/^ {10}/gm, "").length)) < 19_000,
   "every production-backup rehearsal run expression must retain margin below GitHub's 21,000-character limit",
 );
-assert.match(productionBackupRehearsal, /RESTORE_DATABASE_ONLY=true[\s\S]*release:observed-production-schema:preflight[\s\S]*release:migrations:apply[\s\S]*release:target-schema:preflight/,
+assert.match(productionBackupRehearsal, /RESTORE_DATABASE_ONLY=true[\s\S]*release:observed-production-schema:preflight[\s\S]*run-release-migration-full-candidate\.mjs[\s\S]*release:target-schema:preflight/,
   "the production-backup rehearsal must prove the restored pre-migration state, apply the signed plan, and only then check the target fingerprint");
 assert.doesNotMatch(productionBackupRehearsal, /SUPABASE_DB_URL:\s*\$\{\{\s*secrets\.SUPABASE_DB_URL/,
   "the production-backup rehearsal must not read live production while reconstructing the signed archive");
@@ -1136,7 +1138,7 @@ assert.match(productionBackupRehearsal, /inventory\/application-schema\.sql[\s\S
   "the independent rehearsal must restore signed schema/control state before applying signed application data");
 assert.match(productionBackupRehearsal, /RESTORE_REHEARSAL_ACCEPT_EMPTY_TARGET=true[\s\S]*restore:reconcile-isolated[\s\S]*custodial_configure_backend_execution_key/,
   "the independent rehearsal must explicitly reconcile its disposable empty target before exercising recovered application writers");
-assert.match(productionBackupRehearsal, /restore:reconcile-isolated[\s\S]*verify-isolated-source-lease-state\.mjs[\s\S]*release:observed-production-schema:preflight[\s\S]*release:migrations:apply/,
+assert.match(productionBackupRehearsal, /restore:reconcile-isolated[\s\S]*verify-isolated-source-lease-state\.mjs[\s\S]*release:observed-production-schema:preflight[\s\S]*run-release-migration-full-candidate\.mjs/,
   "the independent rehearsal must verify the signed-ledger-aware permanent-table/shim distinction before baseline fingerprinting");
 assert.match(productionBackupRehearsal, /test:feedback-reader-database[\s\S]*npm start[\s\S]*feedback_first_http_status[\s\S]*feedback_replay_http_status/,
   "the recovered application pair must prove bounded feedback reader authority before exact HTTP write and replay");
@@ -1180,8 +1182,14 @@ assert.match(productionBackupRehearsal, /expires_at>clock_timestamp\(\)[\s\S]*ac
   "the recovered pair must distinguish live mutation leases from expired fail-closed blockers");
 assert.match(productionBackupRehearsal, /test "\$active_mutation_leases" = '0'[\s\S]*test "\$expired_mutation_leases" = '0'/,
   "the exact recovered pair must prove that neither active nor expired mutation leases remain");
-assert.match(productionBackupRehearsal, /RELEASE_MIGRATION_REHEARSAL=true[\s\S]*RELEASE_MIGRATION_SOURCE_LEDGER_SHA256/,
-  "the isolated mutator must bind the complete signed source ledger while production requires separate authorization");
+assert.match(ownedMigrationCommandProducer,/RELEASE_MIGRATION_REHEARSAL:'true'[\s\S]*RELEASE_MIGRATION_SOURCE_LEDGER_SHA256:summary\.source_identity\.migration_ledger_sha256/,
+  "the maintained invoker must retain isolated rehearsal and the exact source ledger hint");
+assert.match(fullCandidateMigrationInvoker,/backup_tool_commit[\s\S]*backup_tool_tree[\s\S]*RELEASE_MIGRATION_TARGET_CAPTURE='false'[\s\S]*delete command\.env\.RELEASE_MIGRATION_TARGET_CAPTURE_OUTPUT/,
+  "full candidate must require its own exact backup identity and enter normal target admission, never capture admission");
+assert.match(ownedMigrationCommandProducer,/SUPABASE_DB_URL:'postgresql:\/\/postgres:postgres@127\.0\.0\.1:'/,
+  "only the isolated migration connection must use the existing production postgres actor");
+assert.match(productionBackupRehearsal,/local_db_url="postgresql:\/\/supabase_admin:postgres@127\.0\.0\.1:[\s\S]*SUPABASE_DB_URL="\$local_db_url"[\s\S]*restore-isolated-event-owner-schema/,
+  "normal schema and row restore authority remains unchanged");
 assert.match(productionBackupRehearsal, /cron\.database_name="\$database"/,
   "the production-backup rehearsal must bind pg_cron to its isolated restored database");
 assert.match(productionBackupRehearsal, /cron\.launch_active_jobs=off/,

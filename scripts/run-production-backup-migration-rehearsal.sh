@@ -243,7 +243,7 @@ RELEASE_MIGRATION_APPLY=true RELEASE_MIGRATION_CONFIRM_PROJECT_REF="$project_ref
   RELEASE_MIGRATION_NAMED_ACTOR="$actor" RELEASE_MIGRATION_REHEARSAL=true \
   RELEASE_MIGRATION_CANDIDATE_COMMIT="$source_commit" RELEASE_MIGRATION_CANDIDATE_TREE="$source_tree" \
   RELEASE_MIGRATION_SOURCE_LEDGER_SHA256="$source_migration_ledger_sha256" \
-  SUPABASE_PROJECT_REF="$project_ref" SUPABASE_DB_URL="$local_db_url" \
+  SUPABASE_PROJECT_REF="$project_ref" SUPABASE_DB_URL="postgresql://postgres:postgres@127.0.0.1:${mapped_port}/${database}" \
   npm run --silent release:migrations:apply | tee -a "$receipt"
 backend_secret_digest="$(printf '%s' "$REHEARSAL_CUSTODIAL_BACKEND_PROOF_SECRET" | sha256sum | awk '{print $1}')"
 native_secret_digest="$(printf '%s' "$REHEARSAL_CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET" | sha256sum | awk '{print $1}')"

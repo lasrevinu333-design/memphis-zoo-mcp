@@ -71,7 +71,7 @@ export function prepareTargetCapture({backendRoot,state,databaseUrl,rehearsal,ap
  const pin='supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed';
  const image=JSON.parse(execFileSync('docker',['image','inspect','--format','{"id":{{json .Id}},"digests":{{json .RepoDigests}}}',pin],{encoding:'utf8'}));
  const raw=execFileSync('docker',['inspect','--format',
-  '{"id":{{json .Id}},"image":{{json .Image}},"image_reference":{{json .Config.Image}},"running":{{json .State.Running}},"privileged":{{json .HostConfig.Privileged}},"ports":{{json .HostConfig.PortBindings}},"mounts":{{json .Mounts}}}',container],{encoding:'utf8'});
+  '{"id":{{json .Id}},"image":{{json .Image}},"image_reference":{{json .Config.Image}},"running":{{json .State.Running}},"privileged":{{json .HostConfig.Privileged}},"ports":{{json .NetworkSettings.Ports}},"mounts":{{json .Mounts}}}',container],{encoding:'utf8'});
  const target=assertOwnedTargetMetadata({databaseUrl,runId:env.GITHUB_RUN_ID,container,metadata:JSON.parse(raw),image});
  const git=args=>execFileSync('git',args,{cwd:backendRoot,encoding:'utf8'}).trim();
  assert.equal(git(['rev-parse','HEAD']),candidateCommit);assert.equal(git(['rev-parse','HEAD^{tree}']),candidateTree);

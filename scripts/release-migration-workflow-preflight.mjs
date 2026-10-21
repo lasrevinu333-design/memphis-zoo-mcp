@@ -1,3 +1,4 @@
+import {assertObservedSourcePrefix} from './release-migration-observed-prefix.mjs';
 import {resolveReleaseMigrationSource} from './production-forward-source.mjs';
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
@@ -45,7 +46,7 @@ export function assertReleaseWorkflowSource(root) {
   assert.ok(pending.length > 0, "A migration release requires a nonempty pending phase");
   assert.equal(pending.length, plan.forwardCount);
   assert.equal(applied.length, source.source_authority_migration_count);
-  assert.equal(applied.at(-1), `${source.ledger_head}_${source.source_migration_name}.sql`);
+  assertObservedSourcePrefix(root,state,applied);
   assert.ok(Array.isArray(state.pending_migrations));
   assert.deepEqual(state.pending_migrations.map(({ file }) => file), pending, "Pending migrations must equal the complete ordered unapplied phase");
   for (const [index, item] of state.pending_migrations.entries()) {
