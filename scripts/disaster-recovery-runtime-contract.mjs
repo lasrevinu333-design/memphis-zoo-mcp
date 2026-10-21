@@ -49,16 +49,50 @@ export function validateRecoveryRuntimeConfiguration({ contract, configuration, 
   const services = object(configuration.services, "Recovery runtime services");
   const serviceContracts = object(contract.services, "Recovery runtime contract services");
   exactKeys(services, Object.keys(serviceContracts), "Recovery runtime services");
+  // A split deployment needs a separately observed, complete service identity.
+  // An absent field is the legacy same-commit case; a present malformed field
+  // must never downgrade to that case.
+  const details = releaseIdentity.details_json;
+  if (details != null && (typeof details !== "object" || Array.isArray(details))) {
+    throw new Error("Recorded release details are malformed.");
+  }
+  const hasStaticCommit = details != null && Object.hasOwn(details, "static_render_commit");
+  const staticCommit = hasStaticCommit ? text(details.static_render_commit).toLowerCase() : "";
+  if (hasStaticCommit && (typeof details.static_render_commit !== "string"
+      || !/^[0-9a-f]{40}$/.test(staticCommit))) {
+    throw new Error("Recorded static control-plane commit is malformed.");
+  }
+  const hasServiceIdentity = details != null && Object.hasOwn(details, "recovery_service_identity");
+  const recordedServices = hasServiceIdentity
+    ? object(details.recovery_service_identity, "Recorded recovery service identity") : null;
+  if (hasStaticCommit && !recordedServices) {
+    throw new Error("Split release has no recorded recovery service identity.");
+  }
+  if (recordedServices) exactKeys(recordedServices, Object.keys(serviceContracts), "Recorded recovery service identity");
   for (const [serviceName, serviceContract] of Object.entries(serviceContracts)) {
     const service = object(services[serviceName], `Recovery runtime service ${serviceName}`);
     exactKeys(service, ["service_id", "deployment_id", "deployment_commit", "public_url", "build_command", "start_command", "liveness_path", "readiness_path", "non_secret_environment", "required_secret_presence"], `Recovery runtime service ${serviceName}`);
-    if (text(service.deployment_commit).toLowerCase() !== text(releaseIdentity.backend_commit).toLowerCase()) {
+    const expectedCommit = serviceName === "static_weekly_control_plane" && staticCommit
+      ? staticCommit : text(releaseIdentity.backend_commit).toLowerCase();
+    if (text(service.deployment_commit).toLowerCase() !== expectedCommit) {
       throw new Error(`${serviceName} is not deployed from the exact live release commit recorded by production.`);
     }
     if (!/^[a-zA-Z0-9_-]{3,160}$/.test(text(service.service_id)) || !/^[a-zA-Z0-9_-]{3,200}$/.test(text(service.deployment_id))) {
       throw new Error(`${serviceName} is missing its recoverable service, deployment, or public URL identity.`);
     }
     publicHttpsUrl(service.public_url, `${serviceName} public URL`);
+    if (recordedServices) {
+      const recorded = object(recordedServices[serviceName], `Recorded ${serviceName} identity`);
+      exactKeys(recorded, ["service_id", "deployment_id", "deployment_commit", "public_url"],
+        `Recorded ${serviceName} identity`);
+      if (text(recorded.service_id) !== text(service.service_id)
+          || text(recorded.deployment_id) !== text(service.deployment_id)
+          || text(recorded.deployment_commit).toLowerCase() !== text(service.deployment_commit).toLowerCase()
+          || publicHttpsUrl(recorded.public_url, `Recorded ${serviceName} public URL`)
+             !== publicHttpsUrl(service.public_url, `${serviceName} public URL`)) {
+        throw new Error(`${serviceName} differs from the recorded recovery service identity.`);
+      }
+    }
     for (const field of ["build_command", "start_command", "liveness_path", "readiness_path"]) {
       if (text(service[field]) !== text(serviceContract[field])) throw new Error(`${serviceName} ${field} differs from the source-controlled recovery contract.`);
     }
