@@ -7,6 +7,13 @@
   "production_execution_authorized": false,
   "migrations": [
     {
+      "canonical_file": "20261002090000_manager_issue_outcomes.sql",
+      "canonical_sha256": "4e2032be8225a87bd5612824d9b26c7d4197d2a950e1e6411d9faecd59220017",
+      "forward_file": "release/production-forward-source/20261002090000_manager_issue_outcomes.sql",
+      "forward_sha256": "1746b47a53e1f03ab66d373e3e94046b1319f89af5e1e83222c2300ae5d9e6cd",
+      "profile": "existing-postgres-owner"
+    },
+    {
       "canonical_file": "20261002120000_october_dated_recovery_inventory_rebind.sql",
       "canonical_sha256": "3ba81c38118b4b56543d2f89135bbdb7a6652c700c78b5dedcf898b3e60f6000",
       "forward_file": "release/production-forward-source/20261002120000_october_dated_recovery_inventory_rebind.sql",
