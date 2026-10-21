@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readFileSync,mkdtempSync,mkdirSync,copyFileSync,writeFileSync,unlinkSync,rmSync,symlinkSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join,dirname} from 'node:path';
+import {CURRENT_MESSAGE_SOURCE_PINS,currentCanonicalMessageProfile} from './fixtures/employee-message-current-source.mjs';
 import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
@@ -13,14 +16,20 @@ const hash=x=>createHash('sha256').update(x).digest('hex'),clone=x=>structuredCl
 let checks=0;
 const equal=(a,b,label)=>{assert.deepEqual(a,b,label);checks++;};
 const rejects=fn=>{assert.throws(fn);checks++;};
-const source=readMessageSource();equal(source.migrations.length,219);equal(source.manifest_sha256,MESSAGE_MANIFEST);
+const source=readMessageSource(undefined,{profile:'CURRENT_CANONICAL_289'});
+const frozenBytes=readFileSync(new URL('./fixtures/native-provider-event-decision-historical-source-models.json',import.meta.url));
+equal(hash(frozenBytes),'30e660c3f708e1d1ca0f64547eaffcfbbca99059630b314361ae9797dc55cb0d');
+const frozen=JSON.parse(frozenBytes).models.CURRENT_219;
+equal(frozen.source_commit,'53848431fd55b215affeb4663f233acffb506597');equal(frozen.rows_sha256,MESSAGE_MANIFEST);equal(hash(JSON.stringify(frozen.rows)),MESSAGE_MANIFEST);
+const historicalMigrations=frozen.rows;assertMessageManifest(historicalMigrations);equal(historicalMigrations.length,219);
+equal(source.migrations.length,289);equal(source.canonical_manifest_sha256,'e5867270c2509b986708caf32109956bedf0703363dcc1d775f1737f502c5c68');equal(source.manifest_sha256,'fe4617a721731b9601b399193eaa67c904d4197efe9af506a575d2d01a1696b8');
 equal(source.migrations.filter(x=>x.file===MESSAGE_FILE),[{file:MESSAGE_FILE,sha256:MESSAGE_SHA}]);
 for(const mutate of [
  rows=>rows.pop(),rows=>rows.push(clone(rows[0])),rows=>rows.reverse(),rows=>{rows[30].sha256='a'.repeat(64);},
  rows=>{rows.find(x=>x.file===MESSAGE_FILE).sha256='b'.repeat(64);},
  rows=>{rows.find(x=>x.file===MESSAGE_FILE).file='20261004000100_employee_message_source_admission.sql';},
  rows=>{rows.at(-1).sha256='f'.repeat(64);},rows=>{rows[30].unexpected=true;},
-]){const rows=clone(source.migrations);mutate(rows);rejects(()=>assertMessageManifest(rows));}
+]){const rows=clone(historicalMigrations);mutate(rows);rejects(()=>assertMessageManifest(rows));}
 const fixtureId='00000000-0000-4000-8000-000000000001';
 const target={id:'a'.repeat(64),fixture_id:fixtureId,name:'mz_schema_message_'+fixtureId.replaceAll('-','')};
 const observed={Id:target.id,Name:'/'+target.name,Image:'sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed',
@@ -100,6 +109,34 @@ for(const required of ["assert.equal(git('status','--porcelain'),'','clean commi
  "process.once('SIGINT',stop)","process.once('SIGTERM',stop)",'verifyEmployeeMessageSourceAdmissionDatabase({sql,target:',
  '4f2cac31af750c5bc10a50445583b27ae2c6e67b0f66fe72c078b53c533d00db']){assert.ok(text.includes(required),required);checks++;}
 // Real Node CLI preflight, explicitly SOURCE ONLY. No --execute call anywhere.
-const cli=JSON.parse(execFileSync(process.execPath,[fileURLToPath(new URL('./employee-message-source-admission-replay.mjs',import.meta.url)),'--source-check'],{encoding:'utf8',timeout:10000}));
-equal(cli.scope,'SOURCE_ONLY_NO_ENGINE');equal(cli.manifest_sha256,MESSAGE_MANIFEST);
+const cli=JSON.parse(execFileSync(process.execPath,[fileURLToPath(new URL('./employee-message-source-admission-replay.mjs',import.meta.url)),'--source-check-current'],{encoding:'utf8',timeout:10000}));
+equal(cli.scope,'SOURCE_ONLY_NO_ENGINE');equal(cli.migration_profile,'CURRENT_CANONICAL_289');equal(cli.manifest_sha256,source.manifest_sha256);equal(cli.canonical_manifest_sha256,source.canonical_manifest_sha256);equal(cli.migrations,source.migrations);equal(cli.message_boundary,source.message_boundary);
+equal(source.inputs.length,23);equal(Object.fromEntries(source.inputs.slice(0,-1).map(row=>[row.file,row.sha256])),CURRENT_MESSAGE_SOURCE_PINS);
+equal(currentCanonicalMessageProfile(source.migrations).message_boundary,{file:MESSAGE_FILE,sha256:MESSAGE_SHA,predecessor_count:209,predecessor_manifest_sha256:'f070f410e8c02c35a2d37780e6c2165975e731e50bf63a5bf0bd3ca6341480a9',following_migrations:79,following_manifest_sha256:'ff36e204a9169145903e92fa948e9195f51743d9c248ca4fd2f59b386f1a5ace'});
+rejects(()=>assertMessageManifest(source.migrations));rejects(()=>currentCanonicalMessageProfile(historicalMigrations));
+for(const profile of [null,'','AUTO','CURRENT_219',289,{}])rejects(()=>readMessageSource(undefined,{profile}));
+for(const mutate of [rows=>rows.pop(),rows=>rows.push(clone(rows[0])),rows=>rows.reverse(),rows=>rows.sort((a,b)=>a.file.localeCompare(b.file)),
+ rows=>{rows[0].sha256='0'.repeat(64);},rows=>{rows[209].sha256='0'.repeat(64);},rows=>{rows[288].sha256='0'.repeat(64);},rows=>{rows[210]={...rows[211]};},rows=>{rows[209].extra=true;}]){
+ const rows=clone(source.migrations);mutate(rows);rejects(()=>currentCanonicalMessageProfile(rows));
+}
+assert.ok(text.includes("assert.equal(process.argv[2],'--execute');await execute(process.argv[3])"));checks++;
+assert.ok(text.includes("const source=readMessageSource(),git="));checks++;
+// Actual maintained canonical reader and all Source pins, fresh owned copies.
+const privateSource=mkdtempSync(join(tmpdir(),'custodial-message-source-contract-'));
+try{
+ const root=fileURLToPath(new URL('../',import.meta.url));
+ for(const file of ['supabase/canonical/migration-replay-order.json',...source.migrations.map(row=>'supabase/migrations/'+row.file),...source.inputs.map(row=>row.file)]){
+  mkdirSync(dirname(join(privateSource,file)),{recursive:true});copyFileSync(join(root,file),join(privateSource,file));
+ }
+ equal(readMessageSource(privateSource,{profile:'CURRENT_CANONICAL_289'}),source);
+ const corrupt=(file,mutate)=>{const path=join(privateSource,file),bytes=readFileSync(path);try{mutate(path,bytes);rejects(()=>readMessageSource(privateSource,{profile:'CURRENT_CANONICAL_289'}));}finally{try{unlinkSync(path);}catch(error){if(error.code!=='ENOENT')throw error;}writeFileSync(path,bytes,{flag:'wx'});}};
+ corrupt('supabase/canonical/migration-replay-order.json',(path,bytes)=>writeFileSync(path,Buffer.concat([bytes,Buffer.from('\n')])));
+ corrupt('supabase/migrations/'+MESSAGE_FILE,path=>unlinkSync(path));
+ corrupt('supabase/migrations/'+source.migrations.at(-1).file,(path,bytes)=>writeFileSync(path,Buffer.concat([bytes,Buffer.from('\n')])));
+ corrupt('supabase/migrations/'+MESSAGE_FILE,path=>{unlinkSync(path);symlinkSync(join(root,'supabase/migrations',MESSAGE_FILE),path);});
+ for(const file of ['src/employee-notifications.js','scripts/fixtures/employee-message-prepare-predecessor.json','scripts/native-provider-event-decisions-database-tests.mjs','scripts/fixtures/native-provider-event-decision-current-source.mjs'])
+  corrupt(file,(path,bytes)=>writeFileSync(path,Buffer.concat([bytes,Buffer.from('\n')])));
+ const extra=join(privateSource,'supabase/migrations/20261022000000_unowned.sql');writeFileSync(extra,'-- test-only unowned Source\n',{flag:'wx'});try{rejects(()=>readMessageSource(privateSource,{profile:'CURRENT_CANONICAL_289'}));}finally{unlinkSync(extra);}
+ equal(readMessageSource(privateSource,{profile:'CURRENT_CANONICAL_289'}),source);
+}finally{rmSync(privateSource,{recursive:true});}
 console.log(JSON.stringify({status:'PASS',checks,scope:'fake subprocess and source/manifest/delta/cleanup contracts only; no Docker/SQL/HTTP/JVM/provider',engine_executed:false}));

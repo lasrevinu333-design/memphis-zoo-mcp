@@ -65,8 +65,18 @@ const client={
   const q=String(statement);queryLog.push(q);
   if(q.includes('custodial_action_actor_v1')){
    actorReads++;if(actorReads===revokeOnActorRead)device.revoked_at=new Date().toISOString();
-   if(device.revoked_at||values[0]!==device.manager_id)throw Object.assign(Error('Current manager revoked'),{code:'42501'});
-   return {rows:[{result:{manager_id:values[0],manager_name:device.manager.display_name}}]};
+   // Synthetic current actor DTO follows custodial_action_actor_v1's named
+   // credential/device and fixed action contract; manager identity alone fails.
+   const owner=device.manager.system_key==='eric_custodial_manager'
+    &&values[3]==='full_access'&&device.max_access_level==='full_access';
+   if(device.revoked_at||values[0]!==device.manager_id||values[1]!==device.credential_id
+    ||values[2]!==device.device_id||device.manager.active!==true||device.manager.is_system_principal!==false
+    ||!['read_only','full_access'].includes(values[3])
+    ||!['read','write','close_scan_tickets','manage_absences','manage_coverall','regenerate_routes'].includes(values[4])
+    ||(values[4]==='write'&&!owner)||(values[4]!=='read'&&device.manager.system_key==='eric_custodial_manager'&&!owner))
+    throw Object.assign(Error('Current manager revoked or binding differs'),{code:'42501'});
+   return {rows:[{result:{manager_id:device.manager_id,manager_name:device.manager.display_name,
+    credential_id:device.credential_id,device_id:device.device_id,owner}}]};
   }
   if(q.includes('static_weekly_v3_read_manager_snapshot')){
    snapshotReads++;

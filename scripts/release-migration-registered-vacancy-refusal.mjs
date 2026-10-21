@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 // Fixed153 catalog metadata only; no caller identities or operational rows.
 export const REGISTERED_VACANCY_SOURCE_FILE="20261018151858_registered_never_filled_vacancy_source_recovery.sql";
 export const REGISTERED_VACANCY_SOURCE_SHA256="4127e4a9aa2cb0a5fab6f230040002af04fa3352ee54f231402e3ca05b7fe9ed";
-export const REGISTERED_VACANCY_FORWARD_SHA256="77d98f51f2ddcd0c38f2674bd11ce43c63bfd409592d6e9e8c2386e65bb226fe";
+export const REGISTERED_VACANCY_FORWARD_SHA256="4f31bf55eb23e3e29b99000b4ff138e9c8cc735699b67129b583dcdc1000c60b";
 export const REGISTERED_VACANCY_DEPENDENCIES=Object.freeze([
   {
     "identity": "custodial_reject_release_authority_inventory_mutation()",
@@ -107,12 +107,12 @@ export async function readRegisteredVacancyRefusal(db){
  const predicates=REGISTERED_VACANCY_DEPENDENCIES.map(w=>{
   const r=metadata.find(row=>row.identity===w.identity);
   const expected={owner_matches_actor:true,...(w.definition_sha256?{definition_sha256:w.definition_sha256}:{}),...(w.body_sha256?{body_sha256:w.body_sha256}:{})};
-  if(w.identity==='custodial_reject_release_authority_inventory_mutation()')Object.assign(expected,{acl_is_null:false,raw_acl_rows:'2',raw_acl_distinct_grantees:'2',source153_disallowed_acl_rows:'0'});
+  if(w.identity==='custodial_reject_release_authority_inventory_mutation()')Object.assign(expected,{acl_is_null:false,raw_acl_rows:'1',raw_acl_distinct_grantees:'1',source153_disallowed_acl_rows:'0'});
   const observed=Object.fromEntries(Object.keys(expected).map(key=>[key,r[key]]));
   return {identity:w.identity,fixed_oid:r.fixed_oid,expected,observed,failed_boundary_predicates:Object.keys(expected).filter(key=>observed[key]!==expected[key])};
  });
  return {observed_state:'AFTER_FAILED_STEP_SAVEPOINT_ROLLBACK',actual_failing_predicate:'UNKNOWN',
-  predicate_scope:'CANONICAL153_FIXED3_REEVALUATION_NOT_FAILED_DO_BLOCK_LOCALS',
+  predicate_scope:'EXECUTED153_FIXED3_REEVALUATION_CANONICAL_BODIES_NOT_FAILED_DO_BLOCK_LOCALS',
   source_prerequisite_count:3,source_new_target_count:0,source_canonical_sha256:REGISTERED_VACANCY_SOURCE_SHA256,
   source_executed_sha256:REGISTERED_VACANCY_FORWARD_SHA256,binding,context:context[0],predicates,
   failed_boundary_predicates:predicates.flatMap(r=>r.failed_boundary_predicates.map(predicate=>({identity:r.identity,predicate}))),

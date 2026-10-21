@@ -5,6 +5,7 @@ import {readFileSync,readdirSync,lstatSync,realpathSync,writeFileSync} from 'nod
 import {join,resolve,isAbsolute} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {assertDecisionMigrationManifest,DECISION_IMAGE,DECISION_INPUT_PINS} from './native-provider-event-decisions-database-tests.mjs';
+import {readCurrentMessageSource} from './fixtures/employee-message-current-source.mjs';
 import {verifyEmployeeMessageSourceAdmissionDatabase} from './employee-message-source-admission-database-tests.mjs';
 
 // Importing this module launches nothing. Only explicit --execute may create
@@ -52,7 +53,9 @@ export function assertMessageManifest(rows){
  assert.equal(rows.length-rows.findIndex(x=>x.file===MESSAGE_FILE)-1,13);
  assert.equal(hash(JSON.stringify(rows)),MESSAGE_MANIFEST);return rows;
 }
-export function readMessageSource(root=ROOT){
+export function readMessageSource(root=ROOT,{profile='HISTORICAL_219'}={}){
+ if(profile==='CURRENT_CANONICAL_289')return readCurrentMessageSource(root);
+ assert.equal(profile,'HISTORICAL_219','explicit supported Source profile required');
  const directory=join(root,'supabase/migrations');
  const migrations=assertMessageManifest(readdirSync(directory).filter(x=>x.endsWith('.sql')).sort().map(file=>({file,sha256:hash(readFileSync(join(directory,file)))})));
  const inputs=Object.entries(MESSAGE_INPUTS).map(([file,sha256])=>{assert.equal(hash(readFileSync(join(root,file))),sha256,file);return {file,sha256};});
@@ -175,6 +178,7 @@ async function execute(output){
  console.log('MESSAGE_SQL_JS_SCOPED_RESTORE_PASS',result.checks);
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
- if(process.argv.length===3&&process.argv[2]==='--source-check')console.log(JSON.stringify({status:'PASS',scope:'SOURCE_ONLY_NO_ENGINE',...readMessageSource()}));
+ if(process.argv.length===3&&process.argv[2]==='--source-check-current')console.log(JSON.stringify({status:'PASS',scope:'SOURCE_ONLY_NO_ENGINE',...readMessageSource(ROOT,{profile:'CURRENT_CANONICAL_289'})}));
+ else if(process.argv.length===3&&process.argv[2]==='--source-check')console.log(JSON.stringify({status:'PASS',scope:'SOURCE_ONLY_NO_ENGINE',...readMessageSource()}));
  else{assert.equal(process.argv.length,4,'use --source-check or --execute PRIVATE_EMPTY_OUTPUT_DIRECTORY');assert.equal(process.argv[2],'--execute');await execute(process.argv[3]);}
 }

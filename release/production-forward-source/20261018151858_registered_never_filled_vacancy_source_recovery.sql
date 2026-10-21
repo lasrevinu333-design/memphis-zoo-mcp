@@ -452,9 +452,57 @@ BEGIN
     OR pg_catalog.encode(extensions.digest(pg_catalog.convert_to(inventory_guard_before.prosrc,'UTF8'),'sha256'),'hex')
       IS DISTINCT FROM '398375253665aa45da0a0d73329ae907605d83ac32b00702f34ce2b730dda80b'
   THEN RAISE EXCEPTION USING ERRCODE='55000',MESSAGE='Registered vacancy exact original ALWAYS inventory guard differs'; END IF;
+  -- BEGIN FINITE ORIGINAL POSTGRES SOURCE153 INVENTORY GUARD PROFILE
+  -- The canonical allowed principals coalesce to the same existing owner.
+  -- Observe the exact original ACL/context BEFORE adapting its cardinality.
+  IF owner_oid IS DISTINCT FROM postgres_oid OR owner_oid IS DISTINCT FROM 'postgres'::regrole
+    OR inventory_guard_before.oid IS DISTINCT FROM pg_catalog.to_regprocedure('public.custodial_reject_release_authority_inventory_mutation()')
+    OR pg_catalog.to_regprocedure('custodial_reject_release_authority_inventory_mutation()') IS DISTINCT FROM inventory_guard_before.oid
+    OR NOT EXISTS(SELECT 1 FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace
+      JOIN pg_catalog.pg_language l ON l.oid=p.prolang WHERE p.oid=inventory_guard_before.oid AND n.nspname='public'
+      AND p.proowner='postgres'::regrole AND p.prokind='f' AND l.lanname='plpgsql'
+      AND NOT p.prosecdef AND p.provolatile='v' AND p.proparallel='u' AND NOT p.proretset
+      AND NOT p.proisstrict AND NOT p.proleakproof AND p.pronargs=0 AND p.provariadic=0 AND p.pronargdefaults=0
+      AND p.proargnames IS NULL AND p.prorettype='pg_catalog.trigger'::regtype
+      AND p.proconfig=ARRAY['search_path=pg_catalog, public']::text[]
+      AND pg_catalog.md5(p.prosrc)='68641290a8dcd2770a02c90b74e068fd'
+      AND pg_catalog.md5(pg_catalog.pg_get_functiondef(p.oid))='5c01bad73a63d9859a2467f8c3511d2c'
+      AND public.static_weekly_digest_text(p.prosrc)='398375253665aa45da0a0d73329ae907605d83ac32b00702f34ce2b730dda80b'
+      AND pg_catalog.pg_get_functiondef(p.oid)=guard_definition
+      AND public.static_weekly_digest_text(pg_catalog.pg_get_functiondef(p.oid))='7904db6a14a4c8d2b93cbe4d53ba34f68052e736d15f0a55323fa04c1fae76f6'
+      AND p.proacl IS NOT NULL AND (SELECT count(*) FROM pg_catalog.aclexplode(p.proacl))=1
+      AND NOT EXISTS(SELECT 1 FROM pg_catalog.aclexplode(p.proacl) a WHERE a.grantee<>p.proowner OR a.grantor<>p.proowner
+        OR a.privilege_type<>'EXECUTE' OR a.is_grantable)
+      AND pg_catalog.to_jsonb(p) IS NOT DISTINCT FROM pg_catalog.to_jsonb(inventory_guard_before))
+    OR EXISTS(SELECT 1 FROM(VALUES ('postgres',true),('anon',false),('authenticated',false),('service_role',false),('custodial_application_reader',false),('static_weekly_control_plane',false),('static_weekly_release_operator',false),('static_weekly_runtime_20260823',false)) expected(role_name,may_execute)
+      LEFT JOIN pg_catalog.pg_roles r ON r.rolname=expected.role_name
+      WHERE r.oid IS NULL OR pg_catalog.has_function_privilege(r.oid,inventory_guard_before.oid,'EXECUTE') IS DISTINCT FROM expected.may_execute)
+    OR public.custodial_release_authority_current_grant_definition('custodial_reject_release_authority_inventory_mutation()')
+      IS DISTINCT FROM $source153_guard_grant$select public.custodial_release_authority_reset_grants('custodial_reject_release_authority_inventory_mutation()');$source153_guard_grant$
+    OR public.static_weekly_digest_text(public.custodial_release_authority_current_grant_definition('custodial_reject_release_authority_inventory_mutation()'))
+      IS DISTINCT FROM '162cee83ea1a20b2e4b2e829bda802df6b4bba869a47036d6762b25026989db9'
+    OR (SELECT count(*) FROM public.custodial_release_authority_restore_inventory i
+      WHERE CASE WHEN i.object_kind IN('function','grant') AND position('(' in i.object_identity)>0
+        THEN pg_catalog.to_regprocedure(i.object_identity) END=inventory_guard_before.oid)<>2
+    OR NOT EXISTS(SELECT 1 FROM public.custodial_release_authority_restore_inventory i WHERE i.object_kind='function'
+      AND i.object_identity='custodial_reject_release_authority_inventory_mutation()' AND i.restore_order=100057
+      AND i.definition_sql=guard_definition AND i.definition_sha256='7904db6a14a4c8d2b93cbe4d53ba34f68052e736d15f0a55323fa04c1fae76f6')
+    OR NOT EXISTS(SELECT 1 FROM public.custodial_release_authority_restore_inventory i WHERE i.object_kind='grant'
+      AND i.object_identity='custodial_reject_release_authority_inventory_mutation()' AND i.restore_order=1000059
+      AND i.definition_sql=$source153_saved_guard_grant$select public.custodial_release_authority_reset_grants('custodial_reject_release_authority_inventory_mutation()');$source153_saved_guard_grant$
+      AND i.definition_sha256='162cee83ea1a20b2e4b2e829bda802df6b4bba869a47036d6762b25026989db9')
+    OR inventory_trigger_before.tgfoid IS DISTINCT FROM inventory_guard_before.oid
+    OR inventory_trigger_before.tgenabled<>'A' OR inventory_trigger_before.tgtype<>27
+    OR canonical_trigger_before IS DISTINCT FROM trigger_definition
+    OR canonical_mutation_fence_before IS DISTINCT FROM mutation_fence_definition
+    OR mutation_guard_before.proowner IS DISTINCT FROM owner_oid
+    OR public.static_weekly_digest_text(pg_catalog.pg_get_functiondef(mutation_guard_before.oid))
+      IS DISTINCT FROM 'c951e5a94562536ef46ccd3bfc4c3dfc6df2a526f3fa75891604ca625cd7c8b7'
+  THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='Registered vacancy exact observed postgres owner-only inventory guard profile differs';END IF;
+  -- END FINITE ORIGINAL POSTGRES SOURCE153 INVENTORY GUARD PROFILE
   IF inventory_guard_before.proacl IS NULL
-    OR (SELECT count(*) FROM pg_catalog.aclexplode(inventory_guard_before.proacl))<>2
-    OR (SELECT count(DISTINCT grantee) FROM pg_catalog.aclexplode(inventory_guard_before.proacl))<>2
+    OR (SELECT count(*) FROM pg_catalog.aclexplode(inventory_guard_before.proacl))<>(SELECT count(DISTINCT principal) FROM (VALUES(owner_oid),(postgres_oid)) expected(principal))
+    OR (SELECT count(DISTINCT grantee) FROM pg_catalog.aclexplode(inventory_guard_before.proacl))<>(SELECT count(DISTINCT principal) FROM (VALUES(owner_oid),(postgres_oid)) expected(principal))
     OR EXISTS(SELECT 1 FROM pg_catalog.aclexplode(inventory_guard_before.proacl) a
       WHERE a.grantee NOT IN(owner_oid,postgres_oid) OR a.grantor<>owner_oid
         OR a.privilege_type<>'EXECUTE' OR a.is_grantable)

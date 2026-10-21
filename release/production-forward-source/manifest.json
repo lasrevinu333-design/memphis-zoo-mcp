@@ -52,7 +52,7 @@
       "canonical_file": "20261018151858_registered_never_filled_vacancy_source_recovery.sql",
       "canonical_sha256": "4127e4a9aa2cb0a5fab6f230040002af04fa3352ee54f231402e3ca05b7fe9ed",
       "forward_file": "release/production-forward-source/20261018151858_registered_never_filled_vacancy_source_recovery.sql",
-      "forward_sha256": "77d98f51f2ddcd0c38f2674bd11ce43c63bfd409592d6e9e8c2386e65bb226fe",
+      "forward_sha256": "4f31bf55eb23e3e29b99000b4ff138e9c8cc735699b67129b583dcdc1000c60b",
       "profile": "existing-postgres-owner"
     },
     {
