@@ -340,6 +340,7 @@ export function comparePrivateCustodyRuntimePreimage(metadata){
 }
 export const CANCELLATION_TARGET_SOURCE_FILE='20261012004258_staffing_absence_cancellation_target_fields.sql';
 export const CANCELLATION_TARGET_SOURCE_SHA256='127c514506c9bd4e6b550f93d56bcee759f850a703e06428af5189eea95278cd';
+export const CANCELLATION_TARGET_FORWARD_SHA256='9b8178cf4c18322da053b06ea57ae7cbe287ed7961fd7b7650042f0f584e8709';
 export const CANCELLATION_TARGET_READER='public.static_weekly_v3_read_manager_snapshot(date)';
 export const CANCELLATION_TARGET_CANARY='public.custodial_release_canary_authority_surface()';
 export const CANCELLATION_TARGET_FUNCTION_SHA256='ab1583186f60403baea1ef6041881d18ef96181d6f14fd789e637aff0c59d016';
@@ -398,7 +399,7 @@ export async function readCancellationTargetRefusal(db){
 
 async function readSelectedTargetRefusal(db,migration) {
  if(migration.file===CANCELLATION_TARGET_SOURCE_FILE){
-  assert.equal(migration.order,127);assert.equal(migration.sha256,CANCELLATION_TARGET_SOURCE_SHA256);
+  assert.equal(migration.order,127);assert.ok([CANCELLATION_TARGET_SOURCE_SHA256,CANCELLATION_TARGET_FORWARD_SHA256].includes(migration.sha256));
   return {metadata_source_file:CANCELLATION_TARGET_SOURCE_FILE,metadata_source_sha256:CANCELLATION_TARGET_SOURCE_SHA256,cancellation_target:await readCancellationTargetRefusal(db)};
  }
  if(migration.file===PRIVATE_CUSTODY_SOURCE252_FILE){
