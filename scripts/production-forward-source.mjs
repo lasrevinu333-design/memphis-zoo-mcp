@@ -5,6 +5,20 @@ import {createHash} from 'node:crypto';
 const sha=b=>createHash('sha256').update(b).digest('hex');
 const profile='existing-postgres-owner';
 const admitted=new Map([
+ ['20261007161645_approved_initial_selection_metadata.sql','c155c2dc027ddc395dcf74e2c3a964cf97be253b71e0c4f349a8197517c9694d'],
+ ['20261008032718_native_lunch_spoken_accepted_duties.sql','6f51364149b88f791825175b4ae5b5ab3e95aac7ead2f193a0efa48ea20c1c1c'],
+ ['20261008064748_native_schedule_server_source_window.sql','e8cf7343635fd0180fd89a617538a09c1bf39b77e17cc7d68d1a11e29cadc036'],
+ ['20261008075109_native_schedule_source_reservation.sql','dfa2d15872e6dbe274fd31c375a6b7e28999649140e29d7eb1292412c2d3dda5'],
+ ['20261008083139_native_schedule_content_source.sql','3ac5159ec6682eb3e4b6b3a8db61ae9a07fadc5a9b121e87b0135ff589377764'],
+ ['20261008095837_native_schedule_server_finalization.sql','546e266027a5d881660717e6d47a6889a2a5754fdfb2c50b4f566d8a1dabdd1b'],
+ ['20261008102957_native_schedule_inventory.sql','1dc56786eb5783df203bb11264b0d3ad24ee7144e12a137b28c651b5d21fd4ea'],
+ ['20261008111355_native_schedule_observation_binding.sql','e5e843e965c273ad5104e5549453f153389054585c7f2125f21f8256fe8e46e8'],
+ ['20261008115557_native_schedule_job_preparation.sql','d8e60a063312022b4f44c6479c83b1ce70a4dc19008ec50686815756b4c318a7'],
+ ['20261008122247_native_schedule_attempt_outcome.sql','2b547c771f90d95e5fbe68c3f14d787e4115a93311812b61f432e056f12b126e'],
+ ['20261008124644_native_schedule_sender_inventory.sql','5ffae3607b44915187e06a33517b7423965588267eac7927b31e9c53ca02dd6c'],
+ ['20261008135429_native_schedule_source_discovery.sql','cacc3ca2a86e0028bee8c8013f9e65ee68e96edf78ab0ee0005b2cfdbdb121ce'],
+ ['20261008142316_native_schedule_preparation_source.sql','266cfdb8e28f87ec5bfe2aa5d62d8cb70375fc219df13602043fe0c0a5d64df0'],
+ ['20261011214943_custodial_feedback_triage_receipt_reader.sql','88ca748da7713fd87502675663e34144ea6dea925a29cedd5d358cfbf55c139b'],
  ['20261003220000_current_release_authority_completion.sql','8d8d60f1b10427f5c184488a9faa5e4f4bbb9ac2f11526ff921bb8c2eac70898'],
  ['20261006190426_manager_scheduler_recovery_binding.sql','7a57b1b3607d27bd298646f72bc65917cb522e26a2c6169bb610ec79500c6209'],
  ['20261015040830_same_original_retained_completion_read.sql','ecb708c726535401ddf085d122c54bfad1e58b6322c17c0c89af7c234b046c3d'],
