@@ -201,6 +201,8 @@ export async function readCurrentGrantRefusalPredecessors(db) {
 }
 export const PRIVATE_CUSTODY_SOURCE252_FILE='20261010193211_native_private_custody_chunk_retention.sql';
 export const PRIVATE_CUSTODY_SOURCE252_SHA256='28275c65a49b26a21ee0f37538a0f9c337a45c5fb41f0fa701d2ffdf555f863b';
+export const PRIVATE_CUSTODY_SOURCE252_FORWARD_SHA256='ce160e5c55373e75580c287d62484d925e02348844d4aac2fef9bc4cb94be798';
+export const PRIVATE_CUSTODY_SOURCE252_RUNTIME_PROFILE_SHA256='a9fc28be337bc43d6feaf17e13be103400c5d5c0da85dd9ba0bca600d51c738f';
 export const PRIVATE_CUSTODY_SOURCE252_REFERENCE_SHA256='2f0b2b84762a4786560c59880a076b1e869575af5b1f221830b7b4f0ca67c5b3';
 const private252Key=row=>JSON.stringify([row.object_kind,row.object_identity]);
 export function readPrivateCustodySource252Reference(){
@@ -283,10 +285,65 @@ export async function readPrivateCustodySource252Refusal(db){
  return {...result,difference_counts:{missing:missing.length,extra:extra.length,changed:changed.length},missing,extra,changed,current_catalog_metadata:current,
   operational_rows_selected:false,unknown_routine_bodies_exported:false};
 }
+// Compare the SAME bounded observed census with the sealed runtime profile.
+// The failed step has already been rolled back: neither comparison identifies
+// the actual failing pass, and pass1 is explicitly a counterfactual expectation.
+export function comparePrivateCustodyRuntimePreimage(metadata){
+ const bytes=readFileSync(new URL('../release/production-forward-source/private-custody-existing-postgres-profile.json',import.meta.url));
+ assert.equal(createHash('sha256').update(bytes).digest('hex'),PRIVATE_CUSTODY_SOURCE252_RUNTIME_PROFILE_SHA256);
+ const profile=JSON.parse(bytes);assert.equal(profile.schema,'custodial.source252-existing-original-postgres.v1');assert.equal(profile.scope,'DISTINCT_EXISTING_RUNTIME_PROFILE_NOT_NOAUTO_EQUIVALENCE');
+ assert.equal(profile.original_rows.length,6884);assert.equal(profile.exceptions.length,793);assert.equal(profile.repairs.length,2);
+ const boundary={observed_state:'AFTER_FAILED_STEP_SAVEPOINT_ROLLBACK',actual_failing_pass:'UNKNOWN',
+  profile_sha256:PRIVATE_CUSTODY_SOURCE252_RUNTIME_PROFILE_SHA256,
+  pass0_expected_aggregate_sha256:profile.preimage_aggregate_sha256,
+  pass1_expected_aggregate_sha256:profile.post_repair_aggregate_sha256,
+  pass1_is_counterfactual_after_rollback:true,operational_rows_selected:false,unknown_routine_bodies_exported:false};
+ if(metadata.inventory_metadata_omitted)return {...boundary,comparison_omitted:true,metadata_limit:8192};
+ const reference=readPrivateCustodySource252Reference();
+ const observed=new Map(reference.rows.map(([object_kind,object_identity,restore_order,definition_sha256])=>{
+  const row={object_kind,object_identity,restore_order,definition_sha256,actual_definition_sha256:definition_sha256};return[private252Key(row),[row]];
+ }));
+ for(const row of metadata.missing)observed.delete(private252Key(row));
+ for(const row of metadata.changed)observed.set(private252Key(row.expected),row.observed);
+ for(const row of metadata.extra){const key=private252Key(row);if(!observed.has(key))observed.set(key,[]);observed.get(key).push(row);}
+ const actualRows=[...observed.values()].flat();assert.equal(actualRows.length,Number(metadata.summary.inventory_count));
+ const aggregateRows=rows=>createHash('sha256').update(rows.sort((a,b)=>Buffer.compare(Buffer.from(a.object_kind),Buffer.from(b.object_kind))||Buffer.compare(Buffer.from(a.object_identity),Buffer.from(b.object_identity))).map(r=>r.restore_order+'\n'+r.object_kind+'\n'+r.object_identity+'\n'+r.definition_sha256).join('\n---\n')).digest('hex');
+ // For unique identities the independently reconstructed complete observed tuple
+ // digest must equal the one computed by PostgreSQL in the SAME metadata read.
+ if([...observed.values()].every(rows=>rows.length===1))assert.equal(aggregateRows([...actualRows]),metadata.summary.inventory_sha256);
+ const base=new Map(profile.original_rows.map(([object_kind,object_identity,restore_order,definition_sha256])=>{
+  const row={object_kind,object_identity,restore_order,definition_sha256};return[private252Key(row),row];
+ }));assert.equal(base.size,6884);
+ for(const e of profile.exceptions){const key=private252Key(e);assert.ok(base.has(key));base.set(key,{...base.get(key),definition_sha256:e.saved_sha256});}
+ const compare=(expected,pass)=>{
+  assert.equal(aggregateRows([...expected.values()]),pass===0?profile.preimage_aggregate_sha256:profile.post_repair_aggregate_sha256);
+  const counts={missing:'0',extra:'0',duplicate_identity_groups:'0',restore_order_mismatches:'0',stored_hash_mismatches:'0',selfhash_mismatches:'0'};
+  const mismatches=[],kindCounts=Object.create(null);
+  const bump=(name,kind)=>{counts[name]=String(BigInt(counts[name])+1n);kindCounts[kind]??={};kindCounts[kind][name]=String(BigInt(kindCounts[kind][name]||'0')+1n);};
+  for(const[key,before]of expected){const rows=observed.get(key)||[];
+   if(!rows.length){bump('missing',before.object_kind);mismatches.push({expected:before,observed:[]});continue;}
+   let differs=false;if(rows.length!==1){bump('duplicate_identity_groups',before.object_kind);differs=true;}
+   for(const row of rows){if(row.restore_order!==before.restore_order){bump('restore_order_mismatches',before.object_kind);differs=true;}
+    if(row.definition_sha256!==before.definition_sha256){bump('stored_hash_mismatches',before.object_kind);differs=true;}
+    if(row.actual_definition_sha256!==row.definition_sha256){bump('selfhash_mismatches',before.object_kind);differs=true;}}
+   if(differs)mismatches.push({expected:before,observed:rows});
+  }
+  for(const[key,rows]of observed)if(!expected.has(key))for(const row of rows)bump('extra',row.object_kind);
+  // Only known sealed Source keys appear here. Unknown extras retain the old
+  // bounded tuple-only report and never cause routine/body/catalog selection.
+  return {expected_pass:pass,counts,kind_counts:kindCounts,known_key_differences:mismatches};
+ };
+ const pass0=compare(base,0);const post=new Map([...base].map(([k,v])=>[k,{...v}]));
+ for(const r of profile.repairs){const key=private252Key(r);assert.ok(post.has(key));post.set(key,{...post.get(key),definition_sha256:r.replacement_sha256});}
+ return {...boundary,observed_rows:String(actualRows.length),observed_aggregate_sha256:metadata.summary.inventory_sha256,
+  observed_selfhash_mismatches:metadata.summary.selfhash_mismatches,pass0:pass0,pass1:compare(post,1)};
+}
 async function readSelectedTargetRefusal(db,migration) {
  if(migration.file===PRIVATE_CUSTODY_SOURCE252_FILE){
-  assert.equal(migration.order,119);assert.equal(migration.sha256,PRIVATE_CUSTODY_SOURCE252_SHA256);
-  return {metadata_source_file:PRIVATE_CUSTODY_SOURCE252_FILE,metadata_source_sha256:PRIVATE_CUSTODY_SOURCE252_SHA256,private_source252:await readPrivateCustodySource252Refusal(db)};
+  assert.equal(migration.order,119);assert.ok([PRIVATE_CUSTODY_SOURCE252_SHA256,PRIVATE_CUSTODY_SOURCE252_FORWARD_SHA256].includes(migration.sha256));
+  const metadata=await readPrivateCustodySource252Refusal(db);
+  return {metadata_source_file:PRIVATE_CUSTODY_SOURCE252_FILE,metadata_source_sha256:PRIVATE_CUSTODY_SOURCE252_SHA256,
+   ...(migration.sha256===PRIVATE_CUSTODY_SOURCE252_FORWARD_SHA256?{metadata_executed_sha256:migration.sha256,existing_runtime_comparison:comparePrivateCustodyRuntimePreimage(metadata)}:{}),private_source252:metadata};
  }
  if(migration.file!==CURRENT_GRANT_SERIALIZATION_SOURCE_FILE)
   return {predecessors:await readTargetRefusalPredecessors(db)};
