@@ -89,6 +89,7 @@ export const OCTOBER_RECOVERY_PREDECESSORS=Object.freeze([
 export const OCTOBER_RECOVERY_SOURCE_SHA256='3ba81c38118b4b56543d2f89135bbdb7a6652c700c78b5dedcf898b3e60f6000';
 export const CURRENT_GRANT_SERIALIZATION_SOURCE_FILE="20261003220000_current_release_authority_completion.sql";
 export const CURRENT_GRANT_SERIALIZATION_SOURCE_SHA256="8d8d60f1b10427f5c184488a9faa5e4f4bbb9ac2f11526ff921bb8c2eac70898";
+export const CURRENT_GRANT_SERIALIZATION_FORWARD_SHA256='90e31443af8e2b2ba563c7a965d7a6afeba37f8cb67d2d4ff333034066c88a33';
 export const CURRENT_GRANT_SERIALIZATION_PREDECESSORS=Object.freeze([
   {
     "kind": "grant",
@@ -200,7 +201,7 @@ export async function readCurrentGrantRefusalPredecessors(db) {
 async function readSelectedTargetRefusal(db,migration) {
  if(migration.file!==CURRENT_GRANT_SERIALIZATION_SOURCE_FILE)
   return {predecessors:await readTargetRefusalPredecessors(db)};
- assert.equal(migration.order,87);assert.equal(migration.sha256,CURRENT_GRANT_SERIALIZATION_SOURCE_SHA256);
+ assert.equal(migration.order,87);assert.ok([CURRENT_GRANT_SERIALIZATION_SOURCE_SHA256,CURRENT_GRANT_SERIALIZATION_FORWARD_SHA256].includes(migration.sha256));
  return {metadata_source_file:CURRENT_GRANT_SERIALIZATION_SOURCE_FILE,
   metadata_source_sha256:CURRENT_GRANT_SERIALIZATION_SOURCE_SHA256,
   predecessors:await readCurrentGrantRefusalPredecessors(db),

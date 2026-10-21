@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';import fs from 'node:fs';import {join,resolve} from 'node:path';import {tmpdir} from 'node:os';import {createHash} from 'node:crypto';
-import {runTargetCaptureStep,writeTargetCaptureRefusal,OCTOBER_RECOVERY_PREDECESSORS,OCTOBER_RECOVERY_SOURCE_SHA256,CURRENT_GRANT_SERIALIZATION_SOURCE_FILE,CURRENT_GRANT_SERIALIZATION_SOURCE_SHA256,CURRENT_GRANT_SERIALIZATION_PREDECESSORS} from './release-migration-target-refusal.mjs';
+import {runTargetCaptureStep,writeTargetCaptureRefusal,OCTOBER_RECOVERY_PREDECESSORS,OCTOBER_RECOVERY_SOURCE_SHA256,CURRENT_GRANT_SERIALIZATION_SOURCE_FILE,CURRENT_GRANT_SERIALIZATION_SOURCE_SHA256,CURRENT_GRANT_SERIALIZATION_PREDECESSORS,CURRENT_GRANT_SERIALIZATION_FORWARD_SHA256} from './release-migration-target-refusal.mjs';
 const root=resolve(new URL('..',import.meta.url).pathname);let checks=0;const check=async(name,work)=>{await work();checks++;};
 await check('exact fixed14 identities/hashes derive unchanged canonical57 Source',()=>{const bytes=fs.readFileSync(join(root,'supabase/migrations/20261002120000_october_dated_recovery_inventory_rebind.sql'));assert.equal(createHash('sha256').update(bytes).digest('hex'),OCTOBER_RECOVERY_SOURCE_SHA256);const rows=[...bytes.toString().matchAll(/\('([^']+)','([^']+)','([a-f0-9]{64})','([a-f0-9]{64})'\)/g)].map(m=>({kind:m[1],identity:m[2],captured_digest:m[3],live_digest:m[4]}));assert.deepEqual(OCTOBER_RECOVERY_PREDECESSORS,rows);assert.equal(rows.length,14);});
 await check('exact six87 grant tuples derive unchanged canonical Source, including alias/order pins',()=>{
@@ -44,6 +44,12 @@ await check('actual87 refusal selects six grants and bounded same-OID aliases, n
  for(const c of aliasReads){assert.ok(c.sql.includes("where object_kind='grant'"));assert.ok(c.sql.includes('end=to_regprocedure($1)'));assert.ok(c.sql.includes('actual_definition_sha256'));assert.ok(c.args[0].startsWith('public.'));}
  const rawMetadata=db.calls.filter(x=>x.sql.includes('from pg_proc p where p.oid=to_regprocedure($1)')&&x.sql.includes('md5(p.prosrc)'));assert.equal(rawMetadata.length,6);assert.ok(rawMetadata.every(x=>x.args[0].startsWith('public.')));
  assert.equal(db.calls[1].sql,'rollback to savepoint custodial_target_migration_step');assert.ok(!db.calls.some(x=>/commit|release savepoint/.test(x.sql)));
+});
+await check('87 exact newly declared owner-profile SQL retains same six diagnostic scope',async()=>{
+ assert.equal(createHash('sha256').update(fs.readFileSync(join(root,'release/production-forward-source',CURRENT_GRANT_SERIALIZATION_SOURCE_FILE))).digest('hex'),CURRENT_GRANT_SERIALIZATION_FORWARD_SHA256);
+ const db=grantFixture();let diagnostic;const error=Object.assign(Error('UNIT exact87 profile refusal'),{code:'P0001'});
+ await assert.rejects(runTargetCaptureStep({db,migration:{...migration87,sha256:CURRENT_GRANT_SERIALIZATION_FORWARD_SHA256},targetCapture:true,run:async()=>{db.abort();throw error;},onRefusal:x=>diagnostic=x}),e=>e===error);
+ assert.equal(diagnostic.predecessors.length,6);assert.equal(diagnostic.migration.sha256,CURRENT_GRANT_SERIALIZATION_FORWARD_SHA256);assert.equal(diagnostic.metadata_source_sha256,CURRENT_GRANT_SERIALIZATION_SOURCE_SHA256);
 });
 for(const shadow of ['identity','old_reset','namespace'])await check('87 refuses shadow/nonpublic binding before current or alias metadata '+shadow,async()=>{
  const db=grantFixture({shadow});let diagnostic;const error=Object.assign(Error('UNIT original87 refusal'),{code:'P0001'});

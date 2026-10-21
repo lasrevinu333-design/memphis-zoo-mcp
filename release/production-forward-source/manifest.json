@@ -14,6 +14,34 @@
       "profile": "existing-postgres-owner"
     },
     {
+      "canonical_file": "20261003220000_current_release_authority_completion.sql",
+      "canonical_sha256": "8d8d60f1b10427f5c184488a9faa5e4f4bbb9ac2f11526ff921bb8c2eac70898",
+      "forward_file": "release/production-forward-source/20261003220000_current_release_authority_completion.sql",
+      "forward_sha256": "90e31443af8e2b2ba563c7a965d7a6afeba37f8cb67d2d4ff333034066c88a33",
+      "profile": "existing-postgres-owner"
+    },
+    {
+      "canonical_file": "20261006190426_manager_scheduler_recovery_binding.sql",
+      "canonical_sha256": "7a57b1b3607d27bd298646f72bc65917cb522e26a2c6169bb610ec79500c6209",
+      "forward_file": "release/production-forward-source/20261006190426_manager_scheduler_recovery_binding.sql",
+      "forward_sha256": "178cc832516e2aa78835b8441da04fe801204caf123477e3c7a6eda5dc405906",
+      "profile": "existing-postgres-owner"
+    },
+    {
+      "canonical_file": "20261015040830_same_original_retained_completion_read.sql",
+      "canonical_sha256": "ecb708c726535401ddf085d122c54bfad1e58b6322c17c0c89af7c234b046c3d",
+      "forward_file": "release/production-forward-source/20261015040830_same_original_retained_completion_read.sql",
+      "forward_sha256": "18298fc042702b47e56e30ec21bcde0bfeac3646d806f488b02d453811c8961d",
+      "profile": "existing-postgres-owner"
+    },
+    {
+      "canonical_file": "20261017225101_approved_static_dated_original_materialization.sql",
+      "canonical_sha256": "2526dde3e55268da83ba43c8ce30c61c5f1a8c83df50aae85d557c517c383418",
+      "forward_file": "release/production-forward-source/20261017225101_approved_static_dated_original_materialization.sql",
+      "forward_sha256": "cee7ef97a7aef12f75de1d568e53ff0d987daa428b42f53fde25eb957d095f6f",
+      "profile": "existing-postgres-owner"
+    },
+    {
       "canonical_file": "20261018151858_registered_never_filled_vacancy_source_recovery.sql",
       "canonical_sha256": "4127e4a9aa2cb0a5fab6f230040002af04fa3352ee54f231402e3ca05b7fe9ed",
       "forward_file": "release/production-forward-source/20261018151858_registered_never_filled_vacancy_source_recovery.sql",

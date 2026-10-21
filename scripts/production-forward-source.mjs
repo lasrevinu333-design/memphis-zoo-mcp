@@ -5,6 +5,10 @@ import {createHash} from 'node:crypto';
 const sha=b=>createHash('sha256').update(b).digest('hex');
 const profile='existing-postgres-owner';
 const admitted=new Map([
+ ['20261003220000_current_release_authority_completion.sql','8d8d60f1b10427f5c184488a9faa5e4f4bbb9ac2f11526ff921bb8c2eac70898'],
+ ['20261006190426_manager_scheduler_recovery_binding.sql','7a57b1b3607d27bd298646f72bc65917cb522e26a2c6169bb610ec79500c6209'],
+ ['20261015040830_same_original_retained_completion_read.sql','ecb708c726535401ddf085d122c54bfad1e58b6322c17c0c89af7c234b046c3d'],
+ ['20261017225101_approved_static_dated_original_materialization.sql','2526dde3e55268da83ba43c8ce30c61c5f1a8c83df50aae85d557c517c383418'],
  ['20261002120000_october_dated_recovery_inventory_rebind.sql','3ba81c38118b4b56543d2f89135bbdb7a6652c700c78b5dedcf898b3e60f6000'],
  ['20261018151858_registered_never_filled_vacancy_source_recovery.sql','4127e4a9aa2cb0a5fab6f230040002af04fa3352ee54f231402e3ca05b7fe9ed'],
  ['20261018161845_approved_static_pending_staffing_original_recovery.sql','8063bc0c21a881c14806ef685749acc14c809a0fbfe69629f844ea7fa51ce047'],
