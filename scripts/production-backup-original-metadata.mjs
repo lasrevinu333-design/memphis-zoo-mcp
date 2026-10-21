@@ -294,6 +294,26 @@ const GUARDS_SQL=`select pg_catalog.pg_get_functiondef(p.oid) definition,p.prosr
     objects.sort((a,b)=>compare(key(a),key(b)));return Object.freeze(objects);
    }
 
+// DATA validation inside the SAME original native snapshot only. A legacy
+// schema's observed empty private relation census is retained as actual
+// absence, including the fixed private guard's original all-NULL catalog row.
+// Partial private tables or a missing mandatory mutation guard still refuse.
+function requireOriginalPrivateRelationGuardData(relationRows,guards){
+ const privateRows=relationRows.filter(r=>r.schema_name==="custodial_release_identity");
+ if(privateRows.length!==0)for(const table of ["group_original_creations","employee_message_original_outcomes"])
+  assert.ok(privateRows.some(r=>r.table_name===table),"Required original private relation metadata is missing");
+ assert.equal(guards.length,2);
+ for(let i=0;i<guards.length;i++){
+  const g=guards[i];fields(g,["definition","prosrc","owner"]);
+  if(i===0&&privateRows.length===0&&g.definition===null&&g.prosrc===null&&g.owner===null)continue;
+  name(g.owner);
+  assert.ok(typeof g.definition==="string"&&typeof g.prosrc==="string"
+   &&g.definition.startsWith("CREATE OR REPLACE FUNCTION "+GUARDS[i]+"\n")
+   &&g.definition.endsWith("AS $function$"+g.prosrc+"$function$\n"),
+   "Exact original guard definition/body is unavailable");
+ }
+}
+
 export async function captureProductionBackupOriginalMetadata(client) {
   assert.equal(arguments.length,1,"Original metadata capture takes only its existing snapshot client");
   requireNative(client);
@@ -339,17 +359,8 @@ export async function captureProductionBackupOriginalMetadata(client) {
     for(const k of ["is_partition","relrowsecurity","relforcerowsecurity"])assert.equal(typeof r[k],"boolean");
     const key=JSON.stringify([r.schema_name,r.table_name]);assert.ok(!seen.has(key));seen.add(key);
   }
-  for(const table of ["group_original_creations","employee_message_original_outcomes"])
-    assert.ok(relationRows.some(r=>r.schema_name==="custodial_release_identity"&&r.table_name===table),
-      "Required original private relation metadata is missing");
-  const guards=(await query(GUARDS_SQL)).rows;assert.equal(guards.length,2);
-  for(let i=0;i<guards.length;i++){
-    const g=guards[i];fields(g,["definition","prosrc","owner"]);name(g.owner);
-    assert.ok(typeof g.definition==="string"&&typeof g.prosrc==="string"
-      &&g.definition.startsWith("CREATE OR REPLACE FUNCTION "+GUARDS[i]+"\n")
-      &&g.definition.endsWith("AS $function$"+g.prosrc+"$function$\n"),
-      "Exact original guard definition/body is unavailable");
-  }
+  const guards=(await query(GUARDS_SQL)).rows;
+  requireOriginalPrivateRelationGuardData(relationRows,guards);
   const routines=await captureOriginalRoutineAcls(client,query);
   const relations=await captureOriginalRelationAcls(client,query);
   const namespaces_columns=await captureOriginalNamespaceColumnAcls(client,query);

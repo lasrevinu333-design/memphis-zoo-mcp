@@ -1077,11 +1077,17 @@ export function selectVerifiedRestoreTables({summary, catalog, checksumPaths, da
   // All actual catalog members still require exact counts/checksummed paths,
   // and the existing non-Storage (including private) coverage stays required.
   if (rows !== summary.database_row_count
-      || summary.backed_up_schemas.some(schema=>schema !== "storage" && !representedSchemas.has(schema))) {
+      || summary.backed_up_schemas.some(schema=>schema !== "storage" && schema !== "custodial_release_identity" && !representedSchemas.has(schema))) {
     throw new Error("Restore catalog does not cover the exact signed schema and row summary.");
   }
   // Storage metadata remains API-owned in ordinary full restore and SQL-owned
   // only in the already restricted loopback database-only mode.
+  // Empty fixed private schema is signed archive DATA only. Its authenticated
+  // table catalog and complete checksummed file inventory must agree; retained
+  // private bytes cannot be hidden behind a caller-supplied absence verdict.
+  if(!representedSchemas.has("custodial_release_identity")
+    && [...checksumPaths].some(path=>path.startsWith("database/custodial_release_identity.")))
+    throw new Error("Private original files exist without their signed table catalog.");
   return Object.freeze({
     databaseTables: Object.freeze(catalog.filter(table=>table.schema_name !== "storage" || databaseOnly)),
     storageTables: Object.freeze(catalog.filter(table=>table.schema_name === "storage")),

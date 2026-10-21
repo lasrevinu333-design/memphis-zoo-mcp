@@ -563,6 +563,22 @@ if (process.argv.includes("--original-metadata-producer-only")) {
   await assert.rejects(() => compile(1)(null, async () => ({ rows: [{ search_path: "pg_catalog", routines: [{ ...routine, grants: [grant, grant] }] }] })));
   cases.push("new shipping data adapters preserve original owners/PUBLIC/grantor/options and reject drift/duplicates");
 
+  const fieldsStart=moduleSource.indexOf("function fields(value,keys){"),rowsStart=moduleSource.indexOf("function rows(reply){",fieldsStart);
+  const metadataStart=moduleSource.indexOf("function requireOriginalPrivateRelationGuardData("),metadataEnd=moduleSource.indexOf("export async function captureProductionBackupOriginalMetadata",metadataStart);
+  assert.ok(fieldsStart>0&&rowsStart>fieldsStart&&metadataStart>rowsStart&&metadataEnd>metadataStart);
+  const guardIds=["custodial_release_identity.guard_group_original_creation()","custodial_dr.guard_application_mutation()"];
+  const checkMetadata=new Function("assert","Buffer","GUARDS",moduleSource.slice(fieldsStart,rowsStart)+moduleSource.slice(metadataStart,metadataEnd)+"\nreturn requireOriginalPrivateRelationGuardData;")(assert,Buffer,guardIds);
+  const guard=i=>({owner:"UNIT_original_owner",prosrc:"\nBEGIN\n RETURN NEW;\nEND\n",definition:"CREATE OR REPLACE FUNCTION "+guardIds[i]+"\nAS $function$\nBEGIN\n RETURN NEW;\nEND\n$function$\n"});
+  const absent={owner:null,prosrc:null,definition:null},ordinary=[{schema_name:"public",table_name:"UNIT_original"}];
+  checkMetadata(ordinary,[absent,guard(1)]);assert.deepEqual(absent,{owner:null,prosrc:null,definition:null});
+  const privateRows=[{schema_name:"custodial_release_identity",table_name:"group_original_creations"},
+    {schema_name:"custodial_release_identity",table_name:"employee_message_original_outcomes"}];
+  checkMetadata([...ordinary,...privateRows],[guard(0),guard(1)]);
+  for(const [relations,guards]of [[ordinary,[]],[ordinary,[absent,absent]],[ordinary,[{...absent,prosrc:"unknown"},guard(1)]],
+    [[...ordinary,privateRows[0]],[absent,guard(1)]],[[...ordinary,...privateRows],[absent,guard(1)]]])
+    assert.throws(()=>checkMetadata(relations,guards));
+  cases.push("observed legacy absence preserves original NULL guard DATA while partial tables/guards refuse");
+
   const writeAt = producer.indexOf('writeJson(join(backupDir, "inventory", "original-relations.json"),');
   const writeEnd = producer.indexOf('\nconst databaseCatalogSha256 =', writeAt);
   assert.ok(writeAt > 0 && writeEnd > writeAt);
@@ -820,6 +836,17 @@ if (process.argv.includes("--private-original-capture-only")) {
     assert.equal(productionBackupDataSchemas.includes("custodial_dr"),false);
     requireProductionBackupDataScope(namespaces,privateRelations,catalog);
   });
+  run("observed empty private schema preserves the complete ordinary catalog",()=>{
+    const ordinary=[{schema_name:"public",table_name:"UNIT_original",primary_key:["id"],
+      columns:[{name:"id",generated:"",identity:"",data_type:"bigint"}]}];
+    requireProductionBackupDataScope(namespaces,[],ordinary);
+    assert.throws(()=>requireProductionBackupDataScope(namespaces,[],[...ordinary,catalog[0]]));
+    assert.throws(()=>requireProductionBackupDataScope(namespaces.slice(0,3),[],ordinary));
+    assert.throws(()=>requireProductionBackupDataScope(namespaces.map(row=>row.schema_name==="custodial_release_identity"
+      ? {...row,usage_allowed:false}:row),[],ordinary));
+    for(const unknown of [undefined,null,{}])assert.throws(()=>requireProductionBackupDataScope(namespaces,unknown,ordinary));
+    for(const unknown of [undefined,null,{},[]])assert.throws(()=>requireProductionBackupDataScope(namespaces,[],unknown));
+  });
   run("same snapshot and error-on-RLS setup",()=>{
     assert.deepEqual(productionBackupSnapshotStatements,[
       "begin isolation level repeatable read read only deferrable","set local row_security = off"]);
@@ -885,8 +912,50 @@ if (process.argv.includes("--private-original-capture-only")) {
     assert.equal(source.includes("if (!rows.rowCount) break;"),false);
     assert.ok(source.indexOf("tableCatalog.push(")<source.indexOf("archiveSignatureBinding({"));
   });
-  console.log(JSON.stringify({selector:"--private-original-capture-only",status:"PASS_PURE_SOURCE_CASES",cases,
-    count:cases.length,limits:"Synthetic catalog/page inputs only; no SQL, RLS runtime, production backup, signing, encryption or lost-ledger restore qualification."}));
+
+  const fs=await import('node:fs'),{join}=await import('node:path'),{tmpdir}=await import('node:os'),{spawnSync}=await import('node:child_process');
+  const {createHash}=await import('node:crypto'),{archiveSignatureBinding,signBinding,stableJsonFile}=await import('./disaster-recovery-crypto.mjs');
+  const argument=name=>process.argv.find(value=>value.startsWith(name+'='))?.slice(name.length+1);
+  const captured=path=>{const result=JSON.parse(fs.readFileSync(path)),wrapper=JSON.parse(result.content[0].text);
+    const found=wrapper.result.match(/(?:^|\n)<untrusted-data-[^>]+>\s*([\s\S]*?)\s*<\/untrusted-data-/);
+    assert.ok(found);const rows=JSON.parse(found[1]);assert.equal(rows.length,1);return rows[0];};
+  // Metadata replicas never supply native-client/snapshot or restore authority.
+  const actualScopePath=argument('--observed-scope-capture'),actualMetadataPath=argument('--observed-metadata-capture');
+  assert.equal(!!actualScopePath,!!actualMetadataPath);
+  const scope=actualScopePath?captured(actualScopePath).backup_scope:{namespaces,private_relations:[],table_catalog:['public','auth','storage'].map(schema_name=>({schema_name,table_name:'UNIT_records',primary_key:['id'],columns:[{name:'id',generated:'',identity:'',data_type:'bigint'},{name:'value',generated:'',identity:'',data_type:'json'}]}))};
+  const guardIds=['custodial_release_identity.guard_group_original_creation()','custodial_dr.guard_application_mutation()'];
+  const original=actualMetadataPath?captured(actualMetadataPath).original_metadata:{relations:scope.table_catalog.map(table=>({...table,relation_kind:'r',is_partition:false,owner_name:'UNIT_owner',relrowsecurity:false,relforcerowsecurity:false})),guards:[{definition:null,prosrc:null,owner:null},{owner:'UNIT_owner',prosrc:'\nBEGIN\n RETURN NEW;\nEND\n',definition:'CREATE OR REPLACE FUNCTION '+guardIds[1]+'\nAS $function$\nBEGIN\n RETURN NEW;\nEND\n$function$\n'}]};
+  run('empty private producer metadata -> actual restore VERIFY -> encrypted readback agreement',()=>{
+    requireProductionBackupDataScope(scope.namespaces,scope.private_relations,scope.table_catalog);
+    const moduleSource=fs.readFileSync(new URL('./production-backup-original-metadata.mjs',import.meta.url),'utf8');
+    const fieldsStart=moduleSource.indexOf('function fields(value,keys){'),rowsStart=moduleSource.indexOf('function rows(reply){',fieldsStart);
+    const guardStart=moduleSource.indexOf('function requireOriginalPrivateRelationGuardData('),guardEnd=moduleSource.indexOf('export async function captureProductionBackupOriginalMetadata',guardStart);
+    const validate=new Function('assert','Buffer','GUARDS',moduleSource.slice(fieldsStart,rowsStart)+moduleSource.slice(guardStart,guardEnd)+'\nreturn requireOriginalPrivateRelationGuardData;')(assert,Buffer,guardIds);
+    validate(original.relations,original.guards);assert.equal(original.relations.length,scope.table_catalog.length);
+    const base=fs.mkdtempSync(join(tmpdir(),'custodial-observed-empty-pipeline-')),archive=join(base,'archive'),readback=join(base,'readback');
+    const hash=value=>createHash('sha256').update(value).digest('hex'),entries=new Map(),unitKey='UNIT-empty-private-archive-signing-key-0001',unitId='UNIT-empty-private';
+    fs.mkdirSync(archive,{mode:0o700});fs.mkdirSync(join(archive,'database'),{mode:0o700});fs.mkdirSync(join(archive,'inventory'),{mode:0o700});
+    const emit=(name,bytes)=>{const value=Buffer.isBuffer(bytes)?bytes:Buffer.from(bytes);fs.writeFileSync(join(archive,name),value,{mode:0o600});entries.set(name,value);return hash(value);};
+    try{
+      const tables=scope.table_catalog.map(table=>({...table,row_count:'0',data_file:'database/'+table.schema_name+'.'+table.table_name+'.jsonl',data_encoding:backupWire.productionBackupTextColumnsDataEncoding}));
+      for(const table of tables){assert.match(table.data_file,/^database\/(public|auth|storage)\.[A-Za-z0-9_]+\.jsonl$/);emit(table.data_file,Buffer.alloc(0));}
+      const identity={migration_head:'20261021111917',migration_ledger_count:1,cron_job_count:0,release:{migration_head:'20261021111917'}};
+      for(const[name,field,value]of [['application-schema.sql','application_schema_sha256','-- UNIT schema DATA only; no SQL execution\n'],['migration-ledger.json','migration_ledger_sha256',[{version:'20261021111917',name:'UNIT_original',statements:[]}]],['cron-jobs.json','cron_jobs_sha256',[]],['extensions.json','extensions_sha256',[]],['runtime-contract.json','runtime_contract_sha256',{}],['runtime-configuration.json','runtime_configuration_sha256',{}],['original-relations.json','original_relations_sha256',original.relations],['original-guards.json','original_guards_sha256',original.guards],['original-acls.json','original_acls_sha256',{UNIT_fixture_metadata:true}]])identity[field]=emit('inventory/'+name,typeof value==='string'?value:stableJsonFile(value));
+      identity.database_catalog_sha256=emit('inventory/table-catalog.json',stableJsonFile(tables));emit('inventory/storage-buckets.json','[]\n');emit('inventory/storage-objects.json','[]\n');
+      const summary={ok:true,format:'memphis-zoo-disaster-recovery.v4',consistent_database_snapshot:true,project_ref:'abcdefghijklmnopqrst',backed_up_schemas:['public','auth','storage','custodial_release_identity'],source_identity:identity,table_count:tables.length,database_row_count:0,storage_bucket_count:0,storage_object_count:0};
+      emit('backup-summary.json',stableJsonFile(summary));const sums=[...entries].sort(([a],[b])=>a.localeCompare(b)).map(([name,bytes])=>hash(bytes)+'  '+name).join('\n')+'\n';fs.writeFileSync(join(archive,'SHA256SUMS'),sums,{mode:0o600});const digest=hash(sums);
+      fs.writeFileSync(join(archive,'archive-signature.json'),stableJsonFile({format:'memphis-zoo-disaster-recovery-signature.v1',algorithm:'hmac-sha256',key_id:unitId,archive_digest:digest,signature:signBinding(archiveSignatureBinding({archiveDigest:digest,projectRef:summary.project_ref,sourceIdentity:identity,archiveFormat:summary.format}),unitKey)}),{mode:0o600});
+      const verify=directory=>{const run=spawnSync(process.execPath,[new URL('./production-restore.mjs',import.meta.url).pathname],{encoding:'utf8',timeout:15000,env:{PATH:process.env.PATH,RESTORE_SOURCE_DIR:directory,RESTORE_ARCHIVE_VERIFY_KEY:unitKey,RESTORE_ARCHIVE_VERIFY_KEY_ID:unitId,RESTORE_APPLY:'false'}});assert.equal(run.status,0,run.stderr);const output=JSON.parse(run.stdout);assert.equal(output.archive_verified,true);assert.equal(output.dry_run,true);assert.equal(output.selected_private_tables,0);assert.equal(output.selected_database_tables,tables.filter(table=>table.schema_name!=='storage').length);assert.equal(output.tables,tables.length);assert.equal(output.restore_compatible,false);assert.equal(output.data_import_blocker,'NATIVE_TEXT_RESTORE_REQUIRES_IMMUTABLE_ORIGINAL_ROUTE');return output;};
+      const first=verify(archive),pass='UNIT fixture encryption only, never a production key';
+      const execute=(name,args)=>{const run=spawnSync(name,args,{encoding:'utf8',timeout:15000,env:{PATH:process.env.PATH,UNIT_BACKUP_TEST_PASSPHRASE:pass}});assert.equal(run.status,0,run.stderr);};
+      execute('tar',['-C',archive,'-czf',join(base,'archive.tar.gz'),'.']);execute('openssl',['enc','-aes-256-cbc','-salt','-pbkdf2','-iter','250000','-in',join(base,'archive.tar.gz'),'-out',join(base,'archive.enc'),'-pass','env:UNIT_BACKUP_TEST_PASSPHRASE']);execute('openssl',['enc','-d','-aes-256-cbc','-pbkdf2','-iter','250000','-in',join(base,'archive.enc'),'-out',join(base,'readback.tar.gz'),'-pass','env:UNIT_BACKUP_TEST_PASSPHRASE']);fs.mkdirSync(readback,{mode:0o700});execute('tar',['-C',readback,'-xzf',join(base,'readback.tar.gz')]);
+      for(const[name,bytes]of entries)assert.deepEqual(fs.readFileSync(join(readback,name)),bytes);const second=verify(readback);assert.equal(second.archive_digest,first.archive_digest);
+      assert.deepEqual(JSON.parse(fs.readFileSync(join(readback,'inventory/original-guards.json'))),original.guards);
+      console.log(JSON.stringify({scope:'EMPTY_PRIVATE_COUPLED_VERIFY_AND_UNIT_ENCRYPTED_READBACK',metadata_replica_tables:tables.length,actual_metadata_replica:!!actualScopePath,private_tables:0,actual_native_snapshot_capture:false,production_data_rows:0,SQL:false,real_keys:false,real_backup:false,restore_APPLY:false,restore_fidelity:'NOT_QUALIFIED'}));
+    }finally{fs.rmSync(base,{recursive:true,force:true});}
+  });
+  console.log(JSON.stringify({selector:"--private-original-capture-only",status:"PASS_SOURCE_AND_UNIT_ARCHIVE_PIPELINE",cases,
+    count:cases.length,limits:"Synthetic or recorded metadata DATA, actual VERIFY CLI and UNIT encryption readback only; no native snapshot capture, production rows/keys/export, SQL target, restore APPLY or restore-fidelity qualification."}));
   process.exit(0);
 }
 

@@ -872,7 +872,7 @@ if (process.argv.includes('--immutable-bootstrap-metadata-source-only') || proce
       const tag=api.postgresTextColumnsLineEncoding,encode=wire.encodeProductionBackupTextColumnsDataRow;
       assert.equal(tag,wire.productionBackupTextColumnsDataEncoding);assert.equal(tag,'postgres-text-columns-line.v2');
       assert.equal(hash(readFileSync(new URL('./production-backup-pg-dump-command.mjs',import.meta.url))),
-        '1eab2cbf085be4feae2f6db7fb71e93096acbaf8e0ccf5c859e7a10f9ed870ab');
+        '8ad52b64334f4338582429ade37ad1a3c094d6732a28ec9b5f213b5142f3d55f');
       const rawNull=' { "id" : "9223372036854775807", "value" : null } ';
       const rawJSONNull=' { "id" : "9223372036854775807", "value" : "null" } ';
       const rawPrecise=' { "value" : "{  \\"n\\":9007199254740993,\\"fraction\\":0.12345678901234567890,\\"n\\":2 }", "id" : "1" } ';
@@ -923,6 +923,18 @@ if (process.argv.includes('--immutable-bootstrap-metadata-source-only') || proce
         assert.throws(()=>decodeRestoreTableRowLine(JSON.stringify(rawNull),{columns:table.columns}));scenarios++;
       });
       await only('selection',async()=>{
+        const legacySource=fresh({data:Buffer.from(encode(rawJSONNull)+'\n')});
+        const summaryPath=join(legacySource.directory,'backup-summary.json');
+        const legacySummary=JSON.parse(readFileSync(summaryPath));legacySummary.backed_up_schemas.push('custodial_release_identity');
+        writeFileSync(summaryPath,JSON.stringify(legacySummary)+'\n');
+        const sumsPath=join(legacySource.directory,'SHA256SUMS'),lines=readFileSync(sumsPath,'utf8').trimEnd().split('\n').map(line=>line.endsWith('  backup-summary.json')?hash(readFileSync(summaryPath))+'  backup-summary.json':line);
+        const sums=lines.join('\n')+'\n';writeFileSync(sumsPath,sums);
+        const digest=hash(sums);writeFileSync(join(legacySource.directory,'archive-signature.json'),JSON.stringify({format:'memphis-zoo-disaster-recovery-signature.v1',algorithm:'hmac-sha256',key_id:keyId,archive_digest:digest,
+          signature:signBinding(archiveSignatureBinding({archiveDigest:digest,projectRef:legacySummary.project_ref,sourceIdentity:legacySummary.source_identity,archiveFormat:legacySummary.format}),key)}));
+        const legacy=materialize(legacySource),emptySelection=selectOriginal(legacy,{databaseOnly:true});
+        assert.equal(emptySelection.privateTables.length,0);assert.equal(emptySelection.databaseTables.length,3);scenarios++;
+        const detachedCatalog=JSON.parse(readFileSync(join(legacy.directory,'inventory/table-catalog.json')));
+        assert.throws(()=>selectVerifiedRestoreTables({summary:legacy.summary,catalog:detachedCatalog,checksumPaths:new Set([...legacy.checksumPaths,'database/custodial_release_identity.hidden.jsonl'])}),/Private original files exist/);scenarios++;
         const source=fresh({data:Buffer.from(encode(rawJSONNull)+'\n'),privateTables:[{name:'unit_private_original',
           primaryKey:['id'],columns:table.columns.map(c=>({...c,data_type:c.name==='id'?'bigint':'json',generated:'',identity:''})),
           data:Buffer.from(encode(rawNull)+'\n')}],changeCatalog:catalog=>{

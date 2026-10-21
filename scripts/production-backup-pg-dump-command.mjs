@@ -24,7 +24,7 @@ export function requireProductionBackupDataScope(namespaces, privateRelations, c
   if (!Array.isArray(namespaces) || namespaces.length !== productionBackupDataSchemas.length
       || new Set(namespaces.map(row=>row?.schema_name)).size !== namespaces.length
       || namespaces.some(row=>!productionBackupDataSchemas.includes(row?.schema_name) || row.usage_allowed !== true)
-      || !Array.isArray(privateRelations) || privateRelations.length === 0 || !Array.isArray(catalog)) {
+      || !Array.isArray(privateRelations) || !Array.isArray(catalog) || catalog.length === 0) {
     throw new Error("Complete accessible backup schema scope is required.");
   }
   const keys = new Set();
@@ -36,6 +36,9 @@ export function requireProductionBackupDataScope(namespaces, privateRelations, c
     }
     keys.add(JSON.stringify([row.schema_name,row.table_name]));
   }
+  // An actually empty private census is valid only when the same complete
+  // snapshot table catalog also contains no private relation. Namespace USAGE
+  // remains mandatory; missing/denied arrays never stand in for absence.
   const privateNames = new Set();
   for (const row of privateRelations) {
     // ONLY parent exports cannot preserve partition/foreign table DATA. Fail
