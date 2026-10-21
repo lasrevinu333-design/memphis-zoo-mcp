@@ -338,7 +338,69 @@ export function comparePrivateCustodyRuntimePreimage(metadata){
  return {...boundary,observed_rows:String(actualRows.length),observed_aggregate_sha256:metadata.summary.inventory_sha256,
   observed_selfhash_mismatches:metadata.summary.selfhash_mismatches,pass0:pass0,pass1:compare(post,1)};
 }
+export const CANCELLATION_TARGET_SOURCE_FILE='20261012004258_staffing_absence_cancellation_target_fields.sql';
+export const CANCELLATION_TARGET_SOURCE_SHA256='127c514506c9bd4e6b550f93d56bcee759f850a703e06428af5189eea95278cd';
+export const CANCELLATION_TARGET_READER='public.static_weekly_v3_read_manager_snapshot(date)';
+export const CANCELLATION_TARGET_CANARY='public.custodial_release_canary_authority_surface()';
+export const CANCELLATION_TARGET_FUNCTION_SHA256='ab1583186f60403baea1ef6041881d18ef96181d6f14fd789e637aff0c59d016';
+export const CANCELLATION_TARGET_GRANT_SHA256='6f06cf29d8c7ce66ada2e60a7f039ac735f308f30148091053560cc151b05bc1';
+// Re-evaluate only canonical127's fixed predecessor predicates at the failed
+// step's SAVEPOINT boundary. Its temporary before-tables no longer exist.
+// These are catalog/recovery metadata; no manager/business rows are read.
+export async function readCancellationTargetRefusal(db){
+ const identities=[CANCELLATION_TARGET_READER,CANCELLATION_TARGET_CANARY];
+ const binding=(await db.query(`select wanted.identity,p.oid::text public_oid,
+   p.pronamespace='public'::regnamespace public_schema
+   from unnest($1::text[]) wanted(identity)
+   left join pg_proc p on p.oid=to_regprocedure(wanted.identity)`,[identities])).rows;
+ if(binding.length!==2||identities.some(id=>binding.filter(x=>x.identity===id&&x.public_schema===true&&x.public_oid).length!==1))
+  throw Object.assign(new Error('Fixed cancellation public identities unavailable.'),{code:'FIXED_CANCELLATION_PUBLIC_BINDING_MISMATCH'});
+ const predicates=(await db.query(`with reader as(select to_regprocedure($1) oid),canary as(select to_regprocedure($2) oid),
+   inventory as(select object_kind,object_identity,definition_sql,definition_sha256 from public.custodial_release_authority_restore_inventory)
+   select
+   (select count(*)::text from inventory where object_kind='function' and object_identity like '%(%'
+    and to_regprocedure(object_identity)=(select oid from canary)
+    and definition_sql=pg_get_functiondef((select oid from canary))
+    and definition_sha256=public.static_weekly_digest_text(pg_get_functiondef((select oid from canary)))) canary_exact_saved_function_count,
+   (select count(*)::text from inventory where definition_sha256 is distinct from public.static_weekly_digest_text(definition_sql)) inventory_selfhash_mismatches,
+   (select count(*)::text from public.custodial_release_canary_authority_surface() where object_kind='function'
+    and object_identity like '%(%' and to_regprocedure(object_identity)=(select oid from reader)) reader_canary_function_count,
+   (select count(*)::text from public.custodial_release_canary_authority_surface() where object_kind='grant'
+    and object_identity like '%(%' and to_regprocedure(object_identity)=(select oid from reader)) reader_canary_grant_count,
+   (select count(*)::text from inventory where object_kind='function' and object_identity=$1
+    and definition_sha256=$3 and definition_sql=pg_get_functiondef((select oid from reader))) reader_exact_saved_function_count,
+   (select count(*)::text from inventory where object_kind='grant' and object_identity=$1
+    and definition_sha256=$4 and definition_sql=public.custodial_release_authority_current_grant_definition(object_identity)) reader_exact_saved_grant_count,
+   (select count(*)::text from inventory where object_kind in('function','grant') and object_identity like '%(%'
+    and to_regprocedure(object_identity)=(select oid from reader) and object_identity<>$1) reader_other_alias_count,
+   ((length(pg_get_functiondef((select oid from canary)))-length(replace(pg_get_functiondef((select oid from canary)),'  values','')))/length('  values'))::text canary_values_seam_count`,
+  [...identities,CANCELLATION_TARGET_FUNCTION_SHA256,CANCELLATION_TARGET_GRANT_SHA256])).rows;
+ assert.equal(predicates.length,1);
+ const expected={canary_exact_saved_function_count:'1',inventory_selfhash_mismatches:'0',reader_canary_function_count:'0',reader_canary_grant_count:'0',reader_exact_saved_function_count:'1',reader_exact_saved_grant_count:'1',reader_other_alias_count:'0',canary_values_seam_count:'1'};
+ const failed=Object.entries(expected).filter(([key,value])=>predicates[0][key]!==value).map(([key])=>key);
+ const aliases=(await db.query(`select restore_order,object_kind,object_identity,definition_sql,definition_sha256,
+   public.static_weekly_digest_text(definition_sql) actual_definition_sha256
+   from public.custodial_release_authority_restore_inventory where object_kind in('function','grant')
+   and case when position('(' in object_identity)>0 then to_regprocedure(object_identity) end=any(ARRAY[to_regprocedure($1),to_regprocedure($2)])
+   order by object_kind collate pg_catalog."C",object_identity collate pg_catalog."C",restore_order limit 17`,identities)).rows;
+ assert.ok(aliases.length<=16,'Fixed cancellation aliases exceed metadata bound');
+ const predecessors=await readFixedRefusalPredecessors(db,[
+  {kind:'function',identity:CANCELLATION_TARGET_READER,captured_digest:CANCELLATION_TARGET_FUNCTION_SHA256},
+  {kind:'grant',identity:CANCELLATION_TARGET_READER,captured_digest:CANCELLATION_TARGET_GRANT_SHA256},
+  {kind:'function',identity:CANCELLATION_TARGET_CANARY},
+  {kind:'grant',identity:CANCELLATION_TARGET_CANARY}
+ ]);
+ return {observed_state:'AFTER_FAILED_STEP_SAVEPOINT_ROLLBACK',actual_failing_predicate:'UNKNOWN',
+  predicate_scope:'CANONICAL127_PREDECESSOR_REEVALUATION_AT_STEP_BOUNDARY_NOT_FAILED_DO_BLOCK_LOCALS',
+  binding,expected_predicate_values:expected,observed_predicate_values:predicates[0],failed_boundary_predicates:failed,
+  fixed_function_grant_aliases:aliases,predecessors};
+}
+
 async function readSelectedTargetRefusal(db,migration) {
+ if(migration.file===CANCELLATION_TARGET_SOURCE_FILE){
+  assert.equal(migration.order,127);assert.equal(migration.sha256,CANCELLATION_TARGET_SOURCE_SHA256);
+  return {metadata_source_file:CANCELLATION_TARGET_SOURCE_FILE,metadata_source_sha256:CANCELLATION_TARGET_SOURCE_SHA256,cancellation_target:await readCancellationTargetRefusal(db)};
+ }
  if(migration.file===PRIVATE_CUSTODY_SOURCE252_FILE){
   assert.equal(migration.order,119);assert.ok([PRIVATE_CUSTODY_SOURCE252_SHA256,PRIVATE_CUSTODY_SOURCE252_FORWARD_SHA256].includes(migration.sha256));
   const metadata=await readPrivateCustodySource252Refusal(db);
