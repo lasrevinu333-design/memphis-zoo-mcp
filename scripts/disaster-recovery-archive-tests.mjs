@@ -20,6 +20,7 @@ if(process.argv.includes('--ordinary-native-text-owner-sql')){
  const {execFile}=await import('node:child_process'),{promisify}=await import('node:util');
  const execute=promisify(execFile),{stableJsonFile}=await import('./disaster-recovery-crypto.mjs');
  const wire=await import('./production-backup-pg-dump-command.mjs');
+ const {captureProductionBackupOriginalMetadata}=await import('./production-backup-original-metadata.mjs');
  const url=new URL(process.env.RESTORE_DRILL_DATABASE_URL||'invalid:');
  assert.ok(['postgres:','postgresql:'].includes(url.protocol)&&['127.0.0.1','localhost'].includes(url.hostname));
  const admin=new pg.Client({connectionString:String(url)});await admin.connect();
@@ -27,12 +28,7 @@ if(process.argv.includes('--ordinary-native-text-owner-sql')){
  const intentKey='UNIT-native-text-independent-intent-HMAC-20261021',project='abcdefghijklmnopqrst';
  let cases=0;
  await admin.query(readFileSync(new URL('../supabase/canonical/production-source-role-catalog.sql',import.meta.url),'utf8'));
- try{for(const scenario of ['positive','wrong-type','custom-enum-text-cast','external-FK','late-storage-mutation','lost-COMMIT']){
-  const name='mz_schema_rebuild_unit_native_'+randomUUID().replaceAll('-',''),target=new URL(String(url));target.pathname='/'+name;
-  const db=new pg.Client({connectionString:String(target)});let proxy,proxyFaults=0;const proxySockets=new Set();const archive=join(work,scenario);mkdirSync(join(archive,'inventory'),{recursive:true});mkdirSync(join(archive,'database'));
-  try{
-   await admin.query('create database '+pg.escapeIdentifier(name)+' owner postgres template template0');await db.connect();
-   await db.query(`create schema auth;create schema storage;create schema custodial_release_identity;create schema cron;create schema supabase_migrations;
+ const fixtureSql=`create schema auth;create schema storage;create schema custodial_release_identity;create schema cron;create schema supabase_migrations;
     create table supabase_migrations.schema_migrations(version text primary key,name text,statements text[]);
     insert into supabase_migrations.schema_migrations values('20261021111917','UNIT_actual_native_owner',ARRAY[]::text[]);
     create table cron.job(jobid bigserial primary key,schedule text,command text,nodename text,nodeport integer,database text,username text,active boolean,jobname text);
@@ -48,19 +44,70 @@ if(process.argv.includes('--ordinary-native-text-owner-sql')){
     create table public.ops_manager_enrollment_codes(id uuid,status text,revoked_at timestamptz,revoked_reason text);
     create table public.ops_manager_push_devices(id uuid,enabled boolean,revoked_at timestamptz);
     create table auth.sessions(id uuid);
+    insert into public.device_auth_credentials values('00000000-0000-4000-8000-000000000001',null,null);
+    insert into public.device_auth_enrollment_codes values('00000000-0000-4000-8000-000000000002',null);
+    insert into public.ops_manager_trusted_devices values('00000000-0000-4000-8000-000000000003',null,null);
+    insert into public.ops_manager_enrollment_codes values('00000000-0000-4000-8000-000000000004','active',null,null);
+    insert into public.ops_manager_push_devices values('00000000-0000-4000-8000-000000000005',true,null);
+    insert into auth.sessions values('00000000-0000-4000-8000-000000000006');
     create table storage.buckets(id text primary key,name text,public boolean);
     create table storage.objects(id uuid,bucket_id text,name text);
     create table storage.unit_records(id bigint primary key,precise numeric,body json);
     insert into storage.unit_records values(9223372036854775807,123456789012345678901234567890.123456789,' {"storage":9007199254740993} ');
     create table public.release_deployment_manifest(release_id text primary key,backend_commit text not null,frontend_commit text not null,migration_head text not null,
       migration_manifest_sha256 text not null,environment_contract_version text not null,status text not null,details_json jsonb not null,created_at timestamptz not null,deployed_at timestamptz);
-    insert into public.release_deployment_manifest values('UNIT_native_release',repeat('a',40),repeat('b',40),'20261021111917',repeat('c',64),'UNIT','deployed','{}',now(),now());`);
-   await db.query(readFileSync(new URL('../supabase/migrations/20260820125325_custodial_disaster_restore_generation_authority.sql',import.meta.url),'utf8'));
-   await db.query(readFileSync(new URL('../supabase/migrations/20260827150000_disaster_recovery_global_mutation_fence.sql',import.meta.url),'utf8'));
+    insert into public.release_deployment_manifest values('UNIT_native_release',repeat('a',40),repeat('b',40),'20261021111917',repeat('c',64),'UNIT','deployed','{}',now(),now());`;
+ const controlSql=readFileSync(new URL('../supabase/migrations/20260820125325_custodial_disaster_restore_generation_authority.sql',import.meta.url),'utf8');
+ const fenceSql=readFileSync(new URL('../supabase/migrations/20260827150000_disaster_recovery_global_mutation_fence.sql',import.meta.url),'utf8');
+ async function installFixture(client,profile='original') {
+   const schemas='create schema auth;create schema storage;create schema custodial_release_identity;create schema cron;create schema supabase_migrations;';
+   if(profile==='wrong-db-owner'){
+     await client.query('grant create on database '+pg.escapeIdentifier(client.database)+' to postgres');
+     // Empty disposable target only: construct real PostgreSQL-owned schemas
+     // without changing the deliberately different database owner.
+     await client.query('drop schema public;create schema public authorization postgres;create schema custodial_dr authorization postgres;'+
+       schemas.replaceAll(/create schema ([a-z_]+);/g,'create schema $1 authorization postgres;'));
+   }
+   if(profile==='wrong-dr-owner')await client.query('create schema custodial_dr;grant usage,create on schema custodial_dr to postgres');
+   await client.query('set role postgres');await client.query(profile==='wrong-db-owner'?fixtureSql.replace(schemas,''):fixtureSql);
+   if(profile==='wrong-control-owner'){
+     const controlStart=controlSql.indexOf('create table if not exists custodial_dr.restore_control');
+     const controlEnd=controlSql.indexOf('create table if not exists custodial_dr.restore_events');
+     assert.ok(controlStart>0&&controlEnd>controlStart);
+     await client.query(controlSql.slice(0,controlStart));await client.query('reset role');
+     await client.query(controlSql.slice(controlStart,controlEnd));
+     await client.query('grant select,insert,update,delete on custodial_dr.restore_control to postgres');
+     const commentStart=controlSql.indexOf('comment on table custodial_dr.restore_control is'),commentEnd=controlSql.indexOf(';',commentStart)+1;
+     assert.ok(commentStart>controlEnd&&commentEnd>commentStart);
+     await client.query('set role postgres');await client.query(controlSql.slice(controlEnd,commentStart));
+     await client.query('reset role');await client.query(controlSql.slice(commentStart,commentEnd));
+     await client.query('set role postgres');await client.query(controlSql.slice(commentEnd));
+   }else if(profile==='wrong-dr-owner'){
+     // Schema owner applies only its own schema ACL prefix; actual table,
+     // function, and control owners are still born as PostgreSQL.
+     const split=controlSql.indexOf('create table if not exists custodial_dr.restore_control');
+     assert.ok(split>0);await client.query('reset role');await client.query(controlSql.slice(0,split));
+     const commentStart=controlSql.indexOf('comment on schema custodial_dr is'),commentEnd=controlSql.indexOf(';',commentStart)+1;
+     assert.ok(commentStart>split&&commentEnd>commentStart);
+     await client.query('set role postgres');await client.query(controlSql.slice(split,commentStart));
+     await client.query('reset role');await client.query(controlSql.slice(commentStart,commentEnd));
+     await client.query('set role postgres');await client.query(controlSql.slice(commentEnd));
+   }else await client.query(controlSql);
+   if(profile==='wrong-guard-owner')await client.query('reset role');else await client.query('set role postgres');
+   await client.query(fenceSql);await client.query('reset role');
+   if(profile==='wrong-dr-owner')await client.query('revoke usage,create on schema custodial_dr from postgres');
+   if(profile==='wrong-db-owner')await client.query('revoke create on database '+pg.escapeIdentifier(client.database)+' from postgres');
+ }
+ try{for(const scenario of ['positive','wrong-type','custom-enum-text-cast','external-FK','late-storage-mutation','lost-COMMIT','wrong-db-owner','wrong-dr-owner','wrong-control-owner','wrong-guard-owner']){
+  const name='mz_schema_rebuild_unit_native_'+randomUUID().replaceAll('-',''),target=new URL(String(url));target.pathname='/'+name;
+  let db=new pg.Client({connectionString:String(target)}),originalDb,otherName;let proxy,proxyFaults=0;const proxySockets=new Set();const archive=join(work,scenario);mkdirSync(join(archive,'inventory'),{recursive:true});mkdirSync(join(archive,'database'));
+  try{
+   await admin.query('create database '+pg.escapeIdentifier(name)+' owner postgres template template0');await db.connect();
+   await installFixture(db);
    const entries=new Map(),hash=b=>createHash('sha256').update(b).digest('hex');
    const emit=(path,value)=>{const b=Buffer.isBuffer(value)?value:Buffer.from(value);writeFileSync(join(archive,path),b,{mode:0o600});entries.set(path,b);return hash(b);};
    await db.query('begin isolation level repeatable read read only');
-   for(const statement of ["set local search_path=pg_catalog","set local extra_float_digits=3","set local datestyle='ISO, YMD'","set local timezone='UTC'","set local intervalstyle='postgres'","set local bytea_output='hex'"])await db.query(statement);
+   for(const statement of ["set local search_path=pg_catalog","set local row_security=off","set local extra_float_digits=3","set local datestyle='ISO, YMD'","set local timezone='UTC'","set local intervalstyle='postgres'","set local bytea_output='hex'"])await db.query(statement);
    const tables=(await db.query(`select n.nspname schema_name,c.relname table_name,
     coalesce((select jsonb_agg(a.attname order by k.ordinality) from pg_index i cross join lateral unnest(i.indkey) with ordinality k(attnum,ordinality)
       join pg_attribute a on a.attrelid=i.indrelid and a.attnum=k.attnum where i.indrelid=c.oid and i.indisprimary),'[]'::jsonb) primary_key,
@@ -76,11 +123,14 @@ if(process.argv.includes('--ordinary-native-text-owner-sql')){
    }
    const release=JSON.parse((await db.query('select row_to_json(r)::text raw from public.release_deployment_manifest r')).rows[0].raw);
    const ledger=(await db.query('select * from supabase_migrations.schema_migrations order by version')).rows;
+   const originalMetadata=await captureProductionBackupOriginalMetadata(db);assert.equal(originalMetadata.guards[1].owner,'postgres');
    await db.query('rollback');
    const identity={migration_head:'20261021111917',migration_ledger_count:ledger.length,cron_job_count:0,release};
    for(const [file,field,value] of [['application-schema.sql','application_schema_sha256','-- Actual disposable native fixture; owning CLI does not execute schema DATA\n'],
      ['migration-ledger.json','migration_ledger_sha256',ledger],['cron-jobs.json','cron_jobs_sha256',[]],['extensions.json','extensions_sha256',[]],
-     ['runtime-contract.json','runtime_contract_sha256',{}],['runtime-configuration.json','runtime_configuration_sha256',{}]])
+     ['runtime-contract.json','runtime_contract_sha256',{}],['runtime-configuration.json','runtime_configuration_sha256',{}],
+     ['original-relations.json','original_relations_sha256',originalMetadata.relations],['original-guards.json','original_guards_sha256',originalMetadata.guards],
+     ['original-acls.json','original_acls_sha256',originalMetadata.acls]])
      identity[field]=emit('inventory/'+file,typeof value==='string'?value:stableJsonFile(value));
    identity.database_catalog_sha256=emit('inventory/table-catalog.json',stableJsonFile(tables));emit('inventory/storage-buckets.json','[]\n');emit('inventory/storage-objects.json','[]\n');
    const summary={ok:true,format:'memphis-zoo-disaster-recovery.v4',consistent_database_snapshot:true,project_ref:project,backed_up_schemas:['public','auth','storage','custodial_release_identity'],
@@ -88,6 +138,21 @@ if(process.argv.includes('--ordinary-native-text-owner-sql')){
    emit('backup-summary.json',stableJsonFile(summary));const sums=[...entries].sort(([a],[b])=>a.localeCompare(b)).map(([p,b])=>hash(b)+'  '+p).join('\n')+'\n';writeFileSync(join(archive,'SHA256SUMS'),sums);
    writeFileSync(join(archive,'archive-signature.json'),stableJsonFile({format:'memphis-zoo-disaster-recovery-signature.v1',algorithm:'hmac-sha256',key_id:keyId,archive_digest:hash(sums),
     signature:signBinding(archiveSignatureBinding({archiveDigest:hash(sums),projectRef:project,sourceIdentity:identity,archiveFormat:summary.format}),key)}));
+   if(['wrong-db-owner','wrong-dr-owner','wrong-control-owner','wrong-guard-owner'].includes(scenario)){
+     // Construct a separate wrong-profile target from birth. Never ALTER an
+     // original owner or rebaseline the authenticated source guard metadata.
+     originalDb=db;otherName=name.slice(0,52)+'_target';target.pathname='/'+otherName;
+     await admin.query('create database '+pg.escapeIdentifier(otherName)+' owner '+(scenario==='wrong-db-owner'?'supabase_admin':'postgres')+' template template0');
+     db=new pg.Client({connectionString:String(target)});await db.connect();await installFixture(db,scenario);
+     const owners=(await db.query(`select
+       (select pg_get_userbyid(datdba) from pg_database where datname=current_database()) database_owner,
+       (select pg_get_userbyid(nspowner) from pg_namespace where nspname='custodial_dr') dr_owner,
+       (select pg_get_userbyid(relowner) from pg_class where oid='custodial_dr.restore_control'::regclass) control_owner,
+       (select pg_get_userbyid(proowner) from pg_proc where oid='custodial_dr.guard_application_mutation()'::regprocedure) guard_owner`)).rows[0];
+     const expectedOwners={database_owner:'postgres',dr_owner:'postgres',control_owner:'postgres',guard_owner:'postgres'};
+     expectedOwners[{'wrong-db-owner':'database_owner','wrong-dr-owner':'dr_owner','wrong-control-owner':'control_owner','wrong-guard-owner':'guard_owner'}[scenario]]='supabase_admin';
+     assert.deepEqual(owners,expectedOwners,'Exactly the selected original owner must differ');
+   }
    if(scenario==='wrong-type')await db.query('alter table public.unit_records alter column json_value type jsonb using json_value::jsonb');
    if(scenario==='custom-enum-text-cast')await db.query(`create function auth.unit_kind_text(auth.unit_kind) returns text language sql immutable as $$select 'changed'::text$$;create cast(auth.unit_kind as text) with function auth.unit_kind_text(auth.unit_kind) as assignment`);
    if(scenario==='external-FK')await db.query(`create schema outside_scope;create table outside_scope.dependent(id bigint references public.unit_records(id));insert into outside_scope.dependent values(9007199254740993)`);
@@ -139,8 +204,26 @@ if(process.argv.includes('--ordinary-native-text-owner-sql')){
     const evidence=(await db.query('select database_evidence from custodial_dr.restore_manifests')).rows[0].database_evidence;
     assert.deepEqual(evidence.native_text_readback,{state:'MATCH',tables:tables.length,original_text_multiset:true});
     assert.equal((await db.query('select precise::text value from storage.unit_records')).rows[0].value,'123456789012345678901234567890.123456789');
+    assert.deepEqual(output.authority_invalidated,{employee_credentials:1,employee_enrollment:1,manager_credentials:1,manager_enrollment:1,manager_push:1,auth_sessions:1});
     assert.equal(output.storage.exact_table_data.status,'MATCH');
     assert.equal(output.storage.exact_table_data.original_text_multiset,true);
+    // PG17 can allocate real backend slot zero. Exercise the actual catalog
+    // producer in that transaction; do not fabricate a virtual-xid response.
+    const {resolveCronJobDefaultSequence}=await import('./disaster-recovery-cron.mjs');
+    let zeroSlot=false;
+    for(let attempt=0;attempt<256&&!zeroSlot;attempt++){
+      const observer=new pg.Client({connectionString:String(target)});await observer.connect();
+      try{
+        await observer.query('begin');await observer.query('set local search_path=pg_catalog');
+        const actual=await resolveCronJobDefaultSequence(observer);
+        assert.deepEqual(await resolveCronJobDefaultSequence(observer),actual);
+        zeroSlot=actual.virtual_transaction.startsWith('0/');
+        await observer.query('rollback');
+      }finally{await observer.end();}
+    }
+    assert.equal(zeroSlot,true,'Actual bounded PG17 backend-slot-zero observation required');
+    console.log(JSON.stringify({scenario:'cron-zero-backend-slot',status:'PASS_ACTUAL_NATIVE_CATALOG',real_production_backup:false}));
+
    }else if(scenario==='lost-COMMIT'){
     assert.ok(error);assert.equal(proxyFaults,1);assert.ok(error.stderr.includes('NATIVE_TEXT_DATA_COMMIT_OUTCOME_UNKNOWN'));
     const control=(await db.query('select state,mutations_paused from custodial_dr.restore_control')).rows[0];
@@ -150,12 +233,19 @@ if(process.argv.includes('--ordinary-native-text-owner-sql')){
     await assert.rejects(()=>execute(process.execPath,[new URL('./production-restore.mjs',import.meta.url).pathname],{env:replayEnv,timeout:20000}),e=>e.stderr.includes('Another restore or reconciliation already holds'));
     assert.equal((await db.query('select count(*)::text count from custodial_dr.restore_manifests')).rows[0].count,'1');
     assert.equal((await db.query("select count(*)::text count from custodial_dr.restore_events where phase='DATABASE' and outcome='PASSED'")).rows[0].count,'1');
+   }else if(['wrong-db-owner','wrong-dr-owner','wrong-control-owner','wrong-guard-owner'].includes(scenario)){
+    assert.ok(error);assert.ok(error.stderr.includes('RESTORE_AUTHORITY_CONTEXT_UNAVAILABLE'));
+    const manifest=(await db.query('select database_verified,authority_invalidated from custodial_dr.restore_manifests')).rows[0];
+    assert.deepEqual(manifest,{database_verified:true,authority_invalidated:false});
+    assert.equal((await db.query('select count(*)::text count from public.device_auth_credentials where revoked_at is null')).rows[0].count,'1');
+    assert.equal((await db.query('select count(*)::text count from auth.sessions')).rows[0].count,'1');
+    assert.equal((await db.query("select count(*)::text count from custodial_dr.restore_events where phase='AUTHORITY_RECONCILIATION' and outcome='PASSED'")).rows[0].count,'0');
    }else{
     assert.ok(error,'Expected causal refusal: '+scenario);assert.equal((await db.query('select count(*)::text count from public.unit_records')).rows[0].count,'1');
     assert.equal((await db.query('select database_verified from custodial_dr.restore_manifests')).rows[0].database_verified,false);
    }
    cases++;console.log(JSON.stringify({scenario,status:'PASS_ACTUAL_NATIVE_SQL_AND_OWNING_UNIT_CLI',real_production_backup:false}));
-  }finally{for(const socket of proxySockets)socket.destroy();if(proxy)await new Promise(resolve=>proxy.close(resolve));await db.end().catch(()=>{});await admin.query('drop database if exists '+pg.escapeIdentifier(name)+' with (force)');}
+  }finally{for(const socket of proxySockets)socket.destroy();if(proxy)await new Promise(resolve=>proxy.close(resolve));await db.end().catch(()=>{});if(originalDb)await originalDb.end().catch(()=>{});if(otherName)await admin.query('drop database if exists '+pg.escapeIdentifier(otherName)+' with (force)');await admin.query('drop database if exists '+pg.escapeIdentifier(name)+' with (force)');}
  }}finally{await admin.end();rmSync(work,{recursive:true,force:true});}
  console.log(JSON.stringify({selector:'ordinary-native-text-owner-sql',cases,proof:'ACTUAL_DISPOSABLE_POSTGRES_AND_NORMAL_SIGNED_UNIT_OWNER',production_restore:false}));process.exit(0);
 }

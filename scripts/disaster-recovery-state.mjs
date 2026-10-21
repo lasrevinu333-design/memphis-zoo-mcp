@@ -3,7 +3,7 @@ import { isProxy } from "node:util/types";
 import { createHash } from "node:crypto";
 import { stableJson } from "./disaster-recovery-crypto.mjs";
 import { productionBackupDataEncoding, productionBackupTextColumnsDataEncoding } from "./production-backup-pg-dump-command.mjs";
-import { readVerifiedArchiveSourceBinding, readVerifiedRestoreTableSelection, postgresTextColumnsLineEncoding, decodeRestoreTableRowLine } from "./disaster-recovery-archive.mjs";
+import { readVerifiedArchiveSourceBinding, readVerifiedImmutableBootstrapInventory, readVerifiedRestoreTableSelection, postgresTextColumnsLineEncoding, decodeRestoreTableRowLine } from "./disaster-recovery-archive.mjs";
 
 function quoteIdentifier(value) { return `"${String(value).replaceAll('"', '""')}"`; }
 function qualified(schema, table) { return `${quoteIdentifier(schema)}.${quoteIdentifier(table)}`; }
@@ -310,19 +310,36 @@ export async function invalidateRestoredOrdinaryNativeAuthority(db,{generation,v
   const selection=readVerifiedRestoreTableSelection(verifiedArchive,{databaseOnly:true});
   if(selection.privateTables.length || !selection.databaseTables.length
     || selection.databaseTables.some(table=>table.data_encoding!==postgresTextColumnsLineEncoding))restoreAuthorityUnavailable();
+  // The mandatory original mutation guard is already hash-bound in the
+  // signed archive. Its owner/definition are original DATA, not a supplied
+  // owner verdict. Never change the restored owner to fit the invoking actor.
+  const metadata=readVerifiedImmutableBootstrapInventory(verifiedArchive);
+  if(metadata.sourceBinding!==binding)restoreAuthorityUnavailable();
+  const guards=JSON.parse(metadata.inventory['inventory/original-guards.json']);
+  const guard=Array.isArray(guards)&&guards.length===2?guards[1]:null;
+  if(!guard || Object.keys(guard).sort().join('|')!=='definition|owner|prosrc'
+    || guard.owner!=='postgres' || typeof guard.definition!=='string' || !guard.definition.length
+    || typeof guard.prosrc!=='string' || !guard.prosrc.length)restoreAuthorityUnavailable();
+  const originalGuard=Object.freeze({owner:guard.owner,definition:guard.definition,prosrc:guard.prosrc});
   const source=()=>{
     if(readVerifiedArchiveSourceBinding(verifiedArchive)!==binding
-      || readVerifiedRestoreTableSelection(verifiedArchive,{databaseOnly:true})!==selection)restoreAuthorityUnavailable();
+      || readVerifiedRestoreTableSelection(verifiedArchive,{databaseOnly:true})!==selection
+      || readVerifiedImmutableBootstrapInventory(verifiedArchive)!==metadata)restoreAuthorityUnavailable();
   };
   source();
-  const result=await invalidateRestoredOwnedAuthority(db,{generation},{binding,source});
+  const result=await invalidateRestoredOwnedAuthority(db,{generation},{binding,source,originalGuard});
   source();return result;
 }
 const ordinaryRestoreAuthorityContextSql=restoreAuthorityContextSql.replace(') control_valid',
   `) and exists(select 1 from pg_catalog.pg_namespace n where n.nspname='custodial_release_identity'
       and pg_catalog.has_schema_privilege(current_user,n.oid,'USAGE'))
     and not exists(select 1 from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid=c.relnamespace
-      where n.nspname='custodial_release_identity') control_valid`);
+      where n.nspname='custodial_release_identity')
+    and exists(select 1 from pg_catalog.pg_proc p
+      where p.oid=pg_catalog.to_regprocedure('custodial_dr.guard_application_mutation()')
+        and p.prokind='f' and p.prorettype='pg_catalog.trigger'::pg_catalog.regtype and p.prosecdef
+        and pg_catalog.pg_get_userbyid(p.proowner)=$2::pg_catalog.text
+        and pg_catalog.pg_get_functiondef(p.oid)=$3::pg_catalog.text and p.prosrc=$4::pg_catalog.text) control_valid`);
 async function invalidateRestoredOwnedAuthority(db, options, ordinaryOriginal) {
   const field = options && typeof options === "object" && !isProxy(options)
     ? Object.getOwnPropertyDescriptor(options, "generation") : null;
@@ -365,9 +382,12 @@ async function invalidateRestoredOwnedAuthority(db, options, ordinaryOriginal) {
     if (failed) throw failure;
     return result;
   };
+  if(ordinaryOriginal)await raw("lock table pg_catalog.pg_proc,pg_catalog.pg_namespace,pg_catalog.pg_class in share mode");
   let originalContext;
   const context = async () => {
-    const rows = restoreAuthorityRows(await raw(ordinaryOriginal ? ordinaryRestoreAuthorityContextSql : restoreAuthorityContextSql, [originalGeneration]), "SELECT");
+    const args=ordinaryOriginal ? [originalGeneration,ordinaryOriginal.originalGuard.owner,
+      ordinaryOriginal.originalGuard.definition,ordinaryOriginal.originalGuard.prosrc] : [originalGeneration];
+    const rows = restoreAuthorityRows(await raw(ordinaryOriginal ? ordinaryRestoreAuthorityContextSql : restoreAuthorityContextSql,args), "SELECT");
     if (rows.length !== 1 || !rows[0] || isProxy(rows[0]) || Object.getPrototypeOf(rows[0]) !== Object.prototype
         || Reflect.ownKeys(rows[0]).length !== 1) restoreAuthorityUnavailable();
     const text = restoreAuthorityOwn(rows[0], "context_utf8");
@@ -385,7 +405,8 @@ async function invalidateRestoredOwnedAuthority(db, options, ordinaryOriginal) {
         || typeof current.transaction_id !== "string" || !/^[1-9][0-9]{0,18}(?![\s\S])/.test(current.transaction_id)
         || BigInt(current.transaction_id) > 9223372036854775807n
         || current.actor !== "supabase_admin" || current.session_actor !== current.actor
-        || current.database_owner !== "postgres" || current.dr_owner !== "postgres" || current.control_owner !== current.actor
+        || current.database_owner !== "postgres" || current.dr_owner !== "postgres"
+        || current.control_owner !== (ordinaryOriginal ? ordinaryOriginal.originalGuard.owner : current.actor)
         || current.read_only !== "off" || current.replication !== (ordinaryOriginal ? "replica" : "origin") || current.row_security !== "off"
         || current.search_path !== "pg_catalog, pg_temp" || current.first_schema !== "pg_catalog"
         || current.held_fences !== 2 || current.control_count !== 1

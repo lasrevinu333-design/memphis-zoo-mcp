@@ -83,6 +83,8 @@ export async function resolveCronJobDefaultSequence(client) {
     && text.trim() === text && BigInt(text) <= 4294967295n;
   const name = text => typeof text === "string" && text.length > 0 && !text.includes("\0")
     && Buffer.byteLength(text, "utf8") <= 63 && Buffer.from(text, "utf8").toString("utf8") === text;
+  // PostgreSQL 17 can assign backend slot zero; the local transaction
+  // component remains positive and the complete identity stays pinned below.
   if (![value.job_oid, value.default_oid, value.sequence_oid, value.database_oid].every(oid)
     || ![value.job_owner, value.schema_name, value.sequence_name, value.owner_name, value.actor, value.session_actor].every(name)
     || !Number.isInteger(value.job_attribute_number) || value.job_attribute_number < 1
@@ -95,7 +97,7 @@ export async function resolveCronJobDefaultSequence(client) {
     || value.default_expression !== value.expected_expression
     || !Number.isInteger(value.backend_pid) || value.backend_pid < 1 || value.backend_pid > 2147483647
     || typeof value.transaction_started_at !== "string" || !value.transaction_started_at.length
-    || typeof value.virtual_transaction !== "string" || !/^[1-9][0-9]*\/[1-9][0-9]*$/.test(value.virtual_transaction)
+    || typeof value.virtual_transaction !== "string" || !/^(?:0|[1-9][0-9]*)\/[1-9][0-9]*$/.test(value.virtual_transaction)
     || value.virtual_transaction.trim() !== value.virtual_transaction) fail();
   return Object.freeze(value);
 }
