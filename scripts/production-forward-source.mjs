@@ -5,6 +5,8 @@ import {createHash} from 'node:crypto';
 const sha=b=>createHash('sha256').update(b).digest('hex');
 const profile='existing-postgres-owner';
 const admitted=new Map([
+ ['20261011000206_native_private_custody_complete_frame_readback.sql','ae478c85db3321c257038273765f7124c821eb0c40d4636daa051affae75657d'],
+ ['20261010193211_native_private_custody_chunk_retention.sql','28275c65a49b26a21ee0f37538a0f9c337a45c5fb41f0fa701d2ffdf555f863b'],
  ['20261007161645_approved_initial_selection_metadata.sql','c155c2dc027ddc395dcf74e2c3a964cf97be253b71e0c4f349a8197517c9694d'],
  ['20261008032718_native_lunch_spoken_accepted_duties.sql','6f51364149b88f791825175b4ae5b5ab3e95aac7ead2f193a0efa48ea20c1c1c'],
  ['20261008064748_native_schedule_server_source_window.sql','e8cf7343635fd0180fd89a617538a09c1bf39b77e17cc7d68d1a11e29cadc036'],

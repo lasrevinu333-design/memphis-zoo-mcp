@@ -159,6 +159,20 @@
       "forward_file": "release/production-forward-source/20261011214943_custodial_feedback_triage_receipt_reader.sql",
       "forward_sha256": "ffc4bbe60bdd7986b3553d430dab96ec819c9846806553793ae939500ebb5910",
       "profile": "existing-postgres-owner"
+    },
+    {
+      "canonical_file": "20261010193211_native_private_custody_chunk_retention.sql",
+      "canonical_sha256": "28275c65a49b26a21ee0f37538a0f9c337a45c5fb41f0fa701d2ffdf555f863b",
+      "forward_file": "release/production-forward-source/20261010193211_native_private_custody_chunk_retention.sql",
+      "forward_sha256": "ce160e5c55373e75580c287d62484d925e02348844d4aac2fef9bc4cb94be798",
+      "profile": "existing-postgres-owner"
+    },
+    {
+      "canonical_file": "20261011000206_native_private_custody_complete_frame_readback.sql",
+      "canonical_sha256": "ae478c85db3321c257038273765f7124c821eb0c40d4636daa051affae75657d",
+      "forward_file": "release/production-forward-source/20261011000206_native_private_custody_complete_frame_readback.sql",
+      "forward_sha256": "7955900bf9d2b02d076c9ab8ad52fc1b4d0dea10de60ddd89c4ebd9bfd3888e0",
+      "profile": "existing-postgres-owner"
     }
   ]
 }

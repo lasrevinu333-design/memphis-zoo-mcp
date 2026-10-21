@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import {openIsolatedPreservationArchive} from './release-migration-isolated-preservation-archive.mjs';
+import {prepareIsolatedReleaseDataPreservation} from './isolated-release-data-preservation.mjs';
 import {runTargetCaptureStep,writeTargetCaptureRefusal} from './release-migration-target-refusal.mjs';
 import {prepareTargetCapture,writeTargetCapture} from './release-migration-target-capture.mjs';
 import {resolveReleaseMigrationSource,releaseMigrationPlanIdentity} from './production-forward-source.mjs';
@@ -169,8 +171,15 @@ const db = new Client({
   application_name: "memphis-zoo-release-migration-plan",
   ...(databaseCaCertPath ? { ssl: { ca: readFileSync(resolve(databaseCaCertPath), "utf8"), rejectUnauthorized: true } } : {}),
 });
-await db.connect();
+let isolatedPreservationArchive=null;
+let transactionStarted=false;
 try {
+// BEGIN ISOLATED PRESERVATION ARCHIVE
+isolatedPreservationArchive=rehearsal&&plan.length===155
+ ?openIsolatedPreservationArchive({backendRoot:root,databaseUrl,rehearsal,apply,targetCapture,candidateCommit,candidateTree,
+   sourceLedgerSha256,captureContext,env:process.env}):null;
+// END ISOLATED PRESERVATION ARCHIVE
+  await db.connect();
   if (targetCapture) {
     const profile = (await db.query(`select current_user actor,session_user original_actor,
       (select datdba::regrole::text from pg_database where datname=current_database()) database_owner,
@@ -188,6 +197,7 @@ try {
     captureContext.assertSourceCurrent();
   }
   await db.query("begin isolation level serializable");
+  transactionStarted=true;
   await db.query("set local lock_timeout='5s'");
   await db.query("set local statement_timeout='180s'");
   await db.query("select pg_advisory_xact_lock(hashtextextended('memphis-zoo-release-migration-plan',0))");
@@ -227,6 +237,10 @@ try {
   // Only after locked source/ledger admission; the finite SQL variants also
   // require their exact project + unchanged postgres session owner internally.
   await db.query("select set_config('custodial.deployment_project_ref',$1,true)",[projectRef]);
+  // BEGIN ISOLATED PRESERVATION SNAPSHOT
+  const originalDataPreservation=isolatedPreservationArchive
+   ?await prepareIsolatedReleaseDataPreservation({client:db,backendRoot:root,sourceCatalog:beforeCatalog,plan,verifiedArchive:isolatedPreservationArchive.archive}):null;
+  // END ISOLATED PRESERVATION SNAPSHOT
   const applied = [];
   for (const migration of plan) {
     try {
@@ -278,6 +292,9 @@ try {
   if (beforeLedger.rows.some((row) => stableJson(afterByVersion.get(row.version)) !== stableJson(row))) {
     throw new Error("An earlier migration-ledger entry changed while applying the release plan.");
   }
+  // BEGIN ISOLATED PRESERVATION VERIFY
+  const originalDataPreservationReceipt=originalDataPreservation?await originalDataPreservation.verify():null;
+  // END ISOLATED PRESERVATION VERIFY
   const afterCatalog = normalizeCatalog(await captureCatalogFromSnapshot(db), currentDatabase);
   const afterCatalogIdentity = fingerprintSchemaCatalog(afterCatalog);
   if (!targetCapture && (afterCatalogIdentity.fingerprint !== state.target.canonical_source_schema_fingerprint
@@ -333,7 +350,7 @@ try {
       candidate_commit:candidateCommit,candidate_tree:candidateTree,archive_digest:captureContext.archive_digest,
       owned_target:captureContext.target,actor_profile:captureContext.actor_profile,
       actual_private_routine_metadata:readerOwners,actual_recovery_inventory_guard:recoveryGuard,
-      actual_private_schema_owners:privateSchemaOwners,
+      actual_private_schema_owners:privateSchemaOwners,source_data_preservation:originalDataPreservationReceipt,
       source_catalog_fingerprint:beforeCatalogIdentity.fingerprint,source_ledger_sha256:sourceLedgerSha256,
       source_ledger_count:beforeLedger.rowCount,source_ledger_head:beforeHead.version,
       source_authority_migration_count:134,canonical_source_count:289,
@@ -366,17 +383,21 @@ try {
     after_ledger_count: afterLedger.rowCount,
     after_ledger_head: afterLedger.rows.at(-1).version,
     applied,
+    ...(originalDataPreservationReceipt?{source_data_preservation:originalDataPreservationReceipt}:{}),
     outlook_rows_preserved: outlookAfter.rows,
     outlook_rows_sha256: outlookAfter.sha256,
   }, null, 2));
   }
 } catch (error) {
+  // Archive/profile admission can fail before a connection or transaction exists.
+  // pg queues queries before connect; never queue a rollback on that path.
+  if (!transactionStarted) throw error;
   if (!targetCapture) {
     await db.query("rollback").catch(() => {});
     throw error;
   }
   await db.query("rollback");
-  if (targetCapture && captureContext.refusal && captureContext.locked_source) {
+  if (targetCapture && captureContext.locked_source) {
     // Never emit a success capture or continue the plan. This receipt exists
     // only after whole rollback and independent exact Source readback.
     const original=captureContext.locked_source;
@@ -389,7 +410,7 @@ try {
     await db.query('rollback');
     if(!preserved)throw new Error('Target-refusal whole rollback failed exact original catalog/ledger readback.');
     captureContext.assertSourceCurrent();
-    writeTargetCaptureRefusal(resolve(process.env.RUNNER_TEMP,'production-migration-target-capture-refusal.json'),{
+    if(captureContext.refusal)writeTargetCaptureRefusal(resolve(process.env.RUNNER_TEMP,'production-migration-target-capture-refusal.json'),{
       schema:'custodial.production-migration-target-refusal.v1',scope:'target_preparation_failure',
       committed:false,rollback_verified:true,production_authorized:false,candidate_migration_admission:false,
       runtime_admission:false,full_rehearsal_attestation:false,project_ref:projectRef,
@@ -402,5 +423,6 @@ try {
   throw error;
 } finally {
   await db.end().catch(() => {});
+  isolatedPreservationArchive?.close();
   captureContext?.archive.cleanup();
 }

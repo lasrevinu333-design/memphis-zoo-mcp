@@ -1,0 +1,32 @@
+{
+  "schema": "custodial.source253-direct-closure-evidence.v1",
+  "scope": "SOURCE_ONLY_NOT_NOAUTO_EQUIVALENCE",
+  "canonical120_sha256": "ae478c85db3321c257038273765f7124c821eb0c40d4636daa051affae75657d",
+  "executed120_sha256": "7955900bf9d2b02d076c9ab8ad52fc1b4d0dea10de60ddd89c4ebd9bfd3888e0",
+  "profile_sha256": "92658305ec278150cb2711ce1a7f0f83cb7d1e92488ca87d187f076c9078afdd",
+  "required_executed119_sha256": "ce160e5c55373e75580c287d62484d925e02348844d4aac2fef9bc4cb94be798",
+  "original6968_reconstructed_digest": "3944844de0557a78f2cfcd65f43607196934c511c1837eda0335519fafd6b76f",
+  "distinct_runtime6968_reconstructed_digest": "4cbf29a48bdf9a39a0626f87dfd453dbbf6f5630dc18c36840b7549cc59704f5",
+  "complete_original_tuples": 6968,
+  "existing_runtime_differing_tuples": 797,
+  "new84selfhashes": true,
+  "new84changed_only5owner_grant_clauses": true,
+  "new3function_bodies_exact_canonical119": true,
+  "canary_patch_exact_canonical119": true,
+  "restore_order_changes": 0,
+  "only_canonical120_replacement": {
+    "original_json_digest": "3944844de0557a78f2cfcd65f43607196934c511c1837eda0335519fafd6b76f",
+    "distinct_runtime_json_digest": "4cbf29a48bdf9a39a0626f87dfd453dbbf6f5630dc18c36840b7549cc59704f5",
+    "occurrences": 1
+  },
+  "canonical_remainder_byte_exact": true,
+  "new_guard_public_mutations": false,
+  "new_grants": false,
+  "revocations": false,
+  "owner_swaps": false,
+  "business_row_writes": false,
+  "SQL_executed": false,
+  "production_authorized": false,
+  "candidate_migration_admission": false,
+  "runtime_admission": false
+}
