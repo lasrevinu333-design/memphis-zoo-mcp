@@ -1034,7 +1034,7 @@ async function continueRestoreAfterDatabase({databaseEvidence,immutablePrivateDa
     database_only: databaseOnly,
     database_tables: databaseEvidence.tables,
     database_rows: databaseEvidence.rows,
-    ...(immutablePrivateDataEvidence === null ? {} : { database_evidence: databaseEvidence }),
+    ...(immutablePrivateDataEvidence === null && !nativeTextDatabase ? {} : { database_evidence: databaseEvidence }),
     storage: storageEvidence,
     authority_invalidated: invalidated,
     final_manifest_sha256: finalManifestSha256,

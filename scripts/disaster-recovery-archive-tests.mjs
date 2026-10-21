@@ -207,6 +207,7 @@ if(process.argv.includes('--ordinary-native-text-owner-sql')){
     assert.deepEqual(output.authority_invalidated,{employee_credentials:1,employee_enrollment:1,manager_credentials:1,manager_enrollment:1,manager_push:1,auth_sessions:1});
     assert.equal(output.storage.exact_table_data.status,'MATCH');
     assert.equal(output.storage.exact_table_data.original_text_multiset,true);
+    assert.deepEqual(output.database_evidence.native_text_readback,evidence.native_text_readback);
     // PG17 can allocate real backend slot zero. Exercise the actual catalog
     // producer in that transaction; do not fabricate a virtual-xid response.
     const {resolveCronJobDefaultSequence}=await import('./disaster-recovery-cron.mjs');
@@ -351,6 +352,25 @@ if(process.argv.includes('--ordinary-native-text-owner-only')){
    database_evidence:{native_text_readback:{state:'MATCH',tables:2,original_text_multiset:true}},
    storage:{database_only_metadata_verified:true,exact_table_data:{status:'MATCH',tables:1,original_text_multiset:true}}};
  const receipt=r=>scope.backupOnlyRestoreReceipt({summary,restore:r,toolCommit:'e'.repeat(40),backupRunId:'39605791047',archiveDigest:'d'.repeat(64),storageTableCount:1});
+ // Couple receipt validation to the actual shipping stdout projection. The
+ // supplied values are detached UNIT DATA; no native client/restore is issued.
+ const outputStart=source.indexOf('  restoreSuccessOutput = JSON.stringify({');
+ const outputEnd=source.indexOf('  requireFreshContinuation();',outputStart);
+ assert.ok(outputStart>0&&outputEnd>outputStart);
+ const projectOutput=new Function('restoreId','generation','projectRef','databaseOnly','databaseEvidence',
+   'immutablePrivateDataEvidence','nativeTextDatabase','storageEvidence','invalidated','finalManifestSha256',
+   'unresolvedCount','resumeEligible','freshPrivateDatabase',
+   'let restoreSuccessOutput;'+source.slice(outputStart,outputEnd)+'return JSON.parse(restoreSuccessOutput);');
+ const shippingResult=(native=true,privateEvidence=null)=>projectOutput(restore.restore_id,1,summary.project_ref,true,
+   {...restore.database_evidence,tables:2,rows:3},privateEvidence,native,restore.storage,{},restore.final_manifest_sha256,1,false,false);
+ check('actual native TEXT stdout carries original readback into backup-only receipt',()=>{
+   const output=shippingResult();assert.deepEqual(output.database_evidence.native_text_readback,restore.database_evidence.native_text_readback);
+   const r=receipt(output);assert.equal(r.native_text_original_readback.state,'MATCH');assert.equal(r.full_rehearsal_attestation,false);
+ });
+ check('actual legacy stdout omission and private evidence projection remain distinct',()=>{
+   assert.equal(Object.hasOwn(shippingResult(false),'database_evidence'),false);
+   assert.deepEqual(shippingResult(false,{}).database_evidence.native_text_readback,restore.database_evidence.native_text_readback);
+ });
  check('backup-only receipt keeps source/tool identities and denies broader admission',()=>{
    const r=receipt(restore);assert.equal(r.source_commit,'a'.repeat(40));assert.equal(r.qualification_tool_commit,'e'.repeat(40));
    for(const field of ['forward_migrations_applied','candidate_migration_admission','runtime_admission','storage_provider_admission','full_rehearsal_attestation'])assert.equal(r[field],false);
