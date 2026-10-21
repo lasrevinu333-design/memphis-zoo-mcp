@@ -1,11 +1,14 @@
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
-import {readFileSync} from 'node:fs';
+import {readFileSync,mkdtempSync,mkdirSync,copyFileSync,writeFileSync,unlinkSync,rmSync,symlinkSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join,dirname} from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
+import {CURRENT_DECISION_CANONICAL_MANIFEST,CURRENT_DECISION_ORDERED_ROWS,CURRENT_DECISION_SOURCE_PINS,currentCanonicalDecisionProfile} from './fixtures/native-provider-event-decision-current-source.mjs';
 import * as fixtureApi from './fixtures/native-provider-event-decisions-database-cases.mjs';
 import {validateNativeDecisionInput,nativeDecisionSeed,assertNativeDecisionHttpCapture,NATIVE_DECISION_INPUT_SCHEMA,NATIVE_DECISION_PATH} from './fixtures/native-provider-event-decision-native-wire.mjs';
-import {assertDecisionMigrationManifest,assertCurrentDecisionMigrationManifest,decisionMigrationProfile,assertDecisionLookupBoundary,assertDecisionLookupPredecessor,
+import {assertDecisionMigrationManifest,assertCurrentDecisionMigrationManifest,assertIntegratedDecisionMigrationManifest,decisionMigrationProfile,assertDecisionLookupBoundary,assertDecisionLookupPredecessor,
  readDecisionSource,assertDecisionTarget,compareDecisionRecoverySets,buildDecisionRecoveryProtocol,parseDecisionRecoveryProtocol,
  DECISION_IMAGE,DECISION_RPC,DECISION_HEAD,DECISION_217,DECISION_218,DECISION_219,DECISION_MESSAGE_FILE,DECISION_MESSAGE_SHA,DECISION_INPUT_PINS} from './native-provider-event-decisions-database-tests.mjs';
 
@@ -50,8 +53,20 @@ for(const mutate of [x=>x.data.native_request_id=uid(41),x=>x.data.request_body_
  x=>x.data.results.pop(),x=>x.data.results.push(x.data.results[0]),x=>x.data.results[0].event_id=uid(90),x=>x.data.results[0].decision='PERMANENTLY_DENIED',
  x=>x.data.results[0].receipt.replayed=false,x=>x.data.results[0].receipt.original_observation.boot_count=8,x=>x.data.results[0].receipt.receipt_job_id=uid(90)])
  check('pure hostile raw response derivative rejects even with recomputed transport checksum',()=>{const bad=httpCapture(modelPrepared),value=JSON.parse(Buffer.from(bad.body_base64,'base64'));mutate(value);const raw=JSON.stringify(value);bad.body_base64=Buffer.from(raw).toString('base64');bad.body_sha256=wireSha(raw);assert.throws(()=>assertNativeDecisionHttpCapture(modelPrepared,bad));});
-const source=readDecisionSource();
-const historicalMigrations=source.migrations.filter(r=>r.file!==DECISION_MESSAGE_FILE);
+const source=readDecisionSource(undefined,{profile:'CURRENT_CANONICAL_289'});
+// Frozen full historical Source models from their original pinned commits;
+// none are inferred by removing/filtering members from the current schema.
+const frozenBytes=readFileSync(new URL('./fixtures/native-provider-event-decision-historical-source-models.json',import.meta.url));
+assert.equal(wireSha(frozenBytes),'30e660c3f708e1d1ca0f64547eaffcfbbca99059630b314361ae9797dc55cb0d');
+const frozen=JSON.parse(frozenBytes);assert.equal(frozen.schema,'custodial.native-event-decision-frozen-source-models.v1');
+assert.deepEqual(Object.keys(frozen.models).sort(),['CURRENT_219','HISTORICAL_218','INTEGRATED_227']);
+for(const [profile,commit,digest] of [
+ ['HISTORICAL_218','7cdc15656a00213e0741f31611bab54f3989758b',DECISION_218],
+ ['CURRENT_219','53848431fd55b215affeb4663f233acffb506597',DECISION_219],
+ ['INTEGRATED_227','d9fbcfc374a166832fa45890671eff8f6a696bce','df6373a06e51e1477e0304dc0460be2e600d6240a5107719cc536b0c0cf21a34'],
+]){const model=frozen.models[profile];assert.equal(model.source_commit,commit);assert.equal(model.rows_sha256,digest);assert.equal(wireSha(JSON.stringify(model.rows)),digest);decisionMigrationProfile(model.rows,profile);}
+const historicalMigrations=frozen.models.HISTORICAL_218.rows,current219Migrations=frozen.models.CURRENT_219.rows;
+const historical219=decisionMigrationProfile(current219Migrations,'CURRENT_219');
 // Retained actual first218 engine stderr (run actual218-Jj4seo). This literal
 // is PostgreSQL evidence of rejection, not a synthetic engine PASS receipt.
 const dismissedPrimary='ERROR:  exact finite native event required\n';
@@ -89,10 +104,10 @@ check('historical exact218 and independently pinned217 prefix remain strict',()=
 for(const mutate of [x=>x.pop(),x=>x.push({...x.at(-1),file:'20261005000000_unowned.sql'}),x=>x.reverse(),x=>x[0].sha256='0'.repeat(64),
  x=>x[216].sha256='0'.repeat(64),x=>x[217].sha256='0'.repeat(64),x=>x[217].file='20261003000000_wrong_order.sql',x=>x[5]={...x[4]},
  x=>x[0].extra=true,x=>x[0].file='../supabase.sql',x=>x[0].sha256=null])check('historical manifest mutation fails closed',()=>{const bad=structuredClone(historicalMigrations);mutate(bad);assert.throws(()=>assertDecisionMigrationManifest(bad));assert.throws(()=>decisionMigrationProfile(bad,'HISTORICAL_218'));});
-check('actual current219 binds full bytes plus only the exact additive MESSAGE row',()=>{assertCurrentDecisionMigrationManifest(source.migrations);assert.equal(source.migrations.length,219);assert.equal(source.manifest_sha256,DECISION_219);assert.equal(source.migration_profile,'CURRENT_219');assert.deepEqual(source.migrations[205],{file:DECISION_MESSAGE_FILE,sha256:DECISION_MESSAGE_SHA});assert.deepEqual(decisionMigrationProfile(source.migrations),{migration_profile:source.migration_profile,manifest_sha256:source.manifest_sha256,lookup_boundary:source.lookup_boundary});});
-check('historical and current profiles cannot silently substitute for one another',()=>{assert.throws(()=>assertDecisionMigrationManifest(source.migrations));assert.throws(()=>assertCurrentDecisionMigrationManifest(historicalMigrations));assert.throws(()=>decisionMigrationProfile(historicalMigrations));assert.throws(()=>decisionMigrationProfile(source.migrations,'HISTORICAL_218'));});
+check('frozen explicit219 binds full bytes plus only the exact additive MESSAGE row',()=>{assertCurrentDecisionMigrationManifest(current219Migrations);assert.equal(current219Migrations.length,219);assert.equal(historical219.manifest_sha256,DECISION_219);assert.equal(historical219.migration_profile,'CURRENT_219');assert.deepEqual(current219Migrations[205],{file:DECISION_MESSAGE_FILE,sha256:DECISION_MESSAGE_SHA});assert.deepEqual(decisionMigrationProfile(current219Migrations),{migration_profile:historical219.migration_profile,manifest_sha256:historical219.manifest_sha256,lookup_boundary:historical219.lookup_boundary});});
+check('historical and current profiles cannot silently substitute for one another',()=>{assert.throws(()=>assertDecisionMigrationManifest(current219Migrations));assert.throws(()=>assertCurrentDecisionMigrationManifest(historicalMigrations));assert.throws(()=>decisionMigrationProfile(historicalMigrations));assert.throws(()=>decisionMigrationProfile(current219Migrations,'HISTORICAL_218'));});
 for(const profile of [null,'',218,219,'AUTO','HISTORICAL_217','CURRENT_220',{}])
- check('unknown profile rejects instead of guessing from count',()=>assert.throws(()=>decisionMigrationProfile(source.migrations,profile)));
+ check('unknown profile rejects instead of guessing from count',()=>assert.throws(()=>decisionMigrationProfile(current219Migrations,profile)));
 for(const [name,mutate] of [
  ['missing MESSAGE',x=>x.splice(205,1)],['duplicate MESSAGE',x=>x.push({...x[205]})],['missing old row',x=>x.splice(30,1)],
  ['extra row',x=>x.push({file:'20261005000000_unowned.sql',sha256:'a'.repeat(64)})],['wrong order',x=>x.reverse()],
@@ -102,10 +117,10 @@ for(const [name,mutate] of [
  ['head not last',x=>[x[217],x[218]]=[x[218],x[217]]],['duplicate old identity',x=>x[4]={...x[5]}],
  ['old extra field',x=>x[0].extra=true],['malformed hash',x=>x[0].sha256=null],['malformed row',x=>x[205]=null],
  ['path escape',x=>x[0].file='../source.sql'],
- ])check('current219 hostile '+name+' is rejected by invoked validator and profile',()=>{const bad=structuredClone(source.migrations);mutate(bad);assert.throws(()=>assertCurrentDecisionMigrationManifest(bad));assert.throws(()=>decisionMigrationProfile(bad,'CURRENT_219'));});
+ ])check('current219 hostile '+name+' is rejected by invoked validator and profile',()=>{const bad=structuredClone(current219Migrations);mutate(bad);assert.throws(()=>assertCurrentDecisionMigrationManifest(bad));assert.throws(()=>decisionMigrationProfile(bad,'CURRENT_219'));});
 for(const [profile,rows,count,prefix] of [
  ['HISTORICAL_218',historicalMigrations,217,DECISION_217],
- ['CURRENT_219',source.migrations,218,'af2f80877b572e24e8046df0a45d838dd5fddbc69a02d1050988ac400d2fbaf5'],
+ ['CURRENT_219',current219Migrations,218,'af2f80877b572e24e8046df0a45d838dd5fddbc69a02d1050988ac400d2fbaf5'],
  ]){
  check(profile+' exact head boundary binds predecessor count and full prefix',()=>{const binding=assertDecisionLookupBoundary(rows,count,profile);assert.deepEqual(binding,{file:DECISION_HEAD,sha256:'ab4e6eb848bd214f8616fb52f094829786df9a9a81d2eb8d00d247b1f28e52fd',predecessor_count:count,predecessor_manifest_sha256:prefix});});
  for(const index of [count-1,count+1,0,null,String(count)])check(profile+' rejects misplaced predecessor snapshot',()=>assert.throws(()=>assertDecisionLookupBoundary(rows,index,profile)));
@@ -139,8 +154,11 @@ check('historical218 verifier bytes and constants are preserved exactly without 
  assert.ok(start>0&&end>start);assert.equal(wireSha(runner.slice(start,end)),'c169cb9c47828cb46dfb662fe756a9197b013466ea1b5f92f85ebd522a6c23f5');
  assert.equal(DECISION_218,'24503cfe852d7668ac94744b2f9ed21d8d2556906b917c7016e0f6c2d3b8d7a1');
 });
-const currentCanonical=JSON.parse(readFileSync(new URL('../supabase/canonical/schema-fingerprint-input.json',import.meta.url)));
-const currentCanary=currentCanonical.functions.find(f=>f.function_name==='custodial_release_canary_authority_surface').definition;
+// The predecessor guard belongs to the frozen historical SQL fixture, not
+// today's evolved canonical canary. Keep its original complete Source body.
+const currentCanary=frozen.lookup_canary_model.definition;
+assert.equal(frozen.lookup_canary_model.source_commit,'53848431fd55b215affeb4663f233acffb506597');
+assert.equal(wireSha(currentCanary),frozen.lookup_canary_model.definition_sha256);
 const lookupSource=readFileSync(new URL('../supabase/migrations/'+DECISION_HEAD,import.meta.url),'utf8');
 const additionsEscaped=lookupSource.match(/ additions text:=E'([^\n]*)';/)[1];
 const additionsText=additionsEscaped.replaceAll("''","'").replaceAll('\\n','\n');
@@ -207,7 +225,7 @@ check('all original fault, repair, protected and rollback comparisons remain man
  "check('all protected records exactly preserved',JSON.parse(sql(SNAPSHOT)),protectedBefore)"] )assert.ok(runner.includes(exact),exact);});
 check('fixed owning bootstrap and pre-assertion finite observation are not optional',()=>{assert.match(runner,/'-U','supabase_admin','-d','postgres'/);assert.ok(runner.includes("observeAccess:value=>save('access-matrix-observed.json',value)"));assert.ok(fixture.includes("assert.equal(typeof observeAccess,'function'"));assert.ok(fixture.indexOf("observeAccess({classification:'UNVALIDATED_SYNTHETIC_ACCESS_OBSERVATION',authority})")<fixture.indexOf("check('exact source ACL/RLS"));});
 for(const [name,pattern] of [
- ['explicit source/execute distinction',/process\.argv\[2\]==='--source-check'[\s\S]+assert\.equal\(process\.argv\[2\],'--execute'\)/],
+ ['explicit source/execute distinction',/process\.argv\[2\]==='--source-check'[\s\S]+assert\.ok\(\['--execute','--execute-integrated'\]\.includes\(process\.argv\[2\]\)\)/],
  ['pinned local socket no endpoint',/\['--host','unix:\/\/\/var\/run\/docker\.sock'/],
  ['no image pulling',/\['run','-d','--pull','never','--network','none'/],
  ['source-bound exceptions preserve absent defaults',/sql\(ABSENT\+'\\n'\+bytes\+'\\n'\+\(EXCEPTIONS\[m\.file\]\?REMOVE_DEFAULTS:''\)\+'\\n'\+ABSENT\)/],
@@ -222,11 +240,51 @@ for(const [name,pattern] of [
  ['ambiguous launch exact named reconciliation',/launchAttempted&&!created[\s\S]+assertDecisionTarget\(row,target,\{allowStopped:true\}\)/],
  ['exact-ID cleanup',/docker\(\['rm','-f',target\.id\]\)/],
  ['private no-overwrite outputs',/flag:'wx',mode:0o600/],
- ['readonly source identity end fence',/assert\.deepEqual\(readDecisionSource\(\),source\)/],
+ ['readonly source identity end fence',/assert\.deepEqual\(readDecisionSource\(ROOT,\{profile\}\),source\)/],
  ['migration failure binds exact unapplied file',/save\('failed-migration\.json',\{file:m\.file,sha256:m\.sha256,index,applied_predecessors:index,status:'FAIL'\}\)/],
  ['PASS receipt written only after verified cleanup',/assert\.equal\(cleaned,true\);assert\.equal\(created,false\);assert\.ok\(receipt\);\s+save\('receipt\.json'/],
  ])check(name,()=>assert.match(runner,pattern));
 check('no accepted-event INSERT or original migration rewrite',()=>{assert.doesNotMatch(runner,/insert into public\.employee_native_provider_events\b/i);assert.doesNotMatch(runner,/writeFileSync\([^\n]*(?:migration|supabase)/);});
 check('no solver browser JVM full controller or runtime activation',()=>assert.doesNotMatch(runner,/custodial_configure_backend_execution_key|custodial_control_release_canary|seedCompiledEventAuthority|spawn\([^\n]*(?:java|playwright)|run-isolated-shift-end-tests/));
-check('actual CLI source check runs current219 without engine or historical attribution',()=>{const value=JSON.parse(execFileSync(process.execPath,[runnerPath,'--source-check'],{encoding:'utf8',timeout:10000,maxBuffer:2*1024*1024}));assert.equal(value.scope,'SOURCE_ONLY_NO_ENGINE');assert.equal(value.status,'PASS');assert.deepEqual(value.migrations,source.migrations);assert.equal(value.migration_profile,'CURRENT_219');assert.equal(value.manifest_sha256,DECISION_219);assert.deepEqual(value.lookup_boundary,source.lookup_boundary);});
+check('explicit current289 source-only CLI reads canonical phase order without engine attribution',()=>{const value=JSON.parse(execFileSync(process.execPath,[runnerPath,'--source-check-current'],{encoding:'utf8',timeout:10000,maxBuffer:2*1024*1024}));assert.equal(value.scope,'SOURCE_ONLY_NO_ENGINE');assert.equal(value.status,'PASS');assert.deepEqual(value, {status:'PASS',scope:'SOURCE_ONLY_NO_ENGINE',...source});});
+check('current289 binds distinct raw canonical manifest/full rows/prefix/suffix and current source inputs',()=>{
+ assert.equal(source.migration_profile,'CURRENT_CANONICAL_289');assert.equal(source.canonical_manifest_sha256,CURRENT_DECISION_CANONICAL_MANIFEST);
+ assert.equal(source.manifest_sha256,CURRENT_DECISION_ORDERED_ROWS);assert.notEqual(source.manifest_sha256,source.canonical_manifest_sha256);
+ assert.equal(source.migrations.length,289);assert.equal(source.inputs.length,14);assert.deepEqual(Object.fromEntries(source.inputs.map(r=>[r.file,r.sha256])),CURRENT_DECISION_SOURCE_PINS);
+ assert.deepEqual(assertDecisionLookupBoundary(source.migrations,222,'CURRENT_CANONICAL_289'),source.lookup_boundary);
+ assert.equal(source.lookup_boundary.following_migrations,66);assert.equal(source.lookup_boundary.following_manifest_sha256,'5d092f1ea5d6a301ebd0563a7c567f322ac5bcd3b0057a4b281e27cc2d8e88f7');
+});
+for(const [name,mutate] of [
+ ['missing suffix',x=>x.pop()],['extra suffix',x=>x.push({file:'20261022000000_unowned.sql',sha256:'0'.repeat(64)})],
+ ['phase order replaced by chronology',x=>x.sort((a,b)=>a.file.localeCompare(b.file))],['swapped suffix',x=>[x[227],x[228]]=[x[228],x[227]]],
+ ['changed prefix',x=>x[0].sha256='0'.repeat(64)],['changed head',x=>x[222].sha256='0'.repeat(64)],['changed suffix',x=>x[288].sha256='0'.repeat(64)],
+ ['duplicate identity',x=>x[288]={...x[287]}],['extra field',x=>x[288].extra=true],['path escape',x=>x[0].file='../source.sql'],
+])check('current289 rejects '+name,()=>{const bad=structuredClone(source.migrations);mutate(bad);assert.throws(()=>currentCanonicalDecisionProfile(bad));assert.throws(()=>decisionMigrationProfile(bad,'CURRENT_CANONICAL_289'));});
+for(const profile of ['HISTORICAL_218','CURRENT_219','INTEGRATED_227']){
+ check('current289 cannot substitute for frozen '+profile,()=>{assert.throws(()=>decisionMigrationProfile(source.migrations,profile));assert.throws(()=>currentCanonicalDecisionProfile(frozen.models[profile].rows));});
+}
+check('frozen integrated227 remains strict including its four-member suffix',()=>{const rows=frozen.models.INTEGRATED_227.rows;assertIntegratedDecisionMigrationManifest(rows);assert.equal(assertDecisionLookupBoundary(rows,222,'INTEGRATED_227').following_migrations,4);const bad=structuredClone(rows);bad[226].sha256='0'.repeat(64);assert.throws(()=>assertIntegratedDecisionMigrationManifest(bad));});
+check('current289 is never a SQL execution selection and old execute source fence is retained',()=>{
+ assert.ok(runner.includes("await execute(process.argv[3],process.argv[2]==='--execute-integrated'?'INTEGRATED_227':'CURRENT_219')"));
+ assert.ok(runner.includes("assert.ok(['--execute','--execute-integrated'].includes(process.argv[2]))"));
+ assert.match(runner,/export function readDecisionSource\(root=ROOT,\{profile='CURRENT_219'\}=\{\}\)/);
+});
+// Actual maintained reader against only a fresh test-owned filesystem copy.
+// Mutations never touch the original source or an existing runtime owner.
+const privateSource=mkdtempSync(join(tmpdir(),'custodial-decision-source-contract-'));
+try{
+ const originalRoot=fileURLToPath(new URL('../',import.meta.url));
+ const sourceFiles=['supabase/canonical/migration-replay-order.json',...source.migrations.map(row=>'supabase/migrations/'+row.file),...source.inputs.map(row=>row.file)];
+ for(const file of sourceFiles){mkdirSync(dirname(join(privateSource,file)),{recursive:true});copyFileSync(join(originalRoot,file),join(privateSource,file));}
+ check('fresh complete current Source copy agrees with actual maintained reader',()=>assert.deepEqual(readDecisionSource(privateSource,{profile:'CURRENT_CANONICAL_289'}),source));
+ const corrupt=(name,file,mutate)=>check(name,()=>{const path=join(privateSource,file),bytes=readFileSync(path);try{mutate(path,bytes);assert.throws(()=>readDecisionSource(privateSource,{profile:'CURRENT_CANONICAL_289'}));}finally{try{unlinkSync(path);}catch(error){if(error.code!=='ENOENT')throw error;}writeFileSync(path,bytes,{flag:'wx'});}});
+ corrupt('equivalent but unpinned canonical JSON bytes refuse','supabase/canonical/migration-replay-order.json',(path,bytes)=>writeFileSync(path,Buffer.concat([bytes,Buffer.from('\n')])));
+ corrupt('missing original migration refuses','supabase/migrations/'+DECISION_HEAD,path=>unlinkSync(path));
+ corrupt('changed suffix migration bytes refuse','supabase/migrations/'+source.migrations.at(-1).file,(path,bytes)=>writeFileSync(path,Buffer.concat([bytes,Buffer.from('\n')])));
+ corrupt('symlink migration refuses even with identical bytes','supabase/migrations/'+DECISION_HEAD,path=>{unlinkSync(path);symlinkSync(join(originalRoot,'supabase/migrations',DECISION_HEAD),path);});
+ corrupt('current authenticated source input drift refuses','src/auth/device-credential-auth.js',(path,bytes)=>writeFileSync(path,Buffer.concat([bytes,Buffer.from('\n')])));
+ corrupt('maintained canonical reader source pin drift refuses','scripts/migration-replay-order.mjs',(path,bytes)=>writeFileSync(path,Buffer.concat([bytes,Buffer.from('\n')])));
+ check('undeclared migration refuses rather than filtering observed survivors',()=>{const extra=join(privateSource,'supabase/migrations/20261022000000_unowned.sql');writeFileSync(extra,'-- test-only unowned Source\n',{flag:'wx'});try{assert.throws(()=>readDecisionSource(privateSource,{profile:'CURRENT_CANONICAL_289'}));}finally{unlinkSync(extra);}});
+ check('restored complete Source copy is revalidated after all refusals',()=>assert.deepEqual(readDecisionSource(privateSource,{profile:'CURRENT_CANONICAL_289'}),source));
+}finally{rmSync(privateSource,{recursive:true});}
 console.log(JSON.stringify({status:'PASS',checks,scope:'SOURCE_CONTRACT_AND_PURE_HOSTILE_DATA_ONLY',actualSourceCheck:true,databaseExecuted:false,containerCreated:false,httpExecuted:false,engineEvidence:false}));

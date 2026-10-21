@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {migrationReplayNames} from './migration-replay-order.mjs';
+import {currentCanonicalDecisionProfile,readCurrentCanonicalDecisionSource} from './fixtures/native-provider-event-decision-current-source.mjs';
 import {createHash,createHmac,randomUUID} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import {readFileSync,readdirSync,lstatSync,realpathSync,writeFileSync} from 'node:fs';
@@ -135,6 +136,7 @@ export function assertIntegratedDecisionMigrationManifest(rows){
  return rows;
 }
 export function decisionMigrationProfile(rows,profile='CURRENT_219'){
+ if(profile==='CURRENT_CANONICAL_289')return currentCanonicalDecisionProfile(rows);
  if(profile==='INTEGRATED_227'){
   assertIntegratedDecisionMigrationManifest(rows);
   return {migration_profile:profile,manifest_sha256:DECISION_INTEGRATED_227,
@@ -162,6 +164,7 @@ export function assertDecisionLookupPredecessor(snapshot){
  assert.equal(rows[0].definition_sha256,CANARY_PRIOR);assert.equal(hash(rows[0].definition_sql),CANARY_PRIOR);
 }
 export function readDecisionSource(root=ROOT,{profile='CURRENT_219'}={}){
+ if(profile==='CURRENT_CANONICAL_289')return readCurrentCanonicalDecisionSource(root);
  const directory=join(root,'supabase/migrations');
  const names=profile==='INTEGRATED_227'?migrationReplayNames(root):readdirSync(directory).filter(x=>x.endsWith('.sql')).sort();
  const migrations=names.map(file=>({file,sha256:hash(readFileSync(join(directory,file)))}));
@@ -400,6 +403,7 @@ commit;`);
 }
 
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
- if(process.argv.length===3&&process.argv[2]==='--source-check')console.log(JSON.stringify({status:'PASS',scope:'SOURCE_ONLY_NO_ENGINE',...readDecisionSource()}));
+ if(process.argv.length===3&&process.argv[2]==='--source-check-current')console.log(JSON.stringify({status:'PASS',scope:'SOURCE_ONLY_NO_ENGINE',...readDecisionSource(ROOT,{profile:'CURRENT_CANONICAL_289'})}));
+ else if(process.argv.length===3&&process.argv[2]==='--source-check')console.log(JSON.stringify({status:'PASS',scope:'SOURCE_ONLY_NO_ENGINE',...readDecisionSource()}));
  else{assert.equal(process.argv.length,4,'use --source-check or explicit --execute/--execute-integrated PRIVATE_EMPTY_OUTPUT_DIRECTORY');assert.ok(['--execute','--execute-integrated'].includes(process.argv[2]));await execute(process.argv[3],process.argv[2]==='--execute-integrated'?'INTEGRATED_227':'CURRENT_219');}
 }
