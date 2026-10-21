@@ -3,7 +3,7 @@ import { isProxy } from "node:util/types";
 import { createHash } from "node:crypto";
 import { stableJson } from "./disaster-recovery-crypto.mjs";
 import { productionBackupDataEncoding, productionBackupTextColumnsDataEncoding } from "./production-backup-pg-dump-command.mjs";
-import { decodeRestoreTableRowLine } from "./disaster-recovery-archive.mjs";
+import { readVerifiedArchiveSourceBinding, readVerifiedRestoreTableSelection, postgresTextColumnsLineEncoding, decodeRestoreTableRowLine } from "./disaster-recovery-archive.mjs";
 
 function quoteIdentifier(value) { return `"${String(value).replaceAll('"', '""')}"`; }
 function qualified(schema, table) { return `${quoteIdentifier(schema)}.${quoteIdentifier(table)}`; }
@@ -297,6 +297,33 @@ async function updateRequiredAuthorityTarget(query, { schema = "public", table, 
 }
 
 export async function invalidateRestoredAuthority(db, options) {
+  return invalidateRestoredOwnedAuthority(db,options,null);
+}
+
+// Ordinary replica import never borrows the private original-origin contract.
+// This entry binds the real verified archive's no-private/all-native selection
+// to the actual control row. Source DATA is not permission: the same native
+// principal, transaction, generation and BOTH real exclusive fences below
+// remain mandatory before and after every read/effect.
+export async function invalidateRestoredOrdinaryNativeAuthority(db,{generation,verifiedArchive}) {
+  const binding=readVerifiedArchiveSourceBinding(verifiedArchive);
+  const selection=readVerifiedRestoreTableSelection(verifiedArchive,{databaseOnly:true});
+  if(selection.privateTables.length || !selection.databaseTables.length
+    || selection.databaseTables.some(table=>table.data_encoding!==postgresTextColumnsLineEncoding))restoreAuthorityUnavailable();
+  const source=()=>{
+    if(readVerifiedArchiveSourceBinding(verifiedArchive)!==binding
+      || readVerifiedRestoreTableSelection(verifiedArchive,{databaseOnly:true})!==selection)restoreAuthorityUnavailable();
+  };
+  source();
+  const result=await invalidateRestoredOwnedAuthority(db,{generation},{binding,source});
+  source();return result;
+}
+const ordinaryRestoreAuthorityContextSql=restoreAuthorityContextSql.replace(') control_valid',
+  `) and exists(select 1 from pg_catalog.pg_namespace n where n.nspname='custodial_release_identity'
+      and pg_catalog.has_schema_privilege(current_user,n.oid,'USAGE'))
+    and not exists(select 1 from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid=c.relnamespace
+      where n.nspname='custodial_release_identity') control_valid`);
+async function invalidateRestoredOwnedAuthority(db, options, ordinaryOriginal) {
   const field = options && typeof options === "object" && !isProxy(options)
     ? Object.getOwnPropertyDescriptor(options, "generation") : null;
   const generation = field && Object.hasOwn(field, "value") ? field.value : undefined;
@@ -307,6 +334,7 @@ export async function invalidateRestoredAuthority(db, options) {
     throw Object.assign(new Error("RESTORE_AUTHORITY_GENERATION_INVALID"), { code: "RESTORE_AUTHORITY_GENERATION_INVALID" });
   }
   const native = () => {
+    ordinaryOriginal?.source();
     const exportedClient = Object.getOwnPropertyDescriptor(pg, "Client");
     const queryMethod = Object.getOwnPropertyDescriptor(restoreAuthorityPrototype, "query");
     if (!db || typeof db !== "object" || isProxy(db) || !exportedClient || !Object.hasOwn(exportedClient, "value")
@@ -318,6 +346,8 @@ export async function invalidateRestoredAuthority(db, options) {
         || restoreAuthorityOwn(db, "_txStatus") !== "T") restoreAuthorityUnavailable();
   };
   native();
+  if(ordinaryOriginal && !["127.0.0.1","localhost"].includes(
+    restoreAuthorityOwn(restoreAuthorityOwn(db,"connectionParameters"),"host")))restoreAuthorityUnavailable();
   const originalConnection = restoreAuthorityOwn(db, "connection");
   const raw = async (sql, params = []) => {
     native();
@@ -337,7 +367,7 @@ export async function invalidateRestoredAuthority(db, options) {
   };
   let originalContext;
   const context = async () => {
-    const rows = restoreAuthorityRows(await raw(restoreAuthorityContextSql, [originalGeneration]), "SELECT");
+    const rows = restoreAuthorityRows(await raw(ordinaryOriginal ? ordinaryRestoreAuthorityContextSql : restoreAuthorityContextSql, [originalGeneration]), "SELECT");
     if (rows.length !== 1 || !rows[0] || isProxy(rows[0]) || Object.getPrototypeOf(rows[0]) !== Object.prototype
         || Reflect.ownKeys(rows[0]).length !== 1) restoreAuthorityUnavailable();
     const text = restoreAuthorityOwn(rows[0], "context_utf8");
@@ -356,7 +386,7 @@ export async function invalidateRestoredAuthority(db, options) {
         || BigInt(current.transaction_id) > 9223372036854775807n
         || current.actor !== "supabase_admin" || current.session_actor !== current.actor
         || current.database_owner !== "postgres" || current.dr_owner !== "postgres" || current.control_owner !== current.actor
-        || current.read_only !== "off" || current.replication !== "origin" || current.row_security !== "off"
+        || current.read_only !== "off" || current.replication !== (ordinaryOriginal ? "replica" : "origin") || current.row_security !== "off"
         || current.search_path !== "pg_catalog, pg_temp" || current.first_schema !== "pg_catalog"
         || current.held_fences !== 2 || current.control_count !== 1
         || current.control_valid !== true || typeof current.control_utf8 !== "string") restoreAuthorityUnavailable();
@@ -367,6 +397,10 @@ export async function invalidateRestoredAuthority(db, options) {
         || !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/.test(control.restore_id)
         || typeof control.archive_digest !== "string" || control.archive_digest.length !== 64
         || !/^[0-9a-f]{64}$/.test(control.archive_digest)) restoreAuthorityUnavailable();
+    if(ordinaryOriginal && (!/^mz_schema_rebuild_[a-zA-Z0-9_]+$/.test(current.database_name)
+      || control.archive_digest!==ordinaryOriginal.binding.archive_digest
+      || control.source_project_ref!==ordinaryOriginal.binding.summary.project_ref
+      || control.target_project_ref!==ordinaryOriginal.binding.summary.project_ref))restoreAuthorityUnavailable();
     // Equality includes raw control/revision, principal, catalog owners/OIDs,
     // native DB/PID/xid, settings and both actual granted fence observations.
     if (originalContext !== undefined && text !== originalContext) restoreAuthorityUnavailable();

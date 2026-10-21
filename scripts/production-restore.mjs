@@ -27,6 +27,7 @@ import {
   capturePreRestoreState,
   compareRestoredState,
   invalidateRestoredAuthority,
+  invalidateRestoredOrdinaryNativeAuthority,
   preserveCurrentReleaseIdentity,
   refuseUnreconciledImmutableRetry,
 } from "./disaster-recovery-state.mjs";
@@ -179,12 +180,14 @@ if (tableSelection !== null) {
 // substitute for the still-missing owning original-DATA import contract.
 const privateImportBlocker = tableSelection?.privateTables.length
   ? "PRIVATE_ORIGINAL_DATA_IMPORT_UNSUPPORTED" : null;
-// The replica/JSON-value loop has no native-text contract. Never let a new
-// signed DATA tag reinterpret strings as JSON values or truncate before
-// discovering that mismatch. Current Custodial's private originals use the
-// separate same-original fresh-target route, still held for full production.
-const nativeTextLegacyBlocker = tableSelection && !tableSelection.privateTables.length
-  && tableSelection.databaseTables.some(table=>table.data_encoding===postgresTextColumnsLineEncoding)
+// Native TEXT uses the ordinary owner only for the existing isolated DB-only
+// target. Full production and mixed legacy/native DATA retain their pre-connect
+// hold. The signed tag chooses representation, never a target or effect grant.
+const hasOrdinaryNativeText = tableSelection && !tableSelection.privateTables.length
+  && tableSelection.databaseTables.some(table=>table.data_encoding===postgresTextColumnsLineEncoding);
+const nativeTextDatabase = hasOrdinaryNativeText && databaseOnly
+  && tableSelection.databaseTables.every(table=>table.data_encoding===postgresTextColumnsLineEncoding);
+const nativeTextLegacyBlocker = hasOrdinaryNativeText && !nativeTextDatabase
   ? "NATIVE_TEXT_RESTORE_REQUIRES_IMMUTABLE_ORIGINAL_ROUTE" : null;
 // Selector only, not fresh-target or transaction authority. The exact local
 // URI guard below AND the fresh API's original native owner/catalog/intent
@@ -481,6 +484,152 @@ function assertIntentTargetIdentity(target) {
   }
 }
 
+// Ordinary native TEXT DATA has no private-original capability. These helpers
+// are private to the normal owner below: the actual signed intent, client,
+// paused generation, drained leases and held fence precede every invocation.
+// Only server-enumerated type identifiers enter SQL; archived type text is
+// compared as DATA, never interpolated as executable cast syntax.
+const nativeTextQueryMethod = Client.prototype.query;
+function requireNativeTextOwner() {
+  requireOriginalArchiveSource();
+  if (!nativeTextDatabase || !databaseOnly || !prepared || !mutationFenceHeld
+      || Date.now() >= expiresAt || Object.getPrototypeOf(db) !== Client.prototype
+      || Object.hasOwn(db,"query") || Client.prototype.query !== nativeTextQueryMethod
+      || db._txStatus !== "T" || db._connected !== true || db._ending !== false) {
+    throw Object.assign(new Error("Ordinary native TEXT restore owner is unavailable."),
+      {code:"NATIVE_TEXT_RESTORE_OWNER_UNAVAILABLE",retry_safe:false});
+  }
+}
+async function nativeTextQuery(sql, values=[]) {
+  requireNativeTextOwner();
+  const reply=await Reflect.apply(nativeTextQueryMethod,db,[sql,values]);
+  requireNativeTextOwner();
+  return reply;
+}
+function nativeTextRestorePlan(table, actual) {
+  const refuse=()=>{throw Object.assign(new Error("Native TEXT target columns or input types differ from the original archive."),
+    {code:"NATIVE_TEXT_TARGET_CATALOG_MISMATCH",retry_safe:false});};
+  if (!actual || actual.relation_kind!=="r" || actual.is_partition!==false
+      || actual.inheritance_count!=="0" || actual.dropped_count!=="0"
+      || !Array.isArray(actual.columns) || !Array.isArray(actual.casts)
+      || stableJson(actual.columns)!==stableJson(table.columns)
+      || stableJson(actual.primary_key)!==stableJson(table.primary_key)
+      || actual.casts.length!==table.columns.length) refuse();
+  const literal=value=>"E'"+value.replaceAll("\\","\\\\").replaceAll("'","''")+"'";
+  const names=table.columns.map(column=>column.name);
+  const writable=table.columns.filter(column=>!column.generated);
+  for(let i=0;i<names.length;i++){
+    const cast=actual.casts[i];
+    if(!cast || cast.name!==names[i] || cast.supported_io!==true
+      || typeof cast.type_schema!=="string" || !cast.type_schema
+      || typeof cast.type_name!=="string" || !cast.type_name
+      || [cast.type_schema,cast.type_name].some(value=>value.includes("\0")))refuse();
+  }
+  // An all-generated table cannot carry a populated original in this route.
+  if(!writable.length)refuse();
+  const projection=alias=>`pg_catalog.json_object(ARRAY[${names.map(literal).join(",")}]::pg_catalog.text[],`
+    +`ARRAY[${names.map(name=>`${alias}.${quoteIdentifier(name)}::pg_catalog.text`).join(",")}]::pg_catalog.text[])::pg_catalog.text`;
+  const originalProjection=`pg_catalog.json_object(ARRAY[${names.map(literal).join(",")}]::pg_catalog.text[],`
+    +`ARRAY[${names.map(name=>`raw::pg_catalog.json->>${literal(name)}`).join(",")}]::pg_catalog.text[])::pg_catalog.text`;
+  const values=writable.map(column=>{
+    const cast=actual.casts[names.indexOf(column.name)];
+    return `($1::pg_catalog.json->>${literal(column.name)})::${qualified(cast.type_schema,cast.type_name)}`;
+  }).join(",");
+  const target=qualified(table.schema_name,table.table_name);
+  return Object.freeze({insert:`with inserted as (insert into ${target} (${writable.map(c=>quoteIdentifier(c.name)).join(",")}) overriding system value select ${values} returning 1),
+    retained as (insert into pg_temp.custodial_native_text_restore_expected(schema_name,table_name,raw)
+      select $2::pg_catalog.text,$3::pg_catalog.text,$1::pg_catalog.text from inserted returning 1)
+    select (select count(*)::pg_catalog.text from inserted) inserted,(select count(*)::pg_catalog.text from retained) retained`,
+    compare:`with expected as materialized (select ${originalProjection} collate pg_catalog."C" image
+      from pg_temp.custodial_native_text_restore_expected where schema_name=$1 and table_name=$2),
+    actual as materialized (select ${projection("r")} collate pg_catalog."C" image from only ${target} r),
+    missing as (select image from expected except all select image from actual),
+    extra as (select image from actual except all select image from expected)
+    select (select count(*)::pg_catalog.text from expected) expected_rows,
+      (select count(*)::pg_catalog.text from actual) actual_rows,
+      (select count(*)::pg_catalog.text from missing) missing_rows,(select count(*)::pg_catalog.text from extra) extra_rows`});
+}
+async function requireNativeTextRelationCensus() {
+  const reply=await nativeTextQuery(`select n.nspname schema_name,c.relname table_name
+    from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid=c.relnamespace
+    where n.nspname in ('public','auth','storage','custodial_release_identity') and c.relkind in ('r','p','f')
+    order by n.nspname,c.relname`);
+  const expected=databaseTables.map(t=>({schema_name:t.schema_name,table_name:t.table_name}));
+  const ordered=rows=>rows.map(row=>JSON.stringify([row.schema_name,row.table_name])).sort();
+  if(reply.rowCount!==expected.length || stableJson(ordered(reply.rows))!==stableJson(ordered(expected)))
+    throw new Error("Native TEXT target relation scope differs from the authenticated source.");
+}
+async function prepareNativeTextRestorePlans(expectedState="PREPARING", retainedRows=false) {
+  // Hold the real control row through DATA+evidence COMMIT. No stale public
+  // result/flag substitutes for the same generation's paused owner.
+  const control=await nativeTextQuery(`select restore_id::text,authority_generation::text,archive_digest,
+    source_project_ref,target_project_ref,mutations_paused,state from custodial_dr.restore_control where singleton=true for update`);
+  const row=control.rows[0];
+  if(control.rowCount!==1 || row.restore_id!==restoreId || row.authority_generation!==String(generation)
+    || row.archive_digest!==archiveDigest || row.source_project_ref!==summary.project_ref
+    || row.target_project_ref!==projectRef || row.mutations_paused!==true || row.state!==expectedState)
+    throw new Error("Original native TEXT restore control owner changed.");
+  await nativeTextQuery("set local search_path = pg_catalog, pg_temp");
+  await nativeTextQuery("set local row_security = off");
+  for(const sql of ["set local extra_float_digits = 3","set local datestyle = 'ISO, YMD'",
+    "set local timezone = 'UTC'","set local intervalstyle = 'postgres'","set local bytea_output = 'hex'"])
+    await nativeTextQuery(sql);
+  // Table locks do not pin independent type/cast/function DDL. Keep the
+  // actual catalog I/O definitions fixed in this same transaction as DATA.
+  await nativeTextQuery("lock table pg_catalog.pg_type,pg_catalog.pg_proc,pg_catalog.pg_cast,pg_catalog.pg_namespace,pg_catalog.pg_enum,pg_catalog.pg_range in share mode");
+  await nativeTextQuery(`lock table ${databaseTables.map(t=>"only "+qualified(t.schema_name,t.table_name)).join(",")} in access exclusive mode`);
+  await requireNativeTextRelationCensus();
+  const plans=new Map();
+  for(const table of databaseTables){
+    const result=await nativeTextQuery(`select c.relkind::text relation_kind,c.relispartition is_partition,
+      (select count(*)::text from pg_catalog.pg_inherits where inhparent=c.oid or inhrelid=c.oid) inheritance_count,
+      (select count(*)::text from pg_catalog.pg_attribute where attrelid=c.oid and attnum>0 and attisdropped) dropped_count,
+      (select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object('name',a.attname,'data_type',pg_catalog.format_type(a.atttypid,a.atttypmod),
+        'generated',a.attgenerated,'identity',a.attidentity) order by a.attnum)
+        from pg_catalog.pg_attribute a where a.attrelid=c.oid and a.attnum>0 and not a.attisdropped) columns,
+      coalesce((select pg_catalog.jsonb_agg(a.attname order by k.ordinality) from pg_catalog.pg_index i
+        cross join lateral pg_catalog.unnest(i.indkey) with ordinality k(attnum,ordinality)
+        join pg_catalog.pg_attribute a on a.attrelid=i.indrelid and a.attnum=k.attnum
+        where i.indrelid=c.oid and i.indisprimary and i.indisvalid),'[]'::jsonb) primary_key,
+      (select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object('name',a.attname,'type_schema',tn.nspname,'type_name',t.typname,
+        'supported_io',not exists(select 1 from pg_catalog.pg_cast x
+            left join pg_catalog.pg_proc cast_proc on cast_proc.oid=x.castfunc
+            where ((x.castsource=t.oid and x.casttarget='pg_catalog.text'::pg_catalog.regtype)
+              or (x.castsource='pg_catalog.text'::pg_catalog.regtype and x.casttarget=t.oid))
+              and (t.typtype='e' or (x.castmethod='b' and tn.nspname<>'pg_catalog') or (x.castmethod='f' and
+                (cast_proc.pronamespace<>'pg_catalog'::pg_catalog.regnamespace
+                  or cast_proc.prolang<>(select oid from pg_catalog.pg_language where lanname='internal')
+                  or cast_proc.prosecdef or cast_proc.proconfig is not null))))
+          and ti.pronamespace='pg_catalog'::pg_catalog.regnamespace and tout.pronamespace=ti.pronamespace
+          and ti.prolang=(select oid from pg_catalog.pg_language where lanname='internal') and tout.prolang=ti.prolang
+          and ((tn.nspname='pg_catalog' and t.typisdefined and (t.typtype in ('b','r')))
+            or (t.typtype='e' and t.typinput='pg_catalog.enum_in(cstring,oid)'::pg_catalog.regprocedure
+              and t.typoutput='pg_catalog.enum_out(anyenum)'::pg_catalog.regprocedure))) order by a.attnum)
+        from pg_catalog.pg_attribute a join pg_catalog.pg_type t on t.oid=a.atttypid
+        join pg_catalog.pg_namespace tn on tn.oid=t.typnamespace join pg_catalog.pg_proc ti on ti.oid=t.typinput
+        join pg_catalog.pg_proc tout on tout.oid=t.typoutput
+        where a.attrelid=c.oid and a.attnum>0 and not a.attisdropped) casts
+      from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid=c.relnamespace where n.nspname=$1 and c.relname=$2`,
+      [table.schema_name,table.table_name]);
+    if(result.rowCount!==1)throw new Error("Native TEXT target relation is unavailable.");
+    plans.set(table,nativeTextRestorePlan(table,result.rows[0]));
+  }
+  const collision=await nativeTextQuery("select pg_catalog.to_regclass('pg_temp.custodial_native_text_restore_expected')::text relation");
+  if(collision.rowCount!==1 || (retainedRows ? collision.rows[0].relation===null : collision.rows[0].relation!==null))
+    throw new Error("Native TEXT expected-row namespace differs from the original phase.");
+  return plans;
+}
+async function compareNativeTextRestorePlans(plans,tables=databaseTables) {
+  await requireNativeTextRelationCensus();
+  for(const table of tables){
+    const reply=await nativeTextQuery(plans.get(table).compare,[table.schema_name,table.table_name]);
+    const row=reply.rows[0];
+    if(reply.rowCount!==1 || row.expected_rows!==table.row_count || row.actual_rows!==table.row_count
+      || row.missing_rows!=="0" || row.extra_rows!=="0")throw new Error("Native TEXT original table readback differs.");
+  }
+  requireNativeTextOwner();
+}
+
 const endRestoreClient = Client.prototype.end;
 let restoreSessionLockHeld = false;
 let restoreLifecycleFailed = false;
@@ -544,7 +693,8 @@ async function observeFreshOriginalAuthorityCommit(){
 }
 async function continueRestoreAfterDatabase({databaseEvidence,immutablePrivateDataEvidence,unvalidatedCheckEvidence,invalidated}) {
   const requireFreshContinuation = () => {
-    if (!freshPrivateDatabase) return; // Legacy caller's existing guards/SQL are unchanged.
+    if (!freshPrivateDatabase && !nativeTextDatabase) return; // Historical ordinary caller unchanged.
+    if(nativeTextDatabase && Date.now()>=expiresAt)throw new Error("Original native restore intent expired.");
     requireOriginalArchiveSource();
     if (!databaseOnly || !prepared || !mutationFenceHeld) {
       throw new Error("Fresh paused continuation requires its original retained mutation fence.");
@@ -574,6 +724,7 @@ async function continueRestoreAfterDatabase({databaseEvidence,immutablePrivateDa
     await db.query(freshPrivateDatabase ? "begin isolation level repeatable read read only" : "begin");
     try {
       requireFreshContinuation();
+      if(nativeTextDatabase)await db.query("set local session_replication_role = replica");
       cronEvidence = await (freshPrivateDatabase ? verifyRestoredCronJobs : restoreCronJobs)(db, archivedCronJobs, {
         sourceDatabase: String(summary.database_snapshot?.database_name || "") || null,
       });
@@ -672,6 +823,20 @@ async function continueRestoreAfterDatabase({databaseEvidence,immutablePrivateDa
     }).filter((item) => item.field !== "owner_access_boundary");
     if (storageDifferences.length) throw new Error(`Isolated database Storage metadata restore differed in ${storageDifferences.length} field(s).`);
     storageEvidence = { database_only_metadata_verified: true, archived_buckets: buckets.length, archived_objects: objects.length };
+    if(nativeTextDatabase){
+      // Independently re-lock/revalidate the same actual columns/I/O after
+      // authority reconciliation, then compare EVERY Storage table to the
+      // retained exact original TEXT. No private decoder/source is borrowed.
+      await db.query("begin");
+      try{
+        const plans=await prepareNativeTextRestorePlans("STORAGE_RESTORING",true);
+        await compareNativeTextRestorePlans(plans,tableSelection.storageTables);
+        await db.query("rollback");
+      }catch(error){await db.query("rollback").catch(()=>{});throw error;}
+      requireFreshContinuation();
+      storageEvidence.exact_table_data={status:"MATCH",tables:tableSelection.storageTables.length,
+        original_text_multiset:true,scope:"POST_AUTHORITY_SAME_ORIGINAL_NATIVE_SQL",object_provider_verified:false};
+    }
     }
   } else {
     const supabase = createClient(`https://${projectRef}.supabase.co`, secret, { auth: { persistSession: false, autoRefreshToken: false } });
@@ -836,7 +1001,7 @@ async function continueRestoreAfterDatabase({databaseEvidence,immutablePrivateDa
     source_identity: summary.source_identity,
     database_tables: databaseEvidence.tables,
     database_rows: databaseEvidence.rows,
-    ...(immutablePrivateDataEvidence === null ? {} : { database_evidence: databaseEvidence }),
+    ...(immutablePrivateDataEvidence === null && !nativeTextDatabase ? {} : { database_evidence: databaseEvidence }),
     unvalidated_check_constraints: unvalidatedCheckEvidence,
     storage: storageEvidence,
     cron: cronEvidence,
@@ -1203,6 +1368,7 @@ try {
   await db.query("begin");
   let unvalidatedCheckEvidence = restoreCheckEvidence([]);
   let immutablePrivateDataEvidence = null;
+  let nativeTextPlans = null;
   let databaseEvidence;
   let databaseEventEvidence;
   let mixedDataCommitAttempted = false;
@@ -1227,10 +1393,17 @@ try {
       // No CHECK, ALWAYS trigger, RLS or ACL was suspended in this branch.
       unvalidatedCheckEvidence = { ...unvalidatedCheckEvidence, mode: "NOT_SUSPENDED" };
     } else {
+    nativeTextPlans=nativeTextDatabase ? await prepareNativeTextRestorePlans() : null;
     await db.query("set local session_replication_role = replica");
+    if(nativeTextPlans)await nativeTextQuery(`create temporary table custodial_native_text_restore_expected(
+      schema_name pg_catalog.text not null,table_name pg_catalog.text not null,raw pg_catalog.text not null) on commit preserve rows`);
     if (databaseTables.length) {
       restorePhase = "truncate_target_tables";
-      await db.query(`truncate ${databaseTables.map((table) => qualified(table.schema_name, table.table_name)).join(",")} restart identity cascade`);
+      // Native TEXT truncates ONLY the complete authenticated table set.
+      // PostgreSQL refuses an external FK dependent; CASCADE must never reach
+      // an unselected namespace just because the selected census matched.
+      const sql=`truncate ${databaseTables.map((table) => qualified(table.schema_name, table.table_name)).join(",")} restart identity${nativeTextDatabase ? "" : " cascade"}`;
+      if(nativeTextDatabase)await nativeTextQuery(sql);else await db.query(sql);
     }
     restorePhase = "suspend_unvalidated_restore_checks";
     const suspendedChecks = await suspendUnvalidatedRestoreChecks(db, databaseTables);
@@ -1255,7 +1428,11 @@ try {
         let restored = 0;
         for await (const line of input) {
           const rawRowText = decodeRestoreTableRowLine(line, table);
-          await db.query(insert, [rawRowText]);
+          if(nativeTextPlans){
+            const result=await nativeTextQuery(nativeTextPlans.get(selectedTable).insert,[rawRowText,table.schema_name,table.table_name]);
+            if(result.rowCount!==1 || result.rows[0].inserted!=="1" || result.rows[0].retained!=="1")
+              throw new Error("Native TEXT original row import was not exact.");
+          } else await db.query(insert, [rawRowText]);
           restored += 1;
         }
         await wireSettled;
@@ -1282,6 +1459,7 @@ try {
     restoreTable = null;
     restorePhase = "reinstate_unvalidated_restore_checks";
     unvalidatedCheckEvidence = await reinstateUnvalidatedRestoreChecks(db, suspendedChecks);
+    if(nativeTextPlans)await compareNativeTextRestorePlans(nativeTextPlans);
     }
     const importedTables = immutablePrivateDataEvidence === null ? databaseTables
       : databaseTables.filter((table) => !(table.schema_name === "public" && table.table_name === "release_deployment_manifest"));
@@ -1293,6 +1471,10 @@ try {
       unvalidated_check_constraints: unvalidatedCheckEvidence,
     };
     databaseEventEvidence = { tables: importedTables.length, unvalidated_check_constraints: unvalidatedCheckEvidence };
+    if(nativeTextDatabase){
+      databaseEvidence.native_text_readback={state:"MATCH",tables:databaseTables.length,original_text_multiset:true};
+      databaseEventEvidence.native_text_readback=databaseEvidence.native_text_readback;
+    }
     if (immutablePrivateDataEvidence !== null) {
       const mixedEvidence = {
         original_data_import: immutablePrivateDataEvidence,
@@ -1307,9 +1489,16 @@ try {
       // never by blindly replaying the original importer into a nonempty target.
       await recordDatabaseRestored();
     }
+    if(nativeTextDatabase){
+      await recordDatabaseRestored();
+      // Last table comparison follows every evidence/check callback. The same
+      // ACCESS EXCLUSIVE locks and control row remain held through COMMIT.
+      await compareNativeTextRestorePlans(nativeTextPlans);
+    }
     requireOriginalArchiveSource();
-    if (immutablePrivateDataEvidence !== null) {
-      restorePhase = "commit_immutable_mixed_data";
+    if (immutablePrivateDataEvidence !== null || nativeTextDatabase) {
+      if(nativeTextDatabase)requireNativeTextOwner();
+      restorePhase = nativeTextDatabase ? "commit_native_text_data" : "commit_immutable_mixed_data";
       mixedDataCommitAttempted = true;
     }
     await db.query("commit");
@@ -1319,13 +1508,13 @@ try {
       // A successful ROLLBACK reply cannot undo/prove absence of an earlier
       // COMMIT whose response was lost. Keep the original paused for named
       // reconciliation; expose no raw private SQL/row error detail here.
-      throw Object.assign(new Error("Immutable mixed DATA commit outcome is unknown; retain the original restore identity for named reconciliation, not an import retry."), {
-        code: "IMMUTABLE_PRIVATE_DATA_COMMIT_OUTCOME_UNKNOWN", outcome: "UNKNOWN", retry_safe: false,
+      throw Object.assign(new Error("Original DATA commit outcome is unknown; retain the original restore identity for named reconciliation, not an import retry."), {
+        code: nativeTextDatabase ? "NATIVE_TEXT_DATA_COMMIT_OUTCOME_UNKNOWN" : "IMMUTABLE_PRIVATE_DATA_COMMIT_OUTCOME_UNKNOWN", outcome: "UNKNOWN", retry_safe: false,
       });
     }
     throw error;
   }
-  if (immutablePrivateDataEvidence === null) await recordDatabaseRestored();
+  if (immutablePrivateDataEvidence === null && !nativeTextDatabase) await recordDatabaseRestored();
 
   restorePhase = "authority_reconciliation";
   await db.query("begin");
@@ -1356,12 +1545,23 @@ try {
       requireOriginalArchiveSource();
       assertIntentTargetIdentity(await readTargetIdentity());
       requireOriginalArchiveSource();
+    } else if(nativeTextDatabase) {
+      // The normal owner retains its ordinary replica route; a separate
+      // original-archive join below preserves the private origin contract.
+      requireOriginalArchiveSource();
+      await db.query("select pg_advisory_xact_lock(hashtextextended('memphis-zoo-application-mutation-admission',0))");
+      await db.query("set local session_replication_role = replica");
+      await db.query("set local row_security = off");
+      await db.query("set local search_path = pg_catalog, pg_temp");
+      requireOriginalArchiveSource();
     } else {
       await db.query("set local session_replication_role = replica");
     }
     discrepancies = await compareRestoredState(db, { restoreId, generation });
     const preservedReleaseRows = await preserveCurrentReleaseIdentity(db, { restoreId, generation });
-    invalidated = await invalidateRestoredAuthority(db, { generation });
+    invalidated = nativeTextDatabase
+      ? await invalidateRestoredOrdinaryNativeAuthority(db,{generation,verifiedArchive})
+      : await invalidateRestoredAuthority(db, { generation });
     await db.query(`update custodial_dr.restore_manifests set authority_invalidated=true,authority_evidence=$2::jsonb,updated_at=clock_timestamp() where restore_id=$1`, [restoreId, JSON.stringify({ invalidated, preserved_release_rows: preservedReleaseRows, discrepancies })]);
     await recordEvent("AUTHORITY_RECONCILIATION", "PASSED", { invalidated, preserved_release_rows: preservedReleaseRows, discrepancies });
     await db.query("commit");
@@ -1375,10 +1575,12 @@ try {
 } catch (error) {
   const outcomeUnknown = error?.outcome === "UNKNOWN" && error?.retry_safe === false;
   const code = outcomeUnknown && (error?.code === "IMMUTABLE_PRIVATE_DATA_COMMIT_OUTCOME_UNKNOWN"
+    || error?.code === "NATIVE_TEXT_DATA_COMMIT_OUTCOME_UNKNOWN"
     || error?.code === "PRIVATE_ORIGINAL_DATA_IMPORT_UNSUPPORTED"
     || (freshPrivateDatabase && error?.code === "IMMUTABLE_PRIVATE_DATA_COMMIT_NOT_ADMITTED")
     || error?.code === "RESTORE_RETRY_RECONCILIATION_REQUIRED") ? error.code : null;
   const currentImport = code === "IMMUTABLE_PRIVATE_DATA_COMMIT_OUTCOME_UNKNOWN"
+    || code === "NATIVE_TEXT_DATA_COMMIT_OUTCOME_UNKNOWN"
     || code === "PRIVATE_ORIGINAL_DATA_IMPORT_UNSUPPORTED"
     || (freshPrivateDatabase && code === "IMMUTABLE_PRIVATE_DATA_COMMIT_NOT_ADMITTED");
   let requestedOriginalRestore;

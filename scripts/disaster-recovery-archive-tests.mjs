@@ -13,6 +13,275 @@ import { materializeVerifiedArchive, restoreArchiveAdmission, selectVerifiedRest
   decodeRestoreTableRowLine, postgresJsonTextLineEncoding, createRestoreRowUtf8Guard } from "./disaster-recovery-archive.mjs";
 import { archiveSignatureBinding, signBinding, stableJson } from "./disaster-recovery-crypto.mjs";
 
+// Actual disposable PostgreSQL + actual owning CLI. UNIT archive/intent keys,
+// populated native rows, normal restore control/fences; no production reads.
+if(process.argv.includes('--ordinary-native-text-owner-sql')){
+ const {default:pg}=await import('pg'),{randomUUID}=await import('node:crypto');
+ const {execFile}=await import('node:child_process'),{promisify}=await import('node:util');
+ const execute=promisify(execFile),{stableJsonFile}=await import('./disaster-recovery-crypto.mjs');
+ const wire=await import('./production-backup-pg-dump-command.mjs');
+ const url=new URL(process.env.RESTORE_DRILL_DATABASE_URL||'invalid:');
+ assert.ok(['postgres:','postgresql:'].includes(url.protocol)&&['127.0.0.1','localhost'].includes(url.hostname));
+ const admin=new pg.Client({connectionString:String(url)});await admin.connect();
+ const work=mkdtempSync(join(tmpdir(),'UNIT-native-text-owning-')),key='UNIT-native-text-original-archive-HMAC-20261021',keyId='UNIT-native-text-owner';
+ const intentKey='UNIT-native-text-independent-intent-HMAC-20261021',project='abcdefghijklmnopqrst';
+ let cases=0;
+ await admin.query(readFileSync(new URL('../supabase/canonical/production-source-role-catalog.sql',import.meta.url),'utf8'));
+ try{for(const scenario of ['positive','wrong-type','custom-enum-text-cast','external-FK','late-storage-mutation','lost-COMMIT']){
+  const name='mz_schema_rebuild_unit_native_'+randomUUID().replaceAll('-',''),target=new URL(String(url));target.pathname='/'+name;
+  const db=new pg.Client({connectionString:String(target)});let proxy,proxyFaults=0;const proxySockets=new Set();const archive=join(work,scenario);mkdirSync(join(archive,'inventory'),{recursive:true});mkdirSync(join(archive,'database'));
+  try{
+   await admin.query('create database '+pg.escapeIdentifier(name)+' owner postgres template template0');await db.connect();
+   await db.query(`create schema auth;create schema storage;create schema custodial_release_identity;create schema cron;create schema supabase_migrations;
+    create table supabase_migrations.schema_migrations(version text primary key,name text,statements text[]);
+    insert into supabase_migrations.schema_migrations values('20261021111917','UNIT_actual_native_owner',ARRAY[]::text[]);
+    create table cron.job(jobid bigserial primary key,schedule text,command text,nodename text,nodeport integer,database text,username text,active boolean,jobname text);
+    create type auth.unit_kind as enum('first','second');
+    create table public.unit_records(id bigint generated always as identity primary key,precise numeric(30,10),json_value json,sql_null json,json_null json,
+      native_array numeric[],moment timestamptz,bytes bytea,kind auth.unit_kind,period tstzrange,derived text generated always as (id::text) stored);
+    insert into public.unit_records(id,precise,json_value,sql_null,json_null,native_array,moment,bytes,kind,period) overriding system value
+      values(9007199254740993,12345678901234567890.1234567890,' {"n":9007199254740993,"n":2} ',null,'null',
+      '[0:1]={9007199254740993.1234567890,NULL}'::numeric[],'2026-10-21 13:00:00.123456+00','\\x00ff','second','[2026-10-21 13:00:00.123456+00,2026-10-21 13:01:00.654321+00)');
+    create table public.device_auth_credentials(id uuid,revoked_at timestamptz,revoked_reason text);
+    create table public.device_auth_enrollment_codes(id uuid,revoked_at timestamptz);
+    create table public.ops_manager_trusted_devices(id uuid,revoked_at timestamptz,revoked_reason text);
+    create table public.ops_manager_enrollment_codes(id uuid,status text,revoked_at timestamptz,revoked_reason text);
+    create table public.ops_manager_push_devices(id uuid,enabled boolean,revoked_at timestamptz);
+    create table auth.sessions(id uuid);
+    create table storage.buckets(id text primary key,name text,public boolean);
+    create table storage.objects(id uuid,bucket_id text,name text);
+    create table storage.unit_records(id bigint primary key,precise numeric,body json);
+    insert into storage.unit_records values(9223372036854775807,123456789012345678901234567890.123456789,' {"storage":9007199254740993} ');
+    create table public.release_deployment_manifest(release_id text primary key,backend_commit text not null,frontend_commit text not null,migration_head text not null,
+      migration_manifest_sha256 text not null,environment_contract_version text not null,status text not null,details_json jsonb not null,created_at timestamptz not null,deployed_at timestamptz);
+    insert into public.release_deployment_manifest values('UNIT_native_release',repeat('a',40),repeat('b',40),'20261021111917',repeat('c',64),'UNIT','deployed','{}',now(),now());`);
+   await db.query(readFileSync(new URL('../supabase/migrations/20260820125325_custodial_disaster_restore_generation_authority.sql',import.meta.url),'utf8'));
+   await db.query(readFileSync(new URL('../supabase/migrations/20260827150000_disaster_recovery_global_mutation_fence.sql',import.meta.url),'utf8'));
+   const entries=new Map(),hash=b=>createHash('sha256').update(b).digest('hex');
+   const emit=(path,value)=>{const b=Buffer.isBuffer(value)?value:Buffer.from(value);writeFileSync(join(archive,path),b,{mode:0o600});entries.set(path,b);return hash(b);};
+   await db.query('begin isolation level repeatable read read only');
+   for(const statement of ["set local search_path=pg_catalog","set local extra_float_digits=3","set local datestyle='ISO, YMD'","set local timezone='UTC'","set local intervalstyle='postgres'","set local bytea_output='hex'"])await db.query(statement);
+   const tables=(await db.query(`select n.nspname schema_name,c.relname table_name,
+    coalesce((select jsonb_agg(a.attname order by k.ordinality) from pg_index i cross join lateral unnest(i.indkey) with ordinality k(attnum,ordinality)
+      join pg_attribute a on a.attrelid=i.indrelid and a.attnum=k.attnum where i.indrelid=c.oid and i.indisprimary),'[]'::jsonb) primary_key,
+    (select jsonb_agg(jsonb_build_object('name',a.attname,'data_type',format_type(a.atttypid,a.atttypmod),'generated',a.attgenerated,'identity',a.attidentity) order by a.attnum)
+      from pg_attribute a where a.attrelid=c.oid and a.attnum>0 and not a.attisdropped) columns
+    from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname in ('public','auth','storage') and c.relkind='r' order by n.nspname,c.relname`)).rows;
+   const quote=v=>pg.escapeIdentifier(v),literal=v=>"E'"+v.replaceAll('\\','\\\\').replaceAll("'","''")+"'";
+   for(const table of tables){
+    const projection=`json_object(ARRAY[${table.columns.map(c=>literal(c.name)).join(',')}]::text[],ARRAY[${table.columns.map(c=>'r.'+quote(c.name)+'::text').join(',')}]::text[])::text`;
+    const rows=(await db.query('select '+projection+' raw from only '+quote(table.schema_name)+'.'+quote(table.table_name)+' r')).rows;
+    table.row_count=String(rows.length);table.data_file='database/'+table.schema_name+'.'+table.table_name+'.jsonl';table.data_encoding=wire.productionBackupTextColumnsDataEncoding;
+    emit(table.data_file,rows.map(r=>wire.encodeProductionBackupTextColumnsDataRow(r.raw)+'\n').join(''));
+   }
+   const release=JSON.parse((await db.query('select row_to_json(r)::text raw from public.release_deployment_manifest r')).rows[0].raw);
+   const ledger=(await db.query('select * from supabase_migrations.schema_migrations order by version')).rows;
+   await db.query('rollback');
+   const identity={migration_head:'20261021111917',migration_ledger_count:ledger.length,cron_job_count:0,release};
+   for(const [file,field,value] of [['application-schema.sql','application_schema_sha256','-- Actual disposable native fixture; owning CLI does not execute schema DATA\n'],
+     ['migration-ledger.json','migration_ledger_sha256',ledger],['cron-jobs.json','cron_jobs_sha256',[]],['extensions.json','extensions_sha256',[]],
+     ['runtime-contract.json','runtime_contract_sha256',{}],['runtime-configuration.json','runtime_configuration_sha256',{}]])
+     identity[field]=emit('inventory/'+file,typeof value==='string'?value:stableJsonFile(value));
+   identity.database_catalog_sha256=emit('inventory/table-catalog.json',stableJsonFile(tables));emit('inventory/storage-buckets.json','[]\n');emit('inventory/storage-objects.json','[]\n');
+   const summary={ok:true,format:'memphis-zoo-disaster-recovery.v4',consistent_database_snapshot:true,project_ref:project,backed_up_schemas:['public','auth','storage','custodial_release_identity'],
+    source_identity:identity,table_count:tables.length,database_row_count:tables.reduce((n,t)=>n+Number(t.row_count),0),storage_bucket_count:0,storage_object_count:0};
+   emit('backup-summary.json',stableJsonFile(summary));const sums=[...entries].sort(([a],[b])=>a.localeCompare(b)).map(([p,b])=>hash(b)+'  '+p).join('\n')+'\n';writeFileSync(join(archive,'SHA256SUMS'),sums);
+   writeFileSync(join(archive,'archive-signature.json'),stableJsonFile({format:'memphis-zoo-disaster-recovery-signature.v1',algorithm:'hmac-sha256',key_id:keyId,archive_digest:hash(sums),
+    signature:signBinding(archiveSignatureBinding({archiveDigest:hash(sums),projectRef:project,sourceIdentity:identity,archiveFormat:summary.format}),key)}));
+   if(scenario==='wrong-type')await db.query('alter table public.unit_records alter column json_value type jsonb using json_value::jsonb');
+   if(scenario==='custom-enum-text-cast')await db.query(`create function auth.unit_kind_text(auth.unit_kind) returns text language sql immutable as $$select 'changed'::text$$;create cast(auth.unit_kind as text) with function auth.unit_kind_text(auth.unit_kind) as assignment`);
+   if(scenario==='external-FK')await db.query(`create schema outside_scope;create table outside_scope.dependent(id bigint references public.unit_records(id));insert into outside_scope.dependent values(9007199254740993)`);
+   if(scenario==='late-storage-mutation')await db.query(`create function custodial_dr.unit_late_storage_mutation() returns trigger language plpgsql as $$begin
+     if new.database_verified and not old.database_verified then update storage.unit_records set precise=0;end if;return new;end$$;
+     create trigger unit_late_storage_mutation before update on custodial_dr.restore_manifests for each row execute function custodial_dr.unit_late_storage_mutation();
+     alter table custodial_dr.restore_manifests enable always trigger unit_late_storage_mutation`);
+   const env={...process.env,SUPABASE_DB_URL:String(target),SUPABASE_PROJECT_REF:project,RESTORE_SOURCE_DIR:archive,RESTORE_ARCHIVE_VERIFY_KEY:key,RESTORE_ARCHIVE_VERIFY_KEY_ID:keyId,
+    RESTORE_NAMED_ACTOR:'UNIT actual disposable native owner',RESTORE_INTENT_SIGNING_KEY:intentKey,RESTORE_INTENT_SIGNING_KEY_ID:keyId+'-intent',RESTORE_DATABASE_ONLY:'true'};
+   const produced=await execute(process.execPath,[new URL('./create-production-restore-intent.mjs',import.meta.url).pathname],{env,timeout:20000,maxBuffer:1024*1024});
+   const normalEnv={...env,RESTORE_APPLY:'true',RESTORE_INTENT_JSON:produced.stdout,RESTORE_INTENT_VERIFY_KEY:intentKey,RESTORE_INTENT_VERIFY_KEY_ID:keyId+'-intent'};
+   if(scenario==='lost-COMMIT'){
+    const net=await import('node:net');
+    // Transparent real PostgreSQL wire proxy; constructor-fixed one-shot fault
+    // discards ONLY the third actual COMMIT's successful server reply. Neither
+    // caller flags nor fabricated query results enter the native owner.
+    proxy=net.createServer(client=>{
+     const server=net.connect({host:url.hostname,port:Number(url.port||5432)});
+     proxySockets.add(client);proxySockets.add(server);
+     let upstream=Buffer.alloc(0),downstream=Buffer.alloc(0),startup=true,commits=0,armed=false,committed=false;
+     const finish=()=>{client.destroy();server.destroy();proxySockets.delete(client);proxySockets.delete(server);};
+     client.on('error',finish);server.on('error',finish);client.on('close',()=>server.destroy());server.on('close',()=>client.destroy());
+     client.on('data',chunk=>{
+      server.write(chunk);upstream=Buffer.concat([upstream,chunk]);
+      if(startup){if(upstream.length<4)return;const size=upstream.readUInt32BE(0);if(upstream.length<size)return;upstream=upstream.subarray(size);startup=false;}
+      while(upstream.length>=5){const size=upstream.readUInt32BE(1)+1;if(upstream.length<size)break;
+       if(upstream[0]===81&&/^commit\0$/i.test(upstream.subarray(5,size).toString('utf8'))&&++commits===3)armed=true;
+       upstream=upstream.subarray(size);
+      }
+     });
+     server.on('data',chunk=>{
+      downstream=Buffer.concat([downstream,chunk]);while(downstream.length>=5){
+       const size=downstream.readUInt32BE(1)+1;if(downstream.length<size)break;
+       const frame=downstream.subarray(0,size);downstream=downstream.subarray(size);
+       if(!armed)client.write(frame);else{
+        if(frame[0]===67&&frame.subarray(5).toString('utf8')==='COMMIT\0')committed=true;
+        if(frame[0]===90){assert.equal(committed,true);proxyFaults++;finish();}
+       }
+      }
+     });
+    });
+    await new Promise(resolve=>proxy.listen(0,'127.0.0.1',resolve));
+    const proxied=new URL(String(target));proxied.port=String(proxy.address().port);normalEnv.SUPABASE_DB_URL=String(proxied);
+   }
+
+   let result,error;try{result=await execute(process.execPath,[new URL('./production-restore.mjs',import.meta.url).pathname],{env:normalEnv,timeout:45000,maxBuffer:2*1024*1024});}catch(e){error=e;}
+   if(scenario==='positive'){
+    assert.equal(error,undefined,error?.stderr);const output=JSON.parse(result.stdout);assert.equal(output.ok,true);assert.equal(output.database_only,true);
+    const evidence=(await db.query('select database_evidence from custodial_dr.restore_manifests')).rows[0].database_evidence;
+    assert.deepEqual(evidence.native_text_readback,{state:'MATCH',tables:tables.length,original_text_multiset:true});
+    assert.equal((await db.query('select precise::text value from storage.unit_records')).rows[0].value,'123456789012345678901234567890.123456789');
+    assert.equal(output.storage.exact_table_data.status,'MATCH');
+    assert.equal(output.storage.exact_table_data.original_text_multiset,true);
+   }else if(scenario==='lost-COMMIT'){
+    assert.ok(error);assert.equal(proxyFaults,1);assert.ok(error.stderr.includes('NATIVE_TEXT_DATA_COMMIT_OUTCOME_UNKNOWN'));
+    const control=(await db.query('select state,mutations_paused from custodial_dr.restore_control')).rows[0];
+    assert.deepEqual(control,{state:'DATABASE_RESTORED',mutations_paused:true});
+    assert.equal((await db.query('select database_verified from custodial_dr.restore_manifests')).rows[0].database_verified,true);
+    const replayEnv={...normalEnv,SUPABASE_DB_URL:String(target)};
+    await assert.rejects(()=>execute(process.execPath,[new URL('./production-restore.mjs',import.meta.url).pathname],{env:replayEnv,timeout:20000}),e=>e.stderr.includes('Another restore or reconciliation already holds'));
+    assert.equal((await db.query('select count(*)::text count from custodial_dr.restore_manifests')).rows[0].count,'1');
+    assert.equal((await db.query("select count(*)::text count from custodial_dr.restore_events where phase='DATABASE' and outcome='PASSED'")).rows[0].count,'1');
+   }else{
+    assert.ok(error,'Expected causal refusal: '+scenario);assert.equal((await db.query('select count(*)::text count from public.unit_records')).rows[0].count,'1');
+    assert.equal((await db.query('select database_verified from custodial_dr.restore_manifests')).rows[0].database_verified,false);
+   }
+   cases++;console.log(JSON.stringify({scenario,status:'PASS_ACTUAL_NATIVE_SQL_AND_OWNING_UNIT_CLI',real_production_backup:false}));
+  }finally{for(const socket of proxySockets)socket.destroy();if(proxy)await new Promise(resolve=>proxy.close(resolve));await db.end().catch(()=>{});await admin.query('drop database if exists '+pg.escapeIdentifier(name)+' with (force)');}
+ }}finally{await admin.end();rmSync(work,{recursive:true,force:true});}
+ console.log(JSON.stringify({selector:'ordinary-native-text-owner-sql',cases,proof:'ACTUAL_DISPOSABLE_POSTGRES_AND_NORMAL_SIGNED_UNIT_OWNER',production_restore:false}));process.exit(0);
+}
+
+// Pure DATA SQL-plan checks for the normal owning entry. These never grant
+// a native client, pause, intent, transaction or restore capability.
+if(process.argv.includes('--ordinary-native-text-owner-only')){
+ const source=readFileSync(new URL('./production-restore.mjs',import.meta.url),'utf8');
+ const begin=source.indexOf('function nativeTextRestorePlan('),end=source.indexOf('async function requireNativeTextRelationCensus(',begin);
+ assert.ok(begin>0&&end>begin);
+ const quoteIdentifier=value=>'"'+String(value).replaceAll('"','""')+'"';
+ const qualified=(schema,table)=>quoteIdentifier(schema)+'.'+quoteIdentifier(table);
+ const plan=new Function('stableJson','quoteIdentifier','qualified',source.slice(begin,end)+'return nativeTextRestorePlan;')(stableJson,quoteIdentifier,qualified);
+ let cases=0;
+ const check=(name,fn)=>{fn();cases++;console.log(JSON.stringify({case:name,status:'PASS_DATA_OR_SOURCE_ONLY'}));};
+ const table={schema_name:'public',table_name:'records',primary_key:['id'],columns:[
+   {name:'id',data_type:'bigint',generated:'',identity:'a'},
+   {name:'native_json',data_type:'json',generated:'',identity:''},
+   {name:'native_array',data_type:'numeric[]',generated:'',identity:''},
+   {name:'derived',data_type:'text',generated:'s',identity:''}]};
+ const actual={relation_kind:'r',is_partition:false,inheritance_count:'0',dropped_count:'0',
+   columns:structuredClone(table.columns),primary_key:['id'],casts:table.columns.map((c,i)=>({name:c.name,
+   type_schema:'pg_catalog',type_name:['int8','json','_numeric','text'][i],supported_io:true}))};
+ check('native DATA uses raw parameter and actual quoted type identities',()=>{
+   const sql=plan(table,actual);assert.match(sql.insert,/\$1::pg_catalog\.json->>E'id'\)::"pg_catalog"\."int8"/);
+   assert.match(sql.insert,/\$1::pg_catalog\.json->>E'native_json'\)::"pg_catalog"\."json"/);
+   assert.match(sql.insert,/"pg_catalog"\."_numeric"/);assert.doesNotMatch(sql.insert,/json_populate_record/);
+   assert.match(sql.insert,/overriding system value/);assert.doesNotMatch(sql.insert,/\("derived"\)/);
+   assert.match(sql.compare,/except all/);assert.match(sql.compare,/r\."derived"::pg_catalog\.text/);
+   assert.match(sql.compare,/collate pg_catalog\."C"/);
+ });
+ check('field names are escaped independently for identifiers and E literals',()=>{
+   const strange='q\\\'";--';const t=structuredClone(table),a=structuredClone(actual);
+   t.columns[1].name=strange;a.columns[1].name=strange;a.casts[1].name=strange;
+   const sql=plan(t,a);assert.ok(sql.insert.includes(quoteIdentifier(strange)));
+   assert.ok(sql.insert.includes("E'"+strange.replaceAll("\\","\\\\").replaceAll("'","''")+"'"));
+ });
+ for(const [name,mutate] of [
+   ['changed type',a=>a.columns[1].data_type='jsonb'],['changed order',a=>a.columns.reverse()],
+   ['changed generated',a=>a.columns[1].generated='s'],['changed identity',a=>a.columns[0].identity=''],
+   ['changed primary key',a=>a.primary_key=[]],['partition',a=>a.is_partition=true],
+   ['foreign table',a=>a.relation_kind='f'],['partition parent',a=>a.relation_kind='p'],
+   ['inheritance',a=>a.inheritance_count='1'],['dropped column',a=>a.dropped_count='1'],
+   ['unsupported I/O',a=>a.casts[1].supported_io=false],['wrong cast column',a=>a.casts[1].name='id'],
+   ['missing cast',a=>a.casts.pop()],['NUL type',a=>a.casts[0].type_name='int8\0bad']]){
+   check(name+' refuses before target data SQL',()=>{const a=structuredClone(actual);mutate(a);
+     assert.throws(()=>plan(table,a),error=>error.code==='NATIVE_TEXT_TARGET_CATALOG_MISMATCH');});
+ }
+ check('target type names cannot introduce SQL syntax',()=>{
+   const a=structuredClone(actual);a.casts[0].type_schema='p";select';a.casts[0].type_name='t";--';
+   assert.ok(plan(table,a).insert.includes('"p"";select"."t"";--"'));
+ });
+ check('all-generated populated target refuses',()=>{
+   const t=structuredClone(table),a=structuredClone(actual);t.columns.forEach(c=>c.generated='s');a.columns=structuredClone(t.columns);
+   assert.throws(()=>plan(t,a));
+ });
+ check('owning ordering preserves signed intent and refuses production native APPLY before connect',()=>{
+   assert.ok(source.indexOf('captureVerifiedOriginalRestoreIntent(intentEnvelope')<source.indexOf('if (nativeTextLegacyBlocker !== null)'));
+   assert.ok(source.indexOf('if (nativeTextLegacyBlocker !== null)')<source.indexOf('  await db.connect();'));
+   assert.match(source,/nativeTextDatabase = hasOrdinaryNativeText && databaseOnly/);
+   assert.match(source,/tableSelection\.databaseTables\.every\(table=>table\.data_encoding===postgresTextColumnsLineEncoding\)/);
+   const prepare=source.indexOf('nativeTextPlans=nativeTextDatabase ? await prepareNativeTextRestorePlans()');
+   assert.ok(prepare>source.indexOf('restorePhase = "acquire_global_mutation_fence"'));
+   assert.ok(prepare<source.indexOf('restorePhase = "truncate_target_tables"'));
+   assert.match(source,/Date\.now\(\) >= expiresAt/);assert.match(source,/db\._txStatus !== "T"/);
+ });
+ check('native truncation denies external FK closure and type casts reject custom functions',()=>{
+   assert.ok(source.includes('nativeTextDatabase ? "" : " cascade"'));
+   assert.match(source,/x\.castsource=t\.oid and x\.casttarget='pg_catalog\.text'/);
+   assert.match(source,/x\.castsource='pg_catalog\.text'::pg_catalog\.regtype and x\.casttarget=t\.oid/);
+   assert.match(source,/cast_proc\.pronamespace<>'pg_catalog'::pg_catalog\.regnamespace/);
+   assert.match(source,/cast_proc\.prolang<>/);
+ });
+ check('whole-table final readback and evidence precede same COMMIT; unknown cannot retry',()=>{
+   const evidence=source.indexOf('if(nativeTextDatabase){\n      await recordDatabaseRestored();');
+   const compare=source.indexOf('await compareNativeTextRestorePlans(nativeTextPlans);',evidence);
+   const commit=source.indexOf('    await db.query("commit");',compare);
+   assert.ok(evidence>0&&compare>evidence&&commit>compare);
+   assert.match(source,/nativeTextDatabase \? "NATIVE_TEXT_DATA_COMMIT_OUTCOME_UNKNOWN"/);
+   assert.match(source,/code === "NATIVE_TEXT_DATA_COMMIT_OUTCOME_UNKNOWN"/);
+   assert.match(source,/if \(prepared && !outcomeUnknown\)/);
+ });
+ const scope=await import('./production-backup-rehearsal-scope.mjs');
+ const summary={format:'memphis-zoo-disaster-recovery.v4',project_ref:'abcdefghijklmnopqrst',database_row_count:3,table_count:2,storage_object_count:0,
+   source_identity:{backup_tool_commit:'a'.repeat(40),backup_tool_tree:'b'.repeat(40),migration_head:'20261021111917',migration_ledger_count:235,migration_ledger_sha256:'c'.repeat(64)}};
+ const run={id:39605791047,repository:{full_name:'unit/repo'},status:'completed',conclusion:'success',head_sha:'a'.repeat(40),path:'.github/workflows/production-disaster-recovery-backup.yml'};
+ check('backup-only source/run lineage metadata agrees without granting effects',()=>{
+   scope.assertBackupOnlySourceBinding({summary,run,backupRunId:'39605791047',repository:'unit/repo'});
+   assert.equal(scope.backupArchiveMetadata(summary,'d'.repeat(64)).length,8);
+ });
+ for(const [name,change] of [['failed run',r=>r.conclusion='failure'],['pending run',r=>r.status='in_progress'],
+   ['wrong source commit',r=>r.head_sha='d'.repeat(40)],['wrong repository',r=>r.repository.full_name='foreign/repo'],
+   ['wrong workflow',r=>r.path='other.yml'],['wrong run',r=>r.id++ ]])check(name+' cannot bind backup-only receipt',()=>{
+   const r=structuredClone(run);change(r);assert.throws(()=>scope.assertBackupOnlySourceBinding({summary,run:r,backupRunId:'39605791047',repository:'unit/repo'}));
+ });
+ check('empty source and metadata line injection refuse',()=>{
+   assert.throws(()=>scope.assertBackupOnlySourceBinding({summary:{...summary,database_row_count:0},run,backupRunId:'39605791047',repository:'unit/repo'}));
+   const bad=structuredClone(summary);bad.source_identity.backup_tool_commit+='\n';
+   assert.throws(()=>scope.backupArchiveMetadata(bad,'d'.repeat(64)));
+ });
+ const restore={ok:true,database_only:true,state:'PAUSED_RECONCILIATION',mutations_paused:true,database_tables:2,database_rows:3,
+   restore_id:'a'.repeat(8)+'-'+ 'a'.repeat(4)+'-'+ 'a'.repeat(4)+'-'+ 'a'.repeat(4)+'-'+ 'a'.repeat(12),authority_generation:1,final_manifest_sha256:'f'.repeat(64),
+   database_evidence:{native_text_readback:{state:'MATCH',tables:2,original_text_multiset:true}},
+   storage:{database_only_metadata_verified:true,exact_table_data:{status:'MATCH',tables:1,original_text_multiset:true}}};
+ const receipt=r=>scope.backupOnlyRestoreReceipt({summary,restore:r,toolCommit:'e'.repeat(40),backupRunId:'39605791047',archiveDigest:'d'.repeat(64),storageTableCount:1});
+ check('backup-only receipt keeps source/tool identities and denies broader admission',()=>{
+   const r=receipt(restore);assert.equal(r.source_commit,'a'.repeat(40));assert.equal(r.qualification_tool_commit,'e'.repeat(40));
+   for(const field of ['forward_migrations_applied','candidate_migration_admission','runtime_admission','storage_provider_admission','full_rehearsal_attestation'])assert.equal(r[field],false);
+ });
+ for(const [name,change] of [['row count',r=>r.database_rows=2],['table count',r=>r.database_tables=3],
+   ['unpaused',r=>r.mutations_paused=false],['wrong state',r=>r.state='COMPLETE'],
+   ['native mismatch',r=>r.database_evidence.native_text_readback.state='DIFFERENT'],
+   ['Storage mismatch',r=>r.storage.exact_table_data.status='DIFFERENT'],['Storage missing table',r=>r.storage.exact_table_data.tables=0]])
+   check(name+' cannot claim backup fidelity',()=>{const r=structuredClone(restore);change(r);assert.throws(()=>receipt(r));});
+ check('backup-only workflow exits before forward SQL/runtime and skips full attestation',()=>{
+   const flow=readFileSync(new URL('../.github/workflows/production-backup-migration-rehearsal.yml',import.meta.url),'utf8');
+   assert.match(flow,/default: full_candidate/);assert.match(flow,/if: inputs\.rehearsal_scope != 'backup_only'/);
+   const boundary=flow.indexOf('node scripts/production-backup-rehearsal-scope.mjs restore-result');
+   assert.ok(boundary>flow.indexOf('RESTORE_APPLY=true'));assert.ok(flow.indexOf('exit 0',boundary)<flow.indexOf('release:migrations:apply'));
+   assert.match(flow,/test "\$source_commit" = "\$GITHUB_SHA"/);
+ });
+ console.log(JSON.stringify({selector:'ordinary-native-text-owner-only',cases,
+   proof:'PURE_SQL_PLAN_AND_OWNING_SOURCE_GUARDS_ONLY',native_sql_or_populated_restore:false}));
+ process.exit(0);
+}
+
 // Newly mandatory legacy mutation admission only. Real UNIT signed archive
 // reads/EOF/cleanup, plus extracted owning entry prefixes with inert effects.
 // No facade is supplied as an accepted native client to shipping methods.
@@ -3105,10 +3374,12 @@ if (process.argv.includes("--private-original-restore-selection-only") || proces
   });
   run("complete legacy three-schema archives preserve mode behavior",()=>{
     const legacyCatalog=catalog.slice(0,3),legacy={...summary,backed_up_schemas:summary.backed_up_schemas.slice(0,3),table_count:3,database_row_count:3};
-    const plan=selectVerifiedRestoreTables(input({catalog:legacyCatalog,summary:legacy}));
+    const checksumPaths=new Set(legacyCatalog.map(table=>table.data_file));
+    assert.throws(()=>selectVerifiedRestoreTables(input({catalog:legacyCatalog,summary:legacy}))); // Retained private checksum is not a complete legacy archive.
+    const plan=selectVerifiedRestoreTables(input({catalog:legacyCatalog,summary:legacy,checksumPaths}));
     assert.equal(plan.privateTables.length,0);
     assert.deepEqual(plan.databaseTables,legacyCatalog.slice(0,2));
-    assert.deepEqual(selectVerifiedRestoreTables(input({catalog:legacyCatalog,summary:legacy,databaseOnly:true})).databaseTables,legacyCatalog);
+    assert.deepEqual(selectVerifiedRestoreTables(input({catalog:legacyCatalog,summary:legacy,checksumPaths,databaseOnly:true})).databaseTables,legacyCatalog);
   });
   run("control arbitrary undeclared or missing schema coverage refuses",()=>{
     for(const schemas of[["public","auth","storage","custodial_dr"],["public","auth","storage","foreign"],
@@ -3157,8 +3428,10 @@ if (process.argv.includes("--private-original-restore-selection-only") || proces
     const selection=source.indexOf("? selectVerifiedRestoreTables({summary,catalog,checksumPaths,databaseOnly})");
     assert.ok(selection>source.indexOf("if (catalogDigest !== summary.source_identity.database_catalog_sha256)"));
     assert.ok(source.includes("tableSelection?.privateTables.length"));
-    const refusal=source.indexOf("if (privateImportBlocker !== null)");
-    assert.ok(refusal>source.indexOf("!verifyBinding(restoreIntentBinding(intentEnvelope.intent)"));
+    const refusal=source.indexOf("if (privateImportBlocker !== null && !freshPrivateDatabase)");
+    const originalIntent=source.indexOf("captureVerifiedOriginalRestoreIntent(intentEnvelope, intentVerifyKey, intentVerifyKeyId)");
+    assert.ok(originalIntent>0 && refusal>originalIntent);
+    assert.ok(source.includes("const freshPrivateDatabase = databaseOnly && privateImportBlocker !== null;"));
     assert.ok(refusal<source.indexOf("const db = new Client("));
     assert.ok(refusal<source.indexOf('restorePhase = "pause_admission"'));
     assert.ok(refusal<source.indexOf("truncate ${databaseTables"));
