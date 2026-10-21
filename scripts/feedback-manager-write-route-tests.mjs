@@ -58,7 +58,7 @@ const credentialId='81000000-0000-4000-8000-000000000002';
 const otherManagerId='81000000-0000-4000-8000-000000000003';
 const employeeId='81000000-0000-4000-8000-000000000004';
 const employeeCredentialId='81000000-0000-4000-8000-000000000005';
-const manager={manager_id:managerId,display_name:'Synthetic Named Manager',roles:['CUSTODIAL_MANAGER'],active:true,revoked_at:null};
+const manager={manager_id:managerId,display_name:'Synthetic Named Manager',roles:['CUSTODIAL_MANAGER'],active:true,revoked_at:null,system_key:'eric_custodial_manager',is_system_principal:false};
 const originalRow={credential_id:credentialId,device_id:'SYNTHETIC_MANAGER_BROWSER',manager_id:managerId,manager,
   max_access_level:'full_access',created_at:new Date().toISOString(),expires_at:new Date(Date.now()+86400000).toISOString(),revoked_at:null};
 let row=structuredClone(originalRow),employeeEnrolled=true,writes=0,rateChecks=0,lastPayload=null;
@@ -68,7 +68,7 @@ const token=accessLevel=>createOpsManagerSession({credentialId,deviceId:original
 const fullToken=token('full_access'),readToken=token('read_only');
 const app=express();app.use(express.json());
 const operations=new Map(),rows=[];
-const context={app,makeFeedbackSubmitAuthority,authoritativeFeedbackPayload,
+const context={app,Buffer,makeFeedbackSubmitAuthority,authoritativeFeedbackPayload,employeeFeedbackReceipt:()=>null,
   authenticatePresentedOpsAccessRequest:req=>authenticatePresentedOpsAccessRequest(req,{env}),
   requireOpsManagerAuth:makeOpsAccessMiddleware({env,trustedDeviceStore:store}),
   requireOpsManagerWrite:makeOpsAccessMiddleware({env,trustedDeviceStore:store,requireWrite:true}),
@@ -92,7 +92,9 @@ const context={app,makeFeedbackSubmitAuthority,authoritativeFeedbackPayload,
   supabaseAdmin:{},APP_VERSION:'test',RELEASE_ID:'test',FEEDBACK_CONTRACT_VERSION:'test',
   console:{error(){/* Expected denial details are asserted below, not raw logged. */}},
 };
-vm.runInNewContext(index.slice(factoryStart,factoryEnd)+'\n'+index.slice(routeStart,routeEnd),context,{timeout:1000});
+const helperStart=index.indexOf('function feedbackSubmissionActor(req)');
+assert.ok(helperStart>=0&&helperStart<routeStart);
+vm.runInNewContext(index.slice(factoryStart,factoryEnd)+'\n'+index.slice(helperStart,routeEnd),context,{timeout:1000});
 const server=app.listen(0,'127.0.0.1');
 await new Promise((resolve,reject)=>{server.once('listening',resolve);server.once('error',reject);});
 const address=server.address(),base=`http://127.0.0.1:${address.port}`;

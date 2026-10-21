@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 // applies a migration, changes a hash/ACL, or reads an operational table.
 export const APPROVED_DATED_SOURCE_FILE="20261017225101_approved_static_dated_original_materialization.sql";
 export const APPROVED_DATED_SOURCE_SHA256="2526dde3e55268da83ba43c8ce30c61c5f1a8c83df50aae85d557c517c383418";
-export const APPROVED_DATED_FORWARD_SHA256="cee7ef97a7aef12f75de1d568e53ff0d987daa428b42f53fde25eb957d095f6f";
+export const APPROVED_DATED_FORWARD_SHA256="7bb4e47bd18487a150f422a6a9dbe335e76e5f0309073e7ad4fa982adf8d9454";
 export const APPROVED_DATED_PREREQUISITES=Object.freeze([
   {
     "identity": "static_weekly_v8_materialize_lunch_document(uuid,jsonb,uuid)",
@@ -96,6 +96,10 @@ export const APPROVED_DATED_NEW_TARGETS=Object.freeze([
   "public.static_weekly_approved_dated_materialize_projection(uuid,uuid,date,text,bigint,bigint,text,jsonb)",
   "public.static_weekly_approved_dated_projection_sink(uuid,date,text,text,jsonb,jsonb,text,jsonb,bigint,uuid,text,text)"
 ]);
+export const APPROVED_DATED_EXECUTED_GRANT_SHA256=Object.freeze({
+  "static_weekly_compiler_exception_set(uuid,date)": "33b08761a92ee41164aa15127e76e17390aecd088655fba28facde99c9b46236",
+  "static_weekly_accepted_exception_set(uuid,date)": "7726510b8129c4e59778db1dc250291875ca4ff1e6c3d69551e5c4ed633811b2"
+});
 const roles=Object.freeze(['postgres','anon','authenticated','service_role','custodial_application_reader','static_weekly_control_plane','static_weekly_release_operator','static_weekly_runtime_20260823']);
 const MAX_DEFINITION_BYTES=1024*1024,MAX_TOTAL_BYTES=4*1024*1024;
 export async function readApprovedDatedRefusal(db){
@@ -170,13 +174,13 @@ export async function readApprovedDatedRefusal(db){
  const predicates=APPROVED_DATED_PREREQUISITES.map(w=>{
   const r=metadata.find(row=>row.identity===w.identity);
   const expected={owner_matches_actor:true,body_sha256:w.body_sha256,definition_sha256:w.definition_sha256,exact_saved_function_count:'1',
-   ...(w.function_only_registration?{saved_grant_count:'0',current_grant_sha256:w.fixed_grant_sha256,unexpected_nonowner_grantor_count:'0'}:{saved_grant_current_match_count:'1'})};
+   ...(w.function_only_registration?{saved_grant_count:'0',current_grant_sha256:APPROVED_DATED_EXECUTED_GRANT_SHA256[w.identity],unexpected_nonowner_grantor_count:'0'}:{saved_grant_current_match_count:'1'})};
   const observed=Object.fromEntries(Object.keys(expected).map(key=>[key,r[key]]));
   return {identity:w.identity,public_oid:r.public_oid,function_only_registration:w.function_only_registration,
    expected,observed,failed_boundary_predicates:Object.keys(expected).filter(key=>observed[key]!==expected[key])};
  });
  return {observed_state:'AFTER_FAILED_STEP_SAVEPOINT_ROLLBACK',actual_failing_predicate:'UNKNOWN',
-  predicate_scope:'CANONICAL152_FIXED10_DEPENDENCY_REEVALUATION_AT_STEP_BOUNDARY_NOT_FAILED_DO_BLOCK_LOCALS',
+  predicate_scope:'EXECUTED152_FIXED10_DEPENDENCY_REEVALUATION_CANONICAL_BODY_PINS_NOT_FAILED_DO_BLOCK_LOCALS',
   source_prerequisite_count:10,source_new_target_count:8,source_canonical_sha256:APPROVED_DATED_SOURCE_SHA256,
   source_executed_sha256:APPROVED_DATED_FORWARD_SHA256,binding,context:context[0],predicates,
   failed_boundary_predicates:predicates.flatMap(r=>r.failed_boundary_predicates.map(predicate=>({identity:r.identity,predicate}))),

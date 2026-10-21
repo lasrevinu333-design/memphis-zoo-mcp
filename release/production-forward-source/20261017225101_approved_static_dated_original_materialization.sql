@@ -39,6 +39,52 @@ begin
  then raise exception 'Exact existing postgres canary owner and named ACL required';end if;
 end $production_forward_original_owner$;
 
+-- BEGIN FINITE EXISTING POSTGRES SOURCE152 HELPER GRANT PROFILE
+DO $dated_helper_owner_profile$
+DECLARE spec record;p record;
+BEGIN
+ IF current_user<>'postgres' OR session_user<>current_user
+  OR current_setting('custodial.deployment_project_ref',true) IS DISTINCT FROM 'rqquvtjdmugpigbndmne'
+  OR current_setting('session_replication_role')<>'origin' OR current_setting('transaction_read_only')<>'off'
+  OR NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname=current_user AND NOT rolsuper AND rolbypassrls)
+  OR NOT EXISTS(SELECT 1 FROM pg_class WHERE oid='public.custodial_release_authority_restore_inventory'::regclass
+   AND relowner='postgres'::regrole AND relkind='r' AND relpersistence='p')
+  OR NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='public.custodial_release_authority_restore_inventory'::regclass
+   AND tgname='trg_custodial_release_authority_restore_inventory_immutable' AND tgenabled='A' AND tgtype=27 AND NOT tgisinternal
+   AND tgfoid='public.custodial_reject_release_authority_inventory_mutation()'::regprocedure)
+ THEN RAISE EXCEPTION 'Approved dated exact normal postgres helper owner context changed';END IF;
+ FOR spec IN SELECT * FROM jsonb_to_recordset($dated_helper_specs$[{"identity":"static_weekly_compiler_exception_set(uuid,date)","public_identity":"public.static_weekly_compiler_exception_set(uuid,date)","body_sha256":"53bd75e28b947dc643fc711b3684be7e1cdc651fccab2a6cb13aedc5b8ef0529","definition_sha256":"85db993fb76b2bd098a0581c44f474c6990576252d1e2f5928555899b8cab212","body_md5":"9a0da514351a45ca4d6c833e5b39bd04","definition_md5":"8da5d21a3ad12577457390367f02fa7e","restore_order":100255,"grant_sql":"select public.custodial_release_authority_reset_grants('static_weekly_compiler_exception_set(uuid,date)');","grant_sha256":"33b08761a92ee41164aa15127e76e17390aecd088655fba28facde99c9b46236"},{"identity":"static_weekly_accepted_exception_set(uuid,date)","public_identity":"public.static_weekly_accepted_exception_set(uuid,date)","body_sha256":"9d05dcedabab2212f6abc73ccecf1a6ebd2f6f71fb56e482f2a03511e3c74290","definition_sha256":"8ce1e49beaf770567bd3468be0b28aea370e5930ce2138e1597eb90668e348d7","body_md5":"e66d9f8b3e1a08aa681f2de8df34b562","definition_md5":"8ccc93ee140e4911f920223460fe97d5","restore_order":100253,"grant_sql":"select public.custodial_release_authority_reset_grants('static_weekly_accepted_exception_set(uuid,date)');","grant_sha256":"7726510b8129c4e59778db1dc250291875ca4ff1e6c3d69551e5c4ed633811b2"}]$dated_helper_specs$::jsonb)
+  AS x(identity text,public_identity text,body_sha256 text,definition_sha256 text,body_md5 text,definition_md5 text,restore_order integer,grant_sql text,grant_sha256 text) LOOP
+  SELECT f.*,l.lanname INTO STRICT p FROM pg_proc f JOIN pg_language l ON l.oid=f.prolang
+   WHERE f.oid=to_regprocedure(spec.public_identity) AND f.pronamespace='public'::regnamespace;
+  IF to_regprocedure(spec.identity) IS DISTINCT FROM p.oid OR p.proowner<>'postgres'::regrole OR p.prokind<>'f'
+   OR p.lanname<>'sql' OR NOT p.prosecdef OR p.provolatile<>'s'
+   OR p.proconfig IS DISTINCT FROM ARRAY['search_path=pg_catalog, public']::text[]
+   OR p.proargnames IS DISTINCT FROM ARRAY['p_publication_id','p_week_start']::text[]
+   OR pg_get_function_identity_arguments(p.oid)<>'p_publication_id uuid, p_week_start date'
+   OR pg_get_function_result(p.oid)<>'jsonb' OR p.proretset OR p.proisstrict OR p.proleakproof OR p.proparallel<>'u'
+   OR p.provariadic<>0 OR p.pronargdefaults<>0
+   OR md5(p.prosrc) IS DISTINCT FROM spec.body_md5 OR md5(pg_get_functiondef(p.oid)) IS DISTINCT FROM spec.definition_md5
+   OR public.static_weekly_digest_text(p.prosrc) IS DISTINCT FROM spec.body_sha256
+   OR public.static_weekly_digest_text(pg_get_functiondef(p.oid)) IS DISTINCT FROM spec.definition_sha256
+   OR p.proacl IS NULL OR (SELECT count(*) FROM aclexplode(p.proacl))<>1
+   OR EXISTS(SELECT 1 FROM aclexplode(p.proacl) a
+    WHERE a.grantee<>p.proowner OR a.grantor<>p.proowner OR a.privilege_type<>'EXECUTE' OR a.is_grantable)
+   OR EXISTS(SELECT 1 FROM(VALUES ('postgres',true),('anon',false),('authenticated',false),('service_role',false),('custodial_application_reader',false),('static_weekly_control_plane',false),('static_weekly_release_operator',false),('static_weekly_runtime_20260823',false)) expected(role_name,may_execute)
+    LEFT JOIN pg_roles r ON r.rolname=expected.role_name
+    WHERE r.oid IS NULL OR has_function_privilege(r.oid,p.oid,'EXECUTE') IS DISTINCT FROM expected.may_execute)
+   OR public.custodial_release_authority_current_grant_definition(spec.identity) IS DISTINCT FROM spec.grant_sql
+   OR public.static_weekly_digest_text(public.custodial_release_authority_current_grant_definition(spec.identity)) IS DISTINCT FROM spec.grant_sha256
+   OR (SELECT count(*) FROM public.custodial_release_authority_restore_inventory i
+    WHERE CASE WHEN i.object_kind IN('function','grant') AND position('(' in i.object_identity)>0 THEN to_regprocedure(i.object_identity) END=p.oid)<>1
+   OR NOT EXISTS(SELECT 1 FROM public.custodial_release_authority_restore_inventory i
+    WHERE i.object_kind='function' AND i.object_identity=spec.identity AND i.restore_order=spec.restore_order
+     AND i.definition_sql=pg_get_functiondef(p.oid) AND i.definition_sha256=spec.definition_sha256)
+  THEN RAISE EXCEPTION 'Approved dated exact PUBLIC helper body owner ACL effective rights or recovery tuple changed';END IF;
+ END LOOP;
+END $dated_helper_owner_profile$;
+-- END FINITE EXISTING POSTGRES SOURCE152 HELPER GRANT PROFILE
+
 CREATE TEMP TABLE approved_dated_install_targets(
  identity text PRIMARY KEY,body_sha256 text NOT NULL,return_type text NOT NULL,
  volatility text NOT NULL,argument_names text[] NOT NULL
@@ -133,8 +179,8 @@ BEGIN
      AND to_regprocedure(i.object_identity)=to_regprocedure(dependency.identity))
     OR public.static_weekly_digest_text(public.custodial_release_authority_current_grant_definition(dependency.identity))
      IS DISTINCT FROM (CASE dependency.identity
-      WHEN 'static_weekly_compiler_exception_set(uuid,date)' THEN '5e045b2e87eeab69f63d6e165e816477b4d9b428dbf668ae381edbfbe8c995fb'
-      WHEN 'static_weekly_accepted_exception_set(uuid,date)' THEN '7e2fe1f75b7606def8d8b34dcf3fec480b7b07d8a5e5fde735198b7b454f24a0'
+      WHEN 'static_weekly_compiler_exception_set(uuid,date)' THEN '33b08761a92ee41164aa15127e76e17390aecd088655fba28facde99c9b46236'
+      WHEN 'static_weekly_accepted_exception_set(uuid,date)' THEN '7726510b8129c4e59778db1dc250291875ca4ff1e6c3d69551e5c4ed633811b2'
      END)
     OR EXISTS(SELECT 1 FROM pg_proc p CROSS JOIN LATERAL aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
      WHERE p.oid=to_regprocedure(dependency.identity) AND a.grantee<>p.proowner AND a.grantor<>p.proowner)

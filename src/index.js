@@ -971,6 +971,7 @@ function verifyFeedbackLinkToken(token, feedbackId, purpose = "ack") {
 
 function requireFeedbackSignedLinkOrOps(purpose) {
   return (req, res, next) => {
+    if (purpose === "image") res.setHeader("Cache-Control", "no-store");
     const feedbackId = String(req.params.feedbackId || "").trim();
     if (verifyFeedbackLinkToken(req.query.token || req.body?.token, feedbackId, purpose)) {
       req.feedbackSignedLink = { purpose, feedback_id: feedbackId };
@@ -978,13 +979,7 @@ function requireFeedbackSignedLinkOrOps(purpose) {
       return;
     }
     if (purpose === "ack") return requireOpsManagerWrite(req, res, next);
-    const result = authenticateOpsAccessRequest(req);
-    if (!result.ok) {
-      res.status(result.status || 401).json({ ok: false, error: result.error || "Unauthorized" });
-      return;
-    }
-    req.memphisAuth = result.session;
-    next();
+    return requireOpsManagerAuth(req, res, next);
   };
 }
 
@@ -2714,7 +2709,7 @@ app.get("/feedback-api/image/:feedbackId", requireFeedbackSignedLinkOrOps("image
       if (error) throw new Error(error.message || "Feedback image download failed.");
       const arrayBuffer = await data.arrayBuffer();
       res.setHeader("Content-Type", String(image.type || data.type || "application/octet-stream"));
-      res.setHeader("Cache-Control", "private, max-age=3600");
+      res.setHeader("Cache-Control", "no-store");
       res.status(200).send(Buffer.from(arrayBuffer));
       return;
     }
@@ -2726,7 +2721,7 @@ app.get("/feedback-api/image/:feedbackId", requireFeedbackSignedLinkOrOps("image
     }
     const body = Buffer.from(match[2].replace(/\s+/g, ""), "base64");
     res.setHeader("Content-Type", match[1].replace("image/jpg", "image/jpeg"));
-    res.setHeader("Cache-Control", "private, max-age=3600");
+    res.setHeader("Cache-Control", "no-store");
     res.status(200).send(body);
   } catch (error) {
     res.status(404).send(error?.message || "Feedback image lookup failed");

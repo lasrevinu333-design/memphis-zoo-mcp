@@ -58,7 +58,7 @@ async function affectedProjectionCases(){
 if(process.argv.includes('--affected-projection-only')){await affectedProjectionCases();process.exit(0);}
 let checks=0;const same=(a,b)=>{assert.deepEqual(a,b);checks++;};
 const row={id:randomUUID(),message:'Full original message',status:'acknowledged',notification_status:'historical'};
-const status=(id,state='queued',evidence_state='no_send_evidence')=>({feedback_id:id,state,evidence_state,relay_paused:true,needs_attention:false,possible_duplicate:false,protected_attachment_pending:false});
+const status=(id,state='queued',evidence_state='no_send_evidence')=>({feedback_id:id,state,evidence_state,relay_paused:true,needs_attention:state==='needs_attention',possible_duplicate:false,protected_attachment_pending:false});
 for(const [state,evidence] of [['queued','no_send_evidence'],['claimed','no_send_evidence'],['outcome_unknown','outcome_unknown'],['connector_accepted','connector_accepted'],['sent_observed','sent_observed'],['inbox_observed','inbox_observed'],['needs_attention','inbox_observed'],['not_enrolled','not_enrolled']]){
  const before=structuredClone(row);const received=status(row.id,state,evidence);
  const [result]=await attachFeedbackDelivery([row],{client:{rpc:async(name,args)=>{same(name,'custodial_feedback_delivery_status');same(args,{p_feedback_ids:[row.id]});return {data:[{...received,claim_token:'never expose',email_text:'never expose'}]};}}});

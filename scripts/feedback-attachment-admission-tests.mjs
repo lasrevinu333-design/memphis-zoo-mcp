@@ -4,32 +4,35 @@ import {verifyFeedbackAttachmentForRelay,FeedbackAttachmentAdmissionError} from 
 import {callFeedbackRelay,FEEDBACK_RELAY_CONTRACT,FEEDBACK_RELAY_SCHEMA_SHA256} from '../src/feedback-email-relay.js';
 import {createClient} from '@supabase/supabase-js';
 
+// Synthetic exact SQL begin response only; this fixture never supplies a sender.
+const originalBeginPermit=args=>({ok:true,may_send:true,attempt_id:randomUUID(),attempt_generation:1,provider_generation:1,envelope_sha256:args.p_args.envelope_sha256});
+
 async function currentRelayAuthorityCases(){
   const authority=()=>({authInfo:{clientId:'authority-fixture',scopes:['mcp:read','mcp:write'],extra:{authSource:'self_contained_oauth',issuer:'https://fixture.invalid',subject:'original-relay'}}});
   const request=()=>({contract_version:FEEDBACK_RELAY_CONTRACT,request_id:randomUUID(),intent_id:randomUUID(),claim_token:randomUUID(),claim_generation:1,envelope_sha256:'a'.repeat(64)});
   let checks=0;
   for(const change of ['principal','scope','expiry']){
     const extra=authority(),calls=[];
-    const client={rpc:async name=>{calls.push(name);if(name==='custodial_feedback_relay_attachment_internal'){
+    const client={rpc:async(name,args)=>{calls.push(name);if(name==='custodial_feedback_relay_attachment_internal'){
       if(change==='principal')extra.authInfo.extra.subject='changed-relay';
       if(change==='scope')extra.authInfo.scopes=['mcp:read'];
       if(change==='expiry')extra.authInfo.expiresAt=1;
       return {data:{status:'no_attachment'}};
-    }return {data:{ok:true,may_send:true}};}};
+    }return {data:originalBeginPermit(args)};}};
     await assert.rejects(()=>callFeedbackRelay('begin',request(),extra,{client}),/authorization|principal|expired/);checks++;
     assert.deepEqual(calls,['custodial_feedback_relay_attachment_internal'],'changed current authority cannot reach begin');checks++;
   }
   const extra=authority();let calls=0;
-  await assert.rejects(()=>callFeedbackRelay('begin',request(),extra,{client:{rpc:async name=>{calls++;
+  await assert.rejects(()=>callFeedbackRelay('begin',request(),extra,{client:{rpc:async(name,args)=>{calls++;
     if(name==='custodial_feedback_relay_attachment_internal')return {data:{status:'no_attachment'}};
-    extra.authInfo.expiresAt=1;return {data:{ok:true,may_send:true}};
-  }}}),/expired/);checks++;
+    extra.authInfo.expiresAt=1;return {data:originalBeginPermit(args)};
+  }}}),/original authorization.*changed/);checks++;
   assert.equal(calls,2,'possibly committed begin is not repeated');checks++;
   const denied=authority();denied.authInfo.expiresAt=1;calls=0;
   await assert.rejects(()=>callFeedbackRelay('begin',request(),denied,{client:{rpc:async()=>{calls++;}}}),/expired/);checks++;
   assert.equal(calls,0);checks++;
   const stableCalls=[];
-  assert.equal((await callFeedbackRelay('begin',request(),authority(),{client:{rpc:async name=>{stableCalls.push(name);return {data:name==='custodial_feedback_relay_attachment_internal'?{status:'no_attachment'}:{ok:true,may_send:true}};}}})).may_send,true);checks++;
+  assert.equal((await callFeedbackRelay('begin',request(),authority(),{client:{rpc:async(name,args)=>{stableCalls.push(name);return {data:name==='custodial_feedback_relay_attachment_internal'?{status:'no_attachment'}:originalBeginPermit(args)};}}})).may_send,true);checks++;
   assert.equal(stableCalls.length,2);checks++;
   for(const downloadFails of [false,true]){
     const changing=authority(),calls=[],data=Buffer.from([0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a]);
@@ -40,7 +43,7 @@ async function currentRelayAuthorityCases(){
       return {data:new Blob([data]).stream()};
     }})})},rpc:async(name,args)=>{calls.push({name,action:args.p_action});return {data:{status:'ready',ticket,operation_id,
       image:{type:'image/png',size:data.length,sha256,storage_bucket:'system-feedback-private',storage_path:`feedback/${operation_id}/${sha256}.png`}}};}};
-    await assert.rejects(()=>callFeedbackRelay('begin',request(),changing,{client}),/read and write/);checks++;
+    await assert.rejects(()=>callFeedbackRelay('begin',request(),changing,{client}),/original authorization.*changed/);checks++;
     assert.deepEqual(calls,[{name:'custodial_feedback_relay_attachment_internal',action:'prepare'}],'authority lost during historical attachment read cannot complete/reject/begin');checks++;
   }
   console.log(JSON.stringify({status:'FEEDBACK_CURRENT_RELAY_AUTHORITY_PASS',checks,at_utc:new Date().toISOString(),rpc_synthetic:true,mail_sent:false,actual_authentication:false}));
@@ -87,7 +90,7 @@ let calls=[];
 const service={storage:client.storage,rpc:async(name,args)=>{
   calls.push({name,args});
   if(name==='custodial_feedback_relay_attachment_internal')return {data:args.p_action==='prepare'?{status:'ready',ticket:randomUUID(),...stored}:{status:'verified'},error:null};
-  if(name==='custodial_feedback_relay_begin')return {data:{ok:true,may_send:true,attempt_id:randomUUID()},error:null};
+  if(name==='custodial_feedback_relay_begin')return {data:originalBeginPermit(args),error:null};
   throw Error(`Unexpected RPC ${name}`);
 }};
 const result=await callFeedbackRelay('begin',fence,extra,{client:service});
@@ -100,13 +103,13 @@ assert.ok(!JSON.stringify(result).includes(path)&&!JSON.stringify(result).includ
 calls=[];
 const unavailableService={...service,...streamClient(async()=>{throw Error('offline');}),rpc:async(name,args)=>{
   calls.push({name,args});
-  return {data:name==='custodial_feedback_relay_attachment_internal'?(args.p_action==='prepare'?{status:'ready',ticket:randomUUID(),...stored}:{status:'paused'}):{ok:true,may_send:true},error:null};
+  return {data:name==='custodial_feedback_relay_attachment_internal'?(args.p_action==='prepare'?{status:'ready',ticket:randomUUID(),...stored}:{status:'paused'}):originalBeginPermit(args),error:null};
 }};
 assert.deepEqual(await callFeedbackRelay('begin',{...fence,request_id:randomUUID()},extra,{client:unavailableService}),{ok:false,may_send:false,needs_attention:false,paused:true});
 assert.deepEqual(calls.map(c=>c.name),['custodial_feedback_relay_attachment_internal','custodial_feedback_relay_attachment_internal'],'transport outage never reaches public begin');
 assert.equal(calls[1].args.p_args.disposition,'configuration_unavailable');
 calls=[];
-const textService={rpc:async(name,args)=>{calls.push(name);return {data:name==='custodial_feedback_relay_attachment_internal'?{status:'no_attachment'}:{ok:true,may_send:true},error:null};}};
+const textService={rpc:async(name,args)=>{calls.push(name);return {data:name==='custodial_feedback_relay_attachment_internal'?{status:'no_attachment'}:originalBeginPermit(args),error:null};}};
 assert.equal((await callFeedbackRelay('begin',{...fence,request_id:randomUUID()},extra,{client:textService})).may_send,true);
 assert.deepEqual(calls,['custodial_feedback_relay_attachment_internal','custodial_feedback_relay_begin'],'text-only path remains available');
 console.log(JSON.stringify({status:'FEEDBACK_ATTACHMENT_ADMISSION_TESTS_PASS',checks:22,actualStorageSdk:true,network:'intercepted',external_schema_sha256:FEEDBACK_RELAY_SCHEMA_SHA256,provider_called:false}));

@@ -45,7 +45,7 @@
       "canonical_file": "20261017225101_approved_static_dated_original_materialization.sql",
       "canonical_sha256": "2526dde3e55268da83ba43c8ce30c61c5f1a8c83df50aae85d557c517c383418",
       "forward_file": "release/production-forward-source/20261017225101_approved_static_dated_original_materialization.sql",
-      "forward_sha256": "cee7ef97a7aef12f75de1d568e53ff0d987daa428b42f53fde25eb957d095f6f",
+      "forward_sha256": "7bb4e47bd18487a150f422a6a9dbe335e76e5f0309073e7ad4fa982adf8d9454",
       "profile": "existing-postgres-owner"
     },
     {

@@ -145,7 +145,12 @@ assert.match(readerMigration, /create policy custodial_application_reader_system
 assert.match(readerMigration, /revoke all privileges on table public\.system_feedback_legacy_image_backups[\s\S]*from custodial_application_reader/i);
 assert.doesNotMatch(readerMigration, /grant\s+(?:insert|update|delete|all)[\s\S]*system_feedback_items[\s\S]*custodial_application_reader/i);
 assert.match(readerMigration, /custodial_release_authority_restore_inventory[\s\S]*public\.system_feedback_items:custodial_application_reader_system_feedback_runtime/i);
-assert.match(index, /\.\.\.authoritativeFeedbackPayload\(req\)/);
+// The immutable original request is captured before the first asynchronous actor check.
+const submit=index.slice(index.indexOf('app.post("/feedback-api/submit"'),index.indexOf('app.get("/guest-api/locations'));
+assert.match(submit,/const request=originalFeedbackRequest\(req\),actor=feedbackSubmissionActor\(req\)/);
+assert.match(submit,/\.\.\.authoritativeFeedbackPayload\(request\)/);
+assert.ok(submit.indexOf('originalFeedbackRequest(req)')<submit.indexOf('await '),'capture precedes the first route await');
+assert.doesNotMatch(submit,/\.\.\.authoritativeFeedbackPayload\(req\)/,'live mutable request is not the persisted authority snapshot');
 assert.doesNotMatch(
   index.slice(index.indexOf('app.post("/feedback-api/submit"'), index.indexOf('app.get("/guest-api/status"')),
   /\.\.\.\(req\.body/,

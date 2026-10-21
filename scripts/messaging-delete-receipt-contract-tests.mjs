@@ -6,16 +6,16 @@ import {EventEmitter} from 'node:events';
 import {createHash,createHmac} from 'node:crypto';
 import {createOriginalMessageActions} from '../src/messaging-original-outcome.js';
 
-// Focused member: runs the real product factory with recording boundaries.
-// This does not qualify the SQL engine, router mount, or a physical phone.
-async function originalOutcomeContract({attestationOnly=false,prototypeOnly=false}={}) {
+// Focused members and the default route use real product factories with
+// recording credential/SQL boundaries. No SQL engine or physical phone proof.
+async function originalOutcomeContract({attestationOnly=false,prototypeOnly=false,routerOnly=false}={}) {
   const ids=Array.from({length:8},(_,i)=>`${i+1}0000000-0000-4000-8000-00000000000${i+1}`);
   const [devicePk,employeeId,credentialId,userId,threadId,messageId,operationId,otherId]=ids;
   const tokenHash='a'.repeat(64), fingerprint='b'.repeat(64),time='2026-10-12T21:20:00.123456+00:00';
   const nativeSecret='SyntheticOriginalRequestSecret_1234567890';
   const authorization=`Device ${credentialId}.${nativeSecret}`;
   let current={device_pk:devicePk,device_id:'KIOSK_04',employee_id:employeeId,credential_id:credentialId,assignment_epoch:'17',token_hash:tokenHash};
-  let denied=false,sqlRows=null,sqlHook=null,rpcHook=null,changeReceipt=null,unknown=false,checks=0,expectedMiddlewareRequest=null;
+  let denied=false,sqlRows=null,sqlHook=null,rpcHook=null,changeReceipt=null,unknown=false,checks=0,expectedMiddlewareRequest=null,incompleteAdmission=false,participant=true;
   const calls=[],sql=[],headers=[];
   class Response extends EventEmitter {
     status(value){this.statusCode=value;return this}
@@ -46,19 +46,33 @@ async function originalOutcomeContract({attestationOnly=false,prototypeOnly=fals
       ?{...common(),user_id:userId,operation_id:operationId}
       :{...common(),sender_user_id:userId,body:' original text ',message_type:'text',metadata_json:{source:'employee'},client_message_id:'original-client-1'}}));
   const normalRow=()=>({device_pk:devicePk,device_id:'KIOSK_04',employee_id:employeeId,assignment_epoch:'17',user_id:userId});
-  const actions=createOriginalMessageActions({
+  const ports={
     requireDeviceAccess(req,res,next){
       if(expectedMiddlewareRequest)assert.equal(req,expectedMiddlewareRequest,'middleware receives the actual authenticated request');
       // Deliberately mirrors the existing non-Promise-returning wrapper.
       void Promise.resolve().then(()=>{
         headers.push(req.headers.authorization);
+        if(routerOnly&&req.headers.authorization==='Bearer recording-read-only-manager'){
+          req.memphisAuth={manager_id:otherId,read_only:true};next();return;
+        }
         if(denied || req.headers.authorization!==authorization){res.status(401).json({ok:false});return}
+        if(incompleteAdmission){req.memphisDevice={canonical_device_id:'KIOSK_04'};next();return;}
         install(req);next();
       });
     },
-    async runReadOnlySql(statement){sql.push(statement);if(sqlHook)await sqlHook();return sqlRows??[normalRow()]},
+    async runReadOnlySql(statement){
+      sql.push(statement);if(sqlHook)await sqlHook();
+      if(routerOnly){
+        if(/public\.device_aliases/.test(statement))return [{canonical_device_id:'KIOSK_04',device_id:'KIOSK_04',device_active:true,assigned_employee_id:employeeId,employee_active:true}];
+        if(/public\.msg_get_user_by_device\('KIOSK_04'\)/.test(statement))return [{msg_user_id:userId,role:'employee'}];
+        if(/from public\.msg_threads t/.test(statement))return [{id:threadId,thread_type:'direct',system_key:null,is_active:true,has_memphis_bot:false}];
+        if(/from public\.msg_thread_participants/.test(statement))return participant?[{present:1}]:[];
+      }
+      return sqlRows??[normalRow()];
+    },
     async runRpc(name,args){
       calls.push({name,args:structuredClone(args)});if(rpcHook)await rpcHook();
+      if(routerOnly&&name==='msg_ensure_ops_manager_user')return {msg_user_id:otherId,role:'manager'};
       const payload=args.p_payload,command=payload.original_command??args.p_command;
       const actor={device_pk:devicePk,device_id:payload.device_id,employee_id:payload.expected_employee_id,
         credential_id:payload.expected_credential_id,assignment_epoch:payload.expected_assignment_epoch,user_id:payload.user_id};
@@ -75,9 +89,52 @@ async function originalOutcomeContract({attestationOnly=false,prototypeOnly=fals
       const receipt={...base,state:'ORIGINAL_TRANSACTION_OUTCOME_RECORDED',original_outcome_recorded:true,original_request:original,result,recorded_at:time};
       if(changeReceipt)changeReceipt(receipt);return receipt;
     }
-  });
+  };
+  const actions=createOriginalMessageActions(ports);
   const check=(label,actual,expected)=>{assert.deepEqual(actual,expected,label);checks++;console.log('PASS original-outcome',label)};
   const rejects=async(label,action,req,status)=>{await assert.rejects(()=>actions[action](req,new Response()),e=>e.status===status,label);checks++;console.log('PASS original-outcome',label)};
+  if(routerOnly){
+    // Actual shipping router + original-action factory; only SQL/credential
+    // observations are recording fixtures. This is not SQL or native-platform proof.
+    const app=express();app.use(express.json({verify(req,_res,bytes){req.scanAuthorityRawBody=Buffer.from(bytes)}}));
+    app.use('/messaging-api',createMessagingRouter({...ports,buildHealthPayload:()=>({ok:true}),appVersion:'source',releaseId:'not-deployed',contractVersion:'messaging.v5'}));
+    const server=await new Promise(resolve=>{const listener=app.listen(0,'127.0.0.1',()=>resolve(listener))});
+    const post=async(req=request('delete'))=>{
+      const response=await fetch(`http://127.0.0.1:${server.address().port}${req.originalUrl}`,{method:req.method,headers:{...req.headers,'content-type':'application/json'},body:req.scanAuthorityRawBody});
+      return {status:response.status,body:await response.json()};
+    };
+    const actionCalls=()=>calls.filter(c=>c.name==='app_apply_operational_command');
+    try{
+      let response=await post();check('current signed routed employee delete status',response.status,200);
+      check('current routed exact operation',response.body.data.operation_id,operationId);
+      check('current routed exact deletion scope',response.body.data.deletion_scope,'user');
+      check('current routed private original RPC',actionCalls().at(-1).args.p_command,'employee_message_original_delete');
+      check('current routed server-only token hash',actionCalls().at(-1).args.p_payload.credential_token_hash,tokenHash);
+      check('current routed original outcome recorded',response.body.meta.original_outcome.state,'ORIGINAL_TRANSACTION_OUTCOME_RECORDED');
+      check('current routed no finalizer authority',response.body.meta.original_outcome.finalizer_allowed,false);
+      check('current routed no legacy delete RPC',calls.some(c=>c.name==='msg_delete_thread'),false);
+      for(const [label,mutate,status] of [
+        ['anonymous current route',req=>delete req.headers.authorization,401],
+        ['wrong current credential',req=>req.headers.authorization='Device wrong',401],
+        ['unsigned current route',req=>delete req.headers['x-memphis-native-request-attestation'],403],
+        ['wrong original signature',req=>req.headers['x-memphis-native-request-attestation']='0'.repeat(64),403],
+        ['unknown original body field',req=>{req.body.extra='unsafe';sign(req)},422],
+        ['wrong original assignment',req=>{req.body.expected_assignment_epoch='18';sign(req)},409],
+        ['forged original user',req=>{req.body.user_id=otherId;sign(req)},403],
+      ]){
+        const before=actionCalls().length,req=request('delete');mutate(req);response=await post(req);
+        check(label+' refused',response.status,status);check(label+' no original action',actionCalls().length,before);
+      }
+      let before=actionCalls().length;incompleteAdmission=true;response=await post();incompleteAdmission=false;
+      check('canonical-device-only admission stays refused',response.status,401);check('incomplete credential no original action',actionCalls().length,before);
+      participant=false;response=await post();participant=true;check('current nonparticipant refused',response.status,403);check('current nonparticipant no original action',actionCalls().length,before);
+      const manager=request('delete');manager.headers.authorization='Bearer recording-read-only-manager';response=await post(manager);
+      check('current read-only manager remains refused',response.status,403);check('current read-only manager no original action',actionCalls().length,before);
+      unknown=true;response=await post();unknown=false;check('current original UNKNOWN cannot become success',response.status,502);
+      console.log('MESSAGING_CURRENT_ORIGINAL_DELETE_ROUTER_CONTRACT_PASS',checks);
+    }finally{await new Promise(resolve=>server.close(resolve));console.log('OWNED_CURRENT_ORIGINAL_HTTP_SERVER_CLOSED')}
+    return;
+  }
   if(prototypeOnly){
     const actualApp=express(),observed={};
     actualApp.use(express.json({verify(req,_res,bytes){req.scanAuthorityRawBody=Buffer.from(bytes)}}));
@@ -259,6 +316,8 @@ if(process.argv.includes('--original-prototype-only')){await originalOutcomeCont
 if(process.argv.includes('--original-attestation-only')){await originalOutcomeContract({attestationOnly:true});process.exit(0)}
 if(process.argv.includes('--original-outcome-only')){await originalOutcomeContract();process.exit(0)}
 
+async function legacyReceiptRouterFallbackContract(){
+// Legacy import-safe router fallback only; NOT current shipping device admission.
 const sqlSource=readFileSync(new URL('../supabase/migrations/20260810140000_finalize_named_manager_messenger_retirement_integrity.sql',import.meta.url),'utf8');
 const begin=sqlSource.indexOf('create or replace function public.msg_delete_thread(p_thread_id uuid,p_request_user_id uuid,p_operation_id uuid)');
 const end=sqlSource.indexOf('create or replace function public.msg_admin_tombstone_thread(',begin);
@@ -285,15 +344,16 @@ const receipt=(args,changes={})=>({ok:true,deleted:true,thread_id:args.p_thread_
 let receiptResult=args=>receipt(args),identityMode='normal',participant=true;
 const rpcCalls=[];
 const app=express();app.use(express.json());
-app.use('/messaging-api',createMessagingRouter({
-  requireDeviceAccess(req,res,next){
+app.use((req,res,next)=>{
     const token=req.headers.authorization;
     if(token==='Bearer employee'){req.memphisDevice={canonical_device_id:'KIOSK_04'};next();return}
     if(token==='Bearer manager' || token==='Bearer manager-read-only'){
       req.memphisAuth={manager_id:manager,read_only:token.endsWith('read-only')};next();return;
     }
-    res.status(401).json({ok:false,error:'Test auth required'});
-  },
+    res.status(401).json({ok:false,error:'Legacy recording fixture auth required'});
+});
+app.use('/messaging-api',createMessagingRouter({
+  // Omit requireDeviceAccess ONLY here to select its documented import-safe fallback.
   async runReadOnlySql(statement){
     const query=String(statement);
     if(/public\.device_aliases/.test(query))return [{canonical_device_id:'KIOSK_04',device_id:'KIOSK_04',device_active:true,assigned_employee_id:employee,employee_active:true}];
@@ -314,7 +374,7 @@ const server=await new Promise(resolve=>{const listener=app.listen(0,'127.0.0.1'
 const origin=`http://127.0.0.1:${server.address().port}`;
 const post=async(body={device_id:'KIOSK_04',user_id:employee,operation_id:operation},token='employee')=>{
   const response=await fetch(`${origin}/messaging-api/thread/${thread}/delete`,{method:'POST',
-    headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},body:JSON.stringify(body)});
+    headers:{'Content-Type':'application/json','x-device-id':'KIOSK_04',Authorization:`Bearer ${token}`},body:JSON.stringify(body)});
   return {status:response.status,body:await response.json()};
 };
 let checks=0;
@@ -371,5 +431,12 @@ try{
   result=await post({operation_id:operation},'manager');
   check('named manager delete allowed',result.status,200);check('named manager actor is server-derived',result.body.data.user_id,managerUser);
   check('named manager SQL caller',deleteCalls().at(-1).args.p_request_user_id,managerUser);
-  console.log('MESSAGING_DELETE_RECEIPT_CONTRACT_PASS',checks);
+  console.log('MESSAGING_LEGACY_IMPORT_SAFE_DELETE_RECEIPT_CONTRACT_PASS',checks);
 }finally{await new Promise(resolve=>server.close(resolve));console.log('OWNED_HTTP_SERVER_CLOSED')}
+
+}
+// Normal default suite always covers current original actions and signed routed delete.
+await originalOutcomeContract();
+await originalOutcomeContract({attestationOnly:true});
+await originalOutcomeContract({routerOnly:true});
+await legacyReceiptRouterFallbackContract();

@@ -5,7 +5,7 @@ import {createOpsManagerSession,makeOpsAccessMiddleware} from '../src/auth/share
 import {makeFeedbackPrivateReader,feedbackManagerPageRedirect} from '../src/feedback-private-reader.js';
 const id='91000000-0000-4000-8000-000000000001',managerId='91000000-0000-4000-8000-000000000002',credentialId='91000000-0000-4000-8000-000000000003';
 const env={NODE_ENV:'production',OPS_MANAGER_AUTH_REQUIRED:'true',OPS_MANAGER_SESSION_SECRET:'synthetic-feedback-reader-test-only-secret'};
-const manager={manager_id:managerId,display_name:'Different synthetic manager',roles:['CUSTODIAL_MANAGER'],active:true,revoked_at:null};
+const manager={manager_id:managerId,display_name:'Different synthetic manager',roles:['CUSTODIAL_MANAGER'],active:true,revoked_at:null,is_system_principal:false};
 const trusted={credential_id:credentialId,device_id:'OPS_FEEDBACK_FIXTURE',device_label:'Feedback synthetic manager',
   token_hash:'synthetic-test-only-hash',created_at:new Date().toISOString(),manager_id:managerId,manager,
   max_access_level:'full_access',revoked_at:null,expires_at:new Date(Date.now()+86400000).toISOString()};
