@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import {writeFileSync} from 'node:fs';
+import {writeFileSync,readFileSync} from 'node:fs';
+import {createHash} from 'node:crypto';
 export const OCTOBER_RECOVERY_PREDECESSORS=Object.freeze([
   {
     "kind": "function",
@@ -198,7 +199,95 @@ export async function readTargetRefusalPredecessors(db) {
 export async function readCurrentGrantRefusalPredecessors(db) {
  return readFixedRefusalPredecessors(db,CURRENT_GRANT_SERIALIZATION_PREDECESSORS,{aliases:true});
 }
+export const PRIVATE_CUSTODY_SOURCE252_FILE='20261010193211_native_private_custody_chunk_retention.sql';
+export const PRIVATE_CUSTODY_SOURCE252_SHA256='28275c65a49b26a21ee0f37538a0f9c337a45c5fb41f0fa701d2ffdf555f863b';
+export const PRIVATE_CUSTODY_SOURCE252_REFERENCE_SHA256='2f0b2b84762a4786560c59880a076b1e869575af5b1f221830b7b4f0ca67c5b3';
+const private252Key=row=>JSON.stringify([row.object_kind,row.object_identity]);
+export function readPrivateCustodySource252Reference(){
+ const bytes=readFileSync(new URL('../release/production-forward-source/private-custody-source252-reference.json',import.meta.url));
+ assert.equal(createHash('sha256').update(bytes).digest('hex'),PRIVATE_CUSTODY_SOURCE252_REFERENCE_SHA256);
+ const reference=JSON.parse(bytes);assert.equal(reference.count,6884);assert.equal(reference.rows.length,6884);
+ assert.equal(reference.raw_capture_sha256,'37f0382ee69fb5b63096962b294c516233bb9df5d2884ae21bcb54eada6e7614');
+ assert.equal(reference.inventory_sha256,'d9abaf120c47e789c6b3114717f14eb76d1ceacf9aea5600bccfb1005a176d27');
+ return reference;
+}
+// Read only Source/recovery/catalog metadata after rollback to the failed
+// migration's savepoint. The outer owner still always rethrows/whole-rolls back.
+export async function readPrivateCustodySource252Refusal(db){
+ const reference=readPrivateCustodySource252Reference();
+ const summary=(await db.query(`select count(*)::text inventory_count,
+  public.static_weekly_digest_text(string_agg(restore_order::text||E'\n'||object_kind||E'\n'||object_identity||E'\n'||definition_sha256,E'\n---\n'
+   ORDER BY object_kind COLLATE "C",object_identity COLLATE "C")) inventory_sha256,
+  count(*) filter(where definition_sha256 IS DISTINCT FROM public.static_weekly_digest_text(definition_sql))::text selfhash_mismatches,
+  (select count(*)::text from(select object_kind,object_identity from public.custodial_release_authority_restore_inventory group by object_kind,object_identity having count(*)<>1) q) duplicate_identity_groups,
+  (select count(*)::text from(select restore_order from public.custodial_release_authority_restore_inventory group by restore_order having count(*)<>1) q) duplicate_order_groups
+  from public.custodial_release_authority_restore_inventory`)).rows[0];
+ const kindCounts=(await db.query(`select object_kind,count(*)::text rows from public.custodial_release_authority_restore_inventory group by object_kind order by object_kind collate "C"`)).rows;
+ const canary=(await db.query(`select p.oid::text public_oid,p.pronamespace='public'::regnamespace public_schema,
+  to_regprocedure('custodial_release_canary_authority_surface()')=p.oid unqualified_same_public_oid,
+  pg_get_functiondef(p.oid) definition_sql,public.static_weekly_digest_text(pg_get_functiondef(p.oid)) definition_sha256,
+  md5(p.prosrc) body_md5,p.proowner::regrole::text owner_name,p.prosecdef,p.provolatile,p.proconfig,
+  (select jsonb_agg(jsonb_build_object('grantee',coalesce(r.rolname,'PUBLIC'),'grantor',a.grantor::regrole::text,'privilege',a.privilege_type,'grantable',a.is_grantable)
+   order by coalesce(r.rolname,'PUBLIC'),a.privilege_type,a.is_grantable) from aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a left join pg_roles r on r.oid=a.grantee) acl
+  from pg_proc p where p.oid=to_regprocedure('public.custodial_release_canary_authority_surface()') and p.pronamespace='public'::regnamespace`)).rows;
+ const boundary=(await db.query(`select c.relowner::regrole::text inventory_owner,t.tgname,t.tgenabled,t.tgfoid::regprocedure::text guard_function,
+  to_regclass('public.custodial_native_private_custody_operations') is null operations_absent,
+  to_regclass('public.custodial_native_private_custody_chunks') is null chunks_absent,
+  not exists(select 1 from pg_proc where pronamespace='public'::regnamespace and proname in
+   ('custodial_private_custody_v1_immutable','custodial_private_custody_v1_retain_chunk','custodial_private_custody_v1_read_chunk')) new_routine_names_absent
+  from pg_class c left join pg_trigger t on t.tgrelid=c.oid and t.tgname='trg_custodial_release_authority_restore_inventory_immutable' and not t.tgisinternal
+  where c.oid='public.custodial_release_authority_restore_inventory'::regclass`)).rows;
+ const result={reference:{raw_capture_sha256:reference.raw_capture_sha256,reference_sha256:PRIVATE_CUSTODY_SOURCE252_REFERENCE_SHA256,
+  inventory_count:'6884',inventory_sha256:reference.inventory_sha256,canary_sha256:reference.canary_sha256},summary,kind_counts:kindCounts,canary,boundary};
+ // A genuine unexpected count remains visible, without an unbounded export.
+ if(!/^(0|[1-9][0-9]*)$/.test(summary.inventory_count)||BigInt(summary.inventory_count)>8192n)
+  return {...result,inventory_metadata_omitted:true,metadata_limit:8192};
+ const observed=(await db.query(`select restore_order::text,object_kind,object_identity,definition_sha256,
+  public.static_weekly_digest_text(definition_sql) actual_definition_sha256,octet_length(definition_sql)::text definition_bytes
+  from public.custodial_release_authority_restore_inventory order by object_kind collate "C",object_identity collate "C",restore_order limit 8193`)).rows;
+ assert.equal(observed.length,Number(summary.inventory_count));
+ const expected=new Map(reference.rows.map(([object_kind,object_identity,restore_order,definition_sha256])=>{
+  const row={object_kind,object_identity,restore_order,definition_sha256};return [private252Key(row),row];}));
+ assert.equal(expected.size,6884);
+ const actual=new Map();for(const row of observed){const key=private252Key(row);if(!actual.has(key))actual.set(key,[]);actual.get(key).push(row);}
+ const missing=[],extra=[],changed=[];
+ for(const[key,before]of expected){const rows=actual.get(key)||[];if(!rows.length)missing.push(before);
+  else if(rows.length!==1||rows[0].restore_order!==before.restore_order||rows[0].definition_sha256!==before.definition_sha256
+   ||rows[0].actual_definition_sha256!==rows[0].definition_sha256)changed.push({expected:before,observed:rows});}
+ for(const[key,rows]of actual)if(!expected.has(key))extra.push(...rows);
+ // Resolve only changed identities already present in the independently pinned
+ // Source252 reference. Unknown extras never select their routine bodies.
+ const wanted=changed.map(x=>x.expected).filter(x=>['function','grant','view','relation','relation_state','column_set','column','constraint','trigger','index','policy'].includes(x.object_kind));
+ const current=wanted.length?(await db.query(`with wanted as(select * from jsonb_to_recordset($1::jsonb) as x(object_kind text,object_identity text)),
+  identities as(select *,case when position('(' in object_identity)>0 and object_kind in('function','grant')
+   then case when position('.' in split_part(object_identity,'(',1))>0 then object_identity else 'public.'||object_identity end end function_identity,
+   case when position('(' in object_identity)=0 then case when object_kind in('column','constraint','policy') then split_part(object_identity,':',1)
+    when object_kind='trigger' then regexp_replace(object_identity,'[.][^.]+$','') else object_identity end end relation_identity from wanted),
+  resolved as(select *,to_regprocedure(function_identity) function_oid,to_regclass(relation_identity) relation_oid from identities)
+  select w.object_kind,w.object_identity,p.oid::text function_oid,np.nspname function_schema,p.proowner::regrole::text function_owner,
+   md5(p.prosrc) function_body_md5,md5(pg_get_functiondef(p.oid)) function_definition_md5,p.prosecdef,p.provolatile,p.proconfig,
+   case when p.oid is not null then to_regprocedure(w.object_identity)=p.oid end original_spelling_same_function_oid,
+   c.oid::text relation_oid,nc.nspname relation_schema,c.relowner::regrole::text relation_owner,c.relkind::text,c.reloptions,c.relrowsecurity,c.relforcerowsecurity,
+   t.tgname,t.tgenabled,t.tgfoid::regprocedure::text trigger_function,md5(pg_get_triggerdef(t.oid,true)) trigger_definition_md5,
+   case when p.oid is not null then(select jsonb_agg(jsonb_build_object('grantee',coalesce(r.rolname,'PUBLIC'),'grantor',a.grantor::regrole::text,'privilege',a.privilege_type,'grantable',a.is_grantable)
+    order by coalesce(r.rolname,'PUBLIC'),a.privilege_type,a.is_grantable) from aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a left join pg_roles r on r.oid=a.grantee)
+    when c.oid is not null then(select jsonb_agg(jsonb_build_object('grantee',coalesce(r.rolname,'PUBLIC'),'grantor',a.grantor::regrole::text,'privilege',a.privilege_type,'grantable',a.is_grantable)
+    order by coalesce(r.rolname,'PUBLIC'),a.privilege_type,a.is_grantable) from aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a left join pg_roles r on r.oid=a.grantee) end acl,
+   case when w.object_kind='grant' and((p.oid is not null and to_regprocedure(w.object_identity)=p.oid) or(c.oid is not null and to_regclass(w.object_identity)=c.oid))
+    then public.custodial_release_authority_current_grant_definition(w.object_identity)
+    when w.object_kind='view' and c.relkind='v' then public.custodial_release_authority_current_view_definition(w.object_identity) end current_catalog_definition_sql
+  from resolved w left join pg_proc p on p.oid=w.function_oid left join pg_namespace np on np.oid=p.pronamespace
+   left join pg_class c on c.oid=w.relation_oid left join pg_namespace nc on nc.oid=c.relnamespace
+   left join pg_trigger t on w.object_kind='trigger' and t.tgrelid=c.oid and t.tgname=substring(w.object_identity from '[^.]+$') and not t.tgisinternal
+  order by w.object_kind collate "C",w.object_identity collate "C"`,[JSON.stringify(wanted)])).rows:[];
+ return {...result,difference_counts:{missing:missing.length,extra:extra.length,changed:changed.length},missing,extra,changed,current_catalog_metadata:current,
+  operational_rows_selected:false,unknown_routine_bodies_exported:false};
+}
 async function readSelectedTargetRefusal(db,migration) {
+ if(migration.file===PRIVATE_CUSTODY_SOURCE252_FILE){
+  assert.equal(migration.order,119);assert.equal(migration.sha256,PRIVATE_CUSTODY_SOURCE252_SHA256);
+  return {metadata_source_file:PRIVATE_CUSTODY_SOURCE252_FILE,metadata_source_sha256:PRIVATE_CUSTODY_SOURCE252_SHA256,private_source252:await readPrivateCustodySource252Refusal(db)};
+ }
  if(migration.file!==CURRENT_GRANT_SERIALIZATION_SOURCE_FILE)
   return {predecessors:await readTargetRefusalPredecessors(db)};
  assert.equal(migration.order,87);assert.ok([CURRENT_GRANT_SERIALIZATION_SOURCE_SHA256,CURRENT_GRANT_SERIALIZATION_FORWARD_SHA256].includes(migration.sha256));
