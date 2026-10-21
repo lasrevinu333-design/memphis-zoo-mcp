@@ -15,7 +15,10 @@ export function registerServerTools(server, options = {}) {
       inputSchema: serverToolManifestInputSchema,
     },
     async ({ include_planned = true } = {}) => {
-      return jsonResponse(getToolManifest({ includePlanned: include_planned }));
+      return jsonResponse({
+        ...getToolManifest({ includePlanned: include_planned }),
+        app: getAppInfo(),
+      });
     }
   );
 

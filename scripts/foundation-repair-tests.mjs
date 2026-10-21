@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 
 const schedule = readFileSync(new URL('../src/schedule-api.js', import.meta.url), 'utf8');
-const moxie = readFileSync(new URL('../src/routes/moxie.js', import.meta.url), 'utf8');
 const migrationFiles = [
   '20260716193526_foundation_repair_archive_cleanup.sql',
   '20260716193547_foundation_repair_schedule_audit.sql',
@@ -31,15 +30,6 @@ assert.ok(windowRoute, 'generation-window route must exist');
 assert.doesNotMatch(windowRoute, /await maybeAutoGenerateWindow/);
 assert.match(windowRoute, /trigger_auto_ignored/);
 assert.match(schedule, /router\.post\("\/generate-range", requireSchedulePin/);
-
-assert.doesNotMatch(moxie, /if\(r\.ok\)\{msg\.textContent="Password changed/);
-assert.match(moxie, /router\.post\("\/settings\/password"/);
-assert.match(moxie, /crypto\.scrypt/);
-assert.match(moxie, /rotate_moxie_auth_credential/);
-assert.doesNotMatch(moxie, /does not expose or pretend to rotate/);
-assert.doesNotMatch(moxie, /id="settingsModal"/);
-assert.match(moxie, /expectedRevision:sharedRevision/);
-assert.match(moxie, /r\.status===409/);
 
 assert.equal(new Set(migrationFiles.map((name) => name.slice(0, 14))).size, migrationFiles.length);
 assert.match(migration, /sch_ensure_schedule_window/);

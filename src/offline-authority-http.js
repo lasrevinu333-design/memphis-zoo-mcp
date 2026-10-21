@@ -45,7 +45,14 @@ export function authorityHttpOutcome(data) {
   const status = String(result.status || "").trim().toLowerCase();
   const reason = String(result.reason || "").trim();
   const replayed = result.replayed === true;
-  if (status === "closed" || result.committable === true) {
+  // A provisional activation may be committable, but that flag cannot make a
+  // non-closed terminal/quarantined/fenced result successful. Preserve exact
+  // already-closed receipt replay, including its existing terminal markers.
+  const committable = result.committable === true
+    && status !== "quarantined"
+    && result.terminal !== true
+    && result.automatic_replay_fenced !== true;
+  if (status === "closed" || committable) {
     return {
       status: 200,
       body: {

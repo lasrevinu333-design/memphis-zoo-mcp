@@ -5,6 +5,9 @@ import { textResponse } from "./responses.js";
 import { registerGithubTools } from "./github-tools.js";
 import { registerSupabaseTools } from "./supabase-tools.js";
 import { registerServerTools } from "./server-tools.js";
+import { registerFeedbackRelayTools } from "./feedback-relay-tools.js";
+import { registerOutlookEventTools } from "./outlook-event-tools.js";
+import { registerOperationsMailTools } from "./operations-mail-tools.js";
 
 const DEFAULT_MCP_SERVER_NAME = "memphis-zoo-mcp";
 
@@ -20,6 +23,9 @@ export function createMcpServer(options = {}) {
     name: normalizeMcpServerName(options.name || process.env.APP_NAME),
     version: options.version || "development",
     release_id: options.releaseId || options.version || "development",
+    // Diagnostic release metadata, not a signed source/deployment attestation.
+    backend_commit_sha: /^[0-9a-f]{40}$/.test(options.backendCommitSha || '')
+      ? options.backendCommitSha : null,
   };
 
   const server = new McpServer({
@@ -55,6 +61,9 @@ export function createMcpServer(options = {}) {
   });
   registerGithubTools(server, { includeWrites: includePrivilegedTools });
   registerSupabaseTools(server, { includeWrites: includePrivilegedTools });
+  registerFeedbackRelayTools(server, { includeWrites: includePrivilegedTools });
+  registerOutlookEventTools(server, { includeWrites: includePrivilegedTools });
+  registerOperationsMailTools(server, { includeWrites: includePrivilegedTools });
 
   finalizeMcpToolAuth(server);
   return server;

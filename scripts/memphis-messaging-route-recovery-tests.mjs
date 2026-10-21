@@ -9,6 +9,8 @@ const REQUESTED_THREAD_ID = '20000000-0000-4000-8000-000000000002';
 const rpcCalls = [];
 let messageCounter = 0;
 let skipBotClaim = false;
+let failContacts = false;
+let sourceMessageBody = 'help';
 
 const runReadOnlySql = async (sql) => {
   const query = String(sql || '');
@@ -29,12 +31,15 @@ const runReadOnlySql = async (sql) => {
   }
   if (/from public\.msg_thread_participants/i.test(query) && /select 1/i.test(query)) return [{ one: 1 }];
   if (/msg_get_memphis_user_id/i.test(query)) return [{ memphis_user_id: BOT_ID }];
+  if (failContacts && /from public\.internal_ops_contacts/i.test(query)) {
+    throw new Error('private SQL diagnostic: service credential and table name');
+  }
   if (/from public\.msg_messages m/i.test(query) && /where m\.id/i.test(query)) {
     return [{
       id: '30000000-0000-4000-8000-000000000001',
       thread_id: THREAD_ID,
       sender_user_id: USER_ID,
-      body: 'help',
+      body: sourceMessageBody,
       metadata_json: { channel: 'memphis', device_id: 'KIOSK_02', client_message_id: 'client-message-001' },
       device_id: 'KIOSK_02',
     }];
@@ -177,6 +182,37 @@ try {
   const explicitSend = rpcCalls.find((call) => call.name === 'msg_send_message');
   assert.equal(explicitSend.params.p_thread_id, REQUESTED_THREAD_ID,
     '/memphis/message must preserve the exact conversation selected by the client');
+
+  rpcCalls.length = 0;
+  messageCounter = 0;
+  skipBotClaim = false;
+  failContacts = true;
+  sourceMessageBody = 'What is Eric Operle\'s phone number?';
+  const failedContactResponse = await fetch(`${base}/messaging-api/memphis/message`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      user_id: USER_ID,
+      device_id: 'KIOSK_02',
+      body: sourceMessageBody,
+      client_message_id: 'client-message-failed-contact',
+    }),
+  });
+  const failedContactPayload = await failedContactResponse.json();
+  assert.equal(failedContactResponse.status, 200);
+  assert.equal(failedContactPayload.ok, true);
+  const failedContactReply = rpcCalls.filter((call) => call.name === 'msg_send_message').at(-1);
+  assert.equal(failedContactReply.params.p_body,
+    "I couldn't verify that answer right now. Please try again or check with a manager.");
+  assert.deepEqual(failedContactReply.params.p_metadata_json, {
+    channel: 'memphis',
+    ai: true,
+    client_message_id: 'memphis-reply:30000000-0000-4000-8000-000000000001',
+    reply_to_message_id: '30000000-0000-4000-8000-000000000001',
+    fallback: true,
+    mode: 'answer_unavailable',
+  });
+  assert.doesNotMatch(JSON.stringify(failedContactReply.params), /private SQL diagnostic|service credential|internal_ops_contacts/);
 
   console.log('MEMPHIS_MESSAGING_ROUTE_RECOVERY_TESTS_PASS');
 } finally {

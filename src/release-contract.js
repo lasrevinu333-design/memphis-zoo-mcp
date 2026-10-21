@@ -16,8 +16,8 @@ const ATTESTATION_KEYS = [
 ];
 const SIGNED_PAYLOAD_KEYS = ATTESTATION_KEYS.filter((key) => key !== "signature");
 export const RELEASE_ATTESTATION_TRUST_ROOT = Object.freeze({
-  keyId: "custodial-build52-20260915-v1",
-  publicKeySpkiSha256: "992a3be69b3340e65bae0b28b8d78ef568dfc30a0ed8120268794ea15e1b49a0",
+  keyId: "memphis-release-recovery-20260928-v1",
+  publicKeySpkiSha256: "a0af17f2aabc006af0a5ea3d80e2ccbab0650c1689f7ed828ec7aeb1075c5190",
 });
 
 export function releaseAttestationPayload(input) {

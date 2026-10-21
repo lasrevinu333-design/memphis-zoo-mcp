@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
+import {createHash} from 'node:crypto';
 import { readFileSync } from "node:fs";
 import { buildReleaseManifest } from "../src/release-manifest.js";
 import { assertSchemaAlignment } from "../src/schema-transition.js";
@@ -16,10 +17,21 @@ const input = JSON.parse(readFileSync(new URL("../release/schema-alignment-input
 const frontend = JSON.parse(readFileSync(new URL("../release/frontend-release-manifest.json", import.meta.url), "utf8"));
 const canonicalCatalog = JSON.parse(readFileSync(new URL("../supabase/canonical/schema-fingerprint-input.json", import.meta.url), "utf8"));
 const target = readFileSync(new URL("../supabase/canonical/schema-fingerprint.txt", import.meta.url), "utf8").trim();
-const RELEASE_VALIDATION_TIME = "2026-09-19T03:30:00Z";
+// New candidate is bound to its actual isolated NORMAL capture, not a stale
+// September19 fixture clock. Original14-day/expiry/security assertions remain.
+const captureBytes=readFileSync(new URL('../supabase/canonical/source-capture-252.json',import.meta.url));
+assert.equal(createHash('sha256').update(captureBytes).digest('hex'),'ff671755afde209c927a85f5a0c5b9c3a7f17675cee12d6dc9ff55976559a656');
+const capture=JSON.parse(captureBytes);
+assert.equal(capture.schema,'custodial.isolated-normal-canonical-source-binding.v1');
+assert.equal(capture.migration_count,252);
+assert.equal(capture.exact_captured_product_commit,'9a0da26eb3e0d0052227da15224cbc78ee8705c0');
+for(const flag of ['production','independent_review','release_admission','frontend_pair_admission'])assert.equal(capture[flag],false);
+assert.equal(capture.schema_fingerprint,target);
+assert.equal(createHash('sha256').update(readFileSync(new URL('../supabase/canonical/schema-fingerprint-input.json',import.meta.url))).digest('hex'),capture.normal_catalog_sha256);
+const RELEASE_VALIDATION_TIME = capture.captured_at_utc;
 const now = Date.parse(RELEASE_VALIDATION_TIME);
 
-assert.equal(frontend.frontend_commit_sha, input.frontend_commit_sha, "the backend manifest must pin the exact audited frontend");
+assert.equal(frontend.frontend_commit_sha, input.frontend_commit_sha, "the candidate backend manifest must pin the exact source-paired frontend; independent review is separate");
 assert.equal(frontend.frontend_commit_state, "final_pair_bound");
 assert.equal(frontend.schema_fingerprint, target, "the exact frontend pair must declare the canonical target schema");
 assert.deepEqual(frontend.minimum_supported, input.minimum_supported);

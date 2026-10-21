@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import pg from "pg";
+import { normalizedCronJobs, restoreCronJobs } from "./disaster-recovery-cron.mjs";
 import {
   ensureIsolatedRestoreLeaseShim,
   ledgerHasGlobalMutationFence,
@@ -25,7 +26,15 @@ if (summary.format !== "memphis-zoo-disaster-recovery.v4") {
   throw new Error("Independent restore rehearsal requires a v4 archive with signed schema and control inventories.");
 }
 const ledger = JSON.parse(readFileSync(join(sourceDir, "inventory", "migration-ledger.json"), "utf8"));
-const cronJobs = JSON.parse(readFileSync(join(sourceDir, "inventory", "cron-jobs.json"), "utf8"));
+// Refuse lost legacy numeric bits before connecting or hydrating ANY target
+// inventory. This conversion never changes the archived original file bytes.
+const cronJobs = normalizedCronJobs(JSON.parse(readFileSync(join(sourceDir, "inventory", "cron-jobs.json"), "utf8")));
+const sourceDatabase = summary.database_snapshot?.database_name;
+if (typeof sourceDatabase !== "string" || !sourceDatabase.length || sourceDatabase.includes("\0")
+    || Buffer.byteLength(sourceDatabase, "utf8") > 63
+    || Buffer.from(sourceDatabase, "utf8").toString("utf8") !== sourceDatabase) {
+  throw new Error("The archived original database identity is unavailable for pg_cron reconciliation.");
+}
 const extensions = JSON.parse(readFileSync(join(sourceDir, "inventory", "extensions.json"), "utf8"));
 if (!Array.isArray(ledger) || !ledger.length || String(ledger.at(-1)?.version || "") !== summary.source_identity.migration_head) {
   throw new Error("The signed migration inventory does not terminate at the archived head.");
@@ -50,13 +59,8 @@ try {
       [row.version, row.name, row.statements],
     );
   }
-  await db.query("truncate cron.job restart identity");
-  for (const row of cronJobs) {
-    await db.query("insert into cron.job select * from json_populate_record(null::cron.job,$1::json)", [JSON.stringify(row)]);
-  }
-  if (cronJobs.length) {
-    await db.query("select setval(pg_get_serial_sequence('cron.job','jobid'),(select max(jobid) from cron.job),true)");
-  }
+  const cronRestoration = await restoreCronJobs(db, cronJobs, { sourceDatabase });
+  if (cronRestoration.differences.length) throw new Error("Isolated pg_cron hydration differs from the exact archived inventory.");
   const release = summary.source_identity.release;
   if (!release || typeof release !== "object") throw new Error("Signed release identity is unavailable.");
   await db.query("truncate public.release_deployment_manifest cascade");

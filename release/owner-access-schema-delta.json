@@ -1,0 +1,39 @@
+{
+  "method": "incremental_source_catalog_extension",
+  "base_fingerprint": "750e7f040519f6d4555836cbd4d172a22f98911d5bab9918fa370238fff3f822",
+  "candidate_fingerprint": "09cad1cd3941e367192c5939c220823713ec0161affc7f4db656d1452b3e41ae",
+  "functions_added": 4,
+  "routine_grants_added": 6,
+  "production_function_definition_sha256": {
+    "custodial_action_actor_v1": "6abd4a957e752c7f8a26aa1c1d41926e459a6fb010dfc5604e94dd1b9d527fca",
+    "custodial_owner_coverage_v1": "1595658534739f25906d96e65c29eb44295333a17adf49c9b2797dafe6396a59",
+    "custodial_close_scan_ticket_v1": "bbfdb89e284e754730ffc8ce0c7af5ef578a5f032287d4c4c99e5158da1e44a0",
+    "custodial_authorize_absence_operations_v1": "1685f5ff3a2d9c9895afe41937db7bc0297ca39f1944bc1693626141bfc03b0f"
+  },
+  "public_and_authenticated_execute": false,
+  "unchanged_catalog_sections": [
+    "column_grants",
+    "columns",
+    "constraints",
+    "cron_jobs",
+    "default_privileges",
+    "extensions",
+    "indexes",
+    "owned_scheduler_role_memberships",
+    "owned_scheduler_roles",
+    "policies",
+    "privilege_bearing_roles",
+    "role_memberships",
+    "schema_grants",
+    "sequence_grants",
+    "sequences",
+    "table_grants",
+    "tables",
+    "triggers",
+    "type_grants",
+    "types",
+    "views"
+  ],
+  "full_clean_rebuild_performed": false,
+  "scope": "Preserved canonical source baseline plus four production-verified additive definitions and grants. Not a fresh whole-production catalog inventory or full historical migration replay."
+}

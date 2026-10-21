@@ -1,4 +1,4 @@
-name: Manager Access, Moxie, and Operational Live Acceptance
+name: Manager Access and Operational Live Acceptance
 
 on:
   push:
@@ -8,7 +8,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: manager-access-moxie-operational-live-main
+  group: manager-access-operational-live-main
   cancel-in-progress: true
 
 jobs:
@@ -27,16 +27,16 @@ jobs:
           # has converged without conflating source identity and app version.
           expected_sha="${GITHUB_SHA}"
           version=''
-          moxie_health=''
+          leadership_health=''
           for attempt in $(seq 1 60); do
             version="$(curl -fsSL --max-time 40 "$root/version?attempt=$attempt" || true)"
-            moxie_health="$(curl -fsSL --max-time 40 "$root/moxie/health?attempt=$attempt" || true)"
-            printf 'attempt=%s version=%s moxie_health=%s\n' "$attempt" "$version" "$moxie_health"
-            if grep -Fq "$expected_sha" <<<"$version" && grep -Fq '"auth_required":true' <<<"$moxie_health"; then break; fi
+            leadership_health="$(curl -fsSL --max-time 40 "$root/leadership-api/health?attempt=$attempt" || true)"
+            printf 'attempt=%s version=%s leadership_health=%s\n' "$attempt" "$version" "$leadership_health"
+            if grep -Fq "$expected_sha" <<<"$version" && grep -Fq '"named_manager_enrollment":true' <<<"$leadership_health"; then break; fi
             sleep 10
           done
           grep -Fq "$expected_sha" <<<"$version"
-          python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["ok"] is True and d["configured"] is True and d["auth_required"] is True' <<<"$moxie_health"
+          python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["ok"] is True and d["named_manager_enrollment"] is True and d["shared_manager_enrollment"] is False' <<<"$leadership_health"
 
           # The browser/app origin boundary is checked before trusted-device
           # authority. Exercise the intended unauthenticated state from the
@@ -70,53 +70,12 @@ jobs:
           dependencies="$(curl -fsSL --max-time 40 "$root/health/dependencies")"
           python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["ok"] is True and d["database_reachable"] is True and d["required_schema_present"] is True and d["worker"]["durable_database_leases"] is True' <<<"$dependencies"
 
-          root_status="$(curl -sS --max-time 40 -D /tmp/moxie-root.headers -o /tmp/moxie-root.body -w '%{http_code}' "$root/moxie/")"
-          tr -d '\r' < /tmp/moxie-root.headers > /tmp/moxie-root.normalized
-          cat /tmp/moxie-root.normalized
-          case "$root_status" in 302|303) ;; *) echo "Unexpected Moxie root status: $root_status"; exit 1 ;; esac
-          grep -Fqi 'location: /moxie/login' /tmp/moxie-root.normalized
-          grep -Eiq '^cache-control: .*no-store' /tmp/moxie-root.normalized
-
-          login_status="$(curl -sS --max-time 40 -D /tmp/moxie-login.headers -o /tmp/moxie-login.html -w '%{http_code}' "$root/moxie/login")"
-          test "$login_status" = '200'
-          grep -Fq 'type="password"' /tmp/moxie-login.html
-          grep -Fq 'id="moxie-secret-entry"' /tmp/moxie-login.html
-          grep -Fq 'value=""' /tmp/moxie-login.html
-          grep -Fq 'autocomplete="new-password"' /tmp/moxie-login.html
-          grep -Fq 'readonly' /tmp/moxie-login.html
-          grep -Fq 'data-lpignore="true"' /tmp/moxie-login.html
-          grep -Fq 'data-1p-ignore="true"' /tmp/moxie-login.html
-          grep -Fq 'id="moxie-secret-submit" name="password" value=""' /tmp/moxie-login.html
-
-          wrong="invalid-live-probe-$(date +%s)"
-          wrong_status="$(curl -sS --max-time 40 -D /tmp/moxie-wrong.headers -o /tmp/moxie-wrong.html -w '%{http_code}' \
-            -H 'Content-Type: application/x-www-form-urlencoded' \
-            --data-urlencode "password=$wrong" \
-            "$root/moxie/login")"
-          test "$wrong_status" = '401'
-          grep -Fqi 'Wrong password' /tmp/moxie-wrong.html
-          ! grep -Eiq '^set-cookie: moxie_session=[^;]+' /tmp/moxie-wrong.headers
-
-          logout_status="$(curl -sS --max-time 40 -D /tmp/moxie-logout.headers -o /tmp/moxie-logout.body -w '%{http_code}' "$root/moxie/logout")"
-          tr -d '\r' < /tmp/moxie-logout.headers > /tmp/moxie-logout.normalized
-          test "$logout_status" = '303'
-          grep -Fqi 'location: /moxie/login?logged_out=1' /tmp/moxie-logout.normalized
-          grep -Eiq '^set-cookie: moxie_session=' /tmp/moxie-logout.normalized
-          grep -Eiq 'path=/moxie' /tmp/moxie-logout.normalized
-          grep -Eiq 'max-age=0|expires=Thu, 01 Jan 1970' /tmp/moxie-logout.normalized
-
-          signed_out_status="$(curl -sS --max-time 40 -o /tmp/moxie-signed-out.html -w '%{http_code}' "$root/moxie/login?logged_out=1")"
-          test "$signed_out_status" = '200'
-          grep -Fq 'Signed out. Enter the password to open Moxie again.' /tmp/moxie-signed-out.html
-
-          for asset in moxie-avatar.jpg frog-on-log-writing-pad.png reminders-woodland-animal.png contacts-creekside-animal.png settings-woodland-cog.png ops-dashboard.png ops-schedule.png ops-events.png ops-messaging.png; do
-            status="$(curl -fsS --retry 3 --retry-all-errors --retry-delay 2 --max-time 40 -D "/tmp/$asset.headers" -o "/tmp/$asset" -w '%{http_code}' "$root/moxie/assets/$asset")"
-            bytes="$(wc -c < "/tmp/$asset" | tr -d ' ')"
-            printf '%s status=%s bytes=%s\n' "$asset" "$status" "$bytes"
-            test "$status" = '200'
-            grep -Eiq '^content-type: image/' "/tmp/$asset.headers"
-            test "$bytes" -gt 500
-            test "$bytes" -lt 400000
+          # The retired MOXIE web/mobile routes must not reappear. The legacy
+          # OAuth environment-variable name is a separate credential boundary.
+          for retired_path in /moxie/ /moxie/login /moxie/health /moxie-mobile-api/health; do
+            retired_status="$(curl -sS --max-time 40 -o /dev/null -w '%{http_code}' "$root$retired_path")"
+            printf 'retired_path=%s status=%s\n' "$retired_path" "$retired_status"
+            test "$retired_status" = '404'
           done
 
           # The enrollment-status preflight may tell a phone that enrollment or
@@ -139,4 +98,4 @@ jobs:
             python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["ok"] is False and d["code"] in {"device_not_registered","device_not_eligible","device_credential_required"}' <"/tmp/$device-schedule.json"
           done
 
-          echo MANAGER_ACCESS_MOXIE_OPERATIONAL_LIVE_PASS
+          echo MANAGER_ACCESS_OPERATIONAL_LIVE_PASS

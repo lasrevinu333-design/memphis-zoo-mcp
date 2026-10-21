@@ -4,6 +4,5 @@
 
 ## Moxie status
 
-- Moxie source exists under `src/routes/moxie.js`, but it is intentionally not mounted in the current running server.
-- `/moxie/health` returning `404` is expected unless Moxie is explicitly mounted in `src/index.js`.
-- If Moxie is mounted later, all write/admin/private routes must remain protected by Moxie's password/session middleware and should be re-smoked locally and on Render.
+- The Moxie administration routes and runtime source are retired. A `404` remains the expected route outcome; this checklist does not authorize remounting them.
+- Preserve protected historical data and the existing OAuth credential hook used by other supported services. Retirement is not data deletion or permission relaxation.

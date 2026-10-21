@@ -1,0 +1,59 @@
+// Actual isolated PostgreSQL source eligibility, no provider/job/phone effect.
+import assert from 'node:assert/strict';
+import {createHash,randomUUID} from 'node:crypto';
+import {readFileSync,writeFileSync,appendFileSync} from 'node:fs';
+import pg from 'pg';
+import {deriveNativeScheduleOccurrence} from '../src/native-schedule-occurrence.js';
+import {deriveNativeScheduleValiditySource} from '../src/native-schedule-validity-source.js';
+import {nativeScheduleSnapshotSql} from '../src/native-schedule-preparation.js';
+import {migrationReplayNames} from './migration-replay-order.mjs';
+import {nativeLocationAuthoritySource} from './fixtures/native-location-authority.mjs';
+import {seedCompiledEventAuthority} from './fixtures/event-static-authority-fixture.mjs';
+import {createStaticWeeklyProjectionWithLunchRpcInput} from '../src/static-weekly-lunch-publication.js';
+import {shutdownStaticWeeklyCompiler} from '../src/static-weekly-schedule-compiler-runtime.js';
+const [socket,out,container]=process.argv.slice(2),q=x=>`'${String(typeof x==='object'?JSON.stringify(x):x).replaceAll("'","''")}'`;
+assert.match(socket,/^\/tmp\/mz-msg-[A-Za-z0-9_-]+\/socket$/);assert.match(container,/^mz_schema_rebuild_lunch_[a-z0-9]+$/);
+const sha=x=>createHash('sha256').update(x).digest('hex');
+const put=(name,x)=>writeFileSync(out+'/'+name,JSON.stringify(x,null,2)+'\n',{flag:'wx',mode:0o600});
+let c,checks=0,current='startup';
+const step=(name,detail={})=>{const row={at:new Date().toISOString(),name,...detail};appendFileSync(out+'/PROGRESS.jsonl',JSON.stringify(row)+'\n',{mode:0o600});console.log(JSON.stringify(row));};
+const eq=(name,a,b)=>{assert.deepEqual(a,b,name);checks++;step('CHECK',{test:name,checks});};
+const sql=async text=>{const r=await c.query(text);return Array.isArray(r)?r.findLast(x=>x.rows?.length)||r.at(-1):r;};
+const one=async text=>(await sql(text)).rows[0]?.v;
+async function deny(name,text){await sql('begin');let error;try{await sql(text);}catch(e){error=e;}finally{await sql('rollback');}
+ assert.equal(error?.code,'42501',name);checks++;step('CHECK',{test:name,checks});}
+const absent="select count(*)::int as v from pg_default_acl d cross join lateral aclexplode(d.defaclacl) a where d.defaclnamespace in (0,'public'::regnamespace) and d.defaclrole in ('postgres'::regrole,'supabase_admin'::regrole) and d.defaclobjtype in ('r','S') and a.grantee in (0,'anon'::regrole,'authenticated'::regrole,'service_role'::regrole)";
+const remove=['postgres','supabase_admin'].flatMap(owner=>['',' in schema public'].flatMap(scope=>['tables','sequences'].map(kind=>`alter default privileges for role ${owner}${scope} revoke all on ${kind} from public,anon,authenticated,service_role;`))).join('\n');
+const exceptions=new Set(['20260718083100_reconstruct_public_grant_hardening.sql','20260729150527_audit_defense_in_depth_hardening.sql','20260815160613_normalize_managed_production_schema_security.sql']);
+const manifest=migrationReplayNames().map(file=>({file,sha256:sha(readFileSync('supabase/migrations/'+file))}));put('MIGRATIONS.json',manifest);
+assert.equal(manifest.length,237);assert.equal(manifest.at(-1).file,'20261008064748_native_schedule_server_source_window.sql');
+try{
+ let ready=0;
+ for(let n=0;n<40;n++){
+  const next=new pg.Client({host:socket,user:'supabase_admin',password:'postgres',database:'postgres',connectionTimeoutMillis:500,query_timeout:30000});next.on('error',()=>{});
+  try{await next.connect();assert.equal((await next.query("select count(*)::int n from pg_roles where rolname in ('anon','authenticated','service_role','supabase_admin')")).rows[0].n,4);
+   if(++ready===4){c=next;break;}await next.end();}catch{ready=0;await next.end().catch(()=>{});}await new Promise(r=>setTimeout(r,500));
+ }
+ assert.ok(c);step('READY');await sql(remove);
+ for(const [i,row] of manifest.entries()){
+  current=row.file;assert.equal(await one(absent),0,'before '+current);const bytes=readFileSync('supabase/migrations/'+current);assert.equal(sha(bytes),row.sha256);await sql(bytes.toString());
+  if(await one(absent)){assert.ok(exceptions.has(current));assert.doesNotMatch(bytes.toString(),/create\s+(?:unlogged\s+)?table|create\s+sequence/i);await sql(remove);}
+  assert.equal(await one(absent),0,'after '+current);if(i%25===24||i===manifest.length-1)step('REPLAY',{completed:i+1,file:current});
+ }
+
+ current='window-recovery-registry';
+ for(const identity of ['custodial_native_schedule_window_source(uuid,uuid,uuid)','custodial_native_schedule_window_source_at(uuid,uuid,uuid,timestamptz)']){
+  eq('exact normalized function recovery '+identity,await one("select count(*)::int as v from public.custodial_release_authority_restore_inventory where object_kind='function' and case when object_identity like 'custodial_native_schedule_window_source%' or object_identity like 'public.custodial_native_schedule_window_source%' then to_regprocedure(object_identity) else null end="+q('public.'+identity)+"::regprocedure and definition_sql=pg_get_functiondef("+q('public.'+identity)+"::regprocedure) and definition_sha256=public.static_weekly_digest_text(definition_sql)"),1);
+  eq('exact normalized grant recovery '+identity,await one("select count(*)::int as v from public.custodial_release_authority_restore_inventory where object_kind='grant' and case when object_identity like 'custodial_native_schedule_window_source%' or object_identity like 'public.custodial_native_schedule_window_source%' then to_regprocedure(object_identity) else null end="+q('public.'+identity)+"::regprocedure and definition_sql=public.custodial_release_authority_current_grant_definition(object_identity) and definition_sha256=public.static_weekly_digest_text(definition_sql)"),1);
+ }
+ eq('only intended service wrapper execute',await one("select has_function_privilege('service_role','public.custodial_native_schedule_window_source(uuid,uuid,uuid)','EXECUTE') as v"),true);
+ eq('time-parametric core denied service',await one("select has_function_privilege('service_role','public.custodial_native_schedule_window_source_at(uuid,uuid,uuid,timestamptz)','EXECUTE') as v"),false);
+ eq('new wrapper in canary',await one("select count(*)::int as v from public.custodial_release_canary_authority_surface() where object_kind='function' and object_identity='custodial_native_schedule_window_source(uuid,uuid,uuid)'"),1);
+ eq('ALWAYS guard preserved',await one("select tgenabled::text as v from pg_trigger where tgrelid='public.custodial_release_authority_restore_inventory'::regclass and tgname='trg_custodial_release_authority_restore_inventory_immutable'"),'A');
+ eq('no automatic table or sequence grants',await one(absent),0);
+ put('REGISTRY_RECEIPT.json',{status:'PASS',checks,migration_count:237,migration_sha256:manifest.at(-1).sha256,
+  scope:'Narrow remaining function/grant/guard/canary registry proof; no repeated compiled fixture or functional window cases',
+  typed_signature_alias_normalized:true,whole_window_suite_executed:false,source_only:true,production:false,phone:false});
+ console.log(JSON.stringify({status:'PASS',checks,sql_executed:true,scope:'remaining registry only',delivery_admitted:false}));
+}catch(error){put('SQL_FAILURE.json',{stage:current,code:error.code||null,message:String(error.message).slice(0,700),checks});throw error;}
+finally{await c?.end().catch(()=>{});await shutdownStaticWeeklyCompiler();}

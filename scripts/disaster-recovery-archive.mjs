@@ -822,6 +822,29 @@ export function readVerifiedImmutableBootstrapInventory(archive) {
   return result;
 }
 
+// Fixed signed metadata only for rollback-only target preparation. A live
+// verified snapshot and the original named members are required throughout.
+export function readVerifiedMigrationTargetCaptureSource(archive) {
+  const sourceBinding=readVerifiedArchiveSourceBinding(archive),context=schemaSectionSnapshots.get(archive);
+  const names=[['source-schema-binding.json','source_schema_binding_sha256'],
+    ['source-catalog.json','source_catalog_sha256'],['migration-ledger.json','migration_ledger_sha256']];
+  const members=names.map(([name,field])=>{
+    const path='inventory/'+name,original=context.files.get(path),sha256=sourceBinding.source_identity[field];
+    if(!original||!Number.isSafeInteger(original.size)||original.size<=0||original.size>32*1024*1024
+      ||! /^[a-f0-9]{64}$/.test(sha256||'')||context.checksums.get(path)!==sha256)
+      throw new Error('Exact signed target-capture source metadata unavailable.');
+    return {path,original,sha256};
+  });
+  requireBootstrapMemberPins(archive,sourceBinding,context,members);
+  const fd=openSync(context.directory,DIRECTORY_FLAGS),values=[];
+  try {for(const member of members){
+    values.push(JSON.parse(requireSectionFile(fd,member,member.original,true).sql));
+    requireBootstrapMemberPins(archive,sourceBinding,context,members);
+  }} finally {closeSync(fd);}
+  requireBootstrapMemberPins(archive,sourceBinding,context,members);
+  return {sourceBinding,binding:values[0],catalog:values[1],ledger:values[2]};
+}
+
 function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
 }

@@ -21,7 +21,9 @@ function compactScheduleSummary(assignments = []) {
 }
 
 export function summarizeEmployeeWorkStatus(status = {}) {
-  if (!status?.ok) return "I could not resolve that employee's work status.";
+  if (!status?.ok) return status?.reason==='current_publication_unavailable'
+    ? `I can't verify a current published schedule for ${status.service_date || 'that date'}.`
+    : "I could not verify that employee in the current published roster.";
 
   const name = status.employee_name || "That employee";
   const serviceDate = status.service_date || "that date";
@@ -33,16 +35,12 @@ export function summarizeEmployeeWorkStatus(status = {}) {
   const shiftEnd = String(shift.shift_end || "").slice(0, 5);
   const lunch = shift.lunch ? `, lunch ${shift.lunch}` : "";
 
-  if (workStatus === "off_static") {
+  if (workStatus === "off" || workStatus === "off_static") {
     return `${name} is off on ${weekday}, ${serviceDate}.`;
   }
 
   if (["off_pto", "off_sick", "off_callout", "off_absence_override", "off_shift_override"].includes(workStatus)) {
-    const label = workStatus === "off_pto" ? "out on PTO"
-      : workStatus === "off_sick" ? "out sick"
-      : workStatus === "off_callout" ? "called out"
-      : "off";
-    return `${name} is ${label} on ${weekday}, ${serviceDate}.`;
+    return `${name} is off on ${weekday}, ${serviceDate}.`;
   }
 
   if (workStatus === "working_unassigned") {
@@ -61,5 +59,5 @@ export function summarizeEmployeeWorkStatus(status = {}) {
     return `${name} is not active in the employee roster.`;
   }
 
-  return `${name}'s work status for ${weekday}, ${serviceDate} is ${workStatus || "unknown"}.`;
+  return `I can't verify ${name}'s current published work status for ${weekday}, ${serviceDate}.`;
 }

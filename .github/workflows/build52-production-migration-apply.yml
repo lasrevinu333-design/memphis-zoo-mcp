@@ -92,6 +92,9 @@ jobs:
           test "$GITHUB_SHA" = "$INPUT_CANDIDATE_COMMIT"
           test "$(git rev-parse HEAD^{tree})" = "$INPUT_CANDIDATE_TREE"
           test "$(git status --porcelain)" = ''
+          # Validate the exact target and both receipt predicates before any mutation.
+          node scripts/release-migration-workflow-preflight.mjs
+          node scripts/release-migration-workflow-tests.mjs
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         if: inputs.evidence_mode == 'github-actions'
         with:
@@ -219,6 +222,9 @@ jobs:
               "$INPUT_LOCAL_EXECUTION_ID" "$INPUT_AUTHORIZATION_SHA256" "$authorization_verify_key_id" > "$receipt_path"
           fi
 
+          # Recheck source immediately before the irreversible transaction boundary.
+          node scripts/release-migration-workflow-preflight.mjs
+
           RELEASE_MIGRATION_APPLY=true \
             RELEASE_MIGRATION_CONFIRM_PROJECT_REF='rqquvtjdmugpigbndmne' \
             RELEASE_MIGRATION_NAMED_ACTOR='Eric Build 52 approved production release' \
@@ -234,14 +240,19 @@ jobs:
           jq -e \
             --arg commit "$INPUT_CANDIDATE_COMMIT" \
             --arg tree "$INPUT_CANDIDATE_TREE" \
-            '.ok == true
+            --slurpfile release_state release/production-migration-state.json \
+            '($release_state[0]) as $state
+             | .ok == true
              and .candidate_commit == $commit
              and .candidate_tree == $tree
-             and .before_ledger_count == 230
-             and .before_ledger_head == "20260920010000"
-             and .after_ledger_count == 253
-             and .after_ledger_head == "20260925190000"
-             and (.applied | length) == 23' \
+             and .project_ref == $state.project_ref
+             and .before_ledger_count == $state.observed_production.production_ledger_count
+             and .before_ledger_head == $state.observed_production.ledger_head
+             and .source_catalog_fingerprint == $state.observed_production.catalog_privilege_fingerprint
+             and .after_ledger_count == $state.target.production_ledger_count
+             and .after_ledger_head == $state.target.source_migration_version
+             and .target_catalog_fingerprint == $state.target.canonical_source_schema_fingerprint
+             and .applied == ($state.pending_migrations | map({order, version: .source_migration_version, file, sha256}))' \
             "$result_path" >/dev/null
           printf '{"stage":"production_apply_committed","result_sha256":"%s","completed_at":"%s"}\n' \
             "$(sha256sum "$result_path" | awk '{print $1}')" "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$receipt_path"
@@ -306,14 +317,16 @@ jobs:
           process.stdout.write(`${JSON.stringify(observed, null, 2)}\n`);
           NODE
           jq -e \
-            '.format == "memphis-zoo-build52-production-post-apply.v1"
+            --slurpfile release_state release/production-migration-state.json \
+            '($release_state[0]) as $state
+             | .format == "memphis-zoo-build52-production-post-apply.v1"
              and .ok == true
              and .source == "direct-production-query"
-             and .ledger_count == 253
-             and .ledger_head == "20260925190000"
-             and .counts.functions == 567
-             and .counts.routine_grants == 383
-             and .schema_fingerprint == "34f13666aac64ba95409d4f074581a791541e6a1a09f1d560598583c05882a45"' \
+             and .ledger_count == $state.target.production_ledger_count
+             and .ledger_head == $state.target.source_migration_version
+             and .counts.functions == $state.target.expected_catalog_counts.functions
+             and .counts.routine_grants == $state.target.expected_catalog_counts.routine_grants
+             and .schema_fingerprint == $state.target.canonical_source_schema_fingerprint' \
             "$post_apply_path" >/dev/null
           printf '{"stage":"production_target_independently_verified","verification_sha256":"%s","completed_at":"%s"}\n' \
             "$(sha256sum "$post_apply_path" | awk '{print $1}')" "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$receipt_path"

@@ -1,3 +1,4 @@
+import {migrationReplayNames} from './migration-replay-order.mjs';
 import { randomUUID } from "node:crypto";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
@@ -12,8 +13,28 @@ const keepDatabase = /^(1|true|yes)$/i.test(String(process.env.SCHEMA_REBUILD_KE
 const useEmptyContainerPostgres = /^(1|true|yes)$/i.test(String(process.env.SCHEMA_REBUILD_USE_EMPTY_CONTAINER_POSTGRES || ""));
 let ownsDockerContainer = false;
 
+// New owning group tuple cases use an already supplied disposable schema.
+// This branch neither provisions a target nor replays any rebuild/old group case.
+if (process.argv.includes('--group-original-binding-only') || process.argv.includes('--group-original-recovery-only')) {
+  const target = String(process.env.SCHEMA_REBUILD_DATABASE_NAME || '').trim();
+  if (!/^mz_schema_rebuild_[a-zA-Z0-9_]+$/.test(String(dockerContainer || ''))
+      || !/^(postgres|mz_schema_rebuild_[a-zA-Z0-9_]+)$/.test(target)) {
+    throw new Error('Group original binding requires a supplied disposable container and exact database name.');
+  }
+  await verifyOriginalGroupBindingOnly(target, {recoveryOnly:process.argv.includes('--group-original-recovery-only')});
+  process.exit(0);
+}
+
 if (!adminUrl && !dockerContainer && !dockerImage) {
   console.error("Set SCHEMA_REBUILD_ADMIN_URL, SCHEMA_REBUILD_DOCKER_CONTAINER, or SCHEMA_REBUILD_DOCKER_IMAGE for a non-production PostgreSQL target.");
+  process.exit(2);
+}
+
+// This release's PASS includes the missing-fence restored-state challenge.
+// The legacy direct-URL branch cannot inject and verify that challenge, so it
+// must not issue an equivalent-looking success receipt.
+if (adminUrl && !dockerContainer && !dockerImage) {
+  console.error("Direct-URL rebuild mode cannot certify the required restored-fence gap; use an isolated Docker target.");
   process.exit(2);
 }
 
@@ -24,7 +45,7 @@ if (adminUrl && !/(localhost|127\.0\.0\.1|memphis-rebuild|schema-rebuild|test|ci
 
 const root = resolve(new URL("..", import.meta.url).pathname);
 const migrationsDir = resolve(root, "supabase/migrations");
-const migrationFiles = readdirSync(migrationsDir).filter((name) => name.endsWith(".sql")).sort();
+const migrationFiles = migrationReplayNames(process.cwd());
 const retirementCorrectionPath = resolve(migrationsDir, "20260810130000_harden_named_manager_retired_archive_and_concurrency.sql");
 const retirementCorrection = readFileSync(retirementCorrectionPath, "utf8");
 const retirementCorrectionBody = retirementCorrection
@@ -45,7 +66,7 @@ function quoteIdentifier(value) {
   return `"${String(value).replaceAll('"', '""')}"`;
 }
 
-function dockerPsql(database, sql) {
+function dockerPsql(database, sql, captureNotices = false) {
   const user = process.env.SCHEMA_REBUILD_DOCKER_USER || "supabase_admin";
   const result = spawnSync(
     "docker",
@@ -55,7 +76,7 @@ function dockerPsql(database, sql) {
   if (result.status !== 0) {
     throw new Error(`docker psql failed (${result.status}): ${result.stderr || result.stdout}`);
   }
-  return result.stdout;
+  return captureNotices ? {stdout:result.stdout,stderr:result.stderr} : result.stdout;
 }
 
 function dockerPsqlConcurrent(database, sql) {
@@ -76,6 +97,537 @@ function dockerPsqlConcurrent(database, sql) {
 
 function outputLines(result) {
   return String(result.stdout || "").split("\n").map((line) => line.trim()).filter(Boolean);
+}
+
+async function verifyOriginalGroupBindingOnly(database, {recoveryOnly=false} = {}) {
+  const users = Array.from({length:4},()=>randomUUID());
+  const employees = Array.from({length:4},()=>randomUUID());
+  const members = [users[1],users[2]].sort().reverse();
+  const key = `thread:${randomUUID()}`, legacyKey = `thread:${randomUUID()}`;
+  const metadata = () => JSON.parse(dockerPsql(database, `
+    select jsonb_build_object(
+      'rpc_owner',p.proowner::text,'rpc_acl',p.proacl::text,'rpc_config',p.proconfig,
+      'rpc_definer',p.prosecdef,'rpc_return',p.prorettype::text,
+      'table_owner',c.relowner::text,'table_acl',c.relacl::text,'rls',c.relrowsecurity,'force_rls',c.relforcerowsecurity,
+      'service_execute',has_function_privilege('service_role',p.oid,'EXECUTE'),
+      'public_execute',exists(select 1 from aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        where a.grantee=0 and a.privilege_type='EXECUTE'),
+      'anon_execute',has_function_privilege('anon',p.oid,'EXECUTE'),
+      'authenticated_execute',has_function_privilege('authenticated',p.oid,'EXECUTE'),
+      'guard_definer',g.prosecdef,'guard_acl',g.proacl::text,
+      'guard_public_execute',exists(select 1 from aclexplode(coalesce(g.proacl,acldefault('f',g.proowner))) a
+        where a.grantee=0 and a.privilege_type='EXECUTE'),
+      'guard_service_execute',has_function_privilege('service_role',g.oid,'EXECUTE'),
+      'guard_anon_execute',has_function_privilege('anon',g.oid,'EXECUTE'),
+      'guard_authenticated_execute',has_function_privilege('authenticated',g.oid,'EXECUTE'),
+      'ledger_owner',l.relowner::text,'ledger_acl',l.relacl::text,
+      'ledger_rls',l.relrowsecurity,'ledger_force_rls',l.relforcerowsecurity,
+      'ledger_policy',jsonb_build_object('roles',pol.polroles,'command',pol.polcmd,
+        'using',pg_get_expr(pol.polqual,pol.polrelid),'check',pg_get_expr(pol.polwithcheck,pol.polrelid)),
+      'ledger_nonowner_acl',exists(select 1 from aclexplode(coalesce(l.relacl,acldefault('r',l.relowner))) a where a.grantee<>p.proowner),
+      'ledger_runtime_privilege',exists(select 1 from pg_roles r where r.rolname in ('anon','authenticated','service_role','custodial_application_reader')
+        and has_table_privilege(r.oid,l.oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')),
+      'ledger_guard_definer',lg.prosecdef,
+      'ledger_guard_nonowner_execute',exists(select 1 from aclexplode(coalesce(lg.proacl,acldefault('f',lg.proowner))) a
+        where a.grantee<>p.proowner and a.privilege_type='EXECUTE'),
+      'ledger_always_guards',(select count(*) from pg_trigger where tgrelid=l.oid and tgenabled='A' and not tgisinternal),
+      'ledger_foreign_keys',(select count(*) from pg_constraint where conrelid=l.oid and contype='f')
+    )::text from pg_proc p cross join pg_class c cross join pg_proc g
+      cross join pg_class l cross join pg_proc lg cross join pg_policy pol
+    where p.oid='public.msg_create_group_thread_v2(uuid,text,uuid[],text)'::regprocedure
+      and g.oid='public.msg_preserve_original_group_creation()'::regprocedure
+      and c.oid='public.msg_threads'::regclass
+      and l.oid='custodial_release_identity.group_original_creations'::regclass
+      and lg.oid='custodial_release_identity.guard_group_original_creation()'::regprocedure
+      and pol.polrelid=l.oid and pol.polname='group_original_creation_definer_owner';
+  `).trim());
+  const before = metadata();
+  if (before.service_execute !== true || before.public_execute !== false || before.anon_execute !== false
+      || before.authenticated_execute !== false || before.rpc_definer !== true
+      || before.guard_definer !== false || before.guard_public_execute !== false || before.guard_service_execute !== false
+      || before.guard_anon_execute !== false || before.guard_authenticated_execute !== false
+      || before.ledger_owner !== before.rpc_owner || before.ledger_rls !== true || before.ledger_force_rls !== true
+      || before.ledger_nonowner_acl !== false || before.ledger_runtime_privilege !== false
+      || before.ledger_guard_definer !== false || before.ledger_guard_nonowner_execute !== false
+      || before.ledger_always_guards !== 2 || before.ledger_foreign_keys !== 0
+      || JSON.stringify(before.ledger_policy.roles) !== JSON.stringify([before.rpc_owner])
+      || before.ledger_policy.command !== '*' || before.ledger_policy.using !== 'true' || before.ledger_policy.check !== 'true') {
+    throw new Error('Group RPC private service-role ACL prerequisite changed.');
+  }
+  const output = dockerPsql(database, `
+    begin;
+    insert into public.employees(id,employee_code,display_name,active,role) values
+      ${employees.map((id,index)=>`('${id}','EMP98910${index+1}','Synthetic Group Original ${index+1}',true,'staff')`).join(',')};
+    insert into public.msg_users(id,employee_id,display_name,role,is_active) values
+      ${users.map((id,index)=>`('${id}','${employees[index]}','Synthetic Group Original ${index+1}','employee',true)`).join(',')};
+    insert into public.msg_device_assignments(device_identifier,msg_user_id,is_active) values
+      ${users.map(id=>`('GROUP_ORIGINAL_SQL_${id}','${id}',true)`).join(',')};
+    set local role service_role;
+    do $group_original_cases$
+    declare
+      v_creator uuid := '${users[0]}';
+      v_members uuid[] := array['${members[0]}'::uuid,'${members[1]}'::uuid];
+      v_key text := '${key}';
+      v_bound public.msg_threads%rowtype;
+      v_replay public.msg_threads%rowtype;
+      v_legacy public.msg_threads%rowtype;
+      v_expected jsonb;
+      v_row_before jsonb;
+      v_participants_before jsonb;
+      v_row_after jsonb;
+      v_participants_after jsonb;
+      v_hashes jsonb := '[]'::jsonb;
+      v_case integer;
+      v_denied boolean;
+    begin
+      if ${recoveryOnly} then
+        -- Necessary new recovery fixture seed only: create an original via
+        -- the owning service RPC, never insert an alleged accepted ledger row.
+        perform public.msg_create_group_thread_v2(v_creator,'  Original Group  ',v_members,v_key);
+      else
+      v_expected := jsonb_build_object('schema','custodial.group-original-creation.v1',
+        'created_by_user_id',v_creator,'client_thread_id',v_key,'title','  Original Group  ',
+        'member_user_ids',to_jsonb(v_members));
+      v_bound := public.msg_create_group_thread_v2(v_creator,'  Original Group  ',v_members,v_key);
+      if v_bound.original_group_creation is distinct from v_expected or v_bound.title is distinct from 'Original Group' then
+        raise exception 'Original raw title/ordered members were not captured with the actual creation';
+      end if;
+      if (select count(*) from public.msg_thread_participants where thread_id=v_bound.id and left_at is null)<>3 then
+        raise exception 'Original group participant creation is incomplete';
+      end if;
+      v_replay := public.msg_create_group_thread_v2(v_creator,'  Original Group  ',v_members,v_key);
+      if to_jsonb(v_replay) is distinct from to_jsonb(v_bound) then
+        raise exception 'Exact original replay altered the persisted row or timestamps';
+      end if;
+      select coalesce(jsonb_agg(to_jsonb(p) order by p.user_id),'[]'::jsonb) into v_participants_before
+      from public.msg_thread_participants p where p.thread_id=v_bound.id;
+      v_row_before := to_jsonb(v_bound);
+      -- Same visible title but changed raw input, order, recipient or key spelling
+      -- must not modify the original or current participant rows.
+      for v_case in 1..4 loop
+        v_denied := false;
+        begin
+          if v_case=1 then
+            perform public.msg_create_group_thread_v2(v_creator,'Original Group',v_members,v_key);
+          elsif v_case=2 then
+            perform public.msg_create_group_thread_v2(v_creator,'  Original Group  ',array[v_members[2],v_members[1]],v_key);
+          elsif v_case=3 then
+            perform public.msg_create_group_thread_v2(v_creator,'  Original Group  ',array[v_members[1],'${users[3]}'::uuid],v_key);
+          else
+            perform public.msg_create_group_thread_v2(v_creator,'  Original Group  ',v_members,' '||v_key||' ');
+          end if;
+        exception when invalid_parameter_value then v_denied := true;
+        end;
+        if not v_denied then raise exception 'Different original tuple accepted for case %',v_case; end if;
+        select to_jsonb(t) into v_row_after from public.msg_threads t where t.id=v_bound.id;
+        select coalesce(jsonb_agg(to_jsonb(p) order by p.user_id),'[]'::jsonb) into v_participants_after
+        from public.msg_thread_participants p where p.thread_id=v_bound.id;
+        if v_row_after is distinct from v_row_before or v_participants_after is distinct from v_participants_before then
+          raise exception 'Conflicting original tuple mutated group/participants';
+        end if;
+        v_hashes := v_hashes||jsonb_build_array(jsonb_build_object('case',v_case,
+          'row_before',encode(extensions.digest(convert_to(v_row_before::text,'UTF8'),'sha256'),'hex'),
+          'row_after',encode(extensions.digest(convert_to(v_row_after::text,'UTF8'),'sha256'),'hex'),
+          'participants_before',encode(extensions.digest(convert_to(v_participants_before::text,'UTF8'),'sha256'),'hex'),
+          'participants_after',encode(extensions.digest(convert_to(v_participants_after::text,'UTF8'),'sha256'),'hex')));
+      end loop;
+      -- Current title/membership changes cannot rewrite or substitute the
+      -- creation tuple. Exact replay must preserve those current changes too.
+      update public.msg_threads set title='Current renamed group' where id=v_bound.id;
+      update public.msg_thread_participants set left_at=clock_timestamp() where thread_id=v_bound.id and user_id=v_members[1];
+      select to_jsonb(t) into v_row_before from public.msg_threads t where t.id=v_bound.id;
+      select coalesce(jsonb_agg(to_jsonb(p) order by p.user_id),'[]'::jsonb) into v_participants_before
+      from public.msg_thread_participants p where p.thread_id=v_bound.id;
+      v_replay := public.msg_create_group_thread_v2(v_creator,'  Original Group  ',v_members,v_key);
+      select coalesce(jsonb_agg(to_jsonb(p) order by p.user_id),'[]'::jsonb) into v_participants_after
+      from public.msg_thread_participants p where p.thread_id=v_bound.id;
+      if to_jsonb(v_replay) is distinct from v_row_before or v_replay.original_group_creation is distinct from v_expected
+        or v_participants_after is distinct from v_participants_before then
+        raise exception 'Original replay substituted current title/membership or restored a departed member';
+      end if;
+      for v_case in 1..5 loop
+        v_denied := false;
+        begin
+          if v_case=1 then update public.msg_threads set original_group_creation=null where id=v_bound.id;
+          elsif v_case=2 then update public.msg_threads set original_group_creation=jsonb_set(original_group_creation,'{title}','"rewritten"') where id=v_bound.id;
+          elsif v_case=3 then update public.msg_threads set client_thread_id='thread:rewritten' where id=v_bound.id;
+          elsif v_case=4 then update public.msg_threads set created_by_user_id='${users[3]}'::uuid where id=v_bound.id;
+          else update public.msg_threads set id='${users[3]}'::uuid where id=v_bound.id;
+          end if;
+        exception when check_violation then v_denied := true;
+        end;
+        if not v_denied then raise exception 'Original binding updater accepted case %',v_case; end if;
+        if (select to_jsonb(t) from public.msg_threads t where t.id=v_bound.id) is distinct from v_row_before then
+          raise exception 'Denied original update changed its persisted row';
+        end if;
+      end loop;
+      -- Explicit legacy fixture has no original provenance. It must not be
+      -- adopted by either RPC replay or an ordinary update of the new column.
+      insert into public.msg_threads(thread_type,title,created_by_user_id,client_thread_id,is_active)
+      values('group','Legacy unbound fixture',v_creator,'${legacyKey}',true) returning * into v_legacy;
+      v_denied := false;
+      begin
+        perform public.msg_create_group_thread_v2(v_creator,'Legacy unbound fixture',v_members,'${legacyKey}');
+      exception when object_not_in_prerequisite_state then v_denied := true;
+      end;
+      if not v_denied then raise exception 'Legacy original was silently adopted by replay'; end if;
+      v_denied := false;
+      begin
+        update public.msg_threads set original_group_creation=jsonb_build_object('schema','custodial.group-original-creation.v1',
+          'created_by_user_id',v_creator,'client_thread_id','${legacyKey}','title','Legacy unbound fixture','member_user_ids',to_jsonb(v_members))
+        where id=v_legacy.id;
+      exception when check_violation then v_denied := true;
+      end;
+      if not v_denied or (select to_jsonb(t) from public.msg_threads t where t.id=v_legacy.id) is distinct from to_jsonb(v_legacy) then
+        raise exception 'Legacy original was backfilled or changed';
+      end if;
+      if exists(select 1 from public.msg_thread_participants where thread_id=v_legacy.id) then
+        raise exception 'Unbound replay inserted participants';
+      end if;
+      v_denied := false;
+      begin
+        insert into public.msg_threads(thread_type,title,created_by_user_id,client_thread_id,is_active,original_group_creation)
+        values('group','Mismatched inserted binding',v_creator,'different-'||v_key,true,v_expected);
+      exception when check_violation then v_denied := true;
+      end;
+      if not v_denied or exists(select 1 from public.msg_threads where client_thread_id='different-'||v_key) then
+        raise exception 'A caller tuple was accepted for a different inserted group identity';
+      end if;
+      update public.msg_users set is_active=false where id=v_creator;
+      v_denied := false;
+      begin
+        perform public.msg_create_group_thread_v2(v_creator,'  Original Group  ',v_members,v_key);
+      exception when insufficient_privilege then v_denied := true;
+      end;
+      if not v_denied or (select to_jsonb(t) from public.msg_threads t where t.id=v_bound.id) is distinct from v_row_before then
+        raise exception 'Current inactive creator was accepted or original group changed';
+      end if;
+      raise notice 'GROUP_ORIGINAL_BINDING_NEW:%',jsonb_build_object('state','SOURCE_SQL_CASES_EXECUTED',
+        'creator',v_creator,'thread',v_bound.id,'conflict_hashes',v_hashes,'legacy_unbound_preserved',true,
+        'current_membership_not_original',true,'fixture_role','service_role');
+      end if;
+    end
+    $group_original_cases$;
+    -- Normal service RPC owns creation, but its caller receives NO direct
+    -- private ledger access. Each attempted statement must be denied.
+    do $ledger_runtime_denials$
+    declare v_sql text; v_denied boolean;
+    begin
+      if not ${recoveryOnly} then
+      foreach v_sql in array array[
+        'select * from custodial_release_identity.group_original_creations',
+        'insert into custodial_release_identity.group_original_creations select * from custodial_release_identity.group_original_creations',
+        'update custodial_release_identity.group_original_creations set group_uuid=group_uuid',
+        'delete from custodial_release_identity.group_original_creations',
+        'truncate custodial_release_identity.group_original_creations'
+      ] loop
+        v_denied := false;
+        begin execute v_sql; exception when insufficient_privilege then v_denied := true; end;
+        if not v_denied then raise exception 'Service caller gained direct ledger capability: %',v_sql; end if;
+      end loop;
+      end if;
+    end
+    $ledger_runtime_denials$;
+    reset role;
+    -- Fixture administrator observes the actual ledger only; it does not
+    -- seed a purported accepted original or grant any capability.
+    -- Exact source270 recovery scope. These additions exercise metadata replay
+    -- over retained DATA, not restore of lost originals or arbitrary owners.
+    create temp table group_original_recovery_scope(kind text,identity text,primary key(kind,identity)) on commit drop;
+    insert into group_original_recovery_scope values
+      ('relation','custodial_release_identity.group_original_creations'),
+      ('column_set','custodial_release_identity.group_original_creations'),
+      ('relation_state','custodial_release_identity.group_original_creations'),
+      ('policy','custodial_release_identity.group_original_creations:group_original_creation_definer_owner'),
+      ('grant','custodial_release_identity.group_original_creations'),
+      ('column','custodial_release_identity.group_original_creations:creator_uuid'),
+      ('column','custodial_release_identity.group_original_creations:original_client_thread_id'),
+      ('column','custodial_release_identity.group_original_creations:group_uuid'),
+      ('column','custodial_release_identity.group_original_creations:original_tuple'),
+      ('constraint','custodial_release_identity.group_original_creations:group_original_creations_pkey'),
+      ('constraint','custodial_release_identity.group_original_creations:group_original_creations_group_uuid_key'),
+      ('constraint','custodial_release_identity.group_original_creations:group_original_creations_original_client_thread_id_check'),
+      ('constraint','custodial_release_identity.group_original_creations:group_original_creations_original_tuple_check'),
+      ('trigger','custodial_release_identity.group_original_creations.group_original_creation_immutable'),
+      ('trigger','custodial_release_identity.group_original_creations.group_original_creation_no_truncate'),
+      ('function','custodial_release_identity.guard_group_original_creation()'),
+      ('grant','custodial_release_identity.guard_group_original_creation()'),
+      ('function','public.msg_preserve_original_group_creation()'),
+      ('grant','public.msg_preserve_original_group_creation()'),
+      ('trigger','public.msg_threads.trg_msg_preserve_original_group_creation'),
+      ('column','public.msg_threads:original_group_creation'),
+      ('relation','public.msg_threads'),
+      ('column_set','public.msg_threads'),
+      ('function','public.msg_create_group_thread_v2(uuid,text,uuid[],text)'),
+      ('grant','public.msg_create_group_thread_v2(uuid,text,uuid[],text)');
+    create temp table group_original_inventory_before on commit drop as
+      select * from public.custodial_release_authority_restore_inventory;
+    do $ledger_retention_cases$
+    declare
+      v_original custodial_release_identity.group_original_creations%rowtype;
+      v_after custodial_release_identity.group_original_creations%rowtype;
+      v_thread public.msg_threads%rowtype;
+      v_expected jsonb;
+      v_denied boolean;
+      v_case integer;
+      v_hash_before text;
+      v_hash_after text;
+      v_purge jsonb;
+      v_owner name;
+      v_restore record;
+      v_live text;
+      v_all_ledger_before text;
+      v_all_ledger_after text;
+      v_restored integer := 0;
+      v_runtime_role text;
+      v_denied_roles integer := 0;
+    begin
+      select * into strict v_original from custodial_release_identity.group_original_creations
+        where creator_uuid='${users[0]}'::uuid and original_client_thread_id='${key}';
+      select * into strict v_thread from public.msg_threads where id=v_original.group_uuid;
+      v_expected := jsonb_build_object('schema','custodial.group-original-creation.v1',
+        'created_by_user_id','${users[0]}'::uuid,'client_thread_id','${key}',
+        'title','  Original Group  ','member_user_ids',to_jsonb(array['${members[0]}'::uuid,'${members[1]}'::uuid]));
+      if v_original.original_tuple is distinct from v_expected
+        or v_thread.original_group_creation is distinct from v_original.original_tuple
+        or (select count(*) from custodial_release_identity.group_original_creations where creator_uuid='${users[0]}'::uuid)<>1
+        or exists(select 1 from custodial_release_identity.group_original_creations where original_client_thread_id='${legacyKey}') then
+        raise exception 'Original ledger was missing, duplicated or adopted from legacy';
+      end if;
+      select rolname into strict v_owner from pg_roles where oid=(select proowner from pg_proc
+        where oid='public.msg_create_group_thread_v2(uuid,text,uuid[],text)'::regprocedure);
+      if not ${recoveryOnly} then
+      execute format('set local role %I',v_owner);
+      if (select to_jsonb(l) from custodial_release_identity.group_original_creations l
+          where creator_uuid=v_original.creator_uuid and original_client_thread_id=v_original.original_client_thread_id)
+        is distinct from to_jsonb(v_original) then raise exception 'Preserved definer owner cannot read its FORCE RLS ledger'; end if;
+      -- Owner privilege is not permission to rewrite original metadata.
+      for v_case in 1..3 loop
+        v_denied := false;
+        begin
+          if v_case=1 then update custodial_release_identity.group_original_creations set original_tuple=jsonb_set(original_tuple,'{title}','"rewritten"')
+            where creator_uuid=v_original.creator_uuid and original_client_thread_id=v_original.original_client_thread_id;
+          elsif v_case=2 then delete from custodial_release_identity.group_original_creations
+            where creator_uuid=v_original.creator_uuid and original_client_thread_id=v_original.original_client_thread_id;
+          else truncate custodial_release_identity.group_original_creations;
+          end if;
+        exception when check_violation then v_denied := true;
+        end;
+        if not v_denied then raise exception 'Immutable ledger mutation accepted case %',v_case; end if;
+      end loop;
+      -- Closed ledger INSERT validation cannot backfill an existing NULL
+      -- group, even for the owner, or accept a fabricated original vector.
+      for v_case in 1..3 loop
+        v_denied := false;
+        begin
+          insert into custodial_release_identity.group_original_creations(creator_uuid,original_client_thread_id,group_uuid,original_tuple)
+          select '${users[0]}'::uuid,'${legacyKey}',id,
+            case when v_case=1 then v_expected||jsonb_build_object('client_thread_id','${legacyKey}','unsafe',true)
+            when v_case=2 then v_expected||jsonb_build_object('client_thread_id','${legacyKey}','member_user_ids',jsonb_build_array('wrong-id','wrong-id-2'))
+            else v_expected||jsonb_build_object('client_thread_id','${legacyKey}') end
+          from public.msg_threads where client_thread_id='${legacyKey}' and created_by_user_id='${users[0]}'::uuid;
+        exception when check_violation then v_denied := true;
+        end;
+        if not v_denied then raise exception 'Malformed/unbound ledger insert accepted case %',v_case; end if;
+      end loop;
+      reset role;
+      end if;
+      v_hash_before := encode(extensions.digest(convert_to(to_jsonb(v_original)::text,'UTF8'),'sha256'),'hex');
+      -- Reactivate only the synthetic fixture user used by the earlier
+      -- negative. Then run EXISTING retention on an actually created empty
+      -- group whose tombstone is due; do not change the purge implementation.
+      update public.msg_users set is_active=true where id='${users[0]}'::uuid;
+      update public.msg_threads set is_active=false,deleted_at=statement_timestamp()-interval '15 days',
+        deleted_by_user_id='${users[0]}'::uuid,purge_after=statement_timestamp()-interval '1 day'
+        where id=v_original.group_uuid;
+      set local role service_role;
+      v_purge := public.msg_purge_deleted_content(statement_timestamp(),1000);
+      if exists(select 1 from public.msg_threads where id=v_original.group_uuid) then
+        raise exception 'Existing legitimate retention could not physically purge the created group';
+      end if;
+      if not ${recoveryOnly} then
+      for v_case in 1..4 loop
+        v_denied := false;
+        begin
+          if v_case=1 then perform public.msg_create_group_thread_v2('${users[0]}'::uuid,'  Original Group  ',
+            array['${members[0]}'::uuid,'${members[1]}'::uuid],'${key}');
+          elsif v_case=2 then perform public.msg_create_group_thread_v2('${users[0]}'::uuid,'changed',
+            array['${members[0]}'::uuid,'${members[1]}'::uuid],'${key}');
+          elsif v_case=3 then perform public.msg_create_group_thread_v2('${users[0]}'::uuid,'  Original Group  ',
+            array['${members[1]}'::uuid,'${members[0]}'::uuid],'${key}');
+          else perform public.msg_create_group_thread_v2('${users[0]}'::uuid,'  Original Group  ',
+            array['${members[0]}'::uuid,'${members[1]}'::uuid],' '||'${key}'||' ');
+          end if;
+        exception when object_not_in_prerequisite_state then
+          if v_case<>1 then raise; end if; v_denied := true;
+        when invalid_parameter_value then
+          if v_case=1 then raise; end if; v_denied := true;
+        end;
+        if not v_denied or exists(select 1 from public.msg_threads where created_by_user_id='${users[0]}'::uuid and client_thread_id='${key}') then
+          raise exception 'Purged original operation created a replacement group or accepted mismatched replay';
+        end if;
+      end loop;
+      end if;
+      reset role;
+      -- A purged group's retained original is still present. Drift only
+      -- metadata, never delete/reinsert the ledger or disable guards to insert
+      -- purported accepted DATA. The real guard would correctly reject such
+      -- an INSERT without the original live group.
+      if (select count(*) from group_original_recovery_scope)<>25
+        or exists(select 1 from group_original_recovery_scope s where
+          (select count(*) from public.custodial_release_authority_restore_inventory i
+            where i.object_kind=s.kind and i.object_identity=s.identity)<>1
+          or (select count(*) from public.custodial_release_canary_authority_surface() c
+            where c.object_kind=s.kind and c.object_identity=s.identity)<>1) then
+        raise exception 'Exact original group recovery/canary scope is incomplete';
+      end if;
+      select encode(extensions.digest(convert_to(coalesce(jsonb_agg(to_jsonb(l)
+        order by l.creator_uuid,l.original_client_thread_id),'[]'::jsonb)::text,'UTF8'),'sha256'),'hex')
+        into v_all_ledger_before from custodial_release_identity.group_original_creations l;
+      if v_owner is distinct from (select rolname from pg_roles where oid=(select proowner from pg_proc
+          where oid='public.custodial_control_release_canary(uuid,uuid,text,text,text,jsonb,text)'::regprocedure)) then
+        raise exception 'Owning recovery executor must retain the original group definer owner';
+      end if;
+      execute format('set local role %I',v_owner);
+      alter table custodial_release_identity.group_original_creations no force row level security;
+      drop policy group_original_creation_definer_owner on custodial_release_identity.group_original_creations;
+      alter table custodial_release_identity.group_original_creations disable trigger group_original_creation_immutable;
+      alter table custodial_release_identity.group_original_creations disable trigger group_original_creation_no_truncate;
+      alter table custodial_release_identity.group_original_creations drop constraint group_original_creations_original_tuple_check;
+      -- Restore this column's exact declaration without throwing away any
+      -- existing group tuple. Column removal/data loss is NOT this challenge.
+      alter table public.msg_threads alter column original_group_creation set default '{}'::jsonb;
+      for v_restore in select i.* from public.custodial_release_authority_restore_inventory i
+        join group_original_recovery_scope s on s.kind=i.object_kind and s.identity=i.object_identity
+        order by i.restore_order,i.object_identity loop
+        if public.static_weekly_digest_text(v_restore.definition_sql) is distinct from v_restore.definition_sha256 then
+          raise exception 'Original group stored restoration checksum failed';
+        end if;
+        execute v_restore.definition_sql;
+        v_restored:=v_restored+1;
+      end loop;
+      reset role;
+      if v_restored<>25 then raise exception 'Original group scoped restoration was incomplete'; end if;
+      for v_restore in select i.* from public.custodial_release_authority_restore_inventory i
+        join group_original_recovery_scope s on s.kind=i.object_kind and s.identity=i.object_identity loop
+        v_live:=case v_restore.object_kind
+          when 'function' then pg_get_functiondef(to_regprocedure(v_restore.object_identity))
+          when 'relation' then public.custodial_release_authority_current_relation_definition(v_restore.object_identity)
+          when 'column' then public.custodial_release_authority_current_column_definition(v_restore.object_identity)
+          when 'column_set' then public.custodial_release_authority_current_column_set_definition(v_restore.object_identity)
+          when 'relation_state' then public.custodial_release_authority_current_relation_state_definition(v_restore.object_identity)
+          when 'constraint' then public.custodial_release_authority_current_constraint_definition(v_restore.object_identity)
+          when 'policy' then public.custodial_release_authority_current_policy_definition(v_restore.object_identity)
+          when 'grant' then public.custodial_release_authority_current_grant_definition(v_restore.object_identity)
+          when 'trigger' then (select 'drop trigger if exists '||quote_ident(t.tgname)||' on '
+            ||quote_ident(n.nspname)||'.'||quote_ident(c.relname)||'; '||pg_get_triggerdef(t.oid,true)
+            ||'; alter table '||quote_ident(n.nspname)||'.'||quote_ident(c.relname)||' '
+            ||case t.tgenabled when 'A' then 'enable always' when 'O' then 'enable' end||' trigger '||quote_ident(t.tgname)||';'
+            from pg_trigger t join pg_class c on c.oid=t.tgrelid join pg_namespace n on n.oid=c.relnamespace
+            where not t.tgisinternal and v_restore.object_identity=n.nspname||'.'||c.relname||'.'||t.tgname) end;
+        if v_live is distinct from v_restore.definition_sql then
+          raise exception 'Original group restored metadata does not match original: %',v_restore.object_identity;
+        end if;
+      end loop;
+      select encode(extensions.digest(convert_to(coalesce(jsonb_agg(to_jsonb(l)
+        order by l.creator_uuid,l.original_client_thread_id),'[]'::jsonb)::text,'UTF8'),'sha256'),'hex')
+        into v_all_ledger_after from custodial_release_identity.group_original_creations l;
+      if v_all_ledger_after is distinct from v_all_ledger_before
+        or exists(select * from group_original_inventory_before except select * from public.custodial_release_authority_restore_inventory)
+        or exists(select * from public.custodial_release_authority_restore_inventory except select * from group_original_inventory_before)
+        or exists(select 1 from pg_roles r where r.rolname in ('anon','authenticated','service_role','custodial_application_reader')
+          and has_table_privilege(r.oid,'custodial_release_identity.group_original_creations','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER'))
+        or (select relowner from pg_class where oid='custodial_release_identity.group_original_creations'::regclass)
+          is distinct from (select proowner from pg_proc where oid='public.msg_create_group_thread_v2(uuid,text,uuid[],text)'::regprocedure)
+        or exists(select 1 from pg_proc p cross join lateral aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+          where p.oid in ('public.msg_preserve_original_group_creation()'::regprocedure,
+            'custodial_release_identity.guard_group_original_creation()'::regprocedure) and a.grantee<>p.proowner)
+        or not exists(select 1 from pg_trigger where tgrelid='public.custodial_release_authority_restore_inventory'::regclass
+          and tgname='trg_custodial_release_authority_restore_inventory_immutable' and tgenabled='A') then
+        raise exception 'Original group restore changed retained DATA, owner path, ACL or unrelated inventory';
+      end if;
+      -- Recheck actual owner FORCE RLS visibility and immutable guards after
+      -- metadata repair; then the normal RPC still refuses the purged original.
+      execute format('set local role %I',v_owner);
+      if not exists(select 1 from custodial_release_identity.group_original_creations
+        where creator_uuid=v_original.creator_uuid and original_client_thread_id=v_original.original_client_thread_id
+          and original_tuple=v_original.original_tuple) then raise exception 'Original owner cannot read restored FORCE RLS ledger'; end if;
+      for v_case in 1..3 loop
+        v_denied:=false;
+        begin
+          if v_case=1 then update custodial_release_identity.group_original_creations set original_tuple=original_tuple;
+          elsif v_case=2 then delete from custodial_release_identity.group_original_creations;
+          else truncate custodial_release_identity.group_original_creations; end if;
+        exception when check_violation then v_denied:=true; end;
+        if not v_denied then raise exception 'Restored original ledger guard allowed mutation: %',v_case; end if;
+      end loop;
+      reset role;
+      foreach v_runtime_role in array array['anon','authenticated','service_role','custodial_application_reader'] loop
+        execute format('set local role %I',v_runtime_role);
+        v_denied:=false;
+        begin perform 1 from custodial_release_identity.group_original_creations;
+        exception when insufficient_privilege then v_denied:=true; end;
+        if not v_denied then raise exception 'Restored private ledger admitted a runtime reader: %',v_runtime_role; end if;
+        v_denied:=false;
+        begin delete from custodial_release_identity.group_original_creations;
+        exception when insufficient_privilege then v_denied:=true; end;
+        if not v_denied then raise exception 'Restored private ledger admitted a runtime writer: %',v_runtime_role; end if;
+        reset role;
+        v_denied_roles:=v_denied_roles+1;
+      end loop;
+      set local role service_role;
+      v_denied:=false;
+      begin perform public.msg_create_group_thread_v2('${users[0]}'::uuid,'  Original Group  ',
+        array['${members[0]}'::uuid,'${members[1]}'::uuid],'${key}');
+      exception when object_not_in_prerequisite_state then v_denied:=true; end;
+      if not v_denied or exists(select 1 from public.msg_threads where id=v_original.group_uuid) then
+        raise exception 'Metadata restore recreated or admitted the purged original group'; end if;
+      reset role;
+      raise notice 'GROUP_ORIGINAL_RECOVERY_NEW:%',jsonb_build_object('state','SOURCE_SQL_METADATA_RECOVERY_CASES_EXECUTED',
+        'restored_objects',v_restored,'ledger_before',v_all_ledger_before,'ledger_after',v_all_ledger_after,
+        'retained_data_preserved',true,'purged_original_no_replacement',true,
+        'runtime_roles_denied',v_denied_roles,'lost_data_restore_qualified',false,'owner_drift_restore_qualified',false);
+      select * into strict v_after from custodial_release_identity.group_original_creations
+        where creator_uuid=v_original.creator_uuid and original_client_thread_id=v_original.original_client_thread_id;
+      v_hash_after := encode(extensions.digest(convert_to(to_jsonb(v_after)::text,'UTF8'),'sha256'),'hex');
+      if to_jsonb(v_after) is distinct from to_jsonb(v_original) then raise exception 'Purge/replay changed original ledger'; end if;
+      raise notice 'GROUP_ORIGINAL_LEDGER_NEW:%',jsonb_build_object('state','SOURCE_SQL_LEDGER_CASES_EXECUTED',
+        'ledger_before',v_hash_before,'ledger_after',v_hash_after,'original_group_uuid',v_original.group_uuid,
+        'purged_original_no_replacement',true,'owner_force_rls_read',true,'service_direct_denied',true,'purge_result',v_purge);
+    end
+    $ledger_retention_cases$;
+    rollback;
+  `, true);
+  const marker = 'GROUP_ORIGINAL_BINDING_NEW:';
+  let receipt = null;
+  if (!recoveryOnly) {
+    const receiptLine = output.stderr.split('\n').find(line=>line.includes(marker));
+    if (!receiptLine) throw new Error('Executed group cases did not return their original row hash receipt.');
+    receipt = JSON.parse(receiptLine.slice(receiptLine.indexOf(marker)+marker.length));
+    if (receipt.state !== 'SOURCE_SQL_CASES_EXECUTED' || receipt.conflict_hashes?.length !== 4
+        || receipt.conflict_hashes.some(row=>row.row_before!==row.row_after || row.participants_before!==row.participants_after)) {
+      throw new Error('Original group conflict row/participant hash evidence is inconsistent.');
+    }
+  }
+  const ledgerMarker = 'GROUP_ORIGINAL_LEDGER_NEW:';
+  const ledgerLine = output.stderr.split('\n').find(line=>line.includes(ledgerMarker));
+  if (!ledgerLine) throw new Error('Executed ledger cases did not return their original retention hash receipt.');
+  const ledgerReceipt = JSON.parse(ledgerLine.slice(ledgerLine.indexOf(ledgerMarker)+ledgerMarker.length));
+  if (ledgerReceipt.state !== 'SOURCE_SQL_LEDGER_CASES_EXECUTED' || ledgerReceipt.ledger_before !== ledgerReceipt.ledger_after
+      || ledgerReceipt.purged_original_no_replacement !== true || ledgerReceipt.owner_force_rls_read !== true
+      || ledgerReceipt.service_direct_denied !== true) throw new Error('Original ledger retention evidence is inconsistent.');
+  const recoveryMarker = 'GROUP_ORIGINAL_RECOVERY_NEW:';
+  const recoveryLine = output.stderr.split('\n').find(line=>line.includes(recoveryMarker));
+  if (!recoveryLine) throw new Error('Executed group recovery cases did not return retained-data evidence.');
+  const recoveryReceipt = JSON.parse(recoveryLine.slice(recoveryLine.indexOf(recoveryMarker)+recoveryMarker.length));
+  if (recoveryReceipt.state !== 'SOURCE_SQL_METADATA_RECOVERY_CASES_EXECUTED' || recoveryReceipt.restored_objects !== 25
+      || recoveryReceipt.ledger_before !== recoveryReceipt.ledger_after || recoveryReceipt.retained_data_preserved !== true
+      || recoveryReceipt.purged_original_no_replacement !== true || recoveryReceipt.runtime_roles_denied !== 4 || recoveryReceipt.lost_data_restore_qualified !== false
+      || recoveryReceipt.owner_drift_restore_qualified !== false) throw new Error('Original group recovery evidence is inconsistent.');
+  const after = metadata();
+  if (JSON.stringify(before) !== JSON.stringify(after)) throw new Error('Group RPC/table owner, ACL or authority metadata changed during cases.');
+  console.log(JSON.stringify({scope:recoveryOnly?'new original group metadata recovery cases only':'new original group SQL cases only',status:'PASS_EXECUTED_SQL_ONLY',
+    privateRpcMetadata:after,transaction:'ROLLED_BACK',sqlReceipt:receipt,ledgerReceipt,recoveryReceipt,sqlOutput:output.stdout.trim(),limits:'Synthetic fixture identities; metadata repair preserves retained DATA, not lost-data or owner-drift restoration; no HTTP, real manager or provider proof.'}));
 }
 
 async function verifyNamedManagerRetirementMigrationModes(database) {
@@ -217,8 +769,14 @@ async function verifyDockerConcurrency(database) {
     values ('00000000-0000-4000-8000-00000000f211', 'GPS_HARDENING', 'GPS Hardening Test', 'restroom', 'restroom', true);
     insert into public.devices(id, device_id, device_name, active)
     values ('00000000-0000-4000-8000-00000000f212', 'GPS-HARDENING-DEVICE', 'GPS Hardening Device', true);
-    insert into public.location_proximity_settings(location_id, latitude, longitude, coordinate_source, coordinate_confidence, active)
-    values ('00000000-0000-4000-8000-00000000f211', 35.1495, -90.0490, 'empty_database_rebuild', 'test', true);
+    insert into public.location_proximity_settings(
+      location_id, latitude, longitude, coordinate_source, coordinate_confidence,
+      authority_radius_m, authority_surveyed_at, active
+    )
+    values (
+      '00000000-0000-4000-8000-00000000f211', 35.1495, -90.0490,
+      'empty_database_rebuild', 'surveyed', 175, now() - interval '1 day', true
+    );
   `);
   const gpsResults = [];
   const runIsolatedGpsEvaluation = (clientEventId, latitude, observedAtSql) => {
@@ -1160,6 +1718,8 @@ if (dockerImage) {
     runDocker([
       "run",
       "-d",
+      "--network",
+      "none",
       "--name",
       dockerContainer,
       "--tmpfs",
@@ -1220,6 +1780,56 @@ if (dockerContainer) {
       dockerPsql("postgres", `create database ${quoteIdentifier(databaseName)};`);
     }
     for (const file of migrationFiles) {
+      if (file === '20260929125440_custodial_recovery_inventory_closure.sql') {
+        // Reproduce the production-backup restore's observed ten-fence gap
+        // immediately before the actual closure migration, not merely after
+        // a fully migrated clean replay.
+        const recurringTables = [
+          'static_weekly_recurring_acceptance_proofs',
+          'static_weekly_recurring_application_intents',
+          'static_weekly_recurring_application_receipts',
+          'static_weekly_recurring_dependency_changes',
+          'static_weekly_recurring_dependency_checks',
+          'static_weekly_recurring_invalidated_principals',
+          'static_weekly_recurring_invalidations',
+          'static_weekly_recurring_publication_bindings',
+          'static_weekly_recurring_terminal_intents',
+          'static_weekly_recurring_terminal_receipts',
+        ];
+        const fenceCount = dockerPsql(targetDatabase, `select count(*) from pg_trigger t
+          join pg_class c on c.oid=t.tgrelid join pg_namespace n on n.oid=c.relnamespace
+          where n.nspname='public' and c.relname=any(array[${recurringTables.map(table => `'${table}'`).join(',')}])
+            and t.tgname='custodial_disaster_restore_mutation_fence' and t.tgenabled='O' and not t.tgisinternal;`).trim();
+        if (fenceCount !== '10') throw new Error(`expected ten healthy recurring fences before the missing-fence restore challenge, found ${fenceCount}`);
+        const activationProviderTables = [
+          'custodial_activation_legacy_lineage_bindings',
+          'custodial_assigned_activation_operations',
+          'employee_native_push_generations',
+        ];
+        const capturedCount = dockerPsql(targetDatabase, `select count(*) from public.custodial_release_authority_restore_inventory
+          where object_kind='trigger' and object_identity=any(array[${activationProviderTables.map(table =>
+            `'public.${table}.custodial_disaster_restore_mutation_fence'`).join(',')}]);`).trim();
+        if (capturedCount !== '3') throw new Error(`expected three captured activation/provider fences before the restored-ledger challenge, found ${capturedCount}`);
+        dockerPsql(targetDatabase, `begin;
+          alter table public.custodial_release_authority_restore_inventory disable trigger trg_custodial_release_authority_restore_inventory_immutable;
+          delete from public.custodial_release_authority_restore_inventory where object_kind='trigger'
+            and object_identity=any(array[${activationProviderTables.map(table =>
+              `'public.${table}.custodial_disaster_restore_mutation_fence'`).join(',')}]);
+          alter table public.custodial_release_authority_restore_inventory enable trigger trg_custodial_release_authority_restore_inventory_immutable;
+          commit;`);
+        console.log('removed three activation/provider inventory rows to reproduce the restored production ledger gap');
+        // Inventory ALTER TABLE fires the global after-DDL installer. Do it
+        // before dropping recurring fences, otherwise the fixture silently
+        // repairs the very restored-state gap it is meant to challenge.
+        for (const table of recurringTables) dockerPsql(targetDatabase,
+          `drop trigger custodial_disaster_restore_mutation_fence on public.${table};`);
+        const absentFenceCount = dockerPsql(targetDatabase, `select count(*) from pg_trigger t
+          join pg_class c on c.oid=t.tgrelid join pg_namespace n on n.oid=c.relnamespace
+          where n.nspname='public' and c.relname=any(array[${recurringTables.map(table => `'${table}'`).join(',')}])
+            and t.tgname='custodial_disaster_restore_mutation_fence' and not t.tgisinternal;`).trim();
+        if (absentFenceCount !== '0') throw new Error(`restored-fence gap was repaired before closure migration: ${absentFenceCount}`);
+        console.log('verified all ten recurring restore fences remain absent immediately before the actual closure migration');
+      }
       const sql = readFileSync(resolve(migrationsDir, file), "utf8");
       dockerPsql(targetDatabase, sql);
       console.log(`applied ${file}`);

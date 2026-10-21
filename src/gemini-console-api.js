@@ -4,6 +4,7 @@ import { extname } from "node:path";
 import mammoth from "mammoth";
 import { getGeminiApiKey, getGeminiDiagnostics } from "./utils/gemini-config.js";
 import { withApplicationMutationLease } from "./restore-mutation-gate.js";
+import { originalConsoleOutcome } from "./gemini-original-outcome.js";
 
 const BUCKET = "gemini-console-private";
 const MAX_FILE_BYTES = 6 * 1024 * 1024;
@@ -85,7 +86,7 @@ function affectedComponents(value = "") {
     ["messaging", /messag|inbox|thread|unread/], ["scans", /scan|cleaning|nfc|qr/],
     ["scheduling", /schedule|pto|absence/], ["events", /event|venue/],
     ["authentication", /auth|login|manager access/], ["gemini_console", /gemini|console/],
-    ["moxie", /moxie|annie/], ["feedback", /feedback|guest report/],
+    ["feedback", /feedback|guest report/],
   ];
   for (const [name, pattern] of map) if (pattern.test(text)) components.push(name);
   return components.length ? components : ["custodial_program"];
@@ -508,6 +509,85 @@ export function createGeminiConsoleRouter({
     } catch (error) { apiError(res, error, "Attachment removal failed."); }
   });
 
+  // Read the original user/assistant and current named credential in ONE
+  // existing read-only SQL snapshot. No provider dispatch or claim is allowed.
+  router.post("/conversations/:conversationId/messages/original-outcome", async (req, res) => {
+    try {
+      const actor = actorFrom(req), session = req.memphisAuth;
+      const sessionDeviceId = session?.device_id, sessionExpiresAt = session?.expires_at;
+      const supplied = req.body;
+      const keys = ["client_message_id", "correlation_id", "conversation_id", "body", "orderedattachment_ids", "created_at"];
+      // Capture the closed original before the first asynchronous read. A route
+      // caller must not be able to change what the SQL lookup means to the
+      // persisted-row projector while that read is outstanding.
+      const plain = supplied && typeof supplied === "object" && !Array.isArray(supplied)
+        && (Object.getPrototypeOf(supplied) === Object.prototype || Object.getPrototypeOf(supplied) === null);
+      const fields = plain ? Object.getOwnPropertyDescriptors(supplied) : null;
+      const exact = fields && Reflect.ownKeys(fields).length === keys.length
+        && keys.every(key => Object.hasOwn(fields, key) && Object.hasOwn(fields[key], "value"));
+      const attachments = exact ? fields.orderedattachment_ids.value : null;
+      const array = Array.isArray(attachments) && Object.getPrototypeOf(attachments) === Array.prototype
+        && attachments.length <= MAX_ATTACHMENTS;
+      const items = array ? Object.getOwnPropertyDescriptors(attachments) : null;
+      const exactItems = items && Reflect.ownKeys(items).length === attachments.length + 1
+        && Array.from({ length: attachments.length }, (_, index) => index)
+          .every(index => Object.hasOwn(items, index) && Object.hasOwn(items[index], "value")
+            && typeof items[index].value === "string" && isUuid(items[index].value));
+      if (!exact || !exactItems) {
+        throw Object.assign(new Error("Exact original outcome request is required."), { status: 422 });
+      }
+      const expected = Object.freeze({
+        client_message_id: fields.client_message_id.value,
+        correlation_id: fields.correlation_id.value,
+        conversation_id: fields.conversation_id.value,
+        body: fields.body.value,
+        orderedattachment_ids: Object.freeze(Array.from({ length: attachments.length }, (_, index) => items[index].value)),
+        created_at: fields.created_at.value,
+      });
+      if (expected.conversation_id !== req.params.conversationId
+        || ![expected.client_message_id, expected.correlation_id, expected.conversation_id].every(value => typeof value === "string" && isUuid(value))
+        || typeof expected.body !== "string" || !expected.body.trim() || expected.body.length > MAX_BODY_CHARS
+        || typeof expected.created_at !== "string" || expected.created_at.length > 64) {
+        throw Object.assign(new Error("Exact original outcome request is required."), { status: 422 });
+      }
+      if (typeof runReadOnlySql !== "function" || typeof sessionDeviceId !== "string"
+        || !sessionDeviceId || typeof sessionExpiresAt !== "string"
+        || !(Date.parse(sessionExpiresAt) > Date.now())) {
+        throw Object.assign(new Error("Current original outcome reader is unavailable."), { status: 503 });
+      }
+      // UUIDs have already been closed above. Only the normal signed session's
+      // device label uses quoting; message text is NEVER interpolated into SQL.
+      const quote = value => "'" + String(value).replaceAll("'", "''") + "'";
+      const rows = normalizeRows(await runReadOnlySql(`
+        select to_jsonb(u) as original_user, to_jsonb(a) as original_assistant
+        from public.ops_manager_trusted_devices d
+        join public.ops_manager_managers m on m.manager_id=d.manager_id
+        join public.gemini_console_conversations c on c.owner_manager_id=m.manager_id
+        join public.gemini_console_messages u on u.conversation_id=c.conversation_id and u.manager_id=m.manager_id
+        left join public.gemini_console_messages a on a.response_to_message_id=u.message_id and a.role='assistant'
+        where d.credential_id=${quote(actor.credentialId)}::uuid
+          and d.manager_id=${quote(actor.managerId)}::uuid and d.device_id=${quote(sessionDeviceId)}
+          and d.revoked_at is null and d.expires_at>statement_timestamp()
+          and m.active and m.revoked_at is null and m.is_system_principal=false
+          and c.conversation_id=${quote(expected.conversation_id)}::uuid and c.status='active'
+          and u.role='user' and u.client_message_id=${quote(expected.client_message_id)}::uuid
+      `));
+      if (req.memphisAuth !== session || actorFrom(req).managerId !== actor.managerId
+        || actorFrom(req).credentialId !== actor.credentialId
+        || session.device_id !== sessionDeviceId || session.expires_at !== sessionExpiresAt
+        || !(Date.parse(sessionExpiresAt) > Date.now())) {
+        throw Object.assign(new Error("Original manager context changed."), { status: 403 });
+      }
+      const pair = rows.length === 1 ? rows[0] : null;
+      const outcome = originalConsoleOutcome(actor, expected, pair?.original_user, pair?.original_assistant);
+      res.status(200).json({ ok: true, data: outcome });
+    } catch (error) {
+      // An unavailable/denied normal reader remains a concrete dependency;
+      // never retry through service credentials or dispatch a replacement turn.
+      apiError(res, error, "Original outcome read unavailable; saved request remains retained.");
+    }
+  });
+
   router.post("/conversations/:conversationId/messages/stream", async (req, res) => {
     const correlationId = isUuid(req.body?.correlation_id) ? String(req.body.correlation_id) : randomUUID();
     configureEventStream(res, correlationId);
@@ -515,15 +595,16 @@ export function createGeminiConsoleRouter({
     let controller;
     try {
       const actor = actorFrom(req);
-      await conversationFor(actor, req.params.conversationId);
+      const conversationId = req.params.conversationId;
       const body = String(req.body?.body || "").trim();
       const clientMessageId = String(req.body?.client_message_id || "");
       const attachmentIds = Array.isArray(req.body?.attachment_ids) ? req.body.attachment_ids.map(String) : [];
       if (!body || body.length > MAX_BODY_CHARS) throw Object.assign(new Error("A message between 1 and 30000 characters is required."), { status: 422 });
       if (!isUuid(clientMessageId) || attachmentIds.some((id) => !isUuid(id)) || attachmentIds.length > MAX_ATTACHMENTS) throw Object.assign(new Error("Valid message and attachment operation identifiers are required."), { status: 422 });
+      await conversationFor(actor, conversationId);
       sendEvent(res, "status", { state: "queued", label: "Queued", correlation_id: correlationId });
       const { data: begin, error: beginError } = await supabase.rpc("gemini_console_begin_turn", {
-        p_conversation_id: req.params.conversationId, p_manager_id: actor.managerId,
+        p_conversation_id: conversationId, p_manager_id: actor.managerId,
         p_client_message_id: clientMessageId, p_body: body, p_attachment_ids: attachmentIds,
         p_correlation_id: correlationId,
       });
@@ -545,7 +626,7 @@ export function createGeminiConsoleRouter({
 
       if (isExplicitRepairAuthorization(body)) {
         sendEvent(res, "status", { state: "authorizing", label: "Authorizing", correlation_id: correlationId });
-        const job = await authorizeActiveProposal({ actor, conversationId: req.params.conversationId, userMessage, correlationId });
+        const job = await authorizeActiveProposal({ actor, conversationId, userMessage, correlationId });
         const responseText = job.execution_mode === "acceptance_probe"
           ? "The controlled disposable repair acceptance job completed. It changed no production feature; durable authorization, test, verification, and rollback evidence were recorded."
           : `Repair job ${job.repair_job_id} is authorized and durable. It is awaiting the controlled worker backup and claim gate; it is not reported as repaired or deployed.`;
@@ -571,8 +652,8 @@ export function createGeminiConsoleRouter({
       const audit = isAuditRequest(body);
       sendEvent(res, "status", { state: audit ? "auditing" : "thinking", label: audit ? "Auditing" : "Thinking", correlation_id: correlationId });
       const grounding = await collectGrounding();
-      const history = await messageHistory(req.params.conversationId);
-      const attachments = await attachmentParts(actor, req.params.conversationId, userMessageId);
+      const history = await messageHistory(conversationId);
+      const attachments = await attachmentParts(actor, conversationId, userMessageId);
       const contents = history.filter((message) => message.message_id !== userMessageId).map((message) => ({ role: message.role === "assistant" ? "model" : "user", parts: [{ text: message.body }] }));
       contents.push({ role: "user", parts: [{ text: body }, ...attachments] });
       if (audit) sendEvent(res, "status", { state: "planning", label: "Planning", correlation_id: correlationId });
@@ -589,11 +670,11 @@ export function createGeminiConsoleRouter({
         p_correlation_id: correlationId, p_metadata_json: { streamed, attachment_count: attachmentIds.length, audit_request: audit },
       });
       if (completed.error) throw completed.error;
-      await supabase.from("ai_provider_access_audit").insert({ provider: "google_gemini", purpose: "gemini_console_chat", allowed: true, input_sha256: sha256(body), redaction_count: 0, redaction_json: {}, metadata_json: { conversation_id: req.params.conversationId, message_id: userMessageId, model } });
+      await supabase.from("ai_provider_access_audit").insert({ provider: "google_gemini", purpose: "gemini_console_chat", allowed: true, input_sha256: sha256(body), redaction_count: 0, redaction_json: {}, metadata_json: { conversation_id: conversationId, message_id: userMessageId, model } });
       let proposal = null;
       if (audit) {
         sendEvent(res, "status", { state: "planning", label: "Proposal ready", correlation_id: correlationId });
-        proposal = await createProposal({ actor, conversationId: req.params.conversationId, assistantMessage: completed.data, userBody: body });
+        proposal = await createProposal({ actor, conversationId, assistantMessage: completed.data, userBody: body });
       }
       sendEvent(res, "message", completed.data);
       if (proposal) sendEvent(res, "proposal", proposal);

@@ -12,7 +12,6 @@ import {
   normalizeWindow,
   selectEffectiveWeeklyVersion,
   serviceDateWeekday,
-  snapshotIncumbency,
   snapshotDatedRosterSlot,
   stableCompare,
   sha256Hex,
@@ -20,6 +19,7 @@ import {
   windowsOverlap,
 } from "./static-weekly-schedule-model.js";
 import { STATIC_WEEKLY_FLEXIBLE_COVERAGE_MODE, STATIC_WEEKLY_ROUTE_CANONICALITY_SCHEMA, STATIC_WEEKLY_SERVICE_MODES, canonicalOptimizerAssignmentProjection, canonicalProgramMatches, canonicalSolverAuthorityCertificate, canonicalSolverAuthorityTierProjection, generateStaticWeeklySchedulingProgram, iterateStaticWeeklySchedulingWitnessTiers, normalizeStaticWeeklyIncludedLocations, postgresJsonbContentDigest, remainingStaticWeeklyMilliseconds } from "./static-weekly-schedule-program.js";
+import { LUNCH_COVERAGE_SCHEMA, deriveLunchCoverageFromPreparedProblem, lunchCoverageContentDigest } from "./static-weekly-lunch-derivation.js";
 
 const array = (value) => Array.isArray(value) ? value : [];
 const text = (value) => String(value ?? "").trim();
@@ -262,7 +262,7 @@ function apply(state, item) {
   const payload = item.payload || {}; const slotId = text(payload.slotId || item.slotId); const window = item.window || payload.window;
   if (["pto", "daily_absence", "partial_absence"].includes(item.type)) { const prior = state.availability.get(slotId) || { slotId }; state.availability.set(slotId, !window ? { ...prior, status: "absent", blockedWindows: [{ start: "00:00", end: "23:59" }] } : { ...prior, blockedWindows: [...array(prior.blockedWindows), normalizeWindow(window, "absence window")] }); if (!window) state.fullDayAbsenceSlotIds.push(slotId); }
   else if (item.type === "shift_override") { const prior = state.availability.get(slotId) || { slotId }; state.availability.set(slotId, { ...prior, status: payload.status || prior.status || "working", shift: normalizeWindow(payload.shift || window, "shift override") }); }
-  else if (item.type === "cover_all") { const supplied = structuredClone(payload.availability || payload); const cover = text(supplied.slotId || slotId); state.availability.set(cover, { ...(state.availability.get(cover) || {}), ...supplied, slotId: cover, status: "working" }); state.contractorCoverageSlotIds.push(cover); }
+  else if (item.type === "cover_all") { const supplied = structuredClone(payload.availability || payload); const cover = text(supplied.slotId || slotId); if (supplied.breakChoice === 'NONE') supplied.lunch = null; state.availability.set(cover, { ...(state.availability.get(cover) || {}), ...supplied, slotId: cover, status: "working" }); state.contractorCoverageSlotIds.push(cover); }
   else if (item.type === "lunch") { const prior = state.availability.get(slotId) || { slotId }; state.availability.set(slotId, { ...prior, lunch: normalizeWindow(payload.lunch || window, "lunch") }); }
   else if (["nine_forty_five_rebalance", "manager_correction"].includes(item.type)) for (const lock of array(payload.locks || payload.assignments || (payload.workId ? [payload] : []))) state.locks.set(text(lock.workId || lock.id), text(lock.slotId || lock.ownerSlotId));
   else if (item.type === "event_impact") {
@@ -324,6 +324,22 @@ function exactTerms(terms, values) {
 }
 
 export function verifyStaticWeeklyScheduleResult(input = {}, result = {}, deadline = null, { allowProvisionalExecutionReceipt = false } = {}) {
+  return verifyStaticWeeklyScheduleResultInternal(input, result, deadline, allowProvisionalExecutionReceipt, false);
+}
+
+// Source/result only: no callback, carried program, prepared graph, validation
+// receipt or caller-selectable provisional mode may enter this typed path.
+// Every existing independent verifier check executes before lunch derivation.
+export function createIndependentlyVerifiedStaticWeeklyLunchCandidate(input, result) {
+  const fail = code => { throw Object.assign(new Error(code), { code }); };
+  if (!result?.canonicalAuthority || !result.authorityDigest || !result.replayDigest) fail('lunch_complete_base_authority_required');
+  const candidate = verifyStaticWeeklyScheduleResultInternal(input, result, null, false, true);
+  // All early verifier failures return their original verification shape.
+  if (candidate?.schema !== LUNCH_COVERAGE_SCHEMA) fail('lunch_base_schedule_not_verified');
+  return candidate;
+}
+
+function verifyStaticWeeklyScheduleResultInternal(input, result, deadline, allowProvisionalExecutionReceipt, deriveVerifiedLunch) {
   const violations = [];
   const deadlineFailure = (stage) => ({ ok: false, violations: [{ code: "solver_timeout", stage }], metrics: null, digest: contentDigest({ input, result, timeout: stage }), verifierVersion: VERIFIER_VERSION });
   const expired = () => {
@@ -402,6 +418,9 @@ export function verifyStaticWeeklyScheduleResult(input = {}, result = {}, deadli
       const key = `${day}:${item.workId}`; if (!validWork(item)) push(violations, "missing_or_incompatible_provenance", { planWorkId: key }); expected.set(key, { ...item, key, day });
     }
     for (const [slotId, item] of state.availability) {
+      if (Object.hasOwn(item, 'breakChoice') && (item.breakChoice !== 'NONE' || item.lunch !== null
+        || slotById.get(slotId)?.kind !== 'CONTRACTOR_CAPACITY'
+        || !exceptionSet(normalizedInput.exceptions, occurrenceDate, version, violations).some(e => e.type === 'cover_all' && e.payload?.availability?.slotId === slotId && e.payload.availability.breakChoice === 'NONE'))) push(violations, 'no_break_requires_typed_nonemployee_capacity', { dayOfWeek: day, slotId });
       if (isDatedVacant(day, slotId) && item?.status !== "vacant_unfilled") push(violations, "vacant_slot_availability_mismatch", { dayOfWeek: day, slotId, status: item?.status || null });
       if (!isDatedVacant(day, slotId) && item?.status === "vacant_unfilled") push(violations, "vacant_slot_not_declared", { dayOfWeek: day, slotId });
       if (item?.status === "working" && !validEligibilityAuthority(item)) push(violations, "working_slot_missing_eligibility_provenance", { dayOfWeek: day, slotId });
@@ -436,7 +455,7 @@ export function verifyStaticWeeklyScheduleResult(input = {}, result = {}, deadli
     if (assignment.planWorkId !== key || assignment.workId !== work.workId || Number(assignment.dayOfWeek) !== work.day || assignment.serviceDate !== occurrenceDate || assignment.locationId !== work.locationId || assignment.window?.start !== work.window?.start || assignment.window?.end !== work.window?.end || Number(assignment.serviceEffortMinutes) !== Number(work.serviceEffortMinutes)) push(violations, "immutable_work_fact_mismatch", { planWorkId: key });
     if (assignment.status === "ASSIGNED") {
       if (isDatedVacant(work.day, baselineSlotId)) push(violations, "vacant_work_was_assigned", { planWorkId: key, baselineSlotId });
-      try { optimized = snapshotIncumbency(slotById.get(text(assignment.slotId)), occurrenceDate); } catch (error) { push(violations, "optimized_identity_not_canonical", { planWorkId: key, detail: error.code || error.message }); }
+      try { optimized = snapshotDatedRosterSlot(slotById.get(text(assignment.slotId)), occurrenceDate); } catch (error) { push(violations, "optimized_identity_not_canonical", { planWorkId: key, detail: error.code || error.message }); }
     }
     const expectedOwnerDigest = postgresJsonbContentDigest({ planWorkId: key, slotId: optimized?.slotId || null, personId: optimized?.personId || null, serviceDate: occurrenceDate });
     const expectedExactOwnerIdentity = postgresJsonbContentDigest({ plan_work_id: key, service_date: occurrenceDate, optimized_owner_slot_id: optimized?.slotId || null, optimized_owner_person_id: optimized?.personId || null, baseline_owner_slot_id: baseline?.slotId || null, baseline_owner_person_id: baseline?.personId || null });
@@ -448,6 +467,9 @@ export function verifyStaticWeeklyScheduleResult(input = {}, result = {}, deadli
       actualActorPersonId: null, ownerDigest: expectedOwnerDigest, exactOwnerIdentity: expectedExactOwnerIdentity,
     };
     for (const [field, value] of Object.entries(canonicalFacts)) if ((assignment[field] ?? null) !== value) push(violations, "canonical_identity_fact_mismatch", { planWorkId: key, field });
+    if (optimized?.kind === 'CONTRACTOR_CAPACITY') {
+      if (assignment.ownerKind !== optimized.kind || assignment.capacityId !== optimized.capacityId) push(violations, 'contractor_capacity_identity_mismatch', { planWorkId: key });
+    } else if (assignment.ownerKind != null || assignment.capacityId != null) push(violations, 'unexpected_contractor_capacity_identity', { planWorkId: key });
     const canonicalStatus = assignment.status === "ASSIGNED" ? "ASSIGNED" : (isEffectiveRequired(work) ? "REVIEW" : "OPEN");
     if (assignment.status !== canonicalStatus) push(violations, "assignment_status_not_canonical", { planWorkId: key, expected: canonicalStatus, actual: assignment.status ?? null });
     if (assignment.status !== "ASSIGNED") {
@@ -753,7 +775,7 @@ export function verifyStaticWeeklyScheduleResult(input = {}, result = {}, deadli
   };
   if (authority && postgresJsonbContentDigest(authority.optimizerResult?.metrics) !== postgresJsonbContentDigest(metrics)) push(violations, "canonical_duty_metrics_mismatch");
   const digest = contentDigest({ verifierVersion: VERIFIER_VERSION, assignments: assignments.map((item) => ({ planWorkId: item.planWorkId, status: item.status, slotId: item.slotId })), metrics, violations });
-  return {
+  const verification = {
     ok: violations.length === 0, violations, metrics, digest, verifierVersion: VERIFIER_VERSION,
     evidence: {
       independent: "canonical input, dated identity, coverage, eligibility, combined route, travel, service, duty, and objective values were recomputed without trusting optimizer owner branches",
@@ -761,4 +783,16 @@ export function verifyStaticWeeklyScheduleResult(input = {}, result = {}, deadli
       independentlyProvesOptimality: false,
     },
   };
+  if (!deriveVerifiedLunch) return verification;
+  const fail = code => { throw Object.assign(new Error(code), { code }); };
+  if (!verification.ok || result.status !== 'FEASIBLE' || result.publicationAuthority !== 'ACCEPTABLE') fail('lunch_base_schedule_not_verified');
+  if (regenerated.problem.inputDigest !== result.inputDigest) fail('lunch_base_schedule_identity_mismatch');
+  // This graph was reconstructed in THIS invocation, never supplied by an
+  // optimizer or earlier verification. No graph escapes this private finish.
+  const candidate = {
+    ...deriveLunchCoverageFromPreparedProblem(regenerated.problem, result.weeklyAssignments),
+    baseAuthorityDigest: result.authorityDigest,
+    baseReplayDigest: result.replayDigest,
+  };
+  return { ...candidate, candidateDigest: lunchCoverageContentDigest(candidate) };
 }

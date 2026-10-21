@@ -19,6 +19,10 @@ const [container, database] = match.slice(1);
 assert.match(container, /^mz_schema_rebuild_[A-Za-z0-9_]+$/);
 
 try {
+  execFileSync(process.execPath, ["scripts/shared-events-recovery-database-tests.mjs"], {
+    env: { ...process.env, BUILD52_RECOVERY_TEST_DOCKER_CONTAINER: container, BUILD52_RECOVERY_TEST_DATABASE: database },
+    stdio: "inherit",
+  });
   execFileSync(process.execPath, ["scripts/release-canary-recovery-database-tests.mjs"], {
     env: { ...process.env, RELEASE_CANARY_TEST_DOCKER_CONTAINER: container, RELEASE_CANARY_TEST_DATABASE: database },
     stdio: "inherit",

@@ -1,0 +1,31 @@
+{
+  "recorded_at": "2026-10-06T12:01:08.184772+00:00",
+  "changes": "Real PostgreSQL lifecycle fixtures now resolve the seeded owner and create an expiring disposable credential. Receipt queries follow that same actor. No production authorization check was weakened.",
+  "verified": [
+    "complete v3 authority",
+    "closure lifecycle",
+    "independent-session concurrency",
+    "outer day-change compile/projection/crash rollback and exact replay",
+    "vacant roster slots"
+  ],
+  "results": "All five scheduler database scripts passed. The first three passed in the combined run; after fixing two stale actor receipt predicates, the final two passed in the focused rerun.",
+  "logs": [
+    {
+      "filename": "custodial-owner-scheduler-database-20261006.log",
+      "sha256": "d17c5bc1b014a978c97c93e2ce522dfdacae6b98e065a3bdf571e9322246fb21"
+    },
+    {
+      "filename": "custodial-owner-day-changes-20261006.log",
+      "sha256": "0680a47a736c72b523174d94aea303c0b50a52ea89fcf8eeed675aa5638b3d6c"
+    }
+  ],
+  "live_data_modified": false,
+  "key_diagnostic": {
+    "ed25519": true,
+    "public_pair_matches": true,
+    "previous_release_signature_valid": true,
+    "new_signature_created": false
+  },
+  "github_prior_run": 37458937918,
+  "github_prior_result": "Earlier fixture failure; not claimed successful"
+}

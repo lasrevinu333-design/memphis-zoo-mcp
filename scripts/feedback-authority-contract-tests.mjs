@@ -11,6 +11,23 @@ const employeeId = "10000000-0000-4000-8000-000000000001";
 const credentialId = "20000000-0000-4000-8000-000000000002";
 const managerId = "30000000-0000-4000-8000-000000000003";
 
+export function runCurrentFeedbackAuthorityCases(){
+  let checks=0;
+  const current=()=>({body:{hub_context:'employee',expected_employee_id:employeeId,expected_credential_id:credentialId,expected_assignment_epoch:'7',message:'Exact original'},
+    memphisDeviceAuth:{credentialed:true},memphisDeviceCredential:{credential_id:credentialId},memphisDevice:{canonical_device_id:'KIOSK_08',assigned_employee_id:employeeId,assigned_employee_name:'Synthetic Employee',assignment_epoch:7}});
+  const result=authoritativeFeedbackPayload(current());assert.equal(result.message,'Exact original');checks++;assert.deepEqual(result.identity_verification,{status:'verified',kind:'enrolled_employee_device',device_id:'KIOSK_08',credential_id:credentialId,employee_id:employeeId,assignment_epoch:7});checks++;
+  for(const [field,value] of [['assigned_employee_id',''],['assigned_employee_id','invalid'],['assigned_employee_name',''],['assignment_epoch',null],['assignment_epoch','1e1'],['assignment_epoch','9007199254740993']]){
+    const req=current();req.memphisDevice[field]=value;assert.throws(()=>authoritativeFeedbackPayload(req),error=>error.status===409&&error.code==='feedback_employee_authority_unavailable');checks++;
+  }
+  for(const [field,value] of [['expected_credential_id',employeeId],['expected_credential_id',''],['expected_assignment_epoch','8'],['expected_assignment_epoch','07']]){
+    const req=current();req.body[field]=value;assert.throws(()=>authoritativeFeedbackPayload(req),error=>error.status===409&&error.code==='feedback_employee_authority_changed');checks++;
+  }
+  const req=current();req.memphisDeviceCredential.credential_id='invalid';assert.throws(()=>authoritativeFeedbackPayload(req),error=>error.status===409);checks++;
+  return {status:'FEEDBACK_CURRENT_EMPLOYEE_AUTHORITY_SOURCE_PASS',checks,newCases:12,utc:new Date().toISOString(),auth:'recording request fixtures; no normal credential/SQL qualification',provider:false};
+}
+if(process.argv.includes('--current-submission-only')){console.log(JSON.stringify(runCurrentFeedbackAuthorityCases()));process.exit(0);}
+if(!new URL(import.meta.url).searchParams.has('currentSubmissionMember')){
+
 assert.equal(requestedFeedbackHub({ body: { hub_context: " EMPLOYEE " } }), "employee");
 assert.equal(requestedFeedbackHub({ body: { hub_context: "invented" } }), "public");
 
@@ -39,13 +56,12 @@ assert.throws(
   () => authoritativeFeedbackPayload({ body: { hub_context: "employee", device_id: "KIOSK_08" } }),
   /Enrolled phone identity is required/,
 );
-const employeePayloadWithoutEpoch = authoritativeFeedbackPayload({
+assert.throws(()=>authoritativeFeedbackPayload({
   body: { hub_context: "employee" },
   memphisDeviceAuth: { credentialed: true },
   memphisDeviceCredential: { credential_id: credentialId },
   memphisDevice: { canonical_device_id: "KIOSK_08" },
-});
-assert.equal(employeePayloadWithoutEpoch.identity_verification.assignment_epoch, null);
+}),error=>error.status===409&&error.code==='feedback_employee_authority_unavailable');
 
 const managerPayload = authoritativeFeedbackPayload({
   body: { hub_context: "manager", submitted_by: "Impostor", device_id: "KIOSK_99" },
@@ -59,6 +75,15 @@ const managerPayload = authoritativeFeedbackPayload({
 assert.equal(managerPayload.submitted_by, "Named Manager");
 assert.equal(managerPayload.device_id, "MANAGER_01");
 assert.equal(managerPayload.identity_verification.manager_id, managerId);
+for (const field of ['expected_manager_id','expected_credential_id']) {
+  for (const value of ['not-a-uuid',employeeId]) {
+    assert.throws(() => authoritativeFeedbackPayload({body:{hub_context:'manager',[field]:value},
+      memphisAuth:{manager_id:managerId,manager_display_name:'Named Manager',credential_id:credentialId}}),
+      error => error.status===409 && error.code==='feedback_manager_authority_changed');
+  }
+}
+assert.equal(authoritativeFeedbackPayload({body:{hub_context:'manager',expected_manager_id:managerId,expected_credential_id:credentialId},
+  memphisAuth:{manager_id:managerId,manager_display_name:'Named Manager',credential_id:credentialId}}).identity_verification.manager_id,managerId);
 
 const publicPayload = authoritativeFeedbackPayload({
   body: { hub_context: "unknown", submitted_by: "Claimed Name", device_id: "KIOSK_08" },
@@ -71,6 +96,9 @@ assert.deepEqual(publicPayload.identity_verification, { status: "unverified", ki
 let employeeMiddlewareCalls = 0;
 let managerMiddlewareCalls = 0;
 let nextCalls = 0;
+assert.throws(() => makeFeedbackSubmitAuthority(), /Employee device middleware/);
+assert.throws(() => makeFeedbackSubmitAuthority({requireEmployeeDeviceCredential(){}}), /Manager write middleware/);
+assert.throws(() => makeFeedbackSubmitAuthority({requireEmployeeDeviceCredential(){},requireOpsManagerWrite(){}}), /Presented manager credential detection/);
 const middleware = makeFeedbackSubmitAuthority({
   requireEmployeeDeviceCredential(req, _res, next) {
     employeeMiddlewareCalls += 1;
@@ -78,7 +106,8 @@ const middleware = makeFeedbackSubmitAuthority({
     req.memphisDeviceCredential = { credential_id: credentialId };
     next();
   },
-  requireOpsManagerAuth(_req, _res, next) { managerMiddlewareCalls += 1; next(); },
+  requireOpsManagerWrite(_req, _res, next) { managerMiddlewareCalls += 1; next(); },
+  authenticatePresentedOpsAccessRequest() { return {presented:false}; },
 });
 const response = { status() { return this; }, json() { throw new Error("unexpected rejection"); } };
 middleware({ body: { hub_context: "employee" } }, response, () => { nextCalls += 1; });
@@ -95,7 +124,8 @@ makeFeedbackSubmitAuthority({
     req.memphisDeviceAuth = { credentialed: false, legacy: true };
     next();
   },
-  requireOpsManagerAuth() { throw new Error("manager middleware not expected"); },
+  requireOpsManagerWrite() { throw new Error("manager middleware not expected"); },
+  authenticatePresentedOpsAccessRequest() { return {presented:false}; },
 })({ body: { hub_context: "employee" } }, {
   status(value) { rejectedStatus = value; return this; },
   json(value) { rejectedCode = value.code; },
@@ -122,4 +152,7 @@ assert.doesNotMatch(
   "feedback persistence must not copy caller identity fields directly",
 );
 
+assert.match(index, /makeFeedbackSubmitAuthority\(\{\s*requireEmployeeDeviceCredential,\s*requireOpsManagerWrite,\s*authenticatePresentedOpsAccessRequest,\s*\}\)/);
+await import('./feedback-manager-write-route-tests.mjs');
 console.log("FEEDBACK_AUTHORITY_CONTRACT_PASS");
+}

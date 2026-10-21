@@ -71,8 +71,14 @@ export function createStaffingCommandRequest(input,{minimumServiceDate=null,allo
       input.targetAbsenceId,
       'staffing_target_absence_id_required',
     );
-    const minimum=requireServiceDate(minimumServiceDate,'staffing_current_service_date_required');
-    if(startDate<minimum&&!allowElapsedAuthorityReplay)throw failure('staffing_cancellation_cannot_rewrite_elapsed_service_date');
+    // Authority-replay mode canonicalizes only; its trusted caller delegates
+    // the date decision to the typed begin RPC, which resolves an original key
+    // before applying its server operational-date guard to a new cancellation.
+    // Ordinary callers still require a real minimum, never a guessed date.
+    if(!allowElapsedAuthorityReplay||minimumServiceDate!==null){
+      const minimum=requireServiceDate(minimumServiceDate,'staffing_current_service_date_required');
+      if(startDate<minimum&&!allowElapsedAuthorityReplay)throw failure('staffing_cancellation_cannot_rewrite_elapsed_service_date');
+    }
   }
 
   const window = enumerateStaffingServiceWindow(startDate, endDate);

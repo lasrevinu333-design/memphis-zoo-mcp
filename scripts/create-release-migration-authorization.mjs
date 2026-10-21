@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {resolveReleaseMigrationSource,releaseMigrationPlanIdentity} from './production-forward-source.mjs';
 
 import { createHash, randomUUID } from "node:crypto";
 import { createReadStream, readFileSync } from "node:fs";
@@ -93,7 +94,8 @@ const rehearsalProvenanceKind = validateRehearsalAttestationProvenance(rehearsal
   resultSha256: rehearsalResultSha256,
   runnerSha256: taskLocalRunnerSha256,
 });
-const plan = state.pending_migrations.map(({ order, source_migration_version, file, sha256: digest }) => ({ order, source_migration_version, file, sha256: digest }));
+for(const item of state.pending_migrations)resolveReleaseMigrationSource(root,item);
+const plan = releaseMigrationPlanIdentity(state.pending_migrations);
 const planSha256 = sha256(stableJson(plan));
 const backupCompletedAt = Date.parse(String(summary.completed_at || ""));
 const rehearsalCompletedAt = Date.parse(String(rehearsal?.completed_at || ""));

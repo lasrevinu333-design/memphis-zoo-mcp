@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { resolveCanonicalDevice } from '../src/device-identity.js';
+import { runWorkSessionGpsOrderSourceTests } from './work-session-gps-order-source-tests.mjs';
 
 const root = process.cwd();
 const read = (relative) => {
@@ -158,8 +159,17 @@ assert.match(gpsMotionHardening, /on conflict\(client_event_id\) where client_ev
 assert.match(gpsMotionHardening, /never changes cleaning session authority/i);
 assert.match(gpsMotionHardening, /revoke all on function public\.tool_evaluate_location_proximity_v2[\s\S]*from public, anon, authenticated/i);
 
+const gpsOrderReceipt=await runWorkSessionGpsOrderSourceTests();
+assert.equal(gpsOrderReceipt.status,'PASS');
+assert.equal(gpsOrderReceipt.checks,18);
+assert.equal(gpsOrderReceipt.actual_SQL,false);
+assert.equal(gpsOrderReceipt.manager_login_proof,false);
+assert.equal(gpsOrderReceipt.geographic_alignment,false);
+assert.equal(gpsOrderReceipt.production,false);
+assert.equal(gpsOrderReceipt.phone,false);
 console.log(JSON.stringify({
   ok: true,
+  gps_order_source_checks:gpsOrderReceipt.checks,
   checked: [
     'canonical_device_alias_resolution',
     'alias_precedence_over_legacy_duplicate_device_rows',

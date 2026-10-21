@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {migrationReplayNames} from './migration-replay-order.mjs';
 
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
@@ -33,38 +34,29 @@ const databaseName = assertOwnedReleaseFixture({
 const { clientConfig, databaseUrl } = canonicalReleaseFixtureConnection(databaseName);
 const root = resolve(new URL("..", import.meta.url).pathname);
 const state = JSON.parse(readFileSync(resolve(root, "release/production-migration-state.json"), "utf8"));
-assert.deepEqual(state.pending_migrations.map(({ order, file }) => ({ order, file })), [
-  { order: 1, file: "20260922050000_lunch_delivery_failure_manager_alert.sql" },
-  { order: 2, file: "20260922070000_completed_cleaning_reminder_cycles.sql" },
-  { order: 3, file: "20260922090000_verified_visit_reminder_state.sql" },
-  { order: 4, file: "20260922163000_static_weekly_lunch_publication.sql" },
-  { order: 5, file: "20260922200000_lunch_notification_producer.sql" },
-  { order: 6, file: "20260922235500_static_weekly_existing_employee_restore.sql" },
-  { order: 7, file: "20260923065000_static_weekly_vacate_roster_slot.sql" },
-  { order: 8, file: "20260923121151_visitor_attendance_reader.sql" },
-  { order: 9, file: "20260924022250_release_selection_and_occurrence_guards.sql" },
-  { order: 10, file: "20260924023930_notification_receipt_and_lunch_integrity.sql" },
-  { order: 11, file: "20260924032226_bind_release_selection_guard_recovery.sql" },
-  { order: 12, file: "20260924042758_static_weekly_canonical_shift_end_derivation.sql" },
-  { order: 13, file: "20260924044035_static_weekly_atomic_roster_completion.sql" },
-  { order: 14, file: "20260924053507_assigned_phone_activation_transport.sql" },
-  { order: 15, file: "20260924080839_custodial_legacy_installation_observation.sql" },
-  { order: 16, file: "20260924161004_owner_oc24_cleaning_and_inspection_boundaries.sql" },
-  { order: 17, file: "20260924172500_oc24_manual_contractor_lunch.sql" },
-  { order: 18, file: "20260924201258_native_provider_durable_authority.sql" },
-  { order: 19, file: "20260925015905_oc24_completion_selection_normalization.sql" },
-  { order: 20, file: "20260925020244_oc24_bound_legacy_completion_replay.sql" },
-  { order: 21, file: "20260925050718_static_weekly_staffing_command_ledger.sql" },
-  { order: 22, file: "20260925054802_static_weekly_staffing_atomic_acceptance.sql" },
-  { order: 23, file: "20260925190000_gps_exact_location_authority_boundary.sql" },
-], "the correction release fixture must contain exactly the twenty-three candidate migrations in order");
-assert.equal(
-  state.pending_migrations.every((item) => item.source_migration_version > state.observed_production.ledger_head),
-  true,
-  "all reviewed correction migrations must advance beyond the admitted production head",
-);
+const replayManifest=JSON.parse(readFileSync(resolve(root,"supabase/canonical/migration-replay-order.json"),"utf8"));
+assert.equal(replayManifest.phases[0].files.length,134,"exact installed-source fixture prefix");
+assert.equal(replayManifest.phases[1].files.length,93,"exact pending source inventory");
+assert.equal(replayManifest.schema,'custodial.migration-replay-order.v2');
+assert.equal(replayManifest.phases.length,3,'exact current forward plus paired alert source');
+assert.equal(replayManifest.phases[2].kind,'paired_native_alert_source_after_current_forward');
+assert.equal(replayManifest.phases[2].files.length,7);
+assert.equal(replayManifest.production_execution_authorized,false,"source manifest is not execution approval");
+assert.deepEqual(state.pending_migrations.map(({order,file,sha256})=>({order,file,sha256})),
+ replayManifest.phases.slice(1).flatMap(phase=>phase.files).map((item,index)=>({order:index+1,file:item.name,sha256:item.sha256})),
+ "the pending declaration must equal all exact forward files, including earlier-dated uninstalled files");
+assert.equal(state.observed_production.ledger_head,"20261006203931");
+assert.equal(state.observed_production.production_ledger_count,234);
+assert.equal(state.target.production_ledger_count,334);
+assert.equal(state.pending_migrations.length,100);
+assert.equal(state.target.canonical_source_schema_fingerprint,'5d2618c1495c5e0629cb4749257756f230c92e830171890bf28ef281112250ba');
+const sourceVersions=new Set(replayManifest.phases[0].files.map(item=>item.name.slice(0,14)));
+assert.ok(state.pending_migrations.every(item=>!sourceVersions.has(item.source_migration_version)),
+ "no pending migration may repeat an installed-source version");
+assert.ok(state.pending_migrations.some(item=>item.source_migration_version<state.observed_production.ledger_head),
+ "fixture must exercise the legitimate backdated-pending case, not silently restore timestamp inference");
 const pending = new Set(state.pending_migrations.map((item) => item.file));
-const migrationFiles = readdirSync(resolve(root, "supabase/migrations")).filter((name) => name.endsWith(".sql")).sort();
+const migrationFiles = migrationReplayNames(root);
 const preMigrationFiles = migrationFiles.filter((name) => !pending.has(name));
 const outlookAdoptionSql = readFileSync(resolve(root, "supabase/migrations/20260827152000_adopt_outlook_event_sync_authority.sql"), "utf8");
 const admin = new Client(clientConfig);
@@ -152,8 +144,11 @@ function firstCatalogDifference(expected, actual) {
   }
   return null;
 }
+let diagnosticAttempt=0;
+function progress(phase,extra={}) { console.log(JSON.stringify({phase,at_utc:new Date().toISOString(),...extra})); }
 async function runPlan(extraEnv = {}) {
-  return execFileAsync(process.execPath, [resolve(root, "scripts/apply-release-migration-plan.mjs")], {
+  const attempt=++diagnosticAttempt;progress('PLAN_BEGIN',{attempt,fail_after_order:extraEnv.RELEASE_MIGRATION_TEST_FAIL_AFTER_ORDER??null,rehearsal:extraEnv.RELEASE_MIGRATION_REHEARSAL??'true'});
+  try { const result=await execFileAsync(process.execPath, [resolve(root, "scripts/apply-release-migration-plan.mjs")], {
     cwd: root,
     env: {
       ...process.env,
@@ -171,7 +166,8 @@ async function runPlan(extraEnv = {}) {
       ...extraEnv,
     },
     maxBuffer: 64 * 1024 * 1024,
-  });
+  }); progress('PLAN_RETURN',{attempt,exit:0});return result;
+  } catch(error) { progress('PLAN_RETURN',{attempt,exit:error.code??null});throw error; }
 }
 
 await admin.connect();
@@ -190,7 +186,9 @@ try {
       created_by text, idempotency_key text, rollback text
     )
   `);
+  progress('PREFIX_REPLAY_BEGIN',{files:preMigrationFiles.length});
   for (const file of preMigrationFiles) await db.query(readFileSync(resolve(root, "supabase/migrations", file), "utf8"));
+  progress('PREFIX_REPLAY_COMPLETE',{files:preMigrationFiles.length});
   // Production owns this table before source migration 152. Recreate that
   // exact owning state without recording 152 in the migration ledger.
   await db.query(outlookAdoptionSql);
@@ -304,7 +302,7 @@ try {
   const afterFingerprint = fingerprintSchemaCatalog(afterCatalog);
   const canonical = JSON.parse(readFileSync(resolve(root, "supabase/canonical/schema-fingerprint-input.json"), "utf8"));
   assert.equal(afterFingerprint.fingerprint, state.target.canonical_source_schema_fingerprint,
-    `the exact twenty-three-migration correction plan must terminate at the canonical target catalog: ${JSON.stringify(firstCatalogDifference(canonical, afterFingerprint.normalized))}`);
+    `the exact100-migration correction plan must terminate at the canonical target catalog: ${JSON.stringify(firstCatalogDifference(canonical, afterFingerprint.normalized))}`);
   await assert.rejects(runPlan(), /already present|pre-migration production state|Locked source catalog/,
     "the complete plan is exactly-once and rejects replay or partial application");
   console.log("RELEASE_MIGRATION_PLAN_DATABASE_TESTS_PASS");

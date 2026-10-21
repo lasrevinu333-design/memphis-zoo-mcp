@@ -25,6 +25,14 @@ execFileSync(process.execPath, ["scripts/build52-release-recovery-binding-databa
   stdio: "inherit",
 });
 
+// Recheck the GPS/recurring correction through the same disposable recovery
+// controller, including permission and trigger-state fault sensitivity.
+execFileSync(process.execPath, ["scripts/recovery-inventory-closure-database-tests.mjs"], {
+  env: { ...process.env, BUILD52_RECOVERY_TEST_DOCKER_CONTAINER: container,
+    BUILD52_RECOVERY_TEST_DATABASE: database },
+  stdio: "inherit",
+});
+
 function sql(statement, { role = "supabase_admin", expectFailure = false } = {}) {
   try {
     const output = execFileSync("docker", ["exec", container, "psql", "-v", "ON_ERROR_STOP=1", "-At", "-U", role, "-d", database, "-c", statement], {
@@ -141,7 +149,7 @@ assert.equal(sql("select has_function_privilege('service_role','public.tool_comm
   "recovery must not revive the legacy completion writer");
 assert.equal(sql(`select count(*) from public.custodial_terminal_writer_inventory where application_callable
   and (mutates_terminal_truth or delegates_alternate_terminal_authority)
-  and proname not in ('tool_start_offline_occurrence','tool_commit_cleaning_workflow_authoritative','tool_complete_session_authoritative','custodial_close_maintenance_ticket_authoritative','custodial_finish_historical_session_authoritative');`), "0",
+  and proname not in ('tool_start_offline_occurrence','tool_commit_cleaning_workflow_authoritative','tool_complete_session_authoritative','custodial_set_maintenance_ticket_outcome','custodial_finish_historical_session_authoritative');`), "0",
   "the recovery control must not become an alternate terminal writer");
 
 const operationalViews = [

@@ -12,9 +12,11 @@ const device={requested_device_id:'KIOSK_08',canonical_device_id:'KIOSK_08',cano
 const base={credential_id:cid,device_id:pk,token_hash:deviceCredentialInternals.tokenHash(secret,env),created_at:'2026-01-01T00:00:00.000Z',
  confirmed_at:'2026-01-01T00:00:00.000Z',last_used_at:new Date().toISOString(),expires_at:'2099-01-01T00:00:00.000Z',revoked_at:null,
  metadata_json:deviceCredentialInternals.deviceCredentialSecretMetadata(env)};
-let row=structuredClone(base),calls=0,lastArgs,lastFunction,checks=0,dbError=null;
+let row=structuredClone(base),calls=0,lastArgs,lastFunction,checks=0,dbError=null,dbValue=null,requestId=id(9);
+const validResponse=args=>({data:{synthetic:true,server_now:'2026-10-02T01:02:03.123455Z'},clock:{native_request_id:args.p_native_request,
+ server_now:'2026-10-02T01:02:03.123456Z',valid_until:'2026-10-02T01:17:03.123456Z'}});
 const app=express();app.use(createGeneralJsonMiddleware());
-installNativeProviderRoutes(app,{env,db:{rpc:async(fn,args)=>{calls++;lastArgs=args;lastFunction=fn;return dbError?{error:dbError}:{data:{synthetic:true}};}},
+installNativeProviderRoutes(app,{env,db:{rpc:async(fn,args)=>{calls++;lastArgs=args;lastFunction=fn;return dbError?{error:dbError}:{data:dbValue??validResponse(args)};}},
  requireCurrentCredential:makeDeviceCredentialMiddleware({env,store:{getPolicy:async()=>({mode:'enforce'}),findCredential:async n=>n===cid?row:null,touchCredential:async()=>{},audit:async()=>{}},
   runReadOnlySql:async()=>[device],requireEnrolledCredential:true})});
 app.use((err,_req,res,_next)=>res.status(err.status||500).json({code:'synthetic_error'}));
@@ -26,9 +28,9 @@ const body={schema:'custodial.native-provider-register.v1',operation_id:id(5),ge
  principal_digest:'a'.repeat(64),token_digest:crypto.createHash('sha256').update(token).digest('hex'),token,
  native_app:{package_name:'org.memphiszoo.custodial',version_name:'synthetic',version_code:53,build_id:'synthetic.custodial.df36d32368b6'}};
 function headers(bytes,p=path,t=new Date().toISOString()){
- const proof=['custodial-native-request.v1',cid,'KIOSK_08','POST',p,crypto.createHash('sha256').update(bytes).digest('hex'),id(9),t,'custodial'].join('\n');
+ const proof=['custodial-native-request.v1',cid,'KIOSK_08','POST',p,crypto.createHash('sha256').update(bytes).digest('hex'),requestId,t,'custodial'].join('\n');
  return {'content-type':'application/json',authorization:`Device ${cid}.${secret}`,'x-device-id':'KIOSK_08',origin:'https://localhost','x-memphis-app-edition':'custodial',
-  'x-memphis-native-attestation-version':'custodial-native-request.v1','x-memphis-native-request-id':id(9),'x-memphis-native-request-timestamp':t,
+  'x-memphis-native-attestation-version':'custodial-native-request.v1','x-memphis-native-request-id':requestId,'x-memphis-native-request-timestamp':t,
   'x-memphis-native-request-attestation':crypto.createHmac('sha256',secret).update(proof).digest('hex')};
 }
 async function send(value=body,p=path,edit=()=>{},method='POST'){
@@ -40,11 +42,26 @@ async function refused(name,value=body,p=path,edit=()=>{},method='POST'){
  const count=calls,r=await send(value,p,edit,method);await r.text();check(name,r.status>=400&&calls===count);
 }
 try{
- let r=await send();await r.text();check('actual current credential plus HMAC reaches typed registration',r.status===200&&lastFunction==='custodial_native_provider_registration');
+ let r=await send();const accepted=await r.json();check('actual current credential plus HMAC reaches typed clock registration',r.status===200&&lastFunction==='custodial_native_provider_registration_clock');
+ check('exact separate SQL microsecond clock is returned',accepted.clock.server_now==='2026-10-02T01:02:03.123456Z'&&accepted.clock.native_request_id===id(9)&&r.headers.get('cache-control')==='no-store');
  check('no raw credential secret goes to SQL',lastArgs.p_credential_hash===base.token_hash&&!JSON.stringify(lastArgs).includes(secret));
  check('actual verified original request identity forwarded',lastArgs.p_native_request===id(9)&&/^[a-f0-9]{64}$/.test(lastArgs.p_attestation_digest));
  const status={...body,schema:'custodial.native-provider-status.v1'};delete status.token;
  r=await send(status,prefix+'/status');await r.text();check('same typed status owner',r.status===200&&lastArgs.p_status===true&&!Object.hasOwn(lastArgs.p_body,'token'));
+ requestId=id(10);r=await send(status,prefix+'/status');const fresh=await r.json();check('same original operation gets fresh verified request nonce',r.status===200&&fresh.clock.native_request_id===id(10)&&lastArgs.p_body.operation_id===body.operation_id);
+ dbValue=validResponse({p_native_request:id(9)});r=await send(status,prefix+'/status');await r.text();check('cached prior clock cannot bind new nonce',r.status===503);dbValue=null;requestId=id(9);
+ for(const fault of ['missing','zero','negative','too_long','fraction','calendar','extra','after_clock']){
+  dbValue=validResponse({p_native_request:id(9)});
+  if(fault==='missing')delete dbValue.clock;
+  if(fault==='zero')dbValue.clock.valid_until=dbValue.clock.server_now;
+  if(fault==='negative')dbValue.clock.valid_until='2026-10-02T01:02:03.123455Z';
+  if(fault==='too_long')dbValue.clock.valid_until='2026-10-02T01:17:03.123457Z';
+  if(fault==='fraction')dbValue.clock.server_now='2026-10-02T01:02:03.123Z';
+  if(fault==='calendar')dbValue.clock.server_now='2026-02-30T01:02:03.123456Z';
+  if(fault==='extra')dbValue.clock.q_ns=0;
+  if(fault==='after_clock')dbValue.data.server_now='2026-10-02T01:02:03.123457Z';
+  r=await send();await r.text();check('SQL clock response fails closed '+fault,r.status===503);
+ }dbValue=null;
  for(const key of ['x-memphis-native-attestation-version','x-memphis-native-request-id','x-memphis-native-request-timestamp','x-memphis-native-request-attestation'])
   await refused('missing native proof '+key,body,path,h=>delete h[key]);
  await refused('wrong signed body',body,path,h=>Object.assign(h,headers(JSON.stringify({...body,principal_digest:'f'.repeat(64)}))));
@@ -67,7 +84,54 @@ try{
   if(state==='wrong_device')row.device_id=id(99);if(state==='wrong_secret')row.token_hash='f'.repeat(64);
   await refused('noncurrent credential '+state);
  }row=structuredClone(base);
- for(const suffix of ['events','inventory'])await refused('unfinished '+suffix+' cannot relay to generic SQL',body,prefix+'/'+suffix);
+ await refused('events cannot relay registration schema to generic SQL',body,prefix+'/events');
+ const event={schema:'custodial.native-provider-event.v2',event_id:id(60),generation_id:body.generation_id,receipt_job_id:id(61),notification_key:'synthetic-event-key',
+  action:'received',receipt_credential_id:cid,receipt_employee_id:employee,receipt_device_id:'KIOSK_08',receipt_assignment_epoch:7,
+  principal_digest:body.principal_digest,token_digest:body.token_digest,content_sha256:'c'.repeat(64),admission_bounds:{earliest_at:'2026-10-02T01:00:00.123456Z',latest_at:'2026-10-02T01:00:00.123456Z',clock_profile_id:'SYNTHETIC_ONLY_PC01',elapsed_realtime_ms:150,boot_count:1},
+  original_observation:{earliest_at:null,latest_at:null,clock_profile_id:null,boot_count:null,elapsed_realtime_ms:null}};
+ event.record_id=crypto.createHash('sha256').update(event.generation_id+'\n'+event.receipt_job_id+'\n'+event.notification_key).digest('hex');
+ const events={schema:'custodial.native-provider-events.v2',events:[event]},eventResponse={ok:true,data:{schema:'custodial.native-provider-event-receipts.v2',results:[
+  {...event,schema:'custodial.native-provider-event-receipt.v2',admitted_state:'ACCEPTED',server_received_at:'2026-10-02T01:01:00.123456Z',replayed:false}]}};
+ dbValue=eventResponse;r=await send(events,prefix+'/events');const eventResult=await r.json();
+ check('events current HMAC reaches exact SQL wrapper',r.status===200&&lastFunction==='custodial_native_provider_events'&&!Object.hasOwn(lastArgs,'p_status'));
+ check('events echoes exact committed observations',JSON.stringify(eventResult)===JSON.stringify(eventResponse));
+ for(const k of ['x-memphis-native-attestation-version','x-memphis-native-request-id','x-memphis-native-request-attestation'])
+  await refused('events requires native proof '+k,events,prefix+'/events',h=>delete h[k]);
+ for(const change of [{action:'dismissed'},{receipt_employee_id:id(88)},{receipt_assignment_epoch:'7'},{extra:true}])
+  await refused('events strict '+Object.keys(change)[0],{...events,events:[{...event,...change}]},prefix+'/events');
+ for(const path of [prefix+'/events/',prefix+'/EVENTS',prefix+'/%65vents',prefix+'/events?x=1'])await refused('events alias denied '+path,events,path);
+ for(const fault of ['foreign','observation','duplicate','bad_time','extra']){
+  dbValue=structuredClone(eventResponse);const item=dbValue.data.results[0];
+  if(fault==='foreign')item.receipt_employee_id=id(88);if(fault==='observation')item.original_observation.boot_count=1;
+  if(fault==='duplicate')dbValue.data.results.push({...item});if(fault==='bad_time')item.server_received_at='2026-02-30T01:00:00.000000Z';if(fault==='extra')item.extra=true;
+  r=await send(events,prefix+'/events');await r.text();check('events malformed SQL response '+fault,r.status===503);
+ }
+ dbValue={ok:true,data:{schema:eventResponse.data.schema,results:[]}};r=await send(events,prefix+'/events');
+ check('missing SQL event items are not synthesized',r.status===200&&(await r.json()).data.results.length===0);dbValue=null;
+ await refused('inventory rejects registration schema before SQL',body,prefix+'/inventory');
+ const inventory={schema:'custodial.native-provider-inventory-request.v1',scan_id:id(44),principal_digest:body.principal_digest,
+  device_id:body.device_id,credential_id:cid,employee_id:employee,assignment_epoch:7,generation_ids:[body.generation_id],limit:32,cursor:null,ceiling:null,server_now:null};
+ const inventoryData={...inventory,schema:'custodial.native-provider-inventory.v1',server_now:'2026-10-02T01:02:03.123456Z',has_more:false,rows:[]};delete inventoryData.limit;
+ dbValue={ok:true,data:inventoryData,clock:validResponse({p_native_request:requestId}).clock};r=await send(inventory,prefix+'/inventory');const inventoryResult=await r.json();
+ check('actual native HMAC inventory reaches exact service owner',r.status===200&&lastFunction==='custodial_native_provider_inventory_clock'&&!Object.hasOwn(lastArgs,'p_status'));
+ check('exact empty inventory is not invented device receipt',JSON.stringify(inventoryResult)===JSON.stringify(dbValue));
+ for(const fault of ['missing_clock','wrong_nonce','frozen_newer','extra_clock','bad_horizon']){
+  dbValue={ok:true,data:inventoryData,clock:validResponse({p_native_request:requestId}).clock};
+  if(fault==='missing_clock')delete dbValue.clock;
+  if(fault==='wrong_nonce')dbValue.clock.native_request_id=id(99);
+  if(fault==='frozen_newer')dbValue.clock.server_now='2026-10-02T01:02:03.123455Z';
+  if(fault==='extra_clock')dbValue.clock.qualified=true;
+  if(fault==='bad_horizon')dbValue.clock.valid_until='2026-10-02T01:17:03.123457Z';
+  r=await send(inventory,prefix+'/inventory');await r.text();check('fresh inventory envelope rejects '+fault,r.status===503);
+ }
+ for(const change of [{scan_id:[id(44)]},{limit:33},{assignment_epoch:'7'},{generation_ids:[body.generation_id,body.generation_id]},{cursor:{reservation_at:'2026-10-02T01:02:03.123456Z',job_id:id(45)}},{extra:true}])
+  await refused('strict inventory request '+Object.keys(change)[0],{...inventory,...change},prefix+'/inventory');
+ for(const fault of ['foreign','has_more','unknown','malformed_time']){
+  dbValue={ok:true,data:structuredClone(inventoryData),clock:validResponse({p_native_request:requestId}).clock};
+  if(fault==='foreign')dbValue.data.employee_id=id(88);if(fault==='has_more')dbValue.data.has_more=true;
+  if(fault==='unknown')dbValue.data.extra='ignored';if(fault==='malformed_time')dbValue.data.server_now='2026-02-30T01:02:03.123456Z';
+  r=await send(inventory,prefix+'/inventory');await r.text();check('inventory SQL response fails closed '+fault,r.status===503);
+ }dbValue=null;
  const raw=' \n'+JSON.stringify(body,null,2)+'\n';r=await send(raw);await r.text();check('whitespace original bytes actually authenticate',r.status===200);
  await refused('reserialized signature cannot replace original bytes',raw,path,h=>Object.assign(h,headers(JSON.stringify(body))));
  for(const [code,expected] of [['42501',403],['23505',409],['22023',400],['XX000',503]]){

@@ -624,14 +624,8 @@ if (process.argv.includes("--schema-section-evidence-only")) {
   const source = readFileSync(new URL("./production-backup.mjs", import.meta.url), "utf8");
   const helperSource = readFileSync(new URL("./production-backup-pg-dump-command.mjs", import.meta.url), "utf8");
   const hash = value => createHash("sha256").update(value).digest("hex");
-  // Exact named function bytes from the original 2cdc1a9 predecessor. New
-  // native-column codecs precede it; their insertion must not shift this pin.
-  const fullStart=helperSource.indexOf("export function productionBackupPgDumpDockerArgs(");
-  const fullEnd=helperSource.indexOf("\nexport const productionBackupSchemaSections",fullStart);
-  assert.ok(fullStart>=0&&fullEnd>fullStart);
-  const fullSource=helperSource.slice(fullStart,fullEnd);
-  assert.equal(hash(fullSource.slice(0,fullSource.lastIndexOf("\n}")+2)+"\n"),
-    "a01ec36f06fe4606995aec2cbbae76390e8b2191c76a2fd1a4e3f72a27cb6443",
+  // Exact frozen predecessor bytes, without depending on task-local artifacts.
+  assert.equal(hash(helperSource.slice(0, 6122)), "2a0efe92b7719040c33f0495f03b276bb4ee63a9fbeaa243d1e82650bdee4122",
     "The existing full-schema command helper must remain bytewise unchanged");
   const full = productionBackupPgDumpDockerArgs(fixture);
   const profiles = backupWire.productionBackupSchemaSections;

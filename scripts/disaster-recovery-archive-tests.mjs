@@ -1903,27 +1903,36 @@ if (process.argv.includes('--immutable-bootstrap-metadata-source-only') || proce
     }else if(authorityReconciliationOnly){
       const source=readFileSync(new URL('./production-restore.mjs',import.meta.url),'utf8');
       const start=source.indexOf('  restorePhase = "authority_reconciliation";');
-      const end=source.indexOf('  let cronEvidence = null;',start);
+      const end=source.indexOf('  await continueRestoreAfterDatabase({databaseEvidence,immutablePrivateDataEvidence,unvalidatedCheckEvidence,invalidated});',start);
       assert.ok(start>=0&&end>start);
-      // Existing extracted-shipping-source facility, not a second restore
-      // implementation. All SQL/state/source/target ports here RECORD calls;
-      // no connected pg.Client, original-owner admission or DATA effect exists.
-      const reconcile=new Function('db','immutablePrivateDataEvidence','prepared','mutationFenceHeld','restoreId','generation',
+      // Execute the current shipping authority region. Only external ports
+      // record calls: no pg.Client, native owner, SQL or admission is created.
+      const reconcile=new Function('db','immutablePrivateDataEvidence','nativeTextDatabase','verifiedArchive','prepared','mutationFenceHeld','restoreId','generation',
         'requireOriginalArchiveSource','readTargetIdentity','assertIntentTargetIdentity','compareRestoredState',
-        'preserveCurrentReleaseIdentity','invalidateRestoredAuthority','recordEvent',
+        'preserveCurrentReleaseIdentity','invalidateRestoredAuthority','invalidateRestoredOrdinaryNativeAuthority','recordEvent',
         'return (async()=>{let restorePhase;\n'+source.slice(start,end)+'\nreturn {restorePhase,discrepancies,invalidated};})();');
-      const make=({mixed=true,mode={rowCount:1,rows:[{session_replication_role:'origin'}]},prepared=true,fence=true,
+      const formatStatements=["set local extra_float_digits = 3","set local datestyle = 'ISO, YMD'","set local timezone = 'UTC'",
+        "set local intervalstyle = 'postgres'","set local bytea_output = 'hex'"];
+      const formatCalls=['begin','source',...formatStatements.flatMap((text,index)=>['format:'+index,'source'])];
+      const privatePrefix=[...formatCalls,'source','mode','source','target','identity','source'];
+      const ordinarySetup=["select pg_advisory_xact_lock(hashtextextended('memphis-zoo-application-mutation-admission',0))",
+        'set local session_replication_role = replica','set local row_security = off','set local search_path = pg_catalog, pg_temp'];
+      const make=({mixed=true,native=false,mode={rowCount:1,rows:[{session_replication_role:'origin'}]},prepared=true,fence=true,
         sourceFailureAt=0,targetFailure=null,effectFailure=null,rollbackFailure=false}={})=>{
         const calls=[],restoreId='00000000-0000-4000-8000-000000000001',generation=7;
         const originalEvidence=mixed?Object.freeze({source_recording_only:true}):null;
+        const archive=Object.freeze({source_recording_archive_only:true});
         const target=Object.freeze({source_recording_target_only:true}),differences=Object.freeze([{category:'device_assignments'}]);
         const invalidated=Object.freeze({employee_credentials:2,auth_sessions:1});let checks=0;
         const sourceError=new Error('SYNTHETIC_ORIGINAL_SOURCE_WITHDRAWN');
         const db={async query(text,args=[]){
           assert.equal(this,db,'the original db receiver must be retained');
+          if(formatStatements.includes(text)){calls.push('format:'+formatStatements.indexOf(text));assert.deepEqual(args,[]);return {rowCount:0,rows:[]};}
           if(text==='show session_replication_role'){calls.push('mode');assert.deepEqual(args,[]);return mode;}
-          if(text==='set local session_replication_role = replica'){
-            calls.push('replica');assert.equal(mixed,false,'immutable reconciliation attempted replica mode');return {rowCount:0,rows:[]};
+          if(ordinarySetup.includes(text)){
+            assert.equal(mixed,false,'immutable reconciliation attempted ordinary replica setup');
+            calls.push(text===ordinarySetup[0]?'admission':text===ordinarySetup[1]?'replica':text===ordinarySetup[2]?'row-security':'search-path');
+            return {rowCount:0,rows:[]};
           }
           if(['begin','commit','rollback'].includes(text)){
             calls.push(text);if(text==='rollback'&&rollbackFailure)throw new Error('SYNTHETIC_ROLLBACK_REPLY_LOST');return {rowCount:0,rows:[]};
@@ -1932,20 +1941,25 @@ if (process.argv.includes('--immutable-bootstrap-metadata-source-only') || proce
           calls.push('manifest');assert.deepEqual(args,[restoreId,JSON.stringify({invalidated,preserved_release_rows:1,discrepancies:differences})]);
           return {rowCount:1,rows:[]};
         }};
-        const execute=()=>reconcile(db,originalEvidence,prepared,fence,restoreId,generation,
+        const invalidate=(actual,args,ordinary)=>{
+          calls.push(ordinary?'ordinary-invalidate':'invalidate');assert.equal(actual,db);
+          assert.deepEqual(args,ordinary?{generation,verifiedArchive:archive}:{generation});
+          if(effectFailure)throw effectFailure;return invalidated;
+        };
+        const execute=()=>reconcile(db,originalEvidence,native,archive,prepared,fence,restoreId,generation,
           ()=>{calls.push('source');if(++checks===sourceFailureAt)throw sourceError;},
           async()=>{calls.push('target');if(targetFailure)throw targetFailure;return target;},
           actual=>{calls.push('identity');assert.equal(actual,target);},
           async(actual,args)=>{calls.push('compare');assert.equal(actual,db);assert.deepEqual(args,{restoreId,generation});return differences;},
-          async(actual,args)=>{calls.push('release');assert.equal(actual,db);assert.deepEqual(args,{restoreId});return 1;},
-          async(actual,args)=>{calls.push('invalidate');assert.equal(actual,db);assert.deepEqual(args,{generation});if(effectFailure)throw effectFailure;return invalidated;},
+          async(actual,args)=>{calls.push('release');assert.equal(actual,db);assert.deepEqual(args,{restoreId,generation});return 1;},
+          async(actual,args)=>invalidate(actual,args,false),async(actual,args)=>invalidate(actual,args,true),
           async(phase,state,details)=>{calls.push('event');assert.equal(phase,'AUTHORITY_RECONCILIATION');assert.equal(state,'PASSED');
             assert.deepEqual(details,{invalidated,preserved_release_rows:1,discrepancies:differences});});
         return {calls,execute,sourceError,differences,invalidated,originalEvidence};
       };
       await run('AUTHORITY_ORIGIN_NEW immutable DATA keeps origin and exact reconciliation order',async()=>{
         const x=make(),result=await x.execute();
-        assert.deepEqual(x.calls,['begin','source','mode','source','target','identity','source','compare','release','invalidate','manifest','event','commit']);
+        assert.deepEqual(x.calls,[...privatePrefix,'compare','release','invalidate','manifest','event','commit']);
         assert.equal(result.restorePhase,'authority_reconciliation');assert.equal(result.discrepancies,x.differences);assert.equal(result.invalidated,x.invalidated);
         assert.deepEqual(x.originalEvidence,{source_recording_only:true});
       });
@@ -1955,34 +1969,42 @@ if (process.argv.includes('--immutable-bootstrap-metadata-source-only') || proce
           {rowCount:2,rows:[{session_replication_role:'origin'},{session_replication_role:'origin'}]},
           {rowCount:1,rows:[{}]},{rowCount:1,rows:[{session_replication_role:true}]}]){
           const x=make({mode});await assert.rejects(x.execute,/origin/i);
-          assert.deepEqual(x.calls,['begin','source','mode','rollback']);
+          assert.deepEqual(x.calls,[...formatCalls,'source','mode','rollback']);
         }
         for(const options of [{prepared:false},{fence:false}]){
-          const x=make(options);await assert.rejects(x.execute,/fence/i);assert.deepEqual(x.calls,['begin','rollback']);
+          const x=make(options);await assert.rejects(x.execute,/fence/i);assert.deepEqual(x.calls,[...formatCalls,'rollback']);
         }
       });
       await run('AUTHORITY_ORIGIN_NEW unchanged mutable route retains replica and original state calls',async()=>{
         const x=make({mixed:false}),result=await x.execute();
-        assert.deepEqual(x.calls,['begin','replica','compare','release','invalidate','manifest','event','commit']);
+        assert.deepEqual(x.calls,[...formatCalls,'replica','compare','release','invalidate','manifest','event','commit']);
+        assert.equal(result.discrepancies,x.differences);assert.equal(result.invalidated,x.invalidated);
+      });
+      await run('AUTHORITY_ORIGIN_NEW native TEXT uses own admission profile and original archive invalidator',async()=>{
+        const x=make({mixed:false,native:true}),result=await x.execute();
+        assert.deepEqual(x.calls,[...formatCalls,'source','admission','replica','row-security','search-path','source',
+          'compare','release','ordinary-invalidate','manifest','event','commit']);
         assert.equal(result.discrepancies,x.differences);assert.equal(result.invalidated,x.invalidated);
       });
       await run('AUTHORITY_ORIGIN_NEW source or target withdrawal cannot reach state mutations',async()=>{
-        for(const sourceFailureAt of [1,2,3]){
+        for(let sourceFailureAt=1;sourceFailureAt<=9;sourceFailureAt++){
           const x=make({sourceFailureAt});await assert.rejects(x.execute,error=>error===x.sourceError);
           assert.equal(x.calls.at(-1),'rollback');assert.equal(x.calls.includes('compare'),false);assert.equal(x.calls.includes('replica'),false);
         }
         const targetFailure=new Error('SYNTHETIC_ORIGINAL_TARGET_CHANGED'),x=make({targetFailure});
         await assert.rejects(x.execute,error=>error===targetFailure);
-        assert.deepEqual(x.calls,['begin','source','mode','source','target','rollback']);
+        assert.deepEqual(x.calls,[...formatCalls,'source','mode','source','target','rollback']);
       });
       await run('AUTHORITY_ORIGIN_NEW guarded invalidation refusal retains first failure without fallback or retry',async()=>{
         const effectFailure=Object.assign(new Error('SYNTHETIC_EXISTING_GUARD_REFUSAL'),{code:'42501'});
-        for(const rollbackFailure of [false,true]){
-          const x=make({effectFailure,rollbackFailure});await assert.rejects(x.execute,error=>error===effectFailure);
-          assert.deepEqual(x.calls,['begin','source','mode','source','target','identity','source','compare','release','invalidate','rollback']);
+        for(const native of [false,true])for(const rollbackFailure of [false,true]){
+          const x=make({mixed:!native,native,effectFailure,rollbackFailure});await assert.rejects(x.execute,error=>error===effectFailure);
+          const prefix=native?[...formatCalls,'source','admission','replica','row-security','search-path','source']:privatePrefix;
+          assert.deepEqual(x.calls,[...prefix,'compare','release',native?'ordinary-invalidate':'invalidate','rollback']);
+          assert.equal(x.calls.includes(native?'invalidate':'ordinary-invalidate'),false,'no fallback between owner paths');
         }
       });
-      assert.ok(cases.length>0,'Unknown/empty authority-reconciliation case selector');
+      assert.equal(cases.length,6,'Unknown/empty authority-reconciliation case selector');
       console.log(JSON.stringify({selector:'--immutable-authority-reconciliation-source-only',count:cases.length,cases,
         status:'PASS_CHANGED_CALLER_ROUTING_SOURCE_RECORDING_ONLY',actual_SQL:'NOT_RUN',
         limits:'Extracted shipping reconciliation region and recording ports only; no real owner/fence/identity/RLS/ALWAYS/auth invalidation, immutable DATA, rollback, anti-resurrection or runtime activation proof.',

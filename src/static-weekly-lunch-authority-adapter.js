@@ -1,4 +1,6 @@
 import { postgresJsonbContentDigest } from './static-weekly-schedule-compiler.js';
+import { canonicalJson } from './static-weekly-schedule-model.js';
+import { createIndependentlyVerifiedStaticWeeklyLunchCandidate } from './static-weekly-schedule-verifier.js';
 import {
   createStaticWeeklyLunchCoverageCandidate,
   verifyStaticWeeklyLunchCoverageCandidate,
@@ -31,6 +33,7 @@ function normalizedLoan(loan) {
     day_of_week: loan.dayOfWeek,
     normal_owner_slot_id: loan.normalOwnerSlotId,
     normal_owner_person_id: loan.normalOwnerPersonId,
+    ...(loan.normalOwnerCapacityId?{normal_owner_capacity_id:loan.normalOwnerCapacityId}:{}),
     coverage_start: loan.window?.start ?? null,
     coverage_end: loan.window?.end ?? null,
     status: loan.status,
@@ -48,8 +51,10 @@ function normalizedResponsibility(loan, row) {
     day_of_week: loan.dayOfWeek,
     normal_owner_slot_id: row.normalOwnerSlotId,
     normal_owner_person_id: row.normalOwnerPersonId,
+    ...(row.normalOwnerCapacityId?{normal_owner_capacity_id:row.normalOwnerCapacityId}:{}),
     coverer_slot_id: row.covererSlotId,
     coverer_person_id: row.covererPersonId,
+    ...(row.covererCapacityId?{coverer_capacity_id:row.covererCapacityId}:{}),
     coverage_purpose: row.coveragePurpose,
     coverage_start: loan.window?.start ?? null,
     coverage_end: loan.window?.end ?? null,
@@ -78,6 +83,26 @@ export function createStaticWeeklyLunchAuthorityDocument({ input, result, candid
   const exactCandidate = candidate || createStaticWeeklyLunchCoverageCandidate(input, result);
   const verification = verifyStaticWeeklyLunchCoverageCandidate(input, result, exactCandidate);
   if (!verification.ok) fail('lunch_authority_candidate_verification_failed', { reason: verification.reason || null });
+  return finishLunchAuthorityDocument(exactCandidate, result);
+}
+
+// Private worker fresh construction retains TWO full independent verifier
+// invocations and the complete A/B candidate equality comparison.
+export function createFreshVerifiedStaticWeeklyLunchAuthorityDocument({ input, result } = {}) {
+  if (!input || !result) fail('lunch_authority_base_required');
+  const exactCandidate = createIndependentlyVerifiedStaticWeeklyLunchCandidate(input, result);
+  let verification;
+  try {
+    const expected = createIndependentlyVerifiedStaticWeeklyLunchCandidate(input, result);
+    verification = { ok: canonicalJson(expected) === canonicalJson(exactCandidate), expectedDigest: expected.candidateDigest };
+  } catch (error) {
+    verification = { ok: false, reason: error.code || 'lunch_candidate_invalid' };
+  }
+  if (!verification.ok) fail('lunch_authority_candidate_verification_failed', { reason: verification.reason || null });
+  return finishLunchAuthorityDocument(exactCandidate, result);
+}
+
+function finishLunchAuthorityDocument(exactCandidate, result) {
   if (exactCandidate.publicationAuthority !== 'NOT_PUBLISHED' || exactCandidate.status !== 'PLANNED') {
     fail('lunch_authority_candidate_not_publishable');
   }

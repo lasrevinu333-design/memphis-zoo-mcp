@@ -13,6 +13,7 @@ import {
   assertServiceDate,
   bytewiseCompare,
   canonicalJson,
+  canonicalValueDigest,
   contentDigest,
   normalizeWindow,
   selectEffectiveWeeklyVersion,
@@ -102,15 +103,12 @@ const EPSILON = 1e-9;
 // HiGHS' integer-as-double coefficients fail closed before a model is built.
 export const STATIC_WEEKLY_EQUITY_SCALE = "exact-lossless-common-denominator";
 export const MAX_SAFE_EXACT_INTEGER = BigInt(Number.MAX_SAFE_INTEGER);
-// One compiler request performs a bounded sequence of independently bounded
-// solver tiers and then regenerates/verifies the complete witness twice.  Do
-// not reuse the 30-second *per-tier* worker limit as the deadline for that
-// whole sequence: production authority currently requires 111 exact tiers.
-// The admitted V10 schedule completes locally inside two minutes but exceeds
-// that parent bound on the Render Starter CPU. Five minutes remains a finite,
-// fail-closed request boundary while preserving each worker's stricter
-// 30-second ceiling and the control plane's one-request serialization.
-export const REQUEST_DEADLINE_MILLISECONDS = 300_000;
+// October3 controlling owner ceiling: ONE absolute60s program operation,
+// including preparation/solve/independent verification, not a renewed tier or
+// stage allowance. Caller/runtime owns the earlier user-operation origin and
+// passes only its remaining time. Strict authority/optimality checks remain;
+// timeout is failure/UNKNOWN, never a feasible or accepted fallback.
+export const REQUEST_DEADLINE_MILLISECONDS = 60_000;
 // HiGHS terminal reports use bounded scientific formatting.  Keep every
 // staged objective below this exact-print envelope so report attestation can
 // equal the independently recomputed integer without relying on rounded text.
@@ -308,6 +306,7 @@ export function canonicalOptimizerAssignmentProjection(weeklyAssignments) {
     slotId: assignment.slotId,
     personId: assignment.personId,
     displayName: assignment.displayName,
+    ...(assignment.ownerKind === 'CONTRACTOR_CAPACITY' ? { ownerKind: assignment.ownerKind, capacityId: assignment.capacityId } : {}),
     ownerDigest: assignment.ownerDigest,
     exactOwnerIdentity: assignment.exactOwnerIdentity,
     baselineSlotId: assignment.baselineSlotId,
@@ -364,9 +363,13 @@ export function monotonicNowMilliseconds() {
   return typeof performance?.now === "function" ? performance.now() : Number(process.hrtime.bigint() / 1_000_000n);
 }
 export function createStaticWeeklyDeadline(milliseconds = REQUEST_DEADLINE_MILLISECONDS) {
+  if (!Number.isSafeInteger(milliseconds) || milliseconds < 1 || milliseconds > REQUEST_DEADLINE_MILLISECONDS) {
+    throw Object.assign(new RangeError('Static weekly operation deadline must be within the absolute60s ceiling.'), {code:'solver_timeout'});
+  }
   return monotonicNowMilliseconds() + milliseconds;
 }
 export function remainingStaticWeeklyMilliseconds(deadline) {
+  if (!Number.isFinite(deadline)) throw Object.assign(new Error('Static weekly request deadline is invalid.'), {code:'solver_timeout'});
   const remaining = Math.floor(deadline - monotonicNowMilliseconds());
   if (remaining <= 0) throw Object.assign(new Error("Static weekly request deadline expired."), { code: "solver_timeout" });
   return remaining;
@@ -471,8 +474,19 @@ export function postgresJsonbCanonicalText(value) {
   // locale/numeric comparator can disagree for keys such as `tier_10` and
   // `tier_2`, which would make a JavaScript digest bind a different document
   // than PostgreSQL's exact JSONB boundary.
-  const utf8Length = (entry) => new TextEncoder().encode(entry).length;
-  const keys = Object.keys(value || {}).sort((left, right) => utf8Length(left) - utf8Length(right) || bytewiseCompare(left, right));
+  // Encode each string key once in this object only.  These records contain
+  // no values and never survive the call; recursive values/getters are still
+  // read in the same stable sorted order (including equal replacement-byte
+  // encodings for distinct lone-surrogate keys).
+  const encoder = new TextEncoder();
+  const keys = Object.keys(value || {}).map((key) => ({ key, bytes: encoder.encode(key) })).sort((left, right) => {
+    const lengthDifference = left.bytes.length - right.bytes.length;
+    if (lengthDifference) return lengthDifference;
+    for (let index = 0; index < left.bytes.length; index += 1) {
+      if (left.bytes[index] !== right.bytes[index]) return left.bytes[index] < right.bytes[index] ? -1 : 1;
+    }
+    return 0;
+  }).map((entry) => entry.key);
   return `{${keys.map((key) => `${JSON.stringify(key)}: ${postgresJsonbCanonicalText(value[key])}`).join(", ")}}`;
 }
 
@@ -480,7 +494,18 @@ export function postgresJsonbCanonicalText(value) {
 // separators for this bounded JSON contract.  The database recomputes this
 // value with static_weekly_digest_jsonb; it is deliberately separate from the
 // portable replay digest (which remains canonicalJson based).
-export function postgresJsonbContentDigest(value) { return sha256Hex(postgresJsonbCanonicalText(value)); }
+function writePostgresJsonbTokens(value,emit) {
+  if(value === null) { emit('null'); return; }
+  if(typeof value === 'boolean') { emit(value ? 'true' : 'false'); return; }
+  if(typeof value !== 'object') { emit(typeof value === 'number' ? postgresJsonbNumberText(value) : JSON.stringify(value)); return; }
+  if(Array.isArray(value)) { emit('['); for(let i=0;i<value.length;i++) { if(i) emit(', '); writePostgresJsonbTokens(value[i],emit); } emit(']'); return; }
+  const encoder=new TextEncoder(),keys=Object.keys(value).map(key=>({key,bytes:encoder.encode(key)})).sort((a,b)=>{
+    const length=a.bytes.length-b.bytes.length;if(length)return length;
+    for(let i=0;i<a.bytes.length;i++)if(a.bytes[i]!==b.bytes[i])return a.bytes[i]<b.bytes[i]?-1:1;return 0;
+  });
+  emit('{');for(let i=0;i<keys.length;i++) { if(i)emit(', ');const key=keys[i].key;emit(JSON.stringify(key));emit(': ');writePostgresJsonbTokens(value[key],emit); }emit('}');
+}
+export function postgresJsonbContentDigest(value) { return canonicalValueDigest(value,writePostgresJsonbTokens,postgresJsonbCanonicalText); }
 
 function greatestCommonDivisor(left, right) {
   let a = BigInt(left); let b = BigInt(right);
@@ -934,6 +959,10 @@ function applyException(state, exception) {
     state.availability.set(slotId, { ...prior, status: payload.status || prior.status || "working", shift: normalizeWindow(payload.shift || window, "shift override") });
   } else if (exception.type === "cover_all") {
     const supplied = clone(payload.availability || payload); const coverSlotId = text(supplied.slotId || slotId);
+    if (supplied.breakChoice === 'NONE') {
+      // The exact typed source is checked during problem construction below.
+      supplied.lunch = null;
+    }
     state.availability.set(coverSlotId, { ...(state.availability.get(coverSlotId) || {}), ...supplied, slotId: coverSlotId, status: "working" });
     state.contractorCoverageSlotIds.push(coverSlotId);
   } else if (exception.type === "lunch") {
@@ -1129,6 +1158,13 @@ export function prepareStaticWeeklySchedulingProblem(input, deadline = null) {
     try {
       overlays = activeExceptions(exceptions, date, version);
       overlays.forEach((item) => applyException(state, item));
+      for (const [slotId, availability] of state.availability) {
+        if (Object.hasOwn(availability, 'breakChoice') && (availability.breakChoice !== 'NONE'
+          || availability.lunch !== null || slots.find(slot => slot.id === slotId)?.kind !== 'CONTRACTOR_CAPACITY'
+          || !overlays.some(item => item.type === 'cover_all' && item.payload?.availability?.slotId === slotId && item.payload.availability.breakChoice === 'NONE'))) {
+          throw Object.assign(new Error('No-break requires explicit dated manager activation of typed nonemployee capacity.'), { code: 'no_break_requires_typed_nonemployee_capacity' });
+        }
+      }
       applyCustodialAbsenceCoveragePolicy(state, new Map(slots.map((slot) => [slot.id, slot])));
     } catch (error) { return { error: programReason(error.code || "invalid_exception_overlay", { message: error.message }) }; }
     applied.push(...state.applied); states.set(day, state);
@@ -1303,6 +1339,36 @@ function groupedObjectiveError(objective, base, width) {
   return null;
 }
 
+// Once every daily rank is independently fixed to an endpoint of the same
+// single-binary load M*x, its two big-M links are exactly one binary matching
+// inequality. This does not fix x, remove a rank, or change its tie objective.
+// Any shape outside this narrow generated contract retains the original rows.
+function fixedBinaryDailyRankValues(prefix, loads, ranks, maximum, bindings, assignmentVariables) {
+  if (prefix !== "daily_rank" || !ranks.length || ranks.length !== loads.length || !Number.isSafeInteger(maximum) || maximum <= 0) return null;
+  const variables = new Set();
+  for (const entry of loads) {
+    if (entry.constant !== 0 || entry.upper !== maximum || entry.terms.length !== 1) return null;
+    const [coefficient, variable] = entry.terms[0];
+    if (coefficient !== maximum || !assignmentVariables.has(variable) || variables.has(variable)) return null;
+    variables.add(variable);
+  }
+  const rankSet = new Set(ranks), names = new Set(), values = [];
+  for (const binding of bindings) {
+    if (names.has(binding.name)) return null;
+    names.add(binding.name);
+    const related = binding.name.startsWith("daily_service_effort_utilization_rank_");
+    if (!related) {
+      if (binding.terms.some(([, variable]) => rankSet.has(variable))) return null;
+      continue;
+    }
+    const index = values.length;
+    if (index >= ranks.length || binding.name !== `daily_service_effort_utilization_rank_${index + 1}` || binding.terms.length !== 1 || binding.terms[0][0] !== 1 || binding.terms[0][1] !== ranks[index] || (binding.value !== 0 && binding.value !== maximum)) return null;
+    if (index && values[index - 1] < binding.value) return null;
+    values.push(binding.value);
+  }
+  return values.length === ranks.length ? values : null;
+}
+
 export function buildStaticWeeklySchedulingModel(problem, bindings, objective, deadline = null) {
   if (deadline != null) remainingStaticWeeklyMilliseconds(deadline);
   // Rank permutations are optimization machinery, not hard scheduling rows.
@@ -1419,7 +1485,16 @@ export function buildStaticWeeklySchedulingModel(problem, bindings, objective, d
     const permutations = loads.map((entry, itemIndex) => ranks.map((rank, rankIndex) => `p_${prefix}_${itemIndex + 1}_${rankIndex + 1}`)); permutations.flat().forEach((name) => binary.add(name));
     loads.forEach((entry, itemIndex) => constraints.push({ name: `${prefix}_item_${itemIndex + 1}`, terms: permutations[itemIndex].map((name) => [1, name]), relation: limit === loads.length ? "=" : "<=", value: 1 }));
     ranks.forEach((rank, rankIndex) => constraints.push({ name: `${prefix}_rank_${rankIndex + 1}`, terms: permutations.map((row) => [1, row[rankIndex]]), relation: "=", value: 1 }));
-    loads.forEach((entry, itemIndex) => ranks.forEach((rank, rankIndex) => { const permutation = permutations[itemIndex][rankIndex]; constraints.push({ name: `${prefix}_link_lo_${itemIndex + 1}_${rankIndex + 1}`, terms: [[1, rank], ...entry.terms.map(([coefficient, variable]) => [-coefficient, variable]), [-maximum, permutation]], relation: ">=", value: entry.constant - maximum }); constraints.push({ name: `${prefix}_link_hi_${itemIndex + 1}_${rankIndex + 1}`, terms: [[1, rank], ...entry.terms.map(([coefficient, variable]) => [-coefficient, variable]), [maximum, permutation]], relation: "<=", value: entry.constant + maximum }); }));
+    const fixedValues = fixedBinaryDailyRankValues(prefix, loads, ranks, maximum, bindings, new Set(x.values()));
+    loads.forEach((entry, itemIndex) => ranks.forEach((rank, rankIndex) => { const permutation = permutations[itemIndex][rankIndex];
+      if (fixedValues) {
+        const variable = entry.terms[0][1], high = fixedValues[rankIndex] === maximum;
+        constraints.push({ name: `${prefix}_link_match_${itemIndex + 1}_${rankIndex + 1}`, terms: [[1, permutation], [high ? -1 : 1, variable]], relation: "<=", value: high ? 0 : 1 });
+      } else {
+        constraints.push({ name: `${prefix}_link_lo_${itemIndex + 1}_${rankIndex + 1}`, terms: [[1, rank], ...entry.terms.map(([coefficient, variable]) => [-coefficient, variable]), [-maximum, permutation]], relation: ">=", value: entry.constant - maximum });
+        constraints.push({ name: `${prefix}_link_hi_${itemIndex + 1}_${rankIndex + 1}`, terms: [[1, rank], ...entry.terms.map(([coefficient, variable]) => [-coefficient, variable]), [maximum, permutation]], relation: "<=", value: entry.constant + maximum });
+      }
+    }));
     ranks.slice(0, -1).forEach((rank, rankIndex) => constraints.push({ name: `${prefix}_descending_${rankIndex + 1}`, terms: [[1, rank], [-1, ranks[rankIndex + 1]]], relation: ">=", value: 0 }));
     if (limit && limit < loads.length) loads.forEach((entry, itemIndex) => constraints.push({ name: `${prefix}_top_${itemIndex + 1}`, terms: [[-1, ranks.at(-1)], ...entry.terms, ...permutations[itemIndex].map((name) => [-maximum, name])], relation: "<=", value: -entry.constant }));
     return { prefix, loads, maximum, ranks, permutations, fixed: false };
@@ -1520,9 +1595,9 @@ export function buildStaticWeeklySchedulingModel(problem, bindings, objective, d
     uncoveredVariables: [...uncovered.entries()].map(([planWorkId, variable]) => ({ variable, planWorkId })).sort((left, right) => stableCompare(left.variable, right.variable)),
     routeCanonicality,
     routeGroups: routeGroups.map((group) => ({ daySlot: publicDaySlotIdentity(group.daySlot), nodes: group.nodes.map((node) => ({ id: node.id, kind: node.kind, locationId: node.locationId, startMinute: node.startMinute, endMinute: node.endMinute, active: node.active })), arcs: group.arcs.map((arc) => ({ name: arc.name, from: arc.from.id, to: arc.to.id, minutes: arc.minutes, waitingMinutes: arc.waitingMinutes, protectedMinutes: arc.protectedMinutes })) })),
-    constraints: { count: constraints.length, terms: constraints.reduce((total, constraint) => total + constraint.terms.length, 0), rows: constraints.map((constraint) => ({ name: constraint.name, terms: constraint.terms, relation: constraint.relation, value: constraint.value })), digest: sha256Hex(canonicalJson(constraints.map((constraint) => ({ name: constraint.name, terms: constraint.terms, relation: constraint.relation, value: constraint.value })))) },
+    constraints: { count: constraints.length, terms: constraints.reduce((total, constraint) => total + constraint.terms.length, 0), rows: constraints.map((constraint) => ({ name: constraint.name, terms: constraint.terms, relation: constraint.relation, value: constraint.value })), digest: contentDigest(constraints.map((constraint) => ({ name: constraint.name, terms: constraint.terms, relation: constraint.relation, value: constraint.value }))) },
   };
-  const modelBasisDigest = sha256Hex(canonicalJson(modelBasis));
+  const modelBasisDigest = contentDigest(modelBasis);
   const priorBindings = bindings.map((binding) => ({ name: binding.name, terms: binding.terms, value: binding.value }));
   const modelIdentity = { schema: "memphis-zoo.static-weekly-tier-model.v1", basisDigest: modelBasisDigest, objective: { name: objective.name, family: objective.family || null, rank: objective.rank ?? null, terms: objective.terms }, priorBindings };
   return { lp, x, uncovered, routeGroups, expressions, binary, general, objective, dailyRank, weeklyRank, dailyLoads, weeklyLoads, preflight: { ...problem.preflight, actualLpBytes: modelBytes, actualBinaryVariables, actualVariableCount, actualConstraintCount, actualConstraintTerms }, modelBasis, modelBasisDigest, priorBindings, priorBindingDigest: sha256Hex(canonicalJson(priorBindings)), modelDigest: sha256Hex(canonicalJson(modelIdentity)), modelBytes };

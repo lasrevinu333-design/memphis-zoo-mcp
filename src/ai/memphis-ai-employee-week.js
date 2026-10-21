@@ -1,4 +1,5 @@
-import { esc, normalizeLoose } from "./memphis-ai-utils.js";
+import { normalizeLoose } from "./memphis-ai-utils.js";
+import { fetchCurrentMemphisScheduleDay } from "./memphis-ai-daily.js";
 
 const DAY_NAMES = {
   0: "Sunday",
@@ -76,38 +77,6 @@ function scoreEmployeeMatch(candidate = "", displayName = "") {
   return score;
 }
 
-function compressTemplateRows(rows = []) {
-  const groups = new Map();
-
-  for (const row of rows) {
-    const key = `${row.shift_start}|${row.shift_end}|${row.notes || ""}`;
-    if (!groups.has(key)) {
-      groups.set(key, {
-        shift_start: row.shift_start,
-        shift_end: row.shift_end,
-        notes: row.notes || "",
-        days: [],
-      });
-    }
-    groups.get(key).days.push(Number(row.day_of_week));
-  }
-
-  return Array.from(groups.values()).map((group) => {
-    const sorted = group.days.sort((a, b) => a - b);
-    const first = sorted[0];
-    const last = sorted[sorted.length - 1];
-    const dayText = sorted.length > 1 && last - first === sorted.length - 1
-      ? `${DAY_NAMES[first]} through ${DAY_NAMES[last]}`
-      : sorted.map((day) => DAY_NAMES[day]).join(", ");
-
-    const start = String(group.shift_start || "").slice(0, 5);
-    const end = String(group.shift_end || "").slice(0, 5);
-    const lunch = String(group.notes || "").match(/Lunch\s+([^\.]+)\./i)?.[1];
-
-    return `${dayText}, ${start} to ${end}${lunch ? `, lunch ${lunch}` : ""}`;
-  });
-}
-
 export async function answerEmployeeWeeklyScheduleQuestion(runReadOnlySql, text = "", threadContext = {}) {
   if (!isEmployeeWeeklyScheduleQuestion(text)) return null;
 
@@ -133,19 +102,19 @@ export async function answerEmployeeWeeklyScheduleQuestion(runReadOnlySql, text 
 
   if (!employee?.id || bestScore < 70) return null;
 
-  const templateRows = await runReadOnlySql(`
-    select est.day_of_week, est.shift_start, est.shift_end, est.notes, est.active
-    from public.employee_shift_templates est
-    where est.employee_id = '${esc(employee.id)}'::uuid
-      and est.active = true
-    order by est.day_of_week, est.shift_start
-  `);
-
-  const templates = Array.isArray(templateRows) ? templateRows : [];
-  if (!templates.length) {
-    return `${employee.display_name} does not have an active weekly shift template listed.`;
+  const todayRows=await runReadOnlySql("select (now() at time zone 'America/Chicago')::date as service_date");
+  const start=String(todayRows?.[0]?.service_date||'');
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(start)) return `I can't verify a current published schedule for ${employee.display_name}.`;
+  const days=[];
+  for(let index=0;index<7;index++){
+    const date=new Date(`${start}T12:00:00Z`);
+    date.setUTCDate(date.getUTCDate()+index);
+    const serviceDate=date.toISOString().slice(0,10);
+    const current=await fetchCurrentMemphisScheduleDay(runReadOnlySql,serviceDate);
+    if(current.status!=='current') return `I can't verify the full current seven-day schedule for ${employee.display_name}; ${serviceDate} has no current published readback.`;
+    const row=current.rows.find((item)=>item.employee_id===employee.id);
+    if(row?.working) days.push(`${DAY_NAMES[date.getUTCDay()]}, ${serviceDate}, ${row.shift_start} to ${row.shift_end}`);
   }
-
-  const summary = compressTemplateRows(templates).join("; ");
-  return `${employee.display_name}'s regular weekly schedule is ${summary}.`;
+  return days.length?`${employee.display_name}'s published schedule for the next seven days is ${days.join('; ')}.`
+    :`${employee.display_name} has no working days in the current published seven-day schedule starting ${start}.`;
 }

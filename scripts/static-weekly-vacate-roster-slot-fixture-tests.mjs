@@ -16,6 +16,10 @@ function check(name,actual,expected){assert.deepEqual(actual,expected,name);pass
 function rejected(name,text,pattern){assert.throws(()=>sql(text),pattern,name);passed++;}
 check('vacancy command exists',sql("select (to_regprocedure('public.static_weekly_v8_vacate_roster_slot(uuid,uuid,uuid,date,text,bigint,uuid,text)') is not null)::text"),'true');
 const manager=randomUUID(),sourceId=randomUUID(),slot=randomUUID(),employee=randomUUID(),incumbency=randomUUID();
+const retainedDevice=randomUUID(),retainedCredential=randomUUID(),protectedSession=randomUUID(),location=randomUUID(),nativeLocation=randomUUID();
+const nativeSession=`separation-native-${randomUUID()}`;
+const executionSecret='synthetic-separation-execution-01234567890123456789';
+const nativeRouteSecret='synthetic-separation-native-01234567890123456789';
 const start=sql("select (public.sch_service_date(now())-30)::text"),effective=sql("select public.sch_service_date(now())::text");
 const revision=()=>Number(sql('select current_revision from public.static_weekly_schedule_control where singleton'));
 sql(`insert into public.ops_manager_managers(manager_id,display_name,roles,active,is_system_principal)
@@ -28,7 +32,22 @@ sql(`insert into public.ops_manager_managers(manager_id,display_name,roles,activ
  values(${q(slot)},'SYNTHETIC_VACANCY_'||${q(slot)},'Synthetic stable position',${q(manager)},'Synthetic Vacancy Manager',repeat('a',64));
  insert into public.weekly_roster_slot_incumbencies(incumbency_id,slot_id,person_id,person_name_snapshot,effective_start,created_by_manager_id,created_by_manager_name_snapshot,content_digest)
  values(${q(incumbency)},${q(slot)},${q(employee)},'Synthetic Former Custodian',${q(start)},${q(manager)},'Synthetic Vacancy Manager',repeat('b',64));`);
-const source={serviceDate:effective,timezone:'America/Chicago',exceptions:[],proximity:[],slots:[{id:slot,label:'Synthetic stable position',incumbencies:[{personId:employee,displayName:'Synthetic Former Custodian',effectiveStart:start,effectiveEnd:effective}]}],version:{id:randomUUID(),publicationId:randomUUID(),status:'published',effectiveStart:effective,effectiveEnd:null,objective:{},vacancyCapableSlotIds:[slot],vacantSlotIds:[slot],slotAvailability:[],assignments:[]}};
+sql(`insert into public.locations(id,location_code,location_name,location_type,form_type,active)
+ values(${q(location)},${q('PROTECTED_'+location.slice(0,8))},'Synthetic protected location','restroom','restroom',true),
+       (${q(nativeLocation)},${q('NATIVE_'+nativeLocation.slice(0,8))},'Synthetic native location','restroom','restroom',true);
+ insert into public.devices(id,device_id,device_name,active,assigned_employee_id,assignment_epoch)
+ values(${q(retainedDevice)},${q('SYNTHETIC_PROTECTED_'+retainedDevice.slice(0,8))},'Synthetic protected phone',true,${q(employee)},1);
+ insert into public.device_auth_credentials(credential_id,device_id,token_hash,confirmed_at,expires_at)
+ values(${q(retainedCredential)},${q(retainedDevice)},repeat('a',64),statement_timestamp()-interval '1 day',statement_timestamp()+interval '1 day');
+ insert into public.custodial_employee_device_assignment_history(device_id,device_identifier,new_employee_id,new_employee_name,change_reason,source)
+ values(${q(retainedDevice)},${q('SYNTHETIC_PROTECTED_'+retainedDevice.slice(0,8))},${q(employee)},'Synthetic Former Custodian','fixture','test');
+ insert into public.sessions(id,session_uuid,location_id,employee_id,device_id,status,started_at)
+ values(${q(protectedSession)},${q('protected-'+protectedSession)},${q(location)},${q(employee)},${q(retainedDevice)},'active',statement_timestamp()-interval '2 minutes');`);
+sql(`select public.custodial_configure_backend_execution_key(encode(extensions.digest(convert_to(${q(executionSecret)},'UTF8'),'sha256'),'hex'),'synthetic separation native replay');
+ select public.custodial_configure_native_route_proof_key(encode(extensions.digest(convert_to(${q(nativeRouteSecret)},'UTF8'),'sha256'),'hex'),'synthetic separation native replay');`);
+const nativeSnapshot=parsed(`select public.tool_get_offline_scan_authority_snapshot(${q('SYNTHETIC_PROTECTED_'+retainedDevice.slice(0,8))},${q(retainedCredential)},${q(executionSecret)})::text`);
+const nativeStartAt=new Date(Date.parse(nativeSnapshot.generated_at)+1).toISOString();
+const source={serviceDate:effective,timezone:'America/Chicago',exceptions:[],proximity:[],slots:[{id:slot,label:'Synthetic stable position',incumbencies:[{personId:employee,displayName:'Synthetic Former Custodian',effectiveStart:start,effectiveEnd:null}]}],version:{id:randomUUID(),publicationId:randomUUID(),status:'published',effectiveStart:effective,effectiveEnd:null,objective:{},vacancyCapableSlotIds:[slot],vacantSlotIds:[],slotAvailability:[],assignments:[]}};
 sql(`set role static_weekly_release_operator; select public.static_weekly_v3_register_authority_source(${q(sourceId)},${j(source)},'synthetic-vacancy-test');`);
 const inputRevision=revision(),key='vacate-'+slot;
 function call({actor=manager,source=sourceId,person=employee,date=effective,requestKey=key,expected=inputRevision,reason='Owner confirmed position is vacant'}={}){return `set role static_weekly_control_plane; select public.static_weekly_v8_vacate_roster_slot(${q(source)},${q(slot)},${q(person)},${q(date)},${q(reason)},${expected},${q(actor)},${q(requestKey)})::text`;}
@@ -55,6 +74,66 @@ check('history row byte-identical',sql(`select to_jsonb(i)::text from public.wee
 check('person count unchanged',sql('select count(*)::text from public.employees'),peopleBefore);
 check('messenger identity count unchanged',sql('select count(*)::text from public.msg_users'),usersBefore);
 check('former employee inactive',sql(`select active::text from public.employees where id=${q(employee)}`),'false');
+check('active cleaning retained for original actor',sql(`select status from public.sessions where id=${q(protectedSession)}`),'active');
+check('original phone assignment retained',sql(`select assigned_employee_id::text from public.devices where id=${q(retainedDevice)}`),employee);
+check('original credential retained',sql(`select (revoked_at is null)::text from public.device_auth_credentials where credential_id=${q(retainedCredential)}`),'true');
+check('protected work remains honestly pending',sql(`select state from public.custodial_employee_separation_fences where employee_id=${q(employee)}`),'PENDING_RECONCILIATION');
+check('native inventory remains unknown',sql(`select native_inventory_state from public.custodial_employee_separation_fences where employee_id=${q(employee)}`),'UNKNOWN');
+const separationRead=parsed(`set role static_weekly_control_plane; select public.custodial_v12_read_separation(${q(slot)},${q(manager)})::text`);
+check('manager readback binds original employee',separationRead.employee_id,employee);
+check('manager readback retains active protected session count',Number(separationRead.database_active_sessions),1);
+check('manager readback never calls unknown native inventory empty',separationRead.native_inventory_state,'UNKNOWN');
+if(process.env.SEPARATION_CONTEXT_PROOF==='1'){
+ const exact=`public.custodial_v13_read_separation_context(${q(retainedDevice)},${q(retainedCredential)})`;
+ const context=parsed(`set role custodial_application_reader;select ${exact}::text`);
+ check('context binds original employee',context.employee_id,employee);
+ check('context binds original credential',context.credential_id,retainedCredential);
+ check('context binds original device',context.device_id,retainedDevice);
+ check('context binds original epoch',context.assignment_epoch,1);
+ check('context binds exact immutable separation',context.separation_id,separationRead.separation_id);
+ check('context cutoff keeps six microsecond digits',/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/.test(context.cutoff_at),true);
+ check('status context is never new-work authority',context.new_work_allowed,false);
+ check('status context never releases phone',context.phone_released,false);
+ check('native inventory is not inferred from SQL',context.native_inventory_state,'UNKNOWN');
+ check('exact pre-cutoff open session retained',context.server_known_open_sessions.map(s=>s.session_id),[protectedSession]);
+ check('context purpose is status only',context.purpose,'SEPARATION_STATUS_ONLY');
+ for(const role of ['anon','authenticated','service_role','static_weekly_control_plane','static_weekly_release_operator'])
+  rejected('actual context read denied '+role,`set role ${role};select ${exact}`,/permission denied/);
+ check('wrong credential context absent',sql(`set role custodial_application_reader;select (public.custodial_v13_read_separation_context(${q(retainedDevice)},${q(randomUUID())}) is null)::text`),'true');
+ check('wrong device context absent',sql(`set role custodial_application_reader;select (public.custodial_v13_read_separation_context(${q(randomUUID())},${q(retainedCredential)}) is null)::text`),'true');
+ check('changed current epoch cannot borrow original context',sql(`begin;update public.devices set assignment_epoch=assignment_epoch+1 where id=${q(retainedDevice)};set local role custodial_application_reader;select (${exact} is null)::text;rollback;`),'true');
+ const lateCredential=randomUUID();
+ rejected('retained original blocks a second active credential',`insert into public.device_auth_credentials(credential_id,device_id,token_hash,confirmed_at,expires_at)
+  values(${q(lateCredential)},${q(retainedDevice)},repeat('b',64),statement_timestamp(),statement_timestamp()+interval '1 day')`,/idx_device_auth_credentials_one_active_per_device/);
+ check('unissued later credential is not admitted',sql(`set role custodial_application_reader;select (public.custodial_v13_read_separation_context(${q(retainedDevice)},${q(lateCredential)}) is null)::text`),'true');
+ check('historical v12 unknown principal never backfilled',sql(`begin;alter table public.custodial_employee_separation_fences disable trigger trg_custodial_employee_separation_fences_immutable;
+  update public.custodial_employee_separation_fences set device_inventory_json=jsonb_build_array(jsonb_build_object('device_uuid',${q(retainedDevice)},'device_identifier',${q(context.canonical_device_id)})) where separation_id=${q(context.separation_id)};
+  set local role custodial_application_reader;select (${exact} is null)::text;rollback;`),'true');
+ check('rollback preserves exact original context',parsed(`set role custodial_application_reader;select ${exact}::text`),context);
+}
+const secondManager=randomUUID();
+sql(`insert into public.ops_manager_managers(manager_id,display_name,roles,active,is_system_principal)
+ values(${q(secondManager)},'Different Synthetic Custodial Manager',array['OPS_MANAGER','CUSTODIAL_MANAGER'],true,false)`);
+check('different authorized manager can inspect pending old-principal work',
+ parsed(`set role static_weekly_control_plane; select public.custodial_v12_read_separation(${q(slot)},${q(secondManager)})::text`).separation_id,
+ separationRead.separation_id);
+for(const role of ['anon','authenticated','service_role','custodial_application_reader','static_weekly_release_operator'])
+ check(role+' cannot read protected separation',sql(`select has_function_privilege(${q(role)},'public.custodial_v12_read_separation(uuid,uuid)','execute')::text`),'false');
+for(const role of ['anon','authenticated','service_role','custodial_application_reader','static_weekly_control_plane'])
+ check(role+' has no direct separation table access',sql(`select has_table_privilege(${q(role)},'public.custodial_employee_separation_fences','select,insert,update,delete')::text`),'false');
+check('separation table has forced RLS',sql(`select (relrowsecurity and relforcerowsecurity)::text from pg_class where oid='public.custodial_employee_separation_fences'::regclass`),'true');
+check('native replay fixture began before separation',Date.parse(nativeStartAt)<Date.parse(separationRead.separated_at),true);
+const nativeArgs=(session,startedAt)=>`${q('SYNTHETIC_PROTECTED_'+retainedDevice.slice(0,8))},${q('NATIVE_'+nativeLocation.slice(0,8))},${q(session)},${q(startedAt)},${q(nativeSnapshot.snapshot_id)},${q(nativeSnapshot.employee_id)},${nativeSnapshot.assignment_epoch},${q(retainedCredential)},${q(retainedCredential)},${q(randomUUID())},'custodial-native-start.v1',${q('a'.repeat(64))},${q(nativeRouteSecret)},${q(executionSecret)}`;
+const nativeRecovered=parsed(`select public.tool_start_offline_occurrence(${nativeArgs(nativeSession,nativeStartAt)})::text`);
+check('original principal owns delayed native Start',nativeRecovered.employee_id,employee);
+check('delayed native Start remains open with original actor',sql(`select employee_id::text from public.custodial_offline_actor_contexts where context_id=${q(nativeRecovered.context_id)}`),employee);
+rejected('native Start timestamp after separation is fenced',
+ `select public.tool_start_offline_occurrence(${nativeArgs(nativeSession+'-late',new Date(Date.now()+1000).toISOString())})::text`,
+ /separated employee cannot start/i);
+rejected('new Start after separation is fenced',`insert into public.sessions(session_uuid,location_id,employee_id,device_id,status,started_at)
+ values(${q('forged-'+protectedSession)},${q(location)},${q(employee)},${q(retainedDevice)},'active',statement_timestamp()+interval '1 second')`,/separated employee cannot start/i);
+rejected('pending phone cannot be reassigned',`update public.devices set assigned_employee_id=null where id=${q(retainedDevice)}`,/protected former-employee phone/i);
+rejected('pending credential cannot be revoked',`update public.device_auth_credentials set revoked_at=statement_timestamp() where credential_id=${q(retainedCredential)}`,/protected former-employee credential/i);
 check('former messenger principal inactive',sql(`select is_active::text from public.msg_users where employee_id=${q(employee)}`),'false');
 check('old effective range preserved',sql(`select count(*)::text from public.v_weekly_roster_slot_incumbency_ranges where slot_id=${q(slot)} and effective_start<=${q(start)}::date and ${q(start)}::date<effective_end`),'1');
 check('no incumbent on vacancy date',sql(`select count(*)::text from public.v_weekly_roster_slot_incumbency_ranges where slot_id=${q(slot)} and effective_start<=${q(effective)}::date and (effective_end is null or ${q(effective)}::date<effective_end)`),'0');
@@ -77,6 +156,9 @@ check('source retained closure for current-week history',afterHydration.compiler
 
 rejected('future vacancy cannot deactivate a current employee',call({date:nextMonday,requestKey:'future-'+key,expected:revision()}),/current service date/i);
 const functions=[
+ ...(process.env.SEPARATION_CONTEXT_PROOF==='1'?[
+  'public.custodial_v12_inactivate_preserving_work(uuid,uuid,uuid,text,bigint,uuid,date)',
+  'public.custodial_v13_read_separation_context(uuid,uuid)']:[]),
  'public.static_weekly_v8_guard_vacancy_closure()',
  'public.static_weekly_v8_vacate_roster_slot(uuid,uuid,uuid,date,text,bigint,uuid,text)',
  'public.static_weekly_v7_fill_vacant_roster_slot(uuid,text,date,text,bigint,uuid,text)',

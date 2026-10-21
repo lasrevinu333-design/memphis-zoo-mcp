@@ -356,7 +356,7 @@ try {
     const catalog=await captureCatalogFromSnapshot(client);
     const declaration=JSON.parse(readFileSync(new URL("../release/production-backup-source-extension.json",import.meta.url),"utf8"));
     sourceSchemaBinding=bindBackupSchemaExtension({projectRef,releaseIdentity,migrationLedger,catalog,declaration,
-      readSource:(filename,location)=>readFileSync(new URL((location==="retained_installed"?"../release/installed-source/":"../supabase/migrations/")+filename,import.meta.url))});
+      readSource:filename=>readFileSync(new URL("../supabase/migrations/"+filename,import.meta.url))});
     writeJson(join(backupDir,"inventory","source-catalog.json"),catalog);
     writeJson(join(backupDir,"inventory","source-schema-binding.json"),sourceSchemaBinding);
   }

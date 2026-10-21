@@ -49,8 +49,13 @@ const pauseGuestNotificationsWhenDisabled = readFileSync(`supabase/migrations/${
 const eventReminderWorkdayAndOwnerContractFile = "20260918012000_event_reminder_workday_and_owner_contract.sql";
 const eventReminderWorkdayAndOwnerContract = readFileSync(`supabase/migrations/${eventReminderWorkdayAndOwnerContractFile}`, "utf8");
 const eventReminderStaticWeeklyAuthorityFile = "20260920010000_event_reminder_static_weekly_authority.sql";
+const custodialOwnerDelegatedActionsFile = "20261006031304_custodial_owner_delegated_actions.sql";
+const sharedEventsOutlookFile = "20261006113610_custodial_shared_events_outlook.sql";
+const sharedEventsRecoveryFile = "20261006162427_custodial_shared_events_recovery_binding.sql";
 const eventReminderStaticWeeklyAuthority = readFileSync(`supabase/migrations/${eventReminderStaticWeeklyAuthorityFile}`, "utf8");
 const index = readFileSync("src/index.js", "utf8");
+const ownerAccessApi = readFileSync("src/owner-access-api.js", "utf8");
+const ownerActionsSql = readFileSync(`supabase/migrations/${custodialOwnerDelegatedActionsFile}`, "utf8");
 const scanAuthorityCutover = readFileSync("src/scan-authority-cutover.js", "utf8");
 const schedulerControlPlane = readFileSync("src/static-weekly-control-plane.js", "utf8");
 const auth = readFileSync("src/auth/device-credential-auth.js", "utf8");
@@ -95,6 +100,29 @@ const exactPendingReleaseMigrations = [
   "20260925050718_static_weekly_staffing_command_ledger.sql",
   "20260925054802_static_weekly_staffing_atomic_acceptance.sql",
   "20260925190000_gps_exact_location_authority_boundary.sql",
+  "20260926143542_static_weekly_protected_separation.sql",
+  "20260926180000_retire_direct_employee_status_rpc.sql",
+  "20260926192656_static_weekly_recurring_confirmation_ledger.sql",
+  "20260926193000_retire_direct_employee_mutation_helpers.sql",
+  "20260926193651_static_weekly_recurring_source_admission.sql",
+  "20260926194644_static_weekly_recurring_generation_fence.sql",
+  "20260926200458_static_weekly_recurring_future_same_monday.sql",
+  "20260926201644_static_weekly_recurring_dependency_snapshot.sql",
+  "20260926202657_static_weekly_recurring_publication_binding.sql",
+  "20260926204235_static_weekly_recurring_terminal_targets.sql",
+  "20260926205849_static_weekly_recurring_blocked_authority_repair.sql",
+  "20260926211714_static_weekly_recurring_common_lock_order.sql",
+  "20260926220510_static_weekly_recurring_dependency_reconciliation.sql",
+  "20260926223914_static_weekly_recurring_application_targets.sql",
+  "20260926225613_static_weekly_recurring_atomic_finalization.sql",
+  "20260926234537_static_weekly_authenticated_schedule_delivery.sql",
+  "20260927001706_static_weekly_lunch_validation_materialization.sql",
+  "20260927010911_static_weekly_current_recurring_delivery_status.sql",
+  "20260927031806_schedule_bound_location_reminders.sql",
+  "20260927052929_schedule_notification_admission_corrections.sql",
+  "20260927072146_schedule_notification_exact_canary.sql",
+  "20260927075352_protected_separation_original_context.sql",
+  "20260929125440_custodial_recovery_inventory_closure.sql",
 ];
 const exactMigrationFiles = readdirSync("supabase/migrations").filter((name) => /^[0-9]{14}_.+\.sql$/.test(name)).sort();
 const exactMigrationCount = exactMigrationFiles.length;
@@ -178,8 +206,17 @@ assert.match(index, /action === "resume_canary" && authoritativeHealth\?\.ok !==
   "physical canary resume must require the combined database and real scan-transport health probe");
 assert.match(index, /runCustodialOfflineReconciliationNotificationWorker/);
 assert.doesNotMatch(index, /run_application_write|force-close-session/);
-assert.match(index, /app\.post\("\/admin-api\/close-ticket"[\s\S]{0,900}runRpc\("custodial_close_maintenance_ticket_authoritative"/);
-assert.match(index, /app\.post\("\/dashboard-api\/close-ticket"[\s\S]{0,900}runRpc\("custodial_close_maintenance_ticket_authoritative"/);
+assert.ok(index.includes("installOwnerAccessRoutes(app, { store: opsTrustedDeviceStore, runRpc, backendSecret: offlineAuthoritySecret })"),
+  "both ticket routes must be installed with current named-manager storage and backend authority");
+assert.ok(ownerAccessApi.includes("app.post(['/admin-api/close-ticket', '/dashboard-api/close-ticket'], close,"),
+  "both ticket-close aliases must use the same permission-checked route");
+assert.ok(ownerAccessApi.includes("requiredPermission: 'close_scan_tickets'") && ownerAccessApi.includes("assertServerAssignedActor(req.body)")
+  && ownerAccessApi.includes("runRpc('custodial_close_scan_ticket_outcome_v1'") && ownerAccessApi.includes("...managerActionArguments(req)"),
+  "ticket closure must preserve delegated permission, current actor and authoritative SQL boundaries");
+assert.ok(ownerActionsSql.includes("public.custodial_close_maintenance_ticket_authoritative(ticket.id")
+  && ownerActionsSql.includes("Delegated closure requires a verified scan-session ticket")
+  && ownerActionsSql.includes("custodial_require_backend_execution_secret(p_backend_execution_secret)"),
+  "new provenance validation must retain the original authoritative ticket writer and backend proof");
 assert.match(index, /notification_instance_key: recipient\.notification_instance_key/);
 assert.match(index, /client_message_id: recipient\.client_message_id/);
 assert.doesNotMatch(index, /custodial_issue_offline_actor_context/);
@@ -200,13 +237,13 @@ assert.match(schemaFingerprintRefresh, /target\?\.canonical_source_schema_finger
 assert.match(populatedPreflightWorkflow, /release:populated-schema:preflight/);
 assert.match(releaseInput.cutover.phase_order[1], /exact observed production ledger head.*catalog\/privilege fingerprint.*zero target-position collisions/i);
 assert.match(releaseInput.cutover.phase_order[2], /fresh post-capture backup receipt.*exact pending-migration digest.*exact source attestation/i);
-assert.match(releaseInput.cutover.phase_order[3], /twenty-three exact ordered pending migrations.*lunch-delivery manager alerts.*completed-cleaning reminder compatibility.*verified-visit five-minute overdue authority.*atomic static-weekly lunch publication.*durable lunch start\/end notification production.*existing-employee identity restoration.*dated roster-slot vacancy.*aggregate visitor-attendance reading.*release-selection and occurrence guards.*independent notification receipt and lunch integrity.*release-selector recovery bindings.*canonical dated shift-end derivation.*atomic roster completion.*assigned-phone activation transport.*legacy-installation observation.*owner cleaning and inspection boundaries.*manual contractor lunch authority.*durable native provider authority.*completion-selection normalization.*bound legacy completion replay.*durable staffing command ledger.*atomic staffing acceptance.*exact-location GPS authority boundary.*ledger to advance exactly twenty-three entries.*do not replay historical production migrations/i);
+assert.match(releaseInput.cutover.phase_order[3], /forty-six exact ordered pending migrations.*lunch-delivery manager alerts.*completed-cleaning reminder compatibility.*verified-visit five-minute overdue authority.*atomic static-weekly lunch publication.*durable lunch start\/end notification production.*existing-employee identity restoration.*dated roster-slot vacancy.*aggregate visitor-attendance reading.*release-selection and occurrence guards.*independent notification receipt and lunch integrity.*release-selector recovery bindings.*canonical dated shift-end derivation.*atomic roster completion.*assigned-phone activation transport.*legacy-installation observation.*owner cleaning and inspection boundaries.*manual contractor lunch authority.*durable native provider authority.*completion-selection normalization.*bound legacy completion replay.*durable staffing command ledger.*atomic staffing acceptance.*exact-location GPS authority boundary.*ledger to advance exactly forty-six entries.*do not replay historical production migrations/i);
 assert.match(releaseInput.cutover.phase_order[4], /retain the current immutable weighted-schedule publication by default.*only when a named manager approves a replacement.*derive exactly one replacement draft from the current publication.*expected-revision and idempotency guards.*do not create a competing draft.*preserve the current publication/i);
 assert.equal(releaseInput.cutover.production_migration_state, "release/production-migration-state.json");
 assert.match(releaseInput.cutover.production_migration_evidence.github_actions,
   /repository.*workflow ref.*workflow commit.*run ID.*run-attempt.*cannot contain task-local fields/i);
 assert.match(releaseInput.cutover.production_migration_evidence.task_local,
-  /host networking.*db\.rqquvtjdmugpigbndmne\.supabase\.co.*verify-full.*encrypted archive stays local.*same isolated restore.*twenty-three-migration.*runtime.*write.*replay.*cleanup/i);
+  /host networking.*db\.rqquvtjdmugpigbndmne\.supabase\.co.*verify-full.*encrypted archive stays local.*same isolated restore.*forty-six-migration.*runtime.*write.*replay.*cleanup/i);
 assert.match(releaseInput.cutover.production_migration_evidence.authorization_and_apply,
   /archive.*receipt\/result.*candidate commit\/tree.*runner.*signer IDs.*source\/target migration and catalog.*zero leases.*timestamps.*dedicated ephemeral verification key.*never the archive or rehearsal.*sanitized result and receipt hashes/i);
 assert.equal(productionMigrationState.artifact, "production-migration-state.v2");
@@ -237,20 +274,20 @@ assert.equal(productionMigrationState.observed_production.vacancy_functions_pres
 assert.equal(productionMigrationState.observed_production.hydrated_initial_draft_reader_present, true);
 assert.equal(productionMigrationState.observed_production.registered_source_dated_status_excluded, true);
 assert.equal(productionMigrationState.observed_production.outlook_event_sync_table_present, true);
-assert.equal(productionMigrationState.target.source_migration_file, "20260925190000_gps_exact_location_authority_boundary.sql");
-assert.equal(productionMigrationState.target.source_migration_name, "gps_exact_location_authority_boundary");
-assert.equal(productionMigrationState.target.source_migration_version, "20260925190000");
+assert.equal(productionMigrationState.target.source_migration_file, "20260929125440_custodial_recovery_inventory_closure.sql");
+assert.equal(productionMigrationState.target.source_migration_name, "custodial_recovery_inventory_closure");
+assert.equal(productionMigrationState.target.source_migration_version, "20260929125440");
 assert.equal(productionMigrationState.target.production_ledger_version, null);
 assert.equal(productionMigrationState.target.canonical_source_schema_fingerprint, canonicalFingerprint);
-assert.equal(productionMigrationState.target.public_function_count, 567);
-assert.equal(productionMigrationState.target.production_ledger_count, 253);
+assert.equal(productionMigrationState.target.public_function_count, 606);
+assert.equal(productionMigrationState.target.production_ledger_count, 276);
 assert.equal(productionMigrationState.target.source_authority_migration_count, exactMigrationCount);
 assert.equal(productionMigrationState.target.pending_migration_count, exactPendingReleaseMigrations.length);
 assert.equal(productionMigrationState.target.registered_source_dated_status_excluded, true);
-assert.equal(productionMigrationState.target.expected_catalog_counts.functions, 567);
-assert.equal(productionMigrationState.target.expected_catalog_counts.triggers, 338);
-assert.equal(productionMigrationState.target.expected_catalog_counts.policies, 43);
-assert.equal(productionMigrationState.target.expected_catalog_counts.routine_grants, 383);
+assert.equal(productionMigrationState.target.expected_catalog_counts.functions, 606);
+assert.equal(productionMigrationState.target.expected_catalog_counts.triggers, 388);
+assert.equal(productionMigrationState.target.expected_catalog_counts.policies, 44);
+assert.equal(productionMigrationState.target.expected_catalog_counts.routine_grants, 396);
 assert.equal(productionMigrationState.target.expected_catalog_counts.schema_grants, 9);
 assert.match(releaseHealthIdentityProjection, /bb04f7c05f72d959b4aba5a3a047adad1163eaf6b88aeeebd5d0f9f6a3b10baf/);
 assert.match(releaseHealthIdentityProjection, /c\.relname in \('devices','employees','device_aliases'\)/);
