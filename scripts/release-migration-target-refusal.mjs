@@ -1,3 +1,4 @@
+import {APPROVED_DATED_SOURCE_FILE,APPROVED_DATED_SOURCE_SHA256,APPROVED_DATED_FORWARD_SHA256,readApprovedDatedRefusal} from './release-migration-approved-dated-refusal.mjs';
 import assert from 'node:assert/strict';
 import {writeFileSync,readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
@@ -398,6 +399,11 @@ export async function readCancellationTargetRefusal(db){
 }
 
 async function readSelectedTargetRefusal(db,migration) {
+ if(migration.file===APPROVED_DATED_SOURCE_FILE){
+  assert.equal(migration.order,152);assert.equal(migration.sha256,APPROVED_DATED_FORWARD_SHA256);
+  return {metadata_source_file:APPROVED_DATED_SOURCE_FILE,metadata_source_sha256:APPROVED_DATED_SOURCE_SHA256,
+   metadata_executed_sha256:migration.sha256,approved_dated_dependencies:await readApprovedDatedRefusal(db)};
+ }
  if(migration.file===CANCELLATION_TARGET_SOURCE_FILE){
   assert.equal(migration.order,127);assert.ok([CANCELLATION_TARGET_SOURCE_SHA256,CANCELLATION_TARGET_FORWARD_SHA256].includes(migration.sha256));
   return {metadata_source_file:CANCELLATION_TARGET_SOURCE_FILE,metadata_source_sha256:CANCELLATION_TARGET_SOURCE_SHA256,cancellation_target:await readCancellationTargetRefusal(db)};
