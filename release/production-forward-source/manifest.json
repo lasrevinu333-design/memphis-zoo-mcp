@@ -187,6 +187,13 @@
       "forward_file": "release/production-forward-source/20261012004258_staffing_absence_cancellation_target_fields.sql",
       "forward_sha256": "9b8178cf4c18322da053b06ea57ae7cbe287ed7961fd7b7650042f0f584e8709",
       "profile": "existing-postgres-owner"
+    },
+    {
+      "canonical_file": "20261012063248_staffing_vacancy_reviewed_preparation.sql",
+      "canonical_sha256": "8ad600506a41cb91f21ea42bd0e3ee4fc83dc1f4a14585efa0a6c1e323425abb",
+      "forward_file": "release/production-forward-source/20261012063248_staffing_vacancy_reviewed_preparation.sql",
+      "forward_sha256": "1dd73eca8c1042096d0cf2d9b3a69bb6afa710e467389899b99ee33ecdbc821c",
+      "profile": "existing-postgres-owner"
     }
   ]
 }

@@ -52,7 +52,7 @@ for(const c of proof.changes){
  });
 }
 test('all old eight finite variants remain exact and late owner-aware Source unchanged',()=>{
- const m=productionForwardSourceManifest(root);assert.equal(m.migrations.length,26);
+ const m=productionForwardSourceManifest(root);assert.equal(m.migrations.length,27);
  const old=new Map([['20261002120000_october_dated_recovery_inventory_rebind.sql','688e336bc4b985bbc5ba0847f9d6c0e0f64fc05bf027d217f95e3778649d9a16'],['20261003220000_current_release_authority_completion.sql','90e31443af8e2b2ba563c7a965d7a6afeba37f8cb67d2d4ff333034066c88a33'],['20261006190426_manager_scheduler_recovery_binding.sql','178cc832516e2aa78835b8441da04fe801204caf123477e3c7a6eda5dc405906'],['20261015040830_same_original_retained_completion_read.sql','18298fc042702b47e56e30ec21bcde0bfeac3646d806f488b02d453811c8961d'],['20261017225101_approved_static_dated_original_materialization.sql','cee7ef97a7aef12f75de1d568e53ff0d987daa428b42f53fde25eb957d095f6f']]);
  for(const[file,hash]of old)assert.equal(sha(read('release/production-forward-source/'+file)),hash);
  for(const n of ['20261013171946_messenger_original_group_creation.sql','20261017200958_approved_static_original_confirmation_receipts.sql','20261017225101_approved_static_dated_original_materialization.sql'])assert.ok(!proof.changes.some(c=>c.file===n));

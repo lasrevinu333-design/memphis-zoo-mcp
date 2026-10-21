@@ -78,7 +78,8 @@ export async function prepareSameOriginalNativeRegistrationFixture({admin,backen
 // Staged SOURCE FIXTURE only. Native must create each original BEFORE its SQL
 // acceptance, then capture the returned response BEFORE Main calls separation.
 // Byte echoes below are matching checks, NOT proof of native response capture.
-export async function prepareSameOriginalNativeAcceptedCompletionFixture({admin,backendRoot}) {
+export async function prepareSameOriginalNativeAcceptedCompletionFixture({admin,backendRoot,ordinaryTwoVisit=false}) {
+  assert.equal(typeof ordinaryTwoVisit,'boolean');
   const {pathToFileURL}=await import('node:url'),path=await import('node:path');
   const {randomBytes}=await import('node:crypto');
   const authModule=await import(pathToFileURL(backendRoot+'/src/auth/device-credential-auth.js'));
@@ -122,6 +123,7 @@ export async function prepareSameOriginalNativeAcceptedCompletionFixture({admin,
   const locationId=randomUUID(),locationCode='SYNTHETIC_ACCEPTED_ORIGINAL';
   const executionSecret=randomBytes(32).toString('hex'),routeSecret=randomBytes(32).toString('hex');
   let state='PREPARING',activeLoanCheck=()=>{},snapshot,start,completion,originalArguments,commitResponse;
+  let ordinaryVisit=1;const capturedOrdinaryOriginals=[];
   const sha=value=>createHash('sha256').update(value).digest('hex');
   const clone=value=>structuredClone(value);
   // Main must loan one dedicated SQL session, not a pool rotating clients:
@@ -256,7 +258,14 @@ export async function prepareSameOriginalNativeAcceptedCompletionFixture({admin,
       try{
         native=takeLoan(loan,'tool_start_offline_occurrence',startKeys);
         activeLoanCheck=()=>{assert.equal(state,'START_UNKNOWN');native.unchanged();};
-        const p=native.args;assert.equal(p.p_snapshot_id,snapshot.snapshot_id);assert.equal(p.p_snapshot_employee_id,ids.employee);
+        const p=native.args;
+        if(ordinaryTwoVisit&&ordinaryVisit===2){
+          const first=capturedOrdinaryOriginals[0];assert.ok(first);
+          assert.notEqual(p.p_client_session_id,first.start.args.p_client_session_id,'a captured original is not a new visit');
+          assert.notEqual(p.p_native_scan_entry_id,first.start.args.p_native_scan_entry_id,'new ordinary visit needs a new native scan');
+          assert.notEqual(p.p_native_scan_entry_id,first.arguments.p_native_finish_scan_entry_id,'prior finish cannot become next start');
+        }
+        assert.equal(p.p_snapshot_id,snapshot.snapshot_id);assert.equal(p.p_snapshot_employee_id,ids.employee);
         assert.equal(p.p_snapshot_credential_id,ids.credential);assert.equal(p.p_snapshot_assignment_epoch,7);
         await authenticate(native,'start');
         const rows=await tx('service_role','select public.tool_start_offline_occurrence($1,$2,$3,$4,$5,$6,$7::integer,$8,$9,$10,$11,$12,$13,$14) data',[
@@ -274,6 +283,14 @@ export async function prepareSameOriginalNativeAcceptedCompletionFixture({admin,
         native=takeLoan(loan,'tool_commit_cleaning_workflow',completionKeys);
         activeLoanCheck=()=>{assert.equal(state,'COMPLETION_UNKNOWN');native.unchanged();};const p=native.args;
         assert.equal(p.p_client_session_id,start.args.p_client_session_id);assert.equal(p.p_client_started_at,start.args.p_client_started_at);
+        if(ordinaryTwoVisit&&ordinaryVisit===2){
+          const first=capturedOrdinaryOriginals[0];
+          assert.equal(p.p_response_json.work_result,'checked_no_cleaning_needed');
+          assert.notEqual(p.p_client_completion_id,first.arguments.p_client_completion_id);
+          assert.notEqual(p.p_native_finish_scan_entry_id,first.arguments.p_native_finish_scan_entry_id);
+          assert.notEqual(p.p_native_finish_scan_entry_id,first.start.args.p_native_scan_entry_id);
+          assert.ok(Date.parse(p.p_client_ended_at)>Date.parse(first.arguments.p_client_ended_at),'check must actually follow accepted cleaning');
+        }
         const control=p.p_response_json?.__custodial_offline_reconciliation_v1;
         plainData(control,['context_id','submission_proof']);assert.equal(control.context_id,start.result.context_id);
         assert.equal(control.submission_proof,start.result.submission_proof);
@@ -355,7 +372,33 @@ export async function prepareSameOriginalNativeAcceptedCompletionFixture({admin,
           source:'ACTUAL_SHIPPING_SEPARATION_CONTEXT_ROUTE_NORMAL_AUTH_AND_FIXED_SQL'};
       }finally{activeLoanCheck=()=>{};}
     },
-    close(){state='CLOSED';originalArguments?.fill(0);commitResponse?.fill(0);start?.response.fill(0);}
+    ...(ordinaryTwoVisit?{
+      // Explicit NEW ordinary visit only after successful first native capture.
+      // Byte equality correlates DATA, not an authenticated capture capability;
+      // the owning runner separately validates actual native journal receipt.
+      async advanceToSecondNativeVisit({exactCapturedResponseBytes}){
+        assert.equal(ordinaryVisit,1);assert.equal(state,'AWAIT_MAIN_NATIVE_RESPONSE_CAPTURE');
+        assert.ok(Buffer.isBuffer(exactCapturedResponseBytes)&&exactCapturedResponseBytes.equals(commitResponse));
+        assert.equal(completion.result.status,'closed');assert.equal(start.result.native_start_attested,true);
+        const argumentsCopy=JSON.parse(originalArguments.toString('utf8'));
+        assert.equal(argumentsCopy.p_response_json.work_result,'full','nonempty priorcleaning must originate in normal FULL writer');
+        // Consume this first owner before await; failure is terminal, not retry.
+        state='NEXT_VISIT_UNKNOWN';
+        activeLoanCheck=()=>{assert.equal(state,'NEXT_VISIT_UNKNOWN');assert.ok(exactCapturedResponseBytes.equals(commitResponse));};
+        try{
+          const rows=await tx('custodial_application_reader','select * from custodial_release_identity.read_original_scan_completion_v1($1::uuid,$2,$3::uuid,$4::bigint,$5::uuid,$6::jsonb)',[
+            ids.device,'KIOSK_08',ids.employee,7,ids.credential,originalArguments.toString('utf8')]);
+          assert.equal(rows.length,1);assert.deepEqual(rows[0],completion.readback);
+          capturedOrdinaryOriginals.push({start,completion,originalArguments,commitResponse,arguments:argumentsCopy});
+          start=null;completion=null;originalArguments=null;commitResponse=null;
+          ordinaryVisit=2;state='AWAIT_NATIVE_START';
+          return {scope:'SECOND_DISTINCT_ORDINARY_VISIT_NOT_REPLAY',visit:2};
+        }finally{activeLoanCheck=()=>{};}
+      }
+    }:{}),
+    close(){state='CLOSED';originalArguments?.fill(0);commitResponse?.fill(0);start?.response.fill(0);
+      for(const prior of capturedOrdinaryOriginals){prior.originalArguments.fill(0);prior.commitResponse.fill(0);prior.start.response.fill(0);}}
+
   });
 }
 
