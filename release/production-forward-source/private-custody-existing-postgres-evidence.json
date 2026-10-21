@@ -16,7 +16,7 @@
   "all783_nonowner_direct_acl_exact_current_renderer": true,
   "all17_normal_payloads_preserve_existing82_rights": true,
   "canonical_sql_sha256": "28275c65a49b26a21ee0f37538a0f9c337a45c5fb41f0fa701d2ffdf555f863b",
-  "executed_sql_sha256": "ce160e5c55373e75580c287d62484d925e02348844d4aac2fef9bc4cb94be798",
+  "executed_sql_sha256": "4a961ebc7aefdfd99d04044fef0d7ceebc0f095783ff525491332244f329ce2a",
   "profile_sha256": "a9fc28be337bc43d6feaf17e13be103400c5d5c0da85dd9ba0bca600d51c738f",
   "counts": {
     "stale_saved_function_exact_earlier_source_body_current_correct": 1,

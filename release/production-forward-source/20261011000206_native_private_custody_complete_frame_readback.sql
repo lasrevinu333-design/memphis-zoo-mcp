@@ -55,10 +55,10 @@ BEGIN
   RAISE EXCEPTION 'Distinct Source253 exact public canary body/owner changed';END IF;
  SELECT coalesce(jsonb_agg(jsonb_build_object('grantee',CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END,
   'grantor',pg_get_userbyid(a.grantor),'privilege',a.privilege_type,'grantable',a.is_grantable)
-  ORDER BY CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END,pg_get_userbyid(a.grantor),a.privilege_type,a.is_grantable),'[]'::jsonb)
+  ORDER BY (CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END)::text COLLATE pg_catalog."C",pg_get_userbyid(a.grantor)::text COLLATE pg_catalog."C",a.privilege_type COLLATE pg_catalog."C",a.is_grantable),'[]'::jsonb)
   INTO acl FROM pg_proc p CROSS JOIN LATERAL aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
   WHERE p.oid='public.custodial_release_canary_authority_surface()'::regprocedure;
- SELECT coalesce(jsonb_agg(x ORDER BY x->>'grantee',x->>'grantor',x->>'privilege',(x->>'grantable')::boolean),'[]'::jsonb) INTO expected_acl
+ SELECT coalesce(jsonb_agg(x ORDER BY (x->>'grantee') COLLATE pg_catalog."C",(x->>'grantor') COLLATE pg_catalog."C",(x->>'privilege') COLLATE pg_catalog."C",(x->>'grantable')::boolean),'[]'::jsonb) INTO expected_acl
   FROM jsonb_array_elements(spec->'canary_acl') x;
  IF acl IS DISTINCT FROM expected_acl THEN RAISE EXCEPTION 'Distinct Source253 exact canary named ACL changed';END IF;
  IF (SELECT count(*) FROM pg_proc WHERE pronamespace='public'::regnamespace AND proname IN(
@@ -85,7 +85,7 @@ BEGIN
      RAISE EXCEPTION 'Distinct Source253 new custody routine ACL target owner changed';END IF;
     SELECT coalesce(jsonb_agg(jsonb_build_object('grantee',CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END,
      'grantor',pg_get_userbyid(a.grantor),'privilege',a.privilege_type,'grantable',a.is_grantable)
-     ORDER BY CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END,pg_get_userbyid(a.grantor),a.privilege_type,a.is_grantable),'[]'::jsonb)
+     ORDER BY (CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END)::text COLLATE pg_catalog."C",pg_get_userbyid(a.grantor)::text COLLATE pg_catalog."C",a.privilege_type COLLATE pg_catalog."C",a.is_grantable),'[]'::jsonb)
      INTO acl FROM pg_proc p CROSS JOIN LATERAL aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE p.oid=obj;
    ELSE
     obj:=to_regclass(item->>'object_identity');
@@ -96,10 +96,10 @@ BEGIN
      RAISE EXCEPTION 'Distinct Source253 new opaque custody table owner/FORCE RLS/no-policy boundary changed';END IF;
     SELECT coalesce(jsonb_agg(jsonb_build_object('grantee',CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END,
      'grantor',pg_get_userbyid(a.grantor),'privilege',a.privilege_type,'grantable',a.is_grantable)
-     ORDER BY CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END,pg_get_userbyid(a.grantor),a.privilege_type,a.is_grantable),'[]'::jsonb)
+     ORDER BY (CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END)::text COLLATE pg_catalog."C",pg_get_userbyid(a.grantor)::text COLLATE pg_catalog."C",a.privilege_type COLLATE pg_catalog."C",a.is_grantable),'[]'::jsonb)
      INTO acl FROM pg_class c CROSS JOIN LATERAL aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE c.oid=obj;
    END IF;
-   SELECT coalesce(jsonb_agg(x ORDER BY x->>'grantee',x->>'grantor',x->>'privilege',(x->>'grantable')::boolean),'[]'::jsonb) INTO expected_acl
+   SELECT coalesce(jsonb_agg(x ORDER BY (x->>'grantee') COLLATE pg_catalog."C",(x->>'grantor') COLLATE pg_catalog."C",(x->>'privilege') COLLATE pg_catalog."C",(x->>'grantable')::boolean),'[]'::jsonb) INTO expected_acl
     FROM jsonb_array_elements(item->'expected_acl') x;
    IF acl IS DISTINCT FROM expected_acl THEN RAISE EXCEPTION 'Distinct Source253 exact new custody owner/runtime named ACL changed';END IF;
    IF strpos(item->>'object_identity','(')>0 THEN

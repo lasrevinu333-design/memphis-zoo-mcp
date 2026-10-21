@@ -81,7 +81,7 @@ BEGIN
      'definition_md5',item->'definition_md5','security_definer',item->'security_definer','volatility',item->'volatility','configuration',item->'configuration');
     SELECT coalesce(jsonb_agg(jsonb_build_object('grantee',CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END,
      'grantor',pg_get_userbyid(a.grantor),'privilege',a.privilege_type,'grantable',a.is_grantable)
-     ORDER BY CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END,pg_get_userbyid(a.grantor),a.privilege_type,a.is_grantable),'[]'::jsonb)
+     ORDER BY (CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END)::text COLLATE pg_catalog."C",pg_get_userbyid(a.grantor)::text COLLATE pg_catalog."C",a.privilege_type COLLATE pg_catalog."C",a.is_grantable),'[]'::jsonb)
      INTO named_acl FROM pg_proc p CROSS JOIN LATERAL aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE p.oid=obj;
     SELECT jsonb_object_agg(role,has_function_privilege(role,obj,'EXECUTE')) INTO effective
      FROM unnest(ARRAY['postgres','anon','authenticated','service_role','custodial_application_reader','static_weekly_control_plane','static_weekly_release_operator']) role;
@@ -99,7 +99,7 @@ BEGIN
     IF item->>'catalog_kind'='view' THEN actual:=actual-'row_security'-'force_row_security';expected:=expected-'row_security'-'force_row_security';END IF;
     SELECT coalesce(jsonb_agg(jsonb_build_object('grantee',CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END,
      'grantor',pg_get_userbyid(a.grantor),'privilege',a.privilege_type,'grantable',a.is_grantable)
-     ORDER BY CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END,pg_get_userbyid(a.grantor),a.privilege_type,a.is_grantable),'[]'::jsonb)
+     ORDER BY (CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END)::text COLLATE pg_catalog."C",pg_get_userbyid(a.grantor)::text COLLATE pg_catalog."C",a.privilege_type COLLATE pg_catalog."C",a.is_grantable),'[]'::jsonb)
      INTO named_acl FROM pg_class c CROSS JOIN LATERAL aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE c.oid=obj;
     SELECT jsonb_object_agg(role,(SELECT jsonb_object_agg(privilege,has_table_privilege(role,obj,privilege))
      FROM (SELECT DISTINCT privilege_type privilege FROM pg_class c CROSS JOIN LATERAL aclexplode(acldefault('r',c.relowner)) a WHERE c.oid=obj) rights))
@@ -112,7 +112,7 @@ BEGIN
    IF actual IS DISTINCT FROM expected OR namespace IS DISTINCT FROM item->>'schema'
     OR definition IS DISTINCT FROM item->>'current_definition_sql'
     OR public.static_weekly_digest_text(definition) IS DISTINCT FROM item->>'current_sha256'
-    OR (item ? 'acl' AND named_acl IS DISTINCT FROM (SELECT coalesce(jsonb_agg(x ORDER BY x->>'grantee',x->>'grantor',x->>'privilege',(x->>'grantable')::boolean),'[]'::jsonb) FROM jsonb_array_elements(item->'acl') x))
+    OR (item ? 'acl' AND named_acl IS DISTINCT FROM (SELECT coalesce(jsonb_agg(x ORDER BY (x->>'grantee') COLLATE pg_catalog."C",(x->>'grantor') COLLATE pg_catalog."C",(x->>'privilege') COLLATE pg_catalog."C",(x->>'grantable')::boolean),'[]'::jsonb) FROM jsonb_array_elements(item->'acl') x))
    THEN RAISE EXCEPTION 'Distinct existing Source252 exact current body/owner/options/named privilege profile changed';END IF;
    actual:=jsonb_build_object('object_oid',obj,'catalog',actual,'acl',named_acl,'column_acl',column_acl,'effective',effective,'definition_sha256',public.static_weekly_digest_text(definition));
    IF pass=0 THEN

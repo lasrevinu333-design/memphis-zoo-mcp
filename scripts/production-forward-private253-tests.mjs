@@ -1,3 +1,4 @@
+import {reverseNamedAclComparisonOnly} from './production-forward-acl-comparison-proof.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {readFileSync} from 'node:fs';
@@ -12,7 +13,7 @@ const digest=rows=>sha('['+order(rows).map(x=>JSON.stringify({object_kind:x[0],o
 const strip=s=>s.replace(/ grant [^;]+ to postgres(?: with grant option)?;/g,''),quote=s=>"'"+s.replaceAll("'","''")+"'";
 const raw=variant.match(/\$existing_profile253_json\$([\s\S]*?)\$existing_profile253_json\$/)[1],runtime=JSON.parse(raw);
 const block=variant.match(/-- BEGIN DISTINCT EXISTING ORIGINAL-POSTGRES SOURCE253 CLOSURE[\s\S]*?-- END DISTINCT EXISTING ORIGINAL-POSTGRES SOURCE253 CLOSURE\n/)[0];
-test('exact finite84 and original Source lineage bind canonical119 unchanged',()=>{assert.equal(data.scope,'DISTINCT_EXISTING_RUNTIME_PROFILE_NOT_NOAUTO_EQUIVALENCE');assert.equal(data.original_finite84_receipt_sha256,'8419679d6722478e3deec9c50659334043ec65fd335023ebadbabb068d0ab044');assert.equal(data.canonical119_sha256,'28275c65a49b26a21ee0f37538a0f9c337a45c5fb41f0fa701d2ffdf555f863b');assert.equal(data.required_executed119_sha256,sha(read('release/production-forward-source/20261010193211_native_private_custody_chunk_retention.sql')));for(const k of ['new_grants','revocations','owner_swaps','business_row_writes','production_authorized'])assert.equal(data[k],false);});
+test('exact finite84 and original Source lineage bind canonical119 unchanged',()=>{assert.equal(data.scope,'DISTINCT_EXISTING_RUNTIME_PROFILE_NOT_NOAUTO_EQUIVALENCE');assert.equal(data.original_finite84_receipt_sha256,'8419679d6722478e3deec9c50659334043ec65fd335023ebadbabb068d0ab044');assert.equal(data.canonical119_sha256,'28275c65a49b26a21ee0f37538a0f9c337a45c5fb41f0fa701d2ffdf555f863b');assert.equal(data.required_executed119_sha256,sha(reverseNamedAclComparisonOnly(read('release/production-forward-source/20261010193211_native_private_custody_chunk_retention.sql'),'20261010193211_native_private_custody_chunk_retention.sql')));for(const k of ['new_grants','revocations','owner_swaps','business_row_writes','production_authorized'])assert.equal(data[k],false);});
 test('original Source253 all6968 exact tuples independently reconstruct canonical120 digest',()=>{
  const original=new Map(p252.original_rows.map(x=>[key(x),[x[0],x[1],Number(x[2]),x[3]]]));assert.equal(sha(data.source_canary_original_sql),'d87c2c10574dbcaf542245a83b8019e66017b819a0abcc54d313074f831afb84');
  const entries=order(data.finite_new84.map(x=>[x.object_kind,x.object_identity])).map(x=>'('+quote(x[0])+','+quote(x[1])+','+quote('opaque original private custody only; no namespace semantics, ACK, work, resend, finalizer or key/reuse authority')+'),').join('\n');
