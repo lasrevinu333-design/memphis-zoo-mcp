@@ -1,7 +1,15 @@
 import assert from 'node:assert/strict';import fs from 'node:fs';import {join,resolve} from 'node:path';import {tmpdir} from 'node:os';import {createHash} from 'node:crypto';
-import {runTargetCaptureStep,writeTargetCaptureRefusal,OCTOBER_RECOVERY_PREDECESSORS,OCTOBER_RECOVERY_SOURCE_SHA256} from './release-migration-target-refusal.mjs';
+import {runTargetCaptureStep,writeTargetCaptureRefusal,OCTOBER_RECOVERY_PREDECESSORS,OCTOBER_RECOVERY_SOURCE_SHA256,CURRENT_GRANT_SERIALIZATION_SOURCE_FILE,CURRENT_GRANT_SERIALIZATION_SOURCE_SHA256,CURRENT_GRANT_SERIALIZATION_PREDECESSORS} from './release-migration-target-refusal.mjs';
 const root=resolve(new URL('..',import.meta.url).pathname);let checks=0;const check=async(name,work)=>{await work();checks++;};
 await check('exact fixed14 identities/hashes derive unchanged canonical57 Source',()=>{const bytes=fs.readFileSync(join(root,'supabase/migrations/20261002120000_october_dated_recovery_inventory_rebind.sql'));assert.equal(createHash('sha256').update(bytes).digest('hex'),OCTOBER_RECOVERY_SOURCE_SHA256);const rows=[...bytes.toString().matchAll(/\('([^']+)','([^']+)','([a-f0-9]{64})','([a-f0-9]{64})'\)/g)].map(m=>({kind:m[1],identity:m[2],captured_digest:m[3],live_digest:m[4]}));assert.deepEqual(OCTOBER_RECOVERY_PREDECESSORS,rows);assert.equal(rows.length,14);});
+await check('exact six87 grant tuples derive unchanged canonical Source, including alias/order pins',()=>{
+ const bytes=fs.readFileSync(join(root,'supabase/migrations',CURRENT_GRANT_SERIALIZATION_SOURCE_FILE));
+ assert.equal(createHash('sha256').update(bytes).digest('hex'),CURRENT_GRANT_SERIALIZATION_SOURCE_SHA256);
+ const block=bytes.toString().split('  for wanted in select * from (values')[1].split('  ) v(identity,old_reset_identity,expected_order,prior_sha256,current_sha256)')[0];
+ const rows=[...block.matchAll(/\('([^']+)',\s*'([^']+)',(\d+),\s*'([a-f0-9]{64})',\s*'([a-f0-9]{64})'\)/g)].map(m=>({kind:'grant',identity:m[1],old_reset_identity:m[2],expected_order:Number(m[3]),captured_digest:m[4],live_digest:m[5]}));
+ assert.deepEqual(CURRENT_GRANT_SERIALIZATION_PREDECESSORS,rows);assert.equal(rows.length,6);
+ assert.equal(CURRENT_GRANT_SERIALIZATION_SOURCE_SHA256,'8d8d60f1b10427f5c184488a9faa5e4f4bbb9ac2f11526ff921bb8c2eac70898');
+});
 function fixture({readFailure=false}={}){let aborted=false;const calls=[];return {calls,abort(){aborted=true;},async query(sql,args){calls.push({sql,args});if(sql==='rollback to savepoint custodial_target_migration_step'){aborted=false;return {rows:[]};}if(aborted)throw Error('25P02 no metadata read before rollback-to-savepoint');if(sql==='savepoint custodial_target_migration_step'||sql==='release savepoint custodial_target_migration_step'||sql.startsWith('set local search_path'))return {rows:[]};if(readFailure){aborted=true;throw Object.assign(Error('UNIT metadata denied'),{code:'42501'});}assert.ok(sql.startsWith('select '),'metadata SELECTs only');assert.ok(Array.isArray(args)&&OCTOBER_RECOVERY_PREDECESSORS.some(x=>args.includes(x.identity)),'fixed14 identities only');return {rows:[{UNIT:'captured metadata'}]};}};}
 const migration={order:57,file:'20261002120000_october_dated_recovery_inventory_rebind.sql',sha256:OCTOBER_RECOVERY_SOURCE_SHA256};
 await check('normal full/production step uses no savepoint or diagnostic SQL',async()=>{const db=fixture();let called=0;assert.equal(await runTargetCaptureStep({db,migration,targetCapture:false,run:async()=>{called++;return 'same-result';},onRefusal:()=>assert.fail()}),'same-result');assert.equal(called,1);assert.deepEqual(db.calls,[]);});
@@ -9,6 +17,47 @@ await check('successful capture step uses one savepoint and release only',async(
 await check('actual57 P0001 abort is recovered only for fixed metadata then rethrown, never continued',async()=>{const db=fixture();let diagnostic,runCalls=0;const original=Object.assign(Error('October recovery captured predecessor changed: static_weekly_v8_read_lunch_segments(date)'),{code:'P0001'});await assert.rejects(runTargetCaptureStep({db,migration,targetCapture:true,run:async()=>{runCalls++;db.abort();throw original;},onRefusal:value=>{diagnostic=value;}}),e=>e===original);assert.equal(runCalls,1);assert.equal(db.calls[1].sql,'rollback to savepoint custodial_target_migration_step');assert.equal(diagnostic.predecessors.length,14);assert.equal(diagnostic.sqlstate,'P0001');assert.ok(!db.calls.some(x=>/commit|release savepoint/.test(x.sql)));assert.ok(diagnostic.predecessors.every((x,i)=>x.expected===OCTOBER_RECOVERY_PREDECESSORS[i]));});
 await check('arbitrary private PG error text is absent from exported diagnostic',async()=>{const db=fixture();let diagnostic;const sentinel='UNIT_PRIVATE_BUSINESS_INPUT_MUST_NOT_EXPORT_20261021';const error=Object.assign(Error(sentinel),{code:'P0001'});await assert.rejects(runTargetCaptureStep({db,migration,targetCapture:true,run:async()=>{db.abort();throw error;},onRefusal:x=>diagnostic=x}),e=>e===error);assert.equal(diagnostic.reason_code,'TARGET_MIGRATION_SQL_REFUSAL');assert.equal(diagnostic.sqlstate,'P0001');assert.equal(Object.hasOwn(diagnostic,'reason'),false);assert.equal(JSON.stringify(diagnostic).includes(sentinel),false);assert.equal(error.message,sentinel,'original private failure remains unchanged');});
 await check('denied metadata read rolls back the diagnostic abort and preserves original refusal',async()=>{const db=fixture({readFailure:true});let captured;const error=Object.assign(Error('original57'),{code:'P0001'});await assert.rejects(runTargetCaptureStep({db,migration,targetCapture:true,run:async()=>{db.abort();throw error;},onRefusal:x=>captured=x}),e=>e===error);assert.equal(captured.metadata_read_failed,true);assert.equal(captured.code,'42501');assert.equal(db.calls.filter(x=>x.sql==='rollback to savepoint custodial_target_migration_step').length,2);});
+const migration87={order:87,file:CURRENT_GRANT_SERIALIZATION_SOURCE_FILE,sha256:CURRENT_GRANT_SERIALIZATION_SOURCE_SHA256};
+function grantFixture({shadow=null}={}){let aborted=false;const calls=[];return {calls,abort(){aborted=true;},async query(sql,args){
+ calls.push({sql,args});if(sql==='rollback to savepoint custodial_target_migration_step'){aborted=false;return {rows:[]};}
+ assert.equal(aborted,false,'no metadata query in aborted transaction');
+ if(sql==='savepoint custodial_target_migration_step'||sql.startsWith('set local search_path'))return {rows:[]};
+ assert.ok(sql.startsWith('select '),'metadata SELECTs only');
+ if(sql.includes('identity_oid,to_regprocedure($3)')){
+  assert.equal(args.length,3);const expected=CURRENT_GRANT_SERIALIZATION_PREDECESSORS.find(x=>x.identity===args[1]);assert.ok(expected);
+  assert.equal(args[0],expected.identity.startsWith('public.')?expected.identity:'public.'+expected.identity);assert.equal(args[2],expected.old_reset_identity);
+  return {rows:[{public_oid:'4242',identity_oid:shadow==='identity'?'9999':'4242',old_reset_oid:shadow==='old_reset'?'9999':'4242',public_schema:shadow!=='namespace'}]};
+ }
+ if(sql.includes("to_regprocedure('public.custodial_release_authority_current_grant_definition(text)')")){assert.equal(args,undefined);assert.ok(sql.includes('md5(p.prosrc)'));return {rows:[{UNIT:'fixed serializer metadata'}]};}
+ assert.ok(Array.isArray(args)&&args.length<=2&&CURRENT_GRANT_SERIALIZATION_PREDECESSORS.some(x=>args.includes(x.identity)||args.includes(x.identity.startsWith('public.')?x.identity:'public.'+x.identity)),'only exact six87 identities');
+ assert.ok(!sql.includes('OCTOBER')&&!sql.includes('events_app_events')&&!sql.includes('device_auth_credentials'));
+ return {rows:[{UNIT:'fixed six grant metadata'}]};
+ }};}
+await check('actual87 refusal selects six grants and bounded same-OID aliases, never old14 or operational data',async()=>{
+ const db=grantFixture();let diagnostic;const error=Object.assign(Error('Current grant serialization captured predecessor changed: custodial_release_canary_authority_surface()'),{code:'P0001'});
+ await assert.rejects(runTargetCaptureStep({db,migration:migration87,targetCapture:true,run:async()=>{db.abort();throw error;},onRefusal:x=>diagnostic=x}),e=>e===error);
+ assert.equal(diagnostic.metadata_source_file,CURRENT_GRANT_SERIALIZATION_SOURCE_FILE);assert.equal(diagnostic.metadata_source_sha256,CURRENT_GRANT_SERIALIZATION_SOURCE_SHA256);
+ assert.equal(diagnostic.predecessors.length,6);assert.ok(diagnostic.predecessors.every((x,i)=>x.expected===CURRENT_GRANT_SERIALIZATION_PREDECESSORS[i]&&x.captured_aliases.length===1));
+ assert.equal(diagnostic.grant_serializer.length,1);assert.equal(diagnostic.reason_code,'TARGET_MIGRATION_SQL_REFUSAL');assert.equal(diagnostic.sqlstate,'P0001');assert.equal(Object.hasOwn(diagnostic,'reason'),false);
+ const bindings=db.calls.filter(x=>x.sql.includes('identity_oid,to_regprocedure($3)'));assert.equal(bindings.length,6);
+ const aliasReads=db.calls.filter(x=>x.sql.includes('case when position('));assert.equal(aliasReads.length,6);
+ for(const c of aliasReads){assert.ok(c.sql.includes("where object_kind='grant'"));assert.ok(c.sql.includes('end=to_regprocedure($1)'));assert.ok(c.sql.includes('actual_definition_sha256'));assert.ok(c.args[0].startsWith('public.'));}
+ const rawMetadata=db.calls.filter(x=>x.sql.includes('from pg_proc p where p.oid=to_regprocedure($1)')&&x.sql.includes('md5(p.prosrc)'));assert.equal(rawMetadata.length,6);assert.ok(rawMetadata.every(x=>x.args[0].startsWith('public.')));
+ assert.equal(db.calls[1].sql,'rollback to savepoint custodial_target_migration_step');assert.ok(!db.calls.some(x=>/commit|release savepoint/.test(x.sql)));
+});
+for(const shadow of ['identity','old_reset','namespace'])await check('87 refuses shadow/nonpublic binding before current or alias metadata '+shadow,async()=>{
+ const db=grantFixture({shadow});let diagnostic;const error=Object.assign(Error('UNIT original87 refusal'),{code:'P0001'});
+ await assert.rejects(runTargetCaptureStep({db,migration:migration87,targetCapture:true,run:async()=>{db.abort();throw error;},onRefusal:x=>diagnostic=x}),e=>e===error);
+ assert.equal(diagnostic.metadata_read_failed,true);assert.equal(diagnostic.code,'FIXED_PUBLIC_GRANT_IDENTITY_MISMATCH');
+ assert.equal(db.calls.filter(x=>x.sql.startsWith('select ')).length,1);assert.ok(!db.calls.some(x=>x.sql.includes('case when position(')));
+});
+for(const key of ['order','sha256'])await check('changed87 canonical tuple cannot read diagnostic metadata '+key,async()=>{
+ const db=grantFixture();let diagnostic;const changed={...migration87,[key]:key==='order'?88:'0'.repeat(64)},error=Object.assign(Error('UNIT original private refusal'),{code:'P0001'});
+ await assert.rejects(runTargetCaptureStep({db,migration:changed,targetCapture:true,run:async()=>{db.abort();throw error;},onRefusal:x=>diagnostic=x}),e=>e===error);
+ assert.equal(diagnostic.metadata_read_failed,true);assert.equal(diagnostic.code,'ERR_ASSERTION');assert.ok(!db.calls.some(x=>x.sql.startsWith('select ')));
+});
+await check('normal full87 invokes no diagnostic/savepoint SQL',async()=>{const db=grantFixture();assert.equal(await runTargetCaptureStep({db,migration:migration87,targetCapture:false,run:async()=>23,onRefusal:()=>assert.fail()}),23);assert.deepEqual(db.calls,[]);});
+await check('87 arbitrary PG error message still never exported',async()=>{const db=grantFixture();let diagnostic;const sentinel='UNIT87_PRIVATE_DATA_MUST_REMAIN_IN_ORIGINAL_EXCEPTION';const error=Object.assign(Error(sentinel),{code:'P0001'});await assert.rejects(runTargetCaptureStep({db,migration:migration87,targetCapture:true,run:async()=>{db.abort();throw error;},onRefusal:x=>diagnostic=x}),e=>e===error);assert.ok(!JSON.stringify(diagnostic).includes(sentinel));assert.equal(error.message,sentinel);});
 const work=fs.mkdtempSync(join(tmpdir(),'UNIT-target-refusal-'));try{
  const receipt={scope:'target_preparation_failure',committed:false,rollback_verified:true,production_authorized:false,candidate_migration_admission:false,runtime_admission:false,full_rehearsal_attestation:false};
  await check('refusal metadata publication is exclusive0600, no success-admission shape',()=>{const path=join(work,'refusal.json');writeTargetCaptureRefusal(path,receipt);assert.equal(fs.statSync(path).mode&0o777,0o600);assert.deepEqual(JSON.parse(fs.readFileSync(path)),receipt);assert.throws(()=>writeTargetCaptureRefusal(path,receipt));});

@@ -87,11 +87,76 @@ export const OCTOBER_RECOVERY_PREDECESSORS=Object.freeze([
   }
 ].map(Object.freeze));
 export const OCTOBER_RECOVERY_SOURCE_SHA256='3ba81c38118b4b56543d2f89135bbdb7a6652c700c78b5dedcf898b3e60f6000';
+export const CURRENT_GRANT_SERIALIZATION_SOURCE_FILE="20261003220000_current_release_authority_completion.sql";
+export const CURRENT_GRANT_SERIALIZATION_SOURCE_SHA256="8d8d60f1b10427f5c184488a9faa5e4f4bbb9ac2f11526ff921bb8c2eac70898";
+export const CURRENT_GRANT_SERIALIZATION_PREDECESSORS=Object.freeze([
+  {
+    "kind": "grant",
+    "identity": "custodial_release_canary_authority_surface()",
+    "old_reset_identity": "public.custodial_release_canary_authority_surface()",
+    "expected_order": 1000073,
+    "captured_digest": "a843e6ab1177177e039163a3d520b95d6552de8105474a48e390b25302692f48",
+    "live_digest": "b7d461eda320ec386b55ce3490063e09848a83723999acdd741e83cad0460498"
+  },
+  {
+    "kind": "grant",
+    "identity": "public.static_weekly_v3_assert_draft_incumbency(uuid)",
+    "old_reset_identity": "static_weekly_v3_assert_draft_incumbency(uuid)",
+    "expected_order": 1000199,
+    "captured_digest": "d6f202a5c174036cf978cebd88e2274f5b54039dedf614f4808086701cb8305a",
+    "live_digest": "8f5efab4cf9957046185fc19bf9bfb23be3c48900e414f9422be0e05baaba1ca"
+  },
+  {
+    "kind": "grant",
+    "identity": "public.static_weekly_v4_hydrate_compiler_source(jsonb,date)",
+    "old_reset_identity": "static_weekly_v4_hydrate_compiler_source(jsonb,date)",
+    "expected_order": 1000198,
+    "captured_digest": "57b252cee39b5f763518cb957528a6fea8eabae017351f0a4c7483d62df9598a",
+    "live_digest": "cd7d80e0f473c00254a875badd84ec701b370489bd1eb64dbe568b72784e08af"
+  },
+  {
+    "kind": "grant",
+    "identity": "public.static_weekly_v2_materialize_projection(uuid,date,text,text,jsonb,jsonb,text,jsonb,bigint,uuid,text,text)",
+    "old_reset_identity": "static_weekly_v2_materialize_projection(uuid,date,text,text,jsonb,jsonb,text,jsonb,bigint,uuid,text,text)",
+    "expected_order": 950028,
+    "captured_digest": "cfea7c5bfcf61a00e64b56e38e1c98f93d7a973c373205b89bc3b708aad0902b",
+    "live_digest": "419abb490483777437126a3593d601da11e9d3db32b777e21be802291a97ce6b"
+  },
+  {
+    "kind": "grant",
+    "identity": "public.static_weekly_v6_read_schedule_segments_dated_base(date)",
+    "old_reset_identity": "static_weekly_v6_read_schedule_segments_dated_base(date)",
+    "expected_order": 950168,
+    "captured_digest": "4bbcbf22890a56bb56ff4d05a6ba7c95bbac648b755b22291267589d8261aabd",
+    "live_digest": "6161a03a11c95bbe898fc4b27ae54d9ba3e66eade32fc5fc29e3b75da1f85201"
+  },
+  {
+    "kind": "grant",
+    "identity": "public.static_weekly_v8_read_lunch_segments_dated_base(date)",
+    "old_reset_identity": "static_weekly_v8_read_lunch_segments_dated_base(date)",
+    "expected_order": 950170,
+    "captured_digest": "8eb43bf71ab7c0bcb60bbf818bd54d77d43a4163fcfa19a4f3962948a7ad3f80",
+    "live_digest": "a38bf3e78db3a49335dd315a33ad98605deeea8638c8d6596a7bc82402795b41"
+  }
+].map(Object.freeze));
 // Fixed metadata only. Recovery definitions are Source/catalog material, not
 // operational table DATA or credentials. No caller-supplied SQL or identities.
-export async function readTargetRefusalPredecessors(db) {
+async function readFixedRefusalPredecessors(db,predecessors,{aliases=false}={}) {
  const rows=[];
- for(const expected of OCTOBER_RECOVERY_PREDECESSORS){
+ for(const expected of predecessors){
+  let publicIdentity=expected.identity;
+  if(aliases){
+   // Mirror canonical87's public_oid binding before resolving any current or
+   // historical alias. The first tuple is deliberately unqualified as DATA.
+   publicIdentity=expected.identity.startsWith('public.')?expected.identity:'public.'+expected.identity;
+   const binding=(await db.query(`select to_regprocedure($1)::oid::text public_oid,
+     to_regprocedure($2)::oid::text identity_oid,to_regprocedure($3)::oid::text old_reset_oid,
+     p.pronamespace='public'::regnamespace public_schema
+     from pg_proc p where p.oid=to_regprocedure($1)`,[publicIdentity,expected.identity,expected.old_reset_identity])).rows;
+   if(binding.length!==1||binding[0].public_schema!==true||!binding[0].public_oid
+    ||binding[0].identity_oid!==binding[0].public_oid||binding[0].old_reset_oid!==binding[0].public_oid)
+    throw Object.assign(new Error('Fixed public grant identities do not resolve to the same public function.'),{code:'FIXED_PUBLIC_GRANT_IDENTITY_MISMATCH'});
+  }
   const captured=(await db.query(`select restore_order,object_kind,object_identity,definition_sql,definition_sha256,
     public.static_weekly_digest_text(definition_sql) actual_definition_sha256
     from public.custodial_release_authority_restore_inventory where object_kind=$1 and object_identity=$2`,[expected.kind,expected.identity])).rows;
@@ -108,16 +173,40 @@ export async function readTargetRefusalPredecessors(db) {
     md5(p.prosrc) body_md5,md5(pg_get_functiondef(p.oid)) definition_md5,p.prosecdef,p.provolatile,p.proconfig,
     (select jsonb_agg(jsonb_build_object('grantee',coalesce(r.rolname,'PUBLIC'),'grantor',a.grantor::regrole::text,'privilege',a.privilege_type,'grantable',a.is_grantable)
       order by coalesce(r.rolname,'PUBLIC'),a.privilege_type,a.is_grantable) from aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a left join pg_roles r on r.oid=a.grantee) acl
-    from pg_proc p where p.oid=to_regprocedure($1)`,[expected.identity])).rows;
+    from pg_proc p where p.oid=to_regprocedure($1)`,[publicIdentity])).rows;
   else if(expected.kind==='view')metadata=(await db.query(`select c.oid::regclass::text identity,c.relowner::regrole::text owner_name,c.reloptions
     from pg_class c where c.oid=to_regclass($1)`,[expected.identity])).rows;
   else metadata=(await db.query(`select n.nspname schema_name,r.relname table_name,r.relowner::regrole::text owner_name,t.tgname,t.tgenabled,
     p.oid::regprocedure::text function_signature,p.proowner::regrole::text function_owner,md5(p.prosrc) function_body_md5
     from pg_trigger t join pg_class r on r.oid=t.tgrelid join pg_namespace n on n.oid=r.relnamespace join pg_proc p on p.oid=t.tgfoid
     where $1=quote_ident(n.nspname)||'.'||quote_ident(r.relname)||'.'||quote_ident(t.tgname) and not t.tgisinternal`,[expected.identity])).rows;
-  rows.push({expected,captured,current,metadata});
+  // Only aliases of these six independently fixed public function identities.
+  // These are recovery definitions; no operational table DATA is selected.
+  const capturedAliases=aliases?(await db.query(`select restore_order,object_kind,object_identity,definition_sql,definition_sha256,
+    public.static_weekly_digest_text(definition_sql) actual_definition_sha256
+    from public.custodial_release_authority_restore_inventory where object_kind='grant'
+    and case when position('(' in object_identity)>0 then to_regprocedure(object_identity) end=to_regprocedure($1)
+    order by restore_order,object_identity`,[publicIdentity])).rows:null;
+  rows.push({expected,captured,current,metadata,...(aliases?{captured_aliases:capturedAliases}:{})});
  }
  return rows;
+}
+export async function readTargetRefusalPredecessors(db) {
+ return readFixedRefusalPredecessors(db,OCTOBER_RECOVERY_PREDECESSORS);
+}
+export async function readCurrentGrantRefusalPredecessors(db) {
+ return readFixedRefusalPredecessors(db,CURRENT_GRANT_SERIALIZATION_PREDECESSORS,{aliases:true});
+}
+async function readSelectedTargetRefusal(db,migration) {
+ if(migration.file!==CURRENT_GRANT_SERIALIZATION_SOURCE_FILE)
+  return {predecessors:await readTargetRefusalPredecessors(db)};
+ assert.equal(migration.order,87);assert.equal(migration.sha256,CURRENT_GRANT_SERIALIZATION_SOURCE_SHA256);
+ return {metadata_source_file:CURRENT_GRANT_SERIALIZATION_SOURCE_FILE,
+  metadata_source_sha256:CURRENT_GRANT_SERIALIZATION_SOURCE_SHA256,
+  predecessors:await readCurrentGrantRefusalPredecessors(db),
+  grant_serializer:(await db.query(`select p.oid::regprocedure::text signature,p.proowner::regrole::text owner_name,
+    md5(p.prosrc) body_md5,md5(pg_get_functiondef(p.oid)) definition_md5,p.prosecdef,p.provolatile,p.proconfig
+    from pg_proc p where p.oid=to_regprocedure('public.custodial_release_authority_current_grant_definition(text)')`)).rows};
 }
 export async function runTargetCaptureStep({db,migration,run,targetCapture,onRefusal}) {
  if(!targetCapture)return run();
@@ -126,7 +215,7 @@ export async function runTargetCaptureStep({db,migration,run,targetCapture,onRef
  catch(error){
   await db.query('rollback to savepoint custodial_target_migration_step');
   let diagnostic;
-  try {await db.query('set local search_path=pg_catalog,public,extensions');diagnostic={predecessors:await readTargetRefusalPredecessors(db)};}
+  try {await db.query('set local search_path=pg_catalog,public,extensions');diagnostic=await readSelectedTargetRefusal(db,migration);}
   catch(readError){await db.query('rollback to savepoint custodial_target_migration_step');diagnostic={metadata_read_failed:true,code:String(readError.code||'METADATA_READ_FAILED')};}
   onRefusal({migration:{order:migration.order,file:migration.file,sha256:migration.sha256},
    sqlstate:String(error.code||'SQL_ERROR'),reason_code:'TARGET_MIGRATION_SQL_REFUSAL',...diagnostic});
