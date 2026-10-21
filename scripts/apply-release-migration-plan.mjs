@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {runTargetCaptureStep,writeTargetCaptureRefusal} from './release-migration-target-refusal.mjs';
 import {prepareTargetCapture,writeTargetCapture} from './release-migration-target-capture.mjs';
 import {resolveReleaseMigrationSource,releaseMigrationPlanIdentity} from './production-forward-source.mjs';
 
@@ -217,6 +218,8 @@ try {
   if (beforeLedger.rows.some((row) => plan.some((item) => item.source_migration_version === row.version))) {
     throw new Error("One or more pending release migrations are already present; refusing a partial or replayed plan.");
   }
+  if (targetCapture) captureContext.locked_source={fingerprint:beforeCatalogIdentity.fingerprint,
+    counts:catalogCounts(beforeCatalog),ledger:beforeLedger.rows,database:currentDatabase};
   const outlookBefore = await outlookSnapshot(db);
   if (outlookBefore.present !== state.observed_production.outlook_event_sync_table_present) {
     throw new Error("Restored Outlook event-sync authority presence differs from the admitted production state.");
@@ -226,18 +229,24 @@ try {
   await db.query("select set_config('custodial.deployment_project_ref',$1,true)",[projectRef]);
   const applied = [];
   for (const migration of plan) {
-    try { await db.query(migration.body); }
-    catch (error) {
+    try {
+      await runTargetCaptureStep({db,migration,targetCapture,
+        onRefusal:diagnostic=>{captureContext.refusal=diagnostic;},
+        run:async()=>{
+          await db.query(migration.body);
+          await db.query(`
+            insert into supabase_migrations.schema_migrations(
+              version,statements,name,created_by,idempotency_key,rollback
+            ) values($1,$2::text[],$3,$4,null,null)
+          `,[migration.source_migration_version,[migration.sql],migration.phase,actor]);
+        },
+      });
+    } catch (error) {
       if (!targetCapture) throw error;
       const refusal = new Error(`Target preparation migration ${migration.order} ${migration.file} refused (${String(error.code || 'SQL_ERROR')}): ${String(error.message || '').slice(0, 1200)}`);
       refusal.code = error.code;
       throw refusal;
     }
-    await db.query(`
-      insert into supabase_migrations.schema_migrations(
-        version,statements,name,created_by,idempotency_key,rollback
-      ) values($1,$2::text[],$3,$4,null,null)
-    `, [migration.source_migration_version, [migration.sql], migration.phase, actor]);
     applied.push({ order: migration.order, version: migration.source_migration_version, file: basename(migration.file), sha256: migration.sha256 });
     if (failAfterOrder === migration.order) {
       if (!allowFailureProbe) throw new Error("Release migration failure injection is restricted to a disposable loopback database.");
@@ -362,7 +371,34 @@ try {
   }, null, 2));
   }
 } catch (error) {
-  await db.query("rollback").catch(() => {});
+  if (!targetCapture) {
+    await db.query("rollback").catch(() => {});
+    throw error;
+  }
+  await db.query("rollback");
+  if (targetCapture && captureContext.refusal && captureContext.locked_source) {
+    // Never emit a success capture or continue the plan. This receipt exists
+    // only after whole rollback and independent exact Source readback.
+    const original=captureContext.locked_source;
+    await db.query('begin isolation level repeatable read read only');
+    const sourceCatalog=normalizeCatalog(await captureCatalogFromSnapshot(db),original.database);
+    const sourceLedger=await db.query('select version::text,name::text,statements from supabase_migrations.schema_migrations order by version');
+    const preserved=fingerprintSchemaCatalog(sourceCatalog).fingerprint===original.fingerprint
+      &&stableJson(catalogCounts(sourceCatalog))===stableJson(original.counts)
+      &&stableJson(sourceLedger.rows)===stableJson(original.ledger);
+    await db.query('rollback');
+    if(!preserved)throw new Error('Target-refusal whole rollback failed exact original catalog/ledger readback.');
+    captureContext.assertSourceCurrent();
+    writeTargetCaptureRefusal(resolve(process.env.RUNNER_TEMP,'production-migration-target-capture-refusal.json'),{
+      schema:'custodial.production-migration-target-refusal.v1',scope:'target_preparation_failure',
+      committed:false,rollback_verified:true,production_authorized:false,candidate_migration_admission:false,
+      runtime_admission:false,full_rehearsal_attestation:false,project_ref:projectRef,
+      candidate_commit:candidateCommit,candidate_tree:candidateTree,archive_digest:captureContext.archive_digest,
+      source_catalog_fingerprint:original.fingerprint,source_ledger_sha256:sourceLedgerSha256,
+      source_ledger_count:original.ledger.length,owned_target:captureContext.target,actor_profile:captureContext.actor_profile,
+      plan_sha256:planSha256,refusal:captureContext.refusal,completed_at:new Date().toISOString(),
+    });
+  }
   throw error;
 } finally {
   await db.end().catch(() => {});

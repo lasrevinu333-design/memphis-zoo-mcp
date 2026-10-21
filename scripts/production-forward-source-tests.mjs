@@ -47,5 +47,5 @@ function client(deny=false){return {async query(sql){
 }};}
 const captured=await captureCatalogFromSnapshot(client());assert.equal(fingerprintSchemaCatalog(captured).fingerprint,fingerprintSchemaCatalog(data).fingerprint);assert.equal(nativeCronReads,1);checks++;
 await assert.rejects(captureCatalogFromSnapshot(client(true)),error=>error.code==='42501');checks++;
-const application=fs.readFileSync(join(root,'scripts/apply-release-migration-plan.mjs'),'utf8');assert.equal((application.match(/await captureCatalogFromSnapshot\(db\)/g)||[]).length,3);assert.ok(!application.includes('await captureSchemaCatalog('));checks++;
+const application=fs.readFileSync(join(root,'scripts/apply-release-migration-plan.mjs'),'utf8');assert.equal((application.match(/await captureCatalogFromSnapshot\(db\)/g)||[]).length,4);assert.ok(!application.includes('await captureSchemaCatalog('));checks++;
 console.log(JSON.stringify({status:'PASS_SOURCE_ONLY',checks,old_pending:state.pending_migrations.length,actual_manifest_producer_consumer_join:true,canonical_routine_bodies_unchanged:true,SQL_executed:false,populated_real_owner_rehearsal:'PENDING',production:false}));

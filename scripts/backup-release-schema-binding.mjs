@@ -3,6 +3,13 @@ import {createHash} from 'node:crypto';
 import {fingerprintSchemaCatalog} from './schema-fingerprint-catalog.mjs';
 const sha=value=>createHash('sha256').update(value).digest('hex');
 const HASH=/^[a-f0-9]{64}$/;
+// Already installed one-off SQL is retained outside migration discovery. Its
+// original bytes still match the exact ledger; this grants no replay rights.
+function extensionSourceLocation(extension) {
+ const location=Object.hasOwn(extension,'source_location')?extension.source_location:'migration';
+ assert.ok(location==='migration'||location==='retained_installed','Unknown installed source location');
+ return location;
+}
 
 // A backup must not fabricate a new deployed application identity just because
 // separately authorized schema changes were installed first. This exception is
@@ -25,7 +32,7 @@ export function bindBackupSchemaExtension({projectRef,releaseIdentity,migrationL
   assert.equal(row.version,expected.ledger_version);assert.equal(row.name,expected.ledger_name);
   assert.ok(Array.isArray(row.statements)&&row.statements.length===1&&typeof row.statements[0]==='string');
   assert.match(expected.source_file,/^[0-9]{14}_[a-z][a-z0-9_]*\.sql$/);assert.match(expected.sql_sha256,HASH);
-  const bytes=readSource(expected.source_file);assert.equal(sha(bytes),expected.sql_sha256,'Declared source bytes changed');
+  const bytes=readSource(expected.source_file,extensionSourceLocation(expected));assert.equal(sha(bytes),expected.sql_sha256,'Declared source bytes changed');
   assert.equal(sha(row.statements[0]),expected.sql_sha256,'Installed schema statement differs from source');
   observed.push({...expected});
  }
@@ -57,6 +64,7 @@ export function verifyArchivedSchemaExtension({summary,binding,catalog,ledger}) 
  for(let i=0;i<extension.length;i++){
   assert.equal(extension[i].version,binding.extensions[i].ledger_version);
   assert.equal(extension[i].name,binding.extensions[i].ledger_name);
+  extensionSourceLocation(binding.extensions[i]);
   assert.ok(Array.isArray(extension[i].statements)&&extension[i].statements.length===1);
   assert.equal(sha(extension[i].statements[0]),binding.extensions[i].sql_sha256);
  }

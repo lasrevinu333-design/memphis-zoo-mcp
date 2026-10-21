@@ -1,3 +1,4 @@
+import {createHash} from 'node:crypto';
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';
 import{bindBackupSchemaExtension,verifyArchivedSchemaExtension}from'./backup-release-schema-binding.mjs';
 import{catalogConnectionOptions,readCatalogReadOnly,NATIVE_CRON_CATALOG_SQL}from'./schema-catalog-readonly-client.mjs';
@@ -8,14 +9,14 @@ const declaration=JSON.parse(fs.readFileSync(new URL('../release/production-back
 const catalog=Object.fromEntries(Object.keys(SCHEMA_CATALOG_QUERIES).map(key=>[key,[]]));
 const declaredSourceFingerprint=declaration.observed_catalog_fingerprint;
 declaration.observed_catalog_fingerprint=fingerprintSchemaCatalog(catalog).fingerprint;
-test('source declaration is the exact independently observed predeployment boundary',()=>{assert.equal(declaredSourceFingerprint,'1e16187577e00c47c3520688cb32c06cfcf52a870982e566820e0a6a1e66e3da');assert.equal(declaration.observed_ledger_count,234);assert.equal(declaration.observed_ledger_head,'20261006203931');assert.equal(declaration.extensions.length,4);});
-const source=name=>fs.readFileSync(new URL('../supabase/migrations/'+name,import.meta.url));
+test('source declaration is the exact independently observed predeployment boundary',()=>{assert.equal(declaredSourceFingerprint,'0096e7c488aca86f1d38b061561696b2d4ac409036f063ffc9f196625b9ee9c2');assert.equal(declaration.observed_ledger_count,235);assert.equal(declaration.observed_ledger_head,'20261021111917');assert.equal(declaration.extensions.length,5);});
+const source=(name,location='migration')=>fs.readFileSync(new URL((location==='retained_installed'?'../release/installed-source/':'../supabase/migrations/')+name,import.meta.url));
 const prefix=Array.from({length:229},(_,i)=>({version:String(10000000000000+i),name:'synthetic-history',statements:['select 1;']}));
 prefix.push({version:'20260920010000',name:'event_reminder_static_weekly_authority',statements:['select 1;']});
-const ledger=[...prefix,...declaration.extensions.map(r=>({version:r.ledger_version,name:r.ledger_name,statements:[source(r.source_file).toString('utf8')]}))];
+const ledger=[...prefix,...declaration.extensions.map(r=>({version:r.ledger_version,name:r.ledger_name,statements:[source(r.source_file,r.source_location).toString('utf8')]}))];
 const input=()=>({projectRef:declaration.project_ref,releaseIdentity:structuredClone(declaration.deployed_release),migrationLedger:structuredClone(ledger),catalog:structuredClone(catalog),declaration:structuredClone(declaration),readSource:source});
 let binding;
-test('exact known installed extension is archived without pretending application deployment',()=>{binding=bindBackupSchemaExtension(input());assert.equal(binding.runtime_migration_head,'20260920010000');assert.equal(binding.captured_migration_head,'20261006203931');assert.equal(binding.application_upgrade_claimed,false);assert.equal(binding.production_mutation_authorized,false);assert.equal(binding.extensions.length,4);});
+test('exact known installed extension is archived without pretending application deployment',()=>{binding=bindBackupSchemaExtension(input());assert.equal(binding.runtime_migration_head,'20260920010000');assert.equal(binding.captured_migration_head,'20261021111917');assert.equal(binding.application_upgrade_claimed,false);assert.equal(binding.production_mutation_authorized,false);assert.equal(binding.extensions.length,5);});
 const mutations=[['wrong project',x=>x.projectRef='aaaaaaaaaaaaaaaaaaaa'],['different runtime',x=>x.releaseIdentity.backend_commit='1'.repeat(40)],['wrong release head',x=>x.releaseIdentity.migration_head='20261001000000'],['missing ledger row',x=>x.migrationLedger.pop()],['extra migration',x=>x.migrationLedger.push({version:'20261007000000'})],['duplicate ledger version',x=>x.migrationLedger[1].version=x.migrationLedger[0].version],['rewritten source SQL',x=>x.migrationLedger.at(-1).statements[0]+='\nselect 1;'],['multiple source statements',x=>x.migrationLedger.at(-1).statements.push('select 1;')],['different source bytes',x=>x.readSource=()=>Buffer.from('not the source')],['unexpected privilege',x=>x.catalog.routine_grants.push({...x.catalog.routine_grants[0],grantee:'anon'})],['wrong target fingerprint',x=>x.declaration.observed_catalog_fingerprint='0'.repeat(64)],['mutation authority flag',x=>x.declaration.production_mutation_authorized=true],['source path traversal',x=>x.declaration.extensions[0].source_file='../private.pem']];
 for(const[label,change]of mutations)test(label+' fails before backup acceptance',()=>{const x=input();change(x);assert.throws(()=>bindBackupSchemaExtension(x));});
 function archive(){const x=input(),b=bindBackupSchemaExtension(x);return{summary:{project_ref:x.projectRef,source_identity:{release:x.releaseIdentity,migration_head:b.captured_migration_head,migration_ledger_count:ledger.length}},binding:b,catalog:x.catalog,ledger:x.migrationLedger};}
@@ -162,7 +163,7 @@ test('PRIVATE_RECOVERY_historical fixed rows retain exact original hash and form
  const captured=await readRecoveryCatalog(recoveryCatalogFixture({rows}));
  assert.equal(fingerprintSchemaCatalog(captured).fingerprint,originalHash);
  assert.deepEqual(Object.keys(captured),Object.keys(catalog));
- assert.equal(declaredSourceFingerprint,'1e16187577e00c47c3520688cb32c06cfcf52a870982e566820e0a6a1e66e3da');
+ assert.equal(declaredSourceFingerprint,'0096e7c488aca86f1d38b061561696b2d4ac409036f063ffc9f196625b9ee9c2');
 });
 
 // Only the new RECOVERY_OWNER_ members are selected for this product leaf.
@@ -232,7 +233,7 @@ test('RECOVERY_OWNER_absent private namespace preserves the exact public histori
  const captured=await readRecoveryCatalog(recoveryCatalogFixture({rows,schemaOwners:[]}));
  assert.equal(Object.hasOwn(captured,'recovery_schema_owners'),false);assert.deepEqual(Object.keys(captured),Object.keys(catalog));
  assert.equal(fingerprintSchemaCatalog(captured).fingerprint,'63e017cbf003621c2496755685aa463efdcbf28d26a039fd168ba4d1707837d0');
- assert.equal(declaredSourceFingerprint,'1e16187577e00c47c3520688cb32c06cfcf52a870982e566820e0a6a1e66e3da');
+ assert.equal(declaredSourceFingerprint,'0096e7c488aca86f1d38b061561696b2d4ac409036f063ffc9f196625b9ee9c2');
 });
 test('RECOVERY_OWNER_historical private catalog remains its original hash not new owner admission',()=>{
  // Same synthetic rows as the retained pre-change capture, ordered by its
@@ -244,4 +245,31 @@ test('RECOVERY_OWNER_historical private catalog remains its original hash not ne
  assert.equal(fingerprintSchemaCatalog(historical).fingerprint,'b1ee20255061eba16aa9c9dff4784e9693cdd56aac65fde76931100e1494eef2');
  const {saved,bound}=ownerBoundArchive(historical);assert.equal(verifyArchivedSchemaExtension(saved),true);
  assert.equal(bound.application_upgrade_claimed,false);assert.equal(bound.production_mutation_authorized,false);
+});
+
+
+test('installed operational-day source is byte-bound and excluded from both replay selectors',()=>{
+ const extension=declaration.extensions.at(-1),name=extension.source_file;
+ assert.equal(extension.source_location,'retained_installed');
+ assert.equal(source(name,extension.source_location).byteLength,4184);
+ assert.equal(fs.existsSync(new URL('../supabase/migrations/'+name,import.meta.url)),false);
+ const discovered=fs.readdirSync(new URL('../supabase/migrations/',import.meta.url)).filter(file=>file.endsWith('.sql'));
+ assert.equal(discovered.includes(name),false);
+ // Full canonical Source retains the original four installed-prefix files.
+ // Only the separately installed fifth grant is outside canonical replay.
+ for(const installed of declaration.extensions.slice(0,-1)){
+  assert.equal(discovered.includes(installed.source_file),true);
+  const canonical=fs.readFileSync(new URL('../supabase/migrations/'+installed.source_file,import.meta.url));
+  assert.equal(createHash('sha256').update(canonical).digest('hex'),installed.sql_sha256);
+  assert.equal(createHash('sha256').update(source(installed.source_file,installed.source_location)).digest('hex'),installed.sql_sha256);
+ }
+ const pending=JSON.parse(fs.readFileSync(new URL('../release/production-migration-state.json',import.meta.url),'utf8')).pending_migrations;
+ assert.equal(pending.some(row=>row.file===name||row.source_migration_version===extension.ledger_version),false);
+});
+test('unknown retained source location refuses before a source file can be borrowed',()=>{
+ const x=input();x.declaration.extensions.at(-1).source_location='other';let opened=false;
+ const read=x.readSource;x.readSource=(name,location)=>{if(name===x.declaration.extensions.at(-1).source_file)opened=true;return read(name,location);};
+ assert.throws(()=>bindBackupSchemaExtension(x),/Unknown installed source location/);assert.equal(opened,false);
+ const a=archive();a.binding={...a.binding,extensions:a.binding.extensions.map(row=>({...row}))};a.binding.extensions.at(-1).source_location='other';
+ assert.throws(()=>verifyArchivedSchemaExtension(a),/Unknown installed source location/);
 });

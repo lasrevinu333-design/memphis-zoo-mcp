@@ -332,6 +332,7 @@ jobs:
           path: |
             ${{ runner.temp }}/production-backup-migration-rehearsal.jsonl
             ${{ runner.temp }}/production-migration-target-capture.json
+            ${{ runner.temp }}/production-migration-target-capture-refusal.json
             ${{ runner.temp }}/production-backup-migration-rehearsal-attestation.json
             ${{ runner.temp }}/production-backup-migration-rehearsal-postgres.log
             ${{ runner.temp }}/production-backup-rehearsal-backend.log
