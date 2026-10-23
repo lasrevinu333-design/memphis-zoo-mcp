@@ -3,20 +3,91 @@ import {readFileSync,writeFileSync} from 'node:fs';
 import {execFileSync} from 'node:child_process';
 import {resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {createHash} from 'node:crypto';
 import {materializeVerifiedArchive,readVerifiedArchiveSourceBinding,readVerifiedRestoreTableSelection} from './disaster-recovery-archive.mjs';
 import {requireSigningKey} from './disaster-recovery-crypto.mjs';
 
 // Detached provenance/result DATA only. Neither function admits SQL, restores
 // rows, resumes an app or signs candidate migration/runtime attestations.
-export function assertBackupOnlySourceBinding({summary,run,backupRunId,repository}) {
+// One reviewed split-identity workflow profile, not caller-supplied pins.
+// Its whole tree differs from the tool tree ONLY at this workflow. A future
+// workflow/tool change needs a separately reviewed profile, never a flag.
+const pinnedWorkflow = Object.freeze({
+  repository:'lasrevinu333-design/memphis-zoo-mcp',
+  branch:'custodial-backup-source-20261021',
+  path:'.github/workflows/production-disaster-recovery-backup.yml',
+  toolCommit:'1bcc95afa2634a616fa8a063579d48b8c1ad18ed',
+  toolTree:'4985b79ae533c62cacf8cc35197631573df9b528',
+  workflowTree:'d2ea4b634c3cc320e2c35e4257b6e6e1998e8498',
+  workflowBlob:'4ecc7896eb190f0b45733416abad000717153e73',
+  workflowSha256:'aea5419affb01837b29b4ea3fe7aaa7d56f43d750fd494ef82a9ae4d02b03ca1',
+});
+function gitObject(kind,bytes) {
+  return createHash('sha1').update(Buffer.from(`${kind} ${bytes.length}\0`)).update(bytes).digest('hex');
+}
+function proofBytes(proof,name,limit) {
+  const text=proof[name];
+  assert.equal(typeof text,'string');assert.ok(text.length>0&&text.length<=4*Math.ceil(limit/3));
+  const bytes=Buffer.from(text,'base64');
+  assert.ok(bytes.length>0&&bytes.length<=limit);assert.equal(bytes.toString('base64'),text);
+  return bytes;
+}
+function commitTree(bytes) {
+  const text=bytes.toString('utf8');assert.ok(Buffer.from(text,'utf8').equals(bytes));
+  const end=text.indexOf('\n\n');assert.ok(end>0);
+  const header=text.slice(0,end).split('\n');
+  assert.match(header[0],/^tree [0-9a-f]{40}$/);
+  assert.equal(header.filter(line=>line.startsWith('tree ')).length,1);
+  assert.deepEqual(header.filter(line=>line.startsWith('parent ')),['parent '+pinnedWorkflow.toolCommit]);
+  return header[0].slice(5);
+}
+function treeEntry(bytes,name,mode) {
+  let offset=0;const entries=new Map();
+  while(offset<bytes.length) {
+    const space=bytes.indexOf(32,offset),zero=bytes.indexOf(0,space+1);
+    assert.ok(space>offset&&zero>space+1&&zero+21<=bytes.length);
+    const entryMode=bytes.subarray(offset,space).toString('ascii');
+    assert.ok(['40000','100644','100755','120000'].includes(entryMode));
+    const rawName=bytes.subarray(space+1,zero),entryName=rawName.toString('utf8');
+    assert.ok(Buffer.from(entryName,'utf8').equals(rawName)&&!entryName.includes('/')&&!entries.has(entryName));
+    entries.set(entryName,{mode:entryMode,sha:bytes.subarray(zero+1,zero+21).toString('hex')});offset=zero+21;
+  }
+  assert.equal(offset,bytes.length);const entry=entries.get(name);assert.ok(entry);assert.equal(entry.mode,mode);return entry.sha;
+}
+function assertBackupRun({summary,run,backupRunId,repository}) {
   assert.match(String(backupRunId),/^[1-9][0-9]*(?![\s\S])/);
   assert.equal(String(run.id),String(backupRunId));
   assert.equal(run.repository.full_name,repository);
   assert.equal(run.status,'completed');assert.equal(run.conclusion,'success');
-  assert.equal(run.head_sha,summary.source_identity.backup_tool_commit);
   assert.equal(run.path,'.github/workflows/production-disaster-recovery-backup.yml');
   assert.ok(Number.isSafeInteger(summary.database_row_count)&&summary.database_row_count>0,
     'Populated original DATA is required.');
+}
+export function assertBackupOnlySourceBinding({summary,run,backupRunId,repository,workflowProof}) {
+  assertBackupRun({summary,run,backupRunId,repository});
+  // Historical same-SHA captures keep their exact original admission. No new
+  // proof is needed and no workflow/tool identity is silently reinterpreted.
+  if(run.head_sha===summary.source_identity.backup_tool_commit)return;
+  assert.equal(repository,pinnedWorkflow.repository);
+  assert.equal(run.head_branch,pinnedWorkflow.branch);assert.equal(run.event,'workflow_dispatch');
+  assert.ok(Number.isSafeInteger(run.run_attempt)&&run.run_attempt>0);
+  assert.match(run.head_sha,/^[0-9a-f]{40}$/);
+  assert.equal(summary.source_identity.backup_tool_commit,pinnedWorkflow.toolCommit);
+  assert.equal(summary.source_identity.backup_tool_tree,pinnedWorkflow.toolTree);
+  assert.ok(workflowProof&&typeof workflowProof==='object');
+  assert.deepEqual(Object.keys(workflowProof).sort(),['commit','githubTree','rootTree','version','workflow','workflowsTree']);
+  assert.equal(workflowProof.version,'backup-workflow-git-proof.v1');
+  const commit=proofBytes(workflowProof,'commit',32768),root=proofBytes(workflowProof,'rootTree',262144);
+  const github=proofBytes(workflowProof,'githubTree',65536),workflows=proofBytes(workflowProof,'workflowsTree',524288);
+  const workflow=proofBytes(workflowProof,'workflow',65536);
+  assert.equal(gitObject('commit',commit),run.head_sha);
+  assert.equal(commitTree(commit),pinnedWorkflow.workflowTree);
+  assert.equal(gitObject('tree',root),pinnedWorkflow.workflowTree);
+  assert.equal(gitObject('tree',github),treeEntry(root,'.github','40000'));
+  assert.equal(gitObject('tree',workflows),treeEntry(github,'workflows','40000'));
+  assert.equal(treeEntry(workflows,'production-disaster-recovery-backup.yml','100644'),pinnedWorkflow.workflowBlob);
+  assert.equal(gitObject('blob',workflow),pinnedWorkflow.workflowBlob);
+  assert.equal(createHash('sha256').update(workflow).digest('hex'),pinnedWorkflow.workflowSha256);
 }
 export function backupOnlyRestoreReceipt({summary,restore,toolCommit,backupRunId,archiveDigest,storageTableCount}) {
   assert.match(toolCommit,/^[0-9a-f]{40}(?![\s\S])/);
@@ -83,7 +154,21 @@ if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)) {
         writeFileSync(p+'/backup-run-provenance.json',raw,{mode:0o600,flag:'wx'});
       }
       const run=JSON.parse(readFileSync(p+'/backup-run-provenance.json','utf8'));
-      assertBackupOnlySourceBinding({summary,run,backupRunId:process.env.BACKUP_RUN_ID,repository:process.env.GITHUB_REPOSITORY});
+      let workflowProof;
+      if(run.head_sha!==summary.source_identity.backup_tool_commit) {
+        if(mode==='source-binding') {
+          assertBackupRun({summary,run,backupRunId:process.env.BACKUP_RUN_ID,repository:process.env.GITHUB_REPOSITORY});
+          assert.match(run.head_sha,/^[0-9a-f]{40}$/);
+          const rawGit=(kind,sha)=>{assert.match(sha,/^[0-9a-f]{40}$/);return execFileSync('git',['cat-file',kind,sha],{maxBuffer:2*1024*1024});};
+          const commit=rawGit('commit',run.head_sha),rootTree=rawGit('tree',commitTree(commit));
+          const githubTree=rawGit('tree',treeEntry(rootTree,'.github','40000'));
+          const workflowsTree=rawGit('tree',treeEntry(githubTree,'workflows','40000'));
+          const workflow=rawGit('blob',treeEntry(workflowsTree,'production-disaster-recovery-backup.yml','100644'));
+          workflowProof={version:'backup-workflow-git-proof.v1',...Object.fromEntries(Object.entries({commit,rootTree,githubTree,workflowsTree,workflow}).map(([key,bytes])=>[key,bytes.toString('base64')]))};
+        } else workflowProof=JSON.parse(readFileSync(p+'/backup-workflow-git-proof.json','utf8'));
+      }
+      assertBackupOnlySourceBinding({summary,run,backupRunId:process.env.BACKUP_RUN_ID,repository:process.env.GITHUB_REPOSITORY,workflowProof});
+      if(mode==='source-binding'&&workflowProof!==undefined)writeFileSync(p+'/backup-workflow-git-proof.json',JSON.stringify(workflowProof)+'\n',{mode:0o600,flag:'wx'});
       if(mode==='restore-result') {
         const restore=JSON.parse(readFileSync(p+'/backup-only-owned-restore-result.json','utf8'));
         console.log(JSON.stringify(backupOnlyRestoreReceipt({summary,restore,toolCommit:process.env.GITHUB_SHA,backupRunId:process.env.BACKUP_RUN_ID,archiveDigest:binding.archive_digest,
