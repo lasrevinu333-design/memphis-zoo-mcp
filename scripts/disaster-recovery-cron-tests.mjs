@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { compareCronJobs, normalizedCronJobs } from "./disaster-recovery-cron.mjs";
 
 const jobs = [{
-  jobid: 7,
+  jobid: "7",
   schedule: "5 * * * *",
   command: "select public.expire_stale_open_sessions();",
   nodename: "localhost",
