@@ -11,16 +11,16 @@ const binding=JSON.parse(readFileSync(resolve(root,'release/current291-staged-so
 const plan=readMigrationReplayPlan(root);const checks=[];
 const check=(name,fn)=>{fn();checks.push(name);};
 const sha=b=>createHash('sha256').update(b).digest('hex');
-check('exact134 base and157 current pending members',()=>{
- assert.equal(plan.baseCount,134);assert.equal(plan.files.length,291);
- assert.equal(state.pending_migrations.length,157);
+check('exact134 base and159 current pending members',()=>{
+ assert.equal(plan.baseCount,134);assert.equal(plan.files.length,293);
+ assert.equal(state.pending_migrations.length,159);
  assert.deepEqual(state.pending_migrations.map(x=>x.file),plan.files.slice(134));
 });
 check('every original applied-prefix byte remains exact',()=>{
  assert.equal(binding.preserved134.length,134);
  for(const x of binding.preserved134)assert.equal(sha(readFileSync(resolve(root,'supabase/migrations',x.file))),x.sha256);
 });
-check('all157 source versions/order/hash resolve, only27 explicit existing-owner variants',()=>{
+check('all159 source versions/order/hash resolve, only27 explicit existing-owner variants',()=>{
  assert.equal(state.pending_migrations.filter(x=>x.forward_source).length,27);
  for(const [i,x]of state.pending_migrations.entries()){
   assert.equal(x.order,i+1);assert.equal(x.source_migration_version,x.file.slice(0,14));
@@ -49,12 +49,12 @@ check('current unresolved target refuses normal preflight before DB exists',()=>
 const unit={canonical_source_schema_fingerprint:'a'.repeat(64),expected_catalog_counts:{functions:1},production_ledger_count:1,public_function_count:1};
 check('existing target structural prerequisite accepts fully typed UNIT only',()=>assert.doesNotThrow(()=>assertCapturedTargetCatalog(unit)));
 for(const key of Object.keys(unit))check('missing target '+key+' refuses',()=>{const x={...unit};delete x[key];assert.throws(()=>assertCapturedTargetCatalog(x));});
-check('original217-table proof stays mandatory at157, no155 bypass',()=>{
+check('original217-table proof stays mandatory at159, no155 bypass',()=>{
  const source=readFileSync(resolve(root,'scripts/apply-release-migration-plan.mjs'),'utf8');
- assert.ok(source.includes('rehearsal&&plan.length===157'));
+ assert.ok(source.includes('rehearsal&&plan.length===159'));
  assert.ok(!source.includes('rehearsal&&plan.length===155'));
  const m=JSON.parse(readFileSync(resolve(root,'release/production-data-preservation/original-235.json')));
- assert.equal(m.plan.length,157);assert.equal(m.tables.length,182);assert.equal(m.production_authorized,false);
+ assert.equal(m.plan.length,159);assert.equal(m.tables.length,182);assert.equal(m.production_authorized,false);
  assert.deepEqual(m.plan.map(x=>x.file),state.pending_migrations.map(x=>x.file));
 });
 check('normal apply preflight is before any client/query; transaction rollback body retained',()=>{

@@ -540,7 +540,7 @@
       {
         "path": "release/current291-staged-source-binding.json",
         "mode": "100644",
-        "object_id": "38a117e0aaf15569c764bc7619def1289e7225cb"
+        "object_id": "91fe8589833f2c3bf362e355365d3ecb7b932209"
       },
       {
         "path": "release/disaster-recovery-runtime-contract.json",
@@ -590,7 +590,7 @@
       {
         "path": "release/production-data-preservation/original-235.json",
         "mode": "100644",
-        "object_id": "9da4e9acb94dc40131660144846639172ff8cd5b"
+        "object_id": "45f95e3d422e4261c4a7c4e2b9d785fa4bf0a1fd"
       },
       {
         "path": "release/production-forward-source/20261002090000_manager_issue_outcomes.sql",
@@ -735,7 +735,7 @@
       {
         "path": "release/production-migration-state.json",
         "mode": "100644",
-        "object_id": "af1181c10201130cf55e19e1ccf0b8eb07020e15"
+        "object_id": "ad4e553fa14dac708d0c9a754adf6291be977f9f"
       },
       {
         "path": "release/production-schema-observation-20260922.json",
@@ -790,7 +790,7 @@
       {
         "path": "scripts/apply-release-migration-plan.mjs",
         "mode": "100644",
-        "object_id": "e02bbdfd9a911314396c7b9171667e89fd18ab04"
+        "object_id": "f9bb4fe3951e5d50a84b8c6128e955588fe713a7"
       },
       {
         "path": "scripts/assigned-activation-transport-database-tests.mjs",
@@ -940,7 +940,7 @@
       {
         "path": "scripts/current291-production-plan-source-tests.mjs",
         "mode": "100644",
-        "object_id": "4035f486f9ee233d94c24d7ff3d8c3d7f0017918"
+        "object_id": "8cdc491c205a233938f743dcdba7a390bae9d879"
       },
       {
         "path": "scripts/custodial-atomic-commit-database-tests.mjs",
@@ -1420,7 +1420,7 @@
       {
         "path": "scripts/isolated-release-data-preservation.mjs",
         "mode": "100644",
-        "object_id": "055c728bbe90b2b9cb49b60c1e54dec56a9d70fb"
+        "object_id": "d63332145461d4eae0e20d56ccfdf082334b005f"
       },
       {
         "path": "scripts/isolated-restore-lease-shim-tests.mjs",
@@ -1920,7 +1920,7 @@
       {
         "path": "scripts/release-migration-preservation-caller-tests.mjs",
         "mode": "100644",
-        "object_id": "06536a6eee88a4bd01252a020c63ec050f146148"
+        "object_id": "4f858581f5a0f51807fdf008d97e3c51d959c629"
       },
       {
         "path": "scripts/release-migration-registered-vacancy-refusal.mjs",
@@ -1935,7 +1935,7 @@
       {
         "path": "scripts/release-migration-target-capture.mjs",
         "mode": "100644",
-        "object_id": "142f5aee2ad87bd60e7b600582db5cd162c27092"
+        "object_id": "2c6611904262d60718b19feef7566a9e80d797ef"
       },
       {
         "path": "scripts/release-migration-target-refusal.mjs",
@@ -2450,7 +2450,7 @@
       {
         "path": "scripts/static-weekly-vacate-roster-slot-database-tests.mjs",
         "mode": "100644",
-        "object_id": "2d4bf8055773a9b6d0f52266852bcf6555835776"
+        "object_id": "1fde3e6646d627fd934102e86a094a22af2a9a52"
       },
       {
         "path": "scripts/static-weekly-vacate-roster-slot-fixture-tests.mjs",
@@ -2480,7 +2480,7 @@
       {
         "path": "scripts/verified-visit-completion-integration-tests.mjs",
         "mode": "100644",
-        "object_id": "687d332d2c40184dcbede0583083d011243f458b"
+        "object_id": "23e1a696e9898d8e8862e682ba5952af8264c337"
       },
       {
         "path": "scripts/verified-visit-reminder-database-tests.mjs",
@@ -2803,9 +2803,14 @@
         "object_id": "dadbc4568af8a95510856433369bd842ade443c8"
       },
       {
+        "path": "src/completion-selection-read-boundary.js",
+        "mode": "100644",
+        "object_id": "ee6c0ea687a531826c6fa38ec74d75cedaeebbc1"
+      },
+      {
         "path": "src/completion-taxonomy-manager.js",
         "mode": "100644",
-        "object_id": "fe79f906a847ec79491b0da352ca2c6968b281e4"
+        "object_id": "9c501e9ec8892b6e6ed17c17ee0c09d4bdce95d7"
       },
       {
         "path": "src/config/env.js",
@@ -2900,7 +2905,7 @@
       {
         "path": "src/index.js",
         "mode": "100644",
-        "object_id": "fd21e2691c65c694cfeb71d2c1c6ad2f8bd392b5"
+        "object_id": "85baae0d368d5c7a5e9237ffcf8fce0fb2b7f76f"
       },
       {
         "path": "src/integrated-backend-authority-release-evidence.js",
@@ -3245,7 +3250,7 @@
       {
         "path": "supabase/canonical/migration-replay-order.json",
         "mode": "100644",
-        "object_id": "10ebbe78a24f2f12e2ad1d95e61b506fcbd7d9bd"
+        "object_id": "b25c8dd6276c572413f0e0eddd1fa8dbf0d13fb7"
       },
       {
         "path": "supabase/canonical/production-schema-fingerprint-input.json",
@@ -5318,13 +5323,23 @@
         "object_id": "ac8fa55f363b7731b874594cf227d73dab743bac"
       },
       {
+        "path": "supabase/migrations/20261025094420_authority_identity_renderer_counterparts.sql",
+        "mode": "100644",
+        "object_id": "1864d8250b3ddda2aca6208ba4a31773860a481f"
+      },
+      {
+        "path": "supabase/migrations/20261025124437_manager_completion_evidence_opaque_session_domain.sql",
+        "mode": "100644",
+        "object_id": "7251086e053be8d168811c95aa07e5f3de544eea"
+      },
+      {
         "path": "tmp/write_probe.txt",
         "mode": "100644",
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 1039,
-    "migration_path_count": 291,
+    "authority_path_count": 1042,
+    "migration_path_count": 293,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
   },
@@ -6207,6 +6222,12 @@
     },
     {
       "name": "20261022071830_recurring_normal_notification_plan.sql"
+    },
+    {
+      "name": "20261025094420_authority_identity_renderer_counterparts.sql"
+    },
+    {
+      "name": "20261025124437_manager_completion_evidence_opaque_session_domain.sql"
     }
   ],
   "release_boundary": "Prepare distinct minimum-32-character backend, native-route, and employee-device credential secrets before cutover; configure database digests immediately after the migrations that create each configuration function, retain the bridge backend artifact through the scan-snapshot phase, require manager-code recovery without phone-local work loss for any device-credential generation mismatch, and require the executable health/restoration probes before traffic changes."

@@ -1,5 +1,5 @@
 {
-  "state": "SOURCE_ONLY_CURRENT291_POPULATED_TARGET_UNRESOLVED",
+  "state": "SOURCE_ONLY_CURRENT293_POPULATED_TARGET_UNRESOLVED",
   "preserved134": [
     {
       "file": "00000000000000_production_baseline.sql",
@@ -1501,9 +1501,9 @@
     }
   ],
   "current_replay_manifest": {
-    "path": "/home/eric/Documents/Codex/2026-09-13/i-x20/work/autonomous-repair-20260923/overnight-readiness-20261006/lean-held-correction-integration-20261011/backend/supabase/canonical/migration-replay-order.json",
-    "sha256": "041d5dc2c3ad3d7af06babd48a254e3d6b4610e3cf8a392715e5ffa303bfd8fa",
-    "bytes": 55269
+    "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/inventory-ack/backend-current1043-selected292-and-opaque293-generator-inputs-source03-current293-tail-assertion/after/supabase/canonical/migration-replay-order.json",
+    "sha256": "ff3bc79c2576eb4e3a72295ea92d08a74c8ac6b42a2cf3fee41c97642aa3c539",
+    "bytes": 55656
   },
   "current_forward_manifest": {
     "path": "/home/eric/Documents/Codex/2026-09-13/i-x20/work/autonomous-repair-20260923/overnight-readiness-20261006/lean-held-correction-integration-20261011/backend/release/production-forward-source/manifest.json",
@@ -1523,5 +1523,6 @@
   "fresh_SQL_imported": false,
   "actual_target_catalog": null,
   "actual_target_counts": null,
-  "populated_profile_compatibility": null
+  "populated_profile_compatibility": null,
+  "retained_filename_precision": "current291 filename retained as existing protocol name; current supplied manifest293, no oldSourceYEStransfer"
 }

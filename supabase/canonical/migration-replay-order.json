@@ -1180,6 +1180,14 @@
         {
           "name": "20261022071830_recurring_normal_notification_plan.sql",
           "sha256": "f3083dba31b1973cd42692362ceda5e4c08d505c063ceb505c75214dd4e16c95"
+        },
+        {
+          "name": "20261025094420_authority_identity_renderer_counterparts.sql",
+          "sha256": "19e55cfdc9f1ddfd34c2912892ac23979ad5fc44a45da7e444a008b1da0a8c9b"
+        },
+        {
+          "name": "20261025124437_manager_completion_evidence_opaque_session_domain.sql",
+          "sha256": "ef296210e35b3e6b0118d0ca84bee0db6152b039547960bc05803cfd320c77a8"
         }
       ]
     }
