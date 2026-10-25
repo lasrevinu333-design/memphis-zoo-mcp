@@ -1,4 +1,10 @@
 #!/usr/bin/env node
+import {assertReleaseWorkflowSource} from './release-migration-workflow-preflight.mjs';
+import {openIsolatedPreservationArchive} from './release-migration-isolated-preservation-archive.mjs';
+import {prepareIsolatedReleaseDataPreservation} from './isolated-release-data-preservation.mjs';
+import {runTargetCaptureStep,writeTargetCaptureRefusal} from './release-migration-target-refusal.mjs';
+import {prepareTargetCapture,writeTargetCapture} from './release-migration-target-capture.mjs';
+import {resolveReleaseMigrationSource,releaseMigrationPlanIdentity} from './production-forward-source.mjs';
 
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -11,7 +17,8 @@ import {
   stableJsonFileSha256,
   verifyBinding,
 } from "./disaster-recovery-crypto.mjs";
-import { captureSchemaCatalog, fingerprintSchemaCatalog } from "./schema-fingerprint-catalog.mjs";
+import { fingerprintSchemaCatalog } from "./schema-fingerprint-catalog.mjs";
+import {captureCatalogFromSnapshot} from "./schema-catalog-readonly-client.mjs";
 import {
   TASK_LOCAL_PROVENANCE_KIND,
   TASK_LOCAL_RUNNER_PATH,
@@ -20,7 +27,7 @@ import {
 
 const { Client } = pg;
 const root = resolve(new URL("..", import.meta.url).pathname);
-const state = JSON.parse(readFileSync(resolve(root, "release/production-migration-state.json"), "utf8"));
+let state = JSON.parse(readFileSync(resolve(root, "release/production-migration-state.json"), "utf8"));
 const databaseUrl = String(process.env.SUPABASE_DB_URL || process.env.DATABASE_URL || "").trim();
 const databaseCaCertPath = String(process.env.SUPABASE_DB_CA_CERT_PATH || "").trim();
 const projectRef = String(process.env.SUPABASE_PROJECT_REF || "").trim();
@@ -31,12 +38,23 @@ const rehearsal = String(process.env.RELEASE_MIGRATION_REHEARSAL || "false").toL
 const candidateCommit = String(process.env.RELEASE_MIGRATION_CANDIDATE_COMMIT || "").trim().toLowerCase();
 const candidateTree = String(process.env.RELEASE_MIGRATION_CANDIDATE_TREE || "").trim().toLowerCase();
 
+const targetCapture = String(process.env.RELEASE_MIGRATION_TARGET_CAPTURE || 'false') === 'true';
+let captureContext = null;
+// A normal apply must have a complete current target before opening a DB.
+// The existing targetCapture route separately enforces signed archive + owned
+// loopback postgres-only rollback, and is the producer of these missing facts.
+if (!targetCapture) assertReleaseWorkflowSource(root);
+
 if (!apply) throw new Error("RELEASE_MIGRATION_APPLY=true is required.");
 if (!databaseUrl || projectRef !== state.project_ref || confirmedRef !== projectRef) {
   throw new Error("SUPABASE_DB_URL and exact project/confirmation identity from production-migration-state.json are required.");
 }
 if (!actor || !/^[a-zA-Z0-9 ._@:-]{2,160}$/.test(actor)) throw new Error("RELEASE_MIGRATION_NAMED_ACTOR must identify the applying operator.");
 if (!/^[0-9a-f]{40}$/.test(candidateCommit) || !/^[0-9a-f]{40}$/.test(candidateTree)) throw new Error("Exact release migration candidate commit and tree are required.");
+if (targetCapture) {
+  captureContext = prepareTargetCapture({backendRoot:root,state,databaseUrl,rehearsal,apply,candidateCommit,candidateTree,env:process.env});
+  state = captureContext.state;
+}
 if (!Array.isArray(state.pending_migrations) || state.pending_migrations.length !== state.target.pending_migration_count) {
   throw new Error("Pending migration inventory is incomplete.");
 }
@@ -61,9 +79,7 @@ function migrationPlan() {
   return state.pending_migrations.map((item, index) => {
     if (item.order !== index + 1 || item.source_migration_version !== item.file.slice(0, 14)
         || !item.file.endsWith(`_${item.phase}.sql`)) throw new Error("Pending migration order, version, phase, or filename is inconsistent.");
-    const path = resolve(root, "supabase/migrations", item.file);
-    const sql = readFileSync(path, "utf8");
-    if (sha256(sql) !== item.sha256) throw new Error(`Pending migration hash mismatch for ${item.file}.`);
+    const {sql} = resolveReleaseMigrationSource(root,item);
     return { ...item, sql, body: transactionBody(sql, item.file) };
   });
 }
@@ -75,7 +91,7 @@ async function outlookSnapshot(db) {
 }
 
 const plan = migrationPlan();
-const planIdentity = plan.map(({ order, source_migration_version, file, sha256: digest }) => ({ order, source_migration_version, file, sha256: digest }));
+const planIdentity = releaseMigrationPlanIdentity(plan);
 const planSha256 = sha256(stableJson(planIdentity));
 const targetUrl = new URL(databaseUrl);
 const allowFailureProbe = /^(127\.0\.0\.1|localhost)$/.test(targetUrl.hostname)
@@ -89,6 +105,10 @@ if ((testSourceCatalogFingerprint || testSourceCatalogCounts) && (!allowFailureP
 const expectedSourceCatalogFingerprint = testSourceCatalogFingerprint || state.observed_production.catalog_privilege_fingerprint;
 const expectedSourceCatalogCounts = testSourceCatalogCounts || state.observed_production.catalog_counts;
 let sourceLedgerSha256 = String(process.env.RELEASE_MIGRATION_SOURCE_LEDGER_SHA256 || "").trim();
+if (captureContext && sourceLedgerSha256 !== captureContext.source_ledger_sha256) {
+  captureContext.archive.cleanup();
+  throw new Error('Target capture must bind the exact authenticated populated archive ledger.');
+}
 let authorizationId = null;
 let authorizationProvenanceKind = rehearsal ? "isolated-rehearsal" : null;
 if (rehearsal) {
@@ -156,9 +176,33 @@ const db = new Client({
   application_name: "memphis-zoo-release-migration-plan",
   ...(databaseCaCertPath ? { ssl: { ca: readFileSync(resolve(databaseCaCertPath), "utf8"), rejectUnauthorized: true } } : {}),
 });
-await db.connect();
+let isolatedPreservationArchive=null;
+let transactionStarted=false;
 try {
+// BEGIN ISOLATED PRESERVATION ARCHIVE
+isolatedPreservationArchive=rehearsal&&plan.length===157
+ ?openIsolatedPreservationArchive({backendRoot:root,databaseUrl,rehearsal,apply,targetCapture,candidateCommit,candidateTree,
+   sourceLedgerSha256,captureContext,env:process.env}):null;
+// END ISOLATED PRESERVATION ARCHIVE
+  await db.connect();
+  if (targetCapture) {
+    const profile = (await db.query(`select current_user actor,session_user original_actor,
+      (select datdba::regrole::text from pg_database where datname=current_database()) database_owner,
+      (select rolsuper from pg_roles where rolname=current_user) superuser,
+      (select rolbypassrls from pg_roles where rolname=current_user) bypassrls,
+      current_setting('cron.launch_active_jobs') cron_active,
+      current_setting('cron.database_name') cron_database,current_database() database_name,
+      inet_server_addr()::text server_address`)).rows[0];
+    if (profile.actor!=='postgres'||profile.original_actor!=='postgres'||profile.database_owner!=='postgres'
+      ||profile.superuser!==false||profile.bypassrls!==true||profile.cron_active!=='off'
+      ||profile.cron_database!==profile.database_name) {
+      throw new Error('Target capture requires the unchanged postgres owner on its isolated cron-disabled loopback target.');
+    }
+    captureContext.actor_profile=profile;
+    captureContext.assertSourceCurrent();
+  }
   await db.query("begin isolation level serializable");
+  transactionStarted=true;
   await db.query("set local lock_timeout='5s'");
   await db.query("set local statement_timeout='180s'");
   await db.query("select pg_advisory_xact_lock(hashtextextended('memphis-zoo-release-migration-plan',0))");
@@ -172,7 +216,7 @@ try {
   `);
   if (applicationTables.rowCount) await db.query(`lock table ${applicationTables.rows.map((row) => row.table_name).join(",")} in access exclusive mode`);
   const currentDatabase = String((await db.query("select current_database() database_name")).rows[0].database_name);
-  const beforeCatalog = normalizeCatalog(await captureSchemaCatalog({ query: (sql) => db.query(sql) }), currentDatabase);
+  const beforeCatalog = normalizeCatalog(await captureCatalogFromSnapshot(db), currentDatabase);
   const beforeCatalogIdentity = fingerprintSchemaCatalog(beforeCatalog);
   if (beforeCatalogIdentity.fingerprint !== expectedSourceCatalogFingerprint
       || stableJson(catalogCounts(beforeCatalog)) !== stableJson(expectedSourceCatalogCounts)) {
@@ -189,18 +233,39 @@ try {
   if (beforeLedger.rows.some((row) => plan.some((item) => item.source_migration_version === row.version))) {
     throw new Error("One or more pending release migrations are already present; refusing a partial or replayed plan.");
   }
+  if (targetCapture) captureContext.locked_source={fingerprint:beforeCatalogIdentity.fingerprint,
+    counts:catalogCounts(beforeCatalog),ledger:beforeLedger.rows,database:currentDatabase};
   const outlookBefore = await outlookSnapshot(db);
   if (outlookBefore.present !== state.observed_production.outlook_event_sync_table_present) {
     throw new Error("Restored Outlook event-sync authority presence differs from the admitted production state.");
   }
+  // Only after locked source/ledger admission; the finite SQL variants also
+  // require their exact project + unchanged postgres session owner internally.
+  await db.query("select set_config('custodial.deployment_project_ref',$1,true)",[projectRef]);
+  // BEGIN ISOLATED PRESERVATION SNAPSHOT
+  const originalDataPreservation=isolatedPreservationArchive
+   ?await prepareIsolatedReleaseDataPreservation({client:db,backendRoot:root,sourceCatalog:beforeCatalog,plan,verifiedArchive:isolatedPreservationArchive.archive}):null;
+  // END ISOLATED PRESERVATION SNAPSHOT
   const applied = [];
   for (const migration of plan) {
-    await db.query(migration.body);
-    await db.query(`
-      insert into supabase_migrations.schema_migrations(
-        version,statements,name,created_by,idempotency_key,rollback
-      ) values($1,$2::text[],$3,$4,null,null)
-    `, [migration.source_migration_version, [migration.sql], migration.phase, actor]);
+    try {
+      await runTargetCaptureStep({db,migration,targetCapture,
+        onRefusal:diagnostic=>{captureContext.refusal=diagnostic;},
+        run:async()=>{
+          await db.query(migration.body);
+          await db.query(`
+            insert into supabase_migrations.schema_migrations(
+              version,statements,name,created_by,idempotency_key,rollback
+            ) values($1,$2::text[],$3,$4,null,null)
+          `,[migration.source_migration_version,[migration.sql],migration.phase,actor]);
+        },
+      });
+    } catch (error) {
+      if (!targetCapture) throw error;
+      const refusal = new Error(`Target preparation migration ${migration.order} ${migration.file} refused (${String(error.code || 'SQL_ERROR')}): ${String(error.message || '').slice(0, 1200)}`);
+      refusal.code = error.code;
+      throw refusal;
+    }
     applied.push({ order: migration.order, version: migration.source_migration_version, file: basename(migration.file), sha256: migration.sha256 });
     if (failAfterOrder === migration.order) {
       if (!allowFailureProbe) throw new Error("Release migration failure injection is restricted to a disposable loopback database.");
@@ -232,12 +297,79 @@ try {
   if (beforeLedger.rows.some((row) => stableJson(afterByVersion.get(row.version)) !== stableJson(row))) {
     throw new Error("An earlier migration-ledger entry changed while applying the release plan.");
   }
-  const afterCatalog = normalizeCatalog(await captureSchemaCatalog({ query: (sql) => db.query(sql) }), currentDatabase);
+  // BEGIN ISOLATED PRESERVATION VERIFY
+  const originalDataPreservationReceipt=originalDataPreservation?await originalDataPreservation.verify():null;
+  // END ISOLATED PRESERVATION VERIFY
+  const afterCatalog = normalizeCatalog(await captureCatalogFromSnapshot(db), currentDatabase);
   const afterCatalogIdentity = fingerprintSchemaCatalog(afterCatalog);
-  if (afterCatalogIdentity.fingerprint !== state.target.canonical_source_schema_fingerprint
-      || stableJson(catalogCounts(afterCatalog)) !== stableJson(state.target.expected_catalog_counts)) {
+  if (!targetCapture && (afterCatalogIdentity.fingerprint !== state.target.canonical_source_schema_fingerprint
+      || stableJson(catalogCounts(afterCatalog)) !== stableJson(state.target.expected_catalog_counts))) {
     throw new Error("Locked post-migration catalog does not equal the exact reviewed target catalog and privilege state.");
   }
+  if (targetCapture) {
+    // Target DATA is retained only after the whole transaction has rolled back
+    // and both original catalog and ledger have been independently read back.
+    const readerOwners=(await db.query(`
+      select n.nspname schema_name,p.proname function_name,
+        pg_get_function_identity_arguments(p.oid) identity_arguments,
+        p.proowner::regrole::text owner_name,md5(p.prosrc) body_md5,
+        md5(pg_get_functiondef(p.oid)) definition_md5,p.prosecdef,p.provolatile,p.proconfig,
+        (select jsonb_agg(jsonb_build_object('grantee',coalesce(r.rolname,'PUBLIC'),
+          'privilege',a.privilege_type,'grantable',a.is_grantable)
+          order by coalesce(r.rolname,'PUBLIC'),a.privilege_type,a.is_grantable)
+         from aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+         left join pg_roles r on r.oid=a.grantee) acl
+      from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+      where (n.nspname='custodial_release_identity' and p.proname in
+        ('read_current_original_dashboard_completions_v1','read_current_verified_dashboard_checks_v1'))
+        or n.nspname='custodial_recovery'
+      order by n.nspname,p.proname,pg_get_function_identity_arguments(p.oid)
+    `)).rows;
+    const recoveryGuard=(await db.query(`
+      select n.nspname schema_name,c.relname table_name,c.relowner::regrole::text owner_name,
+        t.tgname,t.tgenabled,md5(pg_get_triggerdef(t.oid,true)) definition_md5
+      from pg_class c join pg_namespace n on n.oid=c.relnamespace
+      join pg_trigger t on t.tgrelid=c.oid
+      where n.nspname='public' and c.relname='custodial_release_authority_restore_inventory'
+        and t.tgname='trg_custodial_release_authority_restore_inventory_immutable'
+    `)).rows;
+    const privateSchemaOwners=(await db.query(`
+      select nspname schema_name,nspowner::regrole::text owner_name from pg_namespace
+      where nspname in('custodial_release_identity','custodial_recovery') order by nspname
+    `)).rows;
+    captureContext.assertSourceCurrent();
+    await db.query('rollback');
+    await db.query('begin isolation level repeatable read read only');
+    const rolledCatalog=normalizeCatalog(await captureCatalogFromSnapshot(db),currentDatabase);
+    const rolledLedger=await db.query('select version::text,name::text,statements from supabase_migrations.schema_migrations order by version');
+    const rollbackVerified=fingerprintSchemaCatalog(rolledCatalog).fingerprint===beforeCatalogIdentity.fingerprint
+      &&stableJson(catalogCounts(rolledCatalog))===stableJson(catalogCounts(beforeCatalog))
+      &&stableJson(rolledLedger.rows)===stableJson(beforeLedger.rows);
+    await db.query('rollback');
+    if(!rollbackVerified)throw new Error('Target preparation rollback did not preserve the exact original catalog and ledger.');
+    captureContext.assertSourceCurrent();
+    writeTargetCapture(captureContext.output,{
+      schema:'custodial.production-migration-target-preparation.v1',scope:'target_preparation',
+      committed:false,rollback_verified:true,production_authorized:false,candidate_migration_admission:false,
+      runtime_admission:false,full_rehearsal_attestation:false,project_ref:projectRef,
+      candidate_commit:candidateCommit,candidate_tree:candidateTree,archive_digest:captureContext.archive_digest,
+      owned_target:captureContext.target,actor_profile:captureContext.actor_profile,
+      actual_private_routine_metadata:readerOwners,actual_recovery_inventory_guard:recoveryGuard,
+      actual_private_schema_owners:privateSchemaOwners,source_data_preservation:originalDataPreservationReceipt,
+      source_catalog_fingerprint:beforeCatalogIdentity.fingerprint,source_ledger_sha256:sourceLedgerSha256,
+      source_ledger_count:beforeLedger.rowCount,source_ledger_head:beforeHead.version,
+      source_authority_migration_count:134,canonical_source_count:291,
+      canonical_replay_manifest_sha256:'041d5dc2c3ad3d7af06babd48a254e3d6b4610e3cf8a392715e5ffa303bfd8fa',
+      plan_sha256:planSha256,applied,target_catalog_fingerprint:afterCatalogIdentity.fingerprint,
+      target_catalog_counts:catalogCounts(afterCatalog),target_ledger_count:afterLedger.rowCount,
+      target_ledger_head:afterLedger.rows.at(-1).version,target_ledger_sha256:ledgerFileSha256(afterLedger.rows),
+      catalog:afterCatalog,ledger:afterLedger.rows,completed_at:new Date().toISOString(),
+    });
+    console.log(JSON.stringify({stage:'isolated_target_metadata_captured_then_rolled_back',scope:'target_preparation',
+      committed:false,rollback_verified:true,candidate_migration_admission:false,runtime_admission:false,
+      source_catalog_fingerprint:beforeCatalogIdentity.fingerprint,target_catalog_fingerprint:afterCatalogIdentity.fingerprint,
+      applied_count:applied.length,output:captureContext.output}));
+  } else {
   await db.query("commit");
   console.log(JSON.stringify({
     ok: true,
@@ -256,12 +388,46 @@ try {
     after_ledger_count: afterLedger.rowCount,
     after_ledger_head: afterLedger.rows.at(-1).version,
     applied,
+    ...(originalDataPreservationReceipt?{source_data_preservation:originalDataPreservationReceipt}:{}),
     outlook_rows_preserved: outlookAfter.rows,
     outlook_rows_sha256: outlookAfter.sha256,
   }, null, 2));
+  }
 } catch (error) {
-  await db.query("rollback").catch(() => {});
+  // Archive/profile admission can fail before a connection or transaction exists.
+  // pg queues queries before connect; never queue a rollback on that path.
+  if (!transactionStarted) throw error;
+  if (!targetCapture) {
+    await db.query("rollback").catch(() => {});
+    throw error;
+  }
+  await db.query("rollback");
+  if (targetCapture && captureContext.locked_source) {
+    // Never emit a success capture or continue the plan. This receipt exists
+    // only after whole rollback and independent exact Source readback.
+    const original=captureContext.locked_source;
+    await db.query('begin isolation level repeatable read read only');
+    const sourceCatalog=normalizeCatalog(await captureCatalogFromSnapshot(db),original.database);
+    const sourceLedger=await db.query('select version::text,name::text,statements from supabase_migrations.schema_migrations order by version');
+    const preserved=fingerprintSchemaCatalog(sourceCatalog).fingerprint===original.fingerprint
+      &&stableJson(catalogCounts(sourceCatalog))===stableJson(original.counts)
+      &&stableJson(sourceLedger.rows)===stableJson(original.ledger);
+    await db.query('rollback');
+    if(!preserved)throw new Error('Target-refusal whole rollback failed exact original catalog/ledger readback.');
+    captureContext.assertSourceCurrent();
+    if(captureContext.refusal)writeTargetCaptureRefusal(resolve(process.env.RUNNER_TEMP,'production-migration-target-capture-refusal.json'),{
+      schema:'custodial.production-migration-target-refusal.v1',scope:'target_preparation_failure',
+      committed:false,rollback_verified:true,production_authorized:false,candidate_migration_admission:false,
+      runtime_admission:false,full_rehearsal_attestation:false,project_ref:projectRef,
+      candidate_commit:candidateCommit,candidate_tree:candidateTree,archive_digest:captureContext.archive_digest,
+      source_catalog_fingerprint:original.fingerprint,source_ledger_sha256:sourceLedgerSha256,
+      source_ledger_count:original.ledger.length,owned_target:captureContext.target,actor_profile:captureContext.actor_profile,
+      plan_sha256:planSha256,refusal:captureContext.refusal,completed_at:new Date().toISOString(),
+    });
+  }
   throw error;
 } finally {
   await db.end().catch(() => {});
+  isolatedPreservationArchive?.close();
+  captureContext?.archive.cleanup();
 }

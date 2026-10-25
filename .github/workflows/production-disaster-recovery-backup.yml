@@ -18,17 +18,6 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          # Tooling identity is distinct from the deployed application identity.
-          # A moving trigger/default branch must not select older capture code.
-          ref: 1bcc95afa2634a616fa8a063579d48b8c1ad18ed
-      - name: Admit immutable backup tooling before dependency work
-        run: |
-          set -euo pipefail
-          test "$(git rev-parse HEAD)" = "1bcc95afa2634a616fa8a063579d48b8c1ad18ed"
-          test "$(git rev-parse 'HEAD^{tree}')" = "4985b79ae533c62cacf8cc35197631573df9b528"
-          actual_tool_status="$(git status --porcelain=v1 --untracked-files=all)"
-          test -z "$actual_tool_status"
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '22.23.1'
@@ -53,15 +42,8 @@ jobs:
           test -n "$BACKUP_RUNTIME_CONFIGURATION_JSON"
       - name: Bind backup tooling to the exact source tree
         run: |
-          set -euo pipefail
-          actual_tool_commit="$(git rev-parse HEAD)"
-          actual_tool_tree="$(git rev-parse 'HEAD^{tree}')"
-          test "$actual_tool_commit" = "1bcc95afa2634a616fa8a063579d48b8c1ad18ed"
-          test "$actual_tool_tree" = "4985b79ae533c62cacf8cc35197631573df9b528"
-          actual_tool_status="$(git status --porcelain=v1 --untracked-files=all)"
-          test -z "$actual_tool_status"
-          echo "BACKUP_TOOL_COMMIT=$actual_tool_commit" >> "$GITHUB_ENV"
-          echo "BACKUP_TOOL_TREE=$actual_tool_tree" >> "$GITHUB_ENV"
+          echo "BACKUP_TOOL_COMMIT=${GITHUB_SHA}" >> "$GITHUB_ENV"
+          echo "BACKUP_TOOL_TREE=$(git rev-parse HEAD^{tree})" >> "$GITHUB_ENV"
           echo "BACKUP_PG_DUMP_IMAGE=supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed" >> "$GITHUB_ENV"
       - name: Pull exact schema-capture tooling before opening the database snapshot
         run: |

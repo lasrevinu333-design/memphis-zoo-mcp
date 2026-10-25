@@ -8,13 +8,14 @@ on:
         required: true
         type: string
       rehearsal_scope:
-        description: Source backup fidelity only, or full candidate migration/runtime admission
+        description: Source backup fidelity, rollback-only target metadata, or full candidate admission
         required: true
         type: choice
         default: full_candidate
         options:
           - full_candidate
           - backup_only
+          - target_capture
 
 permissions:
   actions: read
@@ -63,14 +64,14 @@ jobs:
           test -n "$BACKUP_ENCRYPTION_PASSPHRASE"
           test -n "$RESTORE_ARCHIVE_VERIFY_KEY"
           test -n "$RESTORE_ARCHIVE_VERIFY_KEY_ID"
-          case "$REHEARSAL_SCOPE" in full_candidate|backup_only) ;; *) exit 1 ;; esac
+          case "$REHEARSAL_SCOPE" in full_candidate|backup_only|target_capture) ;; *) exit 1 ;; esac
           [[ "$BACKUP_RUN_ID" =~ ^[1-9][0-9]*$ ]]
           test -n "$REHEARSAL_CUSTODIAL_BACKEND_PROOF_SECRET"
           test -n "$REHEARSAL_CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET"
           test -n "$REHEARSAL_DEVICE_CREDENTIAL_SECRET"
           test -n "$REHEARSAL_OPS_MANAGER_SESSION_SECRET"
           image='supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed'
-          postgrest_image='public.ecr.aws/supabase/postgrest@sha256:d2009b5c9deffc210c8a5592698472fede14fd9f6ca89823c8474ca54d58c012'
+          postgrest_image='ghcr.io/supabase/postgrest@sha256:d2009b5c9deffc210c8a5592698472fede14fd9f6ca89823c8474ca54d58c012'
           container="mz_schema_rebuild_${GITHUB_RUN_ID}"
           postgrest_container="${container}_postgrest"
           database="mz_schema_rebuild_${GITHUB_RUN_ID}"
@@ -105,7 +106,7 @@ jobs:
             < <(node scripts/production-backup-rehearsal-scope.mjs metadata)
           source_catalog_fingerprint="$(jq -r '.observed_production.catalog_privilege_fingerprint' release/production-migration-state.json)"
           test "$archive_format" = 'memphis-zoo-disaster-recovery.v4'
-          if test "$REHEARSAL_SCOPE" = backup_only; then
+          if test "$REHEARSAL_SCOPE" != full_candidate; then
             node scripts/production-backup-rehearsal-scope.mjs source-binding
           else
             test "$source_commit" = "$GITHUB_SHA"
@@ -170,18 +171,25 @@ jobs:
             node scripts/production-backup-rehearsal-scope.mjs restore-result | tee -a "$receipt"
             exit 0
           fi
+          # Diagnostic target_capture stops on its NEW copy before any resolve/unpause.
+          # The historical paused restore and its discrepancies are never reused.
+          if test "$REHEARSAL_SCOPE" = target_capture; then
+            RESTORE_SOURCE_DIR="$backup_dir" SUPABASE_DB_URL="$local_db_url" \
+              RESTORE_REHEARSAL_EXPECTED_ARCHIVE_DIGEST="$archive_digest" \
+              node scripts/export-isolated-pre-reconcile-metadata.mjs | tee -a "$receipt"
+            exit 78 # Defensive: helper normally returns78 after durable metadata export.
+          fi
           RESTORE_REHEARSAL_ACCEPT_EMPTY_TARGET=true RESTORE_REHEARSAL_EXPECTED_ARCHIVE_DIGEST="$archive_digest" \
             SUPABASE_DB_URL="$local_db_url" npm run --silent restore:reconcile-isolated | tee -a "$receipt"
           RESTORE_SOURCE_DIR="$backup_dir" SUPABASE_DB_URL="$local_db_url" \
             node scripts/verify-isolated-source-lease-state.mjs | tee -a "$receipt"
+          if test "$REHEARSAL_SCOPE" = target_capture; then
+            node scripts/run-release-migration-target-capture.mjs "$backup_dir" "$container" "$port" | tee -a "$receipt"
+            exit 0
+          fi
           SCHEMA_FINGERPRINT_DOCKER_CONTAINER="$container" SCHEMA_FINGERPRINT_DATABASE="$database" \
             npm run --silent release:observed-production-schema:preflight | tee -a "$receipt"
-          RELEASE_MIGRATION_APPLY=true RELEASE_MIGRATION_CONFIRM_PROJECT_REF="$project_ref" \
-            RELEASE_MIGRATION_NAMED_ACTOR="GitHub production backup migration rehearsal ${GITHUB_RUN_ID}" \
-            RELEASE_MIGRATION_REHEARSAL=true RELEASE_MIGRATION_CANDIDATE_COMMIT="$source_commit" \
-            RELEASE_MIGRATION_CANDIDATE_TREE="$source_tree" RELEASE_MIGRATION_SOURCE_LEDGER_SHA256="$source_migration_ledger_sha256" \
-            SUPABASE_PROJECT_REF="$project_ref" SUPABASE_DB_URL="$local_db_url" \
-            npm run --silent release:migrations:apply | tee -a "$receipt"
+          node scripts/run-release-migration-full-candidate.mjs "$backup_dir" "$container" "$port" | tee -a "$receipt"
           backend_secret_digest="$(printf '%s' "$REHEARSAL_CUSTODIAL_BACKEND_PROOF_SECRET" | sha256sum | awk '{print $1}')"
           native_secret_digest="$(printf '%s' "$REHEARSAL_CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET" | sha256sum | awk '{print $1}')"
           docker exec "$container" psql -v ON_ERROR_STOP=1 -At -U supabase_admin -d "$database" \
@@ -193,15 +201,21 @@ jobs:
           target_migration_head="$(jq -r '.target.source_migration_version' release/production-migration-state.json)"
           target_migration_count="$(jq -r '.target.production_ledger_count' release/production-migration-state.json)"
           target_fingerprint="$(tr -d '\r\n' < supabase/canonical/schema-fingerprint.txt)"
+          echo ' target-ledger-head'
           test "$(docker exec "$container" psql -v ON_ERROR_STOP=1 -At -U supabase_admin -d "$database" \
             -c 'select max(version)::text from supabase_migrations.schema_migrations;' | tail -n 1)" = "$target_migration_head"
+          echo ' target-ledger-count'
           test "$(docker exec "$container" psql -v ON_ERROR_STOP=1 -At -U supabase_admin -d "$database" \
             -c 'select count(*)::text from supabase_migrations.schema_migrations;' | tail -n 1)" = "$target_migration_count"
+          echo ' source-target-distinct'
           test "$target_migration_head" != "$migration_head"
+          echo ' backend-authority-health'
           test "$(docker exec "$container" psql -v ON_ERROR_STOP=1 -At -U supabase_admin -d "$database" \
             -c "select public.custodial_backend_authority_health('$REHEARSAL_CUSTODIAL_BACKEND_PROOF_SECRET')->>'ok';" | tail -n 1)" = 'true'
+          echo ' active-scheduler-key-count'
           test "$(docker exec "$container" psql -v ON_ERROR_STOP=1 -At -U supabase_admin -d "$database" \
             -c "select count(*) from public.static_weekly_authority_attestation_keys where key_state='active' and activates_at<=now() and (verify_not_after is null or verify_not_after>now());" | tail -n 1)" = '1'
+          echo ' terminal-direct-dml-denied'
           if docker exec "$container" psql -v ON_ERROR_STOP=1 -At -U supabase_admin -d "$database" \
             -c 'set role service_role; truncate public.sessions;' >/dev/null 2>&1; then
             echo 'service_role unexpectedly retained direct terminal DML' >&2
@@ -247,7 +261,7 @@ jobs:
           FEEDBACK_PROBE_DATABASE_URL="$local_db_url" \
             FEEDBACK_PROBE_READER_DATABASE_URL="postgresql://custodial_readonly_runtime_20991231:${reader_password}@127.0.0.1:${port}/${database}" \
             npm run --silent test:feedback-reader-database | tee -a "$receipt"
-          printf '{"stage":"feedback_reader_database_authority_proven","writer":"app_apply_operational_command.feedback_create","reader_login":"custodial_readonly_runtime_20991231","reader_projection_columns":21,"sole_reader_policy":true,"reader_mutation_denied":true,"legacy_image_backup_hidden":true,"recovery_inventory_exact":true}\n' >> "$receipt"
+          printf '{"stage":"feedback_reader_database_authority_proven","probe":"test:feedback-reader-database","ok":true}\n' >> "$receipt"
           backend_log="${RUNNER_TEMP}/production-backup-rehearsal-backend.log"
           backend_dependencies_file="${RUNNER_TEMP}/production-backup-rehearsal-backend-dependencies.json"
           static_log="${RUNNER_TEMP}/production-backup-rehearsal-static-weekly.log"
@@ -313,7 +327,7 @@ jobs:
           printf '{"ok":true,"backup_run_id":"%s","archive_digest":"%s","source_commit":"%s","source_tree":"%s","source_migration_head":"%s","source_migration_count":%s,"source_migration_ledger_sha256":"%s","source_catalog_fingerprint":"%s","target_migration_head":"%s","target_migration_count":%s,"target_catalog_fingerprint":"%s","active_mutation_leases":0,"expired_mutation_leases":0,"authority_health":true,"direct_dml_denied":true,"live_production_reads":0,"completed_at":"%s"}\n' \
             '${{ inputs.backup_run_id }}' "$archive_digest" "$source_commit" "$source_tree" "$migration_head" "$source_migration_count" "$source_migration_ledger_sha256" "$source_catalog_fingerprint" "$target_migration_head" "$target_migration_count" "$target_fingerprint" "$completed_at" >> "$receipt"
       - name: Sign exact rehearsal run provenance
-        if: inputs.rehearsal_scope != 'backup_only'
+        if: inputs.rehearsal_scope == 'full_candidate'
         env:
           RELEASE_REHEARSAL_ATTESTATION_SIGNING_KEY: ${{ secrets.RELEASE_REHEARSAL_ATTESTATION_SIGNING_KEY }}
           RELEASE_REHEARSAL_ATTESTATION_SIGNING_KEY_ID: ${{ vars.RELEASE_REHEARSAL_ATTESTATION_SIGNING_KEY_ID }}
@@ -325,6 +339,9 @@ jobs:
           name: production-backup-migration-rehearsal-${{ github.run_id }}
           path: |
             ${{ runner.temp }}/production-backup-migration-rehearsal.jsonl
+            ${{ runner.temp }}/target-capture-pre-reconcile-discrepancies.json
+            ${{ runner.temp }}/production-migration-target-capture.json
+            ${{ runner.temp }}/production-migration-target-capture-refusal.json
             ${{ runner.temp }}/production-backup-migration-rehearsal-attestation.json
             ${{ runner.temp }}/production-backup-migration-rehearsal-postgres.log
             ${{ runner.temp }}/production-backup-rehearsal-backend.log

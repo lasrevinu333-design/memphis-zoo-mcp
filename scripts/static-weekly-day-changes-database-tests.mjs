@@ -164,7 +164,7 @@ let pool = null;
 let removed = false;
 try {
   await docker(["image", "inspect", image]);
-  await docker(["run", "--rm", "-d", "--name", container, "-p", "127.0.0.1::5432", "--tmpfs", "/var/lib/postgresql/data:rw,size=1g", "-e", "POSTGRES_PASSWORD=postgres", image, "-c", "shared_preload_libraries=pg_cron,pg_net,pg_stat_statements", "-c", "listen_addresses=*"]);
+  await docker(["run", "--rm", "-d", "--name", container, "-p", "127.0.0.1::5432", "--tmpfs", "/var/lib/postgresql/data:rw,size=1g", "-e", "POSTGRES_PASSWORD=postgres", image, "-c", "shared_preload_libraries=pg_cron,pg_net,pg_stat_statements", "-c", "cron.launch_active_jobs=off", "-c", "listen_addresses=*"]);
   let ready = false;
   for (let attempt = 0; attempt < 300; attempt += 1) {
     try {
@@ -179,6 +179,7 @@ try {
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
   assert.equal(ready, true, "owned disposable PostgreSQL must start");
+  assert.equal(await containerSql("show cron.launch_active_jobs"), "off", "cron job launching must be disabled before canonical migration replay");
   await containerSql("do $$ begin create role anon; exception when duplicate_object then null; end $$; do $$ begin create role authenticated; exception when duplicate_object then null; end $$; do $$ begin create role service_role; exception when duplicate_object then null; end $$;");
   for (const migration of migrations) await containerSql(fs.readFileSync(migration, "utf8"));
   await containerSql("alter role supabase_admin password 'postgres'");
