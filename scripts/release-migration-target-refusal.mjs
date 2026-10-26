@@ -399,7 +399,67 @@ export async function readCancellationTargetRefusal(db){
   fixed_function_grant_aliases:aliases,predecessors};
 }
 
+
+// Fixed pending158 boundary only. This never selects operational tables, runs
+// captured SQL, changes a guard, or admits a failed predecessor as authority.
+export const AUTHORITY_IDENTITY158_SOURCE_FILE='20261025094420_authority_identity_renderer_counterparts.sql';
+export const AUTHORITY_IDENTITY158_CANONICAL_SHA256='19e55cfdc9f1ddfd34c2912892ac23979ad5fc44a45da7e444a008b1da0a8c9b';
+export const AUTHORITY_IDENTITY158_FORWARD_SHA256='2e2b296d4b858e2a752b0f9a1c677020ef387bde8862e6b2a2f6dc1e18547cac';
+export const AUTHORITY_IDENTITY158_METADATA_SQL=`with inventory as materialized(
+ select restore_order,object_kind,object_identity,definition_sql,definition_sha256
+ from public.custodial_release_authority_restore_inventory),
+ kind_counts as(select object_kind,count(*)::text rows from inventory group by object_kind),
+ named_guard as(select t.oid,t.tgname,t.tgenabled,t.tgtype,t.tgisinternal,t.tgrelid,t.tgfoid
+ from pg_catalog.pg_trigger t where t.tgrelid=to_regclass('public.custodial_release_authority_restore_inventory')
+ and t.tgname='trg_custodial_release_authority_restore_inventory_immutable')
+ select current_user::text actor,session_user::text original_actor,
+ current_setting('session_replication_role') replication_role,
+ current_setting('transaction_read_only') transaction_read_only,
+ current_setting('custodial.deployment_project_ref',true) deployment_project_ref,
+ (select datdba::regrole::text from pg_catalog.pg_database where datname=current_database()) database_owner,
+ (select rolsuper from pg_catalog.pg_roles where rolname=current_user) actor_superuser,
+ (select rolbypassrls from pg_catalog.pg_roles where rolname=current_user) actor_bypassrls,
+ (select count(*)::text from inventory) inventory_count,
+ (select count(*)::text from inventory where definition_sha256 is distinct from
+  encode(extensions.digest(convert_to(definition_sql,'UTF8'),'sha256'),'hex')) inventory_selfhash_mismatches,
+ (select encode(extensions.digest(convert_to(coalesce(string_agg(restore_order::text||'|'||object_kind||'|'||object_identity||'|'||definition_sha256,E'\\n'
+  order by restore_order,object_kind collate pg_catalog."C",object_identity collate pg_catalog."C"),''),'UTF8'),'sha256'),'hex') from inventory) inventory_tuple_digest_sha256,
+ (select coalesce(jsonb_agg(jsonb_build_object('object_kind',object_kind,'rows',rows) order by object_kind collate pg_catalog."C"),'[]'::jsonb) from kind_counts) inventory_group_counts,
+ (select count(*)::text from named_guard where tgenabled='A') exact_named_ALWAYS_guard_count,
+ (select coalesce(jsonb_agg(jsonb_build_object('trigger_oid',oid::text,'trigger_name',tgname,'enabled',tgenabled::text,
+  'trigger_type',tgtype,'internal',tgisinternal,'relation_oid',tgrelid::text,'function_identity',tgfoid::regprocedure::text) order by oid),'[]'::jsonb) from named_guard) named_guard_metadata,
+ (select jsonb_build_object('relation_oid',c.oid::text,'schema_name',n.nspname,'relation_name',c.relname,
+  'owner_name',c.relowner::regrole::text,'relation_kind',c.relkind::text,'persistence',c.relpersistence::text,
+  'row_security',c.relrowsecurity,'force_row_security',c.relforcerowsecurity)
+ from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid=c.relnamespace
+ where c.oid=to_regclass('public.custodial_release_authority_restore_inventory')) inventory_relation_metadata`;
+async function readAuthorityIdentity158Refusal(db){
+ const rows=(await db.query(AUTHORITY_IDENTITY158_METADATA_SQL)).rows;assert.equal(rows.length,1);
+ const observed=rows[0];
+ for(const key of ['inventory_count','inventory_selfhash_mismatches','exact_named_ALWAYS_guard_count'])assert.match(String(observed[key]),/^[0-9]+$/);
+ assert.match(observed.inventory_tuple_digest_sha256,/^[a-f0-9]{64}$/);
+ assert.ok(Array.isArray(observed.inventory_group_counts)&&observed.inventory_group_counts.length<=1024);
+ assert.ok(Array.isArray(observed.named_guard_metadata)&&observed.named_guard_metadata.length<=16);
+ const expected={inventory_count:'7312',exact_named_ALWAYS_guard_count:'1'};
+ const failed=Object.keys(expected).filter(key=>observed[key]!==expected[key]);
+ return {observed_state:'AFTER_FAILED_STEP_SAVEPOINT_ROLLBACK',actual_failing_DO_local_predicate:'UNKNOWN',
+  predicate_scope:'EXACT_158_CONTEXT_COMPOSITE_REEVALUATION_AT_PRESERVED_STEP_BOUNDARY_NOT_FAILED_DO_LOCALS',
+  expected_composite_values:expected,observed_inventory_guard_metadata:observed,
+  failed_boundary_predicates:failed,composite_at_preserved_boundary_passes:failed.length===0,
+  operational_rows_read:false,stored_definition_bodies_returned:false,SQL_execution_or_guard_change:false,
+  canonical_or_production_authority:false};
+}
+
 async function readSelectedTargetRefusal(db,migration) {
+ if(migration.file===AUTHORITY_IDENTITY158_SOURCE_FILE){
+  assert.equal(migration.order,158);assert.equal(migration.sha256,AUTHORITY_IDENTITY158_FORWARD_SHA256);
+  assert.deepEqual(migration.forward_source,{schema:'custodial.production-forward-source-binding.v1',profile:'existing-postgres-owner',
+   canonical_sha256:AUTHORITY_IDENTITY158_CANONICAL_SHA256,file:'release/production-forward-source/'+AUTHORITY_IDENTITY158_SOURCE_FILE,
+   sha256:AUTHORITY_IDENTITY158_FORWARD_SHA256});
+  return {metadata_source_file:AUTHORITY_IDENTITY158_SOURCE_FILE,metadata_source_sha256:AUTHORITY_IDENTITY158_CANONICAL_SHA256,
+   metadata_executed_sha256:migration.sha256,authority_identity158:await readAuthorityIdentity158Refusal(db)};
+ }
+
  if(migration.file===REGISTERED_VACANCY_SOURCE_FILE){
   assert.equal(migration.order,153);assert.equal(migration.sha256,REGISTERED_VACANCY_FORWARD_SHA256);
   return {metadata_source_file:REGISTERED_VACANCY_SOURCE_FILE,metadata_source_sha256:REGISTERED_VACANCY_SOURCE_SHA256,

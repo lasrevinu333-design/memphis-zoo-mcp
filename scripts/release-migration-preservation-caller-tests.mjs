@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {runTargetCaptureStep,AUTHORITY_IDENTITY158_SOURCE_FILE,AUTHORITY_IDENTITY158_CANONICAL_SHA256,AUTHORITY_IDENTITY158_FORWARD_SHA256,AUTHORITY_IDENTITY158_METADATA_SQL} from './release-migration-target-refusal.mjs';
 import {readFileSync} from 'node:fs';
 import {resolve,basename} from 'node:path';
 import {createHash} from 'node:crypto';
@@ -13,7 +14,7 @@ const stableJson=JSON.stringify;
 const sha=v=>createHash('sha256').update(v).digest('hex');
 const digest=v=>sha(stableJson(v));
 let checks=0;
-async function fixture({target=true,fail=null,length=159,rehearsal=true}={}){
+async function fixture({target=true,fail=null,length=160,rehearsal=true}={}){
  const events=[],logs=[],failError=Error('UNIT_'+fail),before={cron_jobs:[],tables:[{original:true}]},after={cron_jobs:[],tables:[{candidate:true}]};
  const ledger=[{version:'20250101000000',name:'original',statements:['ORIGINAL']}];
  const pending=Array.from({length},(_,i)=>{const version=String(20260101000000+i);return{order:i+1,file:version+'_unit.sql',source_migration_version:version,phase:'unit',sha256:'b'.repeat(64)};});
@@ -55,7 +56,7 @@ async function fixture({target=true,fail=null,length=159,rehearsal=true}={}){
   captureCatalogFromSnapshot:async()=>{catalogReads++;events.push('catalogRead');if(fail==='sourceCatalog'&&catalogReads===1)return after;if(rolled)return fail==='rollbackCatalog'?after:before;return catalogReads===1?before:after;},
   fingerprintSchemaCatalog:c=>({fingerprint:fail==='targetCatalog'&&c.tables[0].candidate===true?'0'.repeat(64):digest(c)}),
   openIsolatedPreservationArchive:()=>{events.push('openArchive');if(fail==='archive')throw failError;return{archive:{unitArchive:true},close(){events.push('preservationArchiveClose');}};},
-  prepareIsolatedReleaseDataPreservation:async args=>{events.push('snapshot');assert.deepEqual(args.sourceCatalog,before);assert.equal(args.plan.length,159);assert.equal(args.verifiedArchive.unitArchive,true);if(fail==='snapshot')throw failError;return{verify:async()=>{events.push('verify');if(fail==='verify')throw failError;return{unitPreserved:true};}};},
+  prepareIsolatedReleaseDataPreservation:async args=>{events.push('snapshot');assert.deepEqual(args.sourceCatalog,before);assert.equal(args.plan.length,160);assert.equal(args.verifiedArchive.unitArchive,true);if(fail==='snapshot')throw failError;return{verify:async()=>{events.push('verify');if(fail==='verify')throw failError;return{unitPreserved:true};}};},
   releaseMigrationAuthorizationBinding:()=>{},requireSigningKey:()=>{},verifyBinding:()=>false,validateAuthorizationRehearsalProvenance:()=>{},TASK_LOCAL_PROVENANCE_KIND:'unit',TASK_LOCAL_RUNNER_PATH:'unit'};
  let error;try{await new AsyncFunction(...Object.keys(dependencies),executable)(...Object.values(dependencies));}catch(e){error=e;}
  return{events,logs,error,migrations};
@@ -63,11 +64,11 @@ async function fixture({target=true,fail=null,length=159,rehearsal=true}={}){
 const before=(r,a,b)=>assert.ok(r.events.indexOf(a)>=0&&r.events.indexOf(a)<r.events.indexOf(b),a+' before '+b);
 const absent=(r,...names)=>names.forEach(n=>assert.equal(r.events.includes(n),false,n+' absent'));
 async function check(name,fn){await fn();checks++;}
-await check('159 target capture snapshots and verifies within locks before postcatalog, rolls back and reads source before publication',async()=>{
- const r=await fixture();assert.ifError(r.error);assert.equal(r.migrations,159);before(r,'openArchive','connect');before(r,'ledgerRead','snapshot');before(r,'snapshot','migration:1');before(r,'migration:159','verify');before(r,'verify','rollback');before(r,'rollback','successReceipt');
+await check('160 target capture snapshots and verifies within locks before postcatalog, rolls back and reads source before publication',async()=>{
+ const r=await fixture();assert.ifError(r.error);assert.equal(r.migrations,160);before(r,'openArchive','connect');before(r,'ledgerRead','snapshot');before(r,'snapshot','migration:1');before(r,'migration:160','verify');before(r,'verify','rollback');before(r,'rollback','successReceipt');
  const publish=r.events.indexOf('successReceipt');assert.ok(r.events.lastIndexOf('ledgerRead',publish)>r.events.indexOf('rollback'));assert.ok(r.events.lastIndexOf('catalogRead',publish)>r.events.indexOf('rollback'));assert.equal(r.logs.find(x=>x.scope==='target_preparation').source_data_preservation.unitPreserved,true);absent(r,'COMMITTED','refusalReceipt');before(r,'end','preservationArchiveClose');before(r,'preservationArchiveClose','captureArchiveCleanup');
 });
-await check('159 ordinary isolated rehearsal verifies before its existing disposable commit and prints receipt afterward',async()=>{const r=await fixture({target:false});assert.ifError(r.error);before(r,'snapshot','migration:1');before(r,'migration:159','verify');before(r,'verify','COMMITTED');before(r,'COMMITTED','stdout');assert.equal(r.logs[0].source_data_preservation.unitPreserved,true);absent(r,'successReceipt','refusalReceipt','captureArchiveCleanup');});
+await check('160 ordinary isolated rehearsal verifies before its existing disposable commit and prints receipt afterward',async()=>{const r=await fixture({target:false});assert.ifError(r.error);before(r,'snapshot','migration:1');before(r,'migration:160','verify');before(r,'verify','COMMITTED');before(r,'COMMITTED','stdout');assert.equal(r.logs[0].source_data_preservation.unitPreserved,true);absent(r,'successReceipt','refusalReceipt','captureArchiveCleanup');});
 for(const target of [true,false])for(const fail of ['archive','connect','sourceCatalog','snapshot','migration','ledger','verify',...(!target?['targetCatalog']:[])])await check('failure '+fail+' target='+target+' never commits or publishes success',async()=>{
  const r=await fixture({target,fail});assert.ok(r.error,JSON.stringify({target,fail,events:r.events.slice(-15)}));absent(r,'COMMITTED','successReceipt','stdout');assert.ok(r.events.includes('end'));if(fail!=='archive')assert.ok(r.events.includes('preservationArchiveClose'));if(['archive','connect'].includes(fail))absent(r,'rollback','ledgerRead','catalogRead');
  if(['archive','connect','sourceCatalog','snapshot'].includes(fail))assert.equal(r.migrations,0);
@@ -75,5 +76,37 @@ for(const target of [true,false])for(const fail of ['archive','connect','sourceC
  if(fail!=='migration')absent(r,'refusalReceipt');else if(target){before(r,'rollback','refusalReceipt');assert.ok(r.events.lastIndexOf('ledgerRead')<r.events.indexOf('refusalReceipt'));}
 });
 for(const fail of ['rollbackLedger','rollbackCatalog'])await check('target source readback '+fail+' refuses metadata publication',async()=>{const r=await fixture({fail});assert.ok(r.error);absent(r,'successReceipt','refusalReceipt','COMMITTED','stdout');});
-await check('older isolated non159 path does not borrow new archive or checker authority',async()=>{const r=await fixture({target:false,length:2});assert.ifError(r.error);absent(r,'openArchive','snapshot','verify');assert.ok(r.events.includes('COMMITTED'));assert.equal(Object.hasOwn(r.logs[0],'source_data_preservation'),false);});
+await check('older isolated non160 path does not borrow new archive or checker authority',async()=>{const r=await fixture({target:false,length:2});assert.ifError(r.error);absent(r,'openArchive','snapshot','verify');assert.ok(r.events.includes('COMMITTED'));assert.equal(Object.hasOwn(r.logs[0],'source_data_preservation'),false);});
+
+// Exercise the actual fixed refusal dispatcher with recording metadata only.
+// The original migration failure is always rethrown; no database is opened.
+const identity158Migration=()=>({order:158,file:AUTHORITY_IDENTITY158_SOURCE_FILE,sha256:AUTHORITY_IDENTITY158_FORWARD_SHA256,
+ forward_source:{schema:'custodial.production-forward-source-binding.v1',profile:'existing-postgres-owner',
+  canonical_sha256:AUTHORITY_IDENTITY158_CANONICAL_SHA256,file:'release/production-forward-source/'+AUTHORITY_IDENTITY158_SOURCE_FILE,sha256:AUTHORITY_IDENTITY158_FORWARD_SHA256}});
+const identity158Metadata=()=>({actor:'postgres',original_actor:'postgres',replication_role:'origin',transaction_read_only:'off',
+ deployment_project_ref:'rqquvtjdmugpigbndmne',database_owner:'postgres',actor_superuser:false,actor_bypassrls:true,
+ inventory_count:'7312',inventory_selfhash_mismatches:'0',inventory_tuple_digest_sha256:'a'.repeat(64),
+ inventory_group_counts:[{object_kind:'function',rows:'7312'}],exact_named_ALWAYS_guard_count:'1',
+ named_guard_metadata:[{trigger_oid:'42',trigger_name:'trg_custodial_release_authority_restore_inventory_immutable',enabled:'A',internal:false}],
+ inventory_relation_metadata:{owner_name:'postgres',relation_kind:'r'}});
+async function identity158Case({migration=identity158Migration(),metadata=identity158Metadata(),readFails=false,target=true}={}){
+ const events=[],original=Object.assign(Error('ORIGINAL158_COMPOSITE_REFUSAL'),{code:'P0001'});let diagnostic;
+ const db={async query(sql){events.push(sql);if(sql===AUTHORITY_IDENTITY158_METADATA_SQL){if(readFails)throw Object.assign(Error('READ_FAILURE'),{code:'UNIT_READ_FAILURE'});return{rows:[metadata]};}
+  assert.ok(['savepoint custodial_target_migration_step','rollback to savepoint custodial_target_migration_step','set local search_path=pg_catalog,public,extensions','release savepoint custodial_target_migration_step'].includes(sql));return{rows:[]};}};
+ let thrown;try{await runTargetCaptureStep({db,migration,targetCapture:target,run:async()=>{events.push('originalRun');throw original;},onRefusal:x=>{events.push('refusal');diagnostic=x;}});}catch(error){thrown=error;}
+ assert.equal(thrown,original);return{events,diagnostic};
+}
+await check('fixed158 metadata observes each composite clause separately after savepoint rollback and preserves originalfailure',async()=>{
+ const metadata=identity158Metadata();metadata.inventory_count='7313';const r=await identity158Case({metadata});const d=r.diagnostic.authority_identity158;
+ assert.deepEqual(d.failed_boundary_predicates,['inventory_count']);assert.equal(d.observed_inventory_guard_metadata,metadata);
+ assert.ok(r.events.indexOf('rollback to savepoint custodial_target_migration_step')<r.events.indexOf(AUTHORITY_IDENTITY158_METADATA_SQL));assert.equal(d.canonical_or_production_authority,false);
+});
+await check('fixed158 O guard failure stays separate from exact7312 count',async()=>{const metadata=identity158Metadata();metadata.exact_named_ALWAYS_guard_count='0';metadata.named_guard_metadata[0].enabled='O';const d=(await identity158Case({metadata})).diagnostic.authority_identity158;assert.deepEqual(d.failed_boundary_predicates,['exact_named_ALWAYS_guard_count']);assert.equal(d.observed_inventory_guard_metadata.named_guard_metadata[0].enabled,'O')});
+await check('fixed158 both failures remain visible without accepting any new count',async()=>{const metadata=identity158Metadata();metadata.inventory_count='7313';metadata.exact_named_ALWAYS_guard_count='0';const d=(await identity158Case({metadata})).diagnostic.authority_identity158;assert.deepEqual(d.failed_boundary_predicates,['inventory_count','exact_named_ALWAYS_guard_count']);assert.equal(d.composite_at_preserved_boundary_passes,false)});
+await check('fixed158 boundary match does not claim actualfailedDO predicate or dismiss originalerror',async()=>{const d=(await identity158Case()).diagnostic.authority_identity158;assert.equal(d.composite_at_preserved_boundary_passes,true);assert.equal(d.actual_failing_DO_local_predicate,'UNKNOWN');assert.equal(d.canonical_or_production_authority,false)});
+for(const [name,edit]of [['wrongorder',m=>{m.order=157}],['wrongexecutedSHA',m=>{m.sha256='0'.repeat(64)}],['wrongcanonicalSHA',m=>{m.forward_source.canonical_sha256='0'.repeat(64)}],['missingforwardbinding',m=>{delete m.forward_source}]])await check('fixed158 '+name+' refuses metadata selection but rethrows originalfailure',async()=>{const migration=identity158Migration();edit(migration);const r=await identity158Case({migration});assert.equal(r.events.includes(AUTHORITY_IDENTITY158_METADATA_SQL),false);assert.equal(r.diagnostic.metadata_read_failed,true);assert.equal(r.diagnostic.sqlstate,'P0001')});
+await check('fixed158 metadata readfailure cannot mask originalmigrationfailure',async()=>{const r=await identity158Case({readFails:true});assert.equal(r.diagnostic.metadata_read_failed,true);assert.equal(r.diagnostic.code,'UNIT_READ_FAILURE');assert.equal(r.diagnostic.sqlstate,'P0001')});
+await check('non-target caller remains unchanged and never reads158 metadata',async()=>{const r=await identity158Case({target:false});assert.deepEqual(r.events,['originalRun']);assert.equal(r.diagnostic,undefined)});
+await check('fixed158 metadata query has no arbitraryparameters/businessrows/definition execution',async()=>{assert.match(AUTHORITY_IDENTITY158_METADATA_SQL,/from public\.custodial_release_authority_restore_inventory/);assert.doesNotMatch(AUTHORITY_IDENTITY158_METADATA_SQL,/\b(?:insert|update|delete|alter|drop|execute|call)\b/i);assert.doesNotMatch(AUTHORITY_IDENTITY158_METADATA_SQL,/\$[0-9]/);assert.match(AUTHORITY_IDENTITY158_METADATA_SQL,/tgenabled='A'/);assert.match(AUTHORITY_IDENTITY158_METADATA_SQL,/inventory_selfhash_mismatches/)});
+
 console.log(JSON.stringify({status:'PASS_RECORDING_CALLER_ONLY',checks,caller_sha256:sha(original),actual_SQL:false,production:false}));

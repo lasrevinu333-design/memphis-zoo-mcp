@@ -194,6 +194,20 @@
       "forward_file": "release/production-forward-source/20261012063248_staffing_vacancy_reviewed_preparation.sql",
       "forward_sha256": "1dd73eca8c1042096d0cf2d9b3a69bb6afa710e467389899b99ee33ecdbc821c",
       "profile": "existing-postgres-owner"
+    },
+    {
+      "canonical_file": "20261025094420_authority_identity_renderer_counterparts.sql",
+      "canonical_sha256": "19e55cfdc9f1ddfd34c2912892ac23979ad5fc44a45da7e444a008b1da0a8c9b",
+      "forward_file": "release/production-forward-source/20261025094420_authority_identity_renderer_counterparts.sql",
+      "forward_sha256": "2e2b296d4b858e2a752b0f9a1c677020ef387bde8862e6b2a2f6dc1e18547cac",
+      "profile": "existing-postgres-owner"
+    },
+    {
+      "canonical_file": "20261022041249_original_schedule_delivery_outcome.sql",
+      "canonical_sha256": "4d201d542066718e58932199db06b358e19e947f60de72a0c1ca8097a79ff71a",
+      "forward_file": "release/production-forward-source/20261022041249_original_schedule_delivery_outcome.sql",
+      "forward_sha256": "ee140104c1f3f9c523f345e1a9295fb0be490e2c15a221b815353f8a63c75ef1",
+      "profile": "existing-postgres-owner"
     }
   ]
 }

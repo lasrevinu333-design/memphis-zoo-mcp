@@ -49,35 +49,35 @@
     }
   },
   "target": {
-    "source_migration_file": "20261025124437_manager_completion_evidence_opaque_session_domain.sql",
-    "source_migration_name": "manager_completion_evidence_opaque_session_domain",
-    "source_migration_version": "20261025124437",
+    "source_migration_file": "20261026065000_location_scan_state_qualified_lookup.sql",
+    "source_migration_name": "location_scan_state_qualified_lookup",
+    "source_migration_version": "20261026065000",
     "execution_tail": {
-      "file": "20261025124437_manager_completion_evidence_opaque_session_domain.sql",
-      "version": "20261025124437",
+      "file": "20261026065000_location_scan_state_qualified_lookup.sql",
+      "version": "20261026065000",
       "role": "last_applied_member"
     },
     "production_ledger_version": null,
     "canonical_source_schema_fingerprint": null,
     "public_function_count": null,
     "production_ledger_count": null,
-    "source_authority_migration_count": 293,
-    "pending_migration_count": 159,
+    "source_authority_migration_count": 294,
+    "pending_migration_count": 160,
     "registered_source_dated_status_excluded": true,
     "expected_catalog_counts": null,
     "normal_source_capture": null
   },
   "source_binding": {
     "kind": "external_exact_head_release_attestation",
-    "rule": "Use the byte-bound293 canonical Source sequence with the exact134-source installed authority prefix preserved and159 declared pending members, in the existing explicit production-forward-source order/profile. Every one of the159 pending ledger versions must be absent, including older timestamped versions; current connected ledger235/head20261021111917 is a distinct observed ledger fact, not permission to replay historical statements. Preserve all original canonical preimages and installed Owner/Events/CoverAll bytes and documented aliases. Current complete source catalog and actual populated293 target catalog/count/function/ledger facts remain unresolved NULL. Signed fresh backup, full populated restore/rehearsal, row/store preservation, exact Source-bound authorization and unchanged release/runtime/physical gates remain mandatory. Fresh-only C10 and other historical NORMAL profiles are comparison context only and cannot supply production SQL or populated compatibility. The prior118/352/Isolated252 prose is retained only in historical_Source05_current_prose, never as current authorization.",
+    "rule": "Use the byte-bound294 canonical Source sequence with the exact134-source installed authority prefix preserved and160 declared pending members, in the existing explicit production-forward-source order/profile. Every one of the160 pending ledger versions must be absent, including older timestamped versions; current connected ledger235/head20261021111917 is a distinct observed ledger fact, not permission to replay historical statements. Preserve all original canonical preimages and installed Owner/Events/CoverAll bytes and documented aliases. Current complete source catalog and actual populated294 target catalog/count/function/ledger facts remain unresolved NULL. Signed fresh backup, full populated restore/rehearsal, row/store preservation, exact Source-bound authorization and unchanged release/runtime/physical gates remain mandatory. Fresh-only C10 and other historical NORMAL profiles are comparison context only and cannot supply production SQL or populated compatibility. The prior118/352/Isolated252 prose is retained only in historical_Source05_current_prose, never as current authorization.",
     "source_replay_manifest": "supabase/canonical/migration-replay-order.json",
-    "source_replay_manifest_sha256": "4300e07bd609ac0fe916dec01ecbbed94617bb8a7279a644a5d7e755bd7b6e3e",
+    "source_replay_manifest_sha256": "5a0ac3a398d25f59a0a7f6e045d0db1c4d59b28924a18ec479f01bbe5a710121",
     "source_prefix_commit": "b227a0a99e627224ec5948c18a914b48f461f0fe",
     "current291_preparation": {
       "state": "SOURCE_ONLY_POPULATED_TARGET_CAPTURE_REQUIRED_NO_APPLY_AUTHORITY",
       "preserve_existing_source_authority_prefix": 134,
-      "current_source_members": 293,
-      "declared_pending_members": 159,
+      "current_source_members": 294,
+      "declared_pending_members": 160,
       "execution_profile": "existing-postgres-owner",
       "fresh_reference_context_only": {
         "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/atomic-finalization/fresh291-prospective-staged-reference-twentyone-image-source10-source-derived-canary-counterparts/RESULT.json",
@@ -92,10 +92,11 @@
       "fresh_SQL_overrides_copied_to_production": false,
       "actual_populated_target_catalog_and_counts": null,
       "actual_populated_forward_profile_compatibility": null,
-      "rule": "Retain all applied source134 bytes and original118 canonical preimages. Execute only explicit existing-postgres-owner variants already admitted by production-forward-source, plus unchanged canonical members. C10 is fresh-only context, not populated compatibility. Obtain signed fresh backup and isolated rollback-only populated293 target capture, then full populated rehearsal and existing exact authorization. No current target fingerprint/counts or permission is fabricated.",
-      "retained_protocol_key_precision": "The retained current291_preparation key labels the original protocol; operative Source count is293/pending159. No old291 Source acceptance transfers.",
+      "rule": "Retain all applied source134 bytes and original118 canonical preimages. Execute only explicit existing-postgres-owner variants already admitted by production-forward-source, plus unchanged canonical members. C10 is fresh-only context, not populated compatibility. Obtain signed fresh backup and isolated rollback-only populated294 target capture, then full populated rehearsal and existing exact authorization. No current target fingerprint/counts or permission is fabricated.",
+      "retained_protocol_key_precision": "The retained current291_preparation key labels the original protocol; operative Source count is294/pending160. No old291 Source acceptance transfers.",
       "followup_profile_limit": "Unchanged newSQL has exactsupabase_admin/origin/7312/Source291canary preconditions. Existing-postgres-owner populated application is UNQUALIFIED; no28thvariant or guard relaxation selected.",
-      "new293_scope": "Prospective same-signature manager completion evidence reader domain128->200 only; exact OID/owner/ACL/other pg_proc fields and every other inventory row unchanged. No current293 Source/SQL/target/qualification adoption is inferred."
+      "new293_scope": "Prospective same-signature manager completion evidence reader domain128->200 only; exact OID/owner/ACL/other pg_proc fields and every other inventory row unchanged. No current293 Source/SQL/target/qualification adoption is inferred.",
+      "new294_scope": "Append-only same-signature get_location_scan_state lookup qualification; existing293 migration history unchanged. Actual294 catalog/expected fingerprint and populated compatibility remain unestablished; no prior catalog or source verdict transfers."
     },
     "observed_source_extensions": [
       {
@@ -1419,7 +1420,14 @@
       "phase": "original_schedule_delivery_outcome",
       "file": "20261022041249_original_schedule_delivery_outcome.sql",
       "source_migration_version": "20261022041249",
-      "sha256": "4d201d542066718e58932199db06b358e19e947f60de72a0c1ca8097a79ff71a"
+      "sha256": "ee140104c1f3f9c523f345e1a9295fb0be490e2c15a221b815353f8a63c75ef1",
+      "forward_source": {
+        "schema": "custodial.production-forward-source-binding.v1",
+        "profile": "existing-postgres-owner",
+        "canonical_sha256": "4d201d542066718e58932199db06b358e19e947f60de72a0c1ca8097a79ff71a",
+        "file": "release/production-forward-source/20261022041249_original_schedule_delivery_outcome.sql",
+        "sha256": "ee140104c1f3f9c523f345e1a9295fb0be490e2c15a221b815353f8a63c75ef1"
+      }
     },
     {
       "order": 157,
@@ -1433,7 +1441,14 @@
       "phase": "authority_identity_renderer_counterparts",
       "file": "20261025094420_authority_identity_renderer_counterparts.sql",
       "source_migration_version": "20261025094420",
-      "sha256": "19e55cfdc9f1ddfd34c2912892ac23979ad5fc44a45da7e444a008b1da0a8c9b"
+      "sha256": "2e2b296d4b858e2a752b0f9a1c677020ef387bde8862e6b2a2f6dc1e18547cac",
+      "forward_source": {
+        "schema": "custodial.production-forward-source-binding.v1",
+        "profile": "existing-postgres-owner",
+        "canonical_sha256": "19e55cfdc9f1ddfd34c2912892ac23979ad5fc44a45da7e444a008b1da0a8c9b",
+        "file": "release/production-forward-source/20261025094420_authority_identity_renderer_counterparts.sql",
+        "sha256": "2e2b296d4b858e2a752b0f9a1c677020ef387bde8862e6b2a2f6dc1e18547cac"
+      }
     },
     {
       "order": 159,
@@ -1441,11 +1456,18 @@
       "file": "20261025124437_manager_completion_evidence_opaque_session_domain.sql",
       "source_migration_version": "20261025124437",
       "sha256": "ef296210e35b3e6b0118d0ca84bee0db6152b039547960bc05803cfd320c77a8"
+    },
+    {
+      "order": 160,
+      "phase": "location_scan_state_qualified_lookup",
+      "file": "20261026065000_location_scan_state_qualified_lookup.sql",
+      "source_migration_version": "20261026065000",
+      "sha256": "ca79547cd57ef3f8b3436e846bd4ed57581ea17be2d57701c72d1e45646591db"
     }
   ],
   "postconditions": [
-    "Only the159 exact declared pending versions may be added after all existing authorization and populated-target prerequisites succeed; preserve every preexisting ledger row byte-for-byte. The actual resulting target ledger count/head remain NULL until genuine populated293 target capture supplies them, and must then match that admitted target.",
-    "The current populated293 target catalog fingerprint, catalog counts, function count, ledger count and compatibility remain NULL and must be established by the existing signed populated target capture and full rehearsal. Historical Isolated252 or fresh-only C10 hashes/counts provide no current production or target authority.",
+    "Only the160 exact declared pending versions may be added after all existing authorization and populated-target prerequisites succeed; preserve every preexisting ledger row byte-for-byte. The actual resulting target ledger count/head remain NULL until genuine populated294 target capture supplies them, and must then match that admitted target.",
+    "The current populated294 target catalog fingerprint, catalog counts, function count, ledger count and compatibility remain NULL and must be established by the existing signed populated target capture and full rehearsal. Historical Isolated252 or fresh-only C10 hashes/counts provide no current production or target authority.",
     "Owner remains full control; other currently authenticated named managers are read-only except dated absences, manual CoverAll, current route regeneration and verified scan-ticket outcomes; no owner-away window is required.",
     "Approved initial and recurring fixed-pattern publication remains owner-only and requires actual registered source and current revision; no invented five-person approval or employee record.",
     "Existing immutable weekly history, source/event ledger, pending work and employee identities are retained; no automatic CoverAll purchase or unrequested event sends.",
