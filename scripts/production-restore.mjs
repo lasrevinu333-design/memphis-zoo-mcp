@@ -36,6 +36,8 @@ import {
   compareVerifiedStorageTableData,
   prepareVerifiedStorageUploads,
   validateV4StorageArchiveObjects,
+  captureVerifiedFreshLocalStorageProvider,
+  verifyFreshLocalStorageProvider,
 } from "./disaster-recovery-storage.mjs";
 import {
   compareCronJobs,
@@ -289,6 +291,20 @@ if (!String(intent.actor || "").trim()) throw new Error("Restore intent must ide
 const expiresAt = Date.parse(String(intent.expires_at || ""));
 if (!Number.isFinite(expiresAt) || expiresAt <= Date.now() || expiresAt > Date.now() + 24 * 60 * 60 * 1000) {
   throw new Error("Restore intent is expired or exceeds the 24-hour authorization window.");
+}
+
+// Explicit same-original disposable official provider. The normal production
+// private APPLY barrier below is unchanged; no caller-selected role/profile.
+const freshStorageProviderInput = String(process.env.RESTORE_FRESH_STORAGE_PROVIDER_JSON || "");
+const freshStorageServiceKey = String(process.env.RESTORE_FRESH_STORAGE_SERVICE_KEY || "");
+const freshStorageJwtSecret = String(process.env.RESTORE_FRESH_STORAGE_JWT_SECRET || "");
+let freshStorageProvider = null;
+if (freshStorageProviderInput || freshStorageServiceKey || freshStorageJwtSecret) {
+  if (!databaseOnly || !(freshPrivateDatabase || nativeTextDatabase) || !freshStorageProviderInput || !freshStorageServiceKey || !freshStorageJwtSecret)
+    throw new Error("Fresh local Storage requires the existing authenticated whole-fresh database route.");
+  freshStorageProvider = captureVerifiedFreshLocalStorageProvider({verifiedArchive,
+    originalIntentEnvelope:intentEnvelope,intentVerifyKey,intentVerifyKeyId,
+    providerEnvelope:JSON.parse(freshStorageProviderInput),serviceKey:freshStorageServiceKey,jwtSecret:freshStorageJwtSecret,databaseUrl});
 }
 
 if (nativeTextLegacyBlocker !== null) {
@@ -917,7 +933,36 @@ async function continueRestoreAfterDatabase({databaseEvidence,immutablePrivateDa
       requireOriginalArchiveSource();
     }
   }
-  const storageVerified = databaseOnly || storageEvidence.metadata_and_ownership_verified === true;
+  if (freshStorageProvider !== null) {
+    requireFreshContinuation();
+    const providerEvidence = await verifyFreshLocalStorageProvider({token:freshStorageProvider,db,state:"STORAGE_RESTORING"});
+    requireFreshContinuation();
+    const actualBuckets = await db.query("select row_to_json(b) row from storage.buckets b order by b.id");
+    requireFreshContinuation();
+    const actualObjects = await db.query("select row_to_json(o) row from storage.objects o order by o.bucket_id,o.name,o.id");
+    requireFreshContinuation();
+    const differences = compareStorageState({archivedBuckets:buckets,archivedObjects:objects,
+      actualBuckets:actualBuckets.rows.map(item=>item.row),actualObjects:actualObjects.rows.map(item=>item.row)})
+      .filter(item=>!(item.field==='owner_access_boundary' && providerEvidence.owner_access_probes.some(probe=>probe.bucket_id===item.bucket_id && probe.name===item.name && probe.status==='VERIFIED_CURRENT_RESTORED_ROLE_BOUNDARY')));
+    const exact = await readExactOriginalStorageSnapshot();
+    requireFreshContinuation();
+    // Clear only the boundary for this exact archived member after genuine
+    // intended/foreign/anon/invalid-signature HTTP probes, not service reads.
+    storageEvidence = {...storageEvidence,...providerEvidence,exact_table_data:exact,discrepancies:differences,
+      metadata_only:false,metadata_and_ownership_verified:differences.length===0 && exact.status==="MATCH"};
+    if (!storageEvidence.metadata_and_ownership_verified) {
+      await db.query(`insert into custodial_dr.restore_discrepancies(
+        restore_id,authority_generation,category,status,before_count,restored_count,details_json
+      ) values ($1,$2,'storage_state','OPEN',$3,$4,$5::jsonb)
+      on conflict (restore_id,category) do update set status='OPEN',before_count=excluded.before_count,
+        restored_count=excluded.restored_count,details_json=excluded.details_json,resolved_by=null,resolved_at=null,resolution=null`,
+      [restoreId,generation,objects.length,actualObjects.rowCount,JSON.stringify(storageEvidence)]);
+      requireFreshContinuation();
+    }
+  }
+  const storageVerified = freshStorageProvider !== null
+    ? storageEvidence.provider_verified === true && storageEvidence.metadata_and_ownership_verified === true
+    : databaseOnly || storageEvidence.metadata_and_ownership_verified === true;
   requireFreshContinuation();
   await db.query(`update custodial_dr.restore_manifests set storage_verified=$2,storage_evidence=$3::jsonb,updated_at=clock_timestamp() where restore_id=$1`, [restoreId, storageVerified, JSON.stringify(storageEvidence)]);
   requireFreshContinuation();
@@ -929,7 +974,12 @@ async function continueRestoreAfterDatabase({databaseEvidence,immutablePrivateDa
   await setControl("VERIFYING");
   requireFreshContinuation();
 
-  if (!databaseOnly) {
+  if (!databaseOnly || freshStorageProvider !== null) {
+    if (freshStorageProvider !== null) {
+      requireFreshContinuation();
+      storageEvidence.final_provider_resample = await verifyFreshLocalStorageProvider({token:freshStorageProvider,db,state:"VERIFYING"});
+      requireFreshContinuation();
+    }
     requireOriginalArchiveSource();
     const finalBuckets = await db.query("select row_to_json(b) row from storage.buckets b order by b.id");
     requireOriginalArchiveSource();
@@ -940,7 +990,8 @@ async function continueRestoreAfterDatabase({databaseEvidence,immutablePrivateDa
       archivedObjects: objects,
       actualBuckets: finalBuckets.rows.map((item) => item.row),
       actualObjects: finalObjects.rows.map((item) => item.row),
-    });
+    }).filter(item=>!(freshStorageProvider !== null && item.field==='owner_access_boundary'
+      && storageEvidence.final_provider_resample.owner_access_probes.some(probe=>probe.bucket_id===item.bucket_id && probe.name===item.name && probe.status==='VERIFIED_CURRENT_RESTORED_ROLE_BOUNDARY')));
     const finalExactStorageData = await readExactOriginalStorageSnapshot();
     requireOriginalArchiveSource();
     const finalStorageVerified = finalStorageDifferences.length === 0 && finalExactStorageData.status === "MATCH";
