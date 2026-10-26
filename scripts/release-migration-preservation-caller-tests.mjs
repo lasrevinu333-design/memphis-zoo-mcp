@@ -13,7 +13,7 @@ const stableJson=JSON.stringify;
 const sha=v=>createHash('sha256').update(v).digest('hex');
 const digest=v=>sha(stableJson(v));
 let checks=0;
-async function fixture({target=true,fail=null,length=159,rehearsal=true}={}){
+async function fixture({target=true,fail=null,length=160,rehearsal=true}={}){
  const events=[],logs=[],failError=Error('UNIT_'+fail),before={cron_jobs:[],tables:[{original:true}]},after={cron_jobs:[],tables:[{candidate:true}]};
  const ledger=[{version:'20250101000000',name:'original',statements:['ORIGINAL']}];
  const pending=Array.from({length},(_,i)=>{const version=String(20260101000000+i);return{order:i+1,file:version+'_unit.sql',source_migration_version:version,phase:'unit',sha256:'b'.repeat(64)};});
@@ -55,7 +55,7 @@ async function fixture({target=true,fail=null,length=159,rehearsal=true}={}){
   captureCatalogFromSnapshot:async()=>{catalogReads++;events.push('catalogRead');if(fail==='sourceCatalog'&&catalogReads===1)return after;if(rolled)return fail==='rollbackCatalog'?after:before;return catalogReads===1?before:after;},
   fingerprintSchemaCatalog:c=>({fingerprint:fail==='targetCatalog'&&c.tables[0].candidate===true?'0'.repeat(64):digest(c)}),
   openIsolatedPreservationArchive:()=>{events.push('openArchive');if(fail==='archive')throw failError;return{archive:{unitArchive:true},close(){events.push('preservationArchiveClose');}};},
-  prepareIsolatedReleaseDataPreservation:async args=>{events.push('snapshot');assert.deepEqual(args.sourceCatalog,before);assert.equal(args.plan.length,159);assert.equal(args.verifiedArchive.unitArchive,true);if(fail==='snapshot')throw failError;return{verify:async()=>{events.push('verify');if(fail==='verify')throw failError;return{unitPreserved:true};}};},
+  prepareIsolatedReleaseDataPreservation:async args=>{events.push('snapshot');assert.deepEqual(args.sourceCatalog,before);assert.equal(args.plan.length,160);assert.equal(args.verifiedArchive.unitArchive,true);if(fail==='snapshot')throw failError;return{verify:async()=>{events.push('verify');if(fail==='verify')throw failError;return{unitPreserved:true};}};},
   releaseMigrationAuthorizationBinding:()=>{},requireSigningKey:()=>{},verifyBinding:()=>false,validateAuthorizationRehearsalProvenance:()=>{},TASK_LOCAL_PROVENANCE_KIND:'unit',TASK_LOCAL_RUNNER_PATH:'unit'};
  let error;try{await new AsyncFunction(...Object.keys(dependencies),executable)(...Object.values(dependencies));}catch(e){error=e;}
  return{events,logs,error,migrations};
@@ -63,11 +63,11 @@ async function fixture({target=true,fail=null,length=159,rehearsal=true}={}){
 const before=(r,a,b)=>assert.ok(r.events.indexOf(a)>=0&&r.events.indexOf(a)<r.events.indexOf(b),a+' before '+b);
 const absent=(r,...names)=>names.forEach(n=>assert.equal(r.events.includes(n),false,n+' absent'));
 async function check(name,fn){await fn();checks++;}
-await check('159 target capture snapshots and verifies within locks before postcatalog, rolls back and reads source before publication',async()=>{
- const r=await fixture();assert.ifError(r.error);assert.equal(r.migrations,159);before(r,'openArchive','connect');before(r,'ledgerRead','snapshot');before(r,'snapshot','migration:1');before(r,'migration:159','verify');before(r,'verify','rollback');before(r,'rollback','successReceipt');
+await check('160 target capture snapshots and verifies within locks before postcatalog, rolls back and reads source before publication',async()=>{
+ const r=await fixture();assert.ifError(r.error);assert.equal(r.migrations,160);before(r,'openArchive','connect');before(r,'ledgerRead','snapshot');before(r,'snapshot','migration:1');before(r,'migration:160','verify');before(r,'verify','rollback');before(r,'rollback','successReceipt');
  const publish=r.events.indexOf('successReceipt');assert.ok(r.events.lastIndexOf('ledgerRead',publish)>r.events.indexOf('rollback'));assert.ok(r.events.lastIndexOf('catalogRead',publish)>r.events.indexOf('rollback'));assert.equal(r.logs.find(x=>x.scope==='target_preparation').source_data_preservation.unitPreserved,true);absent(r,'COMMITTED','refusalReceipt');before(r,'end','preservationArchiveClose');before(r,'preservationArchiveClose','captureArchiveCleanup');
 });
-await check('159 ordinary isolated rehearsal verifies before its existing disposable commit and prints receipt afterward',async()=>{const r=await fixture({target:false});assert.ifError(r.error);before(r,'snapshot','migration:1');before(r,'migration:159','verify');before(r,'verify','COMMITTED');before(r,'COMMITTED','stdout');assert.equal(r.logs[0].source_data_preservation.unitPreserved,true);absent(r,'successReceipt','refusalReceipt','captureArchiveCleanup');});
+await check('160 ordinary isolated rehearsal verifies before its existing disposable commit and prints receipt afterward',async()=>{const r=await fixture({target:false});assert.ifError(r.error);before(r,'snapshot','migration:1');before(r,'migration:160','verify');before(r,'verify','COMMITTED');before(r,'COMMITTED','stdout');assert.equal(r.logs[0].source_data_preservation.unitPreserved,true);absent(r,'successReceipt','refusalReceipt','captureArchiveCleanup');});
 for(const target of [true,false])for(const fail of ['archive','connect','sourceCatalog','snapshot','migration','ledger','verify',...(!target?['targetCatalog']:[])])await check('failure '+fail+' target='+target+' never commits or publishes success',async()=>{
  const r=await fixture({target,fail});assert.ok(r.error,JSON.stringify({target,fail,events:r.events.slice(-15)}));absent(r,'COMMITTED','successReceipt','stdout');assert.ok(r.events.includes('end'));if(fail!=='archive')assert.ok(r.events.includes('preservationArchiveClose'));if(['archive','connect'].includes(fail))absent(r,'rollback','ledgerRead','catalogRead');
  if(['archive','connect','sourceCatalog','snapshot'].includes(fail))assert.equal(r.migrations,0);
@@ -75,5 +75,5 @@ for(const target of [true,false])for(const fail of ['archive','connect','sourceC
  if(fail!=='migration')absent(r,'refusalReceipt');else if(target){before(r,'rollback','refusalReceipt');assert.ok(r.events.lastIndexOf('ledgerRead')<r.events.indexOf('refusalReceipt'));}
 });
 for(const fail of ['rollbackLedger','rollbackCatalog'])await check('target source readback '+fail+' refuses metadata publication',async()=>{const r=await fixture({fail});assert.ok(r.error);absent(r,'successReceipt','refusalReceipt','COMMITTED','stdout');});
-await check('older isolated non159 path does not borrow new archive or checker authority',async()=>{const r=await fixture({target:false,length:2});assert.ifError(r.error);absent(r,'openArchive','snapshot','verify');assert.ok(r.events.includes('COMMITTED'));assert.equal(Object.hasOwn(r.logs[0],'source_data_preservation'),false);});
+await check('older isolated non160 path does not borrow new archive or checker authority',async()=>{const r=await fixture({target:false,length:2});assert.ifError(r.error);absent(r,'openArchive','snapshot','verify');assert.ok(r.events.includes('COMMITTED'));assert.equal(Object.hasOwn(r.logs[0],'source_data_preservation'),false);});
 console.log(JSON.stringify({status:'PASS_RECORDING_CALLER_ONLY',checks,caller_sha256:sha(original),actual_SQL:false,production:false}));

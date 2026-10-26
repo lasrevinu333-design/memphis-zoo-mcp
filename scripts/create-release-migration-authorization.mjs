@@ -13,6 +13,7 @@ import {
 } from "./disaster-recovery-crypto.mjs";
 import { materializeVerifiedArchive } from "./disaster-recovery-archive.mjs";
 import { parseJsonValueStream } from "./json-value-stream.mjs";
+import { releaseMigrationPlanIdentity } from "./production-forward-source.mjs";
 import {
   TASK_LOCAL_PROVENANCE_KIND,
   TASK_LOCAL_RUNNER_PATH,
@@ -93,7 +94,7 @@ const rehearsalProvenanceKind = validateRehearsalAttestationProvenance(rehearsal
   resultSha256: rehearsalResultSha256,
   runnerSha256: taskLocalRunnerSha256,
 });
-const plan = state.pending_migrations.map(({ order, source_migration_version, file, sha256: digest }) => ({ order, source_migration_version, file, sha256: digest }));
+const plan = releaseMigrationPlanIdentity(state.pending_migrations);
 const planSha256 = sha256(stableJson(plan));
 const backupCompletedAt = Date.parse(String(summary.completed_at || ""));
 const rehearsalCompletedAt = Date.parse(String(rehearsal?.completed_at || ""));

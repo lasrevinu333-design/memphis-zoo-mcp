@@ -11,23 +11,39 @@ const binding=JSON.parse(readFileSync(resolve(root,'release/current291-staged-so
 const plan=readMigrationReplayPlan(root);const checks=[];
 const check=(name,fn)=>{fn();checks.push(name);};
 const sha=b=>createHash('sha256').update(b).digest('hex');
-check('exact134 base and159 current pending members',()=>{
- assert.equal(plan.baseCount,134);assert.equal(plan.files.length,293);
- assert.equal(state.pending_migrations.length,159);
+check('exact134 base and160 current pending members',()=>{
+ assert.equal(plan.baseCount,134);assert.equal(plan.files.length,294);
+ assert.equal(state.pending_migrations.length,160);
  assert.deepEqual(state.pending_migrations.map(x=>x.file),plan.files.slice(134));
 });
 check('every original applied-prefix byte remains exact',()=>{
  assert.equal(binding.preserved134.length,134);
  for(const x of binding.preserved134)assert.equal(sha(readFileSync(resolve(root,'supabase/migrations',x.file))),x.sha256);
 });
-check('all159 source versions/order/hash resolve, only27 explicit existing-owner variants',()=>{
- assert.equal(state.pending_migrations.filter(x=>x.forward_source).length,27);
+check('all160 source versions/order/hash resolve, only28 explicit existing-owner variants',()=>{
+ assert.equal(state.pending_migrations.filter(x=>x.forward_source).length,28);
  for(const [i,x]of state.pending_migrations.entries()){
   assert.equal(x.order,i+1);assert.equal(x.source_migration_version,x.file.slice(0,14));
   const actual=resolveReleaseMigrationSource(root,x);assert.equal(sha(actual.sql),x.sha256);
   if(x.forward_source)assert.equal(actual.forward_profile,'existing-postgres-owner');
  }
 });
+
+check('order158 exact original production actor counterpart preserves every other canonical byte',()=>{
+ const item=state.pending_migrations[157];assert.equal(item.order,158);assert.equal(item.file,'20261025094420_authority_identity_renderer_counterparts.sql');
+ const original=readFileSync(resolve(root,'supabase/migrations',item.file),'utf8');
+ assert.equal(sha(original),'19e55cfdc9f1ddfd34c2912892ac23979ad5fc44a45da7e444a008b1da0a8c9b');
+ const old="IF session_user<>'supabase_admin' OR current_user<>session_user OR current_setting('session_replication_role')<>'origin' THEN";
+ assert.equal(original.split(old).length,2);
+ const selected=resolveReleaseMigrationSource(root,item);assert.equal(selected.canonical_sha256,sha(original));
+ assert.equal(selected.sql,original.replace(old,old.replace("'supabase_admin'","'postgres'")));
+ assert.equal(item.forward_source.profile,'existing-postgres-owner');assert.equal(item.forward_source.file,'release/production-forward-source/'+item.file);
+ assert.equal(item.sha256,sha(selected.sql));assert.notEqual(item.sha256,sha(original));
+ for(const bad of [{...item,forward_source:undefined},{...item,sha256:'0'.repeat(64)},
+  {...item,forward_source:{...item.forward_source,profile:'arbitrary-owner'}},
+  {...item,forward_source:{...item.forward_source,canonical_sha256:'0'.repeat(64)}}])assert.throws(()=>resolveReleaseMigrationSource(root,bad));
+});
+
 check('original118 canonical preimages retained',()=>{
  for(const [i,x]of binding.historical118.entries()){
   const n=state.pending_migrations[i];assert.equal(n.file,x.file);
@@ -49,12 +65,12 @@ check('current unresolved target refuses normal preflight before DB exists',()=>
 const unit={canonical_source_schema_fingerprint:'a'.repeat(64),expected_catalog_counts:{functions:1},production_ledger_count:1,public_function_count:1};
 check('existing target structural prerequisite accepts fully typed UNIT only',()=>assert.doesNotThrow(()=>assertCapturedTargetCatalog(unit)));
 for(const key of Object.keys(unit))check('missing target '+key+' refuses',()=>{const x={...unit};delete x[key];assert.throws(()=>assertCapturedTargetCatalog(x));});
-check('original217-table proof stays mandatory at159, no155 bypass',()=>{
+check('original217-table proof stays mandatory at160, no155 bypass',()=>{
  const source=readFileSync(resolve(root,'scripts/apply-release-migration-plan.mjs'),'utf8');
- assert.ok(source.includes('rehearsal&&plan.length===159'));
+ assert.ok(source.includes('rehearsal&&plan.length===160'));
  assert.ok(!source.includes('rehearsal&&plan.length===155'));
  const m=JSON.parse(readFileSync(resolve(root,'release/production-data-preservation/original-235.json')));
- assert.equal(m.plan.length,159);assert.equal(m.tables.length,182);assert.equal(m.production_authorized,false);
+ assert.equal(m.plan.length,160);assert.equal(m.tables.length,182);assert.equal(m.production_authorized,false);
  assert.deepEqual(m.plan.map(x=>x.file),state.pending_migrations.map(x=>x.file));
 });
 check('normal apply preflight is before any client/query; transaction rollback body retained',()=>{
