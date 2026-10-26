@@ -1,7 +1,7 @@
 {
   "artifact": "integrated-backend-authority-release-evidence.v2",
   "release_id": "release-2026.07.19.custodial-v3.12",
-  "frontend_commit_sha": "f0e5994762ee1362252e167475dd59d6e75982e6",
+  "frontend_commit_sha": "c384572e984f66d038d545fe2a3ed0b1cd34d8e5",
   "frontend_commit_state": "final_pair_bound",
   "schema_fingerprint": "b849658718b36165fba18c67855933b4e131f9cee76cee8d9b3fe91208831548",
   "schema_transition": {
@@ -145,7 +145,7 @@
       {
         "path": ".github/workflows/custodial-production-repair.yml",
         "mode": "100644",
-        "object_id": "b8271c719c5764ca3a782a3089cb539e7b05e394"
+        "object_id": "da909d6efdbd9403a887080ecc48a69c131beac7"
       },
       {
         "path": ".github/workflows/device-credential-foundation.yml",
@@ -160,7 +160,7 @@
       {
         "path": ".github/workflows/foundation-security-gate.yml",
         "mode": "100644",
-        "object_id": "d6116630b2ca8085195be9dd070e53425af47a5a"
+        "object_id": "ff60296dffd6c7146970da33a222d4e848cc5515"
       },
       {
         "path": ".github/workflows/integrated-release-attestation.yml",
@@ -690,7 +690,7 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "5c4fe28c98febc8ca9efbaac59ea5a4fa32c5f22"
+        "object_id": "1fa2577af5cd31dfa0e4650199d412e131410e0e"
       },
       {
         "path": "release/installed-source/20261006031304_custodial_owner_delegated_actions.sql",
@@ -890,7 +890,7 @@
       {
         "path": "release/schema-alignment-input.json",
         "mode": "100644",
-        "object_id": "51f6848735a47118184bf6b0894427f19209653f"
+        "object_id": "5efc659acd1a992111aeb6f9c27e09851f199ff7"
       },
       {
         "path": "release/target-capture-source/20261021111917_dashboard_application_reader_operational_day_repair.sql",
@@ -1308,6 +1308,11 @@
         "object_id": "58cf6db43b9e3584052984f19185777e2d4b8545"
       },
       {
+        "path": "scripts/feedback-attachment-admission-tests.mjs",
+        "mode": "100644",
+        "object_id": "f008bda9ceed182c053cea6e72d83212c4a91d3b"
+      },
+      {
         "path": "scripts/feedback-authority-contract-tests.mjs",
         "mode": "100644",
         "object_id": "d1e3a8d3fe7c9aaadc19a7a007ec575d6637c861"
@@ -1318,9 +1323,19 @@
         "object_id": "bf042c996f5997eed3ac9f1ff0447c7c5e4b0eb8"
       },
       {
+        "path": "scripts/feedback-email-relay-tests.mjs",
+        "mode": "100644",
+        "object_id": "fa4f71188e2c7db6534f4534c574cee6a4358a99"
+      },
+      {
         "path": "scripts/feedback-reader-database-probe.mjs",
         "mode": "100644",
         "object_id": "29ced11cc61e0e41bf19b30e4957a8fcd5760d9f"
+      },
+      {
+        "path": "scripts/feedback-relay-original-call-lifetime-tests.mjs",
+        "mode": "100644",
+        "object_id": "cb5ef4b29c522df391167eb9eca799d684f7ba52"
       },
       {
         "path": "scripts/final-closure-database-isolated-tests.mjs",
@@ -1656,6 +1671,11 @@
         "path": "scripts/mcp-connector-auth-tests.mjs",
         "mode": "100644",
         "object_id": "c554eb9e10dad51c94e3984279fa3ce1a72f936f"
+      },
+      {
+        "path": "scripts/mcp-retained-outlook-registration-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "e2e77132543c0d863698a69cd257e6da34134c91"
       },
       {
         "path": "scripts/mcp-self-contained-oauth-wire-tests.mjs",
@@ -3008,9 +3028,19 @@
         "object_id": "ad2c278d74514800a6c2e7ed364ac5b9e01d9f85"
       },
       {
+        "path": "src/feedback-attachment-admission.js",
+        "mode": "100644",
+        "object_id": "b3f2871e6385aabb3997ce8246bee4f26222e723"
+      },
+      {
         "path": "src/feedback-authority.js",
         "mode": "100644",
         "object_id": "141138f661bfffe95d3133d897f642185ea0c848"
+      },
+      {
+        "path": "src/feedback-email-relay.js",
+        "mode": "100644",
+        "object_id": "d239bcd808604a20a54b5a2e771db1715a0829a3"
       },
       {
         "path": "src/gemini-console-api.js",
@@ -3055,7 +3085,7 @@
       {
         "path": "src/index.js",
         "mode": "100644",
-        "object_id": "85baae0d368d5c7a5e9237ffcf8fce0fb2b7f76f"
+        "object_id": "cbbbfeb2b85c4fa48f227c9dfcdca8e01f0a9021"
       },
       {
         "path": "src/integrated-backend-authority-release-evidence.js",
@@ -3080,12 +3110,27 @@
       {
         "path": "src/mcp/create-mcp-server.js",
         "mode": "100644",
-        "object_id": "f00f5cb0ccdd9b7d055f799e2119548bc7911113"
+        "object_id": "78dafc430f60c6577188211cacdade11dfc17788"
+      },
+      {
+        "path": "src/mcp/feedback-relay-tools.js",
+        "mode": "100644",
+        "object_id": "2bde06984b2009e9631ed9638a1c158794033942"
       },
       {
         "path": "src/mcp/github-tools.js",
         "mode": "100644",
         "object_id": "e92202c70dd60483fdad2b429068a01b66bbff2d"
+      },
+      {
+        "path": "src/mcp/operations-mail-tools.js",
+        "mode": "100644",
+        "object_id": "5129657473031b4ea7883102cf816f7c1c0822eb"
+      },
+      {
+        "path": "src/mcp/outlook-event-tools.js",
+        "mode": "100644",
+        "object_id": "ceecf88d0b48e92c7d241f0ea2d4a27278c3e1d2"
       },
       {
         "path": "src/mcp/register.js",
@@ -3105,7 +3150,7 @@
       {
         "path": "src/mcp/server-tools.js",
         "mode": "100644",
-        "object_id": "58b01f80ee3bc421c536a7d6117a1531d4a8b147"
+        "object_id": "4d73743e71b4e6496084f744fcb482794e92226f"
       },
       {
         "path": "src/mcp/supabase-tools.js",
@@ -3115,7 +3160,7 @@
       {
         "path": "src/mcp/tool-manifest.js",
         "mode": "100644",
-        "object_id": "5e0ddaab4ac2ba514003d66e47adfe330ab2672a"
+        "object_id": "f6f8385ae0ea23fa3f08c734597786d0d2aff5d9"
       },
       {
         "path": "src/memphis-ai.js",
@@ -3156,6 +3201,26 @@
         "path": "src/operational-analytics-api.js",
         "mode": "100644",
         "object_id": "1b51b31d54d2d83fbfd25cfdd90d8127cf1b257c"
+      },
+      {
+        "path": "src/operations-mail-contract.js",
+        "mode": "100644",
+        "object_id": "e039dba3092355d5e65d23bf52e7bd58c8ae2c18"
+      },
+      {
+        "path": "src/operations-mail-ledger.js",
+        "mode": "100644",
+        "object_id": "4c8c397b207a10e1cd68e40b8d4b362fd0a76e59"
+      },
+      {
+        "path": "src/operations-mail-sync.js",
+        "mode": "100644",
+        "object_id": "d1ec396d90da1c3b6dafc85a4ac4a1d117ec2c43"
+      },
+      {
+        "path": "src/outlook-event-sync.js",
+        "mode": "100644",
+        "object_id": "d38b1d320271947a139f09943d801c56815a3eb8"
       },
       {
         "path": "src/production-release-deployment-recorder.js",
@@ -5553,7 +5618,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 1085,
+    "authority_path_count": 1098,
     "migration_path_count": 293,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."

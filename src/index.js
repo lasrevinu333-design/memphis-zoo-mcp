@@ -2358,6 +2358,7 @@ function createMcpServer({ readOnly = false, advertiseOAuth = false } = {}) {
     name: process.env.APP_NAME,
     version: RELEASE_ID,
     releaseId: RELEASE_ID,
+    backendCommitSha: BACKEND_COMMIT_SHA,
     readOnly,
     // A tokenless request gets every manifest read tool. When OAuth is
     // available the same mixed tool list also advertises guarded writes so a

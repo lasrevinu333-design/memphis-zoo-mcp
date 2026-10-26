@@ -1,3 +1,8 @@
+import { z } from 'zod';
+import { feedbackRelaySchemas, FEEDBACK_RELAY_CONTRACT, FEEDBACK_RELAY_SCHEMA_SHA256 } from '../feedback-email-relay.js';
+import {outlookSyncSchema,OUTLOOK_SYNC_CONTRACT,OUTLOOK_SYNC_SCHEMA_SHA256} from '../outlook-event-sync.js';
+import {operationsMailSyncSchema,OPERATIONS_MAIL_SYNC_CONTRACT,OPERATIONS_MAIL_SYNC_SCHEMA_SHA256} from '../operations-mail-sync.js';
+
 export const TOOL_SAFETY = Object.freeze({
   READ: "read",
   SAFE_WRITE: "safe-write",
@@ -8,6 +13,26 @@ export const TOOL_SAFETY = Object.freeze({
 export const MCP_TOOL_MANIFEST_VERSION = "mcp-tools.v3";
 
 export const MCP_TOOL_MANIFEST = Object.freeze([
+  {name:'custodial_outlook_operations_import',safety:TOOL_SAFETY.SAFE_WRITE,status:'current',
+    description:'Private original school/Spiceworks observation import with existing restore lease and exact readback; no mailbox activation or external ticket edits.',
+    requires:['supabase'],inputs:Object.keys(operationsMailSyncSchema.shape),input_schema:z.toJSONSchema(operationsMailSyncSchema),
+    contract_version:OPERATIONS_MAIL_SYNC_CONTRACT,adapter_schema_sha256:OPERATIONS_MAIL_SYNC_SCHEMA_SHA256,required_scopes:['mcp:read','mcp:write']},
+  {name:'custodial_outlook_events_sync',safety:TOOL_SAFETY.SAFE_WRITE,status:'current',
+    description:'Private existing Outlook event writer with source-bound ledger readback; no mailbox/scheduler activation or external mutation.',
+    requires:['supabase'],inputs:Object.keys(outlookSyncSchema.shape),input_schema:z.toJSONSchema(outlookSyncSchema),
+    contract_version:OUTLOOK_SYNC_CONTRACT,adapter_schema_sha256:OUTLOOK_SYNC_SCHEMA_SHA256,required_scopes:['mcp:read','mcp:write']},
+  ...Object.entries(feedbackRelaySchemas).map(([verb, schema]) => ({
+    name: `custodial_feedback_relay_${verb}`,
+    safety: TOOL_SAFETY.SAFE_WRITE,
+    status: 'current',
+    description: `Private Feedback ${verb}; non-sending queue boundary, transport initially paused.`,
+    requires: ['supabase'],
+    inputs: Object.keys(schema.shape),
+    input_schema: z.toJSONSchema(schema),
+    contract_version: FEEDBACK_RELAY_CONTRACT,
+    adapter_schema_sha256: FEEDBACK_RELAY_SCHEMA_SHA256,
+    required_scopes: ['mcp:read', 'mcp:write'],
+  })),
   {
     name: "ping",
     safety: TOOL_SAFETY.READ,
@@ -200,6 +225,7 @@ export function getToolManifest({ includePlanned = true } = {}) {
   return {
     ok: true,
     version: MCP_TOOL_MANIFEST_VERSION,
+    evidence_kind: 'source_catalog_not_runtime_admission',
     generated_at: new Date().toISOString(),
     tools,
   };
