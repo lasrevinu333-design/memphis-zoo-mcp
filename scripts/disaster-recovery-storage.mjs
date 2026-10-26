@@ -1,13 +1,13 @@
-import { createHash } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 import { isProxy } from "node:util/types";
 import { pipeline } from "node:stream/promises";
 import { Transform } from "node:stream";
 import pg from "pg";
-import { stableJson } from "./disaster-recovery-crypto.mjs";
+import { stableJson, verifyBinding, captureVerifiedOriginalRestoreIntent } from "./disaster-recovery-crypto.mjs";
 import { readVerifiedArchiveSourceBinding, readVerifiedRestoreTableSelection, openVerifiedRestoreTableData,
   decodeRestoreTableRowLine, createRestoreRowLineBatchDecoder, postgresJsonTextLineEncoding,
   postgresTextColumnsLineEncoding, createRestoreRowUtf8Guard, readVerifiedStorageUploadInventory,
-  assertVerifiedStorageUploadCurrent, readVerifiedStorageUploadBlob } from "./disaster-recovery-archive.mjs";
+  assertVerifiedStorageUploadCurrent, readVerifiedStorageUploadBlob, assertVerifiedArchiveIndependentIntentKey } from "./disaster-recovery-archive.mjs";
 
 const StorageTableClient = pg.Client;
 const storageTableQuery = StorageTableClient.prototype.query;
@@ -1217,4 +1217,202 @@ export function isExplicitLocalRestoreFixtureTarget(databaseUrl) {
     && target.search===""&&target.hash===""
     && /^(127\.0\.0\.1|localhost)$/.test(target.hostname)
     && /^\/mz_schema_rebuild_[a-zA-Z0-9_]+$/.test(target.pathname);
+}
+
+
+// Explicit disposable same-original provider. This is not a production target,
+// import, ACK, role override or metadata-repair authority. The official FILE
+// backend is populated at archived versions before its server starts; this
+// consumer only reads through the genuine official HTTP API.
+const freshLocalStorageTokens = new WeakMap();
+const freshLocalStorageFetch = globalThis.fetch;
+const freshLocalStorageImage = "sha256:528ec49c3c32561908b07ee91bced7f8456f3b688164e341eaa422441767a0bd";
+const freshStorageHash = value => createHash("sha256").update(value).digest("hex");
+function freshStorageRefuse() { throw Object.assign(new Error("Fresh local Storage provider binding is unavailable."), {code:"FRESH_LOCAL_STORAGE_PROVIDER_UNAVAILABLE",outcome:"UNKNOWN",retry_safe:false}); }
+function freshStorageData(value, depth=0) {
+  if(depth>12)freshStorageRefuse();
+  if(value===null || typeof value==="boolean" || typeof value==="string" && value.length<=1048576 || typeof value==="number" && Number.isSafeInteger(value))return value;
+  if(!value || typeof value!=="object" || isProxy(value))freshStorageRefuse();
+  const array=Array.isArray(value), proto=Object.getPrototypeOf(value);
+  if(proto!==(array?Array.prototype:Object.prototype))freshStorageRefuse();
+  const keys=Reflect.ownKeys(value);
+  if(keys.length>4096 || keys.some(k=>typeof k!=="string"))freshStorageRefuse();
+  const out=array?[]:{};
+  if(array && keys.length!==value.length+1)freshStorageRefuse();
+  for(const key of keys){
+    if(array && key==="length")continue;
+    if(array && !/^(0|[1-9][0-9]*)$/.test(key))freshStorageRefuse();
+    if(["__proto__","constructor","prototype","toJSON"].includes(key))freshStorageRefuse();
+    const d=Object.getOwnPropertyDescriptor(value,key);
+    if(!d || !Object.hasOwn(d,"value") || !d.enumerable)freshStorageRefuse();
+    out[key]=freshStorageData(d.value,depth+1);
+  }
+  return out;
+}
+function freshStorageClosed(value,keys){
+  if(!value || Array.isArray(value) || Object.keys(value).sort().join("|")!==keys.slice().sort().join("|"))freshStorageRefuse();
+  return value;
+}
+export function freshLocalStorageArchiveBinding(verifiedArchive){
+  const sourceBinding=readVerifiedArchiveSourceBinding(verifiedArchive);
+  const selection=readVerifiedRestoreTableSelection(verifiedArchive,{databaseOnly:true});
+  const source_profile=selection.privateTables.length ? "immutable-private-fresh-supabase-admin"
+    : selection.databaseTables.length && selection.databaseTables.every(t=>t.data_encoding===postgresTextColumnsLineEncoding)
+      ? "native-text-v4-existing-postgres" : null;
+  if(!source_profile)freshStorageRefuse();
+  const inventory=readVerifiedStorageUploadInventory(verifiedArchive);
+  return Object.freeze({source_profile,expected_session_user:source_profile==="native-text-v4-existing-postgres"?"postgres":"supabase_admin",
+    expected_database_owner:"postgres",sourceBinding,
+    archived_storage_inventory_sha256:freshStorageHash(stableJson({buckets:inventory.bucketRecords,objects:inventory.objectRecords})),
+    bucket_count:inventory.bucketRecords.length,object_count:inventory.objectRecords.length});
+}
+// DATA validator, also used by the actual branded capture below. A returned
+// object alone never opens a connection or creates a usable provider token.
+export function validateFreshLocalStorageProviderData(options){
+  try {
+  const o=freshStorageData(options);
+  freshStorageClosed(o,["providerEnvelope","originalIntentEnvelope","intentVerifyKey","intentVerifyKeyId","serviceKey","jwtSecret","databaseUrl","expected"]);
+  const e=freshStorageClosed(o.expected,["source_profile","expected_session_user","expected_database_owner","archive_digest","source_project_ref","source_identity_sha256","archived_storage_inventory_sha256"]);
+  const profiles={"native-text-v4-existing-postgres":"postgres","immutable-private-fresh-supabase-admin":"supabase_admin"};
+  if(!Object.hasOwn(profiles,e.source_profile) || e.expected_session_user!==profiles[e.source_profile] || e.expected_database_owner!=="postgres")freshStorageRefuse();
+  const intent=captureVerifiedOriginalRestoreIntent(o.originalIntentEnvelope,o.intentVerifyKey,o.intentVerifyKeyId);
+  freshStorageClosed(intent,["restore_id","authority_generation","retry_of_restore_id","archive_digest","source_project_ref","target_project_ref","source_identity_sha256","target_migration_head","target_release_identity","actor","approved_at","expires_at","resume_after_verification"]);
+  if(intent.archive_digest!==e.archive_digest || intent.source_project_ref!==e.source_project_ref || intent.source_identity_sha256!==e.source_identity_sha256
+    || intent.authority_generation!==1 || intent.retry_of_restore_id!==null || intent.resume_after_verification!==false)freshStorageRefuse();
+  const envelope=freshStorageClosed(o.providerEnvelope,["format","algorithm","key_id","binding","signature"]);
+  if(envelope.format!=="custodial.immutable-fresh-local-storage-provider.v1" || envelope.algorithm!=="hmac-sha256" || envelope.key_id!==o.intentVerifyKeyId
+    || !/^[a-f0-9]{64}$/.test(envelope.signature) || !verifyBinding(envelope.binding,envelope.signature,o.intentVerifyKey))freshStorageRefuse();
+  const b=freshStorageClosed(envelope.binding,["purpose","source_profile","original_intent_sha256","restore_id","authority_generation","archive_digest","source_identity_sha256","source_project_ref","target_project_ref","approved_at","expires_at","host_target","provider"]);
+  if(b.purpose!=="custodial-immutable-fresh-local-storage-provider" || b.source_profile!==e.source_profile || b.original_intent_sha256!==freshStorageHash(stableJson(o.originalIntentEnvelope)))freshStorageRefuse();
+  for(const key of ["restore_id","authority_generation","archive_digest","source_identity_sha256","source_project_ref","target_project_ref"])if(b[key]!==intent[key])freshStorageRefuse();
+  const approved=Date.parse(b.approved_at),expires=Date.parse(b.expires_at),originalApproved=Date.parse(intent.approved_at),originalExpires=Date.parse(intent.expires_at);
+  if(![approved,expires,originalApproved,originalExpires].every(Number.isFinite) || approved<originalApproved || approved>Date.now() || expires>originalExpires
+    || expires<=Date.now() || expires-approved>86400000)freshStorageRefuse();
+  const h=freshStorageClosed(b.host_target,["hostname","port","database_name","database_oid","session_user","database_owner"]);
+  const u=new URL(o.databaseUrl);
+  if(!["postgres:","postgresql:"].includes(u.protocol) || u.hostname!=="127.0.0.1" || u.search || u.hash || u.username!==e.expected_session_user
+    || h.hostname!==u.hostname || h.port!==Number(u.port||5432) || h.database_name!==decodeURIComponent(u.pathname.slice(1))
+    || !/^mz_schema_rebuild_[a-zA-Z0-9_]+$/.test(h.database_name) || !/^[1-9][0-9]{0,9}$/.test(h.database_oid)
+    || h.session_user!==e.expected_session_user || h.database_owner!==e.expected_database_owner)freshStorageRefuse();
+  const p=freshStorageClosed(b.provider,["origin","container_id","image_digest","namespace","config_sha256","service_key_sha256","jwt_secret_sha256","database","backend","restore_method","archived_storage_inventory_sha256","archived_migrations_74_full_tuple_sha256","file_backend_namespace_sha256"]);
+  const origin=new URL(p.origin);
+  if(origin.protocol!=="http:" || origin.hostname!=="127.0.0.1" || !origin.port || Number(origin.port)<1024 || origin.username || origin.password || origin.pathname!=="/" || origin.search || origin.hash
+    || p.origin!==origin.origin || !/^[a-f0-9]{64}$/.test(p.container_id) || p.image_digest!==freshLocalStorageImage
+    || !/^mz_schema_rebuild_[a-zA-Z0-9_]+$/.test(p.namespace) || p.backend!=="file" || p.restore_method!=="official-file-backend-archived-version-v1"
+    || p.archived_storage_inventory_sha256!==e.archived_storage_inventory_sha256 || typeof o.serviceKey!=="string" || o.serviceKey.length<32 || o.serviceKey.length>16384
+    || p.service_key_sha256!==freshStorageHash(o.serviceKey) || typeof o.jwtSecret!=="string" || Buffer.byteLength(o.jwtSecret)<32 || Buffer.byteLength(o.jwtSecret)>16384 || o.jwtSecret===o.intentVerifyKey || p.jwt_secret_sha256!==freshStorageHash(o.jwtSecret))freshStorageRefuse();
+  for(const k of ["config_sha256","archived_migrations_74_full_tuple_sha256","file_backend_namespace_sha256"])if(!/^[a-f0-9]{64}$/.test(p[k]))freshStorageRefuse();
+  const d=freshStorageClosed(p.database,["network_alias","port","database_name","database_oid","role"]);
+  if(!/^mz_schema_rebuild_[a-zA-Z0-9_]+$/.test(d.network_alias) || d.port!==5432 || d.database_name!==h.database_name || d.database_oid!==h.database_oid || d.role!=="supabase_storage_admin")freshStorageRefuse();
+  return Object.freeze({binding:b,intent});
+  } catch { freshStorageRefuse(); }
+}
+export function captureVerifiedFreshLocalStorageProvider(options){
+  if(!options || typeof options!=='object' || isProxy(options) || Object.getPrototypeOf(options)!==Object.prototype)freshStorageRefuse();
+  const keys=['verifiedArchive','originalIntentEnvelope','intentVerifyKey','intentVerifyKeyId','providerEnvelope','serviceKey','jwtSecret','databaseUrl'];
+  if(Reflect.ownKeys(options).length!==keys.length)freshStorageRefuse();
+  const values=keys.map(k=>{const d=Object.getOwnPropertyDescriptor(options,k);if(!d || !Object.hasOwn(d,'value'))freshStorageRefuse();return d.value;});
+  const [verifiedArchive,originalIntentEnvelope,intentVerifyKey,intentVerifyKeyId,providerEnvelope,serviceKey,jwtSecret,databaseUrl]=values;
+  assertVerifiedArchiveIndependentIntentKey(verifiedArchive,intentVerifyKey);
+  assertVerifiedArchiveIndependentIntentKey(verifiedArchive,jwtSecret);
+  const archive=freshLocalStorageArchiveBinding(verifiedArchive),s=archive.sourceBinding;
+  const captured=validateFreshLocalStorageProviderData({providerEnvelope,originalIntentEnvelope,intentVerifyKey,intentVerifyKeyId,serviceKey,jwtSecret,databaseUrl,
+    expected:{source_profile:archive.source_profile,expected_session_user:archive.expected_session_user,expected_database_owner:archive.expected_database_owner,
+      archive_digest:s.archive_digest,source_project_ref:s.project_ref,source_identity_sha256:s.source_identity_sha256,archived_storage_inventory_sha256:archive.archived_storage_inventory_sha256}});
+  const token=Object.freeze({});
+  freshLocalStorageTokens.set(token,{...captured,verifiedArchive,sourceBinding:s,serviceKey,jwtSecret,databaseUrl,db:null,connection:null,stream:null});
+  return token;
+}
+export async function verifyFreshLocalStorageProvider({token,db,state}){
+  const c=freshLocalStorageTokens.get(token);
+  if(!c || !["STORAGE_RESTORING","VERIFYING"].includes(state))freshStorageRefuse();
+  const b=c.binding;
+  const native=()=>{
+    if(Date.parse(b.expires_at)<=Date.now() || readVerifiedArchiveSourceBinding(c.verifiedArchive)!==c.sourceBinding
+      || !db || isProxy(db) || Object.getPrototypeOf(db)!==StorageTableClient.prototype || Object.hasOwn(db,"query")
+      || StorageTableClient.prototype.query!==storageTableQuery || db._connected!==true || db._ending!==false || db._ended!==false || db._queryable!==true
+      || db._txStatus!=="I" || db.readyForQuery!==true || db._activeQuery || db._queryQueue.length || globalThis.fetch!==freshLocalStorageFetch)freshStorageRefuse();
+    const connection=db.connection,stream=connection?.stream;
+    if(!connection || isProxy(connection) || !stream || isProxy(stream) || stream.destroyed || stream.remoteAddress!=="127.0.0.1"
+      || stream.remotePort!==b.host_target.port || db.connectionParameters?.database!==b.host_target.database_name || db.connectionParameters?.user!==b.host_target.session_user)freshStorageRefuse();
+    if(c.db!==null && (c.db!==db || c.connection!==connection || c.stream!==stream))freshStorageRefuse();
+    c.db=db;c.connection=connection;c.stream=stream;
+  };
+  const context=async()=>{
+    native();
+    const r=await Reflect.apply(storageTableQuery,db,[`select current_database() database_name,(select oid::text from pg_catalog.pg_database where datname=current_database()) database_oid,
+      session_user::text session_user,current_user::text current_user,(select pg_catalog.pg_get_userbyid(datdba) from pg_catalog.pg_database where datname=current_database()) database_owner,
+      restore_id::text,authority_generation::text,archive_digest,source_project_ref,target_project_ref,mutations_paused,state
+      from custodial_dr.restore_control where singleton=true`]);
+    native();const r0=r.rows?.[0];
+    if(r.command!=="SELECT" || r.rowCount!==1 || !r0 || r0.database_name!==b.host_target.database_name || r0.database_oid!==b.host_target.database_oid
+      || r0.session_user!==b.host_target.session_user || r0.current_user!==b.host_target.session_user || r0.database_owner!==b.host_target.database_owner
+      || r0.restore_id!==b.restore_id || r0.authority_generation!==String(b.authority_generation) || r0.archive_digest!==b.archive_digest
+      || r0.source_project_ref!==b.source_project_ref || r0.target_project_ref!==b.target_project_ref || r0.mutations_paused!==true || r0.state!==state)freshStorageRefuse();
+  };
+  const request=async(path,limit,bearer=c.serviceKey,deny=false)=>{
+    await context();const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),10000);
+    try{
+      const response=await freshLocalStorageFetch(b.provider.origin+path,{method:"GET",headers:{authorization:`Bearer ${bearer}`,apikey:c.serviceKey},redirect:"error",signal:controller.signal});
+      await context();
+      if(response.url!==b.provider.origin+path)freshStorageRefuse();
+      if(deny){if(![401,403,404].includes(response.status))freshStorageRefuse();await response.body?.cancel();await context();return response.status;}
+      if(!response.ok || !response.body)freshStorageRefuse();
+      const chunks=[];let size=0;
+      for await(const chunk of response.body){size+=chunk.byteLength;if(size>limit){controller.abort();freshStorageRefuse();}chunks.push(Buffer.from(chunk));}
+      await context();return Buffer.concat(chunks);
+    }finally{clearTimeout(timer);}
+  };
+  // Readiness is allowed only after the original data/fence reached this exact
+  // storage boundary, never as an excuse to start/migrate an empty database.
+  const deadline=Date.now()+120000;
+  for(;;){try{await request('/status',65536);break;}catch(error){await context();if(Date.now()>=deadline)throw error;await new Promise(r=>setTimeout(r,250));}}
+  const inventory=readVerifiedStorageUploadInventory(c.verifiedArchive);
+  if(inventory.sourceBinding!==c.sourceBinding)freshStorageRefuse();
+  let totalBytes=0;
+  for(const object of inventory.objectRecords){totalBytes+=object.size_bytes;if(!Number.isSafeInteger(totalBytes) || totalBytes>64*1024*1024)freshStorageRefuse();}
+  const current=()=>assertVerifiedStorageUploadCurrent(c.verifiedArchive);
+  const jwt=(role,sub)=>{
+    const encode=v=>Buffer.from(JSON.stringify(v)).toString('base64url');
+    const body=encode({alg:'HS256',typ:'JWT'})+'.'+encode({role,...(sub?{sub}:{}),aud:'authenticated',iat:Math.floor(Date.now()/1000),exp:Math.min(Math.floor(Date.parse(b.expires_at)/1000),Math.floor(Date.now()/1000)+300)});
+    return body+'.'+createHmac('sha256',c.jwtSecret).update(body).digest('base64url');
+  };
+  const roleProbes=[];
+    for(const object of inventory.objectRecords){
+      if(typeof object.bucket_id!=="string" || /[\\/%?#\x00-\x20\x7f]/.test(object.bucket_id) || typeof object.name!=="string" || !object.name || object.name.startsWith('/') || object.name.endsWith('/')
+        || object.name.includes('//') || /[\\%?#\x00-\x1f\x7f]/.test(object.name) || object.name.split('/').some(part=>part==='.'||part==='..'))freshStorageRefuse();
+      current();
+      // Independently reopen the signed archived blob; no upload/multipart
+      // encoding restrictions are imposed on this read-only provider path.
+      const original=readVerifiedStorageUploadBlob(c.verifiedArchive,object.object_id);
+      if(original.blob.size!==object.size_bytes)freshStorageRefuse();
+      const path='/object/authenticated/'+encodeURIComponent(object.bucket_id)+'/'+object.name.split('/').map(encodeURIComponent).join('/');
+      const bytes=await request(path,object.size_bytes);
+      current();
+      if(bytes.length!==object.size_bytes || freshStorageHash(bytes)!==object.sha256)freshStorageRefuse();
+      await context();
+      const metadata=await Reflect.apply(storageTableQuery,db,[`select to_jsonb(o) object_row,b.public
+        from storage.objects o join storage.buckets b on b.id=o.bucket_id where o.id=$1::uuid and o.bucket_id=$2 and o.name=$3`,[object.object_id,object.bucket_id,object.name]]);
+      await context();
+      if(metadata.rowCount!==1 || typeof metadata.rows[0].public!=='boolean')freshStorageRefuse();
+      const owner=storageOwnerPrincipalId(metadata.rows[0].object_row),publicBucket=metadata.rows[0].public;
+      if(owner!==null && !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(owner))freshStorageRefuse();
+      const rolePath=publicBucket?'/object/public/'+encodeURIComponent(object.bucket_id)+'/'+object.name.split('/').map(encodeURIComponent).join('/'):path;
+      const verify=async bearer=>{const actual=await request(rolePath,object.size_bytes,bearer);if(actual.length!==object.size_bytes || freshStorageHash(actual)!==object.sha256)freshStorageRefuse();};
+      if(owner!==null)await verify(jwt('authenticated',owner));
+      else if(!publicBucket)freshStorageRefuse(); // No invented owner for an ownerless private object.
+      const foreign=owner==='00000000-0000-4000-8000-000000000001'?'00000000-0000-4000-8000-000000000002':'00000000-0000-4000-8000-000000000001';
+      let foreignStatus,anonStatus;
+      if(publicBucket){await verify(jwt('authenticated',foreign));await verify(jwt('anon'));foreignStatus=anonStatus='PUBLIC_EXACT_BYTES';}
+      else{foreignStatus=await request(path,65536,jwt('authenticated',foreign),true);anonStatus=await request(path,65536,jwt('anon'),true);}
+      const invalidStatus=await request(path,65536,'invalid-signature.'+freshStorageHash(object.object_id),true);
+      roleProbes.push(Object.freeze({bucket_id:object.bucket_id,name:object.name,owner_principal:owner,public:publicBucket,
+        intended:owner!==null?'OWNER_EXACT_BYTES':'PUBLIC_EXACT_BYTES',foreign:foreignStatus,anon:anonStatus,invalid_signature:invalidStatus,status:'VERIFIED_CURRENT_RESTORED_ROLE_BOUNDARY'}));
+    }
+    await context();
+    return Object.freeze({provider_verified:true,object_bytes_verified:true,verified_object_bytes:inventory.objectRecords.length,
+      archived_buckets:inventory.bucketRecords.length,scope:"OFFICIAL_LOCAL_FILE_BACKEND_SAME_ORIGINAL",source_profile:b.source_profile,
+      provider_image_digest:b.provider.image_digest,provider_container_id:b.provider.container_id,
+      archived_storage_inventory_sha256:b.provider.archived_storage_inventory_sha256,database_oid:b.host_target.database_oid,
+      production_provider_verified:false,owner_access_probes:Object.freeze(roleProbes)});
 }

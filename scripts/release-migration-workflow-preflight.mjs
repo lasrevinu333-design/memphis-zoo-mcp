@@ -1,5 +1,7 @@
+import {stableJson} from './disaster-recovery-crypto.mjs';
+import {resolveReleaseSchemaTarget} from './production-target-schema-profile.mjs';
 import {assertObservedSourcePrefix} from './release-migration-observed-prefix.mjs';
-import {resolveReleaseMigrationSource} from './production-forward-source.mjs';
+import {resolveReleaseMigrationSource,releaseMigrationPlanIdentity} from './production-forward-source.mjs';
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { lstatSync, readFileSync, readdirSync } from "node:fs";
@@ -33,6 +35,8 @@ export function assertReleaseWorkflowSource(root) {
   const state = JSON.parse(read("release/production-migration-state.json").toString("utf8"));
   const catalog = JSON.parse(read("supabase/canonical/schema-fingerprint-input.json").toString("utf8"));
   const fingerprint = read("supabase/canonical/schema-fingerprint.txt").toString("utf8").trim();
+  const schemaTarget = resolveReleaseSchemaTarget(root);
+  assert.equal(schemaTarget.canonicalFingerprint, fingerprint);
   const source = state.observed_production;
   const target = state.target;
   assertCapturedTargetCatalog(target);
@@ -105,21 +109,42 @@ export function assertReleaseWorkflowSource(root) {
   assert.deepEqual(Reflect.ownKeys(catalog).sort(), sections.sort(), "The complete canonical catalog is required");
   assert.match(fingerprint, /^[a-f0-9]{64}$/);
   assert.equal(fingerprintSchemaCatalog(catalog).fingerprint, fingerprint);
-  assert.equal(target.canonical_source_schema_fingerprint, fingerprint);
+  // Legacy target field is the RAW connected-database target. Canonical files
+  // retain the application/source identity; only the closed declared profile
+  // may relate that identity to a distinct deployment catalog.
+  assert.equal(target.canonical_source_schema_fingerprint, schemaTarget.deploymentFingerprint);
+  if (schemaTarget.profile) {
+    const profile = schemaTarget.profile, capture = target.normal_source_capture;
+    assert.ok(capture && capture.scope === 'ROLLBACK_ONLY_TARGET_PREPARATION_DATA_NOT_PRODUCTION_OR_FULL_REHEARSAL');
+    assert.equal(capture.report.sha256, profile.capture.report_sha256);
+    assert.equal(capture.report.bytes, profile.capture.report_bytes);
+    assert.equal(capture.candidate_commit, profile.capture.candidate_commit);
+    assert.equal(capture.candidate_tree, profile.capture.candidate_tree);
+    assert.equal(capture.plan_sha256, profile.capture.plan_sha256);
+    assert.equal(capture.archive_digest, profile.archive_digest);
+    assert.equal(source.catalog_privilege_fingerprint, profile.source_fingerprint);
+    assert.equal(source.catalog_capture_provenance.source_catalog.sha256, profile.source_catalog_sha256);
+    assert.equal(source.catalog_capture_provenance.source_ledger.sha256, profile.source_ledger_sha256);
+    assert.equal(source.production_ledger_count, profile.capture.source_ledger_count);
+    assert.equal(pending.length, profile.capture.pending_count);
+    assert.equal(target.production_ledger_count, profile.capture.target_ledger_count);
+    assert.equal(createHash('sha256').update(stableJson(releaseMigrationPlanIdentity(state.pending_migrations))).digest('hex'), profile.capture.plan_sha256);
+  }
   const counts = Object.fromEntries(Object.entries(catalog).map(([name, rows]) => {
     assert.ok(Array.isArray(rows), `Invalid canonical catalog section: ${name}`);
     return [name, rows.length];
   }));
   assert.deepEqual(Object.keys(counts).sort(), sections, "The complete canonical catalog is required");
-  assert.deepEqual(target.expected_catalog_counts, counts);
-  assert.equal(target.public_function_count, counts.functions);
+  assert.deepEqual(counts, schemaTarget.canonicalCounts);
+  assert.deepEqual(target.expected_catalog_counts, schemaTarget.deploymentCounts);
+  assert.equal(target.public_function_count, schemaTarget.deploymentCounts.functions);
   const manifest = JSON.parse(read("release/frontend-release-manifest.json").toString("utf8"));
   assert.equal(manifest.schema_fingerprint, fingerprint);
   assert.equal(manifest.schema_transition.to_fingerprint, fingerprint);
   assert.equal(manifest.schema_transition.from_fingerprint, source.catalog_privilege_fingerprint);
   return { sourceCount: source.production_ledger_count, sourceHead: source.ledger_head,
     targetCount: target.production_ledger_count, targetHead: target.source_migration_version,
-    pendingCount: pending.length, targetFingerprint: fingerprint };
+    pendingCount: pending.length, targetFingerprint: schemaTarget.deploymentFingerprint };
 }
 
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
