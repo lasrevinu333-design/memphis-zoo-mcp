@@ -59,6 +59,42 @@ jobs:
             "${ImageOS:-unknown}" "${ImageVersion:-unknown}" "$(node --version)" \
             "$(docker image inspect supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed --format '{{.Id}}')" \
             > closure-toolchain-provenance.json
+      - name: Provision exact selected fresh PostgreSQL image
+        timeout-minutes: 5
+        shell: bash
+        run: |
+          set -euo pipefail
+          image='public.ecr.aws/supabase/postgres@sha256:28f0e16a019e648089fc1a6d333549a55548f6019c15ae4bd7cd58b989027518'
+          node --input-type=module -e 'import fs from "node:fs"; if(JSON.parse(fs.readFileSync("release/fresh-only-replay/MANIFEST.json")).image!==process.argv[1]) process.exit(1)' "$image"
+          evidence="$RUNNER_TEMP/ci-fresh-only-failure-evidence/pinned-pg-provisioning"
+          mkdir -m 700 -p "$evidence"
+          mirror='docker.io/supabase/postgres@sha256:28f0e16a019e648089fc1a6d333549a55548f6019c15ae4bd7cd58b989027518'
+          set +e
+          timeout --signal=TERM --kill-after=5s 120s docker pull "$mirror" > "$evidence/mirror.stdout" 2> "$evidence/mirror.stderr"
+          code=$?
+          set -e
+          printf '%s\n' "$code" > "$evidence/mirror.actual-exit"
+          if [ "$code" -ne 0 ]; then cat "$evidence/mirror.stderr" >&2; exit "$code"; fi
+          docker image inspect --format '{"id":{{json .Id}},"repo_digests":{{json .RepoDigests}}}' "$mirror" > "$evidence/mirror-image.json"
+          node --input-type=module -e 'import fs from "node:fs"; const m=JSON.parse(fs.readFileSync(process.argv[1])); if(!/^sha256:[a-f0-9]{64}$/.test(m.id)||!Array.isArray(m.repo_digests)||!m.repo_digests.includes(process.argv[2])) process.exit(1)' "$evidence/mirror-image.json" "$mirror"
+          for attempt in 1 2 3; do
+            printf '%s\n' "$image" > "$evidence/$attempt.image"
+            set +e
+            timeout --signal=TERM --kill-after=5s 45s docker pull "$image" > "$evidence/$attempt.stdout" 2> "$evidence/$attempt.stderr"
+            code=$?
+            set -e
+            printf '%s\n' "$code" > "$evidence/$attempt.actual-exit"
+            if [ "$code" -eq 0 ]; then
+              docker image inspect --format '{"id":{{json .Id}},"repo_digests":{{json .RepoDigests}}}' "$image" > "$evidence/verified-ecr-image.json"
+              node --input-type=module -e 'import fs from "node:fs"; const e=JSON.parse(fs.readFileSync(process.argv[1])),m=JSON.parse(fs.readFileSync(process.argv[2])); if(e.id!==m.id||!Array.isArray(e.repo_digests)||!e.repo_digests.includes(process.argv[3])) process.exit(1)' "$evidence/verified-ecr-image.json" "$evidence/mirror-image.json" "$image"
+              exit 0
+            fi
+            cat "$evidence/$attempt.stderr" >&2
+            if [ "$attempt" -eq 3 ] || ! grep -Eiq 'toomanyrequests|rate exceeded|HTTP[^0-9]*429|status[^0-9]*429' "$evidence/$attempt.stderr" "$evidence/$attempt.stdout"; then
+              exit "$code"
+            fi
+            sleep "$((attempt * 5))"
+          done
       - name: Authentication and integration contracts
         run: |
           set -euo pipefail
@@ -94,3 +130,10 @@ jobs:
           name: closure-toolchain-provenance-${{ github.run_id }}
           path: closure-toolchain-provenance.json
           if-no-files-found: error
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: failure()
+        with:
+          name: ci-fresh-only-failure-evidence-${{ github.run_id }}
+          path: ${{ runner.temp }}/ci-fresh-only-failure-evidence/
+          if-no-files-found: warn

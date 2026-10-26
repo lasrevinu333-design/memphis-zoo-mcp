@@ -36,6 +36,8 @@ import {
   compareVerifiedStorageTableData,
   prepareVerifiedStorageUploads,
   validateV4StorageArchiveObjects,
+  captureVerifiedFreshLocalStorageProvider,
+  verifyFreshLocalStorageProvider,
 } from "./disaster-recovery-storage.mjs";
 import {
   compareCronJobs,
@@ -291,6 +293,24 @@ if (!Number.isFinite(expiresAt) || expiresAt <= Date.now() || expiresAt > Date.n
   throw new Error("Restore intent is expired or exceeds the 24-hour authorization window.");
 }
 
+// Explicit same-original disposable official provider. The normal production
+// private APPLY barrier below is unchanged; no caller-selected role/profile.
+const freshStorageProviderInput = String(process.env.RESTORE_FRESH_STORAGE_PROVIDER_JSON || "");
+const freshStorageServiceKey = String(process.env.RESTORE_FRESH_STORAGE_SERVICE_KEY || "");
+const freshStorageJwtSecret = String(process.env.RESTORE_FRESH_STORAGE_JWT_SECRET || "");
+let freshStorageProvider = null;
+let freshStorageProviderTarget = null;
+if (freshStorageProviderInput || freshStorageServiceKey || freshStorageJwtSecret) {
+  if (!databaseOnly || !(freshPrivateDatabase || nativeTextDatabase) || !freshStorageProviderInput || !freshStorageServiceKey || !freshStorageJwtSecret)
+    throw new Error("Fresh local Storage requires the existing authenticated whole-fresh database route.");
+  const providerEnvelope=JSON.parse(freshStorageProviderInput);
+  freshStorageProvider = captureVerifiedFreshLocalStorageProvider({verifiedArchive,
+    originalIntentEnvelope:intentEnvelope,intentVerifyKey,intentVerifyKeyId,
+    providerEnvelope,serviceKey:freshStorageServiceKey,jwtSecret:freshStorageJwtSecret,databaseUrl});
+  // Captured only after the branded provider authenticated the whole envelope.
+  freshStorageProviderTarget=Object.freeze({...providerEnvelope.binding.host_target});
+}
+
 if (nativeTextLegacyBlocker !== null) {
   throw Object.assign(new Error("Native-text DATA cannot use the legacy JSON-value replica restore route. No target was connected or changed."),{code:nativeTextLegacyBlocker});
 }
@@ -506,6 +526,96 @@ async function nativeTextQuery(sql, values=[]) {
   requireNativeTextOwner();
   return reply;
 }
+function nativeTextCatalogLockInsist(value,message){
+  if(!value)throw Object.assign(new Error(message),{code:"NATIVE_TEXT_CATALOG_LOCK_CAPABILITY_UNAVAILABLE",retry_safe:false});
+}
+// Fixed same-transaction catalog locks for one authenticated disposable native
+// original. No generic SQL or alternate restore actor is admitted.
+function nativeTextCatalogLockCapability(intent,target){
+  nativeTextCatalogLockInsist(/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(intent.restore_id)
+    && /^[1-9][0-9]{0,18}$/.test(String(intent.authority_generation))
+    && BigInt(intent.authority_generation)<=9223372036854775807n
+    && /^[a-f0-9]{64}$/.test(intent.archive_digest)
+    && /^[a-z0-9]{20}$/.test(intent.source_project_ref) && /^[a-z0-9]{20}$/.test(intent.target_project_ref)
+    && /^mz_schema_rebuild_[A-Za-z0-9_]{1,100}$/.test(target.database_name)
+    && /^[1-9][0-9]{0,9}$/.test(String(target.database_oid)) && BigInt(target.database_oid)<=4294967295n
+    && target.database_owner==='postgres','Closed native original catalog capability identity required.');
+  const body=`
+BEGIN
+  IF session_user <> 'postgres' OR current_user <> 'supabase_admin'
+    OR current_setting('session_replication_role') <> 'origin'
+    OR current_database() <> '${target.database_name}'
+    OR (SELECT oid FROM pg_catalog.pg_database WHERE datname=current_database()) <> '${target.database_oid}'::pg_catalog.oid
+    OR (SELECT count(*) FROM custodial_dr.restore_control
+      WHERE singleton=true AND restore_id='${intent.restore_id}'::pg_catalog.uuid
+        AND authority_generation='${intent.authority_generation}'::pg_catalog.int8
+        AND archive_digest='${intent.archive_digest}'
+        AND source_project_ref='${intent.source_project_ref}' AND target_project_ref='${intent.target_project_ref}'
+        AND mutations_paused=true AND state IN ('PREPARING','STORAGE_RESTORING')) <> 1
+  THEN RAISE EXCEPTION 'Fixed native original catalog lock authority refused' USING ERRCODE='42501'; END IF;
+  LOCK TABLE pg_catalog.pg_type,pg_catalog.pg_proc,pg_catalog.pg_cast,pg_catalog.pg_namespace,pg_catalog.pg_enum,pg_catalog.pg_range IN SHARE MODE;
+END;
+`;
+  const definition="CREATE OR REPLACE FUNCTION custodial_dr.native_text_lock_catalogs_v1()\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog'\nAS $function$"+body+"$function$\n";
+  return {identity:'custodial_dr.native_text_lock_catalogs_v1()',body,definition,owner:'supabase_admin',
+    acl:[{grantee:'postgres',grantor:'supabase_admin',privilege:'EXECUTE',grantable:false},
+      {grantee:'supabase_admin',grantor:'supabase_admin',privilege:'EXECUTE',grantable:false}]};
+}
+const NATIVE_LOCK_INSPECT_SQL=`select p.oid::text oid,p.prosrc body,pg_catalog.pg_get_functiondef(p.oid) definition,
+ pg_catalog.pg_get_userbyid(p.proowner) owner,p.prosecdef security_definer,p.proconfig config,
+ p.prokind::text kind,p.prorettype::pg_catalog.regtype::text returns,p.pronargs args,
+ (select jsonb_agg(jsonb_build_object('grantee',case when a.grantee=0 then 'PUBLIC' else pg_catalog.pg_get_userbyid(a.grantee) end,
+ 'grantor',pg_catalog.pg_get_userbyid(a.grantor),'privilege',a.privilege_type,'grantable',a.is_grantable)
+ order by (case when a.grantee=0 then 'PUBLIC' else pg_catalog.pg_get_userbyid(a.grantee) end) collate "C",a.privilege_type)
+ from pg_catalog.aclexplode(coalesce(p.proacl,pg_catalog.acldefault('f',p.proowner)))a) acl
+ from pg_catalog.pg_proc p join pg_catalog.pg_namespace n on n.oid=p.pronamespace
+ where n.nspname='custodial_dr' and p.proname='native_text_lock_catalogs_v1'`;
+function requireExactNativeLock(row,plan,oid=null){
+  nativeTextCatalogLockInsist(row && /^[1-9][0-9]*$/.test(row.oid) && (!oid || row.oid===oid) && row.body===plan.body
+    && row.definition===plan.definition && row.owner===plan.owner && row.security_definer===true
+    && stableJson(row.config)===stableJson(['search_path=pg_catalog']) && row.kind==='f' && row.returns==='void' && row.args===0
+    && stableJson(row.acl)===stableJson(plan.acl),'Fixed native catalog lock capability identity changed.');
+  return row;
+}
+
+let nativeTextCatalogLockOid=null;
+async function lockNativeTextCatalogs(){
+  // The production/legacy path remains the same direct native transaction.
+  if(freshStorageProvider===null){
+    await nativeTextQuery("lock table pg_catalog.pg_type,pg_catalog.pg_proc,pg_catalog.pg_cast,pg_catalog.pg_namespace,pg_catalog.pg_enum,pg_catalog.pg_range in share mode");
+    return;
+  }
+  // Only the authenticated disposable provider may supply this fixed function.
+  // The restore actor stays postgres; no catalog UPDATE privilege is granted.
+  nativeTextCatalogLockInsist(freshStorageProviderTarget!==null && Object.isFrozen(freshStorageProvider)
+    && Object.isFrozen(freshStorageProviderTarget),"Authenticated native provider context required.");
+  const plan=nativeTextCatalogLockCapability(intent,freshStorageProviderTarget);
+  const inspect=async()=>{
+    const result=await nativeTextQuery(NATIVE_LOCK_INSPECT_SQL);
+    nativeTextCatalogLockInsist(result.rowCount===1,"Fixed native catalog capability is absent or overloaded.");
+    const row=requireExactNativeLock(result.rows[0],plan,nativeTextCatalogLockOid);
+    if(nativeTextCatalogLockOid===null)nativeTextCatalogLockOid=row.oid;
+  };
+  await inspect();
+  await nativeTextQuery("select custodial_dr.native_text_lock_catalogs_v1()");
+  await inspect();
+  const proof=await nativeTextQuery(`select current_database() database_name,
+    (select oid::text from pg_catalog.pg_database where datname=current_database()) database_oid,
+    session_user::text session_user,current_user::text current_user,
+    (select pg_catalog.pg_get_userbyid(datdba) from pg_catalog.pg_database where datname=current_database()) database_owner,
+    (select count(*)::text from pg_catalog.pg_locks l
+      where l.pid=pg_catalog.pg_backend_pid() and l.locktype='relation' and l.mode='ShareLock' and l.granted
+        and l.database=(select oid from pg_catalog.pg_database where datname=current_database())
+        and l.relation in ('pg_catalog.pg_type'::pg_catalog.regclass,'pg_catalog.pg_proc'::pg_catalog.regclass,
+          'pg_catalog.pg_cast'::pg_catalog.regclass,'pg_catalog.pg_namespace'::pg_catalog.regclass,
+          'pg_catalog.pg_enum'::pg_catalog.regclass,'pg_catalog.pg_range'::pg_catalog.regclass)) held_catalog_locks`);
+  const row=proof.rows[0],target=freshStorageProviderTarget;
+  nativeTextCatalogLockInsist(proof.rowCount===1 && row.database_name===target.database_name
+    && row.database_oid===target.database_oid && row.database_owner==='postgres'
+    && row.session_user==='postgres' && row.current_user==='postgres' && row.held_catalog_locks==='6',
+    "The original native restore backend does not hold all six catalog locks.");
+}
+
 function nativeTextRestorePlan(table, actual) {
   const refuse=()=>{throw Object.assign(new Error("Native TEXT target columns or input types differ from the original archive."),
     {code:"NATIVE_TEXT_TARGET_CATALOG_MISMATCH",retry_safe:false});};
@@ -576,7 +686,7 @@ async function prepareNativeTextRestorePlans(expectedState="PREPARING", retained
     await nativeTextQuery(sql);
   // Table locks do not pin independent type/cast/function DDL. Keep the
   // actual catalog I/O definitions fixed in this same transaction as DATA.
-  await nativeTextQuery("lock table pg_catalog.pg_type,pg_catalog.pg_proc,pg_catalog.pg_cast,pg_catalog.pg_namespace,pg_catalog.pg_enum,pg_catalog.pg_range in share mode");
+  await lockNativeTextCatalogs();
   await nativeTextQuery(`lock table ${databaseTables.map(t=>"only "+qualified(t.schema_name,t.table_name)).join(",")} in access exclusive mode`);
   await requireNativeTextRelationCensus();
   const plans=new Map();
@@ -917,7 +1027,36 @@ async function continueRestoreAfterDatabase({databaseEvidence,immutablePrivateDa
       requireOriginalArchiveSource();
     }
   }
-  const storageVerified = databaseOnly || storageEvidence.metadata_and_ownership_verified === true;
+  if (freshStorageProvider !== null) {
+    requireFreshContinuation();
+    const providerEvidence = await verifyFreshLocalStorageProvider({token:freshStorageProvider,db,state:"STORAGE_RESTORING"});
+    requireFreshContinuation();
+    const actualBuckets = await db.query("select row_to_json(b) row from storage.buckets b order by b.id");
+    requireFreshContinuation();
+    const actualObjects = await db.query("select row_to_json(o) row from storage.objects o order by o.bucket_id,o.name,o.id");
+    requireFreshContinuation();
+    const differences = compareStorageState({archivedBuckets:buckets,archivedObjects:objects,
+      actualBuckets:actualBuckets.rows.map(item=>item.row),actualObjects:actualObjects.rows.map(item=>item.row)})
+      .filter(item=>!(item.field==='owner_access_boundary' && providerEvidence.owner_access_probes.some(probe=>probe.bucket_id===item.bucket_id && probe.name===item.name && probe.status==='VERIFIED_CURRENT_RESTORED_ROLE_BOUNDARY')));
+    const exact = await readExactOriginalStorageSnapshot();
+    requireFreshContinuation();
+    // Clear only the boundary for this exact archived member after genuine
+    // intended/foreign/anon/invalid-signature HTTP probes, not service reads.
+    storageEvidence = {...storageEvidence,...providerEvidence,exact_table_data:exact,discrepancies:differences,
+      metadata_only:false,metadata_and_ownership_verified:differences.length===0 && exact.status==="MATCH"};
+    if (!storageEvidence.metadata_and_ownership_verified) {
+      await db.query(`insert into custodial_dr.restore_discrepancies(
+        restore_id,authority_generation,category,status,before_count,restored_count,details_json
+      ) values ($1,$2,'storage_state','OPEN',$3,$4,$5::jsonb)
+      on conflict (restore_id,category) do update set status='OPEN',before_count=excluded.before_count,
+        restored_count=excluded.restored_count,details_json=excluded.details_json,resolved_by=null,resolved_at=null,resolution=null`,
+      [restoreId,generation,objects.length,actualObjects.rowCount,JSON.stringify(storageEvidence)]);
+      requireFreshContinuation();
+    }
+  }
+  const storageVerified = freshStorageProvider !== null
+    ? storageEvidence.provider_verified === true && storageEvidence.metadata_and_ownership_verified === true
+    : databaseOnly || storageEvidence.metadata_and_ownership_verified === true;
   requireFreshContinuation();
   await db.query(`update custodial_dr.restore_manifests set storage_verified=$2,storage_evidence=$3::jsonb,updated_at=clock_timestamp() where restore_id=$1`, [restoreId, storageVerified, JSON.stringify(storageEvidence)]);
   requireFreshContinuation();
@@ -929,7 +1068,12 @@ async function continueRestoreAfterDatabase({databaseEvidence,immutablePrivateDa
   await setControl("VERIFYING");
   requireFreshContinuation();
 
-  if (!databaseOnly) {
+  if (!databaseOnly || freshStorageProvider !== null) {
+    if (freshStorageProvider !== null) {
+      requireFreshContinuation();
+      storageEvidence.final_provider_resample = await verifyFreshLocalStorageProvider({token:freshStorageProvider,db,state:"VERIFYING"});
+      requireFreshContinuation();
+    }
     requireOriginalArchiveSource();
     const finalBuckets = await db.query("select row_to_json(b) row from storage.buckets b order by b.id");
     requireOriginalArchiveSource();
@@ -940,7 +1084,8 @@ async function continueRestoreAfterDatabase({databaseEvidence,immutablePrivateDa
       archivedObjects: objects,
       actualBuckets: finalBuckets.rows.map((item) => item.row),
       actualObjects: finalObjects.rows.map((item) => item.row),
-    });
+    }).filter(item=>!(freshStorageProvider !== null && item.field==='owner_access_boundary'
+      && storageEvidence.final_provider_resample.owner_access_probes.some(probe=>probe.bucket_id===item.bucket_id && probe.name===item.name && probe.status==='VERIFIED_CURRENT_RESTORED_ROLE_BOUNDARY')));
     const finalExactStorageData = await readExactOriginalStorageSnapshot();
     requireOriginalArchiveSource();
     const finalStorageVerified = finalStorageDifferences.length === 0 && finalExactStorageData.status === "MATCH";
