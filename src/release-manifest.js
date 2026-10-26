@@ -1,3 +1,4 @@
+import {resolveReleaseSchemaTarget} from '../scripts/production-target-schema-profile.mjs';
 import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
@@ -5,6 +6,9 @@ import { fileURLToPath } from "node:url";
 import { assertExactReleaseAttestation } from "./release-contract.js";
 
 const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
+// Deployment source is immutable: validate the complete profile once, not on each health probe.
+const schemaTarget = Object.freeze(resolveReleaseSchemaTarget(repoRoot));
+const deploymentProfileSha256 = schemaTarget.profileSha256;
 
 function readText(path, fallback = "") {
   try {
@@ -137,6 +141,9 @@ export function buildReleaseManifest({ appVersion, releaseId, contracts = {} } =
     schema: {
       fingerprint: readText(canonicalFingerprintPath).trim() || "unknown",
       fingerprint_file: "supabase/canonical/schema-fingerprint.txt",
+      deployment_fingerprint: schemaTarget.deploymentFingerprint,
+      deployment_profile_file: schemaTarget.profile ? "release/production-target-schema-profile.json" : null,
+      deployment_profile_sha256: deploymentProfileSha256,
       migrations: listSqlFiles(join(repoRoot, "supabase/migrations")),
     },
     api_contract_versions: canonicalContracts.api_contract_versions,

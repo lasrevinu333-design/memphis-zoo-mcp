@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {resolveReleaseSchemaTarget} from './production-target-schema-profile.mjs';
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
@@ -65,8 +66,10 @@ const liveCheck = JSON.parse(execFileSync(process.execPath, ["scripts/live-relea
 assert.equal(liveCheck.ok, true, "Live integrated release alignment is not green.");
 
 const state = JSON.parse(readFileSync(resolve(root, "release/production-migration-state.json"), "utf8"));
-assert.equal(attestation.schema_fingerprint, state.target.canonical_source_schema_fingerprint,
-  "Signed release schema does not equal the reviewed target schema.");
+const schemaTarget = resolveReleaseSchemaTarget(root);
+assert.equal(liveCheck.observed_production_schema_fingerprint, schemaTarget.deploymentFingerprint);
+assert.equal(attestation.schema_fingerprint, schemaTarget.canonicalFingerprint,
+  "Signed application schema does not equal the canonical source identity.");
 const githubActions = String(process.env.GITHUB_ACTIONS || "").trim().toLowerCase() === "true";
 assert.equal(githubActions, true, "Production release recording is restricted to the gated GitHub Actions workflow.");
 const provenance = {
@@ -207,6 +210,8 @@ try {
     const details = {
       recorder: "production-release-recorder.v1", recorded_at: recordedAt, provenance,
       plan_sha256: plan.plan_sha256, schema_fingerprint: attestation.schema_fingerprint,
+      observed_production_schema_fingerprint: liveCheck.observed_production_schema_fingerprint,
+      production_catalog_profile_sha256: liveCheck.production_catalog_profile_sha256 ?? null,
       backend_tree_sha: attestation.backend_tree_sha,
       backend_evidence_sha256: attestation.backend_evidence_sha256,
       runtime_configuration_sha256: runtimeConfigurationSha256,

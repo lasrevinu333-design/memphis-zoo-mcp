@@ -255,7 +255,7 @@ SCHEMA_FINGERPRINT_DOCKER_CONTAINER="$container" SCHEMA_FINGERPRINT_DATABASE="$d
   npm run --silent test:schema-fingerprint | tee -a "$receipt"
 target_migration_head="$(jq -r '.target.source_migration_version' release/production-migration-state.json)"
 target_migration_count="$(jq -r '.target.production_ledger_count' release/production-migration-state.json)"
-target_fingerprint="$(tr -d '\r\n' < supabase/canonical/schema-fingerprint.txt)"
+target_fingerprint="$(jq -er ' .target.canonical_source_schema_fingerprint | select(test("^[0-9a-f]{64}$"))' release/production-migration-state.json)"
 test "$(docker exec "$container" psql -v ON_ERROR_STOP=1 -At -U supabase_admin -d "$database" \
   -c 'select max(version)::text from supabase_migrations.schema_migrations;' | tail -n 1)" = "$target_migration_head"
 test "$(docker exec "$container" psql -v ON_ERROR_STOP=1 -At -U supabase_admin -d "$database" \
@@ -333,7 +333,7 @@ static_pid=$!
 bash scripts/wait-rehearsal-json-endpoint.sh "http://127.0.0.1:${backend_port}/healthz" \
   '.ok == true and .process_alive == true and .probe_scope == "process_liveness"'
 bash scripts/verify-isolated-rehearsal-backend-dependencies.sh \
-  "http://127.0.0.1:${backend_port}/health/dependencies" "$backend_dependencies_file" "$target_fingerprint"
+  "http://127.0.0.1:${backend_port}/health/dependencies" "$backend_dependencies_file" "$(tr -d '\r\n' < supabase/canonical/schema-fingerprint.txt)"
 bash scripts/wait-rehearsal-json-endpoint.sh "http://127.0.0.1:${static_port}/healthz" \
   '.ok == true and .data.process_ready == true'
 bash scripts/wait-rehearsal-json-endpoint.sh "http://127.0.0.1:${static_port}/ready" \

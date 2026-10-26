@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import {resolveReleaseSchemaTarget} from './production-target-schema-profile.mjs';
+import {createHash} from 'node:crypto';
 import assert from "node:assert/strict";
 import { lstatSync, readFileSync, realpathSync } from "node:fs";
 import { isAbsolute, relative, resolve, sep } from "node:path";
@@ -8,6 +10,8 @@ import { assertSchemaAlignment } from "../src/schema-transition.js";
 
 const root = realpathSync(resolve(fileURLToPath(new URL("..", import.meta.url))));
 const canonicalInput = JSON.parse(readFileSync(resolve(root, "release/schema-alignment-input.json"), "utf8"));
+const schemaTarget = resolveReleaseSchemaTarget(root);
+const profileSha256 = schemaTarget.profile ? createHash("sha256").update(readFileSync(resolve(root,"release/production-target-schema-profile.json"))).digest("hex") : null;
 
 function outsideRoot(path) {
   const value = relative(root, path);
@@ -79,7 +83,10 @@ assertManifestContract(frontend, canonicalInput);
 assertBackendFrontendIdentity(backend, canonicalInput);
 assertFrontendReleaseDeclaration(frontend);
 assertFrontendReleaseIdentity(deployment, canonicalInput);
-assertObservedSchemaIdentity(observed, backend.schema?.fingerprint);
+assert.equal(backend.schema?.fingerprint, schemaTarget.canonicalFingerprint, "backend application schema is not the source canonical identity");
+assert.equal(backend.schema?.deployment_fingerprint, schemaTarget.deploymentFingerprint, "backend raw target is not the closed declared production profile");
+assert.equal(backend.schema?.deployment_profile_sha256, profileSha256, "backend production profile source bytes differ");
+assertObservedSchemaIdentity(observed, schemaTarget.deploymentFingerprint);
 const schemaAlignment = assertSchemaAlignment({ backendManifest: backend, frontendManifest: frontend, deploymentManifest: deployment });
 assert.equal(health.ok, true, "backend dependency health is not green");
 assert.equal(health.database_reachable, true, "backend cannot reach its database");
@@ -115,4 +122,6 @@ console.log(JSON.stringify({ ok: true, release_id: attestation.release_id, backe
   backend_tree_sha: attestation.backend_tree_sha, backend_evidence_sha256: attestation.backend_evidence_sha256,
   frontend_commit_sha: attestation.frontend_commit_sha, observed_production_schema_fingerprint: observed.fingerprint,
   schema_alignment_mode: schemaAlignment.mode, schema_transition_id: schemaAlignment.transition?.transition_id || null,
+  canonical_application_schema_fingerprint: schemaTarget.canonicalFingerprint,
+  expected_deployment_schema_fingerprint: schemaTarget.deploymentFingerprint, production_catalog_profile_sha256: profileSha256,
   backend_health_latency_ms: Math.round(healthProbe.elapsed_ms), operational_backlog: health.worker?.backlog || 0 }, null, 2));
