@@ -510,7 +510,7 @@ BEGIN
        ('public','devices','trg_custodial_offline_device_activation_boundary',21,'public.custodial_record_offline_authority_activation_boundary()',
         '14bde0e8c994bf8b0cb325fe39c6f60dd8531944a8cc766faf921ec2540449be',ARRAY['active']::text[]),
        ('public','ops_manager_push_devices','trg_ops_manager_push_devices_owner',23,'public.ops_manager_notification_validate_owner()',
-        '113dd3d7ca437be901ef8b314d34d9a88e421e821338ab472acc6e67351fa77d',ARRAY[]::text[]),
+        'a94e65887e886b4b16163382e7f9cdfa5795a3aed6a2a35db371675a5d2d8cc6',ARRAY[]::text[]),
        ('public','employees','trg_recurring_authority_lock',30,'public.static_weekly_v15_lock_recurring_mutation()',
         '541eba3c620076ef528a3c57c8566d52c741a205f33b898d5e4225470988c850',ARRAY[]::text[]),
        ('public','employees','trg_recurring_authority_generation',29,'public.static_weekly_v15_advance_recurring_generation()',

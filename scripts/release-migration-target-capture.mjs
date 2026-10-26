@@ -46,12 +46,12 @@ export function targetCaptureState({backendRoot,state,source}) {
  const normalize=binding=>({...binding,extensions:binding.extensions.map(({source_location,...item})=>item)});
  assert.deepEqual(normalize(source.binding),expected,'Signed archive must match the finite observed235 source declaration');
  assert.equal(stableJsonFileSha256(source.ledger),summary.source_identity.migration_ledger_sha256);
- const replay=readMigrationReplayPlan(backendRoot);assert.equal(replay.files.length,293);
- assert.equal(replay.manifestSha256,'4300e07bd609ac0fe916dec01ecbbed94617bb8a7279a644a5d7e755bd7b6e3e');
+ const replay=readMigrationReplayPlan(backendRoot);assert.equal(replay.files.length,294);
+ assert.equal(replay.manifestSha256,'5a0ac3a398d25f59a0a7f6e045d0db1c4d59b28924a18ec479f01bbe5a710121');
  assert.equal(state.observed_production.source_authority_migration_count,134);
  const canonical=replay.files.slice(134).map((file,index)=>({order:index+1,file,phase:file.slice(15,-4),
   source_migration_version:file.slice(0,14),sha256:sha(readFileSync(resolve(backendRoot,'supabase/migrations',file)))}));
- assert.equal(canonical.length,159);assert.equal(state.pending_migrations.length,159);
+ assert.equal(canonical.length,160);assert.equal(state.pending_migrations.length,160);
  const pending=bindExistingPostgresForwardSources(backendRoot,canonical);
  assert.deepEqual(pending,state.pending_migrations,'Preserve exact current291 canonical preimages and explicit production forward-source bytes');
  assert.ok(pending.every(item=>!source.ledger.some(row=>row.version===item.source_migration_version)));
