@@ -15,6 +15,16 @@ function fixture(){
  return {summary,archiveDigest:hash,restore,profile,control,manifest,discrepancyCount:'9',discrepancies,snapshots,leases:{total:'0',active:'0',expired:'0'},runId:'12345'};
 }
 check('positive metadata export remains HOLD, with no resolve/unpause/capture credit',()=>{const d=validateDiagnostic(fixture());assert.equal(d.state,'HOLD_ROOT_DISPOSITION_BEFORE_ANY_RESOLVE_OR_UNPAUSE');assert.equal(d.resolve_performed,false);assert.equal(d.unpause_performed,false);assert.equal(d.target_capture_performed,false);assert.equal(d.Root_disposition,null);assert.equal(d.proof_scope.all217_post_authority_byte_equality,false)});
+check('fresh signed80320 count binds restore and manifest without fixed historical count',()=>{const f=fixture();f.summary.database_row_count=80320;f.restore.database_rows=80320;f.manifest.database_rows='80320';const d=validateDiagnostic(f);assert.equal(d.manifest.database_rows,'80320');assert.equal(d.Root_disposition,null);assert.equal(d.resolve_performed,false)});
+check('another signed positive count is not pinned to80320',()=>{const f=fixture();f.summary.database_row_count=80321;f.restore.database_rows=80321;f.manifest.database_rows='80321';assert.equal(validateDiagnostic(f).manifest.database_rows,'80321')});
+for(const [name,edit]of [
+ ['restore count counterfeit against signed summary',f=>{f.restore.database_rows=80320}],
+ ['manifest count counterfeit against signed summary',f=>{f.manifest.database_rows='80320'}],
+ ['summary count changed without matching restore',f=>{f.summary.database_row_count=80320}],
+ ['both unsigned counts changed against signed summary',f=>{f.restore.database_rows=80320;f.manifest.database_rows='80320'}],
+ ['noncanonical manifest count text',f=>{f.manifest.database_rows='080324'}],
+ ...[0,-1,1.5,Number.MAX_SAFE_INTEGER+1,'80324',null].map(value=>['invalid signed count '+String(value),f=>{f.summary.database_row_count=value;f.restore.database_rows=value;f.manifest.database_rows=String(value)}])
+])check(name+' refuses',()=>{const f=fixture();edit(f);assert.throws(()=>validateDiagnostic(f))});
 for(const [name,edit]of [
  ['historical restore selection',f=>{f.restore.restore_id='04ab307a-b7c3-4325-8732-16097743cff4'}],
  ['production database path',f=>{f.profile.database_name='postgres'}],
