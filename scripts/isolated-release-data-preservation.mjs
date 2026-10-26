@@ -28,16 +28,16 @@ export const nativeTextColumnProjection=(names,alias)=>`pg_catalog.json_object(A
 const tableKey=t=>t.schema+'.'+t.name;
 export function loadOriginal235PreservationSource(backendRoot){
  const file=join(backendRoot,'release/production-data-preservation/original-235.json'),raw=fs.readFileSync(file);
- assert.equal(sha(raw),'17c568c086f6d820d07680bb38d9e3983e1ce73d5e7e3e270fff9f4fa982db4c');
+ assert.equal(sha(raw),'8fd975552abfc8b736f63fe1c192532ca56104da8f6c091e7440adc9f74f40d6');
  const m=JSON.parse(raw);assert.equal(m.schema,'custodial.original235-data-preservation-source.v1');
  assert.equal(m.project_ref,'rqquvtjdmugpigbndmne');assert.equal(m.production_authorized,false);
- assert.equal(m.tables.length,182);assert.equal(m.plan.length,159);assert.equal(new Set(m.tables.map(tableKey)).size,182);
+ assert.equal(m.tables.length,182);assert.equal(m.plan.length,160);assert.equal(new Set(m.tables.map(tableKey)).size,182);
  assert.ok(m.tables.every(t=>t.schema==='public'&&t.columns.length>0&&new Set(t.columns).size===t.columns.length));
  assert.equal(m.tables.filter(t=>!EXCEPTIONS.has(t.name)).length,178);return m;
 }
 export function validateOriginal235PreservationPlan(backendRoot,plan){
  const manifest=loadOriginal235PreservationSource(backendRoot);
- assert.equal(plan.length,159);
+ assert.equal(plan.length,160);
  for(let i=0;i<plan.length;i++){
   const expected=manifest.plan[i],item=plan[i];assert.equal(item.order,expected.order);assert.equal(item.file,expected.file);
   const source=resolveReleaseMigrationSource(backendRoot,item);assert.equal(source.canonical_sha256,expected.canonical_sha256);
@@ -218,7 +218,7 @@ export async function prepareIsolatedReleaseDataPreservation({client,backendRoot
    join pg_attribute a on a.attrelid=c.oid where n.nspname in('public','auth','storage') and c.relkind='r' and a.attnum>0 and not a.attisdropped`)).rows;
   for(const old of census()){const now=currentColumns.find(x=>x.schema===old.schema&&x.name===old.name&&x.column_name===old.column_name);assert.ok(now);const {locked,...before}=old;assert.deepEqual(now,before,'original relation/column/type identity changed');}
   assertCurrent();
-  return Object.freeze({schema:'custodial.isolated-release-data-preservation.v1',scope:'ISOLATED_EXISTING159_TRANSACTION_DATA_PROOF',original_tables:217,original_public_tables:182,ordinary_public_tables:178,nonpublic_tables:35,nonpublic_exact_native_text:true,
+  return Object.freeze({schema:'custodial.isolated-release-data-preservation.v1',scope:'ISOLATED_EXISTING160_TRANSACTION_DATA_PROOF',original_tables:217,original_public_tables:182,ordinary_public_tables:178,nonpublic_tables:35,nonpublic_exact_native_text:true,
    events:eventResult,four_settings_constants_verified:true,four_settings:settingsDigest,relay_paused_no_migration_time_send_evidence:true,
    recovery_metadata:'DELIBERATE_CANONICAL_GUARDED_REPAIRS_NOT_BUSINESS_EXEMPTION',tables:results,
    raw_values_exported:false,production_authorized:false,full_candidate_admission:false});

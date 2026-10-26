@@ -15,8 +15,8 @@ const SOURCES = Object.freeze([
     sourceSha256: "8819fcabe7f3bfb155ba1a3c52f5916ac516499878e46fde0a961b2ab42247eb" }),
   Object.freeze({ sourcePath: "proposals/immutable-original-device-boundary-restore.sql", bytes: 8793,
     sourceSha256: "3661d44b43cdef0e1985b57899679377aa82e05a971b1e26022f9ac25f40ac93" }),
-  Object.freeze({ sourcePath: "proposals/immutable-original-manager-push-restore.sql", bytes: 15631,
-    sourceSha256: "ff2939a1556c08fdaf42c87f0fb332b8c8bd79c163902616156d80df147d2f91" }),
+  Object.freeze({ sourcePath: "proposals/immutable-original-manager-push-restore.sql", bytes: 22426,
+    sourceSha256: "2a9dd3a1050d0f7e7714abdd8feeb4259eea54287c68ffacd787b9072a9f7f9d" }),
   Object.freeze({ sourcePath: "proposals/immutable-original-employee-push-authority-restore.sql", bytes: 18144,
     sourceSha256: "2b8c5dad21a56d6132688a998ab3ae3df78584686c8b2f4fdd7baf7bbafd527d" }),
 ]);

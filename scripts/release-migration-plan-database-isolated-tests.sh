@@ -22,6 +22,41 @@ node_sha256="${node_sha256%% *}"
 lib64_source="$(readlink -f /lib64)"
 lib_source="$(readlink -f /lib/x86_64-linux-gnu)"
 test -d "$lib64_source" && test -d "$lib_source"
+# Current NULL target is a source-only refusal case, not a positive DB plan.
+# Select it before image inspection, token/temp creation or Docker allocation.
+# A partially missing/malformed target fails closed; fully captured future
+# targets retain the existing complete owned-database route below.
+set +e
+env -i PATH=/usr/bin:/bin LANG=C LC_ALL=C TZ=UTC "$node_source" --max-old-space-size=128 --input-type=module -e '
+  import assert from "node:assert/strict";
+  import {readFileSync} from "node:fs";
+  import {assertCapturedTargetCatalog, assertReleaseWorkflowSource} from "./scripts/release-migration-workflow-preflight.mjs";
+  const state = JSON.parse(readFileSync("release/production-migration-state.json", "utf8"));
+  const keys = ["canonical_source_schema_fingerprint", "expected_catalog_counts",
+    "production_ledger_count", "public_function_count"];
+  assert.ok(state.target && typeof state.target === "object" && !Array.isArray(state.target));
+  for (const key of keys) assert.ok(Object.hasOwn(state.target, key), "Missing current target field: " + key);
+  const unresolved = keys.map(key => state.target[key] === null);
+  if (unresolved.some(Boolean)) {
+    assert.ok(unresolved.every(Boolean), "Partially captured target is not source-only or admitted");
+    process.exit(0);
+  }
+  assertCapturedTargetCatalog(state.target);
+  assertReleaseWorkflowSource(process.cwd());
+  process.exit(3);
+'
+current_target_route_status=$?
+set -e
+if test "$current_target_route_status" -eq 0; then
+  env -i PATH=/usr/bin:/bin LANG=C LC_ALL=C TZ=UTC "$node_source" --max-old-space-size=128 \
+    scripts/release-migration-plan-database-tests.mjs --current-unresolved-target-source-only
+  printf '{"source_only_current_unresolved_target":true,"SQL_execution":false,"positive_database_scenarios":"NOT_RUN","production_authorized":false}\n'
+  exit 0
+elif test "$current_target_route_status" -ne 3; then
+  echo "Current release target shape is invalid; refusing both qualification routes." >&2
+  exit "$current_target_route_status"
+fi
+
 owner_token="$(node -e "process.stdout.write(require('node:crypto').randomBytes(16).toString('hex'))")"
 container="mz_schema_rebuild_releaseplan_${owner_token}"
 image_id="$(docker image inspect --format '{{.Id}}' "$image")"

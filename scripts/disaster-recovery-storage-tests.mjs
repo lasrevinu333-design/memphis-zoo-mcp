@@ -10,9 +10,12 @@ import { pipeline } from "node:stream/promises";
 import pg from "pg";
 import { materializeVerifiedArchive, readVerifiedArchiveSourceBinding, readVerifiedRestoreTableSelection,
   openVerifiedRestoreTableData, decodeRestoreTableRowLine, createRestoreRowLineBatchDecoder } from "./disaster-recovery-archive.mjs";
-import { stableJson } from "./disaster-recovery-crypto.mjs";
+import { stableJson, signBinding, restoreIntentBinding } from "./disaster-recovery-crypto.mjs";
 import {
   captureStorageSupportedState,
+  validateFreshLocalStorageProviderData,
+  validateFreshLocalStorageDeniedResponse,
+  captureVerifiedFreshLocalStorageProvider,
   compareVerifiedStorageTableData,
   compareStorageState,
   storageBucketOptions,
@@ -22,6 +25,106 @@ import {
   validateV4StorageArchiveObjects,
   validateStorageOperatorEvidence,
 } from "./disaster-recovery-storage.mjs";
+
+// Pure DATA validator cases only. These synthetic signatures do not create a
+// branded archive, native PG client, provider token, live scope or restore ACK.
+if (process.argv.includes("--storage-fresh-local-provider-contract-only")) {
+  const key="local-contract-unit-key-"+"a".repeat(48),keyId="unit-local-contract",serviceKey="unit-service-"+"b".repeat(48),jwtSecret="unit-local-jwt-"+"c".repeat(48);
+  const hash=v=>createHash("sha256").update(v).digest("hex");
+  const now=Date.now(),approved=new Date(now-1000).toISOString(),expires=new Date(now+1800000).toISOString();
+  function input(profile="native-text-v4-fresh-supabase-admin"){
+    const role="supabase_admin";
+    const intent={restore_id:"11111111-1111-4111-8111-111111111111",authority_generation:1,retry_of_restore_id:null,
+      archive_digest:"a".repeat(64),source_project_ref:"original-project",target_project_ref:"isolated-project",
+      source_identity_sha256:"b".repeat(64),target_migration_head:"20261026065000",target_release_identity:null,
+      actor:"synthetic-pure-contract-test",approved_at:approved,expires_at:expires,resume_after_verification:false};
+    const originalIntentEnvelope={format:"memphis-zoo-production-restore-intent.v1",algorithm:"hmac-sha256",key_id:keyId,intent,
+      signature:signBinding(restoreIntentBinding(intent),key)};
+    const binding={purpose:"custodial-immutable-fresh-local-storage-provider",source_profile:profile,
+      original_intent_sha256:hash(stableJson(originalIntentEnvelope)),restore_id:intent.restore_id,authority_generation:1,
+      archive_digest:intent.archive_digest,source_identity_sha256:intent.source_identity_sha256,
+      source_project_ref:intent.source_project_ref,target_project_ref:intent.target_project_ref,approved_at:approved,expires_at:expires,
+      host_target:{hostname:"127.0.0.1",port:54329,database_name:"mz_schema_rebuild_contract",database_oid:"16384",session_user:role,database_owner:"postgres"},
+      provider:{origin:"http://127.0.0.1:54330",container_id:"c".repeat(64),image_digest:"sha256:528ec49c3c32561908b07ee91bced7f8456f3b688164e341eaa422441767a0bd",
+        namespace:"mz_schema_rebuild_contract",config_sha256:"d".repeat(64),service_key_sha256:hash(serviceKey),jwt_secret_sha256:hash(jwtSecret),
+        database:{network_alias:"mz_schema_rebuild_contract",port:5432,database_name:"mz_schema_rebuild_contract",database_oid:"16384",role:"supabase_storage_admin"},
+        backend:"file",restore_method:"official-file-backend-archived-version-v1",archived_storage_inventory_sha256:"e".repeat(64),
+        archived_migrations_74_full_tuple_sha256:"f".repeat(64),file_backend_namespace_sha256:"1".repeat(64)}};
+    return {providerEnvelope:{format:"custodial.immutable-fresh-local-storage-provider.v1",algorithm:"hmac-sha256",key_id:keyId,binding,signature:signBinding(binding,key)},
+      originalIntentEnvelope,intentVerifyKey:key,intentVerifyKeyId:keyId,serviceKey,jwtSecret,databaseUrl:`postgresql://${role}:unit@127.0.0.1:54329/mz_schema_rebuild_contract`,
+      expected:{source_profile:profile,expected_session_user:role,expected_database_owner:"postgres",archive_digest:intent.archive_digest,
+        source_project_ref:intent.source_project_ref,source_identity_sha256:intent.source_identity_sha256,archived_storage_inventory_sha256:"e".repeat(64)}};
+  }
+  let cases=0;
+  for(const profile of ["native-text-v4-fresh-supabase-admin","immutable-private-fresh-supabase-admin"]){
+    assert.equal(validateFreshLocalStorageProviderData(input(profile)).binding.source_profile,profile);cases++;
+  }
+  const mutations=[
+    x=>x.providerEnvelope.binding.provider.origin="http://example.com:54330",
+    x=>x.providerEnvelope.binding.provider.origin="http://127.0.0.1:54330/storage/v1",
+    x=>x.providerEnvelope.binding.provider.origin="http://user@127.0.0.1:54330",
+    x=>x.providerEnvelope.binding.provider.origin="http://127.0.0.1:54330?other=1",
+    x=>x.providerEnvelope.binding.provider.database.database_oid="16385",
+    x=>x.providerEnvelope.binding.provider.database.role="postgres",
+    x=>x.providerEnvelope.binding.host_target.session_user="postgres",
+    x=>x.providerEnvelope.binding.host_target.database_owner="supabase_admin",
+    x=>x.providerEnvelope.binding.provider.image_digest="sha256:"+"0".repeat(64),
+    x=>x.providerEnvelope.binding.provider.restore_method="ordinary-upsert-and-repin",
+    x=>x.providerEnvelope.binding.provider.archived_storage_inventory_sha256="0".repeat(64),
+    x=>x.providerEnvelope.binding.archive_digest="0".repeat(64),
+    x=>x.providerEnvelope.binding.authority_generation=2,
+    x=>x.providerEnvelope.binding.restore_id="22222222-2222-4222-8222-222222222222",
+    x=>x.providerEnvelope.binding.original_intent_sha256="0".repeat(64),
+    x=>x.providerEnvelope.binding.expires_at=new Date(now-1).toISOString(),
+    x=>x.providerEnvelope.binding.expires_at=new Date(now+3600000).toISOString(),
+    x=>x.providerEnvelope.binding.host_target.port=5432,
+    x=>x.providerEnvelope.binding.host_target.extra="unreviewed",
+    x=>x.providerEnvelope.binding.provider.extra="unreviewed",
+    x=>x.providerEnvelope.binding.provider.service_key_sha256="0".repeat(64),
+    x=>x.providerEnvelope.binding.provider.jwt_secret_sha256="0".repeat(64),
+    x=>x.jwtSecret="too-short",
+    x=>{x.jwtSecret=key;x.providerEnvelope.binding.provider.jwt_secret_sha256=hash(key);},
+    x=>x.databaseUrl="postgresql://postgres:unit@remote.example:54329/mz_schema_rebuild_contract",
+    x=>x.databaseUrl+="?options=-crole%3Dpostgres",
+    x=>x.expected.source_profile="caller-selected-role",
+  ];
+  for(const mutate of mutations){const x=input();mutate(x);x.providerEnvelope.signature=signBinding(x.providerEnvelope.binding,key);
+    assert.throws(()=>validateFreshLocalStorageProviderData(x));cases++;}
+  {const x=input();x.providerEnvelope.signature="0".repeat(64);assert.throws(()=>validateFreshLocalStorageProviderData(x));cases++;}
+  {const x=input();x.originalIntentEnvelope.intent.actor="tampered";assert.throws(()=>validateFreshLocalStorageProviderData(x));cases++;}
+  {const x=input();let invoked=false;Object.defineProperty(x.providerEnvelope.binding,"provider",{enumerable:true,get(){invoked=true;throw Error("getter");}});
+    assert.throws(()=>validateFreshLocalStorageProviderData(x));assert.equal(invoked,false);cases++;}
+  {const x=input();x.providerEnvelope.binding=new Proxy(x.providerEnvelope.binding,{});assert.throws(()=>validateFreshLocalStorageProviderData(x));cases++;}
+  assert.throws(()=>captureVerifiedFreshLocalStorageProvider({...input(),verifiedArchive:{}}));cases++;
+  // Old provider-profile names cannot silently relabel the authenticated actor.
+  for(const [profile,actor]of [['native-text-v4-existing-postgres','postgres'],['native-text-v4-existing-postgres','supabase_admin'],['native-text-v4-fresh-supabase-admin','postgres'],['immutable-private-fresh-supabase-admin','postgres']]){
+    const x=input();x.expected.source_profile=profile;x.expected.expected_session_user=actor;
+    x.providerEnvelope.binding.source_profile=profile;x.providerEnvelope.binding.host_target.session_user=actor;
+    x.databaseUrl=`postgresql://${actor}:unit@127.0.0.1:54329/mz_schema_rebuild_contract`;
+    x.providerEnvelope.signature=signBinding(x.providerEnvelope.binding,key);assert.throws(()=>validateFreshLocalStorageProviderData(x));cases++;
+  }
+  const wire={statusCode:'404',code:'NoSuchKey',error:'not_found',message:'Object not found'};
+  const jwtWire={statusCode:'403',code:'AccessDenied',error:'Unauthorized',message:'Invalid Compact JWS'};
+  for(const [kind,body]of [['private-object',wire],['invalid-signature',jwtWire]]){
+    const raw=Buffer.from(JSON.stringify(body)),actual=validateFreshLocalStorageDeniedResponse(400,raw,kind);
+    assert.equal(actual.body_sha256,hash(raw));assert.equal(actual.probe_kind,kind);cases++;
+  }
+  const counterfeit=[
+    [200,Buffer.from(JSON.stringify(wire)),'private-object'],[500,Buffer.from(JSON.stringify(wire)),'private-object'],
+    [400,Buffer.from('{}'),'private-object'],[400,Buffer.from('not json'),'private-object'],
+    [400,Buffer.from('x'.repeat(4097)),'private-object'],[400,Buffer.from([255]),'private-object'],
+    [400,Buffer.from(JSON.stringify({...wire,code:'InternalError'})),'private-object'],
+    [400,Buffer.from(JSON.stringify({...wire,statusCode:'403'})),'private-object'],
+    [400,Buffer.from(JSON.stringify({...wire,extra:'unmatched'})),'private-object'],
+    [400,Buffer.from(JSON.stringify({...wire,message:'read bytes leaked'})),'private-object'],
+    [400,Buffer.from(JSON.stringify(jwtWire)),'private-object'],[400,Buffer.from(JSON.stringify(wire)),'invalid-signature'],
+    [400,Buffer.from(JSON.stringify({...jwtWire,message:'unrecognized JWT failure'})),'invalid-signature']
+  ];
+  for(const args of counterfeit){assert.throws(()=>validateFreshLocalStorageDeniedResponse(...args));cases++;}
+  console.log(JSON.stringify({status:"PASS",scope:"PURE_CLOSED_LOCAL_PROVIDER_CONTRACT_DATA_ONLY",cases,
+    provider_runtime:false,original_archive:false,native_database:false,restore_ack:false}));
+  process.exit(0);
+}
 
 // Actual consumer with inert discrepancy/resample DATA only: no native SQL,
 // provider, current private authority, or new evidence/admission port.
@@ -864,7 +967,7 @@ if (process.argv.includes("--storage-typed-text-comparison-only")) {
     ${text.replace("export async function", "async function")} return compareVerifiedStorageTableData;`);
   const sqlSource = readFileSync(new URL("../proposals/immutable-private-owner-context.sql", import.meta.url), "utf8");
   assert.equal(createHash("sha256").update(sqlSource).digest("hex"),
-    "f0c870ea6691552b47daa8eb962645512b74cdd8d26078cef05a42f52116fc55");
+    "cdc59dcd238ec2eabf70cdec4e28b41c92c58b2570dc0abfa335704443b180d4");
   const sourceBody = name => {
     const signature = "CREATE FUNCTION custodial_dr." + name + "(";
     assert.equal(sqlSource.split(signature).length, 2);
@@ -1100,7 +1203,7 @@ if (process.argv.includes("--storage-typed-text-comparison-only")) {
       "Every existing provider/byte/state function remains byte-identical"); cases++;
   }
   console.log(JSON.stringify({ selector: "storage-typed-text-comparison-only", cases, predecessorCounterexample, v1QueryUnchanged,
-    source_component_only: true, actual_helper_source_pin: "f0c870ea6691552b47daa8eb962645512b74cdd8d26078cef05a42f52116fc55",
+    source_component_only: true, actual_helper_source_pin: "cdc59dcd238ec2eabf70cdec4e28b41c92c58b2570dc0abfa335704443b180d4",
     native_SQL: "NOT_RUN", signatures: 0, connections: 0, provider_calls: 0 }));
   process.exit(0);
 }

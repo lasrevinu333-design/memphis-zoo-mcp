@@ -15,7 +15,7 @@ const plans=new WeakMap(),sha=value=>createHash('sha256').update(value).digest('
 // Never cache currentness, target observations or either Source assertion.
 const sourceRowExpectations=new WeakMap();
 const basePath=fileURLToPath(new URL('../proposals/immutable-private-owner-context.sql',import.meta.url));
-const baseSha='f0c870ea6691552b47daa8eb962645512b74cdd8d26078cef05a42f52116fc55';
+const baseSha='cdc59dcd238ec2eabf70cdec4e28b41c92c58b2570dc0abfa335704443b180d4';
 const authoritySourcePins=Object.freeze([
  Object.freeze({sourcePath:'proposals/immutable-original-authority-reconciliation.sql',sourceSha256:'e60545804e8c76d94769c6b80426e3dcb86f0bdf47527cd42b5735eb7eff600a'}),
  Object.freeze({sourcePath:'proposals/immutable-original-authority-target-shape.sql',sourceSha256:'265185d8860131d5472db2a70f036332758b4b2f577b48582980f36ff7eacc3e'}),
@@ -27,8 +27,9 @@ const sourceOrder=['immutable-private-owner-context.sql','immutable-original-eve
  'immutable-original-employee-restore.sql','immutable-original-messenger-restore.sql',
  'immutable-original-message-guards-restore.sql','immutable-original-message-effects-restore.sql',
  'immutable-original-message-audit-restore.sql','immutable-original-message-receipts-restore.sql',
- 'immutable-original-device-boundary-restore.sql','immutable-original-manager-push-restore.sql'].map(name=>'proposals/'+name)
- .concat(authoritySourcePins.map(row=>row.sourcePath),'proposals/immutable-original-employee-push-authority-restore.sql');
+ 'immutable-original-device-boundary-restore.sql'].map(name=>'proposals/'+name)
+ .concat(authoritySourcePins.map(row=>row.sourcePath),'proposals/immutable-original-manager-push-restore.sql',
+  'proposals/immutable-original-employee-push-authority-restore.sql');
 const inventoryKeys=['application-schema.sql','migration-ledger.json','cron-jobs.json','extensions.json',
  'table-catalog.json','original-relations.json','original-guards.json','original-acls.json'].map(name=>'inventory/'+name);
 // Only fixed Source phases may cross this boundary. Never inspect, format or
