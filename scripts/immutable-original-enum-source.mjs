@@ -22,7 +22,8 @@ function reader(tokens){
 // Narrow supported pg_dump representation: CREATE SCHEMA auth + its explicit
 // original owner, CREATE TYPE auth.<id> AS ENUM (standard quoted labels), and
 // one explicit ALTER TYPE OWNER per definition. No names/labels are invented.
-// Other user-defined type representations intentionally remain unsupported.
+// The sole official Storage buckettype declaration is separately validated and
+// omitted from this AUTH-only result. Other foreign type representations refuse.
 export function deriveOriginalAuthEnumDescriptors(schemaSql){
   if(arguments.length!==1||typeof schemaSql!=='string'||!schemaSql.length
     ||Buffer.byteLength(schemaSql,'utf8')>32*1024*1024||schemaSql.includes('\0')
@@ -30,6 +31,7 @@ export function deriveOriginalAuthEnumDescriptors(schemaSql){
   try {
     const {statements}=splitSchemaStatements(schemaSql),enums=new Map();
     let strings=false,stringDeclarations=0,schemaCreated=false,schemaOwner=null;
+    let storageSchemaCreated=false,storageSchemaOwner=null,storageBucketEnum=null;
     for(const statement of statements){
       const t=statement.tokens,r=reader(t);
       if(kw(t[0],'set')&&t.some(token=>token.kind==='identifier'&&token.value==='standard_conforming_strings')){
@@ -50,14 +52,27 @@ export function deriveOriginalAuthEnumDescriptors(schemaSql){
         r.word('alter');r.word('schema');r.id();r.word('owner');r.word('to');const owner=r.id();r.symbol(';');r.end();
         if(!schemaCreated||schemaOwner!==null||enums.size||owner!=='supabase_admin')unavailable();schemaOwner=owner;
       }
+      if(kw(t[0],'create')&&kw(t[1],'schema')&&t[2]?.value==='storage'){
+        r.word('create');r.word('schema');if(r.id()!=='storage')unavailable();r.symbol(';');r.end();
+        if(storageSchemaCreated||storageBucketEnum)unavailable();storageSchemaCreated=true;
+      }
+      if(kw(t[0],'alter')&&kw(t[1],'schema')&&t[2]?.value==='storage'){
+        r.word('alter');r.word('schema');r.id();r.word('owner');r.word('to');const owner=r.id();r.symbol(';');r.end();
+        if(!storageSchemaCreated||storageSchemaOwner!==null||storageBucketEnum||owner!=='supabase_admin')unavailable();
+        storageSchemaOwner=owner;
+      }
+      if(kw(t[0],'drop')&&kw(t[1],'schema')&&storageSchemaCreated
+        &&t.some(token=>token.kind==='identifier'&&token.value==='storage'))unavailable();
       if(kw(t[0],'drop')&&kw(t[1],'schema')&&schemaCreated
         &&t.some(token=>token.kind==='identifier'&&token.value==='auth'))unavailable();
       if(['create','alter','drop'].some(word=>kw(t[0],word))&&kw(t[1],'domain'))unavailable();
       if(kw(t[0],'create')&&kw(t[1],'type')){
         r.word('create');r.word('type');const schema=r.id();r.symbol('.');const name=r.id();
         r.word('as');r.word('enum');r.symbol('(');
-        if(!strings||!schemaCreated||schemaOwner!=='supabase_admin'||schema!=='auth'
-          ||enums.has(name)||enums.size>=256)unavailable();
+        const vendorBucket=schema==='storage'&&name==='buckettype';
+        if(!strings||!schemaCreated||schemaOwner!=='supabase_admin'||enums.size>=256
+          ||(schema==='auth'?enums.has(name):!vendorBucket||!storageSchemaCreated
+            ||storageSchemaOwner!=='supabase_admin'||storageBucketEnum!==null))unavailable();
         const labels=[];
         for(;;){
           const token=r.take();
@@ -70,15 +85,20 @@ export function deriveOriginalAuthEnumDescriptors(schemaSql){
           if(r.peek()?.value!==',')break;r.symbol(',');
         }
         r.symbol(')');r.symbol(';');r.end();
-        enums.set(name,{kind:'e',schema_name:schema,type_name:name,namespace_owner:schemaOwner,owner_name:null,labels});
+        if(vendorBucket){
+          if(labels.length!==3||labels.some((label,index)=>label!==['STANDARD','ANALYTICS','VECTOR'][index]))unavailable();
+          storageBucketEnum={owner_name:null};
+        }else enums.set(name,{kind:'e',schema_name:schema,type_name:name,namespace_owner:schemaOwner,owner_name:null,labels});
       }
       if(kw(t[0],'alter')&&kw(t[1],'type')){
-        r.word('alter');r.word('type');if(r.id()!=='auth')unavailable();r.symbol('.');const name=r.id();
+        r.word('alter');r.word('type');const schema=r.id();r.symbol('.');const name=r.id();
         r.word('owner');r.word('to');const owner=r.id();r.symbol(';');r.end();
-        const entry=enums.get(name);
-        if(!entry||entry.owner_name!==null||owner!=='supabase_auth_admin')unavailable();entry.owner_name=owner;
+        const vendorBucket=schema==='storage'&&name==='buckettype';
+        const entry=schema==='auth'?enums.get(name):vendorBucket?storageBucketEnum:null;
+        if(!entry||entry.owner_name!==null||owner!==(vendorBucket?'supabase_storage_admin':'supabase_auth_admin'))unavailable();
+        entry.owner_name=owner;
       }
-      if(kw(t[0],'drop')&&kw(t[1],'type')&&enums.size)unavailable();
+      if(kw(t[0],'drop')&&kw(t[1],'type')&&(enums.size||storageBucketEnum))unavailable();
       // No opaque top-level execution or user cast declaration can change an
       // inferred type after/beside its parsed definition. Function bodies are
       // tokenized as literals, not recursively executed or regex-scanned.
@@ -94,6 +114,8 @@ export function deriveOriginalAuthEnumDescriptors(schemaSql){
       }
     }
     for(const entry of enums.values())if(entry.owner_name===null)unavailable();
+    if(storageBucketEnum&&storageBucketEnum.owner_name!=='supabase_storage_admin')unavailable();
+    if(storageSchemaCreated&&storageSchemaOwner!=='supabase_admin')unavailable();
     return Object.freeze([...enums.values()].sort((a,b)=>a.type_name<b.type_name?-1:a.type_name>b.type_name?1:0)
       .map(entry=>Object.freeze({...entry,labels:Object.freeze(entry.labels)})));
   }catch{unavailable();}
