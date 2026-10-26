@@ -864,7 +864,7 @@ if (process.argv.includes("--storage-typed-text-comparison-only")) {
     ${text.replace("export async function", "async function")} return compareVerifiedStorageTableData;`);
   const sqlSource = readFileSync(new URL("../proposals/immutable-private-owner-context.sql", import.meta.url), "utf8");
   assert.equal(createHash("sha256").update(sqlSource).digest("hex"),
-    "f0c870ea6691552b47daa8eb962645512b74cdd8d26078cef05a42f52116fc55");
+    "cdc59dcd238ec2eabf70cdec4e28b41c92c58b2570dc0abfa335704443b180d4");
   const sourceBody = name => {
     const signature = "CREATE FUNCTION custodial_dr." + name + "(";
     assert.equal(sqlSource.split(signature).length, 2);
@@ -1100,7 +1100,7 @@ if (process.argv.includes("--storage-typed-text-comparison-only")) {
       "Every existing provider/byte/state function remains byte-identical"); cases++;
   }
   console.log(JSON.stringify({ selector: "storage-typed-text-comparison-only", cases, predecessorCounterexample, v1QueryUnchanged,
-    source_component_only: true, actual_helper_source_pin: "f0c870ea6691552b47daa8eb962645512b74cdd8d26078cef05a42f52116fc55",
+    source_component_only: true, actual_helper_source_pin: "cdc59dcd238ec2eabf70cdec4e28b41c92c58b2570dc0abfa335704443b180d4",
     native_SQL: "NOT_RUN", signatures: 0, connections: 0, provider_calls: 0 }));
   process.exit(0);
 }
