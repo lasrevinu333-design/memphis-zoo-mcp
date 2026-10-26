@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { createCiFreshOnlyFixture } from './ci-fresh-only-replay.mjs';
 
 import assert from "node:assert/strict";
 import { execFile, execFileSync, spawn } from "node:child_process";
@@ -13,7 +14,9 @@ if(suppliedContainer){
   const inspection=JSON.parse(execFileSync('docker',['inspect',suppliedContainer],{encoding:'utf8',timeout:10000}))[0];
   assert.equal(inspection.HostConfig.NetworkMode,'none');assert.equal(Object.keys(inspection.HostConfig.PortBindings??{}).length,0);
 }
-const container = suppliedContainer || `mz_static_weekly_vacancy_${process.pid}`;
+const fixtureName = `mz_schema_rebuild_static_weekly_vacancy_${process.pid}`;
+let container = suppliedContainer || fixtureName;
+let fixture = null;
 const migrationsDir = path.resolve(process.cwd(), "supabase/migrations");
 const managerId = "10000000-0000-4000-8000-000000000091";
 const sourceId = "50000000-0000-4000-8000-000000000091";
@@ -51,20 +54,8 @@ async function state() {
 let removed = false;
 try {
  if(!suppliedContainer){
-  const image = process.env.SCHEMA_REBUILD_DOCKER_IMAGE || "supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed";
-  await docker(["image", "inspect", image]);
-  await docker(["run", "--rm", "-d", "--network", "none", "--name", container, "--tmpfs", "/var/lib/postgresql/data:rw,size=1g", "-e", "POSTGRES_PASSWORD=postgres", image, "-c", "shared_preload_libraries=pg_cron,pg_net,pg_stat_statements"]);
-  let ready = false; let consecutiveReadyChecks = 0;
-  for (let attempt = 0; attempt < 120; attempt += 1) {
-    try {
-      await sql("select 1"); consecutiveReadyChecks += 1;
-      if (consecutiveReadyChecks >= 5) { ready = true; break; }
-    } catch { consecutiveReadyChecks = 0; }
-    await new Promise((resolve) => setTimeout(resolve, 500));
-  }
-  assert.equal(ready, true, "disposable PostgreSQL must start before vacancy authority tests");
-  await sql("do $$ begin create role anon; exception when duplicate_object then null; end $$; do $$ begin create role authenticated; exception when duplicate_object then null; end $$; do $$ begin create role service_role; exception when duplicate_object then null; end $$;");
-  for (const file of fs.readdirSync(migrationsDir).filter((name) => name.endsWith(".sql")).sort()) await sql(fs.readFileSync(path.join(migrationsDir, file), "utf8"));
+  fixture = await createCiFreshOnlyFixture({ name: fixtureName, hostSocket: false });
+  container = fixture.container;
  }
   await sql(`insert into public.ops_manager_managers(manager_id,display_name,roles,active,metadata_json,is_system_principal) values(${quote(managerId)},'Vacancy Test Manager',array['OPS_MANAGER','CUSTODIAL_MANAGER']::text[],true,'{}'::jsonb,false)`);
   const vacancyTemplateConstraint = await scalar("select pg_get_constraintdef(oid) from pg_constraint where conrelid='public.weekly_schedule_slot_availability'::regclass and conname='weekly_schedule_slot_availability_vacancy_template_check'");
@@ -162,6 +153,6 @@ try {
 
   console.log("static weekly vacant roster-slot database tests: PASS");
 } finally {
-  if(!suppliedContainer){try { await docker(["rm", "-f", container]); removed = true; } catch {}
+  if(!suppliedContainer){try { if (fixture) await fixture.cleanup(); removed = true; } catch {}
    if (!removed) process.exitCode = 1;}
 }

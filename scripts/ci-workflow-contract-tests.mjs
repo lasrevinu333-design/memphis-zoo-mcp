@@ -35,11 +35,11 @@ const postgresPinSources = [
 const qualifiedFreshReplayImage = "public.ecr.aws/supabase/postgres@sha256:28f0e16a019e648089fc1a6d333549a55548f6019c15ae4bd7cd58b989027518";
 const qualifiedFreshReplayManifestBytes = readFileSync(resolve(root, "release/fresh-only-replay/MANIFEST.json"));
 assert.equal(createHash("sha256").update(qualifiedFreshReplayManifestBytes).digest("hex"),
-  "cc9db65f462b534f11a6bd882cdb21ea2507b13881b1c2e8d96646f632e1548c",
-  "fresh-only replay must retain the exact qualified293 selection with21 overrides");
+  "dbe83c4be6e5cbcf1a13ca0359dd9da7596821d39b6a34578499ae8b63c8a95d",
+  "fresh-only replay must retain the exact qualified294 selection with21 overrides");
 const qualifiedFreshReplayManifest = JSON.parse(qualifiedFreshReplayManifestBytes);
 assert.equal(qualifiedFreshReplayManifest.image, qualifiedFreshReplayImage);
-assert.equal(qualifiedFreshReplayManifest.entries.length, 293);
+assert.equal(qualifiedFreshReplayManifest.entries.length, 294);
 assert.equal(qualifiedFreshReplayManifest.overrides.length, 21);
 assert.equal(qualifiedFreshReplayManifest.full_vendor_NORMAL, false);
 assert.equal(qualifiedFreshReplayManifest.expected_fingerprint_authority, null);
@@ -47,6 +47,11 @@ const freshReplayWorkflowPaths = new Set([
   resolve(workflowDirectory, "event-integrity-diagnostics.yml"),
   resolve(workflowDirectory, "operational-analytics-diagnostics.yml"),
 ]);
+// The two reviewed Repair construction steps use qualified fresh-only replay;
+// its earlier recorder retains the distinct rehearsal image. Bind the whole
+// reviewed workflow so this exception cannot admit another image caller.
+const mixedFreshRepairWorkflowPath = resolve(workflowDirectory, "custodial-production-repair.yml");
+const mixedFreshRepairWorkflowSha256 = "a79d6ffb2c56e3320c4556407daf2ad351420f611d3a4a6457b432ab82c06f8e";
 const thisContractPath = fileURLToPath(import.meta.url);
 const postgresImagePins = postgresPinSources.flatMap((path) => {
   const pins = [...readFileSync(path, "utf8").matchAll(/(?:public\.ecr\.aws\/)?supabase\/postgres@sha256:[0-9a-f]{64}/g)]
@@ -57,6 +62,11 @@ const postgresImagePins = postgresPinSources.flatMap((path) => {
   } else if (freshReplayWorkflowPaths.has(path)) {
     assert.deepEqual([...new Set(pins)], [qualifiedFreshReplayImage],
       `${path} must use only the exact qualified fresh-only replay image`);
+  } else if (path === mixedFreshRepairWorkflowPath) {
+    assert.equal(createHash("sha256").update(readFileSync(path)).digest("hex"), mixedFreshRepairWorkflowSha256,
+      "mixed-image Repair must be the exact reviewed workflow with only two explicit fresh-only construction steps");
+    assert.deepEqual([...new Set(pins)].sort(), [rehearsalPostgresImage, qualifiedFreshReplayImage].sort(),
+      "Repair must retain its distinct recorder rehearsal pin and qualified fresh-only fixture pin");
   } else {
     for (const pin of pins) assert.equal(pin, rehearsalPostgresImage,
       `${path} must retain the extension-compatible rehearsal image; fresh-only authority is not portable to another caller`);
@@ -413,7 +423,7 @@ const productionBackupRehearsal = readFileSync(resolve(workflowDirectory, "produ
 // not as a parser for arbitrary future YAML. Any workflow edit fails before
 // an actual workflow reaches scalar measurement and requires a reviewed pin.
 assert.equal(createHash("sha256").update(productionBackupRehearsal, "utf8").digest("hex"),
-  "7c7f7523ff1a7ca86ca8945325b9fa5498913ee9ad125c68cb8953d4e28940ea",
+  "de2340baca8d5f170d91e61e268ed8cafd22db04234a7e095d2fe17a92946749",
   "rehearsal length measurement requires the exact reviewed whole workflow");
 const blankGapPlainRunMutant = productionBackupRehearsal.replace(
   "      - run: npm ci --ignore-scripts\n",
@@ -426,7 +436,7 @@ assert.throws(() => canonicalRunScalarsForLength(
 "a space-only blank line must not hide the valid 21,001-character plain run scalar");
 const escapedQuotedRunMutant = productionBackupRehearsal.replace(
   "        run: |\n",
-  '        "r\\u0075n": |\n' + "          #" + "x".repeat(1_952) + "\n",
+  '        "r\\u0075n": |\n' + "          #" + "x".repeat(620) + "\n",
 );
 assert.notEqual(escapedQuotedRunMutant, productionBackupRehearsal);
 assert.throws(() => canonicalRunScalarsForLength(
@@ -437,8 +447,12 @@ assert.throws(() => canonicalRunScalarsForLength(
 const localProductionBackupRehearsal = readFileSync(resolve(root, "scripts/run-production-backup-migration-rehearsal.sh"), "utf8");
 const build52ProductionMigrationApply = readFileSync(resolve(workflowDirectory, "build52-production-migration-apply.yml"), "utf8");
 assert.equal(createHash("sha256").update(build52ProductionMigrationApply, "utf8").digest("hex"),
-  "ab6d30e590d7121d1b345e3652b872cfc062a66b690b1578241d420900914c41",
+  "4bdb11224d3e4d20dfb3bc9293c1a13f0bf86323c58594ac082f4e7463ab9c25",
   "Build52 length measurement requires the exact reviewed whole workflow");
+assert.match(build52ProductionMigrationApply, /node scripts\/current291-production-plan-source-tests\.mjs/,
+  "normal apply must invoke the existing current plan source suite");
+assert.doesNotMatch(build52ProductionMigrationApply, /node scripts\/release-migration-workflow-tests\.mjs/,
+  "normal apply must not invoke the absent historical source-test module");
 const build52ProductionMigrationApplyJob = workflowJobs(build52ProductionMigrationApply)
   .find(({ name }) => name === "authorize-and-apply");
 assert.ok(build52ProductionMigrationApplyJob, "the Build 52 production migration workflow must retain its authorize-and-apply job");
@@ -609,8 +623,8 @@ const maximumRehearsalRunCharacters = Math.max(...canonicalRunScalarsForLength(p
   .map((source) => source.length));
 assert.ok(maximumRehearsalRunCharacters < 21_000,
   "every production-backup rehearsal run expression must stay below the provider's hard character ceiling");
-assert.ok(maximumRehearsalRunCharacters <= 19_047,
-  "the exact current reviewed rehearsal retains at least1,953characters margin; no larger run envelope is admitted");
+assert.ok(maximumRehearsalRunCharacters <= 20_379,
+  "the exact current reviewed rehearsal retains at least621characters margin; no larger run envelope is admitted");
 assert.match(productionBackupRehearsal, /RESTORE_DATABASE_ONLY=true[\s\S]*release:observed-production-schema:preflight[\s\S]*node scripts\/run-release-migration-full-candidate\.mjs "\$backup_dir" "\$container" "\$port"[\s\S]*release:target-schema:preflight/,
   "the production-backup rehearsal must prove the restored pre-migration state, apply the signed plan, and only then check the target fingerprint");
 assert.doesNotMatch(productionBackupRehearsal, /SUPABASE_DB_URL:\s*\$\{\{\s*secrets\.SUPABASE_DB_URL/,

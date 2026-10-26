@@ -4,8 +4,8 @@
   "source_catalog_fingerprint": "0096e7c488aca86f1d38b061561696b2d4ac409036f063ffc9f196625b9ee9c2",
   "source_ledger_count": 235,
   "source_ledger_head": "20261021111917",
-  "canonical_replay_sha256": "4300e07bd609ac0fe916dec01ecbbed94617bb8a7279a644a5d7e755bd7b6e3e",
-  "canonical_source_count": 293,
+  "canonical_replay_sha256": "5a0ac3a398d25f59a0a7f6e045d0db1c4d59b28924a18ec479f01bbe5a710121",
+  "canonical_source_count": 294,
   "tables": [
     {
       "schema": "public",
@@ -3977,6 +3977,11 @@
       "order": 159,
       "file": "20261025124437_manager_completion_evidence_opaque_session_domain.sql",
       "canonical_sha256": "ef296210e35b3e6b0118d0ca84bee0db6152b039547960bc05803cfd320c77a8"
+    },
+    {
+      "order": 160,
+      "file": "20261026065000_location_scan_state_qualified_lookup.sql",
+      "canonical_sha256": "ca79547cd57ef3f8b3436e846bd4ed57581ea17be2d57701c72d1e45646591db"
     }
   ],
   "production_authorized": false

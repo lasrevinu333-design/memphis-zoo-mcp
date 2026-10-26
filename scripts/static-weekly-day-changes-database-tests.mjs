@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { createCiFreshOnlyFixture } from './ci-fresh-only-replay.mjs';
 // Real-PostgreSQL evidence for the outer, transaction-owning daily batch and
 // its database-authoritative complete-chain replay contract.
 import assert from "node:assert/strict";
@@ -14,7 +15,9 @@ import { createStaticWeeklyControlPlane } from "../src/static-weekly-control-pla
 import { REQUEST_DEADLINE_MILLISECONDS } from "../src/static-weekly-schedule-program.js";
 
 const execFileAsync = promisify(execFile);
-const container = `mz_static_weekly_day_changes_${process.pid}`;
+const fixtureName = `mz_schema_rebuild_static_weekly_day_changes_${process.pid}`;
+let container = fixtureName;
+let fixture = null;
 const migrationsDir = path.resolve(process.cwd(), "supabase/migrations");
 const migrations = fs.readdirSync(migrationsDir).filter((name) => name.endsWith(".sql")).sort().map((name) => path.join(migrationsDir, name));
 const image = process.env.SCHEMA_REBUILD_DOCKER_IMAGE || "supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed";
@@ -163,29 +166,10 @@ const correctionOperations = slotIds.slice(0, 3).map((slotId, index) => ({ opera
 let pool = null;
 let removed = false;
 try {
-  await docker(["image", "inspect", image]);
-  await docker(["run", "--rm", "-d", "--name", container, "-p", "127.0.0.1::5432", "--tmpfs", "/var/lib/postgresql/data:rw,size=1g", "-e", "POSTGRES_PASSWORD=postgres", image, "-c", "shared_preload_libraries=pg_cron,pg_net,pg_stat_statements", "-c", "cron.launch_active_jobs=off", "-c", "listen_addresses=*"]);
-  let ready = false;
-  for (let attempt = 0; attempt < 300; attempt += 1) {
-    try {
-      const logs = (await docker(["logs", container])).stdout;
-      if (logs.includes("PostgreSQL init process complete; ready for start up.")) {
-        await new Promise((resolve) => setTimeout(resolve, 2_000));
-        await containerSql("select 1");
-        ready = true;
-        break;
-      }
-    } catch {}
-    await new Promise((resolve) => setTimeout(resolve, 500));
-  }
-  assert.equal(ready, true, "owned disposable PostgreSQL must start");
-  assert.equal(await containerSql("show cron.launch_active_jobs"), "off", "cron job launching must be disabled before canonical migration replay");
-  await containerSql("do $$ begin create role anon; exception when duplicate_object then null; end $$; do $$ begin create role authenticated; exception when duplicate_object then null; end $$; do $$ begin create role service_role; exception when duplicate_object then null; end $$;");
-  for (const migration of migrations) await containerSql(fs.readFileSync(migration, "utf8"));
-  await containerSql("alter role supabase_admin password 'postgres'");
-  const port = Number((await docker(["port", container, "5432/tcp"])).stdout.trim().split(":").at(-1));
-  assert.equal(Number.isInteger(port) && port > 0, true, "owned PostgreSQL must expose one loopback test port");
-  pool = new Pool({ connectionString: `postgres://supabase_admin:postgres@127.0.0.1:${port}/postgres`, max: 16, connectionTimeoutMillis: 10_000, idleTimeoutMillis: 2_000 });
+  fixture = await createCiFreshOnlyFixture({ name: fixtureName, hostSocket: true });
+  container = fixture.container;
+  assert.equal(typeof fixture.socketDirectory, 'string', 'owned fixture must expose its private PostgreSQL socket');
+  pool = new Pool({ host: fixture.socketDirectory, user: 'supabase_admin', database: 'postgres', password: 'postgres', max: 16, connectionTimeoutMillis: 10_000, idleTimeoutMillis: 2_000 });
 
   await containerSql(`insert into public.ops_manager_managers(manager_id,display_name,roles,active,metadata_json,is_system_principal) values(${quote(actor.manager_id)},${quote(actor.manager_display_name)},array['OPS_MANAGER']::text[],true,'{}'::jsonb,false)`);
   await containerSql("set role static_weekly_release_operator; select public.static_weekly_v3_configure_initial_authority_key('static-weekly-authority-hmac-v2','static-weekly-day-change-test-secret-012345678901234567890','day-change-suite')");
@@ -297,7 +281,7 @@ try {
 
     const crashTrace = [];
     const crashing = createStaticWeeklyControlPlane({ database: tracedDatabase(pool, crashTrace, { terminateProjection: true, adminPool: pool }), compiler: async () => baselineCompilation });
-    await assert.rejects(() => crashing.applyDayChanges(batchRequest("outer-connection-loss", currentRevision, lateFailureOperations)), (error) => error?.code === "static_weekly_control_plane_database_unavailable" && /No schedule change was accepted/.test(error?.message || ""), "connection loss is normalized to one retryable fail-closed authority response");
+    await assert.rejects(() => crashing.applyDayChanges(batchRequest("outer-connection-loss", currentRevision, lateFailureOperations)), (error) => error?.code === "static_weekly_control_plane_database_unavailable" && error?.message === "The scheduler database connection was interrupted. The outcome is unknown; check the exact operation status before retrying." && error?.cause instanceof Error, "connection loss preserves unknown outcome and exact-operation-status-before-retry instructions");
     assert.equal(crashTrace.filter((entry) => entry.statement.includes("static_weekly_v3_apply_exception") && !entry.sqlstate).length, 5, "all children succeed before connection loss");
     assert.equal(await scalar("select row_to_json(s)::text from (select current_revision,(select count(*) from public.weekly_schedule_exception_commands) exceptions,(select count(*) from public.weekly_schedule_compiled_projections) projections,(select count(*) from public.weekly_schedule_command_receipts) receipts from public.static_weekly_schedule_control where singleton) s"), stableState, "connection loss rolls back the PostgreSQL transaction");
     assert.equal(await scalar("select count(*)::text from public.weekly_schedule_command_receipts where actor_manager_id='10000000-0000-4000-8000-000000000061' and (idempotency_key in (select public.static_weekly_v4_day_change_child_key('outer-connection-loss',i) from generate_series(0,25) i) or idempotency_key=public.static_weekly_v4_day_change_projection_key('outer-connection-loss'))"), "0", "connection loss leaves the complete request key reusable rather than partially claimed");
@@ -311,7 +295,7 @@ try {
   throw error;
 } finally {
   if (pool) await pool.end().catch(() => {});
-  await docker(["rm", "-f", container]).catch(() => {});
+  if (fixture) await fixture.cleanup();
   removed = true;
 }
 assert.equal(removed, true, "owned disposable PostgreSQL container must be removed");

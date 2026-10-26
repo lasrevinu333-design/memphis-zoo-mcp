@@ -4138,6 +4138,64 @@
         "bytes": 31145
       },
       "atomic_mode": "exact-Source-BEGIN-COMMIT"
+    },
+    {
+      "name": "20261026065000_location_scan_state_qualified_lookup.sql",
+      "original": {
+        "path": "supabase/migrations/20261026065000_location_scan_state_qualified_lookup.sql",
+        "sha256": "ca79547cd57ef3f8b3436e846bd4ed57581ea17be2d57701c72d1e45646591db",
+        "bytes": 3443
+      },
+      "selected": {
+        "path": "supabase/migrations/20261026065000_location_scan_state_qualified_lookup.sql",
+        "sha256": "ca79547cd57ef3f8b3436e846bd4ed57581ea17be2d57701c72d1e45646591db",
+        "bytes": 3443
+      },
+      "atomic_mode": "exact-Source-BEGIN-COMMIT"
     }
-  ]
+  ],
+  "no_auto_profile": {
+    "format": "custodial.ci-fresh-only-no-auto-profile.v1",
+    "scope": "NONCANONICAL_NO_AUTO",
+    "reference": {
+      "path": "release/fresh-only-replay/no-auto/REFERENCE_PREFIX226.json",
+      "sha256": "1f3d00389cb962075664be4c6cc89209e8da859981d684d9535aea869a192c61",
+      "bytes": 13002540
+    },
+    "comparison_sha256": "40a10a8569fe98a40b6490a8f37db5340ca14f56c95f51b66e638ed322d856b5",
+    "overrides": [
+      {
+        "name": "20261006113610_custodial_shared_events_outlook.sql",
+        "selected": {
+          "path": "release/fresh-only-replay/no-auto/images/20261006113610_custodial_shared_events_outlook.sql",
+          "sha256": "4f45d175514e99b5a172c915043c3c3370ed3a9d9f1f65e05d696b5a62210e84",
+          "bytes": 131748
+        }
+      },
+      {
+        "name": "20261006162427_custodial_shared_events_recovery_binding.sql",
+        "selected": {
+          "path": "release/fresh-only-replay/no-auto/images/20261006162427_custodial_shared_events_recovery_binding.sql",
+          "sha256": "56a54717b1a3127afaf35fc44982c2b0144840f568d7a7f1c7cbae7599af674f",
+          "bytes": 131912
+        }
+      },
+      {
+        "name": "20261010193211_native_private_custody_chunk_retention.sql",
+        "selected": {
+          "path": "release/fresh-only-replay/no-auto/images/20261010193211_native_private_custody_chunk_retention.sql",
+          "sha256": "1d1a2aab8a4b1ecbb49f8549548ced772c9c2b0503bee70365b289b2395cdf28",
+          "bytes": 52346
+        }
+      },
+      {
+        "name": "20261011000206_native_private_custody_complete_frame_readback.sql",
+        "selected": {
+          "path": "release/fresh-only-replay/no-auto/images/20261011000206_native_private_custody_complete_frame_readback.sql",
+          "sha256": "84abc0fc688043bbbf38f7af5a7035a2eafa6a51ad08aac362e90c60c15e02b9",
+          "bytes": 26986
+        }
+      }
+    ]
+  }
 }
