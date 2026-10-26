@@ -85,14 +85,17 @@ function assertDrift(phase, identity, { missing = false } = {}) {
 
 function snapshotOwnedBindings() {
   return JSON.parse(sql(`with required as (
-      select signature,to_regprocedure(signature)::text as identity
+      select signature,to_regprocedure(signature)::text as identity,
+        -- The current Event recovery migration explicitly qualifies this grant only.
+        case when signature=${q(scheduleFunction)} then signature
+          else to_regprocedure(signature)::text end as grant_identity
       from unnest(array[${functions.map(q).join(",")}]) as required(signature)
     ), live as (
       select signature,identity,'function'::text as object_kind,
         pg_get_functiondef(to_regprocedure(signature)) as live_definition from required
       union all
-      select signature,identity,'grant',
-        public.custodial_release_authority_current_grant_definition(identity) from required
+      select signature,grant_identity,'grant',
+        public.custodial_release_authority_current_grant_definition(grant_identity) from required
       union all
       select ${q(constraint)},${q(constraint)},'constraint',
         public.custodial_release_authority_current_constraint_definition(${q(constraint)})
