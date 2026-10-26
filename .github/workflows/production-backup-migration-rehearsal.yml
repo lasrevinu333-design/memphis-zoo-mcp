@@ -16,6 +16,12 @@ on:
           - full_candidate
           - backup_only
           - target_capture
+          - reviewed_target_capture
+      reviewed_disposition_sha256:
+        description: Exact issued Root nine-discrepancy disposition digest, required only for reviewed_target_capture
+        required: false
+        type: string
+        default: ""
 
 permissions:
   actions: read
@@ -50,6 +56,7 @@ jobs:
         env:
           REHEARSAL_SCOPE: ${{ inputs.rehearsal_scope || 'full_candidate' }}
           BACKUP_RUN_ID: ${{ inputs.backup_run_id }}
+          REVIEWED_DISPOSITION_SHA256: ${{ inputs.reviewed_disposition_sha256 }}
           GH_TOKEN: ${{ github.token }}
           BACKUP_ENCRYPTION_PASSPHRASE: ${{ secrets.BACKUP_ENCRYPTION_PASSPHRASE }}
           RESTORE_ARCHIVE_VERIFY_KEY: ${{ secrets.BACKUP_MANIFEST_SIGNING_KEY }}
@@ -64,7 +71,7 @@ jobs:
           test -n "$BACKUP_ENCRYPTION_PASSPHRASE"
           test -n "$RESTORE_ARCHIVE_VERIFY_KEY"
           test -n "$RESTORE_ARCHIVE_VERIFY_KEY_ID"
-          case "$REHEARSAL_SCOPE" in full_candidate|backup_only|target_capture) ;; *) exit 1 ;; esac
+          case "$REHEARSAL_SCOPE" in full_candidate|backup_only|target_capture|reviewed_target_capture) ;; *) exit 1 ;; esac
           [[ "$BACKUP_RUN_ID" =~ ^[1-9][0-9]*$ ]]
           test -n "$REHEARSAL_CUSTODIAL_BACKEND_PROOF_SECRET"
           test -n "$REHEARSAL_CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET"
@@ -178,6 +185,21 @@ jobs:
               RESTORE_REHEARSAL_EXPECTED_ARCHIVE_DIGEST="$archive_digest" \
               node scripts/export-isolated-pre-reconcile-metadata.mjs | tee -a "$receipt"
             exit 78 # Defensive: helper normally returns78 after durable metadata export.
+          fi
+          if test "$REHEARSAL_SCOPE" = reviewed_target_capture; then
+            RESTORE_SOURCE_DIR="$backup_dir" SUPABASE_DB_URL="$local_db_url" RESTORE_REHEARSAL_EXPECTED_ARCHIVE_DIGEST="$archive_digest" \
+              node scripts/export-isolated-pre-reconcile-metadata.mjs --reviewed-target-capture | tee -a "$receipt"
+            rj="${RUNNER_TEMP}/target-capture-reviewed-resolutions.json"
+            ri="${RUNNER_TEMP}/target-capture-signed-reconciliation.json"
+            export SUPABASE_DB_URL="$local_db_url" SUPABASE_PROJECT_REF="$project_ref"
+            export RESTORE_RECONCILIATION_NAMED_ACTOR='Root reviewed isolated target capture'
+            export RESTORE_RECONCILIATION_SIGNING_KEY="$intent_key" RESTORE_RECONCILIATION_SIGNING_KEY_ID="$intent_key_id"
+            RESTORE_RECONCILIATION_RESOLUTIONS_JSON="$(<"$rj")" npm run --silent restore:reconciliation:create > "$ri"
+            RESTORE_RECONCILIATION_CONFIRM_PROJECT_REF="$project_ref" RESTORE_RECONCILIATION_VERIFY_KEY="$intent_key" RESTORE_RECONCILIATION_VERIFY_KEY_ID="$intent_key_id" RESTORE_RECONCILIATION_JSON="$(<"$ri")" \
+              npm run --silent restore:reconciliation:apply | tee -a "$receipt"
+            RESTORE_SOURCE_DIR="$backup_dir" node scripts/verify-isolated-source-lease-state.mjs | tee -a "$receipt"
+            node scripts/run-release-migration-target-capture.mjs "$backup_dir" "$container" "$port" | tee -a "$receipt"
+            exit 0
           fi
           RESTORE_REHEARSAL_ACCEPT_EMPTY_TARGET=true RESTORE_REHEARSAL_EXPECTED_ARCHIVE_DIGEST="$archive_digest" \
             SUPABASE_DB_URL="$local_db_url" npm run --silent restore:reconcile-isolated | tee -a "$receipt"

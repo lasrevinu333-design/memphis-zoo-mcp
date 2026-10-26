@@ -1,5 +1,5 @@
 {
-  "state": "SOURCE_ONLY_CURRENT293_POPULATED_TARGET_UNRESOLVED",
+  "state": "SOURCE_ONLY_CURRENT294_POPULATED_TARGET_UNRESOLVED",
   "preserved134": [
     {
       "file": "00000000000000_production_baseline.sql",
@@ -1501,14 +1501,14 @@
     }
   ],
   "current_replay_manifest": {
-    "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/manager-access/Backend1098-Source26-three-SQL-null-safe-definition-guard-data-rebase-source01/current-six-release-binding-counterparts-final04/after/supabase/canonical/migration-replay-order.json",
-    "sha256": "4300e07bd609ac0fe916dec01ecbbed94617bb8a7279a644a5d7e755bd7b6e3e",
-    "bytes": 55656
+    "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/atomic-finalization/Source27-appended294-location-scan-state-qualified-lookup-source01/final02-preserve-current-ALWAYS-inventory-guard/after/supabase/canonical/migration-replay-order.json",
+    "sha256": "5a0ac3a398d25f59a0a7f6e045d0db1c4d59b28924a18ec479f01bbe5a710121",
+    "bytes": 55841
   },
   "current_forward_manifest": {
-    "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/manager-access/Backend1098-Source26-three-SQL-null-safe-definition-guard-data-rebase-source01/current-six-release-binding-counterparts-final04/after/release/production-forward-source/manifest.json",
-    "sha256": "978baf0f9055defbd35baab787af9f5e189b7028103f5b79367c70351559c18f",
-    "bytes": 12217
+    "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/inventory-ack/Source27-pending156-explicit-ALWAYS-forward-three-JSON-counterparts-source02/after/release/production-forward-source/manifest.json",
+    "sha256": "f595b67110e0221c8b68e199195f82d88425d8a73476a9adc981112f8bb89f30",
+    "bytes": 13101
   },
   "C10_context_only": {
     "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/atomic-finalization/fresh291-prospective-staged-reference-twentyone-image-source10-source-derived-canary-counterparts/RESULT.json",
@@ -1524,5 +1524,5 @@
   "actual_target_catalog": null,
   "actual_target_counts": null,
   "populated_profile_compatibility": null,
-  "retained_filename_precision": "current291 filename retained as existing protocol name; current supplied manifest293, no oldSourceYEStransfer"
+  "retained_filename_precision": "current291 filename retained as existing protocol name; current supplied manifest294, no oldSourceYEStransfer"
 }

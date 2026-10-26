@@ -399,7 +399,133 @@ export async function readCancellationTargetRefusal(db){
   fixed_function_grant_aliases:aliases,predecessors};
 }
 
+
+// Fixed pending158 boundary only. This never selects operational tables, runs
+// captured SQL, changes a guard, or admits a failed predecessor as authority.
+export const AUTHORITY_IDENTITY158_SOURCE_FILE='20261025094420_authority_identity_renderer_counterparts.sql';
+export const AUTHORITY_IDENTITY158_CANONICAL_SHA256='19e55cfdc9f1ddfd34c2912892ac23979ad5fc44a45da7e444a008b1da0a8c9b';
+export const AUTHORITY_IDENTITY158_FORWARD_SHA256='2e2b296d4b858e2a752b0f9a1c677020ef387bde8862e6b2a2f6dc1e18547cac';
+export const AUTHORITY_IDENTITY158_METADATA_SQL=`with inventory as materialized(
+ select restore_order,object_kind,object_identity,definition_sql,definition_sha256
+ from public.custodial_release_authority_restore_inventory),
+ kind_counts as(select object_kind,count(*)::text rows from inventory group by object_kind),
+ named_guard as(select t.oid,t.tgname,t.tgenabled,t.tgtype,t.tgisinternal,t.tgrelid,t.tgfoid
+ from pg_catalog.pg_trigger t where t.tgrelid=to_regclass('public.custodial_release_authority_restore_inventory')
+ and t.tgname='trg_custodial_release_authority_restore_inventory_immutable'),
+ routines as(select wanted.fixed_identity,p.* from unnest($2::text[]) wanted(fixed_identity)
+ left join pg_catalog.pg_proc p on p.oid=to_regprocedure(wanted.fixed_identity)),
+ fixed_triggers as(select wanted.relation_name,c.oid relation_oid,n.nspname,c.relname,t.*
+ from unnest($1::text[]) wanted(relation_name)
+ left join pg_catalog.pg_namespace n on n.nspname='public'
+ left join pg_catalog.pg_class c on c.relnamespace=n.oid and c.relname=wanted.relation_name
+ left join pg_catalog.pg_trigger t on t.tgrelid=c.oid and t.tgname='custodial_recurring_notification_plan_source_fence')
+ select current_user::text actor,session_user::text original_actor,
+ current_setting('session_replication_role') replication_role,
+ current_setting('transaction_read_only') transaction_read_only,
+ current_setting('custodial.deployment_project_ref',true) deployment_project_ref,
+ (select datdba::regrole::text from pg_catalog.pg_database where datname=current_database()) database_owner,
+ (select rolsuper from pg_catalog.pg_roles where rolname=current_user) actor_superuser,
+ (select rolbypassrls from pg_catalog.pg_roles where rolname=current_user) actor_bypassrls,
+ (select count(*)::text from inventory) inventory_count,
+ (select count(*)::text from inventory where definition_sha256 is distinct from
+  encode(extensions.digest(convert_to(definition_sql,'UTF8'),'sha256'),'hex')) inventory_selfhash_mismatches,
+ (select encode(extensions.digest(convert_to(coalesce(string_agg(restore_order::text||'|'||object_kind||'|'||object_identity||'|'||definition_sha256,E'\\n'
+  order by restore_order,object_kind collate pg_catalog."C",object_identity collate pg_catalog."C"),''),'UTF8'),'sha256'),'hex') from inventory) inventory_tuple_digest_sha256,
+ (select coalesce(jsonb_agg(jsonb_build_object('object_kind',object_kind,'rows',rows) order by object_kind collate pg_catalog."C"),'[]'::jsonb) from kind_counts) inventory_group_counts,
+ (select count(*)::text from named_guard where tgenabled='A') exact_named_always_guard_count,
+ (select coalesce(jsonb_agg(jsonb_build_object('trigger_oid',oid::text,'trigger_name',tgname,'enabled',tgenabled::text,
+  'trigger_type',tgtype,'internal',tgisinternal,'relation_oid',tgrelid::text,'function_identity',tgfoid::regprocedure::text) order by oid),'[]'::jsonb) from named_guard) named_guard_metadata,
+ (select jsonb_build_object('relation_oid',c.oid::text,'schema_name',n.nspname,'relation_name',c.relname,
+  'owner_name',c.relowner::regrole::text,'relation_kind',c.relkind::text,'persistence',c.relpersistence::text,
+  'row_security',c.relrowsecurity,'force_row_security',c.relforcerowsecurity)
+ from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid=c.relnamespace
+ where c.oid=to_regclass('public.custodial_release_authority_restore_inventory')) inventory_relation_metadata,
+ (select coalesce(jsonb_agg(jsonb_build_object('fixed_identity',p.fixed_identity,'oid',p.oid::text,
+  'owner_name',p.proowner::regrole::text,'definition',pg_get_functiondef(p.oid),'prosrc',p.prosrc,
+  'definition_md5',md5(pg_get_functiondef(p.oid)),'definition_sha256',encode(extensions.digest(convert_to(pg_get_functiondef(p.oid),'UTF8'),'sha256'),'hex'),
+  'prosrc_md5',md5(p.prosrc),'prosrc_sha256',encode(extensions.digest(convert_to(p.prosrc,'UTF8'),'sha256'),'hex'),
+  'proconfig',p.proconfig,'catalog_row',to_jsonb(p)-'fixed_identity',
+  'acl',(select coalesce(jsonb_agg(jsonb_build_object('grantee',coalesce(grantee.rolname,'PUBLIC'),'grantor',g.grantor::regrole::text,
+    'privilege',g.privilege_type,'grantable',g.is_grantable) order by coalesce(grantee.rolname,'PUBLIC'),g.privilege_type,g.is_grantable),'[]'::jsonb)
+    from aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) g left join pg_roles grantee on grantee.oid=g.grantee))
+  order by p.fixed_identity collate pg_catalog."C"),'[]'::jsonb) from routines p) known_routine_metadata,
+ (select coalesce(jsonb_agg(to_jsonb(x) order by x.object_kind collate pg_catalog."C",x.object_identity collate pg_catalog."C",x.restore_order),'[]'::jsonb)
+ from (select i.*,encode(extensions.digest(convert_to(i.definition_sql,'UTF8'),'sha256'),'hex') actual_definition_sha256,
+  case when position('(' in i.object_identity)>0 then to_regprocedure(i.object_identity)::text end resolved_function_identity
+  from public.custodial_release_authority_restore_inventory i where i.object_kind in('function','grant')
+  and case when position('(' in i.object_identity)>0 then to_regprocedure(i.object_identity) end
+   =any(array[to_regprocedure('public.custodial_release_canary_authority_surface()'),to_regprocedure('public.mz_mark_employee_event_opened(uuid,text)')])
+  order by i.object_kind collate pg_catalog."C",i.object_identity collate pg_catalog."C",i.restore_order limit 129)x) known_function_grant_inventory_aliases,
+ (select coalesce(jsonb_agg(jsonb_build_object('relation_name',g.relation_name,'relation_oid',g.relation_oid::text,
+  'trigger_oid',g.oid::text,'trigger_catalog_row',to_jsonb(g)-array['relation_name','relation_oid','nspname','relname'],
+  'live_definition',pg_get_triggerdef(g.oid,true),'enabled',g.tgenabled::text,'trigger_type',g.tgtype,'argument_count',g.tgnargs,
+  'qualifier',pg_get_expr(g.tgqual,g.tgrelid),'internal',g.tgisinternal,'function_oid',g.tgfoid::text,
+  'old_identity',quote_ident(g.relation_name)||'.custodial_recurring_notification_plan_source_fence',
+  'new_identity','public.'||quote_ident(g.relation_name)||'.custodial_recurring_notification_plan_source_fence',
+  'expected_old_definition','drop trigger if exists '||quote_ident(g.tgname)||' on '||g.tgrelid::regclass::text||'; '
+   ||pg_get_triggerdef(g.oid,true)||'; alter table '||g.tgrelid::regclass::text||' enable always trigger '||quote_ident(g.tgname)||';',
+  'new_definition','drop trigger if exists '||quote_ident(g.tgname)||' on public.'||quote_ident(g.relation_name)||'; '
+   ||pg_get_triggerdef(g.oid,true)||'; alter table public.'||quote_ident(g.relation_name)||' enable always trigger '||quote_ident(g.tgname)||';',
+  'fixed_stored_inventory_rows',(select coalesce(jsonb_agg(to_jsonb(i)||jsonb_build_object('actual_definition_sha256',
+    encode(extensions.digest(convert_to(i.definition_sql,'UTF8'),'sha256'),'hex')) order by i.restore_order),'[]'::jsonb)
+   from public.custodial_release_authority_restore_inventory i where i.object_kind='trigger' and i.object_identity in(
+    quote_ident(g.relation_name)||'.custodial_recurring_notification_plan_source_fence',
+    'public.'||quote_ident(g.relation_name)||'.custodial_recurring_notification_plan_source_fence')))
+  order by g.relation_name collate pg_catalog."C"),'[]'::jsonb) from fixed_triggers g) known_trigger_preimages`;
+function fixedAuthorityIdentity158Source(){
+ const raw=readFileSync(new URL('../supabase/migrations/'+AUTHORITY_IDENTITY158_SOURCE_FILE,import.meta.url));
+ assert.equal(createHash('sha256').update(raw).digest('hex'),AUTHORITY_IDENTITY158_CANONICAL_SHA256);
+ const source=raw.toString('utf8'),marker='$EXACT_SOURCE291_CANARY_PREIMAGE$';const parts=source.split(marker);assert.equal(parts.length,3);
+ const relationBlock=source.split('INSERT INTO identity_fix_relations VALUES\n')[1].split(';\n')[0];
+ const relations=[...relationBlock.matchAll(/\('([a-z0-9_]+)'\)/g)].map(x=>x[1]);assert.equal(relations.length,53);assert.equal(new Set(relations).size,53);
+ return {before_text:parts[1],before_sha256:createHash('sha256').update(parts[1],'utf8').digest('hex'),relations,
+  routines:['public.static_weekly_v27_notification_plan_source_write_fence()','public.mz_mark_employee_event_opened(uuid,text)',
+   'public.custodial_release_canary_authority_surface()','public.custodial_release_authority_current_grant_definition(text)']};
+}
+async function readAuthorityIdentity158Refusal(db){
+ const fixed=fixedAuthorityIdentity158Source();
+ const rows=(await db.query(AUTHORITY_IDENTITY158_METADATA_SQL,[fixed.relations,fixed.routines])).rows;assert.equal(rows.length,1);
+ const observed=rows[0];
+ for(const key of ['inventory_count','inventory_selfhash_mismatches','exact_named_always_guard_count'])assert.match(String(observed[key]),/^[0-9]+$/);
+ assert.match(observed.inventory_tuple_digest_sha256,/^[a-f0-9]{64}$/);
+ assert.ok(Array.isArray(observed.inventory_group_counts)&&observed.inventory_group_counts.length<=1024);
+ assert.ok(Array.isArray(observed.named_guard_metadata)&&observed.named_guard_metadata.length<=16);
+ assert.ok(Array.isArray(observed.known_routine_metadata)&&observed.known_routine_metadata.length<=4);
+ assert.ok(Array.isArray(observed.known_function_grant_inventory_aliases)&&observed.known_function_grant_inventory_aliases.length<=128);
+ assert.ok(Array.isArray(observed.known_trigger_preimages)&&observed.known_trigger_preimages.length<=53);
+ assert.ok(Buffer.byteLength(JSON.stringify(observed),'utf8')<=16*1024*1024,'Fixed158 metadata exceeds16MiB');
+ const expected={inventory_count:'7312',exact_named_always_guard_count:'1'};
+ const failed=Object.keys(expected).filter(key=>observed[key]!==expected[key]);
+ const canary=observed.known_routine_metadata.find(x=>x.fixed_identity==='public.custodial_release_canary_authority_surface()');
+ const stored=observed.known_function_grant_inventory_aliases.filter(x=>x.object_kind==='function'
+  &&x.object_identity==='custodial_release_canary_authority_surface()'&&x.definition_sql===fixed.before_text
+  &&x.definition_sha256===fixed.before_sha256&&x.actual_definition_sha256===fixed.before_sha256);
+ const liveEqual=canary?.definition===fixed.before_text;
+ return {observed_state:'AFTER_FAILED_STEP_SAVEPOINT_ROLLBACK',actual_failing_DO_local_predicate:'UNKNOWN',
+  predicate_scope:'FIXED_158_PREDECESSOR_CATALOG_REEVALUATION_AT_PRESERVED_STEP_BOUNDARY_NOT_FAILED_DO_LOCALS',
+  expected_composite_values:expected,observed_inventory_guard_metadata:observed,
+  failed_boundary_predicates:failed,composite_at_preserved_boundary_passes:failed.length===0,
+  canary_source_composite:{expected_before_sha256:fixed.before_sha256,expected_source_canonical_sha256:AUTHORITY_IDENTITY158_CANONICAL_SHA256,
+   live_definition_equal_expected:liveEqual,exact_unqualified_stored_function_preimage_count:String(stored.length),
+   composite_at_preserved_boundary_passes:liveEqual&&stored.length===1,
+   live_function_missing:!canary?.oid,known_routine_count:String(observed.known_routine_metadata.filter(x=>x.oid).length),
+   expected_preserved_proc_count:'3',grant_serializer_is_additional_known_catalog_context:true},
+  fixed_source_relation_names:fixed.relations,
+  guard_preimage_limits:'53fixedtrigger catalog/inventorypreimages+3fixedroutine catalogs+knownserializer+allcanary/markequivalentOIDfunction/grantaliases retained; no arbitrarybodies. Serializer/canary functions NOT executed; derivedgrant/postmutation/fullrow checks remain source guards, not reenacted authority.',
+  operational_rows_read:false,unknown_definition_bodies_returned:false,known_source_catalog_definitions_only:true,
+  arbitrary_SQL_or_guard_change:false,canonical_or_production_authority:false};
+}
+
 async function readSelectedTargetRefusal(db,migration) {
+ if(migration.file===AUTHORITY_IDENTITY158_SOURCE_FILE){
+  assert.equal(migration.order,158);assert.equal(migration.sha256,AUTHORITY_IDENTITY158_FORWARD_SHA256);
+  assert.deepEqual(migration.forward_source,{schema:'custodial.production-forward-source-binding.v1',profile:'existing-postgres-owner',
+   canonical_sha256:AUTHORITY_IDENTITY158_CANONICAL_SHA256,file:'release/production-forward-source/'+AUTHORITY_IDENTITY158_SOURCE_FILE,
+   sha256:AUTHORITY_IDENTITY158_FORWARD_SHA256});
+  return {metadata_source_file:AUTHORITY_IDENTITY158_SOURCE_FILE,metadata_source_sha256:AUTHORITY_IDENTITY158_CANONICAL_SHA256,
+   metadata_executed_sha256:migration.sha256,authority_identity158:await readAuthorityIdentity158Refusal(db)};
+ }
+
  if(migration.file===REGISTERED_VACANCY_SOURCE_FILE){
   assert.equal(migration.order,153);assert.equal(migration.sha256,REGISTERED_VACANCY_FORWARD_SHA256);
   return {metadata_source_file:REGISTERED_VACANCY_SOURCE_FILE,metadata_source_sha256:REGISTERED_VACANCY_SOURCE_SHA256,
