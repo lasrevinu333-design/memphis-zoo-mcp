@@ -65,7 +65,31 @@ assert.match(SCHEMA_CATALOG_QUERIES.schema_grants, /coalesce\(grantee\.rolname,'
   "provider administrator schema grants must remain visible under one normalized migration-owner identity");
 assert.doesNotMatch(SCHEMA_CATALOG_QUERIES.schema_grants, /not in \('postgres','supabase_admin'\)/,
   "schema authority must not hide explicit provider-administrator grants");
-assert.equal(canonicalCatalog.schema_grants.length, 9, "the clean target must bind all nine public-schema grants");
+assert.equal(
+  canonicalCatalog.schema_grants.filter((grant) => grant.schema_name === "public").length,
+  9,
+  "the clean target must bind all nine public-schema grants",
+);
+assert.deepEqual(
+  canonicalCatalog.schema_grants.filter((grant) => grant.schema_name !== "public"),
+  [
+    {
+      grantee: "migration_owner",
+      grantor: "migration_owner",
+      is_grantable: false,
+      privilege_type: "CREATE",
+      schema_name: "custodial_recovery",
+    },
+    {
+      grantee: "migration_owner",
+      grantor: "migration_owner",
+      is_grantable: false,
+      privilege_type: "USAGE",
+      schema_name: "custodial_recovery",
+    },
+  ],
+  "the fixed function-only recovery schema must retain only its two migration-owner grants",
+);
 assert.deepEqual(
   canonicalCatalog.schema_grants.filter((grant) =>
     grant.grantee === "migration_owner" &&

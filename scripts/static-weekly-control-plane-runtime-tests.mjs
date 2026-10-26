@@ -98,7 +98,15 @@ const controlPlane = {
 };
 const runtime = createStaticWeeklyControlPlaneRuntime({
   env,
-  supabase: { async rpc() { return { data: { mutations_paused: false, state: "READY", authority_generation: 0, restore_id: null }, error: null }; } },
+  supabase: { async rpc(name) {
+    if (name === "custodial_begin_application_mutation_lease") {
+      return { data: { mutations_paused: false, state: "READY", authority_generation: 0, restore_id: null }, error: null };
+    }
+    if (name === "custodial_heartbeat_application_mutation_lease" || name === "custodial_release_application_mutation_lease") {
+      return { data: true, error: null };
+    }
+    throw new Error(`Unexpected runtime fixture RPC: ${name}`);
+  } },
   trustedDeviceStore: store,
   database: {},
   controlPlane,
@@ -242,9 +250,9 @@ try {
   assert.equal(response.status, 200, "the current matching manager/device association may reach the scheduler mutation boundary");
   assert.equal(mutations, 3);
 
-  mutationFailure = Object.assign(new Error("The scheduler database connection was interrupted. No schedule change was accepted."), { code: "static_weekly_control_plane_database_unavailable" });
+  mutationFailure = Object.assign(new Error("The scheduler database connection was interrupted. The outcome is unknown; check the exact operation status before retrying."), { code: "static_weekly_control_plane_database_unavailable" });
   response = await mutation();
-  assert.equal(response.status, 503, "an interrupted authority connection is a retryable unavailable response, not a revision conflict");
+  assert.equal(response.status, 503, "an interrupted authority connection is an outcome-unknown unavailable response, not a revision conflict");
   assert.equal(response.body.code, "static_weekly_control_plane_database_unavailable");
   assert.equal(mutations, 3, "an interrupted authority connection cannot report or count a mutation");
   mutationFailure = null;

@@ -1020,7 +1020,7 @@
       {
         "path": "scripts/ci-workflow-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "ec975c2419e6bbf33ef78951de6b24f8ead43b70"
+        "object_id": "145689d43ab05d39cbfe66e0a400bec4ff0d8774"
       },
       {
         "path": "scripts/cleaning-identity-gps-database-tests.mjs",
@@ -2250,7 +2250,7 @@
       {
         "path": "scripts/schema-transition-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "178f336a1713a22c14d2a0d19401ef107e21c66d"
+        "object_id": "c73c96cf7672051a03b511d1b9aae7ab8866a3fc"
       },
       {
         "path": "scripts/smoke-ai-intent.mjs",
@@ -2410,22 +2410,22 @@
       {
         "path": "scripts/static-weekly-compiler-runtime-tests.mjs",
         "mode": "100644",
-        "object_id": "65399376acbf49bf1ba3e89b50a71e1f612c0a77"
+        "object_id": "2627f59f3d5c98f8d2c56735fae69098b1732c06"
       },
       {
         "path": "scripts/static-weekly-control-plane-deployment-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "7c691694a4e07a83af5fe879c88f8494ba6007b0"
+        "object_id": "4166ad4f0d1dfdc6a65d693572065faa33c48e75"
       },
       {
         "path": "scripts/static-weekly-control-plane-runtime-tests.mjs",
         "mode": "100644",
-        "object_id": "82a5b9e0f448e7ee62fa9d06ee698f873f8284be"
+        "object_id": "1515bb1d8e0b32b4835f933b0c10fb0f3899d08a"
       },
       {
         "path": "scripts/static-weekly-control-plane-tests.mjs",
         "mode": "100644",
-        "object_id": "e2cb4a2b7ab798df8fc7f425ed2036a3a5d21bf8"
+        "object_id": "efb7ef84108622c1c6c4ac52183693717833bb29"
       },
       {
         "path": "scripts/static-weekly-current-roster-lunch-diagnosis.mjs",
@@ -2560,7 +2560,7 @@
       {
         "path": "scripts/static-weekly-schedule-compiler-tests.mjs",
         "mode": "100644",
-        "object_id": "f665f34d6c077de854c8c71a8e9f5eed75cb1341"
+        "object_id": "65849b975357fdf205438335d5d3e6f1599898cf"
       },
       {
         "path": "scripts/static-weekly-schedule-concurrency-tests.mjs",

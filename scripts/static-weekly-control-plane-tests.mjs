@@ -459,7 +459,7 @@ await assert.rejects(() => interruptedControlPlane.createInitialDraft({
   effectiveStart: "2026-10-05",
   expectedRevision: 0,
   idempotencyKey: "interrupted-initial-draft",
-}), (error) => error?.code === "static_weekly_control_plane_database_unavailable" && /No schedule change was accepted/.test(error.message));
+}), (error) => error?.code === "static_weekly_control_plane_database_unavailable" && /The outcome is unknown; check the exact operation status before retrying\./.test(error.message));
 assert.equal(interruptedQueries.includes("commit"), false, "an interrupted authority connection cannot commit");
 assert.equal(interruptedQueries.at(-1), "rollback", "an interrupted authority transaction attempts rollback before failing closed");
 assert.equal(interruptedReleaseError, interruptedConnectionError, "the broken authority client is destroyed instead of returned to the pool");

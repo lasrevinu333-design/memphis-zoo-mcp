@@ -30,15 +30,44 @@ const postgresPinSources = [
     .filter((name) => name.endsWith(".mjs"))
     .map((name) => resolve(root, "scripts", name)),
 ];
-const postgresImagePins = postgresPinSources.flatMap((path) =>
-  [...readFileSync(path, "utf8").matchAll(/supabase\/postgres@sha256:[0-9a-f]{64}/g)]
-    .map((match) => match[0]),
-);
-assert.ok(postgresImagePins.length > 0, "the repository must retain an immutable rehearsal PostgreSQL image pin");
+// The retained extension-compatible rehearsal image and the separately
+// qualified21 fresh-only replay image have distinct admitted scopes.
+const qualifiedFreshReplayImage = "public.ecr.aws/supabase/postgres@sha256:28f0e16a019e648089fc1a6d333549a55548f6019c15ae4bd7cd58b989027518";
+const qualifiedFreshReplayManifestBytes = readFileSync(resolve(root, "release/fresh-only-replay/MANIFEST.json"));
+assert.equal(createHash("sha256").update(qualifiedFreshReplayManifestBytes).digest("hex"),
+  "b9b8593a27e11a53beb81d4905d40c9a74e78e0fee5cf26403c03323ac3bf9da",
+  "fresh-only replay must retain the exact qualified293 selection with21 overrides");
+const qualifiedFreshReplayManifest = JSON.parse(qualifiedFreshReplayManifestBytes);
+assert.equal(qualifiedFreshReplayManifest.image, qualifiedFreshReplayImage);
+assert.equal(qualifiedFreshReplayManifest.entries.length, 293);
+assert.equal(qualifiedFreshReplayManifest.overrides.length, 21);
+assert.equal(qualifiedFreshReplayManifest.full_vendor_NORMAL, false);
+assert.equal(qualifiedFreshReplayManifest.expected_fingerprint_authority, null);
+const freshReplayWorkflowPaths = new Set([
+  resolve(workflowDirectory, "event-integrity-diagnostics.yml"),
+  resolve(workflowDirectory, "operational-analytics-diagnostics.yml"),
+]);
+const thisContractPath = fileURLToPath(import.meta.url);
+const postgresImagePins = postgresPinSources.flatMap((path) => {
+  const pins = [...readFileSync(path, "utf8").matchAll(/(?:public\.ecr\.aws\/)?supabase\/postgres@sha256:[0-9a-f]{64}/g)]
+    .map((match) => match[0]);
+  if (path === thisContractPath) {
+    assert.deepEqual([...new Set(pins)].sort(), [rehearsalPostgresImage, qualifiedFreshReplayImage].sort(),
+      "this contract must declare exactly the two independently scoped immutable images");
+  } else if (freshReplayWorkflowPaths.has(path)) {
+    assert.deepEqual([...new Set(pins)], [qualifiedFreshReplayImage],
+      `${path} must use only the exact qualified fresh-only replay image`);
+  } else {
+    for (const pin of pins) assert.equal(pin, rehearsalPostgresImage,
+      `${path} must retain the extension-compatible rehearsal image; fresh-only authority is not portable to another caller`);
+  }
+  return pins;
+});
+assert.ok(postgresImagePins.length > 0, "the repository must retain immutable rehearsal PostgreSQL image pins");
 assert.deepEqual(
-  [...new Set(postgresImagePins)],
-  [rehearsalPostgresImage],
-  "every backup, rehearsal, and disposable database path must use the extension-compatible PostgreSQL image",
+  [...new Set(postgresImagePins)].sort(),
+  [rehearsalPostgresImage, qualifiedFreshReplayImage].sort(),
+  "only the exact rehearsal and qualified21 fresh-only images may occur in their admitted source paths",
 );
 
 function workflowJobs(source) {
@@ -75,6 +104,68 @@ function workflowRunSteps(jobSource) {
   }
   return runSteps;
 }
+
+// Length-only reader for the exact canonical scalar forms in the two reviewed
+// workflows. Keep the shared command/guard extractor above byte-literal.
+// YAML `|` uses default clip chomping: one terminal LF belongs to its value.
+function canonicalRunScalarsForLength(jobSource) {
+  assert.ok(!jobSource.includes("\r") && jobSource.endsWith("\n"),
+    "run-length input must retain canonical LF line endings and a final LF");
+  const lines = jobSource.split("\n");
+  const values = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    // Reject unsupported step mapping keys before a run-only prefilter can
+    // omit an escaped quoted spelling of the YAML key (for example r\\u0075n).
+    assert.ok(!/^(?: {6}- | {8})(?:["']|\?)/.test(line),
+      "run-length reader rejects unsupported quoted or explicit step mapping keys");
+    if (!/^\s*(?:-\s*)?(?:["']?run["']?\s*:|\?\s+["']?run["']?\b)/.test(line)) continue;
+    const mapping = line.match(/^( {8}run: | {6}- run: )(\S.*)$/);
+    assert.ok(mapping, "run-length reader rejects unsupported run keys, headers or indentation");
+    const runIndent = mapping[1].startsWith("      -") ? 6 : 8;
+    const value = mapping[2];
+    if (value !== "|") {
+      assert.ok(!/^[|>!&*'"[{]/.test(value) && value.trim() === value && !/\s#/.test(value),
+        "run-length reader supports only canonical unquoted single-line scalars or exact literal | blocks");
+      let next = index + 1;
+      while (next < lines.length && /^ *$/.test(lines[next])) next += 1;
+      assert.ok(next === lines.length || lines[next].match(/^ */)[0].length <= runIndent,
+        "plain run scalars must not have unmeasured continuation lines");
+      values.push(value);
+      continue;
+    }
+    assert.equal(mapping[1], "        run: ", "literal run blocks require the reviewed mapping indentation");
+    const content = [];
+    let next = index + 1;
+    for (; next < lines.length; next += 1) {
+      const candidate = lines[next];
+      assert.ok(!/^ +$/.test(candidate), "ambiguous whitespace-only literal lines are unsupported");
+      if (candidate === "") { content.push(""); continue; }
+      const indentation = candidate.match(/^ */)[0].length;
+      if (indentation <= runIndent) break;
+      assert.ok(candidate.startsWith("          "), "literal content must retain ten-space indentation");
+      if (!content.some(part => part !== "")) assert.equal(indentation, 10,
+        "literal indentation indicators or implicit alternate indentation are unsupported");
+      content.push(candidate.slice(10)); // Preserve all nonempty trailing spaces.
+    }
+    assert.ok(content.some(part => part !== ""), "empty literal run blocks are unsupported");
+    values.push(content.join("\n").replace(/\n+$/, "") + "\n");
+    index = next - 1;
+  }
+  assert.ok(values.length > 0, "run-length input must contain measured canonical run scalars");
+  return values;
+}
+
+const lengthFixture = "    steps:\n      - name: literal\n        run: |\n          printf x  \n\n      - run: true\n";
+assert.deepEqual(canonicalRunScalarsForLength(lengthFixture), ["printf x  \n", "true"],
+  "literal clip chomping retains one LF and nonempty trailing spaces; plain scalars gain no LF");
+for (const header of ["|-", "|+", "|2", ">", "| # alternate header"]) {
+  assert.throws(() => canonicalRunScalarsForLength(lengthFixture.replace("run: |\n", `run: ${header}\n`)));
+}
+assert.throws(() => canonicalRunScalarsForLength(lengthFixture.replace("          printf", "         printf")));
+assert.throws(() => canonicalRunScalarsForLength(lengthFixture.replace("          printf", "           printf")));
+assert.throws(() => canonicalRunScalarsForLength(lengthFixture.replace("        run: |", "        'run': |")));
+assert.throws(() => canonicalRunScalarsForLength(lengthFixture.replace("      - run: true", "      - run: true\n        continuation")));
 
 function executableLines(script) {
   return script
@@ -318,14 +409,42 @@ assert.match(populatedSchemaPreflight, /test -n "\$SCHEMA_FINGERPRINT_MCP_URL"/,
 assert.match(populatedSchemaPreflight, /set -euo pipefail[\s\S]*release:populated-schema:preflight \| tee[\s\S]*test -s \/tmp\/custodial-populated-schema-preflight\.json/,
   "the production schema preflight must preserve command failure and require a non-empty receipt");
 const productionBackupRehearsal = readFileSync(resolve(workflowDirectory, "production-backup-migration-rehearsal.yml"), "utf8");
+// This length reader is admitted only for these exact reviewed input bodies,
+// not as a parser for arbitrary future YAML. Any workflow edit fails before
+// an actual workflow reaches scalar measurement and requires a reviewed pin.
+assert.equal(createHash("sha256").update(productionBackupRehearsal, "utf8").digest("hex"),
+  "7c7f7523ff1a7ca86ca8945325b9fa5498913ee9ad125c68cb8953d4e28940ea",
+  "rehearsal length measurement requires the exact reviewed whole workflow");
+const blankGapPlainRunMutant = productionBackupRehearsal.replace(
+  "      - run: npm ci --ignore-scripts\n",
+  "      - run: npm ci --ignore-scripts\n" + "  \n" + "          " + "x".repeat(20_977) + "\n",
+);
+assert.notEqual(blankGapPlainRunMutant, productionBackupRehearsal);
+assert.throws(() => canonicalRunScalarsForLength(
+  workflowJobs(blankGapPlainRunMutant).find(job => job.name === "rehearse").source,
+), /plain run scalars must not have unmeasured continuation lines/,
+"a space-only blank line must not hide the valid 21,001-character plain run scalar");
+const escapedQuotedRunMutant = productionBackupRehearsal.replace(
+  "        run: |\n",
+  '        "r\\u0075n": |\n' + "          #" + "x".repeat(1_952) + "\n",
+);
+assert.notEqual(escapedQuotedRunMutant, productionBackupRehearsal);
+assert.throws(() => canonicalRunScalarsForLength(
+  workflowJobs(escapedQuotedRunMutant).find(job => job.name === "rehearse").source,
+), /unsupported quoted or explicit step mapping keys/,
+"an escaped quoted run key must be rejected rather than omit the valid 21,001-character literal scalar");
+
 const localProductionBackupRehearsal = readFileSync(resolve(root, "scripts/run-production-backup-migration-rehearsal.sh"), "utf8");
 const build52ProductionMigrationApply = readFileSync(resolve(workflowDirectory, "build52-production-migration-apply.yml"), "utf8");
+assert.equal(createHash("sha256").update(build52ProductionMigrationApply, "utf8").digest("hex"),
+  "ab6d30e590d7121d1b345e3652b872cfc062a66b690b1578241d420900914c41",
+  "Build52 length measurement requires the exact reviewed whole workflow");
 const build52ProductionMigrationApplyJob = workflowJobs(build52ProductionMigrationApply)
   .find(({ name }) => name === "authorize-and-apply");
 assert.ok(build52ProductionMigrationApplyJob, "the Build 52 production migration workflow must retain its authorize-and-apply job");
 const build52ProductionMigrationRunSteps = workflowRunSteps(build52ProductionMigrationApplyJob.source);
 assert.ok(
-  Math.max(...build52ProductionMigrationRunSteps.map((source) => source.replace(/^ {10}/gm, "").length)) < 19_000,
+  Math.max(...canonicalRunScalarsForLength(build52ProductionMigrationApplyJob.source).map((source) => source.length)) < 19_000,
   "every Build 52 production migration run expression must retain margin below GitHub's 21,000-character limit",
 );
 const independentProductionTargetStep = build52ProductionMigrationRunSteps
@@ -343,7 +462,7 @@ assert.match(independentProductionTargetStep,
 assert.match(independentProductionTargetStep, /captureSchemaCatalog\(database\)[\s\S]*fingerprintSchemaCatalog\(normalizedCatalog\)/,
   "the independent verifier must recapture and fingerprint the actual production catalog");
 assert.doesNotMatch(independentProductionTargetStep,
-  /build52-production-migration-result\.json|\bresult_path\b|production-migration-state\.json|target_catalog_fingerprint/,
+  /build52-production-migration-result\.json|\bresult_path\b|target_catalog_fingerprint/,
   "the independent target decision must not trust the candidate migration result or candidate-provided target values");
 assert.ok(
   build52ProductionMigrationApply.indexOf("npm run --silent release:migrations:apply")
@@ -352,7 +471,7 @@ assert.ok(
 );
 const productionApplyCommitted = build52ProductionMigrationApply.indexOf('"stage":"production_apply_committed"');
 const independentProductionRead = build52ProductionMigrationApply.indexOf('source: "direct-production-query"');
-const independentProductionPredicate = build52ProductionMigrationApply.indexOf(`and .counts.functions == ${expectedProductionTarget.expected_catalog_counts.functions}`);
+const independentProductionPredicate = build52ProductionMigrationApply.indexOf("and .counts.functions == $state.target.expected_catalog_counts.functions");
 const productionTargetVerified = build52ProductionMigrationApply.indexOf('"stage":"production_target_independently_verified"');
 assert.ok(
   build52ProductionMigrationApply.indexOf("npm run --silent release:migrations:apply") < productionApplyCommitted
@@ -363,36 +482,57 @@ assert.ok(
 );
 assert.match(build52ProductionMigrationApply, /build52-production-post-apply-verification\.json/,
   "the independent production verification receipt must be uploaded even when the workflow fails closed");
-const independentTargetPredicateMatch = build52ProductionMigrationApply.match(
-  /jq -e \\\n\s+'([^']*\.source == "direct-production-query"[^']*)' \\\n\s+"\$post_apply_path"/,
+assert.equal((independentProductionTargetStep.match(/--slurpfile release_state release\/production-migration-state\.json/g) || []).length, 1,
+  "the independent decision must read exactly the reviewed release-state file, not a candidate-provided target");
+const independentTargetPredicateMatch = independentProductionTargetStep.match(
+  /jq -e \\\n\s+--slurpfile release_state release\/production-migration-state\.json \\\n\s+'([^']*\.source == "direct-production-query"[^']*)' \\\n\s+"\$post_apply_path"/,
 );
 assert.ok(independentTargetPredicateMatch,
-  "the production workflow must retain one exact workflow-owned post-apply acceptance predicate");
+  "the production workflow must retain one exact workflow-owned post-apply acceptance predicate and trusted release-state binding");
 const independentTargetPredicate = independentTargetPredicateMatch[1];
+assert.equal(independentTargetPredicate.replace(/\s+/g, " ").trim(),
+  '($release_state[0]) as $state | .format == "memphis-zoo-build52-production-post-apply.v1" and .ok == true and .source == "direct-production-query" and .ledger_count == $state.target.production_ledger_count and .ledger_head == $state.target.source_migration_version and .counts.functions == $state.target.expected_catalog_counts.functions and .counts.routine_grants == $state.target.expected_catalog_counts.routine_grants and .schema_fingerprint == $state.target.canonical_source_schema_fingerprint',
+  "the complete independent predicate must compare actual observations only to the exact reviewed release-state target");
+// This positive predicate exercise is an inert fixture, never a production
+// target observation. The current reviewed release state may intentionally
+// retain unresolved target counts/fingerprint and must not be fabricated.
+const predicateFixtureState = {
+  observed_production: {
+    ledger_head: "20000101000000",
+    catalog_counts: { functions: 1, routine_grants: 2 },
+    catalog_privilege_fingerprint: "0".repeat(64),
+  },
+  target: {
+    production_ledger_count: 3,
+    source_migration_version: "20000102000000",
+    expected_catalog_counts: { functions: 4, routine_grants: 5 },
+    canonical_source_schema_fingerprint: "1".repeat(64),
+  },
+};
 const acceptedProductionTarget = {
   format: "memphis-zoo-build52-production-post-apply.v1",
   ok: true,
   source: "direct-production-query",
-  ledger_count: expectedProductionTarget.production_ledger_count,
-  ledger_head: expectedProductionTarget.source_migration_version,
-  counts: {
-    functions: expectedProductionTarget.expected_catalog_counts.functions,
-    routine_grants: expectedProductionTarget.expected_catalog_counts.routine_grants,
-  },
-  schema_fingerprint: expectedProductionTarget.canonical_source_schema_fingerprint,
+  ledger_count: predicateFixtureState.target.production_ledger_count,
+  ledger_head: predicateFixtureState.target.source_migration_version,
+  counts: { ...predicateFixtureState.target.expected_catalog_counts },
+  schema_fingerprint: predicateFixtureState.target.canonical_source_schema_fingerprint,
 };
 for (const expected of [
-  `.before_ledger_count == ${expectedProductionSource.production_ledger_count}`,
-  `.before_ledger_head == "${expectedProductionSource.ledger_head}"`,
-  `.after_ledger_count == ${expectedProductionTarget.production_ledger_count}`,
-  `.after_ledger_head == "${expectedProductionTarget.source_migration_version}"`,
-  `(.applied | length) == ${expectedProductionTarget.pending_migration_count}`,
-  `.ledger_count == ${expectedProductionTarget.production_ledger_count}`,
-  `.ledger_head == "${expectedProductionTarget.source_migration_version}"`,
-  `.counts.functions == ${expectedProductionTarget.expected_catalog_counts.functions}`,
-  `.counts.routine_grants == ${expectedProductionTarget.expected_catalog_counts.routine_grants}`,
-  `.schema_fingerprint == "${expectedProductionTarget.canonical_source_schema_fingerprint}"`,
-]) assert.ok(build52ProductionMigrationApply.includes(expected), `production apply workflow drifted from release state: ${expected}`);
+  ".project_ref == $state.project_ref",
+  ".before_ledger_count == $state.observed_production.production_ledger_count",
+  ".before_ledger_head == $state.observed_production.ledger_head",
+  ".source_catalog_fingerprint == $state.observed_production.catalog_privilege_fingerprint",
+  ".after_ledger_count == $state.target.production_ledger_count",
+  ".after_ledger_head == $state.target.source_migration_version",
+  ".target_catalog_fingerprint == $state.target.canonical_source_schema_fingerprint",
+  ".applied == ($state.pending_migrations | map({order, version: .source_migration_version, file, sha256}))",
+  ".ledger_count == $state.target.production_ledger_count",
+  ".ledger_head == $state.target.source_migration_version",
+  ".counts.functions == $state.target.expected_catalog_counts.functions",
+  ".counts.routine_grants == $state.target.expected_catalog_counts.routine_grants",
+  ".schema_fingerprint == $state.target.canonical_source_schema_fingerprint",
+]) assert.ok(build52ProductionMigrationApply.includes(expected), `production apply workflow drifted from reviewed release-state binding: ${expected}`);
 const productionTargetFixtureDirectory = mkdtempSync(join(tmpdir(), "custodial-b010-jq-"));
 try {
   const inlineVerifierMatch = independentProductionTargetStep.match(
@@ -410,13 +550,15 @@ try {
   assert.equal(syntaxResult.status, 0,
     `the independent verifier must parse as an ES module: ${syntaxResult.stderr || syntaxResult.stdout}`);
   const productionTargetFixturePath = join(productionTargetFixtureDirectory, "observed-target.json");
-  function workflowAcceptsProductionTarget(overrides = {}) {
+  const reviewedStateFixturePath = join(productionTargetFixtureDirectory, "reviewed-release-state.INERT-FIXTURE.json");
+  function workflowAcceptsProductionTarget(overrides = {}, reviewedState = predicateFixtureState) {
+    writeFileSync(reviewedStateFixturePath, `${JSON.stringify(reviewedState)}\n`, { mode: 0o600 });
     writeFileSync(
       productionTargetFixturePath,
       `${JSON.stringify({ ...acceptedProductionTarget, ...overrides })}\n`,
       { mode: 0o600 },
     );
-    const result = spawnSync("jq", ["-e", independentTargetPredicate, productionTargetFixturePath], {
+    const result = spawnSync("jq", ["-e", "--slurpfile", "release_state", reviewedStateFixturePath, independentTargetPredicate, productionTargetFixturePath], {
       encoding: "utf8",
       timeout: 5_000,
     });
@@ -424,16 +566,30 @@ try {
     return result.status === 0;
   }
   assert.equal(workflowAcceptsProductionTarget(), true,
-    "the exact frozen B-010 production target must pass the workflow-owned predicate");
+    "the explicit inert target fixture must pass the unchanged workflow-owned predicate");
+  for (const [field, value] of [
+    ["production_ledger_count", null],
+    ["expected_catalog_counts", null],
+    ["canonical_source_schema_fingerprint", null],
+  ]) assert.equal(workflowAcceptsProductionTarget({}, {
+    ...predicateFixtureState,
+    target: { ...predicateFixtureState.target, [field]: value },
+  }), false, `unresolved reviewed target ${field} must fail closed rather than become a fixture default`);
+  if (releaseMigrationState.target.production_ledger_count === null
+    || releaseMigrationState.target.expected_catalog_counts === null
+    || releaseMigrationState.target.canonical_source_schema_fingerprint === null) {
+    assert.equal(workflowAcceptsProductionTarget({}, releaseMigrationState), false,
+      "the actual unresolved production state is not a production apply admission");
+  }
   for (const [field, overrides] of [
     ["format", { format: "candidate-result.v1" }],
     ["ok", { ok: false }],
     ["source", { source: "candidate-result" }],
-    ["ledger_count", { ledger_count: expectedProductionTarget.production_ledger_count - 1 }],
-    ["ledger_head", { ledger_head: expectedProductionSource.ledger_head }],
-    ["functions", { counts: { functions: expectedProductionSource.catalog_counts.functions, routine_grants: expectedProductionTarget.expected_catalog_counts.routine_grants } }],
-    ["routine_grants", { counts: { functions: expectedProductionTarget.expected_catalog_counts.functions, routine_grants: expectedProductionSource.catalog_counts.routine_grants } }],
-    ["schema_fingerprint", { schema_fingerprint: expectedProductionSource.catalog_privilege_fingerprint }],
+    ["ledger_count", { ledger_count: predicateFixtureState.target.production_ledger_count - 1 }],
+    ["ledger_head", { ledger_head: predicateFixtureState.observed_production.ledger_head }],
+    ["functions", { counts: { functions: predicateFixtureState.observed_production.catalog_counts.functions, routine_grants: predicateFixtureState.target.expected_catalog_counts.routine_grants } }],
+    ["routine_grants", { counts: { functions: predicateFixtureState.target.expected_catalog_counts.functions, routine_grants: predicateFixtureState.observed_production.catalog_counts.routine_grants } }],
+    ["schema_fingerprint", { schema_fingerprint: predicateFixtureState.observed_production.catalog_privilege_fingerprint }],
   ]) {
     assert.equal(workflowAcceptsProductionTarget(overrides), false,
       `the workflow-owned production target predicate must fail closed for wrong ${field}`);
@@ -449,11 +605,13 @@ const productionSourceRoleCatalog = readFileSync(resolve(root, "supabase/canonic
 const emptyDatabaseRebuild = readFileSync(resolve(root, "scripts/empty-database-rebuild-check.mjs"), "utf8");
 const productionBackupRehearsalJob = workflowJobs(productionBackupRehearsal).find(({ name }) => name === "rehearse");
 assert.ok(productionBackupRehearsalJob, "the production-backup rehearsal must retain its rehearse job");
-assert.ok(
-  Math.max(...workflowRunSteps(productionBackupRehearsalJob.source).map((source) => source.replace(/^ {10}/gm, "").length)) < 19_000,
-  "every production-backup rehearsal run expression must retain margin below GitHub's 21,000-character limit",
-);
-assert.match(productionBackupRehearsal, /RESTORE_DATABASE_ONLY=true[\s\S]*release:observed-production-schema:preflight[\s\S]*release:migrations:apply[\s\S]*release:target-schema:preflight/,
+const maximumRehearsalRunCharacters = Math.max(...canonicalRunScalarsForLength(productionBackupRehearsalJob.source)
+  .map((source) => source.length));
+assert.ok(maximumRehearsalRunCharacters < 21_000,
+  "every production-backup rehearsal run expression must stay below the provider's hard character ceiling");
+assert.ok(maximumRehearsalRunCharacters <= 19_047,
+  "the exact current reviewed rehearsal retains at least1,953characters margin; no larger run envelope is admitted");
+assert.match(productionBackupRehearsal, /RESTORE_DATABASE_ONLY=true[\s\S]*release:observed-production-schema:preflight[\s\S]*node scripts\/run-release-migration-full-candidate\.mjs "\$backup_dir" "\$container" "\$port"[\s\S]*release:target-schema:preflight/,
   "the production-backup rehearsal must prove the restored pre-migration state, apply the signed plan, and only then check the target fingerprint");
 assert.doesNotMatch(productionBackupRehearsal, /SUPABASE_DB_URL:\s*\$\{\{\s*secrets\.SUPABASE_DB_URL/,
   "the production-backup rehearsal must not read live production while reconstructing the signed archive");
@@ -469,7 +627,7 @@ assert.match(productionBackupRehearsal, /inventory\/application-schema\.sql[\s\S
   "the independent rehearsal must restore signed schema/control state before applying signed application data");
 assert.match(productionBackupRehearsal, /RESTORE_REHEARSAL_ACCEPT_EMPTY_TARGET=true[\s\S]*restore:reconcile-isolated[\s\S]*custodial_configure_backend_execution_key/,
   "the independent rehearsal must explicitly reconcile its disposable empty target before exercising recovered application writers");
-assert.match(productionBackupRehearsal, /restore:reconcile-isolated[\s\S]*verify-isolated-source-lease-state\.mjs[\s\S]*release:observed-production-schema:preflight[\s\S]*release:migrations:apply/,
+assert.match(productionBackupRehearsal, /restore:reconcile-isolated[\s\S]*verify-isolated-source-lease-state\.mjs[\s\S]*release:observed-production-schema:preflight[\s\S]*node scripts\/run-release-migration-full-candidate\.mjs "\$backup_dir" "\$container" "\$port"/,
   "the independent rehearsal must verify the signed-ledger-aware permanent-table/shim distinction before baseline fingerprinting");
 assert.match(productionBackupRehearsal, /test:feedback-reader-database[\s\S]*npm start[\s\S]*feedback_first_http_status[\s\S]*feedback_replay_http_status/,
   "the recovered application pair must prove bounded feedback reader authority before exact HTTP write and replay");
@@ -513,8 +671,23 @@ assert.match(productionBackupRehearsal, /expires_at>clock_timestamp\(\)[\s\S]*ac
   "the recovered pair must distinguish live mutation leases from expired fail-closed blockers");
 assert.match(productionBackupRehearsal, /test "\$active_mutation_leases" = '0'[\s\S]*test "\$expired_mutation_leases" = '0'/,
   "the exact recovered pair must prove that neither active nor expired mutation leases remain");
-assert.match(productionBackupRehearsal, /RELEASE_MIGRATION_REHEARSAL=true[\s\S]*RELEASE_MIGRATION_SOURCE_LEDGER_SHA256/,
-  "the isolated mutator must bind the complete signed source ledger while production requires separate authorization");
+const fullCandidateMigrationHelper = readFileSync(resolve(root, "scripts/run-release-migration-full-candidate.mjs"), "utf8");
+const targetCaptureMigrationHelper = readFileSync(resolve(root, "scripts/run-release-migration-target-capture.mjs"), "utf8");
+assert.equal(createHash("sha256").update(fullCandidateMigrationHelper).digest("hex"),
+  "301fce876ade3434ed26429cdf823e696124ca987e4bfe60229f122c96480422",
+  "the rehearsal must retain its exact reviewed full-candidate helper");
+assert.equal(createHash("sha256").update(targetCaptureMigrationHelper).digest("hex"),
+  "2360ef3bf5ee0762e01e938db0039ad974d3d156c2073f1f53972ce4aa83f28e",
+  "the rehearsal must retain its exact reviewed disposable-target/source-ledger command producer");
+assert.match(fullCandidateMigrationHelper,
+  /targetCaptureCommand\(input\)[\s\S]*summary\.source_identity\.backup_tool_commit,command\.env\.RELEASE_MIGRATION_CANDIDATE_COMMIT[\s\S]*summary\.source_identity\.backup_tool_tree,command\.env\.RELEASE_MIGRATION_CANDIDATE_TREE/,
+  "the full-candidate helper must bind archived source commit and tree before the normal consumer");
+assert.match(fullCandidateMigrationHelper,
+  /command\.env\.RELEASE_MIGRATION_TARGET_CAPTURE='false'[\s\S]*delete command\.env\.RELEASE_MIGRATION_TARGET_CAPTURE_OUTPUT[\s\S]*spawnSync\(process\.execPath,\[command\.file\]/,
+  "full-candidate rehearsal must leave capture-only mode and execute the existing child");
+assert.match(targetCaptureMigrationHelper,
+  /file:resolve\(backendRoot,'scripts\/apply-release-migration-plan\.mjs'\)[\s\S]*RELEASE_MIGRATION_REHEARSAL:'true'[\s\S]*RELEASE_MIGRATION_CANDIDATE_COMMIT:env\.GITHUB_SHA[\s\S]*RELEASE_MIGRATION_CANDIDATE_TREE:candidateTree[\s\S]*RELEASE_MIGRATION_SOURCE_LEDGER_SHA256:summary\.source_identity\.migration_ledger_sha256/,
+  "the unchanged disposable helper must bind the signed source ledger and exact candidate while production requires separate authorization");
 assert.match(productionBackupRehearsal, /cron\.database_name="\$database"/,
   "the production-backup rehearsal must bind pg_cron to its isolated restored database");
 assert.match(productionBackupRehearsal, /cron\.launch_active_jobs=off/,
