@@ -130,6 +130,8 @@ const actorEventRecord = {
   end_date: "2026-08-14",
   start_time: "18:00:00",
   end_time: "20:00:00",
+  start_instant_utc: "2026-08-14T18:00:00-05:00",
+  end_instant_utc: "2026-08-14T20:00:00-05:00",
   attendee_count: 10,
   notes: "actor authority test",
   created_by: "Forged Client Creator",
@@ -146,8 +148,8 @@ const updatedActorEvent = JSON.parse(sql(`select public.app_apply_event_command(
   'Forged Update Actor','update actor test')::text;`));
 assert.equal(updatedActorEvent.updated_by_manager_id, managerId);
 assert.equal(updatedActorEvent.overridden_by, eventActorName);
-const cancelledActorEvent = JSON.parse(sql(`select public.app_apply_event_command(
-  'cancel','${actorEvent.id}'::uuid,jsonb_build_object('actor_manager_id','${managerId}'),'Forged Cancel Actor','cancel actor test')::text;`));
+const cancelledActorEvent = JSON.parse(sql(`select public.app_transition_event_cancellation(
+  '${actorEvent.id}'::uuid,'cancel',${updatedActorEvent.revision},'${randomUUID()}'::uuid,'${managerId}'::uuid,'cancel actor test')::text;`)).event;
 assert.equal(cancelledActorEvent.cancelled_by_manager_id, managerId);
 assert.equal(cancelledActorEvent.updated_by_manager_id, managerId);
 assert.equal(cancelledActorEvent.cancelled_by, eventActorName);
@@ -226,7 +228,7 @@ assert.equal(JSON.parse(sql(`select public.custodial_backend_authority_health(${
 
 const requiredNotificationAuthorityFunctions = [
   "mz_register_employee_push(uuid,text,text,text,text,text)",
-  "mz_mark_employee_event_opened(uuid,text)",
+  "public.mz_mark_employee_event_opened(uuid,text)",
   "mz_enqueue_employee_event_pushes(timestamp with time zone)",
   "mz_enqueue_employee_location_pushes(timestamp with time zone)",
   "mz_resolve_employee_push_delivery(uuid,bigint,timestamp with time zone)",
@@ -250,7 +252,7 @@ assert.equal(sql(`select coalesce(string_agg(p.oid::regprocedure::text,',' order
   from pg_proc p join pg_namespace n on n.oid=p.pronamespace
   where n.nspname='public' and (p.proname like '%notification%' or p.proname like '%push%')
     and not exists(select 1 from public.custodial_release_authority_restore_inventory i
-      where i.object_kind='function' and i.object_identity=p.oid::regprocedure::text);`), "",
+      where i.object_kind='function' and to_regprocedure(CASE WHEN i.object_kind='function' THEN i.object_identity ELSE NULL END)=p.oid);`), "",
 "every live notification and push function must be generated into the recovery inventory");
 assert.equal(sql(`select coalesce(string_agg(c.relname,',' order by c.relname),'')
   from pg_class c join pg_namespace n on n.oid=c.relnamespace
@@ -268,15 +270,31 @@ sql(`select public.custodial_control_release_canary(
   ${q(JSON.stringify(missingNotificationAuthority))}::jsonb,${q(secret)});`);
 assert.ok(sql(`select to_regprocedure('public.mz_register_employee_push(uuid,text,text,text,text,text)') is not null;`) === "t");
 assert.equal(JSON.parse(sql(`select public.custodial_backend_authority_health(${q(secret)})::text;`)).ok, true);
-sql(`drop table public.device_notification_acknowledgements;`);
+const acknowledgementProjectionForeignKey = 'public.employee_native_location_ack_projections:employee_native_location_ack_projection_acknowledgement_id_fkey';
+const acknowledgementProjectionForeignKeyDefinition = 'FOREIGN KEY (acknowledgement_id) REFERENCES device_notification_acknowledgements(id)';
+const acknowledgementProjectionForeignKeyQuery = `select pg_get_constraintdef(c.oid,true)||'|'||c.convalidated::text
+  from pg_constraint c where c.conrelid='public.employee_native_location_ack_projections'::regclass
+    and c.conname='employee_native_location_ack_projection_acknowledgement_id_fkey' and c.contype='f'
+    and c.confrelid='public.device_notification_acknowledgements'::regclass`;
+assert.equal(sql(acknowledgementProjectionForeignKeyQuery), acknowledgementProjectionForeignKeyDefinition+'|true',
+  'the current exact dependent foreign key is present before the disposable missing-relation challenge');
+assert.equal(sql(`select definition_sha256 from public.custodial_release_authority_restore_inventory
+  where object_kind='constraint' and object_identity=${q(acknowledgementProjectionForeignKey)};`),
+  '1e314fc2d77fbe4122f8097c0459a0e64255aa92081e054db3b90d0fc1b64204',
+  'the exact current dependent constraint restoration definition is captured');
+sql(`drop table public.device_notification_acknowledgements cascade;`);
 const missingNotificationRelation = JSON.parse(sql(`select public.custodial_backend_authority_health(${q(secret)})::text;`));
 assert.equal(missingNotificationRelation.ok, false);
 assert.ok(missingNotificationRelation.missing_objects.includes("public.device_notification_acknowledgements"),
   "dropping a live notification relation must fail the canonical authority health gate");
+assert.ok(missingNotificationRelation.missing_objects.includes(acknowledgementProjectionForeignKey),
+  'the exact dependent foreign key dropped by the isolated challenge must also fail authority health');
 sql(`select public.custodial_control_release_canary(
   '${managerId}'::uuid,'${randomUUID()}'::uuid,'KIOSK_09','restore_authority','restore missing notification relation',
   ${q(JSON.stringify(missingNotificationRelation))}::jsonb,${q(secret)});`);
 assert.equal(sql(`select (to_regclass('public.device_notification_acknowledgements') is not null)::text;`), "true");
+assert.equal(sql(acknowledgementProjectionForeignKeyQuery), acknowledgementProjectionForeignKeyDefinition+'|true',
+  'authority restoration must recreate the exact validated dependent foreign key');
 assert.equal(JSON.parse(sql(`select public.custodial_backend_authority_health(${q(secret)})::text;`)).ok, true);
 
 sql(`alter table public.custodial_release_canary_controls
@@ -440,17 +458,21 @@ sql(`update public.ops_manager_push_devices set fcm_token=${q(fcmToken)} where p
 
 const crossingKey = `event-crossing-${stamp}`;
 const eventId = randomUUID();
-sql(`insert into public.events_app_events(id,event_name,location_group_id,event_date,start_time,end_date,status,event_scope,display_location,needs_review)
-  select '${eventId}'::uuid,'Uncertainty canonical event',id,((now()+interval '1 hour') at time zone 'America/Chicago')::date,
-    ((now()+interval '1 hour') at time zone 'America/Chicago')::time,((now()+interval '1 hour') at time zone 'America/Chicago')::date,
+sql(`insert into public.events_app_events(id,event_name,location_group_id,event_date,start_time,end_date,end_time,start_instant_utc,end_instant_utc,status,event_scope,display_location,needs_review)
+  select '${eventId}'::uuid,'Uncertainty canonical event',id,((now()+interval '1 hours') at time zone 'America/Chicago')::date,
+    ((now()+interval '1 hours') at time zone 'America/Chicago')::time,((now()+interval '2 hours') at time zone 'America/Chicago')::date,
+    ((now()+interval '2 hours') at time zone 'America/Chicago')::time,now()+interval '1 hours',now()+interval '2 hours',
     'SCHEDULED','ZOO_WIDE','Zoo Footprint',false from public.location_groups order by id limit 1;
   insert into public.ops_manager_notification_queue(job_key,credential_id,manager_id,notification_type,title,body,data_json)
-  values (${q(crossingKey)},'${credentialId}'::uuid,'${managerId}'::uuid,'event_digest','Crossing event','Must expire before finish',
-    jsonb_build_object('kind','event_digest','next_event_id','${eventId}'::uuid,'next_event_starts_at',
-      (select (event_date+start_time) at time zone 'America/Chicago' from public.events_app_events where id='${eventId}'::uuid)));`);
+  select ${q(crossingKey)},'${credentialId}'::uuid,'${managerId}'::uuid,'event_digest','Crossing event','Must expire before finish',
+    jsonb_build_object('kind','event_digest','next_event_id','${eventId}'::uuid,
+      'next_event_revision',candidate.event_revision,'next_event_starts_at',candidate.occurrence_starts_at,
+      'next_event_display_location',candidate.display_location)
+  from public.app_event_manager_digest_candidate('${eventId}'::uuid,statement_timestamp()) candidate;`);
 const lease = JSON.parse(sql(`select row_to_json(q)::text from public.ops_manager_claim_notification_jobs('uncertainty-worker',10,120) q where q.job_key=${q(crossingKey)};`));
 assert.equal(sql(`select public.ops_manager_notification_job_is_current('${lease.queue_id}'::uuid,'${lease.lease_token}'::uuid,'${pushDeviceId}'::uuid,${q(fcmTokenSha256)});`), "t");
-sql(`update public.events_app_events set status='CANCELLED',cancelled_at=now(),cancelled_by='final uncertainty test' where id='${eventId}'::uuid;`);
+sql(`select public.app_transition_event_cancellation('${eventId}'::uuid,'cancel',
+  (select revision from public.events_app_events where id='${eventId}'::uuid),'${randomUUID()}'::uuid,'${managerId}'::uuid,'final uncertainty test');`);
 assert.equal(sql(`select public.ops_manager_notification_job_is_current('${lease.queue_id}'::uuid,'${lease.lease_token}'::uuid,'${pushDeviceId}'::uuid,${q(fcmTokenSha256)});`), "f",
   "the worker must revalidate the canonical event immediately before provider dispatch");
 const finished = JSON.parse(sql(`select row_to_json(public.ops_manager_finish_notification_job('${lease.queue_id}'::uuid,'${lease.lease_token}'::uuid,'${pushDeviceId}'::uuid,${q(fcmTokenSha256)},false,null,'event was cancelled',30))::text;`));
@@ -459,15 +481,23 @@ assert.equal(finished.provider_message_id, null);
 
 const rescheduledId = randomUUID();
 const rescheduledKey = `event-rescheduled-${stamp}`;
-sql(`insert into public.events_app_events(id,event_name,location_group_id,event_date,start_time,end_date,status,event_scope,display_location,needs_review)
+sql(`insert into public.events_app_events(id,event_name,location_group_id,event_date,start_time,end_date,end_time,start_instant_utc,end_instant_utc,status,event_scope,display_location,needs_review)
   select '${rescheduledId}'::uuid,'Uncertainty rescheduled event',id,((now()+interval '2 hours') at time zone 'America/Chicago')::date,
-    ((now()+interval '2 hours') at time zone 'America/Chicago')::time,((now()+interval '2 hours') at time zone 'America/Chicago')::date,
+    ((now()+interval '2 hours') at time zone 'America/Chicago')::time,((now()+interval '3 hours') at time zone 'America/Chicago')::date,
+    ((now()+interval '3 hours') at time zone 'America/Chicago')::time,now()+interval '2 hours',now()+interval '3 hours',
     'SCHEDULED','ZOO_WIDE','Zoo Footprint',false from public.location_groups order by id limit 1;
   insert into public.ops_manager_notification_queue(job_key,credential_id,manager_id,notification_type,title,body,data_json)
-  values (${q(rescheduledKey)},'${credentialId}'::uuid,'${managerId}'::uuid,'event_digest','Rescheduled event','Old occurrence must not send',
-    jsonb_build_object('kind','event_digest','next_event_id','${rescheduledId}'::uuid,'next_event_starts_at',
-      (select (event_date+start_time) at time zone 'America/Chicago' from public.events_app_events where id='${rescheduledId}'::uuid)));
-  update public.events_app_events set start_time=((now() at time zone 'America/Chicago')+interval '3 hours')::time where id='${rescheduledId}'::uuid;`);
+  select ${q(rescheduledKey)},'${credentialId}'::uuid,'${managerId}'::uuid,'event_digest','Rescheduled event','Old occurrence must not send',
+    jsonb_build_object('kind','event_digest','next_event_id','${rescheduledId}'::uuid,
+      'next_event_revision',candidate.event_revision,'next_event_starts_at',candidate.occurrence_starts_at,
+      'next_event_display_location',candidate.display_location)
+  from public.app_event_manager_digest_candidate('${rescheduledId}'::uuid,statement_timestamp()) candidate;
+  update public.events_app_events set event_date=((now()+interval '3 hours') at time zone 'America/Chicago')::date,
+    start_time=((now()+interval '3 hours') at time zone 'America/Chicago')::time,
+    end_date=((now()+interval '4 hours') at time zone 'America/Chicago')::date,
+    end_time=((now()+interval '4 hours') at time zone 'America/Chicago')::time,
+    start_instant_utc=now()+interval '3 hours',end_instant_utc=now()+interval '4 hours',revision=revision+1
+    where id='${rescheduledId}'::uuid;`);
 assert.equal(sql(`select count(*) from public.ops_manager_claim_notification_jobs('uncertainty-worker',10,120) where job_key=${q(rescheduledKey)};`), "0");
 assert.equal(sql(`select status from public.ops_manager_notification_queue where job_key=${q(rescheduledKey)};`), "cancelled");
 
@@ -590,8 +620,8 @@ const crossingEmployeeEventClaim = JSON.parse(sql(`select public.mz_claim_employ
   '${employeeRegistrationId}'::uuid,${q(employeeTokenHashC)},now())::text;`));
 assert.equal(crossingEmployeeEventClaim.ok, true);
 assert.equal(sql(`select state from public.event_push_instances where instance_id='${crossingEmployeeEventInstanceId}'::uuid;`), "leased");
-sql(`update public.events_app_events set status='CANCELLED',cancelled_at=now(),cancelled_by='employee provider boundary test'
-  where id='${rescheduledId}'::uuid;`);
+sql(`select public.app_transition_event_cancellation('${rescheduledId}'::uuid,'cancel',
+  (select revision from public.events_app_events where id='${rescheduledId}'::uuid),'${randomUUID()}'::uuid,'${managerId}'::uuid,'employee provider boundary test');`);
 const crossingEmployeeEventFinish = JSON.parse(sql(`select public.mz_record_employee_event_push_delivery(
   '${crossingEmployeeEventJob.jobId}'::uuid,'${crossingEmployeeEventJob.leaseToken}'::uuid,
   '${crossingEmployeeEventInstanceId}'::uuid,'${employeeCredentialId}'::uuid,
@@ -606,9 +636,10 @@ assert.equal(sql(`select (last_successful_delivery_at is null)::text from public
 
 const successfulEmployeeEventId = randomUUID();
 const successfulEmployeeEventInstanceId = randomUUID();
-sql(`insert into public.events_app_events(id,event_name,location_group_id,event_date,start_time,end_date,status,event_scope,display_location,needs_review)
+sql(`insert into public.events_app_events(id,event_name,location_group_id,event_date,start_time,end_date,end_time,start_instant_utc,end_instant_utc,status,event_scope,display_location,needs_review)
   select '${successfulEmployeeEventId}'::uuid,'Uncertainty employee delivery',id,((now()+interval '4 hours') at time zone 'America/Chicago')::date,
-    ((now()+interval '4 hours') at time zone 'America/Chicago')::time,((now()+interval '4 hours') at time zone 'America/Chicago')::date,
+    ((now()+interval '4 hours') at time zone 'America/Chicago')::time,((now()+interval '5 hours') at time zone 'America/Chicago')::date,
+    ((now()+interval '5 hours') at time zone 'America/Chicago')::time,now()+interval '4 hours',now()+interval '5 hours',
     'SCHEDULED','ZOO_WIDE','Zoo Footprint',false from public.location_groups order by id limit 1;`);
 await seedCurrentEmployeeEventInstance(successfulEmployeeEventId, successfulEmployeeEventInstanceId, "success", "three_days_before");
 const successfulEmployeeEventJob = leaseEmployeeEventJob(successfulEmployeeEventInstanceId, "success");
@@ -647,9 +678,10 @@ assert.equal(sql(`select (last_successful_delivery_at is not null)::text from pu
 
 const ambiguousEmployeeEventId = randomUUID();
 const ambiguousEmployeeEventInstanceId = randomUUID();
-sql(`insert into public.events_app_events(id,event_name,location_group_id,event_date,start_time,end_date,status,event_scope,display_location,needs_review)
+sql(`insert into public.events_app_events(id,event_name,location_group_id,event_date,start_time,end_date,end_time,start_instant_utc,end_instant_utc,status,event_scope,display_location,needs_review)
   select '${ambiguousEmployeeEventId}'::uuid,'Uncertainty ambiguous employee delivery',id,((now()+interval '5 hours') at time zone 'America/Chicago')::date,
-    ((now()+interval '5 hours') at time zone 'America/Chicago')::time,((now()+interval '5 hours') at time zone 'America/Chicago')::date,
+    ((now()+interval '5 hours') at time zone 'America/Chicago')::time,((now()+interval '6 hours') at time zone 'America/Chicago')::date,
+    ((now()+interval '6 hours') at time zone 'America/Chicago')::time,now()+interval '5 hours',now()+interval '6 hours',
     'SCHEDULED','ZOO_WIDE','Zoo Footprint',false from public.location_groups order by id limit 1;`);
 await seedCurrentEmployeeEventInstance(ambiguousEmployeeEventId, ambiguousEmployeeEventInstanceId, "ambiguous", "three_days_before");
 const ambiguousEmployeeEventJob = leaseEmployeeEventJob(ambiguousEmployeeEventInstanceId, "ambiguous");

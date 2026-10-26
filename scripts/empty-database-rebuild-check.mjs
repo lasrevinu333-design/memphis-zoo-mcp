@@ -1,6 +1,6 @@
-import { randomUUID } from "node:crypto";
+import { randomUUID, createHash } from "node:crypto";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
-import { readdirSync, readFileSync, mkdtempSync, rmSync, chmodSync, openSync, closeSync, writeFileSync, fsyncSync, existsSync } from "node:fs";
+import { readdirSync, readFileSync, mkdtempSync, rmSync, chmodSync, openSync, closeSync, writeFileSync, fsyncSync, existsSync, lstatSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { loadCiFreshOnlyReplay } from "./ci-fresh-only-replay.mjs";
 import { resolve } from "node:path";
@@ -33,7 +33,42 @@ const freshOnly = process.env.SCHEMA_REBUILD_FRESH_ONLY === '1';
 if (freshOnly && (!dockerImage || dockerContainer || adminUrl || useEmptyContainerPostgres
   || (process.env.SCHEMA_REBUILD_DOCKER_USER && process.env.SCHEMA_REBUILD_DOCKER_USER !== 'supabase_admin')))
   throw new Error('Fresh-only replay requires its own new pinned-image container, never an existing container/URL or another installer.');
-const freshSelection = freshOnly ? loadCiFreshOnlyReplay(root, dockerImage, migrationFiles) : null;
+if (process.env.SCHEMA_REBUILD_MIGRATIONS_ONLY !== undefined && process.env.SCHEMA_REBUILD_MIGRATIONS_ONLY !== '1')
+  throw new Error('SCHEMA_REBUILD_MIGRATIONS_ONLY must be the explicit value 1.');
+const migrationsOnly = process.env.SCHEMA_REBUILD_MIGRATIONS_ONLY === '1';
+const fixtureName = process.env.SCHEMA_REBUILD_FIXTURE_NAME || '';
+const fixtureSocket = process.env.SCHEMA_REBUILD_FIXTURE_SOCKET_DIRECTORY || '';
+if (process.env.SCHEMA_REBUILD_NO_AUTO_TABLE_GRANTS !== undefined && process.env.SCHEMA_REBUILD_NO_AUTO_TABLE_GRANTS !== '1')
+  throw new Error('SCHEMA_REBUILD_NO_AUTO_TABLE_GRANTS must be the explicit value 1.');
+const noAutoTableGrants = process.env.SCHEMA_REBUILD_NO_AUTO_TABLE_GRANTS === '1';
+if (noAutoTableGrants && process.env.VACANCY_REFRESH_CATALOG === '1')
+  throw new Error('Noncanonical no-auto construction cannot refresh canonical catalog authority.');
+if (noAutoTableGrants && (!migrationsOnly || fixtureSocket || !/^mz_schema_rebuild_roster_[A-Za-z0-9_]+$/.test(fixtureName)))
+  throw new Error('No-auto-table-grants construction is the explicit isolated vacate-roster fixture profile only.');
+if (migrationsOnly && (!freshOnly || !keepDatabase))
+  throw new Error('Migrations-only construction requires explicit fresh-only ownership and retained handoff.');
+if ((fixtureName || fixtureSocket) && !migrationsOnly)
+  throw new Error('Fixture name/socket inputs require explicit migrations-only construction.');
+if (fixtureName && !/^mz_schema_rebuild_[A-Za-z0-9_]{1,100}$/.test(fixtureName))
+  throw new Error('Exact disposable fixture name required.');
+if (fixtureSocket) {
+  const parent = resolve(fixtureSocket, '..'), base = resolve(parent, '..');
+  const runtime = '/run/user/' + process.getuid();
+  const parentName = parent.slice(base.length + 1);
+  const allowed = (base === runtime && /^custodial-s27-[A-Za-z0-9]+$/.test(parentName))
+    || (base === '/tmp' && /^custodial-s27-sock-[A-Za-z0-9]+$/.test(parentName));
+  const baseStat = lstatSync(base), parentStat = lstatSync(parent), socketStat = lstatSync(fixtureSocket);
+  if (!allowed || realpathSync(base) !== base || !baseStat.isDirectory() || baseStat.isSymbolicLink()
+    || (base === runtime ? baseStat.uid !== process.getuid() || (baseStat.mode & 0o777) !== 0o700 : baseStat.uid !== 0 || (baseStat.mode & 0o7777) !== 0o1777)
+    || fixtureSocket !== resolve(parent, 'socket') || realpathSync(parent) !== parent || realpathSync(fixtureSocket) !== fixtureSocket
+    || !parentStat.isDirectory() || parentStat.isSymbolicLink() || parentStat.uid !== process.getuid() || (parentStat.mode & 0o777) !== 0o700
+    || !socketStat.isDirectory() || socketStat.isSymbolicLink() || socketStat.uid !== process.getuid() || (socketStat.mode & 0o777) !== 0o777
+    || readdirSync(parent).join(',') !== 'socket' || readdirSync(fixtureSocket).length !== 0
+    || Buffer.byteLength(fixtureSocket + '/.s.PGSQL.5432') >= 108)
+    throw new Error('Host socket requires a short empty owned socket leaf inside its private runtime/tmp parent.');
+}
+const freshSelection = freshOnly ? loadCiFreshOnlyReplay(root, dockerImage, migrationFiles, { noAutoTableGrants }) : null;
+let freshConstructionCompleted = false;
 let freshInitDirectory = null;
 let freshChecksPassed = false;
 let freshCustody = null;
@@ -1231,7 +1266,7 @@ rollback;
 `;
 
 if (dockerImage) {
-  dockerContainer = `mz_schema_rebuild_${Date.now()}_${randomUUID().replaceAll("-", "").slice(0, 8)}`;
+  dockerContainer = fixtureName || `mz_schema_rebuild_${Date.now()}_${randomUUID().replaceAll("-", "").slice(0, 8)}`;
   ownsDockerContainer = true;
   try {
     if (freshOnly) {
@@ -1241,7 +1276,9 @@ if (dockerImage) {
       chmodSync(directory, 0o700);
       freshCustody = { schema: 'custodial.ci-fresh-original-container-custody.v1', directory,
         name: dockerContainer, image: dockerImage, image_id: null, owner: randomUUID(),
-        cidfile: resolve(directory, 'original-container.cid'), empty_init_directory: freshInitDirectory };
+        cidfile: resolve(directory, 'original-container.cid'), empty_init_directory: freshInitDirectory,
+        ...(migrationsOnly ? { construction_only: true, host_socket_directory: fixtureSocket || null,
+          max_connections: fixtureSocket ? 32 : 10, no_auto_table_grants: noAutoTableGrants } : {}) };
       freshCustodyReceipt('PREBIRTH_ORIGINAL_CONTAINER.json', freshCustody);
       const parent = openSync(tmpdir(), 'r');
       try { fsyncSync(parent); } finally { closeSync(parent); }
@@ -1251,18 +1288,21 @@ if (dockerImage) {
     const returnedCID = runDocker(freshOnly ? [
       'run', '-d', '--name', dockerContainer, '--label', 'custodial.owner=' + freshCustody.owner,
       '--cidfile', freshCustody.cidfile, '--network', 'none', '--read-only',
-      '--memory', '512m', '--memory-swap', '512m', '--cpus', '1', '--pids-limit', '64', '--no-healthcheck',
+      '--memory', '512m', '--memory-swap', '512m', '--cpus', '1', '--pids-limit', '128', '--no-healthcheck',
       '--log-driver', 'local', '--log-opt', 'max-size=1m', '--log-opt', 'max-file=2',
       '--tmpfs', '/tmp:rw,size=64m', '--tmpfs', '/var/run/postgresql:rw,size=8m',
+      ...(fixtureSocket ? ['--mount', `type=bind,source=${fixtureSocket},target=/custodial-fixture-socket`] : []),
       '--tmpfs', '/var/lib/postgresql/data:rw,size=1g',
       '--mount', `type=bind,source=${freshInitDirectory},target=/docker-entrypoint-initdb.d,readonly`,
       '-e', 'POSTGRES_USER=supabase_admin', '-e', 'POSTGRES_DB=postgres', '-e', 'PGDATA=/var/lib/postgresql/data',
       '-e', 'POSTGRES_PASSWORD=isolated-new-clean-no-network-test-only',
       '-e', 'POSTGRES_INITDB_ARGS=--auth-local=trust --auth-host=scram-sha-256', dockerImage,
-      'postgres', '-D', '/var/lib/postgresql/data', '-c', 'shared_buffers=64MB', '-c', 'max_connections=10',
-      '-c', 'listen_addresses=', '-c', 'shared_preload_libraries=pg_cron,pg_net,pg_stat_statements',
+      'postgres', '-D', '/var/lib/postgresql/data', '-c', 'shared_buffers=64MB', '-c', fixtureSocket ? 'max_connections=32' : 'max_connections=10',
+      '-c', 'listen_addresses=',
+      ...(fixtureSocket ? ['-c', 'unix_socket_directories=/var/run/postgresql,/custodial-fixture-socket'] : []),
+      '-c', 'shared_preload_libraries=pg_cron,pg_net,pg_stat_statements',
       '-c', 'cron.launch_active_jobs=off', '-c', 'cron.database_name=postgres',
-      '-c', 'statement_timeout=20000', '-c', 'lock_timeout=5000',
+      '-c', 'statement_timeout=20000', '-c', fixtureSocket ? 'lock_timeout=0' : 'lock_timeout=5000',
     ] : [
       "run",
       "-d",
@@ -1328,8 +1368,105 @@ if (dockerImage) {
   }
 }
 
+async function captureFailedNormalSelectedInventory(database, failure) {
+  // Failure observation only, before owned cleanup; never continue or adopt a failed replay.
+  const names = ['20261006113610_custodial_shared_events_outlook.sql', '20261006162427_custodial_shared_events_recovery_binding.sql'];
+  if (noAutoTableGrants || !freshOnly || !freshSelection || !freshCustody
+    || ![227, 228].includes(failure.order) || failure.name !== names[failure.order - 227])
+    throw new Error('Normal inventory observation requires the exact selected227/228 owned fresh failure');
+  const selected = freshSelection.entries[failure.order - 1];
+  if (selected.name !== failure.name || failure.selected_sha256 !== selected.selected.sha256
+    || failure.selected_sha256 !== failure.expected_selected_sha256)
+    throw new Error('Normal failed selected source identity differs');
+  const owned = freshOwnedIdentity();
+  if (!owned || !owned.State.Running) throw new Error('Original failed normal fixture absent before inventory observation');
+  const raw = dockerPsql(database, `select jsonb_build_object(
+    'rows',coalesce(jsonb_agg(jsonb_build_object('object_kind',object_kind,'object_identity',object_identity,
+      'restore_order',restore_order,'definition_sql',definition_sql,'definition_sha256',definition_sha256)
+      order by object_kind,object_identity,restore_order),'[]'::jsonb),
+    'count',count(*),'semantic_sha256',encode(extensions.digest(convert_to(coalesce(jsonb_agg(jsonb_build_object(
+      'kind',object_kind,'identity',object_identity,'order',restore_order,'definition',definition_sql,'sha256',definition_sha256)
+      order by object_kind,object_identity,restore_order),'[]'::jsonb)::text,'UTF8'),'sha256'),'hex'))::text
+    from public.custodial_release_authority_restore_inventory`);
+  if (Buffer.byteLength(raw, 'utf8') > 16 * 1024 * 1024) throw new Error('Normal failed inventory exceeds private observation bound');
+  const measured = JSON.parse(raw);
+  if (!Array.isArray(measured.rows) || measured.count !== measured.rows.length
+    || !Number.isSafeInteger(measured.count) || measured.count < 0 || !/^[a-f0-9]{64}$/.test(measured.semantic_sha256))
+    throw new Error('Normal failed inventory observation shape differs');
+  const inventory = { schema: 'custodial.normal-failed-selected-inventory.v1', rows: measured.rows };
+  if (Buffer.byteLength(JSON.stringify(inventory, null, 2) + '\n', 'utf8') > 16 * 1024 * 1024)
+    throw new Error('Normal formatted inventory exceeds private observation bound');
+  // Revalidate the exact original CID/name/owner/image immediately before persistence.
+  if (freshOwnedIdentity()?.Id !== owned.Id) throw new Error('Original failed normal fixture identity changed');
+  const name = 'FAILED_NORMAL_SELECTED_INVENTORY.json';
+  freshCustodyReceipt(name, inventory);
+  const path = resolve(freshCustody.directory, name), bytes = readFileSync(path);
+  freshCustodyReceipt('FAILED_NORMAL_SELECTED_METADATA.json', {
+    schema: 'custodial.normal-failed-selected-inventory-metadata.v1',
+    profile: 'NORMAL_SELECTED_FRESH_FAILURE_OBSERVATION_ONLY',
+    container: owned.Id, name: freshCustody.name, owner: freshCustody.owner,
+    image: freshCustody.image, image_id: freshCustody.image_id, database,
+    failed_selected_migration: failure, inventory_count: measured.count,
+    inventory_semantic_sha256: measured.semantic_sha256,
+    inventory: { path, sha256: createHash('sha256').update(bytes).digest('hex'), bytes: bytes.length },
+    observation_only: true, original_exception_preserved: true, continuation_permitted: false,
+    canonical_fingerprint_PASS: false, full_suite_PASS: false, new_authority: false
+  });
+}
+
+async function captureFailedNoAutoMigration(database, failure, witnesses) {
+  // Failure observation only: no migration continuation, canonical admission or restoration.
+  if (!noAutoTableGrants || !freshSelection || !freshOnly || !freshCustody)
+    throw new Error('Failed-migration diagnostics require the explicit owned no-auto profile');
+  const owned = freshOwnedIdentity();
+  if (!owned || !owned.State.Running) throw new Error('Exact original failed fixture absent before diagnostic observation');
+  const metadata = { schema: 'custodial.no-auto-failed-selected-migration-observation.v1',
+    profile: 'NONCANONICAL_NO_AUTO_GRANTS_TEST_FIXTURE', container: freshContainerCID,
+    name: freshCustody.name, owner: freshCustody.owner, image: freshCustody.image,
+    image_id: freshCustody.image_id, database, failed_selected_migration: failure,
+    successful_migration_witness_count: witnesses.length, observation_only: true,
+    canonical_fingerprint_PASS: false, canonical_catalog_authority: false,
+    full_suite_PASS: false, new_authority: false, continuation_permitted: false };
+  freshCustodyReceipt('FAILED_SELECTED_MIGRATION_ORIGINAL.json', metadata);
+  const references = {}, captureErrors = [];
+  const privateReference = name => { const path = resolve(freshCustody.directory, name), bytes = readFileSync(path);
+    return { path, sha256: createHash('sha256').update(bytes).digest('hex'), bytes: bytes.length }; };
+  const observe = async (name, capture) => {
+    try {
+      const value = await capture();
+      freshCustodyReceipt(name, { ...metadata, ...value });
+      references[name] = privateReference(name);
+    } catch (error) { captureErrors.push({ diagnostic: name, name: error.name, message: String(error.message) }); }
+  };
+  await observe('FAILED_SELECTED_MIGRATION_FULL_CATALOG.json', async () => {
+    const { captureSchemaCatalog, fingerprintSchemaCatalog } = await import('./schema-fingerprint-catalog.mjs');
+    const catalog = await captureSchemaCatalog({ query: async statement => ({ rows: JSON.parse(dockerPsql(database,
+      `select coalesce(json_agg(row_to_json(measured)), '[]'::json)::text from (${statement.replace(/;\s*$/, '')}) measured`).trim()) }) });
+    return { catalog, measured_fingerprint: fingerprintSchemaCatalog(catalog).fingerprint,
+      counts: Object.fromEntries(Object.entries(catalog).map(([name, rows]) => [name, rows.length])),
+      capture_snapshot_authority: 'READ_ONLY_OWNED_FAILED_FIXTURE_SEPARATE_QUERIES_NOT_CANONICAL_AUTHORITY' };
+  });
+  await observe('FAILED_SELECTED_MIGRATION_FULL_RECOVERY_INVENTORY.json', async () => ({
+    rows: JSON.parse(dockerPsql(database, `select coalesce(jsonb_agg(jsonb_build_object(
+      'object_kind',object_kind,'object_identity',object_identity,'restore_order',restore_order,
+      'definition_sql',definition_sql,'definition_sha256',definition_sha256)
+      order by object_kind,object_identity),'[]'::jsonb)::text from public.custodial_release_authority_restore_inventory`).trim()),
+  }));
+  await observe('FAILED_SELECTED_MIGRATION_RAW_TABLE_SEQUENCE_ACL.json', async () => {
+    const rows = JSON.parse(dockerPsql(database, `select coalesce(json_agg(row_to_json(observed) order by observed.relname,observed.relkind),'[]'::json)::text from (
+      select c.relname,c.relkind::text as relkind,c.relacl::text as relacl_text from pg_class c join pg_namespace n on n.oid=c.relnamespace
+      where n.nspname='public' and c.relkind in ('r','S')) observed`).trim());
+    const aclDigestSql = "select md5(coalesce(string_agg(c.relname||'|'||c.relkind::text||'|'||coalesce(c.relacl::text,'<owner-default>'),E'\\n' order by c.relname,c.relkind),'')) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind in ('r','S')";
+    return { rows, md5: dockerPsql(database, aclDigestSql).trim(), exact_existing_vacancy_acl_digest_sql: aclDigestSql };
+  });
+  await observe('FAILED_SELECTED_MIGRATION_COMPLETED_WITNESSES.json', async () => ({ witnesses }));
+  freshCustodyReceipt('FAILED_SELECTED_MIGRATION_DIAGNOSTICS.json', { ...metadata, references, capture_errors: captureErrors,
+    original_exception_preserved: true, observations_complete: captureErrors.length === 0 });
+}
+
 if (dockerContainer) {
   try {
+    migrationConstruction: {
     execFileSync("docker", ["inspect", dockerContainer], { stdio: "ignore" });
     const targetDatabase = ownsDockerContainer || useEmptyContainerPostgres ? "postgres" : databaseName;
     if (useEmptyContainerPostgres) {
@@ -1343,14 +1480,107 @@ if (dockerContainer) {
         throw new Error('Fresh-only selected bootstrap requires an empty public schema.');
       freshSelection.assertBootstrap(dockerPsql(targetDatabase, freshSelection.bootstrap));
     }
+    const noAutoWitnesses = [];
+    const defaultsSql = "select count(*) from pg_default_acl d cross join lateral aclexplode(d.defaclacl) a where d.defaclnamespace in (0,'public'::regnamespace) and d.defaclobjtype in ('r','S') and a.grantee in (0,'anon'::regrole,'authenticated'::regrole,'service_role'::regrole)";
+    const noAutoCount = () => Number(dockerPsql(targetDatabase, defaultsSql).trim());
+    const removeFixtureDefaults = () => {
+      for (const owner of ['postgres','supabase_admin']) for (const scope of ['', 'in schema public'])
+        dockerPsql(targetDatabase, `alter default privileges for role ${owner} ${scope} revoke all on tables from public,anon,authenticated,service_role; alter default privileges for role ${owner} ${scope} revoke all on sequences from public,anon,authenticated,service_role;`);
+    };
+    if (noAutoTableGrants) {
+      removeFixtureDefaults();
+      if (noAutoCount() !== 0) throw new Error('No-auto fixture default grants present before replay');
+    }
     for (let index = 0; index < migrationFiles.length; index++) {
       const file = migrationFiles[index];
       const selected = freshSelection?.entries[index];
       const sql = selected ? selected.sql : readFileSync(resolve(migrationsDir, file), "utf8");
-      dockerPsql(targetDatabase, sql, selected?.atomicMode);
+      if (noAutoTableGrants && index === 226) {
+        const rows = JSON.parse(dockerPsql(targetDatabase, `select coalesce(jsonb_agg(jsonb_build_object(
+          'object_kind',object_kind,'object_identity',object_identity,'restore_order',restore_order,
+          'definition_sql',definition_sql,'definition_sha256',definition_sha256)
+          order by object_kind,object_identity),'[]'::jsonb)::text from public.custodial_release_authority_restore_inventory`).trim());
+        freshCustodyReceipt('NO_AUTO_PREFIX226_FULL_INVENTORY.json', {
+          profile: 'NONCANONICAL_NO_AUTO_GRANTS_TEST_FIXTURE', rows,
+          canonical_catalog_authority: false, new_authority: false, observation_only: true });
+      }
+      if (noAutoTableGrants && noAutoCount() !== 0) throw new Error('Automatic grants before selected migration ' + file);
+      try {
+        dockerPsql(targetDatabase, sql, selected?.atomicMode);
+      } catch (error) {
+        if (!noAutoTableGrants && freshSelection && [227, 228].includes(index + 1)) {
+          try {
+            const status = /^docker psql failed \((-?\d+)\):/.exec(String(error.message));
+            await captureFailedNormalSelectedInventory(targetDatabase, { order: index + 1, name: file,
+              original_sha256: createHash('sha256').update(readFileSync(resolve(migrationsDir, file))).digest('hex'),
+              selected_sha256: createHash('sha256').update(sql).digest('hex'), expected_selected_sha256: selected.selected.sha256,
+              atomic_mode: selected.atomicMode, original_psql_child_exit_code: status ? Number(status[1]) : null });
+          } catch { /* Observation refusal must never replace the original selected-migration exception. */ }
+        }
+        if (noAutoTableGrants && freshSelection) {
+          let failure = null;
+          try {
+          const status = /^docker psql failed \((-?\d+)\):/.exec(String(error.message));
+          failure = { order: index + 1, name: file,
+            original_sha256: createHash('sha256').update(readFileSync(resolve(migrationsDir, file))).digest('hex'),
+            selected_sha256: createHash('sha256').update(sql).digest('hex'), expected_selected_sha256: selected.selected.sha256,
+            atomic_mode: selected.atomicMode, original_error: { name: error.name, message: String(error.message) },
+            original_psql_child_exit_code: status ? Number(status[1]) : null,
+            exit_code_source: status ? 'EXACT_ORIGINAL_DOCKER_PSQL_FAILURE_MESSAGE' : 'NOT_AVAILABLE_IN_ORIGINAL_ERROR',
+            original_helper_exit_code: null };
+          await captureFailedNoAutoMigration(targetDatabase, failure, noAutoWitnesses);
+          } catch (captureError) {
+            try { freshCustodyReceipt('FAILED_SELECTED_MIGRATION_CAPTURE_REFUSAL.json', {
+              failed_selected_migration: failure, diagnostic_error: { name: captureError.name, message: String(captureError.message) },
+              observation_only: true, new_authority: false, original_exception_preserved: true }); } catch {}
+          }
+        }
+        throw error;
+      }
+      if (noAutoTableGrants) {
+        const normalizationNeeded = noAutoCount() !== 0;
+        if (normalizationNeeded) {
+          if (!['20260718083100_reconstruct_public_grant_hardening.sql','20260729150527_audit_defense_in_depth_hardening.sql','20260815160613_normalize_managed_production_schema_security.sql'].includes(file)
+            || /create\s+(?:unlogged\s+)?table|create\s+sequence/i.test(sql))
+            throw new Error('Unreviewed automatic grant construction in selected migration ' + file);
+          removeFixtureDefaults();
+        }
+        if (noAutoCount() !== 0) throw new Error('Automatic grants after selected migration ' + file);
+        noAutoWitnesses.push({ order: index + 1, name: file, original_sha256: createHash('sha256').update(readFileSync(resolve(migrationsDir, file))).digest('hex'),
+          selected_sha256: createHash('sha256').update(sql).digest('hex'), atomic_mode: selected.atomicMode,
+          exit: 0, before_default_grants: 0, after_default_grants: 0, normalization_removed: normalizationNeeded,
+          ...(index + 1 === 153 ? { current_profile_153_raw_public_r_S_acl_md5: dockerPsql(targetDatabase, "select md5(coalesce(string_agg(c.relname||'|'||c.relkind::text||'|'||coalesce(c.relacl::text,'<owner-default>'),E'\\n' order by c.relname,c.relkind),'')) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind in ('r','S')").trim() } : {}) });
+      }
       console.log(`applied ${file}`);
     }
     if (freshOnly && !freshOwnedIdentity()) throw new Error('Original fresh container absent before fingerprint capture');
+    let measuredNoAutoCatalog = null;
+    if (noAutoTableGrants) {
+      if (noAutoWitnesses.length !== 294) throw new Error('No-auto fixture lacks all294 per-migration witnesses');
+      const { captureSchemaCatalog, fingerprintSchemaCatalog } = await import('./schema-fingerprint-catalog.mjs');
+      const catalog = await captureSchemaCatalog({ query: async statement => ({ rows: JSON.parse(dockerPsql(targetDatabase,
+        `select coalesce(json_agg(row_to_json(measured)), '[]'::json)::text from (${statement.replace(/;\s*$/, '')}) measured`).trim()) }) });
+      measuredNoAutoCatalog = { profile: 'NONCANONICAL_NO_AUTO_GRANTS_TEST_FIXTURE',
+        measured_fingerprint: fingerprintSchemaCatalog(catalog).fingerprint,
+        counts: Object.fromEntries(Object.entries(catalog).map(([name, rows]) => [name, rows.length])),
+        canonical_fingerprint_PASS: false, new_authority: false };
+      const rawAclRows = JSON.parse(dockerPsql(targetDatabase, `select coalesce(json_agg(row_to_json(observed) order by observed.relname,observed.relkind),'[]'::json)::text from (
+        select c.relname,c.relkind::text as relkind,c.relacl::text as relacl_text from pg_class c join pg_namespace n on n.oid=c.relnamespace
+        where n.nspname='public' and c.relkind in ('r','S')) observed`).trim());
+      const aclDigestSql = "select md5(coalesce(string_agg(c.relname||'|'||c.relkind::text||'|'||coalesce(c.relacl::text,'<owner-default>'),E'\\n' order by c.relname,c.relkind),'')) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind in ('r','S')";
+      const rawAclMd5 = dockerPsql(targetDatabase, aclDigestSql).trim();
+      const privateReference = name => { const path = resolve(freshCustody.directory, name), bytes = readFileSync(path);
+        return { path, sha256: createHash('sha256').update(bytes).digest('hex'), bytes: bytes.length }; };
+      const prefix226 = privateReference('NO_AUTO_PREFIX226_FULL_INVENTORY.json');
+      freshCustodyReceipt('NO_AUTO_TABLE_GRANTS_FULL_MEASURED_CATALOG.json', {
+        ...measuredNoAutoCatalog, catalog, prefix226_inventory: prefix226,
+        raw_public_table_sequence_acl: { rows: rawAclRows, md5: rawAclMd5, exact_existing_vacancy_acl_digest_sql: aclDigestSql },
+        observation_only: true });
+      measuredNoAutoCatalog = { ...measuredNoAutoCatalog, prefix226_inventory: prefix226,
+        full_catalog: privateReference('NO_AUTO_TABLE_GRANTS_FULL_MEASURED_CATALOG.json') };
+      freshCustodyReceipt('NO_AUTO_TABLE_GRANTS_MIGRATION_WITNESSES.json', { profile: measuredNoAutoCatalog.profile, witnesses: noAutoWitnesses });
+      freshCustodyReceipt('NO_AUTO_TABLE_GRANTS_MEASURED_CATALOG.json', measuredNoAutoCatalog);
+    } else {
     execFileSync(process.execPath, [resolve(root, "scripts/refresh-schema-fingerprint.mjs"), "--check"], {
       cwd: root,
       env: {
@@ -1363,6 +1593,28 @@ if (dockerContainer) {
       stdio: "inherit",
     });
     console.log("verified clean-rebuild schema inventory equals the committed canonical fingerprint");
+    }
+    if (migrationsOnly) {
+      if (!freshOwnedIdentity()) throw new Error('Original fresh container absent at construction handoff');
+      freshSelection.assertPreserved();
+      const fingerprintBytes = readFileSync(resolve(root, 'supabase/canonical/schema-fingerprint.txt'));
+      const construction = {
+        schema: 'custodial.ci-fresh-only-migrations-construction.v1',
+        state: noAutoTableGrants ? 'NONCANONICAL_NO_AUTO_GRANTS_TEST_FIXTURE' : 'CONSTRUCTED_NOT_FUNCTIONALLY_QUALIFIED',
+        container: freshContainerCID, name: freshCustody.name, owner: freshCustody.owner,
+        database: targetDatabase, image: freshCustody.image, image_id: freshCustody.image_id,
+        custody_directory: freshCustody.directory, socket_directory: fixtureSocket || null,
+        max_connections: fixtureSocket ? 32 : 10, selected_replay: freshSelection.receipt,
+        fingerprint_check: noAutoTableGrants ? 'NOT_CANONICAL_PROFILE_MEASURED_ONLY' : 'PASS_COMMITTED_CANONICAL_FILE',
+        no_auto_table_grants: noAutoTableGrants, measured_no_auto_catalog: measuredNoAutoCatalog,
+        fingerprint_file_sha256: createHash('sha256').update(fingerprintBytes).digest('hex'),
+        full_suite_PASS: false, synthetic_fixture_checks_executed: false,
+      };
+      freshCustodyReceipt('MIGRATIONS_ONLY_CONSTRUCTION.json', construction);
+      freshConstructionCompleted = true;
+      console.log(JSON.stringify({ migrations_only_construction: construction }));
+      break migrationConstruction;
+    }
     dockerPsql(targetDatabase, exactFinishFunctionalSql);
     console.log("verified exact session finish transition and idempotent replay");
     await verifyNamedManagerRetirementMigrationModes(targetDatabase);
@@ -1444,6 +1696,7 @@ if (dockerContainer) {
       console.log(JSON.stringify({ scoped_fresh_only_replay: freshSelection.receipt }));
       freshChecksPassed = true;
     }
+    } // migrationConstruction: default path retains every original functional check.
   } finally {
     try {
       if (!ownsDockerContainer && !useEmptyContainerPostgres && !keepDatabase) {
@@ -1461,11 +1714,28 @@ if (dockerContainer) {
     } catch {
       // Best-effort cleanup for local/CI disposable databases.
     } finally {
-      if (ownsDockerContainer && (!keepDatabase || (freshOnly && !freshChecksPassed))) {
+      if (ownsDockerContainer && (!keepDatabase || (freshOnly && !freshChecksPassed && !freshConstructionCompleted))) {
         if (freshOnly) cleanupFreshOwnedContainer();
         else execFileSync("docker", ["rm", "-f", dockerContainer], { stdio: "ignore" });
       }
-      if (ownsDockerContainer && keepDatabase && (!freshOnly || freshChecksPassed)) console.log(JSON.stringify({ retained_test_container: dockerContainer, retained_test_database: "postgres" }));
+      if (ownsDockerContainer && keepDatabase && freshOnly && freshChecksPassed) {
+        const owned = freshOwnedIdentity();
+        if (!owned || !owned.State.Running) throw new Error('Full fresh fixture absent before retained handoff');
+        const complete = {
+          schema: 'custodial.ci-fresh-full-rebuild-functional-complete.v1',
+          container: freshContainerCID, name: freshCustody.name, owner: freshCustody.owner,
+          image: freshCustody.image, image_id: freshCustody.image_id, database: 'postgres',
+          custody_directory: freshCustody.directory, selected_replay: freshSelection.receipt,
+          full_suite_PASS: true, fingerprint_check: 'PASS_COMMITTED_CANONICAL_FILE',
+          synthetic_fixture_checks_executed: true,
+          fingerprint_file_sha256: createHash('sha256').update(readFileSync(resolve(root, 'supabase/canonical/schema-fingerprint.txt'))).digest('hex'),
+        };
+        freshCustodyReceipt('FULL_REBUILD_FUNCTIONAL_COMPLETE.json', complete);
+        console.log(JSON.stringify({ retained_test_container: freshCustody.name,
+          retained_test_container_id: freshContainerCID, retained_test_custody_directory: freshCustody.directory,
+          retained_test_database: 'postgres' }));
+      } else if (ownsDockerContainer && keepDatabase && (!freshOnly || freshConstructionCompleted))
+        console.log(JSON.stringify({ retained_test_container: dockerContainer, retained_test_database: "postgres" }));
       if (freshInitDirectory) rmSync(freshInitDirectory, { recursive: true });
     }
   }

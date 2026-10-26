@@ -20,11 +20,17 @@ export const RELEASE_ATTESTATION_TRUST_ROOT = Object.freeze({
   publicKeySpkiSha256: "992a3be69b3340e65bae0b28b8d78ef568dfc30a0ed8120268794ea15e1b49a0",
 });
 
+export const RELEASE_ATTESTATION_TRUST_ROOTS = Object.freeze([
+  RELEASE_ATTESTATION_TRUST_ROOT,
+  Object.freeze({keyId: "memphis-zoo-release-2026-08-13",
+    publicKeySpkiSha256: "094b591c0da0d16549c82210b02285dbe88f80ad5a6305b53285ddb8893b54b7"}),
+]);
+
 export function releaseAttestationPayload(input) {
   return Object.fromEntries(SIGNED_PAYLOAD_KEYS.map((key) => [key, input?.[key]]));
 }
 
-export function assertExactReleaseAttestation(input, { publicKeyPem, trustRoot = RELEASE_ATTESTATION_TRUST_ROOT } = {}) {
+export function assertExactReleaseAttestation(input, { publicKeyPem, trustRoot } = {}) {
   assert.ok(input && typeof input === "object" && !Array.isArray(input), "release attestation input must be an object");
   assert.deepEqual(Object.keys(input).sort(), ATTESTATION_KEYS, "release attestation input has an unexpected shape");
   assert.equal(input.artifact, "memphis-zoo-integrated-release-attestation.v2");
@@ -37,6 +43,8 @@ export function assertExactReleaseAttestation(input, { publicKeyPem, trustRoot =
   assert.match(String(input.schema_fingerprint || ""), FINGERPRINT, "release attestation schema fingerprint is invalid");
   assert.deepEqual(Object.keys(input.signature || {}).sort(), ["algorithm", "key_id", "value_base64"]);
   assert.equal(input.signature.algorithm, "ed25519");
+  if (trustRoot === undefined) trustRoot = RELEASE_ATTESTATION_TRUST_ROOTS.find(root => root.keyId === input.signature.key_id);
+  assert.ok(trustRoot, "release attestation key identity is not a source-pinned trust root");
   assert.equal(input.signature.key_id, trustRoot.keyId, "release attestation key identity is not the source-pinned trust root");
   assert.match(String(input.signature.value_base64 || ""), /^[A-Za-z0-9+/]+={0,2}$/);
   assert.ok(String(publicKeyPem || "").trim(), "release attestation public key is required");

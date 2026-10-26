@@ -16,6 +16,18 @@ on:
           - full_candidate
           - backup_only
           - target_capture
+          - reviewed_target_capture
+      reviewed_disposition_sha256:
+        description: Exact issued Root nine-discrepancy disposition digest, required only for reviewed_target_capture
+        required: false
+        type: string
+        default: ""
+
+      official_local_storage_provider:
+        description: Explicit backup_only same-original official local Storage provider qualification
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   actions: read
@@ -49,7 +61,9 @@ jobs:
         shell: bash
         env:
           REHEARSAL_SCOPE: ${{ inputs.rehearsal_scope || 'full_candidate' }}
+          OFFICIAL_LOCAL_STORAGE_PROVIDER: ${{ inputs.official_local_storage_provider }}
           BACKUP_RUN_ID: ${{ inputs.backup_run_id }}
+          REVIEWED_DISPOSITION_SHA256: ${{ inputs.reviewed_disposition_sha256 }}
           GH_TOKEN: ${{ github.token }}
           BACKUP_ENCRYPTION_PASSPHRASE: ${{ secrets.BACKUP_ENCRYPTION_PASSPHRASE }}
           RESTORE_ARCHIVE_VERIFY_KEY: ${{ secrets.BACKUP_MANIFEST_SIGNING_KEY }}
@@ -64,7 +78,7 @@ jobs:
           test -n "$BACKUP_ENCRYPTION_PASSPHRASE"
           test -n "$RESTORE_ARCHIVE_VERIFY_KEY"
           test -n "$RESTORE_ARCHIVE_VERIFY_KEY_ID"
-          case "$REHEARSAL_SCOPE" in full_candidate|backup_only|target_capture) ;; *) exit 1 ;; esac
+          case "$REHEARSAL_SCOPE" in full_candidate|backup_only|target_capture|reviewed_target_capture) ;; *) exit 1 ;; esac
           [[ "$BACKUP_RUN_ID" =~ ^[1-9][0-9]*$ ]]
           test -n "$REHEARSAL_CUSTODIAL_BACKEND_PROOF_SECRET"
           test -n "$REHEARSAL_CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET"
@@ -94,7 +108,7 @@ jobs:
             return "$status"
           }
           trap cleanup EXIT
-          printf '{"started":true,"backup_run_id":"%s","rehearsal_target_commit":"%s"}\n' '${{ inputs.backup_run_id }}' "$GITHUB_SHA" > "$receipt"
+          printf '{"started":true,"backup_run_id":"%s","rehearsal_target_commit":"%s"}\n' "$BACKUP_RUN_ID" "$GITHUB_SHA" > "$receipt"
           mkdir -p "$backup_dir"
           openssl enc -d -aes-256-cbc -pbkdf2 -iter 250000 \
             -in "${RUNNER_TEMP}/encrypted-backup/memphis-zoo-backup.tar.gz.enc" \
@@ -116,7 +130,9 @@ jobs:
             "$archive_format" "$source_commit" "$source_tree" "$migration_head" >> "$receipt"
           docker pull "$image"
           if test "$REHEARSAL_SCOPE" = full_candidate; then docker pull "$postgrest_image"; fi
-          docker run -d --name "$container" --tmpfs /var/lib/postgresql/data:rw,size=1g \
+          pg_tmpfs=1g
+          if test "$OFFICIAL_LOCAL_STORAGE_PROVIDER" = true; then test "$REHEARSAL_SCOPE" = backup_only; pg_tmpfs=2g; fi
+          docker run -d --name "$container" --tmpfs "/var/lib/postgresql/data:rw,size=$pg_tmpfs" \
             -p 127.0.0.1::5432 -e POSTGRES_PASSWORD=postgres -e PGPASSWORD=postgres \
             "$image" postgres -D /etc/postgresql \
             -c listen_addresses='*' \
@@ -154,6 +170,11 @@ jobs:
             node scripts/restore-isolated-event-owner-schema.mjs | tee -a "$receipt"
           RESTORE_SOURCE_DIR="$backup_dir" SUPABASE_DB_URL="$local_db_url" \
             npm run --silent restore:prepare-isolated | tee -a "$receipt"
+          restore_command=(npm run --silent restore:verify)
+          if test "$OFFICIAL_LOCAL_STORAGE_PROVIDER" = true; then
+            test "$REHEARSAL_SCOPE" = backup_only
+            restore_command=(node scripts/run-official-local-storage-rehearsal.mjs)
+          fi
           intent_key="$(openssl rand -hex 32)"
           intent_key_id="isolated-rehearsal-${GITHUB_RUN_ID}"
           intent_file="${RUNNER_TEMP}/isolated-restore-intent.json"
@@ -166,9 +187,9 @@ jobs:
             RESTORE_ARCHIVE_VERIFY_KEY="$RESTORE_ARCHIVE_VERIFY_KEY" RESTORE_ARCHIVE_VERIFY_KEY_ID="$RESTORE_ARCHIVE_VERIFY_KEY_ID" \
             RESTORE_INTENT_VERIFY_KEY="$intent_key" RESTORE_INTENT_VERIFY_KEY_ID="$intent_key_id" \
             RESTORE_INTENT_JSON="$(<"$intent_file")" \
-            npm run --silent restore:verify | tee "${RUNNER_TEMP}/backup-only-owned-restore-result.json" -a "$receipt"
+            "${restore_command[@]}" | tee "${RUNNER_TEMP}/backup-only-owned-restore-result.json" -a "$receipt"
           if test "$REHEARSAL_SCOPE" = backup_only; then
-            node scripts/production-backup-rehearsal-scope.mjs restore-result | tee -a "$receipt"
+            if test "$OFFICIAL_LOCAL_STORAGE_PROVIDER" != true; then node scripts/production-backup-rehearsal-scope.mjs restore-result | tee -a "$receipt"; fi
             exit 0
           fi
           # Diagnostic target_capture stops on its NEW copy before any resolve/unpause.
@@ -178,6 +199,21 @@ jobs:
               RESTORE_REHEARSAL_EXPECTED_ARCHIVE_DIGEST="$archive_digest" \
               node scripts/export-isolated-pre-reconcile-metadata.mjs | tee -a "$receipt"
             exit 78 # Defensive: helper normally returns78 after durable metadata export.
+          fi
+          if test "$REHEARSAL_SCOPE" = reviewed_target_capture; then
+            RESTORE_SOURCE_DIR="$backup_dir" SUPABASE_DB_URL="$local_db_url" RESTORE_REHEARSAL_EXPECTED_ARCHIVE_DIGEST="$archive_digest" \
+              node scripts/export-isolated-pre-reconcile-metadata.mjs --reviewed-target-capture | tee -a "$receipt"
+            rj="${RUNNER_TEMP}/target-capture-reviewed-resolutions.json"
+            ri="${RUNNER_TEMP}/target-capture-signed-reconciliation.json"
+            export SUPABASE_DB_URL="$local_db_url" SUPABASE_PROJECT_REF="$project_ref"
+            export RESTORE_RECONCILIATION_NAMED_ACTOR='Root reviewed isolated target capture'
+            export RESTORE_RECONCILIATION_SIGNING_KEY="$intent_key" RESTORE_RECONCILIATION_SIGNING_KEY_ID="$intent_key_id"
+            RESTORE_RECONCILIATION_RESOLUTIONS_JSON="$(<"$rj")" npm run --silent restore:reconciliation:create > "$ri"
+            RESTORE_RECONCILIATION_CONFIRM_PROJECT_REF="$project_ref" RESTORE_RECONCILIATION_VERIFY_KEY="$intent_key" RESTORE_RECONCILIATION_VERIFY_KEY_ID="$intent_key_id" RESTORE_RECONCILIATION_JSON="$(<"$ri")" \
+              npm run --silent restore:reconciliation:apply | tee -a "$receipt"
+            RESTORE_SOURCE_DIR="$backup_dir" node scripts/verify-isolated-source-lease-state.mjs | tee -a "$receipt"
+            node scripts/run-release-migration-target-capture.mjs "$backup_dir" "$container" "$port" | tee -a "$receipt"
+            exit 0
           fi
           RESTORE_REHEARSAL_ACCEPT_EMPTY_TARGET=true RESTORE_REHEARSAL_EXPECTED_ARCHIVE_DIGEST="$archive_digest" \
             SUPABASE_DB_URL="$local_db_url" npm run --silent restore:reconcile-isolated | tee -a "$receipt"
@@ -200,7 +236,7 @@ jobs:
             npm run --silent test:schema-fingerprint | tee -a "$receipt"
           target_migration_head="$(jq -r '.target.source_migration_version' release/production-migration-state.json)"
           target_migration_count="$(jq -r '.target.production_ledger_count' release/production-migration-state.json)"
-          target_fingerprint="$(tr -d '\r\n' < supabase/canonical/schema-fingerprint.txt)"
+          target_fingerprint="$(jq -er '.target.canonical_source_schema_fingerprint | select(test("^[0-9a-f]{64}$"))' release/production-migration-state.json)"
           echo ' target-ledger-head'
           test "$(docker exec "$container" psql -v ON_ERROR_STOP=1 -At -U supabase_admin -d "$database" \
             -c 'select max(version)::text from supabase_migrations.schema_migrations;' | tail -n 1)" = "$target_migration_head"
@@ -289,7 +325,7 @@ jobs:
           bash scripts/wait-rehearsal-json-endpoint.sh 'http://127.0.0.1:31871/healthz' \
             '.ok == true and .process_alive == true and .probe_scope == "process_liveness"'
           bash scripts/verify-isolated-rehearsal-backend-dependencies.sh \
-            'http://127.0.0.1:31871/health/dependencies' "$backend_dependencies_file" "$target_fingerprint"
+            'http://127.0.0.1:31871/health/dependencies' "$backend_dependencies_file" "$(tr -d '\r\n' < supabase/canonical/schema-fingerprint.txt)"
           bash scripts/wait-rehearsal-json-endpoint.sh 'http://127.0.0.1:31872/healthz' \
             '.ok == true and .data.process_ready == true'
           bash scripts/wait-rehearsal-json-endpoint.sh 'http://127.0.0.1:31872/ready' \
@@ -325,7 +361,7 @@ jobs:
           printf '{"stage":"exact_application_pair_recovered","backend_liveness":true,"backend_dependencies_http_status":503,"backend_dependency_invariants_ready":true,"backend_device_credentials_intentionally_revoked":true,"backend_device_credential_reason":"no_active_device_credentials","static_liveness":true,"static_readiness":true,"postgrest_ready":true,"feedback_first_http_status":201,"feedback_replay_http_status":200,"canonical_feedback_write_rows":1,"canonical_http_replay_returned_existing":true,"active_mutation_leases":0,"expired_mutation_leases":%s}\n' "$expired_mutation_leases" >> "$receipt"
           completed_at="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
           printf '{"ok":true,"backup_run_id":"%s","archive_digest":"%s","source_commit":"%s","source_tree":"%s","source_migration_head":"%s","source_migration_count":%s,"source_migration_ledger_sha256":"%s","source_catalog_fingerprint":"%s","target_migration_head":"%s","target_migration_count":%s,"target_catalog_fingerprint":"%s","active_mutation_leases":0,"expired_mutation_leases":0,"authority_health":true,"direct_dml_denied":true,"live_production_reads":0,"completed_at":"%s"}\n' \
-            '${{ inputs.backup_run_id }}' "$archive_digest" "$source_commit" "$source_tree" "$migration_head" "$source_migration_count" "$source_migration_ledger_sha256" "$source_catalog_fingerprint" "$target_migration_head" "$target_migration_count" "$target_fingerprint" "$completed_at" >> "$receipt"
+            "$BACKUP_RUN_ID" "$archive_digest" "$source_commit" "$source_tree" "$migration_head" "$source_migration_count" "$source_migration_ledger_sha256" "$source_catalog_fingerprint" "$target_migration_head" "$target_migration_count" "$target_fingerprint" "$completed_at" >> "$receipt"
       - name: Sign exact rehearsal run provenance
         if: inputs.rehearsal_scope == 'full_candidate'
         env:
@@ -338,6 +374,7 @@ jobs:
         with:
           name: production-backup-migration-rehearsal-${{ github.run_id }}
           path: |
+            ${{ runner.temp }}/official-local-storage-provider-evidence/
             ${{ runner.temp }}/production-backup-migration-rehearsal.jsonl
             ${{ runner.temp }}/target-capture-pre-reconcile-discrepancies.json
             ${{ runner.temp }}/production-migration-target-capture.json
