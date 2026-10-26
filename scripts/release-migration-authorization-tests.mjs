@@ -5,16 +5,18 @@ import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { promisify } from "node:util";
 import {
   archiveSignatureBinding,
   releaseMigrationAuthorizationBinding,
   releaseMigrationRehearsalAttestationBinding,
   signBinding,
+  stableJson,
   stableJsonFile,
   verifyBinding,
 } from "./disaster-recovery-crypto.mjs";
+import { releaseMigrationPlanIdentity, resolveReleaseMigrationSource } from "./production-forward-source.mjs";
 
 const execFileAsync = promisify(execFile);
 const root = resolve(new URL("..", import.meta.url).pathname);
@@ -181,6 +183,61 @@ try {
   assert.equal(envelope.intent.rehearsal.workflow_sha, candidateCommit);
   assert.match(envelope.intent.rehearsal.attestation_sha256, /^[0-9a-f]{64}$/);
   assert.equal(verifyBinding(releaseMigrationAuthorizationBinding(envelope.intent), envelope.signature, key), true);
+  // The normal producer's actual signed output must match the same current
+  // mixed canonical/explicit-forward identity consumed by the executor.
+  const canonicalItem = state.pending_migrations.find(item => !item.forward_source);
+  const forwardItem = state.pending_migrations.find(item => item.forward_source);
+  assert.ok(canonicalItem && forwardItem, "current plan must exercise canonical and explicit forward SQL");
+  const expectedPlanSha256 = sha256(stableJson(releaseMigrationPlanIdentity(state.pending_migrations)));
+  assert.equal(envelope.intent.pending_migration_plan_sha256, expectedPlanSha256,
+    "normal authorization and executor must bind the same complete current plan");
+  const strippedLegacyPlan = state.pending_migrations.map(({order,source_migration_version,file,sha256}) =>
+    ({order,source_migration_version,file,sha256}));
+  assert.notEqual(sha256(stableJson(strippedLegacyPlan)), expectedPlanSha256,
+    "dropping explicit forward-source counterparts must change the signed current plan");
+  assert.deepEqual(releaseMigrationPlanIdentity([canonicalItem]),
+    [{order:canonicalItem.order,source_migration_version:canonicalItem.source_migration_version,
+      file:canonicalItem.file,sha256:canonicalItem.sha256}], "canonical-only identity remains literal");
+  for (const [name, mutate] of [
+    ["executed SQL digest", item => { item.sha256 = "0".repeat(64); }],
+    ["canonical preimage digest", item => { item.forward_source.canonical_sha256 = "0".repeat(64); }],
+    ["forward counterpart identity", item => { item.forward_source.file += ".changed"; }],
+  ]) {
+    const changedPlan = structuredClone(state.pending_migrations);
+    mutate(changedPlan.find(item => item.forward_source));
+    const changedDigest = sha256(stableJson(releaseMigrationPlanIdentity(changedPlan)));
+    assert.notEqual(changedDigest, expectedPlanSha256, name + " is covered by the complete identity");
+    const alteredIntent = {...envelope.intent,pending_migration_plan_sha256:changedDigest};
+    assert.equal(verifyBinding(releaseMigrationAuthorizationBinding(alteredIntent), envelope.signature, key), false,
+      name + " cannot reuse the valid original authorization signature");
+  }
+  // Actual maintained resolver validates full owning source bytes, not just
+  // an identity helper or a hand-written equivalent. Mutate private copies.
+  assert.equal(resolveReleaseMigrationSource(root, canonicalItem).canonical_sha256, canonicalItem.sha256);
+  assert.equal(resolveReleaseMigrationSource(root, forwardItem).canonical_sha256, forwardItem.forward_source.canonical_sha256);
+  const sourceRoot = join(work, "exact-current-source-counterpart");
+  const sourceFiles = new Set(["release/production-forward-source/manifest.json",
+    "supabase/migrations/" + canonicalItem.file, "supabase/migrations/" + forwardItem.file,
+    forwardItem.forward_source.file]);
+  for (const name of sourceFiles) {
+    const file = join(sourceRoot, name);mkdirSync(dirname(file), {recursive:true,mode:0o700});
+    writeFileSync(file, readFileSync(join(root, name)), {flag:"wx",mode:0o600});
+  }
+  assert.equal(resolveReleaseMigrationSource(sourceRoot, forwardItem).canonical_sha256, forwardItem.forward_source.canonical_sha256);
+  for (const [name, message] of [
+    ["supabase/migrations/" + forwardItem.file, /Canonical source preimage changed/],
+    [forwardItem.forward_source.file, /Executed forward-source bytes changed/],
+  ]) {
+    const file = join(sourceRoot, name), originalBytes = readFileSync(file);
+    try {
+      writeFileSync(file, Buffer.concat([originalBytes,Buffer.from("\n-- private test counterpart tamper\n")]));
+      assert.throws(() => resolveReleaseMigrationSource(sourceRoot, forwardItem), message);
+    } finally { writeFileSync(file, originalBytes); }
+  }
+  assert.throws(() => resolveReleaseMigrationSource(sourceRoot, {...forwardItem,sha256:"0".repeat(64)}),
+    /Plan digest must identify actual executed SQL/);
+  assert.throws(() => resolveReleaseMigrationSource(sourceRoot,
+    {...forwardItem,forward_source:{...forwardItem.forward_source,file:forwardItem.forward_source.file + ".changed"}}));
   writeReceipt({ provenanceKind: "task-local" });
   await writeAttestation({ provenanceKind: "task-local" });
   const localEnvelope = JSON.parse((await createAuthorization()).stdout);

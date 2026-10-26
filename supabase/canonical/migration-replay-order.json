@@ -1188,6 +1188,10 @@
         {
           "name": "20261025124437_manager_completion_evidence_opaque_session_domain.sql",
           "sha256": "ef296210e35b3e6b0118d0ca84bee0db6152b039547960bc05803cfd320c77a8"
+        },
+        {
+          "name": "20261026065000_location_scan_state_qualified_lookup.sql",
+          "sha256": "ca79547cd57ef3f8b3436e846bd4ed57581ea17be2d57701c72d1e45646591db"
         }
       ]
     }

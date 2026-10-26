@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import assert from "node:assert/strict";
+import {resolveReleaseSchemaTarget} from './production-target-schema-profile.mjs';
 
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync, lstatSync } from "node:fs";
@@ -99,10 +101,12 @@ function firstTextDifference(expected,actual){
 }
 if(targetPreflightOnly){
   const releaseState=JSON.parse(readFileSync(resolve(root,"release/production-migration-state.json"),"utf8"));
+  const schemaTarget=resolveReleaseSchemaTarget(root);
   const canonicalExpected=readFileSync(hashPath,"utf8").trim();
+  assert.equal(canonicalExpected,schemaTarget.canonicalFingerprint);
   const releaseExpected=String(releaseState.target?.canonical_source_schema_fingerprint||"");
-  if(!/^[0-9a-f]{64}$/.test(canonicalExpected)||releaseExpected!==canonicalExpected)throw new Error("Release target schema fingerprint is invalid or differs from the canonical target.");
-  if(fingerprint!==canonicalExpected)throw new Error(`Restored post-migration database fingerprint ${fingerprint} differs from canonical target ${canonicalExpected}.`);
+  if(!/^[0-9a-f]{64}$/.test(canonicalExpected)||releaseExpected!==schemaTarget.deploymentFingerprint)throw new Error("Release raw target schema fingerprint is invalid or differs from the declared deployment target.");
+  if(fingerprint!==schemaTarget.deploymentFingerprint)throw new Error(`Restored post-migration database fingerprint ${fingerprint} differs from declared deployment target ${schemaTarget.deploymentFingerprint}.`);
 }else if(observedProductionPreflightOnly){
   const releaseState=JSON.parse(readFileSync(resolve(root,"release/production-migration-state.json"),"utf8"));
   const expected=String(releaseState.observed_production?.catalog_privilege_fingerprint||"");
