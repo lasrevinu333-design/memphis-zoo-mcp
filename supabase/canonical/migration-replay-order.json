@@ -770,7 +770,7 @@
         },
         {
           "name": "20261002110000_event_impact_preview_and_custodial_notes.sql",
-          "sha256": "385c296e8353e493a4fa483f7cfaaff1a8106a834c25e684264dae61ff78a078"
+          "sha256": "a85957778f111e3a64c4ba43be58db8b30e1c5293cd5adad5884d331b4d937ee"
         },
         {
           "name": "20261002120000_october_dated_recovery_inventory_rebind.sql",
@@ -782,7 +782,7 @@
         },
         {
           "name": "20261002140000_event_supersession_and_chicago_instants.sql",
-          "sha256": "e0eccd95d775c0a1e2c829ea50010cb0ca5bdf4b2eb8b3535f43508732fffdb5"
+          "sha256": "2e8ca5217c668daefe81ead57a28ad2c2cfb6671cc976b0f39d8894240cdc14a"
         },
         {
           "name": "20261002150000_feedback_delivery_readback.sql",
@@ -894,7 +894,7 @@
         },
         {
           "name": "20261003220000_current_release_authority_completion.sql",
-          "sha256": "8d8d60f1b10427f5c184488a9faa5e4f4bbb9ac2f11526ff921bb8c2eac70898"
+          "sha256": "ad0bcc43d23d7b72935ed464490ec3cc44c73ed64436c15ac3f2520c02c1dc58"
         },
         {
           "name": "20261003230000_static_weekly_named_handoff_derivation.sql",

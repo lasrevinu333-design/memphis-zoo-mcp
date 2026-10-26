@@ -196,7 +196,7 @@ begin
   end if;
   if orders=array[201743,201744,202132,202133,202134,202135] and
     (to_regprocedure('public.custodial_outlook_event_sync_v1(text,jsonb)') is null or
-     public.static_weekly_digest_text(pg_get_functiondef('public.custodial_outlook_event_sync_v1(text,jsonb)'::regprocedure))
+     public.static_weekly_digest_text(pg_get_functiondef(to_regprocedure('public.custodial_outlook_event_sync_v1(text,jsonb)')))
       is distinct from '943393c799426d0430a44b0056db6b292d171f5e637c66f059fac4beff65a067') then
     raise exception 'Current Event column order has no admitted Shared Events prefix';
   end if;

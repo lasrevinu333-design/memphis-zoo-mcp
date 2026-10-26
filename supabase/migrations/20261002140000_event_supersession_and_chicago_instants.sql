@@ -21,7 +21,7 @@ begin
  end loop;
  if present not in (0,2) then raise exception 'Shared Event field pair is incomplete';end if;
  if present=2 and (to_regprocedure('public.custodial_outlook_event_sync_v1(text,jsonb)') is null or
-  encode(extensions.digest(convert_to(pg_get_functiondef('public.custodial_outlook_event_sync_v1(text,jsonb)'::regprocedure),'UTF8'),'sha256'),'hex')
+  encode(extensions.digest(convert_to(pg_get_functiondef(to_regprocedure('public.custodial_outlook_event_sync_v1(text,jsonb)')),'UTF8'),'sha256'),'hex')
    is distinct from '943393c799426d0430a44b0056db6b292d171f5e637c66f059fac4beff65a067') then
   raise exception 'Existing shared Event fields are not from the admitted Outlook writer';
  end if;

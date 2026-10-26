@@ -28,7 +28,7 @@ export const nativeTextColumnProjection=(names,alias)=>`pg_catalog.json_object(A
 const tableKey=t=>t.schema+'.'+t.name;
 export function loadOriginal235PreservationSource(backendRoot){
  const file=join(backendRoot,'release/production-data-preservation/original-235.json'),raw=fs.readFileSync(file);
- assert.equal(sha(raw),'03518824ef623a37bc09297131a80b2adf3b53f8cffe5dbb10c29e3a59974ad2');
+ assert.equal(sha(raw),'17c568c086f6d820d07680bb38d9e3983e1ce73d5e7e3e270fff9f4fa982db4c');
  const m=JSON.parse(raw);assert.equal(m.schema,'custodial.original235-data-preservation-source.v1');
  assert.equal(m.project_ref,'rqquvtjdmugpigbndmne');assert.equal(m.production_authorized,false);
  assert.equal(m.tables.length,182);assert.equal(m.plan.length,159);assert.equal(new Set(m.tables.map(tableKey)).size,182);

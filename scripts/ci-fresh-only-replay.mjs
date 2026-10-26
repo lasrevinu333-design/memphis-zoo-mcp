@@ -5,7 +5,7 @@ import { resolve, relative, sep } from 'node:path';
 
 // Explicit scoped fresh-only construction. This is not vendor NORMAL,
 // ledger adoption, production replay, or a substitute for downstream checks.
-const MANIFEST_SHA = 'b9b8593a27e11a53beb81d4905d40c9a74e78e0fee5cf26403c03323ac3bf9da';
+const MANIFEST_SHA = 'cc9db65f462b534f11a6bd882cdb21ea2507b13881b1c2e8d96646f632e1548c';
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 export function loadCiFreshOnlyReplay(root, image, names) {
   const frozen = new Map();

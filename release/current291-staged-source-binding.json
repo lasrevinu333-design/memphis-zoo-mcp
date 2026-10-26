@@ -1063,7 +1063,7 @@
       "phase": "event_impact_preview_and_custodial_notes",
       "file": "20261002110000_event_impact_preview_and_custodial_notes.sql",
       "source_migration_version": "20261002110000",
-      "sha256": "385c296e8353e493a4fa483f7cfaaff1a8106a834c25e684264dae61ff78a078"
+      "sha256": "a85957778f111e3a64c4ba43be58db8b30e1c5293cd5adad5884d331b4d937ee"
     },
     {
       "order": 57,
@@ -1084,7 +1084,7 @@
       "phase": "event_supersession_and_chicago_instants",
       "file": "20261002140000_event_supersession_and_chicago_instants.sql",
       "source_migration_version": "20261002140000",
-      "sha256": "e0eccd95d775c0a1e2c829ea50010cb0ca5bdf4b2eb8b3535f43508732fffdb5"
+      "sha256": "2e8ca5217c668daefe81ead57a28ad2c2cfb6671cc976b0f39d8894240cdc14a"
     },
     {
       "order": 60,
@@ -1280,7 +1280,7 @@
       "phase": "current_release_authority_completion",
       "file": "20261003220000_current_release_authority_completion.sql",
       "source_migration_version": "20261003220000",
-      "sha256": "8d8d60f1b10427f5c184488a9faa5e4f4bbb9ac2f11526ff921bb8c2eac70898"
+      "sha256": "ad0bcc43d23d7b72935ed464490ec3cc44c73ed64436c15ac3f2520c02c1dc58"
     },
     {
       "order": 88,
@@ -1501,13 +1501,13 @@
     }
   ],
   "current_replay_manifest": {
-    "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/inventory-ack/backend-current1043-selected292-and-opaque293-generator-inputs-source03-current293-tail-assertion/after/supabase/canonical/migration-replay-order.json",
-    "sha256": "ff3bc79c2576eb4e3a72295ea92d08a74c8ac6b42a2cf3fee41c97642aa3c539",
+    "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/manager-access/Backend1098-Source26-three-SQL-null-safe-definition-guard-data-rebase-source01/current-six-release-binding-counterparts-final04/after/supabase/canonical/migration-replay-order.json",
+    "sha256": "4300e07bd609ac0fe916dec01ecbbed94617bb8a7279a644a5d7e755bd7b6e3e",
     "bytes": 55656
   },
   "current_forward_manifest": {
-    "path": "/home/eric/Documents/Codex/2026-09-13/i-x20/work/autonomous-repair-20260923/overnight-readiness-20261006/lean-held-correction-integration-20261011/backend/release/production-forward-source/manifest.json",
-    "sha256": "40f867a9c07e9591909a31ea5c15d3d4afc2adfdd3617753d4dfbff2f8d99689",
+    "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/manager-access/Backend1098-Source26-three-SQL-null-safe-definition-guard-data-rebase-source01/current-six-release-binding-counterparts-final04/after/release/production-forward-source/manifest.json",
+    "sha256": "978baf0f9055defbd35baab787af9f5e189b7028103f5b79367c70351559c18f",
     "bytes": 12217
   },
   "C10_context_only": {

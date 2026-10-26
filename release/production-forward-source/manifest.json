@@ -22,9 +22,9 @@
     },
     {
       "canonical_file": "20261003220000_current_release_authority_completion.sql",
-      "canonical_sha256": "8d8d60f1b10427f5c184488a9faa5e4f4bbb9ac2f11526ff921bb8c2eac70898",
+      "canonical_sha256": "ad0bcc43d23d7b72935ed464490ec3cc44c73ed64436c15ac3f2520c02c1dc58",
       "forward_file": "release/production-forward-source/20261003220000_current_release_authority_completion.sql",
-      "forward_sha256": "90e31443af8e2b2ba563c7a965d7a6afeba37f8cb67d2d4ff333034066c88a33",
+      "forward_sha256": "2121d2b2dbedc40b6345bcefcaf3f4cf7ed4ec22617c54f727a405c9e5a93332",
       "profile": "existing-postgres-owner"
     },
     {

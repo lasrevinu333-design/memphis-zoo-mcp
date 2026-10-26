@@ -560,7 +560,7 @@
       {
         "path": "release/current291-staged-source-binding.json",
         "mode": "100644",
-        "object_id": "91fe8589833f2c3bf362e355365d3ecb7b932209"
+        "object_id": "1fa768bd61ede75af698f9eeb8634907bf654122"
       },
       {
         "path": "release/disaster-recovery-runtime-contract.json",
@@ -575,7 +575,7 @@
       {
         "path": "release/fresh-only-replay/MANIFEST.json",
         "mode": "100644",
-        "object_id": "0b649182a556db88c9ad71b986f057ecd5987617"
+        "object_id": "fc9a1e097a737dbe26d580fc83d5afb61821b103"
       },
       {
         "path": "release/fresh-only-replay/SELECTED_PROFILE.json",
@@ -730,7 +730,7 @@
       {
         "path": "release/production-data-preservation/original-235.json",
         "mode": "100644",
-        "object_id": "45f95e3d422e4261c4a7c4e2b9d785fa4bf0a1fd"
+        "object_id": "9794c30510673cf80ba70a3a0126c067b487352a"
       },
       {
         "path": "release/production-forward-source/20261002090000_manager_issue_outcomes.sql",
@@ -745,7 +745,7 @@
       {
         "path": "release/production-forward-source/20261003220000_current_release_authority_completion.sql",
         "mode": "100644",
-        "object_id": "37749d49a535d5c39505a331cb7025b65956c7e3"
+        "object_id": "b5005219c3751e01dc02a72ccda6eb15afe1fa6e"
       },
       {
         "path": "release/production-forward-source/20261006190426_manager_scheduler_recovery_binding.sql",
@@ -870,12 +870,12 @@
       {
         "path": "release/production-forward-source/manifest.json",
         "mode": "100644",
-        "object_id": "34d6d89b3d0c1568521d84e0eb63086db15e09eb"
+        "object_id": "90d157d8fe0710761af082b43bf0f0b90204c5df"
       },
       {
         "path": "release/production-migration-state.json",
         "mode": "100644",
-        "object_id": "ad4e553fa14dac708d0c9a754adf6291be977f9f"
+        "object_id": "c93c617856f1057d9ce88643b2429ae7c1125826"
       },
       {
         "path": "release/production-schema-observation-20260922.json",
@@ -930,7 +930,7 @@
       {
         "path": "scripts/apply-release-migration-plan.mjs",
         "mode": "100644",
-        "object_id": "f9bb4fe3951e5d50a84b8c6128e955588fe713a7"
+        "object_id": "a5569dce901edcd8bdf0eb180fcfdd358a22a1bc"
       },
       {
         "path": "scripts/assigned-activation-transport-database-tests.mjs",
@@ -1015,12 +1015,12 @@
       {
         "path": "scripts/ci-fresh-only-replay.mjs",
         "mode": "100644",
-        "object_id": "7bbd4d21db3e09f0bb7f982b5f5f86a4a95f8a58"
+        "object_id": "fd5019ef8dae89794d412d1c44c04922e2db2c8b"
       },
       {
         "path": "scripts/ci-workflow-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "145689d43ab05d39cbfe66e0a400bec4ff0d8774"
+        "object_id": "eccc017e0ff16802d562d1ce572e75e6a1f03371"
       },
       {
         "path": "scripts/cleaning-identity-gps-database-tests.mjs",
@@ -1580,7 +1580,7 @@
       {
         "path": "scripts/isolated-release-data-preservation.mjs",
         "mode": "100644",
-        "object_id": "d63332145461d4eae0e20d56ccfdf082334b005f"
+        "object_id": "3521a209127aa82e9e1d8f509ba13cbfe720edc8"
       },
       {
         "path": "scripts/isolated-restore-lease-shim-tests.mjs",
@@ -1935,7 +1935,7 @@
       {
         "path": "scripts/production-forward-source.mjs",
         "mode": "100644",
-        "object_id": "39c066c90536d514275a2f5fd3d5094cd381a5cc"
+        "object_id": "dc7758bf82d5a33a2cd36f538c91eeeb6d6d5d63"
       },
       {
         "path": "scripts/production-release-deployment-recorder-tests.mjs",
@@ -2100,12 +2100,12 @@
       {
         "path": "scripts/release-migration-target-capture.mjs",
         "mode": "100644",
-        "object_id": "2c6611904262d60718b19feef7566a9e80d797ef"
+        "object_id": "8b68006e5360fd27423fa4c6821dbae7750a441d"
       },
       {
         "path": "scripts/release-migration-target-refusal.mjs",
         "mode": "100644",
-        "object_id": "98ac5dbf63ac35da28c3971e98bbb4da395658b9"
+        "object_id": "c99dc05c348a5e07c20f3fafe63990b2b69e5528"
       },
       {
         "path": "scripts/release-migration-workflow-preflight.mjs",
@@ -3530,7 +3530,7 @@
       {
         "path": "supabase/canonical/migration-replay-order.json",
         "mode": "100644",
-        "object_id": "b25c8dd6276c572413f0e0eddd1fa8dbf0d13fb7"
+        "object_id": "48b403e308712dc1cb79abccc7d3f054659648d1"
       },
       {
         "path": "supabase/canonical/production-schema-fingerprint-input.json",
@@ -5075,7 +5075,7 @@
       {
         "path": "supabase/migrations/20261002110000_event_impact_preview_and_custodial_notes.sql",
         "mode": "100644",
-        "object_id": "ec30d43f862c2a310d907baaa7368ca76745df4d"
+        "object_id": "9f797104af60dd0a00c25369b0efb89403d12304"
       },
       {
         "path": "supabase/migrations/20261002120000_october_dated_recovery_inventory_rebind.sql",
@@ -5090,7 +5090,7 @@
       {
         "path": "supabase/migrations/20261002140000_event_supersession_and_chicago_instants.sql",
         "mode": "100644",
-        "object_id": "cde1a951c1fb7b9c60b370241700aa39d4832872"
+        "object_id": "54e32c125538eca2190f10bc82100d1e55c450ea"
       },
       {
         "path": "supabase/migrations/20261002150000_feedback_delivery_readback.sql",
@@ -5230,7 +5230,7 @@
       {
         "path": "supabase/migrations/20261003220000_current_release_authority_completion.sql",
         "mode": "100644",
-        "object_id": "8977b8f98fd5a031c50c0c8cc4015a5654b4ddb0"
+        "object_id": "19c5fe7e1785fdd929d7ef54c7141610db8c7cbb"
       },
       {
         "path": "supabase/migrations/20261003230000_static_weekly_named_handoff_derivation.sql",

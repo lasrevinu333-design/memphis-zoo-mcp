@@ -71,7 +71,7 @@
     "kind": "external_exact_head_release_attestation",
     "rule": "Use the byte-bound293 canonical Source sequence with the exact134-source installed authority prefix preserved and159 declared pending members, in the existing explicit production-forward-source order/profile. Every one of the159 pending ledger versions must be absent, including older timestamped versions; current connected ledger235/head20261021111917 is a distinct observed ledger fact, not permission to replay historical statements. Preserve all original canonical preimages and installed Owner/Events/CoverAll bytes and documented aliases. Current complete source catalog and actual populated293 target catalog/count/function/ledger facts remain unresolved NULL. Signed fresh backup, full populated restore/rehearsal, row/store preservation, exact Source-bound authorization and unchanged release/runtime/physical gates remain mandatory. Fresh-only C10 and other historical NORMAL profiles are comparison context only and cannot supply production SQL or populated compatibility. The prior118/352/Isolated252 prose is retained only in historical_Source05_current_prose, never as current authorization.",
     "source_replay_manifest": "supabase/canonical/migration-replay-order.json",
-    "source_replay_manifest_sha256": "ff3bc79c2576eb4e3a72295ea92d08a74c8ac6b42a2cf3fee41c97642aa3c539",
+    "source_replay_manifest_sha256": "4300e07bd609ac0fe916dec01ecbbed94617bb8a7279a644a5d7e755bd7b6e3e",
     "source_prefix_commit": "b227a0a99e627224ec5948c18a914b48f461f0fe",
     "current291_preparation": {
       "state": "SOURCE_ONLY_POPULATED_TARGET_CAPTURE_REQUIRED_NO_APPLY_AUTHORITY",
@@ -537,7 +537,7 @@
       "phase": "event_impact_preview_and_custodial_notes",
       "file": "20261002110000_event_impact_preview_and_custodial_notes.sql",
       "source_migration_version": "20261002110000",
-      "sha256": "385c296e8353e493a4fa483f7cfaaff1a8106a834c25e684264dae61ff78a078"
+      "sha256": "a85957778f111e3a64c4ba43be58db8b30e1c5293cd5adad5884d331b4d937ee"
     },
     {
       "order": 57,
@@ -565,7 +565,7 @@
       "phase": "event_supersession_and_chicago_instants",
       "file": "20261002140000_event_supersession_and_chicago_instants.sql",
       "source_migration_version": "20261002140000",
-      "sha256": "e0eccd95d775c0a1e2c829ea50010cb0ca5bdf4b2eb8b3535f43508732fffdb5"
+      "sha256": "2e8ca5217c668daefe81ead57a28ad2c2cfb6671cc976b0f39d8894240cdc14a"
     },
     {
       "order": 60,
@@ -761,13 +761,13 @@
       "phase": "current_release_authority_completion",
       "file": "20261003220000_current_release_authority_completion.sql",
       "source_migration_version": "20261003220000",
-      "sha256": "90e31443af8e2b2ba563c7a965d7a6afeba37f8cb67d2d4ff333034066c88a33",
+      "sha256": "2121d2b2dbedc40b6345bcefcaf3f4cf7ed4ec22617c54f727a405c9e5a93332",
       "forward_source": {
         "schema": "custodial.production-forward-source-binding.v1",
         "profile": "existing-postgres-owner",
-        "canonical_sha256": "8d8d60f1b10427f5c184488a9faa5e4f4bbb9ac2f11526ff921bb8c2eac70898",
+        "canonical_sha256": "ad0bcc43d23d7b72935ed464490ec3cc44c73ed64436c15ac3f2520c02c1dc58",
         "file": "release/production-forward-source/20261003220000_current_release_authority_completion.sql",
-        "sha256": "90e31443af8e2b2ba563c7a965d7a6afeba37f8cb67d2d4ff333034066c88a33"
+        "sha256": "2121d2b2dbedc40b6345bcefcaf3f4cf7ed4ec22617c54f727a405c9e5a93332"
       }
     },
     {

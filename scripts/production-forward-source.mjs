@@ -24,7 +24,7 @@ const admitted=new Map([
  ['20261008135429_native_schedule_source_discovery.sql','cacc3ca2a86e0028bee8c8013f9e65ee68e96edf78ab0ee0005b2cfdbdb121ce'],
  ['20261008142316_native_schedule_preparation_source.sql','266cfdb8e28f87ec5bfe2aa5d62d8cb70375fc219df13602043fe0c0a5d64df0'],
  ['20261011214943_custodial_feedback_triage_receipt_reader.sql','88ca748da7713fd87502675663e34144ea6dea925a29cedd5d358cfbf55c139b'],
- ['20261003220000_current_release_authority_completion.sql','8d8d60f1b10427f5c184488a9faa5e4f4bbb9ac2f11526ff921bb8c2eac70898'],
+ ['20261003220000_current_release_authority_completion.sql','ad0bcc43d23d7b72935ed464490ec3cc44c73ed64436c15ac3f2520c02c1dc58'],
  ['20261006190426_manager_scheduler_recovery_binding.sql','7a57b1b3607d27bd298646f72bc65917cb522e26a2c6169bb610ec79500c6209'],
  ['20261015040830_same_original_retained_completion_read.sql','ecb708c726535401ddf085d122c54bfad1e58b6322c17c0c89af7c234b046c3d'],
  ['20261017225101_approved_static_dated_original_materialization.sql','2526dde3e55268da83ba43c8ce30c61c5f1a8c83df50aae85d557c517c383418'],

@@ -35,7 +35,7 @@ const postgresPinSources = [
 const qualifiedFreshReplayImage = "public.ecr.aws/supabase/postgres@sha256:28f0e16a019e648089fc1a6d333549a55548f6019c15ae4bd7cd58b989027518";
 const qualifiedFreshReplayManifestBytes = readFileSync(resolve(root, "release/fresh-only-replay/MANIFEST.json"));
 assert.equal(createHash("sha256").update(qualifiedFreshReplayManifestBytes).digest("hex"),
-  "b9b8593a27e11a53beb81d4905d40c9a74e78e0fee5cf26403c03323ac3bf9da",
+  "cc9db65f462b534f11a6bd882cdb21ea2507b13881b1c2e8d96646f632e1548c",
   "fresh-only replay must retain the exact qualified293 selection with21 overrides");
 const qualifiedFreshReplayManifest = JSON.parse(qualifiedFreshReplayManifestBytes);
 assert.equal(qualifiedFreshReplayManifest.image, qualifiedFreshReplayImage);
