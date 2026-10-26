@@ -552,9 +552,29 @@ export function authenticateOpsAccessRequest(req, { env = process.env, now = new
   return { ok: false, status: 401, error: "Ops Manager authentication required." };
 }
 
-export function makeOpsAccessMiddleware({ env = process.env, requireWrite = false, trustedDeviceStore = null, supabase = null, requireTrustedDeviceStore = true, requireCurrentManagerAssociation = true } = {}) {
+function awaitReadOnlyAuthWithSignal(work, signal) {
+  if (!signal) return work();
+  if (signal.aborted) return Promise.reject(signal.reason || new Error("Manager request expired."));
+  let onAbort;
+  const aborted = new Promise((_, reject) => {
+    onAbort = () => reject(signal.reason || new Error("Manager request expired."));
+    signal.addEventListener("abort", onAbort, { once: true });
+    if (signal.aborted) onAbort();
+  });
+  return Promise.race([Promise.resolve().then(() => {
+    if (signal.aborted) throw signal.reason || new Error("Manager request expired.");
+    return work();
+  }), aborted]).finally(() => signal.removeEventListener("abort", onAbort));
+}
+
+export function makeOpsAccessMiddleware({ env = process.env, requireWrite = false, trustedDeviceStore = null, supabase = null, requireTrustedDeviceStore = true, requireCurrentManagerAssociation = true, operationSignalForRequest = null } = {}) {
   const store = trustedDeviceStore || createSupabaseTrustedDeviceStore(supabase);
   return async function requireOpsAccess(req, res, next) {
+    const signal = operationSignalForRequest?.(req) || null;
+    if (signal?.aborted) {
+      if (!res.headersSent && !res.writableEnded) res.status(503).json({ ok: false, code: "static_weekly_recurring_operation_deadline_exceeded", error: "Manager request expired before authentication completed." });
+      return;
+    }
     const result = authenticateOpsAccessRequest(req, { env });
     if (!result.ok) {
       res.status(result.status || 401).json({ ok: false, error: result.error || "Unauthorized" });
@@ -562,20 +582,28 @@ export function makeOpsAccessMiddleware({ env = process.env, requireWrite = fals
     }
     let session = result.session;
     try {
-      const currentState = isMapDashboardSession(session)
-        ? await verifyCurrentMapDashboardSession(session, { store })
-        : await verifySessionAgainstTrustedDeviceStore(session, {
+      const currentState = await awaitReadOnlyAuthWithSignal(() => isMapDashboardSession(session)
+        ? verifyCurrentMapDashboardSession(session, { store })
+        : verifySessionAgainstTrustedDeviceStore(session, {
             store,
             env,
             requireTrustedDeviceStore,
             requireCurrentManagerAssociation,
-          });
+          }), signal);
+      if (signal?.aborted) {
+        if (!res.headersSent && !res.writableEnded) res.status(503).json({ ok: false, code: "static_weekly_recurring_operation_deadline_exceeded", error: "Manager request expired during authentication." });
+        return;
+      }
       if (!currentState.ok) {
         res.status(currentState.status || 401).json({ ok: false, error: currentState.error || "Unauthorized" });
         return;
       }
       session = currentState.session;
     } catch (error) {
+      if (signal?.aborted) {
+        if (!res.headersSent && !res.writableEnded) res.status(503).json({ ok: false, code: "static_weekly_recurring_operation_deadline_exceeded", error: "Manager request expired during authentication." });
+        return;
+      }
       res.status(error?.status || 500).json({ ok: false, error: error?.message || "Ops Manager session verification failed." });
       return;
     }

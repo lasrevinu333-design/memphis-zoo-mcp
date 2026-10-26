@@ -1,3 +1,10 @@
+import { AsyncLocalStorage } from "node:async_hooks";
+import { types } from "node:util";
+import { MANAGER_OPERATION_MILLISECONDS, CLEANUP_RESERVE_MILLISECONDS } from "./static-weekly-manager-operation.js";
+import { withRecurringDependencyStatus } from "./static-weekly-recurring-dependency-result.js";
+import { postgresJsonbContentDigest } from "./static-weekly-schedule-compiler.js";
+import {prepareApprovedStaticTemplateProjection} from './static-weekly-recurring-staffing-adaptation.js';
+import {prepareStaticWeeklySchedulingProblem} from './static-weekly-schedule-program.js';
 /*
  * Separately deployed static-weekly scheduler control plane.
  *
@@ -30,14 +37,59 @@ import {
 
 export const STATIC_WEEKLY_CONTROL_PLANE_SCHEMA = "memphis-zoo.static-weekly-control-plane.v1";
 export const STATIC_WEEKLY_DATABASE_OPERATION_STATEMENT_TIMEOUT_MS = 120_000;
+export const STATIC_WEEKLY_MANAGER_OPERATION_DEADLINE_MS = MANAGER_OPERATION_MILLISECONDS;
+export const STATIC_WEEKLY_MANAGER_CLEANUP_RESERVE_MS = CLEANUP_RESERVE_MILLISECONDS;
 const STATIC_WEEKLY_AUTHORITY_LOCK_IDENTITY = "memphis-static-weekly-authority";
 
 const text = (value) => typeof value === "string" ? value.trim() : "";
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const fail = (code, message = code) => Object.assign(new Error(message), { code });
 
+function assertOperationActive(signal) {
+  if (signal?.aborted) {
+    const error = fail("static_weekly_recurring_operation_aborted",
+      "The recurring operation was interrupted; check its exact status before retrying.");
+    if (signal.reason instanceof Error) error.cause = signal.reason;
+    throw error;
+  }
+}
+
+function operationRemaining(deadlineAt, signal) {
+  assertOperationActive(signal);
+  const remaining = Math.floor(deadlineAt - performance.now());
+  if (remaining < 1) throw fail("static_weekly_recurring_operation_deadline_exceeded",
+    "The recurring operation exceeded its one-minute deadline; check its exact status before retrying.");
+  return remaining;
+}
+
+async function acquireOperationClient(database, signal) {
+  if (!signal) return database.connect();
+  assertOperationActive(signal);
+  const connecting = Promise.resolve().then(() => database.connect());
+  let onAbort;
+  const aborted = new Promise((_, reject) => {
+    onAbort = () => {
+      try { assertOperationActive(signal); }
+      catch (error) { reject(error); }
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+  try {
+    const client = await Promise.race([connecting, aborted]);
+    assertOperationActive(signal);
+    return client;
+  } catch (error) {
+    // A checkout can settle after the request has failed. It never starts a
+    // transaction; return ONLY that exact late client to its owning pool.
+    void connecting.then(client => client.release(error), () => {});
+    throw error;
+  } finally {
+    signal.removeEventListener("abort", onAbort);
+  }
+}
+
 function databaseConnectionFailure(error) {
-  return Object.assign(new Error("The scheduler database connection was interrupted. No schedule change was accepted."), {
+  return Object.assign(new Error("The scheduler database connection was interrupted. The outcome is unknown; check the exact operation status before retrying."), {
     code: "static_weekly_control_plane_database_unavailable",
     cause: error instanceof Error ? error : undefined,
   });
@@ -357,6 +409,24 @@ export function createStaticWeeklyControlPlane({
     throw fail("static_weekly_control_plane_health_deadline_invalid");
   }
 
+  // Carry the request through queueing and nested asynchronous helpers without
+  // sharing mutable credentials between concurrent manager operations.
+  const managerRequest = new AsyncLocalStorage();
+  async function runManagerOperation({manager,signal,deadlineAt,permission="write"},work) {
+    if(typeof work!=="function" || !signal || !Number.isFinite(deadlineAt))
+      throw fail("static_weekly_recurring_operation_deadline_invalid");
+    operationRemaining(deadlineAt,signal);
+    return managerRequest.run(Object.freeze({manager:Object.freeze({...manager}),signal,deadlineAt,permission}),work);
+  }
+  async function verifyRequestActor(client,context){
+    if(!context)return;
+    const manager=context.manager;
+    const actor=await call(client,"custodial_action_actor_v1",[
+      manager.manager_id,manager.credential_id,manager.device_id,manager.access_level,context.permission]);
+    if(actor?.manager_id!==manager.manager_id || actor?.credential_id!==manager.credential_id
+      ||actor?.device_id!==manager.device_id || (context.permission==="write"&&actor.owner!==true))
+      throw fail("42501","Current manager authority is required at the scheduler transaction boundary.");
+  }
   let closing = false;
   let closePromise = null;
   let activeTransactions = 0;
@@ -383,13 +453,28 @@ export function createStaticWeeklyControlPlane({
     });
   }
 
-  function admitTransaction(work) {
+  function admitTransaction(work, signal = null) {
+    assertOperationActive(signal);
     if (closing) return Promise.reject(fail("static_weekly_control_plane_closing", "The scheduler is closing and cannot admit another operation."));
     if (transactionQueue.length >= maxQueuedTransactions) {
       return Promise.reject(fail("static_weekly_control_plane_busy", "The scheduler already has its maximum bounded operation queue."));
     }
     return new Promise((resolve, reject) => {
-      const record = { work, resolve, reject, timer: null };
+      const record = { work, resolve, reject, timer: null, onAbort: null };
+      if (signal) {
+        record.onAbort = () => {
+          const index = transactionQueue.indexOf(record);
+          if (index < 0) return;
+          transactionQueue.splice(index, 1);
+          clearTimeout(record.timer);
+          reject(signal.reason instanceof Error ? signal.reason : fail("static_weekly_recurring_operation_aborted"));
+        };
+        signal.addEventListener("abort", record.onAbort, { once: true });
+        if (signal.aborted) { signal.removeEventListener("abort", record.onAbort); reject(signal.reason); return; }
+      }
+      const priorResolve = record.resolve, priorReject = record.reject;
+      record.resolve = (value) => { signal?.removeEventListener("abort", record.onAbort); priorResolve(value); };
+      record.reject = (error) => { signal?.removeEventListener("abort", record.onAbort); priorReject(error); };
       if (activeTransactions < transactionConcurrency) {
         beginAdmittedTransaction(record);
         return;
@@ -397,7 +482,7 @@ export function createStaticWeeklyControlPlane({
       record.timer = setTimeout(() => {
         const index = transactionQueue.indexOf(record);
         if (index >= 0) transactionQueue.splice(index, 1);
-        reject(fail("static_weekly_control_plane_queue_timeout", "The scheduler operation expired before a database transaction was opened."));
+        record.reject(fail("static_weekly_control_plane_queue_timeout", "The scheduler operation expired before a database transaction was opened."));
       }, transactionAdmissionMilliseconds);
       record.timer.unref?.();
       transactionQueue.push(record);
@@ -419,42 +504,123 @@ export function createStaticWeeklyControlPlane({
     return execution;
   }
 
-  function transaction(work, { health = false } = {}) {
+  function transaction(work, { health = false, reconcileManagerId = null, signal = null, deadlineAt = null, rollbackOnly = false } = {}) {
+    const request = health ? null : managerRequest.getStore();
+    if(request){
+      signal = signal ? AbortSignal.any([request.signal,signal]) : request.signal;
+      deadlineAt = deadlineAt==null ? request.deadlineAt : Math.min(deadlineAt,request.deadlineAt);
+    }
     const execute = async () => {
+      assertOperationActive(signal);
       if (closing) throw fail("static_weekly_control_plane_closing", "The scheduler is closing and cannot open another database transaction.");
       let client;
       try {
-        client = await database.connect();
+        client = await acquireOperationClient(database, signal);
       } catch (error) {
         if (isDatabaseConnectionFailure(error)) throw databaseConnectionFailure(error);
         throw error;
       }
       let asynchronousConnectionError = null;
       let discardClientError = null;
+      let commitCompleted = false;
+      let commitStarted = false;
       const onConnectionError = (error) => { asynchronousConnectionError ||= error instanceof Error ? error : new Error("Database connection unavailable."); };
+      const onAbort = () => {
+        // pg Client.end() destroys its socket when a query is active. Awaited
+        // query settlement below remains the transaction/lease boundary.
+        discardClientError ||= fail("static_weekly_recurring_operation_aborted");
+        try { void client.end?.()?.catch?.((error) => { asynchronousConnectionError ||= error; }); }
+        catch (error) { asynchronousConnectionError ||= error; }
+      };
       // pg-pool intentionally removes its idle error listener while a client
       // is checked out. The transaction owner must therefore catch the
       // client's asynchronous error event itself or Node terminates the whole
       // control-plane process before rollback/fail-closed handling can run.
       client.on?.("error", onConnectionError);
+      signal?.addEventListener?.("abort", onAbort, { once: true });
+      if (signal?.aborted) onAbort();
       try {
+        assertOperationActive(signal);
         await client.query("begin");
+        assertOperationActive(signal);
         // The login identity is provisioned separately and granted this NOLOGIN
         // capability group. Ordinary service-role credentials lack membership.
         await client.query("set local role static_weekly_control_plane");
-        await client.query(`set local statement_timeout = '${health ? healthTransactionMilliseconds : operationStatementMilliseconds}ms'`);
+        assertOperationActive(signal);
+        await client.query(`set local statement_timeout = '${health ? healthTransactionMilliseconds
+          : deadlineAt == null ? operationStatementMilliseconds
+            : Math.min(operationStatementMilliseconds, operationRemaining(deadlineAt, signal))}ms'`);
+        assertOperationActive(signal);
         if (!health) {
           // Acquire the shared disaster-recovery generation fence before any
           // source read or isolated compile. A restore therefore drains this
           // complete transaction and a later generation can never accept a
           // write prepared from pre-restore state.
           await client.query("select public.custodial_begin_application_mutation()");
+          assertOperationActive(signal);
         }
-        const result = await work(client);
+        // Every in-flight SQL statement is awaited to settlement. Aborting
+        // never releases a checked-out client or promises a rollback while a
+        // query may still be changing state.
+        const workClient = signal ? Object.assign(Object.create(client), {
+          query: async (...args) => {
+            assertOperationActive(signal);
+            // A fresh SQL statement does not get a fresh minute. Its server
+            // timeout is reduced to the remainder of this SAME request clock.
+            if (deadlineAt != null) {
+              await client.query(`set local statement_timeout = '${Math.min(operationStatementMilliseconds,
+                operationRemaining(deadlineAt, signal))}ms'`);
+              assertOperationActive(signal);
+            }
+            const result = await client.query(...args);
+            assertOperationActive(signal);
+            return result;
+          },
+        }) : client;
+        // The existing SQL actor check locks the manager and credential until
+        // commit/rollback, defining an order relative to concurrent revocation.
+        await verifyRequestActor(workClient,request);
+        let result = await work(workClient);
+        assertOperationActive(signal);
+        if (reconcileManagerId !== null) {
+          // Finish the existing immutable mutation/projection/lunch receipt
+          // before advancing future validity. The deferred DB guard and this
+          // checked-out client keep both parts inside the SAME transaction.
+          const validity = await call(client, "static_weekly_v21_reconcile_dependency_changes", [reconcileManagerId]);
+          result = withRecurringDependencyStatus(result, validity);
+        }
         if (asynchronousConnectionError) throw asynchronousConnectionError;
+        assertOperationActive(signal);
+        if (deadlineAt != null) {
+          await client.query(`set local statement_timeout = '${Math.min(operationStatementMilliseconds,
+            operationRemaining(deadlineAt, signal))}ms'`);
+          assertOperationActive(signal);
+        }
+        await verifyRequestActor(workClient,request);
+        assertOperationActive(signal);
+        if (rollbackOnly) {
+          // A vacancy preview exercises the ordinary authenticated mutation
+          // and compiler on this SAME client, but cannot accept any change.
+          // Return its candidate only after rollback actually settles. This
+          // is not an exception/error swallowed into a successful preview.
+          await client.query("rollback");
+          assertOperationActive(signal);
+          if (asynchronousConnectionError) throw asynchronousConnectionError;
+          return result;
+        }
+        commitStarted = true;
         await client.query("commit");
+        commitCompleted = true;
+        if (signal?.aborted) throw fail("static_weekly_recurring_confirmation_outcome_unknown",
+          "The response was interrupted during commit; read the exact confirmation status before retrying.");
         return result;
       } catch (error) {
+        if (commitCompleted) throw error;
+        if (commitStarted && signal?.aborted) {
+          discardClientError = error instanceof Error ? error : new Error("Commit outcome unknown after abort.");
+          throw fail("static_weekly_recurring_confirmation_outcome_unknown",
+            "The transaction was interrupted during commit; read the exact confirmation status before retrying.");
+        }
         let rollbackError = null;
         await client.query("rollback").catch((candidate) => { rollbackError = candidate; });
         const connectionError = asynchronousConnectionError
@@ -466,6 +632,7 @@ export function createStaticWeeklyControlPlane({
         }
         throw error;
       } finally {
+        signal?.removeEventListener?.("abort", onAbort);
         client.removeListener?.("error", onConnectionError);
         // Passing an error tells pg-pool to destroy a broken client rather than
         // return it to the pool for another authority transaction.
@@ -475,7 +642,7 @@ export function createStaticWeeklyControlPlane({
     // The pool has four connections. Ordinary operations may occupy at most
     // three; one coalesced and separately bounded health transaction retains
     // the fourth slot while compiles or idempotent replays are queued.
-    return health ? execute() : admitTransaction(execute);
+    return health ? execute() : admitTransaction(execute, signal);
   }
 
   async function call(client, functionName, args) {
@@ -498,6 +665,441 @@ export function createStaticWeeklyControlPlane({
 
   async function snapshotFor(client, weekStart) {
     return call(client, "static_weekly_v3_read_manager_snapshot", [weekStart]);
+  }
+
+  // Descriptive projection of the existing feasibility DTO for the preview
+  // consumer. It is not an admission certificate or a new policy.
+  function approvedStaticConstraintView(feasibility) {
+    return {
+      schema: 'custodial.approved-static-constraint-view.v1',
+      contract: feasibility.contract,
+      hardConstraintDigest: feasibility.hardConstraintDigest,
+      hardConstraintCount: feasibility.hardConstraintCount,
+      physicalCoverageDigest: feasibility.mapping?.physicalCoverageDigest,
+      mappingDigest: feasibility.mapping?.digest,
+      slotAvailability: feasibility.slotAvailability,
+      projectionAvailability: feasibility.projectionAvailability,
+      shiftEndDerivation: feasibility.shiftEndDerivation,
+      geography: { digest: feasibility.mapping?.candidateDigest, policy: 'APPROVED_SOURCE_BOUND' },
+      balance: { policy: 'FIXED_APPROVED_PATTERN_HARD_ROWS', optimized: false },
+      opening: { policy: 'SOURCE_BOUND_WINDOWS_AND_REQUIRED_COVERAGE', proven: false },
+    };
+  }
+
+  // Only the synchronous local serializer failure can enter this private join.
+  // An error/code supplied by a SQL port or caller is never a preview token.
+  const approvedStaticUnresolvedPreparations=new WeakMap();
+  function approvedStaticUnresolvedPreview(error,{basis,target,choice,selection,publicationId,date,templateId,revision,deadlineAt}) {
+    const invalid=()=>{throw fail('static_template_unresolved_preview_invalid');};
+    if(!error||types.isProxy(error))invalid();
+    const descriptor=Object.getOwnPropertyDescriptor(error,'unresolved');
+    if(!descriptor||!Object.hasOwn(descriptor,'value')||descriptor.enumerable||descriptor.writable||descriptor.configurable)invalid();
+    const diagnostic=descriptor.value,seen=new Set();let nodes=0;
+    // The genuine producer owns a recursively frozen plain DATA graph. Inspect
+    // descriptors before reading values/digesting; never execute diagnostic code.
+    const graph=(value,depth=0)=>{
+      if(++nodes>1000000||depth>64)invalid();
+      if(value===null||typeof value==='string'||typeof value==='boolean')return;
+      if(typeof value==='number'){if(!Number.isFinite(value))invalid();return;}
+      if(!value||typeof value!=='object'||types.isProxy(value)||!Object.isFrozen(value)||seen.has(value))invalid();
+      seen.add(value);
+      if(Array.isArray(value)){
+        if(value.length>100000||Reflect.ownKeys(value).length!==value.length+1)invalid();
+        for(let i=0;i<value.length;i++){const d=Object.getOwnPropertyDescriptor(value,String(i));
+          if(!d||!Object.hasOwn(d,'value')||!d.enumerable)invalid();graph(d.value,depth+1);}
+      }else{
+        if(Object.getPrototypeOf(value)!==Object.prototype)invalid();
+        for(const key of Reflect.ownKeys(value)){const d=Object.getOwnPropertyDescriptor(value,key);
+          if(typeof key!=='string'||!Object.hasOwn(d,'value')||!d.enumerable)invalid();graph(d.value,depth+1);}
+      }
+      seen.delete(value);
+    };
+    graph(diagnostic);
+    const exact=(value,keys)=>{
+      if(!value||Array.isArray(value)||typeof value!=='object'||Reflect.ownKeys(value).length!==keys.length
+        ||keys.some(key=>!Object.hasOwn(value,key)))invalid();
+    };
+    exact(diagnostic,['schema','status','operationDate','dayOfWeek','originalWeekSourceDigest','currentWeekSourceDigest',
+      'approvedTemplateSourceDigest','ownerConfigDigest','parentReferences','selectedAvailability','appliedExceptions',
+      'namedHandoffReferences','unresolved','originalWeekSource']);
+    const day=new Date(`${date}T00:00:00Z`).getUTCDay(),pre={...target.baselineCanonicalInput,exceptions:target.canonicalInput.exceptions};
+    if(diagnostic.schema!=='custodial.approved-dated-mapped-shift-end-unresolved.v1'||diagnostic.status!=='UNRESOLVED'
+      ||diagnostic.operationDate!==date||diagnostic.dayOfWeek!==day
+      ||diagnostic.originalWeekSourceDigest!==postgresJsonbContentDigest(pre)
+      ||diagnostic.currentWeekSourceDigest!==postgresJsonbContentDigest(pre)
+      ||canonicalJson(diagnostic.originalWeekSource)!==canonicalJson(pre)
+      ||diagnostic.ownerConfigDigest!==postgresJsonbContentDigest(basis.ownerConfig)
+      ||!(templateId===null||typeof templateId==='string'&&templateId.trim()===templateId&&templateId.length>0&&templateId.length<=128))invalid();
+    const approvedWire=clone(choice.source);
+    if(approvedWire.version&&!approvedWire.versions){approvedWire.versions=[approvedWire.version];delete approvedWire.version;}
+    const approved=prepareStaticWeeklySchedulingProblem(approvedWire,deadlineAt);
+    if(approved.error||diagnostic.approvedTemplateSourceDigest!==postgresJsonbContentDigest(approved.baselineCanonicalInput))invalid();
+    const parents=approved.baselineCanonicalInput.version.assignments.filter(row=>row.dayOfWeek===day),byId=new Map(parents.map(row=>[row.workId,row])),
+      references=new Map(),roleMap=new Map(),actualRoles=new Map();
+    if(!Array.isArray(diagnostic.parentReferences)||diagnostic.parentReferences.length!==parents.length)invalid();
+    for(const reference of diagnostic.parentReferences){
+      exact(reference,['dayOfWeek','parentWorkId','originalParent','mappedParent','originalOwnerSlotId','mappedOwnerSlotId','currentPersonId']);
+      const original=byId.get(reference.parentWorkId),person=target.incumbencyByDaySlot.get(`${day}\u0000${reference.mappedOwnerSlotId}`);
+      if(!original||references.has(original.workId)||reference.dayOfWeek!==day
+        ||canonicalJson(reference.originalParent)!==canonicalJson(original)||reference.originalOwnerSlotId!==original.ownerSlotId
+        ||canonicalJson(reference.mappedParent)!==canonicalJson({...original,ownerSlotId:reference.mappedOwnerSlotId})
+        ||!person?.personId||person.personId!==reference.currentPersonId||!selection.availablePersonIds.includes(person.personId)
+        ||roleMap.has(original.ownerSlotId)&&roleMap.get(original.ownerSlotId)!==reference.mappedOwnerSlotId
+        ||actualRoles.has(reference.mappedOwnerSlotId)&&actualRoles.get(reference.mappedOwnerSlotId)!==original.ownerSlotId)invalid();
+      references.set(original.workId,reference);roleMap.set(original.ownerSlotId,reference.mappedOwnerSlotId);actualRoles.set(reference.mappedOwnerSlotId,original.ownerSlotId);
+    }
+    const state=target.states.get(day),availability=[...state.availability].map(([slotId,value])=>{
+      const person=target.incumbencyByDaySlot.get(`${day}\u0000${slotId}`);
+      return {slotId,personId:person?.personId??null,vacant:person?.vacant===true,availability:clone(value)};
+    }).sort((a,b)=>a.slotId.localeCompare(b.slotId)),handoffs=(approved.baselineCanonicalInput.version.shiftEndContinuityPolicy?.namedHandoffs||[])
+      .filter(h=>h.dayOfWeek===day).map(h=>({originalHandoff:h,mappedFromSlotId:roleMap.get(h.fromSlotId)||h.fromSlotId,mappedToSlotId:roleMap.get(h.toSlotId)||h.toSlotId}));
+    if(canonicalJson(diagnostic.selectedAvailability)!==canonicalJson(availability)
+      ||canonicalJson(diagnostic.appliedExceptions)!==canonicalJson(target.applied.filter(e=>e.serviceDate===date))
+      ||canonicalJson(diagnostic.namedHandoffReferences)!==canonicalJson(handoffs))invalid();
+    const reasons=['NO_ELIGIBLE_INTERVAL_OWNER','ORIGINAL_BUDGET_INSUFFICIENT_FOR_POSITIVE_SEGMENTS','NAMED_HANDOFF_UNAVAILABLE',
+      'FIXED_VISIT_REQUIRES_SINGLE_AVAILABLE_OWNER','LOCKED_PARENT_UNAVAILABLE'],clock=/^([01][0-9]|2[0-3]):[0-5][0-9]$/;
+    const final=availability.filter(a=>a.personId&&!a.vacant).map(a=>a.availability.shift.end).sort().at(-1);
+    if(!Array.isArray(diagnostic.unresolved)||diagnostic.unresolved.length<1||diagnostic.unresolved.length>10000)invalid();
+    const rows=diagnostic.unresolved.map(row=>{
+      exact(row,['dayOfWeek','parentWorkId','window','reason','originalBudget','requiredSegments']);exact(row.window,['start','end']);
+      const parent=byId.get(row.parentWorkId),end=parent?.window.start==='09:45'?final:parent?.window.end;
+      if(row.dayOfWeek!==day||typeof row.parentWorkId!=='string'||row.parentWorkId.trim()!==row.parentWorkId
+        ||!row.parentWorkId||row.parentWorkId.length>512||/[\x00-\x1f\x7f]/.test(row.parentWorkId)||!parent
+        ||typeof row.window.start!=='string'||typeof row.window.end!=='string'||!clock.test(row.window.start)||!clock.test(row.window.end)
+        ||row.window.start>=row.window.end||row.window.start<parent.window.start||!end||row.window.end>end
+        ||!reasons.includes(row.reason)||!Number.isSafeInteger(row.originalBudget)||row.originalBudget<1
+        ||row.originalBudget!==parent.serviceEffortMinutes
+        ||(row.reason==='ORIGINAL_BUDGET_INSUFFICIENT_FOR_POSITIVE_SEGMENTS'
+          ?!Number.isSafeInteger(row.requiredSegments)||row.requiredSegments<=row.originalBudget:row.requiredSegments!==null))invalid();
+      return Object.freeze({...row,window:Object.freeze({...row.window})});
+    });
+    return Object.freeze({schema:'custodial.approved-static-unresolved-preview.v1',status:'UNRESOLVED',sourcePublicationId:publicationId,
+      authorityRevision:revision,serviceDate:date,kind:'DATED_ABSENCE',templateId,unresolved:Object.freeze(rows)});
+  }
+
+  async function approvedStaticPreparation(client,{actor,publicationId,date,kind,templateId,revision,deadlineAt,signal}) {
+    operationRemaining(deadlineAt,signal);
+    const basis=await call(client,'static_weekly_read_approved_template_basis',
+      [actor.managerId,publicationId,date,kind,templateId,revision]);
+    if(basis?.schema!=='custodial.approved-static-template-basis.v1'
+      || basis.publicationId!==publicationId || basis.serviceDate!==date || basis.kind!==kind
+      || basis.authorityRevision!==revision || !Number.isSafeInteger(basis.generation) || basis.generation<0
+      || !Array.isArray(basis.templates) || !Array.isArray(basis.admittedBindings)
+      || basis.templates.length>4 || basis.admittedBindings.length>4
+      || !Array.isArray(basis.templateCatalogEntries)||basis.templateCatalogEntries.length!==basis.templates.length
+      || basis.admittedBindings.length!==basis.templates.length
+      || new Set(basis.templateCatalogEntries.map(entry=>entry?.templateId)).size!==basis.templates.length
+      || basis.templateCatalogEntries.some((entry,i)=>!entry||typeof entry!=='object'||Array.isArray(entry)
+        ||Object.keys(entry).length!==2||!Object.hasOwn(entry,'templateId')||!Object.hasOwn(entry,'entryDigest')
+        ||entry.templateId!==basis.templates[i]?.templateId||entry.templateId!==basis.admittedBindings[i]?.templateId
+        ||typeof entry.entryDigest!=='string'||entry.entryDigest.length!==64||!/^[a-f0-9]{64}$/.test(entry.entryDigest))
+      // The SQL fingerprint includes release approval evidence, not merely
+      // returned compiler inputs. Preserve BOTH distinct original bindings.
+      || basis.templateCatalogDigest!==postgresJsonbContentDigest(basis.templateCatalogEntries)
+      || basis.templateInputsDigest!==postgresJsonbContentDigest({templates:basis.templates,
+        admittedBindings:basis.admittedBindings,ownerConfig:basis.ownerConfig}))
+      throw fail('static_template_trusted_basis_invalid');
+    const source=clone(basis.currentSource);
+    if(source?.serviceDate!==date)throw fail('static_template_trusted_basis_invalid');
+    const wire=clone(source);
+    if(kind==='DATED_ABSENCE'){
+      // The trusted basis carries the COMPLETE Monday week, while source and
+      // command retain the original operation date. Do not require history
+      // for the following Monday or choose Monday's person for Tuesday.
+      const week=new Date(`${date}T00:00:00Z`);
+      week.setUTCDate(week.getUTCDate()-((week.getUTCDay()+6)%7));
+      wire.serviceDate=week.toISOString().slice(0,10);
+    }
+    if(wire.version&&!wire.versions){wire.versions=[wire.version];delete wire.version;}
+    const target=prepareStaticWeeklySchedulingProblem(wire,deadlineAt);
+    if(target.error)throw fail('static_template_target_authority_invalid');
+    const day=new Date(`${date}T00:00:00Z`).getUTCDay();
+    const operationRoster=kind==='DATED_ABSENCE'
+      ?target.slots.map(slot=>target.incumbencyByDaySlot.get(`${day}\u0000${slot.id}`)):target.roster;
+    const available=operationRoster.filter(p=>p.personId&&p.kind!=='CONTRACTOR_CAPACITY'
+      && !target.version.namedAbsentSlotIds?.includes(p.slotId)
+      && (kind!=='DATED_ABSENCE'||target.availabilityByDaySlot.has(`${day}\u0000${p.slotId}`)));
+    const choices=basis.templates.filter(t=>t.staffingCount===available.length&&(!templateId||t.templateId===templateId));
+    if(choices.length!==1)throw fail('static_template_missing_approved_pattern');
+    const selection={schema:'custodial.static-template-selection.v1',kind,templateId:choices[0].templateId,
+      serviceDate:date,availablePersonIds:available.map(p=>p.personId)};
+    operationRemaining(deadlineAt,signal);
+    const originalBasis=canonicalJson(basis);
+    let feasibility;
+    try{
+      feasibility=prepareApprovedStaticTemplateProjection({templates:basis.templates,
+        admittedBindings:basis.admittedBindings,currentSource:source,currentOwnerConfig:basis.ownerConfig,
+        selection,deadline:deadlineAt});
+    }catch(error){
+      if(kind==='DATED_ABSENCE'&&error&&!types.isProxy(error)
+        &&Object.getOwnPropertyDescriptor(error,'code')?.value==='static_template_dated_coverage_unresolved'){
+        const preview=approvedStaticUnresolvedPreview(error,{basis,target,choice:choices[0],selection,publicationId,date,templateId,revision,deadlineAt});
+        approvedStaticUnresolvedPreparations.set(error,{preview,originalBasis});
+      }
+      throw error;
+    }
+    operationRemaining(deadlineAt,signal);
+    const body={schema:'custodial.approved-static-materialization.v1',managerId:actor.managerId,
+      sourcePublicationId:publicationId,serviceDate:date,kind,expectedRevision:revision,
+      generation:basis.generation,templateCatalogDigest:basis.templateCatalogDigest,
+      templateInputsDigest:basis.templateInputsDigest,feasibility};
+    const previewDigest=postgresJsonbContentDigest(body);
+    return {...body,previewDigest};
+  }
+
+  async function approvedStaticOperation({manager,publicationId,serviceDate,kind='RECURRING_STAFFING',
+    templateId=null,expectedRevision,previewDigest=null,idempotencyKey=null,signal=null,deadlineAt=null},confirm) {
+    const entered=performance.now(),expires=deadlineAt==null?entered+STATIC_WEEKLY_MANAGER_OPERATION_DEADLINE_MS:
+      Math.min(Number(deadlineAt),entered+STATIC_WEEKLY_MANAGER_OPERATION_DEADLINE_MS);
+    if(!Number.isFinite(expires))throw fail('static_weekly_recurring_operation_deadline_invalid');
+    const actor=requireManager(manager),requestedPublication=publicationId==null?null:requirePublicationId(publicationId),revision=requireRevision(expectedRevision);
+    const originalManagerContext=managerRequest.getStore(),principalFields=['manager_id','managerId','manager_display_name','managerName',
+      'credential_id','device_id','access_level','auth_mode','read_only'],originalPrincipal=principalFields.map(key=>manager?.[key]);
+    const date=kind==='RECURRING_STAFFING'?requireMonday(serviceDate,'static effective start'):requireDate(serviceDate,'static service date');
+    if(!['RECURRING_STAFFING','DATED_ABSENCE'].includes(kind))throw fail('static_template_selection_kind_invalid');
+    // A dated projection retains one explicitly named original publication.
+    // Unlike a recurring replacement it cannot adopt whichever plan happens
+    // to be current after a lost response or a later principal/date change.
+    if(kind==='DATED_ABSENCE'&&requestedPublication===null)throw fail('static_template_current_publication_required');
+    if(templateId!==null&&(typeof templateId!=='string'||!templateId.trim()||templateId.length>128))throw fail('static_template_selection_invalid');
+    const controller=new AbortController(),relay=()=>controller.abort(signal?.reason);
+    signal?.addEventListener?.('abort',relay,{once:true});if(signal?.aborted)relay();
+    const timeout=setTimeout(()=>controller.abort(fail('static_weekly_recurring_operation_deadline_exceeded')),
+      Math.max(1,expires-performance.now()-STATIC_WEEKLY_MANAGER_CLEANUP_RESERVE_MS));timeout.unref?.();
+    try {
+      return await transaction(async client=>{
+        await lockStaticWeeklyAuthority(client);
+        const request={publicationId:requestedPublication,serviceDate:date,kind,templateId,
+          expectedRevision:revision,previewDigest:confirm?text(previewDigest):null,
+          idempotencyKey:confirm?requireIdempotencyKey(idempotencyKey):null};
+        if(confirm){
+          const original=await call(client,'static_weekly_read_approved_template_confirmation',[actor.managerId,request.idempotencyKey]);
+          if(original){
+            if(canonicalJson(original.request)!==canonicalJson(request)||original.receipt?.status!=='PERSISTED_CURRENT')
+              throw fail('static_template_confirmation_identity_conflict');
+            return {...original.receipt,replayed:true,status:'ACCEPTED_ORIGINAL_RECEIPT',currentReadbackNotRepeated:true};
+          }
+        }
+        const week=new Date(`${date}T00:00:00Z`);week.setUTCDate(week.getUTCDate()-((week.getUTCDay()+6)%7));
+        const before=await snapshotFor(client,week.toISOString().slice(0,10));
+        if(before?.authority_revision!==revision)throw fail('static_template_revision_changed');
+        const publication=requirePublicationId(before?.current_publication?.publication_id);
+        if(requestedPublication&&requestedPublication!==publication)throw fail('static_template_current_publication_changed');
+        const originalSnapshot=canonicalJson(before);
+        let prepared;
+        try{
+          prepared=await approvedStaticPreparation(client,{actor,publicationId:publication,date,kind,templateId,
+            revision,deadlineAt:expires,signal:controller.signal});
+        }catch(error){
+          const unresolved=error&&typeof error==='object'?approvedStaticUnresolvedPreparations.get(error):null;
+          if(unresolved)approvedStaticUnresolvedPreparations.delete(error);
+          if(confirm||!unresolved)throw error;
+          const current=()=>{
+            operationRemaining(expires,controller.signal);
+            const now=requireManager(manager);
+            if(managerRequest.getStore()!==originalManagerContext||now.managerId!==actor.managerId||now.managerName!==actor.managerName
+              ||principalFields.some((key,i)=>manager?.[key]!==originalPrincipal[i]))throw fail('static_template_unresolved_principal_changed');
+          };
+          current();await verifyRequestActor(client,originalManagerContext);current();
+          const currentBasis=await call(client,'static_weekly_read_approved_template_basis',[actor.managerId,publication,date,kind,templateId,revision]);
+          current();
+          if(canonicalJson(currentBasis)!==unresolved.originalBasis)throw fail('static_template_unresolved_source_changed');
+          const currentSnapshot=await snapshotFor(client,week.toISOString().slice(0,10));
+          current();
+          if(canonicalJson(currentSnapshot)!==originalSnapshot)throw fail('static_template_unresolved_source_changed');
+          await verifyRequestActor(client,originalManagerContext);current();
+          return unresolved.preview;
+        }
+        if(!confirm)return {schema:'custodial.approved-static-preview.v1',status:'PREVIEW_ONLY',
+          previewDigest:prepared.previewDigest,authorityRevision:revision,sourcePublicationId:publication,
+          serviceDate:date,kind,templateId:prepared.feasibility.mapping.templateId,
+          mapping:prepared.feasibility.mapping,assignments:prepared.feasibility.assignments,
+          lunch:prepared.feasibility.lunchDocument,
+          constraintView:approvedStaticConstraintView(prepared.feasibility),
+          solverInvoked:false,published:false};
+        if(!/^[a-f0-9]{64}$/.test(text(previewDigest))||previewDigest!==prepared.previewDigest)
+          throw fail('static_template_preview_changed');
+        const key=requireIdempotencyKey(idempotencyKey);
+        operationRemaining(expires,controller.signal);
+        const accepted=await call(client,'static_weekly_materialize_approved_template',
+          [actor.managerId,publication,date,kind,revision,prepared.generation,key,previewDigest,{...prepared,request}]);
+        if(accepted?.ok!==true||accepted.persistence_status!=='PERSISTED'
+          || !/^[a-f0-9]{64}$/.test(text(accepted.lunch_document_identity))
+          || accepted.feasibility_digest!==prepared.feasibility.digest
+          || (kind==='DATED_ABSENCE'&&accepted.publication_id!==publication))
+          throw fail('static_template_materialization_not_persisted');
+        requirePublicationId(accepted.publication_id);requireUuid(accepted.projection_id,'static_template_materialization_not_persisted');
+        const current=await snapshotFor(client,week.toISOString().slice(0,10));
+        const lunch=await call(client,'static_weekly_v8_read_lunch_document',[date]);
+        if(current?.projection_status!=='current'||current.authority_revision!==accepted.authority_revision
+          || current.current_publication?.publication_id!==accepted.publication_id
+          || current.latest_projection?.projection_id!==accepted.projection_id
+          || lunch?.persistence_status!=='PERSISTED'||lunch.projection_id!==accepted.projection_id
+          || lunch.document_identity!==accepted.lunch_document_identity)
+          throw fail('static_template_current_readback_mismatch');
+        operationRemaining(expires,controller.signal);
+        return {schema:'custodial.approved-static-confirmation.v1',status:'PERSISTED_CURRENT',
+          ...accepted,revision:accepted.authority_revision,previewDigest,solverInvoked:false};
+      },{signal:controller.signal,deadlineAt:expires,reconcileManagerId:confirm?actor.managerId:null});
+    } finally {clearTimeout(timeout);signal?.removeEventListener?.('abort',relay);}
+  }
+
+  // First fixed-approved baseline admission is not a staffing-change command
+  // and does not borrow an optimized certificate. Source/catalog/roster are
+  // server reads; only the distinct initial SQL boundary may publish it.
+  async function approvedConfirmationStatus(kind,{manager,confirmationKey}) {
+    const actor=requireManager(manager),key=requireUuid(confirmationKey,'recurring_confirmation_key_required');
+    const refuse=()=>{throw fail('static_template_original_confirmation_unavailable',
+      'The exact approved schedule receipt is unavailable. Keep the saved original; do not resend it.');};
+    const data=(value,keys)=>{
+      if(!value||typeof value!=='object'||types.isProxy(value)||Object.getPrototypeOf(value)!==Object.prototype)refuse();
+      const fields=Object.getOwnPropertyDescriptors(value);
+      if(Reflect.ownKeys(fields).length!==keys.length||keys.some(name=>!Object.hasOwn(fields,name)
+        ||!Object.hasOwn(fields[name],'value')||!fields[name].enumerable))refuse();
+      return Object.fromEntries(keys.map(name=>[name,fields[name].value]));
+    };
+    return transaction(async client=>{
+      // Use the SAME authority queue as the fixed-approved writer. A transport
+      // timeout or the older compiler ledger cannot answer for this original.
+      await lockStaticWeeklyAuthority(client);
+      const raw=await call(client,kind==='initial'?'static_weekly_read_approved_initial_confirmation'
+        :'static_weekly_read_approved_template_confirmation',[actor.managerId,key]);
+      const result={schema:'custodial.approved-static-confirmation-status.v1',kind,
+        state:'NOT_FOUND',confirmationKey:key,request:null,receipt:null};
+      // Absence is DATA only: it does not cancel a queued writer, allow a
+      // resend, discard the original or manufacture a new operation identity.
+      if(raw===null)return result;
+      const stored=data(raw,['request','receipt']);
+      const request=data(stored.request,kind==='initial'
+        ?['sourceId','effectiveStart','templateId','expectedRevision','previewDigest','idempotencyKey']
+        :['publicationId','serviceDate','kind','templateId','expectedRevision','previewDigest','idempotencyKey']);
+      if(request.idempotencyKey!==key||!Number.isSafeInteger(request.expectedRevision)||request.expectedRevision<0
+        ||typeof request.previewDigest!=='string'||request.previewDigest.length!==64||!/^[a-f0-9]{64}$/.test(request.previewDigest))refuse();
+      const template=request.templateId;
+      if(template!==null&&(typeof template!=='string'||!template.trim()||template!==template.trim()||template.length>128))refuse();
+      if(kind==='initial'){
+        requireUuid(request.sourceId,'static_template_original_confirmation_unavailable');
+        requireMonday(request.effectiveStart,'original approved initial week');
+        if(template===null)refuse();
+      }else if(request.kind==='DATED_ABSENCE'){
+        // The fixed ledger owns this original. A dated projection retains its
+        // publication and may target any real day, not just a recurring Monday.
+        if(typeof request.publicationId!=='string'
+          ||requireUuid(request.publicationId,'static_template_original_confirmation_unavailable')!==request.publicationId
+          ||typeof request.serviceDate!=='string'
+          ||requireDate(request.serviceDate,'original approved operation date')!==request.serviceDate)refuse();
+        const date=new Date(`${request.serviceDate}T00:00:00Z`);
+        if(Number.isNaN(date.getTime())||date.toISOString().slice(0,10)!==request.serviceDate)refuse();
+      }else{
+        if(request.publicationId!==null||request.kind!=='RECURRING_STAFFING')refuse();
+        requireMonday(request.serviceDate,'original approved recurring week');
+      }
+      const receipt=stored.receipt;
+      if(!receipt||typeof receipt!=='object'||types.isProxy(receipt)||Object.getPrototypeOf(receipt)!==Object.prototype
+        ||Object.values(Object.getOwnPropertyDescriptors(receipt)).some(field=>!Object.hasOwn(field,'value'))
+        ||receipt.schema!==`custodial.approved-static${kind==='initial'?'-initial':''}-confirmation.v1`
+        ||receipt.status!=='PERSISTED_CURRENT'||receipt.ok!==true||receipt.persistence_status!=='PERSISTED'
+        ||receipt.solverInvoked!==false||receipt.previewDigest!==request.previewDigest
+        ||!Number.isSafeInteger(receipt.authority_revision)||receipt.authority_revision<=request.expectedRevision
+        ||receipt.revision!==receipt.authority_revision
+        ||!['feasibility_digest','lunch_document_identity'].every(name=>typeof receipt[name]==='string'&&receipt[name].length===64&&/^[a-f0-9]{64}$/.test(receipt[name])))refuse();
+      requireUuid(receipt.publication_id,'static_template_original_confirmation_unavailable');
+      requireUuid(receipt.projection_id,'static_template_original_confirmation_unavailable');
+      if(kind==='initial'&&receipt.source_id!==request.sourceId)refuse();
+      if(kind!=='initial'&&request.kind==='DATED_ABSENCE'
+        &&(receipt.publication_id!==request.publicationId||typeof receipt.projection_id!=='string'
+          ||requireUuid(receipt.projection_id,'static_template_original_confirmation_unavailable')!==receipt.projection_id))refuse();
+      return {...result,state:'ACCEPTED',request:clone(request),receipt:clone(receipt)};
+    });
+  }
+
+  async function approvedInitialOperation({manager,sourceId,effectiveStart,templateId,
+    expectedRevision,previewDigest=null,idempotencyKey=null,signal=null,deadlineAt=null},confirm){
+    const entered=performance.now(),expires=deadlineAt==null?entered+STATIC_WEEKLY_MANAGER_OPERATION_DEADLINE_MS:
+      Math.min(Number(deadlineAt),entered+STATIC_WEEKLY_MANAGER_OPERATION_DEADLINE_MS);
+    if(!Number.isFinite(expires))throw fail('static_weekly_recurring_operation_deadline_invalid');
+    const actor=requireManager(manager),id=requireSourceId(sourceId),date=requireMonday(effectiveStart,'effective start'),
+      revision=requireRevision(expectedRevision);
+    if(typeof templateId!=='string'||!templateId.trim()||templateId.length>128)throw fail('static_template_selection_invalid');
+    const controller=new AbortController(),relay=()=>controller.abort(signal?.reason);
+    signal?.addEventListener?.('abort',relay,{once:true});if(signal?.aborted)relay();
+    const timeout=setTimeout(()=>controller.abort(fail('static_weekly_recurring_operation_deadline_exceeded')),
+      Math.max(1,expires-performance.now()-STATIC_WEEKLY_MANAGER_CLEANUP_RESERVE_MS));timeout.unref?.();
+    try{return await transaction(async client=>{
+      operationRemaining(expires,controller.signal);
+      await lockStaticWeeklyAuthority(client);
+      const request={sourceId:id,effectiveStart:date,templateId,expectedRevision:revision,
+        previewDigest:confirm?text(previewDigest):null,idempotencyKey:confirm?requireIdempotencyKey(idempotencyKey):null};
+      if(confirm){
+        const prior=await call(client,'static_weekly_read_approved_initial_confirmation',[actor.managerId,request.idempotencyKey]);
+        if(prior){
+          if(canonicalJson(prior.request)!==canonicalJson(request)||prior.receipt?.status!=='PERSISTED_CURRENT')
+            throw fail('static_template_confirmation_identity_conflict');
+          return {...prior.receipt,replayed:true,status:'ACCEPTED_ORIGINAL_RECEIPT',currentReadbackNotRepeated:true};
+        }
+      }
+      // Initial admission already names an exact registered source/template.
+      // The generic unbound snapshot deliberately requires a single active
+      // source before the first publication, so it cannot arbitrate this
+      // source-specific path when immutable historical sources are retained.
+      // Keep that generic guard untouched: the private initial-basis RPC checks
+      // the named actor, current revision, live template and hydrated roster
+      // under this same authority lock and restore-generation fence.
+      let basis;
+      try {
+        basis=await call(client,'static_weekly_read_approved_initial_basis',[actor.managerId,id,date,revision,templateId]);
+      } catch(error) {
+        if(error?.code==='40001')throw fail('static_template_revision_changed');
+        throw error;
+      }
+      if(basis?.authorityRevision!==revision)throw fail('static_template_revision_changed');
+      const registered=await registeredSourceFor(client,id,date);
+      if(!registered?.compiler_input||typeof registered.compiler_input!=='object')throw fail('static_template_initial_source_invalid');
+      const source=clone(registered?.compiler_input);
+      if(registered?.source_id!==id||source?.serviceDate!==date||source.version?.effectiveStart!==date
+        || !Array.isArray(source.exceptions)||source.exceptions.length||registered.exceptions?.length)
+        throw fail('static_template_initial_source_invalid');
+      if(basis?.schema!=='custodial.approved-static-initial-basis.v1'||basis.sourceId!==id||basis.serviceDate!==date
+        ||basis.authorityRevision!==revision||!Number.isSafeInteger(basis.generation)||basis.generation<0
+        ||!Array.isArray(basis.templates)||basis.templates.length!==1||!Array.isArray(basis.admittedBindings)||basis.admittedBindings.length!==1
+        ||basis.currentSourceDigest!==postgresJsonbContentDigest(source)||canonicalJson(basis.currentSource)!==canonicalJson(source)
+        ||basis.templateCatalogDigest!==postgresJsonbContentDigest({templates:basis.templates,
+          admittedBindings:basis.admittedBindings,ownerConfig:basis.ownerConfig}))
+        throw fail('static_template_trusted_basis_invalid');
+      const configPeople=Object.values(basis.ownerConfig?.slots||{}).filter(s=>!s.vacancy).map(s=>s.personId);
+      const feasibility=prepareApprovedStaticTemplateProjection({templates:basis.templates,admittedBindings:basis.admittedBindings,
+        currentSource:source,currentOwnerConfig:basis.ownerConfig,selection:{schema:'custodial.static-template-selection.v1',
+          kind:'INITIAL_BASELINE',templateId,serviceDate:date,availablePersonIds:configPeople},deadline:expires});
+      if(!feasibility.initialBaseline||!feasibility.mapping.unchanged||feasibility.currentSourceDigest!==basis.currentSourceDigest)
+        throw fail('static_template_initial_baseline_must_be_exact');
+      const body={schema:'custodial.approved-static-initial-materialization.v1',managerId:actor.managerId,sourceId:id,
+        effectiveStart:date,expectedRevision:revision,generation:basis.generation,
+        templateCatalogDigest:basis.templateCatalogDigest,feasibility};
+      const digest=postgresJsonbContentDigest(body);
+      operationRemaining(expires,controller.signal);
+      if(!confirm)return {schema:'custodial.approved-static-initial-preview.v1',status:'PREVIEW_ONLY',previewDigest:digest,
+        sourceId:id,effectiveStart:date,serviceDate:date,templateId,authorityRevision:revision,assignments:feasibility.assignments,
+        lunch:feasibility.lunchDocument,mapping:feasibility.mapping,
+        constraintView:approvedStaticConstraintView(feasibility),
+        solverInvoked:false,published:false};
+      if(!/^[a-f0-9]{64}$/.test(text(previewDigest))||previewDigest!==digest)throw fail('static_template_preview_changed');
+      const accepted=await call(client,'static_weekly_materialize_approved_initial_baseline',
+        [actor.managerId,id,date,revision,basis.generation,request.idempotencyKey,{...body,previewDigest:digest,request}]);
+      if(accepted?.ok!==true||accepted.persistence_status!=='PERSISTED'||accepted.feasibility_digest!==feasibility.digest
+        ||accepted.source_id!==id||!Number.isSafeInteger(accepted.authority_revision)
+        ||!accepted.lunch_document_identity||accepted.lunch_document_identity!==feasibility.lunchDocument.document_identity)
+        throw fail('static_template_materialization_not_persisted');
+      requirePublicationId(accepted.publication_id);requireUuid(accepted.projection_id,'static_template_materialization_not_persisted');
+      const current=await snapshotFor(client,date),lunch=await call(client,'static_weekly_v8_read_lunch_document',[date]);
+      if(current?.projection_status!=='current'||current.authority_revision!==accepted.authority_revision
+        ||current.current_publication?.publication_id!==accepted.publication_id||current.latest_projection?.projection_id!==accepted.projection_id
+        ||lunch?.persistence_status!=='PERSISTED'||lunch.projection_id!==accepted.projection_id
+        ||lunch.document_identity!==accepted.lunch_document_identity)throw fail('static_template_current_readback_mismatch');
+      operationRemaining(expires,controller.signal);
+      return {schema:'custodial.approved-static-initial-confirmation.v1',status:'PERSISTED_CURRENT',...accepted,
+        revision:accepted.authority_revision,previewDigest:digest,solverInvoked:false};
+    },{signal:controller.signal,deadlineAt:expires,reconcileManagerId:confirm?actor.managerId:null});
+    }finally{clearTimeout(timeout);signal?.removeEventListener?.('abort',relay);}
   }
 
   async function registeredSourceFor(client, sourceId, effectiveStart) {
@@ -640,6 +1242,24 @@ export function createStaticWeeklyControlPlane({
   }
 
   return {
+    runManagerOperation,
+    async getApprovedScheduleChoices({manager}) {
+      requireManager(manager);
+      return transaction(client=>call(client,"custodial_read_approved_schedule_choices_v1",[
+        manager.manager_id,manager.credential_id,manager.device_id,manager.access_level]));
+    },
+    async getApprovedInitialSelection({manager,weekStart,signal,deadlineAt}) {
+      requireManager(manager);
+      const week=requireMonday(weekStart,'initial selection week');
+      return transaction(client=>call(client,'custodial_read_approved_initial_selection_v1',[
+        manager.manager_id,manager.credential_id,manager.device_id,manager.access_level,week]),{signal,deadlineAt});
+    },
+    async previewApprovedStaticPattern(input) { return approvedStaticOperation(input,false); },
+    async confirmApprovedStaticPattern(input) { return approvedStaticOperation(input,true); },
+    async previewApprovedInitialBaseline(input) { return approvedInitialOperation(input,false); },
+    async publishApprovedInitialBaseline(input) { return approvedInitialOperation(input,true); },
+    async getApprovedInitialConfirmationStatus(input) { return approvedConfirmationStatus('initial',input); },
+    async getApprovedStaticConfirmationStatus(input) { return approvedConfirmationStatus('recurring',input); },
     schema: STATIC_WEEKLY_CONTROL_PLANE_SCHEMA,
     health() {
       return admitHealthCheck(async () => {

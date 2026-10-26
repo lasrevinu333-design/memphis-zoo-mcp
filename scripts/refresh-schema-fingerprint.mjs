@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
 import { execFileSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { readFileSync, writeFileSync, lstatSync } from "node:fs";
+import { resolve, isAbsolute } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { SCHEMA_CATALOG_QUERIES, captureSchemaCatalog, fingerprintSchemaCatalog } from "./schema-fingerprint-catalog.mjs";
@@ -10,7 +10,33 @@ import { SCHEMA_CATALOG_QUERIES, captureSchemaCatalog, fingerprintSchemaCatalog 
 const container=String(process.env.SCHEMA_FINGERPRINT_DOCKER_CONTAINER||"").trim();
 const database=String(process.env.SCHEMA_FINGERPRINT_DATABASE||"").trim();
 const mcpUrl=String(process.env.SCHEMA_FINGERPRINT_MCP_URL||"").trim();
-if(!mcpUrl&&(!/^(postgres|mz_schema_rebuild_[a-zA-Z0-9_]+)$/.test(database)||!/^mz_schema_rebuild_[a-zA-Z0-9_]+$/.test(container)))throw new Error("A disposable mz_schema_rebuild Docker container/database or SCHEMA_FINGERPRINT_MCP_URL is required.");
+const freshCustodyDirectory=String(process.env.SCHEMA_FINGERPRINT_FRESH_CUSTODY||"").trim();
+let disposableContainer=/^mz_schema_rebuild_[a-zA-Z0-9_]+$/.test(container);
+if(freshCustodyDirectory){
+  if(mcpUrl||database!=="postgres"||!/^[a-f0-9]{64}$/.test(container)||!isAbsolute(freshCustodyDirectory))throw new Error("Fresh fingerprint capture requires the exact owned CID and postgres database.");
+  const directory=lstatSync(freshCustodyDirectory);
+  if(!directory.isDirectory()||directory.uid!==process.getuid()||(directory.mode&0o777)!==0o700)throw new Error("Fresh fingerprint custody directory is not private and owned.");
+  function custodyText(name,receipt=true){
+    const path=resolve(freshCustodyDirectory,name),file=lstatSync(path);
+    if(!file.isFile()||file.uid!==directory.uid||(receipt&&(file.mode&0o777)!==0o600)||file.nlink!==1)throw new Error("Fresh fingerprint custody file is not private and owned.");
+    return readFileSync(path,"utf8");
+  }
+  const birth=JSON.parse(custodyText("PREBIRTH_ORIGINAL_CONTAINER.json"));
+  const bound=JSON.parse(custodyText("RETURNED_ORIGINAL_CID.json"));
+  const image=JSON.parse(custodyText("BOUND_ORIGINAL_IMAGE_ID.json"));
+  const manifest=JSON.parse(readFileSync(resolve(new URL("..",import.meta.url).pathname,"release/fresh-only-replay/MANIFEST.json"),"utf8"));
+  if(birth.schema!=="custodial.ci-fresh-original-container-custody.v1"||birth.directory!==freshCustodyDirectory
+    ||!/^mz_schema_rebuild_[a-zA-Z0-9_]+$/.test(birth.name)||!/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(birth.owner)
+    ||birth.cidfile!==resolve(freshCustodyDirectory,"original-container.cid")||custodyText("original-container.cid",false).trim()!==container
+    ||birth.image!==manifest.image||!/^public\.ecr\.aws\/supabase\/postgres@sha256:[a-f0-9]{64}$/.test(birth.image)
+    ||bound.id!==container||bound.name!==birth.name||bound.owner!==birth.owner||bound.image!==birth.image
+    ||image.image!==birth.image||image.image_id!==bound.image_id||!/^sha256:[a-f0-9]{64}$/.test(bound.image_id))throw new Error("Fresh fingerprint original custody receipts disagree.");
+  const observed=JSON.parse(execFileSync("docker",["inspect","--format","{{json .}}",container],{encoding:"utf8"}));
+  if(observed.Id!==container||observed.Name!=="/"+birth.name||observed.Config?.Labels?.["custodial.owner"]!==birth.owner
+    ||observed.Config?.Image!==birth.image||observed.Image!==bound.image_id)throw new Error("Fresh fingerprint original container ownership/image mismatch.");
+  disposableContainer=true;
+}
+if(!mcpUrl&&(!/^(postgres|mz_schema_rebuild_[a-zA-Z0-9_]+)$/.test(database)||!disposableContainer))throw new Error("A disposable mz_schema_rebuild Docker container/database or SCHEMA_FINGERPRINT_MCP_URL is required.");
 if(mcpUrl&&!/^https:\/\//i.test(mcpUrl)&&!/^http:\/\/(127\.0\.0\.1|localhost)(?::\d+)?\//i.test(mcpUrl))throw new Error("SCHEMA_FINGERPRINT_MCP_URL must use HTTPS or local HTTP.");
 const root=resolve(new URL("..",import.meta.url).pathname);
 const inputPath=resolve(root,"supabase/canonical/schema-fingerprint-input.json");
@@ -27,7 +53,7 @@ function queryDocker(sql,name){
   const wrapped=`select coalesce(json_agg(row_to_json(q)),'[]'::json)::text from (${sql}) q;`;
   const output=execFileSync("docker",["exec",container,"psql","-v","ON_ERROR_STOP=1","-At","-U","supabase_admin","-d",database,"-c",wrapped],{encoding:"utf8",maxBuffer:64*1024*1024}).trim();
   const rows=JSON.parse(output.split("\n").at(-1)||"[]");
-  if(name==="cron_jobs"&&/^mz_schema_rebuild_[a-zA-Z0-9_]+$/.test(container)&&/^mz_schema_rebuild_[a-zA-Z0-9_]+$/.test(database))return rows.map((row)=>row.database===database?{...row,database:"postgres"}:row);
+  if(name==="cron_jobs"&&disposableContainer&&/^mz_schema_rebuild_[a-zA-Z0-9_]+$/.test(database))return rows.map((row)=>row.database===database?{...row,database:"postgres"}:row);
   return rows;
 }
 

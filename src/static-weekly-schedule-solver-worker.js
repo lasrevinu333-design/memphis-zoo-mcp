@@ -27,6 +27,53 @@ const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 let runtime;
 let activeCollector = null;
 
+// Diagnostic custody only: an exception still throws with its original identity.
+// No LP/output/error text is retained, and no public result or admission consumes
+// these facts. A private observer may take the finite record once before the
+// compiler converts the exception into its existing failure response.
+const solverExceptionDiagnostics = new WeakMap();
+export function takeStaticWeeklySolverExceptionDiagnostic(cause) {
+  if (cause === null || (typeof cause !== "object" && typeof cause !== "function")) return null;
+  const diagnostic = solverExceptionDiagnostics.get(cause) || null;
+  solverExceptionDiagnostics.delete(cause);
+  return diagnostic;
+}
+function retainSolverExceptionDiagnostic(cause, { lp, timeLimitSeconds, stage, collector }) {
+  if (cause === null || (typeof cause !== "object" && typeof cause !== "function")) return;
+  solverExceptionDiagnostics.delete(cause);
+  // Diagnostic failure must never replace an exception or prevent finally's
+  // collector cleanup. Only an actual primitive LP string is inspected.
+  try {
+    if (typeof lp !== "string" || !Number.isFinite(timeLimitSeconds)) return;
+    let lines = 1;
+    for (let index = 0; index < lp.length; index += 1) if (lp.charCodeAt(index) === 10) lines += 1;
+    const output = { printRecords: 0, printErrRecords: 0, abortedMarker: false, memoryMarker: false,
+      solverErrorMarker: false, terminalStart: false, terminalEnd: false,
+      collectedBytes: collector.bytes, truncated: collector.truncated };
+    for (const record of collector.records) {
+      if (record.channel === "print") output.printRecords += 1;
+      if (record.channel === "printErr") output.printErrRecords += 1;
+      output.abortedMarker ||= /\bAborted\(\)/.test(record.text);
+      output.memoryMarker ||= /out of memory|heap limit|allocation failed/i.test(record.text);
+      output.solverErrorMarker ||= /\bERROR\b|assert_ok|Highs_run/.test(record.text);
+      output.terminalStart ||= record.text === REPORT_START;
+      output.terminalEnd ||= record.text === REPORT_END;
+    }
+    solverExceptionDiagnostics.set(cause, Object.freeze({
+      schema: "memphis-zoo.static-weekly-solver-exception-diagnostic.v1",
+      classification: stage === "solver_call" ? "EXCEPTION_NO_RETURNED_SOLUTION_STATUS" : "EXCEPTION_AFTER_RESULT_RETURN_NO_STATUS_INFERRED",
+      stage,
+      lp: Object.freeze({ sha256: sha256(lp), utf8Bytes: Buffer.byteLength(lp, "utf8"), utf16Characters: lp.length, lines }),
+      options: Object.freeze({ ...OPTIONS, time_limit: timeLimitSeconds }),
+      output: Object.freeze(output),
+      diagnosticOnly: true,
+      rawPayloadRetained: false,
+    }));
+  } catch {
+    // No diagnostic is preferable to masking the original runtime failure.
+  }
+}
+
 function reportError(code, detail = {}) { return { code, ...detail }; }
 function reportRepresentation(records) {
   // This is deliberately a fixed-order JSON representation rather than a
@@ -273,8 +320,10 @@ function solveWithRuntime(activeRuntime, {
   }
   if (behavior === "crash") process.exit(91);
   const collector = beginCollector();
+  let failureStage = "solver_call";
   try {
     const result = activeRuntime.solver.solve(lp, { ...OPTIONS, time_limit: timeLimitSeconds });
+    failureStage = "result_processing";
     if (behavior === "non_optimal") result.Status = "Feasible";
     if (behavior === "malformed") delete result.Columns;
     // Test-only adversary: safely above the pinned 1e-9 integer tolerance.
@@ -287,6 +336,9 @@ function solveWithRuntime(activeRuntime, {
     const options = { ...OPTIONS, time_limit: timeLimitSeconds };
     const rawReceiptDigest = sha256(Buffer.from(rawReceiptRepresentation(options, evidence.terminalReport), "utf8"));
     return { type: "result", id, result, evidence: { ...evidence, rawReceiptDigest }, identity: activeRuntime.identity, modelAttestation, options };
+  } catch (cause) {
+    retainSolverExceptionDiagnostic(cause, { lp, timeLimitSeconds, stage: failureStage, collector });
+    throw cause;
   } finally {
     finalizeCollector(collector);
   }

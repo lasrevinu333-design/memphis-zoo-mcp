@@ -8,6 +8,10 @@ import { assertConfiguredReleaseIdentity } from "./release-manifest.js";
 import { makeRestoreMutationGate } from "./restore-mutation-gate.js";
 import { renderCoverAllPdfPair } from "./static-weekly-coverall-print.js";
 
+import { beginBoundedManagerRequest } from "./static-weekly-manager-operation.js";
+import {approvedInitialRequest,approvedInitialSelectionRequest,APPROVED_INITIAL_REQUEST_ERROR} from "./static-weekly-approved-initial-request.js";
+import {OPENING_COVERAGE_ERROR,sanitizeOpeningCoverageDiagnostic} from './static-weekly-opening-coverage-report.js';
+
 const text = (value) => typeof value === "string" ? value.trim() : "";
 const fail = (code, message = code) => Object.assign(new Error(message), { code });
 
@@ -45,6 +49,7 @@ export function createStaticWeeklyControlPlaneRuntime({
   createDatabase = createStaticWeeklyControlPlaneDatabase,
   createControlPlane = createStaticWeeklyControlPlane,
   createSupabaseClient = createClient,
+  managerOperationClock = null,
 } = {}) {
   const releaseIdentity = assertConfiguredReleaseIdentity();
   const { url, key } = requireTrustedDeviceConfiguration(env);
@@ -67,7 +72,16 @@ export function createStaticWeeklyControlPlaneRuntime({
     if (req.method === "OPTIONS") { res.sendStatus(204); return; }
     next();
   });
+  app.use((req,res,next)=>{beginBoundedManagerRequest(req,res,managerOperationClock||undefined);next();});
   app.use(express.json({ limit: "128kb" }));
+  app.use((error,req,res,next)=>{
+    // The first-origin timer may have already sent a typed 503 while an
+    // incomplete body was still in express.json. Closing that one request
+    // intentionally makes raw-body report request.aborted after the response.
+    if (res.writableEnded && req.staticWeeklyManagerOperation?.signal.aborted
+      && error?.type === 'request.aborted') return;
+    next(error);
+  });
   app.use(makeRestoreMutationGate({ supabase: trustedSupabase, required: true, serviceName: "memphis-zoo-static-weekly-control-plane" }));
 
   const requireManagerWrite = makeOpsAccessMiddleware({
@@ -77,6 +91,7 @@ export function createStaticWeeklyControlPlaneRuntime({
     supabase: trustedSupabase,
     requireTrustedDeviceStore: true,
     requireCurrentManagerAssociation: true,
+    operationSignalForRequest: req => req.staticWeeklyManagerOperation?.signal || null,
   });
 
   function namedManager(req, res, next) {
@@ -89,6 +104,22 @@ export function createStaticWeeklyControlPlaneRuntime({
   }
 
   function manager(req) { return req.memphisAuth; }
+  const runOwnedRecurring = (req, kind, body) => {
+    // Fixed approved patterns already acquire the control plane's single
+    // transaction queue. Holding an external-child slot around that same
+    // transaction can exhaust all three slots with three simultaneous callers.
+    // Do not acquire a second slot or invoke the retired optimizer path.
+    if(body.full_nine_source_id!=null)throw fail('static_template_legacy_source_selector_not_supported');
+    const method=kind==='preview'?'previewApprovedStaticPattern':'confirmApprovedStaticPattern';
+    if(typeof authorityControlPlane[method]!=="function")throw fail('static_weekly_control_plane_busy',
+      'The approved pattern authority is unavailable; no work was started.');
+    const input={manager:manager(req),serviceDate:body.effective_start,
+      expectedRevision:body.expected_revision,templateId:body.template_id??null,
+      signal:req.restoreMutationLease.signal,deadlineAt:req.staticWeeklyManagerOperation.deadlineAt};
+    return authorityControlPlane[method](kind==='preview'?input:{...input,
+      previewDigest:body.preview_digest,idempotencyKey:body.confirmation_key});
+  };
+
   function releaseIdentityPayload() {
     return releaseIdentity ? {
       release_id: releaseIdentity.release_id,
@@ -100,15 +131,69 @@ export function createStaticWeeklyControlPlaneRuntime({
   }
   function respond(operation) {
     return async (req, res) => {
-      try { res.status(200).json({ ok: true, data: await operation(req) }); }
+      let data, operationCompleted=false;
+      try {
+        const route=String(req.path||"").replace(/\/$/,"").toLowerCase();
+        const permission=route==="/static-weekly/contractor-capacity"?"manage_coverall":
+          /^\/static-weekly\/staffing-commands(?:\/|$)/.test(route)?"manage_absences":
+          ["/static-weekly/exceptions","/static-weekly/day-changes/batch"].includes(route)?"manage_absences":
+          ["/static-weekly/projections","/static-weekly/rebuild-current-projection"].includes(route)?"regenerate_routes":"write";
+        if(req.staticWeeklyManagerOperation && typeof authorityControlPlane.runManagerOperation==="function") {
+          data=await authorityControlPlane.runManagerOperation({manager:manager(req),permission,
+            signal:req.staticWeeklyManagerOperation.readOnly?req.staticWeeklyManagerOperation.signal:req.restoreMutationLease.signal,
+            deadlineAt:req.staticWeeklyManagerOperation.deadlineAt},()=>operation(req));
+        }else{data=await operation(req);}
+        operationCompleted=true;
+        // Mutation POSTs must settle their exact restore lease before success.
+        // The selection-only GET retains the control plane's SQL restore fence,
+        // current actor verification and ingress deadline without a write lease.
+        if (req.staticWeeklyManagerOperation&&!req.staticWeeklyManagerOperation.readOnly) {
+          if (typeof req.restoreMutationLease?.settleBeforeSuccess !== 'function') {
+            throw fail('static_weekly_recurring_mutation_lease_release_unknown',
+              'The manager operation cannot confirm its exact restore lease release. Check the exact status before retrying.');
+          }
+          await req.restoreMutationLease.settleBeforeSuccess();
+        }
+        res.status(200).json({ ok: true, data });
+      }
       catch (error) {
+        let responseError = error;
+        if (req.staticWeeklyManagerOperation&&!req.staticWeeklyManagerOperation.readOnly
+          && error?.code !== "static_weekly_recurring_operation_custody_unknown"
+          && error?.code !== "static_weekly_recurring_mutation_lease_release_unknown") {
+          // Even a failed private operation must not answer while a proved
+          // group still has an unsettled exact lease-release attempt. The
+          // original ingress signal bounds this wait; uncertainty remains 503.
+          try { await req.restoreMutationLease.settleBeforeSuccess(); }
+          catch (releaseError) { responseError = releaseError; }
+        }
         const unavailable = new Set([
           "static_weekly_control_plane_database_unavailable",
           "static_weekly_control_plane_closing",
           "static_weekly_control_plane_busy",
           "static_weekly_control_plane_queue_timeout",
-        ]).has(error?.code);
-        res.status(error?.code === "static_weekly_control_plane_compiler_rejected" ? 422 : unavailable ? 503 : 409).json({ ok: false, error: error?.message || "Static weekly control-plane request failed.", code: error?.code || "static_weekly_control_plane_failed" });
+          "static_weekly_recurring_operation_deadline_exceeded",
+          "static_weekly_recurring_operation_aborted",
+          "static_weekly_recurring_confirmation_outcome_unknown",
+          "static_weekly_recurring_mutation_lease_release_unknown",
+          "static_weekly_recurring_operation_custody_unknown",
+          "static_weekly_operation_source_invalid",
+          "static_weekly_operation_deadline",
+          "static_weekly_operation_outcome_unknown",
+          "static_weekly_operation_failed",
+          "static_weekly_operation_aborted",
+          "static_weekly_operation_child_exited",
+          "static_weekly_operation_reap_unproven",
+          "static_weekly_compiler_request_aborted",
+        ]).has(responseError?.code);
+        const invalid = ["static_weekly_control_plane_compiler_rejected", "static_weekly_recurring_confirmation_request_invalid", "static_weekly_recurring_delivery_request_invalid",APPROVED_INITIAL_REQUEST_ERROR,OPENING_COVERAGE_ERROR].includes(responseError?.code);
+        const diagnostic=responseError?.code===OPENING_COVERAGE_ERROR?sanitizeOpeningCoverageDiagnostic(responseError.openingCoverageDiagnostic):null;
+        res.status(responseError?.code === "42501" ? 403 : invalid ? 422 : unavailable ? 503 : 409).json({ ok: false, error: diagnostic
+          ?'Opening planned coverage has inconsistent essential source facts. Nothing was admitted or published.'
+          :responseError?.message || "Static weekly control-plane request failed.", code: responseError?.code || "static_weekly_control_plane_failed",
+          ...(operationCompleted?{operation_outcome:"accepted",accepted_result:data}:
+            unavailable?{operation_outcome:"unknown"}:{operation_outcome:"rejected"}),
+          ...(diagnostic?{openingCoverageDiagnostic:diagnostic}:{}) });
       }
     };
   }
@@ -154,6 +239,55 @@ export function createStaticWeeklyControlPlaneRuntime({
   app.get("/healthz", liveness);
   app.get(["/health", "/ready"], readiness);
   app.get("/static-weekly/manager-snapshot", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.getManagerSnapshot({ manager: manager(req), weekStart: req.query?.week_start })));
+  app.get("/static-weekly/approved-choices",requireManagerWrite,namedManager,respond(req=>authorityControlPlane.getApprovedScheduleChoices({manager:manager(req)})));
+  app.get('/static-weekly/approved-initial/selection',requireManagerWrite,namedManager,respond(req=>{
+    const input=approvedInitialSelectionRequest(req.query);
+    if(req.staticWeeklyManagerOperation?.readOnly!==true||typeof authorityControlPlane.getApprovedInitialSelection!=='function')
+      throw fail('static_weekly_control_plane_database_unavailable','Approved selection metadata is unavailable.');
+    return authorityControlPlane.getApprovedInitialSelection({manager:manager(req),weekStart:input.weekStart,
+      signal:req.staticWeeklyManagerOperation.signal,deadlineAt:req.staticWeeklyManagerOperation.deadlineAt});
+  }));
+  // Distinct fixed-pattern baseline: never fall back to the historical draft
+  // optimizer. The same first-ingress deadline and restore-lease settlement
+  // cover authentication, source reads, publication and response delivery.
+  for (const [action,method] of [["preview","previewApprovedInitialBaseline"],["confirm","publishApprovedInitialBaseline"]]) {
+    app.post(`/static-weekly/approved-initial/${action}`,requireManagerWrite,namedManager,respond(req=>{
+      const input=approvedInitialRequest(req.body,{confirm:action==="confirm"});
+      const operation=req.staticWeeklyManagerOperation;
+      if(!operation||!req.restoreMutationLease?.signal||typeof authorityControlPlane[method]!=="function")
+        throw fail("static_weekly_control_plane_database_unavailable","Approved initial schedule service is unavailable.");
+      return authorityControlPlane[method]({...input,manager:manager(req),signal:req.restoreMutationLease.signal,deadlineAt:operation.deadlineAt});
+    }));
+  }
+  app.post("/static-weekly/recurring-adaptation/preview", requireManagerWrite, namedManager, respond((req) => {
+    const body=req.body,allowed=new Set(['effective_start','expected_revision','full_nine_source_id','template_id']);
+    if(!body||typeof body!=='object'||Array.isArray(body)||!Object.hasOwn(body,'effective_start')
+      ||!Object.hasOwn(body,'expected_revision')||Object.keys(body).some(key=>!allowed.has(key)))
+      throw fail('static_weekly_recurring_confirmation_request_invalid','Preview accepts only source/revision selectors, never supplied schedule, report, compiler or manager facts.');
+    return runOwnedRecurring(req, "preview", body);
+  }));
+  app.post("/static-weekly/recurring-adaptation/confirm", requireManagerWrite, namedManager, respond((req) => {
+    const body=req.body;
+    const required=["confirmation_key","effective_start","expected_revision","preview_digest"];
+    const allowed=new Set([...required,"full_nine_source_id","template_id"]);
+    if (!body || typeof body!=="object" || Array.isArray(body)
+      || required.some(key=>!Object.hasOwn(body,key)) || Object.keys(body).some(key=>!allowed.has(key))) {
+      throw fail("static_weekly_recurring_confirmation_request_invalid", "Confirmation accepts only the exact preview identity and revision; schedule facts and manager identity come from authenticated authority.");
+    }
+    return runOwnedRecurring(req, "confirm", body);
+  }));
+  app.get("/static-weekly/recurring-adaptation/confirmations/:confirmationKey", requireManagerWrite, namedManager, respond((req) =>
+    {
+      if(Object.keys(req.query||{}).length||Object.keys(req.body||{}).length||Array.isArray(req.body))
+        throw fail('static_weekly_recurring_confirmation_request_invalid','Status accepts only the original path identity.');
+      return authorityControlPlane.getApprovedStaticConfirmationStatus({manager:manager(req),confirmationKey:req.params.confirmationKey});
+    }));
+  app.get("/static-weekly/approved-initial/confirmations/:idempotencyKey", requireManagerWrite, namedManager, respond((req) =>
+    {
+      if(Object.keys(req.query||{}).length||Object.keys(req.body||{}).length||Array.isArray(req.body))
+        throw fail('static_weekly_recurring_confirmation_request_invalid','Status accepts only the original path identity.');
+      return authorityControlPlane.getApprovedInitialConfirmationStatus({manager:manager(req),confirmationKey:req.params.idempotencyKey});
+    }));
   app.post("/static-weekly/staffing-commands", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.beginStaffingCommand({
     manager: manager(req),
     commandKind: req.body?.command_kind,

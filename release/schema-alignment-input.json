@@ -1,12 +1,12 @@
 {
   "release_id": "release-2026.07.19.custodial-v3.12",
-  "frontend_commit_sha": "5ed9007bb80fc345463b7cf1867e52e2f4ddcec8",
+  "frontend_commit_sha": "f0e5994762ee1362252e167475dd59d6e75982e6",
   "frontend_commit_state": "final_pair_bound",
   "backend_minimum_version": "release-2026.07.19.custodial-v3.12",
-  "schema_from_fingerprint": "750e7f040519f6d4555836cbd4d172a22f98911d5bab9918fa370238fff3f822",
+  "schema_from_fingerprint": "b496c72630100da8173006aa34886c7868b3ead5bea43e056135df64cf53b4ce",
   "schema_transition": {
-    "transition_id": "custodial-verified-visits-20260922",
-    "expires_at": "2026-10-02T23:59:59Z"
+    "transition_id": "custodial-post293-test-20261025",
+    "expires_at": "2026-11-01T15:12:05Z"
   },
   "api_contract_versions": {
     "scan": "scan.v4.snapshot-bound-authority",

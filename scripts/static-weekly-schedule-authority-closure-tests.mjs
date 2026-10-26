@@ -143,9 +143,10 @@ async function expectNoMutation(action, pattern, label) {
 try {
   const postgresImage = process.env.SCHEMA_REBUILD_DOCKER_IMAGE || "supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed";
   await docker(["image", "inspect", postgresImage]);
-  await docker(["run", "--rm", "-d", "--name", container, "--tmpfs", "/var/lib/postgresql/data:rw,size=1g", "-e", "POSTGRES_PASSWORD=postgres", postgresImage, "-c", "shared_preload_libraries=pg_cron,pg_net,pg_stat_statements"]);
+  await docker(["run", "--rm", "-d", "--network", "none", "--name", container, "--tmpfs", "/var/lib/postgresql/data:rw,size=1g", "-e", "POSTGRES_PASSWORD=postgres", postgresImage, "-c", "shared_preload_libraries=pg_cron,pg_net,pg_stat_statements", "-c", "cron.launch_active_jobs=off"]);
   await eventually(() => dockerSql("select 1"));
   await new Promise((resolve) => setTimeout(resolve, 10_000));
+  assert.equal((await dockerSql("show cron.launch_active_jobs")).stdout.trim(), "off", "cron job launching must be disabled before canonical migration replay");
   pool = createDockerPool();
   await pool.query("do $$ begin create role anon; exception when duplicate_object then null; end $$; do $$ begin create role authenticated; exception when duplicate_object then null; end $$; do $$ begin create role service_role; exception when duplicate_object then null; end $$;");
   for (const name of fs.readdirSync(migrationsDir).filter((entry) => entry.endsWith(".sql")).sort()) await pool.query(fs.readFileSync(path.join(migrationsDir, name), "utf8"));

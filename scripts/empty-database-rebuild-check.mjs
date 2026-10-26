@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
-import { readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync, mkdtempSync, rmSync, chmodSync, openSync, closeSync, writeFileSync, fsyncSync, existsSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { loadCiFreshOnlyReplay } from "./ci-fresh-only-replay.mjs";
 import { resolve } from "node:path";
 import pg from "pg";
 
@@ -25,6 +27,78 @@ if (adminUrl && !/(localhost|127\.0\.0\.1|memphis-rebuild|schema-rebuild|test|ci
 const root = resolve(new URL("..", import.meta.url).pathname);
 const migrationsDir = resolve(root, "supabase/migrations");
 const migrationFiles = readdirSync(migrationsDir).filter((name) => name.endsWith(".sql")).sort();
+if (process.env.SCHEMA_REBUILD_FRESH_ONLY !== undefined && process.env.SCHEMA_REBUILD_FRESH_ONLY !== '1')
+  throw new Error('SCHEMA_REBUILD_FRESH_ONLY must be the explicit value 1.');
+const freshOnly = process.env.SCHEMA_REBUILD_FRESH_ONLY === '1';
+if (freshOnly && (!dockerImage || dockerContainer || adminUrl || useEmptyContainerPostgres
+  || (process.env.SCHEMA_REBUILD_DOCKER_USER && process.env.SCHEMA_REBUILD_DOCKER_USER !== 'supabase_admin')))
+  throw new Error('Fresh-only replay requires its own new pinned-image container, never an existing container/URL or another installer.');
+const freshSelection = freshOnly ? loadCiFreshOnlyReplay(root, dockerImage, migrationFiles) : null;
+let freshInitDirectory = null;
+let freshChecksPassed = false;
+let freshCustody = null;
+let freshContainerCID = null;
+let freshContainerMayExist = false;
+
+function freshCustodyReceipt(name, data) {
+  const fd = openSync(resolve(freshCustody.directory, name), 'wx', 0o600);
+  try { writeFileSync(fd, JSON.stringify(data, null, 2) + '\n'); fsyncSync(fd); }
+  finally { closeSync(fd); }
+  const directory = openSync(freshCustody.directory, 'r');
+  try { fsyncSync(directory); } finally { closeSync(directory); }
+}
+function freshInspect(target) {
+  const result = spawnSync('docker', ['inspect', '--format', '{{json .}}', target], { encoding: 'utf8' });
+  if (result.status === 0) return JSON.parse(result.stdout);
+  const absent = ['Error: No such object: ', 'Error: No such container: ', 'error: no such object: ']
+    .some(prefix => result.stderr === prefix + target + '\n');
+  if (result.status === 1 && !result.stdout.trim() && absent) return null;
+  throw new Error('Fresh container inspect unresolved: ' + target);
+}
+function freshOwnedIdentity() {
+  const fromFile = existsSync(freshCustody.cidfile) ? readFileSync(freshCustody.cidfile, 'utf8').trim() : null;
+  if (fromFile && !/^[a-f0-9]{64}$/.test(fromFile)) throw new Error('Invalid original fresh CID file');
+  if (freshContainerCID && fromFile && freshContainerCID !== fromFile) throw new Error('Original fresh CID changed');
+  const expected = freshContainerCID || fromFile;
+  const observed = freshInspect(expected || freshCustody.name);
+  if (!observed) {
+    if (expected && freshInspect(freshCustody.name)) throw new Error('Fresh name/CID absence disagrees');
+    return null;
+  }
+  if (!/^[a-f0-9]{64}$/.test(observed.Id) || observed.Name !== '/' + freshCustody.name
+    || (expected && observed.Id !== expected)
+    || observed.Config.Labels?.['custodial.owner'] !== freshCustody.owner
+    || observed.Config.Image !== freshCustody.image)
+    throw new Error('Fresh container ownership/image mismatch; no cleanup permitted');
+  // Docker run retains its original first-pull behavior. Bind the local image only after birth.
+  const imageId = runDocker(['image', 'inspect', '--format', '{{.Id}}', freshCustody.image]).trim();
+  if (!/^sha256:[a-f0-9]{64}$/.test(imageId) || observed.Image !== imageId
+    || (freshCustody.image_id && freshCustody.image_id !== imageId))
+    throw new Error('Original pinned image ID mismatch; no cleanup permitted');
+  if (!freshCustody.image_id) {
+    freshCustody.image_id = imageId;
+    freshCustodyReceipt('BOUND_ORIGINAL_IMAGE_ID.json', { image: freshCustody.image, image_id: imageId });
+  }
+  if (!freshContainerCID) {
+    freshContainerCID = observed.Id;
+    freshCustodyReceipt('BOUND_ORIGINAL_CID.json', { id: freshContainerCID, name: freshCustody.name,
+      owner: freshCustody.owner, image: freshCustody.image, image_id: freshCustody.image_id });
+  }
+  return observed;
+}
+function cleanupFreshOwnedContainer() {
+  if (!freshContainerMayExist) return;
+  const observed = freshOwnedIdentity();
+  if (observed) {
+    execFileSync('docker', ['rm', '-f', observed.Id], { stdio: 'ignore' });
+    if (freshInspect(observed.Id) || freshInspect(freshCustody.name))
+      throw new Error('Original fresh container removal not confirmed');
+  }
+  freshCustodyReceipt('EXACT_CONTAINER_ABSENT.json', { id: freshContainerCID,
+    name: freshCustody.name, owner: freshCustody.owner, exact_absence: true });
+  freshContainerMayExist = false;
+}
+
 const retirementCorrectionPath = resolve(migrationsDir, "20260810130000_harden_named_manager_retired_archive_and_concurrency.sql");
 const retirementCorrection = readFileSync(retirementCorrectionPath, "utf8");
 const retirementCorrectionBody = retirementCorrection
@@ -45,11 +119,14 @@ function quoteIdentifier(value) {
   return `"${String(value).replaceAll('"', '""')}"`;
 }
 
-function dockerPsql(database, sql) {
+function dockerPsql(database, sql, atomicMode = null) {
   const user = process.env.SCHEMA_REBUILD_DOCKER_USER || "supabase_admin";
   const result = spawnSync(
     "docker",
-    ["exec", "-i", dockerContainer, "psql", "-v", "ON_ERROR_STOP=1", "-At", "-U", user, "-d", database],
+    ["exec", "-i", ...(freshOnly ? ["--user", "postgres"] : []), dockerContainer, "psql",
+      ...(freshOnly ? ["-X", "-q"] : []), "-v", "ON_ERROR_STOP=1", "-At", "-U", user, "-d", database,
+      ...(atomicMode === 'psql-single-transaction' ? ['--single-transaction'] : []),
+      ...(atomicMode ? ['-c', "DO $identity$ BEGIN IF session_user<>'supabase_admin' OR current_user<>'supabase_admin' THEN RAISE EXCEPTION 'Original installer session changed'; END IF; END $identity$;", '-f', '-'] : [])],
     { input: sql, encoding: "utf8", maxBuffer: 1024 * 1024 * 32 },
   );
   if (result.status !== 0) {
@@ -217,8 +294,8 @@ async function verifyDockerConcurrency(database) {
     values ('00000000-0000-4000-8000-00000000f211', 'GPS_HARDENING', 'GPS Hardening Test', 'restroom', 'restroom', true);
     insert into public.devices(id, device_id, device_name, active)
     values ('00000000-0000-4000-8000-00000000f212', 'GPS-HARDENING-DEVICE', 'GPS Hardening Device', true);
-    insert into public.location_proximity_settings(location_id, latitude, longitude, coordinate_source, coordinate_confidence, active)
-    values ('00000000-0000-4000-8000-00000000f211', 35.1495, -90.0490, 'empty_database_rebuild', 'test', true);
+    insert into public.location_proximity_settings(location_id, latitude, longitude, coordinate_source, coordinate_confidence, authority_radius_m, authority_surveyed_at, active)
+    values ('00000000-0000-4000-8000-00000000f211', 35.1495, -90.0490, 'empty_database_rebuild', 'surveyed', 175, clock_timestamp(), true);
   `);
   const gpsResults = [];
   const runIsolatedGpsEvaluation = (clientEventId, latitude, observedAtSql) => {
@@ -1157,7 +1234,36 @@ if (dockerImage) {
   dockerContainer = `mz_schema_rebuild_${Date.now()}_${randomUUID().replaceAll("-", "").slice(0, 8)}`;
   ownsDockerContainer = true;
   try {
-    runDocker([
+    if (freshOnly) {
+      freshInitDirectory = mkdtempSync(resolve(tmpdir(), 'custodial-ci-fresh-empty-init-'));
+      chmodSync(freshInitDirectory, 0o755);
+      const directory = mkdtempSync(resolve(tmpdir(), 'custodial-ci-fresh-custody-'));
+      chmodSync(directory, 0o700);
+      freshCustody = { schema: 'custodial.ci-fresh-original-container-custody.v1', directory,
+        name: dockerContainer, image: dockerImage, image_id: null, owner: randomUUID(),
+        cidfile: resolve(directory, 'original-container.cid'), empty_init_directory: freshInitDirectory };
+      freshCustodyReceipt('PREBIRTH_ORIGINAL_CONTAINER.json', freshCustody);
+      const parent = openSync(tmpdir(), 'r');
+      try { fsyncSync(parent); } finally { closeSync(parent); }
+      if (freshInspect(dockerContainer)) throw new Error('Fresh name already exists; no adoption or cleanup');
+      freshContainerMayExist = true;
+    }
+    const returnedCID = runDocker(freshOnly ? [
+      'run', '-d', '--name', dockerContainer, '--label', 'custodial.owner=' + freshCustody.owner,
+      '--cidfile', freshCustody.cidfile, '--network', 'none', '--read-only',
+      '--memory', '512m', '--memory-swap', '512m', '--cpus', '1', '--pids-limit', '64', '--no-healthcheck',
+      '--log-driver', 'local', '--log-opt', 'max-size=1m', '--log-opt', 'max-file=2',
+      '--tmpfs', '/tmp:rw,size=64m', '--tmpfs', '/var/run/postgresql:rw,size=8m',
+      '--tmpfs', '/var/lib/postgresql/data:rw,size=1g',
+      '--mount', `type=bind,source=${freshInitDirectory},target=/docker-entrypoint-initdb.d,readonly`,
+      '-e', 'POSTGRES_USER=supabase_admin', '-e', 'POSTGRES_DB=postgres', '-e', 'PGDATA=/var/lib/postgresql/data',
+      '-e', 'POSTGRES_PASSWORD=isolated-new-clean-no-network-test-only',
+      '-e', 'POSTGRES_INITDB_ARGS=--auth-local=trust --auth-host=scram-sha-256', dockerImage,
+      'postgres', '-D', '/var/lib/postgresql/data', '-c', 'shared_buffers=64MB', '-c', 'max_connections=10',
+      '-c', 'listen_addresses=', '-c', 'shared_preload_libraries=pg_cron,pg_net,pg_stat_statements',
+      '-c', 'cron.launch_active_jobs=off', '-c', 'cron.database_name=postgres',
+      '-c', 'statement_timeout=20000', '-c', 'lock_timeout=5000',
+    ] : [
       "run",
       "-d",
       "--name",
@@ -1172,6 +1278,16 @@ if (dockerImage) {
       "-c",
       "cron.launch_active_jobs=off",
     ]);
+    if (freshOnly) {
+      const cid = returnedCID.trim();
+      if (!/^[a-f0-9]{64}$/.test(cid) || readFileSync(freshCustody.cidfile, 'utf8').trim() !== cid)
+        throw new Error('Returned fresh CID and original CID file disagree');
+      freshContainerCID = cid;
+      if (!freshOwnedIdentity()) throw new Error('Original fresh container absent after launch');
+      freshCustodyReceipt('RETURNED_ORIGINAL_CID.json', { id: cid, name: freshCustody.name,
+        owner: freshCustody.owner, image: freshCustody.image, image_id: freshCustody.image_id });
+      dockerContainer = cid; // Every subsequent original check targets the exact owned object.
+    }
     let ready = false;
     // Supabase's PostgreSQL image performs substantial first-boot initialization.
     // Busy developer workstations can legitimately need more than three minutes.
@@ -1204,7 +1320,10 @@ if (dockerImage) {
     if (!healthy) throw new Error(`Disposable rebuild container ${dockerContainer} did not become healthy.`);
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10000);
   } catch (error) {
-    execFileSync("docker", ["rm", "-f", dockerContainer], { stdio: "ignore" });
+    try {
+      if (freshOnly) cleanupFreshOwnedContainer();
+      else execFileSync("docker", ["rm", "-f", dockerContainer], { stdio: "ignore" });
+    } finally { if (freshInitDirectory) rmSync(freshInitDirectory, { recursive: true }); }
     throw error;
   }
 }
@@ -1219,17 +1338,26 @@ if (dockerContainer) {
     } else if (!ownsDockerContainer) {
       dockerPsql("postgres", `create database ${quoteIdentifier(databaseName)};`);
     }
-    for (const file of migrationFiles) {
-      const sql = readFileSync(resolve(migrationsDir, file), "utf8");
-      dockerPsql(targetDatabase, sql);
+    if (freshSelection) {
+      if (dockerPsql(targetDatabase, "select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public';").trim() !== '0')
+        throw new Error('Fresh-only selected bootstrap requires an empty public schema.');
+      freshSelection.assertBootstrap(dockerPsql(targetDatabase, freshSelection.bootstrap));
+    }
+    for (let index = 0; index < migrationFiles.length; index++) {
+      const file = migrationFiles[index];
+      const selected = freshSelection?.entries[index];
+      const sql = selected ? selected.sql : readFileSync(resolve(migrationsDir, file), "utf8");
+      dockerPsql(targetDatabase, sql, selected?.atomicMode);
       console.log(`applied ${file}`);
     }
+    if (freshOnly && !freshOwnedIdentity()) throw new Error('Original fresh container absent before fingerprint capture');
     execFileSync(process.execPath, [resolve(root, "scripts/refresh-schema-fingerprint.mjs"), "--check"], {
       cwd: root,
       env: {
         ...process.env,
         SCHEMA_FINGERPRINT_DOCKER_CONTAINER: dockerContainer,
         SCHEMA_FINGERPRINT_DATABASE: targetDatabase,
+        SCHEMA_FINGERPRINT_FRESH_CUSTODY: freshOnly ? freshCustody.directory : "",
         SCHEMA_FINGERPRINT_MCP_URL: "",
       },
       stdio: "inherit",
@@ -1311,6 +1439,11 @@ if (dockerContainer) {
     const rebuildResult = JSON.parse(counts);
     assertRebuildInvariants(rebuildResult);
     console.log(JSON.stringify({ ok: true, database: targetDatabase, migrations: migrationFiles.length, counts: rebuildResult }, null, 2));
+    if (freshSelection) {
+      freshSelection.assertPreserved();
+      console.log(JSON.stringify({ scoped_fresh_only_replay: freshSelection.receipt }));
+      freshChecksPassed = true;
+    }
   } finally {
     try {
       if (!ownsDockerContainer && !useEmptyContainerPostgres && !keepDatabase) {
@@ -1328,10 +1461,12 @@ if (dockerContainer) {
     } catch {
       // Best-effort cleanup for local/CI disposable databases.
     } finally {
-      if (ownsDockerContainer && !keepDatabase) {
-        execFileSync("docker", ["rm", "-f", dockerContainer], { stdio: "ignore" });
+      if (ownsDockerContainer && (!keepDatabase || (freshOnly && !freshChecksPassed))) {
+        if (freshOnly) cleanupFreshOwnedContainer();
+        else execFileSync("docker", ["rm", "-f", dockerContainer], { stdio: "ignore" });
       }
-      if (ownsDockerContainer && keepDatabase) console.log(JSON.stringify({ retained_test_container: dockerContainer, retained_test_database: "postgres" }));
+      if (ownsDockerContainer && keepDatabase && (!freshOnly || freshChecksPassed)) console.log(JSON.stringify({ retained_test_container: dockerContainer, retained_test_database: "postgres" }));
+      if (freshInitDirectory) rmSync(freshInitDirectory, { recursive: true });
     }
   }
   process.exit(0);

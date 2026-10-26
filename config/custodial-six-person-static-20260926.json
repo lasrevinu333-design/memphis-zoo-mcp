@@ -1,0 +1,804 @@
+{
+  "schema": "custodial.owner-corrected-recurring-schedule.v2",
+  "effectiveDate": "2026-09-28",
+  "basePacket": {
+    "path": "/home/eric/custodial-codex/results/production-manager-20260820/STATIC-WEEKLY-WEIGHTED-SCHEDULE-PACKET-V6-20260826.json",
+    "sha256": "2aab217b29482894b883ce36a3d7a44516d8fc4aa2b329471551b2f4c9a86981"
+  },
+  "preserveBaseDays": [],
+  "slots": {
+    "KAREN": {
+      "slotId": "f22348e9-d4b9-5a7e-b8fd-d0d2c1ec534f",
+      "name": "Karen Robinson",
+      "personId": "3da709bb-2223-4e15-8e3a-db02e3f32e97",
+      "workDays": [
+        1,
+        2,
+        3,
+        5,
+        6
+      ],
+      "shift": [
+        "05:00",
+        "14:00"
+      ],
+      "lunch": [
+        "09:30",
+        "10:30"
+      ],
+      "normalAssignmentFamilies": [
+        "AQUARIUM",
+        "BONOBOS_RESTROOMS",
+        "BREEZEWAY_RESTROOMS",
+        "CATHOUSE_CAFE_RESTROOMS",
+        "CAT_COUNTRY",
+        "COURTYARD_RESTROOMS",
+        "EAST_ADMIN",
+        "EDUCATION",
+        "EVENT_CENTER",
+        "HERPETARIUM",
+        "NOCTURNAL",
+        "PRIMATE_CANYON",
+        "PRIMATE_PAVILLION",
+        "ZAMBEZI"
+      ]
+    },
+    "TAMMY": {
+      "slotId": "4a5a83ca-d297-5a30-8344-db08d05b978c",
+      "name": "Tammy Miller",
+      "personId": "cd97111e-cfa0-4228-b4d7-401bc7a5ac13",
+      "workDays": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "shift": [
+        "05:00",
+        "14:00"
+      ],
+      "lunch": [
+        "08:30",
+        "09:30"
+      ],
+      "normalAssignmentFamilies": [
+        "CHINA",
+        "EAST_ADMIN",
+        "EAST_END_RESTROOMS",
+        "NORTH_WEST_PASSAGE",
+        "PRIMATE_CANYON",
+        "PRIMATE_PAVILLION",
+        "TETON",
+        "ZAMBEZI"
+      ]
+    },
+    "KATHY": {
+      "slotId": "55e5939c-175c-5026-94fd-c4350d538922",
+      "name": "Kathy Phelps",
+      "personId": "30ec85e0-a579-45a8-9c27-c164e77a9190",
+      "workDays": [
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "shift": [
+        "06:00",
+        "15:00"
+      ],
+      "lunch": [
+        "10:30",
+        "11:30"
+      ],
+      "normalAssignmentFamilies": [
+        "AQUARIUM",
+        "EVENT_CENTER",
+        "EXPO",
+        "HERPETARIUM",
+        "KOMODOS",
+        "MEMMEX_RESTROOMS",
+        "TROPICAL_BIRDS"
+      ]
+    },
+    "OPTION2": {
+      "slotId": "ae56a131-e2fd-5465-8ab8-6e5dbf543204",
+      "name": null,
+      "personId": null,
+      "workDays": [
+        0,
+        1,
+        2,
+        5,
+        6
+      ],
+      "shift": [
+        "06:00",
+        "15:00"
+      ],
+      "lunch": [
+        "10:00",
+        "11:00"
+      ],
+      "vacancy": true,
+      "history": [
+        {
+          "personId": "6a55a1f0-feb9-4d03-ae7b-95114d2d17ce",
+          "name": "Tabitha Masterson",
+          "start": "2026-08-31",
+          "end": "2026-09-23"
+        }
+      ]
+    },
+    "OPTION4": {
+      "slotId": "40aaa043-6ff3-52c6-9c88-79da314f8b49",
+      "name": null,
+      "personId": null,
+      "workDays": [
+        0,
+        1,
+        2,
+        3,
+        6
+      ],
+      "shift": [
+        "06:00",
+        "15:00"
+      ],
+      "lunch": [
+        "10:00",
+        "11:00"
+      ],
+      "vacancy": true
+    },
+    "KAILI": {
+      "slotId": "e91b7a47-f20f-5777-a5d3-9c0ce8778df5",
+      "name": "Kaili Michaelson",
+      "personId": "abac6002-02ee-46b4-bc16-11337b0abb2a",
+      "workDays": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "shift": [
+        "07:00",
+        "16:00"
+      ],
+      "lunch": [
+        "11:00",
+        "12:00"
+      ],
+      "history": [
+        {
+          "personId": "abac6002-02ee-46b4-bc16-11337b0abb2a",
+          "name": "Kaili Michaelson",
+          "start": "2026-08-31",
+          "end": null
+        }
+      ]
+    },
+    "ALIJAH": {
+      "slotId": "36829381-70d7-521b-9f14-bad0af16ba87",
+      "name": "Alijah Collins",
+      "personId": "77d50e9a-6338-43b1-aed5-9f47d7129466",
+      "workDays": [
+        0,
+        1,
+        4,
+        5,
+        6
+      ],
+      "shift": [
+        "07:00",
+        "16:00"
+      ],
+      "lunch": [
+        "12:00",
+        "13:00"
+      ],
+      "hardForbiddenFamilies": [
+        "HERPETARIUM"
+      ]
+    },
+    "OPTION1": {
+      "slotId": "7044faec-4bbd-57ca-a898-ddd719503113",
+      "name": null,
+      "personId": null,
+      "workDays": [
+        0,
+        1,
+        4,
+        5,
+        6
+      ],
+      "shift": [
+        "08:00",
+        "17:00"
+      ],
+      "lunch": [
+        "12:00",
+        "13:00"
+      ],
+      "vacancy": true,
+      "history": [
+        {
+          "personId": "5311915d-bcee-4dbe-a980-6ebf4eaf1410",
+          "name": "Maurice Stanton",
+          "start": "2026-08-31",
+          "end": "2026-09-23"
+        }
+      ]
+    },
+    "GREGORY": {
+      "slotId": "5d2d2a0e-230f-5b03-9867-2e4c2826871f",
+      "name": "Gregory Staples",
+      "personId": "4f501293-2973-46ba-bf83-34d440d60407",
+      "workDays": [
+        0,
+        1,
+        2,
+        3,
+        6
+      ],
+      "shift": [
+        "08:00",
+        "17:00"
+      ],
+      "lunch": [
+        "12:00",
+        "13:00"
+      ],
+      "history": [
+        {
+          "personId": "4f501293-2973-46ba-bf83-34d440d60407",
+          "name": "Gregory Staples",
+          "start": "2026-09-23",
+          "end": null
+        }
+      ]
+    }
+  },
+  "weights": {
+    "AQUARIUM": 1,
+    "BONOBOS_RESTROOMS": 2,
+    "BREEZEWAY_RESTROOMS": 1,
+    "CATHOUSE_CAFE_RESTROOMS": 2,
+    "CAT_COUNTRY": 0.5,
+    "CHINA": 2,
+    "COURTYARD_RESTROOMS": 2,
+    "EAST_ADMIN": 2,
+    "EAST_END_RESTROOMS": 2,
+    "EDUCATION": 1,
+    "EVENT_CENTER": 2,
+    "EXPO": 3.5,
+    "HERPETARIUM": 1,
+    "KOMODOS": 1,
+    "MEMMEX_RESTROOMS": 2,
+    "NOCTURNAL": 1,
+    "NORTH_WEST_PASSAGE": 1,
+    "PRIMATE_CANYON": 0.5,
+    "PRIMATE_PAVILLION": 1,
+    "TETON": 4,
+    "TROPICAL_BIRDS": 1,
+    "WEST_ADMIN": 4,
+    "ZAMBEZI": 4,
+    "BAMBOO_SPRINGS_GIFT_SHOP": 0.5,
+    "TRADING_POST_GIFT_SHOP": 0.5,
+    "ELEPHANT_TRUNK_GIFT_SHOP": 0.5,
+    "ELEPHANT_TRUNK_RESTROOMS": 0.5
+  },
+  "publicRestroomFamilies": [
+    "BONOBOS_RESTROOMS",
+    "BREEZEWAY_RESTROOMS",
+    "CATHOUSE_CAFE_RESTROOMS",
+    "CHINA",
+    "COURTYARD_RESTROOMS",
+    "EAST_END_RESTROOMS",
+    "EVENT_CENTER",
+    "EXPO",
+    "MEMMEX_RESTROOMS",
+    "TETON",
+    "ZAMBEZI"
+  ],
+  "adminFamilies": [
+    "EAST_ADMIN",
+    "WEST_ADMIN"
+  ],
+  "mondayOnlyFamilies": [
+    "BAMBOO_SPRINGS_GIFT_SHOP",
+    "TRADING_POST_GIFT_SHOP",
+    "ELEPHANT_TRUNK_GIFT_SHOP",
+    "ELEPHANT_TRUNK_RESTROOMS"
+  ],
+  "overrides": {
+    "0": {
+      "morning": {
+        "ALIJAH": [
+          "AQUARIUM",
+          "BONOBOS_RESTROOMS",
+          "CATHOUSE_CAFE_RESTROOMS",
+          "CHINA",
+          "EDUCATION",
+          "MEMMEX_RESTROOMS",
+          "NOCTURNAL",
+          "PRIMATE_CANYON",
+          "TROPICAL_BIRDS"
+        ],
+        "GREGORY": [
+          "BREEZEWAY_RESTROOMS",
+          "CAT_COUNTRY",
+          "COURTYARD_RESTROOMS",
+          "EVENT_CENTER",
+          "EXPO",
+          "HERPETARIUM",
+          "KOMODOS"
+        ],
+        "KAILI": [
+          "EAST_END_RESTROOMS",
+          "NORTH_WEST_PASSAGE",
+          "PRIMATE_PAVILLION",
+          "TETON",
+          "ZAMBEZI"
+        ]
+      },
+      "equalized": {
+        "ALIJAH": [
+          "BONOBOS_RESTROOMS",
+          "CATHOUSE_CAFE_RESTROOMS",
+          "CAT_COUNTRY",
+          "EXPO",
+          "KOMODOS",
+          "MEMMEX_RESTROOMS",
+          "NOCTURNAL",
+          "PRIMATE_CANYON",
+          "TROPICAL_BIRDS"
+        ],
+        "GREGORY": [
+          "AQUARIUM",
+          "BREEZEWAY_RESTROOMS",
+          "COURTYARD_RESTROOMS",
+          "EAST_ADMIN",
+          "EDUCATION",
+          "EVENT_CENTER",
+          "HERPETARIUM",
+          "WEST_ADMIN"
+        ],
+        "KAILI": [
+          "CHINA",
+          "EAST_END_RESTROOMS",
+          "NORTH_WEST_PASSAGE",
+          "PRIMATE_PAVILLION",
+          "TETON",
+          "ZAMBEZI"
+        ]
+      }
+    },
+    "1": {
+      "morning": {
+        "ALIJAH": [
+          "BONOBOS_RESTROOMS",
+          "KOMODOS",
+          "MEMMEX_RESTROOMS",
+          "TROPICAL_BIRDS"
+        ],
+        "GREGORY": [
+          "AQUARIUM",
+          "BREEZEWAY_RESTROOMS",
+          "ELEPHANT_TRUNK_GIFT_SHOP",
+          "ELEPHANT_TRUNK_RESTROOMS",
+          "EXPO"
+        ],
+        "KAILI": [
+          "BAMBOO_SPRINGS_GIFT_SHOP",
+          "COURTYARD_RESTROOMS",
+          "EDUCATION",
+          "EVENT_CENTER",
+          "HERPETARIUM",
+          "TRADING_POST_GIFT_SHOP"
+        ],
+        "KAREN": [
+          "CATHOUSE_CAFE_RESTROOMS",
+          "CAT_COUNTRY",
+          "NOCTURNAL",
+          "PRIMATE_CANYON",
+          "ZAMBEZI"
+        ],
+        "TAMMY": [
+          "CHINA",
+          "EAST_END_RESTROOMS",
+          "NORTH_WEST_PASSAGE",
+          "PRIMATE_PAVILLION",
+          "TETON"
+        ]
+      },
+      "equalized": {
+        "ALIJAH": [
+          "BONOBOS_RESTROOMS",
+          "BREEZEWAY_RESTROOMS",
+          "CAT_COUNTRY",
+          "EAST_ADMIN",
+          "EDUCATION",
+          "KOMODOS",
+          "TROPICAL_BIRDS"
+        ],
+        "GREGORY": [
+          "AQUARIUM",
+          "CHINA",
+          "EXPO",
+          "MEMMEX_RESTROOMS"
+        ],
+        "KAILI": [
+          "COURTYARD_RESTROOMS",
+          "EVENT_CENTER",
+          "HERPETARIUM",
+          "WEST_ADMIN"
+        ],
+        "KAREN": [
+          "CATHOUSE_CAFE_RESTROOMS",
+          "NOCTURNAL",
+          "PRIMATE_CANYON",
+          "ZAMBEZI"
+        ],
+        "TAMMY": [
+          "EAST_END_RESTROOMS",
+          "NORTH_WEST_PASSAGE",
+          "PRIMATE_PAVILLION",
+          "TETON"
+        ]
+      }
+    },
+    "2": {
+      "morning": {
+        "GREGORY": [
+          "COURTYARD_RESTROOMS",
+          "EVENT_CENTER",
+          "KOMODOS"
+        ],
+        "KAILI": [
+          "BONOBOS_RESTROOMS",
+          "BREEZEWAY_RESTROOMS",
+          "CHINA",
+          "EDUCATION",
+          "PRIMATE_CANYON"
+        ],
+        "KAREN": [
+          "CATHOUSE_CAFE_RESTROOMS",
+          "CAT_COUNTRY",
+          "HERPETARIUM",
+          "NOCTURNAL",
+          "ZAMBEZI"
+        ],
+        "KATHY": [
+          "AQUARIUM",
+          "EXPO",
+          "MEMMEX_RESTROOMS",
+          "TROPICAL_BIRDS"
+        ],
+        "TAMMY": [
+          "EAST_END_RESTROOMS",
+          "NORTH_WEST_PASSAGE",
+          "PRIMATE_PAVILLION",
+          "TETON"
+        ]
+      },
+      "equalized": {
+        "GREGORY": [
+          "COURTYARD_RESTROOMS",
+          "EVENT_CENTER",
+          "WEST_ADMIN"
+        ],
+        "KAILI": [
+          "BONOBOS_RESTROOMS",
+          "BREEZEWAY_RESTROOMS",
+          "CHINA",
+          "EAST_ADMIN",
+          "EDUCATION",
+          "PRIMATE_CANYON"
+        ],
+        "KAREN": [
+          "CATHOUSE_CAFE_RESTROOMS",
+          "CAT_COUNTRY",
+          "HERPETARIUM",
+          "NOCTURNAL",
+          "ZAMBEZI"
+        ],
+        "KATHY": [
+          "AQUARIUM",
+          "EXPO",
+          "KOMODOS",
+          "MEMMEX_RESTROOMS",
+          "TROPICAL_BIRDS"
+        ],
+        "TAMMY": [
+          "EAST_END_RESTROOMS",
+          "NORTH_WEST_PASSAGE",
+          "PRIMATE_PAVILLION",
+          "TETON"
+        ]
+      }
+    },
+    "3": {
+      "morning": {
+        "GREGORY": [
+          "COURTYARD_RESTROOMS",
+          "EVENT_CENTER",
+          "KOMODOS"
+        ],
+        "KAILI": [
+          "BONOBOS_RESTROOMS",
+          "CHINA",
+          "EDUCATION",
+          "NOCTURNAL",
+          "PRIMATE_CANYON"
+        ],
+        "KAREN": [
+          "BREEZEWAY_RESTROOMS",
+          "CATHOUSE_CAFE_RESTROOMS",
+          "CAT_COUNTRY",
+          "HERPETARIUM",
+          "ZAMBEZI"
+        ],
+        "KATHY": [
+          "AQUARIUM",
+          "EXPO",
+          "MEMMEX_RESTROOMS",
+          "TROPICAL_BIRDS"
+        ],
+        "TAMMY": [
+          "EAST_END_RESTROOMS",
+          "NORTH_WEST_PASSAGE",
+          "PRIMATE_PAVILLION",
+          "TETON"
+        ]
+      },
+      "equalized": {
+        "GREGORY": [
+          "COURTYARD_RESTROOMS",
+          "EVENT_CENTER",
+          "HERPETARIUM",
+          "WEST_ADMIN"
+        ],
+        "KAILI": [
+          "BONOBOS_RESTROOMS",
+          "BREEZEWAY_RESTROOMS",
+          "CHINA",
+          "EAST_ADMIN",
+          "EDUCATION",
+          "PRIMATE_CANYON"
+        ],
+        "KAREN": [
+          "CATHOUSE_CAFE_RESTROOMS",
+          "CAT_COUNTRY",
+          "NOCTURNAL",
+          "ZAMBEZI"
+        ],
+        "KATHY": [
+          "AQUARIUM",
+          "EXPO",
+          "KOMODOS",
+          "MEMMEX_RESTROOMS",
+          "TROPICAL_BIRDS"
+        ],
+        "TAMMY": [
+          "EAST_END_RESTROOMS",
+          "NORTH_WEST_PASSAGE",
+          "PRIMATE_PAVILLION",
+          "TETON"
+        ]
+      }
+    },
+    "4": {
+      "morning": {
+        "ALIJAH": [
+          "BONOBOS_RESTROOMS",
+          "CATHOUSE_CAFE_RESTROOMS",
+          "CHINA",
+          "PRIMATE_CANYON",
+          "PRIMATE_PAVILLION",
+          "TROPICAL_BIRDS"
+        ],
+        "KAILI": [
+          "BREEZEWAY_RESTROOMS",
+          "CAT_COUNTRY",
+          "COURTYARD_RESTROOMS",
+          "EDUCATION",
+          "EVENT_CENTER",
+          "NOCTURNAL"
+        ],
+        "KATHY": [
+          "AQUARIUM",
+          "EXPO",
+          "HERPETARIUM",
+          "KOMODOS",
+          "MEMMEX_RESTROOMS"
+        ],
+        "TAMMY": [
+          "EAST_END_RESTROOMS",
+          "NORTH_WEST_PASSAGE",
+          "TETON",
+          "ZAMBEZI"
+        ]
+      },
+      "equalized": {
+        "ALIJAH": [
+          "BONOBOS_RESTROOMS",
+          "CATHOUSE_CAFE_RESTROOMS",
+          "CHINA",
+          "EAST_ADMIN",
+          "NOCTURNAL",
+          "PRIMATE_CANYON",
+          "PRIMATE_PAVILLION"
+        ],
+        "KAILI": [
+          "BREEZEWAY_RESTROOMS",
+          "CAT_COUNTRY",
+          "COURTYARD_RESTROOMS",
+          "EDUCATION",
+          "EVENT_CENTER",
+          "WEST_ADMIN"
+        ],
+        "KATHY": [
+          "AQUARIUM",
+          "EXPO",
+          "HERPETARIUM",
+          "KOMODOS",
+          "MEMMEX_RESTROOMS",
+          "TROPICAL_BIRDS"
+        ],
+        "TAMMY": [
+          "EAST_END_RESTROOMS",
+          "NORTH_WEST_PASSAGE",
+          "TETON",
+          "ZAMBEZI"
+        ]
+      }
+    },
+    "5": {
+      "morning": {
+        "ALIJAH": [
+          "BONOBOS_RESTROOMS",
+          "BREEZEWAY_RESTROOMS",
+          "COURTYARD_RESTROOMS",
+          "NOCTURNAL",
+          "PRIMATE_CANYON",
+          "PRIMATE_PAVILLION",
+          "TROPICAL_BIRDS"
+        ],
+        "KAREN": [
+          "CATHOUSE_CAFE_RESTROOMS",
+          "CAT_COUNTRY",
+          "EDUCATION",
+          "EVENT_CENTER",
+          "ZAMBEZI"
+        ],
+        "KATHY": [
+          "AQUARIUM",
+          "EXPO",
+          "HERPETARIUM",
+          "KOMODOS",
+          "MEMMEX_RESTROOMS"
+        ],
+        "TAMMY": [
+          "CHINA",
+          "EAST_END_RESTROOMS",
+          "NORTH_WEST_PASSAGE",
+          "TETON"
+        ]
+      },
+      "equalized": {
+        "ALIJAH": [
+          "BONOBOS_RESTROOMS",
+          "BREEZEWAY_RESTROOMS",
+          "COURTYARD_RESTROOMS",
+          "EDUCATION",
+          "PRIMATE_CANYON",
+          "WEST_ADMIN"
+        ],
+        "KAREN": [
+          "CATHOUSE_CAFE_RESTROOMS",
+          "CAT_COUNTRY",
+          "EVENT_CENTER",
+          "NOCTURNAL",
+          "PRIMATE_PAVILLION",
+          "ZAMBEZI"
+        ],
+        "KATHY": [
+          "AQUARIUM",
+          "EXPO",
+          "HERPETARIUM",
+          "KOMODOS",
+          "MEMMEX_RESTROOMS",
+          "TROPICAL_BIRDS"
+        ],
+        "TAMMY": [
+          "CHINA",
+          "EAST_ADMIN",
+          "EAST_END_RESTROOMS",
+          "NORTH_WEST_PASSAGE",
+          "TETON"
+        ]
+      }
+    },
+    "6": {
+      "morning": {
+        "ALIJAH": [
+          "BONOBOS_RESTROOMS",
+          "BREEZEWAY_RESTROOMS",
+          "CHINA",
+          "EDUCATION",
+          "NOCTURNAL",
+          "PRIMATE_CANYON",
+          "TROPICAL_BIRDS"
+        ],
+        "GREGORY": [
+          "EAST_END_RESTROOMS",
+          "NORTH_WEST_PASSAGE",
+          "PRIMATE_PAVILLION",
+          "TETON"
+        ],
+        "KAREN": [
+          "AQUARIUM",
+          "CATHOUSE_CAFE_RESTROOMS",
+          "CAT_COUNTRY",
+          "COURTYARD_RESTROOMS",
+          "ZAMBEZI"
+        ],
+        "KATHY": [
+          "EVENT_CENTER",
+          "EXPO",
+          "HERPETARIUM",
+          "KOMODOS",
+          "MEMMEX_RESTROOMS"
+        ]
+      },
+      "equalized": {
+        "ALIJAH": [
+          "BREEZEWAY_RESTROOMS",
+          "CHINA",
+          "NOCTURNAL",
+          "NORTH_WEST_PASSAGE",
+          "PRIMATE_CANYON",
+          "PRIMATE_PAVILLION",
+          "TETON"
+        ],
+        "GREGORY": [
+          "COURTYARD_RESTROOMS",
+          "EAST_END_RESTROOMS",
+          "EDUCATION",
+          "EVENT_CENTER",
+          "WEST_ADMIN"
+        ],
+        "KAREN": [
+          "BONOBOS_RESTROOMS",
+          "CATHOUSE_CAFE_RESTROOMS",
+          "CAT_COUNTRY",
+          "EAST_ADMIN",
+          "ZAMBEZI"
+        ],
+        "KATHY": [
+          "AQUARIUM",
+          "EXPO",
+          "HERPETARIUM",
+          "KOMODOS",
+          "MEMMEX_RESTROOMS",
+          "TROPICAL_BIRDS"
+        ]
+      }
+    }
+  },
+  "correctionNotes": [
+    "Six actual incumbents; the three stable unfilled positions receive no recurring cleaning areas.",
+    "Corrected September 22 temporary handout is the area seed; later owner-fixed lunches and current weighted fairness control conflicts.",
+    "No automatic daily reshuffle. Dated absences and manual CoverAll are separate manager commands.",
+    "Uncoverable handoffs are explicit OPEN work, not fabricated employees or service completions."
+  ],
+  "effectiveDateNote": "Unpublished next-Monday candidate compatible with the existing weekly control-plane boundary. Not an activation, deployment or rollout date; later rollout must revalidate its actual effective week.",
+  "sourceHandout": {
+    "path": "config/custodial-six-person-handout-20260926.json",
+    "pdfSha256": "a1f1dbb6826ba09ff3a81332632c0ba433ed6770e9fb48efc009382eccdfdeb1",
+    "precedence": "areas are a geographic seed; later fixed lunches, restrictions and workload policy control"
+  }
+}

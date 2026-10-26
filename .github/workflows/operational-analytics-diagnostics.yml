@@ -7,6 +7,9 @@ on:
       - 'src/operational-analytics-api.js'
       - 'src/index.js'
       - 'scripts/operational-analytics-*.mjs'
+      - 'scripts/empty-database-rebuild-check.mjs'
+      - 'scripts/ci-fresh-only-replay.mjs'
+      - 'release/fresh-only-replay/**'
       - 'supabase/migrations/20260722233500_operational_retention_and_analytics.sql'
       - 'supabase/migrations/20260722233600_event_retention_history_guard.sql'
       - '.github/workflows/operational-analytics-diagnostics.yml'
@@ -37,7 +40,8 @@ jobs:
         id: database
         continue-on-error: true
         env:
-          SCHEMA_REBUILD_DOCKER_IMAGE: supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed
+          SCHEMA_REBUILD_FRESH_ONLY: '1'
+          SCHEMA_REBUILD_DOCKER_IMAGE: public.ecr.aws/supabase/postgres@sha256:28f0e16a019e648089fc1a6d333549a55548f6019c15ae4bd7cd58b989027518
         shell: bash
         run: |
           set -o pipefail

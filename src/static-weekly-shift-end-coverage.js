@@ -21,8 +21,14 @@ function datedPositions(source,config,day){
 export function completeRecurringShiftEndCoverage(source,config){
  const input=clone(source),version=input.version,notes=[],openResponsibilities=[];
  assert.ok(version && !input.versions,'one canonical recurring source required');
+ const named=new Map();
+ for(const handoff of config.namedHandoffs||[]){
+  const key=`${handoff.dayOfWeek}:${handoff.locationCode}:${handoff.at}`;
+  assert.ok(!named.has(key),`duplicate named handoff ${key}`);named.set(key,handoff);
+ }
+ const usedNamed=new Set();
  const distances=new Map(input.proximity.filter(e=>e.verified===true).map(e=>[`${e.fromLocationId}|${e.toLocationId}`,e.minutes]));
- const original=version.assignments,added=[];
+ const original=version.assignments,added=[],insufficientBudgets=[];
  for(let day=0;day<7;day++){
   const positions=datedPositions(input,config,day),workers=positions.filter(s=>!s.incumbent.vacant&&s.status!=='departed_named_absent');
   const slotById=new Map(positions.map(s=>[s.slotId,s]));
@@ -36,7 +42,14 @@ export function completeRecurringShiftEndCoverage(source,config){
   // Never extend a vacant position beyond its shift: a later hire would
   // otherwise inherit an impossible immutable baseline without any rebuild.
   for(const row of normal)row.window.end=clock(Math.min(minute(row.window.end),lastEnd));
-  const anchors=new Map(positions.map(s=>[s.slotId,normal.filter(r=>r.ownerSlotId===s.slotId).flatMap(ids)]));
+  const anchors=new Map(positions.map(s=>{
+   const owned=normal.filter(r=>r.ownerSlotId===s.slotId).flatMap(ids);
+   // A stable position with no recurring areas still needs its source-bound
+   // route anchor: it ranks an OPEN gap while vacant and a real handoff if a
+   // future employee fills it. The anchor never creates an incumbent.
+   return [s.slotId,owned.length?owned:(s.acceptedRouteAnchorLocationId
+    ?[s.acceptedRouteAnchorLocationId]:[])];
+  }));
   const current=normal.map(row=>({original:row,owner:row.ownerSlotId,rows:[row]}));
   const boundaries=[...new Set(positions.map(s=>minute(s.shift[1])))].filter(t=>t<lastEnd).sort((a,b)=>a-b);
   for(const at of boundaries){
@@ -65,7 +78,17 @@ export function completeRecurringShiftEndCoverage(source,config){
     if(open)eligible.push(...rankEligible(positions.filter(s=>s.incumbent.vacant
       &&minute(s.shift[0])<=at&&at<minute(s.shift[1]))));
     assert.ok(eligible.length,`${day}/${row.workId}/${clock(at)} has no eligible on-duty handoff owner`);
-    const next=eligible[0],previous=unit.owner;
+    const namedKey=`${day}:${row.locationCodeSnapshot}:${clock(at)}`;
+    const namedHandoff=named.get(namedKey);
+    let next=eligible[0];
+    if(namedHandoff){
+     assert.equal(unit.owner,namedHandoff.fromSlotId,`named handoff source changed at ${namedKey}`);
+     assert.ok(!open,`named handoff cannot become an OPEN position at ${namedKey}`);
+     next=eligible.find(item=>item.slot.slotId===namedHandoff.toSlotId);
+     assert.ok(next,`named handoff recipient not eligible at ${namedKey}`);
+     usedNamed.add(namedKey);
+    }
+    const previous=unit.owner;
     const handoff={...clone(row),workId:`${row.workId}:${open?'open':'handoff'}:${clock(at)}:${config.fullSegmentIdentity?next.slot.slotId:next.slot.slotId.slice(0,8)}`,
       ownerSlotId:next.slot.slotId,originSlotId:next.slot.slotId,
       window:{start:clock(at),end:clock(Math.min(minute(next.slot.shift[1]),lastEnd))}};
@@ -80,7 +103,11 @@ export function completeRecurringShiftEndCoverage(source,config){
    assert.equal(unit.rows.at(-1).window.end,clock(lastEnd),'responsibility must reach final shift end');
    if(unit.rows.length===1)continue;
    const budget=unit.original.serviceEffortMinutes;
-   assert.ok(Number.isSafeInteger(budget)&&budget>=unit.rows.length,'retained workload budget cannot cover positive handoff segments');
+   if(!Number.isSafeInteger(budget)||budget<unit.rows.length){
+    insufficientBudgets.push({day,workId:unit.original.workId,budget,segments:unit.rows.length,
+      owners:unit.rows.map(row=>row.ownerSlotId),windows:unit.rows.map(row=>row.window)});
+    continue;
+   }
    const durations=unit.rows.map(r=>minute(r.window.end)-minute(r.window.start));
    const total=durations.reduce((a,b)=>a+b,0),distributable=budget-unit.rows.length;
    const allocation=durations.map((d,index)=>({index,points:1+Math.floor(distributable*d/total),remainder:(distributable*d)%total}));
@@ -95,6 +122,9 @@ export function completeRecurringShiftEndCoverage(source,config){
    assert.equal(unit.rows.reduce((n,r)=>n+r.serviceEffortMinutes,0),budget);
   }
  }
+ assert.equal(usedNamed.size,named.size,'named handoff was not applied');
+ assert.ok(insufficientBudgets.length===0,
+  `retained workload budget cannot cover positive handoff segments: ${JSON.stringify(insufficientBudgets)}`);
  version.assignments.push(...added);
  version.assignments.sort((a,b)=>a.dayOfWeek-b.dayOfWeek||a.window.start.localeCompare(b.window.start)||a.workId.localeCompare(b.workId));
  const validation=validateRecurringShiftEndCoverage(source,input,config);
@@ -110,7 +140,11 @@ export function validateRecurringShiftEndCoverage(baseline,candidate,config){
   const vacancies=new Set(dated.filter(s=>s.incumbent.vacant).map(s=>s.slotId));
   const final=Math.max(...staffed.map(s=>minute(s.shift[1])));
   staffedDepartureByDay[day]=clock(final);
-  const rows=candidate.version.assignments.filter(r=>r.dayOfWeek===day&&minute(r.window.start)>=585);
+  // A one-time reminder (for example Kathy's Tuesday employee-restroom duty)
+  // is not a continuous location-ownership segment and must not be expanded
+  // or counted as shift-end coverage.
+  const rows=candidate.version.assignments.filter(r=>r.dayOfWeek===day
+    &&r.serviceMode!=='reminder_only'&&minute(r.window.start)>=585);
   assert.ok(rows.every(r=>minute(r.window.end)<=final),`responsibility after final staffed departure on ${day}`);
   for(const row of rows.filter(r=>vacancies.has(r.ownerSlotId))){
    const original=baseline.version.assignments.find(r=>r.dayOfWeek===day&&r.workId===row.workId);
