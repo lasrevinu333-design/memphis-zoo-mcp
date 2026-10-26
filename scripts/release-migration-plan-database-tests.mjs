@@ -18,8 +18,74 @@ import {
 } from "./disaster-recovery-crypto.mjs";
 import { assertOwnedReleaseFixture, canonicalReleaseFixtureConnection } from "./release-migration-fixture-guard.mjs";
 
+import { assertReleaseWorkflowSource } from "./release-migration-workflow-preflight.mjs";
+import { readMigrationReplayPlan } from "./migration-replay-order.mjs";
+
 const { Client } = pg;
 const execFileAsync = promisify(execFile);
+// The current source target is deliberately unresolved. Qualify its normal
+// refusal without inventing a target or allocating a database. The complete
+// historical positive/security corpus below remains literal and is NOT_RUN
+// in this explicitly selected source-only branch.
+const currentUnresolvedSelector = "--current-unresolved-target-source-only";
+const selectedArguments = process.argv.slice(2);
+assert.ok(selectedArguments.length === 0
+  || (selectedArguments.length === 1 && selectedArguments[0] === currentUnresolvedSelector),
+  "Select only the existing owned database route or current unresolved source-only refusal");
+if (selectedArguments.length === 1) {
+  const sourceRoot = resolve(new URL("..", import.meta.url).pathname);
+  const currentState = JSON.parse(readFileSync(resolve(sourceRoot, "release/production-migration-state.json"), "utf8"));
+  const currentPlan = readMigrationReplayPlan(sourceRoot);
+  assert.equal(currentPlan.baseCount, 134);
+  assert.equal(currentPlan.files.length, 294);
+  assert.equal(currentState.pending_migrations.length, 160);
+  assert.deepEqual(currentState.pending_migrations.map(({ file }) => file), currentPlan.files.slice(134));
+  assert.equal(currentState.observed_production.production_ledger_count, 235);
+  for (const key of ["canonical_source_schema_fingerprint", "expected_catalog_counts",
+    "production_ledger_count", "public_function_count"]) {
+    assert.ok(Object.hasOwn(currentState.target, key), "Current target field is required: " + key);
+    assert.equal(currentState.target[key], null, "Source-only route requires an explicitly unresolved target: " + key);
+  }
+  assert.throws(() => assertReleaseWorkflowSource(sourceRoot),
+    /Current populated target catalog capture is required before normal apply/);
+  const applySource = readFileSync(resolve(sourceRoot, "scripts/apply-release-migration-plan.mjs"), "utf8");
+  const preflightOffset = applySource.indexOf("if (!targetCapture) assertReleaseWorkflowSource(root);");
+  const clientOffset = applySource.indexOf("new Client(");
+  assert.ok(preflightOffset >= 0 && clientOffset > preflightOffset,
+    "Normal unresolved target preflight must precede any database Client construction");
+  // Minimal UNIT environment has no URL, credentials, targetCapture, test
+  // fingerprint overrides or inherited NODE_OPTIONS. Even a regression cannot
+  // contact a database through this invocation. A different failure is NOTPASS.
+  const normalApplyArgv = ["--max-old-space-size=128", resolve(sourceRoot, "scripts/apply-release-migration-plan.mjs")];
+  const normalApply = execFileAsync(process.execPath, normalApplyArgv, {
+    cwd: sourceRoot,
+    env: { PATH: "/usr/bin:/bin", LANG: "C", LC_ALL: "C", TZ: "UTC", RELEASE_MIGRATION_APPLY: "true" },
+    timeout: 10_000,
+    killSignal: "SIGTERM",
+    maxBuffer: 1024 * 1024,
+  });
+  const normalApplyPid = normalApply.child?.pid ?? null;
+  let normalRefusal;
+  try {
+    await normalApply;
+    assert.fail("Normal apply must refuse the unresolved current target");
+  } catch (error) {
+    assert.equal(error.code, 1, "Normal apply must return its original assertion refusal");
+    assert.equal(error.signal, null, "A timeout or signal is not an accepted refusal");
+    assert.equal(error.killed, false, "A killed child is not an accepted refusal");
+    assert.match(error.stderr,
+      /AssertionError \[ERR_ASSERTION\]: Current populated target catalog capture is required before normal apply/);
+    normalRefusal = { argv: [process.execPath, ...normalApplyArgv], pid: normalApplyPid,
+      exit_code: error.code, signal: error.signal, stdout: error.stdout, stderr: error.stderr,
+      original_execFile_promise_settled: true };
+  }
+  console.log(JSON.stringify({ status: "SOURCE_ONLY_CURRENT_UNRESOLVED_TARGET_REFUSAL_PASS",
+    SQL_execution: false, database_client_constructed: false,
+    positive_database_scenarios: "NOT_RUN_HISTORICAL_23_MIGRATION_CORPUS",
+    production_authorized: false, target_facts_adopted: false,
+    source_authority_prefix: 134, current_pending: 160, canonical_source_count: 294,
+    observed_source_ledger_count: 235, normal_apply_original_refusal: normalRefusal }));
+} else {
 const adminUrl = String(process.env.RELEASE_MIGRATION_TEST_DATABASE_URL || "").trim();
 if (process.env.RELEASE_MIGRATION_TEST_USE_OWNED_CONTAINER_DB !== "1") {
   throw new Error("The release-plan database test requires its isolated owned-container wrapper.");
@@ -311,4 +377,6 @@ try {
 } finally {
   await db.end().catch(() => {});
   await admin.end().catch(() => {});
+}
+
 }

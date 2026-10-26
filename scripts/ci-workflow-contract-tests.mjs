@@ -33,13 +33,14 @@ const postgresPinSources = [
 // The retained extension-compatible rehearsal image and the separately
 // qualified21 fresh-only replay image have distinct admitted scopes.
 const qualifiedFreshReplayImage = "public.ecr.aws/supabase/postgres@sha256:28f0e16a019e648089fc1a6d333549a55548f6019c15ae4bd7cd58b989027518";
+const qualifiedFreshReplayMirror = "docker.io/supabase/postgres@sha256:28f0e16a019e648089fc1a6d333549a55548f6019c15ae4bd7cd58b989027518";
 const qualifiedFreshReplayManifestBytes = readFileSync(resolve(root, "release/fresh-only-replay/MANIFEST.json"));
 assert.equal(createHash("sha256").update(qualifiedFreshReplayManifestBytes).digest("hex"),
-  "cc9db65f462b534f11a6bd882cdb21ea2507b13881b1c2e8d96646f632e1548c",
-  "fresh-only replay must retain the exact qualified293 selection with21 overrides");
+  "dbe83c4be6e5cbcf1a13ca0359dd9da7596821d39b6a34578499ae8b63c8a95d",
+  "fresh-only replay must retain the exact qualified294 selection with21 overrides");
 const qualifiedFreshReplayManifest = JSON.parse(qualifiedFreshReplayManifestBytes);
 assert.equal(qualifiedFreshReplayManifest.image, qualifiedFreshReplayImage);
-assert.equal(qualifiedFreshReplayManifest.entries.length, 293);
+assert.equal(qualifiedFreshReplayManifest.entries.length, 294);
 assert.equal(qualifiedFreshReplayManifest.overrides.length, 21);
 assert.equal(qualifiedFreshReplayManifest.full_vendor_NORMAL, false);
 assert.equal(qualifiedFreshReplayManifest.expected_fingerprint_authority, null);
@@ -47,16 +48,35 @@ const freshReplayWorkflowPaths = new Set([
   resolve(workflowDirectory, "event-integrity-diagnostics.yml"),
   resolve(workflowDirectory, "operational-analytics-diagnostics.yml"),
 ]);
+// The two reviewed Repair construction steps use qualified fresh-only replay;
+// its earlier recorder retains the distinct rehearsal image. Bind the whole
+// reviewed workflow so this exception cannot admit another image caller.
+const mixedFreshRepairWorkflowPath = resolve(workflowDirectory, "custodial-production-repair.yml");
+const mixedFreshRepairWorkflowSha256 = "a79d6ffb2c56e3320c4556407daf2ad351420f611d3a4a6457b432ab82c06f8e";
+// Foundation provisions the exact manifest-selected fresh fixture image before
+// its existing constructor; the earlier recorder keeps its rehearsal image.
+const mixedFreshFoundationWorkflowPath = resolve(workflowDirectory, "foundation-security-gate.yml");
+const mixedFreshFoundationWorkflowSha256 = "656544e11915b73d2bf7d4975d436f5ab36c568fb3408d050e16155ec3ec98f6";
 const thisContractPath = fileURLToPath(import.meta.url);
 const postgresImagePins = postgresPinSources.flatMap((path) => {
-  const pins = [...readFileSync(path, "utf8").matchAll(/(?:public\.ecr\.aws\/)?supabase\/postgres@sha256:[0-9a-f]{64}/g)]
+  const pins = [...readFileSync(path, "utf8").matchAll(/(?:public\.ecr\.aws\/|docker\.io\/)?supabase\/postgres@sha256:[0-9a-f]{64}/g)]
     .map((match) => match[0]);
   if (path === thisContractPath) {
-    assert.deepEqual([...new Set(pins)].sort(), [rehearsalPostgresImage, qualifiedFreshReplayImage].sort(),
-      "this contract must declare exactly the two independently scoped immutable images");
+    assert.deepEqual([...new Set(pins)].sort(), [rehearsalPostgresImage, qualifiedFreshReplayImage, qualifiedFreshReplayMirror].sort(),
+      "this contract declares two immutable identities, with one exact-index mirror permitted only for Foundation preseed");
   } else if (freshReplayWorkflowPaths.has(path)) {
     assert.deepEqual([...new Set(pins)], [qualifiedFreshReplayImage],
       `${path} must use only the exact qualified fresh-only replay image`);
+  } else if (path === mixedFreshRepairWorkflowPath) {
+    assert.equal(createHash("sha256").update(readFileSync(path)).digest("hex"), mixedFreshRepairWorkflowSha256,
+      "mixed-image Repair must be the exact reviewed workflow with only two explicit fresh-only construction steps");
+    assert.deepEqual([...new Set(pins)].sort(), [rehearsalPostgresImage, qualifiedFreshReplayImage].sort(),
+      "Repair must retain its distinct recorder rehearsal pin and qualified fresh-only fixture pin");
+  } else if (path === mixedFreshFoundationWorkflowPath) {
+    assert.equal(createHash("sha256").update(readFileSync(path)).digest("hex"), mixedFreshFoundationWorkflowSha256,
+      "mixed-image Foundation must be the exact reviewed workflow with only fixed manifest-selected fresh image provisioning");
+    assert.deepEqual([...new Set(pins)].sort(), [rehearsalPostgresImage, qualifiedFreshReplayImage, qualifiedFreshReplayMirror].sort(),
+      "Foundation retains its recorder image and separately selected fresh-only fixture image");
   } else {
     for (const pin of pins) assert.equal(pin, rehearsalPostgresImage,
       `${path} must retain the extension-compatible rehearsal image; fresh-only authority is not portable to another caller`);
@@ -66,8 +86,8 @@ const postgresImagePins = postgresPinSources.flatMap((path) => {
 assert.ok(postgresImagePins.length > 0, "the repository must retain immutable rehearsal PostgreSQL image pins");
 assert.deepEqual(
   [...new Set(postgresImagePins)].sort(),
-  [rehearsalPostgresImage, qualifiedFreshReplayImage].sort(),
-  "only the exact rehearsal and qualified21 fresh-only images may occur in their admitted source paths",
+  [rehearsalPostgresImage, qualifiedFreshReplayImage, qualifiedFreshReplayMirror].sort(),
+  "only the exact rehearsal and qualified fresh identity plus its Foundation-only same-index preseed mirror may occur in admitted source paths",
 );
 
 function workflowJobs(source) {
@@ -216,6 +236,14 @@ for (const name of workflowNames) {
 }
 
 const schedulerGate = readFileSync(resolve(workflowDirectory, "foundation-security-gate.yml"), "utf8");
+assert.match(schedulerGate, /if: failure\(\)[\s\S]*name: ci-fresh-only-failure-evidence-\$\{\{ github\.run_id \}\}[\s\S]*path: \$\{\{ runner\.temp \}\}\/ci-fresh-only-failure-evidence\/[\s\S]*if-no-files-found: warn/,
+  "failed fresh fixtures must export only their fixed bounded evidence path without changing required provenance upload");
+assert.match(schedulerGate, /name: Provision exact selected fresh PostgreSQL image[\s\S]*timeout-minutes: 5[\s\S]*timeout --signal=TERM --kill-after=5s 45s docker pull "\$image"[\s\S]*toomanyrequests\|rate exceeded/,
+  "the selected fresh image must be explicitly provisioned with finite rate-limit-only retries and retained original failures");
+assert.match(schedulerGate, /timeout --signal=TERM --kill-after=5s 120s docker pull "\$mirror"[\s\S]*mirror-image\.json[\s\S]*e\.id!==m\.id[\s\S]*e\.repo_digests\.includes\(process\.argv\[3\]\)/,
+  "same-index official mirror may only preseed blobs; success still requires original ECR RepoDigest and identical config image ID");
+assert.doesNotMatch(schedulerGate, /docker (?:tag|import|load) /,
+  "Foundation may not fabricate a selected-registry alias or unverified image identity");
 const packageManifest = readFileSync(resolve(root, "package.json"), "utf8");
 const parsedPackageManifest = JSON.parse(packageManifest);
 assert.match(schedulerGate, /^on:\n\s+pull_request:\s*\n\s+push:\s*$/m, "the scheduler authority gate must run for every pull request and every pushed branch");
@@ -413,7 +441,7 @@ const productionBackupRehearsal = readFileSync(resolve(workflowDirectory, "produ
 // not as a parser for arbitrary future YAML. Any workflow edit fails before
 // an actual workflow reaches scalar measurement and requires a reviewed pin.
 assert.equal(createHash("sha256").update(productionBackupRehearsal, "utf8").digest("hex"),
-  "7c7f7523ff1a7ca86ca8945325b9fa5498913ee9ad125c68cb8953d4e28940ea",
+  "432586502a0498eca46a360f889f1ad5dd0eacfcf331cfd7c1e29381a1532695",
   "rehearsal length measurement requires the exact reviewed whole workflow");
 const blankGapPlainRunMutant = productionBackupRehearsal.replace(
   "      - run: npm ci --ignore-scripts\n",
@@ -426,7 +454,7 @@ assert.throws(() => canonicalRunScalarsForLength(
 "a space-only blank line must not hide the valid 21,001-character plain run scalar");
 const escapedQuotedRunMutant = productionBackupRehearsal.replace(
   "        run: |\n",
-  '        "r\\u0075n": |\n' + "          #" + "x".repeat(1_952) + "\n",
+  '        "r\\u0075n": |\n' + "          #" + "x".repeat(130) + "\n",
 );
 assert.notEqual(escapedQuotedRunMutant, productionBackupRehearsal);
 assert.throws(() => canonicalRunScalarsForLength(
@@ -437,8 +465,12 @@ assert.throws(() => canonicalRunScalarsForLength(
 const localProductionBackupRehearsal = readFileSync(resolve(root, "scripts/run-production-backup-migration-rehearsal.sh"), "utf8");
 const build52ProductionMigrationApply = readFileSync(resolve(workflowDirectory, "build52-production-migration-apply.yml"), "utf8");
 assert.equal(createHash("sha256").update(build52ProductionMigrationApply, "utf8").digest("hex"),
-  "ab6d30e590d7121d1b345e3652b872cfc062a66b690b1578241d420900914c41",
+  "4bdb11224d3e4d20dfb3bc9293c1a13f0bf86323c58594ac082f4e7463ab9c25",
   "Build52 length measurement requires the exact reviewed whole workflow");
+assert.match(build52ProductionMigrationApply, /node scripts\/current291-production-plan-source-tests\.mjs/,
+  "normal apply must invoke the existing current plan source suite");
+assert.doesNotMatch(build52ProductionMigrationApply, /node scripts\/release-migration-workflow-tests\.mjs/,
+  "normal apply must not invoke the absent historical source-test module");
 const build52ProductionMigrationApplyJob = workflowJobs(build52ProductionMigrationApply)
   .find(({ name }) => name === "authorize-and-apply");
 assert.ok(build52ProductionMigrationApplyJob, "the Build 52 production migration workflow must retain its authorize-and-apply job");
@@ -607,10 +639,20 @@ const productionBackupRehearsalJob = workflowJobs(productionBackupRehearsal).fin
 assert.ok(productionBackupRehearsalJob, "the production-backup rehearsal must retain its rehearse job");
 const maximumRehearsalRunCharacters = Math.max(...canonicalRunScalarsForLength(productionBackupRehearsalJob.source)
   .map((source) => source.length));
+// GitHub's real parser rejected the interpolated main shell scalar at run40370566818.
+// Keep this large block literal: both receipt arguments use the already numeric-
+// validated step environment rather than compiling the whole shell as format().
+const mainRehearsalRun = canonicalRunScalarsForLength(productionBackupRehearsalJob.source)
+  .find(source => source.startsWith("set -euo pipefail\n"));
+assert.ok(mainRehearsalRun);
+assert.doesNotMatch(mainRehearsalRun, /\$\{\{/,
+  "the large main rehearsal shell must not become an oversized GitHub Actions expression");
+assert.match(mainRehearsalRun, /\[\[ "\$BACKUP_RUN_ID" =~ \^\[1-9\]\[0-9\]\*\$ \]\]/,
+  "receipt backup_run_id must still come from the numeric-validated environment");
 assert.ok(maximumRehearsalRunCharacters < 21_000,
   "every production-backup rehearsal run expression must stay below the provider's hard character ceiling");
-assert.ok(maximumRehearsalRunCharacters <= 19_047,
-  "the exact current reviewed rehearsal retains at least1,953characters margin; no larger run envelope is admitted");
+assert.ok(maximumRehearsalRunCharacters <= 20_870,
+  "the exact current reviewed rehearsal retains at least130characters margin; no larger run envelope is admitted");
 assert.match(productionBackupRehearsal, /RESTORE_DATABASE_ONLY=true[\s\S]*release:observed-production-schema:preflight[\s\S]*node scripts\/run-release-migration-full-candidate\.mjs "\$backup_dir" "\$container" "\$port"[\s\S]*release:target-schema:preflight/,
   "the production-backup rehearsal must prove the restored pre-migration state, apply the signed plan, and only then check the target fingerprint");
 assert.doesNotMatch(productionBackupRehearsal, /SUPABASE_DB_URL:\s*\$\{\{\s*secrets\.SUPABASE_DB_URL/,
@@ -645,14 +687,14 @@ assert.match(rehearsalJsonEndpointWaiter,
   /--fail --silent --show-error --connect-timeout 2 --max-time 5[\s\S]*jq -e "\$predicate"/,
   "the reusable rehearsal waiter must require successful HTTP plus the exact caller-owned JSON predicate");
 assert.match(productionBackupRehearsal,
-  /bash scripts\/verify-isolated-rehearsal-backend-dependencies\.sh[\s\S]*health\/dependencies[\s\S]*"\$backend_dependencies_file" "\$target_fingerprint"/,
-  "the restored backend must use the bounded exact-state dependency verifier");
+  /bash scripts\/verify-isolated-rehearsal-backend-dependencies\.sh[\s\S]*health\/dependencies[\s\S]*"\$backend_dependencies_file" "\$\(tr -d \'\\r\\n\' < supabase\/canonical\/schema-fingerprint\.txt\)"/,
+  "the backend health verifier must use canonical source schema; the deployment catalog fingerprint stays separate");
 assert.match(isolatedRehearsalBackendDependencies,
   /status=.*curl --silent --show-error[\s\S]*--output "\$response_file" --write-out '%\{http_code\}'[\s\S]*test "\$status" = '503'/,
   "the restored backend must preserve and require the expected fail-closed dependency response instead of treating HTTP 503 as a transport failure");
 assert.doesNotMatch(`${productionBackupRehearsal}\n${isolatedRehearsalBackendDependencies}`, /curl[^\n]*--fail[^\n]*health\/dependencies|curl[^\n]*health\/dependencies[^\n]*--fail/,
   "the rehearsal dependency probe must inspect the intentional HTTP 503 response body rather than discard it with curl --fail");
-const targetFingerprintInitialization = productionBackupRehearsal.indexOf("target_fingerprint=\"$(tr -d '\\r\\n' < supabase/canonical/schema-fingerprint.txt)\"");
+const targetFingerprintInitialization = productionBackupRehearsal.indexOf(`target_fingerprint="$(jq -er '.target.canonical_source_schema_fingerprint | select(test("^[0-9a-f]{64}$"))' release/production-migration-state.json)"`);
 assert.notEqual(targetFingerprintInitialization, -1,
   "the rehearsal must initialize the exact source-controlled target fingerprint");
 assert.ok(
@@ -865,3 +907,22 @@ const executionBoundary = spawnSync(process.execPath, [resolve(root, "scripts/re
 assert.equal(executionBoundary.status, 0, executionBoundary.stdout + executionBoundary.stderr);
 console.log(executionBoundary.stdout.trim());
 console.log(JSON.stringify({ ok: true, workflows_checked: workflowNames.length, direct_and_surrounding_mutants: reviewedMutationCount }, null, 2));
+
+// Importing the dedicated operator is effect-free. The explicit scope and
+// authenticated-result boundary must reject plausible but false admissions.
+const { selectedMode, storageResult } = await import('./run-official-local-storage-rehearsal.mjs');
+const localStorageEnvironment={REHEARSAL_SCOPE:'backup_only',OFFICIAL_LOCAL_STORAGE_PROVIDER:'true',RESTORE_APPLY:'true',RESTORE_DATABASE_ONLY:'true',SUPABASE_DB_URL:'postgresql://postgres:local@127.0.0.1:55432/mz_schema_rebuild_contract'};
+assert.equal(selectedMode(localStorageEnvironment).hostname,'127.0.0.1');
+for(const change of [{REHEARSAL_SCOPE:'full_candidate'},{REHEARSAL_SCOPE:'reviewed_target_capture'},{OFFICIAL_LOCAL_STORAGE_PROVIDER:'false'},{RESTORE_APPLY:'false'},{RESTORE_DATABASE_ONLY:'false'},{SUPABASE_DB_URL:'postgresql://postgres:local@production.invalid/db'}])
+  assert.throws(()=>selectedMode({...localStorageEnvironment,...change}));
+const providerIntent={restore_id:'dddddddd-dddd-4ddd-8ddd-dddddddddddd',authority_generation:1};
+const providerArchive={summary:{table_count:217,database_row_count:80320,storage_object_count:1}};
+const providerResult={ok:true,...providerIntent,database_only:true,mutations_paused:true,state:'PAUSED_RECONCILIATION',database_tables:217,database_rows:80320,
+  storage:{provider_verified:true,object_bytes_verified:true,metadata_and_ownership_verified:true,scope:'OFFICIAL_LOCAL_FILE_BACKEND_SAME_ORIGINAL',production_provider_verified:false,owner_access_probes:[{status:'VERIFIED_CURRENT_RESTORED_ROLE_BOUNDARY'}]}};
+assert.equal(storageResult(providerResult,providerArchive,providerIntent),providerResult);
+for(const change of [{database_rows:80324},{database_tables:216},{mutations_paused:false},{state:'COMPLETE'},{restore_id:'other'}])
+  assert.throws(()=>storageResult({...providerResult,...change},providerArchive,providerIntent));
+for(const change of [{owner_access_probes:[]},{owner_access_probes:[{status:'UNKNOWN'}]},{provider_verified:false},{object_bytes_verified:false},{metadata_and_ownership_verified:false},{production_provider_verified:true},{scope:'PRODUCTION'}])
+  assert.throws(()=>storageResult({...providerResult,storage:{...providerResult.storage,...change}},providerArchive,providerIntent));
+assert.match(productionBackupRehearsal,/official_local_storage_provider:[\s\S]*type: boolean[\s\S]*default: false/);
+assert.match(productionBackupRehearsal,/if test "\$OFFICIAL_LOCAL_STORAGE_PROVIDER" = true; then\n\s+test "\$REHEARSAL_SCOPE" = backup_only\n\s+restore_command=\(node scripts\/run-official-local-storage-rehearsal\.mjs\)/);

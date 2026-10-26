@@ -505,12 +505,47 @@ BEGIN
      AND NOT t.tgisinternal AND t.tgenabled IN('O','A') AND (t.tgtype & 4)<>0
      AND NOT(t.tgfoid=to_regprocedure('custodial_dr.guard_application_mutation()') AND t.tgtype=62
        AND (SELECT proowner FROM pg_catalog.pg_proc WHERE oid=t.tgfoid)=(SELECT oid FROM pg_catalog.pg_roles WHERE rolname=session_user))
+      -- The pinned official Storage 1.70.3 bucket guard is vendor-owned, not
+      -- a public recovery-registry function. Admit only this exact invoker
+      -- validation body/shape; every other INSERT guard remains unsupported.
+      -- Existing owner fence, fresh relation lock and target-shape currentness
+      -- checks still surround this predicate and the unchanged actual INSERT.
+      AND NOT coalesce((current_user=session_user AND session_user='supabase_admin'
+       AND guard_relation_namespace.nspname='storage' AND guard_relation.relname='buckets'
+       AND t.tgrelid='storage.buckets'::regclass
+       AND t.tgname='enforce_bucket_name_length_trigger' AND t.tgtype=23 AND t.tgenabled='O'
+       AND NOT t.tgisinternal AND t.tgconstraint=0 AND NOT t.tgdeferrable AND NOT t.tginitdeferred
+       AND t.tgqual IS NULL AND t.tgnargs=0 AND octet_length(t.tgargs)=0
+       AND t.tgoldtable IS NULL AND t.tgnewtable IS NULL
+       AND coalesce((SELECT array_agg(a.attname::text ORDER BY a.attname)
+        FROM unnest(t.tgattr::smallint[]) number(attnum) JOIN pg_catalog.pg_attribute a
+        ON a.attrelid=t.tgrelid AND a.attnum=number.attnum),ARRAY[]::text[])=ARRAY['name']::text[]
+       AND guard_function_namespace.nspname='storage' AND guard_function.proname='enforce_bucket_name_length'
+       AND t.tgfoid=to_regprocedure('storage.enforce_bucket_name_length()')
+       AND guard_function.prokind='f' AND guard_function.pronargs=0
+       AND guard_function.proargtypes=''::oidvector AND guard_function.proallargtypes IS NULL
+       AND guard_function.proargmodes IS NULL AND guard_function.proargnames IS NULL
+       AND guard_function.prorettype='pg_catalog.trigger'::regtype AND NOT guard_function.proretset
+       AND guard_function.provariadic=0 AND guard_function.prosupport=0
+       AND guard_function.prolang=(SELECT oid FROM pg_catalog.pg_language WHERE lanname='plpgsql')
+       AND NOT guard_function.prosecdef AND NOT guard_function.proleakproof AND NOT guard_function.proisstrict
+       AND guard_function.provolatile='v' AND guard_function.proparallel='u'
+       AND guard_function.proconfig IS NULL AND guard_function.probin IS NULL AND guard_function.prosqlbody IS NULL
+       AND guard_function.proowner=(SELECT oid FROM pg_catalog.pg_roles WHERE rolname='supabase_storage_admin')
+       AND guard_function.prosrc=$OFFICIAL_STORAGE_BUCKET_PROSRC$
+begin
+    if length(new.name) > 100 then
+        raise exception 'bucket name "%" is too long (% characters). Max is 100.', new.name, length(new.name);
+    end if;
+    return new;
+end;
+$OFFICIAL_STORAGE_BUCKET_PROSRC$),false)
      AND NOT EXISTS(
       SELECT 1 FROM (VALUES
        ('public','devices','trg_custodial_offline_device_activation_boundary',21,'public.custodial_record_offline_authority_activation_boundary()',
         '14bde0e8c994bf8b0cb325fe39c6f60dd8531944a8cc766faf921ec2540449be',ARRAY['active']::text[]),
        ('public','ops_manager_push_devices','trg_ops_manager_push_devices_owner',23,'public.ops_manager_notification_validate_owner()',
-        '113dd3d7ca437be901ef8b314d34d9a88e421e821338ab472acc6e67351fa77d',ARRAY[]::text[]),
+        'a94e65887e886b4b16163382e7f9cdfa5795a3aed6a2a35db371675a5d2d8cc6',ARRAY[]::text[]),
        ('public','employees','trg_recurring_authority_lock',30,'public.static_weekly_v15_lock_recurring_mutation()',
         '541eba3c620076ef528a3c57c8566d52c741a205f33b898d5e4225470988c850',ARRAY[]::text[]),
        ('public','employees','trg_recurring_authority_generation',29,'public.static_weekly_v15_advance_recurring_generation()',
