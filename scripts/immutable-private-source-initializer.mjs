@@ -46,7 +46,7 @@ function unwrapSource(statement){
  }
  if(statement.sourcePath==='proposals/immutable-original-manager-push-restore.sql'){
   // This one newly admitted wrapper is fixed program Source, never caller SQL.
-  assert.equal(statement.sourceSha256,'ff2939a1556c08fdaf42c87f0fb332b8c8bd79c163902616156d80df147d2f91');
+  assert.equal(statement.sourceSha256,'2a9dd3a1050d0f7e7714abdd8feeb4259eea54287c68ffacd787b9072a9f7f9d');
   assert.equal(sha(statement.sql),statement.sourceSha256);
  }
  const outer=['proposals/immutable-private-owner-context.sql','proposals/immutable-original-employee-restore.sql',
