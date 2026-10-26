@@ -1,5 +1,10 @@
 #!/usr/bin/env node
 
+import {resolveReleaseSchemaTarget} from './production-target-schema-profile.mjs';
+import {assertReleaseWorkflowSource} from './release-migration-workflow-preflight.mjs';
+import {readMigrationReplayPlan} from './migration-replay-order.mjs';
+import {resolveReleaseMigrationSource} from './production-forward-source.mjs';
+
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -274,10 +279,27 @@ for (const required of [releaseInputPath, productionMigrationStatePath, "scripts
 }
 const input = parseJsonBlob(blobByPath.get(releaseInputPath), "release authority input");
 const productionMigrationState = parseJsonBlob(blobByPath.get(productionMigrationStatePath), "production migration state");
+
+const schemaTarget = resolveReleaseSchemaTarget(root);
+const currentProductionProfile = schemaTarget.profile;
+const currentReplayPlan = currentProductionProfile ? readMigrationReplayPlan(root) : null;
+if (currentProductionProfile) {
+  // Full source/preimage/forward-image/capture provenance validation; no SQL.
+  assertReleaseWorkflowSource(root);
+  assert.equal(productionMigrationState.target.canonical_source_schema_fingerprint, schemaTarget.deploymentFingerprint);
+  assert.deepEqual(productionMigrationState.target.expected_catalog_counts, schemaTarget.deploymentCounts);
+  assert.equal(productionMigrationState.target.production_ledger_count, currentProductionProfile.capture.target_ledger_count);
+  assert.equal(productionMigrationState.observed_production.production_ledger_count, currentProductionProfile.capture.source_ledger_count);
+  assert.equal(productionMigrationState.pending_migrations.length, currentProductionProfile.capture.pending_count);
+  assert.deepEqual(productionMigrationState.pending_migrations.map((m) => m.file), currentReplayPlan.files.slice(currentReplayPlan.baseCount));
+}
 assert.equal(productionMigrationState.mode, "migration_required");
 assert.ok(Array.isArray(productionMigrationState.pending_migrations));
+if (!currentProductionProfile) {
 assert.equal(productionMigrationState.pending_migrations.length, 23, "the candidate must identify exactly the twenty-three ordered Sep22-25 corrections");
+}
 const pendingReleaseMigrations = productionMigrationState.pending_migrations.map(({ file }) => file);
+if (!currentProductionProfile) {
 assert.deepEqual(pendingReleaseMigrations, [
   lunchDeliveryFailureManagerAlert,
   completedCleaningReminderCycles,
@@ -303,6 +325,7 @@ assert.deepEqual(pendingReleaseMigrations, [
   "20260925054802_static_weekly_staffing_atomic_acceptance.sql",
   "20260925190000_gps_exact_location_authority_boundary.sql",
 ]);
+}
 assert.equal(Object.hasOwn(productionMigrationState, "applied_release_migrations"), false,
   "captured state must use the exact ledger head instead of a duplicate partial applied-migration list");
 const orderedMigrationFiles = expectedBlobs
@@ -313,14 +336,21 @@ assert.equal(orderedMigrationFiles.length, expectedMigrationCount, "complete sig
 assert.equal(new Set(orderedMigrationFiles.map((file) => file.slice(0, 14))).size, orderedMigrationFiles.length,
   "signed migration inventory contains a duplicate migration version");
 const observedLedgerHead = String(productionMigrationState.observed_production?.ledger_head || "");
-const appliedReleaseMigrations = orderedMigrationFiles.filter((file) => file.slice(0, 14) <= observedLedgerHead);
-const unappliedReleaseMigrations = orderedMigrationFiles.filter((file) => file.slice(0, 14) > observedLedgerHead);
+let appliedReleaseMigrations, unappliedReleaseMigrations;
+if (currentProductionProfile) {
+  appliedReleaseMigrations = currentReplayPlan.files.slice(0,currentReplayPlan.baseCount);
+  unappliedReleaseMigrations = currentReplayPlan.files.slice(currentReplayPlan.baseCount);
+  assert.deepEqual([...currentReplayPlan.files].sort(), orderedMigrationFiles);
+} else {
+appliedReleaseMigrations = orderedMigrationFiles.filter((file) => file.slice(0, 14) <= observedLedgerHead);
+unappliedReleaseMigrations = orderedMigrationFiles.filter((file) => file.slice(0, 14) > observedLedgerHead);
 assert.equal(appliedReleaseMigrations.length, productionMigrationState.observed_production?.source_authority_migration_count,
   "captured source migration count does not equal the complete signed applied prefix");
 assert.equal(appliedReleaseMigrations.at(-1), `${observedLedgerHead}_${productionMigrationState.observed_production?.source_migration_name}.sql`,
   "captured ledger head is not the final migration in the complete signed applied prefix");
 assert.deepEqual(unappliedReleaseMigrations, pendingReleaseMigrations,
   "every signed migration after the captured ledger head must be an exact ordered pending migration");
+}
 const releaseEvidence = parseJsonBlob(evidenceBlob, "release evidence");
 const index = blobByPath.get("src/index.js").bytes.toString("utf8");
 const deviceCredentialAuth = blobByPath.get("src/auth/device-credential-auth.js").bytes.toString("utf8");
@@ -358,7 +388,9 @@ assert.match(input.backend_contract.device_credential_secret_gate, /Every active
 assert.ok(Array.isArray(input.cutover.phase_order) && input.cutover.phase_order.length >= 7);
 assert.match(input.cutover.phase_order[1], /exact observed production ledger head.*catalog\/privilege fingerprint.*zero target-position collisions/i);
 assert.match(input.cutover.phase_order[2], /fresh post-capture backup receipt.*exact pending-migration digest.*exact source attestation/i);
+if (!currentProductionProfile) {
 assert.match(input.cutover.phase_order[3], /twenty-three exact ordered pending migrations.*lunch-delivery manager alerts.*completed-cleaning reminder compatibility.*verified-visit five-minute overdue authority.*atomic static-weekly lunch publication.*durable lunch start\/end notification production.*existing-employee identity restoration.*dated roster-slot vacancy.*aggregate visitor-attendance reading.*release-selection and occurrence guards.*independent notification receipt and lunch integrity.*release-selector recovery bindings.*canonical dated shift-end derivation.*atomic roster completion.*assigned-phone activation transport.*legacy-installation observation.*owner cleaning and inspection boundaries.*manual contractor lunch authority.*durable native provider authority.*completion-selection normalization.*bound legacy completion replay.*durable staffing command ledger.*atomic staffing acceptance.*exact-location GPS authority boundary.*ledger to advance exactly twenty-three entries.*do not replay historical production migrations/i);
+}
 assert.match(input.cutover.phase_order[4], /retain the current immutable weighted-schedule publication by default.*only when a named manager approves a replacement.*derive exactly one replacement draft from the current publication.*expected-revision and idempotency guards.*do not create a competing draft.*preserve the current publication/i);
 assert.ok(input.cutover.rollback.restoration_checks.some((value) => /retired 09:45 background writer.*manager-approved schedule or absence publication/i.test(value)));
 assert.ok(input.cutover.rollback.restoration_checks.some((value) => /every active employee-device credential.*manager-code recovery.*legacy secret fallback/i.test(value)));
@@ -368,6 +400,7 @@ assert.equal(productionMigrationState.project_ref, "rqquvtjdmugpigbndmne");
 assert.match(String(productionMigrationState.observed_production?.ledger_head || ""), /^[0-9]{14}$/);
 assert.match(String(productionMigrationState.observed_production?.source_migration_name || ""), /^[a-z][a-z0-9_]*$/);
 assert.match(String(productionMigrationState.observed_production?.catalog_privilege_fingerprint || ""), /^[a-f0-9]{64}$/);
+if (!currentProductionProfile) {
 assert.equal(productionMigrationState.observed_production?.ledger_head, "20260920010000");
 assert.equal(productionMigrationState.observed_production?.source_migration_name, "event_reminder_static_weekly_authority");
 assert.equal(productionMigrationState.observed_production?.catalog_privilege_fingerprint, "750e7f040519f6d4555836cbd4d172a22f98911d5bab9918fa370238fff3f822");
@@ -392,6 +425,7 @@ assert.equal(productionMigrationState.target?.expected_catalog_counts?.triggers,
 assert.equal(productionMigrationState.target?.expected_catalog_counts?.policies, 43);
 assert.equal(productionMigrationState.target?.expected_catalog_counts?.routine_grants, 383);
 assert.equal(productionMigrationState.target?.expected_catalog_counts?.schema_grants, 9);
+}
 assert.match(releaseHealthIdentityProjectionText, /c\.relname in \('devices','employees','device_aliases'\)/);
 assert.match(releaseHealthIdentityProjectionText, /Release health recovery inventory row is missing or duplicated/);
 assert.match(messagingDurabilityText, /msg_mark_thread_read_through/);
@@ -417,7 +451,7 @@ for (const [index, migration] of productionMigrationState.pending_migrations.ent
   assert.match(String(migration.sha256 || ""), /^[a-f0-9]{64}$/, `pending migration digest is invalid at ${migration.file}`);
   const blob = blobByPath.get(`supabase/migrations/${migration.file}`);
   assert.ok(blob, `pending migration is absent from the exact backend tree: ${migration.file}`);
-  assert.equal(hash(blob.bytes), migration.sha256, `pending migration digest mismatch: ${migration.file}`);
+  assert.equal(hash(currentProductionProfile ? Buffer.from(resolveReleaseMigrationSource(root,migration).sql) : blob.bytes), migration.sha256, `pending migration digest mismatch: ${migration.file}`);
 }
 assert.equal(input.cutover.source_identity.kind, "external_signed_release_attestation");
 assert.equal(input.cutover.source_identity.generated_evidence_path, releaseEvidencePath);

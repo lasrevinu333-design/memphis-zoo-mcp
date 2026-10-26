@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { createCiFreshOnlyFixture } from './ci-fresh-only-replay.mjs';
 // Independent-session race and rollback probes for the full I2 backend chain.
 import assert from "node:assert/strict";
 import { execFile, spawn } from "node:child_process";
@@ -9,7 +10,9 @@ import { compileStaticWeeklySchedule } from "../src/static-weekly-schedule-compi
 import { createStaticWeeklyDraftRpcInput, createStaticWeeklyProjectionRpcInput } from "../src/static-weekly-schedule-database-adapter.js";
 
 const execFileAsync = promisify(execFile);
-const container = `mz_static_weekly_i2_race_${process.pid}`;
+const fixtureName = `mz_schema_rebuild_static_weekly_i2_race_${process.pid}`;
+let container = fixtureName;
+let fixture = null;
 const migrationsDir = path.resolve(process.cwd(), "supabase/migrations");
 const migrations = fs.readdirSync(migrationsDir).filter((name) => name.endsWith(".sql")).sort().map((name) => path.resolve(migrationsDir, name));
 const one = { id: "10000000-0000-4000-8000-000000000001", name: "Manager One" };
@@ -50,18 +53,8 @@ async function expectReject(promise, expression) { await assert.rejects(promise,
 
 let removed = false;
 try {
-  const postgresImage = process.env.SCHEMA_REBUILD_DOCKER_IMAGE || "supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed";
-  await docker(["image", "inspect", postgresImage]);
-  await docker(["run", "--rm", "-d", "--network", "none", "--name", container, "--tmpfs", "/var/lib/postgresql/data:rw,size=1g", "-e", "POSTGRES_PASSWORD=postgres", postgresImage, "-c", "shared_preload_libraries=pg_cron,pg_net,pg_stat_statements", "-c", "cron.launch_active_jobs=off"]);
-  let ready = false;
-  for (let attempt = 0; attempt < 300; attempt += 1) {
-    try { await sql("select 1"); await new Promise((resolve) => setTimeout(resolve, 1_000)); await sql("select 1"); const health = (await docker(["inspect", container, "--format", "{{if .State.Health}}{{.State.Health.Status}}{{end}}"]))?.stdout?.trim(); if (!health || health === "healthy") { await new Promise((resolve) => setTimeout(resolve, 10_000)); await sql("select 1"); ready = true; break; } } catch {}
-    await new Promise((resolve) => setTimeout(resolve, 500));
-  }
-  if (!ready) throw new Error("owned race database did not start");
-  assert.equal(await sql("show cron.launch_active_jobs"), "off", "cron job launching must be disabled before canonical migration replay");
-  await sql("do $$ begin create role anon; exception when duplicate_object then null; end $$; do $$ begin create role authenticated; exception when duplicate_object then null; end $$; do $$ begin create role service_role; exception when duplicate_object then null; end $$;");
-  for (const migration of migrations) await migrate(migration);
+  fixture = await createCiFreshOnlyFixture({ name: fixtureName, hostSocket: false });
+  container = fixture.container;
   await sql(`insert into public.ops_manager_managers(manager_id,display_name,roles,active,metadata_json,is_system_principal) values
     (${quote(one.id)},${quote(one.name)},array['OPS_MANAGER']::text[],true,'{}'::jsonb,false),
     (${quote(two.id)},${quote(two.name)},array['OPS_MANAGER']::text[],true,'{}'::jsonb,false);`);
@@ -126,7 +119,7 @@ try {
   assert.equal(await scalar("select (to_regprocedure('public.static_weekly_v3_replace_incumbency(uuid,uuid,text,date,bigint,uuid,text)') is null)::text"), "true", "the arbitrary legacy replacement writer is absent during concurrent authority operation");
   console.log("static weekly schedule real independent-session concurrency tests: PASS");
 } finally {
-  await docker(["rm", "-f", container]).catch(() => {});
+  if (fixture) await fixture.cleanup();
   removed = true;
 }
 assert.equal(removed, true, "owned disposable PostgreSQL container must be removed");

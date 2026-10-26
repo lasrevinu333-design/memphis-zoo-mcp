@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { createCiFreshOnlyFixture } from './ci-fresh-only-replay.mjs';
 // Adversarial lifecycle proof for the final scheduler authority closure. This
 // deliberately traverses the deployed control-plane read -> compile -> adapter
 // -> SQL path against one fresh worker-owned PostgreSQL instance.
@@ -27,7 +28,9 @@ const dockerSql = (statement) => {
     child.stdin.end(statement);
   });
 };
-const container = `mz_static_weekly_i2_closure_${process.pid}`;
+const fixtureName = `mz_schema_rebuild_static_weekly_i2_closure_${process.pid}`;
+let container = fixtureName;
+let fixture = null;
 const migrationsDir = path.resolve(process.cwd(), "supabase/migrations");
 const manager = { manager_id: "10000000-0000-4000-8000-000000000071", manager_display_name: "Closure Named Manager", auth_mode: "trusted_device", trusted_device: true, read_only: false };
 const managerRecord = { manager_id: manager.manager_id, display_name: manager.manager_display_name, roles: ["OPS_MANAGER"], active: true };
@@ -141,15 +144,9 @@ async function expectNoMutation(action, pattern, label) {
 }
 
 try {
-  const postgresImage = process.env.SCHEMA_REBUILD_DOCKER_IMAGE || "supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed";
-  await docker(["image", "inspect", postgresImage]);
-  await docker(["run", "--rm", "-d", "--network", "none", "--name", container, "--tmpfs", "/var/lib/postgresql/data:rw,size=1g", "-e", "POSTGRES_PASSWORD=postgres", postgresImage, "-c", "shared_preload_libraries=pg_cron,pg_net,pg_stat_statements", "-c", "cron.launch_active_jobs=off"]);
-  await eventually(() => dockerSql("select 1"));
-  await new Promise((resolve) => setTimeout(resolve, 10_000));
-  assert.equal((await dockerSql("show cron.launch_active_jobs")).stdout.trim(), "off", "cron job launching must be disabled before canonical migration replay");
+  fixture = await createCiFreshOnlyFixture({ name: fixtureName, hostSocket: false });
+  container = fixture.container;
   pool = createDockerPool();
-  await pool.query("do $$ begin create role anon; exception when duplicate_object then null; end $$; do $$ begin create role authenticated; exception when duplicate_object then null; end $$; do $$ begin create role service_role; exception when duplicate_object then null; end $$;");
-  for (const name of fs.readdirSync(migrationsDir).filter((entry) => entry.endsWith(".sql")).sort()) await pool.query(fs.readFileSync(path.join(migrationsDir, name), "utf8"));
   await pool.query("insert into public.ops_manager_managers(manager_id,display_name,roles,active,metadata_json,is_system_principal) values($1,$2,array['OPS_MANAGER']::text[],true,'{}'::jsonb,false)", [manager.manager_id, manager.manager_display_name]);
   await roleCall("static_weekly_release_operator", "static_weekly_v3_configure_initial_authority_key", ["static-weekly-authority-hmac-v1", "closure-initial-authority-secret-012345678901234567890", "closure-suite"]);
 
@@ -240,7 +237,7 @@ try {
   await pool.end(); pool = null;
 } finally {
   if (pool) await pool.end().catch(() => {});
-  await docker(["rm", "-f", container]).catch(() => {});
+  if (fixture) await fixture.cleanup();
   removed = true;
 }
 assert.equal(removed, true, "owned closure-test PostgreSQL container must be removed");
