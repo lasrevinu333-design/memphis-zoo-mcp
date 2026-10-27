@@ -1,0 +1,17 @@
+{
+  "format": "custodial.g12.consistent-physical-export-plan.v1",
+  "scope": "DERIVED_CI_POST_MIGRATION_PHYSICAL_CLONE_FOR_LOCAL_G12_NOT_V4_ARCHIVE",
+  "product_commit": "4803109c968d874519f9dec2278089971bf3530b",
+  "product_tree": "2138a5cc4052c1fd4b98d5a9ef69fe7916879f3c",
+  "repository": "lasrevinu333-design/memphis-zoo-mcp",
+  "control_branch": "codex/custodial-g12-current48031-physical-tmpfs-scram-20261027",
+  "backup_run_id": 40454607125,
+  "backup_artifact_id": 12711908408,
+  "original_zip_sha256": "7680d3df0ac42ce790a4af682483a6adbee5095990b27bd4cc6ae12ceca8d50f",
+  "archive_digest": "d3085a6c253c77dfc6f328f5d65d333b03d11d7f13d870585727b7415a52da52",
+  "target_ledger_count": 395,
+  "target_fingerprint": "f67580f03992120abd4086a9b53af98b05c29469eb140013221384df57bdd160",
+  "recipient_public_key_pem": "-----BEGIN PUBLIC KEY-----\nMIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAzB5i9UjhdKRBt1dKGLtj\nyOSc59PL6pzKh2uoPMFOC4Y/Lnok7fz4E2VsTKahtVwRZHsyIw8JmTM/Q+64cklS\nwxcj00TQnbiFYQfASq3+ESssXnKiVO0JFua7xIc+hg5s9Wo+85UDo2MCKzsAeyzg\nEGtqKCUhLOkuCNApOsSG5dIrVZwioiCkAMjVfpnAJCSTLEW1qrlP28MWdxQ8FTGs\nw/Q1+O091KnJV0Kve8krST+tNtwKpmr0bGuwaNlOIU/2yT+NFAx6ogcVr+x/+IOD\n7m0n9FrxDtqj1PAfyLx9tLfMlmLFonWJjG0WzYYMroZQ/KuZehH5r6aFxBSXM4Et\nA4uHp/lp7uYviiwxFZ7p8opQWMKsQIOkF50M4sVqxyOwDzWwLDZXF6aQekkXm6Bd\n15y44nhxcBQP18DUVvbTn/78IaCQx1sYuxb7puj47hNJ4MYKnrt0qgabcyQeBv1w\nZFSv5nSWTJZBMg8uLuBR0G9ddEvZydAX0PH2/MwUN+PXAgMBAAE=\n-----END PUBLIC KEY-----\n",
+  "recipient_spki_sha256": "5326e1c6e1614045b9eaa536c5eb857a8079377e4b1aa01c6e7fb260303a70ff",
+  "effect_admission": null
+}
