@@ -52,11 +52,11 @@ const freshReplayWorkflowPaths = new Set([
 // its earlier recorder retains the distinct rehearsal image. Bind the whole
 // reviewed workflow so this exception cannot admit another image caller.
 const mixedFreshRepairWorkflowPath = resolve(workflowDirectory, "custodial-production-repair.yml");
-const mixedFreshRepairWorkflowSha256 = "a79d6ffb2c56e3320c4556407daf2ad351420f611d3a4a6457b432ab82c06f8e";
+const mixedFreshRepairWorkflowSha256 = "d4d6f5dc1e6e4a3b497ffb694efd2b3a926300637365443ed9ce1a823d84aca2";
 // Foundation provisions the exact manifest-selected fresh fixture image before
 // its existing constructor; the earlier recorder keeps its rehearsal image.
 const mixedFreshFoundationWorkflowPath = resolve(workflowDirectory, "foundation-security-gate.yml");
-const mixedFreshFoundationWorkflowSha256 = "656544e11915b73d2bf7d4975d436f5ab36c568fb3408d050e16155ec3ec98f6";
+const mixedFreshFoundationWorkflowSha256 = "75b53a96aab93cac2e7641dc1e0dfb05225152c7c94111a7aa09ae22925509dc";
 const thisContractPath = fileURLToPath(import.meta.url);
 const postgresImagePins = postgresPinSources.flatMap((path) => {
   const pins = [...readFileSync(path, "utf8").matchAll(/(?:public\.ecr\.aws\/|docker\.io\/)?supabase\/postgres@sha256:[0-9a-f]{64}/g)]
@@ -224,7 +224,7 @@ for (const name of workflowNames) {
   if (source.includes("actions/setup-node")) {
     const versions = [...source.matchAll(/node-version:\s*['"]?([^'"\s]+)['"]?/g)].map((match) => match[1]);
     assert.ok(versions.length > 0, `${name} must declare a Node version`);
-    assert.deepEqual([...new Set(versions)], ["22.23.1"], `${name} must use Node 22.23.1 exactly`);
+    assert.deepEqual([...new Set(versions)], ["22.23.4"], `${name} must use Node 22.23.4 exactly`);
   }
   for (const match of source.matchAll(/uses:\s*([^@\s#]+)@([^\s#]+)(?:\s+#\s*(v\d+(?:\.\d+){0,2}))?/g)) {
     const [, action, revision, comment] = match;
@@ -293,7 +293,7 @@ assert.ok(
 assert.match(parsedPackageManifest.scripts["test:integrated-backend-authority-cutover:database"], / --database$/,
   "the signed release database command must not silently degrade to source-only acceptance");
 const productionRepairGate = readFileSync(resolve(workflowDirectory, "custodial-production-repair.yml"), "utf8");
-const reviewedNode = "/opt/hostedtoolcache/node/22.23.1/x64/bin/node";
+const reviewedNode = "/opt/hostedtoolcache/node/22.23.4/x64/bin/node";
 const reviewedEntrypoints = ["scripts/legacy-activation-http-tests.mjs",
   "scripts/release-pair-consumer-regression-tests.mjs", "scripts/run-isolated-release-recorder-tests.mjs"];
 const reviewedRegressionCommand = reviewedEntrypoints.map(path => `${reviewedNode} ${path}`).join(" && ");
@@ -302,7 +302,7 @@ const reviewedInputPaths = ["package.json", "package-lock.json", "scripts/legacy
   "scripts/production-release-recorder-database-tests.mjs", "scripts/fixtures/exact-frontend-pair.mjs"];
 const reviewedInputChecks = reviewedInputPaths.map(path =>
   `          ${createHash("sha256").update(readFileSync(resolve(root, path))).digest("hex")}  ${path}`);
-const reviewedCleanShell = "        shell: /usr/bin/env -i HOME=/home/runner PATH=/opt/hostedtoolcache/node/22.23.1/x64/bin:/usr/bin:/bin /bin/bash --noprofile --norc -e -o pipefail {0}";
+const reviewedCleanShell = "        shell: /usr/bin/env -i HOME=/home/runner PATH=/opt/hostedtoolcache/node/22.23.4/x64/bin:/usr/bin:/bin /bin/bash --noprofile --norc -e -o pipefail {0}";
 function assertReviewedRegressionGate(source, jobName, label) {
   // Deliberately accept only these canonical column-zero mappings across the
   // ENTIRE document. Reject alternate YAML spellings/tags/aliases/duplicates
@@ -336,7 +336,7 @@ function assertReviewedRegressionGate(source, jobName, label) {
   const owningSteps = steps.filter(step => step.includes(reviewedRegressionCommand));
   assert.deepEqual(steps.slice(0, 3), [
     "      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1",
-    "      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0\n        with:\n          node-version: '22.23.1'\n          cache: npm",
+    "      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0\n        with:\n          node-version: '22.23.4'\n          cache: npm",
     "      - name: Install exact dependencies\n        run: npm ci --ignore-scripts",
   ], `${label} requires the exact reviewed preparation; no arbitrary predecessor may mutate execution state`);
   assert.equal(steps[3], owningSteps[0], `${label} must execute reviewed regressions immediately after installation`);
@@ -441,7 +441,7 @@ const productionBackupRehearsal = readFileSync(resolve(workflowDirectory, "produ
 // not as a parser for arbitrary future YAML. Any workflow edit fails before
 // an actual workflow reaches scalar measurement and requires a reviewed pin.
 assert.equal(createHash("sha256").update(productionBackupRehearsal, "utf8").digest("hex"),
-  "432586502a0498eca46a360f889f1ad5dd0eacfcf331cfd7c1e29381a1532695",
+  "9d554f84ce9a151f257203be263c6b3cbac963c2f8366c62bdc62703fae9b416",
   "rehearsal length measurement requires the exact reviewed whole workflow");
 const blankGapPlainRunMutant = productionBackupRehearsal.replace(
   "      - run: npm ci --ignore-scripts\n",
@@ -465,7 +465,7 @@ assert.throws(() => canonicalRunScalarsForLength(
 const localProductionBackupRehearsal = readFileSync(resolve(root, "scripts/run-production-backup-migration-rehearsal.sh"), "utf8");
 const build52ProductionMigrationApply = readFileSync(resolve(workflowDirectory, "build52-production-migration-apply.yml"), "utf8");
 assert.equal(createHash("sha256").update(build52ProductionMigrationApply, "utf8").digest("hex"),
-  "4bdb11224d3e4d20dfb3bc9293c1a13f0bf86323c58594ac082f4e7463ab9c25",
+  "c6749200bbcd0bf2312342a6d4154c005dbb4b3b31a5a0ac3f741309881c44ea",
   "Build52 length measurement requires the exact reviewed whole workflow");
 assert.match(build52ProductionMigrationApply, /node scripts\/current291-production-plan-source-tests\.mjs/,
   "normal apply must invoke the existing current plan source suite");
