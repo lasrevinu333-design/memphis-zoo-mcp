@@ -1,6 +1,11 @@
 import crypto from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { makeOpsAccessMiddleware } from "./auth/shared-access-auth.js";
+import { prepareNativeLocationDataSender } from './native-location-dispatch.js';
+import { prepareNativeLunchDataSender } from './native-lunch-dispatch.js';
+import { prepareNativeMessageDataSender } from './native-message-dispatch.js';
+import { prepareNativeEventDataSender } from './native-event-dispatch.js';
+import { prepareNativeScheduleDataSender } from './native-schedule-dispatch.js';
 
 const DEFAULT_TIME_ZONE = "America/Chicago";
 const DEFAULT_SWEEP_MS = 15_000;
@@ -394,7 +399,29 @@ export function createPushRuntime({ db, env }) {
     }
   }
 
-  return { configured: Boolean(account), projectId: account?.project_id || null, getClientConfig, send, sweep };
+  async function prepareNativeLocationSender() {
+    const token = await accessToken(PUSH_SCOPE);
+    return prepareNativeLocationDataSender({ projectId: account.project_id, accessToken: token });
+  }
+  async function prepareNativeLunchSender() {
+    const token = await accessToken(PUSH_SCOPE);
+    return prepareNativeLunchDataSender({ projectId: account.project_id, accessToken: token });
+  }
+  async function prepareNativeMessageSender() {
+    const token = await accessToken(PUSH_SCOPE);
+    return prepareNativeMessageDataSender({ projectId: account.project_id, accessToken: token });
+  }
+  async function prepareNativeEventSender() {
+    const token = await accessToken(PUSH_SCOPE);
+    return prepareNativeEventDataSender({ projectId: account.project_id, accessToken: token });
+  }
+  async function prepareNativeScheduleSender() {
+    const token = await accessToken(PUSH_SCOPE);
+    return prepareNativeScheduleDataSender({ projectId: account.project_id, accessToken: token, fetchImpl: fetch });
+  }
+  return { configured: Boolean(account), projectId: account?.project_id || null, getClientConfig, send, sweep,
+    prepareNativeLocationSender, prepareNativeLunchSender, prepareNativeMessageSender, prepareNativeEventSender,
+    prepareNativeScheduleSender };
 }
 
 export function installManagerNotificationRoutes(app, { env = process.env, supabase = null } = {}) {

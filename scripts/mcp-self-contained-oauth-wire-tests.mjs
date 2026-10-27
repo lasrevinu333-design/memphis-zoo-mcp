@@ -1,3 +1,4 @@
+import './mcp-tool-login-challenge-tests.mjs';
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { createServer } from "node:net";
@@ -302,11 +303,15 @@ try {
   assert.equal(started.response.status, 200);
   assert.match(started.html, /Sign in to Memphis Zoo MCP/);
   assert.ok(started.cookie && started.request && started.csrf);
+  const strictLoginCsp = "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'";
+  assert.equal(started.response.headers.get("content-security-policy"), strictLoginCsp,
+    "Password forms remain same-origin only.");
   assert.doesNotMatch(started.html, new RegExp(OPERATOR_PASSWORD));
 
   const wrongPassword = await login(base, started, "wrong-operator-password");
   assert.equal(wrongPassword.response.status, 401);
   assert.match(wrongPassword.html, /password was not accepted/);
+  assert.equal(wrongPassword.response.headers.get("content-security-policy"), strictLoginCsp);
 
   const signedIn = await login(base, started);
   assert.equal(signedIn.response.status, 200);
@@ -314,6 +319,9 @@ try {
   assert.match(signedIn.html, /Approve access/);
   assert.equal(signedIn.response.headers.get("location"), null, "Correct password must not auto-approve OAuth access.");
   assert.ok(signedIn.cookie && signedIn.request && signedIn.csrf);
+  assert.equal(signedIn.response.headers.get("content-security-policy"),
+    strictLoginCsp.replace("form-action 'self'", `form-action 'self' ${STABLE_REDIRECT}`),
+    "Consent permits only the registered callback, preserving every other directive.");
 
   const approval = await decide(base, signedIn, "approve");
   assert.equal(approval.status, 303);
@@ -417,6 +425,10 @@ try {
     state: "deny-state",
   }));
   const denialSignedIn = await login(base, denialStarted);
+  assert.equal(denialStarted.response.headers.get("content-security-policy"), strictLoginCsp);
+  assert.equal(denialSignedIn.response.headers.get("content-security-policy"),
+    strictLoginCsp.replace("form-action 'self'", `form-action 'self' ${CALLBACK_REDIRECT}`),
+    "Callback-specific consent must not broaden to the stable callback or whole origin.");
   const denial = await decide(base, denialSignedIn, "deny");
   assert.equal(denial.status, 303);
   const denialLocation = new URL(denial.headers.get("location"));
@@ -450,7 +462,7 @@ try {
   const anonymousProtected = await mcpRequest(base, "tools/call", { name: "server_tool_manifest", arguments: { include_planned: false } });
   assert.equal(anonymousProtected.body.result.isError, true);
   assert.deepEqual(anonymousProtected.body.result._meta["mcp/www_authenticate"], [
-    `Bearer resource_metadata="${base}/.well-known/oauth-protected-resource/mcp", scope="mcp:read"`,
+    `Bearer resource_metadata="${base}/.well-known/oauth-protected-resource/mcp", scope="mcp:read", error="insufficient_scope", error_description="Authorize the required Memphis Zoo MCP permissions to use this tool."`,
   ]);
 
   const authorizedProtected = await mcpRequest(base, "tools/call", {

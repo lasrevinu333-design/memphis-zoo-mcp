@@ -1,6 +1,10 @@
 import { createHash, createHmac, randomBytes, randomInt, randomUUID, timingSafeEqual } from "node:crypto";
 import argon2 from "argon2";
 import { isCanonicalEmployeeKiosk, normalizeDeviceIdentifier, resolveActiveAssignedDevice, resolveCanonicalDevice } from "../device-identity.js";
+// BEGIN native credential observation imports (ordinary auth is unchanged).
+import { isDeepStrictEqual } from "node:util";
+import { parseNativeProviderJson } from "../native-provider-json.js";
+// END native credential observation imports.
 
 const DEVICE_COOKIE_NAME = "memphis_device_credential";
 const DEVICE_SECURITY_COOKIE_NAME = "memphis_device_security_session";
@@ -838,12 +842,16 @@ export async function authenticateDeviceCredentialRequest(req, {
   runReadOnlySql,
   now = new Date(),
   requireEnrolledCredential = false,
+  readOnlyValidation = false,
 } = {}) {
   if (typeof runReadOnlySql !== "function") throw new Error("runReadOnlySql is required.");
   const store = suppliedStore || createSupabaseDeviceCredentialStore(supabase);
   if (!store) return { ok: false, status: 503, code: "device_auth_unavailable", error: "Device authentication store is unavailable." };
 
-  const terminalOfflineRecovery = isOfflineRecoveryRequest(req);
+  // Server-owned read freshness only. This is never read from request data.
+  const readOnly = readOnlyValidation === true;
+  requireEnrolledCredential = requireEnrolledCredential || readOnly;
+  const terminalOfflineRecovery = !readOnly && isOfflineRecoveryRequest(req);
   const { identifier, device } = await resolveDevice(req, runReadOnlySql, { allowTerminalOfflineRecovery: terminalOfflineRecovery });
   if (!identifier) return { ok: false, status: 401, code: "device_id_required", error: "device_id is required." };
   if (!device || (!device.device_active && !terminalOfflineRecovery)) return { ok: false, status: 401, code: "device_not_registered", error: "Registered device is required." };
@@ -876,6 +884,23 @@ export async function authenticateDeviceCredentialRequest(req, {
     const valid = Boolean(tokenMatchesDevice && !row.revoked_at && Number.isFinite(expiresAt) && expiresAt > now.getTime());
     const normalCommitEligible = Boolean(device?.device_active && isEligibleEmployeeDevice(device));
     if (valid && normalCommitEligible) {
+      if (readOnly) {
+        // Confirmation/key-generation admission is not optional telemetry.
+        // Revalidation must never repair a credential, consume recovery or
+        // call touch/audit, even when ordinary authentication could do so.
+        const checkedAt = Date.now();
+        if (typeof row.confirmed_at !== "string" || !Number.isFinite(Date.parse(row.confirmed_at))
+          || !recordedSecretKeyId || !/^[0-9a-f]{64}$/.test(recordedSecretKeyId)
+          || !UUID_PATTERN.test(String(device.canonical_device_pk || ""))
+          || !UUID_PATTERN.test(String(device.assigned_employee_id || ""))
+          || !Number.isSafeInteger(device.assignment_epoch) || device.assignment_epoch < 1
+          || typeof device.role !== "string" || !device.role
+          || !Number.isFinite(checkedAt) || expiresAt <= checkedAt) {
+          return {ok:false,status:401,code:"device_credential_required",
+            error:"Current confirmed device authority is required.",enrollment_required:true,policy_mode:policy.mode};
+        }
+        return {ok:true,device,credentialed:true,credential:row,policy_mode:policy.mode,enrollment_required:false};
+      }
       const metadata = row?.metadata_json;
       const operationBound = Boolean(
         metadata
@@ -887,7 +912,7 @@ export async function authenticateDeviceCredentialRequest(req, {
         )
       );
       if (!row.confirmed_at && operationBound) {
-        await audit(store, authEvent(req, device, {
+        if (!readOnly) await audit(store, authEvent(req, device, {
           credentialId: row.credential_id,
           eventType: "device_auth_failed",
           success: false,
@@ -920,7 +945,7 @@ export async function authenticateDeviceCredentialRequest(req, {
       if (!row.confirmed_at) {
         await store.touchCredential(row.credential_id, { ...fingerprintPatch, confirmed_at: nowIso });
         credential = { ...row, ...fingerprintPatch, confirmed_at: nowIso };
-        await audit(store, authEvent(req, device, {
+        if (!readOnly) await audit(store, authEvent(req, device, {
           credentialId: row.credential_id,
           eventType: "device_credential_confirmed",
           success: true,
@@ -961,7 +986,7 @@ export async function authenticateDeviceCredentialRequest(req, {
       const reason = recordedSecretKeyId && !secretGenerationMatches
         ? "credential_secret_generation_mismatch"
         : "credential_secret_generation_unknown";
-      await audit(store, authEvent(req, device, {
+      if (!readOnly) await audit(store, authEvent(req, device, {
         credentialId: row.credential_id,
         eventType: "device_auth_failed",
         success: false,
@@ -985,7 +1010,7 @@ export async function authenticateDeviceCredentialRequest(req, {
     // or assignment loss; the database verifies that the work began while the
     // snapshot and credential were valid.
     if (terminalOfflineRecovery && tokenMatchesDevice) {
-      await audit(store, authEvent(req, device, {
+      if (!readOnly) await audit(store, authEvent(req, device, {
         credentialId: row.credential_id,
         eventType: "device_offline_recovery_submission",
         success: true,
@@ -1005,7 +1030,7 @@ export async function authenticateDeviceCredentialRequest(req, {
     const sameDeviceCredential = Boolean(row
       && String(row.credential_id || "") === parts.credentialId
       && String(row.device_id || "") === String(device.canonical_device_pk || ""));
-    await audit(store, authEvent(req, device, {
+    if (!readOnly) await audit(store, authEvent(req, device, {
       credentialId: parts.credentialId,
       eventType: "device_auth_failed",
       success: false,
@@ -1026,7 +1051,7 @@ export async function authenticateDeviceCredentialRequest(req, {
     }
   }
 
-  if (!requireEnrolledCredential && policy.mode !== "enforce") {
+  if (!readOnly && !requireEnrolledCredential && policy.mode !== "enforce") {
     return {
       ok: true,
       device,
@@ -1048,6 +1073,135 @@ export async function authenticateDeviceCredentialRequest(req, {
     enrollment_required: true,
   };
 }
+
+// H04 status-only lane. Deliberately separate from ordinary authentication
+// and the older offline-work RPC allowlist. It cannot authorize any work.
+export async function authenticateSeparationContextRequest(req, {
+  env=process.env,store,runReadOnlySql,now=new Date(),
+}={}) {
+  const denied=()=>({ok:false,status:403,code:'separation_context_unavailable',error:'Original protected separation context could not be verified.'});
+  const method=req?.method,path=req?.originalUrl||req?.url||'';
+  if(method!=='GET'||new URL(path,'https://custodial.invalid').pathname!=='/device-auth/separation-context')return denied();
+  if(!store||typeof runReadOnlySql!=='function')throw Object.assign(new Error('Separation context store unavailable'),{status:503});
+  const parts=credentialTokenParts(requestCredentialToken(req));if(!parts)return denied();
+  // One admission transcript before the first await. Preserve the effective
+  // legacy cookie/header token and query/body identifier, but never reread
+  // mutable caller inputs while validating its native signature.
+  const identifier=requestDeviceIdentifier(req),raw=req?.scanAuthorityRawBody;
+  if(raw!=null&&!Buffer.isBuffer(raw))return denied();
+  const clock=new Date(now.getTime());if(!Number.isFinite(clock.getTime()))return denied();
+  const credentialHash=tokenHash(parts.secret,env),credentialSecretKeyId=deviceCredentialSecretKeyId(env);
+  req=Object.freeze({method,originalUrl:path,headers:Object.freeze({...req?.headers,
+    authorization:'Device '+parts.credentialId+'.'+parts.secret,'x-device-id':identifier}),
+    scanAuthorityRawBody:raw==null?Buffer.alloc(0):Buffer.from(raw)});
+  const {device:foundDevice}=await resolveDevice(req,runReadOnlySql,{allowTerminalOfflineRecovery:true});
+  const device=foundDevice&&Object.freeze(structuredClone(foundDevice));
+  if(!device||device.device_active!==true||device.employee_active!==false
+    ||!isCanonicalEmployeeKiosk(device.canonical_device_id)||!/^EMP\d+$/i.test(String(device.employee_code||''))
+    ||!UUID_PATTERN.test(device.canonical_device_pk||'')||!UUID_PATTERN.test(device.assigned_employee_id||'')
+    ||!Number.isSafeInteger(Number(device.assignment_epoch))||Number(device.assignment_epoch)<1)return denied();
+  const foundRow=await store.findCredential(parts.credentialId),row=foundRow&&Object.freeze(structuredClone(foundRow)),metadata=row?.metadata_json;
+  const generation=String(metadata?.credential_secret_key_id||'').trim().toLowerCase();
+  if(!row||row.credential_id!==parts.credentialId||row.device_id!==device.canonical_device_pk||row.revoked_at||!row.confirmed_at
+    ||!safeEqual(row.token_hash,credentialHash)
+    ||generation&&(!/^[0-9a-f]{64}$/.test(generation)||!safeEqual(generation,credentialSecretKeyId)))return denied();
+  // Current expiry is not new-work authority here. SQL admits ONLY credentials
+  // recorded valid/confirmed at the immutable separation cutoff; revocation
+  // still denies. Native request proof uses the current authenticated transport.
+  verifyNativeDeviceRequestAttestation({...req,memphisDevice:device,memphisDeviceCredential:row},{now:clock});
+  const rows=await runReadOnlySql(`select public.custodial_v13_read_separation_context('${device.canonical_device_pk}'::uuid,'${parts.credentialId}'::uuid) as context`);
+  const context=rows?.[0]?.context&&structuredClone(rows[0].context);
+  if(!context||context.schema!=='custodial.separation-context.v1'||context.purpose!=='SEPARATION_STATUS_ONLY'
+    ||context.state!=='PENDING_RECONCILIATION'||context.new_work_allowed!==false||context.phone_released!==false
+    ||context.device_id!==device.canonical_device_pk||context.employee_id!==device.assigned_employee_id
+    ||context.credential_id!==parts.credentialId||context.canonical_device_id!==device.canonical_device_id
+    ||context.assignment_epoch!==Number(device.assignment_epoch)||!UUID_PATTERN.test(context.separation_id||'')
+    ||!Number.isSafeInteger(context.authority_revision)||context.authority_revision<1
+    ||typeof context.cutoff_at!=='string'||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/.test(context.cutoff_at)
+    ||!['UNKNOWN','VERIFIED_EMPTY','PROTECTED_PENDING','RECONCILED'].includes(context.native_inventory_state)
+    ||!Array.isArray(context.server_known_open_sessions))return denied();
+  // The fixed context lookup awaited the database. A revocation or assignment
+  // change during that wait must not escape under the earlier native proof.
+  // These bounded before/after checks are status-only, NOT an atomic mutation
+  // fence or an inventory ACK/finalizer/manager authorization capability.
+  const {device:latestFoundDevice}=await resolveDevice(req,runReadOnlySql,{allowTerminalOfflineRecovery:true});
+  const latestDevice=latestFoundDevice&&Object.freeze(structuredClone(latestFoundDevice));
+  if(!latestDevice||['canonical_device_pk','canonical_device_id','assigned_employee_id','employee_code','device_active','employee_active']
+    .some(key=>latestDevice[key]!==device[key])
+    ||Number(latestDevice.assignment_epoch)!==Number(device.assignment_epoch))return denied();
+  const latestFoundRow=await store.findCredential(parts.credentialId);
+  const latestRow=latestFoundRow&&Object.freeze(structuredClone(latestFoundRow));
+  const latestGeneration=String(latestRow?.metadata_json?.credential_secret_key_id||'').trim().toLowerCase();
+  if(!latestRow||latestRow.credential_id!==row.credential_id||latestRow.device_id!==row.device_id
+    ||latestRow.revoked_at||!latestRow.confirmed_at||latestRow.confirmed_at!==row.confirmed_at
+    ||!safeEqual(latestRow.token_hash,credentialHash)||latestGeneration!==generation
+    ||!safeEqual(deviceCredentialSecretKeyId(env),credentialSecretKeyId))return denied();
+  return {ok:true,separation_recovery_only:true,context};
+}
+
+// BEGIN native credential observation proof. This is NOT authentication middleware.
+export async function authenticateNativeProviderCredentialObservationRequest(req, {
+  env=process.env, store, runReadOnlySql, now=new Date(),
+}={}) {
+  const deny=(status=403,code='native_credential_observation_proof_invalid')=>{
+    throw Object.assign(new Error(code),{status,code});
+  };
+  const exact=(v,keys)=>v&&Object.getPrototypeOf(v)===Object.prototype
+    &&isDeepStrictEqual(Object.keys(v).sort(),[...keys].sort());
+  // Snapshot ALL transport inputs before the first await. No request/context
+  // mutation, query/body identity fallback, cookie or ordinary credential flag.
+  if(req?.method!=='POST'||req?.originalUrl!=='/employee-notifications-api/native-provider/credential-observation')deny();
+  const headers=Object.freeze({...req.headers});
+  for(const key of ['authorization','origin','x-device-id','x-memphis-app-edition','x-memphis-native-attestation-version',
+    'x-memphis-native-request-id','x-memphis-native-request-timestamp','x-memphis-native-request-attestation'])
+    if(typeof headers[key]!=='string')deny();
+  if(headers.origin!=='https://localhost'||headers['x-memphis-app-edition']!=='custodial'
+    ||typeof headers.authorization!=='string'||!/^Device \S+$/.test(headers.authorization))deny();
+  if(!Buffer.isBuffer(req.scanAuthorityRawBody))deny(400);
+  const raw=Buffer.from(req.scanAuthorityRawBody),parsed=parseNativeProviderJson(raw);
+  if(!isDeepStrictEqual(parsed,req.body)||!exact(parsed,['schema','requester'])
+    ||parsed.schema!=='custodial.native-provider-credential-observation-query.v1')deny(400);
+  const r=parsed.requester,keys=['current_generation_id','credential_id','employee_id','device_id','assignment_epoch','principal_digest','token_digest'];
+  if(!exact(r,keys))deny(400);
+  for(const k of ['current_generation_id','credential_id','employee_id'])
+    if(typeof r[k]!=='string'||!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(r[k]))deny(400);
+  for(const k of ['principal_digest','token_digest'])if(typeof r[k]!=='string'||!/^[0-9a-f]{64}$/.test(r[k]))deny(400);
+  if(typeof r.device_id!=='string'||!/^KIOSK_(?:0[2-9]|10)$/.test(r.device_id)
+    ||!Number.isSafeInteger(r.assignment_epoch)||r.assignment_epoch<1||headers['x-device-id']!==r.device_id)deny(400);
+  const body=Object.freeze({schema:parsed.schema,requester:Object.freeze({...r})});
+  const parts=credentialTokenParts(authorizationDeviceToken({headers}));
+  if(!parts||parts.credentialId!==r.credential_id)deny();
+  const clock=new Date(now.getTime());if(!Number.isFinite(clock.getTime()))deny();
+  const credentialHash=tokenHash(parts.secret,env),credentialSecretKeyId=deviceCredentialSecretKeyId(env);
+  if(!store||typeof store.findCredential!=='function'||typeof runReadOnlySql!=='function')deny(503,'native_credential_observation_unavailable');
+  const captured={method:'POST',originalUrl:req.originalUrl,headers,body,scanAuthorityRawBody:raw};
+  let device,row;
+  try {
+    const {device:found}=await resolveDevice(captured,runReadOnlySql,{allowTerminalOfflineRecovery:true});
+    device=found&&structuredClone(found);
+  } catch { deny(503,'native_credential_observation_unavailable'); }
+  if(!device||device.canonical_device_id!==r.device_id||!UUID_PATTERN.test(device.canonical_device_pk||'')
+    ||device.device_active!==true||device.employee_active!==true||!/^EMP\d+$/i.test(String(device.employee_code||''))
+    ||device.assigned_employee_id!==r.employee_id||Number(device.assignment_epoch)!==r.assignment_epoch)deny();
+  try {
+    const foundRow=await store.findCredential(parts.credentialId);row=foundRow&&structuredClone(foundRow);
+  } catch { deny(503,'native_credential_observation_unavailable'); }
+  const metadata=row?.metadata_json;
+  if(!row||row.credential_id!==parts.credentialId||row.device_id!==device.canonical_device_pk||!row.confirmed_at
+    ||!safeEqual(row.token_hash,credentialHash)||metadata!==null&&metadata!==undefined
+      &&(!metadata||Object.getPrototypeOf(metadata)!==Object.prototype))deny();
+  if(metadata&&Object.hasOwn(metadata,'credential_secret_key_id')
+    &&(typeof metadata.credential_secret_key_id!=='string'||!/^[0-9a-f]{64}$/.test(metadata.credential_secret_key_id)
+      ||!safeEqual(metadata.credential_secret_key_id,credentialSecretKeyId)))deny();
+  // Deliberately no expiry/revocation interpretation here: locked SQL observes
+  // those exact facts. No getPolicy/touch/audit/confirmation or general access.
+  const a=verifyNativeDeviceRequestAttestation({...captured,memphisDevice:device,memphisDeviceCredential:row},{now:clock});
+  const transcript=JSON.stringify([a.version,a.credential_id,a.device_id,a.method,a.path,a.body_sha256,a.request_id,a.timestamp,a.signature]);
+  return Object.freeze({purpose:'NATIVE_CREDENTIAL_OBSERVATION_ONLY',body,
+    credentialId:parts.credentialId,credentialHash,credentialSecretKeyId,nativeRequestId:a.request_id,
+    attestationDigest:createHash('sha256').update(transcript).digest('hex'),rawBodySha256:a.body_sha256});
+}
+// END native credential observation proof.
 
 export function makeDeviceCredentialMiddleware(options = {}) {
   return async function requireDeviceCredential(req, res, next) {
@@ -1151,27 +1305,139 @@ function makeDeviceSecurityMiddleware({ store, env = process.env } = {}) {
   };
 }
 
+// Purpose-local composition entry, not a route or a standalone manager grant.
+// Recovery must supply an actual authoritative registry store: the older
+// role-only fallback is deliberately unavailable to this new purpose.
+export async function verifySameOriginalRecoverySecuritySession(req, {store,env=process.env,requireCsrf=false}={}) {
+  if(typeof store?.getManager!=='function'||typeof store?.getDeviceSecurityConfig!=='function'
+    ||typeof store?.findDeviceSecuritySession!=='function') {
+    return {ok:false,status:503,error:'same_original_recovery_security_unavailable'};
+  }
+  const result=await verifyDeviceSecuritySession(req,{store,env,requireCsrf});
+  if(result.ok&&result.session?.session_id!==deviceSecuritySessionParts(req)?.sessionId) {
+    return {ok:false,status:403,error:'same_original_recovery_security_session_mismatch'};
+  }
+  return result;
+}
+
+/** Coverage must not accept the SDK's parseInt normalization of a malformed
+ * exact-count denominator. Only the coverage client installs this boundary;
+ * other auth, issuance and mutation clients retain their existing transport.
+ */
+export function createDeviceCoverageFetch(fetchImpl = globalThis.fetch) {
+  if (typeof fetchImpl !== "function") throw new TypeError("Coverage fetch is unavailable.");
+  return async (input, init) => {
+    const response = await fetchImpl(input, init);
+    const url = new URL(typeof input === "string" || input instanceof URL ? input : input.url);
+    const method = String(init?.method || input?.method || "GET").toUpperCase();
+    const headers = new Headers(init?.headers || input?.headers);
+    const exactCount = (headers.get("prefer") || "").split(",").some(value => value.trim().toLowerCase() === "count=exact");
+    if ((method === "GET" || method === "HEAD") && exactCount && response.ok
+      && /\/rest\/v1\/(employees|devices|device_auth_credentials)$/.test(url.pathname)) {
+      const range = response.headers.get("content-range");
+      // Missing/unknown counts already refuse in activeDeviceCoverage. A
+      // present count must be a complete canonical integer, never 9junk/9.5.
+      if (range !== null && (!/^(?:\*|(?:0|[1-9]\d*)-(?:0|[1-9]\d*))\/(?:0|[1-9]\d*)$/.test(range)
+        || !Number.isSafeInteger(Number(range.slice(range.lastIndexOf("/") + 1))))) {
+        // A known malformed response is terminal, not a network exception
+        // which the SDK may retry. Consume no row bytes and expose no data.
+        let cleanupUnconfirmed = false;
+        try { await response.body?.cancel(); } catch { cleanupUnconfirmed = true; }
+        return new Response(JSON.stringify({
+          code: "custodial_coverage_invalid_count_header",
+          message: "Current coverage roster/registry/credential read is unavailable or incomplete (invalid exact-count header).",
+          details: cleanupUnconfirmed ? "Original response cleanup could not be confirmed." : null, hint: null,
+        }), { status: 400, headers: { "Content-Type": "application/json" } });
+      }
+    }
+    return response;
+  };
+}
+
 async function activeDeviceCoverage({ supabase, now = new Date() }) {
   const expectedDeviceIds = Array.from({ length: 9 }, (_value, index) => `KIOSK_${String(index + 2).padStart(2, "0")}`);
-  const { data: devices, error: deviceError } = await supabase
+  // Current active EMP eligibility matches ordinary device authentication;
+  // phone-admin's staff-only editing view is not an extra auth role ceiling.
+  // Never attendance, historical people, fixed counts or inferred vacancies.
+  const { data: employees, error: employeeError, count: employeeCount } = await supabase
+    .from("employees")
+    .select("id,employee_code,display_name,active,role", { count: "exact" })
+    .order("id");
+  if (employeeError) throw employeeError;
+  const { data: devices, error: deviceError, count: deviceCount } = await supabase
     .from("devices")
-    .select("id,device_id,device_name,active,assigned_employee_id,employees!devices_assigned_employee_id_fkey(display_name,employee_code,active)")
-    .in("device_id", expectedDeviceIds)
+    .select("id,device_id,device_name,active,assigned_employee_id,employees!devices_assigned_employee_id_fkey(id,display_name,employee_code,active,role)", { count: "exact" })
     .order("device_id");
   if (deviceError) throw deviceError;
-  const { data: credentials, error: credentialError } = await supabase
+  const { data: credentials, error: credentialError, count: credentialCount } = await supabase
     .from("device_auth_credentials")
-    .select("credential_id,device_id,device_label,created_at,confirmed_at,last_used_at,expires_at,revoked_at,revoked_reason")
+    .select("credential_id,device_id,device_label,created_at,confirmed_at,last_used_at,expires_at,revoked_at,revoked_reason", { count: "exact" })
     .is("revoked_at", null)
     .gt("expires_at", now.toISOString());
   if (credentialError) throw credentialError;
-  const byCanonicalId = new Map((devices || []).map((row) => [String(row.device_id || "").toUpperCase(), row]));
-  const byDevicePk = new Map((credentials || []).map((row) => [String(row.device_id), row]));
+  const complete = (rows, count) => Array.isArray(rows) && Number.isSafeInteger(count) && count === rows.length;
+  if (!complete(employees, employeeCount) || !complete(devices, deviceCount) || !complete(credentials, credentialCount)) {
+    throw new Error("Current coverage roster/registry/credential read is unavailable or incomplete.");
+  }
+  const issues = new Set(), byEmployeeId = new Map(), byCanonicalId = new Map(), devicePks = new Set();
+  for (const employee of employees) {
+    if (!employee || !UUID_PATTERN.test(employee.id || "") || typeof employee.active !== "boolean"
+      || typeof employee.role !== "string" || !employee.role
+      || (employee.employee_code !== null && typeof employee.employee_code !== "string") || byEmployeeId.has(employee.id)) {
+      throw new Error("Current coverage employee roster is ambiguous.");
+    }
+    byEmployeeId.set(employee.id, employee);
+  }
+  const activeEmployees = employees.filter(employee => employee.active === true && /^EMP\d+$/i.test(employee.employee_code || ""));
+  if (!activeEmployees.length) issues.add("no_current_eligible_employees");
+  const assignments = new Map();
+  for (const device of devices) {
+    if (!device || !UUID_PATTERN.test(device.id || "") || devicePks.has(device.id)
+      || typeof device.device_id !== "string" || !device.device_id || typeof device.active !== "boolean"
+      || (device.assigned_employee_id !== null && !UUID_PATTERN.test(device.assigned_employee_id || ""))) {
+      throw new Error("Current coverage device registry is ambiguous.");
+    }
+    devicePks.add(device.id);
+    if (device.assigned_employee_id !== null) {
+      const assigned = assignments.get(device.assigned_employee_id) || [];
+      assigned.push(device); assignments.set(device.assigned_employee_id, assigned);
+    }
+    if (expectedDeviceIds.includes(device.device_id)) {
+      if (byCanonicalId.has(device.device_id)) issues.add("duplicate_canonical_device");
+      else byCanonicalId.set(device.device_id, device);
+    }
+  }
+  for (const employee of activeEmployees) {
+    const assigned = assignments.get(employee.id) || [];
+    if (assigned.length !== 1 || !expectedDeviceIds.includes(assigned[0].device_id) || assigned[0].active !== true) {
+      issues.add("active_employee_not_uniquely_assigned_to_active_canonical_device");
+    }
+  }
+  const byDevicePk = new Map();
+  for (const credential of credentials) {
+    if (!credential || !UUID_PATTERN.test(credential.credential_id || "") || !UUID_PATTERN.test(credential.device_id || "")) {
+      throw new Error("Current coverage credential registry is ambiguous.");
+    }
+    if (credential.revoked_at !== null || !Number.isFinite(Date.parse(credential.expires_at))
+      || Date.parse(credential.expires_at) <= now.getTime()) continue;
+    const current = byDevicePk.get(credential.device_id) || [];
+    current.push(credential); byDevicePk.set(credential.device_id, current);
+  }
   const rows = expectedDeviceIds.map((expectedId) => {
     const device = byCanonicalId.get(expectedId) || null;
-    const employee = Array.isArray(device?.employees) ? device.employees[0] : device?.employees;
-    const credential = device ? byDevicePk.get(String(device.id)) || null : null;
-    const assignmentValid = Boolean(device?.assigned_employee_id && employee?.active === true && /^EMP\d+$/i.test(String(employee?.employee_code || "")));
+    if (!device) issues.add("canonical_device_registry_missing");
+    const employee = device?.assigned_employee_id ? byEmployeeId.get(device.assigned_employee_id) : null;
+    const joined = Array.isArray(device?.employees) ? (device.employees.length === 1 ? device.employees[0] : null) : device?.employees;
+    const joinValid = Boolean(employee && joined && joined.id === employee.id && joined.active === employee.active
+      && joined.employee_code === employee.employee_code && joined.role === employee.role);
+    if (device?.assigned_employee_id && !joinValid) issues.add("assigned_employee_roster_join_unknown_or_changed");
+    const required = employee?.active === true && /^EMP\d+$/i.test(employee.employee_code || "");
+    if (employee?.active === true && !required) issues.add("canonical_assignment_not_eligible");
+    const candidates = device ? byDevicePk.get(device.id) || [] : [];
+    if (required && candidates.length > 1) issues.add("active_device_credential_conflict");
+    const credential = candidates.length === 1 ? candidates[0] : null;
+    const confirmed = Boolean(credential && typeof credential.confirmed_at === "string" && Number.isFinite(Date.parse(credential.confirmed_at)));
+    const assignmentValid = Boolean(required && joinValid && assignments.get(employee.id)?.length === 1);
     return {
       device_pk: device?.id || null,
       device_id: expectedId,
@@ -1183,19 +1449,24 @@ async function activeDeviceCoverage({ supabase, now = new Date() }) {
       employee_code: employee?.employee_code || null,
       employee_active: employee?.active === true,
       assignment_valid: assignmentValid,
+      coverage_required: required,
       credential,
       enrolled: Boolean(credential),
-      confirmed: Boolean(credential?.confirmed_at),
-      ready: Boolean(device?.active === true && assignmentValid && credential?.confirmed_at),
+      confirmed,
+      ready: Boolean(device?.active === true && assignmentValid && confirmed),
     };
   });
+  const requiredRows = rows.filter(row => row.coverage_required);
   return {
     devices: rows,
     total: expectedDeviceIds.length,
     enrolled: rows.filter((row) => row.enrolled).length,
     ready: rows.filter((row) => row.ready).length,
-    missing: rows.filter((row) => !row.ready).map((row) => row.device_id),
-    ready_to_enforce: rows.length === expectedDeviceIds.length && rows.every((row) => row.ready),
+    required_total: activeEmployees.length,
+    coverage_issues: [...issues],
+    missing: rows.filter((row) => !row.registry_present || (row.coverage_required && !row.ready)).map((row) => row.device_id),
+    ready_to_enforce: issues.size === 0 && requiredRows.length === activeEmployees.length && activeEmployees.length > 0
+      && requiredRows.every(row => row.ready),
   };
 }
 
@@ -1203,6 +1474,7 @@ export function installDeviceCredentialRoutes(app, {
   setCors,
   env = process.env,
   supabase,
+  coverageSupabase = supabase,
   store: suppliedStore = null,
   runReadOnlySql,
   requireOpsAuth,
@@ -1322,6 +1594,15 @@ export function installDeviceCredentialRoutes(app, {
     } catch (error) {
       res.status(500).json({ ok: false, error: "Device Security sessions could not be revoked." });
     }
+  });
+
+  app.get('/device-auth/separation-context',async(req,res)=>{
+    res.setHeader('Cache-Control','no-store');
+    try{
+      const result=await authenticateSeparationContextRequest(req,{env,store,runReadOnlySql});
+      if(!result.ok){res.status(result.status).json({ok:false,code:result.code,error:result.error});return;}
+      res.status(200).json({ok:true,data:result.context});
+    }catch(error){res.status(error?.status||503).json({ok:false,code:'separation_context_unavailable',error:'Original protected separation context could not be verified.'});}
   });
 
   app.get("/device-auth/status", async (req, res) => {
@@ -1448,7 +1729,7 @@ export function installDeviceCredentialRoutes(app, {
 
   app.get("/admin-api/device-auth/summary", requireOpsAuth, requireDeviceSecurity, async (_req, res) => {
     try {
-      const [policy, coverage] = await Promise.all([store.getPolicy(), activeDeviceCoverage({ supabase })]);
+      const [policy, coverage] = await Promise.all([store.getPolicy(), activeDeviceCoverage({ supabase: coverageSupabase })]);
       res.status(200).json({ ok: true, data: { policy, coverage } });
     } catch (error) {
       res.status(500).json({ ok: false, error: error?.message || "Device authentication summary failed." });
@@ -1515,11 +1796,11 @@ export function installDeviceCredentialRoutes(app, {
         return;
       }
       const [coverage, previousPolicy] = await Promise.all([
-        activeDeviceCoverage({ supabase }),
+        activeDeviceCoverage({ supabase: coverageSupabase }),
         store.getPolicy(),
       ]);
       if (["enforce-ready", "enforce"].includes(requestedMode) && !coverage.ready_to_enforce) {
-        res.status(409).json({ ok: false, error: "All nine employee kiosks must be enrolled before enforcement can begin.", missing_devices: coverage.missing });
+        res.status(409).json({ ok: false, error: "Current eligible employees must each have a uniquely assigned, confirmed kiosk before enforcement can begin.", missing_devices: coverage.missing, required_total: coverage.required_total, coverage_issues: coverage.coverage_issues });
         return;
       }
       const policy = await store.setPolicy(requestedMode, managerIdentity(req));

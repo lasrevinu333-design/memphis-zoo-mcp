@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { fetchCurrentMemphisScheduleDay,fetchCurrentMemphisScheduleSegments } from "./ai/memphis-ai-daily.js";
 import { getGeminiApiKey } from "./utils/gemini-config.js";
 import {
   addMinutesToTime,
@@ -46,6 +47,24 @@ import {
 } from "./ai/index.js";
 
 const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models";
+// This is the complete operational tool boundary. Conversation context may be saved,
+// but a generated answer cannot acquire a schedule, ticket, Event, or message writer.
+export const MEMPHIS_READ_ONLY_TOOL_NAMES = Object.freeze([
+  "get_upcoming_events", "get_area_schedule", "get_employee_work_status",
+  "get_employee_schedule", "get_my_schedule", "get_absence_coverage",
+  "get_open_segments", "get_employee_load_summary", "get_coverage_candidates",
+  "explain_open_segment", "get_employee_profile", "get_location_details",
+  "get_current_owner", "get_open_tickets", "get_dashboard_summary",
+  "get_scan_state", "list_active_employees",
+]);
+const MEMPHIS_READ_ONLY_TOOL_SET = new Set(MEMPHIS_READ_ONLY_TOOL_NAMES);
+
+export function assertMemphisReadOnlyOperationalTool(name) {
+  if (!MEMPHIS_READ_ONLY_TOOL_SET.has(name)) {
+    throw new Error("Memphis operational tool is not permitted");
+  }
+  return name;
+}
 const DEFAULT_MODEL = String(process.env.MEMPHIS_GEMINI_MODEL || process.env.GEMINI_MODEL || "gemini-2.5-flash").trim();
 const DEFAULT_SCAN_DEVICE_ID = "memphis-bot";
 const DEFAULT_WEATHER_LOCATION = SHARED_DEFAULT_WEATHER_LOCATION;
@@ -380,7 +399,7 @@ function genericConversationalFallback(text = "", threadContext = {}) {
   if (/alive|connected/.test(lower)) return "Yeah. I am here and ready for system questions.";
   if (/sparrow/.test(lower)) return "That depends. African or European?";
   if (/weather/.test(lower)) return `I could not land a clean weather answer for ${weatherLocation || DEFAULT_WEATHER_LOCATION} right now.`;
-  if (/recipe|ingredients|cook|bake|pumpkin pie|creme brulee|pretzel|pretzels/.test(lower)) return "I did not get a clean general-answer response for that recipe question. Check the Gemini/API setup and try again.";
+  if (/recipe|ingredients|cook|bake|pumpkin pie|creme brulee|pretzel|pretzels/.test(lower)) return "I could not get a reliable answer to that recipe question right now. Please try again later.";
   if (/hello|hey|hi/.test(lower)) return "Hey. What do you need?";
   if (/wrong|lying|bad answer|not right|incorrect|made up|guess/.test(lower)) return "Fair. That answer was wrong. I will re-check the specific source instead of guessing.";
   return "I do not have a clean answer for that yet. Ask me again with the specific thing to check, and I will use the matching source instead of guessing.";
@@ -404,11 +423,20 @@ function summarizeWeatherPayload(weather) {
 
 function summarizeEvents(events = []) {
   if (!events.length) return "I don't see any upcoming events in the system right now.";
+  const eventTime=(instant,wall)=>{
+    const parsed=instant instanceof Date?instant:(typeof instant==='string'?new Date(instant):null);
+    if(parsed && !Number.isNaN(parsed.getTime()))return new Intl.DateTimeFormat('en-US',{
+      timeZone:'America/Chicago',hour:'2-digit',minute:'2-digit',hourCycle:'h23',timeZoneName:'short',
+    }).format(parsed);
+    return wall?`${String(wall).slice(0,5)} Memphis time (offset unconfirmed)`:'time unconfirmed';
+  };
   return events.slice(0, 6).map((event) => {
     const attendees = event.attendee_count == null ? "attendees not listed" : `${event.attendee_count} attendees`;
     const spansOvernight = Boolean(event.spans_overnight) || (event.end_date && event.end_date > event.event_date);
     const dateText = spansOvernight ? `${event.event_date} to ${event.end_date}` : event.event_date;
-    const timeText = spansOvernight ? `${event.start_time} to ${event.end_time} next day` : `${event.start_time} to ${event.end_time}`;
+    const timeText = spansOvernight
+      ? `${eventTime(event.start_instant_utc,event.start_time)} to ${eventTime(event.end_instant_utc,event.end_time)} next day`
+      : `${eventTime(event.start_instant_utc,event.start_time)} to ${eventTime(event.end_instant_utc,event.end_time)}`;
     const displayLocation = event.display_location || event.venue_name || event.group_name || event.group_code || "Unknown location";
     return `${event.event_name} at ${displayLocation} on ${dateText} from ${timeText}, ${attendees}.`;
   }).join(" ");
@@ -522,7 +550,7 @@ function summarizeEmployeeAssignments(assignments = [], employeeName, serviceDat
 
 function summarizeTickets(tickets = [], location = "") {
   if (!tickets.length) return location ? `No open tickets matching ${location}.` : "No open tickets right now.";
-  return tickets.slice(0, 8).map((ticket) => `${ticket.location_name || ticket.location_code}: ${ticket.maintenance_issue}.`).join(" ");
+  return tickets.slice(0, 8).map((ticket) => `${ticket.location_name || ticket.location_code}: open maintenance issue${ticket.out_of_order===true?' (out of order)':''}.`).join(" ");
 }
 
 function summarizeDashboard(snapshot = {}, attention = [], attendance = null) {
@@ -578,21 +606,19 @@ function summarizeAttendance(attendance = null, queryText = "") {
 
 function summarizeAbsenceCoverage(data = {}, employeeName = "") {
   const serviceDate = data.service_date || "the requested day";
-  const absentPeople = Array.isArray(data.absent_employees) ? data.absent_employees : [];
-  const coverage = Array.isArray(data.coverage_rows) ? data.coverage_rows : [];
-  const notes = Array.isArray(data.absence_notes) ? data.absence_notes : [];
+  if(data.availability_status!=='current')return `I can't verify current published availability for ${serviceDate}.`;
+  const notScheduled=Array.isArray(data.not_scheduled_employees)?data.not_scheduled_employees:[];
+  const coverage=Array.isArray(data.open_segments)?data.open_segments:[];
   if (employeeName) {
-    if (!coverage.length) {
-      const notesText = notes.length ? ` Notes: ${notes.join(" | ")}` : "";
-      return `I couldn't find explicit coverage rows for ${employeeName} on ${serviceDate}.${notesText}`.trim();
-    }
-    return `${employeeName} on ${serviceDate}: ` + coverage.slice(0, 12).map((row) => `${row.group_name || row.group_code || "Unknown area"} is covered by ${row.assigned_employee_name || "Open"} from ${row.coverage_start || "—"} to ${row.coverage_end || "—"}`).join("; ") + ".";
+    if(data.employee_working===true)return `${employeeName} is scheduled to work on ${serviceDate}. I do not have an authorized leave reason to report.`;
+    if(data.employee_working===false)return `${employeeName} is not scheduled to work in the current published plan on ${serviceDate}. That does not establish a leave reason.`;
+    return `I can't verify ${employeeName} in the current published roster for ${serviceDate}.`;
   }
-  const absenceRows = Array.isArray(data.absence_rows) ? data.absence_rows : [];
-  if (!absentPeople.length && !notes.length && !absenceRows.length) return `I don't see any PTO, absence notes, or replacement coverage for ${serviceDate}.`;
-  const absentLine = absentPeople.length ? `Out/PTO on ${serviceDate}: ${absentPeople.join(", ")}.` : `Absence notes exist for ${serviceDate}.`;
-  const coverageLine = coverage.length ? ` Coverage examples: ${coverage.slice(0, 10).map((row) => `${row.group_name || row.group_code} covered by ${row.assigned_employee_name || "Open"} ${row.coverage_start || "—"}-${row.coverage_end || "—"}`).join("; ")}.` : "";
-  return `${absentLine}${coverageLine}`.trim();
+  const offLine=data.roster_count===0?`The current published roster lists no people for ${serviceDate}.`
+    :notScheduled.length?`Not scheduled to work on ${serviceDate}: ${notScheduled.slice(0,12).join(', ')}.`
+    :`Everyone in the current published roster is scheduled to work on ${serviceDate}.`;
+  const openLine=coverage.length?` Published open segments: ${coverage.slice(0,8).map(row=>`${row.group_name||row.group_code} ${row.coverage_start||'—'}-${row.coverage_end||'—'}`).join('; ')}.`:'';
+  return `${offLine}${openLine} This is work availability, not a leave or medical reason.`;
 }
 
 function summarizeEmployeeProfile(profile = null) {
@@ -613,9 +639,10 @@ function summarizeLocationDetails(data = {}) {
   if (loc.form_type) parts.push(`form ${loc.form_type}`);
   if (loc.group_names?.length) parts.push(`groups: ${loc.group_names.join(", ")}`);
   if (loc.difficulty_rating != null || loc.priority_rating != null) parts.push(`difficulty ${loc.difficulty_rating ?? "n/a"}, priority ${loc.priority_rating ?? "n/a"}`);
-  if (loc.workload_notes) parts.push(`workload notes: ${loc.workload_notes}`);
-  if (loc.notes) parts.push(`notes: ${loc.notes}`);
+  // Freeform location notes are manager-maintained operational data, not
+  // employee/general-help speech authority.
   if (data.current_owner?.owner_display_name || data.current_owner?.employee_name) parts.push(`current owner ${data.current_owner.owner_display_name || data.current_owner.employee_name}`);
+  else parts.push('current assigned owner not verified by this location detail source');
   return parts.join(". ") + ".";
 }
 
@@ -664,20 +691,6 @@ async function getRelativeServiceDate(runReadOnlySql, offsetDays = 0) {
   return Array.isArray(rows) && rows.length ? rows[0].service_date : null;
 }
 
-// LOW #3: addDaysToIsoDate and buildScheduleDateRange were duplicated from memphis-ai-weekly.js.
-// We keep local wrappers since the weekly module versions are not exported, but mark them
-// as candidates for future consolidation into a shared date utils module.
-function addDaysToIsoDate(serviceDate, daysToAdd = 0) {
-  const base = new Date(`${serviceDate}T12:00:00`);
-  if (Number.isNaN(base.getTime())) return serviceDate;
-  base.setDate(base.getDate() + Number(daysToAdd || 0));
-  return base.toISOString().slice(0, 10);
-}
-
-function buildScheduleDateRange(startDate, days = 7) {
-  return Array.from({ length: days }, (_value, index) => addDaysToIsoDate(startDate, index));
-}
-
 function daysBetweenIsoDates(fromDate, toDate) {
   const from = new Date(`${String(fromDate || "")}T12:00:00`);
   const to = new Date(`${String(toDate || "")}T12:00:00`);
@@ -685,42 +698,11 @@ function daysBetweenIsoDates(fromDate, toDate) {
   return Math.round((to.getTime() - from.getTime()) / 86400000);
 }
 
-function shiftIsoDate(serviceDate, daysToAdd = 0) {
-  return addDaysToIsoDate(serviceDate, daysToAdd);
-}
-
 function isWeeklyScheduleQuestion(text = "") {
   const raw = String(text || "");
   const lower = normalizeLoose(raw);
   return /\b(entire week|whole week|this week|next week|weekly|week schedule|all week|for the week)\b/i.test(raw)
     || (lower.includes("week") && /\b(who|where|schedule|assigned|works|working|staff|staffing)\b/.test(lower));
-}
-
-function getWeekStartDate(text = "", todayServiceDate, relativeServiceDate) {
-  if (/\bnext week\b/i.test(String(text || ""))) return addDaysToIsoDate(todayServiceDate || relativeServiceDate, 7);
-  return relativeServiceDate || todayServiceDate;
-}
-
-async function ensureDailySchedule(_runRpc, serviceDate, { force = false } = {}) {
-  return {
-    ok: true,
-    skipped: true,
-    reason: "memphis_ai_read_only_no_schedule_generation",
-    service_date: serviceDate,
-    force_requested: Boolean(force),
-  };
-}
-
-async function ensureScheduleRange(runRpc, dates = [], { force = false } = {}) {
-  // MEDIUM #7: Only ensure today's schedule exists, not 7 days on every question.
-  // The full week range is still used by the weekly schedule generator, which calls
-  // ensureDailySchedule per-day inside generateWeeklyScheduleReply as needed.
-  // When called with multiple dates, only generate the first (today's) to avoid
-  // unnecessary schedule generation on every user question.
-  const datesToEnsure = dates.length > 1 ? [dates[0]] : dates;
-  for (const serviceDate of datesToEnsure) {
-    await ensureDailySchedule(runRpc, serviceDate, { force });
-  }
 }
 
 // MEDIUM #5: Removed duplicated summarizeWeeklyAssignments — already defined in memphis-ai-weekly.js module.
@@ -876,49 +858,26 @@ async function resolveLocationRow(runReadOnlySql, text = "", threadContext = {})
 async function summarizeOwnerQuestion(runReadOnlySql, runRpc, serviceDate, todayServiceDate, text = "", threadContext = {}) {
   const location = await resolveLocationRow(runReadOnlySql, text, threadContext);
   const futureOffset = daysBetweenIsoDates(todayServiceDate, serviceDate);
-  if (location?.location_code && (futureOffset == null || futureOffset <= 0)) {
-    const ownerRows = await runReadOnlySql(`select * from public.sch_get_current_owner('${esc(location.location_code)}', now())`);
-    const owner = Array.isArray(ownerRows) && ownerRows.length ? ownerRows[0] : null;
-    if (owner?.owner_display_name || owner?.employee_name) {
-      return `Current owner: ${owner.owner_display_name || owner.employee_name}. Location: ${location.location_name || location.location_code}. Coverage: ${owner.coverage_start || '—'}-${owner.coverage_end || '—'}.`;
-    }
-  }
-
   const areaRow = await resolveAreaRow(runReadOnlySql, serviceDate, text, threadContext);
   if (!areaRow?.group_name) return "";
-  // H37: Check if the area is reminder-only before forcing schedule generation.
+  // Reminder-only areas do not gain scan tracking from conversational lookup.
   if (isReminderOnlyGroup(areaRow.group_code)) {
     return `${areaRow.group_name} is a reminder-only assignment — no scan tracking or dashboard status required.`;
   }
-  if (futureOffset != null && futureOffset >= 0 && futureOffset < 7) {
-    // MEDIUM #8: Use force:false in user-triggered path — don't force-regenerate on every question.
-    await ensureDailySchedule(runRpc, serviceDate, { force: false });
-  }
-  let rows = [];
-  if (areaRow?.location_group_id) {
-    rows = await runReadOnlySql(`select * from public.v_memphis_area_schedule where service_date = '${esc(serviceDate)}'::date and location_group_id = '${esc(areaRow.location_group_id)}'::uuid order by coverage_start asc, segment_number asc`);
-  }
-  if (!Array.isArray(rows) || !rows.length) {
-    rows = await runReadOnlySql(`select * from public.v_memphis_area_schedule where service_date = '${esc(serviceDate)}'::date and (group_name ilike ${sqlLikeLiteral(areaRow.group_name)} or group_code ilike ${sqlLikeLiteral(areaRow.group_code || areaRow.group_name)}) order by coverage_start asc, segment_number asc`);
-  }
-  rows = Array.isArray(rows) ? rows : [];
-  let assignments = rows.filter((row) => row.employee_name || row.assigned_employee_name);
-  if (!assignments.length && futureOffset != null && futureOffset > 0 && futureOffset < 7) {
-    let fallbackRows = [];
-    if (areaRow?.location_group_id) {
-      fallbackRows = await runReadOnlySql(`select * from public.v_memphis_area_schedule where service_date = '${esc(shiftIsoDate(serviceDate, -7))}'::date and location_group_id = '${esc(areaRow.location_group_id)}'::uuid order by coverage_start asc, segment_number asc`);
-    }
-    if (!Array.isArray(fallbackRows) || !fallbackRows.length) {
-      fallbackRows = await runReadOnlySql(`select * from public.v_memphis_area_schedule where service_date = '${esc(shiftIsoDate(serviceDate, -7))}'::date and (group_name ilike ${sqlLikeLiteral(areaRow.group_name)} or group_code ilike ${sqlLikeLiteral(areaRow.group_code || areaRow.group_name)}) order by coverage_start asc, segment_number asc`);
-    }
-    assignments = (Array.isArray(fallbackRows) ? fallbackRows : []).filter((row) => row.employee_name || row.assigned_employee_name).map((row) => ({ ...row, service_date: serviceDate }));
-  }
+  const day=await fetchCurrentMemphisScheduleDay(runReadOnlySql,serviceDate);
+  if(day.status!=='current')return `I can't verify a current published assignment for ${areaRow.group_name} on ${serviceDate}.`;
+  const rows=await fetchCurrentMemphisAreaSegments(runReadOnlySql,serviceDate,areaRow.location_group_id,day);
+  if(!rows)return `I can't verify a current published assignment for ${areaRow.group_name} on ${serviceDate}.`;
+  const exactLocation=location?.id && findLocationCode(text)?.toLowerCase()===String(location.location_code||'').toLowerCase();
+  const scoped=exactLocation?rows.filter((row)=>Array.isArray(row.included_location_ids)
+    && row.included_location_ids.includes(location.id)):rows;
+  const assignments=futureOffset===0 && exactLocation
+    ? scoped.filter((row)=>row.current_at_query===true):scoped;
   if (!assignments.length) {
-    if (futureOffset != null && futureOffset > 0) return `I do not see generated schedule assignments for ${areaRow.group_name} on ${serviceDate} yet.`;
-    return `I could not find an assignment for ${areaRow.group_name} on ${serviceDate}.`;
+    return `I do not see a ${futureOffset===0&&exactLocation?'current ':''}published assignment for ${exactLocation?location.location_name:areaRow.group_name} on ${serviceDate}.`;
   }
   const names = Array.from(new Set(assignments.slice(0, 8).map((row) => row.employee_name || row.assigned_employee_name).filter(Boolean)));
-  const label = areaRow.group_name || location?.location_name || "that area";
+  const label = exactLocation?location.location_name:areaRow.group_name||"that area";
   return `${label}: ${names.length ? names.join('; ') : 'assigned owner not listed'}.`;
 }
 
@@ -940,32 +899,45 @@ async function resolveEmployeeByLooseName(runReadOnlySql, employeeName = "") {
   return await sharedResolveEmployeeByLooseName(runReadOnlySql, employeeName);
 }
 
-async function fetchStaticEmployeeShift(runReadOnlySql, employeeName = "", serviceDate = "") {
-  const rawDate = String(serviceDate || "").trim();
-  if (!String(employeeName || "").trim() || !rawDate) return null;
+async function fetchCurrentMemphisEmployeeSegments(runReadOnlySql, serviceDate, employeeId, day) {
+  if (day?.status !== 'current' || !day.publication_id || !day.projection_id) return null;
+  const rows = await runReadOnlySql(`select to_jsonb(authority) as authority,
+    (select coalesce(jsonb_agg(to_jsonb(segment) order by segment.group_name,segment.segment_number),'[]'::jsonb)
+      from public.static_weekly_v6_read_schedule_segments('${esc(serviceDate)}'::date) segment
+      where segment.assigned_employee_id='${esc(employeeId)}'::uuid
+        and segment.owner_type='EMPLOYEE' and segment.status='ASSIGNED'
+        and segment.publication_id=authority.publication_id
+        and segment.projection_id=authority.projection_id) as assignments
+    from public.static_weekly_v6_schedule_authority_state('${esc(serviceDate)}'::date) authority`);
+  const result=Array.isArray(rows)&&rows.length===1?rows[0]:null;
+  if(result?.authority?.governed!==true || result.authority.projection_status!=='current'
+    || result.authority.publication_id!==day.publication_id
+    || result.authority.projection_id!==day.projection_id
+    || !Array.isArray(result.assignments)) return null;
+  return result.assignments;
+}
 
-  const employee = await resolveEmployeeByLooseName(runReadOnlySql, employeeName);
-  if (!employee?.id) return null;
-
-  const rows = await runReadOnlySql(`
-    select e.display_name as employee_name, est.shift_start, est.shift_end, est.notes
-    from public.employee_shift_templates est
-    join public.employees e on e.id = est.employee_id
-    where est.active = true
-      and e.active = true
-      and e.id = '${esc(employee.id)}'::uuid
-      and est.day_of_week = extract(dow from '${esc(rawDate)}'::date)::int
-    order by est.shift_start
-    limit 1
-  `);
-
-  if (Array.isArray(rows) && rows.length) return rows[0];
-
-  return {
-    employee_name: employee.display_name,
-    scheduled_off: true,
-    service_date: rawDate,
-  };
+async function fetchCurrentMemphisAreaSegments(runReadOnlySql,serviceDate,groupId,day) {
+  if(day?.status!=='current' || !day.publication_id || !day.projection_id || !groupId)return null;
+  const rows=await runReadOnlySql(`select to_jsonb(authority) as authority,
+    (select coalesce(jsonb_agg(to_jsonb(segment)||jsonb_build_object('current_at_query',
+      segment.coverage_start::time<=(now() at time zone 'America/Chicago')::time
+      and (now() at time zone 'America/Chicago')::time<segment.coverage_end::time)
+      order by segment.coverage_start,segment.segment_number),'[]'::jsonb)
+      from public.static_weekly_v6_read_schedule_segments('${esc(serviceDate)}'::date) segment
+      where segment.location_group_id='${esc(groupId)}'::uuid
+        and segment.owner_type='EMPLOYEE' and segment.status='ASSIGNED'
+        and segment.publication_id=authority.publication_id
+        and segment.projection_id=authority.projection_id) as assignments
+    from public.static_weekly_v6_schedule_authority_state('${esc(serviceDate)}'::date) authority`);
+  const result=Array.isArray(rows)&&rows.length===1?rows[0]:null;
+  if(result?.authority?.governed!==true || result.authority.projection_status!=='current'
+    || result.authority.publication_id!==day.publication_id
+    || result.authority.projection_id!==day.projection_id
+    || !Array.isArray(result.assignments))return null;
+  const eligible=new Set(day.rows.filter(row=>row.working===true).map(row=>row.employee_id));
+  if(result.assignments.some(row=>!eligible.has(row.assigned_employee_id)))return null;
+  return result.assignments;
 }
 
 async function guessEmployeeName(runRpc, text) {
@@ -1045,30 +1017,6 @@ async function tryGeminiConversation({ apiKey, userMessage, webEnabled, threadCo
 }
 
 export function createMemphisResponder({ runReadOnlySql, runRpc }) {
-  async function fetchFallbackAreaAssignments(locationGroupId, serviceDate) {
-    const fallbackDate = shiftIsoDate(serviceDate, -7);
-    const rows = await runReadOnlySql(`
-      select *
-      from public.v_memphis_area_schedule
-      where service_date = '${esc(fallbackDate)}'::date
-        and location_group_id = '${esc(locationGroupId)}'::uuid
-      order by group_name asc, segment_number asc
-    `);
-    return (Array.isArray(rows) ? rows : []).map((row) => ({ ...row, service_date: serviceDate }));
-  }
-
-  async function fetchFallbackEmployeeAssignments(employeeName, serviceDate) {
-    const fallbackDate = shiftIsoDate(serviceDate, -7);
-    const rows = await runReadOnlySql(`
-      select *
-      from public.v_memphis_employee_schedule
-      where service_date = '${esc(fallbackDate)}'::date
-        and employee_name ilike ${sqlLikeLiteral(employeeName)}
-      order by group_name asc, segment_number asc
-    `);
-    return (Array.isArray(rows) ? rows : []).map((row) => ({ ...row, service_date: serviceDate }));
-  }
-
   async function isReminderOnlyLocation(locationId, serviceDate) {
     if (!locationId) return false;
     try {
@@ -1086,6 +1034,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
   }
 
   async function executeTool(name, args = {}) {
+    assertMemphisReadOnlyOperationalTool(name);
     if (name === "get_upcoming_events") {
       const days = toSafeInt(args.days, 14, 1, 60);
       const area = String(args.area || "").trim();
@@ -1093,8 +1042,8 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
         select e.event_name,
           coalesce(e.event_scope, 'UNKNOWN') as event_scope,
           e.primary_venue_id,
-          coalesce(nullif(e.display_location, ''), ev.display_name, lg.group_name) as display_location,
-          ev.display_name as venue_name,
+          coalesce(nullif(place.authority->>'primary_display_name',''),nullif(e.display_location, ''), ev.display_name, lg.group_name) as display_location,
+          coalesce(nullif(place.authority->>'primary_display_name',''),ev.display_name) as venue_name,
           coalesce(ev.venue_code, lg.group_code) as venue_code,
           coalesce(nullif(e.display_location, ''), ev.display_name, lg.group_name) as group_name,
           coalesce(ev.venue_code, lg.group_code) as group_code,
@@ -1102,16 +1051,22 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
           e.end_date,
           to_char(e.start_time, 'HH24:MI:SS') as start_time,
           to_char(e.end_time, 'HH24:MI:SS') as end_time,
+          e.start_instant_utc,
+          e.end_instant_utc,
           (coalesce(e.end_date, e.event_date) > e.event_date) as spans_overnight,
           e.attendee_count,
-          e.notes
+          e.custodial_public_notes as notes
         from public.events_app_events e
         join public.location_groups lg on lg.id = e.location_group_id
         left join public.event_venues ev on ev.id = e.primary_venue_id
-        where e.event_date >= current_date
-          and e.event_date <= current_date + ${days}
+        cross join lateral (select public.app_event_place_authority(to_jsonb(e),statement_timestamp()) as authority) place
+        where coalesce(e.status, 'SCHEDULED') = 'SCHEDULED'
+          and coalesce(e.needs_review, false) = false and e.event_scope <> 'UNKNOWN'
+          and (place.authority->>'admissible')::boolean is true
+          and coalesce(e.end_date, e.event_date) >= (now() at time zone 'America/Chicago')::date
+          and e.event_date <= (now() at time zone 'America/Chicago')::date + ${days}
           ${area ? `and (
-            coalesce(nullif(e.display_location, ''), ev.display_name, lg.group_name) ilike ${sqlLikeLiteral(area)}
+            coalesce(nullif(place.authority->>'primary_display_name',''),nullif(e.display_location, ''), ev.display_name, lg.group_name) ilike ${sqlLikeLiteral(area)}
             or ev.venue_code ilike ${sqlLikeLiteral(area)}
             or ev.display_name ilike ${sqlLikeLiteral(area)}
             or lg.group_name ilike ${sqlLikeLiteral(area)}
@@ -1127,22 +1082,11 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       const serviceDate = normalizeDate(args.service_date) || await getDefaultServiceDate(runReadOnlySql);
       const target = await resolveAreaRow(runReadOnlySql, serviceDate, String(args.area || "").trim(), {});
       if (!target?.location_group_id) return { service_date: serviceDate, assignments: [] };
-      let rows = await runReadOnlySql(`
-        select vas.*,
-          public.sch_extract_lunch_start(dwr.notes)::text as lunch_start,
-          public.sch_extract_lunch_end(dwr.notes)::text as lunch_end
-        from public.v_memphis_area_schedule vas
-        left join public.daily_work_roster dwr
-          on dwr.service_date = vas.service_date
-         and dwr.employee_id = vas.assigned_employee_id
-         and dwr.active = true
-        where vas.service_date = '${esc(serviceDate)}'::date
-          and vas.location_group_id = '${esc(target.location_group_id)}'::uuid
-        order by vas.group_name asc, vas.segment_number asc
-      `);
-      rows = Array.isArray(rows) ? rows : [];
-      if (!rows.length) rows = await fetchFallbackAreaAssignments(target.location_group_id, serviceDate);
-      return { service_date: serviceDate, assignments: rows || [], group_name: target.group_name || target.group_code };
+      const day=await fetchCurrentMemphisScheduleDay(runReadOnlySql,serviceDate);
+      const rows=day.status==='current'
+        ?await fetchCurrentMemphisAreaSegments(runReadOnlySql,serviceDate,target.location_group_id,day):null;
+      return {service_date:serviceDate,assignments:rows||[],group_name:target.group_name||target.group_code,
+        availability_status:rows?'current':'unavailable'};
     }
 
     if (name === "get_employee_work_status") {
@@ -1155,207 +1099,124 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
         return { ok: false, service_date: serviceDate, employee_name: employeeName, work_status: "unknown_employee", reason: "employee_not_resolved" };
       }
 
-      const rows = await runReadOnlySql(`
-        select public.sch_get_employee_work_status(
-          '${esc(serviceDate)}'::date,
-          '${esc(employee.id)}'::uuid
-        ) as data
-      `);
-      return Array.isArray(rows) && rows.length ? rows[0].data : { ok: false, service_date: serviceDate, employee_name: employee.display_name, work_status: "unknown", reason: "status_lookup_failed" };
+      const day=await fetchCurrentMemphisScheduleDay(runReadOnlySql,serviceDate);
+      if(day.status!=='current') return {ok:false,service_date:serviceDate,employee_name:employee.display_name,
+        work_status:'unavailable',reason:'current_publication_unavailable'};
+      const availability=day.rows.find((row)=>row.employee_id===employee.id);
+      if(!availability) return {ok:false,service_date:serviceDate,employee_name:employee.display_name,
+        work_status:'unavailable',reason:'employee_not_in_current_roster'};
+      if(!availability.working) return {ok:true,service_date:serviceDate,employee_name:availability.employee_name,
+        work_status:'off',shift:null,assignments:[],projection_id:day.projection_id};
+      const assignments=await fetchCurrentMemphisEmployeeSegments(runReadOnlySql,serviceDate,employee.id,day);
+      if(!assignments) return {ok:false,service_date:serviceDate,employee_name:availability.employee_name,
+        work_status:'unavailable',reason:'current_publication_unavailable'};
+      return {ok:true,service_date:serviceDate,employee_name:availability.employee_name,
+        work_status:assignments.length?'working_assigned':'working_unassigned',
+        shift:{shift_start:availability.shift_start,shift_end:availability.shift_end},
+        assignments,projection_id:day.projection_id};
     }
 
     if (name === "get_employee_schedule") {
       const employeeName = String(args.employee_name || "").trim();
       const serviceDate = normalizeDate(args.service_date) || await getDefaultServiceDate(runReadOnlySql);
       if (!employeeName) return { service_date: serviceDate, assignments: [] };
-      let rows = await runReadOnlySql(`
-        select *
-        from public.v_memphis_employee_schedule
-        where service_date = '${esc(serviceDate)}'::date
-          and employee_name ilike ${sqlLikeLiteral(employeeName)}
-        order by group_name asc, segment_number asc
-      `);
-      rows = Array.isArray(rows) ? rows : [];
-      return { service_date: serviceDate, assignments: rows || [] };
+      const employee=await resolveEmployeeByLooseName(runReadOnlySql,employeeName);
+      if(!employee?.id) return {service_date:serviceDate,assignments:[],work_status:'unavailable'};
+      const day=await fetchCurrentMemphisScheduleDay(runReadOnlySql,serviceDate);
+      if(day.status!=='current') return {service_date:serviceDate,assignments:[],work_status:'unavailable'};
+      const availability=day.rows.find((row)=>row.employee_id===employee.id);
+      if(!availability?.working) return {service_date:serviceDate,assignments:[],
+        work_status:availability?'off':'unavailable'};
+      const rows=await fetchCurrentMemphisEmployeeSegments(runReadOnlySql,serviceDate,employee.id,day);
+      return {service_date:serviceDate,assignments:rows||[],work_status:rows?'working':'unavailable'};
     }
 
     if (name === "get_my_schedule") {
       const deviceId = String(args.device_id || "").trim();
       const serviceDate = normalizeDate(args.service_date) || await getDefaultServiceDate(runReadOnlySql);
       const assignedEmployee = await fetchAssignedEmployeeForDevice(runReadOnlySql, deviceId);
-      if (!assignedEmployee?.assigned_employee_name) return { service_date: serviceDate, employee_name: null, assignments: [] };
-      const rows = await runReadOnlySql(`
-        select *
-        from public.v_memphis_employee_schedule
-        where service_date = '${esc(serviceDate)}'::date
-          and employee_id = '${esc(assignedEmployee.assigned_employee_id)}'::uuid
-        order by group_name asc, segment_number asc
-      `);
-      return { service_date: serviceDate, employee_name: assignedEmployee.assigned_employee_name, assignments: rows || [] };
+      if (!assignedEmployee?.assigned_employee_name || assignedEmployee.device_active!==true
+        || assignedEmployee.employee_active!==true) return {service_date:serviceDate,employee_name:null,
+          assignments:[],work_status:'unavailable'};
+      const day=await fetchCurrentMemphisScheduleDay(runReadOnlySql,serviceDate);
+      const availability=day.status==='current'?day.rows.find((row)=>row.employee_id===assignedEmployee.assigned_employee_id):null;
+      if(!availability?.working) return {service_date:serviceDate,employee_name:assignedEmployee.assigned_employee_name,
+        assignments:[],work_status:availability?'off':'unavailable'};
+      const rows=await fetchCurrentMemphisEmployeeSegments(runReadOnlySql,serviceDate,assignedEmployee.assigned_employee_id,day);
+      return { service_date: serviceDate, employee_name: assignedEmployee.assigned_employee_name,
+        assignments:rows||[],work_status:rows?'working':'unavailable' };
     }
 
     if (name === "get_absence_coverage") {
       const serviceDate = normalizeDate(args.service_date) || await getDefaultServiceDate(runReadOnlySql);
       const employeeName = String(args.employee_name || "").trim();
-      const employeeRows = employeeName ? await runReadOnlySql(`
-            select id, display_name
-            from public.employees
-            where active = true and display_name ilike ${sqlLikeLiteral(employeeName)}
-            order by length(display_name), display_name
-            limit 1
-          `) : [];
-      const employee = Array.isArray(employeeRows) && employeeRows.length ? employeeRows[0] : null;
-      const coverageRows = await runReadOnlySql(`
-        select *
-        from public.v_memphis_absence_coverage
-        where service_date = '${esc(serviceDate)}'::date
-        ${employee ? `and absent_employee_id = '${esc(employee.id)}'::uuid` : ""}
-        order by absent_employee_name asc, group_name asc, segment_number asc
-      `);
-      const absenceRows = await runReadOnlySql(`
-        select distinct on (employee_id) employee_id, employee_name, absence_type, notes
-        from (
-          select e.id as employee_id, e.display_name as employee_name, lower(coalesce(dao.absence_type, 'absent')) as absence_type, dao.notes,
-                 case lower(coalesce(dao.absence_type, '')) when 'manual_override' then 3 when 'pto' then 2 else 1 end as priority
-          from public.daily_absence_overrides dao
-          join public.employees e on e.id = dao.employee_id
-          where dao.active = true
-            and dao.absence_date = '${esc(serviceDate)}'::date
-            ${employee ? `and dao.employee_id = '${esc(employee.id)}'::uuid` : ""}
-
-          union all
-
-          select e.id as employee_id, e.display_name as employee_name, lower(coalesce(p.pto_type, 'pto')) as absence_type, p.notes, 2 as priority
-          from public.employee_planned_time_off p
-          join public.employees e on e.id = p.employee_id
-          where p.active = true
-            and p.start_date <= '${esc(serviceDate)}'::date
-            and p.end_date >= '${esc(serviceDate)}'::date
-            ${employee ? `and p.employee_id = '${esc(employee.id)}'::uuid` : ""}
-
-          union all
-
-          select e.id as employee_id, e.display_name as employee_name, lower(coalesce(ep.absence_type, 'pto')) as absence_type, ep.notes, 2 as priority
-          from public.employee_pto ep
-          join public.employees e on e.id = ep.employee_id
-          where ep.active = true
-            and ep.start_date <= '${esc(serviceDate)}'::date
-            and ep.end_date >= '${esc(serviceDate)}'::date
-            ${employee ? `and ep.employee_id = '${esc(employee.id)}'::uuid` : ""}
-        ) x
-        order by employee_id, priority desc, employee_name
-      `);
-      const noteRows = await runReadOnlySql(`
-        select distinct notes
-        from public.v_memphis_open_segments
-        where service_date = '${esc(serviceDate)}'::date
-          and notes is not null and notes <> '' and notes ilike '%off%'
-      `);
-      const absenceNotes = [
-        ...(Array.isArray(absenceRows) ? absenceRows.map((row) => `${row.employee_name} (${String(row.absence_type || 'absent').replace(/_/g, ' ')})${row.notes ? `: ${row.notes}` : ''}`) : []),
-        ...(noteRows || []).map((row) => row.notes).filter(Boolean),
-      ];
-      return {
-        service_date: serviceDate,
-        employee_name: employee?.display_name || employeeName || null,
-        absent_employees: Array.from(new Set([
-          ...(Array.isArray(absenceRows) ? absenceRows.map((row) => row.employee_name).filter(Boolean) : []),
-          ...((coverageRows || []).map((row) => row.absent_employee_name).filter(Boolean)),
-        ])),
-        absence_rows: absenceRows || [],
-        absence_notes: absenceNotes,
-        coverage_rows: coverageRows || [],
-      };
+      const day=await fetchCurrentMemphisScheduleDay(runReadOnlySql,serviceDate);
+      const segments=await fetchCurrentMemphisScheduleSegments(runReadOnlySql,serviceDate,day);
+      if(!segments)return {service_date:serviceDate,availability_status:'unavailable',employee_name:employeeName||null};
+      const employee=employeeName?await resolveEmployeeByLooseName(runReadOnlySql,employeeName):null;
+      const row=employee?.id?day.rows.find(item=>item.employee_id===employee.id):null;
+      return {service_date:serviceDate,availability_status:'current',projection_id:day.projection_id,
+        roster_count:day.rows.length,
+        employee_name:row?.employee_name||employeeName||null,
+        employee_working:row?row.working:null,
+        not_scheduled_employees:day.rows.filter(item=>item.working===false).map(item=>item.employee_name),
+        open_segments:segments.filter(item=>item.status==='OPEN').map(item=>({group_name:item.group_name,
+          group_code:item.group_code,coverage_start:item.coverage_start,coverage_end:item.coverage_end}))};
     }
 
     if (name === "get_open_segments") {
       const serviceDate = normalizeDate(args.service_date) || await getDefaultServiceDate(runReadOnlySql);
       const area = String(args.area || "").trim();
-      let rows;
-      if (area) {
-        const target = await resolveAreaRow(runReadOnlySql, serviceDate, area, {});
-        if (!target?.location_group_id) return { service_date: serviceDate, open_segments: [] };
-        rows = await runReadOnlySql(`
-          select *
-          from public.v_memphis_open_segments
-          where service_date = '${esc(serviceDate)}'::date
-            and location_group_id = '${esc(target.location_group_id)}'::uuid
-          order by group_name asc, segment_number asc
-        `);
-      } else {
-        rows = await runReadOnlySql(`
-          select *
-          from public.v_memphis_open_segments
-          where service_date = '${esc(serviceDate)}'::date
-          order by group_name asc, segment_number asc
-        `);
-      }
-      return { service_date: serviceDate, open_segments: rows || [] };
+      const day=await fetchCurrentMemphisScheduleDay(runReadOnlySql,serviceDate);
+      const segments=await fetchCurrentMemphisScheduleSegments(runReadOnlySql,serviceDate,day);
+      if(!segments)return {service_date:serviceDate,open_segments:[],availability_status:'unavailable'};
+      const target=area?await resolveAreaRow(runReadOnlySql,serviceDate,area,{}):null;
+      return {service_date:serviceDate,open_segments:segments.filter(row=>row.status==='OPEN'
+        && (!area || row.location_group_id===target?.location_group_id)),availability_status:'current'};
     }
 
     if (name === "get_employee_load_summary") {
       const serviceDate = normalizeDate(args.service_date) || await getDefaultServiceDate(runReadOnlySql);
       const employeeName = String(args.employee_name || "").trim();
-      const rows = await runReadOnlySql(`
-        select *
-        from public.v_memphis_employee_load_summary
-        where service_date = '${esc(serviceDate)}'::date
-        ${employeeName ? `and employee_name ilike ${sqlLikeLiteral(employeeName)}` : ""}
-        order by assigned_load_points desc, assigned_segments desc, employee_name asc
-      `);
-      return { service_date: serviceDate, load_rows: rows || [] };
+      const day=await fetchCurrentMemphisScheduleDay(runReadOnlySql,serviceDate);
+      const segments=await fetchCurrentMemphisScheduleSegments(runReadOnlySql,serviceDate,day);
+      if(!segments)return {service_date:serviceDate,load_rows:[],availability_status:'unavailable'};
+      const people=new Map(day.rows.filter(row=>row.working===true).map(row=>[row.employee_id,
+        {employee_name:row.employee_name,assigned_segments:0,assigned_load_points:0,assigned_minutes:0}]));
+      for(const row of segments.filter(item=>item.status==='ASSIGNED')){
+        const person=people.get(row.assigned_employee_id);
+        if(!person)continue;
+        person.assigned_segments++;
+        person.assigned_load_points+=Number(row.load_points||0);
+        const start=String(row.coverage_start||'').match(/^(\d\d):(\d\d)/);
+        const end=String(row.coverage_end||'').match(/^(\d\d):(\d\d)/);
+        if(start&&end)person.assigned_minutes+=Math.max(0,(Number(end[1])*60+Number(end[2]))-(Number(start[1])*60+Number(start[2])));
+      }
+      return {service_date:serviceDate,load_rows:[...people.values()].filter(row=>!employeeName
+        || row.employee_name.toLowerCase().includes(employeeName.toLowerCase()))
+        .sort((a,b)=>b.assigned_load_points-a.assigned_load_points||b.assigned_segments-a.assigned_segments||a.employee_name.localeCompare(b.employee_name)),
+        availability_status:'current'};
     }
 
     if (name === "get_coverage_candidates") {
       const serviceDate = normalizeDate(args.service_date) || await getDefaultServiceDate(runReadOnlySql);
       const area = String(args.area || "").trim();
-      const target = await resolveAreaRow(runReadOnlySql, serviceDate, area, {});
-      if (!target?.location_group_id) return { service_date: serviceDate, group_name: area, candidates: [] };
-      const openRows = await runReadOnlySql(`
-        select *
-        from public.v_memphis_open_segments
-        where service_date = '${esc(serviceDate)}'::date
-          and location_group_id = '${esc(target.location_group_id)}'::uuid
-        order by segment_number asc
-        limit 1
-      `);
-      const timeWindow = extractTimeWindow(`${args.coverage_start || ""} ${args.coverage_end || ""}`);
-      const coverageStart = String(args.coverage_start || openRows?.[0]?.coverage_start || timeWindow?.start || "06:00").slice(0, 5);
-      const coverageEnd = String(args.coverage_end || openRows?.[0]?.coverage_end || timeWindow?.end || addMinutesToTime(coverageStart, 60)).slice(0, 5);
-      const rows = await runReadOnlySql(`
-        select *
-        from public.sch_get_coverage_candidates(
-          '${esc(serviceDate)}'::date,
-          '${esc(target.location_group_id)}'::uuid,
-          '${esc(coverageStart)}'::time,
-          '${esc(coverageEnd)}'::time
-        )
-        order by recommendation_score desc, employee_name asc
-        limit 10
-      `);
-      return {
-        service_date: serviceDate,
-        group_name: target.group_name || target.group_code || area,
-        coverage_start: coverageStart,
-        coverage_end: coverageEnd,
-        candidates: rows || [],
-      };
+      const day=await fetchCurrentMemphisScheduleDay(runReadOnlySql,serviceDate);
+      const segments=await fetchCurrentMemphisScheduleSegments(runReadOnlySql,serviceDate,day);
+      const target=await resolveAreaRow(runReadOnlySql,serviceDate,area,{});
+      return {service_date:serviceDate,group_name:target?.group_name||area,candidates:[],
+        availability_status:segments?'unranked':'unavailable',
+        open_segments:segments?.filter(row=>row.status==='OPEN'&&row.location_group_id===target?.location_group_id)||[]};
     }
 
     if (name === "explain_open_segment") {
       const serviceDate = normalizeDate(args.service_date) || await getDefaultServiceDate(runReadOnlySql);
       const area = String(args.area || "").trim();
       const target = await resolveAreaRow(runReadOnlySql, serviceDate, area, {});
-      if (!target?.location_group_id) return { service_date: serviceDate, open_segments: [] };
-      const rows = await runReadOnlySql(`
-        select *
-        from public.v_memphis_open_segments
-        where service_date = '${esc(serviceDate)}'::date
-          and location_group_id = '${esc(target.location_group_id)}'::uuid
-        order by segment_number asc
-        limit 5
-      `);
-      return { service_date: serviceDate, open_segments: rows || [] };
+      const day=await fetchCurrentMemphisScheduleDay(runReadOnlySql,serviceDate);
+      const segments=await fetchCurrentMemphisScheduleSegments(runReadOnlySql,serviceDate,day);
+      return {service_date:serviceDate,open_segments:segments?.filter(row=>row.status==='OPEN'
+        &&row.location_group_id===target?.location_group_id).slice(0,5)||[],availability_status:segments?'current':'unavailable'};
     }
 
     if (name === "get_employee_profile") {
@@ -1386,7 +1247,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
             limit 1
           ) as device_name
         from public.employees em
-        where em.display_name ilike ${sqlLikeLiteral(employeeName)}
+        where em.active=true and em.display_name ilike ${sqlLikeLiteral(employeeName)}
         order by length(em.display_name), em.display_name
         limit 1
       `);
@@ -1403,13 +1264,11 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
           lm.location_type,
           lm.form_type,
           lm.active,
-          lm.notes,
           lm.difficulty_rating,
           lm.priority_rating,
-          lm.workload_notes,
           coalesce(array_agg(distinct lg.group_name) filter (where lg.group_name is not null), array[]::text[]) as group_names
         from (
-          select l.id, l.location_code, l.location_name, l.location_type, l.form_type, l.active, l.notes, l.difficulty_rating, l.priority_rating, l.workload_notes
+          select l.id, l.location_code, l.location_name, l.location_type, l.form_type, l.active, l.difficulty_rating, l.priority_rating
           from public.locations l
           where l.active = true
             and (
@@ -1423,26 +1282,22 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
         ) lm
         left join public.location_group_memberships lgm on lgm.location_id = lm.id and lgm.active = true
         left join public.location_groups lg on lg.id = lgm.location_group_id and lg.active = true
-        group by lm.id, lm.location_code, lm.location_name, lm.location_type, lm.form_type, lm.active, lm.notes, lm.difficulty_rating, lm.priority_rating, lm.workload_notes
+        group by lm.id, lm.location_code, lm.location_name, lm.location_type, lm.form_type, lm.active, lm.difficulty_rating, lm.priority_rating
       `);
       const loc = Array.isArray(locationRows) && locationRows.length ? locationRows[0] : null;
       if (!loc) return { location: null, current_owner: null };
-      const ownerRows = await runReadOnlySql(`select * from public.sch_get_current_owner('${esc(loc.location_code)}', now())`);
-      return { location: loc, current_owner: Array.isArray(ownerRows) && ownerRows.length ? ownerRows[0] : null };
+      return {location:loc,current_owner:null,owner_status:'current_assignment_not_verified'};
     }
 
     if (name === "get_current_owner") {
       const locationCode = String(args.location_code || "").trim();
-      const at = String(args.at || "").trim();
-      const literal = at ? `'${esc(at)}'::timestamptz` : "now()";
-      const rows = await runReadOnlySql(`select * from public.sch_get_current_owner('${esc(locationCode)}', ${literal})`);
-      return Array.isArray(rows) && rows.length ? rows[0] : null;
+      return {location_code:locationCode,owner_status:'current_assignment_not_verified'};
     }
 
     if (name === "get_open_tickets") {
       const location = String(args.location || "").trim();
       const rows = await runReadOnlySql(`
-        select ticket_id, location_code, location_name, maintenance_issue, reported_by, fixture_type, fixture_identifier, out_of_order, date_submitted_display, created_at_display
+        select ticket_id, location_code, location_name, out_of_order, date_submitted_display, created_at_display
         from public.v_open_maintenance_tickets
         ${location ? `where location_code ilike ${sqlLikeLiteral(location)} or location_name ilike ${sqlLikeLiteral(location)}` : ""}
         order by date_submitted desc nulls last, created_at desc nulls last
@@ -1500,10 +1355,6 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       const relativeOffset = inferRelativeDateOffset(text);
       if (relativeOffset !== 0) relativeServiceDate = await getRelativeServiceDate(runReadOnlySql, relativeOffset);
     }
-    const futureWindowOffset = daysBetweenIsoDates(todayServiceDate, relativeServiceDate);
-    if (futureWindowOffset != null && futureWindowOffset >= 0 && futureWindowOffset < 7) {
-      await ensureScheduleRange(runRpc, buildScheduleDateRange(todayServiceDate, 7), { force: false });
-    }
     const assignedEmployee = await fetchAssignedEmployeeForDevice(runReadOnlySql, deviceId);
 
     if (isContactLookupPrompt(text)) {
@@ -1517,10 +1368,6 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
         });
         return { text: contactReply, meta: { fallback: true, mode: "local_internal_contact" } };
       }
-    }
-
-    if (/(schedule|assigned|assignment|assignments|area|areas|works|working|scheduled|staff|staffing|teton|aquarium|restroom|zambezi|expo|cleans|cover|coverage|open segment|anything open|any open segments|uncovered|unassigned)/i.test(text)) {
-      await ensureDailySchedule(runRpc, relativeServiceDate);
     }
 
     if (isWeeklyScheduleQuestion(text)) {
@@ -1599,7 +1446,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     // H3: Use word-boundary regex with maintenance context to avoid misrouting
     // (e.g., "I have a ticket for the event" should not trigger maintenance tickets).
     if (/\b(tickets?|maintenance|broken|out of order|repair|fixture)\b/i.test(text) && !asksEventListing) {
-      const data = await executeTool("get_open_tickets", { location: findLocationCode(text) || text });
+      const data = await executeTool("get_open_tickets", { location: findLocationCode(text) || "" });
       await saveThreadContext(runRpc, threadId, { last_intent: "open_tickets", last_location_code: findLocationCode(text) || null, last_service_date: relativeServiceDate, last_subject_type: "location" });
       return { text: summarizeTickets(data.tickets, findLocationCode(text)), meta: { fallback: true, mode: "local_tickets", sources: ["v_open_maintenance_tickets"] } };
     }
@@ -1610,13 +1457,16 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       const employeeName = await guessEmployeeName(runRpc, text) || (shouldUseEmployeeContext(text) ? threadContext?.last_employee_name : "") || "";
       const data = await executeTool("get_absence_coverage", { employee_name: employeeName, service_date: relativeServiceDate });
       await saveThreadContext(runRpc, threadId, { last_intent: "absence_coverage", last_employee_name: employeeName || null, last_service_date: relativeServiceDate, last_subject_type: "employee" });
-      return { text: summarizeAbsenceCoverage(data, employeeName), meta: { fallback: true, mode: "local_absence_coverage", sources: ["daily_absence_overrides", "employee_planned_time_off", "employee_pto", "v_memphis_absence_coverage"] } };
+      return { text: summarizeAbsenceCoverage(data, employeeName), meta: { fallback: true, mode: "local_absence_coverage", sources: ["custodial_memphis_schedule_day", "static_weekly_v6_read_schedule_segments"] } };
     }
 
     if ((lower.includes("my schedule") || lower === "schedule" || lower.includes("what am i assigned") || lower.includes("what am i doing today")) && assignedEmployee?.assigned_employee_name) {
       const data = await executeTool("get_my_schedule", { device_id: deviceId, service_date: relativeServiceDate });
       await saveThreadContext(runRpc, threadId, { last_intent: "my_schedule", last_employee_name: data.employee_name || assignedEmployee.assigned_employee_name, last_service_date: relativeServiceDate, last_subject_type: "employee", context_json: mergeContextJson(threadContext, { last_question_shape: "my_schedule", last_subject_kind: "employee", last_subject_label: data.employee_name || assignedEmployee.assigned_employee_name }) });
-      return { text: summarizeEmployeeAssignments(data.assignments, data.employee_name || assignedEmployee.assigned_employee_name, data.service_date), meta: { fallback: true, mode: "local_my_schedule", sources: ["devices", "v_memphis_employee_schedule"] } };
+      return { text:data.work_status==='unavailable'?`I can't verify your current published schedule for ${data.service_date}.`
+        :summarizeEmployeeAssignments(data.assignments, data.employee_name || assignedEmployee.assigned_employee_name,
+          data.service_date,{scheduled_off:data.work_status==='off',employee_name:data.employee_name}),
+        meta: { fallback: true, mode: "local_my_schedule", sources: ["devices", "custodial_memphis_schedule_day", "static_weekly_v6_read_schedule_segments"] } };
     }
 
     if (/(who can cover|who should cover|best backup|best person to cover|coverage candidate)/i.test(lower)) {
@@ -1624,27 +1474,31 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       const timeWindow = extractTimeWindow(text) || {};
       const data = await executeTool("get_coverage_candidates", { service_date: relativeServiceDate, area: areaRow?.group_name || text, coverage_start: timeWindow.start, coverage_end: timeWindow.end });
       await saveThreadContext(runRpc, threadId, { last_intent: "coverage_candidates", last_group_name: areaRow?.group_name || null, last_service_date: relativeServiceDate, last_subject_type: "group", context_json: { coverage_start: data.coverage_start || null, coverage_end: data.coverage_end || null } });
-      return { text: summarizeCoverageCandidates(data.candidates, data.group_name || areaRow?.group_name || text), meta: { fallback: true, mode: "local_coverage_candidates", sources: ["sch_get_coverage_candidates", "v_memphis_open_segments"] } };
+      return { text: data.availability_status==='unavailable'
+        ? `I can't verify current published coverage for ${relativeServiceDate}.`
+        : `${data.open_segments.length?`Current published open work exists for ${data.group_name || 'that area'}.`:`I do not see current published open work for ${data.group_name || 'that area'}.`} I can't rank qualified replacement candidates from an accepted current source. A manager needs to review and confirm any coverage change.`,
+        meta: { fallback: true, mode: "local_coverage_candidates", sources: ["custodial_memphis_schedule_day", "static_weekly_v6_read_schedule_segments"] } };
     }
 
     if (/(open segments|what is open|what's open|anything open|any open segments|uncovered|unassigned)/i.test(lower)) {
       const areaRow = await resolveAreaRow(runReadOnlySql, relativeServiceDate, text, threadContext);
       const data = await executeTool("get_open_segments", { service_date: relativeServiceDate, area: areaRow?.group_name || "" });
       await saveThreadContext(runRpc, threadId, { last_intent: "open_segments", last_group_name: areaRow?.group_name || null, last_service_date: relativeServiceDate, last_subject_type: "group" });
-      return { text: summarizeOpenSegments(data.open_segments, data.service_date), meta: { fallback: true, mode: "local_open_segments", sources: ["v_memphis_open_segments"] } };
+      return { text: data.availability_status==='unavailable'?`I can't verify current published open segments for ${data.service_date}.`:summarizeOpenSegments(data.open_segments, data.service_date), meta: { fallback: true, mode: "local_open_segments", sources: ["custodial_memphis_schedule_day", "static_weekly_v6_read_schedule_segments"] } };
     }
 
     if (/(load|workload|heaviest|busy)/i.test(lower)) {
       const employeeName = await guessEmployeeName(runRpc, text) || (shouldUseEmployeeContext(text) ? threadContext?.last_employee_name : "") || "";
       const data = await executeTool("get_employee_load_summary", { service_date: relativeServiceDate, employee_name: employeeName });
       await saveThreadContext(runRpc, threadId, { last_intent: "employee_load_summary", last_employee_name: employeeName || null, last_service_date: relativeServiceDate, last_subject_type: employeeName ? "employee" : "summary" });
-      return { text: summarizeLoadSummary(data.load_rows, data.service_date), meta: { fallback: true, mode: "local_load_summary", sources: ["v_memphis_employee_load_summary"] } };
+      return { text: data.availability_status==='unavailable'?`I can't verify current published workload for ${data.service_date}.`:summarizeLoadSummary(data.load_rows, data.service_date), meta: { fallback: true, mode: "local_load_summary", sources: ["custodial_memphis_schedule_day", "static_weekly_v6_read_schedule_segments"] } };
     }
 
     if (/(why is .* open|why is .* uncovered|why open)/i.test(lower)) {
       const areaRow = await resolveAreaRow(runReadOnlySql, relativeServiceDate, text, threadContext);
       const data = await executeTool("explain_open_segment", { service_date: relativeServiceDate, area: areaRow?.group_name || text });
       await saveThreadContext(runRpc, threadId, { last_intent: "explain_open_segment", last_group_name: areaRow?.group_name || null, last_service_date: relativeServiceDate, last_subject_type: "group" });
+      if(data.availability_status==='unavailable')return {text:`I can't verify current published open work for ${relativeServiceDate}.`,meta:{fallback:true,mode:'local_explain_open'}};
       if (!data.open_segments?.length) return { text: `I do not see an open segment for ${areaRow?.group_name || text} on ${relativeServiceDate}.`, meta: { fallback: true, mode: "local_explain_open" } };
       return { text: summarizeOpenSegments(data.open_segments, data.service_date), meta: { fallback: true, mode: "local_explain_open" } };
     }
@@ -1666,7 +1520,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       const data = await executeTool("get_location_details", { location: query });
       if (data?.location) {
         await saveThreadContext(runRpc, threadId, { last_intent: "location_details", last_group_name: data.location.location_name || null, last_location_code: data.location.location_code || null, last_service_date: relativeServiceDate, last_subject_type: "location" });
-        return { text: summarizeLocationDetails(data), meta: { fallback: true, mode: "local_location_details", sources: ["locations", "location_groups", "sch_get_current_owner"] } };
+        return { text: summarizeLocationDetails(data), meta: { fallback: true, mode: "local_location_details", sources: ["locations", "location_groups"] } };
       }
     }
 
@@ -1690,7 +1544,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
             : (areaRow?.group_name || locationRow?.group_names?.[0] || threadContext?.last_group_name || null),
         })
       });
-      if (ownerText) return { text: ownerText, meta: { fallback: true, mode: "local_owner", sources: ["v_memphis_area_schedule", "sch_get_current_owner"] } };
+      if (ownerText) return { text: ownerText, meta: { fallback: true, mode: "local_owner", sources: ["custodial_memphis_schedule_day", "static_weekly_v6_read_schedule_segments"] } };
     }
 
     // H3: Use word-boundary regex for scan/state queries.
@@ -1739,18 +1593,14 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
         return { text: summarizeEmployeeWorkStatus(workStatus), meta: { fallback: true, mode: "local_employee_work_status" } };
       }
       const areaRow = await resolveAreaRow(runReadOnlySql, relativeServiceDate, text, threadContext);
-      let data = await executeTool("get_area_schedule", { area: areaRow?.group_name || text, service_date: relativeServiceDate });
-      const futureOffset = daysBetweenIsoDates(todayServiceDate, relativeServiceDate);
-      if ((!Array.isArray(data?.assignments) || !data.assignments.length) && futureOffset != null && futureOffset >= 0 && futureOffset < 7) {
-        // MEDIUM #8: Use force:false in user-triggered path — don't force-regenerate.
-        await ensureDailySchedule(runRpc, relativeServiceDate, { force: false });
-        data = await executeTool("get_area_schedule", { area: areaRow?.group_name || text, service_date: relativeServiceDate });
-      }
+      const data = await executeTool("get_area_schedule", { area: areaRow?.group_name || text, service_date: relativeServiceDate });
       await saveThreadContext(runRpc, threadId, { last_intent: "area_schedule", last_group_name: areaRow?.group_name || data.group_name || null, last_service_date: relativeServiceDate, last_subject_type: "group", context_json: mergeContextJson(threadContext, { last_question_shape: "area_schedule", last_subject_kind: "group", last_subject_label: areaRow?.group_name || data.group_name || null }) });
+      if(data.availability_status==='unavailable')return {text:`I can't verify a current published assignment for ${areaRow?.group_name||data.group_name||'that area'} on ${relativeServiceDate}.`,
+        meta:{fallback:true,mode:'local_area_schedule',sources:['custodial_memphis_schedule_day','static_weekly_v6_read_schedule_segments']}};
       const noAssignmentsText = data.service_date && data.service_date > todayServiceDate
         ? `I do not see generated schedule assignments for ${areaRow?.group_name || text} on ${data.service_date} yet.`
         : `I couldn't find schedule assignments for ${areaRow?.group_name || text} on ${data.service_date}.`;
-      return { text: summarizeAssignments(data.assignments, noAssignmentsText, areaRow?.group_code || data.group_name || areaRow?.group_name || ""), meta: { fallback: true, mode: "local_area_schedule", sources: ["v_memphis_area_schedule", "daily_schedule_assignments"] } };
+      return { text: summarizeAssignments(data.assignments, noAssignmentsText, areaRow?.group_code || data.group_name || areaRow?.group_name || ""), meta: { fallback: true, mode: "local_area_schedule", sources: ["custodial_memphis_schedule_day", "static_weekly_v6_read_schedule_segments"] } };
     }
 
     // C2: Dashboard summary and attendance data are only exposed to manager role.
@@ -1758,7 +1608,14 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       const data = await executeTool("get_dashboard_summary", {});
       await saveThreadContext(runRpc, threadId, { last_intent: "dashboard_summary", last_service_date: relativeServiceDate, last_subject_type: "summary" });
       const attendanceOnly = /\b(attendance|guest|guests|visitor|visitors)\b/i.test(text);
-      return { text: attendanceOnly ? summarizeAttendance(data.attendance, text) : summarizeDashboard(data.snapshot, data.attention_locations, data.attendance), meta: { fallback: true, mode: attendanceOnly ? "local_attendance" : "local_dashboard", sources: attendanceOnly ? ["current_attendance_state"] : ["v_admin_health_snapshot", "v_location_dashboard_status", "current_attendance_state"] } };
+      const fetchedAt=Date.parse(String(data.attendance?.fetched_at||''));
+      const age=Date.now()-fetchedAt;
+      const fresh=Number.isFinite(fetchedAt)&&age>=-60_000&&age<=60*60_000
+        && new Intl.DateTimeFormat('en-CA',{timeZone:'America/Chicago',year:'numeric',month:'2-digit',day:'2-digit'})
+          .format(new Date(fetchedAt))===new Intl.DateTimeFormat('en-CA',{timeZone:'America/Chicago',year:'numeric',month:'2-digit',day:'2-digit'})
+          .format(new Date());
+      const attendance=fresh?data.attendance:null;
+      return { text: attendanceOnly ? summarizeAttendance(attendance, text) : summarizeDashboard(data.snapshot, data.attention_locations, attendance), meta: { fallback: true, mode: attendanceOnly ? "local_attendance" : "local_dashboard", attendance_fresh:fresh, sources: attendanceOnly ? ["current_attendance_state"] : ["v_admin_health_snapshot", "v_location_dashboard_status", "current_attendance_state"] } };
     }
 
     const weatherLocation = inferWeatherLocation(text, threadContext);
@@ -1808,10 +1665,12 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
 
     // H35: Use classified intent as the single source of truth for Gemini-vs-local decision.
     // No duplicate contact/schedule/weekly pre-checks — those are handled by generateSystemReply.
-    const explicitSystem =
-      !isGeneralKnowledgeQuestion(effectiveUserMessage) &&
-      (SYSTEM_SPECIFIC_INTENTS.has(route.intent) || route.confidence >= 0.5 ||
-       isSystemSpecificQuestion(effectiveUserMessage, threadContext) || isEmployeeAreaQuestion(effectiveUserMessage));
+    // Generic phrasing such as "how many" must not send a concrete ticket,
+    // attendance, schedule, or Event query to the external conversation model.
+    const explicitSystem = SYSTEM_SPECIFIC_INTENTS.has(route.intent)
+      || isSystemSpecificQuestion(effectiveUserMessage, threadContext)
+      || isEmployeeAreaQuestion(effectiveUserMessage)
+      || (route.confidence >= 0.5 && !isGeneralKnowledgeQuestion(effectiveUserMessage));
 
     if (!apiKey || explicitSystem) {
       const reply = await generateSystemReply(effectiveUserMessage, { deviceId, threadId, userRole: identity?.role || "" });

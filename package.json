@@ -14,8 +14,7 @@
     "start:static-weekly-control-plane": "node src/static-weekly-control-plane-runtime.js",
     "preflight:static-weekly-source": "node scripts/static-weekly-schedule-candidate-importer.mjs",
     "smoke": "node scripts/smoke.mjs",
-    "test:events-parser": "node scripts/events-parser-tests.mjs",
-    "test:events-api": "node scripts/events-api-contract-tests.mjs",
+    "test:events-api": "node --test scripts/shared-events-feed-tests.mjs",
     "test:event-integrity": "node scripts/event-notification-retention-contract-tests.mjs",
     "test:event-integrity-db": "node scripts/event-notification-retention-database-tests.mjs",
     "test:event-static-authority-db": "node scripts/event-static-authority-database-tests.mjs",
@@ -32,9 +31,9 @@
     "test:restroom-rebalance-route": "node scripts/restroom-rebalance-route-tests.mjs",
     "test:ai-intent": "node scripts/smoke-ai-intent.mjs",
     "test:messaging": "node scripts/memphis-messaging-regression-tests.mjs",
-    "test:auth": "node scripts/mcp-connector-auth-tests.mjs && node scripts/mcp-self-contained-oauth-wire-tests.mjs && node scripts/mcp-transport-tool-surface-tests.mjs && node scripts/operations-leadership-mobile-contract-tests.mjs && node scripts/manager-named-enrollment-http-tests.mjs && node scripts/manager-credential-boundary-tests.mjs && node scripts/manager-route-authority-contract-tests.mjs && node scripts/map-manager-identity-tests.mjs",
+    "test:auth": "node scripts/mcp-connector-auth-tests.mjs && node scripts/mcp-self-contained-oauth-wire-tests.mjs && node scripts/mcp-transport-tool-surface-tests.mjs && node scripts/operations-leadership-mobile-contract-tests.mjs && node scripts/manager-named-enrollment-http-tests.mjs && node scripts/manager-credential-boundary-tests.mjs && node scripts/manager-route-authority-contract-tests.mjs && node scripts/map-manager-identity-tests.mjs && node --test scripts/outlook-event-sync-adapter-tests.mjs",
     "test:manager-auth": "node scripts/operations-leadership-mobile-contract-tests.mjs && node scripts/manager-named-enrollment-http-tests.mjs && node scripts/manager-credential-boundary-tests.mjs && node scripts/manager-route-authority-contract-tests.mjs && node scripts/map-manager-identity-tests.mjs",
-    "test:mcp-auth": "node scripts/mcp-connector-auth-tests.mjs && node scripts/mcp-self-contained-oauth-wire-tests.mjs && node scripts/mcp-transport-tool-surface-tests.mjs",
+    "test:mcp-auth": "node scripts/mcp-connector-auth-tests.mjs && node scripts/mcp-self-contained-oauth-wire-tests.mjs && node scripts/mcp-transport-tool-surface-tests.mjs && node --test scripts/outlook-event-sync-adapter-tests.mjs && node --test scripts/operations-mail-sync-adapter-tests.mjs",
     "test:foundation-containment": "node scripts/foundation-security-containment-contract-tests.mjs",
     "test:readonly-database-authority": "node scripts/read-only-database-authority-tests.mjs",
     "test:temporary-repair-retirement": "node scripts/temporary-repair-payload-retirement-tests.mjs",
@@ -62,7 +61,6 @@
     "test:gemini-console": "node scripts/gemini-console-foundation-tests.mjs",
     "test:gemini-console-db": "node scripts/gemini-console-database-tests.mjs",
     "test:device-security-app": "node scripts/device-security-app-tests.mjs",
-    "test:moxie-route": "node scripts/moxie-route-tests.mjs",
     "test:schedule-source-type": "node scripts/schedule-source-type-contract-tests.mjs",
     "test:device-credentials": "node scripts/device-credential-foundation-tests.mjs",
     "test:native-phone-attestation": "node scripts/native-phone-attestation-tests.mjs",
@@ -182,10 +180,25 @@
     "test:static-weekly-full-roster-lunch": "node scripts/static-weekly-full-roster-lunch-tests.mjs",
     "test:static-weekly-existing-employee-restore-db": "node scripts/static-weekly-existing-employee-restore-database-tests.mjs",
     "test:static-weekly-vacate-roster-slot-db": "node scripts/static-weekly-vacate-roster-slot-database-tests.mjs",
-    "test:static-weekly-full-week-publication-db": "node scripts/static-weekly-full-week-publication-database-tests.mjs"
+    "test:static-weekly-full-week-publication-db": "node scripts/static-weekly-full-week-publication-database-tests.mjs",
+    "test:events-chicago-time": "node scripts/events-chicago-time-tests.mjs",
+    "test:separation-auth-admission-source": "node scripts/separation-auth-admission-source-tests.mjs",
+    "test:native-protected-snapshot-evidence": "node scripts/native-protected-snapshot-evidence-tests.mjs",
+    "test:native-protected-snapshot-seal": "node scripts/native-protected-snapshot-seal-tests.mjs",
+    "test:dashboard-reader-compatibility": "node scripts/dashboard-reader-compatibility-tests.mjs && node scripts/dashboard-reader-produced-dto-tests.mjs",
+    "test:moxie-decommission": "node scripts/moxie-decommission-tests.mjs",
+    "test:owner-access": "npm run --silent test:manager-auth && node scripts/map-owner-session-http-tests.mjs && node scripts/feedback-acknowledgment-auth-tests.mjs && node scripts/static-weekly-control-plane-tests.mjs && node scripts/static-weekly-control-plane-runtime-tests.mjs && node scripts/owner-actions-database-tests.mjs && node scripts/release-attestation-path-tests.mjs && npm run --silent test:custodial-employee-phones && node scripts/proxy-address-regression-tests.mjs",
+    "test:release-attestation-paths": "node scripts/release-attestation-path-tests.mjs",
+    "test:shared-events": "node --test scripts/shared-events-feed-tests.mjs",
+    "test:operations-mail": "node --test scripts/operations-mail-ledger-tests.mjs && node --test scripts/operations-mail-sync-adapter-tests.mjs",
+    "test:outlook-events:db": "node scripts/outlook-event-sync-database-tests.mjs",
+    "test:combined-release": "npm run --silent test:owner-access && npm run --silent test:shared-events && node scripts/events-chicago-time-tests.mjs && npm run --silent test:outlook-events:db && npm run --silent test:operations-mail",
+    "test:manager-scheduler": "node scripts/manager-scheduler-http-tests.mjs && node scripts/manager-scheduler-database-tests.mjs && node scripts/static-weekly-approved-initial-http-tests.mjs && node scripts/static-weekly-manager-read-tests.mjs && node scripts/coverall-event-print-integration-tests.mjs && node scripts/oc24-coverall-print-tests.mjs",
+    "test:manager-scheduler:database": "node scripts/manager-scheduler-dated-integration-tests.mjs",
+    "test:backup-source-binding": "node --test scripts/backup-release-schema-binding-tests.mjs"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@modelcontextprotocol/sdk": "1.32.2",
     "@supabase/supabase-js": "^2.103.2",
     "argon2": "^0.44.0",
     "dotenv": "^17.2.3",
@@ -199,7 +212,9 @@
     "zod": "4.6.6"
   },
   "overrides": {
-    "@hono/node-server": "2.0.12"
+    "@hono/node-server": "2.0.12",
+    "fast-uri": "3.1.8",
+    "ip-address": "10.7.1"
   },
   "devDependencies": {
     "libsodium-wrappers": "0.8.4"

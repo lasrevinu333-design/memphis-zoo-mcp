@@ -9,8 +9,217 @@ import { EventEmitter } from "node:events";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createStaticWeeklyControlPlane, STATIC_WEEKLY_DATABASE_OPERATION_STATEMENT_TIMEOUT_MS } from "../src/static-weekly-control-plane.js";
+import { createStaticWeeklyProjectionWithLunchRpcInput } from '../src/static-weekly-lunch-publication.js';
+import { createVacancyManagerPreview } from '../src/static-weekly-vacancy-preview.js';
 import { createStaticWeeklyDraftRpcInput } from "../src/static-weekly-schedule-database-adapter.js";
-import { compileStaticWeeklySchedule } from "../src/static-weekly-schedule-compiler.js";
+import { compileStaticWeeklySchedule, postgresJsonbContentDigest } from "../src/static-weekly-schedule-compiler.js";
+import {createOpeningCoverageReport} from '../src/static-weekly-opening-coverage-report.js';
+import {loadOpeningCoverageFixture} from './static-weekly-opening-coverage-report-tests.mjs';
+import {installStaticWeeklySha256HexAccelerator,contentDigest} from '../src/static-weekly-schedule-model.js';
+import {RECURRING_WEEK_COMMITMENT_SCHEMA,RECURRING_PHASE_SCOPE,RECURRING_MORNING_SCOPE} from '../src/static-weekly-recurring-week-commitment.js';
+import {COMPONENT_WEIGHT_LEDGER_DIGEST} from '../src/schedule-component-weight-authority.js';
+installStaticWeeklySha256HexAccelerator(x=>createHash('sha256').update(x).digest('hex'));
+
+// Selected owning member: recording SQL clients and normal completed compiler
+// captures only (MAIN captures or explicitly synthetic complete producer output). It never runs a solver, server, database or authentication
+// provider. Actual staged-row/RPC/role qualification remains MAIN-owned.
+export async function runReviewedVacancyPreparationControlPlaneTests({first,second,preview,before,baselineInput}) {
+  const copy=v=>structuredClone(v), hash=v=>createHash('sha256').update(v,'utf8').digest('hex');
+  assert.deepEqual(first.input,second.input);assert.deepEqual(first.preparation,second.preparation);
+  const manager={manager_id:preview.managerId,manager_display_name:preview.managerName,auth_mode:'trusted_device',
+    credential_id:'11000000-0000-4000-8000-000000000001',device_id:'recording-vacancy-owner',access_level:'full_access',read_only:false};
+  const request={manager,sourceId:before.body.source_id,slotId:preview.slotId,employeeId:before.body.employee_id,
+    effectiveStart:before.body.effective_start,reason:before.body.reason,expectedRevision:before.body.expected_revision,
+    idempotencyKey:before.body.idempotency_key};
+  const asSource=input=>({compiler_input:{timezone:input.timezone||'America/Chicago',slots:copy(input.slots),
+    proximity:copy(input.proximity),version:copy(input.versions[0])},exceptions:copy(input.exceptions)});
+  const originalAuth=[manager.manager_id,manager.credential_id,manager.device_id,manager.access_level,request.idempotencyKey];
+  const projectionId='77000000-0000-4000-8000-000000000001', checks=[];
+  function fixture(options={}) {
+    let state={revision:request.expectedRevision,mutated:false,stage:null,projection:null},transactionState,savepoint;
+    let compileCount=0,releaseCount=0,stageCount=0,mutationCount=0,consumes=0;
+    let prepareEntered,prepareResolve;
+    const entered=new Promise(resolve=>{prepareEntered=resolve;});
+    const waiting=options.deferred?new Promise(resolve=>{prepareResolve=resolve;}):null;
+    const log=[],controls={...options};
+    const descriptor=(packet,replayed=true)=>{const decoded=JSON.parse(packet),dto=JSON.parse(decoded.previewUtf8);
+      return {found:true,state:'UNSUBMITTED',current:true,replayed,preview_digest:dto.previewDigest,
+        worker_candidate_digest:dto.workerCandidateDigest,generation:0,staged_at:'2026-10-12T06:25:00.000001+00:00',
+        packet_utf8:packet,payload_sha256:hash(packet)};};
+    const database={async connect(){return {async query(sql,values=[]) {
+      log.push({sql,values:copy(values)});
+      const result=value=>({rows:[{result:value}]});
+      if(sql==='begin'){transactionState=copy(state);return {rows:[]};}
+      if(sql==='commit'){
+        if(controls.commitFailure)throw Object.assign(new Error('recording commit connection loss'),{code:'ECONNRESET'});
+        transactionState=null;
+        if(controls.commitReplyLost)throw Object.assign(new Error('recording committed transaction reply loss'),{code:'ECONNRESET'});
+        return {rows:[]};
+      }
+      if(sql==='rollback'){if(transactionState)state=copy(transactionState);transactionState=null;return {rows:[]};}
+      if(sql==='savepoint vacancy_reviewed_preparation'){savepoint=copy(state);return {rows:[]};}
+      if(sql==='rollback to savepoint vacancy_reviewed_preparation'){state=copy(savepoint);return {rows:[]};}
+      if(sql==='release savepoint vacancy_reviewed_preparation'){savepoint=null;return {rows:[]};}
+      if(sql.includes('custodial_action_actor_v1'))return result({manager_id:controls.actorChanged?'foreign-manager':manager.manager_id,
+        credential_id:manager.credential_id,device_id:manager.device_id,owner:true});
+      if(sql.includes('static_weekly_v3_read_manager_snapshot'))return result({authority_revision:state.revision+(controls.revisionChanged?1:0),
+        current_service_date:preview.effectiveStart,current_publication:controls.unpublished?null:{publication_id:preview.publicationId},
+        projection_status:state.projection?'current':'missing',latest_projection:state.projection});
+      if(sql.includes('static_weekly_v3_read_authority_source')){
+        const raw=copy(values.length===1?before.details.registered_compiler_input:before.details.compiler_input);
+        if(controls.sourceChanged)raw.version.id='66000000-0000-4000-8000-000000000099';
+        return result({source_id:preview.sourceId,compiler_input:raw});
+      }
+      if(sql.includes('static_weekly_v3_read_publication_source')){
+        const input=copy(state.mutated?first.input:baselineInput);
+        if(state.mutated&&controls.postChanged)input.timezone='Etc/UTC';
+        return result(asSource(input));
+      }
+      if(sql.includes('static_weekly_read_vacancy_reviewed_preparation')){
+        assert.deepEqual(values.slice(0,4),originalAuth.slice(0,4),'private read binds original manager/credential/device/access');
+        if(values[4]!==originalAuth[4])return result({found:false});
+        if(controls.readDenied)throw Object.assign(new Error('recording current SQL actor denied'),{code:'42501'});
+        if(controls.missing)return result({found:false});
+        if(!state.stage)return result({found:false});
+        const row=copy(state.stage);row.replayed=true;
+        if(controls.stale)row.current=false;
+        if(controls.foreignPacket){const packet=JSON.parse(row.packet_utf8);packet.reason='Different original reason';
+          row.packet_utf8=JSON.stringify(packet);row.payload_sha256=hash(row.packet_utf8);}
+        return result(row);
+      }
+      if(sql.includes('static_weekly_stage_vacancy_reviewed_preparation')){
+        assert.deepEqual(values.slice(0,5),originalAuth);stageCount++;
+        assert.equal(state.revision,request.expectedRevision,'hypothetical revision rolled back BEFORE stage');
+        assert.equal(state.mutated,false);assert.equal(state.projection,null);
+        if(controls.stageFailure)throw Object.assign(new Error('recording stage collision'),{code:'23505'});
+        if(state.stage)assert.equal(state.stage.packet_utf8,values[5]);
+        else state.stage=descriptor(values[5],false);
+        return result(copy(state.stage));
+      }
+      if(sql.includes('static_weekly_v8_vacate_roster_slot')){
+        assert.deepEqual(values,[request.sourceId,request.slotId,request.employeeId,request.effectiveStart,request.reason,
+          request.expectedRevision,manager.manager_id,request.idempotencyKey]);
+        mutationCount++;state.mutated=true;state.revision=request.expectedRevision+1;
+        return result({revision:state.revision,data:{completion_mode:'projection_required',original_publication_id:preview.publicationId}});
+      }
+      if(sql.includes('static_weekly_v3_materialize_projection')){
+        assert.deepEqual(values,[first.projection.publicationId,first.projection.serviceDate,first.projection.exceptionSetDigest,
+          first.projection.compilerVersion,first.projection.objective,first.projection.metrics,first.projection.replayDigest,
+          first.projection.envelope,first.projection.expectedRevision,manager.manager_id,first.projection.idempotencyKey],
+          'materialization receives EXACT complete original candidate, including changed-between-runs raw receipts');
+        state.revision=request.expectedRevision+2;state.projection={projection_id:projectionId};
+        return result({revision:state.revision,data:{projection_id:projectionId}});
+      }
+      if(sql.includes('static_weekly_v8_materialize_lunch_document')){
+        if(controls.lunchFailure)throw Object.assign(new Error('recording lunch persistence failure'),{code:'P0001'});
+        assert.deepEqual(values,[projectionId,first.projection.lunchDocument,manager.manager_id]);
+        return result({ok:true,persistence_status:'PERSISTED',projection_id:projectionId,
+          document_identity:first.projection.lunchDocument.document_identity});
+      }
+      if(sql.includes('static_weekly_consume_vacancy_reviewed_preparation')){
+        assert.deepEqual(values.slice(0,5),originalAuth);assert.equal(values[5],preview.previewDigest);
+        assert.deepEqual(JSON.parse(values[6]),first.input);assert.ok(state.projection);
+        if(controls.consumeFailure)throw Object.assign(new Error('recording exact original receipt unavailable'),{code:'23514'});
+        consumes++;state.stage.state='CONSUMED';return result(copy(state.stage));
+      }
+      if(sql.includes('static_weekly_v21_reconcile_dependency_changes')){
+        if(controls.reconcileFailure)throw Object.assign(new Error('recording dependency reconciliation failure'),{code:'P0001'});
+        return result({authorityRevision:state.revision,processedChangeCount:0,invalidations:[],blockedPublications:[],affectedPhonesUpdated:false});
+      }
+      if(sql.startsWith('set local ')||sql==='select 1'||sql.includes('custodial_begin_application_mutation')
+        ||sql.includes('pg_advisory_xact_lock'))return {rows:[]};
+      throw new Error('unexpected recording SQL: '+sql);
+    },release(){releaseCount++;},async end(){},on(){},removeListener(){}};}};
+    const makePlane=()=>createStaticWeeklyControlPlane({database,compiler:async()=>{throw new Error('no solver in owning capture member');},
+      compilerPreparer:async(input,preparation)=>{
+        compileCount++;assert.deepEqual(input,first.input);assert.deepEqual(preparation,first.preparation);
+        prepareEntered();if(waiting)await waiting;
+        return copy(compileCount===1?first.projection:second.projection);
+      },shutdownCompiler:async()=>{}});
+    const run=(plane,method,args={},controller=new AbortController())=>plane.runManagerOperation({manager,
+      signal:controller.signal,deadlineAt:performance.now()+55000},()=>plane[method]({...request,...args}));
+    return {controls,makePlane,run,log,entered,settle:()=>prepareResolve?.(),state:()=>copy(state),
+      counts:()=>({compileCount,releaseCount,stageCount,mutationCount,consumes})};
+  }
+  async function seed(f){const p=f.makePlane();const retained=await f.run(p,'previewVacancyRosterSlot');
+    assert.deepEqual(retained,{...preview,preview_retained:true,published:false});
+    assert.equal(f.state().revision,request.expectedRevision);assert.equal(f.state().mutated,false);
+    assert.equal(f.state().stage.state,'UNSUBMITTED');return {p,retained};}
+  const positive=fixture(),{p}=await seed(positive),originalPacket=positive.state().stage.packet_utf8;
+  const statements=positive.log.map(row=>row.sql);
+  assert.ok(statements.findIndex(s=>s.includes('pg_advisory_xact_lock'))<statements.indexOf('savepoint vacancy_reviewed_preparation'));
+  assert.ok(statements.indexOf('rollback to savepoint vacancy_reviewed_preparation')<statements.findIndex(s=>s.includes('static_weekly_stage_vacancy_reviewed_preparation')));
+  assert.equal(statements.at(-1),'commit');checks.push('preview rolls back hypothetical vacancy, then commits only exact private UNSUBMITTED preparation');
+  await positive.run(p,'previewVacancyRosterSlot');assert.equal(positive.counts().compileCount,1);
+  assert.equal(positive.state().stage.packet_utf8,originalPacket);checks.push('same-body preview resume reuses first full bytes without second compile');
+  await p.close();const restarted=positive.makePlane();
+  await positive.run(restarted,'previewVacancyRosterSlot');assert.equal(positive.counts().compileCount,1);
+  checks.push('recreated control plane fixed-reads durable original, without process-local cache');
+  const accepted=await positive.run(restarted,'vacateRosterSlot',{previewDigest:preview.previewDigest});
+  assert.equal(accepted.revision,request.expectedRevision+2);assert.equal(positive.counts().compileCount,1);
+  assert.equal(positive.state().stage.packet_utf8,originalPacket);assert.equal(positive.state().stage.state,'CONSUMED');
+  assert.deepEqual(accepted.data.vacancy_preview,preview);
+  const confirmSql=positive.log.map(row=>row.sql);
+  assert.ok(confirmSql.findIndex(s=>s.includes('static_weekly_v8_materialize_lunch_document'))<confirmSql.findIndex(s=>s.includes('static_weekly_consume_vacancy_reviewed_preparation')));
+  checks.push('one confirm reuses complete first projection/lunch, consumes after materialization, and never performs second solve');
+  const mutations=positive.counts().mutationCount;
+  await assert.rejects(positive.run(restarted,'vacateRosterSlot',{previewDigest:preview.previewDigest}),{code:'static_weekly_vacancy_preview_currentness_changed'});
+  assert.equal(positive.counts().mutationCount,mutations);await restarted.close();checks.push('duplicate confirmation does not replay original writer or compile');
+  for(const [name,controls,code] of [
+    ['wrong reviewed hash',{},'static_weekly_vacancy_preview_changed'],
+    ['missing original preparation',{missing:true},'static_weekly_vacancy_reviewed_preparation_unavailable'],
+    ['different original key',{differentKey:true},'static_weekly_vacancy_reviewed_preparation_unavailable'],
+    ['changed current revision',{revisionChanged:true},'static_weekly_vacancy_preview_currentness_changed'],
+    ['stale original preparation',{stale:true},'static_weekly_vacancy_reviewed_preparation_unavailable'],
+    ['foreign original packet',{foreignPacket:true},'static_weekly_vacancy_reviewed_preparation_changed'],
+    ['changed current registered source',{sourceChanged:true},'static_weekly_vacancy_reviewed_preparation_changed'],
+    ['changed actual post-vacancy source',{postChanged:true},'static_weekly_vacancy_preview_changed'],
+    ['denied current private reader',{readDenied:true},'42501'],
+    ['changed current actor',{actorChanged:true},'42501'],
+    ['missing accepted receipt during consume',{consumeFailure:true},'23514'],
+    ['failed lunch persistence',{lunchFailure:true},'P0001'],
+    ['failed dependency reconciliation',{reconcileFailure:true},'P0001'],
+    ['pre-commit connection failure',{commitFailure:true},'static_weekly_control_plane_database_unavailable'],
+  ]){
+    const f=fixture(),seeded=await seed(f),packet=f.state().stage.packet_utf8;
+    Object.assign(f.controls,controls);
+    await assert.rejects(f.run(seeded.p,'vacateRosterSlot',{previewDigest:name==='wrong reviewed hash'?'f'.repeat(64):preview.previewDigest,
+      ...(controls.differentKey?{idempotencyKey:'different-original-key'}:{})}),{code},name);
+    assert.equal(f.counts().compileCount,1);assert.equal(f.state().revision,request.expectedRevision);
+    assert.equal(f.state().stage.packet_utf8,packet);assert.equal(f.state().stage.state,'UNSUBMITTED');
+    assert.equal(f.state().projection,null);await seeded.p.close();checks.push(name+' refuses without replacement candidate or committed prefix');
+  }
+  const unpublished=fixture({unpublished:true}),unpublishedPlane=unpublished.makePlane();
+  await assert.rejects(unpublished.run(unpublishedPlane,'previewVacancyRosterSlot'),{code:'static_weekly_control_plane_current_publication_required'});
+  assert.equal(unpublished.counts().compileCount,0);assert.equal(unpublished.counts().mutationCount,0);
+  assert.equal(unpublished.counts().stageCount,0);assert.equal(unpublished.state().revision,request.expectedRevision);
+  await unpublishedPlane.close();checks.push('unpublished vacancy refuses before prepare, writer or staged candidate');
+  const lostReply=fixture(),lostSeed=await seed(lostReply);lostReply.controls.commitReplyLost=true;
+  await assert.rejects(lostReply.run(lostSeed.p,'vacateRosterSlot',{previewDigest:preview.previewDigest}),
+    {code:'static_weekly_control_plane_database_unavailable'});
+  assert.equal(lostReply.counts().compileCount,1);assert.equal(lostReply.counts().consumes,1);
+  assert.equal(lostReply.state().stage.state,'CONSUMED');assert.equal(lostReply.state().revision,request.expectedRevision+2);
+  assert.ok(lostReply.state().projection);await lostSeed.p.close();
+  checks.push('lost commit reply stays unknown to caller even when recording fixture committed; no automatic compile or writer retry');
+  const failedStage=fixture({stageFailure:true}),failedPlane=failedStage.makePlane();
+  await assert.rejects(failedStage.run(failedPlane,'previewVacancyRosterSlot'),{code:'23505'});
+  assert.equal(failedStage.state().stage,null);assert.equal(failedStage.state().revision,request.expectedRevision);
+  await failedPlane.close();checks.push('stage collision rolls back private preview and hypothetical roster completely');
+  const interrupted=fixture({deferred:true}),interruptedPlane=interrupted.makePlane(),controller=new AbortController();
+  const active=interrupted.run(interruptedPlane,'previewVacancyRosterSlot',{},controller);
+  const failed=assert.rejects(active,{code:'static_weekly_recurring_operation_aborted'});
+  await interrupted.entered;controller.abort();await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(interrupted.counts().releaseCount,0);assert.equal(interrupted.counts().stageCount,0);
+  interrupted.settle();await failed;assert.equal(interrupted.counts().releaseCount,1);
+  assert.equal(interrupted.state().stage,null);assert.equal(interrupted.state().revision,request.expectedRevision);
+  await interruptedPlane.close();checks.push('abort retains transaction/client until original prepare settles, then rolls back with no retained or accepted prefix');
+  return {classification:'RECORDING_CLIENT_SOURCE_ONLY_COMPLETED_CAPTURE_INPUTS',checks,
+    originalPreviewDigest:preview.previewDigest,actualSecondPreparationIdentity:second.projection.envelope.database_projection_identity,
+    SQL:false,HTTP:false,solver:false};
+}
+
+if (!new URL(import.meta.url).searchParams.has('reviewedVacancyMember')) {
+const openingActual=loadOpeningCoverageFixture().baseline;
 
 const root = resolve(new URL("..", import.meta.url).pathname);
 const controlPlaneSource = readFileSync(resolve(root, "src/static-weekly-control-plane.js"), "utf8");
@@ -19,19 +228,19 @@ const ordinaryApiSource = readFileSync(resolve(root, "src/index.js"), "utf8");
 
 assert.doesNotMatch(controlPlaneSource, /STATIC_WEEKLY_AUTHORITY_ATTESTATION_SECRET|createHmac\s*\(/, "the control plane must never hold an application HMAC secret");
 assert.match(controlPlaneSource, /set local role static_weekly_control_plane/, "all database authority calls must enter the constrained control-plane role");
-assert.equal(STATIC_WEEKLY_DATABASE_OPERATION_STATEMENT_TIMEOUT_MS, 120_000, "production-sized signed schedule validation receives one bounded database statement budget inside the overall request deadline");
+assert.equal(STATIC_WEEKLY_DATABASE_OPERATION_STATEMENT_TIMEOUT_MS, 60_000, "one SQL statement cannot exceed the owner's absolute minute; recurring requests further shrink each statement to the remaining time");
 assert.doesNotMatch(controlPlaneSource, /static_weekly_v2_/, "the control plane may invoke only the v3 authority boundary");
 assert.match(controlPlaneSource, /static_weekly_v3_read_authority_source/, "first-publication drafts must load a release-registered source of record server-side");
 assert.match(controlPlaneSource, /source\.source_id/, "draft creation must bind the immutable server-side source identity to PostgreSQL");
 assert.match(controlPlaneSource, /compileAndPrepareStaticWeeklyScheduleIsolated/, "production must isolate both compilation and database-adapter preparation so the transaction owner can keep its database lease alive");
-assert.match(runtimeSource, /requireManagerWrite, namedManager/, "every scheduler mutation route must require a trusted named manager writer");
-assert.match(runtimeSource, /\/static-weekly\/manager-snapshot[^\n]+requireManagerWrite, namedManager/, "the scheduler snapshot must use the same current named-manager association gate as mutations");
+assert.match(runtimeSource, /requireManagerWrite, namedManager/, "owner-only scheduler mutations retain the full owner gate");
+assert.match(runtimeSource, /\/static-weekly\/manager-snapshot[^\n]+requireManagerRead, namedReadManager/, "the scheduler snapshot must use the same current named-manager association gate as mutations");
 assert.match(runtimeSource, /\/static-weekly\/drafts\/initial/, "the separately deployed control plane must expose a deployable first-draft path without accepting source facts");
 assert.match(runtimeSource, /\/static-weekly\/drafts\/:versionId\/refresh[^\n]+requireManagerWrite, namedManager/, "a roster change before first publication must refresh the same draft through the trusted named-manager boundary");
 assert.match(runtimeSource, /\/static-weekly\/employees\/departed/, "the control plane must expose one bounded departure transaction");
 assert.match(runtimeSource, /\/static-weekly\/employees\/replacements/, "the control plane must expose one bounded fresh-start replacement transaction");
 assert.match(runtimeSource, /\/static-weekly\/rebuild-current-projection/, "the control plane must expose the named rebuild-only recovery command");
-assert.match(runtimeSource, /\/static-weekly\/day-changes\/batch[^\n]+requireManagerWrite, namedManager/, "the bounded daily batch route must require a trusted named manager writer");
+assert.match(runtimeSource, /\/static-weekly\/day-changes\/batch[^\n]+requireManagerAbsence, namedSchedulerManager/, "the bounded daily batch route must require a trusted named manager writer");
 assert.match(controlPlaneSource, /async applyDayChanges\(/, "the control plane must own the daily batch transaction rather than split it across HTTP requests");
 assert.match(controlPlaneSource, /pg_advisory_xact_lock\(pg_catalog\.hashtextextended\(\$1,0\)\)/, "the outer batch must acquire the database transaction lock before starting the receipt-gate statement snapshot");
 assert.match(controlPlaneSource, /dayChangeOperationIdempotencyKey/, "daily batch child mutations must use deterministic idempotency keys");
@@ -45,7 +254,7 @@ assert.throws(() => createStaticWeeklyControlPlane({ database: { connect() {} },
 assert.throws(() => createStaticWeeklyControlPlane({ database: { connect() {} }, operationStatementMilliseconds: 180_001 }), /statement_deadline_invalid/, "the production statement budget remains bounded below the outer request deadline");
 
 const solverIdentity = { package: "highs@1.15.2" };
-const manager = { manager_id: "10000000-0000-4000-8000-000000000001", manager_display_name: "Named Manager", auth_mode: "trusted_device", trusted_device: true, read_only: false };
+const manager = { manager_id: "10000000-0000-4000-8000-000000000001", manager_display_name: "Named Manager", auth_mode: "trusted_device", trusted_device: true, read_only: false,access_level:"full_access",credential_id:"11000000-0000-4000-8000-000000000001",device_id:"synthetic-control-owner",permissions:{schema:"custodial.manager-permissions.v1",read:true,owner:true,manage_absences:true,manage_coverall:true,regenerate_routes:true} };
 const authoritySourceId = "50000000-0000-4000-8000-000000000001";
 const publicationId = "70000000-0000-4000-8000-000000000001";
 const versionId = "60000000-0000-4000-8000-000000000001";
@@ -73,7 +282,7 @@ const acceptedProjection = await compileStaticWeeklySchedule(compilerInput());
 assert.equal(acceptedProjection.status, "FEASIBLE", "the control-plane transaction test needs one independently accepted projection");
 assert.equal(acceptedProjection.verifier.ok, true);
 
-function createAuthorityDatabase({ revision: initialRevision = 0, failMutationAt = null, failHeartbeatAt = null, heartbeatDelayMs = 0, failLunch = false, lunchReadOverride = null, completedVacancy = null, priorVacancy = null, priorRoster = null, completedRoster = null, published = true } = {}) {
+function createAuthorityDatabase({ revision: initialRevision = 0, failReconciliation = false, failMutationAt = null, failHeartbeatAt = null, heartbeatDelayMs = 0, failLunch = false, lunchReadOverride = null, completedVacancy = null, priorVacancy = null, priorRoster = null, completedRoster = null, published = true, generationValues = [0], previewSourceTransform = value => value } = {}) {
   const queries = [];
   const materializations = new Map();
   const projectionSnapshots = new Map();
@@ -85,6 +294,7 @@ function createAuthorityDatabase({ revision: initialRevision = 0, failMutationAt
   let commits = 0;
   let mutationAttempts = 0;
   let heartbeatAttempts = 0;
+  let generationReads = 0;
   const source = {
     source_id: authoritySourceId,
     compiler_input: {
@@ -108,6 +318,12 @@ function createAuthorityDatabase({ revision: initialRevision = 0, failMutationAt
         transactionState = { revision, projection, materializations: new Map(materializations), projectionSnapshots: new Map(projectionSnapshots), mutations: new Map(mutations) };
         return { rows: [] };
       }
+      if (statement.includes("static_weekly_v21_reconcile_dependency_changes")) {
+        if (failReconciliation) throw new Error('synthetic dependency reconciliation failure');
+        return {rows:[{result:{
+        authorityRevision: revision, processedChangeCount: 0, invalidations: [], blockedPublications: [], affectedPhonesUpdated: false,
+        }}]};
+      }
       if (statement === "commit") { commits += 1; transactionState = null; return { rows: [] }; }
       if (statement === "rollback") {
         revision = transactionState.revision;
@@ -130,6 +346,9 @@ function createAuthorityDatabase({ revision: initialRevision = 0, failMutationAt
         return { rows: [{ result: { replayed: true, response: { ...materialized, operation: "apply_day_changes", data: { ...materialized.data, current_projection: projectionSnapshots.get(projectionKey(parent)), mutations: children.map((item) => item.data) } } } }] };
       }
       if (statement.includes("static_weekly_v3_read_authority_source")) return { rows: [{ result: source }] };
+      if (statement.includes("static_weekly_v15_read_recurring_generation")) return { rows: [{ result: generationValues[Math.min(generationReads++, generationValues.length - 1)] }] };
+      if (statement.includes("static_weekly_sch022_preview_witness")) return { rows: [{ result: "9".repeat(64) }] };
+      if (statement.includes("static_weekly_v20_read_recurring_preview_basis")) return { rows: [{ result: previewSourceTransform({...source,authority_revision:revision}) }] };
       if (statement.includes("static_weekly_v3_read_publication_source")) return { rows: [{ result: source }] };
       if (statement.includes("static_weekly_v3_read_manager_snapshot")) return { rows: [{ result: { schema: "memphis-zoo.static-weekly-manager-snapshot.v1", week_start: values[0], authority_revision: revision, current_publication: published ? { publication_id: publicationId, version_id: versionId } : null, projection_status: projection ? "current" : "missing", latest_projection: projection } }] };
       if (statement.includes("static_weekly_v3_publish_draft")) { revision = values[2] + 1; return { rows: [{ result: { revision, data: { publication_id: publicationId, version_id: versionId, effective_start: "2026-10-05" } } }] }; }
@@ -512,10 +731,10 @@ const applied = await controlPlane.applyException({
 });
 assert.equal(applied.revision, 2, "a successful staffing mutation returns the final projection revision");
 assert.equal(applied.data.current_projection.projection_id, "projection-2", "a successful staffing mutation returns the current projection");
-assert.deepEqual(authority.queries.map((entry) => entry.statement), ["begin", "set local role static_weekly_control_plane", "set local statement_timeout = '120000ms'", "select public.custodial_begin_application_mutation()", "select public.static_weekly_v3_apply_exception($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) as result", "select public.static_weekly_v3_read_publication_source($1,$2) as result", "select public.static_weekly_v3_materialize_projection($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) as result", "select public.static_weekly_v8_materialize_lunch_document($1,$2,$3) as result", "select public.static_weekly_v3_read_manager_snapshot($1) as result", "commit"], "a generation fence, mutation, canonical compile, current projection, and confirmation share one bounded transaction");
-assert.equal(authority.queries[4].values[9], manager.manager_id, "the trusted manager ID is the only actor value passed to PostgreSQL");
-assert.equal(authority.queries[4].values.includes(manager.manager_display_name), false, "PostgreSQL must derive the actor name from its manager registry");
-assert.match(authority.queries[6].values[10], /^projection-[0-9a-f]{64}$/, "the projection subcommand uses a derived idempotency key");
+assert.deepEqual(authority.queries.map(entry=>entry.statement),["begin", "set local role static_weekly_control_plane", "set local statement_timeout = '60000ms'", "select public.custodial_begin_application_mutation()", "select pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended($1,0))", "select public.custodial_authorize_absence_operations_v1($1,$2,$3,$4,$5,$6,$7) as result", "select public.static_weekly_v4_begin_day_changes($1,$2,$3,$4,$5,$6,$7,$8) as result", "select public.static_weekly_v3_read_publication_source($1,$2) as result", "select public.static_weekly_v3_apply_exception($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) as result", "select public.static_weekly_v3_read_publication_source($1,$2) as result", "select public.static_weekly_v3_materialize_projection($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) as result", "select public.static_weekly_v8_materialize_lunch_document($1,$2,$3) as result", "select public.static_weekly_v3_read_manager_snapshot($1) as result", "select public.custodial_authorize_absence_operations_v1($1,$2,$3,$4,$5,$6,$7) as result", "select public.static_weekly_v21_reconcile_dependency_changes($1) as result", "commit"],"one original generation fence, authority lock, current delegated checks before and after, complete-action receipt, mutation, lunch and projection share one transaction");
+assert.equal(authority.queries.find(q=>q.statement.includes("static_weekly_v3_apply_exception")).values[9], manager.manager_id, "the trusted manager ID is the only actor value passed to PostgreSQL");
+assert.equal(authority.queries.find(q=>q.statement.includes("static_weekly_v3_apply_exception")).values.includes(manager.manager_display_name), false, "PostgreSQL must derive the actor name from its manager registry");
+assert.match(authority.queries.find(q=>q.statement.includes("static_weekly_v3_materialize_projection")).values[10], /^projection-[0-9a-f]{64}$/, "the projection subcommand uses a derived idempotency key");
 
 const contractor = await controlPlane.applyContractorCapacity({
   manager, serviceDate: "2026-10-06", baseVersionId: versionId, publicationId, slotId: contractorSlot,
@@ -594,7 +813,7 @@ assert.deepEqual(dayChangesReplay, dayChanges, "replaying an accepted daily batc
 assert.equal(dayChangesAuthority.mutationAttempts(), 3, "replaying a daily batch does not apply any child mutation again");
 assert.equal(dayChangesAuthority.revision(), 4, "replaying a daily batch does not advance authority revision");
 const replayQueries = dayChangesAuthority.queries.slice(dayChangesAuthority.queries.findLastIndex((entry) => entry.statement === "begin"));
-assert.deepEqual(replayQueries.map((entry) => entry.statement), ["begin", "set local role static_weekly_control_plane", "set local statement_timeout = '120000ms'", "select public.custodial_begin_application_mutation()", "select pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended($1,0))", "select public.static_weekly_v4_begin_day_changes($1,$2,$3,$4,$5,$6,$7,$8) as result", "commit"], "accepted whole-action replay is generation-fenced, authority-locked, and stops before mutable publication authority is reread");
+assert.deepEqual(replayQueries.map((entry) => entry.statement), ["begin", "set local role static_weekly_control_plane", "set local statement_timeout = '60000ms'", "select public.custodial_begin_application_mutation()", "select pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended($1,0))", "select public.custodial_authorize_absence_operations_v1($1,$2,$3,$4,$5,$6,$7) as result", "select public.static_weekly_v4_begin_day_changes($1,$2,$3,$4,$5,$6,$7,$8) as result", "select public.static_weekly_v21_reconcile_dependency_changes($1) as result", "commit"], "accepted whole-action replay is generation-fenced and authority-locked; its immutable receipt is preserved and current future validity is checked before commit");
 
 const invalidDayChangesAuthority = createAuthorityDatabase();
 await assert.rejects(() => controlPlaneFor(invalidDayChangesAuthority).applyDayChanges({
@@ -633,8 +852,250 @@ const snapshotAuthority = createAuthorityDatabase({ revision: 7 });
 const snapshotControlPlane = controlPlaneFor(snapshotAuthority);
 const snapshot = await snapshotControlPlane.getManagerSnapshot({ manager, weekStart: "2026-10-05" });
 assert.equal(snapshot.authority_revision, 7);
-assert.deepEqual(snapshotAuthority.queries.map((entry) => entry.statement), ["begin", "set local role static_weekly_control_plane", "set local statement_timeout = '120000ms'", "select public.custodial_begin_application_mutation()", "select public.static_weekly_v3_read_manager_snapshot($1) as result", "commit"]);
+assert.deepEqual(snapshotAuthority.queries.map((entry) => entry.statement), ["begin", "set local role static_weekly_control_plane", "set local statement_timeout = '60000ms'", "select public.custodial_begin_application_mutation()", "select public.static_weekly_v3_read_manager_snapshot($1) as result", "commit"]);
 await assert.rejects(() => snapshotControlPlane.getManagerSnapshot({ manager, weekStart: "2026-10-06" }), /Monday-aligned/i, "projection workflows reject non-Monday week identity before a transaction starts");
+
+const previewAuthority = createAuthorityDatabase({ revision: 7 });
+let previewBasis = null;
+const { RECURRING_DECISION_SCHEMA, RECURRING_IMPLEMENTATION_DIGEST } = await import('../src/static-weekly-recurring-preview.js');
+// The injected candidate is a transaction-boundary mock, not a solver proof.
+// Mirror only the sibling shape that CP must bind; the separate owning test
+// exercises construction from fresh seven-day terminal evidence.
+const syntheticSiblingFor=candidate=>{
+ const body={schema:RECURRING_WEEK_COMMITMENT_SCHEMA,status:'PROVEN_CANDIDATE_ONLY',
+  scope:'EXACT_SELECTED_POST0945_NORMAL_WEEK_MORNING_FROM_BOUND_INPUT_FIXED',
+  sourceId:candidate.sourceId,publicationId:candidate.publicationId,
+  authorityRevision:candidate.authorityRevision,effectiveWeek:candidate.effectiveDate,
+  publishedSourceDigest:candidate.publishedSourceDigest,
+  managerSnapshotDigest:candidate.managerSnapshotDigest,
+  readbackPatternDigest:candidate.readbackPatternDigest,
+  fullNineSourceDigest:candidate.fullNineSourceDigest,
+  sourceDigest:'1'.repeat(64),sourceBasisDigest:candidate.phaseSourceBasisDigest,
+  sourceSqlDigest:'2'.repeat(64),configDigest:'3'.repeat(64),
+  finalPatternDigest:candidate.patternFingerprint,
+  fullOwnersDigest:'4'.repeat(64),componentLedgerDigest:COMPONENT_WEIGHT_LEDGER_DIGEST,
+  implementationDigest:RECURRING_IMPLEMENTATION_DIGEST,
+  finalSourceDigest:'5'.repeat(64),finalSourceSqlDigest:candidate.candidateSourceDigest,
+  days:Array.from({length:7},(_,dayOfWeek)=>({dayOfWeek,
+   descriptorDigest:'6'.repeat(64),originalLowerBoundDescriptorDigest:'7'.repeat(64),
+   originalSolverSourceDigest:'9'.repeat(64),freshCanonicalSourceBasisDigest:'a'.repeat(64),
+   unchangedRelaxationDayFactsDigest:'b'.repeat(64),unchangedRelaxationDescriptorDigest:'c'.repeat(64),
+   minimumDoubledSpread:1,preferenceCost:4,stableIdentity:[0],selectedOwnership:[{workId:'synthetic',slotId:'synthetic'}],
+   terminalOptima:['raw_spread','inherited_preference','inherited_identity_0'].map((name,index)=>({name,
+    modelDigest:'d'.repeat(64),lpDigest:'e'.repeat(64),objectiveValue:index===0?1:index===1?4:0})),
+   finalCanonicalWitnessDigest:'8'.repeat(64)})),
+  canonicalHard:{modelBasisDigest:'d'.repeat(64),hardConstraintDigest:'e'.repeat(64),
+   hardConstraintCount:1,witnessDigest:'8'.repeat(64)},
+  completeCompiler:{compilerVersion:candidate.compilerVersion,canonicalInputDigest:'f'.repeat(64),modelBasisDigest:candidate.modelBasisDigest,
+   finalWitnessDigest:candidate.finalWitnessDigest,assignmentDigest:candidate.assignmentWitnessDigest,
+   weeklyAssignmentsDigest:candidate.weeklyAssignmentsDigest},
+  normalMorningOptimumClaim:false,datedPriorityChange:false,physicalMinuteFeasibilityClaim:false,
+  admitted:false,published:false};
+ return {...body,digest:contentDigest(body)};
+};
+const syntheticMorningSiblingFor=candidate=>{
+ const late=candidate.weekCommitment;
+ const facts={sourceBasisDigest:'a'.repeat(64),originalSourceDigest:candidate.publishedSourceDigest,
+  candidateSourceDigest:late.sourceDigest,targetEffectiveDate:candidate.effectiveDate,
+  targetCalendarReceiptDigest:'b'.repeat(64),
+  days:Array.from({length:7},(_,dayOfWeek)=>({dayOfWeek,contractDigest:'c'.repeat(64),metrics:{coverage:[0]},
+   selection:[{workId:`synthetic-morning-${dayOfWeek}`,slotId:'synthetic'}],
+   terminalOptima:Array.from({length:6},(_,index)=>({name:`synthetic-${index}`,
+    modelDigest:'d'.repeat(64),lpDigest:'e'.repeat(64),primitiveObjective:0,originalObjective:0}))}))};
+ const body={schema:'custodial.recurring-morning-combined-commitment.v1',scope:RECURRING_MORNING_SCOPE,
+  status:'PROVEN_CANDIDATE_ONLY',sourceId:candidate.sourceId,publicationId:candidate.publicationId,
+  authorityRevision:candidate.authorityRevision,effectiveWeek:candidate.effectiveDate,
+  publishedSourceDigest:candidate.publishedSourceDigest,managerSnapshotDigest:candidate.managerSnapshotDigest,
+  readbackPatternDigest:candidate.readbackPatternDigest,originalMorningSourceDigest:facts.originalSourceDigest,
+  morningSourceBasisDigest:facts.sourceBasisDigest,originalMorningSourceSqlDigest:candidate.publishedSourceDigest,
+  targetCalendarReceiptDigest:facts.targetCalendarReceiptDigest,targetEffectiveDate:candidate.effectiveDate,
+  originalCalendarHeaderDigest:'f'.repeat(64),targetCalendarHeaderDigest:'f'.repeat(64),originalDatedOverlayCount:0,
+  datedOverlaysRetainedInOriginalOnly:true,recurringRowsAnchorsAvailabilityAndHistoryPreserved:true,
+  morningFacts:facts,morningFactsDigest:contentDigest(facts),morningCandidateSourceDigest:late.sourceDigest,
+  phaseSourceBasisDigest:late.sourceBasisDigest,lateCommitmentDigest:late.digest,
+  finalSourceDigest:late.finalSourceDigest,finalSourceSqlDigest:candidate.candidateSourceDigest,
+  finalCanonicalWitnessDigest:late.canonicalHard.witnessDigest,sharedMorningAdmissionBudgetMs:30000,
+  originalAnchorsPreserved:true,originalLateReferencePreserved:true,sourceRequiredPlannedMorningOptimum:true,
+  openingReadinessProven:false,physicalMinuteFeasibilityClaim:false,acceptedStaticChanged:false,
+  datedPriorityChange:false,admitted:false,published:false};
+ return {...body,digest:contentDigest(body)};
+};
+const recurringMockCandidate = (basis) => {
+  const decision = { schema: RECURRING_DECISION_SCHEMA, implementationDigest: RECURRING_IMPLEMENTATION_DIGEST,
+    effectiveDate: basis.effectiveDate, compilerVersion: 'synthetic-recurring-compiler',
+    candidateSourceDigest: postgresJsonbContentDigest(openingActual.source),
+    recurringAvailabilityDigest: postgresJsonbContentDigest(openingActual.source.version.slotAvailability),
+    geographyDigest: postgresJsonbContentDigest(openingActual.source.proximity),
+    assignments: structuredClone(openingActual.result.assignments),
+    gaps: { open: structuredClone(openingActual.result.assignments.filter(r=>openingActual.result.open.includes(r.planWorkId))), review: [] },
+    fixedLunch: { loans: structuredClone(openingActual.result.lunch.loans), responsibilities: structuredClone(openingActual.result.lunch.responsibilities),
+      notificationIntents: structuredClone(openingActual.result.lunch.notification_intents) },
+    shiftEnd: null, metrics: structuredClone(openingActual.result.metrics), changes: [] };
+  const candidate={ status: "CANDIDATE_ONLY", compilerStatus: "FEASIBLE",
+  weekOptimizationScope:RECURRING_PHASE_SCOPE,staffedPositions:7,sourcePatternKind:'UNSPLIT',
+  publicationAuthority: "ACCEPTABLE", verifierOk: true, reviewWorkCount: 0,
+  sourceId: basis.publishedSource.source_id, publicationId: basis.publishedSource.publication_id,
+  authorityRevision: basis.expectedRevision,
+  publishedSourceDigest: postgresJsonbContentDigest(basis.publishedSource.compiler_input),
+  managerSnapshotDigest: postgresJsonbContentDigest(basis.managerSnapshot),
+  fullNineSourceDigest: basis.fullNineSource
+    ? postgresJsonbContentDigest(basis.fullNineSource.compiler_input) : null,
+  candidateSourceDigest: decision.candidateSourceDigest, readbackPatternDigest: "c".repeat(64),
+  phaseSourceBasisDigest: "4".repeat(64),
+  modelBasisDigest: "d".repeat(64), assignmentWitnessDigest: "e".repeat(64),
+  finalWitnessDigest: "f".repeat(64), weeklyAssignmentsDigest: postgresJsonbContentDigest(decision.assignments),
+  metricsDigest: postgresJsonbContentDigest(decision.metrics), lunchFactsDigest: postgresJsonbContentDigest(decision.fixedLunch),
+  openWorkDigest: postgresJsonbContentDigest(decision.gaps.open), shiftEndDerivationDigest: postgresJsonbContentDigest(decision.shiftEnd),
+  effectiveDate: basis.effectiveDate, compilerVersion: decision.compilerVersion,
+  decision, decisionDigest: postgresJsonbContentDigest(decision),
+  lunchLoanCount: decision.fixedLunch.loans.length, openWorkCount: decision.gaps.open.length, patternFingerprint: "b".repeat(64),
+  changes: [], registrationRequired: true, managerConfirmationRequired: true };
+  candidate.weekCommitment=syntheticSiblingFor(candidate);
+  candidate.morningOptimizationScope=RECURRING_MORNING_SCOPE;
+  candidate.morningSourceBasisDigest='a'.repeat(64);
+  candidate.morningCommitment=syntheticMorningSiblingFor(candidate);
+  candidate.openingCoverageReport=createOpeningCoverageReport({source:openingActual.source,assignments:decision.assignments,
+    lunch:openingActual.result.lunch,context:{publicationId:candidate.publicationId,authorityRevision:candidate.authorityRevision},
+    decisionDigest:candidate.decisionDigest});return candidate;
+};
+const previewControlPlane = controlPlaneFor(previewAuthority, async () => acceptedProjection, {
+  recurringCandidatePreparer: async (basis) => {
+    previewBasis = basis;
+    return recurringMockCandidate(basis);
+  },
+});
+const recurringPreview = await previewControlPlane.previewRecurringStaffing({ manager,
+  effectiveStart: "2026-10-05", expectedRevision: 7 });
+assert.equal(recurringPreview.status, "CANDIDATE_ONLY");
+assert.equal(recurringPreview.source, "AUTHENTICATED_MANAGER_READBACK");
+assert.equal(recurringPreview.published, false);
+assert.equal(recurringPreview.recurringGeneration, 0);
+assert.equal(recurringPreview.morningOptimizationScope,RECURRING_MORNING_SCOPE,
+  'synthetic preview includes the current mandatory morning-chain scope');
+assert.equal(recurringPreview.morningCommitment.lateCommitmentDigest,recurringPreview.weekCommitment.digest,
+  'the synthetic morning-chain sibling binds the complete late sibling');
+assert.match(recurringPreview.previewDigest, /^[a-f0-9]{64}$/);
+assert.equal(previewBasis.publishedSource.publication_id, publicationId);
+assert.equal(previewBasis.managerSnapshot.authority_revision, 7);
+assert.equal(previewAuthority.queries.filter((entry) => entry.statement.includes("static_weekly_v3_read_manager_snapshot")).length, 2,
+  "preview rechecks the authority revision after the isolated solve");
+assert.equal(previewAuthority.commits(), 2, "preview performs only two completed read transactions");
+assert.equal(previewAuthority.mutationAttempts(), 0);
+for(const mutate of [candidate=>delete candidate.weekCommitment,
+ candidate=>delete candidate.morningCommitment,
+ candidate=>{candidate.morningCommitment.finalSourceSqlDigest='0'.repeat(64);
+  const {digest,...body}=candidate.morningCommitment;candidate.morningCommitment.digest=contentDigest(body);},
+ candidate=>{candidate.weekCommitment.days[0].descriptorDigest='0'.repeat(64);},
+ candidate=>{candidate.weekCommitment.sourceId='70000000-0000-4000-8000-000000000999';
+  const {digest,...body}=candidate.weekCommitment;candidate.weekCommitment.digest=contentDigest(body);}]){
+ const denied=controlPlaneFor(createAuthorityDatabase({revision:7}),async()=>acceptedProjection,
+  {recurringCandidatePreparer:async basis=>{const candidate=recurringMockCandidate(basis);mutate(candidate);return candidate;}});
+ await assert.rejects(()=>denied.previewRecurringStaffing({manager,effectiveStart:'2026-10-05',expectedRevision:7}),
+  /complete manager decision/,'missing or forged semantic sibling cannot preview');
+ await denied.close();
+}
+const repairPatternId='70000000-0000-4000-8000-000000000882';
+const repairContext={schema:'static-weekly.recurring-repair-basis.v1',state:'REPLACING_INVALID_FUTURE',
+ effectivePublicationId:publicationId,patternPublicationId:repairPatternId,patternSourceId:authoritySourceId,
+ patternSourceDigest:'d'.repeat(64),effectiveStart:'2026-10-05',authorityRevision:7,
+ invalidations:[{invalidationId:'80000000-0000-4000-8000-000000000882',authorityRevision:7,
+ effectiveStart:'2026-10-05',effectiveEnd:null,reasonCode:'ROSTER_DEPENDENCY_CHANGED'}],
+ managerConfirmationRequired:true,published:false};
+const repairTransform=value=>({...value,publication_id:repairPatternId,repair_context:repairContext,
+ repair_context_digest:postgresJsonbContentDigest(repairContext)});
+const repairCandidate=basis=>{const c={...recurringMockCandidate(basis),publicationId,patternPublicationId:repairPatternId,
+ repairContext:structuredClone(basis.publishedSource.repair_context),repairContextDigest:basis.publishedSource.repair_context_digest};
+ c.weekCommitment=syntheticSiblingFor(c);
+ c.morningCommitment=syntheticMorningSiblingFor(c);
+ c.openingCoverageReport=createOpeningCoverageReport({source:openingActual.source,assignments:c.decision.assignments,
+  lunch:openingActual.result.lunch,context:{publicationId,authorityRevision:c.authorityRevision},decisionDigest:c.decisionDigest});return c;};
+const repairDatabase=createAuthorityDatabase({revision:7,previewSourceTransform:repairTransform});
+const repairPlane=controlPlaneFor(repairDatabase,async()=>acceptedProjection,{recurringCandidatePreparer:async basis=>repairCandidate(basis)});
+const repairedPreview=await repairPlane.previewRecurringStaffing({manager,effectiveStart:'2026-10-05',expectedRevision:7});
+assert.equal(repairedPreview.publicationId,publicationId,'repair CAS binds invalidated effective winner');
+assert.equal(repairedPreview.patternPublicationId,repairPatternId,'repair keeps old pattern provenance distinct');
+assert.deepEqual(repairedPreview.repairContext,repairContext);
+assert.equal(repairedPreview.published,false);assert.equal(repairedPreview.affectedPhonesUpdated,false);
+assert.equal(repairDatabase.mutationAttempts(),0);
+assert.ok(!repairDatabase.queries.some(row=>row.statement.includes('static_weekly_v3_read_publication_source')),
+ 'repair uses explicit authenticated basis, never an ordinary fallback to old publication');
+await repairPlane.close();
+for(const mutate of [candidate=>delete candidate.repairContext,
+ candidate=>{candidate.repairContext.patternSourceDigest='e'.repeat(64);candidate.repairContextDigest=postgresJsonbContentDigest(candidate.repairContext);},
+ candidate=>candidate.publicationId=repairPatternId]){
+ const hostile=controlPlaneFor(createAuthorityDatabase({revision:7,previewSourceTransform:repairTransform}),
+  async()=>acceptedProjection,{recurringCandidatePreparer:async basis=>{const c=repairCandidate(basis);mutate(c);return c;}});
+ await assert.rejects(()=>hostile.previewRecurringStaffing({manager,effectiveStart:'2026-10-05',expectedRevision:7}),
+  /complete manager decision|exact source and revision/);
+ await hostile.close();
+}
+const forgedPreviewAuthority = createAuthorityDatabase({ revision: 7 });
+const forgedPreviewControlPlane = controlPlaneFor(forgedPreviewAuthority,
+  async () => acceptedProjection, { recurringCandidatePreparer: async (basis) => ({
+    ...recurringMockCandidate(basis), publishedSourceDigest: "0".repeat(64),
+  }) });
+await assert.rejects(() => forgedPreviewControlPlane.previewRecurringStaffing({ manager,
+  effectiveStart: "2026-10-05", expectedRevision: 7 }),
+  /exact authority inputs and verified decision/,
+  "matching source IDs cannot substitute for the exact immutable source bytes");
+const missingLunchControlPlane = controlPlaneFor(createAuthorityDatabase({ revision: 7 }),
+  async () => acceptedProjection, { recurringCandidatePreparer: async (basis) => ({
+    ...recurringMockCandidate(basis), lunchFactsDigest: null,
+  }) });
+await assert.rejects(() => missingLunchControlPlane.previewRecurringStaffing({ manager,
+  effectiveStart: "2026-10-05", expectedRevision: 7 }),
+  /exact authority inputs and verified decision/,
+  "a preview without verified lunch coverage cannot reach manager confirmation");
+const missingDecisionControlPlane = controlPlaneFor(createAuthorityDatabase({ revision: 7 }),
+  async () => acceptedProjection, { recurringCandidatePreparer: async (basis) => ({
+    ...recurringMockCandidate(basis), decision: null,
+  }) });
+await assert.rejects(() => missingDecisionControlPlane.previewRecurringStaffing({ manager,
+  effectiveStart: "2026-10-05", expectedRevision: 7 }), /complete manager decision/,
+  "opaque hashes without the complete display payload are not a confirmable preview");
+const alteredDecisionControlPlane = controlPlaneFor(createAuthorityDatabase({ revision: 7 }),
+  async () => acceptedProjection, { recurringCandidatePreparer: async (basis) => {
+    const candidate = recurringMockCandidate(basis);
+    candidate.decision.fixedLunch.loans[0].id = 'different-lunch';
+    candidate.decisionDigest = postgresJsonbContentDigest(candidate.decision);
+    return candidate;
+  } });
+await assert.rejects(() => alteredDecisionControlPlane.previewRecurringStaffing({ manager,
+  effectiveStart: "2026-10-05", expectedRevision: 7 }), /complete manager decision/,
+  "a recomputed display digest cannot substitute a different verified lunch result");
+await assert.rejects(() => previewControlPlane.previewRecurringStaffing({ manager,
+  effectiveStart: "2026-10-05", expectedRevision: 6 }), /roster changed before preview/);
+await assert.rejects(() => previewControlPlane.previewRecurringStaffing({ manager,
+  effectiveStart: "2026-10-05", expectedRevision: 7,
+  fullNineSourceId: "33333333-3333-4333-8333-333333333333" }),
+  /exact approved registered source/, "a browser cannot select an unrelated nine-position source");
+const previewRaceAuthority = createAuthorityDatabase({ revision: 9 });
+let previewRaceControlPlane;
+previewRaceControlPlane = controlPlaneFor(previewRaceAuthority, async () => acceptedProjection, {
+  recurringCandidatePreparer: async (basis) => {
+    await previewRaceControlPlane.createVacantRosterSlot({ manager,
+      slotId: "20000000-0000-4000-8000-000000000098", slotLabel: "Synthetic concurrent vacancy",
+      expectedRevision: 9, idempotencyKey: "concurrent-preview-vacancy" });
+    return recurringMockCandidate(basis);
+  },
+});
+await assert.rejects(() => previewRaceControlPlane.previewRecurringStaffing({ manager,
+  effectiveStart: "2026-10-05", expectedRevision: 9 }), /roster changed during preview/,
+"a concurrent accepted roster change invalidates the completed isolated preview");
+
+const generationRaceControlPlane = controlPlaneFor(createAuthorityDatabase({ revision: 7, generationValues: [4, 5] }),
+  async () => acceptedProjection, { recurringCandidatePreparer: async (basis) => recurringMockCandidate(basis) });
+await assert.rejects(() => generationRaceControlPlane.previewRecurringStaffing({ manager,
+  effectiveStart: "2026-10-05", expectedRevision: 7 }), /roster changed during preview/,
+  "semantic employee change invalidates preview even without a global revision change");
+for (const value of [null, undefined, false, '', -1, 1.5, '9007199254740992']) {
+  const unavailable = controlPlaneFor(createAuthorityDatabase({ revision: 7, generationValues: [value] }),
+    async () => acceptedProjection, { recurringCandidatePreparer: async () => assert.fail('missing generation must fail before compilation') });
+  await assert.rejects(() => unavailable.previewRecurringStaffing({ manager,
+    effectiveStart: "2026-10-05", expectedRevision: 7 }), /generation is unavailable/);
+  await unavailable.close();
+}
+await generationRaceControlPlane.close();
 
 const restoreAuthority = createAuthorityDatabase();
 const restoreControlPlane = controlPlaneFor(restoreAuthority);
@@ -647,46 +1108,53 @@ assert.ok(restoreAuthority.queries.some(entry=>entry.statement.includes('static_
  "existing-employee restoration completes projection and lunch without inventing identity or phone assignment");
 assert.equal(restoreAuthority.queries.at(-1).statement,'commit');
 
-const vacateAuthority = createAuthorityDatabase();
-const vacateControlPlane = controlPlaneFor(vacateAuthority);
-const vacateInput = { manager, sourceId: "50000000-0000-4000-8000-000000000093", slotId: "20000000-0000-4000-8000-000000000099", employeeId: "40000000-0000-4000-8000-000000000093", effectiveStart: "2026-10-05", reason: "Position vacant", expectedRevision: 0, idempotencyKey: "vacate-position" };
-const vacated = await vacateControlPlane.vacateRosterSlot(vacateInput);
-assert.equal(vacated.revision, 2, "published-week vacancy returns its verified projection revision");
-assert.equal(vacated.data.replacement_employee_id, null);
-assert.equal(vacated.data.former_employee_id, vacateInput.employeeId);
-const vacancyStatements = vacateAuthority.queries.map(entry => entry.statement);
-assert.ok(vacancyStatements.findIndex(value => value.includes("static_weekly_v3_materialize_projection")) > vacancyStatements.findIndex(value => value.includes("static_weekly_v8_vacate_roster_slot")), "vacancy must refresh the current published projection before committing");
-assert.ok(vacancyStatements.findIndex(value => value.includes("static_weekly_v8_materialize_lunch_document")) < vacancyStatements.lastIndexOf("commit"), "lunch is persisted within the same vacancy transaction");
-assert.ok(vacancyStatements.at(-2).includes("static_weekly_v3_read_manager_snapshot"), "current projection is confirmed before vacancy success");
-assert.equal(vacateAuthority.commits(), 1);
-assert.deepEqual(vacateAuthority.queries.find(entry => entry.statement.includes("static_weekly_v8_vacate_roster_slot")).values, [vacateInput.sourceId, vacateInput.slotId, vacateInput.employeeId, vacateInput.effectiveStart, vacateInput.reason, 0, manager.manager_id, vacateInput.idempotencyKey]);
-await assert.rejects(() => vacateControlPlane.vacateRosterSlot({ ...vacateInput, manager: {} }), /manager/i);
-const failedVacancyAuthority = createAuthorityDatabase({ failLunch: true });
-await assert.rejects(() => controlPlaneFor(failedVacancyAuthority).vacateRosterSlot(vacateInput), /lunch persistence failed/);
-assert.equal(failedVacancyAuthority.commits(), 0, "a failed downstream lunch refresh cannot commit a vacancy or leave other schedules stale");
-assert.equal(failedVacancyAuthority.revision(), 0, "vacancy staffing and projection are rolled back together");
-const originalPublishedVacancy = { revision: 1, data: vacated.data.mutation };
-const completedVacancyAuthority = createAuthorityDatabase({ revision: 2, completedVacancy: vacated, priorVacancy: originalPublishedVacancy });
-const completedVacancyPlane = controlPlaneFor(completedVacancyAuthority, async () => { throw Error("completed vacancy must not recompile"); });
-assert.deepEqual(await completedVacancyPlane.vacateRosterSlot(vacateInput), vacated);
-const completedStatements = completedVacancyAuthority.queries.map(entry => entry.statement);
-assert.ok(completedStatements.findIndex(s => s.includes("static_weekly_v8_vacate_roster_slot")) < completedStatements.findIndex(s => s.includes("static_weekly_v8_read_completed_vacancy")), "full semantic request must be authenticated by writer before completed response lookup");
-assert.ok(!completedStatements.some(s => /static_weekly_v3_read_publication_source|static_weekly_v3_materialize_projection|static_weekly_v8_materialize_lunch_document/.test(s)), "accepted full replay does not reread compiler input or rebuild any immutable proof");
-assert.equal(completedVacancyAuthority.revision(), 2, "replayed writer cannot rewind committed authority");
-const unpublishedVacancyAuthority = createAuthorityDatabase({ published: false });
-const unpublishedVacancy = await controlPlaneFor(unpublishedVacancyAuthority).vacateRosterSlot(vacateInput);
-assert.equal(unpublishedVacancy.data.completion_mode, "mutation_only");
-assert.equal(unpublishedVacancy.data.original_publication_id, null);
-assert.equal(unpublishedVacancy.revision, 1);
-assert.deepEqual(await controlPlaneFor(unpublishedVacancyAuthority).vacateRosterSlot(vacateInput), unpublishedVacancy);
-const nowPublishedVacancyAuthority = createAuthorityDatabase({ revision: 4, priorVacancy: unpublishedVacancy });
-assert.deepEqual(await controlPlaneFor(nowPublishedVacancyAuthority, async () => { throw Error("original mutation-only action must not recompile after publication"); }).vacateRosterSlot(vacateInput), unpublishedVacancy);
-assert.equal(nowPublishedVacancyAuthority.revision(), 4);
-assert.ok(!nowPublishedVacancyAuthority.queries.some(({statement}) => /static_weekly_v3_read_publication_source|static_weekly_v3_materialize_projection|static_weekly_v8_materialize_lunch_document/.test(statement)));
-const missingPublishedCompletion = createAuthorityDatabase({ revision: 1, priorVacancy: originalPublishedVacancy });
-await assert.rejects(controlPlaneFor(missingPublishedCompletion).vacateRosterSlot(vacateInput), /original vacancy completion is missing/);
-assert.equal(missingPublishedCompletion.commits(), 0, "a missing originally required companion is not a mutation-only success");
-assert.equal(missingPublishedCompletion.revision(), 1);
+// The vacancy API now requires a durable reviewed preparation, not a direct
+// writer replay or a mutation-only unpublished success. Keep the real guard.
+const missingPreviewAuthority=createAuthorityDatabase(),missingPreviewPlane=controlPlaneFor(missingPreviewAuthority);
+await assert.rejects(missingPreviewPlane.vacateRosterSlot({manager,sourceId:authoritySourceId,
+  slotId:'20000000-0000-4000-8000-000000000099',employeeId:'40000000-0000-4000-8000-000000000093',
+  effectiveStart:'2026-10-05',reason:'Synthetic vacancy',expectedRevision:0,idempotencyKey:'missing-reviewed-preview'}),
+  {code:'static_weekly_vacancy_reviewed_preview_required'});
+assert.equal(missingPreviewAuthority.queries.length,0,'missing reviewed hash refuses before any SQL');
+await missingPreviewPlane.close();
+// Explicitly synthetic complete fixtures use the same normal compiler,
+// projection/lunch adapter and strict pure preview producer. No SQL/MAIN or
+// live roster qualification is claimed by this recording-client member.
+const reviewedSlots=['20000000-0000-4000-8000-000000000011','20000000-0000-4000-8000-000000000012'];
+const reviewedPeople=['40000000-0000-4000-8000-000000000011','40000000-0000-4000-8000-000000000012'];
+const replacements={'slot-a':reviewedSlots[0],'person-a':reviewedPeople[0],
+  'location-a':'30000000-0000-4000-8000-000000000011','work-a':'80000000-0000-4000-8000-000000000011',
+  'version-a':versionId,'publication-a':publicationId};
+let reviewedBaseline=JSON.parse(JSON.stringify(compilerInput(),(_key,value)=>typeof value==='string'&&Object.hasOwn(replacements,value)?replacements[value]:value));
+reviewedBaseline.slots.push({...structuredClone(reviewedBaseline.slots[0]),id:reviewedSlots[1],label:'Synthetic retained worker',
+  incumbencies:[{personId:reviewedPeople[1],displayName:'Synthetic retained worker',effectiveStart:'2020-01-01',effectiveEnd:null}]});
+reviewedBaseline.versions[0].slotAvailability.push({...structuredClone(reviewedBaseline.versions[0].slotAvailability[0]),slotId:reviewedSlots[1]});
+reviewedBaseline.versions[0].assignments[0].ownerSlotId=reviewedSlots[1];
+reviewedBaseline.versions[0].vacancyCapableSlotIds=[reviewedSlots[0]];
+reviewedBaseline.versions[0].vacantSlotIds=[];
+const reviewedPost=structuredClone(reviewedBaseline);reviewedPost.slots[0].incumbencies=[];
+reviewedPost.versions[0].vacantSlotIds=[reviewedSlots[0]];
+const reviewedRequest={source_id:authoritySourceId,slot_id:reviewedSlots[0],employee_id:reviewedPeople[0],
+  effective_start:'2026-10-05',reason:'Synthetic reviewed vacancy',expected_revision:0,idempotency_key:'reviewed-vacancy-source-only'};
+const reviewedResult=await compileStaticWeeklySchedule(reviewedPost);
+assert.equal(reviewedResult.status,'FEASIBLE');assert.equal(reviewedResult.verifier.ok,true);
+const reviewedActor={managerId:manager.manager_id,managerName:manager.manager_display_name,idempotencyKey:projectionKey(reviewedRequest.idempotency_key)};
+const reviewedPreparation={kind:'projection',publicationId,expectedRevision:1,actor:reviewedActor};
+const reviewedProjection=()=>createStaticWeeklyProjectionWithLunchRpcInput({result:reviewedResult,publicationId,expectedRevision:1,actor:reviewedActor});
+const reviewedFirst={input:reviewedPost,preparation:reviewedPreparation,projection:reviewedProjection()},
+  reviewedSecond={input:reviewedPost,preparation:reviewedPreparation,projection:reviewedProjection()};
+const reviewedSource=input=>({timezone:input.timezone,slots:structuredClone(input.slots),proximity:structuredClone(input.proximity),version:structuredClone(input.versions[0])});
+const reviewedBefore={body:reviewedRequest,details:{registered_compiler_input:reviewedSource(reviewedBaseline),compiler_input:reviewedSource(reviewedBaseline)}};
+const reviewedPreview=createVacancyManagerPreview({managerId:manager.manager_id,sourceId:authoritySourceId,
+  slotId:reviewedRequest.slot_id,employeeId:reviewedRequest.employee_id,effectiveStart:reviewedRequest.effective_start,
+  weekStart:'2026-10-05',expectedRevision:0,idempotencyKey:reviewedRequest.idempotency_key,
+  reasonDigest:createHash('sha256').update(reviewedRequest.reason,'utf8').digest('hex'),
+  registeredSourceDigest:postgresJsonbContentDigest(reviewedBefore.details.registered_compiler_input),
+  currentSourceDigest:postgresJsonbContentDigest(reviewedBefore.details.compiler_input),publicationId,projection:reviewedFirst.projection});
+const reviewedProof=await runReviewedVacancyPreparationControlPlaneTests({first:reviewedFirst,second:reviewedSecond,
+  preview:reviewedPreview,before:reviewedBefore,baselineInput:reviewedBaseline});
+assert.ok(reviewedProof.checks.length>=22,'current reviewed vacancy keeps positive, replay, rollback, denial and cleanup cases');
+console.log(JSON.stringify({scope:'SYNTHETIC_COMPLETE_NORMAL_PRODUCER_RECORDING_CLIENT_VACANCY',checks:reviewedProof.checks.length,SQL:false,MAIN_database_claim:false}));
 
 const vacancyAuthority = createAuthorityDatabase();
 const vacancyControlPlane = controlPlaneFor(vacancyAuthority);
@@ -763,3 +1231,4 @@ assert.equal(failedLunchAuthority.commits(),0,"lunch failure must prevent public
 assert.equal(failedLunchAuthority.revision(),0,"lunch failure must roll back base publication and projection");
 assert.equal(failedLunchAuthority.queries.at(-1).statement,"rollback");
 console.log("static weekly control-plane separation tests: PASS");
+}

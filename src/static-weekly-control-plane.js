@@ -1,10 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { types } from "node:util";
-import { MANAGER_OPERATION_MILLISECONDS, CLEANUP_RESERVE_MILLISECONDS } from "./static-weekly-manager-operation.js";
-import { withRecurringDependencyStatus } from "./static-weekly-recurring-dependency-result.js";
-import { postgresJsonbContentDigest } from "./static-weekly-schedule-compiler.js";
-import {prepareApprovedStaticTemplateProjection} from './static-weekly-recurring-staffing-adaptation.js';
-import {prepareStaticWeeklySchedulingProblem} from './static-weekly-schedule-program.js';
+import { hasManagerPermission } from "./auth/manager-permissions.js";
 /*
  * Separately deployed static-weekly scheduler control plane.
  *
@@ -16,8 +12,11 @@ import {prepareStaticWeeklySchedulingProblem} from './static-weekly-schedule-pro
  * request session and the database re-resolves its active display name.
  */
 import { createHash, randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { MANAGER_OPERATION_MILLISECONDS, CLEANUP_RESERVE_MILLISECONDS } from "./static-weekly-manager-operation.js";
 import { assertOwnerRecurringWorkdays } from "./static-weekly-owner-workdays.js";
 import { createCoverAllPrintDocument } from "./static-weekly-coverall-print.js";
+import {listCoverAllEventBriefPreviews,confirmCoverAllEventBrief,revalidateConfirmedCoverAllEventBrief} from './coverall-event-brief.js';
 import { Pool } from "pg";
 import { createStaticWeeklyDraftRpcInput } from "./static-weekly-schedule-database-adapter.js";
 import { createStaticWeeklyProjectionWithLunchRpcInput } from "./static-weekly-lunch-publication.js";
@@ -25,10 +24,26 @@ import { createStaffingCommandRequest } from "./static-weekly-staffing-command.j
 import { createStaffingCandidateSet } from "./static-weekly-staffing-candidates.js";
 import { createStaffingPreparationMeter, enumerateStaffingServiceWindow } from "./static-weekly-staffing-preparation.js";
 import { createStaffingWeekPreviewInput } from "./static-weekly-staffing-preview.js";
+import { createVacancyManagerPreview } from "./static-weekly-vacancy-preview.js";
+import { assertRecurringManagerDecision, assertRecurringAdmissionCandidate } from "./static-weekly-recurring-preview.js";
+import { assertRecurringWeekCommitment } from "./static-weekly-recurring-week-commitment.js";
+import {createRecurringCorrectionBinding,recurringCorrectionWitness,
+  requireMatchingRecurringCorrectionWitness} from './static-weekly-recurring-correction-binding.js';
+import {OPENING_COVERAGE_ERROR,sanitizeOpeningCoverageDiagnostic,assertOpeningCoverageReport} from './static-weekly-opening-coverage-report.js';
+import { recurringPatternAuthority, assertRecurringRepairCandidate } from "./static-weekly-recurring-repair-basis.js";
+import { withRecurringDependencyStatus } from "./static-weekly-recurring-dependency-result.js";
+import { placePublicationInput, placePublicationSummary } from "./place-operational-adapter.js";
+import {capacitySourceBasisSummary,capacitySourcePublicationInput,capacitySourcePreviewSummary} from "./static-weekly-contractor-source-bridge.js";
+import {createContractorCapacityTransitionCandidate} from "./static-weekly-contractor-source-transition.js";
 import { canonicalJson } from "./static-weekly-schedule-model.js";
+import { postgresJsonbContentDigest } from "./static-weekly-schedule-compiler.js";
+import {prepareApprovedStaticTemplateProjection} from './static-weekly-recurring-staffing-adaptation.js';
+import {prepareStaticWeeklySchedulingProblem} from './static-weekly-schedule-program.js';
 import {
   compileAndPrepareStaticWeeklyScheduleIsolated,
   compileStaticWeeklyScheduleIsolated,
+  prepareRecurringCandidateIsolated,
+  prepareRecurringAdmissionCandidateIsolated,
   getStaticWeeklyCompilerReadiness,
   initializeStaticWeeklyCompiler,
   shutdownStaticWeeklyCompiler,
@@ -36,10 +51,13 @@ import {
 } from "./static-weekly-schedule-compiler-runtime.js";
 
 export const STATIC_WEEKLY_CONTROL_PLANE_SCHEMA = "memphis-zoo.static-weekly-control-plane.v1";
-export const STATIC_WEEKLY_DATABASE_OPERATION_STATEMENT_TIMEOUT_MS = 120_000;
+export const STATIC_WEEKLY_DATABASE_OPERATION_STATEMENT_TIMEOUT_MS = 60_000;
 export const STATIC_WEEKLY_MANAGER_OPERATION_DEADLINE_MS = MANAGER_OPERATION_MILLISECONDS;
 export const STATIC_WEEKLY_MANAGER_CLEANUP_RESERVE_MS = CLEANUP_RESERVE_MILLISECONDS;
 const STATIC_WEEKLY_AUTHORITY_LOCK_IDENTITY = "memphis-static-weekly-authority";
+const APPROVED_FULL_NINE_IDENTITY = JSON.parse(readFileSync(new URL(
+  "../config/custodial-full-nine-family-owners-20260926.json", import.meta.url)));
+const APPROVED_FULL_NINE_SOURCE_ID = APPROVED_FULL_NINE_IDENTITY.baseSourceId;
 
 const text = (value) => typeof value === "string" ? value.trim() : "";
 const clone = (value) => JSON.parse(JSON.stringify(value));
@@ -106,9 +124,11 @@ function isDatabaseConnectionFailure(error) {
     || message.includes("timeout exceeded when trying to connect");
 }
 
-function requireManager(manager) {
+function requireManager(manager, options = {}) {
+  const readOnlyOperation = options?.readOnlyOperation === true;
+  const delegated = typeof options === "string" ? options : null;
   const managerId = text(manager?.manager_id || manager?.managerId);
-  if (!managerId || !text(manager?.manager_display_name || manager?.managerName) || manager?.read_only || manager?.auth_mode === "operations_first" || manager?.auth_mode === "admin_api_key") {
+  if (!managerId || !text(manager?.manager_display_name || manager?.managerName) || (!readOnlyOperation && (delegated ? !hasManagerPermission(manager, delegated) : manager?.read_only)) || manager?.auth_mode === "operations_first" || manager?.auth_mode === "admin_api_key") {
     throw fail("static_weekly_named_manager_required", "A trusted, write-enabled named manager session is required.");
   }
   return {
@@ -124,6 +144,22 @@ function requireDate(value, label) {
   const date = text(value);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw fail("static_weekly_control_plane_invalid_date", `${label} must be YYYY-MM-DD.`);
   return date;
+}
+
+// Dated absence authority is delegated, unlike roster/recurring-plan authority.
+// On resumed operations the kind must come from the protected original ledger.
+function requireStaffingManager(manager, commandKind) {
+  if (manager?.read_only !== true) return requireManager(manager);
+  const actor = requireManager(manager, "manage_absences");
+  if (!["absence", "cancel_absence"].includes(commandKind))
+    throw fail("static_weekly_named_manager_required", "This staffing command requires owner authority.");
+  return actor;
+}
+function requireOriginalStaffingManager(manager, command) {
+  const actor = requireStaffingManager(manager, command?.semantic_body?.commandKind);
+  if (manager?.read_only === true && command?.prepared_by_manager_id !== actor.managerId)
+    throw fail("staffing_original_preparer_required", "Resume only this manager's original staffing operation.");
+  return actor;
 }
 
 function requireMonday(value, label) {
@@ -181,6 +217,24 @@ function requireUuid(value, code) {
   return candidate;
 }
 
+function seasonWorkFromAssignments(assignments) {
+  if (!Array.isArray(assignments) || assignments.length > 10000) throw fail("static_weekly_sch022_work_unavailable");
+  return assignments.map((row) => {
+    const work = row?.workSnapshot;
+    if (!work || typeof work !== "object" || !Array.isArray(work.includedLocations)
+      || !text(work.locationCodeSnapshot) || work.includedLocations.length > 256) {
+      throw fail("static_weekly_sch022_work_unavailable", "The exact scheduled work identities are unavailable for seasonal admission.");
+    }
+    return { locationId: work.locationId || null, locationCode: work.locationCodeSnapshot,
+      includedLocationIds: work.includedLocations.map((location) => location?.locationId) };
+  });
+}
+
+function requireSeasonWitness(value) {
+  if (!/^[a-f0-9]{64}$/.test(text(value))) throw fail("static_weekly_sch022_witness_unavailable");
+  return value;
+}
+
 function projectionIdempotencyKey(value) {
   return `projection-${createHash("sha256").update(requireIdempotencyKey(value)).digest("hex")}`;
 }
@@ -236,7 +290,9 @@ function requireDayChangeOperations(value) {
       const slotId = text(entry.slotId || entry.slot_id);
       if (!slotId) throw fail("static_weekly_control_plane_day_changes_invalid", `Day change ${index + 1} requires a contractor slot.`);
       if (entry.shift != null && (!entry.shift || typeof entry.shift !== "object" || Array.isArray(entry.shift))) throw fail("static_weekly_control_plane_day_changes_invalid", `Day change ${index + 1} has an invalid contractor shift.`);
-      return { operation: "cover_all", slotId, shift: entry.shift == null ? null : requireWindow(entry.shift, "contractor shift"), reason };
+      const breakChoice = entry.breakChoice ?? entry.break_choice;
+      if (breakChoice != null && breakChoice !== 'NONE') throw fail('static_weekly_contractor_break_choice_invalid');
+      return { operation: "cover_all", slotId, shift: entry.shift == null ? null : requireWindow(entry.shift, "contractor shift"), reason, ...(breakChoice === 'NONE' ? { breakChoice } : {}) };
     }
     throw fail("static_weekly_control_plane_day_changes_invalid", `Day change ${index + 1} has an unsupported operation.`);
   });
@@ -249,13 +305,14 @@ function requireBatchPublicationSource(source, publicationId, versionId) {
   return source;
 }
 
-function contractorAvailabilityFromSource(source, slotId, serviceDate, requestedShift) {
+function contractorAvailabilityFromSource(source, slotId, serviceDate, requestedShift, breakChoice = null) {
   const raw = source?.compiler_input;
   const id = text(slotId);
   const slot = Array.isArray(raw?.slots) ? raw.slots.find((entry) => text(entry?.id) === id && entry?.contractorCapacity === true) : null;
   const weekday = new Date(`${requireDate(serviceDate, "service date")}T00:00:00Z`).getUTCDay();
   const template = Array.isArray(slot?.contractorAvailability) ? slot.contractorAvailability.find((entry) => entry?.dayOfWeek === weekday) : null;
   if (!slot || !template) throw fail("static_weekly_control_plane_contractor_slot_required", "The selected slot is not registered contractor capacity for this service day.");
+  if (breakChoice === 'NONE' && slot.kind !== 'CONTRACTOR_CAPACITY') throw fail('static_weekly_contractor_no_break_typed_capacity_required');
   const requiredText = (field) => {
     const value = text(template[field]);
     if (!value) throw fail("static_weekly_control_plane_contractor_template_invalid", `Contractor capacity is missing ${field}.`);
@@ -267,6 +324,7 @@ function contractorAvailabilityFromSource(source, slotId, serviceDate, requested
   return {
     slotId: id,
     shift: requireWindow(requestedShift || template.shift, "contractor shift"),
+    ...(breakChoice === 'NONE' ? { breakChoice } : {}),
     productiveCapacityProvenance: requiredText("productiveCapacityProvenance"),
     maxServiceEffortMinutes: effort,
     maxServiceEffortProvenance: requiredText("maxServiceEffortProvenance"),
@@ -354,11 +412,15 @@ export function createStaticWeeklyControlPlaneDatabase({
   caPem = process.env.STATIC_WEEKLY_CONTROL_PLANE_DATABASE_CA_PEM,
   allowInsecureLoopbackRehearsal,
   pool = null,
+  maxConnections = 4,
 } = {}) {
   if (pool) return pool;
+  if (!Number.isSafeInteger(maxConnections) || maxConnections < 1 || maxConnections > 4) {
+    throw fail("static_weekly_control_plane_database_pool_invalid");
+  }
   const database = new Pool({
     ...staticWeeklyDatabaseConnectionOptions({ connectionString, caPem, allowInsecureLoopbackRehearsal }),
-    max: 4,
+    max: maxConnections,
     idleTimeoutMillis: 10_000,
     connectionTimeoutMillis: 10_000,
     application_name: "memphis-static-weekly-control-plane",
@@ -379,6 +441,8 @@ export function createStaticWeeklyControlPlane({
   database,
   compiler = compileStaticWeeklyScheduleIsolated,
   compilerPreparer = compiler === compileStaticWeeklyScheduleIsolated ? compileAndPrepareStaticWeeklyScheduleIsolated : null,
+  recurringCandidatePreparer = prepareRecurringCandidateIsolated,
+  recurringAdmissionPreparer = prepareRecurringAdmissionCandidateIsolated,
   initializeSolver = initializeStaticWeeklyCompiler,
   getSolverReadiness = getStaticWeeklyCompilerReadiness,
   shutdownCompiler = compiler === compileStaticWeeklyScheduleIsolated ? shutdownStaticWeeklyCompiler : async () => {},
@@ -388,8 +452,10 @@ export function createStaticWeeklyControlPlane({
   transactionAdmissionMilliseconds = STATIC_WEEKLY_COMPILER_RUNTIME_LIMITS.requestMilliseconds,
   operationStatementMilliseconds = STATIC_WEEKLY_DATABASE_OPERATION_STATEMENT_TIMEOUT_MS,
   healthTransactionMilliseconds = 5_000,
+  recurringCorrectionSourceBinding = null,
 } = {}) {
   if (!database?.connect) throw fail("static_weekly_control_plane_database_required");
+  const correctionBinding = createRecurringCorrectionBinding(recurringCorrectionSourceBinding);
   if (!Number.isSafeInteger(transactionKeepaliveMs) || transactionKeepaliveMs < 1 || transactionKeepaliveMs > 10_000) {
     throw fail("static_weekly_control_plane_keepalive_invalid");
   }
@@ -402,7 +468,7 @@ export function createStaticWeeklyControlPlane({
   if (!Number.isSafeInteger(transactionAdmissionMilliseconds) || transactionAdmissionMilliseconds < 1) {
     throw fail("static_weekly_control_plane_transaction_deadline_invalid");
   }
-  if (!Number.isSafeInteger(operationStatementMilliseconds) || operationStatementMilliseconds < 30_000 || operationStatementMilliseconds > 180_000) {
+  if (!Number.isSafeInteger(operationStatementMilliseconds) || operationStatementMilliseconds < 30_000 || operationStatementMilliseconds > STATIC_WEEKLY_MANAGER_OPERATION_DEADLINE_MS) {
     throw fail("static_weekly_control_plane_statement_deadline_invalid");
   }
   if (!Number.isSafeInteger(healthTransactionMilliseconds) || healthTransactionMilliseconds < 1 || healthTransactionMilliseconds > 10_000) {
@@ -502,6 +568,34 @@ export function createStaticWeeklyControlPlane({
       () => { if (activeHealthCheck === execution) activeHealthCheck = null; },
     );
     return execution;
+  }
+
+  async function runExternalRecurringOperation({ signal = null, deadlineAt, action }) {
+    if (typeof action !== "function" || !Number.isFinite(deadlineAt)) throw fail("static_weekly_recurring_operation_deadline_invalid");
+    operationRemaining(deadlineAt, signal);
+    let grant, release;
+    const granted = new Promise((resolve) => { grant = resolve; });
+    const held = new Promise((resolve) => { release = resolve; });
+    // This is the SAME three-active/sixteen-queued admission used by every
+    // ordinary authority transaction. A detached child does not gain a
+    // second, parallel concurrency budget or borrow the health slot.
+    const admitted = admitTransaction(async () => { grant(); await held; }, signal);
+    admitted.catch(() => {});
+    await Promise.race([granted, admitted.then(
+      () => { throw fail("static_weekly_control_plane_closing"); },
+      (error) => { throw error; })]);
+    let safeToRelease = true;
+    try {
+      operationRemaining(deadlineAt, signal);
+      return await action();
+    } catch (error) {
+      if (error?.code === "static_weekly_recurring_operation_custody_unknown") safeToRelease = false;
+      throw error;
+    } finally {
+      if (safeToRelease) { release(); await admitted; }
+      // On unproved process-group custody the slot and exact restore lease
+      // remain held. The existing expired-row reconciliation controls recovery.
+    }
   }
 
   function transaction(work, { health = false, reconcileManagerId = null, signal = null, deadlineAt = null, rollbackOnly = false } = {}) {
@@ -652,6 +746,15 @@ export function createStaticWeeklyControlPlane({
     return rows[0]?.result;
   }
 
+  async function authorizeAbsenceOperations(client, manager, serviceDate, publicationId, operations) {
+    return call(client,"custodial_authorize_absence_operations_v1",[
+      manager.manager_id,manager.credential_id,manager.device_id,manager.access_level,
+      serviceDate,publicationId,JSON.stringify(operations)]);
+  }
+  async function authorizeRouteRegeneration(client,manager,weekStart,publicationId) {
+    return call(client,"custodial_authorize_route_regeneration_v1",[
+      manager.manager_id,manager.credential_id,manager.device_id,manager.access_level,weekStart,publicationId]);
+  }
   async function lockStaticWeeklyAuthority(client) {
     await client.query(
       "select pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended($1,0))",
@@ -661,6 +764,37 @@ export function createStaticWeeklyControlPlane({
 
   async function sourceFor(client, publicationId, serviceDate) {
     return call(client, "static_weekly_v3_read_publication_source", [publicationId, serviceDate]);
+  }
+
+  async function acceptedCoverAllDocument(client,{manager,weekStart,serviceDate,expectedRevision,projectionId}){
+    const issuingManager=requireManager(manager,"manage_coverall");
+    const verifiedActor=await call(client,"custodial_action_actor_v1",[
+      manager.manager_id,manager.credential_id,manager.device_id,manager.access_level,"manage_coverall"]);
+    if(verifiedActor?.manager_id!==manager.manager_id)throw fail("42501","Current CoverAll manager identity is required.");
+    const week=requireMonday(weekStart,'week start'),date=requireDateInWeek(serviceDate,week,'service date');
+    const revision=requireRevision(expectedRevision);
+    await lockStaticWeeklyAuthority(client);
+    const snapshot=await snapshotFor(client,week);
+    const source=await sourceFor(client,requirePublicationId(snapshot?.current_publication?.publication_id),date);
+    const lunch=await call(client,'static_weekly_v8_read_lunch_document',[date]);
+    return createCoverAllPrintDocument({snapshot,source,lunch,serviceDate:date,expectedRevision:revision,projectionId:text(projectionId),issuingManager});
+  }
+  function coverAllWithBriefs(document,briefs){
+    if(!briefs.length)return document;
+    const {documentDigest,...base}=document;
+    const next={...base,baseDocumentDigest:documentDigest,eventBriefs:briefs};
+    return {...next,documentDigest:createHash('sha256').update(canonicalJson(next)).digest('hex')};
+  }
+  function coverAllSelections(value){
+    if(!Array.isArray(value)||value.length>16)throw fail('coverall_event_selection_limit');
+    const seen=new Set();
+    for(const item of value){
+      const keys=['event_id','event_revision','capacity_slot_id','preview','confirmation'];
+      if(!item||typeof item!=='object'||Array.isArray(item)||Object.keys(item).length!==keys.length||keys.some(key=>!Object.hasOwn(item,key)))throw fail('coverall_event_selection_invalid');
+      const key=String(item.capacity_slot_id)+'|'+String(item.event_id);
+      if(seen.has(key))throw fail('coverall_event_selection_duplicate');seen.add(key);
+    }
+    return value;
   }
 
   async function snapshotFor(client, weekStart) {
@@ -1102,6 +1236,15 @@ export function createStaticWeeklyControlPlane({
     }finally{clearTimeout(timeout);signal?.removeEventListener?.('abort',relay);}
   }
 
+  async function recurringGenerationFor(client) {
+    const raw = await call(client, "static_weekly_v15_read_recurring_generation", []);
+    if (!(typeof raw === "number" || (typeof raw === "string" && /^(0|[1-9][0-9]*)$/.test(raw)))
+      || !Number.isSafeInteger(Number(raw)) || Number(raw) < 0) {
+      throw fail("static_weekly_recurring_generation_invalid", "The recurring roster generation is unavailable.");
+    }
+    return Number(raw);
+  }
+
   async function registeredSourceFor(client, sourceId, effectiveStart) {
     return call(client, "static_weekly_v3_read_authority_source", [
       requireSourceId(sourceId),
@@ -1109,29 +1252,161 @@ export function createStaticWeeklyControlPlane({
     ]);
   }
 
-  async function compileOrFail(input) {
-    const result = await compiler(input);
+  function approvedRecurringFullSource(sourceId) {
+    const value = text(sourceId);
+    if (value && value !== APPROVED_FULL_NINE_SOURCE_ID) {
+      throw fail("static_weekly_recurring_full_source_not_approved",
+        "The nine-position template must be the exact approved registered source.");
+    }
+    return value || null;
+  }
+
+  async function recurringBasisFor(client, { actor, date, revision, fullNineSourceId }) {
+    await lockStaticWeeklyAuthority(client);
+    const recurringGeneration = await recurringGenerationFor(client);
+    const snapshot = await snapshotFor(client, date);
+    if (requireRevision(snapshot?.authority_revision) !== revision) {
+      throw fail("static_weekly_recurring_preview_revision_changed", "The manager roster changed before preview.");
+    }
+    const publicationId = requirePublicationId(snapshot?.current_publication?.publication_id);
+    const source = await call(client, "static_weekly_v20_read_recurring_preview_basis", [actor.managerId, date]);
+    const patternAuthority = recurringPatternAuthority({ publishedSource: source, managerSnapshot: snapshot,
+      effectiveDate: date, expectedRevision: revision });
+    if (patternAuthority.publicationId !== publicationId) {
+      throw fail("static_weekly_recurring_preview_revision_changed", "The recurring repair winner changed.");
+    }
+    // The historical split publication needs its exact registered base even
+    // when the manager is reducing current positions and did not supply an
+    // internal source ID. Fetch only the pinned source, under this authority
+    // lock. Keep the request's explicit ID separate for replay/preview binding.
+    const sourceRows = source?.compiler_input?.version?.assignments;
+    const registeredFullNineSourceId = fullNineSourceId
+      || (Array.isArray(sourceRows) && sourceRows.length === 313 ? APPROVED_FULL_NINE_SOURCE_ID : null);
+    const fullNineSource = registeredFullNineSourceId
+      ? await registeredSourceFor(client, registeredFullNineSourceId, date) : null;
+    if (registeredFullNineSourceId && fullNineSource?.source_id !== registeredFullNineSourceId) {
+      throw fail("static_weekly_recurring_full_source_not_approved",
+        "The exact registered nine-position source is unavailable or changed.");
+    }
+    // The correction is a different registered CURRENT source only for a
+    // reduction. The exact historical nine-position static template remains
+    // usable without depending on that separately registered correction.
+    let needsCorrection=false;
+    if(correctionBinding&&Array.isArray(sourceRows)&&sourceRows.length===313){
+      const ordinary=source.compiler_input.slots?.filter(s=>s.contractorCapacity!==true&&!s.kind);
+      if(!Array.isArray(ordinary)||ordinary.length!==9)throw fail('static_weekly_recurring_correction_roster_invalid');
+      let staffed=0;
+      for(const slot of ordinary){
+        const matches=snapshot.roster?.filter(r=>r.slot_id===slot.id);
+        if(matches?.length!==1||matches[0].contractor_capacity===true)
+          throw fail('static_weekly_recurring_correction_roster_invalid');
+        const active=(matches[0].incumbencies||[]).filter(p=>p.effective_start<=date&&(!p.effective_end||date<p.effective_end));
+        if(active.length>1)throw fail('static_weekly_recurring_correction_roster_invalid');
+        staffed+=active.length;
+      }
+      needsCorrection=staffed<9;
+    }
+    const correctionSource = needsCorrection
+      ? await registeredSourceFor(client, correctionBinding.sourceId, date) : null;
+    if(correctionSource&&correctionSource.source_id===fullNineSource?.source_id)
+      throw fail('static_weekly_recurring_correction_source_not_distinct');
+    const correctionWitness = correctionSource ? recurringCorrectionWitness({binding:correctionBinding,
+      snapshot,patternSource:source,correctionSource,effectiveWeek:date,expectedRevision:revision,
+      recurringGeneration,effectivePublicationId:publicationId}) : null;
+    return { snapshot, source, fullNineSource, correctionSource, correctionWitness,
+      requestedFullNineSourceId: fullNineSourceId || null,
+      recurringGeneration, patternAuthority };
+  }
+
+  function recurringPreparationInput(basis, date, revision) {
+    return { publishedSource: basis.source, managerSnapshot: basis.snapshot,
+      fullNineSource: basis.fullNineSource, correctionSource:basis.correctionSource,
+      correctionWitness:basis.correctionWitness,effectiveDate: date, expectedRevision: revision };
+  }
+
+  function validateRecurringCandidate(candidate, basis, revision) {
+    if (candidate?.status !== "CANDIDATE_ONLY" || candidate?.compilerStatus !== "FEASIBLE"
+      || candidate?.publicationAuthority !== "ACCEPTABLE" || candidate?.verifierOk !== true
+      || candidate?.reviewWorkCount !== 0 || candidate?.sourceId !== basis.source.source_id
+      || candidate?.publicationId !== basis.patternAuthority.publicationId || candidate?.authorityRevision !== revision) {
+      throw fail("static_weekly_recurring_preview_rejected", "The isolated recurring preview was not bound to the exact source and revision.");
+    }
+    const digest64 = value => /^[a-f0-9]{64}$/.test(text(value));
+    if (candidate.publishedSourceDigest !== postgresJsonbContentDigest(basis.source.compiler_input)
+      || candidate.managerSnapshotDigest !== postgresJsonbContentDigest(basis.snapshot)
+      || candidate.fullNineSourceDigest !== (basis.fullNineSource ? postgresJsonbContentDigest(basis.fullNineSource.compiler_input) : null)
+      || (basis.correctionSource
+        ?candidate.correctionSourceDigest !== postgresJsonbContentDigest(basis.correctionSource.compiler_input)
+        :candidate.correctionSourceDigest!=null)
+      || (basis.correctionWitness
+        ?candidate.correctionWitnessDigest!==basis.correctionWitness.digest
+        :candidate.correctionWitnessDigest!=null)
+      || ![candidate.candidateSourceDigest, candidate.readbackPatternDigest, candidate.modelBasisDigest,
+        candidate.assignmentWitnessDigest, candidate.finalWitnessDigest, candidate.weeklyAssignmentsDigest,
+        candidate.metricsDigest, candidate.lunchFactsDigest, candidate.openWorkDigest, candidate.shiftEndDerivationDigest].every(digest64)
+      || !Number.isSafeInteger(candidate.lunchLoanCount) || candidate.lunchLoanCount < 0
+      || !Number.isSafeInteger(candidate.openWorkCount) || candidate.openWorkCount < 0) {
+      throw fail("static_weekly_recurring_preview_rejected",
+        "The isolated recurring preview was not bound to the exact authority inputs and verified decision.");
+    }
+    try {
+      assertRecurringManagerDecision(candidate);
+      assertRecurringRepairCandidate(candidate, basis.patternAuthority);
+      if (candidate.weekOptimizationScope === "HISTORICAL_FULL_NINE_STATIC_TEMPLATE_ONLY"
+        && (basis.requestedFullNineSourceId !== APPROVED_FULL_NINE_SOURCE_ID
+          || basis.fullNineSource?.source_id !== APPROVED_FULL_NINE_SOURCE_ID)) {
+        throw new Error("Exact approved registered full-nine source required.");
+      }
+      if (candidate.weekOptimizationScope === "HISTORICAL_FULL_NINE_STATIC_TEMPLATE_ONLY"
+        && (candidate.staticTemplateCommitment?.approvedBasePacketDigest !== APPROVED_FULL_NINE_IDENTITY.basePacketSha256
+          || candidate.staticTemplateCommitment?.approvedFullConfigDigest !== APPROVED_FULL_NINE_IDENTITY.fullConfigSha256)) {
+        throw new Error("Exact approved historical template identities required.");
+      }
+      assertRecurringWeekCommitment(candidate, basis, revision);
+    } catch (error) {
+      if(error?.code===OPENING_COVERAGE_ERROR&&sanitizeOpeningCoverageDiagnostic(error.openingCoverageDiagnostic))throw error;
+      throw fail("static_weekly_recurring_preview_rejected",
+        `The complete manager decision does not match its verified compiler result: ${error.message}`);
+    }
+  }
+
+  function recurringPreviewDigest(actor, basis, candidate) {
+    return createHash("sha256").update(canonicalJson({
+      managerId: actor.managerId, recurringGeneration: basis.recurringGeneration,
+      requestedFullNineSourceId: basis.requestedFullNineSourceId,
+      ...(basis.correctionWitness?{correctionWitnessDigest:basis.correctionWitness.digest}:{}),
+      splashSeasonWitness: requireSeasonWitness(basis.splashSeasonWitness), candidate,
+    })).digest("hex");
+  }
+
+  async function compileOrFail(input, options = {}) {
+    const result = await compiler(input, options);
     if (result?.status !== "FEASIBLE" || result?.publicationAuthority !== "ACCEPTABLE" || result?.verifier?.ok !== true) {
       throw fail("static_weekly_control_plane_compiler_rejected", "Canonical source did not produce a publishable verified schedule.");
     }
     return result;
   }
 
-  async function prepareDraft(input, { expectedRevision, actor }) {
+  async function prepareDraft(input, { expectedRevision, actor, signal = null, deadlineAt = null }) {
     assertOwnerRecurringWorkdays(input);
     if (compilerPreparer) {
-      return compilerPreparer(input, { kind: "draft", expectedRevision, actor });
+      return compilerPreparer(input, { kind: "draft", expectedRevision, actor },
+        deadlineAt == null ? {} : { signal, deadlineMilliseconds: operationRemaining(deadlineAt, signal) });
     }
-    return createStaticWeeklyDraftRpcInput({ result: await compileOrFail(input), expectedRevision, actor });
+    return createStaticWeeklyDraftRpcInput({ result: await compileOrFail(input,
+      deadlineAt == null ? {} : { signal, deadlineMilliseconds: operationRemaining(deadlineAt, signal) }), expectedRevision, actor });
   }
 
-  async function prepareProjection(input, { publicationId, expectedRevision, actor, deadlineMilliseconds = null }) {
+  async function prepareProjection(input, { publicationId, expectedRevision, actor, deadlineMilliseconds = null,
+    signal = null, deadlineAt = null }) {
     assertOwnerRecurringWorkdays(input);
     if (compilerPreparer) {
       return compilerPreparer(input, { kind: "projection", publicationId, expectedRevision, actor },
-        deadlineMilliseconds == null ? {} : { deadlineMilliseconds });
+        deadlineAt == null ? deadlineMilliseconds == null ? {} : { deadlineMilliseconds }
+          : { signal, deadlineMilliseconds: operationRemaining(deadlineAt, signal) });
     }
-    return createStaticWeeklyProjectionWithLunchRpcInput({ result: await compileOrFail(input), publicationId, expectedRevision, actor });
+    return createStaticWeeklyProjectionWithLunchRpcInput({ result: await compileOrFail(input,
+      deadlineAt == null ? {} : { signal, deadlineMilliseconds: operationRemaining(deadlineAt, signal) }), publicationId, expectedRevision, actor });
   }
 
   async function prepareInsideTransaction(client, work) {
@@ -1166,15 +1441,21 @@ export function createStaticWeeklyControlPlane({
     }
   }
 
-  async function materializeCurrentProjection(client, { actor, publicationId, weekStart, expectedRevision, idempotencyKey }) {
+  async function materializeCurrentProjection(client, { actor, publicationId, weekStart, expectedRevision, idempotencyKey,
+    signal = null, deadlineAt = null, preparedProjection = null }) {
     const source = await sourceFor(client, requirePublicationId(publicationId), weekStart);
     const effectivePublicationId = requirePublicationId(publicationId);
     const revision = requireRevision(expectedRevision);
     const preparedActor = { ...actor, idempotencyKey: requireIdempotencyKey(idempotencyKey) };
-    const projection = await prepareInsideTransaction(client, () => prepareProjection(
+    const projection = preparedProjection || await prepareInsideTransaction(client, () => prepareProjection(
       compilerInputFromPublishedSource(source, weekStart),
-      { publicationId: effectivePublicationId, expectedRevision: revision, actor: preparedActor },
+      { publicationId: effectivePublicationId, expectedRevision: revision, actor: preparedActor, signal, deadlineAt },
     ));
+    if (preparedProjection && (projection.publicationId !== effectivePublicationId || projection.serviceDate !== weekStart
+      || projection.expectedRevision !== revision || projection.actorManagerId !== actor.managerId
+      || projection.idempotencyKey !== preparedActor.idempotencyKey)) {
+      throw fail("static_weekly_prepared_projection_binding_changed");
+    }
     if (!projection.lunchDocument?.document_identity
       || projection.lunchDocument.base_replay_digest !== projection.replayDigest
       || projection.lunchDocument.base_authority_digest !== projection.envelope?.authority_digest) {
@@ -1241,25 +1522,128 @@ export function createStaticWeeklyControlPlane({
     });
   }
 
+  async function prepareVacancyOnCurrentTransaction(client, input, confirmDigest = null) {
+    const actor = requireManager(input.manager), sourceId = requireSourceId(input.sourceId);
+    const slotId = requireUuid(input.slotId, "static_weekly_vacancy_slot_required");
+    const employeeId = requireUuid(input.employeeId, "static_weekly_vacancy_employee_required");
+    const date = requireDate(input.effectiveStart, "vacancy effective start");
+    const weekStart = mondayForDate(date, "vacancy effective start");
+    const revision = requireRevision(input.expectedRevision), key = requireIdempotencyKey(input.idempotencyKey);
+    const reason = text(input.reason);
+    const requestedSignal = input.signal ?? null, requestedDeadlineAt = input.deadlineAt ?? null;
+    if (!reason || reason.length > 2000) throw fail("static_weekly_vacancy_reason_required");
+    const manager = managerRequest.getStore()?.manager ?? input.manager;
+    if (requireManager(manager).managerId !== actor.managerId) throw fail("static_weekly_named_manager_required");
+    const credentialId = requireUuid(manager.credential_id, "static_weekly_vacancy_credential_required");
+    const deviceId = text(manager.device_id), access = text(manager.access_level);
+    if (!deviceId || access !== "full_access") throw fail("static_weekly_named_manager_required");
+    const auth = [actor.managerId, credentialId, deviceId, access, key];
+    await lockStaticWeeklyAuthority(client);
+    const before = await snapshotFor(client, weekStart);
+    if (requireRevision(before?.authority_revision) !== revision || before?.current_service_date !== date) {
+      throw fail("static_weekly_vacancy_preview_currentness_changed");
+    }
+    const publicationId = requirePublicationId(before?.current_publication?.publication_id);
+    const currentSource = await registeredSourceFor(client, sourceId, weekStart);
+    const originalSource = await call(client, "static_weekly_v3_read_authority_source", [sourceId]);
+    if (currentSource?.source_id !== sourceId || originalSource?.source_id !== sourceId
+      || !currentSource.compiler_input || !originalSource.compiler_input) {
+      throw fail("static_weekly_vacancy_source_unavailable");
+    }
+    const binding = { managerId: actor.managerId, sourceId, slotId, employeeId,
+      effectiveStart: date, weekStart, expectedRevision: revision, idempotencyKey: key,
+      reasonDigest: createHash("sha256").update(reason, "utf8").digest("hex"),
+      registeredSourceDigest: postgresJsonbContentDigest(originalSource.compiler_input),
+      currentSourceDigest: postgresJsonbContentDigest(currentSource.compiler_input), publicationId };
+    const preInput = compilerInputFromPublishedSource(await sourceFor(client, publicationId, weekStart), weekStart);
+    const mutate = async () => {
+      const mutation = await call(client, "static_weekly_v8_vacate_roster_slot", [
+        sourceId, slotId, employeeId, date, reason, revision, actor.managerId, key,
+      ]);
+      if (mutation?.revision !== revision + 1 || mutation?.data?.completion_mode !== "projection_required"
+        || mutation.data.original_publication_id !== publicationId) {
+        throw fail("static_weekly_vacancy_original_status_required",
+          "Read this request's original outcome; do not resend it.");
+      }
+      return mutation;
+    };
+    let retained = await call(client, "static_weekly_read_vacancy_reviewed_preparation", auth);
+    let stagedPacketUtf8 = null;
+    if (retained?.found === false && Object.keys(retained).length === 1 && confirmDigest === null) {
+      // The generation/actor/authority locks were acquired BEFORE this
+      // savepoint. Roll back the hypothetical vacancy, not those outer fences.
+      await client.query("savepoint vacancy_reviewed_preparation");
+      await mutate();
+      const postInput = compilerInputFromPublishedSource(await sourceFor(client, publicationId, weekStart), weekStart);
+      const requestContext = managerRequest.getStore();
+      const signal = requestedSignal ?? requestContext?.signal ?? null;
+      const deadlineAt = requestedDeadlineAt == null ? requestContext?.deadlineAt ?? null
+        : requestContext?.deadlineAt == null ? requestedDeadlineAt : Math.min(requestedDeadlineAt, requestContext.deadlineAt);
+      const projection = await prepareInsideTransaction(client, () => prepareProjection(postInput,
+        { publicationId, expectedRevision: revision + 1, actor: { ...actor, idempotencyKey: projectionIdempotencyKey(key) },
+          signal, deadlineAt }));
+      const preview = createVacancyManagerPreview({ ...binding, projection });
+      stagedPacketUtf8 = JSON.stringify({ schema: "custodial.vacancy-reviewed-preparation.v1", reason,
+        preInputUtf8: JSON.stringify(preInput), postInputUtf8: JSON.stringify(postInput),
+        preparedProjectionUtf8: JSON.stringify(projection), previewUtf8: JSON.stringify(preview),
+        previewCanonicalUtf8: canonicalJson({ schema: preview.schema, binding, projection }) });
+      await client.query("rollback to savepoint vacancy_reviewed_preparation");
+      await client.query("release savepoint vacancy_reviewed_preparation");
+      // Commit only the private UNSUBMITTED candidate. This is not a roster,
+      // work, projection, lunch, notification or device acceptance.
+      await call(client, "static_weekly_stage_vacancy_reviewed_preparation", [...auth, stagedPacketUtf8]);
+      retained = await call(client, "static_weekly_read_vacancy_reviewed_preparation", auth);
+    }
+    if (retained?.found !== true || retained.state !== "UNSUBMITTED" || retained.current !== true
+      || Object.keys(retained).sort().join(",") !== ["found", "state", "current", "replayed", "preview_digest",
+        "worker_candidate_digest", "generation", "staged_at", "packet_utf8", "payload_sha256"].sort().join(",")
+      || typeof retained.replayed !== "boolean" || !Number.isSafeInteger(retained.generation) || retained.generation < 0
+      || typeof retained.staged_at !== "string" || !Number.isFinite(Date.parse(retained.staged_at))
+      || typeof retained.packet_utf8 !== "string" || typeof retained.payload_sha256 !== "string"
+      || createHash("sha256").update(retained.packet_utf8, "utf8").digest("hex") !== retained.payload_sha256
+      || (stagedPacketUtf8 !== null && retained.packet_utf8 !== stagedPacketUtf8)) {
+      throw fail("static_weekly_vacancy_reviewed_preparation_unavailable",
+        "The original reviewed preparation is unavailable or stale. Retain the request and read its original outcome.");
+    }
+    let packet, projection, preview, originalPreInput, originalPostInput;
+    try {
+      packet = JSON.parse(retained.packet_utf8);
+      if (!packet || Array.isArray(packet) || Object.keys(packet).sort().join(",") !==
+        ["schema", "reason", "preInputUtf8", "postInputUtf8", "preparedProjectionUtf8", "previewUtf8", "previewCanonicalUtf8"].sort().join(",")
+        || packet.schema !== "custodial.vacancy-reviewed-preparation.v1" || packet.reason !== reason
+        || [packet.preInputUtf8, packet.postInputUtf8, packet.preparedProjectionUtf8, packet.previewUtf8,
+          packet.previewCanonicalUtf8].some(value => typeof value !== "string")) throw new Error("packet binding");
+      projection = JSON.parse(packet.preparedProjectionUtf8);
+      preview = JSON.parse(packet.previewUtf8);
+      originalPreInput = JSON.parse(packet.preInputUtf8);
+      originalPostInput = JSON.parse(packet.postInputUtf8);
+      const reproduced = createVacancyManagerPreview({ ...binding, projection });
+      if (projection.actorManagerName !== actor.managerName || canonicalJson(reproduced) !== canonicalJson(preview)
+        || packet.previewCanonicalUtf8 !== canonicalJson({ schema: preview.schema, binding, projection })
+        || reproduced.previewDigest !== retained.preview_digest
+        || reproduced.workerCandidateDigest !== retained.worker_candidate_digest
+        || canonicalJson(preInput) !== canonicalJson(originalPreInput)) throw new Error("original binding");
+    } catch {
+      throw fail("static_weekly_vacancy_reviewed_preparation_changed",
+        "The original reviewed preparation does not match this request and current source. No replacement was prepared.");
+    }
+    let mutation = null, actualPostInputUtf8 = null;
+    if (confirmDigest !== null) {
+      if (preview.previewDigest !== confirmDigest) throw fail("static_weekly_vacancy_preview_changed",
+        "The original reviewed preview does not match this confirmation. Read its original outcome.");
+      mutation = await mutate();
+      const actualPostInput = compilerInputFromPublishedSource(await sourceFor(client, publicationId, weekStart), weekStart);
+      if (canonicalJson(actualPostInput) !== canonicalJson(originalPostInput)) throw fail("static_weekly_vacancy_preview_changed",
+        "The current vacancy source differs from the original reviewed preparation. No change was accepted.");
+      actualPostInputUtf8 = JSON.stringify(actualPostInput);
+    }
+    return { actor, auth, weekStart, publicationId, key, mutation, projection, preview, actualPostInputUtf8,
+      packetUtf8: retained.packet_utf8 };
+  }
+
   return {
     runManagerOperation,
-    async getApprovedScheduleChoices({manager}) {
-      requireManager(manager);
-      return transaction(client=>call(client,"custodial_read_approved_schedule_choices_v1",[
-        manager.manager_id,manager.credential_id,manager.device_id,manager.access_level]));
-    },
-    async getApprovedInitialSelection({manager,weekStart,signal,deadlineAt}) {
-      requireManager(manager);
-      const week=requireMonday(weekStart,'initial selection week');
-      return transaction(client=>call(client,'custodial_read_approved_initial_selection_v1',[
-        manager.manager_id,manager.credential_id,manager.device_id,manager.access_level,week]),{signal,deadlineAt});
-    },
-    async previewApprovedStaticPattern(input) { return approvedStaticOperation(input,false); },
-    async confirmApprovedStaticPattern(input) { return approvedStaticOperation(input,true); },
-    async previewApprovedInitialBaseline(input) { return approvedInitialOperation(input,false); },
-    async publishApprovedInitialBaseline(input) { return approvedInitialOperation(input,true); },
-    async getApprovedInitialConfirmationStatus(input) { return approvedConfirmationStatus('initial',input); },
-    async getApprovedStaticConfirmationStatus(input) { return approvedConfirmationStatus('recurring',input); },
+    runExternalRecurringOperation,
     schema: STATIC_WEEKLY_CONTROL_PLANE_SCHEMA,
     health() {
       return admitHealthCheck(async () => {
@@ -1292,61 +1676,363 @@ export function createStaticWeeklyControlPlane({
       });
     },
     async getManagerSnapshot({ manager, weekStart }) {
-      requireManager(manager);
+      requireManager(manager, { readOnlyOperation: true });
       return transaction((client) => snapshotFor(client, requireMonday(weekStart, "week start")));
     },
-    async beginStaffingCommand({ manager, ...input }) {
+    async getApprovedScheduleChoices({manager}) {
+      requireManager(manager);
+      return transaction(client=>call(client,"custodial_read_approved_schedule_choices_v1",[
+        manager.manager_id,manager.credential_id,manager.device_id,manager.access_level]));
+    },
+    async getApprovedInitialSelection({manager,weekStart,signal,deadlineAt}) {
+      requireManager(manager);
+      const week=requireMonday(weekStart,'initial selection week');
+      return transaction(client=>call(client,'custodial_read_approved_initial_selection_v1',[
+        manager.manager_id,manager.credential_id,manager.device_id,manager.access_level,week]),{signal,deadlineAt});
+    },
+    async previewApprovedStaticPattern(input) { return approvedStaticOperation(input,false); },
+    async confirmApprovedStaticPattern(input) { return approvedStaticOperation(input,true); },
+    async previewApprovedInitialBaseline(input) { return approvedInitialOperation(input,false); },
+    async publishApprovedInitialBaseline(input) { return approvedInitialOperation(input,true); },
+    async previewRecurringStaffing({ manager, effectiveStart, expectedRevision, fullNineSourceId = null,
+      signal = null, deadlineAt = null }) {
+      const enteredAt = performance.now();
+      const expiresAt = deadlineAt == null ? enteredAt + STATIC_WEEKLY_MANAGER_OPERATION_DEADLINE_MS
+        : Math.min(Number(deadlineAt), enteredAt + STATIC_WEEKLY_MANAGER_OPERATION_DEADLINE_MS);
+      if (!Number.isFinite(expiresAt)) throw fail("static_weekly_recurring_operation_deadline_invalid");
+      const controller = new AbortController();
+      const relayAbort = () => controller.abort(signal?.reason);
+      signal?.addEventListener?.("abort", relayAbort, { once: true });
+      if (signal?.aborted) relayAbort();
+      const timeout = setTimeout(() => controller.abort(fail("static_weekly_recurring_operation_deadline_exceeded",
+        "The recurring operation exceeded its one-minute deadline; preview the current plan again.")),
+      Math.max(1, expiresAt - performance.now() - STATIC_WEEKLY_MANAGER_CLEANUP_RESERVE_MS));
+      timeout.unref?.();
+      try {
+      operationRemaining(expiresAt, controller.signal);
       const actor = requireManager(manager);
+      const date = requireMonday(effectiveStart, "recurring effective start");
+      const revision = requireRevision(expectedRevision);
+      const sourceId = approvedRecurringFullSource(fullNineSourceId);
+      const basis = await transaction(client => recurringBasisFor(client, { actor, date, revision, fullNineSourceId: sourceId }),
+        { signal: controller.signal, deadlineAt: expiresAt });
+      // Public preview does not hold an idle transaction during its solve.
+      const candidate = await recurringCandidatePreparer(recurringPreparationInput(basis, date, revision), {
+        signal: controller.signal, deadlineMilliseconds: operationRemaining(expiresAt, controller.signal),
+      });
+      operationRemaining(expiresAt, controller.signal);
+      validateRecurringCandidate(candidate, basis, revision);
+      // Recheck after it completes; a later confirmation must do the same
+      // under a serial authority lock and compare this exact digest.
+      const current = await transaction(async (client) => {
+        await lockStaticWeeklyAuthority(client);
+        const snapshot=await snapshotFor(client,date),recurringGeneration=await recurringGenerationFor(client);
+        const correctionSource=basis.correctionWitness?await registeredSourceFor(client,basis.correctionWitness.sourceId,date):null;
+        const correctionWitness=correctionSource?recurringCorrectionWitness({binding:correctionBinding,snapshot,
+          patternSource:basis.source,correctionSource,effectiveWeek:date,expectedRevision:revision,
+          recurringGeneration,effectivePublicationId:basis.patternAuthority.publicationId}):null;
+        return { snapshot,recurringGeneration,correctionWitness,
+          splashSeasonWitness: await call(client, "static_weekly_sch022_preview_witness", [date,
+            JSON.stringify(seasonWorkFromAssignments(candidate.decision.assignments)),actor.managerId]) };
+      }, { signal: controller.signal, deadlineAt: expiresAt });
+      if (requireRevision(current.snapshot?.authority_revision) !== revision
+        || text(current.snapshot?.current_publication?.publication_id) !== candidate.publicationId
+        || current.recurringGeneration !== basis.recurringGeneration) {
+        throw fail("static_weekly_recurring_preview_revision_changed", "The manager roster changed during preview.");
+      }
+      if(basis.correctionWitness)requireMatchingRecurringCorrectionWitness(basis.correctionWitness,current.correctionWitness);
+      basis.splashSeasonWitness = requireSeasonWitness(current.splashSeasonWitness);
+      // Hash every byte of the manager-visible candidate result, not only its
+      // final area map. This binds source/roster inputs, compiler authority and
+      // replay, metrics and the exact preview changes to the named manager.
+      const previewDigest = recurringPreviewDigest(actor, basis, candidate);
+      operationRemaining(expiresAt, controller.signal);
+      return { ...candidate, recurringGeneration: basis.recurringGeneration,
+        previewDigest, source: "AUTHENTICATED_MANAGER_READBACK",
+        admitted: false, published: false, affectedPhonesUpdated: false };
+      } finally {
+        clearTimeout(timeout);
+        signal?.removeEventListener?.("abort", relayAbort);
+      }
+    },
+    async confirmRecurringStaffing({ manager, confirmationKey, effectiveStart, expectedRevision, previewDigest,
+      fullNineSourceId = null, signal = null, deadlineAt = null }) {
+      const enteredAt = performance.now();
+      const expiresAt = deadlineAt == null ? enteredAt + STATIC_WEEKLY_MANAGER_OPERATION_DEADLINE_MS
+        : Math.min(Number(deadlineAt), enteredAt + STATIC_WEEKLY_MANAGER_OPERATION_DEADLINE_MS);
+      if (!Number.isFinite(expiresAt)) throw fail("static_weekly_recurring_operation_deadline_invalid");
+      const controller = new AbortController();
+      const relayAbort = () => controller.abort(signal?.reason);
+      signal?.addEventListener?.("abort", relayAbort, { once: true });
+      if (signal?.aborted) relayAbort();
+      const timeout = setTimeout(() => controller.abort(fail("static_weekly_recurring_operation_deadline_exceeded",
+        "The recurring operation exceeded its one-minute deadline; check its exact status before retrying.")),
+      Math.max(1, expiresAt - performance.now() - STATIC_WEEKLY_MANAGER_CLEANUP_RESERVE_MS));
+      timeout.unref?.();
+      try {
+      operationRemaining(expiresAt, controller.signal);
+      const actor = requireManager(manager);
+      const key = requireUuid(confirmationKey, "recurring_confirmation_key_required");
+      const date = requireMonday(effectiveStart, "recurring effective start");
+      const revision = requireRevision(expectedRevision);
+      const expectedDigest = text(previewDigest);
+      if (!/^[a-f0-9]{64}$/.test(expectedDigest)) throw fail("static_weekly_recurring_preview_digest_required");
+      const sourceId = approvedRecurringFullSource(fullNineSourceId);
+      const confirmation = await transaction(async client => {
+        // One checked-out client owns every child and the final receipt. Never
+        // invoke the public preview/publish methods from this transaction.
+        await lockStaticWeeklyAuthority(client);
+        const parent = await call(client, "static_weekly_v13_begin_recurring_confirmation",
+          [actor.managerId, key, date, revision, expectedDigest, sourceId]);
+        // Database checks identical request/manager first. Accepted retries
+        // return BEFORE current time, revision, generation or compiler checks.
+        if (parent?.state === "ACCEPTED") return parent;
+        if (parent?.state !== "RESERVED") throw fail("static_weekly_recurring_parent_unavailable");
+        requireUuid(parent.operationId, "static_weekly_recurring_parent_unavailable");
+        const basis = await recurringBasisFor(client, { actor, date, revision, fullNineSourceId: sourceId });
+        const prepared = clone(await prepareInsideTransaction(client, () =>
+          recurringAdmissionPreparer(recurringPreparationInput(basis, date, revision), {
+            signal: controller.signal, deadlineMilliseconds: operationRemaining(expiresAt, controller.signal),
+          })));
+        try { assertRecurringAdmissionCandidate(prepared); }
+        catch (error) {
+          if(error?.code===OPENING_COVERAGE_ERROR&&sanitizeOpeningCoverageDiagnostic(error.openingCoverageDiagnostic))throw error;
+          throw fail("static_weekly_recurring_private_candidate_rejected", `The private recurring candidate is invalid: ${error.message}`);
+        }
+        const candidate = prepared.candidate;
+        validateRecurringCandidate(candidate, basis, revision);
+        basis.splashSeasonWitness = requireSeasonWitness(await call(client,
+          "static_weekly_sch022_preview_witness", [date,
+            JSON.stringify(seasonWorkFromAssignments(candidate.decision.assignments)),actor.managerId]));
+        if (recurringPreviewDigest(actor, basis, candidate) !== expectedDigest) {
+          throw fail("static_weekly_recurring_preview_changed", "The complete recurring preview changed. Preview the current plan again before confirming.");
+        }
+        const admission = await call(client, "static_weekly_v14_admit_recurring_source",
+          [actor.managerId, key, prepared.canonicalSource, candidate.candidateSourceDigest]);
+        const admittedSourceId = requireUuid(admission?.source_id, "static_weekly_recurring_source_admission_failed");
+        const draftInput = clone(prepared.canonicalSource);
+        draftInput.version.id = randomUUID();
+        draftInput.version.publicationId = randomUUID();
+        draftInput.versions = [draftInput.version];
+        delete draftInput.version;
+        const childPrefix = `recurring:${actor.managerId}:${key}`;
+        const draftInputPrepared = await prepareInsideTransaction(client, () => prepareDraft(draftInput,
+          { expectedRevision: revision, actor: { ...actor, idempotencyKey: `${childPrefix}:draft` },
+            signal: controller.signal, deadlineAt: expiresAt }));
+        const draft = await call(client, "static_weekly_v3_create_draft", [draftInputPrepared.effectiveStart,
+          draftInputPrepared.objectiveVersion, draftInputPrepared.objective, draftInputPrepared.inputProvenance,
+          draftInputPrepared.document, revision, actor.managerId, `${childPrefix}:draft`, admittedSourceId]);
+        const publication = await call(client, "static_weekly_v3_publish_draft", [
+          requireUuid(draft?.data?.version_id, "static_weekly_recurring_draft_unavailable"),
+          requireRevision(draft?.data?.draft_revision), requireRevision(draft?.revision), actor.managerId,
+          `${childPrefix}:publish`, "supersede", null]);
+        const publicationId = requirePublicationId(publication?.data?.publication_id);
+        // Our own publication is a semantic authority change. The preview was
+        // checked before writing under the common lock; bind the dependency
+        // generation AFTER this exact parent-owned publication, not its stale
+        // pre-publication value. Other writers cannot enter this transaction.
+        const publicationGeneration = await recurringGenerationFor(client);
+        await call(client, "static_weekly_v18_bind_recurring_publication",
+          [actor.managerId, key, publicationId, publicationGeneration, candidate.decision]);
+        const projection = await materializeCurrentProjection(client, { actor, publicationId, weekStart: date,
+          expectedRevision: requireRevision(publication?.revision), idempotencyKey: `${childPrefix}:projection:${date}`,
+          signal: controller.signal, deadlineAt: expiresAt });
+        const receipt = await call(client, "static_weekly_v23_finalize_recurring_confirmation", [actor.managerId, key]);
+        if (receipt?.accepted !== true || receipt.operationId !== parent.operationId
+          || receipt.managerId !== actor.managerId || receipt.confirmationKey !== key || receipt.previewDigest !== expectedDigest
+          || receipt.sourceId !== admittedSourceId || receipt.sourceDigest !== candidate.candidateSourceDigest
+          || receipt.publicationId !== publicationId || receipt.projectionId !== projection?.data?.projection_id
+          || receipt.authorityRevision !== projection?.revision || receipt.effectiveStart !== date
+          || receipt.phoneDeliveryState !== "PENDING" || receipt.affectedPhonesUpdated !== false) {
+          throw fail("static_weekly_recurring_acceptance_receipt_mismatch");
+        }
+        // Immutable original acceptance, NOT a claim about current validity or
+        // phone delivery. Later exact status/readback supplies those facts.
+        return { state: "ACCEPTED", operationId: parent.operationId, receipt };
+      }, { signal: controller.signal, deadlineAt: expiresAt });
+      if (controller.signal.aborted || performance.now() >= expiresAt) {
+        throw fail("static_weekly_recurring_confirmation_outcome_unknown",
+          "The confirmation outlived its one-minute response deadline; read its exact status before retrying.");
+      }
+      return confirmation;
+      } finally {
+        clearTimeout(timeout);
+        signal?.removeEventListener?.("abort", relayAbort);
+      }
+    },
+    async getApprovedInitialConfirmationStatus(input) { return approvedConfirmationStatus('initial',input); },
+    async getApprovedStaticConfirmationStatus(input) { return approvedConfirmationStatus('recurring',input); },
+    async getRecurringConfirmationStatus({ manager, confirmationKey }) {
+      const actor = requireManager(manager);
+      const key = requireUuid(confirmationKey, "recurring_confirmation_key_required");
+      // Exact status is a locking DB read, not an inference from a transport
+      // timeout. The SQL reader waits for an uncertain writer before deciding
+      // ACCEPTED versus NOT_FOUND; the authenticated HTTP route never infers it.
+      return transaction((client) => call(client, "static_weekly_v13_read_recurring_confirmation", [
+        actor.managerId, key,
+      ]));
+    },
+    async getCurrentRecurringDelivery({ manager, serviceDate }) {
+      const actor = requireManager(manager);
+      const date = requireDate(serviceDate, "service date");
+      return transaction((client) => call(client, "static_weekly_v25_read_current_recurring_delivery", [date, actor.managerId]));
+    },
+    async beginStaffingCommand({ manager, ...input }) {
+      const actor = requireStaffingManager(manager, input.commandKind);
       return transaction(async(client) => {
-        const {rows}=await client.query("select public.sch_service_date(statement_timestamp())::text as service_date");
         // A byte-identical begin may be an idempotent recovery after its response
         // was lost before midnight. PostgreSQL first resolves the authenticated
         // manager + prepare-key identity, then rejects an elapsed *new* command.
-        const request = createStaffingCommandRequest(input,{minimumServiceDate:rows[0]?.service_date,
-          allowElapsedAuthorityReplay:true});
+        // Delegate the canonical operational-date check to that existing typed
+        // RPC, not an invoker read of generic settings by this restricted role.
+        const request = createStaffingCommandRequest(input,{allowElapsedAuthorityReplay:true});
         return call(client, "static_weekly_v10_begin_staffing_command", [request.semanticBody,
           request.clientPrepareKey,request.expectedRevision,actor.managerId]);
       });
     },
     async prepareStaffingCommand({ manager, operationId }) {
-      const actor = requireManager(manager);
+      const actor = requireManager(manager, manager?.read_only === true ? "manage_absences" : undefined);
       const operation = requireUuid(operationId, "staffing_operation_id_required");
+      const principalFields=['manager_id','managerId','manager_display_name','managerName','credential_id','device_id','access_level','auth_mode','read_only'];
+      const originalPrincipal=principalFields.map(key=>manager?.[key]);
+      const requirePrincipal=command=>{
+        const current=requireOriginalStaffingManager(manager,command);
+        if(current.managerId!==actor.managerId||current.managerName!==actor.managerName||principalFields.map(key=>manager?.[key])
+          .some((value,index)=>value!==originalPrincipal[index]))throw fail('staffing_original_principal_changed');
+      };
       return transaction(async (client) => {
+        await lockStaticWeeklyAuthority(client);
         const command = await call(client, "static_weekly_v10_read_staffing_command", [operation, actor.managerId]);
         if (!command) throw fail("staffing_operation_unavailable");
+        // PREPARED is still an awaited original read. Do not return it using
+        // a changed caller credential or authentication mode merely because
+        // no further preparation is necessary.
+        requirePrincipal(command);
         if (command.state === "PREPARED") return command;
         if (command.state !== "PREPARING") throw fail("staffing_operation_not_preparable");
         if (text(command.prepared_by_manager_id) !== actor.managerId) throw fail("staffing_original_preparer_required");
-        const semantic = command.semantic_body;
+        const originalCommand=canonicalJson(command),capturedCommand=clone(command);
+        // The fixed authenticated command read owns the private original.
+        // Capture its primitive pins before any other source await; a current
+        // incumbent or a request field cannot substitute for this ledger fact.
+        const semantic = Object.freeze({ ...command.semantic_body });
+        const semanticDigest = command.semantic_digest;
+        const expectedRevision = requireRevision(command.expected_revision);
+        const currentServiceDate = command.current_service_date;
+        let originalCancellationTarget = null;
+        if (semantic.commandKind === "cancel_absence") {
+          const target = command.original_cancellation_target;
+          if (target == null) throw fail("staffing_original_cancellation_target_required");
+          const fields = ["absenceId", "employeeId", "startDate", "endDate", "acceptedOperationId", "status"];
+          const exactUuid = value => typeof value === "string"
+            && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(value);
+          if (typeof target !== "object" || Array.isArray(target)
+            || Object.keys(target).length !== fields.length || fields.some(field => !Object.hasOwn(target, field))
+            || ![target.absenceId, target.employeeId, target.acceptedOperationId].every(exactUuid)
+            || target.status !== "accepted" || target.absenceId !== semantic.targetAbsenceId
+            || target.employeeId !== semantic.employeeId || target.acceptedOperationId !== target.absenceId
+            || command.operation_id !== operation || semantic.absenceKind !== null
+            || Object.keys(semantic).sort().join(",") !== "absenceKind,commandKind,employeeId,endDate,startDate,targetAbsenceId"
+            || postgresJsonbContentDigest(semantic) !== semanticDigest) {
+            throw fail("staffing_original_cancellation_target_invalid");
+          }
+          enumerateStaffingServiceWindow(target.startDate, target.endDate);
+          enumerateStaffingServiceWindow(currentServiceDate, currentServiceDate);
+          if (semantic.startDate !== (target.startDate > currentServiceDate ? target.startDate : currentServiceDate)
+            || semantic.startDate > target.endDate || semantic.endDate !== target.endDate) {
+            throw fail("staffing_original_cancellation_target_window_changed");
+          }
+          originalCancellationTarget = Object.freeze(Object.fromEntries(fields.map(field => [field, target[field]])));
+        } else if (command.original_cancellation_target != null) {
+          throw fail("staffing_original_cancellation_target_forbidden");
+        }
         const window = enumerateStaffingServiceWindow(semantic.startDate, semantic.endDate);
         const currentTargets=await call(client,"static_weekly_v11_read_current_refresh_targets",
           [semantic.startDate,semantic.endDate,actor.managerId]);
+        requirePrincipal(command);
+        if (!Array.isArray(currentTargets)) throw fail("staffing_current_refresh_targets_unavailable");
         const priorByDate=new Map();
-        for(const row of Array.isArray(currentTargets)?currentTargets:[]){
+        for(const row of currentTargets){
           if(!priorByDate.has(row.serviceDate))priorByDate.set(row.serviceDate,new Set());
           priorByDate.get(row.serviceDate).add(text(row.employeeId));
         }
         const meter = createStaffingPreparationMeter();
+        const {prepareApprovedPendingStaffingWeekIsolated}=await import('./static-weekly-schedule-compiler-runtime.js');
+        requirePrincipal(command);meter.checkpoint();
         const prepared = await prepareInsideTransaction(client, async () => {
           const candidates = []; const weeks = []; const inputDigests = [];
           for (const weekStart of window.weeks) {
             const budget = meter.checkpoint();
+            const weekDeadline=performance.now()+Math.max(1,Math.floor(budget.remainingMilliseconds));
             const snapshot = await snapshotFor(client, weekStart);
-            if (requireRevision(snapshot?.authority_revision) !== command.expected_revision) {
+            requirePrincipal(command);meter.checkpoint();
+            if (requireRevision(snapshot?.authority_revision) !== expectedRevision) {
               throw fail("staffing_preparation_revision_changed");
             }
             const publicationId = requirePublicationId(snapshot?.current_publication?.publication_id);
             const source = await sourceFor(client, publicationId, weekStart);
+            requirePrincipal(command);meter.checkpoint();
             const overlay = createStaffingWeekPreviewInput({ operationId: operation, managerId: actor.managerId,
-              semanticBody: semantic, expectedRevision: command.expected_revision, weekStart, source,
-              currentServiceDate: command.current_service_date });
-            const projection = await prepareProjection(overlay.input, {
-              publicationId, expectedRevision: command.expected_revision,
-              actor: { ...actor, idempotencyKey: `staffing:${operation}:${weekStart}` },
-              deadlineMilliseconds: Math.max(1, Math.floor(budget.remainingMilliseconds)),
-            });
+              semanticBody: semantic, expectedRevision, weekStart, source,
+              currentServiceDate, originalCancellationTarget });
+            const originalSource=canonicalJson(source),originalSnapshot=canonicalJson(snapshot),bases=[];
+            for(const date of overlay.dates){
+              const basis=await call(client,'static_weekly_read_approved_template_basis',
+                [actor.managerId,publicationId,date,'DATED_ABSENCE',null,expectedRevision]);
+              requirePrincipal(command);meter.checkpoint();bases.push(clone(basis));
+            }
+            // Await the SAME serialized owned child queue. Native transaction
+            // keepalives can run during fixed CPU preparation. The captured
+            // absolute deadline includes all earlier basis/Source reads.
+            let projection,unresolvedPreparationError=null;
+            try{
+              projection=await prepareApprovedPendingStaffingWeekIsolated({
+                schema:'custodial.approved-static-pending-staffing-worker-input.v1',
+                command:capturedCommand,managerId:actor.managerId,actor,weekStart,source,bases,snapshot,window
+              },{deadlineAtMilliseconds:weekDeadline});
+            }catch(error){
+              requirePrincipal(command);meter.checkpoint();
+              if(!error||types.isProxy(error)||!['static_template_dated_coverage_unresolved','static_template_missing_approved_pattern']
+                .includes(Object.getOwnPropertyDescriptor(error,'code')?.value))throw error;
+              // Closed unresolved DATA also crossed an await. It may leave
+              // only after the same original-currentness reads as a result.
+              // The catalog dependency likewise cannot describe a stale
+              // original/principal merely because it carries no candidate.
+              unresolvedPreparationError=error;
+            }
+            meter.checkpoint();requirePrincipal(command);
+            // PREPARE stages DATA only. Recheck every actual original before
+            // the existing season/candidate staging boundary; never accept an
+            // exception early or borrow a replacement command/principal.
+            const currentCommand=await call(client,'static_weekly_v10_read_staffing_command',[operation,actor.managerId]);
+            requirePrincipal(currentCommand);meter.checkpoint();
+            if(canonicalJson(currentCommand)!==originalCommand)throw fail('staffing_approved_original_command_changed');
+            const currentSnapshot=await snapshotFor(client,weekStart);
+            requirePrincipal(command);meter.checkpoint();
+            if(canonicalJson(currentSnapshot)!==originalSnapshot)throw fail('staffing_preparation_revision_changed');
+            const currentSource=await sourceFor(client,publicationId,weekStart);
+            requirePrincipal(command);meter.checkpoint();
+            if(canonicalJson(currentSource)!==originalSource)throw fail('staffing_approved_original_source_changed');
+            for(let index=0;index<overlay.dates.length;index++){
+              const current=await call(client,'static_weekly_read_approved_template_basis',
+                [actor.managerId,publicationId,overlay.dates[index],'DATED_ABSENCE',null,expectedRevision]);
+              requirePrincipal(command);meter.checkpoint();
+              if(canonicalJson(current)!==canonicalJson(bases[index]))throw fail('staffing_approved_pending_basis_changed');
+            }
+            if(unresolvedPreparationError)throw unresolvedPreparationError;
             if (!projection.lunchDocument?.document_identity) throw fail("static_weekly_lunch_publication_missing");
-            const { lunchDocument, ...projectionPayload } = projection;
+            // The fused worker checks planned source/assignment coverage before
+            // returning this derived report. Recheck its source/context binding;
+            // never reinterpret it as physical opening-readiness authority.
+            // Keep the original worker response/report intact. Only the canonical
+            // adapter's projection fields belong in v11's closed SQL payload.
+            if (Object.hasOwn(projection, "openingCoverageReport")) {
+              assertOpeningCoverageReport(projection.openingCoverageReport, {
+                sourceDigest: postgresJsonbContentDigest(overlay.input),
+                publicationId, authorityRevision: expectedRevision,
+              });
+            }
+            const { lunchDocument, openingCoverageReport: _openingCoverageReport, ...projectionPayload } = projection;
             candidates.push({ candidateKind: "lunch", candidateKey: `week:${weekStart}`, serviceDate: weekStart,
               payload: lunchDocument });
             candidates.push({ candidateKind: "projection", candidateKey: `week:${weekStart}`, serviceDate: weekStart,
@@ -1360,7 +2046,9 @@ export function createStaticWeeklyControlPlane({
                 if(responsibility?.service_date!==serviceDate)continue;
                 for(const employeeId of [responsibility.normal_owner_person_id,responsibility.coverer_person_id])if(text(employeeId))employees.add(text(employeeId));
               }
-              employees.add(semantic.employeeId);
+              // Match the SQL affected vector: cancellation uses independently
+              // named prior/new work, never the ledger person alone.
+              if (semantic.commandKind === "absence") employees.add(semantic.employeeId);
               for (const employeeId of [...employees].sort()) candidates.push({ candidateKind: "schedule_refresh",
                 candidateKey: `date:${serviceDate}:employee:${employeeId}`, serviceDate,
                 payload: { employeeId, weekStart, publicationId, projectionIdentity: projection.envelope.database_projection_identity,
@@ -1371,22 +2059,33 @@ export function createStaticWeeklyControlPlane({
             meter.checkpoint();
           }
           const candidateSet = createStaffingCandidateSet({ window, candidates, meter });
-          const publicationVector = { expectedRevision: command.expected_revision, weeks };
+          const databaseCandidates = candidateSet.rows.map(({ candidateKind, candidateKey, serviceDate, payload }) => ({
+            candidateKind, candidateKey, payload, serviceDate,
+          }));
+          const seasonWitness = await call(client,"static_weekly_sch022_preview_staffing_witness",
+            [JSON.stringify(databaseCandidates),actor.managerId]);
+          requirePrincipal(command);meter.checkpoint();
+          const seasonWitnessDigest = requireSeasonWitness(seasonWitness?.digest);
+          const publicationVector = { expectedRevision, weeks };
           const inputDigest = createHash("sha256").update(canonicalJson({ operationId: operation,
-            semanticDigest: command.semantic_digest, publicationVector, inputDigests })).digest("hex");
+            semanticDigest, publicationVector, inputDigests })).digest("hex");
           const previewDigest = createHash("sha256").update(canonicalJson({ operationId: operation,
-            semanticDigest: command.semantic_digest, candidateSetDigest: candidateSet.digest,
-            publicationVector, summary: candidateSet.summary })).digest("hex");
-          return { candidateSet, publicationVector, inputDigest, previewDigest };
+            semanticDigest, candidateSetDigest: candidateSet.digest,
+            publicationVector, summary: candidateSet.summary, seasonWitnessDigest })).digest("hex");
+          return { candidateSet, publicationVector, inputDigest, previewDigest, seasonWitnessDigest };
         });
         const databaseCandidates = prepared.candidateSet.rows.map(({ candidateKind, candidateKey, serviceDate, payload }) => ({
           candidateKind, candidateKey, payload, serviceDate,
         }));
-        return call(client, "static_weekly_v10_stage_staffing_command", [operation, databaseCandidates,
-          prepared.previewDigest, prepared.inputDigest, prepared.publicationVector, actor.managerId]);
+        requirePrincipal(command);meter.checkpoint();
+        const staged=await call(client, "static_weekly_sch022_stage_staffing_command", [operation, JSON.stringify(databaseCandidates),
+          prepared.previewDigest, prepared.inputDigest, prepared.publicationVector, actor.managerId,
+          prepared.seasonWitnessDigest]);
+        requirePrincipal(command);meter.checkpoint();return staged;
       });
     },
-    async stageStaffingCommand({ manager, operationId, window, candidates, previewDigest, inputDigest, publicationVector }) {
+    async stageStaffingCommand({ manager, operationId, window, candidates, previewDigest, inputDigest, publicationVector,
+      seasonWitnessDigest = null }) {
       const actor = requireManager(manager);
       const candidateSet = createStaffingCandidateSet({ window, candidates });
       const requireDigest = (value, code) => {
@@ -1400,24 +2099,34 @@ export function createStaticWeeklyControlPlane({
       const databaseCandidates = candidateSet.rows.map(({ candidateKind, candidateKey, serviceDate, payload }) => ({
         candidateKind, candidateKey, payload, serviceDate,
       }));
-      return transaction((client) => call(client, "static_weekly_v10_stage_staffing_command", [
+      return transaction(async (client) => {
+        const currentWitness = await call(client,"static_weekly_sch022_preview_staffing_witness",
+          [JSON.stringify(databaseCandidates),actor.managerId]);
+        if (currentWitness?.target_week_count > 0 && seasonWitnessDigest !== currentWitness.digest) {
+          throw fail("static_weekly_sch022_witness_required", "Target-bearing staffing must retain the exact original seasonal preview witness.");
+        }
+        return call(client, "static_weekly_sch022_stage_staffing_command", [
         requireUuid(operationId, "staffing_operation_id_required"),
-        databaseCandidates,
+        JSON.stringify(databaseCandidates),
         requireDigest(previewDigest, "staffing_preview_digest_required"),
         requireDigest(inputDigest, "staffing_input_digest_required"),
         structuredClone(publicationVector),
         actor.managerId,
-      ]));
+        requireSeasonWitness(currentWitness?.digest),
+      ]);
+      });
     },
     async getStaffingCommand({ manager, operationId }) {
-      const actor = requireManager(manager);
-      return transaction((client) => call(client, "static_weekly_v10_read_staffing_command", [
-        requireUuid(operationId, "staffing_operation_id_required"),
-        actor.managerId,
-      ]));
+      const actor = requireManager(manager, manager?.read_only === true ? "manage_absences" : undefined);
+      return transaction(async client => {
+        const command = await call(client, "static_weekly_v10_read_staffing_command", [
+          requireUuid(operationId, "staffing_operation_id_required"), actor.managerId]);
+        if (command) requireOriginalStaffingManager(manager, command);
+        return command;
+      });
     },
     async listPendingStaffingCommands({ manager, limit = 50, afterCreatedAt = null, afterOperationId = null }) {
-      const actor = requireManager(manager);
+      const actor = requireManager(manager, manager?.read_only === true ? "manage_absences" : undefined);
       const pageLimit = Number(limit);
       if (!Number.isSafeInteger(pageLimit) || pageLimit < 1 || pageLimit > 100) throw fail("staffing_page_limit_invalid");
       const hasCreatedAt = text(afterCreatedAt).length > 0;
@@ -1425,52 +2134,188 @@ export function createStaticWeeklyControlPlane({
       if (hasCreatedAt !== hasOperationId || (hasCreatedAt && Number.isNaN(Date.parse(afterCreatedAt)))) {
         throw fail("staffing_page_cursor_invalid");
       }
-      return transaction((client) => call(client, "static_weekly_v10_list_pending_staffing_commands", [
+      return transaction(async client => {
+        const page = await call(client, "static_weekly_v10_list_pending_staffing_commands", [
         actor.managerId,
         pageLimit,
         hasCreatedAt ? new Date(afterCreatedAt).toISOString() : null,
         hasOperationId ? requireUuid(afterOperationId, "staffing_page_cursor_invalid") : null,
-      ]));
+        ]);
+        if (manager?.read_only === true) {
+          if (!Array.isArray(page?.commands)) throw fail("staffing_operation_unavailable");
+          page.commands = page.commands.filter(command => command.prepared_by_manager_id === actor.managerId);
+          for (const command of page.commands) requireOriginalStaffingManager(manager, command);
+        }
+        return page;
+      });
     },
     async getStaffingDeliveryStatus({ manager, operationId }) {
-      const actor = requireManager(manager);
-      return transaction((client) => call(client, "static_weekly_v10_read_staffing_delivery_status", [
-        requireUuid(operationId, "staffing_operation_id_required"),
-        actor.managerId,
-      ]));
+      const actor = requireManager(manager, manager?.read_only === true ? "manage_absences" : undefined);
+      const operation = requireUuid(operationId, "staffing_operation_id_required");
+      return transaction(async client => {
+        const command = await call(client, "static_weekly_v10_read_staffing_command", [operation, actor.managerId]);
+        if (!command) throw fail("staffing_operation_unavailable");
+        requireOriginalStaffingManager(manager, command);
+        return call(client, "static_weekly_v10_read_staffing_delivery_status", [operation, actor.managerId]);
+      });
     },
     async acceptStaffingCommand({ manager, operationId, previewDigest, confirmationKey }) {
-      const actor = requireManager(manager);
+      const actor = requireManager(manager, manager?.read_only === true ? "manage_absences" : undefined);
       const digest = text(previewDigest);
       if (!/^[0-9a-f]{64}$/.test(digest)) throw fail("staffing_preview_digest_required");
-      return transaction((client) => call(client, "static_weekly_v11_accept_staffing_command", [
-        requireUuid(operationId, "staffing_operation_id_required"),
+      const operation = requireUuid(operationId, "staffing_operation_id_required");
+      return transaction(async client => {
+        const command = await call(client, "static_weekly_v10_read_staffing_command", [operation, actor.managerId]);
+        if (!command) throw fail("staffing_operation_unavailable");
+        requireOriginalStaffingManager(manager, command);
+        return call(client, "static_weekly_v11_accept_staffing_command", [
+        operation,
         digest,
         requireUuid(confirmationKey, "staffing_confirmation_key_required"),
         actor.managerId,
-      ]));
+        ]);
+      });
     },
     async cancelStaffingPreparation({ manager, operationId }) {
-      const actor = requireManager(manager);
-      return transaction((client) => call(client, "static_weekly_v10_cancel_staffing_preparation", [
-        requireUuid(operationId, "staffing_operation_id_required"),
-        actor.managerId,
+      const actor = requireManager(manager, manager?.read_only === true ? "manage_absences" : undefined);
+      const operation = requireUuid(operationId, "staffing_operation_id_required");
+      return transaction(async client => {
+        const command = await call(client, "static_weekly_v10_read_staffing_command", [operation, actor.managerId]);
+        if (!command) throw fail("staffing_operation_unavailable");
+        requireOriginalStaffingManager(manager, command);
+        return call(client, "static_weekly_v10_cancel_staffing_preparation", [operation, actor.managerId]);
+      });
+    },
+    async previewCoverAllEventNotes(input){
+      const actor=requireManager(input.manager);
+      return transaction(async client=>{
+        const document=await acceptedCoverAllDocument(client,input),groups=[];
+        for(const capacity of document.contractors){
+          const result=await listCoverAllEventBriefPreviews({runRpc:(name,args)=>call(client,name,args),manager:actor,
+            capacitySlotId:capacity.slotId,printDocument:document});
+          if(result.status!=='PREVIEW_ONLY'||result.limited!==false)throw fail('coverall_event_preview_unavailable',`Event preview unavailable (${result.status}); no empty or partial approval inferred.`);
+          groups.push({capacitySlotId:capacity.slotId,capacityName:capacity.name,previews:result.previews});
+        }
+        return {schema:'custodial.coverall-event-preview-page.v1',status:'PREVIEW_ONLY',disclosureApproved:false,
+          serviceDate:document.serviceDate,projectionId:document.projectionId,authorityRevision:document.authorityRevision,
+          documentDigest:document.documentDigest,groups};
+      });
+    },
+    async getCoverAllPrintDocument(input) {
+      const selections=coverAllSelections(input.eventSelections??[]);
+      // Viewing the accepted route is delegated. Adding selected event notes
+      // remains the separate, explicit owner-only disclosure action.
+      const actor=selections.length?requireManager(input.manager):requireManager(input.manager,"manage_coverall");
+      return transaction(async client=>{
+        const document=await acceptedCoverAllDocument(client,input),briefs=[];
+        for(const selected of selections)briefs.push(await confirmCoverAllEventBrief({
+          runRpc:(name,args)=>call(client,name,args),manager:actor,printDocument:document,
+          eventId:selected.event_id,eventRevision:selected.event_revision,capacitySlotId:selected.capacity_slot_id,
+          preview:selected.preview,confirmation:selected.confirmation}));
+        return coverAllWithBriefs(document,briefs);
+      });
+    },
+    async revalidateCoverAllPrintDocument(input){
+      const original=input.document;
+      const actor=original?.eventBriefs?.length?requireManager(input.manager):requireManager(input.manager,"manage_coverall");
+      if(!original||!Array.isArray(original.eventBriefs??[])||(original.eventBriefs??[]).length>16)throw fail('coverall_event_confirmation_invalid');
+      return transaction(async client=>{
+        const document=await acceptedCoverAllDocument(client,input),briefs=[];
+        for(const confirmed of original.eventBriefs??[])briefs.push(await revalidateConfirmedCoverAllEventBrief({
+          runRpc:(name,args)=>call(client,name,args),manager:actor,printDocument:document,
+          eventId:confirmed.eventId,eventRevision:confirmed.eventRevision,capacitySlotId:confirmed.capacitySlotId,confirmed}));
+        const checked=coverAllWithBriefs(document,briefs);
+        if(checked.documentDigest!==original.documentDigest)throw fail('coverall_print_source_changed_reprepare_required');
+        return checked;
+      });
+    },
+    async getCapacitySourceBasis({manager,sourcePublicationId,effectiveStart,expectedRevision}) {
+      const actor=requireManager(manager);
+      const basis=await transaction(client=>call(client,"static_weekly_capacity_source_basis",[
+        actor.managerId,requirePublicationId(sourcePublicationId),requireMonday(effectiveStart,"effective start"),requireRevision(expectedRevision),
+      ]));
+      return capacitySourceBasisSummary(basis);
+    },
+    async previewCapacitySource({manager,sourcePublicationId,effectiveStart,expectedRevision,selection,reason}) {
+      const actor=requireManager(manager);
+      const date=requireMonday(effectiveStart,"effective start"),revision=requireRevision(expectedRevision),publication=requirePublicationId(sourcePublicationId);
+      const preview=await transaction(async client=>{
+        const basis=await call(client,"static_weekly_capacity_source_basis",[actor.managerId,publication,date,revision]);
+        const candidate=createContractorCapacityTransitionCandidate({basis,selection,effectiveStart:date,expectedRevision:revision,
+          reason:text(reason),candidateVersionId:randomUUID(),candidatePublicationId:randomUUID()});
+        return call(client,"static_weekly_capacity_source_preview",[actor.managerId,publication,date,revision,
+          JSON.stringify(selection),text(reason),JSON.stringify(candidate.candidateSource)]);
+      });
+      await prepareDraft(capacitySourcePublicationInput(preview),{expectedRevision:preview.expected_revision,
+        actor:{...actor,idempotencyKey:`capacity-preview:${preview.preview_id}`}});
+      return capacitySourcePreviewSummary(preview);
+    },
+    async confirmCapacitySource({manager,operationId,previewId}) {
+      const actor=requireManager(manager),operation=requireUuid(operationId,"capacity_source_operation_required"),
+        preview=requireUuid(previewId,"capacity_source_preview_required");
+      return transaction(async client=>{
+        await lockStaticWeeklyAuthority(client);
+        const prepared=await call(client,"static_weekly_capacity_source_begin",[actor.managerId,operation,preview]);
+        if(prepared?.replayed===true)return {...prepared.receipt,replayed:true};
+        const draft=await prepareInsideTransaction(client,()=>prepareDraft(capacitySourcePublicationInput(prepared),{
+          expectedRevision:prepared.expected_revision,actor:{...actor,idempotencyKey:`capacity-source:${operation}:draft`},
+        }));
+        const created=await call(client,"static_weekly_v3_create_draft",[draft.effectiveStart,draft.objectiveVersion,
+          draft.objective,draft.inputProvenance,draft.document,draft.expectedRevision,actor.managerId,draft.idempotencyKey,prepared.source_id]);
+        const publication=await call(client,"static_weekly_v3_publish_draft",[created.data.version_id,1,created.revision,
+          actor.managerId,`capacity-source:${operation}:publish`,"supersede",null]);
+        const publicationId=requirePublicationId(publication.data.publication_id);
+        const projection=await materializeCurrentProjection(client,{actor,publicationId,weekStart:prepared.effective_start,
+          expectedRevision:publication.revision,idempotencyKey:`capacity-source:${operation}:projection:${prepared.effective_start}`});
+        return call(client,"static_weekly_capacity_source_finalize",[actor.managerId,operation,publicationId,projection.data.projection_id]);
+      });
+    },
+    async getCapacitySourceStatus({manager,operationId}) {
+      const actor=requireManager(manager);
+      return transaction(client=>call(client,"static_weekly_capacity_source_status",[
+        actor.managerId,requireUuid(operationId,"capacity_source_operation_required"),
       ]));
     },
-    async getCoverAllPrintDocument({ manager, weekStart, serviceDate, expectedRevision, projectionId }) {
-      requireManager(manager);
-      const week=requireMonday(weekStart,"week start"),date=requireDateInWeek(serviceDate,week,"service date");
-      const revision=requireRevision(expectedRevision);
-      return transaction(async(client)=>{
-        // Read all three immutable/current bindings in the same authority-lock
-        // boundary as schedule changes. PDF rendering runs AFTER commit.
+    async previewPlaceRepublish({ manager, sourcePublicationId, effectiveStart, expectedRevision, selection, reason }) {
+      const actor = requireManager(manager);
+      const date = requireMonday(effectiveStart, "effective start");
+      const preview = await transaction(client => call(client, "custodial_place_operational_preview", [
+        actor.managerId, requirePublicationId(sourcePublicationId), date, requireRevision(expectedRevision),
+        JSON.stringify(selection), text(reason),
+      ]));
+      // The selected source is server-derived, never an HTTP compiler document.
+      // Preparation does not reserve/publish or run recurring staffing repair.
+      await prepareDraft(placePublicationInput(preview), {expectedRevision: preview.expected_revision,
+        actor:{...actor,idempotencyKey:`place-preview:${preview.preview_id}`}});
+      return {...placePublicationSummary(preview), expires_at:preview.expires_at, compiler_verified:true};
+    },
+    async confirmPlaceRepublish({ manager, operationId, previewId }) {
+      const actor = requireManager(manager);
+      const operation = requireUuid(operationId, "place_operation_id_required");
+      const preview = requireUuid(previewId, "place_preview_id_required");
+      return transaction(async client => {
         await lockStaticWeeklyAuthority(client);
-        const snapshot=await snapshotFor(client,week);
-        const publicationId=requirePublicationId(snapshot?.current_publication?.publication_id);
-        const source=await sourceFor(client,publicationId,date);
-        const lunch=await call(client,"static_weekly_v8_read_lunch_document",[date]);
-        return createCoverAllPrintDocument({snapshot,source,lunch,serviceDate:date,expectedRevision:revision,projectionId:text(projectionId)});
+        const prepared = await call(client, "custodial_place_operational_begin", [actor.managerId, operation, preview]);
+        // Complete original receipt wins before mutable expiry/source checks.
+        if (prepared?.replayed === true) return {...prepared.receipt,replayed:true};
+        const draft = await prepareInsideTransaction(client, () => prepareDraft(placePublicationInput(prepared), {
+          expectedRevision: prepared.expected_revision, actor:{...actor,idempotencyKey:`place:${operation}:draft`},
+        }));
+        const created = await call(client, "static_weekly_v3_create_draft", [draft.effectiveStart,draft.objectiveVersion,
+          draft.objective,draft.inputProvenance,draft.document,draft.expectedRevision,actor.managerId,draft.idempotencyKey,prepared.source_id]);
+        const publication = await call(client, "static_weekly_v3_publish_draft", [created.data.version_id,1,
+          created.revision,actor.managerId,`place:${operation}:publish`,"supersede",null]);
+        const publicationId = requirePublicationId(publication.data.publication_id);
+        const projection = await materializeCurrentProjection(client, {actor,publicationId,weekStart:prepared.effective_start,
+          expectedRevision:publication.revision,idempotencyKey:`place:${operation}:projection:${prepared.effective_start}`});
+        return call(client,"custodial_place_operational_finalize",[actor.managerId,operation,publicationId,projection.data.projection_id]);
       });
+    },
+    async getPlaceRepublishStatus({ manager, operationId }) {
+      const actor = requireManager(manager);
+      return transaction(client => call(client,"custodial_place_operational_status",[
+        actor.managerId,requireUuid(operationId,"place_operation_id_required"),
+      ]));
     },
     async createReplacementDraft({ manager, sourcePublicationId, effectiveStart, expectedRevision, idempotencyKey }) {
       const actor = requireManager(manager); const date = requireDate(effectiveStart, "effective start");
@@ -1524,32 +2369,35 @@ export function createStaticWeeklyControlPlane({
         mutate: () => call(client, "static_weekly_v3_publish_draft", [text(draftVersionId), requireRevision(expectedDraftRevision), requireRevision(expectedRevision), actor.managerId, key, text(publicationKind), rollbackOfVersionId || null]),
       }));
     },
-    async applyException({ manager, exceptionType, serviceDate, startsAt = null, endsAt = null, baseVersionId, publicationId, reason, payload, expectedRevision, idempotencyKey, projectionWeekStart, reversesExceptionId = null }) {
-      const actor = requireManager(manager); const weekStart = projectionWeekForDate(projectionWeekStart, serviceDate); const date = requireDateInWeek(serviceDate, weekStart, "service date"); const key = requireIdempotencyKey(idempotencyKey);
-      return transaction((client) => mutateAndMaterializeCurrentProjection(client, {
-        actor,
-        publicationId: requirePublicationId(publicationId),
-        weekStart,
-        idempotencyKey: key,
-        mutate: () => call(client, "static_weekly_v3_apply_exception", [text(exceptionType), date, startsAt || null, endsAt || null, text(baseVersionId), requirePublicationId(publicationId), text(reason), payload, requireRevision(expectedRevision), actor.managerId, key, reversesExceptionId || null]),
-      }));
+    async applyException({manager,exceptionType,serviceDate,startsAt=null,endsAt=null,baseVersionId,publicationId,
+      reason,payload,expectedRevision,idempotencyKey,projectionWeekStart,reversesExceptionId=null,signal=null,deadlineAt=null}) {
+      requireManager(manager,"manage_absences");
+      return this.applyDayChanges({manager,serviceDate,baseVersionId,publicationId,expectedRevision,idempotencyKey,
+        projectionWeekStart,signal,deadlineAt,operations:[{operation:"exception",exceptionType,startsAt,endsAt,reason,payload,reversesExceptionId}]});
     },
-    async applyContractorCapacity({ manager, serviceDate, baseVersionId, publicationId, slotId, shift, lunch, reason, expectedRevision, idempotencyKey, projectionWeekStart }) {
-      requireManager(manager);
-      const actualShift=requireWindow(shift,"actual contractor shift"),actualLunch=requireWindow(lunch,"actual contractor lunch");
+    async applyContractorCapacity({ manager, serviceDate, baseVersionId, publicationId, slotId, shift, lunch, breakChoice, reason, expectedRevision, idempotencyKey, projectionWeekStart,signal=null,deadlineAt=null }) {
+      requireManager(manager,"manage_coverall");
+      const actualShift=requireWindow(shift,"actual contractor shift");
+      if (breakChoice === 'NONE') {
+        if (lunch != null) throw fail('static_weekly_contractor_break_choice_invalid', 'No-break cannot also contain a lunch window.');
+        return this.applyDayChanges({manager,serviceDate,baseVersionId,publicationId,expectedRevision,idempotencyKey,projectionWeekStart,signal,deadlineAt,
+          operations:[{operation:'cover_all',slotId,shift:actualShift,breakChoice:'NONE',reason}]});
+      }
+      if (breakChoice != null && breakChoice !== 'SCHEDULED') throw fail('static_weekly_contractor_break_choice_invalid');
+      const actualLunch=requireWindow(lunch,"actual contractor lunch");
       const minutes=t=>Number(t.slice(0,2))*60+Number(t.slice(3));
       if(minutes(actualLunch.end)-minutes(actualLunch.start)!==60||actualLunch.start<actualShift.start||actualLunch.end>actualShift.end){
         throw fail("static_weekly_contractor_actual_lunch_required","Enter the actual one-hour CoverAll lunch within its shift; no lunch time is assumed.");
       }
       // Reuse the accepted complete-action receipt and one transaction for both
       // dated facts. A retry must bind lunch as well as capacity and shift.
-      return this.applyDayChanges({manager,serviceDate,baseVersionId,publicationId,expectedRevision,idempotencyKey,projectionWeekStart,operations:[
+      return this.applyDayChanges({manager,serviceDate,baseVersionId,publicationId,expectedRevision,idempotencyKey,projectionWeekStart,signal,deadlineAt,operations:[
         {operation:"cover_all",slotId,shift:actualShift,reason},
         {operation:"exception",exceptionType:"lunch",startsAt:actualLunch.start,endsAt:actualLunch.end,payload:{slotId},reason:"Manager recorded actual CoverAll lunch"},
       ]});
     },
-    async applyDayChanges({ manager, serviceDate, baseVersionId, publicationId, versionId = null, operations, expectedRevision, idempotencyKey, projectionWeekStart }) {
-      const actor = requireManager(manager);
+    async applyDayChanges({ manager, serviceDate, baseVersionId, publicationId, versionId = null, operations, expectedRevision, idempotencyKey, projectionWeekStart, signal=null, deadlineAt=null }) {
+      const actor = requireManager(manager,"manage_absences");
       const weekStart = projectionWeekForDate(projectionWeekStart, serviceDate);
       const date = requireDateInWeek(serviceDate, weekStart, "service date");
       const key = requireIdempotencyKey(idempotencyKey);
@@ -1567,13 +2415,14 @@ export function createStaticWeeklyControlPlane({
         // the winner commits. The gate reauthorizes the current manager and
         // reacquires the same lock defensively; it remains held through commit.
         await lockStaticWeeklyAuthority(client);
+        await authorizeAbsenceOperations(client,manager,date,effectivePublicationId,requestedOperations);
         const batch = await call(client, "static_weekly_v4_begin_day_changes", [date, weekStart, effectiveVersionId, effectivePublicationId, JSON.stringify(requestedOperations), initialRevision, actor.managerId, key]);
         if (batch?.replayed === true) return batch.response;
         // Resolve and validate every operation before invoking the first writer;
         // a malformed CoverAll entry therefore cannot leave a call-out prefix.
         const source = requireBatchPublicationSource(await sourceFor(client, effectivePublicationId, date), effectivePublicationId, effectiveVersionId);
         const commands = requestedOperations.map((operation, index) => operation.operation === "cover_all"
-          ? { ...operation, payload: { availability: contractorAvailabilityFromSource(source, operation.slotId, date, operation.shift) }, idempotencyKey: dayChangeOperationIdempotencyKey(key, index) }
+          ? { ...operation, payload: { availability: contractorAvailabilityFromSource(source, operation.slotId, date, operation.shift, operation.breakChoice) }, idempotencyKey: dayChangeOperationIdempotencyKey(key, index) }
           : { ...operation, idempotencyKey: dayChangeOperationIdempotencyKey(key, index) });
         let revision = initialRevision;
         const mutations = [];
@@ -1589,8 +2438,9 @@ export function createStaticWeeklyControlPlane({
           publicationId: effectivePublicationId,
           weekStart,
           expectedRevision: revision,
-          idempotencyKey: projectionIdempotencyKey(key),
+          idempotencyKey: projectionIdempotencyKey(key),signal,deadlineAt,
         });
+        await authorizeAbsenceOperations(client,manager,date,effectivePublicationId,requestedOperations);
         return {
           ...projection,
           operation: "apply_day_changes",
@@ -1599,7 +2449,7 @@ export function createStaticWeeklyControlPlane({
             mutations,
           },
         };
-      });
+      }, { reconcileManagerId: actor.managerId, signal, deadlineAt });
     },
     async markEmployeeDeparted({ manager, slotId, reason, expectedRevision, idempotencyKey, projectionWeekStart }) {
       const actor = requireManager(manager); const weekStart = requireMonday(projectionWeekStart, "projection week start"); const key = requireIdempotencyKey(idempotencyKey);
@@ -1609,7 +2459,7 @@ export function createStaticWeeklyControlPlane({
         idempotencyKey: key,
         publicationId: async () => requirePublicationId((await snapshotFor(client, weekStart))?.current_publication?.publication_id),
         mutate: () => call(client, "static_weekly_v4_mark_employee_departed", [text(slotId), text(reason), requireRevision(expectedRevision), actor.managerId, key]),
-      }));
+      }), { reconcileManagerId: actor.managerId });
     },
     async replaceEmployee({ manager, slotId, newEmployeeName, reason, expectedRevision, idempotencyKey, projectionWeekStart }) {
       const actor = requireManager(manager); const weekStart = requireMonday(projectionWeekStart, "projection week start"); const key = requireIdempotencyKey(idempotencyKey);
@@ -1619,7 +2469,7 @@ export function createStaticWeeklyControlPlane({
         idempotencyKey: key,
         publicationId: async () => requirePublicationId((await snapshotFor(client, weekStart))?.current_publication?.publication_id),
         mutate: () => call(client, "static_weekly_v4_replace_employee", [text(slotId), text(newEmployeeName), text(reason), requireRevision(expectedRevision), actor.managerId, key]),
-      }));
+      }), { reconcileManagerId: actor.managerId });
     },
     async restoreExistingEmployee({ manager, sourceId, slotId, employeeId, effectiveStart, reason, expectedRevision, idempotencyKey }) {
       const actor = requireManager(manager); const key = requireIdempotencyKey(idempotencyKey);
@@ -1630,44 +2480,81 @@ export function createStaticWeeklyControlPlane({
         mutate: () => call(client, "static_weekly_v8_restore_existing_employee", [
           source, text(slotId), text(employeeId), date, text(reason), revision, actor.managerId, key,
         ]),
-      }));
+      }), { reconcileManagerId: actor.managerId });
     },
-    async vacateRosterSlot({ manager, sourceId, slotId, employeeId, effectiveStart, reason, expectedRevision, idempotencyKey }) {
-      const actor = requireManager(manager); const key = requireIdempotencyKey(idempotencyKey);
-      const date = requireDate(effectiveStart, "vacancy effective start");
-      const weekStart = mondayForDate(date, "vacancy effective start");
-      return transaction(async (client) => {
-        await client.query("select pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended($1,0))", ["memphis-static-weekly-authority"]);
-        const current = await snapshotFor(client, weekStart);
-        const priorRevision = requireRevision(current?.authority_revision);
-        const mutate = () => call(client, "static_weekly_v8_vacate_roster_slot", [
-          text(sourceId), text(slotId), text(employeeId), date, text(reason),
-          requireRevision(expectedRevision), actor.managerId, key,
-        ]);
-        const mutation = await mutate(); // Validates the complete original request on retries, too.
-        // The lock-held revision BEFORE the writer distinguishes a new mutation
-        // from a replay. A committed command has already advanced authority;
-        // it must have its ORIGINAL completion, never manufacture a new one.
-        if (priorRevision !== requireRevision(expectedRevision) || mutation?.data?.completion_mode === "mutation_only") {
-          const completed = await call(client, "static_weekly_v8_read_completed_vacancy", [actor.managerId, key]);
-          if (!completed) throw fail("static_weekly_vacancy_completion_missing", "The original vacancy completion is missing; no new schedule change was accepted.");
-          return completed;
-        }
-        if (mutation?.data?.completion_mode !== "projection_required"
-          || text(mutation.data.original_publication_id) !== text(current?.current_publication?.publication_id)) {
-          throw fail("static_weekly_vacancy_completion_mismatch", "The vacancy does not bind the original published schedule.");
-        }
-        return mutateAndMaterializeCurrentProjection(client, {
-          actor, weekStart, idempotencyKey: key,
-          publicationId: requirePublicationId(current.current_publication.publication_id), mutate: async () => mutation,
+    async previewVacancyRosterSlot(input) {
+      requireManager(input.manager);
+      return transaction(async client => {
+        const prepared = await prepareVacancyOnCurrentTransaction(client, input);
+        return { ...prepared.preview, preview_retained: true, published: false };
+      }, { signal: input.signal ?? null, deadlineAt: input.deadlineAt ?? null });
+    },
+    async vacateRosterSlot(input) {
+      const actor = requireManager(input.manager), digest = text(input.previewDigest);
+      if (!/^[a-f0-9]{64}$/.test(digest)) throw fail("static_weekly_vacancy_reviewed_preview_required");
+      return transaction(async client => {
+        const prepared = await prepareVacancyOnCurrentTransaction(client, input, digest);
+        const projection = await materializeCurrentProjection(client, {
+          actor: prepared.actor, publicationId: prepared.publicationId, weekStart: prepared.weekStart,
+          expectedRevision: prepared.mutation.revision, idempotencyKey: projectionIdempotencyKey(prepared.key),
+          preparedProjection: prepared.projection,
         });
+        const consumed = await call(client, "static_weekly_consume_vacancy_reviewed_preparation",
+          [...prepared.auth, digest, prepared.actualPostInputUtf8]);
+        if (consumed?.found !== true || consumed.state !== "CONSUMED" || consumed.preview_digest !== digest
+          || consumed.worker_candidate_digest !== prepared.preview.workerCandidateDigest
+          || consumed.packet_utf8 !== prepared.packetUtf8
+          || consumed.payload_sha256 !== createHash("sha256").update(prepared.packetUtf8, "utf8").digest("hex")) {
+          throw fail("static_weekly_vacancy_reviewed_preparation_unconfirmed",
+            "The original preparation was not confirmed with its exact accepted receipt.");
+        }
+        return { ...projection, data: { ...prepared.mutation.data, ...projection.data,
+          mutation: prepared.mutation.data, vacancy_preview: prepared.preview } };
+      }, { reconcileManagerId: actor.managerId, signal: input.signal ?? null, deadlineAt: input.deadlineAt ?? null });
+    },
+    async readSeparation({ manager, slotId }) {
+      const actor = requireManager(manager);
+      return transaction((client) => call(client, "custodial_v12_read_separation", [
+        text(slotId), actor.managerId,
+      ]));
+    },
+    async readOriginalStaffingOutcome({ manager, operation, idempotencyKey }) {
+      const actor = requireManager(manager), key = requireIdempotencyKey(idempotencyKey);
+      if (!["vacate_roster_slot","fill_vacant_slot","restore_existing_employee"].includes(operation))
+        throw fail("static_weekly_staffing_operation_invalid");
+      return transaction(client => call(client, "static_weekly_read_original_staffing_outcome_v1",
+        [actor.managerId, key, operation]));
+    },
+    async getRosterSourceDetails({ manager, sourceId, effectiveStart, expectedRevision }) {
+      const actor = requireManager(manager), id = requireSourceId(sourceId);
+      const date = requireDate(effectiveStart,"staffing effective start"), week = mondayForDate(date);
+      const revision = requireRevision(expectedRevision);
+      return transaction(async client => {
+        await lockStaticWeeklyAuthority(client);
+        const snapshot = await snapshotFor(client,week);
+        if (snapshot?.authority_revision !== revision) throw fail("static_weekly_staffing_source_revision_changed");
+        if (!Array.isArray(snapshot.roster)) throw fail("static_weekly_staffing_roster_unavailable");
+        const registered = await registeredSourceFor(client,id,week);
+        const original = await call(client,"static_weekly_v3_read_authority_source",[id]);
+        if (registered?.source_id !== id || !registered.compiler_input?.version || !Array.isArray(registered.compiler_input.slots))
+          throw fail("static_weekly_staffing_source_unavailable");
+        if (original?.source_id !== id || !original.compiler_input || !Array.isArray(original.compiler_input.slots))
+          throw fail("static_weekly_staffing_registered_source_unavailable");
+        return {schema:"custodial.roster-source-details.v1",manager_id:actor.managerId,
+          source_id:id,effective_start:date,week_start:week,authority_revision:revision,
+          current_source_digest:postgresJsonbContentDigest(registered.compiler_input),
+          registered_source_digest:postgresJsonbContentDigest(original.compiler_input),
+          registered_compiler_input:clone(original.compiler_input),
+          compiler_input:clone(registered.compiler_input),current_roster:clone(snapshot.roster),
+          publication_id:snapshot.current_publication?.publication_id || null,
+          phone_released:false};
       });
     },
     async createVacantRosterSlot({ manager, slotId, slotLabel, expectedRevision, idempotencyKey }) {
       const actor = requireManager(manager); const key = requireIdempotencyKey(idempotencyKey);
       return transaction((client) => call(client, "static_weekly_v7_create_vacant_roster_slot", [
         text(slotId), text(slotLabel), requireRevision(expectedRevision), actor.managerId, key,
-      ]));
+      ]), { reconcileManagerId: actor.managerId });
     },
     async fillVacantRosterSlot({ manager, sourceId, slotId, newEmployeeName, effectiveStart, reason, expectedRevision, idempotencyKey }) {
       const actor = requireManager(manager); const key = requireIdempotencyKey(idempotencyKey);
@@ -1678,12 +2565,14 @@ export function createStaticWeeklyControlPlane({
         mutate: () => call(client, "static_weekly_v9_fill_vacant_roster_slot", [
           source, text(slotId), text(newEmployeeName), date, text(reason), revision, actor.managerId, key,
         ]),
-      }));
+      }), { reconcileManagerId: actor.managerId });
     },
-    async materializeProjection({ manager, publicationId, serviceDate, expectedRevision, idempotencyKey }) {
-      const actor = requireManager(manager); const weekStart = requireMonday(serviceDate, "projection start"); const effectivePublicationId = requirePublicationId(publicationId); const revision = requireRevision(expectedRevision); const key = requireIdempotencyKey(idempotencyKey);
+    async materializeProjection({ manager, publicationId, serviceDate, expectedRevision, idempotencyKey, signal=null, deadlineAt=null }) {
+      const actor = requireManager(manager,"regenerate_routes"); const weekStart = requireMonday(serviceDate, "projection start"); const effectivePublicationId = requirePublicationId(publicationId); const revision = requireRevision(expectedRevision); const key = requireIdempotencyKey(idempotencyKey);
       return transaction(async (client) => {
+        await lockStaticWeeklyAuthority(client);
         await client.query("select pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended($1,0))", ["memphis-static-weekly-authority"]);
+        await authorizeRouteRegeneration(client,manager,weekStart,effectivePublicationId);
         const current = await snapshotFor(client, weekStart);
         if (current?.projection_status === "current" && text(current?.current_publication?.publication_id) === effectivePublicationId && text(current?.latest_projection?.week_start) === weekStart) {
           // The legacy split caller may replay the atomic publication, but a
@@ -1707,21 +2596,28 @@ export function createStaticWeeklyControlPlane({
             },
           };
         }
-        return materializeCurrentProjection(client, { actor, publicationId: effectivePublicationId, weekStart, expectedRevision: revision, idempotencyKey: key });
-      });
+        const result=await materializeCurrentProjection(client, { actor, publicationId: effectivePublicationId, weekStart, expectedRevision: revision, idempotencyKey: key,signal,deadlineAt });
+        await authorizeRouteRegeneration(client,manager,weekStart,effectivePublicationId);
+        return result;
+      }, {signal,deadlineAt,reconcileManagerId:actor.managerId});
     },
-    async rebuildCurrentProjection({ manager, weekStart, expectedRevision, idempotencyKey }) {
-      const actor = requireManager(manager); const projectionWeekStart = requireMonday(weekStart, "projection week start"); const key = requireIdempotencyKey(idempotencyKey);
+    async rebuildCurrentProjection({ manager, weekStart, expectedRevision, idempotencyKey, signal=null, deadlineAt=null }) {
+      const actor = requireManager(manager,"regenerate_routes"); const projectionWeekStart = requireMonday(weekStart, "projection week start"); const key = requireIdempotencyKey(idempotencyKey);
       return transaction(async (client) => {
+        await lockStaticWeeklyAuthority(client);
         const snapshot = await snapshotFor(client, projectionWeekStart);
-        return materializeCurrentProjection(client, {
+        const effectivePublicationId=requirePublicationId(snapshot?.current_publication?.publication_id);
+        await authorizeRouteRegeneration(client,manager,projectionWeekStart,effectivePublicationId);
+        const result=await materializeCurrentProjection(client, {
           actor,
           publicationId: requirePublicationId(snapshot?.current_publication?.publication_id),
           weekStart: projectionWeekStart,
           expectedRevision: requireRevision(expectedRevision),
-          idempotencyKey: projectionIdempotencyKey(key),
+          idempotencyKey: projectionIdempotencyKey(key),signal,deadlineAt,
         });
-      });
+        await authorizeRouteRegeneration(client,manager,projectionWeekStart,effectivePublicationId);
+        return result;
+      }, {signal,deadlineAt,reconcileManagerId:actor.managerId});
     },
     async close() {
       if (closePromise) return closePromise;

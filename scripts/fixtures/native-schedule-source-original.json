@@ -1,0 +1,169 @@
+{
+  "provenance": {
+    "source": "/home/eric/Documents/Codex/2026-09-13/i-x20/work/autonomous-repair-20260923/overnight-readiness-20261006/schedule-reservation-sql-v1/SOURCE_RESERVATION_READBACK.json",
+    "source_sha256": "e696a88d51114df24ccd046b051280498f2cc8ca6dbc26f882cf265a5b2de8db",
+    "scope": "Retained exact actual synthetic238SQL source original/replay/expired response; no live staff/provider data or new SQL test"
+  },
+  "first": {
+    "schema": "custodial.native-schedule-source-reservation.v1",
+    "status": "SOURCE_RESERVED_NATIVE_UNQUALIFIED",
+    "replayed": false,
+    "reserved": true,
+    "reservation": {
+      "window": {
+        "schema": "custodial.native-schedule-server-window.v1",
+        "timezone": "America/Chicago",
+        "recipient": {
+          "device_id": "8c0d4272-bd82-4428-a970-d7d9aee18012",
+          "employee_id": "51dc45fe-e9ef-42a9-abe9-6ea7d0548d57",
+          "token_digest": "14afc91b1e42f7526dc4b09e237c83c9702fdc0aea2a37807e6dd0d662975e9c",
+          "credential_id": "1d978131-0e62-4d31-846a-ca9c05e834fe",
+          "generation_id": "a555ec68-555d-42f2-b0f8-5f5b8fc09010",
+          "assignment_epoch": 1,
+          "principal_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "device_identifier": "KIOSK_03"
+        },
+        "server_now": "2026-10-08T14:46:00.000000Z",
+        "valid_from": "2026-10-08T14:45:00.000000Z",
+        "version_id": "e6f29479-9a31-484d-abf9-df887a58fcd6",
+        "after_units": [
+          "LOCATION:05ff968b-72d1-43bc-8b7a-9da04da9698e",
+          "LOCATION:ad2a60d2-a711-4751-ad9f-5e6ffd4825db",
+          "LOCATION:bda12f94-f686-41b2-a7d8-d66c89ef288e"
+        ],
+        "employee_id": "51dc45fe-e9ef-42a9-abe9-6ea7d0548d57",
+        "logical_key": "schedule-ownership:2026-10-08:51dc45fe-e9ef-42a9-abe9-6ea7d0548d57:09:45",
+        "valid_until": "2026-10-08T15:00:00.000000Z",
+        "before_units": [
+          "LOCATION:ad2a60d2-a711-4751-ad9f-5e6ffd4825db",
+          "LOCATION:bda12f94-f686-41b2-a7d8-d66c89ef288e"
+        ],
+        "service_date": "2026-10-08",
+        "employee_name": "Synthetic provider 1",
+        "generation_id": "a555ec68-555d-42f2-b0f8-5f5b8fc09010",
+        "projection_id": "94a47c5e-602e-4e86-a76f-bc9987325e94",
+        "publication_id": "a8fe041d-36b9-4078-8041-767209f72dbf",
+        "source_revision": "3",
+        "server_digest_format": "postgres-jsonb-sha256.v1",
+        "server_source_sha256": "2d62576b6a73ed6afb294c4905142f3b40d9b3cc9452e05e5e3a24f20278ea31",
+        "assignment_occurrence_id": "625588d1-3afb-4761-a2f2-3765c1bfbf5f"
+      },
+      "reserved_at": "2026-10-08T14:46:00.000000Z",
+      "operation_id": "fb8f7c91-7c4c-41a0-92a6-072db2e22ed6",
+      "window_sha256": "7efb1f0dcdf9b875d863f24cdd0a473af51b8a306139c9bf1f1f8c63b3965574",
+      "reservation_id": "a766646c-b023-43e1-ba23-b3eb7ac97040"
+    },
+    "delivery_admitted": false,
+    "dispatch_authorized": false,
+    "retention_authority": null,
+    "clock_effect_authority": null
+  },
+  "replay": {
+    "schema": "custodial.native-schedule-source-reservation.v1",
+    "status": "ORIGINAL_SOURCE_RESERVED",
+    "replayed": true,
+    "reserved": true,
+    "reservation": {
+      "window": {
+        "schema": "custodial.native-schedule-server-window.v1",
+        "timezone": "America/Chicago",
+        "recipient": {
+          "device_id": "8c0d4272-bd82-4428-a970-d7d9aee18012",
+          "employee_id": "51dc45fe-e9ef-42a9-abe9-6ea7d0548d57",
+          "token_digest": "14afc91b1e42f7526dc4b09e237c83c9702fdc0aea2a37807e6dd0d662975e9c",
+          "credential_id": "1d978131-0e62-4d31-846a-ca9c05e834fe",
+          "generation_id": "a555ec68-555d-42f2-b0f8-5f5b8fc09010",
+          "assignment_epoch": 1,
+          "principal_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "device_identifier": "KIOSK_03"
+        },
+        "server_now": "2026-10-08T14:46:00.000000Z",
+        "valid_from": "2026-10-08T14:45:00.000000Z",
+        "version_id": "e6f29479-9a31-484d-abf9-df887a58fcd6",
+        "after_units": [
+          "LOCATION:05ff968b-72d1-43bc-8b7a-9da04da9698e",
+          "LOCATION:ad2a60d2-a711-4751-ad9f-5e6ffd4825db",
+          "LOCATION:bda12f94-f686-41b2-a7d8-d66c89ef288e"
+        ],
+        "employee_id": "51dc45fe-e9ef-42a9-abe9-6ea7d0548d57",
+        "logical_key": "schedule-ownership:2026-10-08:51dc45fe-e9ef-42a9-abe9-6ea7d0548d57:09:45",
+        "valid_until": "2026-10-08T15:00:00.000000Z",
+        "before_units": [
+          "LOCATION:ad2a60d2-a711-4751-ad9f-5e6ffd4825db",
+          "LOCATION:bda12f94-f686-41b2-a7d8-d66c89ef288e"
+        ],
+        "service_date": "2026-10-08",
+        "employee_name": "Synthetic provider 1",
+        "generation_id": "a555ec68-555d-42f2-b0f8-5f5b8fc09010",
+        "projection_id": "94a47c5e-602e-4e86-a76f-bc9987325e94",
+        "publication_id": "a8fe041d-36b9-4078-8041-767209f72dbf",
+        "source_revision": "3",
+        "server_digest_format": "postgres-jsonb-sha256.v1",
+        "server_source_sha256": "2d62576b6a73ed6afb294c4905142f3b40d9b3cc9452e05e5e3a24f20278ea31",
+        "assignment_occurrence_id": "625588d1-3afb-4761-a2f2-3765c1bfbf5f"
+      },
+      "reserved_at": "2026-10-08T14:46:00.000000Z",
+      "operation_id": "fb8f7c91-7c4c-41a0-92a6-072db2e22ed6",
+      "window_sha256": "7efb1f0dcdf9b875d863f24cdd0a473af51b8a306139c9bf1f1f8c63b3965574",
+      "reservation_id": "a766646c-b023-43e1-ba23-b3eb7ac97040"
+    },
+    "delivery_admitted": false,
+    "dispatch_authorized": false,
+    "retention_authority": null,
+    "clock_effect_authority": null
+  },
+  "expired": {
+    "schema": "custodial.native-schedule-source-status.v1",
+    "status": "ORIGINAL_SOURCE_RETAINED",
+    "reservation": {
+      "window": {
+        "schema": "custodial.native-schedule-server-window.v1",
+        "timezone": "America/Chicago",
+        "recipient": {
+          "device_id": "8c0d4272-bd82-4428-a970-d7d9aee18012",
+          "employee_id": "51dc45fe-e9ef-42a9-abe9-6ea7d0548d57",
+          "token_digest": "14afc91b1e42f7526dc4b09e237c83c9702fdc0aea2a37807e6dd0d662975e9c",
+          "credential_id": "1d978131-0e62-4d31-846a-ca9c05e834fe",
+          "generation_id": "a555ec68-555d-42f2-b0f8-5f5b8fc09010",
+          "assignment_epoch": 1,
+          "principal_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "device_identifier": "KIOSK_03"
+        },
+        "server_now": "2026-10-08T14:46:00.000000Z",
+        "valid_from": "2026-10-08T14:45:00.000000Z",
+        "version_id": "e6f29479-9a31-484d-abf9-df887a58fcd6",
+        "after_units": [
+          "LOCATION:05ff968b-72d1-43bc-8b7a-9da04da9698e",
+          "LOCATION:ad2a60d2-a711-4751-ad9f-5e6ffd4825db",
+          "LOCATION:bda12f94-f686-41b2-a7d8-d66c89ef288e"
+        ],
+        "employee_id": "51dc45fe-e9ef-42a9-abe9-6ea7d0548d57",
+        "logical_key": "schedule-ownership:2026-10-08:51dc45fe-e9ef-42a9-abe9-6ea7d0548d57:09:45",
+        "valid_until": "2026-10-08T15:00:00.000000Z",
+        "before_units": [
+          "LOCATION:ad2a60d2-a711-4751-ad9f-5e6ffd4825db",
+          "LOCATION:bda12f94-f686-41b2-a7d8-d66c89ef288e"
+        ],
+        "service_date": "2026-10-08",
+        "employee_name": "Synthetic provider 1",
+        "generation_id": "a555ec68-555d-42f2-b0f8-5f5b8fc09010",
+        "projection_id": "94a47c5e-602e-4e86-a76f-bc9987325e94",
+        "publication_id": "a8fe041d-36b9-4078-8041-767209f72dbf",
+        "source_revision": "3",
+        "server_digest_format": "postgres-jsonb-sha256.v1",
+        "server_source_sha256": "2d62576b6a73ed6afb294c4905142f3b40d9b3cc9452e05e5e3a24f20278ea31",
+        "assignment_occurrence_id": "625588d1-3afb-4761-a2f2-3765c1bfbf5f"
+      },
+      "reserved_at": "2026-10-08T14:46:00.000000Z",
+      "operation_id": "fb8f7c91-7c4c-41a0-92a6-072db2e22ed6",
+      "window_sha256": "7efb1f0dcdf9b875d863f24cdd0a473af51b8a306139c9bf1f1f8c63b3965574",
+      "reservation_id": "a766646c-b023-43e1-ba23-b3eb7ac97040"
+    },
+    "source_current": false,
+    "delivery_admitted": false,
+    "dispatch_authorized": false,
+    "retention_authority": null,
+    "current_source_status": "SOURCE_WINDOW_EXPIRED",
+    "clock_effect_authority": null
+  }
+}

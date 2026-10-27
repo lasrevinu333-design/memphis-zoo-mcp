@@ -1,0 +1,63 @@
+{
+  "schema": "custodial.employee-message-prepare-predecessor.v1",
+  "provenance": {
+    "kind": "EXACT_HISTORICAL_218_CANONICAL_EXTRACTION",
+    "canonical": {
+      "commit": "9d02081c78f50a07a1c863707408056505e6a782",
+      "tree": "42729dfbf48a0086c6bf41ea0802af9ad8f06a7c",
+      "path": "supabase/canonical/schema-fingerprint-input.json",
+      "sha256": "71eaff3d5cd2209630b6be97a0d7416185860049fed90e1b08bfe9d4d2ca2bef",
+      "migration_count": 218,
+      "manifest_sha256": "24503cfe852d7668ac94744b2f9ed21d8d2556906b917c7016e0f6c2d3b8d7a1"
+    },
+    "source_migrations": [
+      {
+        "file": "20260813210000_custodial_u4_ops_closure.sql",
+        "sha256": "3fc7573beac21cf090fbf059c33ef59b472e88770382f7ff28d9f556a1e29f0b"
+      },
+      {
+        "file": "20260927052929_schedule_notification_admission_corrections.sql",
+        "sha256": "14f0413bfe7cef39cd17c548c1044e7bda50f71f56619f4ad4a780f3fe16dcd1"
+      },
+      {
+        "file": "20260927072146_schedule_notification_exact_canary.sql",
+        "sha256": "2d20c35105aaf2e6cfde58eec4590c10b995d41103aff0f7bd7a57a7e294e216"
+      }
+    ],
+    "corroboration": {
+      "kind": "RETAINED_SYNTHETIC_BEFORE_MESSAGE_SNAPSHOT",
+      "source_commit": "eaf9b4bc13a8d0fce21f8af5624fca552e9ac21d",
+      "artifact": "before-message-UNVALIDATED.json",
+      "artifact_sha256": "6593e979bc781d60f58220813990d68dbe38e9af3ac211ec6a7625b840e0e85b",
+      "validated_by": "receipt.json",
+      "receipt_sha256": "7e7f1ef5423f422190f60d82396509bdbf6967837ffbc5039597b94156d28bb2"
+    }
+  },
+  "function": {
+    "catalog_row": {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.mz_prepare_employee_native_push_delivery(p_job_id uuid, p_lease_token uuid, p_credential_id uuid, p_assignment_epoch bigint, p_registration_id uuid, p_token_hash text, p_now timestamp with time zone DEFAULT now())\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare v_delivery jsonb; v_job public.operational_notification_jobs%rowtype; v_receipt public.employee_native_push_delivery_receipts%rowtype; v_reason text;\nbegin\n  if p_job_id is null or p_lease_token is null or p_credential_id is null or p_assignment_epoch is null or p_assignment_epoch<1\n     or p_registration_id is null or coalesce(p_token_hash,'') !~ '^[0-9a-f]{64}$' then\n    raise exception using errcode='22023',message='exact native push job, recipient, and token generation are required';\n  end if;\n  -- Same schedule lock as publication, before registration/job row locks.\n  -- A publication that wins before preparation must be seen by the validator.\n  perform pg_advisory_xact_lock(hashtextextended('memphis-static-weekly-authority',0));\n  v_delivery:=public.mz_resolve_employee_push_delivery(p_credential_id,p_assignment_epoch,p_now);\n  if coalesce((v_delivery->>'ok')::boolean,false) is not true then\n    return jsonb_build_object('current',false,'dispatch_authorized',false,\n      'reason',coalesce(v_delivery->>'reason','employee_push_recipient_superseded'));\n  end if;\n  if (v_delivery#>>'{registration,registration_id}')::uuid is distinct from p_registration_id\n     or v_delivery#>>'{registration,token_hash}' is distinct from p_token_hash then\n    return jsonb_build_object('current',false,'dispatch_authorized',false,'reason','push_registration_superseded');\n  end if;\n  select * into v_job from public.operational_notification_jobs where job_id=p_job_id for update;\n  v_reason:=case\n    when v_job.job_id is null then 'employee_native_push_job_missing'\n    when v_job.job_type<>'employee_native_push' then 'employee_native_push_job_type_mismatch'\n    when v_job.status<>'leased' or v_job.lease_token is distinct from p_lease_token\n      or v_job.leased_until is null or v_job.leased_until<=statement_timestamp() then 'employee_native_push_lease_superseded'\n    when v_job.payload_json->>'credential_id' is distinct from p_credential_id::text\n      or v_job.payload_json->>'assignment_epoch' is distinct from p_assignment_epoch::text then 'employee_native_push_recipient_superseded'\n    else null\n  end;\n  if v_reason is not null then\n    return jsonb_build_object('current',false,'dispatch_authorized',false,'reason',v_reason);\n  end if;\n  -- Recheck in THIS transaction, not only the earlier worker RPC. The job\n  -- row lock also serializes exact native ACK admission against preparation.\n  if v_job.payload_json#>>'{data_json,kind}'='employee_location_status'\n     and (v_job.payload_json#>'{data_json,test_delivery}') is distinct from 'true'::jsonb then\n    v_delivery:=public.mz_validate_employee_location_reminder(p_job_id,p_lease_token,p_now);\n    if coalesce((v_delivery->>'current')::boolean,false) is not true then\n      return jsonb_build_object('current',false,'dispatch_authorized',false,\n        'reason',coalesce(v_delivery->>'reason','location_reminder_superseded'));\n    end if;\n  end if;\n  select * into v_receipt from public.employee_native_push_delivery_receipts where job_id=p_job_id for update;\n  if v_receipt.job_id is not null then\n    if v_receipt.job_key<>v_job.job_key or v_receipt.source_id<>v_job.source_id\n       or v_receipt.credential_id<>p_credential_id or v_receipt.assignment_epoch<>p_assignment_epoch\n       or v_receipt.registration_id<>p_registration_id or v_receipt.token_hash<>p_token_hash then\n      return jsonb_build_object('current',false,'dispatch_authorized',false,'reason','native_push_delivery_receipt_input_mismatch');\n    end if;\n    return jsonb_build_object('current',true,'dispatch_authorized',false,'already_prepared',true,\n      'already_recorded',v_receipt.delivery_state='delivered','delivery_state',v_receipt.delivery_state,\n      'delivery_outcome_unknown',v_receipt.delivery_state='prepared','reason',\n      case when v_receipt.delivery_state='prepared' then 'native_push_delivery_outcome_unknown' else 'native_push_delivery_already_recorded' end,\n      'provider_message_id',v_receipt.provider_message_id,'prepared_at',v_receipt.prepared_at,'delivered_at',v_receipt.delivered_at);\n  end if;\n  insert into public.employee_native_push_delivery_receipts(\n    job_id,job_key,source_id,lease_token,credential_id,assignment_epoch,registration_id,token_hash,delivery_state,prepared_at\n  ) values (\n    v_job.job_id,v_job.job_key,v_job.source_id,p_lease_token,p_credential_id,p_assignment_epoch,\n    p_registration_id,p_token_hash,'prepared',p_now\n  ) returning * into v_receipt;\n  return jsonb_build_object('current',true,'dispatch_authorized',true,'already_prepared',false,\n    'already_recorded',false,'delivery_state','prepared','delivery_outcome_unknown',false,'prepared_at',v_receipt.prepared_at);\nend\n$function$\n",
+      "function_name": "mz_prepare_employee_native_push_delivery",
+      "identity_arguments": "p_job_id uuid, p_lease_token uuid, p_credential_id uuid, p_assignment_epoch bigint, p_registration_id uuid, p_token_hash text, p_now timestamp with time zone",
+      "owner_name": "migration_owner",
+      "schema_name": "public"
+    },
+    "definition_sha256": "33d72de69db3e6735bec2827642bea966b89920d4c7b7bf338d73b7aca907ff2"
+  },
+  "grant": {
+    "object_identity": "mz_prepare_employee_native_push_delivery(uuid,uuid,uuid,bigint,uuid,text,timestamp with time zone)",
+    "definition_sql": "select public.custodial_release_authority_reset_grants('mz_prepare_employee_native_push_delivery(uuid,uuid,uuid,bigint,uuid,text,timestamp with time zone)'); grant execute on function mz_prepare_employee_native_push_delivery(uuid,uuid,uuid,bigint,uuid,text,timestamp with time zone) to postgres; grant execute on function mz_prepare_employee_native_push_delivery(uuid,uuid,uuid,bigint,uuid,text,timestamp with time zone) to service_role;",
+    "definition_sha256": "67aa32e1273a26d411f190d8cbaf66fe2b7788fe0ab03faad22cf7cb9e0c9453"
+  },
+  "canonical_routine_grants": [
+    {
+      "function_name": "mz_prepare_employee_native_push_delivery",
+      "grantee": "service_role",
+      "grantor": "migration_owner",
+      "identity_arguments": "p_job_id uuid, p_lease_token uuid, p_credential_id uuid, p_assignment_epoch bigint, p_registration_id uuid, p_token_hash text, p_now timestamp with time zone",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    }
+  ]
+}

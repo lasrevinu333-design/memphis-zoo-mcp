@@ -10,6 +10,7 @@ import {
 const env = {
   NODE_ENV: "production",
   RENDER: "1",
+  MEMPHIS_MAP_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_synthetic_boundary",
   OPS_MANAGER_INVITE_ALLOWED_ORIGINS: "http://custodian-g12-manager.localhost:31874,http://custodian-g12-employee.localhost:31875",
   OPS_MANAGER_SESSION_SECRET: "manager-boundary-test-secret-at-least-32-characters",
 };
@@ -17,6 +18,8 @@ const allowedOrigin = "https://localhost";
 const manager = {
   manager_id: "00000000-0000-4000-8000-000000000002",
   display_name: "Named Manager",
+  system_key: "eric_custodial_manager",
+  is_system_principal: false,
   roles: ["OPS_MANAGER"],
   active: true,
   revoked_at: null,
@@ -81,6 +84,8 @@ assert.match(migration, /pre_bounded_trust_expires_at/i, "the cutover must prese
 assert.match(migration, /check \(expires_at <= created_at \+ interval '365 days'\)/i);
 
 let enrolled = null;
+let mapEnrolled = null;
+const mapManager = { manager_id: "00000000-0000-4000-8000-000000000003", display_name: "Named Map Delegate", system_key: "annie_feist_operations_admin", is_system_principal: false, roles: ["OPS_MANAGER"], active: true, revoked_at: null };
 let revokeFailure = false;
 const store = {
   async getManagerCodeRateLimit() { return null; },
@@ -101,12 +106,15 @@ const store = {
     };
     return { ok: true, manager, trusted_device: enrolled };
   },
-  async find(credentialId) { return credentialId === enrolled?.credential_id ? enrolled : null; },
+  async getManagerBySystemKey(systemKey) { return systemKey === mapManager.system_key ? mapManager : null; },
+  async enroll(record) { mapEnrolled = { ...record, manager: mapManager, revoked_at: null }; return mapEnrolled; },
+  async find(credentialId) { return credentialId === enrolled?.credential_id ? enrolled : credentialId === mapEnrolled?.credential_id ? mapEnrolled : null; },
   async touch() {},
   async audit() {},
   async revoke(credentialId) {
     if (revokeFailure) throw new Error("simulated revocation outage");
     if (credentialId === enrolled?.credential_id) enrolled.revoked_at = new Date().toISOString();
+    if (credentialId === mapEnrolled?.credential_id) mapEnrolled.revoked_at = new Date().toISOString();
   },
 };
 
@@ -212,6 +220,85 @@ try {
   result = await json("/auth-api/ops/logout", { method: "POST", cookie, extraHeaders: sameOriginHeaders });
   assert.equal(result.response.status, 403, "same-origin metadata must not replace Origin for logout");
   assert.equal(enrolled.revoked_at, null, "denied Origin-less logout must preserve the current credential");
+
+  // Canonical projection must reach the normal HTTP session consumed by FE,
+  // not just an exported helper or a synthetic frontend session fixture.
+  result = await json("/auth-api/session?access_level=full_access", { cookie, extraHeaders: sameOriginHeaders });
+  assert.equal(result.payload.data.session.permissions.schema, "custodial.manager-permissions.v1");
+  assert.equal(result.payload.data.session.permissions.read, true);
+  assert.equal(result.payload.data.session.permissions.owner, true);
+  assert.equal(result.payload.data.session.read_only, false);
+  result = await json("/auth-api/session?access_level=read_only", { cookie, extraHeaders: sameOriginHeaders });
+  assert.equal(result.payload.data.session.permissions.read, true);
+  assert.equal(result.payload.data.session.permissions.owner, false);
+  assert.equal(result.payload.data.session.permissions.manage_absences, false, "read-only owner cannot be promoted by requested role");
+  manager.system_key = "other_named_manager";
+  result = await json("/auth-api/session?access_level=full_access", { cookie, extraHeaders: sameOriginHeaders });
+  assert.equal(result.payload.data.session.permissions.read, true);
+  assert.equal(result.payload.data.session.permissions.owner, false, "role alone is not owner authority");
+  assert.equal(result.payload.data.session.read_only, true);
+  assert.equal(result.payload.data.session.permissions.manage_absences, true);
+  assert.equal(result.payload.data.session.permissions.manage_coverall, true);
+  assert.equal(result.payload.data.session.permissions.regenerate_routes, true);
+  assert.equal(result.payload.data.session.permissions.close_scan_tickets, true);
+  manager.system_key = "eric_custodial_manager";
+  enrolled.max_access_level = "read_only";
+  result = await json("/auth-api/session?access_level=full_access", { cookie, extraHeaders: sameOriginHeaders });
+  assert.equal(result.payload.data.session.permissions.owner, false, "an old limited credential stays limited");
+  enrolled.max_access_level = "full_access";
+  const originalRoles = manager.roles;
+  manager.roles = ["EMPLOYEE"];
+  result = await json("/auth-api/session?access_level=full_access", { cookie, extraHeaders: sameOriginHeaders });
+  assert.equal(result.response.status, 403, "employee roles cannot become manager permission projections");
+  assert.equal(result.payload.data?.session, undefined);
+  manager.roles = originalRoles;
+  manager.is_system_principal = true;
+  result = await json("/auth-api/session?access_level=full_access", { cookie, extraHeaders: sameOriginHeaders });
+  assert.equal(result.response.status, 403, "system principals cannot become real named managers");
+  manager.is_system_principal = false;
+  manager.revoked_at = new Date().toISOString();
+  result = await json("/auth-api/session?access_level=full_access", { cookie, extraHeaders: sameOriginHeaders });
+  assert.equal(result.response.status, 403, "revoked managers cannot obtain a permission projection");
+  manager.revoked_at = null;
+  const credentialRevoked = enrolled.revoked_at;
+  enrolled.revoked_at = new Date().toISOString();
+  result = await json("/auth-api/session?access_level=full_access", { cookie, extraHeaders: sameOriginHeaders });
+  assert.equal(result.response.status, 401, "revoked manager credentials remain rejected");
+  enrolled.revoked_at = credentialRevoked;
+
+  // Exercise the preserved normal Map-to-trusted-credential lifecycle with a
+  // fixed synthetic provider response. No provider/network/account is accessed.
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input, options) => {
+    const url = String(input);
+    if (url === "https://dwzdqekusvivjbxsapdu.supabase.co/auth/v1/user") return {
+      ok: true, json: async () => ({ id: "00000000-0000-4000-8000-000000000004", email: "afeist@memphiszoo.org", email_confirmed_at: "2026-01-01T00:00:00.000Z" }),
+    };
+    return originalFetch(input, options);
+  };
+  try {
+    const mapLogin = await json("/auth-api/map-session", { method: "POST", origin: allowedOrigin, body: { access_token: "synthetic-provider-token" }, deviceId: "map-browser" });
+    assert.equal(mapLogin.response.status, 200);
+    assert.equal(mapLogin.payload.data.session.identity_source, "memphis_map");
+    assert.equal(mapLogin.payload.data.session.trusted_device, true);
+    assert.equal(mapLogin.payload.data.session.permissions.read, true);
+    assert.equal(mapLogin.payload.data.session.permissions.owner, false);
+    assert.equal(mapLogin.payload.data.session.permissions.manage_absences, true);
+    const mapCookie = mapLogin.response.headers.get("set-cookie").split(";")[0];
+    const refreshed = await json("/auth-api/session?access_level=full_access", { cookie: mapCookie, deviceId: "map-browser", extraHeaders: sameOriginHeaders });
+    assert.equal(refreshed.response.status, 200);
+    assert.equal(refreshed.payload.data.session.permissions.schema, "custodial.manager-permissions.v1");
+    assert.equal(refreshed.payload.data.session.read_only, true);
+    mapEnrolled.metadata_json.manager_system_key = "wrong_manager_assignment";
+    const moved = await json("/auth-api/session?access_level=full_access", { cookie: mapCookie, deviceId: "map-browser", extraHeaders: sameOriginHeaders });
+    assert.equal(moved.response.status, 403, "Map trust must stay bound to the current named assignment");
+    mapEnrolled.metadata_json.manager_system_key = mapManager.system_key;
+    const mapLogout = await json("/auth-api/ops/logout", { method: "POST", origin: allowedOrigin, cookie: mapCookie, deviceId: "map-browser", extraHeaders: { ...sameOriginHeaders, authorization: `Bearer ${refreshed.payload.data.session.token}` } });
+    assert.equal(mapLogout.response.status, 200);
+    assert.ok(mapEnrolled.revoked_at, "Map logout revokes the established normal trusted credential");
+    const staleMap = await json("/auth-api/session?access_level=full_access", { cookie: mapCookie, deviceId: "map-browser", extraHeaders: sameOriginHeaders });
+    assert.equal(staleMap.response.status, 401);
+  } finally { globalThis.fetch = originalFetch; }
 
   enrolled.created_at = new Date(Date.now() - 366 * 86_400_000).toISOString();
   enrolled.expires_at = new Date(Date.now() + 3650 * 86_400_000).toISOString();

@@ -1,0 +1,38 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {createHash} from 'node:crypto';
+const start=performance.now(),dir=new URL('../supabase/migrations/',import.meta.url);
+const read=n=>readFileSync(new URL(n,dir),'utf8');
+const sha=s=>createHash('sha256').update(s).digest('hex');
+const original=read('20260824130500_static_weekly_memory_bounded_validator_and_receipt.sql');
+const derivation=read('20260924042758_static_weekly_canonical_shift_end_derivation.sql');
+const sql=read('20261004140657_approved_static_template_authority.sql');
+const old="p_input_provenance->>'adapter_schema' is distinct from 'memphis-zoo.static-weekly-database-adapter.v1'";
+const current="p_input_provenance->>'adapter_schema' is distinct from p_document#>>'{adapter,schema}'";
+const body=original.slice(original.indexOf('create or replace function public.static_weekly_v2_create_draft('),original.indexOf('create or replace function public.static_weekly_v2_update_draft('));
+let checks=0;const check=(name,fn)=>{fn();checks++;console.log('PASS',name);};
+const count=(s,n)=>s.split(n).length-1;
+const guard=s=>assert.equal(count(s,current),1,'initial adapter provenance seam changed');
+check('historical literal seam occurs exactly once',()=>assert.equal(count(body,old),1));
+check('actual September predecessor patch binds adapter to document',()=>assert.ok(derivation.includes('execute replace(d,$old$'+old+'$old$,\n   $new$'+current+'$new$)')));
+const installed=body.replace(old,current);
+check('old failed migration expectation rejects current installed predecessor',()=>assert.equal(count(installed,old),0));
+check('corrected migration retains current guard without replacement',()=>{
+ const quoted=current.replaceAll("'","''");assert.ok(sql.includes("needle:='"+quoted+"';"));
+ const from=sql.indexOf("needle:='"+quoted+"';"),end=sql.indexOf('\n  end if;',from);
+ assert.ok(from>0&&end>from);assert.ok(sql.slice(from,end).includes("<>1 then raise exception 'initial adapter provenance seam changed'"));
+ assert.equal(sql.slice(from,end).includes('changed:=replace'),false);guard(installed);
+});
+check('missing current document binding fails closed',()=>assert.throws(()=>guard(installed.replace(current,'true'))));
+check('duplicate current document binding fails closed',()=>assert.throws(()=>guard(installed+'\n'+current)));
+check('obsolete literal-only predecessor fails closed',()=>assert.throws(()=>guard(body)));
+check('private objective and validator changes reverse exactly with adapter guard unchanged',()=>{
+ const objective="p_document#>'{authority,optimizerResult,objective}'",replacement="p_document->'objective'";
+ const validator='public.static_weekly_assert_document_attested(p_document,p_effective_start,true)';
+ const privateValidator=validator.replace('static_weekly_assert_document_attested','static_weekly_assert_approved_initial_document');
+ assert.equal(count(installed,objective),1);assert.equal(count(installed,validator),1);
+ const copied=installed.replace(objective,replacement).replace(validator,privateValidator);
+ guard(copied);assert.equal(copied.replace(replacement,objective).replace(privateValidator,validator),installed);
+ assert.ok(sql.includes('if reversed<>original then raise exception'));
+});
+console.log(JSON.stringify({status:'PASS',scope:'CURRENT_PREDECESSOR_SOURCE_EQUIVALENCE_NOT_SQL',checks,elapsedMs:performance.now()-start,sqlSha256:sha(sql),predecessorSha256:sha(original),derivationSha256:sha(derivation),sqlExecuted:false}));

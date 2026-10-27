@@ -11,6 +11,142 @@ import {
   verifyIsolatedSourceLeaseState,
 } from "./isolated-restore-lease-shim.mjs";
 
+if (process.argv.includes("--isolated-cron-exact-hydration-only")) {
+  const { readFileSync } = await import("node:fs");
+  const { join, resolve } = await import("node:path");
+  const { createHash } = await import("node:crypto");
+  const { normalizedCronJobs, restoreCronJobs } = await import("./disaster-recovery-cron.mjs");
+  const source = readFileSync(new URL("./prepare-isolated-restore-target.mjs", import.meta.url), "utf8");
+  const start = source.indexOf("const { Client } = pg;");
+  assert.ok(start > 0);
+  const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+  // Run the actual entire CLI body against in-memory files and a synthetic
+  // query adapter. No environment change, real client, connection or SQL.
+  const program = new AsyncFunction("pg", "createHash", "readFileSync", "join", "resolve",
+    "ensureIsolatedRestoreLeaseShim", "ledgerHasGlobalMutationFence", "process", "console",
+    "normalizedCronJobs", "restoreCronJobs", source.slice(start));
+  const job = {
+    jobid: "9223372036854775807", schedule: "0 0 1 1 *", command: "SELECT 1", nodename: "localhost",
+    nodeport: 5432, database: "original_snapshot_database", username: "postgres", active: false, jobname: null,
+  };
+  const run = async ({ rawCron = JSON.stringify([job]), sourceDatabase = "original_snapshot_database",
+    url = "postgresql://postgres@127.0.0.1/mz_schema_rebuild_cron_unit", readbackMismatch = false } = {}) => {
+    const head = "20261017000000";
+    const summary = { format: "memphis-zoo-disaster-recovery.v4", source_identity: { migration_head: head, release: { release_id: "synthetic-release" } },
+      database_snapshot: sourceDatabase === undefined ? {} : { database_name: sourceDatabase } };
+    const files = new Map([
+      ["backup-summary.json", JSON.stringify(summary)],
+      ["inventory/migration-ledger.json", JSON.stringify([{ version: head, name: "synthetic", statements: [] }])],
+      ["inventory/cron-jobs.json", rawCron], ["inventory/extensions.json", "[]"],
+    ]);
+    const originalFiles = [...files];
+    const state = { clients: 0, connected: 0, ended: 0, queries: [], shimOptions: [], output: [], rows: [], setval: null, error: null };
+    class HydrationFixtureClient {
+      constructor() { state.clients++; }
+      async connect() { state.connected++; }
+      async end() { state.ended++; }
+      async query(sql, params = []) {
+        const statement = String(sql).replace(/\s+/g, " ").trim();
+        state.queries.push({ statement, params });
+        if (statement === "select current_database() database_name") return { rows: [{ database_name: "mz_schema_rebuild_cron_unit" }] };
+        if (statement.includes("from cron.job j order by j.jobid")) {
+          assert.ok(statement.includes("'jobid', j.jobid::text"));
+          return { rows: state.rows.map(row => ({ row: { ...row, ...(readbackMismatch ? { active: true } : {}) } })) };
+        }
+        if (statement === "truncate cron.job restart identity") { state.rows = []; return { rows: [] }; }
+        if (statement.startsWith("insert into cron.job(jobid,")) {
+          assert.equal(typeof params[0], "string");
+          state.rows.push(Object.fromEntries(["jobid", "schedule", "command", "nodename", "nodeport", "database", "username", "active", "jobname"].map((key, index) => [key, params[index]])));
+          return { rows: [] };
+        }
+        if (statement === "select pg_get_serial_sequence('cron.job','jobid') sequence_name") return { rows: [{ sequence_name: "cron.jobid_seq" }] };
+        if (statement === "select setval($1::regclass,$2,$3)") { state.setval = [...params]; return { rows: [] }; }
+        if (statement.includes("migration_head,") && statement.includes("cron_job_count")) {
+          return { rows: [{ migration_head: head, migration_count: 1, cron_job_count: state.rows.length, release_count: 1 }] };
+        }
+        if (statement.includes("from pg_extension e join pg_namespace")) return { rows: [] };
+        if (["begin", "commit", "rollback", "truncate supabase_migrations.schema_migrations", "truncate public.release_deployment_manifest cascade"].includes(statement)
+          || statement.startsWith("insert into custodial_dr.restore_control(")
+          || statement.startsWith("insert into supabase_migrations.schema_migrations(")
+          || statement.startsWith("insert into public.release_deployment_manifest ")) return { rows: [] };
+        throw new Error(`Unexpected selected synthetic hydration SQL: ${statement}`);
+      }
+    }
+    try {
+      await program({ Client: HydrationFixtureClient }, createHash, path => {
+        const relative = path.slice("/synthetic-original/".length);
+        assert.ok(path.startsWith("/synthetic-original/") && files.has(relative));
+        return files.get(relative);
+      }, join, resolve,
+      async (_db, options) => { state.shimOptions.push(options); return { created: false }; },
+      ledgerHasGlobalMutationFence,
+      { env: { RESTORE_SOURCE_DIR: "/synthetic-original", SUPABASE_DB_URL: url } },
+      { log: value => state.output.push(value) }, normalizedCronJobs, restoreCronJobs);
+    } catch (error) { state.error = error; }
+    assert.deepEqual([...files], originalFiles, "Original archive bytes must remain unchanged");
+    return state;
+  };
+  let passed = 0;
+  const check = async (name, test) => { await test(); passed++; console.log(`ISOLATED_CRON_HYDRATION_NEW ${name} PASS`); };
+  await check("unsafe-legacy-raw-number-before-client-or-hydration", async () => {
+    for (const literal of ["9223372036854775807", "9007199254740993"]) {
+      const rawCron = JSON.stringify([job]).replace('"jobid":"9223372036854775807"', `"jobid":${literal}`);
+      const state = await run({ rawCron });
+      assert.match(state.error?.message || "", /BIGINT jobid/);
+      assert.equal(state.clients, 0); assert.equal(state.connected, 0); assert.deepEqual(state.queries, []);
+      assert.deepEqual(state.shimOptions, []);
+    }
+  });
+  await check("exact-int64-legacy-safe-ordering-and-source-database-mapping", async () => {
+    const jobs = [job, { ...job, jobid: 7, jobname: "safe-legacy" },
+      { ...job, jobid: "9007199254740993", jobname: "adjacent-high" },
+      { ...job, jobid: "9007199254740992", database: "other-original-database", jobname: "adjacent-low" }];
+    const state = await run({ rawCron: JSON.stringify(jobs) });
+    assert.equal(state.error, null);
+    assert.deepEqual(state.rows.map(row => row.jobid), ["7", "9007199254740992", "9007199254740993", job.jobid]);
+    assert.deepEqual(state.rows, normalizedCronJobs(jobs, { sourceDatabase: "original_snapshot_database", targetDatabase: "mz_schema_rebuild_cron_unit" }));
+    assert.deepEqual(state.setval, ["cron.jobid_seq", job.jobid, true]);
+    assert.equal(state.rows[1].database, "other-original-database");
+    assert.ok(state.rows.filter(row => row.jobid !== "9007199254740992").every(row => row.database === "mz_schema_rebuild_cron_unit"));
+    assert.equal(state.ended, 1); assert.ok(state.queries.some(row => row.statement === "commit"));
+    assert.equal(JSON.parse(state.output[0]).cron_job_count, 4);
+    assert.deepEqual(state.shimOptions, [{ sourceMigrationPresent: false }]);
+  });
+  await check("noncanonical-text-and-duplicate-refuse-before-hydration", async () => {
+    for (const rows of [[{ ...job, jobid: "01" }], [{ ...job, jobid: "9223372036854775808" }],
+      [{ ...job, jobid: "1\n" }], [{ ...job, jobid: 7 }, { ...job, jobid: "7" }]]) {
+      const state = await run({ rawCron: JSON.stringify(rows) });
+      assert.ok(state.error); assert.equal(state.clients, 0); assert.deepEqual(state.queries, []);
+    }
+  });
+  await check("missing-original-database-no-guessed-mapping", async () => {
+    for (const sourceDatabase of [null, "", "bad\0name", "x".repeat(64)]) {
+      const state = await run({ sourceDatabase });
+      assert.match(state.error?.message || "", /archived original database identity/);
+      assert.equal(state.clients, 0); assert.deepEqual(state.queries, []);
+    }
+  });
+  await check("readback-mismatch-retains-rollback-end-and-no-commit", async () => {
+    const state = await run({ readbackMismatch: true });
+    assert.match(state.error?.message || "", /differs from the exact archived inventory/);
+    assert.ok(state.queries.some(row => row.statement === "rollback"));
+    assert.equal(state.queries.some(row => row.statement === "commit"), false);
+    assert.equal(state.queries.some(row => row.statement.startsWith("truncate public.release_deployment_manifest")), false);
+    assert.equal(state.ended, 1);
+  });
+  await check("empty-inventory-and-unchanged-loopback-target-refusal", async () => {
+    const empty = await run({ rawCron: "[]" });
+    assert.equal(empty.error, null); assert.deepEqual(empty.setval, ["cron.jobid_seq", "1", false]);
+    for (const url of ["postgresql://postgres@outside.example/mz_schema_rebuild_cron_unit", "postgresql://postgres@localhost/postgres"]) {
+      const state = await run({ url });
+      assert.match(state.error?.message || "", /restricted to a loopback mz_schema_rebuild/);
+      assert.equal(state.clients, 0); assert.deepEqual(state.queries, []);
+    }
+  });
+  console.log(JSON.stringify({ selector: "--isolated-cron-exact-hydration-only", passed,
+    actual_source_cli_body: true, synthetic_files_and_query_adapter: true, sql_connections: 0, actual_sql: "NOT_RUN", old_groups_run: 0 }));
+} else {
+
 class FixtureDatabase {
   constructor({
     relationName = null,
@@ -245,3 +381,4 @@ if (liveDatabaseUrl) {
 }
 
 console.log("ISOLATED_RESTORE_LEASE_SHIM_TESTS_PASS");
+}

@@ -7,6 +7,7 @@ import { isAbsolute, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { assertBackendFrontendIdentity, assertFrontendReleaseDeclaration, assertFrontendReleaseIdentity, assertManifestContract, assertExactReleaseAttestation, assertObservedSchemaIdentity } from "../src/release-contract.js";
 import { assertSchemaAlignment } from "../src/schema-transition.js";
+import { assertDashboardReleaseCompatibility } from "../src/dashboard-release-compatibility.js";
 
 const root = realpathSync(resolve(fileURLToPath(new URL("..", import.meta.url))));
 const canonicalInput = JSON.parse(readFileSync(resolve(root, "release/schema-alignment-input.json"), "utf8"));
@@ -56,9 +57,10 @@ const schemaToken = requiredEnv("LIVE_RELEASE_SCHEMA_IDENTITY_TOKEN");
 const identityUrl = String(process.env.BACKEND_SCHEMA_IDENTITY_URL || new URL("/admin-api/release-schema-identity", backendUrl).toString());
 const healthUrl = String(process.env.BACKEND_HEALTH_URL || new URL("/health", backendUrl).toString());
 const authorityHealthUrl = String(process.env.BACKEND_AUTHORITY_HEALTH_URL || new URL("/scan-api/authority-health", backendUrl).toString());
+const dashboardCanaryUrl = new URL("/dashboard-api/canary", backendUrl).toString();
 const schedulerReadyUrl = requiredEnv("STATIC_WEEKLY_CONTROL_PLANE_READY_URL");
 
-const [frontend, deployment, backend, observed, healthProbe, authorityHealth, schedulerReady] = await Promise.all([
+const [frontend, deployment, backend, observed, healthProbe, authorityHealth, schedulerReady, dashboardCanary] = await Promise.all([
   fetchJson(frontendReleaseUrl, "frontend release manifest"),
   fetchJson(frontendDeploymentUrl, "frontend deployment manifest"),
   fetchJson(backendUrl, "backend release manifest"),
@@ -66,8 +68,10 @@ const [frontend, deployment, backend, observed, healthProbe, authorityHealth, sc
   fetchTimedJson(healthUrl, "backend dependency health"),
   fetchJson(authorityHealthUrl, "canonical custodial authority health"),
   fetchJson(schedulerReadyUrl, "static weekly scheduler readiness"),
+  fetchJson(dashboardCanaryUrl, "actual application-reader Dashboard execution"),
 ]);
 const health = healthProbe.json;
+assertDashboardReleaseCompatibility({ canary: dashboardCanary, health, releaseId: attestation.release_id, appVersion: backend.backend?.app_version, backendCommitSha: attestation.backend_commit_sha });
 
 assert.equal(backend.release_id, attestation.release_id, "backend release is not the signed exact attestation");
 assert.equal(frontend.release_id, attestation.release_id, "frontend release is not the signed exact attestation");

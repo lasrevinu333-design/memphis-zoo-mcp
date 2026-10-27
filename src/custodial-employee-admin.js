@@ -349,7 +349,9 @@ export function installCustodialEmployeeAdminRoutes(app, { env = process.env, su
       ? next()
       : res.status(403).json({ ok: false, error: "Custodial Manager access is required." })
   ));
-  const requireCustodialRead = requireCustodialRole(requireManagerRead);
+  // The snapshot contains assignment/status data, never enrollment secrets.
+  // All current named managers may read it; only owner writers can change it.
+  const requireCustodialRead = requireManagerRead;
   const requireCustodialWrite = requireCustodialRole(requireManagerWrite);
 
   for (const prefix of ["/custodial-admin-api", "/custodial-device-auth", "/leadership-api/phone-assignments"]) {
@@ -608,33 +610,19 @@ export function installCustodialEmployeeAdminRoutes(app, { env = process.env, su
       return res.status(403).json({ ok: false, code: "native_custodial_app_required", error: "Native custodial app authorization is required." });
     }
     try {
-      const operationId = removalOperationId(req);
-      const deviceId = normalizeDeviceId(req.body?.device_id || req.headers?.["x-device-id"]);
-      const device = await resolveNativeDevice(db, deviceId);
-      const credential = nativeCredentialParts(req);
-      if (!device || !credential) {
-        return res.status(401).json({ ok: false, code: "credential_required", error: "An enrolled custodial device credential is required." });
-      }
-
-      const result = await db.rpc("device_auth_remove_custodial_credential", {
-        p_operation_id: operationId,
-        p_device_id: device.id,
-        p_credential_id: credential.credentialId,
-        p_token_hash: tokenHash(env, credential.secret),
+      removalOperationId(req);
+      // Keep the server boundary aligned with VaultEngine's original removal
+      // admission. A device credential and caller-declared native headers do
+      // not prove manager authority, original all8/browser inventory, durable
+      // writer fencing or eligible semantic disposition. This legacy DTO has
+      // none of those capabilities, including on replay; do not revoke its
+      // credential through a direct HTTP call around the native refusal.
+      // The owning typed preservation/removal protocol remains unfinished.
+      return res.status(409).json({
+        ok: false,
+        code: "custodial_native_removal_inventory_admission_required",
+        error: "Enrollment removal requires protected-work preservation and manager authorization. Saved work is retained.",
       });
-      if (result.error) throw result.error;
-      if (!result.data?.ok) {
-        const reason = String(result.data?.reason || "credential_mismatch");
-        const conflict = reason === "operation_conflict";
-        return res.status(conflict ? 409 : 401).json({
-          ok: false,
-          code: conflict ? "removal_operation_conflict" : reason,
-          error: conflict
-            ? "This operation ID belongs to another credential or device."
-            : "The custodial device removal request could not be authenticated.",
-        });
-      }
-      return res.json({ ok: true, data: result.data });
     } catch (error) {
       const status = Number(error?.status) || 503;
       if (status >= 500) console.warn("custodial device removal failed:", error?.message || error);

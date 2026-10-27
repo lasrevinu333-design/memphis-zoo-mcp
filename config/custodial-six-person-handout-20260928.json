@@ -1,0 +1,797 @@
+{
+  "schema": "custodial.six-person-owner-handout.v1",
+  "source_pdf": "Memphis_Zoo_Six_Employee_Daily_Sheets_2026-09-28.pdf",
+  "source_pdf_sha256": "925751c37e454e0fadb9d88eb57a46dd6a47c1ffe19deadf85189ad9bba2f0aa",
+  "pages": 30,
+  "prepared_from": "Outlook Sent attachment; human-readable source governs",
+  "areas": "All 23 known recurring area families are owned exactly once in each morning and checks phase. EAST_WEST_ADMIN expands to EAST_ADMIN and WEST_ADMIN.",
+  "unresolved_tuesday_duty": "Kathy cleans men's and women's employee restrooms inside Elephant Trunk Gift Shop after public opening; no verified distinct active scan/tag identity yet; no shop-floor cleaning.",
+  "days": {
+    "0": {
+      "TAMMY": {
+        "page": 27,
+        "shift": [
+          "05:00",
+          "14:00"
+        ],
+        "lunch": [
+          "08:30",
+          "09:30"
+        ],
+        "morning": [
+          "CHINA",
+          "EAST_END_RESTROOMS",
+          "TETON",
+          "ZAMBEZI",
+          "NORTH_WEST_PASSAGE",
+          "PRIMATE_CANYON",
+          "PRIMATE_PAVILLION"
+        ],
+        "checks": [
+          "CHINA",
+          "EAST_END_RESTROOMS",
+          "TETON",
+          "NORTH_WEST_PASSAGE",
+          "PRIMATE_PAVILLION"
+        ]
+      },
+      "KAILI": {
+        "page": 28,
+        "shift": [
+          "07:00",
+          "16:00"
+        ],
+        "lunch": [
+          "10:30",
+          "11:30"
+        ],
+        "morning": [
+          "BREEZEWAY_RESTROOMS",
+          "COURTYARD_RESTROOMS",
+          "EVENT_CENTER",
+          "EDUCATION",
+          "HERPETARIUM",
+          "EAST_ADMIN",
+          "WEST_ADMIN"
+        ],
+        "checks": [
+          "BREEZEWAY_RESTROOMS",
+          "COURTYARD_RESTROOMS",
+          "EVENT_CENTER",
+          "EDUCATION",
+          "EAST_ADMIN",
+          "WEST_ADMIN"
+        ]
+      },
+      "ALIJAH": {
+        "page": 29,
+        "shift": [
+          "07:00",
+          "16:00"
+        ],
+        "lunch": [
+          "11:30",
+          "12:30"
+        ],
+        "morning": [
+          "BONOBOS_RESTROOMS",
+          "CATHOUSE_CAFE_RESTROOMS",
+          "MEMMEX_RESTROOMS",
+          "CAT_COUNTRY",
+          "KOMODOS",
+          "NOCTURNAL",
+          "TROPICAL_BIRDS"
+        ],
+        "checks": [
+          "BONOBOS_RESTROOMS",
+          "CATHOUSE_CAFE_RESTROOMS",
+          "ZAMBEZI",
+          "CAT_COUNTRY",
+          "NOCTURNAL",
+          "PRIMATE_CANYON"
+        ]
+      },
+      "GREGORY": {
+        "page": 30,
+        "shift": [
+          "08:00",
+          "17:00"
+        ],
+        "lunch": [
+          "12:30",
+          "13:30"
+        ],
+        "morning": [
+          "EXPO",
+          "AQUARIUM"
+        ],
+        "checks": [
+          "EXPO",
+          "MEMMEX_RESTROOMS",
+          "AQUARIUM",
+          "HERPETARIUM",
+          "KOMODOS",
+          "TROPICAL_BIRDS"
+        ]
+      }
+    },
+    "1": {
+      "TAMMY": {
+        "page": 1,
+        "shift": [
+          "05:00",
+          "14:00"
+        ],
+        "lunch": [
+          "08:30",
+          "09:30"
+        ],
+        "morning": [
+          "CHINA",
+          "EAST_END_RESTROOMS",
+          "TETON",
+          "NORTH_WEST_PASSAGE",
+          "PRIMATE_CANYON",
+          "PRIMATE_PAVILLION"
+        ],
+        "checks": [
+          "EAST_END_RESTROOMS",
+          "TETON",
+          "NORTH_WEST_PASSAGE",
+          "PRIMATE_PAVILLION"
+        ]
+      },
+      "KAREN": {
+        "page": 2,
+        "shift": [
+          "05:00",
+          "14:00"
+        ],
+        "lunch": [
+          "09:30",
+          "10:30"
+        ],
+        "morning": [
+          "CATHOUSE_CAFE_RESTROOMS",
+          "COURTYARD_RESTROOMS",
+          "ZAMBEZI",
+          "CAT_COUNTRY",
+          "NOCTURNAL"
+        ],
+        "checks": [
+          "CATHOUSE_CAFE_RESTROOMS",
+          "ZAMBEZI",
+          "CAT_COUNTRY",
+          "NOCTURNAL",
+          "PRIMATE_CANYON"
+        ]
+      },
+      "KAILI": {
+        "page": 3,
+        "shift": [
+          "07:00",
+          "16:00"
+        ],
+        "lunch": [
+          "10:30",
+          "11:30"
+        ],
+        "morning": [
+          "BREEZEWAY_RESTROOMS",
+          "EVENT_CENTER",
+          "EDUCATION",
+          "HERPETARIUM",
+          "EAST_ADMIN",
+          "WEST_ADMIN"
+        ],
+        "checks": [
+          "BREEZEWAY_RESTROOMS",
+          "COURTYARD_RESTROOMS",
+          "EDUCATION",
+          "EAST_ADMIN",
+          "WEST_ADMIN"
+        ]
+      },
+      "ALIJAH": {
+        "page": 4,
+        "shift": [
+          "07:00",
+          "16:00"
+        ],
+        "lunch": [
+          "11:30",
+          "12:30"
+        ],
+        "morning": [
+          "BONOBOS_RESTROOMS",
+          "MEMMEX_RESTROOMS",
+          "KOMODOS",
+          "TROPICAL_BIRDS"
+        ],
+        "checks": [
+          "BONOBOS_RESTROOMS",
+          "CHINA",
+          "EVENT_CENTER",
+          "KOMODOS",
+          "TROPICAL_BIRDS"
+        ]
+      },
+      "GREGORY": {
+        "page": 5,
+        "shift": [
+          "08:00",
+          "17:00"
+        ],
+        "lunch": [
+          "12:30",
+          "13:30"
+        ],
+        "morning": [
+          "EXPO",
+          "AQUARIUM"
+        ],
+        "checks": [
+          "EXPO",
+          "MEMMEX_RESTROOMS",
+          "AQUARIUM",
+          "HERPETARIUM"
+        ]
+      }
+    },
+    "2": {
+      "TAMMY": {
+        "page": 6,
+        "shift": [
+          "05:00",
+          "14:00"
+        ],
+        "lunch": [
+          "08:30",
+          "09:30"
+        ],
+        "morning": [
+          "CHINA",
+          "EAST_END_RESTROOMS",
+          "TETON",
+          "NORTH_WEST_PASSAGE",
+          "PRIMATE_CANYON",
+          "PRIMATE_PAVILLION"
+        ],
+        "checks": [
+          "EAST_END_RESTROOMS",
+          "TETON",
+          "NORTH_WEST_PASSAGE",
+          "PRIMATE_PAVILLION"
+        ]
+      },
+      "KAREN": {
+        "page": 7,
+        "shift": [
+          "05:00",
+          "14:00"
+        ],
+        "lunch": [
+          "09:30",
+          "10:30"
+        ],
+        "morning": [
+          "CATHOUSE_CAFE_RESTROOMS",
+          "MEMMEX_RESTROOMS",
+          "ZAMBEZI",
+          "CAT_COUNTRY",
+          "HERPETARIUM",
+          "NOCTURNAL"
+        ],
+        "checks": [
+          "CATHOUSE_CAFE_RESTROOMS",
+          "ZAMBEZI",
+          "CAT_COUNTRY",
+          "NOCTURNAL",
+          "PRIMATE_CANYON"
+        ]
+      },
+      "KATHY": {
+        "page": 8,
+        "shift": [
+          "06:00",
+          "15:00"
+        ],
+        "lunch": [
+          "10:30",
+          "11:30"
+        ],
+        "morning": [
+          "BREEZEWAY_RESTROOMS",
+          "COURTYARD_RESTROOMS",
+          "EAST_ADMIN",
+          "WEST_ADMIN"
+        ],
+        "checks": [
+          "BREEZEWAY_RESTROOMS",
+          "COURTYARD_RESTROOMS",
+          "EAST_ADMIN",
+          "WEST_ADMIN"
+        ]
+      },
+      "KAILI": {
+        "page": 9,
+        "shift": [
+          "07:00",
+          "16:00"
+        ],
+        "lunch": [
+          "10:30",
+          "11:30"
+        ],
+        "morning": [
+          "BONOBOS_RESTROOMS",
+          "EVENT_CENTER",
+          "EDUCATION",
+          "KOMODOS",
+          "TROPICAL_BIRDS"
+        ],
+        "checks": [
+          "BONOBOS_RESTROOMS",
+          "CHINA",
+          "EVENT_CENTER",
+          "EDUCATION",
+          "TROPICAL_BIRDS"
+        ]
+      },
+      "GREGORY": {
+        "page": 10,
+        "shift": [
+          "08:00",
+          "17:00"
+        ],
+        "lunch": [
+          "12:30",
+          "13:30"
+        ],
+        "morning": [
+          "EXPO",
+          "AQUARIUM"
+        ],
+        "checks": [
+          "EXPO",
+          "MEMMEX_RESTROOMS",
+          "AQUARIUM",
+          "HERPETARIUM",
+          "KOMODOS"
+        ]
+      }
+    },
+    "3": {
+      "TAMMY": {
+        "page": 11,
+        "shift": [
+          "05:00",
+          "14:00"
+        ],
+        "lunch": [
+          "08:30",
+          "09:30"
+        ],
+        "morning": [
+          "CHINA",
+          "EAST_END_RESTROOMS",
+          "TETON",
+          "NORTH_WEST_PASSAGE",
+          "PRIMATE_CANYON",
+          "PRIMATE_PAVILLION"
+        ],
+        "checks": [
+          "EAST_END_RESTROOMS",
+          "TETON",
+          "NORTH_WEST_PASSAGE",
+          "PRIMATE_PAVILLION"
+        ]
+      },
+      "KAREN": {
+        "page": 12,
+        "shift": [
+          "05:00",
+          "14:00"
+        ],
+        "lunch": [
+          "09:30",
+          "10:30"
+        ],
+        "morning": [
+          "CATHOUSE_CAFE_RESTROOMS",
+          "MEMMEX_RESTROOMS",
+          "ZAMBEZI",
+          "CAT_COUNTRY",
+          "HERPETARIUM",
+          "NOCTURNAL"
+        ],
+        "checks": [
+          "CATHOUSE_CAFE_RESTROOMS",
+          "ZAMBEZI",
+          "CAT_COUNTRY",
+          "NOCTURNAL",
+          "PRIMATE_CANYON"
+        ]
+      },
+      "KATHY": {
+        "page": 13,
+        "shift": [
+          "06:00",
+          "15:00"
+        ],
+        "lunch": [
+          "10:30",
+          "11:30"
+        ],
+        "morning": [
+          "BREEZEWAY_RESTROOMS",
+          "COURTYARD_RESTROOMS",
+          "EAST_ADMIN",
+          "WEST_ADMIN"
+        ],
+        "checks": [
+          "BREEZEWAY_RESTROOMS",
+          "COURTYARD_RESTROOMS",
+          "EAST_ADMIN",
+          "WEST_ADMIN"
+        ]
+      },
+      "KAILI": {
+        "page": 14,
+        "shift": [
+          "07:00",
+          "16:00"
+        ],
+        "lunch": [
+          "10:30",
+          "11:30"
+        ],
+        "morning": [
+          "BONOBOS_RESTROOMS",
+          "EVENT_CENTER",
+          "EDUCATION",
+          "KOMODOS",
+          "TROPICAL_BIRDS"
+        ],
+        "checks": [
+          "BONOBOS_RESTROOMS",
+          "CHINA",
+          "EVENT_CENTER",
+          "EDUCATION",
+          "TROPICAL_BIRDS"
+        ]
+      },
+      "GREGORY": {
+        "page": 15,
+        "shift": [
+          "08:00",
+          "17:00"
+        ],
+        "lunch": [
+          "12:30",
+          "13:30"
+        ],
+        "morning": [
+          "EXPO",
+          "AQUARIUM"
+        ],
+        "checks": [
+          "EXPO",
+          "MEMMEX_RESTROOMS",
+          "AQUARIUM",
+          "HERPETARIUM",
+          "KOMODOS"
+        ]
+      }
+    },
+    "4": {
+      "TAMMY": {
+        "page": 16,
+        "shift": [
+          "05:00",
+          "14:00"
+        ],
+        "lunch": [
+          "08:30",
+          "09:30"
+        ],
+        "morning": [
+          "CHINA",
+          "EAST_END_RESTROOMS",
+          "TETON",
+          "ZAMBEZI",
+          "NORTH_WEST_PASSAGE",
+          "PRIMATE_CANYON",
+          "PRIMATE_PAVILLION"
+        ],
+        "checks": [
+          "CHINA",
+          "EAST_END_RESTROOMS",
+          "TETON",
+          "NORTH_WEST_PASSAGE",
+          "PRIMATE_CANYON",
+          "PRIMATE_PAVILLION"
+        ]
+      },
+      "KATHY": {
+        "page": 17,
+        "shift": [
+          "06:00",
+          "15:00"
+        ],
+        "lunch": [
+          "10:00",
+          "11:00"
+        ],
+        "morning": [
+          "BREEZEWAY_RESTROOMS",
+          "COURTYARD_RESTROOMS",
+          "EAST_ADMIN",
+          "WEST_ADMIN"
+        ],
+        "checks": [
+          "BREEZEWAY_RESTROOMS",
+          "COURTYARD_RESTROOMS",
+          "EAST_ADMIN",
+          "WEST_ADMIN"
+        ]
+      },
+      "KAILI": {
+        "page": 18,
+        "shift": [
+          "07:00",
+          "16:00"
+        ],
+        "lunch": [
+          "11:00",
+          "12:00"
+        ],
+        "morning": [
+          "EVENT_CENTER",
+          "EXPO",
+          "MEMMEX_RESTROOMS",
+          "AQUARIUM",
+          "CAT_COUNTRY",
+          "HERPETARIUM",
+          "KOMODOS"
+        ],
+        "checks": [
+          "EVENT_CENTER",
+          "EXPO",
+          "MEMMEX_RESTROOMS",
+          "AQUARIUM",
+          "CAT_COUNTRY",
+          "HERPETARIUM",
+          "KOMODOS"
+        ]
+      },
+      "ALIJAH": {
+        "page": 19,
+        "shift": [
+          "07:00",
+          "16:00"
+        ],
+        "lunch": [
+          "12:00",
+          "13:00"
+        ],
+        "morning": [
+          "BONOBOS_RESTROOMS",
+          "CATHOUSE_CAFE_RESTROOMS",
+          "EDUCATION",
+          "NOCTURNAL",
+          "TROPICAL_BIRDS"
+        ],
+        "checks": [
+          "BONOBOS_RESTROOMS",
+          "CATHOUSE_CAFE_RESTROOMS",
+          "ZAMBEZI",
+          "EDUCATION",
+          "NOCTURNAL",
+          "TROPICAL_BIRDS"
+        ]
+      }
+    },
+    "5": {
+      "KAREN": {
+        "page": 20,
+        "shift": [
+          "05:00",
+          "14:00"
+        ],
+        "lunch": [
+          "09:30",
+          "10:30"
+        ],
+        "morning": [
+          "CATHOUSE_CAFE_RESTROOMS",
+          "EVENT_CENTER",
+          "EXPO",
+          "MEMMEX_RESTROOMS",
+          "ZAMBEZI",
+          "AQUARIUM",
+          "CAT_COUNTRY",
+          "EDUCATION",
+          "HERPETARIUM",
+          "KOMODOS",
+          "NOCTURNAL",
+          "PRIMATE_CANYON",
+          "TROPICAL_BIRDS"
+        ],
+        "checks": [
+          "CATHOUSE_CAFE_RESTROOMS",
+          "EVENT_CENTER",
+          "EXPO",
+          "MEMMEX_RESTROOMS",
+          "AQUARIUM",
+          "CAT_COUNTRY",
+          "EDUCATION",
+          "HERPETARIUM",
+          "KOMODOS",
+          "NOCTURNAL",
+          "PRIMATE_CANYON",
+          "TROPICAL_BIRDS"
+        ]
+      },
+      "KATHY": {
+        "page": 21,
+        "shift": [
+          "06:00",
+          "15:00"
+        ],
+        "lunch": [
+          "10:30",
+          "11:30"
+        ],
+        "morning": [
+          "BREEZEWAY_RESTROOMS",
+          "COURTYARD_RESTROOMS",
+          "EAST_ADMIN",
+          "WEST_ADMIN"
+        ],
+        "checks": [
+          "BREEZEWAY_RESTROOMS",
+          "COURTYARD_RESTROOMS",
+          "EAST_ADMIN",
+          "WEST_ADMIN"
+        ]
+      },
+      "ALIJAH": {
+        "page": 22,
+        "shift": [
+          "07:00",
+          "16:00"
+        ],
+        "lunch": [
+          "11:30",
+          "12:30"
+        ],
+        "morning": [
+          "BONOBOS_RESTROOMS",
+          "CHINA",
+          "EAST_END_RESTROOMS",
+          "TETON",
+          "NORTH_WEST_PASSAGE",
+          "PRIMATE_PAVILLION"
+        ],
+        "checks": [
+          "BONOBOS_RESTROOMS",
+          "CHINA",
+          "EAST_END_RESTROOMS",
+          "TETON",
+          "ZAMBEZI",
+          "NORTH_WEST_PASSAGE",
+          "PRIMATE_PAVILLION"
+        ]
+      }
+    },
+    "6": {
+      "KAREN": {
+        "page": 23,
+        "shift": [
+          "05:00",
+          "14:00"
+        ],
+        "lunch": [
+          "09:30",
+          "10:30"
+        ],
+        "morning": [
+          "CATHOUSE_CAFE_RESTROOMS",
+          "EVENT_CENTER",
+          "MEMMEX_RESTROOMS",
+          "ZAMBEZI",
+          "CAT_COUNTRY",
+          "EDUCATION",
+          "HERPETARIUM",
+          "KOMODOS",
+          "NOCTURNAL",
+          "PRIMATE_CANYON",
+          "PRIMATE_PAVILLION",
+          "TROPICAL_BIRDS"
+        ],
+        "checks": [
+          "CATHOUSE_CAFE_RESTROOMS",
+          "EVENT_CENTER",
+          "ZAMBEZI",
+          "CAT_COUNTRY",
+          "NOCTURNAL",
+          "PRIMATE_CANYON",
+          "PRIMATE_PAVILLION"
+        ]
+      },
+      "KATHY": {
+        "page": 24,
+        "shift": [
+          "06:00",
+          "15:00"
+        ],
+        "lunch": [
+          "10:30",
+          "11:30"
+        ],
+        "morning": [
+          "BREEZEWAY_RESTROOMS",
+          "COURTYARD_RESTROOMS",
+          "EAST_ADMIN",
+          "WEST_ADMIN"
+        ],
+        "checks": [
+          "BREEZEWAY_RESTROOMS",
+          "COURTYARD_RESTROOMS",
+          "EAST_ADMIN",
+          "WEST_ADMIN"
+        ]
+      },
+      "ALIJAH": {
+        "page": 25,
+        "shift": [
+          "07:00",
+          "16:00"
+        ],
+        "lunch": [
+          "11:30",
+          "12:30"
+        ],
+        "morning": [
+          "BONOBOS_RESTROOMS",
+          "CHINA",
+          "EAST_END_RESTROOMS",
+          "TETON",
+          "NORTH_WEST_PASSAGE"
+        ],
+        "checks": [
+          "BONOBOS_RESTROOMS",
+          "CHINA",
+          "EAST_END_RESTROOMS",
+          "TETON",
+          "NORTH_WEST_PASSAGE"
+        ]
+      },
+      "GREGORY": {
+        "page": 26,
+        "shift": [
+          "08:00",
+          "17:00"
+        ],
+        "lunch": [
+          "12:30",
+          "13:30"
+        ],
+        "morning": [
+          "EXPO",
+          "AQUARIUM"
+        ],
+        "checks": [
+          "EXPO",
+          "MEMMEX_RESTROOMS",
+          "AQUARIUM",
+          "EDUCATION",
+          "HERPETARIUM",
+          "KOMODOS",
+          "TROPICAL_BIRDS"
+        ]
+      }
+    }
+  }
+}

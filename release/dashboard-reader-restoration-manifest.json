@@ -1,0 +1,324 @@
+{
+  "base_backend": "ef8c3b56005c32b06f3325cbc8afac5b6d61a9ea",
+  "project_ref": "rqquvtjdmugpigbndmne",
+  "canonical_function": {
+    "signature": "public.mz_latest_verified_check(uuid,timestamptz,timestamptz)",
+    "source_migration": "20260922090000_verified_visit_reminder_state.sql",
+    "source_declaration_sha256": "f8c137708f1a28a9897a724b903b892ae76b418a739dfce734952ba1ebeb683b",
+    "body_md5": "db291da01ace223486f791a646e98ff0",
+    "owner": "postgres",
+    "security_definer": true,
+    "search_path": [
+      "pg_catalog",
+      "public"
+    ],
+    "execute_roles": [
+      "postgres",
+      "service_role",
+      "custodial_application_reader"
+    ]
+  },
+  "direct_relation_columns": {
+    "custodial_offline_reconciliation_records": [
+      "client_completion_id",
+      "client_session_id",
+      "completion_response_id",
+      "context_id",
+      "credential_id",
+      "device_id",
+      "location_id",
+      "occurrence_fingerprint",
+      "occurrence_id",
+      "original_employee_id",
+      "payload_json",
+      "reconciliation_id",
+      "session_id",
+      "state"
+    ],
+    "custodial_offline_actor_contexts": [
+      "client_session_id",
+      "context_id",
+      "credential_id",
+      "device_id",
+      "employee_id",
+      "location_id",
+      "native_completed_at",
+      "native_completion_attestation_sha256",
+      "native_completion_attestation_version",
+      "native_finish_scan_entry_id",
+      "native_scan_entry_id",
+      "native_start_attestation_version",
+      "occurrence_fingerprint",
+      "occurrence_id",
+      "started_at",
+      "status"
+    ],
+    "sessions": [
+      "client_session_id",
+      "device_id",
+      "employee_id",
+      "ended_at",
+      "id",
+      "location_id",
+      "started_at",
+      "status"
+    ],
+    "completion_responses": [
+      "client_completion_id",
+      "device_id",
+      "id",
+      "location_id",
+      "response_json",
+      "session_id",
+      "submitted_by_employee_id"
+    ],
+    "custodial_offline_scan_event_evidence": [
+      "client_event_id",
+      "context_id",
+      "event_payload",
+      "reconciliation_id",
+      "session_id"
+    ]
+  },
+  "existing_callable_dependency": {
+    "signature": "public.custodial_canonical_utc_millis(timestamptz)",
+    "source_migration": "20260813210000_custodial_u4_ops_closure.sql",
+    "body_md5": "1fc63ecfbab39b8e0d756ae4af258cf6",
+    "owner": "postgres",
+    "security_definer": false,
+    "search_path": [
+      "pg_catalog"
+    ]
+  },
+  "observed_view_predecessor": {
+    "source_readback_sha256": "223fc38e39b8b19a732d5a844678c3d8828567a0f0b6004050d80964b785c808",
+    "definition_md5": "bab6b9acaa3aedd76b1eaf9a5eff699e",
+    "owner": "postgres",
+    "options": null,
+    "missing_required_columns": [
+      "latest_checked_at"
+    ],
+    "native_missing_columns": []
+  },
+  "canonical_view": {
+    "source_migration": "20260922090000_verified_visit_reminder_state.sql",
+    "declaration_sha256": "2fad2a285adbfbabd5166f05d1b1a9e2ecfaefc49dfce4b77276993467db935d",
+    "place_name_adoption": "NOT_REPLAYED; absent helper remains separate feature deployment",
+    "required_original_completion_reader": "custodial_release_identity.read_current_original_dashboard_completions_v1()"
+  },
+  "protected_dashboard_reader": {
+    "signature": "custodial_release_identity.read_current_original_dashboard_completions_v1()",
+    "source_migration": "20261012142853_original_completion_protected_reader.sql",
+    "declaration_sha256": "f6d225b94dc7fec62d961f2c5e0d66298e70f31aecb461af9365861a0aa9e35f",
+    "body_md5": "b80ecc247cc6d966b0b09ff70f19c47c",
+    "direct_relation_columns": {
+      "custodial_offline_reconciliation_records": [
+        "client_completion_id",
+        "client_session_id",
+        "completion_response_id",
+        "context_id",
+        "created_at",
+        "credential_id",
+        "device_id",
+        "location_id",
+        "occurrence_fingerprint",
+        "occurrence_id",
+        "original_employee_id",
+        "payload_fingerprint",
+        "payload_json",
+        "reconciliation_id",
+        "result_json",
+        "session_id",
+        "state"
+      ],
+      "custodial_offline_actor_contexts": [
+        "assignment_epoch",
+        "client_session_id",
+        "context_id",
+        "credential_id",
+        "device_id",
+        "employee_id",
+        "location_id",
+        "native_completed_at",
+        "native_completion_attestation_sha256",
+        "native_completion_attestation_version",
+        "native_finish_scan_entry_id",
+        "native_scan_entry_id",
+        "native_start_attestation_version",
+        "occurrence_fingerprint",
+        "occurrence_id",
+        "snapshot_assignment_epoch",
+        "snapshot_employee_id",
+        "snapshot_id",
+        "started_at",
+        "status"
+      ],
+      "sessions": [
+        "client_session_id",
+        "device_id",
+        "employee_id",
+        "ended_at",
+        "id",
+        "location_id",
+        "session_uuid",
+        "started_at",
+        "status"
+      ],
+      "completion_responses": [
+        "client_completion_id",
+        "device_id",
+        "id",
+        "location_id",
+        "response_json",
+        "session_id",
+        "submitted_by_employee_id"
+      ],
+      "employees": [
+        "display_name",
+        "id"
+      ],
+      "custodial_offline_scan_event_evidence": [
+        "client_event_id",
+        "context_id",
+        "event_payload",
+        "reconciliation_id",
+        "session_id"
+      ]
+    },
+    "existing_callable_dependencies": [
+      "public.operational_day_start(timestamptz)",
+      "public.custodial_canonical_utc_millis(timestamptz)"
+    ],
+    "owner": "postgres",
+    "search_path": [
+      "pg_catalog",
+      "public"
+    ],
+    "security_definer": true,
+    "execute_roles": [
+      "postgres",
+      "custodial_application_reader"
+    ]
+  },
+  "independent_verified_check_reader": {
+    "signature": "custodial_release_identity.read_current_verified_dashboard_checks_v1()",
+    "source_query_preimage": "release/dashboard-reader/verified-check-query-preimage.sql",
+    "source_query_sha256": "4810015827143036cfac142d4257c2224aebfd9a1039b5406473586d79e6e3b8",
+    "backend_call_preimage_sha256": "97950f1e290f89a66979ef026cb5820598e83782de05b999fa123837f0d8a961",
+    "body_md5": "64eca95488a9e8ff03a422557a3e49b6",
+    "direct_relation_columns": {
+      "custodial_offline_reconciliation_records": [
+        "client_completion_id",
+        "client_session_id",
+        "completion_response_id",
+        "context_id",
+        "credential_id",
+        "device_id",
+        "location_id",
+        "occurrence_fingerprint",
+        "occurrence_id",
+        "original_employee_id",
+        "payload_json",
+        "reconciliation_id",
+        "session_id",
+        "state"
+      ],
+      "custodial_offline_actor_contexts": [
+        "client_session_id",
+        "context_id",
+        "credential_id",
+        "device_id",
+        "employee_id",
+        "location_id",
+        "native_completed_at",
+        "native_completion_attestation_sha256",
+        "native_completion_attestation_version",
+        "native_finish_scan_entry_id",
+        "native_scan_entry_id",
+        "native_start_attestation_version",
+        "occurrence_fingerprint",
+        "occurrence_id",
+        "started_at",
+        "status"
+      ],
+      "sessions": [
+        "client_session_id",
+        "device_id",
+        "employee_id",
+        "ended_at",
+        "id",
+        "location_id",
+        "session_uuid",
+        "started_at",
+        "status"
+      ],
+      "completion_responses": [
+        "client_completion_id",
+        "device_id",
+        "id",
+        "location_id",
+        "response_json",
+        "session_id",
+        "submitted_by_employee_id"
+      ],
+      "employees": [
+        "display_name",
+        "id"
+      ],
+      "custodial_offline_scan_event_evidence": [
+        "client_event_id",
+        "context_id",
+        "event_payload",
+        "reconciliation_id",
+        "session_id"
+      ]
+    },
+    "owner": "postgres",
+    "security_definer": true,
+    "search_path": [
+      "pg_catalog",
+      "public"
+    ],
+    "execute_roles": [
+      "postgres",
+      "custodial_application_reader"
+    ],
+    "semantics": "Latest genuine check-only per location within operational day, independently of latest genuine cleaning and latest overall original result; exact original fixed projection/predicate/order retained",
+    "original_reader_and_cleaning_view_unchanged": true,
+    "source_query_boundary_note": "Only closing JavaScript template indentation removed from saved SQL; internal projection, predicate and order bytes unchanged. backend_call_preimage_sha256 covers the exact original call."
+  },
+  "observed_live_forward_sources": [
+    {
+      "path": "release/dashboard-reader/forward-source/20261021110836_dashboard_application_reader_dependencies.sql",
+      "sha256": "a6ec8fe9bb7648a98400afef6de5d76529828634cc9c76f80dda52915ee02fbd"
+    },
+    {
+      "path": "release/dashboard-reader/forward-source/20261021111007_dashboard_verified_check_restoration.sql",
+      "sha256": "f074f9e53921507f7bc683cc2af2c3b5c8faaaab8c1708aa12168f35ccba4cfb"
+    },
+    {
+      "path": "release/dashboard-reader/forward-source/20261021112159_dashboard_verified_check_view_contract.sql",
+      "sha256": "5890f06a1d9fa7e5bf959549fb0071ebf5ed35405083eabccb3e3f927e14e307"
+    },
+    {
+      "path": "release/dashboard-reader/forward-source/20261021112511_dashboard_original_completion_reader_restoration.sql",
+      "sha256": "d34e1a4ac14bbac46e0d4501d2d4e7e9ffd5ca460c18171dad7d50492cfc3619"
+    },
+    {
+      "path": "release/dashboard-reader/forward-source/20261021120148_dashboard_verified_check_private_reader.sql",
+      "sha256": "2ffe5a5f9dd03b74afb2a712cfe16642e33c21a8c5dff70564be590eaa652885"
+    }
+  ],
+  "canonical_fresh_source": {
+    "migration": "supabase/migrations/20261021124949_dashboard_independent_verified_check_reader.sql",
+    "sha256": "743a210140bee5653b6c7bdaf932850dc08c0ab4564ce40f4efa3c9f8f35e761",
+    "normal_source_actor": "supabase_admin",
+    "schema_and_original_reader_owner": "supabase_admin",
+    "body_md5": "64eca95488a9e8ff03a422557a3e49b6",
+    "source_replay_count": 289,
+    "prior288_preserved": true,
+    "source_replay_manifest_sha256": "e5867270c2509b986708caf32109956bedf0703363dcc1d775f1737f502c5c68",
+    "production_execution_authorized": false,
+    "global_release_artifacts_refreshed": false
+  }
+}

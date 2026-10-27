@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {migrationReplayNames} from './migration-replay-order.mjs';
 import { createCiFreshOnlyFixture } from './ci-fresh-only-replay.mjs';
 // Complete authority regression suite. It uses one disposable PostgreSQL
 // container and intentionally attacks the ordinary service role before proving

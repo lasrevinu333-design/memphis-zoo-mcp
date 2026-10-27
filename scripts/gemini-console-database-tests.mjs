@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { promisify } from "node:util";
 
 const execFileAsync=promisify(execFile);
@@ -18,6 +18,145 @@ async function json(expression){const output=await sql(`select (${expression})::
 async function fails(expression,pattern){let failure=null;try{await sql(`select (${expression})::text;`);}catch(error){failure=error;}assert.ok(failure,"query must fail");assert.match(String(failure.stderr||failure.message),pattern);}
 const literal=(value)=>`'${String(value).replaceAll("'","''")}'`;
 
+if(process.argv.includes("--original-preservation-only")){
+  const remainingOnly=process.argv.includes('--remaining-after-correlation');
+  // This selector deliberately bypasses the historical foundation/repair
+  // cases. Main supplies the disposable container after applying source269.
+  const roleSql=statement=>sql(`set role service_role; ${statement}`);
+  const roleJson=async expression=>JSON.parse((await roleSql(`select (${expression})::text;`)).split("\n").at(-1));
+  const roleFails=async(expression,pattern)=>{let error;
+    try{await roleJson(expression);}catch(caught){error=caught;}
+    assert.ok(error,"original operation must refuse");assert.match(String(error.stderr||error.message),pattern);
+  };
+  const sourceFns=[
+    "public.gemini_console_begin_turn(uuid,uuid,uuid,text,uuid[],uuid)",
+    "public.gemini_console_complete_turn(uuid,text,text,text,uuid,jsonb)",
+  ];
+  const acl=()=>json(`(select jsonb_agg(jsonb_build_object(
+    'identity',p.oid::regprocedure::text,'owner',p.proowner::regrole::text,
+    'acl',coalesce(p.proacl::text,''),'source_sha256',public.static_weekly_digest_text(p.prosrc),
+    'service_execute',has_function_privilege('service_role',p.oid,'EXECUTE'),
+    'anon_execute',has_function_privilege('anon',p.oid,'EXECUTE'),
+    'authenticated_execute',has_function_privilege('authenticated',p.oid,'EXECUTE'),
+    'inventory_function_sha256',(select i.definition_sha256 from public.custodial_release_authority_restore_inventory i
+      where i.object_kind='function' and i.object_identity like '%(%' and to_regprocedure(i.object_identity)=p.oid),
+    'inventory_grant_sha256',(select i.definition_sha256 from public.custodial_release_authority_restore_inventory i
+      where i.object_kind='grant' and i.object_identity like '%(%' and to_regprocedure(i.object_identity)=p.oid)
+    ) order by p.oid::regprocedure::text) from pg_proc p where p.oid in
+    (${sourceFns.map(name=>`${literal(name)}::regprocedure`).join(',')}))`);
+  const scope=()=>sql(`select public.static_weekly_digest_text(coalesce(string_agg(
+    object_kind||'|'||object_identity||'|'||definition_sha256,E'\\n' order by object_kind,object_identity),''))
+    from public.custodial_release_authority_restore_inventory;`);
+  const beforeAcl=await acl(),beforeScope=await scope();
+  assert.equal(beforeAcl.length,2);
+  for(const item of beforeAcl){assert.equal(item.service_execute,true);assert.equal(item.anon_execute,false);
+    assert.equal(item.authenticated_execute,false);assert.equal(item.inventory_function_sha256,null);
+    assert.equal(item.inventory_grant_sha256,null);}
+  const manager=(await sql("select manager_id from public.ops_manager_managers where system_key='eric_custodial_manager';")).split("\n").at(-1);
+  assert.match(manager,/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i);
+  const conversation=randomUUID(),client=randomUUID(),correlation=randomUUID(),attachments=[randomUUID(),randomUUID()];
+  const body="Original two-attachment message; preserve exact order";
+  await sql(`insert into public.gemini_console_conversations(conversation_id,owner_manager_id,title)
+    values (${literal(conversation)}::uuid,${literal(manager)}::uuid,'Original-preservation fixture');`);
+  for(const [index,id] of attachments.entries())await sql(`insert into public.gemini_console_attachments
+    (attachment_id,conversation_id,manager_id,storage_path,original_filename,mime_type,extension,size_bytes,sha256)
+    values (${literal(id)}::uuid,${literal(conversation)}::uuid,${literal(manager)}::uuid,
+    ${literal(`original-preservation/${id}`)},${literal(`evidence-${index}.txt`)},'text/plain','.txt',4,
+    ${literal(index===0?'a'.repeat(64):'b'.repeat(64))});`);
+  const array=ids=>ids.length?`array[${ids.map(id=>id===null?'null::uuid':`${literal(id)}::uuid`).join(',')}]::uuid[]`:"'{}'::uuid[]";
+  const begin=(id=client,corr=correlation,ids=attachments,text=body,owner=manager,target=conversation)=>
+    `public.gemini_console_begin_turn(${literal(target)}::uuid,${literal(owner)}::uuid,
+      ${literal(id)}::uuid,${literal(text)},${array(ids)},${literal(corr)}::uuid)`;
+  const metadata={fixture:"original-preservation-only"};
+  const complete=(userId,reply="Original assistant response",provider="google_gemini",model="fixture-model",corr=correlation,meta=metadata)=>
+    `public.gemini_console_complete_turn(${literal(userId)}::uuid,${literal(reply)},${literal(provider)},
+      ${literal(model)},${literal(corr)}::uuid,${literal(JSON.stringify(meta))}::jsonb)`;
+  const rows=(target=conversation)=>json(`(select coalesce(jsonb_agg(to_jsonb(m) order by m.message_id),'[]'::jsonb)
+    from public.gemini_console_messages m where m.conversation_id=${literal(target)}::uuid)`);
+  const rowHash=async target=>createHash('sha256').update(JSON.stringify(await rows(target))).digest('hex');
+  const negativeHashes={};let reachedRemaining=false;
+  const refusedUnchanged=async(label,expression,pattern,target=conversation)=>{
+    if(remainingOnly&&!reachedRemaining){if(label==='changed completion correlation')reachedRemaining=true;else return;}
+    const before=await rowHash(target);await roleFails(expression,pattern);
+    const after=await rowHash(target);negativeHashes[label]={before,after};
+    assert.equal(after,before,`${label} changed a full persisted message row`);};
+
+  const [first,second]=await Promise.all([roleJson(begin()),roleJson(begin())]);
+  assert.equal([first,second].filter(result=>result.inserted).length,1);
+  assert.equal([first,second].filter(result=>result.claimed).length,1);
+  assert.equal(first.user_message.message_id,second.user_message.message_id);
+  assert.equal(first.user_message.correlation_id,correlation);
+  assert.deepEqual(first.user_message.metadata_json.original_attachment_ids,attachments);
+  assert.equal(first.user_message.metadata_json.original_client_time_policy,'LOCAL_DISPLAY_METADATA_NOT_SERVER_AUTHORITY');
+  const userId=first.user_message.message_id;
+  const [completedOne,completedTwo]=await Promise.all([roleJson(complete(userId)),roleJson(complete(userId))]);
+  assert.deepEqual(completedOne,completedTwo,"concurrent identical completions must reuse one persisted assistant");
+  assert.equal(completedOne.response_to_message_id,userId);
+  const acceptedRows=await rows();assert.equal(acceptedRows.length,2);
+  assert.equal(acceptedRows.filter(row=>row.role==='user'&&row.state==='completed').length,1);
+  assert.equal(acceptedRows.filter(row=>row.role==='assistant'&&row.state==='completed').length,1);
+  const acceptedHash=await rowHash(),replayed=await roleJson(begin());
+  assert.equal(replayed.claimed,false);assert.deepEqual(replayed.assistant_message,completedOne);
+  assert.deepEqual(await roleJson(complete(userId)),completedOne);
+  assert.equal(await rowHash(),acceptedHash,"same original replay altered completed rows or timestamps");
+
+  await refusedUnchanged('wrong correlation',begin(client,randomUUID()),/original message request identity|conflict/i);
+  await refusedUnchanged('wrong body',begin(client,correlation,attachments,'changed original body'),/conflict/i);
+  await refusedUnchanged('reordered attachments',begin(client,correlation,[...attachments].reverse()),/original message request identity|conflict/i);
+  await refusedUnchanged('extra attachment',begin(client,correlation,[...attachments,randomUUID()]),/original message request identity|conflict/i);
+  await refusedUnchanged('duplicate attachment',begin(randomUUID(),randomUUID(),[attachments[0],attachments[0]]),/distinct and bounded/i);
+  await refusedUnchanged('null attachment',begin(randomUUID(),randomUUID(),[attachments[0],null]),/distinct and bounded/i);
+  await refusedUnchanged('more than eight attachments',begin(randomUUID(),randomUUID(),Array.from({length:9},()=>randomUUID())),/distinct and bounded/i);
+  for(const [label,expression] of [
+    ['changed completion body',complete(userId,'replacement reply')],
+    ['changed provider',complete(userId,undefined,'other_provider')],
+    ['changed model',complete(userId,undefined,undefined,'other-model')],
+    ['changed metadata',complete(userId,undefined,undefined,undefined,correlation,{fixture:'rewritten'})],
+    ['changed completion correlation',complete(userId,undefined,undefined,undefined,randomUUID())],
+  ])await refusedUnchanged(label,expression,label==='changed completion correlation'
+    ? /original turn identity or manager authority changed/i : /original completed turn conflicts/i);
+
+  // Fixture-only historical shape: create through the normal RPC, then remove
+  // only the new metadata keys to model a pre-269 row. Do not backfill it.
+  const legacyId=randomUUID(),legacyCorr=randomUUID();
+  await roleJson(begin(legacyId,legacyCorr,[],"Historical legacy fixture"));
+  await sql(`update public.gemini_console_messages set metadata_json='{"source":"direct_authenticated_user"}'::jsonb
+    where manager_id=${literal(manager)}::uuid and client_message_id=${literal(legacyId)}::uuid;`);
+  await refusedUnchanged('legacy metadata',begin(legacyId,legacyCorr,[],"Historical legacy fixture"),/original message request identity|conflict/i);
+  assert.deepEqual(await json(`(select metadata_json from public.gemini_console_messages
+    where manager_id=${literal(manager)}::uuid and client_message_id=${literal(legacyId)}::uuid)`),
+    {source:'direct_authenticated_user'});
+
+  for(const state of ['failed','cancelled']){
+    const failedId=randomUUID(),failedCorr=randomUUID(),started=await roleJson(begin(failedId,failedCorr,[],`${state} fixture`));
+    await roleJson(`public.gemini_console_fail_turn(${literal(started.user_message.message_id)}::uuid,
+      ${literal(state)},'fixture_stop','Original request retained')`);
+    await refusedUnchanged(`${state} original completion`,complete(started.user_message.message_id,'late reply',undefined,undefined,failedCorr),/not generating/i);
+  }
+
+  const revokedManager=randomUUID(),revokedConversation=randomUUID(),revokedClient=randomUUID(),revokedCorr=randomUUID();
+  await sql(`insert into public.ops_manager_managers(manager_id,display_name,roles,active,metadata_json)
+    values (${literal(revokedManager)}::uuid,'Disposable revoked original manager',array['OPS_MANAGER'],true,'{"test":true}'::jsonb);
+    insert into public.gemini_console_conversations(conversation_id,owner_manager_id,title)
+    values (${literal(revokedConversation)}::uuid,${literal(revokedManager)}::uuid,'Revoked fixture');`);
+  const revokedStart=await roleJson(begin(revokedClient,revokedCorr,[],"Revoked manager fixture",revokedManager,revokedConversation));
+  await sql(`update public.ops_manager_managers set active=false where manager_id=${literal(revokedManager)}::uuid;`);
+  await refusedUnchanged('revoked manager completion',complete(revokedStart.user_message.message_id,'late reply',undefined,undefined,revokedCorr),/manager authority changed/i,revokedConversation);
+  await refusedUnchanged('revoked manager begin',begin(randomUUID(),randomUUID(),[],"new after revocation",revokedManager,revokedConversation),/active manager not found/i,revokedConversation);
+  const deniedBefore=await rowHash();
+  let denied;try{await sql(`set role authenticated; select ${begin(randomUUID(),randomUUID(),[],"denied caller")}::text;`);}catch(error){denied=error;}
+  assert.ok(denied,"authenticated caller must have no RPC execution");
+  assert.match(String(denied.stderr||denied.message),/permission denied/i);
+  const deniedAfter=await rowHash();negativeHashes['denied caller']={before:deniedBefore,after:deniedAfter};
+  assert.equal(deniedAfter,deniedBefore,"denied caller changed a persisted message row");
+  assert.deepEqual(await acl(),beforeAcl,"two RPC ACL/owner/definition/recovery pins changed");
+  assert.equal(await scope(),beforeScope,"unrelated or target recovery inventory scope changed during fixture");
+  console.log(JSON.stringify({ok:true,selector:'original-preservation-only',role:'service_role',
+    two_identical_begins_one_user:true,two_identical_completions_one_assistant:true,
+    completed_rows_sha256:acceptedHash,final_rows_sha256:await rowHash(),negative_full_row_hashes:negativeHashes,
+    rejected_originals_unchanged:true,legacy_unchanged:true,acl_and_recovery_scope_unchanged:true,
+    external_provider:false,real_manager_browser:false}));
+}else{
 const ericId=(await sql("select manager_id from public.ops_manager_managers where system_key='eric_custodial_manager';")).split("\n").at(-1);
 assert.match(ericId,/^[0-9a-f-]{36}$/i);
 const ericCredential=randomUUID();
@@ -92,3 +231,4 @@ assert.equal(await sql(`select count(*) from public.gemini_console_messages wher
 assert.equal(await sql(`select count(*) from public.gemini_console_messages where conversation_id='${ordinaryConversation}'::uuid and body=${literal("Fix it.")} and metadata_json->>'source'='direct_authenticated_user';`),"1");
 
 console.log(JSON.stringify({ok:true,concurrent_requests:10,logical_user_rows:1,logical_assistant_rows:1,replay_deduplicated:true,attachment_transaction:true,custodial_manager_authorization:true,controlled_worker_claim_backup_finish:true,ordinary_manager_denied:true,private_server_only_tables:true},null,2));
+}

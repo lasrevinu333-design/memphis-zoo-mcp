@@ -94,6 +94,14 @@ fi
 
 owner_secret_dir="$(mktemp -d)"
 owner_secret_file="$owner_secret_dir/token"
+printf 'OWNED_SECRET_DIRECTORY %s\n' "$owner_secret_dir"
+record_owned_resources() {
+  if test -n "${RELEASE_MIGRATION_TEST_RESOURCE_DIRECTORY:-}"; then
+    node -e 'const fs=require("fs"),p=require("path");const [out,secret,name,id]=process.argv.slice(1);const s=fs.lstatSync(out);if(!p.isAbsolute(out)||s.isSymbolicLink()||!s.isDirectory()||s.uid!==process.getuid()||(s.mode&63)!==0)throw Error("private owned evidence directory required");fs.writeFileSync(p.join(out,"OWNED_RESOURCES.json"),JSON.stringify({owner_secret_dir:secret,container_name:name,container_id:id||null})+"\n",{mode:384});' \
+      "$RELEASE_MIGRATION_TEST_RESOURCE_DIRECTORY" "$owner_secret_dir" "$container" "${container_id:-}"
+  fi
+}
+record_owned_resources
 printf '%s' "$owner_token" > "$owner_secret_file"
 chmod 0400 "$owner_secret_file"
 container_may_exist=false
@@ -147,19 +155,32 @@ container_id="$(docker run --rm -d --no-healthcheck --name "$container" \
   -c shared_preload_libraries=pg_cron,pg_net,pg_stat_statements \
   -c "cron.database_name=$container" -c cron.launch_active_jobs=off)"
 [[ "$container_id" =~ ^[a-f0-9]{64}$ ]]
+printf 'OWNED_CONTAINER %s %s\n' "$container_id" "$container"
+record_owned_resources
 
 docker inspect "$container_id" | node scripts/release-migration-fixture-inspect.mjs \
   "$container_id" "$container" "$owner_token" "$image_id" "$project_root" \
   "$node_source" "$node_sha256" "$node_version" "$lib64_source" "$lib_source" "$owner_secret_file"
 
 ready=0
+previous_server_start=''
 for attempt in $(seq 1 240); do
-  if docker exec "$container_id" psql -X -q -At -v ON_ERROR_STOP=1 -h 127.0.0.1 -U supabase_admin -d "$container" -c 'select 1' 2>/dev/null | grep -qx 1; then ready=$((ready + 1)); else ready=0; fi
+  readiness=''
+  if readiness="$(docker exec "$container_id" psql -X -q -At -v ON_ERROR_STOP=1 -h 127.0.0.1 -U supabase_admin -d "$container" -c "select current_database() || '|' || pg_is_in_recovery()::text || '|' || (select count(*) from pg_roles where rolname in ('anon','authenticated','service_role','supabase_admin'))::text || '|' || pg_postmaster_start_time()::text" 2>/dev/null)" \
+    && [[ "$readiness" == "$container|false|4|"* ]]; then
+    server_start="${readiness#"$container|false|4|"}"
+    if test -n "$server_start" && test "$server_start" = "$previous_server_start"; then ready=$((ready + 1)); else ready=1; fi
+    previous_server_start="$server_start"
+  else ready=0; previous_server_start=''; fi
   if test "$ready" -ge 4; then break; fi
   sleep 0.5
 done
 test "$ready" -ge 4
-sleep 10
+# Temporary init server is socket-only in the pinned entrypoint. Four stable
+# authenticated TCP snapshots must name this database, all four bootstrap roles,
+# primary mode and the SAME final postmaster start. No proc/executable access or
+# new capabilities, and no blind startup wait masquerading as readiness proof.
+printf 'FINAL_POSTGRES_READY %s %s\n' "$container_id" "$previous_server_start"
 test "$(docker exec "$container_id" /usr/local/bin/node --version)" = "v$node_version"
 
 docker exec -w /workspace \

@@ -1,0 +1,561 @@
+{
+  "scope": "SOURCE_METADATA_TEST_FIXTURE_NOT_ARCHIVE_AUTHORITY",
+  "source_capture_sha256": "56b4b57baa111318ae95bc0dba755d939c16d07404a2aa713e95ccc17fc4de00",
+  "tables": [
+    {
+      "schema": "auth",
+      "name": "audit_log_entries",
+      "columns": [
+        "instance_id",
+        "id",
+        "payload",
+        "created_at",
+        "ip_address"
+      ]
+    },
+    {
+      "schema": "auth",
+      "name": "custom_oauth_providers",
+      "columns": [
+        "id",
+        "provider_type",
+        "identifier",
+        "name",
+        "client_id",
+        "client_secret",
+        "acceptable_client_ids",
+        "scopes",
+        "pkce_enabled",
+        "attribute_mapping",
+        "authorization_params",
+        "enabled",
+        "email_optional",
+        "issuer",
+        "discovery_url",
+        "skip_nonce_check",
+        "cached_discovery",
+        "discovery_cached_at",
+        "authorization_url",
+        "token_url",
+        "userinfo_url",
+        "jwks_uri",
+        "created_at",
+        "updated_at",
+        "custom_claims_allowlist"
+      ]
+    },
+    {
+      "schema": "auth",
+      "name": "flow_state",
+      "columns": [
+        "id",
+        "user_id",
+        "auth_code",
+        "code_challenge_method",
+        "code_challenge",
+        "provider_type",
+        "provider_access_token",
+        "provider_refresh_token",
+        "created_at",
+        "updated_at",
+        "authentication_method",
+        "auth_code_issued_at",
+        "invite_token",
+        "referrer",
+        "oauth_client_state_id",
+        "linking_target_id",
+        "email_optional"
+      ]
+    },
+    {
+      "schema": "auth",
+      "name": "identities",
+      "columns": [
+        "provider_id",
+        "user_id",
+        "identity_data",
+        "provider",
+        "last_sign_in_at",
+        "created_at",
+        "updated_at",
+        "email",
+        "id"
+      ]
+    },
+    {
+      "schema": "auth",
+      "name": "instances",
+      "columns": [
+        "id",
+        "uuid",
+        "raw_base_config",
+        "created_at",
+        "updated_at"
+      ]
+    },
+    {
+      "schema": "auth",
+      "name": "mfa_amr_claims",
+      "columns": [
+        "session_id",
+        "created_at",
+        "updated_at",
+        "authentication_method",
+        "id"
+      ]
+    },
+    {
+      "schema": "auth",
+      "name": "mfa_challenges",
+      "columns": [
+        "id",
+        "factor_id",
+        "created_at",
+        "verified_at",
+        "ip_address",
+        "otp_code",
+        "web_authn_session_data"
+      ]
+    },
+    {
+      "schema": "auth",
+      "name": "mfa_factors",
+      "columns": [
+        "id",
+        "user_id",
+        "friendly_name",
+        "factor_type",
+        "status",
+        "created_at",
+        "updated_at",
+        "secret",
+        "phone",
+        "last_challenged_at",
+        "web_authn_credential",
+        "web_authn_aaguid",
+        "last_webauthn_challenge_data"
+      ]
+    },
+    {
+      "schema": "auth",
+      "name": "mfa_recovery_code_sets",
+      "columns": [
+        "id",
+        "user_id",
+        "mfa_factor_id",
+        "failed_verification_count",
+        "verification_locked_until",
+        "created_at",
+        "updated_at"
+      ]
+    },
+    {
+      "schema": "auth",
+      "name": "mfa_recovery_codes",
+      "columns": [
+        "id",
+        "mfa_recovery_code_set_id",
+        "code_hash",
+        "consumed_at",
+        "created_at"
+      ]
+    },
+    {
+      "schema": "auth",
+      "name": "oauth_authorizations",
+      "columns": [
+        "id",
+        "authorization_id",
+        "client_id",
+        "user_id",
+        "redirect_uri",
+        "scope",
+        "state",
+        "resource",
+        "code_challenge",
+        "code_challenge_method",
+        "response_type",
+        "status",
+        "authorization_code",
+        "created_at",
+        "expires_at",
+        "approved_at",
+        "nonce"
+      ]
+    },
+    {
+      "schema": "auth",
+      "name": "oauth_client_states",
+      "columns": [
+        "id",
+        "provider_type",
+        "code_verifier",
+        "created_at"
+      ]
+    },
+    {
+      "schema": "auth",
+      "name": "oauth_clients",
+      "columns": [
+        "id",
+        "client_secret_hash",
+        "registration_type",
+        "redirect_uris",
+        "grant_types",
+        "client_name",
+        "client_uri",
+        "logo_uri",
+        "created_at",
+        "updated_at",
+        "deleted_at",
+        "client_type",
+        "token_endpoint_auth_method"
+      ]
+    },
+    {
+      "schema": "auth",
+      "name": "oauth_consents",
+      "columns": [
+        "id",
+        "user_id",
+        "client_id",
+        "scopes",
+        "granted_at",
+        "revoked_at"
+      ]
+    },
+    {
+      "schema": "auth",
+      "name": "one_time_tokens",
+      "columns": [
+        "id",
+        "user_id",
+        "token_type",
+        "token_hash",
+        "relates_to",
+        "created_at",
+        "updated_at",
+        "expires_at"
+      ]
+    },
+    {
+      "schema": "auth",
+      "name": "refresh_tokens",
+      "columns": [
+        "instance_id",
+        "id",
+        "token",
+        "user_id",
+        "revoked",
+        "created_at",
+        "updated_at",
+        "parent",
+        "session_id"
+      ]
+    },
+    {
+      "schema": "auth",
+      "name": "saml_providers",
+      "columns": [
+        "id",
+        "sso_provider_id",
+        "entity_id",
+        "metadata_xml",
+        "metadata_url",
+        "attribute_mapping",
+        "created_at",
+        "updated_at",
+        "name_id_format"
+      ]
+    },
+    {
+      "schema": "auth",
+      "name": "saml_relay_states",
+      "columns": [
+        "id",
+        "sso_provider_id",
+        "request_id",
+        "for_email",
+        "redirect_to",
+        "created_at",
+        "updated_at",
+        "flow_state_id"
+      ]
+    },
+    {
+      "schema": "auth",
+      "name": "schema_migrations",
+      "columns": [
+        "version"
+      ]
+    },
+    {
+      "schema": "auth",
+      "name": "scim_tokens",
+      "columns": [
+        "id",
+        "sso_provider_id",
+        "token_hash",
+        "prefix",
+        "created_at",
+        "expires_at",
+        "revoked_at",
+        "last_used_at"
+      ]
+    },
+    {
+      "schema": "auth",
+      "name": "scim_users",
+      "columns": [
+        "id",
+        "sso_provider_id",
+        "user_id",
+        "resource",
+        "user_name",
+        "external_id",
+        "active",
+        "created_at",
+        "updated_at",
+        "deleted_at"
+      ]
+    },
+    {
+      "schema": "auth",
+      "name": "sessions",
+      "columns": [
+        "id",
+        "user_id",
+        "created_at",
+        "updated_at",
+        "factor_id",
+        "aal",
+        "not_after",
+        "refreshed_at",
+        "user_agent",
+        "ip",
+        "tag",
+        "oauth_client_id",
+        "refresh_token_hmac_key",
+        "refresh_token_counter",
+        "scopes"
+      ]
+    },
+    {
+      "schema": "auth",
+      "name": "sso_domains",
+      "columns": [
+        "id",
+        "sso_provider_id",
+        "domain",
+        "created_at",
+        "updated_at"
+      ]
+    },
+    {
+      "schema": "auth",
+      "name": "sso_providers",
+      "columns": [
+        "id",
+        "resource_id",
+        "created_at",
+        "updated_at",
+        "disabled"
+      ]
+    },
+    {
+      "schema": "auth",
+      "name": "users",
+      "columns": [
+        "instance_id",
+        "id",
+        "aud",
+        "role",
+        "email",
+        "encrypted_password",
+        "email_confirmed_at",
+        "invited_at",
+        "confirmation_token",
+        "confirmation_sent_at",
+        "recovery_token",
+        "recovery_sent_at",
+        "email_change_token_new",
+        "email_change",
+        "email_change_sent_at",
+        "last_sign_in_at",
+        "raw_app_meta_data",
+        "raw_user_meta_data",
+        "is_super_admin",
+        "created_at",
+        "updated_at",
+        "phone",
+        "phone_confirmed_at",
+        "phone_change",
+        "phone_change_token",
+        "phone_change_sent_at",
+        "confirmed_at",
+        "email_change_token_current",
+        "email_change_confirm_status",
+        "banned_until",
+        "reauthentication_token",
+        "reauthentication_sent_at",
+        "is_sso_user",
+        "deleted_at",
+        "is_anonymous"
+      ]
+    },
+    {
+      "schema": "auth",
+      "name": "webauthn_challenges",
+      "columns": [
+        "id",
+        "user_id",
+        "challenge_type",
+        "session_data",
+        "created_at",
+        "expires_at"
+      ]
+    },
+    {
+      "schema": "auth",
+      "name": "webauthn_credentials",
+      "columns": [
+        "id",
+        "user_id",
+        "credential_id",
+        "public_key",
+        "attestation_type",
+        "aaguid",
+        "sign_count",
+        "transports",
+        "backup_eligible",
+        "backed_up",
+        "friendly_name",
+        "created_at",
+        "updated_at",
+        "last_used_at"
+      ]
+    },
+    {
+      "schema": "storage",
+      "name": "buckets",
+      "columns": [
+        "id",
+        "name",
+        "owner",
+        "created_at",
+        "updated_at",
+        "public",
+        "avif_autodetection",
+        "file_size_limit",
+        "allowed_mime_types",
+        "owner_id",
+        "type",
+        "versioning_status",
+        "lifecycle_configuration",
+        "lifecycle_configuration_generation"
+      ]
+    },
+    {
+      "schema": "storage",
+      "name": "buckets_analytics",
+      "columns": [
+        "name",
+        "type",
+        "format",
+        "created_at",
+        "updated_at",
+        "id",
+        "deleted_at"
+      ]
+    },
+    {
+      "schema": "storage",
+      "name": "buckets_vectors",
+      "columns": [
+        "id",
+        "type",
+        "created_at",
+        "updated_at"
+      ]
+    },
+    {
+      "schema": "storage",
+      "name": "migrations",
+      "columns": [
+        "id",
+        "name",
+        "hash",
+        "executed_at"
+      ]
+    },
+    {
+      "schema": "storage",
+      "name": "objects",
+      "columns": [
+        "id",
+        "bucket_id",
+        "name",
+        "owner",
+        "created_at",
+        "updated_at",
+        "last_accessed_at",
+        "metadata",
+        "path_tokens",
+        "version",
+        "owner_id",
+        "user_metadata",
+        "archived_at",
+        "is_delete_marker",
+        "is_versioned"
+      ]
+    },
+    {
+      "schema": "storage",
+      "name": "s3_multipart_uploads",
+      "columns": [
+        "id",
+        "in_progress_size",
+        "upload_signature",
+        "bucket_id",
+        "key",
+        "version",
+        "owner_id",
+        "created_at",
+        "user_metadata",
+        "metadata"
+      ]
+    },
+    {
+      "schema": "storage",
+      "name": "s3_multipart_uploads_parts",
+      "columns": [
+        "id",
+        "upload_id",
+        "size",
+        "part_number",
+        "bucket_id",
+        "key",
+        "etag",
+        "owner_id",
+        "version",
+        "created_at"
+      ]
+    },
+    {
+      "schema": "storage",
+      "name": "vector_indexes",
+      "columns": [
+        "id",
+        "name",
+        "bucket_id",
+        "data_type",
+        "dimension",
+        "distance_metric",
+        "metadata_configuration",
+        "created_at",
+        "updated_at"
+      ]
+    }
+  ],
+  "rows_or_values": false
+}

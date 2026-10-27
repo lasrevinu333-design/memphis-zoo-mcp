@@ -29,8 +29,8 @@ jobs:
           set -euo pipefail
           docker pull supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed
           /usr/bin/sha256sum --check --strict <<'REVIEWED_INPUTS'
-          d0338487e0dede546f5ef9b27f165bdb5f99739d7ed61aee32e82b453300e630  package.json
-          712cbdf47ce9920d45d10c87cf658e0f3ea7c321e7f933647efa4dbb030bb5bb  package-lock.json
+          3c00289fa710b8b0cdf9343c3370146a98b7aa4c31b9bc75987ff18c2c1f09c9  package.json
+          d8c17d9e50b99b641dfd44722b2f6000d015f702a9c18719813bfaba2b2476f3  package-lock.json
           d8ad584e8dd3adf8be9aa04bf7287fb45ed8805f7d771c814183cc781e8e2149  scripts/legacy-activation-http-tests.mjs
           b2fe3d3dd2c1b7619d5cb7869a865ef44284269264cd6e0f931cdbbf930141d0  scripts/release-pair-consumer-regression-tests.mjs
           9c330f91a9795187cbfb1edb92f2283b121935b609169e33effdb07f52e88e12  scripts/run-isolated-release-recorder-tests.mjs
@@ -47,7 +47,6 @@ jobs:
           node --check src/leadership-bootstrap.js
           node --check src/custodial-employee-admin.js
           node --check src/manager-notifications.js
-          node --check src/annie-moxie-bootstrap.js
           npm audit --omit=dev --audit-level=high
       - name: Verify exact release evidence freshness
         run: npm run --silent release:integrated-backend-authority:check
@@ -101,6 +100,12 @@ jobs:
         run: |
           set -euo pipefail
           npm run --silent test:auth
+          npm run --silent test:backup-source-binding
+          node --test scripts/device-profile-epoch-tests.mjs scripts/employee-schedule-identity-tests.mjs
+          node scripts/manager-scheduler-http-tests.mjs
+          node scripts/scheduler-reported-boundaries-tests.mjs
+          node scripts/manager-scheduler-database-tests.mjs
+          npm run --silent test:owner-access
           npm run --silent test:foundation-containment
           npm run --silent test:readonly-database-authority
           npm run --silent test:operations-leadership-mobile
@@ -109,7 +114,7 @@ jobs:
           npm run --silent test:messaging
           npm run --silent test:messaging-manager-authority
           npm run --silent test:batch2
-          npm run --silent test:moxie-route
+          npm run --silent test:moxie-decommission
           npm run --silent test:schedule-source-type
           npm run --silent test:foundation
           npm run --silent test:foundation-repair

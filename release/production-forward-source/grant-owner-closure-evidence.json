@@ -1,0 +1,648 @@
+{
+  "schema": "custodial.production-forward-grant-owner-closure-evidence.v1",
+  "scope": "ACTUAL87_ROLLBACK_METADATA_PLUS_EXACT_SOURCE_DERIVATION_NOT_ADMISSION",
+  "actual87_metadata_sha256": "e325b15106c3c3fddad162a46d35236886672117f3a13e77614cb1bbe1d97005",
+  "production_authorized": false,
+  "six": [
+    {
+      "expected": {
+        "kind": "grant",
+        "identity": "custodial_release_canary_authority_surface()",
+        "old_reset_identity": "public.custodial_release_canary_authority_surface()",
+        "expected_order": 1000073,
+        "captured_digest": "a843e6ab1177177e039163a3d520b95d6552de8105474a48e390b25302692f48",
+        "live_digest": "b7d461eda320ec386b55ce3490063e09848a83723999acdd741e83cad0460498"
+      },
+      "captured": [
+        {
+          "restore_order": 1000073,
+          "object_kind": "grant",
+          "object_identity": "custodial_release_canary_authority_surface()",
+          "definition_sql": "select public.custodial_release_authority_reset_grants('public.custodial_release_canary_authority_surface()'); grant execute on function custodial_release_canary_authority_surface() to public; grant execute on function custodial_release_canary_authority_surface() to service_role;",
+          "definition_sha256": "75b379980842ea961cf0ad8c5b6176c9ff736caecb5d30a566e65afc53d02594",
+          "actual_definition_sha256": "75b379980842ea961cf0ad8c5b6176c9ff736caecb5d30a566e65afc53d02594"
+        }
+      ],
+      "current": [
+        {
+          "definition_sql": "select public.custodial_release_authority_reset_grants('custodial_release_canary_authority_surface()'); grant execute on function custodial_release_canary_authority_surface() to public; grant execute on function custodial_release_canary_authority_surface() to service_role;",
+          "definition_sha256": "379e7c9cd5db175f0f2b7bde6e2f14ece9fef1338f7cc102a96dfd7d056ec76e"
+        }
+      ],
+      "metadata": [
+        {
+          "signature": "custodial_release_canary_authority_surface()",
+          "owner_name": "postgres",
+          "body_md5": "9c2bfac03c20bc2073818f4fd8600f4e",
+          "definition_md5": "60e5aa33bfcd7bb908f07039ace14dfe",
+          "prosecdef": false,
+          "provolatile": "i",
+          "proconfig": [
+            "search_path=pg_catalog, public"
+          ],
+          "acl": [
+            {
+              "grantee": "PUBLIC",
+              "grantor": "postgres",
+              "grantable": false,
+              "privilege": "EXECUTE"
+            },
+            {
+              "grantee": "postgres",
+              "grantor": "postgres",
+              "grantable": false,
+              "privilege": "EXECUTE"
+            },
+            {
+              "grantee": "service_role",
+              "grantor": "postgres",
+              "grantable": false,
+              "privilege": "EXECUTE"
+            }
+          ]
+        }
+      ],
+      "captured_aliases": [
+        {
+          "restore_order": 1000073,
+          "object_kind": "grant",
+          "object_identity": "custodial_release_canary_authority_surface()",
+          "definition_sql": "select public.custodial_release_authority_reset_grants('public.custodial_release_canary_authority_surface()'); grant execute on function custodial_release_canary_authority_surface() to public; grant execute on function custodial_release_canary_authority_surface() to service_role;",
+          "definition_sha256": "75b379980842ea961cf0ad8c5b6176c9ff736caecb5d30a566e65afc53d02594",
+          "actual_definition_sha256": "75b379980842ea961cf0ad8c5b6176c9ff736caecb5d30a566e65afc53d02594"
+        }
+      ]
+    },
+    {
+      "expected": {
+        "kind": "grant",
+        "identity": "public.static_weekly_v3_assert_draft_incumbency(uuid)",
+        "old_reset_identity": "static_weekly_v3_assert_draft_incumbency(uuid)",
+        "expected_order": 1000199,
+        "captured_digest": "d6f202a5c174036cf978cebd88e2274f5b54039dedf614f4808086701cb8305a",
+        "live_digest": "8f5efab4cf9957046185fc19bf9bfb23be3c48900e414f9422be0e05baaba1ca"
+      },
+      "captured": [
+        {
+          "restore_order": 1000199,
+          "object_kind": "grant",
+          "object_identity": "public.static_weekly_v3_assert_draft_incumbency(uuid)",
+          "definition_sql": "select public.custodial_release_authority_reset_grants('static_weekly_v3_assert_draft_incumbency(uuid)');",
+          "definition_sha256": "06b04e84eb25f6c4198ae3258a751d58633bafebd13e6bf25ce149aae63e0428",
+          "actual_definition_sha256": "06b04e84eb25f6c4198ae3258a751d58633bafebd13e6bf25ce149aae63e0428"
+        }
+      ],
+      "current": [
+        {
+          "definition_sql": "select public.custodial_release_authority_reset_grants('public.static_weekly_v3_assert_draft_incumbency(uuid)');",
+          "definition_sha256": "9e2cf4da597da26da9ad168f5054b6817aa591efd3816f97d7352ee9a8448857"
+        }
+      ],
+      "metadata": [
+        {
+          "signature": "static_weekly_v3_assert_draft_incumbency(uuid)",
+          "owner_name": "postgres",
+          "body_md5": "fc588099d40839b1afeb70a1879646d0",
+          "definition_md5": "a58f31c8654c1030da7cc210e26411c2",
+          "prosecdef": true,
+          "provolatile": "v",
+          "proconfig": [
+            "search_path=pg_catalog, public"
+          ],
+          "acl": [
+            {
+              "grantee": "postgres",
+              "grantor": "postgres",
+              "grantable": false,
+              "privilege": "EXECUTE"
+            }
+          ]
+        }
+      ],
+      "captured_aliases": [
+        {
+          "restore_order": 1000199,
+          "object_kind": "grant",
+          "object_identity": "public.static_weekly_v3_assert_draft_incumbency(uuid)",
+          "definition_sql": "select public.custodial_release_authority_reset_grants('static_weekly_v3_assert_draft_incumbency(uuid)');",
+          "definition_sha256": "06b04e84eb25f6c4198ae3258a751d58633bafebd13e6bf25ce149aae63e0428",
+          "actual_definition_sha256": "06b04e84eb25f6c4198ae3258a751d58633bafebd13e6bf25ce149aae63e0428"
+        }
+      ]
+    },
+    {
+      "expected": {
+        "kind": "grant",
+        "identity": "public.static_weekly_v4_hydrate_compiler_source(jsonb,date)",
+        "old_reset_identity": "static_weekly_v4_hydrate_compiler_source(jsonb,date)",
+        "expected_order": 1000198,
+        "captured_digest": "57b252cee39b5f763518cb957528a6fea8eabae017351f0a4c7483d62df9598a",
+        "live_digest": "cd7d80e0f473c00254a875badd84ec701b370489bd1eb64dbe568b72784e08af"
+      },
+      "captured": [
+        {
+          "restore_order": 1000198,
+          "object_kind": "grant",
+          "object_identity": "public.static_weekly_v4_hydrate_compiler_source(jsonb,date)",
+          "definition_sql": "select public.custodial_release_authority_reset_grants('static_weekly_v4_hydrate_compiler_source(jsonb,date)');",
+          "definition_sha256": "46a22e509f5af08209b697e2cfebcf36108d9a20e27f82a14f5d8313a870c6ce",
+          "actual_definition_sha256": "46a22e509f5af08209b697e2cfebcf36108d9a20e27f82a14f5d8313a870c6ce"
+        }
+      ],
+      "current": [
+        {
+          "definition_sql": "select public.custodial_release_authority_reset_grants('public.static_weekly_v4_hydrate_compiler_source(jsonb,date)');",
+          "definition_sha256": "205321b3575a273896101d9aaa95082bfc321b6aae44dec11f8a3fed9c33ebc0"
+        }
+      ],
+      "metadata": [
+        {
+          "signature": "static_weekly_v4_hydrate_compiler_source(jsonb,date)",
+          "owner_name": "postgres",
+          "body_md5": "82720e53823874d904c2e4c8921052dc",
+          "definition_md5": "4129d532e90f3ca150f7cb83e0ebfc0e",
+          "prosecdef": true,
+          "provolatile": "v",
+          "proconfig": [
+            "search_path=pg_catalog, public"
+          ],
+          "acl": [
+            {
+              "grantee": "postgres",
+              "grantor": "postgres",
+              "grantable": false,
+              "privilege": "EXECUTE"
+            }
+          ]
+        }
+      ],
+      "captured_aliases": [
+        {
+          "restore_order": 1000198,
+          "object_kind": "grant",
+          "object_identity": "public.static_weekly_v4_hydrate_compiler_source(jsonb,date)",
+          "definition_sql": "select public.custodial_release_authority_reset_grants('static_weekly_v4_hydrate_compiler_source(jsonb,date)');",
+          "definition_sha256": "46a22e509f5af08209b697e2cfebcf36108d9a20e27f82a14f5d8313a870c6ce",
+          "actual_definition_sha256": "46a22e509f5af08209b697e2cfebcf36108d9a20e27f82a14f5d8313a870c6ce"
+        }
+      ]
+    },
+    {
+      "expected": {
+        "kind": "grant",
+        "identity": "public.static_weekly_v2_materialize_projection(uuid,date,text,text,jsonb,jsonb,text,jsonb,bigint,uuid,text,text)",
+        "old_reset_identity": "static_weekly_v2_materialize_projection(uuid,date,text,text,jsonb,jsonb,text,jsonb,bigint,uuid,text,text)",
+        "expected_order": 950028,
+        "captured_digest": "cfea7c5bfcf61a00e64b56e38e1c98f93d7a973c373205b89bc3b708aad0902b",
+        "live_digest": "419abb490483777437126a3593d601da11e9d3db32b777e21be802291a97ce6b"
+      },
+      "captured": [
+        {
+          "restore_order": 950028,
+          "object_kind": "grant",
+          "object_identity": "public.static_weekly_v2_materialize_projection(uuid,date,text,text,jsonb,jsonb,text,jsonb,bigint,uuid,text,text)",
+          "definition_sql": "select public.custodial_release_authority_reset_grants('static_weekly_v2_materialize_projection(uuid,date,text,text,jsonb,jsonb,text,jsonb,bigint,uuid,text,text)');",
+          "definition_sha256": "c36a776117cf42c16465ff9c3865c35bac77111e1080684f3281e1ac0b9e4b2f",
+          "actual_definition_sha256": "c36a776117cf42c16465ff9c3865c35bac77111e1080684f3281e1ac0b9e4b2f"
+        }
+      ],
+      "current": [
+        {
+          "definition_sql": "select public.custodial_release_authority_reset_grants('public.static_weekly_v2_materialize_projection(uuid,date,text,text,jsonb,jsonb,text,jsonb,bigint,uuid,text,text)');",
+          "definition_sha256": "8672a068a1c6a3f81e7269f7d9a43b3e4357b3739d0a998a049bdd523160fc7d"
+        }
+      ],
+      "metadata": [
+        {
+          "signature": "static_weekly_v2_materialize_projection(uuid,date,text,text,jsonb,jsonb,text,jsonb,bigint,uuid,text,text)",
+          "owner_name": "postgres",
+          "body_md5": "004eab8a9288fb3c5c4b31532cd02303",
+          "definition_md5": "6c1ff75a171ea91c8e8d2f09a6a3cf2e",
+          "prosecdef": true,
+          "provolatile": "v",
+          "proconfig": [
+            "search_path=pg_catalog, public"
+          ],
+          "acl": [
+            {
+              "grantee": "postgres",
+              "grantor": "postgres",
+              "grantable": false,
+              "privilege": "EXECUTE"
+            }
+          ]
+        }
+      ],
+      "captured_aliases": [
+        {
+          "restore_order": 950028,
+          "object_kind": "grant",
+          "object_identity": "public.static_weekly_v2_materialize_projection(uuid,date,text,text,jsonb,jsonb,text,jsonb,bigint,uuid,text,text)",
+          "definition_sql": "select public.custodial_release_authority_reset_grants('static_weekly_v2_materialize_projection(uuid,date,text,text,jsonb,jsonb,text,jsonb,bigint,uuid,text,text)');",
+          "definition_sha256": "c36a776117cf42c16465ff9c3865c35bac77111e1080684f3281e1ac0b9e4b2f",
+          "actual_definition_sha256": "c36a776117cf42c16465ff9c3865c35bac77111e1080684f3281e1ac0b9e4b2f"
+        }
+      ]
+    },
+    {
+      "expected": {
+        "kind": "grant",
+        "identity": "public.static_weekly_v6_read_schedule_segments_dated_base(date)",
+        "old_reset_identity": "static_weekly_v6_read_schedule_segments_dated_base(date)",
+        "expected_order": 950168,
+        "captured_digest": "4bbcbf22890a56bb56ff4d05a6ba7c95bbac648b755b22291267589d8261aabd",
+        "live_digest": "6161a03a11c95bbe898fc4b27ae54d9ba3e66eade32fc5fc29e3b75da1f85201"
+      },
+      "captured": [
+        {
+          "restore_order": 950168,
+          "object_kind": "grant",
+          "object_identity": "public.static_weekly_v6_read_schedule_segments_dated_base(date)",
+          "definition_sql": "select public.custodial_release_authority_reset_grants('static_weekly_v6_read_schedule_segments_dated_base(date)');",
+          "definition_sha256": "33bef61ce6d774d2b559cda665397d0d7be274a788fa4615d171276753c8e227",
+          "actual_definition_sha256": "33bef61ce6d774d2b559cda665397d0d7be274a788fa4615d171276753c8e227"
+        }
+      ],
+      "current": [
+        {
+          "definition_sql": "select public.custodial_release_authority_reset_grants('public.static_weekly_v6_read_schedule_segments_dated_base(date)');",
+          "definition_sha256": "a316dfdf08c54ae75fec74abaf4cb9635d570bd92e622a4a647febf581c81bb7"
+        }
+      ],
+      "metadata": [
+        {
+          "signature": "static_weekly_v6_read_schedule_segments_dated_base(date)",
+          "owner_name": "postgres",
+          "body_md5": "5fef3e8974a8b042fee681fde7d8130b",
+          "definition_md5": "44ea725579c6b793e4a5a4d94834d9df",
+          "prosecdef": true,
+          "provolatile": "s",
+          "proconfig": [
+            "search_path=pg_catalog, public"
+          ],
+          "acl": [
+            {
+              "grantee": "postgres",
+              "grantor": "postgres",
+              "grantable": false,
+              "privilege": "EXECUTE"
+            }
+          ]
+        }
+      ],
+      "captured_aliases": [
+        {
+          "restore_order": 950168,
+          "object_kind": "grant",
+          "object_identity": "public.static_weekly_v6_read_schedule_segments_dated_base(date)",
+          "definition_sql": "select public.custodial_release_authority_reset_grants('static_weekly_v6_read_schedule_segments_dated_base(date)');",
+          "definition_sha256": "33bef61ce6d774d2b559cda665397d0d7be274a788fa4615d171276753c8e227",
+          "actual_definition_sha256": "33bef61ce6d774d2b559cda665397d0d7be274a788fa4615d171276753c8e227"
+        }
+      ]
+    },
+    {
+      "expected": {
+        "kind": "grant",
+        "identity": "public.static_weekly_v8_read_lunch_segments_dated_base(date)",
+        "old_reset_identity": "static_weekly_v8_read_lunch_segments_dated_base(date)",
+        "expected_order": 950170,
+        "captured_digest": "8eb43bf71ab7c0bcb60bbf818bd54d77d43a4163fcfa19a4f3962948a7ad3f80",
+        "live_digest": "a38bf3e78db3a49335dd315a33ad98605deeea8638c8d6596a7bc82402795b41"
+      },
+      "captured": [
+        {
+          "restore_order": 950170,
+          "object_kind": "grant",
+          "object_identity": "public.static_weekly_v8_read_lunch_segments_dated_base(date)",
+          "definition_sql": "select public.custodial_release_authority_reset_grants('static_weekly_v8_read_lunch_segments_dated_base(date)');",
+          "definition_sha256": "14eb54189c3cb734918557070f18b368e2027a0c8ff4afd30dfa542f53126dc1",
+          "actual_definition_sha256": "14eb54189c3cb734918557070f18b368e2027a0c8ff4afd30dfa542f53126dc1"
+        }
+      ],
+      "current": [
+        {
+          "definition_sql": "select public.custodial_release_authority_reset_grants('public.static_weekly_v8_read_lunch_segments_dated_base(date)');",
+          "definition_sha256": "7d4dfbbe0c1c6114fac1fe4ffee917f9c24cb964722e21ccb0706e97cba60a34"
+        }
+      ],
+      "metadata": [
+        {
+          "signature": "static_weekly_v8_read_lunch_segments_dated_base(date)",
+          "owner_name": "postgres",
+          "body_md5": "5b600dba00ae265e2d35b7b059725c1e",
+          "definition_md5": "5dff0972e9770d3b88e3535a72f4f979",
+          "prosecdef": true,
+          "provolatile": "s",
+          "proconfig": [
+            "search_path=pg_catalog, public"
+          ],
+          "acl": [
+            {
+              "grantee": "postgres",
+              "grantor": "postgres",
+              "grantable": false,
+              "privilege": "EXECUTE"
+            }
+          ]
+        }
+      ],
+      "captured_aliases": [
+        {
+          "restore_order": 950170,
+          "object_kind": "grant",
+          "object_identity": "public.static_weekly_v8_read_lunch_segments_dated_base(date)",
+          "definition_sql": "select public.custodial_release_authority_reset_grants('static_weekly_v8_read_lunch_segments_dated_base(date)');",
+          "definition_sha256": "14eb54189c3cb734918557070f18b368e2027a0c8ff4afd30dfa542f53126dc1",
+          "actual_definition_sha256": "14eb54189c3cb734918557070f18b368e2027a0c8ff4afd30dfa542f53126dc1"
+        }
+      ]
+    }
+  ],
+  "changes": [
+    {
+      "file": "20261003220000_current_release_authority_completion.sql",
+      "canonical_sha256": "8d8d60f1b10427f5c184488a9faa5e4f4bbb9ac2f11526ff921bb8c2eac70898",
+      "forward_sha256": "90e31443af8e2b2ba563c7a965d7a6afeba37f8cb67d2d4ff333034066c88a33",
+      "replacement_map": [
+        {
+          "before": "a843e6ab1177177e039163a3d520b95d6552de8105474a48e390b25302692f48",
+          "after": "75b379980842ea961cf0ad8c5b6176c9ff736caecb5d30a566e65afc53d02594",
+          "occurrences": 1,
+          "reason": "Only redundant ownerpostgres EXECUTE removed; all other serialized bytes and canonical hash reconstructed independently"
+        },
+        {
+          "before": "b7d461eda320ec386b55ce3490063e09848a83723999acdd741e83cad0460498",
+          "after": "379e7c9cd5db175f0f2b7bde6e2f14ece9fef1338f7cc102a96dfd7d056ec76e",
+          "occurrences": 1,
+          "reason": "Only redundant ownerpostgres EXECUTE removed; all other serialized bytes and canonical hash reconstructed independently"
+        },
+        {
+          "before": "d6f202a5c174036cf978cebd88e2274f5b54039dedf614f4808086701cb8305a",
+          "after": "06b04e84eb25f6c4198ae3258a751d58633bafebd13e6bf25ce149aae63e0428",
+          "occurrences": 1,
+          "reason": "Only redundant ownerpostgres EXECUTE removed; all other serialized bytes and canonical hash reconstructed independently"
+        },
+        {
+          "before": "8f5efab4cf9957046185fc19bf9bfb23be3c48900e414f9422be0e05baaba1ca",
+          "after": "9e2cf4da597da26da9ad168f5054b6817aa591efd3816f97d7352ee9a8448857",
+          "occurrences": 1,
+          "reason": "Only redundant ownerpostgres EXECUTE removed; all other serialized bytes and canonical hash reconstructed independently"
+        },
+        {
+          "before": "57b252cee39b5f763518cb957528a6fea8eabae017351f0a4c7483d62df9598a",
+          "after": "46a22e509f5af08209b697e2cfebcf36108d9a20e27f82a14f5d8313a870c6ce",
+          "occurrences": 1,
+          "reason": "Only redundant ownerpostgres EXECUTE removed; all other serialized bytes and canonical hash reconstructed independently"
+        },
+        {
+          "before": "cd7d80e0f473c00254a875badd84ec701b370489bd1eb64dbe568b72784e08af",
+          "after": "205321b3575a273896101d9aaa95082bfc321b6aae44dec11f8a3fed9c33ebc0",
+          "occurrences": 1,
+          "reason": "Only redundant ownerpostgres EXECUTE removed; all other serialized bytes and canonical hash reconstructed independently"
+        },
+        {
+          "before": "cfea7c5bfcf61a00e64b56e38e1c98f93d7a973c373205b89bc3b708aad0902b",
+          "after": "c36a776117cf42c16465ff9c3865c35bac77111e1080684f3281e1ac0b9e4b2f",
+          "occurrences": 1,
+          "reason": "Only redundant ownerpostgres EXECUTE removed; all other serialized bytes and canonical hash reconstructed independently"
+        },
+        {
+          "before": "419abb490483777437126a3593d601da11e9d3db32b777e21be802291a97ce6b",
+          "after": "8672a068a1c6a3f81e7269f7d9a43b3e4357b3739d0a998a049bdd523160fc7d",
+          "occurrences": 1,
+          "reason": "Only redundant ownerpostgres EXECUTE removed; all other serialized bytes and canonical hash reconstructed independently"
+        },
+        {
+          "before": "4bbcbf22890a56bb56ff4d05a6ba7c95bbac648b755b22291267589d8261aabd",
+          "after": "33bef61ce6d774d2b559cda665397d0d7be274a788fa4615d171276753c8e227",
+          "occurrences": 1,
+          "reason": "Only redundant ownerpostgres EXECUTE removed; all other serialized bytes and canonical hash reconstructed independently"
+        },
+        {
+          "before": "6161a03a11c95bbe898fc4b27ae54d9ba3e66eade32fc5fc29e3b75da1f85201",
+          "after": "a316dfdf08c54ae75fec74abaf4cb9635d570bd92e622a4a647febf581c81bb7",
+          "occurrences": 1,
+          "reason": "Only redundant ownerpostgres EXECUTE removed; all other serialized bytes and canonical hash reconstructed independently"
+        },
+        {
+          "before": "8eb43bf71ab7c0bcb60bbf818bd54d77d43a4163fcfa19a4f3962948a7ad3f80",
+          "after": "14eb54189c3cb734918557070f18b368e2027a0c8ff4afd30dfa542f53126dc1",
+          "occurrences": 1,
+          "reason": "Only redundant ownerpostgres EXECUTE removed; all other serialized bytes and canonical hash reconstructed independently"
+        },
+        {
+          "before": "a38bf3e78db3a49335dd315a33ad98605deeea8638c8d6596a7bc82402795b41",
+          "after": "7d4dfbbe0c1c6114fac1fe4ffee917f9c24cb964722e21ccb0706e97cba60a34",
+          "occurrences": 1,
+          "reason": "Only redundant ownerpostgres EXECUTE removed; all other serialized bytes and canonical hash reconstructed independently"
+        }
+      ],
+      "additive_guard": "do $production_forward_original_owner$\nbegin\n if current_user<>'postgres' OR session_user<>current_user\n  OR current_setting('custodial.deployment_project_ref',true) IS DISTINCT FROM 'rqquvtjdmugpigbndmne'\n  OR current_setting('session_replication_role')<>'origin'\n  OR current_setting('transaction_read_only')<>'off'\n  OR NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='postgres' AND NOT rolsuper AND rolbypassrls)\n  OR NOT EXISTS(SELECT 1 FROM pg_class WHERE oid=to_regclass('public.custodial_release_authority_restore_inventory')\n   AND relowner='postgres'::regrole AND relkind='r' AND relpersistence='p')\n then raise exception using errcode='42501',message='Exact production postgres original owner/project/normal mutation context required';end if;\n if not exists(select 1 from pg_proc p where p.oid=to_regprocedure('public.custodial_release_authority_current_grant_definition(text)')\n  and p.proowner='postgres'::regrole and not p.prosecdef and p.provolatile='s'\n  and p.proconfig=array['search_path=pg_catalog, public']::text[]\n  and md5(p.prosrc)='a0326680c69ee3c233bb495a6ff7c9f6' and md5(pg_get_functiondef(p.oid))='a1071b529d6ae4bd747b7a4195b90a6d')\n then raise exception 'Exact original postgres grant serializer required';end if;\n if exists(select 1 from (values\n  ('public.custodial_release_canary_authority_surface()','9c2bfac03c20bc2073818f4fd8600f4e','60e5aa33bfcd7bb908f07039ace14dfe',false,'i','[{\"grantee\":\"PUBLIC\",\"grantor\":\"postgres\",\"grantable\":false,\"privilege\":\"EXECUTE\"},{\"grantee\":\"postgres\",\"grantor\":\"postgres\",\"grantable\":false,\"privilege\":\"EXECUTE\"},{\"grantee\":\"service_role\",\"grantor\":\"postgres\",\"grantable\":false,\"privilege\":\"EXECUTE\"}]'::jsonb),\n  ('public.static_weekly_v3_assert_draft_incumbency(uuid)','fc588099d40839b1afeb70a1879646d0','a58f31c8654c1030da7cc210e26411c2',true,'v','[{\"grantee\":\"postgres\",\"grantor\":\"postgres\",\"grantable\":false,\"privilege\":\"EXECUTE\"}]'::jsonb),\n  ('public.static_weekly_v4_hydrate_compiler_source(jsonb,date)','82720e53823874d904c2e4c8921052dc','4129d532e90f3ca150f7cb83e0ebfc0e',true,'v','[{\"grantee\":\"postgres\",\"grantor\":\"postgres\",\"grantable\":false,\"privilege\":\"EXECUTE\"}]'::jsonb),\n  ('public.static_weekly_v2_materialize_projection(uuid,date,text,text,jsonb,jsonb,text,jsonb,bigint,uuid,text,text)','004eab8a9288fb3c5c4b31532cd02303','6c1ff75a171ea91c8e8d2f09a6a3cf2e',true,'v','[{\"grantee\":\"postgres\",\"grantor\":\"postgres\",\"grantable\":false,\"privilege\":\"EXECUTE\"}]'::jsonb),\n  ('public.static_weekly_v6_read_schedule_segments_dated_base(date)','5fef3e8974a8b042fee681fde7d8130b','44ea725579c6b793e4a5a4d94834d9df',true,'s','[{\"grantee\":\"postgres\",\"grantor\":\"postgres\",\"grantable\":false,\"privilege\":\"EXECUTE\"}]'::jsonb),\n  ('public.static_weekly_v8_read_lunch_segments_dated_base(date)','5b600dba00ae265e2d35b7b059725c1e','5dff0972e9770d3b88e3535a72f4f979',true,'s','[{\"grantee\":\"postgres\",\"grantor\":\"postgres\",\"grantable\":false,\"privilege\":\"EXECUTE\"}]'::jsonb)) wanted(identity,body_md5,definition_md5,secdef,volatility,acl)\n  left join pg_proc p on p.oid=to_regprocedure(wanted.identity)\n  where p.oid is null or p.proowner<>'postgres'::regrole or p.prokind<>'f'\n   or p.prosecdef is distinct from wanted.secdef or p.provolatile is distinct from wanted.volatility::\"char\"\n   or p.proconfig is distinct from array['search_path=pg_catalog, public']::text[]\n   or md5(p.prosrc) is distinct from wanted.body_md5 or md5(pg_get_functiondef(p.oid)) is distinct from wanted.definition_md5\n   or (select jsonb_agg(jsonb_build_object('grantee',coalesce(r.rolname,'PUBLIC'),'grantor',a.grantor::regrole::text,'privilege',a.privilege_type,'grantable',a.is_grantable)\n   order by coalesce(r.rolname,'PUBLIC'),a.privilege_type,a.is_grantable) from aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a left join pg_roles r on r.oid=a.grantee) is distinct from wanted.acl)\n then raise exception 'Exact six original function bodies owners and named ACLs required';end if;\nend $production_forward_original_owner$;\n",
+      "header": "-- Finite existing-postgres-owner grant metadata compatibility.\n-- Canonical SQL remains immutable; no live grant or owner change.\n-- Actual six87 metadata SHA256 e325b15106c3c3fddad162a46d35236886672117f3a13e77614cb1bbe1d97005.\n",
+      "guard_after": "lock table public.custodial_release_authority_restore_inventory in share row exclusive mode;\n",
+      "unchanged_remainder": "Exact byte-identical canonical SQL after removing additive header/guard and reversing listed finite replacements"
+    },
+    {
+      "file": "20261006190426_manager_scheduler_recovery_binding.sql",
+      "canonical_sha256": "7a57b1b3607d27bd298646f72bc65917cb522e26a2c6169bb610ec79500c6209",
+      "forward_sha256": "178cc832516e2aa78835b8441da04fe801204caf123477e3c7a6eda5dc405906",
+      "replacement_map": [
+        {
+          "before": "a843e6ab1177177e039163a3d520b95d6552de8105474a48e390b25302692f48",
+          "after": "75b379980842ea961cf0ad8c5b6176c9ff736caecb5d30a566e65afc53d02594",
+          "occurrences": 2,
+          "reason": "Exact same fixed canary PUBLIC-reset serializer+unchanged ACL proven by actual87 and later literal Source133 producer"
+        },
+        {
+          "before": "b7d461eda320ec386b55ce3490063e09848a83723999acdd741e83cad0460498",
+          "after": "379e7c9cd5db175f0f2b7bde6e2f14ece9fef1338f7cc102a96dfd7d056ec76e",
+          "occurrences": 2,
+          "reason": "Exact same fixed canary unqualified-reset serializer+unchanged ACL proven by actual87"
+        },
+        {
+          "before": "\"select public.custodial_release_authority_reset_grants('static_weekly_materialize_approved_initial_baseline(uuid,uuid,date,bigint,bigint,text,jsonb)'); grant execute on function static_weekly_materialize_approved_initial_baseline(uuid,uuid,date,bigint,bigint,text,jsonb) to postgres; grant execute on function static_weekly_materialize_approved_initial_baseline(uuid,uuid,date,bigint,bigint,text,jsonb) to static_weekly_control_plane;\"",
+          "after": "\"select public.custodial_release_authority_reset_grants('static_weekly_materialize_approved_initial_baseline(uuid,uuid,date,bigint,bigint,text,jsonb)'); grant execute on function static_weekly_materialize_approved_initial_baseline(uuid,uuid,date,bigint,bigint,text,jsonb) to static_weekly_control_plane;\"",
+          "occurrences": 1,
+          "reason": "Four literal Source92 grant payload corrections: remove only sameowner selfgrant; exact old/new Source payload hashes retained in evidence"
+        },
+        {
+          "before": "6af0383e6bff900cd0c0540cb0b7acab376764a70198af10313dd96140caae1c",
+          "after": "e931941b0449b3bb949e05faa4d558a20115602d87a1d9c26dc4367644c59bb8",
+          "occurrences": 1,
+          "reason": "Four literal Source92 grant payload corrections: remove only sameowner selfgrant; exact old/new Source payload hashes retained in evidence"
+        },
+        {
+          "before": "2d8fe7f9f48333fec7a66e3485839cd4445bf3c99698104cf8fa9953cf46651c",
+          "after": "1932270699ede1f5dd24ac4929509a1a50dd528af539428f232c5f00fb7c6402",
+          "occurrences": 1,
+          "reason": "Four literal Source92 grant payload corrections: remove only sameowner selfgrant; exact old/new Source payload hashes retained in evidence"
+        },
+        {
+          "before": "\"select public.custodial_release_authority_reset_grants('static_weekly_read_approved_initial_basis(uuid,uuid,date,bigint,text)'); grant execute on function static_weekly_read_approved_initial_basis(uuid,uuid,date,bigint,text) to postgres; grant execute on function static_weekly_read_approved_initial_basis(uuid,uuid,date,bigint,text) to static_weekly_control_plane;\"",
+          "after": "\"select public.custodial_release_authority_reset_grants('static_weekly_read_approved_initial_basis(uuid,uuid,date,bigint,text)'); grant execute on function static_weekly_read_approved_initial_basis(uuid,uuid,date,bigint,text) to static_weekly_control_plane;\"",
+          "occurrences": 1,
+          "reason": "Four literal Source92 grant payload corrections: remove only sameowner selfgrant; exact old/new Source payload hashes retained in evidence"
+        },
+        {
+          "before": "5f9df6ad104a625133116d039a883c09b9be851eae28bdda58c4d61a5e81fe3b",
+          "after": "5b0c06d8066369b745f3dad60d7368895a9769a29c64ff7c13d8686189107f64",
+          "occurrences": 1,
+          "reason": "Four literal Source92 grant payload corrections: remove only sameowner selfgrant; exact old/new Source payload hashes retained in evidence"
+        },
+        {
+          "before": "a345cc3eaafa30495a1bfba3285c6527be4ddea042d42beeae6b86e9cd059ce5",
+          "after": "16df5d3dc3f8f1b356139b8119e6c3dcd742ed4b7f362f5a17ae0ba2803b258f",
+          "occurrences": 1,
+          "reason": "Four literal Source92 grant payload corrections: remove only sameowner selfgrant; exact old/new Source payload hashes retained in evidence"
+        },
+        {
+          "before": "\"select public.custodial_release_authority_reset_grants('static_weekly_read_approved_initial_confirmation(uuid,text)'); grant execute on function static_weekly_read_approved_initial_confirmation(uuid,text) to postgres; grant execute on function static_weekly_read_approved_initial_confirmation(uuid,text) to static_weekly_control_plane;\"",
+          "after": "\"select public.custodial_release_authority_reset_grants('static_weekly_read_approved_initial_confirmation(uuid,text)'); grant execute on function static_weekly_read_approved_initial_confirmation(uuid,text) to static_weekly_control_plane;\"",
+          "occurrences": 1,
+          "reason": "Four literal Source92 grant payload corrections: remove only sameowner selfgrant; exact old/new Source payload hashes retained in evidence"
+        },
+        {
+          "before": "63e3519e09f7cc3cb4396b1e9d1254cb53616e9798fcdf3d9cfbd2940dfe9bea",
+          "after": "d25011da06be74534544ed723a1605a8e15722b546aa0c5cda6d1aea526f31b4",
+          "occurrences": 1,
+          "reason": "Four literal Source92 grant payload corrections: remove only sameowner selfgrant; exact old/new Source payload hashes retained in evidence"
+        },
+        {
+          "before": "c9a7fa58066bd875b058c97c50a62b0ac87a50a293572517b354333def73689c",
+          "after": "a78dee0c2c3d21199d72547a6e291d2f5b66cd94a86d70919ed07bd3e6e08c77",
+          "occurrences": 1,
+          "reason": "Four literal Source92 grant payload corrections: remove only sameowner selfgrant; exact old/new Source payload hashes retained in evidence"
+        },
+        {
+          "before": "\"select public.custodial_release_authority_reset_grants('static_weekly_register_approved_initial_baseline(uuid,text,jsonb)'); grant execute on function static_weekly_register_approved_initial_baseline(uuid,text,jsonb) to postgres; grant execute on function static_weekly_register_approved_initial_baseline(uuid,text,jsonb) to static_weekly_release_operator;\"",
+          "after": "\"select public.custodial_release_authority_reset_grants('static_weekly_register_approved_initial_baseline(uuid,text,jsonb)'); grant execute on function static_weekly_register_approved_initial_baseline(uuid,text,jsonb) to static_weekly_release_operator;\"",
+          "occurrences": 1,
+          "reason": "Four literal Source92 grant payload corrections: remove only sameowner selfgrant; exact old/new Source payload hashes retained in evidence"
+        },
+        {
+          "before": "d371cda724fff9dec68aa8a42a14d87aa2ac052be6e4397cd1d44c4d987ca8ff",
+          "after": "4c62b7947e839e69aed2adc1fbe9b4995b82f04209a89d4eb619aa024233cd56",
+          "occurrences": 1,
+          "reason": "Four literal Source92 grant payload corrections: remove only sameowner selfgrant; exact old/new Source payload hashes retained in evidence"
+        },
+        {
+          "before": "e2fa99828137839a722973dc8296c8b7874ce7629edcc1b007592e3f301d3db2",
+          "after": "0df88c4b2b167650af3cd3621cb28f5613d393f3b98fc8f2f22ca6b0dcfe5eea",
+          "occurrences": 1,
+          "reason": "Four literal Source92 grant payload corrections: remove only sameowner selfgrant; exact old/new Source payload hashes retained in evidence"
+        }
+      ],
+      "additive_guard": "do $production_forward_original_owner$\nbegin\n if current_user<>'postgres' OR session_user<>current_user\n  OR current_setting('custodial.deployment_project_ref',true) IS DISTINCT FROM 'rqquvtjdmugpigbndmne'\n  OR current_setting('session_replication_role')<>'origin'\n  OR current_setting('transaction_read_only')<>'off'\n  OR NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='postgres' AND NOT rolsuper AND rolbypassrls)\n  OR NOT EXISTS(SELECT 1 FROM pg_class WHERE oid=to_regclass('public.custodial_release_authority_restore_inventory')\n   AND relowner='postgres'::regrole AND relkind='r' AND relpersistence='p')\n then raise exception using errcode='42501',message='Exact production postgres original owner/project/normal mutation context required';end if;\n if not exists(select 1 from pg_proc p where p.oid=to_regprocedure('public.custodial_release_authority_current_grant_definition(text)')\n  and p.proowner='postgres'::regrole and not p.prosecdef and p.provolatile='s'\n  and p.proconfig=array['search_path=pg_catalog, public']::text[]\n  and md5(p.prosrc)='a0326680c69ee3c233bb495a6ff7c9f6' and md5(pg_get_functiondef(p.oid))='a1071b529d6ae4bd747b7a4195b90a6d')\n then raise exception 'Exact original postgres grant serializer required';end if;\n if not exists(select 1 from pg_proc p where p.oid=to_regprocedure('public.custodial_release_canary_authority_surface()')\n  and p.proowner='postgres'::regrole and p.prokind='f' and not p.prosecdef and p.provolatile='i'\n  and p.proconfig=array['search_path=pg_catalog, public']::text[]\n  and (select jsonb_agg(jsonb_build_object('grantee',coalesce(r.rolname,'PUBLIC'),'grantor',a.grantor::regrole::text,'privilege',a.privilege_type,'grantable',a.is_grantable)\n   order by coalesce(r.rolname,'PUBLIC'),a.privilege_type,a.is_grantable) from aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a left join pg_roles r on r.oid=a.grantee) = '[{\"grantee\":\"PUBLIC\",\"grantor\":\"postgres\",\"privilege\":\"EXECUTE\",\"grantable\":false},{\"grantee\":\"postgres\",\"grantor\":\"postgres\",\"privilege\":\"EXECUTE\",\"grantable\":false},{\"grantee\":\"service_role\",\"grantor\":\"postgres\",\"privilege\":\"EXECUTE\",\"grantable\":false}]'::jsonb)\n then raise exception 'Exact existing postgres canary owner and named ACL required';end if;\n if exists(select 1 from (values\n  ('public.static_weekly_materialize_approved_initial_baseline(uuid,uuid,date,bigint,bigint,text,jsonb)','4d11728dd37f995bf6cbdb2237ec9b43eb49e48f13a6225efd36e0c6bd41d8a8','[{\"grantee\":\"postgres\",\"grantor\":\"postgres\",\"privilege\":\"EXECUTE\",\"grantable\":false},{\"grantee\":\"static_weekly_control_plane\",\"grantor\":\"postgres\",\"privilege\":\"EXECUTE\",\"grantable\":false}]'::jsonb),\n  ('public.static_weekly_read_approved_initial_basis(uuid,uuid,date,bigint,text)','10147891ce95971e8a6b9a7eecf4f9d9470c1ec5470c6a123de5e093692bf484','[{\"grantee\":\"postgres\",\"grantor\":\"postgres\",\"privilege\":\"EXECUTE\",\"grantable\":false},{\"grantee\":\"static_weekly_control_plane\",\"grantor\":\"postgres\",\"privilege\":\"EXECUTE\",\"grantable\":false}]'::jsonb),\n  ('public.static_weekly_read_approved_initial_confirmation(uuid,text)','46faf5ddb364386f2de3d3632dff86195f3e339cc91ffe3fe315018f68f5141e','[{\"grantee\":\"postgres\",\"grantor\":\"postgres\",\"privilege\":\"EXECUTE\",\"grantable\":false},{\"grantee\":\"static_weekly_control_plane\",\"grantor\":\"postgres\",\"privilege\":\"EXECUTE\",\"grantable\":false}]'::jsonb),\n  ('public.static_weekly_register_approved_initial_baseline(uuid,text,jsonb)','54b3bb6cc2f5e27f36c0098f7a190c8990ea1a38c8edfbdd299c2b8d46876d25','[{\"grantee\":\"postgres\",\"grantor\":\"postgres\",\"privilege\":\"EXECUTE\",\"grantable\":false},{\"grantee\":\"static_weekly_release_operator\",\"grantor\":\"postgres\",\"privilege\":\"EXECUTE\",\"grantable\":false}]'::jsonb)) wanted(identity,definition_sha256,acl)\n  left join pg_proc p on p.oid=to_regprocedure(wanted.identity)\n  where p.oid is null or p.proowner<>'postgres'::regrole or p.prokind<>'f'\n   or public.static_weekly_digest_text(pg_get_functiondef(p.oid)) is distinct from wanted.definition_sha256\n   or (select jsonb_agg(jsonb_build_object('grantee',coalesce(r.rolname,'PUBLIC'),'grantor',a.grantor::regrole::text,'privilege',a.privilege_type,'grantable',a.is_grantable)\n   order by coalesce(r.rolname,'PUBLIC'),a.privilege_type,a.is_grantable) from aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a left join pg_roles r on r.oid=a.grantee) is distinct from wanted.acl)\n then raise exception 'Exact four Source92 original bodies owners and control release ACLs required';end if;\nend $production_forward_original_owner$;\n",
+      "header": "-- Finite existing-postgres-owner grant metadata compatibility.\n-- Canonical SQL remains immutable; no live grant or owner change.\n-- Actual six87 metadata SHA256 e325b15106c3c3fddad162a46d35236886672117f3a13e77614cb1bbe1d97005.\n",
+      "guard_after": "LOCK TABLE public.custodial_release_authority_restore_inventory IN ACCESS EXCLUSIVE MODE;\n",
+      "unchanged_remainder": "Exact byte-identical canonical SQL after removing additive header/guard and reversing listed finite replacements"
+    },
+    {
+      "file": "20261015040830_same_original_retained_completion_read.sql",
+      "canonical_sha256": "ecb708c726535401ddf085d122c54bfad1e58b6322c17c0c89af7c234b046c3d",
+      "forward_sha256": "18298fc042702b47e56e30ec21bcde0bfeac3646d806f488b02d453811c8961d",
+      "replacement_map": [
+        {
+          "before": "a843e6ab1177177e039163a3d520b95d6552de8105474a48e390b25302692f48",
+          "after": "75b379980842ea961cf0ad8c5b6176c9ff736caecb5d30a566e65afc53d02594",
+          "occurrences": 1,
+          "reason": "Exact same fixed canary PUBLIC-reset serializer+unchanged ACL proven by actual87 and later literal Source133 producer"
+        },
+        {
+          "before": "b7d461eda320ec386b55ce3490063e09848a83723999acdd741e83cad0460498",
+          "after": "379e7c9cd5db175f0f2b7bde6e2f14ece9fef1338f7cc102a96dfd7d056ec76e",
+          "occurrences": 1,
+          "reason": "Exact same fixed canary unqualified-reset serializer+unchanged ACL proven by actual87"
+        }
+      ],
+      "additive_guard": "do $production_forward_original_owner$\nbegin\n if current_user<>'postgres' OR session_user<>current_user\n  OR current_setting('custodial.deployment_project_ref',true) IS DISTINCT FROM 'rqquvtjdmugpigbndmne'\n  OR current_setting('session_replication_role')<>'origin'\n  OR current_setting('transaction_read_only')<>'off'\n  OR NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='postgres' AND NOT rolsuper AND rolbypassrls)\n  OR NOT EXISTS(SELECT 1 FROM pg_class WHERE oid=to_regclass('public.custodial_release_authority_restore_inventory')\n   AND relowner='postgres'::regrole AND relkind='r' AND relpersistence='p')\n then raise exception using errcode='42501',message='Exact production postgres original owner/project/normal mutation context required';end if;\n if not exists(select 1 from pg_proc p where p.oid=to_regprocedure('public.custodial_release_authority_current_grant_definition(text)')\n  and p.proowner='postgres'::regrole and not p.prosecdef and p.provolatile='s'\n  and p.proconfig=array['search_path=pg_catalog, public']::text[]\n  and md5(p.prosrc)='a0326680c69ee3c233bb495a6ff7c9f6' and md5(pg_get_functiondef(p.oid))='a1071b529d6ae4bd747b7a4195b90a6d')\n then raise exception 'Exact original postgres grant serializer required';end if;\n if not exists(select 1 from pg_proc p where p.oid=to_regprocedure('public.custodial_release_canary_authority_surface()')\n  and p.proowner='postgres'::regrole and p.prokind='f' and not p.prosecdef and p.provolatile='i'\n  and p.proconfig=array['search_path=pg_catalog, public']::text[]\n  and (select jsonb_agg(jsonb_build_object('grantee',coalesce(r.rolname,'PUBLIC'),'grantor',a.grantor::regrole::text,'privilege',a.privilege_type,'grantable',a.is_grantable)\n   order by coalesce(r.rolname,'PUBLIC'),a.privilege_type,a.is_grantable) from aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a left join pg_roles r on r.oid=a.grantee) = '[{\"grantee\":\"PUBLIC\",\"grantor\":\"postgres\",\"privilege\":\"EXECUTE\",\"grantable\":false},{\"grantee\":\"postgres\",\"grantor\":\"postgres\",\"privilege\":\"EXECUTE\",\"grantable\":false},{\"grantee\":\"service_role\",\"grantor\":\"postgres\",\"privilege\":\"EXECUTE\",\"grantable\":false}]'::jsonb)\n then raise exception 'Exact existing postgres canary owner and named ACL required';end if;\nend $production_forward_original_owner$;\n",
+      "header": "-- Finite existing-postgres-owner grant metadata compatibility.\n-- Canonical SQL remains immutable; no live grant or owner change.\n-- Actual six87 metadata SHA256 e325b15106c3c3fddad162a46d35236886672117f3a13e77614cb1bbe1d97005.\n",
+      "guard_after": "SET LOCAL statement_timeout='30s';\n",
+      "unchanged_remainder": "Exact byte-identical canonical SQL after removing additive header/guard and reversing listed finite replacements"
+    },
+    {
+      "file": "20261017225101_approved_static_dated_original_materialization.sql",
+      "canonical_sha256": "2526dde3e55268da83ba43c8ce30c61c5f1a8c83df50aae85d557c517c383418",
+      "forward_sha256": "cee7ef97a7aef12f75de1d568e53ff0d987daa428b42f53fde25eb957d095f6f",
+      "replacement_map": [
+        {
+          "before": "a843e6ab1177177e039163a3d520b95d6552de8105474a48e390b25302692f48",
+          "after": "75b379980842ea961cf0ad8c5b6176c9ff736caecb5d30a566e65afc53d02594",
+          "occurrences": 1,
+          "reason": "Exact same fixed canary PUBLIC-reset serializer+unchanged ACL proven by actual87 and later literal Source133 producer"
+        }
+      ],
+      "additive_guard": "do $production_forward_original_owner$\nbegin\n if current_user<>'postgres' OR session_user<>current_user\n  OR current_setting('custodial.deployment_project_ref',true) IS DISTINCT FROM 'rqquvtjdmugpigbndmne'\n  OR current_setting('session_replication_role')<>'origin'\n  OR current_setting('transaction_read_only')<>'off'\n  OR NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='postgres' AND NOT rolsuper AND rolbypassrls)\n  OR NOT EXISTS(SELECT 1 FROM pg_class WHERE oid=to_regclass('public.custodial_release_authority_restore_inventory')\n   AND relowner='postgres'::regrole AND relkind='r' AND relpersistence='p')\n then raise exception using errcode='42501',message='Exact production postgres original owner/project/normal mutation context required';end if;\n if not exists(select 1 from pg_proc p where p.oid=to_regprocedure('public.custodial_release_authority_current_grant_definition(text)')\n  and p.proowner='postgres'::regrole and not p.prosecdef and p.provolatile='s'\n  and p.proconfig=array['search_path=pg_catalog, public']::text[]\n  and md5(p.prosrc)='a0326680c69ee3c233bb495a6ff7c9f6' and md5(pg_get_functiondef(p.oid))='a1071b529d6ae4bd747b7a4195b90a6d')\n then raise exception 'Exact original postgres grant serializer required';end if;\n if not exists(select 1 from pg_proc p where p.oid=to_regprocedure('public.custodial_release_canary_authority_surface()')\n  and p.proowner='postgres'::regrole and p.prokind='f' and not p.prosecdef and p.provolatile='i'\n  and p.proconfig=array['search_path=pg_catalog, public']::text[]\n  and (select jsonb_agg(jsonb_build_object('grantee',coalesce(r.rolname,'PUBLIC'),'grantor',a.grantor::regrole::text,'privilege',a.privilege_type,'grantable',a.is_grantable)\n   order by coalesce(r.rolname,'PUBLIC'),a.privilege_type,a.is_grantable) from aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a left join pg_roles r on r.oid=a.grantee) = '[{\"grantee\":\"PUBLIC\",\"grantor\":\"postgres\",\"privilege\":\"EXECUTE\",\"grantable\":false},{\"grantee\":\"postgres\",\"grantor\":\"postgres\",\"privilege\":\"EXECUTE\",\"grantable\":false},{\"grantee\":\"service_role\",\"grantor\":\"postgres\",\"privilege\":\"EXECUTE\",\"grantable\":false}]'::jsonb)\n then raise exception 'Exact existing postgres canary owner and named ACL required';end if;\nend $production_forward_original_owner$;\n",
+      "header": "-- Finite existing-postgres-owner grant metadata compatibility.\n-- Canonical SQL remains immutable; no live grant or owner change.\n-- Actual six87 metadata SHA256 e325b15106c3c3fddad162a46d35236886672117f3a13e77614cb1bbe1d97005.\n",
+      "guard_after": "LOCK TABLE public.custodial_release_authority_restore_inventory IN ACCESS EXCLUSIVE MODE;\n",
+      "unchanged_remainder": "Exact byte-identical canonical SQL after removing additive header/guard and reversing listed finite replacements"
+    }
+  ],
+  "source92_literal_derivations": [
+    {
+      "identity": "static_weekly_materialize_approved_initial_baseline(uuid,uuid,date,bigint,bigint,text,jsonb)",
+      "old_identity": "public.static_weekly_materialize_approved_initial_baseline(uuid, uuid, date, bigint, bigint, text, jsonb)",
+      "restore_order": 950193,
+      "canonical_old_sql": "select public.custodial_release_authority_reset_grants('public.static_weekly_materialize_approved_initial_baseline(uuid, uuid, date, bigint, bigint, text, jsonb)'); grant execute on function static_weekly_materialize_approved_initial_baseline(uuid,uuid,date,bigint,bigint,text,jsonb) to postgres; grant execute on function static_weekly_materialize_approved_initial_baseline(uuid,uuid,date,bigint,bigint,text,jsonb) to static_weekly_control_plane;",
+      "canonical_old_sha256": "6af0383e6bff900cd0c0540cb0b7acab376764a70198af10313dd96140caae1c",
+      "canonical_new_sql": "select public.custodial_release_authority_reset_grants('static_weekly_materialize_approved_initial_baseline(uuid,uuid,date,bigint,bigint,text,jsonb)'); grant execute on function static_weekly_materialize_approved_initial_baseline(uuid,uuid,date,bigint,bigint,text,jsonb) to postgres; grant execute on function static_weekly_materialize_approved_initial_baseline(uuid,uuid,date,bigint,bigint,text,jsonb) to static_weekly_control_plane;",
+      "canonical_new_sha256": "2d8fe7f9f48333fec7a66e3485839cd4445bf3c99698104cf8fa9953cf46651c",
+      "forward_old_sql": "select public.custodial_release_authority_reset_grants('public.static_weekly_materialize_approved_initial_baseline(uuid, uuid, date, bigint, bigint, text, jsonb)'); grant execute on function static_weekly_materialize_approved_initial_baseline(uuid,uuid,date,bigint,bigint,text,jsonb) to static_weekly_control_plane;",
+      "forward_old_sha256": "e931941b0449b3bb949e05faa4d558a20115602d87a1d9c26dc4367644c59bb8",
+      "forward_new_sql": "select public.custodial_release_authority_reset_grants('static_weekly_materialize_approved_initial_baseline(uuid,uuid,date,bigint,bigint,text,jsonb)'); grant execute on function static_weekly_materialize_approved_initial_baseline(uuid,uuid,date,bigint,bigint,text,jsonb) to static_weekly_control_plane;",
+      "forward_new_sha256": "1932270699ede1f5dd24ac4929509a1a50dd528af539428f232c5f00fb7c6402",
+      "removed_only": " grant execute on function static_weekly_materialize_approved_initial_baseline(uuid,uuid,date,bigint,bigint,text,jsonb) to postgres;",
+      "role": "static_weekly_control_plane",
+      "function_sha256": "4d11728dd37f995bf6cbdb2237ec9b43eb49e48f13a6225efd36e0c6bd41d8a8"
+    },
+    {
+      "identity": "static_weekly_read_approved_initial_basis(uuid,uuid,date,bigint,text)",
+      "old_identity": "public.static_weekly_read_approved_initial_basis(uuid, uuid, date, bigint, text)",
+      "restore_order": 950194,
+      "canonical_old_sql": "select public.custodial_release_authority_reset_grants('public.static_weekly_read_approved_initial_basis(uuid, uuid, date, bigint, text)'); grant execute on function static_weekly_read_approved_initial_basis(uuid,uuid,date,bigint,text) to postgres; grant execute on function static_weekly_read_approved_initial_basis(uuid,uuid,date,bigint,text) to static_weekly_control_plane;",
+      "canonical_old_sha256": "5f9df6ad104a625133116d039a883c09b9be851eae28bdda58c4d61a5e81fe3b",
+      "canonical_new_sql": "select public.custodial_release_authority_reset_grants('static_weekly_read_approved_initial_basis(uuid,uuid,date,bigint,text)'); grant execute on function static_weekly_read_approved_initial_basis(uuid,uuid,date,bigint,text) to postgres; grant execute on function static_weekly_read_approved_initial_basis(uuid,uuid,date,bigint,text) to static_weekly_control_plane;",
+      "canonical_new_sha256": "a345cc3eaafa30495a1bfba3285c6527be4ddea042d42beeae6b86e9cd059ce5",
+      "forward_old_sql": "select public.custodial_release_authority_reset_grants('public.static_weekly_read_approved_initial_basis(uuid, uuid, date, bigint, text)'); grant execute on function static_weekly_read_approved_initial_basis(uuid,uuid,date,bigint,text) to static_weekly_control_plane;",
+      "forward_old_sha256": "5b0c06d8066369b745f3dad60d7368895a9769a29c64ff7c13d8686189107f64",
+      "forward_new_sql": "select public.custodial_release_authority_reset_grants('static_weekly_read_approved_initial_basis(uuid,uuid,date,bigint,text)'); grant execute on function static_weekly_read_approved_initial_basis(uuid,uuid,date,bigint,text) to static_weekly_control_plane;",
+      "forward_new_sha256": "16df5d3dc3f8f1b356139b8119e6c3dcd742ed4b7f362f5a17ae0ba2803b258f",
+      "removed_only": " grant execute on function static_weekly_read_approved_initial_basis(uuid,uuid,date,bigint,text) to postgres;",
+      "role": "static_weekly_control_plane",
+      "function_sha256": "10147891ce95971e8a6b9a7eecf4f9d9470c1ec5470c6a123de5e093692bf484"
+    },
+    {
+      "identity": "static_weekly_read_approved_initial_confirmation(uuid,text)",
+      "old_identity": "public.static_weekly_read_approved_initial_confirmation(uuid, text)",
+      "restore_order": 950195,
+      "canonical_old_sql": "select public.custodial_release_authority_reset_grants('public.static_weekly_read_approved_initial_confirmation(uuid, text)'); grant execute on function static_weekly_read_approved_initial_confirmation(uuid,text) to postgres; grant execute on function static_weekly_read_approved_initial_confirmation(uuid,text) to static_weekly_control_plane;",
+      "canonical_old_sha256": "63e3519e09f7cc3cb4396b1e9d1254cb53616e9798fcdf3d9cfbd2940dfe9bea",
+      "canonical_new_sql": "select public.custodial_release_authority_reset_grants('static_weekly_read_approved_initial_confirmation(uuid,text)'); grant execute on function static_weekly_read_approved_initial_confirmation(uuid,text) to postgres; grant execute on function static_weekly_read_approved_initial_confirmation(uuid,text) to static_weekly_control_plane;",
+      "canonical_new_sha256": "c9a7fa58066bd875b058c97c50a62b0ac87a50a293572517b354333def73689c",
+      "forward_old_sql": "select public.custodial_release_authority_reset_grants('public.static_weekly_read_approved_initial_confirmation(uuid, text)'); grant execute on function static_weekly_read_approved_initial_confirmation(uuid,text) to static_weekly_control_plane;",
+      "forward_old_sha256": "d25011da06be74534544ed723a1605a8e15722b546aa0c5cda6d1aea526f31b4",
+      "forward_new_sql": "select public.custodial_release_authority_reset_grants('static_weekly_read_approved_initial_confirmation(uuid,text)'); grant execute on function static_weekly_read_approved_initial_confirmation(uuid,text) to static_weekly_control_plane;",
+      "forward_new_sha256": "a78dee0c2c3d21199d72547a6e291d2f5b66cd94a86d70919ed07bd3e6e08c77",
+      "removed_only": " grant execute on function static_weekly_read_approved_initial_confirmation(uuid,text) to postgres;",
+      "role": "static_weekly_control_plane",
+      "function_sha256": "46faf5ddb364386f2de3d3632dff86195f3e339cc91ffe3fe315018f68f5141e"
+    },
+    {
+      "identity": "static_weekly_register_approved_initial_baseline(uuid,text,jsonb)",
+      "old_identity": "public.static_weekly_register_approved_initial_baseline(uuid, text, jsonb)",
+      "restore_order": 950197,
+      "canonical_old_sql": "select public.custodial_release_authority_reset_grants('public.static_weekly_register_approved_initial_baseline(uuid, text, jsonb)'); grant execute on function static_weekly_register_approved_initial_baseline(uuid,text,jsonb) to postgres; grant execute on function static_weekly_register_approved_initial_baseline(uuid,text,jsonb) to static_weekly_release_operator;",
+      "canonical_old_sha256": "d371cda724fff9dec68aa8a42a14d87aa2ac052be6e4397cd1d44c4d987ca8ff",
+      "canonical_new_sql": "select public.custodial_release_authority_reset_grants('static_weekly_register_approved_initial_baseline(uuid,text,jsonb)'); grant execute on function static_weekly_register_approved_initial_baseline(uuid,text,jsonb) to postgres; grant execute on function static_weekly_register_approved_initial_baseline(uuid,text,jsonb) to static_weekly_release_operator;",
+      "canonical_new_sha256": "e2fa99828137839a722973dc8296c8b7874ce7629edcc1b007592e3f301d3db2",
+      "forward_old_sql": "select public.custodial_release_authority_reset_grants('public.static_weekly_register_approved_initial_baseline(uuid, text, jsonb)'); grant execute on function static_weekly_register_approved_initial_baseline(uuid,text,jsonb) to static_weekly_release_operator;",
+      "forward_old_sha256": "4c62b7947e839e69aed2adc1fbe9b4995b82f04209a89d4eb619aa024233cd56",
+      "forward_new_sql": "select public.custodial_release_authority_reset_grants('static_weekly_register_approved_initial_baseline(uuid,text,jsonb)'); grant execute on function static_weekly_register_approved_initial_baseline(uuid,text,jsonb) to static_weekly_release_operator;",
+      "forward_new_sha256": "0df88c4b2b167650af3cd3621cb28f5613d393f3b98fc8f2f22ca6b0dcfe5eea",
+      "removed_only": " grant execute on function static_weekly_register_approved_initial_baseline(uuid,text,jsonb) to postgres;",
+      "role": "static_weekly_release_operator",
+      "function_sha256": "54b3bb6cc2f5e27f36c0098f7a190c8990ea1a38c8edfbdd299c2b8d46876d25"
+    }
+  ]
+}

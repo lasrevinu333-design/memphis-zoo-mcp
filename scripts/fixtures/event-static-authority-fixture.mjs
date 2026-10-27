@@ -79,7 +79,7 @@ function insertRows(table, rows, { conflict = "" } = {}) {
   return `insert into public.${table}(${columns.join(",")}) select ${columns.map((column) => `r.${column}`).join(",")} from jsonb_populate_recordset(null::public.${table},${j(rows)}) r ${conflict};`;
 }
 
-export async function seedCompiledEventAuthority({ sql, container, database = "postgres", managerId, employeeId, dates, label = "event-static-authority", source: suppliedSource, mode = "official" }) {
+export async function seedCompiledEventAuthority({ sql, container, database = "postgres", managerId, employeeId, dates, label = "event-static-authority", source: suppliedSource, mode = "official", compiler = compileStaticWeeklySchedule }) {
   assert.match(container || "", /^mz_schema_rebuild_[a-zA-Z0-9_]+$/);
   assert.match(database, /^(postgres|mz_schema_rebuild_[a-zA-Z0-9_]+)$/);
   assert.ok(["official", "synthetic_append_only"].includes(mode));
@@ -108,7 +108,7 @@ export async function seedCompiledEventAuthority({ sql, container, database = "p
   assert.equal(source.exceptions?.length || 0, 0, "seed baseline first; accept dated exceptions through applyException");
   const actor = { managerId, managerName, idempotencyKey: `${label}-${randomUUID()}` };
   const compile = async (input) => {
-    const result = await compileStaticWeeklySchedule(input);
+    const result = await compiler(input);
     assert.equal(result.status, "FEASIBLE", JSON.stringify(result.fatal || result.reviewWork));
     assert.equal(result.verifier?.ok, true);
     assert.equal(result.publicationAuthority, "ACCEPTABLE");

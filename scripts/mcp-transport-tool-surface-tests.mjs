@@ -8,6 +8,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { z } from "zod";
 import { createMcpServer } from "../src/mcp/create-mcp-server.js";
 import { getToolManifest, TOOL_SAFETY } from "../src/mcp/tool-manifest.js";
+import { FEEDBACK_RELAY_CONTRACT, FEEDBACK_RELAY_SCHEMA_SHA256 } from "../src/feedback-email-relay.js";
 
 async function reservePort() {
   const server = createServer();
@@ -91,6 +92,7 @@ const child = spawn(process.execPath, ["src/index.js"], {
   env: {
     ...process.env,
     NODE_ENV: "test",
+    RENDER_GIT_COMMIT: "b".repeat(40),
     PORT: String(port),
     MCP_CONNECTOR_TOKEN: connectorToken,
     MCP_ALLOW_FULL_NOAUTH: "false",
@@ -197,6 +199,18 @@ try {
   assert.equal(manifestResult.isError, undefined);
   const manifestPayload = JSON.parse(String(manifestResult.content?.[0]?.text || "{}"));
   assert.equal(manifestPayload.ok, true);
+  assert.equal(manifestPayload.evidence_kind, "source_catalog_not_runtime_admission");
+  assert.equal(manifestPayload.app.backend_commit_sha, "b".repeat(40));
+  const feedbackManifest = manifestPayload.tools.filter(tool => tool.name.startsWith("custodial_feedback_relay_"));
+  assert.equal(feedbackManifest.length, 6);
+  for (const descriptor of feedbackManifest) {
+    assert.equal(descriptor.contract_version, FEEDBACK_RELAY_CONTRACT);
+    assert.equal(descriptor.adapter_schema_sha256, FEEDBACK_RELAY_SCHEMA_SHA256);
+    assert.deepEqual(descriptor.required_scopes, ["mcp:read", "mcp:write"]);
+    assert.deepEqual(descriptor.input_schema, currentManifest.find(tool => tool.name === descriptor.name).input_schema);
+    assert.equal(descriptor.input_schema.additionalProperties, false);
+  }
+  assert.ok(feedbackManifest.find(tool => tool.name.endsWith("_control")).input_schema.properties.preflight);
 
   const migrationPreview = await withTimeout(
     client.callTool({

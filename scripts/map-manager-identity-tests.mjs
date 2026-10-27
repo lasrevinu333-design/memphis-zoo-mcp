@@ -22,6 +22,7 @@ const manager = {
   display_name: "Jennifer Sheffield",
   system_key: MAP_DASHBOARD_MANAGER_SYSTEM_KEYS["jsheffield@memphiszoo.org"],
   roles: ["DIRECTOR", "CUSTODIAL_MANAGER", "SECURITY_ADMIN"],
+  is_system_principal: false,
   active: true,
   revoked_at: null,
 };
@@ -40,20 +41,18 @@ const accepted = await verifyMapManagerAccessToken("map-token", {
 assert.equal(accepted.system_key, manager.system_key);
 assert.equal(accepted.email, "jsheffield@memphiszoo.org");
 
-await assert.rejects(
-  verifyMapManagerAccessToken("owner-map-token", {
-    env,
-    fetchImpl: async () => ({
-      ok: true,
-      json: async () => ({
-        id: "33333333-3333-4333-8333-333333333333",
-        email: "eoperle@memphiszoo.org",
-        email_confirmed_at: "2026-01-01T00:00:00.000Z",
-      }),
-    }),
-  }),
-  /does not have Custodial dashboard access/i,
-);
+const ownerIdentity = await verifyMapManagerAccessToken("owner-map-token", {
+  env,
+  fetchImpl: async (_url, options) => {
+    assert.equal(options.redirect, "error");
+    assert.ok(options.signal instanceof AbortSignal);
+    return { ok: true, json: async () => ({ id: "33333333-3333-4333-8333-333333333333", email: "eoperle@memphiszoo.org", email_confirmed_at: "2026-01-01T00:00:00.000Z" }) };
+  },
+});
+assert.equal(ownerIdentity.system_key, "eric_custodial_manager", "the existing canonical owner Map identity is explicitly mapped");
+await assert.rejects(verifyMapManagerAccessToken("unknown-map-token", {
+  env, fetchImpl: async () => ({ ok: true, json: async () => ({ id: "33333333-3333-4333-8333-333333333333", email: "unregistered@memphiszoo.org", email_confirmed_at: "2026-01-01T00:00:00.000Z" }) }),
+}), /does not have Custodial dashboard access/i);
 
 const session = createOpsManagerSession({
   env,
@@ -65,10 +64,16 @@ const session = createOpsManagerSession({
 });
 assert.equal(isMapDashboardSession(session), true);
 
+const ownerManager = { ...manager, manager_id: "44444444-4444-4444-8444-444444444444", display_name: "Existing Custodial Owner", system_key: "eric_custodial_manager" };
+let issued = null;
 const store = {
   async getManagerBySystemKey(systemKey) {
-    return systemKey === manager.system_key ? manager : null;
+    return systemKey === manager.system_key ? manager : systemKey === ownerManager.system_key ? ownerManager : null;
   },
+  async enroll(record) { issued = { ...record, manager: record.manager_id === ownerManager.manager_id ? ownerManager : manager, revoked_at: null }; return issued; },
+  async find(id) { return issued?.credential_id === id ? issued : null; },
+  async audit() {},
+  async revoke(id) { assert.equal(id, issued.credential_id); issued.revoked_at = new Date().toISOString(); },
 };
 const checked = await verifyCurrentMapDashboardSession(session, { store });
 assert.equal(checked.ok, true);
@@ -119,11 +124,12 @@ installSharedAuthRoutes({
 }, { env, setCors() {}, trustedDeviceStore: store });
 
 const originalFetch = globalThis.fetch;
+let providerEmail = "jsheffield@memphiszoo.org";
 globalThis.fetch = async () => ({
   ok: true,
   json: async () => ({
     id: "22222222-2222-4222-8222-222222222222",
-    email: "jsheffield@memphiszoo.org",
+    email: providerEmail,
     email_confirmed_at: "2026-01-01T00:00:00.000Z",
   }),
 });
@@ -135,9 +141,12 @@ try {
     headers: { "x-device-id": "map-site-browser" },
     header(name) { return this.headers[String(name).toLowerCase()] || ""; },
   };
+  const responseHeaders = {};
   const res = {
     status(code) { statusCode = code; return this; },
     json(value) { payload = value; return this; },
+    setHeader(name, value) { responseHeaders[name.toLowerCase()] = value; },
+    getHeader(name) { return responseHeaders[name.toLowerCase()]; },
   };
   await routes.get("POST /auth-api/map-session")(req, res);
   assert.equal(statusCode, 200);
@@ -145,6 +154,27 @@ try {
   assert.equal(payload.data.session.read_only, true);
   assert.deepEqual(payload.data.session.roles, ["OPS_MANAGER"]);
   assert.deepEqual(payload.data.manager.roles, ["OPS_MANAGER"]);
+  assert.equal(payload.data.session.trusted_device, true);
+  assert.equal(payload.data.session.permissions.schema, "custodial.manager-permissions.v1");
+  assert.equal(payload.data.session.permissions.owner, false);
+  assert.equal(payload.data.session.permissions.manage_absences, true);
+  assert.equal(issued.metadata_json.identity_source, "memphis_map");
+  assert.match(String(responseHeaders["set-cookie"]), /HttpOnly.*SameSite=None.*Secure/);
+  const delegated = await runMiddleware(makeOpsAccessMiddleware({ env, trustedDeviceStore: store, requiredPermission: "manage_absences" }), payload.data.session.token);
+  assert.equal(delegated.nextCalled, true, "a verified Map delegate keeps the canonical bounded delegated capability");
+  const generalWrite = await runMiddleware(makeOpsAccessMiddleware({ env, trustedDeviceStore: store, requireWrite: true }), payload.data.session.token);
+  assert.equal(generalWrite.statusCode, 403, "delegated capability does not grant general owner writes");
+  providerEmail = "eoperle@memphiszoo.org";
+  await routes.get("POST /auth-api/map-session")(req, res);
+  assert.equal(statusCode, 200);
+  assert.equal(payload.data.session.manager_id, ownerManager.manager_id);
+  assert.equal(payload.data.session.permissions.owner, true);
+  assert.equal(payload.data.session.read_only, false);
+  const ownerRead = await runMiddleware(makeOpsAccessMiddleware({ env, trustedDeviceStore: store, requireWrite: true }), payload.data.session.token);
+  assert.equal(ownerRead.nextCalled, true);
+  issued.revoked_at = new Date().toISOString();
+  const staleOwner = await runMiddleware(makeOpsAccessMiddleware({ env, trustedDeviceStore: store }), payload.data.session.token);
+  assert.equal(staleOwner.statusCode, 401, "revoked Map trust remains denied after canonical identity projection");
 } finally {
   globalThis.fetch = originalFetch;
 }
@@ -161,6 +191,7 @@ assert.deepEqual(
     "afeist@memphiszoo.org",
     "bgull@memphiszoo.org",
     "emckenney@memphiszoo.org",
+    "eoperle@memphiszoo.org",
     "hlejman@memphiszoo.org",
     "jsheffield@memphiszoo.org",
   ],

@@ -3,6 +3,7 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { types } from "node:util";
 import { createClient } from "@supabase/supabase-js";
 import pg from "pg";
 import {
@@ -11,9 +12,13 @@ import {
   stableJson,
   verifyBinding,
 } from "./disaster-recovery-crypto.mjs";
-import { captureStorageSupportedState, validateStorageOperatorEvidence } from "./disaster-recovery-storage.mjs";
+import { captureStorageSupportedState, validateStorageOperatorEvidence, isExplicitLocalRestoreFixtureTarget } from "./disaster-recovery-storage.mjs";
 
 const { Client } = pg;
+const nativeClientPrototype = Client.prototype;
+const nativeQuery = nativeClientPrototype.query;
+const nativeConnect = nativeClientPrototype.connect;
+const nativeEnd = nativeClientPrototype.end;
 const databaseUrl = String(process.env.SUPABASE_DB_URL || process.env.DATABASE_URL || "").trim();
 const databaseCaCertPath = String(process.env.SUPABASE_DB_CA_CERT_PATH || "").trim();
 const projectRef = String(process.env.SUPABASE_PROJECT_REF || "").trim();
@@ -31,6 +36,8 @@ if (!databaseUrl || !/^[a-z0-9]{20}$/.test(projectRef) || confirmedRef !== proje
 }
 if (!envelope || envelope.format !== "memphis-zoo-production-restore-reconciliation.v1"
     || envelope.algorithm !== "hmac-sha256" || envelope.key_id !== keyId
+    || typeof envelope.signature !== "string" || envelope.signature.length !== 64
+    || !/^[0-9a-f]{64}$/.test(envelope.signature)
     || !verifyBinding(restoreReconciliationBinding(envelope.intent || {}), envelope.signature, key)) {
   throw new Error("Production restore reconciliation signature verification failed.");
 }
@@ -49,6 +56,11 @@ const expiresAt = Date.parse(String(intent.expires_at || ""));
 if (!Number.isFinite(expiresAt) || expiresAt <= Date.now() || expiresAt > Date.now() + 24 * 60 * 60 * 1000) {
   throw new Error("Production restore reconciliation is expired or exceeds the 24-hour authorization window.");
 }
+const originalReconciliationExpiresAt = intent.expires_at;
+const originalReconciliationExpiresAtMs = expiresAt;
+if (typeof originalReconciliationExpiresAt !== "string") {
+  throw new Error("Original signed reconciliation expiry must be a timestamp string.");
+}
 
 function sha256(value) { return createHash("sha256").update(value).digest("hex"); }
 function discrepancySnapshot(rows) {
@@ -63,9 +75,10 @@ function discrepancySnapshot(rows) {
   }));
 }
 function makeStorageDownloader() {
-  const target = new URL(databaseUrl);
-  const allowFixture = /^(127\.0\.0\.1|localhost)$/.test(target.hostname)
-    && /^\/mz_schema_rebuild_[a-zA-Z0-9_]+$/.test(target.pathname) && testStorageBytes;
+  const allowFixture = isExplicitLocalRestoreFixtureTarget(databaseUrl) && testStorageBytes;
+  if (testStorageBytes && !allowFixture) {
+    throw new Error("The reconciliation Storage-byte fixture is restricted to an explicit disposable loopback database.");
+  }
   if (allowFixture) {
     const fixture = JSON.parse(testStorageBytes);
     return async (bucketId, name) => {
@@ -84,21 +97,132 @@ function makeStorageDownloader() {
 }
 const intentDigest = sha256(stableJson(restoreReconciliationBinding(intent)));
 const target = new URL(databaseUrl);
-const allowCrashProbe = /^(127\.0\.0\.1|localhost)$/.test(target.hostname)
-  && /^\/mz_schema_rebuild_[a-zA-Z0-9_]+$/.test(target.pathname);
+const allowCrashProbe = isExplicitLocalRestoreFixtureTarget(databaseUrl);
+if (testStorageBytes && !allowCrashProbe) {
+  throw new Error("The reconciliation Storage-byte fixture is restricted to an explicit disposable loopback database.");
+}
+if (String(process.env.RESTORE_RECONCILIATION_TEST_FAIL_BEFORE_COMMIT || "").toLowerCase() === "true" && !allowCrashProbe) {
+  throw new Error("The reconciliation crash probe is restricted to a disposable loopback database.");
+}
 const db = new Client({
   connectionString: databaseUrl,
   application_name: "memphis-zoo-apply-restore-reconciliation",
   ...(databaseCaCertPath ? { ssl: { ca: readFileSync(resolve(databaseCaCertPath), "utf8"), rejectUnauthorized: true } } : {}),
 });
-await db.connect();
-await db.query("select pg_advisory_lock(hashtextextended('memphis-zoo-production-restore',0))");
+// Read-request DATA only: neither this tuple nor a COMMIT reply admits a retry.
+const originalReconciliationRequest = Object.freeze({
+  restore_id: intent.restore_id,
+  authority_generation: intent.authority_generation,
+  reconciliation_id: intent.reconciliation_id,
+  archive_digest: intent.archive_digest,
+});
+let connected = false, lockAttempted = false, transactionAttempted = false;
+let commitAttempted = false, commitConfirmed = false;
+let failed = false, failure, success;
+function requireOriginalReconciliationClient() {
+  if (types.isProxy(db) || Object.getPrototypeOf(db) !== nativeClientPrototype
+      || Client.prototype !== nativeClientPrototype
+      || nativeClientPrototype.query !== nativeQuery || nativeClientPrototype.connect !== nativeConnect
+      || nativeClientPrototype.end !== nativeEnd
+      || ["query", "connect", "end"].some((name) => Object.hasOwn(db, name))) {
+    throw new Error("Original native reconciliation client changed.");
+  }
+}
+function requireReconciliationCommitReceipt(result) {
+  if (!result || typeof result !== "object" || types.isProxy(result) || Array.isArray(result)) {
+    throw new Error("Native reconciliation COMMIT receipt is unavailable.");
+  }
+  const fields = Object.getOwnPropertyDescriptors(result);
+  if (Reflect.ownKeys(fields).some((name) => !Object.hasOwn(fields[name], "value"))
+      || !Object.hasOwn(fields, "command") || fields.command.value !== "COMMIT"
+      || !Object.hasOwn(fields, "rowCount") || fields.rowCount.value !== null
+      || !Object.hasOwn(fields, "rows")) {
+    throw new Error("Native reconciliation COMMIT receipt differs.");
+  }
+  const rows = fields.rows.value;
+  if (types.isProxy(rows) || !Array.isArray(rows) || Object.getPrototypeOf(rows) !== Array.prototype) {
+    throw new Error("Native reconciliation COMMIT rows differ.");
+  }
+  const rowFields = Object.getOwnPropertyDescriptors(rows);
+  if (Reflect.ownKeys(rowFields).length !== 1 || !Object.hasOwn(rowFields, "length")
+      || !Object.hasOwn(rowFields.length, "value") || rowFields.length.value !== 0) {
+    throw new Error("Native reconciliation COMMIT rows are not empty.");
+  }
+}
+function requireOriginalReconciliationNodeLifetime() {
+  const now = Date.now();
+  if (!Number.isFinite(now) || now >= originalReconciliationExpiresAtMs) {
+    throw new Error("Original signed reconciliation lifetime expired.");
+  }
+}
+async function requireOriginalReconciliationPublicationLifetime() {
+  requireOriginalReconciliationClient();
+  const result = await Reflect.apply(nativeQuery, db, [
+    "select pg_catalog.clock_timestamp() < $1::pg_catalog.timestamptz as original_intent_current",
+    [originalReconciliationExpiresAt],
+  ]);
+  requireOriginalReconciliationClient();
+  if (!result || typeof result !== "object" || types.isProxy(result) || Array.isArray(result)) {
+    throw new Error("Original reconciliation database lifetime is unavailable.");
+  }
+  const fields = Object.getOwnPropertyDescriptors(result);
+  if (Reflect.ownKeys(fields).some(name => !Object.hasOwn(fields[name], "value"))
+      || !Object.hasOwn(fields, "command") || fields.command.value !== "SELECT"
+      || !Object.hasOwn(fields, "rowCount") || fields.rowCount.value !== 1
+      || !Object.hasOwn(fields, "rows")) {
+    throw new Error("Original reconciliation database lifetime receipt differs.");
+  }
+  const rows = fields.rows.value;
+  if (types.isProxy(rows) || !Array.isArray(rows) || Object.getPrototypeOf(rows) !== Array.prototype) {
+    throw new Error("Original reconciliation database lifetime rows differ.");
+  }
+  const entries = Object.getOwnPropertyDescriptors(rows);
+  if (Reflect.ownKeys(entries).length !== 2 || !Object.hasOwn(entries, "length")
+      || !Object.hasOwn(entries.length, "value") || entries.length.value !== 1
+      || !Object.hasOwn(entries, "0") || !Object.hasOwn(entries[0], "value")) {
+    throw new Error("Original reconciliation database lifetime row count differs.");
+  }
+  const row = entries[0].value;
+  if (!row || typeof row !== "object" || types.isProxy(row) || Object.getPrototypeOf(row) !== Object.prototype
+      || Reflect.ownKeys(row).length !== 1) {
+    throw new Error("Original reconciliation database lifetime row differs.");
+  }
+  const current = Object.getOwnPropertyDescriptor(row, "original_intent_current");
+  if (!current || !Object.hasOwn(current, "value") || current.value !== true) {
+    throw new Error("Original signed reconciliation lifetime expired or is unavailable.");
+  }
+  requireOriginalReconciliationNodeLifetime();
+}
+async function commitOriginalReconciliationOnce() {
+  if (commitAttempted) throw new Error("Original reconciliation COMMIT was already attempted.");
+  commitAttempted = true; // Consume before native IO, including a lost reply.
+  requireOriginalReconciliationClient();
+  const result = await Reflect.apply(nativeQuery, db, ["commit"]);
+  requireReconciliationCommitReceipt(result);
+  commitConfirmed = true;
+}
 try {
+  requireOriginalReconciliationClient();
+  await db.connect();
+  connected = true;
+  lockAttempted = true;
+  await db.query("select pg_advisory_lock(hashtextextended('memphis-zoo-production-restore',0))");
+  transactionAttempted = true;
   await db.query("begin isolation level serializable");
   await db.query("select pg_advisory_xact_lock(hashtextextended('memphis-zoo-application-mutation-admission',0))");
   const controlResult = await db.query("select * from custodial_dr.restore_control where singleton=true for update");
   const control = controlResult.rows[0];
   if (control?.state === "COMPLETE" && control.mutations_paused === false) {
+    // Native pg int8 is canonical text; the signed v1 intent is a safe integer.
+    if (control.restore_id !== intent.restore_id
+        || typeof control.authority_generation !== "string"
+        || !/^[1-9][0-9]{0,18}$/.test(control.authority_generation)
+        || BigInt(control.authority_generation) > 9223372036854775807n
+        || control.authority_generation !== String(intent.authority_generation)
+        || control.archive_digest !== intent.archive_digest
+        || control.target_project_ref !== intent.target_project_ref) {
+      throw new Error("Completed restore control does not match the signed reconciliation.");
+    }
     const prior = await db.query(`
       select 1 from custodial_dr.restore_events
       where restore_id=$1 and authority_generation=$2 and phase='PRODUCTION_RECONCILIATION'
@@ -106,20 +230,31 @@ try {
         and evidence_json->>'intent_sha256'=$4
     `, [intent.restore_id, intent.authority_generation, intent.reconciliation_id, intentDigest]);
     if (prior.rowCount !== 1) throw new Error("Production is already resumed by a different reconciliation authority.");
-    await db.query("commit");
-    console.log(JSON.stringify({ ok: true, idempotent_replay: true, restore_id: intent.restore_id, reconciliation_id: intent.reconciliation_id }));
-    process.exit(0);
-  }
-  if (!control || control.state !== "PAUSED_RECONCILIATION" || control.mutations_paused !== true
-      || String(control.restore_id) !== intent.restore_id
-      || Number(control.authority_generation) !== intent.authority_generation
+    await requireOriginalReconciliationPublicationLifetime();
+    await commitOriginalReconciliationOnce();
+    success = { ok: true, idempotent_replay: true, restore_id: intent.restore_id, reconciliation_id: intent.reconciliation_id };
+  } else {
+  if (controlResult.rowCount !== 1 || !Array.isArray(controlResult.rows) || controlResult.rows.length !== 1
+      || !control || control.state !== "PAUSED_RECONCILIATION" || control.mutations_paused !== true
+      || control.restore_id !== intent.restore_id
+      || typeof control.authority_generation !== "string"
+      || !/^[1-9][0-9]{0,18}$/.test(control.authority_generation)
+      || BigInt(control.authority_generation) > 9223372036854775807n
+      || control.authority_generation !== String(intent.authority_generation)
       || control.archive_digest !== intent.archive_digest
       || control.target_project_ref !== projectRef) {
     throw new Error("Paused restore control does not match the signed reconciliation.");
   }
   const manifestResult = await db.query("select * from custodial_dr.restore_manifests where restore_id=$1 for update", [intent.restore_id]);
-  const manifest = manifestResult.rows[0];
-  if (!manifest || manifest.database_verified !== true
+  const manifest = Array.isArray(manifestResult.rows) ? manifestResult.rows[0] : null;
+  if (manifestResult.rowCount !== 1 || !Array.isArray(manifestResult.rows) || manifestResult.rows.length !== 1
+      || !manifest || manifest.restore_id !== intent.restore_id
+      || typeof manifest.authority_generation !== "string"
+      || !/^[1-9][0-9]{0,18}$/.test(manifest.authority_generation)
+      || BigInt(manifest.authority_generation) > 9223372036854775807n
+      || manifest.authority_generation !== String(intent.authority_generation)
+      || manifest.archive_digest !== intent.archive_digest
+      || manifest.database_verified !== true
       || manifest.authority_invalidated !== true || manifest.post_restore_verified !== true
       || manifest.final_manifest_sha256 !== intent.final_manifest_sha256) {
     throw new Error("Final restore manifest does not match the signed reconciliation.");
@@ -203,6 +338,7 @@ try {
   if (Number(remaining.rows[0].count) !== 0) throw new Error("Restore retains unresolved discrepancies.");
   const leases = await db.query("select count(*)::int count from custodial_dr.application_mutation_leases");
   if (Number(leases.rows[0].count) !== 0) throw new Error("Application mutation leases remain; production cannot resume.");
+  await requireOriginalReconciliationPublicationLifetime();
   const resumed = await db.query(`
     update custodial_dr.restore_control set
       state='COMPLETE',mutations_paused=false,completed_at=clock_timestamp(),failure_reason=null,updated_at=clock_timestamp()
@@ -222,12 +358,48 @@ try {
     storage_supported_state_resample: intent.storage_supported_state_resample,
     reconciliation_manifest_sha256: reconciliationManifestSha256,
   })]);
-  await db.query("commit");
-  console.log(JSON.stringify({ ok: true, idempotent_replay: false, restore_id: intent.restore_id, reconciliation_id: intent.reconciliation_id, resumed: true }));
+  await requireOriginalReconciliationPublicationLifetime();
+  await commitOriginalReconciliationOnce();
+  success = { ok: true, idempotent_replay: false, restore_id: intent.restore_id, reconciliation_id: intent.reconciliation_id, resumed: true };
+  }
+  requireOriginalReconciliationNodeLifetime();
 } catch (error) {
-  await db.query("rollback").catch(() => {});
-  throw error;
+  failed = true;
+  failure = error; // An explicit flag preserves even thrown undefined/false.
+  if (transactionAttempted && !commitAttempted) {
+    try { await Reflect.apply(nativeQuery, db, ["rollback"]); }
+    catch (cleanup) { failure = new AggregateError([error, cleanup], "Reconciliation failed and rollback was not confirmed.", { cause: error }); }
+  }
 } finally {
-  await db.query("select pg_advisory_unlock(hashtextextended('memphis-zoo-production-restore',0))").catch(() => {});
-  await db.end().catch(() => {});
+  const cleanup = [];
+  if (connected && lockAttempted) {
+    try { await Reflect.apply(nativeQuery, db, ["select pg_advisory_unlock(hashtextextended('memphis-zoo-production-restore',0))"]); }
+    catch (error) { cleanup.push(error); }
+  }
+  try { await Reflect.apply(nativeEnd, db, []); }
+  catch (error) { cleanup.push(error); }
+  if (cleanup.length) {
+    failure = new AggregateError([...(failed ? [failure] : []), ...cleanup], "Reconciliation cleanup was not confirmed.", { cause: failed ? failure : cleanup[0] });
+    failed = true;
+  }
+}
+if (!failed && commitConfirmed) {
+  try { requireOriginalReconciliationNodeLifetime(); }
+  catch (error) { failed = true; failure = error; }
+}
+if (failed) {
+  if (!commitAttempted) throw failure;
+  // No rollback, retry, resumed claim or additional database writes after a
+  // COMMIT attempt. Retain the first failure internally; emit only fixed safe
+  // metadata, never driver errors, SQL, evidence, signatures or credentials.
+  console.error(JSON.stringify({
+    ok: false,
+    code: commitConfirmed ? "RESTORE_RECONCILIATION_COMMIT_CONFIRMED_CLEANUP_FAILED" : "RESTORE_RECONCILIATION_COMMIT_UNKNOWN",
+    outcome: "UNKNOWN",
+    retry_safe: false,
+    read_request: originalReconciliationRequest,
+  }));
+  process.exitCode = 1;
+} else {
+  console.log(JSON.stringify(success));
 }

@@ -1,6 +1,13 @@
 import crypto from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 import { createClient } from '@supabase/supabase-js';
 import { makeDeviceCredentialMiddleware } from './auth/device-credential-auth.js';
+import { deliverNativeLocationJob } from './native-location-dispatch.js';
+import { deliverNativeLunchJob } from './native-lunch-dispatch.js';
+import { deliverNativeMessageJob } from './native-message-dispatch.js';
+import { deliverNativeEventJob } from './native-event-dispatch.js';
+import { holdUnqualifiedNativeScheduleJob } from './native-schedule-job-preparation.js';
+import { prepareNativeScheduleSourceJobs } from './native-schedule-source-producer.js';
 
 const runtimeByApp = new WeakMap();
 const API_PREFIX = '/employee-notifications-api';
@@ -12,6 +19,78 @@ function createSupabase(env) {
   return url && key ? createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } }) : null;
 }
 function clip(value, max) { return String(value ?? '').trim().slice(0, max); }
+function isOriginalMessageJob(job) {
+  return job?.job_type === 'employee_native_push'
+    && (job.payload_json?.data_json?.kind === 'employee_message'
+      || String(job.job_key || '').startsWith('employee-message-push:'))
+    && job.payload_json?.data_json?.test_delivery !== true;
+}
+function authorizedMessagePush(projection, job, registration) {
+  const fields = ['schema', 'job_id', 'job_key', 'lease_token', 'source_id', 'message_id', 'thread_id',
+    'recipient_user_id', 'employee_id', 'device_id', 'device_identifier', 'credential_id', 'assignment_epoch',
+    'registration_id', 'token_hash', 'logical_key', 'source_revision', 'payload'];
+  const payload = job.payload_json;
+  const tokenHash = crypto.createHash('sha256').update(String(registration?.fcm_token || '')).digest('hex');
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  const same = (field, value) => projection?.[field] === value;
+  if (!projection || typeof projection !== 'object' || Array.isArray(projection)
+    || !isDeepStrictEqual(Object.keys(projection).sort(), [...fields].sort())
+    || !same('schema', 'custodial.employee-message-admission.v1')
+    || !['job_id','job_key','lease_token','source_id'].every(field => same(field, job[field]))
+    || !['employee_id','device_id','device_identifier','credential_id','assignment_epoch'].every(field => same(field, payload[field]))
+    || !same('message_id', job.source_id) || !same('message_id', payload.data_json?.message_id)
+    || !same('thread_id', payload.data_json?.thread_id) || !uuid.test(projection.recipient_user_id)
+    || !same('registration_id', registration?.registration_id) || !same('token_hash', tokenHash)
+    || !same('logical_key', `message:${job.source_id}:recipient:${projection.recipient_user_id}`)
+    || !/^[0-9a-f]{64}$/.test(projection.source_revision)
+    || !isDeepStrictEqual(projection.payload, payload)
+    || payload.channel_id !== 'employee-messages' || payload.data_json?.kind !== 'employee_message'
+    || payload.data_json.notification_type !== 'message'
+    || payload.data_json.notification_key !== `message:${job.source_id}`
+    || payload.data_json.route !== `messages.html?hub=employee&thread_id=${projection.thread_id}`) {
+    // The SQL prepare may already have committed. Do not invent a release or
+    // a fresh attempt from a malformed/lost authority response.
+    throw deferredDeliveryError('employee_message_projection_unresolved');
+  }
+  const original = structuredClone(projection.payload);
+  return { title: clip(original.title, 180) || 'Memphis Zoo',
+    body: clip(original.body, 1000) || 'You have a new notification.', data_json: original.data_json };
+}
+const CUSTODIAL_EVENT_SPEECH = Object.freeze({
+  trash_boxes: 'Place trash boxes',
+  extra_cans: 'Set out extra trash cans',
+  restroom_checks: 'Perform requested restroom checks',
+});
+export function buildEmployeeEventReminderBody(event = {}, employeeName) {
+  const name = clip(employeeName, 160);
+  const title = clip(event.event_name, 180);
+  const place = clip(event.display_location, 180);
+  const date = clip(event.event_date, 40);
+  const start = clip(event.start_time, 20);
+  const end = clip(event.end_time, 20);
+  if (!name || !title || !place || !date || !start || !end) {
+    throw new Error('Event reminder is missing a named recipient or required event details.');
+  }
+  const attendance = event.attendee_count == null ? null : Number(event.attendee_count);
+  if (attendance != null && (!Number.isSafeInteger(attendance) || attendance < 0)) {
+    throw new Error('Event reminder attendance is invalid.');
+  }
+  // Only manager-selected, fixed custodial operations are speech sources.
+  // Generic notes/source text/ticket detail can contain private VIP, catering,
+  // or itinerary content and never enter the native spoken reminder.
+  const approvedNotes = [...new Set(Array.isArray(event.custodial_note_codes) ? event.custodial_note_codes : [])]
+    .map((code) => CUSTODIAL_EVENT_SPEECH[code]).filter(Boolean);
+  const publicNotes = clip(event.custodial_public_notes, 500);
+  return clip(`${name}, event reminder. ${title} is at ${place} on ${date}, from ${start} to ${end}.`
+    + (attendance == null ? '' : ` Expected attendance is ${attendance}.`)
+    + (approvedNotes.length || publicNotes ? ` Custodial preparation: ${[...approvedNotes, publicNotes].filter(Boolean).join('; ')}.` : ''), 1000);
+}
+function eventTimeWithZone(instant) {
+  const date = new Date(String(instant || ''));
+  if (Number.isNaN(date.getTime())) throw new Error('Event reminder has no confirmed time instant.');
+  return new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago',
+    hour: 'numeric', minute: '2-digit', timeZoneName: 'short' }).format(date);
+}
 function credentialId(req) {
   return String(
     req.memphisDeviceCredential?.credential_id
@@ -21,6 +100,65 @@ function credentialId(req) {
       || req.memphisAuth?.credential_id
       || '',
   ).trim();
+}
+// Original event receipts are server facts, not a provider boolean or a
+// recipient reconstructed from a current device after assignment changed.
+const EVENT_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const EVENT_KINDS = new Set(['three_days_before', 'two_days_before', 'shift_plus_15']);
+function eventPending() {
+  return Object.assign(new Error('Original event receipt is unavailable or no longer current.'), { status: 409 });
+}
+function exactEventKey(value) {
+  if (typeof value !== 'string' || !value || value !== value.trim()
+    || Buffer.byteLength(value, 'utf8') > 240 || /[\u0000-\u001f\u007f]/.test(value)) {
+    throw Object.assign(new Error('An exact bounded notification key is required.'), { status: 422 });
+  }
+  return value;
+}
+function eventInstant(value, nullable = false) {
+  if (nullable && value === null) return null;
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$/.test(value)
+    || !Number.isFinite(Date.parse(value)) || value.slice(0,4) === '0000'
+    || new Date(`${value.slice(0,10)}T00:00:00Z`).toISOString().slice(0,10) !== value.slice(0,10)) throw eventPending();
+  return value; // Preserve the original SQL offset/fraction; never retimestamp.
+}
+function originalEventAuth(req) {
+  const auth = req.memphisDeviceAuth, d = req.memphisDevice, c = req.memphisDeviceCredential;
+  const epoch = Number(d?.assignment_epoch); // Normal PostgreSQL bigint auth field.
+  if (auth?.ok !== true || auth.credentialed !== true || auth.offline_recovery_only === true
+    || auth.device !== d || auth.credential !== c || d?.device_active !== true || d.employee_active !== true
+    || !EVENT_UUID.test(d.canonical_device_pk || '') || !EVENT_UUID.test(d.assigned_employee_id || '')
+    || !/^KIOSK_(0[2-9]|10)$/.test(d.canonical_device_id || '')
+    || !EVENT_UUID.test(c?.credential_id || '') || c.device_id !== d.canonical_device_pk
+    || !c.confirmed_at || c.revoked_at !== null || !Number.isFinite(Date.parse(c.expires_at))
+    || !['number', 'string'].includes(typeof d.assignment_epoch)
+    || (typeof d.assignment_epoch === 'string' && !/^[1-9][0-9]*$/.test(d.assignment_epoch))
+    || !Number.isSafeInteger(epoch) || epoch < 1) throw eventPending();
+  return { credential_id: c.credential_id, employee_id: d.assigned_employee_id,
+    device_id: d.canonical_device_pk, device_identifier: d.canonical_device_id, assignment_epoch: epoch };
+}
+function originalEventRow(row, auth, key = null) {
+  if (!row || typeof row !== 'object' || Array.isArray(row)
+    || !EVENT_UUID.test(row.instance_id || '') || !EVENT_UUID.test(row.event_id || '')
+    || !['credential_id', 'employee_id', 'device_id', 'assignment_epoch'].every(k => row[k] === auth[k])
+    || !Number.isSafeInteger(row.event_revision) || row.event_revision < 1 || row.event_revision > 2147483647
+    || ![...EVENT_KINDS, 'day_before'].includes(row.notification_kind)
+    || !['pending', 'leased', 'sent', 'failed', 'cancelled', 'opened'].includes(row.state)
+    || exactEventKey(row.notification_key) !== row.notification_key
+    || (key !== null && row.notification_key !== key)) throw eventPending();
+  eventInstant(row.scheduled_for);
+  if (row.state === 'sent' && (row.opened_at !== null || !eventInstant(row.sent_at))) throw eventPending();
+  if (row.state === 'opened' && Date.parse(eventInstant(row.sent_at)) > Date.parse(eventInstant(row.opened_at))) throw eventPending();
+  return row;
+}
+function originalEventOpenReceipt(row, auth, key) {
+  originalEventRow(row, auth, key);
+  if (row.state !== 'opened' || !EVENT_KINDS.has(row.notification_kind)
+    || row.cancelled_at !== null
+    || Date.parse(eventInstant(row.sent_at)) > Date.parse(eventInstant(row.opened_at))) throw eventPending();
+  return { schema: 'custodial.employee-event-open-receipt.v1', instance_id: row.instance_id,
+    notification_key: row.notification_key, event_id: row.event_id, notification_kind: row.notification_kind,
+    ...auth, state: 'opened', opened_at: eventInstant(row.opened_at) };
 }
 function terminalDeliveryError(reason) {
   const normalized = clip(reason, 160) || 'employee_push_recipient_superseded';
@@ -352,23 +490,86 @@ export function installEmployeeNotificationRoutes(app, {
 
   app.get(`${API_PREFIX}/events`, requireEmployee, async (req, res) => {
     try {
-      const id = credentialId(req);
-      const result = await db.from('event_push_instances')
-        .select('notification_key,event_id,notification_kind,scheduled_for,state,sent_at,opened_at')
-        .eq('credential_id', id).order('scheduled_for', { ascending: false }).limit(100);
+      const auth = originalEventAuth(req);
+      const query = req.query || {};
+      if (Object.keys(query).some(k => k !== 'notification_key')) throw eventPending();
+      const key = Object.hasOwn(query, 'notification_key') ? exactEventKey(query.notification_key) : null;
+      let selection = db.from('event_push_instances')
+        .select('notification_key,event_id,notification_kind,scheduled_for,state,sent_at,opened_at,instance_id,credential_id,employee_id,device_id,assignment_epoch,event_revision,service_date,cancelled_at')
+        .eq('credential_id', auth.credential_id).eq('employee_id', auth.employee_id)
+        .eq('device_id', auth.device_id).eq('assignment_epoch', auth.assignment_epoch);
+      if (key !== null) selection = selection.eq('notification_key', key);
+      const result = await selection.order('scheduled_for', { ascending: false }).limit(key === null ? 100 : 2);
       if (result.error) throw result.error;
-      res.status(200).json({ ok: true, data: result.data || [] });
+      if (!Array.isArray(result.data) || result.data.length > (key === null ? 100 : 1)) throw eventPending();
+      const data = [], seen = new Set();
+      for (const value of result.data) {
+        const row = originalEventRow(value, auth, key);
+        if (seen.has(row.instance_id) || seen.has(row.notification_key)) throw eventPending();
+        seen.add(row.instance_id); seen.add(row.notification_key);
+        let validity = 'UNKNOWN';
+        if (row.cancelled_at !== null || row.state === 'cancelled' || !EVENT_KINDS.has(row.notification_kind)) {
+          validity = 'WITHHELD';
+        } else {
+          // Existing service-callable owning guards; no private live-source RPC
+          // exposure, raw Event payload, new grant or parser-derived approval.
+          const event = await db.rpc('app_event_manager_digest_candidate', {
+            p_event_id: row.event_id, p_at: new Date().toISOString(),
+          });
+          // SQL event_date is the original instance's service date. An advance
+          // reminder_date is different; UTC instant calendar is not Zoo date.
+          const sourceDate = value => typeof value === 'string'
+            && /^\d{4}-\d{2}-\d{2}$/.test(value) && value.slice(0,4) !== '0000'
+            && Number.isFinite(Date.parse(value + 'T00:00:00Z'))
+            && new Date(value + 'T00:00:00Z').toISOString().slice(0,10) === value;
+          if (!event.error && Array.isArray(event.data) && event.data.length === 0) validity = 'WITHHELD';
+          else if (!event.error && Array.isArray(event.data) && event.data.length === 1
+            && Number.isSafeInteger(event.data[0]?.event_revision)
+            && sourceDate(event.data[0]?.event_date)
+            && eventInstant(event.data[0]?.occurrence_starts_at)) {
+            if (event.data[0].event_revision !== row.event_revision
+              || event.data[0].event_date !== row.service_date) validity = 'WITHHELD';
+            else {
+              const schedule = await db.rpc('mz_event_reminder_schedule', {
+                p_event_id: row.event_id, p_event_revision: row.event_revision,
+                p_employee_id: auth.employee_id, p_notification_kind: row.notification_kind,
+              });
+              if (!schedule.error && Array.isArray(schedule.data)) {
+                if (schedule.data.length === 0) validity = 'WITHHELD';
+                else if (schedule.data.length === 1
+                  && sourceDate(schedule.data[0]?.reminder_date)
+                  && Date.parse(eventInstant(schedule.data[0]?.scheduled_for)) === Date.parse(eventInstant(row.scheduled_for))) validity = 'CURRENT';
+              }
+            }
+          }
+        }
+        const projected = { notification_key: row.notification_key, event_id: row.event_id,
+          notification_kind: row.notification_kind, scheduled_for: eventInstant(row.scheduled_for), state: row.state,
+          sent_at: eventInstant(row.sent_at, true), opened_at: eventInstant(row.opened_at, true),
+          instance_id: row.instance_id, ...auth, event_revision: row.event_revision, event_validity: validity };
+        if (validity === 'CURRENT' && row.state === 'opened') projected.open_receipt = originalEventOpenReceipt(row, auth, row.notification_key);
+        data.push(projected);
+      }
+      // Missing rows/history are UNKNOWN, never deletion/denial or permission
+      // to renew an original POST. Fixed key GET does not mutate any receipt.
+      res.status(200).json({ ok: true, data });
     } catch (error) { fail(res, error); }
   });
 
   app.post(`${API_PREFIX}/opened`, requireEmployee, async (req, res) => {
     try {
+      const auth = originalEventAuth(req);
+      if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)
+        || Object.keys(req.body).length !== 1 || !Object.hasOwn(req.body, 'notification_key')) throw eventPending();
+      const key = exactEventKey(req.body.notification_key);
       const result = await db.rpc('mz_mark_employee_event_opened', {
-        p_credential_id: credentialId(req),
-        p_notification_key: clip(req.body?.notification_key, 240),
+        p_credential_id: auth.credential_id,
+        p_notification_key: key,
       });
       if (result.error) throw result.error;
-      res.status(200).json({ ok: true, data: { opened: true } });
+      if (Array.isArray(result.data) && result.data.length !== 1) throw eventPending();
+      const row = Array.isArray(result.data) ? result.data[0] : result.data;
+      res.status(200).json({ ok: true, data: originalEventOpenReceipt(row, auth, key) });
     } catch (error) { fail(res, error); }
   });
 
@@ -449,6 +650,28 @@ export function installEmployeeNotificationRoutes(app, {
   });
 
   async function deliverClaimedJob(job) {
+    // Never allow SCHEDULE, malformed aliases or test flags to reach a legacy
+    // sender before its separate source/qualification/lifecycle admission.
+    holdUnqualifiedNativeScheduleJob(job);
+    // Snapshot only the real MESSAGE lane before any await. Other kind and
+    // explicit manager-test behavior remains unchanged.
+    const originalMessage = isOriginalMessageJob(job);
+    if (originalMessage) return deliverNativeMessageJob({db,pushRuntime,job});
+    if (job?.job_type === 'employee_event_push') {
+      return deliverNativeEventJob({db,pushRuntime,job,eventBody: projection => buildEmployeeEventReminderBody({
+        ...projection,
+        start_time: eventTimeWithZone(projection.start_instant_utc),
+        end_time: eventTimeWithZone(projection.end_instant_utc),
+      }, projection.employee_name)});
+    }
+    if (job?.job_type === 'employee_native_push' && job.payload_json?.data_json?.kind === 'employee_lunch_coverage'
+      && !Object.hasOwn(job.payload_json.data_json, 'test_delivery')) {
+      return deliverNativeLunchJob({ db, pushRuntime, job });
+    }
+    if (job?.job_type === 'employee_native_push' && job.payload_json?.data_json?.kind === 'employee_location_status'
+      && !Object.hasOwn(job.payload_json.data_json, 'test_delivery')) {
+      return deliverNativeLocationJob({ db, pushRuntime, job });
+    }
     let registration = null;
     let eventInstance = null;
     let credential = null;
@@ -458,17 +681,16 @@ export function installEmployeeNotificationRoutes(app, {
       let push;
       let channelId;
       if (job.job_type === 'employee_event_push') {
-        const instanceResult = await db.from('event_push_instances').select('*,events_app_events(event_name,display_location)')
+        const instanceResult = await db.from('event_push_instances').select('*')
           .eq('instance_id', job.source_id).single();
         if (instanceResult.error) throw instanceResult.error;
         eventInstance = instanceResult.data;
-        const event = eventInstance.events_app_events || {};
         credential = eventInstance.credential_id;
         assignmentEpoch = eventInstance.assignment_epoch;
         channelId = 'employee-events';
         push = {
           title: 'Assigned event reminder',
-          body: `${event.event_name || 'Zoo event'}${event.display_location ? ` — ${event.display_location}` : ''}`,
+          body: null,
           data_json: {
             kind: 'employee_event',
             notification_type: 'event',
@@ -524,12 +746,50 @@ export function installEmployeeNotificationRoutes(app, {
           return { provider_message_id: claimed.provider_message_id, replayed: true };
         }
         providerBoundaryPrepared = true;
+        // Content is read only for this exact leased instance after the
+        // database has authorized its dispatch. Raw manager/source notes and
+        // stale legacy venue display never enter the spoken payload.
+        const current = await db.rpc('mz_employee_event_push_current_projection', {
+          p_job_id: job.job_id, p_lease_token: job.lease_token,
+          p_instance_id: eventInstance.instance_id, p_credential_id: credential,
+          p_assignment_epoch: assignmentEpoch,
+        });
+        if (current.error) {
+          const error = current.error;
+          error.deliveryNotAccepted = true;
+          throw error;
+        }
+        if (current.data?.current !== true
+          || current.data.event_id !== eventInstance.event_id
+          || Number(current.data.event_revision) !== Number(eventInstance.event_revision)
+          || current.data.instance_id !== eventInstance.instance_id
+          || current.data.employee_id !== eventInstance.employee_id
+          || current.data.notification_key !== eventInstance.notification_key) {
+          const error = terminalDeliveryError(current.data?.reason || 'event_projection_identity_superseded');
+          error.deliveryNotAccepted = true;
+          throw error;
+        }
+        try {
+          push.body = buildEmployeeEventReminderBody({
+            ...current.data,
+            start_time: eventTimeWithZone(current.data.start_instant_utc),
+            end_time: eventTimeWithZone(current.data.end_instant_utc),
+          }, current.data.employee_name);
+        } catch (error) {
+          error.deliveryNotAccepted = true;
+          error.terminal = true;
+          throw error;
+        }
       } else {
         const prepared = await prepareNativeDelivery(job, credential, assignmentEpoch, registration);
         if (prepared.already_recorded === true) {
           return { provider_message_id: prepared.provider_message_id, replayed: true };
         }
         providerBoundaryPrepared = true;
+        if (originalMessage) {
+          push = authorizedMessagePush(prepared.message_projection, job, registration);
+          channelId = 'employee-messages';
+        }
       }
       // Carry the same immutable recipient/job identity through the handset
       // outbox. A saved receipt must never be relabelled after recovery or a
@@ -604,6 +864,9 @@ export function installEmployeeNotificationRoutes(app, {
   async function sweep({ limit = 25 } = {}) {
     if (!db || !pushRuntime?.configured || inFlight) return { ok: false, skipped: inFlight ? 'in_flight' : 'not_configured' };
     inFlight = true;
+    // One bounded preparation pass in the existing sweep, not another timer.
+    // It never delays current human-message delivery or authorizes native send.
+    const schedulePreparation = prepareNativeScheduleSourceJobs({ db });
     try {
       const now = new Date().toISOString();
       const [eventsEnqueued, locationsEnqueued, lunchEnqueued] = await Promise.all([
@@ -655,8 +918,13 @@ export function installEmployeeNotificationRoutes(app, {
         ok: true,
         enqueued: { events: eventsEnqueued.data, locations: locationsEnqueued.data, lunch: lunchEnqueued.data },
         claimed: jobs.length,
+        schedule_preparation: await schedulePreparation,
       };
-    } finally { inFlight = false; }
+    } finally {
+      // Keep the existing single-flight lifecycle until its bounded source
+      // work settles, including an unrelated ordinary-lane failure.
+      try { await schedulePreparation; } finally { inFlight = false; }
+    }
   }
 
   if (typeof registerOperationalJobHandler === 'function') {

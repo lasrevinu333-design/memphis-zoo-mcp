@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {migrationReplayNames} from './migration-replay-order.mjs';
 import { createCiFreshOnlyFixture } from './ci-fresh-only-replay.mjs';
 import assert from "node:assert/strict";
 import { execFile, spawn } from "node:child_process";

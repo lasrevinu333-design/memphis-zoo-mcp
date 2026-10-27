@@ -5,9 +5,8 @@ import { installLeadershipHttpRoutes } from "../src/leadership-bootstrap.js";
 import { assertExactFrontendPair } from './fixtures/exact-frontend-pair.mjs';
 
 const root = new URL("../", import.meta.url);
-const [bootstrap, annieMoxie, indexSource, migration, authSource, releaseManifestSource] = await Promise.all([
+const [bootstrap, indexSource, migration, authSource, releaseManifestSource] = await Promise.all([
   readFile(new URL("src/leadership-bootstrap.js", root), "utf8"),
-  readFile(new URL("src/annie-moxie-bootstrap.js", root), "utf8"),
   readFile(new URL("src/index.js", root), "utf8"),
   readFile(new URL("supabase/migrations/20260721190000_operations_leadership_mobile_foundation.sql", root), "utf8"),
   readFile(new URL("src/auth/shared-access-auth.js", root), "utf8"),
@@ -39,9 +38,8 @@ assert.match(bootstrap, /\/viewer-api\/dashboard/);
 assert.match(bootstrap, /capacitor:\/\/localhost/);
 assert.match(bootstrap, /replace\(\/\[’‘\]\/g, "'"\)/);
 assert.doesNotMatch(bootstrap, /express\.application\.use\s*=/, "leadership routes must not revive retired browser routes through a global Express hook");
-assert.match(annieMoxie, /Moxie access is limited to Annie Feist and Eric Operle/);
-assert.match(annieMoxie, /annie_feist_operations_admin/);
-assert.match(indexSource, /installAnnieMoxieRoutes\(app/);
+assert.doesNotMatch(bootstrap, /moxie-mobile-api|requireMoxie/);
+assert.doesNotMatch(indexSource, /installAnnieMoxieRoutes|createMoxieRouter/);
 assert.match(indexSource, /installLeadershipHttpRoutes\(app/);
 assert.match(authSource, /app\.post\("\/auth-api\/ops\/manager-codes\/consume"/);
 assert.match(authSource, /app\.use\("\/auth-api\/ops\/shared-enrollment", retireSharedManagerEnrollment\)/);
