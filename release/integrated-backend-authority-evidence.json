@@ -1,7 +1,7 @@
 {
   "artifact": "integrated-backend-authority-release-evidence.v2",
   "release_id": "release-2026.07.19.custodial-v3.12",
-  "frontend_commit_sha": "db3831e98e4d5df60a3127eae5e31ec6510eeab6",
+  "frontend_commit_sha": "82975a3a25c668c7ca8c842967465a9cc4453d25",
   "frontend_commit_state": "final_pair_bound",
   "schema_fingerprint": "91eb02974fd180586869fb3d4b905da7e9bded0ac518d83b6ee03a570cd1f944",
   "schema_transition": {
@@ -135,47 +135,47 @@
       {
         "path": ".github/workflows/build52-production-migration-apply.yml",
         "mode": "100644",
-        "object_id": "ed9e6bccc234af1196e01d1fb5a7ad1e5110a538"
+        "object_id": "81ae9b868e85829e64593715dbb584f6db7fe16d"
       },
       {
         "path": ".github/workflows/custodial-populated-schema-preflight.yml",
         "mode": "100644",
-        "object_id": "ad8b37f899866384ab4ad510b9d8e8fa0c750227"
+        "object_id": "237616a84472a8bc7707df4ab56a78b47b6f248d"
       },
       {
         "path": ".github/workflows/custodial-production-repair.yml",
         "mode": "100644",
-        "object_id": "59e5fb738a7b884a7d2f2ee1b41d80c379ef19a9"
+        "object_id": "7428822dc117e1579fd7abb24df313929e92d25b"
       },
       {
         "path": ".github/workflows/device-credential-foundation.yml",
         "mode": "100644",
-        "object_id": "e70b6697ff51b59ab10419ecfa5793556e3f9fbc"
+        "object_id": "28939d402ad61aebb816ad835b76acb843b85d5d"
       },
       {
         "path": ".github/workflows/event-integrity-diagnostics.yml",
         "mode": "100644",
-        "object_id": "2fb13f3defe00fda855aff5d733111b2b2b62600"
+        "object_id": "9290206b4dc1699ea6f4392589dd23c42f45e995"
       },
       {
         "path": ".github/workflows/foundation-security-gate.yml",
         "mode": "100644",
-        "object_id": "a44495d52a8885d57c2a3a3cac8788ad971c4617"
+        "object_id": "8561de4b346836f2d003101dd2621ef90a2a53f0"
       },
       {
         "path": ".github/workflows/integrated-release-attestation.yml",
         "mode": "100644",
-        "object_id": "6927bb11e25249a6ca7b954927ae53df96374be5"
+        "object_id": "a47db5a80a5b21c886d96bd2e5514f34157f6c97"
       },
       {
         "path": ".github/workflows/manager-inspection-readiness-monitor.yml",
         "mode": "100644",
-        "object_id": "ad62fa5235761b04c2a0cb99c97c57b84dca9432"
+        "object_id": "604970184813cc21a009ed81571d7731a6724fa4"
       },
       {
         "path": ".github/workflows/operational-analytics-diagnostics.yml",
         "mode": "100644",
-        "object_id": "4c3f68a54ed3ad83bdf815b2b55751ee3e7757e0"
+        "object_id": "bc901b6ae1f1272806cd50fcbc9f48d25d0065e9"
       },
       {
         "path": ".github/workflows/operational-recovery-live.yml",
@@ -185,47 +185,47 @@
       {
         "path": ".github/workflows/operations-leadership-mobile-foundation.yml",
         "mode": "100644",
-        "object_id": "9334bbe4ca29f03a0007e1593d34a7400868fe7d"
+        "object_id": "df98fdf0d21287881f0ec1146873738535b94129"
       },
       {
         "path": ".github/workflows/phone-production-handoff-monitor.yml",
         "mode": "100644",
-        "object_id": "dc867a1fe794a11a2abd4c762111e8ed83ada9d7"
+        "object_id": "720a2aa003de2a9fbf437a285159675e232b2293"
       },
       {
         "path": ".github/workflows/production-availability-monitor.yml",
         "mode": "100644",
-        "object_id": "ad465e47fd7a22795b497791e19bc0b7a5f722ef"
+        "object_id": "2a568bfaef1d03b83e5a37dae7c59051752c3182"
       },
       {
         "path": ".github/workflows/production-backup-migration-rehearsal.yml",
         "mode": "100644",
-        "object_id": "87baf6e5131a538e35deeb3b54f5bbd4b0fd13ec"
+        "object_id": "a8c72d6a7e4e8e710230e7db57b37abdb2bb0e7b"
       },
       {
         "path": ".github/workflows/production-database-credential-bridge.yml",
         "mode": "100644",
-        "object_id": "2c3ebbf23a681bf86fda5440c294190915ff47df"
+        "object_id": "cb4c7a80689004ca0a2ad876bac768693088ae2c"
       },
       {
         "path": ".github/workflows/production-disaster-recovery-backup.yml",
         "mode": "100644",
-        "object_id": "49f0ab5be05e7c84dd805512519e7f87d6ac8e2a"
+        "object_id": "d952ad7f058e294e0bfca0742ded3dd6c3b3af08"
       },
       {
         "path": ".github/workflows/production-release-deployment-record.yml",
         "mode": "100644",
-        "object_id": "841688500b0f10a65c518fd62cddbd3c0d7bdc5a"
+        "object_id": "6950d5349a2526c47796b26bda8883eba1b73dc6"
       },
       {
         "path": ".github/workflows/production-schema-c674-bootstrap.yml",
         "mode": "100644",
-        "object_id": "5045332189ca4944cddd0efb0c98170edc7cd726"
+        "object_id": "486f7527f024200cf0e290eb486efa531e8e24fa"
       },
       {
         "path": ".github/workflows/production-schema-inspection-freshness.yml",
         "mode": "100644",
-        "object_id": "339e81028ea609a271381f2d88cae87e53b2f61f"
+        "object_id": "b1b06dbc8234a8f2fe7022307abad9c18b074202"
       },
       {
         "path": ".gitignore",
@@ -315,7 +315,7 @@
       {
         "path": "deploy/static-weekly-control-plane.render.yaml",
         "mode": "100644",
-        "object_id": "f2103b1f6ced8c6ae5dabc3f9b3388bc5d01e1d0"
+        "object_id": "b8ecea83842cc307d6b45128c2ec3c439e586ec6"
       },
       {
         "path": "docs/AI_INTEGRATION_ARCHITECTURE.md",
@@ -335,7 +335,7 @@
       {
         "path": "docs/env.md",
         "mode": "100644",
-        "object_id": "1ff8f4e72738437a41c1892e64c3cbbd9077697a"
+        "object_id": "4c75e4e51e61da7405a4feca6591771c8b5be9ab"
       },
       {
         "path": "docs/github-json-commands.md",
@@ -370,7 +370,7 @@
       {
         "path": "docs/ops-manager-trusted-device-auth.md",
         "mode": "100644",
-        "object_id": "53b4152923833ca6b89938d5c6058e6acd5afc8c"
+        "object_id": "080348bd63f8bdabf4d1c0ab5af5edb76264a722"
       },
       {
         "path": "docs/plans/2026-06-09-scheduler-open-owner-repair.md",
@@ -440,12 +440,12 @@
       {
         "path": "package-lock.json",
         "mode": "100644",
-        "object_id": "f8cf990ee4b4d879cb1df201824f544ee1cb4c3e"
+        "object_id": "e08608e2987b589e25002eef7212ed23d3ffa92f"
       },
       {
         "path": "package.json",
         "mode": "100644",
-        "object_id": "04dce09a94a0abb085ccb1c9914a2d9a5e9559b1"
+        "object_id": "0a0dac1792813902a8949a5e5caacf49bedde5ac"
       },
       {
         "path": "proposals/immutable-original-authority-reconciliation.sql",
@@ -565,7 +565,7 @@
       {
         "path": "release/disaster-recovery-runtime-contract.json",
         "mode": "100644",
-        "object_id": "40c824d5870979e290164fe348e64be3c2b52e98"
+        "object_id": "45e51917fcb994f038c6cad8ff8d372f2cb1d42f"
       },
       {
         "path": "release/fresh-only-replay/BOOTSTRAP.sql",
@@ -720,7 +720,7 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "c0d92434784114c52b3759f6e2415114063866be"
+        "object_id": "ac22fc6cf881c0458103d3c28e928cd478696f40"
       },
       {
         "path": "release/installed-source/20261006031304_custodial_owner_delegated_actions.sql",
@@ -935,7 +935,7 @@
       {
         "path": "release/schema-alignment-input.json",
         "mode": "100644",
-        "object_id": "96add6786c1ffd855202dbfe58555e671687c287"
+        "object_id": "b35bfa2f74d01d8b770916cbfe2d548ce89decf4"
       },
       {
         "path": "release/target-capture-source/20261021111917_dashboard_application_reader_operational_day_repair.sql",
@@ -1065,7 +1065,7 @@
       {
         "path": "scripts/ci-workflow-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "fbfbd2b4434ac9a883ef9a4718f5087dc1ffcbf0"
+        "object_id": "0b5794f4a84a3a1fd2f512df4eab4d8eb6e7e422"
       },
       {
         "path": "scripts/cleaning-identity-gps-database-tests.mjs",
@@ -1320,7 +1320,7 @@
       {
         "path": "scripts/event-static-authority-database-tests.mjs",
         "mode": "100644",
-        "object_id": "57aaa622b9491f28d28d0fb62ce552d188e46c54"
+        "object_id": "a6c1851083d1cb32eeef5aba3b30f438654ed929"
       },
       {
         "path": "scripts/events-ai-source-identity-tests.mjs",
@@ -1485,7 +1485,7 @@
       {
         "path": "scripts/gemini-console-database-tests.mjs",
         "mode": "100644",
-        "object_id": "5378e001c7aad5b29ada82c4fa43699494652302"
+        "object_id": "d8b1266aacb4d31a7f1453d1f094e67b7ab076b6"
       },
       {
         "path": "scripts/gemini-console-foundation-tests.mjs",
@@ -1875,7 +1875,7 @@
       {
         "path": "scripts/offline-actor-recovery-database-tests.mjs",
         "mode": "100644",
-        "object_id": "d7b516e5fb66f928167df553fe93642e63571f2a"
+        "object_id": "599f30a9ca695d08e11508a3820687a7b5bbbe16"
       },
       {
         "path": "scripts/offline-actor-recovery-route-tests.mjs",
@@ -2008,6 +2008,16 @@
         "object_id": "36114f0ecb64ff3c6acfb468759632fd80631628"
       },
       {
+        "path": "scripts/production-restore-manager-recovery-tests.mjs",
+        "mode": "100644",
+        "object_id": "c73faefef937894e11ef8cc9344713fa0743b328"
+      },
+      {
+        "path": "scripts/production-restore-manager-recovery.mjs",
+        "mode": "100644",
+        "object_id": "ad1d0a05929194ef0eb44f070aa4f5e76e4c975a"
+      },
+      {
         "path": "scripts/production-restore.mjs",
         "mode": "100644",
         "object_id": "c63ff4e1897f2ec8aaf408e80b554a5f29c7282d"
@@ -2130,12 +2140,12 @@
       {
         "path": "scripts/release-migration-plan-database-isolated-tests.sh",
         "mode": "100644",
-        "object_id": "9aace796a93a518f8c7de3306e1f1bc154ad2010"
+        "object_id": "8deecf189d1d20c10caa9f16adce1f7bebb83c11"
       },
       {
         "path": "scripts/release-migration-plan-database-tests.mjs",
         "mode": "100644",
-        "object_id": "a1da97cacb1feaba5364a98820f3362ab8242279"
+        "object_id": "ae5b4f9caf9841bb802d0b0b88ea602078207959"
       },
       {
         "path": "scripts/release-migration-preservation-caller-tests.mjs",
@@ -2205,7 +2215,7 @@
       {
         "path": "scripts/reviewed-regression-execution-tests.mjs",
         "mode": "100644",
-        "object_id": "3e59f536a1d278ee2dd4a7721b3a3622fda6b4ec"
+        "object_id": "538b1179efb4efbce07873a8c038a71e696f15c7"
       },
       {
         "path": "scripts/run-current-verified-visit-database-tests.mjs",
@@ -2230,7 +2240,7 @@
       {
         "path": "scripts/run-official-local-storage-rehearsal.mjs",
         "mode": "100644",
-        "object_id": "4b3e01e664984a71494e6805c8e8adc8c02427cf"
+        "object_id": "9109461e33b2162823ad9b85da11bedf9654b8e6"
       },
       {
         "path": "scripts/run-production-backup-migration-rehearsal.sh",
@@ -2475,7 +2485,7 @@
       {
         "path": "scripts/static-weekly-control-plane-deployment-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "4166ad4f0d1dfdc6a65d693572065faa33c48e75"
+        "object_id": "4aadc3369bd19e9b605869fb38f71e71aeabf3c6"
       },
       {
         "path": "scripts/static-weekly-control-plane-runtime-tests.mjs",
@@ -3145,7 +3155,7 @@
       {
         "path": "src/index.js",
         "mode": "100644",
-        "object_id": "cbbbfeb2b85c4fa48f227c9dfcdca8e01f0a9021"
+        "object_id": "472e1777a12843dde17890418ae5ed6afbf1ad34"
       },
       {
         "path": "src/integrated-backend-authority-release-evidence.js",
@@ -5683,7 +5693,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 1111,
+    "authority_path_count": 1113,
     "migration_path_count": 294,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."

@@ -759,7 +759,9 @@ function buildHealthPayload(area, extra = {}) {
 function staticWeeklyControlPlanePublicUrl(env = process.env) {
   const value = String(env.STATIC_WEEKLY_CONTROL_PLANE_PUBLIC_URL || "").trim().replace(/\/+$/, "");
   if (!value) return null;
-  if (!/^https:\/\/[a-z0-9.-]+(?::\d+)?$/i.test(value) && !/^http:\/\/(?:127\.0\.0\.1|localhost)(?::\d+)?$/i.test(value)) {
+  const g12PreviewOrigin = env.STATIC_WEEKLY_CONTROL_PLANE_ALLOW_INSECURE_LOOPBACK_REHEARSAL === "true"
+    && /^http:\/\/(?:custodian-g12-manager\.localhost|custodian-g12-employee\.localhost)(?::\d+)?$/i.test(value);
+  if (!/^https:\/\/[a-z0-9.-]+(?::\d+)?$/i.test(value) && !/^http:\/\/(?:127\.0\.0\.1|localhost)(?::\d+)?$/i.test(value) && !g12PreviewOrigin) {
     throw new Error("STATIC_WEEKLY_CONTROL_PLANE_PUBLIC_URL must be one HTTPS origin or a local HTTP origin.");
   }
   return value;

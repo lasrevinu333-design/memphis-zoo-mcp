@@ -16,7 +16,7 @@ image='supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07
 node_source="$(readlink -f "$(command -v node)")"
 test -f "$node_source" && test -x "$node_source"
 node_version="$("$node_source" -p 'process.versions.node')"
-"$node_source" -e 'const [a,b,c]=process.versions.node.split(".").map(Number); if(a!==22 || b<23 || (b===23 && c<1)) process.exit(1)'
+"$node_source" -e 'const [a,b,c]=process.versions.node.split(".").map(Number); if(a!==22 || b<23 || (b===23 && c<4)) process.exit(1)'
 node_sha256="$(sha256sum "$node_source")"
 node_sha256="${node_sha256%% *}"
 lib64_source="$(readlink -f /lib64)"
@@ -32,6 +32,8 @@ env -i PATH=/usr/bin:/bin LANG=C LC_ALL=C TZ=UTC "$node_source" --max-old-space-
   import {readFileSync} from "node:fs";
   import {assertCapturedTargetCatalog, assertReleaseWorkflowSource} from "./scripts/release-migration-workflow-preflight.mjs";
   const state = JSON.parse(readFileSync("release/production-migration-state.json", "utf8"));
+  const {readMigrationReplayPlan} = await import("./scripts/migration-replay-order.mjs");
+  const plan = readMigrationReplayPlan(process.cwd());
   const keys = ["canonical_source_schema_fingerprint", "expected_catalog_counts",
     "production_ledger_count", "public_function_count"];
   assert.ok(state.target && typeof state.target === "object" && !Array.isArray(state.target));
@@ -43,6 +45,12 @@ env -i PATH=/usr/bin:/bin LANG=C LC_ALL=C TZ=UTC "$node_source" --max-old-space-
   }
   assertCapturedTargetCatalog(state.target);
   assertReleaseWorkflowSource(process.cwd());
+  if (plan.files.length === 294) {
+    assert.equal(plan.baseCount, 134);
+    assert.equal(state.pending_migrations.length, 160);
+    assert.ok(state.target.normal_source_capture, "Current captured source requires its adopted capture binding");
+    process.exit(4);
+  }
   process.exit(3);
 '
 current_target_route_status=$?
@@ -51,6 +59,11 @@ if test "$current_target_route_status" -eq 0; then
   env -i PATH=/usr/bin:/bin LANG=C LC_ALL=C TZ=UTC "$node_source" --max-old-space-size=128 \
     scripts/release-migration-plan-database-tests.mjs --current-unresolved-target-source-only
   printf '{"source_only_current_unresolved_target":true,"SQL_execution":false,"positive_database_scenarios":"NOT_RUN","production_authorized":false}\n'
+  exit 0
+elif test "$current_target_route_status" -eq 4; then
+  env -i PATH=/usr/bin:/bin LANG=C LC_ALL=C TZ=UTC "$node_source" --max-old-space-size=128 \
+    scripts/release-migration-plan-database-tests.mjs --current-captured-target-source-only
+  printf '{"source_only_current_captured_target":true,"SQL_execution":false,"historical23_database_scenarios":"NOT_RUN","production_authorized":false}\n'
   exit 0
 elif test "$current_target_route_status" -ne 3; then
   echo "Current release target shape is invalid; refusing both qualification routes." >&2

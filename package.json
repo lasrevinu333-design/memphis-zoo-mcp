@@ -4,7 +4,7 @@
   "description": "Memphis Zoo MCP backend. Package version is semantic; runtime deploy identity is defined by src/app-version.js and the deployed Git commit.",
   "type": "module",
   "engines": {
-    "node": "^22.23.1"
+    "node": "^22.23.4"
   },
   "packageManager": "npm@10.9.8",
   "main": "src/index.js",
