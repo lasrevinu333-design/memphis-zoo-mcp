@@ -28,11 +28,65 @@ const execFileAsync = promisify(execFile);
 // historical positive/security corpus below remains literal and is NOT_RUN
 // in this explicitly selected source-only branch.
 const currentUnresolvedSelector = "--current-unresolved-target-source-only";
+const currentCapturedSelector = "--current-captured-target-source-only";
 const selectedArguments = process.argv.slice(2);
 assert.ok(selectedArguments.length === 0
-  || (selectedArguments.length === 1 && selectedArguments[0] === currentUnresolvedSelector),
-  "Select only the existing owned database route or current unresolved source-only refusal");
-if (selectedArguments.length === 1) {
+  || (selectedArguments.length === 1 && [currentUnresolvedSelector, currentCapturedSelector].includes(selectedArguments[0])),
+  "Select only the existing owned database route or explicit current source-only qualification");
+if (selectedArguments[0] === currentCapturedSelector) {
+  // Current captured production is not a synthetic prefix plus filler ledger.
+  // Validate its adopted source/profile binding without allocating a database.
+  const sourceRoot = resolve(new URL("..", import.meta.url).pathname);
+  const state = JSON.parse(readFileSync(resolve(sourceRoot, "release/production-migration-state.json"), "utf8"));
+  const plan = readMigrationReplayPlan(sourceRoot);
+  const { resolveReleaseSchemaTarget } = await import("./production-target-schema-profile.mjs");
+  const schemaTarget = resolveReleaseSchemaTarget(sourceRoot);
+  assert.ok(schemaTarget.profile, "Current captured target requires its closed production profile");
+  const capture = state.target.normal_source_capture;
+  const proof = schemaTarget.profile.capture;
+  assert.equal(plan.baseCount, 134);
+  assert.equal(plan.files.length, 294);
+  assert.equal(state.pending_migrations.length, 160);
+  assert.deepEqual(state.pending_migrations.map(({ file }) => file), plan.files.slice(plan.baseCount));
+  assert.equal(state.observed_production.production_ledger_count, 235);
+  assert.equal(proof.source_ledger_count, state.observed_production.production_ledger_count);
+  assert.equal(proof.pending_count, state.pending_migrations.length);
+  assert.equal(proof.target_ledger_count, proof.source_ledger_count + proof.pending_count);
+  assert.equal(proof.target_ledger_count, 395);
+  assert.equal(state.target.production_ledger_count, proof.target_ledger_count);
+  assert.equal(state.target.canonical_source_schema_fingerprint, schemaTarget.deploymentFingerprint);
+  assert.deepEqual(state.target.expected_catalog_counts, schemaTarget.deploymentCounts);
+  assert.equal(capture.scope, "ROLLBACK_ONLY_TARGET_PREPARATION_DATA_NOT_PRODUCTION_OR_FULL_REHEARSAL");
+  assert.equal(capture.report.sha256, proof.report_sha256);
+  assert.equal(capture.report.bytes, proof.report_bytes);
+  for (const key of ["candidate_commit", "candidate_tree", "plan_sha256"]) assert.equal(capture[key], proof[key]);
+  assert.equal(capture.archive_digest, schemaTarget.profile.archive_digest);
+  const checked = assertReleaseWorkflowSource(sourceRoot);
+  assert.equal(checked.pendingCount, 160);
+  assert.equal(checked.targetCount, 395);
+  assert.equal(checked.targetFingerprint, schemaTarget.deploymentFingerprint);
+  // Reuse the maintained complete source-plan/profile/capture and refusal
+  // contracts. No URL, credentials, targetCapture or preload reaches the child.
+  const argv = ["--max-old-space-size=128", resolve(sourceRoot, "scripts/current291-production-plan-source-tests.mjs")];
+  const child = execFileAsync(process.execPath, argv, {
+    cwd: sourceRoot,
+    env: { PATH: "/usr/bin:/bin", LANG: "C", LC_ALL: "C", TZ: "UTC" },
+    timeout: 15_000, killSignal: "SIGTERM", maxBuffer: 1024 * 1024,
+  });
+  const pid = child.child?.pid ?? null;
+  const original = await child;
+  assert.match(original.stdout, /PASS_SOURCE_ONLY_NO_DB/);
+  console.log(JSON.stringify({ status: "SOURCE_ONLY_CURRENT_CAPTURED_TARGET_CONTRACT_PASS",
+    SQL_execution: false, database_client_constructed: false, production_authorized: false,
+    historical_23_positive_security_database_corpus: "NOT_RUN_CURRENT160_SOURCE_ROUTE",
+    actual160_database_proof: "SEPARATE_ORIGINAL_CAPTURE_40360756054_NOT_REEXECUTED",
+    source_ledger_count: 235, pending_count: 160, target_ledger_count: 395,
+    canonical_fingerprint: schemaTarget.canonicalFingerprint,
+    deployment_fingerprint: schemaTarget.deploymentFingerprint,
+    adopted_report_sha256: proof.report_sha256,
+    maintained_source_contract: { argv: [process.execPath, ...argv], pid,
+      stdout: original.stdout, stderr: original.stderr, original_execFile_promise_settled: true } }));
+} else if (selectedArguments.length === 1) {
   const sourceRoot = resolve(new URL("..", import.meta.url).pathname);
   const currentState = JSON.parse(readFileSync(resolve(sourceRoot, "release/production-migration-state.json"), "utf8"));
   const currentPlan = readMigrationReplayPlan(sourceRoot);

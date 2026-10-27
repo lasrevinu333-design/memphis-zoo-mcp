@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import express from "express";
+import { request as httpRequest } from "node:http";
 import { readFile } from "node:fs/promises";
 import {
   assertOpsManagerSessionSecret,
@@ -9,6 +10,7 @@ import {
 const env = {
   NODE_ENV: "production",
   RENDER: "1",
+  OPS_MANAGER_INVITE_ALLOWED_ORIGINS: "http://custodian-g12-manager.localhost:31874,http://custodian-g12-employee.localhost:31875",
   OPS_MANAGER_SESSION_SECRET: "manager-boundary-test-secret-at-least-32-characters",
 };
 const allowedOrigin = "https://localhost";
@@ -115,11 +117,31 @@ const server = app.listen(0, "127.0.0.1");
 await new Promise((resolve) => server.once("listening", resolve));
 const base = `http://127.0.0.1:${server.address().port}`;
 
-async function json(path, { method = "GET", origin, cookie, body, deviceId = "manager-phone" } = {}) {
-  const headers = { "x-device-id": deviceId };
+async function json(path, { method = "GET", origin, cookie, body, deviceId = "manager-phone", extraHeaders = {} } = {}) {
+  const headers = { "x-device-id": deviceId, ...extraHeaders };
   if (origin) headers.origin = origin;
   if (cookie) headers.cookie = cookie;
   if (body !== undefined) headers["content-type"] = "application/json";
+  // Node fetch ignores an explicit Host override. These browser-authority
+  // cases use the ordinary HTTP client so the exact tested Host reaches Express.
+  if (extraHeaders.host !== undefined) {
+    return await new Promise((resolve, reject) => {
+      const request = httpRequest(`${base}${path}`, { method, headers }, (incoming) => {
+        const chunks = []; let size = 0;
+        incoming.on("data", (chunk) => { size += chunk.length; if (size > 65536) incoming.destroy(new Error("bounded fixture response exceeded")); else chunks.push(chunk); });
+        incoming.on("error", reject);
+        incoming.on("end", () => {
+          try {
+            const text = Buffer.concat(chunks).toString("utf8");
+            resolve({ response: { status: incoming.statusCode, headers: new Headers(incoming.headers) }, payload: text ? JSON.parse(text) : null });
+          } catch (error) { reject(error); }
+        });
+      });
+      request.setTimeout(5000, () => request.destroy(new Error("bounded fixture HTTP timeout")));
+      request.on("error", reject);
+      request.end(body === undefined ? undefined : JSON.stringify(body));
+    });
+  }
   const response = await fetch(`${base}${path}`, {
     method,
     headers,
@@ -161,6 +183,35 @@ try {
   result = await json("/auth-api/session?access_level=full_access", { origin: allowedOrigin, cookie, deviceId: "manager-phone" });
   assert.equal(result.response.status, 200);
   assert.equal(result.payload.data.session.manager_id, manager.manager_id);
+
+  const sameOriginHeaders = { host: "custodian-g12-manager.localhost:31874", "sec-fetch-site": "same-origin" };
+  result = await json("/auth-api/session?access_level=full_access", { cookie, extraHeaders: sameOriginHeaders });
+  assert.equal(result.response.status, 200, "normal same-origin GET must refresh only actual trusted manager cookie");
+  assert.equal(result.payload.data.session.manager_id, manager.manager_id);
+  const head = await json("/auth-api/session?access_level=full_access", { method: "HEAD", cookie, extraHeaders: sameOriginHeaders });
+  assert.equal(head.response.status, 200, "normal same-origin HEAD uses the existing GET route without mutation");
+  assert.equal(head.payload, null);
+  result = await json("/auth-api/session?access_level=full_access", { extraHeaders: sameOriginHeaders });
+  assert.equal(result.response.status, 401, "same-origin context is not a substitute for manager credentials");
+  for (const extraHeaders of [
+    { ...sameOriginHeaders, origin: "" },
+    { ...sameOriginHeaders, origin: "null" },
+    { ...sameOriginHeaders, origin: "https://attacker.example" },
+    { ...sameOriginHeaders, "sec-fetch-site": "cross-site" },
+    { ...sameOriginHeaders, "sec-fetch-site": "same-site" },
+    { host: sameOriginHeaders.host },
+    { ...sameOriginHeaders, host: "attacker.example" },
+    { ...sameOriginHeaders, host: "custodian-g12-manager.localhost:31876" },
+    { ...sameOriginHeaders, host: "attacker.example", "x-forwarded-host": sameOriginHeaders.host },
+  ]) {
+    result = await json("/auth-api/session?access_level=full_access", { cookie, extraHeaders });
+    assert.equal(result.response.status, 403, "missing/foreign Origin may use only exact same-origin browser/direct allowed authority");
+  }
+  result = await json("/auth-api/ops/manager-codes/consume", { method: "POST", body: enrollmentBody, extraHeaders: sameOriginHeaders });
+  assert.equal(result.response.status, 403, "same-origin metadata must not replace Origin for code consumption");
+  result = await json("/auth-api/ops/logout", { method: "POST", cookie, extraHeaders: sameOriginHeaders });
+  assert.equal(result.response.status, 403, "same-origin metadata must not replace Origin for logout");
+  assert.equal(enrolled.revoked_at, null, "denied Origin-less logout must preserve the current credential");
 
   enrolled.created_at = new Date(Date.now() - 366 * 86_400_000).toISOString();
   enrolled.expires_at = new Date(Date.now() + 3650 * 86_400_000).toISOString();

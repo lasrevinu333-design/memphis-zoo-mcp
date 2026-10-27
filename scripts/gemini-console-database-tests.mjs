@@ -26,18 +26,25 @@ await sql(`insert into public.ops_manager_trusted_devices(credential_id,device_i
 const conversation=randomUUID();
 await sql(`insert into public.gemini_console_conversations(conversation_id,owner_manager_id,title) values ('${conversation}'::uuid,'${ericId}'::uuid,'Concurrency fixture');`);
 
-const clientId=randomUUID();const correlations=Array.from({length:10},()=>randomUUID());
+const clientId=randomUUID();const correlationId=randomUUID();const correlations=Array.from({length:10},()=>correlationId);
 const starts=await Promise.all(correlations.map(correlation=>json(`public.gemini_console_begin_turn('${conversation}'::uuid,'${ericId}'::uuid,'${clientId}'::uuid,'One durable logical message','{}'::uuid[],'${correlation}'::uuid)`)));
 assert.equal(starts.filter(row=>row.inserted).length,1,"exactly one user row is inserted");
 assert.equal(starts.filter(row=>row.claimed).length,1,"exactly one request claims generation");
 assert.equal(new Set(starts.map(row=>row.user_message.message_id)).size,1,"all retries resolve to one logical message");
 const userMessageId=starts[0].user_message.message_id;
-const assistant=await json(`public.gemini_console_complete_turn('${userMessageId}'::uuid,'One durable response','google_gemini','fixture-model','${randomUUID()}'::uuid,'{"test":true}'::jsonb)`);
+assert.ok(starts.every(row=>row.user_message.correlation_id===correlationId),"all retries preserve the durable original request correlation");
+const assistant=await json(`public.gemini_console_complete_turn('${userMessageId}'::uuid,'One durable response','google_gemini','fixture-model','${correlationId}'::uuid,'{"test":true}'::jsonb)`);
 assert.equal(assistant.response_to_message_id,userMessageId);
-const replay=await json(`public.gemini_console_begin_turn('${conversation}'::uuid,'${ericId}'::uuid,'${clientId}'::uuid,'One durable logical message','{}'::uuid[],'${randomUUID()}'::uuid)`);
+const replay=await json(`public.gemini_console_begin_turn('${conversation}'::uuid,'${ericId}'::uuid,'${clientId}'::uuid,'One durable logical message','{}'::uuid[],'${correlationId}'::uuid)`);
 assert.equal(replay.claimed,false);assert.equal(replay.assistant_message.message_id,assistant.message_id);
+const completedReplay=await json(`public.gemini_console_complete_turn('${userMessageId}'::uuid,'One durable response','google_gemini','fixture-model','${correlationId}'::uuid,'{"test":true}'::jsonb)`);
+assert.deepEqual(completedReplay,assistant,"an exact completion retry retains the original completed response");
+await fails(`public.gemini_console_begin_turn('${conversation}'::uuid,'${ericId}'::uuid,'${clientId}'::uuid,'One durable logical message','{}'::uuid[],'${randomUUID()}'::uuid)`,/original message request identity is unavailable or conflicts/i);
+await fails(`public.gemini_console_complete_turn('${userMessageId}'::uuid,'One durable response','google_gemini','fixture-model','${randomUUID()}'::uuid,'{"test":true}'::jsonb)`,/original turn identity or manager authority changed/i);
+await fails(`public.gemini_console_complete_turn('${userMessageId}'::uuid,'Conflicting response','google_gemini','fixture-model','${correlationId}'::uuid,'{"test":true}'::jsonb)`,/original completed turn conflicts/i);
+assert.deepEqual(await json(`(select to_jsonb(m) from public.gemini_console_messages m where m.message_id='${assistant.message_id}'::uuid)`),assistant,"denied request mutations retain every original assistant field");
 assert.equal(await sql(`select count(*) from public.gemini_console_messages where conversation_id='${conversation}'::uuid;`),"2");
-await fails(`public.gemini_console_begin_turn('${conversation}'::uuid,'${ericId}'::uuid,'${clientId}'::uuid,'Conflicting body','{}'::uuid[],'${randomUUID()}'::uuid)`,/conflicts with another logical message/i);
+await fails(`public.gemini_console_begin_turn('${conversation}'::uuid,'${ericId}'::uuid,'${clientId}'::uuid,'Conflicting body','{}'::uuid[],'${correlationId}'::uuid)`,/conflicts with another logical message/i);
 
 const attachmentId=randomUUID();
 await sql(`insert into public.gemini_console_attachments(attachment_id,conversation_id,manager_id,storage_path,original_filename,mime_type,extension,size_bytes,sha256) values ('${attachmentId}'::uuid,'${conversation}'::uuid,'${ericId}'::uuid,'test/${attachmentId}','evidence.txt','text/plain','.txt',4,'${"b".repeat(64)}');`);
@@ -46,7 +53,7 @@ assert.equal(attachmentTurn.claimed,true);
 assert.equal(await sql(`select status||':'||(message_id is not null)::text from public.gemini_console_attachments where attachment_id='${attachmentId}'::uuid;`),"attached:true");
 
 const auditClient=randomUUID();const auditTurn=await json(`public.gemini_console_begin_turn('${conversation}'::uuid,'${ericId}'::uuid,'${auditClient}'::uuid,'Audit disposable gemini repair workflow fixture','{}'::uuid[],'${randomUUID()}'::uuid)`);
-const auditAssistant=await json(`public.gemini_console_complete_turn('${auditTurn.user_message.message_id}'::uuid,'Verified disposable plan','google_gemini','fixture-model','${randomUUID()}'::uuid,'{}'::jsonb)`);
+const auditAssistant=await json(`public.gemini_console_complete_turn('${auditTurn.user_message.message_id}'::uuid,'Verified disposable plan','google_gemini','fixture-model','${auditTurn.user_message.correlation_id}'::uuid,'{}'::jsonb)`);
 const proposalId=randomUUID();
 await sql(`insert into public.gemini_console_repair_proposals(proposal_id,conversation_id,source_message_id,proposed_by_manager_id,plan_sha256,plan_text,repair_kind) values ('${proposalId}'::uuid,'${conversation}'::uuid,'${auditAssistant.message_id}'::uuid,'${ericId}'::uuid,'${"c".repeat(64)}','Verified disposable plan','acceptance_probe');`);
 const authorizationClient=randomUUID();const authorization=await json(`public.gemini_console_begin_turn('${conversation}'::uuid,'${ericId}'::uuid,'${authorizationClient}'::uuid,'Fix it.','{}'::uuid[],'${randomUUID()}'::uuid)`);
@@ -55,7 +62,7 @@ assert.equal(job.execution_mode,"acceptance_probe");assert.equal(job.status,"com
 
 await json(`public.gemini_console_worker_heartbeat('db-test-worker',true,'{"protocol":"gemini-controlled-repair.v1"}'::jsonb,'fixture-release','${"1".repeat(40)}')`);
 const controlledAudit=await json(`public.gemini_console_begin_turn('${conversation}'::uuid,'${ericId}'::uuid,'${randomUUID()}'::uuid,'Audit controlled repair worker fixture','{}'::uuid[],'${randomUUID()}'::uuid)`);
-const controlledAssistant=await json(`public.gemini_console_complete_turn('${controlledAudit.user_message.message_id}'::uuid,'Controlled repair plan','google_gemini','fixture-model','${randomUUID()}'::uuid,'{}'::jsonb)`);
+const controlledAssistant=await json(`public.gemini_console_complete_turn('${controlledAudit.user_message.message_id}'::uuid,'Controlled repair plan','google_gemini','fixture-model','${controlledAudit.user_message.correlation_id}'::uuid,'{}'::jsonb)`);
 const controlledProposal=randomUUID();
 await sql(`insert into public.gemini_console_repair_proposals(proposal_id,conversation_id,source_message_id,proposed_by_manager_id,plan_revision,plan_sha256,plan_text,repair_kind) values ('${controlledProposal}'::uuid,'${conversation}'::uuid,'${controlledAssistant.message_id}'::uuid,'${ericId}'::uuid,2,'${"2".repeat(64)}','Controlled repair plan','controlled_source_repair');`);
 const controlledAuthClient=randomUUID();
@@ -74,7 +81,7 @@ const ordinaryId=randomUUID();const ordinaryCredential=randomUUID();const ordina
 const ordinaryTokenHash=randomUUID().replaceAll("-","").repeat(2);
 await sql(`insert into public.ops_manager_managers(manager_id,display_name,roles,active,metadata_json) values ('${ordinaryId}'::uuid,'Disposable Ordinary Manager',array['OPS_MANAGER'],true,'{"test":true}'::jsonb); insert into public.ops_manager_trusted_devices(credential_id,device_id,device_label,token_hash,max_access_level,manager_id,expires_at,metadata_json) values ('${ordinaryCredential}'::uuid,'gemini-db-ordinary-${ordinaryCredential}','Gemini DB Ordinary','${ordinaryTokenHash}','full_access','${ordinaryId}'::uuid,now()+interval '1 day','{"test":true}'::jsonb); insert into public.gemini_console_conversations(conversation_id,owner_manager_id,title) values ('${ordinaryConversation}'::uuid,'${ordinaryId}'::uuid,'Ordinary fixture');`);
 const ordinaryAudit=await json(`public.gemini_console_begin_turn('${ordinaryConversation}'::uuid,'${ordinaryId}'::uuid,'${randomUUID()}'::uuid,'Audit disposable fixture','{}'::uuid[],'${randomUUID()}'::uuid)`);
-const ordinaryPlan=await json(`public.gemini_console_complete_turn('${ordinaryAudit.user_message.message_id}'::uuid,'Ordinary manager plan','google_gemini','fixture','${randomUUID()}'::uuid,'{}'::jsonb)`);
+const ordinaryPlan=await json(`public.gemini_console_complete_turn('${ordinaryAudit.user_message.message_id}'::uuid,'Ordinary manager plan','google_gemini','fixture','${ordinaryAudit.user_message.correlation_id}'::uuid,'{}'::jsonb)`);
 const ordinaryProposal=randomUUID();await sql(`insert into public.gemini_console_repair_proposals(proposal_id,conversation_id,source_message_id,proposed_by_manager_id,plan_sha256,plan_text,repair_kind) values ('${ordinaryProposal}'::uuid,'${ordinaryConversation}'::uuid,'${ordinaryPlan.message_id}'::uuid,'${ordinaryId}'::uuid,'${"f".repeat(64)}','Ordinary plan','acceptance_probe');`);
 const ordinaryAuthClient=randomUUID();const ordinaryAuth=await json(`public.gemini_console_begin_turn('${ordinaryConversation}'::uuid,'${ordinaryId}'::uuid,'${ordinaryAuthClient}'::uuid,'Fix it.','{}'::uuid[],'${randomUUID()}'::uuid)`);
 await fails(`public.gemini_console_authorize_repair('${ordinaryProposal}'::uuid,'${ordinaryId}'::uuid,'${ordinaryCredential}'::uuid,'${ordinaryAuth.user_message.message_id}'::uuid,'${ordinaryAuthClient}'::uuid,'fixture','fixture','fixture','${"0".repeat(64)}','${randomUUID()}'::uuid)`,/Custodial Manager authorization is required/i);

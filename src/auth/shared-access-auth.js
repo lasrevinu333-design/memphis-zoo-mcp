@@ -697,7 +697,24 @@ function requestOrigin(req) {
 }
 
 function isAllowedManagerInviteOrigin(req, env = process.env, { requireOrigin = false } = {}) {
-  const origin = requestOrigin(req);
+  let origin = requestOrigin(req);
+  // Normal same-origin browser GET/HEAD omits Origin. Accept that browser
+  // context only against the same fixed invite-origin allowlist below.
+  // Explicit (including empty) Origin and every mutation keep their contract.
+  const originAbsent = req?.headers?.origin === undefined
+    && (typeof req?.header !== "function" || req.header("origin") === undefined);
+  if (!origin && requireOrigin && originAbsent && ["GET", "HEAD"].includes(req?.method)
+    && req?.headers?.["sec-fetch-site"] === "same-origin") {
+    const protocol = req.protocol;
+    const host = req?.headers?.host;
+    if (["http", "https"].includes(protocol) && typeof host === "string"
+      && /^[a-z0-9.-]+(?::[1-9][0-9]{0,4})?$/.test(host)) {
+      try {
+        const candidate = new URL(`${protocol}://${host}`);
+        if (candidate.host === host) origin = candidate.origin;
+      } catch { /* Invalid direct authority remains denied. */ }
+    }
+  }
   if (!origin) return !requireOrigin;
   const configured = String(env.OPS_MANAGER_INVITE_ALLOWED_ORIGINS || env.ALLOWED_CORS_ORIGINS || "")
     .split(",").map((value) => value.trim()).filter(Boolean);
