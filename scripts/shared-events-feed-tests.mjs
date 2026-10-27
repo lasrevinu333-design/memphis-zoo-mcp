@@ -3,7 +3,7 @@ import test from 'node:test';
 import express from 'express';
 import { readFileSync, existsSync } from 'node:fs';
 import { employeeVisibleEvents, sharedEventFeed, makeSharedManagerEventsHandler, retiredEventIntake } from '../src/shared-events-feed.js';
-import { createEventsEmployeeRouter, listSharedEvents, normalizeEventPayload, createEventMaintenanceController } from '../src/events-api.js';
+import { createEventsPublicRouter, createEventsEmployeeRouter, listSharedEvents, normalizeEventPayload, createEventMaintenanceController } from '../src/events-api.js';
 import { projectOperationsEvents } from '../src/operations-board.js';
 const E='11111111-1111-4111-8111-111111111111', M='22222222-2222-4222-8222-222222222222', C='33333333-3333-4333-8333-333333333333';
 const row=(delta={})=>({id:'44444444-4444-4444-8444-444444444444',revision:3,event_name:'Zoo evening',event_scope:'SINGLE_VENUE',
@@ -58,4 +58,45 @@ for(const boundary of ['sync manager changed','events revoked','events session c
  await handler(req,res);
  if(['stable','sync unavailable'].includes(boundary)){assert.equal(res.code,200);assert.equal(res.body.feed.rows.length,1);assert.equal(res.body.feed.state,'snapshot');assert.equal(auths,3);assert.deepEqual(res.body.meta,{manager_id:M,credential_id:C});assert.doesNotMatch(JSON.stringify(res.body),/synthetic-session|synthetic-manager-device|private source failure/);}
  else{assert.equal(res.code,403);assert.equal(res.body.ok,false);assert.equal(Object.hasOwn(res.body,'feed'),false);assert.equal(reads,boundary==='sync manager changed'?1:2);}
+});
+
+
+await test('legacy public compatibility excludes private and unresolved audiences without changing enrolled feeds', async t => {
+ const id = value => `55555555-5555-4555-8555-${String(value).padStart(12,'0')}`;
+ const general = row({id:id(1),event_name:'General operations'});
+ const assigned = row({id:id(2),event_name:'Assigned location operations',audience_scope:'assigned_location'});
+ const privateE = row({id:id(3),event_name:'PRIVATE ADDRESSED E',audience_scope:'specific_employees',audience_employee_ids:[E]});
+ const privateM = row({id:id(4),event_name:'PRIVATE ADDRESSED M',audience_scope:'specific_employees',audience_employee_ids:[M]});
+ const unresolved = [row({id:id(5),audience_scope:'unknown'}),row({id:id(6),audience_scope:null}),row({id:id(7),audience_scope:undefined})];
+ const rows=[general,assigned,privateE,privateM,...unresolved];let publicSql='';
+ const app=express();
+ app.use('/dashboard-api/events',createEventsPublicRouter({runReadOnlySql:async sql=>{publicSql=sql;return rows;},buildHealthPayload:()=>({ok:true}),appVersion:'test',releaseId:'test'}));
+ const expires_at=new Date(Date.now()+60000).toISOString();
+ const managerAuth=(req,res,next)=>{if(req.get('x-test-manager')!=='valid')return res.status(403).json({ok:false});req.memphisAuth={role:'ops_manager',manager_id:M,credential_id:C,device_id:'synthetic-manager-device',token:'synthetic-session',expires_at};next();};
+ app.get('/dashboard-api/events-feed',makeSharedManagerEventsHandler({readEvents:async()=>rows,requireOpsManagerAuth:managerAuth,now:()=>now}));
+ app.use('/employee-events-api',createEventsEmployeeRouter({runReadOnlySql:async()=>rows,appVersion:'test',releaseId:'test',requireDeviceAccess(req,res,next){
+  const employee=req.get('x-test-device');if(![E,M].includes(employee))return res.status(401).json({ok:false});
+  req.memphisDevice={canonical_device_id:'KIOSK_08',assigned_employee_id:employee,assignment_epoch:1};req.memphisDeviceCredential={credential_id:C};next();
+ }}));
+ const server=await new Promise(resolve=>{const instance=app.listen(0,'127.0.0.1',()=>resolve(instance));});const url=`http://127.0.0.1:${server.address().port}`;
+ try {
+  for(const headers of [{},{'x-test-device':E,'x-test-manager':'valid','authorization':'Bearer synthetic-untrusted','cookie':'synthetic=untrusted'}])await t.test('public response admits only explicit general audiences regardless of claimed principal',async()=>{
+   const response=await fetch(url+'/dashboard-api/events',{headers});assert.equal(response.status,200);const body=await response.json();
+   assert.deepEqual(body.data.map(value=>value.id),[general.id,assigned.id]);assert.equal(body.data[0].attendee_count,0);assert.equal(body.data[0].status,'SCHEDULED');
+   assert.doesNotMatch(JSON.stringify(body),/PRIVATE|audience_employee_ids|audience_scope|custodial_public_notes|source_text/);
+   assert.match(publicSql,/e\.audience_scope in \('assigned_location','all_working_employees'\)/);
+   assert.match(publicSql,/coalesce\(e\.status, 'SCHEDULED'\) = 'SCHEDULED'/);assert.match(publicSql,/e\.event_scope <> 'UNKNOWN'/);
+   assert.match(publicSql,/place\.authority->>'admissible'/);assert.match(publicSql,/coalesce\(e\.end_date, e\.event_date\) >=/);
+  });
+  await t.test('normal manager retains addressed source projection',async()=>{
+   const response=await fetch(url+'/dashboard-api/events-feed',{headers:{'x-test-manager':'valid'}});assert.equal(response.status,200);const body=await response.json();
+   assert.ok(body.feed.rows.some(value=>value.id===privateE.id));assert.ok(body.feed.rows.some(value=>value.id===privateM.id));
+   assert.doesNotMatch(JSON.stringify(body),/audience_employee_ids|source_text|PRIVATE MAIL|PRIVATE NOTES/);
+  });
+  for(const [employee,own,other]of [[E,privateE,privateM],[M,privateM,privateE]])await t.test('normal enrolled employee sees own addressed event and never another employee event',async()=>{
+   const response=await fetch(url+'/employee-events-api',{headers:{'x-test-device':employee}});assert.equal(response.status,200);const body=await response.json();
+   assert.deepEqual(new Set(body.feed.rows.map(value=>value.id)),new Set([general.id,assigned.id,own.id]));assert.ok(!body.data.some(value=>value.id===other.id));
+   assert.equal(response.headers.get('cache-control'),'private, no-store');assert.doesNotMatch(JSON.stringify(body),/audience_employee_ids|source_text|PRIVATE MAIL|PRIVATE NOTES/);
+  });
+ } finally { server.closeAllConnections?.();await new Promise((resolve,reject)=>server.close(error=>error?reject(error):resolve())); }
 });

@@ -2749,18 +2749,20 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
           return;
         }
       }
-      const parts = trustTokenParts(trustCookieValue(req));
-      if (!parts) {
-        res.status(401).json({ ok: false, error: "This manager phone is not enrolled." });
+      // A correctly shaped cookie is not proof of its secret. Verify current
+      // named trust and constant-time token-hash equality before any revocation.
+      const trusted = await verifyTrustedDevice(req, { store, env });
+      if (!trusted.ok) {
+        res.status(trusted.status || 401).json({ ok: false, error: trusted.error });
         return;
       }
       const activeStore = trustedDeviceStoreOrThrow(store);
       if (typeof activeStore.revoke !== "function") {
         throw Object.assign(new Error("Manager phone revocation is unavailable."), { status: 503 });
       }
-      await activeStore.revoke(parts.credentialId, "user_logout");
+      await activeStore.revoke(trusted.credentialId, "user_logout");
       await auditTrustedDevice(activeStore, authEvent(req, {
-        credentialId: parts.credentialId,
+        credentialId: trusted.credentialId,
         eventType: "device_revoked",
         success: true,
         detail: { reason: "user_logout" },

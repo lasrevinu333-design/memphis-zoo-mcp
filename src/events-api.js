@@ -402,12 +402,16 @@ function normalizeEventPayload(payload = {}, referenceData = {}) {
 async function listUpcomingEvents(runReadOnlySql) {
   const rows = await runReadOnlySql(buildEventResponseSelectSql(
     `coalesce(e.status, 'SCHEDULED') = 'SCHEDULED'
+     and e.audience_scope in ('assigned_location','all_working_employees')
      and coalesce(e.needs_review, false) = false and e.event_scope <> 'UNKNOWN'
      and coalesce((place.authority->>'admissible')::boolean,false)
      and coalesce(e.end_date, e.event_date) >= (now() at time zone '${EVENTS_TIME_ZONE}')::date`,
     `order by e.event_date asc, e.start_time asc, e.event_name asc`
   ));
-  return Array.isArray(rows) ? rows : [];
+  // Public compatibility has no employee identity. Never expose an addressed
+  // or unresolved audience, even if a reader returns an overbroad row set.
+  return Array.isArray(rows) ? rows.filter(row => row
+    && ['assigned_location', 'all_working_employees'].includes(row.audience_scope)) : [];
 }
 
 function boundedWholeNumber(value, fallback, minimum, maximum) {

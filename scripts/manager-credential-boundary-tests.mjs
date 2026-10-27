@@ -87,6 +87,7 @@ let enrolled = null;
 let mapEnrolled = null;
 const mapManager = { manager_id: "00000000-0000-4000-8000-000000000003", display_name: "Named Map Delegate", system_key: "annie_feist_operations_admin", is_system_principal: false, roles: ["OPS_MANAGER"], active: true, revoked_at: null };
 let revokeFailure = false;
+const revokeCalls = [];
 const store = {
   async getManagerCodeRateLimit() { return null; },
   async recordManagerCodeFailure() { return { locked_until: null }; },
@@ -112,6 +113,7 @@ const store = {
   async touch() {},
   async audit() {},
   async revoke(credentialId) {
+    revokeCalls.push(credentialId);
     if (revokeFailure) throw new Error("simulated revocation outage");
     if (credentialId === enrolled?.credential_id) enrolled.revoked_at = new Date().toISOString();
     if (credentialId === mapEnrolled?.credential_id) mapEnrolled.revoked_at = new Date().toISOString();
@@ -221,6 +223,39 @@ try {
   assert.equal(result.response.status, 403, "same-origin metadata must not replace Origin for logout");
   assert.equal(enrolled.revoked_at, null, "denied Origin-less logout must preserve the current credential");
 
+  // No caller may revoke a chosen credential by guessing its public UUID.
+  // These requests exercise the actual mounted HTTP route, not a helper stub.
+  const beforeDeniedLogout = revokeCalls.length;
+  const forgedCookie = `memphis_ops_trust=${enrolled.credential_id}.${'A'.repeat(43)}`;
+  for (const invalidCookie of [forgedCookie, undefined, 'memphis_ops_trust=malformed',
+    `memphis_ops_trust=99999999-9999-4999-8999-999999999999.${'B'.repeat(43)}`]) {
+    result = await json("/auth-api/ops/logout", { method: "POST", origin: allowedOrigin, cookie: invalidCookie });
+    assert.equal(result.response.status, 401, "missing/malformed/unknown/forged cookie must not authorize revocation");
+    assert.equal(result.response.headers.get("set-cookie"), null, "denied logout must not clear unrelated current trust");
+    assert.equal(revokeCalls.length, beforeDeniedLogout, "denied cookie must not even invoke the revocation store");
+    assert.equal(enrolled.revoked_at, null, "forged correctly shaped trust must preserve victim credential");
+  }
+  const normalExpiry = enrolled.expires_at;
+  enrolled.expires_at = new Date(Date.now() - 1000).toISOString();
+  result = await json("/auth-api/ops/logout", { method: "POST", origin: allowedOrigin, cookie });
+  assert.equal(result.response.status, 401, "expired cookie authority cannot revoke");
+  assert.equal(revokeCalls.length, beforeDeniedLogout);
+  enrolled.expires_at = normalExpiry;
+  enrolled.revoked_at = new Date().toISOString();
+  result = await json("/auth-api/ops/logout", { method: "POST", origin: allowedOrigin, cookie });
+  assert.equal(result.response.status, 401, "already revoked trust cannot authorize another revocation");
+  assert.equal(revokeCalls.length, beforeDeniedLogout);
+  enrolled.revoked_at = null;
+  manager.active = false;
+  result = await json("/auth-api/ops/logout", { method: "POST", origin: allowedOrigin, cookie });
+  assert.equal(result.response.status, 403, "inactive named manager cannot authorize logout mutation");
+  assert.equal(revokeCalls.length, beforeDeniedLogout);
+  manager.active = true;
+  result = await json("/auth-api/ops/logout", { method: "POST", origin: allowedOrigin, cookie,
+    extraHeaders: { authorization: 'Bearer invalid-session' } });
+  assert.equal(result.response.status, 401, "invalid explicit bearer must not fall back to an otherwise valid cookie");
+  assert.equal(revokeCalls.length, beforeDeniedLogout);
+
   // Canonical projection must reach the normal HTTP session consumed by FE,
   // not just an exported helper or a synthetic frontend session fixture.
   result = await json("/auth-api/session?access_level=full_access", { cookie, extraHeaders: sameOriginHeaders });
@@ -318,6 +353,7 @@ try {
   assert.equal(result.response.status, 200);
   assert.match(result.response.headers.get("set-cookie") || "", /Max-Age=0/);
   assert.ok(enrolled.revoked_at, "successful logout must durably revoke before clearing the cookie");
+  assert.equal(revokeCalls.at(-1), enrolled.credential_id, "valid normal cookie revokes only its proven credential");
 
   console.log("MANAGER_CREDENTIAL_BOUNDARY_PASS");
 } finally {
