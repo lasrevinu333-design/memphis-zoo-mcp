@@ -1134,6 +1134,7 @@ reviewedBaseline.versions[0].vacancyCapableSlotIds=[reviewedSlots[0]];
 reviewedBaseline.versions[0].vacantSlotIds=[];
 const reviewedPost=structuredClone(reviewedBaseline);reviewedPost.slots[0].incumbencies=[];
 reviewedPost.versions[0].vacantSlotIds=[reviewedSlots[0]];
+reviewedPost.versions[0].slotAvailability.find(entry=>entry.slotId===reviewedSlots[0]).status='vacant_unfilled';
 const reviewedRequest={source_id:authoritySourceId,slot_id:reviewedSlots[0],employee_id:reviewedPeople[0],
   effective_start:'2026-10-05',reason:'Synthetic reviewed vacancy',expected_revision:0,idempotency_key:'reviewed-vacancy-source-only'};
 const reviewedResult=await compileStaticWeeklySchedule(reviewedPost);
