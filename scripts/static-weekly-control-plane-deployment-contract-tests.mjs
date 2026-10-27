@@ -17,7 +17,7 @@ assert.match(deployment, /\n    branch: main\n/, "production deployment must con
 assert.match(deployment, /\n    autoDeployTrigger: off\n/, "source changes must not silently deploy the scheduler authority");
 assert.match(deployment, /\n    healthCheckPath: \/healthz\n/);
 assert.match(deployment, /\n    maxShutdownDelaySeconds: 30\n/);
-assert.match(deployment, /\n      - key: NODE_VERSION\n        value: 22\.23\.1\n/);
+assert.match(deployment, /\n      - key: NODE_VERSION\n        value: 22\.23\.4\n/);
 assert.match(deployment, /\n      - key: STATIC_WEEKLY_CONTROL_PLANE_DATABASE_URL\n        sync: false\n/);
 assert.match(deployment, /\n      - key: STATIC_WEEKLY_CONTROL_PLANE_DATABASE_CA_PEM\n        sync: false\n/);
 assert.match(deployment, /\n      - key: SUPABASE_SERVICE_ROLE_KEY\n        sync: false\n/);
