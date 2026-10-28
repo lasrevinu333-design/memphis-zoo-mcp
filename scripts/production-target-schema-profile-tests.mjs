@@ -16,8 +16,8 @@ check('distinct real physical target and canonical reference remain distinct', (
   assert.notEqual(resolved.canonicalFingerprint, resolved.deploymentFingerprint);
   assert.equal(fingerprintSchemaCatalog(canonical).fingerprint, resolved.canonicalFingerprint);
   assert.equal(fingerprintSchemaCatalog(resolved.deploymentCatalog).fingerprint, resolved.deploymentFingerprint);
-  assert.equal(resolved.canonicalCounts.functions, 963);
-  assert.equal(resolved.deploymentCounts.functions, 963);
+  assert.equal(resolved.canonicalCounts.functions, 972);
+  assert.equal(resolved.deploymentCounts.functions, 972);
   assert.equal(resolved.canonicalCounts.role_memberships, 10);
   assert.equal(resolved.deploymentCounts.role_memberships, 25);
 });
@@ -35,6 +35,10 @@ for (const [name, edit] of [
   ['unregistered target identity', p => { p.deployment_fingerprint = '0'.repeat(64); }],
   ['different original source', p => { p.source_ledger_sha256 = '0'.repeat(64); }],
   ['unrelated capture plan', p => { p.capture.plan_sha256 = '0'.repeat(64); }],
+  ['historical160 capture report', p => { p.capture.report_sha256 = '946dd61971aba8f6976b5dd463909a7808b8fba697991c9513477f325e9b1dc0'; }],
+  ['historical395 target ledger', p => { p.capture.target_ledger_count = 395; }],
+  ['historical160 pending count', p => { p.capture.pending_count = 160; }],
+  ['other original archive', p => { p.archive_digest = '5a72377ae70ff1a632c3d38df52a104f5f134332a87b41fc99473e42ff2a008d'; }],
   ['new platform privilege', p => { p.original_role_memberships[0].admin_option = !p.original_role_memberships[0].admin_option; }],
   ['extra membership', p => { p.original_role_memberships.push({...p.original_role_memberships[0], member_role: 'unreviewed_actor'}); }],
   ['wrong current policy owner', p => { p.policy_owner.deployment_role = 'service_role'; }],

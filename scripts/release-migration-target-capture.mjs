@@ -33,6 +33,18 @@ export function assertOwnedTargetMetadata({databaseUrl,runId,container,metadata,
  return metadata;
 }
 
+export function assertTargetCapturePendingPlan(pending,declared) {
+ assert.equal(pending.length,163);
+ assert.ok(Array.isArray(declared)&&[160,163].includes(declared.length),'Only exact historical160 or current163 declared plans are supported');
+ assert.deepEqual(pending.slice(0,declared.length),declared,'Preserve the whole exact declared canonical/production-forward source plan');
+ assert.deepEqual(pending.slice(160).map(({file,sha256,order})=>({file,sha256,order})),[
+  {file:'20261027230000_accepted_actual_lunch_windows.sql',sha256:'55b2cd92ebe36c6920a3c27cc13031ef6ca263d8f10114182c3058fd0991c81b',order:161},
+  {file:'20261027231000_canonical_coverall_capacity_links.sql',sha256:'c4be89a07f46717ddcc7ceebed639cdc10b589b8ff72e9cf20a3523bdec43903',order:162},
+  {file:'20261027234814_mcp_oauth_durable_token_families.sql',sha256:'e74210f033e5c65d5e99a090ca201d1c010d6cb5c4159a015bb08e3719c44f6e',order:163},
+ ],'Only the exact source-selected three additions can extend rollback-only target preparation');
+ return pending;
+}
+
 export function targetCaptureState({backendRoot,state,source}) {
  const {summary}=source.sourceBinding;
  assert.equal(summary.format,'memphis-zoo-disaster-recovery.v4');
@@ -51,14 +63,8 @@ export function targetCaptureState({backendRoot,state,source}) {
  assert.equal(state.observed_production.source_authority_migration_count,134);
  const canonical=replay.files.slice(134).map((file,index)=>({order:index+1,file,phase:file.slice(15,-4),
   source_migration_version:file.slice(0,14),sha256:sha(readFileSync(resolve(backendRoot,'supabase/migrations',file)))}));
- assert.equal(canonical.length,163);assert.equal(state.pending_migrations.length,160);
- const pending=bindExistingPostgresForwardSources(backendRoot,canonical);
- assert.deepEqual(pending.slice(0,160),state.pending_migrations,'Preserve exact existing160 canonical preimages and explicit production forward-source bytes');
- assert.deepEqual(pending.slice(160).map(({file,sha256,order})=>({file,sha256,order})),[
-  {file:'20261027230000_accepted_actual_lunch_windows.sql',sha256:'55b2cd92ebe36c6920a3c27cc13031ef6ca263d8f10114182c3058fd0991c81b',order:161},
-  {file:'20261027231000_canonical_coverall_capacity_links.sql',sha256:'c4be89a07f46717ddcc7ceebed639cdc10b589b8ff72e9cf20a3523bdec43903',order:162},
-  {file:'20261027234814_mcp_oauth_durable_token_families.sql',sha256:'e74210f033e5c65d5e99a090ca201d1c010d6cb5c4159a015bb08e3719c44f6e',order:163},
- ],'Only the exact source-selected three additions can extend rollback-only target preparation');
+ assert.equal(canonical.length,163);
+ const pending=assertTargetCapturePendingPlan(bindExistingPostgresForwardSources(backendRoot,canonical),state.pending_migrations);
  assert.ok(pending.every(item=>!source.ledger.some(row=>row.version===item.source_migration_version)));
  return {...state,mode:'isolated_target_preparation_rollback_only',
   observed_production:{...state.observed_production,production_ledger_count:source.ledger.length,
