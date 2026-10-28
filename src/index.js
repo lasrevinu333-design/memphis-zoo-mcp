@@ -1,3 +1,4 @@
+import { makeEmployeeFeedbackOriginalReceiptReader } from './employee-feedback-original-receipt.js';
 import { listSharedEvents } from "./events-api.js";
 import { makeSharedManagerEventsHandler, retiredEventIntake } from "./shared-events-feed.js";
 import { makeOperationsBoardHandler } from "./operations-board.js";
@@ -2813,6 +2814,28 @@ async function revalidateFeedbackSubmission(request,expectedActor) {
     {status:409,code:'feedback_original_authority_changed'});
   return request;
 }
+app.post("/feedback-api/original-receipt", requireFeedbackSubmitAuthority, async (req, res) => {
+  res.setHeader('Cache-Control', 'private, no-store');
+  try {
+    const request=originalFeedbackRequest(req),actor=feedbackSubmissionActor(req);
+    // Populate the fixed copied request from fresh credential authority. Never
+    // accept a browser-supplied actor or fall back to a public receipt reader.
+    await revalidateFeedbackSubmission(request,actor);
+    const reader=makeEmployeeFeedbackOriginalReceiptReader({
+      revalidate: original=>revalidateFeedbackSubmission(original,actor),
+      readItem: async operationId=>{
+        const rows=await runReadOnlySql(`select id,operation_id,request_fingerprint,category,priority,message,
+          hub_context,device_id,page_url,metadata_json from public.system_feedback_items
+          where operation_id=${sqlLiteral(operationId)}::uuid limit 1`);
+        return Array.isArray(rows)&&rows.length===1?rows[0]:null;
+      },
+    });
+    res.status(200).json(await reader(request));
+  } catch (error) {
+    res.status([401,403,409].includes(error?.status)?error.status:503).json({ok:false,
+      error:'Original feedback receipt is not confirmed. Keep the saved original.'});
+  }
+});
 app.post("/feedback-api/submit", publicSubmissionRateLimit("feedback"), requireFeedbackSubmitAuthority, async (req, res) => {
   try {
     const request=originalFeedbackRequest(req),actor=feedbackSubmissionActor(req);
