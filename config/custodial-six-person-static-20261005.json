@@ -209,7 +209,7 @@
         0,
         1,
         2,
-        3,
+        5,
         6
       ],
       "shift": [
@@ -991,7 +991,8 @@
     "All 23 recurring area families are assigned exactly once per day and phase; three gift-shop cleaning assignments are retired.",
     "Kathy's Tuesday Elephant Trunk employee-restroom duty is a post-opening reminder-only assignment pending distinct active location/tag identity; no gift-shop floor or invented NFC tag.",
     "Sunday and Friday are newly balanced against Eric's corrected Tammy workweek, not copied from the stale September 28 handout; issue replacement sheets from the accepted revision.",
-    "Handoffs and lunch relief must be reconciled with the corrected employee sheets before publication; never claim runtime match from this source alone."
+    "Handoffs and lunch relief must be reconciled with the corrected employee sheets before publication; never claim runtime match from this source alone.",
+    "October 28 owner clarification: retain the established static schedule and Karen Monday/Tuesday/Wednesday/Friday/Saturday correction. The remaining open position OPTION4 works Friday through Tuesday, off Wednesday/Thursday; preserve its06:00-15:00 shift and10:00-11:00 lunch. No broad area reoptimization or actual clock-out dependency."
   ],
   "effectiveDateNote": "Unpublished next-Monday candidate compatible with the existing weekly control-plane boundary. Not an activation, deployment or rollout date; later rollout must revalidate its actual effective week.",
   "sourceHandout": {
