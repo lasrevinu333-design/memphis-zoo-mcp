@@ -1,7 +1,7 @@
 {
   "artifact": "integrated-backend-authority-release-evidence.v2",
   "release_id": "release-2026.07.19.custodial-v3.12",
-  "frontend_commit_sha": "6a7e105f3f07197537520f47af019f70830d039c",
+  "frontend_commit_sha": "f43e2da09ee987b69e2971be346d16bb471df8d4",
   "frontend_commit_state": "final_pair_bound",
   "schema_fingerprint": "a54f3660584b15a3129f7a448ba12cd43b572c3ede6ca64a23cbceb8b37f2187",
   "schema_transition": {
@@ -870,7 +870,7 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "38b437b7d470edac5aeb89cb2248b2402ff2650e"
+        "object_id": "5d830f8ba3a9d765a8ae1a17ef8787d256b860fc"
       },
       {
         "path": "release/installed-source/20261006031304_custodial_owner_delegated_actions.sql",
@@ -1205,7 +1205,7 @@
       {
         "path": "release/schema-alignment-input.json",
         "mode": "100644",
-        "object_id": "d49efd8e50d71edb9b25afbc900d28b648c4a052"
+        "object_id": "60cd05283a310ea336af98a0bbef7065eebc3e2c"
       },
       {
         "path": "release/shared-events-database-receipt.json",
@@ -1776,6 +1776,11 @@
         "path": "scripts/employee-schedule-identity-tests.mjs",
         "mode": "100644",
         "object_id": "5b92aac7125bb0a2a1fb0faf91be31773936ecee"
+      },
+      {
+        "path": "scripts/employee-zoo-wide-coverage-tests.mjs",
+        "mode": "100644",
+        "object_id": "9731832a5828a2511675616327f18d3588c206ab"
       },
       {
         "path": "scripts/empty-database-rebuild-check.mjs",
@@ -5773,6 +5778,11 @@
         "object_id": "1f795e43ab218a033c49c8f4870de843f30bef34"
       },
       {
+        "path": "src/employee-zoo-wide-coverage.js",
+        "mode": "100644",
+        "object_id": "27a84097ebacf78801f83b7782fda1241008d3a1"
+      },
+      {
         "path": "src/events-api.js",
         "mode": "100644",
         "object_id": "9a6efbe0e51f4431219ae471a8ddf7ab388ddde0"
@@ -6470,7 +6480,7 @@
       {
         "path": "src/schedule-api.js",
         "mode": "100644",
-        "object_id": "6952d45ffd4f1522c6749f71860112c8d5b37d67"
+        "object_id": "ac7ebeeae93a36dceea7c63a900dcf8e4b16bb29"
       },
       {
         "path": "src/schedule-component-weight-authority.js",
@@ -8963,7 +8973,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 1767,
+    "authority_path_count": 1769,
     "migration_path_count": 297,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
