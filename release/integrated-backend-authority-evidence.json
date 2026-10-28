@@ -135,7 +135,7 @@
       {
         "path": ".github/workflows/build52-production-migration-apply.yml",
         "mode": "100644",
-        "object_id": "81ae9b868e85829e64593715dbb584f6db7fe16d"
+        "object_id": "df41dc5f7689a9cc4155876b7e5f4ceeaaff5f1a"
       },
       {
         "path": ".github/workflows/custodial-populated-schema-preflight.yml",
@@ -1275,7 +1275,7 @@
       {
         "path": "scripts/apply-release-migration-plan.mjs",
         "mode": "100644",
-        "object_id": "b02190de5ceeb88fd68801fa42d6310853fdbc5e"
+        "object_id": "d5b741f9aa863aed94f4536b9f199772c9a5f35f"
       },
       {
         "path": "scripts/approved-initial-current-predecessor-tests.mjs",
@@ -1410,7 +1410,7 @@
       {
         "path": "scripts/ci-workflow-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "45d0269331029f7477dc9846167243d11a1bc433"
+        "object_id": "699fff15cce7fb16cc824e34ab21e7ce5982c791"
       },
       {
         "path": "scripts/cleaning-identity-gps-database-tests.mjs",
@@ -3695,7 +3695,7 @@
       {
         "path": "scripts/production-database-identity-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "acd5a78ebeab23d11231b93a7af90fee84e66ab5"
+        "object_id": "7cb36972571b5052a566f0d70bce8f46f869990f"
       },
       {
         "path": "scripts/production-database-identity.mjs",
