@@ -1,3 +1,4 @@
+import {readZooWideCoverage} from './employee-zoo-wide-coverage.js';
 import {readRecurringNotificationPlan,exactPlanReceiptInstant} from './recurring-notification-plan.js';
 import {readHomeTimeFacts} from './employee-home-time-facts.js';
 import {normalizeCoverAllLanguage,coverAllLabels} from './coverall-language.js';
@@ -3418,6 +3419,7 @@ export function createScheduleRouter({
         const pageData = Array.isArray(pageRows) && pageRows.length ? pageRows[0].data : null;
         data = combineFullDaySchedule(pageData, fullDayItems);
       }
+      const zooWideCoverage=await readZooWideCoverage({day:data,runReadOnlySql});
       const ordinaryNotificationPlan=await readRecurringNotificationPlan({runRpc,delivery,serviceDate,assignment,
         credentialId:req.memphisDeviceCredential?.credential_id});
       res.status(200).json({
@@ -3425,6 +3427,7 @@ export function createScheduleRouter({
         data: {
           ...data,
           ordinary_notification_plan:ordinaryNotificationPlan,
+          zoo_wide_coverage:zooWideCoverage,
           requested_device_id: assignment?.requested_device_id || deviceId || null,
           device_id: assignment?.canonical_device_id || assignment?.device_id || deviceId || null,
           canonical_device_id: assignment?.canonical_device_id || assignment?.device_id || null,
