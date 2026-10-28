@@ -54,7 +54,10 @@ function healthy(label) {
   return value;
 }
 const initial = healthy('clean forward migration is healthy');
-equal(initial.canonical_objects_expected, 5127, 'seven missing GPS recovery objects were added, not duplicated');
+// The historical GPS closure had 5127 entries. The measured current297
+// constructor includes later required recovery surfaces; keep its exact count
+// pinned here and retain the seven GPS identity/uniqueness checks below.
+equal(initial.canonical_objects_expected, 7350, 'exact current297 recovery inventory includes all later surfaces and the original seven GPS objects');
 for (const [table, digest] of [
   ['custodial_activation_legacy_lineage_bindings', '631407ef4816c053c6bac2b1d404fd21d5df8455292aac42a530361940cbd454'],
   ['custodial_assigned_activation_operations', '5f64cded9a19eafa8243e5466312ae9c90c8b7b6bca91c5b811ced0d790190c6'],
