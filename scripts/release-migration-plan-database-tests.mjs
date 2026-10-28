@@ -44,15 +44,16 @@ if (selectedArguments[0] === currentCapturedSelector) {
   assert.ok(schemaTarget.profile, "Current captured target requires its closed production profile");
   const capture = state.target.normal_source_capture;
   const proof = schemaTarget.profile.capture;
+  const current297 = plan.files.length === 297;
   assert.equal(plan.baseCount, 134);
-  assert.equal(plan.files.length, 294);
-  assert.equal(state.pending_migrations.length, 160);
+  assert.equal(plan.files.length, current297 ? 297 : 294);
+  assert.equal(state.pending_migrations.length, current297 ? 163 : 160);
   assert.deepEqual(state.pending_migrations.map(({ file }) => file), plan.files.slice(plan.baseCount));
   assert.equal(state.observed_production.production_ledger_count, 235);
   assert.equal(proof.source_ledger_count, state.observed_production.production_ledger_count);
   assert.equal(proof.pending_count, state.pending_migrations.length);
   assert.equal(proof.target_ledger_count, proof.source_ledger_count + proof.pending_count);
-  assert.equal(proof.target_ledger_count, 395);
+  assert.equal(proof.target_ledger_count, current297 ? 398 : 395);
   assert.equal(state.target.production_ledger_count, proof.target_ledger_count);
   assert.equal(state.target.canonical_source_schema_fingerprint, schemaTarget.deploymentFingerprint);
   assert.deepEqual(state.target.expected_catalog_counts, schemaTarget.deploymentCounts);
@@ -62,8 +63,8 @@ if (selectedArguments[0] === currentCapturedSelector) {
   for (const key of ["candidate_commit", "candidate_tree", "plan_sha256"]) assert.equal(capture[key], proof[key]);
   assert.equal(capture.archive_digest, schemaTarget.profile.archive_digest);
   const checked = assertReleaseWorkflowSource(sourceRoot);
-  assert.equal(checked.pendingCount, 160);
-  assert.equal(checked.targetCount, 395);
+  assert.equal(checked.pendingCount, current297 ? 163 : 160);
+  assert.equal(checked.targetCount, current297 ? 398 : 395);
   assert.equal(checked.targetFingerprint, schemaTarget.deploymentFingerprint);
   // Reuse the maintained complete source-plan/profile/capture and refusal
   // contracts. No URL, credentials, targetCapture or preload reaches the child.
@@ -78,9 +79,9 @@ if (selectedArguments[0] === currentCapturedSelector) {
   assert.match(original.stdout, /PASS_SOURCE_ONLY_NO_DB/);
   console.log(JSON.stringify({ status: "SOURCE_ONLY_CURRENT_CAPTURED_TARGET_CONTRACT_PASS",
     SQL_execution: false, database_client_constructed: false, production_authorized: false,
-    historical_23_positive_security_database_corpus: "NOT_RUN_CURRENT160_SOURCE_ROUTE",
-    actual160_database_proof: "SEPARATE_ORIGINAL_CAPTURE_40360756054_NOT_REEXECUTED",
-    source_ledger_count: 235, pending_count: 160, target_ledger_count: 395,
+    historical_23_positive_security_database_corpus: "NOT_RUN_CURRENT_CAPTURED_SOURCE_ROUTE",
+    adopted_capture_database_proof: current297 ? "SEPARATE_ORIGINAL_CAPTURE_40615635335_NOT_REEXECUTED" : "SEPARATE_ORIGINAL_CAPTURE_40360756054_NOT_REEXECUTED",
+    source_ledger_count: 235, pending_count: current297 ? 163 : 160, target_ledger_count: current297 ? 398 : 395,
     canonical_fingerprint: schemaTarget.canonicalFingerprint,
     deployment_fingerprint: schemaTarget.deploymentFingerprint,
     adopted_report_sha256: proof.report_sha256,

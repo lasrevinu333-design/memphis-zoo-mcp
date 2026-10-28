@@ -45,9 +45,9 @@ env -i PATH=/usr/bin:/bin LANG=C LC_ALL=C TZ=UTC "$node_source" --max-old-space-
   }
   assertCapturedTargetCatalog(state.target);
   assertReleaseWorkflowSource(process.cwd());
-  if (plan.files.length === 294) {
+  if ([294, 297].includes(plan.files.length)) {
     assert.equal(plan.baseCount, 134);
-    assert.equal(state.pending_migrations.length, 160);
+    assert.equal(state.pending_migrations.length, plan.files.length === 297 ? 163 : 160);
     assert.ok(state.target.normal_source_capture, "Current captured source requires its adopted capture binding");
     process.exit(4);
   }

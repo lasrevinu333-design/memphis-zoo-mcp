@@ -12,6 +12,60 @@ const binding=JSON.parse(readFileSync(resolve(root,'release/current291-staged-so
 const plan=readMigrationReplayPlan(root);const checks=[];
 const check=(name,fn)=>{fn();checks.push(name);};
 const sha=b=>createHash('sha256').update(b).digest('hex');
+if(plan.files.length===297){
+ // The historical294 corpus below remains literal. This branch qualifies the
+ // actual three-tail successor without attributing its source checks to SQL.
+ check('current297 retains exact134 prefix and original160 plus three tails',()=>{
+  assert.equal(plan.baseCount,134);assert.equal(state.pending_migrations.length,163);
+  assert.deepEqual(state.pending_migrations.map(x=>x.file),plan.files.slice(134));
+  assert.deepEqual(state.pending_migrations.slice(0,160),state.historical_294_160_target_preparation.pending_migrations);
+  assert.equal(binding.preserved134.length,134);
+  for(const x of binding.preserved134)assert.equal(sha(readFileSync(resolve(root,'supabase/migrations',x.file))),x.sha256);
+ });
+ check('every selected source version order and hash resolves normally',()=>{
+  assert.equal(state.pending_migrations.filter(x=>x.forward_source).length,29);
+  for(const [i,x]of state.pending_migrations.entries()){
+   assert.equal(x.order,i+1);assert.equal(x.source_migration_version,x.file.slice(0,14));
+   assert.equal(sha(resolveReleaseMigrationSource(root,x).sql),x.sha256);
+  }
+  const tails=[
+   ['20261027230000_accepted_actual_lunch_windows.sql','55b2cd92ebe36c6920a3c27cc13031ef6ca263d8f10114182c3058fd0991c81b'],
+   ['20261027231000_canonical_coverall_capacity_links.sql','c4be89a07f46717ddcc7ceebed639cdc10b589b8ff72e9cf20a3523bdec43903'],
+   ['20261027234814_mcp_oauth_durable_token_families.sql','e74210f033e5c65d5e99a090ca201d1c010d6cb5c4159a015bb08e3719c44f6e'],
+  ];
+  assert.deepEqual(plan.files.slice(-3),tails.map(x=>x[0]));
+  for(const [name,digest]of tails)assert.equal(sha(readFileSync(resolve(root,'supabase/migrations',name))),digest);
+ });
+ check('current physical398 profile binds the genuine reviewed rollback capture',()=>{
+  const target=resolveReleaseSchemaTarget(root),capture=state.target.normal_source_capture,proof=target.profile.capture;
+  assert.equal(target.canonicalFingerprint,'a54f3660584b15a3129f7a448ba12cd43b572c3ede6ca64a23cbceb8b37f2187');
+  assert.equal(target.deploymentFingerprint,'6ee1d9e694bef75bfdfd07e7426d864e3c3b7cb2e1603fdcb1bd6bebf7fc0d0a');
+  assert.equal(proof.source_ledger_count,235);assert.equal(proof.pending_count,163);assert.equal(proof.target_ledger_count,398);
+  assert.equal(proof.report_sha256,'8042bc5e3a1bd141442fddb2b52b532b9eb67bdec6d0588bc5b87d951920a37e');
+  assert.equal(proof.report_bytes,18533770);
+  assert.equal(capture.report.sha256,proof.report_sha256);assert.equal(capture.report.bytes,proof.report_bytes);
+  for(const key of ['candidate_commit','candidate_tree','plan_sha256'])assert.equal(capture[key],proof[key]);
+  assert.equal(capture.archive_digest,target.profile.archive_digest);
+  assert.equal(capture.scope,'ROLLBACK_ONLY_TARGET_PREPARATION_DATA_NOT_PRODUCTION_OR_FULL_REHEARSAL');
+  assert.equal(capture.rollback_evidence.rollback_verified,true);
+  for(const key of ['candidate_migration_admission','runtime_admission','production_authorized'])assert.equal(capture[key],false);
+  assert.equal(state.target.production_ledger_version,null,'rollback evidence is not production application');
+  assert.equal(state.target.source_authority_migration_count,297);assert.equal(state.target.pending_migration_count,163);
+  assert.equal(state.target.production_ledger_count,398);assert.equal(state.target.source_migration_version,'20261027234814');
+  assert.equal(state.target.canonical_source_schema_fingerprint,target.deploymentFingerprint);
+  assert.deepEqual(state.target.expected_catalog_counts,target.deploymentCounts);
+  const checked=assertReleaseWorkflowSource(root);
+  assert.equal(checked.sourceCount,235);assert.equal(checked.pendingCount,163);assert.equal(checked.targetCount,398);
+  assert.equal(checked.targetFingerprint,target.deploymentFingerprint);
+ });
+ check('normal apply still preflights before clients and retains serializable rollback',()=>{
+  const source=readFileSync(resolve(root,'scripts/apply-release-migration-plan.mjs'),'utf8');
+  assert.ok(source.indexOf('if (!targetCapture) assertReleaseWorkflowSource(root);')<source.indexOf('new Client('));
+  assert.ok(source.includes('await db.query("begin isolation level serializable")'));
+  assert.ok(source.includes('await db.query("rollback")')||source.includes("await db.query('rollback')"));
+ });
+ console.log(JSON.stringify({status:'PASS_SOURCE_ONLY_NO_DB',checks,source_count:297,pending_count:163,target_ledger_count:398,SQL_execution:false,production_authorized:false,historical294_corpus:'NOT_RUN_CURRENT297_BRANCH'}));
+}else{
 check('exact134 base and160 current pending members',()=>{
  assert.equal(plan.baseCount,134);assert.equal(plan.files.length,294);
  assert.equal(state.pending_migrations.length,160);
@@ -134,3 +188,4 @@ check('normal apply preflight is before any client/query; transaction rollback b
  assert.ok(source.includes('await db.query("rollback")')||source.includes("await db.query('rollback')"));
 });
 console.log(JSON.stringify({status:'PASS_SOURCE_ONLY_NO_DB',checks,SQL_execution:false,production_authorized:false,target_facts_adopted:false}));
+}
