@@ -1091,12 +1091,16 @@ const ownedMigrationCommandProducer = readFileSync(resolve(root,"scripts/run-rel
 const localProductionBackupRehearsal = readFileSync(resolve(root, "scripts/run-production-backup-migration-rehearsal.sh"), "utf8");
 const build52ProductionMigrationApply = readFileSync(resolve(workflowDirectory, "build52-production-migration-apply.yml"), "utf8");
 assert.equal(createHash("sha256").update(build52ProductionMigrationApply, "utf8").digest("hex"),
-  "c6749200bbcd0bf2312342a6d4154c005dbb4b3b31a5a0ac3f741309881c44ea",
+  "6f6f498a29f0cf189123050b7dda63feada17c9fed49fe208281390a0fbd0a05",
   "Build52 length measurement requires the exact reviewed whole workflow");
 assert.match(build52ProductionMigrationApply, /node scripts\/current291-production-plan-source-tests\.mjs/,
   "normal apply must invoke the existing current plan source suite");
 assert.doesNotMatch(build52ProductionMigrationApply, /node scripts\/release-migration-workflow-tests\.mjs/,
   "normal apply must not invoke the absent historical source-test module");
+assert.equal((build52ProductionMigrationApply.match(/secrets\.SUPABASE_MIGRATION_DB_URL/g) || []).length, 2,
+  'both migration apply and independent readback use the dedicated migration credential');
+assert.doesNotMatch(build52ProductionMigrationApply, /secrets\.SUPABASE_DB_URL\s*\}\}/,
+  'the backup connection must not be reused as migration authority');
 const build52ProductionMigrationApplyJob = workflowJobs(build52ProductionMigrationApply)
   .find(({ name }) => name === "authorize-and-apply");
 assert.ok(build52ProductionMigrationApplyJob, "the Build 52 production migration workflow must retain its authorize-and-apply job");

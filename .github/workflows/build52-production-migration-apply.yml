@@ -124,7 +124,7 @@ jobs:
           TASK_LOCAL_AUTHORIZATION_VERIFY_KEY: ${{ secrets.BUILD52_TASK_LOCAL_RELEASE_MIGRATION_AUTHORIZATION_VERIFY_KEY }}
           TASK_LOCAL_AUTHORIZATION_VERIFY_KEY_ID: ${{ vars.BUILD52_TASK_LOCAL_RELEASE_MIGRATION_AUTHORIZATION_VERIFY_KEY_ID }}
           TASK_LOCAL_RELEASE_MIGRATION_AUTHORIZATION_JSON: ${{ secrets.BUILD52_TASK_LOCAL_RELEASE_MIGRATION_AUTHORIZATION_JSON }}
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_MIGRATION_DB_URL }}
           INPUT_EVIDENCE_MODE: ${{ inputs.evidence_mode }}
           INPUT_BACKUP_RUN_ID: ${{ inputs.backup_run_id }}
           INPUT_REHEARSAL_RUN_ID: ${{ inputs.rehearsal_run_id }}
@@ -259,7 +259,7 @@ jobs:
       - name: Independently verify the actual production target
         shell: bash
         env:
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_MIGRATION_DB_URL }}
         run: |
           set -euo pipefail
           test -n "$SUPABASE_DB_URL"

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import {assertReleaseWorkflowSource} from './release-migration-workflow-preflight.mjs';
+import {assertProductionDatabaseIdentity} from './production-database-identity.mjs';
 import {openIsolatedPreservationArchive} from './release-migration-isolated-preservation-archive.mjs';
 import {prepareIsolatedReleaseDataPreservation} from './isolated-release-data-preservation.mjs';
 import {runTargetCaptureStep,writeTargetCaptureRefusal} from './release-migration-target-refusal.mjs';
@@ -185,6 +186,9 @@ isolatedPreservationArchive=rehearsal&&[160,163].includes(plan.length)
    sourceLedgerSha256,captureContext,env:process.env}):null;
 // END ISOLATED PRESERVATION ARCHIVE
   await db.connect();
+  // Production migrations use the existing migration-owning identity. A backup
+  // reader must be refused before transaction locks; never broaden its grants.
+  if (!rehearsal) await assertProductionDatabaseIdentity(db, { migrationAuthority: true });
   if (targetCapture) {
     const profile = (await db.query(`select current_user actor,session_user original_actor,
       (select datdba::regrole::text from pg_database where datname=current_database()) database_owner,
