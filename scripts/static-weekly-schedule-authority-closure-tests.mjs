@@ -122,9 +122,10 @@ async function expectNoMutation(action, pattern, label) {
 }
 
 try {
-  fixture = await createCiFreshOnlyFixture({ name: fixtureName, hostSocket: false });
+  fixture = await createCiFreshOnlyFixture({ name: fixtureName, hostSocket: true });
   container = fixture.container;
-  pool = createDockerPool();
+  assert.equal(typeof fixture.socketDirectory, 'string', 'owned fixture must expose its private PostgreSQL socket');
+  pool = new Pool({ host: fixture.socketDirectory, user: 'supabase_admin', database: 'postgres', password: 'postgres', max: 4, connectionTimeoutMillis: 10_000, idleTimeoutMillis: 2_000 });
   // This lifecycle exercises owner-only edits. Resolve the fixture's seeded
   // owner and persist the current credential required by the application policy.
   const owner = outputJson((await dockerSql("select jsonb_build_object('manager_id',manager_id,'display_name',display_name,'roles',roles,'active',active,'revoked_at',revoked_at,'system_key',system_key,'is_system_principal',is_system_principal)::text from public.ops_manager_managers where system_key='eric_custodial_manager' and active and not is_system_principal")).stdout);
