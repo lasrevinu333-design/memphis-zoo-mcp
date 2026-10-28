@@ -180,7 +180,7 @@ let isolatedPreservationArchive=null;
 let transactionStarted=false;
 try {
 // BEGIN ISOLATED PRESERVATION ARCHIVE
-isolatedPreservationArchive=rehearsal&&plan.length===160
+isolatedPreservationArchive=rehearsal&&[160,163].includes(plan.length)
  ?openIsolatedPreservationArchive({backendRoot:root,databaseUrl,rehearsal,apply,targetCapture,candidateCommit,candidateTree,
    sourceLedgerSha256,captureContext,env:process.env}):null;
 // END ISOLATED PRESERVATION ARCHIVE
@@ -358,8 +358,8 @@ isolatedPreservationArchive=rehearsal&&plan.length===160
       actual_private_schema_owners:privateSchemaOwners,source_data_preservation:originalDataPreservationReceipt,
       source_catalog_fingerprint:beforeCatalogIdentity.fingerprint,source_ledger_sha256:sourceLedgerSha256,
       source_ledger_count:beforeLedger.rowCount,source_ledger_head:beforeHead.version,
-      source_authority_migration_count:134,canonical_source_count:294,
-      canonical_replay_manifest_sha256:'5a0ac3a398d25f59a0a7f6e045d0db1c4d59b28924a18ec479f01bbe5a710121',
+      source_authority_migration_count:134,canonical_source_count:297,
+      canonical_replay_manifest_sha256:'e37cf98ffde8165797069595b45d84fdaf89871a719c31a839905e9e6317d54c',
       plan_sha256:planSha256,applied,target_catalog_fingerprint:afterCatalogIdentity.fingerprint,
       target_catalog_counts:catalogCounts(afterCatalog),target_ledger_count:afterLedger.rowCount,
       target_ledger_head:afterLedger.rows.at(-1).version,target_ledger_sha256:ledgerFileSha256(afterLedger.rows),

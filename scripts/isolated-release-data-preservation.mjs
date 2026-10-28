@@ -5,6 +5,7 @@ import {createHash} from 'node:crypto';
 import pg from 'pg';
 import {fingerprintSchemaCatalog} from './schema-fingerprint-catalog.mjs';
 import {resolveReleaseMigrationSource} from './production-forward-source.mjs';
+import {readMigrationReplayPlan} from './migration-replay-order.mjs';
 import {readVerifiedArchiveSourceBinding,readVerifiedRestoreTableSelection,readVerifiedMigrationTargetCaptureSource,postgresTextColumnsLineEncoding} from './disaster-recovery-archive.mjs';
 const {Client}=pg,originalQuery=Client.prototype.query;
 const sha=x=>createHash('sha256').update(x).digest('hex');
@@ -37,11 +38,29 @@ export function loadOriginal235PreservationSource(backendRoot){
 }
 export function validateOriginal235PreservationPlan(backendRoot,plan){
  const manifest=loadOriginal235PreservationSource(backendRoot);
- assert.equal(plan.length,160);
- for(let i=0;i<plan.length;i++){
+ assert.ok(plan.length===160||plan.length===163,'Only original160 or exact source-selected163 preservation plan');
+ for(let i=0;i<manifest.plan.length;i++){
   const expected=manifest.plan[i],item=plan[i];assert.equal(item.order,expected.order);assert.equal(item.file,expected.file);
   const source=resolveReleaseMigrationSource(backendRoot,item);assert.equal(source.canonical_sha256,expected.canonical_sha256);
   if(Object.hasOwn(item,'sql'))assert.equal(item.sql,source.sql);
+ }
+ if(plan.length===163){
+  const replay=readMigrationReplayPlan(backendRoot);
+  assert.equal(replay.files.length,297);
+  assert.equal(replay.manifestSha256,'e37cf98ffde8165797069595b45d84fdaf89871a719c31a839905e9e6317d54c');
+  const additions=[
+   ['20261027230000_accepted_actual_lunch_windows.sql','55b2cd92ebe36c6920a3c27cc13031ef6ca263d8f10114182c3058fd0991c81b'],
+   ['20261027231000_canonical_coverall_capacity_links.sql','c4be89a07f46717ddcc7ceebed639cdc10b589b8ff72e9cf20a3523bdec43903'],
+   ['20261027234814_mcp_oauth_durable_token_families.sql','e74210f033e5c65d5e99a090ca201d1c010d6cb5c4159a015bb08e3719c44f6e'],
+  ];
+  assert.deepEqual(replay.files.slice(294),additions.map(([file])=>file));
+  for(const [index,[file,digest]]of additions.entries()){
+   const item=plan[160+index];assert.equal(item.order,161+index);assert.equal(item.file,file);
+   assert.equal(item.source_migration_version,file.slice(0,14));assert.equal(item.sha256,digest);
+   assert.ok(!Object.hasOwn(item,'forward_source'),'New selected sources execute their exact reviewed canonical bytes');
+   const source=resolveReleaseMigrationSource(backendRoot,item);assert.equal(source.canonical_sha256,digest);
+   if(Object.hasOwn(item,'sql'))assert.equal(item.sql,source.sql);
+  }
  }
  return manifest;
 }
@@ -218,7 +237,7 @@ export async function prepareIsolatedReleaseDataPreservation({client,backendRoot
    join pg_attribute a on a.attrelid=c.oid where n.nspname in('public','auth','storage') and c.relkind='r' and a.attnum>0 and not a.attisdropped`)).rows;
   for(const old of census()){const now=currentColumns.find(x=>x.schema===old.schema&&x.name===old.name&&x.column_name===old.column_name);assert.ok(now);const {locked,...before}=old;assert.deepEqual(now,before,'original relation/column/type identity changed');}
   assertCurrent();
-  return Object.freeze({schema:'custodial.isolated-release-data-preservation.v1',scope:'ISOLATED_EXISTING160_TRANSACTION_DATA_PROOF',original_tables:217,original_public_tables:182,ordinary_public_tables:178,nonpublic_tables:35,nonpublic_exact_native_text:true,
+  return Object.freeze({schema:'custodial.isolated-release-data-preservation.v1',scope:plan.length===163?'ISOLATED_EXISTING160_PLUS_SELECTED3_TRANSACTION_DATA_PROOF':'ISOLATED_EXISTING160_TRANSACTION_DATA_PROOF',applied_migration_count:plan.length,original_tables:217,original_public_tables:182,ordinary_public_tables:178,nonpublic_tables:35,nonpublic_exact_native_text:true,
    events:eventResult,four_settings_constants_verified:true,four_settings:settingsDigest,relay_paused_no_migration_time_send_evidence:true,
    recovery_metadata:'DELIBERATE_CANONICAL_GUARDED_REPAIRS_NOT_BUSINESS_EXEMPTION',tables:results,
    raw_values_exported:false,production_authorized:false,full_candidate_admission:false});

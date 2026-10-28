@@ -1,3 +1,4 @@
+import {coverAllAccessTokenHash,coverAllCanonicalBinding,scopeCanonicalCoverAllDocument} from './static-weekly-coverall-access.js';
 import { AsyncLocalStorage } from "node:async_hooks";
 import { types } from "node:util";
 import { hasManagerPermission } from "./auth/manager-permissions.js";
@@ -11,7 +12,7 @@ import { hasManagerPermission } from "./auth/manager-permissions.js";
  * rotation state, and every mutation. Manager identity comes from the trusted
  * request session and the database re-resolves its active display name.
  */
-import { createHash, randomUUID } from "node:crypto";
+import { randomBytes, createHash, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { MANAGER_OPERATION_MILLISECONDS, CLEANUP_RESERVE_MILLISECONDS } from "./static-weekly-manager-operation.js";
 import { assertOwnerRecurringWorkdays } from "./static-weekly-owner-workdays.js";
@@ -771,6 +772,9 @@ export function createStaticWeeklyControlPlane({
     const verifiedActor=await call(client,"custodial_action_actor_v1",[
       manager.manager_id,manager.credential_id,manager.device_id,manager.access_level,"manage_coverall"]);
     if(verifiedActor?.manager_id!==manager.manager_id)throw fail("42501","Current CoverAll manager identity is required.");
+    return readAcceptedCoverAllDocument(client,{weekStart,serviceDate,expectedRevision,projectionId,issuingManager});
+  }
+  async function readAcceptedCoverAllDocument(client,{weekStart,serviceDate,expectedRevision,projectionId,issuingManager}){
     const week=requireMonday(weekStart,'week start'),date=requireDateInWeek(serviceDate,week,'service date');
     const revision=requireRevision(expectedRevision);
     await lockStaticWeeklyAuthority(client);
@@ -2201,6 +2205,43 @@ export function createStaticWeeklyControlPlane({
           documentDigest:document.documentDigest,groups};
       });
     },
+    async issueCoverAllAssignmentLink(input){
+      const actor=requireManager(input.manager,"manage_coverall"),ttl=input.ttlHours;
+      if(!Number.isSafeInteger(ttl)||ttl<1||ttl>168)throw fail('coverall_link_ttl_invalid');
+      if(!/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(input.requestId))throw fail('coverall_link_request_id_required');
+      return transaction(async client=>{
+        const document=await acceptedCoverAllDocument(client,input);
+        const binding=coverAllCanonicalBinding(document,input.capacityId);
+        const token=randomBytes(32).toString('base64url'),id=input.requestId;
+        const result=await call(client,'static_weekly_issue_coverall_link',[
+          input.manager.manager_id,input.manager.credential_id,input.manager.device_id,input.manager.access_level,
+          id,coverAllAccessTokenHash(token),binding,ttl]);
+        if(result?.link_id!==id||typeof result.expires_at!=='string')throw fail('coverall_link_issue_response_invalid');
+        return {schema:'custodial.coverall-canonical-link.v1',link_id:id,capacity_id:binding.capacity_id,
+          service_date:binding.service_date,authority_revision:binding.authority_revision,projection_id:binding.projection_id,
+          expires_at:result.expires_at,assignment_path:'/static-weekly/coverall-links/assignment?'+new URLSearchParams({lang:'both'})+'#'+new URLSearchParams({access_token:token})};
+      });
+    },
+    async readCoverAllAssignmentLink({accessToken}){
+      const tokenHash=coverAllAccessTokenHash(accessToken);
+      return transaction(async client=>{
+        await lockStaticWeeklyAuthority(client);
+        const current=await call(client,'static_weekly_read_coverall_link',[tokenHash]);
+        if(current?.schema!=='custodial.coverall-canonical-access.v1'||!current.binding
+          ||typeof current.issuing_manager?.managerId!=='string'||typeof current.issuing_manager?.managerName!=='string')
+          throw fail('coverall_link_invalid');
+        const b=current.binding;
+        const document=await readAcceptedCoverAllDocument(client,{weekStart:b.week_start,serviceDate:b.service_date,
+          expectedRevision:b.authority_revision,projectionId:b.projection_id,issuingManager:current.issuing_manager});
+        return scopeCanonicalCoverAllDocument(document,b);
+      });
+    },
+    async revokeCoverAllAssignmentLink({manager,linkId}){
+      requireManager(manager,"manage_coverall");
+      if(!/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(linkId))throw fail('coverall_link_invalid');
+      return transaction(client=>call(client,'static_weekly_revoke_coverall_link',[
+        manager.manager_id,manager.credential_id,manager.device_id,manager.access_level,linkId]));
+    },
     async getCoverAllPrintDocument(input) {
       const selections=coverAllSelections(input.eventSelections??[]);
       // Viewing the accepted route is delegated. Adding selected event notes
@@ -2386,8 +2427,8 @@ export function createStaticWeeklyControlPlane({
       if (breakChoice != null && breakChoice !== 'SCHEDULED') throw fail('static_weekly_contractor_break_choice_invalid');
       const actualLunch=requireWindow(lunch,"actual contractor lunch");
       const minutes=t=>Number(t.slice(0,2))*60+Number(t.slice(3));
-      if(minutes(actualLunch.end)-minutes(actualLunch.start)!==60||actualLunch.start<actualShift.start||actualLunch.end>actualShift.end){
-        throw fail("static_weekly_contractor_actual_lunch_required","Enter the actual one-hour CoverAll lunch within its shift; no lunch time is assumed.");
+      if(actualLunch.start<actualShift.start||actualLunch.end>actualShift.end){
+        throw fail("static_weekly_contractor_actual_lunch_required","Enter the actual CoverAll lunch start and end within its shift; no lunch time is assumed.");
       }
       // Reuse the accepted complete-action receipt and one transaction for both
       // dated facts. A retry must bind lunch as well as capacity and shift.

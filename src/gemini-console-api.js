@@ -211,6 +211,17 @@ export function createGeminiConsoleRouter({
   if (typeof requireOpsManagerAuth !== "function") throw new Error("Gemini Console requires trusted manager authentication.");
   const router = express.Router();
   router.use(requireOpsManagerAuth);
+  router.use((req, res, next) => {
+    // Original-outcome observation is a read-only POST, not a replacement turn.
+    const originalOutcomeRead = req.method === "POST"
+      && /^\/conversations\/[0-9a-f-]{36}\/messages\/original-outcome\/?$/i.test(req.path || "");
+    if (["POST", "PUT", "PATCH", "DELETE"].includes(req.method) && !originalOutcomeRead
+        && req.memphisAuth?.read_only !== false) {
+      res.status(403).json({ ok: false, error: "Read-only manager access cannot change Gemini Console conversations." });
+      return;
+    }
+    next();
+  });
   if (!supabase) {
     router.use((_req, res) => res.status(503).json({ ok: false, error: "Gemini Console storage is not configured." }));
     return router;

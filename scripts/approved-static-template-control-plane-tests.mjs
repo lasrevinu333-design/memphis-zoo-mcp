@@ -421,7 +421,7 @@ if(process.argv.includes('--approved-dated-operation-day-only')){
 
 // NEW overlay and closing components only. Retained compiler input is real fixture DATA,
 // NOT an accepted SQL command, event approval, current manager or publication.
-if(process.argv.includes('--approved-pending-isolated-producer-only')||process.argv.includes('--approved-pending-caller-refusals-only')||process.argv.includes('--approved-pending-relation-refusals-only')||process.argv.includes('--approved-pending-proposal-source-only')||process.argv.includes('--approved-pending-multidate-producer-only')||process.argv.includes('--approved-dated-unresolved-snapshot-guard-only')||process.argv.includes('--approved-dated-unresolved-response-only')||process.argv.includes('--approved-dated-unresolved-response-predecessor-only')||process.argv.includes('--approved-dated-closing-consumer-only')||process.argv.includes('--approved-dated-closing-refusals-only')||process.argv.includes('--approved-dated-closing-unresolved-only')||process.argv.includes('--approved-dated-closing-partial-covered-only')||process.argv.includes('--approved-dated-partial-native-consumer-only')||process.argv.includes('--approved-dated-partial-native-source-only')){
+if(process.argv.includes('--approved-pending-actual-lunch-window-only')||process.argv.includes('--approved-pending-isolated-producer-only')||process.argv.includes('--approved-pending-caller-refusals-only')||process.argv.includes('--approved-pending-relation-refusals-only')||process.argv.includes('--approved-pending-proposal-source-only')||process.argv.includes('--approved-pending-multidate-producer-only')||process.argv.includes('--approved-dated-unresolved-snapshot-guard-only')||process.argv.includes('--approved-dated-unresolved-response-only')||process.argv.includes('--approved-dated-unresolved-response-predecessor-only')||process.argv.includes('--approved-dated-closing-consumer-only')||process.argv.includes('--approved-dated-closing-refusals-only')||process.argv.includes('--approved-dated-closing-unresolved-only')||process.argv.includes('--approved-dated-closing-partial-covered-only')||process.argv.includes('--approved-dated-partial-native-consumer-only')||process.argv.includes('--approved-dated-partial-native-source-only')){
  const {prepareApprovedStaticTemplateProjection}=await import('../src/static-weekly-recurring-staffing-adaptation.js');
  const {createShiftEndContinuityPolicy}=await import('../src/static-weekly-shift-end-derivation.js');
  const {prepareStaticWeeklySchedulingProblem,normalizeStaticWeeklyAuthority}=await import('../src/static-weekly-schedule-program.js');
@@ -434,6 +434,7 @@ if(process.argv.includes('--approved-pending-isolated-producer-only')||process.a
  const ownerConfig=JSON.parse(readFileSync(new URL('../config/custodial-six-person-static-20261005.json',import.meta.url))),
   filled=Object.entries(ownerConfig.slots).filter(([,s])=>!s.vacancy),kaili=ownerConfig.slots.KAILI.slotId,
   substitute='74000000-0000-4000-8000-000000000003',person='74000000-0000-4000-8000-000000000001';
+ if(process.argv.includes('--approved-pending-actual-lunch-window-only'))ownerConfig.slots.KAREN.lunch=['09:30','10:00'];
  // Tiny explicit UNIT Source: normal role IDs/geography, but constructed
  // seven-day attendance/work/edges. NOT approved/current production facts.
  for(const [,s]of filled){s.workDays=[0,1,2,3,4,5,6];delete s.shiftByDay;delete s.lunchByDay;}
@@ -513,7 +514,7 @@ if(process.argv.includes('--approved-pending-isolated-producer-only')||process.a
   }
   console.log(JSON.stringify({checks,scope:'NEW actual pending preparation controller refusals with inert SQL/actor DATA; no planner/worker/SQL acceptance',SQL:'NOT_RUN',oldGroups:0,resources0:true}));process.exit(0);
  }
- if(process.argv.includes('--approved-pending-isolated-producer-only')||process.argv.includes('--approved-pending-relation-refusals-only')||process.argv.includes('--approved-pending-proposal-source-only')||process.argv.includes('--approved-pending-multidate-producer-only')){
+ if(process.argv.includes('--approved-pending-actual-lunch-window-only')||process.argv.includes('--approved-pending-isolated-producer-only')||process.argv.includes('--approved-pending-relation-refusals-only')||process.argv.includes('--approved-pending-proposal-source-only')||process.argv.includes('--approved-pending-multidate-producer-only')){
   const {prepareApprovedPendingStaffingWeekProjection}=await import('../src/static-weekly-recurring-staffing-adaptation.js'),
    {createApprovedPendingStaffingWeekInput}=await import('../src/static-weekly-staffing-preview.js'),
    managerId='81000000-0000-4000-8000-000000000001',operation='85000000-0000-4000-8000-000000000001',accepted=clone(current);
@@ -620,6 +621,14 @@ if(process.argv.includes('--approved-pending-isolated-producer-only')||process.a
    lunchDocument:Object.fromEntries(Object.entries(out.lunchDocument).filter(([key])=>!['base_authority_digest','base_replay_digest','document_identity'].includes(key)))}));
   assert.equal(Object.keys(out).filter(key=>key!=='lunchDocument').length,12);
   assert.equal(canonicalJson(args),before);assert.equal(Object.hasOwn(out.envelope,'attestation'),false);
+  if(process.argv.includes('--approved-pending-actual-lunch-window-only')){
+   const karen=ownerConfig.slots.KAREN.slotId,loans=out.lunchDocument.loans.filter(l=>l.normal_owner_slot_id===karen);
+   assert.equal(loans.length,7);assert.ok(loans.every(l=>l.coverage_start==='09:30'&&l.coverage_end==='10:00'));
+   const responsibilities=out.lunchDocument.responsibilities.filter(r=>r.normal_owner_slot_id===karen),endIntents=out.lunchDocument.notification_intents.filter(i=>loans.some(l=>l.loan_id===i.loan_id)&&i.event==='end');
+   assert.ok(responsibilities.length>0);assert.ok(responsibilities.every(r=>r.coverage_end==='10:00'));
+   assert.ok(endIntents.length>0);assert.ok(endIntents.every(i=>i.scheduled_time==='10:00'));
+   console.log(JSON.stringify({checks:5,scope:'actual unchanged recurring pending producer transitively derives accepted synthetic 30-minute lunch/end without fixed-hour rule; NOT SQL/current operational authority',SQL:'NOT_RUN',solver:false}));process.exit(0);
+  }
   console.log(JSON.stringify({checks:1,scope:'NEW original pending two-day overlay -> disjoint fixed components -> merged hard model/lunch; synthetic UNIT DATA not DB acceptance',
    SQL:'NOT_RUN',solver:false,oldGroups:0,resources0:true}));process.exit(0);
  }

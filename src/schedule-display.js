@@ -4,7 +4,7 @@ const SECTION_DEFINITIONS = Object.freeze({
   morning: { order: 10, title: "Morning Assigned Areas" },
   rebalance: { order: 20, title: "Restroom Rebalance Schedule" },
   response: { order: 25, title: "Respond to Issues Only" },
-  lunch: { order: 30, title: "1 Hour Lunch Coverage" },
+  lunch: { order: 30, title: "Lunch Coverage" },
   late: { order: 40, title: "Afternoon Call Coverage" },
   reminder: { order: 50, title: "Reminder Only" },
   special: { order: 60, title: "Special Coverage" },

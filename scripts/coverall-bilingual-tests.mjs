@@ -50,11 +50,16 @@ assert.match(policyMigration, /to service_role/i);
 assert.match(policyMigration, /using \(true\)[\s\S]*with check \(true\)/i);
 assert.doesNotMatch(policyMigration, /to (anon|authenticated|public)/i);
 
-let writeCount = 0;
+let writeCount = 0,legacyDataReads=0,authorityMode='legacy';
 const app = express();
 app.use(express.json());
 app.use("/schedule-api", createScheduleRouter({
   runReadOnlySql: async (sql) => {
+    if (/static_weekly_v6_schedule_authority_state/.test(sql)){
+      if(authorityMode==='unavailable')throw Error('UNIT authority unavailable');
+      return [{governed:authorityMode!=='legacy',authority_source:authorityMode==='legacy'?'legacy_daily_schedule':'static_weekly_projection',projection_status:authorityMode==='legacy'?'legacy_ungoverned':authorityMode}];
+    }
+    if(/daily_work_roster|daily_schedule_assignments/.test(sql))legacyDataReads++;
     if (/from public\.coverall_assignment_links/i.test(sql)) return [{ id: "00000000-0000-4000-8000-000000000001" }];
     if (/from public\.employees/i.test(sql)) return [1, 2, 3, 4].map((number) => ({
       employee_id: `00000000-0000-4000-8000-00000000000${number}`,
@@ -102,6 +107,15 @@ try {
     assert.ok(!html.includes('slot=COVERALL_02'),'public output must remain scoped to the one approved contractor slot');
   }
   assert.equal(writeCount,0,'bilingual rendering remains read-only');
+  for(authorityMode of ['current','stale_staffing_change','missing_projection','unavailable']){
+    const before=legacyDataReads;
+    const denied=await fetch(`${base}/coverall/assignment?service_date=2026-07-30&slot=COVERALL_01&lang=en&access_token=${token}`);
+    assert.equal(denied.status,authorityMode==='unavailable'?400:409);
+    assert.equal(legacyDataReads,before,'governed/stale/unknown authority cannot read preserved daily rows');
+    assert.ok(!(await denied.text()).includes('CoverAll_01'));
+  }
+  authorityMode='legacy';
+
 
   const createAttempt = await fetch(`${base}/coverall/links`, {
     method: "POST",

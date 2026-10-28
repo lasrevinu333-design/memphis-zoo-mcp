@@ -1238,7 +1238,15 @@ export function createScheduleRouter({
     return rows[0];
   }
 
+  async function assertLegacyCoverAllDate(serviceDate){
+    const state=await loadScheduleAuthorityState(serviceDate);
+    if(state.governed!==false&&state.governed!=='false'){
+      throw Object.assign(new Error('Use the accepted canonical CoverAll handout and explicit capacity selector for this date.'),
+        {status:409,code:'coverall_canonical_capacity_link_required'});
+    }
+  }
   async function issueCoverAllAssignmentLink({ serviceDate, slotCode, lang, ttlHours, actor }) {
+    await assertLegacyCoverAllDate(serviceDate);
     const slot = await getCoverAllSlotByCode(slotCode);
     const token = randomBytes(32).toString("base64url");
     const tokenHash = coverAllAccessTokenHash(token);
@@ -1251,6 +1259,7 @@ export function createScheduleRouter({
     });
     const row = Array.isArray(result) ? result[0] : result;
     if (!row?.id) throw new Error("The secure CoverAll assignment link could not be created.");
+    await assertLegacyCoverAllDate(serviceDate);
     const publicOrigin = String(process.env.SCHEDULE_PUBLIC_BASE_URL || process.env.PUBLIC_BASE_URL || "https://memphis-zoo-mcp.onrender.com").replace(/\/+$/, "");
     const normalizedLang = normalizeCoverAllLanguage(lang);
     return {
@@ -3946,6 +3955,7 @@ export function createScheduleRouter({
       const lang = normalizeCoverAllLanguage(req.query.lang);
       const accessToken = normalizeCoverAllAccessToken(req.query.access_token || req.query.token);
       await authorizeCoverAllAssignmentLink({ serviceDate, slotCode, accessToken });
+      await assertLegacyCoverAllDate(serviceDate);
       const slot = await getCoverAllSlotByCode(slotCode);
       const shiftRows = await runReadOnlySql(`
         select to_char(shift_start, 'HH24:MI') as shift_start, to_char(shift_end, 'HH24:MI') as shift_end
@@ -4019,6 +4029,7 @@ export function createScheduleRouter({
   <main class="wrap"><div class="notice">${htmlEscape(t.notice)}</div><section class="card"><h2>${htmlEscape(t.restrooms)}</h2><ul>${renderItems(restroomItems)}</ul></section><section class="card"><h2>${htmlEscape(t.other)}</h2><ul>${renderItems(otherItems)}</ul></section><div class="meta">${htmlEscape(slot.employee_code)} • ${htmlEscape(serviceDate)}</div></main>
 </body>
 </html>`;
+      await assertLegacyCoverAllDate(serviceDate);
       res.setHeader("Content-Type", "text/html; charset=utf-8");
       res.status(200).send(html);
     } catch (error) {

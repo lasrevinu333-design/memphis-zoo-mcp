@@ -38,8 +38,12 @@ if (!/^[0-9a-f-]{36}$/i.test(String(intent.reconciliation_id || ""))
 }
 const expiresAt = Date.parse(String(intent.expires_at || ""));
 const approvedAt = Date.parse(String(intent.approved_at || ""));
-if (!Number.isFinite(expiresAt) || !Number.isFinite(approvedAt) || approvedAt > Date.now()
-    || expiresAt <= Date.now() || expiresAt > Date.now() + 24 * 60 * 60 * 1000) throw new Error("Abandoned lease reconciliation is expired or exceeds the 24-hour authorization window.");
+function requireAuthorizationFresh() {
+  const now = Date.now();
+  if (!Number.isFinite(expiresAt) || !Number.isFinite(approvedAt) || approvedAt > now
+      || expiresAt <= now || expiresAt > now + 24 * 60 * 60 * 1000) throw new Error("Abandoned lease reconciliation is expired or exceeds the 24-hour authorization window.");
+}
+requireAuthorizationFresh();
 const intentDigest = createHash("sha256").update(stableJson(abandonedMutationLeaseReconciliationBinding(intent))).digest("hex");
 
 function iso(value) { return new Date(value).toISOString(); }
@@ -72,9 +76,11 @@ const db = new Client({
 await db.connect();
 await db.query("select pg_advisory_lock(hashtextextended('memphis-zoo-production-restore',0))");
 try {
+  requireAuthorizationFresh();
   await db.query("begin isolation level serializable");
   await db.query("select pg_advisory_xact_lock(hashtextextended('memphis-zoo-application-mutation-admission',0))");
   const controlResult = await db.query("select authority_generation,mutations_paused,state,restore_id,target_project_ref from custodial_dr.restore_control where singleton=true for update");
+  requireAuthorizationFresh();
   const control = controlResult.rows[0];
   const authorityGeneration = control ? sqlAuthorityGeneration(control.authority_generation) : null;
   if (!control || authorityGeneration !== intent.authority_generation
@@ -109,6 +115,7 @@ try {
       })) {
     throw new Error("Signed process-termination evidence does not cover the exact lease set.");
   }
+  requireAuthorizationFresh();
   const deleted = await db.query("delete from custodial_dr.application_mutation_leases where request_id=any($1::uuid[])", [actual.map((row) => row.request_id)]);
   if (deleted.rowCount !== actual.length) throw new Error("Failed to delete the exact reconciled lease set.");
   await db.query(`
@@ -116,6 +123,7 @@ try {
       reconciliation_id,authority_generation,restore_id,intent_sha256,actor,leases_json,evidence_json
     ) values($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb)
   `, [intent.reconciliation_id, intent.authority_generation, intent.restore_id, intentDigest, intent.actor, JSON.stringify(intent.leases), JSON.stringify(intent.evidence)]);
+  requireAuthorizationFresh();
   await db.query("commit");
   console.log(JSON.stringify({ ok: true, idempotent_replay: false, reconciliation_id: intent.reconciliation_id, reconciled_leases: actual.length, control_state_unchanged: control.state }));
 } catch (error) {

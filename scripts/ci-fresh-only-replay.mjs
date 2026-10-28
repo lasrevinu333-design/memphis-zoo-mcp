@@ -7,7 +7,7 @@ import { resolve, relative, sep } from 'node:path';
 
 // Explicit scoped fresh-only construction. This is not vendor NORMAL,
 // ledger adoption, production replay, or a substitute for downstream checks.
-const MANIFEST_SHA = '87f0fb5007e016f02a2d6fd5bd62f4a257e561de057092ee028e9cc484d63269';
+const MANIFEST_SHA = '5094a272dcc9f01ccbf043f3de7012e12bdb542606089a0a818629c1ecf86b26';
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 export function loadCiFreshOnlyReplay(root, image, names, options = {}) {
   assert.ok(options && typeof options === 'object' && !Array.isArray(options));
@@ -31,7 +31,7 @@ export function loadCiFreshOnlyReplay(root, image, names, options = {}) {
   assert.equal(manifest.format, 'custodial.ci-fresh-only-selected-replay.v1');
   assert.equal(manifest.full_vendor_NORMAL, false); assert.equal(manifest.expected_fingerprint_authority, null);
   assert.equal(image, manifest.image);
-  assert.equal(manifest.entries.length, 294);
+  assert.equal(manifest.entries.length, 297);
   assert.deepEqual(names, manifest.entries.map(row => row.name));
   assert.deepEqual(readdirSync(resolve(root, 'supabase/migrations')).filter(name => name.endsWith('.sql')).sort(), names);
   assert.equal(manifest.overrides.length, 22);
@@ -138,7 +138,7 @@ export function loadCiFreshOnlyReplay(root, image, names, options = {}) {
       assert.ok(profile && typeof profile === 'object');
     },
     assertPreserved() { for (const [path, bytes] of frozen) assert.deepEqual(readFileSync(path), bytes); },
-    receipt: { format: manifest.format, manifest_sha256: MANIFEST_SHA, migrations: 294, overrides: 22,
+    receipt: { format: manifest.format, manifest_sha256: MANIFEST_SHA, migrations: 297, overrides: 22,
       ...(noAutoTableGrants ? { no_auto_profile: { reference: { ...noAutoProfile.reference }, comparison_sha256: noAutoProfile.comparison_sha256, overrides: noAutoProfile.overrides, original_source_choices: manifest.no_auto_profile.original_source_choices } } : {}),
       full_vendor_NORMAL: false, expected_fingerprint_authority: null },
   };
@@ -342,7 +342,7 @@ export async function createCiFreshOnlyFixture(options) {
       assert.equal(prefix.canonical_catalog_authority, false); assert.equal(prefix.new_authority, false);
       const witnesses = JSON.parse(fixtureRead(custody, 'NO_AUTO_TABLE_GRANTS_MIGRATION_WITNESSES.json'));
       verifiedMigrationWitnesses = witnesses.witnesses;
-      assert.equal(witnesses.profile, construction.state); assert.equal(witnesses.witnesses.length, 294);
+      assert.equal(witnesses.profile, construction.state); assert.equal(witnesses.witnesses.length, 297);
       for (const [index, witness] of witnesses.witnesses.entries()) {
         const row = manifest.entries[index]; assert.equal(witness.order, index + 1); assert.equal(witness.name, row.name);
         assert.equal(witness.original_sha256, row.original.sha256); assert.equal(witness.selected_sha256, selection.entries[index].selected.sha256);

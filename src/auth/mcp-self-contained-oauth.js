@@ -8,6 +8,7 @@ import {
   timingSafeEqual,
 } from "node:crypto";
 import express from "express";
+import { createMcpOAuthDurableStore, oauthArtifactDigest, oauthBindingDigest } from "./mcp-oauth-durable-store.js";
 
 const OAUTH_VERSION = "v1";
 const ACCESS_TOKEN_TYPE = "at+jwt";
@@ -465,6 +466,7 @@ function verifyFlowCookie(config, req, kind, requestToken, csrf, current) {
 function issueAuthorizationRequest(config, details, issuedAt, random = randomBytes) {
   return sealObject("mzr", {
     typ: "authorization_request",
+    durable_version: 2,
     ...details,
     iss: config.issuer,
     iat: issuedAt,
@@ -475,7 +477,7 @@ function issueAuthorizationRequest(config, details, issuedAt, random = randomByt
 
 function verifyAuthorizationRequest(config, value, current) {
   const request = openObject(value, "mzr", config.keys.requestEncryption, config.keys.requestSigning);
-  if (!request || request.typ !== "authorization_request" || request.iss !== config.issuer) return null;
+  if (!request || request.typ !== "authorization_request" || request.durable_version !== 2 || !validAuthorityGeneration(request.authority_generation) || request.iss !== config.issuer) return null;
   if (!Number.isSafeInteger(request.iat) || !Number.isSafeInteger(request.exp)) return null;
   if (request.iat > current + config.clockSkewSeconds || request.exp <= current) return null;
   const client = verifyClientId(config, request.client_id, current);
@@ -541,25 +543,15 @@ function createRateLimiter(config, { now, windowMs = 15 * 60 * 1000, maximum = 5
   };
 }
 
-function createReplayCache({ now }) {
-  const used = new Map();
-  return {
-    consume(namespace, identifier, expiresAt) {
-      const current = nowSeconds(now);
-      for (const [key, expiry] of used) {
-        if (expiry <= current) used.delete(key);
-      }
-      const key = `${namespace}:${identifier}`;
-      if (used.has(key)) return false;
-      used.set(key, expiresAt);
-      return true;
-    },
-  };
+function validAuthorityGeneration(value) {
+  return typeof value === "string" && /^(0|[1-9][0-9]{0,18})$/.test(value)
+    && BigInt(value) <= 9223372036854775807n;
 }
-
 function issueAuthorizationCode(config, request, issuedAt, random = randomBytes) {
   return sealObject("mza", {
     typ: "authorization_code",
+    durable_version: 2,
+    authority_generation: request.authority_generation,
     iss: config.issuer,
     aud: config.resource,
     sub: config.operatorSub,
@@ -580,6 +572,8 @@ function verifyTimedArtifact(config, artifact, current, type) {
   return Boolean(
     artifact
     && artifact.typ === type
+    && artifact.durable_version === 2
+    && validAuthorityGeneration(artifact.authority_generation)
     && artifact.iss === config.issuer
     && artifact.aud === config.resource
     && artifact.sub === config.operatorSub
@@ -600,8 +594,15 @@ function issueTokenPair(config, {
   scope,
   generation = 0,
   includeRefresh = true,
+  familyId,
+  authorityGeneration,
 }, issuedAt, random = randomBytes) {
+  if (!/^[A-Za-z0-9_-]{24,64}$/.test(String(familyId || ""))) throw new Error("OAuth family identifier required.");
+  if (!validAuthorityGeneration(authorityGeneration)) throw new Error("OAuth authority generation required.");
   const accessClaims = {
+    durable_version: 2,
+    family_id: familyId,
+    authority_generation: authorityGeneration,
     iss: config.issuer,
     aud: config.resource,
     sub: config.operatorSub,
@@ -614,6 +615,9 @@ function issueTokenPair(config, {
   };
   const refresh = sealObject("mzt", {
     typ: "refresh_token",
+    durable_version: 2,
+    family_id: familyId,
+    authority_generation: authorityGeneration,
     iss: config.issuer,
     aud: config.resource,
     sub: config.operatorSub,
@@ -651,6 +655,9 @@ export function verifyMcpOAuthAccessToken(config, token, { now = Date.now, requi
   const clientScopes = normalizeScopes(client?.scope, { defaultRead: false });
   if (
     !claims
+    || claims.durable_version !== 2
+    || !validAuthorityGeneration(claims.authority_generation)
+    || !/^[A-Za-z0-9_-]{24,64}$/.test(String(claims.family_id || ""))
     || claims.iss !== config.issuer
     || claims.aud !== config.resource
     || claims.sub !== config.operatorSub
@@ -680,6 +687,8 @@ export function verifyMcpOAuthAccessToken(config, token, { now = Date.now, requi
       subject: claims.sub,
       audience: claims.aud,
       authSource: "self_contained_oauth",
+      familyId: claims.family_id,
+      authorityGeneration: claims.authority_generation,
     },
   };
 }
@@ -695,7 +704,7 @@ function passwordMatches(config, supplied) {
   return safeEqual(expected, actual);
 }
 
-export function createSelfContainedMcpOAuthService({ env = process.env, now = Date.now, random = randomBytes } = {}) {
+export function createSelfContainedMcpOAuthService({ env = process.env, now = Date.now, random = randomBytes, durableStore = null } = {}) {
   const config = assertSelfContainedMcpOAuthConfig(env);
   const router = express.Router();
   if (!config.enabled) {
@@ -704,7 +713,19 @@ export function createSelfContainedMcpOAuthService({ env = process.env, now = Da
 
   const metadata = buildMcpProtectedResourceMetadata(config);
   const asMetadata = buildMcpAuthorizationServerMetadata(config);
-  const replayCache = createReplayCache({ now });
+  // There is no process-local fallback: replay state is shared by every instance.
+  const store = durableStore || createMcpOAuthDurableStore(env);
+  const requireStore = () => {
+    if (!store) throw new Error("Durable OAuth replay authority unavailable.");
+    return store;
+  };
+  async function verifyCurrentAccessToken(token, options = {}) {
+    const verified = verifyMcpOAuthAccessToken(config, token, { now, ...options });
+    if (!await requireStore().active({ familyDigest: oauthArtifactDigest("family", verified.extra.familyId),
+      bindingDigest: oauthBindingDigest(config, verified.clientId, verified.extra.authorityGeneration),
+      authorityGeneration: verified.extra.authorityGeneration })) throw new McpOAuthAccessTokenError();
+    return verified;
+  }
   const loginLimiter = createRateLimiter(config, { now });
 
   router.use("/oauth/register", express.json({ limit: "12kb", strict: true }));
@@ -739,7 +760,7 @@ export function createSelfContainedMcpOAuthService({ env = process.env, now = Da
     }
   });
 
-  router.get("/oauth/authorize", (req, res) => {
+  router.get("/oauth/authorize", async (req, res) => {
     const current = nowSeconds(now);
     const clientId = exactSingle(req.query.client_id);
     const client = verifyClientId(config, clientId, current);
@@ -769,19 +790,26 @@ export function createSelfContainedMcpOAuthService({ env = process.env, now = Da
     if (!registeredScopes || scopes.some((scope) => !registeredScopes.includes(scope))) {
       return reject("invalid_scope", "The requested MCP scope was not registered for this client.");
     }
-    const requestToken = issueAuthorizationRequest(config, {
-      client_id: clientId,
-      client_name: client.client_name,
-      redirect_uri: redirectUri,
-      resource,
-      scope: scopes.join(" "),
-      code_challenge: codeChallenge,
-      code_challenge_method: "S256",
-      state,
-    }, current, random);
-    const csrf = random(24).toString("base64url");
-    setFlowCookie(res, config, issueFlowCookie(config, "login", requestToken, csrf, current, random));
-    sendHtml(res, 200, loginPage(requestToken, csrf));
+    let authorityGeneration;
+    try { authorityGeneration = await requireStore().generation();
+      if (!validAuthorityGeneration(authorityGeneration)) throw new Error("Invalid generation."); }
+    catch { sendHtml(res, 503, errorPage("Authorization is temporarily unavailable.")); return; }
+    try {
+      const requestToken = issueAuthorizationRequest(config, {
+        authority_generation: authorityGeneration,
+        client_id: clientId,
+        client_name: client.client_name,
+        redirect_uri: redirectUri,
+        resource,
+        scope: scopes.join(" "),
+        code_challenge: codeChallenge,
+        code_challenge_method: "S256",
+        state,
+      }, current, random);
+      const csrf = random(24).toString("base64url");
+      setFlowCookie(res, config, issueFlowCookie(config, "login", requestToken, csrf, current, random));
+      sendHtml(res, 200, loginPage(requestToken, csrf));
+    } catch { sendHtml(res, 503, errorPage("Authorization could not be prepared. Restart normal authorization.")); }
   });
 
   router.post("/oauth/login", (req, res) => {
@@ -810,7 +838,7 @@ export function createSelfContainedMcpOAuthService({ env = process.env, now = Da
     sendHtml(res, 200, consentPage(requestToken, consentCsrf, request), { consentRedirectUri: request.redirect_uri });
   });
 
-  router.post("/oauth/decision", (req, res) => {
+  router.post("/oauth/decision", async (req, res) => {
     const current = nowSeconds(now);
     const requestToken = String(req.body?.request || "");
     const csrf = String(req.body?.csrf || "");
@@ -821,7 +849,12 @@ export function createSelfContainedMcpOAuthService({ env = process.env, now = Da
       sendHtml(res, 403, errorPage("The authorization decision is invalid or expired. Return to ChatGPT and try again."));
       return;
     }
-    if (!replayCache.consume("decision", request.jti, request.exp)) {
+    let decisionConsumed;
+    try { decisionConsumed = await requireStore().consumeDecision({
+      artifactDigest: oauthArtifactDigest("decision", requestToken), expiresAt: request.exp,
+      authorityGeneration: request.authority_generation }); }
+    catch { sendHtml(res, 503, errorPage("Authorization is temporarily unavailable. No decision was returned; restart normal authorization.")); return; }
+    if (!decisionConsumed) {
       clearFlowCookie(res, config);
       sendHtml(res, 403, errorPage("This authorization decision has already been used. Return to ChatGPT and try again."));
       return;
@@ -831,11 +864,17 @@ export function createSelfContainedMcpOAuthService({ env = process.env, now = Da
       redirectAuthorization(res, config, request, { error: "access_denied", error_description: "The operator denied access." });
       return;
     }
-    const code = issueAuthorizationCode(config, request, current, random);
-    redirectAuthorization(res, config, request, { code });
+    try {
+      const code = issueAuthorizationCode(config, request, current, random);
+      redirectAuthorization(res, config, request, { code });
+    } catch {
+      // The consent nonce is already consumed. Never return an unconfirmed code
+      // or silently remint from the same decision; begin normal authorization.
+      sendHtml(res, 503, errorPage("Authorization code issuance failed. Restart normal authorization."));
+    }
   });
 
-  router.post("/oauth/token", (req, res) => {
+  router.post("/oauth/token", async (req, res) => {
     if (req.headers.authorization || req.body?.client_secret) {
       sendOAuthJsonError(res, 401, "invalid_client", "This public client must authenticate with token_endpoint_auth_method none.");
       return;
@@ -870,18 +909,25 @@ export function createSelfContainedMcpOAuthService({ env = process.env, now = Da
         sendOAuthJsonError(res, 400, "invalid_grant", "The authorization code, redirect URI, resource, or PKCE verifier is invalid.");
         return;
       }
-      if (!replayCache.consume("code", code.jti, code.exp)) {
-        sendOAuthJsonError(res, 400, "invalid_grant", "The authorization code has already been used.");
-        return;
+      // Sign/seal BEFORE the atomic transaction: serialization/signing failure cannot
+      // consume the code. Never return tokens until durable consumption commits.
+      let pair, accepted;
+      try {
+        const familyId = random(24).toString("base64url");
+        pair = issueTokenPair(config, { clientId, scope: code.scope, generation: 0,
+          includeRefresh: client.grant_types.includes("refresh_token"), familyId, authorityGeneration: code.authority_generation }, current, random);
+        accepted = await requireStore().exchange({ codeDigest: oauthArtifactDigest("code", codeValue),
+          codeExpiresAt: code.exp, familyDigest: oauthArtifactDigest("family", familyId),
+          bindingDigest: oauthBindingDigest(config, clientId, code.authority_generation), authorityGeneration: code.authority_generation,
+          refreshDigest: pair.refresh_token ? oauthArtifactDigest("refresh", pair.refresh_token) : null,
+          expiresAt: current + (pair.refresh_token ? config.refreshTtlSeconds : config.accessTtlSeconds) });
+      } catch { sendOAuthJsonError(res, 503, "temporarily_unavailable", "Token issuance was not confirmed. Restart normal authorization; do not retry this code."); return; }
+      if (!accepted) {
+        sendOAuthJsonError(res, 400, "invalid_grant", "The authorization code has already been used or expired."); return;
       }
       res.setHeader("Cache-Control", "no-store");
       res.setHeader("Pragma", "no-cache");
-      res.status(200).json(issueTokenPair(config, {
-        clientId,
-        scope: code.scope,
-        generation: 0,
-        includeRefresh: client.grant_types.includes("refresh_token"),
-      }, current, random));
+      res.status(200).json(pair);
       return;
     }
     if (grantType === "refresh_token") {
@@ -902,27 +948,33 @@ export function createSelfContainedMcpOAuthService({ env = process.env, now = Da
         || requestedScopes.some((scope) => !originalScopes.includes(scope))
         || !Number.isSafeInteger(refresh.generation)
         || refresh.generation < 0
+        || refresh.generation >= Number.MAX_SAFE_INTEGER
+        || !/^[A-Za-z0-9_-]{24,64}$/.test(String(refresh.family_id || ""))
       ) {
         sendOAuthJsonError(res, 400, "invalid_grant", "The refresh token, client, resource, or requested scope is invalid.");
         return;
       }
-      if (!replayCache.consume("refresh", refresh.jti, refresh.exp)) {
-        sendOAuthJsonError(res, 400, "invalid_grant", "The refresh token has already been rotated.");
-        return;
+      let pair, rotated;
+      try {
+        pair = issueTokenPair(config, { clientId, scope: requestedScopes.join(" "),
+          generation: refresh.generation + 1, familyId: refresh.family_id, authorityGeneration: refresh.authority_generation }, current, random);
+        rotated = await requireStore().rotate({ familyDigest: oauthArtifactDigest("family", refresh.family_id),
+          bindingDigest: oauthBindingDigest(config, clientId, refresh.authority_generation), authorityGeneration: refresh.authority_generation,
+          previousDigest: oauthArtifactDigest("refresh", refreshValue), generation: refresh.generation,
+          nextDigest: oauthArtifactDigest("refresh", pair.refresh_token), expiresAt: current + config.refreshTtlSeconds });
+      } catch { sendOAuthJsonError(res, 503, "temporarily_unavailable", "Rotation was not confirmed. Restart normal authorization; do not retry this refresh token."); return; }
+      if (!rotated) {
+        sendOAuthJsonError(res, 400, "invalid_grant", "The refresh token is expired, revoked, or reused; reauthorize this client."); return;
       }
       res.setHeader("Cache-Control", "no-store");
       res.setHeader("Pragma", "no-cache");
-      res.status(200).json(issueTokenPair(config, {
-        clientId,
-        scope: requestedScopes.join(" "),
-        generation: refresh.generation + 1,
-      }, current, random));
+      res.status(200).json(pair);
       return;
     }
     sendOAuthJsonError(res, 400, "unsupported_grant_type", "Only authorization_code and refresh_token grants are supported.");
   });
 
-  function authenticateRequest(req) {
+  async function authenticateRequest(req) {
     const customToken = String(
       req?.header?.("x-memphis-connector-token")
       || req?.header?.("x-mcp-connector-token")
@@ -974,7 +1026,7 @@ export function createSelfContainedMcpOAuthService({ env = process.env, now = Da
       };
     }
     try {
-      const verified = verifyMcpOAuthAccessToken(config, bearer, { now });
+      const verified = await verifyCurrentAccessToken(bearer);
       return {
         ok: true,
         auth: {
@@ -993,8 +1045,8 @@ export function createSelfContainedMcpOAuthService({ env = process.env, now = Da
     }
   }
 
-  function middleware(req, res, next) {
-    const result = authenticateRequest(req);
+  async function middleware(req, res, next) {
+    const result = await authenticateRequest(req);
     if (!result.ok) {
       res.setHeader("WWW-Authenticate", buildMcpBearerChallenge(config));
       res.status(result.status || 401).json({ ok: false, error: "Unauthorized" });
@@ -1036,6 +1088,6 @@ export function createSelfContainedMcpOAuthService({ env = process.env, now = Da
     router,
     authenticateRequest,
     middleware,
-    verifyAccessToken: (token, options = {}) => verifyMcpOAuthAccessToken(config, token, { now, ...options }),
+    verifyAccessToken: verifyCurrentAccessToken,
   };
 }

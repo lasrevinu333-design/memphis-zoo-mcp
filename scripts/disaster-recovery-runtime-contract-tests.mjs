@@ -3,6 +3,120 @@
 import assert from "node:assert/strict";
 import { loadRecoveryRuntimeContract, validateRecoveryRuntimeConfiguration } from "./disaster-recovery-runtime-contract.mjs";
 
+// Normal ordinary legacy row mutation: actual shipping loop + actual verified
+// synthetic archive/FD reader. SQL calls are captured only; no DB or restore runs.
+if (process.argv.includes('--normal-legacy-row-fidelity-only') || process.argv.includes('--normal-legacy-admission-and-effect-expiry-only')) {
+ const {readFileSync,mkdtempSync,mkdirSync,writeFileSync,rmSync,existsSync}=await import('node:fs');
+ const {join}=await import('node:path'),{tmpdir}=await import('node:os');
+ const {createHash}=await import('node:crypto'),{pipeline}=await import('node:stream/promises'),{createInterface}=await import('node:readline');
+ const api=await import('./disaster-recovery-archive.mjs'),crypto=await import('./disaster-recovery-crypto.mjs');
+ const {encodeProductionBackupTextColumnsDataRow}=await import('./production-backup-pg-dump-command.mjs');
+ const source=readFileSync(new URL('./production-restore.mjs',import.meta.url),'utf8');
+ const marker='    for (const selectedTable of databaseTables) {',endMarker='    restoreTable = null;';
+ function extract(text){assert.equal(text.split(marker).length,2);const start=text.indexOf(marker),end=text.indexOf(endMarker,start);assert.ok(end>start);return text.slice(start,end);}
+ const currentLoop=extract(source);
+ const ownedFidelityDelta="          // Legacy JSON cannot distinguish JSON-column null from SQL NULL.\n          // Require the existing mutation-fidelity proof before any row INSERT;\n          // refusal stays inside this transaction and cannot become count-only success.\n          const rawRowText = nativeTextPlans ? decodeRestoreTableRowLine(line, table)\n            : assertRestoreRowMutationFidelity(line, table);";
+ assert.equal(currentLoop.split(ownedFidelityDelta).length,2,'one exact owned fidelity delta required');
+ const freshInsert="          } else {\n            requireOrdinaryRestoreIntentFresh();\n            await db.query(insert, [rawRowText]);\n          }";
+ assert.equal(currentLoop.split(freshInsert).length,2);
+ const fidelityOnlyLoop=currentLoop.replace(freshInsert,'          } else await db.query(insert, [rawRowText]);');
+ const priorLoop=fidelityOnlyLoop.replace(ownedFidelityDelta,"          const rawRowText = decodeRestoreTableRowLine(line, table);");
+ assert.equal(createHash('sha256').update(priorLoop).digest('hex'),'cb42e8396760b61aedee294a93e97bed5e7898ec3e47efd459288b2e4d3604c2','all original shipping loop bytes must be recovered; unrelated drift refuses');
+ assert.match(source,/readVerifiedRestoreTableSelection, decodeRestoreTableRowLine, assertRestoreRowMutationFidelity, createRestoreRowUtf8Guard/);
+ assert.ok(currentLoop.includes('nativeTextPlans ? decodeRestoreTableRowLine(line, table)') && currentLoop.includes(': assertRestoreRowMutationFidelity(line, table)'));
+ assert.ok(currentLoop.indexOf('assertRestoreRowMutationFidelity(line, table)')<currentLoop.indexOf('await db.query(insert, [rawRowText])'));
+ const AsyncFunction=Object.getPrototypeOf(async function(){}).constructor;
+ const identifiers=source.split(String.fromCharCode(10)).filter(line=>line.startsWith('function quoteIdentifier(')||line.startsWith('function qualified('));assert.equal(identifiers.length,2);
+ function compile(loop){return new AsyncFunction('ports','const {db,databaseTables,verifiedArchive,openVerifiedRestoreTableData,createRestoreRowUtf8Guard,pipeline,createInterface,decodeRestoreTableRowLine,assertRestoreRowMutationFidelity,nativeTextPlans,nativeTextQuery,requireOrdinaryRestoreIntentFresh=()=>{}}=ports;let restorePhase,restoreTable;'+identifiers.join(String.fromCharCode(10))+String.fromCharCode(10)+loop);}
+ const current=compile(currentLoop),prior=compile(priorLoop),work=mkdtempSync(join(tmpdir(),'UNIT-normal-legacy-fidelity-'));
+ const key='UNIT-only-normal-legacy-fidelity-HMAC-20261027',keyId='unit-normal-legacy-fidelity-v1';
+ const sha=b=>createHash('sha256').update(b).digest('hex');const cases=[];let ordinal=0;
+ function fixture({raws,type='json',native=false,count=raws.length}){
+  const dir=join(work,'archive-'+ordinal++);mkdirSync(join(dir,'inventory'),{recursive:true});mkdirSync(join(dir,'database'));
+  const encoding=native?api.postgresTextColumnsLineEncoding:api.postgresJsonTextLineEncoding;
+  const columns=[{name:'id',data_type:'bigint',generated:'',identity:''},{name:'value',data_type:type,generated:'',identity:''}];
+  const catalog=['public','auth','storage'].map(schema_name=>({schema_name,table_name:'records',primary_key:['id'],columns,row_count:String(schema_name==='public'?count:0),data_file:'database/'+schema_name+'.records.jsonl',data_encoding:encoding}));
+  const cat=Buffer.from(JSON.stringify(catalog)+'\n');const summary={ok:true,format:'memphis-zoo-disaster-recovery.v4',consistent_database_snapshot:true,project_ref:'abcdefghijklmnopqrst',source_identity:{database_catalog_sha256:sha(cat)},backed_up_schemas:['public','auth','storage'],table_count:3,database_row_count:count};
+  const data=Buffer.from(raws.map(v=>native?encodeProductionBackupTextColumnsDataRow(v):JSON.stringify(v)).join('\n')+(raws.length?'\n':''));
+  const entries=[['backup-summary.json',Buffer.from(JSON.stringify(summary)+'\n')],['inventory/table-catalog.json',cat],['database/public.records.jsonl',data],['database/auth.records.jsonl',Buffer.alloc(0)],['database/storage.records.jsonl',Buffer.alloc(0)]];
+  for(const[n,b]of entries)writeFileSync(join(dir,n),b,{mode:0o600});const sums=entries.map(([n,b])=>sha(b)+'  '+n).join('\n')+'\n';writeFileSync(join(dir,'SHA256SUMS'),sums,{mode:0o600});const digest=sha(sums);
+  writeFileSync(join(dir,'archive-signature.json'),JSON.stringify({format:'memphis-zoo-disaster-recovery-signature.v1',algorithm:'hmac-sha256',key_id:keyId,archive_digest:digest,signature:crypto.signBinding(crypto.archiveSignatureBinding({archiveDigest:digest,projectRef:summary.project_ref,sourceIdentity:summary.source_identity,archiveFormat:summary.format}),key)}),{mode:0o600});
+  const archive=api.materializeVerifiedArchive({sourceDir:dir,archiveVerifyKey:key,archiveVerifyKeyId:keyId});return{archive,table:catalog[0],native};
+ }
+ async function run(label,options,{predecessor=false,refusal=null,expectRows=options.raws,expectFailure=false}={}){
+  const f=fixture(options),readers=[],calls=[],parameters=[];let error;
+  const open=(...args)=>{const r=api.openVerifiedRestoreTableData(...args);readers.push(r);return r;};
+  const query=async(sql,args)=>{calls.push(sql);if(sql.startsWith('insert into')||sql==='UNIT_NATIVE_PLAN'){parameters.push(args[0]);return{rowCount:1,rows:[{inserted:'1',retained:'1'}]};}return{rowCount:0,rows:[]};};
+  try{
+   await query('begin');
+   try{await(predecessor?prior:current)({db:{query},databaseTables:[f.table],verifiedArchive:f.archive,openVerifiedRestoreTableData:open,createRestoreRowUtf8Guard:api.createRestoreRowUtf8Guard,pipeline,createInterface,decodeRestoreTableRowLine:api.decodeRestoreTableRowLine,assertRestoreRowMutationFidelity:api.assertRestoreRowMutationFidelity,nativeTextPlans:f.native?new Map([[f.table,{insert:'UNIT_NATIVE_PLAN'}]]):null,nativeTextQuery:query});await query('commit');}
+   catch(caught){error=caught;await query('rollback');}
+   if(refusal||expectFailure){assert.ok(error);assert.equal(calls.includes('commit'),false);assert.equal(calls.at(-1),'rollback');if(refusal){assert.equal(error.code,'IMMUTABLE_LEGACY_DATA_FIDELITY_UNPROVEN');assert.equal(error.fidelity_reason,refusal);assert.equal(String(error).includes('PRIVATE-CANARY'),false);}}
+   else{assert.equal(error,undefined);assert.equal(calls.at(-1),'commit');}
+   assert.deepEqual(parameters,expectRows);for(const r of readers){await r.close();assert.ok(r.stream.closed&&r.stream.destroyed);}
+   cases.push({case:label,status:'PASS',source:predecessor?'PRESERVED_PREDECESSOR_REPRODUCTION':'CHANGED_SHIPPING_LOOP',captured_inserts:parameters.length,commit_callback:calls.includes('commit'),refusal:refusal??null,actual_SQL:false});
+   return parameters;
+  }finally{for(const r of readers)await r.close();f.archive.cleanup();assert.equal(existsSync(f.archive.directory),false);}
+ }
+ try{
+  const ambiguous='{"id":1,"value":null}';
+  // JSON-column SQL NULL and JSON null have the same legacy row token. Never
+  // pretend one can be inferred from this archive; both refuse mutation.
+  await run('prior legacy nullable JSON reaches count-only success',{raws:[ambiguous]},{predecessor:true});
+  for(const type of ['json','jsonb'])await run('legacy '+type+' ambiguous null refuses before INSERT',{raws:[ambiguous],type},{refusal:'JSON_NULL_AMBIGUOUS',expectRows:[]});
+  await run('legacy exact nonnull JSON/numeric spans survive',{raws:['{"id":9223372036854775807,"value":{"n":9007199254740993,"fraction":0.12345678901234567890,"n":2}}']});
+  await run('legacy JSON string null is not ambiguous null',{raws:['{"id":1,"value":"null"}']});
+  await run('known non-JSON SQL NULL remains accepted',{raws:[ambiguous],type:'text'});
+  await run('empty original JSON table remains empty',{raws:[]});
+  const valid='{"id":1,"value":{"valid":true}}';await run('late ambiguous row never reaches commit',{raws:[valid,ambiguous]},{refusal:'JSON_NULL_AMBIGUOUS',expectRows:[valid]});
+  await run('signed rowcount mismatch cannot become success',{raws:[valid],count:2},{expectFailure:true,expectRows:[valid]});
+  const sqlNull='{"id":"1","value":null}',jsonNull='{"id":"1","value":"null"}';
+  const params=await run('native TEXT preserves SQLNULL versus JSONnull distinct parameters',{raws:[sqlNull,jsonNull],native:true});assert.notEqual(params[0],params[1]);
+  if(process.argv.includes('--normal-legacy-admission-and-effect-expiry-only')){
+   function exactBetween(start,end){assert.equal(source.split(start).length,2);const a=source.indexOf(start),b=source.indexOf(end,a);assert.ok(b>a);return source.slice(a,b);}
+   const preflightSource=exactBetween('async function preflightOrdinaryLegacyRestoreData() {','function requireOrdinaryRestoreIntentFresh() {');
+   assert.ok(source.indexOf('await preflightOrdinaryLegacyRestoreData();')<source.indexOf('const db = new Client('));
+   const preflight=new AsyncFunction('ports','const {freshPrivateDatabase=false,nativeTextDatabase=false,requireRestoreIntentFresh,requireOriginalArchiveSource,databaseTables,verifiedArchive,openVerifiedRestoreTableData,createRestoreRowUtf8Guard,pipeline,createInterface,assertRestoreRowMutationFidelity}=ports;'+preflightSource+'return preflightOrdinaryLegacyRestoreData();');
+   async function admissionCase(label,options,{refusal=null,expireAtRead=null,skip=false}={}){
+    const f=fixture(options),readers=[];let calls=0,error,closed=0;
+    try{
+     const check=()=>{if(expireAtRead!==null&&++calls>=expireAtRead)throw new Error('UNIT authorization expired');};
+     try{await preflight({nativeTextDatabase:skip,requireRestoreIntentFresh:check,requireOriginalArchiveSource:()=>{},databaseTables:[f.table],verifiedArchive:f.archive,openVerifiedRestoreTableData:(...a)=>{const r=api.openVerifiedRestoreTableData(...a);readers.push(r);return r;},createRestoreRowUtf8Guard:api.createRestoreRowUtf8Guard,pipeline,createInterface,assertRestoreRowMutationFidelity:api.assertRestoreRowMutationFidelity});}catch(e){error=e;}
+     if(refusal){assert.ok(error);assert.equal(error.fidelity_reason,refusal);}else if(expireAtRead!==null)assert.match(String(error),/authorization expired/);else assert.equal(error,undefined);
+     for(const r of readers){await r.close();assert.ok(r.stream.closed&&r.stream.destroyed);closed++;}
+     if(skip)assert.equal(readers.length,0);
+     cases.push({case:label,status:'PASS',source:'EXACT_SHIPPING_PREFLIGHT_BEFORE_CLIENT',private_readers_closed:closed,target_connections:0,captured_mutations:0,actual_SQL:false});
+    }finally{for(const r of readers)await r.close();f.archive.cleanup();}
+   }
+   await admissionCase('legacy preflight rejects late ambiguous JSON before any target connection',{raws:['{"id":1,"value":{"valid":true}}','{"id":2,"value":null}']},{refusal:'JSON_NULL_AMBIGUOUS'});
+   await admissionCase('legacy preflight exact nonnull source admitted and private FD closed',{raws:['{"id":1,"value":{"n":9007199254740993}}']});
+   await admissionCase('legacy preflight actual ordinary SQL NULL in known text column admitted',{raws:['{"id":1,"value":null}'],type:'text'});
+   await admissionCase('legacy preflight authorization expiration during scan refuses before connection',{raws:['{"id":1,"value":{"valid":true}}']},{expireAtRead:2});
+   await admissionCase('native source is not decoded by legacy preflight',{raws:['{"id":"1","value":null}'],native:true},{skip:true});
+   // Compile actual lock/truncate seam. Expiration while the awaited lock was held
+   // must prevent the original destructive statement; a fresh intent still works.
+   const lockSource=exactBetween('      if (!nativeTextDatabase) {\n        requireOrdinaryRestoreIntentFresh();\n        await db.query(`lock table','    restorePhase = "suspend_unvalidated_restore_checks";');
+   const lockCode=lockSource.slice(0,lockSource.lastIndexOf('    }')); // exclude containing databaseTables block closure
+   const guardedTruncate=new AsyncFunction('ports','const {nativeTextDatabase=false,requireOrdinaryRestoreIntentFresh,db,databaseTables,qualified,nativeTextQuery,sql}=ports;'+lockCode);
+   for(const expiresAfterLock of [false,true]){
+    let expired=false,error;const calls=[];
+    try{await guardedTruncate({requireOrdinaryRestoreIntentFresh:()=>{if(expired)throw new Error('UNIT authorization expired');},db:{query:async sql=>{calls.push(sql);if(sql.startsWith('lock table')&&expiresAfterLock)expired=true;return{rows:[]};}},databaseTables:[{schema_name:'public',table_name:'records'}],qualified:(s,t)=>'"'+s+'"."'+t+'"',nativeTextQuery:()=>assert.fail('legacy must not call native'),sql:'truncate UNIT_SELECTED_ONLY'});}catch(e){error=e;}
+    assert.equal(calls.some(sql=>sql.startsWith('truncate')),!expiresAfterLock);if(expiresAfterLock)assert.match(String(error),/expired/);else assert.equal(error,undefined);
+    cases.push({case:expiresAfterLock?'expiry after awaited table lock prevents TRUNCATE':'fresh authorization preserves normal lock then TRUNCATE',status:'PASS',captured_queries:calls,actual_SQL:false});
+   }
+   const commitMarker='    requireOrdinaryRestoreIntentFresh();\n    await db.query("commit");\n  } catch (error) {\n    await db.query("rollback").catch(() => {});\n    if (mixedDataCommitAttempted)';
+   assert.equal(source.split(commitMarker).length,2,'exact ordinary DATA final-commit seam');
+   const commit=new AsyncFunction('ports','const {requireOrdinaryRestoreIntentFresh,db}=ports;'+commitMarker.slice(0,commitMarker.indexOf('\n  } catch')));
+   for(const expired of [false,true]){const calls=[];let error;try{await commit({requireOrdinaryRestoreIntentFresh:()=>{if(expired)throw new Error('UNIT authorization expired');},db:{query:async q=>calls.push(q)}});}catch(e){error=e;}
+    assert.deepEqual(calls,expired?[]:['commit']);assert.equal(Boolean(error),expired);cases.push({case:expired?'expired ordinary intent prevents final DATA COMMIT':'fresh ordinary intent preserves final DATA COMMIT',status:'PASS',captured_queries:calls,actual_SQL:false});}
+   const f=fixture({raws:['{"id":1,"value":{"valid":true}}']}),readers=[];let error,inserts=0;
+   try{try{await current({db:{query:async()=>{inserts++;return{rows:[],rowCount:1};}},databaseTables:[f.table],verifiedArchive:f.archive,openVerifiedRestoreTableData:(...a)=>{const r=api.openVerifiedRestoreTableData(...a);readers.push(r);return r;},createRestoreRowUtf8Guard:api.createRestoreRowUtf8Guard,pipeline,createInterface,decodeRestoreTableRowLine:api.decodeRestoreTableRowLine,assertRestoreRowMutationFidelity:api.assertRestoreRowMutationFidelity,nativeTextPlans:null,nativeTextQuery:()=>assert.fail(),requireOrdinaryRestoreIntentFresh:()=>{throw new Error('UNIT authorization expired');}});}catch(e){error=e;}assert.match(String(error),/expired/);assert.equal(inserts,0);cases.push({case:'ordinary row effect rechecks authorization after source decoding',status:'PASS',captured_mutations:0,actual_SQL:false});}finally{for(const r of readers)await r.close();f.archive.cleanup();}
+  }
+  console.log(JSON.stringify({selector:process.argv.includes('--normal-legacy-admission-and-effect-expiry-only')?'--normal-legacy-admission-and-effect-expiry-only':'--normal-legacy-row-fidelity-only',status:'PASS',cases,count:cases.length,archive_verifier:'ACTUAL_SYNTHETIC_HMAC_AND_PRIVATE_READER',current_loop:'EXACT_SHIPPING_SOURCE',SQL:'NOT_RUN',limits:'Synthetic archive keys and captured transaction/query callbacks; no actual SQL null conversion, transaction rollback, actor/intent/target admission or restore effects proven.'}));
+ }finally{rmSync(work,{recursive:true,force:true});assert.equal(existsSync(work),false);}
+ process.exit(0);
+}
+
 // NEW fresh no-member Storage caller fragments. Inert SQL records stand in
 // for already-validated inputs only; no branded archive/native admission proof.
 if (process.argv.includes('--fresh-no-storage-only')) {

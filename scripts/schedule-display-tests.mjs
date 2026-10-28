@@ -38,5 +38,16 @@ assert.equal((workStatus.match(/Aquarium/g) || []).length, 2, 'Memphis work-stat
 assert.match(workStatus, /Morning Assigned Areas/);
 assert.match(workStatus, /Restroom Rebalance Schedule/);
 
+for(const [start,end,label] of [['12:00','12:30','12:00 PM – 12:30 PM'],['12:00','13:30','12:00 PM – 01:30 PM']]){
+  const input=[{location_group_id:'actual-lunch',group_name:'Accepted actual window',coverage_purpose:'lunch_coverage',coverage_start:start,coverage_end:end,is_current:true}],before=JSON.stringify(input);
+  const view=consolidateScheduleItems(input);
+  assert.equal(view.sections[0].title,'Lunch Coverage');assert.equal(view.items[0].section_title,'Lunch Coverage');
+  assert.equal(view.items[0].time_label,label);assert.equal(view.items[0].is_current,true);assert.equal(JSON.stringify(input),before);
+}
+const unknown=[{location_group_id:'unknown-lunch',group_name:'Unknown window',coverage_purpose:'lunch_coverage',coverage_start:null,coverage_end:null,is_current:false}];
+const unknownBefore=JSON.stringify(unknown),unknownView=consolidateScheduleItems(unknown);
+assert.equal(unknownView.sections[0].title,'Lunch Coverage');assert.equal(unknownView.items[0].is_current,false);
+assert.equal(unknownView.items[0].time_label,'');assert.equal(unknownView.items[0].coverage_end,null);assert.equal(JSON.stringify(unknown),unknownBefore);
+console.log('ACTUAL_LUNCH_DISPLAY_WINDOW_CASES_PASS');
 console.log('SCHEDULE_DISPLAY_TESTS_PASS');
 await import('./schedule-display-order-tests.mjs');

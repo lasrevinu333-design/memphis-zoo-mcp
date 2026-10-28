@@ -3,7 +3,69 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-if(process.argv.includes("--stream-original-dispatch-new")){
+if(process.argv.includes("--readonly-crud-http-new")){
+  const {default:express}=await import("express");
+  const {createGeminiConsoleRouter}=await import("../src/gemini-console-api.js");
+  const {createOpsManagerSession,makeOpsAccessMiddleware}=await import("../src/auth/shared-access-auth.js");
+  const id=n=>`00000000-0000-4000-8000-${String(n).padStart(12,"0")}`;
+  const manager={manager_id:id(1),display_name:"Synthetic named manager",roles:["OPS_MANAGER"],
+    active:true,revoked_at:null,is_system_principal:false,system_key:"eric_custodial_manager"};
+  const env={OPS_MANAGER_SESSION_SECRET:"synthetic-gemini-manager-independent-secret-32chars"};
+  const now=new Date();
+  const credential={credential_id:id(2),device_id:"synthetic-gemini-device",manager_id:manager.manager_id,manager,
+    max_access_level:"full_access",created_at:now.toISOString(),expires_at:new Date(+now+86400000).toISOString(),revoked_at:null};
+  const store={find:async key=>key===credential.credential_id?credential:null};
+  const session=accessLevel=>createOpsManagerSession({credentialId:credential.credential_id,
+    deviceId:credential.device_id,manager,env,accessLevel});
+  const full=session("full_access"),readonly=session("read_only");
+  const rows=new Map();let reads=0,writes=0,rpcs=0,outcomeReads=0,checks=0;
+  const supabase={rpc:async()=>{rpcs++;throw Error("Unexpected RPC");},from(table){
+    reads++;assert.equal(table,"gemini_console_conversations");
+    const filters=[];let patch=null,insert=null;
+    const q={select(){return this;},eq(k,v){filters.push(r=>r[k]===v);return this;},neq(k,v){filters.push(r=>r[k]!==v);return this;},
+      order(){return this;},limit(){return this;},upsert(row){writes++;insert=row;return this;},update(row){writes++;patch=row;return this;},
+      async execute(){if(insert&&!rows.has(insert.conversation_id))rows.set(insert.conversation_id,{status:"active",...insert});
+        const found=[...rows.values()].filter(r=>filters.every(f=>f(r)));
+        if(patch)found.forEach(r=>Object.assign(r,patch));return {data:found,error:null};},
+      async maybeSingle(){const result=await this.execute();return {...result,data:result.data[0]||null};},
+      single(){return this.maybeSingle();},then(resolve,reject){return this.execute().then(resolve,reject);}};
+    return q;
+  }};
+  const app=express();app.use(express.json());app.use(createGeminiConsoleRouter({supabase,
+    requireOpsManagerAuth:makeOpsAccessMiddleware({env,trustedDeviceStore:store}),
+    runReadOnlySql:async()=>{outcomeReads++;return [];}}));
+  const server=app.listen(0,"127.0.0.1");await new Promise(resolve=>server.once("listening",resolve));
+  const base=`http://127.0.0.1:${server.address().port}`;
+  async function request(method,path,token,body){const response=await fetch(base+path,{method,headers:{
+    ...(token?{Authorization:`Bearer ${token}`} : {}),...(body?{"Content-Type":"application/json"}:{})},
+    ...(body?{body:JSON.stringify(body)}:{})});return {status:response.status,body:await response.json()};}
+  async function expect(method,path,token,body,status){const result=await request(method,path,token,body);assert.equal(result.status,status,`${method} ${path}`);checks++;return result;}
+  try{
+    const mutations=[["POST","/conversations",{client_operation_id:id(3)}],["PATCH",`/conversations/${id(3)}`,{title:"Changed"}],
+      ["DELETE",`/conversations/${id(3)}`],["POST",`/conversations/${id(3)}/attachments`,{}],
+      ["DELETE",`/attachments/${id(4)}`],["POST",`/conversations/${id(3)}/messages/stream`,{}],
+      ["POST",`/messages/${id(5)}/cancel`,{}]];
+    for(const [method,path,body] of mutations){await expect(method,path,readonly.token,body,403);
+      assert.deepEqual([reads,writes,rpcs],[0,0,0],"ReadOnly denied before conversation/storage/provider/RPC access");checks++;}
+    await expect("POST","/conversations",null,{client_operation_id:id(3)},401);
+    credential.revoked_at=new Date().toISOString();await expect("POST","/conversations",full.token,{client_operation_id:id(3)},401);
+    credential.revoked_at=null;
+    await expect("POST","/conversations",full.token,{client_operation_id:id(3),title:"Original"},200);
+    await expect("PATCH",`/conversations/${id(3)}`,full.token,{title:"Updated",draft_text:"Saved draft"},200);
+    assert.equal(rows.get(id(3)).draft_text,"Saved draft");checks++;
+    const previousWrites=writes;await expect("GET","/conversations",readonly.token,undefined,200);
+    assert.equal(writes,previousWrites);checks++;
+    await expect("POST",`/conversations/${id(3)}/messages/original-outcome`,readonly.token,{conversation_id:id(3),
+      client_message_id:id(6),correlation_id:id(7),body:"Original body",orderedattachment_ids:[],created_at:now.toISOString()},200);
+    assert.equal(outcomeReads,1);assert.equal(writes,previousWrites);checks++;
+    rows.set(id(8),{conversation_id:id(8),owner_manager_id:id(9),status:"active",title:"Other manager"});
+    await expect("PATCH",`/conversations/${id(8)}`,full.token,{title:"Must not change"},404);
+    assert.equal(rows.get(id(8)).title,"Other manager");checks++;
+    await expect("DELETE",`/conversations/${id(3)}`,full.token,undefined,200);
+    assert.equal(rows.get(id(3)).status,"deleted");checks++;
+    console.log(JSON.stringify({scope:"Gemini actual mounted HTTP, synthetic signed sessions and recording store; no SQL/provider",checks,result:"PASS"}));
+  }finally{server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
+}else if(process.argv.includes("--stream-original-dispatch-new")){
   const {createGeminiConsoleRouter}=await import("../src/gemini-console-api.js");
   const ids={manager:"00000000-0000-4000-8000-000000000001",credential:"00000000-0000-4000-8000-000000000002",
     conversation:"00000000-0000-4000-8000-000000000003",otherConversation:"00000000-0000-4000-8000-000000000004",

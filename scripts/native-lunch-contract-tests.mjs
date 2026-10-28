@@ -34,6 +34,15 @@ try{
  const permit=validateNativeLunchDispatch(dispatch,{jobId:id(1),leaseToken:id(2),expected});
  check('strict original 27-field native LUNCH contract',Object.keys(permit.reservation.payload).sort(),NATIVE_LUNCH_PAYLOAD_KEYS);
  check('business TTL preserves SQL microseconds',permit.ttl_seconds,3598);
+ for(const [end,ttl] of [['12:30',1798],['13:30',5398]]){
+  const actual={...data,valid_until:`2026-10-02T${end}:00.000000Z`};
+  const actualPayload={...actual,content_sha256:hash(canonicalNativeLocation(actual))};
+  const actualReservation={...reservation,payload:actualPayload,wire:canonicalNativeLocation(actualPayload)};
+  const admitted=validateNativeLunchDispatch({...dispatch,reservation:actualReservation,ttl_seconds:ttl},
+   {jobId:id(1),leaseToken:id(2),expected});
+  check('actual accepted lunch end drives TTL without fixed hour',admitted.ttl_seconds,ttl);
+ }
+
  for(const changed of [
   {...payload,schema:'custodial.native-location-payload.v2'},
   {...payload,extra:'unapproved'},

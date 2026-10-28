@@ -2,6 +2,43 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import express from "express";
 import { createMessagingRouter } from "../src/messaging-api.js";
+import {createMemphisResponder} from '../src/memphis-ai.js';
+
+if(process.argv.includes('--responder-named-identity-only')) {
+  const user='00000000-0000-4000-8000-000000000803',manager='00000000-0000-4000-8000-000000000801';
+  let current={msg_user_id:user,user_active:true,ops_manager_id:manager,manager_id:manager,
+    display_name:'Current Manager',roles:['OPS_MANAGER'],active:true,revoked_at:null,is_system_principal:false};
+  let deviceIdentity=null;const queries=[];
+  const responder=createMemphisResponder({runRpc:async()=>null,runReadOnlySql:async sql=>{
+    queries.push(sql);
+    if(sql.includes('from public.msg_users u')&&sql.includes('join public.ops_manager_managers'))return current?[{...current}]:[];
+    if(sql.includes('msg_get_user_by_device'))return deviceIdentity?[deviceIdentity]:[];
+    return [];
+  }});
+  const ask=(text='attendance today',extra={})=>responder.generateReply({userId:user,deviceId:'named-manager-browser-no-employee',userMessage:text,...extra});
+  let result=await ask();assert.equal(result.meta.mode,'local_attendance','a current named manager does not require an employee-device record');
+  assert.ok(queries.some(q=>q.includes('v_admin_health_snapshot')));assert.ok(!queries.some(q=>q.includes('msg_get_user_by_device')));
+  result=await ask('who am i');assert.match(result.text,/Current Manager/);
+  const valid={...current};
+  for(const invalid of [{active:false},{revoked_at:'2026-01-01T00:00:00Z'},{is_system_principal:true},{roles:[]},{user_active:false},
+    {msg_user_id:'00000000-0000-4000-8000-000000000999'}]) {
+    current={...valid,...invalid};queries.length=0;deviceIdentity={role:'manager',msg_user_id:user};
+    result=await ask();assert.notEqual(result.meta.mode,'local_attendance');
+    assert.ok(!queries.some(q=>q.includes('v_admin_health_snapshot')),'invalid named identity cannot execute manager-only reads');
+    assert.ok(!queries.some(q=>q.includes('msg_get_user_by_device')),'invalid named identity cannot fall back to a claimed device');
+    queries.length=0;
+    result=await ask('who am i');assert.equal(result.meta.mode,'identity_unavailable');
+    assert.ok(!queries.some(q=>q.includes('msg_get_user_by_device')||q.includes('from public.devices')||q.includes('msg_messages')),
+      'an invalid named sender cannot read device/employee identity or thread context on another intent');
+  }
+  current={msg_user_id:user,user_active:true,ops_manager_id:null};deviceIdentity={role:'employee',msg_user_id:user};queries.length=0;
+  result=await ask('attendance today',{role:'manager',identity:{role:'manager'}});
+  assert.notEqual(result.meta.mode,'local_attendance');assert.ok(!queries.some(q=>q.includes('v_admin_health_snapshot')));
+  deviceIdentity={role:'manager',msg_user_id:'00000000-0000-4000-8000-000000000999'};queries.length=0;
+  result=await ask();assert.notEqual(result.meta.mode,'local_attendance');assert.ok(!queries.some(q=>q.includes('v_admin_health_snapshot')));
+  console.log('NAMED_MANAGER_RESPONDER_CURRENT_IDENTITY_PASS: actual responder with recording current-registry reads; no HTTP/SQL/provider claim');
+  process.exit(0);
+}
 
 const MANAGER_A_ID = "00000000-0000-4000-8000-000000000801";
 const MANAGER_B_ID = "00000000-0000-4000-8000-000000000802";

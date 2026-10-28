@@ -22,7 +22,7 @@ import {
   captureVerifiedOriginalRestoreIntent,
   stableJson,
 } from "./disaster-recovery-crypto.mjs";
-import { materializeVerifiedArchive, restoreArchiveAdmission, selectVerifiedRestoreTables, readVerifiedRestoreTableSelection, decodeRestoreTableRowLine, createRestoreRowUtf8Guard, readVerifiedArchiveSourceBinding, openVerifiedRestoreTableData, postgresTextColumnsLineEncoding } from "./disaster-recovery-archive.mjs";
+import { materializeVerifiedArchive, restoreArchiveAdmission, selectVerifiedRestoreTables, readVerifiedRestoreTableSelection, decodeRestoreTableRowLine, assertRestoreRowMutationFidelity, createRestoreRowUtf8Guard, readVerifiedArchiveSourceBinding, openVerifiedRestoreTableData, postgresTextColumnsLineEncoding } from "./disaster-recovery-archive.mjs";
 import {
   capturePreRestoreState,
   compareRestoredState,
@@ -289,9 +289,13 @@ if (intent.archive_digest !== archiveDigest
 }
 if (!String(intent.actor || "").trim()) throw new Error("Restore intent must identify the named actor.");
 const expiresAt = Date.parse(String(intent.expires_at || ""));
-if (!Number.isFinite(expiresAt) || expiresAt <= Date.now() || expiresAt > Date.now() + 24 * 60 * 60 * 1000) {
-  throw new Error("Restore intent is expired or exceeds the 24-hour authorization window.");
+function requireRestoreIntentFresh() {
+  const now = Date.now();
+  if (!Number.isFinite(expiresAt) || expiresAt <= now || expiresAt > now + 24 * 60 * 60 * 1000) {
+    throw new Error("Restore intent is expired or exceeds the 24-hour authorization window.");
+  }
 }
+requireRestoreIntentFresh();
 
 // Explicit same-original disposable official provider. The normal production
 // private APPLY barrier below is unchanged; no caller-selected role/profile.
@@ -344,6 +348,51 @@ const restoreClientOptions = {
   application_name: "memphis-zoo-disaster-restore",
   ...(databaseCaCertPath ? { ssl: { ca: readFileSync(resolve(databaseCaCertPath), "utf8"), rejectUnauthorized: true } } : {}),
 };
+async function preflightOrdinaryLegacyRestoreData() {
+  if (freshPrivateDatabase || nativeTextDatabase) return;
+  requireRestoreIntentFresh();
+  requireOriginalArchiveSource();
+  for (const selectedTable of databaseTables) {
+    const tableData = openVerifiedRestoreTableData(verifiedArchive, selectedTable.schema_name, selectedTable.table_name);
+    let rowStream, utf8Guard, wireSettled, input, tableFailure;
+    try {
+      const table = tableData.table;
+      rowStream = tableData.stream;
+      utf8Guard = createRestoreRowUtf8Guard();
+      wireSettled = pipeline(rowStream, utf8Guard);
+      wireSettled.catch(() => {});
+      input = createInterface({ input: utf8Guard, crlfDelay: Infinity });
+      let rows = 0;
+      for await (const line of input) {
+        requireRestoreIntentFresh();
+        requireOriginalArchiveSource();
+        assertRestoreRowMutationFidelity(line, table);
+        rows += 1;
+      }
+      await wireSettled;
+      await tableData.verified;
+      if (rows !== Number(table.row_count)) throw new Error("Legacy restore admission row-count mismatch.");
+      requireRestoreIntentFresh();
+      requireOriginalArchiveSource();
+    } catch (error) {
+      tableFailure = error;
+      throw error;
+    } finally {
+      input?.close(); rowStream?.destroy(); utf8Guard?.destroy();
+      if (wireSettled) await wireSettled.catch(() => {});
+      try { await tableData.close(); }
+      catch (cleanupError) {
+        if (tableFailure) throw new AggregateError([tableFailure, cleanupError], "Legacy restore admission and source cleanup failed.", { cause: tableFailure });
+        throw cleanupError;
+      }
+    }
+  }
+}
+function requireOrdinaryRestoreIntentFresh() {
+  if (!freshPrivateDatabase && !nativeTextDatabase) requireRestoreIntentFresh();
+}
+await preflightOrdinaryLegacyRestoreData();
+
 const db = new Client(restoreClientOptions);
 // Fixed, local read snapshot only: no caller query/body/profile or effect
 // authority. Each checkpoint must observe a new snapshot, never a saved flag.
@@ -733,7 +782,11 @@ async function observeFreshOriginalAuthorityCommit(){
 }
 async function continueRestoreAfterDatabase({databaseEvidence,immutablePrivateDataEvidence,unvalidatedCheckEvidence,invalidated}) {
   const requireFreshContinuation = () => {
-    if (!freshPrivateDatabase && !nativeTextDatabase) return; // Historical ordinary caller unchanged.
+    if (!freshPrivateDatabase && !nativeTextDatabase) {
+      requireRestoreIntentFresh();
+      requireOriginalArchiveSource();
+      return;
+    }
     if(nativeTextDatabase && Date.now()>=expiresAt)throw new Error("Original native restore intent expired.");
     requireOriginalArchiveSource();
     if (!databaseOnly || !prepared || !mutationFenceHeld) {
@@ -883,32 +936,42 @@ async function continueRestoreAfterDatabase({databaseEvidence,immutablePrivateDa
     productionSupabase = supabase;
     const targetBucketsBefore = await db.query("select row_to_json(b) row from storage.buckets b order by b.id");
     const targetObjectsBefore = await db.query("select row_to_json(o) row from storage.objects o order by o.bucket_id,o.name,o.id");
+    requireOrdinaryRestoreIntentFresh();
     requireOriginalArchiveSource();
     const preparedUploads = await prepareVerifiedStorageUploads({ verifiedArchive });
     let storageUploadFailed = false;
     try {
+    requireOrdinaryRestoreIntentFresh();
     requireOriginalArchiveSource(); preparedUploads.requireCurrent();
     for (const bucket of preparedUploads.buckets) {
+      requireOrdinaryRestoreIntentFresh();
       requireOriginalArchiveSource(); preparedUploads.requireCurrent();
       const created = await supabase.storage.createBucket(bucket.id, bucket.options);
       if (created.error && !/already exists|duplicate/i.test(created.error.message)) throw created.error;
+      requireOrdinaryRestoreIntentFresh();
       requireOriginalArchiveSource(); preparedUploads.requireCurrent();
       if (created.error) {
+        requireOrdinaryRestoreIntentFresh();
         requireOriginalArchiveSource(); preparedUploads.requireCurrent();
         const updated = await supabase.storage.updateBucket(bucket.id, bucket.options);
         if (updated.error) throw updated.error;
+        requireOrdinaryRestoreIntentFresh();
         requireOriginalArchiveSource(); preparedUploads.requireCurrent();
       }
     }
     for (const object of preparedUploads.objects) {
+      requireOrdinaryRestoreIntentFresh();
       requireOriginalArchiveSource(); preparedUploads.requireCurrent();
       const uploaded = await supabase.storage.from(object.bucket_id).upload(object.name, object.body, object.options);
       if (uploaded.error) throw uploaded.error;
+      requireOrdinaryRestoreIntentFresh();
       requireOriginalArchiveSource(); preparedUploads.requireCurrent();
       const downloaded = await supabase.storage.from(object.bucket_id).download(object.name);
       if (downloaded.error || !downloaded.data) throw downloaded.error || new Error("Original Storage byte verification unavailable.");
+      requireOrdinaryRestoreIntentFresh();
       requireOriginalArchiveSource(); preparedUploads.requireCurrent();
       const actual = sha256Bytes(Buffer.from(await downloaded.data.arrayBuffer()));
+      requireOrdinaryRestoreIntentFresh();
       requireOriginalArchiveSource(); preparedUploads.requireCurrent();
       if (actual !== object.sha256) throw new Error("Original Storage byte verification differs.");
     }
@@ -921,10 +984,13 @@ async function continueRestoreAfterDatabase({databaseEvidence,immutablePrivateDa
       catch (error) { if (!cleanupFailed) { cleanupFailed = true; cleanupFailure = error; } }
       if (cleanupFailed && !storageUploadFailed) throw cleanupFailure;
     }
+    requireOrdinaryRestoreIntentFresh();
     requireOriginalArchiveSource();
     const actualBuckets = await db.query("select row_to_json(b) row from storage.buckets b order by b.id");
+    requireOrdinaryRestoreIntentFresh();
     requireOriginalArchiveSource();
     const actualObjects = await db.query("select row_to_json(o) row from storage.objects o order by o.bucket_id,o.name,o.id");
+    requireOrdinaryRestoreIntentFresh();
     requireOriginalArchiveSource();
     const storageDifferences = compareStorageState({
       archivedBuckets: buckets,
@@ -933,6 +999,7 @@ async function continueRestoreAfterDatabase({databaseEvidence,immutablePrivateDa
       actualObjects: actualObjects.rows.map((item) => item.row),
     });
     const exactStorageData = await readExactOriginalStorageSnapshot();
+    requireOrdinaryRestoreIntentFresh();
     requireOriginalArchiveSource();
     storageEvidence = {
       buckets: buckets.length,
@@ -945,6 +1012,7 @@ async function continueRestoreAfterDatabase({databaseEvidence,immutablePrivateDa
       discrepancies: storageDifferences,
     };
     if (!storageEvidence.metadata_and_ownership_verified) {
+      requireOrdinaryRestoreIntentFresh();
       requireOriginalArchiveSource();
       await db.query(`
         insert into custodial_dr.restore_discrepancies(
@@ -954,6 +1022,7 @@ async function continueRestoreAfterDatabase({databaseEvidence,immutablePrivateDa
           status='OPEN',before_count=excluded.before_count,restored_count=excluded.restored_count,
           details_json=excluded.details_json,resolved_by=null,resolved_at=null,resolution=null
       `, [restoreId, generation, objects.length, actualObjects.rowCount, JSON.stringify(storageEvidence)]);
+      requireOrdinaryRestoreIntentFresh();
       requireOriginalArchiveSource();
     }
   }
@@ -1004,10 +1073,13 @@ async function continueRestoreAfterDatabase({databaseEvidence,immutablePrivateDa
       storageEvidence.final_provider_resample = await verifyFreshLocalStorageProvider({token:freshStorageProvider,db,state:"VERIFYING"});
       requireFreshContinuation();
     }
+    requireOrdinaryRestoreIntentFresh();
     requireOriginalArchiveSource();
     const finalBuckets = await db.query("select row_to_json(b) row from storage.buckets b order by b.id");
+    requireOrdinaryRestoreIntentFresh();
     requireOriginalArchiveSource();
     const finalObjects = await db.query("select row_to_json(o) row from storage.objects o order by o.bucket_id,o.name,o.id");
+    requireOrdinaryRestoreIntentFresh();
     requireOriginalArchiveSource();
     const finalStorageDifferences = compareStorageState({
       archivedBuckets: buckets,
@@ -1017,6 +1089,7 @@ async function continueRestoreAfterDatabase({databaseEvidence,immutablePrivateDa
     }).filter(item=>!(freshStorageProvider !== null && item.field==='owner_access_boundary'
       && storageEvidence.final_provider_resample.owner_access_probes.some(probe=>probe.bucket_id===item.bucket_id && probe.name===item.name && probe.status==='VERIFIED_CURRENT_RESTORED_ROLE_BOUNDARY')));
     const finalExactStorageData = await readExactOriginalStorageSnapshot();
+    requireOrdinaryRestoreIntentFresh();
     requireOriginalArchiveSource();
     const finalStorageVerified = finalStorageDifferences.length === 0 && finalExactStorageData.status === "MATCH";
     storageEvidence.metadata_and_ownership_verified = storageEvidence.metadata_and_ownership_verified === true && finalStorageVerified;
@@ -1030,6 +1103,7 @@ async function continueRestoreAfterDatabase({databaseEvidence,immutablePrivateDa
       storage_api_client_initialized: Boolean(productionSupabase),
     };
     if (!finalStorageVerified) {
+      requireOrdinaryRestoreIntentFresh();
       requireOriginalArchiveSource();
       await db.query(`
         insert into custodial_dr.restore_discrepancies(
@@ -1039,10 +1113,13 @@ async function continueRestoreAfterDatabase({databaseEvidence,immutablePrivateDa
           status='OPEN',before_count=excluded.before_count,restored_count=excluded.restored_count,
           details_json=excluded.details_json,resolved_by=null,resolved_at=null,resolution=null
       `, [restoreId, generation, objects.length, finalObjects.rowCount, JSON.stringify(storageEvidence)]);
+      requireOrdinaryRestoreIntentFresh();
       requireOriginalArchiveSource();
     }
+    requireOrdinaryRestoreIntentFresh();
     requireOriginalArchiveSource();
     await db.query("update custodial_dr.restore_manifests set storage_verified=$2,storage_evidence=$3::jsonb,updated_at=clock_timestamp() where restore_id=$1", [restoreId, storageEvidence.metadata_and_ownership_verified, JSON.stringify(storageEvidence)]);
+    requireOrdinaryRestoreIntentFresh();
     requireOriginalArchiveSource();
   }
   if (cronEvidence) {
@@ -1131,6 +1208,7 @@ try {
   await db.query("select pg_advisory_lock(hashtextextended('memphis-zoo-production-restore',0))");
   restoreSessionLockHeld = true;
 try {
+  requireRestoreIntentFresh();
   if (freshPrivateDatabase) {
     // No legacy pause/prepare, second initializer, TRUNCATE/replica or second
     // authority rewrite. Only the original private factory may bridge to the
@@ -1328,6 +1406,7 @@ try {
     }
   } else {
   restorePhase = "preflight";
+  requireOrdinaryRestoreIntentFresh();
   const control = await db.query("select * from custodial_dr.restore_control where singleton=true for update");
   if (control.rowCount !== 1) throw new Error("The non-restored disaster-recovery control plane is unavailable.");
   const previousControl = control.rows[0];
@@ -1341,23 +1420,30 @@ try {
   if (generation !== Number(previousControl.authority_generation) + 1) throw new Error("Restore intent generation is not the next non-restored authority generation.");
   if (retryFailure) {
     await refuseUnreconciledImmutableRetry(db, { restoreId: previousControl.restore_id, generation: previousControl.authority_generation });
+    requireOrdinaryRestoreIntentFresh();
     const retryLeases = await db.query("select count(*)::int count from custodial_dr.application_mutation_leases");
     if (Number(retryLeases.rows[0].count) !== 0) throw new Error("A PAUSED_FAILURE retry requires every application mutation lease to be settled or reconciled.");
   }
   const preflightTargetIdentity = await readTargetIdentity();
   assertIntentTargetIdentity(preflightTargetIdentity);
   if (databaseOnly && /^(1|true|yes)$/i.test(String(process.env.RESTORE_DRILL_PREFLIGHT_BARRIER || ""))) {
+    requireOrdinaryRestoreIntentFresh();
     await db.query("select pg_advisory_lock(hashtextextended('memphis-zoo-restore-drill-preflight-barrier',0))");
     await db.query("select pg_advisory_unlock(hashtextextended('memphis-zoo-restore-drill-preflight-barrier',0))");
+    requireOrdinaryRestoreIntentFresh();
   }
 
   requireOriginalArchiveSource();
+  requireRestoreIntentFresh();
   restorePhase = "pause_admission";
+  requireOrdinaryRestoreIntentFresh();
   await db.query("begin");
   try {
     // Close HTTP/API admission atomically. Existing request leases are allowed
     // to finish; later admissions wait on this lock and then observe pause.
+    requireOrdinaryRestoreIntentFresh();
     await db.query("select pg_advisory_xact_lock(hashtextextended('memphis-zoo-application-mutation-admission',0))");
+    requireRestoreIntentFresh();
     await db.query(`
       update custodial_dr.restore_control set
         authority_generation=$1,mutations_paused=true,state='PREPARING',restore_id=$2,
@@ -1366,10 +1452,12 @@ try {
         completed_at=null,failure_reason=null,updated_at=clock_timestamp()
       where singleton=true
     `, [generation, restoreId, archiveDigest, summary.project_ref, projectRef, JSON.stringify({ archive: summary.source_identity.release, target: preflightTargetIdentity.release_identity, retry_of_restore_id: intent.retry_of_restore_id }), intent.actor]);
+    requireOrdinaryRestoreIntentFresh();
     await db.query(`
       insert into custodial_dr.restore_manifests(restore_id,authority_generation,archive_digest)
       values ($1,$2,$3)
     `, [restoreId, generation, archiveDigest]);
+    requireRestoreIntentFresh();
     await db.query("commit");
     prepared = true;
   } catch (error) {
@@ -1382,6 +1470,7 @@ try {
   let activeLeaseCount = 0;
   let expiredLeaseCount = 0;
   do {
+    requireOrdinaryRestoreIntentFresh();
     const leases = await db.query(`
       select
         count(*) filter (where expires_at>clock_timestamp())::int active_count,
@@ -1399,6 +1488,7 @@ try {
   } while (true);
 
   restorePhase = "acquire_global_mutation_fence";
+  requireOrdinaryRestoreIntentFresh();
   await db.query("select pg_advisory_lock(hashtextextended('memphis-zoo-application-mutation-fence',0))");
   mutationFenceHeld = true;
 
@@ -1407,24 +1497,32 @@ try {
   assertIntentTargetIdentity(quiescentTargetIdentity);
 
   restorePhase = "quiescent_snapshot";
+  requireOrdinaryRestoreIntentFresh();
   await db.query("begin");
   try {
     // Canonical native TEXT output belongs only to this snapshot transaction.
     requireOriginalArchiveSource();
+    requireOrdinaryRestoreIntentFresh();
     await db.query("set local extra_float_digits = 3");
     requireOriginalArchiveSource();
+    requireOrdinaryRestoreIntentFresh();
     await db.query("set local datestyle = 'ISO, YMD'");
     requireOriginalArchiveSource();
+    requireOrdinaryRestoreIntentFresh();
     await db.query("set local timezone = 'UTC'");
     requireOriginalArchiveSource();
+    requireOrdinaryRestoreIntentFresh();
     await db.query("set local intervalstyle = 'postgres'");
     requireOriginalArchiveSource();
+    requireOrdinaryRestoreIntentFresh();
     await db.query("set local bytea_output = 'hex'");
     requireOriginalArchiveSource();
     // The session-level exclusive fence remains held through database, cron,
     // Storage, and final verification. DDL and direct writers either drained
     // before this point or observe the paused generation after release.
+    requireOrdinaryRestoreIntentFresh();
     const snapshotEvidence = await capturePreRestoreState(db, { restoreId, generation });
+    requireOrdinaryRestoreIntentFresh();
     await recordEvent("PREPARE", "PASSED", {
       target_migration_head: quiescentTargetIdentity.migration_head,
       drained_application_mutation_leases: activeLeaseCount,
@@ -1432,6 +1530,7 @@ try {
       target_identity_revalidated_under_global_fence: true,
       snapshots: snapshotEvidence,
     });
+    requireOrdinaryRestoreIntentFresh();
     await db.query("commit");
   } catch (error) {
     await db.query("rollback").catch(() => {});
@@ -1440,6 +1539,7 @@ try {
 
   requireOriginalArchiveSource();
   restorePhase = "restore_database";
+  requireOrdinaryRestoreIntentFresh();
   await db.query("begin");
   let unvalidatedCheckEvidence = restoreCheckEvidence([]);
   let immutablePrivateDataEvidence = null;
@@ -1448,8 +1548,11 @@ try {
   let databaseEventEvidence;
   let mixedDataCommitAttempted = false;
   async function recordDatabaseRestored() {
+    requireOrdinaryRestoreIntentFresh();
     await setControl("DATABASE_RESTORED");
+    requireOrdinaryRestoreIntentFresh();
     await db.query(`update custodial_dr.restore_manifests set database_verified=true,database_evidence=$2::jsonb,updated_at=clock_timestamp() where restore_id=$1`, [restoreId, JSON.stringify(databaseEvidence)]);
+    requireOrdinaryRestoreIntentFresh();
     await recordEvent("DATABASE", "PASSED", databaseEventEvidence);
   }
   try {
@@ -1469,6 +1572,7 @@ try {
       unvalidatedCheckEvidence = { ...unvalidatedCheckEvidence, mode: "NOT_SUSPENDED" };
     } else {
     nativeTextPlans=nativeTextDatabase ? await prepareNativeTextRestorePlans() : null;
+    requireOrdinaryRestoreIntentFresh();
     await db.query("set local session_replication_role = replica");
     if(nativeTextPlans)await nativeTextQuery(`create temporary table custodial_native_text_restore_expected(
       schema_name pg_catalog.text not null,table_name pg_catalog.text not null,raw pg_catalog.text not null) on commit preserve rows`);
@@ -1478,9 +1582,18 @@ try {
       // PostgreSQL refuses an external FK dependent; CASCADE must never reach
       // an unselected namespace just because the selected census matched.
       const sql=`truncate ${databaseTables.map((table) => qualified(table.schema_name, table.table_name)).join(",")} restart identity${nativeTextDatabase ? "" : " cascade"}`;
-      if(nativeTextDatabase)await nativeTextQuery(sql);else await db.query(sql);
+      if (!nativeTextDatabase) {
+        requireOrdinaryRestoreIntentFresh();
+        await db.query(`lock table ${databaseTables.map((table) => qualified(table.schema_name, table.table_name)).join(",")} in access exclusive mode`);
+        requireOrdinaryRestoreIntentFresh();
+      }
+      if(nativeTextDatabase)await nativeTextQuery(sql);else {
+        requireOrdinaryRestoreIntentFresh();
+        await db.query(sql);
+      }
     }
     restorePhase = "suspend_unvalidated_restore_checks";
+    requireOrdinaryRestoreIntentFresh();
     const suspendedChecks = await suspendUnvalidatedRestoreChecks(db, databaseTables);
     for (const selectedTable of databaseTables) {
       restoreTable = `${selectedTable.schema_name}.${selectedTable.table_name}`;
@@ -1502,12 +1615,19 @@ try {
         input = createInterface({ input: utf8Guard, crlfDelay: Infinity });
         let restored = 0;
         for await (const line of input) {
-          const rawRowText = decodeRestoreTableRowLine(line, table);
+          // Legacy JSON cannot distinguish JSON-column null from SQL NULL.
+          // Require the existing mutation-fidelity proof before any row INSERT;
+          // refusal stays inside this transaction and cannot become count-only success.
+          const rawRowText = nativeTextPlans ? decodeRestoreTableRowLine(line, table)
+            : assertRestoreRowMutationFidelity(line, table);
           if(nativeTextPlans){
             const result=await nativeTextQuery(nativeTextPlans.get(selectedTable).insert,[rawRowText,table.schema_name,table.table_name]);
             if(result.rowCount!==1 || result.rows[0].inserted!=="1" || result.rows[0].retained!=="1")
               throw new Error("Native TEXT original row import was not exact.");
-          } else await db.query(insert, [rawRowText]);
+          } else {
+            requireOrdinaryRestoreIntentFresh();
+            await db.query(insert, [rawRowText]);
+          }
           restored += 1;
         }
         await wireSettled;
@@ -1533,6 +1653,7 @@ try {
     }
     restoreTable = null;
     restorePhase = "reinstate_unvalidated_restore_checks";
+    requireOrdinaryRestoreIntentFresh();
     unvalidatedCheckEvidence = await reinstateUnvalidatedRestoreChecks(db, suspendedChecks);
     if(nativeTextPlans)await compareNativeTextRestorePlans(nativeTextPlans);
     }
@@ -1576,6 +1697,7 @@ try {
       restorePhase = nativeTextDatabase ? "commit_native_text_data" : "commit_immutable_mixed_data";
       mixedDataCommitAttempted = true;
     }
+    requireOrdinaryRestoreIntentFresh();
     await db.query("commit");
   } catch (error) {
     await db.query("rollback").catch(() => {});
@@ -1589,23 +1711,32 @@ try {
     }
     throw error;
   }
-  if (immutablePrivateDataEvidence === null && !nativeTextDatabase) await recordDatabaseRestored();
+  if (immutablePrivateDataEvidence === null && !nativeTextDatabase) {
+    requireOrdinaryRestoreIntentFresh();
+    await recordDatabaseRestored();
+  }
 
   restorePhase = "authority_reconciliation";
+  requireOrdinaryRestoreIntentFresh();
   await db.query("begin");
   let discrepancies;
   let invalidated;
   try {
     // Match the retained snapshot's native TEXT output before comparison/upsert.
     requireOriginalArchiveSource();
+    requireOrdinaryRestoreIntentFresh();
     await db.query("set local extra_float_digits = 3");
     requireOriginalArchiveSource();
+    requireOrdinaryRestoreIntentFresh();
     await db.query("set local datestyle = 'ISO, YMD'");
     requireOriginalArchiveSource();
+    requireOrdinaryRestoreIntentFresh();
     await db.query("set local timezone = 'UTC'");
     requireOriginalArchiveSource();
+    requireOrdinaryRestoreIntentFresh();
     await db.query("set local intervalstyle = 'postgres'");
     requireOriginalArchiveSource();
+    requireOrdinaryRestoreIntentFresh();
     await db.query("set local bytea_output = 'hex'");
     requireOriginalArchiveSource();
     if (immutablePrivateDataEvidence !== null) {
@@ -1613,6 +1744,7 @@ try {
       // switch modes to make a rejected authority mutation succeed.
       if (!prepared || !mutationFenceHeld) throw new Error("Immutable authority reconciliation requires the existing prepared mutation fence.");
       requireOriginalArchiveSource();
+      requireOrdinaryRestoreIntentFresh();
       const mode = await db.query("show session_replication_role");
       if (mode.rowCount !== 1 || mode.rows[0]?.session_replication_role !== "origin") {
         throw new Error("Immutable authority reconciliation requires origin replication mode.");
@@ -1624,21 +1756,32 @@ try {
       // The normal owner retains its ordinary replica route; a separate
       // original-archive join below preserves the private origin contract.
       requireOriginalArchiveSource();
+      requireOrdinaryRestoreIntentFresh();
       await db.query("select pg_advisory_xact_lock(hashtextextended('memphis-zoo-application-mutation-admission',0))");
+      requireOrdinaryRestoreIntentFresh();
       await db.query("set local session_replication_role = replica");
+      requireOrdinaryRestoreIntentFresh();
       await db.query("set local row_security = off");
+      requireOrdinaryRestoreIntentFresh();
       await db.query("set local search_path = pg_catalog, pg_temp");
       requireOriginalArchiveSource();
     } else {
+      requireOrdinaryRestoreIntentFresh();
       await db.query("set local session_replication_role = replica");
     }
+    requireOrdinaryRestoreIntentFresh();
     discrepancies = await compareRestoredState(db, { restoreId, generation });
+    requireOrdinaryRestoreIntentFresh();
     const preservedReleaseRows = await preserveCurrentReleaseIdentity(db, { restoreId, generation });
+    requireOrdinaryRestoreIntentFresh();
     invalidated = nativeTextDatabase
       ? await invalidateRestoredOrdinaryNativeAuthority(db,{generation,verifiedArchive})
       : await invalidateRestoredAuthority(db, { generation });
+    requireOrdinaryRestoreIntentFresh();
     await db.query(`update custodial_dr.restore_manifests set authority_invalidated=true,authority_evidence=$2::jsonb,updated_at=clock_timestamp() where restore_id=$1`, [restoreId, JSON.stringify({ invalidated, preserved_release_rows: preservedReleaseRows, discrepancies })]);
+    requireOrdinaryRestoreIntentFresh();
     await recordEvent("AUTHORITY_RECONCILIATION", "PASSED", { invalidated, preserved_release_rows: preservedReleaseRows, discrepancies });
+    requireOrdinaryRestoreIntentFresh();
     await db.query("commit");
   } catch (error) {
     await db.query("rollback").catch(() => {});

@@ -45,11 +45,11 @@ const qualifiedFreshReplayImage = "public.ecr.aws/supabase/postgres@sha256:28f0e
 const qualifiedFreshReplayMirror = "docker.io/supabase/postgres@sha256:28f0e16a019e648089fc1a6d333549a55548f6019c15ae4bd7cd58b989027518";
 const qualifiedFreshReplayManifestBytes = readFileSync(resolve(root, "release/fresh-only-replay/MANIFEST.json"));
 assert.equal(createHash("sha256").update(qualifiedFreshReplayManifestBytes).digest("hex"),
-  "87f0fb5007e016f02a2d6fd5bd62f4a257e561de057092ee028e9cc484d63269",
-  "fresh-only replay must retain the exact selected294 selection with22 NORMAL-only overrides");
+  "5094a272dcc9f01ccbf043f3de7012e12bdb542606089a0a818629c1ecf86b26",
+  "fresh-only replay must retain the exact selected297 selection with original294 and22 NORMAL-only overrides");
 const qualifiedFreshReplayManifest = JSON.parse(qualifiedFreshReplayManifestBytes);
 assert.equal(qualifiedFreshReplayManifest.image, qualifiedFreshReplayImage);
-assert.equal(qualifiedFreshReplayManifest.entries.length, 294);
+assert.equal(qualifiedFreshReplayManifest.entries.length, 297);
 assert.equal(qualifiedFreshReplayManifest.overrides.length, 22);
 assert.equal(qualifiedFreshReplayManifest.full_vendor_NORMAL, false);
 assert.equal(qualifiedFreshReplayManifest.expected_fingerprint_authority, null);

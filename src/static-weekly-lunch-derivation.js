@@ -111,7 +111,7 @@ function availableForLunch(context, lunch) {
   if (!availability.lunch && !explicitCapacityNoBreak) return false;
   if (availability.lunch) {
     const helperLunch=windowOf(availability.lunch);
-    if(helperLunch.endMinute-helperLunch.startMinute!==60 || !contains(windowOf(availability.shift),helperLunch) || overlap(helperLunch,lunch)) return false;
+    if(!contains(windowOf(availability.shift),helperLunch) || overlap(helperLunch,lunch)) return false;
   }
   return !(availability.blockedWindows||[]).some(window=>overlap(windowOf(window),lunch));
 }
@@ -169,8 +169,8 @@ export function deriveLunchCoverageFromPreparedProblem(problem, weeklyAssignment
       const base={serviceDate,dayOfWeek:day,normalOwnerSlotId:ownerSlotId,normalOwnerPersonId:incumbent.personId,
         ...(capacityOwner?{normalOwnerCapacityId:incumbent.capacityId}:{}),
         window:{start:lunch.start,end:lunch.end},loanId:digest({policy:POLICY,input:problem.inputDigest,serviceDate,ownerSlotId,start:lunch.start,end:lunch.end})};
-      if(lunch.endMinute-lunch.startMinute!==60 || !contains(windowOf(availability.shift),lunch)) {
-        lunches.push({...base,status:'REVIEW_REQUIRED',reason:'scheduled_lunch_must_be_one_hour_within_shift',responsibilities:[]});continue;
+      if(!contains(windowOf(availability.shift),lunch)) {
+        lunches.push({...base,status:'REVIEW_REQUIRED',reason:'scheduled_lunch_outside_shift',responsibilities:[]});continue;
       }
       const areas=lunchAreas(rowsBySlot.get(ownerSlotId)||[],byWork,lunch);
       const contexts=new Map(),costRows=areas.map(area=>({areaId:area.areaId,costs:Object.create(null)})),evidence=new Map();

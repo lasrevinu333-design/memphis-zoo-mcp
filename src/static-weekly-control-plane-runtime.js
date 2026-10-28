@@ -1,3 +1,5 @@
+import {createHash} from 'node:crypto';
+import {renderCanonicalCoverAllLink} from './static-weekly-coverall-access.js';
 import "dotenv/config";
 import { pathToFileURL } from "node:url";
 import express from "express";
@@ -371,6 +373,43 @@ export function createStaticWeeklyControlPlaneRuntime({
   app.post("/static-weekly/staffing-commands/:operationId/cancel", requireManagerAbsence, namedSchedulerManager, respond((req) => authorityControlPlane.cancelStaffingPreparation({
     manager: manager(req), operationId: req.params.operationId,
   })));
+  app.post('/static-weekly/coverall-links',requireManagerCoverAll,namedSchedulerManager,respond(req=>{
+    const keys=['week_start','service_date','expected_revision','projection_id','capacity_id','ttl_hours','request_id'],b=req.body;
+    if(!b||typeof b!=='object'||Array.isArray(b)||Object.keys(b).length!==keys.length||keys.some(k=>!Object.hasOwn(b,k)))
+      throw fail('coverall_link_request_invalid');
+    return authorityControlPlane.issueCoverAllAssignmentLink({manager:manager(req),weekStart:b.week_start,serviceDate:b.service_date,
+      expectedRevision:b.expected_revision,projectionId:b.projection_id,capacityId:b.capacity_id,ttlHours:b.ttl_hours,requestId:b.request_id});
+  }));
+  app.post('/static-weekly/coverall-links/revoke',requireManagerCoverAll,namedSchedulerManager,respond(req=>{
+    if(!req.body||typeof req.body!=='object'||Array.isArray(req.body)||Object.keys(req.body).length!==1||!Object.hasOwn(req.body,'link_id'))
+      throw fail('coverall_link_request_invalid');
+    return authorityControlPlane.revokeCoverAllAssignmentLink({manager:manager(req),linkId:req.body.link_id});
+  }));
+  app.get('/static-weekly/coverall-links/assignment',async(req,res)=>{
+    res.setHeader('Cache-Control','no-store, private, max-age=0');res.setHeader('Referrer-Policy','no-referrer');
+    res.setHeader('X-Content-Type-Options','nosniff');
+    res.setHeader('Content-Security-Policy',"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'");
+    try{
+      if(Object.keys(req.query).some(k=>k!=='lang')||(req.query.lang!==undefined&&typeof req.query.lang!=='string')
+        ||!['en','es','both'].includes(req.query.lang||'both'))throw fail('coverall_link_invalid');
+      const accessToken=req.headers['x-coverall-access-token'];
+      if(accessToken===undefined){
+        // Fragment never reaches HTTP/access logs. Keep the capability in RAM;
+        // no cookies/storage, external scripts, URL query or error interpolation.
+        const script=`(async()=>{try{const f=new URLSearchParams(location.hash.slice(1));const token=f.get('access_token');history.replaceState(null,'',location.pathname+location.search);if([...f.keys()].length!==1||!/^[A-Za-z0-9_-]{43}$/.test(token||''))throw Error();const r=await fetch(location.pathname+location.search,{headers:{'X-CoverAll-Access-Token':token},credentials:'omit',cache:'no-store',referrerPolicy:'no-referrer',redirect:'error'});if(!r.ok)throw Error();const html=await r.text();document.open();document.write(html);document.close();}catch{document.body.textContent='This private handout link is unavailable or no longer current. Ask the issuing manager for a current handout.';}})();`;
+        const digest=createHash('sha256').update(script).digest('base64');
+        res.setHeader('Content-Security-Policy',`default-src 'none'; connect-src 'self'; script-src 'sha256-${digest}'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`);
+        return res.type('html').status(200).send('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Private CoverAll handout</title></head><body><p>Opening private handout…</p><script>'+script+'</script></body></html>');
+      }
+      if(typeof accessToken!=='string')throw fail('coverall_link_invalid');
+      const input={accessToken};
+      const document=await authorityControlPlane.readCoverAllAssignmentLink(input);
+      const html=renderCanonicalCoverAllLink(document,req.query.lang||'both');
+      const current=await authorityControlPlane.readCoverAllAssignmentLink(input);
+      if(current.documentDigest!==document.documentDigest)throw fail('coverall_link_authority_changed');
+      res.type('html').status(200).send(html);
+    }catch{res.status(403).type('html').send('<!doctype html><html><body><h1>CoverAll schedule unavailable</h1><p>This private handout link is unavailable, expired or no longer current. Ask the issuing manager for a current handout.</p></body></html>');}
+  });
   app.get("/static-weekly/coverall-print", requireManagerCoverAll, namedSchedulerManager, respond(async(req) => {
     const revision=text(req.query?.expected_revision);
     if(!/^(0|[1-9][0-9]*)$/.test(revision))throw fail("coverall_print_expected_revision_required");

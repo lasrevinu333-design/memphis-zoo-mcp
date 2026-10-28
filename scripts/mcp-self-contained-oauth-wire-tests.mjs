@@ -1,5 +1,6 @@
 import './mcp-tool-login-challenge-tests.mjs';
 import assert from "node:assert/strict";
+import { createRecordingAtomicOAuthAuthority } from "./mcp-oauth-durable-family-tests.mjs";
 import { createHash } from "node:crypto";
 import { createServer } from "node:net";
 import express from "express";
@@ -174,7 +175,7 @@ const env = {
   MCP_CONNECTOR_TOKEN: CONNECTOR_TOKEN,
   MOXIE_WEB_PASSWORD: OPERATOR_PASSWORD,
 };
-const oauth = createSelfContainedMcpOAuthService({ env });
+const oauth = createSelfContainedMcpOAuthService({ env, durableStore: createRecordingAtomicOAuthAuthority() });
 assert.equal(oauth.enabled, true);
 assert.deepEqual(buildMcpProtectedResourceMetadata(oauth.config), {
   resource: `${base}/mcp`,
@@ -409,15 +410,6 @@ try {
   assert.notEqual(refreshed.refresh_token, token.refresh_token);
   assert.notEqual(refreshed.access_token, token.access_token);
 
-  const refreshReplay = await fetch(`${base}/oauth/token`, form({
-    grant_type: "refresh_token",
-    client_id: clientId,
-    refresh_token: token.refresh_token,
-    resource: `${base}/mcp`,
-  }));
-  assert.equal(refreshReplay.status, 400);
-  assert.equal((await refreshReplay.json()).error, "invalid_grant");
-
   const denialStarted = await beginAuthorization(authorizeUrl(base, {
     clientId,
     verifier,
@@ -471,6 +463,21 @@ try {
   }, { token: refreshed.access_token });
   assert.equal(authorizedProtected.body.result.isError, undefined);
   assert.equal(JSON.parse(authorizedProtected.body.result.content[0].text).ok, true);
+
+  const refreshReplay = await fetch(`${base}/oauth/token`, form({
+    grant_type: "refresh_token",
+    client_id: clientId,
+    refresh_token: token.refresh_token,
+    resource: `${base}/mcp`,
+  }));
+  assert.equal(refreshReplay.status, 400);
+  assert.equal((await refreshReplay.json()).error, "invalid_grant");
+
+  const revokedDescendant = await mcpRequest(base, "tools/call", {
+    name: "server_tool_manifest", arguments: { include_planned: false },
+  }, { token: refreshed.access_token });
+  assert.equal(revokedDescendant.response.status, 401, "reuse revokes even the winning descendant access token");
+
 
   const readRegistration = await registerClient(base, { scope: "mcp:read" });
   assert.equal(readRegistration.response.status, 201);

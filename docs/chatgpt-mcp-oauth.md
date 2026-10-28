@@ -1,5 +1,22 @@
 # ChatGPT access to Memphis Zoo MCP
 
+> **Source-transition status — not activated.** The original stateless v1 notes
+> below are retained as historical connection context. They are not the security
+> contract for the proposed durable v2 implementation. See
+> [Durable OAuth token families](mcp-oauth-durable-token-families.md) for its exact
+> service-only migration, non-restored authority-generation binding, qualification
+> status and failure semantics. Actual local SQL qualification and the reviewed
+> cutover remain prerequisites; this document does not claim deployment.
+>
+> Activating v2 rejects old self-contained OAuth access/refresh tokens and
+> in-flight consent/code flows; normal operator reauthorization is required.
+> Manager/browser/device sessions and the legacy connector-token lane are not
+> revoked or rotated. Preserve-sessions consequences must be explicitly reviewed
+> before activation. Do not reactivate the process-local replay implementation as
+> a security rollback; retire all old OAuth-serving instances for the cutover.
+
+## Historical stateless v1 notes
+
 The Memphis Zoo backend is its own bounded OAuth 2.1 authorization server for
 the private ChatGPT developer-mode app. It does not require Supabase OAuth
 Server, a Supabase Auth user, another database migration, or another secret.

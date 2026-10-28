@@ -1192,6 +1192,18 @@
         {
           "name": "20261026065000_location_scan_state_qualified_lookup.sql",
           "sha256": "ca79547cd57ef3f8b3436e846bd4ed57581ea17be2d57701c72d1e45646591db"
+        },
+        {
+          "name": "20261027230000_accepted_actual_lunch_windows.sql",
+          "sha256": "55b2cd92ebe36c6920a3c27cc13031ef6ca263d8f10114182c3058fd0991c81b"
+        },
+        {
+          "name": "20261027231000_canonical_coverall_capacity_links.sql",
+          "sha256": "c4be89a07f46717ddcc7ceebed639cdc10b589b8ff72e9cf20a3523bdec43903"
+        },
+        {
+          "name": "20261027234814_mcp_oauth_durable_token_families.sql",
+          "sha256": "e74210f033e5c65d5e99a090ca201d1c010d6cb5c4159a015bb08e3719c44f6e"
         }
       ]
     }

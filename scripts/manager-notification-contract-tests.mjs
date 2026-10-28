@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { generateKeyPairSync } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import express from "express";
+import {createOpsManagerSession} from "../src/auth/shared-access-auth.js";
 import { createPushRuntime, installManagerNotificationRoutes, managerDeliveryAttention } from "../src/manager-notifications.js";
 
 const root = new URL("../", import.meta.url);
@@ -410,3 +411,38 @@ try {
 }
 
 console.log("MANAGER_NOTIFICATION_CONTRACT_PASS");
+
+// Actual notification settings HTTP privilege and GET purity regression.
+{
+const env={NODE_ENV:'test',OPS_MANAGER_AUTH_REQUIRED:'true',OPS_MANAGER_SESSION_SECRET:'synthetic-notification-privilege-boundary-at-least32'};
+const prior=Object.fromEntries(Object.keys(env).map(k=>[k,process.env[k]]));Object.assign(process.env,env);
+const manager={manager_id:'10000000-0000-4000-8000-000000000001',display_name:'Synthetic manager',roles:['OPS_MANAGER'],system_key:'eric_custodial_manager',is_system_principal:false,active:true,revoked_at:null};
+const row={credential_id:'20000000-0000-4000-8000-000000000001',device_id:'synthetic-notification-browser',manager_id:manager.manager_id,manager,created_at:new Date().toISOString(),expires_at:new Date(Date.now()+3600000).toISOString(),max_access_level:'full_access',revoked_at:null};
+let preferences=null,push=null,queues=0;const writes=[],queries=[],rpcCalls=[];
+const db={from(table){const q={op:'select',value:null,filters:[],select(){return this;},eq(k,v){this.filters.push([k,v]);return this;},neq(){return this;},is(){return this;},order(){return this;},limit(){return this;},insert(v){this.op='insert';this.value=v;return this;},update(v){this.op='update';this.value=v;return this;},upsert(v){this.op='upsert';this.value=v;return this;},async done(){queries.push({table,op:this.op});if(this.op!=='select')writes.push({table,op:this.op});let data=null;
+ if(table==='ops_manager_trusted_devices')data=row;
+ else if(table==='ops_manager_managers')data=manager;
+ else if(table==='ops_manager_notification_preferences'){if(this.op==='insert')preferences={...this.value};if(this.op==='update')preferences={...preferences,...this.value};data=preferences;}
+ else if(table==='ops_manager_push_devices'){if(this.op==='upsert')push={push_device_id:'30000000-0000-4000-8000-000000000001',...this.value};if(this.op==='update'&&push)push={...push,...this.value};data=push;}
+ else if(table==='ops_manager_notification_queue'){if(this.op==='insert'){queues++;data={queue_id:'40000000-0000-4000-8000-000000000001',status:'pending'};}else data=[];}
+ else throw Error('unexpected table '+table);return {data,error:null,count:0};},maybeSingle(){return this.done();},single(){return this.done();},then(a,b){return this.done().then(a,b);}};return q;},async rpc(name){rpcCalls.push(name);throw Error('Unexpected RPC/provider worker in bounded HTTP test');}};
+const token=level=>createOpsManagerSession({credentialId:row.credential_id,deviceId:row.device_id,manager,accessLevel:level,maximumAccessLevel:'full_access',authMode:'trusted_device',env}).token;
+const full=token('full_access'),readOnly=token('read_only'),app=express();app.use(express.json({limit:'32kb'}));installManagerNotificationRoutes(app,{env,supabase:db});
+const server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));const base='http://127.0.0.1:'+server.address().port;
+const checks=[];async function request(method,path,auth,body){const r=await fetch(base+'/manager-notifications-api/'+path,{method,headers:{...(auth?{authorization:'Bearer '+auth}:{}),...(body!==undefined?{'content-type':'application/json'}:{})},body:body===undefined?undefined:JSON.stringify(body)});return {status:r.status,body:await r.json()};}
+try{
+ let r=await request('GET','preferences',readOnly);assert.equal(r.status,200);assert.equal(r.body.data.preferences.messages_enabled,true);assert.equal(r.body.data.preferences.event_reminders_enabled,false);assert.equal(writes.length,0,'ReadOnly GET missing preferences must not INSERT defaults');assert.equal(preferences,null);checks.push('ReadOnly GET missing preferences pure safe defaults');
+ for(const [method,path,body] of [['PUT','preferences',{messages_enabled:false}],['POST','register',{token:'SYNTHETIC_FCM_TOKEN_ONLY_1234567890',platform:'android'}],['DELETE','register',undefined],['POST','test',{}]]){const n=writes.length;r=await request(method,path,readOnly,body);assert.equal(r.status,403);assert.equal(writes.length,n);checks.push('ReadOnly '+method+' '+path+' denied before mutation');}
+ r=await request('GET','preferences');assert.equal(r.status,401);assert.equal(writes.length,0);checks.push('anonymous denied');
+ row.revoked_at=new Date().toISOString();r=await request('PUT','preferences',full,{});assert.equal(r.status,401);assert.equal(writes.length,0);row.revoked_at=null;checks.push('revoked manager denied');
+ r=await request('PUT','preferences','SYNTHETIC_NONMANAGER_DEVICE_CREDENTIAL',{});assert.equal(r.status,401);assert.equal(writes.length,0);checks.push('nonmanager credential denied');
+ r=await request('GET','preferences',full);assert.equal(r.status,200);assert.equal(writes.length,0);checks.push('writable manager GET also pure');
+ r=await request('PUT','preferences',full,{messages_enabled:false});assert.equal(r.status,200);assert.equal(preferences.messages_enabled,false);assert.equal(writes.filter(x=>x.table==='ops_manager_notification_preferences'&&x.op==='insert').length,1);checks.push('writable PUT explicitly creates and updates preferences');
+ r=await request('POST','register',full,{token:'SYNTHETIC_FCM_TOKEN_ONLY_1234567890',platform:'android'});assert.equal(r.status,200);assert.equal(push.credential_id,row.credential_id);assert.equal(push.enabled,true);checks.push('writable registration stays bound to credential');
+ r=await request('POST','test',full,{});assert.equal(r.status,503);assert.equal(queues,1);assert.equal(rpcCalls.length,0);checks.push('writable test queues once but honestly reports absent provider');
+ r=await request('DELETE','register',full);assert.equal(r.status,200);assert.equal(push.enabled,false);checks.push('writable unregister works');
+ const n=writes.length;r=await request('GET','preferences',readOnly);assert.equal(r.status,200);assert.equal(r.body.data.preferences.messages_enabled,false);assert.equal(writes.length,n);checks.push('ReadOnly existing preferences read pure');
+ assert.equal(rpcCalls.length,0);console.log(JSON.stringify({status:'PASS',checks:checks.length,real_database:false,real_provider:false}));
+}finally{server.closeAllConnections();await new Promise(r=>server.close(r));for(const [k,v]of Object.entries(prior)){if(v===undefined)delete process.env[k];else process.env[k]=v;}}
+
+}

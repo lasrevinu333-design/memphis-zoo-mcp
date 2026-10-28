@@ -52,7 +52,7 @@ export function validateNativeLunchPayload(value,{jobId,expected}){
  const days=[31,leap?29:28,31,30,31,30,31,31,30,31,30,31];
  if(year<1||month<1||month>12||day<1||day>days[month-1])invalid();
  const scheduled=micros(p.scheduled_at),reserved=micros(p.reservation_at),until=micros(p.valid_until);
- if(reserved<scheduled||reserved>=until||(p.event==='start'&&until>scheduled+3600000000n))invalid();
+ if(reserved<scheduled||reserved>=until)invalid();
  const wire=canonicalNativeLocation(p);
  if(Buffer.byteLength(wire)>3500
   ||createHash('sha256').update(canonicalNativeLocation(p,{excludeHash:true})).digest('hex')!==p.content_sha256)invalid();

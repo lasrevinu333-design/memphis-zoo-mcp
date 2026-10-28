@@ -3,32 +3,8 @@ import express from "express";
 import { createClient } from "@supabase/supabase-js";
 import { makeOpsAccessMiddleware } from "./auth/shared-access-auth.js";
 
-// iPhone smart punctuation previously made “Who’s working?” miss the roster
-// handler even though "Who's working?" succeeded. Normalize only common
-// user-entered prompt fields at JSON parsing time.
-const originalJson = express.json;
-if (typeof originalJson === "function" && !express.__memphisSmartPunctuationJsonPatched) {
-  Object.defineProperty(express, "__memphisSmartPunctuationJsonPatched", { value: true });
-  express.json = function memphisNormalizedJson(...args) {
-    const parser = originalJson.apply(this, args);
-    return function normalizedJsonMiddleware(req, res, next) {
-      parser(req, res, (error) => {
-        if (error) return next(error);
-        if (req.body && typeof req.body === "object") {
-          for (const field of ["body", "message", "userMessage", "user_message", "prompt"]) {
-            if (typeof req.body[field] === "string") {
-              req.body[field] = req.body[field]
-                .replace(/[’‘]/g, "'")
-                .replace(/[“”]/g, '"')
-                .replace(/[–—]/g, "-");
-            }
-          }
-        }
-        next();
-      });
-    };
-  };
-}
+// Request JSON stays verbatim. Memphis normalizes a separate prompt copy
+// inside its intent matcher, without changing Feedback or stored messages.
 
 function envText(env, key) { return String(env?.[key] || "").trim(); }
 function hmacHex(secret, value) { return crypto.createHmac("sha256", secret).update(String(value || "")).digest("hex"); }
@@ -177,13 +153,20 @@ export function installLeadershipHttpRoutes(app, { env = process.env, supabase =
       const days = Math.max(1, Math.min(180, Number(req.query?.days) || 60));
       const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
       const until = new Date(Date.now() + days * 86400000).toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
+      const publicFields = ["id", "event_name", "event_date", "end_date", "start_time", "end_time", "display_location", "event_scope", "status"];
+      const publicAudiences = ["assigned_location", "all_working_employees"];
       const result = await db.from("events_app_events")
-        .select("id,event_name,event_date,end_date,start_time,end_time,display_location,event_scope,status")
-        .eq("status", "SCHEDULED").gte("end_date", today).lte("event_date", until)
+        .select([...publicFields, "audience_scope"].join(","))
+        .eq("status", "SCHEDULED").in("audience_scope", publicAudiences).gte("end_date", today).lte("event_date", until)
         .order("event_date", { ascending: true }).order("start_time", { ascending: true }).limit(250);
       if (result.error) throw result.error;
+      // This compatibility route has no authenticated recipient. Keep addressed
+      // and unresolved events out of its public cache and expose only its fields.
+      const events = (Array.isArray(result.data) ? result.data : [])
+        .filter(event => event && publicAudiences.includes(event.audience_scope))
+        .map(event => Object.fromEntries(publicFields.map(field => [field, event[field]])));
       res.setHeader("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
-      res.json({ ok: true, data: { events: result.data || [], generated_at: new Date().toISOString() } });
+      res.json({ ok: true, data: { events, generated_at: new Date().toISOString() } });
     } catch (error) { fail(res, error, "Events are temporarily unavailable."); }
   });
 

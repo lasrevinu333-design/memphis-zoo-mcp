@@ -100,3 +100,29 @@ await test('legacy public compatibility excludes private and unresolved audience
   });
  } finally { server.closeAllConnections?.();await new Promise((resolve,reject)=>server.close(error=>error?reject(error):resolve())); }
 });
+
+
+await test('viewer public route excludes addressed and unresolved audiences with no credential dependence', async () => {
+ const {installLeadershipHttpRoutes}=await import('../src/leadership-bootstrap.js');
+ const fields=['id','event_name','event_date','end_date','start_time','end_time','display_location','event_scope','status'];
+ const base={event_date:'2099-01-01',end_date:'2099-01-01',start_time:'12:00',end_time:'13:00',display_location:'Public fixture place',event_scope:'PLACE',status:'SCHEDULED'};
+ const data=['assigned_location','all_working_employees','specific_employees','unknown',null,undefined].map((scope,index)=>({...base,id:`viewer-${index}`,event_name:index<2?'General fixture event':'PRIVATE ADDRESSED FIXTURE',audience_scope:scope,audience_employee_ids:['private-recipient-fixture'],notes:'PRIVATE INTERNAL FIELD'}));
+ const calls=[];
+ const db={from(table){assert.equal(table,'events_app_events');const q={};for(const method of ['select','eq','in','gte','lte','order'])q[method]=(...args)=>{calls.push([method,...args]);return q;};q.limit=async value=>{calls.push(['limit',value]);return{data,error:null};};return q;}};
+ const app=express();installLeadershipHttpRoutes(app,{env:{},supabase:db});
+ const server=await new Promise(resolve=>{const instance=app.listen(0,'127.0.0.1',()=>resolve(instance));});
+ try{
+  const url=`http://127.0.0.1:${server.address().port}/viewer-api/events?days=999`;
+  for(const headers of [{},{authorization:'Bearer synthetic-untrusted',cookie:'synthetic=untrusted'}]){
+   const response=await fetch(url,{headers});assert.equal(response.status,200);const body=await response.json();
+   assert.deepEqual(body.data.events.map(event=>event.id),['viewer-0','viewer-1']);
+   for(const event of body.data.events)assert.deepEqual(Object.keys(event).sort(),[...fields].sort());
+   assert.doesNotMatch(JSON.stringify(body),/PRIVATE|audience_scope|audience_employee_ids|private-recipient/);
+   assert.match(response.headers.get('cache-control'),/^public,/);
+  }
+  assert.ok(calls.some(([method,key,value])=>method==='in'&&key==='audience_scope'&&JSON.stringify(value)===JSON.stringify(['assigned_location','all_working_employees'])));
+  assert.ok(calls.some(([method,value])=>method==='select'&&value.split(',').includes('audience_scope')));
+  assert.ok(calls.some(([method,key,value])=>method==='eq'&&key==='status'&&value==='SCHEDULED'));
+  assert.ok(calls.some(([method,value])=>method==='limit'&&value===250));
+ }finally{server.closeAllConnections?.();await new Promise((resolve,reject)=>server.close(error=>error?reject(error):resolve()));}
+});

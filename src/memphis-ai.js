@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import {isActiveNamedManager} from './auth/manager-permissions.js';
 import { fetchCurrentMemphisScheduleDay,fetchCurrentMemphisScheduleSegments } from "./ai/memphis-ai-daily.js";
 import { getGeminiApiKey } from "./utils/gemini-config.js";
 import {
@@ -132,8 +133,12 @@ function scoreMemphisIntent(lower, intent, terms) {
   return score;
 }
 
+function promptForMatching(value) {
+  return String(value ?? '').replace(/[’‘]/g, "'").replace(/[“”]/g, '"').replace(/[–—]/g, '-');
+}
+
 function classifyMemphisIntentLocal(text = "", threadContext = {}) {
-  const raw = String(text || "").trim();
+  const raw = promptForMatching(text).trim();
   const lower = normalizeLoose(raw);
   const scores = Object.entries(MEMPHIS_INTENT_KEYWORDS).map(([intent, terms]) => ({ intent, score: scoreMemphisIntent(lower, intent, terms) }));
   const locationHint = findLocationCode(raw) || hasLocationKeyword(raw);
@@ -895,6 +900,27 @@ async function fetchDeviceIdentity(runReadOnlySql, deviceId) {
   return Array.isArray(rows) && rows.length ? rows[0] : null;
 }
 
+async function fetchResponderIdentity(runReadOnlySql, userId, deviceId) {
+  const id=String(userId || '').trim();
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+    // The caller supplies the server-resolved message sender, never a role
+    // from the request body. Re-read current named authority for queued work.
+    const rows=await runReadOnlySql(`select u.id as msg_user_id,u.is_active as user_active,u.ops_manager_id,
+      m.manager_id,m.display_name,m.roles,m.active,m.revoked_at,m.is_system_principal
+      from public.msg_users u left join public.ops_manager_managers m on m.manager_id=u.ops_manager_id
+      where u.id='${esc(id)}'::uuid limit 1`);
+    const current=Array.isArray(rows)&&rows.length===1?rows[0]:null;
+    if (!current || current.msg_user_id!==id || current.user_active!==true) return null;
+    if (current.ops_manager_id) {
+      if (!isActiveNamedManager(current)) return null;
+      return {...current,role:'manager',identity_source:'current_named_manager_registry'};
+    }
+  }
+  const identity=await fetchDeviceIdentity(runReadOnlySql,deviceId);
+  if(id && String(identity?.msg_user_id || identity?.user_id || '')!==id) return null;
+  return identity;
+}
+
 async function resolveEmployeeByLooseName(runReadOnlySql, employeeName = "") {
   return await sharedResolveEmployeeByLooseName(runReadOnlySql, employeeName);
 }
@@ -1338,11 +1364,11 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     throw new Error(`Unknown Memphis tool: ${name}`);
   }
 
-  async function generateSystemReply(userMessage, { deviceId = "", threadId = "", userRole = "" } = {}) {
+  async function generateSystemReply(userMessage, { deviceId = "", threadId = "", userRole = "", viewerIdentity = null } = {}) {
     const isManager = String(userRole || "").trim().toLowerCase() === "manager";
     const threadContext = await fetchThreadContext(runReadOnlySql, threadId);
     const rewrittenMessage = rewriteFollowUpWithContext(userMessage, threadContext);
-    const text = String(rewrittenMessage || "").trim();
+    const text = promptForMatching(rewrittenMessage).trim();
     const lower = text.toLowerCase();
     const todayServiceDate = await getDefaultServiceDate(runReadOnlySql);
     const explicitDate = extractExplicitDate(text);
@@ -1415,8 +1441,8 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     }
 
     if (isSelfIdentityQuestion(text)) {
-      const assignedEmployee = deviceId ? await fetchAssignedEmployeeForDevice(runReadOnlySql, deviceId) : null;
-      const identity = deviceId ? await fetchDeviceIdentity(runReadOnlySql, deviceId) : null;
+      const assignedEmployee = !isManager && deviceId ? await fetchAssignedEmployeeForDevice(runReadOnlySql, deviceId) : null;
+      const identity = isManager ? viewerIdentity : (deviceId ? await fetchDeviceIdentity(runReadOnlySql, deviceId) : null);
       const name = assignedEmployee?.assigned_employee_name || identity?.display_name || identity?.user_name || "";
       if (name) {
         await saveThreadContext(runRpc, threadId, { last_intent: "self_identity", last_employee_name: name, last_subject_type: "employee", context_json: mergeContextJson(threadContext, { last_question_shape: "self_identity", last_subject_kind: "employee", last_subject_label: name }) });
@@ -1633,13 +1659,17 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
 
   async function generateReply({ deviceId = "", userId = "", userMessage = "", threadId = "" }) {
     const _userId = String(userId || "").trim();
+    const identity = await fetchResponderIdentity(runReadOnlySql, _userId, deviceId);
+    if (_userId && !identity) {
+      return {text:"I couldn't verify your current Messenger identity. Reopen Messenger before asking again.",
+        meta:{fallback:true,mode:'identity_unavailable'}};
+    }
 
     const threadContext = await fetchThreadContext(runReadOnlySql, threadId);
     const rewrittenMessage = rewriteFollowUpWithContext(userMessage, threadContext);
     const effectiveUserMessage = String(rewrittenMessage || "").trim() || userMessage;
 
     const apiKey = getGeminiApiKey(["MEMPHIS_GEMINI_API_KEY"]);
-    const identity = await fetchDeviceIdentity(runReadOnlySql, deviceId);
     const webEnabled = allowWebSearch({ deviceId, identityRole: identity?.role || "" });
     const recentMessages = await fetchRecentThreadMessages(runReadOnlySql, threadId, 10);
     const route = classifyMemphisIntentLocal(effectiveUserMessage, threadContext);
@@ -1673,7 +1703,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       || (route.confidence >= 0.5 && !isGeneralKnowledgeQuestion(effectiveUserMessage));
 
     if (!apiKey || explicitSystem) {
-      const reply = await generateSystemReply(effectiveUserMessage, { deviceId, threadId, userRole: identity?.role || "" });
+      const reply = await generateSystemReply(effectiveUserMessage, { deviceId, threadId, userRole: identity?.role || "", viewerIdentity:identity });
       return annotateMemphisReply(reply, route, reply?.meta?.sources || []);
     }
 
@@ -1702,7 +1732,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       console.error("memphis conversation gemini path failed:", error);
     }
 
-    const reply = await generateSystemReply(effectiveUserMessage, { deviceId, threadId, userRole: identity?.role || "" });
+    const reply = await generateSystemReply(effectiveUserMessage, { deviceId, threadId, userRole: identity?.role || "", viewerIdentity:identity });
     return annotateMemphisReply(reply, route, reply?.meta?.sources || []);
   }
 
