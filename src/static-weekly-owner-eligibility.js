@@ -41,20 +41,52 @@ export function validateOwnerEligibilityConfig(config){
    assert.ok(Array.isArray(slot[field])&&slot[field].every(v=>typeof v==='string'&&/^[A-Z0-9_]+$/.test(v)),`${key}: invalid ${field}`);
    assert.equal(new Set(slot[field]).size,slot[field].length,`${key}: duplicate ${field}`);
   }
+  if(slot.hardForbiddenFamiliesByDay!==undefined){
+   assert.ok(slot.hardForbiddenFamiliesByDay&&Object.getPrototypeOf(slot.hardForbiddenFamiliesByDay)===Object.prototype,`${key}: invalid weekday restrictions`);
+   assert.deepEqual(Object.keys(slot.hardForbiddenFamiliesByDay).sort(),['0','1','2','3','4','5','6'],`${key}: explicit seven-day restrictions required`);
+   for(const families of Object.values(slot.hardForbiddenFamiliesByDay)){
+    assert.ok(Array.isArray(families)&&families.every(f=>typeof f==='string'&&/^[A-Z0-9_]+$/.test(f)),`${key}: invalid weekday family`);
+    assert.equal(new Set(families).size,families.length,`${key}: duplicate weekday family`);
+   }
+  }
+  if(slot.mandatoryNormalFamilies!==undefined){
+   assert.ok(Array.isArray(slot.mandatoryNormalFamilies)&&slot.mandatoryNormalFamilies.every(f=>slot.normalAssignmentFamilies?.includes(f)),`${key}: mandatory family outside normal geography`);
+   assert.equal(new Set(slot.mandatoryNormalFamilies).size,slot.mandatoryNormalFamilies.length,`${key}: duplicate mandatory family`);
+  }
  }
  const slot=config.slots.ALIJAH;
  assert.equal(slot.slotId,alijah.slotId,'Alijah stable position identity changed');
- if(String(slot.personId||'').toLowerCase()===alijah.personId)assert.deepEqual(slot.hardForbiddenFamilies,['HERPETARIUM'],'current person hard restriction remains exact');
+ if(String(slot.personId||'').toLowerCase()===alijah.personId){
+  if(slot.hardForbiddenFamiliesByDay){
+   assert.deepEqual(slot.hardForbiddenFamilies,[],'weekday correction must not retain the superseded blanket ban');
+   assert.deepEqual(slot.hardForbiddenFamiliesByDay,Object.fromEntries(Array.from({length:7},(_,d)=>[d,d===1?[]:['HERPETARIUM']])),'Alijah Herpetarium is Monday only');
+  }else assert.deepEqual(slot.hardForbiddenFamilies,['HERPETARIUM'],'historical person hard restriction remains exact');
+ }
  // Declared/inherited source restrictions are still preserved for replacements.
  // Removing an inherited restriction requires the existing classified, bound
  // source transition, never just changing this config person's ID.
 }
-export function assertNormalOwnerEligibility(owner,family){
- assert.ok(!(owner.hardForbiddenFamilies||[]).includes(family),`${owner.key||owner.name} received forbidden family ${family}`);
+export function forbiddenFamiliesForDay(owner,dayOfWeek){
+ // Missing weekday never opens a day-specific permission. Historical configs
+ // retain their original all-week restriction until explicitly superseded.
+ const daily=owner.hardForbiddenFamiliesByDay;
+ return [...new Set([...(owner.hardForbiddenFamilies||[]),...(daily
+  ?Number.isInteger(dayOfWeek)&&dayOfWeek>=0&&dayOfWeek<=6?daily[dayOfWeek]||[]:Object.values(daily).flat()
+  :[])])].sort();
+}
+export function isHardForbidden(owner,family,dayOfWeek){return forbiddenFamiliesForDay(owner,dayOfWeek).includes(family);}
+export function mandatoryNormalOwner(config,family,dayOfWeek){
+ const matches=Object.values(config.slots).filter(s=>s.vacancy!==true&&s.workDays.includes(dayOfWeek)
+  &&s.mandatoryNormalFamilies?.includes(family)&&normalGeographyRestrictionApplies(s));
+ assert.ok(matches.length<=1,'conflicting mandatory normal owners');
+ return matches[0]?.slotId??null;
+}
+export function assertNormalOwnerEligibility(owner,family,dayOfWeek){
+ assert.ok(!isHardForbidden(owner,family,dayOfWeek),`${owner.key||owner.name} received forbidden family ${family}`);
  if(normalGeographyRestrictionApplies(owner))assert.ok(owner.normalAssignmentFamilies.includes(family),`${owner.key||owner.name} normal geography violated: ${family}`);
 }
-export function hardRestrictedSlots(config,family,inherited=[]){
- return [...new Set([...inherited,...Object.values(config.slots).filter(s=>(s.hardForbiddenFamilies||[]).includes(family)).map(s=>s.slotId)])].sort();
+export function hardRestrictedSlots(config,family,inherited=[],dayOfWeek){
+ return [...new Set([...inherited,...Object.values(config.slots).filter(s=>isHardForbidden(s,family,dayOfWeek)).map(s=>s.slotId)])].sort();
 }
 export function verifiedBaseRestrictionInventory(input,sha256){
  const entries=input.version.assignments.filter(a=>a.restrictedSlotIds?.length).map(a=>({workId:a.workId,

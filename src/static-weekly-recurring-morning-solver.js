@@ -3,7 +3,7 @@
 import {canonicalJson,contentDigest,sha256Hex,bytewiseCompare,normalizeWindow} from './static-weekly-schedule-model.js';
 import {postgresJsonbContentDigest} from './static-weekly-schedule-program.js';
 import {createMorningPlanningDescriptor,assertMorningPlanningDescriptor} from './static-weekly-morning-planning-authority.js';
-import {assertNormalOwnerEligibility} from './static-weekly-owner-eligibility.js';
+import {assertNormalOwnerEligibility,mandatoryNormalOwner} from './static-weekly-owner-eligibility.js';
 import {getScheduleComponentWeightLedger} from './schedule-component-weight-authority.js';
 import {recurringSecondaryOwnerReference} from './static-weekly-recurring-staffing-adaptation.js';
 import {evaluateRecurringPhaseCanonicalSource,createRecurringPreferencePrimitiveObjective,
@@ -100,7 +100,9 @@ export function createRecurringMorningObjectiveContract(input){
   secondaryOwnerReferences.push({workId:pkg.workId,reference});
   for(const [j,owner]of owners.entries()){
    const av=owner.baselineAvailability,c={key:owner.key,...cfg.slots[owner.key]},row=pkg.sourceRow;
-   try{assertNormalOwnerEligibility(c,pkg.family);}catch{continue;}
+   try{assertNormalOwnerEligibility(c,pkg.family,descriptor.dayOfWeek);}catch{continue;}
+   const protectedOwner=mandatoryNormalOwner(cfg,pkg.family,descriptor.dayOfWeek);
+   if(protectedOwner&&owners.some(o=>o.slotId===protectedOwner)&&owner.slotId!==protectedOwner)continue;
    if(cfg.mondayOnlyFamilies?.includes(pkg.family)&&pkg.baselineOwner.slotId!==owner.slotId)continue;
    if((row.restrictedSlotIds||[]).includes(owner.slotId)||(av.restrictions||[]).includes(pkg.primaryLocationId))continue;
    fail(Array.isArray(av.qualifications)&&av.qualificationProvenance&&Array.isArray(av.restrictions)&&av.restrictionProvenance,'missing_eligibility_provenance');

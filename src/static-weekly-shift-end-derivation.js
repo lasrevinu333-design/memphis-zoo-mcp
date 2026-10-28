@@ -1,6 +1,6 @@
 import {canonicalJson,snapshotDatedRosterSlot,serviceDateWeekday} from './static-weekly-schedule-model.js';
 import {completeRecurringShiftEndCoverage} from './static-weekly-shift-end-coverage.js';
-import {validateOwnerEligibilityConfig,assertNormalOwnerEligibility,normalGeographyRestrictionApplies} from './static-weekly-owner-eligibility.js';
+import {validateOwnerEligibilityConfig,assertNormalOwnerEligibility,normalGeographyRestrictionApplies,isHardForbidden} from './static-weekly-owner-eligibility.js';
 import {prepareStaticWeeklySchedulingProblem} from './static-weekly-schedule-program.js';
 
 export const SHIFT_END_POLICY_SCHEMA='memphis-zoo.shift-end-continuity-policy.v1';
@@ -242,7 +242,7 @@ export function deriveApprovedDatedMappedShiftEndCoverage(context,digest){
    'approved dated selected role mapping is inconsistent');
   roleMap.set(m.patternSlotId,m.actualSlotId);actualRoles.set(m.actualSlotId,m.patternSlotId);
   const a=p.availability;
-  assertNormalOwnerEligibility(p.configured,mappedParent.locationCodeSnapshot);
+  assertNormalOwnerEligibility(p.configured,mappedParent.locationCodeSnapshot,mappedParent.dayOfWeek);
   requireFact(mappedParent.window.start>=a.shift.start&&mappedParent.window.end<=a.shift.end
    &&(mappedParent.window.start!=='09:45'||mappedParent.window.end===a.shift.end),'approved dated mapped target shift conflicts');
   requireFact((mappedParent.requiredQualifications||[]).every(q=>a.qualifications.includes(q))
@@ -303,7 +303,7 @@ export function deriveApprovedDatedMappedShiftEndCoverage(context,digest){
   const eligibleFor=(u,p,start,end)=>{
    const r=u.original,a=p.availability,c=p.configured;
    return fits(p,start,end,p.slotId!==r.ownerSlotId||!u.flexible)
-    &&!(c.hardForbiddenFamilies||[]).includes(r.locationCodeSnapshot)
+    &&!isHardForbidden(c,r.locationCodeSnapshot,day)
     &&(!normalGeographyRestrictionApplies(c)||c.normalAssignmentFamilies.includes(r.locationCodeSnapshot))
     &&!(r.restrictedSlotIds||[]).includes(p.slotId)&&(r.requiredQualifications||[]).every(q=>a.qualifications.includes(q))
     &&!ids(r).some(id=>a.restrictions.includes(id));
@@ -326,7 +326,7 @@ export function deriveApprovedDatedMappedShiftEndCoverage(context,digest){
    for(const n of leaving.sort((a,b)=>a.u.original.workId.localeCompare(b.u.original.workId))){
     const r=n.u.original,candidates=remaining.filter(p=>{
      const a=p.availability,c=p.configured;
-     return !(c.hardForbiddenFamilies||[]).includes(r.locationCodeSnapshot)
+     return !isHardForbidden(c,r.locationCodeSnapshot,day)
       &&(!normalGeographyRestrictionApplies(c)||c.normalAssignmentFamilies.includes(r.locationCodeSnapshot))
       &&!(r.restrictedSlotIds||[]).includes(p.slotId)&&(r.requiredQualifications||[]).every(q=>a.qualifications.includes(q))
       &&!ids(r).some(id=>a.restrictions.includes(id))&&!(minute(a.lunch.start)<=at&&at<minute(a.lunch.end));
@@ -422,7 +422,7 @@ export function deriveApprovedDatedMappedShiftEndCoverage(context,digest){
   for(const u of leaving.sort((a,b)=>a.original.workId.localeCompare(b.original.workId))){
    const r=u.original,rank=domain=>domain.filter(p=>{
     const a=p.availability,c=p.configured;
-    return !(c.hardForbiddenFamilies||[]).includes(r.locationCodeSnapshot)
+    return !isHardForbidden(c,r.locationCodeSnapshot,day)
      &&(!normalGeographyRestrictionApplies(c)||c.normalAssignmentFamilies.includes(r.locationCodeSnapshot))
      &&!(r.restrictedSlotIds||[]).includes(p.slotId)&&(r.requiredQualifications||[]).every(q=>a.qualifications.includes(q))
      &&!ids(r).some(id=>a.restrictions.includes(id))&&!(minute(a.lunch.start)<=at&&at<minute(a.lunch.end))
@@ -581,6 +581,7 @@ export function deriveApprovedMappedShiftEndCoverage({originalSource,currentSour
   }
   positions[slot.id]={slotId:slot.id,workDays:availability.map(a=>a.dayOfWeek),datedAvailability,
    forbiddenFamilies:configured.hardForbiddenFamilies||[],
+   ...(configured.hardForbiddenFamiliesByDay?{hardForbiddenFamiliesByDay:clone(configured.hardForbiddenFamiliesByDay)}:{}),
    ...(normalGeographyRestrictionApplies(configured)?{normalAllowedFamilies:configured.normalAssignmentFamilies}:{})};
  }
  const seen=new Set(),references=[];
@@ -597,7 +598,7 @@ export function deriveApprovedMappedShiftEndCoverage({originalSource,currentSour
   const a=mappedSource.version.slotAvailability.find(a=>a.slotId===current.id&&a.dayOfWeek===mapping.dayOfWeek),configured=configBySlot.get(current.id);
   requireFact(person.personId&&person.personId===mapping.actualPersonId&&configured?.personId===person.personId
    &&a?.status==='working','approved mapped current person/availability differs');
-  assertNormalOwnerEligibility(configured,mappedParent.locationCodeSnapshot);
+  assertNormalOwnerEligibility(configured,mappedParent.locationCodeSnapshot,mappedParent.dayOfWeek);
   requireFact(mappedParent.window.start>=a.shift.start&&mappedParent.window.end<=a.shift.end
    &&(mappedParent.window.start!=='09:45'||mappedParent.window.end===a.shift.end),
   'approved mapped closing parent must retain exact current target shift');

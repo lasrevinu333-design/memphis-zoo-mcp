@@ -1,3 +1,4 @@
+import {isHardForbidden} from './static-weekly-owner-eligibility.js';
 import {assertServiceDate,snapshotDatedRosterSlot} from './static-weekly-schedule-model.js';
 // Pure segment completion. Runtime callers must use the source-bound derivation
 // wrapper; the config-taking entry point also supports offline legacy evidence.
@@ -58,7 +59,7 @@ export function completeRecurringShiftEndCoverage(source,config){
    const loads=new Map(remaining.map(s=>[s.slotId,current.filter(u=>u.owner===s.slotId).reduce((n,u)=>n+Number(config.weights[u.original.locationCodeSnapshot]??1),0)]));
    for(const unit of leaving.sort((a,b)=>a.original.workId.localeCompare(b.original.workId))){
     const row=unit.original;
-    const rankEligible=domain=>domain.filter(s=>!(s.forbiddenFamilies||[]).includes(row.locationCodeSnapshot)
+    const rankEligible=domain=>domain.filter(s=>!(s.forbiddenFamilies||[]).includes(row.locationCodeSnapshot)&&!isHardForbidden(s,row.locationCodeSnapshot,day)
       && (!s.normalAllowedFamilies||s.normalAllowedFamilies.includes(row.locationCodeSnapshot))
       && (!config.sourceBoundEligibility || (!(row.restrictedSlotIds||[]).includes(s.slotId)
         && (row.requiredQualifications||[]).every(q=>s.qualifications.includes(q))
@@ -157,7 +158,7 @@ export function validateRecurringShiftEndCoverage(baseline,candidate,config){
     const owner=positions.get(row.ownerSlotId);
     assert.ok(owner?.workDays.includes(day)&&minute(owner.shift[0])<=at
       &&at<minute(owner.shift[1]),`off-duty recurring owner at ${day}/${clock(at)}`);
-    assert.ok(!(owner.forbiddenFamilies||[]).includes(row.locationCodeSnapshot),'forbidden handoff family');
+    assert.ok(!(owner.forbiddenFamilies||[]).includes(row.locationCodeSnapshot)&&!isHardForbidden(owner,row.locationCodeSnapshot,day),'forbidden handoff family');
     assert.ok(!owner.normalAllowedFamilies||owner.normalAllowedFamilies.includes(row.locationCodeSnapshot),'handoff outside established geographic areas');
     for(const id of ids(row))counts.set(id,(counts.get(id)||0)+1);
    }

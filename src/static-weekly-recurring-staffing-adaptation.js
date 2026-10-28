@@ -10,7 +10,7 @@ import {deriveLunchCoverageFromPreparedProblem} from './static-weekly-lunch-deri
 import { recurringPatternAuthority } from "./static-weekly-recurring-repair-basis.js";
 import { createShiftEndContinuityPolicy,deriveApprovedMappedShiftEndCoverage,deriveApprovedDatedMappedShiftEndCoverage } from "./static-weekly-shift-end-derivation.js";
 import { assertNormalOwnerEligibility, hardRestrictedSlots,
-  validateOwnerEligibilityConfig,normalGeographyRestrictionApplies } from "./static-weekly-owner-eligibility.js";
+  validateOwnerEligibilityConfig,normalGeographyRestrictionApplies,isHardForbidden,mandatoryNormalOwner } from "./static-weekly-owner-eligibility.js";
 import {createRecurringPhaseDescriptor,createRecurringPhaseProspectiveSource,
   enumerateRecurringPhaseMinimum,evaluateRecurringPhaseCanonicalSource,
   solveRecurringPhaseCanonicalMinimum,assertRecurringPhasePreferenceNormalization,
@@ -388,7 +388,7 @@ export function mapApprovedStaticTemplateCandidate({ templates, admittedBindings
       require(configOwner && configOwner[1].personId === actual.personId && configOwner[1].vacancy !== true,
         'static_template_current_person_config_mismatch');
       for (const row of rows) {
-        try { assertNormalOwnerEligibility({ key: configOwner[0], ...configOwner[1] }, row.locationCodeSnapshot); }
+        try { assertNormalOwnerEligibility({ key: configOwner[0], ...configOwner[1] }, row.locationCodeSnapshot,row.dayOfWeek); }
         catch { fits = false; break; }
         const roleAvailability = approved.states.get(row.dayOfWeek).availability.get(role);
         const actualContext = target.availabilityByDaySlot.get(`${row.dayOfWeek}\u0000${actual.slotId}`);
@@ -990,7 +990,7 @@ export function createFullNineReductionContext({publishedSource,managerSnapshot,
     }
     const restriction=`owner:${sourceConfigSha}:hard_place_eligibility;base:${currentHandout.base}`;
     if(row.restrictionProvenance===restriction)normalized.restrictionProvenance=restriction;
-    if(Object.hasOwn(row,'restrictedSlotIds'))normalized.restrictedSlotIds=hardRestrictedSlots(fullConfig,row.locationCodeSnapshot,original.restrictedSlotIds||[]);
+    if(Object.hasOwn(row,'restrictedSlotIds'))normalized.restrictedSlotIds=hardRestrictedSlots(fullConfig,row.locationCodeSnapshot,original.restrictedSlotIds||[],row.dayOfWeek);
     assert.equal(canonicalJson(row),canonicalJson(normalized),'historical full-row/physical/workload/provenance drift');
   }
   // Target people must already be represented by the authenticated hydrated
@@ -1050,7 +1050,7 @@ export function createFullNineReductionContext({publishedSource,managerSnapshot,
         serviceEffortMinutes:old.reduce((n,r)=>n+r.serviceEffortMinutes,0),window:phase==='morning'?{start:owner.shift[0],end:'09:45'}:{start:'09:45',end:owner.shift[1]},
         serviceEffortProvenance:`base:${currentHandout.base}:effort`,priorityProvenance:`base:${currentHandout.base}:priority`,
         qualificationProvenance:`base:${currentHandout.base}:qualifications`,restrictionProvenance:`owner:40da4e1d4cce52b2361b5403b7e5e4477ca00def0fd3649a1d76dacb48422f30:hard_place_eligibility;base:${currentHandout.base}`,
-        restrictedSlotIds:hardRestrictedSlots(config,family,old.flatMap(r=>r.restrictedSlotIds||[]))});
+        restrictedSlotIds:hardRestrictedSlots(config,family,old.flatMap(r=>r.restrictedSlotIds||[]),day)});
       rows.push(row);(config.overrides[String(day)][phase][key]||=[]).push(family);
       comparisonLedger.push({day,phase,family,originalRows:structuredClone(old),originalRowsDigest:contentDigest(old),referenceSlotId:targetSlots[correctedAdminKey||originalKey].slotId,
         comparisonSourceOwnerSlotId:owner.slotId,...(mandatory?{mandatoryCurrentOwnerBinding:mandatory}:{}),
@@ -1580,9 +1580,9 @@ export function adaptRegisteredRecurringSource({ registeredSource, patternConfig
     const ownerKey = keyBySlot.get(assignment.originSlotId);
     assert.ok(ownerKey, `assignment owner outside stable positions ${assignment.workId}`);
     assertNormalOwnerEligibility({ key: ownerKey, ...patternConfig.slots[ownerKey] },
-      assignment.locationCodeSnapshot);
+      assignment.locationCodeSnapshot,assignment.dayOfWeek);
     assignment.restrictedSlotIds = hardRestrictedSlots(patternConfig, assignment.locationCodeSnapshot,
-      assignment.restrictedSlotIds || []);
+      assignment.restrictedSlotIds || [],assignment.dayOfWeek);
     assert.ok(!assignment.restrictedSlotIds.includes(assignment.ownerSlotId),
       `hard-restricted source owner ${assignment.workId}`);
     assignment.serviceEffortProvenance = `base:${baseHash}:effort`;
@@ -2055,7 +2055,9 @@ export function deriveRecurringStaffingPattern({ currentConfig, targetSlots, ful
             .find(b=>b.dayOfWeek===day&&b.family===family):null;
           if(mandatory&&targetSlots[owner].slotId!==mandatory.mandatoryPrimarySlotId)continue;
         }
-        if (targetSlots[owner].hardForbiddenFamilies?.includes(family)) continue;
+        if (isHardForbidden(targetSlots[owner],family,day)) continue;
+        const protectedOwner=mandatoryNormalOwner(result,family,day);
+        if(protectedOwner&&owners.some(k=>targetSlots[k].slotId===protectedOwner)&&targetSlots[owner].slotId!==protectedOwner)continue;
         if (normalGeographyRestrictionApplies({key:owner,...targetSlots[owner]})
           && !targetSlots[owner].normalAssignmentFamilies.includes(family)) continue;
         // Monday-only route packages stay with their actual handout owner.

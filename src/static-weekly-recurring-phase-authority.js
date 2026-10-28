@@ -3,7 +3,7 @@
 import {contentDigest,canonicalJson,bytewiseCompare} from './static-weekly-schedule-model.js';
 import {prepareStaticWeeklySchedulingProblem,buildStaticWeeklySchedulingModel} from './static-weekly-schedule-program.js';
 import {getScheduleComponentWeightLedger,COMPONENT_WEIGHT_UNIT} from './schedule-component-weight-authority.js';
-import {normalGeographyRestrictionApplies,validateOwnerEligibilityConfig} from './static-weekly-owner-eligibility.js';
+import {normalGeographyRestrictionApplies,validateOwnerEligibilityConfig,isHardForbidden,mandatoryNormalOwner} from './static-weekly-owner-eligibility.js';
 export const RECURRING_PHASE_SCHEMA='custodial.recurring-selected-phase-authority.v1';
 export const RECURRING_PHASE_ENUMERATION_LIMIT=64;
 const fail=(code,message)=>{throw Object.assign(new Error(message),{code});};
@@ -67,7 +67,8 @@ function descriptorWithPreparation({source,ownerConfig,dayOfWeek,selectedWorkIds
    &&h.locationCode===r.family&&h.at===original.window.end&&h.fromSlotId===(original.originSlotId||original.ownerSlotId));
   return !(ownerConfig.mondayOnlyFamilies?.includes(r.family)&&(original.originSlotId||original.ownerSlotId)!==o.slotId)
    &&named.every(h=>h.fromSlotId===o.slotId&&h.at===o.shift.end)
-   &&!c.hardForbiddenFamilies?.includes(r.family)
+   &&!isHardForbidden(c,r.family,dayOfWeek)
+   &&(!mandatoryNormalOwner(ownerConfig,r.family,dayOfWeek)||mandatoryNormalOwner(ownerConfig,r.family,dayOfWeek)===o.slotId)
    &&(!normalGeographyRestrictionApplies(c)||c.normalAssignmentFamilies.includes(r.family))&&o.shift.end>'09:45';
  }).map(o=>({slotId:o.slotId,window:{start:'09:45',end:o.shift.end},
   prospectiveWorkId:`${dayOfWeek}:${r.family}:equalized:${o.slotId.slice(0,8)}`}))}));

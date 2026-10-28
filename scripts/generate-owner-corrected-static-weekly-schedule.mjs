@@ -3,12 +3,17 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
-import { compileStaticWeeklySchedule, postgresJsonbContentDigest } from "../src/static-weekly-schedule-compiler.js";
+import { postgresJsonbContentDigest } from "../src/static-weekly-schedule-compiler.js";
 import { prepareStaticWeeklyRegistrationArtifact } from "./static-weekly-schedule-candidate-importer.mjs";
 import { createShiftEndContinuityPolicy } from "../src/static-weekly-shift-end-derivation.js";
-import {validateOwnerEligibilityConfig,assertNormalOwnerEligibility,hardRestrictedSlots,verifiedBaseRestrictionInventory} from '../src/static-weekly-owner-eligibility.js';
+import {validateOwnerEligibilityConfig,assertNormalOwnerEligibility,hardRestrictedSlots,mandatoryNormalOwner,verifiedBaseRestrictionInventory} from '../src/static-weekly-owner-eligibility.js';
 import {validateScheduleComponentWeightSource,validateScheduleComponentWeightPacket} from '../src/schedule-component-weight-authority.js';
 
+import {compileStaticWeeklyScheduleIsolated,shutdownStaticWeeklyCompiler} from '../src/static-weekly-schedule-compiler-runtime.js';
+import {installStaticWeeklySha256HexAccelerator} from '../src/static-weekly-schedule-model.js';
+// Match the maintained server runtime: one bounded fused solver process, not
+// one cold WASM process per objective. Hash bytes and acceptance are unchanged.
+installStaticWeeklySha256HexAccelerator(text=>createHash('sha256').update(text,'utf8').digest('hex'));
 const BACKEND = path.resolve(process.cwd());
 const CONFIG_PATH = process.env.STATIC_WEEKLY_OWNER_CONFIG_PATH
   ? path.resolve(process.env.STATIC_WEEKLY_OWNER_CONFIG_PATH)
@@ -186,7 +191,9 @@ for (const assignment of version.assignments) {
   const owner = activeBySlot.get(assignment.originSlotId);
   assert.ok(owner, `assignment owner is not one of the nine stable positions: ${assignment.workId}`);
   assert.ok(owner.workDays.includes(assignment.dayOfWeek), `${owner.key} owns work on an off day`);
-  assertNormalOwnerEligibility(owner,assignment.locationCodeSnapshot);
+  assertNormalOwnerEligibility(owner,assignment.locationCodeSnapshot,assignment.dayOfWeek);
+  const mandatory=mandatoryNormalOwner(config,assignment.locationCodeSnapshot,assignment.dayOfWeek);
+  assert.ok(!mandatory||mandatory===owner.slotId,`protected normal owner changed: ${assignment.workId}`);
 }
 for (let day=0; day<7; day+=1) for (const phase of ["morning","equalized"]) {
   const oldSource = baseAssignments.filter((row) => row.dayOfWeek===day && phaseOf(row)===phase);
@@ -346,7 +353,7 @@ for (const availability of version.slotAvailability) {
 // Only hard eligibility is global. Normal geography was validated above and
 // must not prohibit legitimate nearby temporary lunch coverage.
 for (const assignment of version.assignments) {
-  assignment.restrictedSlotIds=hardRestrictedSlots(config,assignment.locationCodeSnapshot,assignment.restrictedSlotIds||[]);
+  assignment.restrictedSlotIds=hardRestrictedSlots(config,assignment.locationCodeSnapshot,assignment.restrictedSlotIds||[],assignment.dayOfWeek);
   // The packet carries exact hash-bound source artifacts. Repeat references,
   // not the same long explanatory prose, inside every certificate work row.
   assignment.serviceEffortProvenance = `base:${config.basePacket.sha256}:effort`;
@@ -369,7 +376,9 @@ const componentWeightInputReceipt = exactSixPersonHandout
 const compileInput = clone(input);
 compileInput.versions = [clone(input.version)];
 delete compileInput.version;
-const compiled = await compileStaticWeeklySchedule(compileInput);
+let compiled;
+try { compiled = await compileStaticWeeklyScheduleIsolated(compileInput); }
+finally { await shutdownStaticWeeklyCompiler(); }
 if (process.env.STATIC_WEEKLY_DIAGNOSTIC === '1' && compiled.status !== 'FEASIBLE') {
   console.error(JSON.stringify({status:compiled.status,fatal:compiled.fatal,
     reviewWork:compiled.reviewWork,verifier:compiled.verifier},null,2));
@@ -438,7 +447,7 @@ const packet = {
     eligibilityScope:{baseRestrictionInventory,normalAssignmentGeography:slotEntries.filter(([,s])=>s.normalAssignmentFamilies)
       .map(([key,s])=>({slotKey:key,slotId:s.slotId,families:s.normalAssignmentFamilies,scope:'normal_assignment_geography'})),
       hardPlaceEligibility:slotEntries.filter(([,s])=>s.hardForbiddenFamilies)
-      .map(([key,s])=>({slotKey:key,slotId:s.slotId,families:s.hardForbiddenFamilies,scope:'hard_place_eligibility'}))},
+      .map(([key,s])=>({slotKey:key,slotId:s.slotId,families:s.hardForbiddenFamilies,...(s.hardForbiddenFamiliesByDay?{familiesByDay:s.hardForbiddenFamiliesByDay}:{}),scope:'hard_place_eligibility'}))},
     note:"Full immutable position template with canonical dated closing derivation. Local compiler verification only; independent review and production staffing/publication remain separately gated."
   }
 };

@@ -119,7 +119,12 @@
           "08:30",
           "09:30"
         ]
-      }
+      },
+      "mandatoryNormalFamilies": [
+        "TETON",
+        "NORTH_WEST_PASSAGE",
+        "EAST_END_RESTROOMS"
+      ]
     },
     "KATHY": {
       "slotId": "55e5939c-175c-5026-94fd-c4350d538922",
@@ -308,9 +313,7 @@
         "11:30",
         "12:30"
       ],
-      "hardForbiddenFamilies": [
-        "HERPETARIUM"
-      ],
+      "hardForbiddenFamilies": [],
       "lunchByDay": {
         "0": [
           "11:30",
@@ -350,7 +353,28 @@
         "TETON",
         "TROPICAL_BIRDS",
         "ZAMBEZI"
-      ]
+      ],
+      "hardForbiddenFamiliesByDay": {
+        "0": [
+          "HERPETARIUM"
+        ],
+        "1": [],
+        "2": [
+          "HERPETARIUM"
+        ],
+        "3": [
+          "HERPETARIUM"
+        ],
+        "4": [
+          "HERPETARIUM"
+        ],
+        "5": [
+          "HERPETARIUM"
+        ],
+        "6": [
+          "HERPETARIUM"
+        ]
+      }
     },
     "OPTION1": {
       "slotId": "7044faec-4bbd-57ca-a898-ddd719503113",
@@ -852,20 +876,21 @@
       "morning": {
         "KAREN": [
           "EVENT_CENTER",
-          "MEMMEX_RESTROOMS",
-          "AQUARIUM",
           "CAT_COUNTRY",
           "HERPETARIUM",
           "KOMODOS",
           "NOCTURNAL",
           "TROPICAL_BIRDS",
-          "EXPO"
+          "EXPO",
+          "ZAMBEZI",
+          "PRIMATE_PAVILLION"
         ],
         "TAMMY": [
-          "ZAMBEZI",
           "PRIMATE_CANYON",
           "TETON",
-          "NORTH_WEST_PASSAGE"
+          "NORTH_WEST_PASSAGE",
+          "EAST_END_RESTROOMS",
+          "CHINA"
         ],
         "KATHY": [
           "BREEZEWAY_RESTROOMS",
@@ -877,27 +902,27 @@
         "ALIJAH": [
           "EDUCATION",
           "BONOBOS_RESTROOMS",
-          "CHINA",
-          "EAST_END_RESTROOMS",
-          "PRIMATE_PAVILLION"
+          "MEMMEX_RESTROOMS",
+          "AQUARIUM"
         ]
       },
       "equalized": {
         "KAREN": [
-          "MEMMEX_RESTROOMS",
-          "AQUARIUM",
           "CAT_COUNTRY",
           "EDUCATION",
           "HERPETARIUM",
           "KOMODOS",
           "NOCTURNAL",
-          "PRIMATE_CANYON",
-          "TROPICAL_BIRDS"
+          "TROPICAL_BIRDS",
+          "ZAMBEZI",
+          "PRIMATE_PAVILLION"
         ],
         "TAMMY": [
           "TETON",
-          "ZAMBEZI",
-          "NORTH_WEST_PASSAGE"
+          "NORTH_WEST_PASSAGE",
+          "EAST_END_RESTROOMS",
+          "CHINA",
+          "PRIMATE_CANYON"
         ],
         "KATHY": [
           "BREEZEWAY_RESTROOMS",
@@ -910,9 +935,8 @@
           "EVENT_CENTER",
           "CATHOUSE_CAFE_RESTROOMS",
           "BONOBOS_RESTROOMS",
-          "CHINA",
-          "EAST_END_RESTROOMS",
-          "PRIMATE_PAVILLION"
+          "MEMMEX_RESTROOMS",
+          "AQUARIUM"
         ]
       }
     },
@@ -992,7 +1016,9 @@
     "Kathy's Tuesday Elephant Trunk employee-restroom duty is a post-opening reminder-only assignment pending distinct active location/tag identity; no gift-shop floor or invented NFC tag.",
     "Sunday and Friday are newly balanced against Eric's corrected Tammy workweek, not copied from the stale September 28 handout; issue replacement sheets from the accepted revision.",
     "Handoffs and lunch relief must be reconciled with the corrected employee sheets before publication; never claim runtime match from this source alone.",
-    "October 28 owner clarification: retain the established static schedule and Karen Monday/Tuesday/Wednesday/Friday/Saturday correction. The remaining open position OPTION4 works Friday through Tuesday, off Wednesday/Thursday; preserve its06:00-15:00 shift and10:00-11:00 lunch. No broad area reoptimization or actual clock-out dependency."
+    "October 28 owner clarification: retain the established static schedule and Karen Monday/Tuesday/Wednesday/Friday/Saturday correction. The remaining open position OPTION4 works Friday through Tuesday, off Wednesday/Thursday; preserve its06:00-15:00 shift and10:00-11:00 lunch. No broad area reoptimization or actual clock-out dependency.",
+    "October28 recovered personal rules: Tammy mandatory Teton/NWP/EastEnd normal ownership, with Friday EastEnd restored and Zambezi returned to Karen. Alijah Herpetarium Monday-only eligibility applies to normal and temporary duties. All times remain static; no live data changed.",
+    "Friday-only neighboring transfers retain source workload limits: China to Tammy; Primate Pavilion to Karen; Aquarium/MemMex to Alijah; Primate Canyon to Tammy after09:45. Other six-person weekdays remain unchanged. Incoming review staffing remains a separate unactivated pattern."
   ],
   "effectiveDateNote": "Unpublished next-Monday candidate compatible with the existing weekly control-plane boundary. Not an activation, deployment or rollout date; later rollout must revalidate its actual effective week.",
   "sourceHandout": {
