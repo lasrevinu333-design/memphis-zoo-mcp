@@ -1,7 +1,7 @@
 {
   "artifact": "integrated-backend-authority-release-evidence.v2",
   "release_id": "release-2026.07.19.custodial-v3.12",
-  "frontend_commit_sha": "b010716c38504435cd15917a65b23fff56233b88",
+  "frontend_commit_sha": "cddea6d05fedbf2e15796240819b2088e4ac23ca",
   "frontend_commit_state": "final_pair_bound",
   "schema_fingerprint": "a54f3660584b15a3129f7a448ba12cd43b572c3ede6ca64a23cbceb8b37f2187",
   "schema_transition": {
@@ -870,7 +870,7 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "c4f39110f1dcfd2a4b9adfeae7ec99e3d012abfd"
+        "object_id": "3c63c13554ec4c264dffdab3a829ae45c132003d"
       },
       {
         "path": "release/installed-source/20261006031304_custodial_owner_delegated_actions.sql",
@@ -1205,7 +1205,7 @@
       {
         "path": "release/schema-alignment-input.json",
         "mode": "100644",
-        "object_id": "d6d90c411193dfcf5c2f4c1516b5f9ae1daef43f"
+        "object_id": "5fc9cb98fc2a78e85f4c7bb63b2b0a936c3ec122"
       },
       {
         "path": "release/shared-events-database-receipt.json",
