@@ -24,7 +24,17 @@
         }
       },
       "original_rollback_catalog": null,
-      "original_rollback_ledger": null
+      "original_rollback_ledger": null,
+      "Root_full_readback": {
+        "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/actual-reviewed-rollback40615635335/RESULT.ROOT_ORIGINAL163_CAPTURE_FULL_READBACK.json",
+        "sha256": "fafc11746cee8253c00705f15a99d4d4aa7ea8eadfc2810e6cef50d2fea15997",
+        "bytes": 1621
+      },
+      "source_catalog": {
+        "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/actual-reviewed-rollback40615635335/AUTHENTICATED235_SOURCE_CATALOG_BYTE_REUSED_NOT_NEW_CAPTURE.json",
+        "sha256": "f034e7a0a019010093b15388ab1c2ee7865420bf343a4404d23a9a21c183b277",
+        "bytes": 3580157
+      }
     },
     "catalog_counts": {
       "column_grants": 43,
@@ -97,7 +107,7 @@
       "version": "20261027234814",
       "role": "last_applied_member"
     },
-    "production_ledger_version": "20261027234814",
+    "production_ledger_version": null,
     "canonical_source_schema_fingerprint": "6ee1d9e694bef75bfdfd07e7426d864e3c3b7cb2e1603fdcb1bd6bebf7fc0d0a",
     "public_function_count": 972,
     "production_ledger_count": 398,

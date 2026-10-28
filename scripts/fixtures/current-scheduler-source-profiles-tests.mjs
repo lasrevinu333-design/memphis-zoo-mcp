@@ -13,5 +13,23 @@ for(const row of document.profiles){
  assert.throws(()=>restoreSchedulerProofSource(row.profile,current.replace(row.hunks[0].current,row.hunks[0].current+row.hunks[0].current)));checks++;
  assert.throws(()=>restoreSchedulerProofSource(row.profile,prior));checks++;
 }
+// The fixture document and all15 historical endpoints remain immutable.
+const nativeProfile='NATIVE_CURRENT_REPLAY_MANIFEST_RETAINED_WIRING',manifestPath=new URL('../../supabase/canonical/migration-replay-order.json',import.meta.url),current297=readFileSync(manifestPath,'utf8');
+assert.equal(sha(current297),'e37cf98ffde8165797069595b45d84fdaf89871a719c31a839905e9e6317d54c');checks++;
+const old=JSON.parse(current297);old.phases[2].files=old.phases[2].files.slice(0,-3);const retained294=JSON.stringify(old,null,2)+'\n';
+assert.equal(sha(retained294),'5a0ac3a398d25f59a0a7f6e045d0db1c4d59b28924a18ec479f01bbe5a710121');checks++;
+assert.equal(restoreSchedulerProofSource(nativeProfile,current297),restoreSchedulerProofSource(nativeProfile,retained294));checks++;
+for(const mutate of [
+ doc=>doc.phases[2].files.pop(),
+ doc=>doc.phases[2].files.push({name:'20990101000000_unknown.sql',sha256:'f'.repeat(64)}),
+ doc=>doc.phases[2].files[0].sha256='f'.repeat(64),
+ doc=>doc.phases[0].files[0].sha256='f'.repeat(64),
+ doc=>doc.phases[2].files.at(-1).sha256='f'.repeat(64),
+ doc=>doc.phases[2].files.at(-2).name='20990101000000_unknown.sql',
+ doc=>doc.phases[2].files.reverse(),
+ doc=>doc.phases.push({kind:'unknown',files:[]}),
+]) {const changed=JSON.parse(current297);mutate(changed);assert.throws(()=>restoreSchedulerProofSource(nativeProfile,JSON.stringify(changed,null,2)+'\n'));checks++;}
+assert.throws(()=>restoreSchedulerProofSource(nativeProfile,current297+' '));checks++;
+assert.throws(()=>restoreSchedulerProofSource('NATIVE_CURRENT_HTTP_SELECTED_DEVICE_PIN',current297));checks++;
 assert.throws(()=>restoreSchedulerProofSource('UNKNOWN',''));checks++;
 console.log(JSON.stringify({status:'PASS',checks,profiles:document.profiles.length,scope:'Source-only exact whole-image prior reconstruction, unknown/missing/duplicate/drift refusals',sql:false}));

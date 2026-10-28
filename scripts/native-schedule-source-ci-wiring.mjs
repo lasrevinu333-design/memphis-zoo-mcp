@@ -6,7 +6,9 @@ import {resolve} from 'node:path';
 
 const statement="await import('./native-schedule-source-ci-tests.mjs');";
 const hashes={
-  'src/manager-notifications.js':'327a2bcd9dd77a2588342ce425623c14bc4562c17a637038c72d291d588446dd',
+  // Current S4 notification privilege/read-purity source; createPushRuntime and
+  // its entire native prefix remain literal. Current behavior is not normalized.
+  'src/manager-notifications.js':'50507bdd740a463e839fd40a0bea1b9b5462bfbbb6ad0d12239bde2172bba113',
   'scripts/native-schedule-sender-factory-tests.mjs':'1b5ea8649cbc2d8919f8b612fa2aa44c19841a9dcb58dc626393ef6c3ff55183',
   'src/native-schedule-source-producer.js':'a5ffbb3f816ba32e8bf2e2ab8583786a2983cb0ea7cb43eddaa970c9250828bb',
   'scripts/native-schedule-source-producer-tests.mjs':'c3ffbedf1b27f74ff571df7062d8a5b52118bcf9b517420ceb83b9c0fdf58410',

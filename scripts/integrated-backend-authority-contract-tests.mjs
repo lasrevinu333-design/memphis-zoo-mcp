@@ -198,8 +198,32 @@ assert.match(index, /action === "resume_canary" && authoritativeHealth\?\.ok !==
   "physical canary resume must require the combined database and real scan-transport health probe");
 assert.match(index, /runCustodialOfflineReconciliationNotificationWorker/);
 assert.doesNotMatch(index, /run_application_write|force-close-session/);
-assert.match(index, /app\.post\("\/admin-api\/close-ticket"[\s\S]{0,900}runRpc\("custodial_close_maintenance_ticket_authoritative"/);
-assert.match(index, /app\.post\("\/dashboard-api\/close-ticket"[\s\S]{0,900}runRpc\("custodial_close_maintenance_ticket_authoritative"/);
+// Both normal close routes share the current typed manager-outcome writer.
+// The older untyped closer remains historical and is no longer HTTP authority.
+const ownerActions = readFileSync("src/owner-access-api.js", "utf8");
+const ownerOutcomeSql = readFileSync("supabase/migrations/20261006172928_custodial_manager_scheduler_permissions.sql", "utf8");
+assert.ok(index.includes('import { installOwnerAccessRoutes } from "./owner-access-api.js";'));
+assert.ok(index.includes('installOwnerAccessRoutes(app, { store: opsTrustedDeviceStore, runRpc, backendSecret: offlineAuthoritySecret });'));
+assert.ok(ownerActions.includes("const close = makeOpsAccessMiddleware({ env, trustedDeviceStore: store, requiredPermission: 'close_scan_tickets' });"));
+const closeRouteStart = ownerActions.indexOf("app.post(['/admin-api/close-ticket', '/dashboard-api/close-ticket'], close, respond(async req => {");
+assert.ok(closeRouteStart >= 0);
+const closeRouteEnd = ownerActions.indexOf("\n  app.get(", closeRouteStart);
+assert.ok(closeRouteEnd > closeRouteStart);
+const closeRoute = ownerActions.slice(closeRouteStart, closeRouteEnd);
+assert.ok(closeRoute.includes('assertServerAssignedActor(req.body);'));
+assert.ok(closeRoute.includes("exactBody(req.body, ['ticket_id', 'outcome', 'external_work_order_reference', 'close_notes'])"));
+assert.ok(closeRoute.includes("return runRpc('custodial_close_scan_ticket_outcome_v1', { ...managerActionArguments(req),"));
+assert.ok(closeRoute.includes('p_backend_execution_secret: backendSecret()'));
+assert.ok(ownerActions.includes("if (!uuid.test(s?.manager_id || '') || !uuid.test(s?.credential_id || '') || !s?.device_id)"));
+assert.ok(ownerActions.includes('p_manager_id: s.manager_id, p_credential_id: s.credential_id'));
+assert.ok(ownerActions.includes('p_device_id: s.device_id, p_session_access: s.access_level'));
+assert.ok(ownerOutcomeSql.includes("actor:=public.custodial_action_actor_v1(p_manager_id,p_credential_id,p_device_id,p_session_access,'close_scan_tickets');"));
+assert.ok(ownerOutcomeSql.includes('PERFORM public.custodial_require_backend_execution_secret(p_backend_execution_secret);'));
+assert.ok(ownerOutcomeSql.includes('result:=public.custodial_set_maintenance_ticket_outcome(p_ticket_id,p_outcome,p_manager_id,requested_reference,requested_notes,p_backend_execution_secret);'));
+assert.ok(ownerOutcomeSql.includes("Delegated closure requires a verified scan-session ticket"));
+assert.ok(ownerOutcomeSql.includes('FROM PUBLIC,anon,authenticated,static_weekly_control_plane;'));
+assert.ok(ownerOutcomeSql.includes('TO service_role;'));
+assert.doesNotMatch(ownerActions, /runRpc\(['"]custodial_close_maintenance_ticket_authoritative/);
 assert.match(index, /notification_instance_key: recipient\.notification_instance_key/);
 assert.match(index, /client_message_id: recipient\.client_message_id/);
 assert.doesNotMatch(index, /custodial_issue_offline_actor_context/);
@@ -302,14 +326,28 @@ assert.deepEqual(
 }
 assert.equal(productionMigrationState.authorization.production_mutation_required, true);
 assert.equal(productionMigrationState.authorization.sequence_policy, "apply_exact_ordered_pending_migrations_after_release_admission");
-assert.equal(productionMigrationState.backup_evidence.state, "fresh_verified_backup_required_after_fresh_source_capture_and_before_mutation");
 if (!currentProductionProfile) {
+assert.equal(productionMigrationState.backup_evidence.state, "fresh_verified_backup_required_after_fresh_source_capture_and_before_mutation");
 assert.equal(productionMigrationState.backup_evidence.last_verified.workflow_run_id, 33102836824);
 assert.equal(productionMigrationState.backup_evidence.last_verified.source_commit, "e679618b605c10ffc4055181797743cdf01978cb");
 assert.equal(productionMigrationState.backup_evidence.last_verified.artifact_sha256, "f3e7782513e3b046b04b246d509528a4b7e6cb814c7747ce6538c1b968dac8ba");
 assert.equal(productionMigrationState.backup_evidence.last_verified.archive_digest, "e3a545d1af72be16e592b6c24a53c92a7e69dc08e974774286e8f0007beffcbe");
-}
 assert.equal(productionMigrationState.backup_evidence.last_verified.restore_verification, "passed");
+} else {
+  const backup = productionMigrationState.backup_evidence;
+  const capture = productionMigrationState.target.normal_source_capture;
+  assert.equal(backup.state, "AUTHENTIC_SOURCE_A_BACKUP_AND_REVIEWED_ROLLBACK_CAPTURE_FULL_REHEARSAL_STILL_REQUIRED");
+  assert.equal(backup.last_verified.workflow_run_id, capture.original_backup_run_id);
+  assert.equal(backup.last_verified.archive_digest, currentProductionProfile.archive_digest);
+  assert.equal(backup.last_verified.restore_verification, "SIGNED_ARCHIVE_VERIFIED_AND_REVIEWED_ROLLBACK_TARGET_CAPTURE_NOT_FULL_CANDIDATE");
+  assert.deepEqual(backup.last_verified.reviewed_target_report, capture.report);
+  assert.equal(capture.rollback_evidence.committed, false);
+  assert.equal(capture.rollback_evidence.rollback_verified, true);
+  for (const key of ["production_authorized", "candidate_migration_admission", "runtime_admission", "full_rehearsal_attestation"]) assert.equal(capture[key], false);
+  assert.equal(productionMigrationState.target.production_ledger_version, null);
+  assert.equal(productionMigrationState.target.source_migration_version, currentReplayPlan.files.at(-1).slice(0,14));
+  assert.equal(productionMigrationState.target.execution_tail.version, productionMigrationState.target.source_migration_version);
+}
 assert.equal(Object.hasOwn(productionMigrationState, "applied_release_migrations"), false,
   "captured state must use the exact ledger head instead of a duplicate partial applied-migration list");
 assert.equal(new Set(exactMigrationFiles.map((file) => file.slice(0, 14))).size, exactMigrationFiles.length,
