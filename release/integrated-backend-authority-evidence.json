@@ -1540,7 +1540,7 @@
       {
         "path": "scripts/current291-production-plan-source-tests.mjs",
         "mode": "100644",
-        "object_id": "75fad6b385e72a72df1208525a6eaafb50e7703f"
+        "object_id": "c5aec9b418e818bec72eff24de1eca87f4d6c169"
       },
       {
         "path": "scripts/custodial-atomic-commit-database-tests.mjs",
@@ -4010,12 +4010,12 @@
       {
         "path": "scripts/release-migration-plan-database-isolated-tests.sh",
         "mode": "100644",
-        "object_id": "fe8d12e9cff42edaf6f4bfe91ccd7be9da9fb22f"
+        "object_id": "145544a2a9f2a29de031463e5f1c5faf5d58bed4"
       },
       {
         "path": "scripts/release-migration-plan-database-tests.mjs",
         "mode": "100644",
-        "object_id": "ae5b4f9caf9841bb802d0b0b88ea602078207959"
+        "object_id": "3521bd1a2ed2f6c6fad1f69d1716cf0d97c38acd"
       },
       {
         "path": "scripts/release-migration-preservation-archive-tests.mjs",
@@ -5315,7 +5315,7 @@
       {
         "path": "scripts/static-weekly-vacate-roster-slot-database-tests.mjs",
         "mode": "100644",
-        "object_id": "a8177002b99085ae13d88a84f3e00d284453144f"
+        "object_id": "d4fbbb90fd49c9c78f7f0cf3e056ca9b28d20599"
       },
       {
         "path": "scripts/static-weekly-vacate-roster-slot-fixture-tests.mjs",
