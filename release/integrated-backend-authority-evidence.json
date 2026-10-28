@@ -3,7 +3,7 @@
   "release_id": "release-2026.07.19.custodial-v3.12",
   "frontend_commit_sha": "82975a3a25c668c7ca8c842967465a9cc4453d25",
   "frontend_commit_state": "final_pair_bound",
-  "schema_fingerprint": "91eb02974fd180586869fb3d4b905da7e9bded0ac518d83b6ee03a570cd1f944",
+  "schema_fingerprint": "a54f3660584b15a3129f7a448ba12cd43b572c3ede6ca64a23cbceb8b37f2187",
   "schema_transition": {
     "transition_id": "custodial-post294-test-20261026",
     "from_fingerprint": "0096e7c488aca86f1d38b061561696b2d4ac409036f063ffc9f196625b9ee9c2",
@@ -140,17 +140,17 @@
       {
         "path": ".github/workflows/custodial-populated-schema-preflight.yml",
         "mode": "100644",
-        "object_id": "237616a84472a8bc7707df4ab56a78b47b6f248d"
+        "object_id": "1f00f0ed8233b575c2fef35fa1eed44b28fdb223"
       },
       {
         "path": ".github/workflows/custodial-production-repair.yml",
         "mode": "100644",
-        "object_id": "7428822dc117e1579fd7abb24df313929e92d25b"
+        "object_id": "fdedb929da4a86c048b097c72f1d347d5671abe4"
       },
       {
         "path": ".github/workflows/device-credential-foundation.yml",
         "mode": "100644",
-        "object_id": "28939d402ad61aebb816ad835b76acb843b85d5d"
+        "object_id": "3a8a10a1f756847fed42361fc21eba914e288b3e"
       },
       {
         "path": ".github/workflows/event-integrity-diagnostics.yml",
@@ -160,7 +160,7 @@
       {
         "path": ".github/workflows/foundation-security-gate.yml",
         "mode": "100644",
-        "object_id": "8561de4b346836f2d003101dd2621ef90a2a53f0"
+        "object_id": "916fb7d4a690e2d97412011d2820d93ff7add9ef"
       },
       {
         "path": ".github/workflows/integrated-release-attestation.yml",
@@ -185,7 +185,7 @@
       {
         "path": ".github/workflows/operations-leadership-mobile-foundation.yml",
         "mode": "100644",
-        "object_id": "df98fdf0d21287881f0ec1146873738535b94129"
+        "object_id": "542fc48da99c8ff52f456fefbe391dbc3d47be8d"
       },
       {
         "path": ".github/workflows/phone-production-handoff-monitor.yml",
@@ -243,6 +243,11 @@
         "object_id": "9d433e8f41f620bcd4fa9d952e96e45ea948c450"
       },
       {
+        "path": "OCTOBER_TRANSITION_HANDOFF.md",
+        "mode": "100644",
+        "object_id": "3eeb38b9fa82f5c193c37468ba5cef6b2dcc7754"
+      },
+      {
         "path": "POST_DEPLOY_REGRESSION_CHECKLIST.md",
         "mode": "100644",
         "object_id": "e08b10c21087e0f95d9ae5309d655600c79fadc2"
@@ -268,6 +273,11 @@
         "object_id": "3545d2fe8406dc06b21f58d10c3454747568bbae"
       },
       {
+        "path": "config/custodial-friday-herpetarium-accepted-exception-20260930.json",
+        "mode": "100644",
+        "object_id": "0209316e8020f5cb1253e82e78d0756385fd2d7c"
+      },
+      {
         "path": "config/custodial-full-nine-family-owners-20260926.json",
         "mode": "100644",
         "object_id": "da3bd49e0b3ec721aa5a87771d4c2ed10c697fac"
@@ -276,6 +286,11 @@
         "path": "config/custodial-maintenance-recipients.json",
         "mode": "100644",
         "object_id": "1a1462c3d3b42b3988662770dc601d5bb3ce52b0"
+      },
+      {
+        "path": "config/custodial-october-dated-plan-20261001.json",
+        "mode": "100644",
+        "object_id": "a3de40fcd652f21a22d629767c4398a637daa609"
       },
       {
         "path": "config/custodial-owner-workdays.json",
@@ -293,9 +308,24 @@
         "object_id": "973952b2e8350ded47e430bf7abf88436acfeab8"
       },
       {
+        "path": "config/custodial-six-person-handout-20260926.json",
+        "mode": "100644",
+        "object_id": "74f592c3f657acf8176cedd0c2356f634422416a"
+      },
+      {
+        "path": "config/custodial-six-person-handout-20260928.json",
+        "mode": "100644",
+        "object_id": "1533392b15ea532f6b3d9f498a9cf691a1c0677e"
+      },
+      {
         "path": "config/custodial-six-person-static-20260926.json",
         "mode": "100644",
         "object_id": "00a615075fdf2f645076f5c9181bf13efffa7c6c"
+      },
+      {
+        "path": "config/custodial-six-person-static-20260928.json",
+        "mode": "100644",
+        "object_id": "5a9a90a83eec803308db2f2ec5f3949c1bc10480"
       },
       {
         "path": "config/custodial-six-person-static-20261005.json",
@@ -323,9 +353,39 @@
         "object_id": "936586f668d82a5e63a386cf4726e7db10bb9f03"
       },
       {
+        "path": "docs/NATIVE_LOCATION_LIFECYCLE_STAGE.md",
+        "mode": "100644",
+        "object_id": "2d885be20364557ca4b4076f6b722d938fd9eca8"
+      },
+      {
+        "path": "docs/NATIVE_PROVIDER_EVENTS_STAGE.md",
+        "mode": "100644",
+        "object_id": "1f7b500ce9310fc4e126547111088f22fbda7ca8"
+      },
+      {
+        "path": "docs/NATIVE_PROVIDER_INTERVAL_PROTOCOL.md",
+        "mode": "100644",
+        "object_id": "827efc1dc1317d812d45e6a6c71a90c1fafe801c"
+      },
+      {
+        "path": "docs/OCTOBER_DATED_MATERIALIZATION_CONTRACT.md",
+        "mode": "100644",
+        "object_id": "4a8c22857106cdf3ace01f9d99348ac5867521cf"
+      },
+      {
+        "path": "docs/OUTLOOK_OPERATIONS_COLLECTOR.md",
+        "mode": "100644",
+        "object_id": "a773a8ce8d6ccc74976d0d75f5a9cf4f73c5caee"
+      },
+      {
+        "path": "docs/OUTLOOK_SHARED_EVENTS.md",
+        "mode": "100644",
+        "object_id": "eeb1d7dce8c68e70a7ce63a80b3d4a8c9787d81c"
+      },
+      {
         "path": "docs/chatgpt-mcp-oauth.md",
         "mode": "100644",
-        "object_id": "c83499dd96ea8b465aa68d4a418d0cb923bc1476"
+        "object_id": "36318dc3e487c1c9d0ba6c3e2b6a7cda36151265"
       },
       {
         "path": "docs/custodial-readonly-database-authority.md",
@@ -341,6 +401,11 @@
         "path": "docs/github-json-commands.md",
         "mode": "100644",
         "object_id": "c9f897b14223fb1ecbe18813e5ad5e2fbb640501"
+      },
+      {
+        "path": "docs/mcp-oauth-durable-token-families.md",
+        "mode": "100644",
+        "object_id": "3ce4ea29698481bb3b9f5d817feb040a381c6ca3"
       },
       {
         "path": "docs/mcp-repair-note.md",
@@ -366,6 +431,16 @@
         "path": "docs/moxie-authentication-repair-20260716.md",
         "mode": "100644",
         "object_id": "d869807a127494c9ad2592ccd6d7a979ea659c0d"
+      },
+      {
+        "path": "docs/native-location-dispatch-source.md",
+        "mode": "100644",
+        "object_id": "2197a232ec47c78770e5b0ef1a2f65467b04af24"
+      },
+      {
+        "path": "docs/native-private-custody-http-route-interface.json",
+        "mode": "100644",
+        "object_id": "481e056994bfb522b199b533d5e352ba688b57a6"
       },
       {
         "path": "docs/ops-manager-trusted-device-auth.md",
@@ -396,6 +471,16 @@
         "path": "docs/restored-scan-lunch-20260628.md",
         "mode": "100644",
         "object_id": "9722b2951005ddb1447f08e6c01ea5edfe233121"
+      },
+      {
+        "path": "docs/retired-event-console/events-api-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "91519d53317622eec37699c2f085f9437530ba8f"
+      },
+      {
+        "path": "docs/retired-event-console/events-parser-tests.mjs",
+        "mode": "100644",
+        "object_id": "c46dddb57c02b379490e50ff5fd1fccbc53f456a"
       },
       {
         "path": "docs/routes.md",
@@ -440,12 +525,27 @@
       {
         "path": "package-lock.json",
         "mode": "100644",
-        "object_id": "e08608e2987b589e25002eef7212ed23d3ffa92f"
+        "object_id": "50d09c1fc87f89e8ebcbd25c68d57fe6cf40bcf3"
       },
       {
         "path": "package.json",
         "mode": "100644",
-        "object_id": "0a0dac1792813902a8949a5e5caacf49bedde5ac"
+        "object_id": "bda78588775cd572f3da059656301615fb6ec636"
+      },
+      {
+        "path": "proposals/approved-static-dated-absence-materializer.sql",
+        "mode": "100644",
+        "object_id": "eedf92a87d5942e895862469fb7c63c0e96f5581"
+      },
+      {
+        "path": "proposals/approved-static-pending-staffing-normal-install.sql",
+        "mode": "100644",
+        "object_id": "4901bbf7a00a18d2f329023e1d998951428931a8"
+      },
+      {
+        "path": "proposals/approved-static-pending-staffing.sql",
+        "mode": "100644",
+        "object_id": "b8b92277c4d1da71e3e1e3852be890bb8a8cadb6"
       },
       {
         "path": "proposals/immutable-original-authority-reconciliation.sql",
@@ -513,54 +613,104 @@
         "object_id": "99a7cbc493505d1a7caef32d2e91db275a91401c"
       },
       {
-        "path": "public/moxie-assets/contacts-creekside-animal.png",
+        "path": "proposals/registered-never-filled-vacancy.sql",
         "mode": "100644",
-        "object_id": "be41d29c6e49f3d0fd7f712bf2b5415469f883f1"
+        "object_id": "663b116973d8518a716023108d89038d9e8554a2"
       },
       {
-        "path": "public/moxie-assets/frog-on-log-writing-pad.png",
+        "path": "release/combined-release-verification.json",
         "mode": "100644",
-        "object_id": "d241ab7c001a0963abff39e8d45248ba7191f6c7"
-      },
-      {
-        "path": "public/moxie-assets/moxie-avatar.jpg",
-        "mode": "100644",
-        "object_id": "8938d0bc445ae486eaf53dc757e1f82d680706f8"
-      },
-      {
-        "path": "public/moxie-assets/ops-dashboard.png",
-        "mode": "100644",
-        "object_id": "4133ea1d8c7084de696bb01db51f271119253513"
-      },
-      {
-        "path": "public/moxie-assets/ops-events.png",
-        "mode": "100644",
-        "object_id": "71d24d5aa0e6e88c4d4ac2f604902e173b8df619"
-      },
-      {
-        "path": "public/moxie-assets/ops-messaging.png",
-        "mode": "100644",
-        "object_id": "46aed7b0c8be0fad31ec0e25ae67a8779c1a1b00"
-      },
-      {
-        "path": "public/moxie-assets/ops-schedule.png",
-        "mode": "100644",
-        "object_id": "6f1b1a2ccd64779a3d1a5cbd8f6675c1f4b2bb5e"
-      },
-      {
-        "path": "public/moxie-assets/reminders-woodland-animal.png",
-        "mode": "100644",
-        "object_id": "d66b6e8a54bebf6e8d372d8fd0d0e6176ba3a2e3"
-      },
-      {
-        "path": "public/moxie-assets/settings-woodland-cog.png",
-        "mode": "100644",
-        "object_id": "3e06fc6aaea8f2af937b1436560fc5805dcf2652"
+        "object_id": "698d18b9fa7c419c6cfe6df5b5a380d372509a77"
       },
       {
         "path": "release/current291-staged-source-binding.json",
         "mode": "100644",
         "object_id": "117f5dea558fd391f4871c28106b61d101829a24"
+      },
+      {
+        "path": "release/cutover-declaration-correction-verification.json",
+        "mode": "100644",
+        "object_id": "742310709b507dcab7caeb3f75b63fa42757f36a"
+      },
+      {
+        "path": "release/dashboard-reader-restoration-manifest.json",
+        "mode": "100644",
+        "object_id": "1226a680efe1d4ec7e9de7699c0309091e070ab5"
+      },
+      {
+        "path": "release/dashboard-reader/NATIVE-JOURNEY-BRIDGE.md",
+        "mode": "100644",
+        "object_id": "721ab9043e32e2c555da6ba0c4db6214da140c3e"
+      },
+      {
+        "path": "release/dashboard-reader/ROLLOUT.md",
+        "mode": "100644",
+        "object_id": "cd5330830985a60c967d0719df8a9996097295f0"
+      },
+      {
+        "path": "release/dashboard-reader/candidate-prerequisites-readonly.sql",
+        "mode": "100644",
+        "object_id": "d85f5e5de864b9578fa0a2ff6761c2959fd28005"
+      },
+      {
+        "path": "release/dashboard-reader/forward-source/20261021110836_dashboard_application_reader_dependencies.sql",
+        "mode": "100644",
+        "object_id": "ccb976aa1f0f7ff45452a942e76abd9de10363a6"
+      },
+      {
+        "path": "release/dashboard-reader/forward-source/20261021111007_dashboard_verified_check_restoration.sql",
+        "mode": "100644",
+        "object_id": "3bc0cae4a7f0b92cecf395873765323dd96581b8"
+      },
+      {
+        "path": "release/dashboard-reader/forward-source/20261021112159_dashboard_verified_check_view_contract.sql",
+        "mode": "100644",
+        "object_id": "bb4df6445513df548d0b5b696421a4c68dce4389"
+      },
+      {
+        "path": "release/dashboard-reader/forward-source/20261021112511_dashboard_original_completion_reader_restoration.sql",
+        "mode": "100644",
+        "object_id": "9fb5809af1919d2e328d528b3f855d0b34e28738"
+      },
+      {
+        "path": "release/dashboard-reader/forward-source/20261021120148_dashboard_verified_check_private_reader.sql",
+        "mode": "100644",
+        "object_id": "7b401f63de7f1d8cb35e88edc4fbac69c4f4403b"
+      },
+      {
+        "path": "release/dashboard-reader/independent-check-postdeploy-readonly.sql",
+        "mode": "100644",
+        "object_id": "0d50150063664ea658bf0e3de00086b3dff3886b"
+      },
+      {
+        "path": "release/dashboard-reader/live-operational-day-forward.sql",
+        "mode": "100644",
+        "object_id": "57c51a2349dcf25a423693d9dbd113cbd7ba9ffe"
+      },
+      {
+        "path": "release/dashboard-reader/live-operational-day-rollback.sql",
+        "mode": "100644",
+        "object_id": "3affd473b98d2a77a9a24f9cff2ad8bc2a834e9a"
+      },
+      {
+        "path": "release/dashboard-reader/protected-reader-prerequisites-readonly.sql",
+        "mode": "100644",
+        "object_id": "c12bc454f0e347af08ff970df656de2b513f3826"
+      },
+      {
+        "path": "release/dashboard-reader/recovery-prerequisites-readonly.sql",
+        "mode": "100644",
+        "object_id": "00cf998b78884a3b78524821e0cd2fca98e66ac4"
+      },
+      {
+        "path": "release/dashboard-reader/verified-check-query-preimage.sql",
+        "mode": "100644",
+        "object_id": "8ec868efd24f256cfd874618c694c84540199724"
+      },
+      {
+        "path": "release/dependency-and-release-correction-verification.json",
+        "mode": "100644",
+        "object_id": "6736f345436a4703b3568912779a915c506c181f"
       },
       {
         "path": "release/disaster-recovery-runtime-contract.json",
@@ -575,7 +725,7 @@
       {
         "path": "release/fresh-only-replay/MANIFEST.json",
         "mode": "100644",
-        "object_id": "27b4466d27049c2cbdc8ec4093c9843938d42e1b"
+        "object_id": "b632d90cdecd7865db504e58bc1c478947d5d58f"
       },
       {
         "path": "release/fresh-only-replay/SELECTED_PROFILE.json",
@@ -753,9 +903,29 @@
         "object_id": "b4c928d84d7c48181224acdbaa86a1d69d0648de"
       },
       {
+        "path": "release/owner-access-schema-delta.json",
+        "mode": "100644",
+        "object_id": "fcb106e8397f887991ea6bb8cc42f249c00311c2"
+      },
+      {
+        "path": "release/owner-access-verification.json",
+        "mode": "100644",
+        "object_id": "e81400f6f2b2621b71ede0990155ad7154846cd3"
+      },
+      {
+        "path": "release/owner-database-fixture-correction-verification.json",
+        "mode": "100644",
+        "object_id": "922c4bea94ddcf75d3c34bd194162d7f0d375244"
+      },
+      {
         "path": "release/production-backup-source-extension.json",
         "mode": "100644",
         "object_id": "b73a27c189c7d0416240736d2957b32e878a9966"
+      },
+      {
+        "path": "release/production-data-preservation/README.md",
+        "mode": "100644",
+        "object_id": "614f775f2844acc2fee01867eeeefe623fcc57e1"
       },
       {
         "path": "release/production-data-preservation/original-235.json",
@@ -908,9 +1078,109 @@
         "object_id": "2a22913feabc560a280d0f109bf9ef2d3b439d4f"
       },
       {
+        "path": "release/production-forward-source/ACL-COMPARISON-ORDER.md",
+        "mode": "100644",
+        "object_id": "fbd8ebb9e6e28dac000f86d3d0d518d1ee99f64c"
+      },
+      {
+        "path": "release/production-forward-source/CREATOR-OWNER-ROLLOUT.md",
+        "mode": "100644",
+        "object_id": "08dadaea4141d95a87776ca04f7c25bf571cbbed"
+      },
+      {
+        "path": "release/production-forward-source/ISSUE-COLUMN-ORDER54.md",
+        "mode": "100644",
+        "object_id": "034872a93f4049c58e09f6170f4a42ff93457766"
+      },
+      {
+        "path": "release/production-forward-source/PRIVATE-CUSTODY-EXISTING-RUNTIME-ROLLOUT.md",
+        "mode": "100644",
+        "object_id": "33c38652277144553edd88e95f73a80722cce657"
+      },
+      {
+        "path": "release/production-forward-source/PRIVATE-CUSTODY-SOURCE253-CLOSURE.md",
+        "mode": "100644",
+        "object_id": "c24d9e9c38498d1aad18ad449fd734908e18a827"
+      },
+      {
+        "path": "release/production-forward-source/ROLLOUT.md",
+        "mode": "100644",
+        "object_id": "51ff2316854d76005892a2af6bd08eccb4fc4ec9"
+      },
+      {
+        "path": "release/production-forward-source/approved-dated152-helper-owner-evidence.json",
+        "mode": "100644",
+        "object_id": "97dc710de9c7e4e288e7797c5dd718043879aa5c"
+      },
+      {
+        "path": "release/production-forward-source/cancellation127-evidence.json",
+        "mode": "100644",
+        "object_id": "4693f49523795254cdcc14ae2a189e76e3f25d93"
+      },
+      {
+        "path": "release/production-forward-source/creator-owner-equivalence-evidence.json",
+        "mode": "100644",
+        "object_id": "ba008015cf046cb3b0ca4307ede59e89a7a038c4"
+      },
+      {
+        "path": "release/production-forward-source/creator131-owner-equivalence-evidence.json",
+        "mode": "100644",
+        "object_id": "7a0d4a42a83b4de2791e48fbe8a1c6e51f3e4510"
+      },
+      {
+        "path": "release/production-forward-source/grant-owner-closure-evidence.json",
+        "mode": "100644",
+        "object_id": "833f86f828151bd6c2512053198cbcbab5925533"
+      },
+      {
+        "path": "release/production-forward-source/issue-column-order54-evidence.json",
+        "mode": "100644",
+        "object_id": "89629fd7ee02ad528e771ce13860ea25e8d0569c"
+      },
+      {
         "path": "release/production-forward-source/manifest.json",
         "mode": "100644",
         "object_id": "1f6175de626de93dbab44723079b73ab8dbfb81a"
+      },
+      {
+        "path": "release/production-forward-source/october-recovery-owner-evidence.json",
+        "mode": "100644",
+        "object_id": "bc9ded2deef2ce9466646a4188cf3608b7369eb9"
+      },
+      {
+        "path": "release/production-forward-source/private-custody-acl-comparison-evidence.json",
+        "mode": "100644",
+        "object_id": "6a237da26d91f83d9d048040cc9d567ca1537f86"
+      },
+      {
+        "path": "release/production-forward-source/private-custody-existing-postgres-evidence.json",
+        "mode": "100644",
+        "object_id": "9a48e7a9b86cb0689e13210a6876121eeab07e99"
+      },
+      {
+        "path": "release/production-forward-source/private-custody-existing-postgres-profile.json",
+        "mode": "100644",
+        "object_id": "039100a8b3643f4a4e9f8dbf6c595dab9bd7bd1d"
+      },
+      {
+        "path": "release/production-forward-source/private-custody-source252-reference.json",
+        "mode": "100644",
+        "object_id": "dac0faa0bcbf4f09f3471d447ff40e81404dab13"
+      },
+      {
+        "path": "release/production-forward-source/private-custody-source253-existing-evidence.json",
+        "mode": "100644",
+        "object_id": "4429d62b5162568d44104ff93f1412930179fccf"
+      },
+      {
+        "path": "release/production-forward-source/private-custody-source253-existing-profile.json",
+        "mode": "100644",
+        "object_id": "7297d8c24850a62bb9b029b28b40f0aa8cccdc93"
+      },
+      {
+        "path": "release/production-forward-source/registered-vacancy153-owner-evidence.json",
+        "mode": "100644",
+        "object_id": "98bc8e0b32592d16cb4980d5254fe3b72557ee85"
       },
       {
         "path": "release/production-migration-state.json",
@@ -938,9 +1208,39 @@
         "object_id": "b35bfa2f74d01d8b770916cbfe2d548ce89decf4"
       },
       {
+        "path": "release/shared-events-database-receipt.json",
+        "mode": "100644",
+        "object_id": "ac102ca0c5cbc84ec19f7670cef48832d2a9ef92"
+      },
+      {
+        "path": "release/shared-events-recovery-verification.json",
+        "mode": "100644",
+        "object_id": "8427ac4d449aab5c9a39bab10658cac04a11694b"
+      },
+      {
+        "path": "release/shared-events-schema-delta.json",
+        "mode": "100644",
+        "object_id": "e8fdfbe202ddf50bd159215f0d2e6681b8fe4be5"
+      },
+      {
+        "path": "release/shared-events-schema-extension.json",
+        "mode": "100644",
+        "object_id": "220e84c9b62f224a4790c438ca1e705a24d69b32"
+      },
+      {
+        "path": "release/signer-path-correction-verification.json",
+        "mode": "100644",
+        "object_id": "8d52e05b56f78dae5e9df3b681736553a74a67a7"
+      },
+      {
         "path": "release/target-capture-source/20261021111917_dashboard_application_reader_operational_day_repair.sql",
         "mode": "100644",
         "object_id": "77ffba7d41f447c0f7e5105d0627f46feeb83585"
+      },
+      {
+        "path": "release/target-capture-source/ROLLOUT.md",
+        "mode": "100644",
+        "object_id": "bccac8e7c10eaafa6200530e8700b362aa9ef8ab"
       },
       {
         "path": "release/target-capture-source/declaration.json",
@@ -960,22 +1260,42 @@
       {
         "path": "scripts/apply-abandoned-mutation-lease-reconciliation.mjs",
         "mode": "100644",
-        "object_id": "0fe2db041e54259bc0ca402fabc89a497c3caf39"
+        "object_id": "04fa0c9c28c8d40e7339aa3e172316411fe84c7a"
       },
       {
         "path": "scripts/apply-annie-migration.mjs",
         "mode": "100644",
-        "object_id": "aff3e6215b90ecdc337fdf3e1c8a08a4f7c4485d"
+        "object_id": "622affc0576e76f6063d4d7805a0b5cd1ebe694e"
       },
       {
         "path": "scripts/apply-production-restore-reconciliation.mjs",
         "mode": "100644",
-        "object_id": "c69c82e82cbd96bbcde288265895179b0f35e52b"
+        "object_id": "ef5471d3baf9fb1951a12b0a9038a5a8cb5e635a"
       },
       {
         "path": "scripts/apply-release-migration-plan.mjs",
         "mode": "100644",
-        "object_id": "51ed8bb756d7f518d7759cb1a265cdd5bc3bacb5"
+        "object_id": "b02190de5ceeb88fd68801fa42d6310853fdbc5e"
+      },
+      {
+        "path": "scripts/approved-initial-current-predecessor-tests.mjs",
+        "mode": "100644",
+        "object_id": "54b8c2cc49cf4a2dee39597772af732c79bb6abb"
+      },
+      {
+        "path": "scripts/approved-static-template-control-plane-tests.mjs",
+        "mode": "100644",
+        "object_id": "eb3bbc1df774dcaf486875d098e2712c26000359"
+      },
+      {
+        "path": "scripts/approved-static-template-mapping-tests.mjs",
+        "mode": "100644",
+        "object_id": "d7d944ae8c8b965c2508a31fa81582751454717d"
+      },
+      {
+        "path": "scripts/assemble-verified-october-transition-candidate.mjs",
+        "mode": "100644",
+        "object_id": "67b1c9949476189bed16fbaa088602269522081e"
       },
       {
         "path": "scripts/assigned-activation-transport-database-tests.mjs",
@@ -1010,12 +1330,12 @@
       {
         "path": "scripts/audit5-feedback-guest-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "4db6adc7e16096234007ca06d83df757229994ba"
+        "object_id": "e295eb3440954c03999b4c621a9d34a066180d39"
       },
       {
         "path": "scripts/audit6-coverall-security-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "9cec14e875700a13142c8aba767634ebfa81b085"
+        "object_id": "0513d8b6efd94ada46b16d995d61cd378683aff5"
       },
       {
         "path": "scripts/backup-release-schema-binding-tests.mjs",
@@ -1038,9 +1358,34 @@
         "object_id": "8b7800fb76fb8c7010645f0bf7b624e16cd3494e"
       },
       {
+        "path": "scripts/bounded-node-proof-ci-wiring.mjs",
+        "mode": "100644",
+        "object_id": "542e9d89d66fe0deda6d780b32de230b6a10aeac"
+      },
+      {
+        "path": "scripts/bounded-node-proof-diagnostics-source.mjs",
+        "mode": "100644",
+        "object_id": "d561320e8421966a0ab0939a1671bbab50a10e6d"
+      },
+      {
+        "path": "scripts/bounded-node-proof-tests.mjs",
+        "mode": "100644",
+        "object_id": "aec33179731a1345b401d2354c58b8b049a3993d"
+      },
+      {
+        "path": "scripts/bounded-node-proof.mjs",
+        "mode": "100644",
+        "object_id": "c02a31a0965da53ad3fbc0a43146f0eb9b54bd09"
+      },
+      {
         "path": "scripts/build52-release-recovery-binding-database-tests.mjs",
         "mode": "100644",
         "object_id": "7c70e3673c3aaec5543e015be5b99b578579204b"
+      },
+      {
+        "path": "scripts/canonical-coverall-access-tests.mjs",
+        "mode": "100644",
+        "object_id": "bac392594581090942cbb3f385d47e330a56cc6a"
       },
       {
         "path": "scripts/canonical-schema-reconciliation-database-tests.mjs",
@@ -1060,12 +1405,12 @@
       {
         "path": "scripts/ci-fresh-only-replay.mjs",
         "mode": "100644",
-        "object_id": "b599151de0e3d66e32b56ba0f33e0a9265c1590d"
+        "object_id": "f70ca0adcfb03c866f738fcedbb563adbfd36a7c"
       },
       {
         "path": "scripts/ci-workflow-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "0b5794f4a84a3a1fd2f512df4eab4d8eb6e7e422"
+        "object_id": "45d0269331029f7477dc9846167243d11a1bc433"
       },
       {
         "path": "scripts/cleaning-identity-gps-database-tests.mjs",
@@ -1083,24 +1428,54 @@
         "object_id": "91358a0e819cb14a39669f0b8f277daeba5701a7"
       },
       {
+        "path": "scripts/completion-taxonomy-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "387c2a277cb8d4e98331f309ed4f31d1e13575fd"
+      },
+      {
+        "path": "scripts/completion-taxonomy-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "230c11e69210dcab21361c6ca4f065589f68a887"
+      },
+      {
+        "path": "scripts/constraint-index-recovery-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "2dac02d0dffbcb1ef9d69dbaa61405a2127d1d42"
+      },
+      {
+        "path": "scripts/coverall-advisory-order-tests.mjs",
+        "mode": "100644",
+        "object_id": "8309195e49c8f5f91b872d14ad63f49f58d08b2d"
+      },
+      {
         "path": "scripts/coverall-bilingual-tests.mjs",
         "mode": "100644",
-        "object_id": "b45dbfa5b2a0748b2b881a804c5ed48c0cb079b1"
+        "object_id": "abad72a804aabf0435a7be30c3a200b5afb4765a"
+      },
+      {
+        "path": "scripts/coverall-event-brief-tests.mjs",
+        "mode": "100644",
+        "object_id": "7edfef1fae4d75c2b1338741de72d06d96a559c8"
+      },
+      {
+        "path": "scripts/coverall-event-print-integration-tests.mjs",
+        "mode": "100644",
+        "object_id": "a8b81bb8652bdc54ffe4a8862c7e6176c876dde8"
       },
       {
         "path": "scripts/create-abandoned-mutation-lease-reconciliation.mjs",
         "mode": "100644",
-        "object_id": "9dcae4babbecfeb1d83d88945f063c9a48d52cba"
+        "object_id": "45957240a25f16bd36edca22585ff0f136860263"
       },
       {
         "path": "scripts/create-production-restore-intent.mjs",
         "mode": "100644",
-        "object_id": "71515a07d7e419f16cb6acdc8111ae7a8dd01828"
+        "object_id": "caebcb61df19cb4c64ad5223bca820cd031c0ed3"
       },
       {
         "path": "scripts/create-production-restore-reconciliation.mjs",
         "mode": "100644",
-        "object_id": "e065549147d5f2aad0e9544b125678a0ba4e1087"
+        "object_id": "744e4260130fa8b921a72d63ba9c11ba547297af"
       },
       {
         "path": "scripts/create-rehearsal-service-role-jwt.mjs",
@@ -1110,7 +1485,7 @@
       {
         "path": "scripts/create-release-attestation.mjs",
         "mode": "100644",
-        "object_id": "f8286e751a6f1451437b9e5f505c0baecee2da11"
+        "object_id": "204b9b2f517647e1504dc740ac433bfd0ed2b4d6"
       },
       {
         "path": "scripts/create-release-migration-authorization.mjs",
@@ -1126,6 +1501,41 @@
         "path": "scripts/create-release-signing-key.mjs",
         "mode": "100644",
         "object_id": "834e7c87d2ce34562e0e4dff45e5acb999d582f1"
+      },
+      {
+        "path": "scripts/current-release-recovery-probe-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "2335446e2458d6c2f623983a8b7127bc0f3abf8c"
+      },
+      {
+        "path": "scripts/current-release-recovery-probe.mjs",
+        "mode": "100644",
+        "object_id": "aba8a498e657a5109b704cf4a4bce45f4d334e12"
+      },
+      {
+        "path": "scripts/current-release-recovery-replay-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "043ab85eb9efb47c29b20c032c56dc931f0d55f0"
+      },
+      {
+        "path": "scripts/current-release-recovery-replay.mjs",
+        "mode": "100644",
+        "object_id": "86b0f8baebfbf2170cffc916c27fe190a455f4db"
+      },
+      {
+        "path": "scripts/current-system-fresh-owning-entry.mjs",
+        "mode": "100644",
+        "object_id": "053e24e217fb468cdffeead694f7b9724c604c41"
+      },
+      {
+        "path": "scripts/current-system-fresh-owning-wiring.mjs",
+        "mode": "100644",
+        "object_id": "b6dda3a604dd86a2d08825329c976c8f725768d0"
+      },
+      {
+        "path": "scripts/current-system-source-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "4f469aba1161e04d95bbc1918df2c80823d4fbd6"
       },
       {
         "path": "scripts/current291-production-plan-source-tests.mjs",
@@ -1160,7 +1570,7 @@
       {
         "path": "scripts/custodial-employee-admin-authorization-tests.mjs",
         "mode": "100644",
-        "object_id": "8436fb55072a34b9c191554d9e404fb6a7214fcf"
+        "object_id": "df10d99d85869c505c033e67f4f9337abef3b988"
       },
       {
         "path": "scripts/custodial-employee-phone-contract-tests.mjs",
@@ -1175,7 +1585,7 @@
       {
         "path": "scripts/custodial-enrollment-security-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "3190db299ca22f81367be1b655981cf5593d9f07"
+        "object_id": "a2df186aa472ac2e0a0e34dbd59cc206f82f4dd2"
       },
       {
         "path": "scripts/custodial-enrollment-security-database-tests.mjs",
@@ -1195,7 +1605,22 @@
       {
         "path": "scripts/custodial-u4-migration-convergence-tests.mjs",
         "mode": "100644",
-        "object_id": "40281cc19db9ebd16c3373d6041c2fb2f202c969"
+        "object_id": "25afaefb16e48f4ff9b887641feeb7f4d949e02a"
+      },
+      {
+        "path": "scripts/dashboard-reader-compatibility-tests.mjs",
+        "mode": "100644",
+        "object_id": "066045fc5d073f0eeec38e2808ad2f8592786daa"
+      },
+      {
+        "path": "scripts/dashboard-reader-isolated-database-tests.py",
+        "mode": "100644",
+        "object_id": "671f508aa877f5692fe82ff1b791cec38f97a194"
+      },
+      {
+        "path": "scripts/dashboard-reader-produced-dto-tests.mjs",
+        "mode": "100644",
+        "object_id": "3100097445f4375245d259bf5fb0fb314e852548"
       },
       {
         "path": "scripts/dashboard-recent-activity-contract-tests.mjs",
@@ -1208,14 +1633,29 @@
         "object_id": "69d8efb77576d8aeeb64b110e60340a279f28d10"
       },
       {
+        "path": "scripts/dependency-uri-regression-tests.mjs",
+        "mode": "100644",
+        "object_id": "969d9b616c5cd51bfbd01b6ce1f9eb4cbb6b1830"
+      },
+      {
+        "path": "scripts/derive-six-person-static-config.mjs",
+        "mode": "100644",
+        "object_id": "ed7e79055f0a58b8f8eda1704d09c55b5e208d9e"
+      },
+      {
         "path": "scripts/device-credential-foundation-tests.mjs",
         "mode": "100644",
-        "object_id": "de8140697853085233230363438da3bdb731bfb5"
+        "object_id": "c35eb5cfdacb7d47b8f11ffaff1a8a7a76b2bd1d"
       },
       {
         "path": "scripts/device-popup-fully-kiosk-test.mjs",
         "mode": "100644",
         "object_id": "c189e773763ffa928dd6471cc135a52dadb2a0e8"
+      },
+      {
+        "path": "scripts/device-profile-epoch-tests.mjs",
+        "mode": "100644",
+        "object_id": "6f9a116991c465af7047b9843f8c0ed1b944dcbb"
       },
       {
         "path": "scripts/device-security-app-tests.mjs",
@@ -1245,7 +1685,7 @@
       {
         "path": "scripts/disaster-recovery-cron-tests.mjs",
         "mode": "100644",
-        "object_id": "f8ee38cb6c517d7d257702c1121c010b9903ba52"
+        "object_id": "2ec598c1a8d706eb53285905cbc385aa21882ed1"
       },
       {
         "path": "scripts/disaster-recovery-cron.mjs",
@@ -1255,7 +1695,7 @@
       {
         "path": "scripts/disaster-recovery-crypto-tests.mjs",
         "mode": "100644",
-        "object_id": "d1a83ed5dc4e15193ad6ad3a95adf594edf244b0"
+        "object_id": "a7409538238e44a2057b44556ce2190d5c037579"
       },
       {
         "path": "scripts/disaster-recovery-crypto.mjs",
@@ -1270,7 +1710,7 @@
       {
         "path": "scripts/disaster-recovery-runtime-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "e7dea26e339b469342eefc9665de94093944b77a"
+        "object_id": "9c64043f19c64b17b9fe8e7889e55b23dc301841"
       },
       {
         "path": "scripts/disaster-recovery-runtime-contract.mjs",
@@ -1295,17 +1735,77 @@
       {
         "path": "scripts/employee-home-time-facts-tests.mjs",
         "mode": "100644",
-        "object_id": "1229bf7c5f406cc78325eab204a217753c0267e3"
+        "object_id": "6ae9f9e53935dfd5b7afad55436880d4a74fa440"
+      },
+      {
+        "path": "scripts/employee-message-prepare-predecessor-tests.mjs",
+        "mode": "100644",
+        "object_id": "d1be450719de8acb05f041d0f1644f0f052951e5"
+      },
+      {
+        "path": "scripts/employee-message-source-admission-ci-tests.mjs",
+        "mode": "100644",
+        "object_id": "defd6ee9e06f56baf38f2d699ec7350a671f3748"
+      },
+      {
+        "path": "scripts/employee-message-source-admission-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "13a02c288195b10bf09da3f78399bb6d4fae1b63"
+      },
+      {
+        "path": "scripts/employee-message-source-admission-replay-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "1a3c15ad0b7e37a5458f8cfc1910368936984637"
+      },
+      {
+        "path": "scripts/employee-message-source-admission-replay.mjs",
+        "mode": "100644",
+        "object_id": "0936299cd3ad6d8a70792e2a7575f862e2295ee2"
+      },
+      {
+        "path": "scripts/employee-message-source-admission-tests.mjs",
+        "mode": "100644",
+        "object_id": "a9d3789ebbc8f8fb65f7d8489c42ae6d01913d96"
       },
       {
         "path": "scripts/employee-notification-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "b1965c5057f43403c7261e3ad31af9250948c700"
+        "object_id": "2bc692fdfa5d0b5cc3defeb652389a2c3dcf7bfa"
+      },
+      {
+        "path": "scripts/employee-schedule-identity-tests.mjs",
+        "mode": "100644",
+        "object_id": "2014d30094945036649113a70dcfe7cdf2c9ede3"
       },
       {
         "path": "scripts/empty-database-rebuild-check.mjs",
         "mode": "100644",
-        "object_id": "65fb3a675ed618fa924cc2d52a51931c811791e5"
+        "object_id": "9f279952db8b88836759278f7a72d9828c9f5fb9"
+      },
+      {
+        "path": "scripts/event-count-cross-surface-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "22e29bf54ab2ebddf32743180b7e7acb660a4215"
+      },
+      {
+        "path": "scripts/event-manager-cas-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "e521ae5b8aa6d4540d77a88bcf16faec0cc65185"
+      },
+      {
+        "path": "scripts/event-needs-review-database-assert.sql",
+        "mode": "100644",
+        "object_id": "55256d880927ce2e73ba6d5caad97603e29c9220"
+      },
+      {
+        "path": "scripts/event-notification-current-projection-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "f465152471aa8946e0c3600ff1d03b977516a4ac"
+      },
+      {
+        "path": "scripts/event-notification-current-projection-schedule-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "3473225adc3e379fbdd51e94f9363b5efbc9912b"
       },
       {
         "path": "scripts/event-notification-retention-contract-tests.mjs",
@@ -1318,24 +1818,44 @@
         "object_id": "94665b059969390ac3c6a664bd7b906ab2ee1614"
       },
       {
+        "path": "scripts/event-place-admission-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "abdbe898066a3623f9a1e2ca9d4064c219770eed"
+      },
+      {
         "path": "scripts/event-static-authority-database-tests.mjs",
         "mode": "100644",
-        "object_id": "a6c1851083d1cb32eeef5aba3b30f438654ed929"
+        "object_id": "990c30f682d454813553e3e8dcbe854f11d19b51"
+      },
+      {
+        "path": "scripts/events-ai-provenance-tests.mjs",
+        "mode": "100644",
+        "object_id": "79d1312af8a9e57d5ec67c35bb73c284286ab548"
       },
       {
         "path": "scripts/events-ai-source-identity-tests.mjs",
         "mode": "100644",
-        "object_id": "2a95b7d9c4ac62d134ecfac467eb8d0a9bf2c3cc"
+        "object_id": "619be5044f206f813976a04e9978a08cad7f1aed"
       },
       {
-        "path": "scripts/events-api-contract-tests.mjs",
+        "path": "scripts/events-cancel-restore-concurrency.mjs",
         "mode": "100644",
-        "object_id": "9e2d4dbe014a35ce5f86de4d7502530056be1306"
+        "object_id": "167c47e09643115c195231b148f37fff4db320b6"
       },
       {
-        "path": "scripts/events-parser-tests.mjs",
+        "path": "scripts/events-cancel-restore-disposable.sql",
         "mode": "100644",
-        "object_id": "8a172c9b6127ceff8dd238ca845ad0218e4e6b4e"
+        "object_id": "685ea6fd7781ad65b506aa2ff85270b88d8bed1e"
+      },
+      {
+        "path": "scripts/events-chicago-supersession-disposable.sql",
+        "mode": "100644",
+        "object_id": "836c3c871279b357424958ac93f8caf8d1f15d1b"
+      },
+      {
+        "path": "scripts/events-chicago-time-tests.mjs",
+        "mode": "100644",
+        "object_id": "dab67b08a9371ff067fe75c234e69bbc9872f2e8"
       },
       {
         "path": "scripts/export-isolated-pre-reconcile-metadata-tests.mjs",
@@ -1353,6 +1873,11 @@
         "object_id": "58cf6db43b9e3584052984f19185777e2d4b8545"
       },
       {
+        "path": "scripts/feedback-acknowledgment-auth-tests.mjs",
+        "mode": "100644",
+        "object_id": "51a1c59a5d5f795c8ada6622f0fffe55cdf98504"
+      },
+      {
         "path": "scripts/feedback-attachment-admission-tests.mjs",
         "mode": "100644",
         "object_id": "f008bda9ceed182c053cea6e72d83212c4a91d3b"
@@ -1360,17 +1885,52 @@
       {
         "path": "scripts/feedback-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "d1e3a8d3fe7c9aaadc19a7a007ec575d6637c861"
+        "object_id": "40ff688231bb9e1314b68a12ac6704cb4dbbcd20"
       },
       {
         "path": "scripts/feedback-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "bf042c996f5997eed3ac9f1ff0447c7c5e4b0eb8"
+        "object_id": "134191d5a5163d5b75d781f4aa91eab7a6cc01fb"
+      },
+      {
+        "path": "scripts/feedback-delivery-status-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "56061212f1a2036039d8e25d7a73352af7dcdefe"
+      },
+      {
+        "path": "scripts/feedback-delivery-status-tests.mjs",
+        "mode": "100644",
+        "object_id": "8624e81052c1b9d862308daa80c073f53b364d51"
+      },
+      {
+        "path": "scripts/feedback-email-intent-fixture-assert.sql",
+        "mode": "100644",
+        "object_id": "379ffebb9ec2d7e2167125507ffdcf27438fc6f2"
+      },
+      {
+        "path": "scripts/feedback-email-intent-fixture-setup.sql",
+        "mode": "100644",
+        "object_id": "851d82e8d91ed0230f609f6f2b9e5b070362761e"
+      },
+      {
+        "path": "scripts/feedback-email-relay-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "7f651c176c51f6ab2dadcf1cee29f74d62b19489"
       },
       {
         "path": "scripts/feedback-email-relay-tests.mjs",
         "mode": "100644",
         "object_id": "fa4f71188e2c7db6534f4534c574cee6a4358a99"
+      },
+      {
+        "path": "scripts/feedback-manager-write-route-tests.mjs",
+        "mode": "100644",
+        "object_id": "ca8bb8e512bf08b0ed70a51abbed2b25ba30f920"
+      },
+      {
+        "path": "scripts/feedback-private-reader-tests.mjs",
+        "mode": "100644",
+        "object_id": "1ace9921cfb1b7b5eab6972ad9a0eb3acdeb3877"
       },
       {
         "path": "scripts/feedback-reader-database-probe.mjs",
@@ -1381,6 +1941,26 @@
         "path": "scripts/feedback-relay-original-call-lifetime-tests.mjs",
         "mode": "100644",
         "object_id": "cb5ef4b29c522df391167eb9eca799d684f7ba52"
+      },
+      {
+        "path": "scripts/feedback-relay-v2-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "8e0e91a97df8e1775b1f40edd7290b793cea51e4"
+      },
+      {
+        "path": "scripts/feedback-triage-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "a8b0523a27430e0e493be4bb1187c5db50604d5e"
+      },
+      {
+        "path": "scripts/feedback-triage-status-tests.mjs",
+        "mode": "100644",
+        "object_id": "dbc4abe2bcff7ae694140a8ad96907a19d5d220d"
+      },
+      {
+        "path": "scripts/feedback-triage-tests.mjs",
+        "mode": "100644",
+        "object_id": "cb58f785f2092d684ceb82a244c8528b5bcd7af4"
       },
       {
         "path": "scripts/final-closure-database-isolated-tests.mjs",
@@ -1398,9 +1978,134 @@
         "object_id": "697a67f33ce33bbe3e63688b082c730d622294c6"
       },
       {
+        "path": "scripts/fixtures/approved-dated152-helper-owner-predicates.sql",
+        "mode": "100644",
+        "object_id": "d6cb05ac6b9d4cdad5c3bb9239ac5ca38fd89317"
+      },
+      {
+        "path": "scripts/fixtures/approved-initial-http-transport.mjs",
+        "mode": "100644",
+        "object_id": "0731fe4f977691f0ca42de852ec69a0045ce6631"
+      },
+      {
+        "path": "scripts/fixtures/approved-schedule-web-consumer-7ddd.js",
+        "mode": "100644",
+        "object_id": "977ebda91d29811bddbe2bcb7b8f65ad13458b8e"
+      },
+      {
         "path": "scripts/fixtures/completed-cleaning-reminder-fixture.sql",
         "mode": "100644",
         "object_id": "b9137b6bb98bd58a94cdb20769134202248c19bf"
+      },
+      {
+        "path": "scripts/fixtures/coverall-event-brief-sql-fixture.mjs",
+        "mode": "100644",
+        "object_id": "3bef7b18434dc9236cf9d333f4e3bc3c9ec136eb"
+      },
+      {
+        "path": "scripts/fixtures/create-six-person-absence-source-fixture.mjs",
+        "mode": "100644",
+        "object_id": "3395f27f023e33272e750878d61685cd973091ae"
+      },
+      {
+        "path": "scripts/fixtures/current-manager-219-source.mjs",
+        "mode": "100644",
+        "object_id": "118394970e0e8b46ff0314134a1b8e79891cc87e"
+      },
+      {
+        "path": "scripts/fixtures/current-manager-historical-source/20261002110000_event_impact_preview_and_custodial_notes.sql",
+        "mode": "100644",
+        "object_id": "832498d5a99470631f1919d5dedc384cfddb5cdd"
+      },
+      {
+        "path": "scripts/fixtures/current-manager-historical-source/20261002140000_event_supersession_and_chicago_instants.sql",
+        "mode": "100644",
+        "object_id": "fa0416ed81b8633407f7411e375df2fa1fe3f9fa"
+      },
+      {
+        "path": "scripts/fixtures/current-manager-historical-source/20261003220000_current_release_authority_completion.sql",
+        "mode": "100644",
+        "object_id": "a43109e65d9947b737ab8ebb6b36da7faf684b10"
+      },
+      {
+        "path": "scripts/fixtures/current-manager-publication-source.mjs",
+        "mode": "100644",
+        "object_id": "ca4266d9f383a772e22759d3babd559e3ef0a968"
+      },
+      {
+        "path": "scripts/fixtures/current-manager-source-contract-models.mjs",
+        "mode": "100644",
+        "object_id": "aff4b2ee924dba07b8e7a99c9b30dcd6b180b774"
+      },
+      {
+        "path": "scripts/fixtures/current-recovery-historical-inputs.json",
+        "mode": "100644",
+        "object_id": "cbdbf15229cb92b99474d97f5ef5406d2168bbb9"
+      },
+      {
+        "path": "scripts/fixtures/current-release-canary-predecessor-fixture.mjs",
+        "mode": "100644",
+        "object_id": "24539d29ffa2b05d98d7b6403e3e6dc14a4e6246"
+      },
+      {
+        "path": "scripts/fixtures/current-scheduler-source-profile-deltas.json",
+        "mode": "100644",
+        "object_id": "b79240c145f2025b1acb2277ee4b71a75d3944b2"
+      },
+      {
+        "path": "scripts/fixtures/current-scheduler-source-profiles-tests.mjs",
+        "mode": "100644",
+        "object_id": "76db128bc7a2062f88f9f89b11abc3354a927ae7"
+      },
+      {
+        "path": "scripts/fixtures/current-scheduler-source-profiles.mjs",
+        "mode": "100644",
+        "object_id": "39fb49b6b2e6f13f1bdfd00b4ea33c035234d85f"
+      },
+      {
+        "path": "scripts/fixtures/dashboard-independent-check-reader-fixture.py",
+        "mode": "100644",
+        "object_id": "fa2c267e3a4d95db1e470725bd12a39818729614"
+      },
+      {
+        "path": "scripts/fixtures/dashboard-reader-canonical-recovery-fixture.py",
+        "mode": "100644",
+        "object_id": "30419ca82c3cbf35af47e71ba709c0f8538bc63e"
+      },
+      {
+        "path": "scripts/fixtures/dashboard-reader-closure-fixture.py",
+        "mode": "100644",
+        "object_id": "af94211250f4f0bc333e344140ae516e64891274"
+      },
+      {
+        "path": "scripts/fixtures/dashboard-reader-live-catalog-20261021.json",
+        "mode": "100644",
+        "object_id": "adbe0cc2f4ba1d1be7371b2592d55e820cba9a55"
+      },
+      {
+        "path": "scripts/fixtures/dated-consumer-cycle1-probes.mjs",
+        "mode": "100644",
+        "object_id": "7b8655ca016772df734d6c245e992770dd5bf284"
+      },
+      {
+        "path": "scripts/fixtures/dated-display-before-cycle1.js",
+        "mode": "100644",
+        "object_id": "8d6641723af88c23491bac39498b9d1a382dfe13"
+      },
+      {
+        "path": "scripts/fixtures/dated-home-facts.js",
+        "mode": "100644",
+        "object_id": "542e1572736183cfd56ef54b4c9134fc78b7e906"
+      },
+      {
+        "path": "scripts/fixtures/dated-materialization-before-web.txt",
+        "mode": "100644",
+        "object_id": "67492a15aaac16d910d43b47c76e5556edbe4467"
+      },
+      {
+        "path": "scripts/fixtures/dated-postgres-before-web.txt",
+        "mode": "100644",
+        "object_id": "3eb4bb9c1580b37e11aa106af90c9692075c03e9"
       },
       {
         "path": "scripts/fixtures/dated-roster-continuity-fixture.mjs",
@@ -1408,9 +2113,44 @@
         "object_id": "08943fa26decb03bfec8d33775b9368898b00e0b"
       },
       {
+        "path": "scripts/fixtures/dated-transition-transaction-fixture.mjs",
+        "mode": "100644",
+        "object_id": "17b0e1d67d9c84832ae1023646eac5b158335e7e"
+      },
+      {
+        "path": "scripts/fixtures/dated-web-authority-postgres-probes.mjs",
+        "mode": "100644",
+        "object_id": "2b156b127ffa33feb6def0b301e1f24ab6d9054f"
+      },
+      {
+        "path": "scripts/fixtures/dual-source-registered-correction-sql-source.mjs",
+        "mode": "100644",
+        "object_id": "20540e9bd62acdc8423732f3ce88f3ab2f806f86"
+      },
+      {
+        "path": "scripts/fixtures/employee-message-current-source.mjs",
+        "mode": "100644",
+        "object_id": "5f93aa2c8d4619ff5473070b1c8ee8348d421b87"
+      },
+      {
+        "path": "scripts/fixtures/employee-message-generic-dispatcher-e31626c.txt",
+        "mode": "100644",
+        "object_id": "242966f29845f5a124da629a61c69e93a2e21dcb"
+      },
+      {
+        "path": "scripts/fixtures/employee-message-prepare-predecessor.json",
+        "mode": "100644",
+        "object_id": "75573482195d3d4e4180341b3a244df84cbf9841"
+      },
+      {
+        "path": "scripts/fixtures/employee-message-prepare-predecessor.mjs",
+        "mode": "100644",
+        "object_id": "46f566ab8b970cb6c11e52c624a0c6c351a220fa"
+      },
+      {
         "path": "scripts/fixtures/event-static-authority-fixture.mjs",
         "mode": "100644",
-        "object_id": "7c81aa46e52c77e68e0d517fac6118480211cd56"
+        "object_id": "1fe29797db247ca941d6d238b866ff0250cd22b2"
       },
       {
         "path": "scripts/fixtures/exact-frontend-pair.mjs",
@@ -1418,9 +2158,134 @@
         "object_id": "03eaf4a0dcb2598b32b4f4d6390a8b5e106ad37b"
       },
       {
+        "path": "scripts/fixtures/full-nine-v6-source.json",
+        "mode": "100644",
+        "object_id": "9a31ac95630b08bf6764fa54bcc224a590367638"
+      },
+      {
+        "path": "scripts/fixtures/full-nine-v6-source.mjs",
+        "mode": "100644",
+        "object_id": "3e0f0af4fe6ed10632a14b68834842533b5cce93"
+      },
+      {
+        "path": "scripts/fixtures/native-alert-wire-fixture.mjs",
+        "mode": "100644",
+        "object_id": "a4e973da9eb15590bac09f6439f79cbd7f7669f1"
+      },
+      {
+        "path": "scripts/fixtures/native-event-dispatch-fixture.mjs",
+        "mode": "100644",
+        "object_id": "27554f3bfc2253dceb9df97a783053f81f2ad2c7"
+      },
+      {
+        "path": "scripts/fixtures/native-location-authority.mjs",
+        "mode": "100644",
+        "object_id": "61a9b3fab2958a21d299d8fd0e44870fd6d723b5"
+      },
+      {
+        "path": "scripts/fixtures/native-location-lifecycle-before-inventory.js",
+        "mode": "100644",
+        "object_id": "2341c177b263f9ad6e3ca8cf87f3f2dc9e757109"
+      },
+      {
+        "path": "scripts/fixtures/native-message-dispatch-fixture.mjs",
+        "mode": "100644",
+        "object_id": "7bbfbe105031939912aa18649c77000b6a3c9242"
+      },
+      {
+        "path": "scripts/fixtures/native-provider-credential-observation-proposal.sql",
+        "mode": "100644",
+        "object_id": "d387c18db36f3b775276e9030a25c6c5e8c53b44"
+      },
+      {
+        "path": "scripts/fixtures/native-provider-event-decision-current-source.mjs",
+        "mode": "100644",
+        "object_id": "0c0628f6792a11520a7d33b5284e48c0ad3d09bc"
+      },
+      {
+        "path": "scripts/fixtures/native-provider-event-decision-historical-source-models.json",
+        "mode": "100644",
+        "object_id": "4f59abe806288b5fc0e10055001d5f40c86d6274"
+      },
+      {
+        "path": "scripts/fixtures/native-provider-event-decision-native-wire.mjs",
+        "mode": "100644",
+        "object_id": "be1ad61ff3bfd4f334b22e39b04d1e38077afa3f"
+      },
+      {
+        "path": "scripts/fixtures/native-provider-event-decisions-database-cases.mjs",
+        "mode": "100644",
+        "object_id": "d13513e2b4e6a6063d9cbf290230e94f7bdcec12"
+      },
+      {
+        "path": "scripts/fixtures/native-provider-interval-database-cases.mjs",
+        "mode": "100644",
+        "object_id": "0813efaadda110bfa990ee9704250d4416753c35"
+      },
+      {
+        "path": "scripts/fixtures/native-provider-test-clock.mjs",
+        "mode": "100644",
+        "object_id": "5b939322097bb76460ded44dd72e9370a1c2fa22"
+      },
+      {
+        "path": "scripts/fixtures/native-schedule-dated-reader-source.mjs",
+        "mode": "100644",
+        "object_id": "607cbb8e8be096c81632d414f9038dbd40a9ad38"
+      },
+      {
+        "path": "scripts/fixtures/native-schedule-occurrence-source.mjs",
+        "mode": "100644",
+        "object_id": "e641c2e2a31ecd17c5c68fedec0690033a57833e"
+      },
+      {
+        "path": "scripts/fixtures/native-schedule-source-original.json",
+        "mode": "100644",
+        "object_id": "ce2dfd6fb61666c7cc36765fe8109343ca81f144"
+      },
+      {
+        "path": "scripts/fixtures/native-schedule-target-before-ab76.json",
+        "mode": "100644",
+        "object_id": "74739982d7dd3035963e8310718d076421d9c20c"
+      },
+      {
+        "path": "scripts/fixtures/native-schedule-wire.json",
+        "mode": "100644",
+        "object_id": "54b82148ec21e412dacda8a5aacd9522d9484e30"
+      },
+      {
+        "path": "scripts/fixtures/native-sql-fixture-output.mjs",
+        "mode": "100644",
+        "object_id": "f635aaaebca42d96cd9bc1d4acf98a8268ec2c75"
+      },
+      {
+        "path": "scripts/fixtures/nonemployee-coverall-source.mjs",
+        "mode": "100644",
+        "object_id": "004a0935194bf926dc95bdef29102700af41cd77"
+      },
+      {
+        "path": "scripts/fixtures/notification-plan-fixture.mjs",
+        "mode": "100644",
+        "object_id": "6fdcf865ecbe6515fe605861cbc9d2adb0bb8514"
+      },
+      {
+        "path": "scripts/fixtures/notification-plan-recurring-public-api.mjs",
+        "mode": "100644",
+        "object_id": "42ede3bc48985f64c0204beaba25aa8f66f89cb7"
+      },
+      {
         "path": "scripts/fixtures/oc24-coverall-database-fixture.mjs",
         "mode": "100644",
-        "object_id": "fc4bad0a0ac3810c686544df43d299a31217d795"
+        "object_id": "1b414c3d457a798f5572f733eb5c86802134d58a"
+      },
+      {
+        "path": "scripts/fixtures/opening-coverage-actual-results.json",
+        "mode": "100644",
+        "object_id": "6c4285c3975b0e18cd167444a44430caf9c12fba"
+      },
+      {
+        "path": "scripts/fixtures/original235-nonpublic-column-metadata.json",
+        "mode": "100644",
+        "object_id": "f0ab3ad04184b64eb5d35206acbc2013ba985c0e"
       },
       {
         "path": "scripts/fixtures/owner-workdays-database-fixture.mjs",
@@ -1428,9 +2293,84 @@
         "object_id": "2cca95a28b1cff0f380b1715ace030bee5c638fc"
       },
       {
+        "path": "scripts/fixtures/postgres-authenticated-initial-http.mjs",
+        "mode": "100644",
+        "object_id": "02e23d82603a747150ce92a20d8f2f0e75d33899"
+      },
+      {
+        "path": "scripts/fixtures/prior-cutover-replay-region.json",
+        "mode": "100644",
+        "object_id": "3a6fd5d44497107478f285af783ff8bf2dfa6dd5"
+      },
+      {
+        "path": "scripts/fixtures/production-forward-cancellation127-metadata.sql",
+        "mode": "100644",
+        "object_id": "1779d269c073ae6a8a5fe4ad6e5a3a1a886d124e"
+      },
+      {
+        "path": "scripts/fixtures/qualified-alert-dispatcher.mjs",
+        "mode": "100644",
+        "object_id": "8e4e818104e11aabf0e1b534b213ae8f2320c91c"
+      },
+      {
+        "path": "scripts/fixtures/qualified-event-sql-proof.mjs",
+        "mode": "100644",
+        "object_id": "6e799c76ff4e32b6b1bde3402451300834f08a59"
+      },
+      {
+        "path": "scripts/fixtures/recurring-identity-retained-failure.json",
+        "mode": "100644",
+        "object_id": "eb1cc0ab940449090b7ebbe3aaa6f79ea9a5745d"
+      },
+      {
+        "path": "scripts/fixtures/registered-current-correction-reduction.mjs",
+        "mode": "100644",
+        "object_id": "31a8834c497256b1b6ec46d1ec7c4b7493513e54"
+      },
+      {
+        "path": "scripts/fixtures/registered-vacancy153-acl-predicates.sql",
+        "mode": "100644",
+        "object_id": "344b58711c39b5c52fd404ce9b66981a4df83ed4"
+      },
+      {
+        "path": "scripts/fixtures/six-person-absence-source.json",
+        "mode": "100644",
+        "object_id": "35cc3a88eafb10f1d7924fbfa4462d3b1444a669"
+      },
+      {
+        "path": "scripts/fixtures/six-person-absence-source.mjs",
+        "mode": "100644",
+        "object_id": "a27d7df6e77a3106634e65de9878be24d2dfcd2f"
+      },
+      {
         "path": "scripts/fixtures/static-weekly-compiler-runtime-test-worker.mjs",
         "mode": "100644",
         "object_id": "ede0fc76cb2cb39e8e54bbf8974686bbaf19049b"
+      },
+      {
+        "path": "scripts/fixtures/static-weekly-control-plane-runtime-before-pattern-retirement.mjs",
+        "mode": "100644",
+        "object_id": "b362566e364024e5d25aeb89795c39f9360de511"
+      },
+      {
+        "path": "scripts/fixtures/static-weekly-manager-operation-before-general-owner.mjs",
+        "mode": "100644",
+        "object_id": "baae72ff449b501d33e4ece9a360a82cbcfeae1c"
+      },
+      {
+        "path": "scripts/fixtures/static-weekly-policy-scope-receipts.json",
+        "mode": "100644",
+        "object_id": "82165ea614bc846142f426f9313dc0146eaa2c79"
+      },
+      {
+        "path": "scripts/fixtures/static-weekly-recurring-inherited-compiler-child.mjs",
+        "mode": "100644",
+        "object_id": "4500ccdec2773f84b68dc7404d495a4829307516"
+      },
+      {
+        "path": "scripts/fixtures/static-weekly-recurring-operation-owner-child.mjs",
+        "mode": "100644",
+        "object_id": "fc5fbedcb0ff91aee34b486cfb78b220801542df"
       },
       {
         "path": "scripts/fixtures/static-weekly-scheduler/canary-authority.json",
@@ -1470,12 +2410,17 @@
       {
         "path": "scripts/foundation-repair-tests.mjs",
         "mode": "100644",
-        "object_id": "12ab77c2f57cbfde14c6b77088fc2c1eb157636b"
+        "object_id": "7134fa32354516e20d396bfd1ca0d3576bf8b5fa"
       },
       {
         "path": "scripts/foundation-security-containment-contract-tests.mjs",
         "mode": "100644",
         "object_id": "cd3b939d4150f2b556ec2a038be6514e2d312562"
+      },
+      {
+        "path": "scripts/full-nine-v6-fixture-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "d9681930ef567ba5d3697c8e9c24830f4aea488a"
       },
       {
         "path": "scripts/full-window-absence-coverage-tests.mjs",
@@ -1485,17 +2430,22 @@
       {
         "path": "scripts/gemini-console-database-tests.mjs",
         "mode": "100644",
-        "object_id": "d8b1266aacb4d31a7f1453d1f094e67b7ab076b6"
+        "object_id": "e20a91738739c09d6c88d7d5c2b71fe403b8caa1"
       },
       {
         "path": "scripts/gemini-console-foundation-tests.mjs",
         "mode": "100644",
-        "object_id": "11df7764faf1bf5bd75d725c7f1c058de4e39edd"
+        "object_id": "97ffd00f6fd8dda9fe96331c527b184979005d76"
+      },
+      {
+        "path": "scripts/generate-october-transition-candidate.mjs",
+        "mode": "100644",
+        "object_id": "e63c60b8722860018078a25583e4e14c20c6d56e"
       },
       {
         "path": "scripts/generate-owner-corrected-static-weekly-schedule.mjs",
         "mode": "100644",
-        "object_id": "a60487fc69051ce3b9ba70b2b87c4a9fdb6d2204"
+        "object_id": "f9f7079db4af20a10f08f3bda4482ce8ca8a1570"
       },
       {
         "path": "scripts/generate-v3-source-review.mjs",
@@ -1518,9 +2468,29 @@
         "object_id": "82f6de76089ee1b941599b84da9668d63d76caaa"
       },
       {
+        "path": "scripts/gps-map-context-route-tests.mjs",
+        "mode": "100644",
+        "object_id": "27de6923fb5d2cf78065ed478803411e22434009"
+      },
+      {
+        "path": "scripts/gps-map-lane-history-tests.mjs",
+        "mode": "100644",
+        "object_id": "8b8a75a1b119fe87dd5063cec5c85ca4a385fecd"
+      },
+      {
+        "path": "scripts/gps-native-history-source-tests.mjs",
+        "mode": "100644",
+        "object_id": "6ff8192b5a2318dd575fe1d082699745cc547908"
+      },
+      {
         "path": "scripts/hash-backup-directory.mjs",
         "mode": "100644",
         "object_id": "ec5207f6d8dd386392ab4abc5444691cc1fe769f"
+      },
+      {
+        "path": "scripts/held-event-correction-canonical-adapter-tests.mjs",
+        "mode": "100644",
+        "object_id": "3387851c1f5edd355c99e5bc32c42c8189ceb008"
       },
       {
         "path": "scripts/immutable-original-enum-source.mjs",
@@ -1578,6 +2548,11 @@
         "object_id": "f74c297d3b07446ba78c71f9f630dfa3f369d6b2"
       },
       {
+        "path": "scripts/immutable-private-source-bootstrap-tests.mjs",
+        "mode": "100644",
+        "object_id": "442ade99ea5de620f58951c7f345a3f7a9be9130"
+      },
+      {
         "path": "scripts/immutable-private-source-bootstrap.mjs",
         "mode": "100644",
         "object_id": "7e3c9821e7b4d135b9aff3799be32d0c84d02e3e"
@@ -1600,7 +2575,7 @@
       {
         "path": "scripts/integrated-backend-authority-release-provenance-tests.mjs",
         "mode": "100644",
-        "object_id": "dd691dcce2c93483e873b643bc26dc8c1b887f1b"
+        "object_id": "f75a4fb230fb0bbdb44230d94f22bd0789e5f0fd"
       },
       {
         "path": "scripts/integrated-backend-authority-suite-order-isolated-tests.mjs",
@@ -1615,7 +2590,7 @@
       {
         "path": "scripts/isolated-event-owner-schema-tests.mjs",
         "mode": "100644",
-        "object_id": "2afac73ffb6dd712b1d76d3105d6f3a27c5d299d"
+        "object_id": "dba09c4e88b7d4197eda1d382c481b87369707cd"
       },
       {
         "path": "scripts/isolated-event-owner-schema.mjs",
@@ -1623,14 +2598,19 @@
         "object_id": "46267bd30226b92f77e90af08a8dbb5861d8e227"
       },
       {
+        "path": "scripts/isolated-release-data-preservation-tests.mjs",
+        "mode": "100644",
+        "object_id": "3430ef35c4b6efc47a2b81d0ba3fd32b690f37d8"
+      },
+      {
         "path": "scripts/isolated-release-data-preservation.mjs",
         "mode": "100644",
-        "object_id": "7bea4c48288ca036082560cb79b4d5417773b011"
+        "object_id": "14d16524458e6231adf50cdbef67dbf7a4c7a654"
       },
       {
         "path": "scripts/isolated-restore-lease-shim-tests.mjs",
         "mode": "100644",
-        "object_id": "2e33b33f0f894518942040c44f9b49ba424593f0"
+        "object_id": "13414bd60d0d60d2d865f8ba1b416d2449db8198"
       },
       {
         "path": "scripts/isolated-restore-lease-shim.mjs",
@@ -1655,7 +2635,7 @@
       {
         "path": "scripts/live-release-alignment-check.mjs",
         "mode": "100644",
-        "object_id": "dc616cfa327340fe0e85a3efba11453a38b96908"
+        "object_id": "5efae833901e033d080bcb2f252c9b385d96df1b"
       },
       {
         "path": "scripts/location-group-audit-reminder-aware.mjs",
@@ -1680,7 +2660,17 @@
       {
         "path": "scripts/manager-credential-boundary-tests.mjs",
         "mode": "100644",
-        "object_id": "27147482cfa36bf67eef6b82e60dceac9f83a515"
+        "object_id": "fa10f7b40c112eed01cabdee1eb0bfdfe35bffea"
+      },
+      {
+        "path": "scripts/manager-held-event-review-reader-tests.mjs",
+        "mode": "100644",
+        "object_id": "9a2bb5f7387fd657ce8f6d5644001d6139e2d0e8"
+      },
+      {
+        "path": "scripts/manager-held-event-review-tests.mjs",
+        "mode": "100644",
+        "object_id": "d97ba9ca581790c9f4facc0afa41ca282b0722a6"
       },
       {
         "path": "scripts/manager-inspection-readiness-tests.mjs",
@@ -1693,24 +2683,64 @@
         "object_id": "85987c0fb566893a479220eeb0fd7c16c649ef0a"
       },
       {
+        "path": "scripts/manager-issue-outcomes-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "f79748a1dcc786438051858c3f82ee9bdacd52eb"
+      },
+      {
         "path": "scripts/manager-named-enrollment-http-tests.mjs",
         "mode": "100644",
-        "object_id": "08c6656016c668fda69397ec5d116c762e8745a2"
+        "object_id": "d0ca0b80a95974710699237aa46f443c5ee76e4f"
       },
       {
         "path": "scripts/manager-notification-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "cd38cfac5a041d37b5d599cba67d93a3fdb0217d"
+        "object_id": "414de75d8b324425914c74727381bbffa79b7d7d"
+      },
+      {
+        "path": "scripts/manager-notification-history-tests.mjs",
+        "mode": "100644",
+        "object_id": "d0c0038551cf4c69fbf2c483c2fe00edc6eedf38"
+      },
+      {
+        "path": "scripts/manager-original-recovery-approval-tests.mjs",
+        "mode": "100644",
+        "object_id": "b294da8b30f0f2d2d04b15d8f30c240491deac71"
+      },
+      {
+        "path": "scripts/manager-permissions-recovery-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "f2c1877978ab6ecf3c1cd590bbf2bf9d00d9ad55"
       },
       {
         "path": "scripts/manager-route-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "e7486739be3fa7772e7e549eb5b2ffe76568f91e"
+        "object_id": "cf2ea550b8a5e36b2c53040d81c90e500300560e"
+      },
+      {
+        "path": "scripts/manager-scheduler-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "d73c6142656756377cf0de06e346d3e397c50ffa"
+      },
+      {
+        "path": "scripts/manager-scheduler-dated-integration-tests.mjs",
+        "mode": "100644",
+        "object_id": "48546f2f6e961f3e5d4b823ce480309c7e8d0cd1"
+      },
+      {
+        "path": "scripts/manager-scheduler-http-tests.mjs",
+        "mode": "100644",
+        "object_id": "e3494a6cbd61a3e7eaf9cd15f5691367a5a87abb"
       },
       {
         "path": "scripts/map-manager-identity-tests.mjs",
         "mode": "100644",
-        "object_id": "afc8ba567f4980dcba60993cad3ceaa642c5d10f"
+        "object_id": "a458a723127aee41e368592d3e75505272384f84"
+      },
+      {
+        "path": "scripts/map-owner-session-http-tests.mjs",
+        "mode": "100644",
+        "object_id": "ff9a22817a105dde9b2af53c52d7daabdd9ed816"
       },
       {
         "path": "scripts/mcp-connector-auth-tests.mjs",
@@ -1718,19 +2748,39 @@
         "object_id": "c554eb9e10dad51c94e3984279fa3ce1a72f936f"
       },
       {
+        "path": "scripts/mcp-oauth-durable-family-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "04c05be7f4366352c0b813f34bf200fec5476389"
+      },
+      {
+        "path": "scripts/mcp-oauth-durable-family-tests.mjs",
+        "mode": "100644",
+        "object_id": "6c5990cbc50c0183531f05567bcd48926e9c783b"
+      },
+      {
         "path": "scripts/mcp-retained-outlook-registration-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "e2e77132543c0d863698a69cd257e6da34134c91"
+        "object_id": "f03b50f263dde0c87ec7724b739e9f7eec24b72e"
       },
       {
         "path": "scripts/mcp-self-contained-oauth-wire-tests.mjs",
         "mode": "100644",
-        "object_id": "e2e3b51fe228e0a96775769d2e213c31ce7dc883"
+        "object_id": "afe2c4d44efba036d69994a702c3be23c6538ca0"
+      },
+      {
+        "path": "scripts/mcp-tool-login-challenge-tests.mjs",
+        "mode": "100644",
+        "object_id": "4d49c82883458e3ae7853be8f464b0d9ab166c31"
       },
       {
         "path": "scripts/mcp-transport-tool-surface-tests.mjs",
         "mode": "100644",
-        "object_id": "3847e484495961486ef25000c29c7921307f5880"
+        "object_id": "dde93d8b8c187602e0fea7812e1a05ed5bf6c2c8"
+      },
+      {
+        "path": "scripts/memphis-authoritative-date-tests.mjs",
+        "mode": "100644",
+        "object_id": "c8c08c21d85e3613ca8541769bf5f6b173c392e0"
       },
       {
         "path": "scripts/memphis-contact-privacy-tests.mjs",
@@ -1738,14 +2788,44 @@
         "object_id": "e4402f62416c9b640505e0799085ef60d9ed6d34"
       },
       {
+        "path": "scripts/memphis-current-authority-route-tests.mjs",
+        "mode": "100644",
+        "object_id": "5926ee3abf2474460c88248e0b0f8ae48f92690c"
+      },
+      {
+        "path": "scripts/memphis-current-schedule-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "63b3e8b0d4d61f80fc892474dc1fa106650ce2cf"
+      },
+      {
+        "path": "scripts/memphis-direct-contact-privacy-tests.mjs",
+        "mode": "100644",
+        "object_id": "2e248c2f82439b15fb62505763e425c966773d36"
+      },
+      {
+        "path": "scripts/memphis-event-read-tests.mjs",
+        "mode": "100644",
+        "object_id": "f872f7e98b76b3a45edcc58dbb17e2ecf50842e0"
+      },
+      {
         "path": "scripts/memphis-messaging-regression-tests.mjs",
         "mode": "100644",
-        "object_id": "23a900affcdf906aba31219c8be7db58e32308d0"
+        "object_id": "fe252779dc67749bba808598d8d81c2c4c4478fe"
       },
       {
         "path": "scripts/memphis-messaging-route-recovery-tests.mjs",
         "mode": "100644",
-        "object_id": "7f7987d8422aa6f8d465ccb31dac07ef6d6cc8f2"
+        "object_id": "5c10a7dd5f9626ff9af09897e19b78fdb5989d38"
+      },
+      {
+        "path": "scripts/memphis-provenance-boundary-tests.mjs",
+        "mode": "100644",
+        "object_id": "7ae88637378ff23eceea6622777290f154a6b0ee"
+      },
+      {
+        "path": "scripts/messaging-delete-receipt-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "af786613d0f6ea3599313d7840e72109c2e49fbd"
       },
       {
         "path": "scripts/messaging-durability-contract-tests.mjs",
@@ -1773,14 +2853,24 @@
         "object_id": "2c8319e3fba002f303b9195048a6657b26c2a7f4"
       },
       {
+        "path": "scripts/migration-replay-order-tests.mjs",
+        "mode": "100644",
+        "object_id": "c6b3a6066df44a047d1fe3cdebd3ef490ad6bb6b"
+      },
+      {
         "path": "scripts/migration-replay-order.mjs",
         "mode": "100644",
         "object_id": "dd8bbdb006998199a1985c82d703d3171bfaf019"
       },
       {
-        "path": "scripts/moxie-route-tests.mjs",
+        "path": "scripts/moxie-decommission-tests.mjs",
         "mode": "100644",
-        "object_id": "10ce097a9b51f2f95dfc25bc5352be6bb17c47c6"
+        "object_id": "7da6ab33f2ee1a1a8f9db693e96a82fdd4453746"
+      },
+      {
+        "path": "scripts/moxie-retired-source-inventory-tests.mjs",
+        "mode": "100644",
+        "object_id": "11d48cf06df8b5b2dd83826a4ba6a9fe18e67492"
       },
       {
         "path": "scripts/named-manager-messenger-admin-route-database-tests.mjs",
@@ -1790,7 +2880,7 @@
       {
         "path": "scripts/named-manager-messenger-identity-tests.mjs",
         "mode": "100644",
-        "object_id": "17ee2ce71908b39de2eaa56acf5f0899d495c705"
+        "object_id": "76130dfc04a6a1d318fabab745cdf036eb43c4a3"
       },
       {
         "path": "scripts/named-manager-messenger-retirement-correction-database-tests.mjs",
@@ -1803,9 +2893,89 @@
         "object_id": "55844bf34b6bb985481f4f574531fb4ea023fbcd"
       },
       {
+        "path": "scripts/native-alert-inventory-events-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "00272abe953884038dab987cdb9500f0ef2b4650"
+      },
+      {
+        "path": "scripts/native-alert-inventory-guard-recovery-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "7c31ce8b1aebce10abde820c097ce34563fbd458"
+      },
+      {
+        "path": "scripts/native-alert-reservation-tests.mjs",
+        "mode": "100644",
+        "object_id": "5c9da3d3b3459620df9bdcd677794b310b61705f"
+      },
+      {
+        "path": "scripts/native-alert-sql-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "1f2e9efb946944eefd2451a105b937c23dc6fd13"
+      },
+      {
+        "path": "scripts/native-alert-two-stage-tests.mjs",
+        "mode": "100644",
+        "object_id": "9728067ffeb0b487ca29f335167b3502d061f9ca"
+      },
+      {
         "path": "scripts/native-canary-transport-route-tests.mjs",
         "mode": "100644",
         "object_id": "12be60aba83d14b61786a9aefc8f5ffbfe830012"
+      },
+      {
+        "path": "scripts/native-cleaning-check-pair-source-tests.mjs",
+        "mode": "100644",
+        "object_id": "c7c5afede6e650d2af9db40f10bb8b44096f711f"
+      },
+      {
+        "path": "scripts/native-cleaning-check-pair-stages.mjs",
+        "mode": "100644",
+        "object_id": "bef4f311a237de64282ba7a3e3abdcd2565e15f1"
+      },
+      {
+        "path": "scripts/native-event-dispatch-tests.mjs",
+        "mode": "100644",
+        "object_id": "2dc44f367cfe55038f99df839c3546d44e428a07"
+      },
+      {
+        "path": "scripts/native-location-dispatch-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "da43a952018ec93cf73c67ee58ac15887f54a56f"
+      },
+      {
+        "path": "scripts/native-location-dispatch-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "0cdc6fed8984e5a0eb7f492376f9b8ef951ae47f"
+      },
+      {
+        "path": "scripts/native-location-lifecycle-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "0b357944194907cb34128366a12e759c57c0b1f7"
+      },
+      {
+        "path": "scripts/native-location-lifecycle-tests.mjs",
+        "mode": "100644",
+        "object_id": "9e22bde924be50ee8419d7486055d1a96ac0a736"
+      },
+      {
+        "path": "scripts/native-location-reservation-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "1bc036fa4f9ed294053e48efb6d3fc16c8cd915c"
+      },
+      {
+        "path": "scripts/native-lunch-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "ed5f4ea47a107b92a4d64218fd57b1d651176fb7"
+      },
+      {
+        "path": "scripts/native-lunch-spoken-sql-tests.mjs",
+        "mode": "100644",
+        "object_id": "eeefa3ff69eb677bd833372420be17bcba55d300"
+      },
+      {
+        "path": "scripts/native-message-dispatch-tests.mjs",
+        "mode": "100644",
+        "object_id": "dfbc9727fedc40d7544e2b68b994309e7ae22405"
       },
       {
         "path": "scripts/native-notification-receipt-tests.mjs",
@@ -1813,24 +2983,464 @@
         "object_id": "d626532f6367908f46dcd31f231f7cf175445f86"
       },
       {
+        "path": "scripts/native-original-feedback-journey-fixture.mjs",
+        "mode": "100644",
+        "object_id": "efab06ffddd6a501fc476df6eff36d8a1c027882"
+      },
+      {
+        "path": "scripts/native-original-feedback-owned-diagnostic.mjs",
+        "mode": "100644",
+        "object_id": "67a2286f6e3dc8dcd9872f8195481a921e13e38c"
+      },
+      {
+        "path": "scripts/native-original-inventory-manifest-chunk-tests.mjs",
+        "mode": "100644",
+        "object_id": "ce78b28f19814a9468e7cc68aaf89d7d467806eb"
+      },
+      {
+        "path": "scripts/native-original-inventory-manifest-tests.mjs",
+        "mode": "100644",
+        "object_id": "9b57a79d8891dc1452ed35813f84269bd4a90a6a"
+      },
+      {
+        "path": "scripts/native-original-inventory-request-http-tests.mjs",
+        "mode": "100644",
+        "object_id": "42930255a51f7f0ba9eab739e5a8888b81a47c7b"
+      },
+      {
+        "path": "scripts/native-original-inventory-request-sql-tests.mjs",
+        "mode": "100644",
+        "object_id": "8c6979c40341ff65c06b6f8a6b69ddc0c1c8547e"
+      },
+      {
+        "path": "scripts/native-original-inventory-request-tests.mjs",
+        "mode": "100644",
+        "object_id": "3bf47c1e0655c1d5d606ae45715453dd0c62e3bb"
+      },
+      {
+        "path": "scripts/native-original-inventory-shipping-manager-fixture.mjs",
+        "mode": "100644",
+        "object_id": "1361c0fc4d683e5a820ddb49b49e2af8f73cd628"
+      },
+      {
+        "path": "scripts/native-original-inventory-shipping-manager-sql-tests.mjs",
+        "mode": "100644",
+        "object_id": "5f25719e4b97058e38027b3fefaff066f898a345"
+      },
+      {
+        "path": "scripts/native-original-inventory-status-http-tests.mjs",
+        "mode": "100644",
+        "object_id": "5ee3751f8a7f80859d711f6dd1d6418391b3c8bf"
+      },
+      {
+        "path": "scripts/native-original-inventory-status-tests.mjs",
+        "mode": "100644",
+        "object_id": "db12b43769592eb1248a73c7e63edbff1fd88d6a"
+      },
+      {
         "path": "scripts/native-phone-attestation-tests.mjs",
         "mode": "100644",
         "object_id": "c148700720330c95733d1e3adfb8bd5329b5dbd2"
       },
       {
+        "path": "scripts/native-private-custody-guard-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "1469c5df7df0e0d3a72841dddff9d4551f8f5901"
+      },
+      {
+        "path": "scripts/native-private-custody-http-piece-tests.mjs",
+        "mode": "100644",
+        "object_id": "843605633ed66bcbb5f4f4672ef2a16701a71e0e"
+      },
+      {
+        "path": "scripts/native-private-custody-http-route-tests.mjs",
+        "mode": "100644",
+        "object_id": "2fc85adfc78a6611fdba1b0bb49151358e7a6e2b"
+      },
+      {
+        "path": "scripts/native-private-custody-main-composition-tests.mjs",
+        "mode": "100644",
+        "object_id": "c9c8d896eb097ce793ad08299bd7eba5960cfe68"
+      },
+      {
+        "path": "scripts/native-private-custody-owner-proof-tests.mjs",
+        "mode": "100644",
+        "object_id": "93917032d382bb0a23615273a736982ccf643bdb"
+      },
+      {
+        "path": "scripts/native-private-custody-record-tests.mjs",
+        "mode": "100644",
+        "object_id": "f56ab1c77848c3696c5f130bab9cb4783ce0d469"
+      },
+      {
+        "path": "scripts/native-private-custody-returned-piece-tests.mjs",
+        "mode": "100644",
+        "object_id": "61c47a6a9337c96eface1ad3cdcbd3c1a69acee9"
+      },
+      {
+        "path": "scripts/native-private-custody-transport-frame-tests.mjs",
+        "mode": "100644",
+        "object_id": "38822430e9f4c03c63cf5aade81c2b5f1a5b6a03"
+      },
+      {
+        "path": "scripts/native-protected-snapshot-evidence-tests.mjs",
+        "mode": "100644",
+        "object_id": "f25d6bdf31eca3f3caa6536727037fd16cf9135e"
+      },
+      {
+        "path": "scripts/native-protected-snapshot-seal-tests.mjs",
+        "mode": "100644",
+        "object_id": "35ef855eaffc0f03f4e5b370364177ff0c41e60c"
+      },
+      {
         "path": "scripts/native-provider-api-tests.mjs",
         "mode": "100644",
-        "object_id": "0af96b8fdae9c90f23efc514f949f6233434df86"
+        "object_id": "151343623e27b5fbaa9432df76f4850230b4cb28"
+      },
+      {
+        "path": "scripts/native-provider-clock-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "dbd2276b412e2d4831f413a3fe9c1e9472ec1c7b"
+      },
+      {
+        "path": "scripts/native-provider-credential-observation-ci-tests.mjs",
+        "mode": "100644",
+        "object_id": "835c4649c4f0b45d7627fe884bf949d60a1453d1"
+      },
+      {
+        "path": "scripts/native-provider-credential-observation-ci-wiring.mjs",
+        "mode": "100644",
+        "object_id": "1e3e2a447f5f6e03fd99198d78ba5882c6036b23"
+      },
+      {
+        "path": "scripts/native-provider-credential-observation-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "192e53ffafd56ba08829805d4ce23a21fc9561a3"
+      },
+      {
+        "path": "scripts/native-provider-credential-observation-http-tests.mjs",
+        "mode": "100644",
+        "object_id": "d5ec7b3fd0df3993864c8767464a34ceb5acfebf"
+      },
+      {
+        "path": "scripts/native-provider-credential-observation-sql-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "bd39a073a2cfd6aa3281e27a5af317204877d40f"
+      },
+      {
+        "path": "scripts/native-provider-event-decisions-database-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "c917ac17437453b98337d939b3df326061856667"
+      },
+      {
+        "path": "scripts/native-provider-event-decisions-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "2d4319b005a26fccfe6730ffc42c78c2e8854220"
+      },
+      {
+        "path": "scripts/native-provider-event-decisions-tests.mjs",
+        "mode": "100644",
+        "object_id": "4b638429ebb956e7b933ff28d28511fa7b0fa9ae"
+      },
+      {
+        "path": "scripts/native-provider-events-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "51eeefcf4c466023b56576bc2872c10903bb17cb"
+      },
+      {
+        "path": "scripts/native-provider-events-tests.mjs",
+        "mode": "100644",
+        "object_id": "eab02fc10c36bc1f4431fcbb7fe58c467ab10490"
       },
       {
         "path": "scripts/native-provider-generation-database-tests.mjs",
         "mode": "100644",
-        "object_id": "6584856ddd9dfb383772a9c1382bcba56fcdad1a"
+        "object_id": "2ef1029451409a0b428fbfa647125a15e80dc101"
+      },
+      {
+        "path": "scripts/native-provider-integrated-profile-tests.mjs",
+        "mode": "100644",
+        "object_id": "fcf02f7acd147f7e5f21f5b1a2b64a6efd77439d"
+      },
+      {
+        "path": "scripts/native-provider-inventory-http-tests.mjs",
+        "mode": "100644",
+        "object_id": "865ef99406d1341052d779026af701847b5b1314"
+      },
+      {
+        "path": "scripts/native-provider-inventory-payload-tests.mjs",
+        "mode": "100644",
+        "object_id": "e7b51d6c99195979576a05c2d705baa22ddcd058"
       },
       {
         "path": "scripts/native-provider-json-tests.mjs",
         "mode": "100644",
-        "object_id": "76f8a5e383ae649691b53704dd049c63669b6d7b"
+        "object_id": "abfb1c6f5ad7b3f5a3a59f3372aba38606d08942"
+      },
+      {
+        "path": "scripts/native-provider-production-binding-tests.mjs",
+        "mode": "100644",
+        "object_id": "e78c032813eaa9cd9e7bb73910754a0fa1f3ee00"
+      },
+      {
+        "path": "scripts/native-retained-attempt-readback-tests.mjs",
+        "mode": "100644",
+        "object_id": "eb9c365dd0668628d7653434a14f30f51c52bf4d"
+      },
+      {
+        "path": "scripts/native-retained-intake-route-source-tests.mjs",
+        "mode": "100644",
+        "object_id": "f408cde65c4fc6d7f082d39be76ff8f0b7d15163"
+      },
+      {
+        "path": "scripts/native-retained-record-values-tests.mjs",
+        "mode": "100644",
+        "object_id": "f6734611c668774b1235f8f389d54855e027a1e5"
+      },
+      {
+        "path": "scripts/native-retained-value-chunk-capture-tests.mjs",
+        "mode": "100644",
+        "object_id": "7e245e4f0676a2d96d4978e42b8bb9531d4001e4"
+      },
+      {
+        "path": "scripts/native-retained-value-chunk-http-tests.mjs",
+        "mode": "100644",
+        "object_id": "510adfddb4f014dbe5496e0f993620079d6ceb05"
+      },
+      {
+        "path": "scripts/native-schedule-attempt-lifecycle-tests.mjs",
+        "mode": "100644",
+        "object_id": "1e8a2e0874d933321bde6d9a8d2864a1fe37941f"
+      },
+      {
+        "path": "scripts/native-schedule-attempt-sql-tests.mjs",
+        "mode": "100644",
+        "object_id": "ae35093d0ae0a0db77ce6b34113c52bda5252aca"
+      },
+      {
+        "path": "scripts/native-schedule-content-source-sql-tests.mjs",
+        "mode": "100644",
+        "object_id": "e1cdaa548b9a4f77d4e9eb443d42c32486e64ec7"
+      },
+      {
+        "path": "scripts/native-schedule-dated-reader-tests.mjs",
+        "mode": "100644",
+        "object_id": "a6f5fc2f1e6b365aa11be43b99a39755155b992c"
+      },
+      {
+        "path": "scripts/native-schedule-delivery-preparation-tests.mjs",
+        "mode": "100644",
+        "object_id": "cb3b607277b818ea853dcd0f733655cada1964e6"
+      },
+      {
+        "path": "scripts/native-schedule-dispatch-tests.mjs",
+        "mode": "100644",
+        "object_id": "27542d3c481c0caf8fd96eb6196d15d1523c95e0"
+      },
+      {
+        "path": "scripts/native-schedule-event-originals-tests.mjs",
+        "mode": "100644",
+        "object_id": "dcac2e2d9dfede6b8a78e2573d1e3493089a538e"
+      },
+      {
+        "path": "scripts/native-schedule-finalization-source-tests.mjs",
+        "mode": "100644",
+        "object_id": "5c3b8e103750d1a0d19257a76a7564a09c0e1212"
+      },
+      {
+        "path": "scripts/native-schedule-finalization-sql-tests.mjs",
+        "mode": "100644",
+        "object_id": "0af1e6852447fdd1f8ed3755c911c9df4df0bdea"
+      },
+      {
+        "path": "scripts/native-schedule-inventory-sql-tests.mjs",
+        "mode": "100644",
+        "object_id": "ff66c37510fd8ae58a60d4464b2c81ff58f86ecb"
+      },
+      {
+        "path": "scripts/native-schedule-job-preparation-tests.mjs",
+        "mode": "100644",
+        "object_id": "e99c93d3220e8cef9b511b93b494852df17c60ad"
+      },
+      {
+        "path": "scripts/native-schedule-job-sql-tests.mjs",
+        "mode": "100644",
+        "object_id": "e5eb95890168083960b88ee12c34ae7b258da1cc"
+      },
+      {
+        "path": "scripts/native-schedule-lunch-recipient-sql-tests.mjs",
+        "mode": "100644",
+        "object_id": "c8a07d8a86f61720120736f81b74f95794a687b2"
+      },
+      {
+        "path": "scripts/native-schedule-lunch-recipient-tests.mjs",
+        "mode": "100644",
+        "object_id": "4df1fb85c0e84887b2ed3e2b09eab7f8279aa89d"
+      },
+      {
+        "path": "scripts/native-schedule-observation-http-tests.mjs",
+        "mode": "100644",
+        "object_id": "c4bb0a289ffa1c9b6b14dc6e6a892a98332d7c3e"
+      },
+      {
+        "path": "scripts/native-schedule-observation-sql-tests.mjs",
+        "mode": "100644",
+        "object_id": "4674e54104ab878a10c63f59ff73fb09350c5933"
+      },
+      {
+        "path": "scripts/native-schedule-occurrence-tests.mjs",
+        "mode": "100644",
+        "object_id": "225f72a7c9165fd4d426461f3120d19f12d83e31"
+      },
+      {
+        "path": "scripts/native-schedule-payload-tests.mjs",
+        "mode": "100644",
+        "object_id": "3b990635166389129d2b3eb58e9e8c0ac744892e"
+      },
+      {
+        "path": "scripts/native-schedule-sender-factory-tests.mjs",
+        "mode": "100644",
+        "object_id": "2b80a5948e7e7f47384650dbff49ab07016e8922"
+      },
+      {
+        "path": "scripts/native-schedule-sender-sql-tests.mjs",
+        "mode": "100644",
+        "object_id": "188a73cd190e9df26f41f2b477860962e5e44e3e"
+      },
+      {
+        "path": "scripts/native-schedule-server-window-registry-sql-tests.mjs",
+        "mode": "100644",
+        "object_id": "9601b406d3be160eddd72299f7ebc4abb415dfef"
+      },
+      {
+        "path": "scripts/native-schedule-server-window-sql-tests.mjs",
+        "mode": "100644",
+        "object_id": "d37f4a27562c107cf1d746b99afb3ed576421a62"
+      },
+      {
+        "path": "scripts/native-schedule-source-ci-tests.mjs",
+        "mode": "100644",
+        "object_id": "c664eee07fc27a8400621595ac5a7e264f2fb6af"
+      },
+      {
+        "path": "scripts/native-schedule-source-ci-wiring.mjs",
+        "mode": "100644",
+        "object_id": "67d75dc0675c8444b48ceced3eb6eab5bf91897e"
+      },
+      {
+        "path": "scripts/native-schedule-source-discovery-sql-tests.mjs",
+        "mode": "100644",
+        "object_id": "2b3a7c680d2ae0163215d90a53c782eaeed301ed"
+      },
+      {
+        "path": "scripts/native-schedule-source-discovery-tests.mjs",
+        "mode": "100644",
+        "object_id": "af0375aee95cd5b095c6c5a9743afe5c00b60883"
+      },
+      {
+        "path": "scripts/native-schedule-source-orchestration-sql-tests.mjs",
+        "mode": "100644",
+        "object_id": "f4f90293678cc47af93a51d4408976d1f03e2bbe"
+      },
+      {
+        "path": "scripts/native-schedule-source-orchestration-tests.mjs",
+        "mode": "100644",
+        "object_id": "51f41dc8ce6fc30656d32411755256f0c17284f7"
+      },
+      {
+        "path": "scripts/native-schedule-source-producer-sdk-tests.mjs",
+        "mode": "100644",
+        "object_id": "e30d6a862d9f62271618affbdfab2bfc665f8eba"
+      },
+      {
+        "path": "scripts/native-schedule-source-producer-sql-tests.mjs",
+        "mode": "100644",
+        "object_id": "00511aff10f94a4b1991d930841719e75ed3b24b"
+      },
+      {
+        "path": "scripts/native-schedule-source-producer-tests.mjs",
+        "mode": "100644",
+        "object_id": "f00c504c0db6ffde374757c7efacde087a64db9e"
+      },
+      {
+        "path": "scripts/native-schedule-source-reservation-sql-tests.mjs",
+        "mode": "100644",
+        "object_id": "7ddf20e3250800737ba752e6f38a163c0d7f82fc"
+      },
+      {
+        "path": "scripts/native-schedule-source-write-boundary-sql-tests.mjs",
+        "mode": "100644",
+        "object_id": "409bfbdfd9d578e8e108dc8cfbf2169b2532d5e9"
+      },
+      {
+        "path": "scripts/native-schedule-source-write-registry-sql-tests.mjs",
+        "mode": "100644",
+        "object_id": "53ad511030e21c48889711c9e23ab4c9a88ddc7b"
+      },
+      {
+        "path": "scripts/native-schedule-validity-source-tests.mjs",
+        "mode": "100644",
+        "object_id": "26cdbd74f98c584bbd3c27e013321d0087cb22c4"
+      },
+      {
+        "path": "scripts/native-sql-fixture-output-tests.mjs",
+        "mode": "100644",
+        "object_id": "789fbff83def29ef0826a374053915f7e9b2dd38"
+      },
+      {
+        "path": "scripts/native-target-source-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "6cb66d01b09fe5fbae60ec7438e6754f02c19878"
+      },
+      {
+        "path": "scripts/native-target-source-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "8bc423e1b7ee307dd50ba979e0f32c592d6792e4"
+      },
+      {
+        "path": "scripts/native-target-source-kind-guard-tests.sql",
+        "mode": "100644",
+        "object_id": "ad20b64ebf05ac15e0c4371af7c029f5f90cbaeb"
+      },
+      {
+        "path": "scripts/nonemployee-coverall-compiler-tests.mjs",
+        "mode": "100644",
+        "object_id": "591aeaf764bbafc05c411bc62c6053633d08cef6"
+      },
+      {
+        "path": "scripts/nonemployee-coverall-current-source-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "952bb334ddafcf1c9ab2246a2d55f0c2f0b0422a"
+      },
+      {
+        "path": "scripts/nonemployee-coverall-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "63b754dd9b94b1e0c85a38b2da526f08bc22b502"
+      },
+      {
+        "path": "scripts/nonemployee-coverall-nonempty-lunch-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "e9ae8fbc3f7ab975e9fbc2d70c0e39257425dbc1"
+      },
+      {
+        "path": "scripts/nonemployee-coverall-nonempty-lunch-tests.mjs",
+        "mode": "100644",
+        "object_id": "83712b44aaad9c180dbb454bf28c7808f3d14e1f"
+      },
+      {
+        "path": "scripts/nonemployee-coverall-print-identity-tests.mjs",
+        "mode": "100644",
+        "object_id": "4016626be5051cb293876653d335cd3c3c434ad0"
+      },
+      {
+        "path": "scripts/nonemployee-coverall-source-bridge-tests.mjs",
+        "mode": "100644",
+        "object_id": "21679ccc739cbae5d8113c86b602f04504c5622d"
+      },
+      {
+        "path": "scripts/nonemployee-coverall-source-transition-tests.mjs",
+        "mode": "100644",
+        "object_id": "ecd649e663e3e8789a716828b79a14add7dccba1"
       },
       {
         "path": "scripts/oc24-candidate-diagnostics-proof.mjs",
@@ -1855,7 +3465,7 @@
       {
         "path": "scripts/oc24-coverall-print-tests.mjs",
         "mode": "100644",
-        "object_id": "a213ec9018fae96cef6303e8f7badac7122f8103"
+        "object_id": "6e6f9786b5325eb2f451245a9ee355630a0a216c"
       },
       {
         "path": "scripts/oc24-gregory-lunch-analysis.mjs",
@@ -1873,6 +3483,11 @@
         "object_id": "b591a33089bd2c1580293514d85ab0eb42f458d7"
       },
       {
+        "path": "scripts/october-dated-recovery-inventory-tests.mjs",
+        "mode": "100644",
+        "object_id": "a7d7740abfa87e5db8ebc70bec0b2539772d9e6b"
+      },
+      {
         "path": "scripts/offline-actor-recovery-database-tests.mjs",
         "mode": "100644",
         "object_id": "599f30a9ca695d08e11508a3820687a7b5bbbe16"
@@ -1880,12 +3495,12 @@
       {
         "path": "scripts/offline-actor-recovery-route-tests.mjs",
         "mode": "100644",
-        "object_id": "cc7b3efa900d67b32628b0b1ecb32075f1a5db73"
+        "object_id": "dfe59b03917c5844adcd857b2294416ecc391432"
       },
       {
         "path": "scripts/offline-authority-route-tests.mjs",
         "mode": "100644",
-        "object_id": "b8b0328cb66b21cc038d267fce466368b188c504"
+        "object_id": "07112b7792cba2117328105468eff460ba21d14e"
       },
       {
         "path": "scripts/operational-analytics-contract-tests.mjs",
@@ -1900,12 +3515,12 @@
       {
         "path": "scripts/operational-recovery-tests.mjs",
         "mode": "100644",
-        "object_id": "cd611feb63f9e412d9386de3bc9cccc5d1de7007"
+        "object_id": "8a8f41e2d6d2d7153e98836ddb99ca7643fe38f3"
       },
       {
         "path": "scripts/operations-leadership-mobile-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "b43351af2c696187f270df9659509e4d21ce5a76"
+        "object_id": "bfa37cc15001b17bd409261da543df86cde1efce"
       },
       {
         "path": "scripts/operations-leadership-mobile-database-tests.mjs",
@@ -1913,9 +3528,69 @@
         "object_id": "836ed2c94152af66871c5557d493e5761f7e9b95"
       },
       {
+        "path": "scripts/operations-mail-ledger-tests.mjs",
+        "mode": "100644",
+        "object_id": "bce6d02cdd3ea5862e543c4ffe7f1564ffffb0aa"
+      },
+      {
+        "path": "scripts/operations-mail-sync-adapter-tests.mjs",
+        "mode": "100644",
+        "object_id": "c921eefabb6f1d8d7b70064bc3d2896418ca8c32"
+      },
+      {
+        "path": "scripts/original-delivery-outcome-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "e4f9fbc150e6e0873a695063316a45841898903c"
+      },
+      {
+        "path": "scripts/original-delivery-outcome-http-tests.mjs",
+        "mode": "100644",
+        "object_id": "55f3e2efa6e1982542f217ab62e73fb4ccea0718"
+      },
+      {
+        "path": "scripts/original-inventory-owned-read-tests.mjs",
+        "mode": "100644",
+        "object_id": "6a61a26d7f9e2843ca2390afae635666202f4fa5"
+      },
+      {
+        "path": "scripts/original-inventory-separation-manager-tests.mjs",
+        "mode": "100644",
+        "object_id": "ff483f0c858715d5f4726f3f729ad1ace301e90d"
+      },
+      {
+        "path": "scripts/outlook-event-sync-adapter-tests.mjs",
+        "mode": "100644",
+        "object_id": "89f34bc5085d90e383d4f44ca1722e16acb40134"
+      },
+      {
+        "path": "scripts/outlook-event-sync-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "e784e03fd42692ad1b1fad2891fc16a90f5f761d"
+      },
+      {
+        "path": "scripts/outlook-intake-lane-collector-tests.mjs",
+        "mode": "100644",
+        "object_id": "5faf4245269c0fca51a00c1f4f9559bcfa7c0c72"
+      },
+      {
+        "path": "scripts/owner-actions-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "6b6b99bc1fb1f6ef3fdb912ab6ad8fb98154676f"
+      },
+      {
         "path": "scripts/owner-workdays-tests.mjs",
         "mode": "100644",
         "object_id": "0f561f01d334387e464eb04408c25b26830813ac"
+      },
+      {
+        "path": "scripts/paired-alert-replay-order-tests.mjs",
+        "mode": "100644",
+        "object_id": "4e14ff845ab36ffda344fad6e9d5857e4e945185"
+      },
+      {
+        "path": "scripts/paired-replay-cutover-region-tests.mjs",
+        "mode": "100644",
+        "object_id": "574c1e6c0e4498f3735d61df794f12dae1bb3f0c"
       },
       {
         "path": "scripts/phone-production-readiness-contract-tests.mjs",
@@ -1933,9 +3608,49 @@
         "object_id": "b37e92432f3d0c13a984aa732f2f5056f1152c47"
       },
       {
+        "path": "scripts/place-bridge-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "4d5e73f358a43ee6d558d6a9e0f3e507109472c6"
+      },
+      {
+        "path": "scripts/place-lifecycle-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "167d4ddbf4d77c4ae4f7b02b1d2f1d171b86af59"
+      },
+      {
+        "path": "scripts/place-lifecycle-source-tests.mjs",
+        "mode": "100644",
+        "object_id": "b9a02f2010a8f0e5cfe12a49e3c2f6f15012bc90"
+      },
+      {
+        "path": "scripts/place-operational-adapter-tests.mjs",
+        "mode": "100644",
+        "object_id": "0864bd66113c763cc9e71cf37b270d3bd660ee8d"
+      },
+      {
+        "path": "scripts/place-operational-adoption-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "0330ba4fe34db93b515e23a22cefaf64096f14db"
+      },
+      {
+        "path": "scripts/place-operational-bridge-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "be0da1a954776e658d69e7b6e7ce7364ac44c6a8"
+      },
+      {
+        "path": "scripts/place-preview-restricted-reader-tests.mjs",
+        "mode": "100644",
+        "object_id": "d8def7c658c797b0992d78add05cd0a90b49bbb6"
+      },
+      {
+        "path": "scripts/places-api-http-tests.mjs",
+        "mode": "100644",
+        "object_id": "3179dbb4a92c984dd43150675c4f9dd6a1ad636a"
+      },
+      {
         "path": "scripts/prepare-isolated-restore-target.mjs",
         "mode": "100644",
-        "object_id": "d69e276192620fd254708aa35e9afc7003c31a13"
+        "object_id": "dd489cb21534dccb5f7340e2807c8216c560ecb1"
       },
       {
         "path": "scripts/production-backup-original-metadata.mjs",
@@ -1978,6 +3693,81 @@
         "object_id": "666c60c503e4024ae62efe35778be9d8c9be2da2"
       },
       {
+        "path": "scripts/production-forward-acl-comparison-proof.mjs",
+        "mode": "100644",
+        "object_id": "8b29c8b53f49bdf2dbc189bfd3776dbc08971026"
+      },
+      {
+        "path": "scripts/production-forward-acl-comparison-tests.mjs",
+        "mode": "100644",
+        "object_id": "7eec4dd5981bff83cc3d4da10f866f1cdd2d3491"
+      },
+      {
+        "path": "scripts/production-forward-approved-dated152-proof.mjs",
+        "mode": "100644",
+        "object_id": "2ec3c4e4287d70c0649f2fcc01e617b1e197f643"
+      },
+      {
+        "path": "scripts/production-forward-approved-dated152-tests.mjs",
+        "mode": "100644",
+        "object_id": "b781e2c716553db96ed1381136775d89270e5792"
+      },
+      {
+        "path": "scripts/production-forward-cancellation127-tests.mjs",
+        "mode": "100644",
+        "object_id": "af4616aa9705f03b933174fcfc72e7d58dc19644"
+      },
+      {
+        "path": "scripts/production-forward-creator-owner-tests.mjs",
+        "mode": "100644",
+        "object_id": "899072c7d3f08616af144c698dc858f5e761dc80"
+      },
+      {
+        "path": "scripts/production-forward-creator131-tests.mjs",
+        "mode": "100644",
+        "object_id": "a4f0dd062375d955d1774aa74d36d2fe88097e1c"
+      },
+      {
+        "path": "scripts/production-forward-grant-owner-closure-tests.mjs",
+        "mode": "100644",
+        "object_id": "64f4acc02cb3d48e9c4a05ac24d507d18738b2d0"
+      },
+      {
+        "path": "scripts/production-forward-issue-column-order54-tests.mjs",
+        "mode": "100644",
+        "object_id": "a8bd5b67f03803a2738a17ddea504944c1fe35ce"
+      },
+      {
+        "path": "scripts/production-forward-october-recovery-tests.mjs",
+        "mode": "100644",
+        "object_id": "5a956bccb0dbebb9552ce0a8057932546612d090"
+      },
+      {
+        "path": "scripts/production-forward-private252-tests.mjs",
+        "mode": "100644",
+        "object_id": "de2fdb7e2bb73d8b0281b9df61a4922cd4d2677e"
+      },
+      {
+        "path": "scripts/production-forward-private253-tests.mjs",
+        "mode": "100644",
+        "object_id": "9d748a21ea2bed9a13717545957f1d1810d7da42"
+      },
+      {
+        "path": "scripts/production-forward-registered-vacancy153-proof.mjs",
+        "mode": "100644",
+        "object_id": "d0b68aa7f7e38cc0da6b5f03573cc90e13e232bc"
+      },
+      {
+        "path": "scripts/production-forward-registered-vacancy153-tests.mjs",
+        "mode": "100644",
+        "object_id": "df070d4c87e1a1a142788643dfcefcd492a7124f"
+      },
+      {
+        "path": "scripts/production-forward-source-tests.mjs",
+        "mode": "100644",
+        "object_id": "91fd300d4ba8b3f608cbac250b405a0adf747b5a"
+      },
+      {
         "path": "scripts/production-forward-source.mjs",
         "mode": "100644",
         "object_id": "2d85b19b6efd5a2fd5b0a7c7ddadc88e18eb21e5"
@@ -2005,7 +3795,7 @@
       {
         "path": "scripts/production-restore-drill.mjs",
         "mode": "100644",
-        "object_id": "36114f0ecb64ff3c6acfb468759632fd80631628"
+        "object_id": "a1d43504bdaafe9f427d63a427b695428bc5ea91"
       },
       {
         "path": "scripts/production-restore-manager-recovery-tests.mjs",
@@ -2020,7 +3810,7 @@
       {
         "path": "scripts/production-restore.mjs",
         "mode": "100644",
-        "object_id": "c63ff4e1897f2ec8aaf408e80b554a5f29c7282d"
+        "object_id": "0765101733a81b842bbb53e9dca2e0c734c73f64"
       },
       {
         "path": "scripts/production-runtime-contract-tests.mjs",
@@ -2063,6 +3853,16 @@
         "object_id": "6b18c93d379aa547becc9169945283c16bfbb589"
       },
       {
+        "path": "scripts/proxy-address-regression-tests.mjs",
+        "mode": "100644",
+        "object_id": "32a807cb40e921b06e9de6270654b6be79dba337"
+      },
+      {
+        "path": "scripts/qualified-alert-integration-sql-tests.mjs",
+        "mode": "100644",
+        "object_id": "c8a015782a0478c083cc8ff6e5ac1a785b477a90"
+      },
+      {
         "path": "scripts/read-only-database-authority-tests.mjs",
         "mode": "100644",
         "object_id": "0fb1282d3458a1e7de359fb64e29c5c735f8b0a1"
@@ -2071,6 +3871,46 @@
         "path": "scripts/record-production-release-deployment.mjs",
         "mode": "100644",
         "object_id": "af7f03955565d86576398e0052966a39a52eb57f"
+      },
+      {
+        "path": "scripts/recovery-inventory-closure-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "175eafb38b83b8e68dc56b25712ce745997612a1"
+      },
+      {
+        "path": "scripts/recurring-notification-incumbency-closure-tests.mjs",
+        "mode": "100644",
+        "object_id": "afcbed9ffb1b567da5160378c5128edc1f9dad5e"
+      },
+      {
+        "path": "scripts/recurring-notification-original-bindings-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "e9384008f65a222d531e2a3f8b374c1932bd943f"
+      },
+      {
+        "path": "scripts/recurring-notification-original-bindings-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "b6e275213ef0e19021e36e777e95a99723a41350"
+      },
+      {
+        "path": "scripts/recurring-notification-original-bindings-isolated-tests.mjs",
+        "mode": "100644",
+        "object_id": "8c2d16480c4e681b79513479ab2c2b445596fdb8"
+      },
+      {
+        "path": "scripts/recurring-notification-plan-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "27deb08f8fa5c94fdc3c34fb10f5076062c6ef17"
+      },
+      {
+        "path": "scripts/recurring-notification-plan-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "ea9fc01dddf72be5bb33815368cd35f7e475837b"
+      },
+      {
+        "path": "scripts/recurring-notification-plan-http-tests.mjs",
+        "mode": "100644",
+        "object_id": "2d49dee0452c3f426c407944bf85a905276545de"
       },
       {
         "path": "scripts/refresh-integrated-backend-authority-release.mjs",
@@ -2088,14 +3928,29 @@
         "object_id": "b7c80b44699b14aeea45883584009a915366739d"
       },
       {
+        "path": "scripts/release-attestation-path-tests.mjs",
+        "mode": "100644",
+        "object_id": "94a78f5d86ed9aa3cb80f867b5c8f2a2f0772df7"
+      },
+      {
         "path": "scripts/release-canary-recovery-database-tests.mjs",
         "mode": "100644",
-        "object_id": "a8d153605fabec74d3695d7d6ab2c3599796359b"
+        "object_id": "a6ba48dadc5cea45d1e000604c031700b54913e6"
       },
       {
         "path": "scripts/release-closure-contract-tests.mjs",
         "mode": "100644",
         "object_id": "febce935edf40b3b8f43251c55fe39da533bee78"
+      },
+      {
+        "path": "scripts/release-ledger-head-order-tests.mjs",
+        "mode": "100644",
+        "object_id": "f4da35875ce579b98e534119628d18612d8a2fd9"
+      },
+      {
+        "path": "scripts/release-migration-approved-dated-refusal-tests.mjs",
+        "mode": "100644",
+        "object_id": "c1d5bd36085e72c1ccfaba2b0e35f0b00dd7023d"
       },
       {
         "path": "scripts/release-migration-approved-dated-refusal.mjs",
@@ -2106,6 +3961,16 @@
         "path": "scripts/release-migration-authorization-tests.mjs",
         "mode": "100644",
         "object_id": "a6d3259dc09539679bc315de7f0933095235b8e7"
+      },
+      {
+        "path": "scripts/release-migration-cancellation127-refusal-tests.mjs",
+        "mode": "100644",
+        "object_id": "596f784644d8487fe64c3eec01b33830cd1dd300"
+      },
+      {
+        "path": "scripts/release-migration-existing252-refusal-tests.mjs",
+        "mode": "100644",
+        "object_id": "c56c1a0b4ec39c113dddfd3996dad7196fe97cc3"
       },
       {
         "path": "scripts/release-migration-fixture-guard-tests.mjs",
@@ -2133,6 +3998,11 @@
         "object_id": "8c69d01ff8954b3704868399b0c51441439fdc08"
       },
       {
+        "path": "scripts/release-migration-observed-prefix-tests.mjs",
+        "mode": "100644",
+        "object_id": "c596ab9b8eeeb93d737be468ce14c230111f5c01"
+      },
+      {
         "path": "scripts/release-migration-observed-prefix.mjs",
         "mode": "100644",
         "object_id": "5f0dbcd796370e2b7f621537110d75356ec3c5bb"
@@ -2140,7 +4010,7 @@
       {
         "path": "scripts/release-migration-plan-database-isolated-tests.sh",
         "mode": "100644",
-        "object_id": "8deecf189d1d20c10caa9f16adce1f7bebb83c11"
+        "object_id": "fe8d12e9cff42edaf6f4bfe91ccd7be9da9fb22f"
       },
       {
         "path": "scripts/release-migration-plan-database-tests.mjs",
@@ -2148,9 +4018,24 @@
         "object_id": "ae5b4f9caf9841bb802d0b0b88ea602078207959"
       },
       {
+        "path": "scripts/release-migration-preservation-archive-tests.mjs",
+        "mode": "100644",
+        "object_id": "8021ad63f68404e3a0b7b8579345f6d2d082058d"
+      },
+      {
         "path": "scripts/release-migration-preservation-caller-tests.mjs",
         "mode": "100644",
         "object_id": "1847808fedc6f53f4e7e44ea6a3ebfe3c5701fed"
+      },
+      {
+        "path": "scripts/release-migration-private252-refusal-tests.mjs",
+        "mode": "100644",
+        "object_id": "8e72ebc5b40de8628abacf5937672bceaf63ec02"
+      },
+      {
+        "path": "scripts/release-migration-registered-vacancy-refusal-tests.mjs",
+        "mode": "100644",
+        "object_id": "c44568580bd93ccc814a5eb6819e59ac06c81932"
       },
       {
         "path": "scripts/release-migration-registered-vacancy-refusal.mjs",
@@ -2163,9 +4048,19 @@
         "object_id": "463925a2408056a23c4e613acd37cd3f00096b37"
       },
       {
+        "path": "scripts/release-migration-target-capture-tests.mjs",
+        "mode": "100644",
+        "object_id": "8fd3dc637a5d4be7539115ace4f4e27778ffbead"
+      },
+      {
         "path": "scripts/release-migration-target-capture.mjs",
         "mode": "100644",
-        "object_id": "9ba218afecc78f2c1d369e038c1dc2d377cd636b"
+        "object_id": "d7bb3580615de252ffed5918c7b41cfcea1a7ab9"
+      },
+      {
+        "path": "scripts/release-migration-target-refusal-tests.mjs",
+        "mode": "100644",
+        "object_id": "60a7aab13d987dda4fd125851a528e65c769f64f"
       },
       {
         "path": "scripts/release-migration-target-refusal.mjs",
@@ -2178,9 +4073,19 @@
         "object_id": "190a753d081a35f7e08bcdb3782927abf71a7dd7"
       },
       {
+        "path": "scripts/release-migration-workflow-tests.mjs",
+        "mode": "100644",
+        "object_id": "3f34d1a173d4b860a3f94bd3a6b7053deee17a24"
+      },
+      {
         "path": "scripts/release-pair-consumer-regression-tests.mjs",
         "mode": "100644",
         "object_id": "5e457ebf63a71f33d0636d02d5ced31a3a66f0e6"
+      },
+      {
+        "path": "scripts/render-october-candidate-pdfs.mjs",
+        "mode": "100644",
+        "object_id": "39fefcae8c63d4c190cd5ec20d29084fa7ce2139"
       },
       {
         "path": "scripts/resolve-isolated-restore-rehearsal.mjs",
@@ -2200,7 +4105,7 @@
       {
         "path": "scripts/restore-mutation-gate-tests.mjs",
         "mode": "100644",
-        "object_id": "c122cd92596f1921f4fadcd256ad91a32e3dabfd"
+        "object_id": "9f8d0ef3053d04ffbb9d25398a86fd9ca569907e"
       },
       {
         "path": "scripts/restore-unvalidated-checks.mjs",
@@ -2220,7 +4125,7 @@
       {
         "path": "scripts/run-current-verified-visit-database-tests.mjs",
         "mode": "100644",
-        "object_id": "5533fbf7fcba6917b47d4968183e525775c6ef57"
+        "object_id": "ed6ba50b4fc41e6ae6d2a12d044587f744b6ae71"
       },
       {
         "path": "scripts/run-isolated-release-recorder-tests.mjs",
@@ -2230,12 +4135,12 @@
       {
         "path": "scripts/run-isolated-shift-end-tests.mjs",
         "mode": "100644",
-        "object_id": "abf76e84141b4e93a3656b05b541f6f6833a2e37"
+        "object_id": "93bbce78383bcc8894be46b23ad78eff2a122b6d"
       },
       {
         "path": "scripts/run-oc24-owner-database-tests.mjs",
         "mode": "100644",
-        "object_id": "6d315fc6fe87aedd23977ea9b3dea8caccdd394d"
+        "object_id": "ce9582e69e23096a818f8a3bc09c601f374c7779"
       },
       {
         "path": "scripts/run-official-local-storage-rehearsal.mjs",
@@ -2245,7 +4150,7 @@
       {
         "path": "scripts/run-production-backup-migration-rehearsal.sh",
         "mode": "100644",
-        "object_id": "8b31749dd2193503926ce3898d21a0aace8ab4c3"
+        "object_id": "4355b424087b013bdd5d0190bbad919943d03b9c"
       },
       {
         "path": "scripts/run-release-migration-full-candidate.mjs",
@@ -2260,7 +4165,67 @@
       {
         "path": "scripts/run-specialized-lunch-receipt-database-tests.mjs",
         "mode": "100644",
-        "object_id": "1e5bcd2d2f4ec22aea6d24b09f13c34f03184741"
+        "object_id": "b77d47312665d0809a796cc474fda06706a3c071"
+      },
+      {
+        "path": "scripts/same-original-completion-read-store-tests.mjs",
+        "mode": "100644",
+        "object_id": "daa20b627929962d2b56a3aa09e8ff43821ff801"
+      },
+      {
+        "path": "scripts/same-original-completion-read-wire-tests.mjs",
+        "mode": "100644",
+        "object_id": "9cb5e88db753d43126ca4261890b15caeeddc39b"
+      },
+      {
+        "path": "scripts/same-original-recovery-local-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "dd9e9465f6c99cef178d6c200f0a40b67ac734b3"
+      },
+      {
+        "path": "scripts/same-original-recovery-manager-auth-tests.mjs",
+        "mode": "100644",
+        "object_id": "d97b9eba7a784ec79d3666a02d9f2b05d021c4d4"
+      },
+      {
+        "path": "scripts/same-original-recovery-manager-composition-tests.mjs",
+        "mode": "100644",
+        "object_id": "49ce6f1a4a7bec22bcf1c8d0bd93d306d26ea721"
+      },
+      {
+        "path": "scripts/same-original-recovery-native-challenge-route-tests.mjs",
+        "mode": "100644",
+        "object_id": "6e79d0dd8c6485853dcb07ed21b02f8daedbc78d"
+      },
+      {
+        "path": "scripts/same-original-recovery-native-challenge-store-tests.mjs",
+        "mode": "100644",
+        "object_id": "e41a8e108ed799e7f929de95a1e5e8d7b9e5b5a7"
+      },
+      {
+        "path": "scripts/same-original-recovery-native-challenge-wire-tests.mjs",
+        "mode": "100644",
+        "object_id": "4b5b51c11aba4bc83cfe37ccb54d01d164c23370"
+      },
+      {
+        "path": "scripts/same-original-recovery-native-preparation-store-tests.mjs",
+        "mode": "100644",
+        "object_id": "a2ffcc2a5576686ca090a59d3374a9c19f579684"
+      },
+      {
+        "path": "scripts/same-original-recovery-route-tests.mjs",
+        "mode": "100644",
+        "object_id": "b097f953d2f4cdd4bd3043910508577188735bf8"
+      },
+      {
+        "path": "scripts/same-original-recovery-store-tests.mjs",
+        "mode": "100644",
+        "object_id": "0c2cf06e653a5442c485044360813969b4d2aa2b"
+      },
+      {
+        "path": "scripts/same-original-recovery-wire-tests.mjs",
+        "mode": "100644",
+        "object_id": "e34bb8fd2ac6d27bc2bed1601820d8e51d8e89e2"
       },
       {
         "path": "scripts/scan-authority-cutover-tests.mjs",
@@ -2283,9 +4248,24 @@
         "object_id": "5bdb0a96f39d817eb15f015582b2c144a64baeb8"
       },
       {
+        "path": "scripts/schedule-bound-reminder-integration.mjs",
+        "mode": "100644",
+        "object_id": "068fdefad30870f7fb973849bf0c359e78c4f2c6"
+      },
+      {
+        "path": "scripts/schedule-component-weight-authority-tests.mjs",
+        "mode": "100644",
+        "object_id": "1e7dd5cacf1e590df8632f09b492b980fad14fa5"
+      },
+      {
+        "path": "scripts/schedule-display-order-tests.mjs",
+        "mode": "100644",
+        "object_id": "da038e67d6048fefc02d4c57a7746e24652813cf"
+      },
+      {
         "path": "scripts/schedule-display-tests.mjs",
         "mode": "100644",
-        "object_id": "5e3a90158b77a7ea2f8262b5a217a98da365fe76"
+        "object_id": "9e672dd6dc925a1332e5b2117f5cbf31fa19e067"
       },
       {
         "path": "scripts/schedule-source-type-contract-tests.mjs",
@@ -2295,12 +4275,17 @@
       {
         "path": "scripts/scheduler-alerts-gps-foundation-tests.mjs",
         "mode": "100644",
-        "object_id": "0e19015e8ad7b935099d47a7e252af907fc80d19"
+        "object_id": "83e001f072ed1b4680c4137d8a745691d9da16be"
       },
       {
         "path": "scripts/scheduler-overhaul-contract-tests.mjs",
         "mode": "100644",
         "object_id": "d76c66450696dcaaadb78d1686299139375423d3"
+      },
+      {
+        "path": "scripts/scheduler-reported-boundaries-tests.mjs",
+        "mode": "100644",
+        "object_id": "06fd74438d3d8431fa0e8f3dc66f7a48ddfafa51"
       },
       {
         "path": "scripts/schema-catalog-readonly-client.mjs",
@@ -2323,6 +4308,41 @@
         "object_id": "c73c96cf7672051a03b511d1b9aae7ab8866a3fc"
       },
       {
+        "path": "scripts/separation-auth-admission-source-tests.mjs",
+        "mode": "100644",
+        "object_id": "172fdc96465922dbe7f4e0953274e1b7c140b93a"
+      },
+      {
+        "path": "scripts/separation-context-auth-tests.mjs",
+        "mode": "100644",
+        "object_id": "eb9fb10e49ecd62d7a56e4af6a51d757f0f2da2e"
+      },
+      {
+        "path": "scripts/shared-events-feed-tests.mjs",
+        "mode": "100644",
+        "object_id": "11c66c4dbcc428914de375d6327d5d7cc6b9abff"
+      },
+      {
+        "path": "scripts/shared-events-recovery-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "da05b5579476d05b090cd26461e57b00c334ad5e"
+      },
+      {
+        "path": "scripts/six-person-absence-fixture-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "db97daf660e5b5c8533cc88bdd5e6c4918d80196"
+      },
+      {
+        "path": "scripts/six-person-absence-permutation-tests.mjs",
+        "mode": "100644",
+        "object_id": "d05feb8e306438f2bbf8797c0962c8b5e6aba0b1"
+      },
+      {
+        "path": "scripts/six-person-absence-receipt-tests.mjs",
+        "mode": "100644",
+        "object_id": "3a236144279170473578ed39dedd7379f06973c7"
+      },
+      {
         "path": "scripts/smoke-ai-intent.mjs",
         "mode": "100644",
         "object_id": "9b7c69d485f70f64093aeeaaa14c33ddae4955f1"
@@ -2335,12 +4355,12 @@
       {
         "path": "scripts/smoke-memphis-context.mjs",
         "mode": "100644",
-        "object_id": "0756f558f0c3a4b2f9b56c64f9a41411da3abdac"
+        "object_id": "cff607f9ad7701b64e0a9041303197c68edd89b2"
       },
       {
         "path": "scripts/smoke.mjs",
         "mode": "100644",
-        "object_id": "a1c788e86057ab9f942a2980f74f52e0920c2c55"
+        "object_id": "acef7f2cc3df8b3c677906444536c2100d0cd7f7"
       },
       {
         "path": "scripts/specialized-lunch-receipt-database-tests.mjs",
@@ -2430,27 +4450,27 @@
       {
         "path": "scripts/staffing-command-atomic-acceptance-database-tests.mjs",
         "mode": "100644",
-        "object_id": "1a46a5df3a9847692523f65f670b75be5038bdec"
+        "object_id": "0bae428a33524833cd4d090ebc50e9b17e84eb82"
       },
       {
         "path": "scripts/staffing-command-control-plane-tests.mjs",
         "mode": "100644",
-        "object_id": "43a69c6c00aecd88b6dac6cbbf204cc2900f20bf"
+        "object_id": "3561749f830c16e243e11cec560665f9d28d1022"
       },
       {
         "path": "scripts/staffing-command-ledger-database-tests.mjs",
         "mode": "100644",
-        "object_id": "4a32629dd1524ce69eb81253c37e21a668738b51"
+        "object_id": "896c24730fe364cd2f59fd1fc5f8ad6d7fd19a05"
       },
       {
         "path": "scripts/staffing-command-request-tests.mjs",
         "mode": "100644",
-        "object_id": "45fa4ece6479fac05939d3b863b9ed3b6fd452e7"
+        "object_id": "6b683b0579fccaf902c1f394398a1e38584df9b2"
       },
       {
         "path": "scripts/staffing-compiler-staging-tests.mjs",
         "mode": "100644",
-        "object_id": "b05e533d6fe41ad5ece22975bddc622b4f6dc91f"
+        "object_id": "f37c7e35c581400ce5157c4b7317fbbfa6daffae"
       },
       {
         "path": "scripts/staffing-preparation-boundaries-tests.mjs",
@@ -2460,12 +4480,22 @@
       {
         "path": "scripts/staffing-schedule-application-route-tests.mjs",
         "mode": "100644",
-        "object_id": "8bb44a1f5123eeca5e257f67be57cba520d38cf4"
+        "object_id": "fdb8ef64535426e8d94cb80b60d4d4a30886a3c2"
       },
       {
         "path": "scripts/staffing-week-preview-tests.mjs",
         "mode": "100644",
-        "object_id": "881fda32e8a3f2961a00292e0a55a629b07567e0"
+        "object_id": "ea28f2a69a4186b1e77342a81f38465360adbee0"
+      },
+      {
+        "path": "scripts/static-weekly-adaptation-compiler-tests.mjs",
+        "mode": "100644",
+        "object_id": "e38eabcbda51fae2c38cc416bb93b2b9b31d43d8"
+      },
+      {
+        "path": "scripts/static-weekly-approved-initial-http-tests.mjs",
+        "mode": "100644",
+        "object_id": "05c6e3349b43995d9d7add89bef3bf7f185dfedf"
       },
       {
         "path": "scripts/static-weekly-atomic-roster-database-tests.mjs",
@@ -2478,9 +4508,14 @@
         "object_id": "ef82edb44060a1c1d6c08f8192abd295421c71c3"
       },
       {
+        "path": "scripts/static-weekly-compiler-abort-tests.mjs",
+        "mode": "100644",
+        "object_id": "2854cfa335d873554fbf830c2d56545be95683d1"
+      },
+      {
         "path": "scripts/static-weekly-compiler-runtime-tests.mjs",
         "mode": "100644",
-        "object_id": "2627f59f3d5c98f8d2c56735fae69098b1732c06"
+        "object_id": "d3d7bb9bbd69249c9fb36b965ef78710c0616ba3"
       },
       {
         "path": "scripts/static-weekly-control-plane-deployment-contract-tests.mjs",
@@ -2490,12 +4525,47 @@
       {
         "path": "scripts/static-weekly-control-plane-runtime-tests.mjs",
         "mode": "100644",
-        "object_id": "1515bb1d8e0b32b4835f933b0c10fb0f3899d08a"
+        "object_id": "d697f086cfa29ebf052681f3450faa05a5996f02"
       },
       {
         "path": "scripts/static-weekly-control-plane-tests.mjs",
         "mode": "100644",
-        "object_id": "efb7ef84108622c1c6c4ac52183693717833bb29"
+        "object_id": "2ebbf42ba659f2fa8318de7369e17e67dd3a0615"
+      },
+      {
+        "path": "scripts/static-weekly-current-manager-219-manifest-tests.mjs",
+        "mode": "100644",
+        "object_id": "8b1885fe361059224dd4aa77dad2e48c59d4ac4b"
+      },
+      {
+        "path": "scripts/static-weekly-current-manager-fixture-tests.mjs",
+        "mode": "100644",
+        "object_id": "32b440469b0a073249f0e8600a88301d022468c2"
+      },
+      {
+        "path": "scripts/static-weekly-current-manager-owned-checkpoint-child.mjs",
+        "mode": "100644",
+        "object_id": "97d2b9e7858a247d1666534e97abd797897be912"
+      },
+      {
+        "path": "scripts/static-weekly-current-manager-owned-checkpoint-tests.mjs",
+        "mode": "100644",
+        "object_id": "9c6ce49f6b7bdc67ff6a9bc8ded1ae31d054a73b"
+      },
+      {
+        "path": "scripts/static-weekly-current-manager-owned-checkpoint.mjs",
+        "mode": "100644",
+        "object_id": "98eda6dd6b1fb7ee198e9b1ddec70547b473af78"
+      },
+      {
+        "path": "scripts/static-weekly-current-manager-owned-stage-tests.mjs",
+        "mode": "100644",
+        "object_id": "331ea02764f261192b285e7ff1ee1a9451ec42a3"
+      },
+      {
+        "path": "scripts/static-weekly-current-manager-owned-stage.mjs",
+        "mode": "100644",
+        "object_id": "94620d2d052181f53fc6a77c79eefbbf368d3558"
       },
       {
         "path": "scripts/static-weekly-current-roster-lunch-diagnosis.mjs",
@@ -2505,22 +4575,107 @@
       {
         "path": "scripts/static-weekly-current-roster-publication-tests.mjs",
         "mode": "100644",
-        "object_id": "8b340a46f4464a509c56611b96a1a5c3af718796"
+        "object_id": "9f60ec80b1b401909f5eb9e50580e954cc548903"
+      },
+      {
+        "path": "scripts/static-weekly-dated-consumer-display-tests.mjs",
+        "mode": "100644",
+        "object_id": "16fcc669dc3de1cd1ab9c840dc6d602dea22f99d"
+      },
+      {
+        "path": "scripts/static-weekly-dated-transition-home-facts-tests.mjs",
+        "mode": "100644",
+        "object_id": "0ff4df6a6fdbd63dfe75872f7276342a84ffa631"
+      },
+      {
+        "path": "scripts/static-weekly-dated-transition-materialization-tests.mjs",
+        "mode": "100644",
+        "object_id": "d3baa58df1ed196be7d0c9d52a09b2f74f1bc86e"
+      },
+      {
+        "path": "scripts/static-weekly-dated-transition-postgres-tests.mjs",
+        "mode": "100644",
+        "object_id": "04455212883dd4f5a9e57650b2ee6c8335673514"
+      },
+      {
+        "path": "scripts/static-weekly-dated-transition-runtime-tests.mjs",
+        "mode": "100644",
+        "object_id": "5c58d99780b5fa6a4cfd9cfad47b14f61204d82d"
+      },
+      {
+        "path": "scripts/static-weekly-dated-web-authority-tests.mjs",
+        "mode": "100644",
+        "object_id": "ee9c4ad83fdcf3a1ba11a03084d378cc629f0ade"
       },
       {
         "path": "scripts/static-weekly-day-changes-database-tests.mjs",
         "mode": "100644",
-        "object_id": "867f62d078ac164d22145acbb4c425cf574f4b9b"
+        "object_id": "3c892e8b71a0728407db834e0b6e16578f4bc580"
+      },
+      {
+        "path": "scripts/static-weekly-digest-stream-ci-tests.mjs",
+        "mode": "100644",
+        "object_id": "29a74a402ea7186be40325740ae5282dace5e203"
+      },
+      {
+        "path": "scripts/static-weekly-digest-stream-tests.mjs",
+        "mode": "100644",
+        "object_id": "a03054878a1d8fe591e852fbe2e57d86c854642e"
+      },
+      {
+        "path": "scripts/static-weekly-dual-source-current-correction-sql-tests.mjs",
+        "mode": "100644",
+        "object_id": "8a0a92e521c1c766c2452bdcdcddb59c54319e68"
+      },
+      {
+        "path": "scripts/static-weekly-dual-source-sql-stage-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "0bb80cb8bc865c784269faa3451cc395acd9737c"
       },
       {
         "path": "scripts/static-weekly-employee-day-route-tests.mjs",
         "mode": "100644",
-        "object_id": "fcaa3004bcf67bbaab47fc35da1f82e3339ddd6f"
+        "object_id": "b0fa4abfcae199941c340a5624308276c039eccf"
       },
       {
         "path": "scripts/static-weekly-existing-employee-restore-database-tests.mjs",
         "mode": "100644",
-        "object_id": "5ece4d6c2f11af2fb65f94f2ef0f730d11d0c806"
+        "object_id": "c1581cd2697d0cba3a6b86f3b6854fa66bc0a7ec"
+      },
+      {
+        "path": "scripts/static-weekly-fixed-rank-link-ci-tests.mjs",
+        "mode": "100644",
+        "object_id": "4a72253f893e70c02b8e78dda50564444fd49231"
+      },
+      {
+        "path": "scripts/static-weekly-fixed-rank-link-ci-wiring.mjs",
+        "mode": "100644",
+        "object_id": "988421472220e05dce2ad9dff5bfbc91c0c6732c"
+      },
+      {
+        "path": "scripts/static-weekly-fixed-rank-link-tests.mjs",
+        "mode": "100644",
+        "object_id": "af86e4275beb32c6f7d7b77a234926a58b25b7d0"
+      },
+      {
+        "path": "scripts/static-weekly-friday-candidate-diagnostic.mjs",
+        "mode": "100644",
+        "object_id": "32f1626ce55efbaa716f26abe3035a7a510eb194"
+      },
+      {
+        "path": "scripts/static-weekly-friday-exception-acceptance-tests.mjs",
+        "mode": "100644",
+        "object_id": "c7b402a9a6384c759b4986fef122a374e1657a93"
+      },
+      {
+        "path": "scripts/static-weekly-full-nine-owner-map-tests.mjs",
+        "mode": "100644",
+        "object_id": "48ce9ce99e8f5bd3f33ca93a913982caf2f9ce4d"
+      },
+      {
+        "path": "scripts/static-weekly-full-nine-to-eight-readback-tests.mjs",
+        "mode": "100644",
+        "object_id": "1f8ffce58a022eda794d7b94b8561b19e236ee50"
       },
       {
         "path": "scripts/static-weekly-full-roster-lunch-tests.mjs",
@@ -2533,9 +4688,29 @@
         "object_id": "8dbc6b39699f69b6de4031e836ef27a67b0151b5"
       },
       {
+        "path": "scripts/static-weekly-identity-auxiliary-ci-tests.mjs",
+        "mode": "100644",
+        "object_id": "cf4fa7e0535317780b77b18b58562d995f9a7949"
+      },
+      {
+        "path": "scripts/static-weekly-identity-auxiliary-tests.mjs",
+        "mode": "100644",
+        "object_id": "b906ff9ca5e294be017d36dc7416f7c75566d941"
+      },
+      {
         "path": "scripts/static-weekly-identity-domain-tests.mjs",
         "mode": "100644",
         "object_id": "66c344c37db4ef4a6c5ca911fc548355faa0224e"
+      },
+      {
+        "path": "scripts/static-weekly-internal-employee-rpc-tests.mjs",
+        "mode": "100644",
+        "object_id": "39a4e3fa70dfe29b1bc22db08882333423cd57e8"
+      },
+      {
+        "path": "scripts/static-weekly-isolated-recurring-preview-tests.mjs",
+        "mode": "100644",
+        "object_id": "e0cb74900d46b8dd76212c00de36b06251ef3f13"
       },
       {
         "path": "scripts/static-weekly-lunch-authority-adapter-tests.mjs",
@@ -2550,7 +4725,22 @@
       {
         "path": "scripts/static-weekly-lunch-coverage-tests.mjs",
         "mode": "100644",
-        "object_id": "86d88ca9fac9cf75c69642ef9a0712c7d19a3a96"
+        "object_id": "877479adbbf366b6a6689366c88c04c813f409f8"
+      },
+      {
+        "path": "scripts/static-weekly-lunch-fused-seed-ci-tests.mjs",
+        "mode": "100644",
+        "object_id": "cc3bab612a7267593e5869e3db630dc1f726e93f"
+      },
+      {
+        "path": "scripts/static-weekly-lunch-fused-seed-construction-tests.mjs",
+        "mode": "100644",
+        "object_id": "eec619ca2f1e520994a6e53f537482192539dbeb"
+      },
+      {
+        "path": "scripts/static-weekly-lunch-materialization-integration.mjs",
+        "mode": "100644",
+        "object_id": "52629ae3b5163e14184bc09c974d73310ee304db"
       },
       {
         "path": "scripts/static-weekly-lunch-publication-database-tests.mjs",
@@ -2558,14 +4748,124 @@
         "object_id": "fb4ef0e269fa832a904dc78032afbc5aff266523"
       },
       {
+        "path": "scripts/static-weekly-manager-auth-deadline-tests.mjs",
+        "mode": "100644",
+        "object_id": "589f30a6edac32012fa0f7b77e0c6a056588d256"
+      },
+      {
+        "path": "scripts/static-weekly-manager-ingress-ci-tests.mjs",
+        "mode": "100644",
+        "object_id": "3db8a412e7b5cf8a500b7e3b826f49660a0c01f8"
+      },
+      {
+        "path": "scripts/static-weekly-manager-ingress-ci-wiring.mjs",
+        "mode": "100644",
+        "object_id": "8df85628cbb790bf6671a0b34479a83a67c182da"
+      },
+      {
+        "path": "scripts/static-weekly-manager-ingress-http-tests.mjs",
+        "mode": "100644",
+        "object_id": "3432838fffca27d149819216ed93cdab43f7ebba"
+      },
+      {
+        "path": "scripts/static-weekly-manager-operation-tests.mjs",
+        "mode": "100644",
+        "object_id": "fffac66fe60c49801efd405c271e303f79113eda"
+      },
+      {
+        "path": "scripts/static-weekly-manager-read-tests.mjs",
+        "mode": "100644",
+        "object_id": "1a5cf888c1682697cc5346635143fab6bf10f986"
+      },
+      {
+        "path": "scripts/static-weekly-manager-roster-adaptation-input-tests.mjs",
+        "mode": "100644",
+        "object_id": "aa103808a64c2eb0b269cb1ba6d7133b62f30a0f"
+      },
+      {
         "path": "scripts/static-weekly-midweek-vacancy-database-fixture.mjs",
         "mode": "100644",
-        "object_id": "ccbe281d0a1ac4c79ae4c7a8cae33d94a8491495"
+        "object_id": "93dc68c2f75b5db69e86ded544b774c717091b31"
       },
       {
         "path": "scripts/static-weekly-midweek-vacancy-tests.mjs",
         "mode": "100644",
         "object_id": "d7b29285837c5c13bd04ead2a14d56c41e16f443"
+      },
+      {
+        "path": "scripts/static-weekly-model-basis-digest-stream-ci-tests.mjs",
+        "mode": "100644",
+        "object_id": "82511f3488569697a76156f8710f78e0b720072a"
+      },
+      {
+        "path": "scripts/static-weekly-model-basis-digest-stream-tests.mjs",
+        "mode": "100644",
+        "object_id": "4039cc74cda148ad5b1db0062ef24125961fe1fb"
+      },
+      {
+        "path": "scripts/static-weekly-model-constraints-digest-stream-ci-tests.mjs",
+        "mode": "100644",
+        "object_id": "a9f41e9a3c1b7c8efa6cf04fdd880f1389d914cc"
+      },
+      {
+        "path": "scripts/static-weekly-model-constraints-digest-stream-tests.mjs",
+        "mode": "100644",
+        "object_id": "0eebb886c5371e4a419d2a49020d30429e6b0e8d"
+      },
+      {
+        "path": "scripts/static-weekly-morning-planning-authority-ci-tests.mjs",
+        "mode": "100644",
+        "object_id": "8d26c31de9adf39849771bf72063352c878a94bf"
+      },
+      {
+        "path": "scripts/static-weekly-morning-planning-authority-tests.mjs",
+        "mode": "100644",
+        "object_id": "4759c75df278529b1729a51467da772ce655c549"
+      },
+      {
+        "path": "scripts/static-weekly-named-handoff-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "a720af2a7df129bb58b8a0a2cc74d3755fc2c8de"
+      },
+      {
+        "path": "scripts/static-weekly-october-pdf-data-tests.mjs",
+        "mode": "100644",
+        "object_id": "a27282372b09b01a10d840c2dab387a16783b353"
+      },
+      {
+        "path": "scripts/static-weekly-october-transition-tests.mjs",
+        "mode": "100644",
+        "object_id": "b65d9feafe61b8520e114cfb0f21e8723667c7a1"
+      },
+      {
+        "path": "scripts/static-weekly-opening-coverage-preview-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "bb993323b3cebf1d521710e6ec4634e61f7b00f8"
+      },
+      {
+        "path": "scripts/static-weekly-opening-coverage-report-ci-tests.mjs",
+        "mode": "100644",
+        "object_id": "fce017ff3f8ed9d53200e3c05e26e4bddfa6ac7c"
+      },
+      {
+        "path": "scripts/static-weekly-opening-coverage-report-tests.mjs",
+        "mode": "100644",
+        "object_id": "9c460767034c2ff3162dc7a0a663d8ea38ee9a4b"
+      },
+      {
+        "path": "scripts/static-weekly-operation-deadline-ci-tests.mjs",
+        "mode": "100644",
+        "object_id": "93a4fff842c3b2f09696060a5837f53050710706"
+      },
+      {
+        "path": "scripts/static-weekly-operation-deadline-ci-wiring.mjs",
+        "mode": "100644",
+        "object_id": "0c887ac3cba1a21cbe13588dff363ab353f420b1"
+      },
+      {
+        "path": "scripts/static-weekly-operation-deadline-tests.mjs",
+        "mode": "100644",
+        "object_id": "ecf9fd92799722b50007d13e584665cf4781fcec"
       },
       {
         "path": "scripts/static-weekly-operational-truth-contract-tests.mjs",
@@ -2578,19 +4878,49 @@
         "object_id": "ce1dc07b3086b27ad98a55eab6ffbca0da86d042"
       },
       {
+        "path": "scripts/static-weekly-ordered-psql-transport-tests.mjs",
+        "mode": "100644",
+        "object_id": "04957d3d99b745ce1747300086cb6deb270fbc64"
+      },
+      {
+        "path": "scripts/static-weekly-ordered-psql-transport.mjs",
+        "mode": "100644",
+        "object_id": "c7741c4f7dce1174a55438f908e9a2d744cfcacc"
+      },
+      {
         "path": "scripts/static-weekly-owner-eligibility-tests.mjs",
         "mode": "100644",
-        "object_id": "fdd1713a65cb193da00cdd5be074ca13b2ed4352"
+        "object_id": "93cc133f44e88b26f6d0a752058a95feaead09bc"
       },
       {
         "path": "scripts/static-weekly-owner-workdays-database-tests.mjs",
         "mode": "100644",
-        "object_id": "f731de275325898dfe95203c2e7a8c55a1c02324"
+        "object_id": "d85095d6b66780e9420ad6360bc5d1899e3c9a65"
       },
       {
         "path": "scripts/static-weekly-persisted-continuity-tests.mjs",
         "mode": "100644",
         "object_id": "a20c915af2653194efd64e23fdff0383a0374918"
+      },
+      {
+        "path": "scripts/static-weekly-policy-scope-ci-tests.mjs",
+        "mode": "100644",
+        "object_id": "e29178544f375a54accf80270990e7d319d12e37"
+      },
+      {
+        "path": "scripts/static-weekly-policy-scope-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "4d531c1c7a47afd41a123eaeceefedb8dd5b52c6"
+      },
+      {
+        "path": "scripts/static-weekly-postgres-key-order-ci-tests.mjs",
+        "mode": "100644",
+        "object_id": "aec4fccdc8087d6d815f22d84e49ba5352cda85c"
+      },
+      {
+        "path": "scripts/static-weekly-postgres-key-order-tests.mjs",
+        "mode": "100644",
+        "object_id": "db4ed37939619071d5a47f3bf79fe22256a5afe3"
       },
       {
         "path": "scripts/static-weekly-production-continuity-runtime-tests.mjs",
@@ -2608,19 +4938,279 @@
         "object_id": "798af265e73b56455aca2bbae143b24251833630"
       },
       {
+        "path": "scripts/static-weekly-published-pattern-readback-tests.mjs",
+        "mode": "100644",
+        "object_id": "b79e3c708bb19bd679be8d3879f539d07c5f0236"
+      },
+      {
         "path": "scripts/static-weekly-published-roster-transaction-tests.mjs",
         "mode": "100644",
         "object_id": "bdf7a0371dafef0f198080a29bbc0eb08274f08b"
       },
       {
+        "path": "scripts/static-weekly-recurring-application-integration.mjs",
+        "mode": "100644",
+        "object_id": "d443b4a54afff9b16477d6f22f0b1cc9e4cb033d"
+      },
+      {
+        "path": "scripts/static-weekly-recurring-browser-lease-contract-tests.py",
+        "mode": "100644",
+        "object_id": "9ee77ef256398a54e06534f2340bd25399b31cee"
+      },
+      {
+        "path": "scripts/static-weekly-recurring-browser-lease-launcher.py",
+        "mode": "100644",
+        "object_id": "dbdfe8daf5880f5411fd74e3c86cbdb62cac110a"
+      },
+      {
+        "path": "scripts/static-weekly-recurring-browser-stage-tests.mjs",
+        "mode": "100644",
+        "object_id": "5b139af1aab557c4b1725c9e2a8da0241a376bb2"
+      },
+      {
+        "path": "scripts/static-weekly-recurring-browser-stage.mjs",
+        "mode": "100644",
+        "object_id": "fbb9af97d02d998869dc0fe333595ce49f272bb8"
+      },
+      {
+        "path": "scripts/static-weekly-recurring-browser-transport-tests.mjs",
+        "mode": "100644",
+        "object_id": "0f1354a82b1e1c212e7529558962dde36cb72a56"
+      },
+      {
+        "path": "scripts/static-weekly-recurring-browser-transport.mjs",
+        "mode": "100644",
+        "object_id": "bdd5a0489b266ba9987eecadbe3e8e835f5f6edb"
+      },
+      {
+        "path": "scripts/static-weekly-recurring-catalog-inventory.mjs",
+        "mode": "100644",
+        "object_id": "8bb2bb1c6435488457bc0b3496ec353479c394b4"
+      },
+      {
+        "path": "scripts/static-weekly-recurring-confirmation-control-plane-tests.mjs",
+        "mode": "100644",
+        "object_id": "c69e17245c30513acdd930b0635a613be836d492"
+      },
+      {
+        "path": "scripts/static-weekly-recurring-confirmation-http-integration.mjs",
+        "mode": "100644",
+        "object_id": "16dc5e496490781f77554cf6676dc545327859eb"
+      },
+      {
+        "path": "scripts/static-weekly-recurring-confirmation-integration.mjs",
+        "mode": "100644",
+        "object_id": "5ab4e99e4af7c1ade54a8d849c0568574a826894"
+      },
+      {
+        "path": "scripts/static-weekly-recurring-correction-binding-tests.mjs",
+        "mode": "100644",
+        "object_id": "bce8a5e624aec9eabf84978b3dd8688875e31ea1"
+      },
+      {
+        "path": "scripts/static-weekly-recurring-correction-ci-tests.mjs",
+        "mode": "100644",
+        "object_id": "15796cba4a8a74f422d252ce72d4ee4e87af52ef"
+      },
+      {
+        "path": "scripts/static-weekly-recurring-correction-control-plane-tests.mjs",
+        "mode": "100644",
+        "object_id": "d04caac6f50dcef9608cb2bbc7c74aedb9ed3417"
+      },
+      {
+        "path": "scripts/static-weekly-recurring-delivery-integration.mjs",
+        "mode": "100644",
+        "object_id": "654a2aa7f3006c4487ab6af48d6e4016e8bb7fd3"
+      },
+      {
+        "path": "scripts/static-weekly-recurring-dependency-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "6eed503ebb9b1807c7489e9aaa0a0519453627c1"
+      },
+      {
+        "path": "scripts/static-weekly-recurring-dependency-result-tests.mjs",
+        "mode": "100644",
+        "object_id": "0e3ad0f54f700fb76416d7a931c69c3f4cd118ed"
+      },
+      {
+        "path": "scripts/static-weekly-recurring-display-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "73bd091a1dac6baf8117c0f2849dda7b996ef6df"
+      },
+      {
+        "path": "scripts/static-weekly-recurring-dual-source-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "23a6888511b8e8c0b11df253a040bc259f123041"
+      },
+      {
+        "path": "scripts/static-weekly-recurring-finalization-integration.mjs",
+        "mode": "100644",
+        "object_id": "4e1f95012ee385148f79fc25ec28176f6e7f6b37"
+      },
+      {
+        "path": "scripts/static-weekly-recurring-generation-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "b4c82698766f21e135a7a053e7db65346c5a4638"
+      },
+      {
+        "path": "scripts/static-weekly-recurring-http-boundary-tests.mjs",
+        "mode": "100644",
+        "object_id": "3528b3e9fb79f16a7c113040e00c596db3291e04"
+      },
+      {
+        "path": "scripts/static-weekly-recurring-http-boundary.mjs",
+        "mode": "100644",
+        "object_id": "81f95b3a8af82e8103c8ef623e63ce32c6968ed9"
+      },
+      {
+        "path": "scripts/static-weekly-recurring-ledger-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "07a0feef19801c6748bc673df5553743c294da6f"
+      },
+      {
+        "path": "scripts/static-weekly-recurring-lock-order-tests.mjs",
+        "mode": "100644",
+        "object_id": "a8fcba0f6b64ebe8b7ef58f2241aeb5a9ca322a2"
+      },
+      {
+        "path": "scripts/static-weekly-recurring-morning-integration-ci-tests.mjs",
+        "mode": "100644",
+        "object_id": "e7a0500af5ac97abfb99580780b4be6e7adf88db"
+      },
+      {
+        "path": "scripts/static-weekly-recurring-morning-integration-tests.mjs",
+        "mode": "100644",
+        "object_id": "c670586f48ad020ddf7f1361d400607032b10da3"
+      },
+      {
+        "path": "scripts/static-weekly-recurring-morning-solver-ci-tests.mjs",
+        "mode": "100644",
+        "object_id": "dd91f5e049ec271882b06aa029741ac1be5c9a6a"
+      },
+      {
+        "path": "scripts/static-weekly-recurring-morning-solver-tests.mjs",
+        "mode": "100644",
+        "object_id": "2aefa51477ad75745b338256fceee8d789da07b5"
+      },
+      {
+        "path": "scripts/static-weekly-recurring-operation-child-tests.mjs",
+        "mode": "100644",
+        "object_id": "7f168de5134dda6ddfa599e0128622ed3173f568"
+      },
+      {
+        "path": "scripts/static-weekly-recurring-operation-handler-tests.mjs",
+        "mode": "100644",
+        "object_id": "e146995e45a619539f255e0e817208c5f5050e62"
+      },
+      {
+        "path": "scripts/static-weekly-recurring-operation-owner-tests.mjs",
+        "mode": "100644",
+        "object_id": "774f9a4ed0f00f6bc1c4027640fdc5c1c7e1dfe9"
+      },
+      {
+        "path": "scripts/static-weekly-recurring-overlay-boundary-tests.mjs",
+        "mode": "100644",
+        "object_id": "be5e6819c798ae85253ce1cf4998fb86541a3961"
+      },
+      {
+        "path": "scripts/static-weekly-recurring-owned-http-tests.mjs",
+        "mode": "100644",
+        "object_id": "688a658edbdb13ecdb04a829c9616ed39062f45a"
+      },
+      {
+        "path": "scripts/static-weekly-recurring-phase-authority-ci-tests.mjs",
+        "mode": "100644",
+        "object_id": "03d9b1a682b57c2d2b32ca95d257be05911789c8"
+      },
+      {
+        "path": "scripts/static-weekly-recurring-phase-authority-tests.mjs",
+        "mode": "100644",
+        "object_id": "55055616d124109ef66caef799c4f36d3ac32932"
+      },
+      {
+        "path": "scripts/static-weekly-recurring-range-selector-tests.mjs",
+        "mode": "100644",
+        "object_id": "07d6bce84a356153180e62039060244a693f153c"
+      },
+      {
+        "path": "scripts/static-weekly-recurring-reconciliation-integration.mjs",
+        "mode": "100644",
+        "object_id": "daff55794eb19fc6421ecfa71f02a234d699210f"
+      },
+      {
+        "path": "scripts/static-weekly-recurring-repair-basis-tests.mjs",
+        "mode": "100644",
+        "object_id": "e22c0cc1cd6735c42127544c19bdece916f1447e"
+      },
+      {
+        "path": "scripts/static-weekly-recurring-shared-admission-tests.mjs",
+        "mode": "100644",
+        "object_id": "bf62c5c4216b312218f0699ce058ed74fce72f3f"
+      },
+      {
+        "path": "scripts/static-weekly-recurring-source-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "d879d038c8f3e6cb33a6dbcba643d80d66531af9"
+      },
+      {
+        "path": "scripts/static-weekly-recurring-source-normalization-tests.mjs",
+        "mode": "100644",
+        "object_id": "3680ebad5847a0591d34b3925f0ae6913bb15ecd"
+      },
+      {
+        "path": "scripts/static-weekly-recurring-staffing-adaptation-tests.mjs",
+        "mode": "100644",
+        "object_id": "1117bc67b9de2e5a607c91b36873929a0632c1e8"
+      },
+      {
+        "path": "scripts/static-weekly-recurring-status-tests.mjs",
+        "mode": "100644",
+        "object_id": "21a50502d3f992ff8ed7c9a1acb98519e4dc77d0"
+      },
+      {
+        "path": "scripts/static-weekly-recurring-terminal-boundary-tests.mjs",
+        "mode": "100644",
+        "object_id": "479594144d1318bdb981d109764f556abfde8982"
+      },
+      {
+        "path": "scripts/static-weekly-recurring-terminal-integration.mjs",
+        "mode": "100644",
+        "object_id": "c0250f63de92f90bc9f4a19fcb566e7956d00201"
+      },
+      {
+        "path": "scripts/static-weekly-recurring-week-commitment-tests.mjs",
+        "mode": "100644",
+        "object_id": "17297b8c990dc28384965d6f07c429ae3bc60c8c"
+      },
+      {
+        "path": "scripts/static-weekly-registered-adaptation-source-tests.mjs",
+        "mode": "100644",
+        "object_id": "c0fbc63a495d7a24829f29a0233a4804671feb31"
+      },
+      {
+        "path": "scripts/static-weekly-registered-source-boundary-tests.mjs",
+        "mode": "100644",
+        "object_id": "7e804d75254a69e75c2044554e97b78a0207ffa7"
+      },
+      {
+        "path": "scripts/static-weekly-replay-digest-stream-ci-tests.mjs",
+        "mode": "100644",
+        "object_id": "82b36101d3ec9d626e7c582b584f9d2e75c2de37"
+      },
+      {
+        "path": "scripts/static-weekly-replay-digest-stream-tests.mjs",
+        "mode": "100644",
+        "object_id": "3464f58fc44e5f7f993c4bd5b30618a7b53cde87"
+      },
+      {
         "path": "scripts/static-weekly-schedule-authority-closure-tests.mjs",
         "mode": "100644",
-        "object_id": "095cb54892a4112be97866989a9de46d8c197438"
+        "object_id": "8e718e2c4f6c4dae189ed2b61c911716be84945a"
       },
       {
         "path": "scripts/static-weekly-schedule-authority-v3-tests.mjs",
         "mode": "100644",
-        "object_id": "68d7eb28a2ff72a33bf35541e350edf7c764c343"
+        "object_id": "0cb322f639bfb8ff398839131bc7db36d8378583"
       },
       {
         "path": "scripts/static-weekly-schedule-candidate-importer.mjs",
@@ -2630,12 +5220,12 @@
       {
         "path": "scripts/static-weekly-schedule-compiler-tests.mjs",
         "mode": "100644",
-        "object_id": "65849b975357fdf205438335d5d3e6f1599898cf"
+        "object_id": "fdc5226a4c66e46c49e50df40a604125b98e6292"
       },
       {
         "path": "scripts/static-weekly-schedule-concurrency-tests.mjs",
         "mode": "100644",
-        "object_id": "39ba6712ecdc886b9ada778a7ba7bc475758a874"
+        "object_id": "6fa8ee25946fb10a737f310f899bcb146f8cba91"
       },
       {
         "path": "scripts/static-weekly-schedule-database-adapter-tests.mjs",
@@ -2670,7 +5260,7 @@
       {
         "path": "scripts/static-weekly-shift-end-coverage-tests.mjs",
         "mode": "100644",
-        "object_id": "ccf26a473f356249083ad80845ba881873970fdd"
+        "object_id": "df957b1e9970728390dd60e336999d91f406802a"
       },
       {
         "path": "scripts/static-weekly-shift-end-database-tests.mjs",
@@ -2678,9 +5268,49 @@
         "object_id": "28696ca54aa20332fd15d1630a8e970b718a7497"
       },
       {
+        "path": "scripts/static-weekly-six-person-lunch-tests.mjs",
+        "mode": "100644",
+        "object_id": "c25911f3c3cf61eee7eec9237a9ce72d731c1b31"
+      },
+      {
+        "path": "scripts/static-weekly-six-person-provenance-tests.mjs",
+        "mode": "100644",
+        "object_id": "375c1977ce621aaed321913838bf785c3143abf0"
+      },
+      {
+        "path": "scripts/static-weekly-six-person-september28-candidate-tests.mjs",
+        "mode": "100644",
+        "object_id": "ec82d931004b54c49d94486fef674145bc414228"
+      },
+      {
+        "path": "scripts/static-weekly-six-person-september28-handout-tests.mjs",
+        "mode": "100644",
+        "object_id": "26dea240a17ce3137bb37a27e4684c1aaf160c0d"
+      },
+      {
+        "path": "scripts/static-weekly-six-person-static-tests.mjs",
+        "mode": "100644",
+        "object_id": "b6977e39e72c59ffb25238eec2786af012b34a66"
+      },
+      {
+        "path": "scripts/static-weekly-solver-exception-diagnostic-tests.mjs",
+        "mode": "100644",
+        "object_id": "272dc856452b71748bd448f1e4863962ac72a616"
+      },
+      {
+        "path": "scripts/static-weekly-splash-season-gate-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "25444d09895d0fc30e8d65e519a3da1641e97bc8"
+      },
+      {
+        "path": "scripts/static-weekly-splash-season-official-path-tests.mjs",
+        "mode": "100644",
+        "object_id": "9fe4eb3c97c6e6c93933f888b04f007527f70c29"
+      },
+      {
         "path": "scripts/static-weekly-vacant-roster-slot-database-tests.mjs",
         "mode": "100644",
-        "object_id": "90ed729b68bfe185e4530f99ae914b23663ff528"
+        "object_id": "3d2b06f6f192a233972d0bebd47b796a8c79cf31"
       },
       {
         "path": "scripts/static-weekly-vacate-roster-slot-database-tests.mjs",
@@ -2690,7 +5320,7 @@
       {
         "path": "scripts/static-weekly-vacate-roster-slot-fixture-tests.mjs",
         "mode": "100644",
-        "object_id": "73ae72daea076a8ab57e608e4be09c3be2512b43"
+        "object_id": "787a187dc4e2be22dab946c490c68e38d915e294"
       },
       {
         "path": "scripts/supabase-rest-rehearsal-proxy.mjs",
@@ -2716,6 +5346,16 @@
         "path": "scripts/verified-visit-completion-integration-tests.mjs",
         "mode": "100644",
         "object_id": "23e1a696e9898d8e8862e682ba5952af8264c337"
+      },
+      {
+        "path": "scripts/verified-visit-dashboard-bridge-session-tests.mjs",
+        "mode": "100644",
+        "object_id": "23c4c9b8b03ee7b12a81a307eef3bedd77ccac51"
+      },
+      {
+        "path": "scripts/verified-visit-dashboard-journey-bridge.mjs",
+        "mode": "100644",
+        "object_id": "6aa92948110d42717db11a2f8892144a63a39825"
       },
       {
         "path": "scripts/verified-visit-reminder-database-tests.mjs",
@@ -2750,12 +5390,17 @@
       {
         "path": "scripts/visitor-attendance-reader-database-tests.mjs",
         "mode": "100644",
-        "object_id": "e2cf3d59a66dc9294c5ac32ea65e9563f9c64720"
+        "object_id": "76be9596f9f1bb5b6ec35f69155571034968ea5f"
       },
       {
         "path": "scripts/wait-rehearsal-json-endpoint.sh",
         "mode": "100644",
         "object_id": "0847db2c5315b5a492ad56ac92418f6a8d855a58"
+      },
+      {
+        "path": "scripts/work-session-gps-order-source-tests.mjs",
+        "mode": "100644",
+        "object_id": "7cf9e32ece33019af81d3cc87d593f4a95fe652b"
       },
       {
         "path": "sql/2026-05-29_primate_pavillion_daily_nfc_postcheck.sql",
@@ -2945,7 +5590,7 @@
       {
         "path": "src/ai/memphis-ai-daily.js",
         "mode": "100644",
-        "object_id": "e92796778635a64d520a8f98af8688d26ee5e0e2"
+        "object_id": "1b8304d72382e8a883243df7c69d36e72e94532d"
       },
       {
         "path": "src/ai/memphis-ai-employee-resolver.js",
@@ -2955,7 +5600,7 @@
       {
         "path": "src/ai/memphis-ai-employee-week.js",
         "mode": "100644",
-        "object_id": "a6b8ec76971dcac1b26d15caa7ce8a8237c7a266"
+        "object_id": "51954a347d4883aad384ff8c4afd95a065872d8d"
       },
       {
         "path": "src/ai/memphis-ai-intent.js",
@@ -2985,17 +5630,12 @@
       {
         "path": "src/ai/memphis-ai-weekly.js",
         "mode": "100644",
-        "object_id": "b63aae912dd6b24a775a7f0f60b58fa4dcf637f1"
+        "object_id": "514eda74bffcf83669c417870f06eb9836a57f2e"
       },
       {
         "path": "src/ai/memphis-ai-work-status.js",
         "mode": "100644",
-        "object_id": "6bc105cb3a9e762a77d260ca3f4b181a3819ad4b"
-      },
-      {
-        "path": "src/annie-moxie-bootstrap.js",
-        "mode": "100644",
-        "object_id": "097ac74828ad660d9070d760470e57e7fa2253b1"
+        "object_id": "e36c406f50d10e1b815fdba2279942d218237202"
       },
       {
         "path": "src/app-version.js",
@@ -3015,12 +5655,17 @@
       {
         "path": "src/auth/device-credential-auth.js",
         "mode": "100644",
-        "object_id": "b535ab39d80adf069d2487891ca83825482516db"
+        "object_id": "f0cfd01719ac0cb10138b12d31345e009bc1a9f0"
+      },
+      {
+        "path": "src/auth/manager-permissions.js",
+        "mode": "100644",
+        "object_id": "df6ab09d824133123fbdcfd68ac0938d9153b373"
       },
       {
         "path": "src/auth/map-manager-identity.js",
         "mode": "100644",
-        "object_id": "c367ca3d8626cb383aee7f2ff4b8f6c11671e229"
+        "object_id": "3b9a5072127b898715ccd417b57d02c7b33a6e09"
       },
       {
         "path": "src/auth/mcp-connector-auth.js",
@@ -3028,14 +5673,24 @@
         "object_id": "009cd72a7d670fd79f512c3a21826d9b84ff4b02"
       },
       {
+        "path": "src/auth/mcp-oauth-durable-store.js",
+        "mode": "100644",
+        "object_id": "79b4b77a2fc734d3d4881f62b47115f268279d26"
+      },
+      {
         "path": "src/auth/mcp-self-contained-oauth.js",
         "mode": "100644",
-        "object_id": "44cd52c88fb45eb5f51dc72353f1347b9c938666"
+        "object_id": "a73ac5c9403e7cb98d7374798f97eec276e47db5"
+      },
+      {
+        "path": "src/auth/same-original-recovery-manager-auth.js",
+        "mode": "100644",
+        "object_id": "229eb96dd691ddcd6ef5a4db8d2ef36273d08da4"
       },
       {
         "path": "src/auth/shared-access-auth.js",
         "mode": "100644",
-        "object_id": "3063363ee8115f0ec4b0a17f3516d0d752c05d81"
+        "object_id": "2e3c3b3f3fcbf7aa68b1560b39b023a4dcfe1df0"
       },
       {
         "path": "src/completion-selection-read-boundary.js",
@@ -3048,6 +5703,11 @@
         "object_id": "9c501e9ec8892b6e6ed17c17ee0c09d4bdce95d7"
       },
       {
+        "path": "src/completion-taxonomy-v1.json",
+        "mode": "100644",
+        "object_id": "935c01173a17f3bea5c89e8a60c0adeb73db62da"
+      },
+      {
         "path": "src/config/env.js",
         "mode": "100644",
         "object_id": "16109712d5a1a5643eb76c9d7583ea6ed67fb3aa"
@@ -3056,6 +5716,11 @@
         "path": "src/coverall-advisory-order.js",
         "mode": "100644",
         "object_id": "382b4fade833168fa8cc7a2618be07d3de9cff15"
+      },
+      {
+        "path": "src/coverall-event-brief.js",
+        "mode": "100644",
+        "object_id": "0e3a392b3225a5a582632a11d29943fdf8f6d23c"
       },
       {
         "path": "src/coverall-language.js",
@@ -3070,7 +5735,12 @@
       {
         "path": "src/custodial-employee-admin.js",
         "mode": "100644",
-        "object_id": "2099445debe846162f3992233c5be5c8ce2dbd49"
+        "object_id": "d50207a2eaa2157760b359dfa27bdd85f9657832"
+      },
+      {
+        "path": "src/dashboard-release-compatibility.js",
+        "mode": "100644",
+        "object_id": "02544c66a3625ee5c59e1a2048bf70b4d8c7ad4b"
       },
       {
         "path": "src/device-identity.js",
@@ -3080,22 +5750,22 @@
       {
         "path": "src/employee-home-time-facts.js",
         "mode": "100644",
-        "object_id": "7bed4d09a3c24034585b1e67bb5d6e5890694a17"
+        "object_id": "ba8ce6b9d86a4021ec6121dcef44b8b7a31203ed"
       },
       {
         "path": "src/employee-notifications.js",
         "mode": "100644",
-        "object_id": "58ddabc3da1f59b40a719b22998aebc37a25e438"
-      },
-      {
-        "path": "src/events-ai-parser.js",
-        "mode": "100644",
-        "object_id": "4443fc5308238684341bdea4bb2ddda0e976ef4d"
+        "object_id": "1f795e43ab218a033c49c8f4870de843f30bef34"
       },
       {
         "path": "src/events-api.js",
         "mode": "100644",
-        "object_id": "ad2c278d74514800a6c2e7ed364ac5b9e01d9f85"
+        "object_id": "9a6efbe0e51f4431219ae471a8ddf7ab388ddde0"
+      },
+      {
+        "path": "src/events-time.js",
+        "mode": "100644",
+        "object_id": "987744239be0e7c7003e8efe947bf4edea440203"
       },
       {
         "path": "src/feedback-attachment-admission.js",
@@ -3105,7 +5775,12 @@
       {
         "path": "src/feedback-authority.js",
         "mode": "100644",
-        "object_id": "141138f661bfffe95d3133d897f642185ea0c848"
+        "object_id": "40630fda4c5bc7c5f46d709afa6b340a4620ff0b"
+      },
+      {
+        "path": "src/feedback-delivery-status.js",
+        "mode": "100644",
+        "object_id": "0cb9bd2d1ce816c59162e1e11e1ce86ef7306bae"
       },
       {
         "path": "src/feedback-email-relay.js",
@@ -3113,14 +5788,34 @@
         "object_id": "d239bcd808604a20a54b5a2e771db1715a0829a3"
       },
       {
+        "path": "src/feedback-private-reader.js",
+        "mode": "100644",
+        "object_id": "0238b12ef1260283dc828c5000f172d33eaca48a"
+      },
+      {
+        "path": "src/feedback-triage-status.js",
+        "mode": "100644",
+        "object_id": "99175c19ba93653deffeb6f860d215ff8c0a6a59"
+      },
+      {
+        "path": "src/feedback-triage.js",
+        "mode": "100644",
+        "object_id": "26d2fd67a25ba80e41334442058ed2fa05911602"
+      },
+      {
         "path": "src/gemini-console-api.js",
         "mode": "100644",
-        "object_id": "0c66bbc9217d1a129e7de791655c638b0b22457d"
+        "object_id": "c9741fde88b53e2362fd35ca6c6e7820fca69df0"
       },
       {
         "path": "src/gemini-controlled-worker.js",
         "mode": "100644",
         "object_id": "a8a2082fb186f352265910a5d47af5030acd881b"
+      },
+      {
+        "path": "src/gemini-original-outcome.js",
+        "mode": "100644",
+        "object_id": "1c547dcc5f9b6c7524b656897f70f2f405729563"
       },
       {
         "path": "src/github/branch.js",
@@ -3153,9 +5848,24 @@
         "object_id": "a9bf05b14ec65357f493a7e9c0b7440e4b597ff4"
       },
       {
+        "path": "src/gps-map-context-route.js",
+        "mode": "100644",
+        "object_id": "352c386be5b1c2fc878c2a02965fac49d7ccf6dc"
+      },
+      {
+        "path": "src/gps-map-history.js",
+        "mode": "100644",
+        "object_id": "5521c9a2099c65255cf1bd32d9b5fcd1e4d72fe9"
+      },
+      {
+        "path": "src/held-event-correction-canonical-adapter.js",
+        "mode": "100644",
+        "object_id": "b35a12535eef456bd311d4ed67e7f7fb35172597"
+      },
+      {
         "path": "src/index.js",
         "mode": "100644",
-        "object_id": "472e1777a12843dde17890418ae5ed6afbf1ad34"
+        "object_id": "a31a04e938f27d2d4238365b7b9a2182b68dd317"
       },
       {
         "path": "src/integrated-backend-authority-release-evidence.js",
@@ -3165,7 +5875,7 @@
       {
         "path": "src/leadership-bootstrap.js",
         "mode": "100644",
-        "object_id": "0e4351db3f9cdcdb67eca643557714c863ed8fab"
+        "object_id": "f876c650ef2fe7fffac232253c7e931fef94eb39"
       },
       {
         "path": "src/manager-authority.js",
@@ -3173,9 +5883,39 @@
         "object_id": "5311d65d5bdec5046c9896cf31e7b2f61b7ede48"
       },
       {
+        "path": "src/manager-held-event-correction-route.js",
+        "mode": "100644",
+        "object_id": "992a28ba18b5ab5ef838faf904d1b55946614717"
+      },
+      {
+        "path": "src/manager-held-event-review-reader.js",
+        "mode": "100644",
+        "object_id": "9926ce7caf74f667b804d983ca5269810838fbad"
+      },
+      {
+        "path": "src/manager-held-event-review.js",
+        "mode": "100644",
+        "object_id": "8a2d80c52d4f00419d01b1545e85a1ac0db41371"
+      },
+      {
+        "path": "src/manager-notification-history.js",
+        "mode": "100644",
+        "object_id": "35ed04b8c69e22584f267661034ac1ca36ce289f"
+      },
+      {
         "path": "src/manager-notifications.js",
         "mode": "100644",
-        "object_id": "a53d79e444f249c4156f3d3bf06ac734c41b4c95"
+        "object_id": "933e2c1ea4ece2b9d1c2d417f046cc06a5536de4"
+      },
+      {
+        "path": "src/manager-original-inventory-separation.js",
+        "mode": "100644",
+        "object_id": "2e09ce10a85553762e71e958409436fe2ad08e84"
+      },
+      {
+        "path": "src/manager-original-recovery-approval.js",
+        "mode": "100644",
+        "object_id": "0e23d96e19d8c427af09e75fe9ca06fcfe2264d3"
       },
       {
         "path": "src/mcp/create-mcp-server.js",
@@ -3205,7 +5945,7 @@
       {
         "path": "src/mcp/register.js",
         "mode": "100644",
-        "object_id": "b834bf2bcc03c8f86f909de144969df2006198ac"
+        "object_id": "e539abf8f361956624b2eef541890fbad891b812"
       },
       {
         "path": "src/mcp/responses.js",
@@ -3235,12 +5975,67 @@
       {
         "path": "src/memphis-ai.js",
         "mode": "100644",
-        "object_id": "fda9b3c888bbb7295c96f7bb90e08f2aff0278f7"
+        "object_id": "a4701c59e5f3c3ac73b41b205d1a5b6d9d23279c"
       },
       {
         "path": "src/messaging-api.js",
         "mode": "100644",
-        "object_id": "0c2a9d872aea3d82cc9dddb632e565b190c9d958"
+        "object_id": "d95f7cc4faa8e31eff4429d4b8140466d423aaed"
+      },
+      {
+        "path": "src/messaging-original-outcome.js",
+        "mode": "100644",
+        "object_id": "21221b13c1517a209cc27cb0921b9bb6ca08bc8c"
+      },
+      {
+        "path": "src/native-alert-reservation.js",
+        "mode": "100644",
+        "object_id": "5c292d88b9ba7af3c26bced3570595db1488a90a"
+      },
+      {
+        "path": "src/native-alert-two-stage.js",
+        "mode": "100644",
+        "object_id": "9d79373c3f5be4ee4ec7935a1839eab0865ce256"
+      },
+      {
+        "path": "src/native-event-dispatch.js",
+        "mode": "100644",
+        "object_id": "ae184ab521471337de659ddfd7c4639e2fd70c1a"
+      },
+      {
+        "path": "src/native-location-dispatch.js",
+        "mode": "100644",
+        "object_id": "40406046303bba50f4ed9d492205ca2437b5d775"
+      },
+      {
+        "path": "src/native-location-lifecycle.js",
+        "mode": "100644",
+        "object_id": "dabf81900386d2fd864c23a29c8d46125ea42efa"
+      },
+      {
+        "path": "src/native-location-reservation.js",
+        "mode": "100644",
+        "object_id": "41402901f377f8eb9636d28fed67ad9771912fa8"
+      },
+      {
+        "path": "src/native-lunch-dispatch.js",
+        "mode": "100644",
+        "object_id": "03bc314afc0534c9c14d2547b5f6f57031303a2e"
+      },
+      {
+        "path": "src/native-lunch-lifecycle.js",
+        "mode": "100644",
+        "object_id": "56a207f3dd1ba293b930a8b3def4fdc66aefe862"
+      },
+      {
+        "path": "src/native-lunch-reservation.js",
+        "mode": "100644",
+        "object_id": "30dd070682a580bd9c7881ed82e3c00d832326fe"
+      },
+      {
+        "path": "src/native-message-dispatch.js",
+        "mode": "100644",
+        "object_id": "565f151060682c1243367dc0162b1678fe0d856f"
       },
       {
         "path": "src/native-notification-receipt.js",
@@ -3248,14 +6043,114 @@
         "object_id": "68fb56f31c77aec53d8d372b5cd494025de35387"
       },
       {
+        "path": "src/native-original-inventory-manifest-chunk-route.js",
+        "mode": "100644",
+        "object_id": "e57bdaf272897d065478bff14ab4a43e68fff2b5"
+      },
+      {
+        "path": "src/native-original-inventory-manifest-chunk-status.js",
+        "mode": "100644",
+        "object_id": "e77eafc6a0e17ec47e82992889ba476d5f5bd3f8"
+      },
+      {
+        "path": "src/native-original-inventory-manifest-chunk.js",
+        "mode": "100644",
+        "object_id": "c46b7e2ff425f4875c524ecff3d6d850aba29357"
+      },
+      {
+        "path": "src/native-original-inventory-manifest.js",
+        "mode": "100644",
+        "object_id": "c957fbe05c8f2f3508191398b2cd4aeb2d5f6eb5"
+      },
+      {
+        "path": "src/native-original-inventory-request-route.js",
+        "mode": "100644",
+        "object_id": "edf5cab12c49047d35f7d7e0a76d89f7b077e6b5"
+      },
+      {
+        "path": "src/native-original-inventory-request.js",
+        "mode": "100644",
+        "object_id": "6446915f87f1b2ee378e2112d0e595b7ccad7f7d"
+      },
+      {
+        "path": "src/native-original-inventory-status.js",
+        "mode": "100644",
+        "object_id": "07c0402cd1de9cd9722c417813fcf7ba6960b372"
+      },
+      {
         "path": "src/native-phone-transport.js",
         "mode": "100644",
         "object_id": "10afcdc68699c9316bcf5d66b9008720994fb543"
       },
       {
+        "path": "src/native-private-custody-archived-query-proof.js",
+        "mode": "100644",
+        "object_id": "034ca4697bde49dea535c57557f4c0e977529256"
+      },
+      {
+        "path": "src/native-private-custody-current-query-wire.js",
+        "mode": "100644",
+        "object_id": "30a207960ad52e3b7b1898921e0c070623408983"
+      },
+      {
+        "path": "src/native-private-custody-exchange.js",
+        "mode": "100644",
+        "object_id": "771ce77d40d4641d32d2c48f80b9eb5921a2faa4"
+      },
+      {
+        "path": "src/native-private-custody-http-route.js",
+        "mode": "100644",
+        "object_id": "5257b0e416656c74be7060ad69b060f5e975037e"
+      },
+      {
+        "path": "src/native-private-custody-owner-proof.js",
+        "mode": "100644",
+        "object_id": "884930637121a15fd13fc2f6331dae3df70ebfb8"
+      },
+      {
+        "path": "src/native-private-custody-record.js",
+        "mode": "100644",
+        "object_id": "2bd4134cf3abc7886724e8bb40b76d4059aae57f"
+      },
+      {
+        "path": "src/native-private-custody-transport-frame.js",
+        "mode": "100644",
+        "object_id": "c1183008ac7f85f3781001b63579e5ece0245b9a"
+      },
+      {
+        "path": "src/native-protected-snapshot-evidence.js",
+        "mode": "100644",
+        "object_id": "870211cec038af2fcc39b28e2dd5673036147224"
+      },
+      {
+        "path": "src/native-protected-snapshot-generation.js",
+        "mode": "100644",
+        "object_id": "4bbd7d6fb63044c2c7413f814043d2408ec8db05"
+      },
+      {
         "path": "src/native-provider-api.js",
         "mode": "100644",
-        "object_id": "a8a7db4d7e9ce83b4f6708e4afaa354fbe58a38d"
+        "object_id": "17d412480655f7e32bffb72f85c8b833f10ed974"
+      },
+      {
+        "path": "src/native-provider-credential-observation.js",
+        "mode": "100644",
+        "object_id": "130a3cfae5dd70b7d6a02205664645f4fb586960"
+      },
+      {
+        "path": "src/native-provider-event-decisions.js",
+        "mode": "100644",
+        "object_id": "73e54442775859b60c8db3c58d5e90dc6372b9fc"
+      },
+      {
+        "path": "src/native-provider-events.js",
+        "mode": "100644",
+        "object_id": "b6904b8377a5b70027931a7b41830c805d33c522"
+      },
+      {
+        "path": "src/native-provider-inventory-payload.js",
+        "mode": "100644",
+        "object_id": "36084e99161bb47ed156fd88cfac6bcc3b110e92"
       },
       {
         "path": "src/native-provider-json.js",
@@ -3263,14 +6158,104 @@
         "object_id": "77e243678b083eec91e53518b5665c0f24a5bc2c"
       },
       {
+        "path": "src/native-retained-record-values.js",
+        "mode": "100644",
+        "object_id": "e8cf4a7197b541d9153256aa9e0f14a54fa89c9c"
+      },
+      {
+        "path": "src/native-retained-value-chunk-recorder.js",
+        "mode": "100644",
+        "object_id": "f039be5ea4bea20a8941afb21829d7b1e315fe75"
+      },
+      {
+        "path": "src/native-retained-value-chunk.js",
+        "mode": "100644",
+        "object_id": "845a5ab64fdd6606e3bc9ffaa8278b6f39740c48"
+      },
+      {
+        "path": "src/native-retained-wire-intake.js",
+        "mode": "100644",
+        "object_id": "567120f5961f7f447ce7f59ae5b61960eca26ec9"
+      },
+      {
+        "path": "src/native-schedule-attempt-lifecycle.js",
+        "mode": "100644",
+        "object_id": "6f0f1b80ecdb78db3410e9932a52723c53ad6c23"
+      },
+      {
+        "path": "src/native-schedule-delivery-preparation.js",
+        "mode": "100644",
+        "object_id": "efd98f5c63bfcd7543243a8b0a1d1bb4402cde94"
+      },
+      {
+        "path": "src/native-schedule-dispatch.js",
+        "mode": "100644",
+        "object_id": "40acd305ef84e18f3142ebde98dc4cbc00191ca2"
+      },
+      {
+        "path": "src/native-schedule-event-originals.js",
+        "mode": "100644",
+        "object_id": "a1e2597ffccd1a648bf84c106548121c86eed227"
+      },
+      {
+        "path": "src/native-schedule-job-preparation.js",
+        "mode": "100644",
+        "object_id": "8ae7169be546b71de14904b32766c7d5d516bda6"
+      },
+      {
+        "path": "src/native-schedule-occurrence.js",
+        "mode": "100644",
+        "object_id": "86e665a3de5faff6c35811d3ff5c04a0c362a102"
+      },
+      {
+        "path": "src/native-schedule-payload.js",
+        "mode": "100644",
+        "object_id": "ab9f08953591c21a32be5d27568b9d810c9d1db4"
+      },
+      {
+        "path": "src/native-schedule-preparation.js",
+        "mode": "100644",
+        "object_id": "77fc714ecb2bc7c6f3501f9a3a795c70732407e4"
+      },
+      {
+        "path": "src/native-schedule-source-discovery.js",
+        "mode": "100644",
+        "object_id": "4ea0e4d6d75c722b48f815f6708fd04532bd82f4"
+      },
+      {
+        "path": "src/native-schedule-source-orchestration.js",
+        "mode": "100644",
+        "object_id": "0ec5c28424a24eb305d377a39a1cb138b07c7abc"
+      },
+      {
+        "path": "src/native-schedule-source-producer.js",
+        "mode": "100644",
+        "object_id": "b7c8f64dfc714a06dd5af14ea2d724a4c7e085cb"
+      },
+      {
+        "path": "src/native-schedule-validity-source.js",
+        "mode": "100644",
+        "object_id": "29a44a9f399e497d7bb38db7f096a08fbd8c2b02"
+      },
+      {
+        "path": "src/native-target-source.js",
+        "mode": "100644",
+        "object_id": "17c4b106ff68006b48354c6933b803ee7d114ed3"
+      },
+      {
         "path": "src/offline-authority-http.js",
         "mode": "100644",
-        "object_id": "42350eb6f224388992a33a1ef9809a2a71395818"
+        "object_id": "8a29f83576188ad0574b96a57e08df5d40f4f290"
       },
       {
         "path": "src/operational-analytics-api.js",
         "mode": "100644",
         "object_id": "1b51b31d54d2d83fbfd25cfdd90d8127cf1b257c"
+      },
+      {
+        "path": "src/operations-board.js",
+        "mode": "100644",
+        "object_id": "2630b4bffd9c75d41d1c717c7b64b7d7220d4aca"
       },
       {
         "path": "src/operations-mail-contract.js",
@@ -3288,9 +6273,69 @@
         "object_id": "d1ec396d90da1c3b6dafc85a4ac4a1d117ec2c43"
       },
       {
+        "path": "src/original-inventory-separation-manager-composition.js",
+        "mode": "100644",
+        "object_id": "b19159a6046fb680efb00e1c1e31b6d2af65bc82"
+      },
+      {
+        "path": "src/original-inventory-separation-routes.js",
+        "mode": "100644",
+        "object_id": "cb654f8e071a6d7fb0c0dd85d588a932a510b80f"
+      },
+      {
+        "path": "src/original-inventory-separation-store.js",
+        "mode": "100644",
+        "object_id": "d0e096f7624ef6aa6da3ef9ee860963cc809a402"
+      },
+      {
+        "path": "src/original-inventory-separation-wire.js",
+        "mode": "100644",
+        "object_id": "67cb6de6604bd5938f2d30191857c5b8892f398d"
+      },
+      {
+        "path": "src/outlook-collector-test-route.js",
+        "mode": "100644",
+        "object_id": "de563edcffb7401eed9e0230aae50e454da49de9"
+      },
+      {
         "path": "src/outlook-event-sync.js",
         "mode": "100644",
         "object_id": "d38b1d320271947a139f09943d801c56815a3eb8"
+      },
+      {
+        "path": "src/owner-access-api.js",
+        "mode": "100644",
+        "object_id": "379923d679f4ec349d89a409201a09fbdd011af6"
+      },
+      {
+        "path": "src/place-legacy-bridge.js",
+        "mode": "100644",
+        "object_id": "983008f06fbc4432066aef72c1cbe27001ed7719"
+      },
+      {
+        "path": "src/place-lifecycle.js",
+        "mode": "100644",
+        "object_id": "c75e963b4b2193d34f63385a51db4dc1a8be07a2"
+      },
+      {
+        "path": "src/place-operational-adapter.js",
+        "mode": "100644",
+        "object_id": "0677eb6381027868d3d3c151ead1525d9ffddb27"
+      },
+      {
+        "path": "src/place-operational-bridge.js",
+        "mode": "100644",
+        "object_id": "e31b350771776c003565e4ea0cafd66e1f1af1c8"
+      },
+      {
+        "path": "src/place-reconciliation.js",
+        "mode": "100644",
+        "object_id": "873df8fa12849ad1e6b8167d3196166391fdecb9"
+      },
+      {
+        "path": "src/places-api.js",
+        "mode": "100644",
+        "object_id": "5b9e63ce450f3f1324ef52c602f74ac665437191"
       },
       {
         "path": "src/production-release-deployment-recorder.js",
@@ -3308,6 +6353,11 @@
         "object_id": "ef311da368d785ca5bf0ae306e59e1471416f7fc"
       },
       {
+        "path": "src/recurring-notification-plan.js",
+        "mode": "100644",
+        "object_id": "575dc1ffc8045c81b0da7c9f123daf99b852a87d"
+      },
+      {
         "path": "src/release-contract.js",
         "mode": "100644",
         "object_id": "b9d6fdd102a50855ec42189f899129720cdedf26"
@@ -3320,7 +6370,7 @@
       {
         "path": "src/request-json-parser.js",
         "mode": "100644",
-        "object_id": "0b1d020c77c174e83cb669cd4e3f37d8cf27a9b8"
+        "object_id": "b8ecad586175133864cb94bc76641a6a4dd30386"
       },
       {
         "path": "src/restore-mutation-gate.js",
@@ -3330,22 +6380,72 @@
       {
         "path": "src/routes/index.js",
         "mode": "100644",
-        "object_id": "34a56b24bf07fb467f245f4dfbc5c20107d3af6f"
+        "object_id": "0c081c4fcf44048a1ed06da9489b80a1937f77b7"
       },
       {
-        "path": "src/routes/moxie-templates.js",
+        "path": "src/same-original-completion-read-store.js",
         "mode": "100644",
-        "object_id": "8c2a03ed4818ffb9e8af70f75dd574eca2b80649"
+        "object_id": "1d0984780ef20c851643d4829cd08e05e1e597cb"
       },
       {
-        "path": "src/routes/moxie.js",
+        "path": "src/same-original-completion-read-wire.js",
         "mode": "100644",
-        "object_id": "fd7db2a9a4539ad396a23e0aa81cb37e68e162f0"
+        "object_id": "acfc4e6fa96ef80e133c1d47421a67b979b26c6e"
+      },
+      {
+        "path": "src/same-original-recovery-manager-composition.js",
+        "mode": "100644",
+        "object_id": "c41f49e0df02ceea5cdc8a7937c3ff959c756809"
+      },
+      {
+        "path": "src/same-original-recovery-native-challenge-composition.js",
+        "mode": "100644",
+        "object_id": "49d4612180203dc2121b281b1a6c2cbc8a2dfe0c"
+      },
+      {
+        "path": "src/same-original-recovery-native-challenge-route.js",
+        "mode": "100644",
+        "object_id": "33861a6d525369b98e8097e6c29470b3a75e98b6"
+      },
+      {
+        "path": "src/same-original-recovery-native-challenge-store.js",
+        "mode": "100644",
+        "object_id": "cfcc80536b9203a85463dbaf700b4cab16eddc4a"
+      },
+      {
+        "path": "src/same-original-recovery-native-challenge-wire.js",
+        "mode": "100644",
+        "object_id": "a06d081477ad81b369ce298994ef56124b267202"
+      },
+      {
+        "path": "src/same-original-recovery-native-preparation-store.js",
+        "mode": "100644",
+        "object_id": "ba1f8829ecaf768e1588d58dc5bc65cf496c8d08"
+      },
+      {
+        "path": "src/same-original-recovery-routes.js",
+        "mode": "100644",
+        "object_id": "6bf5a0f2e42df1b5e03d25aafcbd550ec9e53b8c"
+      },
+      {
+        "path": "src/same-original-recovery-store.js",
+        "mode": "100644",
+        "object_id": "e55e3a6ebc2cd4e0e3e0bf7c3591850af22029fa"
+      },
+      {
+        "path": "src/same-original-recovery-wire.js",
+        "mode": "100644",
+        "object_id": "884023cc39955235674f024ebeca06ba38894236"
       },
       {
         "path": "src/scan-authority-cutover.js",
         "mode": "100644",
         "object_id": "895c677d73409d06b547ebd3924e214e0670926f"
+      },
+      {
+        "path": "src/scan-completion-readback.js",
+        "mode": "100644",
+        "object_id": "8f4fefd4a0f3cbad7b7153768160575ad54ccb8c"
       },
       {
         "path": "src/scan-evidence.js",
@@ -3355,7 +6455,7 @@
       {
         "path": "src/schedule-api.js",
         "mode": "100644",
-        "object_id": "dbca327d2660fdcb2b2f098d77266d0cfa91a0ca"
+        "object_id": "6952d45ffd4f1522c6749f71860112c8d5b37d67"
       },
       {
         "path": "src/schedule-component-weight-authority.js",
@@ -3363,9 +6463,14 @@
         "object_id": "99cf8af9c6ff80f092839b27fccf91c99bde56f2"
       },
       {
+        "path": "src/schedule-display-order.js",
+        "mode": "100644",
+        "object_id": "ee32fa8adf65ade55f1637b713f011501571fbc4"
+      },
+      {
         "path": "src/schedule-display.js",
         "mode": "100644",
-        "object_id": "8d6641723af88c23491bac39498b9d1a382dfe13"
+        "object_id": "9b0851d89563857224fdd43baff6b484a435c90c"
       },
       {
         "path": "src/schema-transition.js",
@@ -3378,24 +6483,59 @@
         "object_id": "eac65dfc558d5ed30d97087b86e5074a0ca490dc"
       },
       {
+        "path": "src/shared-events-feed.js",
+        "mode": "100644",
+        "object_id": "955224b0850e9adf2de3ea38919f05126cfb975c"
+      },
+      {
         "path": "src/static-weekly-approved-initial-request.js",
         "mode": "100644",
         "object_id": "e5913a867ad2d5a8b27ee0d3fdc865c7d52f989e"
       },
       {
+        "path": "src/static-weekly-contractor-source-bridge.js",
+        "mode": "100644",
+        "object_id": "a21745fb0338793219a60f0197ebf5248a413167"
+      },
+      {
+        "path": "src/static-weekly-contractor-source-transition.js",
+        "mode": "100644",
+        "object_id": "15b0b96cfdfcb1654749e66267ff4dde8dacac1a"
+      },
+      {
         "path": "src/static-weekly-control-plane-runtime.js",
         "mode": "100644",
-        "object_id": "661296d6681ff00155b4fee854f60c3d0f664173"
+        "object_id": "b4e75471ff619f2334192aae315a4c0c4414da30"
       },
       {
         "path": "src/static-weekly-control-plane.js",
         "mode": "100644",
-        "object_id": "b1bd797124a92f75416be64737ee284e7eba6399"
+        "object_id": "a9938851916fdb960e40a37b514d30705007932a"
+      },
+      {
+        "path": "src/static-weekly-coverall-access.js",
+        "mode": "100644",
+        "object_id": "4a62bb737ebaa8604bac75b1598967f49ddf6878"
       },
       {
         "path": "src/static-weekly-coverall-print.js",
         "mode": "100644",
         "object_id": "db2c1cd1d0b1653e853e51fc15d2fa201c137c48"
+      },
+      {
+        "path": "src/static-weekly-dated-transition-manager-router.js",
+        "mode": "100644",
+        "object_id": "c0ff99d4c23eeedf0df2e44a8f5b6ec3a7fcba15"
+      },
+      {
+        "path": "src/static-weekly-dated-transition-materialization.js",
+        "mode": "100644",
+        "object_id": "5abfc52d89831d21411a12d0fa91b28b70db0372"
+      },
+      {
+        "path": "src/static-weekly-dated-transition-postgres.js",
+        "mode": "100644",
+        "object_id": "0ac9e06a4e2513a841cab7967b2c42f0d710c3fe"
       },
       {
         "path": "src/static-weekly-lunch-authority-adapter.js",
@@ -3410,7 +6550,7 @@
       {
         "path": "src/static-weekly-lunch-derivation.js",
         "mode": "100644",
-        "object_id": "cf6d9c60ad2dd37aa86632d5b60448f1f2fb9f2d"
+        "object_id": "2896c13ba6afea48aa743d6302a5d4ae767741a0"
       },
       {
         "path": "src/static-weekly-lunch-publication.js",
@@ -3428,6 +6568,11 @@
         "object_id": "5c6e57a8b9a92c57fddd09dd117db2811a13bcae"
       },
       {
+        "path": "src/static-weekly-october-transition-candidate.js",
+        "mode": "100644",
+        "object_id": "69756f7572d6cbeeec33a79af2435ab101717b49"
+      },
+      {
         "path": "src/static-weekly-opening-coverage-report.js",
         "mode": "100644",
         "object_id": "e74893b5c2b15a389465a0fdba4c412ddd8cbcd9"
@@ -3443,6 +6588,11 @@
         "object_id": "04f7a1b0d0c7e904f587d68e4e7ce76bf940df56"
       },
       {
+        "path": "src/static-weekly-recurring-correction-binding.js",
+        "mode": "100644",
+        "object_id": "c156e752d9ef60f28e48db1c04dc85f265042b1e"
+      },
+      {
         "path": "src/static-weekly-recurring-dependency-result.js",
         "mode": "100644",
         "object_id": "3493158059a296803857c39b059a2922577ef149"
@@ -3451,6 +6601,36 @@
         "path": "src/static-weekly-recurring-morning-solver.js",
         "mode": "100644",
         "object_id": "0fb6c2102b0f5a05a497f2c6e9f1cd4399347048"
+      },
+      {
+        "path": "src/static-weekly-recurring-operation-child.js",
+        "mode": "100644",
+        "object_id": "18cd4c935acfe6c9ebf0bc8aa3d01cc3bb95ece3"
+      },
+      {
+        "path": "src/static-weekly-recurring-operation-envelope.js",
+        "mode": "100644",
+        "object_id": "81c3b80d29276030a2a6e35b832d8d4f3c1f53e4"
+      },
+      {
+        "path": "src/static-weekly-recurring-operation-handler.js",
+        "mode": "100644",
+        "object_id": "71aff25ffab25d62ce20e5efcb670223907dfe85"
+      },
+      {
+        "path": "src/static-weekly-recurring-operation-owner.js",
+        "mode": "100644",
+        "object_id": "d1689eaf6d120b241087712c9942802dff01ca79"
+      },
+      {
+        "path": "src/static-weekly-recurring-operation-runner.js",
+        "mode": "100644",
+        "object_id": "406071c088a4314a2ace18b55033795b80042294"
+      },
+      {
+        "path": "src/static-weekly-recurring-operation-source.js",
+        "mode": "100644",
+        "object_id": "6e7755fb9bb8ea385496d1019a543459a34a4d12"
       },
       {
         "path": "src/static-weekly-recurring-phase-authority.js",
@@ -3558,6 +6738,11 @@
         "object_id": "8f3b161f9a7f2b526842c686736a9c7f70ebb6e1"
       },
       {
+        "path": "src/static-weekly-vacancy-preview.js",
+        "mode": "100644",
+        "object_id": "438dec1020f10a888504dbc17f751a5921969dfe"
+      },
+      {
         "path": "src/supabase/client.js",
         "mode": "100644",
         "object_id": "b8ddd3f765f56985b5820e0426158d76ef16bc5e"
@@ -3600,7 +6785,7 @@
       {
         "path": "supabase/canonical/migration-replay-order.json",
         "mode": "100644",
-        "object_id": "99b13202a34b46696895e21e4cbb87e99aa924cd"
+        "object_id": "2ef6b16bc34614620eee8493200a177244c32354"
       },
       {
         "path": "supabase/canonical/production-schema-fingerprint-input.json",
@@ -3620,12 +6805,67 @@
       {
         "path": "supabase/canonical/schema-fingerprint-input.json",
         "mode": "100644",
-        "object_id": "8e1a62494296b5aacc024c8e1b5cd32117864888"
+        "object_id": "2badcef0afed1363e8e24c98224807cef4035bf6"
       },
       {
         "path": "supabase/canonical/schema-fingerprint.txt",
         "mode": "100644",
-        "object_id": "8cee3d4d3837c45aa3ecd82e1b639fe91e5c808f"
+        "object_id": "82046e25e17c2bab0d5e1dfd4107dfb103a15262"
+      },
+      {
+        "path": "supabase/canonical/source-capture-232.json",
+        "mode": "100644",
+        "object_id": "16548f4d3e25aa67461808563bf3e49517d89bc2"
+      },
+      {
+        "path": "supabase/canonical/source-capture-233.json",
+        "mode": "100644",
+        "object_id": "99183ef1d14e5ac55027ab3ac51ef336774b5152"
+      },
+      {
+        "path": "supabase/canonical/source-capture-234.json",
+        "mode": "100644",
+        "object_id": "11930ac375e1f082e069d06c8d991c96e65eca53"
+      },
+      {
+        "path": "supabase/canonical/source-capture-235.json",
+        "mode": "100644",
+        "object_id": "8b2fd05478a7843255b7216659918fdcf99726e5"
+      },
+      {
+        "path": "supabase/canonical/source-capture-245.json",
+        "mode": "100644",
+        "object_id": "6243a3fcd3379ab3cae09d2f6b728ebbadaa5ce0"
+      },
+      {
+        "path": "supabase/canonical/source-capture-247.json",
+        "mode": "100644",
+        "object_id": "094149f5ad48bfc846f211738af7520d01eff97d"
+      },
+      {
+        "path": "supabase/canonical/source-capture-248.json",
+        "mode": "100644",
+        "object_id": "fdd7ba60ce827054bee62adbd1768efca875bd78"
+      },
+      {
+        "path": "supabase/canonical/source-capture-249.json",
+        "mode": "100644",
+        "object_id": "f55c45f67a01eb2256de296a271aa1ca501e4e4e"
+      },
+      {
+        "path": "supabase/canonical/source-capture-250.json",
+        "mode": "100644",
+        "object_id": "537bc08b5f15ccbf9d0d61442e3e9183d8b70b86"
+      },
+      {
+        "path": "supabase/canonical/source-capture-251.json",
+        "mode": "100644",
+        "object_id": "829c4e7112128bfe3221a1d37c92e9ea6decc6ba"
+      },
+      {
+        "path": "supabase/canonical/source-capture-252.json",
+        "mode": "100644",
+        "object_id": "813ed7804990e78348f5cd1eca80c06c904022cc"
       },
       {
         "path": "supabase/config.toml",
@@ -5688,13 +8928,28 @@
         "object_id": "0fb59a84b907599230a65d6854bf2e48d44dd7af"
       },
       {
+        "path": "supabase/migrations/20261027230000_accepted_actual_lunch_windows.sql",
+        "mode": "100644",
+        "object_id": "cf8aad05ccded77b86c611d80f929fcd69f13882"
+      },
+      {
+        "path": "supabase/migrations/20261027231000_canonical_coverall_capacity_links.sql",
+        "mode": "100644",
+        "object_id": "15fc927358a632614fa4c8234da7e196293fdbe0"
+      },
+      {
+        "path": "supabase/migrations/20261027234814_mcp_oauth_durable_token_families.sql",
+        "mode": "100644",
+        "object_id": "a857b7f9a76ed0aa4a7b99baf5279bf41be5fbdb"
+      },
+      {
         "path": "tmp/write_probe.txt",
         "mode": "100644",
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 1113,
-    "migration_path_count": 294,
+    "authority_path_count": 1764,
+    "migration_path_count": 297,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
   },
@@ -6586,6 +9841,15 @@
     },
     {
       "name": "20261026065000_location_scan_state_qualified_lookup.sql"
+    },
+    {
+      "name": "20261027230000_accepted_actual_lunch_windows.sql"
+    },
+    {
+      "name": "20261027231000_canonical_coverall_capacity_links.sql"
+    },
+    {
+      "name": "20261027234814_mcp_oauth_durable_token_families.sql"
     }
   ],
   "release_boundary": "Prepare distinct minimum-32-character backend, native-route, and employee-device credential secrets before cutover; configure database digests immediately after the migrations that create each configuration function, retain the bridge backend artifact through the scan-snapshot phase, require manager-code recovery without phone-local work loss for any device-credential generation mismatch, and require the executable health/restoration probes before traffic changes."
