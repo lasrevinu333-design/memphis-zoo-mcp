@@ -180,7 +180,7 @@
       {
         "path": ".github/workflows/operational-recovery-live.yml",
         "mode": "100644",
-        "object_id": "5d3b48b6fdf39d1540df167839dff5c2b42ae814"
+        "object_id": "cda95e09eed9c948f17a969f1a4e3deb8132371c"
       },
       {
         "path": ".github/workflows/operations-leadership-mobile-foundation.yml",
@@ -1185,7 +1185,7 @@
       {
         "path": "release/production-migration-state.json",
         "mode": "100644",
-        "object_id": "4c90282a223cab0416be60066b054e8ebb9f4f6b"
+        "object_id": "45cd9cad0dd920f4adedc746f9522556ea212084"
       },
       {
         "path": "release/production-schema-observation-20260922.json",
@@ -2055,12 +2055,12 @@
       {
         "path": "scripts/fixtures/current-scheduler-source-profiles-tests.mjs",
         "mode": "100644",
-        "object_id": "76db128bc7a2062f88f9f89b11abc3354a927ae7"
+        "object_id": "02b2556e5f6d7cc98ae41829cf25d140e5d8cd6b"
       },
       {
         "path": "scripts/fixtures/current-scheduler-source-profiles.mjs",
         "mode": "100644",
-        "object_id": "39fb49b6b2e6f13f1bdfd00b4ea33c035234d85f"
+        "object_id": "c3a55a3f55bbbfa7b9dbd0bfb0d5b0911d04f515"
       },
       {
         "path": "scripts/fixtures/dashboard-independent-check-reader-fixture.py",
@@ -2565,17 +2565,17 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "a5f22ebfa9c23cf5a421954abfb5d0acae3d6378"
+        "object_id": "32b21942d8fb0219e13b5bfb7cfded0a0eec5056"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
         "mode": "100644",
-        "object_id": "e98d9d86813b7ac6b5ec7b993d42c805810445f9"
+        "object_id": "87e9d83becc60bf74116fdff8c4aefe0cb362b0d"
       },
       {
         "path": "scripts/integrated-backend-authority-release-provenance-tests.mjs",
         "mode": "100644",
-        "object_id": "f75a4fb230fb0bbdb44230d94f22bd0789e5f0fd"
+        "object_id": "b9310d07f8716a6a9ce1fbc8274cd1da8a4f1a6e"
       },
       {
         "path": "scripts/integrated-backend-authority-suite-order-isolated-tests.mjs",
@@ -3325,7 +3325,7 @@
       {
         "path": "scripts/native-schedule-source-ci-wiring.mjs",
         "mode": "100644",
-        "object_id": "67d75dc0675c8444b48ceced3eb6eab5bf91897e"
+        "object_id": "caddb9ee9b37558f0cdf37a97c5d2766865e0b2c"
       },
       {
         "path": "scripts/native-schedule-source-discovery-sql-tests.mjs",
@@ -3580,7 +3580,7 @@
       {
         "path": "scripts/owner-workdays-tests.mjs",
         "mode": "100644",
-        "object_id": "0f561f01d334387e464eb04408c25b26830813ac"
+        "object_id": "b0303c270d55039cf123995120e1afd68e1f95f0"
       },
       {
         "path": "scripts/paired-alert-replay-order-tests.mjs",
