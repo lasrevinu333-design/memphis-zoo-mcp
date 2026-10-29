@@ -4115,12 +4115,12 @@
       {
         "path": "scripts/release-migration-plan-database-isolated-tests.sh",
         "mode": "100644",
-        "object_id": "145544a2a9f2a29de031463e5f1c5faf5d58bed4"
+        "object_id": "0debb1b50a7afa31c1a1298f49ef79dd8eb14490"
       },
       {
         "path": "scripts/release-migration-plan-database-tests.mjs",
         "mode": "100644",
-        "object_id": "3521bd1a2ed2f6c6fad1f69d1716cf0d97c38acd"
+        "object_id": "e7762761c626c615d91c02611e74030a89cefa26"
       },
       {
         "path": "scripts/release-migration-preservation-archive-tests.mjs",
