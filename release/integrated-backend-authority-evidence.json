@@ -160,7 +160,7 @@
       {
         "path": ".github/workflows/foundation-security-gate.yml",
         "mode": "100644",
-        "object_id": "916fb7d4a690e2d97412011d2820d93ff7add9ef"
+        "object_id": "b7927baffc43c7e4875952addfced54b1ec90409"
       },
       {
         "path": ".github/workflows/integrated-release-attestation.yml",
@@ -273,6 +273,11 @@
         "object_id": "3545d2fe8406dc06b21f58d10c3454747568bbae"
       },
       {
+        "path": "config/custodial-eight-person-static-20261102.json",
+        "mode": "100644",
+        "object_id": "441f021a9b7756e23d9de0cc5145e1cc62c5581d"
+      },
+      {
         "path": "config/custodial-friday-herpetarium-accepted-exception-20260930.json",
         "mode": "100644",
         "object_id": "0209316e8020f5cb1253e82e78d0756385fd2d7c"
@@ -330,7 +335,12 @@
       {
         "path": "config/custodial-six-person-static-20261005.json",
         "mode": "100644",
-        "object_id": "3138c622f434241634ecb65aa675835defbbe0d1"
+        "object_id": "4c7cd0cc2a1fda6045a8405876d5dbb40ee64cea"
+      },
+      {
+        "path": "config/custodial-staffing-activation-20261028.json",
+        "mode": "100644",
+        "object_id": "c93f77fadb33c3f85512bfa161ace6d5dea7afbc"
       },
       {
         "path": "config/fully-kiosk-devices.example.json",
@@ -341,6 +351,16 @@
         "path": "config/location-classification.json",
         "mode": "100644",
         "object_id": "f362dce1dc63784024bddcce134e287f27714a2a"
+      },
+      {
+        "path": "config/schedules/custodial-eight-employee-20261028.json",
+        "mode": "100644",
+        "object_id": "b5f8c0e5a4ff64a70ff572b61f223c7f911ace65"
+      },
+      {
+        "path": "config/schedules/custodial-nine-position-20261028.json",
+        "mode": "100644",
+        "object_id": "90782eb731fe20890b0f9f54c45d7c5878e1c2e4"
       },
       {
         "path": "deploy/static-weekly-control-plane.render.yaml",
@@ -530,7 +550,7 @@
       {
         "path": "package.json",
         "mode": "100644",
-        "object_id": "bda78588775cd572f3da059656301615fb6ec636"
+        "object_id": "321c9b6779938895df6789bff0198c6d55597ae9"
       },
       {
         "path": "proposals/approved-static-dated-absence-materializer.sql",
@@ -918,6 +938,11 @@
         "object_id": "922c4bea94ddcf75d3c34bd194162d7f0d375244"
       },
       {
+        "path": "release/pending-schema/full-hour-source298.json",
+        "mode": "100644",
+        "object_id": "c7c18fe4bcff7bf062004caa6ea413fdece65ea8"
+      },
+      {
         "path": "release/production-backup-source-extension.json",
         "mode": "100644",
         "object_id": "b73a27c189c7d0416240736d2957b32e878a9966"
@@ -1233,6 +1258,16 @@
         "object_id": "8d52e05b56f78dae5e9df3b681736553a74a67a7"
       },
       {
+        "path": "release/static-schedules/README.md",
+        "mode": "100644",
+        "object_id": "ac112eb67ccd80c393b44e64f385e618ae16413f"
+      },
+      {
+        "path": "release/static-schedules/custodial-eight-20261102-registration.json",
+        "mode": "100644",
+        "object_id": "78805fd454be14f73bf9e5958e5dc3ff4bd4dfc8"
+      },
+      {
         "path": "release/target-capture-source/20261021111917_dashboard_application_reader_operational_day_repair.sql",
         "mode": "100644",
         "object_id": "77ffba7d41f447c0f7e5105d0627f46feeb83585"
@@ -1275,7 +1310,7 @@
       {
         "path": "scripts/apply-release-migration-plan.mjs",
         "mode": "100644",
-        "object_id": "d5b741f9aa863aed94f4536b9f199772c9a5f35f"
+        "object_id": "df06abd29d150ea3b47f4ef0fe1b909697175575"
       },
       {
         "path": "scripts/approved-initial-current-predecessor-tests.mjs",
@@ -2023,6 +2058,11 @@
         "object_id": "3395f27f023e33272e750878d61685cd973091ae"
       },
       {
+        "path": "scripts/fixtures/current-eight-schedule-source.json",
+        "mode": "100644",
+        "object_id": "852673a927b5eee49ad9e050832e47f94273f23b"
+      },
+      {
         "path": "scripts/fixtures/current-manager-219-source.mjs",
         "mode": "100644",
         "object_id": "118394970e0e8b46ff0314134a1b8e79891cc87e"
@@ -2165,12 +2205,17 @@
       {
         "path": "scripts/fixtures/event-static-authority-fixture.mjs",
         "mode": "100644",
-        "object_id": "1fe29797db247ca941d6d238b866ff0250cd22b2"
+        "object_id": "1eb036d112274b09e8bd1c2a05048af6c0a5cf04"
       },
       {
         "path": "scripts/fixtures/exact-frontend-pair.mjs",
         "mode": "100644",
         "object_id": "03eaf4a0dcb2598b32b4f4d6390a8b5e106ad37b"
+      },
+      {
+        "path": "scripts/fixtures/full-hour-lunch-source.mjs",
+        "mode": "100644",
+        "object_id": "1769cd0d1cccf61a2e314117e5adf26d3b3f041e"
       },
       {
         "path": "scripts/fixtures/full-nine-v6-source.json",
@@ -2460,7 +2505,7 @@
       {
         "path": "scripts/generate-owner-corrected-static-weekly-schedule.mjs",
         "mode": "100644",
-        "object_id": "f9f7079db4af20a10f08f3bda4482ce8ca8a1570"
+        "object_id": "63a8a681b578fb9eb417b8e567efe8340e10fa8b"
       },
       {
         "path": "scripts/generate-v3-source-review.mjs",
@@ -3268,6 +3313,11 @@
         "object_id": "0af1e6852447fdd1f8ed3755c911c9df4df0bdea"
       },
       {
+        "path": "scripts/native-schedule-full-hour-lunch-tests.mjs",
+        "mode": "100644",
+        "object_id": "1a3531d3dbb38fd5648319ef8a9a4f0869342254"
+      },
+      {
         "path": "scripts/native-schedule-inventory-sql-tests.mjs",
         "mode": "100644",
         "object_id": "ff66c37510fd8ae58a60d4464b2c81ff58f86ecb"
@@ -3591,6 +3641,11 @@
         "path": "scripts/owner-actions-database-tests.mjs",
         "mode": "100644",
         "object_id": "6b6b99bc1fb1f6ef3fdb912ab6ad8fb98154676f"
+      },
+      {
+        "path": "scripts/owner-schedule-oct28-tests.mjs",
+        "mode": "100644",
+        "object_id": "714755a836e4d7bc27295dffe8c8ec8f0bff4c78"
       },
       {
         "path": "scripts/owner-workdays-tests.mjs",
@@ -4065,12 +4120,12 @@
       {
         "path": "scripts/release-migration-target-capture-tests.mjs",
         "mode": "100644",
-        "object_id": "6ff86796900e33498ba3e0b9de69bc71ca037da8"
+        "object_id": "af3f4ac1ba6cb6926cdc68b137ca9a22fca17193"
       },
       {
         "path": "scripts/release-migration-target-capture.mjs",
         "mode": "100644",
-        "object_id": "75796f3ce1a156ca4549e0e636c2f5378a0a2ec9"
+        "object_id": "f592edf3fb3578a25196e7fd5ac796f54e6ec397"
       },
       {
         "path": "scripts/release-migration-target-refusal-tests.mjs",
@@ -4593,6 +4648,11 @@
         "object_id": "9f60ec80b1b401909f5eb9e50580e954cc548903"
       },
       {
+        "path": "scripts/static-weekly-current-target-lunch-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "c4bd22907b013967b301a81945c8e45234f4b24e"
+      },
+      {
         "path": "scripts/static-weekly-dated-consumer-display-tests.mjs",
         "mode": "100644",
         "object_id": "16fcc669dc3de1cd1ab9c840dc6d602dea22f99d"
@@ -4681,6 +4741,16 @@
         "path": "scripts/static-weekly-friday-exception-acceptance-tests.mjs",
         "mode": "100644",
         "object_id": "c7b402a9a6384c759b4986fef122a374e1657a93"
+      },
+      {
+        "path": "scripts/static-weekly-full-hour-lunch-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "c1ac65e56b0c1d5041cec8975e8e46ff8e9f0d3d"
+      },
+      {
+        "path": "scripts/static-weekly-full-hour-lunch-tests.mjs",
+        "mode": "100644",
+        "object_id": "ed2aa20a7d98d30596b814de495bd5fb743b2dbd"
       },
       {
         "path": "scripts/static-weekly-full-nine-owner-map-tests.mjs",
@@ -4828,6 +4898,11 @@
         "object_id": "0eebb886c5371e4a419d2a49020d30429e6b0e8d"
       },
       {
+        "path": "scripts/static-weekly-model-template-tests.mjs",
+        "mode": "100644",
+        "object_id": "0d6c74856d95f65bec91593d39406fd6f38aa391"
+      },
+      {
         "path": "scripts/static-weekly-morning-planning-authority-ci-tests.mjs",
         "mode": "100644",
         "object_id": "8d26c31de9adf39849771bf72063352c878a94bf"
@@ -4916,6 +4991,11 @@
         "path": "scripts/static-weekly-persisted-continuity-tests.mjs",
         "mode": "100644",
         "object_id": "a20c915af2653194efd64e23fdff0383a0374918"
+      },
+      {
+        "path": "scripts/static-weekly-planned-closing-tests.mjs",
+        "mode": "100644",
+        "object_id": "8cb0cb5a28c19b8dd138da7733bf11bf08c97914"
       },
       {
         "path": "scripts/static-weekly-policy-scope-ci-tests.mjs",
@@ -5321,6 +5401,16 @@
         "path": "scripts/static-weekly-splash-season-official-path-tests.mjs",
         "mode": "100644",
         "object_id": "9fe4eb3c97c6e6c93933f888b04f007527f70c29"
+      },
+      {
+        "path": "scripts/static-weekly-target-plan-tests.mjs",
+        "mode": "100644",
+        "object_id": "c6577d207d536cdf53fd21e778f480208470a491"
+      },
+      {
+        "path": "scripts/static-weekly-target-plan-validation.mjs",
+        "mode": "100644",
+        "object_id": "d7797b0932911d467f46154012bbcc428a85012b"
       },
       {
         "path": "scripts/static-weekly-vacant-roster-slot-database-tests.mjs",
@@ -6230,7 +6320,7 @@
       {
         "path": "src/native-schedule-occurrence.js",
         "mode": "100644",
-        "object_id": "86e665a3de5faff6c35811d3ff5c04a0c362a102"
+        "object_id": "ab568932d91c52399fcd7bbdb3a20deea81c9503"
       },
       {
         "path": "src/native-schedule-payload.js",
@@ -6575,7 +6665,12 @@
       {
         "path": "src/static-weekly-lunch-derivation.js",
         "mode": "100644",
-        "object_id": "2896c13ba6afea48aa743d6302a5d4ae767741a0"
+        "object_id": "0200b80633bcf1d2e4f2fc232890386a31c3f3be"
+      },
+      {
+        "path": "src/static-weekly-lunch-policy.js",
+        "mode": "100644",
+        "object_id": "e3fcbf070d3c587167d73fa5b2857bb42c64c2db"
       },
       {
         "path": "src/static-weekly-lunch-publication.js",
@@ -6590,7 +6685,7 @@
       {
         "path": "src/static-weekly-morning-planning-authority.js",
         "mode": "100644",
-        "object_id": "5c6e57a8b9a92c57fddd09dd117db2811a13bcae"
+        "object_id": "92ab9dc921732cf29526f980bde2e43bc4469a38"
       },
       {
         "path": "src/static-weekly-october-transition-candidate.js",
@@ -6605,7 +6700,7 @@
       {
         "path": "src/static-weekly-owner-eligibility.js",
         "mode": "100644",
-        "object_id": "97d31a0a265aeeee2b79892230189e7733fb10d3"
+        "object_id": "a9f4643504f1eced4a3e46cedeb54f83326067f3"
       },
       {
         "path": "src/static-weekly-owner-workdays.js",
@@ -6625,7 +6720,7 @@
       {
         "path": "src/static-weekly-recurring-morning-solver.js",
         "mode": "100644",
-        "object_id": "0fb6c2102b0f5a05a497f2c6e9f1cd4399347048"
+        "object_id": "6da46d8c91029e4eb0b14a8ea4071bcfc68e7497"
       },
       {
         "path": "src/static-weekly-recurring-operation-child.js",
@@ -6660,7 +6755,7 @@
       {
         "path": "src/static-weekly-recurring-phase-authority.js",
         "mode": "100644",
-        "object_id": "3f67f49f0e7419267ddabc1d56c559afa6ca5c05"
+        "object_id": "7214e7f2190918f42c4debe1d228d9a583462548"
       },
       {
         "path": "src/static-weekly-recurring-preview.js",
@@ -6675,7 +6770,7 @@
       {
         "path": "src/static-weekly-recurring-staffing-adaptation.js",
         "mode": "100644",
-        "object_id": "357854df6831c9a857cdfbe71c662d4cb76e07a8"
+        "object_id": "4f12e419b6ba7826ebe6083418483668ce935046"
       },
       {
         "path": "src/static-weekly-recurring-week-commitment.js",
@@ -6695,7 +6790,7 @@
       {
         "path": "src/static-weekly-schedule-compiler.js",
         "mode": "100644",
-        "object_id": "e68dbd13a4d12b9610ce581dcffb855dfb57f2d7"
+        "object_id": "8fb2d88bd1a5c02e61cfcc25d471b896cd7d0c1d"
       },
       {
         "path": "src/static-weekly-schedule-database-adapter.js",
@@ -6705,12 +6800,12 @@
       {
         "path": "src/static-weekly-schedule-model.js",
         "mode": "100644",
-        "object_id": "8f7dddc33bbe823c5857f8d281fc064e1c0aa852"
+        "object_id": "3fa7c2ec96f5b19692b471d540e1bbe244ea55c3"
       },
       {
         "path": "src/static-weekly-schedule-program.js",
         "mode": "100644",
-        "object_id": "9a01e22af2ca9c511a1b97733a3132fa4cf45059"
+        "object_id": "a4a698f9c252b484a1bb74b8d1234cb1de50f987"
       },
       {
         "path": "src/static-weekly-schedule-runtime-policy.js",
@@ -6735,12 +6830,12 @@
       {
         "path": "src/static-weekly-shift-end-coverage.js",
         "mode": "100644",
-        "object_id": "46bc39e33b3b38ae013dd818d7f0aba120066a0c"
+        "object_id": "3ce8b6af0804496136a797b2c3429cd42a4c429f"
       },
       {
         "path": "src/static-weekly-shift-end-derivation.js",
         "mode": "100644",
-        "object_id": "b556e4f98046615063a09bc2fec87f026f3677c7"
+        "object_id": "3b230feac74ebe8b27d11946b1b2c5d2b15eaa5c"
       },
       {
         "path": "src/static-weekly-staffing-candidates.js",
@@ -6810,7 +6905,7 @@
       {
         "path": "supabase/canonical/migration-replay-order.json",
         "mode": "100644",
-        "object_id": "2ef6b16bc34614620eee8493200a177244c32354"
+        "object_id": "8e037e7279d2e6a53bd7e3ddc84a402effbdbe56"
       },
       {
         "path": "supabase/canonical/production-schema-fingerprint-input.json",
@@ -8968,13 +9063,18 @@
         "object_id": "a857b7f9a76ed0aa4a7b99baf5279bf41be5fbdb"
       },
       {
+        "path": "supabase/migrations/20261028224728_full_scheduled_lunch_source_policy.sql",
+        "mode": "100644",
+        "object_id": "6fe2d1d184a6baf868fc80f66a01690c44d746bd"
+      },
+      {
         "path": "tmp/write_probe.txt",
         "mode": "100644",
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 1769,
-    "migration_path_count": 297,
+    "authority_path_count": 1789,
+    "migration_path_count": 298,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
   },
@@ -9875,6 +9975,9 @@
     },
     {
       "name": "20261027234814_mcp_oauth_durable_token_families.sql"
+    },
+    {
+      "name": "20261028224728_full_scheduled_lunch_source_policy.sql"
     }
   ],
   "release_boundary": "Prepare distinct minimum-32-character backend, native-route, and employee-device credential secrets before cutover; configure database digests immediately after the migrations that create each configuration function, retain the bridge backend artifact through the scan-snapshot phase, require manager-code recovery without phone-local work loss for any device-credential generation mismatch, and require the executable health/restoration probes before traffic changes."
