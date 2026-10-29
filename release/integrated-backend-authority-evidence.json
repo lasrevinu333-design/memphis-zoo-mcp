@@ -1,16 +1,16 @@
 {
   "artifact": "integrated-backend-authority-release-evidence.v2",
   "release_id": "release-2026.07.19.custodial-v3.12",
-  "frontend_commit_sha": "f43e2da09ee987b69e2971be346d16bb471df8d4",
-  "frontend_commit_state": "final_pair_bound",
-  "schema_fingerprint": "a54f3660584b15a3129f7a448ba12cd43b572c3ede6ca64a23cbceb8b37f2187",
+  "frontend_commit_sha": null,
+  "frontend_commit_state": "final_rebind_required",
+  "schema_fingerprint": "432052a95830b4a8550cd6478d766bacc2bbbb4b2dd21d44544b238c70c5f001",
   "schema_transition": {
-    "transition_id": "custodial-post297-test-20261027",
+    "transition_id": "custodial-full-hour-test-20261029",
     "from_fingerprint": "0096e7c488aca86f1d38b061561696b2d4ac409036f063ffc9f196625b9ee9c2",
-    "to_fingerprint": "a54f3660584b15a3129f7a448ba12cd43b572c3ede6ca64a23cbceb8b37f2187",
+    "to_fingerprint": "432052a95830b4a8550cd6478d766bacc2bbbb4b2dd21d44544b238c70c5f001",
     "expires_at": "2026-11-01T15:12:05Z"
   },
-  "frontend_source_fingerprint": "a54f3660584b15a3129f7a448ba12cd43b572c3ede6ca64a23cbceb8b37f2187",
+  "frontend_source_fingerprint": "432052a95830b4a8550cd6478d766bacc2bbbb4b2dd21d44544b238c70c5f001",
   "backend_contract": {
     "scan": "scan.v4.snapshot-bound-authority",
     "authority": "offline-authority.v5",
@@ -753,6 +753,11 @@
         "object_id": "73ee4e1cd5bb40f9beff06b6430b246bfd1125b2"
       },
       {
+        "path": "release/fresh-only-replay/SOURCE298_SUCCESSOR.json",
+        "mode": "100644",
+        "object_id": "e8239b7ae3f94fa55dd49046cdf1b49e49b16fa8"
+      },
+      {
         "path": "release/fresh-only-replay/images/20261002090000_manager_issue_outcomes.sql",
         "mode": "100644",
         "object_id": "f8ac683ad4f5a287f73267ad7f9a5ec60fe78cb3"
@@ -890,7 +895,7 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "5d830f8ba3a9d765a8ae1a17ef8787d256b860fc"
+        "object_id": "05b0ac0cb2c0cbf393dc466e9a3d01d8210979c4"
       },
       {
         "path": "release/installed-source/20261006031304_custodial_owner_delegated_actions.sql",
@@ -1235,7 +1240,7 @@
       {
         "path": "release/schema-alignment-input.json",
         "mode": "100644",
-        "object_id": "60cd05283a310ea336af98a0bbef7065eebc3e2c"
+        "object_id": "ae6a2fbb3ecb4785ace62efe311179c0033f8c82"
       },
       {
         "path": "release/shared-events-database-receipt.json",
@@ -1445,12 +1450,22 @@
       {
         "path": "scripts/ci-fresh-only-replay.mjs",
         "mode": "100644",
-        "object_id": "f70ca0adcfb03c866f738fcedbb563adbfd36a7c"
+        "object_id": "0408cafb7e612921a6446b6b674806d1195adc9e"
+      },
+      {
+        "path": "scripts/ci-fresh-only-source-successor-tests.mjs",
+        "mode": "100644",
+        "object_id": "865add3508682f4d213c3c9f76127da93f078835"
+      },
+      {
+        "path": "scripts/ci-fresh-only-source-successor.mjs",
+        "mode": "100644",
+        "object_id": "41796aeda79871cc837ab28cf7a8c9df1d2cc1a9"
       },
       {
         "path": "scripts/ci-workflow-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "8274e6a233218de2569031b19af4f0df11767fe1"
+        "object_id": "f3d7e9ea7718da2f3100a53a87531b809a6d700b"
       },
       {
         "path": "scripts/cleaning-identity-gps-database-tests.mjs",
@@ -1825,7 +1840,7 @@
       {
         "path": "scripts/empty-database-rebuild-check.mjs",
         "mode": "100644",
-        "object_id": "9f279952db8b88836759278f7a72d9828c9f5fb9"
+        "object_id": "d464226c8f0d77cf7a70d140ebc9e162881f5fbe"
       },
       {
         "path": "scripts/event-count-cross-surface-contract-tests.mjs",
@@ -2680,12 +2695,12 @@
       {
         "path": "scripts/isolated-release-data-preservation-tests.mjs",
         "mode": "100644",
-        "object_id": "3430ef35c4b6efc47a2b81d0ba3fd32b690f37d8"
+        "object_id": "542084194e338407fbe76219db110559ad808769"
       },
       {
         "path": "scripts/isolated-release-data-preservation.mjs",
         "mode": "100644",
-        "object_id": "14d16524458e6231adf50cdbef67dbf7a4c7a654"
+        "object_id": "f864993fdaf13c8d9e4d247b845e16b7c5f7b482"
       },
       {
         "path": "scripts/isolated-restore-lease-shim-tests.mjs",
@@ -4115,7 +4130,7 @@
       {
         "path": "scripts/release-migration-preservation-caller-tests.mjs",
         "mode": "100644",
-        "object_id": "1847808fedc6f53f4e7e44ea6a3ebfe3c5701fed"
+        "object_id": "6a6c7bf422746fbf3301bfb14b9b8222781b8169"
       },
       {
         "path": "scripts/release-migration-private252-refusal-tests.mjs",
@@ -4745,12 +4760,12 @@
       {
         "path": "scripts/static-weekly-fixed-rank-link-ci-wiring.mjs",
         "mode": "100644",
-        "object_id": "83c4775effd40285b7e7857a33b991c8c851a366"
+        "object_id": "3f539dcb1d4805b0ab4fbb0c88062de42ce53275"
       },
       {
         "path": "scripts/static-weekly-fixed-rank-link-tests.mjs",
         "mode": "100644",
-        "object_id": "5ec714c6e3c8bedc5c4d8c7b0629289304970d85"
+        "object_id": "0597f35e2ffb00223c73c41725790fbd380a72a9"
       },
       {
         "path": "scripts/static-weekly-friday-candidate-diagnostic.mjs",
@@ -6945,12 +6960,12 @@
       {
         "path": "supabase/canonical/schema-fingerprint-input.json",
         "mode": "100644",
-        "object_id": "2badcef0afed1363e8e24c98224807cef4035bf6"
+        "object_id": "da97f24643391bb0faf03f33e247c1b21b1383ea"
       },
       {
         "path": "supabase/canonical/schema-fingerprint.txt",
         "mode": "100644",
-        "object_id": "82046e25e17c2bab0d5e1dfd4107dfb103a15262"
+        "object_id": "65db0177a02533d357773fa41a3d6c99f22b5303"
       },
       {
         "path": "supabase/canonical/source-capture-232.json",
@@ -9093,7 +9108,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 1793,
+    "authority_path_count": 1796,
     "migration_path_count": 298,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
