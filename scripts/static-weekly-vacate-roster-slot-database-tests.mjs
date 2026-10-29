@@ -9,8 +9,12 @@ const fixtureName='mz_schema_rebuild_roster_'+process.pid;
 let container=fixtureName;
 const image='supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed';
 const migrationFiles=readdirSync(path.join(root,'supabase/migrations')).filter(x=>x.endsWith('.sql')).sort();
-assert.equal(migrationFiles.length,297,'current exact migration count for each vacancy fixture');
-assert.deepEqual(migrationFiles.slice(-3),[
+// The selector binds every original297 byte and admits only the exact one-file
+// source298 successor. Its no-auto-grants choices retain their own identities.
+const selectedManifest=JSON.parse(readFileSync(path.join(root,'release/fresh-only-replay/MANIFEST.json'),'utf8'));
+const selectedSource=loadCiFreshOnlyReplay(root,selectedManifest.image,migrationFiles,{noAutoTableGrants:true});
+assert.equal(migrationFiles.length,selectedSource.entries.length,'current exactly selected migration count for each vacancy fixture');
+assert.deepEqual(migrationFiles.slice(294,297),[
  '20261027230000_accepted_actual_lunch_windows.sql',
  '20261027231000_canonical_coverall_capacity_links.sql',
  '20261027234814_mcp_oauth_durable_token_families.sql',
@@ -44,7 +48,7 @@ try{
  const manifest=JSON.parse(readFileSync(path.join(root,'release/fresh-only-replay/MANIFEST.json'),'utf8'));
  const replay=loadCiFreshOnlyReplay(root,manifest.image,migrationFiles,{noAutoTableGrants:true});
  const witnesses=fixture.receipt.migration_witnesses;
- assert.equal(witnesses.length,297);
+ assert.equal(witnesses.length,migrationFiles.length);
  console.log('OWNED_TEST_CONTAINER',container);
  console.log('AUTOMATIC_PUBLIC_TABLE_AND_SEQUENCE_DATA_API_GRANTS_ABSENT');
  for(const [index,witness]of witnesses.entries()){
@@ -64,7 +68,7 @@ try{
   if(records.length%25===0)console.log('APPLIED_SOURCE_MIGRATIONS',records.length);
  }
  replay.assertPreserved();
- assert.equal(records.length,297,'both fixtures replay the exact current migration baseline');
+ assert.equal(records.length,migrationFiles.length,'both fixtures replay the exact current migration baseline');
  const aclDigest=sql(aclDigestSql).trim();
  const historical153 = witnesses[152];
  assert.equal(historical153.order,153);
@@ -75,6 +79,8 @@ try{
  const aclContract=aclReference.current294_public_r_S_acl_contract;
  // Keep the historical294 reference literal. The three appended migrations
  // add exactly these RPC-only/OAuth tables and five explicit service grants.
+ // The appended full-hour source changes functions only; this exact relation
+ // and grant census is unchanged and is still checked without an exception.
  const addedTables=['static_weekly_coverall_access_links','mcp_oauth_replay_artifacts_v2','mcp_oauth_token_families_v2'];
  const expectedRelations=[...aclContract.expected_public_r_S_relations,...addedTables.map(relation_name=>({schema_name:'public',relation_name,relation_kind:'r',owner_name:'migration_owner'}))];
  const expectedGrants=[...aclContract.expected_public_r_S_nonowner_grants,
