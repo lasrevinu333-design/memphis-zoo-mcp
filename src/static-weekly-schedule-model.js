@@ -178,13 +178,28 @@ function inertDigestGraph(value, isProxy, active = new WeakSet()) {
     || Object.getOwnPropertyDescriptor(Array.prototype,'join')?.value !== ARRAY_JOIN
     || Object.getOwnPropertyDescriptor(Array.prototype,'constructor')?.value !== Array
     || Object.getOwnPropertyDescriptor(Array,Symbol.species)?.get !== ARRAY_SPECIES_GETTER)) return false;
+  // Dense coefficient pairs dominate generated model graphs. Inspect their
+  // descriptors directly instead of allocating a descriptor object, several
+  // key arrays and an Object.entries pair for every coefficient pair. Exactly
+  // length+1 own keys plus every enumerable data index proves the same dense
+  // array shape; holes, accessors, symbols and extra properties still fall back.
+  if (array) {
+    if (Reflect.ownKeys(value).length !== value.length+1) return false;
+    active.add(value);
+    try {
+      for (let index=0;index<value.length;index++) {
+        const descriptor=Object.getOwnPropertyDescriptor(value,String(index));
+        if (!descriptor || !descriptor.enumerable || !('value' in descriptor)
+          || !inertDigestGraph(descriptor.value,isProxy,active)) return false;
+      }
+      return true;
+    } finally { active.delete(value); }
+  }
   const descriptors = Object.getOwnPropertyDescriptors(value);
   if (Reflect.ownKeys(descriptors).some(key => typeof key !== 'string')) return false;
-  if (array && (Reflect.ownKeys(descriptors).length !== value.length+1 || Object.keys(value).length !== value.length || Object.keys(value).some((key,index) => key !== String(index)))) return false;
   active.add(value);
   try {
     for (const [key, descriptor] of Object.entries(descriptors)) {
-      if (array && key === 'length') continue;
       if (!('value' in descriptor)) return false;
       if (descriptor.enumerable && !inertDigestGraph(descriptor.value,isProxy,active)) return false;
     }

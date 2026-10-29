@@ -106,7 +106,7 @@ export function deriveNativeScheduleOccurrence({request,snapshot,targetBefore,ta
    byId.set(s.segment_id,s);
   }
   const anchor=byId.get(request.sourceKey);
-  const loans=new Map();
+  const loans=new Map(),extendedLoans=new Set();
   unique(lunch,l=>[l.responsibility_id,l.normal_occurrence_id,l.coverage_start,l.coverage_end].join('|'),'SOURCE_AMBIGUOUS');
   for(const l of lunch){
    requireValue(exact(l,lunchKeys)&&l.projection_id===a.projection_id&&text(l.loan_id)&&text(l.responsibility_id)
@@ -115,8 +115,16 @@ export function deriveNativeScheduleOccurrence({request,snapshot,targetBefore,ta
    const s=byId.get(l.normal_occurrence_id),w=window(l);
    requireValue(s&&s.status==='ASSIGNED'&&l.normal_owner_id===s.assigned_employee_id&&l.location_group_id===s.location_group_id
     &&l.service_mode===s.service_mode&&same([...l.included_location_ids].sort(),[...s.included_location_ids].sort())
-    &&w.start>=window(s).start&&w.end<=window(s).end,'SOURCE_BINDING_MISMATCH');
-   if(!loans.has(s.segment_id))loans.set(s.segment_id,[]);loans.get(s.segment_id).push(l);
+    &&w.start<window(s).end&&window(s).start<w.end,'SOURCE_BINDING_MISMATCH');
+   const extended=w.start<window(s).start||w.end>window(s).end;
+   if(extended)extendedLoans.add(l);
+   // A whole scheduled loan retains its original anchor. Its effective
+   // responsibility also follows the same physical area into current duty
+   // pieces on the other side of09:45; complete coverage is proved below.
+   const current=extended?segments.filter(row=>row.location_group_id===s.location_group_id&&row.service_mode===s.service_mode
+    &&same([...row.included_location_ids].sort(),[...s.included_location_ids].sort())
+    &&window(row).start<w.end&&w.start<window(row).end):[s];
+   for(const row of current){if(!loans.has(row.segment_id))loans.set(row.segment_id,[]);loans.get(row.segment_id).push(l);}
   }
   // A validated temporary loan can make the coverer, not the usual owner,
   // the employee whose responsibility changes at09:45. Do not substitute a
@@ -128,7 +136,12 @@ export function deriveNativeScheduleOccurrence({request,snapshot,targetBefore,ta
     &&(active(l,true)||active(l,false)))),'SOURCE_BINDING_MISMATCH');
   const effective=(s,before)=>{
    const matches=(loans.get(s.segment_id)||[]).filter(l=>active(l,before));
-   requireValue(matches.length<=1,'SOURCE_AMBIGUOUS');
+   // The immutable document can retain two original anchors for one area.
+   // The operational reader returns one current physical owner. Preserve all
+   // source rows but choose its same deterministic accepted-loan ordering.
+   if(matches.length>1)requireValue(matches.some(l=>extendedLoans.has(l))
+    &&matches.every(l=>l.coverer_id===matches[0].coverer_id),'SOURCE_AMBIGUOUS');
+   matches.sort((a,b)=>{const left=[a.loan_id,a.responsibility_id,a.normal_occurrence_id].join('|'),right=[b.loan_id,b.responsibility_id,b.normal_occurrence_id].join('|');return left<right?-1:left>right?1:0;});
    return {employee_id:matches.length?matches[0].coverer_id:s.assigned_employee_id,loan:matches[0]||null};
   };
   const physicalByOccurrence=new Map();
@@ -140,6 +153,23 @@ export function deriveNativeScheduleOccurrence({request,snapshot,targetBefore,ta
    requireValue(p.assigned_employee_id===null||id(p.assigned_employee_id));
    requireValue(['static_weekly_projection','static_weekly_lunch_coverage'].includes(p.authority_source));
    if(!physicalByOccurrence.has(s.segment_id))physicalByOccurrence.set(s.segment_id,[]);physicalByOccurrence.get(s.segment_id).push(p);
+  }
+  const covers=(ranges,w)=>{
+   let cursor=w.start;
+   for(const part of ranges.map(window).filter(r=>r.start<w.end&&w.start<r.end)
+    .map(r=>({start:Math.max(w.start,r.start),end:Math.min(w.end,r.end)})).sort((a,b)=>a.start-b.start||a.end-b.end)){
+    requireValue(part.start===cursor,'SOURCE_BINDING_MISMATCH');cursor=part.end;
+   }
+   requireValue(cursor===w.end,'SOURCE_BINDING_MISMATCH');
+  };
+  for(const l of extendedLoans){
+   const w=window(l);
+   if(l.service_mode==='scan_tracked')for(const location of l.included_location_ids){
+    // Extending an anchor alone never grants responsibility. Every instant
+    // must be independently present in the current physical owner readback.
+    covers(physical.filter(p=>p.location_group_id===l.location_group_id&&p.location_id===location
+     &&p.assigned_employee_id===l.coverer_id&&p.authority_source==='static_weekly_lunch_coverage'),w);
+   }else covers(segments.filter(s=>s.location_group_id===l.location_group_id&&s.service_mode===l.service_mode),w);
   }
   function at(before){
    const units=new Map();

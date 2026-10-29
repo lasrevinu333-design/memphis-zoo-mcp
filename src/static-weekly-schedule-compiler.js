@@ -24,7 +24,7 @@ import {
   STATIC_WEEKLY_EQUITY_SCALE,
   STATIC_WEEKLY_SCHEDULER_VERSION,
   STATIC_WEEKLY_SERVER_LIMITS,
-  buildStaticWeeklySchedulingModel as buildModel,
+  createStaticWeeklySchedulingModelBuilder,
   canonicalOptimizerAssignmentProjection,
   canonicalProgramDescriptor,
   canonicalSolverAuthorityCertificate,
@@ -172,6 +172,7 @@ function validateTerminalReportEvidence(evidence, solverResult, objectiveValue, 
 }
 
 async function solveLexicographic(problem, deadline, authorityProgram) {
+  const buildModel = createStaticWeeklySchedulingModelBuilder(problem);
   const startedAt = monotonicNowMilliseconds();
   const tiers = []; const bindings = []; let final = null; let runtimeBanner = null; const modelBasis = authorityProgram.modelBasis; let workerOutputBytes = 0;
   const objectives = authorityProgram.objectives;
@@ -179,7 +180,7 @@ async function solveLexicographic(problem, deadline, authorityProgram) {
   for (const objective of objectives) {
     let remaining;
     try { remaining = remainingStaticWeeklyMilliseconds(deadline); } catch (error) { return { error: reason(error.code || "solver_timeout", { stage: "before_tier", tier: objective.name }) }; }
-    const model = buildModel(problem, bindings, objective, deadline); if (model.error) return { error: model.error };
+    const model = buildModel(bindings, objective, deadline); if (model.error) return { error: model.error };
     const seconds = remaining / 1000;
     let solved;
     const workerAttestation = { schema: "memphis-zoo.static-weekly-worker-model-attestation.v1", modelDigest: model.modelDigest, modelBasisDigest: model.modelBasisDigest, priorBindingDigest: model.priorBindingDigest };

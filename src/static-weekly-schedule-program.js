@@ -25,6 +25,7 @@ import {
   windowsOverlap,
 } from "./static-weekly-schedule-model.js";
 import {deriveDatedShiftEndCoverage} from "./static-weekly-shift-end-derivation.js";
+import {validateFullHourLunchPolicy} from './static-weekly-lunch-policy.js';
 
 export const STATIC_WEEKLY_PROGRAM_SCHEMA = "memphis-zoo.static-weekly-canonical-program.v1";
 
@@ -1079,6 +1080,8 @@ export function prepareStaticWeeklySchedulingProblem(input, deadline = null) {
   let normalizedAuthority;
   try { normalizedAuthority = normalizeStaticWeeklyAuthority(version, input.slots, input.exceptions, input.proximity || [], serviceDate); } catch (error) { return { error: programReason(error.code || "invalid_weekly_authority", { message: error.message }) }; }
   version = normalizedAuthority.version;
+  try {validateFullHourLunchPolicy(version.lunchCoveragePolicy,postgresJsonbContentDigest);}
+  catch(error){return {error:programReason(error.code||'full_hour_lunch_policy_invalid')};}
   const slots = normalizedAuthority.slots;
   const exceptions = normalizedAuthority.exceptions;
   const proximity = normalizedAuthority.proximity;
@@ -1603,6 +1606,69 @@ export function buildStaticWeeklySchedulingModel(problem, bindings, objective, d
   return { lp, x, uncovered, routeGroups, expressions, binary, general, objective, dailyRank, weeklyRank, dailyLoads, weeklyLoads, preflight: { ...problem.preflight, actualLpBytes: modelBytes, actualBinaryVariables, actualVariableCount, actualConstraintCount, actualConstraintTerms }, modelBasis, modelBasisDigest, priorBindings, priorBindingDigest: sha256Hex(canonicalJson(priorBindings)), modelDigest: sha256Hex(canonicalJson(modelIdentity)), modelBytes };
 }
 
+// Repeated full-rank tiers change only the objective and ordered bindings.
+// Keep at most one private small model template, built from a private problem
+// snapshot. Compiler and verifier instantiate separate builders; no solver
+// receipt or compiler model becomes verifier authority. Every returned model
+// is detached, so a consumer cannot corrupt subsequent tiers. The public
+// one-shot builder above remains the reference and the fallback.
+export function createStaticWeeklySchedulingModelBuilder(problem) {
+  const snapshot = structuredClone(problem);
+  let cached = null;
+  const freezeJson = value => {
+    if (value && typeof value === 'object' && !Object.isFrozen(value)) {
+      for (const child of Object.values(value)) freezeJson(child);
+      Object.freeze(value);
+    }
+    return value;
+  };
+  const rankKey = (model, bindings, objective) => {
+    const priorNames=bindings.map(binding=>binding.name),family=objective.family;
+    const daily=['seed','daily_leximax','daily_stable_tie','weekly_leximax','weekly_stable_tie'].includes(family)||priorNames.some(name=>name.startsWith('daily_'));
+    const weekly=['seed','weekly_leximax','weekly_stable_tie'].includes(family)||priorNames.some(name=>name.startsWith('weekly_'));
+    const dailyLimit=!daily?0:family==='daily_leximax'&&Number(objective.rank||1)<=16
+      ?Math.min(model.dailyLoads.length,Number(objective.rank||1)+Number(objective.rankCount||1)-1):model.dailyLoads.length;
+    const weeklyLimit=!weekly?0:family==='weekly_leximax'
+      ?Math.min(model.weeklyLoads.length,Number(objective.rank||1)+Number(objective.rankCount||1)-1):model.weeklyLoads.length;
+    return canonicalJson({dailyLimit,weeklyLimit,fixed:fixedBinaryDailyRankValues(
+      'daily_rank',model.dailyLoads,model.dailyRank.ranks,model.dailyRank.maximum,bindings,new Set(model.x.values()))});
+  };
+  return (bindings, objective, deadline = null) => {
+    if (deadline != null) remainingStaticWeeklyMilliseconds(deadline);
+    if (cached && rankKey(cached.model,bindings,objective)===cached.rankKey) {
+      const bindingLines = bindings.map(binding => ` bind_${staticWeeklySafeName(binding.name)}: ${expression(binding.terms)} = ${binding.value}`);
+      const lp = `Minimize\n objective: ${expression(objective.terms)}\nSubject To\n${cached.rows}${bindingLines.length ? bindingLines.join('\n')+'\n' : ''}${cached.tail}`;
+      const modelBytes = Buffer.byteLength(lp, 'utf8');
+      if (modelBytes <= STATIC_WEEKLY_SERVER_LIMITS.maxModelBytes && modelBytes <= snapshot.preflight.projectedLpBytes) {
+        // The largest plain-JSON graph is immutable and can be shared inside
+        // this one builder. Maps and every other exposed mutable value remain
+        // detached. No caller can mutate the retained basis or its rows.
+        const {modelBasis,...rest}=cached.model;
+        const model = {...structuredClone(rest),modelBasis};
+        const priorBindings = bindings.map(binding => ({name:binding.name,terms:binding.terms,value:binding.value}));
+        const modelIdentity = {schema:'memphis-zoo.static-weekly-tier-model.v1',basisDigest:model.modelBasisDigest,
+          objective:{name:objective.name,family:objective.family||null,rank:objective.rank??null,terms:objective.terms},priorBindings};
+        Object.assign(model,{lp,objective,priorBindings,priorBindingDigest:sha256Hex(canonicalJson(priorBindings)),
+          modelDigest:sha256Hex(canonicalJson(modelIdentity)),modelBytes,
+          preflight:{...model.preflight,actualLpBytes:modelBytes}});
+        return model;
+      }
+    }
+    const model = buildStaticWeeklySchedulingModel(snapshot, bindings, objective, deadline);
+    // Bound the extra retained template; large programs use the reference.
+    if (!model.error && model.modelBytes <= 2*1024*1024
+      && model.dailyRank.ranks.length === model.dailyLoads.length
+      && (model.weeklyRank.ranks.length===0 || model.weeklyRank.ranks.length===model.weeklyLoads.length)) {
+      const subject = model.lp.indexOf('\nSubject To\n')+'\nSubject To\n'.length;
+      const bounds = model.lp.indexOf('Bounds\n',subject);
+      cached = {model:structuredClone(model),rankKey:rankKey(model,bindings,objective),
+        rows:model.lp.slice(subject,bounds).replace(/^ bind_[^\n]*\n/gm,''),tail:model.lp.slice(bounds)};
+      freezeJson(cached.model.modelBasis);
+    }
+    return model;
+  };
+}
+
 // Regenerate witness-bound tier models one at a time.  A production schedule
 // can contain more than one hundred lexicographic tiers, while every tier has
 // the same large canonical model basis.  Retaining all regenerated models at
@@ -1612,12 +1678,13 @@ export function buildStaticWeeklySchedulingModel(problem, bindings, objective, d
 export function* iterateStaticWeeklySchedulingWitnessTiers(program, witnessValues, deadline = null) {
   const activeDeadline = deadline ?? createStaticWeeklyDeadline();
   const { problem, objectives } = program;
+  const buildModel = createStaticWeeklySchedulingModelBuilder(problem);
   const values = witnessValues instanceof Map ? witnessValues : new Map(witnessValues);
   const bindings = [];
   for (const objective of objectives) {
     let model;
     try {
-      model = buildStaticWeeklySchedulingModel(problem, bindings, objective, activeDeadline);
+      model = buildModel(bindings, objective, activeDeadline);
     } catch (error) {
       yield { error: programReason(error.code || "canonical_program_generation_failed", { stage: "witness_model", tier: objective.name, message: error.message }), failureServiceDate: problem.serviceDate };
       return;

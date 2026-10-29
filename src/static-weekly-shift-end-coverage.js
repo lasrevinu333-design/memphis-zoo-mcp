@@ -52,8 +52,43 @@ export function completeRecurringShiftEndCoverage(source,config){
     ?[s.acceptedRouteAnchorLocationId]:[])];
   }));
   const current=normal.map(row=>({original:row,owner:row.ownerSlotId,rows:[row]}));
+  const planned=config.plannedClosingOwnership?.[String(day)];
+  if(planned){
+   assert.ok(Array.isArray(planned)&&planned.length>0&&planned.length<=8,'bounded planned closing stages required');
+   const families=[...new Set(normal.map(row=>row.locationCodeSnapshot))].sort();
+   const firstDeparture=Math.min(...workers.map(s=>minute(s.shift[1])));
+   let previous=firstDeparture;
+   for(const stage of planned){
+    assert.equal(minute(stage.start),previous,'planned closing stage gap');
+    assert.ok(minute(stage.end)>previous&&minute(stage.end)<=lastEnd,'planned closing stage bounds');
+    assert.equal(JSON.stringify(Object.keys(stage.owners).sort()),JSON.stringify(families),'planned closing must own every family exactly once');
+    for(const unit of current){
+     const row=unit.original,owner=stage.owners[row.locationCodeSnapshot],slot=slotById.get(owner);
+     assert.ok(slot&&!slot.incumbent.vacant&&slot.status!=='departed_named_absent','planned closer must be a real active incumbent');
+     assert.ok(minute(slot.shift[0])<=previous&&minute(stage.end)<=minute(slot.shift[1]),'planned closer must cover the whole interval');
+     assert.ok(!(minute(slot.lunch[0])<minute(stage.end)&&previous<minute(slot.lunch[1])),'planned closing cannot overlap helper lunch');
+     assert.ok(!(row.restrictedSlotIds||[]).includes(owner)&&!isHardForbidden(slot,row.locationCodeSnapshot,day)
+      &&(!config.sourceBoundEligibility||(row.requiredQualifications||[]).every(q=>slot.qualifications.includes(q))&&!ids(row).some(id=>slot.restrictions.includes(id))),
+      'planned closer is restricted or unqualified');
+     const namedKey=`${day}:${row.locationCodeSnapshot}:${stage.start}`,handoff=named.get(namedKey);
+     if(handoff){assert.equal(unit.owner,handoff.fromSlotId,'planned named handoff source');assert.equal(owner,handoff.toSlotId,'planned named handoff recipient');usedNamed.add(namedKey);}
+     const last=unit.rows.at(-1);
+     if(unit.owner===owner){last.window.end=stage.end;continue;}
+     last.window.end=stage.start;
+     const distance=Math.max(...ids(row).map(target=>Math.min(...(anchors.get(owner)||[]).map(anchor=>target===anchor?0:distances.get(`${anchor}|${target}`)??Infinity))));
+     assert.ok(Number.isFinite(distance),'planned closer needs verified directed proximity');
+     const next={...clone(row),workId:`${row.workId}:handoff:${stage.start}:${config.fullSegmentIdentity?owner:owner.slice(0,8)}`,
+      ownerSlotId:owner,originSlotId:owner,window:{start:stage.start,end:stage.end}};
+     notes.push({day,at:stage.start,workId:next.workId,fromSlotId:unit.owner,toSlotId:owner,locationCode:row.locationCodeSnapshot,
+      locationIds:ids(row),directedProximityMinutes:distance,fromVacantPosition:false});
+     unit.owner=owner;unit.rows.push(next);added.push(next);
+    }
+    previous=minute(stage.end);
+   }
+   assert.equal(previous,lastEnd,'planned closing must reach final scheduled departure');
+  }
   const boundaries=[...new Set(positions.map(s=>minute(s.shift[1])))].filter(t=>t<lastEnd).sort((a,b)=>a-b);
-  for(const at of boundaries){
+  for(const at of planned?[]:boundaries){
    const leaving=current.filter(u=>minute(slotById.get(u.owner).shift[1])===at);
    const remaining=workers.filter(s=>minute(s.shift[0])<=at && at<minute(s.shift[1]));
    const loads=new Map(remaining.map(s=>[s.slotId,current.filter(u=>u.owner===s.slotId).reduce((n,u)=>n+Number(config.weights[u.original.locationCodeSnapshot]??1),0)]));

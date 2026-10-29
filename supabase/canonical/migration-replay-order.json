@@ -1204,6 +1204,10 @@
         {
           "name": "20261027234814_mcp_oauth_durable_token_families.sql",
           "sha256": "e74210f033e5c65d5e99a090ca201d1c010d6cb5c4159a015bb08e3719c44f6e"
+        },
+        {
+          "name": "20261028224728_full_scheduled_lunch_source_policy.sql",
+          "sha256": "5aa81738ee060097d4149605f129f09061864bfc06afcba4161a3242730ffb0b"
         }
       ]
     }

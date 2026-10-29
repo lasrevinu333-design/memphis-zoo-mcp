@@ -5,7 +5,8 @@
 import { createHash } from 'node:crypto';
 import { canonicalJson, normalizeWindow } from './static-weekly-schedule-model.js';
 import { generateStaticWeeklySchedulingProgram, STATIC_WEEKLY_FLEXIBLE_COVERAGE_MODE,
-  weekdayDate } from './static-weekly-schedule-program.js';
+  weekdayDate,postgresJsonbContentDigest } from './static-weekly-schedule-program.js';
+import {validateFullHourLunchPolicy,FULL_HOUR_LUNCH_POLICY_SCHEMA} from './static-weekly-lunch-policy.js';
 
 export const LUNCH_COVERAGE_SCHEMA = 'memphis-zoo.static-weekly-lunch-candidate.v1';
 const POLICY = 'owner-20260921-two-nearby-full-hour-v1';
@@ -138,12 +139,44 @@ function costForArea(area, slotId, context, anchors, edges) {
   return {cost,evidence};
 }
 
+function fullHourPartition(planned,areas,costRows,contexts,lunch){
+  const refused=reason=>({status:'REVIEW_REQUIRED',reason,helperSlotIds:[],assignments:[]});
+  if(!planned||canonicalJson(planned.window)!==canonicalJson({start:lunch.start,end:lunch.end}))
+    return refused('full_hour_lunch_current_owner_or_window_changed');
+  const families=new Set(areas.flatMap(area=>area.entries.map(entry=>entry.work.locationCodeSnapshot)));
+  if(families.size!==planned.areas.size||[...families].some(f=>!planned.areas.has(f)))
+    return refused('full_hour_lunch_original_areas_changed');
+  const assignments=[];let totalDistance=0;
+  for(const area of areas){
+    const helpers=new Set(area.entries.map(entry=>planned.areas.get(entry.work.locationCodeSnapshot)));
+    if(helpers.size!==1)return refused('full_hour_lunch_group_split');
+    const covererSlotId=[...helpers][0],row=costRows.find(row=>row.areaId===area.areaId);
+    if(!contexts.has(covererSlotId)||!Object.hasOwn(row.costs,covererSlotId))
+      return refused('full_hour_lunch_planned_helper_unavailable');
+    totalDistance+=row.costs[covererSlotId];assignments.push({areaId:area.areaId,covererSlotId,distance:row.costs[covererSlotId]});
+  }
+  if(!areas.length)return {status:'NO_AREAS',helperSlotIds:[],assignments:[],totalDistance:0};
+  const helperSlotIds=[...new Set(assignments.map(a=>a.covererSlotId))].sort(compare);
+  const eligible=[...contexts.keys()].filter(slot=>costRows.some(row=>Object.hasOwn(row.costs,slot)));
+  if(helperSlotIds.length!==Math.min(2,eligible.length))return refused('full_hour_lunch_helper_cardinality_changed');
+  return {status:'PLANNED',helperSlotIds,assignments,totalDistance,
+    fallback:helperSlotIds.length===1?'only_one_eligible_custodian':null};
+}
+
 /** Internal pure derivation. Call the verified-result wrapper at trust boundaries. */
 export function deriveLunchCoverageFromPreparedProblem(problem, weeklyAssignments) {
   if (!(problem?.states instanceof Map) || !(problem?.edges instanceof Map)
     || !(problem?.incumbencyByDaySlot instanceof Map) || !Array.isArray(problem.work)
     || !Array.isArray(weeklyAssignments)) fail('lunch_verified_problem_required');
   const byWork=new Map(problem.work.map(work=>[work.key,work]));
+  const fullHourLoans=validateFullHourLunchPolicy(problem.version?.lunchCoveragePolicy,postgresJsonbContentDigest);
+  const currentOwners=new Set();
+  if(fullHourLoans)for(const [day,state]of problem.states)for(const [slot,availability]of state.availability){
+    const owner=problem.incumbencyByDaySlot.get(`${day}\0${slot}`);
+    if(availability.status==='working'&&availability.breakChoice!=='NONE'&&(owner?.personId||owner?.kind==='CONTRACTOR_CAPACITY'))
+      currentOwners.add(`${day}\0${slot}`);
+  }
+  const fullHourRosterCurrent=!fullHourLoans||(currentOwners.size===fullHourLoans.size&&[...currentOwners].every(k=>fullHourLoans.has(k)));
   const assigned=weeklyAssignments.filter(row=>row.status==='ASSIGNED');
   const lunches=[];
   for(const [day,state] of [...problem.states].sort(([a],[b])=>a-b)) {
@@ -187,7 +220,9 @@ export function deriveLunchCoverageFromPreparedProblem(problem, weeklyAssignment
           if(proximity){costRows[i].costs[slot.id]=proximity.cost;evidence.set(`${areas[i].areaId}\0${slot.id}`,proximity.evidence);}
         }
       }
-      const partition=partitionLunchAreas(costRows,[...contexts.keys()]);
+      const partition=fullHourLoans
+        ?fullHourPartition(fullHourRosterCurrent?fullHourLoans.get(`${day}\0${ownerSlotId}`):null,areas,costRows,contexts,lunch)
+        :partitionLunchAreas(costRows,[...contexts.keys()]);
       const responsibilities=(partition.assignments||[]).map(item=>{
         const area=areas.find(area=>area.areaId===item.areaId),person=contexts.get(item.covererSlotId).person;
         return {responsibilityId:digest({loanId:base.loanId,areaId:area.areaId,covererSlotId:item.covererSlotId}),
@@ -198,7 +233,9 @@ export function deriveLunchCoverageFromPreparedProblem(problem, weeklyAssignment
           coveragePurpose:'lunch_coverage',proximityEvidence:evidence.get(`${area.areaId}\0${item.covererSlotId}`),
           checkDeadlinePolicy:'inherit_existing_90_minute_deadline',createsDeepClean:false,
           segments:area.entries.map(entry=>({planWorkId:entry.row.planWorkId,workId:entry.row.workId,
-            serviceMode:entry.work.serviceMode,window:{start:minuteTime(entry.start),end:minuteTime(entry.end)},
+            serviceMode:entry.work.serviceMode,
+            ...(fullHourLoans?{normalWindow:{start:minuteTime(entry.start),end:minuteTime(entry.end)}}:{}),
+            window:fullHourLoans?{start:lunch.start,end:lunch.end}:{start:minuteTime(entry.start),end:minuteTime(entry.end)},
             includedLocations:clone(entry.work.includedLocations)}))};
       });
       lunches.push({...base,status:partition.status,reason:partition.reason||null,
@@ -208,7 +245,21 @@ export function deriveLunchCoverageFromPreparedProblem(problem, weeklyAssignment
           startTime:lunch.start,endTime:lunch.end,deliveryState:'NOT_ENQUEUED'}))});
     }
   }
-  return {schema:LUNCH_COVERAGE_SCHEMA,policy:POLICY,publicationAuthority:'NOT_PUBLISHED',
+  if(fullHourLoans){
+    const byLocation=new Map(),conflicts=new Set();
+    for(const loan of lunches)for(const responsibility of loan.responsibilities||[])for(const segment of responsibility.segments)
+      for(const location of segment.includedLocations){
+        const key=`${loan.serviceDate}\0${location.locationId}`,prior=byLocation.get(key)||[];
+        const item={loan,recipient:responsibility.covererSlotId,window:windowOf(segment.window)};
+        for(const other of prior)if(other.recipient!==item.recipient&&overlap(other.window,item.window)){
+          conflicts.add(other.loan);conflicts.add(loan);
+        }
+        prior.push(item);byLocation.set(key,prior);
+      }
+    for(const loan of conflicts)Object.assign(loan,{status:'REVIEW_REQUIRED',reason:'full_hour_lunch_conflicting_area',
+      helperSlotIds:[],responsibilities:[],notificationIntents:[]});
+  }
+  return {schema:LUNCH_COVERAGE_SCHEMA,policy:fullHourLoans?FULL_HOUR_LUNCH_POLICY_SCHEMA:POLICY,publicationAuthority:'NOT_PUBLISHED',
     status:lunches.some(lunch=>lunch.status==='REVIEW_REQUIRED')?'REVIEW_REQUIRED':'PLANNED',
     sourceInputDigest:problem.inputDigest,weekStart:problem.serviceDate,lunches};
 }

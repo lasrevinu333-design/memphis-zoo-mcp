@@ -18,10 +18,11 @@ const dateForDay=(start,day)=>{
  return date.toISOString().slice(0,10);
 };
 
-export function createShiftEndContinuityPolicy(weights,sourceConfigurationSha256,digest,namedHandoffs=[]){
+export function createShiftEndContinuityPolicy(weights,sourceConfigurationSha256,digest,namedHandoffs=[],plannedClosingOwnership=null){
  const body={schema:SHIFT_END_POLICY_SCHEMA,algorithm:SHIFT_END_ALGORITHM,normalPhaseStart:'09:45',
   weights:clone(weights),provenance:`owner-configuration-sha256:${sourceConfigurationSha256}`,
-  ...(namedHandoffs.length?{namedHandoffs:clone(namedHandoffs)}:{})};
+  ...(namedHandoffs.length?{namedHandoffs:clone(namedHandoffs)}:{}),
+  ...(plannedClosingOwnership?{plannedClosingOwnership:clone(plannedClosingOwnership)}:{})};
  return {...body,policyDigest:digest(body)};
 }
 
@@ -31,7 +32,8 @@ export function deriveDatedShiftEndCoverage(source,digest,canonicalizeEffective=
  const original=canonicalJson(source),policy=source.version?.shiftEndContinuityPolicy;
  requireFact(policy&&typeof digest==='function','source-bound continuity policy is required');
  const expectedKeys=['algorithm','normalPhaseStart','policyDigest','provenance','schema','weights',
-  ...(Object.hasOwn(policy,'namedHandoffs')?['namedHandoffs']:[])];
+  ...(Object.hasOwn(policy,'namedHandoffs')?['namedHandoffs']:[]),
+  ...(Object.hasOwn(policy,'plannedClosingOwnership')?['plannedClosingOwnership']:[])];
  requireFact(canonicalJson(Object.keys(policy).sort())===canonicalJson(expectedKeys.sort()),'continuity policy has unknown or missing fields');
  const {policyDigest,...body}=policy;
  requireFact(policy.schema===SHIFT_END_POLICY_SCHEMA&&policy.algorithm===SHIFT_END_ALGORITHM
@@ -40,6 +42,17 @@ export function deriveDatedShiftEndCoverage(source,digest,canonicalizeEffective=
  requireFact(policy.weights&&Object.getPrototypeOf(policy.weights)===Object.prototype
   &&Object.values(policy.weights).every(n=>typeof n==='number'&&Number.isSafeInteger(n*2)&&n>0&&n<=1000),
   'exact positive half-unit workload weights required');
+ if(policy.plannedClosingOwnership){
+  requireFact(canonicalJson(Object.keys(policy.plannedClosingOwnership).sort())===canonicalJson(['0','1','2','3','4','5','6']),
+   'planned closing must bind all seven days');
+  for(const stages of Object.values(policy.plannedClosingOwnership)){
+   requireFact(Array.isArray(stages)&&stages.length>0&&stages.length<=8,'bounded closing stages required');
+   for(const stage of stages)requireFact(stage&&canonicalJson(Object.keys(stage).sort())===canonicalJson(['end','owners','start'])
+    &&/^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(stage.start)&&/^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(stage.end)
+    &&stage.owners&&Object.getPrototypeOf(stage.owners)===Object.prototype&&Object.keys(stage.owners).length<=128
+    &&Object.values(stage.owners).every(id=>typeof id==='string'&&id.length>0&&id.length<=128),'planned closing stage malformed');
+  }
+ }
  if(Object.hasOwn(policy,'namedHandoffs')){
   requireFact(Array.isArray(policy.namedHandoffs)&&policy.namedHandoffs.length<=14,'bounded named handoffs required');
   const seen=new Set();
@@ -94,7 +107,8 @@ export function deriveDatedShiftEndCoverage(source,digest,canonicalizeEffective=
    &&row.qualificationProvenance,'canonical parent eligibility provenance required');
  }
  const completed=completeRecurringShiftEndCoverage(source,{slots:positions,weights:policy.weights,
-  sourceBoundEligibility:true,fullSegmentIdentity:true,namedHandoffs:policy.namedHandoffs||[]});
+  sourceBoundEligibility:true,fullSegmentIdentity:true,namedHandoffs:policy.namedHandoffs||[],
+  plannedClosingOwnership:policy.plannedClosingOwnership});
  requireFact(completed.input.version.assignments.length<=1024,'derived work exceeds bounded program limit');
  const generated=new Set(),chains=[];
  for(const parent of source.version.assignments){
@@ -274,7 +288,8 @@ export function deriveApprovedDatedMappedShiftEndCoverage(context,digest){
  const partial=applied.some(e=>e.type==='partial_absence')&&[...positions.values()].some(p=>!p.vacant
   &&(p.availability.blockedWindows||[]).some(w=>rows.some(r=>w.start<(r.window.start==='09:45'?clock(final):r.window.end)&&r.window.start<w.end)
    &&w.start<p.availability.shift.end&&p.availability.shift.start<w.end));
- if(partial){
+ const plannedClosing=policy.plannedClosingOwnership?.[String(day)];
+ if(partial||plannedClosing){
   // Use the real accepted interval union, not a whole-person absence flag.
   // Boundaries only split responsibility when ownership actually changes;
   // unrelated shift/lunch/absence boundaries are coalesced before budgeting.
@@ -302,9 +317,11 @@ export function deriveApprovedDatedMappedShiftEndCoverage(context,digest){
   };
   const eligibleFor=(u,p,start,end)=>{
    const r=u.original,a=p.availability,c=p.configured;
+   const plannedOwner=(plannedClosing||[]).find(s=>minute(s.start)<=start&&end<=minute(s.end))?.owners[r.locationCodeSnapshot];
+   const exactPlannedCloser=plannedOwner&&(roleMap.get(plannedOwner)||plannedOwner)===p.slotId;
    return fits(p,start,end,p.slotId!==r.ownerSlotId||!u.flexible)
     &&!isHardForbidden(c,r.locationCodeSnapshot,day)
-    &&(!normalGeographyRestrictionApplies(c)||c.normalAssignmentFamilies.includes(r.locationCodeSnapshot))
+    &&(exactPlannedCloser||!normalGeographyRestrictionApplies(c)||c.normalAssignmentFamilies.includes(r.locationCodeSnapshot))
     &&!(r.restrictedSlotIds||[]).includes(p.slotId)&&(r.requiredQualifications||[]).every(q=>a.qualifications.includes(q))
     &&!ids(r).some(id=>a.restrictions.includes(id));
   };
@@ -318,7 +335,20 @@ export function deriveApprovedDatedMappedShiftEndCoverage(context,digest){
   // emitted as available work: every actual interval still passes fits().
   const nominal=intervalUnits.filter(u=>u.original.window.start==='09:45').map(u=>({u,owner:u.owner,
    spans:[{start:minute(u.original.window.start),end:final,owner:u.owner}]}));
-  for(const at of [...new Set([...positions.values()].map(p=>minute(p.availability.shift.end)))].filter(t=>t<final).sort((a,b)=>a-b)){
+  if(plannedClosing){
+   for(const n of nominal){
+    n.spans=[];let start=minute(n.u.original.window.start),owner=n.owner;
+    for(const stage of plannedClosing){
+     const at=Math.min(final,minute(stage.start));
+     if(at>start)n.spans.push({start,end:at,owner});
+     start=at;owner=roleMap.get(stage.owners[n.u.original.locationCodeSnapshot])||stage.owners[n.u.original.locationCodeSnapshot];
+     requireFact(typeof owner==='string','approved planned closing lost a family owner');
+     if(start===final)break;
+    }
+    if(start<final)n.spans.push({start,end:final,owner});
+   }
+  }
+  for(const at of plannedClosing?[]:[...new Set([...positions.values()].map(p=>minute(p.availability.shift.end)))].filter(t=>t<final).sort((a,b)=>a-b)){
    const leaving=nominal.filter(n=>minute(positions.get(n.owner).availability.shift.end)===at);
    const remaining=workers.filter(p=>minute(p.availability.shift.start)<=at&&at<minute(p.availability.shift.end));
    const loads=new Map(remaining.map(p=>[p.slotId,nominal.filter(n=>n.owner===p.slotId)
@@ -342,7 +372,8 @@ export function deriveApprovedDatedMappedShiftEndCoverage(context,digest){
   }
   const boundaries=[...new Set(intervalUnits.flatMap(u=>[minute(u.original.window.start),minute(u.original.window.end)])
    .concat([...positions.values()].flatMap(p=>[p.availability.shift,p.availability.lunch,...(p.availability.blockedWindows||[])]
-    .flatMap(w=>[minute(w.start),minute(w.end)])),[...named.values()].map(n=>minute(n.at))))].sort((a,b)=>a-b);
+    .flatMap(w=>[minute(w.start),minute(w.end)])),[...named.values()].map(n=>minute(n.at)),
+    (plannedClosing||[]).flatMap(s=>[minute(s.start),minute(s.end)])))].sort((a,b)=>a-b);
   for(let i=0;i<boundaries.length-1;i++){
    const start=boundaries[i],end=boundaries[i+1];
    const active=intervalUnits.filter(u=>minute(u.original.window.start)<=start&&end<=minute(u.original.window.end));
@@ -614,7 +645,8 @@ export function deriveApprovedMappedShiftEndCoverage({originalSource,currentSour
  }
  const policy=mappedSource.version.shiftEndContinuityPolicy;
  const completed=completeRecurringShiftEndCoverage(mappedSource,{slots:positions,weights:policy.weights,
-  sourceBoundEligibility:true,fullSegmentIdentity:true,namedHandoffs:policy.namedHandoffs||[]});
+  sourceBoundEligibility:true,fullSegmentIdentity:true,namedHandoffs:policy.namedHandoffs||[],
+  plannedClosingOwnership:policy.plannedClosingOwnership});
  const generated=new Set(),chains=[];
  for(const parent of mapped){
   const prefix=`${parent.workId}:`,rows=completed.input.version.assignments.filter(r=>r.dayOfWeek===parent.dayOfWeek
