@@ -1,0 +1,7 @@
+# Corrected static schedule data
+
+`custodial-eight-20261102-registration.json` carries the eight-person source, fixed-pattern binding, owner configuration and references to Eric's schedule instructions. It contains source DATA, not a cached compiler certificate, SQL acceptance, production registration or publication receipt. The separate ninth-position planning handout remains in `config/schedules/custodial-nine-position-20261028.json`; it creates no employee.
+
+The source begins November 2, 2026 and retains scheduled shift ends, full-hour lunch helpers, original duty anchors and the corrected closing ownership. The seven-day normal SQL check and unchanged owner/identity refusals are recorded outside the source tree in Main's implementation evidence.
+
+Use the existing release-operator source registration and approved-template RPCs after the exact schema rollout. Register `template.source` under `sourceId` with `static_weekly_v3_register_authority_source`, bind the existing employee profiles to their scheduled positions through the maintained roster workflow, and pass `sourceId`, `template`, `binding`, `ownerConfig` and `approvalEvidence` to `static_weekly_register_approved_template`. Keep the normal authority revision, source, named-manager, backup, release, restore and permission checks. The manager website then uses its existing approved-initial preview and confirmation flow. No publishing side effect occurs by reading this file.
