@@ -37,6 +37,10 @@ for (const [name, edit] of [
   ['unrelated capture plan', p => { p.capture.plan_sha256 = '0'.repeat(64); }],
   ['historical160 capture report', p => { p.capture.report_sha256 = '946dd61971aba8f6976b5dd463909a7808b8fba697991c9513477f325e9b1dc0'; }],
   ['historical395 target ledger', p => { p.capture.target_ledger_count = 395; }],
+  ['historical398 target ledger', p => { p.capture.target_ledger_count = 398; }],
+  ['historical163 pending plan', p => { p.capture.pending_count = 163; }],
+  ['historical297 report cannot authorize full-hour target', p => { p.capture.report_sha256 = '8042bc5e3a1bd141442fddb2b52b532b9eb67bdec6d0588bc5b87d951920a37e'; }],
+
   ['historical160 pending count', p => { p.capture.pending_count = 160; }],
   ['other original archive', p => { p.archive_digest = '5a72377ae70ff1a632c3d38df52a104f5f134332a87b41fc99473e42ff2a008d'; }],
   ['new platform privilege', p => { p.original_role_memberships[0].admin_option = !p.original_role_memberships[0].admin_option; }],

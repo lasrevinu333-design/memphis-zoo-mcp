@@ -1,6 +1,6 @@
 {
   "schema": "custodial.pending-source-schema-delta.v1",
-  "state": "SOURCE_CAPTURE_COMPLETE_POPULATED_TARGET_CAPTURE_PENDING",
+  "state": "SOURCE_AND_POPULATED_ROLLBACK_CAPTURE_COMPLETE_FULL_REHEARSAL_PENDING",
   "productionApplied": false,
   "predecessorCanonicalFingerprint": "a54f3660584b15a3129f7a448ba12cd43b572c3ede6ca64a23cbceb8b37f2187",
   "sourceCanonicalFingerprint": "432052a95830b4a8550cd6478d766bacc2bbbb4b2dd21d44544b238c70c5f001",
@@ -133,5 +133,53 @@
       }
     }
   ],
-  "qualification": "Source catalog data from the maintained selected297 prefix plus the exact new migration. Live populated target capture, exact-candidate backup/rehearsal and production migration authorization remain required; historical297 receipts do not qualify source298."
+  "qualification": "Measured empty canonical source298 and genuine populated rollback-only164 target capture are bound separately. Exact current-candidate backup/full rehearsal and normal production authorization remain required; neither capture grants runtime, installation or physical acceptance.",
+  "populated_target_capture": {
+    "Root_full_readback": {
+      "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/SOURCE298_POPULATED_TARGET_READBACK.json",
+      "sha256": "7ac3c00fc79ec9896f89bfba736fd3e9bd7c3ea2835f47a7dcaa39ba612496d1",
+      "bytes": 1966
+    },
+    "scope": "ROLLBACK_ONLY_TARGET_PREPARATION_DATA_NOT_PRODUCTION_OR_FULL_REHEARSAL",
+    "report": {
+      "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/POPULATED_SOURCE298_TARGET_40965791466/production-migration-target-capture.json",
+      "sha256": "dafa8d869004fa047ec7a191b040d22503bef8001a4200a44123c860fba5ec94",
+      "bytes": 18580457
+    },
+    "original_run_id": 40965791466,
+    "original_backup_run_id": 40960771863,
+    "Root_disposition_sha256": "5a366bf5ff093b632fa690ab111b9b9382209aa7b3eced80fc1245908be449c4",
+    "candidate_commit": "588b893b761d08b5157b4ca5b926f11a784bd142",
+    "candidate_tree": "6783245807db5c90db056d9afaab7ba1839ca664",
+    "archive_digest": "67c0d74bbf18c346314669119f0ae53ff61d9b00c4e6550b7af917b7f02bbdfe",
+    "plan_sha256": "1f9b4bf9e4721f4f9b871a762c8b76b2fdd959d4309632aba2f1ceb588aa7182",
+    "target_ledger_sha256": "1e3c8aebbf696a075a697879e27ad39aee194aa1dfecd0de2542fd6a7aa77a96",
+    "source_data_preservation": {
+      "original_tables": 217,
+      "exact_multiset_tables": 215,
+      "explicit_guarded_event_and_recovery_relations": 2,
+      "applied_migration_count": 164,
+      "report": {
+        "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/POPULATED_SOURCE298_TARGET_40965791466/production-migration-target-capture.json",
+        "sha256": "dafa8d869004fa047ec7a191b040d22503bef8001a4200a44123c860fba5ec94",
+        "bytes": 18580457
+      }
+    },
+    "rollback_evidence": {
+      "kind": "SOURCE_BOUND_PRODUCER_REPORT_ROLLBACK_VERIFIED_WITH_ORIGINAL_READBACK",
+      "report": {
+        "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/POPULATED_SOURCE298_TARGET_40965791466/production-migration-target-capture.json",
+        "sha256": "dafa8d869004fa047ec7a191b040d22503bef8001a4200a44123c860fba5ec94",
+        "bytes": 18580457
+      },
+      "committed": false,
+      "rollback_verified": true
+    },
+    "cleanup_disposition": "HOSTED_BEST_EFFORT_TRAP_ONLY",
+    "cleanup_receipt": null,
+    "production_authorized": false,
+    "candidate_migration_admission": false,
+    "runtime_admission": false,
+    "full_rehearsal_attestation": false
+  }
 }
