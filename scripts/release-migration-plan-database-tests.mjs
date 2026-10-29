@@ -44,16 +44,19 @@ if (selectedArguments[0] === currentCapturedSelector) {
   assert.ok(schemaTarget.profile, "Current captured target requires its closed production profile");
   const capture = state.target.normal_source_capture;
   const proof = schemaTarget.profile.capture;
+  const current298 = plan.files.length === 298;
   const current297 = plan.files.length === 297;
+  const pendingCount = current298 ? 164 : current297 ? 163 : 160;
+  const targetCount = current298 ? 399 : current297 ? 398 : 395;
   assert.equal(plan.baseCount, 134);
-  assert.equal(plan.files.length, current297 ? 297 : 294);
-  assert.equal(state.pending_migrations.length, current297 ? 163 : 160);
+  assert.equal(plan.files.length, current298 ? 298 : current297 ? 297 : 294);
+  assert.equal(state.pending_migrations.length, pendingCount);
   assert.deepEqual(state.pending_migrations.map(({ file }) => file), plan.files.slice(plan.baseCount));
   assert.equal(state.observed_production.production_ledger_count, 235);
   assert.equal(proof.source_ledger_count, state.observed_production.production_ledger_count);
   assert.equal(proof.pending_count, state.pending_migrations.length);
   assert.equal(proof.target_ledger_count, proof.source_ledger_count + proof.pending_count);
-  assert.equal(proof.target_ledger_count, current297 ? 398 : 395);
+  assert.equal(proof.target_ledger_count, targetCount);
   assert.equal(state.target.production_ledger_count, proof.target_ledger_count);
   assert.equal(state.target.canonical_source_schema_fingerprint, schemaTarget.deploymentFingerprint);
   assert.deepEqual(state.target.expected_catalog_counts, schemaTarget.deploymentCounts);
@@ -63,9 +66,18 @@ if (selectedArguments[0] === currentCapturedSelector) {
   for (const key of ["candidate_commit", "candidate_tree", "plan_sha256"]) assert.equal(capture[key], proof[key]);
   assert.equal(capture.archive_digest, schemaTarget.profile.archive_digest);
   const checked = assertReleaseWorkflowSource(sourceRoot);
-  assert.equal(checked.pendingCount, current297 ? 163 : 160);
-  assert.equal(checked.targetCount, current297 ? 398 : 395);
+  assert.equal(checked.pendingCount, pendingCount);
+  assert.equal(checked.targetCount, targetCount);
   assert.equal(checked.targetFingerprint, schemaTarget.deploymentFingerprint);
+  if (current298) {
+    assert.equal(plan.manifestSha256, "aca06e305ff4c5918e83045acf4d739fcb8746e41dcc89ceb59fcd0f98ab20ba");
+    assert.equal(capture.original_run_id, 40965791466);
+    assert.equal(proof.report_sha256, "dafa8d869004fa047ec7a191b040d22503bef8001a4200a44123c860fba5ec94");
+    assert.equal(proof.report_bytes, 18580457);
+    assert.equal(capture.rollback_evidence.rollback_verified, true);
+    assert.equal(capture.rollback_evidence.committed, false);
+    for (const key of ["production_authorized", "candidate_migration_admission", "runtime_admission", "full_rehearsal_attestation"]) assert.equal(capture[key], false);
+  }
   // Reuse the maintained complete source-plan/profile/capture and refusal
   // contracts. No URL, credentials, targetCapture or preload reaches the child.
   const argv = ["--max-old-space-size=128", resolve(sourceRoot, "scripts/current291-production-plan-source-tests.mjs")];
@@ -80,8 +92,8 @@ if (selectedArguments[0] === currentCapturedSelector) {
   console.log(JSON.stringify({ status: "SOURCE_ONLY_CURRENT_CAPTURED_TARGET_CONTRACT_PASS",
     SQL_execution: false, database_client_constructed: false, production_authorized: false,
     historical_23_positive_security_database_corpus: "NOT_RUN_CURRENT_CAPTURED_SOURCE_ROUTE",
-    adopted_capture_database_proof: current297 ? "SEPARATE_ORIGINAL_CAPTURE_40615635335_NOT_REEXECUTED" : "SEPARATE_ORIGINAL_CAPTURE_40360756054_NOT_REEXECUTED",
-    source_ledger_count: 235, pending_count: current297 ? 163 : 160, target_ledger_count: current297 ? 398 : 395,
+    adopted_capture_database_proof: current298 ? "SEPARATE_ORIGINAL_CAPTURE_40965791466_NOT_REEXECUTED" : current297 ? "SEPARATE_ORIGINAL_CAPTURE_40615635335_NOT_REEXECUTED" : "SEPARATE_ORIGINAL_CAPTURE_40360756054_NOT_REEXECUTED",
+    source_ledger_count: 235, pending_count: pendingCount, target_ledger_count: targetCount,
     canonical_fingerprint: schemaTarget.canonicalFingerprint,
     deployment_fingerprint: schemaTarget.deploymentFingerprint,
     adopted_report_sha256: proof.report_sha256,
