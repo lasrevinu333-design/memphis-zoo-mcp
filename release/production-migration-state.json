@@ -322,10 +322,15 @@
     }
   },
   "backup_evidence": {
-    "state": "AUTHENTIC_SOURCE_BACKUP_AND_ROLLBACK164_CAPTURE_CURRENT_CANDIDATE_FULL_REHEARSAL_STILL_REQUIRED",
+    "state": "AUTHENTIC_SOURCE_A_BACKUP_AND_REVIEWED_ROLLBACK_CAPTURE_FULL_REHEARSAL_STILL_REQUIRED",
     "last_verified": {
       "workflow_run_id": 40960771863,
       "source_commit": "f49cbe15fc874115f314b2746ddd5124f0edda70",
+      "artifact_id": 12935099844,
+      "artifact_name": "memphis-zoo-disaster-recovery-40960771863",
+      "artifact_sha256": "3773fecf8492131626503f74aa849f32f7afcb881bca13dd264373eef4dbc3af",
+      "artifact_sha256_scope": "API_REPORTED_ENCRYPTED_ARTIFACT_DIGEST",
+      "artifact_size_bytes": 15479873,
       "archive_digest": "67c0d74bbf18c346314669119f0ae53ff61d9b00c4e6550b7af917b7f02bbdfe",
       "restore_verification": "SIGNED_ARCHIVE_VERIFIED_AND_REVIEWED_ROLLBACK_TARGET_CAPTURE_NOT_FULL_CANDIDATE",
       "reviewed_target_report": {
