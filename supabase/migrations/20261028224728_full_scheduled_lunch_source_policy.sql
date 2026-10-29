@@ -54,6 +54,28 @@ begin$new$),
  execute body;
  if public.custodial_release_authority_current_grant_definition(identity) is distinct from before_acl then
   raise exception 'version guard ACL changed';end if;
+ -- Remove excluded top-level keys in one traversal. Retain only the
+ -- published compiler input needed for the exact source comparison, rather
+ -- than a second complete signed draft. No identity or admission rule moves.
+ identity:='public.static_weekly_assert_projection_envelope_attested(jsonb,uuid,date,jsonb)';
+ before_acl:=public.custodial_release_authority_current_grant_definition(identity);
+ body:=pg_get_functiondef(to_regprocedure(identity));
+ for seam in select * from (values
+  ($old$(p_envelope-'attestation')-'database_projection_identity'$old$,
+   $new$p_envelope-array['attestation','database_projection_identity']$new$),
+  ($old$select v.draft_document into v_document$old$,
+   $new$select v.draft_document#>'{authority,compilerInput}' into v_document$new$),
+  ($old$public.static_weekly_v5_projection_source_identity(v_document#>'{authority,compilerInput}')$old$,
+   $new$public.static_weekly_v5_projection_source_identity(v_document)$new$),
+  ($old$p_envelope-'semantic_snapshot'-'attestation'$old$,
+   $new$p_envelope-array['semantic_snapshot','attestation']$new$)
+ ) changes(old,new) loop
+  if length(body)-length(replace(body,seam.old,''))<>length(seam.old) then raise exception 'exact projection identity predecessor mismatch';end if;
+  body:=replace(body,seam.old,seam.new);
+ end loop;
+ execute body;
+ if public.custodial_release_authority_current_grant_definition(identity) is distinct from before_acl then
+  raise exception 'projection identity validator ACL changed';end if;
  identity:='public.static_weekly_v8_assert_lunch_document(uuid,jsonb)';
  before_acl:=public.custodial_release_authority_current_grant_definition(identity);
  body:=pg_get_functiondef(to_regprocedure(identity));
@@ -324,6 +346,7 @@ do $recovery$ declare identity text;definition text;changed integer;begin
   'public.static_weekly_v9_assert_shift_end_derivation(jsonb)',
   'public.static_weekly_assert_compiler_authority(jsonb,jsonb,date,boolean)',
   'public.static_weekly_version_guard()',
+  'public.static_weekly_assert_projection_envelope_attested(jsonb,uuid,date,jsonb)',
   'public.static_weekly_v3_create_draft(date,text,jsonb,jsonb,jsonb,bigint,uuid,text,uuid)',
   'public.static_weekly_v3_update_draft(uuid,jsonb,jsonb,jsonb,bigint,bigint,uuid,text)',
   'public.static_weekly_v3_publish_draft(uuid,bigint,bigint,uuid,text,text,uuid)',

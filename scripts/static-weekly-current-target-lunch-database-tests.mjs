@@ -2,9 +2,18 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {execFileSync} from 'node:child_process';
 import {randomUUID,createHash} from 'node:crypto';
-import {seedCompiledEventAuthority} from './fixtures/event-static-authority-fixture.mjs';
+import {types} from 'node:util';
+import {seedCompiledEventAuthority,copiedJsonRpcStatement} from './fixtures/event-static-authority-fixture.mjs';
 import {createStaticWeeklyProjectionWithLunchRpcInput} from '../src/static-weekly-lunch-publication.js';
 import {postgresJsonbContentDigest as digest} from '../src/static-weekly-schedule-program.js';
+import {installStaticWeeklySha256HexAccelerator} from '../src/static-weekly-schedule-model.js';
+
+// Match the production compiler worker's hashing implementation. Canonical
+// bytes, solver work, validation and the absolute operation limits are fixed.
+installStaticWeeklySha256HexAccelerator(text=>createHash('sha256').update(text,'utf8').digest('hex'),{
+ schema:'memphis-zoo.sha256-incremental-native.v1',isProxy:types.isProxy,
+ create(){const hash=createHash('sha256');return{writeUtf8:chunk=>hash.update(chunk,'utf8'),finishHex:()=>hash.digest('hex')};}
+});
 
 const container=process.env.LUNCH_PUBLICATION_TEST_CONTAINER;
 assert.match(container??'',/^mz_schema_rebuild_roster_fullhour_[0-9]+$/);
@@ -14,7 +23,7 @@ assert.equal(packet.compilerInput.version.lunchCoveragePolicy.sourceDigest,creat
 assert.equal(plan.status,'CURRENT_PROGRAM_TARGET_PUBLICATION_PENDING');
 const sql=s=>execFileSync('docker',['exec','-i',container,'psql','-X','-q','-At','-v','ON_ERROR_STOP=1','-U','supabase_admin','-d','postgres'],
  {input:(process.env.LUNCH_PUBLICATION_DIAGNOSTICS==='1'&&(/static_weekly_v3_(?:create_draft|publish_draft|materialize_projection)/.test(s))
-   ?"set log_min_messages=debug1;set client_min_messages=warning;load 'auto_explain';set auto_explain.log_min_duration=1;set auto_explain.log_nested_statements=on;set auto_explain.log_analyze=on;set auto_explain.log_timing=off;set auto_explain.log_verbose=off;\n":'')+s,
+   ?"set log_min_messages=debug1;set client_min_messages=warning;load 'auto_explain';set auto_explain.log_parameter_max_length=0;set auto_explain.log_min_duration=1;set auto_explain.log_nested_statements=on;set auto_explain.log_analyze=on;set auto_explain.log_timing=off;set auto_explain.log_verbose=off;\n":'')+s,
   encoding:'utf8',timeout:120000,maxBuffer:32*1024*1024});
 const q=s=>`'${String(s).replaceAll("'","''")}'`,j=v=>`${q(JSON.stringify(v))}::jsonb`;
 const query=s=>sql(s).trim().split('\n').at(-1),parsed=s=>JSON.parse(query(s));
@@ -42,6 +51,20 @@ const dates=Array.from({length:7},(_,n)=>new Date(Date.parse(date+'T12:00:00Z')+
 // compiler/result/attestation substitute for these owning operations.
 const fixture=await seedCompiledEventAuthority({sql,container,managerId:manager,dates,source:input,label:'current-target-full-lunch',mode:'official'});
 const projectionId=fixture.projectionIds[date],result=fixture.compiledByWeek[date];
+// The owning RPC signs this malformed envelope itself, so refusal must come
+// from the exact semantic identity check, beyond signature verification.
+let projectionIdentityRefusals=0;
+{
+ const envelope=structuredClone(fixture.envelopes[date]);envelope.database_projection_identity='0'.repeat(64);
+ const revision=Number(query('select current_revision from public.static_weekly_schedule_control where singleton;'));
+ let error;try{query(copiedJsonRpcStatement({role:'static_weekly_control_plane',
+  value:{objective:envelope.objective,metrics:envelope.metrics,envelope},columns:['objective','metrics','envelope'],
+  select:`select public.static_weekly_v3_materialize_projection(${q(fixture.publicationId)}::uuid,${q(date)}::date,
+   ${q(digest(envelope.applied_exceptions))},${q(envelope.compiler_version)},args.objective,args.metrics,
+   ${q(envelope.replay_digest)},args.envelope,${revision},${q(manager)}::uuid,${q(randomUUID())})::text from pg_temp.event_rpc_input args;`
+ }));}catch(e){error=String(e.stderr);}
+ assert.match(error??'',/projection semantic identity must bind the complete attested envelope/);projectionIdentityRefusals++;
+}
 let closingRefusals=0;
 for(const mutate of [
  p=>{p.plannedClosingOwnership['1'][0].end='14:15';},
@@ -99,7 +122,7 @@ for(const serviceDate of dates){
 }
 assert.equal(dateReads,7);assert.ok(intervals>=7);assert.ok(physicalChecks>0);
 assert.equal(query('select md5(jsonb_agg(to_jsonb(o)order by occurrence_id)::text)from public.weekly_schedule_occurrences o;'),before);
-assert.equal(query("select count(*)::text from public.custodial_release_authority_restore_inventory i where i.object_kind='function' and to_regprocedure(i.object_identity)in('public.static_weekly_v8_assert_lunch_document(uuid,jsonb)'::regprocedure,'public.static_weekly_v8_read_lunch_segments_dated_base(date)'::regprocedure,'public.custodial_operational_location_assignments(date)'::regprocedure,'public.static_weekly_v9_assert_shift_end_derivation(jsonb)'::regprocedure,'public.static_weekly_assert_compiler_authority(jsonb,jsonb,date,boolean)'::regprocedure,'public.static_weekly_version_guard()'::regprocedure,'public.static_weekly_v3_create_draft(date,text,jsonb,jsonb,jsonb,bigint,uuid,text,uuid)'::regprocedure,'public.static_weekly_v3_update_draft(uuid,jsonb,jsonb,jsonb,bigint,bigint,uuid,text)'::regprocedure,'public.static_weekly_v3_publish_draft(uuid,bigint,bigint,uuid,text,text,uuid)'::regprocedure,'public.static_weekly_v3_materialize_projection(uuid,date,text,text,jsonb,jsonb,text,jsonb,bigint,uuid,text)'::regprocedure)and i.definition_sql=pg_get_functiondef(to_regprocedure(i.object_identity));"),'10');
+assert.equal(query("select count(*)::text from public.custodial_release_authority_restore_inventory i where i.object_kind='function' and to_regprocedure(i.object_identity)in('public.static_weekly_v8_assert_lunch_document(uuid,jsonb)'::regprocedure,'public.static_weekly_v8_read_lunch_segments_dated_base(date)'::regprocedure,'public.custodial_operational_location_assignments(date)'::regprocedure,'public.static_weekly_v9_assert_shift_end_derivation(jsonb)'::regprocedure,'public.static_weekly_assert_compiler_authority(jsonb,jsonb,date,boolean)'::regprocedure,'public.static_weekly_version_guard()'::regprocedure,'public.static_weekly_assert_projection_envelope_attested(jsonb,uuid,date,jsonb)'::regprocedure,'public.static_weekly_v3_create_draft(date,text,jsonb,jsonb,jsonb,bigint,uuid,text,uuid)'::regprocedure,'public.static_weekly_v3_update_draft(uuid,jsonb,jsonb,jsonb,bigint,bigint,uuid,text)'::regprocedure,'public.static_weekly_v3_publish_draft(uuid,bigint,bigint,uuid,text,text,uuid)'::regprocedure,'public.static_weekly_v3_materialize_projection(uuid,date,text,text,jsonb,jsonb,text,jsonb,bigint,uuid,text)'::regprocedure)and i.definition_sql=pg_get_functiondef(to_regprocedure(i.object_identity));"),'11');
 assert.equal(query("select count(*)::text from pg_proc where oid in('public.static_weekly_assert_compiler_authority(jsonb,jsonb,date,boolean)'::regprocedure,'public.static_weekly_v9_assert_shift_end_derivation(jsonb)'::regprocedure)and proconfig @> array['plan_cache_mode=force_generic_plan'];"),'2');
 // Exercise the real immutable-row trigger separately from authority admission.
 // This deliberately incomplete synthetic guard row is rolled back; the actual
@@ -143,4 +166,4 @@ const guardResult=parsed(`begin;
 assert.deepEqual(guardResult,{changedColumnsRefused:19,exactBindingAccepted:true});
 console.log(JSON.stringify({status:'PASS',actualCurrentEightSource:true,sourceInputDigest:packet.sourceDigest,normalPublicationAndSQLReadback:true,
  scheduledLunches:doc.loans.length,dateReads,intervals,locationOwnershipComparisons:physicalChecks,closingRefusals,originalOccurrencesUnchanged:true,
- exactPrintedTarget:true,sourceBindingGuard:guardResult,disposableSyntheticNamedManager:true,production:false,genuineManagerBrowser:false,physicalNFC:false}));
+ exactPrintedTarget:true,sourceBindingGuard:guardResult,projectionIdentityRefusals,disposableSyntheticNamedManager:true,production:false,genuineManagerBrowser:false,physicalNFC:false}));
