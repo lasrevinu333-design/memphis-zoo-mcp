@@ -1,8 +1,8 @@
 {
   "artifact": "integrated-backend-authority-release-evidence.v2",
   "release_id": "release-2026.07.19.custodial-v3.12",
-  "frontend_commit_sha": null,
-  "frontend_commit_state": "final_rebind_required",
+  "frontend_commit_sha": "4688d8311ab9b5e71e30f8b4e2a09e30133a4da9",
+  "frontend_commit_state": "final_pair_bound",
   "schema_fingerprint": "432052a95830b4a8550cd6478d766bacc2bbbb4b2dd21d44544b238c70c5f001",
   "schema_transition": {
     "transition_id": "custodial-full-hour-test-20261029",
@@ -895,7 +895,7 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "05b0ac0cb2c0cbf393dc466e9a3d01d8210979c4"
+        "object_id": "280315dd899e238544fef0163b72c11fa5d8f8b7"
       },
       {
         "path": "release/installed-source/20261006031304_custodial_owner_delegated_actions.sql",
@@ -945,7 +945,7 @@
       {
         "path": "release/pending-schema/full-hour-source298.json",
         "mode": "100644",
-        "object_id": "c7c18fe4bcff7bf062004caa6ea413fdece65ea8"
+        "object_id": "85a5e5fabf3d20de26a894cb434174ad9a1cc010"
       },
       {
         "path": "release/production-backup-source-extension.json",
@@ -1215,7 +1215,7 @@
       {
         "path": "release/production-migration-state.json",
         "mode": "100644",
-        "object_id": "45cd9cad0dd920f4adedc746f9522556ea212084"
+        "object_id": "662c9cd500f5eba9eebdc45ac3aa8fee340bb6ca"
       },
       {
         "path": "release/production-schema-observation-20260922.json",
@@ -1225,7 +1225,7 @@
       {
         "path": "release/production-target-schema-profile.json",
         "mode": "100644",
-        "object_id": "13273394ad0315cd2a4e568370c8ec83597176c3"
+        "object_id": "9bff167233ab01f408bc110f58438d538fa9302a"
       },
       {
         "path": "release/restore-dispositions/20261029-backup-40960771863.json",
@@ -1240,7 +1240,7 @@
       {
         "path": "release/schema-alignment-input.json",
         "mode": "100644",
-        "object_id": "ae6a2fbb3ecb4785ace62efe311179c0033f8c82"
+        "object_id": "b8f9271bc7a8045469f221f21f79afbe3b6c2a82"
       },
       {
         "path": "release/shared-events-database-receipt.json",
@@ -1595,7 +1595,7 @@
       {
         "path": "scripts/current291-production-plan-source-tests.mjs",
         "mode": "100644",
-        "object_id": "c5aec9b418e818bec72eff24de1eca87f4d6c169"
+        "object_id": "f5bbce09ac19b69976c675b4281e0d116204862f"
       },
       {
         "path": "scripts/custodial-atomic-commit-database-tests.mjs",
@@ -3950,12 +3950,12 @@
       {
         "path": "scripts/production-target-schema-profile-tests.mjs",
         "mode": "100644",
-        "object_id": "3559ca8adbf24a2dc731f3bf36cd2ed711e316cb"
+        "object_id": "0e49503dc2de3eaae70e8d808ed9b64ecb5e9709"
       },
       {
         "path": "scripts/production-target-schema-profile.mjs",
         "mode": "100644",
-        "object_id": "fb4c62dfda01b923546cdb8aee72dcac8dd1688c"
+        "object_id": "be6ab94665ec7e7e1eeeb6ce1894b6e475a9f757"
       },
       {
         "path": "scripts/proxy-address-regression-tests.mjs",
