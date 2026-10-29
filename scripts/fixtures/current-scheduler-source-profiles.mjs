@@ -11,6 +11,14 @@ assert.equal(document.profiles.length,15);assert.equal(new Set(document.profiles
 export function restoreSchedulerProofSource(profile,source){
  assert.equal(typeof profile,'string');assert.equal(typeof source,'string');
  const row=document.profiles.find(value=>value.profile===profile);assert.ok(row,'explicit retained Source profile required');
+ // One exact source298 successor, solely for this historical wiring view.
+ // Runtime replay and the selected297 fixture admission remain unchanged.
+ if(profile==='NATIVE_CURRENT_REPLAY_MANIFEST_RETAINED_WIRING'&&sha(source)==='aca06e305ff4c5918e83045acf4d739fcb8746e41dcc89ceb59fcd0f98ab20ba') {
+  const current=JSON.parse(source);assert.deepEqual(current.phases.map(phase=>phase.files.length),[134,93,71]);
+  assert.deepEqual(current.phases[2].files.at(-1),{name:'20261028224728_full_scheduled_lunch_source_policy.sql',sha256:'a47387ddf244a04df646c9bb2d60eef86a769b96baf9106759f1c2a703248514'});
+  current.phases[2].files.pop();source=JSON.stringify(current,null,2)+'\n';
+  assert.equal(sha(source),'e37cf98ffde8165797069595b45d84fdaf89871a719c31a839905e9e6317d54c');
+ }
  // Only this historical wiring proof may consume the exact selected297 manifest.
  // Strip its fixed three-row extension back to the authentic294 whole-file
  // endpoint, then apply the unchanged historical profile. No runtime, SQL,

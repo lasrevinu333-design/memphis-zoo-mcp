@@ -1,4 +1,5 @@
 import {restoreSchedulerProofSource} from './fixtures/current-scheduler-source-profiles.mjs';
+import {restoreFullHourProofSource} from './fixtures/full-hour-source-predecessors.mjs';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
@@ -95,7 +96,7 @@ function validate(source,files) {
 }
 
 export function verifyNativeScheduleSourceWiring(source,root) {
-  const files=Object.fromEntries(Object.keys(hashes).map(name=>{const source=readFileSync(resolve(root,name),'utf8');return[name,name==='supabase/canonical/migration-replay-order.json'?restoreSchedulerProofSource('NATIVE_CURRENT_REPLAY_MANIFEST_RETAINED_WIRING',source):name==='scripts/native-provider-credential-observation-http-tests.mjs'?restoreSchedulerProofSource('NATIVE_CURRENT_HTTP_SELECTED_DEVICE_PIN',source):name==='scripts/native-provider-credential-observation-ci-wiring.mjs'?restoreSchedulerProofSource('NATIVE_CURRENT_CREDENTIAL_WIRING_RETAINED_SOURCE',source):source];}));
+  const files=Object.fromEntries(Object.keys(hashes).map(name=>{const source=readFileSync(resolve(root,name),'utf8');return[name,name==='supabase/canonical/migration-replay-order.json'?restoreSchedulerProofSource('NATIVE_CURRENT_REPLAY_MANIFEST_RETAINED_WIRING',source):name==='scripts/native-provider-credential-observation-http-tests.mjs'?restoreSchedulerProofSource('NATIVE_CURRENT_HTTP_SELECTED_DEVICE_PIN',source):name==='scripts/native-provider-credential-observation-ci-wiring.mjs'?restoreSchedulerProofSource('NATIVE_CURRENT_CREDENTIAL_WIRING_RETAINED_SOURCE',source):name==='src/native-schedule-occurrence.js'?restoreFullHourProofSource(name,source):source];}));
   const predecessor=validate(source,files);
   let rejected=0;
   for(const replacement of ['',`// ${statement}`,`${statement}\n${statement}`,

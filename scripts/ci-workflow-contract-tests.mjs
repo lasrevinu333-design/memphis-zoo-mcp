@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import {verifyFreshCurrentOwningWiring} from './current-system-fresh-owning-wiring.mjs';
+import './fixtures/full-hour-source-predecessors-tests.mjs';
 
 import {restoreSchedulerProofSource} from './fixtures/current-scheduler-source-profiles.mjs';
 import assert from "node:assert/strict";
@@ -61,11 +62,13 @@ const freshReplayWorkflowPaths = new Set([
 // its earlier recorder retains the distinct rehearsal image. Bind the whole
 // reviewed workflow so this exception cannot admit another image caller.
 const mixedFreshRepairWorkflowPath = resolve(workflowDirectory, "custodial-production-repair.yml");
-const mixedFreshRepairWorkflowSha256 = "bf5d2e1992f24eae9e8271d4387b3e69afd4601e8e21328915cf51ee39f2808b";
+const mixedFreshRepairWorkflowSha256 = "1c7dea503a8c7c68439b440fed31ba98869378dd3a93a658026d9d830b50f0bb";
 // Foundation provisions the exact manifest-selected fresh fixture image before
 // its existing constructor; the earlier recorder keeps its rehearsal image.
 const mixedFreshFoundationWorkflowPath = resolve(workflowDirectory, "foundation-security-gate.yml");
-const mixedFreshFoundationWorkflowSha256 = "c3256db5eabc195ca21d5e61794038b4353f5a2357eedbc48530c7e1359c0ae9";
+// Successor changes only the exact package.json digest after adding the owner
+// schedule correction checks; fresh-only construction and all limits are exact.
+const mixedFreshFoundationWorkflowSha256 = "eccd18cd20bdcec941ba5dced2d6ad5e9d0e5e76250160e253de427c2a45b0e0";
 const thisContractPath = fileURLToPath(import.meta.url);
 const postgresImagePins = postgresPinSources.flatMap((path) => {
   const pins = [...readFileSync(path, "utf8").matchAll(/(?:public\.ecr\.aws\/|docker\.io\/)?supabase\/postgres@sha256:[0-9a-f]{64}/g)]

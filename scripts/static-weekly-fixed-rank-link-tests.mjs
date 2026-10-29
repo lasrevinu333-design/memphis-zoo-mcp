@@ -6,6 +6,7 @@ import {join} from 'node:path';
 import {pathToFileURL,fileURLToPath} from 'node:url';
 import {isDeepStrictEqual} from 'node:util';
 import * as current from '../src/static-weekly-schedule-program.js';
+import {restoreFullHourProofSource} from './fixtures/full-hour-source-predecessors.mjs';
 // Pure representation proof. No engine, solver, receipt fabrication or
 // publication. --actual additionally checks the privately retained exact LP;
 // the portable run NEVER claims that omitted private artifact was examined.
@@ -20,6 +21,7 @@ const linkStart='    const fixedValues = fixedBinaryDailyRankValues(prefix, load
 const linkEnd='    ranks.slice(0, -1).forEach';
 const originalLink='    loads.forEach((entry, itemIndex) => ranks.forEach((rank, rankIndex) => { const permutation = permutations[itemIndex][rankIndex]; constraints.push({ name: `${prefix}_link_lo_${itemIndex + 1}_${rankIndex + 1}`, terms: [[1, rank], ...entry.terms.map(([coefficient, variable]) => [-coefficient, variable]), [-maximum, permutation]], relation: ">=", value: entry.constant - maximum }); constraints.push({ name: `${prefix}_link_hi_${itemIndex + 1}_${rankIndex + 1}`, terms: [[1, rank], ...entry.terms.map(([coefficient, variable]) => [-coefficient, variable]), [maximum, permutation]], relation: "<=", value: entry.constant + maximum }); }));\n';
 export function reverseFixedRankLinks(source){
+ source=restoreFullHourProofSource('src/static-weekly-schedule-program.js',source);
  assert.equal(sha(source),FINAL,'Exact final product bytes required');
  for(const needle of [helperStart,buildStart,linkStart,linkEnd])assert.equal(source.split(needle).length,2,'Unique guarded source seam');
  const begin=source.indexOf(helperStart),end=source.indexOf(buildStart,begin);
@@ -29,7 +31,7 @@ export function reverseFixedRankLinks(source){
  assert.equal(sha(previous),BASE,'Exact two-hunk reversal; unrelated drift forbidden');return previous;
 }
 async function moduleFrom(source){
- const resolved=source.replace(/from "(\.\/[^"\n]+)"/g,(_,relative)=>`from "${new URL(relative,SOURCE).href}"`);
+ const resolved=source.replace(/from (["'])(\.\/[^"'\n]+)\1/g,(_,quote,relative)=>`from ${quote}${new URL(relative,SOURCE).href}${quote}`);
  const directory=mkdtempSync(join(tmpdir(),'custodial-fixed-ranks-')),file=join(directory,'program.mjs');
  try{writeFileSync(file,resolved,{flag:'wx',mode:0o600});return await import(pathToFileURL(file).href);}
  finally{unlinkSync(file);rmdirSync(directory);}
@@ -107,7 +109,7 @@ export async function runStaticWeeklyFixedRankLinkTests({actual=false}={}){
  const previous=reverseFixedRankLinks(text);checks++;
  for(const bad of [text+'\n',text.replace(linkStart,linkStart+linkStart),text.replace('const modelBytes =','const modelBytesX =')]){assert.throws(()=>reverseFixedRankLinks(bad));checks++;}
  const legacy=await moduleFrom(previous),privateModule=await moduleFrom(text+'\nexport { fixedBinaryDailyRankValues as __testFixedValues };\n'),helper=privateModule.__testFixedValues;
- for(const [file,digest]of [['static-weekly-schedule-model.js','23fd769ded7a126c6dc61c0421a7a2bb96e0073cbae048440910de192d16738e'],['static-weekly-schedule-verifier.js','1700488fafa6e7683aed9ba11e1d6b0eb9800ed4a19d2713410a987417bfcabf'],['static-weekly-schedule-compiler.js','593893e4daac566fa665bb987af17ce803414c92ebd59abf6e8a24aed2361f1a']]){assert.equal(sha(readFileSync(new URL('../src/'+file,import.meta.url))),digest);checks++;}
+ for(const [file,digest]of [['static-weekly-schedule-model.js','6c956a2f3e7cb1a9f6366515393cf2eab03639776f64e53a38317a0010956271'],['static-weekly-schedule-verifier.js','1700488fafa6e7683aed9ba11e1d6b0eb9800ed4a19d2713410a987417bfcabf'],['static-weekly-schedule-compiler.js','12256a5922c1f1e4f4d4b67da211c4adb74f5b328fb82ff178eb032387f94b03']]){assert.equal(sha(readFileSync(new URL('../src/'+file,import.meta.url))),digest);checks++;}
  const verifier=readFileSync(new URL('../src/static-weekly-schedule-verifier.js',import.meta.url),'utf8');
  assert.ok(verifier.includes('generateStaticWeeklySchedulingProgram(input, null, deadline)'));assert.ok(verifier.includes('iterateStaticWeeklySchedulingWitnessTiers(regenerated, witnessByName, deadline)'));checks+=2;
  same(derive(helper,shape()),[5,0,0],'Supported endpoint bindings');checks++;

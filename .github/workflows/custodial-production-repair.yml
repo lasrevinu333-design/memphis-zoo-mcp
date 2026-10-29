@@ -34,7 +34,7 @@ jobs:
           set -euo pipefail
           docker pull supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed
           /usr/bin/sha256sum --check --strict <<'REVIEWED_INPUTS'
-          3c00289fa710b8b0cdf9343c3370146a98b7aa4c31b9bc75987ff18c2c1f09c9  package.json
+          f46280d44a05cb35a1e5fcb99d838be424d67e332b70991216918feaa3e20770  package.json
           d8c17d9e50b99b641dfd44722b2f6000d015f702a9c18719813bfaba2b2476f3  package-lock.json
           d8ad584e8dd3adf8be9aa04bf7287fb45ed8805f7d771c814183cc781e8e2149  scripts/legacy-activation-http-tests.mjs
           b2fe3d3dd2c1b7619d5cb7869a865ef44284269264cd6e0f931cdbbf930141d0  scripts/release-pair-consumer-regression-tests.mjs

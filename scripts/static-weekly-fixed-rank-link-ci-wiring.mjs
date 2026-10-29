@@ -3,11 +3,12 @@ import {readFileSync} from 'node:fs';
 import {resolve} from 'node:path';
 import {createHash} from 'node:crypto';
 import {reverseFixedRankLinks} from './static-weekly-fixed-rank-link-tests.mjs';
+import {restoreFullHourProofSource} from './fixtures/full-hour-source-predecessors.mjs';
 const sha=value=>createHash('sha256').update(value).digest('hex');
 const statement="await import('./static-weekly-fixed-rank-link-ci-tests.mjs');";
 const pins={
  'src/static-weekly-schedule-program.js':'1a5ef78107964d823f1a1eaf617b9d5e439339122730ac4691bd671199a4da52',
- 'scripts/static-weekly-fixed-rank-link-tests.mjs':'99386765ad249eb7005dfd5c89e0bf8505a459a05835db40db79499eff635531',
+ 'scripts/static-weekly-fixed-rank-link-tests.mjs':'cf74b7b2ff33a05b61f6bc162b806752ae4af0044c68692f6f5eee9be6856731',
 };
 // Only old representation-test inputs are reconstructed. The executing
 // product retains the changed model and the current absolute60s deadline.
@@ -42,7 +43,7 @@ function validate(source,wrapper,files){
 }
 export function verifyFixedRankLinkWiring(source,root){
  const wrapper=readFileSync(resolve(root,'scripts/static-weekly-fixed-rank-link-ci-tests.mjs'),'utf8');
- const files=Object.fromEntries(Object.keys(pins).map(path=>[path,readFileSync(resolve(root,path),'utf8')]));
+ const files=Object.fromEntries(Object.keys(pins).map(path=>{const bytes=readFileSync(resolve(root,path),'utf8');return[path,path==='src/static-weekly-schedule-program.js'?restoreFullHourProofSource(path,bytes):bytes];}));
  const prior=validate(source,wrapper,files);let rejected=0;
  for(const replacement of ['',`// ${statement}`,statement+'\n'+statement,`if(false){${statement}}`,statement.replace('await ',''),statement.replace(');',').catch(()=>{});')]){assert.throws(()=>validate(source.replace(statement,replacement),wrapper,files));rejected++;}
  for(const[from,to]of [['process.uptime()*1000','0'],['+60000','+315000'],['receipt.checks,79','receipt.checks,0'],['receipt.completeTruthCases,16584','receipt.completeTruthCases,0'],['receipt.actualPrivateCaptureChecked,false','receipt.actualPrivateCaptureChecked,true'],['await runBoundedNodeProof','runBoundedNodeProof']]){
