@@ -34,6 +34,16 @@ export function assertOwnedTargetMetadata({databaseUrl,runId,container,metadata,
 }
 
 export function assertTargetCapturePendingPlan(pending,declared) {
+ if(pending.length===164){
+  assert.ok(Array.isArray(declared)&&[160,163,164].includes(declared.length),'Exact predecessor or current full-hour declaration required');
+  assertTargetCapturePendingPlan(pending.slice(0,163),declared.slice(0,163));
+  assert.deepEqual(pending[163],{order:164,file:'20261028224728_full_scheduled_lunch_source_policy.sql',
+   phase:'full_scheduled_lunch_source_policy',source_migration_version:'20261028224728',
+   sha256:'a47387ddf244a04df646c9bb2d60eef86a769b96baf9106759f1c2a703248514'},
+   'Only the exact full-hour source delta may follow the intact163 plan');
+  if(declared.length===164)assert.deepEqual(pending,declared,'Complete current declaration must match');
+  return pending;
+ }
  assert.equal(pending.length,163);
  assert.ok(Array.isArray(declared)&&[160,163].includes(declared.length),'Only exact historical160 or current163 declared plans are supported');
  assert.deepEqual(pending.slice(0,declared.length),declared,'Preserve the whole exact declared canonical/production-forward source plan');
@@ -42,6 +52,9 @@ export function assertTargetCapturePendingPlan(pending,declared) {
   {file:'20261027231000_canonical_coverall_capacity_links.sql',sha256:'c4be89a07f46717ddcc7ceebed639cdc10b589b8ff72e9cf20a3523bdec43903',order:162},
   {file:'20261027234814_mcp_oauth_durable_token_families.sql',sha256:'e74210f033e5c65d5e99a090ca201d1c010d6cb5c4159a015bb08e3719c44f6e',order:163},
  ],'Only the exact source-selected three additions can extend rollback-only target preparation');
+ assert.equal(sha(stableJson(releaseMigrationPlanIdentity(pending))),
+  'e022f25547c93d1e012dd500e0a02052d6eebf4aa14d227af8a2ac70f9056a7b',
+  'Retain the complete established163 plan identity and executed owner-profile bytes');
  return pending;
 }
 
@@ -58,12 +71,23 @@ export function targetCaptureState({backendRoot,state,source}) {
  const normalize=binding=>({...binding,extensions:binding.extensions.map(({source_location,...item})=>item)});
  assert.deepEqual(normalize(source.binding),expected,'Signed archive must match the finite observed235 source declaration');
  assert.equal(stableJsonFileSha256(source.ledger),summary.source_identity.migration_ledger_sha256);
- const replay=readMigrationReplayPlan(backendRoot);assert.equal(replay.files.length,297);
- assert.equal(replay.manifestSha256,'e37cf98ffde8165797069595b45d84fdaf89871a719c31a839905e9e6317d54c');
+ const replay=readMigrationReplayPlan(backendRoot);
+ if(replay.files.length===298){
+  assert.equal(replay.manifestSha256,'aca06e305ff4c5918e83045acf4d739fcb8746e41dcc89ceb59fcd0f98ab20ba');
+  const current=JSON.parse(readFileSync(resolve(backendRoot,'supabase/canonical/migration-replay-order.json')));
+  assert.deepEqual(current.phases.map(phase=>phase.files.length),[134,93,71]);
+  assert.deepEqual(current.phases.at(-1).files.pop(),{name:'20261028224728_full_scheduled_lunch_source_policy.sql',
+   sha256:'a47387ddf244a04df646c9bb2d60eef86a769b96baf9106759f1c2a703248514'});
+  assert.equal(sha(JSON.stringify(current,null,2)+'\n'),'e37cf98ffde8165797069595b45d84fdaf89871a719c31a839905e9e6317d54c',
+   'The complete exact297 predecessor must remain unchanged');
+ }else{
+  assert.equal(replay.files.length,297);
+  assert.equal(replay.manifestSha256,'e37cf98ffde8165797069595b45d84fdaf89871a719c31a839905e9e6317d54c');
+ }
  assert.equal(state.observed_production.source_authority_migration_count,134);
  const canonical=replay.files.slice(134).map((file,index)=>({order:index+1,file,phase:file.slice(15,-4),
   source_migration_version:file.slice(0,14),sha256:sha(readFileSync(resolve(backendRoot,'supabase/migrations',file)))}));
- assert.equal(canonical.length,163);
+ assert.equal(canonical.length,replay.files.length===298?164:163);
  const pending=assertTargetCapturePendingPlan(bindExistingPostgresForwardSources(backendRoot,canonical),state.pending_migrations);
  assert.ok(pending.every(item=>!source.ledger.some(row=>row.version===item.source_migration_version)));
  return {...state,mode:'isolated_target_preparation_rollback_only',
