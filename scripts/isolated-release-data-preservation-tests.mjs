@@ -6,6 +6,8 @@ import {join} from 'node:path';
 import pg from 'pg';
 import {loadOriginal235PreservationSource,validateOriginal235PreservationPlan,nativeTextColumnProjection,compileOriginalTableComparison,NATIVE_TEXT_PRESERVATION_SETTINGS,prepareIsolatedReleaseDataPreservation,readOriginal217PreservationScope} from './isolated-release-data-preservation.mjs';
 import {bindExistingPostgresForwardSources,productionForwardSourceManifest} from './production-forward-source.mjs';
+import {readMigrationReplayPlan} from './migration-replay-order.mjs';
+import {createHash} from 'node:crypto';
 const root=fileURLToPath(new URL('..',import.meta.url)),read=f=>fs.readFileSync(join(root,f),'utf8');
 let checks=0;const test=async(name,fn)=>{await fn();checks++;};
 const manifest=loadOriginal235PreservationSource(root),module=read('scripts/isolated-release-data-preservation.mjs');
@@ -18,7 +20,7 @@ const maintainedRenderer=vm.runInNewContext('('+restore.slice(begin,end)+')',{
 });
 await test('exact original235 public metadata census and four finite exceptions',()=>{
  assert.equal(manifest.tables.length,182);assert.equal(manifest.source_ledger_count,235);assert.equal(manifest.source_ledger_head,'20261021111917');
- assert.equal(manifest.canonical_source_count,289);assert.equal(manifest.production_authorized,false);
+ assert.equal(manifest.canonical_source_count,294);assert.equal(manifest.production_authorized,false);
  assert.deepEqual(manifest.tables.find(x=>x.name==='system_settings').columns,['setting_key','setting_value','description','updated_at']);
  assert.deepEqual(manifest.tables.find(x=>x.name==='events_app_event_history').columns,['id','event_id','action','actor','reason','previous_record','new_record','created_at','actor_manager_id']);
 });
@@ -43,7 +45,16 @@ await test('maintained ordinary restore canonical formatting is exactly retained
 });
 const canonicalPlan=manifest.plan.map(x=>({order:x.order,file:x.file,source_migration_version:x.file.slice(0,14),sha256:x.canonical_sha256}));
 const actualPlan=bindExistingPostgresForwardSources(root,canonicalPlan);
-await test('all155 actual source inputs admitted through shipping dualhash resolver',()=>{
+const current164=bindExistingPostgresForwardSources(root,readMigrationReplayPlan(root).files.slice(134).map((file,index)=>({
+ order:index+1,file,phase:file.slice(15,-4),source_migration_version:file.slice(0,14),sha256:createHash('sha256').update(read('supabase/migrations/'+file)).digest('hex'),
+})));
+await test('exact full-hour164 plan preserves all original235 comparison obligations',()=>{
+ assert.equal(current164.length,164);assert.deepEqual(validateOriginal235PreservationPlan(root,current164),manifest);
+});
+for(const mutation of [p=>p.at(-1).sha256='0'.repeat(64),p=>p.at(-1).phase='unknown',p=>p.at(-1).forward_source={},p=>p[160].sha256='0'.repeat(64),p=>p.push({...p.at(-1)})]){
+ await test('full-hour preservation rejects changed tail, prefix, execution profile or extra migration',()=>{const p=structuredClone(current164);mutation(p);assert.throws(()=>validateOriginal235PreservationPlan(root,p));});
+}
+await test('all160 actual source inputs admitted through shipping dualhash resolver',()=>{
  validateOriginal235PreservationPlan(root,actualPlan);
  assert.deepEqual(actualPlan.filter(x=>x.forward_source).map(x=>x.order),canonicalPlan.filter(x=>productionForwardSourceManifest(root).migrations.some(m=>m.canonical_file===x.file)).map(x=>x.order));
 });

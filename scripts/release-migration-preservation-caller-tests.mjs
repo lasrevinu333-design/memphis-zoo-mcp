@@ -3,6 +3,7 @@ import {runTargetCaptureStep,AUTHORITY_IDENTITY158_SOURCE_FILE,AUTHORITY_IDENTIT
 import {readFileSync} from 'node:fs';
 import {resolve,basename} from 'node:path';
 import {createHash} from 'node:crypto';
+import {readMigrationReplayPlan} from './migration-replay-order.mjs';
 
 // Execute the complete maintained caller with recording dependencies. No SQL,
 // Docker, keys, network, or database constructor from production is executed.
@@ -49,14 +50,14 @@ async function fixture({target=true,fail=null,length=160,rehearsal=true}={}){
   }
  }
  const dependencies={assertReleaseWorkflowSource:()=>{events.push('targetSourcePreflight');},createHash,resolve,basename,pg:{Client},process:{env},console:{log:x=>{events.push('stdout');logs.push(JSON.parse(x));}},
-  readFileSync:()=>JSON.stringify(state),stableJson,stableJsonFileSha256:digest,
+  readFileSync:()=>JSON.stringify(state),stableJson,stableJsonFileSha256:digest,readMigrationReplayPlan,
   resolveReleaseMigrationSource:(_r,item)=>({sql:'begin;\nUNIT_'+item.order+'\ncommit;\n'}),releaseMigrationPlanIdentity:p=>p.map(x=>x.order),
   prepareTargetCapture:()=>capture,writeTargetCapture:(_p,value)=>{events.push('successReceipt');logs.push(value);},writeTargetCaptureRefusal:(_p,value)=>{events.push('refusalReceipt');logs.push(value);},
   runTargetCaptureStep:async({run,onRefusal})=>{try{return await run();}catch(e){onRefusal({unit:true});throw e;}},
   captureCatalogFromSnapshot:async()=>{catalogReads++;events.push('catalogRead');if(fail==='sourceCatalog'&&catalogReads===1)return after;if(rolled)return fail==='rollbackCatalog'?after:before;return catalogReads===1?before:after;},
   fingerprintSchemaCatalog:c=>({fingerprint:fail==='targetCatalog'&&c.tables[0].candidate===true?'0'.repeat(64):digest(c)}),
   openIsolatedPreservationArchive:()=>{events.push('openArchive');if(fail==='archive')throw failError;return{archive:{unitArchive:true},close(){events.push('preservationArchiveClose');}};},
-  prepareIsolatedReleaseDataPreservation:async args=>{events.push('snapshot');assert.deepEqual(args.sourceCatalog,before);assert.equal(args.plan.length,160);assert.equal(args.verifiedArchive.unitArchive,true);if(fail==='snapshot')throw failError;return{verify:async()=>{events.push('verify');if(fail==='verify')throw failError;return{unitPreserved:true};}};},
+  prepareIsolatedReleaseDataPreservation:async args=>{events.push('snapshot');assert.deepEqual(args.sourceCatalog,before);assert.equal(args.plan.length,length);assert.equal(args.verifiedArchive.unitArchive,true);if(fail==='snapshot')throw failError;return{verify:async()=>{events.push('verify');if(fail==='verify')throw failError;return{unitPreserved:true};}};},
   releaseMigrationAuthorizationBinding:()=>{},requireSigningKey:()=>{},verifyBinding:()=>false,validateAuthorizationRehearsalProvenance:()=>{},TASK_LOCAL_PROVENANCE_KIND:'unit',TASK_LOCAL_RUNNER_PATH:'unit'};
  let error;try{await new AsyncFunction(...Object.keys(dependencies),executable)(...Object.values(dependencies));}catch(e){error=e;}
  return{events,logs,error,migrations};
@@ -69,6 +70,12 @@ await check('160 target capture snapshots and verifies within locks before postc
  const publish=r.events.indexOf('successReceipt');assert.ok(r.events.lastIndexOf('ledgerRead',publish)>r.events.indexOf('rollback'));assert.ok(r.events.lastIndexOf('catalogRead',publish)>r.events.indexOf('rollback'));assert.equal(r.logs.find(x=>x.scope==='target_preparation').source_data_preservation.unitPreserved,true);absent(r,'COMMITTED','refusalReceipt');before(r,'end','preservationArchiveClose');before(r,'preservationArchiveClose','captureArchiveCleanup');
 });
 await check('160 ordinary isolated rehearsal verifies before its existing disposable commit and prints receipt afterward',async()=>{const r=await fixture({target:false});assert.ifError(r.error);before(r,'snapshot','migration:1');before(r,'migration:160','verify');before(r,'verify','COMMITTED');before(r,'COMMITTED','stdout');assert.equal(r.logs[0].source_data_preservation.unitPreserved,true);absent(r,'successReceipt','refusalReceipt','captureArchiveCleanup');});
+for(const target of [true,false])await check('164 full-hour caller retains complete preservation and target rollback='+target,async()=>{
+ const r=await fixture({target,length:164});assert.ifError(r.error);assert.equal(r.migrations,164);
+ before(r,'snapshot','migration:1');before(r,'migration:164','verify');
+ if(target){before(r,'verify','rollback');before(r,'rollback','successReceipt');absent(r,'COMMITTED');}
+ else{before(r,'verify','COMMITTED');before(r,'COMMITTED','stdout');}
+});
 for(const target of [true,false])for(const fail of ['archive','connect','sourceCatalog','snapshot','migration','ledger','verify',...(!target?['targetCatalog']:[])])await check('failure '+fail+' target='+target+' never commits or publishes success',async()=>{
  const r=await fixture({target,fail});assert.ok(r.error,JSON.stringify({target,fail,events:r.events.slice(-15)}));absent(r,'COMMITTED','successReceipt','stdout');assert.ok(r.events.includes('end'));if(fail!=='archive')assert.ok(r.events.includes('preservationArchiveClose'));if(['archive','connect'].includes(fail))absent(r,'rollback','ledgerRead','catalogRead');
  if(['archive','connect','sourceCatalog','snapshot'].includes(fail))assert.equal(r.migrations,0);

@@ -155,7 +155,7 @@ export async function runStaticWeeklyFixedRankLinkTests({actual=false}={}){
  }
  const actualResult=actual?await actualProof(legacy):null;
  assert.ok(performance.now()-started<60000);
- return{status:'PASS',checks,cellTruthCases,completeTruthCases,completeFeasibleCases,hostileGuardCases:mutations.length,tiny,actual:actualResult,actualPrivateCaptureChecked:actual,sourceSha256:FINAL,predecessorSha256:BASE,elapsedMs:performance.now()-started,pid:process.pid,solver:false,engine:false,publication:false,independentlyProvesOptimality:false,allocationBenefitUnmeasured:true};
+ return{status:'PASS',checks,cellTruthCases,completeTruthCases,completeFeasibleCases,hostileGuardCases:mutations.length,tiny,actual:actualResult,actualPrivateCaptureChecked:actual,sourceSha256:sha(text),retainedFullHourPredecessorSha256:FINAL,predecessorSha256:BASE,elapsedMs:performance.now()-started,pid:process.pid,solver:false,engine:false,publication:false,independentlyProvesOptimality:false,allocationBenefitUnmeasured:true};
 }
 if(process.argv[1]===fileURLToPath(import.meta.url)){
  assert.ok(process.argv.length===2||(process.argv.length===3&&process.argv[2]==='--actual'));

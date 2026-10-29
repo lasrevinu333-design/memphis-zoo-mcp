@@ -1556,7 +1556,7 @@ if (dockerContainer) {
     if (freshOnly && !freshOwnedIdentity()) throw new Error('Original fresh container absent before fingerprint capture');
     let measuredNoAutoCatalog = null;
     if (noAutoTableGrants) {
-      if (noAutoWitnesses.length !== 297) throw new Error('No-auto fixture lacks all297 per-migration witnesses');
+      if (noAutoWitnesses.length !== freshSelection.entries.length) throw new Error('No-auto fixture lacks a witness for every exactly selected migration');
       const { captureSchemaCatalog, fingerprintSchemaCatalog } = await import('./schema-fingerprint-catalog.mjs');
       const catalog = await captureSchemaCatalog({ query: async statement => ({ rows: JSON.parse(dockerPsql(targetDatabase,
         `select coalesce(json_agg(row_to_json(measured)), '[]'::json)::text from (${statement.replace(/;\s*$/, '')}) measured`).trim()) }) });

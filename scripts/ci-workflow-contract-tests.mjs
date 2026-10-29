@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import {verifyFreshCurrentOwningWiring} from './current-system-fresh-owning-wiring.mjs';
 import './fixtures/full-hour-source-predecessors-tests.mjs';
+import './ci-fresh-only-source-successor-tests.mjs';
 
 import {restoreSchedulerProofSource} from './fixtures/current-scheduler-source-profiles.mjs';
 import assert from "node:assert/strict";

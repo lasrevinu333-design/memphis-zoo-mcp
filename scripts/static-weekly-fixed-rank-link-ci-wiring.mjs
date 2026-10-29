@@ -8,7 +8,7 @@ const sha=value=>createHash('sha256').update(value).digest('hex');
 const statement="await import('./static-weekly-fixed-rank-link-ci-tests.mjs');";
 const pins={
  'src/static-weekly-schedule-program.js':'1a5ef78107964d823f1a1eaf617b9d5e439339122730ac4691bd671199a4da52',
- 'scripts/static-weekly-fixed-rank-link-tests.mjs':'cf74b7b2ff33a05b61f6bc162b806752ae4af0044c68692f6f5eee9be6856731',
+ 'scripts/static-weekly-fixed-rank-link-tests.mjs':'336bac221bc225e6e2d8f3393ff0b5f92ce01e56fbafece579c0b41f74359313',
 };
 // Only old representation-test inputs are reconstructed. The executing
 // product retains the changed model and the current absolute60s deadline.

@@ -4,12 +4,14 @@ import { lstatSync, readFileSync, readdirSync, realpathSync, mkdtempSync, mkdirS
 import { spawn, spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { resolve, relative, sep } from 'node:path';
+import {selectFreshOnlySourceRows} from './ci-fresh-only-source-successor.mjs';
 
 // Explicit scoped fresh-only construction. This is not vendor NORMAL,
 // ledger adoption, production replay, or a substitute for downstream checks.
 const MANIFEST_SHA = '5094a272dcc9f01ccbf043f3de7012e12bdb542606089a0a818629c1ecf86b26';
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 export function loadCiFreshOnlyReplay(root, image, names, options = {}) {
+  assert.equal(root, resolve(root), 'Fresh-only source root must be normalized and absolute');
   assert.ok(options && typeof options === 'object' && !Array.isArray(options));
   assert.deepEqual(Object.keys(options).filter(key => key !== 'noAutoTableGrants'), []);
   const noAutoTableGrants = options.noAutoTableGrants ?? false; assert.equal(typeof noAutoTableGrants, 'boolean');
@@ -32,7 +34,7 @@ export function loadCiFreshOnlyReplay(root, image, names, options = {}) {
   assert.equal(manifest.full_vendor_NORMAL, false); assert.equal(manifest.expected_fingerprint_authority, null);
   assert.equal(image, manifest.image);
   assert.equal(manifest.entries.length, 297);
-  assert.deepEqual(names, manifest.entries.map(row => row.name));
+  const source = selectFreshOnlySourceRows(manifest, names, read);
   assert.deepEqual(readdirSync(resolve(root, 'supabase/migrations')).filter(name => name.endsWith('.sql')).sort(), names);
   assert.equal(manifest.overrides.length, 22);
   const deterministic184Name = '20261002090000_manager_issue_outcomes.sql';
@@ -91,7 +93,7 @@ export function loadCiFreshOnlyReplay(root, image, names, options = {}) {
     }
   }
   const actualOverrides = [];
-  const entries = manifest.entries.map(row => {
+  const entries = source.rows.map(row => {
     assert.equal(row.original.path, 'supabase/migrations/' + row.name);
     read(row.original.path, row.original);
     if (row.selected.path !== row.original.path) {
@@ -121,7 +123,7 @@ export function loadCiFreshOnlyReplay(root, image, names, options = {}) {
   const bootstrap = read(manifest.bootstrap.path, manifest.bootstrap).toString('utf8');
   const profile = JSON.parse(read(manifest.profile.path, manifest.profile));
   return {
-    entries, bootstrap,
+    entries, sourceRows: source.rows, bootstrap,
     assertBootstrap(output) {
       const observed = JSON.parse(output.trim());
       assert.equal(observed.schema, 'custodial.fresh291.scoped-pinned-function-bootstrap04.v1');
@@ -138,7 +140,8 @@ export function loadCiFreshOnlyReplay(root, image, names, options = {}) {
       assert.ok(profile && typeof profile === 'object');
     },
     assertPreserved() { for (const [path, bytes] of frozen) assert.deepEqual(readFileSync(path), bytes); },
-    receipt: { format: manifest.format, manifest_sha256: MANIFEST_SHA, migrations: 297, overrides: 22,
+    receipt: { format: manifest.format, manifest_sha256: MANIFEST_SHA, migrations: source.rows.length, overrides: 22,
+      ...(source.successor ? { source_successor: source.successor } : {}),
       ...(noAutoTableGrants ? { no_auto_profile: { reference: { ...noAutoProfile.reference }, comparison_sha256: noAutoProfile.comparison_sha256, overrides: noAutoProfile.overrides, original_source_choices: manifest.no_auto_profile.original_source_choices } } : {}),
       full_vendor_NORMAL: false, expected_fingerprint_authority: null },
   };
@@ -342,9 +345,9 @@ export async function createCiFreshOnlyFixture(options) {
       assert.equal(prefix.canonical_catalog_authority, false); assert.equal(prefix.new_authority, false);
       const witnesses = JSON.parse(fixtureRead(custody, 'NO_AUTO_TABLE_GRANTS_MIGRATION_WITNESSES.json'));
       verifiedMigrationWitnesses = witnesses.witnesses;
-      assert.equal(witnesses.profile, construction.state); assert.equal(witnesses.witnesses.length, 297);
+      assert.equal(witnesses.profile, construction.state); assert.equal(witnesses.witnesses.length, selection.entries.length);
       for (const [index, witness] of witnesses.witnesses.entries()) {
-        const row = manifest.entries[index]; assert.equal(witness.order, index + 1); assert.equal(witness.name, row.name);
+        const row = selection.sourceRows[index]; assert.equal(witness.order, index + 1); assert.equal(witness.name, row.name);
         assert.equal(witness.original_sha256, row.original.sha256); assert.equal(witness.selected_sha256, selection.entries[index].selected.sha256);
         assert.equal(witness.atomic_mode, row.atomic_mode); assert.equal(witness.exit, 0);
         assert.equal(witness.before_default_grants, 0); assert.equal(witness.after_default_grants, 0);
