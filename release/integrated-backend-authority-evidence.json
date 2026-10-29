@@ -145,7 +145,7 @@
       {
         "path": ".github/workflows/custodial-production-repair.yml",
         "mode": "100644",
-        "object_id": "fdedb929da4a86c048b097c72f1d347d5671abe4"
+        "object_id": "3be5ef48b28f6ac06baabfd525bc4ce98caa7d20"
       },
       {
         "path": ".github/workflows/device-credential-foundation.yml",
@@ -1223,6 +1223,11 @@
         "object_id": "13273394ad0315cd2a4e568370c8ec83597176c3"
       },
       {
+        "path": "release/restore-dispositions/20261029-backup-40960771863.json",
+        "mode": "100644",
+        "object_id": "b758911d0e400bcc98c93ff3d5dcd00e5ad3667d"
+      },
+      {
         "path": "release/reviewed-migrations/20260809125735_cleaning_inspection_24_hour_freshness.sql",
         "mode": "100644",
         "object_id": "5b47706e8a319fd23b8245fb6e3e83f65f20b7a1"
@@ -1445,7 +1450,7 @@
       {
         "path": "scripts/ci-workflow-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "699fff15cce7fb16cc824e34ab21e7ce5982c791"
+        "object_id": "8274e6a233218de2569031b19af4f0df11767fe1"
       },
       {
         "path": "scripts/cleaning-identity-gps-database-tests.mjs",
@@ -1900,12 +1905,12 @@
       {
         "path": "scripts/export-isolated-pre-reconcile-metadata-tests.mjs",
         "mode": "100644",
-        "object_id": "66461af842daf7a8f5f1b17df369982a7838b11d"
+        "object_id": "f7eabd5c300548c3a109f1cf823f5720234cda68"
       },
       {
         "path": "scripts/export-isolated-pre-reconcile-metadata.mjs",
         "mode": "100644",
-        "object_id": "e449e7152be62c0b867a81849c4b2b3db7879271"
+        "object_id": "b226e253c29678e6c14c8aa98948705e12bbe412"
       },
       {
         "path": "scripts/extract-weighted-static-weekly-pdf.mjs",
@@ -2110,12 +2115,12 @@
       {
         "path": "scripts/fixtures/current-scheduler-source-profiles-tests.mjs",
         "mode": "100644",
-        "object_id": "02b2556e5f6d7cc98ae41829cf25d140e5d8cd6b"
+        "object_id": "c4cd323228cfffdca31bbc7034e388d082a858ea"
       },
       {
         "path": "scripts/fixtures/current-scheduler-source-profiles.mjs",
         "mode": "100644",
-        "object_id": "c3a55a3f55bbbfa7b9dbd0bfb0d5b0911d04f515"
+        "object_id": "e34e56d9f03d1526f20f25d05163d586e7767395"
       },
       {
         "path": "scripts/fixtures/dashboard-independent-check-reader-fixture.py",
@@ -2216,6 +2221,21 @@
         "path": "scripts/fixtures/full-hour-lunch-source.mjs",
         "mode": "100644",
         "object_id": "1769cd0d1cccf61a2e314117e5adf26d3b3f041e"
+      },
+      {
+        "path": "scripts/fixtures/full-hour-source-predecessors-tests.mjs",
+        "mode": "100644",
+        "object_id": "b17c899407960c5bf5c4b7917306f015cf8572f5"
+      },
+      {
+        "path": "scripts/fixtures/full-hour-source-predecessors.json",
+        "mode": "100644",
+        "object_id": "038741fe56311afa381dcf7e6b2011b92972ae14"
+      },
+      {
+        "path": "scripts/fixtures/full-hour-source-predecessors.mjs",
+        "mode": "100644",
+        "object_id": "2d8ee1d0c1061c9aeb2f8e1b497e56db9a867b90"
       },
       {
         "path": "scripts/fixtures/full-nine-v6-source.json",
@@ -3390,7 +3410,7 @@
       {
         "path": "scripts/native-schedule-source-ci-wiring.mjs",
         "mode": "100644",
-        "object_id": "caddb9ee9b37558f0cdf37a97c5d2766865e0b2c"
+        "object_id": "9c63a745fbea9cae255a79906840a730189810fc"
       },
       {
         "path": "scripts/native-schedule-source-discovery-sql-tests.mjs",
@@ -4725,12 +4745,12 @@
       {
         "path": "scripts/static-weekly-fixed-rank-link-ci-wiring.mjs",
         "mode": "100644",
-        "object_id": "988421472220e05dce2ad9dff5bfbc91c0c6732c"
+        "object_id": "83c4775effd40285b7e7857a33b991c8c851a366"
       },
       {
         "path": "scripts/static-weekly-fixed-rank-link-tests.mjs",
         "mode": "100644",
-        "object_id": "af86e4275beb32c6f7d7b77a234926a58b25b7d0"
+        "object_id": "5ec714c6e3c8bedc5c4d8c7b0629289304970d85"
       },
       {
         "path": "scripts/static-weekly-friday-candidate-diagnostic.mjs",
@@ -9073,7 +9093,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 1789,
+    "authority_path_count": 1793,
     "migration_path_count": 298,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
