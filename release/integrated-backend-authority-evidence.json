@@ -1215,7 +1215,7 @@
       {
         "path": "release/production-migration-state.json",
         "mode": "100644",
-        "object_id": "662c9cd500f5eba9eebdc45ac3aa8fee340bb6ca"
+        "object_id": "bc0c294b6d6dd77942d529cfa5af3cd8ee6dd4a6"
       },
       {
         "path": "release/production-schema-observation-20260922.json",
