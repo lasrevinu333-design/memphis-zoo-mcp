@@ -363,14 +363,19 @@
         "object_id": "90782eb731fe20890b0f9f54c45d7c5878e1c2e4"
       },
       {
+        "path": "config/schedules/manual-approved-20261030/EXTRA_CHORE_NOTE.txt",
+        "mode": "100644",
+        "object_id": "7b846c0c31c4dd45b4a3d2dbc068c7f67f8a4e65"
+      },
+      {
         "path": "config/schedules/manual-approved-20261030/README.md",
         "mode": "100644",
-        "object_id": "919cbbb5e6c921b305733c09529b02de9b659082"
+        "object_id": "7bcfa9fab1afdb04f2e3e373ee2c6b825e4d5813"
       },
       {
         "path": "config/schedules/manual-approved-20261030/catalog.json",
         "mode": "100644",
-        "object_id": "4f05d59ef5d2d4fad32009fd37a80682b02dc8f0"
+        "object_id": "7798ee21aefc70ffd1579f3e2a76c5711e79c116"
       },
       {
         "path": "config/schedules/manual-approved-20261030/packet/INTEGRATION_HANDOFF.md",
@@ -446,6 +451,11 @@
         "path": "config/schedules/manual-approved-20261030/packet/sources/custodial_manual_wednesday_working_draft.json",
         "mode": "100644",
         "object_id": "020c0f229e809776a739196b15531e5cdab497f1"
+      },
+      {
+        "path": "config/schedules/manual-approved-20261030/policy-delta.json",
+        "mode": "100644",
+        "object_id": "695e34227a3115870b3289603165c912a9657ed6"
       },
       {
         "path": "config/schedules/manual-approved-20261030/reference-bindings.json",
@@ -1420,7 +1430,7 @@
       {
         "path": "scripts/approved-manual-week-tests.mjs",
         "mode": "100644",
-        "object_id": "7a7d1ece7173303942316d2a3a7e59c2a71dcee9"
+        "object_id": "366dfbe18d8325bb879a16adb4b95dee73b8f686"
       },
       {
         "path": "scripts/approved-static-template-control-plane-tests.mjs",
@@ -3860,7 +3870,7 @@
       {
         "path": "scripts/prepare-approved-manual-week.mjs",
         "mode": "100644",
-        "object_id": "7d6560bacf3c8a171e4487021718f05858de8188"
+        "object_id": "25078d4298a5a69d98fb998a4ac353c51bdac816"
       },
       {
         "path": "scripts/prepare-isolated-restore-target.mjs",
@@ -5900,12 +5910,22 @@
       {
         "path": "src/approved-manual-compiler-data.js",
         "mode": "100644",
-        "object_id": "f3d9a04a28683763c9cec31111746e764d131856"
+        "object_id": "4e0d860b38d38d7780f874e2784daaa792fcc6e8"
+      },
+      {
+        "path": "src/approved-manual-policy-delta.js",
+        "mode": "100644",
+        "object_id": "3951abfe85ea2ef41a128b7d455130745c704a9b"
+      },
+      {
+        "path": "src/approved-manual-source-draft.js",
+        "mode": "100644",
+        "object_id": "af9db2e8c6b5127f1dd10889198c4f587ddcd605"
       },
       {
         "path": "src/approved-manual-week.js",
         "mode": "100644",
-        "object_id": "2822df28effa4005a2385265203fa57d2705327b"
+        "object_id": "4cc3cba28d50184287bbb374faf75cb28493cbdf"
       },
       {
         "path": "src/assigned-activation-transport.js",
@@ -6990,7 +7010,7 @@
       {
         "path": "src/static-weekly-shift-end-coverage.js",
         "mode": "100644",
-        "object_id": "3ce8b6af0804496136a797b2c3429cd42a4c429f"
+        "object_id": "2d61b32ca4d5a3ccbcf320328888becf99a6a3f0"
       },
       {
         "path": "src/static-weekly-shift-end-derivation.js",
@@ -9233,7 +9253,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 1821,
+    "authority_path_count": 1825,
     "migration_path_count": 298,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
