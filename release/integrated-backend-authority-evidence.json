@@ -365,12 +365,12 @@
       {
         "path": "config/schedules/manual-approved-20261030/README.md",
         "mode": "100644",
-        "object_id": "2e0b1b9cf5090635c584b8736ba3deeaed257080"
+        "object_id": "919cbbb5e6c921b305733c09529b02de9b659082"
       },
       {
         "path": "config/schedules/manual-approved-20261030/catalog.json",
         "mode": "100644",
-        "object_id": "d926d084d29b5372a8cb5d2c123a433bd5f5472e"
+        "object_id": "4f05d59ef5d2d4fad32009fd37a80682b02dc8f0"
       },
       {
         "path": "config/schedules/manual-approved-20261030/packet/INTEGRATION_HANDOFF.md",
@@ -446,6 +446,11 @@
         "path": "config/schedules/manual-approved-20261030/packet/sources/custodial_manual_wednesday_working_draft.json",
         "mode": "100644",
         "object_id": "020c0f229e809776a739196b15531e5cdab497f1"
+      },
+      {
+        "path": "config/schedules/manual-approved-20261030/reference-bindings.json",
+        "mode": "100644",
+        "object_id": "177f19a20a44db02f75f5d6c34ac71383b8163a6"
       },
       {
         "path": "deploy/static-weekly-control-plane.render.yaml",
@@ -1415,7 +1420,7 @@
       {
         "path": "scripts/approved-manual-week-tests.mjs",
         "mode": "100644",
-        "object_id": "0214432665aafc4d073ac03ea2070343ab4d648f"
+        "object_id": "7a7d1ece7173303942316d2a3a7e59c2a71dcee9"
       },
       {
         "path": "scripts/approved-static-template-control-plane-tests.mjs",
@@ -3855,7 +3860,7 @@
       {
         "path": "scripts/prepare-approved-manual-week.mjs",
         "mode": "100644",
-        "object_id": "2a81e14a0484c0d5fd5019cca471c7f3acfe6dc2"
+        "object_id": "7d6560bacf3c8a171e4487021718f05858de8188"
       },
       {
         "path": "scripts/prepare-isolated-restore-target.mjs",
@@ -5888,9 +5893,19 @@
         "object_id": "448e6dc79edfda5b4e51d8ac77eda3945f06a544"
       },
       {
+        "path": "src/approved-manual-bindings.js",
+        "mode": "100644",
+        "object_id": "703f11d9345199ea3a6716bdafc35a3e69ee2708"
+      },
+      {
+        "path": "src/approved-manual-compiler-data.js",
+        "mode": "100644",
+        "object_id": "f3d9a04a28683763c9cec31111746e764d131856"
+      },
+      {
         "path": "src/approved-manual-week.js",
         "mode": "100644",
-        "object_id": "fd625a1d1f92391b2c6277dc39aa4f17c994e763"
+        "object_id": "2822df28effa4005a2385265203fa57d2705327b"
       },
       {
         "path": "src/assigned-activation-transport.js",
@@ -9218,7 +9233,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 1818,
+    "authority_path_count": 1821,
     "migration_path_count": 298,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
