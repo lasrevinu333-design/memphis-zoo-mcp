@@ -8,10 +8,12 @@ import {createHash} from 'node:crypto';
 import {postgresJsonbContentDigest} from './static-weekly-schedule-program.js';
 import {serviceDateWeekday} from './static-weekly-schedule-model.js';
 import {validateApprovedManualBindings} from './approved-manual-bindings.js';
+import {validateApprovedManualPolicyDelta} from './approved-manual-policy-delta.js';
 
 const DEFAULT_CATALOG=fileURLToPath(new URL('../config/schedules/manual-approved-20261030/catalog.json',import.meta.url));
 const SOURCE_ROOT=fileURLToPath(new URL('..',import.meta.url));
 const ISSUED_MANIFEST_SHA256='fe02bbdebc736d95360b55cc7dfe5b73c5a9eaa76f364f1c0f4420a0afb9950f';
+const ISSUED_POLICY_DELTA_SHA256='1e0510e468fce2bf46762b286bb6e801df1b19591ecc0825411c5250a57feee3';
 const DAYS=['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
 const HOLDS=['prearrival_ownership','non_monday_0945','weekly_elephant_trunk_restrooms'];
 const sha=bytes=>createHash('sha256').update(bytes).digest('hex');
@@ -32,6 +34,11 @@ export function readApprovedManualWeek({catalogPath=DEFAULT_CATALOG,expectedMani
   assert.equal(catalog.publication.state,'ACTIVATION_HELD');assert.equal(catalog.publication.published,false);
   assert.equal(catalog.publication.effectiveStart,null);assert.deepEqual(catalog.unresolvedPolicies,HOLDS);
   assert.equal(catalog.objectiveNormalization.formula,null);assert.equal(catalog.objectiveNormalization.state,'NOT_APPROVED');
+  const deltaBytes=regularFile(memberPath(dirname(resolve(catalogPath)),catalog.policyDelta.path));
+  assert.equal(catalog.policyDelta.sha256,ISSUED_POLICY_DELTA_SHA256,'Policy delta differs from the separately issued Library artifact');
+  assert.equal(deltaBytes.length,catalog.policyDelta.bytes);
+  assert.equal(sha(deltaBytes),catalog.policyDelta.sha256,'Later policy delta bytes changed');
+  const policyDelta=JSON.parse(deltaBytes),effectivePolicies=validateApprovedManualPolicyDelta(policyDelta,catalog);
   const contents=new Map();
   for(const row of catalog.files){
     assert.ok(!contents.has(row.path),'Duplicate packet file');
@@ -108,7 +115,7 @@ export function readApprovedManualWeek({catalogPath=DEFAULT_CATALOG,expectedMani
     }
     days.push({day,weekday:DAYS.indexOf(day),sourcePath:catalog.sourcesByDay[day],employees,lunches,transfers,phases,
       checkedWindow:{start:checkedStart,end:staffedEnd},prearrivalPolicy:'UNRESOLVED',
-      policy0945:day==='monday'?'OWNER_APPROVED_NO_CHANGEOVER':'UNRESOLVED',
+      policy0945:effectivePolicies.policy0945,
       coveragePurpose:'INHERITED_AREAS_ARE_ALERT_AND_ISSUE_CUSTODY_NOT_EXTRA_MANDATORY_CLEANING'});
   }
   const bindingBytes=regularFile(memberPath(dirname(resolve(catalogPath)),catalog.referenceBindings.path));
@@ -126,8 +133,10 @@ export function readApprovedManualWeek({catalogPath=DEFAULT_CATALOG,expectedMani
     ratingUnit:'COMBINED_GROUP_OWNER_RATING_1_TO_10_NOT_MINUTES',
     proximityIntent:structuredClone(ratingSource.proximity_planning),absenceRequirement:structuredClone(ratingSource.absence_recalculation_requirement),
     objective:{proximityPercent,loadPercent,normalizedFormula:null,formulaApproved:false},days,
-    referenceBindings,runtimeBinding:{state:'CANDIDATE_REFERENCES_ONLY_NOT_REGISTERED',registeredSourceId:null,liveRosterReadbackRequired:true},
-    activation:{state:'HELD',unresolvedPolicies:[...HOLDS],effectiveStart:null,published:false},receiptEligible:false};
+    referenceBindings,effectivePolicies,policyDelta:{...catalog.policyDelta,recordedAt:policyDelta.policy.resolved_at_utc},
+    runtimeBinding:{state:'CANDIDATE_REFERENCES_ONLY_NOT_REGISTERED',registeredSourceId:null,liveRosterReadbackRequired:true},
+    activation:{state:'HELD',ownerApproved:effectivePolicies.activationOwnerApproved,
+      unresolvedPolicies:[...effectivePolicies.unresolvedPolicies],effectiveStart:null,published:false},receiptEligible:false};
   return freeze({...body,dataDigest:postgresJsonbContentDigest(body)});
 }
 
@@ -138,7 +147,7 @@ export function previewApprovedManualDay(week,{day,serviceDate,time}) {
   const selected=day??datedDay,plan=week.days.find(d=>d.day===selected);assert.ok(plan,'Unknown manual weekday');
   const at=minutes(time),start=minutes(plan.checkedWindow.start),end=minutes(plan.checkedWindow.end);
   const common={schema:'custodial.approved-manual-day-preview.v1',day:plan.day,dataDigest:week.dataDigest,
-    activation:'HELD',published:false,receiptEligible:false,unresolvedPolicies:[...HOLDS]};
+    activation:'HELD',published:false,receiptEligible:false,unresolvedPolicies:[...week.activation.unresolvedPolicies]};
   if(at<start)return {...common,status:'PREARRIVAL_POLICY_UNRESOLVED',owners:[]};
   if(at>=end)return {...common,status:'OUTSIDE_STAFFED_COVERAGE',owners:[]};
   const phase=plan.phases.find(p=>minutes(p.start)<=at&&at<minutes(p.end)),base=new Map(plan.employees.flatMap(p=>p.baseGroups.map(g=>[g,p.name])));

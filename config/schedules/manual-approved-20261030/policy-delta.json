@@ -1,0 +1,114 @@
+{
+  "schema_version": 1,
+  "delta_id": "custodial_policy_delta_20261030_022145",
+  "purpose": "Policy-only update and explicit schedule-data activation authority for the exact approved weekly snapshot. Not an activation completion receipt.",
+  "base_snapshot": {
+    "library_file_id": "libfile_439f9cf79474819195257a4327004dce",
+    "file_id": "file_0000000023f481f5b775be442def1083",
+    "version": 0,
+    "zip_sha256": "3942a5d77774a3dcc8a8ab3e572d02716efaae3428a015f076bdbd8c5e1ec2dd",
+    "bytes": 66544,
+    "unchanged": true
+  },
+  "policy": {
+    "resolved_at_utc": "2026-10-30T02:22:57Z",
+    "global_0945": {
+      "status": "RESOLVED: remove 09:45 changeovers on ALL SEVEN days",
+      "source_quote": "we're removing the nine forty five changeovers",
+      "effect": "Keep each approved daily base unchanged; lunch relief and departure handoffs continue at their approved times. No new 09:45 reassignment event."
+    },
+    "elephant_trunk": {
+      "status": "ANSWERED: simple external weekly chore NOTE ONLY, NOT part of the program",
+      "owner": "Kathy Phelps",
+      "day": "Tuesday",
+      "day_selection": "Assistant implementation choice: Tuesday is tied at 23 base points with Friday/Saturday, versus Wednesday/Thursday 29, and preserves the original weekly Tuesday reference. Eric did NOT personally name Tuesday in his quoted instruction.",
+      "task": "Clean Elephant Trunk employee men's and women's restrooms once weekly after opening.",
+      "source_quotes": [
+        "we do want to assign elephant [Trunk] restrooms weekly ... assign them to Kathy on one of her lighter loaded days",
+        "don't need assign score ... once a week ... not a part of program ... just extra restroom ... get once a week"
+      ],
+      "original_timing_source": "REV3 Tuesday Kathy page 8 and corrected eight-person Tuesday Kathy page 10: once weekly after opening.",
+      "excluded_from": [
+        "23 daily assignment groups",
+        "136 daily base points",
+        "Group scoring",
+        "Scheduler and absence engine",
+        "Lunch relief and departure-handoff engine"
+      ],
+      "no_weight_or_reactivation_gate": "No score needed, no weight question or inactive-flag gate. No database reactivation, new mechanism, automation or engine integration."
+    },
+    "remaining_gates": [
+      "Actual necessary arrival/early-ownership and exact 75/25 normalization constraints, if required by the supported data path; do not invent answers",
+      "Actual qualification, credential and technical release controls"
+    ],
+    "supersedes": "Earlier 09:45 and weekly-task questions are resolved. Initial suggestion to treat Elephant Trunk as an engine task or reconcile inactive DB flags is superseded by Eric's explicit note-only correction.",
+    "immutable_snapshot": "Original integration ZIP and its Library version remain unchanged; this is a policy-only version delta.",
+    "activation_authority": {
+      "status": "EXPLICITLY AUTHORIZED for the approved schedule-data scope; NOT yet verified live",
+      "source_quote": "That answers your questions for activation. So now you may activate.",
+      "scope": "Activate the approved seven-day schedule data and 23 group weights with global 09:45 changeovers removed; Elephant Trunk remains a separate weekly chore note outside every engine.",
+      "timing": "User says activate NOW; this may establish timing for a supported data path, but the existing Main must assess actual required effective-date handling rather than invent a different date.",
+      "conditions": "Actual required checks, credential and release controls must pass. Do not invent answers to genuinely necessary arrival or exact-formula constraints.",
+      "exclusions": "No password reset, unrelated migration, broad DB reactivation or unrelated production authority.",
+      "handoff": "Forwarded once to existing Main through the existing bridge at 02:22 UTC; actual Main acknowledgment/activation pending."
+    },
+    "resolved_gates": [
+      "Global no-09:45 policy answered for all seven days",
+      "Weekly Elephant Trunk scope answered: external note only, no weight/inactive-DB flag gate",
+      "User's schedule-data activation approval explicitly granted now; no separate approval pending for that exact scope"
+    ]
+  },
+  "source_version_deltas": [
+    {
+      "day": "monday",
+      "path": "/user_notes/long_form/custodial_manual_monday_working_draft.json",
+      "before_updated_at": "2026-10-30T00:01:44.296214Z",
+      "after_updated_at": "2026-10-30T02:24:08.960574Z",
+      "core_schedule_unchanged": true
+    },
+    {
+      "day": "tuesday",
+      "path": "/user_notes/long_form/custodial_manual_tuesday_working_draft.json",
+      "before_updated_at": "2026-10-30T00:17:05.367928Z",
+      "after_updated_at": "2026-10-30T02:24:10.410063Z",
+      "core_schedule_unchanged": true
+    },
+    {
+      "day": "wednesday",
+      "path": "/user_notes/long_form/custodial_manual_wednesday_working_draft.json",
+      "before_updated_at": "2026-10-30T00:27:20.948944Z",
+      "after_updated_at": "2026-10-30T02:24:12.529754Z",
+      "core_schedule_unchanged": true
+    },
+    {
+      "day": "thursday",
+      "path": "/user_notes/long_form/custodial_manual_thursday_working_draft.json",
+      "before_updated_at": "2026-10-30T00:41:14.864304Z",
+      "after_updated_at": "2026-10-30T02:24:14.475390Z",
+      "core_schedule_unchanged": true
+    },
+    {
+      "day": "friday",
+      "path": "/user_notes/long_form/custodial_manual_friday_working_draft.json",
+      "before_updated_at": "2026-10-30T00:49:57.110405Z",
+      "after_updated_at": "2026-10-30T02:24:16.523651Z",
+      "core_schedule_unchanged": true
+    },
+    {
+      "day": "saturday",
+      "path": "/user_notes/long_form/custodial_manual_saturday_working_draft.json",
+      "before_updated_at": "2026-10-30T01:00:30.821657Z",
+      "after_updated_at": "2026-10-30T02:24:17.999190Z",
+      "core_schedule_unchanged": true
+    },
+    {
+      "day": "sunday",
+      "path": "/user_notes/long_form/custodial_manual_sunday_working_draft.json",
+      "before_updated_at": "2026-10-30T01:00:32.278157Z",
+      "after_updated_at": "2026-10-30T02:24:19.702247Z",
+      "core_schedule_unchanged": true
+    }
+  ],
+  "integrity": "All seven core base assignments, employee shifts, own lunches, full relief arrays and handoff arrays were byte-equivalent under canonical JSON comparison before/after policy edits. All 23 daily groups/136 points and accepted exceptions preserved; no reoptimization.",
+  "scope": "This delta supersedes only earlier unanswered policy/approval statements. Preserve exact original source packet and historical versions. Memory worker performed no program/DB mutation, deployment, activation, new mechanism or password operation."
+}

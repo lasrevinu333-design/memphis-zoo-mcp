@@ -110,5 +110,13 @@
   "referenceBindings": {
     "path": "reference-bindings.json",
     "sha256": "7b578ab31362e632f03d21e5b3b2868aa6fef0478b9cc57c9a5cd8d3b07c7619"
+  },
+  "policyDelta": {
+    "path": "policy-delta.json",
+    "sha256": "1e0510e468fce2bf46762b286bb6e801df1b19591ecc0825411c5250a57feee3",
+    "bytes": 6781,
+    "libraryFileId": "libfile_3c138fd820a0819185887b55f9554cf2",
+    "backingFileId": "file_0000000023c081f59c1a9c308fba3f25",
+    "version": 0
   }
 }

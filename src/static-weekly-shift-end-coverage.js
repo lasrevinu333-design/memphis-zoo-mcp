@@ -8,6 +8,24 @@ const clone=value=>JSON.parse(JSON.stringify(value));
 const minute=value=>Number(value.slice(0,2))*60+Number(value.slice(3,5));
 const clock=value=>`${String(Math.floor(value/60)).padStart(2,'0')}:${String(value%60).padStart(2,'0')}`;
 const ids=row=>row.includedLocations?.length?row.includedLocations.map(x=>x.locationId):[row.locationId];
+
+// Preserve the existing dimensionless workload budget across changed windows.
+// This does not turn either that budget or the new group ratings into minutes.
+export function splitPreservedWorkloadBudget(budget,windows){
+ assert.ok(Number.isSafeInteger(budget)&&windows.length>0&&budget>=windows.length,'positive budget required for every segment');
+ const durations=windows.map(w=>minute(w.end)-minute(w.start));
+ assert.ok(durations.every(d=>Number.isSafeInteger(d)&&d>0),'positive exact segment windows required');
+ const total=durations.reduce((a,b)=>a+b,0),distributable=budget-windows.length;
+ assert.ok(Number.isSafeInteger(total*budget),'workload split exceeds exact arithmetic');
+ const allocation=durations.map((d,index)=>({index,points:1+Math.floor(distributable*d/total),remainder:(distributable*d)%total}));
+ let left=budget-allocation.reduce((n,r)=>n+r.points,0);
+ for(const item of allocation.slice().sort((a,b)=>b.remainder-a.remainder||a.index-b.index)){
+  if(left<=0)break;item.points++;left--;
+ }
+ const points=allocation.map(a=>a.points);
+ assert.equal(points.reduce((a,b)=>a+b,0),budget,'workload budget was not conserved');
+ return points;
+}
 function datedPositions(source,config,day){
  const base=assertServiceDate(source.serviceDate),date=new Date(`${base}T12:00:00Z`);
  date.setUTCDate(date.getUTCDate()+(day-date.getUTCDay()+7)%7);
@@ -144,16 +162,10 @@ export function completeRecurringShiftEndCoverage(source,config){
       owners:unit.rows.map(row=>row.ownerSlotId),windows:unit.rows.map(row=>row.window)});
     continue;
    }
-   const durations=unit.rows.map(r=>minute(r.window.end)-minute(r.window.start));
-   const total=durations.reduce((a,b)=>a+b,0),distributable=budget-unit.rows.length;
-   const allocation=durations.map((d,index)=>({index,points:1+Math.floor(distributable*d/total),remainder:(distributable*d)%total}));
-   let left=budget-allocation.reduce((n,r)=>n+r.points,0);
-   for(const item of allocation.slice().sort((a,b)=>b.remainder-a.remainder||a.index-b.index)){
-    if(left<=0)break;item.points++;left--;
-   }
-   for(const item of allocation){
-    unit.rows[item.index].serviceEffortMinutes=item.points;
-    unit.rows[item.index].serviceEffortProvenance+=`;shift-split-preserves-budget`;
+   const allocation=splitPreservedWorkloadBudget(budget,unit.rows.map(r=>r.window));
+   for(const [index,points] of allocation.entries()){
+    unit.rows[index].serviceEffortMinutes=points;
+    unit.rows[index].serviceEffortProvenance+=`;shift-split-preserves-budget`;
    }
    assert.equal(unit.rows.reduce((n,r)=>n+r.serviceEffortMinutes,0),budget);
   }

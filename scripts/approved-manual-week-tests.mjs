@@ -8,6 +8,10 @@ import {validateApprovedManualBindings} from '../src/approved-manual-bindings.js
 import {prepareApprovedManualCompilerData} from '../src/approved-manual-compiler-data.js';
 import {validateFullHourLunchPolicy} from '../src/static-weekly-lunch-policy.js';
 import {postgresJsonbContentDigest} from '../src/static-weekly-schedule-program.js';
+import {validateApprovedManualPolicyDelta} from '../src/approved-manual-policy-delta.js';
+import {prepareApprovedManualSourceDraft} from '../src/approved-manual-source-draft.js';
+import {splitPreservedWorkloadBudget} from '../src/static-weekly-shift-end-coverage.js';
+import {prepareStaticWeeklySchedulingProblem} from '../src/static-weekly-schedule-program.js';
 
 const week=readApprovedManualWeek(),pointByGroup=new Map(week.ratings.map(r=>[r.group,r.score]));
 const compilerData=prepareApprovedManualCompilerData(week),nativeLunches=validateFullHourLunchPolicy(compilerData.lunchCoveragePolicy,postgresJsonbContentDigest);
@@ -18,6 +22,14 @@ assert.equal(compilerData.groupRatingAuthority.legacyComponentWeightsReplaced,fa
 assert.equal(compilerData.canonicalCompilerInput,null);assert.equal(compilerData.registrationEligible,false);
 assert.equal(compilerData.effectiveStart,null);assert.equal(compilerData.sourceId,null);
 assert.equal(compilerData.completeCanonicalSource,false);
+assert.deepEqual(compilerData.unresolvedLegacyDuties,[]);
+assert.deepEqual(compilerData.excludedLegacyDuties,['ELEPHANT_TRUNK_RESTROOMS']);
+assert.equal(compilerData.policy0945,'OWNER_APPROVED_NO_CHANGEOVER');
+assert.equal(week.activation.ownerApproved,true);
+assert.deepEqual(week.activation.unresolvedPolicies,['prearrival_ownership']);
+assert.ok(!compilerData.groupRatingAuthority.groups.some(g=>g.locationCode==='ELEPHANT_TRUNK_RESTROOMS'));
+assert.ok(!compilerData.assignmentInputs.some(g=>g.locationCodeSnapshot==='ELEPHANT_TRUNK_RESTROOMS'));
+assert.ok(!compilerData.lunchCoveragePolicy.loans.some(l=>l.areas.some(a=>a.locationCode==='ELEPHANT_TRUNK_RESTROOMS')));
 const tampered=structuredClone(week);tampered.days[0].employees[0].baseGroups=[];
 assert.throws(()=>prepareApprovedManualCompilerData(tampered),/changed after intake/);
 assert.throws(()=>compilerData.assignmentInputs[0].window.start='05:00');
@@ -76,7 +88,12 @@ assert.deepEqual(phase('sunday','15:00').points,{'Alijah Collins':36,'Kiltra Hor
 for(const day of ['thursday','friday'])assert.equal(previewApprovedManualDay(week,{day,time:'16:00'}).status,'OUTSIDE_STAFFED_COVERAGE');
 assert.equal(previewApprovedManualDay(week,{day:'monday',time:'09:45'}).owners.find(o=>o.group==='Zambezi and restrooms').employee,'Alijah Collins');
 assert.throws(()=>previewApprovedManualDay(week,{day:'monday',serviceDate:'2026-11-03',time:'10:00'}),/weekday differs/);
-for(const d of week.days)assert.equal(d.policy0945,d.day==='monday'?'OWNER_APPROVED_NO_CHANGEOVER':'UNRESOLVED');
+for(const d of week.days)assert.equal(d.policy0945,'OWNER_APPROVED_NO_CHANGEOVER');
+const delta=JSON.parse(readFileSync(new URL('../config/schedules/manual-approved-20261030/policy-delta.json',import.meta.url)));
+for(const change of [d=>{d.policy.elephant_trunk.status='Create an engine duty';},d=>{d.policy.elephant_trunk.excluded_from=[];},
+  d=>{d.policy.global_0945.status='Monday only';},d=>{d.base_snapshot.zip_sha256='0'.repeat(64);}]){
+  const invalid=structuredClone(delta);change(invalid);assert.throws(()=>validateApprovedManualPolicyDelta(invalid,week));
+}
 
 const reference=JSON.parse(readFileSync(new URL('../release/static-schedules/custodial-eight-20261102-registration.json',import.meta.url))),
   binding=JSON.parse(readFileSync(new URL('../config/schedules/manual-approved-20261030/reference-bindings.json',import.meta.url))),
@@ -100,6 +117,44 @@ rejectBinding(b=>{b.productionPublished=true;});
 assert.equal(reference.ownerConfig.weights.BONOBOS_RESTROOMS,2,'Retained component weights must stay separate from the new group rating');
 assert.equal(binding.unresolvedLegacyDuties[0].score,null);
 
+const referenceBytes=readFileSync(new URL('../release/static-schedules/custodial-eight-20261102-registration.json',import.meta.url)),
+  referenceBefore=Buffer.from(referenceBytes),weekBefore=JSON.stringify(week),
+  sourceDraft=prepareApprovedManualSourceDraft({week,referenceBytes}),draft=sourceDraft.sourceDraft;
+assert.equal(draft.version.assignments.length,346);assert.equal(draft.version.slotAvailability.length,40);
+assert.equal(sourceDraft.budgetBindings.length,161);assert.equal(sourceDraft.restrictionConflicts.length,1);
+assert.equal(sourceDraft.restrictionConflicts[0].coveragePurpose,'INHERITED_ALERTS_AND_ISSUES_ONLY');
+assert.equal(sourceDraft.restrictionConflicts[0].dayOfWeek,5);
+assert.equal(sourceDraft.restrictionConflicts[0].locationCode,'HERPETARIUM');
+assert.deepEqual(sourceDraft.restrictionConflicts[0].window,{start:'15:00',end:'16:00'});
+assert.equal(sourceDraft.registrationEligible,false);assert.equal(sourceDraft.activationApprovalRecorded,true);
+assert.equal(draft.serviceDate,null);assert.equal(draft.version.effectiveStart,null);assert.equal(draft.version.id,null);
+assert.equal(Object.hasOwn(draft.version,'shiftEndContinuityPolicy'),false,'Old 09:45 derivation must not reappear in the new fixed source');
+assert.ok(!draft.version.assignments.some(r=>r.locationCodeSnapshot==='ELEPHANT_TRUNK_RESTROOMS'));
+for(const budget of sourceDraft.budgetBindings){
+  assert.equal(budget.retainedWork.reduce((n,r)=>n+r.value,0),budget.budget);
+  assert.equal(budget.segments.reduce((n,r)=>n+r.value,0),budget.budget);
+  assert.ok(budget.segments.every(r=>Number.isSafeInteger(r.value)&&r.value>0));
+  assert.equal(budget.newGroupRatingUsedAsBudget,false);
+}
+for(const row of draft.version.assignments){
+  const fragment=compilerData.assignmentInputs.find(r=>r.workId===row.workId);
+  assert.equal(row.ownerSlotId,fragment.ownerSlotId);assert.deepEqual(row.window,fragment.window);
+  assert.equal(row.manualBaseOwnerSlotId,fragment.originSlotId);assert.equal(row.originSlotId,row.ownerSlotId);
+  assert.deepEqual(row.includedLocations,fragment.includedLocations);
+}
+for(const row of draft.version.slotAvailability){
+  const retained=reference.template.source.version.slotAvailability.find(r=>r.slotId===row.slotId&&r.dayOfWeek===row.dayOfWeek);
+  assert.equal(row.maxServiceEffortMinutes,retained.maxServiceEffortMinutes);
+  assert.deepEqual(row.qualifications,retained.qualifications);assert.deepEqual(row.restrictions,retained.restrictions);
+  assert.equal(row.maxDutyMinutes,minute(row.shift.end)-minute(row.shift.start)-60);
+}
+const attempted=structuredClone(draft);attempted.serviceDate='2026-11-02';attempted.versions=[attempted.version];delete attempted.version;
+assert.equal(prepareStaticWeeklySchedulingProblem(attempted).error.code,'candidate_workbook_evidence_not_publishable');
+assert.throws(()=>prepareApprovedManualSourceDraft({week,referenceBytes:Buffer.concat([referenceBytes,Buffer.from(' ')])}));
+assert.deepEqual(referenceBytes,referenceBefore);assert.equal(JSON.stringify(week),weekBefore);
+assert.deepEqual(splitPreservedWorkloadBudget(10,[{start:'08:00',end:'09:00'},{start:'09:00',end:'10:00'},{start:'10:00',end:'11:00'}]),[4,3,3]);
+assert.throws(()=>splitPreservedWorkloadBudget(1,[{start:'08:00',end:'09:00'},{start:'09:00',end:'10:00'}]));
+
 const root=mkdtempSync(join(tmpdir(),'custodial-manual-packet-test-'));
 try{
   const original=fileURLToPath(new URL('../config/schedules/manual-approved-20261030/',import.meta.url)),copy=join(root,'copy');
@@ -113,4 +168,5 @@ try{
 }finally{rmSync(root,{recursive:true});}
 console.log(JSON.stringify({marker:'APPROVED_MANUAL_WEEK_DATA_PASS',days:7,groups:23,fullHourReliefs:40,minuteSamples,ownerSamples,reliefSamples,
   candidateEmployeeReferences:8,rejectedBindings,compilerAssignmentFragments:compilerData.assignmentInputs.length,compilerOwnerSamples,
-  nativeFullHourPolicyValidated:true,activation:'HELD',published:false,engineRecalculationQualified:false,physicalAcceptance:false}));
+  nativeFullHourPolicyValidated:true,sourceWorkloadBudgetsPreserved:161,sourceDraftRestrictionConflicts:1,
+  sourceDraftFeasibilityQualified:false,activationOwnerApproved:true,activation:'HELD',published:false,engineRecalculationQualified:false,physicalAcceptance:false}));
