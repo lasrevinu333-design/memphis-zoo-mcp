@@ -4,6 +4,7 @@ import {resolveReleaseSchemaTarget} from './production-target-schema-profile.mjs
 import {assertReleaseWorkflowSource} from './release-migration-workflow-preflight.mjs';
 import {readMigrationReplayPlan} from './migration-replay-order.mjs';
 import {resolveReleaseMigrationSource} from './production-forward-source.mjs';
+import { readExactGitBlobs } from './exact-git-blob-batch.mjs';
 
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
@@ -122,8 +123,8 @@ function gitText(args) {
   return execFileSync("git", args, { cwd: root, env: cleanGitEnvironment(), encoding: "utf8" }).trim();
 }
 
-function gitBytes(args) {
-  return execFileSync("git", args, { cwd: root, env: cleanGitEnvironment(), maxBuffer: 64 * 1024 * 1024 });
+function gitBytes(args, input) {
+  return execFileSync("git", args, { cwd: root, env: cleanGitEnvironment(), input, maxBuffer: 64 * 1024 * 1024 });
 }
 
 function mustBeRepositoryPath(path) {
@@ -209,19 +210,17 @@ function assertRepositoryIdentity(expectedCommit, expectedTree) {
 }
 
 function trackedEntriesFromExpectedTree(expectedCommit, expectedTree) {
-  const entries = gitBytes(["ls-tree", "-r", "-z", expectedTree]).toString("utf8").split("\0").filter(Boolean).map((record) => {
-    const match = record.match(/^([0-7]{6})\s+(blob)\s+([a-f0-9]{40})\t(.+)$/);
+  const entries = gitBytes(["ls-tree", "-r", "-l", "-z", expectedTree]).toString("utf8").split("\0").filter(Boolean).map((record) => {
+    const match = record.match(/^([0-7]{6})\s+(blob)\s+([a-f0-9]{40})\s+([0-9]+)\t(.+)$/);
     assert.ok(match, `expected tree contains a non-regular tracked entry: ${record}`);
-    const [, mode, type, objectId, rawPath] = match;
+    const [, mode, type, objectId, byteLength, rawPath] = match;
     const path = mustBeRepositoryPath(rawPath);
     assert.equal(type, "blob", `expected tracked entry is not a blob: ${path}`);
     assert.ok(["100644", "100755"].includes(mode), `expected tracked entry must be a regular non-symlink file: ${path}`);
-    assert.equal(gitText(["rev-parse", `${expectedCommit}:${path}`]), objectId, `commit/tree blob mismatch for ${path}`);
-    assert.equal(gitText(["cat-file", "-t", objectId]), "blob", `expected tracked object is not a blob: ${path}`);
-    return { path, mode, object_id: objectId, bytes: gitBytes(["cat-file", "blob", objectId]) };
+    return { path, mode, object_id: objectId, byteLength: Number(byteLength) };
   });
   assert.ok(entries.length > 0, "expected tree must contain tracked paths");
-  return entries;
+  return readExactGitBlobs(entries, { expectedCommit, readGit: gitBytes });
 }
 
 function assertWorktreeMatchesExpectedBlob(blob) {

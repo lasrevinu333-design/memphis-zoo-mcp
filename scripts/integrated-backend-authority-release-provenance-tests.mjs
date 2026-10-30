@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import "./release-migration-workflow-tests.mjs";
+import "./exact-git-blob-batch-tests.mjs";
 import { resolveReleaseSchemaTarget } from "./production-target-schema-profile.mjs";
 
 import assert from "node:assert/strict";
