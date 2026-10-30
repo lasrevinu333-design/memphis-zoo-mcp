@@ -160,7 +160,7 @@
       {
         "path": ".github/workflows/foundation-security-gate.yml",
         "mode": "100644",
-        "object_id": "932f286ed5911b648aa12625d4d37d7678f6b6c3"
+        "object_id": "7f4bb80be2909d0c5b76c8de8605ac5092cd9102"
       },
       {
         "path": ".github/workflows/integrated-release-attestation.yml",
@@ -1660,7 +1660,7 @@
       {
         "path": "scripts/ci-workflow-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "24c61aecc75f2c315a7bcab83ddc5b8161c0187c"
+        "object_id": "d9e72b43251bb7c45eff0cef69641a395959b6c9"
       },
       {
         "path": "scripts/cleaning-identity-gps-database-tests.mjs",
@@ -4335,7 +4335,7 @@
       {
         "path": "scripts/release-migration-plan-database-isolated-tests.sh",
         "mode": "100644",
-        "object_id": "0debb1b50a7afa31c1a1298f49ef79dd8eb14490"
+        "object_id": "c4e40fe08f91f6f348419a6d5a59277daef904c1"
       },
       {
         "path": "scripts/release-migration-plan-database-tests.mjs",
