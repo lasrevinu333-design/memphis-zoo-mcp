@@ -1,16 +1,16 @@
 {
   "artifact": "integrated-backend-authority-release-evidence.v2",
   "release_id": "release-2026.07.19.custodial-v3.12",
-  "frontend_commit_sha": "4688d8311ab9b5e71e30f8b4e2a09e30133a4da9",
+  "frontend_commit_sha": "f7f8a939c7d867f7e3b997d078b65a233c971e78",
   "frontend_commit_state": "final_pair_bound",
-  "schema_fingerprint": "432052a95830b4a8550cd6478d766bacc2bbbb4b2dd21d44544b238c70c5f001",
+  "schema_fingerprint": "aa4d4fad502031a493a15ddfad6305d783cbae90eee5aefb85a8f0c19a737c40",
   "schema_transition": {
     "transition_id": "custodial-full-hour-test-20261029",
     "from_fingerprint": "0096e7c488aca86f1d38b061561696b2d4ac409036f063ffc9f196625b9ee9c2",
-    "to_fingerprint": "432052a95830b4a8550cd6478d766bacc2bbbb4b2dd21d44544b238c70c5f001",
+    "to_fingerprint": "aa4d4fad502031a493a15ddfad6305d783cbae90eee5aefb85a8f0c19a737c40",
     "expires_at": "2026-11-01T15:12:05Z"
   },
-  "frontend_source_fingerprint": "432052a95830b4a8550cd6478d766bacc2bbbb4b2dd21d44544b238c70c5f001",
+  "frontend_source_fingerprint": "aa4d4fad502031a493a15ddfad6305d783cbae90eee5aefb85a8f0c19a737c40",
   "backend_contract": {
     "scan": "scan.v4.snapshot-bound-authority",
     "authority": "offline-authority.v5",
@@ -370,7 +370,7 @@
       {
         "path": "config/schedules/manual-approved-20261030/README.md",
         "mode": "100644",
-        "object_id": "7bcfa9fab1afdb04f2e3e373ee2c6b825e4d5813"
+        "object_id": "c0b93fd65f8b42bb23ba2cfe16b44ba4ff166afc"
       },
       {
         "path": "config/schedules/manual-approved-20261030/catalog.json",
@@ -853,9 +853,29 @@
         "object_id": "73ee4e1cd5bb40f9beff06b6430b246bfd1125b2"
       },
       {
+        "path": "release/fresh-only-replay/SOURCE298_REPLAY_ORDER.json",
+        "mode": "100644",
+        "object_id": "8e037e7279d2e6a53bd7e3ddc84a402effbdbe56"
+      },
+      {
         "path": "release/fresh-only-replay/SOURCE298_SUCCESSOR.json",
         "mode": "100644",
         "object_id": "e8239b7ae3f94fa55dd49046cdf1b49e49b16fa8"
+      },
+      {
+        "path": "release/fresh-only-replay/SOURCE299_REPLAY_ORDER.json",
+        "mode": "100644",
+        "object_id": "7ed66f1f25282437ce0c02a3a09f30a8785b5e6b"
+      },
+      {
+        "path": "release/fresh-only-replay/SOURCE299_SUCCESSOR.json",
+        "mode": "100644",
+        "object_id": "2e6fc7c32095a829d5b9f1a81bce3bc0c239e2da"
+      },
+      {
+        "path": "release/fresh-only-replay/SOURCE300_SUCCESSOR.json",
+        "mode": "100644",
+        "object_id": "10986612b08be9f2598719ee6baf653f17d8f9cd"
       },
       {
         "path": "release/fresh-only-replay/images/20261002090000_manager_issue_outcomes.sql",
@@ -995,7 +1015,7 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "280315dd899e238544fef0163b72c11fa5d8f8b7"
+        "object_id": "d397a634a2035478b2920f25154eac19e0a77b92"
       },
       {
         "path": "release/installed-source/20261006031304_custodial_owner_delegated_actions.sql",
@@ -1315,7 +1335,7 @@
       {
         "path": "release/production-migration-state.json",
         "mode": "100644",
-        "object_id": "bc0c294b6d6dd77942d529cfa5af3cd8ee6dd4a6"
+        "object_id": "6234e0f09961314317d9aaf1cc3314659354a7d7"
       },
       {
         "path": "release/production-schema-observation-20260922.json",
@@ -1325,7 +1345,7 @@
       {
         "path": "release/production-target-schema-profile.json",
         "mode": "100644",
-        "object_id": "9bff167233ab01f408bc110f58438d538fa9302a"
+        "object_id": "ef8194ccd79fab4d263817dc2423460327b9d2cd"
       },
       {
         "path": "release/restore-dispositions/20261029-backup-40960771863.json",
@@ -1340,7 +1360,37 @@
       {
         "path": "release/schema-alignment-input.json",
         "mode": "100644",
-        "object_id": "b8f9271bc7a8045469f221f21f79afbe3b6c2a82"
+        "object_id": "d2468f7bf6f9c486c8370e41eb00213b3b10437c"
+      },
+      {
+        "path": "release/schema-evidence/SOURCE298_CAPTURED_TARGET_PROFILE.json",
+        "mode": "100644",
+        "object_id": "9bff167233ab01f408bc110f58438d538fa9302a"
+      },
+      {
+        "path": "release/schema-evidence/SOURCE299_CANONICAL_FORWARD_CAPTURE.json",
+        "mode": "100644",
+        "object_id": "5bd4bfef5388add9339cd97f15b8dc822f21d210"
+      },
+      {
+        "path": "release/schema-evidence/SOURCE299_CAPTURED_TARGET_PROFILE.json",
+        "mode": "100644",
+        "object_id": "99f49e8ca3deecc6a601aa9bf501d8eeb156a201"
+      },
+      {
+        "path": "release/schema-evidence/SOURCE299_PRE_CAPTURE_EXPECTATION.json",
+        "mode": "100644",
+        "object_id": "f58fb072368d94aabcc32b96d7066912d07f2785"
+      },
+      {
+        "path": "release/schema-evidence/SOURCE300_EXPECTED_TARGET_BEFORE_CAPTURE.json",
+        "mode": "100644",
+        "object_id": "c2920261e6dede4dcc6b23e830b9c24eb1bff369"
+      },
+      {
+        "path": "release/schema-evidence/SOURCE300_FUNCTION_PREDECESSORS.json",
+        "mode": "100644",
+        "object_id": "164d9de1b541e90adba4af5d1510a76cf606fcdb"
       },
       {
         "path": "release/shared-events-database-receipt.json",
@@ -1420,7 +1470,7 @@
       {
         "path": "scripts/apply-release-migration-plan.mjs",
         "mode": "100644",
-        "object_id": "df06abd29d150ea3b47f4ef0fe1b909697175575"
+        "object_id": "1ca8d1052ccb1a7ff23060b04a80fd06b97a1b08"
       },
       {
         "path": "scripts/approved-initial-current-predecessor-tests.mjs",
@@ -1428,14 +1478,29 @@
         "object_id": "54b8c2cc49cf4a2dee39597772af732c79bb6abb"
       },
       {
+        "path": "scripts/approved-manual-manager-view-tests.mjs",
+        "mode": "100644",
+        "object_id": "31b68a653caf37c4a153c1986001bc62abed5ec5"
+      },
+      {
+        "path": "scripts/approved-manual-native-template-tests.mjs",
+        "mode": "100644",
+        "object_id": "44b1cb8c73879f1a3e59299160ab3a15f1d7486b"
+      },
+      {
+        "path": "scripts/approved-manual-week-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "eab2d819737db8cca20d241112293338321eac52"
+      },
+      {
         "path": "scripts/approved-manual-week-tests.mjs",
         "mode": "100644",
-        "object_id": "366dfbe18d8325bb879a16adb4b95dee73b8f686"
+        "object_id": "a8b7a63c74ed985e7bf07e98234a3caba37e162b"
       },
       {
         "path": "scripts/approved-static-template-control-plane-tests.mjs",
         "mode": "100644",
-        "object_id": "eb3bbc1df774dcaf486875d098e2712c26000359"
+        "object_id": "5bc7f52b942da909f2c7032e443c71809e7ddd54"
       },
       {
         "path": "scripts/approved-static-template-mapping-tests.mjs",
@@ -1565,7 +1630,7 @@
       {
         "path": "scripts/ci-fresh-only-source-successor.mjs",
         "mode": "100644",
-        "object_id": "41796aeda79871cc837ab28cf7a8c9df1d2cc1a9"
+        "object_id": "18d365a2a3119f1e36c36e737161e91b247b87b2"
       },
       {
         "path": "scripts/ci-workflow-contract-tests.mjs",
@@ -1700,7 +1765,7 @@
       {
         "path": "scripts/current291-production-plan-source-tests.mjs",
         "mode": "100644",
-        "object_id": "f5bbce09ac19b69976c675b4281e0d116204862f"
+        "object_id": "427f78d760d72c62058a3769f14699aecb0f2202"
       },
       {
         "path": "scripts/custodial-atomic-commit-database-tests.mjs",
@@ -2173,6 +2238,11 @@
         "object_id": "0731fe4f977691f0ca42de852ec69a0045ce6631"
       },
       {
+        "path": "scripts/fixtures/approved-initial-six-owner-40da.json",
+        "mode": "100644",
+        "object_id": "070977a7b47c4afbac05e65af922e81cd886fbcc"
+      },
+      {
         "path": "scripts/fixtures/approved-schedule-web-consumer-7ddd.js",
         "mode": "100644",
         "object_id": "977ebda91d29811bddbe2bcb7b8f65ad13458b8e"
@@ -2350,7 +2420,7 @@
       {
         "path": "scripts/fixtures/full-hour-lunch-source.mjs",
         "mode": "100644",
-        "object_id": "1769cd0d1cccf61a2e314117e5adf26d3b3f041e"
+        "object_id": "68c444da3db7474ab5a2741f697b17616c1ed961"
       },
       {
         "path": "scripts/fixtures/full-hour-source-predecessors-tests.mjs",
@@ -2810,12 +2880,12 @@
       {
         "path": "scripts/isolated-release-data-preservation-tests.mjs",
         "mode": "100644",
-        "object_id": "542084194e338407fbe76219db110559ad808769"
+        "object_id": "353f0becbb706a48a8ab93ad7126534ef4144432"
       },
       {
         "path": "scripts/isolated-release-data-preservation.mjs",
         "mode": "100644",
-        "object_id": "f864993fdaf13c8d9e4d247b845e16b7c5f7b482"
+        "object_id": "7ca511488945156b47d500491ab8733a71c76f46"
       },
       {
         "path": "scripts/isolated-restore-lease-shim-tests.mjs",
@@ -4070,12 +4140,12 @@
       {
         "path": "scripts/production-target-schema-profile-tests.mjs",
         "mode": "100644",
-        "object_id": "0e49503dc2de3eaae70e8d808ed9b64ecb5e9709"
+        "object_id": "afb405e82d93ee3f72993069d91e714b30ea75a3"
       },
       {
         "path": "scripts/production-target-schema-profile.mjs",
         "mode": "100644",
-        "object_id": "be6ab94665ec7e7e1eeeb6ce1894b6e475a9f757"
+        "object_id": "f1fd0347ab8f8b16c15e323476a906730f34ec61"
       },
       {
         "path": "scripts/proxy-address-regression-tests.mjs",
@@ -4240,7 +4310,7 @@
       {
         "path": "scripts/release-migration-plan-database-tests.mjs",
         "mode": "100644",
-        "object_id": "e7762761c626c615d91c02611e74030a89cefa26"
+        "object_id": "26b80c4cc9721bc0e593ec89e4bc3f1adbd02241"
       },
       {
         "path": "scripts/release-migration-preservation-archive-tests.mjs",
@@ -4250,7 +4320,7 @@
       {
         "path": "scripts/release-migration-preservation-caller-tests.mjs",
         "mode": "100644",
-        "object_id": "6a6c7bf422746fbf3301bfb14b9b8222781b8169"
+        "object_id": "23acc047c527b97b3fa362546dfc71dedc0bbf3b"
       },
       {
         "path": "scripts/release-migration-private252-refusal-tests.mjs",
@@ -4275,12 +4345,12 @@
       {
         "path": "scripts/release-migration-target-capture-tests.mjs",
         "mode": "100644",
-        "object_id": "af3f4ac1ba6cb6926cdc68b137ca9a22fca17193"
+        "object_id": "3ab23b051c4a069ac7a712067a5dffbf7b8b5d94"
       },
       {
         "path": "scripts/release-migration-target-capture.mjs",
         "mode": "100644",
-        "object_id": "f592edf3fb3578a25196e7fd5ac796f54e6ec397"
+        "object_id": "17812c3e62e5cf8601b19196399798353ce2b5d6"
       },
       {
         "path": "scripts/release-migration-target-refusal-tests.mjs",
@@ -4295,7 +4365,7 @@
       {
         "path": "scripts/release-migration-workflow-preflight.mjs",
         "mode": "100644",
-        "object_id": "190a753d081a35f7e08bcdb3782927abf71a7dd7"
+        "object_id": "5bf3c59bb39cd08aa7a79cd82c5661123a9ef206"
       },
       {
         "path": "scripts/release-migration-workflow-tests.mjs",
@@ -4900,12 +4970,12 @@
       {
         "path": "scripts/static-weekly-full-hour-lunch-database-tests.mjs",
         "mode": "100644",
-        "object_id": "c1ac65e56b0c1d5041cec8975e8e46ff8e9f0d3d"
+        "object_id": "339cf744fab0bf7ea5130e750bcdb7efc7c500ec"
       },
       {
         "path": "scripts/static-weekly-full-hour-lunch-tests.mjs",
         "mode": "100644",
-        "object_id": "8795c712e338cfa740e46f11f8e54f310193f32e"
+        "object_id": "8a11af0ee7d143e11333446612cf87035d53768c"
       },
       {
         "path": "scripts/static-weekly-full-nine-owner-map-tests.mjs",
@@ -5910,7 +5980,17 @@
       {
         "path": "src/approved-manual-compiler-data.js",
         "mode": "100644",
-        "object_id": "4e0d860b38d38d7780f874e2784daaa792fcc6e8"
+        "object_id": "6db9405cb5648591b1530aee13bbf25fc1fb1667"
+      },
+      {
+        "path": "src/approved-manual-manager-view.js",
+        "mode": "100644",
+        "object_id": "e968c13b6e9801f40657784fad4be5ed15fb18ce"
+      },
+      {
+        "path": "src/approved-manual-owner-config.js",
+        "mode": "100644",
+        "object_id": "b4482529b2afdefe298e2fcd25b422f2bc45de11"
       },
       {
         "path": "src/approved-manual-policy-delta.js",
@@ -5920,7 +6000,7 @@
       {
         "path": "src/approved-manual-source-draft.js",
         "mode": "100644",
-        "object_id": "af9db2e8c6b5127f1dd10889198c4f587ddcd605"
+        "object_id": "2d919c33e4d76a0d3d7d3a74e0e1c9dd4e4608b1"
       },
       {
         "path": "src/approved-manual-week.js",
@@ -6805,7 +6885,7 @@
       {
         "path": "src/static-weekly-control-plane.js",
         "mode": "100644",
-        "object_id": "a9938851916fdb960e40a37b514d30705007932a"
+        "object_id": "b766f572bc900f0630260422275a3301638584ae"
       },
       {
         "path": "src/static-weekly-coverall-access.js",
@@ -6845,7 +6925,7 @@
       {
         "path": "src/static-weekly-lunch-derivation.js",
         "mode": "100644",
-        "object_id": "0200b80633bcf1d2e4f2fc232890386a31c3f3be"
+        "object_id": "fb2452f2386ef2a3970881eecbda581b90e95e7b"
       },
       {
         "path": "src/static-weekly-lunch-policy.js",
@@ -6880,7 +6960,7 @@
       {
         "path": "src/static-weekly-owner-eligibility.js",
         "mode": "100644",
-        "object_id": "a9f4643504f1eced4a3e46cedeb54f83326067f3"
+        "object_id": "09cb92f39d17ad51f318a0c5dc28e740837354a2"
       },
       {
         "path": "src/static-weekly-owner-workdays.js",
@@ -6950,7 +7030,7 @@
       {
         "path": "src/static-weekly-recurring-staffing-adaptation.js",
         "mode": "100644",
-        "object_id": "4f12e419b6ba7826ebe6083418483668ce935046"
+        "object_id": "4f3dc92633544cff9c0afd8c56c4827e989ce9aa"
       },
       {
         "path": "src/static-weekly-recurring-week-commitment.js",
@@ -7085,7 +7165,7 @@
       {
         "path": "supabase/canonical/migration-replay-order.json",
         "mode": "100644",
-        "object_id": "8e037e7279d2e6a53bd7e3ddc84a402effbdbe56"
+        "object_id": "ca3f2f453b8e959d0843725387109eb6c6de14e5"
       },
       {
         "path": "supabase/canonical/production-schema-fingerprint-input.json",
@@ -7105,12 +7185,12 @@
       {
         "path": "supabase/canonical/schema-fingerprint-input.json",
         "mode": "100644",
-        "object_id": "da97f24643391bb0faf03f33e247c1b21b1383ea"
+        "object_id": "ef187b4104afcf4d46aa9e83493b49cfe7f7585d"
       },
       {
         "path": "supabase/canonical/schema-fingerprint.txt",
         "mode": "100644",
-        "object_id": "65db0177a02533d357773fa41a3d6c99f22b5303"
+        "object_id": "d431278f5f6d0aa5bd9963fc732b752985613eab"
       },
       {
         "path": "supabase/canonical/source-capture-232.json",
@@ -9248,13 +9328,23 @@
         "object_id": "6fe2d1d184a6baf868fc80f66a01690c44d746bd"
       },
       {
+        "path": "supabase/migrations/20261030031200_approved_manual_full_hour_coverers.sql",
+        "mode": "100644",
+        "object_id": "43b0dfd5f15169084cf345102322de012ea912a0"
+      },
+      {
+        "path": "supabase/migrations/20261030050235_compact_approved_initial_confirmation.sql",
+        "mode": "100644",
+        "object_id": "786e8c28827946c7cec800f7ba732ed57812adcd"
+      },
+      {
         "path": "tmp/write_probe.txt",
         "mode": "100644",
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 1825,
-    "migration_path_count": 298,
+    "authority_path_count": 1843,
+    "migration_path_count": 300,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
   },
@@ -10158,6 +10248,12 @@
     },
     {
       "name": "20261028224728_full_scheduled_lunch_source_policy.sql"
+    },
+    {
+      "name": "20261030031200_approved_manual_full_hour_coverers.sql"
+    },
+    {
+      "name": "20261030050235_compact_approved_initial_confirmation.sql"
     }
   ],
   "release_boundary": "Prepare distinct minimum-32-character backend, native-route, and employee-device credential secrets before cutover; configure database digests immediately after the migrations that create each configuration function, retain the bridge backend artifact through the scan-snapshot phase, require manager-code recovery without phone-local work loss for any device-credential generation mismatch, and require the executable health/restoration probes before traffic changes."
