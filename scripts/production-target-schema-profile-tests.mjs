@@ -6,8 +6,12 @@ import { validateProductionTargetSchemaProfile, resolveReleaseSchemaTarget } fro
 import { fingerprintSchemaCatalog } from './schema-fingerprint-catalog.mjs';
 
 const root = resolve(new URL('..', import.meta.url).pathname);
-const canonical = JSON.parse(readFileSync(join(root, 'supabase/canonical/schema-fingerprint-input.json')));
-const profile = JSON.parse(readFileSync(join(root, 'release/production-target-schema-profile.json')));
+const currentCanonical=JSON.parse(readFileSync(join(root,'supabase/canonical/schema-fingerprint-input.json'))),
+ currentProfile=JSON.parse(readFileSync(join(root,'release/production-target-schema-profile.json'))),
+ canonical=structuredClone(currentCanonical),profile=currentProfile.parent_profile||currentProfile;
+if(currentProfile.previous_function){const previous=currentProfile.previous_function;
+ const i=canonical.functions.findIndex(f=>f.schema_name===previous.schema_name&&f.function_name===previous.function_name&&f.identity_arguments===previous.identity_arguments);
+ assert.ok(i>=0);canonical.functions[i]=structuredClone(previous);}
 const clone = value => JSON.parse(JSON.stringify(value));
 let checks = 0;
 function check(name, run) { run(); checks++; }
@@ -58,7 +62,7 @@ check('changed function body cannot be hidden by the deployment profile', () => 
   assert.throws(() => validateProductionTargetSchemaProfile(changed, profile));
 });
 check('source resolver reads the declared physical profile and keeps legacy no-profile catalogs explicit', () => {
-  assert.equal(resolveReleaseSchemaTarget(root).deploymentFingerprint, profile.deployment_fingerprint);
+  assert.equal(resolveReleaseSchemaTarget(root).deploymentFingerprint, currentProfile.deployment_fingerprint);
   const dir = mkdtempSync(join(tmpdir(), 'custodial-schema-profile-'));
   try {
     mkdirSync(join(dir, 'supabase/canonical'), {recursive: true});
@@ -70,5 +74,29 @@ check('source resolver reads the declared physical profile and keeps legacy no-p
     assert.notEqual(legacy.deploymentFingerprint, profile.deployment_fingerprint);
   } finally { rmSync(dir, {recursive: true}); }
 });
+if(currentProfile.schema==='custodial.production-target-schema-profile.forward.v1'){
+ const forward=validateProductionTargetSchemaProfile(currentCanonical,currentProfile);
+ check('forward expectation keeps complete catalog identity and genuine parent capture',()=>{
+  assert.equal(forward.canonicalFingerprint,currentProfile.canonical_fingerprint);
+  assert.equal(forward.deploymentFingerprint,currentProfile.deployment_fingerprint);
+  assert.equal(forward.profileQualification,'FORWARD_EXPECTATION_REQUIRES_FRESH_POPULATED_REHEARSAL');
+  assert.equal(forward.profile.qualification.new_populated_target_observed,false);
+  assert.deepEqual(forward.profile.parent_profile,profile);
+  for(const key of Object.keys(currentCanonical))if(!['columns','policies','role_memberships'].includes(key))
+   assert.deepEqual(forward.deploymentCatalog[key],forward.canonicalCatalog[key]);
+ });
+ for(const [name,edit]of [
+  ['forged populated observation',p=>{p.qualification.new_populated_target_observed=true;}],
+  ['removed fresh rehearsal requirement',p=>{p.qualification.fresh_exact_head_populated_rehearsal_required=false;}],
+  ['unreviewed forward SQL',p=>{p.forward_migration.sha256='0'.repeat(64);}],
+  ['changed preceding function',p=>{p.previous_function.definition+='\n-- drift';}],
+  ['changed genuine parent capture',p=>{p.parent_profile.capture.target_ledger_count=400;}],
+  ['old399 ledger substituted for forward400',p=>{p.expected_ledger.target=399;}],
+  ['unrelated canonical capture',p=>{p.canonical_capture.sha256='0'.repeat(64);}],
+  ['unknown forward property',p=>{p.ignore_grants=true;}],
+ ])check(name+' refuses',()=>{const bad=clone(currentProfile);edit(bad);assert.throws(()=>validateProductionTargetSchemaProfile(currentCanonical,bad));});
+ check('forward profile cannot hide changed current grants',()=>{const bad=clone(currentCanonical);bad.table_grants[0].is_grantable=!bad.table_grants[0].is_grantable;
+  assert.throws(()=>validateProductionTargetSchemaProfile(bad,currentProfile));});
+}
 console.log(JSON.stringify({status: 'PASS_SOURCE_PROFILE_ONLY', checks, database_queries: false,
   production_catalog_unchanged: true, raw_fingerprint_normalization_changed: false}));

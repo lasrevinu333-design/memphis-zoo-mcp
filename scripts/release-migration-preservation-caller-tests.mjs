@@ -76,6 +76,12 @@ for(const target of [true,false])await check('164 full-hour caller retains compl
  if(target){before(r,'verify','rollback');before(r,'rollback','successReceipt');absent(r,'COMMITTED');}
  else{before(r,'verify','COMMITTED');before(r,'COMMITTED','stdout');}
 });
+for(const target of [true,false])await check('165 named-coverer caller retains complete preservation and target rollback='+target,async()=>{
+ const r=await fixture({target,length:165});assert.ifError(r.error);assert.equal(r.migrations,165);
+ before(r,'snapshot','migration:1');before(r,'migration:165','verify');
+ if(target){before(r,'verify','rollback');before(r,'rollback','successReceipt');absent(r,'COMMITTED');}
+ else{before(r,'verify','COMMITTED');before(r,'COMMITTED','stdout');}
+});
 for(const target of [true,false])for(const fail of ['archive','connect','sourceCatalog','snapshot','migration','ledger','verify',...(!target?['targetCatalog']:[])])await check('failure '+fail+' target='+target+' never commits or publishes success',async()=>{
  const r=await fixture({target,fail});assert.ok(r.error,JSON.stringify({target,fail,events:r.events.slice(-15)}));absent(r,'COMMITTED','successReceipt','stdout');assert.ok(r.events.includes('end'));if(fail!=='archive')assert.ok(r.events.includes('preservationArchiveClose'));if(['archive','connect'].includes(fail))absent(r,'rollback','ledgerRead','catalogRead');
  if(['archive','connect','sourceCatalog','snapshot'].includes(fail))assert.equal(r.migrations,0);

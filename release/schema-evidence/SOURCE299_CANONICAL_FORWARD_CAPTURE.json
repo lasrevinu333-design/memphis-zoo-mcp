@@ -1,0 +1,22 @@
+{
+  "schema": "custodial.source299-named-coverer-local-sql.v1",
+  "began": "2026-10-30T03:37:00.426Z",
+  "status": "PASS",
+  "phase": "capture_actual_post_sql_catalog",
+  "name": "mz_schema_rebuild_lunch_1396483",
+  "profile": "normal",
+  "migration": {
+    "file": "supabase/migrations/20261030031200_approved_manual_full_hour_coverers.sql",
+    "sha256": "de548422310c3369bac0560e14507e4022cc9d5b9effe898d4f24ae79156cf6a"
+  },
+  "production": false,
+  "productionWritten": false,
+  "populatedTarget": false,
+  "manualEightSqlQualified": false,
+  "measuredFingerprint": "95ad1f4e76159d18c5ccdb7c84fb639918005f05155b152641f79c15919f082d",
+  "canonicalCaptureQualified": true,
+  "catalogChangedFunctions": 1,
+  "singleCovererSqlQualified": false,
+  "cleanup": "SUPPORTED_OWNED_FIXTURE_CLEANUP_RETURNED",
+  "finished": "2026-10-30T03:39:03.066Z"
+}

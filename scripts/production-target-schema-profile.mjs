@@ -7,6 +7,8 @@ import { fingerprintSchemaCatalog } from './schema-fingerprint-catalog.mjs';
 const CANONICAL = '432052a95830b4a8550cd6478d766bacc2bbbb4b2dd21d44544b238c70c5f001';
 const DEPLOYMENT = 'b57982c0c739632fcbfc9ba30177fccab05a5847ce44121408b5ddab8d169d33';
 const SOURCE = '0096e7c488aca86f1d38b061561696b2d4ac409036f063ffc9f196625b9ee9c2';
+const FORWARD_CANONICAL='95ad1f4e76159d18c5ccdb7c84fb639918005f05155b152641f79c15919f082d';
+const FORWARD_DEPLOYMENT='09a3374c452a81cd0a8904273d9212444de3ba41be01bf4d07fd887a21f4d0c6';
 const PROFILE_PATH = 'release/production-target-schema-profile.json';
 const POLICIES = [
   ['custodial_native_inventory_manifest_chunks', 'native_inventory_manifest_owner'],
@@ -45,7 +47,7 @@ function one(rows, predicate, label) {
 // This is an explicit, source-reviewed physical deployment profile. It does
 // not modify catalog capture or its fingerprint, ignore roles/ACLs, or claim
 // that the fresh and populated catalogs have the same physical identity.
-export function validateProductionTargetSchemaProfile(canonicalCatalog, profile) {
+function validateCapturedTargetSchemaProfile(canonicalCatalog, profile) {
   closed(profile, ['schema', 'canonical_fingerprint', 'deployment_fingerprint', 'source_fingerprint',
     'source_catalog_sha256', 'source_ledger_sha256', 'archive_digest', 'capture',
     'original_columns', 'original_role_memberships', 'policy_owner'], 'Closed production target profile required');
@@ -110,6 +112,44 @@ export function validateProductionTargetSchemaProfile(canonicalCatalog, profile)
     canonicalCounts: counts(canonical.normalized), deploymentCounts: counts(actual.normalized), profile: clone(profile)};
 }
 
+// A forward expectation is not a new populated-target observation. Rebuild
+// the exact captured predecessor first, then substitute the sole function
+// observed after the forward SQL. No ACL, role, column, policy or other
+// catalog surface is omitted. Normal release still needs its fresh populated
+// target/rehearsal evidence and compares the complete physical fingerprint.
+export function validateProductionTargetSchemaProfile(canonicalCatalog,profile){
+ if(profile?.schema!=='custodial.production-target-schema-profile.forward.v1')return validateCapturedTargetSchemaProfile(canonicalCatalog,profile);
+ closed(profile,['schema','canonical_fingerprint','deployment_fingerprint','parent_profile','previous_function',
+  'forward_migration','canonical_capture','expected_ledger','qualification'],'Closed forward target profile required');
+ assert.equal(profile.canonical_fingerprint,FORWARD_CANONICAL);assert.equal(profile.deployment_fingerprint,FORWARD_DEPLOYMENT);
+ assert.deepEqual(profile.forward_migration,{path:'supabase/migrations/20261030031200_approved_manual_full_hour_coverers.sql',
+  sha256:'de548422310c3369bac0560e14507e4022cc9d5b9effe898d4f24ae79156cf6a',bytes:4436});
+ assert.deepEqual(profile.canonical_capture,{path:'release/schema-evidence/SOURCE299_CANONICAL_FORWARD_CAPTURE.json',
+  sha256:'6baf6fcd8fc154921f1cada007760c6dcf4d6acd025500b1715d8c225deb167d',bytes:846});
+ assert.deepEqual(profile.expected_ledger,{source:235,target:400,pending:165});
+ assert.deepEqual(profile.qualification,{method:'GENUINE_PARENT_TARGET_PLUS_ACTUAL_CANONICAL_FORWARD_SQL',
+  new_populated_target_observed:false,fresh_exact_head_populated_rehearsal_required:true});
+ const canonical=fingerprintSchemaCatalog(canonicalCatalog);assert.equal(canonical.fingerprint,FORWARD_CANONICAL);
+ const previous=profile.previous_function;
+ closed(previous,['comment','definition','function_name','identity_arguments','owner_name','schema_name'],'Exact preceding function required');
+ assert.equal(previous.schema_name,'public');assert.equal(previous.function_name,'static_weekly_v8_assert_lunch_document');
+ assert.equal(previous.identity_arguments,'p_projection_id uuid, p_document jsonb');
+ const matches=row=>row.schema_name===previous.schema_name&&row.function_name===previous.function_name&&row.identity_arguments===previous.identity_arguments,
+  current=one(canonical.normalized.functions,matches,'One exact forward function required'),
+  {definition:oldDefinition,...oldAttrs}=previous,{definition:newDefinition,...newAttrs}=current;
+ assert.deepEqual(newAttrs,oldAttrs,'Forward function metadata changed');assert.notEqual(newDefinition,oldDefinition);
+ const predecessor=clone(canonical.normalized);predecessor.functions[predecessor.functions.findIndex(matches)]=clone(previous);
+ const parent=validateCapturedTargetSchemaProfile(predecessor,profile.parent_profile),deployment=clone(parent.deploymentCatalog),
+  oldPhysical=one(deployment.functions,matches,'Exact captured preceding function required');
+ assert.deepEqual(oldPhysical,previous);
+ deployment.functions[deployment.functions.indexOf(oldPhysical)]=clone(current);
+ const physical=fingerprintSchemaCatalog(deployment);assert.equal(physical.fingerprint,FORWARD_DEPLOYMENT);
+ return {canonicalFingerprint:FORWARD_CANONICAL,deploymentFingerprint:FORWARD_DEPLOYMENT,
+  canonicalCatalog:canonical.normalized,deploymentCatalog:physical.normalized,
+  canonicalCounts:counts(canonical.normalized),deploymentCounts:counts(physical.normalized),profile:clone(profile),
+  profileQualification:'FORWARD_EXPECTATION_REQUIRES_FRESH_POPULATED_REHEARSAL'};
+}
+
 export function resolveReleaseSchemaTarget(root) {
   const read = name => {
     const file = resolve(root, name), stat = lstatSync(file);
@@ -125,6 +165,17 @@ export function resolveReleaseSchemaTarget(root) {
     canonicalCounts: counts(identity.normalized), deploymentCounts: counts(identity.normalized), profile: null, profileSha256: null,
   };
   const raw = read(PROFILE_PATH);
-  return {...validateProductionTargetSchemaProfile(canonicalCatalog, JSON.parse(raw)),
+  const profile=JSON.parse(raw),validated=validateProductionTargetSchemaProfile(canonicalCatalog,profile);
+  if(profile.schema==='custodial.production-target-schema-profile.forward.v1'){
+    for(const reference of [profile.forward_migration,profile.canonical_capture]){
+      const bytes=read(reference.path);assert.equal(bytes.length,reference.bytes);
+      assert.equal(createHash('sha256').update(bytes).digest('hex'),reference.sha256,'Forward profile reference bytes differ');
+    }
+    const capture=JSON.parse(read(profile.canonical_capture.path));
+    assert.equal(capture.status,'PASS');assert.equal(capture.profile,'normal');assert.equal(capture.canonicalCaptureQualified,true);
+    assert.equal(capture.populatedTarget,false);assert.equal(capture.catalogChangedFunctions,1);
+    assert.equal(capture.measuredFingerprint,FORWARD_CANONICAL);assert.equal(capture.productionWritten,false);
+  }
+  return {...validated,
     profileSha256: createHash('sha256').update(raw).digest('hex')};
 }

@@ -39,8 +39,8 @@ export function loadOriginal235PreservationSource(backendRoot){
 }
 export function validateOriginal235PreservationPlan(backendRoot,plan){
  const manifest=loadOriginal235PreservationSource(backendRoot);
- assert.ok([160,163,164].includes(plan.length),'Only original160, exact source-selected163 or exact full-hour164 preservation plan');
- if(plan.length===164){
+ assert.ok([160,163,164,165].includes(plan.length),'Only original160 or exact source-selected163/164/165 preservation plans');
+ if(plan.length>=164){
   const sourcePlan=plan.map(({sql,body,...item})=>item);
   assertTargetCapturePendingPlan(sourcePlan,sourcePlan.slice(0,163));
  }
@@ -51,14 +51,18 @@ export function validateOriginal235PreservationPlan(backendRoot,plan){
  }
  if(plan.length>=163){
   const replay=readMigrationReplayPlan(backendRoot);
-  assert.equal(replay.files.length,plan.length===164?298:297);
-  assert.equal(replay.manifestSha256,plan.length===164?'aca06e305ff4c5918e83045acf4d739fcb8746e41dcc89ceb59fcd0f98ab20ba':'e37cf98ffde8165797069595b45d84fdaf89871a719c31a839905e9e6317d54c');
+  assert.equal(replay.files.length,plan.length+134);
+  const replayHashes={163:'e37cf98ffde8165797069595b45d84fdaf89871a719c31a839905e9e6317d54c',
+   164:'aca06e305ff4c5918e83045acf4d739fcb8746e41dcc89ceb59fcd0f98ab20ba',
+   165:'965300d634959010c017ac203d71fe915f65b4b42e69910b173b96d034c38001'};
+  assert.equal(replay.manifestSha256,replayHashes[plan.length]);
   const additions=[
    ['20261027230000_accepted_actual_lunch_windows.sql','55b2cd92ebe36c6920a3c27cc13031ef6ca263d8f10114182c3058fd0991c81b'],
    ['20261027231000_canonical_coverall_capacity_links.sql','c4be89a07f46717ddcc7ceebed639cdc10b589b8ff72e9cf20a3523bdec43903'],
    ['20261027234814_mcp_oauth_durable_token_families.sql','e74210f033e5c65d5e99a090ca201d1c010d6cb5c4159a015bb08e3719c44f6e'],
   ];
-  if(plan.length===164)additions.push(['20261028224728_full_scheduled_lunch_source_policy.sql','a47387ddf244a04df646c9bb2d60eef86a769b96baf9106759f1c2a703248514']);
+  if(plan.length>=164)additions.push(['20261028224728_full_scheduled_lunch_source_policy.sql','a47387ddf244a04df646c9bb2d60eef86a769b96baf9106759f1c2a703248514']);
+  if(plan.length===165)additions.push(['20261030031200_approved_manual_full_hour_coverers.sql','de548422310c3369bac0560e14507e4022cc9d5b9effe898d4f24ae79156cf6a']);
   assert.deepEqual(replay.files.slice(294),additions.map(([file])=>file));
   for(const [index,[file,digest]]of additions.entries()){
    const item=plan[160+index];assert.equal(item.order,161+index);assert.equal(item.file,file);
@@ -243,7 +247,7 @@ export async function prepareIsolatedReleaseDataPreservation({client,backendRoot
    join pg_attribute a on a.attrelid=c.oid where n.nspname in('public','auth','storage') and c.relkind='r' and a.attnum>0 and not a.attisdropped`)).rows;
   for(const old of census()){const now=currentColumns.find(x=>x.schema===old.schema&&x.name===old.name&&x.column_name===old.column_name);assert.ok(now);const {locked,...before}=old;assert.deepEqual(now,before,'original relation/column/type identity changed');}
   assertCurrent();
-  return Object.freeze({schema:'custodial.isolated-release-data-preservation.v1',scope:plan.length===164?'ISOLATED_EXISTING160_PLUS_SELECTED4_TRANSACTION_DATA_PROOF':plan.length===163?'ISOLATED_EXISTING160_PLUS_SELECTED3_TRANSACTION_DATA_PROOF':'ISOLATED_EXISTING160_TRANSACTION_DATA_PROOF',applied_migration_count:plan.length,original_tables:217,original_public_tables:182,ordinary_public_tables:178,nonpublic_tables:35,nonpublic_exact_native_text:true,
+  return Object.freeze({schema:'custodial.isolated-release-data-preservation.v1',scope:plan.length>=163?`ISOLATED_EXISTING160_PLUS_SELECTED${plan.length-160}_TRANSACTION_DATA_PROOF`:'ISOLATED_EXISTING160_TRANSACTION_DATA_PROOF',applied_migration_count:plan.length,original_tables:217,original_public_tables:182,ordinary_public_tables:178,nonpublic_tables:35,nonpublic_exact_native_text:true,
    events:eventResult,four_settings_constants_verified:true,four_settings:settingsDigest,relay_paused_no_migration_time_send_evidence:true,
    recovery_metadata:'DELIBERATE_CANONICAL_GUARDED_REPAIRS_NOT_BUSINESS_EXEMPTION',tables:results,
    raw_values_exported:false,production_authorized:false,full_candidate_admission:false});

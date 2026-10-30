@@ -36,6 +36,8 @@ export function assertReleaseWorkflowSource(root) {
   const catalog = JSON.parse(read("supabase/canonical/schema-fingerprint-input.json").toString("utf8"));
   const fingerprint = read("supabase/canonical/schema-fingerprint.txt").toString("utf8").trim();
   const schemaTarget = resolveReleaseSchemaTarget(root);
+  assert.notEqual(schemaTarget.profileQualification,'FORWARD_EXPECTATION_REQUIRES_FRESH_POPULATED_REHEARSAL',
+    'Source299 populated target capture is pending; a projected catalog cannot authorize normal release.');
   assert.equal(schemaTarget.canonicalFingerprint, fingerprint);
   const source = state.observed_production;
   const target = state.target;

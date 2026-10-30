@@ -34,6 +34,16 @@ export function assertOwnedTargetMetadata({databaseUrl,runId,container,metadata,
 }
 
 export function assertTargetCapturePendingPlan(pending,declared) {
+ if(pending.length===165){
+  assert.ok(Array.isArray(declared)&&[160,163,164,165].includes(declared.length),'Exact predecessor or current named-coverer declaration required');
+  assertTargetCapturePendingPlan(pending.slice(0,164),declared.slice(0,164));
+  assert.deepEqual(pending[164],{order:165,file:'20261030031200_approved_manual_full_hour_coverers.sql',
+   phase:'approved_manual_full_hour_coverers',source_migration_version:'20261030031200',
+   sha256:'de548422310c3369bac0560e14507e4022cc9d5b9effe898d4f24ae79156cf6a'},
+   'Only the exact approved named-coverer delta may follow the intact164 plan');
+  if(declared.length===165)assert.deepEqual(pending,declared,'Complete current declaration must match');
+  return pending;
+ }
  if(pending.length===164){
   assert.ok(Array.isArray(declared)&&[160,163,164].includes(declared.length),'Exact predecessor or current full-hour declaration required');
   assertTargetCapturePendingPlan(pending.slice(0,163),declared.slice(0,163));
@@ -72,7 +82,15 @@ export function targetCaptureState({backendRoot,state,source}) {
  assert.deepEqual(normalize(source.binding),expected,'Signed archive must match the finite observed235 source declaration');
  assert.equal(stableJsonFileSha256(source.ledger),summary.source_identity.migration_ledger_sha256);
  const replay=readMigrationReplayPlan(backendRoot);
- if(replay.files.length===298){
+ if(replay.files.length===299){
+  assert.equal(replay.manifestSha256,'965300d634959010c017ac203d71fe915f65b4b42e69910b173b96d034c38001');
+  const current=JSON.parse(readFileSync(resolve(backendRoot,'supabase/canonical/migration-replay-order.json')));
+  assert.deepEqual(current.phases.map(phase=>phase.files.length),[134,93,72]);
+  assert.deepEqual(current.phases.at(-1).files.pop(),{name:'20261030031200_approved_manual_full_hour_coverers.sql',
+   sha256:'de548422310c3369bac0560e14507e4022cc9d5b9effe898d4f24ae79156cf6a'});
+  assert.equal(sha(JSON.stringify(current,null,2)+'\n'),'aca06e305ff4c5918e83045acf4d739fcb8746e41dcc89ceb59fcd0f98ab20ba',
+   'The complete exact298 predecessor must remain unchanged');
+ }else if(replay.files.length===298){
   assert.equal(replay.manifestSha256,'aca06e305ff4c5918e83045acf4d739fcb8746e41dcc89ceb59fcd0f98ab20ba');
   const current=JSON.parse(readFileSync(resolve(backendRoot,'supabase/canonical/migration-replay-order.json')));
   assert.deepEqual(current.phases.map(phase=>phase.files.length),[134,93,71]);
@@ -87,7 +105,7 @@ export function targetCaptureState({backendRoot,state,source}) {
  assert.equal(state.observed_production.source_authority_migration_count,134);
  const canonical=replay.files.slice(134).map((file,index)=>({order:index+1,file,phase:file.slice(15,-4),
   source_migration_version:file.slice(0,14),sha256:sha(readFileSync(resolve(backendRoot,'supabase/migrations',file)))}));
- assert.equal(canonical.length,replay.files.length===298?164:163);
+ assert.equal(canonical.length,replay.files.length-134);
  const pending=assertTargetCapturePendingPlan(bindExistingPostgresForwardSources(backendRoot,canonical),state.pending_migrations);
  assert.ok(pending.every(item=>!source.ledger.some(row=>row.version===item.source_migration_version)));
  return {...state,mode:'isolated_target_preparation_rollback_only',
