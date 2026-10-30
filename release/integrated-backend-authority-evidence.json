@@ -160,7 +160,7 @@
       {
         "path": ".github/workflows/foundation-security-gate.yml",
         "mode": "100644",
-        "object_id": "c8f28951cf7b1ffa9e5a39474fdb62229af850cb"
+        "object_id": "d011658d745a5f47e965457d74b12ab9547338ad"
       },
       {
         "path": ".github/workflows/integrated-release-attestation.yml",
@@ -511,6 +511,11 @@
         "path": "docs/OUTLOOK_SHARED_EVENTS.md",
         "mode": "100644",
         "object_id": "eeb1d7dce8c68e70a7ce63a80b3d4a8c9787d81c"
+      },
+      {
+        "path": "docs/approved-manual-period-integration.md",
+        "mode": "100644",
+        "object_id": "8014cc52f9dd66a5ce801a888292b408c2367091"
       },
       {
         "path": "docs/approved-manual-schedule-operations.md",
@@ -1505,7 +1510,7 @@
       {
         "path": "scripts/approved-manual-absence-tests.mjs",
         "mode": "100644",
-        "object_id": "ad63b3f29aeb4e17da4734dd45c02af369ff7bdb"
+        "object_id": "17f877d7da3ccfc2a2dc2c26e8fc509e7b3ff362"
       },
       {
         "path": "scripts/approved-manual-activation-database-tests.mjs",
@@ -1520,12 +1525,27 @@
       {
         "path": "scripts/approved-manual-manager-view-tests.mjs",
         "mode": "100644",
-        "object_id": "31b68a653caf37c4a153c1986001bc62abed5ec5"
+        "object_id": "1bf0f82f547a4d887f3d5ef53755b805927daca2"
       },
       {
         "path": "scripts/approved-manual-native-template-tests.mjs",
         "mode": "100644",
         "object_id": "44b1cb8c73879f1a3e59299160ab3a15f1d7486b"
+      },
+      {
+        "path": "scripts/approved-manual-period-projection-tests.mjs",
+        "mode": "100644",
+        "object_id": "aea2d4b93700697f0a864c731fdda7fcd650ec92"
+      },
+      {
+        "path": "scripts/approved-manual-period-tests.mjs",
+        "mode": "100644",
+        "object_id": "1daa1fd3fbdbe7fd607910748611ed108d70299c"
+      },
+      {
+        "path": "scripts/approved-manual-period-worker-tests.mjs",
+        "mode": "100644",
+        "object_id": "4c95977e1caca8e7aa392d05f90482d23842f2a9"
       },
       {
         "path": "scripts/approved-manual-roster-transition-tests.mjs",
@@ -1535,7 +1555,7 @@
       {
         "path": "scripts/approved-manual-week-database-tests.mjs",
         "mode": "100644",
-        "object_id": "490cf94b82dc45d8062dc05069969918d574b95e"
+        "object_id": "e518451e8a1d874f1871de06ed02fa46a46d4c35"
       },
       {
         "path": "scripts/approved-manual-week-tests.mjs",
@@ -1680,7 +1700,7 @@
       {
         "path": "scripts/ci-workflow-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "31b346f33e9026c6f8191d2ed3001ee30b14b95d"
+        "object_id": "9eafebf01f4d0ade36c5aba351343b08ae735152"
       },
       {
         "path": "scripts/cleaning-identity-gps-database-tests.mjs",
@@ -2286,6 +2306,11 @@
         "path": "scripts/fixtures/approved-initial-six-owner-40da.json",
         "mode": "100644",
         "object_id": "070977a7b47c4afbac05e65af922e81cd886fbcc"
+      },
+      {
+        "path": "scripts/fixtures/approved-manual-capacity-source.mjs",
+        "mode": "100644",
+        "object_id": "4f3d59623b07efb4eb8a1ee664d1e2525d2016e7"
       },
       {
         "path": "scripts/fixtures/approved-schedule-web-consumer-7ddd.js",
@@ -4590,7 +4615,7 @@
       {
         "path": "scripts/schedule-ai-tests.mjs",
         "mode": "100644",
-        "object_id": "5bdb0a96f39d817eb15f015582b2c144a64baeb8"
+        "object_id": "d92a6daf14ff2a899d2dd7915743630c2594e633"
       },
       {
         "path": "scripts/schedule-bound-reminder-integration.mjs",
@@ -6025,7 +6050,7 @@
       {
         "path": "src/approved-manual-absence.js",
         "mode": "100644",
-        "object_id": "dd0fcee689c3b80dfedc79e960f864e6f431b4ca"
+        "object_id": "3d089fd814d28a96b1a85dec5159ed5f38b4bf55"
       },
       {
         "path": "src/approved-manual-bindings.js",
@@ -6035,7 +6060,7 @@
       {
         "path": "src/approved-manual-compiler-data.js",
         "mode": "100644",
-        "object_id": "6db9405cb5648591b1530aee13bbf25fc1fb1667"
+        "object_id": "75732754ce1979f4e30b8f31ea63b70bcae9fb1b"
       },
       {
         "path": "src/approved-manual-gps.js",
@@ -6045,12 +6070,22 @@
       {
         "path": "src/approved-manual-manager-view.js",
         "mode": "100644",
-        "object_id": "e968c13b6e9801f40657784fad4be5ed15fb18ce"
+        "object_id": "71d19f4114090e2ceb9a021caa072ebd02c170e1"
       },
       {
         "path": "src/approved-manual-owner-config.js",
         "mode": "100644",
         "object_id": "b4482529b2afdefe298e2fcd25b422f2bc45de11"
+      },
+      {
+        "path": "src/approved-manual-period-projection.js",
+        "mode": "100644",
+        "object_id": "5949826df92a98b1c74813aa540b941936687803"
+      },
+      {
+        "path": "src/approved-manual-period-worker.js",
+        "mode": "100644",
+        "object_id": "e82dfa7920fd68b84ac968189d193e922dd678ca"
       },
       {
         "path": "src/approved-manual-policy-delta.js",
@@ -6895,7 +6930,7 @@
       {
         "path": "src/schedule-api.js",
         "mode": "100644",
-        "object_id": "ac7ebeeae93a36dceea7c63a900dcf8e4b16bb29"
+        "object_id": "fc816189e58409455d1728bea31e706c98f8983b"
       },
       {
         "path": "src/schedule-component-weight-authority.js",
@@ -6978,9 +7013,14 @@
         "object_id": "0ac9e06a4e2513a841cab7967b2c42f0d710c3fe"
       },
       {
+        "path": "src/static-weekly-fixed-ownership.js",
+        "mode": "100644",
+        "object_id": "562bc5e2c9e0bf5c97debc1bc5cc11128c544ab1"
+      },
+      {
         "path": "src/static-weekly-lunch-authority-adapter.js",
         "mode": "100644",
-        "object_id": "75c9692055479b63caee3656f728cc259fb7fd13"
+        "object_id": "7a481ac64dc60b4105478f838ee32c506de24b83"
       },
       {
         "path": "src/static-weekly-lunch-coverage.js",
@@ -7095,7 +7135,7 @@
       {
         "path": "src/static-weekly-recurring-staffing-adaptation.js",
         "mode": "100644",
-        "object_id": "6b1fc4f64bf0ed09792ac506b29579f5f529c9af"
+        "object_id": "86ea95fd3f7f993cbaba9eeee44ff0b6bea960a7"
       },
       {
         "path": "src/static-weekly-recurring-week-commitment.js",
@@ -7105,12 +7145,12 @@
       {
         "path": "src/static-weekly-schedule-compiler-runtime.js",
         "mode": "100644",
-        "object_id": "9d6b4470425e1fd1ae7c8a695e9af1a7b81d5e17"
+        "object_id": "31b42a9ba3dd151d91a9cb34a87b675dbe0315fc"
       },
       {
         "path": "src/static-weekly-schedule-compiler-worker.js",
         "mode": "100644",
-        "object_id": "7dbee6e448eea7f85e0d1cb48af715dbdc84f5d4"
+        "object_id": "6f81a2878845325a63221b6496106a2f7e4cbdb3"
       },
       {
         "path": "src/static-weekly-schedule-compiler.js",
@@ -7180,7 +7220,7 @@
       {
         "path": "src/static-weekly-staffing-preview.js",
         "mode": "100644",
-        "object_id": "8f3b161f9a7f2b526842c686736a9c7f70ebb6e1"
+        "object_id": "811ec3405557c977ad2eeb5df382b11a790547c4"
       },
       {
         "path": "src/static-weekly-vacancy-preview.js",
@@ -9413,7 +9453,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 1857,
+    "authority_path_count": 1865,
     "migration_path_count": 301,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
