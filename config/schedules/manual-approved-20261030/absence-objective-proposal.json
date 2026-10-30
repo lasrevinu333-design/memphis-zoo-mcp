@@ -1,0 +1,33 @@
+{
+  "schema": "custodial.manual-absence-objective-proposal.v1",
+  "approval": "PENDING_OWNER_RESPONSE",
+  "productionActive": false,
+  "weights": {
+    "proximity": 75,
+    "load": 25,
+    "priority": 0
+  },
+  "areaUnit": "ONE_COMBINED_GROUP_RATING_1_TO_10",
+  "proximity": {
+    "metric": "HAVERSINE_STRAIGHT_LINE_GPS",
+    "anchor": "Each recipient s retained normal base groups; never transferred groups",
+    "normalizer": "Maximum pairwise GPS distance among all23 combined groups",
+    "aggregation": "Mean normalized distance across23 current owners in each phase",
+    "walkingTimeClaim": false,
+    "legacyRouteGridUsed": false
+  },
+  "load": {
+    "points": "Sum each combined group score once for its current owner",
+    "normalizer": "sum_i abs(points_i - S/n) / (2*S*(1-1/n))",
+    "S": "Total23-group score, currently136",
+    "n": "Custodians available during this phase, excluding their own lunches",
+    "singleCustodianLoss": 0
+  },
+  "dayScore": "Duration-weighted mean of (0.75*proximityLoss + 0.25*loadLoss) over exact static shift and lunch boundaries",
+  "baselineUnchangedWithoutAbsence": true,
+  "normalHerpetariumMondayOnlyPreserved": true,
+  "helperWholeHourAndNoOverlapRequired": true,
+  "gpsInput": "Authoritative active group coordinates with source/confidence metadata; no inferred coordinates or pixel-anchor substitution",
+  "currentGpsReadback": "All23 groups have exact ID-bound saved coordinates:22 group pins and the stored Cat Country member centroid. Coordinates are not physically qualified walking routes.",
+  "request": "Single asynchronous Main question asking whether to use this normalization or a different formula"
+}

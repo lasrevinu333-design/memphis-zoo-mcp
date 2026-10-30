@@ -11,7 +11,24 @@ assert.equal(document.profiles.length,15);assert.equal(new Set(document.profiles
 export function restoreSchedulerProofSource(profile,source){
  assert.equal(typeof profile,'string');assert.equal(typeof source,'string');
  const row=document.profiles.find(value=>value.profile===profile);assert.ok(row,'explicit retained Source profile required');
- // One exact source298 successor, solely for this historical wiring view.
+ // Exact source299/300 tails, solely for this historical wiring view. Match
+ // the full current bytes and reproduce the entire preserved source298 image
+ // before applying its existing historical transformations. This is not a
+ // runtime replay, catalog normalization or publication admission.
+ if(profile==='NATIVE_CURRENT_REPLAY_MANIFEST_RETAINED_WIRING'
+  &&['965300d634959010c017ac203d71fe915f65b4b42e69910b173b96d034c38001',
+    'be9f1ce99e037690b3095c8b8e963fc30efd8c83adaa1e415856a79808dc31b1'].includes(sha(source))){
+  const count=sha(source)==='be9f1ce99e037690b3095c8b8e963fc30efd8c83adaa1e415856a79808dc31b1'?2:1,
+   current=JSON.parse(source),tails=[
+    {name:'20261030031200_approved_manual_full_hour_coverers.sql',sha256:'de548422310c3369bac0560e14507e4022cc9d5b9effe898d4f24ae79156cf6a'},
+    {name:'20261030050235_compact_approved_initial_confirmation.sql',sha256:'fa9373adcf48f8d13db1b8e4876a5f134b02f8a897f20f887987cbd384393469'},
+   ];
+  assert.deepEqual(current.phases.map(phase=>phase.files.length),[134,93,71+count]);
+  assert.deepEqual(current.phases[2].files.slice(-count),tails.slice(0,count));
+  current.phases[2].files=current.phases[2].files.slice(0,-count);source=JSON.stringify(current,null,2)+'\n';
+  assert.equal(sha(source),'aca06e305ff4c5918e83045acf4d739fcb8746e41dcc89ceb59fcd0f98ab20ba');
+ }
+ // Exact source298 successor, solely for this historical wiring view.
  // Runtime replay and the selected297 fixture admission remain unchanged.
  if(profile==='NATIVE_CURRENT_REPLAY_MANIFEST_RETAINED_WIRING'&&sha(source)==='aca06e305ff4c5918e83045acf4d739fcb8746e41dcc89ceb59fcd0f98ab20ba') {
   const current=JSON.parse(source);assert.deepEqual(current.phases.map(phase=>phase.files.length),[134,93,71]);

@@ -99,6 +99,7 @@ jobs:
       - name: Authentication and integration contracts
         run: |
           set -euo pipefail
+          npm run --silent test:ci-workflows
           npm run --silent test:auth
           npm run --silent test:backup-source-binding
           node --test scripts/device-profile-epoch-tests.mjs scripts/employee-schedule-identity-tests.mjs
@@ -120,6 +121,8 @@ jobs:
           npm run --silent test:foundation-repair
           npm run --silent test:scheduler-overhaul
           npm run --silent test:static-weekly-scheduler:fast
+          node scripts/approved-manual-gps-tests.mjs
+          node scripts/approved-manual-absence-tests.mjs
           # This starts only disposable worker-owned PostgreSQL containers and
           # includes the real independent-session concurrency/restart suite.
           npm run --silent test:static-weekly-scheduler:database
@@ -127,7 +130,6 @@ jobs:
           npm run --silent test:integrated-backend-authority-release-provenance
           npm run --silent test:release-closure
           npm run --silent test:final-closure-database-isolated
-          npm run --silent test:ci-workflows
           npm run --silent test:release-migration-authorization
           npm run --silent test:release-migration-plan-db-isolated
           npm run --silent test:isolated-restore-lease-shim

@@ -67,9 +67,10 @@ const mixedFreshRepairWorkflowSha256 = "1c7dea503a8c7c68439b440fed31ba98869378dd
 // Foundation provisions the exact manifest-selected fresh fixture image before
 // its existing constructor; the earlier recorder keeps its rehearsal image.
 const mixedFreshFoundationWorkflowPath = resolve(workflowDirectory, "foundation-security-gate.yml");
-// Successor changes only the exact package.json digest after adding the owner
-// schedule correction checks; fresh-only construction and all limits are exact.
-const mixedFreshFoundationWorkflowSha256 = "eccd18cd20bdcec941ba5dced2d6ad5e9d0e5e76250160e253de427c2a45b0e0";
+// Bind the added manual GPS/absence proposal checks and run these fast wiring
+// checks before the unchanged disposable SQL suites. Construction and all
+// process/resource limits remain exact.
+const mixedFreshFoundationWorkflowSha256 = "33bb1010187c2bb2f227f23433fa11476a09a7aab2cec01f850761b0582c0c72";
 const thisContractPath = fileURLToPath(import.meta.url);
 const postgresImagePins = postgresPinSources.flatMap((path) => {
   const pins = [...readFileSync(path, "utf8").matchAll(/(?:public\.ecr\.aws\/|docker\.io\/)?supabase\/postgres@sha256:[0-9a-f]{64}/g)]
