@@ -45,9 +45,9 @@ env -i PATH=/usr/bin:/bin LANG=C LC_ALL=C TZ=UTC "$node_source" --max-old-space-
   }
   assertCapturedTargetCatalog(state.target);
   assertReleaseWorkflowSource(process.cwd());
-  if ([294, 297, 298].includes(plan.files.length)) {
+  if ([294, 297, 298, 299, 300].includes(plan.files.length)) {
     assert.equal(plan.baseCount, 134);
-    const pendingCounts = new Map([[294, 160], [297, 163], [298, 164]]);
+    const pendingCounts = new Map([[294, 160], [297, 163], [298, 164], [299, 165], [300, 166]]);
     assert.equal(state.pending_migrations.length, pendingCounts.get(plan.files.length));
     assert.ok(state.target.normal_source_capture, "Current captured source requires its adopted capture binding");
     process.exit(4);
