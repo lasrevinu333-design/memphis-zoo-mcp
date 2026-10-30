@@ -1,20 +1,20 @@
 {
   "schema": "custodial.production-target-schema-profile.v1",
-  "canonical_fingerprint": "95ad1f4e76159d18c5ccdb7c84fb639918005f05155b152641f79c15919f082d",
-  "deployment_fingerprint": "09a3374c452a81cd0a8904273d9212444de3ba41be01bf4d07fd887a21f4d0c6",
+  "canonical_fingerprint": "aa4d4fad502031a493a15ddfad6305d783cbae90eee5aefb85a8f0c19a737c40",
+  "deployment_fingerprint": "742caa62cb7a7dff55b3ddeaf0a3eafde511930cb9d9ba7c965ed9f8be3a80a5",
   "source_fingerprint": "0096e7c488aca86f1d38b061561696b2d4ac409036f063ffc9f196625b9ee9c2",
   "source_catalog_sha256": "f034e7a0a019010093b15388ab1c2ee7865420bf343a4404d23a9a21c183b277",
   "source_ledger_sha256": "2f80104d2f1fe54a6604c2c84436f823b1a78542bc4ba3d7975236951db93b66",
   "archive_digest": "67c0d74bbf18c346314669119f0ae53ff61d9b00c4e6550b7af917b7f02bbdfe",
   "capture": {
-    "report_sha256": "7fded7c546d4c6d879df233f8059cbf4752433c2d9b403641730d6886452593a",
-    "report_bytes": 18585920,
-    "candidate_commit": "7dec6b966b832a658240f114243c0d40971330dd",
-    "candidate_tree": "10e44aad24960bfaae4121efadf850955ba4dbb9",
-    "plan_sha256": "f92f1867a5f8ec0e7cb201b87b040d1593cefbb5f1b1d5756dda4e248b945d61",
+    "report_sha256": "cf5d77a95b3f7e6c64d9f321d5b3aaa19fb78d5bd2e9f313a123cfe8e323fcd3",
+    "report_bytes": 18593702,
+    "candidate_commit": "5455fc4b1ee2ad6910d6d52e491e5db116adee7a",
+    "candidate_tree": "0b42825b28bc95ce4fff61dfdb060d6d6502b0bc",
+    "plan_sha256": "ec143c3344d84f5d01fa33693827d62a19a48f491a91a553864071570a0bfff7",
     "source_ledger_count": 235,
-    "target_ledger_count": 400,
-    "pending_count": 165
+    "target_ledger_count": 401,
+    "pending_count": 166
   },
   "original_columns": [
     {

@@ -1,0 +1,213 @@
+{
+  "schema": "custodial.production-target-schema-profile.v1",
+  "canonical_fingerprint": "95ad1f4e76159d18c5ccdb7c84fb639918005f05155b152641f79c15919f082d",
+  "deployment_fingerprint": "09a3374c452a81cd0a8904273d9212444de3ba41be01bf4d07fd887a21f4d0c6",
+  "source_fingerprint": "0096e7c488aca86f1d38b061561696b2d4ac409036f063ffc9f196625b9ee9c2",
+  "source_catalog_sha256": "f034e7a0a019010093b15388ab1c2ee7865420bf343a4404d23a9a21c183b277",
+  "source_ledger_sha256": "2f80104d2f1fe54a6604c2c84436f823b1a78542bc4ba3d7975236951db93b66",
+  "archive_digest": "67c0d74bbf18c346314669119f0ae53ff61d9b00c4e6550b7af917b7f02bbdfe",
+  "capture": {
+    "report_sha256": "7fded7c546d4c6d879df233f8059cbf4752433c2d9b403641730d6886452593a",
+    "report_bytes": 18585920,
+    "candidate_commit": "7dec6b966b832a658240f114243c0d40971330dd",
+    "candidate_tree": "10e44aad24960bfaae4121efadf850955ba4dbb9",
+    "plan_sha256": "f92f1867a5f8ec0e7cb201b87b040d1593cefbb5f1b1d5756dda4e248b945d61",
+    "source_ledger_count": 235,
+    "target_ledger_count": 400,
+    "pending_count": 165
+  },
+  "original_columns": [
+    {
+      "schema_name": "public",
+      "table_name": "events_app_events",
+      "ordinal_position": 41,
+      "column_name": "custodial_public_notes",
+      "data_type": "text",
+      "not_null": false,
+      "identity_kind": "",
+      "generated_kind": "",
+      "default_expression": null,
+      "collation_name": null,
+      "comment": "Explicit manager-classified employee-visible and spoken custodial preparation. Never infer from generic notes, source text, parser, or ticket details."
+    },
+    {
+      "schema_name": "public",
+      "table_name": "events_app_events",
+      "ordinal_position": 42,
+      "column_name": "custodial_note_codes",
+      "data_type": "text[]",
+      "not_null": true,
+      "identity_kind": "",
+      "generated_kind": "",
+      "default_expression": "'{}'::text[]",
+      "collation_name": null,
+      "comment": "Manager-selected custodial-only reminder codes. Never infer from generic notes, source text, parser, or ticket details."
+    }
+  ],
+  "original_role_memberships": [
+    {
+      "granted_role": "anon",
+      "member_role": "authenticator",
+      "grantor_role": "migration_owner",
+      "admin_option": false
+    },
+    {
+      "granted_role": "anon",
+      "member_role": "migration_owner",
+      "grantor_role": "migration_owner",
+      "admin_option": true
+    },
+    {
+      "granted_role": "authenticated",
+      "member_role": "authenticator",
+      "grantor_role": "migration_owner",
+      "admin_option": false
+    },
+    {
+      "granted_role": "authenticated",
+      "member_role": "migration_owner",
+      "grantor_role": "migration_owner",
+      "admin_option": true
+    },
+    {
+      "granted_role": "authenticator",
+      "member_role": "migration_owner",
+      "grantor_role": "migration_owner",
+      "admin_option": true
+    },
+    {
+      "granted_role": "authenticator",
+      "member_role": "supabase_storage_admin",
+      "grantor_role": "migration_owner",
+      "admin_option": false
+    },
+    {
+      "granted_role": "pg_create_subscription",
+      "member_role": "migration_owner",
+      "grantor_role": "migration_owner",
+      "admin_option": true
+    },
+    {
+      "granted_role": "pg_monitor",
+      "member_role": "migration_owner",
+      "grantor_role": "migration_owner",
+      "admin_option": true
+    },
+    {
+      "granted_role": "pg_monitor",
+      "member_role": "supabase_etl_admin",
+      "grantor_role": "migration_owner",
+      "admin_option": false
+    },
+    {
+      "granted_role": "pg_monitor",
+      "member_role": "supabase_read_only_user",
+      "grantor_role": "migration_owner",
+      "admin_option": false
+    },
+    {
+      "granted_role": "pg_read_all_data",
+      "member_role": "memphis_zoo_backup",
+      "grantor_role": "migration_owner",
+      "admin_option": false
+    },
+    {
+      "granted_role": "pg_read_all_data",
+      "member_role": "migration_owner",
+      "grantor_role": "migration_owner",
+      "admin_option": true
+    },
+    {
+      "granted_role": "pg_read_all_data",
+      "member_role": "supabase_etl_admin",
+      "grantor_role": "migration_owner",
+      "admin_option": false
+    },
+    {
+      "granted_role": "pg_read_all_data",
+      "member_role": "supabase_read_only_user",
+      "grantor_role": "migration_owner",
+      "admin_option": false
+    },
+    {
+      "granted_role": "pg_read_all_settings",
+      "member_role": "pg_monitor",
+      "grantor_role": "migration_owner",
+      "admin_option": false
+    },
+    {
+      "granted_role": "pg_read_all_stats",
+      "member_role": "pg_monitor",
+      "grantor_role": "migration_owner",
+      "admin_option": false
+    },
+    {
+      "granted_role": "pg_signal_backend",
+      "member_role": "migration_owner",
+      "grantor_role": "migration_owner",
+      "admin_option": true
+    },
+    {
+      "granted_role": "pg_stat_scan_tables",
+      "member_role": "pg_monitor",
+      "grantor_role": "migration_owner",
+      "admin_option": false
+    },
+    {
+      "granted_role": "service_role",
+      "member_role": "authenticator",
+      "grantor_role": "migration_owner",
+      "admin_option": false
+    },
+    {
+      "granted_role": "service_role",
+      "member_role": "migration_owner",
+      "grantor_role": "migration_owner",
+      "admin_option": true
+    },
+    {
+      "granted_role": "static_weekly_control_plane",
+      "member_role": "migration_owner",
+      "grantor_role": "migration_owner",
+      "admin_option": false
+    },
+    {
+      "granted_role": "static_weekly_control_plane",
+      "member_role": "static_weekly_runtime_20260823",
+      "grantor_role": "migration_owner",
+      "admin_option": false
+    },
+    {
+      "granted_role": "static_weekly_release_operator",
+      "member_role": "migration_owner",
+      "grantor_role": "migration_owner",
+      "admin_option": false
+    },
+    {
+      "granted_role": "supabase_privileged_role",
+      "member_role": "migration_owner",
+      "grantor_role": "migration_owner",
+      "admin_option": false
+    },
+    {
+      "granted_role": "supabase_privileged_role",
+      "member_role": "supabase_etl_admin",
+      "grantor_role": "migration_owner",
+      "admin_option": false
+    }
+  ],
+  "policy_owner": {
+    "canonical_role": "supabase_admin",
+    "deployment_role": "postgres",
+    "actual_private_schema_owners": [
+      {
+        "schema_name": "custodial_recovery",
+        "owner_name": "postgres"
+      },
+      {
+        "schema_name": "custodial_release_identity",
+        "owner_name": "postgres"
+      }
+    ]
+  }
+}

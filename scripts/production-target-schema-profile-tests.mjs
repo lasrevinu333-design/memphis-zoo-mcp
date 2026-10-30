@@ -41,6 +41,8 @@ for (const [name, edit] of [
   ['unrelated capture plan', p => { p.capture.plan_sha256 = '0'.repeat(64); }],
   ['historical160 capture report', p => { p.capture.report_sha256 = '946dd61971aba8f6976b5dd463909a7808b8fba697991c9513477f325e9b1dc0'; }],
   ['historical395 target ledger', p => { p.capture.target_ledger_count = 395; }],
+  ['historical400 target ledger', p => { p.capture.target_ledger_count = 400; }],
+  ['historical165 pending count', p => { p.capture.pending_count = 165; }],
   ['historical399 target ledger', p => { p.capture.target_ledger_count = 399; }],
   ['historical164 pending count', p => { p.capture.pending_count = 164; }],
   ['historical398 target ledger', p => { p.capture.target_ledger_count = 398; }],
@@ -79,14 +81,18 @@ check('source resolver reads the declared physical profile and keeps legacy no-p
 const preparationProfile=JSON.parse(readFileSync(join(root,'release/schema-evidence/SOURCE299_PRE_CAPTURE_EXPECTATION.json')));
 if(preparationProfile.schema==='custodial.production-target-schema-profile.forward.v1'){
  const currentProfile=preparationProfile,profile=currentProfile.parent_profile;
- const forward=validateProductionTargetSchemaProfile(currentCanonical,currentProfile);
+ const historicalCanonical=clone(currentCanonical),predecessors=JSON.parse(readFileSync(join(root,'release/schema-evidence/SOURCE300_FUNCTION_PREDECESSORS.json')));
+ for(const f of predecessors.functions){const i=historicalCanonical.functions.findIndex(row=>row.schema_name===f.schema_name&&row.function_name===f.function_name&&row.identity_arguments===f.identity_arguments);assert.ok(i>=0);historicalCanonical.functions[i]=clone(f);}
+ assert.equal(fingerprintSchemaCatalog(historicalCanonical).fingerprint,preparationProfile.canonical_fingerprint);
+
+ const forward=validateProductionTargetSchemaProfile(historicalCanonical,currentProfile);
  check('forward expectation keeps complete catalog identity and genuine parent capture',()=>{
   assert.equal(forward.canonicalFingerprint,currentProfile.canonical_fingerprint);
   assert.equal(forward.deploymentFingerprint,currentProfile.deployment_fingerprint);
   assert.equal(forward.profileQualification,'FORWARD_EXPECTATION_REQUIRES_FRESH_POPULATED_REHEARSAL');
   assert.equal(forward.profile.qualification.new_populated_target_observed,false);
   assert.deepEqual(forward.profile.parent_profile,profile);
-  for(const key of Object.keys(currentCanonical))if(!['columns','policies','role_memberships'].includes(key))
+  for(const key of Object.keys(historicalCanonical))if(!['columns','policies','role_memberships'].includes(key))
    assert.deepEqual(forward.deploymentCatalog[key],forward.canonicalCatalog[key]);
  });
  for(const [name,edit]of [
@@ -98,8 +104,8 @@ if(preparationProfile.schema==='custodial.production-target-schema-profile.forwa
   ['old399 ledger substituted for forward400',p=>{p.expected_ledger.target=399;}],
   ['unrelated canonical capture',p=>{p.canonical_capture.sha256='0'.repeat(64);}],
   ['unknown forward property',p=>{p.ignore_grants=true;}],
- ])check(name+' refuses',()=>{const bad=clone(currentProfile);edit(bad);assert.throws(()=>validateProductionTargetSchemaProfile(currentCanonical,bad));});
- check('forward profile cannot hide changed current grants',()=>{const bad=clone(currentCanonical);bad.table_grants[0].is_grantable=!bad.table_grants[0].is_grantable;
+ ])check(name+' refuses',()=>{const bad=clone(currentProfile);edit(bad);assert.throws(()=>validateProductionTargetSchemaProfile(historicalCanonical,bad));});
+ check('forward profile cannot hide changed current grants',()=>{const bad=clone(historicalCanonical);bad.table_grants[0].is_grantable=!bad.table_grants[0].is_grantable;
   assert.throws(()=>validateProductionTargetSchemaProfile(bad,currentProfile));});
 }
 console.log(JSON.stringify({status: 'PASS_SOURCE_PROFILE_ONLY', checks, database_queries: false,

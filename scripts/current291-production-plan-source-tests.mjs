@@ -13,14 +13,14 @@ const binding=JSON.parse(readFileSync(resolve(root,'release/current291-staged-so
 const plan=readMigrationReplayPlan(root);const checks=[];
 const check=(name,fn)=>{fn();checks.push(name);};
 const sha=b=>createHash('sha256').update(b).digest('hex');
-if([298,299].includes(plan.files.length)){
- const successor=plan.files.length===299,pendingCount=successor?165:164,targetCount=235+pendingCount;
- const canonical=successor?'95ad1f4e76159d18c5ccdb7c84fb639918005f05155b152641f79c15919f082d':'432052a95830b4a8550cd6478d766bacc2bbbb4b2dd21d44544b238c70c5f001';
- const physical=successor?'09a3374c452a81cd0a8904273d9212444de3ba41be01bf4d07fd887a21f4d0c6':'b57982c0c739632fcbfc9ba30177fccab05a5847ce44121408b5ddab8d169d33';
+if([298,299,300].includes(plan.files.length)){
+ const compact=plan.files.length===300,successor=plan.files.length>=299,pendingCount=plan.files.length-134,targetCount=235+pendingCount;
+ const canonical=compact?'aa4d4fad502031a493a15ddfad6305d783cbae90eee5aefb85a8f0c19a737c40':successor?'95ad1f4e76159d18c5ccdb7c84fb639918005f05155b152641f79c15919f082d':'432052a95830b4a8550cd6478d766bacc2bbbb4b2dd21d44544b238c70c5f001';
+ const physical=compact?'742caa62cb7a7dff55b3ddeaf0a3eafde511930cb9d9ba7c965ed9f8be3a80a5':successor?'09a3374c452a81cd0a8904273d9212444de3ba41be01bf4d07fd887a21f4d0c6':'b57982c0c739632fcbfc9ba30177fccab05a5847ce44121408b5ddab8d169d33';
  check('current source preserves exact134 source and complete predecessor before its exact tail',()=>{
   assert.equal(plan.baseCount,134);assert.equal(state.pending_migrations.length,pendingCount);
   assert.deepEqual(state.pending_migrations.map(x=>x.file),plan.files.slice(134));
-  assert.equal(plan.manifestSha256,successor?'965300d634959010c017ac203d71fe915f65b4b42e69910b173b96d034c38001':'aca06e305ff4c5918e83045acf4d739fcb8746e41dcc89ceb59fcd0f98ab20ba');
+  assert.equal(plan.manifestSha256,compact?'be9f1ce99e037690b3095c8b8e963fc30efd8c83adaa1e415856a79808dc31b1':successor?'965300d634959010c017ac203d71fe915f65b4b42e69910b173b96d034c38001':'aca06e305ff4c5918e83045acf4d739fcb8746e41dcc89ceb59fcd0f98ab20ba');
   assert.equal(binding.preserved134.length,134);
   for(const row of binding.preserved134)assert.equal(sha(readFileSync(resolve(root,'supabase/migrations',row.file))),row.sha256);
   assertTargetCapturePendingPlan(state.pending_migrations,state.pending_migrations.slice(0,pendingCount-1));
@@ -37,9 +37,9 @@ if([298,299].includes(plan.files.length)){
   assert.equal(target.canonicalFingerprint,canonical);
   assert.equal(target.deploymentFingerprint,physical);
   assert.equal(proof.source_ledger_count,235);assert.equal(proof.pending_count,pendingCount);assert.equal(proof.target_ledger_count,targetCount);
-  assert.equal(proof.report_sha256,successor?'7fded7c546d4c6d879df233f8059cbf4752433c2d9b403641730d6886452593a':'dafa8d869004fa047ec7a191b040d22503bef8001a4200a44123c860fba5ec94');
-  assert.equal(proof.report_bytes,successor?18585920:18580457);
-  assert.equal(capture.original_run_id,successor?41003969617:40965791466);
+  assert.equal(proof.report_sha256,compact?'cf5d77a95b3f7e6c64d9f321d5b3aaa19fb78d5bd2e9f313a123cfe8e323fcd3':successor?'7fded7c546d4c6d879df233f8059cbf4752433c2d9b403641730d6886452593a':'dafa8d869004fa047ec7a191b040d22503bef8001a4200a44123c860fba5ec94');
+  assert.equal(proof.report_bytes,compact?18593702:successor?18585920:18580457);
+  assert.equal(capture.original_run_id,compact?41007886733:successor?41003969617:40965791466);
   assert.equal(capture.report.sha256,proof.report_sha256);assert.equal(capture.report.bytes,proof.report_bytes);
   for(const key of ['candidate_commit','candidate_tree','plan_sha256'])assert.equal(capture[key],proof[key]);
   assert.equal(capture.archive_digest,target.profile.archive_digest);
@@ -48,7 +48,7 @@ if([298,299].includes(plan.files.length)){
   assert.equal(state.target.production_ledger_version,null);
   const checked=assertReleaseWorkflowSource(root);
   assert.equal(checked.sourceCount,235);assert.equal(checked.pendingCount,pendingCount);assert.equal(checked.targetCount,targetCount);
-  assert.equal(checked.targetHead,successor?'20261030031200':'20261028224728');assert.equal(checked.targetFingerprint,target.deploymentFingerprint);
+  assert.equal(checked.targetHead,compact?'20261030050235':successor?'20261030031200':'20261028224728');assert.equal(checked.targetFingerprint,target.deploymentFingerprint);
  });
  check('normal apply still preflights before clients and retains serializable rollback',()=>{
   const source=readFileSync(resolve(root,'scripts/apply-release-migration-plan.mjs'),'utf8');

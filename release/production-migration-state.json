@@ -99,20 +99,20 @@
     }
   },
   "target": {
-    "source_migration_file": "20261030031200_approved_manual_full_hour_coverers.sql",
-    "source_migration_name": "approved_manual_full_hour_coverers",
-    "source_migration_version": "20261030031200",
+    "source_migration_file": "20261030050235_compact_approved_initial_confirmation.sql",
+    "source_migration_name": "compact_approved_initial_confirmation",
+    "source_migration_version": "20261030050235",
     "execution_tail": {
-      "file": "20261030031200_approved_manual_full_hour_coverers.sql",
-      "version": "20261030031200",
+      "file": "20261030050235_compact_approved_initial_confirmation.sql",
+      "version": "20261030050235",
       "role": "last_applied_member"
     },
     "production_ledger_version": null,
-    "canonical_source_schema_fingerprint": "09a3374c452a81cd0a8904273d9212444de3ba41be01bf4d07fd887a21f4d0c6",
+    "canonical_source_schema_fingerprint": "742caa62cb7a7dff55b3ddeaf0a3eafde511930cb9d9ba7c965ed9f8be3a80a5",
     "public_function_count": 972,
-    "production_ledger_count": 400,
-    "source_authority_migration_count": 299,
-    "pending_migration_count": 165,
+    "production_ledger_count": 401,
+    "source_authority_migration_count": 300,
+    "pending_migration_count": 166,
     "registered_source_dated_status_excluded": true,
     "expected_catalog_counts": {
       "extensions": 8,
@@ -142,41 +142,41 @@
     },
     "normal_source_capture": {
       "Root_full_readback": {
-        "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/SOURCE299_POPULATED_TARGET_READBACK.json",
-        "sha256": "8da835ac26b09cfe1bd44d534f20072de324fb0681e7ec119d070c3e88bcbab7",
+        "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/SOURCE300_POPULATED_TARGET_READBACK.json",
+        "sha256": "361e9f0131bcf34a4e04cb18e895a8b1bd363f0a8fe6b82b337b9aac402fa3d6",
         "bytes": 1010
       },
       "scope": "ROLLBACK_ONLY_TARGET_PREPARATION_DATA_NOT_PRODUCTION_OR_FULL_REHEARSAL",
       "report": {
-        "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/POPULATED_SOURCE299_TARGET_41003969617/production-migration-target-capture.json",
-        "sha256": "7fded7c546d4c6d879df233f8059cbf4752433c2d9b403641730d6886452593a",
-        "bytes": 18585920
+        "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/POPULATED_SOURCE300_TARGET_41007886733/production-migration-target-capture.json",
+        "sha256": "cf5d77a95b3f7e6c64d9f321d5b3aaa19fb78d5bd2e9f313a123cfe8e323fcd3",
+        "bytes": 18593702
       },
-      "original_run_id": 41003969617,
+      "original_run_id": 41007886733,
       "original_backup_run_id": 40960771863,
       "Root_disposition_sha256": "5a366bf5ff093b632fa690ab111b9b9382209aa7b3eced80fc1245908be449c4",
-      "candidate_commit": "7dec6b966b832a658240f114243c0d40971330dd",
-      "candidate_tree": "10e44aad24960bfaae4121efadf850955ba4dbb9",
+      "candidate_commit": "5455fc4b1ee2ad6910d6d52e491e5db116adee7a",
+      "candidate_tree": "0b42825b28bc95ce4fff61dfdb060d6d6502b0bc",
       "archive_digest": "67c0d74bbf18c346314669119f0ae53ff61d9b00c4e6550b7af917b7f02bbdfe",
-      "plan_sha256": "f92f1867a5f8ec0e7cb201b87b040d1593cefbb5f1b1d5756dda4e248b945d61",
-      "target_ledger_sha256": "8c18f89df84feb7ce469856945c9bd008e0dfd17f9804796e84cc0c4684aa892",
+      "plan_sha256": "ec143c3344d84f5d01fa33693827d62a19a48f491a91a553864071570a0bfff7",
+      "target_ledger_sha256": "cbfbc211fa6dc81bf299a70b8a46778e571ce58e69e05732021ef785097aede4",
       "source_data_preservation": {
         "original_tables": 217,
         "exact_multiset_tables": 215,
         "explicit_guarded_event_and_recovery_relations": 2,
-        "applied_migration_count": 165,
+        "applied_migration_count": 166,
         "report": {
-          "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/POPULATED_SOURCE299_TARGET_41003969617/production-migration-target-capture.json",
-          "sha256": "7fded7c546d4c6d879df233f8059cbf4752433c2d9b403641730d6886452593a",
-          "bytes": 18585920
+          "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/POPULATED_SOURCE300_TARGET_41007886733/production-migration-target-capture.json",
+          "sha256": "cf5d77a95b3f7e6c64d9f321d5b3aaa19fb78d5bd2e9f313a123cfe8e323fcd3",
+          "bytes": 18593702
         }
       },
       "rollback_evidence": {
         "kind": "SOURCE_BOUND_PRODUCER_REPORT_ROLLBACK_VERIFIED_WITH_ORIGINAL_READBACK",
         "report": {
-          "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/POPULATED_SOURCE299_TARGET_41003969617/production-migration-target-capture.json",
-          "sha256": "7fded7c546d4c6d879df233f8059cbf4752433c2d9b403641730d6886452593a",
-          "bytes": 18585920
+          "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/POPULATED_SOURCE300_TARGET_41007886733/production-migration-target-capture.json",
+          "sha256": "cf5d77a95b3f7e6c64d9f321d5b3aaa19fb78d5bd2e9f313a123cfe8e323fcd3",
+          "bytes": 18593702
         },
         "committed": false,
         "rollback_verified": true
@@ -191,9 +191,9 @@
   },
   "source_binding": {
     "kind": "external_exact_head_release_attestation",
-    "rule": "Exact source299 sequence preserves the installed134-source authority prefix and all164 predecessor forward members, appending only the named-coverer delta. Genuine rollback-only capture41003969617 measured target400 and preserved original235 ledger plus217-table data. Fresh exact-candidate backup, full rehearsal, live locked source match, signed authorization and applicable runtime/physical gates remain mandatory.",
+    "rule": "Exact source300 preserves the installed134-source authority prefix and all165 predecessor forward members, appending only compact initial confirmation and direct baseline linking. Genuine rollback-only capture41007886733 measured target401 and preserved original235 ledger plus217-table data. Fresh exact-candidate backup, full rehearsal, live locked source match, signed authorization and applicable runtime/physical gates remain mandatory.",
     "source_replay_manifest": "supabase/canonical/migration-replay-order.json",
-    "source_replay_manifest_sha256": "965300d634959010c017ac203d71fe915f65b4b42e69910b173b96d034c38001",
+    "source_replay_manifest_sha256": "be9f1ce99e037690b3095c8b8e963fc30efd8c83adaa1e415856a79808dc31b1",
     "source_prefix_commit": "b227a0a99e627224ec5948c18a914b48f461f0fe",
     "observed_source_extensions": [
       {
@@ -371,6 +371,58 @@
       },
       "production_authorized": false,
       "full_rehearsal_attestation": false
+    },
+    "current300_preparation": {
+      "state": "ACTUAL_ROLLBACK_ONLY166_TARGET_CAPTURE_FULL_REHEARSAL_AND_RELEASE_ADMISSION_PENDING",
+      "preserve_existing_source_authority_prefix": 134,
+      "current_source_members": 300,
+      "declared_pending_members": 166,
+      "execution_profile": "existing-postgres-owner",
+      "original165_exact_prefix_preserved": true,
+      "compact_initial_tail": {
+        "order": 166,
+        "file": "20261030050235_compact_approved_initial_confirmation.sql",
+        "phase": "compact_approved_initial_confirmation",
+        "source_migration_version": "20261030050235",
+        "sha256": "fa9373adcf48f8d13db1b8e4876a5f134b02f8a897f20f887987cbd384393469"
+      },
+      "fresh_SQL_overrides_copied_to_production": false,
+      "actual_populated_target_catalog_and_counts": {
+        "fingerprint": "742caa62cb7a7dff55b3ddeaf0a3eafde511930cb9d9ba7c965ed9f8be3a80a5",
+        "counts": {
+          "extensions": 8,
+          "types": 0,
+          "sequences": 0,
+          "tables": 277,
+          "columns": 3024,
+          "constraints": 1907,
+          "indexes": 921,
+          "functions": 972,
+          "views": 33,
+          "triggers": 611,
+          "policies": 50,
+          "owned_scheduler_roles": 3,
+          "owned_scheduler_role_memberships": 3,
+          "privilege_bearing_roles": 4,
+          "role_memberships": 25,
+          "table_grants": 1536,
+          "column_grants": 43,
+          "sequence_grants": 0,
+          "routine_grants": 595,
+          "type_grants": 0,
+          "schema_grants": 11,
+          "default_privileges": 12,
+          "cron_jobs": 9,
+          "recovery_schema_owners": 1
+        },
+        "report": {
+          "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/POPULATED_SOURCE300_TARGET_41007886733/production-migration-target-capture.json",
+          "sha256": "cf5d77a95b3f7e6c64d9f321d5b3aaa19fb78d5bd2e9f313a123cfe8e323fcd3",
+          "bytes": 18593702
+        }
+      },
+      "production_authorized": false,
+      "full_rehearsal_attestation": false
     }
   },
   "backup_evidence": {
@@ -386,9 +438,9 @@
       "archive_digest": "67c0d74bbf18c346314669119f0ae53ff61d9b00c4e6550b7af917b7f02bbdfe",
       "restore_verification": "SIGNED_ARCHIVE_VERIFIED_AND_REVIEWED_ROLLBACK_TARGET_CAPTURE_NOT_FULL_CANDIDATE",
       "reviewed_target_report": {
-        "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/POPULATED_SOURCE299_TARGET_41003969617/production-migration-target-capture.json",
-        "sha256": "7fded7c546d4c6d879df233f8059cbf4752433c2d9b403641730d6886452593a",
-        "bytes": 18585920
+        "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/POPULATED_SOURCE300_TARGET_41007886733/production-migration-target-capture.json",
+        "sha256": "cf5d77a95b3f7e6c64d9f321d5b3aaa19fb78d5bd2e9f313a123cfe8e323fcd3",
+        "bytes": 18593702
       }
     },
     "rule": "This authentic ancestor backup was used by the measured reviewed capture. It does not waive exact current-candidate backup/full-rehearsal requirements for later release admission."
@@ -399,8 +451,8 @@
     "rollback_policy": "forward-only; preserve fresh pre-change backup and all operational/history evidence; repair forward rather than delete evidence or re-enable retired writers"
   },
   "preconditions": [
-    "Exact project rqquvtjdmugpigbndmne; authentic backup40960771863 and rollback capture41003969617 bind original235 ledger/head20261021111917 and source catalog0096e7c488aca86f1d38b061561696b2d4ac409036f063ffc9f196625b9ee9c2. These measurements do not authorize production mutation.",
-    "Normal apply must compare the complete locked live source catalog, counts and original235 ledger. The measured400/165 rollback target cannot replace fresh exact-candidate backup, full rehearsal or authorization.",
+    "Exact project rqquvtjdmugpigbndmne; authentic backup40960771863 and rollback capture41007886733 bind original235 ledger/head20261021111917 and source catalog0096e7c488aca86f1d38b061561696b2d4ac409036f063ffc9f196625b9ee9c2. These measurements do not authorize production mutation.",
+    "Normal apply must compare the complete locked live source catalog, counts and original235 ledger. The measured401/166 rollback target cannot replace fresh exact-candidate backup, full rehearsal or authorization.",
     "Every signed pending migration ledger version must be absent, including versions earlier than the current ledger head; no historical statement may be replayed or rewritten.",
     "Fresh encrypted backup and completed restore/rehearsal must bind the exact source ledger/catalog, target, candidate commit/tree and source hashes.",
     "Preserve every actual existing source row, publication, projection, roster entry, receipt, authority/store record and immutable history as proven by the exact fresh signed source backup and populated rehearsal; retained historical application figures are not a fresh current-state measurement.",
@@ -1771,11 +1823,18 @@
       "phase": "approved_manual_full_hour_coverers",
       "source_migration_version": "20261030031200",
       "sha256": "de548422310c3369bac0560e14507e4022cc9d5b9effe898d4f24ae79156cf6a"
+    },
+    {
+      "order": 166,
+      "file": "20261030050235_compact_approved_initial_confirmation.sql",
+      "phase": "compact_approved_initial_confirmation",
+      "source_migration_version": "20261030050235",
+      "sha256": "fa9373adcf48f8d13db1b8e4876a5f134b02f8a897f20f887987cbd384393469"
     }
   ],
   "postconditions": [
-    "Only the165 exact declared pending versions may be added after unchanged authorization and populated-target prerequisites succeed; preserve every original235 ledger row. Rollback-only capture measured400 rows/head20261030031200/digest8c18f89df84feb7ce469856945c9bd008e0dfd17f9804796e84cc0c4684aa892. A future committed apply requires its own admitted evidence and verification.",
-    "Current source299 populated target metadata is measured by genuine165 rollback capture: catalog09a3374c452a81cd0a8904273d9212444de3ba41be01bf4d07fd887a21f4d0c6 and complete recorded counts. This is neither candidate/runtime admission nor a full rehearsal attestation; historical or fresh-only catalogs cannot substitute.",
+    "Only the166 exact declared pending versions may be added after unchanged authorization and populated-target prerequisites succeed; preserve every original235 ledger row. Rollback-only capture measured401 rows/head20261030050235/digestcbfbc211fa6dc81bf299a70b8a46778e571ce58e69e05732021ef785097aede4. A future committed apply requires its own admitted evidence and verification.",
+    "Current source300 populated target metadata is measured by genuine166 rollback capture: catalog742caa62cb7a7dff55b3ddeaf0a3eafde511930cb9d9ba7c965ed9f8be3a80a5 and complete recorded counts. This is neither candidate/runtime admission nor a full rehearsal attestation; historical or fresh-only catalogs cannot substitute.",
     "Owner remains full control; other currently authenticated named managers are read-only except dated absences, manual CoverAll, current route regeneration and verified scan-ticket outcomes; no owner-away window is required.",
     "Approved initial and recurring fixed-pattern publication remains owner-only and requires actual registered source and current revision; no invented five-person approval or employee record.",
     "Existing immutable weekly history, source/event ledger, pending work and employee identities are retained; no automatic CoverAll purchase or unrequested event sends.",
@@ -3752,6 +3811,321 @@
     "postconditions": [
       "Only the164 exact declared pending versions may be added after all unchanged authorization and populated-target prerequisites succeed; preserve every original235 ledger row. Rollback-only capture measured399 rows/head20261028224728/digest1e3c8aebbf696a075a697879e27ad39aee194aa1dfecd0de2542fd6a7aa77a96. A future committed apply requires its own admitted evidence and verification.",
       "Current populated source298 metadata is measured by genuine164 rollback capture: catalogb57982c0c739632fcbfc9ba30177fccab05a5847ce44121408b5ddab8d169d33 and complete recorded counts. This is neither candidate/runtime admission nor a full rehearsal attestation; historical or fresh-only catalogs cannot substitute.",
+      "Owner remains full control; other currently authenticated named managers are read-only except dated absences, manual CoverAll, current route regeneration and verified scan-ticket outcomes; no owner-away window is required.",
+      "Approved initial and recurring fixed-pattern publication remains owner-only and requires actual registered source and current revision; no invented five-person approval or employee record.",
+      "Existing immutable weekly history, source/event ledger, pending work and employee identities are retained; no automatic CoverAll purchase or unrequested event sends.",
+      "Complete declared manager function/grant recovery restores exact intended and denied permissions; general browser writes and private legacy closer remain denied.",
+      "No unexpected source catalog, privilege, recovery, runtime configuration or protected-row delta remains."
+    ]
+  },
+  "historical_299_165_target_preparation": {
+    "target": {
+      "source_migration_file": "20261030031200_approved_manual_full_hour_coverers.sql",
+      "source_migration_name": "approved_manual_full_hour_coverers",
+      "source_migration_version": "20261030031200",
+      "execution_tail": {
+        "file": "20261030031200_approved_manual_full_hour_coverers.sql",
+        "version": "20261030031200",
+        "role": "last_applied_member"
+      },
+      "production_ledger_version": null,
+      "canonical_source_schema_fingerprint": "09a3374c452a81cd0a8904273d9212444de3ba41be01bf4d07fd887a21f4d0c6",
+      "public_function_count": 972,
+      "production_ledger_count": 400,
+      "source_authority_migration_count": 299,
+      "pending_migration_count": 165,
+      "registered_source_dated_status_excluded": true,
+      "expected_catalog_counts": {
+        "extensions": 8,
+        "types": 0,
+        "sequences": 0,
+        "tables": 277,
+        "columns": 3024,
+        "constraints": 1907,
+        "indexes": 921,
+        "functions": 972,
+        "views": 33,
+        "triggers": 611,
+        "policies": 50,
+        "owned_scheduler_roles": 3,
+        "owned_scheduler_role_memberships": 3,
+        "privilege_bearing_roles": 4,
+        "role_memberships": 25,
+        "table_grants": 1536,
+        "column_grants": 43,
+        "sequence_grants": 0,
+        "routine_grants": 595,
+        "type_grants": 0,
+        "schema_grants": 11,
+        "default_privileges": 12,
+        "cron_jobs": 9,
+        "recovery_schema_owners": 1
+      },
+      "normal_source_capture": {
+        "Root_full_readback": {
+          "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/SOURCE299_POPULATED_TARGET_READBACK.json",
+          "sha256": "8da835ac26b09cfe1bd44d534f20072de324fb0681e7ec119d070c3e88bcbab7",
+          "bytes": 1010
+        },
+        "scope": "ROLLBACK_ONLY_TARGET_PREPARATION_DATA_NOT_PRODUCTION_OR_FULL_REHEARSAL",
+        "report": {
+          "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/POPULATED_SOURCE299_TARGET_41003969617/production-migration-target-capture.json",
+          "sha256": "7fded7c546d4c6d879df233f8059cbf4752433c2d9b403641730d6886452593a",
+          "bytes": 18585920
+        },
+        "original_run_id": 41003969617,
+        "original_backup_run_id": 40960771863,
+        "Root_disposition_sha256": "5a366bf5ff093b632fa690ab111b9b9382209aa7b3eced80fc1245908be449c4",
+        "candidate_commit": "7dec6b966b832a658240f114243c0d40971330dd",
+        "candidate_tree": "10e44aad24960bfaae4121efadf850955ba4dbb9",
+        "archive_digest": "67c0d74bbf18c346314669119f0ae53ff61d9b00c4e6550b7af917b7f02bbdfe",
+        "plan_sha256": "f92f1867a5f8ec0e7cb201b87b040d1593cefbb5f1b1d5756dda4e248b945d61",
+        "target_ledger_sha256": "8c18f89df84feb7ce469856945c9bd008e0dfd17f9804796e84cc0c4684aa892",
+        "source_data_preservation": {
+          "original_tables": 217,
+          "exact_multiset_tables": 215,
+          "explicit_guarded_event_and_recovery_relations": 2,
+          "applied_migration_count": 165,
+          "report": {
+            "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/POPULATED_SOURCE299_TARGET_41003969617/production-migration-target-capture.json",
+            "sha256": "7fded7c546d4c6d879df233f8059cbf4752433c2d9b403641730d6886452593a",
+            "bytes": 18585920
+          }
+        },
+        "rollback_evidence": {
+          "kind": "SOURCE_BOUND_PRODUCER_REPORT_ROLLBACK_VERIFIED_WITH_ORIGINAL_READBACK",
+          "report": {
+            "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/POPULATED_SOURCE299_TARGET_41003969617/production-migration-target-capture.json",
+            "sha256": "7fded7c546d4c6d879df233f8059cbf4752433c2d9b403641730d6886452593a",
+            "bytes": 18585920
+          },
+          "committed": false,
+          "rollback_verified": true
+        },
+        "cleanup_disposition": "HOSTED_BEST_EFFORT_TRAP_ONLY",
+        "cleanup_receipt": null,
+        "production_authorized": false,
+        "candidate_migration_admission": false,
+        "runtime_admission": false,
+        "full_rehearsal_attestation": false
+      }
+    },
+    "source_binding": {
+      "kind": "external_exact_head_release_attestation",
+      "rule": "Exact source299 sequence preserves the installed134-source authority prefix and all164 predecessor forward members, appending only the named-coverer delta. Genuine rollback-only capture41003969617 measured target400 and preserved original235 ledger plus217-table data. Fresh exact-candidate backup, full rehearsal, live locked source match, signed authorization and applicable runtime/physical gates remain mandatory.",
+      "source_replay_manifest": "supabase/canonical/migration-replay-order.json",
+      "source_replay_manifest_sha256": "965300d634959010c017ac203d71fe915f65b4b42e69910b173b96d034c38001",
+      "source_prefix_commit": "b227a0a99e627224ec5948c18a914b48f461f0fe",
+      "observed_source_extensions": [
+        {
+          "ledger_version": "20261021111917",
+          "ledger_name": "dashboard_application_reader_operational_day_repair",
+          "source_file": "release/target-capture-source/20261021111917_dashboard_application_reader_operational_day_repair.sql",
+          "sha256": "be68ea76fb70c183c63986307759c21ababa4b5f6aac53b01532abdb5efa267e"
+        }
+      ],
+      "current297_preparation": {
+        "state": "ACTUAL_ROLLBACK_ONLY163_TARGET_CAPTURE_FULL_REHEARSAL_AND_RELEASE_ADMISSION_PENDING",
+        "preserve_existing_source_authority_prefix": 134,
+        "current_source_members": 297,
+        "declared_pending_members": 163,
+        "execution_profile": "existing-postgres-owner",
+        "original160_exact_prefix_preserved": true,
+        "selected_three_tail": [
+          {
+            "order": 161,
+            "version": "20261027230000",
+            "file": "20261027230000_accepted_actual_lunch_windows.sql",
+            "sha256": "55b2cd92ebe36c6920a3c27cc13031ef6ca263d8f10114182c3058fd0991c81b"
+          },
+          {
+            "order": 162,
+            "version": "20261027231000",
+            "file": "20261027231000_canonical_coverall_capacity_links.sql",
+            "sha256": "c4be89a07f46717ddcc7ceebed639cdc10b589b8ff72e9cf20a3523bdec43903"
+          },
+          {
+            "order": 163,
+            "version": "20261027234814",
+            "file": "20261027234814_mcp_oauth_durable_token_families.sql",
+            "sha256": "e74210f033e5c65d5e99a090ca201d1c010d6cb5c4159a015bb08e3719c44f6e"
+          }
+        ],
+        "fresh_SQL_overrides_copied_to_production": false,
+        "actual_populated_target_catalog_and_counts": {
+          "fingerprint": "6ee1d9e694bef75bfdfd07e7426d864e3c3b7cb2e1603fdcb1bd6bebf7fc0d0a",
+          "counts": {
+            "extensions": 8,
+            "types": 0,
+            "sequences": 0,
+            "tables": 277,
+            "columns": 3024,
+            "constraints": 1907,
+            "indexes": 921,
+            "functions": 972,
+            "views": 33,
+            "triggers": 611,
+            "policies": 50,
+            "owned_scheduler_roles": 3,
+            "owned_scheduler_role_memberships": 3,
+            "privilege_bearing_roles": 4,
+            "role_memberships": 25,
+            "table_grants": 1536,
+            "column_grants": 43,
+            "sequence_grants": 0,
+            "routine_grants": 595,
+            "type_grants": 0,
+            "schema_grants": 11,
+            "default_privileges": 12,
+            "cron_jobs": 9,
+            "recovery_schema_owners": 1
+          },
+          "report": {
+            "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/actual-reviewed-rollback40615635335/extracted/production-migration-target-capture.json",
+            "sha256": "8042bc5e3a1bd141442fddb2b52b532b9eb67bdec6d0588bc5b87d951920a37e",
+            "bytes": 18533770
+          }
+        },
+        "actual_populated_forward_profile_compatibility": "ACTUAL163_ROLLBACK_CAPTURE_ONLY_NOT_FULL_REHEARSAL_OR_ADMISSION",
+        "rule": "The report verifies this exact163 plan identity and unchanged source235 ledger after rollback; future normal apply still requires all current source/target/backup/rehearsal/authorization gates. No historical/fresh-only catalog substitutes for current deployment target."
+      },
+      "current298_preparation": {
+        "state": "ACTUAL_ROLLBACK_ONLY164_TARGET_CAPTURE_FULL_REHEARSAL_AND_RELEASE_ADMISSION_PENDING",
+        "preserve_existing_source_authority_prefix": 134,
+        "current_source_members": 298,
+        "declared_pending_members": 164,
+        "execution_profile": "existing-postgres-owner",
+        "original163_exact_prefix_preserved": true,
+        "full_hour_tail": {
+          "order": 164,
+          "file": "20261028224728_full_scheduled_lunch_source_policy.sql",
+          "phase": "full_scheduled_lunch_source_policy",
+          "source_migration_version": "20261028224728",
+          "sha256": "a47387ddf244a04df646c9bb2d60eef86a769b96baf9106759f1c2a703248514"
+        },
+        "fresh_SQL_overrides_copied_to_production": false,
+        "actual_populated_target_catalog_and_counts": {
+          "fingerprint": "b57982c0c739632fcbfc9ba30177fccab05a5847ce44121408b5ddab8d169d33",
+          "counts": {
+            "extensions": 8,
+            "types": 0,
+            "sequences": 0,
+            "tables": 277,
+            "columns": 3024,
+            "constraints": 1907,
+            "indexes": 921,
+            "functions": 972,
+            "views": 33,
+            "triggers": 611,
+            "policies": 50,
+            "owned_scheduler_roles": 3,
+            "owned_scheduler_role_memberships": 3,
+            "privilege_bearing_roles": 4,
+            "role_memberships": 25,
+            "table_grants": 1536,
+            "column_grants": 43,
+            "sequence_grants": 0,
+            "routine_grants": 595,
+            "type_grants": 0,
+            "schema_grants": 11,
+            "default_privileges": 12,
+            "cron_jobs": 9,
+            "recovery_schema_owners": 1
+          },
+          "report": {
+            "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/POPULATED_SOURCE298_TARGET_40965791466/production-migration-target-capture.json",
+            "sha256": "dafa8d869004fa047ec7a191b040d22503bef8001a4200a44123c860fba5ec94",
+            "bytes": 18580457
+          }
+        },
+        "production_authorized": false,
+        "full_rehearsal_attestation": false
+      },
+      "current299_preparation": {
+        "state": "ACTUAL_ROLLBACK_ONLY165_TARGET_CAPTURE_FULL_REHEARSAL_AND_RELEASE_ADMISSION_PENDING",
+        "preserve_existing_source_authority_prefix": 134,
+        "current_source_members": 299,
+        "declared_pending_members": 165,
+        "execution_profile": "existing-postgres-owner",
+        "original164_exact_prefix_preserved": true,
+        "named_coverer_tail": {
+          "order": 165,
+          "file": "20261030031200_approved_manual_full_hour_coverers.sql",
+          "phase": "approved_manual_full_hour_coverers",
+          "source_migration_version": "20261030031200",
+          "sha256": "de548422310c3369bac0560e14507e4022cc9d5b9effe898d4f24ae79156cf6a"
+        },
+        "fresh_SQL_overrides_copied_to_production": false,
+        "actual_populated_target_catalog_and_counts": {
+          "fingerprint": "09a3374c452a81cd0a8904273d9212444de3ba41be01bf4d07fd887a21f4d0c6",
+          "counts": {
+            "extensions": 8,
+            "types": 0,
+            "sequences": 0,
+            "tables": 277,
+            "columns": 3024,
+            "constraints": 1907,
+            "indexes": 921,
+            "functions": 972,
+            "views": 33,
+            "triggers": 611,
+            "policies": 50,
+            "owned_scheduler_roles": 3,
+            "owned_scheduler_role_memberships": 3,
+            "privilege_bearing_roles": 4,
+            "role_memberships": 25,
+            "table_grants": 1536,
+            "column_grants": 43,
+            "sequence_grants": 0,
+            "routine_grants": 595,
+            "type_grants": 0,
+            "schema_grants": 11,
+            "default_privileges": 12,
+            "cron_jobs": 9,
+            "recovery_schema_owners": 1
+          },
+          "report": {
+            "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/POPULATED_SOURCE299_TARGET_41003969617/production-migration-target-capture.json",
+            "sha256": "7fded7c546d4c6d879df233f8059cbf4752433c2d9b403641730d6886452593a",
+            "bytes": 18585920
+          }
+        },
+        "production_authorized": false,
+        "full_rehearsal_attestation": false
+      }
+    },
+    "backup_evidence": {
+      "state": "AUTHENTIC_SOURCE_A_BACKUP_AND_REVIEWED_ROLLBACK_CAPTURE_FULL_REHEARSAL_STILL_REQUIRED",
+      "last_verified": {
+        "workflow_run_id": 40960771863,
+        "source_commit": "f49cbe15fc874115f314b2746ddd5124f0edda70",
+        "artifact_id": 12935099844,
+        "artifact_name": "memphis-zoo-disaster-recovery-40960771863",
+        "artifact_sha256": "3773fecf8492131626503f74aa849f32f7afcb881bca13dd264373eef4dbc3af",
+        "artifact_sha256_scope": "API_REPORTED_ENCRYPTED_ARTIFACT_DIGEST",
+        "artifact_size_bytes": 15479873,
+        "archive_digest": "67c0d74bbf18c346314669119f0ae53ff61d9b00c4e6550b7af917b7f02bbdfe",
+        "restore_verification": "SIGNED_ARCHIVE_VERIFIED_AND_REVIEWED_ROLLBACK_TARGET_CAPTURE_NOT_FULL_CANDIDATE",
+        "reviewed_target_report": {
+          "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/POPULATED_SOURCE299_TARGET_41003969617/production-migration-target-capture.json",
+          "sha256": "7fded7c546d4c6d879df233f8059cbf4752433c2d9b403641730d6886452593a",
+          "bytes": 18585920
+        }
+      },
+      "rule": "This authentic ancestor backup was used by the measured reviewed capture. It does not waive exact current-candidate backup/full-rehearsal requirements for later release admission."
+    },
+    "preconditions": [
+      "Exact project rqquvtjdmugpigbndmne; authentic backup40960771863 and rollback capture41003969617 bind original235 ledger/head20261021111917 and source catalog0096e7c488aca86f1d38b061561696b2d4ac409036f063ffc9f196625b9ee9c2. These measurements do not authorize production mutation.",
+      "Normal apply must compare the complete locked live source catalog, counts and original235 ledger. The measured400/165 rollback target cannot replace fresh exact-candidate backup, full rehearsal or authorization.",
+      "Every signed pending migration ledger version must be absent, including versions earlier than the current ledger head; no historical statement may be replayed or rewritten.",
+      "Fresh encrypted backup and completed restore/rehearsal must bind the exact source ledger/catalog, target, candidate commit/tree and source hashes.",
+      "Preserve every actual existing source row, publication, projection, roster entry, receipt, authority/store record and immutable history as proven by the exact fresh signed source backup and populated rehearsal; retained historical application figures are not a fresh current-state measurement.",
+      "No live employee, protected scan, native queue, event, ticket or schedule record may be deleted to make the cutover pass.",
+      "The exact backend/frontend pair must pass its unchanged signature verification and applicable source/runtime/physical gates."
+    ],
+    "postconditions": [
+      "Only the165 exact declared pending versions may be added after unchanged authorization and populated-target prerequisites succeed; preserve every original235 ledger row. Rollback-only capture measured400 rows/head20261030031200/digest8c18f89df84feb7ce469856945c9bd008e0dfd17f9804796e84cc0c4684aa892. A future committed apply requires its own admitted evidence and verification.",
+      "Current source299 populated target metadata is measured by genuine165 rollback capture: catalog09a3374c452a81cd0a8904273d9212444de3ba41be01bf4d07fd887a21f4d0c6 and complete recorded counts. This is neither candidate/runtime admission nor a full rehearsal attestation; historical or fresh-only catalogs cannot substitute.",
       "Owner remains full control; other currently authenticated named managers are read-only except dated absences, manual CoverAll, current route regeneration and verified scan-ticket outcomes; no owner-away window is required.",
       "Approved initial and recurring fixed-pattern publication remains owner-only and requires actual registered source and current revision; no invented five-person approval or employee record.",
       "Existing immutable weekly history, source/event ledger, pending work and employee identities are retained; no automatic CoverAll purchase or unrequested event sends.",

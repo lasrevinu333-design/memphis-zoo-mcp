@@ -9,6 +9,8 @@ const DEPLOYMENT = 'b57982c0c739632fcbfc9ba30177fccab05a5847ce44121408b5ddab8d16
 const SOURCE = '0096e7c488aca86f1d38b061561696b2d4ac409036f063ffc9f196625b9ee9c2';
 const FORWARD_CANONICAL='95ad1f4e76159d18c5ccdb7c84fb639918005f05155b152641f79c15919f082d';
 const FORWARD_DEPLOYMENT='09a3374c452a81cd0a8904273d9212444de3ba41be01bf4d07fd887a21f4d0c6';
+const COMPACT_CANONICAL='aa4d4fad502031a493a15ddfad6305d783cbae90eee5aefb85a8f0c19a737c40';
+const COMPACT_DEPLOYMENT='742caa62cb7a7dff55b3ddeaf0a3eafde511930cb9d9ba7c965ed9f8be3a80a5';
 const PROFILE_PATH = 'release/production-target-schema-profile.json';
 const POLICIES = [
   ['custodial_native_inventory_manifest_chunks', 'native_inventory_manifest_owner'],
@@ -52,9 +54,9 @@ function validateCapturedTargetSchemaProfile(canonicalCatalog, profile) {
     'source_catalog_sha256', 'source_ledger_sha256', 'archive_digest', 'capture',
     'original_columns', 'original_role_memberships', 'policy_owner'], 'Closed production target profile required');
   assert.equal(profile.schema, 'custodial.production-target-schema-profile.v1');
-  const successor=profile.canonical_fingerprint===FORWARD_CANONICAL,
-    canonicalFingerprint=successor?FORWARD_CANONICAL:CANONICAL,
-    deploymentFingerprint=successor?FORWARD_DEPLOYMENT:DEPLOYMENT;
+  const compact=profile.canonical_fingerprint===COMPACT_CANONICAL,successor=profile.canonical_fingerprint===FORWARD_CANONICAL,
+    canonicalFingerprint=compact?COMPACT_CANONICAL:successor?FORWARD_CANONICAL:CANONICAL,
+    deploymentFingerprint=compact?COMPACT_DEPLOYMENT:successor?FORWARD_DEPLOYMENT:DEPLOYMENT;
   assert.equal(profile.canonical_fingerprint, canonicalFingerprint);
   assert.equal(profile.deployment_fingerprint, deploymentFingerprint);
   assert.equal(profile.source_fingerprint, SOURCE);
@@ -63,14 +65,14 @@ function validateCapturedTargetSchemaProfile(canonicalCatalog, profile) {
   assert.equal(profile.archive_digest, '67c0d74bbf18c346314669119f0ae53ff61d9b00c4e6550b7af917b7f02bbdfe');
   closed(profile.capture, ['report_sha256', 'report_bytes', 'candidate_commit', 'candidate_tree',
     'plan_sha256', 'source_ledger_count', 'target_ledger_count', 'pending_count'], 'Exact genuine target capture required');
-  assert.equal(profile.capture.report_sha256, successor?'7fded7c546d4c6d879df233f8059cbf4752433c2d9b403641730d6886452593a':'dafa8d869004fa047ec7a191b040d22503bef8001a4200a44123c860fba5ec94');
-  assert.equal(profile.capture.report_bytes, successor?18585920:18580457);
-  assert.equal(profile.capture.candidate_commit, successor?'7dec6b966b832a658240f114243c0d40971330dd':'588b893b761d08b5157b4ca5b926f11a784bd142');
-  assert.equal(profile.capture.candidate_tree, successor?'10e44aad24960bfaae4121efadf850955ba4dbb9':'6783245807db5c90db056d9afaab7ba1839ca664');
-  assert.equal(profile.capture.plan_sha256, successor?'f92f1867a5f8ec0e7cb201b87b040d1593cefbb5f1b1d5756dda4e248b945d61':'1f9b4bf9e4721f4f9b871a762c8b76b2fdd959d4309632aba2f1ceb588aa7182');
+  assert.equal(profile.capture.report_sha256, compact?'cf5d77a95b3f7e6c64d9f321d5b3aaa19fb78d5bd2e9f313a123cfe8e323fcd3':successor?'7fded7c546d4c6d879df233f8059cbf4752433c2d9b403641730d6886452593a':'dafa8d869004fa047ec7a191b040d22503bef8001a4200a44123c860fba5ec94');
+  assert.equal(profile.capture.report_bytes, compact?18593702:successor?18585920:18580457);
+  assert.equal(profile.capture.candidate_commit, compact?'5455fc4b1ee2ad6910d6d52e491e5db116adee7a':successor?'7dec6b966b832a658240f114243c0d40971330dd':'588b893b761d08b5157b4ca5b926f11a784bd142');
+  assert.equal(profile.capture.candidate_tree, compact?'0b42825b28bc95ce4fff61dfdb060d6d6502b0bc':successor?'10e44aad24960bfaae4121efadf850955ba4dbb9':'6783245807db5c90db056d9afaab7ba1839ca664');
+  assert.equal(profile.capture.plan_sha256, compact?'ec143c3344d84f5d01fa33693827d62a19a48f491a91a553864071570a0bfff7':successor?'f92f1867a5f8ec0e7cb201b87b040d1593cefbb5f1b1d5756dda4e248b945d61':'1f9b4bf9e4721f4f9b871a762c8b76b2fdd959d4309632aba2f1ceb588aa7182');
   assert.equal(profile.capture.source_ledger_count, 235);
-  assert.equal(profile.capture.target_ledger_count, successor?400:399);
-  assert.equal(profile.capture.pending_count, successor?165:164);
+  assert.equal(profile.capture.target_ledger_count, compact?401:successor?400:399);
+  assert.equal(profile.capture.pending_count, compact?166:successor?165:164);
   closed(profile.policy_owner, ['canonical_role', 'deployment_role', 'actual_private_schema_owners'], 'Exact policy-owner context required');
   assert.equal(profile.policy_owner.canonical_role, 'supabase_admin');
   assert.equal(profile.policy_owner.deployment_role, 'postgres');

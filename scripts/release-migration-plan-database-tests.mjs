@@ -44,12 +44,14 @@ if (selectedArguments[0] === currentCapturedSelector) {
   assert.ok(schemaTarget.profile, "Current captured target requires its closed production profile");
   const capture = state.target.normal_source_capture;
   const proof = schemaTarget.profile.capture;
+  const current300 = plan.files.length === 300;
+  const current299 = plan.files.length === 299;
   const current298 = plan.files.length === 298;
   const current297 = plan.files.length === 297;
-  const pendingCount = current298 ? 164 : current297 ? 163 : 160;
-  const targetCount = current298 ? 399 : current297 ? 398 : 395;
+  const pendingCount = current300 ? 166 : current299 ? 165 : current298 ? 164 : current297 ? 163 : 160;
+  const targetCount = 235+pendingCount;
   assert.equal(plan.baseCount, 134);
-  assert.equal(plan.files.length, current298 ? 298 : current297 ? 297 : 294);
+  assert.equal(plan.files.length, 134+pendingCount);
   assert.equal(state.pending_migrations.length, pendingCount);
   assert.deepEqual(state.pending_migrations.map(({ file }) => file), plan.files.slice(plan.baseCount));
   assert.equal(state.observed_production.production_ledger_count, 235);
@@ -69,7 +71,14 @@ if (selectedArguments[0] === currentCapturedSelector) {
   assert.equal(checked.pendingCount, pendingCount);
   assert.equal(checked.targetCount, targetCount);
   assert.equal(checked.targetFingerprint, schemaTarget.deploymentFingerprint);
-  if (current298) {
+  if(current300||current299){
+    assert.equal(plan.manifestSha256,current300?'be9f1ce99e037690b3095c8b8e963fc30efd8c83adaa1e415856a79808dc31b1':'965300d634959010c017ac203d71fe915f65b4b42e69910b173b96d034c38001');
+    assert.equal(capture.original_run_id,current300?41007886733:41003969617);
+    assert.equal(proof.report_sha256,current300?'cf5d77a95b3f7e6c64d9f321d5b3aaa19fb78d5bd2e9f313a123cfe8e323fcd3':'7fded7c546d4c6d879df233f8059cbf4752433c2d9b403641730d6886452593a');
+    assert.equal(proof.report_bytes,current300?18593702:18585920);
+    assert.equal(capture.rollback_evidence.rollback_verified,true);assert.equal(capture.rollback_evidence.committed,false);
+    for(const key of ['production_authorized','candidate_migration_admission','runtime_admission','full_rehearsal_attestation'])assert.equal(capture[key],false);
+  }else if (current298) {
     assert.equal(plan.manifestSha256, "aca06e305ff4c5918e83045acf4d739fcb8746e41dcc89ceb59fcd0f98ab20ba");
     assert.equal(capture.original_run_id, 40965791466);
     assert.equal(proof.report_sha256, "dafa8d869004fa047ec7a191b040d22503bef8001a4200a44123c860fba5ec94");
@@ -92,7 +101,7 @@ if (selectedArguments[0] === currentCapturedSelector) {
   console.log(JSON.stringify({ status: "SOURCE_ONLY_CURRENT_CAPTURED_TARGET_CONTRACT_PASS",
     SQL_execution: false, database_client_constructed: false, production_authorized: false,
     historical_23_positive_security_database_corpus: "NOT_RUN_CURRENT_CAPTURED_SOURCE_ROUTE",
-    adopted_capture_database_proof: current298 ? "SEPARATE_ORIGINAL_CAPTURE_40965791466_NOT_REEXECUTED" : current297 ? "SEPARATE_ORIGINAL_CAPTURE_40615635335_NOT_REEXECUTED" : "SEPARATE_ORIGINAL_CAPTURE_40360756054_NOT_REEXECUTED",
+    adopted_capture_database_proof: current300 ? "SEPARATE_ORIGINAL_CAPTURE_41007886733_NOT_REEXECUTED" : current299 ? "SEPARATE_ORIGINAL_CAPTURE_41003969617_NOT_REEXECUTED" : current298 ? "SEPARATE_ORIGINAL_CAPTURE_40965791466_NOT_REEXECUTED" : current297 ? "SEPARATE_ORIGINAL_CAPTURE_40615635335_NOT_REEXECUTED" : "SEPARATE_ORIGINAL_CAPTURE_40360756054_NOT_REEXECUTED",
     source_ledger_count: 235, pending_count: pendingCount, target_ledger_count: targetCount,
     canonical_fingerprint: schemaTarget.canonicalFingerprint,
     deployment_fingerprint: schemaTarget.deploymentFingerprint,
