@@ -1,0 +1,97 @@
+name: Custodial backup database identity only
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Exact reviewed main commit for this identity check
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: custodial-backup-identity-only
+  cancel-in-progress: false
+
+jobs:
+  identity:
+    if: github.repository == 'lasrevinu333-design/memphis-zoo-mcp' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Verify reviewed source and first attempt
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          set -eu
+          test "$EXPECTED_SHA" = "$GITHUB_SHA"
+          test "$GITHUB_RUN_ATTEMPT" = "1"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '22.23.1'
+      - name: Install locked dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Read database login identity only
+        env:
+          IDENTITY_DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
+        shell: bash
+        run: |
+          set +x
+          node --input-type=module <<'NODE'
+          import {readFileSync} from 'node:fs';
+          import pg from 'pg';
+          const project = 'rqquvtjdmugpigbndmne';
+          let client;
+          try {
+            const raw = process.env.IDENTITY_DATABASE_URL;
+            delete process.env.IDENTITY_DATABASE_URL;
+            if (!raw) throw new Error('identity_input_unavailable');
+            const u = new URL(raw);
+            const user = decodeURIComponent(u.username);
+            const password = decodeURIComponent(u.password);
+            const direct = u.hostname === `db.${project}.supabase.co`;
+            const pooler = /^aws-[0-9]+-us-east-1\.pooler\.supabase\.com$/.test(u.hostname)
+              && user.endsWith(`.${project}`);
+            const port = Number(u.port || 5432);
+            if (!['postgres:', 'postgresql:'].includes(u.protocol)
+                || !(direct || pooler) || u.pathname !== '/postgres'
+                || ![5432, 6543].includes(port) || !user || !password || u.hash) {
+              throw new Error('identity_target_validation_failed');
+            }
+            // Explicit fields prevent URI SSL options from weakening certificate validation.
+            client = new pg.Client({
+              host: u.hostname, port, user, password, database: 'postgres',
+              ssl: {rejectUnauthorized: true,
+                ca: readFileSync('.github/certs/prod-ca-2021.crt', 'utf8')},
+              application_name: 'custodial-approved-backup-identity-check',
+              connectionTimeoutMillis: 10000,
+              query_timeout: 10000,
+              options: '-c default_transaction_read_only=on -c statement_timeout=5000'
+            });
+            client.on('error', () => {});
+            await client.connect();
+            await client.query('BEGIN READ ONLY');
+            const {rows} = await client.query(
+              'SELECT current_user::text AS current_user, session_user::text AS session_user'
+            );
+            await client.query('ROLLBACK');
+            if (rows.length !== 1 || ![rows[0].current_user, rows[0].session_user]
+                .every(x => typeof x === 'string' && /^[A-Za-z_][A-Za-z0-9_]{0,62}$/.test(x))) {
+              throw new Error('unexpected_identity_result');
+            }
+            console.log(JSON.stringify({current_user: rows[0].current_user,
+              session_user: rows[0].session_user}));
+          } catch {
+            // Never print exceptions: database errors can contain connection details.
+            console.log(JSON.stringify({status: 'IDENTITY_CHECK_FAILED_NO_DETAILS_EXPOSED'}));
+            process.exitCode = 1;
+          } finally {
+            if (client) await client.end().catch(() => {});
+          }
+          NODE
