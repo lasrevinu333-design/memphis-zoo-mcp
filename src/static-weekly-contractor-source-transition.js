@@ -9,27 +9,12 @@ const same = (a,b) => canonicalJson(a)===canonicalJson(b);
 const sameMultiset = (a,b) => Array.isArray(a)&&Array.isArray(b)
  &&same(a.map(canonicalJson).sort(),b.map(canonicalJson).sort());
 
-/** Pure, nonmutating source candidate. The basis is a SERVER-owned authority
- * read, never HTTP compiler data. This helper alone cannot register/publish.
- * Existing staffing/vacancies remain unchanged; nine POSITIONS is not a claim
- * that nine real people currently work or that historical people are deleted.
- */
-export function createContractorCapacityTransitionCandidate({basis,selection,effectiveStart,expectedRevision,
-  reason,candidateVersionId,candidatePublicationId}) {
- const date=assertServiceDate(effectiveStart);
- assertServiceDate(basis?.trusted_service_date);
- if(new Date(`${date}T00:00:00Z`).getUTCDay()!==1||!Number.isSafeInteger(expectedRevision)
-  ||date<=basis.trusted_service_date||expectedRevision!==basis?.authority_revision||basis?.current_publication_id!==basis?.publication_id
-  ||basis?.future_exception_count!==0||!Array.isArray(basis?.capacity_dependency_findings)
-  ||basis.capacity_dependency_findings.length)fail('capacity_transition_current_basis_changed_or_requires_reconciliation');
- for(const key of ['source_digest','roster_digest','dependency_digest'])hash(basis[key]);
- for(const key of ['source_id','publication_id','version_id'])uuid(basis[key]);
- const source=basis.compiler_input;
- if(!source||!Array.isArray(source.slots)||!source.version||source.version.id!==basis.version_id
-  ||source.version.publicationId!==basis.publication_id||postgresJsonbContentDigest(source)!==basis.source_digest
-  ||!Array.isArray(source.version.slotAvailability)||!Array.isArray(source.version.assignments)
-  ||!Array.isArray(basis.all_slot_ids))fail('capacity_transition_exact_source_required');
- if(typeof reason!=='string'||!reason.trim()||reason.length>500)fail('capacity_transition_reason_required');
+// Shared pure mapping. Publication dates, manager freshness, dependency
+// checks and atomic registration belong to the operation-specific owner.
+export function mapLegacyContractorCapacitySourceData({source,selection,allSlotIds,serviceDate}){
+ const date=assertServiceDate(serviceDate);
+ if(!source||!Array.isArray(source.slots)||!source.version||!Array.isArray(source.version.slotAvailability)
+  ||!Array.isArray(source.version.assignments)||!Array.isArray(allSlotIds))fail('capacity_transition_exact_source_required');
  const ordinary=source.slots.filter(s=>s.contractorCapacity!==true),legacy=source.slots.filter(s=>s.contractorCapacity===true);
  if(ordinary.length!==9||legacy.length!==8||legacy.some(s=>s.kind==='CONTRACTOR_CAPACITY'))fail('capacity_transition_explicit_legacy_pool_required');
  const people=new Set(ordinary.flatMap(s=>(s.incumbencies||[]).map(i=>i.personId)));
@@ -40,7 +25,7 @@ export function createContractorCapacityTransitionCandidate({basis,selection,eff
   if(!entry||Object.keys(entry).sort().join(',')!=='capacity_code,legacy_slot_id,new_capacity_id')fail('capacity_transition_exact_mapping_required');
   uuid(entry.legacy_slot_id);uuid(entry.new_capacity_id);
   if(!legacy.some(s=>s.id===entry.legacy_slot_id)||mapped.has(entry.legacy_slot_id)||newIds.has(entry.new_capacity_id)
-   ||basis.all_slot_ids.includes(entry.new_capacity_id)||!/^CoverAll0[1-8]$/.test(entry.capacity_code)||codes.has(entry.capacity_code))fail('capacity_transition_duplicate_or_unbound_mapping');
+   ||allSlotIds.includes(entry.new_capacity_id)||!/^CoverAll0[1-8]$/.test(entry.capacity_code)||codes.has(entry.capacity_code))fail('capacity_transition_duplicate_or_unbound_mapping');
   mapped.set(entry.legacy_slot_id,entry);newIds.add(entry.new_capacity_id);codes.add(entry.capacity_code);
  }
  // No inferred reassignment/removal of accepted duties, origins, exclusions,
@@ -65,6 +50,34 @@ export function createContractorCapacityTransitionCandidate({basis,selection,eff
   if(row.status!=='unavailable'||Object.keys(row).some(k=>!['slotId','dayOfWeek','status'].includes(k)))fail('capacity_transition_baseline_capacity_must_be_inactive');
   return {...row,slotId:mapping.new_capacity_id};
  });
+ candidate.version=version;
+ return{candidate,ordinary,legacy,mapped,newIds};
+}
+
+/** Pure, nonmutating source candidate. The basis is a SERVER-owned authority
+ * read, never HTTP compiler data. This helper alone cannot register/publish.
+ * Existing staffing/vacancies remain unchanged; nine POSITIONS is not a claim
+ * that nine real people currently work or that historical people are deleted.
+ */
+export function createContractorCapacityTransitionCandidate({basis,selection,effectiveStart,expectedRevision,
+  reason,candidateVersionId,candidatePublicationId}) {
+ const date=assertServiceDate(effectiveStart);
+ assertServiceDate(basis?.trusted_service_date);
+ if(new Date(`${date}T00:00:00Z`).getUTCDay()!==1||!Number.isSafeInteger(expectedRevision)
+  ||date<=basis.trusted_service_date||expectedRevision!==basis?.authority_revision||basis?.current_publication_id!==basis?.publication_id
+  ||basis?.future_exception_count!==0||!Array.isArray(basis?.capacity_dependency_findings)
+  ||basis.capacity_dependency_findings.length)fail('capacity_transition_current_basis_changed_or_requires_reconciliation');
+ for(const key of ['source_digest','roster_digest','dependency_digest'])hash(basis[key]);
+ for(const key of ['source_id','publication_id','version_id'])uuid(basis[key]);
+ const source=basis.compiler_input;
+ if(!source||!Array.isArray(source.slots)||!source.version||source.version.id!==basis.version_id
+  ||source.version.publicationId!==basis.publication_id||postgresJsonbContentDigest(source)!==basis.source_digest
+  ||!Array.isArray(source.version.slotAvailability)||!Array.isArray(source.version.assignments)
+  ||!Array.isArray(basis.all_slot_ids))fail('capacity_transition_exact_source_required');
+ if(typeof reason!=='string'||!reason.trim()||reason.length>500)fail('capacity_transition_reason_required');
+ const {candidate:rawCandidate,ordinary,legacy,mapped,newIds}=mapLegacyContractorCapacitySourceData({
+  source,selection,allSlotIds:basis.all_slot_ids,serviceDate:date});
+ let candidate=rawCandidate;const version=candidate.version;
  version.id=uuid(candidateVersionId);version.publicationId=uuid(candidatePublicationId);version.effectiveStart=date;version.effectiveEnd=null;version.status='published';
  candidate.version=version;candidate.serviceDate=date;
  // New UUIDs change the existing canonical normalizer's collection ordering.

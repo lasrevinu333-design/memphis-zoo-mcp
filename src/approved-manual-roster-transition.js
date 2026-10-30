@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {postgresJsonbContentDigest as digest,canonicalAuthorityInput} from './static-weekly-schedule-program.js';
 import {contentDigest} from './static-weekly-schedule-model.js';
 import {prepareApprovedStaticTemplateProjection} from './static-weekly-recurring-staffing-adaptation.js';
+import {mapLegacyContractorCapacitySourceData} from './static-weekly-contractor-source-transition.js';
 
 const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 const date=value=>{assert.match(value,/^\d{4}-\d{2}-\d{2}$/);assert.equal(new Date(value+'T12:00:00Z').toISOString().slice(0,10),value);return value;};
@@ -84,6 +85,32 @@ export function prepareApprovedManualRosterTransition({week,draft,snapshot,effec
   currentDateWeeklyAdmissionProven:false,normalScheduleOptimizationUsed:false,
   activationTiming:'AS_SOON_AS_READY_AND_VERIFIED',futureMondayHold:false};
  return{...body,transitionDigest:digest(body)};
+}
+
+// Prepare separate nonemployee capacity DATA using the maintained transition
+// mapping. Do not feed this to the Source301 registration/activation command:
+// fresh dependency/registry checks and atomic enrollment still belong to the
+// native successor. Existing roster/history and all normal duties stay intact.
+export function prepareApprovedManualCapacityTransition({week,draft,snapshot,selection}){
+ const before=digest({week,draft,snapshot,selection}),
+  roster=prepareApprovedManualRosterTransition({week,draft,snapshot,effectiveStart:snapshot.serviceDate}),
+  mapped=mapLegacyContractorCapacitySourceData({source:roster.projectedSourceDraft,selection,
+   allSlotIds:snapshot.rosterSlots.map(s=>s.slotId),serviceDate:roster.serviceDate}),
+  source=mapped.candidate;
+ assert.deepEqual(source.version,roster.projectedSourceDraft.version,'Capacity mapping cannot change any approved normal assignment, lunch or shift');
+ const body={schema:'custodial.approved-manual-capacity-transition.v1',status:'DATA_REQUIRES_NATIVE_ATOMIC_ADMISSION',
+  serviceDate:roster.serviceDate,expectedRevision:roster.expectedRevision,rosterReadbackDigest:roster.readbackDigest,
+  normalRosterTransitionDigest:roster.transitionDigest,selection:structuredClone(selection),selectionDigest:digest(selection),
+  projectedSourceDraft:source,projectedSourceDigest:digest(source),
+  unchangedPositionIds:mapped.ordinary.map(s=>s.id),historicalCapacitySlotIds:mapped.legacy.map(s=>s.id),newCapacityIds:[...mapped.newIds],
+  preservedLiveHistoryDigests:snapshot.rosterSlots.map(s=>({slotId:s.slotId,digest:digest(s)})),
+  existingRosterPositions:snapshot.rosterSlots.length,additionalNonemployeeCapacityPositions:8,
+  expectedTotalRosterPositions:snapshot.rosterSlots.length+8,employeeRowsCreated:0,legacyRowsChanged:false,normalSchedulesChanged:false,
+  source301AdmissionEligible:false,registrationEligible:false,publicationEligible:false,productionWritten:false,
+  requiredBeforeAtomicAdmission:['FRESH_LEGACY_DEPENDENCY_CHECKS','FRESH_EXISTING_CAPACITY_REGISTRATIONS',
+   'SOURCE_BOUND_REGISTRY_AND_ROSTER_CAS','SAME_TRANSACTION_SOURCE_CAPACITY_ROSTER_NORMAL_PUBLICATION_AND_LUNCH']};
+ assert.equal(digest({week,draft,snapshot,selection}),before);
+ return{...body,capacityTransitionDigest:digest(body)};
 }
 
 // Prepare the EXISTING fixed-pattern adapter for the server's actual date.

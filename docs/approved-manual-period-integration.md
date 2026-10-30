@@ -64,6 +64,14 @@ areas before all staff arrive remains unspecified and is reported explicitly.
    data. Apply only the dated accepted adjustments. Keep each normal baseline
    intact rather than optimizing or replacing it each day.
 
+`prepareApprovedManualCapacityTransition` now reuses the maintained transition's
+shared pure mapping for the manual current-date plan. Recorded-data tests retain
+all 22 existing positions and history, propose eight separate nonemployee
+capacity positions, and preserve all normal employee duties, shifts and lunches.
+The prospective total of 30 positions is not an employee headcount. The plan
+explicitly refuses Source301 admission and still requires the fresh registry,
+dependency and atomic transaction gates above.
+
 The current canonical source still has 301 migrations. No Source302 migration
 has been adopted. The new native DATA path is not yet a live manager save path.
 Final populated-target rehearsal, the final release pair/CI, live release and

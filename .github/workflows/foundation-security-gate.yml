@@ -126,6 +126,7 @@ jobs:
           node scripts/approved-manual-period-projection-tests.mjs --native-evidence-dir "$RUNNER_TEMP/approved-manual-period-native"
           node scripts/approved-manual-period-worker-tests.mjs "$RUNNER_TEMP/approved-manual-period-worker"
           node scripts/approved-manual-roster-transition-tests.mjs
+          node scripts/approved-manual-capacity-transition-tests.mjs "$RUNNER_TEMP/approved-manual-capacity-data"
           node scripts/approved-manual-activation-database-tests.mjs --out "$RUNNER_TEMP/approved-manual-activation-sql"
           # This starts only disposable worker-owned PostgreSQL containers and
           # includes the real independent-session concurrency/restart suite.
@@ -168,4 +169,5 @@ jobs:
           path: |
             ${{ runner.temp }}/approved-manual-period-native/RESULT.json
             ${{ runner.temp }}/approved-manual-period-worker/RESULT.json
+            ${{ runner.temp }}/approved-manual-capacity-data/RESULT.json
           if-no-files-found: warn
