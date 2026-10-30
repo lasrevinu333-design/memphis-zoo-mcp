@@ -160,7 +160,7 @@
       {
         "path": ".github/workflows/foundation-security-gate.yml",
         "mode": "100644",
-        "object_id": "b7927baffc43c7e4875952addfced54b1ec90409"
+        "object_id": "932f286ed5911b648aa12625d4d37d7678f6b6c3"
       },
       {
         "path": ".github/workflows/integrated-release-attestation.yml",
@@ -373,9 +373,19 @@
         "object_id": "c0b93fd65f8b42bb23ba2cfe16b44ba4ff166afc"
       },
       {
+        "path": "config/schedules/manual-approved-20261030/absence-objective-proposal.json",
+        "mode": "100644",
+        "object_id": "77740c6d39cb43388bfd426bfc508a93ac458b28"
+      },
+      {
         "path": "config/schedules/manual-approved-20261030/catalog.json",
         "mode": "100644",
         "object_id": "7798ee21aefc70ffd1579f3e2a76c5711e79c116"
+      },
+      {
+        "path": "config/schedules/manual-approved-20261030/gps-reference-20261030.json",
+        "mode": "100644",
+        "object_id": "a7b04aa9a314b3532cc3e5d7ac69437e46bb03b8"
       },
       {
         "path": "config/schedules/manual-approved-20261030/packet/INTEGRATION_HANDOFF.md",
@@ -1478,6 +1488,16 @@
         "object_id": "54b8c2cc49cf4a2dee39597772af732c79bb6abb"
       },
       {
+        "path": "scripts/approved-manual-absence-tests.mjs",
+        "mode": "100644",
+        "object_id": "be51918c83663ce74c8fe7864fca9e4d9fbac744"
+      },
+      {
+        "path": "scripts/approved-manual-gps-tests.mjs",
+        "mode": "100644",
+        "object_id": "0b2e39a1ce912038c5c4e1df2e9b12733e16e4d5"
+      },
+      {
         "path": "scripts/approved-manual-manager-view-tests.mjs",
         "mode": "100644",
         "object_id": "31b68a653caf37c4a153c1986001bc62abed5ec5"
@@ -1625,7 +1645,7 @@
       {
         "path": "scripts/ci-fresh-only-source-successor-tests.mjs",
         "mode": "100644",
-        "object_id": "865add3508682f4d213c3c9f76127da93f078835"
+        "object_id": "6efd5619248350756afef374613f271568dbff81"
       },
       {
         "path": "scripts/ci-fresh-only-source-successor.mjs",
@@ -1635,7 +1655,7 @@
       {
         "path": "scripts/ci-workflow-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "f3d7e9ea7718da2f3100a53a87531b809a6d700b"
+        "object_id": "24c61aecc75f2c315a7bcab83ddc5b8161c0187c"
       },
       {
         "path": "scripts/cleaning-identity-gps-database-tests.mjs",
@@ -2320,7 +2340,7 @@
       {
         "path": "scripts/fixtures/current-scheduler-source-profiles.mjs",
         "mode": "100644",
-        "object_id": "e34e56d9f03d1526f20f25d05163d586e7767395"
+        "object_id": "f4e7ad6dcdef3e7980e092d18629d9c2d3a34dc6"
       },
       {
         "path": "scripts/fixtures/dashboard-independent-check-reader-fixture.py",
@@ -5973,6 +5993,11 @@
         "object_id": "448e6dc79edfda5b4e51d8ac77eda3945f06a544"
       },
       {
+        "path": "src/approved-manual-absence.js",
+        "mode": "100644",
+        "object_id": "74b447d060b5e24ea62cde509a039dd3953826ed"
+      },
+      {
         "path": "src/approved-manual-bindings.js",
         "mode": "100644",
         "object_id": "703f11d9345199ea3a6716bdafc35a3e69ee2708"
@@ -5981,6 +6006,11 @@
         "path": "src/approved-manual-compiler-data.js",
         "mode": "100644",
         "object_id": "6db9405cb5648591b1530aee13bbf25fc1fb1667"
+      },
+      {
+        "path": "src/approved-manual-gps.js",
+        "mode": "100644",
+        "object_id": "012ce4facb74697cd61e057787cc853b1744698b"
       },
       {
         "path": "src/approved-manual-manager-view.js",
@@ -9343,7 +9373,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 1843,
+    "authority_path_count": 1849,
     "migration_path_count": 300,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
