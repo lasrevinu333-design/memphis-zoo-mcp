@@ -515,7 +515,7 @@
       {
         "path": "docs/approved-manual-period-integration.md",
         "mode": "100644",
-        "object_id": "212ed50ed4d5654da59e17eb7f8cae682335b089"
+        "object_id": "0a44ff404e414d8e6d5eab559efc2abde124cd0d"
       },
       {
         "path": "docs/approved-manual-schedule-operations.md",
@@ -1540,7 +1540,7 @@
       {
         "path": "scripts/approved-manual-period-projection-tests.mjs",
         "mode": "100644",
-        "object_id": "aea2d4b93700697f0a864c731fdda7fcd650ec92"
+        "object_id": "cf642bb23fcf192c2f2c52ae1aa28e7c3c810fdd"
       },
       {
         "path": "scripts/approved-manual-period-tests.mjs",
@@ -1550,7 +1550,7 @@
       {
         "path": "scripts/approved-manual-period-worker-tests.mjs",
         "mode": "100644",
-        "object_id": "4c95977e1caca8e7aa392d05f90482d23842f2a9"
+        "object_id": "8c3fcc9d03ab248bdb8d6b01cc3ff4af0eddeee7"
       },
       {
         "path": "scripts/approved-manual-roster-transition-tests.mjs",
@@ -6073,6 +6073,11 @@
         "object_id": "42d345e592cb9c2389e55586f81fdddb31cbb5bd"
       },
       {
+        "path": "src/approved-manual-lunch-retention.js",
+        "mode": "100644",
+        "object_id": "c07d580b4cfa4ae4a18a39f56930f4a7256d9e5d"
+      },
+      {
         "path": "src/approved-manual-manager-view.js",
         "mode": "100644",
         "object_id": "71d19f4114090e2ceb9a021caa072ebd02c170e1"
@@ -6085,12 +6090,12 @@
       {
         "path": "src/approved-manual-period-projection.js",
         "mode": "100644",
-        "object_id": "5949826df92a98b1c74813aa540b941936687803"
+        "object_id": "44c2f07b79fc9b19ea37e48408fb2e2df3af9eb0"
       },
       {
         "path": "src/approved-manual-period-worker.js",
         "mode": "100644",
-        "object_id": "e82dfa7920fd68b84ac968189d193e922dd678ca"
+        "object_id": "f358cd14a09679b0af5b9f4ffe5bb79cf807e219"
       },
       {
         "path": "src/approved-manual-policy-delta.js",
@@ -9458,7 +9463,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 1866,
+    "authority_path_count": 1867,
     "migration_path_count": 301,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
