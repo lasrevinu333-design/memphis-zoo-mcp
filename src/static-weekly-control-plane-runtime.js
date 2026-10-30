@@ -7,7 +7,7 @@ import { createClient } from "@supabase/supabase-js";
 import { assertOpsManagerSessionSecret, createSupabaseTrustedDeviceStore, makeOpsAccessMiddleware } from "./auth/shared-access-auth.js";
 import { createStaticWeeklyControlPlane, createStaticWeeklyControlPlaneDatabase } from "./static-weekly-control-plane.js";
 import { beginBoundedManagerRequest } from "./static-weekly-manager-operation.js";
-import {approvedInitialRequest,approvedInitialSelectionRequest,APPROVED_INITIAL_REQUEST_ERROR} from "./static-weekly-approved-initial-request.js";
+import {approvedInitialRequest,approvedInitialSelectionRequest,approvedManualActivationRequest,APPROVED_INITIAL_REQUEST_ERROR} from "./static-weekly-approved-initial-request.js";
 import {isMapDashboardSession} from "./auth/map-manager-identity.js";
 import { createRecurringOperationRunner } from "./static-weekly-recurring-operation-runner.js";
 import { runRecurringWithRestoreCustody } from "./static-weekly-recurring-operation-handler.js";
@@ -229,7 +229,7 @@ export function createStaticWeeklyControlPlaneRuntime({
           "static_weekly_operation_reap_unproven",
           "static_weekly_compiler_request_aborted",
         ]).has(responseError?.code);
-        const invalid = ["static_weekly_control_plane_compiler_rejected", "static_weekly_recurring_confirmation_request_invalid", "static_weekly_recurring_delivery_request_invalid",APPROVED_INITIAL_REQUEST_ERROR,OPENING_COVERAGE_ERROR].includes(responseError?.code);
+        const invalid = ["static_weekly_control_plane_compiler_rejected", "static_weekly_recurring_confirmation_request_invalid", "static_weekly_recurring_delivery_request_invalid",'static_weekly_manual_activation_request_invalid',APPROVED_INITIAL_REQUEST_ERROR,OPENING_COVERAGE_ERROR].includes(responseError?.code);
         const diagnostic=responseError?.code===OPENING_COVERAGE_ERROR?sanitizeOpeningCoverageDiagnostic(responseError.openingCoverageDiagnostic):null;
         res.status(responseError?.code === "42501" ? 403 : invalid ? 422 : unavailable ? 503 : 409).json({ ok: false, error: diagnostic
           ?'Opening planned coverage has inconsistent essential source facts. Nothing was admitted or published.'
@@ -293,6 +293,21 @@ export function createStaticWeeklyControlPlaneRuntime({
       signal:req.staticWeeklyManagerOperation.signal,deadlineAt:req.staticWeeklyManagerOperation.deadlineAt});
   }));
   app.get("/static-weekly/manager-snapshot", requireManagerRead, namedReadManager, respond((req) => authorityControlPlane.getManagerSnapshot({ manager: manager(req), weekStart: req.query?.week_start })));
+  app.get('/static-weekly/manual-activation/roster',requireManagerWrite,namedManager,respond(req=>
+    authorityControlPlane.getApprovedManualActivationRoster({manager:manager(req)})));
+  for(const [action,method]of [['preview','previewApprovedManualActivation'],['confirm','activateApprovedManualSchedule']]){
+    app.post(`/static-weekly/manual-activation/${action}`,requireManagerWrite,namedManager,respond(req=>{
+      const input=approvedManualActivationRequest(req.body,{confirm:action==='confirm'}),operation=req.staticWeeklyManagerOperation;
+      if(!operation||!req.restoreMutationLease?.signal||typeof authorityControlPlane[method]!=='function')
+        throw fail('static_weekly_control_plane_database_unavailable','Approved schedule activation is unavailable.');
+      return authorityControlPlane[method]({...input,manager:manager(req),signal:req.restoreMutationLease.signal,deadlineAt:operation.deadlineAt});
+    }));
+  }
+  app.get('/static-weekly/manual-activation/outcome',requireManagerWrite,namedManager,respond(req=>{
+    if(Object.keys(req.query||{}).length!==1||typeof req.query.idempotency_key!=='string')
+      throw fail('static_weekly_manual_activation_request_invalid');
+    return authorityControlPlane.getApprovedManualActivationOutcome({manager:manager(req),idempotencyKey:req.query.idempotency_key});
+  }));
   // Distinct fixed-pattern baseline: never fall back to the historical draft
   // optimizer. The same first-ingress deadline and restore-lease settlement
   // cover authentication, source reads, publication and response delivery.

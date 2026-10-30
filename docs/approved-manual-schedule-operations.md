@@ -79,12 +79,23 @@ slice. This calculation applies only to dated absence adjustments.
 Activate as soon as implementation is ready and verified. There is no future
 Monday or November 2 hold; future dates in local tests are fixtures only.
 
-The absence engine and CoverAll overlay currently return validated DATA drafts,
-not SQL publication receipts. The remaining implementation is atomic admission
-of the four existing employees over the real roster history, current-date
-weekly publication/native projections, and authenticated dated-adjustment
-persistence/readback. Do not label those unfinished steps completed based on
-these local tests. Do not change the normal schedules to bypass admission.
+Current-day atomic roster admission and the normal fixed-pattern publisher
+are implemented in Source301. An owned populated PostgreSQL fixture passed
+four existing-employee transfers, three append-only predecessor closures,
+preservation of all 22 positions and the prior historical projection, exact
+request recovery, five changed-reference refusals and denial of direct runtime
+access to the private composition helper. The Friday-to-Thursday publication
+passed 40 full-hour lunch checks, 40 employee-day readbacks and 162,540 physical
+location-minute ownership comparisons. These are SQL ownership checks, not
+physical device or genuine signed-in browser tests. Production was not changed.
+
+The absence engine and CoverAll overlay still return validated DATA drafts,
+not authenticated SQL publication receipts. Authenticated dated-adjustment
+persistence/readback and repetition of the locked normal pattern in later
+coverage periods remain implementation work. A new source requires its own
+measured populated-target capture and release rehearsal; the earlier Source300
+capture cannot qualify Source301. Do not change a normal schedule to bypass
+these boundaries or treat local SQL proof as live rollout.
 
 ## Migration-owner credential boundary
 
@@ -101,13 +112,18 @@ existing password-to-connection helper uses
 Read-only checks must establish project, physical-cluster identity and migration
 authority before the reviewed release workflow is used.
 
-The targeted October 30 saved-file search found no verified owner credential.
-Do not claim there is a saved password without a specific verified source.
-No password reset, rotation, protected-store access, access-denial bypass or
-reuse of backup/runtime credentials is authorized by a missing search result.
+The owner supplied a specific saved password file after the targeted search.
+A TLS read-only connection verified the project, pinned physical cluster,
+`postgres` migration owner and migration-ledger authority. With the owner's
+explicit scoped approval, the existing session-pooler connection was derived
+in memory and installed as the encrypted repository Actions secret
+`SUPABASE_MIGRATION_DB_URL` on October 30, 2026. The source file was protected
+with mode `0600`; its path, contents and connection string are excluded from
+repository documentation and logs. This credential step is complete. It did
+not run a migration, deploy, reset a password or change runtime access.
 Leave `memphis_zoo_backup`, `custodial_readonly_runtime_20260822` and
 `static_weekly_runtime_20260823` unchanged. No migrations or deployment were run
-as part of this search or formula approval.
+as part of the credential setup or formula approval.
 
 Main works alone. Do not resume old helpers, start another builder, or run an
 audit under these implementation instructions.

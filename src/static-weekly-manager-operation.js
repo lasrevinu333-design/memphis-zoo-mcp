@@ -9,6 +9,7 @@ export function beginBoundedManagerRequest(req, res, {
   // handlers accept mixed case and one optional trailing slash as well.
   const routePath = typeof req.path === "string" ? req.path.replace(/\/$/, "").toLowerCase() : "";
   const readOnly=req.method==='GET'&&(routePath==='/static-weekly/approved-initial/selection'
+    ||['/static-weekly/manual-activation/roster','/static-weekly/manual-activation/outcome'].includes(routePath)
     ||/^\/static-weekly\/(?:approved-initial|recurring-adaptation)\/confirmations\/[^/]+$/.test(routePath)
     ||/^\/static-weekly\/staffing-commands(?:\/|$)/.test(routePath));
   if (!readOnly&&(req.method !== "POST" || !routePath.startsWith("/static-weekly/"))) return null;

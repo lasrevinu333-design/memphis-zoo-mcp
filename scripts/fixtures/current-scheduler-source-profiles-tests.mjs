@@ -14,7 +14,7 @@ for(const row of document.profiles){
  assert.throws(()=>restoreSchedulerProofSource(row.profile,prior));checks++;
 }
 // The fixture document and all15 historical endpoints remain immutable.
-const nativeProfile='NATIVE_CURRENT_REPLAY_MANIFEST_RETAINED_WIRING',manifestPath=new URL('../../supabase/canonical/migration-replay-order.json',import.meta.url),current298=readFileSync(manifestPath,'utf8');
+const nativeProfile='NATIVE_CURRENT_REPLAY_MANIFEST_RETAINED_WIRING',manifestPath=new URL('../../release/fresh-only-replay/SOURCE298_REPLAY_ORDER.json',import.meta.url),current298=readFileSync(manifestPath,'utf8');
 assert.equal(sha(current298),'aca06e305ff4c5918e83045acf4d739fcb8746e41dcc89ceb59fcd0f98ab20ba');checks++;
 const predecessor297=JSON.parse(current298);
 assert.deepEqual(predecessor297.phases[2].files.pop(),{name:'20261028224728_full_scheduled_lunch_source_policy.sql',sha256:'a47387ddf244a04df646c9bb2d60eef86a769b96baf9106759f1c2a703248514'});checks++;
@@ -39,5 +39,10 @@ for(const mutate of [
 ]) {const changed=JSON.parse(current297);mutate(changed);assert.throws(()=>restoreSchedulerProofSource(nativeProfile,JSON.stringify(changed,null,2)+'\n'));checks++;}
 assert.throws(()=>restoreSchedulerProofSource(nativeProfile,current297+' '));checks++;
 assert.throws(()=>restoreSchedulerProofSource('NATIVE_CURRENT_HTTP_SELECTED_DEVICE_PIN',current297));checks++;
+for(const path of ['../../release/fresh-only-replay/SOURCE299_REPLAY_ORDER.json','../../release/fresh-only-replay/SOURCE300_REPLAY_ORDER.json','../../supabase/canonical/migration-replay-order.json']){
+ const selected=readFileSync(new URL(path,import.meta.url),'utf8');assert.equal(restoreSchedulerProofSource(nativeProfile,selected),restoreSchedulerProofSource(nativeProfile,current298));checks++;
+ assert.throws(()=>restoreSchedulerProofSource(nativeProfile,selected+' '));checks++;
+ const changed=JSON.parse(selected);changed.phases[2].files.at(-1).sha256='f'.repeat(64);assert.throws(()=>restoreSchedulerProofSource(nativeProfile,JSON.stringify(changed,null,2)+'\n'));checks++;
+}
 assert.throws(()=>restoreSchedulerProofSource('UNKNOWN',''));checks++;
 console.log(JSON.stringify({status:'PASS',checks,profiles:document.profiles.length,scope:'Source-only exact whole-image prior reconstruction, unknown/missing/duplicate/drift refusals',sql:false}));

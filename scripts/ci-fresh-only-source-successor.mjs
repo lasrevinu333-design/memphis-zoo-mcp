@@ -8,6 +8,8 @@ const NAME299='20261030031200_approved_manual_full_hour_coverers.sql';
 const SUCCESSOR299='aacbb20c43419718fce0b4fbf1d5845a45c48700fb1a2a51b1b07ad184327de8';
 const NAME300='20261030050235_compact_approved_initial_confirmation.sql';
 const SUCCESSOR300='6c72ea5ddc4587d21ac9464f71126ad7c5b77c9b72768247d6b8394125b5e078';
+const NAME301='20261030155202_approved_manual_current_day_activation.sql';
+const SUCCESSOR301='dacdeccb363fd648660f5a47cac7ae96d5f5d8793a37ed449c2ec312c7f3ba0e';
 
 // One exact appended source migration. The selected297 manifest, bootstrap,
 // overrides, no-auto choices and all prior SQL bytes retain their own identity.
@@ -19,8 +21,8 @@ export function selectFreshOnlySourceRows(manifest,names,read){
  assert.equal(manifest.entries.length,297);
  const predecessorNames=manifest.entries.map(row=>row.name);
  if(names.length===297){assert.deepEqual(names,predecessorNames);return {rows:manifest.entries,successor:null};}
- const source300=names.length===300,source299=names.length===299||source300;
- assert.deepEqual(names,[...predecessorNames,NAME,...(source299?[NAME299]:[]),...(source300?[NAME300]:[])],'only the exact source298/source299/source300 successor is admitted');
+ const source301=names.length===301,source300=names.length===300||source301,source299=names.length===299||source300;
+ assert.deepEqual(names,[...predecessorNames,NAME,...(source299?[NAME299]:[]),...(source300?[NAME300]:[]),...(source301?[NAME301]:[])],'only the exact source298/source299/source300/source301 successor is admitted');
  const bytes=read('release/fresh-only-replay/SOURCE298_SUCCESSOR.json',{bytes:1535,sha256:SUCCESSOR});
  assert.equal(sha(bytes),SUCCESSOR);
  const successor=JSON.parse(bytes);
@@ -55,11 +57,27 @@ export function selectFreshOnlySourceRows(manifest,names,read){
   read(last.preserved_predecessor_replay.path,last.preserved_predecessor_replay);
   assert.equal(last.source_migrations,300);assert.equal(last.append.name,NAME300);
   assert.deepEqual(last.append.selected,last.append.original);read(last.append.original.path,last.append.original);
-  read(last.replay_manifest.path,last.replay_manifest);
+  if(!source301)read(last.replay_manifest.path,last.replay_manifest);
   assert.equal(last.full_vendor_NORMAL,false);assert.equal(last.expected_fingerprint_authority,null);
  }
+ let final=null;
+ if(source301){
+  const finalBytes=read('release/fresh-only-replay/SOURCE301_SUCCESSOR.json',{bytes:2169,sha256:SUCCESSOR301});
+  assert.equal(sha(finalBytes),SUCCESSOR301);final=JSON.parse(finalBytes);
+  assert.equal(final.schema,last.schema);assert.equal(final.scope,last.scope);
+  assert.deepEqual(final.predecessor_manifest,last.predecessor_manifest);
+  assert.deepEqual(final.predecessor_successor,{path:'release/fresh-only-replay/SOURCE300_SUCCESSOR.json',sha256:SUCCESSOR300,bytes:2054,source_migrations:300});
+  assert.deepEqual(final.preserved_predecessor_replay,{...last.replay_manifest,path:'release/fresh-only-replay/SOURCE300_REPLAY_ORDER.json'});
+  read(final.preserved_predecessor_replay.path,final.preserved_predecessor_replay);
+  assert.equal(final.source_migrations,301);assert.equal(final.append.name,NAME301);
+  assert.deepEqual(final.append.selected,final.append.original);read(final.append.original.path,final.append.original);
+  read(final.replay_manifest.path,final.replay_manifest);
+  assert.equal(final.full_vendor_NORMAL,false);assert.equal(final.expected_fingerprint_authority,null);
+ }
  assert.equal(successor.full_vendor_NORMAL,false);assert.equal(successor.expected_fingerprint_authority,null);
- return {rows:[...manifest.entries,successor.append,...(next?[next.append]:[]),...(last?[last.append]:[])],successor:last
+ return {rows:[...manifest.entries,successor.append,...(next?[next.append]:[]),...(last?[last.append]:[]),...(final?[final.append]:[])],successor:final
+  ?{sha256:SUCCESSOR301,predecessor_manifest_sha256:PREDECESSOR,predecessor_successor_sha256:SUCCESSOR300,appended_migration:NAME301}
+  :last
   ?{sha256:SUCCESSOR300,predecessor_manifest_sha256:PREDECESSOR,predecessor_successor_sha256:SUCCESSOR299,appended_migration:NAME300}
   :next
   ?{sha256:SUCCESSOR299,predecessor_manifest_sha256:PREDECESSOR,predecessor_successor_sha256:SUCCESSOR,appended_migration:NAME299}

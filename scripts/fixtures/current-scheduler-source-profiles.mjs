@@ -11,6 +11,16 @@ assert.equal(document.profiles.length,15);assert.equal(new Set(document.profiles
 export function restoreSchedulerProofSource(profile,source){
  assert.equal(typeof profile,'string');assert.equal(typeof source,'string');
  const row=document.profiles.find(value=>value.profile===profile);assert.ok(row,'explicit retained Source profile required');
+ // Admit only the exact Source301 replay tail to this TEST-ONLY historical
+ // view. Reproduce the complete preserved Source300 bytes before following
+ // its unchanged reconstruction chain; no runtime/catalog normalization.
+ if(profile==='NATIVE_CURRENT_REPLAY_MANIFEST_RETAINED_WIRING'
+  &&sha(source)==='aa3225489f809029f362f9bb2a5ff30f1442a85eb5dda468663b3f0800a9e83b'){
+  const current=JSON.parse(source);assert.deepEqual(current.phases.map(phase=>phase.files.length),[134,93,74]);
+  assert.deepEqual(current.phases[2].files.pop(),{name:'20261030155202_approved_manual_current_day_activation.sql',sha256:'54d95f3ab7ffb088a7e72241c360fe22edb1a06a24a3f768f9adcc494ed69492'});
+  source=JSON.stringify(current,null,2)+'\n';
+  assert.equal(sha(source),'be9f1ce99e037690b3095c8b8e963fc30efd8c83adaa1e415856a79808dc31b1');
+ }
  // Exact source299/300 tails, solely for this historical wiring view. Match
  // the full current bytes and reproduce the entire preserved source298 image
  // before applying its existing historical transformations. This is not a

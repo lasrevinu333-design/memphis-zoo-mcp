@@ -11,6 +11,10 @@ let revoked=false,storeBroken=false,mode='normal',releasedBeforeResult=false,aut
 const store={async find(){authEntered=true;if(authPending)await authPending;if(storeBroken)throw Error('fixture store unavailable');return {credential_id:credentialId,device_id:deviceId,max_access_level:'full_access',created_at:new Date(Date.now()-60000).toISOString(),expires_at:new Date(Date.now()+60000).toISOString(),revoked_at:revoked?new Date().toISOString():null,manager_id:manager.manager_id,manager:{...manager}};}};
 const clock={now:()=>performance.now(),setTimer:(fn,ms)=>{assert.equal(ms,55000);const timer=setTimeout(fn,ms);timers.add(timer);timerCallbacks.set(timer,fn);return timer;},clearTimer:t=>{clearTimeout(t);timers.delete(t);timerCallbacks.delete(t);}};
 const controlPlane={
+ async getApprovedManualActivationRoster(request){calls.push({kind:'manual-roster',request});return{schema:'custodial.manual-live-roster-readback.v1',serviceDate:'2026-10-30',authorityRevision:42};},
+ async previewApprovedManualActivation(request){calls.push({kind:'manual-preview',request});return{schema:'custodial.approved-manual-activation-preview.v1',status:'PREVIEW_ONLY',serviceDate:'2026-10-30',windowEnd:'2026-11-05',published:false};},
+ async activateApprovedManualSchedule(request){calls.push({kind:'manual-confirm',request});return{schema:'custodial.approved-manual-activation-confirmation.v1',status:'PERSISTED_CURRENT',atomicRosterAndPublication:true};},
+ async getApprovedManualActivationOutcome(request){calls.push({kind:'manual-outcome',request});return{schema:'custodial.approved-manual-activation-status.v1',state:'ACCEPTED',doesNotAuthorizeRetry:true};},
  async getApprovedInitialSelection(request){calls.push({kind:'selection',request});return {schema:'custodial.approved-initial-selection.v1',week_start:request.weekStart,week_end:'2026-10-11',authority_revision:42,published:false,snapshot_authority:'SELECTION_METADATA_ONLY',approved_initial_baselines:[],approved_templates:[]};},
  async previewApprovedInitialBaseline(request){calls.push({kind:'preview',request});if(mode==='missing_pattern')throw Object.assign(Error('No admitted fixed pattern'),{code:'static_template_missing_approved_pattern'});if(mode==='db_unavailable')throw Object.assign(Error('Database unavailable'),{code:'static_weekly_control_plane_database_unavailable'});return {schema:'custodial.approved-static-initial-preview.v1',status:'PREVIEW_ONLY',previewDigest:'a'.repeat(64),published:false,solverInvoked:false};},
  async publishApprovedInitialBaseline(request){calls.push({kind:'confirm',request});if(mode==='stale')throw Object.assign(Error('Current source changed'),{code:'static_template_preview_changed'});return {schema:'custodial.approved-static-initial-confirmation.v1',status:'PERSISTED_CURRENT',revision:43,solverInvoked:false};},
@@ -63,6 +67,29 @@ try{
  await test('unconfirmed restore-lease release never reports success',async()=>{mode='release_error';try{const r=await request(confirmPath,confirm);assert.equal(r.status,503);assert.equal(r.payload.code,'static_weekly_recurring_mutation_lease_release_unknown');assert.equal(r.payload.ok,false);}finally{mode='normal';}});
  await test('deadline includes waiting for current-credential authentication',async()=>{let release;authEntered=false;authPending=new Promise(r=>{release=r;});const before=calls.length,pending=request(previewPath);try{for(let i=0;i<100&&!authEntered;i++)await new Promise(r=>setTimeout(r,2));assert.equal(authEntered,true);assert.equal(timerCallbacks.size,1);for(const fn of [...timerCallbacks.values()])fn();const r=await pending;assert.equal(r.status,503);assert.equal(calls.length,before);}finally{release();authPending=null;await pending.catch(()=>{});}});
  await test('missing method fails closed instead of using legacy optimizer',async()=>{const method=controlPlane.publishApprovedInitialBaseline;delete controlPlane.publishApprovedInitialBaseline;try{const r=await request(confirmPath,confirm);assert.equal(r.status,503);assert.equal(r.payload.ok,false);}finally{controlPlane.publishApprovedInitialBaseline=method;}});
+ const manual={packet_id:body.source_id,expected_revision:42},manualConfirm={...manual,preview_digest:'b'.repeat(64),idempotency_key:'manual-current-day-1'};
+ await test('manual current-day preview accepts only the registered packet identity',async()=>{
+  const r=await request('/static-weekly/manual-activation/preview',manual);assert.equal(r.status,200);
+  assert.equal(r.payload.data.windowEnd,'2026-11-05');assert.equal(r.payload.data.published,false);
+  assert.equal(calls.at(-1).request.manager.manager_id,manager.manager_id);assert.equal(calls.at(-1).request.packetId,manual.packet_id);
+  assert.ok(calls.at(-1).request.signal instanceof AbortSignal);
+ });
+ await test('manual current-day confirmation settles its restore lease before success',async()=>{
+  const r=await request('/static-weekly/manual-activation/confirm',manualConfirm);assert.equal(r.status,200);
+  assert.equal(r.releasedBeforeResult,true);assert.equal(r.payload.data.atomicRosterAndPublication,true);
+  assert.equal(calls.at(-1).request.idempotencyKey,manualConfirm.idempotency_key);
+ });
+ for(const injected of [{...manual,service_date:'2026-11-02'},{...manual,source:{}},{...manual,manager_id:manager.manager_id},
+  {...manual,expected_revision:-1},{...manual,packet_id:'not-a-packet'}])await test('manual activation refuses client date/source/actor or invalid identity',async()=>{
+   const before=calls.length,r=await request('/static-weekly/manual-activation/preview',injected);assert.equal(r.status,422);assert.equal(calls.length,before);
+  });
+ for(const token of [null,readonly.token])await test('manual activation requires authenticated write access',async()=>{
+  const before=calls.length,r=await request('/static-weekly/manual-activation/confirm',manualConfirm,{token});assert.ok([401,403].includes(r.status));assert.equal(calls.length,before);
+ });
+ await test('manual outcome GET is bounded read-only original reconciliation',async()=>{
+  const r=await request('/static-weekly/manual-activation/outcome?idempotency_key=manual-current-day-1',null,{method:'GET'});
+  assert.equal(r.status,200);assert.equal(r.payload.data.doesNotAuthorizeRetry,true);assert.equal(r.releasedBeforeResult,false);assert.equal(leases.size,0);
+ });
  await test('all requests release leases and deadline timers',async()=>{await new Promise(r=>setTimeout(r,20));assert.equal(timers.size,0);assert.equal(leases.size,0);});
 }finally{server.closeAllConnections();await new Promise((r,j)=>server.close(e=>e?j(e):r()));for(const timer of timers)clearTimeout(timer);}
 console.log(JSON.stringify({status:results.every(r=>r.pass)?'PASS':'FAIL',checks:results.length,passed:results.filter(r=>r.pass).length,failed:results.filter(r=>!r.pass),scope:'Actual runtime, signed synthetic manager sessions, real loopback HTTP; synthetic current store, restore RPC and application methods. No production I/O or SQL acceptance claim.'},null,2));

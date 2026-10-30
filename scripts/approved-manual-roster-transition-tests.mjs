@@ -3,8 +3,10 @@ import fs from 'node:fs';
 import {createHash,randomUUID} from 'node:crypto';
 import {readApprovedManualWeek} from '../src/approved-manual-week.js';
 import {prepareApprovedManualSourceDraft} from '../src/approved-manual-source-draft.js';
-import {prepareApprovedManualRosterTransition} from '../src/approved-manual-roster-transition.js';
+import {prepareApprovedManualRosterTransition,prepareApprovedManualActivationPackage} from '../src/approved-manual-roster-transition.js';
 import {postgresJsonbContentDigest as digest} from '../src/static-weekly-schedule-program.js';
+import {installStaticWeeklySha256HexAccelerator} from '../src/static-weekly-schedule-model.js';
+installStaticWeeklySha256HexAccelerator(x=>createHash('sha256').update(x).digest('hex'));
 
 const bytes=fs.readFileSync(new URL('./fixtures/manual-live-roster-20261030.json',import.meta.url));
 assert.equal(bytes.length,12830);assert.equal(createHash('sha256').update(bytes).digest('hex'),'ba5147dfd345c20bad9acd5f403cf20aff40294109ed53e4d5b6c5c5c7f6fb0f');
@@ -68,6 +70,19 @@ for(const change of result.transfers){const live=completed.rosterSlots.find(s=>s
 }
 const observedCompleted=prepare(completed);assert.equal(observedCompleted.transfers.length,0);assert.equal(observedCompleted.unchanged.length,8);
 assert.equal(observedCompleted.publicationEligible,false);
+// The date is explicitly fixture data, not a refreshed production readback.
+// Exercise Friday-to-Thursday through the SAME complete fixed-pattern adapter.
+const friday=structuredClone(snapshot);friday.serviceDate='2026-10-30';
+const activation=prepareApprovedManualActivationPackage({week,draft,snapshot:friday,
+ sourceId:randomUUID(),versionId:randomUUID(),templatePublicationId:randomUUID(),packetId:randomUUID(),managerId:randomUUID(),templateId:'manual-friday-local-fixture'});
+assert.equal(activation.serviceDate,'2026-10-30');assert.equal(activation.windowEnd,'2026-11-05');
+assert.equal(activation.feasibility.initialBaseline.projection.week_end,'2026-11-05');
+assert.deepEqual([...new Set(activation.feasibility.projectionAssignments.map(r=>r.service_date))].sort(),
+ ['2026-10-30','2026-10-31','2026-11-01','2026-11-02','2026-11-03','2026-11-04','2026-11-05']);
+assert.equal(activation.feasibility.projectionAssignments.length,346);assert.equal(activation.feasibility.lunch.lunches.length,40);
+assert.equal(activation.transition.transfers.length,4);assert.equal(activation.historyRewrite,false);assert.equal(activation.productionWritten,false);
+assert.equal(activation.feasibility.solverInvoked,false);assert.equal(activation.feasibility.mapping.unchanged,true);
+assert.equal(JSON.stringify({snapshot,draft}),before,'Friday preparation must preserve the historical source and roster');
 console.log(JSON.stringify({status:'PASS',scope:'Recorded live roster DATA reconciliation and refusal behavior only; not atomic command, publication, SQL qualification or production activation',
  recordedOperationalDate:snapshot.serviceDate,livePositionsPreserved:22,projectedClosures:3,existingEmployeesAssigned:4,unchangedEmployees:4,
- unrelatedPositionsPreserved:5,hostileRefusals:refusals,productionWritten:false}));
+ unrelatedPositionsPreserved:5,hostileRefusals:refusals,currentDateFixedAdapter:{start:activation.serviceDate,end:activation.windowEnd,assignments:346,fullHourLunches:40,solverInvoked:false},productionWritten:false}));

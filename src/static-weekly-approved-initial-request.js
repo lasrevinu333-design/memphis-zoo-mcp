@@ -25,3 +25,15 @@ export function approvedInitialRequest(body,{confirm=false}={}){
  return Object.freeze({sourceId:body.source_id,effectiveStart:body.effective_start,templateId:body.template_id,
   expectedRevision:body.expected_revision,...(confirm?{previewDigest:body.preview_digest,idempotencyKey:body.idempotency_key}:{})});
 }
+
+// Current-day activation selects an immutable release-admitted packet. Dates,
+// people, source geometry and availability are never accepted from the client.
+export function approvedManualActivationRequest(body,{confirm=false}={}){
+ const keys=['packet_id','expected_revision',...(confirm?['preview_digest','idempotency_key']:[])],
+  refuse=()=>{throw Object.assign(Error('Select the approved activation packet and exact revision/confirmation identity.'),{code:'static_weekly_manual_activation_request_invalid'});};
+ if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).length!==keys.length||keys.some(k=>!Object.hasOwn(body,k))
+  ||typeof body.packet_id!=='string'||!uuid.test(body.packet_id)||!Number.isSafeInteger(body.expected_revision)||body.expected_revision<0)refuse();
+ if(confirm&&(!bounded(body.idempotency_key,120)||typeof body.preview_digest!=='string'||!/^[a-f0-9]{64}$/.test(body.preview_digest)))refuse();
+ return Object.freeze({packetId:body.packet_id,expectedRevision:body.expected_revision,
+  ...(confirm?{previewDigest:body.preview_digest,idempotencyKey:body.idempotency_key}:{})});
+}

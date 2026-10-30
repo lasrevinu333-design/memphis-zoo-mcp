@@ -17,14 +17,17 @@ import {postgresJsonbContentDigest as digest} from '../src/static-weekly-schedul
 // A complete normal Source/template/manager-preview/publication check in a
 // newly owned, nonnetworked PostgreSQL fixture. The civil date below is test
 // data; this executable cannot select a live rollout date or database URL.
-export async function runApprovedManualWeekDatabaseTest({out,constructFixture=createCiFreshOnlyFixture,constructorMigrationCount=300}){
+export async function runApprovedManualWeekDatabaseTest({out,constructFixture=createCiFreshOnlyFixture,constructorMigrationCount=301,
+ initialDate='2026-11-02',seedFixturePeopleAt=null,fixturePoolMax=3,afterSqlQualified=null}){
 assert.ok(isAbsolute(out));fs.mkdirSync(out,{mode:0o700});
 const save=(name,value)=>fs.writeFileSync(resolve(out,name),JSON.stringify(value,null,2)+'\n',{flag:'wx',mode:0o600});
 const result={schema:'custodial.approved-manual-week-sql.v1',startedAt:new Date().toISOString(),status:'RUNNING',
  phase:'construct_owned_selected_source',constructorMigrationCount,productionWritten:false,operationalDateSelected:false,genuineManagerBrowser:false,physicalNfc:false};
 save('INTENT.json',result);let fixture,pool,monitorTimer,monitorPending=Promise.resolve(),confirmationBackendPid=null;
-const memoryDiagnostic=process.env.APPROVED_MANUAL_SQL_MEMORY_DIAGNOSTIC==='1';
+const memoryDiagnostic=['1','trace'].includes(process.env.APPROVED_MANUAL_SQL_MEMORY_DIAGNOSTIC);
+let memoryContextLogged=false;
 const memorySamples=[];
+const fixtureConnectionErrors=[];
 installStaticWeeklySha256HexAccelerator(x=>createHash('sha256').update(x).digest('hex'),{
  schema:'memphis-zoo.sha256-incremental-native.v1',isProxy:types.isProxy,
  create(){const h=createHash('sha256');return{writeUtf8:x=>h.update(x),finishHex:()=>h.digest('hex')};}});
@@ -32,11 +35,15 @@ const phase=name=>{result.phase=name;console.log(JSON.stringify({phase:name,at:n
 try{
  fixture=await constructFixture({name:`mz_schema_rebuild_manual_${process.pid}`,hostSocket:true});
  await fixture.assertOwned();assert.equal(fixture.receipt.selected_replay.migrations,constructorMigrationCount);save('FIXTURE.json',fixture.receipt);
- pool=new pg.Pool({host:fixture.socketDirectory,database:'postgres',user:'supabase_admin',password:'postgres',max:3,connectionTimeoutMillis:5000});
+ assert.ok(Number.isInteger(fixturePoolMax)&&fixturePoolMax>=1&&fixturePoolMax<=3);
+ pool=new pg.Pool({host:fixture.socketDirectory,database:'postgres',user:'supabase_admin',password:'postgres',max:fixturePoolMax,connectionTimeoutMillis:5000});
+ const connectionError=error=>{fixtureConnectionErrors.push({code:error.code??null,message:String(error.message).slice(0,250)});};
+ pool.on('error',connectionError);pool.on('connect',client=>client.on('error',connectionError));
  const query=async(sql,args=[])=>{await fixture.assertOwned();return pool.query(sql,args);};
  const rpc=async(role,name,args=[])=>{
   assert.ok(['static_weekly_release_operator','static_weekly_control_plane','custodial_application_reader'].includes(role));
   assert.match(name,/^[a-z][a-z0-9_]+$/);const client=await pool.connect();
+  confirmationBackendPid=client.processID;
   try{await client.query('begin');await client.query('set local role '+role);
    const r=await client.query(`select public.${name}(${args.map((_,i)=>'$'+(i+1)).join(',')}) as result`,args);
    await client.query('commit');return r.rows[0].result;
@@ -48,8 +55,15 @@ try{
   referenceBytes:fs.readFileSync(new URL('../'+week.referenceBindings.reference.path,import.meta.url))});
  assert.deepEqual(draft.restrictionConflicts,[]);
  const source=structuredClone(draft.sourceDraft);delete source.publicationAuthority;
- const date='2026-11-02',sourceId=randomUUID(),managerId=randomUUID(),templateId='approved-manual-complete-sql-fixture';
+ const date=initialDate,sourceId=randomUUID(),managerId=randomUUID(),templateId='approved-manual-complete-sql-fixture';
  source.serviceDate=date;Object.assign(source.version,{id:randomUUID(),publicationId:randomUUID(),status:'published',effectiveStart:date});
+ if(seedFixturePeopleAt!==null){
+  assert.match(seedFixturePeopleAt,/^\d{4}-\d{2}-\d{2}$/);assert.ok(seedFixturePeopleAt<date);
+  // Explicit synthetic predecessor data in this owned fixture only. It is
+  // never a readback or change to real employee employment/roster history.
+  for(const person of week.referenceBindings.people)source.slots.find(s=>s.id===person.slotId).incumbencies=[{
+   personId:person.employeeId,displayName:person.approvedName,effectiveStart:seedFixturePeopleAt,effectiveEnd:null}];
+ }
  const ownerConfig=structuredClone(draft.ownerConfig);ownerConfig.effectiveDate=date;
  const roleSlotIds=week.referenceBindings.people.map(p=>p.slotId).sort();
  const makeArgs=currentSource=>{
@@ -113,15 +127,22 @@ try{
    await fixture.assertOwned();
    const usage=Number(execFileSync('docker',['exec',fixture.container,'cat','/sys/fs/cgroup/memory.current'],{encoding:'utf8',timeout:3000}));
    memorySamples.push({at:new Date().toISOString(),bytes:usage,pid:confirmationBackendPid});
-   if(usage>300*1024*1024){
+   const logContext=(cancel=false)=>{
+    assert.ok(Number.isSafeInteger(confirmationBackendPid)&&confirmationBackendPid>0);
+    execFileSync('docker',['exec',fixture.container,'psql','-X','-v','ON_ERROR_STOP=1','-At','-U','supabase_admin','-d','postgres','-c',
+     `select pg_log_backend_memory_contexts(${confirmationBackendPid})${cancel?`,pg_cancel_backend(${confirmationBackendPid})`:''}`],{encoding:'utf8',timeout:5000});
+   };
+   if(usage>300*1024*1024&&process.env.APPROVED_MANUAL_SQL_MEMORY_DIAGNOSTIC==='1'){
     result.diagnosticCancellation={usage,pid:confirmationBackendPid,scope:'EXACT_OWNED_FIXTURE_CONFIRMATION_ONLY'};
-    await pool.query('select pg_log_backend_memory_contexts($1),pg_cancel_backend($1)',[confirmationBackendPid]);
-   }else monitorTimer=setTimeout(()=>{monitorPending=sample().catch(e=>{result.monitorError=String(e.message);});},300);
+    logContext(true);
+   }else{
+    if(usage>410*1024*1024&&!memoryContextLogged){memoryContextLogged=true;logContext();}
+    monitorTimer=setTimeout(()=>{monitorPending=sample().catch(e=>{result.monitorError=String(e.message);});},300);
+   }
   };
   monitorTimer=setTimeout(()=>{monitorPending=sample().catch(e=>{result.monitorError=String(e.message);});},300);
  }
  const accepted=await plane.publishApprovedInitialBaseline({...input,previewDigest:preview.previewDigest,idempotencyKey:'approved-manual-complete-week'});
- clearTimeout(monitorTimer);await monitorPending;
  assert.equal(accepted.status,'PERSISTED_CURRENT');assert.equal(accepted.solverInvoked,false);save('PUBLICATION.json',accepted);
  const managerSnapshot=await plane.getManagerSnapshot({manager:input.manager,weekStart:date}),managerView=managerSnapshot.approved_manual_schedule;
  assert.equal(managerView?.groups.length,23);assert.equal(managerView.days.length,7);
@@ -160,6 +181,8 @@ try{
  assert.equal(dayReads,7);assert.equal(minuteReads,3780);assert.equal(employeeReads,40);
  const counts=(await query('select count(*)::integer as n from public.weekly_schedule_projection_assignments where projection_id=$1',[accepted.projection_id])).rows[0].n;
  assert.equal(counts,346);await fixture.assertOwned();
+ if(afterSqlQualified){phase('current_day_atomic_activation');memoryContextLogged=false;result.currentDayActivation=await afterSqlQualified({
+  fixture,pool,query,rpc,cp,release,week,draft,plane,managerId,manager:input.manager,accepted,source:currentSource,save});}
  Object.assign(result,{status:'PASS',sourceId,manualDataDigest:week.dataDigest,sourceDigest:digest(currentSource),
   assignments:counts,days:dayReads,scheduledLunches:stored.loans.length,oneNamedCovererPerLunch:true,
   coveredMinutes:minuteReads,physicalOwnershipComparisons,employeeDayReadbacks:employeeReads,
@@ -170,6 +193,7 @@ try{
  cause:error.cause?{code:error.cause.code??null,message:String(error.cause.message).slice(0,1800)}:null};process.exitCode=1;}
 finally{
  clearTimeout(monitorTimer);await monitorPending;
+ if(fixtureConnectionErrors.length){result.status='FAIL';result.fixtureConnectionErrors=fixtureConnectionErrors;process.exitCode=1;}
  if(memoryDiagnostic)save('MEMORY_SAMPLES.json',memorySamples);
  if(pool)await pool.end();
  if(fixture){try{

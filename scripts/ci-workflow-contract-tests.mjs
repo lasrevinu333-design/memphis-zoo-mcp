@@ -70,7 +70,7 @@ const mixedFreshFoundationWorkflowPath = resolve(workflowDirectory, "foundation-
 // Bind the added manual GPS/absence proposal checks and run these fast wiring
 // checks before the unchanged disposable SQL suites. Construction and all
 // process/resource limits remain exact.
-const mixedFreshFoundationWorkflowSha256 = "72df2de6bc525830f066b9b2ec69f66fdd74140ecde8a223a99baecdcc98b682";
+const mixedFreshFoundationWorkflowSha256 = "07a4fb0abb36d443b7a09a208ad29343f0a9fb62de2b09dd0663017c4630eaec";
 const thisContractPath = fileURLToPath(import.meta.url);
 const postgresImagePins = postgresPinSources.flatMap((path) => {
   const pins = [...readFileSync(path, "utf8").matchAll(/(?:public\.ecr\.aws\/|docker\.io\/)?supabase\/postgres@sha256:[0-9a-f]{64}/g)]
@@ -265,6 +265,9 @@ assertExactCommandsInJob(schedulerGate,"validate",[
   "node scripts/manager-scheduler-http-tests.mjs",
   "node scripts/manager-scheduler-database-tests.mjs",
 ],"Current scheduler permissions and assignment identity must remain called, not only archived");
+assertExactCommandsInJob(schedulerGate,"validate",[
+  'node scripts/approved-manual-activation-database-tests.mjs --out "$RUNNER_TEMP/approved-manual-activation-sql"',
+],"Current-day manual activation must exercise owned SQL, append-only roster history and original receipt recovery");
 const packageManifest = readFileSync(resolve(root, "package.json"), "utf8");
 const parsedPackageManifest = JSON.parse(packageManifest);
 assert.match(schedulerGate, /^on:\n\s+pull_request:\s*\n\s+push:\s*$/m, "the scheduler authority gate must run for every pull request and every pushed branch");

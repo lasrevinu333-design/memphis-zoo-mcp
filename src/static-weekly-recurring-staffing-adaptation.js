@@ -762,7 +762,7 @@ export function prepareApprovedStaticTemplateProjection(args) {
           authority_digest:baseAuthorityDigest,replay_digest:baseReplayDigest}};
       document.validation.database_document_identity=postgresJsonbContentDigest(document);
       const projection={adapter,service_date:problem.serviceDate,week_start:problem.serviceDate,
-        week_end:weekdayDate(problem.serviceDate,0),authority:staticAuthority,receipt,
+        week_end:new Date(Date.parse(problem.serviceDate+'T12:00:00Z')+6*86400000).toISOString().slice(0,10),authority:staticAuthority,receipt,
         authority_digest:baseAuthorityDigest,replay_digest:baseReplayDigest,compiler_version:adapter.version,
         objective,metrics:{hardConstraints:model.modelBasis.constraints.count,violations:0},applied_exceptions:[],
         assignments:projectionAssignments,semantic_snapshot:{schema:'custodial.approved-static-projection-snapshot.v1',

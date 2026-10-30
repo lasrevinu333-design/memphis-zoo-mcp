@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
-import {postgresJsonbContentDigest as digest} from './static-weekly-schedule-program.js';
+import {postgresJsonbContentDigest as digest,canonicalAuthorityInput} from './static-weekly-schedule-program.js';
+import {contentDigest} from './static-weekly-schedule-model.js';
+import {prepareApprovedStaticTemplateProjection} from './static-weekly-recurring-staffing-adaptation.js';
 
 const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 const date=value=>{assert.match(value,/^\d{4}-\d{2}-\d{2}$/);assert.equal(new Date(value+'T12:00:00Z').toISOString().slice(0,10),value);return value;};
@@ -82,4 +84,43 @@ export function prepareApprovedManualRosterTransition({week,draft,snapshot,effec
   currentDateWeeklyAdmissionProven:false,normalScheduleOptimizationUsed:false,
   activationTiming:'AS_SOON_AS_READY_AND_VERIFIED',futureMondayHold:false};
  return{...body,transitionDigest:digest(body)};
+}
+
+// Prepare the EXISTING fixed-pattern adapter for the server's actual date.
+// Trim only the compiler's seven-day view; the transition retains all original
+// history and the SQL command appends closures/new ranges atomically. UUIDs are
+// explicit new source/version identities, never guessed employee identities.
+export function prepareApprovedManualActivationPackage({week,draft,snapshot,sourceId,versionId,templatePublicationId,templateId,packetId,managerId}){
+ for(const id of [sourceId,versionId,templatePublicationId,packetId,managerId])assert.match(id,UUID);
+ assert.ok(typeof templateId==='string'&&templateId.length>0&&templateId.length<=128);
+ const transition=prepareApprovedManualRosterTransition({week,draft,snapshot,effectiveStart:snapshot.serviceDate}),
+  at=transition.serviceDate,end=new Date(Date.parse(at+'T12:00:00Z')+6*86400000).toISOString().slice(0,10),
+  raw=structuredClone(transition.projectedSourceDraft),config=structuredClone(draft.ownerConfig);
+ delete raw.publicationAuthority;Object.assign(raw.version,{id:versionId,publicationId:templatePublicationId,status:'published',effectiveStart:at});
+ config.effectiveDate=at;
+ for(const slot of raw.slots)if(slot.kind!=='CONTRACTOR_CAPACITY')slot.incumbencies=slot.incumbencies.filter(r=>r.effectiveStart<=end&&(r.effectiveEnd===null||r.effectiveEnd>at));
+ const vacant=raw.slots.filter(s=>s.kind!=='CONTRACTOR_CAPACITY'&&!s.incumbencies.length).map(s=>s.id).sort();
+ assert.ok(vacant.every(id=>raw.version.vacancyCapableSlotIds.includes(id)),'No missing live incumbent may become an invented vacancy');
+ raw.version.vacantSlotIds=vacant;
+ const source=canonicalAuthorityInput(raw.version,raw.slots,[],raw.proximity,at),roleSlotIds=week.referenceBindings.people.map(p=>p.slotId).sort(),
+  template={templateId,staffingCount:8,source,roleSlotIds},binding={schema:'custodial.approved-static-template-binding.v1',
+   templateId,staffingCount:8,sourceDigest:contentDigest(source),roleSlotIdsDigest:contentDigest(roleSlotIds),
+   patternAuthority:'OWNER_APPROVED_OPERATIONAL_PATTERN',artifactSha256:week.zipSha256,
+   ownerConfigDigest:contentDigest(config),patternPublicationStatus:'UNPUBLISHED_LOCAL_CANDIDATE'},
+  feasibility=prepareApprovedStaticTemplateProjection({templates:[template],admittedBindings:[binding],
+   currentSource:source,currentOwnerConfig:config,selection:{schema:'custodial.static-template-selection.v1',kind:'INITIAL_BASELINE',
+    templateId,serviceDate:at,availablePersonIds:week.referenceBindings.people.map(p=>p.employeeId)}});
+ assert.equal(feasibility.solverInvoked,false);assert.equal(feasibility.mapping.unchanged,true);
+ assert.equal(feasibility.initialBaseline.projection.week_start,at);assert.equal(feasibility.initialBaseline.projection.week_end,end);
+ assert.equal(feasibility.projectionAssignments.length,346);assert.equal(feasibility.lunch.lunches.length,40);
+ const dates=[...new Set(feasibility.projectionAssignments.map(r=>r.service_date))].sort();
+ assert.equal(dates.length,7);assert.equal(dates[0],at);assert.equal(dates[6],end);
+ const body={schema:'custodial.approved-manual-activation-package.v1',packetId,sourceId,managerId,templateId,
+  serviceDate:at,windowEnd:end,transition,source,ownerConfig:config,template,binding,feasibility,
+  approvalEvidence:{classification:'OWNER_APPROVED_OPERATIONAL_PATTERN',artifactSha256:week.zipSha256,
+   sourceReference:'config/schedules/manual-approved-20261030/packet#'+week.manifestSha256,
+   ownerDecisionReference:'codex-chat:01a15718-2d88-7de1-8cec-6cdc241f0151; seven locked normal days; activate as soon as ready and verified'},
+  weeklyBaselineChanged:false,historyRewrite:false,newEmployeeCreated:false,messengerPrincipalCreated:false,
+  registered:false,publicationEligible:false,productionWritten:false};
+ return{...body,packageDigest:digest(body)};
 }

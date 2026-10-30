@@ -1117,7 +1117,7 @@ export function createStaticWeeklyControlPlane({
       if(template!==null&&(typeof template!=='string'||!template.trim()||template!==template.trim()||template.length>128))refuse();
       if(kind==='initial'){
         requireUuid(request.sourceId,'static_template_original_confirmation_unavailable');
-        requireMonday(request.effectiveStart,'original approved initial week');
+        requireDate(request.effectiveStart,'original approved initial window');
         if(template===null)refuse();
       }else if(request.kind==='DATED_ABSENCE'){
         // The fixed ledger owns this original. A dated projection retains its
@@ -1156,7 +1156,7 @@ export function createStaticWeeklyControlPlane({
     const entered=performance.now(),expires=deadlineAt==null?entered+STATIC_WEEKLY_MANAGER_OPERATION_DEADLINE_MS:
       Math.min(Number(deadlineAt),entered+STATIC_WEEKLY_MANAGER_OPERATION_DEADLINE_MS);
     if(!Number.isFinite(expires))throw fail('static_weekly_recurring_operation_deadline_invalid');
-    const actor=requireManager(manager),id=requireSourceId(sourceId),date=requireMonday(effectiveStart,'effective start'),
+    const actor=requireManager(manager),id=requireSourceId(sourceId),date=requireDate(effectiveStart,'effective start'),
       revision=requireRevision(expectedRevision);
     if(typeof templateId!=='string'||!templateId.trim()||templateId.length>128)throw fail('static_template_selection_invalid');
     const controller=new AbortController(),relay=()=>controller.abort(signal?.reason);
@@ -1194,6 +1194,9 @@ export function createStaticWeeklyControlPlane({
       const registered=await registeredSourceFor(client,id,date);
       if(!registered?.compiler_input||typeof registered.compiler_input!=='object')throw fail('static_template_initial_source_invalid');
       const source=clone(registered?.compiler_input);
+      if(new Date(date+'T12:00:00Z').getUTCDay()!==1
+        &&source.version?.manualGroupRatingAuthority?.manifestSha256!=='fe02bbdebc736d95360b55cc7dfe5b73c5a9eaa76f364f1c0f4420a0afb9950f')
+        throw fail('static_weekly_control_plane_projection_week_required');
       if(registered?.source_id!==id||source?.serviceDate!==date||source.version?.effectiveStart!==date
         || !Array.isArray(source.exceptions)||source.exceptions.length||registered.exceptions?.length)
         throw fail('static_template_initial_source_invalid');
@@ -1688,10 +1691,64 @@ export function createStaticWeeklyControlPlane({
         const week=requireMonday(weekStart,'week start'),snapshot=await snapshotFor(client,week);
         if(snapshot.projection_status!=='current'||snapshot.latest_projection?.compiler_version!=='approved-static-fixed-v1'
           ||!snapshot.current_publication?.publication_id)return snapshot;
-        const registered=await call(client,'static_weekly_v3_read_publication_source',[snapshot.current_publication.publication_id,week]);
+        const frame=requireDate(snapshot.week_start,'current publication window');
+        const registered=await call(client,'static_weekly_v3_read_publication_source',[snapshot.current_publication.publication_id,frame]);
         if(!registered.compiler_input?.version?.manualGroupRatingAuthority)return snapshot;
-        const lunch=await call(client,'static_weekly_v8_read_lunch_document',[week]);
+        const lunch=await call(client,'static_weekly_v8_read_lunch_document',[frame]);
         return{...snapshot,approved_manual_schedule:approvedManualManagerView({snapshot,source:registered.compiler_input,lunchDocument:lunch})};
+      });
+    },
+    async getApprovedManualActivationRoster({manager}) {
+      const actor=requireManager(manager);
+      return transaction(client=>call(client,'static_weekly_read_manual_activation_roster',[actor.managerId]));
+    },
+    async previewApprovedManualActivation({manager,packetId,expectedRevision}) {
+      const actor=requireManager(manager),id=requireUuid(packetId,'static_manual_activation_packet_required'),revision=requireRevision(expectedRevision);
+      return transaction(async client=>{
+        await lockStaticWeeklyAuthority(client);
+        const basis=await call(client,'static_weekly_read_manual_activation_basis',[actor.managerId,id,revision]);
+        if(basis?.schema!=='custodial.approved-manual-activation-preview-basis.v1'||basis.managerId!==actor.managerId
+          ||basis.packetId!==id||basis.expectedRevision!==revision||!/^[a-f0-9]{64}$/.test(basis.previewDigest||''))
+          throw fail('static_manual_activation_basis_invalid');
+        return{...basis,schema:'custodial.approved-manual-activation-preview.v1',status:'PREVIEW_ONLY',
+          solverInvoked:false,published:false,atomicRosterAndPublication:true};
+      });
+    },
+    async activateApprovedManualSchedule({manager,packetId,expectedRevision,previewDigest,idempotencyKey}) {
+      const actor=requireManager(manager),id=requireUuid(packetId,'static_manual_activation_packet_required'),revision=requireRevision(expectedRevision),
+        key=requireIdempotencyKey(idempotencyKey),preview=text(previewDigest);
+      if(key.length>120||!/^[a-f0-9]{64}$/.test(preview))throw fail('static_manual_activation_identity_invalid');
+      const request={managerId:actor.managerId,packetId:id,expectedRevision:revision,previewDigest:preview,idempotencyKey:key};
+      return transaction(async client=>{
+        await lockStaticWeeklyAuthority(client);
+        const prior=await call(client,'static_weekly_read_manual_activation_confirmation',[actor.managerId,key]);
+        if(prior){
+          if(canonicalJson(prior.request)!==canonicalJson(request)||prior.receipt?.schema!=='custodial.approved-manual-activation-confirmation.v1')
+            throw fail('static_manual_activation_original_identity_conflict');
+          return{...prior.receipt,status:'ACCEPTED_ORIGINAL_RECEIPT',replayed:true,currentReadbackNotRepeated:true};
+        }
+        const accepted=await call(client,'static_weekly_activate_approved_manual_schedule',[actor.managerId,id,revision,preview,key]);
+        if(accepted?.schema!=='custodial.approved-manual-activation-confirmation.v1'||accepted.status!=='PERSISTED_CURRENT'
+          ||accepted.ok!==true||accepted.persistence_status!=='PERSISTED'||accepted.packetId!==id||accepted.previewDigest!==preview
+          ||accepted.atomicRosterAndPublication!==true||accepted.solverInvoked!==false||accepted.weeklyBaselineChanged!==false)
+          throw fail('static_manual_activation_not_persisted');
+        const date=requireDate(accepted.serviceDate,'manual activation date'),snapshot=await snapshotFor(client,date),
+          lunch=await call(client,'static_weekly_v8_read_lunch_document',[date]);
+        if(snapshot.projection_status!=='current'||snapshot.current_publication?.publication_id!==accepted.publication_id
+          ||snapshot.latest_projection?.projection_id!==accepted.projection_id||snapshot.authority_revision!==accepted.authority_revision
+          ||snapshot.week_start!==date||lunch.persistence_status!=='PERSISTED'||lunch.projection_id!==accepted.projection_id
+          ||lunch.document_identity!==accepted.lunch_document_identity)
+          throw fail('static_manual_activation_current_readback_mismatch');
+        return accepted;
+      },{reconcileManagerId:actor.managerId});
+    },
+    async getApprovedManualActivationOutcome({manager,idempotencyKey}) {
+      const actor=requireManager(manager),key=requireIdempotencyKey(idempotencyKey);
+      return transaction(async client=>{
+        await lockStaticWeeklyAuthority(client);
+        const original=await call(client,'static_weekly_read_manual_activation_confirmation',[actor.managerId,key]);
+        return{schema:'custodial.approved-manual-activation-status.v1',state:original?'ACCEPTED':'NOT_FOUND',
+          idempotencyKey:key,original:original||null,doesNotAuthorizeRetry:true};
       });
     },
     async getApprovedScheduleChoices({manager}) {
