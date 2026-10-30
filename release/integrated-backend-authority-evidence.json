@@ -363,6 +363,91 @@
         "object_id": "90782eb731fe20890b0f9f54c45d7c5878e1c2e4"
       },
       {
+        "path": "config/schedules/manual-approved-20261030/README.md",
+        "mode": "100644",
+        "object_id": "2e0b1b9cf5090635c584b8736ba3deeaed257080"
+      },
+      {
+        "path": "config/schedules/manual-approved-20261030/catalog.json",
+        "mode": "100644",
+        "object_id": "d926d084d29b5372a8cb5d2c123a433bd5f5472e"
+      },
+      {
+        "path": "config/schedules/manual-approved-20261030/packet/INTEGRATION_HANDOFF.md",
+        "mode": "100644",
+        "object_id": "fabc36432ed063cf4c49b78f87e399f0839b709c"
+      },
+      {
+        "path": "config/schedules/manual-approved-20261030/packet/MANIFEST.json",
+        "mode": "100644",
+        "object_id": "3097b03234b77d47541f60c3cc9b4427f71b1e7f"
+      },
+      {
+        "path": "config/schedules/manual-approved-20261030/packet/REQUIREMENTS_EXTRACTED.json",
+        "mode": "100644",
+        "object_id": "04355e618de5fc8a0f158dff8cb81035f9da9e2c"
+      },
+      {
+        "path": "config/schedules/manual-approved-20261030/packet/SHA256SUMS",
+        "mode": "100644",
+        "object_id": "00804634be3f9c45c884aaf5dd396bc29b050dce"
+      },
+      {
+        "path": "config/schedules/manual-approved-20261030/packet/UNRESOLVED_POLICIES.md",
+        "mode": "100644",
+        "object_id": "eb2378d8059bdc61d74b3f0f63c431ecd78a39e5"
+      },
+      {
+        "path": "config/schedules/manual-approved-20261030/packet/VALIDATION_REPORT.json",
+        "mode": "100644",
+        "object_id": "b043a2c5f136588ea93a77296d3a82005f1948e8"
+      },
+      {
+        "path": "config/schedules/manual-approved-20261030/packet/source_provenance.json",
+        "mode": "100644",
+        "object_id": "1cfcc95ae6e64a59366f584fba89afd4582889f4"
+      },
+      {
+        "path": "config/schedules/manual-approved-20261030/packet/sources/custodial_area_group_scoring_draft_20261029.json",
+        "mode": "100644",
+        "object_id": "45b68ba4d84763fecbc5b626dc9b9134f6a4a555"
+      },
+      {
+        "path": "config/schedules/manual-approved-20261030/packet/sources/custodial_manual_friday_working_draft.json",
+        "mode": "100644",
+        "object_id": "794b585b8979c1dac28dcc3d7049d98adfe6fe24"
+      },
+      {
+        "path": "config/schedules/manual-approved-20261030/packet/sources/custodial_manual_monday_working_draft.json",
+        "mode": "100644",
+        "object_id": "d8b394fb9b719b05e744590627f63639c58c2bcf"
+      },
+      {
+        "path": "config/schedules/manual-approved-20261030/packet/sources/custodial_manual_saturday_working_draft.json",
+        "mode": "100644",
+        "object_id": "910b6d544c60622ebffe17cb6b2985e36d358b49"
+      },
+      {
+        "path": "config/schedules/manual-approved-20261030/packet/sources/custodial_manual_sunday_working_draft.json",
+        "mode": "100644",
+        "object_id": "c36bb542329abedd5efc982177c6d9478f08a615"
+      },
+      {
+        "path": "config/schedules/manual-approved-20261030/packet/sources/custodial_manual_thursday_working_draft.json",
+        "mode": "100644",
+        "object_id": "bd2c29476ed7a6469aac1601ae067b1600c8927e"
+      },
+      {
+        "path": "config/schedules/manual-approved-20261030/packet/sources/custodial_manual_tuesday_working_draft.json",
+        "mode": "100644",
+        "object_id": "a0aeaa724c2e01e56ab4976ca137c7d6bc7050c3"
+      },
+      {
+        "path": "config/schedules/manual-approved-20261030/packet/sources/custodial_manual_wednesday_working_draft.json",
+        "mode": "100644",
+        "object_id": "020c0f229e809776a739196b15531e5cdab497f1"
+      },
+      {
         "path": "deploy/static-weekly-control-plane.render.yaml",
         "mode": "100644",
         "object_id": "b8ecea83842cc307d6b45128c2ec3c439e586ec6"
@@ -1270,7 +1355,7 @@
       {
         "path": "release/static-schedules/README.md",
         "mode": "100644",
-        "object_id": "ac112eb67ccd80c393b44e64f385e618ae16413f"
+        "object_id": "5f7f89f0b53fc035b9dac44c868f0403079d7ef8"
       },
       {
         "path": "release/static-schedules/custodial-eight-20261102-registration.json",
@@ -1326,6 +1411,11 @@
         "path": "scripts/approved-initial-current-predecessor-tests.mjs",
         "mode": "100644",
         "object_id": "54b8c2cc49cf4a2dee39597772af732c79bb6abb"
+      },
+      {
+        "path": "scripts/approved-manual-week-tests.mjs",
+        "mode": "100644",
+        "object_id": "0214432665aafc4d073ac03ea2070343ab4d648f"
       },
       {
         "path": "scripts/approved-static-template-control-plane-tests.mjs",
@@ -3763,6 +3853,11 @@
         "object_id": "3179dbb4a92c984dd43150675c4f9dd6a1ad636a"
       },
       {
+        "path": "scripts/prepare-approved-manual-week.mjs",
+        "mode": "100644",
+        "object_id": "2a81e14a0484c0d5fd5019cca471c7f3acfe6dc2"
+      },
+      {
         "path": "scripts/prepare-isolated-restore-target.mjs",
         "mode": "100644",
         "object_id": "dd489cb21534dccb5f7340e2807c8216c560ecb1"
@@ -4795,7 +4890,7 @@
       {
         "path": "scripts/static-weekly-full-hour-lunch-tests.mjs",
         "mode": "100644",
-        "object_id": "ed2aa20a7d98d30596b814de495bd5fb743b2dbd"
+        "object_id": "8795c712e338cfa740e46f11f8e54f310193f32e"
       },
       {
         "path": "scripts/static-weekly-full-nine-owner-map-tests.mjs",
@@ -5791,6 +5886,11 @@
         "path": "src/app-version.js",
         "mode": "100644",
         "object_id": "448e6dc79edfda5b4e51d8ac77eda3945f06a544"
+      },
+      {
+        "path": "src/approved-manual-week.js",
+        "mode": "100644",
+        "object_id": "fd625a1d1f92391b2c6277dc39aa4f17c994e763"
       },
       {
         "path": "src/assigned-activation-transport.js",
@@ -9118,7 +9218,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 1798,
+    "authority_path_count": 1818,
     "migration_path_count": 298,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
