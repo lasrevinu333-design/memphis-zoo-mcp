@@ -37,6 +37,17 @@ const unchanged=rows=>rows.filter(r=>r.service_date!=='2026-11-03');
 assert.deepEqual(unchanged(nativeAbsence.projectionAssignments),unchanged(nativeNormal.projectionAssignments));
 for(const b of nativeAbsence.authority.groupDayBudgets)assert.equal(b.sourceBudget,b.datedBudget);
 assert.equal(nativeAbsence.lunchDocument.loans.length,38);
+const priorProjection={projectionId:'00000000-0000-4000-8000-000000001003',publicationId:source.version.publicationId,versionId:source.version.id,
+ frameStart:normal.frameStart,frameEnd:normal.frameEnd,lunchDocument:nativeNormal.lunchDocument},
+ retained=prepareApprovedManualPeriodProjection({week,source,ownerConfig:draft.ownerConfig,period:adjusted,
+  acceptedExceptions:acceptedFor(adjusted),priorProjection});
+for(const field of ['loans','responsibilities','notification_intents'])assert.deepEqual(
+ unchanged(retained.lunchDocument[field]),unchanged(nativeNormal.lunchDocument[field]),'Unchanged days retain actual lunch/notification member identities');
+assert.ok(retained.authority.lunchIdentityRetention.loans.length>=34);
+assert.equal(retained.authority.datedDayBases.length,1);
+const wrongPrior=structuredClone(priorProjection);wrongPrior.publicationId='00000000-0000-4000-8000-000000001088';
+assert.throws(()=>prepareApprovedManualPeriodProjection({week,source,ownerConfig:draft.ownerConfig,period:adjusted,priorProjection:wrongPrior}));
+save('UNCHANGED_LUNCH_IDENTITIES_NATIVE.json',retained);
 const nativeThird=run(withThird);save('THIRD_COVERALL_NATIVE.json',nativeThird);
 assert.equal(nativeThird.lunchDocument.loans.length,38);
 for(const r of nativeThird.projectionAssignments.filter(r=>r.owner_kind==='CONTRACTOR_CAPACITY')){
@@ -63,6 +74,6 @@ const wrong=structuredClone(source);wrong.version.assignments[0].includedLocatio
 assert.throws(()=>prepareApprovedManualPeriodProjection({week,source:wrong,ownerConfig:draft.ownerConfig,period:adjusted}));
 assert.equal(digest({week,source,draft,normal,adjusted,withThird,extended}),before);
 const result={status:'PASS',scope:'Native DATA preparation with maintained exact hard-constraint witness and native full-hour lunch derivation; no SQL, deployment or real manager claim',
- normalRows:346,normalLunches:40,adjustedLunches:38,unaffectedSixDaysExact:true,combinedGroupDayBudgetsConserved:true,
+ normalRows:346,normalLunches:40,adjustedLunches:38,unaffectedSixDaysExact:true,unchangedLunchAndNotificationIdentitiesRetained:true,combinedGroupDayBudgetsConserved:true,
  typedFixtureCapacityHasNoEmployeeIdentity:true,all23GroupsThroughConfirmed18:true,baselineAndAcceptedPlansUnchanged:true,
  productionWritten:false};save('RESULT.json',result);console.log(JSON.stringify(result));

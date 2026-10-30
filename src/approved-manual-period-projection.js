@@ -1,3 +1,4 @@
+import {validateApprovedManualLunchPrior,retainApprovedManualLunchIdentities} from './approved-manual-lunch-retention.js';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {contentDigest} from './static-weekly-schedule-model.js';
@@ -17,13 +18,14 @@ const clone=structuredClone,minute=t=>Number(t.slice(0,2))*60+Number(t.slice(3,5
 // Lower validated dated DATA into native projection rows and full-hour lunch
 // records. The immutable recurring Source is retained separately, unchanged.
 // This adapter is not a publication command and cannot issue an attestation.
-export function prepareApprovedManualPeriodProjection({week,source,ownerConfig,period,acceptedExceptions=[]},{deadline=null}={}){
- const before=digest({week,source,ownerConfig,period,acceptedExceptions}),version=source.version||source.versions?.[0],
+export function prepareApprovedManualPeriodProjection({week,source,ownerConfig,period,acceptedExceptions=[],priorProjection=null},{deadline=null}={}){
+ const before=digest({week,source,ownerConfig,period,acceptedExceptions,priorProjection}),version=source.version||source.versions?.[0],
   proposal=readApprovedManualAbsenceObjective(),candidate=clone(source),
   approvedByDay=new Map(week.days.map(day=>[day.weekday,day])),
   groups=new Map(week.referenceBindings.groups.map(g=>[g.approvedGroup,g.referenceCode])),
   people=new Map(week.referenceBindings.people.map(p=>[p.approvedName,p])),
   changedDays=new Map(),loans=[],links=[],budgets=[],prearrivalUnowned=[];
+ validateApprovedManualLunchPrior(priorProjection,{publicationId:version.publicationId,versionId:version.id,frameStart:period.frameStart,frameEnd:period.frameEnd});
  assert.equal(period.schema,'custodial.approved-manual-period-adjustments.v1');sameDigest(period,'periodDraftDigest');
  assert.equal(period.status,'COMPLETE_VALIDATED_DATED_DRAFTS');assert.equal(period.days.length,7);
  assert.equal(period.sourceDigest,digest(source));assert.equal(period.frameStart,source.serviceDate);
@@ -73,10 +75,8 @@ export function prepareApprovedManualPeriodProjection({week,source,ownerConfig,p
    delete actual.breakChoice; // A scheduled lunch uses the maintained implicit choice.
    const at=candidate.version.slotAvailability.findIndex(a=>a.dayOfWeek===day&&a.slotId===slot.id);
    if(at<0)candidate.version.slotAvailability.push(actual);else candidate.version.slotAvailability[at]=actual;
-   // The existing model owns nonemployee capacity classification. Mirror only
-   // the actual dated entry into this private candidate's capacity schedule.
-   const target=candidate.slots.find(slt=>slt.id===s.slotId),entry=target.contractorAvailability.findIndex(a=>a.dayOfWeek===day);
-   target.contractorAvailability[entry]=clone(actual);
+   // The registered capacity template stays unchanged; actual dated hours
+   // belong only to availability and the accepted CoverAll/lunch overlays.
   }
  }
  assert.equal(dates.size,7);
@@ -108,6 +108,9 @@ export function prepareApprovedManualPeriodProjection({week,source,ownerConfig,p
   }
   if(item.kind==='COVERALL'&&parent.window.end===normalWindow.end&&item.selected.checkedWindow.end>normalWindow.end)
    add(normalWindow.end,item.selected.checkedWindow.end,item.overlay.substitute.slotId);
+  if(pieces.length===1&&pieces[0].ownerSlotId===parent.ownerSlotId&&digest(pieces[0].window)===digest(parent.window)){
+   assignments.push(clone(parent));continue;
+  }
   for(const piece of pieces){
    const key={parentWorkId:parent.workId,serviceDate:item.serviceDate,slotId:piece.ownerSlotId,window:piece.window},
     workId='manual-dated:'+createHash('sha256').update(JSON.stringify(key)).digest('hex'),row={...clone(parent),...piece,workId,
@@ -120,8 +123,11 @@ export function prepareApprovedManualPeriodProjection({week,source,ownerConfig,p
  for(const [day]of changedDays)for(const code of new Set(version.assignments.filter(w=>w.dayOfWeek===day).map(w=>w.locationCodeSnapshot))){
   const parents=version.assignments.filter(w=>w.dayOfWeek===day&&w.locationCodeSnapshot===code),
    rows=assignments.filter(w=>w.dayOfWeek===day&&w.locationCodeSnapshot===code).sort((a,b)=>a.window.start.localeCompare(b.window.start)),
-   total=parents.reduce((n,w)=>n+w.serviceEffortMinutes,0),allocation=splitPreservedWorkloadBudget(total,rows.map(w=>w.window));
-  for(let i=0;i<rows.length;i++){rows[i].serviceEffortMinutes=allocation[i];rows[i].serviceEffortProvenance+=`;dated-group-budget:${period.periodDraftDigest}`;}
+   total=parents.reduce((n,w)=>n+w.serviceEffortMinutes,0),
+   unchanged=rows.length===parents.length&&rows.every(r=>parents.some(p=>p.workId===r.workId&&digest(p)===digest(r))),
+   allocation=unchanged?rows.map(r=>r.serviceEffortMinutes):splitPreservedWorkloadBudget(total,rows.map(w=>w.window)),
+   dayBasis=changedDays.get(day),dayDigest=dayBasis.overlay?.overlayDigest||dayBasis.plan.planDigest;
+  if(!unchanged)for(let i=0;i<rows.length;i++){rows[i].serviceEffortMinutes=allocation[i];rows[i].serviceEffortProvenance+=`;dated-group-budget:${dayDigest}`;}
   budgets.push({dayOfWeek:day,locationCode:code,sourceBudget:total,datedBudget:allocation.reduce((n,v)=>n+v,0)});
  }
  candidate.version.assignments=assignments;
@@ -168,10 +174,16 @@ export function prepareApprovedManualPeriodProjection({week,source,ownerConfig,p
    periodDraftDigest:period.periodDraftDigest,formulaObjectiveDigest:period.formulaObjectiveDigest,acceptedExceptionsDigest:digest(acceptedExceptions),
    overlayInputDigest:problem.inputDigest,projectionAvailability,parentLinks:links,groupDayBudgets:budgets,prearrivalUnowned,
    hardConstraintCount:witness.model.modelBasis.constraints.count,hardConstraintDigest:witness.model.modelBasis.constraints.digest,
-   fixedWitnessDigest:contentDigest([...witness.values]),normalSourceChanged:false,objectiveSolverRerun:false},
-  authorityDigest=digest(authority),replayDigest=digest({projectionAssignments,lunch}),
-  lunchDocument=serializePreparedStaticWeeklyLunchAuthorityDocument({candidate:lunch,authorityDigest,replayDigest});
- assert.equal(digest({week,source,ownerConfig,period,acceptedExceptions}),before,'Native dated preparation mutated its source or accepted basis');
+   fixedWitnessDigest:contentDigest([...witness.values]),datedDayBases:period.days.filter(d=>d.kind!=='NORMAL').map(d=>clone(d)),
+   normalSourceChanged:false,objectiveSolverRerun:false};
+ const provisionalAuthorityDigest=digest(authority),provisionalReplayDigest=digest({projectionAssignments,lunch}),
+  provisionalDocument=serializePreparedStaticWeeklyLunchAuthorityDocument({candidate:lunch,authorityDigest:provisionalAuthorityDigest,replayDigest:provisionalReplayDigest}),
+  retained=retainApprovedManualLunchIdentities({candidate:lunch,currentDocument:provisionalDocument,prior:priorProjection});
+ if(retained.retention)authority.lunchIdentityRetention=retained.retention;
+ const
+  authorityDigest=digest(authority),replayDigest=digest({projectionAssignments,lunch:retained.candidate}),
+  lunchDocument=serializePreparedStaticWeeklyLunchAuthorityDocument({candidate:retained.candidate,authorityDigest,replayDigest});
+ assert.equal(digest({week,source,ownerConfig,period,acceptedExceptions,priorProjection}),before,'Native dated preparation mutated its source or accepted basis');
  const body={schema:'custodial.approved-manual-period-projection-data.v1',status:'NATIVE_DATA_PREPARED_NOT_PUBLISHED',
   frameStart:period.frameStart,frameEnd:period.frameEnd,authority,authorityDigest,replayDigest,projectionAssignments,lunchDocument,
   publicationEligible:false,productionWritten:false,normalWeekChanged:false,contractorBooked:false};

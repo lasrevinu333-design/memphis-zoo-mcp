@@ -1,3 +1,4 @@
+import {validateApprovedManualLunchPrior} from './approved-manual-lunch-retention.js';
 import {captureStaticWeeklyPreparationData} from './static-weekly-staffing-preview.js';
 import {postgresJsonbContentDigest as digest} from './static-weekly-schedule-program.js';
 import {readApprovedManualWeek} from './approved-manual-week.js';
@@ -11,7 +12,7 @@ const fail=()=>{throw Object.assign(Error('The original manual period preparatio
 
 export function captureApprovedManualPeriodWorkerInput(input){
  const v=captureStaticWeeklyPreparationData(input);
- exact(v,['schema','source','ownerConfig','frameStart','changes','priorDays','acceptedExceptions','actor','expectedRevision','idempotencyKey']);
+ exact(v,['schema','source','ownerConfig','frameStart','changes','priorDays','acceptedExceptions','priorProjection','actor','expectedRevision','idempotencyKey']);
  exact(v.actor,['managerId','managerName']);
  if(v.schema!=='custodial.approved-manual-period-worker-input.v1'||!identity(v.actor.managerId)
   ||typeof v.actor.managerName!=='string'||!v.actor.managerName.trim()||v.actor.managerName.length>256
@@ -24,6 +25,8 @@ export function captureApprovedManualPeriodWorkerInput(input){
  const version=v.source.version||v.source.versions?.[0];
  if(!identity(version?.id)||!identity(version?.publicationId)
   ||version.manualGroupRatingAuthority?.manifestSha256!=='fe02bbdebc736d95360b55cc7dfe5b73c5a9eaa76f364f1c0f4420a0afb9950f')fail();
+ validateApprovedManualLunchPrior(v.priorProjection,{publicationId:version.publicationId,versionId:version.id,frameStart:v.frameStart,
+  frameEnd:new Date(Date.parse(v.frameStart+'T12:00Z')+6*86400000).toISOString().slice(0,10)});
  return v;
 }
 
@@ -53,7 +56,7 @@ export async function prepareApprovedManualPeriodWorkerData(input,deadline){
    frameStart:captured.frameStart,changes:captured.changes,priorDays:captured.priorDays},{deadline}),
   nativeProjection=period.status==='COMPLETE_VALIDATED_DATED_DRAFTS'
    ?prepareApprovedManualPeriodProjection({week,source:captured.source,ownerConfig:captured.ownerConfig,period,
-    acceptedExceptions:captured.acceptedExceptions},{deadline}):null;
+    acceptedExceptions:captured.acceptedExceptions,priorProjection:captured.priorProjection},{deadline}):null;
  return captureApprovedManualPeriodWorkerResult({schema:'custodial.approved-manual-period-worker-result.v1',
   requestDigest:digest(captured),period,nativeProjection,publicationEligible:false,productionWritten:false,contractorBooked:false},captured);
 }

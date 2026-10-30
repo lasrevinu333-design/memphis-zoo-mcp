@@ -19,7 +19,7 @@ const week=readApprovedManualWeek(),draft=prepareApprovedManualSourceDraft({week
 delete source.publicationAuthority;source.serviceDate=frameStart;
 Object.assign(source.version,{id:'00000000-0000-4000-8000-000000001001',publicationId:'00000000-0000-4000-8000-000000001002',status:'published',effectiveStart:frameStart});
 const base={schema:'custodial.approved-manual-period-worker-input.v1',source,ownerConfig:draft.ownerConfig,frameStart,
- changes:[],priorDays:[],acceptedExceptions:[],actor:{managerId:'00000000-0000-4000-8000-000000001099',managerName:'DISPOSABLE_DATA_FIXTURE_NOT_A_REAL_MANAGER'},
+ changes:[],priorDays:[],acceptedExceptions:[],priorProjection:null,actor:{managerId:'00000000-0000-4000-8000-000000001099',managerName:'DISPOSABLE_DATA_FIXTURE_NOT_A_REAL_MANAGER'},
  expectedRevision:0,idempotencyKey:'local-native-period-worker-not-an-accepted-request'},runtime=createStaticWeeklyCompilerRuntime();
 const startedAt=new Date().toISOString();save('INTENT.json',{startedAt,scope:'Existing owned isolated compiler queue, DATA only; typed capacity fixture has no production registration',
  production:false,SQL:false,genuineBrowser:false,physical:false});
@@ -45,12 +45,21 @@ try{
  assert.equal(prepared.productionWritten,false);assert.equal(prepared.publicationEligible,false);
  const tampered=structuredClone(prepared);tampered.nativeProjection.projectionAssignments[0].owner_person_id='altered';
  assert.throws(()=>captureApprovedManualPeriodWorkerResult(tampered,detached));
+ const reused=structuredClone(detached);
+ reused.changes.push({serviceDate:'2026-11-02',absentPersonIds:[]});
+ reused.priorDays=prepared.period.days.filter(d=>d.kind!=='NORMAL');
+ reused.priorProjection={projectionId:'00000000-0000-4000-8000-000000001003',publicationId:source.version.publicationId,versionId:source.version.id,
+  frameStart:prepared.period.frameStart,frameEnd:prepared.period.frameEnd,lunchDocument:prepared.nativeProjection.lunchDocument};
+ const kept=await runtime.compileAndPrepare(reused,{kind:'approved-manual-period'},{deadlineAtMilliseconds:performance.now()+60000});
+ assert.equal(kept.period.solverInvoked,false);assert.equal(kept.nativeProjection.authority.lunchIdentityRetention.loans.length,38);
+ for(const field of ['loans','responsibilities','notification_intents'])assert.deepEqual(kept.nativeProjection.lunchDocument[field],prepared.nativeProjection.lunchDocument[field]);
+ save('REUSED_ALL_LUNCH_IDENTITIES.json',kept);
  assert.ok(pulses>20);assert.ok(maxGap<2000,`Parent event loop stalled ${maxGap}ms`);
  save('NORMAL.json',normal);save('ADJUSTED.json',prepared);
  result={status:'PASS',startedAt,scope:'Real existing isolated compiler process, bounded IPC, native hard constraints and lunch DATA; no database/publication claim',
  normalSolverBypassed:true,oneDatedTwoAbsenceSolve:true,normalAssignments:346,adjustedLunches:38,
  parentPulses:pulses,maxParentGapMilliseconds:Math.round(maxGap),originalInputDetachedBeforeAwait:true,
- gettersNotExecuted:true,tamperedResultRefused:true,productionWritten:false};
+ gettersNotExecuted:true,tamperedResultRefused:true,unchangedAcceptedDayReusedWithoutSolver:true,all38LunchIdentitiesRetained:true,productionWritten:false};
 }finally{clearInterval(timer);await runtime.shutdown();}
 assert.equal(runtime.getReadiness().state,'closed');result.ownedRuntimeCleanup='SUPPORTED_SHUTDOWN_RETURNED';result.finishedAt=new Date().toISOString();
 save('RESULT.json',result);console.log(JSON.stringify(result));

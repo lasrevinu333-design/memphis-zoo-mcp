@@ -39,6 +39,16 @@ Complete-site coverage begins at the approved checked start and continues
 through the final confirmed staffed end. Temporary ownership of colleagues'
 areas before all staff arrive remains unspecified and is reported explicitly.
 
+Unchanged parent rows retain their original work IDs. Changed group budgets
+bind the individual dated plan rather than the whole period. A same-publication,
+same-version prior lunch document can retain unchanged logical lunch,
+responsibility and notification identities. The new full-hour derivation still
+supplies fresh eligibility/proximity evidence. The SQL owner must recheck the
+actual prior document and preserve queued/sent notification state; a DATA label
+alone cannot establish that relationship. Dated day bases are retained in the
+native authority so a later third absence can recover the original two-person
+plan rather than reconstructing or reoptimizing it.
+
 ## Remaining native admission
 
 1. Connect manager-entered PTO/call-outs to this preparation from the existing
@@ -90,4 +100,6 @@ preserved effort budgets and capacity display with null employee identity. The
 capacity UUIDs in these tests are explicit disposable fixtures, not production
 registrations. The owned isolated process test qualified a real dated solve,
 detachment before await, event-loop responsiveness, result tamper refusal and
-supported process cleanup. Its largest measured parent timer gap was 330 ms.
+supported process cleanup. The normal/adjusted/reuse check finished in 10.5 seconds,
+retained all 38 existing lunch identities on reuse, and measured a largest parent
+timer gap of 510 ms. This is local process evidence, not hosted manager proof.
