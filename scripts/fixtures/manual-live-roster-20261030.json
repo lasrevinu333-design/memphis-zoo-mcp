@@ -1,0 +1,369 @@
+{
+  "schema": "custodial.manual-roster-transition-recorded-fixture.v1",
+  "classification": "RECORDED_READ_ONLY_FACTS_NOT_FRESH_AUTHORITY",
+  "recordedCivilDate": "2026-10-30",
+  "productionWritten": false,
+  "readback": {
+    "schema": "custodial.manual-live-roster-readback.v1",
+    "employees": [
+      {
+        "active": true,
+        "employeeId": "06228c5d-5123-4b8b-b730-e01114bdc971",
+        "displayName": "Kiltra Horton",
+        "employeeCode": "EMP015",
+        "hasMessenger": true
+      },
+      {
+        "active": true,
+        "employeeId": "1318b295-fd70-4e78-8828-62c29302f96f",
+        "displayName": "Xavier Green",
+        "employeeCode": "EMP017",
+        "hasMessenger": true
+      },
+      {
+        "active": true,
+        "employeeId": "30ec85e0-a579-45a8-9c27-c164e77a9190",
+        "displayName": "Kathy Phelps",
+        "employeeCode": "EMP006",
+        "hasMessenger": true
+      },
+      {
+        "active": true,
+        "employeeId": "3da709bb-2223-4e15-8e3a-db02e3f32e97",
+        "displayName": "Karen Robinson",
+        "employeeCode": "EMP007",
+        "hasMessenger": true
+      },
+      {
+        "active": true,
+        "employeeId": "77d50e9a-6338-43b1-aed5-9f47d7129466",
+        "displayName": "Alijah Collins",
+        "employeeCode": "EMP001",
+        "hasMessenger": true
+      },
+      {
+        "active": true,
+        "employeeId": "8067cca2-7487-4589-ba7c-aa442e135045",
+        "displayName": "Derrick Henderson",
+        "employeeCode": "EMP016",
+        "hasMessenger": true
+      },
+      {
+        "active": true,
+        "employeeId": "cd97111e-cfa0-4228-b4d7-401bc7a5ac13",
+        "displayName": "Tammy Miller",
+        "employeeCode": "EMP003",
+        "hasMessenger": true
+      },
+      {
+        "active": true,
+        "employeeId": "d5fecc86-659b-464a-bc99-f0d914385db4",
+        "displayName": "Jada Rawlings",
+        "employeeCode": "EMP014",
+        "hasMessenger": true
+      }
+    ],
+    "rosterSlots": [
+      {
+        "label": "CoverAll contractor capacity 8",
+        "slotId": "0e931b87-48e2-5074-8d0c-f7e04d98d043",
+        "slotCode": "STATIC_0E931B8748E250748D0CF7E04D98D043",
+        "incumbencies": [
+          {
+            "personId": "ff1a3a74-00a4-59f2-9358-b1fe6a0f4aa7",
+            "displayName": "CoverAll contractor capacity 8",
+            "effectiveEnd": null,
+            "incumbencyId": "d3c26fda-d978-4d06-88b0-63a6e83a0219",
+            "effectiveStart": "2020-01-01"
+          }
+        ]
+      },
+      {
+        "label": "Custodial schedule slot 09",
+        "slotId": "36829381-70d7-521b-9f14-bad0af16ba87",
+        "slotCode": "STATIC_3682938170D7521B9F14BAD0AF16BA87",
+        "incumbencies": [
+          {
+            "personId": "77d50e9a-6338-43b1-aed5-9f47d7129466",
+            "displayName": "Alijah Collins",
+            "effectiveEnd": null,
+            "incumbencyId": "427c4110-d7ca-4d1d-a0d6-6632990b71f6",
+            "effectiveStart": "2020-01-01"
+          }
+        ]
+      },
+      {
+        "label": "Employee 4",
+        "slotId": "40aaa043-6ff3-52c6-9c88-79da314f8b49",
+        "slotCode": "STATIC_40AAA0436FF352C69C8879DA314F8B49",
+        "incumbencies": []
+      },
+      {
+        "label": "Custodial schedule slot 02",
+        "slotId": "4a5a83ca-d297-5a30-8344-db08d05b978c",
+        "slotCode": "STATIC_4A5A83CAD2975A308344DB08D05B978C",
+        "incumbencies": [
+          {
+            "personId": "cd97111e-cfa0-4228-b4d7-401bc7a5ac13",
+            "displayName": "Tammy Miller",
+            "effectiveEnd": null,
+            "incumbencyId": "6cdb8567-6607-4515-ab5b-62407eef0d0b",
+            "effectiveStart": "2020-01-01"
+          }
+        ]
+      },
+      {
+        "label": "Custodial schedule slot 03",
+        "slotId": "4b6ce934-5794-52bc-8a74-04f737a43108",
+        "slotCode": "STATIC_4B6CE934579452BC8A7404F737A43108",
+        "incumbencies": [
+          {
+            "personId": "dd3684f7-99a4-4620-98fc-ad21b7f695f9",
+            "displayName": "Markiesha Warren",
+            "effectiveEnd": null,
+            "incumbencyId": "c2829433-9f53-40cf-bd4f-403250d8d979",
+            "effectiveStart": "2020-01-01"
+          }
+        ]
+      },
+      {
+        "label": "Custodial schedule slot 05",
+        "slotId": "55e5939c-175c-5026-94fd-c4350d538922",
+        "slotCode": "STATIC_55E5939C175C502694FDC4350D538922",
+        "incumbencies": [
+          {
+            "personId": "30ec85e0-a579-45a8-9c27-c164e77a9190",
+            "displayName": "Kathy Phelps",
+            "effectiveEnd": null,
+            "incumbencyId": "5f579d56-c360-454f-a17d-dbedf36c3839",
+            "effectiveStart": "2020-01-01"
+          }
+        ]
+      },
+      {
+        "label": "Option 3 schedule position",
+        "slotId": "5d2d2a0e-230f-5b03-9867-2e4c2826871f",
+        "slotCode": "STATIC_5D2D2A0E230F5B0398672E4C2826871F",
+        "incumbencies": []
+      },
+      {
+        "label": "Custodial schedule slot 07",
+        "slotId": "5e919604-93b7-5e76-8819-18b248294666",
+        "slotCode": "STATIC_5E91960493B75E76881918B248294666",
+        "incumbencies": [
+          {
+            "personId": "2941f931-fcaa-4578-9ce2-f92e205078ef",
+            "displayName": "Michael McWright",
+            "effectiveEnd": null,
+            "incumbencyId": "3eafb913-6c42-454f-8be5-12e2aa14c9ce",
+            "effectiveStart": "2020-01-01"
+          }
+        ]
+      },
+      {
+        "label": "Employee 1",
+        "slotId": "7044faec-4bbd-57ca-a898-ddd719503113",
+        "slotCode": "STATIC_7044FAEC4BBD57CAA898DDD719503113",
+        "incumbencies": [
+          {
+            "personId": "5311915d-bcee-4dbe-a980-6ebf4eaf1410",
+            "displayName": "Maurice Stanton",
+            "effectiveEnd": null,
+            "incumbencyId": "c6b0f47d-1306-4f2c-b5f3-1fb7cc9ad1c8",
+            "effectiveStart": "2026-08-31"
+          }
+        ]
+      },
+      {
+        "label": "CoverAll contractor capacity 3",
+        "slotId": "81695055-5d7b-598a-b2da-b8dd52f55fd0",
+        "slotCode": "STATIC_816950555D7B598AB2DAB8DD52F55FD0",
+        "incumbencies": [
+          {
+            "personId": "00f6e152-418b-56a5-802a-110c4155127c",
+            "displayName": "CoverAll contractor capacity 3",
+            "effectiveEnd": null,
+            "incumbencyId": "e9e80ee5-83e8-4118-99fb-6efa08bb780c",
+            "effectiveStart": "2020-01-01"
+          }
+        ]
+      },
+      {
+        "label": "CoverAll contractor capacity 2",
+        "slotId": "8dda4a59-c303-5204-ad4e-2cb7ae1c51d7",
+        "slotCode": "STATIC_8DDA4A59C3035204AD4E2CB7AE1C51D7",
+        "incumbencies": [
+          {
+            "personId": "c7cac614-6086-506c-8f78-9a13f6b7a851",
+            "displayName": "CoverAll contractor capacity 2",
+            "effectiveEnd": null,
+            "incumbencyId": "62d29de1-8d4e-4999-b0d9-66cdd5eb0612",
+            "effectiveStart": "2020-01-01"
+          }
+        ]
+      },
+      {
+        "label": "Custodial schedule slot 04",
+        "slotId": "9ad1bcf8-5033-5b23-bafb-5de7ea5e374a",
+        "slotCode": "STATIC_9AD1BCF850335B23BAFB5DE7EA5E374A",
+        "incumbencies": [
+          {
+            "personId": "61f2291e-fda8-4b8e-8704-f404632a0caf",
+            "displayName": "Kinnaye Peete",
+            "effectiveEnd": null,
+            "incumbencyId": "0ed06a52-4e93-4cfb-938f-6e4feaeb8818",
+            "effectiveStart": "2020-01-01"
+          }
+        ]
+      },
+      {
+        "label": "Custodial schedule slot 06",
+        "slotId": "ab1c6b7f-e3bf-5cc5-9e8c-23189ce71ab3",
+        "slotCode": "STATIC_AB1C6B7FE3BF5CC59E8C23189CE71AB3",
+        "incumbencies": [
+          {
+            "personId": "40b4f4fc-a579-46b1-a9f2-fff85a0577d9",
+            "displayName": "Sherita Wilbon",
+            "effectiveEnd": null,
+            "incumbencyId": "57508f2d-f019-4435-b5ef-984f3ed6ea1c",
+            "effectiveStart": "2020-01-01"
+          }
+        ]
+      },
+      {
+        "label": "CoverAll contractor capacity 6",
+        "slotId": "ac196467-c7cc-5ba1-8bac-8d8d89d38ac5",
+        "slotCode": "STATIC_AC196467C7CC5BA18BAC8D8D89D38AC5",
+        "incumbencies": [
+          {
+            "personId": "b94cc959-2ed1-5662-b083-6efe043ef2b2",
+            "displayName": "CoverAll contractor capacity 6",
+            "effectiveEnd": null,
+            "incumbencyId": "ddb05d1f-63b4-40e1-9b31-221d7be56768",
+            "effectiveStart": "2020-01-01"
+          }
+        ]
+      },
+      {
+        "label": "Employee 2",
+        "slotId": "ae56a131-e2fd-5465-8ab8-6e5dbf543204",
+        "slotCode": "STATIC_AE56A131E2FD54658AB86E5DBF543204",
+        "incumbencies": [
+          {
+            "personId": "6a55a1f0-feb9-4d03-ae7b-95114d2d17ce",
+            "displayName": "Tabitha Masterson",
+            "effectiveEnd": null,
+            "incumbencyId": "a6774e12-43b3-4468-892f-2161b19b1993",
+            "effectiveStart": "2026-08-31"
+          }
+        ]
+      },
+      {
+        "label": "CoverAll contractor capacity 5",
+        "slotId": "b3a4941e-0dec-5b40-8ea5-0d5f64247b15",
+        "slotCode": "STATIC_B3A4941E0DEC5B408EA50D5F64247B15",
+        "incumbencies": [
+          {
+            "personId": "8a1e5092-e799-5041-a3d4-fe1c0b43ec72",
+            "displayName": "CoverAll contractor capacity 5",
+            "effectiveEnd": null,
+            "incumbencyId": "5251a80a-28e8-4036-8084-1296fbcd7fc2",
+            "effectiveStart": "2020-01-01"
+          }
+        ]
+      },
+      {
+        "label": "CoverAll contractor capacity 4",
+        "slotId": "b996199f-e3b8-5d2a-82d6-bcda86c22a7e",
+        "slotCode": "STATIC_B996199FE3B85D2A82D6BCDA86C22A7E",
+        "incumbencies": [
+          {
+            "personId": "4e81b508-fe61-5df4-b3fe-4836123dad3d",
+            "displayName": "CoverAll contractor capacity 4",
+            "effectiveEnd": null,
+            "incumbencyId": "a68d79d7-5b16-41cf-8980-237d15f57724",
+            "effectiveStart": "2020-01-01"
+          }
+        ]
+      },
+      {
+        "label": "CoverAll contractor capacity 7",
+        "slotId": "ca4912d0-88aa-5164-8f0b-86e24f27738f",
+        "slotCode": "STATIC_CA4912D088AA51648F0B86E24F27738F",
+        "incumbencies": [
+          {
+            "personId": "e73abfb2-b8c3-588a-90c6-9c8055a0f9f7",
+            "displayName": "CoverAll contractor capacity 7",
+            "effectiveEnd": null,
+            "incumbencyId": "ebcace98-4c36-46bc-84fb-845f0aa6ec65",
+            "effectiveStart": "2020-01-01"
+          }
+        ]
+      },
+      {
+        "label": "Kaili Michaelson schedule position",
+        "slotId": "e91b7a47-f20f-5777-a5d3-9c0ce8778df5",
+        "slotCode": "STATIC_E91B7A47F20F5777A5D39C0CE8778DF5",
+        "incumbencies": [
+          {
+            "personId": "abac6002-02ee-46b4-bc16-11337b0abb2a",
+            "displayName": "Kaili Michaelson",
+            "effectiveEnd": null,
+            "incumbencyId": "4cc348f0-f94d-4d95-adac-b24692cab039",
+            "effectiveStart": "2026-08-31"
+          }
+        ]
+      },
+      {
+        "label": "CoverAll contractor capacity 1",
+        "slotId": "eb283dea-86b3-51b0-af9a-f0b4f7f983a6",
+        "slotCode": "STATIC_EB283DEA86B351B0AF9AF0B4F7F983A6",
+        "incumbencies": [
+          {
+            "personId": "28a2505c-ac8d-5dd9-962c-993734107c05",
+            "displayName": "CoverAll contractor capacity 1",
+            "effectiveEnd": null,
+            "incumbencyId": "83d89f3d-d92a-4395-be86-fa2a7c7ff655",
+            "effectiveStart": "2020-01-01"
+          }
+        ]
+      },
+      {
+        "label": "Custodial schedule slot 01",
+        "slotId": "f22348e9-d4b9-5a7e-b8fd-d0d2c1ec534f",
+        "slotCode": "STATIC_F22348E9D4B95A7EB8FDD0D2C1EC534F",
+        "incumbencies": [
+          {
+            "personId": "3da709bb-2223-4e15-8e3a-db02e3f32e97",
+            "displayName": "Karen Robinson",
+            "effectiveEnd": null,
+            "incumbencyId": "5157c4a4-bad3-464b-a7fc-b84b209efb17",
+            "effectiveStart": "2020-01-01"
+          }
+        ]
+      },
+      {
+        "label": "Custodial schedule slot 08",
+        "slotId": "f4bd07dc-3dbd-59cf-a75b-475de0ddbe84",
+        "slotCode": "STATIC_F4BD07DC3DBD59CFA75B475DE0DDBE84",
+        "incumbencies": [
+          {
+            "personId": "1c7aa487-3b8b-4022-8121-44cd63d513d8",
+            "displayName": "Daniel Morgan",
+            "effectiveEnd": null,
+            "incumbencyId": "17cf2f67-5a19-47dc-a2e1-7427f699e437",
+            "effectiveStart": "2020-01-01"
+          }
+        ]
+      }
+    ],
+    "serviceDate": "2026-10-29",
+    "authorityRevision": 19,
+    "parentPublication": {
+      "sourceId": "a00cdf2a-0623-5e2d-bc65-338c1dd67202",
+      "versionId": "2fa86e39-80e5-45ba-96cf-daf8ee2a244b",
+      "publicationId": "07bc1528-cf56-474b-adb0-216a908c4eed",
+      "effectiveStart": "2026-08-31"
+    }
+  }
+}
