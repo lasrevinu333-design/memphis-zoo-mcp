@@ -14,7 +14,9 @@ const sql=s=>execFileSync('docker',['exec','-i',container,'psql','-X','-q','-At'
   {input:s,encoding:'utf8',timeout:120000,maxBuffer:16*1024*1024});
 const q=s=>`'${String(s).replaceAll("'","''")}'`,j=v=>`${q(JSON.stringify(v))}::jsonb`;
 const query=s=>sql(s).trim().split('\n').at(-1),parsed=s=>JSON.parse(query(s));
-const {input,people,locations}=fullHourLunchFixture(),manager=randomUUID(),date=input.serviceDate;
+const singleCoverer=process.env.LUNCH_SINGLE_NAMED_COVERER==='1';
+assert.ok(process.env.LUNCH_SINGLE_NAMED_COVERER===undefined||singleCoverer,'Explicit single-coverer SQL fixture flag required');
+const {input,people,locations}=fullHourLunchFixture({singleCovererLoan:singleCoverer}),manager=randomUUID(),date=input.serviceDate;
 sql(`insert into public.ops_manager_managers(manager_id,display_name) values(${q(manager)},'Synthetic full-hour lunch manager');`);
 for(const [key,p]of Object.entries(people))sql(`insert into public.employees(id,display_name,role) values(${q(p.personId)},${q('Synthetic '+key)},'staff');`);
 for(const [family,id]of Object.entries(locations)){
@@ -27,6 +29,8 @@ const projectionId=fixture.projectionIds[date],result=fixture.compiledByWeek[dat
 const prepared=createStaticWeeklyProjectionWithLunchRpcInput({result,publicationId:fixture.publicationId,expectedRevision:0,
   actor:{managerId:manager,managerName:'Synthetic full-hour lunch manager',idempotencyKey:'full-hour-lunch-document'}});
 const doc=prepared.lunchDocument;
+if(singleCoverer){const loan=doc.loans.find(l=>l.normal_owner_slot_id===people.a.slotId);
+ assert.deepEqual(loan.helper_slot_ids,[people.b.slotId]);assert.equal(loan.fallback,null);}
 const before=query('select md5(jsonb_agg(to_jsonb(o) order by occurrence_id)::text) from public.weekly_schedule_occurrences o;');
 const accepted=parsed(`set role static_weekly_control_plane;select public.static_weekly_v8_materialize_lunch_document(${q(projectionId)}::uuid,${j(doc)},${q(manager)}::uuid)::text;`);
 assert.equal(accepted.persistence_status,'PERSISTED');assert.equal(accepted.replayed,false);
@@ -52,6 +56,12 @@ for(const [name,mutate,pattern]of [
   try{query(`set role static_weekly_control_plane;select public.static_weekly_v8_assert_lunch_document(${q(projectionId)}::uuid,${j(rehash(bad))});`);}catch(e){error=String(e.stderr);}
   assert.ok(error,`${name} must refuse`);assert.match(error,pattern,name);refused++;
 }
+if(singleCoverer){
+ const bad=structuredClone(doc),loan=bad.loans.find(l=>l.normal_owner_slot_id===people.a.slotId);
+ loan.helper_slot_ids=[people.b.slotId,people.c.slotId].sort();let error;
+ try{query(`set role static_weekly_control_plane;select public.static_weekly_v8_assert_lunch_document(${q(projectionId)}::uuid,${j(rehash(bad))});`);}catch(e){error=String(e.stderr);}
+ assert.match(error??'',/full lunch source coverer set changed/);refused++;
+}
 for(const role of ['anon','authenticated','service_role','custodial_application_reader','static_weekly_release_operator']){
   assert.equal(query(`select has_function_privilege(${q(role)},'public.static_weekly_v8_assert_lunch_document(uuid,jsonb)','EXECUTE')::text;`),'false');
 }
@@ -59,5 +69,6 @@ assert.equal(query("select count(*)::text from public.custodial_release_authorit
 assert.equal(query("select (relrowsecurity and relforcerowsecurity)::text from pg_class where oid='public.weekly_schedule_lunch_documents'::regclass;"),'true');
 assert.equal(query('select count(*)::text from public.weekly_schedule_lunch_documents;'),'1');
 console.log(JSON.stringify({status:'PASS',actualPostgres:true,officialSyntheticSourcePublication:true,documentId:doc.document_identity,
+  sourceNamedSingleCoverer:singleCoverer,
   fullWindowReadback:true,originalOccurrenceWindowRetained:true,deniedTampering:refused,deniedValidatorRoles:5,
   exactRecoveryFunctions:2,forcedRLS:true,production:false,namedManagerBrowser:false,physical:false}));

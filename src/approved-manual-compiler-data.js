@@ -37,7 +37,7 @@ export function prepareApprovedManualCompilerData(week){
       for(const segment of segments)assignments.push({
         workId:`manual:${week.manifestSha256.slice(0,16)}:${day.weekday}:${group.referenceCode}:${segment.start}`,
         dayOfWeek:day.weekday,locationId:group.primaryLocationId,locationCodeSnapshot:group.referenceCode,
-        locationNameSnapshot:group.referenceLabel,serviceMode:group.retainedServiceModes[0],
+        locationNameSnapshot:name,serviceMode:group.retainedServiceModes[0],
         includedLocations:clone(group.includedLocations),window:{start:segment.start,end:segment.end},
         ownerSlotId:people.get(segment.owner).slotId,originSlotId:people.get(baseOwner.name).slotId,
         schedulingMode:'flexible_coverage_ownership',

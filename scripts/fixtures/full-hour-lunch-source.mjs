@@ -2,7 +2,7 @@ import {createFullHourLunchPolicy} from '../../src/static-weekly-lunch-policy.js
 import {postgresJsonbContentDigest} from '../../src/static-weekly-schedule-program.js';
 
 // Synthetic local source only; no real manager, employee, credential or effect.
-export function fullHourLunchFixture(){
+export function fullHourLunchFixture({singleCovererLoan=false}={}){
   const uuid=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
   const ids=['a','b','c','d'],times=[['09:30','10:30'],['11:00','12:00'],['12:00','13:00'],['13:00','14:00']];
   const people=Object.fromEntries(ids.map((key,i)=>[key,{slotId:uuid(i+1),personId:uuid(i+11)}]));
@@ -25,6 +25,7 @@ export function fullHourLunchFixture(){
       serviceEffortProvenance:'local-fixture-work',priority:2,priorityProvenance:'local-fixture-priority',
       requiredQualifications:['general'],qualificationProvenance:'local-fixture-qualification',restrictions:[],restrictionProvenance:'local-fixture-restriction'}))};
   const mapping={a:{W:'b',E:'c'},b:{B:'a',B2:'c'},c:{C:'a',C2:'d'},d:{W:'b',D:'b',D2:'c'}};
+  if(singleCovererLoan)mapping.a.E='b';
   version.lunchCoveragePolicy=createFullHourLunchPolicy({sourceDigest:'a'.repeat(64),loans:ids.map((key,i)=>({
     dayOfWeek:1,normalOwnerSlotId:people[key].slotId,window:{start:times[i][0],end:times[i][1]},
     areas:Object.entries(mapping[key]).map(([locationCode,helper])=>({locationCode,covererSlotId:people[helper].slotId}))}))},postgresJsonbContentDigest);

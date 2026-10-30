@@ -157,10 +157,12 @@ function fullHourPartition(planned,areas,costRows,contexts,lunch){
   }
   if(!areas.length)return {status:'NO_AREAS',helperSlotIds:[],assignments:[],totalDistance:0};
   const helperSlotIds=[...new Set(assignments.map(a=>a.covererSlotId))].sort(compare);
-  const eligible=[...contexts.keys()].filter(slot=>costRows.some(row=>Object.hasOwn(row.costs,slot)));
-  if(helperSlotIds.length!==Math.min(2,eligible.length))return refused('full_hour_lunch_helper_cardinality_changed');
+  // An immutable full-hour policy names its complete coverer set. It can
+  // deliberately choose one qualified helper even when another is available.
+  // The legacy planner still selects its own one/two-helper partition below.
+  if(helperSlotIds.length<1||helperSlotIds.length>2)return refused('full_hour_lunch_source_helper_limit');
   return {status:'PLANNED',helperSlotIds,assignments,totalDistance,
-    fallback:helperSlotIds.length===1?'only_one_eligible_custodian':null};
+    fallback:null};
 }
 
 /** Internal pure derivation. Call the verified-result wrapper at trust boundaries. */

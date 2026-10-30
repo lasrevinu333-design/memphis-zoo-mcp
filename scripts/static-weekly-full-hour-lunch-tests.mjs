@@ -6,6 +6,7 @@ import {generateStaticWeeklySchedulingProgram,postgresJsonbContentDigest as dige
 import {deriveLunchCoverageFromPreparedProblem,createStaticWeeklyLunchCoverageCandidate} from '../src/static-weekly-lunch-coverage.js';
 import {createStaticWeeklyLunchAuthorityDocument,verifyStaticWeeklyLunchAuthorityDocument} from '../src/static-weekly-lunch-authority-adapter.js';
 import {validateFullHourLunchPolicy} from '../src/static-weekly-lunch-policy.js';
+import './approved-manual-native-template-tests.mjs';
 
 async function assertOverlappingAreaRefused(){
   const {input,people}=fullHourLunchFixture(),version=input.versions[0];
@@ -46,6 +47,17 @@ const doc=createStaticWeeklyLunchAuthorityDocument({input,result,candidate});
 assert.equal(verifyStaticWeeklyLunchAuthorityDocument({input,result,document:doc}).ok,true);
 assert.equal(doc.persistence_authority,'NOT_PERSISTED');assert.ok(doc.responsibilities.every(r=>!r.creates_deep_clean));
 assert.equal(JSON.stringify(input),before);
+
+// A named single coverer is a source decision, even while another qualified
+// employee is on duty. It must not manufacture a two-helper fallback.
+const single=structuredClone(input),singlePolicy=single.versions[0].lunchCoveragePolicy;
+for(const area of singlePolicy.loans.find(l=>l.normalOwnerSlotId===people.a.slotId).areas)area.covererSlotId=people.b.slotId;
+const {policyDigest:discarded,...singleBody}=singlePolicy;singlePolicy.policyDigest=digest(singleBody);
+const singleResult=await compileStaticWeeklySchedule(single);assert.equal(singleResult.status,'FEASIBLE');
+const singleCandidate=createStaticWeeklyLunchCoverageCandidate(single,singleResult),singleLoan=singleCandidate.lunches.find(l=>l.normalOwnerSlotId===people.a.slotId);
+assert.equal(singleCandidate.status,'PLANNED');assert.deepEqual(singleLoan.helperSlotIds,[people.b.slotId]);assert.equal(singleLoan.fallback,null);
+assert.equal(verifyStaticWeeklyLunchAuthorityDocument({input:single,result:singleResult,
+  document:createStaticWeeklyLunchAuthorityDocument({input:single,result:singleResult,candidate:singleCandidate})}).ok,true);
 
 const program=generateStaticWeeklySchedulingProgram(input);assert.ok(!program.error);
 for(const patch of [{shift:{start:'10:00',end:'17:00'}},{lunch:{start:'10:00',end:'11:00'}},{blockedWindows:[{start:'09:45',end:'10:00'}]},{restrictions:[west.includedLocations[0].locationId]}]){

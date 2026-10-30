@@ -1,0 +1,45 @@
+{
+  "schema": "custodial.ci-fresh-only-exact-source-successor.v1",
+  "scope": "DISPOSABLE_CONSTRUCTION_ONLY_NOT_VENDOR_NORMAL_OR_PRODUCTION_ADMISSION",
+  "predecessor_manifest": {
+    "path": "release/fresh-only-replay/MANIFEST.json",
+    "sha256": "5094a272dcc9f01ccbf043f3de7012e12bdb542606089a0a818629c1ecf86b26",
+    "migrations": 297,
+    "overrides": 22
+  },
+  "predecessor_successor": {
+    "path": "release/fresh-only-replay/SOURCE298_SUCCESSOR.json",
+    "sha256": "c163c4018512ca66189effbb750c22b89ae0760909e5b067593652e357bbb65e",
+    "bytes": 1535,
+    "source_migrations": 298
+  },
+  "preserved_predecessor_replay": {
+    "path": "release/fresh-only-replay/SOURCE298_REPLAY_ORDER.json",
+    "sha256": "aca06e305ff4c5918e83045acf4d739fcb8746e41dcc89ceb59fcd0f98ab20ba",
+    "bytes": 56565
+  },
+  "source_migrations": 299,
+  "replay_manifest": {
+    "path": "supabase/canonical/migration-replay-order.json",
+    "sha256": "965300d634959010c017ac203d71fe915f65b4b42e69910b173b96d034c38001",
+    "bytes": 56748
+  },
+  "append": {
+    "name": "20261030031200_approved_manual_full_hour_coverers.sql",
+    "original": {
+      "path": "supabase/migrations/20261030031200_approved_manual_full_hour_coverers.sql",
+      "sha256": "de548422310c3369bac0560e14507e4022cc9d5b9effe898d4f24ae79156cf6a",
+      "bytes": 4436
+    },
+    "selected": {
+      "path": "supabase/migrations/20261030031200_approved_manual_full_hour_coverers.sql",
+      "sha256": "de548422310c3369bac0560e14507e4022cc9d5b9effe898d4f24ae79156cf6a",
+      "bytes": 4436
+    },
+    "atomic_mode": "exact-Source-BEGIN-COMMIT"
+  },
+  "observed_empty_source_fingerprint": "95ad1f4e76159d18c5ccdb7c84fb639918005f05155b152641f79c15919f082d",
+  "source_capture_scope": "Actual maintained source298 construction plus exact source299 forward SQL; one function changed, every other canonical catalog section preserved. Populated target and runtime admission remain separate.",
+  "full_vendor_NORMAL": false,
+  "expected_fingerprint_authority": null
+}

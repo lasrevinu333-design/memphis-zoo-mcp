@@ -388,7 +388,7 @@ export function mapApprovedStaticTemplateCandidate({ templates, admittedBindings
       require(configOwner && configOwner[1].personId === actual.personId && configOwner[1].vacancy !== true,
         'static_template_current_person_config_mismatch');
       for (const row of rows) {
-        try { assertNormalOwnerEligibility({ key: configOwner[0], ...configOwner[1] }, row.locationCodeSnapshot,row.dayOfWeek); }
+        try { assertNormalOwnerEligibility({ key: configOwner[0], ...configOwner[1] }, row.locationCodeSnapshot,row.dayOfWeek,row.coveragePurpose); }
         catch { fits = false; break; }
         const roleAvailability = approved.states.get(row.dayOfWeek).availability.get(role);
         const actualContext = target.availabilityByDaySlot.get(`${row.dayOfWeek}\u0000${actual.slotId}`);
@@ -1580,7 +1580,7 @@ export function adaptRegisteredRecurringSource({ registeredSource, patternConfig
     const ownerKey = keyBySlot.get(assignment.originSlotId);
     assert.ok(ownerKey, `assignment owner outside stable positions ${assignment.workId}`);
     assertNormalOwnerEligibility({ key: ownerKey, ...patternConfig.slots[ownerKey] },
-      assignment.locationCodeSnapshot,assignment.dayOfWeek);
+      assignment.locationCodeSnapshot,assignment.dayOfWeek,assignment.coveragePurpose);
     assignment.restrictedSlotIds = hardRestrictedSlots(patternConfig, assignment.locationCodeSnapshot,
       assignment.restrictedSlotIds || [],assignment.dayOfWeek);
     assert.ok(!assignment.restrictedSlotIds.includes(assignment.ownerSlotId),

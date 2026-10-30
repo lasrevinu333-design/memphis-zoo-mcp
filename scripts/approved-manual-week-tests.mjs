@@ -121,11 +121,11 @@ const referenceBytes=readFileSync(new URL('../release/static-schedules/custodial
   referenceBefore=Buffer.from(referenceBytes),weekBefore=JSON.stringify(week),
   sourceDraft=prepareApprovedManualSourceDraft({week,referenceBytes}),draft=sourceDraft.sourceDraft;
 assert.equal(draft.version.assignments.length,346);assert.equal(draft.version.slotAvailability.length,40);
-assert.equal(sourceDraft.budgetBindings.length,161);assert.equal(sourceDraft.restrictionConflicts.length,1);
-assert.equal(sourceDraft.restrictionConflicts[0].coveragePurpose,'INHERITED_ALERTS_AND_ISSUES_ONLY');
-assert.equal(sourceDraft.restrictionConflicts[0].dayOfWeek,5);
-assert.equal(sourceDraft.restrictionConflicts[0].locationCode,'HERPETARIUM');
-assert.deepEqual(sourceDraft.restrictionConflicts[0].window,{start:'15:00',end:'16:00'});
+assert.equal(sourceDraft.budgetBindings.length,161);assert.equal(sourceDraft.restrictionConflicts.length,0);
+assert.equal(sourceDraft.restrictionClassifications.length,5);
+const fridayAlert=sourceDraft.restrictionClassifications.find(c=>c.dayOfWeek===5);
+assert.equal(fridayAlert.coveragePurpose,'INHERITED_ALERTS_AND_ISSUES_ONLY');
+assert.equal(fridayAlert.locationCode,'HERPETARIUM');assert.equal(fridayAlert.normalAssignmentRestrictionRetained,true);
 assert.equal(sourceDraft.registrationEligible,false);assert.equal(sourceDraft.activationApprovalRecorded,true);
 assert.equal(draft.serviceDate,null);assert.equal(draft.version.effectiveStart,null);assert.equal(draft.version.id,null);
 assert.equal(Object.hasOwn(draft.version,'shiftEndContinuityPolicy'),false,'Old 09:45 derivation must not reappear in the new fixed source');
@@ -168,5 +168,5 @@ try{
 }finally{rmSync(root,{recursive:true});}
 console.log(JSON.stringify({marker:'APPROVED_MANUAL_WEEK_DATA_PASS',days:7,groups:23,fullHourReliefs:40,minuteSamples,ownerSamples,reliefSamples,
   candidateEmployeeReferences:8,rejectedBindings,compilerAssignmentFragments:compilerData.assignmentInputs.length,compilerOwnerSamples,
-  nativeFullHourPolicyValidated:true,sourceWorkloadBudgetsPreserved:161,sourceDraftRestrictionConflicts:1,
+  nativeFullHourPolicyValidated:true,sourceWorkloadBudgetsPreserved:161,sourceDraftRestrictionConflicts:0,
   sourceDraftFeasibilityQualified:false,activationOwnerApproved:true,activation:'HELD',published:false,engineRecalculationQualified:false,physicalAcceptance:false}));

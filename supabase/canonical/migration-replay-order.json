@@ -1208,6 +1208,10 @@
         {
           "name": "20261028224728_full_scheduled_lunch_source_policy.sql",
           "sha256": "a47387ddf244a04df646c9bb2d60eef86a769b96baf9106759f1c2a703248514"
+        },
+        {
+          "name": "20261030031200_approved_manual_full_hour_coverers.sql",
+          "sha256": "de548422310c3369bac0560e14507e4022cc9d5b9effe898d4f24ae79156cf6a"
         }
       ]
     }
