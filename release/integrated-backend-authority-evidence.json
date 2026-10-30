@@ -375,7 +375,7 @@
       {
         "path": "config/schedules/manual-approved-20261030/absence-objective-proposal.json",
         "mode": "100644",
-        "object_id": "77740c6d39cb43388bfd426bfc508a93ac458b28"
+        "object_id": "b76ce58f230002cc57b4674e5a917c3905ea69c3"
       },
       {
         "path": "config/schedules/manual-approved-20261030/catalog.json",
@@ -511,6 +511,11 @@
         "path": "docs/OUTLOOK_SHARED_EVENTS.md",
         "mode": "100644",
         "object_id": "eeb1d7dce8c68e70a7ce63a80b3d4a8c9787d81c"
+      },
+      {
+        "path": "docs/approved-manual-schedule-operations.md",
+        "mode": "100644",
+        "object_id": "4d3f7d43d6c712d3bd59ce31ac412b82acbc698d"
       },
       {
         "path": "docs/chatgpt-mcp-oauth.md",
@@ -1490,12 +1495,12 @@
       {
         "path": "scripts/approved-manual-absence-tests.mjs",
         "mode": "100644",
-        "object_id": "be51918c83663ce74c8fe7864fca9e4d9fbac744"
+        "object_id": "ad63b3f29aeb4e17da4734dd45c02af369ff7bdb"
       },
       {
         "path": "scripts/approved-manual-gps-tests.mjs",
         "mode": "100644",
-        "object_id": "0b2e39a1ce912038c5c4e1df2e9b12733e16e4d5"
+        "object_id": "421c15ef583d563ab27592cc0a6f006c7aa8ad06"
       },
       {
         "path": "scripts/approved-manual-manager-view-tests.mjs",
@@ -1510,7 +1515,7 @@
       {
         "path": "scripts/approved-manual-roster-transition-tests.mjs",
         "mode": "100644",
-        "object_id": "d51a72f3856d7bb9c1e9c97d6a8f5ca26c0b1d2a"
+        "object_id": "49dbcc3d60c1087385eb73c2ac39554aba91ea40"
       },
       {
         "path": "scripts/approved-manual-week-database-tests.mjs",
@@ -6005,7 +6010,7 @@
       {
         "path": "src/approved-manual-absence.js",
         "mode": "100644",
-        "object_id": "74b447d060b5e24ea62cde509a039dd3953826ed"
+        "object_id": "dd0fcee689c3b80dfedc79e960f864e6f431b4ca"
       },
       {
         "path": "src/approved-manual-bindings.js",
@@ -6020,7 +6025,7 @@
       {
         "path": "src/approved-manual-gps.js",
         "mode": "100644",
-        "object_id": "012ce4facb74697cd61e057787cc853b1744698b"
+        "object_id": "42d345e592cb9c2389e55586f81fdddb31cbb5bd"
       },
       {
         "path": "src/approved-manual-manager-view.js",
@@ -6040,7 +6045,7 @@
       {
         "path": "src/approved-manual-roster-transition.js",
         "mode": "100644",
-        "object_id": "42b9a2587759f08397838033150a50b87ef4a42f"
+        "object_id": "da0c6c3330b3a9a2f7ccfe7b6634fdf0d17c3590"
       },
       {
         "path": "src/approved-manual-source-draft.js",
@@ -9388,7 +9393,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 1852,
+    "authority_path_count": 1853,
     "migration_path_count": 300,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
