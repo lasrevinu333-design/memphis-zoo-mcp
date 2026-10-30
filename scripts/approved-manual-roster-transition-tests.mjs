@@ -41,7 +41,8 @@ assert.equal(slot.label,'Option 3 schedule position');assert.equal(slot.incumben
 assert.ok(!slot.incumbencies.some(i=>i.displayName==='Gregory Staples'),'Candidate-only Gregory history cannot enter a live transition');
 for(const preserved of [...result.preservedReferencedSlots,...result.unreferencedSlotsToPreserve])
  assert.equal(preserved.liveRangeDigest,digest(snapshot.rosterSlots.find(s=>s.slotId===preserved.slotId)));
-for(const key of ['initialBootstrap','historyRewrite','productionWritten','registrationEligible','publicationEligible','currentDateWeeklyAdmissionProven','formulaApproved'])assert.equal(result[key],false);
+for(const key of ['initialBootstrap','historyRewrite','productionWritten','registrationEligible','publicationEligible','currentDateWeeklyAdmissionProven','normalScheduleOptimizationUsed','futureMondayHold'])assert.equal(result[key],false);
+assert.equal(result.activationTiming,'AS_SOON_AS_READY_AND_VERIFIED');
 let refusals=0;
 for(const change of [
  s=>{s.rosterSlots=s.rosterSlots.filter(r=>r.slotId!==xavier.slotId);},

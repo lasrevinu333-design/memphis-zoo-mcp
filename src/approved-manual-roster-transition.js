@@ -79,6 +79,7 @@ export function prepareApprovedManualRosterTransition({week,draft,snapshot,effec
   projectedSourceDraft:source,transfers,unchanged,preservedReferencedSlots:preservedSlots,unreferencedSlotsToPreserve:untouched,
   liveSlotCount:snapshot.rosterSlots.length,initialBootstrap:false,historyRewrite:false,productionWritten:false,
   registrationEligible:false,publicationEligible:false,normalAtomicAdmissionRequired:true,
-  currentDateWeeklyAdmissionProven:false,formulaApproved:false};
+  currentDateWeeklyAdmissionProven:false,normalScheduleOptimizationUsed:false,
+  activationTiming:'AS_SOON_AS_READY_AND_VERIFIED',futureMondayHold:false};
  return{...body,transitionDigest:digest(body)};
 }

@@ -1,6 +1,6 @@
 {
-  "schema": "custodial.manual-absence-objective-proposal.v1",
-  "approval": "PENDING_OWNER_RESPONSE",
+  "schema": "custodial.manual-absence-objective-proposal.v2",
+  "approval": "OWNER_APPROVED",
   "productionActive": false,
   "weights": {
     "proximity": 75,
@@ -9,25 +9,56 @@
   },
   "areaUnit": "ONE_COMBINED_GROUP_RATING_1_TO_10",
   "proximity": {
-    "metric": "HAVERSINE_STRAIGHT_LINE_GPS",
-    "anchor": "Each recipient s retained normal base groups; never transferred groups",
-    "normalizer": "Maximum pairwise GPS distance among all23 combined groups",
-    "aggregation": "Mean normalized distance across23 current owners in each phase",
+    "metric": "SAVED_ACCESS_ADJUSTED_HAVERSINE_PENALTY",
+    "anchor": "Nearest of each recipient's approved normal base groups; never transferred groups",
+    "fixedDenominatorMeters": 807.6262463035904,
+    "directConnectionFactor": 0.8,
+    "sharedNeighborhoodFactor": 0.9,
+    "otherFactor": 1,
+    "overlapsStacked": false,
+    "transitiveNeighborhoodMerging": false,
+    "aggregation": "100 times the mean of 23 current area-to-owner penalties divided by the fixed denominator",
     "walkingTimeClaim": false,
+    "walkingDistancesMeasured": false,
     "legacyRouteGridUsed": false
   },
   "load": {
-    "points": "Sum each combined group score once for its current owner",
-    "normalizer": "sum_i abs(points_i - S/n) / (2*S*(1-1/n))",
-    "S": "Total23-group score, currently136",
-    "n": "Custodians available during this phase, excluding their own lunches",
+    "points": "Sum each approved combined group rating once for its current owner; total 136",
+    "normalizer": "100 * sum_i abs(points_i - S/n) / (2*S*(1-1/n))",
+    "S": 136,
+    "n": "Actual custodians available in the time slice, excluding their own lunches",
     "singleCustodianLoss": 0
   },
-  "dayScore": "Duration-weighted mean of (0.75*proximityLoss + 0.25*loadLoss) over exact static shift and lunch boundaries",
+  "dayScore": "Sum of minutes * (0.75*proximityPenalty + 0.25*workloadPenalty), divided by total covered minutes",
+  "hardRulesBeforeScoring": [
+    "Validate complete actual-hours ownership and full-hour relief before any weighted scoring",
+    "Tammy retains Teton, Northwest Passage and East End; her only possible extra is China",
+    "Minimize Tammy's China-extra minutes first, using zero whenever a valid zero-extra plan exists",
+    "Give full-hour relief appointments to other available employees before Tammy whenever feasible; no overlapping helper appointments",
+    "Then minimize time away from Karen's Zambezi/Pavilion and Kathy's East/West Admin when feasible"
+  ],
+  "example": {
+    "available": 4,
+    "loads": [
+      40,
+      36,
+      32,
+      28
+    ],
+    "proximityPenalty": 20,
+    "workloadPenalty": 7.8431372549019605,
+    "combinedPenalty": 16.96078431372549
+  },
+  "appliesOnlyToDatedAbsenceAdjustments": true,
   "baselineUnchangedWithoutAbsence": true,
-  "normalHerpetariumMondayOnlyPreserved": true,
-  "helperWholeHourAndNoOverlapRequired": true,
-  "gpsInput": "Authoritative active group coordinates with source/confidence metadata; no inferred coordinates or pixel-anchor substitution",
-  "currentGpsReadback": "All23 groups have exact ID-bound saved coordinates:22 group pins and the stored Cat Country member centroid. Coordinates are not physically qualified walking routes.",
-  "request": "Single asynchronous Main question asking whether to use this normalization or a different formula"
+  "approvalRequiredForPreciseFormula": false,
+  "ownerApproval": {
+    "confirmed": true,
+    "recordedAt": "2026-10-30T15:34:59.585161+00:00",
+    "chatId": "01a15718-2d88-7de1-8cec-6cdc241f0151",
+    "questionId": "call_97aaa12c08a84a0e8afed222696e481c",
+    "answer": "Approve this precise formula",
+    "scope": "DATED_ABSENCE_ADJUSTMENTS_ONLY",
+    "normalSchedulesMayChange": false
+  }
 }

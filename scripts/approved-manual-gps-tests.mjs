@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {readApprovedManualWeek} from '../src/approved-manual-week.js';
-import {readApprovedManualGpsReference,prepareApprovedManualGpsDistances,straightLineGpsMeters} from '../src/approved-manual-gps.js';
+import {readApprovedManualGpsReference,prepareApprovedManualGpsDistances,prepareApprovedManualAccessProposal,straightLineGpsMeters} from '../src/approved-manual-gps.js';
 
 const week=readApprovedManualWeek(),reference=readApprovedManualGpsReference(week),matrix=prepareApprovedManualGpsDistances(week);
 assert.equal(reference.groups.length,23);assert.equal(matrix.pairs.length,253);
@@ -21,4 +21,14 @@ assert.equal(matrix.normalizedFormula,null);assert.equal(matrix.formulaApproved,
 assert.throws(()=>straightLineGpsMeters({latitude:null,longitude:0},origin));
 assert.throws(()=>straightLineGpsMeters({latitude:91,longitude:0},origin));
 assert.throws(()=>readApprovedManualGpsReference({...week,manifestSha256:'0'.repeat(64)}));
-console.log(JSON.stringify({status:'PASS',scope:'23 exact ID-bound saved GPS references and straight-line distances; no weighted-policy, walking-time, publication or physical qualification',groups:23,pairs:253,maximumPairwiseMeters:matrix.maximumPairwiseMeters}));
+const access=prepareApprovedManualAccessProposal(week),pair=(a,b)=>access.pairs.find(p=>(p.from===a&&p.to===b)||(p.from===b&&p.to===a));
+assert.equal(access.fixedDenominatorMeters,807.6262463035904);assert.equal(access.formulaApproved,true);
+assert.equal(pair('BONOBOS_RESTROOMS','CATHOUSE_CAFE_RESTROOMS').accessFactor,.8);
+assert.equal(pair('TETON','EAST_END_RESTROOMS').accessFactor,.8);
+assert.equal(pair('ZAMBEZI','BREEZEWAY_RESTROOMS').accessFactor,.9);
+assert.equal(pair('HERPETARIUM','EVENT_CENTER').accessFactor,.9,'Overlapping memberships must not stack discounts');
+assert.equal(pair('ZAMBEZI','CHINA').accessFactor,1,'Canyon does not merge separate neighborhoods transitively');
+assert.equal(pair('ZAMBEZI','TROPICAL_BIRDS').accessFactor,1,'An accepted long route is not measured short distance');
+assert.ok(!access.neighborhoods.flat().includes('ELEPHANT_TRUNK_RESTROOMS'));
+assert.equal(access.walkingDistancesMeasured,false);assert.equal(access.productionWritten,false);
+console.log(JSON.stringify({status:'PASS',scope:'23 exact saved GPS references and approved access penalties; no measured walking, publication or physical qualification',groups:23,pairs:253,maximumPairwiseMeters:matrix.maximumPairwiseMeters,ownerApprovedAccessPenalty:true}));

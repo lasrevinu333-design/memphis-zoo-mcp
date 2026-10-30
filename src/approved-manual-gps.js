@@ -64,3 +64,45 @@ export function prepareApprovedManualGpsDistances(week){
  assert.equal(pairs.length,253);
  return {...body,distancesDigest:digest(body)};
 }
+
+// Owner-described access options, separate from measured geography and normal
+// assignments. Overlapping groups never create a transitive mega-cluster.
+// The owner approved the multipliers on October30; they remain preference
+// penalties, not measured walking distances or normal assignment changes.
+export function prepareApprovedManualAccessProposal(week){
+ const gps=prepareApprovedManualGpsDistances(week),known=new Set(gps.groups.map(g=>g.locationCode));
+ const directConnections=[
+  ['ZAMBEZI','PRIMATE_PAVILLION'],['PRIMATE_PAVILLION','PRIMATE_CANYON'],
+  ['TETON','NORTH_WEST_PASSAGE'],['TETON','EAST_END_RESTROOMS'],['NORTH_WEST_PASSAGE','EAST_END_RESTROOMS'],
+  ['COURTYARD_RESTROOMS','BREEZEWAY_RESTROOMS'],['BREEZEWAY_RESTROOMS','EDUCATION'],
+  ['BONOBOS_RESTROOMS','CATHOUSE_CAFE_RESTROOMS'],
+ ];
+ const neighborhoods=[
+  ['ZAMBEZI','PRIMATE_PAVILLION','PRIMATE_CANYON','BREEZEWAY_RESTROOMS'],
+  ['PRIMATE_CANYON','CHINA','BONOBOS_RESTROOMS'],
+  ['COURTYARD_RESTROOMS','BREEZEWAY_RESTROOMS','EDUCATION','NOCTURNAL','CATHOUSE_CAFE_RESTROOMS','CAT_COUNTRY','PRIMATE_CANYON'],
+  ['HERPETARIUM','EVENT_CENTER','BONOBOS_RESTROOMS','CHINA','PRIMATE_CANYON'],
+  ['CATHOUSE_CAFE_RESTROOMS','TROPICAL_BIRDS','HERPETARIUM','EVENT_CENTER','KOMODOS'],
+  ['HERPETARIUM','EVENT_CENTER','KOMODOS','AQUARIUM'],
+  ['HERPETARIUM','KOMODOS','AQUARIUM','EXPO','MEMMEX_RESTROOMS'],
+  ['TROPICAL_BIRDS','MEMMEX_RESTROOMS','EXPO','AQUARIUM'],
+ ];
+ for(const option of [...directConnections,...neighborhoods])for(const code of option)assert.ok(known.has(code));
+ const pairKey=(a,b)=>[a,b].sort().join(':'),direct=new Set(directConnections.map(([a,b])=>pairKey(a,b)));
+ const pairs=gps.pairs.map(pair=>{
+  const connection=direct.has(pairKey(pair.from,pair.to)),shared=neighborhoods.some(n=>n.includes(pair.from)&&n.includes(pair.to)),
+   factor=connection?.8:shared?.9:1;
+  return{...pair,accessFactor:factor,accessPenaltyMeters:pair.meters*factor,
+   accessBasis:connection?'EXPLICIT_SAVED_CONNECTION':shared?'SHARED_SAVED_NEIGHBORHOOD':'GPS_BASELINE'};
+ });
+ const body={schema:'custodial.approved-manual-access-proposal.v1',manifestSha256:MANIFEST,
+  gpsReferenceSha256:GPS_SHA256,source:'packet/REQUIREMENTS_EXTRACTED.json:proximity_planning.explicit_directives',
+  directConnections,neighborhoods,pairs,fixedDenominatorMeters:807.6262463035904,
+  directConnectionFactor:.8,sharedNeighborhoodFactor:.9,otherFactor:1,
+  overlapsStacked:false,transitiveNeighborhoodMerging:false,
+  acceptedLongRoute:['ZAMBEZI','TROPICAL_BIRDS'],acceptedLongRouteDiscounted:false,
+  formulaApproved:true,approvalQuestionId:'call_97aaa12c08a84a0e8afed222696e481c',
+  walkingTimeClaimed:false,walkingDistancesMeasured:false,productionWritten:false};
+ assert.equal(body.fixedDenominatorMeters,gps.maximumPairwiseMeters,'Coordinate revision requires a new explicit proposal');
+ return{...body,accessProposalDigest:digest(body)};
+}
