@@ -1918,6 +1918,16 @@
         "object_id": "dab67b08a9371ff067fe75c234e69bbc9872f2e8"
       },
       {
+        "path": "scripts/exact-git-blob-batch-tests.mjs",
+        "mode": "100644",
+        "object_id": "50483cc53fb19a9838d4ca4786f535297f87b699"
+      },
+      {
+        "path": "scripts/exact-git-blob-batch.mjs",
+        "mode": "100644",
+        "object_id": "7e5e9940bed50944eb55bcd04f8992e8aedfce9d"
+      },
+      {
         "path": "scripts/export-isolated-pre-reconcile-metadata-tests.mjs",
         "mode": "100644",
         "object_id": "f7eabd5c300548c3a109f1cf823f5720234cda68"
@@ -2665,12 +2675,12 @@
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
         "mode": "100644",
-        "object_id": "87e9d83becc60bf74116fdff8c4aefe0cb362b0d"
+        "object_id": "d558aeb688caf9ef451e5a405b7ebef89bf6c941"
       },
       {
         "path": "scripts/integrated-backend-authority-release-provenance-tests.mjs",
         "mode": "100644",
-        "object_id": "b9310d07f8716a6a9ce1fbc8274cd1da8a4f1a6e"
+        "object_id": "af45220a669bde327e318e12a9ae6fe8b2cf720f"
       },
       {
         "path": "scripts/integrated-backend-authority-suite-order-isolated-tests.mjs",
@@ -9108,7 +9118,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 1796,
+    "authority_path_count": 1798,
     "migration_path_count": 298,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
