@@ -2057,16 +2057,19 @@ export function createScheduleRouter({
     if (!rows.length) throw new Error("No PTO rows were detected in the report text.");
 
     const bestByKey = new Map();
-    const rank = { approved: 3, submitted: 2, cancelled: 1, refused: 0 };
+    // No timestamps establish which conflicting report entry is current.
+    // Accept only unambiguous Approved rows; Submitted is never approval.
+    const conflictingKeys = new Set();
     for (const row of rows) {
       const key = `${row.service_date}__${row.employee_name.toLowerCase()}`;
       const prior = bestByKey.get(key);
-      const currentRank = rank[row.status.toLowerCase()] ?? -1;
-      const priorRank = prior ? (rank[String(prior.status || "").toLowerCase()] ?? -1) : -1;
-      if (!prior || currentRank > priorRank) bestByKey.set(key, row);
+      if (prior && prior.status.toLowerCase() !== row.status.toLowerCase()) conflictingKeys.add(key);
+      if (!prior) bestByKey.set(key, row);
     }
 
-    const kept = Array.from(bestByKey.values()).filter((row) => /^(approved|submitted)$/i.test(row.status));
+    const kept = Array.from(bestByKey.entries())
+      .filter(([key,row]) => !conflictingKeys.has(key) && /^approved$/i.test(row.status))
+      .map(([,row]) => row);
     const grouped = new Map();
     for (const row of kept) {
       const key = row.employee_name.toLowerCase();
@@ -2080,7 +2083,7 @@ export function createScheduleRouter({
       const dates = Array.from(new Set(group.dates)).sort();
       let start = dates[0];
       let end = dates[0];
-      const pushRange = () => importedRows.push({ employee_name: group.employee_name, start_date: start, end_date: end, pto_type: "PTO", notes: "Imported from PTO report", source: "report", provider: "local-parser", provider_used: "local-parser", provider_fallback: false, warnings: [] });
+      const pushRange = () => importedRows.push({ employee_name: group.employee_name, start_date: start, end_date: end, pto_type: "PTO", notes: "Imported from PTO report", source: "report", approval_status: "APPROVED", provider: "local-parser", provider_used: "local-parser", provider_fallback: false, warnings: [] });
       for (let i = 1; i < dates.length; i += 1) {
         const prev = new Date(`${end}T12:00:00`);
         prev.setDate(prev.getDate() + 1);
@@ -2130,7 +2133,7 @@ export function createScheduleRouter({
       "- employee_name should be the employee's display name in normal order when known, like 'Jane Smith'.",
       "- start_date and end_date must be YYYY-MM-DD.",
       "- collapse consecutive PTO dates for the same employee into one range row.",
-      "- include only approved or submitted PTO rows. Ignore cancelled and refused rows.",
+      "- include only explicitly approved PTO rows. Ignore submitted, cancelled, refused or missing status.",
       "- pto_type should usually be PTO unless the report clearly says otherwise.",
       "- notes should be short plain text or null.",
       "- confidence must be one of high, medium, low.",
@@ -2210,23 +2213,11 @@ export function createScheduleRouter({
       };
     }
 
-    const localRows = Array.isArray(localResult?.import_rows) ? localResult.import_rows : [];
-    const localWarnings = localRows.reduce((sum, row) => sum + (Array.isArray(row?.warnings) ? row.warnings.length : 0), 0);
-    const geminiWarnings = normalizedGeminiRows.reduce((sum, row) => sum + (Array.isArray(row?.warnings) ? row.warnings.length : 0), 0);
-
-    if (!localRows.length || geminiWarnings <= localWarnings) {
-      return {
-        detected_rows: Array.isArray(localResult?.detected_rows) ? localResult.detected_rows : [],
-        kept_rows: normalizedGeminiRows,
-        import_rows: normalizedGeminiRows,
-        provider: "gemini",
-        providers_used: ["local-parser", "gemini"],
-        fallback_count: localRows.length,
-      };
-    }
-
+    // AI output assists manager review; it cannot establish PTO approval or
+    // replace the deterministically approved report dates used by import.
     return {
       ...localResult,
+      review_rows: normalizedGeminiRows.map(row => ({...row, approval_verified: false, requires_manager_confirmation: true})),
       providers_used: ["local-parser", "gemini"],
       fallback_count: normalizedGeminiRows.length,
     };

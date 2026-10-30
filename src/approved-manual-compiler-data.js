@@ -34,6 +34,12 @@ export function prepareApprovedManualCompilerData(week){
         if(last&&last.owner===owner&&last.end===phase.start)last.end=phase.end;
         else segments.push({owner,start:phase.start,end:phase.end});
       }
+      // The approved base owner starts their own areas at their actual static
+      // shift start. Temporary custody of colleagues' not-yet-started areas is
+      // unspecified; the complete-site coverage window is retained separately.
+      assert.equal(segments[0].owner,baseOwner.name);
+      assert.ok(baseOwner.shift.start<=segments[0].start);
+      segments[0].start=baseOwner.shift.start;
       for(const segment of segments)assignments.push({
         workId:`manual:${week.manifestSha256.slice(0,16)}:${day.weekday}:${group.referenceCode}:${segment.start}`,
         dayOfWeek:day.weekday,locationId:group.primaryLocationId,locationCodeSnapshot:group.referenceCode,
@@ -52,6 +58,8 @@ export function prepareApprovedManualCompilerData(week){
   const ratingAuthority={schema:'custodial.approved-manual-group-ratings.v1',manifestSha256:week.manifestSha256,
     unit:week.ratingUnit,groups:[...groups].map(([name,group])=>({locationCode:group.referenceCode,
       primaryLocationId:group.primaryLocationId,score:ratings.get(name)})),
+    completeCoverageWindows:week.days.map(day=>({dayOfWeek:day.weekday,...clone(day.checkedWindow)})),
+    prearrivalPolicy:'OWN_BASE_AREAS_FROM_ACTUAL_SHIFT_START_ONLY',
     proximityPercent:week.objective.proximityPercent,loadPercent:week.objective.loadPercent,
     normalizedFormula:null,formulaApproved:false,legacyComponentWeightsReplaced:false,physicalMinutesEstablished:false};
   const result={schema:'custodial.approved-manual-compiler-data.v1',manualDataDigest:dataDigest,

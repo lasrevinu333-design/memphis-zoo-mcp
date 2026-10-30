@@ -1,3 +1,4 @@
+import {withApprovedManualFixtureCapacities} from './fixtures/approved-manual-capacity-source.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {isAbsolute,resolve} from 'node:path';
@@ -8,9 +9,10 @@ import {prepareApprovedManualAbsenceDay,solveApprovedManualAbsenceAdjustment,val
 
 const week=readApprovedManualWeek(),draft=prepareApprovedManualSourceDraft({week,
  referenceBytes:fs.readFileSync(new URL('../'+week.referenceBindings.reference.path,import.meta.url))}),
+ capacityFixtureSource=withApprovedManualFixtureCapacities(draft.sourceDraft),
  proposal=JSON.parse(fs.readFileSync(new URL('../config/schedules/manual-approved-20261030/absence-objective-proposal.json',import.meta.url))),
  id=name=>week.referenceBindings.people.find(p=>p.approvedName.startsWith(name+' ')).employeeId,
- input=(serviceDate,names)=>prepareApprovedManualAbsenceDay({week,source:draft.sourceDraft,ownerConfig:draft.ownerConfig,
+ input=(serviceDate,names)=>prepareApprovedManualAbsenceDay({week,source:capacityFixtureSource,ownerConfig:draft.ownerConfig,
   serviceDate,absentPersonIds:names.map(id)});
 const args=process.argv.slice(2);assert.ok(!args.length||(args.length===2&&args[0]==='--evidence-dir'&&isAbsolute(args[1])));
 const evidence=args.length?args[1]:null;
@@ -23,7 +25,7 @@ if(evidence){
   files:files.map(path=>({path,sha256:createHash('sha256').update(fs.readFileSync(new URL('../'+path,import.meta.url))).digest('hex')})),
   productionWritten:false,publicationEligible:false,physicalAcceptance:false});
 }
-const lockedWeek=JSON.stringify(week),lockedSource=JSON.stringify(draft.sourceDraft),lockedConfig=JSON.stringify(draft.ownerConfig);
+const lockedWeek=JSON.stringify(week),lockedSource=JSON.stringify(draft.sourceDraft),lockedConfig=JSON.stringify(draft.ownerConfig),lockedCapacityFixture=JSON.stringify(capacityFixtureSource);
 for(let date=2;date<=8;date++){
  const unchanged=input(`2026-11-0${date}`,[]);assert.equal(unchanged.status,'UNCHANGED_APPROVED_DAY');
  assert.deepEqual(unchanged.day,week.days.find(d=>d.weekday===new Date(`2026-11-0${date}T12:00Z`).getUTCDay()));
@@ -76,10 +78,10 @@ for(const [date,names]of cases){
  const wrongPolicy=structuredClone(proposal);wrongPolicy.weights.proximity=100;
  await assert.rejects(()=>solveApprovedManualAbsenceAdjustment(prepared,{proposal:wrongPolicy}));
  if(date==='2026-11-03'){
-  const replacement=prepared.roster.find(p=>p.personId===id('Karen')),capacity=draft.sourceDraft.slots.find(s=>s.contractorCapacity===true),
+  const replacement=prepared.roster.find(p=>p.personId===id('Karen')),capacity=capacityFixtureSource.slots.find(s=>s.contractorCapacity===true),
    substitute={slotId:capacity.id,serviceDate:date,managerConfirmed:true,actualHoursConfirmed:true,
     confirmationReference:'LOCAL_FIXTURE_NOT_A_BOOKING',shift:structuredClone(replacement.shift),lunch:structuredClone(replacement.lunch)},
-   apply=sub=>applyApprovedManualCoverAllSubstitute({acceptedPlan:solved,input:prepared,proposal,source:draft.sourceDraft,
+   apply=sub=>applyApprovedManualCoverAllSubstitute({acceptedPlan:solved,input:prepared,proposal,source:capacityFixtureSource,
     absentPersonId:replacement.personId,substitute:sub}),overlay=apply(substitute);
   assert.equal(overlay.solverInvoked,false);assert.equal(overlay.otherNormalOwnersChanged,false);assert.equal(overlay.scoringRerun,false);
   assert.equal(overlay.absentPersonIds.length,3);assert.equal(overlay.contractorBooked,false);assert.equal(overlay.publicationEligible,false);
@@ -93,7 +95,7 @@ for(const [date,names]of cases){
   incompatibleLunch.lunchCovererSlotId=prepared.roster.find(p=>p.name.startsWith('Xavier ')).slotId;
   assert.throws(()=>apply(incompatibleLunch));
   const stale=structuredClone(solved);stale.phaseOwners[0].owners.CHINA='stale-owner';
-  assert.throws(()=>applyApprovedManualCoverAllSubstitute({acceptedPlan:stale,input:prepared,proposal,source:draft.sourceDraft,absentPersonId:replacement.personId,substitute}));
+  assert.throws(()=>applyApprovedManualCoverAllSubstitute({acceptedPlan:stale,input:prepared,proposal,source:capacityFixtureSource,absentPersonId:replacement.personId,substitute}));
   save('THIRD_ABSENCE_COVERALL_OVERLAY.json',overlay);
  }
  results.push({date,absent:names,status:solved.status,fullHourLunches:checked.fullHourLunches,ownershipChecks,
@@ -101,7 +103,7 @@ for(const [date,names]of cases){
  save(`CASE_${date}.json`,{input:prepared,plan:solved,validation:checked,ownershipChecks});
  console.log(JSON.stringify(results.at(-1)));
 }
-assert.equal(JSON.stringify(week),lockedWeek);assert.equal(JSON.stringify(draft.sourceDraft),lockedSource);assert.equal(JSON.stringify(draft.ownerConfig),lockedConfig);
+assert.equal(JSON.stringify(week),lockedWeek);assert.equal(JSON.stringify(draft.sourceDraft),lockedSource);assert.equal(JSON.stringify(draft.ownerConfig),lockedConfig);assert.equal(JSON.stringify(capacityFixtureSource),lockedCapacityFixture);
 const result={status:'PASS',scope:'Real bounded local solver with the exact owner-approved formula; not manager publication, SQL admission, production activation or physical acceptance',formulaApproved:true,results,
  allSevenBaselinesPreserved:true,sourceAndOwnerConfigPreserved:true,thirdAbsenceRequestsManagerDecision:true,
  thirdAbsenceUsesExistingCapacityWithoutReshuffle:true,unconfirmedShortAndConflictingContractorHoursRejected:true,

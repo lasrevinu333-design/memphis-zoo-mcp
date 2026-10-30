@@ -146,13 +146,13 @@ try{
  assert.equal(accepted.status,'PERSISTED_CURRENT');assert.equal(accepted.solverInvoked,false);save('PUBLICATION.json',accepted);
  const managerSnapshot=await plane.getManagerSnapshot({manager:input.manager,weekStart:date}),managerView=managerSnapshot.approved_manual_schedule;
  assert.equal(managerView?.groups.length,23);assert.equal(managerView.days.length,7);
- for(const d of managerView.days)for(const phase of d.phases)assert.equal(phase.totalPoints,136);
+ for(const d of managerView.days)for(const phase of d.phases)if(phase.completeSiteCoverageRequired)assert.equal(phase.totalPoints,136);
  save('MANAGER_VIEW.json',managerView);result.managerRatingViewSqlQualified=true;
  phase('read_every_day_full_hour_lunch_and_physical_ownership');
  const stored=(await query('select document_json from public.weekly_schedule_lunch_documents where projection_id=$1',[accepted.projection_id])).rows[0].document_json;
  assert.equal(stored.loans.length,40);assert.ok(stored.loans.every(l=>l.helper_slot_ids.length===1&&l.fallback===null));
  const minute=t=>Number(t.slice(0,2))*60+Number(t.slice(3,5)),time=m=>`${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
- let dayReads=0,minuteReads=0,physicalOwnershipComparisons=0,employeeReads=0;
+ let dayReads=0,minuteReads=0,physicalOwnershipComparisons=0,employeeReads=0,earlyBasePhysicalOwnershipComparisons=0;
  for(const day of week.days){
   const offset=(day.weekday+6)%7,serviceDate=new Date(Date.parse(date+'T12:00:00Z')+offset*86400000).toISOString().slice(0,10);
   // Use short role-scoped sessions for reads; the pool itself stays admin for
@@ -162,6 +162,15 @@ try{
    assignments=(await client.query('select * from public.custodial_operational_location_assignments($1::date)',[serviceDate])).rows;
    await client.query('commit');
   }catch(e){await client.query('rollback');throw e;}finally{client.release();}
+  for(const employee of day.employees)for(const name of employee.baseGroups){
+   const g=week.referenceBindings.groups.find(x=>x.approvedGroup===name),person=week.referenceBindings.people.find(p=>p.approvedName===employee.name);
+   if(g.retainedServiceModes[0]!=='scan_tracked')continue;
+   for(const l of g.includedLocations){
+    const at=minute(employee.shift.start),active=assignments.filter(r=>r.location_id===l.locationId&&minute(r.coverage_start)<=at&&at<minute(r.coverage_end));
+    assert.deepEqual(active.map(r=>r.assigned_employee_id),[person.employeeId],`Own base area missing at actual start: ${serviceDate}/${employee.name}/${name}`);
+    earlyBasePhysicalOwnershipComparisons++;
+   }
+  }
   const lunch=await cp('static_weekly_v8_read_lunch_document',[serviceDate]);
   assert.equal(lunch.persistence_status,'PERSISTED');assert.equal(lunch.loans.length,day.lunches.length);dayReads++;
   for(const p of day.employees){const person=week.referenceBindings.people.find(x=>x.approvedName===p.name),
@@ -178,7 +187,8 @@ try{
    }
   }
  }
- assert.equal(dayReads,7);assert.equal(minuteReads,3780);assert.equal(employeeReads,40);
+ assert.equal(dayReads,7);assert.equal(minuteReads,3780);assert.equal(employeeReads,40);assert.ok(earlyBasePhysicalOwnershipComparisons>0);
+ result.earlyBasePhysicalOwnershipComparisons=earlyBasePhysicalOwnershipComparisons;
  const counts=(await query('select count(*)::integer as n from public.weekly_schedule_projection_assignments where projection_id=$1',[accepted.projection_id])).rows[0].n;
  assert.equal(counts,346);await fixture.assertOwned();
  if(afterSqlQualified){phase('current_day_atomic_activation');memoryContextLogged=false;result.currentDayActivation=await afterSqlQualified({

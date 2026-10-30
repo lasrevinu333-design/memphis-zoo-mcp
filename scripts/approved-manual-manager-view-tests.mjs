@@ -10,11 +10,24 @@ const projectionId='00000000-0000-4000-8000-000000001003',source=args.currentSou
  lunchDocument={...structuredClone(result.lunchDocument),projection_id:projectionId,persistence_status:'PERSISTED'},
  view=approvedManualManagerView({snapshot,source,lunchDocument});
 assert.equal(view.groups.length,23);assert.equal(view.days.length,7);assert.equal(view.effortBudgetsReplaced,false);
-for(const day of view.days)for(const phase of day.phases){assert.equal(phase.totalPoints,136);assert.equal(phase.owners.flatMap(o=>o.groups).length,23);}
+for(const day of view.days)for(const phase of day.phases){
+ const covered=phase.owners.flatMap(o=>o.groups);assert.equal(new Set([...covered,...phase.notYetStartedGroups]).size,23);
+ if(phase.completeSiteCoverageRequired){assert.equal(phase.totalPoints,136);assert.equal(covered.length,23);}
+ else {assert.ok(phase.notYetStartedGroups.length);assert.ok(phase.totalPoints<136);}
+}
 const slot=name=>args.currentOwnerConfig.slots[name].slotId,
  phase=(date,time)=>view.days.find(d=>d.serviceDate===date).phases.find(p=>p.start<=time&&time<p.end),
  points=(date,time,name)=>phase(date,time).owners.find(o=>o.slotId===slot(name))?.points??0;
 assert.equal(points('2026-11-02','08:00','TAMMY'),24);
+assert.equal(points('2026-11-02','05:00','TAMMY'),24);
+assert.equal(phase('2026-11-02','05:00').completeSiteCoverageRequired,false);
+const sunday=week.days.find(d=>d.weekday===0),jada=sunday.employees.find(p=>p.name.startsWith('Jada '));
+assert.equal(points('2026-11-08','06:00','JADA'),week.ratings.filter(r=>jada.baseGroups.includes(r.group)).reduce((n,r)=>n+r.score,0));
+for(const day of week.days)for(const p of day.employees){
+ const slotId=week.referenceBindings.people.find(b=>b.approvedName===p.name).slotId,
+  at=phase(`2026-11-${String(day.weekday===0?8:day.weekday+1).padStart(2,'0')}`,p.shift.start);
+ assert.ok(at.owners.some(o=>o.slotId===slotId),'Own approved base areas begin at actual shift start');
+}
 assert.equal(points('2026-11-06','15:00','KILTRA'),67);assert.equal(points('2026-11-06','15:00','ALIJAH'),69);
 for(const [name,n]of [['ALIJAH',45],['KILTRA',52],['XAVIER',39]])assert.equal(points('2026-11-07','15:00',name),n);
 for(const [name,n]of [['ALIJAH',36],['KILTRA',35],['DERRICK',36],['XAVIER',29]])assert.equal(points('2026-11-08','15:00',name),n);

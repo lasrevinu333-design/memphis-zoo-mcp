@@ -1,5 +1,5 @@
 import { postgresJsonbContentDigest } from './static-weekly-schedule-compiler.js';
-import { canonicalJson } from './static-weekly-schedule-model.js';
+import { canonicalJson,contentDigest } from './static-weekly-schedule-model.js';
 import { createIndependentlyVerifiedStaticWeeklyLunchCandidate } from './static-weekly-schedule-verifier.js';
 import {
   createStaticWeeklyLunchCoverageCandidate,
@@ -100,6 +100,14 @@ export function createFreshVerifiedStaticWeeklyLunchAuthorityDocument({ input, r
   }
   if (!verification.ok) fail('lunch_authority_candidate_verification_failed', { reason: verification.reason || null });
   return finishLunchAuthorityDocument(exactCandidate, result);
+}
+
+// Native DATA serialization for a candidate already derived inside the
+// isolated fixed-plan boundary. This creates no approval or persistence.
+export function serializePreparedStaticWeeklyLunchAuthorityDocument({candidate,authorityDigest,replayDigest}){
+  if(!/^[0-9a-f]{64}$/.test(authorityDigest)||!/^[0-9a-f]{64}$/.test(replayDigest))fail('lunch_authority_identity_required');
+  return finishLunchAuthorityDocument({...candidate,candidateDigest:contentDigest(candidate)},
+    {authorityDigest,replayDigest});
 }
 
 function finishLunchAuthorityDocument(exactCandidate, result) {

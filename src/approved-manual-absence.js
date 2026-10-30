@@ -4,6 +4,7 @@ import {postgresJsonbContentDigest as digest} from './static-weekly-schedule-pro
 import {assertNormalOwnerEligibility,validateOwnerEligibilityConfig} from './static-weekly-owner-eligibility.js';
 import {prepareApprovedManualAccessProposal} from './approved-manual-gps.js';
 import {solveStaticWeeklyMip} from './static-weekly-schedule-solver.js';
+import {snapshotContractorCapacity} from './static-weekly-schedule-model.js';
 
 const minute=t=>Number(t.slice(0,2))*60+Number(t.slice(3));
 const contains=(a,b)=>minute(a.start)<=minute(b.start)&&minute(a.end)>=minute(b.end);
@@ -397,13 +398,21 @@ export function applyApprovedManualCoverAllSubstitute({acceptedPlan,input,propos
  const capacity=source.slots.find(s=>s.id===substitute.slotId&&s.contractorCapacity===true),
   template=capacity?.contractorAvailability?.find(a=>a.dayOfWeek===input.weekday);
  assert.ok(capacity&&template,'Select existing source-bound CoverAll capacity');
+ snapshotContractorCapacity(capacity,input.serviceDate);
  assert.ok(!input.roster.some(p=>p.slotId===capacity.id));
  assert.ok(Array.isArray(template.qualifications)&&template.qualificationProvenance);
  assert.ok(Array.isArray(template.restrictions)&&template.restrictionProvenance);
  const replaceSlot=slot=>slot===replaced.slotId?capacity.id:slot,
-  phaseOwners=acceptedPlan.phaseOwners.map(p=>({window:structuredClone(p.window),owners:Object.fromEntries(Object.entries(p.owners).map(([g,s])=>[g,replaceSlot(s)]))})),
+  retainedPhaseOwners=acceptedPlan.phaseOwners.map(p=>({window:structuredClone(p.window),owners:Object.fromEntries(Object.entries(p.owners).map(([g,s])=>[g,replaceSlot(s)]))})),
+  phaseOwners=[...retainedPhaseOwners],phaseOrigins=input.phases.map(p=>p.index),
+  checkedWindow={start:input.checkedWindow.start,
+   end:shift.end>input.checkedWindow.end?shift.end:input.checkedWindow.end},
   roster=input.roster.filter(p=>p.slotId!==replaced.slotId).map(p=>({slotId:p.slotId,personId:p.personId,name:p.name,shift:p.shift,lunch:p.lunch,kind:'EMPLOYEE'}));
  roster.push({slotId:capacity.id,name:capacity.label,kind:'CONTRACTOR_CAPACITY',shift,lunch,replacesPersonId:replaced.personId});
+ // Confirmed extra hours create only dated inherited custody, never an
+ // extension of an employee's shift or a new normal cleaning assignment.
+ const allAreas=()=>Object.fromEntries(input.groups.map(g=>[g.code,capacity.id]));
+ if(checkedWindow.end>input.checkedWindow.end){phaseOwners.push({window:{start:input.checkedWindow.end,end:checkedWindow.end},owners:allAreas()});phaseOrigins.push(input.phases.length-1);}
  const bySlot=new Map(roster.map(p=>[p.slotId,p])),oldLunch=acceptedPlan.lunchPlans.find(l=>l.recipientSlotId===replaced.slotId),
   sameLunch=oldLunch.window.start===lunch.start&&oldLunch.window.end===lunch.end;
  const coverer=substitute.lunchCovererSlotId??(sameLunch?oldLunch.covererSlotId:null);
@@ -424,12 +433,12 @@ export function applyApprovedManualCoverAllSubstitute({acceptedPlan,input,propos
   const a=lunchPlans[i],b=lunchPlans[j];
   assert.ok(a.covererSlotId!==b.covererSlotId||!overlaps(a.window,b.window),'CoverAll lunch creates overlapping helper appointments');
  }
- const edges=new Set([minute(input.checkedWindow.start),minute(input.checkedWindow.end)]);
+ const edges=new Set([minute(checkedWindow.start),minute(checkedWindow.end)]);
  for(const p of phaseOwners)for(const t of Object.values(p.window))edges.add(minute(t));
  for(const p of roster)for(const w of [p.shift,p.lunch])for(const t of Object.values(w))edges.add(minute(t));
- const ordered=[...edges].filter(t=>t>=minute(input.checkedWindow.start)&&t<=minute(input.checkedWindow.end)).sort((a,b)=>a-b),coverage=[];
+ const ordered=[...edges].filter(t=>t>=minute(checkedWindow.start)&&t<=minute(checkedWindow.end)).sort((a,b)=>a-b),coverage=[];
  for(let i=0;i<ordered.length-1;i++){
-  const start=ordered[i],end=ordered[i+1],w={start:time(start),end:time(end)},phaseIndex=input.phases.findIndex(p=>activeAt(p.window,start)),
+  const start=ordered[i],end=ordered[i+1],w={start:time(start),end:time(end)},phaseIndex=phaseOwners.findIndex(p=>activeAt(p.window,start)),sourcePhaseIndex=phaseOrigins[phaseIndex],
    phase=phaseOwners[phaseIndex],available=roster.filter(p=>contains(p.shift,w)&&!overlaps(p.lunch,w)),
    onShift=roster.filter(p=>contains(p.shift,w));assert.ok(phase&&available.length);
   const owners={};let total=0;
@@ -438,12 +447,12 @@ export function applyApprovedManualCoverAllSubstitute({acceptedPlan,input,propos
    const onLunch=activeAt(normal.lunch,start),relief=onLunch?lunchPlans.find(l=>l.recipientSlotId===normal.slotId):null,
     actual=onLunch?bySlot.get(relief?.covererSlotId):normal;
    assert.ok(actual&&available.some(p=>p.slotId===actual.slotId),'An owner is off shift or on lunch');
-   const area=input.phases[phaseIndex].areas.find(a=>a.code===group.code);
+   const area=input.phases[sourcePhaseIndex].areas.find(a=>a.code===group.code);
    if(actual.slotId===capacity.id){
     assert.ok((area.work.requiredQualifications||[]).every(q=>template.qualifications.includes(q))&&!template.restrictions.includes(area.work.locationId),'CoverAll source qualifications/restrictions do not permit these duties');
     assert.ok(!(area.work.restrictedSlotIds||[]).includes(capacity.id));
    }else if(onLunch){
-    assert.ok(input.reliefEligibility.includes(`${phaseIndex}:${group.code}:${actual.slotId}`),'The named helper cannot inherit this area');
+    assert.ok(input.reliefEligibility.includes(`${sourcePhaseIndex}:${group.code}:${actual.slotId}`),'The named helper cannot inherit this area');
     const original=input.roster.find(p=>p.slotId===actual.slotId);
     if(original.owner.key==='TAMMY'&&group.code==='CHINA'){
      const prior=acceptedPlan.coverage.find(c=>activeAt(c.window,start));
@@ -457,20 +466,113 @@ export function applyApprovedManualCoverAllSubstitute({acceptedPlan,input,propos
  }
  // Mechanical proof that every other normal assignment and relief appointment
  // remains the same. Only the missing person is replaced by source capacity.
- for(let i=0;i<phaseOwners.length;i++)for(const [g,slot]of Object.entries(acceptedPlan.phaseOwners[i].owners))assert.equal(phaseOwners[i].owners[g],replaceSlot(slot));
+ for(let i=0;i<retainedPhaseOwners.length;i++)for(const [g,slot]of Object.entries(acceptedPlan.phaseOwners[i].owners))assert.equal(retainedPhaseOwners[i].owners[g],replaceSlot(slot));
  for(const original of acceptedPlan.lunchPlans.filter(l=>l.recipientSlotId!==replaced.slotId)){
   const retained=lunchPlans.find(l=>l.recipientSlotId===original.recipientSlotId);
   assert.deepEqual(retained.window,original.window);assert.equal(retained.covererSlotId,replaceSlot(original.covererSlotId));
  }
- const body={schema:'custodial.approved-manual-coverall-overlay.v1',status:'VALIDATED_UNPUBLISHED_COVERALL_OVERLAY',
+ const extension=checkedWindow.start!==input.checkedWindow.start||checkedWindow.end!==input.checkedWindow.end;
+ const body={schema:extension?'custodial.approved-manual-coverall-overlay.v2':'custodial.approved-manual-coverall-overlay.v1',status:'VALIDATED_UNPUBLISHED_COVERALL_OVERLAY',
   serviceDate:input.serviceDate,acceptedPlanDigest:planDigest,sourceDigest:input.sourceDigest,
   absentPersonIds:[...input.absentPersonIds,absentPersonId].sort(),replacedPersonId:absentPersonId,
   substitute:{slotId:capacity.id,kind:'CONTRACTOR_CAPACITY',shift,lunch,confirmationReference:substitute.confirmationReference,
    actualHoursConfirmed:true,managerConfirmationIsCallerInput:true},
-  checkedWindow:input.checkedWindow,phaseOwners,lunchPlans,coverage,roster,groups:input.groups,conservedRatingTotal:136,
+  checkedWindow,phaseOwners,lunchPlans,coverage,roster,groups:input.groups,conservedRatingTotal:136,
+  ...(extension?{normalCoverageWindow:structuredClone(input.checkedWindow),confirmedCoverageExtension:{
+   beforeNormalMinutes:minute(input.checkedWindow.start)-minute(checkedWindow.start),
+   afterNormalMinutes:minute(checkedWindow.end)-minute(input.checkedWindow.end),
+   ownerSlotId:capacity.id,purpose:'INHERITED_ALERTS_AND_ISSUES_ONLY',employeeShiftExtensions:false}}:{}),
   solverInvoked:false,scoringRerun:false,otherNormalOwnersChanged:false,weeklyBaselineChanged:false,
   formulaApproved:true,publicationEligible:false,productionWritten:false,contractorBooked:false};
  return{...body,overlayDigest:digest(body)};
+}
+
+// Compose the existing day engine over one aligned coverage period. The
+// authenticated owner must supply normalized ACCEPTED facts and any original
+// accepted day basis. This pure DATA adapter has no SQL, signing or authority.
+// Normal days bypass the solver; an unchanged accepted adjustment is validated
+// and retained. The third-absence branch reuses its exact two-absence basis.
+export async function solveApprovedManualAbsencePeriod({week,source,ownerConfig,frameStart,changes=[],priorDays=[]},
+ {proposal=readApprovedManualAbsenceObjective(),deadline=performance.now()+45000,signal}={}){
+ const date=value=>{assert.match(value,/^\d{4}-\d{2}-\d{2}$/);const parsed=new Date(value+'T12:00:00Z');assert.equal(parsed.toISOString().slice(0,10),value);return value;},
+  dates=Array.from({length:7},(_,i)=>new Date(Date.parse(date(frameStart)+'T12:00:00Z')+i*86400000).toISOString().slice(0,10)),
+  current=()=>{if(signal?.aborted||performance.now()>=deadline)throw Object.assign(Error('The dated preparation deadline elapsed; no publication was produced'),{code:'approved_manual_period_deadline_exceeded'});},
+  fail=(serviceDate,reason)=>({serviceDate,reason}),sourceDigest=digest(source),before=digest({week,source,ownerConfig,changes,priorDays}),
+  byDate=new Map(),previous=new Map(),issues=[],prepared=[],days=[],solvedDates=[],reusedDates=[];
+ current();assert.equal(source.serviceDate,frameStart);assert.deepEqual(source.exceptions,[],
+  'Pass the exact normal source separately from normalized accepted absence facts');
+ assert.equal(digest(proposal),digest(readApprovedManualAbsenceObjective()));
+ const version=source.version||source.versions?.[0];assert.equal(version.manualGroupRatingAuthority?.manifestSha256,week.manifestSha256);
+ if(version.effectiveStart!==null&&version.effectiveStart!==undefined){
+  date(version.effectiveStart);assert.ok(frameStart>=version.effectiveStart);
+  assert.equal((Date.parse(frameStart+'T12:00:00Z')-Date.parse(version.effectiveStart+'T12:00:00Z'))%(7*86400000),0,
+   'The period must retain its actual approved-source origin');
+ }
+ if(version.effectiveEnd!==null&&version.effectiveEnd!==undefined)assert.ok(dates[6]<date(version.effectiveEnd),
+  'The full period must remain inside one actual approved publication');
+ assert.ok(Array.isArray(changes)&&changes.length<=7&&Array.isArray(priorDays)&&priorDays.length<=7);
+ for(const change of changes){
+  assert.ok(change&&dates.includes(date(change.serviceDate))&&!byDate.has(change.serviceDate));
+  assert.ok(Array.isArray(change.absentPersonIds)&&new Set(change.absentPersonIds).size===change.absentPersonIds.length);
+  byDate.set(change.serviceDate,change);
+ }
+ for(const record of priorDays){assert.ok(record&&dates.includes(date(record.serviceDate))&&!previous.has(record.serviceDate));previous.set(record.serviceDate,record);}
+ const validatePrior=(record,input)=>{
+  assert.ok(record?.input&&record?.plan,'An original accepted two-absence basis is required');
+  assert.equal(record.input.inputDigest,input.inputDigest,'The original accepted day source, employees or policy changed');
+  const {planDigest,...body}=record.plan;assert.equal(digest(body),planDigest,'The original accepted plan changed');
+  validateApprovedManualAbsenceProposal({plan:record.plan,input,proposal});
+ };
+ // Prepare every day and refuse known hard failures before the first solve.
+ for(const serviceDate of dates){
+  current();const change=byDate.get(serviceDate),absent=[...(change?.absentPersonIds||[])].sort(),prior=previous.get(serviceDate);
+  if(absent.length>3){issues.push(fail(serviceDate,'MORE_THAN_THREE_ABSENCES_NEEDS_AN_EXPLICIT_COVERAGE_DECISION'));continue;}
+  if(absent.length===3){
+   if(!prior?.input||!prior?.plan||prior.input.absentPersonIds.length!==2
+    ||prior.input.absentPersonIds.some(id=>!absent.includes(id))||!change.substitute){
+    issues.push(fail(serviceDate,'THIRD_ABSENCE_NEEDS_THE_ACCEPTED_TWO_ABSENCE_PLAN_AND_CONFIRMED_COVERALL'));continue;
+   }
+   const basis=prepareApprovedManualAbsenceDay({week,source,ownerConfig,serviceDate,absentPersonIds:prior.input.absentPersonIds});
+   validatePrior(prior,basis);const added=absent.filter(id=>!basis.absentPersonIds.includes(id));assert.equal(added.length,1);
+   try{
+    const overlay=applyApprovedManualCoverAllSubstitute({acceptedPlan:prior.plan,input:basis,proposal,source,
+     absentPersonId:added[0],substitute:change.substitute});
+    prepared.push({serviceDate,kind:'COVERALL',input:basis,plan:structuredClone(prior.plan),overlay});
+   }catch(error){if(error?.code!=='ERR_ASSERTION')throw error;issues.push(fail(serviceDate,'CONFIRMED_COVERALL_HOURS_OR_RELIEF_DO_NOT_COVER_THE_RETAINED_PLAN'));}
+   continue;
+  }
+  const input=prepareApprovedManualAbsenceDay({week,source,ownerConfig,serviceDate,absentPersonIds:absent});
+  if(input.status==='UNCHANGED_APPROVED_DAY'){prepared.push({serviceDate,kind:'NORMAL',approvedDay:input.day});continue;}
+  if(input.status!=='PREPARED_FOR_EXPLICIT_OBJECTIVE'){
+   issues.push({serviceDate,reason:'STATIC_HOURS_OR_FULL_HOUR_COVERAGE_UNRESOLVED',constraints:structuredClone(input.issues||[])});continue;
+  }
+  if(prior&&prior.input?.absentPersonIds.length===absent.length&&prior.input.absentPersonIds.every(id=>absent.includes(id))){
+   validatePrior(prior,input);prepared.push({serviceDate,kind:'ABSENCE',input,plan:structuredClone(prior.plan),reused:true});
+  }else prepared.push({serviceDate,kind:'ABSENCE',input});
+ }
+ const result=(status,extra={})=>{
+  assert.equal(digest({week,source,ownerConfig,changes,priorDays}),before,'Dated composition mutated its source or original basis');
+  const body={schema:'custodial.approved-manual-period-adjustments.v1',status,frameStart,frameEnd:dates[6],sourceDigest,
+   manifestSha256:week.manifestSha256,manualDataDigest:week.dataDigest,acceptedFactsDigest:digest(changes),
+   formulaObjectiveDigest:digest(proposal),days,issues,solvedDates,reusedDates,solverInvoked:solvedDates.length>0,
+   normalWeekChanged:false,publicationEligible:false,productionWritten:false,contractorBooked:false,...extra};
+  return{...body,periodDraftDigest:digest(body)};
+ };
+ if(issues.length)return result('COVERAGE_CONSTRAINTS_UNRESOLVED');
+ for(const item of prepared){
+  current();
+  if(item.kind==='ABSENCE'&&!item.plan){
+   const plan=await solveApprovedManualAbsenceAdjustment(item.input,{proposal,deadline,signal});current();solvedDates.push(item.serviceDate);
+   if(plan.status!=='COMPLETE_APPROVED_FORMULA_ADJUSTMENT_DRAFT'){
+    issues.push(fail(item.serviceDate,plan.status));return result('COVERAGE_CONSTRAINTS_UNRESOLVED');
+   }
+   item.plan=plan;
+  }
+  if(item.kind==='ABSENCE'){validateApprovedManualAbsenceProposal({plan:item.plan,input:item.input,proposal});if(item.reused)reusedDates.push(item.serviceDate);}
+  days.push(item);
+ }
+ assert.equal(days.length,7);
+ return result('COMPLETE_VALIDATED_DATED_DRAFTS');
 }
 
 // Compatibility name for previously saved callers; one implementation only.

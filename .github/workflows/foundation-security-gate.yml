@@ -123,6 +123,8 @@ jobs:
           npm run --silent test:static-weekly-scheduler:fast
           node scripts/approved-manual-gps-tests.mjs
           node scripts/approved-manual-absence-tests.mjs
+          node scripts/approved-manual-period-projection-tests.mjs --native-evidence-dir "$RUNNER_TEMP/approved-manual-period-native"
+          node scripts/approved-manual-period-worker-tests.mjs "$RUNNER_TEMP/approved-manual-period-worker"
           node scripts/approved-manual-roster-transition-tests.mjs
           node scripts/approved-manual-activation-database-tests.mjs --out "$RUNNER_TEMP/approved-manual-activation-sql"
           # This starts only disposable worker-owned PostgreSQL containers and
@@ -157,4 +159,13 @@ jobs:
             ${{ runner.temp }}/approved-manual-activation-sql/RESULT.json
             ${{ runner.temp }}/approved-manual-activation-sql/SOURCE301_SCHEMA_FINGERPRINT.json
             ${{ runner.temp }}/approved-manual-activation-sql/CURRENT_DAY_ACTIVATION_RECEIPT.json
+          if-no-files-found: warn
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: approved-manual-dated-data-result-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/approved-manual-period-native/RESULT.json
+            ${{ runner.temp }}/approved-manual-period-worker/RESULT.json
           if-no-files-found: warn
