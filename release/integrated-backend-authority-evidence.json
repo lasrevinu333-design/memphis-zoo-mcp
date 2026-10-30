@@ -160,7 +160,7 @@
       {
         "path": ".github/workflows/foundation-security-gate.yml",
         "mode": "100644",
-        "object_id": "d011658d745a5f47e965457d74b12ab9547338ad"
+        "object_id": "b36f5652c4c036ab160284ed20c138b380ca5d7b"
       },
       {
         "path": ".github/workflows/integrated-release-attestation.yml",
@@ -515,7 +515,7 @@
       {
         "path": "docs/approved-manual-period-integration.md",
         "mode": "100644",
-        "object_id": "8014cc52f9dd66a5ce801a888292b408c2367091"
+        "object_id": "212ed50ed4d5654da59e17eb7f8cae682335b089"
       },
       {
         "path": "docs/approved-manual-schedule-operations.md",
@@ -1518,6 +1518,11 @@
         "object_id": "c02a971e1e1348a37584f5f878f3f87afd777149"
       },
       {
+        "path": "scripts/approved-manual-capacity-transition-tests.mjs",
+        "mode": "100644",
+        "object_id": "32416e78ca88ffc1ef651319d477c0e4e5a1a814"
+      },
+      {
         "path": "scripts/approved-manual-gps-tests.mjs",
         "mode": "100644",
         "object_id": "421c15ef583d563ab27592cc0a6f006c7aa8ad06"
@@ -1700,7 +1705,7 @@
       {
         "path": "scripts/ci-workflow-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "9eafebf01f4d0ade36c5aba351343b08ae735152"
+        "object_id": "4fe83da50b495bf0530f668bff5bd139590d086f"
       },
       {
         "path": "scripts/cleaning-identity-gps-database-tests.mjs",
@@ -6095,7 +6100,7 @@
       {
         "path": "src/approved-manual-roster-transition.js",
         "mode": "100644",
-        "object_id": "fe029d884c9aef328b2b3852c75111feac8800ba"
+        "object_id": "832cc98a2331e646c494aa2a2da09c81335a716d"
       },
       {
         "path": "src/approved-manual-source-draft.js",
@@ -6975,7 +6980,7 @@
       {
         "path": "src/static-weekly-contractor-source-transition.js",
         "mode": "100644",
-        "object_id": "15b0b96cfdfcb1654749e66267ff4dde8dacac1a"
+        "object_id": "5b4c35ac7d82d38d79b98bb8e1afc7d13edbb92a"
       },
       {
         "path": "src/static-weekly-control-plane-runtime.js",
@@ -9453,7 +9458,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 1865,
+    "authority_path_count": 1866,
     "migration_path_count": 301,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
