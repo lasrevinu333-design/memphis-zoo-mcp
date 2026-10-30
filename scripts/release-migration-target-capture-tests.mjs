@@ -24,7 +24,7 @@ const declaredState=JSON.parse(fs.readFileSync(join(root,'release/production-mig
 const actualPlan=bindExistingPostgresForwardSources(root,readMigrationReplayPlan(root).files.slice(134).map((file,i)=>({order:i+1,file,phase:file.slice(15,-4),source_migration_version:file.slice(0,14),sha256:sha(fs.readFileSync(join(root,'supabase/migrations',file)))})));
 run('current163 plan accepts complete actual current declaration',()=>assert.deepEqual(assertTargetCapturePendingPlan(actualPlan,declaredState.pending_migrations),actualPlan));
 run('historical160 exact prefix remains supported without rewriting original plan',()=>assert.deepEqual(assertTargetCapturePendingPlan(actualPlan,actualPlan.slice(0,160)),actualPlan));
-for(const n of [0,159,161,162,166])run('capture plan rejects unsupported declared count '+n,()=>assert.throws(()=>assertTargetCapturePendingPlan(actualPlan,Array.from({length:n},(_,i)=>actualPlan[i]||actualPlan[0]))));
+for(const n of [0,159,161,162,167])run('capture plan rejects unsupported declared count '+n,()=>assert.throws(()=>assertTargetCapturePendingPlan(actualPlan,Array.from({length:n},(_,i)=>actualPlan[i]||actualPlan[0]))));
 run('current163 prefix drift refuses',()=>{const d=structuredClone(actualPlan);d[0].sha256='f'.repeat(64);assert.throws(()=>assertTargetCapturePendingPlan(actualPlan,d));});
 run('current163 tail drift refuses',()=>{const d=structuredClone(actualPlan);d[162].sha256='f'.repeat(64);assert.throws(()=>assertTargetCapturePendingPlan(actualPlan,d));});
 run('tail cannot be jointly redefined by plan and state',()=>{const d=structuredClone(actualPlan);d[161].sha256='f'.repeat(64);assert.throws(()=>assertTargetCapturePendingPlan(d,d));});
@@ -35,10 +35,14 @@ run('full-hour164 source retains exact163 predecessor',()=>{
  assert.deepEqual(assertTargetCapturePendingPlan(actualPlan.slice(0,163),actualPlan.slice(0,160)),actualPlan.slice(0,163));
 });
 run('named-coverer165 retains complete164 prefix and exact source tail',()=>{
- assert.equal(actualPlan.length,165);assert.deepEqual(assertTargetCapturePendingPlan(actualPlan,actualPlan),actualPlan);
- assert.deepEqual(assertTargetCapturePendingPlan(actualPlan,actualPlan.slice(0,164)),actualPlan);
+ const predecessor=actualPlan.slice(0,165);assert.equal(predecessor.length,165);assert.deepEqual(assertTargetCapturePendingPlan(predecessor,predecessor),predecessor);
+ assert.deepEqual(assertTargetCapturePendingPlan(predecessor,predecessor.slice(0,164)),predecessor);
 });
-for(const mutate of [p=>p.at(-1).sha256='f'.repeat(64),p=>p.at(-1).order=166,
+run('compact166 retains complete165 prefix and exact source tail',()=>{
+ assert.equal(actualPlan.length,166);assert.deepEqual(assertTargetCapturePendingPlan(actualPlan,actualPlan),actualPlan);
+ assert.deepEqual(assertTargetCapturePendingPlan(actualPlan,actualPlan.slice(0,165)),actualPlan);
+});
+for(const mutate of [p=>p.at(-1).sha256='f'.repeat(64),p=>p.at(-1).order=167,
  p=>p.at(-1).file='20990101000000_foreign.sql',p=>p.at(-1).forward_source={file:'foreign'},
  p=>p[0].sha256='f'.repeat(64),p=>p.push({...p.at(-1),order:165})])
  run('full-hour successor rejects changed tail, history or extra member',()=>{const p=structuredClone(actualPlan);mutate(p);assert.throws(()=>assertTargetCapturePendingPlan(p,p));});

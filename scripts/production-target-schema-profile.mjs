@@ -52,22 +52,25 @@ function validateCapturedTargetSchemaProfile(canonicalCatalog, profile) {
     'source_catalog_sha256', 'source_ledger_sha256', 'archive_digest', 'capture',
     'original_columns', 'original_role_memberships', 'policy_owner'], 'Closed production target profile required');
   assert.equal(profile.schema, 'custodial.production-target-schema-profile.v1');
-  assert.equal(profile.canonical_fingerprint, CANONICAL);
-  assert.equal(profile.deployment_fingerprint, DEPLOYMENT);
+  const successor=profile.canonical_fingerprint===FORWARD_CANONICAL,
+    canonicalFingerprint=successor?FORWARD_CANONICAL:CANONICAL,
+    deploymentFingerprint=successor?FORWARD_DEPLOYMENT:DEPLOYMENT;
+  assert.equal(profile.canonical_fingerprint, canonicalFingerprint);
+  assert.equal(profile.deployment_fingerprint, deploymentFingerprint);
   assert.equal(profile.source_fingerprint, SOURCE);
   assert.equal(profile.source_catalog_sha256, 'f034e7a0a019010093b15388ab1c2ee7865420bf343a4404d23a9a21c183b277');
   assert.equal(profile.source_ledger_sha256, '2f80104d2f1fe54a6604c2c84436f823b1a78542bc4ba3d7975236951db93b66');
   assert.equal(profile.archive_digest, '67c0d74bbf18c346314669119f0ae53ff61d9b00c4e6550b7af917b7f02bbdfe');
   closed(profile.capture, ['report_sha256', 'report_bytes', 'candidate_commit', 'candidate_tree',
     'plan_sha256', 'source_ledger_count', 'target_ledger_count', 'pending_count'], 'Exact genuine target capture required');
-  assert.equal(profile.capture.report_sha256, 'dafa8d869004fa047ec7a191b040d22503bef8001a4200a44123c860fba5ec94');
-  assert.equal(profile.capture.report_bytes, 18580457);
-  assert.equal(profile.capture.candidate_commit, '588b893b761d08b5157b4ca5b926f11a784bd142');
-  assert.equal(profile.capture.candidate_tree, '6783245807db5c90db056d9afaab7ba1839ca664');
-  assert.equal(profile.capture.plan_sha256, '1f9b4bf9e4721f4f9b871a762c8b76b2fdd959d4309632aba2f1ceb588aa7182');
+  assert.equal(profile.capture.report_sha256, successor?'7fded7c546d4c6d879df233f8059cbf4752433c2d9b403641730d6886452593a':'dafa8d869004fa047ec7a191b040d22503bef8001a4200a44123c860fba5ec94');
+  assert.equal(profile.capture.report_bytes, successor?18585920:18580457);
+  assert.equal(profile.capture.candidate_commit, successor?'7dec6b966b832a658240f114243c0d40971330dd':'588b893b761d08b5157b4ca5b926f11a784bd142');
+  assert.equal(profile.capture.candidate_tree, successor?'10e44aad24960bfaae4121efadf850955ba4dbb9':'6783245807db5c90db056d9afaab7ba1839ca664');
+  assert.equal(profile.capture.plan_sha256, successor?'f92f1867a5f8ec0e7cb201b87b040d1593cefbb5f1b1d5756dda4e248b945d61':'1f9b4bf9e4721f4f9b871a762c8b76b2fdd959d4309632aba2f1ceb588aa7182');
   assert.equal(profile.capture.source_ledger_count, 235);
-  assert.equal(profile.capture.target_ledger_count, 399);
-  assert.equal(profile.capture.pending_count, 164);
+  assert.equal(profile.capture.target_ledger_count, successor?400:399);
+  assert.equal(profile.capture.pending_count, successor?165:164);
   closed(profile.policy_owner, ['canonical_role', 'deployment_role', 'actual_private_schema_owners'], 'Exact policy-owner context required');
   assert.equal(profile.policy_owner.canonical_role, 'supabase_admin');
   assert.equal(profile.policy_owner.deployment_role, 'postgres');
@@ -76,7 +79,7 @@ function validateCapturedTargetSchemaProfile(canonicalCatalog, profile) {
     {schema_name: 'custodial_release_identity', owner_name: 'postgres'},
   ]);
   const canonical = fingerprintSchemaCatalog(canonicalCatalog);
-  assert.equal(canonical.fingerprint, CANONICAL, 'Complete fresh canonical catalog must remain exact');
+  assert.equal(canonical.fingerprint, canonicalFingerprint, 'Complete fresh canonical catalog must remain exact');
   const deployment = clone(canonical.normalized);
   assert.ok(Array.isArray(profile.original_columns) && profile.original_columns.length === 2);
   const note = one(deployment.columns, row => row.schema_name === 'public' && row.table_name === 'events_app_events'
@@ -106,8 +109,8 @@ function validateCapturedTargetSchemaProfile(canonicalCatalog, profile) {
   assert.deepEqual(extras.map(key).sort(), PLATFORM_MEMBERSHIPS.map(key).sort(), 'Only authenticated pre-existing platform memberships may differ');
   deployment.role_memberships = clone(memberships);
   const actual = fingerprintSchemaCatalog(deployment);
-  assert.equal(actual.fingerprint, DEPLOYMENT, 'Full physical catalog must equal the captured populated target');
-  return {canonicalFingerprint: CANONICAL, deploymentFingerprint: DEPLOYMENT,
+  assert.equal(actual.fingerprint, deploymentFingerprint, 'Full physical catalog must equal the captured populated target');
+  return {canonicalFingerprint, deploymentFingerprint,
     canonicalCatalog: canonical.normalized, deploymentCatalog: actual.normalized,
     canonicalCounts: counts(canonical.normalized), deploymentCounts: counts(actual.normalized), profile: clone(profile)};
 }

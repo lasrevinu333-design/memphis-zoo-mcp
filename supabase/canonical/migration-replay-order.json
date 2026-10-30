@@ -1212,6 +1212,10 @@
         {
           "name": "20261030031200_approved_manual_full_hour_coverers.sql",
           "sha256": "de548422310c3369bac0560e14507e4022cc9d5b9effe898d4f24ae79156cf6a"
+        },
+        {
+          "name": "20261030050235_compact_approved_initial_confirmation.sql",
+          "sha256": "fa9373adcf48f8d13db1b8e4876a5f134b02f8a897f20f887987cbd384393469"
         }
       ]
     }

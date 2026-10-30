@@ -41,6 +41,8 @@ for (const [name, edit] of [
   ['unrelated capture plan', p => { p.capture.plan_sha256 = '0'.repeat(64); }],
   ['historical160 capture report', p => { p.capture.report_sha256 = '946dd61971aba8f6976b5dd463909a7808b8fba697991c9513477f325e9b1dc0'; }],
   ['historical395 target ledger', p => { p.capture.target_ledger_count = 395; }],
+  ['historical399 target ledger', p => { p.capture.target_ledger_count = 399; }],
+  ['historical164 pending count', p => { p.capture.pending_count = 164; }],
   ['historical398 target ledger', p => { p.capture.target_ledger_count = 398; }],
   ['historical163 pending plan', p => { p.capture.pending_count = 163; }],
   ['historical297 report cannot authorize full-hour target', p => { p.capture.report_sha256 = '8042bc5e3a1bd141442fddb2b52b532b9eb67bdec6d0588bc5b87d951920a37e'; }],
@@ -74,7 +76,9 @@ check('source resolver reads the declared physical profile and keeps legacy no-p
     assert.notEqual(legacy.deploymentFingerprint, profile.deployment_fingerprint);
   } finally { rmSync(dir, {recursive: true}); }
 });
-if(currentProfile.schema==='custodial.production-target-schema-profile.forward.v1'){
+const preparationProfile=JSON.parse(readFileSync(join(root,'release/schema-evidence/SOURCE299_PRE_CAPTURE_EXPECTATION.json')));
+if(preparationProfile.schema==='custodial.production-target-schema-profile.forward.v1'){
+ const currentProfile=preparationProfile,profile=currentProfile.parent_profile;
  const forward=validateProductionTargetSchemaProfile(currentCanonical,currentProfile);
  check('forward expectation keeps complete catalog identity and genuine parent capture',()=>{
   assert.equal(forward.canonicalFingerprint,currentProfile.canonical_fingerprint);

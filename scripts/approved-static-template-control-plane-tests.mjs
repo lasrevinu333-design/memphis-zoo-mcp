@@ -1312,7 +1312,9 @@ const consumerBytes=readFileSync(new URL('./fixtures/approved-schedule-web-consu
 assert.equal(createHash('sha256').update(consumerBytes).digest('hex'),'fa9064b80f703fc77c989c27e16e10ebf5e0fa77c6194801233b4947484dab80','exact current web consumer, not an accepting stand-in');
 const webContext={};runInNewContext(consumerBytes.toString(),webContext);
 const webConsumer=webContext.MemphisApprovedSchedule;
-const configBytes=readFileSync(new URL('../config/custodial-six-person-static-20261005.json',import.meta.url));
+// This historical six-person contract retains its original owner config;
+// current staffing changes must not silently redefine its fixture.
+const configBytes=readFileSync(new URL('./fixtures/approved-initial-six-owner-40da.json',import.meta.url));
 assert.equal(createHash('sha256').update(configBytes).digest('hex'),'40da4e1d4cce52b2361b5403b7e5e4477ca00def0fd3649a1d76dacb48422f30');
 const ownerConfig=JSON.parse(configBytes),packet=loadSixPersonAbsenceSource(),currentSource=packet.compilerInput;
 assert.equal(packet.fixtureSha256,'882e5895d60338313b08f28ec327f2087468261749cdbac5dc7d78ac22e20469');
@@ -1331,6 +1333,10 @@ const templates=[{templateId,staffingCount:6,source:clone(currentSource),roleSlo
  patternAuthority:'OWNER_APPROVED_OPERATIONAL_PATTERN',artifactSha256:createHash('sha256').update(configBytes).digest('hex'),
  ownerConfigDigest:contentDigest(ownerConfig),patternPublicationStatus:'UNPUBLISHED_LOCAL_CANDIDATE'}];
 const inputsDigest=postgresJsonbContentDigest({templates,admittedBindings,ownerConfig});
+const admittedInitial=initialMode?(await import('../src/static-weekly-recurring-staffing-adaptation.js')).prepareApprovedStaticTemplateProjection({
+ templates,admittedBindings,currentSource,currentOwnerConfig:ownerConfig,
+ selection:{schema:'custodial.static-template-selection.v1',kind:'INITIAL_BASELINE',templateId,serviceDate:currentSource.serviceDate,
+  availablePersonIds:Object.values(ownerConfig.slots).filter(s=>!s.vacancy).map(s=>s.personId)}}):null;
 // Match the existing SQL's release-entry fingerprint, not an invented hash of
 // the narrower returned inputs. Approval evidence remains part of each entry.
 const catalogEntries=templates.map((template,i)=>({templateId:template.templateId,
@@ -1365,7 +1371,15 @@ class Client extends EventEmitter {
     currentSource:clone(currentSource),ownerConfig:clone(ownerConfig),templates:clone(templates),admittedBindings:clone(admittedBindings),
     templateCatalogDigest:catalogDigest,templateCatalogEntries:clone(catalogEntries),templateInputsDigest:inputsDigest});
   else if(sql.includes('static_weekly_materialize_approved_template')||sql.includes('static_weekly_materialize_approved_initial_baseline')){
-    const envelope=args[initialMode?6:8];assert.equal(args[0],actor.manager_id);assert.equal(args[initialMode?3:4],revision);
+    let envelope=args[initialMode?6:8];assert.equal(args[0],actor.manager_id);assert.equal(args[initialMode?3:4],revision);
+    if(initialMode){
+      assert.equal(envelope.schema,'custodial.approved-static-initial-materialization.compact.v1');
+      assert.equal(Object.hasOwn(envelope,'feasibility'),false);assert.ok(Buffer.byteLength(JSON.stringify(envelope))<2048);
+      assert.equal(envelope.feasibilityDigest,admittedInitial.digest);
+      envelope={...envelope,schema:'custodial.approved-static-initial-materialization.v1',feasibility:clone(admittedInitial)};
+      delete envelope.feasibilityDigest;
+      const {request,previewDigest,...body}=envelope;assert.equal(postgresJsonbContentDigest(body),previewDigest);
+    }
     if(initialMode){assert.equal(args[1],sourceId);assert.equal(envelope.feasibility.currentSourceDigest,postgresJsonbContentDigest(currentSource));
       assert.deepEqual(envelope.feasibility.candidateSource,currentSource);
       assert.equal(envelope.feasibility.initialBaseline.document.assignments.length,323);

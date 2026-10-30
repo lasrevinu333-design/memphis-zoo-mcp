@@ -45,14 +45,14 @@ await test('maintained ordinary restore canonical formatting is exactly retained
 });
 const canonicalPlan=manifest.plan.map(x=>({order:x.order,file:x.file,source_migration_version:x.file.slice(0,14),sha256:x.canonical_sha256}));
 const actualPlan=bindExistingPostgresForwardSources(root,canonicalPlan);
-const current164=bindExistingPostgresForwardSources(root,readMigrationReplayPlan(root).files.slice(134).map((file,index)=>({
+const current166=bindExistingPostgresForwardSources(root,readMigrationReplayPlan(root).files.slice(134).map((file,index)=>({
  order:index+1,file,phase:file.slice(15,-4),source_migration_version:file.slice(0,14),sha256:createHash('sha256').update(read('supabase/migrations/'+file)).digest('hex'),
 })));
-await test('exact full-hour164 plan preserves all original235 comparison obligations',()=>{
- assert.equal(current164.length,164);assert.deepEqual(validateOriginal235PreservationPlan(root,current164),manifest);
+await test('exact compact166 plan preserves all original235 comparison obligations',()=>{
+ assert.equal(current166.length,166);assert.deepEqual(validateOriginal235PreservationPlan(root,current166),manifest);
 });
 for(const mutation of [p=>p.at(-1).sha256='0'.repeat(64),p=>p.at(-1).phase='unknown',p=>p.at(-1).forward_source={},p=>p[160].sha256='0'.repeat(64),p=>p.push({...p.at(-1)})]){
- await test('full-hour preservation rejects changed tail, prefix, execution profile or extra migration',()=>{const p=structuredClone(current164);mutation(p);assert.throws(()=>validateOriginal235PreservationPlan(root,p));});
+ await test('compact preservation rejects changed tail, prefix, execution profile or extra migration',()=>{const p=structuredClone(current166);mutation(p);assert.throws(()=>validateOriginal235PreservationPlan(root,p));});
 }
 await test('all160 actual source inputs admitted through shipping dualhash resolver',()=>{
  validateOriginal235PreservationPlan(root,actualPlan);

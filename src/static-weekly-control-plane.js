@@ -742,7 +742,7 @@ export function createStaticWeeklyControlPlane({
 
   async function call(client, functionName, args) {
     const values = Array.isArray(args) ? args : [];
-    const placeholders = values.map((_, index) => `$${index + 1}`).join(",");
+    const placeholders = values.map((_, index) => `$${index+1}`).join(",");
     const { rows } = await client.query(`select public.${functionName}(${placeholders}) as result`, values);
     return rows[0]?.result;
   }
@@ -1221,8 +1221,11 @@ export function createStaticWeeklyControlPlane({
         constraintView:approvedStaticConstraintView(feasibility),
         solverInvoked:false,published:false};
       if(!/^[a-f0-9]{64}$/.test(text(previewDigest))||previewDigest!==digest)throw fail('static_template_preview_changed');
+      const compactEnvelope={...body,schema:'custodial.approved-static-initial-materialization.compact.v1',
+        feasibilityDigest:feasibility.digest,previewDigest:digest,request};
+      delete compactEnvelope.feasibility;
       const accepted=await call(client,'static_weekly_materialize_approved_initial_baseline',
-        [actor.managerId,id,date,revision,basis.generation,request.idempotencyKey,{...body,previewDigest:digest,request}]);
+        [actor.managerId,id,date,revision,basis.generation,request.idempotencyKey,compactEnvelope]);
       if(accepted?.ok!==true||accepted.persistence_status!=='PERSISTED'||accepted.feasibility_digest!==feasibility.digest
         ||accepted.source_id!==id||!Number.isSafeInteger(accepted.authority_revision)
         ||!accepted.lunch_document_identity||accepted.lunch_document_identity!==feasibility.lunchDocument.document_identity)
@@ -1681,7 +1684,15 @@ export function createStaticWeeklyControlPlane({
     },
     async getManagerSnapshot({ manager, weekStart }) {
       requireManager(manager, { readOnlyOperation: true });
-      return transaction((client) => snapshotFor(client, requireMonday(weekStart, "week start")));
+      return transaction(async client=>{
+        const week=requireMonday(weekStart,'week start'),snapshot=await snapshotFor(client,week);
+        if(snapshot.projection_status!=='current'||snapshot.latest_projection?.compiler_version!=='approved-static-fixed-v1'
+          ||!snapshot.current_publication?.publication_id)return snapshot;
+        const registered=await call(client,'static_weekly_v3_read_publication_source',[snapshot.current_publication.publication_id,week]);
+        if(!registered.compiler_input?.version?.manualGroupRatingAuthority)return snapshot;
+        const lunch=await call(client,'static_weekly_v8_read_lunch_document',[week]);
+        return{...snapshot,approved_manual_schedule:approvedManualManagerView({snapshot,source:registered.compiler_input,lunchDocument:lunch})};
+      });
     },
     async getApprovedScheduleChoices({manager}) {
       requireManager(manager);
@@ -2681,3 +2692,4 @@ export function createStaticWeeklyControlPlane({
     },
   };
 }
+import {approvedManualManagerView} from './approved-manual-manager-view.js';

@@ -34,6 +34,16 @@ export function assertOwnedTargetMetadata({databaseUrl,runId,container,metadata,
 }
 
 export function assertTargetCapturePendingPlan(pending,declared) {
+ if(pending.length===166){
+  assert.ok(Array.isArray(declared)&&[160,163,164,165,166].includes(declared.length),'Exact predecessor or current compact confirmation declaration required');
+  assertTargetCapturePendingPlan(pending.slice(0,165),declared.slice(0,165));
+  assert.deepEqual(pending[165],{order:166,file:'20261030050235_compact_approved_initial_confirmation.sql',
+   phase:'compact_approved_initial_confirmation',source_migration_version:'20261030050235',
+   sha256:'fa9373adcf48f8d13db1b8e4876a5f134b02f8a897f20f887987cbd384393469'},
+   'Only the exact compact confirmation and direct baseline delta may follow the intact165 plan');
+  if(declared.length===166)assert.deepEqual(pending,declared,'Complete current declaration must match');
+  return pending;
+ }
  if(pending.length===165){
   assert.ok(Array.isArray(declared)&&[160,163,164,165].includes(declared.length),'Exact predecessor or current named-coverer declaration required');
   assertTargetCapturePendingPlan(pending.slice(0,164),declared.slice(0,164));
@@ -82,7 +92,15 @@ export function targetCaptureState({backendRoot,state,source}) {
  assert.deepEqual(normalize(source.binding),expected,'Signed archive must match the finite observed235 source declaration');
  assert.equal(stableJsonFileSha256(source.ledger),summary.source_identity.migration_ledger_sha256);
  const replay=readMigrationReplayPlan(backendRoot);
- if(replay.files.length===299){
+ if(replay.files.length===300){
+  assert.equal(replay.manifestSha256,'be9f1ce99e037690b3095c8b8e963fc30efd8c83adaa1e415856a79808dc31b1');
+  const current=JSON.parse(readFileSync(resolve(backendRoot,'supabase/canonical/migration-replay-order.json')));
+  assert.deepEqual(current.phases.map(phase=>phase.files.length),[134,93,73]);
+  assert.deepEqual(current.phases.at(-1).files.pop(),{name:'20261030050235_compact_approved_initial_confirmation.sql',
+   sha256:'fa9373adcf48f8d13db1b8e4876a5f134b02f8a897f20f887987cbd384393469'});
+  assert.equal(sha(JSON.stringify(current,null,2)+'\n'),'965300d634959010c017ac203d71fe915f65b4b42e69910b173b96d034c38001',
+   'The complete exact299 predecessor must remain unchanged');
+ }else if(replay.files.length===299){
   assert.equal(replay.manifestSha256,'965300d634959010c017ac203d71fe915f65b4b42e69910b173b96d034c38001');
   const current=JSON.parse(readFileSync(resolve(backendRoot,'supabase/canonical/migration-replay-order.json')));
   assert.deepEqual(current.phases.map(phase=>phase.files.length),[134,93,72]);

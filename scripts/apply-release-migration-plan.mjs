@@ -182,7 +182,7 @@ let isolatedPreservationArchive=null;
 let transactionStarted=false;
 try {
 // BEGIN ISOLATED PRESERVATION ARCHIVE
-isolatedPreservationArchive=rehearsal&&[160,163,164,165].includes(plan.length)
+isolatedPreservationArchive=rehearsal&&[160,163,164,165,166].includes(plan.length)
  ?openIsolatedPreservationArchive({backendRoot:root,databaseUrl,rehearsal,apply,targetCapture,candidateCommit,candidateTree,
    sourceLedgerSha256,captureContext,env:process.env}):null;
 // END ISOLATED PRESERVATION ARCHIVE

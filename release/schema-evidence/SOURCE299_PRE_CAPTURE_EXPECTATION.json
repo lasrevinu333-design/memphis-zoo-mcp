@@ -1,0 +1,246 @@
+{
+  "schema": "custodial.production-target-schema-profile.forward.v1",
+  "canonical_fingerprint": "95ad1f4e76159d18c5ccdb7c84fb639918005f05155b152641f79c15919f082d",
+  "deployment_fingerprint": "09a3374c452a81cd0a8904273d9212444de3ba41be01bf4d07fd887a21f4d0c6",
+  "parent_profile": {
+    "schema": "custodial.production-target-schema-profile.v1",
+    "canonical_fingerprint": "432052a95830b4a8550cd6478d766bacc2bbbb4b2dd21d44544b238c70c5f001",
+    "deployment_fingerprint": "b57982c0c739632fcbfc9ba30177fccab05a5847ce44121408b5ddab8d169d33",
+    "source_fingerprint": "0096e7c488aca86f1d38b061561696b2d4ac409036f063ffc9f196625b9ee9c2",
+    "source_catalog_sha256": "f034e7a0a019010093b15388ab1c2ee7865420bf343a4404d23a9a21c183b277",
+    "source_ledger_sha256": "2f80104d2f1fe54a6604c2c84436f823b1a78542bc4ba3d7975236951db93b66",
+    "archive_digest": "67c0d74bbf18c346314669119f0ae53ff61d9b00c4e6550b7af917b7f02bbdfe",
+    "capture": {
+      "report_sha256": "dafa8d869004fa047ec7a191b040d22503bef8001a4200a44123c860fba5ec94",
+      "report_bytes": 18580457,
+      "candidate_commit": "588b893b761d08b5157b4ca5b926f11a784bd142",
+      "candidate_tree": "6783245807db5c90db056d9afaab7ba1839ca664",
+      "plan_sha256": "1f9b4bf9e4721f4f9b871a762c8b76b2fdd959d4309632aba2f1ceb588aa7182",
+      "source_ledger_count": 235,
+      "target_ledger_count": 399,
+      "pending_count": 164
+    },
+    "original_columns": [
+      {
+        "schema_name": "public",
+        "table_name": "events_app_events",
+        "ordinal_position": 41,
+        "column_name": "custodial_public_notes",
+        "data_type": "text",
+        "not_null": false,
+        "identity_kind": "",
+        "generated_kind": "",
+        "default_expression": null,
+        "collation_name": null,
+        "comment": "Explicit manager-classified employee-visible and spoken custodial preparation. Never infer from generic notes, source text, parser, or ticket details."
+      },
+      {
+        "schema_name": "public",
+        "table_name": "events_app_events",
+        "ordinal_position": 42,
+        "column_name": "custodial_note_codes",
+        "data_type": "text[]",
+        "not_null": true,
+        "identity_kind": "",
+        "generated_kind": "",
+        "default_expression": "'{}'::text[]",
+        "collation_name": null,
+        "comment": "Manager-selected custodial-only reminder codes. Never infer from generic notes, source text, parser, or ticket details."
+      }
+    ],
+    "original_role_memberships": [
+      {
+        "granted_role": "anon",
+        "member_role": "authenticator",
+        "grantor_role": "migration_owner",
+        "admin_option": false
+      },
+      {
+        "granted_role": "anon",
+        "member_role": "migration_owner",
+        "grantor_role": "migration_owner",
+        "admin_option": true
+      },
+      {
+        "granted_role": "authenticated",
+        "member_role": "authenticator",
+        "grantor_role": "migration_owner",
+        "admin_option": false
+      },
+      {
+        "granted_role": "authenticated",
+        "member_role": "migration_owner",
+        "grantor_role": "migration_owner",
+        "admin_option": true
+      },
+      {
+        "granted_role": "authenticator",
+        "member_role": "migration_owner",
+        "grantor_role": "migration_owner",
+        "admin_option": true
+      },
+      {
+        "granted_role": "authenticator",
+        "member_role": "supabase_storage_admin",
+        "grantor_role": "migration_owner",
+        "admin_option": false
+      },
+      {
+        "granted_role": "pg_create_subscription",
+        "member_role": "migration_owner",
+        "grantor_role": "migration_owner",
+        "admin_option": true
+      },
+      {
+        "granted_role": "pg_monitor",
+        "member_role": "migration_owner",
+        "grantor_role": "migration_owner",
+        "admin_option": true
+      },
+      {
+        "granted_role": "pg_monitor",
+        "member_role": "supabase_etl_admin",
+        "grantor_role": "migration_owner",
+        "admin_option": false
+      },
+      {
+        "granted_role": "pg_monitor",
+        "member_role": "supabase_read_only_user",
+        "grantor_role": "migration_owner",
+        "admin_option": false
+      },
+      {
+        "granted_role": "pg_read_all_data",
+        "member_role": "memphis_zoo_backup",
+        "grantor_role": "migration_owner",
+        "admin_option": false
+      },
+      {
+        "granted_role": "pg_read_all_data",
+        "member_role": "migration_owner",
+        "grantor_role": "migration_owner",
+        "admin_option": true
+      },
+      {
+        "granted_role": "pg_read_all_data",
+        "member_role": "supabase_etl_admin",
+        "grantor_role": "migration_owner",
+        "admin_option": false
+      },
+      {
+        "granted_role": "pg_read_all_data",
+        "member_role": "supabase_read_only_user",
+        "grantor_role": "migration_owner",
+        "admin_option": false
+      },
+      {
+        "granted_role": "pg_read_all_settings",
+        "member_role": "pg_monitor",
+        "grantor_role": "migration_owner",
+        "admin_option": false
+      },
+      {
+        "granted_role": "pg_read_all_stats",
+        "member_role": "pg_monitor",
+        "grantor_role": "migration_owner",
+        "admin_option": false
+      },
+      {
+        "granted_role": "pg_signal_backend",
+        "member_role": "migration_owner",
+        "grantor_role": "migration_owner",
+        "admin_option": true
+      },
+      {
+        "granted_role": "pg_stat_scan_tables",
+        "member_role": "pg_monitor",
+        "grantor_role": "migration_owner",
+        "admin_option": false
+      },
+      {
+        "granted_role": "service_role",
+        "member_role": "authenticator",
+        "grantor_role": "migration_owner",
+        "admin_option": false
+      },
+      {
+        "granted_role": "service_role",
+        "member_role": "migration_owner",
+        "grantor_role": "migration_owner",
+        "admin_option": true
+      },
+      {
+        "granted_role": "static_weekly_control_plane",
+        "member_role": "migration_owner",
+        "grantor_role": "migration_owner",
+        "admin_option": false
+      },
+      {
+        "granted_role": "static_weekly_control_plane",
+        "member_role": "static_weekly_runtime_20260823",
+        "grantor_role": "migration_owner",
+        "admin_option": false
+      },
+      {
+        "granted_role": "static_weekly_release_operator",
+        "member_role": "migration_owner",
+        "grantor_role": "migration_owner",
+        "admin_option": false
+      },
+      {
+        "granted_role": "supabase_privileged_role",
+        "member_role": "migration_owner",
+        "grantor_role": "migration_owner",
+        "admin_option": false
+      },
+      {
+        "granted_role": "supabase_privileged_role",
+        "member_role": "supabase_etl_admin",
+        "grantor_role": "migration_owner",
+        "admin_option": false
+      }
+    ],
+    "policy_owner": {
+      "canonical_role": "supabase_admin",
+      "deployment_role": "postgres",
+      "actual_private_schema_owners": [
+        {
+          "schema_name": "custodial_recovery",
+          "owner_name": "postgres"
+        },
+        {
+          "schema_name": "custodial_release_identity",
+          "owner_name": "postgres"
+        }
+      ]
+    }
+  },
+  "previous_function": {
+    "comment": null,
+    "definition": "CREATE OR REPLACE FUNCTION public.static_weekly_v8_assert_lunch_document(p_projection_id uuid, p_document jsonb)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n projection public.weekly_schedule_compiled_projections%rowtype;\n loan jsonb;responsibility jsonb;segment jsonb;intent jsonb;availability jsonb;helper jsonb;\n base_work jsonb;expected jsonb;actual jsonb;helper_id text;identity_key text;\n start_time time;end_time time;\n projection_availability jsonb;projection_assignments jsonb;projection_work jsonb;\n full_hour_policy jsonb;full_hour boolean;planned_loan jsonb;normal_segment_window jsonb;\nbegin\n perform public.static_weekly_assert_exact_object(p_document,\n  array['schema','persistence_authority','verification_status','week_start','base_authority_digest','base_replay_digest','source_input_digest','candidate_digest','loans','responsibilities','notification_intents','semantic_snapshot','document_identity'],\n  array['schema','persistence_authority','verification_status','week_start','base_authority_digest','base_replay_digest','source_input_digest','candidate_digest','loans','responsibilities','notification_intents','semantic_snapshot','document_identity'],'lunch document');\n select * into projection from public.weekly_schedule_compiled_projections where projection_id=p_projection_id;\n if not found then raise exception 'lunch projection is missing'; end if;\n\n projection_availability:=projection.projection_envelope#>'{authority,projectionAvailability}';\n projection_assignments:=projection.projection_envelope->'assignments';\n projection_work:=projection.projection_envelope#>'{authority,overlayCompilerInput,version,assignments}';\n full_hour_policy:=projection.projection_envelope#>'{authority,compilerInput,version,lunchCoveragePolicy}';\n full_hour:=full_hour_policy is not null;\n if projection.projection_envelope#>'{authority,overlayCompilerInput,version,lunchCoveragePolicy}'\n   is distinct from full_hour_policy then raise exception 'full lunch policy changed during projection';end if;\n if full_hour then\n  perform public.static_weekly_assert_exact_object(full_hour_policy,\n   array['schema','sourceDigest','loans','policyDigest'],array['schema','sourceDigest','loans','policyDigest'],'full lunch policy');\n  if full_hour_policy->>'schema' is distinct from 'memphis-zoo.static-weekly-full-hour-lunch-policy.v1'\n   or jsonb_typeof(full_hour_policy->'sourceDigest') is distinct from 'string'\n   or coalesce(full_hour_policy->>'sourceDigest','') !~ '^[0-9a-f]{64}$'\n   or full_hour_policy->>'policyDigest' is distinct from public.static_weekly_digest_jsonb(full_hour_policy-'policyDigest')\n   or jsonb_typeof(full_hour_policy->'loans') is distinct from 'array'\n   or jsonb_array_length(full_hour_policy->'loans')>1792 then raise exception 'invalid full lunch source policy';end if;\n  for planned_loan in select value from jsonb_array_elements(full_hour_policy->'loans') loop\n   perform public.static_weekly_assert_exact_object(planned_loan,\n    array['dayOfWeek','normalOwnerSlotId','window','areas'],array['dayOfWeek','normalOwnerSlotId','window','areas'],'full lunch source loan');\n   perform public.static_weekly_v3_assert_window(planned_loan->'window','full lunch source window');\n   if jsonb_typeof(planned_loan->'dayOfWeek') is distinct from 'number'\n    or (planned_loan->>'dayOfWeek') !~ '^[0-6]$'\n    or jsonb_typeof(planned_loan->'normalOwnerSlotId') is distinct from 'string'\n    or length(planned_loan->>'normalOwnerSlotId') not between 1 and 512\n    or jsonb_typeof(planned_loan->'areas') is distinct from 'array'\n    or jsonb_array_length(planned_loan->'areas')>128 then raise exception 'invalid full lunch source owner or areas';end if;\n  end loop;\n  select coalesce(jsonb_agg(entry order by entry::text),'[]') into expected from\n   (select jsonb_build_array(value->'dayOfWeek',value->'normalOwnerSlotId') entry\n    from jsonb_array_elements(full_hour_policy->'loans')) q;\n  select coalesce(jsonb_agg(entry order by entry::text),'[]') into actual from\n   (select jsonb_build_array(value->'day_of_week',value->'normal_owner_slot_id') entry\n    from jsonb_array_elements(p_document->'loans')) q;\n  if expected is distinct from actual then raise exception 'full lunch source owner set changed';end if;\n end if;\n\n if p_document->>'schema' is distinct from 'memphis-zoo.static-weekly-lunch-authority-document.v1'\n  or p_document->>'persistence_authority' is distinct from 'NOT_PERSISTED'\n  or p_document->>'verification_status' is distinct from 'VERIFIED'\n  or p_document->>'week_start' is distinct from projection.week_start::text\n  or p_document->>'base_authority_digest' is distinct from projection.authority_digest\n  or p_document->>'base_replay_digest' is distinct from projection.replay_digest\n  or p_document->>'source_input_digest' is distinct from projection.projection_envelope#>>'{authority,inputDigest}'\n  or coalesce(p_document->>'candidate_digest','') !~ '^[0-9a-f]{64}$'\n  or p_document->>'document_identity' is distinct from public.static_weekly_digest_jsonb(p_document-'document_identity') then\n  raise exception 'lunch document is not bound to the exact verified projection';\n end if;\n foreach identity_key in array array['loans','responsibilities','notification_intents'] loop\n  if jsonb_typeof(p_document->identity_key) is distinct from 'array'\n   or jsonb_array_length(p_document->identity_key)>4096 then raise exception 'lunch document array invalid'; end if;\n end loop;\n expected:=jsonb_build_object('schema','memphis-zoo.static-weekly-lunch-semantic-snapshot.v1',\n  'loans_digest',public.static_weekly_digest_jsonb(p_document->'loans'),\n  'responsibilities_digest',public.static_weekly_digest_jsonb(p_document->'responsibilities'),\n  'notification_intents_digest',public.static_weekly_digest_jsonb(p_document->'notification_intents'));\n if p_document->'semantic_snapshot' is distinct from expected then raise exception 'lunch semantic snapshot mismatch'; end if;\n if (select count(*)<>count(distinct value->>'loan_id') from jsonb_array_elements(p_document->'loans'))\n or (select count(*)<>count(distinct value->>'responsibility_id') from jsonb_array_elements(p_document->'responsibilities'))\n or (select count(*)<>count(distinct value->>'notification_key') from jsonb_array_elements(p_document->'notification_intents')) then\n  raise exception 'duplicate or missing lunch record identity'; end if;\n select coalesce(jsonb_agg(jsonb_build_array(value->>'serviceDate',value->>'slotId') order by value->>'serviceDate',value->>'slotId'),'[]')\n into expected from jsonb_array_elements(projection_availability)\n where value->>'status'='working' and (nullif(value->>'incumbentPersonId','') is not null or value->>'ownerKind'='CONTRACTOR_CAPACITY')\n  and (value->>'ownerKind'='CONTRACTOR_CAPACITY' and value->>'breakChoice'='NONE' and value->'lunch'='null'::jsonb) is not true;\n select coalesce(jsonb_agg(jsonb_build_array(value->>'service_date',value->>'normal_owner_slot_id') order by value->>'service_date',value->>'normal_owner_slot_id'),'[]')\n into actual from jsonb_array_elements(p_document->'loans');\n if actual is distinct from expected then raise exception 'lunch coverage omits or duplicates a working owner'; end if;\n for loan in select value from jsonb_array_elements(p_document->'loans') loop\n  perform public.static_weekly_capacity_assert_lunch_party(p_projection_id,loan,'normal_owner');\n  perform public.static_weekly_assert_exact_object(loan,\n   case when loan ? 'normal_owner_capacity_id' then array['loan_id','service_date','day_of_week','normal_owner_slot_id','normal_owner_capacity_id','coverage_start','coverage_end','status','helper_slot_ids']\n    else array['loan_id','service_date','day_of_week','normal_owner_slot_id','normal_owner_person_id','coverage_start','coverage_end','status','helper_slot_ids'] end,\n   array['loan_id','service_date','day_of_week','normal_owner_slot_id','normal_owner_person_id','normal_owner_capacity_id','coverage_start','coverage_end','status','reason','helper_slot_ids','fallback','total_distance_minutes'],'lunch loan');\n  if not (loan ?& array['reason','fallback','total_distance_minutes']) then raise exception 'lunch explanatory fields are missing'; end if;\n  if coalesce(loan->>'loan_id','') !~ '^[0-9a-f]{64}$' then raise exception 'invalid lunch loan identity'; end if;\n  select value into availability from jsonb_array_elements(projection_availability)\n   where value->>'slotId'=loan->>'normal_owner_slot_id' and value->>'serviceDate'=loan->>'service_date';\n  if not found or availability->>'incumbentPersonId' is distinct from loan->>'normal_owner_person_id'\n   or loan->'day_of_week' is distinct from availability->'dayOfWeek'\n   or loan->>'coverage_start' is distinct from availability#>>'{lunch,start}'\n   or loan->>'coverage_end' is distinct from availability#>>'{lunch,end}' then raise exception 'lunch owner or scheduled hour mismatch'; end if;\n  perform public.static_weekly_v3_assert_window(jsonb_build_object('start',loan->'coverage_start','end',loan->'coverage_end'),'lunch');\n  start_time:=(loan->>'coverage_start')::time;end_time:=(loan->>'coverage_end')::time;\n  if end_time<=start_time then raise exception 'accepted lunch end must follow its start'; end if;\n  perform public.static_weekly_v3_assert_string_array(loan->'helper_slot_ids','lunch helpers');\n  if ((loan->>'status'='NO_AREAS' and jsonb_array_length(loan->'helper_slot_ids')=0 and loan->'fallback'='null'::jsonb)\n    or (loan->>'status'='PLANNED' and ((jsonb_array_length(loan->'helper_slot_ids')=2 and loan->'fallback'='null'::jsonb)\n      or (jsonb_array_length(loan->'helper_slot_ids')=1 and loan->>'fallback'='only_one_eligible_custodian')))) is not true then\n   raise exception 'lunch helper cardinality or fallback invalid'; end if;\n  if full_hour then\n   select value into strict planned_loan from jsonb_array_elements(full_hour_policy->'loans')\n    where value->'dayOfWeek'=loan->'day_of_week' and value->'normalOwnerSlotId'=loan->'normal_owner_slot_id';\n   if planned_loan->'window' is distinct from jsonb_build_object('start',loan->'coverage_start','end',loan->'coverage_end')\n    then raise exception 'full lunch source window changed';end if;\n  end if;\n  for helper_id in select jsonb_array_elements_text(loan->'helper_slot_ids') loop\n   select value into helper from jsonb_array_elements(projection_availability)\n    where value->>'slotId'=helper_id and value->>'serviceDate'=loan->>'service_date';\n   if not found or helper->>'status' is distinct from 'working' or helper_id=loan->>'normal_owner_slot_id'\n    or (nullif(helper->>'incumbentPersonId','') is null and helper->>'ownerKind' is distinct from 'CONTRACTOR_CAPACITY')\n    or ((helper#>>'{lunch,start}' is null or helper#>>'{lunch,end}' is null)\n      and (helper->>'ownerKind'='CONTRACTOR_CAPACITY' and helper->>'breakChoice'='NONE' and helper->'lunch'='null'::jsonb) is not true) or (helper#>>'{shift,start}')::time>start_time\n    or (helper#>>'{shift,end}')::time<end_time\n    or ((helper#>>'{lunch,start}')::time<end_time and start_time<(helper#>>'{lunch,end}')::time) then\n    raise exception 'lunch helper is not available for the full scheduled hour'; end if;\n   if not exists(select 1 from jsonb_array_elements(p_document->'responsibilities') r\n     where r->>'loan_id'=loan->>'loan_id' and r->>'coverer_slot_id'=helper_id) then\n    raise exception 'lunch helper has no assigned responsibility'; end if;\n  end loop;\n end loop;\n for responsibility in select value from jsonb_array_elements(p_document->'responsibilities') loop\n  perform public.static_weekly_capacity_assert_lunch_party(p_projection_id,responsibility,'normal_owner');\n  perform public.static_weekly_capacity_assert_lunch_party(p_projection_id,responsibility,'coverer');\n  perform public.static_weekly_assert_exact_object(responsibility,\n   array['responsibility_id','loan_id','service_date','day_of_week','normal_owner_slot_id','coverer_slot_id','coverage_purpose','coverage_start','coverage_end','check_deadline_policy','creates_deep_clean','proximity_evidence','segments']\n    ||case when responsibility ? 'normal_owner_capacity_id' then array['normal_owner_capacity_id'] else array['normal_owner_person_id'] end\n    ||case when responsibility ? 'coverer_capacity_id' then array['coverer_capacity_id'] else array['coverer_person_id'] end,\n   array['responsibility_id','loan_id','service_date','day_of_week','normal_owner_slot_id','normal_owner_person_id','normal_owner_capacity_id','coverer_slot_id','coverer_person_id','coverer_capacity_id','coverage_purpose','coverage_start','coverage_end','check_deadline_policy','creates_deep_clean','proximity_evidence','segments'],'lunch responsibility');\n  select value into loan from jsonb_array_elements(p_document->'loans') where value->>'loan_id'=responsibility->>'loan_id';\n  if not found or loan->>'status'<>'PLANNED' then raise exception 'lunch responsibility has no planned loan'; end if;\n  foreach identity_key in array array['service_date','day_of_week','normal_owner_slot_id','normal_owner_person_id','coverage_start','coverage_end'] loop\n   if responsibility->identity_key is distinct from loan->identity_key then raise exception 'lunch responsibility scope mismatch'; end if;\n  end loop;\n  select value into helper from jsonb_array_elements(projection_availability)\n   where value->>'slotId'=responsibility->>'coverer_slot_id' and value->>'serviceDate'=responsibility->>'service_date';\n  if not found or helper->>'incumbentPersonId' is distinct from responsibility->>'coverer_person_id'\n   or not (loan->'helper_slot_ids' ? (responsibility->>'coverer_slot_id'))\n   or coalesce(responsibility->>'responsibility_id','') !~ '^[0-9a-f]{64}$'\n   or responsibility->>'coverage_purpose' is distinct from 'lunch_coverage'\n   or responsibility->>'check_deadline_policy' is distinct from 'inherit_existing_90_minute_deadline'\n   or responsibility->'creates_deep_clean' is distinct from 'false'::jsonb\n   or jsonb_typeof(responsibility->'segments') is distinct from 'array'\n   or jsonb_array_length(responsibility->'segments')=0 then raise exception 'lunch responsibility policy or recipient mismatch'; end if;\n  for segment in select value from jsonb_array_elements(responsibility->'segments') loop\n   perform public.static_weekly_assert_exact_object(segment,\n    array['planWorkId','workId','serviceMode','window','includedLocations']||case when full_hour then array['normalWindow'] else array[]::text[] end,\n    array['planWorkId','workId','serviceMode','window','includedLocations']||case when full_hour then array['normalWindow'] else array[]::text[] end,'lunch segment');\n   select value into base_work from jsonb_array_elements(projection_assignments)\n    where value->>'plan_work_id'=segment->>'planWorkId' and value->>'service_date'=responsibility->>'service_date';\n   if not found or base_work->>'status' is distinct from 'assigned'\n    or base_work->>'owner_slot_id' is distinct from responsibility->>'normal_owner_slot_id'\n    or base_work->>'owner_person_id' is distinct from responsibility->>'normal_owner_person_id'\n    or base_work->>'work_id' is distinct from segment->>'workId'\n    or base_work#>'{work_snapshot,includedLocations}' is distinct from segment->'includedLocations'\n    or base_work#>>'{work_snapshot,serviceMode}' is distinct from segment->>'serviceMode'\n    or segment->>'serviceMode'='reminder_only' then raise exception 'borrowed area differs from original assignment'; end if;\n   if not ((helper->'qualifications') @> (base_work#>'{work_snapshot,requiredQualifications}'))\n    or (base_work#>'{work_snapshot,restrictedSlotIds}') ? (responsibility->>'coverer_slot_id')\n    or exists(select 1 from jsonb_array_elements(segment->'includedLocations') location\n      where helper->'restrictions' ? (location->>'locationId')) then\n    raise exception 'lunch helper is restricted or unqualified for a borrowed area'; end if;\n   perform public.static_weekly_v3_assert_window(segment->'window','borrowed area');\n   normal_segment_window:=case when full_hour then segment->'normalWindow' else segment->'window' end;\n   perform public.static_weekly_v3_assert_window(normal_segment_window,'original borrowed-area anchor');\n   if (normal_segment_window->>'start')::time<>greatest((base_work#>>'{work_snapshot,window,start}')::time,(loan->>'coverage_start')::time)\n    or (normal_segment_window->>'end')::time<>least((base_work#>>'{work_snapshot,window,end}')::time,(loan->>'coverage_end')::time) then\n    raise exception 'borrowed-area window must be the exact normal-duty and lunch intersection'; end if;\n   if full_hour then\n    if segment->'window' is distinct from jsonb_build_object('start',loan->'coverage_start','end',loan->'coverage_end')\n     then raise exception 'full lunch area must cover the entire accepted lunch';end if;\n    select value into strict planned_loan from jsonb_array_elements(full_hour_policy->'loans')\n     where value->'dayOfWeek'=loan->'day_of_week' and value->'normalOwnerSlotId'=loan->'normal_owner_slot_id';\n    if not exists(select 1 from jsonb_array_elements(planned_loan->'areas') area\n     where area->>'locationCode'=base_work#>>'{work_snapshot,locationCodeSnapshot}'\n      and area->'covererSlotId'=responsibility->'coverer_slot_id') then\n     raise exception 'full lunch recipient differs from the immutable area plan';end if;\n   end if;\n  end loop;\n end loop;\n if full_hour then\n  for planned_loan in select value from jsonb_array_elements(full_hour_policy->'loans') loop\n   for segment in select value from jsonb_array_elements(planned_loan->'areas') loop\n    perform public.static_weekly_assert_exact_object(segment,array['locationCode','covererSlotId'],array['locationCode','covererSlotId'],'full lunch source area');\n    if jsonb_typeof(segment->'locationCode') is distinct from 'string' or length(segment->>'locationCode') not between 1 and 512\n     or jsonb_typeof(segment->'covererSlotId') is distinct from 'string' or length(segment->>'covererSlotId') not between 1 and 512\n     or segment->'covererSlotId'=planned_loan->'normalOwnerSlotId' then raise exception 'invalid full lunch source area';end if;\n   end loop;\n  end loop;\n  select coalesce(jsonb_agg(entry order by entry::text),'[]') into expected from\n   (select jsonb_build_array(l->'dayOfWeek',l->'normalOwnerSlotId',a->'locationCode',a->'covererSlotId') entry\n    from jsonb_array_elements(full_hour_policy->'loans') l cross join lateral jsonb_array_elements(l->'areas') a) q;\n  select coalesce(jsonb_agg(entry order by entry::text),'[]') into actual from\n   (select distinct jsonb_build_array(r->'day_of_week',r->'normal_owner_slot_id',a#>'{work_snapshot,locationCodeSnapshot}',r->'coverer_slot_id') entry\n    from jsonb_array_elements(p_document->'responsibilities') r cross join lateral jsonb_array_elements(r->'segments') s\n    join jsonb_array_elements(projection_assignments) a on a->>'plan_work_id'=s->>'planWorkId'\n     and a->'service_date'=r->'service_date') q;\n  if expected is distinct from actual then raise exception 'full lunch source areas omitted, duplicated or reassigned';end if;\n  if exists(with areas as materialized (\n    select r->>'service_date' service_date,loc->>'locationId' location_id,\n     jsonb_build_array(r->'coverer_slot_id',r->'coverer_person_id',r->'coverer_capacity_id') recipient,\n     (s#>>'{window,start}')::time starts,(s#>>'{window,end}')::time ends\n    from jsonb_array_elements(p_document->'responsibilities') r cross join lateral jsonb_array_elements(r->'segments') s\n     cross join lateral jsonb_array_elements(s->'includedLocations') loc)\n   select 1 from areas a join areas b on a.service_date=b.service_date and a.location_id=b.location_id\n    and a.recipient is distinct from b.recipient and a.starts<b.ends and b.starts<a.ends) then\n   raise exception 'full lunch plans conflict on current physical responsibility';end if;\n end if;\n -- Account for every normal flexible duty that intersects each scheduled lunch.\n select coalesce(jsonb_agg(jsonb_build_array(l->>'loan_id',a->>'plan_work_id')\n  order by l->>'loan_id',a->>'plan_work_id'),'[]') into expected\n from jsonb_array_elements(p_document->'loans') l\n join jsonb_array_elements(projection_assignments) a\n  on a->>'service_date'=l->>'service_date' and a->>'owner_slot_id'=l->>'normal_owner_slot_id'\n join jsonb_array_elements(projection_work) w\n  on w->>'workId'=a->>'work_id' and w->>'dayOfWeek'=a->>'day_of_week'\n where a->>'status'='assigned' and w->>'schedulingMode'='flexible_coverage_ownership'\n  and w->>'serviceMode'<>'reminder_only'\n  and (a#>>'{work_snapshot,window,start}')::time<(l->>'coverage_end')::time\n  and (l->>'coverage_start')::time<(a#>>'{work_snapshot,window,end}')::time;\n select coalesce(jsonb_agg(jsonb_build_array(r->>'loan_id',s->>'planWorkId')\n  order by r->>'loan_id',s->>'planWorkId'),'[]') into actual\n from jsonb_array_elements(p_document->'responsibilities') r cross join lateral jsonb_array_elements(r->'segments') s;\n if actual is distinct from expected then raise exception 'lunch responsibility must cover every eligible original area exactly once'; end if;\n if exists(select 1 from jsonb_array_elements(p_document->'responsibilities') r,\n  jsonb_array_elements(r->'segments') s group by r->>'loan_id',s->>'planWorkId' having count(*)>1) then\n  raise exception 'borrowed work assigned more than once'; end if;\n if exists(select 1 from jsonb_array_elements(p_document->'responsibilities') r,\n  jsonb_array_elements(r->'segments') s,jsonb_array_elements(s->'includedLocations') location\n  group by r->>'loan_id',location->>'locationId' having count(distinct r->>'coverer_slot_id')>1) then\n  raise exception 'paired or grouped locations split between lunch helpers'; end if;\n for intent in select value from jsonb_array_elements(p_document->'notification_intents') loop\n  perform public.static_weekly_assert_exact_object(intent,\n   array['notification_key','loan_id','service_date','event','scheduled_time','coverer_slot_id','delivery_state'],\n   array['notification_key','loan_id','service_date','event','scheduled_time','coverer_slot_id','delivery_state'],'lunch notification intent');\n  if coalesce(intent->>'notification_key','') !~ '^[0-9a-f]{64}$'\n   or intent->>'delivery_state' is distinct from 'NOT_ENQUEUED' then raise exception 'invalid lunch notification intent'; end if;\n end loop;\n select coalesce(jsonb_agg(jsonb_build_array(l->>'loan_id',l->>'service_date',h,e,\n  case e when 'start' then l->>'coverage_start' else l->>'coverage_end' end) order by l->>'loan_id',h,e),'[]') into expected\n from jsonb_array_elements(p_document->'loans') l cross join lateral jsonb_array_elements_text(l->'helper_slot_ids') h\n cross join unnest(array['start','end']) e\n where exists(select 1 from jsonb_array_elements(projection_availability) a\n  where a->>'slotId'=h and a->>'serviceDate'=l->>'service_date' and nullif(a->>'incumbentPersonId','') is not null);\n select coalesce(jsonb_agg(jsonb_build_array(n->>'loan_id',n->>'service_date',n->>'coverer_slot_id',n->>'event',n->>'scheduled_time')\n  order by n->>'loan_id',n->>'coverer_slot_id',n->>'event'),'[]') into actual\n from jsonb_array_elements(p_document->'notification_intents') n;\n if actual is distinct from expected then raise exception 'lunch start/end intents must exactly cover every helper'; end if;\nend $function$\n",
+    "function_name": "static_weekly_v8_assert_lunch_document",
+    "identity_arguments": "p_projection_id uuid, p_document jsonb",
+    "owner_name": "migration_owner",
+    "schema_name": "public"
+  },
+  "forward_migration": {
+    "path": "supabase/migrations/20261030031200_approved_manual_full_hour_coverers.sql",
+    "sha256": "de548422310c3369bac0560e14507e4022cc9d5b9effe898d4f24ae79156cf6a",
+    "bytes": 4436
+  },
+  "canonical_capture": {
+    "path": "release/schema-evidence/SOURCE299_CANONICAL_FORWARD_CAPTURE.json",
+    "sha256": "6baf6fcd8fc154921f1cada007760c6dcf4d6acd025500b1715d8c225deb167d",
+    "bytes": 846
+  },
+  "expected_ledger": {
+    "source": 235,
+    "target": 400,
+    "pending": 165
+  },
+  "qualification": {
+    "method": "GENUINE_PARENT_TARGET_PLUS_ACTUAL_CANONICAL_FORWARD_SQL",
+    "new_populated_target_observed": false,
+    "fresh_exact_head_populated_rehearsal_required": true
+  }
+}

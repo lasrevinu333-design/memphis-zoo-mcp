@@ -13,30 +13,33 @@ const binding=JSON.parse(readFileSync(resolve(root,'release/current291-staged-so
 const plan=readMigrationReplayPlan(root);const checks=[];
 const check=(name,fn)=>{fn();checks.push(name);};
 const sha=b=>createHash('sha256').update(b).digest('hex');
-if(plan.files.length===298){
- check('current298 preserves exact134 source and complete163 prefix before the single full-hour tail',()=>{
-  assert.equal(plan.baseCount,134);assert.equal(state.pending_migrations.length,164);
+if([298,299].includes(plan.files.length)){
+ const successor=plan.files.length===299,pendingCount=successor?165:164,targetCount=235+pendingCount;
+ const canonical=successor?'95ad1f4e76159d18c5ccdb7c84fb639918005f05155b152641f79c15919f082d':'432052a95830b4a8550cd6478d766bacc2bbbb4b2dd21d44544b238c70c5f001';
+ const physical=successor?'09a3374c452a81cd0a8904273d9212444de3ba41be01bf4d07fd887a21f4d0c6':'b57982c0c739632fcbfc9ba30177fccab05a5847ce44121408b5ddab8d169d33';
+ check('current source preserves exact134 source and complete predecessor before its exact tail',()=>{
+  assert.equal(plan.baseCount,134);assert.equal(state.pending_migrations.length,pendingCount);
   assert.deepEqual(state.pending_migrations.map(x=>x.file),plan.files.slice(134));
-  assert.equal(plan.manifestSha256,'aca06e305ff4c5918e83045acf4d739fcb8746e41dcc89ceb59fcd0f98ab20ba');
+  assert.equal(plan.manifestSha256,successor?'965300d634959010c017ac203d71fe915f65b4b42e69910b173b96d034c38001':'aca06e305ff4c5918e83045acf4d739fcb8746e41dcc89ceb59fcd0f98ab20ba');
   assert.equal(binding.preserved134.length,134);
   for(const row of binding.preserved134)assert.equal(sha(readFileSync(resolve(root,'supabase/migrations',row.file))),row.sha256);
-  assertTargetCapturePendingPlan(state.pending_migrations,state.pending_migrations.slice(0,163));
+  assertTargetCapturePendingPlan(state.pending_migrations,state.pending_migrations.slice(0,pendingCount-1));
  });
- check('all164 executed source hashes retain the exact existing29 owner-profile variants',()=>{
+ check('all executed source hashes retain the exact existing29 owner-profile variants',()=>{
   assert.equal(state.pending_migrations.filter(x=>x.forward_source).length,29);
   for(const [index,item]of state.pending_migrations.entries()){
    assert.equal(item.order,index+1);assert.equal(item.source_migration_version,item.file.slice(0,14));
    assert.equal(sha(resolveReleaseMigrationSource(root,item).sql),item.sha256);
   }
  });
- check('physical399 profile binds the actual full-hour rollback report without release admission',()=>{
+ check('physical target profile binds the actual rollback report without release admission',()=>{
   const target=resolveReleaseSchemaTarget(root),capture=state.target.normal_source_capture,proof=target.profile.capture;
-  assert.equal(target.canonicalFingerprint,'432052a95830b4a8550cd6478d766bacc2bbbb4b2dd21d44544b238c70c5f001');
-  assert.equal(target.deploymentFingerprint,'b57982c0c739632fcbfc9ba30177fccab05a5847ce44121408b5ddab8d169d33');
-  assert.equal(proof.source_ledger_count,235);assert.equal(proof.pending_count,164);assert.equal(proof.target_ledger_count,399);
-  assert.equal(proof.report_sha256,'dafa8d869004fa047ec7a191b040d22503bef8001a4200a44123c860fba5ec94');
-  assert.equal(proof.report_bytes,18580457);
-  assert.equal(capture.original_run_id,40965791466);
+  assert.equal(target.canonicalFingerprint,canonical);
+  assert.equal(target.deploymentFingerprint,physical);
+  assert.equal(proof.source_ledger_count,235);assert.equal(proof.pending_count,pendingCount);assert.equal(proof.target_ledger_count,targetCount);
+  assert.equal(proof.report_sha256,successor?'7fded7c546d4c6d879df233f8059cbf4752433c2d9b403641730d6886452593a':'dafa8d869004fa047ec7a191b040d22503bef8001a4200a44123c860fba5ec94');
+  assert.equal(proof.report_bytes,successor?18585920:18580457);
+  assert.equal(capture.original_run_id,successor?41003969617:40965791466);
   assert.equal(capture.report.sha256,proof.report_sha256);assert.equal(capture.report.bytes,proof.report_bytes);
   for(const key of ['candidate_commit','candidate_tree','plan_sha256'])assert.equal(capture[key],proof[key]);
   assert.equal(capture.archive_digest,target.profile.archive_digest);
@@ -44,8 +47,8 @@ if(plan.files.length===298){
   for(const key of ['candidate_migration_admission','runtime_admission','production_authorized','full_rehearsal_attestation'])assert.equal(capture[key],false);
   assert.equal(state.target.production_ledger_version,null);
   const checked=assertReleaseWorkflowSource(root);
-  assert.equal(checked.sourceCount,235);assert.equal(checked.pendingCount,164);assert.equal(checked.targetCount,399);
-  assert.equal(checked.targetHead,'20261028224728');assert.equal(checked.targetFingerprint,target.deploymentFingerprint);
+  assert.equal(checked.sourceCount,235);assert.equal(checked.pendingCount,pendingCount);assert.equal(checked.targetCount,targetCount);
+  assert.equal(checked.targetHead,successor?'20261030031200':'20261028224728');assert.equal(checked.targetFingerprint,target.deploymentFingerprint);
  });
  check('normal apply still preflights before clients and retains serializable rollback',()=>{
   const source=readFileSync(resolve(root,'scripts/apply-release-migration-plan.mjs'),'utf8');
@@ -53,7 +56,7 @@ if(plan.files.length===298){
   assert.ok(source.includes('await db.query("begin isolation level serializable")'));
   assert.ok(source.includes('await db.query("rollback")')||source.includes("await db.query('rollback')"));
  });
- console.log(JSON.stringify({status:'PASS_SOURCE_ONLY_NO_DB',checks,source_count:298,pending_count:164,target_ledger_count:399,SQL_execution:false,production_authorized:false,historical297_and294_corpora:'PRESERVED_NOT_REATTRIBUTED_TO_CURRENT298'}));
+ console.log(JSON.stringify({status:'PASS_SOURCE_ONLY_NO_DB',checks,source_count:plan.files.length,pending_count:pendingCount,target_ledger_count:targetCount,SQL_execution:false,production_authorized:false,historical297_and294_corpora:'PRESERVED_NOT_REATTRIBUTED_TO_CURRENT298'}));
 }else if(plan.files.length===297){
  // The historical294 corpus below remains literal. This branch qualifies the
  // actual three-tail successor without attributing its source checks to SQL.

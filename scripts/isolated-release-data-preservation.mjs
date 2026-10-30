@@ -39,7 +39,7 @@ export function loadOriginal235PreservationSource(backendRoot){
 }
 export function validateOriginal235PreservationPlan(backendRoot,plan){
  const manifest=loadOriginal235PreservationSource(backendRoot);
- assert.ok([160,163,164,165].includes(plan.length),'Only original160 or exact source-selected163/164/165 preservation plans');
+ assert.ok([160,163,164,165,166].includes(plan.length),'Only original160 or exact source-selected163/164/165/166 preservation plans');
  if(plan.length>=164){
   const sourcePlan=plan.map(({sql,body,...item})=>item);
   assertTargetCapturePendingPlan(sourcePlan,sourcePlan.slice(0,163));
@@ -54,7 +54,8 @@ export function validateOriginal235PreservationPlan(backendRoot,plan){
   assert.equal(replay.files.length,plan.length+134);
   const replayHashes={163:'e37cf98ffde8165797069595b45d84fdaf89871a719c31a839905e9e6317d54c',
    164:'aca06e305ff4c5918e83045acf4d739fcb8746e41dcc89ceb59fcd0f98ab20ba',
-   165:'965300d634959010c017ac203d71fe915f65b4b42e69910b173b96d034c38001'};
+   165:'965300d634959010c017ac203d71fe915f65b4b42e69910b173b96d034c38001',
+   166:'be9f1ce99e037690b3095c8b8e963fc30efd8c83adaa1e415856a79808dc31b1'};
   assert.equal(replay.manifestSha256,replayHashes[plan.length]);
   const additions=[
    ['20261027230000_accepted_actual_lunch_windows.sql','55b2cd92ebe36c6920a3c27cc13031ef6ca263d8f10114182c3058fd0991c81b'],
@@ -62,7 +63,8 @@ export function validateOriginal235PreservationPlan(backendRoot,plan){
    ['20261027234814_mcp_oauth_durable_token_families.sql','e74210f033e5c65d5e99a090ca201d1c010d6cb5c4159a015bb08e3719c44f6e'],
   ];
   if(plan.length>=164)additions.push(['20261028224728_full_scheduled_lunch_source_policy.sql','a47387ddf244a04df646c9bb2d60eef86a769b96baf9106759f1c2a703248514']);
-  if(plan.length===165)additions.push(['20261030031200_approved_manual_full_hour_coverers.sql','de548422310c3369bac0560e14507e4022cc9d5b9effe898d4f24ae79156cf6a']);
+  if(plan.length>=165)additions.push(['20261030031200_approved_manual_full_hour_coverers.sql','de548422310c3369bac0560e14507e4022cc9d5b9effe898d4f24ae79156cf6a']);
+  if(plan.length===166)additions.push(['20261030050235_compact_approved_initial_confirmation.sql','fa9373adcf48f8d13db1b8e4876a5f134b02f8a897f20f887987cbd384393469']);
   assert.deepEqual(replay.files.slice(294),additions.map(([file])=>file));
   for(const [index,[file,digest]]of additions.entries()){
    const item=plan[160+index];assert.equal(item.order,161+index);assert.equal(item.file,file);

@@ -50,3 +50,4 @@ console.log(JSON.stringify({marker:'APPROVED_MANUAL_NATIVE_TEMPLATE_PASS',normal
  days:7,assignments:346,fullHourLoans:40,oneNamedCovererPerLoan:true,unchangedMapping:true,
  normalMondayOnlyRulePreserved:true,inheritedAlertCustodyAllowed:true,otherHardRestrictionsPreserved:true,
  solverInvoked:false,sqlQualified:false,registered:false,published:false,effectiveDateSelected:false}));
+export {week,args,result};
