@@ -1508,6 +1508,11 @@
         "object_id": "44b1cb8c73879f1a3e59299160ab3a15f1d7486b"
       },
       {
+        "path": "scripts/approved-manual-roster-transition-tests.mjs",
+        "mode": "100644",
+        "object_id": "d51a72f3856d7bb9c1e9c97d6a8f5ca26c0b1d2a"
+      },
+      {
         "path": "scripts/approved-manual-week-database-tests.mjs",
         "mode": "100644",
         "object_id": "eab2d819737db8cca20d241112293338321eac52"
@@ -2466,6 +2471,11 @@
         "path": "scripts/fixtures/full-nine-v6-source.mjs",
         "mode": "100644",
         "object_id": "3e0f0af4fe6ed10632a14b68834842533b5cce93"
+      },
+      {
+        "path": "scripts/fixtures/manual-live-roster-20261030.json",
+        "mode": "100644",
+        "object_id": "d642c3eb4d4af9504682298b66b2290bbf36aa88"
       },
       {
         "path": "scripts/fixtures/native-alert-wire-fixture.mjs",
@@ -6028,6 +6038,11 @@
         "object_id": "3951abfe85ea2ef41a128b7d455130745c704a9b"
       },
       {
+        "path": "src/approved-manual-roster-transition.js",
+        "mode": "100644",
+        "object_id": "42b9a2587759f08397838033150a50b87ef4a42f"
+      },
+      {
         "path": "src/approved-manual-source-draft.js",
         "mode": "100644",
         "object_id": "2d919c33e4d76a0d3d7d3a74e0e1c9dd4e4608b1"
@@ -9373,7 +9388,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 1849,
+    "authority_path_count": 1852,
     "migration_path_count": 300,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
