@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {writeFileSync} from 'node:fs';
 import {isAbsolute} from 'node:path';
 import {readApprovedManualWeek,previewApprovedManualDay} from '../src/approved-manual-week.js';
+import {prepareApprovedManualCompilerData} from '../src/approved-manual-compiler-data.js';
 
 const args=process.argv.slice(2),options={};
 for(let i=0;i<args.length;i+=2){
@@ -16,6 +17,8 @@ assert.equal(Boolean(options['--catalog']),Boolean(options['--manifest-sha256'])
 assert.equal(Boolean(options['--day']),Boolean(options['--time']),'Day and time must be supplied together');
 const week=readApprovedManualWeek(options['--catalog']?{catalogPath:options['--catalog'],expectedManifestSha256:options['--manifest-sha256']}:{});
 const preview=options['--day']?previewApprovedManualDay(week,{day:options['--day'],time:options['--time']}):null;
-writeFileSync(options['--output'],JSON.stringify({week,preview},null,2)+'\n',{flag:'wx',mode:0o600});
+const compilerData=prepareApprovedManualCompilerData(week);
+writeFileSync(options['--output'],JSON.stringify({week,preview,compilerData},null,2)+'\n',{flag:'wx',mode:0o600});
 console.log(JSON.stringify({schema:week.schema,dataDigest:week.dataDigest,output:options['--output'],days:week.days.length,
-  fullHourReliefs:week.days.reduce((n,d)=>n+d.lunches.length,0),activation:week.activation,published:false,receiptEligible:false}));
+  fullHourReliefs:compilerData.lunchCoveragePolicy.loans.length,compilerDataDigest:compilerData.compilerDataDigest,
+  assignmentFragments:compilerData.assignmentInputs.length,activation:week.activation,published:false,receiptEligible:false}));

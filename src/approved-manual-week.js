@@ -7,8 +7,10 @@ import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
 import {postgresJsonbContentDigest} from './static-weekly-schedule-program.js';
 import {serviceDateWeekday} from './static-weekly-schedule-model.js';
+import {validateApprovedManualBindings} from './approved-manual-bindings.js';
 
 const DEFAULT_CATALOG=fileURLToPath(new URL('../config/schedules/manual-approved-20261030/catalog.json',import.meta.url));
+const SOURCE_ROOT=fileURLToPath(new URL('..',import.meta.url));
 const ISSUED_MANIFEST_SHA256='fe02bbdebc736d95360b55cc7dfe5b73c5a9eaa76f364f1c0f4420a0afb9950f';
 const DAYS=['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
 const HOLDS=['prearrival_ownership','non_monday_0945','weekly_elephant_trunk_restrooms'];
@@ -20,7 +22,7 @@ const minutes=value=>{assert.match(value,/^(?:[01][0-9]|2[0-3]):[0-5][0-9]$/,'Ex
 const overlap=(a,b)=>minutes(a.start)<minutes(b.end)&&minutes(b.start)<minutes(a.end);
 const windowOf=value=>{assert.ok(value&&typeof value==='object');const w={start:value.start,end:value.end};assert.ok(minutes(w.start)<minutes(w.end),'Invalid static window');return w;};
 const onShift=(person,time)=>minutes(person.shift.start)<=time&&time<minutes(person.shift.end);
-const regularFile=path=>{const s=lstatSync(path);assert.ok(s.isFile()&&!s.isSymbolicLink()&&s.size<=1024*1024,'Bounded regular packet file required');return readFileSync(path);};
+const regularFile=(path,maxBytes=1024*1024)=>{const s=lstatSync(path);assert.ok(s.isFile()&&!s.isSymbolicLink()&&s.size<=maxBytes,'Bounded regular packet file required');return readFileSync(path);};
 const memberPath=(root,path)=>{assert.match(path,/^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))[A-Za-z0-9._/-]+$/);const f=resolve(root,path),r=relative(realpathSync(root),realpathSync(f));assert.ok(r&&!r.startsWith('..')&&!isAbsolute(r),'Packet path escaped its verified root');return f;};
 
 export function readApprovedManualWeek({catalogPath=DEFAULT_CATALOG,expectedManifestSha256=ISSUED_MANIFEST_SHA256}={}) {
@@ -109,12 +111,22 @@ export function readApprovedManualWeek({catalogPath=DEFAULT_CATALOG,expectedMani
       policy0945:day==='monday'?'OWNER_APPROVED_NO_CHANGEOVER':'UNRESOLVED',
       coveragePurpose:'INHERITED_AREAS_ARE_ALERT_AND_ISSUE_CUSTODY_NOT_EXTRA_MANDATORY_CLEANING'});
   }
+  const bindingBytes=regularFile(memberPath(dirname(resolve(catalogPath)),catalog.referenceBindings.path));
+  assert.equal(sha(bindingBytes),catalog.referenceBindings.sha256,'Manual identity binding bytes changed');
+  const binding=JSON.parse(bindingBytes);
+  // The retained registration is larger than an individual raw packet member.
+  // Keep packet limits intact and bound this single pinned reference separately.
+  assert.ok(Number.isSafeInteger(binding.reference.bytes)&&binding.reference.bytes>0&&binding.reference.bytes<=2*1024*1024);
+  const referenceBytes=regularFile(memberPath(SOURCE_ROOT,binding.reference.path),binding.reference.bytes);
+  assert.equal(referenceBytes.length,binding.reference.bytes,'Retained reference length changed');
+  const referenceBindings=validateApprovedManualBindings({binding,reference:JSON.parse(referenceBytes),referenceSha256:sha(referenceBytes),
+    manual:{manifestSha256:catalog.manifestSha256,days,ratings,educationScope:ratingSource.education_scope}});
   const body={schema:'custodial.approved-manual-week-data.v1',packetId:catalog.packetId,zipSha256:catalog.zipSha256,
     manifestSha256:catalog.manifestSha256,timezone:'America/Chicago',ratings,
     ratingUnit:'COMBINED_GROUP_OWNER_RATING_1_TO_10_NOT_MINUTES',
     proximityIntent:structuredClone(ratingSource.proximity_planning),absenceRequirement:structuredClone(ratingSource.absence_recalculation_requirement),
     objective:{proximityPercent,loadPercent,normalizedFormula:null,formulaApproved:false},days,
-    runtimeBinding:{state:'NOT_YET_BOUND_TO_CANONICAL_SOURCE',registeredSourceId:null},
+    referenceBindings,runtimeBinding:{state:'CANDIDATE_REFERENCES_ONLY_NOT_REGISTERED',registeredSourceId:null,liveRosterReadbackRequired:true},
     activation:{state:'HELD',unresolvedPolicies:[...HOLDS],effectiveStart:null,published:false},receiptEligible:false};
   return freeze({...body,dataDigest:postgresJsonbContentDigest(body)});
 }
@@ -138,6 +150,9 @@ export function previewApprovedManualDay(week,{day,serviceDate,time}) {
     const p=plan.employees.find(p=>p.name===row.employee);assert.ok(p&&onShift(p,at));
     assert.ok(!activeLunches.some(l=>l.recipient===row.employee),'Employee on lunch still owns a current group');
   }
-  return {...common,status:'APPROVED_PLANNING_PREVIEW_ONLY',owners:[...live.values()],
+  const people=new Map(week.referenceBindings.people.map(p=>[p.approvedName,p])),groups=new Map(week.referenceBindings.groups.map(g=>[g.approvedGroup,g]));
+  const owners=[...live.values()].map(row=>({...row,employeeId:people.get(row.employee).employeeId,
+    slotId:people.get(row.employee).slotId,locationCode:groups.get(row.group).referenceCode,locationId:groups.get(row.group).primaryLocationId}));
+  return {...common,status:'APPROVED_PLANNING_PREVIEW_ONLY',owners,
     zooWideCoverage:phase.zooWideCoverage,createsMandatoryInheritedCleaningRoutes:false};
 }

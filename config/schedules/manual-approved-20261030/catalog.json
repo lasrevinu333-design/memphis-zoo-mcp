@@ -106,5 +106,9 @@
   "historicalSchedulesPreserved": [
     "config/schedules/custodial-eight-employee-20261028.json",
     "config/schedules/custodial-nine-position-20261028.json"
-  ]
+  ],
+  "referenceBindings": {
+    "path": "reference-bindings.json",
+    "sha256": "7b578ab31362e632f03d21e5b3b2868aa6fef0478b9cc57c9a5cd8d3b07c7619"
+  }
 }
