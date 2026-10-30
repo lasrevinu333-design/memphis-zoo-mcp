@@ -1,0 +1,908 @@
+{
+  "schema_version": 1,
+  "updated_at": "2026-10-30T00:26:48Z",
+  "title": "Custodial manual Wednesday working draft",
+  "schedule_day": "Wednesday",
+  "timezone": "America/Chicago",
+  "status": "APPROVED / LOCKED Wednesday working plan: bases, five full-hour lunch reliefs and exact weighted 14:00/15:00/16:00 handoffs. Wednesday 9:45 policy remains separately unchosen. Not production or measured physical feasibility.",
+  "authority": {
+    "source": "Eric's current voice choice relayed by parent",
+    "quote": "yeah do that one, show in chat",
+    "context": "Accepted the cleaner Wednesday variant after rejecting Cat House Cafe for Xavier as too far.",
+    "chat_receipt": "Sentinel_7991854d82a0819189ab7623e8699025",
+    "scope": "Wednesday full working plan approved. Earlier base-only/proposal limits are superseded for these exact reliefs and transfers; Monday and Tuesday remain unchanged.",
+    "latest_confirmation": {
+      "quote": "yeah let's lock in Wednesday",
+      "received_at_utc": "2026-10-30T00:26:48Z",
+      "scope": "Explicit final acceptance of bases, five reliefs and weighted handoffs after 46/47/43, 68/68 and Xavier-only closing phases were discussed."
+    },
+    "lunch_confirmation": {
+      "quotes": [
+        "sounds great",
+        "yeah"
+      ],
+      "scope": "Keep all five full-hour lunch reliefs as-is."
+    }
+  },
+  "on_duty": [
+    "Tammy Miller",
+    "Karen Robinson",
+    "Kathy Phelps",
+    "Derrick Henderson",
+    "Xavier Green"
+  ],
+  "employees": [
+    {
+      "name": "Tammy Miller",
+      "requested_base_areas": [
+        "Teton and restrooms",
+        "Northwest Passage",
+        "East End restrooms"
+      ],
+      "group_scores": [
+        {
+          "group": "Teton and restrooms",
+          "score": 10
+        },
+        {
+          "group": "Northwest Passage",
+          "score": 7
+        },
+        {
+          "group": "East End restrooms",
+          "score": 7
+        }
+      ],
+      "base_only_sum": 24,
+      "lunch_relief": {
+        "status": "APPROVED full-hour relief",
+        "coverers": [
+          {
+            "name": "Karen Robinson",
+            "start": "08:30",
+            "end": "09:30",
+            "areas": [
+              "Teton and restrooms",
+              "Northwest Passage",
+              "East End restrooms"
+            ]
+          }
+        ],
+        "covers_other_employees": [],
+        "exemption": "Tammy covers no other employee's lunch on Wednesday."
+      },
+      "shift_baseline": {
+        "start": "05:00",
+        "end": "14:00",
+        "status": "Existing recurring employee shift retained; approved Wednesday departure plan uses these end times. Not actual punches."
+      },
+      "own_lunch_baseline": {
+        "start": "08:30",
+        "end": "09:30",
+        "status": "Own-lunch window explicitly used in the approved Wednesday relief plan."
+      }
+    },
+    {
+      "name": "Karen Robinson",
+      "requested_base_areas": [
+        "Zambezi and restrooms",
+        "Primate Pavilion",
+        "Breezeway restrooms",
+        "Tropical Birds",
+        "Nocturnal",
+        "Primate Canyon"
+      ],
+      "group_scores": [
+        {
+          "group": "Zambezi and restrooms",
+          "score": 9
+        },
+        {
+          "group": "Primate Pavilion",
+          "score": 3
+        },
+        {
+          "group": "Breezeway restrooms",
+          "score": 6
+        },
+        {
+          "group": "Tropical Birds",
+          "score": 5
+        },
+        {
+          "group": "Nocturnal",
+          "score": 3
+        },
+        {
+          "group": "Primate Canyon",
+          "score": 1
+        }
+      ],
+      "base_only_sum": 27,
+      "lunch_relief": {
+        "status": "APPROVED full-hour relief",
+        "coverers": [
+          {
+            "name": "Derrick Henderson",
+            "start": "09:30",
+            "end": "10:30",
+            "areas": [
+              "Zambezi and restrooms",
+              "Primate Pavilion",
+              "Breezeway restrooms",
+              "Tropical Birds",
+              "Nocturnal",
+              "Primate Canyon"
+            ]
+          }
+        ],
+        "covers_other_employees": [
+          {
+            "name": "Tammy Miller",
+            "start": "08:30",
+            "end": "09:30",
+            "areas": [
+              "Teton and restrooms",
+              "Northwest Passage",
+              "East End restrooms"
+            ]
+          },
+          {
+            "name": "Kathy Phelps",
+            "start": "10:30",
+            "end": "11:30",
+            "areas": [
+              "East Admin and restrooms",
+              "West Admin and restrooms",
+              "Courtyard restrooms",
+              "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+              "Cat Country"
+            ]
+          }
+        ]
+      },
+      "shift_baseline": {
+        "start": "05:00",
+        "end": "14:00",
+        "status": "Existing recurring employee shift retained; approved Wednesday departure plan uses these end times. Not actual punches."
+      },
+      "own_lunch_baseline": {
+        "start": "09:30",
+        "end": "10:30",
+        "status": "Own-lunch window explicitly used in the approved Wednesday relief plan."
+      }
+    },
+    {
+      "name": "Kathy Phelps",
+      "requested_base_areas": [
+        "East Admin and restrooms",
+        "West Admin and restrooms",
+        "Courtyard restrooms",
+        "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+        "Cat Country"
+      ],
+      "group_scores": [
+        {
+          "group": "East Admin and restrooms",
+          "score": 5
+        },
+        {
+          "group": "West Admin and restrooms",
+          "score": 7
+        },
+        {
+          "group": "Courtyard restrooms",
+          "score": 7
+        },
+        {
+          "group": "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+          "score": 8
+        },
+        {
+          "group": "Cat Country",
+          "score": 2
+        }
+      ],
+      "base_only_sum": 29,
+      "lunch_relief": {
+        "status": "APPROVED full-hour relief",
+        "coverers": [
+          {
+            "name": "Karen Robinson",
+            "start": "10:30",
+            "end": "11:30",
+            "areas": [
+              "East Admin and restrooms",
+              "West Admin and restrooms",
+              "Courtyard restrooms",
+              "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+              "Cat Country"
+            ]
+          }
+        ],
+        "covers_other_employees": []
+      },
+      "shift_baseline": {
+        "start": "06:00",
+        "end": "15:00",
+        "status": "Existing recurring employee shift retained; approved Wednesday departure plan uses these end times. Not actual punches."
+      },
+      "own_lunch_baseline": {
+        "start": "10:30",
+        "end": "11:30",
+        "status": "Own-lunch window explicitly used in the approved Wednesday relief plan."
+      }
+    },
+    {
+      "name": "Derrick Henderson",
+      "requested_base_areas": [
+        "China and restrooms",
+        "Bonobos restrooms",
+        "Herpetarium",
+        "Cat House Cafe restrooms"
+      ],
+      "group_scores": [
+        {
+          "group": "China and restrooms",
+          "score": 7
+        },
+        {
+          "group": "Bonobos restrooms",
+          "score": 8
+        },
+        {
+          "group": "Herpetarium",
+          "score": 5
+        },
+        {
+          "group": "Cat House Cafe restrooms",
+          "score": 7
+        }
+      ],
+      "base_only_sum": 27,
+      "lunch_relief": {
+        "status": "APPROVED full-hour relief",
+        "coverers": [
+          {
+            "name": "Xavier Green",
+            "start": "10:30",
+            "end": "11:30",
+            "areas": [
+              "China and restrooms",
+              "Bonobos restrooms",
+              "Herpetarium",
+              "Cat House Cafe restrooms"
+            ]
+          }
+        ],
+        "covers_other_employees": [
+          {
+            "name": "Karen Robinson",
+            "start": "09:30",
+            "end": "10:30",
+            "areas": [
+              "Zambezi and restrooms",
+              "Primate Pavilion",
+              "Breezeway restrooms",
+              "Tropical Birds",
+              "Nocturnal",
+              "Primate Canyon"
+            ]
+          },
+          {
+            "name": "Xavier Green",
+            "start": "12:30",
+            "end": "13:30",
+            "areas": [
+              "Expo and restrooms",
+              "MemMex restrooms",
+              "Aquarium",
+              "Event Center and restrooms",
+              "Komodos"
+            ]
+          }
+        ]
+      },
+      "shift_baseline": {
+        "start": "07:00",
+        "end": "16:00",
+        "status": "Existing recurring employee shift retained; approved Wednesday departure plan uses these end times. Not actual punches."
+      },
+      "own_lunch_baseline": {
+        "start": "10:30",
+        "end": "11:30",
+        "status": "Own-lunch window explicitly used in the approved Wednesday relief plan."
+      }
+    },
+    {
+      "name": "Xavier Green",
+      "requested_base_areas": [
+        "Expo and restrooms",
+        "MemMex restrooms",
+        "Aquarium",
+        "Event Center and restrooms",
+        "Komodos"
+      ],
+      "group_scores": [
+        {
+          "group": "Expo and restrooms",
+          "score": 8
+        },
+        {
+          "group": "MemMex restrooms",
+          "score": 7
+        },
+        {
+          "group": "Aquarium",
+          "score": 5
+        },
+        {
+          "group": "Event Center and restrooms",
+          "score": 5
+        },
+        {
+          "group": "Komodos",
+          "score": 4
+        }
+      ],
+      "base_only_sum": 29,
+      "lunch_relief": {
+        "status": "APPROVED full-hour relief",
+        "coverers": [
+          {
+            "name": "Derrick Henderson",
+            "start": "12:30",
+            "end": "13:30",
+            "areas": [
+              "Expo and restrooms",
+              "MemMex restrooms",
+              "Aquarium",
+              "Event Center and restrooms",
+              "Komodos"
+            ]
+          }
+        ],
+        "covers_other_employees": [
+          {
+            "name": "Derrick Henderson",
+            "start": "10:30",
+            "end": "11:30",
+            "areas": [
+              "China and restrooms",
+              "Bonobos restrooms",
+              "Herpetarium",
+              "Cat House Cafe restrooms"
+            ]
+          }
+        ]
+      },
+      "shift_baseline": {
+        "start": "08:00",
+        "end": "17:00",
+        "status": "Existing recurring employee shift retained; approved Wednesday departure plan uses these end times. Not actual punches."
+      },
+      "own_lunch_baseline": {
+        "start": "12:30",
+        "end": "13:30",
+        "status": "Own-lunch window explicitly used in the approved Wednesday relief plan."
+      }
+    }
+  ],
+  "area_scope": {
+    "Education": "One umbrella including Volunteer, IT, Interpretation and FOUR classrooms.",
+    "West Admin": "Both floors and private restrooms included.",
+    "East Admin": "Includes private restrooms.",
+    "China": "China Theater and both restrooms as one group.",
+    "Event Center": "Includes both restrooms as one group."
+  },
+  "inventory_check": {
+    "checked_at": "2026-10-30T00:26:48Z",
+    "groups": 23,
+    "unique_groups": 23,
+    "missing": [],
+    "duplicates": [],
+    "total_base_points": 136,
+    "base_only_sums": {
+      "Tammy Miller": 24,
+      "Karen Robinson": 27,
+      "Kathy Phelps": 29,
+      "Derrick Henderson": 27,
+      "Xavier Green": 29
+    },
+    "scope": "Simple group inventory/arithmetic only, not measured workload/travel, time/GPS scoring, full coverage or operational acceptance."
+  },
+  "rejected_alternative": {
+    "status": "SUPERSEDED / NOT CURRENT",
+    "description": "Original proposal assigned Cat House Cafe restrooms to Xavier; Eric rejected that as too far. Current accepted variant assigns Cat House Cafe to Derrick."
+  },
+  "lunch_relief_assignments": [
+    {
+      "coverer": "Karen Robinson",
+      "employee_on_lunch": "Tammy Miller",
+      "start": "08:30",
+      "end": "09:30",
+      "areas": [
+        "Teton and restrooms",
+        "Northwest Passage",
+        "East End restrooms"
+      ],
+      "retains_own_base": true,
+      "status": "Explicitly approved full-hour relief"
+    },
+    {
+      "coverer": "Derrick Henderson",
+      "employee_on_lunch": "Karen Robinson",
+      "start": "09:30",
+      "end": "10:30",
+      "areas": [
+        "Zambezi and restrooms",
+        "Primate Pavilion",
+        "Breezeway restrooms",
+        "Tropical Birds",
+        "Nocturnal",
+        "Primate Canyon"
+      ],
+      "retains_own_base": true,
+      "status": "Explicitly approved full-hour relief"
+    },
+    {
+      "coverer": "Karen Robinson",
+      "employee_on_lunch": "Kathy Phelps",
+      "start": "10:30",
+      "end": "11:30",
+      "areas": [
+        "East Admin and restrooms",
+        "West Admin and restrooms",
+        "Courtyard restrooms",
+        "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+        "Cat Country"
+      ],
+      "retains_own_base": true,
+      "status": "Explicitly approved full-hour relief"
+    },
+    {
+      "coverer": "Xavier Green",
+      "employee_on_lunch": "Derrick Henderson",
+      "start": "10:30",
+      "end": "11:30",
+      "areas": [
+        "China and restrooms",
+        "Bonobos restrooms",
+        "Herpetarium",
+        "Cat House Cafe restrooms"
+      ],
+      "retains_own_base": true,
+      "status": "Explicitly approved full-hour relief"
+    },
+    {
+      "coverer": "Derrick Henderson",
+      "employee_on_lunch": "Xavier Green",
+      "start": "12:30",
+      "end": "13:30",
+      "areas": [
+        "Expo and restrooms",
+        "MemMex restrooms",
+        "Aquarium",
+        "Event Center and restrooms",
+        "Komodos"
+      ],
+      "retains_own_base": true,
+      "status": "Explicitly approved full-hour relief"
+    }
+  ],
+  "afternoon_handoffs": {
+    "status": "APPROVED / LOCKED exact working plan",
+    "trigger_scope": "Planned shift ends. Actual clock-out integration remains unresolved; not runtime proof.",
+    "assignments": [
+      {
+        "time": "14:00",
+        "departing": [
+          "Tammy Miller",
+          "Karen Robinson"
+        ],
+        "transfers": [
+          {
+            "from": "Tammy Miller",
+            "to": "Derrick Henderson",
+            "areas": [
+              "Teton and restrooms"
+            ]
+          },
+          {
+            "from": "Karen Robinson",
+            "to": "Derrick Henderson",
+            "areas": [
+              "Zambezi and restrooms"
+            ]
+          },
+          {
+            "from": "Karen Robinson",
+            "to": "Kathy Phelps",
+            "areas": [
+              "Primate Pavilion",
+              "Breezeway restrooms",
+              "Nocturnal",
+              "Primate Canyon",
+              "Tropical Birds"
+            ]
+          },
+          {
+            "from": "Tammy Miller",
+            "to": "Xavier Green",
+            "areas": [
+              "Northwest Passage",
+              "East End restrooms"
+            ]
+          }
+        ]
+      },
+      {
+        "time": "15:00",
+        "departing": [
+          "Kathy Phelps"
+        ],
+        "transfers": [
+          {
+            "from": "Kathy Phelps",
+            "to": "Derrick Henderson",
+            "areas": [
+              "East Admin and restrooms",
+              "Courtyard restrooms",
+              "Primate Pavilion",
+              "Breezeway restrooms",
+              "Primate Canyon"
+            ]
+          },
+          {
+            "from": "Kathy Phelps",
+            "to": "Xavier Green",
+            "areas": [
+              "West Admin and restrooms",
+              "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+              "Cat Country",
+              "Nocturnal",
+              "Tropical Birds"
+            ]
+          }
+        ]
+      },
+      {
+        "time": "16:00",
+        "departing": [
+          "Derrick Henderson"
+        ],
+        "transfers": [
+          {
+            "from": "Derrick Henderson",
+            "to": "Xavier Green",
+            "areas": [
+              "China and restrooms",
+              "Bonobos restrooms",
+              "Herpetarium",
+              "Cat House Cafe restrooms",
+              "Teton and restrooms",
+              "Zambezi and restrooms",
+              "East Admin and restrooms",
+              "Courtyard restrooms",
+              "Primate Pavilion",
+              "Breezeway restrooms",
+              "Primate Canyon"
+            ]
+          }
+        ]
+      }
+    ],
+    "coverage_scope": "Inherited coverage means radio/restroom alerts and issues as needed, not mandatory extra cleaning routes. Eric accepts remote reach for this approved plan.",
+    "ownership_snapshots": [
+      {
+        "time": "14:00",
+        "owners": {
+          "Kathy Phelps": [
+            "East Admin and restrooms",
+            "West Admin and restrooms",
+            "Courtyard restrooms",
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+            "Cat Country",
+            "Primate Pavilion",
+            "Breezeway restrooms",
+            "Nocturnal",
+            "Primate Canyon",
+            "Tropical Birds"
+          ],
+          "Derrick Henderson": [
+            "China and restrooms",
+            "Bonobos restrooms",
+            "Herpetarium",
+            "Cat House Cafe restrooms",
+            "Teton and restrooms",
+            "Zambezi and restrooms"
+          ],
+          "Xavier Green": [
+            "Expo and restrooms",
+            "MemMex restrooms",
+            "Aquarium",
+            "Event Center and restrooms",
+            "Komodos",
+            "Northwest Passage",
+            "East End restrooms"
+          ]
+        },
+        "groups": 23,
+        "unique": 23,
+        "total_points": 136,
+        "owner_counts": {
+          "Kathy Phelps": 10,
+          "Derrick Henderson": 6,
+          "Xavier Green": 7
+        },
+        "owner_points": {
+          "Kathy Phelps": 47,
+          "Derrick Henderson": 46,
+          "Xavier Green": 43
+        }
+      },
+      {
+        "time": "15:00",
+        "owners": {
+          "Derrick Henderson": [
+            "China and restrooms",
+            "Bonobos restrooms",
+            "Herpetarium",
+            "Cat House Cafe restrooms",
+            "Teton and restrooms",
+            "Zambezi and restrooms",
+            "East Admin and restrooms",
+            "Courtyard restrooms",
+            "Primate Pavilion",
+            "Breezeway restrooms",
+            "Primate Canyon"
+          ],
+          "Xavier Green": [
+            "Expo and restrooms",
+            "MemMex restrooms",
+            "Aquarium",
+            "Event Center and restrooms",
+            "Komodos",
+            "Northwest Passage",
+            "East End restrooms",
+            "West Admin and restrooms",
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+            "Cat Country",
+            "Nocturnal",
+            "Tropical Birds"
+          ]
+        },
+        "groups": 23,
+        "unique": 23,
+        "total_points": 136,
+        "owner_counts": {
+          "Derrick Henderson": 11,
+          "Xavier Green": 12
+        },
+        "owner_points": {
+          "Derrick Henderson": 68,
+          "Xavier Green": 68
+        }
+      },
+      {
+        "time": "16:00",
+        "owners": {
+          "Xavier Green": [
+            "Expo and restrooms",
+            "MemMex restrooms",
+            "Aquarium",
+            "Event Center and restrooms",
+            "Komodos",
+            "Northwest Passage",
+            "East End restrooms",
+            "West Admin and restrooms",
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+            "Cat Country",
+            "Nocturnal",
+            "Tropical Birds",
+            "China and restrooms",
+            "Bonobos restrooms",
+            "Herpetarium",
+            "Cat House Cafe restrooms",
+            "Teton and restrooms",
+            "Zambezi and restrooms",
+            "East Admin and restrooms",
+            "Courtyard restrooms",
+            "Primate Pavilion",
+            "Breezeway restrooms",
+            "Primate Canyon"
+          ]
+        },
+        "groups": 23,
+        "unique": 23,
+        "total_points": 136,
+        "owner_counts": {
+          "Xavier Green": 23
+        },
+        "owner_points": {
+          "Xavier Green": 136
+        }
+      }
+    ]
+  },
+  "pending_decisions": [
+    "Wednesday 9:45 policy remains unchosen; no rebalance/changeover is inferred from this approval."
+  ],
+  "preserved_days": "Monday and Tuesday accepted working scopes remain UNCHANGED.",
+  "rating_source": "/user_notes/long_form/custodial_area_group_scoring_draft_20261029.json",
+  "boundaries": "Memory/planning only. No HTML, database, program, PDF, live integration or publication changes. Monday and Tuesday untouched. Wednesday is a schedule day, not a new dated appointment.",
+  "proposal_request": {
+    "status": "APPROVED / APPLIED to Wednesday working draft",
+    "scope": "Exact plan below replaces proposal-only status."
+  },
+  "validation": {
+    "checked_at": "2026-10-30T00:26:48Z",
+    "result": "PASS: logical inventory, arithmetic, full-hour availability and planned transfer checks only",
+    "base_groups": 23,
+    "base_total_points": 136,
+    "full_hour_reliefs": 5,
+    "own_lunch_or_coverer_overlap": false,
+    "all_coverers_on_shift": true,
+    "ownership_intervals": [
+      {
+        "start": "08:00",
+        "end": "08:30",
+        "unique_groups": 23,
+        "total_points": 136,
+        "owner_counts": {
+          "Tammy Miller": 3,
+          "Karen Robinson": 6,
+          "Kathy Phelps": 5,
+          "Derrick Henderson": 4,
+          "Xavier Green": 5
+        }
+      },
+      {
+        "start": "08:30",
+        "end": "09:30",
+        "unique_groups": 23,
+        "total_points": 136,
+        "owner_counts": {
+          "Karen Robinson": 9,
+          "Kathy Phelps": 5,
+          "Derrick Henderson": 4,
+          "Xavier Green": 5
+        }
+      },
+      {
+        "start": "09:30",
+        "end": "10:30",
+        "unique_groups": 23,
+        "total_points": 136,
+        "owner_counts": {
+          "Tammy Miller": 3,
+          "Kathy Phelps": 5,
+          "Derrick Henderson": 10,
+          "Xavier Green": 5
+        }
+      },
+      {
+        "start": "10:30",
+        "end": "11:30",
+        "unique_groups": 23,
+        "total_points": 136,
+        "owner_counts": {
+          "Tammy Miller": 3,
+          "Karen Robinson": 11,
+          "Xavier Green": 9
+        }
+      },
+      {
+        "start": "11:30",
+        "end": "12:30",
+        "unique_groups": 23,
+        "total_points": 136,
+        "owner_counts": {
+          "Tammy Miller": 3,
+          "Karen Robinson": 6,
+          "Kathy Phelps": 5,
+          "Derrick Henderson": 4,
+          "Xavier Green": 5
+        }
+      },
+      {
+        "start": "12:30",
+        "end": "13:30",
+        "unique_groups": 23,
+        "total_points": 136,
+        "owner_counts": {
+          "Tammy Miller": 3,
+          "Karen Robinson": 6,
+          "Kathy Phelps": 5,
+          "Derrick Henderson": 9
+        }
+      },
+      {
+        "start": "13:30",
+        "end": "14:00",
+        "unique_groups": 23,
+        "total_points": 136,
+        "owner_counts": {
+          "Tammy Miller": 3,
+          "Karen Robinson": 6,
+          "Kathy Phelps": 5,
+          "Derrick Henderson": 4,
+          "Xavier Green": 5
+        }
+      },
+      {
+        "start": "14:00",
+        "end": "15:00",
+        "unique_groups": 23,
+        "total_points": 136,
+        "owner_counts": {
+          "Kathy Phelps": 10,
+          "Derrick Henderson": 6,
+          "Xavier Green": 7
+        }
+      },
+      {
+        "start": "15:00",
+        "end": "16:00",
+        "unique_groups": 23,
+        "total_points": 136,
+        "owner_counts": {
+          "Derrick Henderson": 11,
+          "Xavier Green": 12
+        }
+      },
+      {
+        "start": "16:00",
+        "end": "17:00",
+        "unique_groups": 23,
+        "total_points": 136,
+        "owner_counts": {
+          "Xavier Green": 23
+        }
+      }
+    ],
+    "phase_owner_points": [
+      {
+        "time": "08:00",
+        "points": {
+          "Tammy Miller": 24,
+          "Karen Robinson": 27,
+          "Kathy Phelps": 29,
+          "Derrick Henderson": 27,
+          "Xavier Green": 29
+        }
+      },
+      {
+        "time": "14:00",
+        "points": {
+          "Kathy Phelps": 47,
+          "Derrick Henderson": 46,
+          "Xavier Green": 43
+        }
+      },
+      {
+        "time": "15:00",
+        "points": {
+          "Derrick Henderson": 68,
+          "Xavier Green": 68
+        }
+      },
+      {
+        "time": "16:00",
+        "points": {
+          "Xavier Green": 136
+        }
+      }
+    ],
+    "limitations": "No measured walking time, physical workload feasibility, GPS combined score, actual clock-out behavior, live UI or production acceptance. No full-site coverage claim before all listed staff have arrived at 08:00 or after 17:00."
+  },
+  "future_handoff_preference": {
+    "source": "Eric's current voice clarification relayed by parent",
+    "preference": "For future planning, avoid early handoffs to the 17:00 closer Xavier where possible. Spread inherited areas across other remaining employees first, adding a small amount gradually to the closer if needed.",
+    "scope": "Preference, not an automatic prohibition. The exact current Wednesday plan was explicitly approved after this preference and must not be rewritten."
+  },
+  "retracted_voice_proposal": {
+    "description": "Xavier's Expo/MemMex reassigned to Kathy at 14:00 based on alleged West Admin adjacency.",
+    "status": "RETRACTED / NEVER APPROVED; not in the working plan."
+  }
+}

@@ -1,0 +1,3077 @@
+{
+  "snapshot_checked_at_utc": "2026-10-30T01:05:36.381761Z",
+  "status": "PASS for the frozen planned data only",
+  "ratings": {
+    "groups": 23,
+    "sum": 136,
+    "scale": "One combined 1–10 workload score per assigned group"
+  },
+  "days": [
+    {
+      "day": "monday",
+      "result": "PASS — logical inventory and time availability only",
+      "base": {
+        "unique_groups": 23,
+        "total_points": 136,
+        "owner_counts": {
+          "Tammy Miller": 3,
+          "Karen Robinson": 3,
+          "Alijah Collins": 3,
+          "Jada Rawlings": 4,
+          "Kiltra Horton": 3,
+          "Xavier Green": 3,
+          "Derrick Henderson": 4
+        },
+        "owner_points": {
+          "Tammy Miller": 24,
+          "Karen Robinson": 18,
+          "Alijah Collins": 19,
+          "Jada Rawlings": 18,
+          "Kiltra Horton": 17,
+          "Xavier Green": 20,
+          "Derrick Henderson": 20
+        }
+      },
+      "relief_count": 7,
+      "full_hour_reliefs": [
+        {
+          "coverer": "Kiltra Horton",
+          "away": "Tammy Miller",
+          "start": "08:30",
+          "end": "09:30",
+          "areas": [
+            "Teton and restrooms",
+            "Northwest Passage",
+            "East End restrooms"
+          ]
+        },
+        {
+          "coverer": "Alijah Collins",
+          "away": "Karen Robinson",
+          "start": "09:30",
+          "end": "10:30",
+          "areas": [
+            "Zambezi and restrooms",
+            "Primate Pavilion",
+            "Breezeway restrooms"
+          ]
+        },
+        {
+          "coverer": "Kiltra Horton",
+          "away": "Jada Rawlings",
+          "start": "10:00",
+          "end": "11:00",
+          "areas": [
+            "Cat House Cafe restrooms",
+            "Tropical Birds",
+            "Cat Country",
+            "Komodos"
+          ]
+        },
+        {
+          "coverer": "Karen Robinson",
+          "away": "Derrick Henderson",
+          "start": "10:30",
+          "end": "11:30",
+          "areas": [
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+            "Nocturnal",
+            "Primate Canyon",
+            "Bonobos restrooms"
+          ]
+        },
+        {
+          "coverer": "Jada Rawlings",
+          "away": "Alijah Collins",
+          "start": "11:30",
+          "end": "12:30",
+          "areas": [
+            "East Admin and restrooms",
+            "West Admin and restrooms",
+            "Courtyard restrooms"
+          ]
+        },
+        {
+          "coverer": "Derrick Henderson",
+          "away": "Kiltra Horton",
+          "start": "12:00",
+          "end": "13:00",
+          "areas": [
+            "China and restrooms",
+            "Event Center and restrooms",
+            "Herpetarium"
+          ]
+        },
+        {
+          "coverer": "Jada Rawlings",
+          "away": "Xavier Green",
+          "start": "12:30",
+          "end": "13:30",
+          "areas": [
+            "Expo and restrooms",
+            "MemMex restrooms",
+            "Aquarium"
+          ]
+        }
+      ],
+      "validated_staffed_window": {
+        "start": "08:00",
+        "end": "17:00"
+      },
+      "handoff_phases": [
+        {
+          "time": "14:00",
+          "owners": {
+            "Alijah Collins": [
+              "East Admin and restrooms",
+              "West Admin and restrooms",
+              "Courtyard restrooms",
+              "Primate Pavilion",
+              "Breezeway restrooms"
+            ],
+            "Jada Rawlings": [
+              "Cat House Cafe restrooms",
+              "Tropical Birds",
+              "Cat Country",
+              "Komodos",
+              "Teton and restrooms",
+              "Zambezi and restrooms"
+            ],
+            "Kiltra Horton": [
+              "China and restrooms",
+              "Event Center and restrooms",
+              "Herpetarium",
+              "East End restrooms",
+              "Northwest Passage"
+            ],
+            "Xavier Green": [
+              "Expo and restrooms",
+              "MemMex restrooms",
+              "Aquarium"
+            ],
+            "Derrick Henderson": [
+              "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+              "Nocturnal",
+              "Primate Canyon",
+              "Bonobos restrooms"
+            ]
+          },
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Alijah Collins": 5,
+            "Jada Rawlings": 6,
+            "Kiltra Horton": 5,
+            "Xavier Green": 3,
+            "Derrick Henderson": 4
+          },
+          "owner_points": {
+            "Alijah Collins": 28,
+            "Jada Rawlings": 37,
+            "Kiltra Horton": 31,
+            "Xavier Green": 20,
+            "Derrick Henderson": 20
+          }
+        },
+        {
+          "time": "15:00",
+          "owners": {
+            "Alijah Collins": [
+              "East Admin and restrooms",
+              "West Admin and restrooms",
+              "Courtyard restrooms",
+              "Primate Pavilion",
+              "Breezeway restrooms"
+            ],
+            "Kiltra Horton": [
+              "China and restrooms",
+              "Event Center and restrooms",
+              "Herpetarium",
+              "East End restrooms",
+              "Northwest Passage",
+              "Teton and restrooms",
+              "Zambezi and restrooms"
+            ],
+            "Xavier Green": [
+              "Expo and restrooms",
+              "MemMex restrooms",
+              "Aquarium"
+            ],
+            "Derrick Henderson": [
+              "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+              "Nocturnal",
+              "Primate Canyon",
+              "Bonobos restrooms",
+              "Cat House Cafe restrooms",
+              "Tropical Birds",
+              "Cat Country",
+              "Komodos"
+            ]
+          },
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Alijah Collins": 5,
+            "Kiltra Horton": 7,
+            "Xavier Green": 3,
+            "Derrick Henderson": 8
+          },
+          "owner_points": {
+            "Alijah Collins": 28,
+            "Kiltra Horton": 50,
+            "Xavier Green": 20,
+            "Derrick Henderson": 38
+          }
+        },
+        {
+          "time": "16:00",
+          "owners": {
+            "Xavier Green": [
+              "Expo and restrooms",
+              "MemMex restrooms",
+              "Aquarium",
+              "East Admin and restrooms",
+              "West Admin and restrooms",
+              "Courtyard restrooms",
+              "Primate Pavilion",
+              "Breezeway restrooms",
+              "China and restrooms",
+              "Event Center and restrooms",
+              "Herpetarium",
+              "East End restrooms",
+              "Northwest Passage",
+              "Teton and restrooms",
+              "Zambezi and restrooms",
+              "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+              "Nocturnal",
+              "Primate Canyon",
+              "Bonobos restrooms",
+              "Cat House Cafe restrooms",
+              "Tropical Birds",
+              "Cat Country",
+              "Komodos"
+            ]
+          },
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Xavier Green": 23
+          },
+          "owner_points": {
+            "Xavier Green": 136
+          }
+        }
+      ],
+      "intervals": [
+        {
+          "start": "08:00",
+          "end": "08:30",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Tammy Miller": 3,
+            "Karen Robinson": 3,
+            "Alijah Collins": 3,
+            "Jada Rawlings": 4,
+            "Kiltra Horton": 3,
+            "Xavier Green": 3,
+            "Derrick Henderson": 4
+          },
+          "owner_points": {
+            "Tammy Miller": 24,
+            "Karen Robinson": 18,
+            "Alijah Collins": 19,
+            "Jada Rawlings": 18,
+            "Kiltra Horton": 17,
+            "Xavier Green": 20,
+            "Derrick Henderson": 20
+          }
+        },
+        {
+          "start": "08:30",
+          "end": "09:30",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Karen Robinson": 3,
+            "Alijah Collins": 3,
+            "Jada Rawlings": 4,
+            "Kiltra Horton": 6,
+            "Xavier Green": 3,
+            "Derrick Henderson": 4
+          },
+          "owner_points": {
+            "Karen Robinson": 18,
+            "Alijah Collins": 19,
+            "Jada Rawlings": 18,
+            "Kiltra Horton": 41,
+            "Xavier Green": 20,
+            "Derrick Henderson": 20
+          }
+        },
+        {
+          "start": "09:30",
+          "end": "10:00",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Tammy Miller": 3,
+            "Alijah Collins": 6,
+            "Jada Rawlings": 4,
+            "Kiltra Horton": 3,
+            "Xavier Green": 3,
+            "Derrick Henderson": 4
+          },
+          "owner_points": {
+            "Tammy Miller": 24,
+            "Alijah Collins": 37,
+            "Jada Rawlings": 18,
+            "Kiltra Horton": 17,
+            "Xavier Green": 20,
+            "Derrick Henderson": 20
+          }
+        },
+        {
+          "start": "10:00",
+          "end": "10:30",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Tammy Miller": 3,
+            "Alijah Collins": 6,
+            "Kiltra Horton": 7,
+            "Xavier Green": 3,
+            "Derrick Henderson": 4
+          },
+          "owner_points": {
+            "Tammy Miller": 24,
+            "Alijah Collins": 37,
+            "Kiltra Horton": 35,
+            "Xavier Green": 20,
+            "Derrick Henderson": 20
+          }
+        },
+        {
+          "start": "10:30",
+          "end": "11:00",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Tammy Miller": 3,
+            "Karen Robinson": 7,
+            "Alijah Collins": 3,
+            "Kiltra Horton": 7,
+            "Xavier Green": 3
+          },
+          "owner_points": {
+            "Tammy Miller": 24,
+            "Karen Robinson": 38,
+            "Alijah Collins": 19,
+            "Kiltra Horton": 35,
+            "Xavier Green": 20
+          }
+        },
+        {
+          "start": "11:00",
+          "end": "11:30",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Tammy Miller": 3,
+            "Karen Robinson": 7,
+            "Alijah Collins": 3,
+            "Jada Rawlings": 4,
+            "Kiltra Horton": 3,
+            "Xavier Green": 3
+          },
+          "owner_points": {
+            "Tammy Miller": 24,
+            "Karen Robinson": 38,
+            "Alijah Collins": 19,
+            "Jada Rawlings": 18,
+            "Kiltra Horton": 17,
+            "Xavier Green": 20
+          }
+        },
+        {
+          "start": "11:30",
+          "end": "12:00",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Tammy Miller": 3,
+            "Karen Robinson": 3,
+            "Jada Rawlings": 7,
+            "Kiltra Horton": 3,
+            "Xavier Green": 3,
+            "Derrick Henderson": 4
+          },
+          "owner_points": {
+            "Tammy Miller": 24,
+            "Karen Robinson": 18,
+            "Jada Rawlings": 37,
+            "Kiltra Horton": 17,
+            "Xavier Green": 20,
+            "Derrick Henderson": 20
+          }
+        },
+        {
+          "start": "12:00",
+          "end": "12:30",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Tammy Miller": 3,
+            "Karen Robinson": 3,
+            "Jada Rawlings": 7,
+            "Xavier Green": 3,
+            "Derrick Henderson": 7
+          },
+          "owner_points": {
+            "Tammy Miller": 24,
+            "Karen Robinson": 18,
+            "Jada Rawlings": 37,
+            "Xavier Green": 20,
+            "Derrick Henderson": 37
+          }
+        },
+        {
+          "start": "12:30",
+          "end": "13:00",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Tammy Miller": 3,
+            "Karen Robinson": 3,
+            "Alijah Collins": 3,
+            "Jada Rawlings": 7,
+            "Derrick Henderson": 7
+          },
+          "owner_points": {
+            "Tammy Miller": 24,
+            "Karen Robinson": 18,
+            "Alijah Collins": 19,
+            "Jada Rawlings": 38,
+            "Derrick Henderson": 37
+          }
+        },
+        {
+          "start": "13:00",
+          "end": "13:30",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Tammy Miller": 3,
+            "Karen Robinson": 3,
+            "Alijah Collins": 3,
+            "Jada Rawlings": 7,
+            "Kiltra Horton": 3,
+            "Derrick Henderson": 4
+          },
+          "owner_points": {
+            "Tammy Miller": 24,
+            "Karen Robinson": 18,
+            "Alijah Collins": 19,
+            "Jada Rawlings": 38,
+            "Kiltra Horton": 17,
+            "Derrick Henderson": 20
+          }
+        },
+        {
+          "start": "13:30",
+          "end": "14:00",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Tammy Miller": 3,
+            "Karen Robinson": 3,
+            "Alijah Collins": 3,
+            "Jada Rawlings": 4,
+            "Kiltra Horton": 3,
+            "Xavier Green": 3,
+            "Derrick Henderson": 4
+          },
+          "owner_points": {
+            "Tammy Miller": 24,
+            "Karen Robinson": 18,
+            "Alijah Collins": 19,
+            "Jada Rawlings": 18,
+            "Kiltra Horton": 17,
+            "Xavier Green": 20,
+            "Derrick Henderson": 20
+          }
+        },
+        {
+          "start": "14:00",
+          "end": "15:00",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Alijah Collins": 5,
+            "Jada Rawlings": 6,
+            "Kiltra Horton": 5,
+            "Xavier Green": 3,
+            "Derrick Henderson": 4
+          },
+          "owner_points": {
+            "Alijah Collins": 28,
+            "Jada Rawlings": 37,
+            "Kiltra Horton": 31,
+            "Xavier Green": 20,
+            "Derrick Henderson": 20
+          }
+        },
+        {
+          "start": "15:00",
+          "end": "16:00",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Alijah Collins": 5,
+            "Kiltra Horton": 7,
+            "Xavier Green": 3,
+            "Derrick Henderson": 8
+          },
+          "owner_points": {
+            "Alijah Collins": 28,
+            "Kiltra Horton": 50,
+            "Xavier Green": 20,
+            "Derrick Henderson": 38
+          }
+        },
+        {
+          "start": "16:00",
+          "end": "17:00",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Xavier Green": 23
+          },
+          "owner_points": {
+            "Xavier Green": 136
+          }
+        }
+      ]
+    },
+    {
+      "day": "tuesday",
+      "result": "PASS — logical inventory and time availability only",
+      "base": {
+        "unique_groups": 23,
+        "total_points": 136,
+        "owner_counts": {
+          "Tammy Miller": 3,
+          "Karen Robinson": 4,
+          "Kathy Phelps": 5,
+          "Jada Rawlings": 5,
+          "Derrick Henderson": 3,
+          "Xavier Green": 3
+        },
+        "owner_points": {
+          "Tammy Miller": 24,
+          "Karen Robinson": 23,
+          "Kathy Phelps": 23,
+          "Jada Rawlings": 23,
+          "Derrick Henderson": 23,
+          "Xavier Green": 20
+        }
+      },
+      "relief_count": 6,
+      "full_hour_reliefs": [
+        {
+          "coverer": "Karen Robinson",
+          "away": "Tammy Miller",
+          "start": "08:30",
+          "end": "09:30",
+          "areas": [
+            "Teton and restrooms",
+            "Northwest Passage",
+            "East End restrooms"
+          ]
+        },
+        {
+          "coverer": "Tammy Miller",
+          "away": "Karen Robinson",
+          "start": "09:30",
+          "end": "10:30",
+          "areas": [
+            "Zambezi and restrooms",
+            "Primate Pavilion",
+            "Breezeway restrooms",
+            "Tropical Birds"
+          ]
+        },
+        {
+          "coverer": "Xavier Green",
+          "away": "Jada Rawlings",
+          "start": "10:00",
+          "end": "11:00",
+          "areas": [
+            "Cat House Cafe restrooms",
+            "Herpetarium",
+            "Event Center and restrooms",
+            "Cat Country",
+            "Komodos"
+          ]
+        },
+        {
+          "coverer": "Tammy Miller",
+          "away": "Kathy Phelps",
+          "start": "10:30",
+          "end": "11:30",
+          "areas": [
+            "East Admin and restrooms",
+            "West Admin and restrooms",
+            "Courtyard restrooms",
+            "Nocturnal",
+            "Primate Canyon"
+          ]
+        },
+        {
+          "coverer": "Karen Robinson",
+          "away": "Derrick Henderson",
+          "start": "10:30",
+          "end": "11:30",
+          "areas": [
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+            "China and restrooms",
+            "Bonobos restrooms"
+          ]
+        },
+        {
+          "coverer": "Jada Rawlings",
+          "away": "Xavier Green",
+          "start": "12:30",
+          "end": "13:30",
+          "areas": [
+            "Expo and restrooms",
+            "MemMex restrooms",
+            "Aquarium"
+          ]
+        }
+      ],
+      "validated_staffed_window": {
+        "start": "08:00",
+        "end": "17:00"
+      },
+      "handoff_phases": [
+        {
+          "time": "14:00",
+          "owners": {
+            "Kathy Phelps": [
+              "East Admin and restrooms",
+              "West Admin and restrooms",
+              "Courtyard restrooms",
+              "Nocturnal",
+              "Primate Canyon",
+              "Zambezi and restrooms",
+              "Primate Pavilion",
+              "Breezeway restrooms",
+              "Tropical Birds"
+            ],
+            "Jada Rawlings": [
+              "Cat House Cafe restrooms",
+              "Herpetarium",
+              "Event Center and restrooms",
+              "Cat Country",
+              "Komodos",
+              "Teton and restrooms",
+              "Northwest Passage",
+              "East End restrooms"
+            ],
+            "Derrick Henderson": [
+              "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+              "China and restrooms",
+              "Bonobos restrooms"
+            ],
+            "Xavier Green": [
+              "Expo and restrooms",
+              "MemMex restrooms",
+              "Aquarium"
+            ]
+          },
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Kathy Phelps": 9,
+            "Jada Rawlings": 8,
+            "Derrick Henderson": 3,
+            "Xavier Green": 3
+          },
+          "owner_points": {
+            "Kathy Phelps": 46,
+            "Jada Rawlings": 47,
+            "Derrick Henderson": 23,
+            "Xavier Green": 20
+          }
+        },
+        {
+          "time": "15:00",
+          "owners": {
+            "Derrick Henderson": [
+              "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+              "China and restrooms",
+              "Bonobos restrooms",
+              "East Admin and restrooms",
+              "West Admin and restrooms",
+              "Courtyard restrooms",
+              "Nocturnal",
+              "Primate Canyon",
+              "Zambezi and restrooms",
+              "Primate Pavilion",
+              "Breezeway restrooms",
+              "Tropical Birds"
+            ],
+            "Xavier Green": [
+              "Expo and restrooms",
+              "MemMex restrooms",
+              "Aquarium",
+              "Cat House Cafe restrooms",
+              "Herpetarium",
+              "Event Center and restrooms",
+              "Cat Country",
+              "Komodos",
+              "Teton and restrooms",
+              "Northwest Passage",
+              "East End restrooms"
+            ]
+          },
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Derrick Henderson": 12,
+            "Xavier Green": 11
+          },
+          "owner_points": {
+            "Derrick Henderson": 69,
+            "Xavier Green": 67
+          }
+        },
+        {
+          "time": "16:00",
+          "owners": {
+            "Xavier Green": [
+              "Expo and restrooms",
+              "MemMex restrooms",
+              "Aquarium",
+              "Cat House Cafe restrooms",
+              "Herpetarium",
+              "Event Center and restrooms",
+              "Cat Country",
+              "Komodos",
+              "Teton and restrooms",
+              "Northwest Passage",
+              "East End restrooms",
+              "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+              "China and restrooms",
+              "Bonobos restrooms",
+              "East Admin and restrooms",
+              "West Admin and restrooms",
+              "Courtyard restrooms",
+              "Nocturnal",
+              "Primate Canyon",
+              "Zambezi and restrooms",
+              "Primate Pavilion",
+              "Breezeway restrooms",
+              "Tropical Birds"
+            ]
+          },
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Xavier Green": 23
+          },
+          "owner_points": {
+            "Xavier Green": 136
+          }
+        }
+      ],
+      "intervals": [
+        {
+          "start": "08:00",
+          "end": "08:30",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Tammy Miller": 3,
+            "Karen Robinson": 4,
+            "Kathy Phelps": 5,
+            "Jada Rawlings": 5,
+            "Derrick Henderson": 3,
+            "Xavier Green": 3
+          },
+          "owner_points": {
+            "Tammy Miller": 24,
+            "Karen Robinson": 23,
+            "Kathy Phelps": 23,
+            "Jada Rawlings": 23,
+            "Derrick Henderson": 23,
+            "Xavier Green": 20
+          }
+        },
+        {
+          "start": "08:30",
+          "end": "09:30",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Karen Robinson": 7,
+            "Kathy Phelps": 5,
+            "Jada Rawlings": 5,
+            "Derrick Henderson": 3,
+            "Xavier Green": 3
+          },
+          "owner_points": {
+            "Karen Robinson": 47,
+            "Kathy Phelps": 23,
+            "Jada Rawlings": 23,
+            "Derrick Henderson": 23,
+            "Xavier Green": 20
+          }
+        },
+        {
+          "start": "09:30",
+          "end": "10:00",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Tammy Miller": 7,
+            "Kathy Phelps": 5,
+            "Jada Rawlings": 5,
+            "Derrick Henderson": 3,
+            "Xavier Green": 3
+          },
+          "owner_points": {
+            "Tammy Miller": 47,
+            "Kathy Phelps": 23,
+            "Jada Rawlings": 23,
+            "Derrick Henderson": 23,
+            "Xavier Green": 20
+          }
+        },
+        {
+          "start": "10:00",
+          "end": "10:30",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Tammy Miller": 7,
+            "Kathy Phelps": 5,
+            "Derrick Henderson": 3,
+            "Xavier Green": 8
+          },
+          "owner_points": {
+            "Tammy Miller": 47,
+            "Kathy Phelps": 23,
+            "Derrick Henderson": 23,
+            "Xavier Green": 43
+          }
+        },
+        {
+          "start": "10:30",
+          "end": "11:00",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Tammy Miller": 8,
+            "Karen Robinson": 7,
+            "Xavier Green": 8
+          },
+          "owner_points": {
+            "Tammy Miller": 47,
+            "Karen Robinson": 46,
+            "Xavier Green": 43
+          }
+        },
+        {
+          "start": "11:00",
+          "end": "11:30",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Tammy Miller": 8,
+            "Karen Robinson": 7,
+            "Jada Rawlings": 5,
+            "Xavier Green": 3
+          },
+          "owner_points": {
+            "Tammy Miller": 47,
+            "Karen Robinson": 46,
+            "Jada Rawlings": 23,
+            "Xavier Green": 20
+          }
+        },
+        {
+          "start": "11:30",
+          "end": "12:30",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Tammy Miller": 3,
+            "Karen Robinson": 4,
+            "Kathy Phelps": 5,
+            "Jada Rawlings": 5,
+            "Derrick Henderson": 3,
+            "Xavier Green": 3
+          },
+          "owner_points": {
+            "Tammy Miller": 24,
+            "Karen Robinson": 23,
+            "Kathy Phelps": 23,
+            "Jada Rawlings": 23,
+            "Derrick Henderson": 23,
+            "Xavier Green": 20
+          }
+        },
+        {
+          "start": "12:30",
+          "end": "13:30",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Tammy Miller": 3,
+            "Karen Robinson": 4,
+            "Kathy Phelps": 5,
+            "Jada Rawlings": 8,
+            "Derrick Henderson": 3
+          },
+          "owner_points": {
+            "Tammy Miller": 24,
+            "Karen Robinson": 23,
+            "Kathy Phelps": 23,
+            "Jada Rawlings": 43,
+            "Derrick Henderson": 23
+          }
+        },
+        {
+          "start": "13:30",
+          "end": "14:00",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Tammy Miller": 3,
+            "Karen Robinson": 4,
+            "Kathy Phelps": 5,
+            "Jada Rawlings": 5,
+            "Derrick Henderson": 3,
+            "Xavier Green": 3
+          },
+          "owner_points": {
+            "Tammy Miller": 24,
+            "Karen Robinson": 23,
+            "Kathy Phelps": 23,
+            "Jada Rawlings": 23,
+            "Derrick Henderson": 23,
+            "Xavier Green": 20
+          }
+        },
+        {
+          "start": "14:00",
+          "end": "15:00",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Kathy Phelps": 9,
+            "Jada Rawlings": 8,
+            "Derrick Henderson": 3,
+            "Xavier Green": 3
+          },
+          "owner_points": {
+            "Kathy Phelps": 46,
+            "Jada Rawlings": 47,
+            "Derrick Henderson": 23,
+            "Xavier Green": 20
+          }
+        },
+        {
+          "start": "15:00",
+          "end": "16:00",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Derrick Henderson": 12,
+            "Xavier Green": 11
+          },
+          "owner_points": {
+            "Derrick Henderson": 69,
+            "Xavier Green": 67
+          }
+        },
+        {
+          "start": "16:00",
+          "end": "17:00",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Xavier Green": 23
+          },
+          "owner_points": {
+            "Xavier Green": 136
+          }
+        }
+      ]
+    },
+    {
+      "day": "wednesday",
+      "result": "PASS — logical inventory and time availability only",
+      "base": {
+        "unique_groups": 23,
+        "total_points": 136,
+        "owner_counts": {
+          "Tammy Miller": 3,
+          "Karen Robinson": 6,
+          "Kathy Phelps": 5,
+          "Derrick Henderson": 4,
+          "Xavier Green": 5
+        },
+        "owner_points": {
+          "Tammy Miller": 24,
+          "Karen Robinson": 27,
+          "Kathy Phelps": 29,
+          "Derrick Henderson": 27,
+          "Xavier Green": 29
+        }
+      },
+      "relief_count": 5,
+      "full_hour_reliefs": [
+        {
+          "coverer": "Karen Robinson",
+          "away": "Tammy Miller",
+          "start": "08:30",
+          "end": "09:30",
+          "areas": [
+            "Teton and restrooms",
+            "Northwest Passage",
+            "East End restrooms"
+          ]
+        },
+        {
+          "coverer": "Derrick Henderson",
+          "away": "Karen Robinson",
+          "start": "09:30",
+          "end": "10:30",
+          "areas": [
+            "Zambezi and restrooms",
+            "Primate Pavilion",
+            "Breezeway restrooms",
+            "Tropical Birds",
+            "Nocturnal",
+            "Primate Canyon"
+          ]
+        },
+        {
+          "coverer": "Karen Robinson",
+          "away": "Kathy Phelps",
+          "start": "10:30",
+          "end": "11:30",
+          "areas": [
+            "East Admin and restrooms",
+            "West Admin and restrooms",
+            "Courtyard restrooms",
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+            "Cat Country"
+          ]
+        },
+        {
+          "coverer": "Xavier Green",
+          "away": "Derrick Henderson",
+          "start": "10:30",
+          "end": "11:30",
+          "areas": [
+            "China and restrooms",
+            "Bonobos restrooms",
+            "Herpetarium",
+            "Cat House Cafe restrooms"
+          ]
+        },
+        {
+          "coverer": "Derrick Henderson",
+          "away": "Xavier Green",
+          "start": "12:30",
+          "end": "13:30",
+          "areas": [
+            "Expo and restrooms",
+            "MemMex restrooms",
+            "Aquarium",
+            "Event Center and restrooms",
+            "Komodos"
+          ]
+        }
+      ],
+      "validated_staffed_window": {
+        "start": "08:00",
+        "end": "17:00"
+      },
+      "handoff_phases": [
+        {
+          "time": "14:00",
+          "owners": {
+            "Kathy Phelps": [
+              "East Admin and restrooms",
+              "West Admin and restrooms",
+              "Courtyard restrooms",
+              "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+              "Cat Country",
+              "Primate Pavilion",
+              "Breezeway restrooms",
+              "Nocturnal",
+              "Primate Canyon",
+              "Tropical Birds"
+            ],
+            "Derrick Henderson": [
+              "China and restrooms",
+              "Bonobos restrooms",
+              "Herpetarium",
+              "Cat House Cafe restrooms",
+              "Teton and restrooms",
+              "Zambezi and restrooms"
+            ],
+            "Xavier Green": [
+              "Expo and restrooms",
+              "MemMex restrooms",
+              "Aquarium",
+              "Event Center and restrooms",
+              "Komodos",
+              "Northwest Passage",
+              "East End restrooms"
+            ]
+          },
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Kathy Phelps": 10,
+            "Derrick Henderson": 6,
+            "Xavier Green": 7
+          },
+          "owner_points": {
+            "Kathy Phelps": 47,
+            "Derrick Henderson": 46,
+            "Xavier Green": 43
+          }
+        },
+        {
+          "time": "15:00",
+          "owners": {
+            "Derrick Henderson": [
+              "China and restrooms",
+              "Bonobos restrooms",
+              "Herpetarium",
+              "Cat House Cafe restrooms",
+              "Teton and restrooms",
+              "Zambezi and restrooms",
+              "East Admin and restrooms",
+              "Courtyard restrooms",
+              "Primate Pavilion",
+              "Breezeway restrooms",
+              "Primate Canyon"
+            ],
+            "Xavier Green": [
+              "Expo and restrooms",
+              "MemMex restrooms",
+              "Aquarium",
+              "Event Center and restrooms",
+              "Komodos",
+              "Northwest Passage",
+              "East End restrooms",
+              "West Admin and restrooms",
+              "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+              "Cat Country",
+              "Nocturnal",
+              "Tropical Birds"
+            ]
+          },
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Derrick Henderson": 11,
+            "Xavier Green": 12
+          },
+          "owner_points": {
+            "Derrick Henderson": 68,
+            "Xavier Green": 68
+          }
+        },
+        {
+          "time": "16:00",
+          "owners": {
+            "Xavier Green": [
+              "Expo and restrooms",
+              "MemMex restrooms",
+              "Aquarium",
+              "Event Center and restrooms",
+              "Komodos",
+              "Northwest Passage",
+              "East End restrooms",
+              "West Admin and restrooms",
+              "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+              "Cat Country",
+              "Nocturnal",
+              "Tropical Birds",
+              "China and restrooms",
+              "Bonobos restrooms",
+              "Herpetarium",
+              "Cat House Cafe restrooms",
+              "Teton and restrooms",
+              "Zambezi and restrooms",
+              "East Admin and restrooms",
+              "Courtyard restrooms",
+              "Primate Pavilion",
+              "Breezeway restrooms",
+              "Primate Canyon"
+            ]
+          },
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Xavier Green": 23
+          },
+          "owner_points": {
+            "Xavier Green": 136
+          }
+        }
+      ],
+      "intervals": [
+        {
+          "start": "08:00",
+          "end": "08:30",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Tammy Miller": 3,
+            "Karen Robinson": 6,
+            "Kathy Phelps": 5,
+            "Derrick Henderson": 4,
+            "Xavier Green": 5
+          },
+          "owner_points": {
+            "Tammy Miller": 24,
+            "Karen Robinson": 27,
+            "Kathy Phelps": 29,
+            "Derrick Henderson": 27,
+            "Xavier Green": 29
+          }
+        },
+        {
+          "start": "08:30",
+          "end": "09:30",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Karen Robinson": 9,
+            "Kathy Phelps": 5,
+            "Derrick Henderson": 4,
+            "Xavier Green": 5
+          },
+          "owner_points": {
+            "Karen Robinson": 51,
+            "Kathy Phelps": 29,
+            "Derrick Henderson": 27,
+            "Xavier Green": 29
+          }
+        },
+        {
+          "start": "09:30",
+          "end": "10:30",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Tammy Miller": 3,
+            "Kathy Phelps": 5,
+            "Derrick Henderson": 10,
+            "Xavier Green": 5
+          },
+          "owner_points": {
+            "Tammy Miller": 24,
+            "Kathy Phelps": 29,
+            "Derrick Henderson": 54,
+            "Xavier Green": 29
+          }
+        },
+        {
+          "start": "10:30",
+          "end": "11:30",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Tammy Miller": 3,
+            "Karen Robinson": 11,
+            "Xavier Green": 9
+          },
+          "owner_points": {
+            "Tammy Miller": 24,
+            "Karen Robinson": 56,
+            "Xavier Green": 56
+          }
+        },
+        {
+          "start": "11:30",
+          "end": "12:30",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Tammy Miller": 3,
+            "Karen Robinson": 6,
+            "Kathy Phelps": 5,
+            "Derrick Henderson": 4,
+            "Xavier Green": 5
+          },
+          "owner_points": {
+            "Tammy Miller": 24,
+            "Karen Robinson": 27,
+            "Kathy Phelps": 29,
+            "Derrick Henderson": 27,
+            "Xavier Green": 29
+          }
+        },
+        {
+          "start": "12:30",
+          "end": "13:30",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Tammy Miller": 3,
+            "Karen Robinson": 6,
+            "Kathy Phelps": 5,
+            "Derrick Henderson": 9
+          },
+          "owner_points": {
+            "Tammy Miller": 24,
+            "Karen Robinson": 27,
+            "Kathy Phelps": 29,
+            "Derrick Henderson": 56
+          }
+        },
+        {
+          "start": "13:30",
+          "end": "14:00",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Tammy Miller": 3,
+            "Karen Robinson": 6,
+            "Kathy Phelps": 5,
+            "Derrick Henderson": 4,
+            "Xavier Green": 5
+          },
+          "owner_points": {
+            "Tammy Miller": 24,
+            "Karen Robinson": 27,
+            "Kathy Phelps": 29,
+            "Derrick Henderson": 27,
+            "Xavier Green": 29
+          }
+        },
+        {
+          "start": "14:00",
+          "end": "15:00",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Kathy Phelps": 10,
+            "Derrick Henderson": 6,
+            "Xavier Green": 7
+          },
+          "owner_points": {
+            "Kathy Phelps": 47,
+            "Derrick Henderson": 46,
+            "Xavier Green": 43
+          }
+        },
+        {
+          "start": "15:00",
+          "end": "16:00",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Derrick Henderson": 11,
+            "Xavier Green": 12
+          },
+          "owner_points": {
+            "Derrick Henderson": 68,
+            "Xavier Green": 68
+          }
+        },
+        {
+          "start": "16:00",
+          "end": "17:00",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Xavier Green": 23
+          },
+          "owner_points": {
+            "Xavier Green": 136
+          }
+        }
+      ]
+    },
+    {
+      "day": "thursday",
+      "result": "PASS — logical inventory and time availability only",
+      "base": {
+        "unique_groups": 23,
+        "total_points": 136,
+        "owner_counts": {
+          "Tammy Miller": 3,
+          "Kathy Phelps": 5,
+          "Alijah Collins": 6,
+          "Kiltra Horton": 4,
+          "Derrick Henderson": 5
+        },
+        "owner_points": {
+          "Tammy Miller": 24,
+          "Kathy Phelps": 29,
+          "Alijah Collins": 27,
+          "Kiltra Horton": 27,
+          "Derrick Henderson": 29
+        }
+      },
+      "relief_count": 5,
+      "full_hour_reliefs": [
+        {
+          "coverer": "Kiltra Horton",
+          "away": "Tammy Miller",
+          "start": "08:30",
+          "end": "09:30",
+          "areas": [
+            "Teton and restrooms",
+            "Northwest Passage",
+            "East End restrooms"
+          ]
+        },
+        {
+          "coverer": "Alijah Collins",
+          "away": "Kathy Phelps",
+          "start": "10:30",
+          "end": "11:30",
+          "areas": [
+            "East Admin and restrooms",
+            "West Admin and restrooms",
+            "Courtyard restrooms",
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+            "Cat Country"
+          ]
+        },
+        {
+          "coverer": "Kiltra Horton",
+          "away": "Derrick Henderson",
+          "start": "10:30",
+          "end": "11:30",
+          "areas": [
+            "Expo and restrooms",
+            "MemMex restrooms",
+            "Aquarium",
+            "Komodos",
+            "Herpetarium"
+          ]
+        },
+        {
+          "coverer": "Kathy Phelps",
+          "away": "Alijah Collins",
+          "start": "11:30",
+          "end": "12:30",
+          "areas": [
+            "Zambezi and restrooms",
+            "Primate Pavilion",
+            "Breezeway restrooms",
+            "Tropical Birds",
+            "Nocturnal",
+            "Primate Canyon"
+          ]
+        },
+        {
+          "coverer": "Derrick Henderson",
+          "away": "Kiltra Horton",
+          "start": "12:00",
+          "end": "13:00",
+          "areas": [
+            "China and restrooms",
+            "Bonobos restrooms",
+            "Cat House Cafe restrooms",
+            "Event Center and restrooms"
+          ]
+        }
+      ],
+      "validated_staffed_window": {
+        "start": "07:00",
+        "end": "16:00"
+      },
+      "handoff_phases": [
+        {
+          "time": "14:00",
+          "owners": {
+            "Kathy Phelps": [
+              "East Admin and restrooms",
+              "West Admin and restrooms",
+              "Courtyard restrooms",
+              "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+              "Cat Country"
+            ],
+            "Alijah Collins": [
+              "Zambezi and restrooms",
+              "Primate Pavilion",
+              "Breezeway restrooms",
+              "Tropical Birds",
+              "Nocturnal",
+              "Primate Canyon",
+              "Teton and restrooms"
+            ],
+            "Kiltra Horton": [
+              "China and restrooms",
+              "Bonobos restrooms",
+              "Cat House Cafe restrooms",
+              "Event Center and restrooms",
+              "Northwest Passage",
+              "East End restrooms"
+            ],
+            "Derrick Henderson": [
+              "Expo and restrooms",
+              "MemMex restrooms",
+              "Aquarium",
+              "Komodos",
+              "Herpetarium"
+            ]
+          },
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Kathy Phelps": 5,
+            "Alijah Collins": 7,
+            "Kiltra Horton": 6,
+            "Derrick Henderson": 5
+          },
+          "owner_points": {
+            "Kathy Phelps": 29,
+            "Alijah Collins": 37,
+            "Kiltra Horton": 41,
+            "Derrick Henderson": 29
+          }
+        },
+        {
+          "time": "15:00",
+          "owners": {
+            "Alijah Collins": [
+              "Zambezi and restrooms",
+              "Primate Pavilion",
+              "Breezeway restrooms",
+              "Tropical Birds",
+              "Nocturnal",
+              "Primate Canyon",
+              "Teton and restrooms",
+              "Education (includes Volunteer, IT, Interpretation, and four classrooms)"
+            ],
+            "Kiltra Horton": [
+              "China and restrooms",
+              "Bonobos restrooms",
+              "Cat House Cafe restrooms",
+              "Event Center and restrooms",
+              "Northwest Passage",
+              "East End restrooms",
+              "East Admin and restrooms"
+            ],
+            "Derrick Henderson": [
+              "Expo and restrooms",
+              "MemMex restrooms",
+              "Aquarium",
+              "Komodos",
+              "Herpetarium",
+              "West Admin and restrooms",
+              "Courtyard restrooms",
+              "Cat Country"
+            ]
+          },
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Alijah Collins": 8,
+            "Kiltra Horton": 7,
+            "Derrick Henderson": 8
+          },
+          "owner_points": {
+            "Alijah Collins": 45,
+            "Kiltra Horton": 46,
+            "Derrick Henderson": 45
+          }
+        }
+      ],
+      "intervals": [
+        {
+          "start": "07:00",
+          "end": "08:30",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Tammy Miller": 3,
+            "Kathy Phelps": 5,
+            "Alijah Collins": 6,
+            "Kiltra Horton": 4,
+            "Derrick Henderson": 5
+          },
+          "owner_points": {
+            "Tammy Miller": 24,
+            "Kathy Phelps": 29,
+            "Alijah Collins": 27,
+            "Kiltra Horton": 27,
+            "Derrick Henderson": 29
+          }
+        },
+        {
+          "start": "08:30",
+          "end": "09:30",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Kathy Phelps": 5,
+            "Alijah Collins": 6,
+            "Kiltra Horton": 7,
+            "Derrick Henderson": 5
+          },
+          "owner_points": {
+            "Kathy Phelps": 29,
+            "Alijah Collins": 27,
+            "Kiltra Horton": 51,
+            "Derrick Henderson": 29
+          }
+        },
+        {
+          "start": "09:30",
+          "end": "10:30",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Tammy Miller": 3,
+            "Kathy Phelps": 5,
+            "Alijah Collins": 6,
+            "Kiltra Horton": 4,
+            "Derrick Henderson": 5
+          },
+          "owner_points": {
+            "Tammy Miller": 24,
+            "Kathy Phelps": 29,
+            "Alijah Collins": 27,
+            "Kiltra Horton": 27,
+            "Derrick Henderson": 29
+          }
+        },
+        {
+          "start": "10:30",
+          "end": "11:30",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Tammy Miller": 3,
+            "Alijah Collins": 11,
+            "Kiltra Horton": 9
+          },
+          "owner_points": {
+            "Tammy Miller": 24,
+            "Alijah Collins": 56,
+            "Kiltra Horton": 56
+          }
+        },
+        {
+          "start": "11:30",
+          "end": "12:00",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Tammy Miller": 3,
+            "Kathy Phelps": 11,
+            "Kiltra Horton": 4,
+            "Derrick Henderson": 5
+          },
+          "owner_points": {
+            "Tammy Miller": 24,
+            "Kathy Phelps": 56,
+            "Kiltra Horton": 27,
+            "Derrick Henderson": 29
+          }
+        },
+        {
+          "start": "12:00",
+          "end": "12:30",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Tammy Miller": 3,
+            "Kathy Phelps": 11,
+            "Derrick Henderson": 9
+          },
+          "owner_points": {
+            "Tammy Miller": 24,
+            "Kathy Phelps": 56,
+            "Derrick Henderson": 56
+          }
+        },
+        {
+          "start": "12:30",
+          "end": "13:00",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Tammy Miller": 3,
+            "Kathy Phelps": 5,
+            "Alijah Collins": 6,
+            "Derrick Henderson": 9
+          },
+          "owner_points": {
+            "Tammy Miller": 24,
+            "Kathy Phelps": 29,
+            "Alijah Collins": 27,
+            "Derrick Henderson": 56
+          }
+        },
+        {
+          "start": "13:00",
+          "end": "14:00",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Tammy Miller": 3,
+            "Kathy Phelps": 5,
+            "Alijah Collins": 6,
+            "Kiltra Horton": 4,
+            "Derrick Henderson": 5
+          },
+          "owner_points": {
+            "Tammy Miller": 24,
+            "Kathy Phelps": 29,
+            "Alijah Collins": 27,
+            "Kiltra Horton": 27,
+            "Derrick Henderson": 29
+          }
+        },
+        {
+          "start": "14:00",
+          "end": "15:00",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Kathy Phelps": 5,
+            "Alijah Collins": 7,
+            "Kiltra Horton": 6,
+            "Derrick Henderson": 5
+          },
+          "owner_points": {
+            "Kathy Phelps": 29,
+            "Alijah Collins": 37,
+            "Kiltra Horton": 41,
+            "Derrick Henderson": 29
+          }
+        },
+        {
+          "start": "15:00",
+          "end": "16:00",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Alijah Collins": 8,
+            "Kiltra Horton": 7,
+            "Derrick Henderson": 8
+          },
+          "owner_points": {
+            "Alijah Collins": 45,
+            "Kiltra Horton": 46,
+            "Derrick Henderson": 45
+          }
+        }
+      ]
+    },
+    {
+      "day": "friday",
+      "result": "PASS — logical inventory and time availability only",
+      "base": {
+        "unique_groups": 23,
+        "total_points": 136,
+        "owner_counts": {
+          "Tammy Miller": 3,
+          "Karen Robinson": 4,
+          "Kathy Phelps": 5,
+          "Jada Rawlings": 5,
+          "Kiltra Horton": 3,
+          "Alijah Collins": 3
+        },
+        "owner_points": {
+          "Tammy Miller": 24,
+          "Karen Robinson": 23,
+          "Kathy Phelps": 23,
+          "Jada Rawlings": 23,
+          "Kiltra Horton": 23,
+          "Alijah Collins": 20
+        }
+      },
+      "relief_count": 6,
+      "full_hour_reliefs": [
+        {
+          "coverer": "Kiltra Horton",
+          "away": "Tammy Miller",
+          "start": "08:30",
+          "end": "09:30",
+          "areas": [
+            "Teton and restrooms",
+            "Northwest Passage",
+            "East End restrooms"
+          ]
+        },
+        {
+          "coverer": "Alijah Collins",
+          "away": "Karen Robinson",
+          "start": "09:30",
+          "end": "10:30",
+          "areas": [
+            "Zambezi and restrooms",
+            "Primate Pavilion",
+            "Breezeway restrooms",
+            "Tropical Birds"
+          ]
+        },
+        {
+          "coverer": "Kiltra Horton",
+          "away": "Jada Rawlings",
+          "start": "10:00",
+          "end": "11:00",
+          "areas": [
+            "Cat House Cafe restrooms",
+            "Herpetarium",
+            "Event Center and restrooms",
+            "Cat Country",
+            "Komodos"
+          ]
+        },
+        {
+          "coverer": "Karen Robinson",
+          "away": "Kathy Phelps",
+          "start": "10:30",
+          "end": "11:30",
+          "areas": [
+            "East Admin and restrooms",
+            "West Admin and restrooms",
+            "Courtyard restrooms",
+            "Nocturnal",
+            "Primate Canyon"
+          ]
+        },
+        {
+          "coverer": "Jada Rawlings",
+          "away": "Alijah Collins",
+          "start": "11:30",
+          "end": "12:30",
+          "areas": [
+            "Expo and restrooms",
+            "MemMex restrooms",
+            "Aquarium"
+          ]
+        },
+        {
+          "coverer": "Kathy Phelps",
+          "away": "Kiltra Horton",
+          "start": "12:00",
+          "end": "13:00",
+          "areas": [
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+            "China and restrooms",
+            "Bonobos restrooms"
+          ]
+        }
+      ],
+      "validated_staffed_window": {
+        "start": "07:00",
+        "end": "16:00"
+      },
+      "handoff_phases": [
+        {
+          "time": "14:00",
+          "owners": {
+            "Kathy Phelps": [
+              "East Admin and restrooms",
+              "West Admin and restrooms",
+              "Courtyard restrooms",
+              "Nocturnal",
+              "Primate Canyon",
+              "Zambezi and restrooms",
+              "Primate Pavilion",
+              "Breezeway restrooms",
+              "Tropical Birds"
+            ],
+            "Jada Rawlings": [
+              "Cat House Cafe restrooms",
+              "Herpetarium",
+              "Event Center and restrooms",
+              "Cat Country",
+              "Komodos",
+              "Teton and restrooms",
+              "Northwest Passage",
+              "East End restrooms"
+            ],
+            "Kiltra Horton": [
+              "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+              "China and restrooms",
+              "Bonobos restrooms"
+            ],
+            "Alijah Collins": [
+              "Expo and restrooms",
+              "MemMex restrooms",
+              "Aquarium"
+            ]
+          },
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Kathy Phelps": 9,
+            "Jada Rawlings": 8,
+            "Kiltra Horton": 3,
+            "Alijah Collins": 3
+          },
+          "owner_points": {
+            "Kathy Phelps": 46,
+            "Jada Rawlings": 47,
+            "Kiltra Horton": 23,
+            "Alijah Collins": 20
+          }
+        },
+        {
+          "time": "15:00",
+          "owners": {
+            "Kiltra Horton": [
+              "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+              "China and restrooms",
+              "Bonobos restrooms",
+              "Teton and restrooms",
+              "Northwest Passage",
+              "East End restrooms",
+              "Cat Country",
+              "Zambezi and restrooms",
+              "Primate Pavilion",
+              "East Admin and restrooms",
+              "Primate Canyon"
+            ],
+            "Alijah Collins": [
+              "Expo and restrooms",
+              "MemMex restrooms",
+              "Aquarium",
+              "Breezeway restrooms",
+              "Tropical Birds",
+              "West Admin and restrooms",
+              "Courtyard restrooms",
+              "Nocturnal",
+              "Cat House Cafe restrooms",
+              "Herpetarium",
+              "Event Center and restrooms",
+              "Komodos"
+            ]
+          },
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Kiltra Horton": 11,
+            "Alijah Collins": 12
+          },
+          "owner_points": {
+            "Kiltra Horton": 67,
+            "Alijah Collins": 69
+          }
+        }
+      ],
+      "intervals": [
+        {
+          "start": "07:00",
+          "end": "08:30",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Tammy Miller": 3,
+            "Karen Robinson": 4,
+            "Kathy Phelps": 5,
+            "Jada Rawlings": 5,
+            "Kiltra Horton": 3,
+            "Alijah Collins": 3
+          },
+          "owner_points": {
+            "Tammy Miller": 24,
+            "Karen Robinson": 23,
+            "Kathy Phelps": 23,
+            "Jada Rawlings": 23,
+            "Kiltra Horton": 23,
+            "Alijah Collins": 20
+          }
+        },
+        {
+          "start": "08:30",
+          "end": "09:30",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Karen Robinson": 4,
+            "Kathy Phelps": 5,
+            "Jada Rawlings": 5,
+            "Kiltra Horton": 6,
+            "Alijah Collins": 3
+          },
+          "owner_points": {
+            "Karen Robinson": 23,
+            "Kathy Phelps": 23,
+            "Jada Rawlings": 23,
+            "Kiltra Horton": 47,
+            "Alijah Collins": 20
+          }
+        },
+        {
+          "start": "09:30",
+          "end": "10:00",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Tammy Miller": 3,
+            "Kathy Phelps": 5,
+            "Jada Rawlings": 5,
+            "Kiltra Horton": 3,
+            "Alijah Collins": 7
+          },
+          "owner_points": {
+            "Tammy Miller": 24,
+            "Kathy Phelps": 23,
+            "Jada Rawlings": 23,
+            "Kiltra Horton": 23,
+            "Alijah Collins": 43
+          }
+        },
+        {
+          "start": "10:00",
+          "end": "10:30",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Tammy Miller": 3,
+            "Kathy Phelps": 5,
+            "Kiltra Horton": 8,
+            "Alijah Collins": 7
+          },
+          "owner_points": {
+            "Tammy Miller": 24,
+            "Kathy Phelps": 23,
+            "Kiltra Horton": 46,
+            "Alijah Collins": 43
+          }
+        },
+        {
+          "start": "10:30",
+          "end": "11:00",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Tammy Miller": 3,
+            "Karen Robinson": 9,
+            "Kiltra Horton": 8,
+            "Alijah Collins": 3
+          },
+          "owner_points": {
+            "Tammy Miller": 24,
+            "Karen Robinson": 46,
+            "Kiltra Horton": 46,
+            "Alijah Collins": 20
+          }
+        },
+        {
+          "start": "11:00",
+          "end": "11:30",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Tammy Miller": 3,
+            "Karen Robinson": 9,
+            "Jada Rawlings": 5,
+            "Kiltra Horton": 3,
+            "Alijah Collins": 3
+          },
+          "owner_points": {
+            "Tammy Miller": 24,
+            "Karen Robinson": 46,
+            "Jada Rawlings": 23,
+            "Kiltra Horton": 23,
+            "Alijah Collins": 20
+          }
+        },
+        {
+          "start": "11:30",
+          "end": "12:00",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Tammy Miller": 3,
+            "Karen Robinson": 4,
+            "Kathy Phelps": 5,
+            "Jada Rawlings": 8,
+            "Kiltra Horton": 3
+          },
+          "owner_points": {
+            "Tammy Miller": 24,
+            "Karen Robinson": 23,
+            "Kathy Phelps": 23,
+            "Jada Rawlings": 43,
+            "Kiltra Horton": 23
+          }
+        },
+        {
+          "start": "12:00",
+          "end": "12:30",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Tammy Miller": 3,
+            "Karen Robinson": 4,
+            "Kathy Phelps": 8,
+            "Jada Rawlings": 8
+          },
+          "owner_points": {
+            "Tammy Miller": 24,
+            "Karen Robinson": 23,
+            "Kathy Phelps": 46,
+            "Jada Rawlings": 43
+          }
+        },
+        {
+          "start": "12:30",
+          "end": "13:00",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Tammy Miller": 3,
+            "Karen Robinson": 4,
+            "Kathy Phelps": 8,
+            "Jada Rawlings": 5,
+            "Alijah Collins": 3
+          },
+          "owner_points": {
+            "Tammy Miller": 24,
+            "Karen Robinson": 23,
+            "Kathy Phelps": 46,
+            "Jada Rawlings": 23,
+            "Alijah Collins": 20
+          }
+        },
+        {
+          "start": "13:00",
+          "end": "14:00",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Tammy Miller": 3,
+            "Karen Robinson": 4,
+            "Kathy Phelps": 5,
+            "Jada Rawlings": 5,
+            "Kiltra Horton": 3,
+            "Alijah Collins": 3
+          },
+          "owner_points": {
+            "Tammy Miller": 24,
+            "Karen Robinson": 23,
+            "Kathy Phelps": 23,
+            "Jada Rawlings": 23,
+            "Kiltra Horton": 23,
+            "Alijah Collins": 20
+          }
+        },
+        {
+          "start": "14:00",
+          "end": "15:00",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Kathy Phelps": 9,
+            "Jada Rawlings": 8,
+            "Kiltra Horton": 3,
+            "Alijah Collins": 3
+          },
+          "owner_points": {
+            "Kathy Phelps": 46,
+            "Jada Rawlings": 47,
+            "Kiltra Horton": 23,
+            "Alijah Collins": 20
+          }
+        },
+        {
+          "start": "15:00",
+          "end": "16:00",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Kiltra Horton": 11,
+            "Alijah Collins": 12
+          },
+          "owner_points": {
+            "Kiltra Horton": 67,
+            "Alijah Collins": 69
+          }
+        }
+      ]
+    },
+    {
+      "day": "saturday",
+      "result": "PASS — logical inventory and time availability only",
+      "base": {
+        "unique_groups": 23,
+        "total_points": 136,
+        "owner_counts": {
+          "Alijah Collins": 3,
+          "Karen Robinson": 4,
+          "Kathy Phelps": 5,
+          "Jada Rawlings": 5,
+          "Kiltra Horton": 3,
+          "Xavier Green": 3
+        },
+        "owner_points": {
+          "Alijah Collins": 24,
+          "Karen Robinson": 23,
+          "Kathy Phelps": 23,
+          "Jada Rawlings": 23,
+          "Kiltra Horton": 23,
+          "Xavier Green": 20
+        }
+      },
+      "relief_count": 6,
+      "full_hour_reliefs": [
+        {
+          "coverer": "Alijah Collins",
+          "away": "Karen Robinson",
+          "start": "09:30",
+          "end": "10:30",
+          "areas": [
+            "Zambezi and restrooms",
+            "Primate Pavilion",
+            "Breezeway restrooms",
+            "Tropical Birds"
+          ]
+        },
+        {
+          "coverer": "Kiltra Horton",
+          "away": "Jada Rawlings",
+          "start": "10:00",
+          "end": "11:00",
+          "areas": [
+            "Cat House Cafe restrooms",
+            "Herpetarium",
+            "Event Center and restrooms",
+            "Cat Country",
+            "Komodos"
+          ]
+        },
+        {
+          "coverer": "Karen Robinson",
+          "away": "Kathy Phelps",
+          "start": "10:30",
+          "end": "11:30",
+          "areas": [
+            "East Admin and restrooms",
+            "West Admin and restrooms",
+            "Courtyard restrooms",
+            "Nocturnal",
+            "Primate Canyon"
+          ]
+        },
+        {
+          "coverer": "Jada Rawlings",
+          "away": "Alijah Collins",
+          "start": "11:30",
+          "end": "12:30",
+          "areas": [
+            "Teton and restrooms",
+            "Northwest Passage",
+            "East End restrooms"
+          ]
+        },
+        {
+          "coverer": "Kathy Phelps",
+          "away": "Kiltra Horton",
+          "start": "12:00",
+          "end": "13:00",
+          "areas": [
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+            "China and restrooms",
+            "Bonobos restrooms"
+          ]
+        },
+        {
+          "coverer": "Jada Rawlings",
+          "away": "Xavier Green",
+          "start": "12:30",
+          "end": "13:30",
+          "areas": [
+            "Expo and restrooms",
+            "MemMex restrooms",
+            "Aquarium"
+          ]
+        }
+      ],
+      "validated_staffed_window": {
+        "start": "08:00",
+        "end": "17:00"
+      },
+      "handoff_phases": [
+        {
+          "time": "14:00",
+          "owners": {
+            "Alijah Collins": [
+              "Teton and restrooms",
+              "Northwest Passage",
+              "East End restrooms",
+              "Zambezi and restrooms",
+              "Primate Pavilion"
+            ],
+            "Kathy Phelps": [
+              "East Admin and restrooms",
+              "West Admin and restrooms",
+              "Courtyard restrooms",
+              "Nocturnal",
+              "Primate Canyon",
+              "Breezeway restrooms"
+            ],
+            "Jada Rawlings": [
+              "Cat House Cafe restrooms",
+              "Herpetarium",
+              "Event Center and restrooms",
+              "Cat Country",
+              "Komodos",
+              "Tropical Birds"
+            ],
+            "Kiltra Horton": [
+              "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+              "China and restrooms",
+              "Bonobos restrooms"
+            ],
+            "Xavier Green": [
+              "Expo and restrooms",
+              "MemMex restrooms",
+              "Aquarium"
+            ]
+          },
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Alijah Collins": 5,
+            "Kathy Phelps": 6,
+            "Jada Rawlings": 6,
+            "Kiltra Horton": 3,
+            "Xavier Green": 3
+          },
+          "owner_points": {
+            "Alijah Collins": 36,
+            "Kathy Phelps": 29,
+            "Jada Rawlings": 28,
+            "Kiltra Horton": 23,
+            "Xavier Green": 20
+          }
+        },
+        {
+          "time": "15:00",
+          "owners": {
+            "Alijah Collins": [
+              "Teton and restrooms",
+              "Northwest Passage",
+              "East End restrooms",
+              "Zambezi and restrooms",
+              "Primate Pavilion",
+              "East Admin and restrooms",
+              "Nocturnal",
+              "Primate Canyon"
+            ],
+            "Kiltra Horton": [
+              "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+              "China and restrooms",
+              "Bonobos restrooms",
+              "West Admin and restrooms",
+              "Courtyard restrooms",
+              "Breezeway restrooms",
+              "Cat House Cafe restrooms",
+              "Cat Country"
+            ],
+            "Xavier Green": [
+              "Expo and restrooms",
+              "MemMex restrooms",
+              "Aquarium",
+              "Herpetarium",
+              "Event Center and restrooms",
+              "Komodos",
+              "Tropical Birds"
+            ]
+          },
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Alijah Collins": 8,
+            "Kiltra Horton": 8,
+            "Xavier Green": 7
+          },
+          "owner_points": {
+            "Alijah Collins": 45,
+            "Kiltra Horton": 52,
+            "Xavier Green": 39
+          }
+        },
+        {
+          "time": "16:00",
+          "owners": {
+            "Xavier Green": [
+              "Expo and restrooms",
+              "MemMex restrooms",
+              "Aquarium",
+              "Herpetarium",
+              "Event Center and restrooms",
+              "Komodos",
+              "Tropical Birds",
+              "Teton and restrooms",
+              "Northwest Passage",
+              "East End restrooms",
+              "Zambezi and restrooms",
+              "Primate Pavilion",
+              "East Admin and restrooms",
+              "Nocturnal",
+              "Primate Canyon",
+              "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+              "China and restrooms",
+              "Bonobos restrooms",
+              "West Admin and restrooms",
+              "Courtyard restrooms",
+              "Breezeway restrooms",
+              "Cat House Cafe restrooms",
+              "Cat Country"
+            ]
+          },
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Xavier Green": 23
+          },
+          "owner_points": {
+            "Xavier Green": 136
+          }
+        }
+      ],
+      "intervals": [
+        {
+          "start": "08:00",
+          "end": "09:30",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Alijah Collins": 3,
+            "Karen Robinson": 4,
+            "Kathy Phelps": 5,
+            "Jada Rawlings": 5,
+            "Kiltra Horton": 3,
+            "Xavier Green": 3
+          },
+          "owner_points": {
+            "Alijah Collins": 24,
+            "Karen Robinson": 23,
+            "Kathy Phelps": 23,
+            "Jada Rawlings": 23,
+            "Kiltra Horton": 23,
+            "Xavier Green": 20
+          }
+        },
+        {
+          "start": "09:30",
+          "end": "10:00",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Alijah Collins": 7,
+            "Kathy Phelps": 5,
+            "Jada Rawlings": 5,
+            "Kiltra Horton": 3,
+            "Xavier Green": 3
+          },
+          "owner_points": {
+            "Alijah Collins": 47,
+            "Kathy Phelps": 23,
+            "Jada Rawlings": 23,
+            "Kiltra Horton": 23,
+            "Xavier Green": 20
+          }
+        },
+        {
+          "start": "10:00",
+          "end": "10:30",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Alijah Collins": 7,
+            "Kathy Phelps": 5,
+            "Kiltra Horton": 8,
+            "Xavier Green": 3
+          },
+          "owner_points": {
+            "Alijah Collins": 47,
+            "Kathy Phelps": 23,
+            "Kiltra Horton": 46,
+            "Xavier Green": 20
+          }
+        },
+        {
+          "start": "10:30",
+          "end": "11:00",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Alijah Collins": 3,
+            "Karen Robinson": 9,
+            "Kiltra Horton": 8,
+            "Xavier Green": 3
+          },
+          "owner_points": {
+            "Alijah Collins": 24,
+            "Karen Robinson": 46,
+            "Kiltra Horton": 46,
+            "Xavier Green": 20
+          }
+        },
+        {
+          "start": "11:00",
+          "end": "11:30",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Alijah Collins": 3,
+            "Karen Robinson": 9,
+            "Jada Rawlings": 5,
+            "Kiltra Horton": 3,
+            "Xavier Green": 3
+          },
+          "owner_points": {
+            "Alijah Collins": 24,
+            "Karen Robinson": 46,
+            "Jada Rawlings": 23,
+            "Kiltra Horton": 23,
+            "Xavier Green": 20
+          }
+        },
+        {
+          "start": "11:30",
+          "end": "12:00",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Karen Robinson": 4,
+            "Kathy Phelps": 5,
+            "Jada Rawlings": 8,
+            "Kiltra Horton": 3,
+            "Xavier Green": 3
+          },
+          "owner_points": {
+            "Karen Robinson": 23,
+            "Kathy Phelps": 23,
+            "Jada Rawlings": 47,
+            "Kiltra Horton": 23,
+            "Xavier Green": 20
+          }
+        },
+        {
+          "start": "12:00",
+          "end": "12:30",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Karen Robinson": 4,
+            "Kathy Phelps": 8,
+            "Jada Rawlings": 8,
+            "Xavier Green": 3
+          },
+          "owner_points": {
+            "Karen Robinson": 23,
+            "Kathy Phelps": 46,
+            "Jada Rawlings": 47,
+            "Xavier Green": 20
+          }
+        },
+        {
+          "start": "12:30",
+          "end": "13:00",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Alijah Collins": 3,
+            "Karen Robinson": 4,
+            "Kathy Phelps": 8,
+            "Jada Rawlings": 8
+          },
+          "owner_points": {
+            "Alijah Collins": 24,
+            "Karen Robinson": 23,
+            "Kathy Phelps": 46,
+            "Jada Rawlings": 43
+          }
+        },
+        {
+          "start": "13:00",
+          "end": "13:30",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Alijah Collins": 3,
+            "Karen Robinson": 4,
+            "Kathy Phelps": 5,
+            "Jada Rawlings": 8,
+            "Kiltra Horton": 3
+          },
+          "owner_points": {
+            "Alijah Collins": 24,
+            "Karen Robinson": 23,
+            "Kathy Phelps": 23,
+            "Jada Rawlings": 43,
+            "Kiltra Horton": 23
+          }
+        },
+        {
+          "start": "13:30",
+          "end": "14:00",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Alijah Collins": 3,
+            "Karen Robinson": 4,
+            "Kathy Phelps": 5,
+            "Jada Rawlings": 5,
+            "Kiltra Horton": 3,
+            "Xavier Green": 3
+          },
+          "owner_points": {
+            "Alijah Collins": 24,
+            "Karen Robinson": 23,
+            "Kathy Phelps": 23,
+            "Jada Rawlings": 23,
+            "Kiltra Horton": 23,
+            "Xavier Green": 20
+          }
+        },
+        {
+          "start": "14:00",
+          "end": "15:00",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Alijah Collins": 5,
+            "Kathy Phelps": 6,
+            "Jada Rawlings": 6,
+            "Kiltra Horton": 3,
+            "Xavier Green": 3
+          },
+          "owner_points": {
+            "Alijah Collins": 36,
+            "Kathy Phelps": 29,
+            "Jada Rawlings": 28,
+            "Kiltra Horton": 23,
+            "Xavier Green": 20
+          }
+        },
+        {
+          "start": "15:00",
+          "end": "16:00",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Alijah Collins": 8,
+            "Kiltra Horton": 8,
+            "Xavier Green": 7
+          },
+          "owner_points": {
+            "Alijah Collins": 45,
+            "Kiltra Horton": 52,
+            "Xavier Green": 39
+          }
+        },
+        {
+          "start": "16:00",
+          "end": "17:00",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Xavier Green": 23
+          },
+          "owner_points": {
+            "Xavier Green": 136
+          }
+        }
+      ]
+    },
+    {
+      "day": "sunday",
+      "result": "PASS — logical inventory and time availability only",
+      "base": {
+        "unique_groups": 23,
+        "total_points": 136,
+        "owner_counts": {
+          "Alijah Collins": 3,
+          "Kiltra Horton": 6,
+          "Jada Rawlings": 5,
+          "Derrick Henderson": 4,
+          "Xavier Green": 5
+        },
+        "owner_points": {
+          "Alijah Collins": 24,
+          "Kiltra Horton": 27,
+          "Jada Rawlings": 29,
+          "Derrick Henderson": 27,
+          "Xavier Green": 29
+        }
+      },
+      "relief_count": 5,
+      "full_hour_reliefs": [
+        {
+          "coverer": "Kiltra Horton",
+          "away": "Jada Rawlings",
+          "start": "10:00",
+          "end": "11:00",
+          "areas": [
+            "East Admin and restrooms",
+            "West Admin and restrooms",
+            "Courtyard restrooms",
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+            "Cat Country"
+          ]
+        },
+        {
+          "coverer": "Xavier Green",
+          "away": "Derrick Henderson",
+          "start": "10:30",
+          "end": "11:30",
+          "areas": [
+            "China and restrooms",
+            "Bonobos restrooms",
+            "Herpetarium",
+            "Cat House Cafe restrooms"
+          ]
+        },
+        {
+          "coverer": "Jada Rawlings",
+          "away": "Alijah Collins",
+          "start": "11:30",
+          "end": "12:30",
+          "areas": [
+            "Teton and restrooms",
+            "Northwest Passage",
+            "East End restrooms"
+          ]
+        },
+        {
+          "coverer": "Derrick Henderson",
+          "away": "Kiltra Horton",
+          "start": "12:00",
+          "end": "13:00",
+          "areas": [
+            "Zambezi and restrooms",
+            "Primate Pavilion",
+            "Breezeway restrooms",
+            "Tropical Birds",
+            "Nocturnal",
+            "Primate Canyon"
+          ]
+        },
+        {
+          "coverer": "Jada Rawlings",
+          "away": "Xavier Green",
+          "start": "12:30",
+          "end": "13:30",
+          "areas": [
+            "Expo and restrooms",
+            "MemMex restrooms",
+            "Aquarium",
+            "Event Center and restrooms",
+            "Komodos"
+          ]
+        }
+      ],
+      "validated_staffed_window": {
+        "start": "08:00",
+        "end": "17:00"
+      },
+      "handoff_phases": [
+        {
+          "time": "15:00",
+          "owners": {
+            "Alijah Collins": [
+              "Teton and restrooms",
+              "Northwest Passage",
+              "East End restrooms",
+              "East Admin and restrooms",
+              "West Admin and restrooms"
+            ],
+            "Kiltra Horton": [
+              "Zambezi and restrooms",
+              "Primate Pavilion",
+              "Breezeway restrooms",
+              "Tropical Birds",
+              "Nocturnal",
+              "Primate Canyon",
+              "Education (includes Volunteer, IT, Interpretation, and four classrooms)"
+            ],
+            "Derrick Henderson": [
+              "China and restrooms",
+              "Bonobos restrooms",
+              "Herpetarium",
+              "Cat House Cafe restrooms",
+              "Courtyard restrooms",
+              "Cat Country"
+            ],
+            "Xavier Green": [
+              "Expo and restrooms",
+              "MemMex restrooms",
+              "Aquarium",
+              "Event Center and restrooms",
+              "Komodos"
+            ]
+          },
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Alijah Collins": 5,
+            "Kiltra Horton": 7,
+            "Derrick Henderson": 6,
+            "Xavier Green": 5
+          },
+          "owner_points": {
+            "Alijah Collins": 36,
+            "Kiltra Horton": 35,
+            "Derrick Henderson": 36,
+            "Xavier Green": 29
+          }
+        },
+        {
+          "time": "16:00",
+          "owners": {
+            "Xavier Green": [
+              "Expo and restrooms",
+              "MemMex restrooms",
+              "Aquarium",
+              "Event Center and restrooms",
+              "Komodos",
+              "Teton and restrooms",
+              "Northwest Passage",
+              "East End restrooms",
+              "East Admin and restrooms",
+              "West Admin and restrooms",
+              "Zambezi and restrooms",
+              "Primate Pavilion",
+              "Breezeway restrooms",
+              "Tropical Birds",
+              "Nocturnal",
+              "Primate Canyon",
+              "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+              "China and restrooms",
+              "Bonobos restrooms",
+              "Herpetarium",
+              "Cat House Cafe restrooms",
+              "Courtyard restrooms",
+              "Cat Country"
+            ]
+          },
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Xavier Green": 23
+          },
+          "owner_points": {
+            "Xavier Green": 136
+          }
+        }
+      ],
+      "intervals": [
+        {
+          "start": "08:00",
+          "end": "10:00",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Alijah Collins": 3,
+            "Kiltra Horton": 6,
+            "Jada Rawlings": 5,
+            "Derrick Henderson": 4,
+            "Xavier Green": 5
+          },
+          "owner_points": {
+            "Alijah Collins": 24,
+            "Kiltra Horton": 27,
+            "Jada Rawlings": 29,
+            "Derrick Henderson": 27,
+            "Xavier Green": 29
+          }
+        },
+        {
+          "start": "10:00",
+          "end": "10:30",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Alijah Collins": 3,
+            "Kiltra Horton": 11,
+            "Derrick Henderson": 4,
+            "Xavier Green": 5
+          },
+          "owner_points": {
+            "Alijah Collins": 24,
+            "Kiltra Horton": 56,
+            "Derrick Henderson": 27,
+            "Xavier Green": 29
+          }
+        },
+        {
+          "start": "10:30",
+          "end": "11:00",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Alijah Collins": 3,
+            "Kiltra Horton": 11,
+            "Xavier Green": 9
+          },
+          "owner_points": {
+            "Alijah Collins": 24,
+            "Kiltra Horton": 56,
+            "Xavier Green": 56
+          }
+        },
+        {
+          "start": "11:00",
+          "end": "11:30",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Alijah Collins": 3,
+            "Kiltra Horton": 6,
+            "Jada Rawlings": 5,
+            "Xavier Green": 9
+          },
+          "owner_points": {
+            "Alijah Collins": 24,
+            "Kiltra Horton": 27,
+            "Jada Rawlings": 29,
+            "Xavier Green": 56
+          }
+        },
+        {
+          "start": "11:30",
+          "end": "12:00",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Kiltra Horton": 6,
+            "Jada Rawlings": 8,
+            "Derrick Henderson": 4,
+            "Xavier Green": 5
+          },
+          "owner_points": {
+            "Kiltra Horton": 27,
+            "Jada Rawlings": 53,
+            "Derrick Henderson": 27,
+            "Xavier Green": 29
+          }
+        },
+        {
+          "start": "12:00",
+          "end": "12:30",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Jada Rawlings": 8,
+            "Derrick Henderson": 10,
+            "Xavier Green": 5
+          },
+          "owner_points": {
+            "Jada Rawlings": 53,
+            "Derrick Henderson": 54,
+            "Xavier Green": 29
+          }
+        },
+        {
+          "start": "12:30",
+          "end": "13:00",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Alijah Collins": 3,
+            "Jada Rawlings": 10,
+            "Derrick Henderson": 10
+          },
+          "owner_points": {
+            "Alijah Collins": 24,
+            "Jada Rawlings": 58,
+            "Derrick Henderson": 54
+          }
+        },
+        {
+          "start": "13:00",
+          "end": "13:30",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Alijah Collins": 3,
+            "Kiltra Horton": 6,
+            "Jada Rawlings": 10,
+            "Derrick Henderson": 4
+          },
+          "owner_points": {
+            "Alijah Collins": 24,
+            "Kiltra Horton": 27,
+            "Jada Rawlings": 58,
+            "Derrick Henderson": 27
+          }
+        },
+        {
+          "start": "13:30",
+          "end": "15:00",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Alijah Collins": 3,
+            "Kiltra Horton": 6,
+            "Jada Rawlings": 5,
+            "Derrick Henderson": 4,
+            "Xavier Green": 5
+          },
+          "owner_points": {
+            "Alijah Collins": 24,
+            "Kiltra Horton": 27,
+            "Jada Rawlings": 29,
+            "Derrick Henderson": 27,
+            "Xavier Green": 29
+          }
+        },
+        {
+          "start": "15:00",
+          "end": "16:00",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Alijah Collins": 5,
+            "Kiltra Horton": 7,
+            "Derrick Henderson": 6,
+            "Xavier Green": 5
+          },
+          "owner_points": {
+            "Alijah Collins": 36,
+            "Kiltra Horton": 35,
+            "Derrick Henderson": 36,
+            "Xavier Green": 29
+          }
+        },
+        {
+          "start": "16:00",
+          "end": "17:00",
+          "unique_groups": 23,
+          "total_points": 136,
+          "owner_counts": {
+            "Xavier Green": 23
+          },
+          "owner_points": {
+            "Xavier Green": 136
+          }
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "No reoptimization or source edits.",
+    "No measured travel/workload feasibility, GPS normalization/formula proof or physical acceptance.",
+    "No complete area ownership asserted before all scheduled workers arrive.",
+    "No live application, actual clock-out integration, deployment or database verification."
+  ]
+}

@@ -1,0 +1,908 @@
+{
+  "schema_version": 1,
+  "updated_at": "2026-10-30T00:49:14Z",
+  "title": "Custodial manual Friday working draft",
+  "schedule_day": "Friday",
+  "timezone": "America/Chicago",
+  "status": "APPROVED / LOCKED full Friday working plan: six bases, six full-hour lunch reliefs, exact 14:00/15:00 handoffs and 16:00 staffed end. Not production or measured physical feasibility.",
+  "authority": {
+    "source": "Eric's current voice statement relayed by parent",
+    "quote": "looks good. Go ahead and do lunches handoffs",
+    "chat_receipt": "Sentinel_0c12b17a7ccc81919e9d3158f196d75a",
+    "scope": "Exact full Friday working plan approved; supersedes proposal-only lunch/handoff status.",
+    "latest_confirmation": {
+      "quote": "Okay yeah go ahead and save Friday",
+      "received_at_utc": "2026-10-30T00:49:14Z",
+      "scope": "Full six-relief and 67/69 handoff plan approved. No East Admin/Breezeway 68/68 swap."
+    }
+  },
+  "employees": [
+    {
+      "name": "Tammy Miller",
+      "requested_base_areas": [
+        "Teton and restrooms",
+        "Northwest Passage",
+        "East End restrooms"
+      ],
+      "group_scores": [
+        {
+          "group": "Teton and restrooms",
+          "score": 10
+        },
+        {
+          "group": "Northwest Passage",
+          "score": 7
+        },
+        {
+          "group": "East End restrooms",
+          "score": 7
+        }
+      ],
+      "base_only_sum": 24,
+      "status": "APPROVED / LOCKED working assignment",
+      "shift_baseline": {
+        "start": "05:00",
+        "end": "14:00",
+        "source": "Existing recurring schedule baseline retained, not actual punches."
+      },
+      "own_lunch_baseline": {
+        "start": "08:30",
+        "end": "09:30",
+        "source": "Own-lunch window used in explicitly approved Friday relief plan."
+      },
+      "lunch_relief": {
+        "status": "APPROVED",
+        "coverers": [
+          {
+            "name": "Kiltra Horton",
+            "start": "08:30",
+            "end": "09:30",
+            "areas": [
+              "Teton and restrooms",
+              "Northwest Passage",
+              "East End restrooms"
+            ]
+          }
+        ],
+        "covers_other_employees": [],
+        "exemption": "Tammy covers nobody on Friday."
+      }
+    },
+    {
+      "name": "Karen Robinson",
+      "requested_base_areas": [
+        "Zambezi and restrooms",
+        "Primate Pavilion",
+        "Breezeway restrooms",
+        "Tropical Birds"
+      ],
+      "group_scores": [
+        {
+          "group": "Zambezi and restrooms",
+          "score": 9
+        },
+        {
+          "group": "Primate Pavilion",
+          "score": 3
+        },
+        {
+          "group": "Breezeway restrooms",
+          "score": 6
+        },
+        {
+          "group": "Tropical Birds",
+          "score": 5
+        }
+      ],
+      "base_only_sum": 23,
+      "status": "APPROVED / LOCKED working assignment",
+      "shift_baseline": {
+        "start": "05:00",
+        "end": "14:00",
+        "source": "Existing recurring schedule baseline retained, not actual punches."
+      },
+      "own_lunch_baseline": {
+        "start": "09:30",
+        "end": "10:30",
+        "source": "Own-lunch window used in explicitly approved Friday relief plan."
+      },
+      "lunch_relief": {
+        "status": "APPROVED",
+        "coverers": [
+          {
+            "name": "Alijah Collins",
+            "start": "09:30",
+            "end": "10:30",
+            "areas": [
+              "Zambezi and restrooms",
+              "Primate Pavilion",
+              "Breezeway restrooms",
+              "Tropical Birds"
+            ]
+          }
+        ],
+        "covers_other_employees": [
+          {
+            "name": "Kathy Phelps",
+            "start": "10:30",
+            "end": "11:30",
+            "areas": [
+              "East Admin and restrooms",
+              "West Admin and restrooms",
+              "Courtyard restrooms",
+              "Nocturnal",
+              "Primate Canyon"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "Kathy Phelps",
+      "requested_base_areas": [
+        "East Admin and restrooms",
+        "West Admin and restrooms",
+        "Courtyard restrooms",
+        "Nocturnal",
+        "Primate Canyon"
+      ],
+      "group_scores": [
+        {
+          "group": "East Admin and restrooms",
+          "score": 5
+        },
+        {
+          "group": "West Admin and restrooms",
+          "score": 7
+        },
+        {
+          "group": "Courtyard restrooms",
+          "score": 7
+        },
+        {
+          "group": "Nocturnal",
+          "score": 3
+        },
+        {
+          "group": "Primate Canyon",
+          "score": 1
+        }
+      ],
+      "base_only_sum": 23,
+      "status": "APPROVED / LOCKED working assignment",
+      "shift_baseline": {
+        "start": "06:00",
+        "end": "15:00",
+        "source": "Existing recurring schedule baseline retained, not actual punches."
+      },
+      "own_lunch_baseline": {
+        "start": "10:30",
+        "end": "11:30",
+        "source": "Own-lunch window used in explicitly approved Friday relief plan."
+      },
+      "lunch_relief": {
+        "status": "APPROVED",
+        "coverers": [
+          {
+            "name": "Karen Robinson",
+            "start": "10:30",
+            "end": "11:30",
+            "areas": [
+              "East Admin and restrooms",
+              "West Admin and restrooms",
+              "Courtyard restrooms",
+              "Nocturnal",
+              "Primate Canyon"
+            ]
+          }
+        ],
+        "covers_other_employees": [
+          {
+            "name": "Kiltra Horton",
+            "start": "12:00",
+            "end": "13:00",
+            "areas": [
+              "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+              "China and restrooms",
+              "Bonobos restrooms"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "Jada Rawlings",
+      "requested_base_areas": [
+        "Cat House Cafe restrooms",
+        "Herpetarium",
+        "Event Center and restrooms",
+        "Cat Country",
+        "Komodos"
+      ],
+      "group_scores": [
+        {
+          "group": "Cat House Cafe restrooms",
+          "score": 7
+        },
+        {
+          "group": "Herpetarium",
+          "score": 5
+        },
+        {
+          "group": "Event Center and restrooms",
+          "score": 5
+        },
+        {
+          "group": "Cat Country",
+          "score": 2
+        },
+        {
+          "group": "Komodos",
+          "score": 4
+        }
+      ],
+      "base_only_sum": 23,
+      "status": "APPROVED / LOCKED working assignment",
+      "shift_baseline": {
+        "start": "06:00",
+        "end": "15:00",
+        "source": "Existing recurring schedule baseline retained, not actual punches."
+      },
+      "own_lunch_baseline": {
+        "start": "10:00",
+        "end": "11:00",
+        "source": "Own-lunch window used in explicitly approved Friday relief plan."
+      },
+      "lunch_relief": {
+        "status": "APPROVED",
+        "coverers": [
+          {
+            "name": "Kiltra Horton",
+            "start": "10:00",
+            "end": "11:00",
+            "areas": [
+              "Cat House Cafe restrooms",
+              "Herpetarium",
+              "Event Center and restrooms",
+              "Cat Country",
+              "Komodos"
+            ]
+          }
+        ],
+        "covers_other_employees": [
+          {
+            "name": "Alijah Collins",
+            "start": "11:30",
+            "end": "12:30",
+            "areas": [
+              "Expo and restrooms",
+              "MemMex restrooms",
+              "Aquarium"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "Kiltra Horton",
+      "requested_base_areas": [
+        "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+        "China and restrooms",
+        "Bonobos restrooms"
+      ],
+      "group_scores": [
+        {
+          "group": "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+          "score": 8
+        },
+        {
+          "group": "China and restrooms",
+          "score": 7
+        },
+        {
+          "group": "Bonobos restrooms",
+          "score": 8
+        }
+      ],
+      "base_only_sum": 23,
+      "status": "APPROVED / LOCKED working assignment",
+      "shift_baseline": {
+        "start": "07:00",
+        "end": "16:00",
+        "source": "Existing recurring schedule baseline retained, not actual punches."
+      },
+      "own_lunch_baseline": {
+        "start": "12:00",
+        "end": "13:00",
+        "source": "Own-lunch window used in explicitly approved Friday relief plan."
+      },
+      "lunch_relief": {
+        "status": "APPROVED",
+        "coverers": [
+          {
+            "name": "Kathy Phelps",
+            "start": "12:00",
+            "end": "13:00",
+            "areas": [
+              "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+              "China and restrooms",
+              "Bonobos restrooms"
+            ]
+          }
+        ],
+        "covers_other_employees": [
+          {
+            "name": "Tammy Miller",
+            "start": "08:30",
+            "end": "09:30",
+            "areas": [
+              "Teton and restrooms",
+              "Northwest Passage",
+              "East End restrooms"
+            ]
+          },
+          {
+            "name": "Jada Rawlings",
+            "start": "10:00",
+            "end": "11:00",
+            "areas": [
+              "Cat House Cafe restrooms",
+              "Herpetarium",
+              "Event Center and restrooms",
+              "Cat Country",
+              "Komodos"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "Alijah Collins",
+      "requested_base_areas": [
+        "Expo and restrooms",
+        "MemMex restrooms",
+        "Aquarium"
+      ],
+      "group_scores": [
+        {
+          "group": "Expo and restrooms",
+          "score": 8
+        },
+        {
+          "group": "MemMex restrooms",
+          "score": 7
+        },
+        {
+          "group": "Aquarium",
+          "score": 5
+        }
+      ],
+      "base_only_sum": 20,
+      "status": "APPROVED / LOCKED working assignment",
+      "shift_baseline": {
+        "start": "07:00",
+        "end": "16:00",
+        "source": "Existing recurring schedule baseline retained, not actual punches."
+      },
+      "own_lunch_baseline": {
+        "start": "11:30",
+        "end": "12:30",
+        "source": "Own-lunch window used in explicitly approved Friday relief plan."
+      },
+      "lunch_relief": {
+        "status": "APPROVED",
+        "coverers": [
+          {
+            "name": "Jada Rawlings",
+            "start": "11:30",
+            "end": "12:30",
+            "areas": [
+              "Expo and restrooms",
+              "MemMex restrooms",
+              "Aquarium"
+            ]
+          }
+        ],
+        "covers_other_employees": [
+          {
+            "name": "Karen Robinson",
+            "start": "09:30",
+            "end": "10:30",
+            "areas": [
+              "Zambezi and restrooms",
+              "Primate Pavilion",
+              "Breezeway restrooms",
+              "Tropical Birds"
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "inventory_check": {
+    "groups": 23,
+    "unique_groups": 23,
+    "total_base_points": 136,
+    "missing": [],
+    "duplicates": [],
+    "scope": "Logical inventory and simple base-only arithmetic, not physical feasibility or GPS combined score."
+  },
+  "staffed_coverage_policy": {
+    "end": "16:00",
+    "status": "Approved general policy: hand off until all scheduled staff leave, then staffed coverage ends.",
+    "meaning": "No 17:00 closer or shift extension is invented; no 16:00–17:00 coverage gap obligation is assumed."
+  },
+  "lunch_relief_assignments": [
+    {
+      "coverer": "Kiltra Horton",
+      "employee_on_lunch": "Tammy Miller",
+      "start": "08:30",
+      "end": "09:30",
+      "areas": [
+        "Teton and restrooms",
+        "Northwest Passage",
+        "East End restrooms"
+      ],
+      "retains_own_base": true,
+      "status": "APPROVED full-hour relief"
+    },
+    {
+      "coverer": "Alijah Collins",
+      "employee_on_lunch": "Karen Robinson",
+      "start": "09:30",
+      "end": "10:30",
+      "areas": [
+        "Zambezi and restrooms",
+        "Primate Pavilion",
+        "Breezeway restrooms",
+        "Tropical Birds"
+      ],
+      "retains_own_base": true,
+      "status": "APPROVED full-hour relief"
+    },
+    {
+      "coverer": "Kiltra Horton",
+      "employee_on_lunch": "Jada Rawlings",
+      "start": "10:00",
+      "end": "11:00",
+      "areas": [
+        "Cat House Cafe restrooms",
+        "Herpetarium",
+        "Event Center and restrooms",
+        "Cat Country",
+        "Komodos"
+      ],
+      "retains_own_base": true,
+      "status": "APPROVED full-hour relief"
+    },
+    {
+      "coverer": "Karen Robinson",
+      "employee_on_lunch": "Kathy Phelps",
+      "start": "10:30",
+      "end": "11:30",
+      "areas": [
+        "East Admin and restrooms",
+        "West Admin and restrooms",
+        "Courtyard restrooms",
+        "Nocturnal",
+        "Primate Canyon"
+      ],
+      "retains_own_base": true,
+      "status": "APPROVED full-hour relief"
+    },
+    {
+      "coverer": "Jada Rawlings",
+      "employee_on_lunch": "Alijah Collins",
+      "start": "11:30",
+      "end": "12:30",
+      "areas": [
+        "Expo and restrooms",
+        "MemMex restrooms",
+        "Aquarium"
+      ],
+      "retains_own_base": true,
+      "status": "APPROVED full-hour relief"
+    },
+    {
+      "coverer": "Kathy Phelps",
+      "employee_on_lunch": "Kiltra Horton",
+      "start": "12:00",
+      "end": "13:00",
+      "areas": [
+        "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+        "China and restrooms",
+        "Bonobos restrooms"
+      ],
+      "retains_own_base": true,
+      "status": "APPROVED full-hour relief"
+    }
+  ],
+  "afternoon_handoffs": {
+    "status": "APPROVED / LOCKED",
+    "trigger_scope": "Planned shift-end transfers; actual clock-out integration remains unverified.",
+    "assignments": [
+      {
+        "time": "14:00",
+        "departing": [
+          "Tammy Miller",
+          "Karen Robinson"
+        ],
+        "transfers": [
+          {
+            "from": "Karen Robinson",
+            "to": "Kathy Phelps",
+            "areas": [
+              "Zambezi and restrooms",
+              "Primate Pavilion",
+              "Breezeway restrooms",
+              "Tropical Birds"
+            ]
+          },
+          {
+            "from": "Tammy Miller",
+            "to": "Jada Rawlings",
+            "areas": [
+              "Teton and restrooms",
+              "Northwest Passage",
+              "East End restrooms"
+            ]
+          }
+        ]
+      },
+      {
+        "time": "15:00",
+        "departing": [
+          "Kathy Phelps",
+          "Jada Rawlings"
+        ],
+        "transfers": [
+          {
+            "from": "Jada Rawlings",
+            "to": "Kiltra Horton",
+            "areas": [
+              "Teton and restrooms",
+              "Northwest Passage",
+              "East End restrooms",
+              "Cat Country"
+            ]
+          },
+          {
+            "from": "Kathy Phelps",
+            "to": "Kiltra Horton",
+            "areas": [
+              "Zambezi and restrooms",
+              "Primate Pavilion",
+              "East Admin and restrooms",
+              "Primate Canyon"
+            ]
+          },
+          {
+            "from": "Kathy Phelps",
+            "to": "Alijah Collins",
+            "areas": [
+              "Breezeway restrooms",
+              "Tropical Birds",
+              "West Admin and restrooms",
+              "Courtyard restrooms",
+              "Nocturnal"
+            ]
+          },
+          {
+            "from": "Jada Rawlings",
+            "to": "Alijah Collins",
+            "areas": [
+              "Cat House Cafe restrooms",
+              "Herpetarium",
+              "Event Center and restrooms",
+              "Komodos"
+            ]
+          }
+        ]
+      }
+    ],
+    "ownership_snapshots": [
+      {
+        "time": "14:00",
+        "owners": {
+          "Kathy Phelps": [
+            "East Admin and restrooms",
+            "West Admin and restrooms",
+            "Courtyard restrooms",
+            "Nocturnal",
+            "Primate Canyon",
+            "Zambezi and restrooms",
+            "Primate Pavilion",
+            "Breezeway restrooms",
+            "Tropical Birds"
+          ],
+          "Jada Rawlings": [
+            "Cat House Cafe restrooms",
+            "Herpetarium",
+            "Event Center and restrooms",
+            "Cat Country",
+            "Komodos",
+            "Teton and restrooms",
+            "Northwest Passage",
+            "East End restrooms"
+          ],
+          "Kiltra Horton": [
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+            "China and restrooms",
+            "Bonobos restrooms"
+          ],
+          "Alijah Collins": [
+            "Expo and restrooms",
+            "MemMex restrooms",
+            "Aquarium"
+          ]
+        },
+        "unique_groups": 23,
+        "total_points": 136,
+        "owner_counts": {
+          "Kathy Phelps": 9,
+          "Jada Rawlings": 8,
+          "Kiltra Horton": 3,
+          "Alijah Collins": 3
+        },
+        "owner_points": {
+          "Kathy Phelps": 46,
+          "Jada Rawlings": 47,
+          "Kiltra Horton": 23,
+          "Alijah Collins": 20
+        }
+      },
+      {
+        "time": "15:00",
+        "owners": {
+          "Kiltra Horton": [
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+            "China and restrooms",
+            "Bonobos restrooms",
+            "Teton and restrooms",
+            "Northwest Passage",
+            "East End restrooms",
+            "Cat Country",
+            "Zambezi and restrooms",
+            "Primate Pavilion",
+            "East Admin and restrooms",
+            "Primate Canyon"
+          ],
+          "Alijah Collins": [
+            "Expo and restrooms",
+            "MemMex restrooms",
+            "Aquarium",
+            "Breezeway restrooms",
+            "Tropical Birds",
+            "West Admin and restrooms",
+            "Courtyard restrooms",
+            "Nocturnal",
+            "Cat House Cafe restrooms",
+            "Herpetarium",
+            "Event Center and restrooms",
+            "Komodos"
+          ]
+        },
+        "unique_groups": 23,
+        "total_points": 136,
+        "owner_counts": {
+          "Kiltra Horton": 11,
+          "Alijah Collins": 12
+        },
+        "owner_points": {
+          "Kiltra Horton": 67,
+          "Alijah Collins": 69
+        }
+      }
+    ],
+    "staffed_end": {
+      "time": "16:00",
+      "departing": [
+        "Kiltra Horton",
+        "Alijah Collins"
+      ],
+      "remaining_staff": [],
+      "no_closer_or_extension_required": true
+    },
+    "meaning": "Radio/restroom alerts and issues as needed, not mandatory new cleaning routes."
+  },
+  "pending_decisions": [
+    "Friday 9:45 policy was not separately specified; no changeover is inferred."
+  ],
+  "preserved_days": "Accepted Monday–Thursday plans unchanged.",
+  "boundaries": "Memory/planning only; no HTML, database, program, PDF, solver or production changes. Friday is a schedule day, not a newly scheduled dated appointment.",
+  "validation": {
+    "checked_at": "2026-10-30T00:49:14Z",
+    "status": "PASS: logical inventory, base/phase arithmetic, on-shift ownership and full-hour relief availability",
+    "groups": 23,
+    "total_points": 136,
+    "full_hour_reliefs": 6,
+    "own_lunch_or_coverer_overlap": false,
+    "ownership_intervals": [
+      {
+        "start": "07:00",
+        "end": "08:30",
+        "unique_groups": 23,
+        "total_points": 136,
+        "owner_counts": {
+          "Tammy Miller": 3,
+          "Karen Robinson": 4,
+          "Kathy Phelps": 5,
+          "Jada Rawlings": 5,
+          "Kiltra Horton": 3,
+          "Alijah Collins": 3
+        }
+      },
+      {
+        "start": "08:30",
+        "end": "09:30",
+        "unique_groups": 23,
+        "total_points": 136,
+        "owner_counts": {
+          "Karen Robinson": 4,
+          "Kathy Phelps": 5,
+          "Jada Rawlings": 5,
+          "Kiltra Horton": 6,
+          "Alijah Collins": 3
+        }
+      },
+      {
+        "start": "09:30",
+        "end": "10:00",
+        "unique_groups": 23,
+        "total_points": 136,
+        "owner_counts": {
+          "Tammy Miller": 3,
+          "Kathy Phelps": 5,
+          "Jada Rawlings": 5,
+          "Kiltra Horton": 3,
+          "Alijah Collins": 7
+        }
+      },
+      {
+        "start": "10:00",
+        "end": "10:30",
+        "unique_groups": 23,
+        "total_points": 136,
+        "owner_counts": {
+          "Tammy Miller": 3,
+          "Kathy Phelps": 5,
+          "Kiltra Horton": 8,
+          "Alijah Collins": 7
+        }
+      },
+      {
+        "start": "10:30",
+        "end": "11:00",
+        "unique_groups": 23,
+        "total_points": 136,
+        "owner_counts": {
+          "Tammy Miller": 3,
+          "Karen Robinson": 9,
+          "Kiltra Horton": 8,
+          "Alijah Collins": 3
+        }
+      },
+      {
+        "start": "11:00",
+        "end": "11:30",
+        "unique_groups": 23,
+        "total_points": 136,
+        "owner_counts": {
+          "Tammy Miller": 3,
+          "Karen Robinson": 9,
+          "Jada Rawlings": 5,
+          "Kiltra Horton": 3,
+          "Alijah Collins": 3
+        }
+      },
+      {
+        "start": "11:30",
+        "end": "12:00",
+        "unique_groups": 23,
+        "total_points": 136,
+        "owner_counts": {
+          "Tammy Miller": 3,
+          "Karen Robinson": 4,
+          "Kathy Phelps": 5,
+          "Jada Rawlings": 8,
+          "Kiltra Horton": 3
+        }
+      },
+      {
+        "start": "12:00",
+        "end": "12:30",
+        "unique_groups": 23,
+        "total_points": 136,
+        "owner_counts": {
+          "Tammy Miller": 3,
+          "Karen Robinson": 4,
+          "Kathy Phelps": 8,
+          "Jada Rawlings": 8
+        }
+      },
+      {
+        "start": "12:30",
+        "end": "13:00",
+        "unique_groups": 23,
+        "total_points": 136,
+        "owner_counts": {
+          "Tammy Miller": 3,
+          "Karen Robinson": 4,
+          "Kathy Phelps": 8,
+          "Jada Rawlings": 5,
+          "Alijah Collins": 3
+        }
+      },
+      {
+        "start": "13:00",
+        "end": "14:00",
+        "unique_groups": 23,
+        "total_points": 136,
+        "owner_counts": {
+          "Tammy Miller": 3,
+          "Karen Robinson": 4,
+          "Kathy Phelps": 5,
+          "Jada Rawlings": 5,
+          "Kiltra Horton": 3,
+          "Alijah Collins": 3
+        }
+      },
+      {
+        "start": "14:00",
+        "end": "15:00",
+        "unique_groups": 23,
+        "total_points": 136,
+        "owner_counts": {
+          "Kathy Phelps": 9,
+          "Jada Rawlings": 8,
+          "Kiltra Horton": 3,
+          "Alijah Collins": 3
+        }
+      },
+      {
+        "start": "15:00",
+        "end": "16:00",
+        "unique_groups": 23,
+        "total_points": 136,
+        "owner_counts": {
+          "Kiltra Horton": 11,
+          "Alijah Collins": 12
+        }
+      }
+    ],
+    "phase_points": [
+      {
+        "time": "07:00",
+        "points": {
+          "Tammy Miller": 24,
+          "Karen Robinson": 23,
+          "Kathy Phelps": 23,
+          "Jada Rawlings": 23,
+          "Kiltra Horton": 23,
+          "Alijah Collins": 20
+        }
+      },
+      {
+        "time": "14:00",
+        "points": {
+          "Kathy Phelps": 46,
+          "Jada Rawlings": 47,
+          "Kiltra Horton": 23,
+          "Alijah Collins": 20
+        }
+      },
+      {
+        "time": "15:00",
+        "points": {
+          "Kiltra Horton": 67,
+          "Alijah Collins": 69
+        }
+      }
+    ],
+    "scope": "From all scheduled arrivals at 07:00 until staffed coverage ends at 16:00; no earlier full-site or later coverage promise. Not measured workload/travel, combined GPS score, runtime or production proof."
+  },
+  "rejected_alternative": {
+    "status": "NOT APPROVED / NOT APPLIED",
+    "description": "Do not swap East Admin and Breezeway to create 68/68. Approved final split is Kiltra 67 / Alijah 69."
+  }
+}

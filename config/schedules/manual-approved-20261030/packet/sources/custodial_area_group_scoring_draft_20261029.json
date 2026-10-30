@@ -1,0 +1,586 @@
+{
+  "schema_version": 1,
+  "updated_at": "2026-10-30T00:46:20Z",
+  "title": "Authoritative DRAFT area-group workload model",
+  "status": "COMPLETE current 23-group draft ratings, user-selected; not implemented or production-approved. Expo remains the user's parked 8 unless he later changes it.",
+  "authority": "Eric's direct voice statements relayed by parent. This supersedes the individual-rating WORKING approach, not stored database data or historical evidence.",
+  "model": {
+    "unit": "ONE combined workload score for each of the 23 assigned area groups",
+    "scale": {
+      "minimum": 1,
+      "maximum": 10
+    },
+    "bundling": "ONE score for the entire assigned group, including its building/exhibit and restrooms where applicable. Never apply the group number separately to men's and women's rooms.",
+    "factors": [
+      "Cleaning effort and time",
+      "Traffic and usage",
+      "Frequency of attention needed",
+      "Importance"
+    ],
+    "proximity": "Separate from each group workload rating. Eric explicitly selected intended weighting of 75% proximity and 25% load for the new planning method; exact distance metric, normalization and final formula are not yet approved.",
+    "scope": "Planning/draft only. Not measured minutes, production acceptance, database update or automatic change to scheduling formulas/overrides."
+  },
+  "ratings_in_user_discussion_order": [
+    {
+      "group": "Teton and restrooms",
+      "score": 10,
+      "status": "Explicitly selected, provisional draft model",
+      "source_quotes": [
+        "Teton and its restrooms combined would be a 10. It doesn't get any more difficult than that"
+      ]
+    },
+    {
+      "group": "Zambezi and restrooms",
+      "score": 9,
+      "status": "Explicitly selected, provisional draft model",
+      "source_quotes": [
+        "I would give it a nine That's including its restrooms"
+      ]
+    },
+    {
+      "group": "Expo and restrooms",
+      "score": 8,
+      "status": "Provisional: user considered 7/8, agreed to park at 8",
+      "source_context": "Assistant asked to park Expo at 8; Eric said 'Yeah'."
+    },
+    {
+      "group": "Courtyard restrooms",
+      "score": 7,
+      "status": "Explicitly selected in draft",
+      "source_quotes": [
+        "I think we want to stick with that seven",
+        "I'm gonna expect that thing cleaned all the time"
+      ],
+      "rationale": "Eric says Courtyard restrooms are about the SAME SIZE as Teton restrooms, possibly one extra stall, with higher entrance traffic and frequent attention expected.",
+      "correction": "Supersedes assistant's smaller-size claim; not a measured stall count or mandated continuous cleaning appointment."
+    },
+    {
+      "group": "Cat House Cafe restrooms",
+      "score": 7,
+      "status": "Explicitly selected in draft",
+      "source_quotes": [
+        "Cat House ... seven"
+      ]
+    },
+    {
+      "group": "Breezeway restrooms",
+      "score": 6,
+      "status": "Explicitly selected in draft",
+      "source_quotes": [
+        "Breezeway, I would say six",
+        "it would even be a five if it wasn't for being in the high traffic location"
+      ],
+      "rationale": "High-traffic location raises the selected group score to 6; hypothetical 5 is NOT the selected value."
+    },
+    {
+      "group": "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+      "score": 8,
+      "status": "Explicitly selected in draft",
+      "source_quotes": [
+        "education volunteers, interpretation, NIT, all in one building, plus the four classrooms",
+        "make that an eight"
+      ],
+      "interpretation": "IT is intended from established context. ONE Education umbrella includes Volunteer, IT, Interpretation and FOUR classrooms, not separately scored sublocations."
+    },
+    {
+      "group": "Nocturnal",
+      "score": 3,
+      "status": "Explicitly selected in draft",
+      "source_quotes": [
+        "We'll call Nocturnal a three"
+      ]
+    },
+    {
+      "group": "Primate Canyon",
+      "score": 1,
+      "status": "Explicitly corrected and confirmed in draft",
+      "source_quotes": [
+        "Okay, my bad, Primate Canyon",
+        "Yeah"
+      ],
+      "correction": "Initial Primate Pavilion 1 was corrected to Primate CANYON 1. Do not retain Pavilion 1."
+    },
+    {
+      "group": "Cat Country",
+      "score": 2,
+      "status": "Explicitly selected in draft",
+      "source_quotes": [
+        "Cat Country do at a two"
+      ]
+    },
+    {
+      "group": "Primate Pavilion",
+      "score": 3,
+      "status": "Separately explicitly selected in draft",
+      "source_quotes": [
+        "Let's give it a three"
+      ]
+    },
+    {
+      "group": "China and restrooms",
+      "score": 7,
+      "status": "Explicitly approved combined group score in draft",
+      "source_quotes": [
+        "Let's give it a seven"
+      ],
+      "scope": "Includes China Theater and BOTH restrooms. Earlier 4-valued components are context only, not the assignment-group score."
+    },
+    {
+      "group": "Event Center and restrooms",
+      "score": 5,
+      "status": "Explicitly selected combined group score in draft",
+      "source_quotes": [
+        "Event Center and its two restrooms, I would do a five"
+      ]
+    },
+    {
+      "group": "Herpetarium",
+      "score": 5,
+      "status": "Explicitly selected in draft",
+      "source_quotes": [
+        "Herpetarium,5"
+      ]
+    },
+    {
+      "group": "Komodos",
+      "score": 4,
+      "status": "Explicitly selected in draft",
+      "source_quotes": [
+        "Komodos,4"
+      ],
+      "guard": "Do not compare to China's contextual Theater component as if that were the full China assignment; combined China is 7."
+    },
+    {
+      "group": "Tropical Birds",
+      "score": 5,
+      "status": "Explicitly selected in draft",
+      "source_quotes": [
+        "five"
+      ]
+    },
+    {
+      "group": "Aquarium",
+      "score": 5,
+      "status": "Explicitly selected in draft",
+      "source_quotes": [
+        "Aquarium would be a five"
+      ]
+    },
+    {
+      "group": "MemMex restrooms",
+      "score": 7,
+      "status": "Explicitly selected combined restroom group in draft",
+      "source_quotes": [
+        "MemMex would be a seven",
+        "Restroom together"
+      ],
+      "scope": "Both restrooms TOGETHER, not 7 each and no extra building."
+    },
+    {
+      "group": "Northwest Passage",
+      "score": 7,
+      "status": "Explicitly selected combined group score",
+      "source_quotes": [
+        "solid seven"
+      ],
+      "rationale": "Floor waxing, glass on both sides, and underwater glass."
+    },
+    {
+      "group": "East End restrooms",
+      "score": 7,
+      "status": "Explicitly selected combined restroom-group score",
+      "source_quotes": [
+        "seven all day"
+      ]
+    },
+    {
+      "group": "West Admin and restrooms",
+      "score": 7,
+      "status": "Explicitly selected combined group score",
+      "source_quotes": [
+        "seven"
+      ],
+      "scope": "Both floors plus associated private restrooms together."
+    },
+    {
+      "group": "East Admin and restrooms",
+      "score": 5,
+      "status": "Explicitly selected combined group score",
+      "source_quotes": [
+        "five"
+      ]
+    },
+    {
+      "group": "Bonobos restrooms",
+      "score": 8,
+      "status": "Explicitly selected combined restroom-group score",
+      "source_quotes": [
+        "eight"
+      ],
+      "guard": "This new draft score is 8, not the historical stored group override 75. No override was edited."
+    }
+  ],
+  "current_discussion": {
+    "status": "All 23 group ratings are supplied. Current user-led discussion is the new proximity method and practical adjacency preferences; assignments and production remain unchanged.",
+    "group": null,
+    "score": null
+  },
+  "unrated_groups": [],
+  "order_rule": "Proceed in the order Eric thinks of areas; do not impose alphabetical/geographic order or auto-score remaining groups.",
+  "supersedes_working_reference": "/user_notes/long_form/custodial_difficulty_ratings_user_20261029.json",
+  "preserved_sources": {
+    "stored_database_and_installed_logic": "/user_notes/long_form/custodial_stored_weights_20261029/README.md",
+    "previous_individual_proposals": "/user_notes/long_form/custodial_difficulty_ratings_user_20261029.json",
+    "monday_assignments": "/user_notes/long_form/custodial_manual_monday_working_draft.json",
+    "tuesday_assignments": "/user_notes/long_form/custodial_manual_tuesday_working_draft.json",
+    "wednesday_assignments": "/user_notes/long_form/custodial_manual_wednesday_working_draft.json"
+  },
+  "source": {
+    "type": "Trusted current direct voice transcript relayed by parent",
+    "received_at_utc": "2026-10-29T21:26:40Z",
+    "quotes": [
+      "we really only need to score the 23 locations, assigned areas right",
+      "We could include the restrooms in that number",
+      "Teton and its restrooms combined would be a 10. It doesn't get any more difficult than that",
+      "I would give it a nine That's including its restrooms",
+      "Yeah"
+    ],
+    "latest_batch_received_at_utc": "2026-10-29T21:37:01Z"
+  },
+  "no_changes": "Monday remains approved/locked. Tuesday reviewed full balanced-chain working plan approved and recorded with derived relief/handoffs. Group ratings/proximity method unchanged; no production edits.",
+  "completeness": {
+    "group_inventory": 23,
+    "scored": 23,
+    "unrated": 0,
+    "all_current_group_values_supplied": true,
+    "implementation_complete": false,
+    "production_applied": false,
+    "expo_note": "Parked at 8 by user agreement; retain rather than change automatically."
+  },
+  "education_scope": {
+    "display": "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+    "one_group": true,
+    "classroom_count": 4,
+    "source": "Eric's current explicit voice clarification; assignment owners unchanged."
+  },
+  "resolved_component_discussions": [
+    {
+      "group": "China and restrooms",
+      "score": null,
+      "status": "RESOLVED by explicit combined China group 7; old component inputs retained as context only.",
+      "components": [
+        {
+          "component": "China Theater",
+          "score": 4,
+          "source_quote": "China Theater ... Four"
+        },
+        {
+          "component": "China Men's Restroom",
+          "score": 4,
+          "source_quotes": [
+            "Nah, we'd better not do that. They are restrooms.",
+            "Let's make them- let's make them fours"
+          ]
+        },
+        {
+          "component": "China Women's Restroom",
+          "score": 4,
+          "source_quotes": [
+            "Nah, we'd better not do that. They are restrooms.",
+            "Let's make them- let's make them fours"
+          ]
+        }
+      ],
+      "candidate_total": null,
+      "candidate_total_status": "Old 6 withdrawn; no summed 12. User explicitly selected group 7.",
+      "scope": "Component inputs are retained as this explicit discussion exception; model remains 23 combined area-group scores, not a general return to per-restroom scoring.",
+      "component_correction": "Each China restroom is now 4, superseding 1 each. China Theater stays 4. Components do not determine a group score automatically.",
+      "resolved_group_score": 7,
+      "resolved_source_quote": "Let's give it a seven"
+    }
+  ],
+  "inventory_verification": {
+    "source": "/user_notes/long_form/custodial_manual_tuesday_working_draft.json",
+    "source_updated_at": "2026-10-29T21:33:35.688551Z",
+    "total_groups": 23,
+    "unique_selected_groups": 23,
+    "unknown_selected_groups": [],
+    "duplicate_selected_groups": [],
+    "remaining_groups": [],
+    "scope": "Exact group-name/count match, 1–10 range. Splash Pad excluded; no stored override/DB/assignment changes."
+  },
+  "seasonal_future_notes": [
+    {
+      "group": "Splash Pad restrooms",
+      "score_when_open": 8,
+      "status": "FUTURE WHEN OPEN ONLY; excluded from current 23 groups and present arithmetic",
+      "source_quotes": [
+        "we're not worrying about now"
+      ],
+      "no_activation": true
+    }
+  ],
+  "workflow_direction": {
+    "received_at_utc": "2026-10-29T21:38:38Z",
+    "status": "Keep the complete group ratings and manual assignments here in PLANNING until the method is figured out; GPS/proximity discussion next.",
+    "source_quotes": [
+      "We'll keep this here until we get it all figured out",
+      "we're gonna build our own system here. And then we'll have that integrate at the end"
+    ],
+    "intent": "Develop Eric's own weights + GPS/proximity method and manual assignments first, independent of legacy route-grid/formula/manual overrides. These settled scores should inform the scheduler only after the method is figured out and a later integration step is authorized.",
+    "boundaries": "No integration or production edits now. Do not import Bonobos 75/other old overrides, rearrange assignments or infer implementation from arithmetic.",
+    "next_discussion": "Continue user-led GPS/proximity planning. No exhaustive barrier audit or new lookup/solver is authorized automatically."
+  },
+  "base_only_comparison": {
+    "path": "/user_notes/long_form/custodial_base_score_comparison_20261029.json",
+    "scope": "Arithmetic sum of the user-selected 23 combined group ratings for each saved BASE assignment. Excludes lunch relief, inherited afternoon holdings, time weighting and GPS/proximity. NOT a combined 75/25 score, measured work time or proof of balance/feasibility.",
+    "Monday": {
+      "Tammy Miller": 24,
+      "Karen Robinson": 18,
+      "Alijah Collins": 19,
+      "Jada Rawlings": 18,
+      "Kiltra Horton": 17,
+      "Xavier Green": 20,
+      "Derrick Henderson": 20
+    },
+    "Tuesday": {
+      "Tammy Miller": 24,
+      "Karen Robinson": 23,
+      "Kathy Phelps": 23,
+      "Jada Rawlings": 23,
+      "Derrick Henderson": 23,
+      "Xavier Green": 20
+    },
+    "total_each_day": 136,
+    "last_monday_revision": {
+      "at_utc": "2026-10-30T00:01:44Z",
+      "source": "/user_notes/long_form/custodial_manual_monday_working_draft.json",
+      "scope": "Explicit Courtyard Jada→Alijah, Cat Country Alijah→Jada, Komodos Xavier→Jada; Monday plan approved/locked, not production."
+    },
+    "last_tuesday_revision": {
+      "at_utc": "2026-10-30T00:15:10Z",
+      "source": "/user_notes/long_form/custodial_manual_tuesday_working_draft.json",
+      "scope": "Eric approved original reviewed balanced-chain plan; same relief choices/times and derived current-area handoffs applied to working memory only."
+    },
+    "Wednesday": {
+      "Tammy Miller": 24,
+      "Karen Robinson": 27,
+      "Kathy Phelps": 29,
+      "Derrick Henderson": 27,
+      "Xavier Green": 29
+    },
+    "last_wednesday_revision": {
+      "at_utc": "2026-10-30T00:20:28Z",
+      "source": "/user_notes/long_form/custodial_manual_wednesday_working_draft.json",
+      "scope": "Accepted cleaner BASE variant; Cat House Cafe with Derrick, not Xavier. Lunch/handoffs still proposals only."
+    }
+  },
+  "proximity_planning": {
+    "updated_at_utc": "2026-10-29T21:48:43Z",
+    "source": "Eric's current direct voice statements, relayed by parent; local access descriptions are owner-reported, not an independent walk survey.",
+    "explicit_directives": {
+      "intended_weighting": {
+        "proximity_percent": 75,
+        "load_percent": 25,
+        "source_quote": "75 percent proximity, 25 percent load"
+      },
+      "preferred_cluster": {
+        "groups": [
+          "Zambezi and restrooms",
+          "Primate Pavilion",
+          "Primate Canyon",
+          "Breezeway restrooms"
+        ],
+        "base_load_sum": 19,
+        "base_load_scope": "9 + 3 + 1 + 6 = 19 simple group-load points, not a combined proximity/load score.",
+        "preference": "Prefer keeping these relatively close groups together when practical; SPLITTABLE, not a hard assignment lock.",
+        "source_quotes": [
+          "That's ... a preference I try to keep together",
+          "we gotta do what we gotta do"
+        ],
+        "access_notes": [
+          "Primate Pavilion is directly across the street from Zambezi.",
+          "Primate Canyon is near Pavilion/across the street, with simple access.",
+          "The Breezeway route passes through a gate, but Eric includes it in the accepted tight cluster and did not state a major barrier."
+        ]
+      },
+      "overlapping_adjacency": {
+        "bridge_group": "Primate Canyon",
+        "alternative_neighbors": [
+          "China and restrooms",
+          "Bonobos restrooms"
+        ],
+        "owner_description": "Canyon is also very close to China and Bonobos. Zambezi is on the south side and China on the north side.",
+        "source_quote": "that doesn't necessarily tie them into the Zambezi side",
+        "interpretation": "Record overlapping adjacency with Canyon bridging alternative groupings, NOT a transitive all-nearby mega-cluster, hard lock or assignment change.",
+        "flexibility_confirmation": {
+          "source_quote": "Yeah ... you could go one side or the other.",
+          "meaning": "Canyon can fit either neighboring side; no fixed cluster membership or assignment change."
+        }
+      },
+      "tammy_route": "Eric says Teton, Northwest Passage and East End restrooms connect directly by front/back routes; no special route exception is needed.",
+      "barriers": "Eric will flag detours or barriers case by case. No exhaustive access/barrier audit now.",
+      "estimate_limit": "GPS distance is a baseline estimate, not a verified walking distance or travel time.",
+      "workflow": "Develop the new own method in planning, independent of legacy grid/formula/overrides; no integration or production edits now.",
+      "entrance_area_neighborhood": {
+        "groups": [
+          "Courtyard restrooms",
+          "Breezeway restrooms",
+          "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+          "Nocturnal",
+          "Cat House Cafe restrooms",
+          "Cat Country",
+          "Primate Canyon"
+        ],
+        "correction": "PRIMATE CANYON, not Primate Pavilion, is the location in this entrance-neighborhood description.",
+        "owner_walking_description": [
+          "From Admissions, roughly 50–60 feet to Courtyard restrooms on the left.",
+          "Then roughly another 70 feet to Breezeway restrooms on the right/opposite side of the Nile River.",
+          "Breezeway leads to Education and the classroom row, described as like storefronts.",
+          "Nocturnal is across the street; Canyon is accessible from this area.",
+          "Cat House Cafe is almost straight ahead/slightly left from Admissions."
+        ],
+        "limits": "Approximate owner-reported walking descriptions, not surveyed coordinates, measured walking lengths or all-pairs distances. Cat Country is included in the stated neighborhood without a newly specified exact route/distance.",
+        "assignment_scope": "Overlapping proximity options only. No mandatory all-to-one assignment, merged mega-cluster or automatic moves."
+      },
+      "overlapping_options": {
+        "source": "Eric's current direct voice descriptions relayed by parent; owner-reported proximity, not independent measurement.",
+        "source_quote": "that whole end can kind of be criss-crossed",
+        "explicit_purpose": "Nearby area options with overlapping alternatives, NOT assigning one employee all listed areas.",
+        "options": [
+          {
+            "id": "A",
+            "groups": [
+              "Herpetarium",
+              "Event Center and restrooms",
+              "Bonobos restrooms",
+              "China and restrooms",
+              "Primate Canyon"
+            ],
+            "seasonal_future_only": "Splash Pad restrooms may join this option ONLY WHEN OPEN; excluded now.",
+            "additional_overlap": "Cat House Cafe restrooms overlaps A through the explicitly described Bonobos/backside/back-door connection."
+          },
+          {
+            "id": "B",
+            "groups": [
+              "Cat House Cafe restrooms",
+              "Tropical Birds",
+              "Herpetarium",
+              "Event Center and restrooms",
+              "Komodos"
+            ]
+          },
+          {
+            "id": "C",
+            "groups": [
+              "Herpetarium",
+              "Event Center and restrooms",
+              "Komodos",
+              "Aquarium"
+            ]
+          },
+          {
+            "id": "D",
+            "groups": [
+              "Herpetarium",
+              "Komodos",
+              "Aquarium",
+              "Expo and restrooms",
+              "MemMex restrooms"
+            ]
+          },
+          {
+            "id": "E",
+            "groups": [
+              "Tropical Birds",
+              "MemMex restrooms",
+              "Expo and restrooms",
+              "Aquarium"
+            ]
+          }
+        ],
+        "explicit_access_edge": {
+          "from": "Bonobos restrooms",
+          "via": "Backside of Cat House Cafe",
+          "connection": "Cat House Cafe back door",
+          "related_assignment_group": "Cat House Cafe restrooms",
+          "status": "Owner-described connection; no measured distance or walking time."
+        },
+        "limits": "Membership records overlapping proximity options, not equal all-pairs distance, a transitive mega-cluster, hard cluster constraints or assignments. Do not infer walking times or automatic moves. No production integration."
+      },
+      "karen_zambezi_tropical_route": {
+        "received_at_utc": "2026-10-30T00:13:14Z",
+        "owner_confirmed": "Karen's Zambezi–Tropical Birds route is acceptable and has been used before, despite distance.",
+        "limits": "Owner route experience/preference, not surveyed coordinates or measured walk time. Eric separately approved the reviewed Tuesday plan at 00:14 UTC; approval does not make distance measured."
+      }
+    },
+    "assistant_proposals_not_user_approved": {
+      "status": "PROPOSED implementation safeguards only; not approved exact formula or requirements.",
+      "proposals": [
+        "Normalize proximity and load onto comparable scales before applying 75/25.",
+        "Avoid an additional cluster bonus that could double-count proximity."
+      ],
+      "exact_formula_approved": false
+    },
+    "no_changes": "No daily assignment, lunch, handoff, database, program, HTML, PDF or production changes. No inferred walk times or exhaustive audit.",
+    "user_directives": {},
+    "future_handoff_preference": {
+      "source": "Eric's explicit voice clarification, October 30, 2026 UTC",
+      "preference": "When planning future departures, spread early inherited coverage among other remaining staff before adding a small amount gradually to the 17:00 closer Xavier where needed.",
+      "coverage_meaning": "Radio/restroom alerts and issues as needed, not mandatory extra cleaning routes; Eric accepts remote reach.",
+      "scope": "Preference, not a hard prohibition or a retrospective rewrite. Wednesday's exact weighted transfers were explicitly approved after this preference.",
+      "current_plan": "/user_notes/long_form/custodial_manual_wednesday_working_draft.json"
+    }
+  },
+  "absence_recalculation_requirement": {
+    "status": "AUTHORITATIVE USER REQUIREMENT for eventual program integration; not implemented or tested.",
+    "source": {
+      "received_at_utc": "2026-10-30T00:43:41Z",
+      "kind": "Eric's direct voice statements relayed by parent",
+      "quotes": [
+        "remove whoever calls in from the list and it recalculate and distribute those areas to people around them",
+        "up to two people out",
+        "wouldn't be until a third absence that I'd need to call somebody",
+        "program be able to do that within itself ... can use Gemini help, it's connected if it needs it, but preferably without any outside help, it can compute and figure it out"
+      ]
+    },
+    "manager_workflow": "Manager removes the call-in employee or employees from that day's list. Recalculate all their assigned areas onto remaining staff in nearby general areas using the new 75% proximity / 25% load planning method.",
+    "recalculation_scope": [
+      "Regenerate the affected employee plans, not base ownership alone.",
+      "Recalculate full-hour lunch relief using employees available for each entire window.",
+      "Recalculate inherited departure handoffs and ongoing current-area ownership as people leave."
+    ],
+    "resilience_target": "Handle up to TWO absences as the normal target, most of the time. This is not a guarantee that all staffing, time and coverage constraints are always feasible.",
+    "third_absence": "A THIRD absence normally means Eric would call CoverAll, then assign appropriate areas to available contractor coverage instead of manually reworking the weekly schedule.",
+    "failure_handling": "If hours, staffing, full-hour relief or area coverage are infeasible, explicitly flag uncovered areas/windows and the constraint. Do not invent staff availability, silently relax constraints or claim guaranteed coverage.",
+    "contractor_authority": "No automatic contractor booking, outreach or assumption that requested CoverAll staff are confirmed.",
+    "baseline_scope": "Preserve accepted Monday–Thursday weekly baseline plans. No current assignments, shifts, reliefs or handoffs are changed by recording this requirement.",
+    "integration_gate": "Integrate the completed planning system at the end. No build, audit, solver run, program/database change or implementation claim now.",
+    "formula_limit": "75/25 weighting intent is approved; exact normalization, distance metric and calculation remain to be finalized.",
+    "internal_computation": {
+      "status": "AUTHORITATIVE USER REQUIREMENT, not an implementation claim",
+      "requirement": "The program itself must compute absence redistribution, complete employee plans, full-hour lunch relief and inherited handoffs without depending on Sophia, Codex or an external cloud AI service.",
+      "normal_path": "Preferably self-contained: normal calculation must work without outside AI assistance.",
+      "optional_gemini": "Gemini assistance/connectivity may be considered if needed; Eric previously reported it connected, but there is no current verified connection or permission to enroll new access now. Normal computation remains self-contained.",
+      "no_execution": "No build, service call or integration executed by saving this requirement."
+    },
+    "baseline_and_dated_adjustment": {
+      "status": "USER-AFFIRMED planning approach",
+      "source_quote": "Well yes",
+      "context": "Eric affirmed the explanation of preserving the weekly baseline and using dated adjustments for absences.",
+      "scope": "Baseline plus dated adjustment is now affirmed; exact storage schema, technical implementation and solver architecture remain undecided."
+    },
+    "proposed_solver_architecture": {
+      "status": "PROPOSED implementation, not Eric's exact chosen algorithm",
+      "description": "A deterministic constraint-validated solver could fulfill the self-contained calculation requirement, checking availability, full-hour relief, ownership and infeasible coverage.",
+      "limits": "Not implemented, tested, selected as the final algorithm or authorized for a build now."
+    },
+    "existing_engine_first": {
+      "status": "LATEST AUTHORITATIVE USER DIRECTION",
+      "source_quote": "most of that ... should already be in program ... verify that it is ... computing based on our new load count",
+      "next_implementation_step": "First verify which absence/recalculation capabilities already exist, then adapt the existing engine to the new group ratings, 75% proximity / 25% load intent, full-hour relief and inherited-handoff rules. Do not assume a new engine/build is needed.",
+      "evidence_limit": "Eric expects much of it already exists; actual code capability and use of the new ratings are not yet verified.",
+      "scope": "Requirement saved for eventual authorized implementation; no inspection, build, audit, service call or production change performed by this memory update."
+    }
+  }
+}

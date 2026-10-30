@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import './approved-manual-week-tests.mjs';
 import {fullHourLunchFixture} from './fixtures/full-hour-lunch-source.mjs';
 import {compileStaticWeeklySchedule} from '../src/static-weekly-schedule-compiler.js';
 import {generateStaticWeeklySchedulingProgram,postgresJsonbContentDigest as digest} from '../src/static-weekly-schedule-program.js';
