@@ -105,7 +105,7 @@ assert.throws(() => assertServerAssignedActor({ ticket_id: "ticket", closed_by: 
 const index = await readFile(new URL("../src/index.js", import.meta.url), "utf8");
 const actions = await readFile(new URL('../src/owner-access-api.js',import.meta.url),'utf8');
 const migration = await readFile(new URL('../supabase/migrations/20261006031304_custodial_owner_delegated_actions.sql',import.meta.url),'utf8');
-assert.match(index,/installOwnerAccessRoutes\(app, \{ store: opsTrustedDeviceStore, runRpc, backendSecret: offlineAuthoritySecret \}\)/);
+assert.match(index,/installOwnerAccessRoutes\(app, \{ store: opsTrustedDeviceStore, runRpc, backendSecret: offlineAuthoritySecret,\s*leadershipTicketBridge:createCustodialLeadershipTicketBridge\(\{env:process\.env\}\) \}\)/);
 for(const route of ['admin-api','dashboard-api'])assert.ok(actions.includes('/'+route+'/close-ticket'));
 assert.match(actions,/assertServerAssignedActor\(req.body\)/);
 assert.match(actions,/requiredPermission: 'close_scan_tickets'/);
