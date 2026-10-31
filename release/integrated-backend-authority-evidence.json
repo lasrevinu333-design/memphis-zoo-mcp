@@ -1,16 +1,16 @@
 {
   "artifact": "integrated-backend-authority-release-evidence.v2",
   "release_id": "release-2026.07.19.custodial-v3.12",
-  "frontend_commit_sha": "c3c3a0fe97da7ae085aa1b70cf18876c2fe15363",
+  "frontend_commit_sha": "30d85737ee14ee3523ff2c26c2aa9e349b28cb51",
   "frontend_commit_state": "final_pair_bound",
-  "schema_fingerprint": "30218d9f5885ac5a8ca77785338a546da685d7e277c0633929e673ef80a870db",
+  "schema_fingerprint": "04e4c3d7abaa71cdf36a164a483ee1fa5efef77ab1711b07a201f515b85248d6",
   "schema_transition": {
     "transition_id": "custodial-full-hour-test-20261029",
     "from_fingerprint": "0096e7c488aca86f1d38b061561696b2d4ac409036f063ffc9f196625b9ee9c2",
-    "to_fingerprint": "30218d9f5885ac5a8ca77785338a546da685d7e277c0633929e673ef80a870db",
+    "to_fingerprint": "04e4c3d7abaa71cdf36a164a483ee1fa5efef77ab1711b07a201f515b85248d6",
     "expires_at": "2026-11-01T15:12:05Z"
   },
-  "frontend_source_fingerprint": "30218d9f5885ac5a8ca77785338a546da685d7e277c0633929e673ef80a870db",
+  "frontend_source_fingerprint": "04e4c3d7abaa71cdf36a164a483ee1fa5efef77ab1711b07a201f515b85248d6",
   "backend_contract": {
     "scan": "scan.v4.snapshot-bound-authority",
     "authority": "offline-authority.v5",
@@ -690,7 +690,7 @@
       {
         "path": "proposals/approved-manual-employment-admission.sql",
         "mode": "100644",
-        "object_id": "22e8a28819194771ecc89087fad775c74b937404"
+        "object_id": "c711be34e26af781c825df1cc60b4c87075258fb"
       },
       {
         "path": "proposals/approved-manual-employment-native-read.sql",
@@ -831,6 +831,31 @@
         "path": "release/combined-release-verification.json",
         "mode": "100644",
         "object_id": "698d18b9fa7c419c6cfe6df5b5a380d372509a77"
+      },
+      {
+        "path": "release/current-eight-launch-20261031/CURRENT_EIGHT_PERIOD_RESULT.json",
+        "mode": "100644",
+        "object_id": "299012f9542fe99aad60dcfb1f9562316f1d039c"
+      },
+      {
+        "path": "release/current-eight-launch-20261031/ORIGINAL_FAILED_INITIAL_ROLLBACK_RECONCILIATION.json",
+        "mode": "100644",
+        "object_id": "7a2de2d572fbf115aa403851410eeacf39ce5a67"
+      },
+      {
+        "path": "release/current-eight-launch-20261031/TRANSACTION_JIT_MEASUREMENT.json",
+        "mode": "100644",
+        "object_id": "bed7379353a2f474320e8f20ba465c7c3a5379be"
+      },
+      {
+        "path": "release/current-eight-launch-20261031/TYPED_INITIAL_ACTIVATION_PARENT_WAIT.json",
+        "mode": "100644",
+        "object_id": "51777159f82bbf3b0942a1216f104bf2d778819d"
+      },
+      {
+        "path": "release/current-eight-launch-20261031/TYPED_INITIAL_ACTIVATION_RESULT.json",
+        "mode": "100644",
+        "object_id": "580994723eae2097c6fab9d39b6e19e13c0d1bc1"
       },
       {
         "path": "release/current291-staged-source-binding.json",
@@ -985,7 +1010,7 @@
       {
         "path": "release/fresh-only-replay/SOURCE302_SUCCESSOR.json",
         "mode": "100644",
-        "object_id": "09967fe87041e4f2588d372b8a87ee85782cc7d8"
+        "object_id": "78090236bcefa69b4cfbba1234088e220b0c8562"
       },
       {
         "path": "release/fresh-only-replay/images/20261002090000_manager_issue_outcomes.sql",
@@ -1123,6 +1148,36 @@
         "object_id": "4213e0a30f211955c99f537b1bd3584e7efce024"
       },
       {
+        "path": "release/fresh-only-replay/source302-eight-active-normal-evidence/CATALOG_NORMALIZED.json",
+        "mode": "100644",
+        "object_id": "aa73d2620fc53a5ed5bdbd570e41bb0039a78129"
+      },
+      {
+        "path": "release/fresh-only-replay/source302-eight-active-normal-evidence/CATALOG_RAW.json",
+        "mode": "100644",
+        "object_id": "dd35df4f15974949947f40a7616c6d4823c08cf4"
+      },
+      {
+        "path": "release/fresh-only-replay/source302-eight-active-normal-evidence/CONSTRUCTED_SOURCE302_SUCCESSOR.json",
+        "mode": "100644",
+        "object_id": "896944bd7dcf7849b89b17b403084387c3c009e0"
+      },
+      {
+        "path": "release/fresh-only-replay/source302-eight-active-normal-evidence/FINGERPRINT.txt",
+        "mode": "100644",
+        "object_id": "33f7f98a2385d55f119a811a88ae706b6eb5b206"
+      },
+      {
+        "path": "release/fresh-only-replay/source302-eight-active-normal-evidence/PARENT_WAIT.json",
+        "mode": "100644",
+        "object_id": "4ae12de846fc590d9b5fa091414e09b8fb9e2d5b"
+      },
+      {
+        "path": "release/fresh-only-replay/source302-eight-active-normal-evidence/RESULT.json",
+        "mode": "100644",
+        "object_id": "6fcf331948a85f48b1483994265cda3ba9d84dfd"
+      },
+      {
         "path": "release/fresh-only-replay/source302-normal-evidence/CATALOG_NORMALIZED.json",
         "mode": "100644",
         "object_id": "c9414356e8a97552cf89ea65d41f657086638908"
@@ -1155,7 +1210,7 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "fc1f4461308025a6813f3ef7c63658b4c763c854"
+        "object_id": "192c5f0ad6bc2b31e230833e0e4e62cd4ef00c8b"
       },
       {
         "path": "release/installed-source/20261006031304_custodial_owner_delegated_actions.sql",
@@ -1510,7 +1565,7 @@
       {
         "path": "release/production-target-schema-profile.json",
         "mode": "100644",
-        "object_id": "d257e823c4510b1308be8d9b0888e50f623120d3"
+        "object_id": "dfae0ed7ca8d36230e42ae23aa82288b1a01b550"
       },
       {
         "path": "release/restore-dispositions/20261029-backup-40960771863.json",
@@ -1525,7 +1580,67 @@
       {
         "path": "release/schema-alignment-input.json",
         "mode": "100644",
-        "object_id": "539bf19b724f37fdca414100deca0419b9839e2d"
+        "object_id": "17d70201da621828b3731b1cebe241376c4bfc76"
+      },
+      {
+        "path": "release/schema-evidence/EIGHT_ACTIVE302_EXACT_CAPTURE_SOURCE_F85E.mjs",
+        "mode": "100644",
+        "object_id": "95d590e885a1f293ba5d6666d33ec3a465334fc8"
+      },
+      {
+        "path": "release/schema-evidence/EIGHT_ACTIVE302_FRESH_CANONICAL_CAPTURE.json",
+        "mode": "100644",
+        "object_id": "dd35df4f15974949947f40a7616c6d4823c08cf4"
+      },
+      {
+        "path": "release/schema-evidence/EIGHT_ACTIVE302_FRESH_CAPTURE_RESULT.json",
+        "mode": "100644",
+        "object_id": "6fcf331948a85f48b1483994265cda3ba9d84dfd"
+      },
+      {
+        "path": "release/schema-evidence/EIGHT_ACTIVE302_FRESH_CONSTRUCTION_RECEIPT.json",
+        "mode": "100644",
+        "object_id": "339d4061f18b3babe96aa0cc41baaa9d26b13097"
+      },
+      {
+        "path": "release/schema-evidence/EIGHT_ACTIVE302_FRESH_ROOT_CLOSED.json",
+        "mode": "100644",
+        "object_id": "4ae12de846fc590d9b5fa091414e09b8fb9e2d5b"
+      },
+      {
+        "path": "release/schema-evidence/EIGHT_ACTIVE302_FRESH_SOURCE_BEFORE.json",
+        "mode": "100644",
+        "object_id": "143d31a270e89e3cdc0024c24e3b5cd19ddc0283"
+      },
+      {
+        "path": "release/schema-evidence/EIGHT_ACTIVE302_FROZEN14_ASSEMBLY_MANIFEST.json",
+        "mode": "100644",
+        "object_id": "f6a7d35970a3e691105d00ef53cc8c825c39bacc"
+      },
+      {
+        "path": "release/schema-evidence/EIGHT_ACTIVE302_ISSUED_EXACT235_RESTORE_DISPOSITION.json",
+        "mode": "100644",
+        "object_id": "b758911d0e400bcc98c93ff3d5dcd00e5ad3667d"
+      },
+      {
+        "path": "release/schema-evidence/EIGHT_ACTIVE302_POPULATED_ARTIFACT_VERIFIED.json",
+        "mode": "100644",
+        "object_id": "7cbb929dfb1b10e7034ac12ca460759bb737579e"
+      },
+      {
+        "path": "release/schema-evidence/EIGHT_ACTIVE302_POPULATED_ROOT_CLOSED.json",
+        "mode": "100644",
+        "object_id": "73be8618c3f29bdf40af07d4bd37d94e528ab087"
+      },
+      {
+        "path": "release/schema-evidence/EIGHT_ACTIVE302_POPULATED_TARGET_CAPTURE.json",
+        "mode": "100644",
+        "object_id": "8e148742d334ebb9bb180ed3b1edfab9357a7d62"
+      },
+      {
+        "path": "release/schema-evidence/EIGHT_ACTIVE302_POPULATED_TERMINAL_RUN.json",
+        "mode": "100644",
+        "object_id": "b3eea4554786af719c0eae2069afae353dcf9a92"
       },
       {
         "path": "release/schema-evidence/SOURCE298_CAPTURED_TARGET_PROFILE.json",
@@ -1683,6 +1798,16 @@
         "object_id": "94bf7007b5c414f5c1fbf9df1a5659f2c87e1c71"
       },
       {
+        "path": "release/worker1-employment-admission-20261030/ERIC_EIGHT_ACTIVE_LAUNCH_STEERING.json",
+        "mode": "100644",
+        "object_id": "790e20affbdceb5e4374ef8aef97266df55abe0b"
+      },
+      {
+        "path": "release/worker1-employment-admission-20261030/OWNER_APPROVED_EIGHT_ACTIVE_20261031.json",
+        "mode": "100644",
+        "object_id": "2fe4cb9c6d04fa26085a28f48e39e842e3c6f12b"
+      },
+      {
         "path": "release/worker1-employment-admission-20261030/OWNER_CONFIRMED_DATED_EMPLOYMENT_DATA.json",
         "mode": "100644",
         "object_id": "8b54201936b62493f88dec90ddc50ef0daa226c4"
@@ -1760,7 +1885,7 @@
       {
         "path": "scripts/approved-manual-activation-database-tests.mjs",
         "mode": "100644",
-        "object_id": "50157fd04ec47a39d4d097ed6cb97732abd13176"
+        "object_id": "3c88cc474e229124c7088599b9c6e2ac6603c3b5"
       },
       {
         "path": "scripts/approved-manual-actual-window-tests.mjs",
@@ -1805,12 +1930,12 @@
       {
         "path": "scripts/approved-manual-employment-admission-tests.mjs",
         "mode": "100644",
-        "object_id": "5858413150dc40c336eb790d2b913d9c61b79ab4"
+        "object_id": "a0119797a2ad2c328c51b230e0362e3fda93ea7f"
       },
       {
         "path": "scripts/approved-manual-employment-period-tests.mjs",
         "mode": "100644",
-        "object_id": "72b849b991ae1ce43c3ff8428037766c5b9d9d5b"
+        "object_id": "bd5a37d45423e43233f85f94bb73938931f5a88c"
       },
       {
         "path": "scripts/approved-manual-gps-tests.mjs",
@@ -2020,12 +2145,12 @@
       {
         "path": "scripts/ci-fresh-only-source-successor-tests.mjs",
         "mode": "100644",
-        "object_id": "d452094ef06933d3a747b739d14dadeeeb46da51"
+        "object_id": "2366242c03a7d58bdf9fcd718ed99b2f690d3c14"
       },
       {
         "path": "scripts/ci-fresh-only-source-successor.mjs",
         "mode": "100644",
-        "object_id": "7820e4a75f4fd7acba70987918974008e6dae944"
+        "object_id": "86525fd9886e26104789a5cbb0df139afd36d931"
       },
       {
         "path": "scripts/ci-workflow-contract-tests.mjs",
@@ -2740,7 +2865,7 @@
       {
         "path": "scripts/fixtures/current-scheduler-source-profiles.mjs",
         "mode": "100644",
-        "object_id": "187ea4ffe2c8f087d78a81ed6351f06ad63b9c3f"
+        "object_id": "aa52f68a46e78775de26707224ffb15366061036"
       },
       {
         "path": "scripts/fixtures/dashboard-independent-check-reader-fixture.py",
@@ -2801,6 +2926,11 @@
         "path": "scripts/fixtures/dated-web-authority-postgres-probes.mjs",
         "mode": "100644",
         "object_id": "2b156b127ffa33feb6def0b301e1f24ab6d9054f"
+      },
+      {
+        "path": "scripts/fixtures/derive-recorded-predecessor.mjs",
+        "mode": "100644",
+        "object_id": "7c6a37294484cd15bc243195559b4fad40641b94"
       },
       {
         "path": "scripts/fixtures/dual-source-registered-correction-sql-source.mjs",
@@ -4580,7 +4710,7 @@
       {
         "path": "scripts/production-target-schema-profile.mjs",
         "mode": "100644",
-        "object_id": "682a201670f3c5fcb2efdeaf70280b555b9aefe7"
+        "object_id": "a8b09364f4660dae39720c4f799981e56a7f2fa6"
       },
       {
         "path": "scripts/proxy-address-regression-tests.mjs",
@@ -6465,7 +6595,7 @@
       {
         "path": "src/approved-manual-employment-admission.js",
         "mode": "100644",
-        "object_id": "a9c04cceae984bc66317a3e99971971912718150"
+        "object_id": "564d2e3007862c4dc93e42b2d45647502a225763"
       },
       {
         "path": "src/approved-manual-employment-integration.js",
@@ -7445,7 +7575,7 @@
       {
         "path": "src/static-weekly-control-plane.js",
         "mode": "100644",
-        "object_id": "a35952b384a43d661113262374430b3aa9b3a202"
+        "object_id": "d4c013232d8b31c1478f20846b4116b5d8ebbab7"
       },
       {
         "path": "src/static-weekly-coverall-access.js",
@@ -7730,7 +7860,7 @@
       {
         "path": "supabase/canonical/migration-replay-order.json",
         "mode": "100644",
-        "object_id": "3777bdc36972165023841206f2beb60547363840"
+        "object_id": "e680906d268e7aa71b9c7516ee9f4ee408ce9bf8"
       },
       {
         "path": "supabase/canonical/production-schema-fingerprint-input.json",
@@ -7750,12 +7880,12 @@
       {
         "path": "supabase/canonical/schema-fingerprint-input.json",
         "mode": "100644",
-        "object_id": "c9414356e8a97552cf89ea65d41f657086638908"
+        "object_id": "aa73d2620fc53a5ed5bdbd570e41bb0039a78129"
       },
       {
         "path": "supabase/canonical/schema-fingerprint.txt",
         "mode": "100644",
-        "object_id": "d90df98688e935a2cf83ced30fa15e5cc20b4b6b"
+        "object_id": "33f7f98a2385d55f119a811a88ae706b6eb5b206"
       },
       {
         "path": "supabase/canonical/source-capture-232.json",
@@ -9910,7 +10040,7 @@
       {
         "path": "supabase/migrations/20261031125902_approved_manual_native_operations.sql",
         "mode": "100644",
-        "object_id": "8660a779302264717a87ee4d01fc353467225d75"
+        "object_id": "0e779ef2458c1c54702998e842e19724c449e0e6"
       },
       {
         "path": "tmp/write_probe.txt",
@@ -9918,7 +10048,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 1958,
+    "authority_path_count": 1984,
     "migration_path_count": 302,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
