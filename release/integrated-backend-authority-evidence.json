@@ -3760,7 +3760,7 @@
       {
         "path": "scripts/manager-route-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "cf2ea550b8a5e36b2c53040d81c90e500300560e"
+        "object_id": "45f515001929ffa5cda397c5bd76fae3918e25a6"
       },
       {
         "path": "scripts/manager-scheduler-database-tests.mjs",
