@@ -1,0 +1,111 @@
+{
+  "status": "PASS",
+  "scope": "OWNED_CURRENT_EIGHT_TYPED_INITIAL_MANAGER_EMPLOYEE_AND_FULL_HOUR_SQL",
+  "productionWritten": false,
+  "physicalPhone": false,
+  "genuineManagerBrowser": false,
+  "providerCalls": 0,
+  "finalAudit": false,
+  "finalBuild": false,
+  "connectionErrors": [],
+  "phase": "one_atomic_native_initial_activation",
+  "sessionBoundaries": [
+    {
+      "purpose": "after_historical_and_employment_setup",
+      "before": {
+        "backend_pid": 2427,
+        "memory_context_total_bytes": "12855128",
+        "memory_context_used_bytes": "9722760"
+      },
+      "after": {
+        "backend_pid": 2428,
+        "memory_context_total_bytes": "1334136",
+        "memory_context_used_bytes": "960064"
+      },
+      "committedRowsPreserved": true,
+      "memoryLimitUnchanged": true
+    },
+    {
+      "purpose": "before_release_packet_preparation",
+      "before": {
+        "backend_pid": 2428,
+        "memory_context_total_bytes": "5007872",
+        "memory_context_used_bytes": "3355336"
+      },
+      "after": {
+        "backend_pid": 2429,
+        "memory_context_total_bytes": "1334136",
+        "memory_context_used_bytes": "960064"
+      },
+      "committedRowsPreserved": true,
+      "memoryLimitUnchanged": true
+    },
+    {
+      "purpose": "after_release_packet_preparation",
+      "before": {
+        "backend_pid": 2429,
+        "memory_context_total_bytes": "5400272",
+        "memory_context_used_bytes": "3290992"
+      },
+      "after": {
+        "backend_pid": 2430,
+        "memory_context_total_bytes": "1334136",
+        "memory_context_used_bytes": "960064"
+      },
+      "committedRowsPreserved": true,
+      "memoryLimitUnchanged": true
+    }
+  ],
+  "currentDate": "2026-10-31",
+  "publicationId": "7b866176-ba0a-4fca-9a85-fb610bbe75cd",
+  "projectionId": "6a492072-3c23-4801-ae63-fcfb15178947",
+  "activationOperation": "03361175-3198-493a-8325-29d1515f0f1d",
+  "original22Preserved": true,
+  "actualSlots30": true,
+  "newEmployeeRows0": true,
+  "allEightActiveForSchedule": true,
+  "firstWorkdayExclusions": 0,
+  "fullHourLunches": 40,
+  "employeeDayReadbacks": 40,
+  "ownershipChecks": 162540,
+  "actualCredentialBoundManagerSQL": true,
+  "samePhysicalTransaction": true,
+  "normalSevenSourcesChanged": false,
+  "physicalDelivery": false,
+  "canonicalSource302Qualified": false,
+  "protectedSourcesPreserved": true,
+  "cleanup": "SUPPORTED_ORIGINAL_OWNED_FIXTURE_CLEANUP_RETURNED",
+  "ids": {
+    "run": "32c70d60-3e2a-4809-99ba-e03f10a120a0",
+    "manager": "00000000-0000-4000-8000-000000000001",
+    "credential": "d3e046d4-501b-4848-902e-4af534f82332",
+    "device": "51e6b856-04ce-4f57-85ec-6b182a40b99a",
+    "deviceCredential": "d95c1396-e404-4bd4-af21-a17d54d23061",
+    "packet": "e71b67ee-af75-45ca-af3c-6f0ab7153336",
+    "source": "f929ef7c-9ad8-44a6-8525-c6efa64916fa",
+    "version": "3a9170df-bab9-42dd-8dd5-4fe338bbfba5",
+    "templatePublication": "7b866176-ba0a-4fca-9a85-fb610bbe75cd",
+    "activation": "03361175-3198-493a-8325-29d1515f0f1d",
+    "negativeActivation": "555c6c98-9c8e-4f5b-9860-ceae70910c31",
+    "employmentRequests": [
+      "6c2e5f3b-e39f-4d76-9683-1513fa7e7c4f",
+      "cc634a1b-0426-4b7b-b787-accea5948a7f"
+    ],
+    "capacityIds": [
+      "9c15726e-7dd6-41b5-98c2-f775492329b8",
+      "27423b8d-fc17-49ce-9a2d-e52a9c4cf952",
+      "2dd452af-2e03-4387-9a2d-43f98f6f2f36",
+      "de72fafc-0825-451f-9d0b-8bdade46f5c1",
+      "24fa580c-3d6e-4695-b1bf-ae4f535271d7",
+      "3ff2aaed-8427-4955-b9d8-a064593e174c",
+      "f364ced9-efa0-4eac-8804-4ba09d0bf0a1",
+      "713f3ff8-ea20-4f6f-9ed0-2c7d0a3db969"
+    ],
+    "activationKey": "owned-current-initial:a2a1e479-999d-4569-8c81-6e24cb0d4b12",
+    "launchScope": "CURRENT_EIGHT_PERSON_TYPED_INITIAL_ONLY"
+  },
+  "directPoolQueriesReturned": 202,
+  "sqlCommandIntents": 270,
+  "finishedAt": "2026-10-31T17:28:34.024Z",
+  "noAutomaticRetry": true
+}

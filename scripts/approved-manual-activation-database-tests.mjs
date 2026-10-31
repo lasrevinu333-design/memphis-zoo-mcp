@@ -100,13 +100,13 @@ async function qualifyCurrentEightTypedInitial({out,input,constructFixture=creat
  try{
   sourceCurrent();fixture=await constructFixture({name:'mz_schema_rebuild_atomic302_'+ids.run.replaceAll('-',''),hostSocket:true});
   await fixture.assertOwned();assert.equal(fixture.receipt.selected_replay.migrations,302);assert.equal(fixture.receipt.full_suite_PASS,false);save('FRESH_CURRENT_SOURCE302_CONSTRUCTION_ONLY.json',fixture.receipt);
-  pool=new pg.Pool({host:fixture.socketDirectory,database:'postgres',user:'supabase_admin',password:'postgres',max:2,connectionTimeoutMillis:5000});
   const connectionErrors=[];
   const lostConnection=error=>{unknown=true;result.status='UNKNOWN';connectionErrors.push({code:error?.code??null,message:String(error?.message??'Connection lost').slice(0,500)});};
   // A checked-out pg Client has no pg-pool idle error listener. Keep its
   // asynchronous errors inside this fixture's original-outcome boundary.
-  pool.on('connect',client=>client.on('error',lostConnection));
-  pool.on('error',lostConnection);
+  const openFixturePool=()=>{const p=new pg.Pool({host:fixture.socketDirectory,database:'postgres',user:'supabase_admin',password:'postgres',max:2,connectionTimeoutMillis:5000});
+   p.on('connect',client=>client.on('error',lostConnection));p.on('error',lostConnection);return p;};
+  pool=openFixturePool();
   result.connectionErrors=connectionErrors;
   const query=async(sql,args=[])=>{assert.equal(unknown,false,'Unknown transaction state forbids another SQL command');await fixture.assertOwned();const n=intent(sql,args);try{const r=await pool.query(sql,args);queries.push({sequence,returned:true});save('SQL_'+n+'_RETURNED.json',{rowCount:r.rowCount??null,command:r.command??null});return r;}catch(e){save('SQL_'+n+'_ERROR.json',{code:e.code??null,message:e.message,where:e.where??null});throw e;}};
   const tx=async(role,work)=>{assert.equal(unknown,false,'Unknown transaction state forbids another SQL transaction');assert.ok(['supabase_admin','static_weekly_release_operator','static_weekly_control_plane','custodial_application_reader','anon','authenticated','service_role'].includes(role));await fixture.assertOwned();const c=await pool.connect();try{await c.query('begin');await c.query('set local role '+role);const r=await work(c);await c.query('commit');return r;}catch(e){await c.query('rollback').catch(()=>{unknown=true;});throw e;}finally{c.release();}};
@@ -164,6 +164,14 @@ async function qualifyCurrentEightTypedInitial({out,input,constructFixture=creat
   save('ACTUAL_HISTORICAL_OFFICIAL_PARENT.json',{sourceId:historical.sourceId,versionId:historical.versionId,publicationId:historical.publicationId,projectionIds:historical.projectionIds,envelopes:historical.envelopes,compiled:historical.compiledByWeek,scope:'Genuine official fixture computation/publication, not current approved baseline or physical proof'});
   assert.equal(Number((await query('select count(*) n from public.weekly_roster_slots')).rows[0].n),22);
   const counts=async()=>(await query("select (select count(*)::int from public.employees) people,(select count(*)::int from public.msg_users) messengers,(select count(*)::int from public.weekly_roster_slots) slots,(select count(*)::int from public.static_weekly_staffing_absences) absences")).rows[0];
+  const sessionBoundaries=[];
+  const separateFixtureSession=async purpose=>{
+   assert.equal(unknown,false,'An unknown outcome cannot be repaired by changing sessions');
+   const dataBefore=await counts(),profile=async()=>(await query("select pg_backend_pid() backend_pid,sum(total_bytes)::text memory_context_total_bytes,sum(used_bytes)::text memory_context_used_bytes from pg_backend_memory_contexts")).rows[0];
+   const before=await profile();await pool.end();pool=openFixturePool();const after=await profile();
+   assert.notEqual(after.backend_pid,before.backend_pid);assert.deepEqual(await counts(),dataBefore);
+   const boundary={purpose,before,after,committedRowsPreserved:true,memoryLimitUnchanged:true};sessionBoundaries.push(boundary);save('ISOLATED_SESSION_'+purpose+'.json',boundary);
+  };
   const historicalRows=(await query('select to_jsonb(s) value from public.weekly_roster_slots s order by slot_id')).rows;save('ORIGINAL22_ROSTER_ROWS.json',historicalRows);
   setPhase('admit_actual_two_dated_employment_facts');
   const employmentData=readOwnerConfirmedEmploymentAdmissionData(),rev=await revision(),commands=employmentData.employees.map((e,i)=>prepareApprovedManualEmploymentAdmission({employeeId:e.employeeId,requestId:ids.employmentRequests[i],managerId:OWNER,expectedAuthorityRevision:rev,expectedEmploymentRevision:0}).command);
@@ -172,6 +180,10 @@ async function qualifyCurrentEightTypedInitial({out,input,constructFixture=creat
   await rejected('read_only_employment',()=>rpc('static_weekly_control_plane','custodial_employment.admit',[commands[0],ids.credential,manager.device_id,'read_only']),'42501');
   const acl=(await query("select n.nspname,c.relname,has_table_privilege('anon',c.oid,'SELECT,INSERT,UPDATE,DELETE') anon,has_table_privilege('authenticated',c.oid,'SELECT,INSERT,UPDATE,DELETE') authenticated,has_table_privilege('service_role',c.oid,'SELECT,INSERT,UPDATE,DELETE') service_role from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname in('custodial_employment','custodial_coverall','custodial_leadership_private') and c.relkind='r'")).rows;
   assert.ok(acl.length>0&&acl.every(r=>!r.anon&&!r.authenticated&&!r.service_role));save('ACTUAL_PRIVATE_ACL_NEGATIVES.json',acl);
+  // Fixture construction and historical seeding are migration/setup work.
+  // Production uses separate owner-preparation and manager runtime accounts;
+  // do not charge their accumulated backend caches to one synthetic session.
+  await separateFixtureSession('after_historical_and_employment_setup');
   plane=createStaticWeeklyControlPlane({database:{connect:async()=>{await fixture.assertOwned();return pool.connect();}}});
   const run=fn=>plane.runManagerOperation({manager,signal:new AbortController().signal,deadlineAt:performance.now()+120000,permission:'write'},fn);
   const snapshot=await run(()=>plane.getApprovedManualActivationRoster({manager}));assert.equal(snapshot.rosterSlots.length,22);assert.equal(snapshot.serviceDate,at);
@@ -179,8 +191,10 @@ async function qualifyCurrentEightTypedInitial({out,input,constructFixture=creat
   const draft=prepareApprovedManualSourceDraft({week,referenceBytes:approvedReferenceBytes});const selection=draft.sourceDraft.slots.filter(s=>s.contractorCapacity).map((s,i)=>({legacy_slot_id:s.id,new_capacity_id:ids.capacityIds[i],capacity_code:'CoverAll'+String(i+1).padStart(2,'0')}));assert.equal(selection.length,8);
   const packet=prepareApprovedManualCoverAllActivation({week,draft,snapshot,selection,sourceId:ids.source,versionId:ids.version,templatePublicationId:ids.templatePublication,templateId:'owned-current-'+ids.run,packetId:ids.packet,managerId:OWNER});
   save('CURRENT_DATE_APPROVED_PACKET_BEFORE_WRITE.json',packet);assert.equal(packet.feasibility.projectionAssignments.length,346);assert.equal(packet.feasibility.lunch.lunches.length,40);assert.equal(packet.feasibility.solverInvoked,false);
+  await separateFixtureSession('before_release_packet_preparation');
   setPhase('prepare_current_typed_packet');
   const prepared=await rpc('static_weekly_release_operator','public.static_weekly_prepare_coverall_activation',[packet]);save('ACTUAL_PACKET_PREPARATION.json',prepared);
+  await separateFixtureSession('after_release_packet_preparation');
   setPhase('preview_current_typed_packet');
   const preview=await run(()=>plane.previewApprovedManualActivation({manager,packetId:ids.packet,expectedRevision:snapshot.authorityRevision}));save('ACTUAL_V2_PREVIEW.json',preview);assert.equal(preview.status,'PREVIEW_ONLY');assert.equal(preview.employmentRevisionVector.length,14);
   for(const role of ['anon','authenticated','service_role'])await rejected('activation_role_'+role,()=>rpc(role,'public.static_weekly_prepare_coverall_activation',[packet]),'42501');
@@ -222,6 +236,7 @@ async function qualifyCurrentEightTypedInitial({out,input,constructFixture=creat
    }
   }
   assert.equal(employeeDayReadbacks,40);sourceCurrent();
+  assert.equal(sessionBoundaries.length,3);assert.equal(unknown,false);result.sessionBoundaries=sessionBoundaries;
   Object.assign(result,{status:'PASS',currentDate:at,publicationId:accepted.publicationId,projectionId:accepted.projectionId,activationOperation:ids.activation,original22Preserved:true,actualSlots30:true,newEmployeeRows0:true,allEightActiveForSchedule:true,firstWorkdayExclusions:0,fullHourLunches:40,employeeDayReadbacks,ownershipChecks,actualCredentialBoundManagerSQL:true,samePhysicalTransaction:true,normalSevenSourcesChanged:false,productionWritten:false,physicalDelivery:false,canonicalSource302Qualified:false});
  }catch(e){unknown=unknown||/^(08|ECONN|57P)/.test(String(e.code??''))||/UNKNOWN|custody_unknown|outcome_unknown|database_unavailable/i.test(String(e.code??''))||/connection terminated/i.test(String(e.message??''))||e.coverAllOriginalTransactionState==='UNKNOWN';Object.assign(result,{status:unknown?'UNKNOWN':'FAIL',failedPhase:result.phase,code:e.code??null,message:String(e.message).slice(0,1800),where:String(e.where??e.cause?.where??'').slice(0,5000),position:e.position??null,internalPosition:e.internalPosition??null,internalQuery:e.internalQuery??null,originalOperationId:activeOriginalIdentity?.operationId??ids.activation,activeOriginalIdentity,retry:false,activeCommandSequence:activeCommand?.sequence??null});process.exitCode=1;}
  finally{

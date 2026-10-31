@@ -1,0 +1,10 @@
+{
+  "container": "2d88fda14df43fefe2d5a8d90eb7237d1c5a66e3dd0d39164e3872b5f8ee2c56",
+  "owner": "68f88640-bc65-42d9-bff3-ad96784fd7dc",
+  "originalOperationId": "a048d67d-b5d8-413f-a4aa-33e1e9350093",
+  "nativeReadback": "BEGIN\n{\"packet\": 1, \"receipt\": 0, \"newsource\": 0, \"operation\": 0}\nROLLBACK\n",
+  "dockerOOMKilled": true,
+  "readOnly": true,
+  "retry": false,
+  "productionWritten": false
+}
