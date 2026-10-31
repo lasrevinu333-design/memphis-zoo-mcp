@@ -1,0 +1,512 @@
+{
+  "schema": "custodial.Root-reviewed-isolated-restore-disposition.v1",
+  "state": "ROOT_REVIEWED_EXACT_NINE_EXPECTED_EMPTY_TARGET_POPULATION_DIFFERENCES",
+  "original_run": 40961713823,
+  "original_restore_identity": {
+    "restore_id": "3a11a7be-284a-460b-9a9f-fde5dd5ed36c",
+    "authority_generation": "1",
+    "final_manifest_sha256": "ae76e76198da7f6f68344c7386ea0340ec4ea1c373bb49be19c246c51231e075"
+  },
+  "original_result": {
+    "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/SOURCE298_CURRENT_ARCHIVE_DISPOSITION_EVIDENCE.json",
+    "sha256": "0f674cde64d7857c2378e9e478873b93b240fcbd216bd8145409bf64ecfd65a3",
+    "bytes": 1170
+  },
+  "archive_digest": "67c0d74bbf18c346314669119f0ae53ff61d9b00c4e6550b7af917b7f02bbdfe",
+  "project_ref": "rqquvtjdmugpigbndmne",
+  "expected_manifest_database_tables": 217,
+  "expected_manifest_database_rows": 80333,
+  "decisions": [
+    {
+      "category": "cleaning_completions",
+      "disposition": "RESOLVED",
+      "resolution": "The new disposable target was empty in this category. The verified native TEXT import restored the authentic signed archive rows; this discrepancy compares empty pre-restore state with archived data and records no accepted data loss.",
+      "exact_original_discrepancy": {
+        "category": "cleaning_completions",
+        "status": "OPEN",
+        "before_count": "0",
+        "restored_count": "128",
+        "before_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "restored_sha256": "c20c9c3aee0772a16d58925b4faccd8afb84c125eba41cb61bfd7094db471891",
+        "pre_restore_missing": "false",
+        "restored_missing": "false",
+        "pre_restore_fields": [
+          "id",
+          "session_id",
+          "client_completion_id",
+          "location_id",
+          "submitted_by_employee_id",
+          "device_id",
+          "submitted_at",
+          "created_at"
+        ],
+        "restored_fields": [
+          "id",
+          "session_id",
+          "client_completion_id",
+          "location_id",
+          "submitted_by_employee_id",
+          "device_id",
+          "submitted_at",
+          "created_at"
+        ],
+        "data_encoding": "postgres-text-columns-line.v2",
+        "evidence_truncated": "false"
+      },
+      "evidence": {
+        "original_metadata": {
+          "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/REHEARSAL_DIAGNOSTIC_40961713823/target-capture-pre-reconcile-discrepancies.json",
+          "sha256": "0482fc1081b3dd21cbfd5ee90d36f930c8439234795e79a04aa9d75bd7a34b49",
+          "bytes": 18047
+        },
+        "archive_digest": "67c0d74bbf18c346314669119f0ae53ff61d9b00c4e6550b7af917b7f02bbdfe",
+        "native_text_import": {
+          "state": "MATCH",
+          "tables": 217,
+          "original_text_multiset": true
+        },
+        "comparison_before_authority_invalidation": true
+      }
+    },
+    {
+      "category": "cleaning_sessions",
+      "disposition": "RESOLVED",
+      "resolution": "The new disposable target was empty in this category. The verified native TEXT import restored the authentic signed archive rows; this discrepancy compares empty pre-restore state with archived data and records no accepted data loss.",
+      "exact_original_discrepancy": {
+        "category": "cleaning_sessions",
+        "status": "OPEN",
+        "before_count": "0",
+        "restored_count": "132",
+        "before_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "restored_sha256": "f295a2b23d193414f48cde3050ad31f2739c5384083ef9280244807551183b32",
+        "pre_restore_missing": "false",
+        "restored_missing": "false",
+        "pre_restore_fields": [
+          "id",
+          "session_uuid",
+          "client_session_id",
+          "location_id",
+          "employee_id",
+          "device_id",
+          "employee_name_snapshot",
+          "location_code_snapshot",
+          "location_name_snapshot",
+          "device_identifier_snapshot",
+          "device_name_snapshot",
+          "assignment_epoch_snapshot",
+          "identity_snapshot_provenance",
+          "status",
+          "started_at",
+          "ended_at",
+          "created_at",
+          "updated_at"
+        ],
+        "restored_fields": [
+          "id",
+          "session_uuid",
+          "client_session_id",
+          "location_id",
+          "employee_id",
+          "device_id",
+          "employee_name_snapshot",
+          "location_code_snapshot",
+          "location_name_snapshot",
+          "device_identifier_snapshot",
+          "device_name_snapshot",
+          "assignment_epoch_snapshot",
+          "identity_snapshot_provenance",
+          "status",
+          "started_at",
+          "ended_at",
+          "created_at",
+          "updated_at"
+        ],
+        "data_encoding": "postgres-text-columns-line.v2",
+        "evidence_truncated": "false"
+      },
+      "evidence": {
+        "original_metadata": {
+          "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/REHEARSAL_DIAGNOSTIC_40961713823/target-capture-pre-reconcile-discrepancies.json",
+          "sha256": "0482fc1081b3dd21cbfd5ee90d36f930c8439234795e79a04aa9d75bd7a34b49",
+          "bytes": 18047
+        },
+        "archive_digest": "67c0d74bbf18c346314669119f0ae53ff61d9b00c4e6550b7af917b7f02bbdfe",
+        "native_text_import": {
+          "state": "MATCH",
+          "tables": 217,
+          "original_text_multiset": true
+        },
+        "comparison_before_authority_invalidation": true
+      }
+    },
+    {
+      "category": "device_assignments",
+      "disposition": "RESOLVED",
+      "resolution": "The new disposable target was empty in this category. The verified native TEXT import restored the authentic signed archive rows; this discrepancy compares empty pre-restore state with archived data and records no accepted data loss.",
+      "exact_original_discrepancy": {
+        "category": "device_assignments",
+        "status": "OPEN",
+        "before_count": "0",
+        "restored_count": "17",
+        "before_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "restored_sha256": "c6e72b18d1bff44129fed699c0957b3e7d1fbba8ee081385f01d3c43ef0a1b02",
+        "pre_restore_missing": "false",
+        "restored_missing": "false",
+        "pre_restore_fields": [
+          "id",
+          "device_id",
+          "active",
+          "assigned_employee_id",
+          "assignment_epoch",
+          "last_seen_at",
+          "updated_at"
+        ],
+        "restored_fields": [
+          "id",
+          "device_id",
+          "active",
+          "assigned_employee_id",
+          "assignment_epoch",
+          "last_seen_at",
+          "updated_at"
+        ],
+        "data_encoding": "postgres-text-columns-line.v2",
+        "evidence_truncated": "false"
+      },
+      "evidence": {
+        "original_metadata": {
+          "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/REHEARSAL_DIAGNOSTIC_40961713823/target-capture-pre-reconcile-discrepancies.json",
+          "sha256": "0482fc1081b3dd21cbfd5ee90d36f930c8439234795e79a04aa9d75bd7a34b49",
+          "bytes": 18047
+        },
+        "archive_digest": "67c0d74bbf18c346314669119f0ae53ff61d9b00c4e6550b7af917b7f02bbdfe",
+        "native_text_import": {
+          "state": "MATCH",
+          "tables": 217,
+          "original_text_multiset": true
+        },
+        "comparison_before_authority_invalidation": true
+      }
+    },
+    {
+      "category": "employee_device_credentials",
+      "disposition": "RESOLVED",
+      "resolution": "The new disposable target was empty in this category. The verified native TEXT import restored the authentic signed archive rows; this discrepancy compares empty pre-restore state with archived data and records no accepted data loss.",
+      "exact_original_discrepancy": {
+        "category": "employee_device_credentials",
+        "status": "OPEN",
+        "before_count": "0",
+        "restored_count": "3",
+        "before_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "restored_sha256": "1e9ea0fe7090a4c7355535b37817a093db012e75b066f4bac37802f05b3abcc2",
+        "pre_restore_missing": "false",
+        "restored_missing": "false",
+        "pre_restore_fields": [
+          "credential_id",
+          "device_id",
+          "confirmed_at",
+          "expires_at",
+          "revoked_at",
+          "revoked_reason",
+          "created_at",
+          "last_used_at"
+        ],
+        "restored_fields": [
+          "credential_id",
+          "device_id",
+          "confirmed_at",
+          "expires_at",
+          "revoked_at",
+          "revoked_reason",
+          "created_at",
+          "last_used_at"
+        ],
+        "data_encoding": "postgres-text-columns-line.v2",
+        "evidence_truncated": "false"
+      },
+      "evidence": {
+        "original_metadata": {
+          "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/REHEARSAL_DIAGNOSTIC_40961713823/target-capture-pre-reconcile-discrepancies.json",
+          "sha256": "0482fc1081b3dd21cbfd5ee90d36f930c8439234795e79a04aa9d75bd7a34b49",
+          "bytes": 18047
+        },
+        "archive_digest": "67c0d74bbf18c346314669119f0ae53ff61d9b00c4e6550b7af917b7f02bbdfe",
+        "native_text_import": {
+          "state": "MATCH",
+          "tables": 217,
+          "original_text_multiset": true
+        },
+        "comparison_before_authority_invalidation": true
+      }
+    },
+    {
+      "category": "employee_enrollment",
+      "disposition": "RESOLVED",
+      "resolution": "The new disposable target was empty in this category. The verified native TEXT import restored the authentic signed archive rows; this discrepancy compares empty pre-restore state with archived data and records no accepted data loss.",
+      "exact_original_discrepancy": {
+        "category": "employee_enrollment",
+        "status": "OPEN",
+        "before_count": "0",
+        "restored_count": "9",
+        "before_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "restored_sha256": "ebf897e61ffdf91beb2960bfd8214105fe9549a4298c15d876933580b5cb10dc",
+        "pre_restore_missing": "false",
+        "restored_missing": "false",
+        "pre_restore_fields": [
+          "enrollment_id",
+          "device_id",
+          "created_at",
+          "expires_at",
+          "consumed_at",
+          "consumed_by_credential_id",
+          "revoked_at",
+          "failed_attempts"
+        ],
+        "restored_fields": [
+          "enrollment_id",
+          "device_id",
+          "created_at",
+          "expires_at",
+          "consumed_at",
+          "consumed_by_credential_id",
+          "revoked_at",
+          "failed_attempts"
+        ],
+        "data_encoding": "postgres-text-columns-line.v2",
+        "evidence_truncated": "false"
+      },
+      "evidence": {
+        "original_metadata": {
+          "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/REHEARSAL_DIAGNOSTIC_40961713823/target-capture-pre-reconcile-discrepancies.json",
+          "sha256": "0482fc1081b3dd21cbfd5ee90d36f930c8439234795e79a04aa9d75bd7a34b49",
+          "bytes": 18047
+        },
+        "archive_digest": "67c0d74bbf18c346314669119f0ae53ff61d9b00c4e6550b7af917b7f02bbdfe",
+        "native_text_import": {
+          "state": "MATCH",
+          "tables": 217,
+          "original_text_multiset": true
+        },
+        "comparison_before_authority_invalidation": true
+      }
+    },
+    {
+      "category": "employee_status",
+      "disposition": "RESOLVED",
+      "resolution": "The new disposable target was empty in this category. The verified native TEXT import restored the authentic signed archive rows; this discrepancy compares empty pre-restore state with archived data and records no accepted data loss.",
+      "exact_original_discrepancy": {
+        "category": "employee_status",
+        "status": "OPEN",
+        "before_count": "0",
+        "restored_count": "21",
+        "before_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "restored_sha256": "979b3a736795144e150b515bcea553182d3638715a90a91a60bbbc2d1c8e3d44",
+        "pre_restore_missing": "false",
+        "restored_missing": "false",
+        "pre_restore_fields": [
+          "id",
+          "employee_code",
+          "display_name",
+          "active",
+          "role",
+          "updated_at"
+        ],
+        "restored_fields": [
+          "id",
+          "employee_code",
+          "display_name",
+          "active",
+          "role",
+          "updated_at"
+        ],
+        "data_encoding": "postgres-text-columns-line.v2",
+        "evidence_truncated": "false"
+      },
+      "evidence": {
+        "original_metadata": {
+          "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/REHEARSAL_DIAGNOSTIC_40961713823/target-capture-pre-reconcile-discrepancies.json",
+          "sha256": "0482fc1081b3dd21cbfd5ee90d36f930c8439234795e79a04aa9d75bd7a34b49",
+          "bytes": 18047
+        },
+        "archive_digest": "67c0d74bbf18c346314669119f0ae53ff61d9b00c4e6550b7af917b7f02bbdfe",
+        "native_text_import": {
+          "state": "MATCH",
+          "tables": 217,
+          "original_text_multiset": true
+        },
+        "comparison_before_authority_invalidation": true
+      }
+    },
+    {
+      "category": "manager_enrollment",
+      "disposition": "RESOLVED",
+      "resolution": "The new disposable target was empty in this category. The verified native TEXT import restored the authentic signed archive rows; this discrepancy compares empty pre-restore state with archived data and records no accepted data loss.",
+      "exact_original_discrepancy": {
+        "category": "manager_enrollment",
+        "status": "OPEN",
+        "before_count": "0",
+        "restored_count": "20",
+        "before_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "restored_sha256": "07aff735fa7c01501bbc8980b808d989a1d4048b6b965ef13f1a1e0ddceb565a",
+        "pre_restore_missing": "false",
+        "restored_missing": "false",
+        "pre_restore_fields": [
+          "id",
+          "manager_id",
+          "status",
+          "created_at",
+          "expires_at",
+          "consumed_at",
+          "consumed_credential_id",
+          "revoked_at",
+          "revoked_reason"
+        ],
+        "restored_fields": [
+          "id",
+          "manager_id",
+          "status",
+          "created_at",
+          "expires_at",
+          "consumed_at",
+          "consumed_credential_id",
+          "revoked_at",
+          "revoked_reason"
+        ],
+        "data_encoding": "postgres-text-columns-line.v2",
+        "evidence_truncated": "false"
+      },
+      "evidence": {
+        "original_metadata": {
+          "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/REHEARSAL_DIAGNOSTIC_40961713823/target-capture-pre-reconcile-discrepancies.json",
+          "sha256": "0482fc1081b3dd21cbfd5ee90d36f930c8439234795e79a04aa9d75bd7a34b49",
+          "bytes": 18047
+        },
+        "archive_digest": "67c0d74bbf18c346314669119f0ae53ff61d9b00c4e6550b7af917b7f02bbdfe",
+        "native_text_import": {
+          "state": "MATCH",
+          "tables": 217,
+          "original_text_multiset": true
+        },
+        "comparison_before_authority_invalidation": true
+      }
+    },
+    {
+      "category": "manager_trusted_devices",
+      "disposition": "RESOLVED",
+      "resolution": "The new disposable target was empty in this category. The verified native TEXT import restored the authentic signed archive rows; this discrepancy compares empty pre-restore state with archived data and records no accepted data loss.",
+      "exact_original_discrepancy": {
+        "category": "manager_trusted_devices",
+        "status": "OPEN",
+        "before_count": "0",
+        "restored_count": "38",
+        "before_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "restored_sha256": "2d2f78ed897a37fae110f9d608b61982312bcf6fb1ca8908cd259ba8d68e4f04",
+        "pre_restore_missing": "false",
+        "restored_missing": "false",
+        "pre_restore_fields": [
+          "credential_id",
+          "manager_id",
+          "device_id",
+          "device_label",
+          "max_access_level",
+          "created_at",
+          "last_used_at",
+          "expires_at",
+          "revoked_at",
+          "revoked_reason"
+        ],
+        "restored_fields": [
+          "credential_id",
+          "manager_id",
+          "device_id",
+          "device_label",
+          "max_access_level",
+          "created_at",
+          "last_used_at",
+          "expires_at",
+          "revoked_at",
+          "revoked_reason"
+        ],
+        "data_encoding": "postgres-text-columns-line.v2",
+        "evidence_truncated": "false"
+      },
+      "evidence": {
+        "original_metadata": {
+          "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/REHEARSAL_DIAGNOSTIC_40961713823/target-capture-pre-reconcile-discrepancies.json",
+          "sha256": "0482fc1081b3dd21cbfd5ee90d36f930c8439234795e79a04aa9d75bd7a34b49",
+          "bytes": 18047
+        },
+        "archive_digest": "67c0d74bbf18c346314669119f0ae53ff61d9b00c4e6550b7af917b7f02bbdfe",
+        "native_text_import": {
+          "state": "MATCH",
+          "tables": 217,
+          "original_text_multiset": true
+        },
+        "comparison_before_authority_invalidation": true
+      }
+    },
+    {
+      "category": "release_identity",
+      "disposition": "RESOLVED",
+      "resolution": "The isolated preparation seeds exactly the signed active release row and verifies release_count=1. The verified native TEXT import restores all five authenticated archive release-history rows. The one-to-five difference is expected restore population, with no accepted loss.",
+      "exact_original_discrepancy": {
+        "category": "release_identity",
+        "status": "OPEN",
+        "before_count": "1",
+        "restored_count": "5",
+        "before_sha256": "5f93365a5838433bae7935da734945d551772b15b663303ff8a3b42fb2f55a2b",
+        "restored_sha256": "1a830ed2c05a5815aaa9cf2e5f2b76966eb365fe4f4ed5cd85e98a59dcd37f08",
+        "pre_restore_missing": "false",
+        "restored_missing": "false",
+        "pre_restore_fields": [
+          "release_id",
+          "backend_commit",
+          "frontend_commit",
+          "migration_head",
+          "migration_manifest_sha256",
+          "environment_contract_version",
+          "status",
+          "details_json",
+          "created_at",
+          "deployed_at"
+        ],
+        "restored_fields": [
+          "release_id",
+          "backend_commit",
+          "frontend_commit",
+          "migration_head",
+          "migration_manifest_sha256",
+          "environment_contract_version",
+          "status",
+          "details_json",
+          "created_at",
+          "deployed_at"
+        ],
+        "data_encoding": "postgres-text-columns-line.v2",
+        "evidence_truncated": "false"
+      },
+      "evidence": {
+        "original_metadata": {
+          "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/REHEARSAL_DIAGNOSTIC_40961713823/target-capture-pre-reconcile-discrepancies.json",
+          "sha256": "0482fc1081b3dd21cbfd5ee90d36f930c8439234795e79a04aa9d75bd7a34b49",
+          "bytes": 18047
+        },
+        "archive_digest": "67c0d74bbf18c346314669119f0ae53ff61d9b00c4e6550b7af917b7f02bbdfe",
+        "native_text_import": {
+          "state": "MATCH",
+          "tables": 217,
+          "original_text_multiset": true
+        },
+        "comparison_before_authority_invalidation": true
+      }
+    }
+  ],
+  "required_fresh_copy_before_any_continuation": "Revalidate all nine full discrepancy tuples including counts hashes fields flags and encoding, exact same signed archive identity and verification; require safe owned loopback target, paused state, all verification flags, zero leases and no unknown categories. Bind normal signed reconciliation to fresh restore identity/gen/finalmanifest.",
+  "original_restore_or_unknown_attempt_reuse_authorized": false,
+  "ACCEPTED_LOSS_authorized": false,
+  "production_change_authorized_by_this_receipt": false,
+  "resolve_unpause_or_migrations_executed": false,
+  "all217_post_authority_equality_claim": false,
+  "cleanup_proof": "HOSTED_ORIGINAL_TRAP_ONLY_NO_REUSE_NEW_INDEPENDENT_COPY_REQUIRED",
+  "backup_run": 40960771863
+}

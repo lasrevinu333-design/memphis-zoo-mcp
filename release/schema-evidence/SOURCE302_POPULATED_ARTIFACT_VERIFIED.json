@@ -1,0 +1,39 @@
+{
+  "state": "EXACT_SUCCESSFUL_REAL235_TARGET_ARTIFACT_DOWNLOADED_AND_MEMBERS_VERIFIED",
+  "sourceRun": 41206645207,
+  "sourceArtifact": 13045060563,
+  "expectedCommit": "9811abb18795df2613d7ec668ad7ab58a01fd343",
+  "credentialValuesPrintedOrSaved": false,
+  "newAuthSetup": false,
+  "signedAssetURLPrintedOrSaved": false,
+  "productionWritten": false,
+  "workflowDispatchOrRerun": false,
+  "zip": {
+    "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/MAIN_REAL235_TARGET_ARTIFACT_41206645207/exact-target-capture-artifact.zip",
+    "sha256": "2cfa7e700e9ffcced8354e9beec04d64618614997f8e87b0af50f354ceceb16d",
+    "bytes": 3364107
+  },
+  "extractedRoot": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/MAIN_REAL235_TARGET_ARTIFACT_41206645207/extracted",
+  "members": [
+    {
+      "name": "production-backup-migration-rehearsal.jsonl",
+      "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/MAIN_REAL235_TARGET_ARTIFACT_41206645207/extracted/production-backup-migration-rehearsal.jsonl",
+      "bytes": 8582,
+      "sha256": "d822434aa8fde903c18d8f345558221d672c8f70f5557da38a4df6b807dd1c9f"
+    },
+    {
+      "name": "target-capture-pre-reconcile-discrepancies.json",
+      "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/MAIN_REAL235_TARGET_ARTIFACT_41206645207/extracted/target-capture-pre-reconcile-discrepancies.json",
+      "bytes": 18047,
+      "sha256": "9d6eff0741f85ca17be3bb7186f90a357964f1d106097ffade75dd6431d09cea"
+    },
+    {
+      "name": "production-migration-target-capture.json",
+      "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/MAIN_REAL235_TARGET_ARTIFACT_41206645207/extracted/production-migration-target-capture.json",
+      "bytes": 20653147,
+      "sha256": "470e926718325470e076e37ba2230935c2f5f4e94f6aa517fab52f9e6c004aed"
+    }
+  ],
+  "candidateSourceProfileAdopted": false,
+  "runtimeOrPhysicalAcceptanceClaimed": false
+}
