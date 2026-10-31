@@ -4235,7 +4235,7 @@
       {
         "path": "scripts/operations-leadership-mobile-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "e8fd049f1b214b42809f400c1d4908962c538451"
+        "object_id": "2db60a619fa53a5fdeb0803f0c9e753d8fe8d7d6"
       },
       {
         "path": "scripts/operations-leadership-mobile-database-tests.mjs",
@@ -5280,7 +5280,7 @@
       {
         "path": "scripts/static-weekly-control-plane-tests.mjs",
         "mode": "100644",
-        "object_id": "2ebbf42ba659f2fa8318de7369e17e67dd3a0615"
+        "object_id": "16b17b942ff83e42ac57f7f740ea911cced4e6c1"
       },
       {
         "path": "scripts/static-weekly-current-manager-219-manifest-tests.mjs",
