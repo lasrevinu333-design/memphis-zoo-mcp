@@ -2163,6 +2163,11 @@
         "object_id": "929a28dc93f5b93a91a6c10746e62e45b65b13f2"
       },
       {
+        "path": "scripts/attendance-chicago-day-tests.mjs",
+        "mode": "100644",
+        "object_id": "15053efd6d5283935a92890702e14bee922437e2"
+      },
+      {
         "path": "scripts/audit-guest-disabled-tests.mjs",
         "mode": "100644",
         "object_id": "478d6c23a8323216985dacc6b75e1defc9b774f9"
@@ -2290,7 +2295,7 @@
       {
         "path": "scripts/cleaning-identity-route-tests.mjs",
         "mode": "100644",
-        "object_id": "8142bb6d8e16599257ba74334ff8f5b850cef41a"
+        "object_id": "59b66a42494bd49355b53f862b0b3d7c3a8fc821"
       },
       {
         "path": "scripts/completed-cleaning-reminder-dispatch-tests.mjs",
@@ -2473,14 +2478,19 @@
         "object_id": "57c812843a8c93397942f4f6fc35fa7245b200f6"
       },
       {
+        "path": "scripts/custodial-leadership-messaging-tests.mjs",
+        "mode": "100644",
+        "object_id": "b40fff63ed8fce589b7e56ab608c78573955f43d"
+      },
+      {
         "path": "scripts/custodial-leadership-pin-tests.mjs",
         "mode": "100644",
-        "object_id": "c46fd3c954e39495744d99c598c8004c3638e9f0"
+        "object_id": "551cb385e705acda928913aaa2498adc52e06d46"
       },
       {
         "path": "scripts/custodial-leadership-runtime-tests.mjs",
         "mode": "100644",
-        "object_id": "639fda9e084c9707f8cbe3e3f70ba0804a9e6d8b"
+        "object_id": "653cd5305f5d98e07a81d25ae1c708caa793bd2b"
       },
       {
         "path": "scripts/custodial-leadership-ticket-database-tests.mjs",
@@ -2496,6 +2506,11 @@
         "path": "scripts/custodial-operational-notes-tests.mjs",
         "mode": "100644",
         "object_id": "592dfdfa20b836b98b4b38fc532591469e8f655e"
+      },
+      {
+        "path": "scripts/custodial-record-operation-tests.mjs",
+        "mode": "100644",
+        "object_id": "a139027701110e85dab0a703a70dacac4a159c1b"
       },
       {
         "path": "scripts/custodial-repair-contract-tests.mjs",
@@ -2520,7 +2535,7 @@
       {
         "path": "scripts/dashboard-reader-produced-dto-tests.mjs",
         "mode": "100644",
-        "object_id": "93e47c4a8c1d2d9149c03a9f04b3ba606b6fc060"
+        "object_id": "c24edd8698b8c6ca5a7bb82ba1eebc370fee3b33"
       },
       {
         "path": "scripts/dashboard-recent-activity-contract-tests.mjs",
@@ -3673,6 +3688,21 @@
         "object_id": "e0cb6edaf57e0db5405cb65424d680426d04e2d7"
       },
       {
+        "path": "scripts/leadership-nonexpiring-session-tests.mjs",
+        "mode": "100644",
+        "object_id": "349d3ba931595888fe1bba76429d5e70be61c897"
+      },
+      {
+        "path": "scripts/leadership-restore-generation-tests.mjs",
+        "mode": "100644",
+        "object_id": "12f5f5b6f8bedb1cc53ea627bed26f866b79e300"
+      },
+      {
+        "path": "scripts/leadership-restore-generation.mjs",
+        "mode": "100644",
+        "object_id": "99eb9e80be89828f42d3476605fd860a36e4030c"
+      },
+      {
         "path": "scripts/legacy-activation-database-tests.mjs",
         "mode": "100644",
         "object_id": "5e7d40e5158f99ddd0909a5b56a328f2a957bebd"
@@ -3745,7 +3775,7 @@
       {
         "path": "scripts/manager-notification-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "414de75d8b324425914c74727381bbffa79b7d7d"
+        "object_id": "de24ce96087167c28e70e4af03a9971769bea642"
       },
       {
         "path": "scripts/manager-notification-history-tests.mjs",
@@ -3833,9 +3863,14 @@
         "object_id": "c8c08c21d85e3613ca8541769bf5f6b173c392e0"
       },
       {
+        "path": "scripts/memphis-cohort-actor-tests.mjs",
+        "mode": "100644",
+        "object_id": "5d9193f0b5664c650c3a7b44faf5bbbba9dd760d"
+      },
+      {
         "path": "scripts/memphis-contact-privacy-tests.mjs",
         "mode": "100644",
-        "object_id": "e4402f62416c9b640505e0799085ef60d9ed6d34"
+        "object_id": "042bdc9b20cfa8feec97664853f51ba32902469a"
       },
       {
         "path": "scripts/memphis-current-authority-route-tests.mjs",
@@ -3850,7 +3885,12 @@
       {
         "path": "scripts/memphis-direct-contact-privacy-tests.mjs",
         "mode": "100644",
-        "object_id": "2e248c2f82439b15fb62505763e425c966773d36"
+        "object_id": "345c541de9a298d89f478ed37ab3c62e927eccc8"
+      },
+      {
+        "path": "scripts/memphis-employee-operations-tests.mjs",
+        "mode": "100644",
+        "object_id": "948f17cd83f86ac3d5044b9d6d3ad8bbb7fee92d"
       },
       {
         "path": "scripts/memphis-event-read-tests.mjs",
@@ -3875,12 +3915,22 @@
       {
         "path": "scripts/memphis-operational-grounding-regression-tests.mjs",
         "mode": "100644",
-        "object_id": "d6d69c2f00684cc7a3699c8fb2433be8737a13b8"
+        "object_id": "54838211505cae55602618f42877baa39af71a93"
       },
       {
         "path": "scripts/memphis-provenance-boundary-tests.mjs",
         "mode": "100644",
         "object_id": "7ae88637378ff23eceea6622777290f154a6b0ee"
+      },
+      {
+        "path": "scripts/messaging-broadcast-idempotency-tests.mjs",
+        "mode": "100644",
+        "object_id": "396fe3fd11f4d85c5f56fd6734f946f1077dc240"
+      },
+      {
+        "path": "scripts/messaging-cohort-routing-tests.mjs",
+        "mode": "100644",
+        "object_id": "8bdfed3fea287ca74fbb94014b8caddbccfb0e83"
       },
       {
         "path": "scripts/messaging-delete-receipt-contract-tests.mjs",
@@ -3905,7 +3955,7 @@
       {
         "path": "scripts/messaging-manager-authority-tests.mjs",
         "mode": "100644",
-        "object_id": "ac5e82249a87b0996e052ddbfcda1b851ffc5abf"
+        "object_id": "8cb9c38fe94b2efa8c0d2176ac2815cf8a58a18d"
       },
       {
         "path": "scripts/messaging-synthetic-roundtrip-tests.mjs",
@@ -3945,7 +3995,7 @@
       {
         "path": "scripts/named-manager-messenger-identity-tests.mjs",
         "mode": "100644",
-        "object_id": "76130dfc04a6a1d318fabab745cdf036eb43c4a3"
+        "object_id": "fcd6c10c32185c0413c286c40269e0a46d6b41a9"
       },
       {
         "path": "scripts/named-manager-messenger-retirement-correction-database-tests.mjs",
@@ -3981,6 +4031,11 @@
         "path": "scripts/native-alert-two-stage-tests.mjs",
         "mode": "100644",
         "object_id": "9728067ffeb0b487ca29f335167b3502d061f9ca"
+      },
+      {
+        "path": "scripts/native-alert-unicode-preview-tests.mjs",
+        "mode": "100644",
+        "object_id": "f01232ace5f244698bd043c34a0e8a1989ae357d"
       },
       {
         "path": "scripts/native-canary-transport-route-tests.mjs",
@@ -4630,7 +4685,7 @@
       {
         "path": "scripts/outlook-event-sync-adapter-tests.mjs",
         "mode": "100644",
-        "object_id": "89f34bc5085d90e383d4f44ca1722e16acb40134"
+        "object_id": "e92e44d6845970c3357644504df00cfdbcf6d493"
       },
       {
         "path": "scripts/outlook-event-sync-database-tests.mjs",
@@ -4641,6 +4696,11 @@
         "path": "scripts/outlook-intake-lane-collector-tests.mjs",
         "mode": "100644",
         "object_id": "5faf4245269c0fca51a00c1f4f9559bcfa7c0c72"
+      },
+      {
+        "path": "scripts/outlook-offsite-mapping-tests.mjs",
+        "mode": "100644",
+        "object_id": "be824c0ee5fc48450273567a694acef6ee687486"
       },
       {
         "path": "scripts/owner-actions-database-tests.mjs",
@@ -4895,7 +4955,7 @@
       {
         "path": "scripts/production-restore.mjs",
         "mode": "100644",
-        "object_id": "ed2e2da960c81538f931d92820d38cabbe9de7d2"
+        "object_id": "27f3783e2743ae430da1b094200a6a3da34530a1"
       },
       {
         "path": "scripts/production-runtime-contract-tests.mjs",
@@ -5411,6 +5471,11 @@
         "path": "scripts/schema-transition-contract-tests.mjs",
         "mode": "100644",
         "object_id": "c73c96cf7672051a03b511d1b9aae7ab8866a3fc"
+      },
+      {
+        "path": "scripts/security-http-boundary-tests.mjs",
+        "mode": "100644",
+        "object_id": "6c7ccc8729f1366d29f998eeb805fcc431ce8712"
       },
       {
         "path": "scripts/separation-auth-admission-source-tests.mjs",
@@ -6735,7 +6800,7 @@
       {
         "path": "src/ai/memphis-ai-contacts.js",
         "mode": "100644",
-        "object_id": "8ea81431c55bc0a9b5158b0b58e6c5d3cbd1c39d"
+        "object_id": "287dc74a9cf5ba86ffd8e95ba73b4b383bd8fa5b"
       },
       {
         "path": "src/ai/memphis-ai-daily.js",
@@ -6925,12 +6990,22 @@
       {
         "path": "src/attendance-state.js",
         "mode": "100644",
-        "object_id": "492d889c36b34daebddd7bb472ba1d3c8c6e5243"
+        "object_id": "2fe38d5ba1b1899dbeeee853077aed3e23ed9146"
+      },
+      {
+        "path": "src/auth/custodial-leadership-messaging.mjs",
+        "mode": "100644",
+        "object_id": "6468d268272b2e4a21e2a12385c0fdbc43ed116e"
+      },
+      {
+        "path": "src/auth/custodial-leadership-record-operation.mjs",
+        "mode": "100644",
+        "object_id": "cddf123fbb91ec82154528268613e632631ad3c4"
       },
       {
         "path": "src/auth/custodial-leadership-runtime.js",
         "mode": "100644",
-        "object_id": "42f0ef9e68f5298e3e64a96da21728e4fcdb782a"
+        "object_id": "1ce593c8c092ef32b5cf11f881a5b2c54cd1ff71"
       },
       {
         "path": "src/auth/custodial-leadership-ticket-operation.mjs",
@@ -6975,7 +7050,7 @@
       {
         "path": "src/auth/shared-access-auth.js",
         "mode": "100644",
-        "object_id": "2637b44ab1ba78b313398ee24cd7915eec594238"
+        "object_id": "d2d385cb30988c9dd8cc98d269588b28c6b58ef6"
       },
       {
         "path": "src/completion-selection-read-boundary.js",
@@ -7025,7 +7100,12 @@
       {
         "path": "src/custodial-leadership-pin.js",
         "mode": "100644",
-        "object_id": "aba74c9b30ef71b00d537b34c78c52b29e15206e"
+        "object_id": "bbfbdb28e40da71ad8958c62e1b59a81802ec701"
+      },
+      {
+        "path": "src/custodial-record-operations.mjs",
+        "mode": "100644",
+        "object_id": "2fea90b4d9a77247e577be3730cd51c3ff312d52"
       },
       {
         "path": "src/dashboard-release-compatibility.js",
@@ -7050,7 +7130,7 @@
       {
         "path": "src/employee-notifications.js",
         "mode": "100644",
-        "object_id": "1f795e43ab218a033c49c8f4870de843f30bef34"
+        "object_id": "02f13d4e369c946f5470550468b8b3be4d3a0f77"
       },
       {
         "path": "src/employee-zoo-wide-coverage.js",
@@ -7165,7 +7245,7 @@
       {
         "path": "src/index.js",
         "mode": "100644",
-        "object_id": "8b9e21ad950357e8ebcb8b86d376dd8331122c9d"
+        "object_id": "171492da927a8547c58161985a4d73a41a1c6e80"
       },
       {
         "path": "src/integrated-backend-authority-release-evidence.js",
@@ -7205,7 +7285,7 @@
       {
         "path": "src/manager-notifications.js",
         "mode": "100644",
-        "object_id": "933e2c1ea4ece2b9d1c2d417f046cc06a5536de4"
+        "object_id": "859e363a1b5f7528e5280980c0e88aa110d887c7"
       },
       {
         "path": "src/manager-original-inventory-separation.js",
@@ -7275,12 +7355,12 @@
       {
         "path": "src/memphis-ai.js",
         "mode": "100644",
-        "object_id": "935ea203d285e324cadd48637b8e0f98fc9a6045"
+        "object_id": "f80d08f1883f17332c5d6c4869a6ee11c5bc547b"
       },
       {
         "path": "src/messaging-api.js",
         "mode": "100644",
-        "object_id": "d95f7cc4faa8e31eff4429d4b8140466d423aaed"
+        "object_id": "89c543ee7192f1e2eac6d4bef240c7891e96d720"
       },
       {
         "path": "src/messaging-original-outcome.js",
@@ -7293,9 +7373,14 @@
         "object_id": "5c292d88b9ba7af3c26bced3570595db1488a90a"
       },
       {
+        "path": "src/native-alert-text.js",
+        "mode": "100644",
+        "object_id": "4a9d5efb82d621c783d8fc692009b50d19c7ccb4"
+      },
+      {
         "path": "src/native-alert-two-stage.js",
         "mode": "100644",
-        "object_id": "9d79373c3f5be4ee4ec7935a1839eab0865ce256"
+        "object_id": "44dbf751e0ae180488466d674c58e0e57012c4c6"
       },
       {
         "path": "src/native-event-dispatch.js",
@@ -7600,7 +7685,7 @@
       {
         "path": "src/outlook-event-sync.js",
         "mode": "100644",
-        "object_id": "d38b1d320271947a139f09943d801c56815a3eb8"
+        "object_id": "2d627562122257030e50ccca60d4acbc0ad8d6c6"
       },
       {
         "path": "src/owner-access-api.js",
@@ -7781,6 +7866,11 @@
         "path": "src/schema-transition.js",
         "mode": "100644",
         "object_id": "7e4b35875a63a8015fe55df16536457b91aeacd9"
+      },
+      {
+        "path": "src/security-http-boundaries.js",
+        "mode": "100644",
+        "object_id": "d2202d2d87a2a490dfa6dbd5e043452f098ba525"
       },
       {
         "path": "src/services/index.js",
@@ -10293,7 +10383,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 2033,
+    "authority_path_count": 2051,
     "migration_path_count": 303,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
