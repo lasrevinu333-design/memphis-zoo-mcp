@@ -853,7 +853,17 @@ const snapshotControlPlane = controlPlaneFor(snapshotAuthority);
 const snapshot = await snapshotControlPlane.getManagerSnapshot({ manager, weekStart: "2026-10-05" });
 assert.equal(snapshot.authority_revision, 7);
 assert.deepEqual(snapshotAuthority.queries.map((entry) => entry.statement), ["begin", "set local role static_weekly_control_plane", "set local statement_timeout = '60000ms'", "select public.custodial_begin_application_mutation()", "select public.static_weekly_v3_read_manager_snapshot($1) as result", "commit"]);
-await assert.rejects(() => snapshotControlPlane.getManagerSnapshot({ manager, weekStart: "2026-10-06" }), /Monday-aligned/i, "projection workflows reject non-Monday week identity before a transaction starts");
+const datedSnapshot = await snapshotControlPlane.getManagerSnapshot({ manager, weekStart: "2026-10-06" });
+assert.equal(datedSnapshot.week_start, "2026-10-06", "read-only manager snapshots accept the requested service date for fixed manual publication frames");
+assert.equal(snapshotAuthority.revision(), 7);
+assert.equal(snapshotAuthority.mutationAttempts(), 0, "a dated snapshot never changes the approved schedule");
+const nonMondayProjectionAuthority = createAuthorityDatabase({ revision: 7 });
+await assert.rejects(() => controlPlaneFor(nonMondayProjectionAuthority).materializeProjection({
+  manager, publicationId, serviceDate: "2026-10-06", expectedRevision: 7, idempotencyKey: "reject-non-monday-generic-projection",
+}), /Monday-aligned/i, "generic projection mutations still reject non-Monday week identity after reading their authoritative source type");
+assert.equal(nonMondayProjectionAuthority.commits(), 0);
+assert.equal(nonMondayProjectionAuthority.mutationAttempts(), 0);
+assert.equal(nonMondayProjectionAuthority.queries.some(entry => entry.statement.includes("static_weekly_v3_materialize_projection")), false);
 
 const previewAuthority = createAuthorityDatabase({ revision: 7 });
 let previewBasis = null;

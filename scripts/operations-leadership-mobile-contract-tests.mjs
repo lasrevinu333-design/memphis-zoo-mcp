@@ -52,7 +52,7 @@ assert.match(authSource, /shared_48_hour_enrollment:\s*false/);
 assert.match(indexSource, /ops-manager-auth\.v6\.http-only-boundary/);
 assert.doesNotMatch(indexSource, /ops-manager-auth\.v4\.shared-48h/);
 assertExactFrontendPair(releaseManifest, releasePairInput);
-assert.equal(releaseManifest.api_contract_versions.ops_manager_auth, "ops-manager-auth.v5.named-leadership");
+assert.equal(releaseManifest.api_contract_versions.ops_manager_auth, "ops-manager-auth.v6.http-only-boundary");
 assert.equal(releaseManifest.api_contract_versions.operational_analytics, "operational-analytics.v1");
 
 const echo = express();
