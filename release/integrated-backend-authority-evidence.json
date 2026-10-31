@@ -858,6 +858,31 @@
         "object_id": "580994723eae2097c6fab9d39b6e19e13c0d1bc1"
       },
       {
+        "path": "release/current-eight-launch-20261031/ci-runner-correction/ACTIVATION_PARENT_WAIT.json",
+        "mode": "100644",
+        "object_id": "f29eaf31643baf79d703b68a6630985a93af6fd9"
+      },
+      {
+        "path": "release/current-eight-launch-20261031/ci-runner-correction/ACTIVATION_RESULT.json",
+        "mode": "100644",
+        "object_id": "5c78a77e07f77fc676ad4434e18c5534539a3898"
+      },
+      {
+        "path": "release/current-eight-launch-20261031/ci-runner-correction/ORIGINAL04_READONLY_RECONCILIATION.json",
+        "mode": "100644",
+        "object_id": "5731d08a7d2bde2f41beef7d8e2b94223670b458"
+      },
+      {
+        "path": "release/current-eight-launch-20261031/ci-runner-correction/ORIGINAL_CI_FAILURE.json",
+        "mode": "100644",
+        "object_id": "2fd56aa9d5ad8db48b980b916e28cef0819b4394"
+      },
+      {
+        "path": "release/current-eight-launch-20261031/ci-runner-correction/ROLLBACK_ONLY_NATIVE_MEMORY_RESULT.json",
+        "mode": "100644",
+        "object_id": "06e53f64694553ae5f684c695c023c6d38ab12f8"
+      },
+      {
         "path": "release/current291-staged-source-binding.json",
         "mode": "100644",
         "object_id": "117f5dea558fd391f4871c28106b61d101829a24"
@@ -1885,7 +1910,7 @@
       {
         "path": "scripts/approved-manual-activation-database-tests.mjs",
         "mode": "100644",
-        "object_id": "3c88cc474e229124c7088599b9c6e2ac6603c3b5"
+        "object_id": "b2138e5556d1d79ddadae6de4f0ccabf5aa3bce4"
       },
       {
         "path": "scripts/approved-manual-actual-window-tests.mjs",
@@ -4500,7 +4525,7 @@
       {
         "path": "scripts/prepare-approved-manual-release-packet.mjs",
         "mode": "100644",
-        "object_id": "ef52a288b30c661e2e478c387a9ec0396c807a48"
+        "object_id": "12fa19a2d2f8cfbe03e7735ed6eedbd3b1d43098"
       },
       {
         "path": "scripts/prepare-approved-manual-week.mjs",
@@ -7575,7 +7600,7 @@
       {
         "path": "src/static-weekly-control-plane.js",
         "mode": "100644",
-        "object_id": "d4c013232d8b31c1478f20846b4116b5d8ebbab7"
+        "object_id": "da2e0984f4f1a090a7b9d587df2e1c65f169c259"
       },
       {
         "path": "src/static-weekly-coverall-access.js",
@@ -10048,7 +10073,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 1984,
+    "authority_path_count": 1989,
     "migration_path_count": 302,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
