@@ -200,7 +200,7 @@
       {
         "path": ".github/workflows/production-backup-migration-rehearsal.yml",
         "mode": "100644",
-        "object_id": "a8c72d6a7e4e8e710230e7db57b37abdb2bb0e7b"
+        "object_id": "79085556f00c67d6de652a21172a18492b5c831b"
       },
       {
         "path": ".github/workflows/production-database-credential-bridge.yml",
@@ -2280,7 +2280,7 @@
       {
         "path": "scripts/ci-workflow-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "6af44b2db4b28e5d21444ec157b7a12d7c48e37f"
+        "object_id": "5e5d8ab2818a762fd7458091dcb79c8f6f7b0554"
       },
       {
         "path": "scripts/cleaning-identity-gps-database-tests.mjs",
@@ -2336,6 +2336,11 @@
         "path": "scripts/create-abandoned-mutation-lease-reconciliation.mjs",
         "mode": "100644",
         "object_id": "45957240a25f16bd36edca22585ff0f136860263"
+      },
+      {
+        "path": "scripts/create-isolated-rehearsal-manager-session.mjs",
+        "mode": "100644",
+        "object_id": "ed2e2b5f7f13646d955b9b2f06373b51b6051995"
       },
       {
         "path": "scripts/create-production-restore-intent.mjs",
@@ -5245,7 +5250,7 @@
       {
         "path": "scripts/run-production-backup-migration-rehearsal.sh",
         "mode": "100644",
-        "object_id": "4355b424087b013bdd5d0190bbad919943d03b9c"
+        "object_id": "8ca9067ca77abbd5fb915947793d65f1b73d939b"
       },
       {
         "path": "scripts/run-release-migration-full-candidate.mjs",
@@ -6505,7 +6510,7 @@
       {
         "path": "scripts/verify-isolated-rehearsal-backend-dependencies.sh",
         "mode": "100644",
-        "object_id": "4c7738afca305778ec38c20e8a31091775573398"
+        "object_id": "b23f52676db919005e7ee5258755cb53d284b127"
       },
       {
         "path": "scripts/verify-isolated-source-lease-state.mjs",
@@ -10283,7 +10288,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 2031,
+    "authority_path_count": 2032,
     "migration_path_count": 303,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
