@@ -1,5 +1,5 @@
 {
-  "schema": "custodial.production-target-schema-profile.source302-eight-active.v1",
+  "schema": "custodial.production-target-schema-profile.source302-eight-active.v2",
   "canonical_fingerprint": "04e4c3d7abaa71cdf36a164a483ee1fa5efef77ab1711b07a201f515b85248d6",
   "deployment_fingerprint": "d4d29c219935b97896305ee8aa0ea35aff67dc64ceeea39e2bf831cd8b98fd0c",
   "source_fingerprint": "0096e7c488aca86f1d38b061561696b2d4ac409036f063ffc9f196625b9ee9c2",
@@ -76,6 +76,11 @@
       "path": "release/schema-evidence/EIGHT_ACTIVE302_EXACT_CAPTURE_SOURCE_F85E.mjs",
       "sha256": "f85e4492a1e2ebe3747e4c14c3eff2463692162cb7f7ceaa5ea895135ca34879",
       "bytes": 20370
+    },
+    {
+      "path": "release/schema-evidence/EIGHT_ACTIVE302_RETAINED_SOURCE235_CATALOG_IDENTITY.json",
+      "sha256": "7c5c693a58184bc1adf694efe14576b7ad50d3cb9cf10735527221b74c13b244",
+      "bytes": 1062
     }
   ],
   "catalog_delta": {
@@ -10956,5 +10961,6 @@
     "types": 0,
     "views": 33
   },
-  "qualification": "GENUINE_FRESH302_AND_SIGNED235_POPULATED_ROLLBACK_CAPTURE_NOT_RELEASE_OR_RUNTIME_ADMISSION"
+  "qualification": "GENUINE_FRESH302_AND_SIGNED235_POPULATED_ROLLBACK_CAPTURE_NOT_RELEASE_OR_RUNTIME_ADMISSION",
+  "source_catalog_sha256": "f034e7a0a019010093b15388ab1c2ee7865420bf343a4404d23a9a21c183b277"
 }

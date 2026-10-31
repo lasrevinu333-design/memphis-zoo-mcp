@@ -1,0 +1,18 @@
+{
+  "schema": "custodial.retained-source235-catalog-identity.v1",
+  "scope": "LOCAL_EXACT_RETAINED_BYTES_AND_FULL_CATALOG_FINGERPRINT_NOT_NEW_PRODUCTION_OBSERVATION",
+  "source_catalog": {
+    "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/actual-reviewed-rollback40615635335/AUTHENTICATED235_SOURCE_CATALOG_BYTE_REUSED_NOT_NEW_CAPTURE.json",
+    "sha256": "f034e7a0a019010093b15388ab1c2ee7865420bf343a4404d23a9a21c183b277",
+    "bytes": 3580157
+  },
+  "source_fingerprint": "0096e7c488aca86f1d38b061561696b2d4ac409036f063ffc9f196625b9ee9c2",
+  "source_ledger_sha256": "2f80104d2f1fe54a6604c2c84436f823b1a78542bc4ba3d7975236951db93b66",
+  "original_capture_timestamp_preserved": "2026-10-26T13:16:33.935Z",
+  "archive_digest": "67c0d74bbf18c346314669119f0ae53ff61d9b00c4e6550b7af917b7f02bbdfe",
+  "actual_raw_bytes_sha256_verified": true,
+  "complete_catalog_fingerprint_recomputed": true,
+  "credentials_exported": false,
+  "production_written": false,
+  "release_or_runtime_admission": false
+}
