@@ -160,7 +160,7 @@
       {
         "path": ".github/workflows/foundation-security-gate.yml",
         "mode": "100644",
-        "object_id": "b36f5652c4c036ab160284ed20c138b380ca5d7b"
+        "object_id": "e7e0b63c862e1b8a4ed455ae7a7b996d7f4f4a44"
       },
       {
         "path": ".github/workflows/integrated-release-attestation.yml",
@@ -1760,7 +1760,7 @@
       {
         "path": "scripts/approved-manual-activation-database-tests.mjs",
         "mode": "100644",
-        "object_id": "c02a971e1e1348a37584f5f878f3f87afd777149"
+        "object_id": "50157fd04ec47a39d4d097ed6cb97732abd13176"
       },
       {
         "path": "scripts/approved-manual-actual-window-tests.mjs",
@@ -1885,7 +1885,7 @@
       {
         "path": "scripts/approved-manual-week-database-tests.mjs",
         "mode": "100644",
-        "object_id": "e518451e8a1d874f1871de06ed02fa46a46d4c35"
+        "object_id": "fe31f6f9761a527845fa388b8845ebf9b8df4b5f"
       },
       {
         "path": "scripts/approved-manual-week-tests.mjs",
@@ -2020,7 +2020,7 @@
       {
         "path": "scripts/ci-fresh-only-source-successor-tests.mjs",
         "mode": "100644",
-        "object_id": "219d28f56872bbf3f491ca3ddcb203d2bee9ee55"
+        "object_id": "d452094ef06933d3a747b739d14dadeeeb46da51"
       },
       {
         "path": "scripts/ci-fresh-only-source-successor.mjs",
@@ -2030,7 +2030,7 @@
       {
         "path": "scripts/ci-workflow-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "4fe83da50b495bf0530f668bff5bd139590d086f"
+        "object_id": "3d1227150ae217d06f239f0a630477b592340030"
       },
       {
         "path": "scripts/cleaning-identity-gps-database-tests.mjs",
@@ -2723,6 +2723,11 @@
         "object_id": "24539d29ffa2b05d98d7b6403e3e6dc14a4e6246"
       },
       {
+        "path": "scripts/fixtures/current-scheduler-implementation-source-successors.json",
+        "mode": "100644",
+        "object_id": "f333280c54835efd4fb88b8e6966a7e7bc194ce7"
+      },
+      {
         "path": "scripts/fixtures/current-scheduler-source-profile-deltas.json",
         "mode": "100644",
         "object_id": "b79240c145f2025b1acb2277ee4b71a75d3944b2"
@@ -2730,12 +2735,12 @@
       {
         "path": "scripts/fixtures/current-scheduler-source-profiles-tests.mjs",
         "mode": "100644",
-        "object_id": "a9640c0fa82227a846ef468adae3db762d5abe6b"
+        "object_id": "7c452c74d6910e0cb3d52b8c5dc3d132ca85964e"
       },
       {
         "path": "scripts/fixtures/current-scheduler-source-profiles.mjs",
         "mode": "100644",
-        "object_id": "b9747957b6a65c71f214780ad544ccc76fe31159"
+        "object_id": "187ea4ffe2c8f087d78a81ed6351f06ad63b9c3f"
       },
       {
         "path": "scripts/fixtures/dashboard-independent-check-reader-fixture.py",
@@ -3031,6 +3036,11 @@
         "path": "scripts/fixtures/registered-vacancy153-acl-predicates.sql",
         "mode": "100644",
         "object_id": "344b58711c39b5c52fd404ce9b66981a4df83ed4"
+      },
+      {
+        "path": "scripts/fixtures/release-migration-original23-literal.txt",
+        "mode": "100644",
+        "object_id": "589a907cfedf3ce6f4624e2111c18a73b245a161"
       },
       {
         "path": "scripts/fixtures/six-person-absence-source.json",
@@ -4745,7 +4755,7 @@
       {
         "path": "scripts/release-migration-plan-inventory-successor-tests.mjs",
         "mode": "100644",
-        "object_id": "f7d0030ee3ba22be266929bfe8d0cf1274e823a4"
+        "object_id": "e6930805cbd2fa19970aed48786e9aa14df07cad"
       },
       {
         "path": "scripts/release-migration-preservation-archive-tests.mjs",
@@ -4800,7 +4810,7 @@
       {
         "path": "scripts/release-migration-target-source-successor-tests.mjs",
         "mode": "100644",
-        "object_id": "fb229a18a21de4dc9e2b8ef1d418651e686cd25e"
+        "object_id": "e936b58d6e661bea131eeb284249e6be8be60c8a"
       },
       {
         "path": "scripts/release-migration-workflow-preflight.mjs",
@@ -9908,7 +9918,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 1956,
+    "authority_path_count": 1958,
     "migration_path_count": 302,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
