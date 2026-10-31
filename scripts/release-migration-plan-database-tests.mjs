@@ -95,7 +95,7 @@ if (selectedArguments[0] === currentCapturedSelector) {
   const current299 = plan.files.length === 299;
   const current298 = plan.files.length === 298;
   const current297 = plan.files.length === 297;
-  const successorClosure=[301,302].includes(plan.files.length)?assertTargetCapturePreservationPlan(sourceRoot,state.pending_migrations):null;
+  const successorClosure=[301,302,303].includes(plan.files.length)?assertTargetCapturePreservationPlan(sourceRoot,state.pending_migrations):null;
   const pendingCount = successorClosure ? successorClosure.pending.length : current300 ? 166 : current299 ? 165 : current298 ? 164 : current297 ? 163 : 160;
   const targetCount = 235+pendingCount;
   assert.equal(plan.baseCount, 134);

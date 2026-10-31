@@ -45,7 +45,7 @@ env -i PATH=/usr/bin:/bin LANG=C LC_ALL=C TZ=UTC "$node_source" --max-old-space-
   }
   assertCapturedTargetCatalog(state.target);
   assertReleaseWorkflowSource(process.cwd());
-  if ([301,302].includes(plan.files.length)) {
+  if ([301,302,303].includes(plan.files.length)) {
     const {assertTargetCapturePreservationPlan}=await import("./scripts/release-migration-target-capture.mjs");
     const closure=assertTargetCapturePreservationPlan(process.cwd(),state.pending_migrations);
     assert.equal(state.target.source_authority_migration_count,closure.canonical_source_count);

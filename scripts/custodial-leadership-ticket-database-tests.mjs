@@ -1,4 +1,4 @@
-// Owned fresh302 + unintegrated successor qualification only; no production URLs.
+// Owned fresh303 canonical ticket component qualification only; no production URLs.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {resolve,dirname,isAbsolute} from 'node:path';
@@ -27,19 +27,19 @@ export async function runTicketDatabaseTests({out,extraSql=null,constructFixture
   extraBytes=cleanSql(extraSql);assert.match(extraBytes,/\bBEGIN\s*;/i);assert.match(extraBytes,/\bROLLBACK\s*;/i);selectedFiles.push(extraSql);}
  const sourceBefore=snapshot(selectedFiles);save('SOURCE_BEFORE.json',sourceBefore);for(let i=0;i<3;i++)save('INPUT_'+i+'.sql',cleanSql(files[i]));
  if(extraBytes!==null)save('INPUT_EXTRA.sql',extraBytes);
- const result={status:'RUNNING',scope:'OWNED_FRESH302_PLUS_STAGING_COHORT_TICKET_SUCCESSOR',productionWritten:false,canonicalReleaseAccepted:false,physicalBrowser:false,httpTransport:'in-memory exported handlers; no socket',checks:[],notices:[]};
+ const result={status:'RUNNING',scope:'OWNED_FRESH303_CANONICAL_COHORT_TICKET_COMPONENT',productionWritten:false,canonicalReleaseAccepted:false,physicalBrowser:false,httpTransport:'in-memory exported handlers; no socket',checks:[],notices:[]};
  let fixture,pool,unknown=false,success=false,sequence=0;
  const lost=e=>{unknown=true;result.connectionErrors??=[];result.connectionErrors.push({code:e?.code,message:e?.message});};
  const check=(label,ok=true)=>{assert.equal(ok,true,label);result.checks.push(label);console.log('PASS '+label);};
  try{
   fixture=await constructFixture({name:'mz_schema_rebuild_ticket_'+randomUUID().replaceAll('-',''),hostSocket:true});
-  await fixture.assertOwned();assert.equal(fixture.receipt.selected_replay.migrations,302);save('OWNED_SOURCE302_RECEIPT.json',fixture.receipt);
+  await fixture.assertOwned();assert.equal(fixture.receipt.selected_replay.migrations,303);save('OWNED_SOURCE303_RECEIPT.json',fixture.receipt);
   pool=new pg.Pool({host:fixture.socketDirectory,database:'postgres',user:'supabase_admin',password:'postgres',max:3,connectionTimeoutMillis:5000});
   pool.on('connect',c=>{c.on('error',lost);c.on('notice',n=>result.notices.push(n.message));});pool.on('error',lost);
   const query=async(sql,args=[])=>{assert.equal(unknown,false,'Unknown connection forbids new SQL');await fixture.assertOwned();const n=String(++sequence).padStart(3,'0');save('QUERY_'+n+'_BEFORE.json',{sql,args});try{const r=await pool.query(sql,args);save('QUERY_'+n+'_RETURNED.json',Array.isArray(r)?r.map(x=>({command:x.command,rowCount:x.rowCount,rows:x.rows})):{command:r.command,rowCount:r.rowCount,rows:r.rows});return r;}catch(e){save('QUERY_'+n+'_ERROR.json',{code:e.code,message:e.message,where:e.where});if(/^(08|ECONN|57P)/.test(e.code||''))unknown=true;throw e;}};
   const legacyDefs=async()=>{const r=await query("select n.nspname,p.proname,pg_get_function_identity_arguments(p.oid) arguments,pg_get_functiondef(p.oid) definition,p.proacl::text acl from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname=any($1::text[]) order by p.proname",[['custodial_action_actor_v1','custodial_ticket_capabilities_v1','custodial_close_scan_ticket_outcome_v1','custodial_set_maintenance_ticket_outcome','static_weekly_leadership_bind_verified_request']]);return r.rows;};
   const before=await legacyDefs();save('LEGACY_BEFORE.json',before);
-  await query(cleanSql(files[2]));check('synthetic committed scan/cohort fixture created in owned disposable source302 only');
+  await query(cleanSql(files[2]));check('synthetic committed scan/cohort fixture created in owned disposable source303 only');
   async function expectSql(label,code,sql,args=[]){const c=await pool.connect();try{await c.query('begin');let e;try{await c.query(sql,args);}catch(x){e=x;}assert.ok(e,label);assert.equal(e.code,code,label);await c.query('rollback');check(label);save('EXPECTED_FAILURE_'+label.replaceAll(/[^a-z0-9]+/gi,'_')+'.json',{code:e.code,message:e.message});}finally{c.release();}}
   await expectSql('baseline service-role capability lacks leadership transaction context','42501',`set local role service_role;select public.custodial_ticket_capabilities_v1('${manager}','${credential}','${browser}','full_access',ARRAY['${ticket}']::uuid[])`);
   await expectSql('baseline bound wrapper still rejects system cohort at named writer','42501',`set local role static_weekly_control_plane;select public.static_weekly_leadership_bind_verified_request('${credential}','${browser}','${manager}','${randomUUID()}');set local role service_role;select public.custodial_close_scan_ticket_outcome_v1('${manager}','${credential}','${browser}','full_access','${ticket}','mark_fixed',NULL,NULL,'synthetic-ticket-test-secret-not-production')`);
