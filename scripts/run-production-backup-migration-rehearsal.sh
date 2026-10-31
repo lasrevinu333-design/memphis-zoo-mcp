@@ -312,6 +312,13 @@ FEEDBACK_PROBE_DATABASE_URL="$local_db_url" \
   npm run --silent test:feedback-reader-database | tee -a "$receipt"
 printf '{"stage":"feedback_reader_database_authority_proven","writer":"app_apply_operational_command.feedback_create","reader_login":"custodial_readonly_runtime_20991231","reader_projection_columns":21,"sole_reader_policy":true,"reader_mutation_denied":true,"legacy_image_backup_hidden":true,"recovery_inventory_exact":true}\n' >> "$receipt"
 
+# Restore invalidation stays intact. Seed one isolated named manager and real
+# trusted-device row solely for the authenticated dependency GET below.
+OPS_MANAGER_SESSION_SECRET="$REHEARSAL_OPS_MANAGER_SESSION_SECRET" \
+  node scripts/create-isolated-rehearsal-manager-session.mjs "$private_dir"
+docker exec -i "$container" psql -v ON_ERROR_STOP=1 -U supabase_admin -d "$database" \
+  < "$private_dir/dependency-manager-seed.sql"
+
 env -u REHEARSAL_OPS_MANAGER_SESSION_SECRET \
   NODE_ENV=production PORT="$backend_port" SUPABASE_URL="http://127.0.0.1:${proxy_port}" \
   SUPABASE_SERVICE_ROLE_KEY="$service_role_jwt" OPS_MANAGER_SESSION_SECRET="$REHEARSAL_OPS_MANAGER_SESSION_SECRET" \
@@ -333,7 +340,8 @@ static_pid=$!
 bash scripts/wait-rehearsal-json-endpoint.sh "http://127.0.0.1:${backend_port}/healthz" \
   '.ok == true and .process_alive == true and .probe_scope == "process_liveness"'
 bash scripts/verify-isolated-rehearsal-backend-dependencies.sh \
-  "http://127.0.0.1:${backend_port}/health/dependencies" "$backend_dependencies_file" "$(tr -d '\r\n' < supabase/canonical/schema-fingerprint.txt)"
+  "http://127.0.0.1:${backend_port}/health/dependencies" "$backend_dependencies_file" "$(tr -d '\r\n' < supabase/canonical/schema-fingerprint.txt)" \
+  "$private_dir/dependency-manager-authorization.header"
 bash scripts/wait-rehearsal-json-endpoint.sh "http://127.0.0.1:${static_port}/healthz" \
   '.ok == true and .data.process_ready == true'
 bash scripts/wait-rehearsal-json-endpoint.sh "http://127.0.0.1:${static_port}/ready" \
