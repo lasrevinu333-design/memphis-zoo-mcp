@@ -22,6 +22,13 @@ export function restoreSchedulerProofSource(profile,source){
   for(const change of implementation.hunks){assert.ok(change.current.length>0&&Buffer.byteLength(change.current)<=256*1024&&Buffer.byteLength(change.prior)<=256*1024);assert.equal(source.split(change.current).length,2);source=source.replace(change.current,change.prior);}
   assert.equal(sha(source),implementation.prior_sha256,'Whole preserved implementation source must be reproduced');
  }
+ // TEST-ONLY exact303 ticket append: restore all302 replay bytes before
+ // the unchanged historical wiring chain. This grants no runtime authority.
+ if(profile==='NATIVE_CURRENT_REPLAY_MANIFEST_RETAINED_WIRING'&&sha(source)==='3e5a9219707a0724b375d94225940b6271d30dcda1b34a4289a9bf77d290f0dd'){
+  const current=JSON.parse(source);assert.deepEqual(current.phases.map(p=>p.files.length),[134,93,76]);
+  assert.deepEqual(current.phases[2].files.pop(),{name:'20261031180631_cohort_ticket_transaction_context.sql',sha256:'063669e808c354d4f4498b13c7597b7603636badc9d2e5f9b5d819cdfeee179b'});
+  source=JSON.stringify(current,null,2)+'\n';assert.equal(sha(source),'af4d8f471f1e5e6276f3232e396d3511a1ae1767edde093f12fe145f461930a9');
+ }
  // Source302 contributes only its one exact already-constructed append.
  // Reproduce the complete preserved301 replay before the unchanged chain.
  if(profile==='NATIVE_CURRENT_REPLAY_MANIFEST_RETAINED_WIRING'&&sha(source)==='c642e562bf012416548f26f215a3c74aae434ca6573fc0f8be83e5c0bcc59b2e'){
