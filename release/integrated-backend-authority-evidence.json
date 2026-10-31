@@ -6510,7 +6510,12 @@
       {
         "path": "scripts/verify-isolated-rehearsal-backend-dependencies.sh",
         "mode": "100644",
-        "object_id": "b23f52676db919005e7ee5258755cb53d284b127"
+        "object_id": "4e53b2bc6196936ffee0987c6c0ae9e7d5d05bd9"
+      },
+      {
+        "path": "scripts/verify-isolated-rehearsal-health-boundary.mjs",
+        "mode": "100644",
+        "object_id": "2a7b99444e2ecb045de43d75a1c64f67a233430a"
       },
       {
         "path": "scripts/verify-isolated-source-lease-state.mjs",
@@ -10288,7 +10293,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 2032,
+    "authority_path_count": 2033,
     "migration_path_count": 303,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
