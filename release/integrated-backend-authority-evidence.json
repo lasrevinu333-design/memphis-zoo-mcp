@@ -1580,7 +1580,7 @@
       {
         "path": "release/production-migration-state.json",
         "mode": "100644",
-        "object_id": "6234e0f09961314317d9aaf1cc3314659354a7d7"
+        "object_id": "1f337149d0027bcbd6a4e13b4675b04bcb47024f"
       },
       {
         "path": "release/production-schema-observation-20260922.json",
@@ -1590,7 +1590,7 @@
       {
         "path": "release/production-target-schema-profile.json",
         "mode": "100644",
-        "object_id": "dfae0ed7ca8d36230e42ae23aa82288b1a01b550"
+        "object_id": "3832cd02e2b170c0ac357454409fb0a3ab56175d"
       },
       {
         "path": "release/restore-dispositions/20261029-backup-40960771863.json",
@@ -1666,6 +1666,11 @@
         "path": "release/schema-evidence/EIGHT_ACTIVE302_POPULATED_TERMINAL_RUN.json",
         "mode": "100644",
         "object_id": "b3eea4554786af719c0eae2069afae353dcf9a92"
+      },
+      {
+        "path": "release/schema-evidence/EIGHT_ACTIVE302_RETAINED_SOURCE235_CATALOG_IDENTITY.json",
+        "mode": "100644",
+        "object_id": "43c8aa70efe3f2dd58a05ff9b4b0f466378f92e0"
       },
       {
         "path": "release/schema-evidence/SOURCE298_CAPTURED_TARGET_PROFILE.json",
@@ -4735,7 +4740,7 @@
       {
         "path": "scripts/production-target-schema-profile.mjs",
         "mode": "100644",
-        "object_id": "a8b09364f4660dae39720c4f799981e56a7f2fa6"
+        "object_id": "dda2223743bd87b13d8629263b154ab967f02536"
       },
       {
         "path": "scripts/proxy-address-regression-tests.mjs",
@@ -10073,7 +10078,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 1989,
+    "authority_path_count": 1990,
     "migration_path_count": 302,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
