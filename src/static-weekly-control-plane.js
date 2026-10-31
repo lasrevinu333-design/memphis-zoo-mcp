@@ -1758,6 +1758,7 @@ export function createStaticWeeklyControlPlane({
     async getApprovedManualActivationRoster({manager}) {
       const actor=requireManager(manager);
       return transaction(async client=>{
+        await client.query("set local jit = off");
         await lockStaticWeeklyAuthority(client);
         const roster=await call(client,'static_weekly_read_manual_activation_roster',[actor.managerId]),
           choices=await call(client,'static_weekly_list_coverall_activation_choices',[actor.managerId]);
@@ -1771,6 +1772,7 @@ export function createStaticWeeklyControlPlane({
     async previewApprovedManualActivation({manager,packetId,expectedRevision}) {
       const actor=requireManager(manager),id=requireUuid(packetId,'static_manual_activation_packet_required'),revision=requireRevision(expectedRevision);
       return transaction(async client=>{
+        await client.query("set local jit = off");
         await lockStaticWeeklyAuthority(client);
         const basis=await call(client,'static_weekly_read_coverall_activation_basis',[actor.managerId,id,revision]);
         if(!basis){

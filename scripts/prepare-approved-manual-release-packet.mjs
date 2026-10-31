@@ -29,6 +29,7 @@ export const PREPARATION_SQL=Object.freeze({
   left join public.ops_manager_managers m on m.manager_id=p.cohort_principal_id where p.singleton`,
  snapshot:'select public.static_weekly_manual_roster_snapshot(public.sch_service_date(statement_timestamp())) as snapshot',
  lock:"select pg_advisory_xact_lock(hashtextextended('memphis-static-weekly-authority',0))",
+ interpret:'set local jit = off',
  exists:`select exists(select 1 from custodial_coverall.activation_packets where packet_id=$1 or source_id=$2 or template_id=$3) packet_exists,
   exists(select 1 from public.static_weekly_authority_source_documents where source_id=$2) source_exists`,
  prepare:'select public.static_weekly_prepare_coverall_activation($1::jsonb) as receipt',
@@ -140,6 +141,9 @@ export async function runPacketPreparation(argv){
     preparedInDatabase:false,registered:false,published:false,activated:false,sourcePreserved:true};write('RESULT.json',result);return result;
   }
   phase='FRESH_PREPARATION_TRANSACTION';await client.query('begin isolation level serializable');transaction=true;
+  // Interpret the large, fully checked packet without JIT compilation spikes.
+  // This setting ends with the transaction; every SQL/actor/data check remains.
+  await client.query(PREPARATION_SQL.interpret);
   await client.query("set local lock_timeout='5s'");await client.query("set local statement_timeout='120s'");await client.query(PREPARATION_SQL.lock);
   const freshProfile=validatePacketPreparationProfile((await client.query(PREPARATION_SQL.profile)).rows[0],client);assert.equal(freshProfile.backend_pid,profile.backend_pid);
   const rows=(await client.query(PREPARATION_SQL.target+' for share of p')).rows;assert.equal(rows.length,1);assert.deepEqual(validatePreparationTarget(rows[0]),target);

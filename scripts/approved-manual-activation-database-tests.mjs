@@ -7,6 +7,8 @@ import fs from 'node:fs';
 import {resolve,isAbsolute,dirname,relative} from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {randomUUID,createHash} from 'node:crypto';
+import {spawnSync} from 'node:child_process';
+import {PREPARATION_SQL} from './prepare-approved-manual-release-packet.mjs';
 import pg from '../node_modules/pg/lib/index.js';
 import {createCiFreshOnlyFixture} from '../scripts/ci-fresh-only-replay.mjs';
 import {seedCompiledEventAuthority,eventAuthorityWeekStart} from '../scripts/fixtures/event-static-authority-fixture.mjs';
@@ -99,9 +101,16 @@ async function qualifyCurrentEightTypedInitial({out,input,constructFixture=creat
   sourceCurrent();fixture=await constructFixture({name:'mz_schema_rebuild_atomic302_'+ids.run.replaceAll('-',''),hostSocket:true});
   await fixture.assertOwned();assert.equal(fixture.receipt.selected_replay.migrations,302);assert.equal(fixture.receipt.full_suite_PASS,false);save('FRESH_CURRENT_SOURCE302_CONSTRUCTION_ONLY.json',fixture.receipt);
   pool=new pg.Pool({host:fixture.socketDirectory,database:'postgres',user:'supabase_admin',password:'postgres',max:2,connectionTimeoutMillis:5000});
+  const connectionErrors=[];
+  const lostConnection=error=>{unknown=true;result.status='UNKNOWN';connectionErrors.push({code:error?.code??null,message:String(error?.message??'Connection lost').slice(0,500)});};
+  // A checked-out pg Client has no pg-pool idle error listener. Keep its
+  // asynchronous errors inside this fixture's original-outcome boundary.
+  pool.on('connect',client=>client.on('error',lostConnection));
+  pool.on('error',lostConnection);
+  result.connectionErrors=connectionErrors;
   const query=async(sql,args=[])=>{assert.equal(unknown,false,'Unknown transaction state forbids another SQL command');await fixture.assertOwned();const n=intent(sql,args);try{const r=await pool.query(sql,args);queries.push({sequence,returned:true});save('SQL_'+n+'_RETURNED.json',{rowCount:r.rowCount??null,command:r.command??null});return r;}catch(e){save('SQL_'+n+'_ERROR.json',{code:e.code??null,message:e.message,where:e.where??null});throw e;}};
   const tx=async(role,work)=>{assert.equal(unknown,false,'Unknown transaction state forbids another SQL transaction');assert.ok(['supabase_admin','static_weekly_release_operator','static_weekly_control_plane','custodial_application_reader','anon','authenticated','service_role'].includes(role));await fixture.assertOwned();const c=await pool.connect();try{await c.query('begin');await c.query('set local role '+role);const r=await work(c);await c.query('commit');return r;}catch(e){await c.query('rollback').catch(()=>{unknown=true;});throw e;}finally{c.release();}};
-  const rpc=(role,name,args=[])=>{assert.match(name,/^(public|custodial_employment)\.[a-z_0-9]+$/);const text=`select ${name}(${args.map((_,i)=>'$'+(i+1)).join(',')}) value`;intent(text,args);return tx(role,async c=>(await c.query(text,args)).rows[0].value);};
+  const rpc=(role,name,args=[])=>{assert.match(name,/^(public|custodial_employment)\.[a-z_0-9]+$/);const text=`select ${name}(${args.map((_,i)=>'$'+(i+1)).join(',')}) value`;intent(text,args);return tx(role,async c=>{if(name==='public.static_weekly_prepare_coverall_activation')await c.query(PREPARATION_SQL.interpret);return(await c.query(text,args)).rows[0].value;});};
   const revision=async()=>Number((await query('select current_revision from public.static_weekly_schedule_control where singleton')).rows[0].current_revision);
   const rejected=async(label,fn,code=null)=>{let failure;try{await fn();}catch(e){failure=e;}if(failure&&(unknown||/UNKNOWN|custody_unknown|outcome_unknown/i.test(String(failure.code??''))||/^(08|ECONN|57P)/.test(String(failure.code??'')))){unknown=true;throw failure;}assert.ok(failure,label+' must refuse');if(code)assert.equal(failure.code,code,label);save('NEGATIVE_'+label+'.json',{label,code:failure.code??null,message:failure.message});};
   setPhase('verify_current302_already_contains_all14_components');
@@ -170,7 +179,9 @@ async function qualifyCurrentEightTypedInitial({out,input,constructFixture=creat
   const draft=prepareApprovedManualSourceDraft({week,referenceBytes:approvedReferenceBytes});const selection=draft.sourceDraft.slots.filter(s=>s.contractorCapacity).map((s,i)=>({legacy_slot_id:s.id,new_capacity_id:ids.capacityIds[i],capacity_code:'CoverAll'+String(i+1).padStart(2,'0')}));assert.equal(selection.length,8);
   const packet=prepareApprovedManualCoverAllActivation({week,draft,snapshot,selection,sourceId:ids.source,versionId:ids.version,templatePublicationId:ids.templatePublication,templateId:'owned-current-'+ids.run,packetId:ids.packet,managerId:OWNER});
   save('CURRENT_DATE_APPROVED_PACKET_BEFORE_WRITE.json',packet);assert.equal(packet.feasibility.projectionAssignments.length,346);assert.equal(packet.feasibility.lunch.lunches.length,40);assert.equal(packet.feasibility.solverInvoked,false);
+  setPhase('prepare_current_typed_packet');
   const prepared=await rpc('static_weekly_release_operator','public.static_weekly_prepare_coverall_activation',[packet]);save('ACTUAL_PACKET_PREPARATION.json',prepared);
+  setPhase('preview_current_typed_packet');
   const preview=await run(()=>plane.previewApprovedManualActivation({manager,packetId:ids.packet,expectedRevision:snapshot.authorityRevision}));save('ACTUAL_V2_PREVIEW.json',preview);assert.equal(preview.status,'PREVIEW_ONLY');assert.equal(preview.employmentRevisionVector.length,14);
   for(const role of ['anon','authenticated','service_role'])await rejected('activation_role_'+role,()=>rpc(role,'public.static_weekly_prepare_coverall_activation',[packet]),'42501');
   const before=await counts(),badInput={manager,packetId:ids.packet,operationId:ids.negativeActivation,expectedRevision:snapshot.authorityRevision,previewDigest:'0'.repeat(64),idempotencyKey:'negative-'+ids.run};save('NEGATIVE_ACTIVATION_BEFORE_WRITE.json',badInput);
@@ -212,13 +223,22 @@ async function qualifyCurrentEightTypedInitial({out,input,constructFixture=creat
   }
   assert.equal(employeeDayReadbacks,40);sourceCurrent();
   Object.assign(result,{status:'PASS',currentDate:at,publicationId:accepted.publicationId,projectionId:accepted.projectionId,activationOperation:ids.activation,original22Preserved:true,actualSlots30:true,newEmployeeRows0:true,allEightActiveForSchedule:true,firstWorkdayExclusions:0,fullHourLunches:40,employeeDayReadbacks,ownershipChecks,actualCredentialBoundManagerSQL:true,samePhysicalTransaction:true,normalSevenSourcesChanged:false,productionWritten:false,physicalDelivery:false,canonicalSource302Qualified:false});
- }catch(e){unknown=unknown||/^(08|ECONN|57P)/.test(String(e.code??''))||/UNKNOWN|custody_unknown|outcome_unknown/i.test(String(e.code??''))||e.coverAllOriginalTransactionState==='UNKNOWN';Object.assign(result,{status:unknown?'UNKNOWN':'FAIL',failedPhase:result.phase,code:e.code??null,message:String(e.message).slice(0,1800),where:String(e.where??e.cause?.where??'').slice(0,5000),position:e.position??null,internalPosition:e.internalPosition??null,internalQuery:e.internalQuery??null,originalOperationId:activeOriginalIdentity?.operationId??ids.activation,activeOriginalIdentity,retry:false,activeCommandSequence:activeCommand?.sequence??null});process.exitCode=1;}
+ }catch(e){unknown=unknown||/^(08|ECONN|57P)/.test(String(e.code??''))||/UNKNOWN|custody_unknown|outcome_unknown|database_unavailable/i.test(String(e.code??''))||/connection terminated/i.test(String(e.message??''))||e.coverAllOriginalTransactionState==='UNKNOWN';Object.assign(result,{status:unknown?'UNKNOWN':'FAIL',failedPhase:result.phase,code:e.code??null,message:String(e.message).slice(0,1800),where:String(e.where??e.cause?.where??'').slice(0,5000),position:e.position??null,internalPosition:e.internalPosition??null,internalQuery:e.internalQuery??null,originalOperationId:activeOriginalIdentity?.operationId??ids.activation,activeOriginalIdentity,retry:false,activeCommandSequence:activeCommand?.sequence??null});process.exitCode=1;}
  finally{
   try{await shutdownStaticWeeklyCompiler();}catch(e){unknown=true;result.compilerCleanupError=e.message;result.status='UNKNOWN';process.exitCode=1;}
   if(plane?.close)try{await plane.close();}catch(e){unknown=true;result.planeCleanupError=e.message;result.status='UNKNOWN';process.exitCode=1;}
   if(pool)try{await pool.end();}catch(e){unknown=true;result.poolCleanupError=e.message;result.status='UNKNOWN';process.exitCode=1;}
   try{sourceCurrent();result.protectedSourcesPreserved=true;}catch(e){result.status='FAIL';result.sourcePreservationError=e.message;process.exitCode=1;}
+  if(unknown){result.status='UNKNOWN';process.exitCode=1;}
   if(fixture&&(unknown||result.status!=='PASS')){
+   try{await fixture.assertOwned();const state=spawnSync('docker',['inspect',fixture.receipt.container],{encoding:'utf8',maxBuffer:1048576,timeout:10000});
+    const container=state.status===0?JSON.parse(state.stdout)[0]:null,logs=spawnSync('docker',['logs','--tail','120',fixture.receipt.container],{encoding:'utf8',maxBuffer:1048576,timeout:10000});
+    const diagnostics={container:fixture.receipt.container,owner:fixture.receipt.owner,state:container?.State??null,
+     memoryLimit:container?.HostConfig?.Memory??null,logsStatus:logs.status,logTail:(logs.stdout+logs.stderr).slice(-32768),syntheticOwnedFixtureOnly:true};
+    save('DATABASE_FAILURE_DIAGNOSTICS.json',diagnostics);
+    // RESULT.json is already retained by the unchanged reviewed CI workflow.
+    result.databaseFailureDiagnostics=diagnostics;
+   }catch(e){result.diagnosticsError=String(e.message).slice(0,500);}
    result.cleanup=unknown?'PRESERVED_ORIGINAL_OWNED_FIXTURE_FOR_UNKNOWN_RECONCILIATION':'PRESERVED_ORIGINAL_OWNED_FIXTURE_AFTER_FAILED_COMPONENT_FLOW';
    save(unknown?'UNKNOWN_ORIGINAL_FIXTURE_PRESERVED.json':'FAILED_ORIGINAL_FIXTURE_PRESERVED.json',{
     status:result.status,phase:result.phase,failedPhase:result.failedPhase??null,unknown,
@@ -240,7 +260,7 @@ async function qualifyCurrentEightTypedInitial({out,input,constructFixture=creat
 export async function runApprovedManualActivationDatabaseTest({out,constructFixture=createCiFreshOnlyFixture,constructorMigrationCount=302}){
  assert.equal(constructorMigrationCount,302);assert.ok(isAbsolute(out));
  const ref=path=>{const raw=fs.readFileSync(path);return {path,sha256:sha(raw),bytes:raw.length};};
- const week=readApprovedManualWeek(),required=[fileURLToPath(import.meta.url),resolve(W,'fixtures/derive-recorded-predecessor.mjs'),resolve(B,'scripts/ci-fresh-only-replay.mjs'),resolve(B,'scripts/fixtures/event-static-authority-fixture.mjs'),resolve(B,'scripts/schema-fingerprint-catalog.mjs'),resolve(B,'src/static-weekly-control-plane.js'),resolve(B,'src/approved-manual-coverall-management.js'),resolve(B,'src/approved-manual-recurring-transport.js'),resolve(B,'src/approved-manual-period-worker.js'),resolve(B,'src/approved-manual-employment-admission.js'),resolve(B,'src/approved-manual-employment-integration.js'),resolve(B,'release/worker1-employment-admission-20261030/OWNER_APPROVED_EIGHT_ACTIVE_20261031.json')];
+ const week=readApprovedManualWeek(),required=[fileURLToPath(import.meta.url),resolve(B,'scripts/prepare-approved-manual-release-packet.mjs'),resolve(W,'fixtures/derive-recorded-predecessor.mjs'),resolve(B,'scripts/ci-fresh-only-replay.mjs'),resolve(B,'scripts/fixtures/event-static-authority-fixture.mjs'),resolve(B,'scripts/schema-fingerprint-catalog.mjs'),resolve(B,'src/static-weekly-control-plane.js'),resolve(B,'src/approved-manual-coverall-management.js'),resolve(B,'src/approved-manual-recurring-transport.js'),resolve(B,'src/approved-manual-period-worker.js'),resolve(B,'src/approved-manual-employment-admission.js'),resolve(B,'src/approved-manual-employment-integration.js'),resolve(B,'release/worker1-employment-admission-20261030/OWNER_APPROVED_EIGHT_ACTIVE_20261031.json')];
  const spec={schema:'custodial.current-eight-owned-typed-initial-input.v1',constructorMigrations:302,componentSql:COMPONENTS.map(p=>ref(resolve(B,p))),performanceProofSql:ref(resolve(B,'proposals/approved-manual-lunch-admission-proof.sql')),historicalReference:ref(resolve(B,'scripts/fixtures/full-nine-v6-source.json')),approvedReference:ref(resolve(B,week.referenceBindings.reference.path)),recordedRoster:ref(resolve(B,'scripts/fixtures/manual-live-roster-20261030.json')),protectedSources:required.map(ref)};
  const input=out+'.INPUT.json';fs.mkdirSync(dirname(out),{recursive:true});fs.writeFileSync(input,JSON.stringify(spec,null,2)+'\n',{flag:'wx',mode:0o600});
  return qualifyCurrentEightTypedInitial({out,input,constructFixture});
