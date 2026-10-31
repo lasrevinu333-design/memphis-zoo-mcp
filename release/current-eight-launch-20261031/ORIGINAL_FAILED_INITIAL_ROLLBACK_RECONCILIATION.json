@@ -1,0 +1,10 @@
+{
+  "container": "fec614c310d7b0438327bbdbf84192a5e094d41d8713424b87f6432b3274f43e",
+  "owner": "8dae9835-8e88-418c-9ffe-f82aa4e89a86",
+  "originalOperationId": "a9721c7f-cea3-4e13-947c-3177a1f08617",
+  "nativeReadback": "BEGIN\n{\"packet\": 1, \"receipt\": 0, \"settings\": {\"jit\": \"on\", \"work_mem\": \"4096\", \"shared_buffers\": \"8192\", \"max_parallel_workers_per_gather\": \"2\"}, \"newsource\": 0, \"operation\": 0}\nROLLBACK\n",
+  "dockerOOMKilled": true,
+  "readOnly": true,
+  "retry": false,
+  "productionWritten": false
+}
