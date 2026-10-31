@@ -127,7 +127,7 @@ export function assert302SourceCaptureScope(next,read){
  }
  assert.ok(['SYNTHETIC_SOURCE_FIXTURE_ONLY_NOT_A_CAPTURE','SYNTHETIC_SOURCE_FIXTURE_ONLY_NOT_CAPTURE'].includes(next.source_capture_scope),'Unproved or unknown fresh302 capture scope');assert.match(next.observed_empty_source_fingerprint,/^[a-f0-9]{64}$/);
 }
-export function selectFreshOnlySourceRows(manifest,names,read){
+function selectThrough302SourceRows(manifest,names,read){
  if(names.length!==302)return selectHistoricalFreshOnlySourceRows(manifest,names,read);
  assert.ok(Array.isArray(names),'Exact302 migration name array required');
  const priorBytes=read('release/fresh-only-replay/SOURCE301_SUCCESSOR.json',{bytes:2169,sha256:SUCCESSOR301});
@@ -170,4 +170,56 @@ export function selectFreshOnlySourceRows(manifest,names,read){
  assert.equal(previousNames.length,301);assert.deepEqual([...previousNames].sort(),[...predecessorNames].sort());
  return {rows:[...priorResult.rows,next.append],successor:{sha256:sha(nextBytes),predecessor_manifest_sha256:PREDECESSOR,
   predecessor_successor_sha256:SUCCESSOR301,appended_migration:next.append.name}};
+}
+
+// Explicit Source303 counterpart. Its predecessor is the exact retained302
+// source, including its original canonical capture; never relabel it303.
+const SOURCE303_NAME='20261031180631_cohort_ticket_transaction_context.sql';
+const RETAINED302_INPUTS={"release/fresh-only-replay/SOURCE302_SUCCESSOR.json":{"sha256":"e4ebb172dbcdfa58690742b9ff09973d33bf35e93ab53d1ebdc41b5a554bcf69","bytes":1882},"supabase/canonical/migration-replay-order.json":{"sha256":"af4d8f471f1e5e6276f3232e396d3511a1ae1767edde093f12fe145f461930a9","bytes":57303},"supabase/canonical/schema-fingerprint-input.json":{"sha256":"ab8f96d2178c74d21ed406b798f6f4be226f11569471b1d62d78bc5fc40cb541","bytes":7832432},"supabase/canonical/schema-fingerprint.txt":{"sha256":"51776a391ef0ce39615de0a11f5c04db2242dcab6c2f60d14ca8832cf13535d8","bytes":65}};
+export function assert303SourceCaptureScope(next,read){
+ assert.equal(next.full_vendor_NORMAL,false);assert.equal(next.expected_fingerprint_authority,null);
+ if(next.source_capture_scope==='MEASURED_SOURCE303_APPEND_ROLLED_BACK_NOT_FRESH303'){assert.equal(next.observed_empty_source_fingerprint,null);return;}
+ if(next.source_capture_scope==='ACTUAL_FRESH303_TICKET_NORMAL_CONSTRUCTION_AND_READ_ONLY_CATALOG'){
+  assert.equal(typeof read,'function','Actual fresh303 scope requires its exact construction evidence');
+  const refs={"RESULT.json":{"path":"release/fresh-only-replay/source303-ticket-normal-evidence/RESULT.json","sha256":"c34b1bbf41dbcde8773d87702ec8b14d35eb1b9bce046c0913babbe610c61d40","bytes":5587},"PARENT_WAIT.json":{"path":"release/fresh-only-replay/source303-ticket-normal-evidence/PARENT_WAIT.json","sha256":"fbeae47d887f2729442122cc538012ab56372fed823dfac5ad14e11b20c44e98","bytes":331},"CATALOG_RAW.json":{"path":"release/fresh-only-replay/source303-ticket-normal-evidence/CATALOG_RAW.json","sha256":"ce7bd00b5f293ac1091836f2ac813504f2aeaba125d6231b385883ad70e95914","bytes":7873227},"CATALOG_NORMALIZED.json":{"path":"release/fresh-only-replay/source303-ticket-normal-evidence/CATALOG_NORMALIZED.json","sha256":"ccde9462dadd63c07d65e6b94125d9b628d87af29c9e9f2f9adcb97f82f5b6c5","bytes":7839956},"FINGERPRINT.txt":{"path":"release/fresh-only-replay/source303-ticket-normal-evidence/FINGERPRINT.txt","sha256":"1e798aa925d33b8646c01ce3a3e0bdfb5562c55a32ee9f05635fe2d71db4102d","bytes":65},"CONSTRUCTED_SOURCE303_SUCCESSOR.json":{"path":"release/fresh-only-replay/source303-ticket-normal-evidence/CONSTRUCTED_SOURCE303_SUCCESSOR.json","sha256":"da1227114d54d0add0e2219fc8a1d1a8f515939d9c2f496b70c0e2a40eb0e221","bytes":1798}};
+  const bytes=name=>{const ref=refs[name],value=read(ref.path,ref);assert.equal(value.length,ref.bytes);assert.equal(sha(value),ref.sha256);return value;};
+  const actual=JSON.parse(bytes('RESULT.json')),wait=JSON.parse(bytes('PARENT_WAIT.json')),constructedBytes=bytes('CONSTRUCTED_SOURCE303_SUCCESSOR.json'),constructed=JSON.parse(constructedBytes);
+  assert.equal(actual.state,'PASS_FRESH303_NORMAL_CONSTRUCTION_AND_ACTUAL_CANONICAL_CATALOG');assert.equal(actual.scope,'ACTUAL_FRESH303_NORMAL_CONSTRUCTION');assert.equal(actual.actualFresh303Fingerprint,next.observed_empty_source_fingerprint);assert.equal(actual.sourceFullBytesAndIdentitiesPreserved,true);assert.equal(actual.catalogReadOnlyRepeatableRead,true);assert.equal(actual.catalogRolledBack,true);assert.equal(actual.clientEndReturned,true);assert.deepEqual(actual.connectionErrors,[]);
+  assert.equal(actual.fullSuitePASS,false);assert.equal(actual.functionalAppAcceptance,false);assert.equal(actual.productionWritten,false);assert.equal(actual.finalAudit,false);assert.equal(actual.finalBuild,false);assert.equal(actual.deployment,false);
+  const receipt=actual.actualReceipt;assert.equal(receipt.schema,'custodial.ci-fresh-only-migrations-construction.v1');assert.equal(receipt.state,'CONSTRUCTED_NOT_FUNCTIONALLY_QUALIFIED');assert.equal(receipt.container,'6f2d17f5c0384a51a772a1a0266c7fe5bff4c0f3b8aa725f5840767591b757c0');assert.equal(receipt.no_auto_table_grants,false);assert.equal(receipt.selected_replay.migrations,303);assert.equal(receipt.selected_replay.overrides,22);assert.equal(receipt.selected_replay.full_vendor_NORMAL,false);assert.equal(receipt.selected_replay.expected_fingerprint_authority,null);assert.equal(receipt.selected_replay.source_successor.sha256,sha(constructedBytes));assert.equal(receipt.selected_replay.source_successor.appended_migration,next.append.name);assert.equal(receipt.selected_replay.manifest_sha256,next.predecessor_manifest.sha256);assert.equal(receipt.selected_replay.source_successor.predecessor_successor_sha256,next.predecessor_successor.sha256);
+  const child=receipt.original_child;assert.equal(child.actual_wait_returned,true);assert.equal(child.exit,0);assert.equal(child.signal,null);assert.equal(child.timed_out,false);assert.equal(child.stream_limit_exceeded,false);assert.equal(child.fresh_PID_PGID_proc_absent,true);assert.equal(wait.actualWaitReturned,true);assert.equal(wait.exit,0);assert.deepEqual(wait.absence,{pid:true,pgid:true,proc:true});assert.equal(wait.positiveSignals,0);
+  assert.equal(constructed.source_capture_scope,'MEASURED_SOURCE303_APPEND_ROLLED_BACK_NOT_FRESH303');assert.equal(constructed.observed_empty_source_fingerprint,null);const relabeled={...next,source_capture_scope:constructed.source_capture_scope,observed_empty_source_fingerprint:null};assert.deepEqual(relabeled,constructed,'Actual construction must bind the identical SQL/301 prefix and replay, with only capture metadata advanced');
+  for(const[name,key]of [['CATALOG_RAW.json','raw'],['CATALOG_NORMALIZED.json','normalized'],['FINGERPRINT.txt','fingerprint']]){assert.equal(refs[name].sha256,actual.artifacts[key].sha256);assert.equal(refs[name].bytes,actual.artifacts[key].bytes);bytes(name);}
+  const captured=fingerprintSchemaCatalog(JSON.parse(bytes('CATALOG_RAW.json'))),normalized=JSON.parse(bytes('CATALOG_NORMALIZED.json')),canonical=fingerprintSchemaCatalog(JSON.parse(read('supabase/canonical/schema-fingerprint-input.json')));
+  assert.equal(captured.fingerprint,next.observed_empty_source_fingerprint);assert.deepEqual(captured.normalized,normalized);assert.deepEqual(canonical.normalized,normalized);assert.equal(bytes('FINGERPRINT.txt').toString('utf8').trim(),captured.fingerprint);assert.equal(read('supabase/canonical/schema-fingerprint.txt').toString('utf8').trim(),captured.fingerprint);assert.deepEqual(Object.fromEntries(Object.entries(normalized).map(([key,rows])=>[key,rows.length])),actual.actualFresh303Counts);return;
+ }
+ throw Error('Unproved or unknown fresh303 capture scope');
+}
+export function selectFreshOnlySourceRows(manifest,names,read){
+ if(names.length!==303)return selectThrough302SourceRows(manifest,names,read);
+ assert.ok(Array.isArray(names));assert.equal(names.at(-1),SOURCE303_NAME);
+ const fixed=(name,ref)=>{const b=read(name,ref);assert.equal(b.length,ref.bytes);assert.equal(sha(b),ref.sha256);return b;};
+ const priorRef=RETAINED302_INPUTS['release/fresh-only-replay/SOURCE302_SUCCESSOR.json'],priorBytes=fixed('release/fresh-only-replay/SOURCE302_SUCCESSOR.json',priorRef),prior=JSON.parse(priorBytes),nextBytes=read('release/fresh-only-replay/SOURCE303_SUCCESSOR.json'),next=JSON.parse(nextBytes);
+ assert.deepEqual(Object.keys(next).sort(),Object.keys(prior).sort());assert.equal(next.schema,prior.schema);assert.equal(next.scope,prior.scope);
+ assert.deepEqual(next.predecessor_manifest,prior.predecessor_manifest);
+ assert.deepEqual(next.predecessor_successor,{path:'release/fresh-only-replay/SOURCE302_SUCCESSOR.json',...priorRef,source_migrations:302});
+ const replayRef=RETAINED302_INPUTS['supabase/canonical/migration-replay-order.json'];
+ assert.deepEqual(next.preserved_predecessor_replay,{path:'release/fresh-only-replay/SOURCE302_REPLAY_ORDER.json',...replayRef});
+ assert.equal(next.source_migrations,303);assert303SourceCaptureScope(next,read);
+ assert.deepEqual(Object.keys(next.append).sort(),['atomic_mode','name','original','selected']);assert.equal(next.append.name,SOURCE303_NAME);assert.equal(next.append.atomic_mode,'exact-Source-BEGIN-COMMIT');assert.deepEqual(next.append.selected,next.append.original);
+ const a=next.append.original;assert.deepEqual(Object.keys(a).sort(),['bytes','path','sha256']);assert.equal(a.path,'supabase/migrations/'+SOURCE303_NAME);assert.equal(a.sha256,'063669e808c354d4f4498b13c7597b7603636badc9d2e5f9b5d819cdfeee179b');assert.equal(a.bytes,10348);assert.match(a.sha256,/^[a-f0-9]{64}$/);assert.ok(Number.isSafeInteger(a.bytes)&&a.bytes>0&&a.bytes<=16*1024*1024);fixed(a.path,a);
+ const replayBytes=read('supabase/canonical/migration-replay-order.json');assert.deepEqual(next.replay_manifest,{path:'supabase/canonical/migration-replay-order.json',sha256:sha(replayBytes),bytes:replayBytes.length});
+ const preserved=fixed(next.preserved_predecessor_replay.path,replayRef),previous=JSON.parse(preserved),prefix=JSON.parse(replayBytes);assert.deepEqual(prefix.phases.at(-1).files.pop(),{name:SOURCE303_NAME,sha256:a.sha256});assert.deepEqual(prefix,previous);
+ const oldNames=previous.phases.flatMap(p=>p.files.map(f=>f.name));assert.equal(oldNames.length,302);assert.deepEqual([...names.slice(0,-1)].sort(),[...oldNames].sort());
+ const aliases={
+  'supabase/canonical/migration-replay-order.json':'release/fresh-only-replay/SOURCE302_REPLAY_ORDER.json',
+  'supabase/canonical/schema-fingerprint-input.json':'release/fresh-only-replay/source302-eight-active-normal-evidence/CATALOG_NORMALIZED.json',
+  'supabase/canonical/schema-fingerprint.txt':'release/fresh-only-replay/source302-eight-active-normal-evidence/FINGERPRINT.txt'
+ };
+ const predecessor=selectThrough302SourceRows(manifest,names.slice(0,-1),(name,expected)=>{
+  if(!Object.hasOwn(aliases,name))return read(name,expected);
+  const ref=RETAINED302_INPUTS[name];assert.ok(ref);if(expected)assert.deepEqual(expected,ref);
+  return fixed(aliases[name],ref);
+ });
+ return {rows:[...predecessor.rows,next.append],successor:{sha256:sha(nextBytes),predecessor_manifest_sha256:PREDECESSOR,predecessor_successor_sha256:priorRef.sha256,appended_migration:SOURCE303_NAME}};
 }

@@ -1224,6 +1224,10 @@
         {
           "name": "20261031125902_approved_manual_native_operations.sql",
           "sha256": "10238c293dda15a52321fa670f3763dd772ab6d976665cf306f737c613696b6d"
+        },
+        {
+          "name": "20261031180631_cohort_ticket_transaction_context.sql",
+          "sha256": "063669e808c354d4f4498b13c7597b7603636badc9d2e5f9b5d819cdfeee179b"
         }
       ]
     }
