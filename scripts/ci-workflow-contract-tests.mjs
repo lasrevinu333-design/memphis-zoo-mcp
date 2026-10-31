@@ -70,7 +70,7 @@ const mixedFreshFoundationWorkflowPath = resolve(workflowDirectory, "foundation-
 // Bind the approved manual GPS/absence and native period checks and run these fast wiring
 // checks before the unchanged disposable SQL suites. Construction and all
 // process/resource limits remain exact.
-const mixedFreshFoundationWorkflowSha256 = "6d4ba837be1649570f251a4cc1475a33390207113603a9736597c7e4d515fa9a";
+const mixedFreshFoundationWorkflowSha256 = "794373437db40bd1ca0d9285d02a6f9518a1680a1a863ea77796f24ed20b7e5c";
 const thisContractPath = fileURLToPath(import.meta.url);
 const postgresImagePins = postgresPinSources.flatMap((path) => {
   const pins = [...readFileSync(path, "utf8").matchAll(/(?:public\.ecr\.aws\/|docker\.io\/)?supabase\/postgres@sha256:[0-9a-f]{64}/g)]

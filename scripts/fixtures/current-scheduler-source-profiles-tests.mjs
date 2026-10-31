@@ -39,7 +39,7 @@ for(const mutate of [
 ]) {const changed=JSON.parse(current297);mutate(changed);assert.throws(()=>restoreSchedulerProofSource(nativeProfile,JSON.stringify(changed,null,2)+'\n'));checks++;}
 assert.throws(()=>restoreSchedulerProofSource(nativeProfile,current297+' '));checks++;
 assert.throws(()=>restoreSchedulerProofSource('NATIVE_CURRENT_HTTP_SELECTED_DEVICE_PIN',current297));checks++;
-for(const path of ['../../release/fresh-only-replay/SOURCE299_REPLAY_ORDER.json','../../release/fresh-only-replay/SOURCE300_REPLAY_ORDER.json','../../supabase/canonical/migration-replay-order.json']){
+for(const path of ['../../release/fresh-only-replay/SOURCE299_REPLAY_ORDER.json','../../release/fresh-only-replay/SOURCE300_REPLAY_ORDER.json','../../release/fresh-only-replay/SOURCE301_REPLAY_ORDER.json','../../supabase/canonical/migration-replay-order.json']){
  const selected=readFileSync(new URL(path,import.meta.url),'utf8');assert.equal(restoreSchedulerProofSource(nativeProfile,selected),restoreSchedulerProofSource(nativeProfile,current298));checks++;
  assert.throws(()=>restoreSchedulerProofSource(nativeProfile,selected+' '));checks++;
  const changed=JSON.parse(selected);changed.phases[2].files.at(-1).sha256='f'.repeat(64);assert.throws(()=>restoreSchedulerProofSource(nativeProfile,JSON.stringify(changed,null,2)+'\n'));checks++;

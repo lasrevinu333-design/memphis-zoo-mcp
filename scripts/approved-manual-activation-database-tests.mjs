@@ -15,23 +15,25 @@ const migration=new URL('../supabase/migrations/20261030155202_approved_manual_c
 const sql=fs.readFileSync(migration,'utf8'),sha=createHash('sha256').update(sql).digest('hex');
 // The optional constructor is a TEST capability, never a database URL. During
 // development an exact owned Source300 fixture receives the exact appended SQL.
-// Normal Source301 CI constructs the appended migration itself.
-export async function runApprovedManualActivationDatabaseTest({out,constructFixture=createCiFreshOnlyFixture,constructorMigrationCount=301,sqlPhaseDiagnostic=false}){
- assert.ok(isAbsolute(out));
+// Current Source302 CI constructs the activation and native operations itself.
+// Explicit retained300/301 test constructors keep their original migration scope.
+export async function runApprovedManualActivationDatabaseTest({out,constructFixture=createCiFreshOnlyFixture,constructorMigrationCount=302,sqlPhaseDiagnostic=false}){
+ assert.ok(isAbsolute(out));assert.ok([300,301,302].includes(constructorMigrationCount));
  const construct=async options=>{
   const fixture=await constructFixture(options);await fixture.assertOwned();
   fs.writeFileSync(resolve(out,'APPEND_FIXTURE.json'),JSON.stringify(fixture.receipt,null,2)+'\n',{flag:'wx',mode:0o600});
   if(fixture.receipt.selected_replay.migrations===300){
    const db=new pg.Client({host:fixture.socketDirectory,database:'postgres',user:'supabase_admin',password:'postgres'});
    try{await db.connect();await db.query(sql);}catch(e){await db.query('rollback').catch(()=>{});await fixture.cleanup().catch(()=>{});throw e;}finally{await db.end();}
-  }else assert.equal(fixture.receipt.selected_replay.migrations,301);
+  }else assert.equal(fixture.receipt.selected_replay.migrations,constructorMigrationCount);
+  const catalogMigrationCount=Math.max(301,fixture.receipt.selected_replay.migrations);
   const catalogDb=new pg.Client({host:fixture.socketDirectory,database:'postgres',user:'supabase_admin',password:'postgres'});
   try{await catalogDb.connect();await catalogDb.query('begin isolation level repeatable read read only');
    await fixture.assertOwned();const inventory=await captureSchemaCatalog(catalogDb),catalog=fingerprintSchemaCatalog(inventory);
    await catalogDb.query('rollback');
-   fs.writeFileSync(resolve(out,'SOURCE301_SCHEMA_CATALOG.json'),JSON.stringify(catalog.normalized,null,2)+'\n',{flag:'wx',mode:0o600});
-   fs.writeFileSync(resolve(out,'SOURCE301_SCHEMA_FINGERPRINT.json'),JSON.stringify({fingerprint:catalog.fingerprint,migrationSha256:sha,
-    constructorMigrations:fixture.receipt.selected_replay.migrations,appendedMigration:301,production:false},null,2)+'\n',{flag:'wx',mode:0o600});
+   fs.writeFileSync(resolve(out,`SOURCE${catalogMigrationCount}_SCHEMA_CATALOG.json`),JSON.stringify(catalog.normalized,null,2)+'\n',{flag:'wx',mode:0o600});
+   fs.writeFileSync(resolve(out,`SOURCE${catalogMigrationCount}_SCHEMA_FINGERPRINT.json`),JSON.stringify({fingerprint:catalog.fingerprint,migrationSha256:sha,
+    constructorMigrations:fixture.receipt.selected_replay.migrations,catalogMigrationCount,appendedMigration:301,production:false},null,2)+'\n',{flag:'wx',mode:0o600});
   }finally{await catalogDb.end();}
   return fixture;
  };

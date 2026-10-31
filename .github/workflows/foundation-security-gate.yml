@@ -158,7 +158,7 @@ jobs:
           name: approved-manual-activation-result-${{ github.run_id }}
           path: |
             ${{ runner.temp }}/approved-manual-activation-sql/RESULT.json
-            ${{ runner.temp }}/approved-manual-activation-sql/SOURCE301_SCHEMA_FINGERPRINT.json
+            ${{ runner.temp }}/approved-manual-activation-sql/SOURCE302_SCHEMA_FINGERPRINT.json
             ${{ runner.temp }}/approved-manual-activation-sql/CURRENT_DAY_ACTIVATION_RECEIPT.json
           if-no-files-found: warn
 

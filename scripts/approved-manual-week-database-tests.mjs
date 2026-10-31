@@ -17,7 +17,7 @@ import {postgresJsonbContentDigest as digest} from '../src/static-weekly-schedul
 // A complete normal Source/template/manager-preview/publication check in a
 // newly owned, nonnetworked PostgreSQL fixture. The civil date below is test
 // data; this executable cannot select a live rollout date or database URL.
-export async function runApprovedManualWeekDatabaseTest({out,constructFixture=createCiFreshOnlyFixture,constructorMigrationCount=301,
+export async function runApprovedManualWeekDatabaseTest({out,constructFixture=createCiFreshOnlyFixture,constructorMigrationCount=302,
  initialDate='2026-11-02',seedFixturePeopleAt=null,fixturePoolMax=3,afterSqlQualified=null}){
 assert.ok(isAbsolute(out));fs.mkdirSync(out,{mode:0o700});
 const save=(name,value)=>fs.writeFileSync(resolve(out,name),JSON.stringify(value,null,2)+'\n',{flag:'wx',mode:0o600});

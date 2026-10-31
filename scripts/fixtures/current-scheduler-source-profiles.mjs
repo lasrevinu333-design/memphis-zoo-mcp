@@ -8,9 +8,27 @@ const bytes=readFileSync(new URL('./current-scheduler-source-profile-deltas.json
 assert.ok(bytes.length<=1024*1024);assert.equal(sha(bytes),'1d832c27a0e59a2804e966d43825d864a8ee73e7af644b690bb9a495ac67f1e9');
 const document=JSON.parse(bytes);assert.equal(document.schema,'custodial.current-scheduler-retained-source-deltas.v1');
 assert.equal(document.profiles.length,15);assert.equal(new Set(document.profiles.map(row=>row.profile)).size,15);
+const implementationBytes=readFileSync(new URL('./current-scheduler-implementation-source-successors.json',import.meta.url));
+assert.ok(implementationBytes.length<=256*1024);assert.equal(sha(implementationBytes),'0d525297806b6e54d5a3dcb5a1e9d2028b03e3c2f8cb2a905c5b1dc0c8df3652');
+const implementations=JSON.parse(implementationBytes);assert.equal(implementations.schema,'custodial.test-only-exact-implementation-source-successors.v1');assert.equal(implementations.profiles.length,2);
 export function restoreSchedulerProofSource(profile,source){
  assert.equal(typeof profile,'string');assert.equal(typeof source,'string');
  const row=document.profiles.find(value=>value.profile===profile);assert.ok(row,'explicit retained Source profile required');
+ // Restore only these two complete, hash-bound implementation successors
+ // to their preserved Git ancestors before the immutable15 historical proofs.
+ const implementation=implementations.profiles.find(value=>value.profile===profile&&value.current_sha256===sha(source));
+ if(implementation){
+  assert.equal(implementation.prior_sha256,row.current_sha256);assert.ok(implementation.hunks.length>0&&implementation.hunks.length<=16);
+  for(const change of implementation.hunks){assert.ok(change.current.length>0&&Buffer.byteLength(change.current)<=256*1024&&Buffer.byteLength(change.prior)<=256*1024);assert.equal(source.split(change.current).length,2);source=source.replace(change.current,change.prior);}
+  assert.equal(sha(source),implementation.prior_sha256,'Whole preserved implementation source must be reproduced');
+ }
+ // Source302 contributes only its one exact already-constructed append.
+ // Reproduce the complete preserved301 replay before the unchanged chain.
+ if(profile==='NATIVE_CURRENT_REPLAY_MANIFEST_RETAINED_WIRING'&&sha(source)==='c642e562bf012416548f26f215a3c74aae434ca6573fc0f8be83e5c0bcc59b2e'){
+  const current=JSON.parse(source);assert.deepEqual(current.phases.map(phase=>phase.files.length),[134,93,75]);
+  assert.deepEqual(current.phases[2].files.pop(),{name:'20261031125902_approved_manual_native_operations.sql',sha256:'ffebba2a6d32ed7a3de29c9446f2554fc56063253afebdfcc5ccadabb911d138'});
+  source=JSON.stringify(current,null,2)+'\n';assert.equal(sha(source),'aa3225489f809029f362f9bb2a5ff30f1442a85eb5dda468663b3f0800a9e83b');
+ }
  // Admit only the exact Source301 replay tail to this TEST-ONLY historical
  // view. Reproduce the complete preserved Source300 bytes before following
  // its unchanged reconstruction chain; no runtime/catalog normalization.
