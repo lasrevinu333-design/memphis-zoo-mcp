@@ -5,6 +5,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { resolve, relative, sep } from 'node:path';
 import {selectFreshOnlySourceRows} from './ci-fresh-only-source-successor.mjs';
+import {normalizeDataStorage,validateOwnedDiskParent,createOwnedDiskStorage,assertOwnedDiskStorage,assertStorageMounts,observeOwnedDiskBudget,cleanupOwnedDiskStorage,assertOwnedDiskCleanupFence,assertOwnedDiskSettings} from './ci-fresh-owned-disk.mjs';
 
 // Explicit scoped fresh-only construction. This is not vendor NORMAL,
 // ledger adoption, production replay, or a substitute for downstream checks.
@@ -151,8 +152,11 @@ export function loadCiFreshOnlyReplay(root, image, names, options = {}) {
 // constructs a database. Existing loadCiFreshOnlyReplay remains the selector.
 export async function createCiFreshOnlyFixture(options) {
   assert.ok(options && typeof options === 'object' && !Array.isArray(options));
-  assert.deepEqual(Object.keys(options).filter(key => !['name', 'hostSocket', 'noAutoTableGrants'].includes(key)), []);
+  assert.deepEqual(Object.keys(options).filter(key => !['name', 'hostSocket', 'noAutoTableGrants', 'dataStorage'].includes(key)), []);
   const { name, hostSocket = false, noAutoTableGrants = false } = options;
+  const dataStorage = normalizeDataStorage(options.dataStorage);
+  for (const key of ['SCHEMA_REBUILD_DATA_STORAGE','SCHEMA_REBUILD_OWNED_DISK_PROFILE'])
+    assert.equal(process.env[key], undefined, 'Storage selection must come only from explicit constructor options');
   assert.match(name, /^mz_schema_rebuild_[A-Za-z0-9_]{1,100}$/);
   assert.equal(typeof hostSocket, 'boolean'); assert.equal(typeof noAutoTableGrants, 'boolean');
   if (noAutoTableGrants) {
@@ -169,6 +173,7 @@ export async function createCiFreshOnlyFixture(options) {
   const canonicalFingerprintBytes = readFileSync(resolve(root, 'supabase/canonical/schema-fingerprint.txt'));
   const canonicalFingerprintSHA = sha(canonicalFingerprintBytes);
   assert.match(canonicalFingerprintBytes.toString('utf8').trim(), /^[a-f0-9]{64}$/);
+  if(dataStorage==='owned-disk') validateOwnedDiskParent(process.env.TMPDIR);
   const directory = mkdtempSync(resolve(tmpdir(), 'custodial-ci-fixture-'));
   chmodSync(directory, 0o700);
   let socketParent = null;
@@ -190,7 +195,14 @@ export async function createCiFreshOnlyFixture(options) {
   const shortParentIdentity = socketParent ? fixtureDirectoryIdentity(socketParent, 0o700) : null;
   const namespace = fixtureDirectoryIdentity(directory, 0o700);
   const socketIdentity = socketDirectory ? fixtureDirectoryIdentity(socketDirectory, 0o777) : null;
+  let ownedDiskStorage = null;
+  if(dataStorage==='owned-disk') try {ownedDiskStorage=createOwnedDiskStorage({directory,parent:process.env.TMPDIR});} catch(error) {
+    assert.deepEqual(fixtureDirectoryIdentity(directory,0o700),namespace);
+    if(socketDirectory) {assert.deepEqual(fixtureDirectoryIdentity(socketParent,0o700),shortParentIdentity);assert.deepEqual(fixtureDirectoryIdentity(socketDirectory,0o777),socketIdentity);assert.deepEqual(readdirSync(socketDirectory),[]);rmdirSync(socketDirectory);rmdirSync(socketParent);}
+    assert.deepEqual(readdirSync(directory),[]);rmdirSync(directory);throw error;
+  }
   const intent = { schema: 'custodial.ci-fresh-fixture-parent-intent.v1', name, hostSocket, noAutoTableGrants,
+    ...(ownedDiskStorage ? {dataStorage,owned_disk_storage:ownedDiskStorage} : {}),
     directory, socketParent, shortParentIdentity, socketDirectory, image: manifest.image, source_selection: selection.receipt,
     full_suite_PASS: false, production: false };
   fixtureWrite(directory, 'PARENT_CONSTRUCTION_INTENT.json', intent);
@@ -209,6 +221,7 @@ export async function createCiFreshOnlyFixture(options) {
   };
   const assertNamespace = () => {
     assert.deepEqual(fixtureDirectoryIdentity(directory, 0o700), namespace);
+    if (ownedDiskStorage) { const storageState=assertOwnedDiskStorage(ownedDiskStorage,{allowAbsent:cleaned}); if(cleaned) assert.equal(storageState.absent,true); }
     if (socketDirectory && cleaned) { assert.equal(existsSync(socketDirectory), false); assert.equal(existsSync(socketParent), false); }
     if (socketDirectory && !cleaned) {
       assert.deepEqual(fixtureDirectoryIdentity(socketParent, 0o700), shortParentIdentity);
@@ -234,7 +247,9 @@ export async function createCiFreshOnlyFixture(options) {
     assert.equal(born.directory, custody); assert.equal(born.name, name); assert.equal(born.image, manifest.image);
     assert.equal(born.cidfile, resolve(custody, 'original-container.cid'));
     assert.equal(born.construction_only, true); assert.equal(born.host_socket_directory, socketDirectory);
-    assert.equal(born.max_connections, hostSocket ? 32 : 10); assert.equal(born.no_auto_table_grants, noAutoTableGrants);
+    assert.equal(born.max_connections, ownedDiskStorage ? 60 : hostSocket ? 32 : 10); assert.equal(born.no_auto_table_grants, noAutoTableGrants);
+    assert.equal(born.data_storage || 'tmpfs',dataStorage);
+    if(ownedDiskStorage) assert.deepEqual(born.owned_disk_storage,ownedDiskStorage);
     assert.match(born.owner, /^[a-f0-9-]{36}$/);
     if (prebirth) assert.deepEqual(born, prebirth); else prebirth = born;
     if (existsSync(born.cidfile)) {
@@ -264,10 +279,11 @@ export async function createCiFreshOnlyFixture(options) {
     assert.equal(observed.HostConfig.LogConfig.Type, 'local');
     assert.equal(observed.HostConfig.LogConfig.Config['max-size'], '1m'); assert.equal(observed.HostConfig.LogConfig.Config['max-file'], '2');
     assert.ok(observed.Config.Cmd.includes('listen_addresses='));
-    assert.ok(observed.Config.Cmd.includes(hostSocket ? 'max_connections=32' : 'max_connections=10'));
-    assert.deepEqual(observed.Config.Cmd.filter(value => value.startsWith('lock_timeout=')), [hostSocket ? 'lock_timeout=0' : 'lock_timeout=5000']);
+    assert.ok(observed.Config.Cmd.includes(ownedDiskStorage ? 'max_connections=60' : hostSocket ? 'max_connections=32' : 'max_connections=10'));
+    assert.deepEqual(observed.Config.Cmd.filter(value => value.startsWith('lock_timeout=')), [ownedDiskStorage || hostSocket ? 'lock_timeout=0' : 'lock_timeout=5000']);
     const bindings = observed.Mounts.filter(mount => mount.Type === 'bind');
-    assert.equal(bindings.length, hostSocket ? 2 : 1);
+    assert.equal(bindings.length, (hostSocket ? 2 : 1) + (ownedDiskStorage ? 1 : 0));
+    if(ownedDiskStorage) assertStorageMounts(observed,{storage:ownedDiskStorage,initDirectory:prebirth.empty_init_directory,socketDirectory});
     assert.ok(bindings.some(mount => mount.Destination === '/docker-entrypoint-initdb.d' && mount.Source === prebirth.empty_init_directory && mount.RW === false));
     assert.equal(observed.HostConfig.Tmpfs['/var/run/postgresql'], 'rw,size=8m');
     if (hostSocket) {
@@ -292,6 +308,11 @@ export async function createCiFreshOnlyFixture(options) {
       assert.equal(inspect(observed.Id), null); assert.equal(inspect(name), null);
     }
     assertNamespace();
+    let storageCleanup = null;
+    if(ownedDiskStorage) {
+      if(prebirth) storageCleanup = cleanupOwnedDiskStorage({storage:ownedDiskStorage,birth:prebirth,container:cid,custodyDirectory:prebirth.directory});
+      else { assertOwnedDiskStorage(ownedDiskStorage,{requireEmpty:true}); rmdirSync(ownedDiskStorage.data.path); storageCleanup={prebirth_failed:true,empty_leaf_removed:true}; }
+    }
     if (socketDirectory) {
       // SIGKILL container removal may leave its exact socket/lock directory entries.
       // The private namespace/type checks above precede unlink; no foreign tree scan.
@@ -299,13 +320,16 @@ export async function createCiFreshOnlyFixture(options) {
       rmdirSync(socketDirectory); rmdirSync(socketParent);
     }
     fixtureWrite(directory, 'PARENT_EXACT_FIXTURE_ABSENT.json', { id: cid, name, owner: prebirth?.owner || null,
-      original_child: childFence, exact_absence: true, socket_directory_removed: !!socketDirectory });
+      original_child: childFence, exact_absence: true, socket_directory_removed: !!socketDirectory,
+      ...(ownedDiskStorage ? {data_storage:dataStorage,storage_cleanup:storageCleanup} : {}) });
     cleaned = true;
     // Preserve original child streams/wait/custody receipts for the owning test.
   };
   try {
     childFence = await fixtureRunConstruction(directory, root, {
       ...process.env, TMPDIR: directory, SCHEMA_REBUILD_FRESH_ONLY: '1', SCHEMA_REBUILD_MIGRATIONS_ONLY: '1',
+      SCHEMA_REBUILD_DATA_STORAGE: ownedDiskStorage ? dataStorage : undefined,
+      SCHEMA_REBUILD_OWNED_DISK_PROFILE: ownedDiskStorage ? JSON.stringify(ownedDiskStorage) : undefined,
       SCHEMA_REBUILD_FIXTURE_NAME: name, SCHEMA_REBUILD_FIXTURE_SOCKET_DIRECTORY: socketDirectory || '',
       SCHEMA_REBUILD_NO_AUTO_TABLE_GRANTS: noAutoTableGrants ? '1' : undefined,
       SCHEMA_REBUILD_DOCKER_IMAGE: manifest.image, SCHEMA_REBUILD_DOCKER_USER: 'supabase_admin', SCHEMA_REBUILD_KEEP_DATABASE: '1',
@@ -318,7 +342,9 @@ export async function createCiFreshOnlyFixture(options) {
     assert.equal(construction.container, cid); assert.equal(construction.name, name); assert.equal(construction.owner, prebirth.owner);
     assert.equal(construction.image, manifest.image); assert.equal(construction.database, 'postgres');
     assert.equal(construction.custody_directory, custody); assert.equal(construction.socket_directory, socketDirectory);
-    assert.equal(construction.max_connections, hostSocket ? 32 : 10); assert.equal(construction.no_auto_table_grants, noAutoTableGrants);
+    assert.equal(construction.max_connections, ownedDiskStorage ? 60 : hostSocket ? 32 : 10); assert.equal(construction.no_auto_table_grants, noAutoTableGrants);
+    assert.equal(construction.data_storage || 'tmpfs',dataStorage);
+    if(ownedDiskStorage) { assert.deepEqual(construction.owned_disk_storage,ownedDiskStorage); assertOwnedDiskSettings(construction.owned_disk_settings_readback); }
     assert.equal(construction.full_suite_PASS, false); assert.equal(construction.synthetic_fixture_checks_executed, false);
     assert.deepEqual(construction.selected_replay, selection.receipt); assert.equal(construction.fingerprint_file_sha256, canonicalFingerprintSHA);
     if (noAutoTableGrants) {
@@ -368,7 +394,7 @@ export async function createCiFreshOnlyFixture(options) {
     selection.assertPreserved(); assert.equal(sha(readFileSync(resolve(root, 'supabase/canonical/schema-fingerprint.txt'))), canonicalFingerprintSHA);
     const observed = assertIdentity(); assert.equal(construction.image_id, observed.Image); assert.equal(observed.State.Running, true);
     const receipt = Object.freeze({ ...JSON.parse(constructionRaw), migration_witnesses: verifiedMigrationWitnesses, original_child: childFence, parent_custody_directory: directory });
-    return { container: cid, name, socketDirectory, receipt, assertOwned: async () => { const value = assertIdentity(); assert.equal(value.State.Running, true); return true; }, cleanup };
+    return { container: cid, name, socketDirectory, receipt, assertOwned: async () => { const value = assertIdentity(); assert.equal(value.State.Running, true); if(ownedDiskStorage) observeOwnedDiskBudget(ownedDiskStorage,cid); return true; }, cleanup };
   } catch (error) {
     let cleanupError;
     try { await cleanup(); } catch (failure) { cleanupError = failure; }
@@ -580,6 +606,8 @@ export async function assertCiFreshOnlyRetainedFixture(options) {
   assert.equal(birth.directory, custodyDirectory); assert.equal(birth.name, name); assert.equal(birth.image, manifest.image);
   assert.match(birth.owner, /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/);
   assert.equal(birth.cidfile, resolve(custodyDirectory, 'original-container.cid'));
+  const retainedDisk = birth.data_storage === 'owned-disk' ? birth.owned_disk_storage : null;
+  if(retainedDisk) { assert.equal(remove,true,'Owned disk is migrations-only, never functional adoption'); assert.equal(birth.construction_only,true); assertOwnedDiskStorage(retainedDisk,{allowAbsent:true}); assertOwnedDiskCleanupFence(retainedDisk); }
   // A durable original CID remains authoritative even when a caller failed
   // before parsing stdout. Never turn name absence into original-ID absence.
   if (existsSync(birth.cidfile)) {
@@ -618,11 +646,12 @@ export async function assertCiFreshOnlyRetainedFixture(options) {
       ['Error: No such object: ', 'Error: No such container: ', 'error: no such object: '].some(prefix => result.stderr === prefix + target + '\n')) return null;
     throw new Error('Retained fixture exact inspect unresolved: ' + target);
   };
+  const finishDiskCleanup = () => retainedDisk ? cleanupOwnedDiskStorage({storage:retainedDisk,birth,container,custodyDirectory}) : null;
   let observed;
   if (container === null) {
     observed = inspect(name);
     assert.equal(fixtureRead(custodyDirectory, 'PREBIRTH_ORIGINAL_CONTAINER.json'), birthRaw);
-    if (!observed) return { container: null, name, no_owned_resource_born: true, exact_absence: true, removed_by_this_call: false, functional_adoption: false };
+    if (!observed) return { container: null, name, no_owned_resource_born: true, exact_absence: true, removed_by_this_call: false, functional_adoption: false, ...(retainedDisk ? {storage_cleanup:finishDiskCleanup()} : {}) };
     // A name is only a discovery hint. Bind an actual CID only after exact
     // private birth owner/image agreement; never remove a foreign collision.
     assert.match(observed.Id, /^[a-f0-9]{64}$/); assert.equal(observed.Name, '/' + name);
@@ -634,7 +663,7 @@ export async function assertCiFreshOnlyRetainedFixture(options) {
   if (!observed) {
     assert.equal(inspect(name), null, 'Original CID absent but alias points to another object; no cleanup');
     assert.equal(remove, true, 'Full functional fixture no longer present');
-    return { container, name, exact_absence: true, removed_by_this_call: false, functional_adoption: false };
+    return { container, name, exact_absence: true, removed_by_this_call: false, functional_adoption: false, ...(retainedDisk ? {storage_cleanup:finishDiskCleanup()} : {}) };
   }
   assert.equal(observed.Id, container); assert.equal(observed.Name, '/' + name);
   assert.equal(observed.Config.Labels?.['custodial.owner'], birth.owner);
@@ -648,10 +677,11 @@ export async function assertCiFreshOnlyRetainedFixture(options) {
     selection.assertPreserved(); assert.equal(observed.State.Running, true);
     return { container, name, owner: birth.owner, image: manifest.image, image_id: imageID, full_suite_PASS: true, functional_adoption: true };
   }
+  if(retainedDisk) assertStorageMounts(observed,{storage:retainedDisk,initDirectory:birth.empty_init_directory,socketDirectory:birth.host_socket_directory});
   const result = spawnSync('docker', ['rm', '-f', container], { encoding: 'utf8', timeout: 30_000, maxBuffer: 1024 * 1024 });
   assert.equal(result.status, 0, 'Exact retained fixture removal failed'); assert.equal(result.stdout.trim(), container);
   assert.equal(inspect(container), null); assert.equal(inspect(name), null);
-  const removal = { container, name, owner: birth.owner, exact_absence: true, removed_by_this_call: true, functional_adoption: false };
+  const removal = { container, name, owner: birth.owner, exact_absence: true, removed_by_this_call: true, functional_adoption: false, ...(retainedDisk ? {storage_cleanup:finishDiskCleanup()} : {}) };
   fixtureWrite(custodyDirectory, 'FULL_REBUILD_RETAINED_EXACT_ABSENCE.json', removal);
   return removal;
 }

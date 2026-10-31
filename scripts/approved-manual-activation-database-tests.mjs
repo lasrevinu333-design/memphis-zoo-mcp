@@ -66,7 +66,8 @@ function copiedPort(statement){
  return{create:`create temporary table event_rpc_input(${match[1]}) on commit drop`,
   insert:`insert into pg_temp.event_rpc_input(${columns.join(',')}) values(${columns.map((_,i)=>'$'+(i+1)+'::jsonb').join(',')})`,values,tail:match[4]};
 }
-async function qualifyCurrentEightTypedInitial({out,input,constructFixture=createCiFreshOnlyFixture}){
+async function qualifyCurrentEightTypedInitial({out,input,constructFixture=createCiFreshOnlyFixture,afterInitial=null}){
+ assert.ok(afterInitial===null||typeof afterInitial==='function');
  assert.ok(isAbsolute(out)&&isAbsolute(input));assert.equal(fs.existsSync(out),false,'New evidence directory only; no consumed request retry');
  const spec=JSON.parse(fs.readFileSync(input,'utf8'));exact(spec,['schema','constructorMigrations','componentSql','performanceProofSql','historicalReference','approvedReference','recordedRoster','protectedSources']);
  assert.equal(spec.schema,'custodial.current-eight-owned-typed-initial-input.v1');assert.equal(spec.constructorMigrations,303);
@@ -236,6 +237,14 @@ async function qualifyCurrentEightTypedInitial({out,input,constructFixture=creat
    }
   }
   assert.equal(employeeDayReadbacks,40);sourceCurrent();
+  // Optional local repair qualification runs only after the unchanged complete
+  // activation evidence exists. Its sources are frozen in protectedSources.
+  // It receives only this runner's owned fixture and must not choose a target.
+  if(afterInitial){
+   setPhase('frozen_isolated_repair_extension');
+   result.repairExtension=await afterInitial({fixture,pool,plane,manager,at,accepted,ids,query,tx,save,sourceCurrent});
+   sourceCurrent();assert.equal(unknown,false);
+  }
   assert.equal(sessionBoundaries.length,3);assert.equal(unknown,false);result.sessionBoundaries=sessionBoundaries;
   Object.assign(result,{status:'PASS',currentDate:at,publicationId:accepted.publicationId,projectionId:accepted.projectionId,activationOperation:ids.activation,original22Preserved:true,actualSlots30:true,newEmployeeRows0:true,allEightActiveForSchedule:true,firstWorkdayExclusions:0,fullHourLunches:40,employeeDayReadbacks,ownershipChecks,actualCredentialBoundManagerSQL:true,samePhysicalTransaction:true,normalSevenSourcesChanged:false,productionWritten:false,physicalDelivery:false,canonicalSource303Qualified:false});
  }catch(e){unknown=unknown||/^(08|ECONN|57P)/.test(String(e.code??''))||/UNKNOWN|custody_unknown|outcome_unknown|database_unavailable/i.test(String(e.code??''))||/connection terminated/i.test(String(e.message??''))||e.coverAllOriginalTransactionState==='UNKNOWN';Object.assign(result,{status:unknown?'UNKNOWN':'FAIL',failedPhase:result.phase,code:e.code??null,message:String(e.message).slice(0,1800),where:String(e.where??e.cause?.where??'').slice(0,5000),position:e.position??null,internalPosition:e.internalPosition??null,internalQuery:e.internalQuery??null,originalOperationId:activeOriginalIdentity?.operationId??ids.activation,activeOriginalIdentity,retry:false,activeCommandSequence:activeCommand?.sequence??null});process.exitCode=1;}
@@ -272,13 +281,16 @@ async function qualifyCurrentEightTypedInitial({out,input,constructFixture=creat
  }
  return result;
 }
-export async function runApprovedManualActivationDatabaseTest({out,constructFixture=createCiFreshOnlyFixture,constructorMigrationCount=303}){
+export async function runApprovedManualActivationDatabaseTest({out,constructFixture=createCiFreshOnlyFixture,constructorMigrationCount=303,afterInitial=null,extensionSources=[]}){
  assert.equal(constructorMigrationCount,303);assert.ok(isAbsolute(out));
+ assert.ok(afterInitial===null||typeof afterInitial==='function');assert.ok(Array.isArray(extensionSources));
+ assert.equal(afterInitial===null,extensionSources.length===0,'An extension requires explicit frozen sources');
+ for(const p of extensionSources){assert.ok(isAbsolute(p)&&p.startsWith(B+'/'));assert.equal(fs.realpathSync(p),p);}
  const ref=path=>{const raw=fs.readFileSync(path);return {path,sha256:sha(raw),bytes:raw.length};};
  const week=readApprovedManualWeek(),required=[fileURLToPath(import.meta.url),resolve(B,'scripts/prepare-approved-manual-release-packet.mjs'),resolve(W,'fixtures/derive-recorded-predecessor.mjs'),resolve(B,'scripts/ci-fresh-only-replay.mjs'),resolve(B,'scripts/fixtures/event-static-authority-fixture.mjs'),resolve(B,'scripts/schema-fingerprint-catalog.mjs'),resolve(B,'src/static-weekly-control-plane.js'),resolve(B,'src/approved-manual-coverall-management.js'),resolve(B,'src/approved-manual-recurring-transport.js'),resolve(B,'src/approved-manual-period-worker.js'),resolve(B,'src/approved-manual-employment-admission.js'),resolve(B,'src/approved-manual-employment-integration.js'),resolve(B,'release/worker1-employment-admission-20261030/OWNER_APPROVED_EIGHT_ACTIVE_20261031.json')];
- const spec={schema:'custodial.current-eight-owned-typed-initial-input.v1',constructorMigrations:303,componentSql:COMPONENTS.map(p=>ref(resolve(B,p))),performanceProofSql:ref(resolve(B,'proposals/approved-manual-lunch-admission-proof.sql')),historicalReference:ref(resolve(B,'scripts/fixtures/full-nine-v6-source.json')),approvedReference:ref(resolve(B,week.referenceBindings.reference.path)),recordedRoster:ref(resolve(B,'scripts/fixtures/manual-live-roster-20261030.json')),protectedSources:required.map(ref)};
+ const spec={schema:'custodial.current-eight-owned-typed-initial-input.v1',constructorMigrations:303,componentSql:COMPONENTS.map(p=>ref(resolve(B,p))),performanceProofSql:ref(resolve(B,'proposals/approved-manual-lunch-admission-proof.sql')),historicalReference:ref(resolve(B,'scripts/fixtures/full-nine-v6-source.json')),approvedReference:ref(resolve(B,week.referenceBindings.reference.path)),recordedRoster:ref(resolve(B,'scripts/fixtures/manual-live-roster-20261030.json')),protectedSources:[...new Set([...required,...extensionSources])].map(ref)};
  const input=out+'.INPUT.json';fs.mkdirSync(dirname(out),{recursive:true});fs.writeFileSync(input,JSON.stringify(spec,null,2)+'\n',{flag:'wx',mode:0o600});
- return qualifyCurrentEightTypedInitial({out,input,constructFixture});
+ return qualifyCurrentEightTypedInitial({out,input,constructFixture,afterInitial});
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
  const args=process.argv.slice(2);assert.equal(args.length,2);assert.equal(args[0],'--out');

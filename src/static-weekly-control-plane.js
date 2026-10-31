@@ -16,7 +16,7 @@ import { randomBytes, createHash, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { MANAGER_OPERATION_MILLISECONDS, CLEANUP_RESERVE_MILLISECONDS } from "./static-weekly-manager-operation.js";
 import { assertOwnerRecurringWorkdays } from "./static-weekly-owner-workdays.js";
-import { createCoverAllPrintDocument } from "./static-weekly-coverall-print.js";
+import { createCoverAllPrintDocument, coverAllIssuingManagerFromActor } from "./static-weekly-coverall-print.js";
 import {listCoverAllEventBriefPreviews,confirmCoverAllEventBrief,revalidateConfirmedCoverAllEventBrief} from './coverall-event-brief.js';
 import { Pool } from "pg";
 import { createStaticWeeklyDraftRpcInput } from "./static-weekly-schedule-database-adapter.js";
@@ -794,18 +794,22 @@ export function createStaticWeeklyControlPlane({
   }
 
   async function acceptedCoverAllDocument(client,{manager,weekStart,serviceDate,expectedRevision,projectionId}){
-    const issuingManager=requireManager(manager,"manage_coverall");
+    requireManager(manager,"manage_coverall");
     const verifiedActor=await call(client,"custodial_action_actor_v1",[
       manager.manager_id,manager.credential_id,manager.device_id,manager.access_level,"manage_coverall"]);
     if(verifiedActor?.manager_id!==manager.manager_id)throw fail("42501","Current CoverAll manager identity is required.");
-    return readAcceptedCoverAllDocument(client,{weekStart,serviceDate,expectedRevision,projectionId,issuingManager});
+    return readAcceptedCoverAllDocument(client,{weekStart,serviceDate,expectedRevision,projectionId,
+      issuingManager:coverAllIssuingManagerFromActor(verifiedActor)});
   }
   async function readAcceptedCoverAllDocument(client,{weekStart,serviceDate,expectedRevision,projectionId,issuingManager}){
-    const week=requireMonday(weekStart,'week start'),date=requireDateInWeek(serviceDate,week,'service date');
+    const week=requireDate(weekStart,'period start'),date=requireDateInWeek(serviceDate,week,'service date');
     const revision=requireRevision(expectedRevision);
     await lockStaticWeeklyAuthority(client);
     const snapshot=await snapshotFor(client,week);
     const source=await sourceFor(client,requirePublicationId(snapshot?.current_publication?.publication_id),date);
+    const frame=isApprovedManualPublication(source)?approvedManualMaterializationFrame(source,date):mondayForDate(date,'service date');
+    if(week!==frame||snapshot.week_start!==frame||snapshot.week_end!==new Date(Date.parse(frame+'T12:00Z')+6*86400000).toISOString().slice(0,10))
+      throw fail('coverall_print_accepted_period_required','The handout must name the accepted publication period for its service date.');
     const lunch=await call(client,'static_weekly_v8_read_lunch_document',[date]);
     return createCoverAllPrintDocument({snapshot,source,lunch,serviceDate:date,expectedRevision:revision,projectionId:text(projectionId),issuingManager});
   }
@@ -1493,9 +1497,15 @@ export function createStaticWeeklyControlPlane({
           assertOperationActive(signal);
           return prepareApprovedManualPeriodIsolated(input,{deadlineAtMilliseconds:expiresAt-STATIC_WEEKLY_MANAGER_CLEANUP_RESERVE_MS});
         })});
-      if(receipt.replayed===true)return {operation:'materialize_projection',revision:receipt.authorityRevision,replayed:true,
-        data:{projection_id:receipt.projectionId,original_receipt:receipt,current_readback_repeated:false}};
       const current=await snapshotFor(client,frame),lunch=await call(client,'static_weekly_v8_read_lunch_document',[frame]);
+      if(receipt.replayed===true){
+        const verified=current?.projection_status==='current'&&current.authority_revision===receipt.authorityRevision
+          &&text(current.current_publication?.publication_id)===publicationId&&text(current.latest_projection?.projection_id)===receipt.projectionId
+          &&lunch?.persistence_status==='PERSISTED'&&lunch.projection_id===receipt.projectionId&&lunch.document_identity===receipt.lunchDocumentIdentity;
+        return {operation:'materialize_projection',revision:receipt.authorityRevision,replayed:true,
+          data:{projection_id:receipt.projectionId,original_receipt:receipt,current_readback_repeated:verified,
+            ...(verified?{current_projection:current.latest_projection}:{})}};
+      }
       if(receipt.status!=='PERSISTED_CURRENT'||current?.projection_status!=='current'
         ||text(current.current_publication?.publication_id)!==publicationId||text(current.latest_projection?.projection_id)!==receipt.projectionId
         ||lunch?.persistence_status!=='PERSISTED'||lunch.projection_id!==receipt.projectionId||lunch.document_identity!==receipt.lunchDocumentIdentity)
@@ -1737,12 +1747,21 @@ export function createStaticWeeklyControlPlane({
     async getManagerSnapshot({ manager, weekStart }) {
       const actor=requireManager(manager, { readOnlyOperation: true });
       return transaction(async client=>{
-        const week=requireDate(weekStart,'week start'),snapshot=await snapshotFor(client,week);
-        if(snapshot.projection_status!=='current'||!['approved-static-fixed-v1','approved-manual-period-v1'].includes(snapshot.latest_projection?.compiler_version)
-          ||!snapshot.current_publication?.publication_id)return snapshot;
+        const week=requireDate(weekStart,'week start');let snapshot=await snapshotFor(client,week);
+        if(!snapshot.current_publication?.publication_id)return snapshot;
         const frame=requireDate(snapshot.week_start,'current publication window');
         const registered=await call(client,'static_weekly_v3_read_publication_source',[snapshot.current_publication.publication_id,frame]);
-        if(!registered.compiler_input?.version?.manualGroupRatingAuthority)return snapshot;
+        if(!isApprovedManualPublication(registered))return snapshot;
+        const origin=requireDate(registered.effective_start??registered.compiler_input.version.effectiveStart,'approved activation origin'),
+          expectedFrame=approvedManualMaterializationFrame(registered,frame),frameEnd=new Date(Date.parse(frame+'T12:00Z')+6*86400000).toISOString().slice(0,10);
+        if(expectedFrame!==frame||snapshot.week_end!==frameEnd||registered.authority_revision!==snapshot.authority_revision||registered.publication_id!==snapshot.current_publication.publication_id
+          ||registered.version_id!==snapshot.current_publication.version_id)throw fail('static_manual_period_source_changed');
+        // Source identity is available even when its projection is absent/stale.
+        // This metadata never represents current assignments or a new publication.
+        snapshot={...snapshot,approved_manual_period:{schema:'custodial.approved-manual-period-window.v1',
+          manifestSha256:registered.compiler_input.version.manualGroupRatingAuthority.manifestSha256,
+          publicationId:registered.publication_id,versionId:registered.version_id,origin,frameStart:frame,frameEnd,normalSourceLocked:true}};
+        if(snapshot.projection_status!=='current'||!['approved-static-fixed-v1','approved-manual-period-v1'].includes(snapshot.latest_projection?.compiler_version))return snapshot;
         const lunch=await call(client,'static_weekly_v8_read_lunch_document',[frame]);
         let projectionAvailability=null;
         if(snapshot.latest_projection.compiler_version==='approved-manual-period-v1'){
@@ -2463,7 +2482,7 @@ export function createStaticWeeklyControlPlane({
       if(!/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(input.requestId))throw fail('coverall_link_request_id_required');
       return transaction(async client=>{
         const document=await acceptedCoverAllDocument(client,input);
-        const binding=coverAllCanonicalBinding(document,input.capacityId);
+        const binding=coverAllCanonicalBinding(document,input.capacityId,input.weekStart);
         const token=randomBytes(32).toString('base64url'),id=input.requestId;
         const result=await call(client,'static_weekly_issue_coverall_link',[
           input.manager.manager_id,input.manager.credential_id,input.manager.device_id,input.manager.access_level,

@@ -6,6 +6,7 @@ import {deliverNativeMessageJob} from '../../src/native-message-dispatch.js';
 import {deliverNativeEventJob} from '../../src/native-event-dispatch.js';
 import {holdUnqualifiedNativeScheduleJob} from '../../src/native-schedule-job-preparation.js';
 import {prepareNativeScheduleSourceJobs} from '../../src/native-schedule-source-producer.js';
+import {nativeAlertUtf8Prefix,nativeAlertPreview} from '../../src/native-alert-text.js';
 // Actual worker body; only DB/auth imports, unrelated lanes and scheduler are
 // synthetic. Both new alert owners and the existing Event formatter are real.
 export async function qualifiedAlertDispatcher(f){
@@ -15,12 +16,13 @@ export async function qualifiedAlertDispatcher(f){
   "import { deliverNativeLocationJob } from './native-location-dispatch.js';","import { deliverNativeLunchJob } from './native-lunch-dispatch.js';",
   "import { deliverNativeMessageJob } from './native-message-dispatch.js';","import { deliverNativeEventJob } from './native-event-dispatch.js';",
   "import { holdUnqualifiedNativeScheduleJob } from './native-schedule-job-preparation.js';",
-  "import { prepareNativeScheduleSourceJobs } from './native-schedule-source-producer.js';"]){
+  "import { prepareNativeScheduleSourceJobs } from './native-schedule-source-producer.js';",
+  "import { nativeAlertUtf8Prefix, nativeAlertPreview } from './native-alert-text.js';"]){
   if(source.split(line).length!==2)throw Error('exact worker import seam changed');source=source.replace(line,'');
  }
  if(/^import /m.test(source))throw Error('unaccounted worker dependency');source=source.replace(/^export /gm,'');
  const install=runInNewContext(source+'\ninstallEmployeeNotificationRoutes;',{
-  crypto,isDeepStrictEqual,structuredClone,process:{pid:1,env:{}},console,
+  crypto,isDeepStrictEqual,structuredClone,nativeAlertUtf8Prefix,nativeAlertPreview,process:{pid:1,env:{}},console,
   createClient(){throw Error('No real environment DB allowed');},makeDeviceCredentialMiddleware(){return()=>{};},
   deliverNativeLocationJob:()=>({unchanged:'location'}),deliverNativeLunchJob:()=>({unchanged:'lunch'}),
   deliverNativeMessageJob,deliverNativeEventJob,holdUnqualifiedNativeScheduleJob,prepareNativeScheduleSourceJobs,setInterval(){return{unref(){}};},

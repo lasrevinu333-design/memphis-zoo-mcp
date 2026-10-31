@@ -8,6 +8,38 @@ const text=value=>typeof value==='string'?value:'';
 const clock=n=>`${String(Math.floor(n/60)).padStart(2,'0')}:${String(n%60).padStart(2,'0')}`;
 const hash=value=>createHash('sha256').update(value).digest('hex');
 const window=value=>normalizeWindow(value,'accepted CoverAll print window');
+// Routing-only duties have no physical cleaning members. Keep their continuity
+// separate from physical-room ownership, including when IDs happen to coincide.
+const coverageKeys=segment=>segment.serviceMode
+ ?[`routing:${segment.serviceMode}:${segment.areaId}`]
+ :segment.locations.map(location=>`physical:${location.id}`);
+
+// The caller supplies the database-verified original actor, never a browser
+// display name. A shared credential authenticates the cohort, not its claim.
+export function coverAllIssuingManagerFromActor(actor){
+ if(!text(actor?.manager_id).trim()||!text(actor?.manager_name).trim())fail('coverall_print_issuing_manager_required');
+ const manager={managerId:actor.manager_id,managerName:actor.manager_name};
+ if(actor.actor_kind==='CUSTODIAL_LEADERSHIP_COHORT'){
+  if(actor.identity_assurance!=='SELF_ASSERTED_NAME'||actor.individual_identity_verified!==false
+   ||!text(actor.claimed_account_id).trim()||!text(actor.claimed_name).trim())fail('coverall_print_issuing_manager_required');
+  return {...manager,actorKind:actor.actor_kind,identityAssurance:actor.identity_assurance,
+   individualIdentityVerified:false,claimedAccountId:actor.claimed_account_id,claimedName:actor.claimed_name};
+ }
+ return manager;
+}
+function managerContact(manager){
+ if(!text(manager?.managerId).trim()||!text(manager?.managerName).trim())return null;
+ if(manager.actorKind==='CUSTODIAL_LEADERSHIP_COHORT'){
+  if(manager.identityAssurance!=='SELF_ASSERTED_NAME'||manager.individualIdentityVerified!==false
+   ||!text(manager.claimedAccountId).trim()||!text(manager.claimedName).trim())fail('coverall_print_issuing_manager_required');
+  return {name:manager.managerName.trim()+' (claimed name: '+manager.claimedName.trim()+')',
+   role:'Issuing custodial manager',method:'IN_PERSON',authority:'AUTHENTICATED_COHORT_SELF_ASSERTED_NAME',
+   managerId:manager.managerId,claimedAccountId:manager.claimedAccountId,claimedName:manager.claimedName.trim(),
+   identityAssurance:'SELF_ASSERTED_NAME',individualIdentityVerified:false};
+ }
+ return {name:manager.managerName.trim(),role:'Issuing custodial manager',method:'IN_PERSON',
+  authority:'AUTHENTICATED_NAMED_MANAGER',managerId:manager.managerId};
+}
 
 // Presentation only. All assignments, temporary loans and dated capacity come
 // from one accepted projection read under the existing authority lock.
@@ -41,7 +73,10 @@ export function createCoverAllPrintDocument({snapshot,source,lunch,serviceDate,e
   const capacity=contractorSlots.get(r.owner_slot_id);
   if(capacity?.kind==='CONTRACTOR_CAPACITY'&&(r.owner_kind!=='CONTRACTOR_CAPACITY'||r.capacity_id!==capacity.id||r.owner_person_id!==null))fail('coverall_print_nonemployee_identity_mismatch');
   const w=r.work_snapshot,locations=list(w?.includedLocations),span=window(w.window);
-  if(!text(r.plan_work_id)||!text(r.owner_slot_id)||!locations.length)fail('coverall_print_incomplete_assignment');
+  const nonphysical=w.serviceMode==='reminder_only'||w.serviceMode==='response_only_no_clean';
+  if(!text(r.plan_work_id)||!text(r.owner_slot_id)
+   ||(nonphysical?(locations.length!==0||!text(w.locationId).trim()||!text(w.locationNameSnapshot||w.locationCodeSnapshot).trim())
+    :(w.serviceMode!=='scan_tracked'||!locations.length)))fail('coverall_print_incomplete_assignment');
   const overrides=list(lunch.responsibilities).filter(x=>x.service_date===serviceDate&&x.normal_owner_slot_id===r.owner_slot_id)
    .flatMap(x=>list(x.segments).filter(s=>s.planWorkId===r.plan_work_id).map(s=>({span:window(s.window),owner:x.coverer_slot_id,loan:x.loan_id})));
   const boundaries=[...new Set([span.startMinute,span.endMinute,...overrides.flatMap(o=>[o.span.startMinute,o.span.endMinute])])].sort((a,b)=>a-b);
@@ -53,11 +88,12 @@ export function createCoverAllPrintDocument({snapshot,source,lunch,serviceDate,e
    if(!text(owner))fail('coverall_print_missing_owner');
    segments.push({owner,start:a,end:b,areaId:text(w.locationId),area:text(w.locationNameSnapshot)||text(w.locationCodeSnapshot),
     locations:locations.map(l=>({id:text(l.locationId),name:text(l.locationNameSnapshot)})),
+    ...(nonphysical?{serviceMode:w.serviceMode}:{}),
     purpose:loans.length?'lunch_coverage':w.serviceMode==='reminder_only'?'reminder_only':'area_owner'});
   }
  }
  const globalSignature=minute=>canonicalJson(segments.filter(s=>s.start<=minute&&minute<s.end)
-  .flatMap(s=>s.locations.map(l=>`${l.id}|${s.owner}|${s.purpose}`)).sort());
+  .flatMap(s=>coverageKeys(s).map(key=>`${key}|${s.owner}|${s.purpose}`)).sort());
  const keep0945=globalSignature(584)!==globalSignature(585);
  const roster=list(snapshot.roster);
  const ownerName=id=>{
@@ -75,14 +111,14 @@ export function createCoverAllPrintDocument({snapshot,source,lunch,serviceDate,e
   const times=[...new Set([c.shift.startMinute,c.shift.endMinute,...own.flatMap(s=>[s.start,s.end]),...(keep0945&&c.shift.startMinute<585&&585<c.shift.endMinute?[585]:[])])].sort((a,b)=>a-b);
   for(let i=0;i<times.length-1;i++){
    const start=times[i],end=times[i+1];
-   const areas=own.filter(s=>s.start<=start&&end<=s.end).map(s=>({areaId:s.areaId,area:s.area,locations:s.locations,purpose:s.purpose}));
+   const areas=own.filter(s=>s.start<=start&&end<=s.end).map(s=>({areaId:s.areaId,area:s.area,locations:s.locations,purpose:s.purpose,...(s.serviceMode?{serviceMode:s.serviceMode}:{})}));
    const unique=[...new Map(areas.map(a=>[canonicalJson(a),a])).values()].sort((a,b)=>canonicalJson(a).localeCompare(canonicalJson(b)));
    const prior=c.periods.at(-1);
    if(prior&&canonicalJson(prior.areas)===canonicalJson(unique)&&!(keep0945&&start===585))prior.end=clock(end);
    else c.periods.push({start:clock(start),end:clock(end),areas:unique});
   }
   const final=own.filter(s=>s.end===c.shift.endMinute);
-  c.shiftEndHandoffs=final.map(s=>({area:s.area,locations:s.locations,nextOwners:[...new Set(segments.filter(next=>next.owner!==c.slotId&&next.start<=c.shift.endMinute&&c.shift.endMinute<next.end&&next.locations.some(l=>s.locations.some(old=>old.id===l.id))).map(next=>ownerName(next.owner)))]}));
+  c.shiftEndHandoffs=final.map(s=>({area:s.area,locations:s.locations,...(s.serviceMode?{serviceMode:s.serviceMode}:{}),nextOwners:[...new Set(segments.filter(next=>next.owner!==c.slotId&&next.start<=c.shift.endMinute&&c.shift.endMinute<next.end&&coverageKeys(next).some(key=>coverageKeys(s).includes(key))).map(next=>ownerName(next.owner)))]}));
   const availability=selected.find(e=>e.payload.availability.slotId===c.slotId).payload.availability;
   for(const period of c.periods)Object.assign(period,suggestCoverAllAreaOrder({areas:period.areas,proximity:source.compiler_input.proximity,
    anchorLocationId:availability.acceptedRouteAnchorLocationId,anchorProvenance:availability.acceptedRouteProvenance}));
@@ -94,16 +130,13 @@ export function createCoverAllPrintDocument({snapshot,source,lunch,serviceDate,e
   // This metadata does not invent a contractor account, phone or NFC workflow.
   show0945:keep0945,contractors,contractorCompletionRecorder:'ERIC_OPERLE_PERSONAL_VERIFICATION',
   guidanceVersion:'custodial.coverall-guidance.v1',
-  managerContact:issuingManager&&typeof issuingManager.managerId==='string'&&typeof issuingManager.managerName==='string'
-   &&issuingManager.managerId.trim()&&issuingManager.managerName.trim()
-   ?{name:issuingManager.managerName.trim(),role:'Issuing custodial manager',method:'IN_PERSON',
-    authority:'AUTHENTICATED_NAMED_MANAGER',managerId:issuingManager.managerId}:null};
+  managerContact:managerContact(issuingManager)};
  return {...document,documentDigest:hash(canonicalJson(document))};
 }
 
 const labels={
- en:{title:'CoverAll assignments',revision:'Accepted revision',date:'Service date',shift:'Shift',lunch:'Lunch',unpublished:'No contractor lunch is published; confirm with the manager.',empty:'No assigned areas in this period.',lunchCoverage:'Temporary lunch coverage',reminder:'Reminder-only work',end:'Shift-end coverage',none:'No later owner in this accepted schedule.',note:'Follow these accepted coverage times. Lunch relief does not add a full cleaning round.',page:'Page'},
- es:{title:'Asignaciones de CoverAll',revision:'Revisión aceptada',date:'Fecha de servicio',shift:'Turno',lunch:'Almuerzo',unpublished:'No hay almuerzo del contratista publicado; confirme con el encargado.',empty:'No hay áreas asignadas en este período.',lunchCoverage:'Cobertura temporal de almuerzo',reminder:'Trabajo de recordatorio',end:'Cobertura al terminar el turno',none:'No hay responsable posterior en este horario aceptado.',note:'Siga estos horarios de cobertura. El relevo de almuerzo no añade una limpieza completa.',page:'Página'},
+ en:{title:'CoverAll assignments',revision:'Accepted revision',date:'Service date',shift:'Shift',lunch:'Lunch',unpublished:'No contractor lunch is published; confirm with the manager.',empty:'No assigned areas in this period.',lunchCoverage:'Temporary lunch coverage',reminder:'Reminder-only work',response:'Response only; no scheduled cleaning.',end:'Shift-end coverage',none:'No later owner in this accepted schedule.',note:'Follow these accepted coverage times. Lunch relief does not add a full cleaning round.',page:'Page'},
+ es:{title:'Asignaciones de CoverAll',revision:'Revisión aceptada',date:'Fecha de servicio',shift:'Turno',lunch:'Almuerzo',unpublished:'No hay almuerzo del contratista publicado; confirme con el encargado.',empty:'No hay áreas asignadas en este período.',lunchCoverage:'Cobertura temporal de almuerzo',reminder:'Trabajo de recordatorio',response:'Solo respuesta; sin limpieza programada.',end:'Cobertura al terminar el turno',none:'No hay responsable posterior en este horario aceptado.',note:'Siga estos horarios de cobertura. El relevo de almuerzo no añade una limpieza completa.',page:'Página'},
 };
 
 const instructions={
@@ -123,7 +156,10 @@ function assertCurrentPrintDocument(document){
  if(document?.schema!=='custodial.coverall-accepted-print.v1')fail('coverall_print_document_required');
  const {documentDigest,...canonical}=document;
  if(documentDigest!==hash(canonicalJson(canonical)))fail('coverall_print_document_digest_mismatch');
- if(document.guidanceVersion!=='custodial.coverall-guidance.v1'||document.managerContact?.authority!=='AUTHENTICATED_NAMED_MANAGER'
+ const contact=document.managerContact,cohort=contact?.authority==='AUTHENTICATED_COHORT_SELF_ASSERTED_NAME';
+ if(cohort&&(contact.identityAssurance!=='SELF_ASSERTED_NAME'||contact.individualIdentityVerified!==false
+  ||!text(contact.claimedAccountId).trim()||!text(contact.claimedName).trim()))fail('coverall_print_issuing_manager_required');
+ if(document.guidanceVersion!=='custodial.coverall-guidance.v1'||(!cohort&&contact?.authority!=='AUTHENTICATED_NAMED_MANAGER')
   ||document.managerContact.method!=='IN_PERSON'||!text(document.managerContact.name).trim()||!text(document.managerContact.managerId).trim())fail('coverall_print_issuing_manager_required');
  if(Object.hasOwn(document,'eventBriefs')){
   if(!Array.isArray(document.eventBriefs)||!document.eventBriefs.length||document.eventBriefs.length>16)fail('coverall_print_event_brief_invalid');
@@ -178,10 +214,10 @@ function contractorLines(document,c,language){
   if(!period.areas.length)add(t.empty);
   else if(period.advisoryOrder?.status==='ADVISORY_VERIFIED_PROXIMITY')add(language==='es'?'Orden sugerido por proximidad:':'Suggested proximity order:');
   else add(language==='es'?'Orden no comprobado; confirme con el encargado.':'Order unproven; confirm with the manager.');
-  for(const a of period.areas){add(a.area,11,true);add(a.locations.map(l=>l.name).join('; '));if(a.purpose==='lunch_coverage')add(t.lunchCoverage);if(a.purpose==='reminder_only')add(t.reminder);}
+  for(const a of period.areas){add(a.area,11,true);if(a.locations.length)add(a.locations.map(l=>l.name).join('; '));if(a.purpose==='lunch_coverage')add(t.lunchCoverage);if(a.serviceMode==='response_only_no_clean')add(t.response);if(a.serviceMode==='reminder_only'||a.purpose==='reminder_only')add(t.reminder);}
  }
  add(`${t.end} - ${c.shift.end}`,13,true);
- for(const h of c.shiftEndHandoffs)add(`${h.area}: ${h.nextOwners.length?h.nextOwners.join(', '):t.none}`);
+ for(const h of c.shiftEndHandoffs){add(`${h.area}: ${h.nextOwners.length?h.nextOwners.join(', '):t.none}`);if(h.serviceMode==='response_only_no_clean')add(t.response);if(h.serviceMode==='reminder_only')add(t.reminder);}
  return out;
 }
 

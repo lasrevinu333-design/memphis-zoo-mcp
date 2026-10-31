@@ -31,7 +31,7 @@
     "test:restroom-rebalance-route": "node scripts/restroom-rebalance-route-tests.mjs",
     "test:ai-intent": "node scripts/smoke-ai-intent.mjs",
     "test:messaging": "node scripts/memphis-messaging-regression-tests.mjs && node scripts/memphis-events-audience-regression-tests.mjs && node scripts/memphis-operational-grounding-regression-tests.mjs && node scripts/messaging-synthetic-roundtrip-tests.mjs",
-    "test:auth": "node scripts/mcp-connector-auth-tests.mjs && node scripts/mcp-self-contained-oauth-wire-tests.mjs && node scripts/mcp-transport-tool-surface-tests.mjs && node scripts/operations-leadership-mobile-contract-tests.mjs && node scripts/manager-named-enrollment-http-tests.mjs && node scripts/manager-credential-boundary-tests.mjs && node scripts/manager-route-authority-contract-tests.mjs && node scripts/map-manager-identity-tests.mjs && node --test scripts/outlook-event-sync-adapter-tests.mjs && node scripts/custodial-leadership-ticket-tests.mjs",
+    "test:auth": "node scripts/mcp-connector-auth-tests.mjs && node scripts/mcp-self-contained-oauth-wire-tests.mjs && node scripts/mcp-transport-tool-surface-tests.mjs && node scripts/operations-leadership-mobile-contract-tests.mjs && node scripts/manager-named-enrollment-http-tests.mjs && node scripts/manager-credential-boundary-tests.mjs && node scripts/manager-route-authority-contract-tests.mjs && node scripts/map-manager-identity-tests.mjs && node --test scripts/outlook-event-sync-adapter-tests.mjs && node scripts/custodial-leadership-ticket-tests.mjs && npm run --silent test:sealed-repair-contracts",
     "test:manager-auth": "node scripts/operations-leadership-mobile-contract-tests.mjs && node scripts/manager-named-enrollment-http-tests.mjs && node scripts/manager-credential-boundary-tests.mjs && node scripts/manager-route-authority-contract-tests.mjs && node scripts/map-manager-identity-tests.mjs && node scripts/custodial-leadership-ticket-tests.mjs",
     "test:custodial-leadership-ticket": "node scripts/custodial-leadership-ticket-tests.mjs",
     "test:mcp-auth": "node scripts/mcp-connector-auth-tests.mjs && node scripts/mcp-self-contained-oauth-wire-tests.mjs && node scripts/mcp-transport-tool-surface-tests.mjs && node --test scripts/outlook-event-sync-adapter-tests.mjs && node --test scripts/operations-mail-sync-adapter-tests.mjs",
@@ -198,7 +198,8 @@
     "test:manager-scheduler": "node scripts/manager-scheduler-http-tests.mjs && node scripts/manager-scheduler-database-tests.mjs && node scripts/static-weekly-approved-initial-http-tests.mjs && node scripts/static-weekly-manager-read-tests.mjs && node scripts/coverall-event-print-integration-tests.mjs && node scripts/oc24-coverall-print-tests.mjs",
     "test:manager-scheduler:database": "node scripts/manager-scheduler-dated-integration-tests.mjs",
     "test:backup-source-binding": "node --test scripts/backup-release-schema-binding-tests.mjs",
-    "test:source303": "node scripts/ci-fresh-only-source303-tests.mjs"
+    "test:source303": "node scripts/ci-fresh-only-source303-tests.mjs",
+    "test:sealed-repair-contracts": "node scripts/sealed-repair-contract-tests.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.2",

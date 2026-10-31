@@ -8,7 +8,7 @@ export const coverAllAccessTokenHash=token=>{
  if(typeof token!=='string'||!/^[A-Za-z0-9_-]{43}$/.test(token))fail('coverall_link_invalid');
  return createHash('sha256').update(token).digest('hex');
 };
-export function coverAllCanonicalBinding(document,capacityId){
+export function coverAllCanonicalBinding(document,capacityId,acceptedPeriodStart=null){
  createCoverAllCopyTexts(document); // Existing full current-document integrity gate.
  if(!uuid.test(capacityId)||document.eventBriefs!==undefined||!isIsoServiceDate(document.serviceDate)
   ||!uuid.test(document.publicationId)||!uuid.test(document.projectionId)
@@ -16,13 +16,16 @@ export function coverAllCanonicalBinding(document,capacityId){
   ||![document.replayDigest,document.lunchDocumentIdentity,document.documentDigest].every(x=>sha.test(x))
   ||document.contractors.filter(c=>c.slotId===capacityId).length!==1)fail('coverall_link_capacity_or_document_invalid');
  const d=new Date(document.serviceDate+'T00:00:00Z');d.setUTCDate(d.getUTCDate()-((d.getUTCDay()+6)%7));
- return {schema:'custodial.coverall-canonical-binding.v1',week_start:d.toISOString().slice(0,10),service_date:document.serviceDate,
+ const period=acceptedPeriodStart??d.toISOString().slice(0,10);
+ if(!isIsoServiceDate(period)||document.serviceDate<period||Date.parse(document.serviceDate+'T00:00Z')>Date.parse(period+'T00:00Z')+6*86400000)
+  fail('coverall_link_accepted_period_invalid');
+ return {schema:'custodial.coverall-canonical-binding.v1',week_start:period,service_date:document.serviceDate,
   capacity_id:capacityId,publication_id:document.publicationId,projection_id:document.projectionId,
   authority_revision:document.authorityRevision,replay_digest:document.replayDigest,
   lunch_document_identity:document.lunchDocumentIdentity,document_digest:document.documentDigest};
 }
 export function scopeCanonicalCoverAllDocument(document,binding){
- const actual=coverAllCanonicalBinding(document,binding.capacity_id);
+ const actual=coverAllCanonicalBinding(document,binding.capacity_id,binding.week_start);
  if(canonicalJson(actual)!==canonicalJson(binding))fail('coverall_link_authority_changed');
  const {documentDigest,...base}=document;
  const selected={...base,contractors:document.contractors.filter(c=>c.slotId===binding.capacity_id)};
