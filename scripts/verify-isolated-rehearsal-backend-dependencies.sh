@@ -57,6 +57,7 @@ for ((attempt = 1; attempt <= max_attempts; attempt += 1)); do
       and .worker.durable_database_leases == true
       and .schema_fingerprint == $target_fingerprint
     ' "$response_file" >/dev/null; then
+    node "$(dirname "${BASH_SOURCE[0]}")/verify-isolated-rehearsal-health-boundary.mjs" "$endpoint"
     exit 0
   fi
   sleep "$retry_delay_seconds"
