@@ -135,7 +135,21 @@ function validateSource302CapturedProfile(canonicalCatalog,profile){
  return {canonicalFingerprint:canonical.fingerprint,deploymentFingerprint:physical.fingerprint,canonicalCatalog:canonical.normalized,deploymentCatalog:physical.normalized,canonicalCounts:counts(canonical.normalized),deploymentCounts:counts(physical.normalized),profile:clone(profile),profileQualification:profile.qualification};
 }
 
+
+// Finite Source302 counterpart generated ONLY after complete actual fresh and
+// populated capture binding. Old297–300/forward validators remain literal.
+function validateSource302EightActiveCapturedProfile(canonicalCatalog,profile){
+  closed(profile,['schema','canonical_fingerprint','deployment_fingerprint','source_fingerprint','source_ledger_sha256','archive_digest','source_migrations','capture','evidence','catalog_delta','canonical_counts','deployment_counts','qualification'],'Exact closed actual Source302 profile required');
+  assert.equal(profile.schema,'custodial.production-target-schema-profile.source302-eight-active.v1');assert.equal(profile.canonical_fingerprint,'04e4c3d7abaa71cdf36a164a483ee1fa5efef77ab1711b07a201f515b85248d6');assert.equal(profile.deployment_fingerprint,'d4d29c219935b97896305ee8aa0ea35aff67dc64ceeea39e2bf831cd8b98fd0c');assert.equal(profile.source_migrations,302);
+  assert.equal(createHash('sha256').update(JSON.stringify(profile)).digest('hex'),'a8f7130233659562822e23ec9d5bfd82f3774a18b7d68240e6ab97bdbe96d80a','Exact selected Source302 profile body required');
+ const canonical=fingerprintSchemaCatalog(canonicalCatalog);assert.equal(canonical.fingerprint,profile.canonical_fingerprint);assert.deepEqual(counts(canonical.normalized),profile.canonical_counts);
+ const deployment=clone(canonical.normalized);for(const [section,d]of Object.entries(profile.catalog_delta)){assert.ok(Array.isArray(deployment[section]));for(const row of d.remove){const i=deployment[section].findIndex(x=>JSON.stringify(x)===JSON.stringify(row));assert.ok(i>=0,'Exact Source302 physical-profile preimage required');deployment[section].splice(i,1);}deployment[section].push(...clone(d.add));closed(d,['remove','add','order'],'Exact full-row delta and complete catalog order required');assert.ok(Array.isArray(d.order));assert.equal(d.order.length,deployment[section].length);assert.equal(new Set(d.order).size,deployment[section].length);assert.ok(d.order.every(i=>Number.isSafeInteger(i)&&i>=0&&i<deployment[section].length),'Complete unique Source-bound catalog permutation required');const rows=deployment[section];deployment[section]=d.order.map(i=>rows[i]);}
+ const physical=fingerprintSchemaCatalog(deployment);assert.equal(physical.fingerprint,profile.deployment_fingerprint);assert.deepEqual(counts(physical.normalized),profile.deployment_counts);
+ return {canonicalFingerprint:canonical.fingerprint,deploymentFingerprint:physical.fingerprint,canonicalCatalog:canonical.normalized,deploymentCatalog:physical.normalized,canonicalCounts:counts(canonical.normalized),deploymentCounts:counts(physical.normalized),profile:clone(profile),profileQualification:profile.qualification};
+}
+
 export function validateProductionTargetSchemaProfile(canonicalCatalog,profile){
+ if(profile?.schema==='custodial.production-target-schema-profile.source302-eight-active.v1')return validateSource302EightActiveCapturedProfile(canonicalCatalog,profile);
  if(profile?.schema==='custodial.production-target-schema-profile.source302.v1')return validateSource302CapturedProfile(canonicalCatalog,profile);
  if(profile?.schema!=='custodial.production-target-schema-profile.forward.v1')return validateCapturedTargetSchemaProfile(canonicalCatalog,profile);
  closed(profile,['schema','canonical_fingerprint','deployment_fingerprint','parent_profile','previous_function',
@@ -184,6 +198,7 @@ export function resolveReleaseSchemaTarget(root) {
     canonicalCounts: counts(identity.normalized), deploymentCounts: counts(identity.normalized), profile: null, profileSha256: null,
   };
   const raw = read(PROFILE_PATH);
+  if(JSON.parse(raw).schema==='custodial.production-target-schema-profile.source302-eight-active.v1'){assert.equal(createHash('sha256').update(raw).digest('hex'),'568c178e29b5a2c2f89e5cf1f5b780b87da4c70c8d972f765f27e932195b81bb');for(const r of JSON.parse(raw).evidence){const b=read(r.path);assert.equal(b.length,r.bytes);assert.equal(createHash('sha256').update(b).digest('hex'),r.sha256);}}
   if(JSON.parse(raw).schema==='custodial.production-target-schema-profile.source302.v1'){assert.equal(createHash('sha256').update(raw).digest('hex'),'adb8436a325100ec4409f7dcaa90f23b8758403a30dd85dbe7674fd728bacb89');for(const r of JSON.parse(raw).evidence){const b=read(r.path);assert.equal(b.length,r.bytes);assert.equal(createHash('sha256').update(b).digest('hex'),r.sha256);}}
   const profile=JSON.parse(raw),validated=validateProductionTargetSchemaProfile(canonicalCatalog,profile);
   if(profile.schema==='custodial.production-target-schema-profile.forward.v1'){

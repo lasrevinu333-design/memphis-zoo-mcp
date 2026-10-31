@@ -1,81 +1,81 @@
 {
-  "schema": "custodial.production-target-schema-profile.source302.v1",
-  "canonical_fingerprint": "30218d9f5885ac5a8ca77785338a546da685d7e277c0633929e673ef80a870db",
-  "deployment_fingerprint": "4bf8e28dea3fdfd09dd19c64590f52cd29aa19943d53283de6cfc8f53cfd1adf",
+  "schema": "custodial.production-target-schema-profile.source302-eight-active.v1",
+  "canonical_fingerprint": "04e4c3d7abaa71cdf36a164a483ee1fa5efef77ab1711b07a201f515b85248d6",
+  "deployment_fingerprint": "d4d29c219935b97896305ee8aa0ea35aff67dc64ceeea39e2bf831cd8b98fd0c",
   "source_fingerprint": "0096e7c488aca86f1d38b061561696b2d4ac409036f063ffc9f196625b9ee9c2",
   "source_ledger_sha256": "2f80104d2f1fe54a6604c2c84436f823b1a78542bc4ba3d7975236951db93b66",
   "archive_digest": "67c0d74bbf18c346314669119f0ae53ff61d9b00c4e6550b7af917b7f02bbdfe",
   "source_migrations": 302,
   "capture": {
-    "report_sha256": "470e926718325470e076e37ba2230935c2f5f4e94f6aa517fab52f9e6c004aed",
-    "report_bytes": 20653147,
-    "candidate_commit": "9811abb18795df2613d7ec668ad7ab58a01fd343",
-    "candidate_tree": "0e1cd7080bfdd9fef34c5459046bdad7bc70dc57",
-    "plan_sha256": "768671199f0043bd8f0dc71658ecb0139b6c8958f269506835a24b95de09722d",
+    "report_sha256": "dc200e98529ddb2919ec2d46505df0b092429bb012f92ec9529083e43bb2efe5",
+    "report_bytes": 20654149,
+    "candidate_commit": "b3110af2c3d19dd438ff07f72ddf99a93c823899",
+    "candidate_tree": "290f883156eff5f3512c7e0106fec32f6bc2f734",
+    "plan_sha256": "ce0121104ecb898eedea599b1828ba6e47f40b83d45a9535e8f49d3bc855bb88",
     "source_ledger_count": 235,
     "target_ledger_count": 403,
     "pending_count": 168
   },
   "evidence": [
     {
-      "path": "release/schema-evidence/SOURCE302_FRESH_CANONICAL_CAPTURE.json",
-      "sha256": "2b9bb58567ba06616416c5de62c75cd2e5e7eac9134ae63a434ced483952d487",
-      "bytes": 7865195
+      "path": "release/schema-evidence/EIGHT_ACTIVE302_FRESH_CANONICAL_CAPTURE.json",
+      "sha256": "eaf0f8ddfcb1c876a059fd8478d55f1a4cb0c3af6d68cb624dc4276af3aaa41d",
+      "bytes": 7865696
     },
     {
-      "path": "release/schema-evidence/SOURCE302_FRESH_CAPTURE_RESULT.json",
-      "sha256": "d74c68af20baf1b7fe27fd137399258ca5f99d792659d2bab4289e1957829dc8",
-      "bytes": 5608
+      "path": "release/schema-evidence/EIGHT_ACTIVE302_FRESH_CAPTURE_RESULT.json",
+      "sha256": "dee964744b8c0fbf05c8141e9fc00ea7fe58840ad2ebe975259233080900634d",
+      "bytes": 5589
     },
     {
-      "path": "release/schema-evidence/SOURCE302_FRESH_CONSTRUCTION_RECEIPT.json",
-      "sha256": "9cc49b424c9668e93febbd0243889f9085d9552e22e6e7c7ea445770889a5617",
-      "bytes": 2597
+      "path": "release/schema-evidence/EIGHT_ACTIVE302_FRESH_CONSTRUCTION_RECEIPT.json",
+      "sha256": "9bdf43bfe2a96802bd993d7257371a2ff475c6d22ab7ae41f9bbdf1fb5673e25",
+      "bytes": 2596
     },
     {
-      "path": "release/schema-evidence/SOURCE302_FRESH_SOURCE_BEFORE.json",
-      "sha256": "7f2ba5bbede1d06a5eb7f90ccf309c8be5308d089440caf36a7ec943444216fc",
-      "bytes": 353933
+      "path": "release/schema-evidence/EIGHT_ACTIVE302_FRESH_SOURCE_BEFORE.json",
+      "sha256": "bf31b3ff348bd7f0161706cc142c1d5a5f7baafb7b3cb8f8ae2771bc22fdff58",
+      "bytes": 368152
     },
     {
-      "path": "release/schema-evidence/SOURCE302_FRESH_ROOT_CLOSED.json",
-      "sha256": "693e5696f82daee5ddc35ced4b571cf70951b96394e930f294712f68ca173062",
+      "path": "release/schema-evidence/EIGHT_ACTIVE302_FRESH_ROOT_CLOSED.json",
+      "sha256": "4e80f9a3b442c43ca6069a7d092524a83d305752639824cc61a60b688bc95cf8",
       "bytes": 331
     },
     {
-      "path": "release/schema-evidence/SOURCE302_POPULATED_TARGET_CAPTURE.json",
-      "sha256": "470e926718325470e076e37ba2230935c2f5f4e94f6aa517fab52f9e6c004aed",
-      "bytes": 20653147
+      "path": "release/schema-evidence/EIGHT_ACTIVE302_POPULATED_TARGET_CAPTURE.json",
+      "sha256": "dc200e98529ddb2919ec2d46505df0b092429bb012f92ec9529083e43bb2efe5",
+      "bytes": 20654149
     },
     {
-      "path": "release/schema-evidence/SOURCE302_POPULATED_ARTIFACT_VERIFIED.json",
-      "sha256": "00abc902160dcff374b5bed041ae54d36c080118ee228a90b15b4d91c098b072",
-      "bytes": 2547
+      "path": "release/schema-evidence/EIGHT_ACTIVE302_POPULATED_ARTIFACT_VERIFIED.json",
+      "sha256": "5a008dbd2494b60af4edfef4675581cce7402616ed0fd0ab1126691464d5a1da",
+      "bytes": 2662
     },
     {
-      "path": "release/schema-evidence/SOURCE302_POPULATED_TERMINAL_RUN.json",
-      "sha256": "f284f0dec7cb13ce6f2ee6d938ce3d3a7a723a4b21ed2b33c439451ca0aa9b40",
-      "bytes": 3619
+      "path": "release/schema-evidence/EIGHT_ACTIVE302_POPULATED_TERMINAL_RUN.json",
+      "sha256": "102b88cc73ba423029f780af0fb26d9003c6e3908d5ee4b2fda42bcf880b56ca",
+      "bytes": 21164
     },
     {
-      "path": "release/schema-evidence/SOURCE302_POPULATED_ROOT_CLOSED.json",
-      "sha256": "e1f9f2cddc82e1ccf669fae3f827070ad05bb617f1f2e6c513b7f15a36c5d204",
+      "path": "release/schema-evidence/EIGHT_ACTIVE302_POPULATED_ROOT_CLOSED.json",
+      "sha256": "3988e37520e2cdc2906e936fd55f5e4053349e6e5bc063a755d7ce976c7ba390",
       "bytes": 331
     },
     {
-      "path": "release/schema-evidence/SOURCE302_FROZEN14_ASSEMBLY_MANIFEST.json",
-      "sha256": "a64e9174f6008c03b9cc860b5722b2167c213c677ac17b8d082c1051b99b6cf6",
-      "bytes": 180274
+      "path": "release/schema-evidence/EIGHT_ACTIVE302_FROZEN14_ASSEMBLY_MANIFEST.json",
+      "sha256": "99e0a2f185bb902429408a693e9f4be68be1d9ecca8cd2deaee757ebd560b4f9",
+      "bytes": 177767
     },
     {
-      "path": "release/schema-evidence/SOURCE302_ISSUED_EXACT235_RESTORE_DISPOSITION.json",
+      "path": "release/schema-evidence/EIGHT_ACTIVE302_ISSUED_EXACT235_RESTORE_DISPOSITION.json",
       "sha256": "5a366bf5ff093b632fa690ab111b9b9382209aa7b3eced80fc1245908be449c4",
       "bytes": 21694
     },
     {
-      "path": "release/schema-evidence/SOURCE302_RETAINED_HISTORICAL_CAPTURE_SOURCE_9011.mjs",
-      "sha256": "9011ff24d666cb89b719d1cfe5d499efb3152b6dd0774e6c1cd25c2ed2684da4",
-      "bytes": 20475
+      "path": "release/schema-evidence/EIGHT_ACTIVE302_EXACT_CAPTURE_SOURCE_F85E.mjs",
+      "sha256": "f85e4492a1e2ebe3747e4c14c3eff2463692162cb7f7ceaa5ea895135ca34879",
+      "bytes": 20370
     }
   ],
   "catalog_delta": {

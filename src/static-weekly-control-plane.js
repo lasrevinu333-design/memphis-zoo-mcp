@@ -1799,6 +1799,10 @@ export function createStaticWeeklyControlPlane({
           startedAt+STATIC_WEEKLY_MANAGER_OPERATION_DEADLINE_MS);
       if(key.length>120||!/^[a-f0-9]{64}$/.test(preview)||!Number.isFinite(expiresAt))throw fail('static_manual_activation_identity_invalid');
       return transaction(async client=>{
+        // The initial native publication evaluates large checked JSON inputs.
+        // PostgreSQL JIT can exhaust the bounded database process while compiling
+        // them. Interpret this transaction; keep every native check and limit.
+        await client.query("set local jit = off");
         await lockStaticWeeklyAuthority(client);
         const legacy=await call(client,'static_weekly_read_manual_activation_confirmation',[actor.managerId,key]);
         if(legacy){
