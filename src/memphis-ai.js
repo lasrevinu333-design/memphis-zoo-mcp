@@ -556,7 +556,8 @@ function summarizeEmployeeAssignments(assignments = [], employeeName, serviceDat
 
 function summarizeTickets(tickets = [], location = "") {
   if (!tickets.length) return location ? `No open tickets matching ${location}.` : "No open tickets right now.";
-  return tickets.slice(0, 8).map((ticket) => `${ticket.location_name || ticket.location_code}: open maintenance issue${ticket.out_of_order===true?' (out of order)':''}.`).join(" ");
+  const shown = tickets.slice(0, 8).map((ticket) => `${ticket.location_name || ticket.location_code}: ${ticket.maintenance_issue || 'open maintenance issue'}${ticket.fixture_type ? `; ${ticket.fixture_type}` : ''}${ticket.fixture_identifier ? ` ${ticket.fixture_identifier}` : ''}${ticket.out_of_order===true?' (out of order)':''}${ticket.date_submitted_display ? `; reported ${ticket.date_submitted_display}` : ''}.`).join(" ");
+  return shown + (tickets.length > 8 ? ' Showing the first 8 matching open tickets.' : '');
 }
 
 function summarizeDashboard(snapshot = {}, attention = [], attendance = null) {
@@ -572,7 +573,7 @@ function summarizeDashboard(snapshot = {}, attention = [], attendance = null) {
   if (snapshot.in_progress_locations != null) bits.push(`${snapshot.in_progress_locations} in progress`);
   const summary = bits.length ? `Dashboard snapshot recorded ${snapshotAt}: ${bits.join(", ")}.`
     : `I can't verify the operational counts in the dashboard snapshot recorded ${snapshotAt}.`;
-  const focus = attention.length ? ` Attention locations: ${attention.slice(0, 8).map((row) => `${row.location_name || row.location_code} (${row.status_code}, ${row.open_ticket_count} tickets)`).join("; ")}.` : "";
+  const focus = attention.length ? ` Attention locations: ${attention.slice(0, 8).map((row) => `${row.location_name || row.location_code} (${row.status_code}, ${row.open_ticket_count} tickets${row.open_session_status ? `; work ${row.open_session_status}${row.open_session_employee_name ? ` by ${row.open_session_employee_name}` : ''}` : ''}${row.latest_completed_at_display ? `; last cleaned ${row.latest_completed_at_display}` : ''})`).join("; ")}.` : "";
   return `${summary}${focus}`.trim();
 }
 
@@ -906,17 +907,28 @@ async function fetchDeviceIdentity(runReadOnlySql, deviceId) {
   return Array.isArray(rows) && rows.length ? rows[0] : null;
 }
 
-async function fetchResponderIdentity(runReadOnlySql, userId, deviceId) {
+async function fetchResponderIdentity(runReadOnlySql, userId, deviceId, sourceMessageId = "") {
   const id=String(userId || '').trim();
   if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
     // The caller supplies the server-resolved message sender, never a role
     // from the request body. Re-read current named authority for queued work.
-    const rows=await runReadOnlySql(`select u.id as msg_user_id,u.is_active as user_active,u.ops_manager_id,
+    const rows=await runReadOnlySql(`select u.id as msg_user_id,u.is_active as user_active,u.ops_manager_id,u.custodial_cohort_manager_id,u.custodial_claimed_account_id,
       m.manager_id,m.display_name,m.roles,m.active,m.revoked_at,m.is_system_principal
       from public.msg_users u left join public.ops_manager_managers m on m.manager_id=u.ops_manager_id
       where u.id='${esc(id)}'::uuid limit 1`);
     const current=Array.isArray(rows)&&rows.length===1?rows[0]:null;
     if (!current || current.msg_user_id!==id || current.user_active!==true) return null;
+    if (current.custodial_cohort_manager_id) {
+      if (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(sourceMessageId) || current.ops_manager_id) return null;
+      const checked = await runReadOnlySql(`select public.msg_custodial_cohort_message_actor_v1('${esc(sourceMessageId)}'::uuid,'${esc(id)}'::uuid,'${esc(deviceId)}') as actor`);
+      const actor = Array.isArray(checked) && checked.length === 1 ? checked[0]?.actor : null;
+      if (actor?.schema !== 'custodial.cohort-messenger-actor.v1' || actor.msg_user_id !== id
+        || actor.source_message_id !== sourceMessageId || actor.role !== 'manager' || actor.owner !== false
+        || actor.custodial_cohort_manager_id !== current.custodial_cohort_manager_id
+        || actor.custodial_claimed_account_id !== current.custodial_claimed_account_id
+        || actor.identity_assurance !== 'SELF_ASSERTED_NAME' || actor.individual_identity_verified !== false) return null;
+      return {...actor,identity_source:'current_self_asserted_cohort_message'};
+    }
     if (current.ops_manager_id) {
       if (!isActiveNamedManager(current)) return null;
       return {...current,role:'manager',identity_source:'current_named_manager_registry'};
@@ -1343,7 +1355,8 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     if (name === "get_open_tickets") {
       const location = String(args.location || "").trim();
       const rows = await runReadOnlySql(`
-        select ticket_id, location_code, location_name, out_of_order, date_submitted_display, created_at_display
+        select ticket_id, location_code, location_name, maintenance_issue, fixture_type, fixture_identifier,
+          out_of_order, status, date_submitted_display, created_at_display
         from public.v_open_maintenance_tickets
         ${location ? `where location_code ilike ${sqlLikeLiteral(location)} or location_name ilike ${sqlLikeLiteral(location)}` : ""}
         order by date_submitted desc nulls last, created_at desc nulls last
@@ -1354,9 +1367,15 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
 
     if (name === "get_dashboard_summary") {
       const [snapshotRows, badRows, attendanceRows] = await Promise.all([
-        runReadOnlySql(`select * from public.v_admin_health_snapshot order by snapshot_at desc limit 1`),
+        runReadOnlySql(args.employee === true ? `select statement_timestamp() as snapshot_at,
+          (select count(*)::integer from public.v_open_maintenance_tickets) as open_ticket_count,
+          count(*) filter (where status_code = 'overdue')::integer as overdue_locations,
+          count(*) filter (where status_code = 'due_soon')::integer as due_soon_locations,
+          count(*) filter (where open_session_status in ('active','pending_submit'))::integer as in_progress_locations
+          from public.v_location_dashboard_status` : `select * from public.v_admin_health_snapshot order by snapshot_at desc limit 1`),
         runReadOnlySql(`
-          select location_code, location_name, status_code, status_color, open_ticket_count, latest_employee_name, latest_completed_at_display, open_session_status
+          select location_code, location_name, status_code, status_color, open_ticket_count, latest_employee_name,
+            latest_completed_at_display, open_session_status, open_session_employee_name
           from public.v_location_dashboard_status
           where status_code <> 'okay' or open_ticket_count > 0
           order by case status_color when 'red' then 1 when 'yellow' then 2 when 'blue' then 3 else 9 end, open_ticket_count desc, location_name
@@ -1386,6 +1405,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
 
   async function generateSystemReply(userMessage, { deviceId = "", threadId = "", userRole = "", viewerIdentity = null } = {}) {
     const isManager = String(userRole || "").trim().toLowerCase() === "manager";
+    const canReadOperations = isManager || String(userRole || '').trim().toLowerCase() === 'employee';
     const threadContext = await fetchThreadContext(runReadOnlySql, threadId);
     const rewrittenMessage = rewriteFollowUpWithContext(userMessage, threadContext);
     const text = promptForMatching(rewrittenMessage).trim();
@@ -1501,7 +1521,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
 
     // H3: Use word-boundary regex with maintenance context to avoid misrouting
     // (e.g., "I have a ticket for the event" should not trigger maintenance tickets).
-    if (/\b(tickets?|maintenance|broken|out of order|repair|fixture)\b/i.test(text) && !asksEventListing) {
+    if (canReadOperations && /\b(tickets?|maintenance|broken|out of order|repair|fixture)\b/i.test(text) && !asksEventListing) {
       const data = await executeTool("get_open_tickets", { location: findLocationCode(text) || "" });
       await saveThreadContext(runRpc, threadId, { last_intent: "open_tickets", last_location_code: findLocationCode(text) || null, last_service_date: relativeServiceDate, last_subject_type: "location" });
       return { text: summarizeTickets(data.tickets, findLocationCode(text)), meta: { fallback: true, mode: "local_tickets", sources: ["v_open_maintenance_tickets"] } };
@@ -1659,9 +1679,10 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       return { text: summarizeAssignments(data.assignments, noAssignmentsText, areaRow?.group_code || data.group_name || areaRow?.group_name || ""), meta: { fallback: true, mode: "local_area_schedule", sources: ["custodial_memphis_schedule_day", "static_weekly_v6_read_schedule_segments"] } };
     }
 
-    // C2: Dashboard summary and attendance data are only exposed to manager role.
-    if (isManager && (/\b(dashboard|summary|status|metrics|attendance|guests?|visitors?|overdue|due soon)\b/i.test(text))) {
-      const data = await executeTool("get_dashboard_summary", {});
+    // Employees may read operational facts. Admin diagnostics and writers are
+    // not part of the employee query or reply projection.
+    if (canReadOperations && (/\b(dashboard|summary|status|metrics|attendance|guests?|visitors?|overdue|due soon)\b/i.test(text))) {
+      const data = await executeTool("get_dashboard_summary", { employee: !isManager });
       await saveThreadContext(runRpc, threadId, { last_intent: "dashboard_summary", last_service_date: relativeServiceDate, last_subject_type: "summary" });
       const attendanceOnly = /\b(attendance|guest|guests|visitor|visitors)\b/i.test(text);
       const fetchedAt=Date.parse(String(data.attendance?.fetched_at||''));
@@ -1671,7 +1692,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
           .format(new Date(fetchedAt))===new Intl.DateTimeFormat('en-CA',{timeZone:'America/Chicago',year:'numeric',month:'2-digit',day:'2-digit'})
           .format(new Date());
       const attendance=fresh?data.attendance:null;
-      return { text: attendanceOnly ? summarizeAttendance(attendance, text) : summarizeDashboard(data.snapshot, data.attention_locations, attendance), meta: { fallback: true, mode: attendanceOnly ? "local_attendance" : "local_dashboard", attendance_fresh:fresh, sources: attendanceOnly ? ["current_attendance_state"] : ["v_admin_health_snapshot", "v_location_dashboard_status", "current_attendance_state"] } };
+      return { text: attendanceOnly ? summarizeAttendance(attendance, text) : summarizeDashboard(data.snapshot, data.attention_locations, attendance), meta: { fallback: true, mode: attendanceOnly ? "local_attendance" : "local_dashboard", attendance_fresh:fresh, sources: attendanceOnly ? ["current_attendance_state"] : [...(isManager ? ["v_admin_health_snapshot"] : []), "v_location_dashboard_status", "current_attendance_state"] } };
     }
 
     const weatherLocation = inferWeatherLocation(text, threadContext);
@@ -1687,9 +1708,9 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     "tickets", "scan_state", "dashboard", "events"
   ]);
 
-  async function generateReply({ deviceId = "", userId = "", userMessage = "", threadId = "" }) {
+  async function generateReply({ deviceId = "", userId = "", userMessage = "", threadId = "", sourceMessageId = "" }) {
     const _userId = String(userId || "").trim();
-    const identity = await fetchResponderIdentity(runReadOnlySql, _userId, deviceId);
+    const identity = await fetchResponderIdentity(runReadOnlySql, _userId, deviceId, sourceMessageId);
     if (_userId && !identity) {
       return {text:"I couldn't verify your current Messenger identity. Reopen Messenger before asking again.",
         meta:{fallback:true,mode:'identity_unavailable'}};

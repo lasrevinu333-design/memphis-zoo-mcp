@@ -61,6 +61,15 @@ for(const extra of [auth,oauth])test(`accepted ${extra.authInfo.extra.authSource
   assert.match(f.calls[1].url,/events_app_outlook_sync/);assert.equal(f.calls[1].method,'GET');assert.ok(f.calls.every(c=>c.signal instanceof AbortSignal));
   assert.ok(!JSON.stringify(r).includes(source.message_id));assert.ok(!JSON.stringify(r).includes(source.content_sha256));
 });
+test('approved offsite import preserves original outside venue and missing legacy group for canonical SQL mapping',async()=>{
+  const args=input();args.request.observation.event={...event,event_scope:'OFFSITE',display_location:'Known outside venue'};
+  delete args.request.observation.event.primary_venue_id;
+  const original=clone(args),f=fixture(args),result=await callOutlookEventSync(args,auth,{client:f.client});
+  assert.equal(result.state,'APPLIED');assert.equal(result.readback_verified,true);
+  assert.deepEqual(args,original);assert.deepEqual(f.calls[0].body.p_observation,original.request.observation);
+  assert.equal(Object.hasOwn(f.calls[0].body.p_observation.event,'location_group_id'),false);
+  assert.equal(f.row.source_payload.event.display_location,'Known outside venue');
+});
 for(const state of ['CANCELLED','UNCHANGED','NEEDS_REVIEW','BLOCKED_MANUAL'])test(`${state} remains truthful, not converted to applied`,async()=>{
   const args=input(),f=fixture(args,{state});assert.equal((await callOutlookEventSync(args,auth,{client:f.client})).state,state);
 });

@@ -507,12 +507,14 @@ export function createOpsManagerSession({
 }
 
 // Same normal Ops signer/parser; scope is the configured cohort, NEVER the chosen person.
-export function createCustodialLeadershipOpsSession({expectedClaims,credentialExpiresAt,env=process.env,now=new Date()}) {
+export function createCustodialLeadershipOpsSession({expectedClaims,credentialExpiresAt,registrationLifetime,env=process.env,now=new Date()}) {
   assertOpsManagerSessionSecret(env);
   if(!isCustodialLeadershipManagementSession(expectedClaims)||expectedClaims.access_level!=='full_access'
     ||expectedClaims.identity_assurance!=='SELF_ASSERTED_NAME'||expectedClaims.individual_identity_verified!==false)
     throw Object.assign(new Error('Invalid configured Custodial cohort session.'),{status:403});
-  const expiry=Math.min(Date.parse(credentialExpiresAt),now.getTime()+getAccessTtlMs(env));
+  const nonexpiring=registrationLifetime==='UNTIL_REVOKED'&&credentialExpiresAt===null;
+  if(registrationLifetime!=null&&!nonexpiring)throw Object.assign(new Error('Invalid explicit Custodial registration lifetime.'),{status:401});
+  const expiry=nonexpiring?now.getTime()+getAccessTtlMs(env):Math.min(Date.parse(credentialExpiresAt),now.getTime()+getAccessTtlMs(env));
   if(!Number.isFinite(expiry)||expiry<=now.getTime())throw Object.assign(new Error('Custodial browser registration expired.'),{status:401});
   const payload={...expectedClaims,v:OPS_ACCESS_TOKEN_VERSION,iat:now.getTime(),exp:expiry,jti:randomUUID(),operational_day:getCSTDate(now)};
   return {...expectedClaims,expires_at:new Date(expiry).toISOString(),token:signOpsPayload(payload,{env})};

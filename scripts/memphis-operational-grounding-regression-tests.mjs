@@ -12,7 +12,7 @@ function fixture({role='manager',snapshot={snapshot_at:'2026-10-31T12:00:00Z',ov
     reads.push(sql);
     if(sql.includes('msg_get_user_by_device'))return[{role}];
     if(sql.includes('sch_service_date'))return[{service_date:'2026-10-31'}];
-    if(sql.includes('v_admin_health_snapshot'))return snapshot===null?[]:[snapshot];
+    if(sql.includes('v_admin_health_snapshot')||sql.includes('as overdue_locations'))return snapshot===null?[]:[snapshot];
     return[];
   },runRpc:async()=>null}).generateReply({deviceId:'SYNTHETIC_PHONE',userMessage:text})};
 }
@@ -21,9 +21,9 @@ for(const text of ['What is overdue?','What is due soon?'])test('operational wor
   assert.equal(modelCalls,before);assert.doesNotMatch(r.text,/FABRICATED/);assert.match(r.text,/3 overdue locations/);
   assert.match(r.text,/2026-10-31T12:00:00/);assert.ok(f.reads.some(sql=>sql.includes('v_admin_health_snapshot')));
 });
-test('employee operational question stays in existing role boundary without model facts',async()=>{
+test('employee approved operational read uses safe counts without admin diagnostics or model facts',async()=>{
   const f=fixture({role:'employee'}),before=modelCalls,r=await f.reply('What is overdue?');
-  assert.equal(modelCalls,before);assert.doesNotMatch(r.text,/FABRICATED|3 overdue/);
+  assert.equal(modelCalls,before);assert.doesNotMatch(r.text,/FABRICATED/);assert.match(r.text,/3 overdue/);
   assert.equal(f.reads.some(sql=>sql.includes('v_admin_health_snapshot')),false);
 });
 for(const snapshot of [null,{}, {overdue_locations:3}])test('missing unqualified dashboard snapshot never claims availability '+JSON.stringify(snapshot),async()=>{

@@ -59,8 +59,8 @@ assert.match(u4Migration, /q\.dispatch_started_at is null and q\.attempts<q\.max
 assert.match(moduleSource, /p_push_device_id:\s*pushDeviceId/);
 assert.match(moduleSource, /p_fcm_token_sha256:\s*fcmTokenSha256/);
 assert.match(moduleSource, /ops_manager_push_devices"\)\.update\(\{ last_seen_at:[\s\S]*\.eq\("push_device_id", pushDeviceId\)\.eq\("fcm_token", fcmToken\)/);
-assert.match(moduleSource, /ops_manager_notification_queue"\)[\s\S]*\.eq\("manager_id", identity\.managerId\)\.eq\("status", "failed"\)/,
-  "manager delivery failures must be read through the authenticated named-manager identity");
+assert.match(moduleSource, /ops_manager_notification_queue"\)[\s\S]*\.eq\("manager_id", identity\.managerId\)\.eq\("credential_id", identity\.credentialId\)\.eq\("status", "failed"\)/,
+  "manager delivery failures must be read through the authenticated manager and current installation identity");
 assert.doesNotMatch(moduleSource, /delivery_attention:[\s\S]{0,300}last_error/,
   "manager delivery attention must not expose raw provider errors as human guidance");
 
@@ -96,12 +96,20 @@ assert.equal(resolvedDeliveryAttention.failed_count, 1);
 assert.equal(resolvedDeliveryAttention.message, null);
 assert.equal(resolvedDeliveryAttention.action, null);
 
+const diagnosticEnv={NODE_ENV:'test',OPS_MANAGER_AUTH_REQUIRED:'true',OPS_MANAGER_SESSION_SECRET:'synthetic-notification-diagnostics-at-least32'};
+const diagnosticManager={manager_id:'10000000-0000-4000-8000-000000000099',display_name:'Synthetic diagnostics manager',roles:['OPS_MANAGER'],system_key:'synthetic_diagnostics',is_system_principal:false,active:true,revoked_at:null};
+const diagnosticRow={credential_id:'20000000-0000-4000-8000-000000000099',device_id:'synthetic-diagnostics-browser',manager_id:diagnosticManager.manager_id,manager:diagnosticManager,created_at:new Date().toISOString(),expires_at:new Date(Date.now()+3600000).toISOString(),max_access_level:'full_access',revoked_at:null};
+const diagnosticStore={find:async id=>id===diagnosticRow.credential_id?diagnosticRow:null};
+const diagnosticToken=createOpsManagerSession({credentialId:diagnosticRow.credential_id,deviceId:diagnosticRow.device_id,manager:diagnosticManager,accessLevel:'full_access',env:diagnosticEnv}).token;
+const diagnosticHeaders={authorization:'Bearer '+diagnosticToken};
 const app = express();
-installManagerNotificationRoutes(app, { env: {} });
+installManagerNotificationRoutes(app, { env: diagnosticEnv, trustedDeviceStore:diagnosticStore });
 const server = app.listen(0, "127.0.0.1");
 await new Promise((resolve) => server.once("listening", resolve));
 try {
-  const response = await fetch(`http://127.0.0.1:${server.address().port}/manager-notifications-api/health`);
+  const anonymous = await fetch(`http://127.0.0.1:${server.address().port}/manager-notifications-api/health`);
+  assert.equal(anonymous.status,401);assert.equal((await anonymous.json()).project_id,undefined);
+  const response = await fetch(`http://127.0.0.1:${server.address().port}/manager-notifications-api/health`,{headers:diagnosticHeaders});
   const payload = await response.json();
   assert.equal(response.status, 503);
   assert.equal(payload.manager_only, true);
@@ -180,7 +188,9 @@ globalThis.fetch = async (input, init = {}) => {
 
 const configuredApp = express();
 installManagerNotificationRoutes(configuredApp, {
+  trustedDeviceStore: diagnosticStore,
   env: {
+    ...diagnosticEnv,
     FIREBASE_SERVICE_ACCOUNT_JSON: JSON.stringify({
       type: "service_account",
       project_id: "memphis-zoo-custodial-program",
@@ -193,7 +203,7 @@ const configuredServer = configuredApp.listen(0, "127.0.0.1");
 await new Promise((resolve) => configuredServer.once("listening", resolve));
 try {
   const base = `http://127.0.0.1:${configuredServer.address().port}`;
-  const healthResponse = await originalFetch(`${base}/manager-notifications-api/health`);
+  const healthResponse = await originalFetch(`${base}/manager-notifications-api/health`,{headers:diagnosticHeaders});
   const health = await healthResponse.json();
   assert.equal(health.provider_configured, true);
   assert.equal(health.project_id, "memphis-zoo-custodial-program");

@@ -61,7 +61,9 @@ export function createPgCustodialLeadershipPinStore({query,ownerQuery=null}){
 
 function sessionView(raw){
  if(!raw)return null;
- if(!UUID.test(raw.registrationId)||!UUID.test(raw.browserId)||!Number.isFinite(Date.parse(raw.credentialExpiresAt))||!UUID.test(raw.claimedAccount?.accountId)||!UUID.test(raw.cohort?.principalId)
+ const nonexpiring=raw.registrationLifetime==='UNTIL_REVOKED'&&raw.credentialExpiresAt===null;
+ const finiteExpiry=raw.registrationLifetime==null&&Number.isFinite(Date.parse(raw.credentialExpiresAt));
+ if(!UUID.test(raw.registrationId)||!UUID.test(raw.browserId)||!(nonexpiring||finiteExpiry)||!UUID.test(raw.claimedAccount?.accountId)||!UUID.test(raw.cohort?.principalId)
   ||raw.cohort.principalId===raw.claimedAccount.accountId||!Number.isSafeInteger(raw.cohort.policyVersion)||raw.cohort.policyVersion<1
   ||!Array.isArray(raw.cohort.permissions)||raw.cohort.permissions.length<1||raw.cohort.permissions.some(p=>!PERMISSIONS.has(p))
   ||new Set(raw.cohort.permissions).size!==raw.cohort.permissions.length
@@ -69,7 +71,7 @@ function sessionView(raw){
  const contact=raw.claimedAccount.contact;
  if(contact!==null&&(!exactly(contact,['email','verifiedAt'])||typeof contact.email!=='string'
   ||contact.email.length>254||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact.email)||!Number.isFinite(Date.parse(contact.verifiedAt))))throw problem('leadership_session_unavailable',403);
- return {registrationId:raw.registrationId,browserId:raw.browserId,credentialExpiresAt:raw.credentialExpiresAt,identityAssurance:'SELF_ASSERTED_NAME',
+ return {registrationId:raw.registrationId,browserId:raw.browserId,credentialExpiresAt:raw.credentialExpiresAt,...(nonexpiring?{registrationLifetime:'UNTIL_REVOKED'}:{}),identityAssurance:'SELF_ASSERTED_NAME',
   claimedAccount:{accountId:raw.claimedAccount.accountId,displayName:raw.claimedAccount.displayName,contact},
   cohort:{principalId:raw.cohort.principalId,policyVersion:raw.cohort.policyVersion,securityEpoch:raw.cohort.securityEpoch,permissions:[...raw.cohort.permissions]},
   audit:{actorKind:'CUSTODIAL_LEADERSHIP_COHORT',claimedNameSelfAsserted:true,individuallyAuthenticated:false}};
@@ -96,10 +98,12 @@ export function createCustodialLeadershipPinService({enabled=false,store,pepper,
   const permissions={schema:'custodial.manager-permissions.v1',read:true,owner:false,custodialManagementAdmin:true,policyVersion:session.cohort.policyVersion,...authorizedActionFlags};
   const expected={role:'ops_manager',access_level:'full_access',roles:['OPS_MANAGER','CUSTODIAL_MANAGER','DIRECTOR','SECURITY_ADMIN'],claimed_manager_id:session.claimedAccount.accountId,claimed_manager_display_name:session.claimedAccount.displayName,identity_assurance:'SELF_ASSERTED_NAME',individual_identity_verified:false,manager_id:session.cohort.principalId,credential_id:session.registrationId,device_id:session.browserId,
    manager_display_name:'Custodial leadership cohort',permissions,auth_mode:'custodial_leadership_pin',actor_kind:'CUSTODIAL_LEADERSHIP_COHORT',read_only:false,owner:false,custodial_management_admin:true};
-  const issued=await issueManagerSession({expectedClaims:structuredClone(expected),credentialExpiresAt:session.credentialExpiresAt,
+  const issued=await issueManagerSession({expectedClaims:structuredClone(expected),credentialExpiresAt:session.credentialExpiresAt,registrationLifetime:session.registrationLifetime,
    identityAssurance:'SELF_ASSERTED_NAME',claimedAccount:structuredClone(session.claimedAccount)});
   if(typeof issued?.token!=='string'||issued.token.length<32||issued.token.length>8192||/[\s\u0000-\u001f]/u.test(issued.token)
-   ||!Number.isFinite(Date.parse(issued.expires_at))||Date.parse(issued.expires_at)>Date.parse(session.credentialExpiresAt)
+   ||!Number.isFinite(Date.parse(issued.expires_at))||Date.parse(issued.expires_at)<=Date.now()
+   ||Date.parse(issued.expires_at)>Date.now()+60*60*1000
+   ||(session.registrationLifetime!=='UNTIL_REVOKED'&&Date.parse(issued.expires_at)>Date.parse(session.credentialExpiresAt))
    ||Object.entries(expected).some(([key,value])=>!isDeepStrictEqual(issued[key],value)))throw problem('manager_session_issuer_unavailable',503);
   return {...session,managerSession:{...expected,token:issued.token,expires_at:issued.expires_at}};
  };
@@ -208,6 +212,9 @@ function cookies(req){
   if(Object.values(CUSTODIAL_LEADERSHIP_COOKIE_NAMES).includes(key)){if(Object.hasOwn(result,key))throw problem('browser_binding_required',403);result[key]=TOKEN.test(value)?value:null;}
  }return result;
 }
+// Server registration is indefinite. Browsers may cap persistent cookie storage;
+// refresh the existing opaque binding on successful reads, without re-enrollment.
+const REGISTRATION_COOKIE_RETENTION_SECONDS=400*24*60*60;
 function setCookie(res,key,value,maxAge){
  res.append('Set-Cookie',`${CUSTODIAL_LEADERSHIP_COOKIE_NAMES[key]}=${value}; Path=/; Secure; HttpOnly; SameSite=None; Max-Age=${maxAge}`);
 }
@@ -234,8 +241,9 @@ export function createCustodialLeadershipPinRouter({service=createCustodialLeade
  };
  const trustedSource=req=>{if(typeof sourceIdentity!=='function')throw problem('trusted_source_required',503);return sourceIdentity(req);};
  router.get('/session',route(async(req,res)=>{
-  const c=cookies(req);let browser=c[CUSTODIAL_LEADERSHIP_COOKIE_NAMES.browser];if(!browser){browser=service.newBrowserToken();setCookie(res,'browser',browser,31536000);}
+  const c=cookies(req);let browser=c[CUSTODIAL_LEADERSHIP_COOKIE_NAMES.browser];if(!browser){browser=service.newBrowserToken();setCookie(res,'browser',browser,REGISTRATION_COOKIE_RETENTION_SECONDS);}
   const session=await service.getSession({browserToken:browser,registrationToken:c[CUSTODIAL_LEADERSHIP_COOKIE_NAMES.registration]});
+  if(session){setCookie(res,'browser',browser,REGISTRATION_COOKIE_RETENTION_SECONDS);setCookie(res,'registration',c[CUSTODIAL_LEADERSHIP_COOKIE_NAMES.registration],REGISTRATION_COOKIE_RETENTION_SECONDS);}
   res.json({ok:true,enrolled:session!==null,csrfToken:service.csrfToken(browser),...(session?{session}:{})});
  }));
  router.post('/challenge',route(async(req,res)=>{
@@ -245,7 +253,7 @@ export function createCustodialLeadershipPinRouter({service=createCustodialLeade
  }));
  router.post('/enroll',route(async(req,res)=>{
   const c=mutation(req,['accountId']);const result=await service.enroll({accountId:req.body.accountId,browserToken:c[CUSTODIAL_LEADERSHIP_COOKIE_NAMES.browser],challengeToken:c[CUSTODIAL_LEADERSHIP_COOKIE_NAMES.challenge],sourceIdentity:trustedSource(req)});
-  setCookie(res,'registration',result.registrationToken,31536000);setCookie(res,'browser',result.browserToken,31536000);setCookie(res,'challenge','',0);
+  setCookie(res,'registration',result.registrationToken,REGISTRATION_COOKIE_RETENTION_SECONDS);setCookie(res,'browser',result.browserToken,REGISTRATION_COOKIE_RETENTION_SECONDS);setCookie(res,'challenge','',0);
   res.json({ok:true,enrolled:true,session:result.session,csrfToken:service.csrfToken(result.browserToken)});
  }));
  router.post('/revoke',route(async(req,res)=>{

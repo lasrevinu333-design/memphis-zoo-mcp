@@ -8,6 +8,7 @@ import { installManagerHeldEventCorrectionRoutes } from "./manager-held-event-co
 import "dotenv/config";
 import { createHash, createHmac, randomUUID, timingSafeEqual } from "crypto";
 import express from "express";
+import { setAllowedCorsOrigin, requireHealthDiagnostics, healthResponse } from "./security-http-boundaries.js";
 import { createGeneralJsonMiddleware } from "./request-json-parser.js";
 import { parse as parseAttendanceDocument } from "parse5";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -68,6 +69,9 @@ import { getToolManifest } from "./mcp/tool-manifest.js";
 import { validateRuntimeEnv } from "./config/env.js";
 import { authorityHttpFailure, deferJsonParserErrors, malformedScanAuthorityOutcome, rpcFailure, scanRpcHttpOutcome, sqlStateHttpStatus } from "./offline-authority-http.js";
 import { installLeadershipHttpRoutes } from "./leadership-bootstrap.js";
+import {installCustodialRecordRoutes} from './custodial-record-operations.mjs';
+import {createCustodialLeadershipRecordBridge} from './auth/custodial-leadership-record-operation.mjs';
+import {createCustodialLeadershipMessagingBridge} from './auth/custodial-leadership-messaging.mjs';
 import {createCustodialLeadershipApiProxy,createCustodialLeadershipRemoteVerifier,createCustodialLeadershipSecurityBridge,createCustodialLeadershipGeminiBridge,createCustodialLeadershipTicketBridge} from "./auth/custodial-leadership-runtime.js";
 import { installCustodialEmployeeAdminRoutes } from "./custodial-employee-admin.js";
 import { installManagerNotificationRoutes } from "./manager-notifications.js";
@@ -853,15 +857,8 @@ const TRUSTED_DEVICE_CORS_HEADERS = [
 ].join(", ");
 
 function setCorsOrigin(res, req) {
-  const origin = String(req?.headers?.origin || "").trim();
-  if (origin && CORS_ORIGINS_SET.has(origin)) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
-  } else {
-    res.setHeader("Access-Control-Allow-Origin", DEFAULT_CORS_ORIGINS[0]);
-  }
-  res.setHeader("Access-Control-Allow-Credentials", "true");
+  setAllowedCorsOrigin(res, req, CORS_ORIGINS_SET);
   res.setHeader("Access-Control-Expose-Headers", "X-Device-Enrollment-Required, Retry-After");
-  res.setHeader("Vary", "Origin");
 }
 
 function setAdminApiCors(res, req) {
@@ -2511,7 +2508,7 @@ app.use("/admin-api", (req, res, next) => { setAdminApiCors(res, req); if (req.m
 app.use("/admin-api/places", createPlacesAdminRouter({ client: supabaseAdmin, requireManagerWrite: requireOpsManagerWrite, runReadOnlySql }));
 app.use("/dashboard-api", (req, res, next) => { setPublicDashboardCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
 app.use("/scan-api", (req, res, next) => { setScanApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
-app.use("/messaging-api", (req, res, next) => { setMessagingApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); }, createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPayload, requireDeviceAccess: requireDeviceOrOpsAccess, requireOpsManagerAuth, registerOperationalJobHandler: registerOperationalNotificationJobHandler, appVersion: APP_VERSION, releaseId: RELEASE_ID, contractVersion: MESSAGING_CONTRACT_VERSION }));
+app.use("/messaging-api", (req, res, next) => { setMessagingApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); }, createMessagingRouter({ leadershipMessagingBridge:createCustodialLeadershipMessagingBridge({env:process.env}), runReadOnlySql, runRpc, buildHealthPayload, requireDeviceAccess: requireDeviceOrOpsAccess, requireOpsManagerAuth, registerOperationalJobHandler: registerOperationalNotificationJobHandler, appVersion: APP_VERSION, releaseId: RELEASE_ID, contractVersion: MESSAGING_CONTRACT_VERSION }));
 app.use("/schedule-api", (req, res, next) => { setScheduleApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); }, createScheduleRouter({ runReadOnlySql, runRpc, runCommand: runScheduleCommand, buildHealthPayload, requireAdminApiAuth: requireOpsManagerWrite, requireOpsManagerAuth, requireDeviceAccess: requireDeviceOrOpsAccess, publicTrafficRateLimit: publicSubmissionRateLimit, appVersion: APP_VERSION, releaseId: RELEASE_ID, contractVersion: SCHEDULE_CONTRACT_VERSION }));
 app.use("/guest-api", (req, res, next) => { setGuestApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
 app.use("/feedback-api", (req, res, next) => { setFeedbackApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
@@ -2589,7 +2586,7 @@ app.get("/scheduler-runtime-config", (req, res) => {
     res.status(503).json({ ok: false, data: { configured: false, public_url: null }, error: error.message });
   }
 });
-app.get(["/health", "/health/dependencies"], async (req, res) => {
+app.get(["/health", "/health/dependencies"], requireHealthDiagnostics(requireOpsManagerAuth), async (req, res) => {
   setPublicDashboardCors(res, req);
   try {
     const canaryDeviceId = configuredReleaseCanaryDeviceId();
@@ -2647,7 +2644,7 @@ app.get(["/health", "/health/dependencies"], async (req, res) => {
       && requiredSchemaPresent
       && canaryReady
       && deviceCredentialSecret.ready === true;
-    res.status(ok ? 200 : 503).json(buildHealthPayload("dependencies", {
+    res.status(ok ? 200 : 503).json(healthResponse(req, buildHealthPayload("dependencies", {
       ok,
       process_alive: true,
       database_reachable: dependencies.database_reachable === true,
@@ -2667,15 +2664,15 @@ app.get(["/health", "/health/dependencies"], async (req, res) => {
         expired_leases: Number(dependencies.expired_worker_leases || 0),
       },
       schema_fingerprint: buildReleaseManifest({ appVersion: APP_VERSION, releaseId: RELEASE_ID }).schema.fingerprint,
-    }));
+    })));
   } catch (error) {
-    res.status(503).json(buildHealthPayload("dependencies", {
+    res.status(503).json(healthResponse(req, buildHealthPayload("dependencies", {
       ok: false,
       process_alive: true,
       database_reachable: false,
       required_schema_present: false,
       error: "Dependency verification failed.",
-    }));
+    })));
   }
 });
 app.get("/admin-api/health", requireOpsManagerAuth, (_req, res) => { res.status(200).json(buildHealthPayload("admin", { authenticated: true })); });
@@ -3035,7 +3032,7 @@ app.post("/dashboard-api/system-feedback/:feedbackId/status", requireOpsManagerW
 // Read ONLY the immutable original receipt through its fixed scoped RPC.
 // An unavailable reader remains UNKNOWN; never fall back to the action writer.
 app.post("/dashboard-api/system-feedback/:feedbackId/triage-status", feedbackTriageStatusHandler({readOriginalReceipt:args=>runRpc("custodial_feedback_triage_receipt",args),requireOpsManagerWrite}));
-app.get("/dashboard-api/canary", async (_req, res) => {
+app.get("/dashboard-api/canary", requireOpsManagerAuth, async (_req, res) => {
   try { const result = await runCanaryChecks(); res.status(result.ok ? 200 : 503).json(buildHealthPayload("dashboard_canary", result)); }
   catch (error) { console.error("dashboard canary failed:", error); res.status(500).json({ ok: false, area: "dashboard_canary", version: APP_VERSION, release_id: RELEASE_ID, error: error.message || "Dashboard canary failed" }); }
 });
@@ -3172,47 +3169,9 @@ app.get("/admin-api/custodial/cleaning-sessions/:sessionUuid/completion-evidence
 // Query transport preserves opaque dot-only identities without URL path normalization.
 app.get("/admin-api/custodial/cleaning-sessions/completion-evidence", requireOpsManagerAuth,
   makeCompletionEvidenceReader({ runRpc, managerId: offlineAuthorityManagerId, backendSecret: offlineAuthoritySecret }));
-app.get("/admin-api/custodial/cleaning-sessions/:sessionId/truth", requireOpsManagerAuth, async (req, res) => {
-  try {
-    const sessionId = String(req.params?.sessionId || "").trim();
-    if (!isUuid(sessionId)) throw Object.assign(new Error("sessionId must be a UUID."), { status: 422, code: "22023" });
-    const data = await runRpc("custodial_manager_get_session_truth", {
-      p_manager_id: offlineAuthorityManagerId(req),
-      p_session_id: sessionId,
-      p_backend_execution_secret: offlineAuthoritySecret(),
-    });
-    res.status(200).json({ ok: true, contract_version: "cleaning-truth.v1", data });
-  } catch (error) {
-    const failure = authorityHttpFailure(error, "Cleaning record truth is unavailable.");
-    res.status(failure.status).json(failure.body);
-  }
-});
-
-app.post("/admin-api/custodial/cleaning-sessions/:sessionId/corrections", requireOpsManagerWrite, async (req, res) => {
-  try {
-    const sessionId = String(req.params?.sessionId || "").trim();
-    const reason = String(req.body?.reason || "").trim();
-    if (!isUuid(sessionId) || !reason || reason.length > 1000) {
-      throw Object.assign(new Error("A cleaning session UUID and correction reason are required."), { status: 422, code: "22023" });
-    }
-    const data = await runRpc("custodial_append_session_correction", {
-      p_operation_id: requiredRequestOperationId(req),
-      p_session_id: sessionId,
-      p_manager_id: offlineAuthorityManagerId(req),
-      p_reason: reason,
-      p_backend_execution_secret: offlineAuthoritySecret(),
-      p_corrected_employee_id: optionalCorrectionUuid(req.body?.corrected_employee_id, "corrected_employee_id"),
-      p_corrected_location_id: optionalCorrectionUuid(req.body?.corrected_location_id, "corrected_location_id"),
-      p_corrected_device_id: optionalCorrectionUuid(req.body?.corrected_device_id, "corrected_device_id"),
-      p_corrected_started_at: optionalCorrectionTimestamp(req.body?.corrected_started_at, "corrected_started_at"),
-      p_corrected_ended_at: optionalCorrectionTimestamp(req.body?.corrected_ended_at, "corrected_ended_at"),
-    });
-    res.status(data?.replayed === true ? 200 : 201).json({ ok: true, contract_version: "cleaning-truth.v1", data });
-  } catch (error) {
-    const failure = authorityHttpFailure(error, "Cleaning record correction is unavailable.");
-    res.status(failure.status).json(failure.body);
-  }
-});
+installCustodialRecordRoutes(app,{requireOpsManagerAuth,requireOpsManagerWrite,runRpc,
+  managerId:offlineAuthorityManagerId,backendSecret:offlineAuthoritySecret,
+  leadershipRecordBridge:createCustodialLeadershipRecordBridge({env:process.env})});
 
 // Original occurrence evidence is append-only. These bounded, named-manager
 // endpoints can inspect it and append a disposition, never rewrite it.
@@ -3265,7 +3224,7 @@ app.get("/scan-api/health", (_req, res) => {
     },
   }));
 });
-app.get("/scan-api/authority-health", async (_req, res) => {
+app.get("/scan-api/authority-health", requireOpsManagerAuth, async (_req, res) => {
   try {
     const canaryDeviceId = configuredReleaseCanaryDeviceId();
     let canaryPaused = null;

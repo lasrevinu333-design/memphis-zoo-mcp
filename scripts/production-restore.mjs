@@ -6,6 +6,7 @@ import { join, resolve, sep } from "node:path";
 import { createInterface } from "node:readline";
 import { pipeline } from "node:stream/promises";
 import pg from "pg";
+import { verifyRestoredLeadershipGeneration } from "./leadership-restore-generation.mjs";
 import { types } from "node:util";
 import {verifyArchivedSchemaExtension} from "./backup-release-schema-binding.mjs";
 import {stageVerifiedImmutablePrivateData,stageVerifiedImmutableFreshData,commitVerifiedImmutableFreshData,
@@ -799,7 +800,9 @@ async function continueRestoreAfterDatabase({databaseEvidence,immutablePrivateDa
     // Persist their observed evidence only; never call legacy invalidation or
     // claim a legacy pre-restore snapshot/release-preservation operation.
     restorePhase = "record_fresh_original_authority_evidence";
-    const authorityEvidence = {invalidated,authority_commit:databaseEvidence.authority_commit,
+    const leadershipGeneration = await verifyRestoredLeadershipGeneration(db, { restoreId, generation });
+    requireFreshContinuation();
+    const authorityEvidence = {invalidated,leadership_generation:leadershipGeneration,authority_commit:databaseEvidence.authority_commit,
       authority_observation:databaseEvidence.authority_observation,
       original_data_readback:databaseEvidence.authority_data_readback};
     await db.query(`update custodial_dr.restore_manifests set authority_invalidated=true,authority_evidence=$2::jsonb,updated_at=clock_timestamp() where restore_id=$1`, [restoreId, JSON.stringify(authorityEvidence)]);
@@ -1778,9 +1781,11 @@ try {
       ? await invalidateRestoredOrdinaryNativeAuthority(db,{generation,verifiedArchive})
       : await invalidateRestoredAuthority(db, { generation });
     requireOrdinaryRestoreIntentFresh();
-    await db.query(`update custodial_dr.restore_manifests set authority_invalidated=true,authority_evidence=$2::jsonb,updated_at=clock_timestamp() where restore_id=$1`, [restoreId, JSON.stringify({ invalidated, preserved_release_rows: preservedReleaseRows, discrepancies })]);
+    const leadershipGeneration = await verifyRestoredLeadershipGeneration(db, { restoreId, generation });
     requireOrdinaryRestoreIntentFresh();
-    await recordEvent("AUTHORITY_RECONCILIATION", "PASSED", { invalidated, preserved_release_rows: preservedReleaseRows, discrepancies });
+    await db.query(`update custodial_dr.restore_manifests set authority_invalidated=true,authority_evidence=$2::jsonb,updated_at=clock_timestamp() where restore_id=$1`, [restoreId, JSON.stringify({ invalidated, leadership_generation: leadershipGeneration, preserved_release_rows: preservedReleaseRows, discrepancies })]);
+    requireOrdinaryRestoreIntentFresh();
+    await recordEvent("AUTHORITY_RECONCILIATION", "PASSED", { invalidated, leadership_generation: leadershipGeneration, preserved_release_rows: preservedReleaseRows, discrepancies });
     requireOrdinaryRestoreIntentFresh();
     await db.query("commit");
   } catch (error) {

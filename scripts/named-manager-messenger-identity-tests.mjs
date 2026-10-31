@@ -33,7 +33,9 @@ if(process.argv.includes('--responder-named-identity-only')) {
   }
   current={msg_user_id:user,user_active:true,ops_manager_id:null};deviceIdentity={role:'employee',msg_user_id:user};queries.length=0;
   result=await ask('attendance today',{role:'manager',identity:{role:'manager'}});
-  assert.notEqual(result.meta.mode,'local_attendance');assert.ok(!queries.some(q=>q.includes('v_admin_health_snapshot')));
+  assert.equal(result.meta.mode,'local_attendance','approved employee read-only operational context remains available despite claimed manager hints');
+  assert.ok(queries.some(q=>q.includes('v_location_dashboard_status')),'employee attendance uses the permitted operational read subset');
+  assert.ok(!queries.some(q=>q.includes('v_admin_health_snapshot')),'employee context cannot read administrator health');
   deviceIdentity={role:'manager',msg_user_id:'00000000-0000-4000-8000-000000000999'};queries.length=0;
   result=await ask();assert.notEqual(result.meta.mode,'local_attendance');assert.ok(!queries.some(q=>q.includes('v_admin_health_snapshot')));
   console.log('NAMED_MANAGER_RESPONDER_CURRENT_IDENTITY_PASS: actual responder with recording current-registry reads; no HTTP/SQL/provider claim');

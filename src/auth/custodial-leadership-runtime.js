@@ -1,6 +1,8 @@
+import {installCustodialLeadershipRecordCompanion} from './custodial-leadership-record-operation.mjs';
 // Main-owned central wiring. Disabled until explicit protected configuration;
 // Main API has no enrollment DB grant: it proxies/reads the fixed control plane.
 import express from 'express';
+import {createCustodialLeadershipMessagingOperation,createCustodialLeadershipMessagingHandler} from './custodial-leadership-messaging.mjs';
 import {createHmac,createHash,randomUUID,timingSafeEqual} from 'node:crypto';
 import {createCustodialLeadershipPinService,createCustodialLeadershipPinRouter,createPgCustodialLeadershipPinStore,CUSTODIAL_LEADERSHIP_COOKIE_NAMES} from '../custodial-leadership-pin.js';
 import {createCustodialLeadershipOpsSession,verifyCustodialLeadershipOpsToken,assertOpsManagerSessionSecret} from './shared-access-auth.js';
@@ -23,7 +25,7 @@ export function custodialLeadershipOrigins(env={}) {
 function requireOrigin(origin,env){if(!custodialLeadershipOrigins(env).includes(origin))throw error('custodial_origin_denied');}
 function allowedPath(req){
  const p=String(req.originalUrl||req.url||'').split('?')[0];
- if((req.method==='GET'&&['/admin-api/health','/auth-api/gemini/session'].includes(p))
+ if((req.method==='GET'&&['/admin-api/health','/auth-api/gemini/session','/health/dependencies','/scan-api/authority-health','/status/deep'].includes(p))
   ||(req.method==='POST'&&p==='/auth-api/gemini/login'))return true;
  if(/^\/analytics-api\/(cleaning-performance|inspection-coverage|inspections|session-facts|ticket-trends)(?:\/|$)/.test(p))return true;
  if(/^\/feedback-api\/(submit|original-receipt|image|acknowledge)(?:\/|$)/.test(p))return true;
@@ -98,7 +100,10 @@ export function createCustodialLeadershipControlPlane({env=process.env,database,
   return actor;
  };
  const ticketOperation=database?.connect?createCustodialLeadershipTicketOperation({database,service,verifyTransaction}):null;
+ const messagingOperation=database?.connect?createCustodialLeadershipMessagingOperation({database,service,verifyTransaction}):null;
  const appRouter=express.Router();
+ installCustodialLeadershipRecordCompanion({router:appRouter,database,service,verifyTransaction,requireOrigin:origin=>requireOrigin(origin,env),token});
+ appRouter.post(internal+'/messaging',express.json({limit:'32kb'}),createCustodialLeadershipMessagingHandler({operation:messagingOperation,assertOrigin:origin=>requireOrigin(origin,env)}));
  appRouter.use('/custodial-leadership-api',createCustodialLeadershipPinRouter({service,allowedOrigins:custodialLeadershipOrigins(env),sourceIdentity:req=>{
    const source=text(req.get('X-Custodial-Source')),stamp=text(req.get('X-Custodial-Source-Time')),mac=text(req.get('X-Custodial-Source-Mac'));
    if(source||stamp||mac){const expected=scopeMac(env,'custodial-proxy-source-v1',source+'\n'+stamp+'\n'+req.path);

@@ -43,7 +43,7 @@ function setCors(req, res, env) {
   if (origin && allowedOrigins(env).has(origin)) res.setHeader("Access-Control-Allow-Origin", origin);
   res.setHeader("Access-Control-Allow-Credentials", "true");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Device-Id, X-Memphis-Device-Credential");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Device-Id, X-Memphis-Device-Credential, X-CSRF-Token");
   res.setHeader("Vary", "Origin");
 }
 function fail(res, error, fallback = "Manager notification request failed.") {
@@ -424,11 +424,11 @@ export function createPushRuntime({ db, env }) {
     prepareNativeScheduleSender };
 }
 
-export function installManagerNotificationRoutes(app, { env = process.env, supabase = null } = {}) {
+export function installManagerNotificationRoutes(app, { env = process.env, supabase = null, trustedDeviceStore = null } = {}) {
   if (!app || runtimeByApp.has(app)) return runtimeByApp.get(app) || null;
   const db = supabase || createSupabase(env);
-  const requireManager = makeOpsAccessMiddleware({ env, supabase: db });
-  const requireManagerWrite = makeOpsAccessMiddleware({ env, supabase: db, requireWrite: true });
+  const requireManager = makeOpsAccessMiddleware({ env, supabase: db, trustedDeviceStore });
+  const requireManagerWrite = makeOpsAccessMiddleware({ env, supabase: db, trustedDeviceStore, requireWrite: true });
   const runtime = createPushRuntime({ db, env });
   runtimeByApp.set(app, runtime);
 
@@ -453,7 +453,7 @@ export function installManagerNotificationRoutes(app, { env = process.env, supab
     return created.data;
   }
 
-  app.get("/manager-notifications-api/health", (_req, res) => {
+  app.get("/manager-notifications-api/health", requireManager, (_req, res) => {
     res.status(db ? 200 : 503).json({
       ok: Boolean(db),
       manager_only: true,
@@ -496,7 +496,7 @@ export function installManagerNotificationRoutes(app, { env = process.env, supab
           .eq("credential_id", identity.credentialId).maybeSingle(),
         db.from("ops_manager_notification_queue")
           .select("notification_type,created_at,updated_at", { count: "exact" })
-          .eq("manager_id", identity.managerId).eq("status", "failed")
+          .eq("manager_id", identity.managerId).eq("credential_id", identity.credentialId).eq("status", "failed")
           .order("updated_at", { ascending: false }).limit(20),
       ]);
       if (deviceResult.error) throw deviceResult.error;

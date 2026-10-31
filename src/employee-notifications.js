@@ -8,6 +8,7 @@ import { deliverNativeMessageJob } from './native-message-dispatch.js';
 import { deliverNativeEventJob } from './native-event-dispatch.js';
 import { holdUnqualifiedNativeScheduleJob } from './native-schedule-job-preparation.js';
 import { prepareNativeScheduleSourceJobs } from './native-schedule-source-producer.js';
+import { nativeAlertUtf8Prefix, nativeAlertPreview } from './native-alert-text.js';
 
 const runtimeByApp = new WeakMap();
 const API_PREFIX = '/employee-notifications-api';
@@ -62,9 +63,11 @@ const CUSTODIAL_EVENT_SPEECH = Object.freeze({
   restroom_checks: 'Perform requested restroom checks',
 });
 export function buildEmployeeEventReminderBody(event = {}, employeeName) {
-  const name = clip(employeeName, 160);
-  const title = clip(event.event_name, 180);
-  const place = clip(event.display_location, 180);
+  // The full source fields remain in Events and the immutable preparation.
+  // These explicitly ellipsized, source-bound previews fit the native wire.
+  const name = nativeAlertPreview(String(employeeName ?? ''), 120);
+  const title = nativeAlertPreview(String(event.event_name ?? ''), 180);
+  const place = nativeAlertPreview(String(event.display_location ?? ''), 240);
   const date = clip(event.event_date, 40);
   const start = clip(event.start_time, 20);
   const end = clip(event.end_time, 20);
@@ -80,9 +83,15 @@ export function buildEmployeeEventReminderBody(event = {}, employeeName) {
   // or itinerary content and never enter the native spoken reminder.
   const approvedNotes = [...new Set(Array.isArray(event.custodial_note_codes) ? event.custodial_note_codes : [])]
     .map((code) => CUSTODIAL_EVENT_SPEECH[code]).filter(Boolean);
-  const publicNotes = clip(event.custodial_public_notes, 500);
-  return clip(`${name}, event reminder. ${title} is at ${place} on ${date}, from ${start} to ${end}.`
-    + (attendance == null ? '' : ` Expected attendance is ${attendance}.`)
+  const publicNotes = String(event.custodial_public_notes ?? '').trim();
+  const required = `${name}, event reminder. ${title} is at ${place} on ${date}, from ${start} to ${end}.`
+    + (attendance == null ? '' : ` Expected attendance is ${attendance}.`);
+  // SQL verifies these same current-source prefixes. All required categories
+  // remain in the reminder; the route opens the complete original event.
+  if (nativeAlertUtf8Prefix(required, 1000) !== required) {
+    throw new Error('event_reminder_required_details_exceed_native_byte_budget');
+  }
+  return nativeAlertUtf8Prefix(required
     + (approvedNotes.length || publicNotes ? ` Custodial preparation: ${[...approvedNotes, publicNotes].filter(Boolean).join('; ')}.` : ''), 1000);
 }
 function eventTimeWithZone(instant) {

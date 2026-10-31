@@ -1,5 +1,14 @@
 const DEFAULT_STALE_AFTER_MS = 60 * 60 * 1000;
 export const ATTENDANCE_FUTURE_SKEW_MS = 60 * 1000;
+const attendanceDay = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit',
+});
+
+function sameAttendanceDay(timestamp, nowMs) {
+  const sourceMs = Date.parse(timestamp);
+  return Number.isFinite(sourceMs) && Number.isFinite(nowMs)
+    && attendanceDay.format(sourceMs) === attendanceDay.format(nowMs);
+}
 
 // PostgreSQL keeps microseconds; Date and Date.parse alone keep only milliseconds.
 // Read this observation's timestamps as text and compare canonical instants, not
@@ -24,7 +33,8 @@ export function canonicalAttendanceTimestamp(value) {
 export function isCurrentAttendanceTimestamp(value, nowMs = Date.now()) {
   const timestamp = canonicalAttendanceTimestamp(value);
   const age = timestamp == null ? NaN : nowMs - Date.parse(timestamp);
-  return Number.isFinite(age) && age >= -ATTENDANCE_FUTURE_SKEW_MS && age <= DEFAULT_STALE_AFTER_MS;
+  return Number.isFinite(age) && age >= -ATTENDANCE_FUTURE_SKEW_MS && age <= DEFAULT_STALE_AFTER_MS
+    && sameAttendanceDay(timestamp, nowMs);
 }
 
 export function toNullableNonNegativeInteger(value) {
@@ -63,7 +73,10 @@ export function normalizeAttendanceRecord(row, {
   const sourceTimestamp = attendanceSourceTimestamp(row);
   const sourceAgeMs = sourceTimestamp ? nowMs - Date.parse(sourceTimestamp) : null;
   const future = sourceAgeMs != null && sourceAgeMs < -ATTENDANCE_FUTURE_SKEW_MS;
-  const stale = sourceAgeMs == null || sourceAgeMs > staleAfterMs || future;
+  // These are cumulative entries for a Chicago calendar day, not a rolling
+  // count. A recent yesterday observation remains useful only as stale data.
+  const otherDay = sourceTimestamp != null && !sameAttendanceDay(sourceTimestamp, nowMs);
+  const stale = sourceAgeMs == null || !Number.isFinite(sourceAgeMs) || sourceAgeMs > staleAfterMs || future || otherDay;
   return {
     attendance,
     last_year: lastYear,
@@ -80,7 +93,7 @@ export function normalizeAttendanceRecord(row, {
     source_age_minutes: sourceAgeMs == null ? null : Math.round(Math.max(0, sourceAgeMs) / 60000),
     cached: true,
     stale,
-    ...(stale ? { warning: future ? "Stored attendance has a future source timestamp." : sourceTimestamp ? "Stored attendance is older than the freshness limit." : "Stored attendance has no valid source timestamp." } : {}),
+    ...(stale ? { warning: future ? "Stored attendance has a future source timestamp." : otherDay ? "Stored attendance belongs to a different Chicago calendar day." : sourceTimestamp ? "Stored attendance is older than the freshness limit." : "Stored attendance has no valid source timestamp." } : {}),
   };
 }
 

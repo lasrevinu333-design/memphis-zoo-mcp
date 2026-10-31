@@ -12,13 +12,20 @@ const instant=z.string().datetime({offset:true});
 const source=z.object({mailbox:z.literal('eoperle@memphiszoo.org'),message_id:z.string().min(8).max(1500),
   content_sha256:hash,evidence_kind:z.enum(['original_event_notice','event_update','event_cancellation']),
   source_at:instant,received_at:instant,subject:z.string().max(200).optional()}).strict();
-const event=z.object({event_name:z.string().min(1).max(180),event_scope:z.enum(['ZOO_WIDE','SINGLE_VENUE','MULTI_VENUE','OFFSITE']),
+const eventFields=z.object({event_name:z.string().min(1).max(180),event_scope:z.enum(['ZOO_WIDE','SINGLE_VENUE','MULTI_VENUE','OFFSITE']),
   primary_venue_id:uuid.nullable().optional(),venue_ids:z.array(uuid).max(100).optional(),location_group_id:uuid.nullable().optional(),
   display_location:z.string().max(240).nullable().optional(),event_date:z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   end_date:z.string().regex(/^\d{4}-\d{2}-\d{2}$/),start_time:z.string().regex(/^\d{2}:\d{2}:\d{2}$/),end_time:z.string().regex(/^\d{2}:\d{2}:\d{2}$/),
   start_instant_utc:instant,end_instant_utc:instant,attendee_count:z.number().int().min(0).max(2147483647).nullable().optional(),
   custodial_public_notes:z.string().max(500).nullable().optional(),custodial_note_codes:z.array(z.enum(['trash_boxes','extra_cans','restroom_checks'])).max(3).optional(),
   coverage_location_ids:z.array(uuid).max(100).optional()}).strict();
+// The canonical OFFSITE classification is mapped by SQL when the original
+// observation has no legacy group. Preserve its outside venue and source
+// bytes; it must never manufacture Zoo custodial coverage.
+const event=z.discriminatedUnion('event_scope',[
+  eventFields.extend({event_scope:z.literal('OFFSITE'),coverage_location_ids:z.array(uuid).max(0).optional()}),
+  eventFields.extend({event_scope:z.enum(['ZOO_WIDE','SINGLE_VENUE','MULTI_VENUE'])}),
+]);
 const identity={source,source_event_key:z.string().min(5).max(400),event_id:uuid.optional(),expected_revision:z.number().int().positive().max(2147483647).optional()};
 export const outlookSyncSchema=z.object({contract_version:z.literal(OUTLOOK_SYNC_CONTRACT),
   request:z.discriminatedUnion('action',[

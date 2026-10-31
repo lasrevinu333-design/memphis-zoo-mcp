@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import vm from 'node:vm';
+import {requireHealthDiagnostics,healthResponse} from '../src/security-http-boundaries.js';
 import { publicOperationsDashboard } from '../src/public-operations-viewer.js';
 import { resolveReleaseSchemaTarget } from './production-target-schema-profile.mjs';
 import { assertDashboardReleaseCompatibility } from '../src/dashboard-release-compatibility.js';
@@ -26,6 +27,7 @@ const context = vm.createContext({
   console: { error() {} },
   app: { get(paths, ...handlers) { for (const path of [paths].flat()) routes.set(path, handlers); } },
   setPublicDashboardCors() {},
+  requireHealthDiagnostics,healthResponse,
   configuredReleaseCanaryDeviceId: () => 'KIOSK_10',
   releaseCanaryConfigurationRequired: () => true,
   offlineAuthoritySecret: () => 'synthetic-DTO-transport-only-no-auth-proof',
@@ -101,6 +103,7 @@ vm.runInContext(between('app.get(["/health", "/health/dependencies"]', '\napp.ge
 vm.runInContext(between('app.get("/dashboard-api/canary"', '\napp.get("/dashboard-api/current-attendance"'), context);
 vm.runInContext(between('app.get("/dashboard-api/summary"', '\napp.get("/dashboard-api/work-session-alerts"'), context);
 async function get(path, req = {}) {
+  req={path,...req};
   const handlers = routes.get(path); assert.ok(handlers, `shipping route missing: ${path}`);
   const response = { statusCode: 200, body: null, status(value) { this.statusCode = value; return this; },
     json(value) { this.body = JSON.parse(JSON.stringify(value)); return this; } };
@@ -108,8 +111,10 @@ async function get(path, req = {}) {
   await next(); return response;
 }
 const version = await get('/version');
-const health = await get('/health');
-const canary = await get('/dashboard-api/canary');
+const publicHealth = await get('/health');
+assert.deepEqual(publicHealth.body,{ok:true,process_alive:true});
+const health = await get('/health/dependencies',{fixtureManager:true});
+const canary = await get('/dashboard-api/canary',{fixtureManager:true});
 assert.equal(version.statusCode, 200); assert.equal(health.statusCode, 200); assert.equal(canary.statusCode, 200);
 const expected = { releaseId: version.body.release_id, appVersion: version.body.version, backendCommitSha: version.body.backend_commit_sha };
 assert.equal(expected.releaseId, input.release_id);
@@ -150,10 +155,10 @@ const count = state.calls.length;
 assert.equal((await get('/dashboard-api/summary')).statusCode, 401);
 assert.equal(state.calls.length, count, 'unauthenticated protected route must not execute SQL');
 state.readerReady = false;
-const unready = await get('/health'); assert.equal(unready.statusCode, 503); assert.equal(unready.body.read_authority_ready, false);
+const unready = await get('/health/dependencies',{fixtureManager:true}); assert.equal(unready.statusCode, 503); assert.equal(unready.body.read_authority_ready, false);
 assert.throws(() => assertDashboardReleaseCompatibility({ canary: canary.body, health: unready.body, ...expected }));
 state.readerReady = true; state.denied = 'public.v_location_dashboard_status';
-const denied = await get('/dashboard-api/canary'); assert.equal(denied.statusCode, 503);
+const denied = await get('/dashboard-api/canary',{fixtureManager:true}); assert.equal(denied.statusCode, 503);
 assert.equal(denied.body.checks.dashboard_summary.ok, false);
 assert.throws(() => assertDashboardReleaseCompatibility({ canary: denied.body, health: health.body, ...expected }));
 console.log(JSON.stringify({ status: 'PASS', producer: 'shipping runPublicDashboardSummary/runCanaryChecks/buildHealthPayload and actual route handlers',

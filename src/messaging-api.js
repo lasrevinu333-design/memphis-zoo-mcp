@@ -7,8 +7,15 @@ import { resolveCanonicalDevice } from "./device-identity.js";
 import { nativeNotificationReceiptArguments } from "./native-notification-receipt.js";
 import { createOriginalMessageActions } from "./messaging-original-outcome.js";
 
-export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPayload, requireDeviceAccess, requireOpsManagerAuth: suppliedOpsManagerAuth, registerOperationalJobHandler, appVersion, releaseId, contractVersion }) {
+export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPayload, requireDeviceAccess, requireOpsManagerAuth: suppliedOpsManagerAuth, leadershipMessagingBridge, registerOperationalJobHandler, appVersion, releaseId, contractVersion }) {
   const router = express.Router();
+  const cohortRequestContexts = new WeakMap();
+  const isCohortSession = session => session?.auth_mode === 'custodial_leadership_pin' || session?.actor_kind === 'CUSTODIAL_LEADERSHIP_COHORT';
+  async function cohortOperation(session, action, input) {
+    const context = cohortRequestContexts.get(session);
+    if (!context || typeof leadershipMessagingBridge !== 'function') throw Object.assign(new Error('Current cohort Messenger context is unavailable.'), {status:403});
+    return leadershipMessagingBridge({session,action,input,origin:context.origin,csrfToken:context.csrfToken});
+  }
   const originalMessageActions = typeof requireDeviceAccess === "function"
     ? createOriginalMessageActions({ runReadOnlySql, runRpc, requireDeviceAccess }) : null;
   const memphisResponder = createMemphisResponder({ runReadOnlySql, runRpc });
@@ -25,6 +32,10 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
   async function finishMessagingIdentity(req, res, next) {
     if (req.memphisAuth) {
       try {
+        if (isCohortSession(req.memphisAuth)) cohortRequestContexts.set(req.memphisAuth, {
+          origin: String(req.get?.('Origin') || req.headers?.origin || ''),
+          csrfToken: String(req.get?.('X-CSRF-Token') || req.headers?.['x-csrf-token'] || ''),
+        });
         const identity = await getManagerMessagingIdentity(req.memphisAuth);
         req.memphisMessagingManager = { identity };
         next();
@@ -226,6 +237,22 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
   async function getManagerMessagingIdentity(managerSession = {}) {
     const managerId = String(managerSession?.manager_id || "").trim();
     if (!isUuid(managerId)) throw Object.assign(new Error("Authenticated manager identity is required for Messenger."), { status: 401 });
+    if (isCohortSession(managerSession)) {
+      const context = cohortRequestContexts.get(managerSession);
+      if (context?.identity) return context.identity;
+      const row = await cohortOperation(managerSession, 'identity', {});
+      if (row?.schema !== 'custodial.cohort-messenger-identity.v1' || !isUuid(row.msg_user_id)
+          || row.custodial_cohort_manager_id !== managerId || row.custodial_claimed_account_id !== managerSession.claimed_manager_id
+          || row.identity_assurance !== 'SELF_ASSERTED_NAME' || row.individual_identity_verified !== false
+          || row.ops_manager_id != null || row.role !== 'manager') {
+        throw Object.assign(new Error('Cohort Messenger identity was not confirmed.'), {status:403});
+      }
+      const identity = {...row,user_id:row.msg_user_id,manager_id:managerId,
+        canonical_device_id:managerSession.device_id,identity_source:'current_self_asserted_cohort_account',
+        role_title:'Custodial leadership (shared PIN)',read_only:false};
+      context.identity = identity;
+      return identity;
+    }
     const data = await runRpc("msg_ensure_ops_manager_user", { p_manager_id: managerId });
     const row = Array.isArray(data) ? data[0] : data;
     const userId = String(row?.msg_user_id || row?.user_id || row?.id || "").trim();
@@ -269,7 +296,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
         identity,
         effectiveUserId,
         deviceId: String(managerSession.device_id || managerSession.credential_id || "manager-session"),
-        isManagerOverview: true,
+        isManagerOverview: !isCohortSession(managerSession),
         authenticatedManager: true,
       };
     }
@@ -1102,29 +1129,12 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     return parts.join(". " ) + ".";
   }
 
-  async function directContactReply(body = "", userId = "") {
-    if (!isDirectContactPrompt(body)) return null;
-    // OC24-13 applies to this shortcut as well as the regular AI contact
-    // formatter. Resolve the actual saved message sender against the current
-    // named-manager registry; message metadata/device labels are not roles.
-    const leadership = await getLeadershipProfileForMessagingUser(userId);
-    const includePhone = isUuid(leadership?.manager_id)
-      && Array.isArray(leadership?.manager_roles)
-      && leadership.manager_roles.some(role => ["OPS_MANAGER", "CUSTODIAL_MANAGER", "DIRECTOR", "SECURITY_ADMIN"].includes(role));
-    const contacts = await runReadOnlySql(`
-      select display_name, role_title, department, ${includePhone ? "phone" : "null::text as phone"}, active, sort_order
-      from public.internal_ops_contacts
-      where active = true
-      order by sort_order asc, display_name asc
-    `);
-    const ranked = (Array.isArray(contacts) ? contacts : [])
-      .map((contact) => ({ contact, score: scoreContactPrompt(body, contact) }))
-      .sort((a, b) => b.score - a.score || Number(a.contact.sort_order || 999) - Number(b.contact.sort_order || 999));
-    const best = ranked[0];
-    if (best && best.score >= 70) return summarizeDirectContact(best.contact, includePhone);
-    if (/\b(manager|managers|director|contact|phone|number)\b/i.test(String(body || ""))) {
-      return ranked.slice(0, 6).map((row) => summarizeDirectContact(row.contact, includePhone)).join(" " );
-    }
+  async function directContactReply() {
+    // Work-directory access now belongs to the shared responder. It resolves
+    // the original sender's current employee/named/cohort identity and applies
+    // the owner-approved internal work-contact policy before any directory read.
+    // Falling through also preserves the original sourceMessageId for cohort
+    // authority instead of granting access from a device label or role hint.
     return null;
   }
 
@@ -1170,7 +1180,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     return raw;
   }
 
-  async function buildMemphisReply({ userId = "", deviceId = "", threadId = "", body = "" } = {}) {
+  async function buildMemphisReply({ userId = "", deviceId = "", threadId = "", body = "", sourceMessageId = "" } = {}) {
     try {
       const directContact = await directContactReply(body, userId);
       if (directContact) {
@@ -1186,7 +1196,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
         };
       }
       const routedBody = normalizeMemphisPromptForLocalRouting(body);
-      let reply = await memphisResponder.generateReply({ userId, deviceId, threadId, userMessage: routedBody });
+      let reply = await memphisResponder.generateReply({ userId, deviceId, threadId, userMessage: routedBody, sourceMessageId });
       if (routedBody !== body) {
         reply = {
           ...reply,
@@ -1217,6 +1227,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     clientMessageId = "",
     threadId = "",
     managerId = "",
+    managerSession = null,
   } = {}) {
     const normalizedUserId = String(userId || "").trim();
     const normalizedDeviceId = String(deviceId || "").trim();
@@ -1252,7 +1263,12 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       },
       p_client_message_id: normalizedClientMessageId || null,
     };
-    const userMessage = normalizedManagerId
+    const userMessage = isCohortSession(managerSession)
+      ? await cohortOperation(managerSession, 'send', {
+        thread_id:thread.id,body:normalizedBody,message_type:'text',metadata_json:messageArgs.p_metadata_json,
+        client_message_id:normalizedClientMessageId,
+      })
+      : normalizedManagerId
       ? await runRpc("msg_send_message_as_ops_manager", {
         ...messageArgs,
         p_manager_id: normalizedManagerId,
@@ -1312,14 +1328,29 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     return Array.isArray(rows) && rows.length ? rows[0] : null;
   }
 
+  async function requireCurrentCohortMessageActor(source) {
+    if (source.custodial_cohort_manager_id) {
+      const checked = await runReadOnlySql(`select public.msg_custodial_cohort_message_actor_v1('${esc(source.id)}'::uuid,'${esc(source.sender_user_id)}'::uuid,'${esc(source.device_id)}') as actor`);
+      const actor = Array.isArray(checked) && checked.length === 1 ? checked[0]?.actor : null;
+      if (actor?.schema !== 'custodial.cohort-messenger-actor.v1' || actor.msg_user_id !== source.sender_user_id
+          || actor.source_message_id !== source.id || actor.custodial_cohort_manager_id !== source.custodial_cohort_manager_id
+          || actor.custodial_claimed_account_id !== source.custodial_claimed_account_id
+          || actor.identity_assurance !== 'SELF_ASSERTED_NAME' || actor.individual_identity_verified !== false || actor.owner !== false) {
+        throw new Error('Original cohort Messenger authority is no longer current.');
+      }
+    }
+  }
+
   async function processMemphisBotReplyJob(job = {}) {
     const sourceMessageId = String(job.source_id || job.payload_json?.message_id || "").trim();
     if (!isUuid(sourceMessageId)) throw new Error("Memphis background job is missing its source message.");
     const sourceRows = await runReadOnlySql(`
       select m.id, m.thread_id, m.sender_user_id, m.body, m.metadata_json,
-             coalesce(m.metadata_json->>'device_id','') as device_id
+             coalesce(m.metadata_json->>'device_id','') as device_id,
+             sender.custodial_cohort_manager_id,sender.custodial_claimed_account_id
       from public.msg_messages m
       join public.msg_threads t on t.id = m.thread_id
+      join public.msg_users sender on sender.id=m.sender_user_id
       where m.id = '${esc(sourceMessageId)}'::uuid
         and m.is_deleted is false
         and t.is_active is true
@@ -1328,6 +1359,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     `);
     const source = Array.isArray(sourceRows) && sourceRows.length ? sourceRows[0] : null;
     if (!source) throw new Error("Memphis source message no longer exists.");
+    await requireCurrentCohortMessageActor(source);
     const replyKey = `memphis-reply:${source.id}`;
     const existing = await findMemphisBotMessage(replyKey);
     if (existing) return { bot_message: existing, replayed: true };
@@ -1340,7 +1372,9 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       deviceId: source.device_id,
       threadId: source.thread_id,
       body: source.body,
+      sourceMessageId: source.id,
     });
+    await requireCurrentCohortMessageActor(source);
     const botMessage = await runRpc("msg_send_message", {
       p_thread_id: source.thread_id,
       p_sender_user_id: memphisUserId,
@@ -2030,6 +2064,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
           clientMessageId,
           threadId,
           managerId: String(req.memphisAuth?.manager_id || "").trim(),
+          managerSession: req.memphisAuth || null,
         });
         res.status(200).json({ ok: true, data, meta: messagingMeta({ responder: "memphis" }) });
         return;
@@ -2044,7 +2079,11 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
         res.status(200).json({ ok: true, data: result, meta: messagingMeta({ original_outcome: outcome }) });
         return;
       }
-      const data = req.memphisAuth
+      const data = isCohortSession(req.memphisAuth)
+        ? await cohortOperation(req.memphisAuth, 'send', {
+          thread_id:threadId,body,message_type:messageType,metadata_json:authoritativeMetadata,client_message_id:clientMessageId,
+        })
+        : req.memphisAuth
         ? await runRpc("msg_send_message_as_ops_manager", {
           p_manager_id: String(req.memphisAuth.manager_id || "").trim(),
           p_thread_id: threadId,
@@ -2161,7 +2200,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
 
   router.post("/thread/:threadId/admin-tombstone", requireWritableDeviceOrOpsAuth, async (req, res) => {
     try {
-      if (!req.memphisAuth) {
+      if (!req.memphisAuth || isCohortSession(req.memphisAuth)) {
         res.status(403).json({ ok: false, error: "A named admin session is required." });
         return;
       }
@@ -2384,6 +2423,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
         clientMessageId,
         threadId,
         managerId: String(req.memphisAuth?.manager_id || "").trim(),
+        managerSession: req.memphisAuth || null,
       });
 
       res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
@@ -2392,23 +2432,36 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     }
   });
 
-  router.post("/broadcast", requireWritableDeviceOrOpsAuth, async (req, res) => {
+  async function broadcastOperation(req, res, readOnly = false) {
     try {
       const senderUserId = String(req.body?.sender_user_id || "").trim();
       const title = req.body?.title == null ? null : String(req.body.title);
       const body = String(req.body?.body || "");
       const deviceId = String(req.body?.device_id || req.body?.deviceId || "").trim();
       const viewer = await resolveViewerContext({ userId: senderUserId, deviceId, managerSession: req.memphisAuth || null });
-      if (!viewer.isManagerOverview) {
+      if (!viewer.isManagerOverview && !viewer.authenticatedManager) {
         res.status(403).json({ ok: false, error: "Broadcast requires a manager device." });
         return;
       }
-      const data = await runRpc("msg_send_broadcast", { p_sender_user_id: viewer.effectiveUserId, p_title: title, p_body: body });
+      const clientBroadcastId = req.body?.client_broadcast_id ?? req.body?.clientBroadcastId;
+      if (typeof clientBroadcastId !== "string" || !clientBroadcastId.trim()
+          || clientBroadcastId !== clientBroadcastId.trim() || clientBroadcastId.length > 200) {
+        throw Object.assign(new Error("A stable client_broadcast_id of 1–200 characters is required."), { status: 422 });
+      }
+      assertMessageBodyWithinLimit(body);
+      const data = await runRpc("msg_broadcast_operation_v1", {
+        p_sender_user_id: viewer.effectiveUserId, p_client_broadcast_id: clientBroadcastId,
+        p_title: title, p_body: body, p_read_only: readOnly,
+      });
       res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
-      fail(res, error, "Send broadcast failed");
+      const sqlStatus = { "23505": 409, "42501": 403, "22023": 422 }[error?.code];
+      if (sqlStatus) error.status = sqlStatus;
+      fail(res, error, readOnly ? "Read original broadcast outcome failed" : "Send broadcast failed");
     }
-  });
+  }
+  router.post("/broadcast", requireWritableDeviceOrOpsAuth, (req, res) => broadcastOperation(req, res));
+  router.post("/broadcast/original-outcome", requireWritableDeviceOrOpsAuth, (req, res) => broadcastOperation(req, res, true));
 
   return router;
 }

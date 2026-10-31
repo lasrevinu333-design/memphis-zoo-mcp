@@ -1,4 +1,5 @@
 import { isDeepStrictEqual } from 'node:util';
+import { nativeAlertUtf8Prefix } from './native-alert-text.js';
 import { NATIVE_EVENT_SCHEMA, NATIVE_MESSAGE_SCHEMA, validateNativeAlertReservation } from './native-alert-reservation.js';
 
 const UUID = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/;
@@ -59,7 +60,8 @@ export function buildNativeAlertCandidate(prepared, { eventBody }) {
       source_revision: prepared.source_revision };
   } else {
     candidate = { schema: NATIVE_MESSAGE_SCHEMA, kind: 'employee_message', notification_type: 'message',
-      title: p.payload?.title, body: p.payload?.body, channel_id: 'employee-messages',
+      title: nativeAlertUtf8Prefix(p.payload?.title, 180),
+      body: nativeAlertUtf8Prefix(p.payload?.body, 1000), channel_id: 'employee-messages',
       route: `messages.html?hub=employee&thread_id=${p.thread_id}`,
       message_id: p.message_id, thread_id: p.thread_id, recipient_user_id: p.recipient_user_id,
       notification_key: `message:${p.message_id}`, source_revision: prepared.source_revision };
