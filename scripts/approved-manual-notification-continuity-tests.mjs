@@ -2,11 +2,21 @@
 // No PostgreSQL, credentials, private user data, provider send, device or clock mutation.
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {createHash} from 'node:crypto';
 import {isDeepStrictEqual} from 'node:util';
 import {inspectApprovedManualLunchContinuity as inspect} from '../src/approved-manual-notification-continuity.js';
 import {postgresJsonbContentDigest as digest} from '../src/static-weekly-schedule-program.js';
-const sourceURL=new URL('../release/worker2-notification-continuity-20261030/',import.meta.url);
-const read=name=>readFileSync(new URL(name,sourceURL),'utf8');
+const sourceURL=new URL('./fixtures/source301/notification-continuity/',import.meta.url);
+const provenance=JSON.parse(readFileSync(new URL('./fixtures/source301/PROVENANCE.json',import.meta.url),'utf8'));
+const fixturePrefix='scripts/fixtures/source301/notification-continuity/';
+const read=name=>{
+ const rows=provenance.rows.filter(r=>r.path===fixturePrefix+name);
+ assert.equal(rows.length,1,'Historical SQL fixture requires one captured provenance record');
+ const bytes=readFileSync(new URL(name,sourceURL));
+ assert.equal(bytes.length,rows[0].bytes,'Historical SQL fixture size changed');
+ assert.equal(createHash('sha256').update(bytes).digest('hex'),rows[0].sha256,'Historical SQL fixture hash changed');
+ return bytes.toString('utf8');
+};
 const clone=structuredClone;
 const id=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 const omit=(o,keys)=>Object.fromEntries(Object.entries(o).filter(([key])=>!keys.includes(key)));

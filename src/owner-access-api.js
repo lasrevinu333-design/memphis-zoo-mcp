@@ -1,5 +1,6 @@
 import { makeOpsAccessMiddleware } from './auth/shared-access-auth.js';
 import { assertServerAssignedActor } from './manager-authority.js';
+import { isCustodialLeadershipManagementSession } from './auth/manager-permissions.js';
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const error = (status, message) => Object.assign(new Error(message), { status });
@@ -25,10 +26,14 @@ function respond(operation) {
     }
   };
 }
-export function installOwnerAccessRoutes(app, { store, runRpc, backendSecret, env = process.env } = {}) {
+export function installOwnerAccessRoutes(app, { store, runRpc, backendSecret, leadershipTicketBridge, env = process.env } = {}) {
   const read = makeOpsAccessMiddleware({ env, trustedDeviceStore: store });
   const write = makeOpsAccessMiddleware({ env, trustedDeviceStore: store, requireWrite: true });
   const close = makeOpsAccessMiddleware({ env, trustedDeviceStore: store, requiredPermission: 'close_scan_tickets' });
+  const cohortTicket = (req, action, input) => {
+    if (typeof leadershipTicketBridge !== 'function') throw error(503, 'Custodial ticket context is unavailable.');
+    return leadershipTicketBridge(req, action, input);
+  };
   const coverage = (req, change) => runRpc('custodial_owner_coverage_v1', {
     ...managerActionArguments(req), p_change: change, p_backend_execution_secret: backendSecret(),
   });
@@ -46,6 +51,7 @@ export function installOwnerAccessRoutes(app, { store, runRpc, backendSecret, en
     const ids=req.query.ids ? req.query.ids.split(',') : [];
     if(ids.length>100 || ids.some(id=>!uuid.test(id)) || new Set(ids.map(id=>id.toLowerCase())).size!==ids.length)
       throw error(422,'Supply at most 100 unique ticket identifiers.');
+    if (isCustodialLeadershipManagementSession(req.memphisAuth)) return cohortTicket(req,'ticket_capabilities',{ticket_ids:ids});
     return runRpc('custodial_ticket_capabilities_v1',{...managerActionArguments(req),p_ticket_ids:ids});
   }));
   app.post(['/admin-api/close-ticket', '/dashboard-api/close-ticket'], close, respond(async req => {
@@ -57,6 +63,8 @@ export function installOwnerAccessRoutes(app, { store, runRpc, backendSecret, en
     if(!['mark_fixed','work_order_sent'].includes(body.outcome))throw error(422,'Choose the actual ticket outcome.');
     const reference=typeof body.external_work_order_reference==='string'?body.external_work_order_reference.trim():'';
     if((body.outcome==='work_order_sent'&&(!reference||reference.length>120))||(body.outcome==='mark_fixed'&&reference))throw error(422,'A submitted work order requires its actual reference; fixed does not.');
+    if (isCustodialLeadershipManagementSession(req.memphisAuth)) return cohortTicket(req,'close_outcome',{
+      ticket_id:body.ticket_id,outcome:body.outcome,external_work_order_reference:reference||null,close_notes:body.close_notes||null});
     return runRpc('custodial_close_scan_ticket_outcome_v1', { ...managerActionArguments(req),
       p_ticket_id: body.ticket_id,p_outcome:body.outcome,p_external_work_order_reference:reference||null, p_close_notes: body.close_notes || null,
       p_backend_execution_secret: backendSecret() });

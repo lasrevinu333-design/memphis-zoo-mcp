@@ -68,7 +68,7 @@ import { getToolManifest } from "./mcp/tool-manifest.js";
 import { validateRuntimeEnv } from "./config/env.js";
 import { authorityHttpFailure, deferJsonParserErrors, malformedScanAuthorityOutcome, rpcFailure, scanRpcHttpOutcome, sqlStateHttpStatus } from "./offline-authority-http.js";
 import { installLeadershipHttpRoutes } from "./leadership-bootstrap.js";
-import {createCustodialLeadershipApiProxy,createCustodialLeadershipRemoteVerifier,createCustodialLeadershipSecurityBridge,createCustodialLeadershipGeminiBridge} from "./auth/custodial-leadership-runtime.js";
+import {createCustodialLeadershipApiProxy,createCustodialLeadershipRemoteVerifier,createCustodialLeadershipSecurityBridge,createCustodialLeadershipGeminiBridge,createCustodialLeadershipTicketBridge} from "./auth/custodial-leadership-runtime.js";
 import { installCustodialEmployeeAdminRoutes } from "./custodial-employee-admin.js";
 import { installManagerNotificationRoutes } from "./manager-notifications.js";
 import { installEmployeeNotificationRoutes } from "./employee-notifications.js";
@@ -2235,6 +2235,7 @@ async function runPublicDashboardSummary() {
     `),
     runReadOnlySql(`
       select ticket_id, location_code, location_name, maintenance_issue, reported_by, fixture_type, fixture_identifier, issue_source,
+             issue_payload->'top_level_note' as recorded_issue_note,
              out_of_order, date_submitted_display, created_at_display
       from public.v_open_maintenance_tickets
       order by date_submitted desc nulls last, created_at desc nulls last, location_code
@@ -2248,7 +2249,16 @@ async function runPublicDashboardSummary() {
 
   const snapshot = Array.isArray(snapshotRows) && snapshotRows.length ? snapshotRows[0] : {};
   const locations = Array.isArray(locationRows) ? locationRows : [];
-  const tickets = Array.isArray(ticketRows) ? ticketRows : [];
+  const tickets = Array.isArray(ticketRows) ? ticketRows.map(({ recorded_issue_note, ...ticket }) => {
+    // The current completion form's Other issue label retains its explanatory
+    // note in protected ticket evidence. Display that existing text without
+    // exposing the raw payload or changing the authoritative category/history.
+    if (typeof ticket.maintenance_issue === "string" && ticket.maintenance_issue.trim().toLowerCase() === "other issue"
+      && typeof recorded_issue_note === "string" && recorded_issue_note.trim()) {
+      ticket.maintenance_issue = `${ticket.maintenance_issue}: ${recorded_issue_note.trim()}`.slice(0, 500);
+    }
+    return ticket;
+  }) : [];
   const verifiedChecks = new Map((Array.isArray(verifiedCheckRows) ? verifiedCheckRows : [])
     .map((row) => [String(row.location_id || "").toLowerCase(), row]));
   const locationsWithVerifiedChecks = locations.map((row) => ({
@@ -3069,7 +3079,8 @@ app.post("/admin-api/bundle", requireOpsManagerWrite, async (req, res) => {
   try { const payload = req.body && typeof req.body === "object" ? req.body : {}; const data = await runAdminBundleViaSqlRead(payload); res.status(200).json({ ok: true, data }); }
   catch (error) { console.error("admin bundle failed:", error); res.status(500).json({ ok: false, error: error.message || "Admin bundle failed" }); }
 });
-installOwnerAccessRoutes(app, { store: opsTrustedDeviceStore, runRpc, backendSecret: offlineAuthoritySecret });
+installOwnerAccessRoutes(app, { store: opsTrustedDeviceStore, runRpc, backendSecret: offlineAuthoritySecret,
+  leadershipTicketBridge:createCustodialLeadershipTicketBridge({env:process.env}) });
 async function readSharedSchoolSnapshot() {
   const mail = await readOperationsMailLedger({client:supabaseAdmin});
   return mail.schools;

@@ -213,7 +213,7 @@ function setCookie(res,key,value,maxAge){
 }
 export function createCustodialLeadershipPinRouter({service=createCustodialLeadershipPinService(),allowedOrigins=[],sourceIdentity}={}){
  const router=express.Router(),origins=new Set(allowedOrigins);
- if([...origins].some(x=>typeof x!=='string'||!/^https:\/\/[^/?#]+$/.test(x)))throw problem('leadership_origin_configuration_invalid',503);
+ if([...origins].some(x=>typeof x!=='string'||(x!=='capacitor://localhost'&&!/^https:\/\/[^/?#]+$/.test(x))))throw problem('leadership_origin_configuration_invalid',503);
  router.use((req,res,next)=>{
   res.set({'Cache-Control':'no-store','Pragma':'no-cache','Referrer-Policy':'no-referrer','Vary':'Origin'});
   if(!service.enabled)return res.status(503).json({ok:false,error:'leadership_disabled'});

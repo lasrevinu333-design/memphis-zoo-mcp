@@ -5,6 +5,7 @@ import {createHmac,createHash,randomUUID,timingSafeEqual} from 'node:crypto';
 import {createCustodialLeadershipPinService,createCustodialLeadershipPinRouter,createPgCustodialLeadershipPinStore,CUSTODIAL_LEADERSHIP_COOKIE_NAMES} from '../custodial-leadership-pin.js';
 import {createCustodialLeadershipOpsSession,verifyCustodialLeadershipOpsToken,assertOpsManagerSessionSecret} from './shared-access-auth.js';
 import {isCustodialLeadershipManagementSession} from './manager-permissions.js';
+import {createCustodialLeadershipTicketOperation,validateLeadershipTicketInput} from './custodial-leadership-ticket-operation.mjs';
 const error=(code,status=403)=>Object.assign(new Error(code),{code,status});
 const text=x=>typeof x==='string'?x.trim():'';
 const enabled=env=>env?.CUSTODIAL_LEADERSHIP_PIN_ENABLED==='true';
@@ -15,9 +16,9 @@ const SECURITY_COOKIE='__Host-custodial_leadership_security';
 const hash=x=>createHash('sha256').update(x).digest('hex');
 const uuid=x=>typeof x==='string'&&/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(x);
 export function custodialLeadershipOrigins(env={}) {
- return [...new Set(['https://lasrevinu333-design.github.io','https://memphis-zoo-mcp.onrender.com','https://localhost',
+ return [...new Set(['https://lasrevinu333-design.github.io','https://memphis-zoo-mcp.onrender.com','https://localhost','capacitor://localhost',
   ...text(env.CUSTODIAL_LEADERSHIP_ALLOWED_ORIGINS||env.STATIC_WEEKLY_CONTROL_PLANE_ALLOWED_ORIGINS||env.ALLOWED_CORS_ORIGINS).split(',').filter(Boolean).map(x=>x.trim())])]
-  .filter(x=>/^https:\/\/[^/?#]+$/.test(x));
+  .filter(x=>x==='capacitor://localhost'||/^https:\/\/[^/?#]+$/.test(x));
 }
 function requireOrigin(origin,env){if(!custodialLeadershipOrigins(env).includes(origin))throw error('custodial_origin_denied');}
 function allowedPath(req){
@@ -96,6 +97,7 @@ export function createCustodialLeadershipControlPlane({env=process.env,database,
    ||actor.manager_id!==manager.manager_id||actor.credential_id!==manager.credential_id||actor.device_id!==manager.device_id)throw error('custodial_transaction_actor_denied');
   return actor;
  };
+ const ticketOperation=database?.connect?createCustodialLeadershipTicketOperation({database,service,verifyTransaction}):null;
  const appRouter=express.Router();
  appRouter.use('/custodial-leadership-api',createCustodialLeadershipPinRouter({service,allowedOrigins:custodialLeadershipOrigins(env),sourceIdentity:req=>{
    const source=text(req.get('X-Custodial-Source')),stamp=text(req.get('X-Custodial-Source-Time')),mac=text(req.get('X-Custodial-Source-Mac'));
@@ -109,6 +111,19 @@ export function createCustodialLeadershipControlPlane({env=process.env,database,
    const v=await service.authenticateManagerSessionToken({token:token(req),requireCsrf:mutating(b.method),csrf:b.csrfToken});
    res.set('Cache-Control','no-store').json({ok:true,session:sessionFromVerified(v)});
   }catch{res.status(403).json({ok:false,error:'custodial_registration_unavailable'});}
+ });
+ appRouter.post(internal+'/tickets',express.json({limit:'32kb'}),async(req,res)=>{
+  try{const b=req.body;if(!b||Object.keys(b).sort().join(',')!=='action,csrfToken,input,origin'
+    ||typeof b.origin!=='string'||typeof b.csrfToken!=='string')throw error('invalid_ticket_request',422);
+   validateLeadershipTicketInput(b.action,b.input);
+   if(b.action==='close_outcome'||b.origin)requireOrigin(b.origin,env);
+   if(!ticketOperation)throw error('custodial_ticket_unavailable',503);
+   const data=await ticketOperation({token:token(req),csrfToken:b.csrfToken,action:b.action,input:b.input});
+   res.set('Cache-Control','no-store').json({ok:true,data});
+  }catch(e){const sqlStatus={'42501':403,'40001':409,'22023':422,'22P02':422,'P0002':404,'40901':409};
+   const status=e.status||sqlStatus[e.code]||503;
+   const code=status===503?'custodial_ticket_outcome_unknown_refresh_before_acting':status===409?'ticket_outcome_conflict':status===404?'ticket_not_found':status===422?'invalid_ticket_request':'custodial_ticket_context_denied';
+   res.set('Cache-Control','no-store').status(status).json({ok:false,error:code,code});}
  });
  appRouter.post(internal+'/gemini',express.json({limit:'256kb'}),async(req,res)=>{
   try{const b=req.body;if(!b||Object.keys(b).sort().join(',')!=='action,csrfToken,input,origin'
@@ -222,5 +237,22 @@ export function createCustodialLeadershipGeminiBridge({env=process.env,fetchImpl
   const {response,body}=await fetchFixed(env,fetchImpl,internal+'/gemini',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+req.memphisAuth.token},
    body:JSON.stringify({action,input,origin:text(req.get('Origin')),csrfToken:text(req.get('X-CSRF-Token'))})},null,1048576);
   if(!response.ok||body?.ok!==true)throw error('custodial_original_gemini_context_denied');return body.data;
+ };
+}
+
+// Fixed original cohort ticket bridge. Never falls back to service-role RPC.
+export function createCustodialLeadershipTicketBridge({env=process.env,fetchImpl=fetch}={}){
+ return async(req,action,input)=>{
+  if(!enabled(env)||!isCustodialLeadershipManagementSession(req.memphisAuth))throw error('custodial_ticket_context_denied');
+  const selected=validateLeadershipTicketInput(action,input);
+  let outcome;
+  try{outcome=await fetchFixed(env,fetchImpl,internal+'/tickets',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+req.memphisAuth.token},
+   body:JSON.stringify({action,input:selected,origin:text(req.get('Origin')),csrfToken:text(req.get('X-CSRF-Token'))})},null,65536);}
+  catch{throw error('custodial_ticket_outcome_unknown_refresh_before_acting',503);}
+  const {response,body}=outcome;
+  if(!response.ok||body?.ok!==true){const status=[403,404,409,422,503].includes(response.status)?response.status:503;
+   const codes={403:'custodial_ticket_context_denied',404:'ticket_not_found',409:'ticket_outcome_conflict',422:'invalid_ticket_request',503:'custodial_ticket_outcome_unknown_refresh_before_acting'};
+   throw error(codes[status],status);}
+  return body.data;
  };
 }

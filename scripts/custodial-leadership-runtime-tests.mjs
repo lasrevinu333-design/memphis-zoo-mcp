@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import express from 'express';
 import {once} from 'node:events';
-import {randomBytes,randomUUID,randomInt} from 'node:crypto';
+import {randomBytes,randomUUID,randomInt,createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {createCustodialLeadershipPinVerifier as verifier,CUSTODIAL_LEADERSHIP_APPROVED_ACCOUNTS as approved} from '../src/custodial-leadership-pin.js';
 import {createCustodialLeadershipControlPlane,createCustodialLeadershipApiProxy,createCustodialLeadershipRemoteVerifier,createCustodialLeadershipSecurityBridge,createCustodialLeadershipGeminiBridge} from '../src/auth/custodial-leadership-runtime.js';
@@ -121,6 +121,14 @@ const f=await fixture();try{
  await test('private registration revocation invalidates already-signed central session immediately',async()=>{const reg=[...f.db.registrations.values()][0];reg.revoked=true;assert.equal((await f.request('/dashboard-api/test',{bearer:f.bearer})).status,403);reg.revoked=false;});
  await test('new cohort issuer does not change old named Ops token projection',()=>{const named=createOpsManagerSession({credentialId:uuid(),deviceId:'named-device',manager:{manager_id:uuid(),display_name:'Named fixture',active:true,is_system_principal:false,roles:['OPS_MANAGER'],system_key:'other'},accessLevel:'full_access',env:f.env});assert.equal(named.auth_mode,'trusted_device');assert.equal(Object.hasOwn(named,'actor_kind'),false);assert.equal(Object.hasOwn(named,'custodial_management_admin'),false);assert.throws(()=>verifyCustodialLeadershipOpsToken(named.token,{env:f.env}));});
 }finally{configureCustodialLeadershipVerifier(null);configureCustodialLeadershipSecurityBridge(null);await f.close();}
+const provenance=JSON.parse(readFileSync(new URL('./fixtures/source301/PROVENANCE.json',import.meta.url),'utf8'));
+const leadershipFixtures=provenance.rows.filter(row=>row.path.startsWith('scripts/fixtures/source301/leadership-central/'));
+assert.equal(leadershipFixtures.length,4,'four original leadership snapshots required');
+for(const entry of leadershipFixtures){
+ const bytes=readFileSync(new URL('../'+entry.path,import.meta.url));
+ assert.equal(bytes.byteLength,entry.bytes,entry.path+' original fixture size');
+ assert.equal(createHash('sha256').update(bytes).digest('hex'),entry.sha256,entry.path+' original fixture hash');
+}
 const sql=readFileSync(new URL('../proposals/custodial-leadership-pin.sql',import.meta.url),'utf8');
-await test('private SQL scope/recovery branch retains exact named-password tails and same-transaction authority',()=>{assert.match(sql,/CREATE TABLE custodial_leadership_private\.security_scopes/);assert.match(sql,/ss\.security_epoch=p\.security_epoch/);assert.match(sql,/backend_pid,transaction_id,request_id/);for(const name of ['assert_current_manager','assert_inventory_manager_read']){const before=readFileSync(new URL('../release/worker2-leadership-pin-20261030/central-wiring01/custodial_recovery.'+name+'.Source301.sql',import.meta.url),'utf8'),after=readFileSync(new URL('../release/worker2-leadership-pin-20261030/central-wiring01/custodial_recovery.'+name+'.proposed.sql',import.meta.url),'utf8');const start=after.indexOf(' IF EXISTS(SELECT 1 FROM custodial_leadership_private.policy');const end=after.indexOf(' END IF;\n',start)+9;assert.equal(after.slice(0,start)+after.slice(end),before);}assert.match(sql,/bind_security_scope\(p_manager,p_credential,p_device/);assert.doesNotMatch(sql,/GRANT.*TO (?:anon|authenticated|service_role)/i);});
+await test('private SQL scope/recovery branch retains exact named-password tails and same-transaction authority',()=>{assert.match(sql,/CREATE TABLE custodial_leadership_private\.security_scopes/);assert.match(sql,/ss\.security_epoch=p\.security_epoch/);assert.match(sql,/backend_pid,transaction_id,request_id/);for(const name of ['assert_current_manager','assert_inventory_manager_read']){const before=readFileSync(new URL('./fixtures/source301/leadership-central/custodial_recovery.'+name+'.Source301.sql',import.meta.url),'utf8'),after=readFileSync(new URL('./fixtures/source301/leadership-central/custodial_recovery.'+name+'.proposed.sql',import.meta.url),'utf8');const start=after.indexOf(' IF EXISTS(SELECT 1 FROM custodial_leadership_private.policy');const end=after.indexOf(' END IF;\n',start)+9;assert.equal(after.slice(0,start)+after.slice(end),before);}assert.match(sql,/bind_security_scope\(p_manager,p_credential,p_device/);assert.doesNotMatch(sql,/GRANT.*TO (?:anon|authenticated|service_role)/i);});
 console.log(JSON.stringify({status:'PASS',checks,scope:'RAM-only secrets; real loopback routers/signer/parser; private SQL rows modeled; no actual SQL/device/live activation'}));

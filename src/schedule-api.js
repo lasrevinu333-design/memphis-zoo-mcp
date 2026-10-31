@@ -2042,10 +2042,12 @@ export function createScheduleRouter({
     let match;
     while ((match = rowPattern.exec(text)) !== null) {
       const [, month, day, year, dayOfWeek, employeeName, status] = match;
-      const date = new Date(`${month} ${day}, ${year} 12:00:00`);
-      if (Number.isNaN(date.getTime())) continue;
+      // Reports name civil service dates, not instants in the server's timezone.
+      // Reject rollover dates instead of quietly approving a different day.
+      const serviceDate = buildDate(Number(year), MONTH_LOOKUP[month.toLowerCase()], Number(day));
+      if (!serviceDate) throw new Error("PTO report contains an invalid calendar date.");
       rows.push({
-        service_date: date.toISOString().slice(0, 10),
+        service_date: serviceDate,
         day_of_week: dayOfWeek,
         employee_name: String(employeeName || "").trim(),
         status: String(status || "").trim(),
@@ -2086,8 +2088,8 @@ export function createScheduleRouter({
       let end = dates[0];
       const pushRange = () => importedRows.push({ employee_name: group.employee_name, start_date: start, end_date: end, pto_type: "PTO", notes: "Imported from PTO report", source: "report", approval_status: "APPROVED", provider: "local-parser", provider_used: "local-parser", provider_fallback: false, warnings: [] });
       for (let i = 1; i < dates.length; i += 1) {
-        const prev = new Date(`${end}T12:00:00`);
-        prev.setDate(prev.getDate() + 1);
+        const prev = new Date(`${end}T12:00:00Z`);
+        prev.setUTCDate(prev.getUTCDate() + 1);
         const expected = prev.toISOString().slice(0, 10);
         if (dates[i] === expected) end = dates[i];
         else { pushRange(); start = dates[i]; end = dates[i]; }

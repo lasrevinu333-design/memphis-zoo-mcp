@@ -1,0 +1,94 @@
+{
+  "capturedUtc": "2026-10-31T17:18:42.431028+00:00",
+  "findings": "DB-02 clean checkout omitted exact historical SQL fixtures required by committed tests",
+  "rows": [
+    {
+      "path": "scripts/fixtures/source301/notification-continuity/mz_enqueue_employee_lunch_coverage_pushes.Source301.sql",
+      "originalPath": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/backend-audit-candidate/release/worker2-notification-continuity-20261030/mz_enqueue_employee_lunch_coverage_pushes.Source301.sql",
+      "sha256": "50347b4c4db3433b2febbc2876b1585b8cacddfdcd1d5beac066ee309d8d7467",
+      "bytes": 8941,
+      "sourceTrackedAtBaseline": false,
+      "purpose": "historical before/proposed source fixture referenced by committed tests; not product SQL or runtime authority"
+    },
+    {
+      "path": "scripts/fixtures/source301/notification-continuity/mz_enqueue_employee_lunch_coverage_pushes.proposed.sql",
+      "originalPath": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/backend-audit-candidate/release/worker2-notification-continuity-20261030/mz_enqueue_employee_lunch_coverage_pushes.proposed.sql",
+      "sha256": "ffcbc000d66492d0d3ddf886b68803b1236630d6cd24051be3030756f6b2f694",
+      "bytes": 9213,
+      "sourceTrackedAtBaseline": false,
+      "purpose": "historical before/proposed source fixture referenced by committed tests; not product SQL or runtime authority"
+    },
+    {
+      "path": "scripts/fixtures/source301/notification-continuity/custodial_native_target_source_at.Source301.sql",
+      "originalPath": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/backend-audit-candidate/release/worker2-notification-continuity-20261030/custodial_native_target_source_at.Source301.sql",
+      "sha256": "120ab6c2021600529e79265da97aeefdf28d3265df032ff1c4edd63c2cee9d9e",
+      "bytes": 14078,
+      "sourceTrackedAtBaseline": false,
+      "purpose": "historical before/proposed source fixture referenced by committed tests; not product SQL or runtime authority"
+    },
+    {
+      "path": "scripts/fixtures/source301/notification-continuity/custodial_native_target_source_at.proposed.sql",
+      "originalPath": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/backend-audit-candidate/release/worker2-notification-continuity-20261030/custodial_native_target_source_at.proposed.sql",
+      "sha256": "37f92acda48420c6c6a99142e9ef110b505d714a7a0ae4162ecdb17eafe9f61b",
+      "bytes": 14208,
+      "sourceTrackedAtBaseline": false,
+      "purpose": "historical before/proposed source fixture referenced by committed tests; not product SQL or runtime authority"
+    },
+    {
+      "path": "scripts/fixtures/source301/notification-continuity/custodial_native_lunch_reserve_at.Source301.sql",
+      "originalPath": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/backend-audit-candidate/release/worker2-notification-continuity-20261030/custodial_native_lunch_reserve_at.Source301.sql",
+      "sha256": "43246f359607a35b115bd8169c5639a0cb03a6ea76f1e4a2dcc67485e7d4acb8",
+      "bytes": 7125,
+      "sourceTrackedAtBaseline": false,
+      "purpose": "historical before/proposed source fixture referenced by committed tests; not product SQL or runtime authority"
+    },
+    {
+      "path": "scripts/fixtures/source301/notification-continuity/static_weekly_v27_original_native_bindings.Source301.sql",
+      "originalPath": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/backend-audit-candidate/release/worker2-notification-continuity-20261030/static_weekly_v27_original_native_bindings.Source301.sql",
+      "sha256": "2489f1e64dce5c28470d053425b34d5fa5bbd4ef630f827f2ec1e0e557bfc6e4",
+      "bytes": 7893,
+      "sourceTrackedAtBaseline": false,
+      "purpose": "historical before/proposed source fixture referenced by committed tests; not product SQL or runtime authority"
+    },
+    {
+      "path": "scripts/fixtures/source301/notification-continuity/static_weekly_v27_original_native_bindings.proposed.sql",
+      "originalPath": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/backend-audit-candidate/release/worker2-notification-continuity-20261030/static_weekly_v27_original_native_bindings.proposed.sql",
+      "sha256": "87c33fbb9cb51f6fe7da034adebea239fa99242e8cb0d5a69ca3ea92fc3ba4ee",
+      "bytes": 8385,
+      "sourceTrackedAtBaseline": false,
+      "purpose": "historical before/proposed source fixture referenced by committed tests; not product SQL or runtime authority"
+    },
+    {
+      "path": "scripts/fixtures/source301/leadership-central/custodial_recovery.assert_current_manager.Source301.sql",
+      "originalPath": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/backend-audit-candidate/release/worker2-leadership-pin-20261030/central-wiring01/custodial_recovery.assert_current_manager.Source301.sql",
+      "sha256": "7fbb7a0fce95ac59b63403f927b3ce879713f364c70ec46f6bb5eabb1a9e5dd4",
+      "bytes": 2556,
+      "sourceTrackedAtBaseline": false,
+      "purpose": "historical before/proposed source fixture referenced by committed tests; not product SQL or runtime authority"
+    },
+    {
+      "path": "scripts/fixtures/source301/leadership-central/custodial_recovery.assert_current_manager.proposed.sql",
+      "originalPath": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/backend-audit-candidate/release/worker2-leadership-pin-20261030/central-wiring01/custodial_recovery.assert_current_manager.proposed.sql",
+      "sha256": "e10e0642d1dce725479a64da9a40e50707c8a40359b0522ff3794cb085540f7f",
+      "bytes": 2847,
+      "sourceTrackedAtBaseline": false,
+      "purpose": "historical before/proposed source fixture referenced by committed tests; not product SQL or runtime authority"
+    },
+    {
+      "path": "scripts/fixtures/source301/leadership-central/custodial_recovery.assert_inventory_manager_read.Source301.sql",
+      "originalPath": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/backend-audit-candidate/release/worker2-leadership-pin-20261030/central-wiring01/custodial_recovery.assert_inventory_manager_read.Source301.sql",
+      "sha256": "145fa565c6c0650801b0ddff2d27edcb537bc31bc14c982f53dd2bf0eb551416",
+      "bytes": 2916,
+      "sourceTrackedAtBaseline": false,
+      "purpose": "historical before/proposed source fixture referenced by committed tests; not product SQL or runtime authority"
+    },
+    {
+      "path": "scripts/fixtures/source301/leadership-central/custodial_recovery.assert_inventory_manager_read.proposed.sql",
+      "originalPath": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/backend-audit-candidate/release/worker2-leadership-pin-20261030/central-wiring01/custodial_recovery.assert_inventory_manager_read.proposed.sql",
+      "sha256": "653c2b0730e1e503fb5add0eb6cda66d7d6a50dbbf2a78ce8c75cf9e2e8de7dd",
+      "bytes": 3207,
+      "sourceTrackedAtBaseline": false,
+      "purpose": "historical before/proposed source fixture referenced by committed tests; not product SQL or runtime authority"
+    }
+  ]
+}

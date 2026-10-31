@@ -18,7 +18,10 @@ const checks=[],test=async(n,f)=>{await f();checks.push(n);},clone=structuredClo
 function makeBasis({preStart=false}={}){
  const employmentByDate=[];for(let n=0;n<7;n++)employmentByDate.push({schema:'custodial.employment-admission-read.v1',serviceDate:at(fixture.source.serviceDate,n),authorityRevision:42,
   employees:records.map((r,i)=>{const command=prepareApprovedManualEmploymentAdmission({employeeId:r.employeeId,managerId:actor.managerId,requestId:uid(i+10),expectedAuthorityRevision:42,expectedEmploymentRevision:0,
-   ...(!preStart&&i===1?{explicitFact:{effectiveFrom:fixture.source.serviceDate,state:'START_DATE_CONFIRMED',firstServiceDate:fixture.source.serviceDate,approvedLunch:null,ownerEvidenceSha256:'b'.repeat(64)}}:{})}).command;
+   // The current owner packet correctly admits all eight employees. Exercise
+   // pre-start refusal with an explicit synthetic fact, never a stale assumption
+   // about Jada's real employment state or an invented current hire date.
+   ...(preStart&&i===1?{explicitFact:{effectiveFrom:fixture.source.serviceDate,state:'PRE_START',firstServiceDate:null,approvedLunch:null,ownerEvidenceSha256:'b'.repeat(64)}}:{})}).command;
    return{employeeId:r.employeeId,employmentRevision:1,acceptedByManagerId:actor.managerId,command};})});
  const employmentRevisionVector=employmentByDate.flatMap(d=>d.employees.map(e=>({serviceDate:d.serviceDate,employeeId:e.employeeId,employmentRevision:e.employmentRevision,requestId:e.command.requestId}))).sort((a,b)=>a.serviceDate.localeCompare(b.serviceDate)||a.employeeId.localeCompare(b.employeeId));
  const b={schema:'custodial.approved-manual-period-basis.v1',managerId:actor.managerId,actor:{manager_name:actor.managerName},publicationId:pub,versionId:fixture.source.version.id,sourceId:uid(3),

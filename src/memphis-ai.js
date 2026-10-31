@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import {isActiveNamedManager} from './auth/manager-permissions.js';
+import {employeeVisibleEvents} from './shared-events-feed.js';
 import { fetchCurrentMemphisScheduleDay,fetchCurrentMemphisScheduleSegments } from "./ai/memphis-ai-daily.js";
 import { getGeminiApiKey } from "./utils/gemini-config.js";
 import {
@@ -113,7 +114,7 @@ const MEMPHIS_INTENT_KEYWORDS = {
   open_segments: ["open segment", "open segments", "uncovered", "unassigned", "what is open", "what's open"],
   events: ["event", "events", "upcoming", "coming up"],
   tickets: ["ticket", "tickets", "maintenance", "broken", "out of order"],
-  dashboard: ["dashboard", "summary", "status", "metrics", "attendance", "guests", "visitors"],
+  dashboard: ["dashboard", "summary", "status", "metrics", "attendance", "guests", "visitors", "overdue", "due soon"],
   contacts: ["phone", "number", "contact", "call", "text", "reach", "boss", "director", "manager"],
   weather: ["weather", "rain", "storm", "temperature", "forecast"],
   scan_state: ["scan", "nfc", "checked in", "session"],
@@ -427,7 +428,7 @@ function summarizeWeatherPayload(weather) {
 }
 
 function summarizeEvents(events = []) {
-  if (!events.length) return "I don't see any upcoming events in the system right now.";
+  if (!events.length) return "There are no upcoming events in the retrieved published records.";
   const eventTime=(instant,wall)=>{
     const parsed=instant instanceof Date?instant:(typeof instant==='string'?new Date(instant):null);
     if(parsed && !Number.isNaN(parsed.getTime()))return new Intl.DateTimeFormat('en-US',{
@@ -559,13 +560,18 @@ function summarizeTickets(tickets = [], location = "") {
 }
 
 function summarizeDashboard(snapshot = {}, attention = [], attendance = null) {
+  const snapshotAt = snapshot?.snapshot_at instanceof Date ? snapshot.snapshot_at.toISOString() : snapshot?.snapshot_at;
+  if (typeof snapshotAt !== 'string' || !Number.isFinite(Date.parse(snapshotAt))) {
+    return "I can't verify a dashboard snapshot right now. Please try the dashboard again later.";
+  }
   const bits = [];
   if (attendance?.attendance != null) bits.push(`attendance ${attendance.attendance}`);
   if (snapshot.open_ticket_count != null) bits.push(`${snapshot.open_ticket_count} open tickets`);
   if (snapshot.overdue_locations != null) bits.push(`${snapshot.overdue_locations} overdue locations`);
   if (snapshot.due_soon_locations != null) bits.push(`${snapshot.due_soon_locations} due soon`);
   if (snapshot.in_progress_locations != null) bits.push(`${snapshot.in_progress_locations} in progress`);
-  const summary = bits.length ? `Dashboard snapshot: ${bits.join(", ")}.` : "Dashboard snapshot is available.";
+  const summary = bits.length ? `Dashboard snapshot recorded ${snapshotAt}: ${bits.join(", ")}.`
+    : `I can't verify the operational counts in the dashboard snapshot recorded ${snapshotAt}.`;
   const focus = attention.length ? ` Attention locations: ${attention.slice(0, 8).map((row) => `${row.location_name || row.location_code} (${row.status_code}, ${row.open_ticket_count} tickets)`).join("; ")}.` : "";
   return `${summary}${focus}`.trim();
 }
@@ -1064,8 +1070,13 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     if (name === "get_upcoming_events") {
       const days = toSafeInt(args.days, 14, 1, 60);
       const area = String(args.area || "").trim();
+      const manager = args.manager === true;
+      const employeeId = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(args.employee_id || '')
+        ? args.employee_id : null;
       const rows = await runReadOnlySql(`
         select e.event_name,
+          e.status, e.needs_review, e.audience_scope, e.audience_employee_ids,
+          (place.authority->>'admissible')::boolean as place_admissible,
           coalesce(e.event_scope, 'UNKNOWN') as event_scope,
           e.primary_venue_id,
           coalesce(nullif(place.authority->>'primary_display_name',''),nullif(e.display_location, ''), ev.display_name, lg.group_name) as display_location,
@@ -1089,6 +1100,8 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
         where coalesce(e.status, 'SCHEDULED') = 'SCHEDULED'
           and coalesce(e.needs_review, false) = false and e.event_scope <> 'UNKNOWN'
           and (place.authority->>'admissible')::boolean is true
+          ${manager ? '' : `and (e.audience_scope in ('assigned_location','all_working_employees')
+            ${employeeId ? `or (e.audience_scope = 'specific_employees' and '${esc(employeeId)}'::uuid = any(e.audience_employee_ids))` : ''})`}
           and coalesce(e.end_date, e.event_date) >= (now() at time zone 'America/Chicago')::date
           and e.event_date <= (now() at time zone 'America/Chicago')::date + ${days}
           ${area ? `and (
@@ -1101,7 +1114,14 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
           )` : ""}
         order by e.event_date asc, e.start_time asc, e.event_name asc
       `);
-      return { events: rows || [] };
+      if (!Array.isArray(rows)) throw new Error('memphis_events_source_unavailable');
+      // Match the shared employee Events reader after the SQL boundary too.
+      // Missing employee authority grants only explicit general audiences.
+      const visible = manager ? rows : employeeId ? employeeVisibleEvents(rows, employeeId)
+        : rows.filter(row => row && row.needs_review === false && row.status === 'SCHEDULED'
+          && row.event_scope !== 'UNKNOWN' && row.place_admissible === true
+          && ['assigned_location','all_working_employees'].includes(row.audience_scope));
+      return { events: visible, source_checked_at: new Date().toISOString() };
     }
 
     if (name === "get_area_schedule") {
@@ -1464,9 +1484,19 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     if (asksEventListing) {
       const areaRow = await resolveAreaRow(runReadOnlySql, relativeServiceDate, text, threadContext);
       const eventArea = areaRow?.group_name === "Event Center" && !/\b(event center|event centre|ec)\b/i.test(text) ? "" : (areaRow?.group_name || "");
-      const data = await executeTool("get_upcoming_events", { days: 14, area: eventArea });
+      const employeeId = viewerIdentity?.role === 'employee' && assignedEmployee?.device_active === true
+        && assignedEmployee?.employee_active === true ? assignedEmployee.assigned_employee_id : null;
+      let data;
+      try {
+        data = await executeTool("get_upcoming_events", { days: 14, area: eventArea, manager: isManager, employee_id: employeeId });
+      } catch {
+        return { text: "I couldn't verify the published event records right now. Please try Events again later.",
+          meta: { fallback: true, mode: "local_events", source_state: "unavailable", sources: ["events_app_events"] } };
+      }
       await saveThreadContext(runRpc, threadId, { last_intent: "upcoming_events", last_group_name: areaRow?.group_name || null, last_service_date: relativeServiceDate, last_subject_type: "group", context_json: mergeContextJson(threadContext, { last_question_shape: "upcoming_events", last_subject_kind: "group", last_subject_label: areaRow?.group_name || null }) });
-      return { text: summarizeEvents(data.events), meta: { fallback: true, mode: "local_events", sources: ["events_app_events", "event_venues", "location_groups"] } };
+      return { text: `${summarizeEvents(data.events)} Published event records checked ${data.source_checked_at}. Outlook collection completeness is not verified.`,
+        meta: { fallback: true, mode: "local_events", source_state: "snapshot", source_checked_at: data.source_checked_at,
+          mailbox_completeness_verified: false, sources: ["events_app_events", "event_venues", "location_groups"] } };
     }
 
     // H3: Use word-boundary regex with maintenance context to avoid misrouting
@@ -1630,7 +1660,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     }
 
     // C2: Dashboard summary and attendance data are only exposed to manager role.
-    if (isManager && (/\b(dashboard|summary|status|metrics|attendance|guests?|visitors?)\b/i.test(text))) {
+    if (isManager && (/\b(dashboard|summary|status|metrics|attendance|guests?|visitors?|overdue|due soon)\b/i.test(text))) {
       const data = await executeTool("get_dashboard_summary", {});
       await saveThreadContext(runRpc, threadId, { last_intent: "dashboard_summary", last_service_date: relativeServiceDate, last_subject_type: "summary" });
       const attendanceOnly = /\b(attendance|guest|guests|visitor|visitors)\b/i.test(text);

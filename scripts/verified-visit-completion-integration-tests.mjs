@@ -74,10 +74,13 @@ async function originalCompletionReadbackDomain(){
   assert.deepEqual(value.result,f.result);assert.deepEqual(value.readback,f.original);
   assert.equal(f.authCalls,2);assert.equal(f.queries.length,1);assert.equal(JSON.stringify(f.payload),before);
   assert.ok(raw.equals(f.request.scanAuthorityRawBody));
-  // Predicate source composition, NOT PostgreSQL execution or record acceptance.
-  assert.match(f.queries[0],/custodial_offline_payload_fingerprint\(context/);
-  assert.match(f.queries[0],/evidence\.event_payload=event/);
-  assert.match(f.queries[0],/device\.assigned_employee_id=context\.employee_id/);
+  // The owning adapter delegates predicates to the fixed private reader.
+  // Verify its exact principal and original payload arguments; this recording
+  // check does not execute or certify the reader's PostgreSQL predicates.
+  const literal=value=>`'${String(value).replaceAll("'","''")}'`;
+  assert.equal(f.queries[0],`select * from custodial_release_identity.read_original_scan_completion_v1(
+    ${literal(f.ids.device)}::uuid,${literal('KIOSK_02')},${literal(f.ids.employee)}::uuid,
+    7::bigint,${literal(f.ids.credential)}::uuid,${literal(JSON.stringify(f.payload))}::jsonb)`);
   assert.doesNotMatch(f.queries[0],/custodial_credential_may_transmit_frozen_work|\b(insert|update|delete|grant)\b/i);
  });
  await test('missing current native/auth callback is not a proof',async()=>{

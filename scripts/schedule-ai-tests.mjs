@@ -165,6 +165,12 @@ assert.doesNotMatch(scanAlertReplacement, /insert into public\.msg_threads/i,
 const amyPto = context.parsePtoReportText("July 30, 2026 Thursday Smith, Amy Approved");
 assert.equal(amyPto.detected_rows.length, 1, "PTO parser must retain first names beginning with uppercase A");
 assert.equal(amyPto.import_rows[0]?.employee_name, "Smith, Amy");
+assert.throws(() => context.parsePtoReportText("February 30, 2026 Monday Smith, Amy Approved"),
+  /invalid calendar date/, "An impossible report date must not approve a different day");
+assert.throws(() => context.parsePtoReportText("April 31, 2026 Friday Smith, Amy Approved"),
+  /invalid calendar date/);
+assert.equal(context.parsePtoReportText("February 29, 2028 Tuesday Smith, Amy Approved").import_rows[0].start_date,
+  "2028-02-29", "Valid leap days remain unchanged civil dates");
 
 const mixedPto = context.parsePtoReportText([
   "July 30, 2026 Thursday Smith, Amy Approved",

@@ -4,6 +4,8 @@ import { createHash } from 'node:crypto';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import vm from 'node:vm';
+import { publicOperationsDashboard } from '../src/public-operations-viewer.js';
+import { resolveReleaseSchemaTarget } from './production-target-schema-profile.mjs';
 import { assertDashboardReleaseCompatibility } from '../src/dashboard-release-compatibility.js';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
@@ -19,7 +21,7 @@ function between(start, end) {
   return source.slice(from, to);
 }
 const context = vm.createContext({
-  createHash, readFileSync, existsSync, readdirSync, dirname, join, relative, fileURLToPath,
+  createHash, readFileSync, existsSync, readdirSync, dirname, join, relative, fileURLToPath, resolveReleaseSchemaTarget,
   process: { env: { NODE_ENV: 'test', RENDER_GIT_COMMIT: fixtureCommit } },
   console: { error() {} },
   app: { get(paths, ...handlers) { for (const path of [paths].flat()) routes.set(path, handlers); } },
@@ -59,8 +61,18 @@ const context = vm.createContext({
       { location_id: 'synthetic-restroom', latest_verified_check_at: '2026-10-21T14:15:00Z', latest_verified_checker_name: 'Synthetic checker', latest_verified_check_session_uuid: 'synthetic-earlier-check', latest_verified_check_completion_id: 'synthetic-earlier-check-completion' },
       { location_id: 'synthetic-exhibit', latest_verified_check_at: '2026-10-21T15:00:00Z', latest_verified_checker_name: 'Synthetic checker', latest_verified_check_session_uuid: 'synthetic-later-check', latest_verified_check_completion_id: 'synthetic-later-check-completion' },
     ];
-    if (sql.includes('from public.v_open_maintenance_tickets')
-      || sql.includes('from public.custodial_offline_reconciliation_records')
+    if (sql.includes('from public.v_open_maintenance_tickets')) {
+      assert.match(sql,/issue_payload->'top_level_note' as recorded_issue_note/);
+      assert.doesNotMatch(sql,/select\s+\*|[ ,]issue_payload[ ,]/i,'read only the bounded note field, not its raw payload');
+      return [
+        {ticket_id:'note-text',maintenance_issue:'Other issue',recorded_issue_note:' Paper towels unavailable '},
+        ...[undefined,null,{},[],true,0,'','   '].map((note,i)=>({ticket_id:'note-invalid-'+i,maintenance_issue:'Other issue',recorded_issue_note:note})),
+        {ticket_id:'ordinary',maintenance_issue:'Sink leaking',recorded_issue_note:'Separate ordinary note'},
+        {ticket_id:'long',maintenance_issue:'Other issue',recorded_issue_note:'x'.repeat(1000)},
+        {ticket_id:'escaped',maintenance_issue:'Other issue',recorded_issue_note:'<script>untrusted note</script>'},
+      ];
+    }
+    if (sql.includes('from public.custodial_offline_reconciliation_records')
       || sql.includes('custodial_release_identity.read_current_original_dashboard_completions_v1()')) return [];
     assert.fail(`Unreviewed shipping SQL reached DTO fixture: ${sql.slice(0, 80)}`);
   },
@@ -126,6 +138,14 @@ const laterCheck = protectedSummary.body.data.exhibits[0];
 assert.equal(laterCheck.latest_completed_session_uuid, 'synthetic-earlier-clean');
 assert.equal(laterCheck.latest_verified_check_session_uuid, 'synthetic-later-check');
 assert.equal(laterCheck.latest_verified_check_completion_id, 'synthetic-later-check-completion');
+const tickets=protectedSummary.body.data.open_tickets;
+assert.equal(tickets.find(row=>row.ticket_id==='note-text').maintenance_issue,'Other issue: Paper towels unavailable');
+for(const row of tickets.filter(row=>row.ticket_id.startsWith('note-invalid-')))assert.equal(row.maintenance_issue,'Other issue');
+assert.equal(tickets.find(row=>row.ticket_id==='ordinary').maintenance_issue,'Sink leaking');
+assert.equal(tickets.find(row=>row.ticket_id==='long').maintenance_issue.length,500);
+assert.equal(tickets.find(row=>row.ticket_id==='escaped').maintenance_issue,'Other issue: <script>untrusted note</script>','escaping belongs to the shipping text renderer, no data rewrite');
+assert.equal(tickets.some(row=>'recorded_issue_note' in row||'issue_payload' in row),false);
+assert.deepEqual(publicOperationsDashboard({...protectedSummary.body.data,status:'current',locations_total:47}),{status:'current',locations_total:47},'public viewer projection never includes private tickets or saved notes');
 const count = state.calls.length;
 assert.equal((await get('/dashboard-api/summary')).statusCode, 401);
 assert.equal(state.calls.length, count, 'unauthenticated protected route must not execute SQL');

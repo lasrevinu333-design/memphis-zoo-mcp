@@ -274,8 +274,35 @@ try {
   assert.equal(publishedSnapshot.assignments.length, 14);
   assert.equal(publishedSnapshot.availability.filter((row) => row.availability_state === "departed_named_absent").length, 14);
   assert.equal(publishedSnapshot.sources.some((entry) => entry.source_id === sourceId), true);
-  await expectReject(cp("static_weekly_v3_read_manager_snapshot", `${quote(initialTuesday)}`), /Monday/i);
+  // The final current-day activation migration makes this public read accept
+  // a requested day and normalize it to the effective publication's frame.
+  // This legacy publication remains Monday framed; its private frame reader
+  // and the legacy publication writers still enforce their own boundaries.
+  const beforeDateReads = await state();
+  for (let day = 1; day < 7; day += 1) {
+    const snapshot = JSON.parse(await scalar(cp("static_weekly_v3_read_manager_snapshot", quote(shiftDays(initialWeek, day)))));
+    assert.equal(snapshot.week_start, initialWeek, "legacy manager reads retain the Monday projection frame");
+    assert.equal(snapshot.week_end, shiftDays(initialWeek, 6));
+    assert.deepEqual(snapshot, publishedSnapshot, "each day reads the same exact historical publication, roster, assignments, and authority");
+  }
+  for (const date of ["null::date", "'infinity'::date", "'-infinity'::date"]) {
+    await expectNoMutation(cp("static_weekly_v3_read_manager_snapshot", date), /exact projection service date required/i, "invalid snapshot date");
+  }
+  await expectNoMutation(cp("static_weekly_v3_read_manager_snapshot", "'2026-02-30'::date"), /date\/time field value out of range/i, "nonexistent snapshot date");
+  // Approved manual sources start on their exact effective date, including a
+  // non-Monday; normalization must not silently reintroduce the old restriction.
+  const manualFrameSource = { version: { effectiveStart: initialTuesday, manualGroupRatingAuthority: {
+    manifestSha256: "fe02bbdebc736d95360b55cc7dfe5b73c5a9eaa76f364f1c0f4420a0afb9950f",
+  } } };
+  for (let day = 0; day < 14; day += 1) {
+    assert.equal(await scalar(`select public.static_weekly_source_window_start(${json(manualFrameSource)},${quote(shiftDays(initialTuesday, day))})::text`),
+      shiftDays(initialTuesday, Math.floor(day / 7) * 7), "approved manual frames retain their exact source origin across the Monday boundary");
+  }
+  await expectNoMutation(`select public.static_weekly_source_window_start(${json(manualFrameSource)},${quote(initialWeek)})`,
+    /manual weekly window requires its exact effective source date/i, "manual date preceding approved origin");
+  assert.deepEqual(await state(), beforeDateReads, "date normalization never republishes or mutates schedule authority");
   await expectReject(`set role service_role; select public.static_weekly_v3_read_manager_snapshot(${quote(initialWeek)})`, /permission denied/i);
+  await expectReject(`set role service_role; select public.static_weekly_v3_read_manager_snapshot(${quote(initialTuesday)})`, /permission denied/i);
   const firstProjection = createStaticWeeklyProjectionRpcInput({ result: compiled, publicationId, expectedRevision: 2, actor: { ...manager, idempotencyKey: "v3-projection-first" } });
   for (const [label, idempotencyKey, mutate] of [
     ["missing family locations", "v3-projection-missing-family-locations", (row) => { delete row.work_snapshot.includedLocations; }],

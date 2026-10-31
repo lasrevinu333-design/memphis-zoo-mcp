@@ -22,7 +22,13 @@ await test('Historical public/recovery section keys and default-privilege SQL re
  assert.equal(C.RECOVERY_SCHEMA_OWNERS_QUERY,Old.RECOVERY_SCHEMA_OWNERS_QUERY);
 });
 await test('Absent private schemas emit no owner section and preserve complete archived catalog JSON/hash',async()=>{
- const historical=JSON.parse(readFileSync(new URL('../supabase/canonical/schema-fingerprint-input.json',import.meta.url))),f=fixture({schemas:[],rows:copy(historical),owners:[]});
+ // The current canonical catalog now includes the three application-private
+ // namespaces. Use the retained pre-extension production catalog for the
+ // historical no-private-schema case; never erase rows from a current capture.
+ const historical=JSON.parse(readFileSync(new URL('../supabase/canonical/production-schema-fingerprint-input.json',import.meta.url))),f=fixture({schemas:[],rows:copy(historical),owners:[]});
+ assert.equal(Object.hasOwn(historical,'private_schema_owners'),false);
+ for(const rows of Object.values(historical))if(Array.isArray(rows))for(const row of rows)
+  assert.ok(!names.includes(row?.schema_name),'Historical fixture must not contain application-private objects');
  // Canonical historical capture may include recovery owner metadata.
  f.query=async sql=>{if(sql===C.RECOVERY_SCHEMA_OWNERS_QUERY)return{rows:historical.recovery_schema_owners||[]};if(sql===C.APPLICATION_PRIVATE_SCHEMA_OWNERS_QUERY)return{rows:[]};
   if(sql===C.UNSUPPORTED_PUBLIC_RELATION_CLASSES_QUERY||sql===C.UNSUPPORTED_PUBLIC_TYPE_CLASSES_QUERY)return{rows:[]};const key=Object.keys(C.SCHEMA_CATALOG_QUERIES).find(k=>C.SCHEMA_CATALOG_QUERIES[k]===sql);assert.ok(key);return{rows:copy(historical[key])};};
