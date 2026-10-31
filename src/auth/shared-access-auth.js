@@ -1,6 +1,6 @@
 import { createHash, createHmac, randomBytes, randomInt, randomUUID, timingSafeEqual } from "node:crypto";
 import { isMapDashboardSession, verifyCurrentMapDashboardSession, verifyMapManagerAccessToken } from "./map-manager-identity.js";
-import { isActiveNamedManager, isCustodialOwner, projectManagerSession, hasManagerPermission } from "./manager-permissions.js";
+import { isActiveNamedManager, isCustodialOwner, projectManagerSession, hasManagerPermission, isCustodialLeadershipManagementSession } from "./manager-permissions.js";
 
 const MEMPHIS_TIME_ZONE = "America/Chicago";
 const OPS_ACCESS_TOKEN_VERSION = 2;
@@ -26,6 +26,12 @@ const MANAGER_CODE_MAX_TTL_SECONDS = 24 * 60 * 60;
 const MANAGER_CODE_ATTEMPT_LIMIT = 5;
 const MANAGER_CODE_LOCKOUT_SECONDS = 15 * 60;
 const MANAGER_ROLES = new Set(["OPS_MANAGER", "CUSTODIAL_MANAGER", "DIRECTOR", "SECURITY_ADMIN"]);
+const CUSTODIAL_LEADERSHIP_SYSTEM_KEYS=new Set(['eric_mckenney_facilities_maintenance_manager','haley_lejman_water_quality_manager','brandy_gull_horticulture_manager','jennifer_sheffield_director_operations','annie_feist_operations_admin','eric_custodial_manager']);
+let custodialLeadershipVerifier = null;
+export function configureCustodialLeadershipVerifier(verifier) {
+  if (verifier!==null&&typeof verifier!=='function') throw new TypeError('Custodial leadership verifier must be a server function.');
+  custodialLeadershipVerifier=verifier;
+}
 const enrollmentAttempts = new Map();
 const managerCodeAttempts = new Map();
 const sharedEnrollmentAttempts = new Map();
@@ -439,6 +445,11 @@ function parseOpsToken(token, { env = process.env, now = new Date() } = {}) {
     access_level: accessLevel,
     read_only: accessLevel === "read_only",
     trusted_device: payload.auth_mode === "trusted_device",
+    ...(payload.auth_mode==='custodial_leadership_pin'?{
+      actor_kind:payload.actor_kind,owner:payload.owner,custodial_management_admin:payload.custodial_management_admin,
+      claimed_manager_id:payload.claimed_manager_id,claimed_manager_display_name:payload.claimed_manager_display_name,
+      identity_assurance:payload.identity_assurance,individual_identity_verified:payload.individual_identity_verified,
+    }:{}),
   };
   return { ok: true, session, payload };
 }
@@ -493,6 +504,24 @@ export function createOpsManagerSession({
     expires_at: new Date(expiresAt).toISOString(),
     token: signOpsPayload(payload, { env }),
   };
+}
+
+// Same normal Ops signer/parser; scope is the configured cohort, NEVER the chosen person.
+export function createCustodialLeadershipOpsSession({expectedClaims,credentialExpiresAt,env=process.env,now=new Date()}) {
+  assertOpsManagerSessionSecret(env);
+  if(!isCustodialLeadershipManagementSession(expectedClaims)||expectedClaims.access_level!=='full_access'
+    ||expectedClaims.identity_assurance!=='SELF_ASSERTED_NAME'||expectedClaims.individual_identity_verified!==false)
+    throw Object.assign(new Error('Invalid configured Custodial cohort session.'),{status:403});
+  const expiry=Math.min(Date.parse(credentialExpiresAt),now.getTime()+getAccessTtlMs(env));
+  if(!Number.isFinite(expiry)||expiry<=now.getTime())throw Object.assign(new Error('Custodial browser registration expired.'),{status:401});
+  const payload={...expectedClaims,v:OPS_ACCESS_TOKEN_VERSION,iat:now.getTime(),exp:expiry,jti:randomUUID(),operational_day:getCSTDate(now)};
+  return {...expectedClaims,expires_at:new Date(expiry).toISOString(),token:signOpsPayload(payload,{env})};
+}
+export function verifyCustodialLeadershipOpsToken(token,{env=process.env,now=new Date()}={}) {
+  const parsed=parseOpsToken(token,{env,now});
+  if(!parsed.ok||!isCustodialLeadershipManagementSession(parsed.session))
+    throw Object.assign(new Error('Custodial cohort session is not current.'),{status:401});
+  return parsed.session;
 }
 
 export function createAdminApiKeySession({ deviceId, now = new Date(), env = process.env } = {}) {
@@ -579,7 +608,7 @@ function awaitReadOnlyAuthWithSignal(work, signal) {
   }), aborted]).finally(() => signal.removeEventListener("abort", onAbort));
 }
 
-export function makeOpsAccessMiddleware({ env = process.env, requireWrite = false, trustedDeviceStore = null, supabase = null, requireTrustedDeviceStore = true, requireCurrentManagerAssociation = true, operationSignalForRequest = null, requiredPermission = null } = {}) {
+export function makeOpsAccessMiddleware({ env = process.env, requireWrite = false, trustedDeviceStore = null, supabase = null, requireTrustedDeviceStore = true, requireCurrentManagerAssociation = true, operationSignalForRequest = null, requiredPermission = null, leadershipVerifier = undefined } = {}) {
   const store = trustedDeviceStore || createSupabaseTrustedDeviceStore(supabase);
   return async function requireOpsAccess(req, res, next) {
     const signal = operationSignalForRequest?.(req) || null;
@@ -594,7 +623,11 @@ export function makeOpsAccessMiddleware({ env = process.env, requireWrite = fals
     }
     let session = result.session;
     try {
-      const currentState = await awaitReadOnlyAuthWithSignal(() => isMapDashboardSession(session)
+      const currentState = await awaitReadOnlyAuthWithSignal(() => session.auth_mode==='custodial_leadership_pin'
+        ? (typeof (leadershipVerifier===undefined?custodialLeadershipVerifier:leadershipVerifier)==='function'
+          ? (leadershipVerifier===undefined?custodialLeadershipVerifier:leadershipVerifier)({req,session,signal})
+          : {ok:false,status:503,error:'Custodial cohort verification is unavailable.'})
+        : isMapDashboardSession(session)
         ? verifyCurrentMapDashboardSession(session, { store })
         : verifySessionAgainstTrustedDeviceStore(session, {
             store,
@@ -1196,6 +1229,10 @@ export function createSupabaseTrustedDeviceStore(supabase) {
         codesByManager.get(String(row.manager_id)) || [],
       ));
     },
+    async managerForEnrollmentCodeHash(codeHash) {
+      const {data,error}=await supabase.from("ops_manager_enrollment_codes").select("manager_id").eq("code_hash",codeHash).maybeSingle();
+      if(error)throw error;return data?.manager_id?this.getManager(data.manager_id):null;
+    },
     async listManagerEnrollmentCodes() {
       const { data, error } = await supabase
         .from("ops_manager_enrollment_codes")
@@ -1631,8 +1668,17 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
     ok: false,
     error: "The legacy Gemini password session is retired. Use a trusted Ops Manager device.",
   });
-  app.post("/auth-api/gemini/login", retiredGeminiPasswordAuth);
-  app.get("/auth-api/gemini/session", retiredGeminiPasswordAuth);
+  const geminiCohortSession = async(req,res)=>{
+    const presented=authenticatePresentedOpsAccessRequest(req,{env});
+    if(!presented.ok||presented.session?.auth_mode!=='custodial_leadership_pin')return retiredGeminiPasswordAuth(req,res);
+    if(req.body&&Object.hasOwn(req.body,'password'))delete req.body.password;
+    res.setHeader('Cache-Control','no-store');
+    const verify=makeOpsAccessMiddleware({env,trustedDeviceStore:store});
+    return verify(req,res,()=>res.status(200).json({ok:true,authenticated:true,session:req.memphisAuth,
+      data:{authenticated:true,auth_mode:'custodial_leadership_pin',manager_id:req.memphisAuth.manager_id,identity_assurance:'SELF_ASSERTED_NAME'}}));
+  };
+  app.post("/auth-api/gemini/login", geminiCohortSession);
+  app.get("/auth-api/gemini/session", geminiCohortSession);
 
   const requireCustodialManager = async (req, res) => {
     const activeStore = trustedDeviceStoreOrThrow(store);
@@ -2050,6 +2096,11 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
       }
       const managerId = String(req.params?.managerId || "");
       if (!/^[0-9a-f-]{36}$/i.test(managerId)) throw Object.assign(new Error("managerId must be a UUID."), { status: 400 });
+      if(env.CUSTODIAL_LEADERSHIP_PIN_ENABLED==='true'){
+        if(typeof activeStore.getManager!=='function')throw Object.assign(new Error('Current manager directory is unavailable.'),{status:503});
+        const target=await activeStore.getManager(managerId);
+        if(CUSTODIAL_LEADERSHIP_SYSTEM_KEYS.has(target?.system_key)){res.status(410).json({ok:false,error:'Custodial leadership enrollment uses the shared leadership flow.'});return;}
+      }
       let created = null;
       let code = "";
       let lastError = null;
@@ -2220,6 +2271,11 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
         if (Date.parse(String(limit?.locked_until || "")) > Date.now()) res.setHeader?.("Retry-After", String(MANAGER_CODE_LOCKOUT_SECONDS));
         res.status(Date.parse(String(limit?.locked_until || "")) > Date.now() ? 429 : 401).json({ ok: false, error: genericError });
         return;
+      }
+      if(env.CUSTODIAL_LEADERSHIP_PIN_ENABLED==='true'){
+        if(typeof activeStore.managerForEnrollmentCodeHash!=='function')throw Object.assign(new Error('Current enrollment scope lookup unavailable.'),{status:503});
+        const target=await activeStore.managerForEnrollmentCodeHash(managerCodeHash(managerCode,env));
+        if(target&&CUSTODIAL_LEADERSHIP_SYSTEM_KEYS.has(target.system_key))return res.status(410).json({ok:false,error:'Custodial enrollment uses the shared PIN name picker.'});
       }
       const deviceId = requestDeviceId(req);
       if (!deviceId) throw Object.assign(new Error("A stable manager device ID is required."), { status: 400 });

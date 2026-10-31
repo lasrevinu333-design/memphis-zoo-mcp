@@ -24,7 +24,7 @@ for(const[label,change]of [['mismatched runtime',x=>x.summary.source_identity.re
 const ca='-----BEGIN CERTIFICATE-----\nsynthetic-certificate\n-----END CERTIFICATE-----',url='postgresql://fixture:fixture-secret@db.fixture.supabase.co:5432/postgres?sslmode=disable&application_name=bad';
 test('TLS verification cannot be overridden in the configured URL',()=>{const options=catalogConnectionOptions({connectionString:url,caPem:ca});assert.equal(options.ssl.rejectUnauthorized,true);assert.equal(options.ssl.ca,ca);assert.equal(new URL(options.connectionString).searchParams.has('sslmode'),false);assert.equal(options.statement_timeout,15000);});
 for(const [label,value]of [['missing certificate',{connectionString:url,caPem:''}],['not postgres',{connectionString:'https://example.invalid',caPem:ca}],['missing credentials',{connectionString:'postgres://example.invalid/db',caPem:ca}]])test(label+' refused',()=>assert.throws(()=>catalogConnectionOptions(value)));
-function fake({fail=false,readOnly='on'}={}){const calls=[];let ended=false;class Client{constructor(options){assert.equal(options.ssl.rejectUnauthorized,true);}async connect(){calls.push('connect');}async query(sql){calls.push(sql);if(sql.startsWith('select current_setting'))return{rows:[{read_only:readOnly}]};if(sql.startsWith('begin')||sql==='rollback'||sql==='set local row_security = off')return{rows:[]};const queries=[...Object.values(SCHEMA_CATALOG_QUERIES).filter(q=>q!==SCHEMA_CATALOG_QUERIES.cron_jobs),NATIVE_CRON_CATALOG_SQL,UNSUPPORTED_PUBLIC_RELATION_CLASSES_QUERY,UNSUPPORTED_PUBLIC_TYPE_CLASSES_QUERY,CatalogSource.RECOVERY_SCHEMA_OWNERS_QUERY].filter(q=>typeof q==='string');assert.ok(queries.some(q=>sql==="select coalesce(json_agg(row_to_json(q)),'[]'::json) as catalog_rows from ("+q+") q"),'only source-controlled complete catalog queries may run');if(fail)throw Object.assign(Error('fixture-secret may not escape'),{code:'XX000'});return{rows:[{catalog_rows:[]}]};}async end(){ended=true;}}return{Client,calls,ended:()=>ended};}
+function fake({fail=false,readOnly='on'}={}){const calls=[];let ended=false;class Client{constructor(options){assert.equal(options.ssl.rejectUnauthorized,true);}async connect(){calls.push('connect');}async query(sql){calls.push(sql);if(sql.startsWith('select current_setting'))return{rows:[{read_only:readOnly}]};if(sql.startsWith('begin')||sql==='rollback'||sql==='set local row_security = off')return{rows:[]};const queries=[...Object.values(SCHEMA_CATALOG_QUERIES).filter(q=>q!==SCHEMA_CATALOG_QUERIES.cron_jobs),NATIVE_CRON_CATALOG_SQL,UNSUPPORTED_PUBLIC_RELATION_CLASSES_QUERY,UNSUPPORTED_PUBLIC_TYPE_CLASSES_QUERY,CatalogSource.RECOVERY_SCHEMA_OWNERS_QUERY,CatalogSource.APPLICATION_PRIVATE_SCHEMA_OWNERS_QUERY].filter(q=>typeof q==='string');assert.ok(queries.some(q=>sql==="select coalesce(json_agg(row_to_json(q)),'[]'::json) as catalog_rows from ("+q+") q"),'only source-controlled complete catalog queries may run');if(fail)throw Object.assign(Error('fixture-secret may not escape'),{code:'XX000'});return{rows:[{catalog_rows:[]}]};}async end(){ended=true;}}return{Client,calls,ended:()=>ended};}
 test('all catalog queries execute in one verified read-only snapshot and rollback',async()=>{const f=fake();const rows=await readCatalogReadOnly({connectionString:url,caPem:ca,Client:f.Client});assert.deepEqual(Object.keys(rows),Object.keys(SCHEMA_CATALOG_QUERIES));assert.equal(f.calls[1],'begin isolation level repeatable read read only deferrable');assert.equal(f.calls.at(-1),'rollback');assert.equal(f.ended(),true);});
 test('failure still rolls back and closes without leaking connection text',async()=>{const f=fake({fail:true});await assert.rejects(readCatalogReadOnly({connectionString:url,caPem:ca,Client:f.Client}),e=>e.code==='XX000'&&!String(e.stack).includes('fixture-secret')&&!e.cause);assert.equal(f.calls.at(-1),'rollback');assert.equal(f.ended(),true);});
 test('read-write transaction is refused before catalog data is requested',async()=>{const f=fake({readOnly:'off'});await assert.rejects(readCatalogReadOnly({connectionString:url,caPem:ca,Client:f.Client}));assert.equal(f.calls.length,4);assert.equal(f.ended(),true);});
@@ -49,6 +49,7 @@ function recoveryCatalogFixture({rows=recoveryCatalogRows(),relations=[],types=[
  // Deliberately limited recording of the fixed SQL projections. The absence
  // of the private-schema predicate in the old source omits the private rows.
  function queryRows(sql){
+  if(sql===CatalogSource.APPLICATION_PRIVATE_SCHEMA_OWNERS_QUERY)return [];
   if(sql===CatalogSource.RECOVERY_SCHEMA_OWNERS_QUERY){
    if(schemaOwnerError)throw schemaOwnerError;
    // Synthetic namespace rows model the fixed SQL projection, independently
@@ -102,11 +103,11 @@ test('PRIVATE_RECOVERY_capture includes exact private overloads owners and ACL r
  assert.equal(f.calls[1],'begin isolation level repeatable read read only deferrable');
  assert.equal(f.calls.at(-1),'rollback');assert.equal(f.ended(),true);
  for(const name of ['functions','routine_grants','schema_grants']){
-  assert.match(SCHEMA_CATALOG_QUERIES[name],/n\.nspname in \('public','custodial_recovery'\)/);
+  assert.match(SCHEMA_CATALOG_QUERIES[name],/n\.nspname in \('public','custodial_recovery','custodial_employment','custodial_coverall','custodial_leadership_private'\)/);
   assert.match(SCHEMA_CATALOG_QUERIES[name],/order by n\.nspname,/);
  }
  // Owner ACL entries are real aclexplode rows, not fabricated owner markers.
- assert.match(SCHEMA_CATALOG_QUERIES.routine_grants,/and \(n\.nspname='custodial_recovery' or coalesce/);
+ assert.match(SCHEMA_CATALOG_QUERIES.routine_grants,/and \(n\.nspname<>'public' or coalesce/);
  assert.match(SCHEMA_CATALOG_QUERIES.routine_grants,/aclexplode\(coalesce\(p\.proacl,acldefault\('f',p\.proowner\)\)\)/);
 });
 test('PRIVATE_RECOVERY_drift changes fingerprint and refuses original archive verification',async()=>{
@@ -130,7 +131,7 @@ test('PRIVATE_RECOVERY_drift changes fingerprint and refuses original archive ve
  }
 });
 test('PRIVATE_RECOVERY_relations refuse through capture and normal readonly rollback',async()=>{
- assert.match(UNSUPPORTED_PUBLIC_RELATION_CLASSES_QUERY,/\(n\.nspname='public' and c\.relkind in \('f'\)\) or n\.nspname='custodial_recovery'/);
+ assert.match(UNSUPPORTED_PUBLIC_RELATION_CLASSES_QUERY,/\(n\.nspname in \('public','custodial_employment','custodial_coverall','custodial_leadership_private'\) and c\.relkind in \('f'\)\) or n\.nspname='custodial_recovery'/);
  for(const kind of ['r','p','S','v','m','f','c','i','I']){
   const f=recoveryCatalogFixture({relations:[{schema_name:'custodial_recovery',relation_name:'unexpected_original',relation_kind:kind}]});
   await assert.rejects(captureSchemaCatalog(f.direct),/Unsupported custodial_recovery relation class/);

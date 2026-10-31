@@ -24,7 +24,7 @@ import {
 import { APP_VERSION, RELEASE_ID } from "./app-version.js";
 import { assertConfiguredReleaseIdentity, buildReleaseManifest } from "./release-manifest.js";
 import { observeProductionSchemaIdentity } from "./production-schema-identity.js";
-import { assertOpsManagerSessionSecret, authenticateOpsAccessRequest, authenticatePresentedOpsAccessRequest, createSupabaseTrustedDeviceStore, installSharedAuthRoutes, makeOpsAccessMiddleware } from "./auth/shared-access-auth.js";
+import { assertOpsManagerSessionSecret, authenticateOpsAccessRequest, authenticatePresentedOpsAccessRequest, createSupabaseTrustedDeviceStore, installSharedAuthRoutes, makeOpsAccessMiddleware, configureCustodialLeadershipVerifier } from "./auth/shared-access-auth.js";
 import { assertServerAssignedActor, authenticatedManagerActor } from "./manager-authority.js";
 import { installOwnerAccessRoutes } from "./owner-access-api.js";
 import { authoritativeFeedbackPayload, makeFeedbackSubmitAuthority } from "./feedback-authority.js";
@@ -46,6 +46,7 @@ import {
   getDeviceCredentialSecretReadiness,
   createSupabaseDeviceCredentialStore,
   installDeviceCredentialRoutes,
+  configureCustodialLeadershipSecurityBridge,
   createDeviceCoverageFetch,
   makeDeviceCredentialMiddleware,
   authenticateDeviceCredentialRequest,
@@ -67,6 +68,7 @@ import { getToolManifest } from "./mcp/tool-manifest.js";
 import { validateRuntimeEnv } from "./config/env.js";
 import { authorityHttpFailure, deferJsonParserErrors, malformedScanAuthorityOutcome, rpcFailure, scanRpcHttpOutcome, sqlStateHttpStatus } from "./offline-authority-http.js";
 import { installLeadershipHttpRoutes } from "./leadership-bootstrap.js";
+import {createCustodialLeadershipApiProxy,createCustodialLeadershipRemoteVerifier,createCustodialLeadershipSecurityBridge,createCustodialLeadershipGeminiBridge} from "./auth/custodial-leadership-runtime.js";
 import { installCustodialEmployeeAdminRoutes } from "./custodial-employee-admin.js";
 import { installManagerNotificationRoutes } from "./manager-notifications.js";
 import { installEmployeeNotificationRoutes } from "./employee-notifications.js";
@@ -235,6 +237,9 @@ function requireGuestMarketingReviewAuth(req, res, next) {
   next();
 }
 
+const custodialLeadershipVerifier=createCustodialLeadershipRemoteVerifier({env:process.env});
+configureCustodialLeadershipVerifier(custodialLeadershipVerifier);
+configureCustodialLeadershipSecurityBridge(createCustodialLeadershipSecurityBridge({env:process.env,verify:custodialLeadershipVerifier}));
 const requireOpsManagerAuth = makeOpsAccessMiddleware({ trustedDeviceStore: opsTrustedDeviceStore });
 const requireOpsManagerWrite = makeOpsAccessMiddleware({ requireWrite: true, trustedDeviceStore: opsTrustedDeviceStore });
 // When both existing operator credentials are configured, Streamable HTTP uses
@@ -841,6 +846,7 @@ const TRUSTED_DEVICE_CORS_HEADERS = [
   "X-Memphis-Native-Request-Timestamp",
   "X-Memphis-Native-Request-Attestation",
   "X-Device-Security-CSRF",
+  "X-CSRF-Token",
   "X-Admin-Key",
   "X-Ops-Access-Key",
   "Idempotency-Key",
@@ -2379,6 +2385,7 @@ function createMcpServer({ readOnly = false, advertiseOAuth = false } = {}) {
   });
 }
 
+app.use("/custodial-leadership-api",createCustodialLeadershipApiProxy({env:process.env}));
 installSharedAuthRoutes(app, { setCors: setAdminApiCors, supabase: supabaseAdmin, trustedDeviceStore: opsTrustedDeviceStore });
 installDeviceCredentialRoutes(app, {
   setCors: setAdminApiCors,
@@ -2502,6 +2509,7 @@ app.use(
   "/gemini-api",
   (req, res, next) => { setGeminiApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); },
   createGeminiConsoleRouter({
+    leadershipBridge:createCustodialLeadershipGeminiBridge({env:process.env}),
     supabase: supabaseAdmin,
     runReadOnlySql,
     requireOpsManagerAuth,

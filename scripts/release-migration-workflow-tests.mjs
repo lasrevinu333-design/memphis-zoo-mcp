@@ -6,6 +6,7 @@ import { join, resolve } from "node:path";
 import { createHash } from "node:crypto";
 import { assertReleaseWorkflowSource } from "./release-migration-workflow-preflight.mjs";
 import { readMigrationReplayPlan } from "./migration-replay-order.mjs";
+import { bindExistingPostgresForwardSources } from "./production-forward-source.mjs";
 import { SCHEMA_CATALOG_NAMES, fingerprintSchemaCatalog } from "./schema-fingerprint-catalog.mjs";
 
 const root = resolve(new URL("..", import.meta.url).pathname);
@@ -171,14 +172,20 @@ function privateSchemaOwnerPreflightCases(){
  try{
   for(const path of ['release/production-migration-state.json','release/frontend-release-manifest.json',
    'supabase/canonical/schema-fingerprint.txt','supabase/canonical/schema-fingerprint-input.json',
-   'supabase/canonical/migration-replay-order.json','supabase/migrations'])
+   'supabase/canonical/migration-replay-order.json','supabase/migrations','release/production-forward-source'])
    cpSync(join(root,path),join(fixture,path),{recursive:true});
   const paths={state:join(fixture,'release/production-migration-state.json'),manifest:join(fixture,'release/frontend-release-manifest.json'),
    catalog:join(fixture,'supabase/canonical/schema-fingerprint-input.json'),fingerprint:join(fixture,'supabase/canonical/schema-fingerprint.txt')};
   const initial=JSON.parse(readFileSync(paths.state,'utf8')),manifest=JSON.parse(readFileSync(paths.manifest,'utf8'));
-  const legacy=JSON.parse(readFileSync(paths.catalog,'utf8')),legacyFingerprint=readFileSync(paths.fingerprint,'utf8').trim();
+  const retainedCatalog=JSON.parse(readFileSync(paths.catalog,'utf8')),retainedFingerprint=readFileSync(paths.fingerprint,'utf8').trim();
+  assert.equal(fingerprintSchemaCatalog(retainedCatalog).fingerprint,retainedFingerprint,'actual copied catalog remains bound to its saved fingerprint');
+  // The current captured source may already contain recovery owner metadata.
+  // Derive a LOCAL synthetic no-owner compatibility control explicitly; this
+  // is not an archived capture and does not rewrite shared canonical evidence.
+  const legacy=structuredClone(retainedCatalog);delete legacy.recovery_schema_owners;
+  const legacyFingerprint=fingerprintSchemaCatalog(legacy).fingerprint;
   const plan=readMigrationReplayPlan(fixture),pending=plan.files.slice(plan.baseCount),baseLast=plan.files[plan.baseCount-1];
-  assert.equal(Object.hasOwn(legacy,'recovery_schema_owners'),false,'this frozen fixture is historical/no-owner');
+  assert.equal(Object.hasOwn(legacy,'recovery_schema_owners'),false,'local synthetic no-owner compatibility control');
   assert.equal(fingerprintSchemaCatalog(legacy).fingerprint,legacyFingerprint);
   // The frozen release declaration can predate this source-only replay.
   // Align TEMPORARY fixture declarations to the exact copied source bytes;
@@ -189,8 +196,11 @@ function privateSchemaOwnerPreflightCases(){
   state.observed_production.source_authority_migration_count=plan.baseCount;
   state.observed_production.ledger_head=baseLast.slice(0,14);
   state.observed_production.source_migration_name=baseLast.slice(15,-4);
-  state.pending_migrations=pending.map((file,index)=>({order:index+1,file,phase:file.slice(15,-4),source_migration_version:file.slice(0,14),
-   sha256:createHash('sha256').update(readFileSync(join(fixture,'supabase/migrations',file))).digest('hex')}));
+  // This TEMPORARY fixture now declares the literal canonical base head, not
+  // production's independently observed extension. Keep the real guard exact.
+  delete state.source_binding.observed_source_extensions;
+  state.pending_migrations=bindExistingPostgresForwardSources(fixture,pending.map((file,index)=>({order:index+1,file,phase:file.slice(15,-4),source_migration_version:file.slice(0,14),
+   sha256:createHash('sha256').update(readFileSync(join(fixture,'supabase/migrations',file))).digest('hex')})));
   Object.assign(state.target,{source_authority_migration_count:plan.files.length,pending_migration_count:pending.length,
    production_ledger_count:state.observed_production.production_ledger_count+pending.length,
    source_migration_file:pending.at(-1),source_migration_version:pending.at(-1).slice(0,14),
@@ -258,7 +268,31 @@ function privateSchemaOwnerPreflightCases(){
     ()=>{const s=JSON.parse(readFileSync(paths.state));s.target.canonical_source_schema_fingerprint='0'.repeat(64);writeFileSync(paths.state,JSON.stringify(s));},
    ]){publish(catalog);change();assert.throws(()=>assertReleaseWorkflowSource(fixture));}
   });
-  ownerCheck('legacy no owner keeps its exact historical hash and comparator',()=>{
+  ownerCheck('Source302 optional private namespace owners participate in actual preflight without historical additions',()=>{
+   const names=['custodial_employment','custodial_coverall','custodial_leadership_private'];
+   const catalog={...structuredClone(legacy),private_schema_owners:names.map(schema_name=>({schema_name,owner_name:'migration_owner'}))};
+   const saved=publish(catalog),actual=assertReleaseWorkflowSource(fixture);
+   assert.equal(actual.targetFingerprint,saved.fingerprint);assert.equal(saved.state.target.expected_catalog_counts.private_schema_owners,3);
+   for(const change of [
+    ()=>{const s=JSON.parse(readFileSync(paths.state));delete s.target.expected_catalog_counts.private_schema_owners;writeFileSync(paths.state,JSON.stringify(s));},
+    ()=>{const s=JSON.parse(readFileSync(paths.state));s.target.expected_catalog_counts.private_schema_owners=2;writeFileSync(paths.state,JSON.stringify(s));},
+    ()=>{const c=structuredClone(catalog);c.private_schema_owners[0].owner_name='different_owner';writeFileSync(paths.catalog,JSON.stringify(c));},
+   ]){publish(catalog);change();assert.throws(()=>assertReleaseWorkflowSource(fixture));}
+   // Raw JSON can express malformed metadata even though the fingerprint helper refuses it.
+   for(const rows of [[],[{schema_name:'unrelated',owner_name:'migration_owner'}],[catalog.private_schema_owners[0],catalog.private_schema_owners[0]]]){
+    publish(catalog);const c=structuredClone(catalog);c.private_schema_owners=rows;writeFileSync(paths.catalog,JSON.stringify(c));
+    assert.throws(()=>assertReleaseWorkflowSource(fixture),/private_schema_owners/);
+   }
+   publish(catalog);const text=readFileSync(paths.catalog,'utf8'),parse=JSON.parse;
+   for(const inject of [
+    (c,get)=>Object.defineProperty(c,'private_schema_owners',{enumerable:true,configurable:true,get}),
+    (c,get)=>Object.defineProperty(c.private_schema_owners,'0',{enumerable:true,configurable:true,get}),
+    (c,get)=>Object.defineProperty(c.private_schema_owners[0],'owner_name',{enumerable:true,configurable:true,get}),
+   ]){let calls=0;JSON.parse=function(value,...args){const c=Reflect.apply(parse,JSON,[value,...args]);if(value===text)inject(c,()=>{calls++;throw Error('must not execute');});return c;};
+    try{assert.throws(()=>assertReleaseWorkflowSource(fixture));}finally{JSON.parse=parse;}assert.equal(calls,0);
+   }
+  });
+  ownerCheck('local no-owner compatibility control keeps its exact hash and comparator',()=>{
    const saved=publish(structuredClone(legacy)),actual=assertReleaseWorkflowSource(fixture);
    assert.equal(saved.fingerprint,legacyFingerprint);assert.equal(actual.targetFingerprint,legacyFingerprint);
    assert.deepEqual(Object.keys(saved.state.target.expected_catalog_counts).sort(),[...SCHEMA_CATALOG_NAMES].sort());

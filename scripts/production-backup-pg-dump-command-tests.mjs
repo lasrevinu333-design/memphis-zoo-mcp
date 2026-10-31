@@ -561,6 +561,15 @@ if (process.argv.includes("--original-metadata-producer-only")) {
   assert.ok(namespaces.every(x => x.owner_name === "original_owner" && x.identity === q(x.schema_name)));
   await assert.rejects(() => compile(1)(null, async () => ({ rows: [{ search_path: "public", routines: [routine] }] })));
   await assert.rejects(() => compile(1)(null, async () => ({ rows: [{ search_path: "pg_catalog", routines: [{ ...routine, grants: [grant, grant] }] }] })));
+  for(const schema_name of ['custodial_employment','custodial_coverall','custodial_leadership_private']){
+    const privateRoutine={...routine,schema_name,identity:schema_name+'.fixture()'};
+    assert.deepEqual(await compile(1)(null,async()=>({rows:[{search_path:'pg_catalog',routines:[privateRoutine]}]})),[privateRoutine]);
+    const privateRelation={...relation,schema_name,identity:q(schema_name)+'.'+q('fixture')};
+    assert.deepEqual(await compile(2)(null,async()=>({rows:[{descriptor:privateRelation}]})),[privateRelation]);
+    const privateNamespace={kind:'SCHEMA',schema_name,object_name:schema_name,owner_name:'original_owner',column_name:null,grants:[]};
+    assert.equal((await compile(0)(null,async()=>({rows:[privateNamespace]})))[0].schema_name,schema_name);
+  }
+  cases.push('each Source302 private schema passes actual shipping routine/relation/namespace ACL data adapters');
   cases.push("new shipping data adapters preserve original owners/PUBLIC/grantor/options and reject drift/duplicates");
 
   const fieldsStart=moduleSource.indexOf("function fields(value,keys){"),rowsStart=moduleSource.indexOf("function rows(reply){",fieldsStart);
@@ -822,7 +831,7 @@ if (process.argv.includes("--private-original-lossless-wire-only")) {
 
 // Only newly affected capture behavior. No database, key, archive, Docker,
 // Storage/network or production entrypoint is invoked by this selector.
-if (process.argv.includes("--private-original-capture-only")) {
+if (process.argv.includes("--private-original-capture-only") || process.argv.includes("--private-original-capture-scope-only")) {
   const cases=[];
   const run=(name,caseBody)=>{caseBody();cases.push(name);};
   const namespaces=productionBackupDataSchemas.map(schema_name=>({schema_name,usage_allowed:true}));
@@ -904,7 +913,8 @@ if (process.argv.includes("--private-original-capture-only")) {
   });
   run("normal exporter wiring includes private rows before signature",()=>{
     const source=readFileSync(new URL("./production-backup.mjs",import.meta.url),"utf8");
-    assert.ok(source.includes("const schemas = productionBackupDataSchemas;"));
+    assert.ok(source.includes("const schemaCandidates=productionBackupAllowedDataSchemas;"));
+    assert.ok(source.includes("schemas=requireProductionBackupDataScope(namespaceResult.rows,privateRelationResult.rows,catalogResult.rows)"));
     assert.ok(source.indexOf("for (const statement of productionBackupSnapshotStatements)")<source.indexOf("select pg_export_snapshot()"));
     assert.ok(source.includes("requireProductionBackupDataScope(namespaceResult.rows,privateRelationResult.rows,catalogResult.rows)"));
     assert.ok(source.includes("const countedRows = productionBackupRowCount(countResult);"));
@@ -913,6 +923,9 @@ if (process.argv.includes("--private-original-capture-only")) {
     assert.ok(source.indexOf("tableCatalog.push(")<source.indexOf("archiveSignatureBinding({"));
   });
 
+  if(process.argv.includes('--private-original-capture-scope-only')){
+    console.log(JSON.stringify({status:'PASS',selector:'--private-original-capture-scope-only',count:cases.length,cases,scope:'In-process capture/DATA-shape cases only; later archive subprocess pipeline explicitly not selected'}));process.exit(0);
+  }
   const fs=await import('node:fs'),{join}=await import('node:path'),{tmpdir}=await import('node:os'),{spawnSync}=await import('node:child_process');
   const {createHash}=await import('node:crypto'),{archiveSignatureBinding,signBinding,stableJsonFile}=await import('./disaster-recovery-crypto.mjs');
   const argument=name=>process.argv.find(value=>value.startsWith(name+'='))?.slice(name.length+1);

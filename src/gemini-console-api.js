@@ -1,4 +1,5 @@
 import express from "express";
+import {isCustodialLeadershipManagementSession} from "./auth/manager-permissions.js";
 import { createHash, randomUUID } from "node:crypto";
 import { extname } from "node:path";
 import mammoth from "mammoth";
@@ -201,6 +202,7 @@ export function createGeminiConsoleRouter({
   supabase,
   runReadOnlySql,
   requireOpsManagerAuth,
+  leadershipBridge=null,
   buildHealthPayload,
   appVersion,
   releaseId,
@@ -211,6 +213,17 @@ export function createGeminiConsoleRouter({
   if (typeof requireOpsManagerAuth !== "function") throw new Error("Gemini Console requires trusted manager authentication.");
   const router = express.Router();
   router.use(requireOpsManagerAuth);
+  const cohortCall=async(req,action,input)=>{
+    if(typeof leadershipBridge!=='function')throw Object.assign(new Error('Current cohort Gemini context unavailable.'),{status:503});
+    return leadershipBridge(req,action,input);
+  };
+  router.use(async(req,res,next)=>{
+    if(!isCustodialLeadershipManagementSession(req.memphisAuth))return next();
+    try{const input={};const conversation=/^\/conversations\/([0-9a-f-]{36})(?:\/|$)/i.exec(req.path),attachment=/^\/attachments\/([0-9a-f-]{36})$/i.exec(req.path),message=/^\/messages\/([0-9a-f-]{36})\/cancel$/i.exec(req.path);
+      if(conversation)input.conversation_id=conversation[1];if(attachment)input.attachment_id=attachment[1];if(message)input.message_id=message[1];
+      req.custodialGeminiContext=await cohortCall(req,'gemini_context',input);next();
+    }catch(e){apiError(res,e);}
+  });
   router.use((req, res, next) => {
     // Original-outcome observation is a read-only POST, not a replacement turn.
     const originalOutcomeRead = req.method === "POST"
@@ -332,7 +345,8 @@ export function createGeminiConsoleRouter({
     return data;
   }
 
-  async function authorizeActiveProposal({ actor, conversationId, userMessage, correlationId }) {
+  async function authorizeActiveProposal({ actor, conversationId, userMessage, correlationId, req }) {
+    if(isCustodialLeadershipManagementSession(req?.memphisAuth))throw Object.assign(new Error('Source and deployment repair authorization requires the separate existing named infrastructure path.'),{status:403});
     if (!hasRole(actor, "CUSTODIAL_MANAGER")) throw Object.assign(new Error("Only the Custodial Manager can authorize production-changing repair work."), { status: 403 });
     const { data: proposals, error } = await supabase.from("gemini_console_repair_proposals")
       .select("proposal_id,plan_sha256,status,expires_at")
@@ -371,6 +385,13 @@ export function createGeminiConsoleRouter({
     try {
       const actor = actorFrom(req);
       const limit = Math.min(100, Math.max(1, Number(req.query.limit || 30)));
+      if(isCustodialLeadershipManagementSession(req.memphisAuth)){
+        const ids=req.custodialGeminiContext?.conversationIds;if(!Array.isArray(ids)||ids.some(id=>!isUuid(id))||ids.length>100)throw Object.assign(new Error('Current original conversation membership unavailable.'),{status:403});
+        if(!ids.length)return res.status(200).json({ok:true,data:[]});
+        const {data,error}=await supabase.from("gemini_console_conversations").select("conversation_id,title,status,created_at,updated_at,last_activity_at,draft_text,draft_updated_at")
+          .eq("owner_manager_id",actor.managerId).in("conversation_id",ids).neq("status","deleted").order("last_activity_at",{ascending:false}).limit(limit);
+        if(error)throw error;return res.status(200).json({ok:true,data:data||[]});
+      }
       const { data, error } = await supabase.from("gemini_console_conversations")
         .select("conversation_id,title,status,created_at,updated_at,last_activity_at,draft_text,draft_updated_at")
         .eq("owner_manager_id", actor.managerId).neq("status", "deleted")
@@ -386,6 +407,7 @@ export function createGeminiConsoleRouter({
       const operationId = String(req.body?.client_operation_id || "");
       if (!isUuid(operationId)) throw Object.assign(new Error("client_operation_id is required."), { status: 422 });
       const title = String(req.body?.title || "New chat").trim().slice(0, 160) || "New chat";
+      if(isCustodialLeadershipManagementSession(req.memphisAuth))return res.status(200).json({ok:true,data:await cohortCall(req,'gemini_conversation',{conversation_id:operationId,title})});
       const { data, error } = await supabase.from("gemini_console_conversations").upsert({ conversation_id: operationId, owner_manager_id: actor.managerId, title }, { onConflict: "conversation_id", ignoreDuplicates: true }).select("conversation_id,title,status,created_at,updated_at,last_activity_at,draft_text,draft_updated_at").maybeSingle();
       if (error) throw error;
       const conversation = data || await conversationFor(actor, operationId);
@@ -569,7 +591,7 @@ export function createGeminiConsoleRouter({
       // UUIDs have already been closed above. Only the normal signed session's
       // device label uses quoting; message text is NEVER interpolated into SQL.
       const quote = value => "'" + String(value).replaceAll("'", "''") + "'";
-      const rows = normalizeRows(await runReadOnlySql(`
+      const rows = isCustodialLeadershipManagementSession(session)?normalizeRows(await cohortCall(req,'gemini_original_outcome',{conversation_id:expected.conversation_id,client_message_id:expected.client_message_id})):normalizeRows(await runReadOnlySql(`
         select to_jsonb(u) as original_user, to_jsonb(a) as original_assistant
         from public.ops_manager_trusted_devices d
         join public.ops_manager_managers m on m.manager_id=d.manager_id
@@ -614,7 +636,9 @@ export function createGeminiConsoleRouter({
       if (!isUuid(clientMessageId) || attachmentIds.some((id) => !isUuid(id)) || attachmentIds.length > MAX_ATTACHMENTS) throw Object.assign(new Error("Valid message and attachment operation identifiers are required."), { status: 422 });
       await conversationFor(actor, conversationId);
       sendEvent(res, "status", { state: "queued", label: "Queued", correlation_id: correlationId });
-      const { data: begin, error: beginError } = await supabase.rpc("gemini_console_begin_turn", {
+      const { data: begin, error: beginError } = isCustodialLeadershipManagementSession(req.memphisAuth)
+        ?{data:await cohortCall(req,'gemini_begin_turn',{conversation_id:conversationId,client_message_id:clientMessageId,body,attachment_ids:attachmentIds,correlation_id:correlationId}),error:null}
+        :await supabase.rpc("gemini_console_begin_turn", {
         p_conversation_id: conversationId, p_manager_id: actor.managerId,
         p_client_message_id: clientMessageId, p_body: body, p_attachment_ids: attachmentIds,
         p_correlation_id: correlationId,
@@ -637,7 +661,7 @@ export function createGeminiConsoleRouter({
 
       if (isExplicitRepairAuthorization(body)) {
         sendEvent(res, "status", { state: "authorizing", label: "Authorizing", correlation_id: correlationId });
-        const job = await authorizeActiveProposal({ actor, conversationId, userMessage, correlationId });
+        const job = await authorizeActiveProposal({ actor, conversationId, userMessage, correlationId, req });
         const responseText = job.execution_mode === "acceptance_probe"
           ? "The controlled disposable repair acceptance job completed. It changed no production feature; durable authorization, test, verification, and rollback evidence were recorded."
           : `Repair job ${job.repair_job_id} is authorized and durable. It is awaiting the controlled worker backup and claim gate; it is not reported as repaired or deployed.`;
@@ -723,7 +747,7 @@ export function createGeminiConsoleRouter({
       ]);
       if (proposalResult.error) throw proposalResult.error;
       if (jobsResult.error) throw jobsResult.error;
-      res.status(200).json({ ok: true, data: { proposals: proposalResult.data || [], jobs: jobsResult.data || [], can_authorize: hasRole(actor, "CUSTODIAL_MANAGER") } });
+      res.status(200).json({ ok: true, data: { proposals: proposalResult.data || [], jobs: jobsResult.data || [], can_authorize: !isCustodialLeadershipManagementSession(req.memphisAuth)&&hasRole(actor, "CUSTODIAL_MANAGER") } });
     } catch (error) { apiError(res, error); }
   });
 

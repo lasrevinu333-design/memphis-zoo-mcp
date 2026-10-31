@@ -7,6 +7,7 @@ import {materializeVerifiedArchive,readVerifiedMigrationTargetCaptureSource} fro
 import {requireSigningKey,stableJson,stableJsonFileSha256} from './disaster-recovery-crypto.mjs';
 import {bindBackupSchemaExtension,verifyArchivedSchemaExtension} from './backup-release-schema-binding.mjs';
 import {readMigrationReplayPlan} from './migration-replay-order.mjs';
+import {selectFreshOnlySourceRows,assert302SourceCaptureScope} from './ci-fresh-only-source-successor.mjs';
 import {bindExistingPostgresForwardSources,releaseMigrationPlanIdentity} from './production-forward-source.mjs';
 const sha=x=>createHash('sha256').update(x).digest('hex');
 const counts=catalog=>Object.fromEntries(Object.entries(catalog).map(([key,rows])=>[key,rows.length]));
@@ -33,7 +34,68 @@ export function assertOwnedTargetMetadata({databaseUrl,runId,container,metadata,
  return metadata;
 }
 
-export function assertTargetCapturePendingPlan(pending,declared) {
+// Only the exact maintained301 chain, optionally followed by ONE frozen302
+// append, may extend the historical target capture. Neither a future count nor
+// matching caller-supplied plan/state is authority for another source.
+const verifiedCaptureSourceClosures=new WeakSet();
+const freezeClosure=value=>{if(value&&typeof value==='object'){Object.values(value).forEach(freezeClosure);Object.freeze(value);}return value;};
+export function readTargetCaptureSourceClosure(backendRoot){
+ const replay=readMigrationReplayPlan(backendRoot),count=replay.files.length;
+ assert.ok(count===301||count===302,'Only exact Source301 or one Source302 successor may extend target capture');
+ const read=(path,expected)=>{const bytes=readFileSync(resolve(backendRoot,path));if(expected){assert.equal(bytes.length,expected.bytes);assert.equal(sha(bytes),expected.sha256);}return bytes;};
+ const manifest=JSON.parse(read('release/fresh-only-replay/MANIFEST.json')),
+  priorBytes=read('release/fresh-only-replay/SOURCE301_SUCCESSOR.json'),prior=JSON.parse(priorBytes),
+  currentBytes=read('supabase/canonical/migration-replay-order.json'),current=JSON.parse(currentBytes);
+ let next=null,selectorAlias=null;
+ if(count===302){
+  next=JSON.parse(read('release/fresh-only-replay/SOURCE302_SUCCESSOR.json'));
+  assert.deepEqual(Object.keys(next).sort(),Object.keys(prior).sort(),'Source302 keeps the closed maintained successor schema');
+  assert.equal(next.schema,prior.schema);assert.equal(next.scope,prior.scope);
+  assert.deepEqual(next.predecessor_manifest,prior.predecessor_manifest);
+  assert.deepEqual(next.predecessor_successor,{path:'release/fresh-only-replay/SOURCE301_SUCCESSOR.json',sha256:sha(priorBytes),bytes:priorBytes.length,source_migrations:301});
+  assert.deepEqual(next.preserved_predecessor_replay,{...prior.replay_manifest,path:'release/fresh-only-replay/SOURCE301_REPLAY_ORDER.json'});
+  const preserved=read(next.preserved_predecessor_replay.path,next.preserved_predecessor_replay),previous=JSON.parse(preserved);
+  assert.equal(next.source_migrations,302);assert.equal(next.full_vendor_NORMAL,false);assert.equal(next.expected_fingerprint_authority,null);
+  assert302SourceCaptureScope(next,read);
+  assert.deepEqual(Object.keys(next.append).sort(),['atomic_mode','name','original','selected']);
+  assert.match(next.append.name,/^[0-9]{14}_[a-z0-9_]+\.sql$/);assert.equal(next.append.name,replay.files.at(-1));
+  assert.equal(next.append.atomic_mode,'exact-Source-BEGIN-COMMIT');assert.deepEqual(next.append.selected,next.append.original);
+  assert.deepEqual(Object.keys(next.append.original).sort(),['bytes','path','sha256']);assert.equal(next.append.original.path,'supabase/migrations/'+next.append.name);
+  assert.ok(Number.isSafeInteger(next.append.original.bytes)&&next.append.original.bytes>0);assert.match(next.append.original.sha256,/^[a-f0-9]{64}$/);read(next.append.original.path,next.append.original);
+  assert.deepEqual(next.replay_manifest,{path:'supabase/canonical/migration-replay-order.json',sha256:sha(currentBytes),bytes:currentBytes.length});
+  const prefix=structuredClone(current);assert.deepEqual(prefix.phases.at(-1).files.pop(),{name:next.append.name,sha256:next.append.original.sha256});
+  assert.deepEqual(prefix,previous,'Every Source301 replay field/member remains literal');
+  // The existing selector supports301. Give ONLY its declared301 replay read
+  // the actual preserved301 bytes, with its ORIGINAL hash/length enforced.
+  // This explicit preserved-source role is never relabeled current302.
+  selectFreshOnlySourceRows(manifest,replay.files.slice(0,-1).sort(),(name,expected)=>name===prior.replay_manifest.path
+   ?(assert.equal(preserved.length,expected.bytes),assert.equal(sha(preserved),expected.sha256),preserved):read(name,expected));
+  selectorAlias={requested:prior.replay_manifest.path,supplied:next.preserved_predecessor_replay};
+ }else selectFreshOnlySourceRows(manifest,[...replay.files].sort(),read);
+ const pending=bindExistingPostgresForwardSources(backendRoot,replay.files.slice(134).map((file,index)=>({order:index+1,file,phase:file.slice(15,-4),source_migration_version:file.slice(0,14),sha256:sha(read('supabase/migrations/'+file))})));
+ assertTargetCapturePendingPlan(pending.slice(0,166),pending.slice(0,166));
+ const result=freezeClosure({schema:'custodial.target-capture-exact-source-closure.v1',canonical_source_count:count,
+  canonical_replay_manifest_sha256:replay.manifestSha256,canonical_replay_manifest_bytes:currentBytes.length,
+  source301_successor:{path:'release/fresh-only-replay/SOURCE301_SUCCESSOR.json',sha256:sha(priorBytes),bytes:priorBytes.length},
+  ...(next?{source302_successor:{path:'release/fresh-only-replay/SOURCE302_SUCCESSOR.json',sha256:sha(read('release/fresh-only-replay/SOURCE302_SUCCESSOR.json')),bytes:read('release/fresh-only-replay/SOURCE302_SUCCESSOR.json').length}}:{}),
+  source301_pending_count:301-134,pending,pending_plan_sha256:sha(stableJson(releaseMigrationPlanIdentity(pending))),preserved_selector_input_alias:selectorAlias,
+  populated_target_captured:false,runtime_admission:false});
+ verifiedCaptureSourceClosures.add(result);return result;
+}
+export function assertTargetCapturePreservationPlan(backendRoot,plan){
+ const closure=readTargetCaptureSourceClosure(backendRoot),sourcePlan=plan.map(({sql,body,...item})=>item);
+ assertTargetCapturePendingPlan(sourcePlan,sourcePlan,closure);return closure;
+}
+
+export function assertTargetCapturePendingPlan(pending,declared,closure=null) {
+ if(closure!==null||pending.length>166){
+  assert.ok(verifiedCaptureSourceClosures.has(closure),'New target/preservation plan needs the full source-verified closed301/302 identity');
+  assert.deepEqual(pending,closure.pending,'Exact complete current canonical/owner-profile plan required');
+  assert.ok(Array.isArray(declared)&&[160,163,164,165,166,closure.source301_pending_count,closure.pending.length].includes(declared.length));
+  assert.ok(declared.length<=pending.length);assert.deepEqual(declared,pending.slice(0,declared.length),'Complete declared predecessor/current plan must remain exact');
+  assertTargetCapturePendingPlan(pending.slice(0,166),pending.slice(0,166));return pending;
+ }
+
  if(pending.length===166){
   assert.ok(Array.isArray(declared)&&[160,163,164,165,166].includes(declared.length),'Exact predecessor or current compact confirmation declaration required');
   assertTargetCapturePendingPlan(pending.slice(0,165),declared.slice(0,165));
@@ -92,7 +154,10 @@ export function targetCaptureState({backendRoot,state,source}) {
  assert.deepEqual(normalize(source.binding),expected,'Signed archive must match the finite observed235 source declaration');
  assert.equal(stableJsonFileSha256(source.ledger),summary.source_identity.migration_ledger_sha256);
  const replay=readMigrationReplayPlan(backendRoot);
- if(replay.files.length===300){
+ const sourceClosure=replay.files.length>300?readTargetCaptureSourceClosure(backendRoot):null;
+ if(sourceClosure){
+  assert.equal(sourceClosure.canonical_replay_manifest_sha256,replay.manifestSha256);
+ }else if(replay.files.length===300){
   assert.equal(replay.manifestSha256,'be9f1ce99e037690b3095c8b8e963fc30efd8c83adaa1e415856a79808dc31b1');
   const current=JSON.parse(readFileSync(resolve(backendRoot,'supabase/canonical/migration-replay-order.json')));
   assert.deepEqual(current.phases.map(phase=>phase.files.length),[134,93,73]);
@@ -124,9 +189,9 @@ export function targetCaptureState({backendRoot,state,source}) {
  const canonical=replay.files.slice(134).map((file,index)=>({order:index+1,file,phase:file.slice(15,-4),
   source_migration_version:file.slice(0,14),sha256:sha(readFileSync(resolve(backendRoot,'supabase/migrations',file)))}));
  assert.equal(canonical.length,replay.files.length-134);
- const pending=assertTargetCapturePendingPlan(bindExistingPostgresForwardSources(backendRoot,canonical),state.pending_migrations);
+ const pending=assertTargetCapturePendingPlan(bindExistingPostgresForwardSources(backendRoot,canonical),state.pending_migrations,sourceClosure);
  assert.ok(pending.every(item=>!source.ledger.some(row=>row.version===item.source_migration_version)));
- return {...state,mode:'isolated_target_preparation_rollback_only',
+ return {...state,mode:'isolated_target_preparation_rollback_only',...(sourceClosure?{target_capture_source_closure:sourceClosure}:{}),
   observed_production:{...state.observed_production,production_ledger_count:source.ledger.length,
    ledger_head:source.ledger.at(-1).version,source_migration_name:source.ledger.at(-1).name,
    catalog_privilege_fingerprint:source.binding.catalog_fingerprint,catalog_counts:counts(source.catalog)},

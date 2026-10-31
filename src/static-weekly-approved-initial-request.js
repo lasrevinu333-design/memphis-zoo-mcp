@@ -29,11 +29,16 @@ export function approvedInitialRequest(body,{confirm=false}={}){
 // Current-day activation selects an immutable release-admitted packet. Dates,
 // people, source geometry and availability are never accepted from the client.
 export function approvedManualActivationRequest(body,{confirm=false}={}){
- const keys=['packet_id','expected_revision',...(confirm?['preview_digest','idempotency_key']:[])],
-  refuse=()=>{throw Object.assign(Error('Select the approved activation packet and exact revision/confirmation identity.'),{code:'static_weekly_manual_activation_request_invalid'});};
+ // Two explicit closed request shapes preserve ONLY historical v1 receipt
+ // replay. Fresh activation always needs the v2 original operation UUID;
+ // the CP refuses a missing UUID unless a genuine old receipt already exists.
+ const version2=confirm&&body&&Object.hasOwn(body,'operation_id'),
+  keys=['packet_id','expected_revision',...(confirm?['preview_digest','idempotency_key',...(version2?['operation_id']:[])]:[])],
+  refuse=()=>{throw Object.assign(Error('Select the approved activation packet and exact original operation/revision/confirmation identity.'),{code:'static_weekly_manual_activation_request_invalid'});};
  if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).length!==keys.length||keys.some(k=>!Object.hasOwn(body,k))
   ||typeof body.packet_id!=='string'||!uuid.test(body.packet_id)||!Number.isSafeInteger(body.expected_revision)||body.expected_revision<0)refuse();
- if(confirm&&(!bounded(body.idempotency_key,120)||typeof body.preview_digest!=='string'||!/^[a-f0-9]{64}$/.test(body.preview_digest)))refuse();
+ if(confirm&&(!bounded(body.idempotency_key,120)||typeof body.preview_digest!=='string'||!/^[a-f0-9]{64}$/.test(body.preview_digest)
+  ||(version2&&(typeof body.operation_id!=='string'||!uuid.test(body.operation_id)))))refuse();
  return Object.freeze({packetId:body.packet_id,expectedRevision:body.expected_revision,
-  ...(confirm?{previewDigest:body.preview_digest,idempotencyKey:body.idempotency_key}:{})});
+  ...(confirm?{previewDigest:body.preview_digest,idempotencyKey:body.idempotency_key,...(version2?{operationId:body.operation_id}:{})}:{})});
 }

@@ -2,6 +2,8 @@ import crypto from "node:crypto";
 import express from "express";
 import { createClient } from "@supabase/supabase-js";
 import { makeOpsAccessMiddleware } from "./auth/shared-access-auth.js";
+import {CUSTODIAL_LEADERSHIP_APPROVED_ACCOUNTS} from "./custodial-leadership-pin.js";
+import { publicOperationsDashboard } from "./public-operations-viewer.js";
 
 // Request JSON stays verbatim. Memphis normalizes a separate prompt copy
 // inside its intent matcher, without changing Feedback or stored messages.
@@ -30,7 +32,7 @@ function setCors(req, res, env) {
   if (origin && allowedOrigins(env).has(origin)) res.setHeader("Access-Control-Allow-Origin", origin);
   res.setHeader("Access-Control-Allow-Credentials", "true");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Device-Id, X-Device-Label, Idempotency-Key");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Device-Id, X-Device-Label, X-CSRF-Token, Idempotency-Key");
   res.setHeader("Vary", "Origin");
 }
 function hasRole(session, role) {
@@ -52,7 +54,7 @@ export function installLeadershipHttpRoutes(app, { env = process.env, supabase =
   if (!app || app.__memphisLeadershipRoutesInstalled) return;
   Object.defineProperty(app, "__memphisLeadershipRoutesInstalled", { value: true });
   const db = supabase || createSupabase(env);
-  const requireManager = makeOpsAccessMiddleware({ supabase: db });
+  const requireManager = makeOpsAccessMiddleware({ env, supabase: db });
 
   for (const prefix of ["/leadership-api", "/mobile-auth-api", "/viewer-api"]) {
     app.use(prefix, (req, res, next) => {
@@ -95,10 +97,11 @@ export function installLeadershipHttpRoutes(app, { env = process.env, supabase =
       const managerId = String(req.params?.managerId || "").trim();
       if (!/^[0-9a-f-]{36}$/i.test(managerId)) return res.status(400).json({ ok: false, error: "A valid leadership manager ID is required." });
       const targetResult = await db.from("ops_manager_managers")
-        .select("manager_id,display_name,job_title,contact_label,roles,active,revoked_at,is_system_principal")
+        .select("manager_id,system_key,display_name,job_title,contact_label,roles,active,revoked_at,is_system_principal")
         .eq("manager_id", managerId).maybeSingle();
       if (targetResult.error) throw targetResult.error;
       const manager = targetResult.data;
+      if(env.CUSTODIAL_LEADERSHIP_PIN_ENABLED==='true'&&CUSTODIAL_LEADERSHIP_APPROVED_ACCOUNTS.some(x=>x.systemKey===manager?.system_key))return res.status(410).json({ok:false,error:'Custodial enrollment uses the shared PIN and self-asserted name picker.'});
       if (!manager || manager.active !== true || manager.revoked_at || manager.is_system_principal) return res.status(404).json({ ok: false, error: "Active leadership identity not found." });
       const secret = sessionSecret(env);
       if (!secret) return res.status(503).json({ ok: false, error: "Manager session signing is not configured." });
@@ -144,7 +147,7 @@ export function installLeadershipHttpRoutes(app, { env = process.env, supabase =
       const result = await db.rpc("public_viewer_dashboard_snapshot");
       if (result.error) throw result.error;
       res.setHeader("Cache-Control", "public, max-age=30, stale-while-revalidate=120");
-      res.json({ ok: true, data: Array.isArray(result.data) ? result.data[0] : (result.data || {}) });
+      res.json({ ok: true, data: publicOperationsDashboard(result.data) });
     } catch (error) { fail(res, error, "Public dashboard is temporarily unavailable."); }
   });
 

@@ -3,6 +3,8 @@ const TASK_LOCAL_PRODUCTION_DATABASE_HOST = "db.rqquvtjdmugpigbndmne.supabase.co
 // Fixed application capture scope, not a caller-selected schema allowlist.
 // custodial_dr is the non-restored control plane and remains excluded.
 export const productionBackupDataSchemas = Object.freeze(["public", "auth", "storage", "custodial_release_identity"]);
+export const productionBackupOptionalPrivateSchemas = Object.freeze(["custodial_employment","custodial_coverall","custodial_leadership_private"]);
+export const productionBackupAllowedDataSchemas = Object.freeze([...productionBackupDataSchemas,...productionBackupOptionalPrivateSchemas]);
 // Signed per-table representation, not archive/restore/custody authorization.
 export const productionBackupDataEncoding = "postgres-json-text-line.v1";
 // New typed-column DATA representation. Each non-NULL SQL value is captured
@@ -21,37 +23,36 @@ export const productionBackupSnapshotStatements = Object.freeze([
 // Compare the independently enumerated private relation scope to the normal
 // table catalog from the SAME read-only snapshot before any table export.
 export function requireProductionBackupDataScope(namespaces, privateRelations, catalog) {
-  if (!Array.isArray(namespaces) || namespaces.length !== productionBackupDataSchemas.length
-      || new Set(namespaces.map(row=>row?.schema_name)).size !== namespaces.length
-      || namespaces.some(row=>!productionBackupDataSchemas.includes(row?.schema_name) || row.usage_allowed !== true)
-      || !Array.isArray(privateRelations) || !Array.isArray(catalog) || catalog.length === 0) {
-    throw new Error("Complete accessible backup schema scope is required.");
+  const allowed=productionBackupAllowedDataSchemas,base=productionBackupDataSchemas,
+    privateSchemas=["custodial_release_identity",...productionBackupOptionalPrivateSchemas];
+  if(!Array.isArray(namespaces)||namespaces.length<base.length||namespaces.length>allowed.length
+    ||new Set(namespaces.map(r=>r?.schema_name)).size!==namespaces.length
+    ||namespaces.some(r=>!allowed.includes(r?.schema_name)||r.usage_allowed!==true)
+    ||base.some(n=>!namespaces.some(r=>r.schema_name===n))
+    ||!Array.isArray(privateRelations)||!Array.isArray(catalog)||!catalog.length)
+    throw Error('Complete accessible backup schema scope is required; missing private USAGE is a permission refusal, not absence.');
+  const selected=allowed.filter(n=>namespaces.some(r=>r.schema_name===n)),keys=new Set();
+  for(const row of catalog){
+    const key=JSON.stringify([row?.schema_name,row?.table_name]);
+    if(!row||!selected.includes(row.schema_name)||typeof row.table_name!=='string'||!row.table_name
+      ||!Array.isArray(row.primary_key)||!Array.isArray(row.columns)||!row.columns.length||keys.has(key))
+      throw Error('Backup table catalog scope is missing, duplicated or unsupported.');
+    keys.add(key);
   }
-  const keys = new Set();
-  for (const row of catalog) {
-    if (!row || !productionBackupDataSchemas.includes(row.schema_name) || typeof row.table_name !== "string" || !row.table_name
-        || !Array.isArray(row.primary_key) || !Array.isArray(row.columns) || row.columns.length === 0
-        || keys.has(JSON.stringify([row.schema_name,row.table_name]))) {
-      throw new Error("Backup table catalog scope is missing, duplicated or unsupported.");
-    }
-    keys.add(JSON.stringify([row.schema_name,row.table_name]));
+  const census=new Set();
+  for(const row of privateRelations){
+    // Only the historical three-field release-identity census may omit schema.
+    const schema=Object.hasOwn(row??{},'schema_name')?row.schema_name:'custodial_release_identity',key=JSON.stringify([schema,row?.table_name]);
+    if(!privateSchemas.includes(schema)||!selected.includes(schema)||typeof row?.table_name!=='string'||!row.table_name
+      ||row.relation_kind!=='r'||row.is_partition!==false||census.has(key)||!keys.has(key)
+      ||(productionBackupOptionalPrivateSchemas.includes(schema)&&row.select_allowed!==true)
+      ||(Object.hasOwn(row,'select_allowed')&&row.select_allowed!==true))
+      throw Error('Original private backup relation scope is incomplete, inaccessible or unsupported.');
+    census.add(key);
   }
-  // An actually empty private census is valid only when the same complete
-  // snapshot table catalog also contains no private relation. Namespace USAGE
-  // remains mandatory; missing/denied arrays never stand in for absence.
-  const privateNames = new Set();
-  for (const row of privateRelations) {
-    // ONLY parent exports cannot preserve partition/foreign table DATA. Fail
-    // closed if this application private scope ever acquires those shapes.
-    if (!row || typeof row.table_name !== "string" || !row.table_name || row.relation_kind !== "r" || row.is_partition !== false
-        || privateNames.has(row.table_name) || !keys.has(JSON.stringify(["custodial_release_identity",row.table_name]))) {
-      throw new Error("Original private backup relation scope is incomplete or unsupported.");
-    }
-    privateNames.add(row.table_name);
-  }
-  if (catalog.filter(row=>row.schema_name === "custodial_release_identity").length !== privateNames.size) {
-    throw new Error("Original private backup catalog does not match the snapshot relation scope.");
-  }
+  for(const row of catalog)if(privateSchemas.includes(row.schema_name)&&!census.has(JSON.stringify([row.schema_name,row.table_name])))
+    throw Error('Original private backup catalog does not match the complete snapshot relation scope.');
+  return Object.freeze(selected);
 }
 
 export function productionBackupRowCount(result) {

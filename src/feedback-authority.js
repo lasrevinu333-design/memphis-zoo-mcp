@@ -1,3 +1,4 @@
+import {isCustodialLeadershipManagementSession} from './auth/manager-permissions.js';
 function normalized(value) {
   return String(value ?? "").trim();
 }
@@ -109,8 +110,11 @@ export function authoritativeFeedbackPayload(req) {
       device_id: normalized(req.memphisAuth.device_id).toUpperCase() || null,
       submitted_by: managerName,
       identity_verification: {
-        status: "verified",
-        kind: "named_manager_session",
+        ...(isCustodialLeadershipManagementSession(req.memphisAuth)?{
+          status:'verified_cohort',kind:'custodial_leadership_cohort',identity_assurance:'SELF_ASSERTED_NAME',
+          individual_identity_verified:false,claimed_account_id:req.memphisAuth.claimed_manager_id,
+          claimed_name:req.memphisAuth.claimed_manager_display_name,
+        }:{status:"verified",kind:"named_manager_session"}),
         manager_id: managerId,
         device_id: normalized(req.memphisAuth.device_id).toUpperCase() || null,
         credential_id: normalized(req.memphisAuth.credential_id).toLowerCase() || null,

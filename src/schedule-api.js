@@ -1,3 +1,4 @@
+import {assertManualScheduleDeliveryOrigin} from './approved-manual-device-delivery.js';
 import {readZooWideCoverage} from './employee-zoo-wide-coverage.js';
 import {readRecurringNotificationPlan,exactPlanReceiptInstant} from './recurring-notification-plan.js';
 import {readHomeTimeFacts} from './employee-home-time-facts.js';
@@ -2968,7 +2969,7 @@ export function createScheduleRouter({
       || !["RECURRING_TERMINAL", "RECURRING_SCHEDULE", "LEGACY_REGISTERED", "UNAVAILABLE"].includes(result.mode)) {
       const error = new Error("The exact schedule delivery state is unavailable."); error.status = 503; throw error;
     }
-    return result;
+    return assertManualScheduleDeliveryOrigin(result);
   }
 
   function toCsvValue(value) {
@@ -3432,6 +3433,7 @@ export function createScheduleRouter({
           schedule_application: delivery?.mode === "LEGACY_REGISTERED" ? delivery.datedApplication : null,
           recurring_delivery: delivery?.mode?.startsWith("RECURRING_") ? delivery.delivery : null,
           schedule_delivery_mode: delivery?.mode || null,
+          schedule_authority_origin: delivery?.authorityOrigin || null,
         },
         meta: {
           version: appVersion, release_id: releaseId, contract_version: contractVersion,

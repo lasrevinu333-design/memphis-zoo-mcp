@@ -5,6 +5,22 @@ export const MANAGER_PERMISSION_SCHEMA = 'custodial.manager-permissions.v1';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const OWNER_ROLES = Object.freeze(['OPS_MANAGER', 'CUSTODIAL_MANAGER', 'DIRECTOR', 'SECURITY_ADMIN']);
 const MANAGER_ROLES = new Set(OWNER_ROLES);
+const MANAGEMENT_ACTIONS = new Set(['write','close_scan_tickets','manage_absences','manage_coverall','regenerate_routes']);
+
+// Authorization projection only. The server must first verify the signed
+// session and its current stored cohort/browser registration. Selecting a
+// person's name is never an authentication or permission input here.
+export function isCustodialLeadershipManagementSession(session) {
+  const p=session?.permissions;
+  return Boolean(session?.auth_mode==='custodial_leadership_pin'
+    && session.actor_kind==='CUSTODIAL_LEADERSHIP_COHORT'
+    && session.role==='ops_manager' && session.read_only===false
+    && session.owner===false && session.custodial_management_admin===true
+    && UUID.test(String(session.manager_id||'')) && UUID.test(String(session.credential_id||''))
+    && String(session.device_id||'').trim()
+    && p?.schema===MANAGER_PERMISSION_SCHEMA && p.read===true && p.owner===false
+    && p.custodialManagementAdmin===true && Number.isSafeInteger(p.policyVersion) && p.policyVersion>=1);
+}
 
 export function isActiveNamedManager(manager) {
   return Boolean(manager && UUID.test(String(manager.manager_id || ''))
@@ -21,8 +37,8 @@ export function isCustodialOwner(manager) {
 export function projectManagerSession(session, manager, { maximumAccessLevel = 'full_access', credentialBound = true } = {}) {
   const active = isActiveNamedManager(manager);
   const owner = active && isCustodialOwner(manager);
-  // Never widen an already issued read-only owner credential. A fresh verified
-  // Map sign-in issues full owner authority; old limited tokens remain limited.
+  // Never widen an already issued read-only owner credential. This legacy
+  // named-record projection is separate from explicit cohort authorization.
   const full = Boolean(owner && credentialBound && session?.access_level === 'full_access'
     && maximumAccessLevel === 'full_access');
   const delegate = Boolean(active && !owner && credentialBound);
@@ -53,6 +69,7 @@ export function hasManagerPermission(session, action) {
   const permission = session?.permissions;
   if (permission?.schema !== MANAGER_PERMISSION_SCHEMA || permission.read !== true) return false;
   if (action === 'read') return true;
+  if (isCustodialLeadershipManagementSession(session)) return MANAGEMENT_ACTIONS.has(action);
   if (action === 'write') return permission.owner === true && session.read_only === false;
   if (!['close_scan_tickets', 'manage_absences', 'manage_coverall', 'regenerate_routes'].includes(action)) return false;
   return permission[action] === true;

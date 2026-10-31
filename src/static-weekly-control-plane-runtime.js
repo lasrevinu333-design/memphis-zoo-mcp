@@ -1,4 +1,7 @@
-import {createHash} from 'node:crypto';
+import {createCustodialLeadershipControlPlane} from "./auth/custodial-leadership-runtime.js";
+import {isCustodialLeadershipManagementSession} from "./auth/manager-permissions.js";
+import {createHash,randomUUID} from 'node:crypto';
+import {AsyncLocalStorage} from 'node:async_hooks';
 import {renderCanonicalCoverAllLink} from './static-weekly-coverall-access.js';
 import "dotenv/config";
 import { pathToFileURL } from "node:url";
@@ -43,8 +46,9 @@ function setCors(req, res, env) {
   const origin = text(req.headers?.origin);
   if (origin && allowedOrigins(env).has(origin)) res.setHeader("Access-Control-Allow-Origin", origin);
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Device-Id");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Device-Id, X-CSRF-Token, X-Device-Security-CSRF");
   res.setHeader("Vary", "Origin");
+  res.setHeader("Access-Control-Allow-Credentials", "true");
 }
 
 export function createStaticWeeklyControlPlaneRuntime({
@@ -60,6 +64,7 @@ export function createStaticWeeklyControlPlaneRuntime({
   managerOperationClock = null,
   recurringOperationRunner = createRecurringOperationRunner(),
   recurringOperationAdmission = null,
+  leadershipRuntime = null,
 } = {}) {
   const releaseIdentity = assertConfiguredReleaseIdentity();
   const { url, key } = requireTrustedDeviceConfiguration(env);
@@ -73,17 +78,22 @@ export function createStaticWeeklyControlPlaneRuntime({
     caPem: env?.STATIC_WEEKLY_CONTROL_PLANE_DATABASE_CA_PEM,
     allowInsecureLoopbackRehearsal: /^(1|true|yes)$/i.test(text(env?.STATIC_WEEKLY_CONTROL_PLANE_ALLOW_INSECURE_LOOPBACK_REHEARSAL)),
   });
-  const authorityControlPlane = controlPlane || createControlPlane({ database: authorityDatabase });
+  const cohortRuntime=leadershipRuntime||createCustodialLeadershipControlPlane({env,database:authorityDatabase});
+  const authorityControlPlane = controlPlane || createControlPlane({ database: authorityDatabase,leadershipRequestActorVerifier:cohortRuntime.verifyTransaction });
+  const datedRequestContext=new AsyncLocalStorage();
+  const bindDatedRequest=async client=>{const context=datedRequestContext.getStore();if(isCustodialLeadershipManagementSession(context?.manager)){if(typeof cohortRuntime.verifyTransaction!=='function')throw fail('custodial_transaction_actor_denied');await cohortRuntime.verifyTransaction(client,context);}};
   const boundedController=datedTransitionController===undefined&&typeof authorityDatabase?.connect==='function'
-    ?createConfiguredOctoberDatedController(authorityDatabase):datedTransitionController;
+    ?createConfiguredOctoberDatedController(authorityDatabase,{bindRequest:bindDatedRequest}):datedTransitionController;
   const app = express();
   app.disable("x-powered-by");
+  app.set("trust proxy",1);
   app.use((req, res, next) => {
     setCors(req, res, env);
     res.setHeader("Cache-Control", "no-store");
     if (req.method === "OPTIONS") { res.sendStatus(204); return; }
     next();
   });
+  if(cohortRuntime.enabled)app.use(cohortRuntime.router);
   app.use((req,res,next)=>{beginBoundedManagerRequest(req,res,managerOperationClock||undefined);next();});
   app.use(express.json({ limit: "128kb" }));
   app.use((error,req,res,next)=>{
@@ -97,7 +107,7 @@ export function createStaticWeeklyControlPlaneRuntime({
   app.use(makeRestoreMutationGate({ supabase: trustedSupabase, required: true, serviceName: "memphis-zoo-static-weekly-control-plane" }));
 
   const requireManagerWrite = makeOpsAccessMiddleware({
-    env,
+    env,leadershipVerifier:cohortRuntime.verify,
     requireWrite: true,
     trustedDeviceStore: trustedStore,
     supabase: trustedSupabase,
@@ -107,12 +117,12 @@ export function createStaticWeeklyControlPlaneRuntime({
   });
 
   const requireManagerRead = makeOpsAccessMiddleware({
-    env,requireWrite:false,trustedDeviceStore:trustedStore,supabase:trustedSupabase,
+    env,leadershipVerifier:cohortRuntime.verify,requireWrite:false,trustedDeviceStore:trustedStore,supabase:trustedSupabase,
     requireTrustedDeviceStore:true,requireCurrentManagerAssociation:true,
     operationSignalForRequest:req=>req.staticWeeklyManagerOperation?.signal||null,
   });
   const schedulerPermission = (requiredPermission) => makeOpsAccessMiddleware({
-    env, trustedDeviceStore: trustedStore, supabase: trustedSupabase,
+    env, leadershipVerifier:cohortRuntime.verify, trustedDeviceStore: trustedStore, supabase: trustedSupabase,
     requireTrustedDeviceStore:true, requireCurrentManagerAssociation:true, requiredPermission,
     operationSignalForRequest:req=>req.staticWeeklyManagerOperation?.signal||null,
   });
@@ -121,7 +131,7 @@ export function createStaticWeeklyControlPlaneRuntime({
   const requireManagerRegenerate = schedulerPermission("regenerate_routes");
   function namedSchedulerManager(req,res,next) {
     const session=req.memphisAuth;
-    if (!session?.trusted_device || session.auth_mode!=="trusted_device" || !session.manager_id || !session.credential_id) {
+    if (!isCustodialLeadershipManagementSession(session)&&(!session?.trusted_device || session.auth_mode!=="trusted_device" || !session.manager_id || !session.credential_id)) {
       res.status(403).json({ok:false,error:"A current named manager credential is required."});return;
     }
     next();
@@ -131,7 +141,7 @@ export function createStaticWeeklyControlPlaneRuntime({
     const trustedDevice=session?.trusted_device&&session.auth_mode==="trusted_device";
     // The preceding read middleware has already verified the signed Map token
     // and its current protected registry mapping; it never grants write access.
-    if((!trustedDevice&&!isMapDashboardSession(session))||!session.manager_id||!session.manager_display_name) {
+    if((!trustedDevice&&!isMapDashboardSession(session)&&!isCustodialLeadershipManagementSession(session))||!session.manager_id||!session.manager_display_name) {
       res.status(403).json({ok:false,error:"A current trusted named manager is required to read the schedule."});return;
     }
     next();
@@ -139,7 +149,7 @@ export function createStaticWeeklyControlPlaneRuntime({
 
   function namedManager(req, res, next) {
     const session = req.memphisAuth;
-    if (!session?.trusted_device || !session.manager_id || !session.manager_display_name || session.read_only || session.auth_mode !== "trusted_device") {
+    if (!isCustodialLeadershipManagementSession(session)&&(!session?.trusted_device || !session.manager_id || !session.manager_display_name || session.read_only || session.auth_mode !== "trusted_device")) {
       res.status(403).json({ ok: false, error: "A trusted write-enabled named manager session is required." });
       return;
     }
@@ -177,7 +187,8 @@ export function createStaticWeeklyControlPlaneRuntime({
       let data, operationCompleted=false;
       try {
         const route=String(req.path||"").replace(/\/$/,"").toLowerCase();
-        const permission=route==="/static-weekly/contractor-capacity"?"manage_coverall":
+        const permission=route==="/static-weekly/contractor-capacity"
+          ||/^\/static-weekly\/staffing-commands\/[^/]+\/coverall-(?:options|prepare)$/.test(route)?"manage_coverall":
           /^\/static-weekly\/staffing-commands(?:\/|$)/.test(route)?"manage_absences":
           ["/static-weekly/exceptions","/static-weekly/day-changes/batch"].includes(route)?"manage_absences":
           ["/static-weekly/projections","/static-weekly/rebuild-current-projection"].includes(route)?"regenerate_routes":"write";
@@ -283,6 +294,7 @@ export function createStaticWeeklyControlPlaneRuntime({
   app.get(["/health", "/ready"], readiness);
   app.use("/static-weekly/dated-transition",createDatedTransitionManagerRouter({
     controller:boundedController,requireManagerWrite,namedManager,manager,
+    runWithManager:(principal,work)=>datedRequestContext.run({manager:principal,leadershipRequestId:randomUUID()},work),
   }));
   app.get("/static-weekly/approved-choices",requireManagerWrite,namedManager,respond(req=>authorityControlPlane.getApprovedScheduleChoices({manager:manager(req)})));
   app.get('/static-weekly/approved-initial/selection',requireManagerWrite,namedManager,respond(req=>{
@@ -304,9 +316,12 @@ export function createStaticWeeklyControlPlaneRuntime({
     }));
   }
   app.get('/static-weekly/manual-activation/outcome',requireManagerWrite,namedManager,respond(req=>{
-    if(Object.keys(req.query||{}).length!==1||typeof req.query.idempotency_key!=='string')
+    const query=req.query||{},keys=Object.keys(query).sort(),version2=Object.hasOwn(query,'operation_id');
+    if(keys.join(',')!==(version2?'idempotency_key,operation_id':'idempotency_key')||typeof query.idempotency_key!=='string'
+      ||(version2&&(typeof query.operation_id!=='string'||!/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(query.operation_id))))
       throw fail('static_weekly_manual_activation_request_invalid');
-    return authorityControlPlane.getApprovedManualActivationOutcome({manager:manager(req),idempotencyKey:req.query.idempotency_key});
+    return authorityControlPlane.getApprovedManualActivationOutcome({manager:manager(req),idempotencyKey:query.idempotency_key,
+      ...(version2?{operationId:query.operation_id}:{})});
   }));
   // Distinct fixed-pattern baseline: never fall back to the historical draft
   // optimizer. The same first-ingress deadline and restore-lease settlement
@@ -368,6 +383,12 @@ export function createStaticWeeklyControlPlaneRuntime({
   })));
   app.post("/static-weekly/staffing-commands/:operationId/prepare", requireManagerAbsence, namedSchedulerManager, respond((req) => authorityControlPlane.prepareStaffingCommand({
     manager: manager(req), operationId: req.params.operationId,
+  })));
+  app.get("/static-weekly/staffing-commands/:operationId/coverall-options", requireManagerCoverAll, namedSchedulerManager, respond((req) => authorityControlPlane.getApprovedManualCoverAllOptions({
+    manager: manager(req), operationId: req.params.operationId,
+  })));
+  app.post("/static-weekly/staffing-commands/:operationId/coverall-prepare", requireManagerCoverAll, namedSchedulerManager, respond((req) => authorityControlPlane.prepareApprovedManualCoverAllStaffing({
+    manager: manager(req), operationId: req.params.operationId, request: req.body,
   })));
   app.get("/static-weekly/staffing-commands/pending", requireManagerAbsence, namedSchedulerManager, respond((req) => authorityControlPlane.listPendingStaffingCommands({
     manager: manager(req),

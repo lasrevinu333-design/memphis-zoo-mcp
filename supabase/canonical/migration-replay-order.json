@@ -1220,6 +1220,10 @@
         {
           "name": "20261030155202_approved_manual_current_day_activation.sql",
           "sha256": "54d95f3ab7ffb088a7e72241c360fe22edb1a06a24a3f768f9adcc494ed69492"
+        },
+        {
+          "name": "20261031125902_approved_manual_native_operations.sql",
+          "sha256": "ffebba2a6d32ed7a3de29c9446f2554fc56063253afebdfcc5ccadabb911d138"
         }
       ]
     }

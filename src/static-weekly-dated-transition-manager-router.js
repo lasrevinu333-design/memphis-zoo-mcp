@@ -1,7 +1,7 @@
 import express from 'express';
 
 // Schedule facts are server-owned. Never fall back to the weekly mutators.
-export function createDatedTransitionManagerRouter({controller,requireManagerWrite,namedManager,manager}){
+export function createDatedTransitionManagerRouter({controller,requireManagerWrite,namedManager,manager,runWithManager=null}){
  const router=express.Router();router.use(requireManagerWrite,namedManager);
  const exact=(body,keys)=>{
   if(!body||typeof body!=='object'||Array.isArray(body)
@@ -14,7 +14,8 @@ export function createDatedTransitionManagerRouter({controller,requireManagerWri
     res.status(503).json({ok:false,code:'dated_transition_store_unavailable_requires_bounded_database_adapter'});return;
    }
    const principal=manager(req);
-   const data=await work(req,{managerId:principal?.manager_id});res.json({ok:true,data});
+   const invoke=()=>work(req,{managerId:principal?.manager_id});
+   const data=await (runWithManager?runWithManager(principal,invoke):invoke());res.json({ok:true,data});
   }catch(error){
    const code=typeof error?.code==='string'&&error.code.startsWith('dated_transition_')
     ?error.code:'dated_transition_invalid_request_or_state';

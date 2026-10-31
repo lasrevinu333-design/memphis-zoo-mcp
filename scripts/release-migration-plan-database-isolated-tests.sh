@@ -45,6 +45,13 @@ env -i PATH=/usr/bin:/bin LANG=C LC_ALL=C TZ=UTC "$node_source" --max-old-space-
   }
   assertCapturedTargetCatalog(state.target);
   assertReleaseWorkflowSource(process.cwd());
+  if ([301,302].includes(plan.files.length)) {
+    const {assertTargetCapturePreservationPlan}=await import("./scripts/release-migration-target-capture.mjs");
+    const closure=assertTargetCapturePreservationPlan(process.cwd(),state.pending_migrations);
+    assert.equal(state.target.source_authority_migration_count,closure.canonical_source_count);
+    assert.ok(state.target.normal_source_capture,"Current closed successor requires its adopted populated capture binding");
+    process.exit(4);
+  }
   if ([294, 297, 298, 299, 300].includes(plan.files.length)) {
     assert.equal(plan.baseCount, 134);
     const pendingCounts = new Map([[294, 160], [297, 163], [298, 164], [299, 165], [300, 166]]);

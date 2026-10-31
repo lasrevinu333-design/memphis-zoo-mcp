@@ -1,8 +1,9 @@
+import {validateApprovedManualCoverAllFacts} from './approved-manual-coverall-facts.js';
 import {approvedManualInheritedEligibility} from './approved-manual-inherited-eligibility.js';
 import {validateApprovedManualLunchPrior,retainApprovedManualLunchIdentities} from './approved-manual-lunch-retention.js';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
-import {contentDigest} from './static-weekly-schedule-model.js';
+import {contentDigest,assertExceptionCommand} from './static-weekly-schedule-model.js';
 import {prepareStaticWeeklySchedulingProblem,postgresJsonbContentDigest as digest} from './static-weekly-schedule-program.js';
 import {splitPreservedWorkloadBudget} from './static-weekly-shift-end-coverage.js';
 import {createFullHourLunchPolicy} from './static-weekly-lunch-policy.js';
@@ -15,6 +16,34 @@ import {prepareApprovedManualAbsenceDay,validateApprovedManualAbsenceProposal,re
 const clone=structuredClone,minute=t=>Number(t.slice(0,2))*60+Number(t.slice(3,5)),
  overlap=(a,b)=>a.start<b.end&&b.start<a.end,
  sameDigest=(object,key)=>{const {[key]:value,...body}=object;assert.equal(value,digest(body));};
+
+// The generic mapper derives its manager-added capacity eligibility marker
+// only from strict legacy cover_all grammar, overwriting raw work markers.
+// Re-express the already validated typed activation in that private feasibility
+// grammar. Its merge MUST be an exact no-op on the already lowered availability.
+// This creates no canonical command, acceptance, assignment or lunch change.
+export function bridgeApprovedManualTypedCapacityForFeasibility({wire,typedFacts,acceptedExceptions}){
+ const next=clone(wire),assignmentsBefore=digest(next.versions[0].assignments);
+ let feasibilityOrder=Math.max(0,...acceptedExceptions.map(e=>e.sequence||0));
+ for(const day of typedFacts.typedDays){
+  assert.ok(Number.isSafeInteger(feasibilityOrder+1));feasibilityOrder++;
+  const facts=acceptedExceptions.filter(e=>e.type==='cover_all'&&e.serviceDate===day.serviceDate
+   &&e.coverAllChoiceId===day.choiceId&&e.coverAllOperationId===day.operationId);assert.equal(facts.length,1);
+  const fact=facts[0],actual=fact.payload.availability;assert.equal(fact.payloadDigest,digest(fact.payload));
+  const weekday=new Date(day.serviceDate+'T12:00Z').getUTCDay(),rows=next.versions[0].slotAvailability.filter(a=>a.dayOfWeek===weekday&&a.slotId===day.substitute.slotId);assert.equal(rows.length,1);
+  const keys=['acceptedRouteAnchorLocationId','acceptedRouteProvenance','maxServiceEffortMinutes','maxServiceEffortProvenance',
+   'productiveCapacityProvenance','qualificationProvenance','qualifications','restrictionProvenance','restrictions','shift','slotId'],
+   availability=Object.fromEntries(keys.map(key=>{assert.ok(Object.hasOwn(actual,key));return [key,clone(actual[key])];}));
+  assert.deepEqual({...rows[0],...availability,slotId:availability.slotId,status:'working'},rows[0],
+   'Feasibility eligibility bridge must not change selected hours, lunch, qualifications, restrictions, routes or capacity');
+  const payload={availability},derived={id:'native-feasibility:'+fact.id,type:'cover_all',serviceDate:fact.serviceDate,
+   baseVersionId:fact.baseVersionId,publicationId:fact.publicationId,actorId:fact.actorId,expectedRevision:fact.expectedRevision,
+   reason:'Private fixed-owner eligibility from exact typed fact '+fact.id,idempotencyKey:'native-feasibility:'+fact.id,
+   sequence:feasibilityOrder,payload,payloadDigest:digest(payload),...(Object.hasOwn(fact,'status')?{status:fact.status}:{})};
+  assertExceptionCommand(derived);next.exceptions.push(derived);
+ }
+ assert.equal(digest(next.versions[0].assignments),assignmentsBefore);return next;
+}
 
 // Lower validated dated DATA into native projection rows and full-hour lunch
 // records. The immutable recurring Source is retained separately, unchanged.
@@ -48,7 +77,7 @@ export function prepareApprovedManualPeriodProjection({week,source,ownerConfig,p
    continue;
   }
   assert.ok(['ABSENCE','COVERALL'].includes(item.kind));
-  const fresh=prepareApprovedManualAbsenceDay({week,source,ownerConfig,serviceDate:item.serviceDate,absentPersonIds:item.input.absentPersonIds});
+  const fresh=prepareApprovedManualAbsenceDay({week,source,ownerConfig,serviceDate:item.serviceDate,absentPersonIds:item.input.absentPersonIds,preStartPersonIds:item.input.preStartPersonIds||[]});
   assert.equal(fresh.inputDigest,item.input.inputDigest);sameDigest(item.input,'inputDigest');sameDigest(item.plan,'planDigest');
   validateApprovedManualAbsenceProposal({input:fresh,plan:item.plan,proposal});
   let selected=item.plan,roster=fresh.roster;
@@ -139,8 +168,10 @@ export function prepareApprovedManualPeriodProjection({week,source,ownerConfig,p
  candidate.version.lunchCoveragePolicy=createFullHourLunchPolicy({sourceDigest:digest({normalSourceDigest:period.sourceDigest,periodDraftDigest:period.periodDraftDigest}),loans},digest);
  // A private fixed candidate locks the selected owners for feasibility only.
  // Original parent/origin identities remain in the unchanged Source and links.
- const wire={...clone(candidate),versions:[clone(candidate.version)],exceptions:clone(acceptedExceptions)};delete wire.version;
- for(const row of wire.versions[0].assignments)row.originSlotId=row.ownerSlotId;
+ const typedFacts=validateApprovedManualCoverAllFacts({source,exceptions:acceptedExceptions,selectedDays:period.days});
+ const loweredWire={...clone(candidate),versions:[clone(candidate.version)],exceptions:clone(typedFacts.legacyExceptions)};delete loweredWire.version;
+ for(const row of loweredWire.versions[0].assignments)row.originSlotId=row.ownerSlotId;
+ const wire=bridgeApprovedManualTypedCapacityForFeasibility({wire:loweredWire,typedFacts,acceptedExceptions});
  const problem=prepareStaticWeeklySchedulingProblem(wire,deadline);
  assert.ok(!problem.error,JSON.stringify(problem.error));
  const rowOwners=new Map(assignments.map(row=>[`${row.dayOfWeek}:${row.workId}`,row.ownerSlotId])),
@@ -174,9 +205,18 @@ export function prepareApprovedManualPeriodProjection({week,source,ownerConfig,p
      ...(work.normalAssignmentRestrictedSlotIds?.length?{normalAssignmentRestrictedSlotIds:clone(work.normalAssignmentRestrictedSlotIds),coveragePurpose:work.coveragePurpose}:{}),manualLock:Boolean(work.manualLock),manualLockSlotId:work.manualLock||null,overlayWork:Boolean(work.overlayWork)},
     explanation:{contract:changedDays.has(row.dayOfWeek)?'approved_manual_dated_adjustment':'fixed_approved_pattern',hardConstraints:'satisfied',reasons:[]}};
   }),projectionAvailability=[...problem.states].flatMap(([day,state])=>[...state.availability].map(([slotId,a])=>{
-   const p=problem.incumbencyByDaySlot.get(`${day}\u0000${slotId}`);
-   return{...clone(a),slotId,dayOfWeek:day,serviceDate:period.days.find(d=>new Date(d.serviceDate+'T12:00Z').getUTCDay()===day).serviceDate,
+   const p=problem.incumbencyByDaySlot.get(`${day}\u0000${slotId}`),datedDay=period.days.find(d=>new Date(d.serviceDate+'T12:00Z').getUTCDay()===day);
+   const typedDay=typedFacts.typedDays.find(d=>d.serviceDate===datedDay.serviceDate&&d.substitute.slotId===slotId);
+   let typedLunch=null;
+   if(typedDay){
+    const facts=acceptedExceptions.filter(e=>e.type==='cover_all'&&e.serviceDate===typedDay.serviceDate
+     &&e.coverAllChoiceId===typedDay.choiceId&&e.coverAllOperationId===typedDay.operationId);assert.equal(facts.length,1);
+    typedLunch=facts[0].payload.availability.lunch;
+    assert.deepEqual(a.lunch,{start:typedLunch.start,end:typedLunch.end},'Normalized typed lunch timing must match the validated source-bound raw lunch');
+   }
+   return{...clone(a),...(typedDay?{lunch:clone(typedLunch)}:{}),slotId,dayOfWeek:day,serviceDate:datedDay.serviceDate,
     incumbentPersonId:p?.personId??null,incumbentName:p?.displayName??null,
+    ...(datedDay.input?.preStartPersonIds?.includes(p?.personId)?{unavailabilityClassification:'PRE_START_NOT_PTO'}:{}),
     ...(p?.kind==='CONTRACTOR_CAPACITY'?{ownerKind:p.kind,capacityId:p.capacityId}:{} )};
   })),authority={schema:'custodial.approved-manual-period-projection-authority.v1',sourceDigest:period.sourceDigest,
    sourcePublicationId:version.publicationId,sourceVersionId:version.id,frameStart:period.frameStart,frameEnd:period.frameEnd,
@@ -184,6 +224,7 @@ export function prepareApprovedManualPeriodProjection({week,source,ownerConfig,p
    overlayInputDigest:problem.inputDigest,projectionAvailability,parentLinks:links,groupDayBudgets:budgets,prearrivalUnowned,
    hardConstraintCount:witness.model.modelBasis.constraints.count,hardConstraintDigest:witness.model.modelBasis.constraints.digest,
    fixedWitnessDigest:contentDigest([...witness.values]),datedDayBases:period.days.filter(d=>d.kind!=='NORMAL').map(d=>clone(d)),
+   ...(period.employmentRevisionVector?{employmentRevisionVector:clone(period.employmentRevisionVector)}:{}),
    normalSourceChanged:false,objectiveSolverRerun:false};
  const provisionalAuthorityDigest=digest(authority),provisionalReplayDigest=digest({projectionAssignments,lunch}),
   provisionalDocument=serializePreparedStaticWeeklyLunchAuthorityDocument({candidate:lunch,authorityDigest:provisionalAuthorityDigest,replayDigest:provisionalReplayDigest}),

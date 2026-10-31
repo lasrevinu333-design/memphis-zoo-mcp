@@ -6,7 +6,7 @@ import pg from 'pg';
 import {fingerprintSchemaCatalog} from './schema-fingerprint-catalog.mjs';
 import {resolveReleaseMigrationSource} from './production-forward-source.mjs';
 import {readMigrationReplayPlan} from './migration-replay-order.mjs';
-import {assertTargetCapturePendingPlan} from './release-migration-target-capture.mjs';
+import {assertTargetCapturePendingPlan,assertTargetCapturePreservationPlan} from './release-migration-target-capture.mjs';
 import {readVerifiedArchiveSourceBinding,readVerifiedRestoreTableSelection,readVerifiedMigrationTargetCaptureSource,postgresTextColumnsLineEncoding} from './disaster-recovery-archive.mjs';
 const {Client}=pg,originalQuery=Client.prototype.query;
 const sha=x=>createHash('sha256').update(x).digest('hex');
@@ -39,10 +39,11 @@ export function loadOriginal235PreservationSource(backendRoot){
 }
 export function validateOriginal235PreservationPlan(backendRoot,plan){
  const manifest=loadOriginal235PreservationSource(backendRoot);
- assert.ok([160,163,164,165,166].includes(plan.length),'Only original160 or exact source-selected163/164/165/166 preservation plans');
+ const successorClosure=![160,163,164,165,166].includes(plan.length)?assertTargetCapturePreservationPlan(backendRoot,plan):null;
+ assert.ok([160,163,164,165,166].includes(plan.length)||successorClosure,'Only original160, exact163–166, or source-verified closed301/302 preservation plans');
  if(plan.length>=164){
   const sourcePlan=plan.map(({sql,body,...item})=>item);
-  assertTargetCapturePendingPlan(sourcePlan,sourcePlan.slice(0,163));
+  assertTargetCapturePendingPlan(sourcePlan,sourcePlan.slice(0,163),successorClosure);
  }
  for(let i=0;i<manifest.plan.length;i++){
   const expected=manifest.plan[i],item=plan[i];assert.equal(item.order,expected.order);assert.equal(item.file,expected.file);
@@ -56,7 +57,7 @@ export function validateOriginal235PreservationPlan(backendRoot,plan){
    164:'aca06e305ff4c5918e83045acf4d739fcb8746e41dcc89ceb59fcd0f98ab20ba',
    165:'965300d634959010c017ac203d71fe915f65b4b42e69910b173b96d034c38001',
    166:'be9f1ce99e037690b3095c8b8e963fc30efd8c83adaa1e415856a79808dc31b1'};
-  assert.equal(replay.manifestSha256,replayHashes[plan.length]);
+  assert.equal(replay.manifestSha256,successorClosure?successorClosure.canonical_replay_manifest_sha256:replayHashes[plan.length]);
   const additions=[
    ['20261027230000_accepted_actual_lunch_windows.sql','55b2cd92ebe36c6920a3c27cc13031ef6ca263d8f10114182c3058fd0991c81b'],
    ['20261027231000_canonical_coverall_capacity_links.sql','c4be89a07f46717ddcc7ceebed639cdc10b589b8ff72e9cf20a3523bdec43903'],
@@ -64,7 +65,8 @@ export function validateOriginal235PreservationPlan(backendRoot,plan){
   ];
   if(plan.length>=164)additions.push(['20261028224728_full_scheduled_lunch_source_policy.sql','a47387ddf244a04df646c9bb2d60eef86a769b96baf9106759f1c2a703248514']);
   if(plan.length>=165)additions.push(['20261030031200_approved_manual_full_hour_coverers.sql','de548422310c3369bac0560e14507e4022cc9d5b9effe898d4f24ae79156cf6a']);
-  if(plan.length===166)additions.push(['20261030050235_compact_approved_initial_confirmation.sql','fa9373adcf48f8d13db1b8e4876a5f134b02f8a897f20f887987cbd384393469']);
+  if(plan.length>=166)additions.push(['20261030050235_compact_approved_initial_confirmation.sql','fa9373adcf48f8d13db1b8e4876a5f134b02f8a897f20f887987cbd384393469']);
+  if(successorClosure)additions.push(...successorClosure.pending.slice(166).map(item=>[item.file,item.sha256]));
   assert.deepEqual(replay.files.slice(294),additions.map(([file])=>file));
   for(const [index,[file,digest]]of additions.entries()){
    const item=plan[160+index];assert.equal(item.order,161+index);assert.equal(item.file,file);
@@ -148,7 +150,7 @@ export async function prepareIsolatedReleaseDataPreservation({client,backendRoot
  const relationCensus=(await query(`select n.nspname schema,c.relname name,c.relkind::text kind,c.relispartition,
   has_schema_privilege(current_user,n.oid,'USAGE') usage,has_table_privilege(current_user,c.oid,'SELECT') readable
   from pg_class c join pg_namespace n on n.oid=c.relnamespace
-  where n.nspname in('public','auth','storage','custodial_release_identity') and c.relkind in('r','p','f')`)).rows;
+  where n.nspname in('public','auth','storage','custodial_release_identity','custodial_employment','custodial_coverall','custodial_leadership_private') and c.relkind in('r','p','f')`)).rows;
  assert.deepEqual(relationCensus.map(tableKey).sort(),tables.map(tableKey).sort());
  for(const t of relationCensus){assert.equal(t.kind,'r');assert.equal(t.relispartition,false);
   assert.equal(t.usage,true,'Existing namespace USAGE required for '+tableKey(t));

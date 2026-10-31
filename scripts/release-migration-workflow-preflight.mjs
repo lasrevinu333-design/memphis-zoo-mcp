@@ -7,7 +7,7 @@ import { createHash } from "node:crypto";
 import { lstatSync, readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { SCHEMA_CATALOG_NAMES, fingerprintSchemaCatalog } from "./schema-fingerprint-catalog.mjs";
+import { SCHEMA_CATALOG_NAMES, fingerprintSchemaCatalog, applicationPrivateOwnerSection } from "./schema-fingerprint-catalog.mjs";
 import { readMigrationReplayPlan } from "./migration-replay-order.mjs";
 
 // Existing exact-target prerequisites, made explicit before any normal apply.
@@ -35,6 +35,34 @@ export function assertReleaseWorkflowSource(root) {
   const state = JSON.parse(read("release/production-migration-state.json").toString("utf8"));
   const catalog = JSON.parse(read("supabase/canonical/schema-fingerprint-input.json").toString("utf8"));
   const fingerprint = read("supabase/canonical/schema-fingerprint.txt").toString("utf8").trim();
+  // Legacy sections remain required. Optional sections are the fixed
+  // namespace-owner DATA captured by captureSchemaCatalog; it is neither an
+  // ACL marker nor permission to reinterpret an old catalog/restore target.
+  const sections = [...SCHEMA_CATALOG_NAMES,...applicationPrivateOwnerSection(catalog)];
+  const ownerSection = Object.getOwnPropertyDescriptor(catalog, "recovery_schema_owners");
+  if (ownerSection) {
+    const message = "Invalid recovery_schema_owners canonical metadata";
+    assert.ok(Object.hasOwn(ownerSection, "value") && ownerSection.enumerable, message);
+    const owners = ownerSection.value;
+    assert.ok(Array.isArray(owners) && Object.getPrototypeOf(owners) === Array.prototype && owners.length === 1, message);
+    assert.deepEqual(Reflect.ownKeys(owners).sort(), ["0", "length"], message);
+    const entry = Object.getOwnPropertyDescriptor(owners, "0");
+    assert.ok(Object.hasOwn(entry, "value") && entry.enumerable, message);
+    const row = entry.value;
+    assert.ok(row && Object.getPrototypeOf(row) === Object.prototype && Reflect.ownKeys(row).length === 2, message);
+    const fields = Object.getOwnPropertyDescriptors(row);
+    assert.ok(Object.hasOwn(fields.schema_name ?? {}, "value") && fields.schema_name.enumerable
+      && Object.hasOwn(fields.owner_name ?? {}, "value") && fields.owner_name.enumerable, message);
+    const schema = fields.schema_name.value, owner = fields.owner_name.value;
+    assert.ok(schema === "custodial_recovery" && typeof owner === "string" && owner.length > 0
+      && !owner.includes("\0") && Buffer.from(owner, "utf8").toString("utf8") === owner, message);
+    sections.push("recovery_schema_owners");
+  }
+  // Check keys/closed owner descriptors BEFORE hashing can read any optional
+  // property. No unknown section or getter is ignored/adopted as metadata.
+  assert.deepEqual(Reflect.ownKeys(catalog).sort(), sections.sort(), "The complete canonical catalog is required");
+  assert.match(fingerprint, /^[a-f0-9]{64}$/);
+  assert.equal(fingerprintSchemaCatalog(catalog).fingerprint, fingerprint);
   const schemaTarget = resolveReleaseSchemaTarget(root);
   assert.notEqual(schemaTarget.profileQualification,'FORWARD_EXPECTATION_REQUIRES_FRESH_POPULATED_REHEARSAL',
     'Source299 populated target capture is pending; a projected catalog cannot authorize normal release.');
@@ -83,34 +111,6 @@ export function assertReleaseWorkflowSource(root) {
   assert.equal(target.source_migration_version, pending.at(-1).slice(0, 14));
   assert.equal(target.source_migration_name, pending.at(-1).slice(15, -4));
   assert.equal(target.production_ledger_version, null);
-  // Legacy sections remain required. The only optional section is the fixed
-  // namespace-owner DATA captured by captureSchemaCatalog; it is neither an
-  // ACL marker nor permission to reinterpret an old catalog/restore target.
-  const sections = [...SCHEMA_CATALOG_NAMES];
-  const ownerSection = Object.getOwnPropertyDescriptor(catalog, "recovery_schema_owners");
-  if (ownerSection) {
-    const message = "Invalid recovery_schema_owners canonical metadata";
-    assert.ok(Object.hasOwn(ownerSection, "value") && ownerSection.enumerable, message);
-    const owners = ownerSection.value;
-    assert.ok(Array.isArray(owners) && Object.getPrototypeOf(owners) === Array.prototype && owners.length === 1, message);
-    assert.deepEqual(Reflect.ownKeys(owners).sort(), ["0", "length"], message);
-    const entry = Object.getOwnPropertyDescriptor(owners, "0");
-    assert.ok(Object.hasOwn(entry, "value") && entry.enumerable, message);
-    const row = entry.value;
-    assert.ok(row && Object.getPrototypeOf(row) === Object.prototype && Reflect.ownKeys(row).length === 2, message);
-    const fields = Object.getOwnPropertyDescriptors(row);
-    assert.ok(Object.hasOwn(fields.schema_name ?? {}, "value") && fields.schema_name.enumerable
-      && Object.hasOwn(fields.owner_name ?? {}, "value") && fields.owner_name.enumerable, message);
-    const schema = fields.schema_name.value, owner = fields.owner_name.value;
-    assert.ok(schema === "custodial_recovery" && typeof owner === "string" && owner.length > 0
-      && !owner.includes("\0") && Buffer.from(owner, "utf8").toString("utf8") === owner, message);
-    sections.push("recovery_schema_owners");
-  }
-  // Check keys/closed owner descriptors BEFORE hashing can read any optional
-  // property. No unknown section or getter is ignored/adopted as metadata.
-  assert.deepEqual(Reflect.ownKeys(catalog).sort(), sections.sort(), "The complete canonical catalog is required");
-  assert.match(fingerprint, /^[a-f0-9]{64}$/);
-  assert.equal(fingerprintSchemaCatalog(catalog).fingerprint, fingerprint);
   // Legacy target field is the RAW connected-database target. Canonical files
   // retain the application/source identity; only the closed declared profile
   // may relate that identity to a distinct deployment catalog.

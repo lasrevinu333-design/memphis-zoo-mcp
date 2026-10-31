@@ -624,7 +624,7 @@ function nativeTextRestorePlan(table, actual) {
 async function requireNativeTextRelationCensus() {
   const reply=await nativeTextQuery(`select n.nspname schema_name,c.relname table_name
     from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid=c.relnamespace
-    where n.nspname in ('public','auth','storage','custodial_release_identity') and c.relkind in ('r','p','f')
+    where n.nspname in ('public','auth','storage','custodial_release_identity','custodial_employment','custodial_coverall','custodial_leadership_private') and c.relkind in ('r','p','f')
     order by n.nspname,c.relname`);
   const expected=databaseTables.map(t=>({schema_name:t.schema_name,table_name:t.table_name}));
   const ordered=rows=>rows.map(row=>JSON.stringify([row.schema_name,row.table_name])).sort();
@@ -1894,7 +1894,7 @@ try {
               for (let index = 0; index < ids.length; index++) {
                 const item = items[String(index)];
                 if (!item || !Object.hasOwn(item, "value") || typeof item.value !== "string"
-                    || !/^(?:public|auth|storage|custodial_release_identity)\.[a-z_][a-z0-9_]{0,62}$/.test(item.value)) break;
+                    || !/^(?:public|auth|storage|custodial_release_identity|custodial_employment|custodial_coverall|custodial_leadership_private)\.[a-z_][a-z0-9_]{0,62}$/.test(item.value)) break;
                 safeIds.push(item.value);
               }
               if (safeIds.length === ids.length) failureOutput.data_readback_disposition = {

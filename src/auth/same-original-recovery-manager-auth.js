@@ -1,5 +1,6 @@
 import {createHash} from 'node:crypto';
 import {isDeepStrictEqual} from 'node:util';
+import {isCustodialLeadershipManagementSession} from './manager-permissions.js';
 import {makeOpsAccessMiddleware} from './shared-access-auth.js';
 import {verifySameOriginalRecoverySecuritySession} from './device-credential-auth.js';
 
@@ -16,16 +17,19 @@ export function createSameOriginalRecoveryManagerAuthenticator({env=process.env,
   const auth=makeOpsAccessMiddleware({env,trustedDeviceStore,requireWrite:true,
     requiredPermission:'write',requireTrustedDeviceStore:true,requireCurrentManagerAssociation:true});
   async function authenticateCurrentManager(req,{requireCsrf=false}={}) {
-    if(typeof trustedDeviceStore?.find!=='function'||typeof securityStore?.getManager!=='function')denied(503);
+    if(typeof trustedDeviceStore?.find!=='function')denied(503);
     const originalHeaders=req.headers,headers=structuredClone(req.headers||{}),method=req.method,url=req.originalUrl;
-    const request={headers,method,originalUrl:url,header(name){return headers[String(name).toLowerCase()]||'';}};
+    const request={headers,method,originalUrl:url,secure:req.secure===true,get(name){return headers[String(name).toLowerCase()]||'';},header(name){return headers[String(name).toLowerCase()]||'';}};
     let admitted=false,status=401;
     const response={status(value){status=value;return this;},json(){return this;}};
     await auth(request,response,()=>{admitted=true;});
     if(!admitted)denied(status);
     const first=structuredClone(request.memphisAuth);
-    if(!first?.permissions?.owner||first.read_only!==false||first.trusted_device!==true
-      ||!first.token||!first.manager_id||!first.credential_id||!first.device_id)denied();
+    const cohort=isCustodialLeadershipManagementSession(first);
+    if(cohort){if(first.owner!==false||first.permissions.owner!==false)denied();}
+    else if(!first?.permissions?.owner||first.read_only!==false||first.trusted_device!==true
+      ||typeof securityStore?.getManager!=='function')denied();
+    if(!first.token||!first.manager_id||!first.credential_id||!first.device_id)denied();
     const security=await verifySameOriginalRecoverySecuritySession(request,{store:securityStore,env,requireCsrf});
     if(!security.ok)denied(security.status);
     const row=structuredClone(security.session);
@@ -36,17 +40,18 @@ export function createSameOriginalRecoveryManagerAuthenticator({env=process.env,
     const securityAgain=await verifySameOriginalRecoverySecuritySession(request,{store:securityStore,env,requireCsrf});
     const again=securityAgain.session;
     if(!securityAgain.ok||!row||!again||row.session_id!==again.session_id
-      ||row.password_version!==again.password_version||row.token_hash!==again.token_hash
+      ||(cohort?row.security_epoch!==again.security_epoch:row.password_version!==again.password_version)||row.token_hash!==again.token_hash
       ||row.csrf_hash!==again.csrf_hash||row.expires_at!==again.expires_at)denied();
     if(req.headers!==originalHeaders||!isDeepStrictEqual(headers,req.headers||{})
       ||method!==req.method||url!==req.originalUrl)denied();
+    if(cohort&&(again.auth_mode!=='custodial_leadership_pin'||again.scope_kind!=='custodial_device_management'||again.password_used!==false||!Number.isSafeInteger(again.security_epoch)))denied();
     const issuer=Object.freeze({manager_id:first.manager_id,manager_credential_id:first.credential_id,
       manager_device_id:first.device_id});
     // These hashes and expiry pins are transactional comparison inputs only;
     // current rows must still be revalidated under the intended ledger lock.
     const bound=Object.freeze({issuer,signed_session_sha256:digest(first.token),
       signed_session_expires_at:first.expires_at,security_session_id:again.session_id,
-      security_password_version:again.password_version,security_token_hash:again.token_hash,
+      security_password_version:cohort?again.security_epoch:again.password_version,...(cohort?{security_auth_mode:'custodial_leadership_pin',security_scope_kind:again.scope_kind,password_used:false}:{}),security_token_hash:again.token_hash,
       security_csrf_hash:again.csrf_hash,confirmation_csrf_verified:requireCsrf===true,
       security_session_expires_at:again.expires_at,
       observation_only:true,transaction_authority:false});

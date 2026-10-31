@@ -5,7 +5,7 @@ import pg from "pg";
 
 const NativeClient = pg.Client;
 const nativeQuery = NativeClient.prototype.query;
-const SCHEMAS = Object.freeze(["public","auth","storage","custodial_release_identity"]);
+const SCHEMAS = Object.freeze(["public","auth","storage","custodial_release_identity","custodial_employment","custodial_coverall","custodial_leadership_private"]);
 const GUARDS = Object.freeze(["custodial_release_identity.guard_group_original_creation()","custodial_dr.guard_application_mutation()"]);
 const quoteIdentifier = value => '"' + value.replaceAll('"','""') + '"';
 
@@ -88,7 +88,7 @@ const RELATIONS_SQL=`select n.nspname schema_name,c.relname table_name,c.relkind
  c.relispartition is_partition,pg_catalog.pg_get_userbyid(c.relowner) owner_name,
  c.relrowsecurity,c.relforcerowsecurity
  from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid=c.relnamespace
- where n.nspname in ('public','auth','storage','custodial_release_identity')
+ where n.nspname in ('public','auth','storage','custodial_release_identity','custodial_employment','custodial_coverall','custodial_leadership_private')
  and c.relkind in ('r','p','f') order by n.nspname,c.relname`;
 const GUARDS_SQL=`select pg_catalog.pg_get_functiondef(p.oid) definition,p.prosrc,
  pg_catalog.pg_get_userbyid(p.proowner) owner
@@ -96,6 +96,17 @@ const GUARDS_SQL=`select pg_catalog.pg_get_functiondef(p.oid) definition,p.prosr
              (1,'custodial_dr.guard_application_mutation()')) original(ordinal,identity)
  left join pg_catalog.pg_proc p on p.oid=pg_catalog.to_regprocedure(original.identity)
  order by original.ordinal`;
+
+function requireOriginalNamespaceCoverage(relationRows,routines,relations,namespaces_columns){
+ const namespaceRows=namespaces_columns.filter(r=>r.kind==='SCHEMA'),names=namespaceRows.map(r=>r.schema_name);
+ assert.equal(new Set(names).size,names.length,'Duplicate original namespace owner/ACL metadata');
+ assert.ok(names.length>=4&&names.length<=SCHEMAS.length&&names.every(n=>SCHEMAS.includes(n)),
+  'Original namespace metadata outside fixed backup scope');
+ assert.ok(SCHEMAS.slice(0,4).every(n=>names.includes(n)),'Complete original legacy schema ACL scope required');
+ for(const row of [...relationRows,...routines,...relations,...namespaces_columns])
+  assert.ok(names.includes(row.schema_name),'Original private object has no captured namespace owner/ACL');
+ return names;
+}
 
    async function captureOriginalNamespaceColumnAcls(client,query){
 
@@ -123,12 +134,12 @@ const GUARDS_SQL=`select pg_catalog.pg_get_functiondef(p.oid) definition,p.prosr
     const compare=(a,b)=>{for(let i=0;i<a.length;i++){const n=Buffer.compare(Buffer.from(a[i]??'','utf8'),Buffer.from(b[i]??'','utf8'));if(n)return n;}return 0;};
     const objectKey=r=>[r.kind,r.schema_name,r.object_name,r.column_name];
     const grantKey=g=>[g.grantee,g.grantor,g.privilege_type];
-    const scopes=['public','auth','storage','custodial_release_identity'];
+    const scopes=['public','auth','storage','custodial_release_identity','custodial_employment','custodial_coverall','custodial_leadership_private'];
     const privileges={SCHEMA:['USAGE','CREATE'],COLUMN:['SELECT','INSERT','UPDATE','REFERENCES']};
     const rows=(await query(`
      with namespaces as (
       select oid,nspname,nspowner,nspacl from pg_catalog.pg_namespace
-      where nspname in ('public','auth','storage','custodial_release_identity')
+      where nspname in ('public','auth','storage','custodial_release_identity','custodial_employment','custodial_coverall','custodial_leadership_private')
      ), objects as (
       select 'SCHEMA'::text kind,n.nspname schema_name,n.nspname object_name,
        n.nspowner owner_oid,null::text column_name,n.nspacl acl
@@ -198,7 +209,7 @@ const GUARDS_SQL=`select pg_catalog.pg_get_functiondef(p.oid) definition,p.prosr
        where a.grantee<>p.proowner),'[]'::jsonb))),'[]'::jsonb) routines
      from pg_catalog.pg_proc p join pg_catalog.pg_namespace n on n.oid=p.pronamespace
      left join pg_catalog.pg_roles owner_role on owner_role.oid=p.proowner
-     where n.nspname in ('public','auth','storage','custodial_release_identity')`);
+     where n.nspname in ('public','auth','storage','custodial_release_identity','custodial_employment','custodial_coverall','custodial_leadership_private')`);
     assert.equal(reply.rows.length,1);assert.equal(reply.rows[0].search_path,'pg_catalog','Routine type identity requires Main pg_catalog search_path');
     const closed=(value,names)=>{
      assert.ok(value&&[Object.prototype,null].includes(Object.getPrototypeOf(value)));
@@ -218,7 +229,7 @@ const GUARDS_SQL=`select pg_catalog.pg_get_functiondef(p.oid) definition,p.prosr
     const result=list(reply.rows[0].routines).map(value=>{
      const r=closed(value,['kind','schema_name','object_name','identity','owner_name','column_name','grants']);
      assert.ok(['FUNCTION','PROCEDURE'].includes(r.kind),'Unsupported selected pg_proc routine kind');
-     assert.ok(['public','auth','storage','custodial_release_identity'].includes(r.schema_name));
+     assert.ok(['public','auth','storage','custodial_release_identity','custodial_employment','custodial_coverall','custodial_leadership_private'].includes(r.schema_name));
      text(r.object_name);text(r.identity,65536);text(r.owner_name);assert.equal(r.column_name,null);
      const seen=new Set();const grants=list(r.grants).map(value=>{
       const g=closed(value,['grantee','grantor','privilege_type','is_grantable']);
@@ -235,7 +246,7 @@ const GUARDS_SQL=`select pg_catalog.pg_get_functiondef(p.oid) definition,p.prosr
 
    async function captureOriginalRelationAcls(client,query){
     const {types}=createRequire(import.meta.url)('node:util');
-    const fixedSchemas=new Set(['public','auth','storage','custodial_release_identity']);
+    const fixedSchemas=new Set(['public','auth','storage','custodial_release_identity','custodial_employment','custodial_coverall','custodial_leadership_private']);
     const kinds=new Set(['TABLE','PARTITIONED TABLE','VIEW','MATERIALIZED VIEW','FOREIGN TABLE','SEQUENCE']);
     const tablePrivileges=new Set(['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER','MAINTAIN']);
     const sequencePrivileges=new Set(['SELECT','UPDATE','USAGE']);
@@ -269,7 +280,7 @@ const GUARDS_SQL=`select pg_catalog.pg_get_functiondef(p.oid) definition,p.prosr
       where a.grantee<>c.relowner),'[]'::jsonb)) descriptor
      from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid=c.relnamespace
      left join pg_catalog.pg_roles owner_role on owner_role.oid=c.relowner
-     where n.nspname in ('public','auth','storage','custodial_release_identity')
+     where n.nspname in ('public','auth','storage','custodial_release_identity','custodial_employment','custodial_coverall','custodial_leadership_private')
        and c.relkind in ('r','p','v','m','f','S')`);
     const objects=[],seen=new Set();
     for(const row of array(result.rows)){
@@ -364,8 +375,7 @@ export async function captureProductionBackupOriginalMetadata(client) {
   const routines=await captureOriginalRoutineAcls(client,query);
   const relations=await captureOriginalRelationAcls(client,query);
   const namespaces_columns=await captureOriginalNamespaceColumnAcls(client,query);
-  assert.deepEqual(namespaces_columns.filter(r=>r.kind==="SCHEMA").map(r=>r.schema_name).sort(),[...SCHEMAS].sort(),
-    "Complete original schema ACL scope required");
+  requireOriginalNamespaceCoverage(relationRows,routines,relations,namespaces_columns);
   await context();requireNative(client);
   return detached({relations:relationRows,guards,acls:{routines,relations,namespaces_columns}});
 }

@@ -1,0 +1,45 @@
+{
+  "schema": "custodial.ci-fresh-only-exact-source-successor.v1",
+  "scope": "DISPOSABLE_CONSTRUCTION_ONLY_NOT_VENDOR_NORMAL_OR_PRODUCTION_ADMISSION",
+  "predecessor_manifest": {
+    "path": "release/fresh-only-replay/MANIFEST.json",
+    "sha256": "5094a272dcc9f01ccbf043f3de7012e12bdb542606089a0a818629c1ecf86b26",
+    "migrations": 297,
+    "overrides": 22
+  },
+  "predecessor_successor": {
+    "path": "release/fresh-only-replay/SOURCE301_SUCCESSOR.json",
+    "sha256": "dacdeccb363fd648660f5a47cac7ae96d5f5d8793a37ed449c2ec312c7f3ba0e",
+    "bytes": 2169,
+    "source_migrations": 301
+  },
+  "preserved_predecessor_replay": {
+    "path": "release/fresh-only-replay/SOURCE301_REPLAY_ORDER.json",
+    "sha256": "aa3225489f809029f362f9bb2a5ff30f1442a85eb5dda468663b3f0800a9e83b",
+    "bytes": 57121
+  },
+  "source_migrations": 302,
+  "replay_manifest": {
+    "path": "supabase/canonical/migration-replay-order.json",
+    "sha256": "c642e562bf012416548f26f215a3c74aae434ca6573fc0f8be83e5c0bcc59b2e",
+    "bytes": 57303
+  },
+  "append": {
+    "name": "20261031125902_approved_manual_native_operations.sql",
+    "original": {
+      "path": "supabase/migrations/20261031125902_approved_manual_native_operations.sql",
+      "sha256": "ffebba2a6d32ed7a3de29c9446f2554fc56063253afebdfcc5ccadabb911d138",
+      "bytes": 864526
+    },
+    "selected": {
+      "path": "supabase/migrations/20261031125902_approved_manual_native_operations.sql",
+      "sha256": "ffebba2a6d32ed7a3de29c9446f2554fc56063253afebdfcc5ccadabb911d138",
+      "bytes": 864526
+    },
+    "atomic_mode": "exact-Source-BEGIN-COMMIT"
+  },
+  "observed_empty_source_fingerprint": "30218d9f5885ac5a8ca77785338a546da685d7e277c0633929e673ef80a870db",
+  "source_capture_scope": "ACTUAL_FRESH302_SCOPED_NORMAL_CONSTRUCTION_AND_READ_ONLY_CATALOG",
+  "full_vendor_NORMAL": false,
+  "expected_fingerprint_authority": null
+}

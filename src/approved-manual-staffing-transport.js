@@ -1,3 +1,6 @@
+import {validateApprovedManualCoverAllFacts,applyApprovedManualTypedCoverAllChanges} from './approved-manual-coverall-facts.js';
+import {approvedManualEmploymentPeriod,approvedManualEmploymentChanges} from './approved-manual-employment-integration.js';
+import {readApprovedManualWeek as readApprovedManualWeekForInitial} from './approved-manual-week.js';
 import assert from 'node:assert/strict';
 import {assertExceptionCommand} from './static-weekly-schedule-model.js';
 import {postgresJsonbContentDigest as digest} from './static-weekly-schedule-program.js';
@@ -27,14 +30,23 @@ export function staffingWindowFromOwnerFrames({command,managerId,frameVector}){
  return Object.freeze({dates:calendar.dates,weeks:Object.freeze(weeks)});
 }
 
-export function approvedManualStaffingWorkerInput({basis,week,actor,operationId,expectedRevision,frameStart}){
+export function approvedManualStaffingWorkerInput({basis,week,actor,operationId,expectedRevision,frameStart,pendingCoverAllChoice=null}){
  assert.equal(basis.schema,'custodial.approved-manual-period-basis.v1');assert.equal(basis.frameStart,frameStart);
  assert.equal(basis.originalCommand.operationId,operationId);assert.equal(basis.originalCommand.preparerId,actor.managerId);
  assert.equal(basis.authorityRevision,expectedRevision);assert.equal(basis.managerId,actor.managerId);assert.equal(basis.actor.manager_name,actor.managerName);
- const facts=approvedManualPeriodStaffingFacts({week,source:basis.normalSource,exceptions:basis.preparedExceptions,originalCommand:basis.originalCommand});
- return captureApprovedManualPeriodWorkerInput({schema:'custodial.approved-manual-period-worker-input.v1',source:basis.normalSource,
-  ownerConfig:basis.ownerConfig,frameStart,changes:facts.changes,priorDays:basis.priorDayBases,acceptedExceptions:basis.preparedExceptions,
-  priorProjection:basis.priorProjection,actor,expectedRevision,idempotencyKey:`staffing:${operationId}:${frameStart}`});
+ const typedFacts=validateApprovedManualCoverAllFacts({source:basis.normalSource,sourceId:basis.sourceId,exceptions:basis.preparedExceptions,
+  priorDays:basis.priorDayBases,pendingChoice:pendingCoverAllChoice,originalCommand:basis.originalCommand});
+ const facts=approvedManualPeriodStaffingFacts({week,source:basis.normalSource,exceptions:typedFacts.legacyExceptions,originalCommand:basis.originalCommand});
+ const employment=Array.isArray(basis.employmentByDate);
+ let changes=facts.changes;
+ if(typedFacts.typedDays.length){
+  if(employment)changes=approvedManualEmploymentChanges({week,changes,employment:approvedManualEmploymentPeriod({frameStart,expectedRevision,employmentByDate:basis.employmentByDate})});
+  changes=applyApprovedManualTypedCoverAllChanges(changes,typedFacts);
+ }
+ return captureApprovedManualPeriodWorkerInput({schema:employment?'custodial.approved-manual-period-worker-input.v2':'custodial.approved-manual-period-worker-input.v1',source:basis.normalSource,
+  ownerConfig:basis.ownerConfig,frameStart,changes,priorDays:basis.priorDayBases,acceptedExceptions:basis.preparedExceptions,
+  priorProjection:basis.priorProjection,actor,expectedRevision,idempotencyKey:`staffing:${operationId}:${frameStart}`,
+  ...(employment?{employmentByDate:basis.employmentByDate}:{})});
 }
 
 // Normalize only the owner-supplied canonical (or pending-preview) exceptions.
@@ -107,11 +119,20 @@ export function approvedManualPendingStaffingTransport({workerInput,workerResult
  assert.equal(basis.normalSourceDigest,digest(input.source));assert.equal(digest(basis.normalSource),digest(input.source));
  assert.equal(basis.frameStart,input.frameStart);assert.equal(basis.frameEnd,native.frameEnd);
  assert.equal(input.idempotencyKey,`staffing:${command.operationId}:${input.frameStart}`);
+ const scopeDates=Array.from({length:7},(_,n)=>dateAt(input.frameStart,n)).filter(d=>d>=command.semanticBody.startDate&&d<=command.semanticBody.endDate);
+ return approvedManualNativeTransport({input,result,basis,semanticSnapshot:{schema:'custodial.approved-manual-pending-staffing-snapshot.v1',originalCommand:clone(command),
+  originalSource:clone(basis.originalSource),scopeDates,weekStart:input.frameStart,generation:basis.generation,
+  catalogEntryDigest:basis.catalogEntryDigest,nativeBasisDigest:basisDigest}});
+}
+
+// Shared mathematical lowering; each caller supplies its distinct SQL-owned
+// original-operation identity. This does not manufacture a staffing command.
+export function approvedManualNativeTransport({input,result,basis,semanticSnapshot}){
+ const native=result.nativeProjection;
  const authority={...clone(native.authority),compilerInput:clone(input.source)},authorityDigest=digest(authority),
   lunch=clone(native.lunchDocument);
  delete lunch.document_identity;delete lunch.base_authority_digest;delete lunch.base_replay_digest;
  const replayDigest=digest({projectionAssignments:native.projectionAssignments,lunchDocument:lunch}),
-  scopeDates=Array.from({length:7},(_,n)=>dateAt(input.frameStart,n)).filter(d=>d>=command.semanticBody.startDate&&d<=command.semanticBody.endDate),
   adapter={schema:'custodial.approved-manual-period-database-adapter.v1',version:'approved-manual-period-v1'},
   objective={contract:'OWNER_APPROVED_MANUAL_DATED_75_25_V2',formulaObjectiveDigest:result.period.formulaObjectiveDigest,
    proximityPercent:75,workloadPercent:25,normalDaysOptimized:false},
@@ -122,13 +143,37 @@ export function approvedManualPendingStaffingTransport({workerInput,workerResult
     fixedWitnessDigest:native.authority.fixedWitnessDigest,selectionSolverInvoked:result.period.solverInvoked},
    authority_digest:authorityDigest,replay_digest:replayDigest,compiler_version:adapter.version,objective,metrics,
    applied_exceptions:clone(basis.preparedSummary),assignments:clone(native.projectionAssignments),
-   semantic_snapshot:{schema:'custodial.approved-manual-pending-staffing-snapshot.v1',originalCommand:clone(command),
-    originalSource:clone(basis.originalSource),scopeDates,weekStart:input.frameStart,generation:basis.generation,
-    catalogEntryDigest:basis.catalogEntryDigest,nativeBasisDigest:basisDigest}};
+   semantic_snapshot:clone(semanticSnapshot)};
  envelope.database_projection_identity=digest(envelope);
  const lunchDocument={...lunch,base_authority_digest:authorityDigest,base_replay_digest:replayDigest};
  lunchDocument.document_identity=digest(lunchDocument);
  return{publicationId:basis.publicationId,serviceDate:input.frameStart,exceptionSetDigest:digest(basis.preparedSummary),
   compilerVersion:adapter.version,objective,metrics,replayDigest,envelope,expectedRevision:input.expectedRevision,
   actorManagerId:input.actor.managerId,actorManagerName:input.actor.managerName,idempotencyKey:input.idempotencyKey,lunchDocument};
+}
+
+export function approvedManualInitialEmploymentWorkerInput({basis,actor,operationId}){
+ assert.equal(basis.schema,'custodial.approved-manual-period-basis.v1');
+ assert.equal(basis.originalCommand,null);assert.equal(basis.managerId,actor.managerId);
+ assert.equal(basis.actor.manager_name,actor.managerName);assert.ok(Array.isArray(basis.employmentByDate));
+ const {basisDigest,...body}=basis;assert.equal(basisDigest,digest(body));
+ const facts=approvedManualPeriodStaffingFacts({week:readApprovedManualWeekForInitial(),source:basis.normalSource,exceptions:basis.preparedExceptions});
+ return captureApprovedManualPeriodWorkerInput({schema:'custodial.approved-manual-period-worker-input.v2',source:basis.normalSource,
+  ownerConfig:basis.ownerConfig,frameStart:basis.frameStart,changes:facts.changes,priorDays:basis.priorDayBases,acceptedExceptions:basis.preparedExceptions,
+  priorProjection:basis.priorProjection,actor,expectedRevision:basis.authorityRevision,idempotencyKey:`coverall-initial:${operationId}`,
+  employmentByDate:basis.employmentByDate});
+}
+
+export function approvedManualInitialEmploymentTransport({workerInput,workerResult,basis,operationId}){
+ const input=captureApprovedManualPeriodWorkerInput(workerInput),result=captureApprovedManualPeriodWorkerResult(workerResult,input);
+ assert.equal(basis.originalCommand,null);assert.equal(basis.managerId,input.actor.managerId);
+ assert.equal(input.idempotencyKey,`coverall-initial:${operationId}`);assert.equal(basis.normalSourceDigest,digest(input.source));
+ assert.equal(basis.authorityRevision,input.expectedRevision);assert.equal(basis.frameStart,input.frameStart);
+ const {basisDigest,...body}=basis;assert.equal(basisDigest,digest(body));
+ if(!result.nativeProjection||result.period.status!=='COMPLETE_VALIDATED_DATED_DRAFTS')fail('approved_manual_initial_actual_coverage_unresolved');
+ const initialActivation={kind:'INITIAL_EMPLOYMENT_OPERATIONALIZATION',operationId,managerId:basis.managerId,sourceId:basis.sourceId,
+  publicationId:basis.publicationId,versionId:basis.versionId,frameStart:basis.frameStart,frameEnd:basis.frameEnd,authorityRevision:basis.authorityRevision};
+ return approvedManualNativeTransport({input,result,basis,semanticSnapshot:{schema:'custodial.approved-manual-initial-employment-snapshot.v1',initialActivation,
+  originalSource:clone(basis.originalSource),scopeDates:Array.from({length:7},(_,n)=>dateAt(input.frameStart,n)),weekStart:input.frameStart,
+  generation:basis.generation,catalogEntryDigest:basis.catalogEntryDigest,nativeBasisDigest:basisDigest}});
 }

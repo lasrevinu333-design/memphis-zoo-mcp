@@ -1049,7 +1049,8 @@ export function restoreArchiveAdmission(archiveFormat, { apply = false } = {}) {
 // verify the normal restore intent. No JSON field here grants restore or
 // custody authority, and this helper does not establish signature provenance.
 export function selectVerifiedRestoreTables({summary, catalog, checksumPaths, databaseOnly = false}) {
-  const schemas = ["public", "auth", "storage", "custodial_release_identity"];
+  const schemas = ["public", "auth", "storage", "custodial_release_identity", "custodial_employment", "custodial_coverall", "custodial_leadership_private"];
+  const optionalPrivate=["custodial_release_identity","custodial_employment","custodial_coverall","custodial_leadership_private"];
   if (typeof databaseOnly !== "boolean" || summary?.format !== "memphis-zoo-disaster-recovery.v4"
       || !Array.isArray(catalog) || !(checksumPaths instanceof Set)
       || !Array.isArray(summary.backed_up_schemas) || summary.backed_up_schemas.length < 3
@@ -1100,7 +1101,7 @@ export function selectVerifiedRestoreTables({summary, catalog, checksumPaths, da
   // All actual catalog members still require exact counts/checksummed paths,
   // and the existing non-Storage (including private) coverage stays required.
   if (rows !== summary.database_row_count
-      || summary.backed_up_schemas.some(schema=>schema !== "storage" && schema !== "custodial_release_identity" && !representedSchemas.has(schema))) {
+      || summary.backed_up_schemas.some(schema=>schema !== "storage" && !optionalPrivate.includes(schema) && !representedSchemas.has(schema))) {
     throw new Error("Restore catalog does not cover the exact signed schema and row summary.");
   }
   // Storage metadata remains API-owned in ordinary full restore and SQL-owned
@@ -1108,8 +1109,8 @@ export function selectVerifiedRestoreTables({summary, catalog, checksumPaths, da
   // Empty fixed private schema is signed archive DATA only. Its authenticated
   // table catalog and complete checksummed file inventory must agree; retained
   // private bytes cannot be hidden behind a caller-supplied absence verdict.
-  if(!representedSchemas.has("custodial_release_identity")
-    && [...checksumPaths].some(path=>path.startsWith("database/custodial_release_identity.")))
+  if(optionalPrivate.some(schema=>!representedSchemas.has(schema)
+    && [...checksumPaths].some(path=>path.startsWith(`database/${schema}.`))))
     throw new Error("Private original files exist without their signed table catalog.");
   return Object.freeze({
     databaseTables: Object.freeze(catalog.filter(table=>table.schema_name !== "storage" || databaseOnly)),

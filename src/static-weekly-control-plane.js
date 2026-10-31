@@ -1,7 +1,7 @@
 import {coverAllAccessTokenHash,coverAllCanonicalBinding,scopeCanonicalCoverAllDocument} from './static-weekly-coverall-access.js';
 import { AsyncLocalStorage } from "node:async_hooks";
 import { types } from "node:util";
-import { hasManagerPermission } from "./auth/manager-permissions.js";
+import { hasManagerPermission, isCustodialLeadershipManagementSession } from "./auth/manager-permissions.js";
 /*
  * Separately deployed static-weekly scheduler control plane.
  *
@@ -40,8 +40,12 @@ import { canonicalJson } from "./static-weekly-schedule-model.js";
 import { postgresJsonbContentDigest } from "./static-weekly-schedule-compiler.js";
 import {prepareApprovedStaticTemplateProjection} from './static-weekly-recurring-staffing-adaptation.js';
 import {prepareStaticWeeklySchedulingProblem} from './static-weekly-schedule-program.js';
+import {captureApprovedManualPeriodWorkerInput} from './approved-manual-period-worker.js';
+import {createApprovedManualCoverAllManagement,readApprovedManualCoverAllChoiceSummary} from './approved-manual-coverall-management.js';
+import {materializeApprovedManualRecurringOnCurrentTransaction,isApprovedManualPublication,approvedManualMaterializationFrame} from './approved-manual-recurring-transport.js';
 import {readApprovedManualWeek} from './approved-manual-week.js';
-import {staffingWindowFromOwnerFrames,approvedManualStaffingWorkerInput,approvedManualPendingStaffingTransport} from './approved-manual-staffing-transport.js';
+import {staffingWindowFromOwnerFrames,approvedManualStaffingWorkerInput,approvedManualPendingStaffingTransport,approvedManualInitialEmploymentWorkerInput,approvedManualInitialEmploymentTransport} from './approved-manual-staffing-transport.js';
+import {prepareApprovedManualCoverAllInitialOnCurrentTransaction,approvedManualCoverAllWorkerInput} from './approved-manual-coverall-workflow.js';
 import {
   compileAndPrepareStaticWeeklyScheduleIsolated,
   compileStaticWeeklyScheduleIsolated,
@@ -457,6 +461,7 @@ export function createStaticWeeklyControlPlane({
   operationStatementMilliseconds = STATIC_WEEKLY_DATABASE_OPERATION_STATEMENT_TIMEOUT_MS,
   healthTransactionMilliseconds = 5_000,
   recurringCorrectionSourceBinding = null,
+  leadershipRequestActorVerifier = null,
 } = {}) {
   if (!database?.connect) throw fail("static_weekly_control_plane_database_required");
   const correctionBinding = createRecurringCorrectionBinding(recurringCorrectionSourceBinding);
@@ -486,15 +491,21 @@ export function createStaticWeeklyControlPlane({
     if(typeof work!=="function" || !signal || !Number.isFinite(deadlineAt))
       throw fail("static_weekly_recurring_operation_deadline_invalid");
     operationRemaining(deadlineAt,signal);
-    return managerRequest.run(Object.freeze({manager:Object.freeze({...manager}),signal,deadlineAt,permission}),work);
+    return managerRequest.run(Object.freeze({manager:Object.freeze({...manager}),signal,deadlineAt,permission,leadershipRequestId:randomUUID()}),work);
   }
   async function verifyRequestActor(client,context){
     if(!context)return;
     const manager=context.manager;
+    const cohort=isCustodialLeadershipManagementSession(manager);
+    if(cohort){
+      if(typeof leadershipRequestActorVerifier!=="function")throw fail("42501","Cohort transaction binding unavailable.");
+      await leadershipRequestActorVerifier(client,context);
+    }
     const actor=await call(client,"custodial_action_actor_v1",[
       manager.manager_id,manager.credential_id,manager.device_id,manager.access_level,context.permission]);
     if(actor?.manager_id!==manager.manager_id || actor?.credential_id!==manager.credential_id
-      ||actor?.device_id!==manager.device_id || (context.permission==="write"&&actor.owner!==true))
+      ||actor?.device_id!==manager.device_id || (context.permission==="write"&&actor.owner!==true
+      && !(cohort&&actor.actor_kind==="CUSTODIAL_LEADERSHIP_COHORT"&&actor.custodialManagementAdmin===true&&actor.owner===false)))
       throw fail("42501","Current manager authority is required at the scheduler transaction boundary.");
   }
   let closing = false;
@@ -758,6 +769,18 @@ export function createStaticWeeklyControlPlane({
   async function authorizeRouteRegeneration(client,manager,weekStart,publicationId) {
     return call(client,"custodial_authorize_route_regeneration_v1",[
       manager.manager_id,manager.credential_id,manager.device_id,manager.access_level,weekStart,publicationId]);
+  }
+  // Only the profile read from the database selects this path. The existing
+  // typed begin/finalize RPCs independently bind the immutable publication,
+  // source/catalog, origin-aligned complete frame, revision and original
+  // credential/request on this same locked physical transaction. This actor
+  // check retains regenerate_routes permission without imposing the generic
+  // Monday/current-week route-regeneration contract on fixed native repeats.
+  async function authorizeManualRecurringMaterialization(client,manager) {
+    const verified=await call(client,"custodial_action_actor_v1",[
+      manager.manager_id,manager.credential_id,manager.device_id,manager.access_level,"regenerate_routes"]);
+    if(verified?.manager_id!==manager.manager_id)throw fail("42501","Current approved manual materialization manager is required.");
+    return verified;
   }
   async function lockStaticWeeklyAuthority(client) {
     await client.query(
@@ -1455,8 +1478,31 @@ export function createStaticWeeklyControlPlane({
   }
 
   async function materializeCurrentProjection(client, { actor, publicationId, weekStart, expectedRevision, idempotencyKey,
-    signal = null, deadlineAt = null, preparedProjection = null }) {
+    signal = null, deadlineAt = null, preparedProjection = null, manager = null }) {
     const source = await sourceFor(client, requirePublicationId(publicationId), weekStart);
+    if(isApprovedManualPublication(source)) {
+      if(preparedProjection)throw fail('approved_manual_legacy_prepared_projection_forbidden');
+      const currentManager=manager||managerRequest.getStore()?.manager;
+      if(!currentManager)throw fail('approved_manual_recurring_current_credential_required');
+      const frame=approvedManualMaterializationFrame(source,weekStart),requestContext=managerRequest.getStore(),
+        expiresAt=Math.min(deadlineAt==null?Infinity:Number(deadlineAt),requestContext?.deadlineAt??Infinity,
+          performance.now()+STATIC_WEEKLY_MANAGER_OPERATION_DEADLINE_MS);
+      const receipt=await materializeApprovedManualRecurringOnCurrentTransaction({client,call,manager:currentManager,actor,
+        publicationId,serviceDate:frame,expectedRevision:requireRevision(expectedRevision),idempotencyKey:requireIdempotencyKey(idempotencyKey),
+        prepareOperational:input=>prepareInsideTransaction(client,()=>{
+          assertOperationActive(signal);
+          return prepareApprovedManualPeriodIsolated(input,{deadlineAtMilliseconds:expiresAt-STATIC_WEEKLY_MANAGER_CLEANUP_RESERVE_MS});
+        })});
+      if(receipt.replayed===true)return {operation:'materialize_projection',revision:receipt.authorityRevision,replayed:true,
+        data:{projection_id:receipt.projectionId,original_receipt:receipt,current_readback_repeated:false}};
+      const current=await snapshotFor(client,frame),lunch=await call(client,'static_weekly_v8_read_lunch_document',[frame]);
+      if(receipt.status!=='PERSISTED_CURRENT'||current?.projection_status!=='current'
+        ||text(current.current_publication?.publication_id)!==publicationId||text(current.latest_projection?.projection_id)!==receipt.projectionId
+        ||lunch?.persistence_status!=='PERSISTED'||lunch.projection_id!==receipt.projectionId||lunch.document_identity!==receipt.lunchDocumentIdentity)
+        throw fail('approved_manual_recurring_projection_not_current');
+      return {operation:'materialize_projection',revision:current.authority_revision,replayed:false,
+        data:{projection_id:receipt.projectionId,current_projection:current.latest_projection,recurring_materialization:receipt}};
+    }
     const effectivePublicationId = requirePublicationId(publicationId);
     const revision = requireRevision(expectedRevision);
     const preparedActor = { ...actor, idempotencyKey: requireIdempotencyKey(idempotencyKey) };
@@ -1654,7 +1700,7 @@ export function createStaticWeeklyControlPlane({
       packetUtf8: retained.packet_utf8 };
   }
 
-  return {
+  const api = {
     runManagerOperation,
     runExternalRecurringOperation,
     schema: STATIC_WEEKLY_CONTROL_PLANE_SCHEMA,
@@ -1711,55 +1757,114 @@ export function createStaticWeeklyControlPlane({
     },
     async getApprovedManualActivationRoster({manager}) {
       const actor=requireManager(manager);
-      return transaction(client=>call(client,'static_weekly_read_manual_activation_roster',[actor.managerId]));
+      return transaction(async client=>{
+        await lockStaticWeeklyAuthority(client);
+        const roster=await call(client,'static_weekly_read_manual_activation_roster',[actor.managerId]),
+          choices=await call(client,'static_weekly_list_coverall_activation_choices',[actor.managerId]);
+        if(choices?.schema!=='custodial.approved-manual-activation-options.v2'||choices.serviceDate!==roster.serviceDate
+          ||choices.authorityRevision!==roster.authorityRevision||!Array.isArray(choices.choices)
+          ||choices.choices.some(c=>c.activationEligible!==true||c.serviceDate!==choices.serviceDate||c.expectedRevision!==choices.authorityRevision))
+          throw fail('static_manual_activation_current_choices_invalid');
+        return{...roster,approvedManualActivation:choices};
+      });
     },
     async previewApprovedManualActivation({manager,packetId,expectedRevision}) {
       const actor=requireManager(manager),id=requireUuid(packetId,'static_manual_activation_packet_required'),revision=requireRevision(expectedRevision);
       return transaction(async client=>{
         await lockStaticWeeklyAuthority(client);
-        const basis=await call(client,'static_weekly_read_manual_activation_basis',[actor.managerId,id,revision]);
-        if(basis?.schema!=='custodial.approved-manual-activation-preview-basis.v1'||basis.managerId!==actor.managerId
-          ||basis.packetId!==id||basis.expectedRevision!==revision||!/^[a-f0-9]{64}$/.test(basis.previewDigest||''))
+        const basis=await call(client,'static_weekly_read_coverall_activation_basis',[actor.managerId,id,revision]);
+        if(!basis){
+          // Old packets and their original receipts remain readable. They are
+          // not fresh employment-aware/typed-capacity activation authority.
+          const legacy=await call(client,'static_weekly_read_manual_activation_basis',[actor.managerId,id,revision]);
+          if(legacy?.schema!=='custodial.approved-manual-activation-preview-basis.v1'||legacy.managerId!==actor.managerId||legacy.packetId!==id)
+            throw fail('static_manual_activation_basis_invalid');
+          return{...legacy,schema:'custodial.approved-manual-activation-preview.v2',status:'CURRENT_TYPED_EMPLOYMENT_PACKET_REQUIRED',
+            originalPacketPreserved:true,published:false,activationEligible:false};
+        }
+        if(basis.schema!=='custodial.approved-manual-coverall-activation-preview-basis.v2'||basis.managerId!==actor.managerId
+          ||basis.packetId!==id||basis.expectedRevision!==revision||!/^[a-f0-9]{64}$/.test(basis.previewDigest||'')
+          ||basis.employmentRevisionVector?.length!==14||basis.currentPositions!==22||basis.additionalCapacityPositions!==8
+          ||basis.prospectivePositions!==30||basis.newEmployees!==0)
           throw fail('static_manual_activation_basis_invalid');
-        return{...basis,schema:'custodial.approved-manual-activation-preview.v1',status:'PREVIEW_ONLY',
-          solverInvoked:false,published:false,atomicRosterAndPublication:true};
+        return{...basis,schema:'custodial.approved-manual-activation-preview.v2',status:'PREVIEW_ONLY',
+          activationKind:'INITIAL_EMPLOYMENT_OPERATIONALIZATION',activationEligible:true,operationIdRequired:true,
+          normalPatternSolverInvoked:false,operationalAdjustmentPending:true,published:false,atomicRosterAndPublication:true};
       });
     },
-    async activateApprovedManualSchedule({manager,packetId,expectedRevision,previewDigest,idempotencyKey}) {
+    async activateApprovedManualSchedule({manager,packetId,operationId=null,expectedRevision,previewDigest,idempotencyKey,signal=null,deadlineAt=null}) {
       const actor=requireManager(manager),id=requireUuid(packetId,'static_manual_activation_packet_required'),revision=requireRevision(expectedRevision),
-        key=requireIdempotencyKey(idempotencyKey),preview=text(previewDigest);
-      if(key.length>120||!/^[a-f0-9]{64}$/.test(preview))throw fail('static_manual_activation_identity_invalid');
-      const request={managerId:actor.managerId,packetId:id,expectedRevision:revision,previewDigest:preview,idempotencyKey:key};
+        key=requireIdempotencyKey(idempotencyKey),preview=text(previewDigest),requestContext=managerRequest.getStore(),
+        startedAt=performance.now(),expiresAt=Math.min(deadlineAt==null?Infinity:Number(deadlineAt),requestContext?.deadlineAt??Infinity,
+          startedAt+STATIC_WEEKLY_MANAGER_OPERATION_DEADLINE_MS);
+      if(key.length>120||!/^[a-f0-9]{64}$/.test(preview)||!Number.isFinite(expiresAt))throw fail('static_manual_activation_identity_invalid');
       return transaction(async client=>{
         await lockStaticWeeklyAuthority(client);
-        const prior=await call(client,'static_weekly_read_manual_activation_confirmation',[actor.managerId,key]);
-        if(prior){
-          if(canonicalJson(prior.request)!==canonicalJson(request)||prior.receipt?.schema!=='custodial.approved-manual-activation-confirmation.v1')
+        const legacy=await call(client,'static_weekly_read_manual_activation_confirmation',[actor.managerId,key]);
+        if(legacy){
+          const oldRequest={managerId:actor.managerId,packetId:id,expectedRevision:revision,previewDigest:preview,idempotencyKey:key};
+          if(canonicalJson(legacy.request)!==canonicalJson(oldRequest)||legacy.receipt?.schema!=='custodial.approved-manual-activation-confirmation.v1')
             throw fail('static_manual_activation_original_identity_conflict');
+          return{...legacy.receipt,status:'ACCEPTED_ORIGINAL_RECEIPT',replayed:true,currentReadbackNotRepeated:true};
+        }
+        const credential=requireUuid(manager.credential_id,'static_manual_activation_current_credential_required'),device=text(manager.device_id),access=text(manager.access_level);
+        if(!device||!['full_access','read_only'].includes(access))throw fail('static_manual_activation_current_credential_required');
+        const prior=await call(client,'static_weekly_read_coverall_activation_request',[actor.managerId,key,credential,device,access]);
+        const operation=requireUuid(operationId,'static_manual_activation_original_operation_required'),
+          request={managerId:actor.managerId,packetId:id,operationId:operation,expectedRevision:revision,previewDigest:preview,idempotencyKey:key};
+        if(prior){
+          if(canonicalJson(prior.request)!==canonicalJson(request)||prior.receipt?.schema!=='custodial.approved-manual-coverall-source-confirmation.v2'
+            ||prior.receipt.operationId!==operation)throw fail('static_manual_activation_original_identity_conflict');
           return{...prior.receipt,status:'ACCEPTED_ORIGINAL_RECEIPT',replayed:true,currentReadbackNotRepeated:true};
         }
-        const accepted=await call(client,'static_weekly_activate_approved_manual_schedule',[actor.managerId,id,revision,preview,key]);
-        if(accepted?.schema!=='custodial.approved-manual-activation-confirmation.v1'||accepted.status!=='PERSISTED_CURRENT'
-          ||accepted.ok!==true||accepted.persistence_status!=='PERSISTED'||accepted.packetId!==id||accepted.previewDigest!==preview
-          ||accepted.atomicRosterAndPublication!==true||accepted.solverInvoked!==false||accepted.weeklyBaselineChanged!==false)
+        await call(client,'static_weekly_bind_coverall_activation_request',[actor.managerId,operation,key,id,revision,preview,credential,device,access]);
+        let actualSelectionSolverInvoked=null;
+        const completed=await prepareApprovedManualCoverAllInitialOnCurrentTransaction({client,managerId:actor.managerId,packetId:id,operationId:operation,
+          expectedRevision:revision,previewDigest:preview,credentialId:credential,deviceId:device,sessionAccess:access,
+          prepareOperational:async({beginning})=>{
+            assertOperationActive(signal);
+            const input=approvedManualInitialEmploymentWorkerInput({basis:beginning.basis,actor,operationId:operation}),
+              workerResult=await prepareApprovedManualPeriodIsolated(input,{deadlineAtMilliseconds:expiresAt-STATIC_WEEKLY_MANAGER_CLEANUP_RESERVE_MS});
+            assertOperationActive(signal);
+            const native=approvedManualInitialEmploymentTransport({workerInput:input,workerResult,basis:beginning.basis,operationId:operation});
+            actualSelectionSolverInvoked=workerResult.period.solverInvoked;
+            return native;
+          }});
+        const accepted=completed.receipt;
+        if(completed.state!=='FINALIZED_IN_ORIGINAL_UNCOMMITTED_TRANSACTION'||completed.committed!==false||!completed.callerMustCommit
+          ||accepted.schema!=='custodial.approved-manual-coverall-source-confirmation.v2'||accepted.status!=='PERSISTED_CURRENT'
+          ||accepted.operationId!==operation||accepted.managerId!==actor.managerId||accepted.actualPositions!==30||accepted.newEmployeesCreated!==false
+          ||accepted.weeklyBaselineChanged!==false||accepted.samePhysicalTransaction!==true
+          ||accepted.operationalSelectionSolverInvoked!==actualSelectionSolverInvoked)
           throw fail('static_manual_activation_not_persisted');
-        const date=requireDate(accepted.serviceDate,'manual activation date'),snapshot=await snapshotFor(client,date),
+        const date=requireDate(accepted.frameStart,'manual activation date'),snapshot=await snapshotFor(client,date),
           lunch=await call(client,'static_weekly_v8_read_lunch_document',[date]);
-        if(snapshot.projection_status!=='current'||snapshot.current_publication?.publication_id!==accepted.publication_id
-          ||snapshot.latest_projection?.projection_id!==accepted.projection_id||snapshot.authority_revision!==accepted.authority_revision
-          ||snapshot.week_start!==date||lunch.persistence_status!=='PERSISTED'||lunch.projection_id!==accepted.projection_id
-          ||lunch.document_identity!==accepted.lunch_document_identity)
+        if(snapshot.projection_status!=='current'||snapshot.current_publication?.publication_id!==accepted.publicationId
+          ||snapshot.latest_projection?.projection_id!==accepted.projectionId||snapshot.authority_revision!==accepted.authorityRevision
+          ||snapshot.week_start!==date||lunch.persistence_status!=='PERSISTED'||lunch.projection_id!==accepted.projectionId
+          ||lunch.document_identity!==accepted.lunchDocumentIdentity)
           throw fail('static_manual_activation_current_readback_mismatch');
-        return accepted;
-      },{reconcileManagerId:actor.managerId});
+        // transaction() owns the actual COMMIT after this callback and rechecks
+        // the current request actor. The baseline alone never exits as success.
+        return{...accepted,packetId:id,previewDigest:preview,idempotencyKey:key,normalPatternSolverInvoked:false,
+          operationalSelectionSolverInvoked:actualSelectionSolverInvoked,atomicRosterAndPublication:true};
+      },{reconcileManagerId:actor.managerId,signal,deadlineAt:expiresAt});
     },
-    async getApprovedManualActivationOutcome({manager,idempotencyKey}) {
-      const actor=requireManager(manager),key=requireIdempotencyKey(idempotencyKey);
+    async getApprovedManualActivationOutcome({manager,idempotencyKey,operationId=null}) {
+      const actor=requireManager(manager),key=requireIdempotencyKey(idempotencyKey),
+        operation=operationId===null?null:requireUuid(operationId,'static_manual_activation_original_operation_required');
       return transaction(async client=>{
         await lockStaticWeeklyAuthority(client);
-        const original=await call(client,'static_weekly_read_manual_activation_confirmation',[actor.managerId,key]);
-        return{schema:'custodial.approved-manual-activation-status.v1',state:original?'ACCEPTED':'NOT_FOUND',
-          idempotencyKey:key,original:original||null,doesNotAuthorizeRetry:true};
+        const legacy=await call(client,'static_weekly_read_manual_activation_confirmation',[actor.managerId,key]);
+        if(legacy)return{schema:'custodial.approved-manual-activation-status.v2',state:'ACCEPTED',idempotencyKey:key,
+          original:legacy,originalPacketPreserved:true,doesNotAuthorizeRetry:true};
+        const credential=requireUuid(manager.credential_id,'static_manual_activation_current_credential_required'),device=text(manager.device_id),access=text(manager.access_level);
+        if(!device||!['full_access','read_only'].includes(access))throw fail('static_manual_activation_current_credential_required');
+        const original=await call(client,'static_weekly_read_coverall_activation_request',[actor.managerId,key,credential,device,access]);
+        if(operation!==null&&original&&original.operationId!==operation)
+          throw fail('static_manual_activation_original_identity_conflict');
+        return{schema:'custodial.approved-manual-activation-status.v2',state:original?'ACCEPTED':'NOT_FOUND',
+          idempotencyKey:key,operationId:original?.operationId??operation,original:original||null,doesNotAuthorizeRetry:true};
       });
     },
     async getApprovedScheduleChoices({manager}) {
@@ -2059,14 +2164,36 @@ export function createStaticWeeklyControlPlane({
             requirePrincipal(command);meter.checkpoint();
             const manual=source.compiler_input?.version?.manualGroupRatingAuthority?.manifestSha256===
               'fe02bbdebc736d95360b55cc7dfe5b73c5a9eaa76f364f1c0f4420a0afb9950f';
-            let overlay,manualBasis=null,manualWorkerInput=null;
+            let overlay,manualBasis=null,manualWorkerInput=null,retainedCancellationDays=[];
             const originalSource=canonicalJson(source),originalSnapshot=canonicalJson(snapshot),bases=[];
             if(manual){
-              manualBasis=await call(client,'static_weekly_manual_period_basis',[actor.managerId,publicationId,weekStart,expectedRevision,operation]);
+              const coverallBasis=await call(client,'static_weekly_coverall_preparing_basis',[actor.managerId,operation,publicationId,weekStart,expectedRevision]);
+              manualBasis=coverallBasis.periodBasis;
               requirePrincipal(command);meter.checkpoint();
               if(canonicalJson(manualBasis.originalSource)!==originalSource)throw fail('staffing_approved_original_source_changed');
-              manualWorkerInput=approvedManualStaffingWorkerInput({basis:manualBasis,week:readApprovedManualWeek(),actor,
-                operationId:operation,expectedRevision,frameStart:weekStart});
+              manualWorkerInput=coverallBasis.choice&&semantic.commandKind!=='cancel_absence'
+                ?approvedManualCoverAllWorkerInput({basis:manualBasis,week:readApprovedManualWeek(),actor,operationId:operation,
+                  expectedRevision,frameStart:weekStart,choice:coverallBasis.choice})
+                :approvedManualStaffingWorkerInput({basis:manualBasis,week:readApprovedManualWeek(),actor,
+                  operationId:operation,expectedRevision,frameStart:weekStart});
+              if(coverallBasis.choice&&semantic.commandKind==='cancel_absence'){
+                await call(client,'static_weekly_coverall_bind_actor',[operation,actor.managerId,
+                  requireUuid(manager.credential_id,'static_manual_coverall_current_credential_required'),manager.device_id,manager.access_level]);
+                requirePrincipal(command);meter.checkpoint();
+                retainedCancellationDays=coverallBasis.retainedDays.filter(r=>r.serviceDate>=semantic.startDate&&r.serviceDate<=semantic.endDate);
+                if(!retainedCancellationDays.length)throw fail('static_manual_coverall_retained_cancellation_basis_required');
+                const days=new Map(manualWorkerInput.priorDays.map(d=>[d.serviceDate,d]));
+                for(const r of retainedCancellationDays){
+                  if(r.publicationId!==publicationId||r.sourceId!==manualBasis.sourceId||r.dayBasis?.kind!=='ABSENCE'
+                    ||r.dayBasis.serviceDate!==r.serviceDate||r.dayBasis.input?.absentPersonIds?.length!==2
+                    ||r.dayBasis.input.sourceDigest!==manualBasis.normalSourceDigest||!/^[a-f0-9]{64}$/.test(r.envelopeIdentity??'')
+                    ||!coverallBasis.normalSources.some(x=>x.sourceId===r.sourceId&&x.publicationId===publicationId
+                      &&postgresJsonbContentDigest(x.source)===manualBasis.normalSourceDigest))
+                    throw fail('static_manual_coverall_retained_cancellation_basis_changed');
+                  days.set(r.serviceDate,clone(r.dayBasis));
+                }
+                manualWorkerInput=captureApprovedManualPeriodWorkerInput({...manualWorkerInput,priorDays:[...days.values()].sort((a,b)=>a.serviceDate.localeCompare(b.serviceDate))});
+              }
             }else{
               overlay=createStaffingWeekPreviewInput({operationId:operation,managerId:actor.managerId,
                 semanticBody:semantic,expectedRevision,weekStart,source,currentServiceDate,originalCancellationTarget});
@@ -2083,6 +2210,15 @@ export function createStaticWeeklyControlPlane({
             try{
               if(manual){
                 const result=await prepareApprovedManualPeriodIsolated(manualWorkerInput,{deadlineAtMilliseconds:weekDeadline});
+                for(const r of retainedCancellationDays){
+                  const kept=result.period?.days?.find(d=>d.serviceDate===r.serviceDate);
+                  if(kept?.kind!=='ABSENCE'||kept.plan?.planDigest!==r.dayBasis.plan?.planDigest
+                    ||canonicalJson(kept.input)!==canonicalJson(r.dayBasis.input))
+                    throw fail('static_manual_coverall_cancellation_must_retain_original_two_plan');
+                }
+                if(result.period?.status==='COVERAGE_CONSTRAINTS_UNRESOLVED'
+                  &&result.period.issues?.some(issue=>issue.reason==='THIRD_ABSENCE_NEEDS_THE_ACCEPTED_TWO_ABSENCE_PLAN_AND_CONFIRMED_COVERALL'))
+                  throw fail('static_manual_coverall_choice_required','Confirm actual CoverAll hours against the retained two-absence plan; the original request remains PREPARING.');
                 projection=approvedManualPendingStaffingTransport({workerInput:manualWorkerInput,workerResult:result,basis:manualBasis});
                 overlay={dates:projection.envelope.semantic_snapshot.scopeDates,input:manualWorkerInput,
                   publication:{weekStart,publicationId,versionId:manualBasis.versionId,authorityRevision:expectedRevision}};
@@ -2230,7 +2366,12 @@ export function createStaticWeeklyControlPlane({
       return transaction(async client => {
         const command = await call(client, "static_weekly_v10_read_staffing_command", [
           requireUuid(operationId, "staffing_operation_id_required"), actor.managerId]);
-        if (command) requireOriginalStaffingManager(manager, command);
+        if (command) {
+          requireOriginalStaffingManager(manager, command);
+          const coverallChoice=await readApprovedManualCoverAllChoiceSummary({client,call,actor,operationId});
+          requireOriginalStaffingManager(manager, command);
+          return {...command,coverallChoice};
+        }
         return command;
       });
     },
@@ -2713,11 +2854,23 @@ export function createStaticWeeklyControlPlane({
         ]),
       }), { reconcileManagerId: actor.managerId });
     },
+    async getApprovedManualRecurringMaterializationStatus({manager,idempotencyKey}) {
+      const actor=requireManager(manager,'regenerate_routes'),key=requireIdempotencyKey(idempotencyKey);
+      return transaction(client=>call(client,'static_weekly_read_manual_recurring_outcome',[actor.managerId,key,
+        requireUuid(manager.credential_id,'approved_manual_recurring_current_credential_required'),manager.device_id,manager.access_level]));
+    },
     async materializeProjection({ manager, publicationId, serviceDate, expectedRevision, idempotencyKey, signal=null, deadlineAt=null }) {
-      const actor = requireManager(manager,"regenerate_routes"); const weekStart = requireMonday(serviceDate, "projection start"); const effectivePublicationId = requirePublicationId(publicationId); const revision = requireRevision(expectedRevision); const key = requireIdempotencyKey(idempotencyKey);
+      const actor = requireManager(manager,"regenerate_routes"); const requestedDate = requireDate(serviceDate, "projection start"); const effectivePublicationId = requirePublicationId(publicationId); const revision = requireRevision(expectedRevision); const key = requireIdempotencyKey(idempotencyKey);
       return transaction(async (client) => {
         await lockStaticWeeklyAuthority(client);
         await client.query("select pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended($1,0))", ["memphis-static-weekly-authority"]);
+        const publishedSource=await sourceFor(client,effectivePublicationId,requestedDate),manual=isApprovedManualPublication(publishedSource),
+          weekStart=manual?approvedManualMaterializationFrame(publishedSource,requestedDate):requireMonday(requestedDate,'projection start');
+        if(manual){
+          await authorizeManualRecurringMaterialization(client,manager);
+          const result=await materializeCurrentProjection(client,{actor,manager,publicationId:effectivePublicationId,weekStart,expectedRevision:revision,idempotencyKey:key,signal,deadlineAt});
+          await authorizeManualRecurringMaterialization(client,manager);return result;
+        }
         await authorizeRouteRegeneration(client,manager,weekStart,effectivePublicationId);
         const current = await snapshotFor(client, weekStart);
         if (current?.projection_status === "current" && text(current?.current_publication?.publication_id) === effectivePublicationId && text(current?.latest_projection?.week_start) === weekStart) {
@@ -2748,20 +2901,27 @@ export function createStaticWeeklyControlPlane({
       }, {signal,deadlineAt,reconcileManagerId:actor.managerId});
     },
     async rebuildCurrentProjection({ manager, weekStart, expectedRevision, idempotencyKey, signal=null, deadlineAt=null }) {
-      const actor = requireManager(manager,"regenerate_routes"); const projectionWeekStart = requireMonday(weekStart, "projection week start"); const key = requireIdempotencyKey(idempotencyKey);
+      const actor = requireManager(manager,"regenerate_routes"); const requestedDate = requireDate(weekStart, "projection week start"); const key = requireIdempotencyKey(idempotencyKey);
       return transaction(async (client) => {
         await lockStaticWeeklyAuthority(client);
-        const snapshot = await snapshotFor(client, projectionWeekStart);
-        const effectivePublicationId=requirePublicationId(snapshot?.current_publication?.publication_id);
-        await authorizeRouteRegeneration(client,manager,projectionWeekStart,effectivePublicationId);
+        const requestedSnapshot = await snapshotFor(client, requestedDate),
+          requestedPublication=requirePublicationId(requestedSnapshot?.current_publication?.publication_id),
+          publishedSource=await sourceFor(client,requestedPublication,requestedDate),
+          manual=isApprovedManualPublication(publishedSource),
+          projectionWeekStart=manual?approvedManualMaterializationFrame(publishedSource,requestedDate):requireMonday(requestedDate,'projection week start'),
+          snapshot=projectionWeekStart===requestedDate?requestedSnapshot:await snapshotFor(client,projectionWeekStart),
+          effectivePublicationId=requirePublicationId(snapshot?.current_publication?.publication_id);
+        if(manual)await authorizeManualRecurringMaterialization(client,manager);
+        else await authorizeRouteRegeneration(client,manager,projectionWeekStart,effectivePublicationId);
         const result=await materializeCurrentProjection(client, {
-          actor,
+          actor,manager,
           publicationId: requirePublicationId(snapshot?.current_publication?.publication_id),
           weekStart: projectionWeekStart,
           expectedRevision: requireRevision(expectedRevision),
           idempotencyKey: projectionIdempotencyKey(key),signal,deadlineAt,
         });
-        await authorizeRouteRegeneration(client,manager,projectionWeekStart,effectivePublicationId);
+        if(manual)await authorizeManualRecurringMaterialization(client,manager);
+        else await authorizeRouteRegeneration(client,manager,projectionWeekStart,effectivePublicationId);
         return result;
       }, {signal,deadlineAt,reconcileManagerId:actor.managerId});
     },
@@ -2785,5 +2945,8 @@ export function createStaticWeeklyControlPlane({
       return closePromise;
     },
   };
+  Object.assign(api,createApprovedManualCoverAllManagement({transaction,requireManager,lockAuthority:lockStaticWeeklyAuthority,call,
+    prepareStaffingCommand:input=>api.prepareStaffingCommand(input)}));
+  return api;
 }
 import {approvedManualManagerView} from './approved-manual-manager-view.js';

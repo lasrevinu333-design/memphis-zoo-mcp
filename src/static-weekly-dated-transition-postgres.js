@@ -10,7 +10,7 @@ function connectionFailure(error){
   ||['connection terminated','connection error','not queryable','timeout exceeded when trying to connect'].some(s=>message.includes(s));
 }
 
-export function createOctoberDatedPostgresStore({database,plan}){
+export function createOctoberDatedPostgresStore({database,plan,bindRequest=null}){
  if(typeof database?.connect!=='function')throw Error('dated_transition_database_required');
  return {contract:DATED_TRANSITION_STORE_CONTRACT,async transaction(work){
   let client;
@@ -28,6 +28,7 @@ export function createOctoberDatedPostgresStore({database,plan}){
    // Same top-level lock as existing weekly authority. Snapshot after waiting.
    await client.query('select pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended($1,0))',['memphis-static-weekly-authority']);
    async function call(operation,args={}){
+    if(bindRequest)await bindRequest(client);
     const result=await client.query('select public.custodial_dated_control($1,$2::jsonb) as data',
      [operation,JSON.stringify({managerId,...args})]);
     return result.rows[0]?.data;
@@ -43,6 +44,7 @@ export function createOctoberDatedPostgresStore({database,plan}){
    };
    const result=await work(tx);
    if(asynchronousConnectionError)throw asynchronousConnectionError;
+   if(bindRequest)await bindRequest(client);
    await client.query('commit');begun=false;
    if(asynchronousConnectionError)throw asynchronousConnectionError;
    return result;
@@ -56,7 +58,7 @@ export function createOctoberDatedPostgresStore({database,plan}){
   }finally{client.removeListener?.('error',onConnectionError);client.release(discardClientError||asynchronousConnectionError||undefined);}
  }};
 }
-export function createConfiguredOctoberDatedController(database){
+export function createConfiguredOctoberDatedController(database,{bindRequest=null}={}){
  const plan=loadPreparedOctoberDatedPlan(JSON.parse(readFileSync(new URL('../config/custodial-october-dated-plan-20261001.json',import.meta.url),'utf8')));
- return createOctoberDatedMaterializationController({plan,store:createOctoberDatedPostgresStore({database,plan})});
+ return createOctoberDatedMaterializationController({plan,store:createOctoberDatedPostgresStore({database,plan,bindRequest})});
 }

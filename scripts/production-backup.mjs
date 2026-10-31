@@ -35,7 +35,7 @@ import {
 } from "./disaster-recovery-storage.mjs";
 import {
   productionBackupPgDumpDockerArgs,
-  productionBackupDataSchemas,
+  productionBackupDataSchemas,productionBackupAllowedDataSchemas,
   productionBackupSnapshotStatements,
   requireProductionBackupDataScope,
   productionBackupRowCount,
@@ -57,7 +57,8 @@ const backupDirInput = String(process.env.BACKUP_DIR || "").trim();
 const backupDir = backupDirInput ? resolve(backupDirInput) : "";
 const pageSize = Math.max(100, Math.min(5000, Number(process.env.BACKUP_PAGE_SIZE || 1000)));
 const startedAt = new Date().toISOString();
-const schemas = productionBackupDataSchemas;
+const schemaCandidates=productionBackupAllowedDataSchemas;
+let schemas = productionBackupDataSchemas;
 const manifestSigningKey = requireSigningKey(process.env.BACKUP_MANIFEST_SIGNING_KEY, "BACKUP_MANIFEST_SIGNING_KEY");
 const manifestSigningKeyId = String(process.env.BACKUP_MANIFEST_SIGNING_KEY_ID || "").trim();
 const backupToolCommit = String(process.env.BACKUP_TOOL_COMMIT || "").trim().toLowerCase();
@@ -373,11 +374,11 @@ try {
   const namespaceResult = await client.query(`
     select nspname schema_name,has_schema_privilege(current_user,oid,'USAGE') usage_allowed
     from pg_namespace where nspname=any($1::text[]) order by nspname
-  `, [schemas]);
+  `, [schemaCandidates]);
   const privateRelationResult = await client.query(`
-    select c.relname table_name,c.relkind::text relation_kind,c.relispartition is_partition
+    select n.nspname schema_name,c.relname table_name,c.relkind::text relation_kind,c.relispartition is_partition,has_table_privilege(current_user,c.oid,'SELECT') select_allowed
     from pg_class c join pg_namespace n on n.oid=c.relnamespace
-    where n.nspname='custodial_release_identity' and c.relkind in ('r','p','f') order by c.relname
+    where n.nspname in ('custodial_release_identity','custodial_employment','custodial_coverall','custodial_leadership_private') and c.relkind in ('r','p','f') order by n.nspname,c.relname
   `);
   const catalogResult = await client.query(`
     select n.nspname schema_name, c.relname table_name,
@@ -398,8 +399,8 @@ try {
     from pg_class c join pg_namespace n on n.oid=c.relnamespace
     where n.nspname=any($1::text[]) and c.relkind in ('r','p') and not c.relispartition
     order by n.nspname,c.relname
-  `, [schemas]);
-  requireProductionBackupDataScope(namespaceResult.rows,privateRelationResult.rows,catalogResult.rows);
+  `, [schemaCandidates]);
+  schemas=requireProductionBackupDataScope(namespaceResult.rows,privateRelationResult.rows,catalogResult.rows);
 
   for (const catalog of catalogResult.rows) {
     const target = qualified(catalog.schema_name, catalog.table_name);

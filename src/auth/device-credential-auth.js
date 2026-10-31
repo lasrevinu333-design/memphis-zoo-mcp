@@ -6,6 +6,8 @@ import { isDeepStrictEqual } from "node:util";
 import { parseNativeProviderJson } from "../native-provider-json.js";
 // END native credential observation imports.
 
+let custodialLeadershipSecurity=null;
+export function configureCustodialLeadershipSecurityBridge(bridge){custodialLeadershipSecurity=bridge;}
 const DEVICE_COOKIE_NAME = "memphis_device_credential";
 const DEVICE_SECURITY_COOKIE_NAME = "memphis_device_security_session";
 const DEFAULT_CREDENTIAL_TTL_DAYS = 3650;
@@ -1257,6 +1259,7 @@ async function auditDeviceSecurity(store, req, { eventType, success, reason = nu
 }
 
 async function verifyDeviceSecuritySession(req, { store, env = process.env, requireCsrf = false } = {}) {
+  if(custodialLeadershipSecurity?.applies(req))return custodialLeadershipSecurity.verify(req,{requireCsrf});
   if (!(await hasAuthoritativeSecurityAdminRole(req, store))) {
     return { ok: false, status: 403, error: "Security Admin access is required." };
   }
@@ -1309,6 +1312,7 @@ function makeDeviceSecurityMiddleware({ store, env = process.env } = {}) {
 // Recovery must supply an actual authoritative registry store: the older
 // role-only fallback is deliberately unavailable to this new purpose.
 export async function verifySameOriginalRecoverySecuritySession(req, {store,env=process.env,requireCsrf=false}={}) {
+  if(custodialLeadershipSecurity?.applies(req))return custodialLeadershipSecurity.verify(req,{requireCsrf});
   if(typeof store?.getManager!=='function'||typeof store?.getDeviceSecurityConfig!=='function'
     ||typeof store?.findDeviceSecuritySession!=='function') {
     return {ok:false,status:503,error:'same_original_recovery_security_unavailable'};
@@ -1498,6 +1502,7 @@ export function installDeviceCredentialRoutes(app, {
 
   app.get("/admin-api/device-security/session", requireOpsAuth, async (req, res) => {
     try {
+      if(custodialLeadershipSecurity?.applies(req))return await custodialLeadershipSecurity.session(req,res);
       if (!(await hasAuthoritativeSecurityAdminRole(req, store))) {
         res.status(403).json({ ok: false, error: "Security Admin access is required.", device_security_locked: true });
         return;
@@ -1517,12 +1522,14 @@ export function installDeviceCredentialRoutes(app, {
         },
       });
     } catch (error) {
+      if(custodialLeadershipSecurity?.applies(req))return res.status(error?.status||503).json({ok:false,error:"Current Custodial security scope could not be issued."});
       res.status(500).json({ ok: false, error: error?.message || "Device Security session check failed." });
     }
   });
 
   app.post("/admin-api/device-security/unlock", requireOpsAuth, async (req, res) => {
     try {
+      if(custodialLeadershipSecurity?.applies(req)){if(req.body)delete req.body.password;return await custodialLeadershipSecurity.session(req,res);}
       if (!(await hasAuthoritativeSecurityAdminRole(req, store))) {
         await auditDeviceSecurity(store, req, { eventType: "device_security_unlock_denied", success: false, reason: "not_security_admin", env });
         res.status(403).json({ ok: false, error: "Device Security password rejected." });
@@ -1571,17 +1578,20 @@ export function installDeviceCredentialRoutes(app, {
       await auditDeviceSecurity(store, req, { eventType: "device_security_unlock_success", success: true, env });
       res.status(200).json({ ok: true, data: { unlocked: true, expires_at: row?.expires_at || expiresAt, csrf_token: csrf } });
     } catch (error) {
+      if(custodialLeadershipSecurity?.applies(req))return res.status(error?.status||503).json({ok:false,error:"Current Custodial security scope could not be issued."});
       res.status(500).json({ ok: false, error: "Device Security unlock failed." });
     }
   });
 
   app.post("/admin-api/device-security/lock", requireOpsAuth, async (req, res) => {
     try {
+      if(custodialLeadershipSecurity?.applies(req))return await custodialLeadershipSecurity.lock(req,res);
       const parts = deviceSecuritySessionParts(req);
       if (parts) await store.revokeDeviceSecuritySession?.(parts.sessionId, "manual_lock");
       clearDeviceSecurityCookie(res, req, env);
       res.status(200).json({ ok: true, data: { locked: true } });
     } catch (error) {
+      if(custodialLeadershipSecurity?.applies(req))return res.status(error?.status||503).json({ok:false,error:"Custodial security scope revocation was not confirmed."});
       clearDeviceSecurityCookie(res, req, env);
       res.status(200).json({ ok: true, data: { locked: true } });
     }
@@ -1589,6 +1599,7 @@ export function installDeviceCredentialRoutes(app, {
 
   app.post("/admin-api/device-security/sessions/revoke-all", requireOpsAuth, requireDeviceSecurity, async (_req, res) => {
     try {
+      if(custodialLeadershipSecurity?.applies(_req))return await custodialLeadershipSecurity.revokeAll(_req,res);
       const revoked = await store.revokeAllDeviceSecuritySessions?.("security_admin_revoke_all");
       res.status(200).json({ ok: true, data: { revoked_count: revoked?.length || 0 } });
     } catch (error) {

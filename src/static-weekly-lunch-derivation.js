@@ -214,7 +214,14 @@ export function deriveLunchCoverageFromPreparedProblem(problem, weeklyAssignment
         const context=problem.availabilityByDaySlot.get(`${day}\0${slot.id}`);
         const person=problem.incumbencyByDaySlot.get(`${day}\0${slot.id}`);
         if((!person?.personId && person?.kind!=='CONTRACTOR_CAPACITY') || !availableForLunch(context,lunch))continue;
-        const anchors=normalAnchors(rowsBySlot.get(slot.id)||[],byWork,lunch);
+        let anchors=normalAnchors(rowsBySlot.get(slot.id)||[],byWork,lunch);
+        // A full-hour policy can name an available helper without current
+        // area custody. Its accepted route anchor still supplies a real base.
+        if(!anchors.length && fullHourLoans
+          && id(context.availability.acceptedRouteAnchorLocationId)
+          && typeof context.availability.acceptedRouteProvenance==='string'
+          && context.availability.acceptedRouteProvenance.trim())
+          anchors=[context.availability.acceptedRouteAnchorLocationId];
         if(!anchors.length)continue;
         contexts.set(slot.id,{...context,person});
         for(let i=0;i<areas.length;i++) {

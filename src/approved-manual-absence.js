@@ -28,7 +28,7 @@ export function readApprovedManualAbsenceObjective(){
 // personal eligibility, qualifications and the bounded local HiGHS worker.
 // This returns DATA only: it cannot authorize a publication, edit a weekly
 // baseline, invent employee availability, book contractors or issue receipts.
-export function prepareApprovedManualAbsenceDay({week,source,ownerConfig,serviceDate,absentPersonIds}){
+export function prepareApprovedManualAbsenceDay({week,source,ownerConfig,serviceDate,absentPersonIds,preStartPersonIds=[]}){
  assert.match(serviceDate,/^\d{4}-\d{2}-\d{2}$/);
  const date=new Date(serviceDate+'T12:00:00Z');assert.equal(date.toISOString().slice(0,10),serviceDate);
  const weekday=date.getUTCDay(),day=week.days.find(d=>d.weekday===weekday),version=source.version||source.versions?.[0];
@@ -38,6 +38,7 @@ export function prepareApprovedManualAbsenceDay({week,source,ownerConfig,service
  assert.equal(week.ratings.length,23);assert.equal(week.ratings.reduce((n,r)=>n+r.score,0),136);
  assert.ok(Array.isArray(absentPersonIds)&&absentPersonIds.every(p=>typeof p==='string'));
  assert.equal(new Set(absentPersonIds).size,absentPersonIds.length,'Duplicate absent employee');
+ assert.ok(Array.isArray(preStartPersonIds)&&new Set(preStartPersonIds).size===preStartPersonIds.length&&preStartPersonIds.every(id=>absentPersonIds.includes(id)),'Pre-start is a distinct unavailable classification');
  const binding=new Map(week.referenceBindings.people.map(p=>[p.approvedName,p])),
   groupBinding=new Map(week.referenceBindings.groups.map(g=>[g.approvedGroup,g])),
   absent=new Set(absentPersonIds),roster=day.employees.map(p=>{
@@ -57,7 +58,7 @@ export function prepareApprovedManualAbsenceDay({week,source,ownerConfig,service
  const common={schema:'custodial.approved-manual-absence-day-input.v1',serviceDate,weekday,
   manifestSha256:week.manifestSha256,manualDataDigest:week.dataDigest,sourceDigest:digest(source),
   formulaObjectiveDigest:digest(readApprovedManualAbsenceObjective()),
-  absentPersonIds:[...absent].sort(),checkedWindow:structuredClone(day.checkedWindow),
+  absentPersonIds:[...absent].sort(),...(preStartPersonIds.length?{preStartPersonIds:[...preStartPersonIds].sort(),preStartClassification:'PRE_START_NOT_PTO'}:{}),checkedWindow:structuredClone(day.checkedWindow),
   publicationEligible:false,formulaApproved:true,productionWritten:false,contractorBooked:false};
  if(absent.size===0)return{...common,status:'UNCHANGED_APPROVED_DAY',day:structuredClone(day),solverInvoked:false};
  if(absent.size>=3)return{...common,status:'MANAGER_COVERALL_DECISION_REQUIRED',solverInvoked:false,
@@ -538,7 +539,7 @@ export async function solveApprovedManualAbsencePeriod({week,source,ownerConfig,
     ||prior.input.absentPersonIds.some(id=>!absent.includes(id))||!change.substitute){
     issues.push(fail(serviceDate,'THIRD_ABSENCE_NEEDS_THE_ACCEPTED_TWO_ABSENCE_PLAN_AND_CONFIRMED_COVERALL'));continue;
    }
-   const basis=prepareApprovedManualAbsenceDay({week,source,ownerConfig,serviceDate,absentPersonIds:prior.input.absentPersonIds});
+   const basis=prepareApprovedManualAbsenceDay({week,source,ownerConfig,serviceDate,absentPersonIds:prior.input.absentPersonIds,preStartPersonIds:prior.input.preStartPersonIds||[]});
    validatePrior(prior,basis);const added=absent.filter(id=>!basis.absentPersonIds.includes(id));assert.equal(added.length,1);
    try{
     const overlay=applyApprovedManualCoverAllSubstitute({acceptedPlan:prior.plan,input:basis,proposal,source,
@@ -547,12 +548,12 @@ export async function solveApprovedManualAbsencePeriod({week,source,ownerConfig,
    }catch(error){if(error?.code!=='ERR_ASSERTION')throw error;issues.push(fail(serviceDate,'CONFIRMED_COVERALL_HOURS_OR_RELIEF_DO_NOT_COVER_THE_RETAINED_PLAN'));}
    continue;
   }
-  const input=prepareApprovedManualAbsenceDay({week,source,ownerConfig,serviceDate,absentPersonIds:absent});
+  const input=prepareApprovedManualAbsenceDay({week,source,ownerConfig,serviceDate,absentPersonIds:absent,preStartPersonIds:change?.preStartPersonIds||[]});
   if(input.status==='UNCHANGED_APPROVED_DAY'){prepared.push({serviceDate,kind:'NORMAL',approvedDay:input.day});continue;}
   if(input.status!=='PREPARED_FOR_EXPLICIT_OBJECTIVE'){
    issues.push({serviceDate,reason:'STATIC_HOURS_OR_FULL_HOUR_COVERAGE_UNRESOLVED',constraints:structuredClone(input.issues||[])});continue;
   }
-  if(prior&&prior.input?.absentPersonIds.length===absent.length&&prior.input.absentPersonIds.every(id=>absent.includes(id))){
+  if(prior&&prior.input?.inputDigest===input.inputDigest){
    validatePrior(prior,input);prepared.push({serviceDate,kind:'ABSENCE',input,plan:structuredClone(prior.plan),reused:true});
   }else prepared.push({serviceDate,kind:'ABSENCE',input});
  }

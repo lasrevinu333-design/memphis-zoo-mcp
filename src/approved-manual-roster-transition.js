@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {types} from 'node:util';
 import {postgresJsonbContentDigest as digest,canonicalAuthorityInput} from './static-weekly-schedule-program.js';
 import {contentDigest} from './static-weekly-schedule-model.js';
 import {prepareApprovedStaticTemplateProjection} from './static-weekly-recurring-staffing-adaptation.js';
@@ -9,12 +10,36 @@ const date=value=>{assert.match(value,/^\d{4}-\d{2}-\d{2}$/);assert.equal(new Da
 const active=(row,at)=>row.effectiveStart<=at&&(row.effectiveEnd===null||at<row.effectiveEnd);
 const history=row=>({personId:row.personId,displayName:row.displayName,effectiveStart:row.effectiveStart,effectiveEnd:row.effectiveEnd});
 
+// This is the exact six-field SQL snapshot, not the manager-view DTO.
+// Only its documented UI sibling may be excluded. No authority field or nested
+// row is normalized, dropped, cloned, or supplied from a guessed default.
+export function projectApprovedManualRosterSnapshot(value){
+ const fields=['schema','serviceDate','authorityRevision','parentPublication','rosterSlots','employees'];
+ assert.ok(value&&typeof value==='object'&&!types.isProxy(value)&&Object.getPrototypeOf(value)===Object.prototype,'Plain SQL roster snapshot required');
+ const own=Object.getOwnPropertyDescriptors(value),keys=Reflect.ownKeys(own);
+ assert.ok(keys.every(k=>typeof k==='string'&&(fields.includes(k)||k==='approvedManualActivation')),'Unknown roster snapshot field');
+ for(const key of fields)assert.ok(Object.hasOwn(own,key)&&Object.hasOwn(own[key],'value')&&own[key].enumerable,'Required roster snapshot data field');
+ if(Object.hasOwn(own,'approvedManualActivation')){
+  const descriptor=own.approvedManualActivation;assert.ok(Object.hasOwn(descriptor,'value')&&descriptor.enumerable,'UI sibling must be inert data');
+  const ui=descriptor.value;assert.ok(ui&&typeof ui==='object'&&!types.isProxy(ui)&&Object.getPrototypeOf(ui)===Object.prototype,'Documented activation UI sibling required');
+  const entries=Object.getOwnPropertyDescriptors(ui),allowed=['schema','serviceDate','authorityRevision','choices','active'];
+  assert.deepEqual(Reflect.ownKeys(entries).sort(),allowed.sort(),'Unknown or missing activation UI field');
+  for(const key of allowed)assert.ok(Object.hasOwn(entries[key],'value')&&entries[key].enumerable,'Activation UI getters are forbidden');
+  assert.equal(entries.schema.value,'custodial.approved-manual-activation-options.v2');
+  assert.equal(entries.serviceDate.value,own.serviceDate.value);assert.equal(entries.authorityRevision.value,own.authorityRevision.value);
+  assert.ok(Array.isArray(entries.choices.value)&&!types.isProxy(entries.choices.value));
+  assert.ok(entries.active.value===null||(typeof entries.active.value==='object'&&!types.isProxy(entries.active.value)&&Object.getPrototypeOf(entries.active.value)===Object.prototype));
+ }
+ return Object.fromEntries(fields.map(key=>[key,own[key].value]));
+}
+
 // Convert an explicit trusted readback into a proposed source/append-only
 // transfer. Never bootstrap a populated roster or copy candidate-only history.
 // This pure preparer cannot assert freshness, execute writers, grant devices,
 // deactivate employees or authorize a publication. The normal atomic command
 // must re-read the exact bound revision, parent and ranges before any write.
 export function prepareApprovedManualRosterTransition({week,draft,snapshot,effectiveStart}){
+ snapshot=projectApprovedManualRosterSnapshot(snapshot);
  assert.equal(snapshot.schema,'custodial.manual-live-roster-readback.v1');
  const at=date(effectiveStart);assert.equal(at,date(snapshot.serviceDate),'NOW uses the server operational date, not a guessed civil date or future Monday');
  assert.ok(Number.isSafeInteger(snapshot.authorityRevision)&&snapshot.authorityRevision>=0);
@@ -92,6 +117,7 @@ export function prepareApprovedManualRosterTransition({week,draft,snapshot,effec
 // fresh dependency/registry checks and atomic enrollment still belong to the
 // native successor. Existing roster/history and all normal duties stay intact.
 export function prepareApprovedManualCapacityTransition({week,draft,snapshot,selection}){
+ snapshot=projectApprovedManualRosterSnapshot(snapshot);
  const before=digest({week,draft,snapshot,selection}),
   roster=prepareApprovedManualRosterTransition({week,draft,snapshot,effectiveStart:snapshot.serviceDate}),
   mapped=mapLegacyContractorCapacitySourceData({source:roster.projectedSourceDraft,selection,
@@ -118,6 +144,7 @@ export function prepareApprovedManualCapacityTransition({week,draft,snapshot,sel
 // history and the SQL command appends closures/new ranges atomically. UUIDs are
 // explicit new source/version identities, never guessed employee identities.
 export function prepareApprovedManualActivationPackage({week,draft,snapshot,sourceId,versionId,templatePublicationId,templateId,packetId,managerId}){
+ snapshot=projectApprovedManualRosterSnapshot(snapshot);
  for(const id of [sourceId,versionId,templatePublicationId,packetId,managerId])assert.match(id,UUID);
  assert.ok(typeof templateId==='string'&&templateId.length>0&&templateId.length<=128);
  const transition=prepareApprovedManualRosterTransition({week,draft,snapshot,effectiveStart:snapshot.serviceDate}),
