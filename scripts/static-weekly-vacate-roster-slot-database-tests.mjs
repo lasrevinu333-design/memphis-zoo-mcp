@@ -77,11 +77,13 @@ try{
   'current28f/profile source-prefix153 raw ACL digest is retained as an observation, not historical runtime reproduction');
  const aclReference=JSON.parse(readFileSync(path.join(root,manifest.no_auto_profile.reference.path),'utf8'));
  const aclContract=aclReference.current294_public_r_S_acl_contract;
- // Keep the historical294 reference literal. The three appended migrations
- // add exactly these RPC-only/OAuth tables and five explicit service grants.
- // The appended full-hour source changes functions only; this exact relation
- // and grant census is unchanged and is still checked without an exception.
- const addedTables=['static_weekly_coverall_access_links','mcp_oauth_replay_artifacts_v2','mcp_oauth_token_families_v2'];
+ // Keep the historical294 reference and exact297 table/grant additions.
+ // Current301/302 also create these three owner-only activation tables.
+ // Source303 changes functions only. All relation identities and the complete
+ // nonowner grant census are still exact; no unknown relation is ignored.
+ const retained297Tables=['static_weekly_coverall_access_links','mcp_oauth_replay_artifacts_v2','mcp_oauth_token_families_v2'];
+ const activationTables=['static_weekly_manual_activation_confirmations','static_weekly_manual_activation_packets','static_weekly_manual_repeat_confirmations'];
+ const addedTables=[...retained297Tables,...activationTables];
  const expectedRelations=[...aclContract.expected_public_r_S_relations,...addedTables.map(relation_name=>({schema_name:'public',relation_name,relation_kind:'r',owner_name:'migration_owner'}))];
  const expectedGrants=[...aclContract.expected_public_r_S_nonowner_grants,
   ...[['mcp_oauth_replay_artifacts_v2',['SELECT','INSERT']],['mcp_oauth_token_families_v2',['SELECT','INSERT','UPDATE']]].flatMap(([table_name,privileges])=>privileges.map(privilege_type=>({schema_name:'public',table_name,grantee:'service_role',grantor:'migration_owner',privilege_type,is_grantable:false})))];
@@ -95,11 +97,16 @@ try{
  const exactSet=rows=>rows.map(row=>canonical(row)).sort();
  const relations=JSON.parse(sql(`select coalesce(json_agg(row_to_json(r)),'[]'::json) from (select n.nspname as schema_name,c.relname as relation_name,c.relkind::text as relation_kind,pg_get_userbyid(c.relowner) as owner_name from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind in ('r','S')) r`));
  for(const row of relations)row.owner_name=ownerAlias(row.owner_name);
- assert.deepEqual(exactSet(relations),exactSet(expectedRelations),'exact current297 public r/S identity, kind and owner set; historical294 plus three reviewed tables');
+ assert.deepEqual(exactSet(relations),exactSet(expectedRelations),'exact current303 public r/S identity, kind and owner set; retained294/297 plus owner-only activation tables');
  const grants=JSON.parse(sql(`select coalesce(json_agg(row_to_json(r)),'[]'::json) from (select n.nspname as schema_name,c.relname as table_name,coalesce(grantee.rolname,'PUBLIC') as grantee,pg_get_userbyid(a.grantor) as grantor,a.privilege_type,a.is_grantable from pg_class c join pg_namespace n on n.oid=c.relnamespace cross join lateral aclexplode(coalesce(c.relacl,acldefault(case when c.relkind='S' then 'S'::"char" else 'r'::"char" end,c.relowner))) a left join pg_roles grantee on grantee.oid=a.grantee where n.nspname='public' and c.relkind in ('r','S') and coalesce(grantee.rolname,'PUBLIC') not in ('postgres','supabase_admin')) r`));
  for(const row of grants)row.grantor=ownerAlias(row.grantor);
- assert.deepEqual(exactSet(grants),exactSet(expectedGrants),'exact source-derived current297 nonowner public r/S privilege, grantor and grantability set');
- assert.equal(sql("select count(*) from pg_class where relnamespace='public'::regnamespace and relname in ('static_weekly_coverall_access_links','mcp_oauth_replay_artifacts_v2','mcp_oauth_token_families_v2') and relrowsecurity").trim(),'3','all three new tables have RLS enabled without automatic grants');
+ assert.deepEqual(exactSet(grants),exactSet(expectedGrants),'exact source-derived current303 nonowner public r/S privilege, grantor and grantability set');
+ assert.equal(sql(`select count(*) from pg_class where relnamespace='public'::regnamespace and relname in (${addedTables.map(name=>"'"+name+"'").join(',')}) and relrowsecurity`).trim(),'6','all six exact appended tables have RLS enabled without automatic grants');
+ assert.equal(sql("select count(*) from pg_class where relnamespace='public'::regnamespace and relname in ('static_weekly_manual_activation_confirmations','static_weekly_manual_activation_packets') and relforcerowsecurity").trim(),'2','activation packet and confirmation tables retain forced RLS');
+ for(const table of activationTables)for(const role of ['anon','authenticated','service_role']){
+  assert.equal(sql(`select has_table_privilege('${role}','public.${table}','SELECT,INSERT,UPDATE,DELETE')`).trim(),'f',`${table} remains RPC-only for ${role}`);
+  assert.equal(sql(`select has_any_column_privilege('${role}','public.${table}','SELECT,INSERT,UPDATE,REFERENCES')`).trim(),'f',`${table} denies column-only direct ${role} access`);
+ }
  for(const table of addedTables)for(const role of ['anon','authenticated']){
   assert.equal(sql(`select has_table_privilege('${role}','public.${table}','SELECT,INSERT,UPDATE,DELETE')`).trim(),'f',`${table} denies direct ${role} access`);
  }
