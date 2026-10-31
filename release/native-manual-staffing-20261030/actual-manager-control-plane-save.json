@@ -1,0 +1,15 @@
+{
+  "scope": "ACTUAL_MANAGER_CONTROL_PLANE_WITH_OWNED_SQL",
+  "status": "PASS",
+  "productionWritten": false,
+  "genuineManagerBrowser": false,
+  "physicalNfc": false,
+  "operationId": "c0a5d1f3-f653-4113-97e6-a39569a16104",
+  "authorityRevision": 5,
+  "projectionId": "04cdeacb-fc58-4308-9807-300ff11ba679",
+  "nativeRows": 338,
+  "fullHourLunches": 38,
+  "earlierAcceptedMondayRowsRetained": 41,
+  "earlierAcceptedMondayLunchIdsRetained": 6,
+  "route": "existing begin -> owned isolated compiler -> canonical stage -> same manager confirmation -> current manager read"
+}

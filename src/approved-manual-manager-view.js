@@ -42,7 +42,9 @@ export function approvedManualManagerView({snapshot,source,lunchDocument,project
   const boundaries=[...edges].filter(m=>m>=first&&m<=last).sort((a,b)=>a-b),phases=[];
   for(let i=0;i<boundaries.length-1;i++){
    const at=boundaries[i],owners=new Map(),notYetStartedGroups=[],completeWindow=ratings.completeCoverageWindows?.find(w=>w.dayOfWeek===dayOf(date)),
-    completeSiteCoverageRequired=!completeWindow||minute(completeWindow.start)<=at,liveLoans=loans.filter(l=>l.status==='PLANNED'&&minute(l.coverage_start)<=at&&at<minute(l.coverage_end));
+    workingStarts=availability.filter(a=>a.availability_state==='working'&&a.shift_start).map(a=>minute(a.shift_start)),
+    completeStart=projectionAvailability!==null&&workingStarts.length?Math.max(...workingStarts):completeWindow?minute(completeWindow.start):first,
+    completeSiteCoverageRequired=completeStart<=at,liveLoans=loans.filter(l=>l.status==='PLANNED'&&minute(l.coverage_start)<=at&&at<minute(l.coverage_end));
    for(const group of groups){
     const active=rows.filter(r=>r.work_snapshot.locationCodeSnapshot===group.code&&minute(r.work_snapshot.window.start)<=at&&at<minute(r.work_snapshot.window.end));
     if(!active.length&&!completeSiteCoverageRequired){notYetStartedGroups.push(group.code);continue;}

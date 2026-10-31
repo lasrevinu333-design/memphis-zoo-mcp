@@ -51,7 +51,7 @@ assert.equal((await run([unconfirmed],[accepted])).status,'COVERAGE_CONSTRAINTS_
 const missing=await run([third]);assert.equal(missing.status,'COVERAGE_CONSTRAINTS_UNRESOLVED');assert.equal(missing.solverInvoked,false);
 const short=structuredClone(third);short.substitute.shift.end='13:00';const shortResult=await run([short],[accepted]);
 assert.equal(shortResult.status,'COVERAGE_CONSTRAINTS_UNRESOLVED');assert.equal(shortResult.solverInvoked,false);
-const impossible=await run([{serviceDate:'2026-11-02',absentPersonIds:[id('Xavier')]},fact]);
+const impossible=await run([{serviceDate:'2026-11-08',absentPersonIds:[id('Derrick'),id('Jada')]},fact]);
 assert.equal(impossible.status,'COVERAGE_CONSTRAINTS_UNRESOLVED');assert.equal(impossible.solverInvoked,false);
 assert.deepEqual(impossible.solvedDates,[],'A known invalid day must prevent every weighted solve in that period');
 const tampered=structuredClone(accepted);tampered.plan.phaseOwners[0].owners.CHINA='stale-owner';await assert.rejects(()=>run([fact],[tampered]));

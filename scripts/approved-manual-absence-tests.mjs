@@ -33,8 +33,9 @@ for(let date=2;date<=8;date++){
 }
 const third=input('2026-11-02',['Tammy','Karen','Jada']);assert.equal(third.status,'MANAGER_COVERALL_DECISION_REQUIRED');
 assert.equal(third.contractorBooked,false);assert.equal(third.solverInvoked,false);
-const noCloser=input('2026-11-02',['Xavier']);assert.equal(noCloser.status,'COVERAGE_CONSTRAINTS_UNRESOLVED');
-assert.ok(noCloser.issues.some(i=>i.code==='NO_ELIGIBLE_OWNER'&&i.window.start==='16:00'&&i.window.end==='17:00'));
+const noCloser=input('2026-11-02',['Xavier']);assert.equal(noCloser.status,'PREPARED_FOR_EXPLICIT_OBJECTIVE');
+assert.deepEqual(noCloser.checkedWindow,{start:'07:00',end:'16:00'});
+assert.ok(noCloser.phases.every(p=>p.window.end<='16:00'));
 const noLunch=input('2026-11-08',['Derrick','Jada']);assert.equal(noLunch.status,'COVERAGE_CONSTRAINTS_UNRESOLVED');
 assert.ok(noLunch.issues.some(i=>i.code==='NO_FULL_HOUR_LUNCH_HELPER'&&i.window.start==='12:00'&&i.window.end==='13:00'));
 assert.throws(()=>input('2026-11-02',['Kathy']));assert.throws(()=>input('2026-11-02',['Tammy','Tammy']));

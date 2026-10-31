@@ -65,6 +65,11 @@ export function prepareApprovedManualAbsenceDay({week,source,ownerConfig,service
  const remaining=roster.filter(p=>!absent.has(p.personId)),groups=week.ratings.map(r=>{
   const b=groupBinding.get(r.group);return{code:b.referenceCode,name:r.group,points:r.score,locationId:b.primaryLocationId};
  }).sort((a,b)=>a.code.localeCompare(b.code)),issues=[];
+ // Full-site custody starts once the remaining scheduled crew has arrived
+ // and lasts to their actual final static departure. Absence never extends
+ // another employee's shift or preserves a phantom closer's working hour.
+ common.checkedWindow={start:remaining.map(p=>p.shift.start).sort().at(-1),end:remaining.map(p=>p.shift.end).sort().at(-1)};
+ const checkedWindow=common.checkedWindow;
  const eligible=(person,work,purpose)=>{
   const code=work.locationCodeSnapshot;
   // These are dated-absence rules only. The normal owner config and all seven
@@ -80,9 +85,10 @@ export function prepareApprovedManualAbsenceDay({week,source,ownerConfig,service
   const normalOnly=person.owner.normalForbiddenFamiliesByDay?.[weekday]?.includes(work.locationCodeSnapshot);
   return !(work.restrictedSlotIds||[]).includes(person.slotId)||(purpose===inherited&&normalOnly===true);
  };
- const phases=day.phases.map((phase,index)=>{
-  const window={start:phase.start,end:phase.end},onShift=remaining.filter(p=>contains(p.shift,window)),areas=groups.map(group=>{
-   const rows=version.assignments.filter(w=>w.dayOfWeek===weekday&&w.locationCodeSnapshot===group.code&&contains(w.window,window));
+ const phases=day.phases.map((phase,index)=>({phase,index,window:{start:index===0?checkedWindow.start:phase.start,
+  end:phase.end<checkedWindow.end?phase.end:checkedWindow.end}})).filter(p=>p.window.start<p.window.end).map(({phase,index,window})=>{
+  const onShift=remaining.filter(p=>contains(p.shift,window)),areas=groups.map(group=>{
+   const rows=version.assignments.filter(w=>w.dayOfWeek===weekday&&w.locationCodeSnapshot===group.code&&contains(w.window,{start:phase.start,end:phase.end}));
    assert.equal(rows.length,1,'Every approved phase must retain one exact source requirement');
    const work=rows[0],purpose=index===0?'NORMAL_AREA_OWNERSHIP':inherited,
     approved=binding.get(phase.owners[group.name]);assert.equal(work.ownerSlotId,approved.slotId);
@@ -102,10 +108,10 @@ export function prepareApprovedManualAbsenceDay({week,source,ownerConfig,service
    constraint:'A named helper must be on shift and outside their own lunch for the entire scheduled hour'});
   return{recipientSlotId:p.slotId,window:structuredClone(p.lunch),candidateSlotIds:candidates.map(c=>c.slotId).sort()};
  });
- const boundaries=new Set([minute(day.checkedWindow.start),minute(day.checkedWindow.end)]);
+ const boundaries=new Set([minute(checkedWindow.start),minute(checkedWindow.end)]);
  for(const phase of phases){boundaries.add(minute(phase.window.start));boundaries.add(minute(phase.window.end));}
  for(const p of remaining){for(const window of [p.shift,p.lunch]){boundaries.add(minute(window.start));boundaries.add(minute(window.end));}}
- const edges=[...boundaries].filter(m=>m>=minute(day.checkedWindow.start)&&m<=minute(day.checkedWindow.end)).sort((a,b)=>a-b),slices=[];
+ const edges=[...boundaries].filter(m=>m>=minute(checkedWindow.start)&&m<=minute(checkedWindow.end)).sort((a,b)=>a-b),slices=[];
  for(let i=0;i<edges.length-1;i++){
   const start=edges[i],end=edges[i+1],phase=phases.find(p=>activeAt(p.window,start)),
    available=remaining.filter(p=>activeAt(p.shift,start)&&!activeAt(p.lunch,start));

@@ -40,6 +40,8 @@ import { canonicalJson } from "./static-weekly-schedule-model.js";
 import { postgresJsonbContentDigest } from "./static-weekly-schedule-compiler.js";
 import {prepareApprovedStaticTemplateProjection} from './static-weekly-recurring-staffing-adaptation.js';
 import {prepareStaticWeeklySchedulingProblem} from './static-weekly-schedule-program.js';
+import {readApprovedManualWeek} from './approved-manual-week.js';
+import {staffingWindowFromOwnerFrames,approvedManualStaffingWorkerInput,approvedManualPendingStaffingTransport} from './approved-manual-staffing-transport.js';
 import {
   compileAndPrepareStaticWeeklyScheduleIsolated,
   compileStaticWeeklyScheduleIsolated,
@@ -48,6 +50,7 @@ import {
   getStaticWeeklyCompilerReadiness,
   initializeStaticWeeklyCompiler,
   shutdownStaticWeeklyCompiler,
+  prepareApprovedManualPeriodIsolated,
   STATIC_WEEKLY_COMPILER_RUNTIME_LIMITS,
 } from "./static-weekly-schedule-compiler-runtime.js";
 
@@ -1686,16 +1689,24 @@ export function createStaticWeeklyControlPlane({
       });
     },
     async getManagerSnapshot({ manager, weekStart }) {
-      requireManager(manager, { readOnlyOperation: true });
+      const actor=requireManager(manager, { readOnlyOperation: true });
       return transaction(async client=>{
-        const week=requireMonday(weekStart,'week start'),snapshot=await snapshotFor(client,week);
-        if(snapshot.projection_status!=='current'||snapshot.latest_projection?.compiler_version!=='approved-static-fixed-v1'
+        const week=requireDate(weekStart,'week start'),snapshot=await snapshotFor(client,week);
+        if(snapshot.projection_status!=='current'||!['approved-static-fixed-v1','approved-manual-period-v1'].includes(snapshot.latest_projection?.compiler_version)
           ||!snapshot.current_publication?.publication_id)return snapshot;
         const frame=requireDate(snapshot.week_start,'current publication window');
         const registered=await call(client,'static_weekly_v3_read_publication_source',[snapshot.current_publication.publication_id,frame]);
         if(!registered.compiler_input?.version?.manualGroupRatingAuthority)return snapshot;
         const lunch=await call(client,'static_weekly_v8_read_lunch_document',[frame]);
-        return{...snapshot,approved_manual_schedule:approvedManualManagerView({snapshot,source:registered.compiler_input,lunchDocument:lunch})};
+        let projectionAvailability=null;
+        if(snapshot.latest_projection.compiler_version==='approved-manual-period-v1'){
+          const view=await call(client,'static_weekly_manual_projection_view_basis',[actor.managerId,snapshot.latest_projection.projection_id]);
+          if(view?.schema!=='custodial.approved-manual-projection-view-basis.v1'||view.projectionId!==snapshot.latest_projection.projection_id
+            ||view.publicationId!==snapshot.current_publication.publication_id||view.frameStart!==frame
+            ||!Array.isArray(view.projectionAvailability))throw fail('static_manual_current_projection_view_changed');
+          projectionAvailability=view.projectionAvailability;
+        }
+        return{...snapshot,approved_manual_schedule:approvedManualManagerView({snapshot,source:registered.compiler_input,lunchDocument:lunch,projectionAvailability})};
       });
     },
     async getApprovedManualActivationRoster({manager}) {
@@ -2018,7 +2029,10 @@ export function createStaticWeeklyControlPlane({
         } else if (command.original_cancellation_target != null) {
           throw fail("staffing_original_cancellation_target_forbidden");
         }
-        const window = enumerateStaffingServiceWindow(semantic.startDate, semantic.endDate);
+        const meter = createStaffingPreparationMeter();
+        const frameVector=await call(client,'static_weekly_staffing_period_frames',[operation,actor.managerId]);
+        requirePrincipal(command);meter.checkpoint();
+        const originalFrameVector=canonicalJson(frameVector),window=staffingWindowFromOwnerFrames({command:capturedCommand,managerId:actor.managerId,frameVector});
         const currentTargets=await call(client,"static_weekly_v11_read_current_refresh_targets",
           [semantic.startDate,semantic.endDate,actor.managerId]);
         requirePrincipal(command);
@@ -2028,7 +2042,6 @@ export function createStaticWeeklyControlPlane({
           if(!priorByDate.has(row.serviceDate))priorByDate.set(row.serviceDate,new Set());
           priorByDate.get(row.serviceDate).add(text(row.employeeId));
         }
-        const meter = createStaffingPreparationMeter();
         const {prepareApprovedPendingStaffingWeekIsolated}=await import('./static-weekly-schedule-compiler-runtime.js');
         requirePrincipal(command);meter.checkpoint();
         const prepared = await prepareInsideTransaction(client, async () => {
@@ -2044,24 +2057,41 @@ export function createStaticWeeklyControlPlane({
             const publicationId = requirePublicationId(snapshot?.current_publication?.publication_id);
             const source = await sourceFor(client, publicationId, weekStart);
             requirePrincipal(command);meter.checkpoint();
-            const overlay = createStaffingWeekPreviewInput({ operationId: operation, managerId: actor.managerId,
-              semanticBody: semantic, expectedRevision, weekStart, source,
-              currentServiceDate, originalCancellationTarget });
+            const manual=source.compiler_input?.version?.manualGroupRatingAuthority?.manifestSha256===
+              'fe02bbdebc736d95360b55cc7dfe5b73c5a9eaa76f364f1c0f4420a0afb9950f';
+            let overlay,manualBasis=null,manualWorkerInput=null;
             const originalSource=canonicalJson(source),originalSnapshot=canonicalJson(snapshot),bases=[];
-            for(const date of overlay.dates){
-              const basis=await call(client,'static_weekly_read_approved_template_basis',
-                [actor.managerId,publicationId,date,'DATED_ABSENCE',null,expectedRevision]);
-              requirePrincipal(command);meter.checkpoint();bases.push(clone(basis));
+            if(manual){
+              manualBasis=await call(client,'static_weekly_manual_period_basis',[actor.managerId,publicationId,weekStart,expectedRevision,operation]);
+              requirePrincipal(command);meter.checkpoint();
+              if(canonicalJson(manualBasis.originalSource)!==originalSource)throw fail('staffing_approved_original_source_changed');
+              manualWorkerInput=approvedManualStaffingWorkerInput({basis:manualBasis,week:readApprovedManualWeek(),actor,
+                operationId:operation,expectedRevision,frameStart:weekStart});
+            }else{
+              overlay=createStaffingWeekPreviewInput({operationId:operation,managerId:actor.managerId,
+                semanticBody:semantic,expectedRevision,weekStart,source,currentServiceDate,originalCancellationTarget});
+              for(const date of overlay.dates){
+                const basis=await call(client,'static_weekly_read_approved_template_basis',
+                  [actor.managerId,publicationId,date,'DATED_ABSENCE',null,expectedRevision]);
+                requirePrincipal(command);meter.checkpoint();bases.push(clone(basis));
+              }
             }
             // Await the SAME serialized owned child queue. Native transaction
             // keepalives can run during fixed CPU preparation. The captured
             // absolute deadline includes all earlier basis/Source reads.
             let projection,unresolvedPreparationError=null;
             try{
-              projection=await prepareApprovedPendingStaffingWeekIsolated({
-                schema:'custodial.approved-static-pending-staffing-worker-input.v1',
-                command:capturedCommand,managerId:actor.managerId,actor,weekStart,source,bases,snapshot,window
-              },{deadlineAtMilliseconds:weekDeadline});
+              if(manual){
+                const result=await prepareApprovedManualPeriodIsolated(manualWorkerInput,{deadlineAtMilliseconds:weekDeadline});
+                projection=approvedManualPendingStaffingTransport({workerInput:manualWorkerInput,workerResult:result,basis:manualBasis});
+                overlay={dates:projection.envelope.semantic_snapshot.scopeDates,input:manualWorkerInput,
+                  publication:{weekStart,publicationId,versionId:manualBasis.versionId,authorityRevision:expectedRevision}};
+              }else{
+                projection=await prepareApprovedPendingStaffingWeekIsolated({
+                  schema:'custodial.approved-static-pending-staffing-worker-input.v1',
+                  command:capturedCommand,managerId:actor.managerId,actor,weekStart,source,bases,snapshot,window
+                },{deadlineAtMilliseconds:weekDeadline});
+              }
             }catch(error){
               requirePrincipal(command);meter.checkpoint();
               if(!error||types.isProxy(error)||!['static_template_dated_coverage_unresolved','static_template_missing_approved_pattern']
@@ -2085,12 +2115,16 @@ export function createStaticWeeklyControlPlane({
             const currentSource=await sourceFor(client,publicationId,weekStart);
             requirePrincipal(command);meter.checkpoint();
             if(canonicalJson(currentSource)!==originalSource)throw fail('staffing_approved_original_source_changed');
-            for(let index=0;index<overlay.dates.length;index++){
-              const current=await call(client,'static_weekly_read_approved_template_basis',
-                [actor.managerId,publicationId,overlay.dates[index],'DATED_ABSENCE',null,expectedRevision]);
+            if(manual){
+              const current=await call(client,'static_weekly_manual_period_basis',[actor.managerId,publicationId,weekStart,expectedRevision,operation]);
               requirePrincipal(command);meter.checkpoint();
-              if(canonicalJson(current)!==canonicalJson(bases[index]))throw fail('staffing_approved_pending_basis_changed');
-            }
+              if(canonicalJson(current)!==canonicalJson(manualBasis))throw fail('staffing_approved_pending_basis_changed');
+            }else for(let index=0;index<overlay.dates.length;index++){
+                const current=await call(client,'static_weekly_read_approved_template_basis',
+                  [actor.managerId,publicationId,overlay.dates[index],'DATED_ABSENCE',null,expectedRevision]);
+                requirePrincipal(command);meter.checkpoint();
+                if(canonicalJson(current)!==canonicalJson(bases[index]))throw fail('staffing_approved_pending_basis_changed');
+              }
             if(unresolvedPreparationError)throw unresolvedPreparationError;
             if (!projection.lunchDocument?.document_identity) throw fail("static_weekly_lunch_publication_missing");
             // The fused worker checks planned source/assignment coverage before
@@ -2130,6 +2164,9 @@ export function createStaticWeeklyControlPlane({
             inputDigests.push(createHash("sha256").update(canonicalJson(overlay.input)).digest("hex"));
             meter.checkpoint();
           }
+          const currentFrames=await call(client,'static_weekly_staffing_period_frames',[operation,actor.managerId]);
+          requirePrincipal(command);meter.checkpoint();
+          if(canonicalJson(currentFrames)!==originalFrameVector)throw fail('staffing_original_period_frames_changed');
           const candidateSet = createStaffingCandidateSet({ window, candidates, meter });
           const databaseCandidates = candidateSet.rows.map(({ candidateKind, candidateKey, serviceDate, payload }) => ({
             candidateKind, candidateKey, payload, serviceDate,

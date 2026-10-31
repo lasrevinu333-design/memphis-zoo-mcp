@@ -1,3 +1,4 @@
+import {approvedManualInheritedEligibility} from './approved-manual-inherited-eligibility.js';
 import {validateApprovedManualLunchPrior,retainApprovedManualLunchIdentities} from './approved-manual-lunch-retention.js';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
@@ -84,12 +85,14 @@ export function prepareApprovedManualPeriodProjection({week,source,ownerConfig,p
  for(const parent of version.assignments){
   const item=changedDays.get(parent.dayOfWeek);
   if(!item){assignments.push(clone(parent));continue;}
-  const pieces=[],normalWindow=approvedByDay.get(parent.dayOfWeek).checkedWindow,
+  const pieces=[],normalWindow=approvedByDay.get(parent.dayOfWeek).checkedWindow,actualWindow=item.selected.checkedWindow,
+   firstParent=parent.window.start<=normalWindow.start&&parent.window.end>normalWindow.start,
+   effectiveParentWindow={start:firstParent&&actualWindow.start<parent.window.start?actualWindow.start:parent.window.start,end:parent.window.end},
    add=(start,end,slotId)=>{
     if(start>=end)return;const last=pieces.at(-1);
     if(last&&last.ownerSlotId===slotId&&last.window.end===start)last.window.end=end;
     else pieces.push({ownerSlotId:slotId,window:{start,end}});
-   },earlyEnd=parent.window.end<normalWindow.start?parent.window.end:normalWindow.start;
+   },earlyEnd=parent.window.end<actualWindow.start?parent.window.end:actualWindow.start;
   if(parent.window.start<earlyEnd){
    let owner=item.roster.find(p=>p.slotId===parent.ownerSlotId);
    if(!owner&&item.kind==='COVERALL'){
@@ -102,8 +105,8 @@ export function prepareApprovedManualPeriodProjection({week,source,ownerConfig,p
     locationCode:parent.locationCodeSnapshot,window:{start:parent.window.start,end:owner?start:earlyEnd},reason:'NO_APPROVED_TEMPORARY_PREARRIVAL_OWNER'});
   }
   for(const phase of item.selected.phaseOwners){
-   if(!overlap(parent.window,phase.window))continue;
-   add(parent.window.start>phase.window.start?parent.window.start:phase.window.start,
+   if(!overlap(effectiveParentWindow,phase.window))continue;
+   add(effectiveParentWindow.start>phase.window.start?effectiveParentWindow.start:phase.window.start,
     parent.window.end<phase.window.end?parent.window.end:phase.window.end,phase.owners[parent.locationCodeSnapshot]);
   }
   if(item.kind==='COVERALL'&&parent.window.end===normalWindow.end&&item.selected.checkedWindow.end>normalWindow.end)
@@ -113,8 +116,10 @@ export function prepareApprovedManualPeriodProjection({week,source,ownerConfig,p
   }
   for(const piece of pieces){
    const key={parentWorkId:parent.workId,serviceDate:item.serviceDate,slotId:piece.ownerSlotId,window:piece.window},
-    workId='manual-dated:'+createHash('sha256').update(JSON.stringify(key)).digest('hex'),row={...clone(parent),...piece,workId,
-     coveragePurpose:piece.window.start>=normalWindow.end?'INHERITED_ALERTS_AND_ISSUES_ONLY':parent.coveragePurpose};
+    workId='manual-dated:'+createHash('sha256').update(JSON.stringify(key)).digest('hex'),
+    phase=item.input.phases.find(p=>p.window.start<=piece.window.start&&piece.window.start<p.window.end),
+    purpose=piece.window.start>=normalWindow.end||phase?.index>0?'INHERITED_ALERTS_AND_ISSUES_ONLY':parent.coveragePurpose,
+    row=approvedManualInheritedEligibility({...clone(parent),...piece,workId,coveragePurpose:purpose},ownerConfig,purpose);
    assignments.push(row);links.push({...key,workId});
   }
  }
@@ -140,7 +145,10 @@ export function prepareApprovedManualPeriodProjection({week,source,ownerConfig,p
  assert.ok(!problem.error,JSON.stringify(problem.error));
  const rowOwners=new Map(assignments.map(row=>[`${row.dayOfWeek}:${row.workId}`,row.ownerSlotId])),
   witness=deriveFixedStaticWeeklyOwnershipWitness(problem,{rowOwners,deadline,allowCapacity:true}),
-  lunch=deriveLunchCoverageFromPreparedProblem(problem,witness.assignments);
+  // Lunch is temporary inherited custody, not a new normal area assignment.
+  // Its scoped view cannot alter the fixed-owner model or stored work facts.
+  lunchProblem={...problem,work:problem.work.map(w=>approvedManualInheritedEligibility(w,ownerConfig,'INHERITED_ALERTS_AND_ISSUES_ONLY'))},
+  lunch=deriveLunchCoverageFromPreparedProblem(lunchProblem,witness.assignments);
  assert.equal(lunch.status,'PLANNED',JSON.stringify(lunch.lunches.filter(l=>l.status!=='PLANNED').map(l=>({slot:l.normalOwnerSlotId,reason:l.reason}))));
  const byWork=new Map(problem.work.map(w=>[w.key,w])),byRaw=new Map(assignments.map(w=>[`${w.dayOfWeek}:${w.workId}`,w])),
   projectionAssignments=witness.assignments.map(row=>{
@@ -162,7 +170,8 @@ export function prepareApprovedManualPeriodProjection({week,source,ownerConfig,p
      coveragePolicy:work.coveragePolicy??null,bestEffortCoverage:work.coverageClass==='best_effort',coveragePolicyOrder:work.coverageOrder,
      coveragePolicyProvenance:work.coveragePolicyProvenance??null,requiredQualifications:clone(work.requiredQualifications),
      qualificationProvenance:work.qualificationProvenance,restrictions:clone(work.restrictions),restrictionProvenance:work.restrictionProvenance,
-     restrictedSlotIds:clone(work.restrictedSlotIds||[]),manualLock:Boolean(work.manualLock),manualLockSlotId:work.manualLock||null,overlayWork:Boolean(work.overlayWork)},
+     restrictedSlotIds:clone(work.restrictedSlotIds||[]),
+     ...(work.normalAssignmentRestrictedSlotIds?.length?{normalAssignmentRestrictedSlotIds:clone(work.normalAssignmentRestrictedSlotIds),coveragePurpose:work.coveragePurpose}:{}),manualLock:Boolean(work.manualLock),manualLockSlotId:work.manualLock||null,overlayWork:Boolean(work.overlayWork)},
     explanation:{contract:changedDays.has(row.dayOfWeek)?'approved_manual_dated_adjustment':'fixed_approved_pattern',hardConstraints:'satisfied',reasons:[]}};
   }),projectionAvailability=[...problem.states].flatMap(([day,state])=>[...state.availability].map(([slotId,a])=>{
    const p=problem.incumbencyByDaySlot.get(`${day}\u0000${slotId}`);
