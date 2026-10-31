@@ -1,0 +1,15 @@
+{
+  "authority": "Direct Eric instruction in Main chat 01a15718-2d88-7de1-8cec-6cdc241f0151",
+  "recordedAt": "2026-10-31T15:30:30.786358+00:00",
+  "instructions": [
+    "All the custodians should be marked as if they work here and active on schedule; the program is not finished yet and by then they will have started. Get the entire program ready for audit.",
+    "Current eight people only, program ready to launch in the next three days. Seven- and nine-person schedules can be updated later if needed."
+  ],
+  "meaning": {
+    "scope": "The eight approved current custodians, on their approved normal working days/hours; not all historical employees and not eight people on every day off.",
+    "availability": "Active for approved schedule, no pending first-workday exclusion. This is program planning availability; do not invent or rewrite actual HR hire dates.",
+    "normalWeeklyAssignmentsAndFullHourLunchUnchanged": true,
+    "otherStaffingCountVariants": "Preserve without further work for this launch.",
+    "audit": "Prepare the complete app and manager website; Eric still chooses the final audit/model."
+  }
+}

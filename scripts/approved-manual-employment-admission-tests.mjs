@@ -8,9 +8,10 @@ const checks=[];
 function check(name,fn){fn();checks.push(name);}
 const copy=structuredClone,managerId='11111111-1111-4111-8111-111111111111',
  requestIds=['22222222-2222-4222-8222-222222222222','33333333-3333-4333-8333-333333333333'],
- data=readOwnerConfirmedEmploymentAdmissionData(),[xavier,jada]=data.employees,
+ launchData=readOwnerConfirmedEmploymentAdmissionData(),
+ data=JSON.parse(readFileSync(new URL('../release/worker1-employment-admission-20261030/OWNER_CONFIRMED_DATED_EMPLOYMENT_DATA.json',import.meta.url))),[xavier,jada]=data.employees,
  prepared=data.employees.map((p,i)=>prepareApprovedManualEmploymentAdmission({employeeId:p.employeeId,managerId,
-  requestId:requestIds[i],expectedAuthorityRevision:42,expectedEmploymentRevision:0}));
+  requestId:requestIds[i],expectedAuthorityRevision:42,expectedEmploymentRevision:0,explicitFact:{effectiveFrom:p.effectiveFrom,state:p.state,firstServiceDate:p.firstServiceDate,approvedLunch:p.approvedLunch,ownerEvidenceSha256:data.source.sha256}}));
 function acceptedRead(serviceDate='2026-11-01'){
  return {schema:'custodial.employment-admission-read.v1',serviceDate,authorityRevision:42,
   employees:prepared.map(p=>({employeeId:p.command.employeeId,employmentRevision:1,acceptedByManagerId:managerId,command:copy(p.command)}))};
@@ -19,6 +20,17 @@ const evaluate=(day='2026-11-01',read=acceptedRead(day))=>prepareApprovedManualE
 const row=(v,id)=>v.employees.find(p=>p.employeeId===id);
 const build=changes=>prepareApprovedManualEmploymentAdmission({employeeId:jada.employeeId,managerId,requestId:requestIds[1],
  expectedAuthorityRevision:42,expectedEmploymentRevision:0,...changes});
+check('Current launch uses all eight active schedule identities without fabricated hire dates',()=>{
+ assert.equal(launchData.launchRoster.length,8);assert.equal(new Set(launchData.launchRoster.map(p=>p.employeeId)).size,8);
+ assert.ok(launchData.launchRoster.every(p=>p.activeForApprovedSchedule===true));assert.equal(launchData.actualHireDatesUnchanged,true);
+ const commands=launchData.employees.map((p,i)=>prepareApprovedManualEmploymentAdmission({employeeId:p.employeeId,managerId,requestId:requestIds[i],expectedAuthorityRevision:42,expectedEmploymentRevision:0}).command);
+ for(const day of ['2026-10-30','2026-10-31','2026-11-01','2026-11-03','2026-11-30']){
+  const read={schema:'custodial.employment-admission-read.v1',serviceDate:day,authorityRevision:42,employees:commands.map(command=>({employeeId:command.employeeId,employmentRevision:1,acceptedByManagerId:managerId,command:copy(command)}))};
+  const v=evaluate(day,read);assert.ok(v.employees.every(p=>p.actualCoverageEligible&&p.actualLunchReliefEligible&&!p.preStart&&p.firstServiceDate===null&&p.unavailabilityClassification===null));
+  assertApprovedManualEmploymentParticipants({availability:v,assignmentEmployeeIds:launchData.launchRoster.map(p=>p.employeeId),lunchCovererEmployeeIds:launchData.launchRoster.map(p=>p.employeeId)});
+ }
+ const bad=copy(commands[1].fact);bad.firstServiceDate='2026-11-01';assert.throws(()=>build({explicitFact:bad}),'Schedule-active state cannot smuggle an invented hire date');
+});
 check('Exact owner instruction and retained IDs, not candidate effective-start authority',()=>{
  assert.equal(xavier.firstServiceDate,'2026-11-01');assert.deepEqual(xavier.approvedLunch,{start:'12:30',end:'13:30'});
  assert.equal(jada.firstServiceDate,null);assert.equal(jada.state,'PRE_START');assert.equal(data.admitted,false);
@@ -27,7 +39,7 @@ check('Exact owner instruction and retained IDs, not candidate effective-start a
  assert.equal(bindings.people.find(p=>p.approvedName===jada.employeeName).referenceEffectiveStart,'2026-11-02');
 });
 check('Prepared command is not accepted availability',()=>{assert.equal(prepared[0].status,'PREPARED_NOT_ADMITTED');assert.throws(()=>evaluate('2026-11-01',prepared[0]));});
-check('Xavier pre-start Oct31 cannot be actual coverage or relief',()=>{
+check('Retained historical Xavier pre-start fact cannot authorize coverage or relief',()=>{
  const v=evaluate('2026-10-31');assert.equal(row(v,xavier.employeeId).preStart,true);
  assert.throws(()=>assertApprovedManualEmploymentParticipants({availability:v,assignmentEmployeeIds:[xavier.employeeId]}));
  assert.throws(()=>assertApprovedManualEmploymentParticipants({availability:v,lunchCovererEmployeeIds:[xavier.employeeId]}));
@@ -37,7 +49,7 @@ check('Xavier starts on Nov1 inclusive, retains exact approved full-hour lunch',
  assert.equal(row(v,xavier.employeeId).actualLunchReliefEligible,true);assert.deepEqual(row(v,xavier.employeeId).approvedLunch,{start:'12:30',end:'13:30'});
  assertApprovedManualEmploymentParticipants({availability:v,assignmentEmployeeIds:[xavier.employeeId],lunchCovererEmployeeIds:[xavier.employeeId]});
 });
-for(const day of ['2026-10-31','2026-11-01','2026-11-02','2026-11-30'])check(`Jada remains pre-start without explicit admission on ${day}`,()=>{
+for(const day of ['2026-10-31','2026-11-01','2026-11-02','2026-11-30'])check(`Retained historical Jada pre-start fact cannot authorize coverage on ${day}`,()=>{
  const v=evaluate(day);assert.equal(row(v,jada.employeeId).firstServiceDate,null);assert.equal(row(v,jada.employeeId).actualCoverageEligible,false);
  assert.throws(()=>assertApprovedManualEmploymentParticipants({availability:v,assignmentEmployeeIds:[jada.employeeId]}));
  assert.throws(()=>assertApprovedManualEmploymentParticipants({availability:v,lunchCovererEmployeeIds:[jada.employeeId]}));
@@ -72,7 +84,7 @@ check('Xavier instruction is not a start/lunch edit seam',()=>{
  const r=acceptedRead();r.employees[0].command.fact.approvedLunch={start:'12:00',end:'13:00'};assert.throws(()=>evaluate('2026-11-01',r));
 });
 check('Changed proposed Jada facts require a new explicit evidence reference',()=>{
- const f=copy(prepared[1].command.fact);f.state='START_DATE_CONFIRMED';f.firstServiceDate='2026-11-05';assert.throws(()=>build({explicitFact:f}));
+ const f=copy(prepareApprovedManualEmploymentAdmission({employeeId:jada.employeeId,managerId,requestId:requestIds[1],expectedAuthorityRevision:42,expectedEmploymentRevision:0}).command.fact);f.state='START_DATE_CONFIRMED';f.firstServiceDate='2026-11-05';assert.throws(()=>build({explicitFact:f}));
 });
 check('Jada explicit future start remains merely prepared until actual RPC admission',()=>{
  const f={effectiveFrom:'2026-11-05',state:'START_DATE_CONFIRMED',firstServiceDate:'2026-11-05',approvedLunch:null,ownerEvidenceSha256:'b'.repeat(64)};

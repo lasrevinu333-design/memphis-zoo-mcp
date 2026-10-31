@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 
-const DATA_SHA256='1d76af9bf8dac837c26e8a3d88b35c7a273d4b181509aa106eae0cae1037ec73';
+const DATA_SHA256='fd0b4a2ee4b6dfdf5287b774999abdebf269ba4527fc3802c7c425679cb2c192';
 const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 const SUBJECTS=Object.freeze([
  Object.freeze({employeeId:'1318b295-fd70-4e78-8828-62c29302f96f',slotId:'5d2d2a0e-230f-5b03-9867-2e4c2826871f',employeeName:'Xavier Green'}),
@@ -19,9 +19,10 @@ const date=v=>{assert.equal(typeof v,'string');assert.match(v,/^[12]\d{3}-\d{2}-
 const subject=id=>{uuid(id);const s=SUBJECTS.find(r=>r.employeeId===id);assert.ok(s,'Employment admission scope is Xavier and Jada only');return s;};
 function fact(value){
  exact(value,['effectiveFrom','state','firstServiceDate','approvedLunch','ownerEvidenceSha256']);date(value.effectiveFrom);
- assert.ok(['PRE_START','START_DATE_CONFIRMED'].includes(value.state));
+ assert.ok(['PRE_START','START_DATE_CONFIRMED','ACTIVE_FOR_APPROVED_SCHEDULE'].includes(value.state));
  assert.match(value.ownerEvidenceSha256,/^[a-f0-9]{64}$/);
  if(value.state==='PRE_START'){assert.equal(value.firstServiceDate,null,'Pre-start has no invented first day');assert.equal(value.approvedLunch,null);}
+ else if(value.state==='ACTIVE_FOR_APPROVED_SCHEDULE')assert.equal(value.firstServiceDate,null,'Schedule-active availability does not invent an actual hire date');
  else {date(value.firstServiceDate);assert.ok(value.firstServiceDate>=value.effectiveFrom,'No backdated employment admission');}
  if(value.approvedLunch!==null){
   exact(value.approvedLunch,['start','end']);
@@ -32,7 +33,7 @@ function fact(value){
  return value;
 }
 export function readOwnerConfirmedEmploymentAdmissionData(){
- const bytes=readFileSync(new URL('../release/worker1-employment-admission-20261030/OWNER_CONFIRMED_DATED_EMPLOYMENT_DATA.json',import.meta.url));
+ const bytes=readFileSync(new URL('../release/worker1-employment-admission-20261030/OWNER_APPROVED_EIGHT_ACTIVE_20261031.json',import.meta.url));
  assert.equal(createHash('sha256').update(bytes).digest('hex'),DATA_SHA256,'Dated owner facts changed');
  const data=JSON.parse(bytes);assert.equal(data.schema,'custodial.owner-confirmed-employment-facts.v1');
  assert.equal(data.admitted,false);assert.equal(data.normalSchedulesMayChange,false);return data;
@@ -48,7 +49,8 @@ export function prepareApprovedManualEmploymentAdmission({employeeId,requestId,m
  if(explicitFact&&JSON.stringify(selected)!==JSON.stringify(initial))
   assert.notEqual(selected.ownerEvidenceSha256,initial.ownerEvidenceSha256,'Changed facts need a new explicit owner evidence reference');
  if(employeeId===SUBJECTS[0].employeeId){
-  assert.equal(selected.state,'START_DATE_CONFIRMED');assert.equal(selected.firstServiceDate,'2026-11-01');
+  assert.ok(['START_DATE_CONFIRMED','ACTIVE_FOR_APPROVED_SCHEDULE'].includes(selected.state));
+  assert.equal(selected.firstServiceDate,selected.state==='ACTIVE_FOR_APPROVED_SCHEDULE'?null:'2026-11-01');
   assert.deepEqual(selected.approvedLunch,{start:'12:30',end:'13:30'},'Xavier approved lunch is not a schedule-edit seam');
  }
  return {status:'PREPARED_NOT_ADMITTED',command:{schema:'custodial.employment-admission-command.v1',requestId,managerId,
@@ -74,8 +76,8 @@ export function prepareApprovedManualEmploymentAvailability({serviceDate,expecte
   revision(r.employmentRevision);assert.equal(r.employmentRevision,r.command.expectedEmploymentRevision+1);
   assert.ok(r.command.expectedAuthorityRevision<=expectedAuthorityRevision,'Future admission authority');
   const f=r.command.fact;assert.ok(f.effectiveFrom<=serviceDate,'Admission fact is not effective for this service date');
-  if(s.employeeId===SUBJECTS[0].employeeId){assert.equal(f.state,'START_DATE_CONFIRMED');assert.equal(f.firstServiceDate,'2026-11-01');assert.deepEqual(f.approvedLunch,{start:'12:30',end:'13:30'});}
-  const eligible=f.state==='START_DATE_CONFIRMED'&&serviceDate>=f.firstServiceDate;
+  if(s.employeeId===SUBJECTS[0].employeeId){assert.ok(['START_DATE_CONFIRMED','ACTIVE_FOR_APPROVED_SCHEDULE'].includes(f.state));assert.equal(f.firstServiceDate,f.state==='ACTIVE_FOR_APPROVED_SCHEDULE'?null:'2026-11-01');assert.deepEqual(f.approvedLunch,{start:'12:30',end:'13:30'});}
+  const eligible=f.state==='ACTIVE_FOR_APPROVED_SCHEDULE'||(f.state==='START_DATE_CONFIRMED'&&serviceDate>=f.firstServiceDate);
   return {...s,employmentRevision:r.employmentRevision,requestId:r.command.requestId,
    actualCoverageEligible:eligible,actualLunchReliefEligible:eligible,
    preStart:!eligible,unavailabilityClassification:eligible?null:'PRE_START_NOT_PTO',

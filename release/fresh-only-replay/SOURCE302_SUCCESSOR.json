@@ -21,25 +21,25 @@
   "source_migrations": 302,
   "replay_manifest": {
     "path": "supabase/canonical/migration-replay-order.json",
-    "sha256": "c642e562bf012416548f26f215a3c74aae434ca6573fc0f8be83e5c0bcc59b2e",
+    "sha256": "af4d8f471f1e5e6276f3232e396d3511a1ae1767edde093f12fe145f461930a9",
     "bytes": 57303
   },
   "append": {
     "name": "20261031125902_approved_manual_native_operations.sql",
     "original": {
       "path": "supabase/migrations/20261031125902_approved_manual_native_operations.sql",
-      "sha256": "ffebba2a6d32ed7a3de29c9446f2554fc56063253afebdfcc5ccadabb911d138",
-      "bytes": 864526
+      "sha256": "10238c293dda15a52321fa670f3763dd772ab6d976665cf306f737c613696b6d",
+      "bytes": 865020
     },
     "selected": {
       "path": "supabase/migrations/20261031125902_approved_manual_native_operations.sql",
-      "sha256": "ffebba2a6d32ed7a3de29c9446f2554fc56063253afebdfcc5ccadabb911d138",
-      "bytes": 864526
+      "sha256": "10238c293dda15a52321fa670f3763dd772ab6d976665cf306f737c613696b6d",
+      "bytes": 865020
     },
     "atomic_mode": "exact-Source-BEGIN-COMMIT"
   },
-  "observed_empty_source_fingerprint": "30218d9f5885ac5a8ca77785338a546da685d7e277c0633929e673ef80a870db",
-  "source_capture_scope": "ACTUAL_FRESH302_SCOPED_NORMAL_CONSTRUCTION_AND_READ_ONLY_CATALOG",
+  "observed_empty_source_fingerprint": "04e4c3d7abaa71cdf36a164a483ee1fa5efef77ab1711b07a201f515b85248d6",
+  "source_capture_scope": "ACTUAL_FRESH302_EIGHT_ACTIVE_NORMAL_CONSTRUCTION_AND_READ_ONLY_CATALOG",
   "full_vendor_NORMAL": false,
   "expected_fingerprint_authority": null
 }

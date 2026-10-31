@@ -17,7 +17,7 @@ for(const noAutoTableGrants of [false,true]){
  const selected=loadCiFreshOnlyReplay(resolve(fileURLToPath(root)),manifest.image,names,{noAutoTableGrants});
  assert.equal(selected.entries.length,302);assert.equal(selected.receipt.migrations,302);checks++;
  assert.equal(selected.receipt.manifest_sha256,'5094a272dcc9f01ccbf043f3de7012e12bdb542606089a0a818629c1ecf86b26');checks++;
- assert.equal(selected.entries.at(-1).selected.sha256,'ffebba2a6d32ed7a3de29c9446f2554fc56063253afebdfcc5ccadabb911d138');checks++;
+ assert.equal(selected.entries.at(-1).selected.sha256,'10238c293dda15a52321fa670f3763dd772ab6d976665cf306f737c613696b6d');checks++;
  assert.equal(selected.receipt.full_vendor_NORMAL,false);assert.equal(selected.receipt.expected_fingerprint_authority,null);checks++;
  selected.assertPreserved();checks++;
 }

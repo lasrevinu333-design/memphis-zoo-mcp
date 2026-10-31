@@ -90,7 +90,7 @@ BEGIN
  IF NOT (f ?& ARRAY['firstServiceDate','approvedLunch']) THEN RAISE EXCEPTION 'Both nullable employment fields must be present';END IF;
  IF coalesce(f->>'effectiveFrom','') !~ '^[12][0-9]{3}-[0-9]{2}-[0-9]{2}$'
   OR coalesce(f->>'ownerEvidenceSha256','') !~ '^[a-f0-9]{64}$'
-  OR f->>'state' NOT IN ('PRE_START','START_DATE_CONFIRMED') OR f->>'state' IS NULL
+  OR f->>'state' NOT IN ('PRE_START','START_DATE_CONFIRMED','ACTIVE_FOR_APPROVED_SCHEDULE') OR f->>'state' IS NULL
  THEN RAISE EXCEPTION 'Typed dated employment fact required'; END IF;
  effective:=(f->>'effectiveFrom')::date;state:=f->>'state';
  IF NOT isfinite(effective) OR effective::text<>(f->>'effectiveFrom')
@@ -98,6 +98,8 @@ BEGIN
  IF state='PRE_START' THEN
   IF f->'firstServiceDate' IS DISTINCT FROM 'null'::jsonb OR f->'approvedLunch' IS DISTINCT FROM 'null'::jsonb
   THEN RAISE EXCEPTION 'Pre-start has no invented start or lunch'; END IF;
+ ELSIF state='ACTIVE_FOR_APPROVED_SCHEDULE' THEN
+  IF f->'firstServiceDate' IS DISTINCT FROM 'null'::jsonb THEN RAISE EXCEPTION 'Schedule-active availability must not invent an actual hire date'; END IF;
  ELSE
   IF coalesce(f->>'firstServiceDate','') !~ '^[12][0-9]{3}-[0-9]{2}-[0-9]{2}$' THEN RAISE EXCEPTION 'Explicit first service date required'; END IF;
   first_day:=(f->>'firstServiceDate')::date;
@@ -110,22 +112,27 @@ BEGIN
    OR (f#>>'{approvedLunch,end}')::time-(f#>>'{approvedLunch,start}')::time<>interval '1 hour'
   THEN RAISE EXCEPTION 'An approved lunch remains one full hour'; END IF;
  END IF;
- -- Immutable Xavier instruction; no normal lunch-edit authority is introduced.
+ -- Preserve Xavier's actual recorded start history and approved lunch.
+ -- The launch availability state is explicit scheduling data, not a hire-date rewrite.
  IF employee='1318b295-fd70-4e78-8828-62c29302f96f'::uuid AND
-  (state<>'START_DATE_CONFIRMED' OR first_day IS DISTINCT FROM date '2026-11-01'
+  ((state='START_DATE_CONFIRMED' AND first_day IS DISTINCT FROM date '2026-11-01')
+   OR state NOT IN ('START_DATE_CONFIRMED','ACTIVE_FOR_APPROVED_SCHEDULE')
    OR f->'approvedLunch' IS DISTINCT FROM '{"start":"12:30","end":"13:30"}'::jsonb)
  THEN RAISE EXCEPTION 'Xavier first service date or approved lunch differs'; END IF;
  SELECT * INTO previous FROM custodial_employment.admissions WHERE employee_id=employee ORDER BY employment_revision DESC LIMIT 1 FOR UPDATE;
  IF coalesce(previous.employment_revision,0)<>expected_employment THEN
   RAISE EXCEPTION USING ERRCODE='40001',MESSAGE='Employee admission revision changed'; END IF;
  IF previous.employment_revision IS NULL THEN
-  initial_fact:=jsonb_build_object('effectiveFrom','2026-10-30','state',CASE WHEN employee='1318b295-fd70-4e78-8828-62c29302f96f'::uuid THEN 'START_DATE_CONFIRMED' ELSE 'PRE_START' END,
-   'firstServiceDate',CASE WHEN employee='1318b295-fd70-4e78-8828-62c29302f96f'::uuid THEN '2026-11-01' ELSE NULL END,
+  initial_fact:=jsonb_build_object('effectiveFrom','2026-10-30','state','ACTIVE_FOR_APPROVED_SCHEDULE',
+   'firstServiceDate',NULL,
    'approvedLunch',CASE WHEN employee='1318b295-fd70-4e78-8828-62c29302f96f'::uuid THEN '{"start":"12:30","end":"13:30"}'::jsonb ELSE 'null'::jsonb END,
-   'ownerEvidenceSha256','be6c3f5818a8ae1804b85064e083949662710c8d4ced118823ce2bbc6afdaf5c');
+   'ownerEvidenceSha256','e2e578dc508efde0bec1cc9b0cfaeac765a44fe36b71417960c7bae3323fbeb4');
   IF f IS DISTINCT FROM initial_fact THEN RAISE EXCEPTION 'Initial admission must bind the exact recorded Eric instruction'; END IF;
  ELSE
-  IF previous.command#>>'{fact,state}'='START_DATE_CONFIRMED' THEN RAISE EXCEPTION 'Already admitted first date is historical; no rewrite through this RPC'; END IF;
+  IF previous.command#>>'{fact,state}' IN ('START_DATE_CONFIRMED','ACTIVE_FOR_APPROVED_SCHEDULE')
+   AND NOT (previous.command#>>'{fact,state}'='START_DATE_CONFIRMED' AND state='ACTIVE_FOR_APPROVED_SCHEDULE'
+    AND f->>'ownerEvidenceSha256'='e2e578dc508efde0bec1cc9b0cfaeac765a44fe36b71417960c7bae3323fbeb4')
+  THEN RAISE EXCEPTION 'Already admitted first date or schedule availability is historical; no rewrite through this RPC'; END IF;
   IF effective<public.sch_service_date(statement_timestamp()) OR effective<previous.effective_from
    OR (f->>'ownerEvidenceSha256')=(previous.command#>>'{fact,ownerEvidenceSha256}')
   THEN RAISE EXCEPTION 'A later instruction requires new explicit evidence and no historical rewrite'; END IF;

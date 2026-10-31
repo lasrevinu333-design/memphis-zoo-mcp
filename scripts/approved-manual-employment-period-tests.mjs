@@ -43,21 +43,24 @@ try{
  const p=prepared.nativeProjection,context=approvedManualEmploymentPeriod({frameStart,expectedRevision:revision,employmentByDate});
  assertApprovedManualEmploymentProjection({employment:context,projection:p});
  const xavier=ids[0],jada=ids[1],sat=p.authority.projectionAvailability.filter(a=>a.serviceDate==='2026-10-31'&&a.incumbentPersonId===xavier);
- assert.equal(sat.length,1);assert.equal(sat[0].status,'absent');assert.equal(sat[0].unavailabilityClassification,'PRE_START_NOT_PTO');
- assert.ok(!p.projectionAssignments.some(a=>a.service_date==='2026-10-31'&&a.owner_person_id===xavier));
- assert.ok(!p.projectionAssignments.some(a=>a.owner_person_id===jada));
+ assert.equal(sat.length,1);assert.equal(sat[0].status,'working');assert.notEqual(sat[0].unavailabilityClassification,'PRE_START_NOT_PTO');
+ assert.ok(p.projectionAssignments.some(a=>a.service_date==='2026-10-31'&&a.owner_person_id===xavier));
+ assert.ok(p.projectionAssignments.some(a=>a.owner_person_id===jada));
+ assert.ok(!p.authority.projectionAvailability.some(a=>a.unavailabilityClassification==='PRE_START_NOT_PTO'),'Current launch has no first-workday exclusions');
+ assert.equal(p.lunchDocument.loans.length,40,'The current eight-person approved week keeps every full-hour lunch');
+ for(const loan of p.lunchDocument.loans){const m=t=>Number(t.slice(0,2))*60+Number(t.slice(3,5));assert.equal(m(loan.coverage_end)-m(loan.coverage_start),60);}
  const sunday=p.authority.projectionAvailability.find(a=>a.serviceDate==='2026-11-01'&&a.incumbentPersonId===xavier);
  assert.equal(sunday.status,'working');assert.deepEqual(sunday.lunch,{start:'12:30',end:'13:30'});
- const bad=structuredClone(p);bad.projectionAssignments[0].owner_person_id=jada;
- assert.throws(()=>assertApprovedManualEmploymentProjection({employment:context,projection:bad}));
- const helper=structuredClone(p),loan=helper.lunchDocument.responsibilities.find(a=>a.service_date==='2026-10-31');
- assert.ok(loan);loan.coverer_slot_id=sat[0].slotId;
- assert.throws(()=>assertApprovedManualEmploymentProjection({employment:context,projection:helper}));
+ const bad=structuredClone(p);bad.authority.projectionAvailability.find(a=>a.serviceDate==='2026-11-01'&&a.incumbentPersonId===xavier).lunch.end='13:29';
+ assert.throws(()=>assertApprovedManualEmploymentProjection({employment:context,projection:bad}),'Approved employee lunch availability remains exact');
+ const shortLunch=structuredClone(p),loan=shortLunch.lunchDocument.loans.find(a=>a.service_date==='2026-11-01'&&a.normal_owner_slot_id===sat[0].slotId);
+ assert.ok(loan);loan.coverage_end='13:29:59';
+ assert.throws(()=>assertApprovedManualEmploymentProjection({employment:context,projection:shortLunch}),'Current approved Xavier lunch must retain its full hour');
  assert.throws(()=>assertApprovedManualEmploymentProjection({employment:structuredClone(context),projection:p}));
  assert.equal(digest({week,source,input}),before,'Approved source/input changed');
  result={status:'PASS',scope:'Actual isolated compiler and dated employment guards with synthetic admission DATA; not SQL or production acceptance',
-  frameStart,frameEnd:prepared.period.frameEnd,employmentBindings:14,preStartCreatesPto:false,preStartOwnersAndLunchHelpersExcluded:true,
-  xavierWorkingFromNovember1:true,approvedLunchPreserved:true,forgedOwnerAndHelperRefused:true,serializedContextRefused:true,
+  frameStart,frameEnd:prepared.period.frameEnd,employmentBindings:14,preStartCreatesPto:false,allEightLaunchRosterActive:true,firstWorkdayExclusions:0,
+  xavierAndJadaWorkingOnApprovedDays:true,fullHourLunches:40,approvedLunchPreserved:true,changedApprovedLunchAvailabilityRefused:true,shortenedApprovedLunchRefused:true,serializedContextRefused:true,
   normalSourceChanged:false,productionWritten:false,providerCalls:0};
 }finally{await runtime.shutdown();}
 assert.equal(runtime.getReadiness().state,'closed');console.log(JSON.stringify(result));

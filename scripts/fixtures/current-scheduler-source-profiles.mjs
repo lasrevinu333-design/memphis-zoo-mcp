@@ -29,6 +29,8 @@ export function restoreSchedulerProofSource(profile,source){
   assert.deepEqual(current.phases[2].files.pop(),{name:'20261031125902_approved_manual_native_operations.sql',sha256:'ffebba2a6d32ed7a3de29c9446f2554fc56063253afebdfcc5ccadabb911d138'});
   source=JSON.stringify(current,null,2)+'\n';assert.equal(sha(source),'aa3225489f809029f362f9bb2a5ff30f1442a85eb5dda468663b3f0800a9e83b');
  }
+ // Exact revised unreleased302 replay for the current eight-person launch.
+ if(profile==='NATIVE_CURRENT_REPLAY_MANIFEST_RETAINED_WIRING'&&sha(source)==='af4d8f471f1e5e6276f3232e396d3511a1ae1767edde093f12fe145f461930a9'){const current=JSON.parse(source);assert.deepEqual(current.phases.map(p=>p.files.length),[134,93,75]);assert.deepEqual(current.phases[2].files.pop(),{name:'20261031125902_approved_manual_native_operations.sql',sha256:'10238c293dda15a52321fa670f3763dd772ab6d976665cf306f737c613696b6d'});source=JSON.stringify(current,null,2)+'\n';assert.equal(sha(source),'aa3225489f809029f362f9bb2a5ff30f1442a85eb5dda468663b3f0800a9e83b');}
  // Admit only the exact Source301 replay tail to this TEST-ONLY historical
  // view. Reproduce the complete preserved Source300 bytes before following
  // its unchanged reconstruction chain; no runtime/catalog normalization.

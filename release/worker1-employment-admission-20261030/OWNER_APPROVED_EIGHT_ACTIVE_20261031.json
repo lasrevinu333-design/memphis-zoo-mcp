@@ -1,0 +1,96 @@
+{
+  "schema": "custodial.owner-confirmed-employment-facts.v1",
+  "recordedServiceDate": "2026-10-31",
+  "source": {
+    "path": "release/worker1-employment-admission-20261030/ERIC_EIGHT_ACTIVE_LAUNCH_STEERING.json",
+    "sha256": "e2e578dc508efde0bec1cc9b0cfaeac765a44fe36b71417960c7bae3323fbeb4",
+    "bytes": 1126,
+    "reportedBy": "Eric directly in Custodial Main",
+    "chatId": "01a15718-2d88-7de1-8cec-6cdc241f0151"
+  },
+  "referenceBindingsSha256": "7b578ab31362e632f03d21e5b3b2868aa6fef0478b9cc57c9a5cd8d3b07c7619",
+  "employees": [
+    {
+      "employeeId": "1318b295-fd70-4e78-8828-62c29302f96f",
+      "slotId": "5d2d2a0e-230f-5b03-9867-2e4c2826871f",
+      "employeeName": "Xavier Green",
+      "effectiveFrom": "2026-10-30",
+      "state": "ACTIVE_FOR_APPROVED_SCHEDULE",
+      "firstServiceDate": null,
+      "approvedLunch": {
+        "start": "12:30",
+        "end": "13:30"
+      },
+      "unavailabilityClassification": null
+    },
+    {
+      "employeeId": "d5fecc86-659b-464a-bc99-f0d914385db4",
+      "slotId": "ae56a131-e2fd-5465-8ab8-6e5dbf543204",
+      "employeeName": "Jada Rawlings",
+      "effectiveFrom": "2026-10-30",
+      "state": "ACTIVE_FOR_APPROVED_SCHEDULE",
+      "firstServiceDate": null,
+      "approvedLunch": null,
+      "unavailabilityClassification": null
+    }
+  ],
+  "normalSchedulesMayChange": false,
+  "productionWritten": false,
+  "admitted": false,
+  "launchRoster": [
+    {
+      "employeeId": "77d50e9a-6338-43b1-aed5-9f47d7129466",
+      "slotId": "36829381-70d7-521b-9f14-bad0af16ba87",
+      "employeeName": "Alijah Collins",
+      "activeForApprovedSchedule": true
+    },
+    {
+      "employeeId": "8067cca2-7487-4589-ba7c-aa442e135045",
+      "slotId": "e91b7a47-f20f-5777-a5d3-9c0ce8778df5",
+      "employeeName": "Derrick Henderson",
+      "activeForApprovedSchedule": true
+    },
+    {
+      "employeeId": "d5fecc86-659b-464a-bc99-f0d914385db4",
+      "slotId": "ae56a131-e2fd-5465-8ab8-6e5dbf543204",
+      "employeeName": "Jada Rawlings",
+      "activeForApprovedSchedule": true
+    },
+    {
+      "employeeId": "3da709bb-2223-4e15-8e3a-db02e3f32e97",
+      "slotId": "f22348e9-d4b9-5a7e-b8fd-d0d2c1ec534f",
+      "employeeName": "Karen Robinson",
+      "activeForApprovedSchedule": true
+    },
+    {
+      "employeeId": "30ec85e0-a579-45a8-9c27-c164e77a9190",
+      "slotId": "55e5939c-175c-5026-94fd-c4350d538922",
+      "employeeName": "Kathy Phelps",
+      "activeForApprovedSchedule": true
+    },
+    {
+      "employeeId": "06228c5d-5123-4b8b-b730-e01114bdc971",
+      "slotId": "7044faec-4bbd-57ca-a898-ddd719503113",
+      "employeeName": "Kiltra Horton",
+      "activeForApprovedSchedule": true
+    },
+    {
+      "employeeId": "cd97111e-cfa0-4228-b4d7-401bc7a5ac13",
+      "slotId": "4a5a83ca-d297-5a30-8344-db08d05b978c",
+      "employeeName": "Tammy Miller",
+      "activeForApprovedSchedule": true
+    },
+    {
+      "employeeId": "1318b295-fd70-4e78-8828-62c29302f96f",
+      "slotId": "5d2d2a0e-230f-5b03-9867-2e4c2826871f",
+      "employeeName": "Xavier Green",
+      "activeForApprovedSchedule": true
+    }
+  ],
+  "scheduleAvailabilityOnly": true,
+  "actualHireDatesUnchanged": true,
+  "priorRecordedFactsPreserved": {
+    "path": "release/worker1-employment-admission-20261030/OWNER_CONFIRMED_DATED_EMPLOYMENT_DATA.json",
+    "sha256": "1d76af9bf8dac837c26e8a3d88b35c7a273d4b181509aa106eae0cae1037ec73"
+  }
+}
