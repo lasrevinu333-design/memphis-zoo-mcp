@@ -3,7 +3,7 @@
   "release_id": "release-2026.07.19.custodial-v3.12",
   "frontend_commit_sha": "155e1bbd73588e5825afa049cd0e55b5410c0539",
   "frontend_commit_state": "final_pair_bound",
-  "schema_fingerprint": "8f9c8059f07dcebbba60f3ef143b8e7a58fe063a960d08b05dae0b4ef2e03d80",
+  "schema_fingerprint": "ff233923ac21cd46b70985a9eaeb20dbb2a4c0bdc6f69f527159d437ed893440",
   "schema_transition": {
     "transition_id": "custodial-full-hour-test-20261029",
     "from_fingerprint": "0096e7c488aca86f1d38b061561696b2d4ac409036f063ffc9f196625b9ee9c2",
@@ -670,7 +670,7 @@
       {
         "path": "package.json",
         "mode": "100644",
-        "object_id": "cd7f3c4f542d980e1206fcba2c08169426514379"
+        "object_id": "bfb8b1796160b8d0ba72be72688ce82134cfe15c"
       },
       {
         "path": "proposals/approved-manual-coverall-management.sql",
@@ -831,6 +831,71 @@
         "path": "proposals/registered-never-filled-vacancy.sql",
         "mode": "100644",
         "object_id": "663b116973d8518a716023108d89038d9e8554a2"
+      },
+      {
+        "path": "proposals/sealed-repair-coverall-accepted-period.sql",
+        "mode": "100644",
+        "object_id": "2bc5a47e74247a7ccc5825100b4056b80565a8ab"
+      },
+      {
+        "path": "proposals/sealed-repair-coverall-cohort-credential.sql",
+        "mode": "100644",
+        "object_id": "b946ff29372687a64658f9b779819f827809353d"
+      },
+      {
+        "path": "proposals/sealed-repair-manual-repeat-memory.sql",
+        "mode": "100644",
+        "object_id": "2104b3b39a879327f3d0f2eed5af5419711321f9"
+      },
+      {
+        "path": "proposals/sealed-repair-staffing-single-validation.sql",
+        "mode": "100644",
+        "object_id": "9b8ada37ef8bba5e7fb5cb4b5c9200e03299bff0"
+      },
+      {
+        "path": "proposals/sealed-repair/F01_messenger.sql",
+        "mode": "100644",
+        "object_id": "1c480d59bc0522a96abca8fbaeb4158498a8a0f2"
+      },
+      {
+        "path": "proposals/sealed-repair/F05_notification_domain.sql",
+        "mode": "100644",
+        "object_id": "413fa65ffd0662b227954d70e700ffdede23cf42"
+      },
+      {
+        "path": "proposals/sealed-repair/F06_F07_lifetime_generation.sql",
+        "mode": "100644",
+        "object_id": "154910e648986fbe96dccfea0c5c2c7e2c97d1ea"
+      },
+      {
+        "path": "proposals/sealed-repair/F18_broadcast.sql",
+        "mode": "100644",
+        "object_id": "7ea67fc772388558c834a8e795212e3928c6536b"
+      },
+      {
+        "path": "proposals/sealed-repair/F25_F26_records.sql",
+        "mode": "100644",
+        "object_id": "5fa7a08f05ca958fc3eff68875759146a549c64d"
+      },
+      {
+        "path": "proposals/sealed-repair/Q07_offsite.sql",
+        "mode": "100644",
+        "object_id": "b8a075e042b13485e92699bf1cfcc543deaa1f1c"
+      },
+      {
+        "path": "proposals/sealed-repair/main-atomic-twelve.sql",
+        "mode": "100644",
+        "object_id": "6531a2c5abcba3ee54ad5c720ab7b36b0c38b3d1"
+      },
+      {
+        "path": "proposals/sealed-repair/native_event_manual_compatibility.sql",
+        "mode": "100644",
+        "object_id": "7757faa45c2719480aa854b1ec245bdfd7f9406a"
+      },
+      {
+        "path": "proposals/sealed-repair/operations.sql",
+        "mode": "100644",
+        "object_id": "453dac0f417aa9973163f5b5210d0faa270926ee"
       },
       {
         "path": "release/combined-release-verification.json",
@@ -1048,9 +1113,19 @@
         "object_id": "78090236bcefa69b4cfbba1234088e220b0c8562"
       },
       {
+        "path": "release/fresh-only-replay/SOURCE303_REPLAY_ORDER.json",
+        "mode": "100644",
+        "object_id": "5909c7aa37201ab5367011733586a02bffb2b8e7"
+      },
+      {
         "path": "release/fresh-only-replay/SOURCE303_SUCCESSOR.json",
         "mode": "100644",
         "object_id": "c3055ef7ad0650487801a1c330de83be2661639a"
+      },
+      {
+        "path": "release/fresh-only-replay/SOURCE304_SUCCESSOR.json",
+        "mode": "100644",
+        "object_id": "a5053db2907c96e5911e6b74244eb333c3a7f6f4"
       },
       {
         "path": "release/fresh-only-replay/images/20261002090000_manager_issue_outcomes.sql",
@@ -1276,6 +1351,46 @@
         "path": "release/fresh-only-replay/source303-ticket-normal-evidence/RESULT.json",
         "mode": "100644",
         "object_id": "a695734e4ba963f18fe9954fdd5c7269b84cb8f2"
+      },
+      {
+        "path": "release/fresh-only-replay/source304-main-atomic-append-evidence/FRESH_CURRENT_SOURCE303_CONSTRUCTION_ONLY.json",
+        "mode": "100644",
+        "object_id": "4e031cc304db430f6f6f9db77c9ad706a7ae26d2"
+      },
+      {
+        "path": "release/fresh-only-replay/source304-main-atomic-append-evidence/MAIN_ATOMIC_POST_APPEND_CAPTURE_RESULT.json",
+        "mode": "100644",
+        "object_id": "538a88a137e0b27552ffb59808d09d4cc2014d75"
+      },
+      {
+        "path": "release/fresh-only-replay/source304-main-atomic-append-evidence/MAIN_ATOMIC_POST_APPEND_NORMALIZED_CATALOG.json",
+        "mode": "100644",
+        "object_id": "6282d5c790ef34fed3590ae3a2b693a296921a2c"
+      },
+      {
+        "path": "release/fresh-only-replay/source304-main-atomic-append-evidence/MAIN_ATOMIC_POST_APPEND_RAW_CATALOG.json",
+        "mode": "100644",
+        "object_id": "2e60d35f63bc87ec25a43701b837c98026b3df55"
+      },
+      {
+        "path": "release/fresh-only-replay/source304-main-atomic-append-evidence/MAIN_ATOMIC_POST_APPEND_READ_ONLY_PROFILE.json",
+        "mode": "100644",
+        "object_id": "6665afebfaae7859ed0bb88bc26747f6f74d0e73"
+      },
+      {
+        "path": "release/fresh-only-replay/source304-main-atomic-append-evidence/MAIN_ATOMIC_POST_APPEND_RECOVERY_BINDINGS.json",
+        "mode": "100644",
+        "object_id": "7b04835e73c8b6506f0aa6191465612f2bf50775"
+      },
+      {
+        "path": "release/fresh-only-replay/source304-main-atomic-append-evidence/REPAIR_ATOMIC_BATCH_main_atomic_twelve_BEFORE.json",
+        "mode": "100644",
+        "object_id": "2591254dc94564b8eefff181079ac361ff181d35"
+      },
+      {
+        "path": "release/fresh-only-replay/source304-main-atomic-append-evidence/REPAIR_ATOMIC_BATCH_main_atomic_twelve_RETURNED.json",
+        "mode": "100644",
+        "object_id": "9db5f828698e7fd5fed6d65e4f7c8804c64b9066"
       },
       {
         "path": "release/frontend-release-manifest.json",
@@ -1853,6 +1968,21 @@
         "object_id": "fb640a0f11d60fce228e6955dc869368a70eb846"
       },
       {
+        "path": "release/sealed-repair-frontend-source/SOURCE_PAIR.json",
+        "mode": "100644",
+        "object_id": "d1774f4d6976ea3d3d60f942a260a73d89bc33d4"
+      },
+      {
+        "path": "release/sealed-repair-frontend-source/memphis-approved-schedule.js",
+        "mode": "100644",
+        "object_id": "3af4e8f637b5d1cf19f6d2e0a2ee11cfc7ac5bfb"
+      },
+      {
+        "path": "release/sealed-repair-frontend-source/memphis-scheduler-actions.js",
+        "mode": "100644",
+        "object_id": "b01ebef7da9a5fc31ee26191831216e6f88fbc49"
+      },
+      {
         "path": "release/shared-events-database-receipt.json",
         "mode": "100644",
         "object_id": "ac102ca0c5cbc84ec19f7670cef48832d2a9ef92"
@@ -2005,7 +2135,7 @@
       {
         "path": "scripts/approved-manual-activation-database-tests.mjs",
         "mode": "100644",
-        "object_id": "283b1b66481c52580908f2aad88b6aff1d405722"
+        "object_id": "b5c51d24382cdf8b534017b19ac42812de050549"
       },
       {
         "path": "scripts/approved-manual-actual-window-tests.mjs",
@@ -2238,6 +2368,11 @@
         "object_id": "c02a31a0965da53ad3fbc0a43146f0eb9b54bd09"
       },
       {
+        "path": "scripts/broadcast-repair-database-extension.mjs",
+        "mode": "100644",
+        "object_id": "227ec092fb3c4ed0175f8a4aee226644cad6a1e4"
+      },
+      {
         "path": "scripts/build52-release-recovery-binding-database-tests.mjs",
         "mode": "100644",
         "object_id": "7c70e3673c3aaec5543e015be5b99b578579204b"
@@ -2253,6 +2388,11 @@
         "object_id": "201027a5191d9889bcc692064e8555f8fbdf713b"
       },
       {
+        "path": "scripts/canonical304-construction-protocol-tests.mjs",
+        "mode": "100644",
+        "object_id": "af0455ced7b5c524d4ea7e33b1c3dc64f07414f3"
+      },
+      {
         "path": "scripts/capture-private-json-stdin.mjs",
         "mode": "100644",
         "object_id": "b810c414cdd3096491b0b7d8825207b8e5b22e4f"
@@ -2265,7 +2405,7 @@
       {
         "path": "scripts/ci-fresh-only-replay.mjs",
         "mode": "100644",
-        "object_id": "0408cafb7e612921a6446b6b674806d1195adc9e"
+        "object_id": "9c21493be033bbc2ac9e1086b44fc306352eced2"
       },
       {
         "path": "scripts/ci-fresh-only-source-successor-tests.mjs",
@@ -2275,12 +2415,27 @@
       {
         "path": "scripts/ci-fresh-only-source-successor.mjs",
         "mode": "100644",
-        "object_id": "8d3962d42c0ab13495b4dae97da7c4ff1da2f164"
+        "object_id": "37bd74735ae25a3391b0d500eb03ad3a246ad8e1"
       },
       {
         "path": "scripts/ci-fresh-only-source303-tests.mjs",
         "mode": "100644",
         "object_id": "eb7c4c12d89ccb260071803848b43a447ea65719"
+      },
+      {
+        "path": "scripts/ci-fresh-only-source304-tests.mjs",
+        "mode": "100644",
+        "object_id": "679e427334caf2b64e48198e1f75ad6777c5f653"
+      },
+      {
+        "path": "scripts/ci-fresh-owned-disk-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "33590476a246d3ef4b3b7cfe141940b223da22cf"
+      },
+      {
+        "path": "scripts/ci-fresh-owned-disk.mjs",
+        "mode": "100644",
+        "object_id": "5e969491a025918da3ce1e0d7d804bc8b150e0b6"
       },
       {
         "path": "scripts/ci-workflow-contract-tests.mjs",
@@ -2328,6 +2483,11 @@
         "object_id": "abad72a804aabf0435a7be30c3a200b5afb4765a"
       },
       {
+        "path": "scripts/coverall-cohort-attribution-tests.mjs",
+        "mode": "100644",
+        "object_id": "a5c6db23c9671f20ce25c39301f21eae900351d9"
+      },
+      {
         "path": "scripts/coverall-event-brief-tests.mjs",
         "mode": "100644",
         "object_id": "7edfef1fae4d75c2b1338741de72d06d96a559c8"
@@ -2336,6 +2496,11 @@
         "path": "scripts/coverall-event-print-integration-tests.mjs",
         "mode": "100644",
         "object_id": "a8b81bb8652bdc54ffe4a8862c7e6176c876dde8"
+      },
+      {
+        "path": "scripts/coverall-nonphysical-print-tests.mjs",
+        "mode": "100644",
+        "object_id": "5f6a1dac0cf736740960fdc908edb497611be56d"
       },
       {
         "path": "scripts/create-abandoned-mutation-lease-reconciliation.mjs",
@@ -2495,7 +2660,7 @@
       {
         "path": "scripts/custodial-leadership-ticket-database-tests.mjs",
         "mode": "100644",
-        "object_id": "c8fb8197709c02344cb87536c6ce547f8089e4a0"
+        "object_id": "b1a3e01aba9823241a165fd90740c16b21d303d0"
       },
       {
         "path": "scripts/custodial-leadership-ticket-tests.mjs",
@@ -2700,7 +2865,7 @@
       {
         "path": "scripts/empty-database-rebuild-check.mjs",
         "mode": "100644",
-        "object_id": "d464226c8f0d77cf7a70d140ebc9e162881f5fbe"
+        "object_id": "bd7f28b67af15c490fa6fc946c14a28b8adec15d"
       },
       {
         "path": "scripts/event-count-cross-surface-contract-tests.mjs",
@@ -2741,6 +2906,11 @@
         "path": "scripts/event-place-admission-database-tests.mjs",
         "mode": "100644",
         "object_id": "abdbe898066a3623f9a1e2ca9d4064c219770eed"
+      },
+      {
+        "path": "scripts/event-reminder-source-text-tests.mjs",
+        "mode": "100644",
+        "object_id": "767554da8ad3942419249ee02ff19310a62a236d"
       },
       {
         "path": "scripts/event-static-authority-database-tests.mjs",
@@ -3300,7 +3470,7 @@
       {
         "path": "scripts/fixtures/qualified-alert-dispatcher.mjs",
         "mode": "100644",
-        "object_id": "8e4e818104e11aabf0e1b534b213ae8f2320c91c"
+        "object_id": "0f85f045b036c820d1266a5832118b72c3c268ff"
       },
       {
         "path": "scripts/fixtures/qualified-event-sql-proof.mjs",
@@ -3326,6 +3496,76 @@
         "path": "scripts/fixtures/release-migration-original23-literal.txt",
         "mode": "100644",
         "object_id": "589a907cfedf3ce6f4624e2111c18a73b245a161"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/CANONICAL304_PLAN.json",
+        "mode": "100644",
+        "object_id": "c90ed9416fdf07e7dd30b65b50d8fdbfa414359f"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/F01_regression.sql",
+        "mode": "100644",
+        "object_id": "a18dee974f9776a9802e176c7d0b2cecbaa1c165"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/F05_original.sql",
+        "mode": "100644",
+        "object_id": "dc2eaaca0ab4896b4c5209b6248294cb8eabdc90"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/F05_regression.sql",
+        "mode": "100644",
+        "object_id": "51da5e77887ba872c342992577387e15aa838aff"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/F06_F07_regression.sql",
+        "mode": "100644",
+        "object_id": "f95831f243c43a5981d5d6245ff7bad66b56539a"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/F07_original.sql",
+        "mode": "100644",
+        "object_id": "4728a804cf9b9af8426d2d694477df7d40a25025"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/F18_regression.sql",
+        "mode": "100644",
+        "object_id": "357324d15b2c7ede23e6faa0e790019acb74c099"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/F25_F26_regression.sql",
+        "mode": "100644",
+        "object_id": "86c8a23c483421538feb22fb09b38ab2122d5cc1"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/PLAN.json",
+        "mode": "100644",
+        "object_id": "5a412bb4cf8702f59372c64b9772d6e1660c5053"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/Q07_regression.sql",
+        "mode": "100644",
+        "object_id": "3975b5e28835619d27875d226846dba87e6f856d"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/manual-repeat-memory-regression.sql",
+        "mode": "100644",
+        "object_id": "8443840cccfd967be06c8f3b7a1176ec22d1eec3"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/native_callback_parser_preflight.sql",
+        "mode": "100644",
+        "object_id": "fbeca18302e37f8b4d65314d1642b3290e5c2bf3"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/native_event_manual_compatibility_regression.sql",
+        "mode": "100644",
+        "object_id": "4033776a2e6b480f18c101e58135c5fd1d9b2598"
+      },
+      {
+        "path": "scripts/fixtures/sealed-repair/operations_regression.sql",
+        "mode": "100644",
+        "object_id": "ebae45057084fc1f086cc9277713edfd89c36911"
       },
       {
         "path": "scripts/fixtures/six-person-absence-source.json",
@@ -3738,6 +3978,16 @@
         "object_id": "4df9c4c0d2c8f8adcf3c33490d668ac1b9ff9558"
       },
       {
+        "path": "scripts/main-atomic-post-append-capture.mjs",
+        "mode": "100644",
+        "object_id": "7e8a2a20d0e487786df1c11318f613704a56a1c6"
+      },
+      {
+        "path": "scripts/main-fresh304-schema-capture.mjs",
+        "mode": "100644",
+        "object_id": "b8baf76cd4a9cb35fccbc4b9f70bbb65104de2df"
+      },
+      {
         "path": "scripts/manager-credential-boundary-tests.mjs",
         "mode": "100644",
         "object_id": "fa10f7b40c112eed01cabdee1eb0bfdfe35bffea"
@@ -3811,6 +4061,21 @@
         "path": "scripts/manager-scheduler-http-tests.mjs",
         "mode": "100644",
         "object_id": "e3494a6cbd61a3e7eaf9cd15f5691367a5a87abb"
+      },
+      {
+        "path": "scripts/manual-period-boundary-tests.mjs",
+        "mode": "100644",
+        "object_id": "98fd2b71414f00fe70e9e0a253f005ce7bfbac73"
+      },
+      {
+        "path": "scripts/manual-period-repair-database-extension.mjs",
+        "mode": "100644",
+        "object_id": "6c31e2b4a436f94d10dbfe009e25e935cf3526f1"
+      },
+      {
+        "path": "scripts/manual-repeat-memory-database-extension.mjs",
+        "mode": "100644",
+        "object_id": "76fcab8c056fc9fa9600c1178cd2593aa08f3aba"
       },
       {
         "path": "scripts/map-manager-identity-tests.mjs",
@@ -4016,6 +4281,11 @@
         "path": "scripts/native-alert-inventory-guard-recovery-database-tests.mjs",
         "mode": "100644",
         "object_id": "7c31ce8b1aebce10abde820c097ce34563fbd458"
+      },
+      {
+        "path": "scripts/native-alert-repair-database-extension.mjs",
+        "mode": "100644",
+        "object_id": "320cc4f34a67a252e48b2edfc0f21bf3fa2b893d"
       },
       {
         "path": "scripts/native-alert-reservation-tests.mjs",
@@ -4590,7 +4860,7 @@
       {
         "path": "scripts/oc24-coverall-print-tests.mjs",
         "mode": "100644",
-        "object_id": "6e6f9786b5325eb2f451245a9ee355630a0a216c"
+        "object_id": "c40dda29873b13c757d947e78d314c8b6df96370"
       },
       {
         "path": "scripts/oc24-gregory-lunch-analysis.mjs",
@@ -5023,6 +5293,11 @@
         "object_id": "af7f03955565d86576398e0052966a39a52eb57f"
       },
       {
+        "path": "scripts/record-repair-database-extension.mjs",
+        "mode": "100644",
+        "object_id": "520d67e8207427a620bd94f8112bd174e3e171bd"
+      },
+      {
         "path": "scripts/recovery-inventory-closure-database-tests.mjs",
         "mode": "100644",
         "object_id": "4d57c2abed2ebbddec5ce42e96becc0ebe4d2153"
@@ -5253,6 +5528,11 @@
         "object_id": "8a7bc9dcb2c648752d30fcab70e57fc316c6dc4f"
       },
       {
+        "path": "scripts/restore-generation-repair-database-extension.mjs",
+        "mode": "100644",
+        "object_id": "32a906759eac54eebb952aa7c41e8ccd48029011"
+      },
+      {
         "path": "scripts/restore-isolated-event-owner-schema.mjs",
         "mode": "100644",
         "object_id": "62cfbd34bf6814ba7ae18b039f35ad41c47c79b8"
@@ -5471,6 +5751,21 @@
         "path": "scripts/schema-transition-contract-tests.mjs",
         "mode": "100644",
         "object_id": "c73c96cf7672051a03b511d1b9aae7ab8866a3fc"
+      },
+      {
+        "path": "scripts/sealed-repair-canonical-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "735bc63111941154293732a2121f25707cea5f7b"
+      },
+      {
+        "path": "scripts/sealed-repair-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "39ee8e5e611c13e9a9a3485444ddc0facf12dc63"
+      },
+      {
+        "path": "scripts/sealed-repair-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "c48ab23027e7e6d0fdae67242bcd14c9f25da457"
       },
       {
         "path": "scripts/security-http-boundary-tests.mjs",
@@ -6525,7 +6820,7 @@
       {
         "path": "scripts/static-weekly-vacate-roster-slot-database-tests.mjs",
         "mode": "100644",
-        "object_id": "e15135f0c116728ee68c80df38c847afb2865aa0"
+        "object_id": "f85790b58ab83051f82323d1a7177a0d20eae44b"
       },
       {
         "path": "scripts/static-weekly-vacate-roster-slot-fixture-tests.mjs",
@@ -7905,17 +8200,17 @@
       {
         "path": "src/static-weekly-control-plane.js",
         "mode": "100644",
-        "object_id": "da2e0984f4f1a090a7b9d587df2e1c65f169c259"
+        "object_id": "0b8d1b06bfe79637dfd09d160d142e3fe8259254"
       },
       {
         "path": "src/static-weekly-coverall-access.js",
         "mode": "100644",
-        "object_id": "4a62bb737ebaa8604bac75b1598967f49ddf6878"
+        "object_id": "cf62db5ed71fa7e5cebcc7309f1d047dfb707ad7"
       },
       {
         "path": "src/static-weekly-coverall-print.js",
         "mode": "100644",
-        "object_id": "db2c1cd1d0b1653e853e51fc15d2fa201c137c48"
+        "object_id": "a0d93d768ce33bfea82c2c768fdba7c3f8289410"
       },
       {
         "path": "src/static-weekly-dated-transition-manager-router.js",
@@ -8190,7 +8485,7 @@
       {
         "path": "supabase/canonical/migration-replay-order.json",
         "mode": "100644",
-        "object_id": "5909c7aa37201ab5367011733586a02bffb2b8e7"
+        "object_id": "7eee1a0b910d4a1a2055170bed411ffcf0231b2a"
       },
       {
         "path": "supabase/canonical/production-schema-fingerprint-input.json",
@@ -8210,12 +8505,12 @@
       {
         "path": "supabase/canonical/schema-fingerprint-input.json",
         "mode": "100644",
-        "object_id": "95e567719ffef16bee944eda35d2ae3bfc92ae91"
+        "object_id": "6282d5c790ef34fed3590ae3a2b693a296921a2c"
       },
       {
         "path": "supabase/canonical/schema-fingerprint.txt",
         "mode": "100644",
-        "object_id": "c655690c354cbb005660ad72f0084e8be5b5a53d"
+        "object_id": "cce6ed5af1c763a171a6b91405e6d00f06a646bd"
       },
       {
         "path": "supabase/canonical/source-capture-232.json",
@@ -10378,13 +10673,18 @@
         "object_id": "c170057e0b771880e531503522b1422bc7036014"
       },
       {
+        "path": "supabase/migrations/20261031225210_custodial_sealed_repairs_current_eight.sql",
+        "mode": "100644",
+        "object_id": "6531a2c5abcba3ee54ad5c720ab7b36b0c38b3d1"
+      },
+      {
         "path": "tmp/write_probe.txt",
         "mode": "100644",
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 2051,
-    "migration_path_count": 303,
+    "authority_path_count": 2111,
+    "migration_path_count": 304,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
   },
@@ -11303,6 +11603,9 @@
     },
     {
       "name": "20261031180631_cohort_ticket_transaction_context.sql"
+    },
+    {
+      "name": "20261031225210_custodial_sealed_repairs_current_eight.sql"
     }
   ],
   "release_boundary": "Prepare distinct minimum-32-character backend, native-route, and employee-device credential secrets before cutover; configure database digests immediately after the migrations that create each configuration function, retain the bridge backend artifact through the scan-snapshot phase, require manager-code recovery without phone-local work loss for any device-credential generation mismatch, and require the executable health/restoration probes before traffic changes."
