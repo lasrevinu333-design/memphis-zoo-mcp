@@ -63,14 +63,14 @@ const freshReplayWorkflowPaths = new Set([
 // its earlier recorder retains the distinct rehearsal image. Bind the whole
 // reviewed workflow so this exception cannot admit another image caller.
 const mixedFreshRepairWorkflowPath = resolve(workflowDirectory, "custodial-production-repair.yml");
-const mixedFreshRepairWorkflowSha256 = "142cfebe5d1e247b2d3469f273c2a271b0e1ea6e20d340813bb80410bbed8a9f";
+const mixedFreshRepairWorkflowSha256 = "6f70812189d0bd11a45f7888cd8fdc673aaf493a0c40d2725b77d721096d03e3";
 // Foundation provisions the exact manifest-selected fresh fixture image before
 // its existing constructor; the earlier recorder keeps its rehearsal image.
 const mixedFreshFoundationWorkflowPath = resolve(workflowDirectory, "foundation-security-gate.yml");
 // Bind the approved manual GPS/absence and native period checks and run these fast wiring
 // checks before the unchanged disposable SQL suites. Construction and all
 // process/resource limits remain exact.
-const mixedFreshFoundationWorkflowSha256 = "2ee4d2eea9fc2861f6c7c7daa60bb1d4abeb058169065b76f3197db132674b27";
+const mixedFreshFoundationWorkflowSha256 = "32e24c53b37eecb323211588778af80594fdc504b8fbeaa43ff7a56b58298636";
 const thisContractPath = fileURLToPath(import.meta.url);
 const postgresImagePins = postgresPinSources.flatMap((path) => {
   const pins = [...readFileSync(path, "utf8").matchAll(/(?:public\.ecr\.aws\/|docker\.io\/)?supabase\/postgres@sha256:[0-9a-f]{64}/g)]
