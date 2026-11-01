@@ -145,7 +145,7 @@
       {
         "path": ".github/workflows/custodial-production-repair.yml",
         "mode": "100644",
-        "object_id": "1dd6504bc4699d7bdaf14a72ba8824600c92074f"
+        "object_id": "38579505bf8c86c937014760d5edc32268ff1927"
       },
       {
         "path": ".github/workflows/device-credential-foundation.yml",
@@ -160,7 +160,7 @@
       {
         "path": ".github/workflows/foundation-security-gate.yml",
         "mode": "100644",
-        "object_id": "0204f8535bbc0edfbdbe47c9854e7254717ed5cd"
+        "object_id": "1d2c3d74ea3b373bb6f49d1fe484d0931b11db98"
       },
       {
         "path": ".github/workflows/integrated-release-attestation.yml",
@@ -2475,7 +2475,7 @@
       {
         "path": "scripts/ci-workflow-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "11fe2bb7d2dc82d2c610119c682350588c5b6b32"
+        "object_id": "ae7bd965eb88e2f2198974cb54ff250f9858cb32"
       },
       {
         "path": "scripts/cleaning-identity-gps-database-tests.mjs",
