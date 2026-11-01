@@ -1,16 +1,16 @@
 {
   "artifact": "integrated-backend-authority-release-evidence.v2",
   "release_id": "release-2026.07.19.custodial-v3.12",
-  "frontend_commit_sha": "155e1bbd73588e5825afa049cd0e55b5410c0539",
+  "frontend_commit_sha": "b8b08655ce2c574df9841fb0f240b287f338ea9e",
   "frontend_commit_state": "final_pair_bound",
   "schema_fingerprint": "ff233923ac21cd46b70985a9eaeb20dbb2a4c0bdc6f69f527159d437ed893440",
   "schema_transition": {
     "transition_id": "custodial-full-hour-test-20261029",
     "from_fingerprint": "0096e7c488aca86f1d38b061561696b2d4ac409036f063ffc9f196625b9ee9c2",
-    "to_fingerprint": "8f9c8059f07dcebbba60f3ef143b8e7a58fe063a960d08b05dae0b4ef2e03d80",
+    "to_fingerprint": "ff233923ac21cd46b70985a9eaeb20dbb2a4c0bdc6f69f527159d437ed893440",
     "expires_at": "2026-11-01T15:12:05Z"
   },
-  "frontend_source_fingerprint": "8f9c8059f07dcebbba60f3ef143b8e7a58fe063a960d08b05dae0b4ef2e03d80",
+  "frontend_source_fingerprint": "ff233923ac21cd46b70985a9eaeb20dbb2a4c0bdc6f69f527159d437ed893440",
   "backend_contract": {
     "scan": "scan.v4.snapshot-bound-authority",
     "authority": "offline-authority.v5",
@@ -160,7 +160,7 @@
       {
         "path": ".github/workflows/foundation-security-gate.yml",
         "mode": "100644",
-        "object_id": "bc5a146b135b253a0397a1aafb7ba66bfdbf53f5"
+        "object_id": "0204f8535bbc0edfbdbe47c9854e7254717ed5cd"
       },
       {
         "path": ".github/workflows/integrated-release-attestation.yml",
@@ -670,7 +670,7 @@
       {
         "path": "package.json",
         "mode": "100644",
-        "object_id": "bfb8b1796160b8d0ba72be72688ce82134cfe15c"
+        "object_id": "29fa9214530daf78369c1af8aa283716609f2ef2"
       },
       {
         "path": "proposals/approved-manual-coverall-management.sql",
@@ -1125,7 +1125,7 @@
       {
         "path": "release/fresh-only-replay/SOURCE304_SUCCESSOR.json",
         "mode": "100644",
-        "object_id": "a5053db2907c96e5911e6b74244eb333c3a7f6f4"
+        "object_id": "b879e53d023c1ab4676793b6863795a2825ad7d4"
       },
       {
         "path": "release/fresh-only-replay/images/20261002090000_manager_issue_outcomes.sql",
@@ -1353,6 +1353,41 @@
         "object_id": "a695734e4ba963f18fe9954fdd5c7269b84cb8f2"
       },
       {
+        "path": "release/fresh-only-replay/source304-fresh-evidence/CANONICAL304_ORIGINAL_CONSTRUCTION_RECEIPT.json",
+        "mode": "100644",
+        "object_id": "6f695a71899a58678306d231c28f0821dafc76ff"
+      },
+      {
+        "path": "release/fresh-only-replay/source304-fresh-evidence/CONSTRUCTED_SOURCE304_SUCCESSOR.json",
+        "mode": "100644",
+        "object_id": "a5053db2907c96e5911e6b74244eb333c3a7f6f4"
+      },
+      {
+        "path": "release/fresh-only-replay/source304-fresh-evidence/MAIN_FRESH304_CAPTURE_RESULT.json",
+        "mode": "100644",
+        "object_id": "2ffb579066950559074900e2e848401a42274939"
+      },
+      {
+        "path": "release/fresh-only-replay/source304-fresh-evidence/MAIN_FRESH304_NORMALIZED_CATALOG.json",
+        "mode": "100644",
+        "object_id": "6282d5c790ef34fed3590ae3a2b693a296921a2c"
+      },
+      {
+        "path": "release/fresh-only-replay/source304-fresh-evidence/MAIN_FRESH304_RAW_CATALOG.json",
+        "mode": "100644",
+        "object_id": "2e60d35f63bc87ec25a43701b837c98026b3df55"
+      },
+      {
+        "path": "release/fresh-only-replay/source304-fresh-evidence/MAIN_FRESH304_READ_ONLY_PROFILE.json",
+        "mode": "100644",
+        "object_id": "c16642103e086e3aa8fbda740d0076e43f702652"
+      },
+      {
+        "path": "release/fresh-only-replay/source304-fresh-evidence/MAIN_FRESH304_RECOVERY_BINDINGS.json",
+        "mode": "100644",
+        "object_id": "ed4dca0e100916ddd7275370d75b62717b31d2a6"
+      },
+      {
         "path": "release/fresh-only-replay/source304-main-atomic-append-evidence/FRESH_CURRENT_SOURCE303_CONSTRUCTION_ONLY.json",
         "mode": "100644",
         "object_id": "4e031cc304db430f6f6f9db77c9ad706a7ae26d2"
@@ -1395,7 +1430,7 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "e8be07aa76187da3cd95272b516f89d09d70fcff"
+        "object_id": "bf4340d557f959613a97cc7188a47e08bfb0ddf3"
       },
       {
         "path": "release/installed-source/20261006031304_custodial_owner_delegated_actions.sql",
@@ -1765,7 +1800,7 @@
       {
         "path": "release/schema-alignment-input.json",
         "mode": "100644",
-        "object_id": "c4902774ff43672daf25fc9d8b30f11ba99c81a9"
+        "object_id": "8508007fa6722d0f1f67bdce979c8669595ac6a6"
       },
       {
         "path": "release/schema-evidence/EIGHT_ACTIVE302_EXACT_CAPTURE_SOURCE_F85E.mjs",
@@ -1970,7 +2005,7 @@
       {
         "path": "release/sealed-repair-frontend-source/SOURCE_PAIR.json",
         "mode": "100644",
-        "object_id": "d1774f4d6976ea3d3d60f942a260a73d89bc33d4"
+        "object_id": "9e50f91913e494516ac0b0a5899ad17315cdc250"
       },
       {
         "path": "release/sealed-repair-frontend-source/memphis-approved-schedule.js",
@@ -2410,22 +2445,22 @@
       {
         "path": "scripts/ci-fresh-only-source-successor-tests.mjs",
         "mode": "100644",
-        "object_id": "ecb50cd8fc13c0355909238adc000f6e71a8842c"
+        "object_id": "f173a0173abdf8697167e7e807d62bd516bad458"
       },
       {
         "path": "scripts/ci-fresh-only-source-successor.mjs",
         "mode": "100644",
-        "object_id": "37bd74735ae25a3391b0d500eb03ad3a246ad8e1"
+        "object_id": "c9ba3b0a769f5aebbd245617d65b61334fdfd3e3"
       },
       {
         "path": "scripts/ci-fresh-only-source303-tests.mjs",
         "mode": "100644",
-        "object_id": "eb7c4c12d89ccb260071803848b43a447ea65719"
+        "object_id": "aec3dd171bc24fb98804f4827075087c7e525c7c"
       },
       {
         "path": "scripts/ci-fresh-only-source304-tests.mjs",
         "mode": "100644",
-        "object_id": "679e427334caf2b64e48198e1f75ad6777c5f653"
+        "object_id": "42b2277e35d181428cead614c9bc8173e7ca0eb1"
       },
       {
         "path": "scripts/ci-fresh-owned-disk-contract-tests.mjs",
@@ -2440,7 +2475,7 @@
       {
         "path": "scripts/ci-workflow-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "5e5d8ab2818a762fd7458091dcb79c8f6f7b0554"
+        "object_id": "11fe2bb7d2dc82d2c610119c682350588c5b6b32"
       },
       {
         "path": "scripts/cleaning-identity-gps-database-tests.mjs",
@@ -3500,7 +3535,7 @@
       {
         "path": "scripts/fixtures/sealed-repair/CANONICAL304_PLAN.json",
         "mode": "100644",
-        "object_id": "c90ed9416fdf07e7dd30b65b50d8fdbfa414359f"
+        "object_id": "ac59ee177aa2f51f50632ad6a5c363a35015199b"
       },
       {
         "path": "scripts/fixtures/sealed-repair/F01_regression.sql",
@@ -4070,12 +4105,12 @@
       {
         "path": "scripts/manual-period-repair-database-extension.mjs",
         "mode": "100644",
-        "object_id": "6c31e2b4a436f94d10dbfe009e25e935cf3526f1"
+        "object_id": "55924867de9c12b84d75c36449b9c8bd93358703"
       },
       {
         "path": "scripts/manual-repeat-memory-database-extension.mjs",
         "mode": "100644",
-        "object_id": "76fcab8c056fc9fa9600c1178cd2593aa08f3aba"
+        "object_id": "37d2d885734111b6558ea8344c7229b3622e828e"
       },
       {
         "path": "scripts/map-manager-identity-tests.mjs",
@@ -4285,7 +4320,7 @@
       {
         "path": "scripts/native-alert-repair-database-extension.mjs",
         "mode": "100644",
-        "object_id": "320cc4f34a67a252e48b2edfc0f21bf3fa2b893d"
+        "object_id": "3c9dd036b187facf0a407e9281161c0b6a422714"
       },
       {
         "path": "scripts/native-alert-reservation-tests.mjs",
@@ -5295,7 +5330,7 @@
       {
         "path": "scripts/record-repair-database-extension.mjs",
         "mode": "100644",
-        "object_id": "520d67e8207427a620bd94f8112bd174e3e171bd"
+        "object_id": "e56f869ef08b066b85309b0c19739c8f385f1fec"
       },
       {
         "path": "scripts/recovery-inventory-closure-database-tests.mjs",
@@ -5485,7 +5520,7 @@
       {
         "path": "scripts/release-migration-target-capture.mjs",
         "mode": "100644",
-        "object_id": "8608da088eabbc509442537c234b8da99a44a06a"
+        "object_id": "49b069105032bf99e3f0408f77d5df10ec599257"
       },
       {
         "path": "scripts/release-migration-target-refusal-tests.mjs",
@@ -5530,7 +5565,7 @@
       {
         "path": "scripts/restore-generation-repair-database-extension.mjs",
         "mode": "100644",
-        "object_id": "32a906759eac54eebb952aa7c41e8ccd48029011"
+        "object_id": "c11fb8b5c5fbf1d9bf941a842dd3d876282b39ce"
       },
       {
         "path": "scripts/restore-isolated-event-owner-schema.mjs",
@@ -10683,7 +10718,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 2111,
+    "authority_path_count": 2118,
     "migration_path_count": 304,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
