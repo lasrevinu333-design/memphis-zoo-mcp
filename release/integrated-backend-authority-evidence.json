@@ -2003,6 +2003,126 @@
         "object_id": "fb640a0f11d60fce228e6955dc869368a70eb846"
       },
       {
+        "path": "release/sealed-repair-current304-runtime/CANONICAL304_SQL_REPLAY_OWNERSHIP.json",
+        "mode": "100644",
+        "object_id": "3eeeceab55fe983ec7d438eac572504c6b522eab"
+      },
+      {
+        "path": "release/sealed-repair-current304-runtime/INTENT.json",
+        "mode": "100644",
+        "object_id": "9d23666c2629a8a6998630949b518540b847504b"
+      },
+      {
+        "path": "release/sealed-repair-current304-runtime/MAIN_FRESH304_CAPTURE_RESULT.json",
+        "mode": "100644",
+        "object_id": "623c9fc9893cd51b9db8380db5db36e6d4532a5c"
+      },
+      {
+        "path": "release/sealed-repair-current304-runtime/MANIFEST.json",
+        "mode": "100644",
+        "object_id": "e100f966be22fee939d6fcdcfb00a1149757356f"
+      },
+      {
+        "path": "release/sealed-repair-current304-runtime/PARENT_IDENTITY.json",
+        "mode": "100644",
+        "object_id": "1e3153fbc168a8cf52ccf8f6732ec8a2756af07b"
+      },
+      {
+        "path": "release/sealed-repair-current304-runtime/PARENT_WAIT.json",
+        "mode": "100644",
+        "object_id": "5e872b513e8dbdcc6d117d20b536c93e8fe84b74"
+      },
+      {
+        "path": "release/sealed-repair-current304-runtime/REPAIR_MODULE_broadcast_concurrency_RESULT.json",
+        "mode": "100644",
+        "object_id": "2c534acf9e6fa78d78739a1a3cc26210abb98053"
+      },
+      {
+        "path": "release/sealed-repair-current304-runtime/REPAIR_MODULE_manual_period_RESULT.json",
+        "mode": "100644",
+        "object_id": "5b02a9f9bbef47c49766f6173d14af3aa47e0368"
+      },
+      {
+        "path": "release/sealed-repair-current304-runtime/REPAIR_MODULE_manual_repeat_memory_receipt_RESULT.json",
+        "mode": "100644",
+        "object_id": "d0dcb910b9e50d86205c6eeb2d98b4c69fb03209"
+      },
+      {
+        "path": "release/sealed-repair-current304-runtime/REPAIR_MODULE_native_source_finalization_RESULT.json",
+        "mode": "100644",
+        "object_id": "88c4f6bd02047a0e4fe8cfa443bfa20448ef555d"
+      },
+      {
+        "path": "release/sealed-repair-current304-runtime/REPAIR_MODULE_record_routes_concurrency_RESULT.json",
+        "mode": "100644",
+        "object_id": "0715b8adf80e6dcbe14fc8c1aea62552e9276b9b"
+      },
+      {
+        "path": "release/sealed-repair-current304-runtime/REPAIR_MODULE_restore_helper_RESULT.json",
+        "mode": "100644",
+        "object_id": "a192fed0ab941a3fc852ee227152972278846e44"
+      },
+      {
+        "path": "release/sealed-repair-current304-runtime/REPAIR_REGRESSION_SUMMARY.json",
+        "mode": "100644",
+        "object_id": "de6d140809fa26f525f8fee4acdd3755ff46db48"
+      },
+      {
+        "path": "release/sealed-repair-current304-runtime/RESOURCE_01_constructed.json",
+        "mode": "100644",
+        "object_id": "d2924af222d28056f75c98d3beae2a34d51d28bc"
+      },
+      {
+        "path": "release/sealed-repair-current304-runtime/RESOURCE_02_initial_activation.json",
+        "mode": "100644",
+        "object_id": "de83e8708be122c6dbc0a1641103106f652be93f"
+      },
+      {
+        "path": "release/sealed-repair-current304-runtime/RESOURCE_03_module_restore_helper.json",
+        "mode": "100644",
+        "object_id": "e87f9effe23ec3c807533e82d3c26b3879442e24"
+      },
+      {
+        "path": "release/sealed-repair-current304-runtime/RESOURCE_04_module_record_routes_concurrency.json",
+        "mode": "100644",
+        "object_id": "7748fceaa18734138d467cf80b7c4fc4e9f90ab3"
+      },
+      {
+        "path": "release/sealed-repair-current304-runtime/RESOURCE_05_module_broadcast_concurrency.json",
+        "mode": "100644",
+        "object_id": "7367291b032e6e64852e481c04fe4db5c65e016a"
+      },
+      {
+        "path": "release/sealed-repair-current304-runtime/RESOURCE_06_module_native_source_finalization.json",
+        "mode": "100644",
+        "object_id": "a23425ab7c90b4e9eea3b305547cce5aa10b5a0b"
+      },
+      {
+        "path": "release/sealed-repair-current304-runtime/RESOURCE_07_module_manual_period.json",
+        "mode": "100644",
+        "object_id": "2c2e596d64e77382f432481281713d03b9b92d6d"
+      },
+      {
+        "path": "release/sealed-repair-current304-runtime/RESOURCE_08_module_manual_repeat_memory_receipt.json",
+        "mode": "100644",
+        "object_id": "ce710d4d69b33ee39dfe00d6abac3423e3ce6e39"
+      },
+      {
+        "path": "release/sealed-repair-current304-runtime/RESOURCE_09_all_extensions.json",
+        "mode": "100644",
+        "object_id": "c340c4c08cf8af53b23f18824e9e538a568957e9"
+      },
+      {
+        "path": "release/sealed-repair-current304-runtime/RESOURCE_10_before_cleanup.json",
+        "mode": "100644",
+        "object_id": "e09d62cdd7846ca6f7e5a1545465753617d689b3"
+      },
+      {
+        "path": "release/sealed-repair-current304-runtime/RESULT.json",
+        "mode": "100644",
+        "object_id": "6336947184771aee33379a99aae36c76a9768ee3"
+      },
+      {
         "path": "release/sealed-repair-frontend-source/SOURCE_PAIR.json",
         "mode": "100644",
         "object_id": "37da2ea492fa66de97e2a4e68a07a3ce574c7f01"
@@ -4755,7 +4875,7 @@
       {
         "path": "scripts/native-schedule-source-ci-wiring.mjs",
         "mode": "100644",
-        "object_id": "9c63a745fbea9cae255a79906840a730189810fc"
+        "object_id": "840070ddd349cec26767402a8c48eec318318626"
       },
       {
         "path": "scripts/native-schedule-source-discovery-sql-tests.mjs",
@@ -10718,7 +10838,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 2118,
+    "authority_path_count": 2142,
     "migration_path_count": 304,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
