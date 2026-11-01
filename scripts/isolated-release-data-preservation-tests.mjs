@@ -4,7 +4,7 @@ import vm from 'node:vm';
 import {fileURLToPath} from 'node:url';
 import {join} from 'node:path';
 import pg from 'pg';
-import {loadOriginal235PreservationSource,validateOriginal235PreservationPlan,nativeTextColumnProjection,compileOriginalTableComparison,NATIVE_TEXT_PRESERVATION_SETTINGS,prepareIsolatedReleaseDataPreservation,readOriginal217PreservationScope} from './isolated-release-data-preservation.mjs';
+import {loadOriginal235PreservationSource,validateOriginal235PreservationPlan,nativeTextColumnProjection,compileOriginalTableComparison,compileApprovedOffsiteComparison,NATIVE_TEXT_PRESERVATION_SETTINGS,prepareIsolatedReleaseDataPreservation,readOriginal217PreservationScope} from './isolated-release-data-preservation.mjs';
 import {bindExistingPostgresForwardSources,productionForwardSourceManifest} from './production-forward-source.mjs';
 import {readMigrationReplayPlan} from './migration-replay-order.mjs';
 import {createHash} from 'node:crypto';
@@ -45,14 +45,14 @@ await test('maintained ordinary restore canonical formatting is exactly retained
 });
 const canonicalPlan=manifest.plan.map(x=>({order:x.order,file:x.file,source_migration_version:x.file.slice(0,14),sha256:x.canonical_sha256}));
 const actualPlan=bindExistingPostgresForwardSources(root,canonicalPlan);
-const current166=bindExistingPostgresForwardSources(root,readMigrationReplayPlan(root).files.slice(134).map((file,index)=>({
+const current170=bindExistingPostgresForwardSources(root,readMigrationReplayPlan(root).files.slice(134).map((file,index)=>({
  order:index+1,file,phase:file.slice(15,-4),source_migration_version:file.slice(0,14),sha256:createHash('sha256').update(read('supabase/migrations/'+file)).digest('hex'),
 })));
-await test('exact compact166 plan preserves all original235 comparison obligations',()=>{
- assert.equal(current166.length,166);assert.deepEqual(validateOriginal235PreservationPlan(root,current166),manifest);
+await test('exact closed304/170 plan preserves all original235 comparison obligations',()=>{
+ assert.equal(current170.length,170);assert.deepEqual(validateOriginal235PreservationPlan(root,current170),manifest);
 });
 for(const mutation of [p=>p.at(-1).sha256='0'.repeat(64),p=>p.at(-1).phase='unknown',p=>p.at(-1).forward_source={},p=>p[160].sha256='0'.repeat(64),p=>p.push({...p.at(-1)})]){
- await test('compact preservation rejects changed tail, prefix, execution profile or extra migration',()=>{const p=structuredClone(current166);mutation(p);assert.throws(()=>validateOriginal235PreservationPlan(root,p));});
+ await test('compact preservation rejects changed tail, prefix, execution profile or extra migration',()=>{const p=structuredClone(current170);mutation(p);assert.throws(()=>validateOriginal235PreservationPlan(root,p));});
 }
 await test('all160 actual source inputs admitted through shipping dualhash resolver',()=>{
  validateOriginal235PreservationPlan(root,actualPlan);
@@ -64,6 +64,19 @@ for(const mutation of [p=>p.pop(),p=>p.reverse(),p=>p[0].sha256='0'.repeat(64),p
 await test('ordinary native comparison uses exact original fields plus duplicate-sensitive EXCEPT ALL',()=>{
  const t=manifest.tables.find(t=>t.name==='device_auth_credentials'),s=compileOriginalTableComparison(t);
  assert.equal((s.match(/except all/g)||[]).length,2);assert.ok(s.includes(nativeTextColumnProjection(t.columns,'r')));assert.ok(s.includes('from only "public"."device_auth_credentials" r'));assert.ok(!s.includes('jsonb'));
+});
+await test('approved Q07 compares every native field and every row except the two explicit bounded changes',()=>{
+ const t=manifest.tables.find(x=>x.name==='location_groups'),sql=compileApprovedOffsiteComparison(t);
+ assert.equal((sql.match(/except all/g)||[]).length,2);
+ for(const c of t.columns)assert.ok(sql.includes(c));
+ for(const guard of ["source_eligible","current_eligible","invalid_transformation","r.group_name is distinct from 'Off campus event'","r.updated_at is null","r.updated_at=transaction_timestamp()","r.updated_at between $1::timestamptz and clock_timestamp()","raw_actual","before_sha256","after_sha256"])assert.ok(sql.includes(guard));
+ assert.ok(!sql.includes('jsonb'),'Untouched values must retain lossless native TEXT');
+ assert.throws(()=>compileApprovedOffsiteComparison({...t,schema:'auth'}));
+ assert.throws(()=>compileApprovedOffsiteComparison({...t,columns:t.columns.slice(1)}));
+ assert.ok(module.includes("plan.at(-1)?.file==='20261031225210_custodial_sealed_repairs_current_eight.sql'"));
+ assert.ok(module.includes("plan.at(-1).sha256,'f4e3dc5be9a465e2099bd9b23488f99b3f9e4c1d9d969844b2fa06b1fbdc7a73'"));
+ assert.ok(module.includes("assert.equal(row.source_eligible,'1');assert.equal(row.current_eligible,'1');assert.equal(row.invalid_transformation,'0')"));
+ const ordinary=compileOriginalTableComparison(t);assert.ok(!ordinary.includes('Q07_APPROVED_MIGRATION_TIME'),'Historical plans keep their exact original row comparison');
 });
 await test('only four setting keys are excluded; no table-wide fallback',()=>{
  const s=compileOriginalTableComparison(manifest.tables.find(x=>x.name==='system_settings'));

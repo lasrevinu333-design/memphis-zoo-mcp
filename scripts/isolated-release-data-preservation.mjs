@@ -115,6 +115,34 @@ export function compileOriginalTableComparison(t){
  (select count(*)::text from missing) missing_rows,(select count(*)::text from extra) extra_rows,
  (select ${hashes('e')} from expected e) before_sha256,(select ${hashes('a')} from actual a) after_sha256`;
 }
+// Q07 changes exactly two fields of the existing event-only OFFSITE row.
+// Keep every original column as native TEXT and every row duplicate-sensitive;
+// only the approved name and bounded migration timestamp may differ.
+export function compileApprovedOffsiteComparison(t){
+ assert.equal(tableKey(t),'public.location_groups');
+ assert.deepEqual(t.columns,['id','group_code','group_name','active','notes','created_at','updated_at','eligible_event_venue','eligible_event_scope','eligible_custodial_coverage','eligible_staffing_assignment','public_restroom','staff_restroom','exhibit','restaurant','event_venue','administrative','zoo_wide_scope','offsite']);
+ const before=`image::json->>'group_code'='OFFSITE' and image::json->>'offsite'='true' and image::json->>'active'='false' and image::json->>'eligible_event_scope'='true' and image::json->>'eligible_custodial_coverage'='false' and image::json->>'eligible_staffing_assignment'='false'`;
+ const after=`r.group_code='OFFSITE' and r.offsite=true and r.active=false and r.eligible_event_scope=true and r.eligible_custodial_coverage=false and r.eligible_staffing_assignment=false`;
+ const projection=(source)=>`pg_catalog.json_object(ARRAY[${t.columns.map(literal).join(',')}]::text[],ARRAY[${t.columns.map(c=>{
+  const value=source==='before'?`image::json->>${literal(c)}`:`r.${ident(c)}::text`;
+  if(c==='updated_at')return `case when ${source==='before'?before:after} then 'Q07_APPROVED_MIGRATION_TIME' else ${value} end`;
+  if(source==='before'&&c==='group_name')return `case when ${before} then 'Off campus event' else ${value} end`;
+  return value;
+ }).join(',')}]::text[])::text`;
+ return `with original as materialized(select image from pg_temp.custodial_release_preservation_before where relation='public.location_groups'),
+ expected as materialized(select ${projection('before')} collate pg_catalog."C" image from original),
+ actual as materialized(select ${projection('after')} collate pg_catalog."C" image from only public.location_groups r),
+ raw_actual as materialized(select ${nativeTextColumnProjection(t.columns,'r')} collate pg_catalog."C" image from only public.location_groups r),
+ missing as(select image from expected except all select image from actual),extra as(select image from actual except all select image from expected)
+ select (select count(*)::text from original) before_rows,(select count(*)::text from actual) after_rows,
+ (select count(*)::text from missing) missing_rows,(select count(*)::text from extra) extra_rows,
+ (select count(*)::text from original where ${before}) source_eligible,
+ (select count(*)::text from only public.location_groups r where ${after}) current_eligible,
+ (select count(*)::text from only public.location_groups r where (${after}) and
+  (r.group_name is distinct from 'Off campus event' or r.updated_at is null or
+   not(r.updated_at=transaction_timestamp() or r.updated_at between $1::timestamptz and clock_timestamp()))) invalid_transformation,
+ (select ${hashes('e')} from original e) before_sha256,(select ${hashes('a')} from raw_actual a) after_sha256`;
+}
 const PROFILE=`select pg_backend_pid()::text pid,current_user actor,session_user original_actor,current_database() database,
  (select datdba::regrole::text from pg_database where datname=current_database()) database_owner,
  (select rolsuper from pg_roles where rolname=current_user) superuser,(select rolbypassrls from pg_roles where rolname=current_user) bypassrls,
@@ -240,9 +268,13 @@ export async function prepareIsolatedReleaseDataPreservation({client,backendRoot
    and not exists(select 1 from jsonb_each(to_jsonb(c)-array['singleton','paused','pause_reason','updated_at']) x where x.value<>'null'::jsonb))::text expected
    from public.system_feedback_email_relay_config c`)).rows[0];assert.deepEqual(relay,{rows:'1',expected:'1'});
   for(const table of ['system_feedback_email_intents','system_feedback_email_attempts','system_feedback_email_receipts','system_feedback_email_relay_requests'])assert.equal((await query('select count(*)::text n from public.'+ident(table))).rows[0].n,'0','no migration-time relay data/send evidence');
+  const approvedOffsite=plan.at(-1)?.file==='20261031225210_custodial_sealed_repairs_current_eight.sql';
+  if(approvedOffsite)assert.equal(plan.at(-1).sha256,'f4e3dc5be9a465e2099bd9b23488f99b3f9e4c1d9d969844b2fa06b1fbdc7a73');
   const results=[];
   await textProfile(async()=>{for(const t of tables){if(t.schema==='public'&&['custodial_release_authority_restore_inventory','events_app_events'].includes(t.name))continue;
-   const row=(await query(compileOriginalTableComparison(t))).rows[0];assert.equal(row.missing_rows,'0',tableKey(t));
+   const q07=approvedOffsite&&tableKey(t)==='public.location_groups';
+   const row=(await query(q07?compileApprovedOffsiteComparison(t):compileOriginalTableComparison(t),q07?[captureClock]:[])).rows[0];assert.equal(row.missing_rows,'0',tableKey(t));
+   if(q07){assert.equal(row.source_eligible,'1');assert.equal(row.current_eligible,'1');assert.equal(row.invalid_transformation,'0');}
    if(!(t.schema==='public'&&t.name==='events_app_event_history'))assert.equal(row.extra_rows,'0',tableKey(t));
    results.push({table:tableKey(t),...row});
   }});
