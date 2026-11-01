@@ -1,7 +1,7 @@
 {
   "artifact": "integrated-backend-authority-release-evidence.v2",
   "release_id": "release-2026.07.19.custodial-v3.12",
-  "frontend_commit_sha": "b8b08655ce2c574df9841fb0f240b287f338ea9e",
+  "frontend_commit_sha": "346e37063f15a0212f3810fc17b99c224314ca83",
   "frontend_commit_state": "final_pair_bound",
   "schema_fingerprint": "ff233923ac21cd46b70985a9eaeb20dbb2a4c0bdc6f69f527159d437ed893440",
   "schema_transition": {
@@ -1430,7 +1430,7 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "bf4340d557f959613a97cc7188a47e08bfb0ddf3"
+        "object_id": "503acb79c248280af337d0ef37e75bb5a0bba428"
       },
       {
         "path": "release/installed-source/20261006031304_custodial_owner_delegated_actions.sql",
@@ -1800,7 +1800,7 @@
       {
         "path": "release/schema-alignment-input.json",
         "mode": "100644",
-        "object_id": "8508007fa6722d0f1f67bdce979c8669595ac6a6"
+        "object_id": "a0b20a03e655f6051fc8cba288a04462f984fed1"
       },
       {
         "path": "release/schema-evidence/EIGHT_ACTIVE302_EXACT_CAPTURE_SOURCE_F85E.mjs",
@@ -2005,7 +2005,7 @@
       {
         "path": "release/sealed-repair-frontend-source/SOURCE_PAIR.json",
         "mode": "100644",
-        "object_id": "9e50f91913e494516ac0b0a5899ad17315cdc250"
+        "object_id": "37da2ea492fa66de97e2a4e68a07a3ce574c7f01"
       },
       {
         "path": "release/sealed-repair-frontend-source/memphis-approved-schedule.js",
@@ -3225,7 +3225,7 @@
       {
         "path": "scripts/fixtures/current-scheduler-source-profiles.mjs",
         "mode": "100644",
-        "object_id": "34ca8d697c7379cdde61bee81cad00bf492e7fd1"
+        "object_id": "a17ee9799be2726651333f60e1ba98c56cb27ef2"
       },
       {
         "path": "scripts/fixtures/dashboard-independent-check-reader-fixture.py",
@@ -3535,7 +3535,7 @@
       {
         "path": "scripts/fixtures/sealed-repair/CANONICAL304_PLAN.json",
         "mode": "100644",
-        "object_id": "ac59ee177aa2f51f50632ad6a5c363a35015199b"
+        "object_id": "446dff45d07e67d58bd8370a87de24b0b881eef0"
       },
       {
         "path": "scripts/fixtures/sealed-repair/F01_regression.sql",
