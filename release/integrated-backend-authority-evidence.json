@@ -3655,7 +3655,7 @@
       {
         "path": "scripts/fixtures/sealed-repair/CANONICAL304_PLAN.json",
         "mode": "100644",
-        "object_id": "446dff45d07e67d58bd8370a87de24b0b881eef0"
+        "object_id": "04d60925c575d912732eefa7b6fa86f8718b0335"
       },
       {
         "path": "scripts/fixtures/sealed-repair/F01_regression.sql",
@@ -4090,12 +4090,12 @@
       {
         "path": "scripts/leadership-restore-generation-tests.mjs",
         "mode": "100644",
-        "object_id": "12f5f5b6f8bedb1cc53ea627bed26f866b79e300"
+        "object_id": "fffe0fa788ab77e51745629f0b57dcfde77a997b"
       },
       {
         "path": "scripts/leadership-restore-generation.mjs",
         "mode": "100644",
-        "object_id": "99eb9e80be89828f42d3476605fd860a36e4030c"
+        "object_id": "f30a850785b8de07cfd6e7927b2f759a92b7df7a"
       },
       {
         "path": "scripts/legacy-activation-database-tests.mjs",
@@ -5380,7 +5380,7 @@
       {
         "path": "scripts/production-restore.mjs",
         "mode": "100644",
-        "object_id": "27f3783e2743ae430da1b094200a6a3da34530a1"
+        "object_id": "e2a8e10602d64a4801fb3c4f16ac115ef1300e85"
       },
       {
         "path": "scripts/production-runtime-contract-tests.mjs",
