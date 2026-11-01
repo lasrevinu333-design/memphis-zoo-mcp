@@ -4060,12 +4060,12 @@
       {
         "path": "scripts/isolated-release-data-preservation-tests.mjs",
         "mode": "100644",
-        "object_id": "353f0becbb706a48a8ab93ad7126534ef4144432"
+        "object_id": "b0a6708b00408d9a487b374be9a8acf546447cbc"
       },
       {
         "path": "scripts/isolated-release-data-preservation.mjs",
         "mode": "100644",
-        "object_id": "f5abe0b0cd15ce15e8fd32c1451d904a1c916506"
+        "object_id": "84b41085df8c6a8d4b70a24358cec540fcd1832b"
       },
       {
         "path": "scripts/isolated-restore-lease-shim-tests.mjs",
