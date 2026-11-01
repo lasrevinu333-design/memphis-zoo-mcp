@@ -1,0 +1,264 @@
+{
+  "schema": "custodial.main.actual-canonical304-complete-runtime.v1",
+  "at": "2026-11-01T00:39:03.899800+00:00",
+  "status": "PASS_LOCAL_COMPLETE_CANONICAL304_PLUS_FULL_REPAIR_WORKFLOWS",
+  "intent": {
+    "schema": "custodial.main.actual-canonical304-run.v1",
+    "at": "2026-11-01T00:27:25.057384+00:00",
+    "backendHead": "3f3ce2a4d962967be5399bef75f424f1e14138a7",
+    "backendTree": "5207e5b3f88813c042b0c8d360312bdcd201fdbe",
+    "planSha256": "0c139bf3b1263cfff047a9cb2ea2b5ec4d6de0bda378c831658ae95de6183b52",
+    "command": [
+      "node",
+      "--max-old-space-size=384",
+      "scripts/sealed-repair-canonical-database-tests.mjs",
+      "--out",
+      "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/MAIN_EIGHT_ACTIVE_LAUNCH_20261031/MAIN_ACTUAL_CANONICAL304_002/database"
+    ],
+    "tmpdir": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/MAIN_EIGHT_ACTIVE_LAUNCH_20261031/MAIN_ACTUAL_CANONICAL304_002/tmp",
+    "out": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/MAIN_EIGHT_ACTIVE_LAUNCH_20261031/MAIN_ACTUAL_CANONICAL304_002/database",
+    "qualificationMemoryBytes": 536870912,
+    "scope": "isolated fresh304 and full corrected workflow tests only; no production/audit/build/deploy",
+    "priorRun": "001 immutable schema+activation+all nine regressions PASS; stale module303 gate known assertion; all owned resources actually cleaned",
+    "newRunReason": "Five exact 303 module preconditions corrected to actual304; SQL and workflow cases unchanged",
+    "cleanup": "Original runner exact fixture cleanup; uncertainty preserved, no automatic retry"
+  },
+  "parentWait": {
+    "pid": 3777875,
+    "wait": 0,
+    "at": "2026-11-01T00:38:26.990694+00:00"
+  },
+  "result": {
+    "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/MAIN_EIGHT_ACTIVE_LAUNCH_20261031/MAIN_ACTUAL_CANONICAL304_002/database/RESULT.json",
+    "sha256": "e46729f50dab92a0079c6305528480d7417f0a813a604a96bb32e0062ca306dd"
+  },
+  "modules": [
+    {
+      "file": "REPAIR_MODULE_broadcast_concurrency_RESULT.json",
+      "sha256": "862b3fdfd315de913d3cfef96e833aec2fcf26b3d826b05ee2c85b27ae5283f1",
+      "checks": 4,
+      "status": "PASS"
+    },
+    {
+      "file": "REPAIR_MODULE_manual_period_RESULT.json",
+      "sha256": "17a0d9dd51f0808d9dad916e74d396887cff2d8995ced5ab8d848ec921afec71",
+      "checks": 30,
+      "status": "PASS"
+    },
+    {
+      "file": "REPAIR_MODULE_manual_repeat_memory_receipt_RESULT.json",
+      "sha256": "c9fae72623a2df9c21fad0acde28573c337e828472b3e4a971538cd9bfc0257e",
+      "checks": null,
+      "status": "PASS"
+    },
+    {
+      "file": "REPAIR_MODULE_native_source_finalization_RESULT.json",
+      "sha256": "44cf1fd3bc10957447607e41a035520d1500242aa912a2d4a391165738bcd514",
+      "checks": 13,
+      "status": "PASS"
+    },
+    {
+      "file": "REPAIR_MODULE_record_routes_concurrency_RESULT.json",
+      "sha256": "dcb468f6970ca8004e8912c14c71547f66deb5e2a8f5afa0fe1c60741503a62d",
+      "checks": 7,
+      "status": "PASS"
+    },
+    {
+      "file": "REPAIR_MODULE_restore_helper_RESULT.json",
+      "sha256": "aa23a03ff89a7cdd7e25ad1790436d50d6427df7c6a0c81fd893be2fb5afe7cc",
+      "checks": 9,
+      "status": "PASS"
+    }
+  ],
+  "resources": [
+    {
+      "file": "RESOURCE_01_constructed.json",
+      "memoryPeak": 268976128,
+      "oom": 0,
+      "oom_kill": 0
+    },
+    {
+      "file": "RESOURCE_02_initial_activation.json",
+      "memoryPeak": 516263936,
+      "oom": 0,
+      "oom_kill": 0
+    },
+    {
+      "file": "RESOURCE_03_module_restore_helper.json",
+      "memoryPeak": 516263936,
+      "oom": 0,
+      "oom_kill": 0
+    },
+    {
+      "file": "RESOURCE_04_module_record_routes_concurrency.json",
+      "memoryPeak": 516263936,
+      "oom": 0,
+      "oom_kill": 0
+    },
+    {
+      "file": "RESOURCE_05_module_broadcast_concurrency.json",
+      "memoryPeak": 516263936,
+      "oom": 0,
+      "oom_kill": 0
+    },
+    {
+      "file": "RESOURCE_06_module_native_source_finalization.json",
+      "memoryPeak": 516263936,
+      "oom": 0,
+      "oom_kill": 0
+    },
+    {
+      "file": "RESOURCE_07_module_manual_period.json",
+      "memoryPeak": 536870912,
+      "oom": 0,
+      "oom_kill": 0
+    },
+    {
+      "file": "RESOURCE_08_module_manual_repeat_memory_receipt.json",
+      "memoryPeak": 536870912,
+      "oom": 0,
+      "oom_kill": 0
+    },
+    {
+      "file": "RESOURCE_09_all_extensions.json",
+      "memoryPeak": 536870912,
+      "oom": 0,
+      "oom_kill": 0
+    },
+    {
+      "file": "RESOURCE_10_before_cleanup.json",
+      "memoryPeak": 536870912,
+      "oom": 0,
+      "oom_kill": 0
+    }
+  ],
+  "fullHourLunches": 40,
+  "employeeDayReadbacks": 40,
+  "ownershipChecks": 162540,
+  "normalSevenSourcesChanged": false,
+  "cleanup": "SUPPORTED_ORIGINAL_OWNED_FIXTURE_CLEANUP_RETURNED",
+  "productionWritten": false,
+  "physicalAcceptance": false,
+  "wholeFrontendSuitePass": false,
+  "finalPairedCiPass": false,
+  "independentAudit": false,
+  "finalSignedBuildOrDeploy": false,
+  "portableArtifacts": [
+    {
+      "path": "release/sealed-repair-current304-runtime/RESULT.json",
+      "sha256": "e46729f50dab92a0079c6305528480d7417f0a813a604a96bb32e0062ca306dd",
+      "bytes": 41952
+    },
+    {
+      "path": "release/sealed-repair-current304-runtime/REPAIR_REGRESSION_SUMMARY.json",
+      "sha256": "09be4af24ec2b3be0d0adfb7a8abaac1a278bc4a8f7a210075a2d1146d67fac4",
+      "bytes": 41
+    },
+    {
+      "path": "release/sealed-repair-current304-runtime/CANONICAL304_SQL_REPLAY_OWNERSHIP.json",
+      "sha256": "4ad4e071cdb4af36ce1bdc4e7e0da69dfc3f187689f22790086408990e7b6714",
+      "bytes": 472
+    },
+    {
+      "path": "release/sealed-repair-current304-runtime/MAIN_FRESH304_CAPTURE_RESULT.json",
+      "sha256": "c7e7ba34614442e947f8e5582e8aaf15c66d63c8ead6c20d0aba1032287306ea",
+      "bytes": 9473
+    },
+    {
+      "path": "release/sealed-repair-current304-runtime/REPAIR_MODULE_broadcast_concurrency_RESULT.json",
+      "sha256": "862b3fdfd315de913d3cfef96e833aec2fcf26b3d826b05ee2c85b27ae5283f1",
+      "bytes": 997
+    },
+    {
+      "path": "release/sealed-repair-current304-runtime/REPAIR_MODULE_manual_period_RESULT.json",
+      "sha256": "17a0d9dd51f0808d9dad916e74d396887cff2d8995ced5ab8d848ec921afec71",
+      "bytes": 5828
+    },
+    {
+      "path": "release/sealed-repair-current304-runtime/REPAIR_MODULE_manual_repeat_memory_receipt_RESULT.json",
+      "sha256": "c9fae72623a2df9c21fad0acde28573c337e828472b3e4a971538cd9bfc0257e",
+      "bytes": 814
+    },
+    {
+      "path": "release/sealed-repair-current304-runtime/REPAIR_MODULE_native_source_finalization_RESULT.json",
+      "sha256": "44cf1fd3bc10957447607e41a035520d1500242aa912a2d4a391165738bcd514",
+      "bytes": 2236
+    },
+    {
+      "path": "release/sealed-repair-current304-runtime/REPAIR_MODULE_record_routes_concurrency_RESULT.json",
+      "sha256": "dcb468f6970ca8004e8912c14c71547f66deb5e2a8f5afa0fe1c60741503a62d",
+      "bytes": 5313
+    },
+    {
+      "path": "release/sealed-repair-current304-runtime/REPAIR_MODULE_restore_helper_RESULT.json",
+      "sha256": "aa23a03ff89a7cdd7e25ad1790436d50d6427df7c6a0c81fd893be2fb5afe7cc",
+      "bytes": 5128
+    },
+    {
+      "path": "release/sealed-repair-current304-runtime/RESOURCE_01_constructed.json",
+      "sha256": "c4a6fc3c522a1dcf772e30c15b953c015e8e738376609259be0db9913d75bb64",
+      "bytes": 3615
+    },
+    {
+      "path": "release/sealed-repair-current304-runtime/RESOURCE_02_initial_activation.json",
+      "sha256": "cdb1941aa28131cfc5396028fb1bbf8fda95a7d31f28994e1693edd2d2fa3219",
+      "bytes": 3626
+    },
+    {
+      "path": "release/sealed-repair-current304-runtime/RESOURCE_03_module_restore_helper.json",
+      "sha256": "cde5f9e97ae414e0a4a8e7aed2cead3489c1a16a669203469ea1518a44d160d3",
+      "bytes": 3629
+    },
+    {
+      "path": "release/sealed-repair-current304-runtime/RESOURCE_04_module_record_routes_concurrency.json",
+      "sha256": "4d0f0963e4fc6d5f3eb632a9d748fefc430b0390197e89988ca3cdd022407316",
+      "bytes": 3640
+    },
+    {
+      "path": "release/sealed-repair-current304-runtime/RESOURCE_05_module_broadcast_concurrency.json",
+      "sha256": "043757dd1fd3d1b565342639c4f9ed285225581d9bcb7fb8d8cf65a674ad0afa",
+      "bytes": 3636
+    },
+    {
+      "path": "release/sealed-repair-current304-runtime/RESOURCE_06_module_native_source_finalization.json",
+      "sha256": "51947060239a9a0df8ff5e8be0a058f113ae29450df0fd59e546cbbff60138b7",
+      "bytes": 3641
+    },
+    {
+      "path": "release/sealed-repair-current304-runtime/RESOURCE_07_module_manual_period.json",
+      "sha256": "63cc6176a9ee1e627528996bb8e5e18117ed44ec0e9a80e62edaf701ac7a0581",
+      "bytes": 3640
+    },
+    {
+      "path": "release/sealed-repair-current304-runtime/RESOURCE_08_module_manual_repeat_memory_receipt.json",
+      "sha256": "37887050e3d5d626b994116230124a1bebb25cfd0802a77ebb74c9b690caeff9",
+      "bytes": 3655
+    },
+    {
+      "path": "release/sealed-repair-current304-runtime/RESOURCE_09_all_extensions.json",
+      "sha256": "97e5ea552ab890d22cdb4c1106458c574ceddef8c50fd4faa02ae12b8554c681",
+      "bytes": 3634
+    },
+    {
+      "path": "release/sealed-repair-current304-runtime/RESOURCE_10_before_cleanup.json",
+      "sha256": "913cf0eb27125e1b12a9919378a7fcf31d63d285d66c9d3c3ec5b03a6b9ec3a5",
+      "bytes": 3631
+    },
+    {
+      "path": "release/sealed-repair-current304-runtime/INTENT.json",
+      "sha256": "91ba5383a55e7ce0e14d25d13b541e04edc156a15cb35dd83c52706bbab79e27",
+      "bytes": 1731
+    },
+    {
+      "path": "release/sealed-repair-current304-runtime/PARENT_IDENTITY.json",
+      "sha256": "90a5d98808c3368be2a8a53a69859f940a091790eb7fa4f37440dc8bec27d3ff",
+      "bytes": 431
+    },
+    {
+      "path": "release/sealed-repair-current304-runtime/PARENT_WAIT.json",
+      "sha256": "3f53911b6a5416df73e4a8f03d10b02e57311e922a220b5df1f6b053c87bb8f3",
+      "bytes": 78
+    }
+  ],
+  "scope": "Actual clean canonical304 and full six-workflow implementation test at original3f3ce2a source; this is local runtime qualification, not hosted/physical/independent audit/final build/production acceptance."
+}

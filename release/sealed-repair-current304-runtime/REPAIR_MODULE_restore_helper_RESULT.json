@@ -1,0 +1,148 @@
+{
+  "status": "PASS",
+  "scope": "ROOT_OWNED_ACTUAL_COMPLETION_HELPER_REAL_SQL_ROLLBACK_ONLY",
+  "checks": [
+    {
+      "name": "ready protected generation and current original c720 registration observed on owned client",
+      "status": "PASS"
+    },
+    {
+      "name": "actual old registration and opaque-cookie runtime readback denied despite legacy completion flag true",
+      "status": "PASS",
+      "legacy_authority_invalidated": true,
+      "unsafe_generation_count": "0",
+      "registration_denied": true,
+      "opaque_cookie_readback_denied": true,
+      "backend_pid": 2746,
+      "trigger_mode": "origin"
+    },
+    {
+      "name": "actual exported completion helper accepts the matching paused generation and fully invalidated old set",
+      "status": "PASS",
+      "schema": "custodial.leadership-restore-generation.v1",
+      "restore_id": "bbc592cb-dbbf-4c7f-a1da-278f25b9b15d",
+      "authority_generation": 1,
+      "registration_count": 2,
+      "unsafe_generation_count": 0,
+      "accepted_registration_count": 0,
+      "outcome": "RESTORED_REGISTRATIONS_DENIED"
+    },
+    {
+      "name": "actual helper rejects wrong restore ownership and protected generation",
+      "status": "PASS"
+    },
+    {
+      "name": "actual helper rejects unrevoked current-generation authority even though pause currently denies its session",
+      "status": "PASS",
+      "legacy_authority_invalidated": true,
+      "unsafe_generation_count": "1",
+      "registration_denied": true,
+      "opaque_cookie_readback_denied": true,
+      "backend_pid": 2746,
+      "trigger_mode": "origin"
+    },
+    {
+      "name": "actual helper rejects unrevoked future-generation authority even though pause currently denies its session",
+      "status": "PASS",
+      "legacy_authority_invalidated": true,
+      "unsafe_generation_count": "1",
+      "registration_denied": true,
+      "opaque_cookie_readback_denied": true,
+      "backend_pid": 2746,
+      "trigger_mode": "origin"
+    },
+    {
+      "name": "actual helper accepts an explicitly revoked row without confusing it with live future authority",
+      "status": "PASS"
+    },
+    {
+      "name": "actual helper and session reader fail closed when protected singleton is unavailable",
+      "status": "PASS"
+    },
+    {
+      "name": "rollback removes synthetic restore metadata and restores exact original rows and current cohort session",
+      "status": "PASS"
+    }
+  ],
+  "helperCalls": [
+    {
+      "label": "old-generation restored registrations denied",
+      "outcome": "RETURNED",
+      "result": {
+        "schema": "custodial.leadership-restore-generation.v1",
+        "restore_id": "bbc592cb-dbbf-4c7f-a1da-278f25b9b15d",
+        "authority_generation": 1,
+        "registration_count": 2,
+        "unsafe_generation_count": 0,
+        "accepted_registration_count": 0,
+        "outcome": "RESTORED_REGISTRATIONS_DENIED"
+      }
+    },
+    {
+      "label": "wrong original restore identity",
+      "outcome": "REFUSED",
+      "code": null,
+      "message": "Restored leadership authority remains unverified; completion must stay paused."
+    },
+    {
+      "label": "wrong protected generation",
+      "outcome": "REFUSED",
+      "code": null,
+      "message": "Restored leadership authority remains unverified; completion must stay paused."
+    },
+    {
+      "label": "current-generation unrevoked row",
+      "outcome": "REFUSED",
+      "code": null,
+      "message": "Restored leadership authority remains unverified; completion must stay paused."
+    },
+    {
+      "label": "future-generation unrevoked row",
+      "outcome": "REFUSED",
+      "code": null,
+      "message": "Restored leadership authority remains unverified; completion must stay paused."
+    },
+    {
+      "label": "revoked future-generation row remains invalidated",
+      "outcome": "RETURNED",
+      "result": {
+        "schema": "custodial.leadership-restore-generation.v1",
+        "restore_id": "bbc592cb-dbbf-4c7f-a1da-278f25b9b15d",
+        "authority_generation": 1,
+        "registration_count": 2,
+        "unsafe_generation_count": 0,
+        "accepted_registration_count": 0,
+        "outcome": "RESTORED_REGISTRATIONS_DENIED"
+      }
+    },
+    {
+      "label": "protected generation unavailable",
+      "outcome": "REFUSED",
+      "code": null,
+      "message": "Restored leadership authority remains unverified; completion must stay paused."
+    },
+    {
+      "label": "reconciled old set before final rollback",
+      "outcome": "RETURNED",
+      "result": {
+        "schema": "custodial.leadership-restore-generation.v1",
+        "restore_id": "bbc592cb-dbbf-4c7f-a1da-278f25b9b15d",
+        "authority_generation": 1,
+        "registration_count": 2,
+        "unsafe_generation_count": 0,
+        "accepted_registration_count": 0,
+        "outcome": "RESTORED_REGISTRATIONS_DENIED"
+      }
+    }
+  ],
+  "backendPid": 2746,
+  "rollbackVerified": true,
+  "production": false,
+  "restoreExecuted": false,
+  "importExecuted": false,
+  "activationExecuted": false,
+  "socketsOpened": 0,
+  "createdPools": 0,
+  "createdDatabases": 0,
+  "independentAcceptance": false
+}

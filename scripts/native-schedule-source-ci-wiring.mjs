@@ -7,9 +7,10 @@ import {resolve} from 'node:path';
 
 const statement="await import('./native-schedule-source-ci-tests.mjs');";
 const hashes={
-  // Current S4 notification privilege/read-purity source; createPushRuntime and
-  // its entire native prefix remain literal. Current behavior is not normalized.
-  'src/manager-notifications.js':'50507bdd740a463e839fd40a0bea1b9b5462bfbbb6ad0d12239bde2172bba113',
+  // Exact integrated notification repairs: CSRF/credential-scoped health and
+  // UTF-8 reminder previews. createPushRuntime remains byte-identical to the
+  // pre-repair implementation; current source is pinned directly, not normalized.
+  'src/manager-notifications.js':'23babba7dae1d0cda59b46e49d474d11912684e20da8727268b02df30d0e0a73',
   'scripts/native-schedule-sender-factory-tests.mjs':'1b5ea8649cbc2d8919f8b612fa2aa44c19841a9dcb58dc626393ef6c3ff55183',
   'src/native-schedule-source-producer.js':'a5ffbb3f816ba32e8bf2e2ab8583786a2983cb0ea7cb43eddaa970c9250828bb',
   'scripts/native-schedule-source-producer-tests.mjs':'c3ffbedf1b27f74ff571df7062d8a5b52118bcf9b517420ceb83b9c0fdf58410',
@@ -32,8 +33,8 @@ const hashes={
   'scripts/native-schedule-attempt-sql-tests.mjs':'66585e257722deb9733cb0cd3b15565e9d7ebe9f2f61a5e9600fa0d96398cb19',
   'supabase/migrations/20261008122247_native_schedule_attempt_outcome.sql':'2b547c771f90d95e5fbe68c3f14d787e4115a93311812b61f432e056f12b126e',
   'src/native-schedule-job-preparation.js':'04f41b8d3fe7cb57285ed0b33fa3e84e8ed8a68c8924b77cfce8b28654e6dbec',
-  'src/employee-notifications.js':'e2a76f19c8b7c09b1cf95ed9bb0446a7aeee3f18b8edeb23d6d649aaed553c80',
-  'scripts/fixtures/qualified-alert-dispatcher.mjs':'7ce56120fd96b73e65e2e4f65406d2ddbc0163a637c0d5fb50f12092ab863379',
+  'src/employee-notifications.js':'75e140b93efa27c046909f584b947420e80f5834cf00d60882758396feb9da07',
+  'scripts/fixtures/qualified-alert-dispatcher.mjs':'b94a3509a9f939cfed5a1c261b465cda937c0562b8b2a1610d4dfa2b9bd8f9c5',
   'scripts/native-schedule-job-preparation-tests.mjs':'c6f2218690007002feeeb4756d5bbbbc42964a995f8b757abc9f6c1cc6c62338',
   'scripts/native-schedule-job-sql-tests.mjs':'e360fd2a6b12157191df8325ffcdd7bd23e9dd0b8473ccfa1ca31dd0b55a8e9e',
   'supabase/migrations/20261008115557_native_schedule_job_preparation.sql':'d8e60a063312022b4f44c6479c83b1ce70a4dc19008ec50686815756b4c318a7',

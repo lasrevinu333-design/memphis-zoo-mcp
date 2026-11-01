@@ -1,0 +1,44 @@
+{
+  "status": "PASS",
+  "scope": "Actual two-connection original broadcast, no provider dispatch",
+  "checks": [
+    "distinct backend PIDs",
+    "concurrent same-key exact original receipt",
+    "one thread/broadcast/message/receipt",
+    "read-only original result"
+  ],
+  "calls": [
+    {
+      "client": 0,
+      "pid": 2746
+    },
+    {
+      "client": 1,
+      "pid": 2887
+    }
+  ],
+  "results": [
+    [
+      {
+        "thread_id": "fd7580a6-5ac0-44c9-99a7-98ec458fb354",
+        "broadcast_id": "78107ebf-3c36-4579-be10-b92854f000ab",
+        "message_id": "3174dbeb-be50-4bda-a036-3e89dba8e183",
+        "recipient_count": 30
+      }
+    ],
+    [
+      {
+        "thread_id": "fd7580a6-5ac0-44c9-99a7-98ec458fb354",
+        "broadcast_id": "78107ebf-3c36-4579-be10-b92854f000ab",
+        "message_id": "3174dbeb-be50-4bda-a036-3e89dba8e183",
+        "recipient_count": 30
+      }
+    ]
+  ],
+  "counts": {
+    "threads": 1,
+    "broadcasts": 1,
+    "messages": 1,
+    "receipts": 1
+  }
+}

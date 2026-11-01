@@ -1,0 +1,195 @@
+{
+  "status": "PASS",
+  "checks": [
+    {
+      "name": "unique fixtures use current directory/session table guards",
+      "status": "PASS"
+    },
+    {
+      "name": "actual shared auth/current CP service rejects invalid CSRF, origin, token, selected claim and missing markers without correction",
+      "status": "PASS"
+    },
+    {
+      "name": "actual HTTP→bridge→current CP /records→SQL commits once, reads truth/status, preserves original audit on replay",
+      "status": "PASS",
+      "operationId": "c7290000-0000-4000-8000-000000000201",
+      "correctionId": "a83fcb09-4853-4451-9537-a0984737347e",
+      "cohortId": "c7200000-0000-4000-8000-000000000001",
+      "claimedAccountId": "828a53b6-ffa1-4767-835e-6f37f893ab0b"
+    },
+    {
+      "name": "later correction cannot substitute original receipt; conflicting replay/stale preview deny; original session/response remain exact",
+      "status": "PASS"
+    },
+    {
+      "name": "same-operation concurrency: observed real lock wait, one correction/audit, exact original replay",
+      "status": "PASS",
+      "sessionId": "c7290000-0000-4000-8000-000000000101",
+      "operationA": "c7290000-0000-4000-8000-000000000301",
+      "operationB": "c7290000-0000-4000-8000-000000000301",
+      "pids": [
+        2746,
+        2887
+      ],
+      "observedBlocking": true,
+      "correctionId": "3cf8d37b-2f27-4e90-bb31-10db193839ee",
+      "secondResult": "EXACT_ORIGINAL_REPLAY",
+      "correctionRows": 1,
+      "auditRows": 1
+    },
+    {
+      "name": "different-operation concurrency: observed real lock wait, one correction/audit, one 40901 conflict",
+      "status": "PASS",
+      "sessionId": "c7290000-0000-4000-8000-000000000102",
+      "operationA": "c7290000-0000-4000-8000-000000000401",
+      "operationB": "c7290000-0000-4000-8000-000000000402",
+      "pids": [
+        2887,
+        2746
+      ],
+      "observedBlocking": true,
+      "correctionId": "7208c355-7e65-431f-8672-84b89fa84b1c",
+      "secondResult": "40901",
+      "correctionRows": 1,
+      "auditRows": 1
+    },
+    {
+      "name": "shared original records and current cohort remain available for later root extensions; no legacy RPC used",
+      "status": "PASS"
+    }
+  ],
+  "transportCalls": [
+    {
+      "path": "/custodial-leadership-internal/verify",
+      "action": null,
+      "status": 403
+    },
+    {
+      "path": "/custodial-leadership-internal/verify",
+      "action": null,
+      "status": 403
+    },
+    {
+      "path": "/custodial-leadership-internal/verify",
+      "action": null,
+      "status": 403
+    },
+    {
+      "path": "/custodial-leadership-internal/verify",
+      "action": null,
+      "status": 200
+    },
+    {
+      "path": "/custodial-leadership-internal/verify",
+      "action": null,
+      "status": 200
+    },
+    {
+      "path": "/custodial-leadership-internal/verify",
+      "action": null,
+      "status": 200
+    },
+    {
+      "path": "/custodial-leadership-internal/verify",
+      "action": null,
+      "status": 200
+    },
+    {
+      "path": "/custodial-leadership-internal/verify",
+      "action": null,
+      "status": 200
+    },
+    {
+      "path": "/custodial-leadership-internal/records",
+      "action": "correct",
+      "status": 200
+    },
+    {
+      "path": "/custodial-leadership-internal/verify",
+      "action": null,
+      "status": 200
+    },
+    {
+      "path": "/custodial-leadership-internal/records",
+      "action": "truth",
+      "status": 200
+    },
+    {
+      "path": "/custodial-leadership-internal/verify",
+      "action": null,
+      "status": 200
+    },
+    {
+      "path": "/custodial-leadership-internal/records",
+      "action": "correct",
+      "status": 200
+    },
+    {
+      "path": "/custodial-leadership-internal/verify",
+      "action": null,
+      "status": 200
+    },
+    {
+      "path": "/custodial-leadership-internal/records",
+      "action": "correction_outcome",
+      "status": 200
+    },
+    {
+      "path": "/custodial-leadership-internal/verify",
+      "action": null,
+      "status": 200
+    },
+    {
+      "path": "/custodial-leadership-internal/records",
+      "action": "correct",
+      "status": 200
+    },
+    {
+      "path": "/custodial-leadership-internal/verify",
+      "action": null,
+      "status": 200
+    },
+    {
+      "path": "/custodial-leadership-internal/records",
+      "action": "correction_outcome",
+      "status": 200
+    },
+    {
+      "path": "/custodial-leadership-internal/verify",
+      "action": null,
+      "status": 200
+    },
+    {
+      "path": "/custodial-leadership-internal/records",
+      "action": "correct",
+      "status": 200
+    },
+    {
+      "path": "/custodial-leadership-internal/verify",
+      "action": null,
+      "status": 200
+    },
+    {
+      "path": "/custodial-leadership-internal/records",
+      "action": "correct",
+      "status": 409
+    },
+    {
+      "path": "/custodial-leadership-internal/verify",
+      "action": null,
+      "status": 200
+    },
+    {
+      "path": "/custodial-leadership-internal/records",
+      "action": "correct",
+      "status": 409
+    }
+  ],
+  "legacyCalls": 0,
+  "scope": "ROOT_OWNED_REAL_SQL_WITH_IN_MEMORY_HTTP_AND_OBSERVED_TWO_CONNECTION_LOCK_WAITS",
+  "socketsOpened": 0,
+  "createdPools": 0,
+  "production": false,
+  "physicalAcceptance": false,
+  "independentAudit": false
+}
