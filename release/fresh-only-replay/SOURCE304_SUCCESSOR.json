@@ -38,8 +38,8 @@
     },
     "atomic_mode": "exact-Source-BEGIN-COMMIT"
   },
-  "observed_empty_source_fingerprint": null,
-  "source_capture_scope": "MEASURED_SOURCE304_ATOMIC_APPEND_AFTER_INITIAL_ACTIVATION_NOT_FRESH304",
+  "observed_empty_source_fingerprint": "ff233923ac21cd46b70985a9eaeb20dbb2a4c0bdc6f69f527159d437ed893440",
+  "source_capture_scope": "ACTUAL_FRESH304_CONSTRUCTION_AND_READ_ONLY_CATALOG_BEFORE_INITIAL_ACTIVATION",
   "full_vendor_NORMAL": false,
   "expected_fingerprint_authority": null
 }

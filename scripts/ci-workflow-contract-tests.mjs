@@ -266,7 +266,7 @@ assertExactCommandsInJob(schedulerGate,"validate",[
   "node scripts/manager-scheduler-database-tests.mjs",
 ],"Current scheduler permissions and assignment identity must remain called, not only archived");
 assertExactCommandsInJob(schedulerGate,"validate",[
-  'node scripts/approved-manual-activation-database-tests.mjs --out "$RUNNER_TEMP/approved-manual-activation-sql"',
+  'node --max-old-space-size=384 scripts/sealed-repair-canonical-database-tests.mjs --out "$RUNNER_TEMP/approved-manual-activation-sql"',
 ],"Current-day manual activation must exercise owned SQL, append-only roster history and original receipt recovery");
 const packageManifest = readFileSync(resolve(root, "package.json"), "utf8");
 const parsedPackageManifest = JSON.parse(packageManifest);

@@ -2,7 +2,7 @@
 // Uses its original owned pool; no constructor, target URL, provider or replay.
 import assert from 'node:assert/strict';
 export async function run({fixture,pool,manager,at,accepted,query,save,sourceCurrent,assertFrozen}) {
- await fixture.assertOwned();assert.equal(fixture.receipt.selected_replay.migrations,303);
+ await fixture.assertOwned();assert.equal(fixture.receipt.selected_replay.migrations,304);
  assert.equal(pool.options.host,fixture.socketDirectory);sourceCurrent();assertFrozen();
  const result=await query(`select jsonb_build_object(
   'operationId',o.operation_id,'publicationId',o.publication_id,'frameStart',o.frame_start,

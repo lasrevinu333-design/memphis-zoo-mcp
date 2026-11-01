@@ -301,7 +301,7 @@ const SOURCE304_MEASURED_REFS={
     "bytes": 7653
   }
 };
-export function assert304SourceCaptureScope(next,read){
+function assert304MeasuredAppendScope(next,read){
  assert.equal(next.full_vendor_NORMAL,false);assert.equal(next.expected_fingerprint_authority,null);
  assert.equal(next.source_capture_scope,'MEASURED_SOURCE304_ATOMIC_APPEND_AFTER_INITIAL_ACTIVATION_NOT_FRESH304');assert.equal(next.observed_empty_source_fingerprint,null);
  const bytes=name=>{const ref=SOURCE304_MEASURED_REFS[name],b=read(ref.path,ref);assert.equal(b.length,ref.bytes);assert.equal(sha(b),ref.sha256);return b;};
@@ -321,6 +321,76 @@ export function assert304SourceCaptureScope(next,read){
  assert.equal(actual.fingerprint,result.fingerprint);assert.deepEqual(actual.normalized,normalized);assert.deepEqual(Object.fromEntries(Object.entries(normalized).map(([k,v])=>[k,v.length])),result.counts);
  const canonical=fingerprintSchemaCatalog(JSON.parse(read('supabase/canonical/schema-fingerprint-input.json')));assert.deepEqual(canonical.normalized,normalized);assert.equal(read('supabase/canonical/schema-fingerprint.txt').toString('utf8').trim(),actual.fingerprint);
 }
+
+// Actual fresh evidence advances capture metadata only. It does not authorize
+// functional, hosted, final-build or production admission.
+const SOURCE304_FRESH_REFS={
+  "MAIN_FRESH304_CAPTURE_RESULT.json": {
+    "path": "release/fresh-only-replay/source304-fresh-evidence/MAIN_FRESH304_CAPTURE_RESULT.json",
+    "sha256": "f6c65eac3b8fed4512b7a05cc79b3ca9aa5a02abd5ed29f9f6acdaa19e2f2d1c",
+    "bytes": 9473
+  },
+  "MAIN_FRESH304_RAW_CATALOG.json": {
+    "path": "release/fresh-only-replay/source304-fresh-evidence/MAIN_FRESH304_RAW_CATALOG.json",
+    "sha256": "a4a6d527c64a2b4f2de9b51fde3ab0e2b9f95c730661a76b70b8c1859c37d4c2",
+    "bytes": 7991574
+  },
+  "MAIN_FRESH304_NORMALIZED_CATALOG.json": {
+    "path": "release/fresh-only-replay/source304-fresh-evidence/MAIN_FRESH304_NORMALIZED_CATALOG.json",
+    "sha256": "937a45649c0338376a6f6689f7220deff307be8e250a13d8c422fa857128275d",
+    "bytes": 7957988
+  },
+  "MAIN_FRESH304_READ_ONLY_PROFILE.json": {
+    "path": "release/fresh-only-replay/source304-fresh-evidence/MAIN_FRESH304_READ_ONLY_PROFILE.json",
+    "sha256": "3a59404472f3f3a05b486d1f57cd362a7f7c8b2484d1d83a9d03c956d66db364",
+    "bytes": 566
+  },
+  "MAIN_FRESH304_RECOVERY_BINDINGS.json": {
+    "path": "release/fresh-only-replay/source304-fresh-evidence/MAIN_FRESH304_RECOVERY_BINDINGS.json",
+    "sha256": "163d51f478dc7a48bf229f9c186c768e57f5049f5167f738462d336ccc356a48",
+    "bytes": 44401
+  },
+  "CANONICAL304_ORIGINAL_CONSTRUCTION_RECEIPT.json": {
+    "path": "release/fresh-only-replay/source304-fresh-evidence/CANONICAL304_ORIGINAL_CONSTRUCTION_RECEIPT.json",
+    "sha256": "17931947023cfed45c362f00f5bbf7c2a862af42c82a6e80eb0b7457fa1c4fa6",
+    "bytes": 7397
+  },
+  "CONSTRUCTED_SOURCE304_SUCCESSOR.json": {
+    "path": "release/fresh-only-replay/source304-fresh-evidence/CONSTRUCTED_SOURCE304_SUCCESSOR.json",
+    "sha256": "90bc59181179c0640a0490b545e0078285cbdbc8e372125fb332ecfa3e5d6ebe",
+    "bytes": 1835
+  }
+};
+export function assert304SourceCaptureScope(next,read){
+ if(next.source_capture_scope==='MEASURED_SOURCE304_ATOMIC_APPEND_AFTER_INITIAL_ACTIVATION_NOT_FRESH304')return assert304MeasuredAppendScope(next,read);
+ assert.equal(next.source_capture_scope,'ACTUAL_FRESH304_CONSTRUCTION_AND_READ_ONLY_CATALOG_BEFORE_INITIAL_ACTIVATION');
+ assert.equal(next.full_vendor_NORMAL,false);assert.equal(next.expected_fingerprint_authority,null);
+ const bytes=name=>{const ref=SOURCE304_FRESH_REFS[name],b=read(ref.path,ref);assert.equal(b.length,ref.bytes);assert.equal(sha(b),ref.sha256);return b;};
+ const constructedBytes=bytes('CONSTRUCTED_SOURCE304_SUCCESSOR.json'),constructed=JSON.parse(constructedBytes);
+ const original={...next,source_capture_scope:constructed.source_capture_scope,observed_empty_source_fingerprint:null};
+ assert.deepEqual(original,constructed,'Only independently observed capture metadata may advance');
+ assert304MeasuredAppendScope(constructed,read);
+ const result=JSON.parse(bytes('MAIN_FRESH304_CAPTURE_RESULT.json')),receipt=JSON.parse(bytes('CANONICAL304_ORIGINAL_CONSTRUCTION_RECEIPT.json')),
+  profile=JSON.parse(bytes('MAIN_FRESH304_READ_ONLY_PROFILE.json')),bindings=JSON.parse(bytes('MAIN_FRESH304_RECOVERY_BINDINGS.json'));
+ assert.equal(result.status,'PASS');assert.equal(result.scope,next.source_capture_scope);assert.equal(result.actualFresh304,true);assert.equal(result.constructionMigrations,304);
+ assert.equal(result.appliedAtomicAppendCount,1);assert.equal(result.fingerprint,next.observed_empty_source_fingerprint);
+ assert.deepEqual(result.expectedCanonicalMigration,{name:SOURCE304_NAME,sha256:SOURCE304_APPEND.original.sha256,bytes:SOURCE304_APPEND.original.bytes});
+ assert.equal(result.closedFunctionNames,41);assert.equal(result.allFunctionGrantInventoryDigestsAndRootsCurrent,true);assert.equal(result.newRpcOnlyPublicTablesDirectApiDenied,true);
+ for(const k of ['functionalAppAcceptance','fullVendorNormal','productionWritten','hostedEquivalence','wholeProgramAcceptance'])assert.equal(result[k],false);
+ assert.equal(result.providerCalls,0);assert.equal(result.readOnlyRepeatableRead,true);assert.equal(result.readOnlyTransactionRolledBack,true);
+ assert.deepEqual(result.actualReceipt,receipt);assert.equal(receipt.schema,'custodial.ci-fresh-only-migrations-construction.v1');assert.equal(receipt.state,'CONSTRUCTED_NOT_FUNCTIONALLY_QUALIFIED');
+ assert.equal(receipt.no_auto_table_grants,false);assert.equal(receipt.full_suite_PASS,false);assert.equal(receipt.selected_replay.migrations,304);assert.equal(receipt.selected_replay.overrides,22);
+ assert.equal(receipt.selected_replay.source_successor.sha256,sha(constructedBytes));assert.equal(receipt.selected_replay.source_successor.appended_migration,SOURCE304_NAME);
+ assert.equal(receipt.selected_replay.full_vendor_NORMAL,false);assert.equal(receipt.selected_replay.expected_fingerprint_authority,null);assert.equal(receipt.data_storage,'owned-disk');
+ assert.equal(receipt.original_child.actual_wait_returned,true);assert.equal(receipt.original_child.exit,0);assert.equal(receipt.original_child.fresh_PID_PGID_proc_absent,true);
+ assert.equal(profile.scope,result.scope);assert.deepEqual(profile.expectedCanonicalMigration,result.expectedCanonicalMigration);
+ assert.equal(profile.profile.transaction_read_only,'on');assert.equal(profile.profile.transaction_isolation,'repeatable read');assert.equal(profile.profile.immutable_mode,'A');assert.equal(profile.profile.backend_pid,result.samePhysicalBackendPid);
+ assert.equal(bindings.scope,result.scope);assert.equal(bindings.functions.length,41);assert.equal(bindings.relations.length,2);
+ const raw=fingerprintSchemaCatalog(JSON.parse(bytes('MAIN_FRESH304_RAW_CATALOG.json'))),normalized=JSON.parse(bytes('MAIN_FRESH304_NORMALIZED_CATALOG.json'));
+ assert.equal(raw.fingerprint,result.fingerprint);assert.deepEqual(raw.normalized,normalized);assert.deepEqual(Object.fromEntries(Object.entries(normalized).map(([k,v])=>[k,v.length])),result.counts);
+ assert.deepEqual(JSON.parse(read('supabase/canonical/schema-fingerprint-input.json')),normalized);assert.equal(read('supabase/canonical/schema-fingerprint.txt').toString('utf8').trim(),raw.fingerprint);
+}
+
 export function selectFreshOnlySourceRows(manifest,names,read){
  assert.ok(Array.isArray(names));if(names.length!==304)return selectThrough303SourceRows(manifest,names,read);
  assert.equal(names.at(-1),SOURCE304_NAME);

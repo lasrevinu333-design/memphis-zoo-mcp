@@ -1,0 +1,1185 @@
+{
+  "scope": "ACTUAL_FRESH304_CONSTRUCTION_AND_READ_ONLY_CATALOG_BEFORE_INITIAL_ACTIVATION",
+  "functions": [
+    {
+      "schema_name": "custodial_leadership_private",
+      "function_name": "bind_registration_generation",
+      "oid": "36661",
+      "identity": "custodial_leadership_private.bind_registration_generation()",
+      "owner": "supabase_admin",
+      "acl": "{supabase_admin=X/supabase_admin}",
+      "definition_sha256": "2274e981ae866ead8a84578a0469474524b0b83b405e8885c559dfd17fd9e435",
+      "function_inventory": [
+        {
+          "identity": "custodial_leadership_private.bind_registration_generation()",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ],
+      "grant_inventory": [
+        {
+          "identity": "custodial_leadership_private.bind_registration_generation()",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ]
+    },
+    {
+      "schema_name": "custodial_leadership_private",
+      "function_name": "coverall_link_issuer",
+      "oid": "36920",
+      "identity": "custodial_leadership_private.coverall_link_issuer(uuid,uuid,text,text,uuid,uuid,integer,integer)",
+      "owner": "supabase_admin",
+      "acl": "{supabase_admin=X/supabase_admin}",
+      "definition_sha256": "44b0222549abafd28daf0b70957576f285f0d640863cc0d5fb6d19eb109ab7d2",
+      "function_inventory": [
+        {
+          "identity": "custodial_leadership_private.coverall_link_issuer(uuid,uuid,text,text,uuid,uuid,integer,integer)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ],
+      "grant_inventory": [
+        {
+          "identity": "custodial_leadership_private.coverall_link_issuer(uuid,uuid,text,text,uuid,uuid,integer,integer)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ]
+    },
+    {
+      "schema_name": "custodial_leadership_private",
+      "function_name": "ensure_messaging_account",
+      "oid": "36621",
+      "identity": "custodial_leadership_private.ensure_messaging_account(uuid,uuid,text)",
+      "owner": "supabase_admin",
+      "acl": "{supabase_admin=X/supabase_admin}",
+      "definition_sha256": "12ea566f7015704c6f345056927101c8049b36448fcf70f0c79fe9cff6372b9a",
+      "function_inventory": [
+        {
+          "identity": "custodial_leadership_private.ensure_messaging_account(uuid,uuid,text)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ],
+      "grant_inventory": [
+        {
+          "identity": "custodial_leadership_private.ensure_messaging_account(uuid,uuid,text)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ]
+    },
+    {
+      "schema_name": "custodial_leadership_private",
+      "function_name": "execute",
+      "oid": "36298",
+      "identity": "custodial_leadership_private.execute(text,jsonb)",
+      "owner": "supabase_admin",
+      "acl": "{supabase_admin=X/supabase_admin}",
+      "definition_sha256": "075a72969b50ddded398a13bde16447dae60d2dc293fcf9cf74b467b60c50b13",
+      "function_inventory": [
+        {
+          "identity": "custodial_leadership_private.execute(text,jsonb)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ],
+      "grant_inventory": [
+        {
+          "identity": "custodial_leadership_private.execute(text,jsonb)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ]
+    },
+    {
+      "schema_name": "custodial_leadership_private",
+      "function_name": "messaging_account_active",
+      "oid": "36620",
+      "identity": "custodial_leadership_private.messaging_account_active(uuid,uuid)",
+      "owner": "supabase_admin",
+      "acl": "{supabase_admin=X/supabase_admin}",
+      "definition_sha256": "d2bf12fc4970f0d08a735d404edfb41b4d25b9abccfe0bf12b1656185970f5e6",
+      "function_inventory": [
+        {
+          "identity": "custodial_leadership_private.messaging_account_active(uuid,uuid)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ],
+      "grant_inventory": [
+        {
+          "identity": "custodial_leadership_private.messaging_account_active(uuid,uuid)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ]
+    },
+    {
+      "schema_name": "custodial_leadership_private",
+      "function_name": "notification_credential",
+      "oid": "36708",
+      "identity": "custodial_leadership_private.notification_credential(uuid,timestamp with time zone)",
+      "owner": "supabase_admin",
+      "acl": "{supabase_admin=X/supabase_admin}",
+      "definition_sha256": "8a469dddb8093933a22ca32ce95bf2ae6b02738775e12dcdd091959e9561853f",
+      "function_inventory": [
+        {
+          "identity": "custodial_leadership_private.notification_credential(uuid,timestamp with time zone)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ],
+      "grant_inventory": [
+        {
+          "identity": "custodial_leadership_private.notification_credential(uuid,timestamp with time zone)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ]
+    },
+    {
+      "schema_name": "custodial_leadership_private",
+      "function_name": "record_operation_v1",
+      "oid": "36723",
+      "identity": "custodial_leadership_private.record_operation_v1(jsonb,text,jsonb)",
+      "owner": "supabase_admin",
+      "acl": "{supabase_admin=X/supabase_admin}",
+      "definition_sha256": "1483b360a49c661c97e53d27756f62e3dc45a4c435e101605185f718e2e83c88",
+      "function_inventory": [
+        {
+          "identity": "custodial_leadership_private.record_operation_v1(jsonb,text,jsonb)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ],
+      "grant_inventory": [
+        {
+          "identity": "custodial_leadership_private.record_operation_v1(jsonb,text,jsonb)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ]
+    },
+    {
+      "schema_name": "custodial_leadership_private",
+      "function_name": "session_view",
+      "oid": "36296",
+      "identity": "custodial_leadership_private.session_view(uuid)",
+      "owner": "supabase_admin",
+      "acl": "{supabase_admin=X/supabase_admin}",
+      "definition_sha256": "ce88c043c937c86c05259953ba166897a4cf9ad7d6cd752c0656b4d71de45d57",
+      "function_inventory": [
+        {
+          "identity": "custodial_leadership_private.session_view(uuid)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ],
+      "grant_inventory": [
+        {
+          "identity": "custodial_leadership_private.session_view(uuid)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ]
+    },
+    {
+      "schema_name": "public",
+      "function_name": "custodial_leadership_messaging_operation_v1",
+      "oid": "36643",
+      "identity": "custodial_leadership_messaging_operation_v1(uuid,uuid,text,text,jsonb)",
+      "owner": "supabase_admin",
+      "acl": "{supabase_admin=X/supabase_admin,postgres=X/supabase_admin,static_weekly_control_plane=X/supabase_admin}",
+      "definition_sha256": "d4b984a6c50d420e5b9aada3874fdc7e032e6c66c9aa27666e0dccb27244bfbb",
+      "function_inventory": [
+        {
+          "identity": "custodial_leadership_messaging_operation_v1(uuid,uuid,text,text,jsonb)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ],
+      "grant_inventory": [
+        {
+          "identity": "custodial_leadership_messaging_operation_v1(uuid,uuid,text,text,jsonb)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ]
+    },
+    {
+      "schema_name": "public",
+      "function_name": "custodial_leadership_record_operation_v1",
+      "oid": "36727",
+      "identity": "custodial_leadership_record_operation_v1(uuid,uuid,text,text,jsonb)",
+      "owner": "supabase_admin",
+      "acl": "{supabase_admin=X/supabase_admin,postgres=X/supabase_admin,static_weekly_control_plane=X/supabase_admin}",
+      "definition_sha256": "57f33a5fca39a6ad35ce827615c8c9d799c1cda7067325dc1f73d203b0dffcaf",
+      "function_inventory": [
+        {
+          "identity": "custodial_leadership_record_operation_v1(uuid,uuid,text,text,jsonb)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ],
+      "grant_inventory": [
+        {
+          "identity": "custodial_leadership_record_operation_v1(uuid,uuid,text,text,jsonb)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ]
+    },
+    {
+      "schema_name": "public",
+      "function_name": "custodial_named_record_operation_v1",
+      "oid": "36726",
+      "identity": "custodial_named_record_operation_v1(uuid,text,text,jsonb)",
+      "owner": "supabase_admin",
+      "acl": "{supabase_admin=X/supabase_admin,postgres=X/supabase_admin,service_role=X/supabase_admin}",
+      "definition_sha256": "0d46690d578b793eb6a627bb4a0773a3c9af158b6f074fce05c384ff4321031c",
+      "function_inventory": [
+        {
+          "identity": "custodial_named_record_operation_v1(uuid,text,text,jsonb)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ],
+      "grant_inventory": [
+        {
+          "identity": "custodial_named_record_operation_v1(uuid,text,text,jsonb)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ]
+    },
+    {
+      "schema_name": "public",
+      "function_name": "custodial_native_alert_finalize_at",
+      "oid": "26612",
+      "identity": "custodial_native_alert_finalize_at(uuid,uuid,uuid,jsonb,jsonb,timestamp with time zone)",
+      "owner": "supabase_admin",
+      "acl": "{supabase_admin=X/supabase_admin,postgres=X/supabase_admin}",
+      "definition_sha256": "17488142c41bad42635bb6f0176cb68f5a805832cc110e503d0b6281c1018e60",
+      "function_inventory": [
+        {
+          "identity": "custodial_native_alert_finalize_at(uuid,uuid,uuid,jsonb,jsonb,timestamp with time zone)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ],
+      "grant_inventory": [
+        {
+          "identity": "custodial_native_alert_finalize_at(uuid,uuid,uuid,jsonb,jsonb,timestamp with time zone)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ]
+    },
+    {
+      "schema_name": "public",
+      "function_name": "custodial_native_alert_prepare_at",
+      "oid": "26558",
+      "identity": "custodial_native_alert_prepare_at(uuid,uuid,jsonb,timestamp with time zone)",
+      "owner": "supabase_admin",
+      "acl": "{supabase_admin=X/supabase_admin,postgres=X/supabase_admin}",
+      "definition_sha256": "31c6427f058e98f9c4dbb7356e244697cdab3cc5907b46ce411ee4e64fb27e25",
+      "function_inventory": [
+        {
+          "identity": "custodial_native_alert_prepare_at(uuid,uuid,jsonb,timestamp with time zone)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ],
+      "grant_inventory": [
+        {
+          "identity": "custodial_native_alert_prepare_at(uuid,uuid,jsonb,timestamp with time zone)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ]
+    },
+    {
+      "schema_name": "public",
+      "function_name": "custodial_native_alert_utf8_prefix",
+      "oid": "36718",
+      "identity": "custodial_native_alert_utf8_prefix(text,integer)",
+      "owner": "supabase_admin",
+      "acl": "{supabase_admin=X/supabase_admin,postgres=X/supabase_admin}",
+      "definition_sha256": "f4aab3b32ae26cafc91b997b842ed57801a6ed50e16118aba73a01b89e6d1583",
+      "function_inventory": [
+        {
+          "identity": "custodial_native_alert_utf8_prefix(text,integer)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ],
+      "grant_inventory": [
+        {
+          "identity": "custodial_native_alert_utf8_prefix(text,integer)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ]
+    },
+    {
+      "schema_name": "public",
+      "function_name": "custodial_ops_manager_message_push_is_current",
+      "oid": "36714",
+      "identity": "custodial_ops_manager_message_push_is_current(uuid)",
+      "owner": "supabase_admin",
+      "acl": "{supabase_admin=X/supabase_admin,postgres=X/supabase_admin}",
+      "definition_sha256": "c5be96d11cc0e214c8b673b5e9d6c4283e7c447bd5523dee54596e8b1eaab994",
+      "function_inventory": [
+        {
+          "identity": "custodial_ops_manager_message_push_is_current(uuid)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ],
+      "grant_inventory": [
+        {
+          "identity": "custodial_ops_manager_message_push_is_current(uuid)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ]
+    },
+    {
+      "schema_name": "public",
+      "function_name": "custodial_ops_manager_notification_binding_is_current",
+      "oid": "22707",
+      "identity": "custodial_ops_manager_notification_binding_is_current(uuid,uuid,uuid,text,timestamp with time zone)",
+      "owner": "supabase_admin",
+      "acl": "{supabase_admin=X/supabase_admin,postgres=X/supabase_admin,service_role=X/supabase_admin}",
+      "definition_sha256": "c87ad55226fc6c8d80603ab28fa85bc98130a42c80a45542e1aa3ac44c81955f",
+      "function_inventory": [
+        {
+          "identity": "custodial_ops_manager_notification_binding_is_current(uuid,uuid,uuid,text,timestamp with time zone)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ],
+      "grant_inventory": [
+        {
+          "identity": "custodial_ops_manager_notification_binding_is_current(uuid,uuid,uuid,text,timestamp with time zone)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ]
+    },
+    {
+      "schema_name": "public",
+      "function_name": "custodial_ops_manager_notification_recipient_is_current",
+      "oid": "22706",
+      "identity": "custodial_ops_manager_notification_recipient_is_current(uuid,uuid,timestamp with time zone)",
+      "owner": "supabase_admin",
+      "acl": "{supabase_admin=X/supabase_admin,postgres=X/supabase_admin,service_role=X/supabase_admin}",
+      "definition_sha256": "54c693d52408b804e732b3a0108ac90e1d32e31a92fe82a1bb79ed520d06edff",
+      "function_inventory": [
+        {
+          "identity": "custodial_ops_manager_notification_recipient_is_current(uuid,uuid,timestamp with time zone)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ],
+      "grant_inventory": [
+        {
+          "identity": "custodial_ops_manager_notification_recipient_is_current(uuid,uuid,timestamp with time zone)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ]
+    },
+    {
+      "schema_name": "public",
+      "function_name": "custodial_release_canary_authority_surface",
+      "oid": "23008",
+      "identity": "custodial_release_canary_authority_surface()",
+      "owner": "supabase_admin",
+      "acl": "{=X/supabase_admin,supabase_admin=X/supabase_admin,postgres=X/supabase_admin,service_role=X/supabase_admin}",
+      "definition_sha256": "8ebc65a54c07ba66bb85cc27e3fb7dad39f26033ccbb02d6175979cbaed2b0ac",
+      "function_inventory": [
+        {
+          "identity": "custodial_release_canary_authority_surface()",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ],
+      "grant_inventory": [
+        {
+          "identity": "custodial_release_canary_authority_surface()",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ]
+    },
+    {
+      "schema_name": "public",
+      "function_name": "evaluate_location_proximity_v2",
+      "oid": "23275",
+      "identity": "evaluate_location_proximity_v2(text,text,numeric,numeric,numeric,text,text,text,timestamp with time zone)",
+      "owner": "supabase_admin",
+      "acl": "{supabase_admin=X/supabase_admin,postgres=X/supabase_admin}",
+      "definition_sha256": "6fa48fcc808225665b61e9e7e286e06cc466cb160576bd26522ca0ee3b375170",
+      "function_inventory": [
+        {
+          "identity": "evaluate_location_proximity_v2(text,text,numeric,numeric,numeric,text,text,text,timestamp with time zone)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ],
+      "grant_inventory": [
+        {
+          "identity": "evaluate_location_proximity_v2(text,text,numeric,numeric,numeric,text,text,text,timestamp with time zone)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ]
+    },
+    {
+      "schema_name": "public",
+      "function_name": "events_app_validate_scope_venue",
+      "oid": "19585",
+      "identity": "events_app_validate_scope_venue()",
+      "owner": "supabase_admin",
+      "acl": "{supabase_admin=X/supabase_admin,postgres=X/supabase_admin}",
+      "definition_sha256": "883b8dc797f7a837b8d2e32f5d26de89d304e9d485d8656c921ca2c52e405f39",
+      "function_inventory": [
+        {
+          "identity": "events_app_validate_scope_venue()",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ],
+      "grant_inventory": [
+        {
+          "identity": "events_app_validate_scope_venue()",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ]
+    },
+    {
+      "schema_name": "public",
+      "function_name": "msg_broadcast_operation_v1",
+      "oid": "36658",
+      "identity": "msg_broadcast_operation_v1(uuid,text,text,text,boolean)",
+      "owner": "supabase_admin",
+      "acl": "{supabase_admin=X/supabase_admin,postgres=X/supabase_admin,service_role=X/supabase_admin}",
+      "definition_sha256": "de3fa777bd77cc1fb60bc6d106d0fa09e517ad6a763bd97ef633bbfd4158b5d2",
+      "function_inventory": [
+        {
+          "identity": "msg_broadcast_operation_v1(uuid,text,text,text,boolean)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ],
+      "grant_inventory": [
+        {
+          "identity": "msg_broadcast_operation_v1(uuid,text,text,text,boolean)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ]
+    },
+    {
+      "schema_name": "public",
+      "function_name": "msg_custodial_cohort_message_actor_v1",
+      "oid": "36647",
+      "identity": "msg_custodial_cohort_message_actor_v1(uuid,uuid,text)",
+      "owner": "supabase_admin",
+      "acl": "{supabase_admin=X/supabase_admin,postgres=X/supabase_admin,service_role=X/supabase_admin,custodial_application_reader=X/supabase_admin}",
+      "definition_sha256": "2bdd8bd938d16d7a55009dbbea41f1027495a3adf20da1834ec0e3c652eb8223",
+      "function_inventory": [
+        {
+          "identity": "msg_custodial_cohort_message_actor_v1(uuid,uuid,text)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ],
+      "grant_inventory": [
+        {
+          "identity": "msg_custodial_cohort_message_actor_v1(uuid,uuid,text)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ]
+    },
+    {
+      "schema_name": "public",
+      "function_name": "msg_is_runtime_user",
+      "oid": "18082",
+      "identity": "msg_is_runtime_user(uuid)",
+      "owner": "supabase_admin",
+      "acl": "{supabase_admin=X/supabase_admin,postgres=X/supabase_admin,service_role=X/supabase_admin}",
+      "definition_sha256": "0d2ad7830e9f428c4d2348b369353c049e1ba257bc5dfcfa37e1d3ab6b682c31",
+      "function_inventory": [
+        {
+          "identity": "msg_is_runtime_user(uuid)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ],
+      "grant_inventory": [
+        {
+          "identity": "msg_is_runtime_user(uuid)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ]
+    },
+    {
+      "schema_name": "public",
+      "function_name": "mz_employee_event_push_current_projection",
+      "oid": "25966",
+      "identity": "mz_employee_event_push_current_projection(uuid,uuid,uuid,uuid,bigint)",
+      "owner": "supabase_admin",
+      "acl": "{supabase_admin=X/supabase_admin,postgres=X/supabase_admin,service_role=X/supabase_admin}",
+      "definition_sha256": "d96185481684e5c29252c222d77646ba130dedb253877efb6014ca4a66e9525b",
+      "function_inventory": [
+        {
+          "identity": "mz_employee_event_push_current_projection(uuid,uuid,uuid,uuid,bigint)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ],
+      "grant_inventory": [
+        {
+          "identity": "public.mz_employee_event_push_current_projection(uuid,uuid,uuid,uuid,bigint)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ]
+    },
+    {
+      "schema_name": "public",
+      "function_name": "mz_event_reminder_schedule_candidate",
+      "oid": "25454",
+      "identity": "mz_event_reminder_schedule_candidate(jsonb,uuid,text)",
+      "owner": "supabase_admin",
+      "acl": "{supabase_admin=X/supabase_admin,postgres=X/supabase_admin,service_role=X/supabase_admin}",
+      "definition_sha256": "fac14efd2624c6edd09ac425404bbcf650a72f1315c186f815efdeaebacf72b0",
+      "function_inventory": [
+        {
+          "identity": "mz_event_reminder_schedule_candidate(jsonb,uuid,text)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ],
+      "grant_inventory": [
+        {
+          "identity": "public.mz_event_reminder_schedule_candidate(jsonb,uuid,text)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ]
+    },
+    {
+      "schema_name": "public",
+      "function_name": "ops_manager_enqueue_lunch_delivery_failure",
+      "oid": "23822",
+      "identity": "ops_manager_enqueue_lunch_delivery_failure(uuid,timestamp with time zone)",
+      "owner": "supabase_admin",
+      "acl": "{supabase_admin=X/supabase_admin,postgres=X/supabase_admin,service_role=X/supabase_admin}",
+      "definition_sha256": "efdf912b7d889b9842c8f26dd3cc997f081c211cf328211b25378a7b4283c583",
+      "function_inventory": [
+        {
+          "identity": "ops_manager_enqueue_lunch_delivery_failure(uuid,timestamp with time zone)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ],
+      "grant_inventory": [
+        {
+          "identity": "ops_manager_enqueue_lunch_delivery_failure(uuid,timestamp with time zone)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ]
+    },
+    {
+      "schema_name": "public",
+      "function_name": "ops_manager_enqueue_message_push",
+      "oid": "20239",
+      "identity": "ops_manager_enqueue_message_push()",
+      "owner": "supabase_admin",
+      "acl": "{supabase_admin=X/supabase_admin,postgres=X/supabase_admin}",
+      "definition_sha256": "49e3dd0cd122a801b0ace6ff0bb24877c633ce4d49ad7cce1a605ae4d013e227",
+      "function_inventory": [
+        {
+          "identity": "ops_manager_enqueue_message_push()",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ],
+      "grant_inventory": [
+        {
+          "identity": "ops_manager_enqueue_message_push()",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ]
+    },
+    {
+      "schema_name": "public",
+      "function_name": "ops_manager_enqueue_scheduled_notifications",
+      "oid": "20241",
+      "identity": "ops_manager_enqueue_scheduled_notifications(timestamp with time zone)",
+      "owner": "supabase_admin",
+      "acl": "{supabase_admin=X/supabase_admin,postgres=X/supabase_admin,service_role=X/supabase_admin}",
+      "definition_sha256": "d9821bcc7e46bedcb1a458daad39f8fb907e3dc5eed885be5af2ac68607f3f98",
+      "function_inventory": [
+        {
+          "identity": "ops_manager_enqueue_scheduled_notifications(timestamp with time zone)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ],
+      "grant_inventory": [
+        {
+          "identity": "ops_manager_enqueue_scheduled_notifications(timestamp with time zone)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        },
+        {
+          "identity": "public.ops_manager_enqueue_scheduled_notifications(timestamptz)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ]
+    },
+    {
+      "schema_name": "public",
+      "function_name": "ops_manager_finish_notification_job",
+      "oid": "22964",
+      "identity": "ops_manager_finish_notification_job(uuid,uuid,uuid,text,boolean,text,text,integer,boolean)",
+      "owner": "supabase_admin",
+      "acl": "{supabase_admin=X/supabase_admin,postgres=X/supabase_admin,service_role=X/supabase_admin}",
+      "definition_sha256": "bcd064a6773891e11130baf4ddb835742e05f76f72c4cbff8d262329ba08c2ed",
+      "function_inventory": [
+        {
+          "identity": "ops_manager_finish_notification_job(uuid,uuid,uuid,text,boolean,text,text,integer,boolean)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ],
+      "grant_inventory": [
+        {
+          "identity": "ops_manager_finish_notification_job(uuid,uuid,uuid,text,boolean,text,text,integer,boolean)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        },
+        {
+          "identity": "public.ops_manager_finish_notification_job(uuid,uuid,uuid,text,boolean,text,text,integer,boolean)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ]
+    },
+    {
+      "schema_name": "public",
+      "function_name": "ops_manager_notification_bind_credential",
+      "oid": "36709",
+      "identity": "ops_manager_notification_bind_credential()",
+      "owner": "supabase_admin",
+      "acl": "{supabase_admin=X/supabase_admin,postgres=X/supabase_admin}",
+      "definition_sha256": "3fcf405ae9b0b9baba73bbc741b98268089a0a471559b2648ac14630a8bd5c79",
+      "function_inventory": [
+        {
+          "identity": "ops_manager_notification_bind_credential()",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ],
+      "grant_inventory": [
+        {
+          "identity": "ops_manager_notification_bind_credential()",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ]
+    },
+    {
+      "schema_name": "public",
+      "function_name": "ops_manager_notification_job_is_current",
+      "oid": "22709",
+      "identity": "ops_manager_notification_job_is_current(uuid,uuid,uuid,text)",
+      "owner": "supabase_admin",
+      "acl": "{supabase_admin=X/supabase_admin,postgres=X/supabase_admin,service_role=X/supabase_admin}",
+      "definition_sha256": "182918cafaec10316566ed3b1ac2d5db95d48e159d502f8e4256d252245c1cf8",
+      "function_inventory": [
+        {
+          "identity": "ops_manager_notification_job_is_current(uuid,uuid,uuid,text)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ],
+      "grant_inventory": [
+        {
+          "identity": "ops_manager_notification_job_is_current(uuid,uuid,uuid,text)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        },
+        {
+          "identity": "public.ops_manager_notification_job_is_current(uuid,uuid,uuid,text)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ]
+    },
+    {
+      "schema_name": "public",
+      "function_name": "ops_manager_notification_validate_owner",
+      "oid": "20236",
+      "identity": "ops_manager_notification_validate_owner()",
+      "owner": "supabase_admin",
+      "acl": "{supabase_admin=X/supabase_admin,postgres=X/supabase_admin}",
+      "definition_sha256": "ca87ecf25e05d0d7e85960ca288bf7c4ab9244294215babeeb898b46c6c915b5",
+      "function_inventory": [
+        {
+          "identity": "ops_manager_notification_validate_owner()",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ],
+      "grant_inventory": [
+        {
+          "identity": "ops_manager_notification_validate_owner()",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ]
+    },
+    {
+      "schema_name": "public",
+      "function_name": "static_weekly_assert_coverall_link_basis",
+      "oid": "35388",
+      "identity": "static_weekly_assert_coverall_link_basis(jsonb,uuid,text)",
+      "owner": "supabase_admin",
+      "acl": "{supabase_admin=X/supabase_admin,postgres=X/supabase_admin}",
+      "definition_sha256": "8b5552dbbbce7963ebfe8161e2ab176bd4b3804d4b6cd69f070b5ec68ff82cce",
+      "function_inventory": [
+        {
+          "identity": "static_weekly_assert_coverall_link_basis(jsonb,uuid,text)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ],
+      "grant_inventory": [
+        {
+          "identity": "static_weekly_assert_coverall_link_basis(jsonb,uuid,text)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ]
+    },
+    {
+      "schema_name": "public",
+      "function_name": "static_weekly_finish_manual_recurring_normal",
+      "oid": "36109",
+      "identity": "static_weekly_finish_manual_recurring_normal(uuid,uuid,jsonb,text)",
+      "owner": "supabase_admin",
+      "acl": "{supabase_admin=X/supabase_admin,postgres=X/supabase_admin,static_weekly_control_plane=X/supabase_admin}",
+      "definition_sha256": "57174a2b1ea56528099e3eae2aa8832f6f0c3cc3c32d4888bfb41363877c5165",
+      "function_inventory": [
+        {
+          "identity": "static_weekly_finish_manual_recurring_normal(uuid,uuid,jsonb,text)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ],
+      "grant_inventory": [
+        {
+          "identity": "static_weekly_finish_manual_recurring_normal(uuid,uuid,jsonb,text)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ]
+    },
+    {
+      "schema_name": "public",
+      "function_name": "static_weekly_issue_coverall_link",
+      "oid": "35390",
+      "identity": "static_weekly_issue_coverall_link(uuid,uuid,text,text,uuid,text,jsonb,integer)",
+      "owner": "supabase_admin",
+      "acl": "{supabase_admin=X/supabase_admin,postgres=X/supabase_admin,static_weekly_control_plane=X/supabase_admin}",
+      "definition_sha256": "ff0cc96dd1a38279b6ad147f564399dd02e3c3380df9df29a82f2833c088314d",
+      "function_inventory": [
+        {
+          "identity": "static_weekly_issue_coverall_link(uuid,uuid,text,text,uuid,text,jsonb,integer)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ],
+      "grant_inventory": [
+        {
+          "identity": "static_weekly_issue_coverall_link(uuid,uuid,text,text,uuid,text,jsonb,integer)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ]
+    },
+    {
+      "schema_name": "public",
+      "function_name": "static_weekly_manual_repeat_components",
+      "oid": "36033",
+      "identity": "static_weekly_manual_repeat_components(uuid,date)",
+      "owner": "supabase_admin",
+      "acl": "{supabase_admin=X/supabase_admin,postgres=X/supabase_admin}",
+      "definition_sha256": "6cf42446e79ace87729a88338109b82342a9f09c206cc079c0b18791ce579778",
+      "function_inventory": [
+        {
+          "identity": "static_weekly_manual_repeat_components(uuid,date)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ],
+      "grant_inventory": [
+        {
+          "identity": "static_weekly_manual_repeat_components(uuid,date)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ]
+    },
+    {
+      "schema_name": "public",
+      "function_name": "static_weekly_manual_repeat_materialize_projection",
+      "oid": "36038",
+      "identity": "static_weekly_manual_repeat_materialize_projection(uuid,date,text,text,jsonb,jsonb,text,jsonb,bigint,uuid,text,text)",
+      "owner": "supabase_admin",
+      "acl": "{supabase_admin=X/supabase_admin,postgres=X/supabase_admin}",
+      "definition_sha256": "16db921f27ff1627ef42172f5290878500c6c4cc6c9b4f40fd74829e9fc7ac24",
+      "function_inventory": [
+        {
+          "identity": "static_weekly_manual_repeat_materialize_projection(uuid,date,text,text,jsonb,jsonb,text,jsonb,bigint,uuid,text,text)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ],
+      "grant_inventory": [
+        {
+          "identity": "static_weekly_manual_repeat_materialize_projection(uuid,date,text,text,jsonb,jsonb,text,jsonb,bigint,uuid,text,text)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ]
+    },
+    {
+      "schema_name": "public",
+      "function_name": "static_weekly_materialize_manual_repeat",
+      "oid": "36040",
+      "identity": "static_weekly_materialize_manual_repeat(jsonb,text,uuid,text,text)",
+      "owner": "supabase_admin",
+      "acl": "{supabase_admin=X/supabase_admin,postgres=X/supabase_admin,static_weekly_control_plane=X/supabase_admin}",
+      "definition_sha256": "eaa30f710b32b9daf94b5f1150d7ce418a36d2b64d785c11221b1047eff00bb0",
+      "function_inventory": [
+        {
+          "identity": "static_weekly_materialize_manual_repeat(jsonb,text,uuid,text,text)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ],
+      "grant_inventory": [
+        {
+          "identity": "static_weekly_materialize_manual_repeat(jsonb,text,uuid,text,text)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ]
+    },
+    {
+      "schema_name": "public",
+      "function_name": "static_weekly_read_coverall_link",
+      "oid": "35391",
+      "identity": "static_weekly_read_coverall_link(text)",
+      "owner": "supabase_admin",
+      "acl": "{supabase_admin=X/supabase_admin,postgres=X/supabase_admin,static_weekly_control_plane=X/supabase_admin}",
+      "definition_sha256": "46504bb97b11c380416eb1d145e504375bfe5138398020fdb035262b1adea424",
+      "function_inventory": [
+        {
+          "identity": "static_weekly_read_coverall_link(text)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ],
+      "grant_inventory": [
+        {
+          "identity": "static_weekly_read_coverall_link(text)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ]
+    },
+    {
+      "schema_name": "public",
+      "function_name": "static_weekly_revoke_coverall_link",
+      "oid": "35392",
+      "identity": "static_weekly_revoke_coverall_link(uuid,uuid,text,text,uuid)",
+      "owner": "supabase_admin",
+      "acl": "{supabase_admin=X/supabase_admin,postgres=X/supabase_admin,static_weekly_control_plane=X/supabase_admin}",
+      "definition_sha256": "287826cf83bc0aac1f392ba293850f6baefd75d90327e354237f8b360d8bcecb",
+      "function_inventory": [
+        {
+          "identity": "static_weekly_revoke_coverall_link(uuid,uuid,text,text,uuid)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ],
+      "grant_inventory": [
+        {
+          "identity": "static_weekly_revoke_coverall_link(uuid,uuid,text,text,uuid)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ]
+    },
+    {
+      "schema_name": "public",
+      "function_name": "static_weekly_v10_stage_staffing_command",
+      "oid": "24415",
+      "identity": "static_weekly_v10_stage_staffing_command(uuid,jsonb,text,text,jsonb,uuid)",
+      "owner": "supabase_admin",
+      "acl": "{supabase_admin=X/supabase_admin,postgres=X/supabase_admin,static_weekly_control_plane=X/supabase_admin}",
+      "definition_sha256": "889455a6388f4365d87d04e238fef2169beb0417985916b42626eee976ac9b1c",
+      "function_inventory": [
+        {
+          "identity": "static_weekly_v10_stage_staffing_command(uuid,jsonb,text,text,jsonb,uuid)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ],
+      "grant_inventory": [
+        {
+          "identity": "static_weekly_v10_stage_staffing_command(uuid,jsonb,text,text,jsonb,uuid)",
+          "root_count": 1,
+          "definition_matches": true,
+          "recorded_digest_valid": true,
+          "recorded_digest_matches": true
+        }
+      ]
+    }
+  ],
+  "relations": [
+    {
+      "name": "msg_broadcast_request_receipts",
+      "schema": "public",
+      "relname": "msg_broadcast_request_receipts",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false,
+      "owner": "supabase_admin",
+      "api_privileges": [
+        {
+          "role": "anon",
+          "direct_table_access": false,
+          "direct_column_access": false
+        },
+        {
+          "role": "authenticated",
+          "direct_table_access": false,
+          "direct_column_access": false
+        },
+        {
+          "role": "service_role",
+          "direct_table_access": false,
+          "direct_column_access": false
+        }
+      ]
+    },
+    {
+      "name": "ops_manager_notification_credentials",
+      "schema": "public",
+      "relname": "ops_manager_notification_credentials",
+      "relrowsecurity": true,
+      "relforcerowsecurity": true,
+      "owner": "supabase_admin",
+      "api_privileges": [
+        {
+          "role": "anon",
+          "direct_table_access": false,
+          "direct_column_access": false
+        },
+        {
+          "role": "authenticated",
+          "direct_table_access": false,
+          "direct_column_access": false
+        },
+        {
+          "role": "service_role",
+          "direct_table_access": false,
+          "direct_column_access": false
+        }
+      ]
+    }
+  ]
+}

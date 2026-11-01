@@ -9,7 +9,7 @@ import {buildEmployeeEventReminderBody} from '../src/employee-notifications.js';
 const hash=value=>createHash('sha256').update(value).digest('hex');
 export async function run({fixture,pool,at,save,sourceCurrent,assertFrozen}) {
  assert.equal(typeof fixture?.assertOwned,'function');await fixture.assertOwned();
- assert.equal(fixture.receipt.selected_replay.migrations,303);
+ assert.equal(fixture.receipt.selected_replay.migrations,304);
  assert.equal(pool.options.host,fixture.socketDirectory);assert.ok(fixture.socketDirectory?.startsWith('/'));
  for(const key of ['DATABASE_URL','SUPABASE_URL','SUPABASE_SERVICE_ROLE_KEY','STATIC_WEEKLY_CONTROL_PLANE_DATABASE_URL'])assert.equal(process.env[key],undefined,'No ambient target: '+key);
  sourceCurrent();assertFrozen();

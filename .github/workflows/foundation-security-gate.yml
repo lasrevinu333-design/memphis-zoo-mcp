@@ -127,7 +127,8 @@ jobs:
           node scripts/approved-manual-period-worker-tests.mjs "$RUNNER_TEMP/approved-manual-period-worker"
           node scripts/approved-manual-roster-transition-tests.mjs
           node scripts/approved-manual-capacity-transition-tests.mjs "$RUNNER_TEMP/approved-manual-capacity-data"
-          node scripts/approved-manual-activation-database-tests.mjs --out "$RUNNER_TEMP/approved-manual-activation-sql"
+          npm run --silent test:sealed-repair-contracts
+          node --max-old-space-size=384 scripts/sealed-repair-canonical-database-tests.mjs --out "$RUNNER_TEMP/approved-manual-activation-sql"
           # This starts only disposable worker-owned PostgreSQL containers and
           # includes the real independent-session concurrency/restart suite.
           npm run --silent test:static-weekly-scheduler:database
@@ -158,7 +159,13 @@ jobs:
           name: approved-manual-activation-result-${{ github.run_id }}
           path: |
             ${{ runner.temp }}/approved-manual-activation-sql/RESULT.json
-            ${{ runner.temp }}/approved-manual-activation-sql/SOURCE302_SCHEMA_FINGERPRINT.json
+            ${{ runner.temp }}/approved-manual-activation-sql/MAIN_FRESH304_CAPTURE_RESULT.json
+            ${{ runner.temp }}/approved-manual-activation-sql/REPAIR_EXTENSION_RESULT.json
+            ${{ runner.temp }}/approved-manual-activation-sql/REPAIR_MODULE_*_RESULT.json
+            ${{ runner.temp }}/approved-manual-activation-sql/REPAIR_REGRESSION_SUMMARY.json
+            ${{ runner.temp }}/approved-manual-activation-sql/RESOURCE_*.json
+            ${{ runner.temp }}/approved-manual-activation-sql/FAILED_ORIGINAL_FIXTURE_PRESERVED.json
+            ${{ runner.temp }}/approved-manual-activation-sql/UNKNOWN_ORIGINAL_FIXTURE_PRESERVED.json
             ${{ runner.temp }}/approved-manual-activation-sql/CURRENT_DAY_ACTIVATION_RECEIPT.json
           if-no-files-found: warn
 

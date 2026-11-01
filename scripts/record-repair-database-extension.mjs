@@ -1,4 +1,4 @@
-// Invoked only by the root-owned frozen source303 database runner. This module
+// Invoked only by the Main-owned frozen canonical304 database runner. This module
 // creates no pool, database, socket, server or process and never reads a target URL.
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
@@ -23,7 +23,7 @@ export async function run(context){
   assert.equal(typeof fixture?.assertOwned,'function');
   assert.equal(typeof assertFrozen,'function');assert.equal(typeof save,'function');
   assertFrozen();await fixture.assertOwned();
-  assert.equal(fixture.receipt.selected_replay.migrations,303);
+  assert.equal(fixture.receipt.selected_replay.migrations,304);
   assert.equal(pool.options.host,fixture.socketDirectory);
   assert.ok(fixture.socketDirectory?.startsWith('/'));
   assert.ok(cohort?.manager?.token&&cohort.service&&cohort.router);

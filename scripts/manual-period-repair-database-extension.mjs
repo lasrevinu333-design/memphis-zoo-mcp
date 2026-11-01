@@ -1,6 +1,6 @@
 // V2 test-only correction after preserved database009 failure. Original callback
 // SHA2569b44bc09628855d87b250e36e44dad328b34af1d07a434c25c8d617788827b5e remains intact.
-// Root-invoked only, on the existing freshly constructed and populated source303
+// Root-invoked only, on the existing freshly constructed and populated canonical304
 // fixture. No constructor, environment URL, provider, fetch, listen or cleanup.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -38,7 +38,7 @@ export function assertStoredStaleHistoricalPeriod({state,serviceDate,currentPubl
  assert.ok(serviceDate>=a.week_start&&serviceDate<=state.projections[0].week_end);
 }
 export async function runSchedulingRepairDatabaseExtension({fixture,pool,plane,manager,at,accepted,query,tx,save,sourceCurrent,cohort,externalSourceRefs}){
- assert.equal(typeof fixture?.assertOwned,'function');await fixture.assertOwned();assert.equal(fixture.receipt.selected_replay.migrations,303);
+ assert.equal(typeof fixture?.assertOwned,'function');await fixture.assertOwned();assert.equal(fixture.receipt.selected_replay.migrations,304);
  assert.equal(pool.options.host,fixture.socketDirectory);assert.ok(fixture.socketDirectory?.startsWith('/'));
  for(const key of ['DATABASE_URL','SUPABASE_URL','SUPABASE_SERVICE_ROLE_KEY','STATIC_WEEKLY_CONTROL_PLANE_DATABASE_URL'])assert.equal(process.env[key],undefined,'No ambient database/provider configuration');
  assert.ok(cohort?.manager&&typeof cohort.verifyTransaction==='function','Root must supply its current signed synthetic cohort');

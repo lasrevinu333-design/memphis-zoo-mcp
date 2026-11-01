@@ -154,7 +154,7 @@
     "test:audit5-repairs": "node scripts/audit5-feedback-guest-contract-tests.mjs",
     "test:audit6-repairs": "node scripts/audit6-coverall-security-contract-tests.mjs",
     "test:production-runtime": "node scripts/production-runtime-contract-tests.mjs && node scripts/production-release-deployment-recorder-tests.mjs && node scripts/production-release-recorder-plan-tests.mjs",
-    "test:ci-workflows": "node scripts/ci-workflow-contract-tests.mjs && node scripts/production-backup-pg-dump-command-tests.mjs && node scripts/isolated-event-owner-schema-tests.mjs && npm run --silent test:source303",
+    "test:ci-workflows": "node scripts/ci-workflow-contract-tests.mjs && node scripts/production-backup-pg-dump-command-tests.mjs && node scripts/isolated-event-owner-schema-tests.mjs && npm run --silent test:source303 && npm run --silent test:source304",
     "test:reviewed-source-regressions": "node scripts/legacy-activation-http-tests.mjs && node scripts/release-pair-consumer-regression-tests.mjs && node scripts/run-isolated-release-recorder-tests.mjs",
     "test:production-schema-c674-bootstrap": "node scripts/production-schema-c674-bootstrap-contract-tests.mjs",
     "test:production-schema-inspection-freshness": "node scripts/production-schema-inspection-freshness-contract-tests.mjs",
@@ -199,7 +199,8 @@
     "test:manager-scheduler:database": "node scripts/manager-scheduler-dated-integration-tests.mjs",
     "test:backup-source-binding": "node --test scripts/backup-release-schema-binding-tests.mjs",
     "test:source303": "node scripts/ci-fresh-only-source303-tests.mjs",
-    "test:sealed-repair-contracts": "node scripts/sealed-repair-contract-tests.mjs"
+    "test:sealed-repair-contracts": "node scripts/sealed-repair-contract-tests.mjs",
+    "test:source304": "node scripts/ci-fresh-only-source304-tests.mjs && node scripts/canonical304-construction-protocol-tests.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.2",

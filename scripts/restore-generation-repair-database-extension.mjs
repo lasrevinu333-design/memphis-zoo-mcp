@@ -1,4 +1,4 @@
-// Root-owned source303 plus frozen repair proposals only. No pool, database,
+// Canonical304 source with its exact integrated repair migration only. No pool, database,
 // socket, process, provider, restore/import runner or activation is created here.
 import assert from 'node:assert/strict';
 import {createHash,randomUUID} from 'node:crypto';
@@ -25,7 +25,7 @@ const observedSql=`select
 export async function run({fixture,pool,cohort,save,assertFrozen,sourceCurrent}){
  assert.equal(typeof fixture?.assertOwned,'function');assert.equal(typeof pool?.connect,'function');
  assert.equal(typeof save,'function');assert.equal(typeof assertFrozen,'function');
- assert.equal(fixture.receipt?.selected_replay?.migrations,303);
+ assert.equal(fixture.receipt?.selected_replay?.migrations,304);
  assert.ok(fixture.socketDirectory?.startsWith('/'));assert.equal(pool.options.host,fixture.socketDirectory);
  assert.equal(cohort?.manager?.credential_id,sharedRegistration,'Original committed c720 cohort fixture required');
  for(const key of ['DATABASE_URL','SUPABASE_URL','SUPABASE_SERVICE_ROLE_KEY','PGHOST','PGPASSWORD','STATIC_WEEKLY_CONTROL_PLANE_DATABASE_URL'])
