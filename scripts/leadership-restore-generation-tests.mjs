@@ -4,7 +4,10 @@ import {verifyRestoredLeadershipGeneration} from './leadership-restore-generatio
 import {productionBackupAllowedDataSchemas,requireProductionBackupDataScope} from './production-backup-pg-dump-command.mjs';
 const restoreId='f0700000-0000-4000-8000-000000000003',generation=7;
 const good={restore_id:restoreId,authority_generation:'7',mutations_paused:true,state:'VERIFYING',registration_count:'4',unsafe_generation_count:'0',accepted_registration_count:'0'};
-let calls=0;const db=row=>({async query(sql,args){calls++;assert.match(sql,/custodial_dr.restore_control[\s\S]+for share/);assert.match(sql,/r.authority_generation >= \$2::bigint/);assert.match(sql,/custodial_leadership_private.session_view/);assert.deepEqual(args,[restoreId,generation]);return {rowCount:row?1:0,rows:row?[row]:[]};}});
+const present={restore_id:restoreId,authority_generation:'7',mutations_paused:true,state:'VERIFYING',namespace_present:true,registrations_present:true,session_view_present:true};
+let calls=0;const db=(row,domain=present)=>({async query(sql,args){calls++;assert.match(sql,/custodial_dr.restore_control[\s\S]+for share/);assert.deepEqual(args,[restoreId,generation]);
+ if(sql.includes('namespace_present'))return {rowCount:domain?1:0,rows:domain?[domain]:[]};
+ assert.match(sql,/r.authority_generation >= \$2::bigint/);assert.match(sql,/custodial_leadership_private.session_view/);return {rowCount:row?1:0,rows:row?[row]:[]};}});
 const checks=[];const pass=s=>{checks.push(s);console.log('PASS '+s);};
 const result=await verifyRestoredLeadershipGeneration(db(good),{restoreId,generation});assert.equal(result.outcome,'RESTORED_REGISTRATIONS_DENIED');assert.equal(result.registration_count,4);assert.equal(Object.isFrozen(result),true);pass('completion proof requires matching paused protected generation and zero unsafe/accepted registrations');
 for(const patch of [{authority_generation:'6'},{restore_id:'f0700000-0000-4000-8000-000000000099'},{mutations_paused:false},{state:'COMPLETE'},{unsafe_generation_count:'1'},{accepted_registration_count:'1'},{registration_count:4},{registration_count:'-1'},{registration_count:'9007199254740992'}])await assert.rejects(()=>verifyRestoredLeadershipGeneration(db({...good,...patch}),{restoreId,generation}),/unverified/);pass('wrong generation/owner, unpaused state, future/current rows, accepted sessions and malformed counts deny completion');
@@ -13,8 +16,17 @@ const before=calls;for(const input of [{restoreId,generation:0},{restoreId,gener
 assert.equal(productionBackupAllowedDataSchemas.includes('custodial_dr'),false);
 assert.throws(()=>requireProductionBackupDataScope([{schema_name:'custodial_dr',usage_allowed:true}],[],[]),/Complete accessible/);pass('fixed production backup scope excludes protected control plane');
 const restore=readFileSync(new URL('./production-restore.mjs',import.meta.url),'utf8');
-assert.equal((restore.match(/await verifyRestoredLeadershipGeneration\(db, \{ restoreId, generation \}\)/g)||[]).length,2);
+assert.equal((restore.match(/await verifyRestoredLeadershipGeneration\(db, \{ restoreId, generation, archiveTables: catalog \}\)/g)||[]).length,2);
 for(const block of restore.split('authority_invalidated=true').slice(0,-1))assert.match(block.slice(-1100),/verifyRestoredLeadershipGeneration/);
 assert.match(restore,/complete_restore:false,resume_allowed:false,retry_allowed:false,rerun_import_allowed:false/);
 assert.match(restore,/generation !== Number\(previousControl.authority_generation\) \+ 1/);pass('both completion flag writes follow generation proof and existing paused/future generation guards remain');
+const absent={...present,namespace_present:false,registrations_present:false,session_view_present:false};
+const archivedTables=[{schema_name:'public',table_name:'employees'}];
+const legacy=await verifyRestoredLeadershipGeneration(db(null,absent),{restoreId,generation,archiveTables:archivedTables});
+assert.equal(legacy.outcome,'LEGACY_ARCHIVE_WITHOUT_LEADERSHIP_DOMAIN');assert.equal(legacy.registration_count,0);assert.ok(Object.isFrozen(legacy));pass('signed legacy catalog plus wholly absent live domain has an explicit zero-domain outcome');
+for(const archiveTables of [null,[],[{schema_name:'custodial_leadership_private',table_name:'registrations'}],[{schema_name:'public',table_name:'malformed table'}]])
+ await assert.rejects(()=>verifyRestoredLeadershipGeneration(db(null,absent),{restoreId,generation,archiveTables}),/unverified/);
+for(const patch of [{namespace_present:true},{registrations_present:true},{session_view_present:true},{mutations_paused:false},{authority_generation:'6'},{state:'COMPLETE'},{namespace_present:null}])
+ await assert.rejects(()=>verifyRestoredLeadershipGeneration(db(null,{...absent,...patch}),{restoreId,generation,archiveTables:archivedTables}),/unverified/);
+pass('missing archive evidence, partial/current domains, wrong generation and unpaused control all refuse legacy admission');
 console.log(JSON.stringify({suite:'leadership-restore-generation-helper',status:'PASS',checks:checks.length,noDatabase:true,noRestore:true}));

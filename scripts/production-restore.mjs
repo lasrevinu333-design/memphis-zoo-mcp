@@ -800,7 +800,7 @@ async function continueRestoreAfterDatabase({databaseEvidence,immutablePrivateDa
     // Persist their observed evidence only; never call legacy invalidation or
     // claim a legacy pre-restore snapshot/release-preservation operation.
     restorePhase = "record_fresh_original_authority_evidence";
-    const leadershipGeneration = await verifyRestoredLeadershipGeneration(db, { restoreId, generation });
+    const leadershipGeneration = await verifyRestoredLeadershipGeneration(db, { restoreId, generation, archiveTables: catalog });
     requireFreshContinuation();
     const authorityEvidence = {invalidated,leadership_generation:leadershipGeneration,authority_commit:databaseEvidence.authority_commit,
       authority_observation:databaseEvidence.authority_observation,
@@ -1781,7 +1781,7 @@ try {
       ? await invalidateRestoredOrdinaryNativeAuthority(db,{generation,verifiedArchive})
       : await invalidateRestoredAuthority(db, { generation });
     requireOrdinaryRestoreIntentFresh();
-    const leadershipGeneration = await verifyRestoredLeadershipGeneration(db, { restoreId, generation });
+    const leadershipGeneration = await verifyRestoredLeadershipGeneration(db, { restoreId, generation, archiveTables: catalog });
     requireOrdinaryRestoreIntentFresh();
     await db.query(`update custodial_dr.restore_manifests set authority_invalidated=true,authority_evidence=$2::jsonb,updated_at=clock_timestamp() where restore_id=$1`, [restoreId, JSON.stringify({ invalidated, leadership_generation: leadershipGeneration, preserved_release_rows: preservedReleaseRows, discrepancies })]);
     requireOrdinaryRestoreIntentFresh();

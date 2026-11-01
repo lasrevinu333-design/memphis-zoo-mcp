@@ -261,8 +261,8 @@
     },
     {
       "path": "scripts/leadership-restore-generation.mjs",
-      "sha256": "38dea007c80e9c1b0be581e675a6368f57c3ee3a7d6b62b1b1e0a60ed629efcc",
-      "bytes": 2297,
+      "sha256": "d23a4109982ee52de3e9aca1ec7a7f3219ba047f57d0a3efc82c41a8368488bd",
+      "bytes": 5545,
       "id": "restore_helper_source"
     },
     {
