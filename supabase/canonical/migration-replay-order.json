@@ -1228,6 +1228,10 @@
         {
           "name": "20261031180631_cohort_ticket_transaction_context.sql",
           "sha256": "063669e808c354d4f4498b13c7597b7603636badc9d2e5f9b5d819cdfeee179b"
+        },
+        {
+          "name": "20261031225210_custodial_sealed_repairs_current_eight.sql",
+          "sha256": "f4e3dc5be9a465e2099bd9b23488f99b3f9e4c1d9d969844b2fa06b1fbdc7a73"
         }
       ]
     }

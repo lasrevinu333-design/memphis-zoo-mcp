@@ -70,7 +70,8 @@ async function qualifyCurrentEightTypedInitial({out,input,constructFixture=creat
  assert.ok(afterInitial===null||typeof afterInitial==='function');
  assert.ok(isAbsolute(out)&&isAbsolute(input));assert.equal(fs.existsSync(out),false,'New evidence directory only; no consumed request retry');
  const spec=JSON.parse(fs.readFileSync(input,'utf8'));exact(spec,['schema','constructorMigrations','componentSql','performanceProofSql','historicalReference','approvedReference','recordedRoster','protectedSources']);
- assert.equal(spec.schema,'custodial.current-eight-owned-typed-initial-input.v1');assert.equal(spec.constructorMigrations,303);
+ assert.equal(spec.schema,'custodial.current-eight-owned-typed-initial-input.v1');assert.ok([303,304].includes(spec.constructorMigrations));
+ assert.equal(fs.readdirSync(resolve(B,'supabase/migrations')).filter(n=>n.endsWith('.sql')).length,spec.constructorMigrations,'Input count must match actual repository; maintained selector independently binds every source byte');
  assert.ok(Array.isArray(spec.componentSql));const selected=spec.componentSql.map(r=>relative(B,r.path));
  assert.deepEqual(selected,COMPONENTS,'Exact fourteen-component dependency order (including proof LAST) required');
  assert.equal(new Set(selected).size,selected.length);assert.equal(selected.length+1,14);
@@ -92,15 +93,15 @@ async function qualifyCurrentEightTypedInitial({out,input,constructFixture=creat
   packet:randomUUID(),source:randomUUID(),version:randomUUID(),templatePublication:randomUUID(),activation:randomUUID(),negativeActivation:randomUUID(),
   employmentRequests:[randomUUID(),randomUUID()],capacityIds:Array.from({length:8},()=>randomUUID()),activationKey:'owned-current-initial:'+randomUUID(),
   launchScope:'CURRENT_EIGHT_PERSON_TYPED_INITIAL_ONLY'};
- save('INTENT_BEFORE_ANY_FIXTURE_OR_SQL_WRITE.json',{scope:'OWNED_CURRENT_SOURCE303_TYPED_EIGHT_INITIAL',ids,inputRef:{path:input,sha256:sha(fs.readFileSync(input)),bytes:fs.statSync(input).size},spec,sourceBefore,productionWritten:false,physicalDevice:false,genuineBrowser:false,finalAppBuild:false,finalAudit:false,EricFinalDecisionRequired:true});
+ save('INTENT_BEFORE_ANY_FIXTURE_OR_SQL_WRITE.json',{scope:`OWNED_CURRENT_SOURCE${spec.constructorMigrations}_TYPED_EIGHT_INITIAL`,ids,inputRef:{path:input,sha256:sha(fs.readFileSync(input)),bytes:fs.statSync(input).size},spec,sourceBefore,productionWritten:false,physicalDevice:false,genuineBrowser:false,finalAppBuild:false,finalAudit:false,EricFinalDecisionRequired:true});
  save('FROZEN_COMPONENT_SQL_AND_DATA_BYTES_BEFORE_WRITE.json',frozenInputs.map(({ref,bytes})=>({ref,encoding:'base64',body:bytes.toString('base64')})));
  let fixture,pool,plane,sequence=0,activeCommand=null,activeOriginalIdentity=null,unknown=false;
  const queries=[],result={status:'RUNNING',scope:'OWNED_CURRENT_EIGHT_TYPED_INITIAL_MANAGER_EMPLOYEE_AND_FULL_HOUR_SQL',productionWritten:false,physicalPhone:false,genuineManagerBrowser:false,providerCalls:0,finalAudit:false,finalBuild:false};
  const intent=(sql,args=[])=>{const n=String(++sequence).padStart(5,'0');activeCommand={sequence,sql,args};save('SQL_'+n+'_BEFORE.json',activeCommand);return n;};
  const setPhase=phase=>{result.phase=phase;save('PHASE_'+String(sequence).padStart(5,'0')+'_'+phase+'.json',{phase,at:new Date().toISOString()});console.log(JSON.stringify({phase}));};
  try{
-  sourceCurrent();fixture=await constructFixture({name:'mz_schema_rebuild_atomic302_'+ids.run.replaceAll('-',''),hostSocket:true});
-  await fixture.assertOwned();assert.equal(fixture.receipt.selected_replay.migrations,303);assert.equal(fixture.receipt.full_suite_PASS,false);save('FRESH_CURRENT_SOURCE303_CONSTRUCTION_ONLY.json',fixture.receipt);
+  sourceCurrent();fixture=await constructFixture({name:'mz_schema_rebuild_atomic'+spec.constructorMigrations+'_'+ids.run.replaceAll('-',''),hostSocket:true});
+  await fixture.assertOwned();assert.equal(fixture.receipt.selected_replay.migrations,spec.constructorMigrations);assert.equal(fixture.receipt.full_suite_PASS,false);save(`FRESH_CURRENT_SOURCE${spec.constructorMigrations}_CONSTRUCTION_ONLY.json`,fixture.receipt);
   const connectionErrors=[];
   const lostConnection=error=>{unknown=true;result.status='UNKNOWN';connectionErrors.push({code:error?.code??null,message:String(error?.message??'Connection lost').slice(0,500)});};
   // A checked-out pg Client has no pg-pool idle error listener. Keep its
@@ -114,7 +115,7 @@ async function qualifyCurrentEightTypedInitial({out,input,constructFixture=creat
   const rpc=(role,name,args=[])=>{assert.match(name,/^(public|custodial_employment)\.[a-z_0-9]+$/);const text=`select ${name}(${args.map((_,i)=>'$'+(i+1)).join(',')}) value`;intent(text,args);return tx(role,async c=>{if(name==='public.static_weekly_prepare_coverall_activation')await c.query(PREPARATION_SQL.interpret);return(await c.query(text,args)).rows[0].value;});};
   const revision=async()=>Number((await query('select current_revision from public.static_weekly_schedule_control where singleton')).rows[0].current_revision);
   const rejected=async(label,fn,code=null)=>{let failure;try{await fn();}catch(e){failure=e;}if(failure&&(unknown||/UNKNOWN|custody_unknown|outcome_unknown/i.test(String(failure.code??''))||/^(08|ECONN|57P)/.test(String(failure.code??'')))){unknown=true;throw failure;}assert.ok(failure,label+' must refuse');if(code)assert.equal(failure.code,code,label);save('NEGATIVE_'+label+'.json',{label,code:failure.code??null,message:failure.message});};
-  setPhase('verify_retained302_macro_components_in_current303');
+  setPhase(`verify_retained302_macro_components_in_current${spec.constructorMigrations}`);
   const currentMigration=fs.readFileSync(resolve(B,'supabase/migrations/20261031125902_approved_manual_native_operations.sql'),'utf8');
   for(const ref of [...spec.componentSql,spec.performanceProofSql]){readFixed(ref);assert.ok(currentMigration.includes('SHA256 '+ref.sha256),'Current macro must bind each exact component');}
   const owner=(await query('select manager_id,display_name,roles,active,is_system_principal,revoked_at,system_key from public.ops_manager_managers where manager_id=$1',[OWNER])).rows[0];
@@ -246,7 +247,7 @@ async function qualifyCurrentEightTypedInitial({out,input,constructFixture=creat
    sourceCurrent();assert.equal(unknown,false);
   }
   assert.equal(sessionBoundaries.length,3);assert.equal(unknown,false);result.sessionBoundaries=sessionBoundaries;
-  Object.assign(result,{status:'PASS',currentDate:at,publicationId:accepted.publicationId,projectionId:accepted.projectionId,activationOperation:ids.activation,original22Preserved:true,actualSlots30:true,newEmployeeRows0:true,allEightActiveForSchedule:true,firstWorkdayExclusions:0,fullHourLunches:40,employeeDayReadbacks,ownershipChecks,actualCredentialBoundManagerSQL:true,samePhysicalTransaction:true,normalSevenSourcesChanged:false,productionWritten:false,physicalDelivery:false,canonicalSource303Qualified:false});
+  Object.assign(result,{status:'PASS',currentDate:at,publicationId:accepted.publicationId,projectionId:accepted.projectionId,activationOperation:ids.activation,original22Preserved:true,actualSlots30:true,newEmployeeRows0:true,allEightActiveForSchedule:true,firstWorkdayExclusions:0,fullHourLunches:40,employeeDayReadbacks,ownershipChecks,actualCredentialBoundManagerSQL:true,samePhysicalTransaction:true,normalSevenSourcesChanged:false,productionWritten:false,physicalDelivery:false,canonicalSourceMigrations:spec.constructorMigrations,canonicalSourceQualified:false});
  }catch(e){unknown=unknown||/^(08|ECONN|57P)/.test(String(e.code??''))||/UNKNOWN|custody_unknown|outcome_unknown|database_unavailable/i.test(String(e.code??''))||/connection terminated/i.test(String(e.message??''))||e.coverAllOriginalTransactionState==='UNKNOWN';Object.assign(result,{status:unknown?'UNKNOWN':'FAIL',failedPhase:result.phase,code:e.code??null,message:String(e.message).slice(0,1800),where:String(e.where??e.cause?.where??'').slice(0,5000),position:e.position??null,internalPosition:e.internalPosition??null,internalQuery:e.internalQuery??null,originalOperationId:activeOriginalIdentity?.operationId??ids.activation,activeOriginalIdentity,retry:false,activeCommandSequence:activeCommand?.sequence??null});process.exitCode=1;}
  finally{
   try{await shutdownStaticWeeklyCompiler();}catch(e){unknown=true;result.compilerCleanupError=e.message;result.status='UNKNOWN';process.exitCode=1;}
@@ -271,7 +272,7 @@ async function qualifyCurrentEightTypedInitial({out,input,constructFixture=creat
     protectedSourcesPreserved:result.protectedSourcesPreserved??false,
     shutdownCallsSettled:true,compilerShutdownReturned:!result.compilerCleanupError,
     planeCloseReturned:plane?.close?!result.planeCleanupError:null,poolEndReturned:pool?!result.poolCleanupError:null,
-    componentQualificationOnly:true,freshSource303Construction:true,fullSuitePASS:false,
+    componentQualificationOnly:true,freshSourceConstruction:true,constructionMigrations:spec.constructorMigrations,fullSuitePASS:false,
     automaticAdoption:false,automaticResume:false,automaticRetry:false,
     MainExplicitOwnedCustodyReviewRequiredBeforeAnyFurtherOperation:true});
   }
@@ -281,14 +282,14 @@ async function qualifyCurrentEightTypedInitial({out,input,constructFixture=creat
  }
  return result;
 }
-export async function runApprovedManualActivationDatabaseTest({out,constructFixture=createCiFreshOnlyFixture,constructorMigrationCount=303,afterInitial=null,extensionSources=[]}){
- assert.equal(constructorMigrationCount,303);assert.ok(isAbsolute(out));
+export async function runApprovedManualActivationDatabaseTest({out,constructFixture=createCiFreshOnlyFixture,constructorMigrationCount=304,afterInitial=null,extensionSources=[]}){
+ assert.ok([303,304].includes(constructorMigrationCount));assert.ok(isAbsolute(out));
  assert.ok(afterInitial===null||typeof afterInitial==='function');assert.ok(Array.isArray(extensionSources));
  assert.equal(afterInitial===null,extensionSources.length===0,'An extension requires explicit frozen sources');
  for(const p of extensionSources){assert.ok(isAbsolute(p)&&p.startsWith(B+'/'));assert.equal(fs.realpathSync(p),p);}
  const ref=path=>{const raw=fs.readFileSync(path);return {path,sha256:sha(raw),bytes:raw.length};};
  const week=readApprovedManualWeek(),required=[fileURLToPath(import.meta.url),resolve(B,'scripts/prepare-approved-manual-release-packet.mjs'),resolve(W,'fixtures/derive-recorded-predecessor.mjs'),resolve(B,'scripts/ci-fresh-only-replay.mjs'),resolve(B,'scripts/fixtures/event-static-authority-fixture.mjs'),resolve(B,'scripts/schema-fingerprint-catalog.mjs'),resolve(B,'src/static-weekly-control-plane.js'),resolve(B,'src/approved-manual-coverall-management.js'),resolve(B,'src/approved-manual-recurring-transport.js'),resolve(B,'src/approved-manual-period-worker.js'),resolve(B,'src/approved-manual-employment-admission.js'),resolve(B,'src/approved-manual-employment-integration.js'),resolve(B,'release/worker1-employment-admission-20261030/OWNER_APPROVED_EIGHT_ACTIVE_20261031.json')];
- const spec={schema:'custodial.current-eight-owned-typed-initial-input.v1',constructorMigrations:303,componentSql:COMPONENTS.map(p=>ref(resolve(B,p))),performanceProofSql:ref(resolve(B,'proposals/approved-manual-lunch-admission-proof.sql')),historicalReference:ref(resolve(B,'scripts/fixtures/full-nine-v6-source.json')),approvedReference:ref(resolve(B,week.referenceBindings.reference.path)),recordedRoster:ref(resolve(B,'scripts/fixtures/manual-live-roster-20261030.json')),protectedSources:[...new Set([...required,...extensionSources])].map(ref)};
+ const spec={schema:'custodial.current-eight-owned-typed-initial-input.v1',constructorMigrations:constructorMigrationCount,componentSql:COMPONENTS.map(p=>ref(resolve(B,p))),performanceProofSql:ref(resolve(B,'proposals/approved-manual-lunch-admission-proof.sql')),historicalReference:ref(resolve(B,'scripts/fixtures/full-nine-v6-source.json')),approvedReference:ref(resolve(B,week.referenceBindings.reference.path)),recordedRoster:ref(resolve(B,'scripts/fixtures/manual-live-roster-20261030.json')),protectedSources:[...new Set([...required,...extensionSources])].map(ref)};
  const input=out+'.INPUT.json';fs.mkdirSync(dirname(out),{recursive:true});fs.writeFileSync(input,JSON.stringify(spec,null,2)+'\n',{flag:'wx',mode:0o600});
  return qualifyCurrentEightTypedInitial({out,input,constructFixture,afterInitial});
 }

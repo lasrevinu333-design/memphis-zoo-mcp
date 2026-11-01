@@ -1,0 +1,26 @@
+{
+  "schema": "custodial.main.exact-frontend-source-pair-for-canonical-sql.v1",
+  "capturedUtc": "2026-10-31T23:02:56.273350+00:00",
+  "frontendRepository": "lasrevinu333-design/Engine",
+  "frontendCommit": "2af401de8a3eb977085f1eb2e5525fcb6efd5e41",
+  "frontendTree": "de4e4dbbe2e0ea8d1e24d3123e61c7dbb362e667",
+  "files": [
+    {
+      "frontendPath": "memphis-approved-schedule.js",
+      "snapshotPath": "release/sealed-repair-frontend-source/memphis-approved-schedule.js",
+      "gitBlob": "3af4e8f637b5d1cf19f6d2e0a2ee11cfc7ac5bfb",
+      "sha256": "90b2c4ec684e56bb0aee2bb05a945cc5ad32dc2083c08c0efc0e41c7e3fedec4",
+      "bytes": 43196
+    },
+    {
+      "frontendPath": "memphis-scheduler-actions.js",
+      "snapshotPath": "release/sealed-repair-frontend-source/memphis-scheduler-actions.js",
+      "gitBlob": "b01ebef7da9a5fc31ee26191831216e6f88fbc49",
+      "sha256": "83bfd861aebd74618b1f072be9e2827cd977ad92b251eda0a9864227d24c43b9",
+      "bytes": 77614
+    }
+  ],
+  "scope": "Exact shipping frontend source bytes used by existing manual-period VM/SQL integration. Portable source snapshot removes sibling-checkout path dependency; does not prove browser/phone/frontendwhole-suite/deployment.",
+  "canonicalBackendChanged": false,
+  "adoption": "STAGED_ONLY; source refs and executable module body preserved except exact filesystem path seam. Canonical PLAN/runner update and genuine canonical database run stillpending."
+}

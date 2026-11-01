@@ -11,7 +11,7 @@ import {createStaticWeeklyControlPlane} from '../src/static-weekly-control-plane
 import {readApprovedManualWeek} from '../src/approved-manual-week.js';
 import {coverAllAccessTokenHash} from '../src/static-weekly-coverall-access.js';
 const digest=bytes=>createHash('sha256').update(bytes).digest('hex'),add=(d,n)=>new Date(Date.parse(d+'T12:00Z')+n*86400000).toISOString().slice(0,10);
-export const schedulingRepairExternalDependencies=Object.freeze(['memphis-approved-schedule.js','memphis-scheduler-actions.js'].map(n=>fileURLToPath(new URL('../../frontend/'+n,import.meta.url))));
+export const schedulingRepairExternalDependencies=Object.freeze(['memphis-approved-schedule.js','memphis-scheduler-actions.js'].map(n=>fileURLToPath(new URL('../release/sealed-repair-frontend-source/'+n,import.meta.url))));
 export function freezeSchedulingRepairExternalDependencies(){return schedulingRepairExternalDependencies.map(path=>{const s=fs.lstatSync(path);assert.ok(s.isFile()&&!s.isSymbolicLink());const bytes=fs.readFileSync(path);return{path,sha256:digest(bytes),bytes:bytes.length};});}
 // Status precedence belongs to the actual SQL reader. A manager's staffing
 // label alone cannot distinguish an absent projection from a stored stale one.
