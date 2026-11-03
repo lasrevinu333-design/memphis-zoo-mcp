@@ -1,3 +1,4 @@
+import {readCurrentCandidateReplayProfile} from './current-candidate-replay-profile.mjs';
 import { createCiFreshOnlyFixture, loadCiFreshOnlyReplay } from './ci-fresh-only-replay.mjs';
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
@@ -9,8 +10,18 @@ const fixtureName='mz_schema_rebuild_roster_'+process.pid;
 let container=fixtureName;
 const image='supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed';
 const migrationFiles=readdirSync(path.join(root,'supabase/migrations')).filter(x=>x.endsWith('.sql')).sort();
-assert.equal(migrationFiles.length,294,'current exact migration count for each vacancy fixture');
-assert.equal(migrationFiles.at(-1),'20261026065000_location_scan_state_qualified_lookup.sql','current exact migration head');
+// The selector binds every original297 byte and admits only the exact one-file
+// source298 successor. Its no-auto-grants choices retain their own identities.
+const selectedManifest=JSON.parse(readFileSync(path.join(root,'release/fresh-only-replay/MANIFEST.json'),'utf8'));
+const currentLocal=Boolean(process.env.CUSTODIAL_CURRENT308_OWNED_CI_DESCRIPTOR);
+const currentProfile=currentLocal?readCurrentCandidateReplayProfile(root):null;
+const selectedSource=currentLocal?{entries:currentProfile.description.effective_sql}:loadCiFreshOnlyReplay(root,selectedManifest.image,migrationFiles,{noAutoTableGrants:true});
+assert.equal(migrationFiles.length,selectedSource.entries.length,'current exactly selected migration count for each vacancy fixture');
+assert.deepEqual(migrationFiles.slice(294,297),[
+ '20261027230000_accepted_actual_lunch_windows.sql',
+ '20261027231000_canonical_coverall_capacity_links.sql',
+ '20261027234814_mcp_oauth_durable_token_families.sql',
+],'the three reviewed successors follow the retained294 prefix');
 const docker=(args,opts={})=>execFileSync('docker',args,{encoding:'utf8',timeout:180000,maxBuffer:32*1024*1024,...opts});
 const sql=text=>docker(['exec','-i',container,'psql','-X','-q','-At','-v','ON_ERROR_STOP=1','-U','supabase_admin','-d','postgres'],{input:text});
 const defaultsSql="select count(*) from pg_default_acl d cross join lateral aclexplode(d.defaclacl) a where d.defaclnamespace in (0,'public'::regnamespace) and d.defaclobjtype in ('r','S') and a.grantee in (0,'anon'::regrole,'authenticated'::regrole,'service_role'::regrole)";
@@ -21,12 +32,38 @@ const fixtures=[
  'static-weekly-midweek-vacancy-database-fixture.mjs',
  'static-weekly-vacate-roster-slot-fixture-tests.mjs',
 ];
+const currentArgs=process.argv.slice(2);
+assert.ok(currentArgs.length===0||(currentLocal&&currentArgs.length===2&&currentArgs[0]==='--current-fixture-index'&&['0','1'].includes(currentArgs[1])));
 for(const [fixtureIndex,fixtureScript] of fixtures.entries()){
+if(currentArgs.length&&fixtureIndex!==Number(currentArgs[1]))continue;
 
 let owned=false;let fixture=null;const records=[];
 try{
  fixture=await createCiFreshOnlyFixture({name:fixtureName,hostSocket:false,noAutoTableGrants:true});
  container=fixture.container;owned=true;
+ if(currentLocal){
+  await fixture.assertOwned();
+  assert.equal(fixture.receipt.schema,'custodial.current308-local-ci-borrow.v1');
+  assert.equal(fixture.receipt.release_admission,false);assert.equal(fixture.receipt.production,false);
+  assert.equal(fixture.receipt.no_api_table_sequence_defaults,true);
+  assert.deepEqual(fixture.receipt.source_profile,currentProfile.description);
+  const witnesses=fixture.receipt.migration_witnesses;assert.equal(witnesses.length,308);
+  for(const [index,witness]of witnesses.entries()){
+   const expected=currentProfile.description.effective_sql[index];
+   assert.equal(witness.order,index+1);assert.equal(witness.name,expected.name);assert.equal(witness.exit,0);
+   assert.equal(witness.sha256,expected.sha256);assert.equal(witness.effective_sha256,expected.effective_sha256);
+   assert.equal(witness.default_grants_before,'0');assert.equal(witness.effective_default_grants_after,'0');
+   assert.equal(witness.raw_default_grants_after,witness.default_grants_after);
+   if(witness.raw_default_grants_after!=='0'){
+    assert.equal(witness.known_default_only_migration_api_defaults_removed,true);
+    assert.ok(['20260718083100_reconstruct_public_grant_hardening.sql','20260729150527_audit_defense_in_depth_hardening.sql','20260815160613_normalize_managed_production_schema_security.sql'].includes(witness.name));
+    assert.doesNotMatch(currentProfile.migrationSql(witness.name),/create\s+(?:unlogged\s+)?table|create\s+sequence/i);
+   }
+   records.push({...witness});
+  }
+  assert.equal(sql(defaultsSql).trim(),'0');
+  console.log('EXPLICIT_CURRENT308_ALL_MIGRATION_WITNESSES_VERIFIED_NO_CANONICAL_OR_RELEASE_CLAIM');
+ }else{
  assert.equal(fixture.name,fixtureName);
  assert.equal(fixture.receipt.name,fixtureName);
  await fixture.assertOwned();
@@ -40,7 +77,7 @@ try{
  const manifest=JSON.parse(readFileSync(path.join(root,'release/fresh-only-replay/MANIFEST.json'),'utf8'));
  const replay=loadCiFreshOnlyReplay(root,manifest.image,migrationFiles,{noAutoTableGrants:true});
  const witnesses=fixture.receipt.migration_witnesses;
- assert.equal(witnesses.length,294);
+ assert.equal(witnesses.length,migrationFiles.length);
  console.log('OWNED_TEST_CONTAINER',container);
  console.log('AUTOMATIC_PUBLIC_TABLE_AND_SEQUENCE_DATA_API_GRANTS_ABSENT');
  for(const [index,witness]of witnesses.entries()){
@@ -60,15 +97,30 @@ try{
   if(records.length%25===0)console.log('APPLIED_SOURCE_MIGRATIONS',records.length);
  }
  replay.assertPreserved();
- assert.equal(records.length,294,'both fixtures replay the exact current migration baseline');
+ assert.equal(records.length,migrationFiles.length,'both fixtures replay the exact current migration baseline');
+ }
  const aclDigest=sql(aclDigestSql).trim();
+ if(!currentLocal){const witnesses=fixture.receipt.migration_witnesses;
  const historical153 = witnesses[152];
  assert.equal(historical153.order,153);
  assert.equal(historical153.name,'20260925190000_gps_exact_location_authority_boundary.sql');
  assert.match(historical153.current_profile_153_raw_public_r_S_acl_md5,/^[a-f0-9]{32}$/,
   'current28f/profile source-prefix153 raw ACL digest is retained as an observation, not historical runtime reproduction');
- const aclReference=JSON.parse(readFileSync(path.join(root,manifest.no_auto_profile.reference.path),'utf8'));
+ }
+ const aclReference=JSON.parse(readFileSync(path.join(root,selectedManifest.no_auto_profile.reference.path),'utf8'));
  const aclContract=aclReference.current294_public_r_S_acl_contract;
+ // Keep the historical294 reference and exact297 table/grant additions.
+ // Current301/302 also create these three owner-only activation tables.
+ // Source303 changes functions only. All relation identities and the complete
+ // nonowner grant census are still exact; no unknown relation is ignored.
+ const retained297Tables=['static_weekly_coverall_access_links','mcp_oauth_replay_artifacts_v2','mcp_oauth_token_families_v2'];
+ const activationTables=['static_weekly_manual_activation_confirmations','static_weekly_manual_activation_packets','static_weekly_manual_repeat_confirmations'];
+ // The source selector above must first admit the exact new successor.
+ const sealedRepairTables=(migrationFiles.length===304||currentLocal)?['msg_broadcast_request_receipts','ops_manager_notification_credentials']:[];
+ const addedTables=[...retained297Tables,...activationTables,...sealedRepairTables];
+ const expectedRelations=[...aclContract.expected_public_r_S_relations,...addedTables.map(relation_name=>({schema_name:'public',relation_name,relation_kind:'r',owner_name:'migration_owner'}))];
+ const expectedGrants=[...aclContract.expected_public_r_S_nonowner_grants,
+  ...[['mcp_oauth_replay_artifacts_v2',['SELECT','INSERT']],['mcp_oauth_token_families_v2',['SELECT','INSERT','UPDATE']]].flatMap(([table_name,privileges])=>privileges.map(privilege_type=>({schema_name:'public',table_name,grantee:'service_role',grantor:'migration_owner',privilege_type,is_grantable:false})))];
  const historicalContext=aclContract.historical153_source_context;
  assert.equal(historicalContext.status,'UNVERIFIED_HISTORICAL_SOURCE_CLAIM');
  assert.equal(historicalContext.historical_expected_raw_md5,'72df064663cf70bcbe58d49822723930');
@@ -79,10 +131,23 @@ try{
  const exactSet=rows=>rows.map(row=>canonical(row)).sort();
  const relations=JSON.parse(sql(`select coalesce(json_agg(row_to_json(r)),'[]'::json) from (select n.nspname as schema_name,c.relname as relation_name,c.relkind::text as relation_kind,pg_get_userbyid(c.relowner) as owner_name from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind in ('r','S')) r`));
  for(const row of relations)row.owner_name=ownerAlias(row.owner_name);
- assert.deepEqual(exactSet(relations),exactSet(aclContract.expected_public_r_S_relations),'exact current294 public r/S identity, kind and owner set');
+ assert.deepEqual(exactSet(relations),exactSet(expectedRelations),'exact selected current public r/S identity, kind and owner set; all known original and successor relations');
  const grants=JSON.parse(sql(`select coalesce(json_agg(row_to_json(r)),'[]'::json) from (select n.nspname as schema_name,c.relname as table_name,coalesce(grantee.rolname,'PUBLIC') as grantee,pg_get_userbyid(a.grantor) as grantor,a.privilege_type,a.is_grantable from pg_class c join pg_namespace n on n.oid=c.relnamespace cross join lateral aclexplode(coalesce(c.relacl,acldefault(case when c.relkind='S' then 'S'::"char" else 'r'::"char" end,c.relowner))) a left join pg_roles grantee on grantee.oid=a.grantee where n.nspname='public' and c.relkind in ('r','S') and coalesce(grantee.rolname,'PUBLIC') not in ('postgres','supabase_admin')) r`));
  for(const row of grants)row.grantor=ownerAlias(row.grantor);
- assert.deepEqual(exactSet(grants),exactSet(aclContract.expected_public_r_S_nonowner_grants),'exact source-derived current294 nonowner public r/S privilege, grantor and grantability set');
+ assert.deepEqual(exactSet(grants),exactSet(expectedGrants),'exact selected source-derived nonowner public r/S privilege, grantor and grantability set');
+ assert.equal(sql(`select count(*) from pg_class where relnamespace='public'::regnamespace and relname in (${addedTables.map(name=>"'"+name+"'").join(',')}) and relrowsecurity`).trim(),String(addedTables.length),'all exact declared appended tables have RLS enabled without automatic grants');
+ assert.equal(sql("select count(*) from pg_class where relnamespace='public'::regnamespace and relname in ('static_weekly_manual_activation_confirmations','static_weekly_manual_activation_packets') and relforcerowsecurity").trim(),'2','activation packet and confirmation tables retain forced RLS');
+ for(const table of [...activationTables,...sealedRepairTables])for(const role of ['anon','authenticated','service_role']){
+  assert.equal(sql(`select has_table_privilege('${role}','public.${table}','SELECT,INSERT,UPDATE,DELETE')`).trim(),'f',`${table} remains RPC-only for ${role}`);
+  assert.equal(sql(`select has_any_column_privilege('${role}','public.${table}','SELECT,INSERT,UPDATE,REFERENCES')`).trim(),'f',`${table} denies column-only direct ${role} access`);
+ }
+ if(sealedRepairTables.length){
+  assert.equal(sql("select relforcerowsecurity::text from pg_class where oid='public.ops_manager_notification_credentials'::regclass").trim(),'true','typed notification credential domain retains forced RLS');
+ }
+ for(const table of addedTables)for(const role of ['anon','authenticated']){
+  assert.equal(sql(`select has_table_privilege('${role}','public.${table}','SELECT,INSERT,UPDATE,DELETE')`).trim(),'f',`${table} denies direct ${role} access`);
+ }
+ assert.equal(sql("select has_table_privilege('service_role','public.static_weekly_coverall_access_links','SELECT,INSERT,UPDATE,DELETE')").trim(),'f','CoverAll link storage remains RPC-only for service_role');
  for(const role of ['anon','authenticated']){
   assert.equal(sql(`select has_table_privilege('${role}','public.weekly_schedule_lunch_documents','SELECT,INSERT,UPDATE,DELETE')`).trim(),'f',`RPC-only lunch document table remains inaccessible to ${role}`);
   assert.equal(sql(`select has_any_column_privilege('${role}','public.weekly_schedule_lunch_documents','SELECT,INSERT,UPDATE,REFERENCES')`).trim(),'f',`RPC-only lunch document columns remain inaccessible to ${role}`);
@@ -106,6 +171,6 @@ try{
  }finally{await fixture.assertOwned();}
  console.log('STATIC_WEEKLY_VACATE_ROSTER_SLOT_DATABASE_PASS');
 }finally{
- if(owned){await fixture.cleanup();owned=false;assert.equal(docker(['ps','-a','--filter','name=^/'+fixture.name+'$','--format','{{.Names}}']).trim(),'');console.log('OWNED_TEST_CONTAINER_REMOVED',container);}
+ if(owned){await fixture.cleanup();owned=false;if(!currentLocal){assert.equal(docker(['ps','-a','--filter','name=^/'+fixture.name+'$','--format','{{.Names}}']).trim(),'');console.log('OWNED_TEST_CONTAINER_REMOVED',container);}else console.log('CURRENT308_BORROW_RELEASED_PARENT_OWNS_FINAL_DESTRUCTION',container);}
 }
 }

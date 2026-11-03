@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
+import {createCiFreshOnlyFixture} from "./ci-fresh-only-replay.mjs";
 import { execFile, spawn } from "node:child_process";
 import { X509Certificate } from "node:crypto";
 import { readFile } from "node:fs/promises";
@@ -11,7 +12,10 @@ import { SCHEMA_CATALOG_QUERIES } from "./schema-fingerprint-catalog.mjs";
 const execFileAsync = promisify(execFile);
 const image = process.env.SCHEMA_REBUILD_DOCKER_IMAGE
   || "supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed";
-const container = `mz_read_authority_${process.pid}`;
+if(!process.env.CUSTODIAL_CURRENT308_OWNED_CI_DESCRIPTOR)throw Error("Explicit owned disk-backed512MiB fixture required; unbounded/tmpfs launch disabled");
+const fixture=await createCiFreshOnlyFixture({name:"mz_schema_rebuild_read_authority_"+process.pid,hostSocket:false});
+const container=fixture.container;let unitCreated=false;
+const unitDatabase="read_authority_test";
 const migration = await readFile(new URL(
   "../supabase/migrations/20260820133000_create_application_read_authority.sql",
   import.meta.url,
@@ -116,7 +120,7 @@ assert.equal(
 
 async function psql(statement) {
   return new Promise((resolve, reject) => {
-    const child = spawn("docker", ["exec", "-i", container, "psql", "-q", "-v", "ON_ERROR_STOP=1", "-At", "-U", "supabase_admin", "-d", "postgres"]);
+    const child = spawn("docker", ["exec", "-i", container, "psql", "-q", "-v", "ON_ERROR_STOP=1", "-At", "-U", "supabase_admin", "-d", unitDatabase]);
     let stdout = "";
     let stderr = "";
     child.stdout.on("data", (chunk) => { stdout += chunk; });
@@ -438,24 +442,8 @@ let privilegedPool;
 let extraMembershipPool;
 let directGrantPool;
 try {
-  await docker(["image", "inspect", image]);
-  await docker(["run", "--rm", "-d", "--name", container, "-p", "127.0.0.1::5432", "--tmpfs", "/var/lib/postgresql/data:rw,size=512m", "-e", "POSTGRES_PASSWORD=postgres", image, "-c", "listen_addresses=*"]);
-
-  let ready = false;
-  for (let attempt = 0; attempt < 120; attempt += 1) {
-    try {
-      const logs = (await docker(["logs", container])).stdout;
-      if (logs.includes("PostgreSQL init process complete; ready for start up.")) {
-        await new Promise((resolve) => setTimeout(resolve, 2_000));
-        await psql("select 1;");
-        ready = true;
-        break;
-      }
-    } catch {}
-    await new Promise((resolve) => setTimeout(resolve, 500));
-  }
-  assert.equal(ready, true, "owned disposable PostgreSQL must start");
-
+  await fixture.assertOwned();
+  await docker(["exec",container,"createdb","-U","supabase_admin","--template=template0",unitDatabase]);unitCreated=true;
   await psql(fixtureSql);
   await psql(migration);
   await psql(cronCatalogMigration);
@@ -500,30 +488,11 @@ try {
   `);
   await psql(retirementMigration);
 
-  const port = Number((await docker(["port", container, "5432/tcp"])).stdout.trim().split(":").at(-1));
-  pool = new Pool({
-    connectionString: `postgres://custodial_readonly_test:read-test-only@127.0.0.1:${port}/postgres`,
-    max: 2,
-    connectionTimeoutMillis: 10_000,
-  });
-
-  privilegedPool = new Pool({
-    connectionString: `postgres://custodial_overprivileged_test:overprivileged-test@127.0.0.1:${port}/postgres`,
-    max: 1,
-    connectionTimeoutMillis: 10_000,
-  });
-
-  extraMembershipPool = new Pool({
-    connectionString: `postgres://custodial_extra_membership_test:extra-membership-test@127.0.0.1:${port}/postgres`,
-    max: 1,
-    connectionTimeoutMillis: 10_000,
-  });
-
-  directGrantPool = new Pool({
-    connectionString: `postgres://custodial_direct_grant_test:direct-grant-test@127.0.0.1:${port}/postgres`,
-    max: 1,
-    connectionTimeoutMillis: 10_000,
-  });
+  const options=(user,password,max)=>({...fixture.pgClientConfig,user,password,database:unitDatabase,max,connectionTimeoutMillis:10000});
+  pool=new Pool(options('custodial_readonly_test','read-test-only',2));
+  privilegedPool=new Pool(options('custodial_overprivileged_test','overprivileged-test',1));
+  extraMembershipPool=new Pool(options('custodial_extra_membership_test','extra-membership-test',1));
+  directGrantPool=new Pool(options('custodial_direct_grant_test','direct-grant-test',1));
 
   await assert.rejects(
     () => runReadOnlySql({ pool: privilegedPool, sql: "select 1 as should_never_be_served" }),
@@ -772,5 +741,5 @@ try {
   await privilegedPool?.end().catch(() => {});
   await extraMembershipPool?.end().catch(() => {});
   await directGrantPool?.end().catch(() => {});
-  await docker(["rm", "-f", container]).catch(() => {});
+  try{await fixture.assertOwned();if(unitCreated){await docker(["exec",container,"dropdb","-U","supabase_admin",unitDatabase]);console.log("OWNED_PARTIAL_UNIT_DATABASE_REMOVED");}}finally{await fixture.cleanup();}
 }

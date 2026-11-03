@@ -1,0 +1,67 @@
+{
+  "request": {
+    "operation": "confirm",
+    "confirmationKey": "6b6c1472-2ebd-45aa-aea8-97d24e4171e1"
+  },
+  "result": {
+    "event": "ACCEPTED",
+    "replayed": false,
+    "manager_id": "f309667e-02fa-41cd-b5e0-5f3c085605ca",
+    "projections": {
+      "2026-11-02": {
+        "reused": null,
+        "projection_id": "2535f58b-0357-458f-ba1b-d9b41c36437b",
+        "publication_id": "150a1dd6-ac1f-49ce-85f7-267e88a3e076",
+        "projection_identity": "5503e765fb9ee7ba6349adacc154e8f52156e559ab9d1b9dec8046fde82d2961",
+        "lunch_document_identity": "6fd298c004dcee5d25c232f4e06b232d4661a5bea430e2fe0929a0e66c203712"
+      }
+    },
+    "recorded_at": "2026-10-30T21:13:26.002365+00:00",
+    "operation_id": "1333c840-114b-4335-9029-f4fcd07b6ea6",
+    "preview_digest": "8768549cbeb4987836e256adaf651fab2d66d472447baa35ba50b7966a3d6460",
+    "semantic_digest": "288bb4da16c105b558cd963391129fac828acd66360f1e55b05ad0c617534ed1",
+    "authority_revision": 4,
+    "device_intent_count": 0,
+    "candidate_set_digest": "b6f20dd41a985eba0e4cd35ea280cc7926dcd7ebb1d09b596073e8ae4dfb5429",
+    "missing_device_targets": [
+      {
+        "status": "NO_CURRENT_DEVICE",
+        "employee_id": "06228c5d-5123-4b8b-b730-e01114bdc971",
+        "service_date": "2026-11-02"
+      },
+      {
+        "status": "NO_CURRENT_DEVICE",
+        "employee_id": "1318b295-fd70-4e78-8828-62c29302f96f",
+        "service_date": "2026-11-02"
+      },
+      {
+        "status": "NO_CURRENT_DEVICE",
+        "employee_id": "3da709bb-2223-4e15-8e3a-db02e3f32e97",
+        "service_date": "2026-11-02"
+      },
+      {
+        "status": "NO_CURRENT_DEVICE",
+        "employee_id": "77d50e9a-6338-43b1-aed5-9f47d7129466",
+        "service_date": "2026-11-02"
+      },
+      {
+        "status": "NO_CURRENT_DEVICE",
+        "employee_id": "8067cca2-7487-4589-ba7c-aa442e135045",
+        "service_date": "2026-11-02"
+      },
+      {
+        "status": "NO_CURRENT_DEVICE",
+        "employee_id": "cd97111e-cfa0-4228-b4d7-401bc7a5ac13",
+        "service_date": "2026-11-02"
+      },
+      {
+        "status": "NO_CURRENT_DEVICE",
+        "employee_id": "d5fecc86-659b-464a-bc99-f0d914385db4",
+        "service_date": "2026-11-02"
+      }
+    ],
+    "original_preparer_manager_id": "f309667e-02fa-41cd-b5e0-5f3c085605ca"
+  },
+  "scope": "OWNED_FIXTURE_ONLY",
+  "productionWritten": false
+}

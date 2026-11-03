@@ -4,6 +4,7 @@ export const MAP_DASHBOARD_MANAGER_SYSTEM_KEYS = Object.freeze({
   "afeist@memphiszoo.org": "annie_feist_operations_admin",
   "bgull@memphiszoo.org": "brandy_gull_horticulture_manager",
   "emckenney@memphiszoo.org": "eric_mckenney_facilities_maintenance_manager",
+  "eoperle@memphiszoo.org": "eric_custodial_manager",
   "hlejman@memphiszoo.org": "haley_lejman_water_quality_manager",
   "jsheffield@memphiszoo.org": "jennifer_sheffield_director_operations",
 });
@@ -20,7 +21,7 @@ function mapConfiguration(env = process.env) {
   const configuredUrl = String(env.MEMPHIS_MAP_SUPABASE_URL || MAP_PROJECT_URL).trim().replace(/\/$/, "");
   const publishableKey = String(env.MEMPHIS_MAP_SUPABASE_PUBLISHABLE_KEY || "").trim();
   if (configuredUrl !== MAP_PROJECT_URL) throw fail(503, "Memphis Map identity provider configuration is invalid.");
-  if (!publishableKey || /service_role|secret/i.test(publishableKey)) {
+  if (!/^sb_publishable_[A-Za-z0-9_-]+$/.test(publishableKey)) {
     throw fail(503, "Memphis Map identity verification is not configured.");
   }
   return { url: configuredUrl, publishableKey };
@@ -46,6 +47,8 @@ export async function verifyMapManagerAccessToken(accessToken, {
     response = await fetchImpl(`${url}/auth/v1/user`, {
       method: "GET",
       cache: "no-store",
+      redirect: "error",
+      signal: AbortSignal.timeout(8000),
       headers: {
         apikey: publishableKey,
         authorization: `Bearer ${token}`,

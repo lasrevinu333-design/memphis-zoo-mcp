@@ -1,0 +1,12 @@
+{
+  "schema": "custodial.source300-target-capture-pending.v1",
+  "canonicalFingerprint": "aa4d4fad502031a493a15ddfad6305d783cbae90eee5aefb85a8f0c19a737c40",
+  "expectedPhysicalFingerprint": "742caa62cb7a7dff55b3ddeaf0a3eafde511930cb9d9ba7c965ed9f8be3a80a5",
+  "observedPopulatedTarget": false,
+  "requiredSourceCount": 300,
+  "requiredPendingCount": 166,
+  "requiredTargetLedgerCount": 401,
+  "genuineParentCapture": 41003969617,
+  "parentReportSha256": "7fded7c546d4c6d879df233f8059cbf4752433c2d9b403641730d6886452593a",
+  "normalReleaseAdmitted": false
+}

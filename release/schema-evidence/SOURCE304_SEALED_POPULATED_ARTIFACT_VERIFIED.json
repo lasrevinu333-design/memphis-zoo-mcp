@@ -1,0 +1,20 @@
+{
+  "run": 41260688087,
+  "head": "d3b8bbc1ed9a0a90e55da4756713d57475f704c8",
+  "sha256": "c8c6fc0be9b629af5528c7feefe7c942a47201bbd566aad48ae29fc497ebb784",
+  "bytes": 3429549,
+  "files": [
+    {
+      "path": "target-capture-pre-reconcile-discrepancies.json",
+      "bytes": 18047
+    },
+    {
+      "path": "production-backup-migration-rehearsal.jsonl",
+      "bytes": 8582
+    },
+    {
+      "path": "production-migration-target-capture.json",
+      "bytes": 21008281
+    }
+  ]
+}

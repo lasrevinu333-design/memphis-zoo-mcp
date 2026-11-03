@@ -1,0 +1,12 @@
+{
+  "state": "BEGIN_RETURNED_WITH_JIT_OFF_AND_ROLLED_BACK",
+  "originalOperation": "a9721c7f-cea3-4e13-947c-3177a1f08617",
+  "measurementOnly": true,
+  "commit": false,
+  "jit": "off",
+  "raisedMemoryLimit": false,
+  "returned": true,
+  "milliseconds": 4685,
+  "returnSchema": "custodial.coverall-initial-uncommitted.v1",
+  "rollbackReturned": true
+}

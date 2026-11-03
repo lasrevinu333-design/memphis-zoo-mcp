@@ -1,0 +1,150 @@
+{
+  "schema": "custodial.ci-fresh-only-migrations-construction.v1",
+  "state": "CONSTRUCTED_NOT_FUNCTIONALLY_QUALIFIED",
+  "container": "791d6d7ff60f1a9ba1761be818e3368bd13fccccda84ee9d63999f4997b8eac1",
+  "name": "mz_schema_rebuild_atomic302_e2d4e36985ce4d1aa6fac7426082ed2c",
+  "owner": "05630145-fb61-4ba5-95f5-0f22f164c765",
+  "database": "postgres",
+  "image": "public.ecr.aws/supabase/postgres@sha256:28f0e16a019e648089fc1a6d333549a55548f6019c15ae4bd7cd58b989027518",
+  "image_id": "sha256:28f0e16a019e648089fc1a6d333549a55548f6019c15ae4bd7cd58b989027518",
+  "custody_directory": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/MAIN_EIGHT_ACTIVE_LAUNCH_20261031/SEALED_REPAIR_EXTERNAL_RUNS_20261031/database-015-parent/temp/custodial-ci-fixture-Qhbs9B/custodial-ci-fresh-custody-McxB00",
+  "socket_directory": "/run/user/1000/custodial-s27-XpXU0R/socket",
+  "max_connections": 60,
+  "selected_replay": {
+    "format": "custodial.ci-fresh-only-selected-replay.v1",
+    "manifest_sha256": "5094a272dcc9f01ccbf043f3de7012e12bdb542606089a0a818629c1ecf86b26",
+    "migrations": 303,
+    "overrides": 22,
+    "source_successor": {
+      "sha256": "d51728e9973dcfba729164bce441d45efff8cf10b59f3382ade56efbae515e27",
+      "predecessor_manifest_sha256": "5094a272dcc9f01ccbf043f3de7012e12bdb542606089a0a818629c1ecf86b26",
+      "predecessor_successor_sha256": "e4ebb172dbcdfa58690742b9ff09973d33bf35e93ab53d1ebdc41b5a554bcf69",
+      "appended_migration": "20261031180631_cohort_ticket_transaction_context.sql"
+    },
+    "full_vendor_NORMAL": false,
+    "expected_fingerprint_authority": null
+  },
+  "data_storage": "owned-disk",
+  "owned_disk_storage": {
+    "schema": "custodial.ci-owned-disk.v1",
+    "kind": "owned-disk",
+    "parent": {
+      "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/MAIN_EIGHT_ACTIVE_LAUNCH_20261031/SEALED_REPAIR_EXTERNAL_RUNS_20261031/database-015-parent/temp",
+      "dev": 2099,
+      "ino": 61094838,
+      "uid": 1000,
+      "gid": 1000,
+      "mode": 448
+    },
+    "namespace": {
+      "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/MAIN_EIGHT_ACTIVE_LAUNCH_20261031/SEALED_REPAIR_EXTERNAL_RUNS_20261031/database-015-parent/temp/custodial-ci-fixture-Qhbs9B",
+      "dev": 2099,
+      "ino": 61094847,
+      "uid": 1000,
+      "gid": 1000,
+      "mode": 448
+    },
+    "data": {
+      "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/MAIN_EIGHT_ACTIVE_LAUNCH_20261031/SEALED_REPAIR_EXTERNAL_RUNS_20261031/database-015-parent/temp/custodial-ci-fixture-Qhbs9B/pgdata",
+      "dev": 2099,
+      "ino": 61094848,
+      "uid": 1000,
+      "gid": 1000,
+      "mode": 448
+    },
+    "filesystem": {
+      "type": 61267,
+      "bsize": 4096,
+      "available_bytes": 2491741904896
+    },
+    "budget": {
+      "max_data_bytes": 1073741824,
+      "min_available_bytes": 536870912,
+      "hard_quota": false,
+      "observation_only_between_operations": true
+    },
+    "settings_source_sha256": "a42bde5d3934d628fe43be6deb881ba44ae3670c8996b250dea70b8cc37b696e",
+    "settings_source_scope": "Observed postgres owner session PG17.6/170006; not either Render runtime account",
+    "settings": {
+      "jit": "off",
+      "work_mem": "2184kB",
+      "shared_buffers": "224MB",
+      "max_connections": "60",
+      "maintenance_work_mem": "32MB",
+      "statement_timeout": "2min",
+      "lock_timeout": "0",
+      "idle_in_transaction_session_timeout": "0",
+      "temp_file_limit": "-1"
+    },
+    "original_mount": {
+      "type": "bind",
+      "source": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/MAIN_EIGHT_ACTIVE_LAUNCH_20261031/SEALED_REPAIR_EXTERNAL_RUNS_20261031/database-015-parent/temp/custodial-ci-fixture-Qhbs9B/pgdata",
+      "target": "/var/lib/postgresql/data",
+      "read_only": false,
+      "bind_propagation": "rprivate",
+      "bind_recursive": "disabled"
+    }
+  },
+  "owned_disk_settings_readback": {
+    "settings": {
+      "jit": "off",
+      "work_mem": "2184kB",
+      "lock_timeout": "0",
+      "shared_buffers": "224MB",
+      "max_connections": "60",
+      "temp_file_limit": "-1",
+      "statement_timeout": "2min",
+      "maintenance_work_mem": "32MB",
+      "idle_in_transaction_session_timeout": "0"
+    },
+    "server_version_num": "170006"
+  },
+  "owned_disk_budget_observation": {
+    "at_ms": 1793489218590,
+    "data_bytes": 138846208,
+    "available_bytes": 2491602964480,
+    "current_data_identity": {
+      "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/MAIN_EIGHT_ACTIVE_LAUNCH_20261031/SEALED_REPAIR_EXTERNAL_RUNS_20261031/database-015-parent/temp/custodial-ci-fixture-Qhbs9B/pgdata",
+      "dev": 2099,
+      "ino": 61094848,
+      "uid": 100,
+      "gid": 1000,
+      "mode": 448
+    },
+    "budget": {
+      "max_data_bytes": 1073741824,
+      "min_available_bytes": 536870912,
+      "hard_quota": false,
+      "observation_only_between_operations": true
+    },
+    "hard_quota": false,
+    "cached": false
+  },
+  "fingerprint_check": "PASS_COMMITTED_CANONICAL_FILE",
+  "no_auto_table_grants": false,
+  "measured_no_auto_catalog": null,
+  "fingerprint_file_sha256": "1e798aa925d33b8646c01ce3a3e0bdfb5562c55a32ee9f05635fe2d71db4102d",
+  "full_suite_PASS": false,
+  "synthetic_fixture_checks_executed": false,
+  "migration_witnesses": null,
+  "original_child": {
+    "schema": "custodial.ci-fixture.original-child-closed.v1",
+    "pid": 3601989,
+    "pgid": 3601989,
+    "actual_wait_returned": true,
+    "exit": 0,
+    "signal": null,
+    "timed_out": false,
+    "stream_limit_exceeded": false,
+    "child_error": null,
+    "fresh_PID_PGID_proc_absent": true,
+    "seconds": 157.718,
+    "stdout_bytes": 26049,
+    "stderr_bytes": 0,
+    "stdout_sha256": "a8231cd75ca5a7ee776cf505236605970a03d08a7b69405ce31b8752c59dcc33",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stdout_path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/MAIN_EIGHT_ACTIVE_LAUNCH_20261031/SEALED_REPAIR_EXTERNAL_RUNS_20261031/database-015-parent/temp/custodial-ci-fixture-Qhbs9B/PARENT_ORIGINAL_CHILD.stdout",
+    "stderr_path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/MAIN_EIGHT_ACTIVE_LAUNCH_20261031/SEALED_REPAIR_EXTERNAL_RUNS_20261031/database-015-parent/temp/custodial-ci-fixture-Qhbs9B/PARENT_ORIGINAL_CHILD.stderr"
+  },
+  "parent_custody_directory": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/MAIN_EIGHT_ACTIVE_LAUNCH_20261031/SEALED_REPAIR_EXTERNAL_RUNS_20261031/database-015-parent/temp/custodial-ci-fixture-Qhbs9B"
+}

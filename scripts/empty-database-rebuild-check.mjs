@@ -3,6 +3,7 @@ import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { readdirSync, readFileSync, mkdtempSync, rmSync, chmodSync, openSync, closeSync, writeFileSync, fsyncSync, existsSync, lstatSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { loadCiFreshOnlyReplay } from "./ci-fresh-only-replay.mjs";
+import {normalizeDataStorage,assertOwnedDiskStorage,diskMountArgs,assertStorageMounts,observeOwnedDiskBudget,OWNED_DISK_SETTINGS,HOSTED_SETTINGS_SHA256,ownedDiskSettingsSql,assertOwnedDiskSettings} from "./ci-fresh-owned-disk.mjs";
 import { resolve } from "node:path";
 import pg from "pg";
 
@@ -38,6 +39,17 @@ if (process.env.SCHEMA_REBUILD_MIGRATIONS_ONLY !== undefined && process.env.SCHE
 const migrationsOnly = process.env.SCHEMA_REBUILD_MIGRATIONS_ONLY === '1';
 const fixtureName = process.env.SCHEMA_REBUILD_FIXTURE_NAME || '';
 const fixtureSocket = process.env.SCHEMA_REBUILD_FIXTURE_SOCKET_DIRECTORY || '';
+const dataStorage = normalizeDataStorage(process.env.SCHEMA_REBUILD_DATA_STORAGE);
+const ownedDiskStorage = dataStorage === 'owned-disk' ? JSON.parse(process.env.SCHEMA_REBUILD_OWNED_DISK_PROFILE || 'null') : null;
+if (dataStorage === 'owned-disk') {
+  if(!freshOnly || !migrationsOnly || !keepDatabase || !fixtureName) throw new Error('Owned disk requires explicit fresh migrations-only constructor.');
+  assertOwnedDiskStorage(ownedDiskStorage,{requireEmpty:true});
+  if(tmpdir() !== ownedDiskStorage.namespace.path) throw new Error('Owned disk child namespace mismatch.');
+  const intentPath=resolve(tmpdir(),'PARENT_CONSTRUCTION_INTENT.json'),intentStat=lstatSync(intentPath);
+  if(!intentStat.isFile() || intentStat.isSymbolicLink() || realpathSync(intentPath)!==intentPath || intentStat.uid!==process.getuid() || (intentStat.mode&0o7777)!==0o600 || intentStat.nlink!==1) throw new Error('Owned disk requires original private constructor intent.');
+  const intent=JSON.parse(readFileSync(intentPath,'utf8'));
+  if(intent.schema!=='custodial.ci-fresh-fixture-parent-intent.v1' || intent.name!==fixtureName || intent.image!==dockerImage || intent.dataStorage!=='owned-disk' || JSON.stringify(intent.owned_disk_storage)!==JSON.stringify(ownedDiskStorage)) throw new Error('Owned disk constructor intent differs.');
+} else if(process.env.SCHEMA_REBUILD_DATA_STORAGE!==undefined || process.env.SCHEMA_REBUILD_OWNED_DISK_PROFILE!==undefined) throw new Error('Storage environment is reserved for the explicit owned-disk constructor.');
 if (process.env.SCHEMA_REBUILD_NO_AUTO_TABLE_GRANTS !== undefined && process.env.SCHEMA_REBUILD_NO_AUTO_TABLE_GRANTS !== '1')
   throw new Error('SCHEMA_REBUILD_NO_AUTO_TABLE_GRANTS must be the explicit value 1.');
 const noAutoTableGrants = process.env.SCHEMA_REBUILD_NO_AUTO_TABLE_GRANTS === '1';
@@ -119,6 +131,7 @@ function freshOwnedIdentity() {
     freshCustodyReceipt('BOUND_ORIGINAL_CID.json', { id: freshContainerCID, name: freshCustody.name,
       owner: freshCustody.owner, image: freshCustody.image, image_id: freshCustody.image_id });
   }
+  if(ownedDiskStorage) { assertOwnedDiskStorage(ownedDiskStorage); assertStorageMounts(observed,{storage:ownedDiskStorage,initDirectory:freshInitDirectory,socketDirectory:fixtureSocket||null}); }
   return observed;
 }
 function cleanupFreshOwnedContainer() {
@@ -155,6 +168,7 @@ function quoteIdentifier(value) {
 }
 
 function dockerPsql(database, sql, atomicMode = null) {
+  if(ownedDiskStorage) observeOwnedDiskBudget(ownedDiskStorage,dockerContainer);
   const user = process.env.SCHEMA_REBUILD_DOCKER_USER || "supabase_admin";
   const result = spawnSync(
     "docker",
@@ -167,6 +181,7 @@ function dockerPsql(database, sql, atomicMode = null) {
   if (result.status !== 0) {
     throw new Error(`docker psql failed (${result.status}): ${result.stderr || result.stdout}`);
   }
+  if(ownedDiskStorage) observeOwnedDiskBudget(ownedDiskStorage,dockerContainer);
   return result.stdout;
 }
 
@@ -1278,7 +1293,8 @@ if (dockerImage) {
         name: dockerContainer, image: dockerImage, image_id: null, owner: randomUUID(),
         cidfile: resolve(directory, 'original-container.cid'), empty_init_directory: freshInitDirectory,
         ...(migrationsOnly ? { construction_only: true, host_socket_directory: fixtureSocket || null,
-          max_connections: fixtureSocket ? 32 : 10, no_auto_table_grants: noAutoTableGrants } : {}) };
+          max_connections: ownedDiskStorage ? 60 : fixtureSocket ? 32 : 10, no_auto_table_grants: noAutoTableGrants,
+          ...(ownedDiskStorage ? {data_storage:dataStorage,owned_disk_storage:ownedDiskStorage,settings_source_sha256:HOSTED_SETTINGS_SHA256,postgres_settings:OWNED_DISK_SETTINGS} : {}) } : {}) };
       freshCustodyReceipt('PREBIRTH_ORIGINAL_CONTAINER.json', freshCustody);
       const parent = openSync(tmpdir(), 'r');
       try { fsyncSync(parent); } finally { closeSync(parent); }
@@ -1292,17 +1308,18 @@ if (dockerImage) {
       '--log-driver', 'local', '--log-opt', 'max-size=1m', '--log-opt', 'max-file=2',
       '--tmpfs', '/tmp:rw,size=64m', '--tmpfs', '/var/run/postgresql:rw,size=8m',
       ...(fixtureSocket ? ['--mount', `type=bind,source=${fixtureSocket},target=/custodial-fixture-socket`] : []),
-      '--tmpfs', '/var/lib/postgresql/data:rw,size=1g',
+      ...(ownedDiskStorage ? diskMountArgs(ownedDiskStorage) : ['--tmpfs', '/var/lib/postgresql/data:rw,size=1g']),
       '--mount', `type=bind,source=${freshInitDirectory},target=/docker-entrypoint-initdb.d,readonly`,
       '-e', 'POSTGRES_USER=supabase_admin', '-e', 'POSTGRES_DB=postgres', '-e', 'PGDATA=/var/lib/postgresql/data',
       '-e', 'POSTGRES_PASSWORD=isolated-new-clean-no-network-test-only',
       '-e', 'POSTGRES_INITDB_ARGS=--auth-local=trust --auth-host=scram-sha-256', dockerImage,
-      'postgres', '-D', '/var/lib/postgresql/data', '-c', 'shared_buffers=64MB', '-c', fixtureSocket ? 'max_connections=32' : 'max_connections=10',
+      'postgres', '-D', '/var/lib/postgresql/data', '-c', ownedDiskStorage ? 'shared_buffers=224MB' : 'shared_buffers=64MB', '-c', ownedDiskStorage ? 'max_connections=60' : fixtureSocket ? 'max_connections=32' : 'max_connections=10',
       '-c', 'listen_addresses=',
       ...(fixtureSocket ? ['-c', 'unix_socket_directories=/var/run/postgresql,/custodial-fixture-socket'] : []),
       '-c', 'shared_preload_libraries=pg_cron,pg_net,pg_stat_statements',
       '-c', 'cron.launch_active_jobs=off', '-c', 'cron.database_name=postgres',
-      '-c', 'statement_timeout=20000', '-c', fixtureSocket ? 'lock_timeout=0' : 'lock_timeout=5000',
+      '-c', ownedDiskStorage ? 'statement_timeout=2min' : 'statement_timeout=20000', '-c', ownedDiskStorage || fixtureSocket ? 'lock_timeout=0' : 'lock_timeout=5000',
+      ...(ownedDiskStorage ? ['-c','jit=off','-c','work_mem=2184kB','-c','maintenance_work_mem=32MB','-c','idle_in_transaction_session_timeout=0','-c','temp_file_limit=-1'] : []),
     ] : [
       "run",
       "-d",
@@ -1323,7 +1340,9 @@ if (dockerImage) {
       if (!/^[a-f0-9]{64}$/.test(cid) || readFileSync(freshCustody.cidfile, 'utf8').trim() !== cid)
         throw new Error('Returned fresh CID and original CID file disagree');
       freshContainerCID = cid;
-      if (!freshOwnedIdentity()) throw new Error('Original fresh container absent after launch');
+      const originalObserved=freshOwnedIdentity();
+      if (!originalObserved) throw new Error('Original fresh container absent after launch');
+      if(ownedDiskStorage) freshCustodyReceipt('OWNED_DISK_ORIGINAL_MOUNT_READBACK.json',{storage:ownedDiskStorage,host_data_identity:assertOwnedDiskStorage(ownedDiskStorage).current,container:cid,image_id:originalObserved.Image,host_config:originalObserved.HostConfig,mounts:originalObserved.Mounts,command:originalObserved.Config.Cmd});
       freshCustodyReceipt('RETURNED_ORIGINAL_CID.json', { id: cid, name: freshCustody.name,
         owner: freshCustody.owner, image: freshCustody.image, image_id: freshCustody.image_id });
       dockerContainer = cid; // Every subsequent original check targets the exact owned object.
@@ -1359,6 +1378,10 @@ if (dockerImage) {
     }
     if (!healthy) throw new Error(`Disposable rebuild container ${dockerContainer} did not become healthy.`);
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10000);
+    if(ownedDiskStorage) {
+      const readback=JSON.parse(dockerPsql('postgres',ownedDiskSettingsSql).trim());
+      freshCustodyReceipt('OWNED_DISK_INITIAL_SETTINGS_READBACK.json',assertOwnedDiskSettings(readback));
+    }
   } catch (error) {
     try {
       if (freshOnly) cleanupFreshOwnedContainer();
@@ -1556,7 +1579,7 @@ if (dockerContainer) {
     if (freshOnly && !freshOwnedIdentity()) throw new Error('Original fresh container absent before fingerprint capture');
     let measuredNoAutoCatalog = null;
     if (noAutoTableGrants) {
-      if (noAutoWitnesses.length !== 294) throw new Error('No-auto fixture lacks all294 per-migration witnesses');
+      if (noAutoWitnesses.length !== freshSelection.entries.length) throw new Error('No-auto fixture lacks a witness for every exactly selected migration');
       const { captureSchemaCatalog, fingerprintSchemaCatalog } = await import('./schema-fingerprint-catalog.mjs');
       const catalog = await captureSchemaCatalog({ query: async statement => ({ rows: JSON.parse(dockerPsql(targetDatabase,
         `select coalesce(json_agg(row_to_json(measured)), '[]'::json)::text from (${statement.replace(/;\s*$/, '')}) measured`).trim()) }) });
@@ -1604,12 +1627,14 @@ if (dockerContainer) {
         container: freshContainerCID, name: freshCustody.name, owner: freshCustody.owner,
         database: targetDatabase, image: freshCustody.image, image_id: freshCustody.image_id,
         custody_directory: freshCustody.directory, socket_directory: fixtureSocket || null,
-        max_connections: fixtureSocket ? 32 : 10, selected_replay: freshSelection.receipt,
+        max_connections: ownedDiskStorage ? 60 : fixtureSocket ? 32 : 10, selected_replay: freshSelection.receipt,
+        ...(ownedDiskStorage ? {data_storage:dataStorage,owned_disk_storage:ownedDiskStorage,owned_disk_settings_readback:JSON.parse(dockerPsql(targetDatabase,ownedDiskSettingsSql).trim()),owned_disk_budget_observation:observeOwnedDiskBudget(ownedDiskStorage,dockerContainer,{force:true})} : {}),
         fingerprint_check: noAutoTableGrants ? 'NOT_CANONICAL_PROFILE_MEASURED_ONLY' : 'PASS_COMMITTED_CANONICAL_FILE',
         no_auto_table_grants: noAutoTableGrants, measured_no_auto_catalog: measuredNoAutoCatalog,
         fingerprint_file_sha256: createHash('sha256').update(fingerprintBytes).digest('hex'),
         full_suite_PASS: false, synthetic_fixture_checks_executed: false,
       };
+      if(ownedDiskStorage) assertOwnedDiskSettings(construction.owned_disk_settings_readback);
       freshCustodyReceipt('MIGRATIONS_ONLY_CONSTRUCTION.json', construction);
       freshConstructionCompleted = true;
       console.log(JSON.stringify({ migrations_only_construction: construction }));

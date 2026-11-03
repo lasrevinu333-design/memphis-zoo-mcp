@@ -4,9 +4,13 @@ import { resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 import { fingerprintSchemaCatalog } from './schema-fingerprint-catalog.mjs';
 
-const CANONICAL = '91eb02974fd180586869fb3d4b905da7e9bded0ac518d83b6ee03a570cd1f944';
-const DEPLOYMENT = 'f67580f03992120abd4086a9b53af98b05c29469eb140013221384df57bdd160';
+const CANONICAL = '432052a95830b4a8550cd6478d766bacc2bbbb4b2dd21d44544b238c70c5f001';
+const DEPLOYMENT = 'b57982c0c739632fcbfc9ba30177fccab05a5847ce44121408b5ddab8d169d33';
 const SOURCE = '0096e7c488aca86f1d38b061561696b2d4ac409036f063ffc9f196625b9ee9c2';
+const FORWARD_CANONICAL='95ad1f4e76159d18c5ccdb7c84fb639918005f05155b152641f79c15919f082d';
+const FORWARD_DEPLOYMENT='09a3374c452a81cd0a8904273d9212444de3ba41be01bf4d07fd887a21f4d0c6';
+const COMPACT_CANONICAL='aa4d4fad502031a493a15ddfad6305d783cbae90eee5aefb85a8f0c19a737c40';
+const COMPACT_DEPLOYMENT='742caa62cb7a7dff55b3ddeaf0a3eafde511930cb9d9ba7c965ed9f8be3a80a5';
 const PROFILE_PATH = 'release/production-target-schema-profile.json';
 const POLICIES = [
   ['custodial_native_inventory_manifest_chunks', 'native_inventory_manifest_owner'],
@@ -45,27 +49,30 @@ function one(rows, predicate, label) {
 // This is an explicit, source-reviewed physical deployment profile. It does
 // not modify catalog capture or its fingerprint, ignore roles/ACLs, or claim
 // that the fresh and populated catalogs have the same physical identity.
-export function validateProductionTargetSchemaProfile(canonicalCatalog, profile) {
+function validateCapturedTargetSchemaProfile(canonicalCatalog, profile) {
   closed(profile, ['schema', 'canonical_fingerprint', 'deployment_fingerprint', 'source_fingerprint',
     'source_catalog_sha256', 'source_ledger_sha256', 'archive_digest', 'capture',
     'original_columns', 'original_role_memberships', 'policy_owner'], 'Closed production target profile required');
   assert.equal(profile.schema, 'custodial.production-target-schema-profile.v1');
-  assert.equal(profile.canonical_fingerprint, CANONICAL);
-  assert.equal(profile.deployment_fingerprint, DEPLOYMENT);
+  const compact=profile.canonical_fingerprint===COMPACT_CANONICAL,successor=profile.canonical_fingerprint===FORWARD_CANONICAL,
+    canonicalFingerprint=compact?COMPACT_CANONICAL:successor?FORWARD_CANONICAL:CANONICAL,
+    deploymentFingerprint=compact?COMPACT_DEPLOYMENT:successor?FORWARD_DEPLOYMENT:DEPLOYMENT;
+  assert.equal(profile.canonical_fingerprint, canonicalFingerprint);
+  assert.equal(profile.deployment_fingerprint, deploymentFingerprint);
   assert.equal(profile.source_fingerprint, SOURCE);
   assert.equal(profile.source_catalog_sha256, 'f034e7a0a019010093b15388ab1c2ee7865420bf343a4404d23a9a21c183b277');
   assert.equal(profile.source_ledger_sha256, '2f80104d2f1fe54a6604c2c84436f823b1a78542bc4ba3d7975236951db93b66');
-  assert.equal(profile.archive_digest, '5a72377ae70ff1a632c3d38df52a104f5f134332a87b41fc99473e42ff2a008d');
+  assert.equal(profile.archive_digest, '67c0d74bbf18c346314669119f0ae53ff61d9b00c4e6550b7af917b7f02bbdfe');
   closed(profile.capture, ['report_sha256', 'report_bytes', 'candidate_commit', 'candidate_tree',
     'plan_sha256', 'source_ledger_count', 'target_ledger_count', 'pending_count'], 'Exact genuine target capture required');
-  assert.equal(profile.capture.report_sha256, '946dd61971aba8f6976b5dd463909a7808b8fba697991c9513477f325e9b1dc0');
-  assert.equal(profile.capture.report_bytes, 18450496);
-  assert.equal(profile.capture.candidate_commit, 'e93a29c738efb4fffd1c4caaf85f534a71a76993');
-  assert.equal(profile.capture.candidate_tree, 'b4612003372064c6640bbdb4d6cc3aa22943bd69');
-  assert.equal(profile.capture.plan_sha256, 'c4b55a4a78abe5e7ed8d41e9e4dee9fc515bcf6a970794ea45dd0f12b71b7051');
+  assert.equal(profile.capture.report_sha256, compact?'cf5d77a95b3f7e6c64d9f321d5b3aaa19fb78d5bd2e9f313a123cfe8e323fcd3':successor?'7fded7c546d4c6d879df233f8059cbf4752433c2d9b403641730d6886452593a':'dafa8d869004fa047ec7a191b040d22503bef8001a4200a44123c860fba5ec94');
+  assert.equal(profile.capture.report_bytes, compact?18593702:successor?18585920:18580457);
+  assert.equal(profile.capture.candidate_commit, compact?'5455fc4b1ee2ad6910d6d52e491e5db116adee7a':successor?'7dec6b966b832a658240f114243c0d40971330dd':'588b893b761d08b5157b4ca5b926f11a784bd142');
+  assert.equal(profile.capture.candidate_tree, compact?'0b42825b28bc95ce4fff61dfdb060d6d6502b0bc':successor?'10e44aad24960bfaae4121efadf850955ba4dbb9':'6783245807db5c90db056d9afaab7ba1839ca664');
+  assert.equal(profile.capture.plan_sha256, compact?'ec143c3344d84f5d01fa33693827d62a19a48f491a91a553864071570a0bfff7':successor?'f92f1867a5f8ec0e7cb201b87b040d1593cefbb5f1b1d5756dda4e248b945d61':'1f9b4bf9e4721f4f9b871a762c8b76b2fdd959d4309632aba2f1ceb588aa7182');
   assert.equal(profile.capture.source_ledger_count, 235);
-  assert.equal(profile.capture.target_ledger_count, 395);
-  assert.equal(profile.capture.pending_count, 160);
+  assert.equal(profile.capture.target_ledger_count, compact?401:successor?400:399);
+  assert.equal(profile.capture.pending_count, compact?166:successor?165:164);
   closed(profile.policy_owner, ['canonical_role', 'deployment_role', 'actual_private_schema_owners'], 'Exact policy-owner context required');
   assert.equal(profile.policy_owner.canonical_role, 'supabase_admin');
   assert.equal(profile.policy_owner.deployment_role, 'postgres');
@@ -74,7 +81,7 @@ export function validateProductionTargetSchemaProfile(canonicalCatalog, profile)
     {schema_name: 'custodial_release_identity', owner_name: 'postgres'},
   ]);
   const canonical = fingerprintSchemaCatalog(canonicalCatalog);
-  assert.equal(canonical.fingerprint, CANONICAL, 'Complete fresh canonical catalog must remain exact');
+  assert.equal(canonical.fingerprint, canonicalFingerprint, 'Complete fresh canonical catalog must remain exact');
   const deployment = clone(canonical.normalized);
   assert.ok(Array.isArray(profile.original_columns) && profile.original_columns.length === 2);
   const note = one(deployment.columns, row => row.schema_name === 'public' && row.table_name === 'events_app_events'
@@ -104,10 +111,110 @@ export function validateProductionTargetSchemaProfile(canonicalCatalog, profile)
   assert.deepEqual(extras.map(key).sort(), PLATFORM_MEMBERSHIPS.map(key).sort(), 'Only authenticated pre-existing platform memberships may differ');
   deployment.role_memberships = clone(memberships);
   const actual = fingerprintSchemaCatalog(deployment);
-  assert.equal(actual.fingerprint, DEPLOYMENT, 'Full physical catalog must equal the captured populated target');
-  return {canonicalFingerprint: CANONICAL, deploymentFingerprint: DEPLOYMENT,
+  assert.equal(actual.fingerprint, deploymentFingerprint, 'Full physical catalog must equal the captured populated target');
+  return {canonicalFingerprint, deploymentFingerprint,
     canonicalCatalog: canonical.normalized, deploymentCatalog: actual.normalized,
     canonicalCounts: counts(canonical.normalized), deploymentCounts: counts(actual.normalized), profile: clone(profile)};
+}
+
+// A forward expectation is not a new populated-target observation. Rebuild
+// the exact captured predecessor first, then substitute the sole function
+// observed after the forward SQL. No ACL, role, column, policy or other
+// catalog surface is omitted. Normal release still needs its fresh populated
+// target/rehearsal evidence and compares the complete physical fingerprint.
+
+// Finite Source302 counterpart generated ONLY after complete actual fresh and
+// populated capture binding. Old297–300/forward validators remain literal.
+function validateSource302CapturedProfile(canonicalCatalog,profile){
+  closed(profile,['schema','canonical_fingerprint','deployment_fingerprint','source_fingerprint','source_ledger_sha256','archive_digest','source_migrations','capture','evidence','catalog_delta','canonical_counts','deployment_counts','qualification'],'Exact closed actual Source302 profile required');
+  assert.equal(profile.schema,'custodial.production-target-schema-profile.source302.v1');assert.equal(profile.canonical_fingerprint,'30218d9f5885ac5a8ca77785338a546da685d7e277c0633929e673ef80a870db');assert.equal(profile.deployment_fingerprint,'4bf8e28dea3fdfd09dd19c64590f52cd29aa19943d53283de6cfc8f53cfd1adf');assert.equal(profile.source_migrations,302);
+  assert.equal(createHash('sha256').update(JSON.stringify(profile)).digest('hex'),'271cf4d8ba68fe24d91bbfd36e81bf1410e0647806db9b42f0599da1d3f5a985','Exact selected Source302 profile body required');
+ const canonical=fingerprintSchemaCatalog(canonicalCatalog);assert.equal(canonical.fingerprint,profile.canonical_fingerprint);assert.deepEqual(counts(canonical.normalized),profile.canonical_counts);
+ const deployment=clone(canonical.normalized);for(const [section,d]of Object.entries(profile.catalog_delta)){assert.ok(Array.isArray(deployment[section]));for(const row of d.remove){const i=deployment[section].findIndex(x=>JSON.stringify(x)===JSON.stringify(row));assert.ok(i>=0,'Exact Source302 physical-profile preimage required');deployment[section].splice(i,1);}deployment[section].push(...clone(d.add));closed(d,['remove','add','order'],'Exact full-row delta and complete catalog order required');assert.ok(Array.isArray(d.order));assert.equal(d.order.length,deployment[section].length);assert.equal(new Set(d.order).size,deployment[section].length);assert.ok(d.order.every(i=>Number.isSafeInteger(i)&&i>=0&&i<deployment[section].length),'Complete unique Source-bound catalog permutation required');const rows=deployment[section];deployment[section]=d.order.map(i=>rows[i]);}
+ const physical=fingerprintSchemaCatalog(deployment);assert.equal(physical.fingerprint,profile.deployment_fingerprint);assert.deepEqual(counts(physical.normalized),profile.deployment_counts);
+ return {canonicalFingerprint:canonical.fingerprint,deploymentFingerprint:physical.fingerprint,canonicalCatalog:canonical.normalized,deploymentCatalog:physical.normalized,canonicalCounts:counts(canonical.normalized),deploymentCounts:counts(physical.normalized),profile:clone(profile),profileQualification:profile.qualification};
+}
+
+
+// Finite Source302 counterpart generated ONLY after complete actual fresh and
+// populated capture binding. Old297–300/forward validators remain literal.
+function validateSource302EightActiveCapturedProfile(canonicalCatalog,profile){
+  closed(profile,['schema','canonical_fingerprint','deployment_fingerprint','source_fingerprint','source_ledger_sha256','archive_digest','source_migrations','capture','evidence','catalog_delta','canonical_counts','deployment_counts','qualification'],'Exact closed actual Source302 profile required');
+  assert.equal(profile.schema,'custodial.production-target-schema-profile.source302-eight-active.v1');assert.equal(profile.canonical_fingerprint,'04e4c3d7abaa71cdf36a164a483ee1fa5efef77ab1711b07a201f515b85248d6');assert.equal(profile.deployment_fingerprint,'d4d29c219935b97896305ee8aa0ea35aff67dc64ceeea39e2bf831cd8b98fd0c');assert.equal(profile.source_migrations,302);
+  assert.equal(createHash('sha256').update(JSON.stringify(profile)).digest('hex'),'a8f7130233659562822e23ec9d5bfd82f3774a18b7d68240e6ab97bdbe96d80a','Exact selected Source302 profile body required');
+ const canonical=fingerprintSchemaCatalog(canonicalCatalog);assert.equal(canonical.fingerprint,profile.canonical_fingerprint);assert.deepEqual(counts(canonical.normalized),profile.canonical_counts);
+ const deployment=clone(canonical.normalized);for(const [section,d]of Object.entries(profile.catalog_delta)){assert.ok(Array.isArray(deployment[section]));for(const row of d.remove){const i=deployment[section].findIndex(x=>JSON.stringify(x)===JSON.stringify(row));assert.ok(i>=0,'Exact Source302 physical-profile preimage required');deployment[section].splice(i,1);}deployment[section].push(...clone(d.add));closed(d,['remove','add','order'],'Exact full-row delta and complete catalog order required');assert.ok(Array.isArray(d.order));assert.equal(d.order.length,deployment[section].length);assert.equal(new Set(d.order).size,deployment[section].length);assert.ok(d.order.every(i=>Number.isSafeInteger(i)&&i>=0&&i<deployment[section].length),'Complete unique Source-bound catalog permutation required');const rows=deployment[section];deployment[section]=d.order.map(i=>rows[i]);}
+ const physical=fingerprintSchemaCatalog(deployment);assert.equal(physical.fingerprint,profile.deployment_fingerprint);assert.deepEqual(counts(physical.normalized),profile.deployment_counts);
+ return {canonicalFingerprint:canonical.fingerprint,deploymentFingerprint:physical.fingerprint,canonicalCatalog:canonical.normalized,deploymentCatalog:physical.normalized,canonicalCounts:counts(canonical.normalized),deploymentCounts:counts(physical.normalized),profile:clone(profile),profileQualification:profile.qualification};
+}
+
+function validateSource302EightActiveV2CapturedProfile(canonicalCatalog,profile){
+  closed(profile,['schema','canonical_fingerprint','deployment_fingerprint','source_fingerprint','source_catalog_sha256','source_ledger_sha256','archive_digest','source_migrations','capture','evidence','catalog_delta','canonical_counts','deployment_counts','qualification'],'Exact closed actual Source302 profile required');
+  assert.equal(profile.schema,'custodial.production-target-schema-profile.source302-eight-active.v2');assert.equal(profile.canonical_fingerprint,'04e4c3d7abaa71cdf36a164a483ee1fa5efef77ab1711b07a201f515b85248d6');assert.equal(profile.deployment_fingerprint,'d4d29c219935b97896305ee8aa0ea35aff67dc64ceeea39e2bf831cd8b98fd0c');assert.equal(profile.source_migrations,302);assert.equal(profile.source_catalog_sha256,'f034e7a0a019010093b15388ab1c2ee7865420bf343a4404d23a9a21c183b277');
+  assert.equal(createHash('sha256').update(JSON.stringify(profile)).digest('hex'),'61e7f0b576f3405dddc43fa025c8db5036705d481b0ca3a773c6af43a3497ed4','Exact selected Source302 profile body required');
+ const canonical=fingerprintSchemaCatalog(canonicalCatalog);assert.equal(canonical.fingerprint,profile.canonical_fingerprint);assert.deepEqual(counts(canonical.normalized),profile.canonical_counts);
+ const deployment=clone(canonical.normalized);for(const [section,d]of Object.entries(profile.catalog_delta)){assert.ok(Array.isArray(deployment[section]));for(const row of d.remove){const i=deployment[section].findIndex(x=>JSON.stringify(x)===JSON.stringify(row));assert.ok(i>=0,'Exact Source302 physical-profile preimage required');deployment[section].splice(i,1);}deployment[section].push(...clone(d.add));closed(d,['remove','add','order'],'Exact full-row delta and complete catalog order required');assert.ok(Array.isArray(d.order));assert.equal(d.order.length,deployment[section].length);assert.equal(new Set(d.order).size,deployment[section].length);assert.ok(d.order.every(i=>Number.isSafeInteger(i)&&i>=0&&i<deployment[section].length),'Complete unique Source-bound catalog permutation required');const rows=deployment[section];deployment[section]=d.order.map(i=>rows[i]);}
+ const physical=fingerprintSchemaCatalog(deployment);assert.equal(physical.fingerprint,profile.deployment_fingerprint);assert.deepEqual(counts(physical.normalized),profile.deployment_counts);
+ return {canonicalFingerprint:canonical.fingerprint,deploymentFingerprint:physical.fingerprint,canonicalCatalog:canonical.normalized,deploymentCatalog:physical.normalized,canonicalCounts:counts(canonical.normalized),deploymentCounts:counts(physical.normalized),profile:clone(profile),profileQualification:profile.qualification};
+}
+
+function validateSource303TicketCapturedProfile(canonicalCatalog,profile){
+  closed(profile,['schema','canonical_fingerprint','deployment_fingerprint','source_fingerprint','source_catalog_sha256','source_ledger_sha256','archive_digest','source_migrations','capture','evidence','catalog_delta','canonical_counts','deployment_counts','qualification'],'Exact closed actual Source303 profile required');
+  assert.equal(profile.schema,'custodial.production-target-schema-profile.source303-ticket.v1');assert.equal(profile.canonical_fingerprint,'8f9c8059f07dcebbba60f3ef143b8e7a58fe063a960d08b05dae0b4ef2e03d80');assert.equal(profile.deployment_fingerprint,'991b18cf8d14d4c24d64490778eeb3883b2b6a02be7ae755042a66949812eeec');assert.equal(profile.source_migrations,303);assert.equal(profile.source_catalog_sha256,'f034e7a0a019010093b15388ab1c2ee7865420bf343a4404d23a9a21c183b277');
+  assert.equal(createHash('sha256').update(JSON.stringify(profile)).digest('hex'),'068db150c4cbde7581fe05a16a2dcf19ba1d9b52dbfb985c1cb765a9e95180d2','Exact selected Source303 profile body required');
+ const canonical=fingerprintSchemaCatalog(canonicalCatalog);assert.equal(canonical.fingerprint,profile.canonical_fingerprint);assert.deepEqual(counts(canonical.normalized),profile.canonical_counts);
+ const deployment=clone(canonical.normalized);for(const [section,d]of Object.entries(profile.catalog_delta)){assert.ok(Array.isArray(deployment[section]));for(const row of d.remove){const i=deployment[section].findIndex(x=>JSON.stringify(x)===JSON.stringify(row));assert.ok(i>=0,'Exact Source303 physical-profile preimage required');deployment[section].splice(i,1);}deployment[section].push(...clone(d.add));closed(d,['remove','add','order'],'Exact full-row delta and complete catalog order required');assert.ok(Array.isArray(d.order));assert.equal(d.order.length,deployment[section].length);assert.equal(new Set(d.order).size,deployment[section].length);assert.ok(d.order.every(i=>Number.isSafeInteger(i)&&i>=0&&i<deployment[section].length),'Complete unique Source-bound catalog permutation required');const rows=deployment[section];deployment[section]=d.order.map(i=>rows[i]);}
+ const physical=fingerprintSchemaCatalog(deployment);assert.equal(physical.fingerprint,profile.deployment_fingerprint);assert.deepEqual(counts(physical.normalized),profile.deployment_counts);
+ return {canonicalFingerprint:canonical.fingerprint,deploymentFingerprint:physical.fingerprint,canonicalCatalog:canonical.normalized,deploymentCatalog:physical.normalized,canonicalCounts:counts(canonical.normalized),deploymentCounts:counts(physical.normalized),profile:clone(profile),profileQualification:profile.qualification};
+}
+
+// Complete actual304 fresh/rollback-populated counterpart; historical profiles remain immutable.
+function validateSource304SealedCapturedProfile(canonicalCatalog,profile){
+  closed(profile,['schema','canonical_fingerprint','deployment_fingerprint','source_fingerprint','source_catalog_sha256','source_ledger_sha256','archive_digest','source_migrations','capture','evidence','catalog_delta','canonical_counts','deployment_counts','qualification'],'Exact closed actual Source304 profile required');
+  assert.equal(profile.schema,'custodial.production-target-schema-profile.source304-sealed.v1');assert.equal(profile.canonical_fingerprint,'ff233923ac21cd46b70985a9eaeb20dbb2a4c0bdc6f69f527159d437ed893440');assert.equal(profile.deployment_fingerprint,'c2c92fe0711ff89fef66430feec40eaf6f93cff7254db4fbfdebbf7816722549');assert.equal(profile.source_migrations,304);assert.equal(profile.source_catalog_sha256,'f034e7a0a019010093b15388ab1c2ee7865420bf343a4404d23a9a21c183b277');
+  assert.equal(createHash('sha256').update(JSON.stringify(profile)).digest('hex'),'301ac68d41242e5b73dacf3a9b757ea9bfd68f0fad912d6eb9ad1fa53761af4f','Exact selected Source304 profile body required');
+ const canonical=fingerprintSchemaCatalog(canonicalCatalog);assert.equal(canonical.fingerprint,profile.canonical_fingerprint);assert.deepEqual(counts(canonical.normalized),profile.canonical_counts);
+ const deployment=clone(canonical.normalized);for(const [section,d]of Object.entries(profile.catalog_delta)){assert.ok(Array.isArray(deployment[section]));for(const row of d.remove){const i=deployment[section].findIndex(x=>JSON.stringify(x)===JSON.stringify(row));assert.ok(i>=0,'Exact Source304 physical-profile preimage required');deployment[section].splice(i,1);}deployment[section].push(...clone(d.add));closed(d,['remove','add','order'],'Exact full-row delta and complete catalog order required');assert.ok(Array.isArray(d.order));assert.equal(d.order.length,deployment[section].length);assert.equal(new Set(d.order).size,deployment[section].length);assert.ok(d.order.every(i=>Number.isSafeInteger(i)&&i>=0&&i<deployment[section].length),'Complete unique Source-bound catalog permutation required');const rows=deployment[section];deployment[section]=d.order.map(i=>rows[i]);}
+ const physical=fingerprintSchemaCatalog(deployment);assert.equal(physical.fingerprint,profile.deployment_fingerprint);assert.deepEqual(counts(physical.normalized),profile.deployment_counts);
+ return {canonicalFingerprint:canonical.fingerprint,deploymentFingerprint:physical.fingerprint,canonicalCatalog:canonical.normalized,deploymentCatalog:physical.normalized,canonicalCounts:counts(canonical.normalized),deploymentCounts:counts(physical.normalized),profile:clone(profile),profileQualification:profile.qualification};
+}
+
+export function validateProductionTargetSchemaProfile(canonicalCatalog,profile){
+ if(profile?.schema==='custodial.production-target-schema-profile.source304-sealed.v1')return validateSource304SealedCapturedProfile(canonicalCatalog,profile);
+ if(profile?.schema==='custodial.production-target-schema-profile.source303-ticket.v1')return validateSource303TicketCapturedProfile(canonicalCatalog,profile);
+ if(profile?.schema==='custodial.production-target-schema-profile.source302-eight-active.v2')return validateSource302EightActiveV2CapturedProfile(canonicalCatalog,profile);
+ if(profile?.schema==='custodial.production-target-schema-profile.source302-eight-active.v1')return validateSource302EightActiveCapturedProfile(canonicalCatalog,profile);
+ if(profile?.schema==='custodial.production-target-schema-profile.source302.v1')return validateSource302CapturedProfile(canonicalCatalog,profile);
+ if(profile?.schema!=='custodial.production-target-schema-profile.forward.v1')return validateCapturedTargetSchemaProfile(canonicalCatalog,profile);
+ closed(profile,['schema','canonical_fingerprint','deployment_fingerprint','parent_profile','previous_function',
+  'forward_migration','canonical_capture','expected_ledger','qualification'],'Closed forward target profile required');
+ assert.equal(profile.canonical_fingerprint,FORWARD_CANONICAL);assert.equal(profile.deployment_fingerprint,FORWARD_DEPLOYMENT);
+ assert.deepEqual(profile.forward_migration,{path:'supabase/migrations/20261030031200_approved_manual_full_hour_coverers.sql',
+  sha256:'de548422310c3369bac0560e14507e4022cc9d5b9effe898d4f24ae79156cf6a',bytes:4436});
+ assert.deepEqual(profile.canonical_capture,{path:'release/schema-evidence/SOURCE299_CANONICAL_FORWARD_CAPTURE.json',
+  sha256:'6baf6fcd8fc154921f1cada007760c6dcf4d6acd025500b1715d8c225deb167d',bytes:846});
+ assert.deepEqual(profile.expected_ledger,{source:235,target:400,pending:165});
+ assert.deepEqual(profile.qualification,{method:'GENUINE_PARENT_TARGET_PLUS_ACTUAL_CANONICAL_FORWARD_SQL',
+  new_populated_target_observed:false,fresh_exact_head_populated_rehearsal_required:true});
+ const canonical=fingerprintSchemaCatalog(canonicalCatalog);assert.equal(canonical.fingerprint,FORWARD_CANONICAL);
+ const previous=profile.previous_function;
+ closed(previous,['comment','definition','function_name','identity_arguments','owner_name','schema_name'],'Exact preceding function required');
+ assert.equal(previous.schema_name,'public');assert.equal(previous.function_name,'static_weekly_v8_assert_lunch_document');
+ assert.equal(previous.identity_arguments,'p_projection_id uuid, p_document jsonb');
+ const matches=row=>row.schema_name===previous.schema_name&&row.function_name===previous.function_name&&row.identity_arguments===previous.identity_arguments,
+  current=one(canonical.normalized.functions,matches,'One exact forward function required'),
+  {definition:oldDefinition,...oldAttrs}=previous,{definition:newDefinition,...newAttrs}=current;
+ assert.deepEqual(newAttrs,oldAttrs,'Forward function metadata changed');assert.notEqual(newDefinition,oldDefinition);
+ const predecessor=clone(canonical.normalized);predecessor.functions[predecessor.functions.findIndex(matches)]=clone(previous);
+ const parent=validateCapturedTargetSchemaProfile(predecessor,profile.parent_profile),deployment=clone(parent.deploymentCatalog),
+  oldPhysical=one(deployment.functions,matches,'Exact captured preceding function required');
+ assert.deepEqual(oldPhysical,previous);
+ deployment.functions[deployment.functions.indexOf(oldPhysical)]=clone(current);
+ const physical=fingerprintSchemaCatalog(deployment);assert.equal(physical.fingerprint,FORWARD_DEPLOYMENT);
+ return {canonicalFingerprint:FORWARD_CANONICAL,deploymentFingerprint:FORWARD_DEPLOYMENT,
+  canonicalCatalog:canonical.normalized,deploymentCatalog:physical.normalized,
+  canonicalCounts:counts(canonical.normalized),deploymentCounts:counts(physical.normalized),profile:clone(profile),
+  profileQualification:'FORWARD_EXPECTATION_REQUIRES_FRESH_POPULATED_REHEARSAL'};
 }
 
 export function resolveReleaseSchemaTarget(root) {
@@ -125,6 +232,22 @@ export function resolveReleaseSchemaTarget(root) {
     canonicalCounts: counts(identity.normalized), deploymentCounts: counts(identity.normalized), profile: null, profileSha256: null,
   };
   const raw = read(PROFILE_PATH);
-  return {...validateProductionTargetSchemaProfile(canonicalCatalog, JSON.parse(raw)),
+  if(JSON.parse(raw).schema==='custodial.production-target-schema-profile.source304-sealed.v1'){assert.equal(createHash('sha256').update(raw).digest('hex'),'6e8fe3f4b1d326a05afe542a49a909e9830850379bff06b673bb75cf3f3c6869');for(const r of JSON.parse(raw).evidence){const b=read(r.path);assert.equal(b.length,r.bytes);assert.equal(createHash('sha256').update(b).digest('hex'),r.sha256);}}
+  if(JSON.parse(raw).schema==='custodial.production-target-schema-profile.source303-ticket.v1'){assert.equal(createHash('sha256').update(raw).digest('hex'),'8a1ad5efc9d98e55428c88e79344a3d165903ebf7e3c8a8f639dec1a2c87c8d0');for(const r of JSON.parse(raw).evidence){const b=read(r.path);assert.equal(b.length,r.bytes);assert.equal(createHash('sha256').update(b).digest('hex'),r.sha256);}}
+  if(JSON.parse(raw).schema==='custodial.production-target-schema-profile.source302-eight-active.v2'){assert.equal(createHash('sha256').update(raw).digest('hex'),'9ba8c31443a0063385d0df700226b1f887ffcf3752191f00a75912f6d575e473');for(const r of JSON.parse(raw).evidence){const b=read(r.path);assert.equal(b.length,r.bytes);assert.equal(createHash('sha256').update(b).digest('hex'),r.sha256);}}
+  if(JSON.parse(raw).schema==='custodial.production-target-schema-profile.source302-eight-active.v1'){assert.equal(createHash('sha256').update(raw).digest('hex'),'568c178e29b5a2c2f89e5cf1f5b780b87da4c70c8d972f765f27e932195b81bb');for(const r of JSON.parse(raw).evidence){const b=read(r.path);assert.equal(b.length,r.bytes);assert.equal(createHash('sha256').update(b).digest('hex'),r.sha256);}}
+  if(JSON.parse(raw).schema==='custodial.production-target-schema-profile.source302.v1'){assert.equal(createHash('sha256').update(raw).digest('hex'),'adb8436a325100ec4409f7dcaa90f23b8758403a30dd85dbe7674fd728bacb89');for(const r of JSON.parse(raw).evidence){const b=read(r.path);assert.equal(b.length,r.bytes);assert.equal(createHash('sha256').update(b).digest('hex'),r.sha256);}}
+  const profile=JSON.parse(raw),validated=validateProductionTargetSchemaProfile(canonicalCatalog,profile);
+  if(profile.schema==='custodial.production-target-schema-profile.forward.v1'){
+    for(const reference of [profile.forward_migration,profile.canonical_capture]){
+      const bytes=read(reference.path);assert.equal(bytes.length,reference.bytes);
+      assert.equal(createHash('sha256').update(bytes).digest('hex'),reference.sha256,'Forward profile reference bytes differ');
+    }
+    const capture=JSON.parse(read(profile.canonical_capture.path));
+    assert.equal(capture.status,'PASS');assert.equal(capture.profile,'normal');assert.equal(capture.canonicalCaptureQualified,true);
+    assert.equal(capture.populatedTarget,false);assert.equal(capture.catalogChangedFunctions,1);
+    assert.equal(capture.measuredFingerprint,FORWARD_CANONICAL);assert.equal(capture.productionWritten,false);
+  }
+  return {...validated,
     profileSha256: createHash('sha256').update(raw).digest('hex')};
 }

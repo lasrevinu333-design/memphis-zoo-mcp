@@ -16,7 +16,7 @@ image='supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07
 node_source="$(readlink -f "$(command -v node)")"
 test -f "$node_source" && test -x "$node_source"
 node_version="$("$node_source" -p 'process.versions.node')"
-"$node_source" -e 'const [a,b,c]=process.versions.node.split(".").map(Number); if(a!==22 || b<23 || (b===23 && c<1)) process.exit(1)'
+"$node_source" -e 'const [a,b,c]=process.versions.node.split(".").map(Number); if(a!==22 || b<23 || (b===23 && c<4)) process.exit(1)'
 node_sha256="$(sha256sum "$node_source")"
 node_sha256="${node_sha256%% *}"
 lib64_source="$(readlink -f /lib64)"
@@ -32,6 +32,8 @@ env -i PATH=/usr/bin:/bin LANG=C LC_ALL=C TZ=UTC "$node_source" --max-old-space-
   import {readFileSync} from "node:fs";
   import {assertCapturedTargetCatalog, assertReleaseWorkflowSource} from "./scripts/release-migration-workflow-preflight.mjs";
   const state = JSON.parse(readFileSync("release/production-migration-state.json", "utf8"));
+  const {readMigrationReplayPlan} = await import("./scripts/migration-replay-order.mjs");
+  const plan = readMigrationReplayPlan(process.cwd());
   const keys = ["canonical_source_schema_fingerprint", "expected_catalog_counts",
     "production_ledger_count", "public_function_count"];
   assert.ok(state.target && typeof state.target === "object" && !Array.isArray(state.target));
@@ -43,6 +45,20 @@ env -i PATH=/usr/bin:/bin LANG=C LC_ALL=C TZ=UTC "$node_source" --max-old-space-
   }
   assertCapturedTargetCatalog(state.target);
   assertReleaseWorkflowSource(process.cwd());
+  if ([301,302,303].includes(plan.files.length)) {
+    const {assertTargetCapturePreservationPlan}=await import("./scripts/release-migration-target-capture.mjs");
+    const closure=assertTargetCapturePreservationPlan(process.cwd(),state.pending_migrations);
+    assert.equal(state.target.source_authority_migration_count,closure.canonical_source_count);
+    assert.ok(state.target.normal_source_capture,"Current closed successor requires its adopted populated capture binding");
+    process.exit(4);
+  }
+  if ([294, 297, 298, 299, 300].includes(plan.files.length)) {
+    assert.equal(plan.baseCount, 134);
+    const pendingCounts = new Map([[294, 160], [297, 163], [298, 164], [299, 165], [300, 166]]);
+    assert.equal(state.pending_migrations.length, pendingCounts.get(plan.files.length));
+    assert.ok(state.target.normal_source_capture, "Current captured source requires its adopted capture binding");
+    process.exit(4);
+  }
   process.exit(3);
 '
 current_target_route_status=$?
@@ -51,6 +67,11 @@ if test "$current_target_route_status" -eq 0; then
   env -i PATH=/usr/bin:/bin LANG=C LC_ALL=C TZ=UTC "$node_source" --max-old-space-size=128 \
     scripts/release-migration-plan-database-tests.mjs --current-unresolved-target-source-only
   printf '{"source_only_current_unresolved_target":true,"SQL_execution":false,"positive_database_scenarios":"NOT_RUN","production_authorized":false}\n'
+  exit 0
+elif test "$current_target_route_status" -eq 4; then
+  env -i PATH=/usr/bin:/bin LANG=C LC_ALL=C TZ=UTC "$node_source" --max-old-space-size=128 \
+    scripts/release-migration-plan-database-tests.mjs --current-captured-target-source-only
+  printf '{"source_only_current_captured_target":true,"SQL_execution":false,"historical23_database_scenarios":"NOT_RUN","production_authorized":false}\n'
   exit 0
 elif test "$current_target_route_status" -ne 3; then
   echo "Current release target shape is invalid; refusing both qualification routes." >&2
@@ -81,6 +102,14 @@ fi
 
 owner_secret_dir="$(mktemp -d)"
 owner_secret_file="$owner_secret_dir/token"
+printf 'OWNED_SECRET_DIRECTORY %s\n' "$owner_secret_dir"
+record_owned_resources() {
+  if test -n "${RELEASE_MIGRATION_TEST_RESOURCE_DIRECTORY:-}"; then
+    node -e 'const fs=require("fs"),p=require("path");const [out,secret,name,id]=process.argv.slice(1);const s=fs.lstatSync(out);if(!p.isAbsolute(out)||s.isSymbolicLink()||!s.isDirectory()||s.uid!==process.getuid()||(s.mode&63)!==0)throw Error("private owned evidence directory required");fs.writeFileSync(p.join(out,"OWNED_RESOURCES.json"),JSON.stringify({owner_secret_dir:secret,container_name:name,container_id:id||null})+"\n",{mode:384});' \
+      "$RELEASE_MIGRATION_TEST_RESOURCE_DIRECTORY" "$owner_secret_dir" "$container" "${container_id:-}"
+  fi
+}
+record_owned_resources
 printf '%s' "$owner_token" > "$owner_secret_file"
 chmod 0400 "$owner_secret_file"
 container_may_exist=false
@@ -134,19 +163,32 @@ container_id="$(docker run --rm -d --no-healthcheck --name "$container" \
   -c shared_preload_libraries=pg_cron,pg_net,pg_stat_statements \
   -c "cron.database_name=$container" -c cron.launch_active_jobs=off)"
 [[ "$container_id" =~ ^[a-f0-9]{64}$ ]]
+printf 'OWNED_CONTAINER %s %s\n' "$container_id" "$container"
+record_owned_resources
 
 docker inspect "$container_id" | node scripts/release-migration-fixture-inspect.mjs \
   "$container_id" "$container" "$owner_token" "$image_id" "$project_root" \
   "$node_source" "$node_sha256" "$node_version" "$lib64_source" "$lib_source" "$owner_secret_file"
 
 ready=0
+previous_server_start=''
 for attempt in $(seq 1 240); do
-  if docker exec "$container_id" psql -X -q -At -v ON_ERROR_STOP=1 -h 127.0.0.1 -U supabase_admin -d "$container" -c 'select 1' 2>/dev/null | grep -qx 1; then ready=$((ready + 1)); else ready=0; fi
+  readiness=''
+  if readiness="$(docker exec "$container_id" psql -X -q -At -v ON_ERROR_STOP=1 -h 127.0.0.1 -U supabase_admin -d "$container" -c "select current_database() || '|' || pg_is_in_recovery()::text || '|' || (select count(*) from pg_roles where rolname in ('anon','authenticated','service_role','supabase_admin'))::text || '|' || pg_postmaster_start_time()::text" 2>/dev/null)" \
+    && [[ "$readiness" == "$container|false|4|"* ]]; then
+    server_start="${readiness#"$container|false|4|"}"
+    if test -n "$server_start" && test "$server_start" = "$previous_server_start"; then ready=$((ready + 1)); else ready=1; fi
+    previous_server_start="$server_start"
+  else ready=0; previous_server_start=''; fi
   if test "$ready" -ge 4; then break; fi
   sleep 0.5
 done
 test "$ready" -ge 4
-sleep 10
+# Temporary init server is socket-only in the pinned entrypoint. Four stable
+# authenticated TCP snapshots must name this database, all four bootstrap roles,
+# primary mode and the SAME final postmaster start. No proc/executable access or
+# new capabilities, and no blind startup wait masquerading as readiness proof.
+printf 'FINAL_POSTGRES_READY %s %s\n' "$container_id" "$previous_server_start"
 test "$(docker exec "$container_id" /usr/local/bin/node --version)" = "v$node_version"
 
 docker exec -w /workspace \

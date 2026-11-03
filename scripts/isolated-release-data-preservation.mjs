@@ -5,6 +5,8 @@ import {createHash} from 'node:crypto';
 import pg from 'pg';
 import {fingerprintSchemaCatalog} from './schema-fingerprint-catalog.mjs';
 import {resolveReleaseMigrationSource} from './production-forward-source.mjs';
+import {readMigrationReplayPlan} from './migration-replay-order.mjs';
+import {assertTargetCapturePendingPlan,assertTargetCapturePreservationPlan} from './release-migration-target-capture.mjs';
 import {readVerifiedArchiveSourceBinding,readVerifiedRestoreTableSelection,readVerifiedMigrationTargetCaptureSource,postgresTextColumnsLineEncoding} from './disaster-recovery-archive.mjs';
 const {Client}=pg,originalQuery=Client.prototype.query;
 const sha=x=>createHash('sha256').update(x).digest('hex');
@@ -37,11 +39,42 @@ export function loadOriginal235PreservationSource(backendRoot){
 }
 export function validateOriginal235PreservationPlan(backendRoot,plan){
  const manifest=loadOriginal235PreservationSource(backendRoot);
- assert.equal(plan.length,160);
- for(let i=0;i<plan.length;i++){
+ const successorClosure=![160,163,164,165,166].includes(plan.length)?assertTargetCapturePreservationPlan(backendRoot,plan):null;
+ assert.ok([160,163,164,165,166].includes(plan.length)||successorClosure,'Only original160, exact163–166, or source-verified closed301/302 preservation plans');
+ if(plan.length>=164){
+  const sourcePlan=plan.map(({sql,body,...item})=>item);
+  assertTargetCapturePendingPlan(sourcePlan,sourcePlan.slice(0,163),successorClosure);
+ }
+ for(let i=0;i<manifest.plan.length;i++){
   const expected=manifest.plan[i],item=plan[i];assert.equal(item.order,expected.order);assert.equal(item.file,expected.file);
   const source=resolveReleaseMigrationSource(backendRoot,item);assert.equal(source.canonical_sha256,expected.canonical_sha256);
   if(Object.hasOwn(item,'sql'))assert.equal(item.sql,source.sql);
+ }
+ if(plan.length>=163){
+  const replay=readMigrationReplayPlan(backendRoot);
+  assert.equal(replay.files.length,plan.length+134);
+  const replayHashes={163:'e37cf98ffde8165797069595b45d84fdaf89871a719c31a839905e9e6317d54c',
+   164:'aca06e305ff4c5918e83045acf4d739fcb8746e41dcc89ceb59fcd0f98ab20ba',
+   165:'965300d634959010c017ac203d71fe915f65b4b42e69910b173b96d034c38001',
+   166:'be9f1ce99e037690b3095c8b8e963fc30efd8c83adaa1e415856a79808dc31b1'};
+  assert.equal(replay.manifestSha256,successorClosure?successorClosure.canonical_replay_manifest_sha256:replayHashes[plan.length]);
+  const additions=[
+   ['20261027230000_accepted_actual_lunch_windows.sql','55b2cd92ebe36c6920a3c27cc13031ef6ca263d8f10114182c3058fd0991c81b'],
+   ['20261027231000_canonical_coverall_capacity_links.sql','c4be89a07f46717ddcc7ceebed639cdc10b589b8ff72e9cf20a3523bdec43903'],
+   ['20261027234814_mcp_oauth_durable_token_families.sql','e74210f033e5c65d5e99a090ca201d1c010d6cb5c4159a015bb08e3719c44f6e'],
+  ];
+  if(plan.length>=164)additions.push(['20261028224728_full_scheduled_lunch_source_policy.sql','a47387ddf244a04df646c9bb2d60eef86a769b96baf9106759f1c2a703248514']);
+  if(plan.length>=165)additions.push(['20261030031200_approved_manual_full_hour_coverers.sql','de548422310c3369bac0560e14507e4022cc9d5b9effe898d4f24ae79156cf6a']);
+  if(plan.length>=166)additions.push(['20261030050235_compact_approved_initial_confirmation.sql','fa9373adcf48f8d13db1b8e4876a5f134b02f8a897f20f887987cbd384393469']);
+  if(successorClosure)additions.push(...successorClosure.pending.slice(166).map(item=>[item.file,item.sha256]));
+  assert.deepEqual(replay.files.slice(294),additions.map(([file])=>file));
+  for(const [index,[file,digest]]of additions.entries()){
+   const item=plan[160+index];assert.equal(item.order,161+index);assert.equal(item.file,file);
+   assert.equal(item.source_migration_version,file.slice(0,14));assert.equal(item.sha256,digest);
+   assert.ok(!Object.hasOwn(item,'forward_source'),'New selected sources execute their exact reviewed canonical bytes');
+   const source=resolveReleaseMigrationSource(backendRoot,item);assert.equal(source.canonical_sha256,digest);
+   if(Object.hasOwn(item,'sql'))assert.equal(item.sql,source.sql);
+  }
  }
  return manifest;
 }
@@ -82,6 +115,34 @@ export function compileOriginalTableComparison(t){
  (select count(*)::text from missing) missing_rows,(select count(*)::text from extra) extra_rows,
  (select ${hashes('e')} from expected e) before_sha256,(select ${hashes('a')} from actual a) after_sha256`;
 }
+// Q07 changes exactly two fields of the existing event-only OFFSITE row.
+// Keep every original column as native TEXT and every row duplicate-sensitive;
+// only the approved name and bounded migration timestamp may differ.
+export function compileApprovedOffsiteComparison(t){
+ assert.equal(tableKey(t),'public.location_groups');
+ assert.deepEqual(t.columns,['id','group_code','group_name','active','notes','created_at','updated_at','eligible_event_venue','eligible_event_scope','eligible_custodial_coverage','eligible_staffing_assignment','public_restroom','staff_restroom','exhibit','restaurant','event_venue','administrative','zoo_wide_scope','offsite']);
+ const before=`image::json->>'group_code'='OFFSITE' and image::json->>'offsite'='true' and image::json->>'active'='false' and image::json->>'eligible_event_scope'='true' and image::json->>'eligible_custodial_coverage'='false' and image::json->>'eligible_staffing_assignment'='false'`;
+ const after=`r.group_code='OFFSITE' and r.offsite=true and r.active=false and r.eligible_event_scope=true and r.eligible_custodial_coverage=false and r.eligible_staffing_assignment=false`;
+ const projection=(source)=>`pg_catalog.json_object(ARRAY[${t.columns.map(literal).join(',')}]::text[],ARRAY[${t.columns.map(c=>{
+  const value=source==='before'?`image::json->>${literal(c)}`:`r.${ident(c)}::text`;
+  if(c==='updated_at')return `case when ${source==='before'?before:after} then 'Q07_APPROVED_MIGRATION_TIME' else ${value} end`;
+  if(source==='before'&&c==='group_name')return `case when ${before} then 'Off campus event' else ${value} end`;
+  return value;
+ }).join(',')}]::text[])::text`;
+ return `with original as materialized(select image from pg_temp.custodial_release_preservation_before where relation='public.location_groups'),
+ expected as materialized(select ${projection('before')} collate pg_catalog."C" image from original),
+ actual as materialized(select ${projection('after')} collate pg_catalog."C" image from only public.location_groups r),
+ raw_actual as materialized(select ${nativeTextColumnProjection(t.columns,'r')} collate pg_catalog."C" image from only public.location_groups r),
+ missing as(select image from expected except all select image from actual),extra as(select image from actual except all select image from expected)
+ select (select count(*)::text from original) before_rows,(select count(*)::text from actual) after_rows,
+ (select count(*)::text from missing) missing_rows,(select count(*)::text from extra) extra_rows,
+ (select count(*)::text from original where ${before}) source_eligible,
+ (select count(*)::text from only public.location_groups r where ${after}) current_eligible,
+ (select count(*)::text from only public.location_groups r where (${after}) and
+  (r.group_name is distinct from 'Off campus event' or r.updated_at is null or
+   not(r.updated_at=transaction_timestamp() or r.updated_at between $1::timestamptz and clock_timestamp()))) invalid_transformation,
+ (select ${hashes('e')} from original e) before_sha256,(select ${hashes('a')} from raw_actual a) after_sha256`;
+}
 const PROFILE=`select pg_backend_pid()::text pid,current_user actor,session_user original_actor,current_database() database,
  (select datdba::regrole::text from pg_database where datname=current_database()) database_owner,
  (select rolsuper from pg_roles where rolname=current_user) superuser,(select rolbypassrls from pg_roles where rolname=current_user) bypassrls,
@@ -117,7 +178,7 @@ export async function prepareIsolatedReleaseDataPreservation({client,backendRoot
  const relationCensus=(await query(`select n.nspname schema,c.relname name,c.relkind::text kind,c.relispartition,
   has_schema_privilege(current_user,n.oid,'USAGE') usage,has_table_privilege(current_user,c.oid,'SELECT') readable
   from pg_class c join pg_namespace n on n.oid=c.relnamespace
-  where n.nspname in('public','auth','storage','custodial_release_identity') and c.relkind in('r','p','f')`)).rows;
+  where n.nspname in('public','auth','storage','custodial_release_identity','custodial_employment','custodial_coverall','custodial_leadership_private') and c.relkind in('r','p','f')`)).rows;
  assert.deepEqual(relationCensus.map(tableKey).sort(),tables.map(tableKey).sort());
  for(const t of relationCensus){assert.equal(t.kind,'r');assert.equal(t.relispartition,false);
   assert.equal(t.usage,true,'Existing namespace USAGE required for '+tableKey(t));
@@ -207,9 +268,13 @@ export async function prepareIsolatedReleaseDataPreservation({client,backendRoot
    and not exists(select 1 from jsonb_each(to_jsonb(c)-array['singleton','paused','pause_reason','updated_at']) x where x.value<>'null'::jsonb))::text expected
    from public.system_feedback_email_relay_config c`)).rows[0];assert.deepEqual(relay,{rows:'1',expected:'1'});
   for(const table of ['system_feedback_email_intents','system_feedback_email_attempts','system_feedback_email_receipts','system_feedback_email_relay_requests'])assert.equal((await query('select count(*)::text n from public.'+ident(table))).rows[0].n,'0','no migration-time relay data/send evidence');
+  const approvedOffsite=plan.at(-1)?.file==='20261031225210_custodial_sealed_repairs_current_eight.sql';
+  if(approvedOffsite)assert.equal(plan.at(-1).sha256,'f4e3dc5be9a465e2099bd9b23488f99b3f9e4c1d9d969844b2fa06b1fbdc7a73');
   const results=[];
   await textProfile(async()=>{for(const t of tables){if(t.schema==='public'&&['custodial_release_authority_restore_inventory','events_app_events'].includes(t.name))continue;
-   const row=(await query(compileOriginalTableComparison(t))).rows[0];assert.equal(row.missing_rows,'0',tableKey(t));
+   const q07=approvedOffsite&&tableKey(t)==='public.location_groups';
+   const row=(await query(q07?compileApprovedOffsiteComparison(t):compileOriginalTableComparison(t),q07?[captureClock]:[])).rows[0];assert.equal(row.missing_rows,'0',tableKey(t));
+   if(q07){assert.equal(row.source_eligible,'1');assert.equal(row.current_eligible,'1');assert.equal(row.invalid_transformation,'0');}
    if(!(t.schema==='public'&&t.name==='events_app_event_history'))assert.equal(row.extra_rows,'0',tableKey(t));
    results.push({table:tableKey(t),...row});
   }});
@@ -218,7 +283,7 @@ export async function prepareIsolatedReleaseDataPreservation({client,backendRoot
    join pg_attribute a on a.attrelid=c.oid where n.nspname in('public','auth','storage') and c.relkind='r' and a.attnum>0 and not a.attisdropped`)).rows;
   for(const old of census()){const now=currentColumns.find(x=>x.schema===old.schema&&x.name===old.name&&x.column_name===old.column_name);assert.ok(now);const {locked,...before}=old;assert.deepEqual(now,before,'original relation/column/type identity changed');}
   assertCurrent();
-  return Object.freeze({schema:'custodial.isolated-release-data-preservation.v1',scope:'ISOLATED_EXISTING160_TRANSACTION_DATA_PROOF',original_tables:217,original_public_tables:182,ordinary_public_tables:178,nonpublic_tables:35,nonpublic_exact_native_text:true,
+  return Object.freeze({schema:'custodial.isolated-release-data-preservation.v1',scope:plan.length>=163?`ISOLATED_EXISTING160_PLUS_SELECTED${plan.length-160}_TRANSACTION_DATA_PROOF`:'ISOLATED_EXISTING160_TRANSACTION_DATA_PROOF',applied_migration_count:plan.length,original_tables:217,original_public_tables:182,ordinary_public_tables:178,nonpublic_tables:35,nonpublic_exact_native_text:true,
    events:eventResult,four_settings_constants_verified:true,four_settings:settingsDigest,relay_paused_no_migration_time_send_evidence:true,
    recovery_metadata:'DELIBERATE_CANONICAL_GUARDED_REPAIRS_NOT_BUSINESS_EXEMPTION',tables:results,
    raw_values_exported:false,production_authorized:false,full_candidate_admission:false});

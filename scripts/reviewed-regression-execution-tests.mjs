@@ -9,7 +9,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const owned=mkdtempSync(join(tmpdir(),'mz-reviewed-ci-boundary-'));
-const pinnedBin='/opt/hostedtoolcache/node/22.23.1/x64/bin';
+const pinnedBin='/opt/hostedtoolcache/node/22.23.4/x64/bin';
 const entries=['scripts/legacy-activation-http-tests.mjs','scripts/release-pair-consumer-regression-tests.mjs','scripts/run-isolated-release-recorder-tests.mjs'];
 const hash=b=>createHash('sha256').update(b).digest('hex');
 let checks=0;

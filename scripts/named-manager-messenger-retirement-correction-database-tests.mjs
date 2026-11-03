@@ -69,6 +69,10 @@ function expectRejected(statement, expected, expectedSqlState = null) {
   if (expectedSqlState) assert.match(output, new RegExp(`\\b${expectedSqlState}\\b`));
 }
 
+// Retain the exact original current function, including later cohort attribution.
+// Historical correction SQL must never silently downgrade the fixture's reader.
+const originalRuntimeUserDefinition=execFileSync('docker',['exec',container,'psql','-X','-v','ON_ERROR_STOP=1','-A','-t','-U','supabase_admin','-d',database,'-c',"select pg_get_functiondef('public.msg_is_runtime_user(uuid)'::regprocedure);"],{encoding:'utf8',maxBuffer:1048576}).trim();
+assert.match(originalRuntimeUserDefinition,/CREATE OR REPLACE FUNCTION public\.msg_is_runtime_user\(p_user_id uuid\)/);
 function applyFinalCorrection() {
   const result = execFileSync("docker", [
     "exec", "-i", container, "psql", "-X", "-v", "ON_ERROR_STOP=1",
@@ -77,7 +81,7 @@ function applyFinalCorrection() {
     // This suite deliberately replays a historical correction. Restore the
     // later messaging definition in the same call so the test cannot leave a
     // clean-head database at an older schema merely because of test order.
-    input: `${migration}\n${currentMessagingMigration}`,
+    input: `${migration}\n${currentMessagingMigration}\n${originalRuntimeUserDefinition}`,
     encoding: "utf8",
     maxBuffer: 32 * 1024 * 1024,
   });

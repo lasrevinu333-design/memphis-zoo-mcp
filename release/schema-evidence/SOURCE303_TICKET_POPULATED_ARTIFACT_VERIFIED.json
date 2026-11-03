@@ -1,0 +1,14 @@
+{
+  "verified": true,
+  "runId": 41230074450,
+  "candidateCommit": "f66a6e9fa248d3d4124ec345644ef134d0c9e54c",
+  "artifactId": 13053207963,
+  "artifactName": "production-backup-migration-rehearsal-41230074450",
+  "githubZipSha256": "9ab99fb604f7d9f4af68fa2c26011578e24bbb42359b3c6a2dc44ff95023e59f",
+  "downloadedZipSha256": "9ab99fb604f7d9f4af68fa2c26011578e24bbb42359b3c6a2dc44ff95023e59f",
+  "zipBytes": 3369127,
+  "reportMember": "production-migration-target-capture.json",
+  "reportSha256": "e72cfdabfc25ac244f13c29384d6c7b7892c593531cd810005a8ee2d659b9faa",
+  "reportBytes": 20673079,
+  "scope": "Source-bound signed-backup rollback-only capture; not production or release admission"
+}

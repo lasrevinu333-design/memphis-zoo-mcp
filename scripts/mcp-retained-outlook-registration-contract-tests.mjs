@@ -145,8 +145,8 @@ test('Outlook SQL replay expired principal cannot dispatch',async()=>{
  const extra=structuredClone(oauth);extra.authInfo.expiresAt=1;const f=replayCase();await assert.rejects(invokeReplay(f,extra),/outlook_sync_principal_required/);assert.equal(f.calls.length,0);
 });
 
-// The actual current issuer helpers remain byte-literal. Only the express
-// import's resolution and a private-helper export wrapper are adapted in memory
+// The actual current issuer helpers are used without implementation rewriting.
+// Import resolution and a private-helper export wrapper are adapted in memory
 // so these tests need no HTTP server, production key, registration or token.
 let actualIssuerFixture;
 async function issuedLongClientAuthority(){
@@ -155,6 +155,7 @@ async function issuedLongClientAuthority(){
   const raw=await readFile(new URL('../src/auth/mcp-self-contained-oauth.js',import.meta.url),'utf8');
   const original='import express from "express";';assert.equal(raw.split(original).length,2);
   const wrapped=raw.replace(original,`import express from ${JSON.stringify(import.meta.resolve('express'))};`)
+   .replace('./mcp-oauth-durable-store.js',new URL('../src/auth/mcp-oauth-durable-store.js',import.meta.url).href)
    +'\nexport {validateRegistrationRequest,issueClientId,verifyClientId,issueTokenPair};\n';
   const issuer=await import('data:text/javascript;base64,'+Buffer.from(wrapped).toString('base64'));
   const config=issuer.getSelfContainedMcpOAuthConfig({NODE_ENV:'test',MCP_OAUTH_ENABLED:'true',MCP_PUBLIC_URL:'http://127.0.0.1:3000',MCP_CONNECTOR_TOKEN:'synthetic-local-root-credential-for-only-this-inert-test',MOXIE_WEB_PASSWORD:'synthetic-local-operator-password'});
@@ -162,7 +163,7 @@ async function issuedLongClientAuthority(){
   const metadata=issuer.validateRegistrationRequest({client_name:'review-fixture',redirect_uris:['a','b','c','d'].map(c=>'https://chatgpt.com/connector/oauth/'+c.repeat(256)),scope:'mcp:read mcp:write'});
   const clientId=issuer.issueClientId(config,metadata,now);assert.ok(Buffer.byteLength(clientId,'utf8')>2048);assert.ok(Buffer.byteLength(clientId,'utf8')<=6144);
   assert.deepEqual(issuer.verifyClientId(config,clientId,now),metadata);
-  const tokens=issuer.issueTokenPair(config,{clientId,scope:'mcp:read mcp:write'},now);
+  const tokens=issuer.issueTokenPair(config,{clientId,scope:'mcp:read mcp:write',familyId:'synthetic-retained-family-identifier',authorityGeneration:'0'},now);
   const verified=issuer.verifyMcpOAuthAccessToken(config,tokens.access_token,{now:()=>now*1000,requiredScopes:['mcp:read','mcp:write']});
   assert.equal(verified.clientId,clientId);assert.deepEqual(verified.scopes,['mcp:read','mcp:write']);
   return{authInfo:verified,clientBytes:Buffer.byteLength(clientId,'utf8'),clientCharacters:clientId.length};

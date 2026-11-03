@@ -1,0 +1,478 @@
+{
+  "schema": "custodial.finite-new-creator-equivalence.v1",
+  "actual_refusal": {
+    "path": "/home/eric/Documents/Codex/2026-10-19/custodial-replacement-plan-20261020/work/target-capture-refusal39663314229-l8uaucf5/production-migration-target-capture-refusal.json",
+    "sha256": "18bb9954f2dc35a809a448ca665b58782b416d387caee56eccb84dd929e5fa7e",
+    "migration": {
+      "order": 131,
+      "file": "20261012063248_staffing_vacancy_reviewed_preparation.sql",
+      "sha256": "8ad600506a41cb91f21ea42bd0e3ee4fc83dc1f4a14585efa0a6c1e323425abb"
+    },
+    "sqlstate": "42501",
+    "exact_log_error": "permission denied for table static_weekly_vacancy_reviewed_preparations"
+  },
+  "orders": [
+    131
+  ],
+  "changes": [
+    {
+      "order": 131,
+      "file": "20261012063248_staffing_vacancy_reviewed_preparation.sql",
+      "canonical_sha256": "8ad600506a41cb91f21ea42bd0e3ee4fc83dc1f4a14585efa0a6c1e323425abb",
+      "new_functions": [
+        {
+          "name": "public.static_weekly_vacancy_reviewed_input",
+          "line": 76,
+          "canonical_header": "CREATE FUNCTION public.static_weekly_vacancy_reviewed_input(p_source jsonb,p_week date)\nRETURNS jsonb LANGUAGE plpgsql IMMUTABLE SET search_path=pg_catalog,public AS $fn$",
+          "canonical_body_sha256": "295c8dd8fa33408c154214a2bb85980e166de8fad1e206dd43ae6a7dffe9b650",
+          "canonical_body_md5": "8eacb01736e38211472cbe88c8ac7b09"
+        },
+        {
+          "name": "public.static_weekly_vacancy_reviewed_packet",
+          "line": 90,
+          "canonical_header": "CREATE FUNCTION public.static_weekly_vacancy_reviewed_packet(p_utf8 text,p_manager uuid,p_key text)\nRETURNS jsonb LANGUAGE plpgsql IMMUTABLE SET search_path=pg_catalog,public AS $fn$",
+          "canonical_body_sha256": "7e348c10f2ffe164010b7e907163bd1b3b9a0ff364637233d36449a7be55412e",
+          "canonical_body_md5": "819aae2442ab5b4e3e8eab03d513142a"
+        },
+        {
+          "name": "public.static_weekly_vacancy_reviewed_current",
+          "line": 157,
+          "canonical_header": "CREATE FUNCTION public.static_weekly_vacancy_reviewed_current(\n r public.static_weekly_vacancy_reviewed_preparations,p_generation bigint,p_actor_name text)\nRETURNS boolean LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,public AS $fn$",
+          "canonical_body_sha256": "9752518bc28110e8a416a271c2251f35207ede8add8527dc8e362b2b9b20efc7",
+          "canonical_body_md5": "31eaaf81c54e54a3c4e9a7077078a4d4"
+        },
+        {
+          "name": "public.static_weekly_vacancy_reviewed_descriptor",
+          "line": 183,
+          "canonical_header": "CREATE FUNCTION public.static_weekly_vacancy_reviewed_descriptor(\n r public.static_weekly_vacancy_reviewed_preparations,p_current boolean,p_replayed boolean)\nRETURNS jsonb LANGUAGE plpgsql IMMUTABLE SET search_path=pg_catalog,public AS $fn$",
+          "canonical_body_sha256": "f568b8f1a0c507fca82d84e5167dd5b86891fe1d106172c3929ea6a4f52b18c5",
+          "canonical_body_md5": "8dfa1e44e815b3fb83ff354bdb534acd"
+        },
+        {
+          "name": "public.static_weekly_vacancy_reviewed_guard",
+          "line": 198,
+          "canonical_header": "CREATE FUNCTION public.static_weekly_vacancy_reviewed_guard()\nRETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public AS $fn$",
+          "canonical_body_sha256": "33ae565420406c30e1dfec3ae97c547f48a08543c52d680ddbeffc1dbe5fd7f8",
+          "canonical_body_md5": "e62eae8319edbff61d207b9b40ae2103"
+        },
+        {
+          "name": "public.static_weekly_stage_vacancy_reviewed_preparation",
+          "line": 213,
+          "canonical_header": "CREATE FUNCTION public.static_weekly_stage_vacancy_reviewed_preparation(\n p_manager uuid,p_credential uuid,p_device text,p_access text,p_key text,p_packet_utf8 text)\nRETURNS jsonb LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,public AS $fn$",
+          "canonical_body_sha256": "3c5f1c37f11bf6459b67a0105800f13cb3676a78634581f0c98e43b071dd6e0c",
+          "canonical_body_md5": "2f42d5c7a8943ee1a9f964a83c992e22"
+        },
+        {
+          "name": "public.static_weekly_read_vacancy_reviewed_preparation",
+          "line": 243,
+          "canonical_header": "CREATE FUNCTION public.static_weekly_read_vacancy_reviewed_preparation(\n p_manager uuid,p_credential uuid,p_device text,p_access text,p_key text)\nRETURNS jsonb LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,public AS $fn$",
+          "canonical_body_sha256": "700333568bca8a7e15a8f0a086c2f4f913d9b97b2739eaa1323f12efea4fa3dc",
+          "canonical_body_md5": "f80eb12450fd58ac8aaa3d9cbf05a122"
+        },
+        {
+          "name": "public.static_weekly_consume_vacancy_reviewed_preparation",
+          "line": 260,
+          "canonical_header": "CREATE FUNCTION public.static_weekly_consume_vacancy_reviewed_preparation(\n p_manager uuid,p_credential uuid,p_device text,p_access text,p_key text,p_preview_digest text,p_post_input_utf8 text)\nRETURNS jsonb LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,public AS $fn$",
+          "canonical_body_sha256": "b6004ec41695b568b352260d9e9aed80976b4b2601368ef9f0dc6326262eddb6",
+          "canonical_body_md5": "dbea10c895d1b64b6c408deadd97996c"
+        }
+      ],
+      "new_relations": [
+        {
+          "name": "public.static_weekly_vacancy_reviewed_preparations",
+          "line": 30
+        }
+      ],
+      "revocation_changes": [
+        {
+          "line": 63,
+          "canonical": "DO $table_acl$ DECLARE role_name text;BEGIN\n FOREACH role_name IN ARRAY ARRAY['public','postgres','anon','authenticated','service_role',\n  'static_weekly_control_plane','static_weekly_release_operator','custodial_application_reader','static_weekly_runtime_20260823'] LOOP\n  IF role_name='public' OR EXISTS(SELECT 1 FROM pg_roles WHERE rolname=role_name) THEN\n   EXECUTE format('revoke all on table public.static_weekly_vacancy_reviewed_preparations from %I',role_name);\n  END IF;\n END LOOP;\n IF EXISTS(SELECT 1 FROM pg_class c CROSS JOIN LATERAL aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a\n  WHERE c.oid='public.static_weekly_vacancy_reviewed_preparations'::regclass AND a.grantee<>c.relowner)\n THEN RAISE EXCEPTION 'Vacancy private table has an unexpected default grantee';END IF;\nEND $table_acl$;",
+          "proposed_owner_preserving": "DO $table_acl$ DECLARE role_name text;BEGIN\n FOREACH role_name IN ARRAY ARRAY['public','anon','authenticated','service_role',\n  'static_weekly_control_plane','static_weekly_release_operator','custodial_application_reader','static_weekly_runtime_20260823'] LOOP\n  IF role_name='public' OR EXISTS(SELECT 1 FROM pg_roles WHERE rolname=role_name) THEN\n   EXECUTE format('revoke all on table public.static_weekly_vacancy_reviewed_preparations from %I',role_name);\n  END IF;\n END LOOP;\n IF EXISTS(SELECT 1 FROM pg_class c CROSS JOIN LATERAL aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a\n  WHERE c.oid='public.static_weekly_vacancy_reviewed_preparations'::regclass AND a.grantee<>c.relowner)\n THEN RAISE EXCEPTION 'Vacancy private table has an unexpected default grantee';END IF;\nEND $table_acl$;",
+          "removed_only": "'postgres',"
+        },
+        {
+          "line": 327,
+          "canonical": "DO $functions_acl$ DECLARE target text;role_name text;BEGIN\n FOREACH target IN ARRAY ARRAY[\n  'public.static_weekly_vacancy_reviewed_input(jsonb,date)',\n  'public.static_weekly_vacancy_reviewed_packet(text,uuid,text)',\n  'public.static_weekly_vacancy_reviewed_current(public.static_weekly_vacancy_reviewed_preparations,bigint,text)',\n  'public.static_weekly_vacancy_reviewed_descriptor(public.static_weekly_vacancy_reviewed_preparations,boolean,boolean)',\n  'public.static_weekly_vacancy_reviewed_guard()',\n  'public.static_weekly_stage_vacancy_reviewed_preparation(uuid,uuid,text,text,text,text)',\n  'public.static_weekly_read_vacancy_reviewed_preparation(uuid,uuid,text,text,text)',\n  'public.static_weekly_consume_vacancy_reviewed_preparation(uuid,uuid,text,text,text,text,text)'] LOOP\n  FOREACH role_name IN ARRAY ARRAY['public','postgres','anon','authenticated','service_role','static_weekly_control_plane',\n   'static_weekly_release_operator','custodial_application_reader','static_weekly_runtime_20260823'] LOOP\n   IF role_name='public' OR EXISTS(SELECT 1 FROM pg_roles WHERE rolname=role_name) THEN\n    EXECUTE format('revoke all on function %s from %I',target,role_name);\n   END IF;\n  END LOOP;\n  IF target LIKE 'public.static_weekly_stage_vacancy%' OR target LIKE 'public.static_weekly_read_vacancy%'\n   OR target LIKE 'public.static_weekly_consume_vacancy%' THEN\n   EXECUTE format('grant execute on function %s to static_weekly_control_plane',target);\n  END IF;\n END LOOP;\nEND $functions_acl$;",
+          "proposed_owner_preserving": "DO $functions_acl$ DECLARE target text;role_name text;BEGIN\n FOREACH target IN ARRAY ARRAY[\n  'public.static_weekly_vacancy_reviewed_input(jsonb,date)',\n  'public.static_weekly_vacancy_reviewed_packet(text,uuid,text)',\n  'public.static_weekly_vacancy_reviewed_current(public.static_weekly_vacancy_reviewed_preparations,bigint,text)',\n  'public.static_weekly_vacancy_reviewed_descriptor(public.static_weekly_vacancy_reviewed_preparations,boolean,boolean)',\n  'public.static_weekly_vacancy_reviewed_guard()',\n  'public.static_weekly_stage_vacancy_reviewed_preparation(uuid,uuid,text,text,text,text)',\n  'public.static_weekly_read_vacancy_reviewed_preparation(uuid,uuid,text,text,text)',\n  'public.static_weekly_consume_vacancy_reviewed_preparation(uuid,uuid,text,text,text,text,text)'] LOOP\n  FOREACH role_name IN ARRAY ARRAY['public','anon','authenticated','service_role','static_weekly_control_plane',\n   'static_weekly_release_operator','custodial_application_reader','static_weekly_runtime_20260823'] LOOP\n   IF role_name='public' OR EXISTS(SELECT 1 FROM pg_roles WHERE rolname=role_name) THEN\n    EXECUTE format('revoke all on function %s from %I',target,role_name);\n   END IF;\n  END LOOP;\n  IF target LIKE 'public.static_weekly_stage_vacancy%' OR target LIKE 'public.static_weekly_read_vacancy%'\n   OR target LIKE 'public.static_weekly_consume_vacancy%' THEN\n   EXECUTE format('grant execute on function %s to static_weekly_control_plane',target);\n  END IF;\n END LOOP;\nEND $functions_acl$;",
+          "removed_only": "'postgres',"
+        }
+      ],
+      "specs": [
+        {
+          "signature": "public.static_weekly_vacancy_reviewed_input(jsonb,date)",
+          "name": "static_weekly_vacancy_reviewed_input",
+          "body_md5": "8eacb01736e38211472cbe88c8ac7b09",
+          "argument_names": [
+            "p_source",
+            "p_week"
+          ],
+          "returns": "jsonb",
+          "language": "plpgsql",
+          "security_definer": false,
+          "volatility": "i",
+          "config": [
+            "search_path=pg_catalog, public"
+          ],
+          "nonowner_execute": []
+        },
+        {
+          "signature": "public.static_weekly_vacancy_reviewed_packet(text,uuid,text)",
+          "name": "static_weekly_vacancy_reviewed_packet",
+          "body_md5": "819aae2442ab5b4e3e8eab03d513142a",
+          "argument_names": [
+            "p_utf8",
+            "p_manager",
+            "p_key"
+          ],
+          "returns": "jsonb",
+          "language": "plpgsql",
+          "security_definer": false,
+          "volatility": "i",
+          "config": [
+            "search_path=pg_catalog, public"
+          ],
+          "nonowner_execute": []
+        },
+        {
+          "signature": "public.static_weekly_vacancy_reviewed_current(public.static_weekly_vacancy_reviewed_preparations,bigint,text)",
+          "name": "static_weekly_vacancy_reviewed_current",
+          "body_md5": "31eaaf81c54e54a3c4e9a7077078a4d4",
+          "argument_names": [
+            "r",
+            "p_generation",
+            "p_actor_name"
+          ],
+          "returns": "boolean",
+          "language": "plpgsql",
+          "security_definer": true,
+          "volatility": "v",
+          "config": [
+            "search_path=pg_catalog, public"
+          ],
+          "nonowner_execute": []
+        },
+        {
+          "signature": "public.static_weekly_vacancy_reviewed_descriptor(public.static_weekly_vacancy_reviewed_preparations,boolean,boolean)",
+          "name": "static_weekly_vacancy_reviewed_descriptor",
+          "body_md5": "8dfa1e44e815b3fb83ff354bdb534acd",
+          "argument_names": [
+            "r",
+            "p_current",
+            "p_replayed"
+          ],
+          "returns": "jsonb",
+          "language": "plpgsql",
+          "security_definer": false,
+          "volatility": "i",
+          "config": [
+            "search_path=pg_catalog, public"
+          ],
+          "nonowner_execute": []
+        },
+        {
+          "signature": "public.static_weekly_vacancy_reviewed_guard()",
+          "name": "static_weekly_vacancy_reviewed_guard",
+          "body_md5": "e62eae8319edbff61d207b9b40ae2103",
+          "argument_names": null,
+          "returns": "trigger",
+          "language": "plpgsql",
+          "security_definer": true,
+          "volatility": "v",
+          "config": [
+            "search_path=pg_catalog, public"
+          ],
+          "nonowner_execute": []
+        },
+        {
+          "signature": "public.static_weekly_stage_vacancy_reviewed_preparation(uuid,uuid,text,text,text,text)",
+          "name": "static_weekly_stage_vacancy_reviewed_preparation",
+          "body_md5": "2f42d5c7a8943ee1a9f964a83c992e22",
+          "argument_names": [
+            "p_manager",
+            "p_credential",
+            "p_device",
+            "p_access",
+            "p_key",
+            "p_packet_utf8"
+          ],
+          "returns": "jsonb",
+          "language": "plpgsql",
+          "security_definer": true,
+          "volatility": "v",
+          "config": [
+            "search_path=pg_catalog, public"
+          ],
+          "nonowner_execute": [
+            "static_weekly_control_plane"
+          ]
+        },
+        {
+          "signature": "public.static_weekly_read_vacancy_reviewed_preparation(uuid,uuid,text,text,text)",
+          "name": "static_weekly_read_vacancy_reviewed_preparation",
+          "body_md5": "f80eb12450fd58ac8aaa3d9cbf05a122",
+          "argument_names": [
+            "p_manager",
+            "p_credential",
+            "p_device",
+            "p_access",
+            "p_key"
+          ],
+          "returns": "jsonb",
+          "language": "plpgsql",
+          "security_definer": true,
+          "volatility": "v",
+          "config": [
+            "search_path=pg_catalog, public"
+          ],
+          "nonowner_execute": [
+            "static_weekly_control_plane"
+          ]
+        },
+        {
+          "signature": "public.static_weekly_consume_vacancy_reviewed_preparation(uuid,uuid,text,text,text,text,text)",
+          "name": "static_weekly_consume_vacancy_reviewed_preparation",
+          "body_md5": "dbea10c895d1b64b6c408deadd97996c",
+          "argument_names": [
+            "p_manager",
+            "p_credential",
+            "p_device",
+            "p_access",
+            "p_key",
+            "p_preview_digest",
+            "p_post_input_utf8"
+          ],
+          "returns": "jsonb",
+          "language": "plpgsql",
+          "security_definer": true,
+          "volatility": "v",
+          "config": [
+            "search_path=pg_catalog, public"
+          ],
+          "nonowner_execute": [
+            "static_weekly_control_plane"
+          ]
+        }
+      ],
+      "triggers": [
+        {
+          "relation": "public.static_weekly_vacancy_reviewed_preparations",
+          "name": "trg_static_weekly_vacancy_reviewed_guard",
+          "function": "public.static_weekly_vacancy_reviewed_guard()",
+          "type": 27,
+          "enabled": "A"
+        }
+      ],
+      "forward_sha256": "1dd73eca8c1042096d0cf2d9b3a69bb6afa710e467389899b99ee33ecdbc821c",
+      "header": "-- Exact existing postgres NEW-creator equivalence; canonical bodies/other-role revocations unchanged.\n",
+      "pre_guard": "\n-- BEGIN FINITE NEW-CREATOR PROFILE 131\nDO $creator_pre$ BEGIN\n IF current_user<>'postgres' OR session_user<>current_user\n  OR current_setting('custodial.deployment_project_ref',true) IS DISTINCT FROM 'rqquvtjdmugpigbndmne'\n  OR current_setting('session_replication_role')<>'origin'\n  OR NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname=current_user AND NOT rolsuper AND rolbypassrls)\n  OR NOT EXISTS(SELECT 1 FROM pg_class WHERE oid='public.custodial_release_authority_restore_inventory'::regclass AND relowner='postgres'::regrole)\n  OR NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='public.custodial_release_authority_restore_inventory'::regclass\n   AND tgname='trg_custodial_release_authority_restore_inventory_immutable' AND tgenabled='A')\n  OR to_regclass('pg_temp.custodial_creator_acl_131_before') IS NOT NULL\n  OR EXISTS(SELECT 1 FROM unnest(ARRAY['public.static_weekly_vacancy_reviewed_preparations']::text[]) x WHERE to_regclass(x) IS NOT NULL)\n  OR EXISTS(SELECT 1 FROM pg_proc WHERE pronamespace='public'::regnamespace AND proname=ANY(ARRAY['static_weekly_vacancy_reviewed_input','static_weekly_vacancy_reviewed_packet','static_weekly_vacancy_reviewed_current','static_weekly_vacancy_reviewed_descriptor','static_weekly_vacancy_reviewed_guard','static_weekly_stage_vacancy_reviewed_preparation','static_weekly_read_vacancy_reviewed_preparation','static_weekly_consume_vacancy_reviewed_preparation']::text[]))\n  OR EXISTS(SELECT 1 FROM public.custodial_release_authority_restore_inventory i\n   CROSS JOIN LATERAL(SELECT regexp_replace(i.object_identity,'[[:space:]\"]','','g') identity) clean\n   WHERE (i.object_kind IN('function','grant') AND EXISTS(SELECT 1 FROM unnest(ARRAY['static_weekly_vacancy_reviewed_input','static_weekly_vacancy_reviewed_packet','static_weekly_vacancy_reviewed_current','static_weekly_vacancy_reviewed_descriptor','static_weekly_vacancy_reviewed_guard','static_weekly_stage_vacancy_reviewed_preparation','static_weekly_read_vacancy_reviewed_preparation','static_weekly_consume_vacancy_reviewed_preparation']::text[]) name\n    WHERE split_part(clean.identity,'(',1)=ANY(ARRAY[name,'public.'||name])))\n    OR EXISTS(SELECT 1 FROM unnest(ARRAY['public.static_weekly_vacancy_reviewed_preparations']::text[]) relation\n     WHERE starts_with(clean.identity,relation) OR starts_with(clean.identity,substr(relation,8)))) THEN\n  RAISE EXCEPTION 'Finite creator Source131 original owner/new-object boundary changed';\n END IF;\nEND $creator_pre$;\nCREATE TEMP TABLE custodial_creator_acl_131_before(class text NOT NULL,signature text PRIMARY KEY,object_oid oid NOT NULL,owner_oid oid NOT NULL,owner_acl jsonb NOT NULL,definition_md5 text) ON COMMIT DROP;\n-- END FINITE NEW-CREATOR PROFILE 131\n",
+      "table_before_guard": "\nDO $creator_table_before$ DECLARE identity text;c record;BEGIN\n FOREACH identity IN ARRAY ARRAY['public.static_weekly_vacancy_reviewed_preparations']::text[] LOOP\n  SELECT p.oid,p.relowner,p.relacl,p.relkind,p.relpersistence,p.relrowsecurity,p.relforcerowsecurity INTO STRICT c FROM pg_class p WHERE p.oid=to_regclass(identity);\n  IF c.relowner<>'postgres'::regrole OR c.relkind<>'r' OR c.relpersistence<>'p' OR NOT c.relrowsecurity OR NOT c.relforcerowsecurity\n   OR EXISTS(SELECT 1 FROM (SELECT DISTINCT privilege_type privilege FROM aclexplode(acldefault('r',c.relowner))) creator_privileges\n    WHERE NOT has_table_privilege(current_user,c.oid,privilege)\n     OR NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE a.grantee=c.relowner AND a.privilege_type=privilege))\n   OR EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE a.grantee=c.relowner AND(a.grantor<>c.relowner OR a.is_grantable)) THEN\n   RAISE EXCEPTION 'Finite creator Source131 new relation owner ordinary privileges unavailable';END IF;\n  INSERT INTO pg_temp.custodial_creator_acl_131_before VALUES('relation',identity,c.oid,c.relowner,(SELECT coalesce(jsonb_agg(jsonb_build_object('grantor',a.grantor::regrole::text,'privilege',a.privilege_type,'grantable',a.is_grantable) ORDER BY a.grantor::regrole::text,a.privilege_type,a.is_grantable),'[]'::jsonb) FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE a.grantee=c.relowner),NULL);\n END LOOP;\nEND $creator_table_before$;\n",
+      "function_before_guard": "\nDO $creator_function_before$ DECLARE spec record;p record;BEGIN\n FOR spec IN SELECT * FROM jsonb_to_recordset($creator_specs$[{\"signature\":\"public.static_weekly_vacancy_reviewed_input(jsonb,date)\",\"name\":\"static_weekly_vacancy_reviewed_input\",\"body_md5\":\"8eacb01736e38211472cbe88c8ac7b09\",\"argument_names\":[\"p_source\",\"p_week\"],\"returns\":\"jsonb\",\"language\":\"plpgsql\",\"security_definer\":false,\"volatility\":\"i\",\"config\":[\"search_path=pg_catalog, public\"],\"nonowner_execute\":[]},{\"signature\":\"public.static_weekly_vacancy_reviewed_packet(text,uuid,text)\",\"name\":\"static_weekly_vacancy_reviewed_packet\",\"body_md5\":\"819aae2442ab5b4e3e8eab03d513142a\",\"argument_names\":[\"p_utf8\",\"p_manager\",\"p_key\"],\"returns\":\"jsonb\",\"language\":\"plpgsql\",\"security_definer\":false,\"volatility\":\"i\",\"config\":[\"search_path=pg_catalog, public\"],\"nonowner_execute\":[]},{\"signature\":\"public.static_weekly_vacancy_reviewed_current(public.static_weekly_vacancy_reviewed_preparations,bigint,text)\",\"name\":\"static_weekly_vacancy_reviewed_current\",\"body_md5\":\"31eaaf81c54e54a3c4e9a7077078a4d4\",\"argument_names\":[\"r\",\"p_generation\",\"p_actor_name\"],\"returns\":\"boolean\",\"language\":\"plpgsql\",\"security_definer\":true,\"volatility\":\"v\",\"config\":[\"search_path=pg_catalog, public\"],\"nonowner_execute\":[]},{\"signature\":\"public.static_weekly_vacancy_reviewed_descriptor(public.static_weekly_vacancy_reviewed_preparations,boolean,boolean)\",\"name\":\"static_weekly_vacancy_reviewed_descriptor\",\"body_md5\":\"8dfa1e44e815b3fb83ff354bdb534acd\",\"argument_names\":[\"r\",\"p_current\",\"p_replayed\"],\"returns\":\"jsonb\",\"language\":\"plpgsql\",\"security_definer\":false,\"volatility\":\"i\",\"config\":[\"search_path=pg_catalog, public\"],\"nonowner_execute\":[]},{\"signature\":\"public.static_weekly_vacancy_reviewed_guard()\",\"name\":\"static_weekly_vacancy_reviewed_guard\",\"body_md5\":\"e62eae8319edbff61d207b9b40ae2103\",\"argument_names\":null,\"returns\":\"trigger\",\"language\":\"plpgsql\",\"security_definer\":true,\"volatility\":\"v\",\"config\":[\"search_path=pg_catalog, public\"],\"nonowner_execute\":[]},{\"signature\":\"public.static_weekly_stage_vacancy_reviewed_preparation(uuid,uuid,text,text,text,text)\",\"name\":\"static_weekly_stage_vacancy_reviewed_preparation\",\"body_md5\":\"2f42d5c7a8943ee1a9f964a83c992e22\",\"argument_names\":[\"p_manager\",\"p_credential\",\"p_device\",\"p_access\",\"p_key\",\"p_packet_utf8\"],\"returns\":\"jsonb\",\"language\":\"plpgsql\",\"security_definer\":true,\"volatility\":\"v\",\"config\":[\"search_path=pg_catalog, public\"],\"nonowner_execute\":[\"static_weekly_control_plane\"]},{\"signature\":\"public.static_weekly_read_vacancy_reviewed_preparation(uuid,uuid,text,text,text)\",\"name\":\"static_weekly_read_vacancy_reviewed_preparation\",\"body_md5\":\"f80eb12450fd58ac8aaa3d9cbf05a122\",\"argument_names\":[\"p_manager\",\"p_credential\",\"p_device\",\"p_access\",\"p_key\"],\"returns\":\"jsonb\",\"language\":\"plpgsql\",\"security_definer\":true,\"volatility\":\"v\",\"config\":[\"search_path=pg_catalog, public\"],\"nonowner_execute\":[\"static_weekly_control_plane\"]},{\"signature\":\"public.static_weekly_consume_vacancy_reviewed_preparation(uuid,uuid,text,text,text,text,text)\",\"name\":\"static_weekly_consume_vacancy_reviewed_preparation\",\"body_md5\":\"dbea10c895d1b64b6c408deadd97996c\",\"argument_names\":[\"p_manager\",\"p_credential\",\"p_device\",\"p_access\",\"p_key\",\"p_preview_digest\",\"p_post_input_utf8\"],\"returns\":\"jsonb\",\"language\":\"plpgsql\",\"security_definer\":true,\"volatility\":\"v\",\"config\":[\"search_path=pg_catalog, public\"],\"nonowner_execute\":[\"static_weekly_control_plane\"]}]$creator_specs$::jsonb)\n  AS x(signature text,name text,body_md5 text,argument_names text[],returns text,language text,security_definer boolean,volatility text,config text[],nonowner_execute text[]) LOOP\n  SELECT f.*,l.lanname INTO STRICT p FROM pg_proc f JOIN pg_language l ON l.oid=f.prolang WHERE f.oid=to_regprocedure(spec.signature) AND f.pronamespace='public'::regnamespace;\n  IF p.proowner<>'postgres'::regrole OR p.proname<>spec.name OR md5(p.prosrc)<>spec.body_md5\n   OR p.proargnames IS DISTINCT FROM spec.argument_names OR pg_get_function_result(p.oid)<>spec.returns OR p.lanname<>spec.language\n   OR p.prosecdef<>spec.security_definer OR p.provolatile::text<>spec.volatility OR p.proconfig IS DISTINCT FROM spec.config\n   OR p.prokind<>'f' OR p.proretset OR p.provariadic<>0 OR p.pronargdefaults<>0 OR p.proisstrict OR p.proleakproof OR p.proparallel<>'u'\n   OR NOT has_function_privilege(current_user,p.oid,'EXECUTE')\n   OR NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee=p.proowner AND a.privilege_type='EXECUTE')\n   OR EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee=p.proowner AND(a.grantor<>p.proowner OR a.is_grantable)) THEN\n   RAISE EXCEPTION 'Finite creator Source131 new routine owner/body/ordinary EXECUTE unavailable';END IF;\n  INSERT INTO pg_temp.custodial_creator_acl_131_before VALUES('function',spec.signature,p.oid,p.proowner,(SELECT coalesce(jsonb_agg(jsonb_build_object('grantor',a.grantor::regrole::text,'privilege',a.privilege_type,'grantable',a.is_grantable) ORDER BY a.grantor::regrole::text,a.privilege_type,a.is_grantable),'[]'::jsonb) FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee=p.proowner),md5(pg_get_functiondef(p.oid)));\n END LOOP;\nEND $creator_function_before$;\n",
+      "pre_capture_guard": "\nDO $creator_before_capture$ DECLARE before record;p record;c record;spec record;actual_acl jsonb;populated boolean;BEGIN\n IF (SELECT count(*) FROM pg_proc WHERE pronamespace='public'::regnamespace AND proname=ANY(ARRAY['static_weekly_vacancy_reviewed_input','static_weekly_vacancy_reviewed_packet','static_weekly_vacancy_reviewed_current','static_weekly_vacancy_reviewed_descriptor','static_weekly_vacancy_reviewed_guard','static_weekly_stage_vacancy_reviewed_preparation','static_weekly_read_vacancy_reviewed_preparation','static_weekly_consume_vacancy_reviewed_preparation']::text[]))<>8\n  OR (SELECT count(*) FROM pg_temp.custodial_creator_acl_131_before)<>9 THEN\n  RAISE EXCEPTION 'Finite creator Source131 exact new-object signature/OID census changed';END IF;\n FOR before IN SELECT * FROM pg_temp.custodial_creator_acl_131_before LOOP\n  IF before.class='relation' THEN\n   SELECT * INTO STRICT c FROM pg_class WHERE oid=to_regclass(before.signature);\n   actual_acl:=(SELECT coalesce(jsonb_agg(jsonb_build_object('grantor',a.grantor::regrole::text,'privilege',a.privilege_type,'grantable',a.is_grantable) ORDER BY a.grantor::regrole::text,a.privilege_type,a.is_grantable),'[]'::jsonb) FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE a.grantee=c.relowner);\n   IF c.oid<>before.object_oid OR c.relowner<>before.owner_oid OR actual_acl IS DISTINCT FROM before.owner_acl\n    OR NOT c.relrowsecurity OR NOT c.relforcerowsecurity\n    OR EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE a.grantee<>c.relowner)\n    OR EXISTS(SELECT 1 FROM unnest(ARRAY['anon','authenticated','service_role','custodial_application_reader','static_weekly_control_plane','static_weekly_release_operator','static_weekly_runtime_20260823']) role\n     CROSS JOIN aclexplode(acldefault('r',c.relowner)) ordinary WHERE has_table_privilege(role,c.oid,ordinary.privilege_type))\n    OR EXISTS(SELECT 1 FROM pg_attribute a CROSS JOIN LATERAL aclexplode(a.attacl) acl WHERE a.attrelid=c.oid AND a.attnum>0 AND NOT a.attisdropped)\n    OR NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=c.oid AND tgname='custodial_disaster_restore_mutation_fence' AND tgenabled='O' AND tgfoid='custodial_dr.guard_application_mutation()'::regprocedure AND tgtype=62 AND NOT tgisinternal)\n    OR EXISTS(SELECT 1 FROM jsonb_to_recordset($creator_triggers$[{\"relation\":\"public.static_weekly_vacancy_reviewed_preparations\",\"name\":\"trg_static_weekly_vacancy_reviewed_guard\",\"function\":\"public.static_weekly_vacancy_reviewed_guard()\",\"type\":27,\"enabled\":\"A\"}]$creator_triggers$::jsonb) AS x(relation text,name text,function text,type integer,enabled text)\n     WHERE relation=before.signature AND NOT EXISTS(SELECT 1 FROM pg_trigger t WHERE t.tgrelid=c.oid AND t.tgname=x.name AND t.tgfoid=to_regprocedure(x.function) AND t.tgtype=x.type AND t.tgenabled::text=x.enabled AND NOT t.tgisinternal))\n    OR (SELECT count(*) FROM pg_trigger WHERE tgrelid=c.oid AND NOT tgisinternal)<>2 THEN\n    RAISE EXCEPTION 'Finite creator Source131 new relation owner/ACL/RLS/trigger boundary changed';END IF;\n   EXECUTE format('SELECT EXISTS(SELECT 1 FROM ONLY %s)',c.oid::regclass) INTO populated;\n   IF populated THEN RAISE EXCEPTION 'Finite creator Source131 new relation unexpectedly populated';END IF;\n  ELSE\n   SELECT * INTO STRICT p FROM pg_proc WHERE oid=to_regprocedure(before.signature);\n   actual_acl:=(SELECT coalesce(jsonb_agg(jsonb_build_object('grantor',a.grantor::regrole::text,'privilege',a.privilege_type,'grantable',a.is_grantable) ORDER BY a.grantor::regrole::text,a.privilege_type,a.is_grantable),'[]'::jsonb) FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee=p.proowner);\n   SELECT * INTO STRICT spec FROM jsonb_to_recordset($creator_specs$[{\"signature\":\"public.static_weekly_vacancy_reviewed_input(jsonb,date)\",\"name\":\"static_weekly_vacancy_reviewed_input\",\"body_md5\":\"8eacb01736e38211472cbe88c8ac7b09\",\"argument_names\":[\"p_source\",\"p_week\"],\"returns\":\"jsonb\",\"language\":\"plpgsql\",\"security_definer\":false,\"volatility\":\"i\",\"config\":[\"search_path=pg_catalog, public\"],\"nonowner_execute\":[]},{\"signature\":\"public.static_weekly_vacancy_reviewed_packet(text,uuid,text)\",\"name\":\"static_weekly_vacancy_reviewed_packet\",\"body_md5\":\"819aae2442ab5b4e3e8eab03d513142a\",\"argument_names\":[\"p_utf8\",\"p_manager\",\"p_key\"],\"returns\":\"jsonb\",\"language\":\"plpgsql\",\"security_definer\":false,\"volatility\":\"i\",\"config\":[\"search_path=pg_catalog, public\"],\"nonowner_execute\":[]},{\"signature\":\"public.static_weekly_vacancy_reviewed_current(public.static_weekly_vacancy_reviewed_preparations,bigint,text)\",\"name\":\"static_weekly_vacancy_reviewed_current\",\"body_md5\":\"31eaaf81c54e54a3c4e9a7077078a4d4\",\"argument_names\":[\"r\",\"p_generation\",\"p_actor_name\"],\"returns\":\"boolean\",\"language\":\"plpgsql\",\"security_definer\":true,\"volatility\":\"v\",\"config\":[\"search_path=pg_catalog, public\"],\"nonowner_execute\":[]},{\"signature\":\"public.static_weekly_vacancy_reviewed_descriptor(public.static_weekly_vacancy_reviewed_preparations,boolean,boolean)\",\"name\":\"static_weekly_vacancy_reviewed_descriptor\",\"body_md5\":\"8dfa1e44e815b3fb83ff354bdb534acd\",\"argument_names\":[\"r\",\"p_current\",\"p_replayed\"],\"returns\":\"jsonb\",\"language\":\"plpgsql\",\"security_definer\":false,\"volatility\":\"i\",\"config\":[\"search_path=pg_catalog, public\"],\"nonowner_execute\":[]},{\"signature\":\"public.static_weekly_vacancy_reviewed_guard()\",\"name\":\"static_weekly_vacancy_reviewed_guard\",\"body_md5\":\"e62eae8319edbff61d207b9b40ae2103\",\"argument_names\":null,\"returns\":\"trigger\",\"language\":\"plpgsql\",\"security_definer\":true,\"volatility\":\"v\",\"config\":[\"search_path=pg_catalog, public\"],\"nonowner_execute\":[]},{\"signature\":\"public.static_weekly_stage_vacancy_reviewed_preparation(uuid,uuid,text,text,text,text)\",\"name\":\"static_weekly_stage_vacancy_reviewed_preparation\",\"body_md5\":\"2f42d5c7a8943ee1a9f964a83c992e22\",\"argument_names\":[\"p_manager\",\"p_credential\",\"p_device\",\"p_access\",\"p_key\",\"p_packet_utf8\"],\"returns\":\"jsonb\",\"language\":\"plpgsql\",\"security_definer\":true,\"volatility\":\"v\",\"config\":[\"search_path=pg_catalog, public\"],\"nonowner_execute\":[\"static_weekly_control_plane\"]},{\"signature\":\"public.static_weekly_read_vacancy_reviewed_preparation(uuid,uuid,text,text,text)\",\"name\":\"static_weekly_read_vacancy_reviewed_preparation\",\"body_md5\":\"f80eb12450fd58ac8aaa3d9cbf05a122\",\"argument_names\":[\"p_manager\",\"p_credential\",\"p_device\",\"p_access\",\"p_key\"],\"returns\":\"jsonb\",\"language\":\"plpgsql\",\"security_definer\":true,\"volatility\":\"v\",\"config\":[\"search_path=pg_catalog, public\"],\"nonowner_execute\":[\"static_weekly_control_plane\"]},{\"signature\":\"public.static_weekly_consume_vacancy_reviewed_preparation(uuid,uuid,text,text,text,text,text)\",\"name\":\"static_weekly_consume_vacancy_reviewed_preparation\",\"body_md5\":\"dbea10c895d1b64b6c408deadd97996c\",\"argument_names\":[\"p_manager\",\"p_credential\",\"p_device\",\"p_access\",\"p_key\",\"p_preview_digest\",\"p_post_input_utf8\"],\"returns\":\"jsonb\",\"language\":\"plpgsql\",\"security_definer\":true,\"volatility\":\"v\",\"config\":[\"search_path=pg_catalog, public\"],\"nonowner_execute\":[\"static_weekly_control_plane\"]}]$creator_specs$::jsonb)\n    AS x(signature text,name text,body_md5 text,argument_names text[],returns text,language text,security_definer boolean,volatility text,config text[],nonowner_execute text[]) WHERE signature=before.signature;\n   IF p.oid<>before.object_oid OR p.proowner<>before.owner_oid OR actual_acl IS DISTINCT FROM before.owner_acl\n    OR md5(pg_get_functiondef(p.oid)) IS DISTINCT FROM before.definition_md5\n    OR md5(p.prosrc)<>spec.body_md5 OR p.proconfig IS DISTINCT FROM spec.config OR p.prosecdef<>spec.security_definer OR p.provolatile::text<>spec.volatility\n    OR (SELECT coalesce(array_agg(r.rolname::text ORDER BY r.rolname),'{}'::text[]) FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a LEFT JOIN pg_roles r ON r.oid=a.grantee WHERE a.grantee<>p.proowner) IS DISTINCT FROM spec.nonowner_execute\n    OR EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.privilege_type<>'EXECUTE' OR a.is_grantable OR a.grantor<>p.proowner)\n    OR EXISTS(SELECT 1 FROM unnest(ARRAY['anon','authenticated','service_role','custodial_application_reader','static_weekly_control_plane','static_weekly_release_operator','static_weekly_runtime_20260823']) role\n     WHERE has_function_privilege(role,p.oid,'EXECUTE') IS DISTINCT FROM (role=ANY(spec.nonowner_execute))) THEN\n    RAISE EXCEPTION 'Finite creator Source131 new routine owner/nonowner ACL/body changed';END IF;\n  END IF;\n END LOOP;\nEND $creator_before_capture$;\n",
+      "after_guard": "\nDO $creator_after$ DECLARE before record;p record;c record;spec record;actual_acl jsonb;populated boolean;BEGIN\n IF (SELECT count(*) FROM pg_proc WHERE pronamespace='public'::regnamespace AND proname=ANY(ARRAY['static_weekly_vacancy_reviewed_input','static_weekly_vacancy_reviewed_packet','static_weekly_vacancy_reviewed_current','static_weekly_vacancy_reviewed_descriptor','static_weekly_vacancy_reviewed_guard','static_weekly_stage_vacancy_reviewed_preparation','static_weekly_read_vacancy_reviewed_preparation','static_weekly_consume_vacancy_reviewed_preparation']::text[]))<>8\n  OR (SELECT count(*) FROM pg_temp.custodial_creator_acl_131_before)<>9 THEN\n  RAISE EXCEPTION 'Finite creator Source131 exact new-object signature/OID census changed';END IF;\n FOR before IN SELECT * FROM pg_temp.custodial_creator_acl_131_before LOOP\n  IF before.class='relation' THEN\n   SELECT * INTO STRICT c FROM pg_class WHERE oid=to_regclass(before.signature);\n   actual_acl:=(SELECT coalesce(jsonb_agg(jsonb_build_object('grantor',a.grantor::regrole::text,'privilege',a.privilege_type,'grantable',a.is_grantable) ORDER BY a.grantor::regrole::text,a.privilege_type,a.is_grantable),'[]'::jsonb) FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE a.grantee=c.relowner);\n   IF c.oid<>before.object_oid OR c.relowner<>before.owner_oid OR actual_acl IS DISTINCT FROM before.owner_acl\n    OR NOT c.relrowsecurity OR NOT c.relforcerowsecurity\n    OR EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE a.grantee<>c.relowner)\n    OR EXISTS(SELECT 1 FROM unnest(ARRAY['anon','authenticated','service_role','custodial_application_reader','static_weekly_control_plane','static_weekly_release_operator','static_weekly_runtime_20260823']) role\n     CROSS JOIN aclexplode(acldefault('r',c.relowner)) ordinary WHERE has_table_privilege(role,c.oid,ordinary.privilege_type))\n    OR EXISTS(SELECT 1 FROM pg_attribute a CROSS JOIN LATERAL aclexplode(a.attacl) acl WHERE a.attrelid=c.oid AND a.attnum>0 AND NOT a.attisdropped)\n    OR NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=c.oid AND tgname='custodial_disaster_restore_mutation_fence' AND tgenabled='O' AND tgfoid='custodial_dr.guard_application_mutation()'::regprocedure AND tgtype=62 AND NOT tgisinternal)\n    OR EXISTS(SELECT 1 FROM jsonb_to_recordset($creator_triggers$[{\"relation\":\"public.static_weekly_vacancy_reviewed_preparations\",\"name\":\"trg_static_weekly_vacancy_reviewed_guard\",\"function\":\"public.static_weekly_vacancy_reviewed_guard()\",\"type\":27,\"enabled\":\"A\"}]$creator_triggers$::jsonb) AS x(relation text,name text,function text,type integer,enabled text)\n     WHERE relation=before.signature AND NOT EXISTS(SELECT 1 FROM pg_trigger t WHERE t.tgrelid=c.oid AND t.tgname=x.name AND t.tgfoid=to_regprocedure(x.function) AND t.tgtype=x.type AND t.tgenabled::text=x.enabled AND NOT t.tgisinternal))\n    OR (SELECT count(*) FROM pg_trigger WHERE tgrelid=c.oid AND NOT tgisinternal)<>2 THEN\n    RAISE EXCEPTION 'Finite creator Source131 new relation owner/ACL/RLS/trigger boundary changed';END IF;\n   EXECUTE format('SELECT EXISTS(SELECT 1 FROM ONLY %s)',c.oid::regclass) INTO populated;\n   IF populated THEN RAISE EXCEPTION 'Finite creator Source131 new relation unexpectedly populated';END IF;\n  ELSE\n   SELECT * INTO STRICT p FROM pg_proc WHERE oid=to_regprocedure(before.signature);\n   actual_acl:=(SELECT coalesce(jsonb_agg(jsonb_build_object('grantor',a.grantor::regrole::text,'privilege',a.privilege_type,'grantable',a.is_grantable) ORDER BY a.grantor::regrole::text,a.privilege_type,a.is_grantable),'[]'::jsonb) FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee=p.proowner);\n   SELECT * INTO STRICT spec FROM jsonb_to_recordset($creator_specs$[{\"signature\":\"public.static_weekly_vacancy_reviewed_input(jsonb,date)\",\"name\":\"static_weekly_vacancy_reviewed_input\",\"body_md5\":\"8eacb01736e38211472cbe88c8ac7b09\",\"argument_names\":[\"p_source\",\"p_week\"],\"returns\":\"jsonb\",\"language\":\"plpgsql\",\"security_definer\":false,\"volatility\":\"i\",\"config\":[\"search_path=pg_catalog, public\"],\"nonowner_execute\":[]},{\"signature\":\"public.static_weekly_vacancy_reviewed_packet(text,uuid,text)\",\"name\":\"static_weekly_vacancy_reviewed_packet\",\"body_md5\":\"819aae2442ab5b4e3e8eab03d513142a\",\"argument_names\":[\"p_utf8\",\"p_manager\",\"p_key\"],\"returns\":\"jsonb\",\"language\":\"plpgsql\",\"security_definer\":false,\"volatility\":\"i\",\"config\":[\"search_path=pg_catalog, public\"],\"nonowner_execute\":[]},{\"signature\":\"public.static_weekly_vacancy_reviewed_current(public.static_weekly_vacancy_reviewed_preparations,bigint,text)\",\"name\":\"static_weekly_vacancy_reviewed_current\",\"body_md5\":\"31eaaf81c54e54a3c4e9a7077078a4d4\",\"argument_names\":[\"r\",\"p_generation\",\"p_actor_name\"],\"returns\":\"boolean\",\"language\":\"plpgsql\",\"security_definer\":true,\"volatility\":\"v\",\"config\":[\"search_path=pg_catalog, public\"],\"nonowner_execute\":[]},{\"signature\":\"public.static_weekly_vacancy_reviewed_descriptor(public.static_weekly_vacancy_reviewed_preparations,boolean,boolean)\",\"name\":\"static_weekly_vacancy_reviewed_descriptor\",\"body_md5\":\"8dfa1e44e815b3fb83ff354bdb534acd\",\"argument_names\":[\"r\",\"p_current\",\"p_replayed\"],\"returns\":\"jsonb\",\"language\":\"plpgsql\",\"security_definer\":false,\"volatility\":\"i\",\"config\":[\"search_path=pg_catalog, public\"],\"nonowner_execute\":[]},{\"signature\":\"public.static_weekly_vacancy_reviewed_guard()\",\"name\":\"static_weekly_vacancy_reviewed_guard\",\"body_md5\":\"e62eae8319edbff61d207b9b40ae2103\",\"argument_names\":null,\"returns\":\"trigger\",\"language\":\"plpgsql\",\"security_definer\":true,\"volatility\":\"v\",\"config\":[\"search_path=pg_catalog, public\"],\"nonowner_execute\":[]},{\"signature\":\"public.static_weekly_stage_vacancy_reviewed_preparation(uuid,uuid,text,text,text,text)\",\"name\":\"static_weekly_stage_vacancy_reviewed_preparation\",\"body_md5\":\"2f42d5c7a8943ee1a9f964a83c992e22\",\"argument_names\":[\"p_manager\",\"p_credential\",\"p_device\",\"p_access\",\"p_key\",\"p_packet_utf8\"],\"returns\":\"jsonb\",\"language\":\"plpgsql\",\"security_definer\":true,\"volatility\":\"v\",\"config\":[\"search_path=pg_catalog, public\"],\"nonowner_execute\":[\"static_weekly_control_plane\"]},{\"signature\":\"public.static_weekly_read_vacancy_reviewed_preparation(uuid,uuid,text,text,text)\",\"name\":\"static_weekly_read_vacancy_reviewed_preparation\",\"body_md5\":\"f80eb12450fd58ac8aaa3d9cbf05a122\",\"argument_names\":[\"p_manager\",\"p_credential\",\"p_device\",\"p_access\",\"p_key\"],\"returns\":\"jsonb\",\"language\":\"plpgsql\",\"security_definer\":true,\"volatility\":\"v\",\"config\":[\"search_path=pg_catalog, public\"],\"nonowner_execute\":[\"static_weekly_control_plane\"]},{\"signature\":\"public.static_weekly_consume_vacancy_reviewed_preparation(uuid,uuid,text,text,text,text,text)\",\"name\":\"static_weekly_consume_vacancy_reviewed_preparation\",\"body_md5\":\"dbea10c895d1b64b6c408deadd97996c\",\"argument_names\":[\"p_manager\",\"p_credential\",\"p_device\",\"p_access\",\"p_key\",\"p_preview_digest\",\"p_post_input_utf8\"],\"returns\":\"jsonb\",\"language\":\"plpgsql\",\"security_definer\":true,\"volatility\":\"v\",\"config\":[\"search_path=pg_catalog, public\"],\"nonowner_execute\":[\"static_weekly_control_plane\"]}]$creator_specs$::jsonb)\n    AS x(signature text,name text,body_md5 text,argument_names text[],returns text,language text,security_definer boolean,volatility text,config text[],nonowner_execute text[]) WHERE signature=before.signature;\n   IF p.oid<>before.object_oid OR p.proowner<>before.owner_oid OR actual_acl IS DISTINCT FROM before.owner_acl\n    OR md5(pg_get_functiondef(p.oid)) IS DISTINCT FROM before.definition_md5\n    OR md5(p.prosrc)<>spec.body_md5 OR p.proconfig IS DISTINCT FROM spec.config OR p.prosecdef<>spec.security_definer OR p.provolatile::text<>spec.volatility\n    OR (SELECT coalesce(array_agg(r.rolname::text ORDER BY r.rolname),'{}'::text[]) FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a LEFT JOIN pg_roles r ON r.oid=a.grantee WHERE a.grantee<>p.proowner) IS DISTINCT FROM spec.nonowner_execute\n    OR EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.privilege_type<>'EXECUTE' OR a.is_grantable OR a.grantor<>p.proowner)\n    OR EXISTS(SELECT 1 FROM unnest(ARRAY['anon','authenticated','service_role','custodial_application_reader','static_weekly_control_plane','static_weekly_release_operator','static_weekly_runtime_20260823']) role\n     WHERE has_function_privilege(role,p.oid,'EXECUTE') IS DISTINCT FROM (role=ANY(spec.nonowner_execute))) THEN\n    RAISE EXCEPTION 'Finite creator Source131 new routine owner/nonowner ACL/body changed';END IF;\n  END IF;\n END LOOP;\nEND $creator_after$;\n"
+    }
+  ],
+  "actual_SQL": false,
+  "production_authorized": false,
+  "canonical289_unchanged": true,
+  "nonowner_runtime_rights_expanded": false,
+  "owner_swaps": false,
+  "source_provenance": {
+    "prior_declared_sources_checked": 264,
+    "new_names_no_prior_create": 9,
+    "remaining132_155": [
+      {
+        "order": 132,
+        "file": "20261012070515_employee_event_open_service_date_binding.sql",
+        "canonical_sha256": "11bfe9ece8a4ad20fadc68a0abff5bea1b91a51def3a3d5725de3550a0a9d5b4",
+        "existing_forward_sha256": null,
+        "same_unconditional_postgres_creator_revoke": false,
+        "classification": "no unconditional postgres creator-right revocation"
+      },
+      {
+        "order": 133,
+        "file": "20261012142853_original_completion_protected_reader.sql",
+        "canonical_sha256": "c4c39b1a7e79eba40680e6ad43a8e213c7e205117eee48c44b15d7feeb5a9280",
+        "existing_forward_sha256": null,
+        "same_unconditional_postgres_creator_revoke": false,
+        "classification": "no unconditional postgres creator-right revocation"
+      },
+      {
+        "order": 134,
+        "file": "20261012211736_custodial_employee_message_original_outcomes.sql",
+        "canonical_sha256": "9ae81a6a52e1a706ec0d18e08b901108e0ff20c0d22d99a63da60216f8bdcd44",
+        "existing_forward_sha256": null,
+        "same_unconditional_postgres_creator_revoke": false,
+        "classification": "no unconditional postgres creator-right revocation"
+      },
+      {
+        "order": 135,
+        "file": "20261013113033_gemini_original_turn_preservation.sql",
+        "canonical_sha256": "33249306963b02d90e84e56f06bfe2d852c2009e869f7b50b8c8d87b91f712f4",
+        "existing_forward_sha256": null,
+        "same_unconditional_postgres_creator_revoke": false,
+        "classification": "no unconditional postgres creator-right revocation"
+      },
+      {
+        "order": 136,
+        "file": "20261013171946_messenger_original_group_creation.sql",
+        "canonical_sha256": "e3cd2f32d0482e8578d109507256c944f054eecda502fc12996e205d9ede52e7",
+        "existing_forward_sha256": null,
+        "same_unconditional_postgres_creator_revoke": false,
+        "classification": "existing owner-conditional postgres default cleanup"
+      },
+      {
+        "order": 137,
+        "file": "20261014000624_same_original_recovery_preparation.sql",
+        "canonical_sha256": "3c6506413076bc39a0bae52a281ffd7da0d7683f30c3df1a1a21367e3c7361cb",
+        "existing_forward_sha256": null,
+        "same_unconditional_postgres_creator_revoke": false,
+        "classification": "no unconditional postgres creator-right revocation"
+      },
+      {
+        "order": 138,
+        "file": "20261014010337_same_original_recovery_target_read.sql",
+        "canonical_sha256": "f91331d9f179a41c4ee81e3535c3503ae042e0203d1b6238d23947be8cd48abb",
+        "existing_forward_sha256": null,
+        "same_unconditional_postgres_creator_revoke": false,
+        "classification": "no unconditional postgres creator-right revocation"
+      },
+      {
+        "order": 139,
+        "file": "20261014024357_same_original_native_challenge_registration.sql",
+        "canonical_sha256": "20b181b6021fb73b4e72eaafbc4e2e2486c3e7c85aa2f898eb9700d85e6a66ae",
+        "existing_forward_sha256": null,
+        "same_unconditional_postgres_creator_revoke": false,
+        "classification": "no unconditional postgres creator-right revocation"
+      },
+      {
+        "order": 140,
+        "file": "20261014031928_same_original_native_registration_status.sql",
+        "canonical_sha256": "d5a559cb102b31ee7553e618655666c43b034492794e2df3b59f5dd3007e6965",
+        "existing_forward_sha256": null,
+        "same_unconditional_postgres_creator_revoke": false,
+        "classification": "no unconditional postgres creator-right revocation"
+      },
+      {
+        "order": 141,
+        "file": "20261014143050_same_original_current_manager_preparation_read.sql",
+        "canonical_sha256": "10eea4b25e210d345382f7c89c3a82fda2273a3b486532ffe6fc70cb5d39bd2e",
+        "existing_forward_sha256": null,
+        "same_unconditional_postgres_creator_revoke": false,
+        "classification": "no unconditional postgres creator-right revocation"
+      },
+      {
+        "order": 142,
+        "file": "20261015040830_same_original_retained_completion_read.sql",
+        "canonical_sha256": "ecb708c726535401ddf085d122c54bfad1e58b6322c17c0c89af7c234b046c3d",
+        "existing_forward_sha256": "18298fc042702b47e56e30ec21bcde0bfeac3646d806f488b02d453811c8961d",
+        "same_unconditional_postgres_creator_revoke": false,
+        "classification": "no unconditional postgres creator-right revocation"
+      },
+      {
+        "order": 143,
+        "file": "20261016095134_native_original_inventory_request_registration.sql",
+        "canonical_sha256": "c0d0f2b0aa9bd7a98adeb4b7a460256c2cc57b5edd748fdf3778504bf9fd7041",
+        "existing_forward_sha256": null,
+        "same_unconditional_postgres_creator_revoke": false,
+        "classification": "no unconditional postgres creator-right revocation"
+      },
+      {
+        "order": 144,
+        "file": "20261016103024_native_original_inventory_request_status_read.sql",
+        "canonical_sha256": "e181509806947b79d00bc43a3472fadf46512b5983876f9a093cafc7a7a37aa6",
+        "existing_forward_sha256": null,
+        "same_unconditional_postgres_creator_revoke": false,
+        "classification": "no unconditional postgres creator-right revocation"
+      },
+      {
+        "order": 145,
+        "file": "20261016111320_native_inventory_current_confirmation_guard.sql",
+        "canonical_sha256": "760877770d9739ec041d8cefa7d20f48ef771dc4f9437c3c09264d2b0be0c4c3",
+        "existing_forward_sha256": null,
+        "same_unconditional_postgres_creator_revoke": false,
+        "classification": "no unconditional postgres creator-right revocation"
+      },
+      {
+        "order": 146,
+        "file": "20261016121857_native_original_inventory_manifest_chunks.sql",
+        "canonical_sha256": "4f3687fe9a35376b5859c90b3c33f417bd6d87ec41658fb53f6d79d2d51d84ce",
+        "existing_forward_sha256": null,
+        "same_unconditional_postgres_creator_revoke": false,
+        "classification": "no unconditional postgres creator-right revocation"
+      },
+      {
+        "order": 147,
+        "file": "20261016133120_native_original_inventory_manager_manifest_read.sql",
+        "canonical_sha256": "7acafd2bd12cedc790aafb4fb696ba6326eb20f530f98fc6f7e6ab1b89d89827",
+        "existing_forward_sha256": null,
+        "same_unconditional_postgres_creator_revoke": false,
+        "classification": "no unconditional postgres creator-right revocation"
+      },
+      {
+        "order": 148,
+        "file": "20261016140703_native_original_inventory_semantic_review.sql",
+        "canonical_sha256": "e61de073f2374bea3305ad23fa06fa22c9d2f1ef9f5c25115e8b98bb0ccbf0e8",
+        "existing_forward_sha256": null,
+        "same_unconditional_postgres_creator_revoke": false,
+        "classification": "no unconditional postgres creator-right revocation"
+      },
+      {
+        "order": 149,
+        "file": "20261016143226_native_original_inventory_manager_decision.sql",
+        "canonical_sha256": "ec4d2920dc99830d217a7e179a3696e487d6ebe6170801f9f53112b9ccc00d79",
+        "existing_forward_sha256": null,
+        "same_unconditional_postgres_creator_revoke": false,
+        "classification": "no unconditional postgres creator-right revocation"
+      },
+      {
+        "order": 150,
+        "file": "20261017200958_approved_static_original_confirmation_receipts.sql",
+        "canonical_sha256": "2a093cd4ef89d4e77f911b7a12c68db717a2dba298da35e565c84fee387156e8",
+        "existing_forward_sha256": null,
+        "same_unconditional_postgres_creator_revoke": false,
+        "classification": "existing owner-conditional postgres default cleanup"
+      },
+      {
+        "order": 151,
+        "file": "20261017201251_approved_static_current_basis_binding.sql",
+        "canonical_sha256": "905f654a03cf25b78799cc5102beb8fbb074b5993cd1cfd0f3ddac71ddf4a629",
+        "existing_forward_sha256": null,
+        "same_unconditional_postgres_creator_revoke": false,
+        "classification": "no unconditional postgres creator-right revocation"
+      },
+      {
+        "order": 152,
+        "file": "20261017225101_approved_static_dated_original_materialization.sql",
+        "canonical_sha256": "2526dde3e55268da83ba43c8ce30c61c5f1a8c83df50aae85d557c517c383418",
+        "existing_forward_sha256": "cee7ef97a7aef12f75de1d568e53ff0d987daa428b42f53fde25eb957d095f6f",
+        "same_unconditional_postgres_creator_revoke": false,
+        "classification": "existing owner-conditional postgres default cleanup"
+      },
+      {
+        "order": 153,
+        "file": "20261018151858_registered_never_filled_vacancy_source_recovery.sql",
+        "canonical_sha256": "4127e4a9aa2cb0a5fab6f230040002af04fa3352ee54f231402e3ca05b7fe9ed",
+        "existing_forward_sha256": "77d98f51f2ddcd0c38f2674bd11ce43c63bfd409592d6e9e8c2386e65bb226fe",
+        "same_unconditional_postgres_creator_revoke": false,
+        "classification": "no unconditional postgres creator-right revocation"
+      },
+      {
+        "order": 154,
+        "file": "20261018161845_approved_static_pending_staffing_original_recovery.sql",
+        "canonical_sha256": "8063bc0c21a881c14806ef685749acc14c809a0fbfe69629f844ea7fa51ce047",
+        "existing_forward_sha256": "b14504a2b97890944be54f4be5762c3f0dbd653cc14748da3777bc47357cfca5",
+        "same_unconditional_postgres_creator_revoke": false,
+        "classification": "no unconditional postgres creator-right revocation"
+      },
+      {
+        "order": 155,
+        "file": "20261021124949_dashboard_independent_verified_check_reader.sql",
+        "canonical_sha256": "743a210140bee5653b6c7bdaf932850dc08c0ab4564ce40f4efa3c9f8f35e761",
+        "existing_forward_sha256": "fc57bbd278fea04890721ed2d15ca8799c58b5b2bae7de14bb40b8d4847d131a",
+        "same_unconditional_postgres_creator_revoke": false,
+        "classification": "no unconditional postgres creator-right revocation"
+      }
+    ],
+    "remaining_same_cause_changes_required": []
+  }
+}

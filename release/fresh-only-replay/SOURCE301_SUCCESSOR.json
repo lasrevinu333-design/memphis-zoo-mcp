@@ -1,0 +1,45 @@
+{
+  "schema": "custodial.ci-fresh-only-exact-source-successor.v1",
+  "scope": "DISPOSABLE_CONSTRUCTION_ONLY_NOT_VENDOR_NORMAL_OR_PRODUCTION_ADMISSION",
+  "predecessor_manifest": {
+    "path": "release/fresh-only-replay/MANIFEST.json",
+    "sha256": "5094a272dcc9f01ccbf043f3de7012e12bdb542606089a0a818629c1ecf86b26",
+    "migrations": 297,
+    "overrides": 22
+  },
+  "predecessor_successor": {
+    "path": "release/fresh-only-replay/SOURCE300_SUCCESSOR.json",
+    "sha256": "6c72ea5ddc4587d21ac9464f71126ad7c5b77c9b72768247d6b8394125b5e078",
+    "bytes": 2054,
+    "source_migrations": 300
+  },
+  "preserved_predecessor_replay": {
+    "path": "release/fresh-only-replay/SOURCE300_REPLAY_ORDER.json",
+    "sha256": "be9f1ce99e037690b3095c8b8e963fc30efd8c83adaa1e415856a79808dc31b1",
+    "bytes": 56934
+  },
+  "source_migrations": 301,
+  "replay_manifest": {
+    "path": "supabase/canonical/migration-replay-order.json",
+    "sha256": "aa3225489f809029f362f9bb2a5ff30f1442a85eb5dda468663b3f0800a9e83b",
+    "bytes": 57121
+  },
+  "append": {
+    "name": "20261030155202_approved_manual_current_day_activation.sql",
+    "original": {
+      "path": "supabase/migrations/20261030155202_approved_manual_current_day_activation.sql",
+      "sha256": "54d95f3ab7ffb088a7e72241c360fe22edb1a06a24a3f768f9adcc494ed69492",
+      "bytes": 56747
+    },
+    "selected": {
+      "path": "supabase/migrations/20261030155202_approved_manual_current_day_activation.sql",
+      "sha256": "54d95f3ab7ffb088a7e72241c360fe22edb1a06a24a3f768f9adcc494ed69492",
+      "bytes": 56747
+    },
+    "atomic_mode": "exact-Source-BEGIN-COMMIT"
+  },
+  "observed_empty_source_fingerprint": "0c48b7d1977f5c5187b56cdf96d8bb33ec356792bd81980b7cb98abbfa09513e",
+  "source_capture_scope": "Actual maintained Source300 construction plus exact Source301 SQL, followed by populated owned-fixture atomic current-day roster/publication, historical preservation, seven-day lunch/employee/physical-location ownership and original-idempotency checks. Not fresh Source301 construction, populated production-target or genuine runtime admission.",
+  "full_vendor_NORMAL": false,
+  "expected_fingerprint_authority": null
+}

@@ -1,0 +1,11 @@
+{
+  "pid": 3777875,
+  "pgid": 3777875,
+  "command": [
+    "node",
+    "--max-old-space-size=384",
+    "scripts/sealed-repair-canonical-database-tests.mjs",
+    "--out",
+    "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/MAIN_EIGHT_ACTIVE_LAUNCH_20261031/MAIN_ACTUAL_CANONICAL304_002/database"
+  ]
+}

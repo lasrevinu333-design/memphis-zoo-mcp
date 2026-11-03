@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import vm from 'node:vm';
+import {readFileSync} from 'node:fs';
+const source=readFileSync(new URL('../src/index.js',import.meta.url),'utf8');
+const body=source.slice(source.indexOf('async function deliverCustodialOfflineReconciliationNotification('),source.indexOf('async function runCustodialOfflineReconciliationNotificationWorker('));
+assert.ok(body.startsWith('async function deliverCustodialOfflineReconciliationNotification('));
+const eric='0a130000-0000-4000-8000-000000000001',other='0a130000-0000-4000-8000-000000000002',user='0a130000-0000-4000-8000-000000000003',bot='0a130000-0000-4000-8000-000000000004';
+let recipients=[{manager_id:eric,user_id:user,system_key:'eric_custodial_manager'},{manager_id:other,user_id:other,system_key:'annie_feist_operations_admin'}],calls=[];
+const context=vm.createContext({resolveOpsManagerRecipients:async()=>recipients,runReadOnlySql:async()=>[{memphis_user_id:bot}],isUuid:x=>typeof x==='string'&&x.length===36,offlineAuthoritySecret:()=> 'synthetic-no-live-secret',OPERATIONAL_NOTIFICATION_WORKER_ID:'synthetic-timeout-worker',runRpc:async(name,args)=>{calls.push({name,args});if(name==='custodial_unfinished_work_recipient_v1')return recipients;if(name==='custodial_claim_offline_reconciliation_notification_recipients')return[{delivery_recipient_id:user,manager_id:eric,recipient_user_id:user,client_message_id:'same-original',notification_instance_key:'same-original',attempts:1,lease_token:user}];if(name==='msg_get_or_create_direct_thread')return{id:user};if(name==='msg_send_message')return{id:user};if(name==='custodial_finish_offline_reconciliation_notification_recipient')return{state:'delivered',message_id:user};throw Error('Unexpected RPC '+name);}});
+vm.runInContext(body,context);const send=vm.runInContext('deliverCustodialOfflineReconciliationNotification',context);
+const notification={notification_kind:'unfinished_work_timeout',outbox_id:user,lease_token:user,payload_json:{notice_id:user,attention_required:true}};
+const result=await send(notification);assert.equal(result.succeeded,true);const claimed=calls.find(x=>x.name==='custodial_claim_offline_reconciliation_notification_recipients');assert.equal(claimed.args.p_recipients.length,1);assert.equal(claimed.args.p_recipients[0].manager_id,eric);
+const message=calls.find(x=>x.name==='msg_send_message');assert.match(message.args.p_body,/did not complete/);assert.match(message.args.p_body,/explicitly clear/);assert.match(message.args.p_body,/unfinished-work.html/);assert.equal(message.args.p_metadata_json.client_message_id,'same-original');
+recipients=[recipients[1]];calls=[];await assert.rejects(send(notification),e=>e.terminal===true);assert.equal(calls.length,1);assert.equal(calls[0].name,'custodial_unfinished_work_recipient_v1');
+console.log(JSON.stringify({passed:2,failed:0,scope:'Actual existing delivery function with synthetic closed RPC ports: Eric-only notice/action and missing Eric fail closed; no live delivery'}));

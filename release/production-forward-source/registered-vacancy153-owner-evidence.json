@@ -1,0 +1,131 @@
+{
+  "schema": "custodial.registered-vacancy153-existing-owner-equivalence.v1",
+  "actual_refusal_sha256": "e0df5747736d27534dc5d54079df5220bc0ef30fcdeea0089fbc9b7d3c0ef6d3",
+  "actual_run": "39675545857",
+  "before_forward_sha256": "77d98f51f2ddcd0c38f2674bd11ce43c63bfd409592d6e9e8c2386e65bb226fe",
+  "forward_sha256": "4f31bf55eb23e3e29b99000b4ff138e9c8cc735699b67129b583dcdc1000c60b",
+  "canonical_sha256": "4127e4a9aa2cb0a5fab6f230040002af04fa3352ee54f231402e3ca05b7fe9ed",
+  "guard": "  -- BEGIN FINITE ORIGINAL POSTGRES SOURCE153 INVENTORY GUARD PROFILE\n  -- The canonical allowed principals coalesce to the same existing owner.\n  -- Observe the exact original ACL/context BEFORE adapting its cardinality.\n  IF owner_oid IS DISTINCT FROM postgres_oid OR owner_oid IS DISTINCT FROM 'postgres'::regrole\n    OR inventory_guard_before.oid IS DISTINCT FROM pg_catalog.to_regprocedure('public.custodial_reject_release_authority_inventory_mutation()')\n    OR pg_catalog.to_regprocedure('custodial_reject_release_authority_inventory_mutation()') IS DISTINCT FROM inventory_guard_before.oid\n    OR NOT EXISTS(SELECT 1 FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace\n      JOIN pg_catalog.pg_language l ON l.oid=p.prolang WHERE p.oid=inventory_guard_before.oid AND n.nspname='public'\n      AND p.proowner='postgres'::regrole AND p.prokind='f' AND l.lanname='plpgsql'\n      AND NOT p.prosecdef AND p.provolatile='v' AND p.proparallel='u' AND NOT p.proretset\n      AND NOT p.proisstrict AND NOT p.proleakproof AND p.pronargs=0 AND p.provariadic=0 AND p.pronargdefaults=0\n      AND p.proargnames IS NULL AND p.prorettype='pg_catalog.trigger'::regtype\n      AND p.proconfig=ARRAY['search_path=pg_catalog, public']::text[]\n      AND pg_catalog.md5(p.prosrc)='68641290a8dcd2770a02c90b74e068fd'\n      AND pg_catalog.md5(pg_catalog.pg_get_functiondef(p.oid))='5c01bad73a63d9859a2467f8c3511d2c'\n      AND public.static_weekly_digest_text(p.prosrc)='398375253665aa45da0a0d73329ae907605d83ac32b00702f34ce2b730dda80b'\n      AND pg_catalog.pg_get_functiondef(p.oid)=guard_definition\n      AND public.static_weekly_digest_text(pg_catalog.pg_get_functiondef(p.oid))='7904db6a14a4c8d2b93cbe4d53ba34f68052e736d15f0a55323fa04c1fae76f6'\n      AND p.proacl IS NOT NULL AND (SELECT count(*) FROM pg_catalog.aclexplode(p.proacl))=1\n      AND NOT EXISTS(SELECT 1 FROM pg_catalog.aclexplode(p.proacl) a WHERE a.grantee<>p.proowner OR a.grantor<>p.proowner\n        OR a.privilege_type<>'EXECUTE' OR a.is_grantable)\n      AND pg_catalog.to_jsonb(p) IS NOT DISTINCT FROM pg_catalog.to_jsonb(inventory_guard_before))\n    OR EXISTS(SELECT 1 FROM(VALUES ('postgres',true),('anon',false),('authenticated',false),('service_role',false),('custodial_application_reader',false),('static_weekly_control_plane',false),('static_weekly_release_operator',false),('static_weekly_runtime_20260823',false)) expected(role_name,may_execute)\n      LEFT JOIN pg_catalog.pg_roles r ON r.rolname=expected.role_name\n      WHERE r.oid IS NULL OR pg_catalog.has_function_privilege(r.oid,inventory_guard_before.oid,'EXECUTE') IS DISTINCT FROM expected.may_execute)\n    OR public.custodial_release_authority_current_grant_definition('custodial_reject_release_authority_inventory_mutation()')\n      IS DISTINCT FROM $source153_guard_grant$select public.custodial_release_authority_reset_grants('custodial_reject_release_authority_inventory_mutation()');$source153_guard_grant$\n    OR public.static_weekly_digest_text(public.custodial_release_authority_current_grant_definition('custodial_reject_release_authority_inventory_mutation()'))\n      IS DISTINCT FROM '162cee83ea1a20b2e4b2e829bda802df6b4bba869a47036d6762b25026989db9'\n    OR (SELECT count(*) FROM public.custodial_release_authority_restore_inventory i\n      WHERE CASE WHEN i.object_kind IN('function','grant') AND position('(' in i.object_identity)>0\n        THEN pg_catalog.to_regprocedure(i.object_identity) END=inventory_guard_before.oid)<>2\n    OR NOT EXISTS(SELECT 1 FROM public.custodial_release_authority_restore_inventory i WHERE i.object_kind='function'\n      AND i.object_identity='custodial_reject_release_authority_inventory_mutation()' AND i.restore_order=100057\n      AND i.definition_sql=guard_definition AND i.definition_sha256='7904db6a14a4c8d2b93cbe4d53ba34f68052e736d15f0a55323fa04c1fae76f6')\n    OR NOT EXISTS(SELECT 1 FROM public.custodial_release_authority_restore_inventory i WHERE i.object_kind='grant'\n      AND i.object_identity='custodial_reject_release_authority_inventory_mutation()' AND i.restore_order=1000059\n      AND i.definition_sql=$source153_saved_guard_grant$select public.custodial_release_authority_reset_grants('custodial_reject_release_authority_inventory_mutation()');$source153_saved_guard_grant$\n      AND i.definition_sha256='162cee83ea1a20b2e4b2e829bda802df6b4bba869a47036d6762b25026989db9')\n    OR inventory_trigger_before.tgfoid IS DISTINCT FROM inventory_guard_before.oid\n    OR inventory_trigger_before.tgenabled<>'A' OR inventory_trigger_before.tgtype<>27\n    OR canonical_trigger_before IS DISTINCT FROM trigger_definition\n    OR canonical_mutation_fence_before IS DISTINCT FROM mutation_fence_definition\n    OR mutation_guard_before.proowner IS DISTINCT FROM owner_oid\n    OR public.static_weekly_digest_text(pg_catalog.pg_get_functiondef(mutation_guard_before.oid))\n      IS DISTINCT FROM 'c951e5a94562536ef46ccd3bfc4c3dfc6df2a526f3fa75891604ca625cd7c8b7'\n  THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='Registered vacancy exact observed postgres owner-only inventory guard profile differs';END IF;\n  -- END FINITE ORIGINAL POSTGRES SOURCE153 INVENTORY GUARD PROFILE\n",
+  "cardinality_changes": [
+    {
+      "before": "(SELECT count(*) FROM pg_catalog.aclexplode(inventory_guard_before.proacl))<>2",
+      "after": "(SELECT count(*) FROM pg_catalog.aclexplode(inventory_guard_before.proacl))<>(SELECT count(DISTINCT principal) FROM (VALUES(owner_oid),(postgres_oid)) expected(principal))"
+    },
+    {
+      "before": "(SELECT count(DISTINCT grantee) FROM pg_catalog.aclexplode(inventory_guard_before.proacl))<>2",
+      "after": "(SELECT count(DISTINCT grantee) FROM pg_catalog.aclexplode(inventory_guard_before.proacl))<>(SELECT count(DISTINCT principal) FROM (VALUES(owner_oid),(postgres_oid)) expected(principal))"
+    }
+  ],
+  "owner_role": "postgres",
+  "other_literal_role": "postgres",
+  "original_canonical_distinct_principals_when_owner_supabase_admin": 2,
+  "existing_profile_distinct_principals_when_owner_postgres": 1,
+  "actual_guard_profile": {
+    "identity": "custodial_reject_release_authority_inventory_mutation()",
+    "explicit_identity": "public.custodial_reject_release_authority_inventory_mutation()",
+    "owner_name": "postgres",
+    "owner_matches_actor": true,
+    "prokind": "f",
+    "prosecdef": false,
+    "provolatile": "v",
+    "proconfig": [
+      "search_path=pg_catalog, public"
+    ],
+    "proisstrict": false,
+    "proleakproof": false,
+    "proparallel": "u",
+    "proretset": false,
+    "proargnames": null,
+    "identity_arguments": "",
+    "return_type": "trigger",
+    "language": "plpgsql",
+    "body_md5": "68641290a8dcd2770a02c90b74e068fd",
+    "definition_md5": "5c01bad73a63d9859a2467f8c3511d2c",
+    "body_sha256": "398375253665aa45da0a0d73329ae907605d83ac32b00702f34ce2b730dda80b",
+    "definition_sha256": "7904db6a14a4c8d2b93cbe4d53ba34f68052e736d15f0a55323fa04c1fae76f6",
+    "acl_is_null": false,
+    "raw_acl_rows": "1",
+    "raw_acl_distinct_grantees": "1",
+    "source153_disallowed_acl_rows": "0",
+    "owner_oid_equals_postgres": true,
+    "named_acl": [
+      {
+        "grantee": "postgres",
+        "grantor": "postgres",
+        "grantable": false,
+        "privilege": "EXECUTE"
+      }
+    ],
+    "effective_execute": [
+      {
+        "role": "anon",
+        "execute": false,
+        "present": true
+      },
+      {
+        "role": "authenticated",
+        "execute": false,
+        "present": true
+      },
+      {
+        "role": "custodial_application_reader",
+        "execute": false,
+        "present": true
+      },
+      {
+        "role": "postgres",
+        "execute": true,
+        "present": true
+      },
+      {
+        "role": "service_role",
+        "execute": false,
+        "present": true
+      },
+      {
+        "role": "static_weekly_control_plane",
+        "execute": false,
+        "present": true
+      },
+      {
+        "role": "static_weekly_release_operator",
+        "execute": false,
+        "present": true
+      },
+      {
+        "role": "static_weekly_runtime_20260823",
+        "execute": false,
+        "present": true
+      }
+    ],
+    "current_grant_sql": "select public.custodial_release_authority_reset_grants('custodial_reject_release_authority_inventory_mutation()');",
+    "current_grant_sha256": "162cee83ea1a20b2e4b2e829bda802df6b4bba869a47036d6762b25026989db9",
+    "exact_saved_function_count": "1",
+    "saved_grant_count": "1",
+    "saved_grant_current_match_count": "1",
+    "unexpected_nonowner_grantor_count": "0"
+  },
+  "actual_saved_aliases": [
+    {
+      "object_kind": "function",
+      "object_identity": "custodial_reject_release_authority_inventory_mutation()",
+      "restore_order": 100057,
+      "definition_sql": "CREATE OR REPLACE FUNCTION public.custodial_reject_release_authority_inventory_mutation()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\nbegin\n  raise exception using errcode='55000',message='release authority restore inventory is immutable';\nend\n$function$\n",
+      "definition_sha256": "7904db6a14a4c8d2b93cbe4d53ba34f68052e736d15f0a55323fa04c1fae76f6",
+      "actual_definition_sha256": "7904db6a14a4c8d2b93cbe4d53ba34f68052e736d15f0a55323fa04c1fae76f6"
+    },
+    {
+      "object_kind": "grant",
+      "object_identity": "custodial_reject_release_authority_inventory_mutation()",
+      "restore_order": 1000059,
+      "definition_sql": "select public.custodial_release_authority_reset_grants('custodial_reject_release_authority_inventory_mutation()');",
+      "definition_sha256": "162cee83ea1a20b2e4b2e829bda802df6b4bba869a47036d6762b25026989db9",
+      "actual_definition_sha256": "162cee83ea1a20b2e4b2e829bda802df6b4bba869a47036d6762b25026989db9"
+    }
+  ],
+  "unchanged_nonowner_membership_grantor_privilege_option_predicate": true,
+  "canonical_routine_bodies_unchanged": true,
+  "new_grants_revokes_roles_owner_or_business_writes": false,
+  "actual_SQL": false,
+  "production": false
+}

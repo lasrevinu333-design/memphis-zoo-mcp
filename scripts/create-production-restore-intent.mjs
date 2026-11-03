@@ -10,10 +10,12 @@ import {
   signBinding,
   stableJson,
 } from "./disaster-recovery-crypto.mjs";
-import { materializeVerifiedArchive, restoreArchiveAdmission } from "./disaster-recovery-archive.mjs";
+import { materializeVerifiedArchive, restoreArchiveAdmission, readVerifiedArchiveSourceBinding } from "./disaster-recovery-archive.mjs";
 import { validateV4StorageArchiveObjects } from "./disaster-recovery-storage.mjs";
+import { refuseUnreconciledImmutableRetry } from "./disaster-recovery-state.mjs";
 
 const { Client } = pg;
+const endRestoreIntentClient = Client.prototype.end;
 const sourceInputDir = resolve(String(process.env.RESTORE_SOURCE_DIR || ""));
 const projectRef = String(process.env.SUPABASE_PROJECT_REF || "").trim();
 const databaseUrl = String(process.env.SUPABASE_DB_URL || process.env.DATABASE_URL || "").trim();
@@ -42,9 +44,20 @@ const verifiedArchive = materializeVerifiedArchive({
     "inventory/storage-objects.json",
   ],
 });
-const sourceDir = verifiedArchive.directory;
-const { summary, archiveDigest } = verifiedArchive;
+const cleanupOriginalArchive = verifiedArchive.cleanup;
+let db, pendingEnvelope, firstFailure;
+let failed = false, rollbackRequired = false;
+const cleanupErrors = [];
 try {
+  const sourceDir = verifiedArchive.directory;
+  const sourceBinding = readVerifiedArchiveSourceBinding(verifiedArchive);
+  const { summary } = sourceBinding;
+  const archiveDigest = sourceBinding.archive_digest;
+  function requireOriginalArchiveSource() {
+    if (readVerifiedArchiveSourceBinding(verifiedArchive) !== sourceBinding) {
+      throw new Error('The original verified archive source binding changed.');
+    }
+  }
   restoreArchiveAdmission(summary.format, { apply: true });
   const archivedStorageObjects = JSON.parse(readFileSync(join(sourceDir, "inventory", "storage-objects.json"), "utf8"));
   validateV4StorageArchiveObjects(archivedStorageObjects);
@@ -62,22 +75,30 @@ try {
   if (summary.project_ref !== projectRef || !summary.source_identity || typeof summary.source_identity !== "object") {
     throw new Error("The verified v4 archive does not bind the exact target project and source identity.");
   }
-} catch (error) {
-  verifiedArchive.cleanup();
-  throw error;
-}
-
-const db = new Client({ connectionString: databaseUrl, application_name: "memphis-zoo-restore-intent" });
-try {
+  db = new Client({ connectionString: databaseUrl, application_name: "memphis-zoo-restore-intent" });
+  requireOriginalArchiveSource();
   await db.connect();
+  rollbackRequired = true;
   await db.query("begin read only");
   const control = await db.query("select authority_generation,mutations_paused,state,restore_id from custodial_dr.restore_control where singleton=true");
   if (control.rowCount !== 1) throw new Error("The restore control plane is unavailable.");
   const controlState = control.rows[0];
+  const originalGeneration = controlState.authority_generation;
+  if (typeof originalGeneration !== "string" || !/^(?:0|[1-9][0-9]{0,18})(?![\s\S])/.test(originalGeneration)) {
+    throw new Error("Restore intent requires a canonical nonnegative SQL generation string.");
+  }
+  const nextGeneration = BigInt(originalGeneration) + 1n;
+  if (nextGeneration > BigInt(Number.MAX_SAFE_INTEGER)) {
+    throw new Error("Restore intent generation is exhausted for the supported v1 safe-integer contract.");
+  }
+  const authorityGeneration = Number(nextGeneration);
   const retryFailure = controlState.mutations_paused === true && controlState.state === "PAUSED_FAILURE" && controlState.restore_id;
   const freshRestore = controlState.mutations_paused === false && ["READY", "COMPLETE"].includes(controlState.state);
   if (!retryFailure && !freshRestore) {
     throw new Error("Only an unpaused ready control plane or an exact PAUSED_FAILURE can receive a restore intent.");
+  }
+  if (retryFailure) {
+    await refuseUnreconciledImmutableRetry(db, { restoreId: controlState.restore_id, generation: controlState.authority_generation });
   }
   const leases = await db.query(`
     select
@@ -101,9 +122,10 @@ try {
   if (release.rowCount !== 1) {
     throw new Error(`Restore intent requires exactly one deployed release identity; found ${release.rowCount}.`);
   }
+  requireOriginalArchiveSource();
   const intent = {
     restore_id: randomUUID(),
-    authority_generation: Number(controlState.authority_generation) + 1,
+    authority_generation: authorityGeneration,
     retry_of_restore_id: retryFailure ? String(controlState.restore_id) : null,
     archive_digest: archiveDigest,
     source_project_ref: summary.project_ref,
@@ -123,9 +145,22 @@ try {
     intent,
     signature: signBinding(restoreIntentBinding(intent), key),
   };
-  console.log(JSON.stringify(envelope));
-  await db.query("rollback");
+  pendingEnvelope = envelope;
+} catch (error) {
+  firstFailure = error;
+  failed = true;
 } finally {
-  await db.end().catch(() => {});
-  verifiedArchive.cleanup();
+  if (rollbackRequired) {
+    try { await db.query("rollback"); } catch (error) { cleanupErrors.push(error); }
+  }
+  if (db) {
+    try { await Reflect.apply(endRestoreIntentClient, db, []); } catch (error) { cleanupErrors.push(error); }
+  }
+  try { await Reflect.apply(cleanupOriginalArchive, verifiedArchive, []); } catch (error) { cleanupErrors.push(error); }
 }
+if (failed || cleanupErrors.length) {
+  const errors = failed ? [firstFailure, ...cleanupErrors] : cleanupErrors;
+  if (errors.length === 1) throw errors[0];
+  throw new AggregateError(errors, "Restore intent failed and cleanup did not complete.", failed ? { cause: firstFailure } : undefined);
+}
+console.log(JSON.stringify(pendingEnvelope));

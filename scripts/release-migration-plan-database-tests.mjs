@@ -20,19 +20,148 @@ import { assertOwnedReleaseFixture, canonicalReleaseFixtureConnection } from "./
 
 import { assertReleaseWorkflowSource } from "./release-migration-workflow-preflight.mjs";
 import { readMigrationReplayPlan } from "./migration-replay-order.mjs";
+import { assertTargetCapturePreservationPlan } from "./release-migration-target-capture.mjs";
 
 const { Client } = pg;
 const execFileAsync = promisify(execFile);
+// Explicit historical23 remains the independent prefix oracle. New tails
+// must additionally match the maintained full-source301/one302 closure.
+export function assertCorrectionReleaseFixtureInventory(sourceRoot,state) {
+ const historical23=[
+  { order: 1, file: "20260922050000_lunch_delivery_failure_manager_alert.sql" },
+  { order: 2, file: "20260922070000_completed_cleaning_reminder_cycles.sql" },
+  { order: 3, file: "20260922090000_verified_visit_reminder_state.sql" },
+  { order: 4, file: "20260922163000_static_weekly_lunch_publication.sql" },
+  { order: 5, file: "20260922200000_lunch_notification_producer.sql" },
+  { order: 6, file: "20260922235500_static_weekly_existing_employee_restore.sql" },
+  { order: 7, file: "20260923065000_static_weekly_vacate_roster_slot.sql" },
+  { order: 8, file: "20260923121151_visitor_attendance_reader.sql" },
+  { order: 9, file: "20260924022250_release_selection_and_occurrence_guards.sql" },
+  { order: 10, file: "20260924023930_notification_receipt_and_lunch_integrity.sql" },
+  { order: 11, file: "20260924032226_bind_release_selection_guard_recovery.sql" },
+  { order: 12, file: "20260924042758_static_weekly_canonical_shift_end_derivation.sql" },
+  { order: 13, file: "20260924044035_static_weekly_atomic_roster_completion.sql" },
+  { order: 14, file: "20260924053507_assigned_phone_activation_transport.sql" },
+  { order: 15, file: "20260924080839_custodial_legacy_installation_observation.sql" },
+  { order: 16, file: "20260924161004_owner_oc24_cleaning_and_inspection_boundaries.sql" },
+  { order: 17, file: "20260924172500_oc24_manual_contractor_lunch.sql" },
+  { order: 18, file: "20260924201258_native_provider_durable_authority.sql" },
+  { order: 19, file: "20260925015905_oc24_completion_selection_normalization.sql" },
+  { order: 20, file: "20260925020244_oc24_bound_legacy_completion_replay.sql" },
+  { order: 21, file: "20260925050718_static_weekly_staffing_command_ledger.sql" },
+  { order: 22, file: "20260925054802_static_weekly_staffing_atomic_acceptance.sql" },
+  { order: 23, file: "20260925190000_gps_exact_location_authority_boundary.sql" },
+];
+ assert.ok(Array.isArray(state.pending_migrations));
+ assert.deepEqual(state.pending_migrations.slice(0,historical23.length).map(({order,file})=>({order,file})),historical23,
+  'Preserve every explicit historical23 candidate and its order');
+ if(state.pending_migrations.length===historical23.length){
+  assert.deepEqual(state.pending_migrations.map(({order,file})=>({order,file})),historical23,
+   'the historical correction release fixture must contain exactly the twenty-three candidate migrations in order');
+  assert.equal(state.pending_migrations.every(item=>item.source_migration_version>state.observed_production.ledger_head),true,
+   'all reviewed historical correction migrations must advance beyond the admitted production head');
+  return {historical23:true,sourceClosure:null};
+ }
+ const sourceClosure=assertTargetCapturePreservationPlan(sourceRoot,state.pending_migrations);
+ assert.equal(state.observed_production.source_authority_migration_count,134);
+ assert.equal(state.observed_production.production_ledger_count,235);
+ return {historical23:false,sourceClosure};
+}
+// END EXACT CORRECTION RELEASE FIXTURE INVENTORY
+
+
 // The current source target is deliberately unresolved. Qualify its normal
 // refusal without inventing a target or allocating a database. The complete
 // historical positive/security corpus below remains literal and is NOT_RUN
 // in this explicitly selected source-only branch.
 const currentUnresolvedSelector = "--current-unresolved-target-source-only";
+const currentCapturedSelector = "--current-captured-target-source-only";
 const selectedArguments = process.argv.slice(2);
 assert.ok(selectedArguments.length === 0
-  || (selectedArguments.length === 1 && selectedArguments[0] === currentUnresolvedSelector),
-  "Select only the existing owned database route or current unresolved source-only refusal");
-if (selectedArguments.length === 1) {
+  || (selectedArguments.length === 1 && [currentUnresolvedSelector, currentCapturedSelector].includes(selectedArguments[0])),
+  "Select only the existing owned database route or explicit current source-only qualification");
+if (selectedArguments[0] === currentCapturedSelector) {
+  // Current captured production is not a synthetic prefix plus filler ledger.
+  // Validate its adopted source/profile binding without allocating a database.
+  const sourceRoot = resolve(new URL("..", import.meta.url).pathname);
+  const state = JSON.parse(readFileSync(resolve(sourceRoot, "release/production-migration-state.json"), "utf8"));
+  const plan = readMigrationReplayPlan(sourceRoot);
+  const { resolveReleaseSchemaTarget } = await import("./production-target-schema-profile.mjs");
+  const schemaTarget = resolveReleaseSchemaTarget(sourceRoot);
+  assert.ok(schemaTarget.profile, "Current captured target requires its closed production profile");
+  const capture = state.target.normal_source_capture;
+  const proof = schemaTarget.profile.capture;
+  const current300 = plan.files.length === 300;
+  const current299 = plan.files.length === 299;
+  const current298 = plan.files.length === 298;
+  const current297 = plan.files.length === 297;
+  const successorClosure=[301,302,303].includes(plan.files.length)?assertTargetCapturePreservationPlan(sourceRoot,state.pending_migrations):null;
+  const pendingCount = successorClosure ? successorClosure.pending.length : current300 ? 166 : current299 ? 165 : current298 ? 164 : current297 ? 163 : 160;
+  const targetCount = 235+pendingCount;
+  assert.equal(plan.baseCount, 134);
+  assert.equal(plan.files.length, 134+pendingCount);
+  assert.equal(state.pending_migrations.length, pendingCount);
+  assert.deepEqual(state.pending_migrations.map(({ file }) => file), plan.files.slice(plan.baseCount));
+  assert.equal(state.observed_production.production_ledger_count, 235);
+  assert.equal(proof.source_ledger_count, state.observed_production.production_ledger_count);
+  assert.equal(proof.pending_count, state.pending_migrations.length);
+  assert.equal(proof.target_ledger_count, proof.source_ledger_count + proof.pending_count);
+  assert.equal(proof.target_ledger_count, targetCount);
+  assert.equal(state.target.production_ledger_count, proof.target_ledger_count);
+  assert.equal(state.target.canonical_source_schema_fingerprint, schemaTarget.deploymentFingerprint);
+  assert.deepEqual(state.target.expected_catalog_counts, schemaTarget.deploymentCounts);
+  assert.equal(capture.scope, "ROLLBACK_ONLY_TARGET_PREPARATION_DATA_NOT_PRODUCTION_OR_FULL_REHEARSAL");
+  assert.equal(capture.report.sha256, proof.report_sha256);
+  assert.equal(capture.report.bytes, proof.report_bytes);
+  for (const key of ["candidate_commit", "candidate_tree", "plan_sha256"]) assert.equal(capture[key], proof[key]);
+  assert.equal(capture.archive_digest, schemaTarget.profile.archive_digest);
+  const checked = assertReleaseWorkflowSource(sourceRoot);
+  assert.equal(checked.pendingCount, pendingCount);
+  assert.equal(checked.targetCount, targetCount);
+  assert.equal(checked.targetFingerprint, schemaTarget.deploymentFingerprint);
+  if(successorClosure){
+    assert.equal(proof.plan_sha256,successorClosure.pending_plan_sha256);
+    assert.equal(state.target.source_authority_migration_count,successorClosure.canonical_source_count);
+    assert.equal(capture.rollback_evidence.rollback_verified,true);assert.equal(capture.rollback_evidence.committed,false);
+    for(const key of ['production_authorized','candidate_migration_admission','runtime_admission','full_rehearsal_attestation'])assert.equal(capture[key],false);
+  }else if(current300||current299){
+    assert.equal(plan.manifestSha256,current300?'be9f1ce99e037690b3095c8b8e963fc30efd8c83adaa1e415856a79808dc31b1':'965300d634959010c017ac203d71fe915f65b4b42e69910b173b96d034c38001');
+    assert.equal(capture.original_run_id,current300?41007886733:41003969617);
+    assert.equal(proof.report_sha256,current300?'cf5d77a95b3f7e6c64d9f321d5b3aaa19fb78d5bd2e9f313a123cfe8e323fcd3':'7fded7c546d4c6d879df233f8059cbf4752433c2d9b403641730d6886452593a');
+    assert.equal(proof.report_bytes,current300?18593702:18585920);
+    assert.equal(capture.rollback_evidence.rollback_verified,true);assert.equal(capture.rollback_evidence.committed,false);
+    for(const key of ['production_authorized','candidate_migration_admission','runtime_admission','full_rehearsal_attestation'])assert.equal(capture[key],false);
+  }else if (current298) {
+    assert.equal(plan.manifestSha256, "aca06e305ff4c5918e83045acf4d739fcb8746e41dcc89ceb59fcd0f98ab20ba");
+    assert.equal(capture.original_run_id, 40965791466);
+    assert.equal(proof.report_sha256, "dafa8d869004fa047ec7a191b040d22503bef8001a4200a44123c860fba5ec94");
+    assert.equal(proof.report_bytes, 18580457);
+    assert.equal(capture.rollback_evidence.rollback_verified, true);
+    assert.equal(capture.rollback_evidence.committed, false);
+    for (const key of ["production_authorized", "candidate_migration_admission", "runtime_admission", "full_rehearsal_attestation"]) assert.equal(capture[key], false);
+  }
+  // Reuse the maintained complete source-plan/profile/capture and refusal
+  // contracts. No URL, credentials, targetCapture or preload reaches the child.
+  const argv = ["--max-old-space-size=128", resolve(sourceRoot, "scripts/current291-production-plan-source-tests.mjs")];
+  const child = execFileAsync(process.execPath, argv, {
+    cwd: sourceRoot,
+    env: { PATH: "/usr/bin:/bin", LANG: "C", LC_ALL: "C", TZ: "UTC" },
+    timeout: 15_000, killSignal: "SIGTERM", maxBuffer: 1024 * 1024,
+  });
+  const pid = child.child?.pid ?? null;
+  const original = await child;
+  assert.match(original.stdout, /PASS_SOURCE_ONLY_NO_DB/);
+  console.log(JSON.stringify({ status: "SOURCE_ONLY_CURRENT_CAPTURED_TARGET_CONTRACT_PASS",
+    SQL_execution: false, database_client_constructed: false, production_authorized: false,
+    historical_23_positive_security_database_corpus: "NOT_RUN_CURRENT_CAPTURED_SOURCE_ROUTE",
+    adopted_capture_database_proof: successorClosure ? "SEPARATE_ORIGINAL_CAPTURE_BOUND_BY_EXACT_CURRENT_REPORT_NOT_REEXECUTED" : current300 ? "SEPARATE_ORIGINAL_CAPTURE_41007886733_NOT_REEXECUTED" : current299 ? "SEPARATE_ORIGINAL_CAPTURE_41003969617_NOT_REEXECUTED" : current298 ? "SEPARATE_ORIGINAL_CAPTURE_40965791466_NOT_REEXECUTED" : current297 ? "SEPARATE_ORIGINAL_CAPTURE_40615635335_NOT_REEXECUTED" : "SEPARATE_ORIGINAL_CAPTURE_40360756054_NOT_REEXECUTED",
+    source_ledger_count: 235, pending_count: pendingCount, target_ledger_count: targetCount,
+    canonical_fingerprint: schemaTarget.canonicalFingerprint,
+    deployment_fingerprint: schemaTarget.deploymentFingerprint,
+    adopted_report_sha256: proof.report_sha256,
+    maintained_source_contract: { argv: [process.execPath, ...argv], pid,
+      stdout: original.stdout, stderr: original.stderr, original_execFile_promise_settled: true } }));
+} else if (selectedArguments.length === 1) {
   const sourceRoot = resolve(new URL("..", import.meta.url).pathname);
   const currentState = JSON.parse(readFileSync(resolve(sourceRoot, "release/production-migration-state.json"), "utf8"));
   const currentPlan = readMigrationReplayPlan(sourceRoot);
@@ -99,36 +228,7 @@ const databaseName = assertOwnedReleaseFixture({
 const { clientConfig, databaseUrl } = canonicalReleaseFixtureConnection(databaseName);
 const root = resolve(new URL("..", import.meta.url).pathname);
 const state = JSON.parse(readFileSync(resolve(root, "release/production-migration-state.json"), "utf8"));
-assert.deepEqual(state.pending_migrations.map(({ order, file }) => ({ order, file })), [
-  { order: 1, file: "20260922050000_lunch_delivery_failure_manager_alert.sql" },
-  { order: 2, file: "20260922070000_completed_cleaning_reminder_cycles.sql" },
-  { order: 3, file: "20260922090000_verified_visit_reminder_state.sql" },
-  { order: 4, file: "20260922163000_static_weekly_lunch_publication.sql" },
-  { order: 5, file: "20260922200000_lunch_notification_producer.sql" },
-  { order: 6, file: "20260922235500_static_weekly_existing_employee_restore.sql" },
-  { order: 7, file: "20260923065000_static_weekly_vacate_roster_slot.sql" },
-  { order: 8, file: "20260923121151_visitor_attendance_reader.sql" },
-  { order: 9, file: "20260924022250_release_selection_and_occurrence_guards.sql" },
-  { order: 10, file: "20260924023930_notification_receipt_and_lunch_integrity.sql" },
-  { order: 11, file: "20260924032226_bind_release_selection_guard_recovery.sql" },
-  { order: 12, file: "20260924042758_static_weekly_canonical_shift_end_derivation.sql" },
-  { order: 13, file: "20260924044035_static_weekly_atomic_roster_completion.sql" },
-  { order: 14, file: "20260924053507_assigned_phone_activation_transport.sql" },
-  { order: 15, file: "20260924080839_custodial_legacy_installation_observation.sql" },
-  { order: 16, file: "20260924161004_owner_oc24_cleaning_and_inspection_boundaries.sql" },
-  { order: 17, file: "20260924172500_oc24_manual_contractor_lunch.sql" },
-  { order: 18, file: "20260924201258_native_provider_durable_authority.sql" },
-  { order: 19, file: "20260925015905_oc24_completion_selection_normalization.sql" },
-  { order: 20, file: "20260925020244_oc24_bound_legacy_completion_replay.sql" },
-  { order: 21, file: "20260925050718_static_weekly_staffing_command_ledger.sql" },
-  { order: 22, file: "20260925054802_static_weekly_staffing_atomic_acceptance.sql" },
-  { order: 23, file: "20260925190000_gps_exact_location_authority_boundary.sql" },
-], "the correction release fixture must contain exactly the twenty-three candidate migrations in order");
-assert.equal(
-  state.pending_migrations.every((item) => item.source_migration_version > state.observed_production.ledger_head),
-  true,
-  "all reviewed correction migrations must advance beyond the admitted production head",
-);
+assertCorrectionReleaseFixtureInventory(root,state);
 const pending = new Set(state.pending_migrations.map((item) => item.file));
 const migrationFiles = readdirSync(resolve(root, "supabase/migrations")).filter((name) => name.endsWith(".sql")).sort();
 const preMigrationFiles = migrationFiles.filter((name) => !pending.has(name));

@@ -1,0 +1,63 @@
+{
+  "snapshot_id": "custodial_manual_integration_20261030T010206Z",
+  "source_capture_started_after": "2026-10-30T01:02:06Z",
+  "sources": [
+    {
+      "path": "/user_notes/long_form/custodial_manual_monday_working_draft.json",
+      "source_updated_at": "2026-10-30T00:01:44.296214Z",
+      "source_bytes": 52903,
+      "file_name": "custodial_manual_monday_working_draft.json",
+      "sha256": "6663599f6259c9f465330f6ef12c18d1e0478205d7005b949ecfaf3b3e939a76"
+    },
+    {
+      "path": "/user_notes/long_form/custodial_manual_tuesday_working_draft.json",
+      "source_updated_at": "2026-10-30T00:17:05.367928Z",
+      "source_bytes": 51847,
+      "file_name": "custodial_manual_tuesday_working_draft.json",
+      "sha256": "a352e66eb0035ded862c79b594e0c57a67118e20202dc8d4137f9db210e27de8"
+    },
+    {
+      "path": "/user_notes/long_form/custodial_manual_wednesday_working_draft.json",
+      "source_updated_at": "2026-10-30T00:27:20.948944Z",
+      "source_bytes": 26142,
+      "file_name": "custodial_manual_wednesday_working_draft.json",
+      "sha256": "5efa9c56cb21392695464669b9586f8442293a4b705af86c5982da280ed56d7a"
+    },
+    {
+      "path": "/user_notes/long_form/custodial_manual_thursday_working_draft.json",
+      "source_updated_at": "2026-10-30T00:41:14.864304Z",
+      "source_bytes": 22909,
+      "file_name": "custodial_manual_thursday_working_draft.json",
+      "sha256": "5fb72cdc4e74462a66d8b22b291b1af1f8c5db57590fb20eec4f04e9d6a75a6d"
+    },
+    {
+      "path": "/user_notes/long_form/custodial_manual_friday_working_draft.json",
+      "source_updated_at": "2026-10-30T00:49:57.110405Z",
+      "source_bytes": 24493,
+      "file_name": "custodial_manual_friday_working_draft.json",
+      "sha256": "0ae18aa7932be18b5efb875f7783a834a216e3780d9fb2d23e35205fbab115ef"
+    },
+    {
+      "path": "/user_notes/long_form/custodial_manual_saturday_working_draft.json",
+      "source_updated_at": "2026-10-30T01:00:30.821657Z",
+      "source_bytes": 21431,
+      "file_name": "custodial_manual_saturday_working_draft.json",
+      "sha256": "4c1d0b41e73880c0d3ceba4837559dc1f1014dda9d75eeee799605e648505201"
+    },
+    {
+      "path": "/user_notes/long_form/custodial_manual_sunday_working_draft.json",
+      "source_updated_at": "2026-10-30T01:00:32.278157Z",
+      "source_bytes": 17647,
+      "file_name": "custodial_manual_sunday_working_draft.json",
+      "sha256": "6a913216d85b298930aa471366bcfe69b57f1bae5e4eb77b57be4a86e532f6f4"
+    },
+    {
+      "path": "/user_notes/long_form/custodial_area_group_scoring_draft_20261029.json",
+      "source_updated_at": "2026-10-30T00:46:36.950937Z",
+      "source_bytes": 28262,
+      "file_name": "custodial_area_group_scoring_draft_20261029.json",
+      "sha256": "225ad351df63084dcb4cb5b020d824395d4536eb7ce35cc551d53612f4ba9733"
+    }
+  ],
+  "local_export_verified_at_utc": "2026-10-30T01:05:36.381761Z"
+}

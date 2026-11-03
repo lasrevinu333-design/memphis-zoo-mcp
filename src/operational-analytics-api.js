@@ -37,7 +37,7 @@ function setCors(req, res, env) {
   if (origin && allowedOrigins(env).has(origin)) res.setHeader("Access-Control-Allow-Origin", origin);
   res.setHeader("Access-Control-Allow-Credentials", "true");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Device-Id, X-Memphis-Device-Credential, Idempotency-Key");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Device-Id, X-Memphis-Device-Credential, X-CSRF-Token, Idempotency-Key");
   res.setHeader("Cache-Control", "no-store");
   res.setHeader("Vary", "Origin");
 }

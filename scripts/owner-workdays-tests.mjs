@@ -134,19 +134,33 @@ await test('immutable baseline and policy remain unchanged by dated validation',
  assertOwnerRecurringWorkdays(datedVacancy());assert.equal(JSON.stringify(i),before);
  assert.equal(readFileSync('config/custodial-owner-workdays.json','utf8'),policyBefore);
 });
-await test('actual vacancy control plane reaches compiler with policy-matched Wednesday departure',async()=>{
- const queries=[];let prepared=0;
+await test('actual vacancy preview reaches compiler with policy-matched Wednesday departure',async()=>{
+ const queries=[];let prepared=0,mutated=false;
  const client={async query(statement){queries.push(statement);
-  if(statement.includes('static_weekly_v3_read_manager_snapshot'))return {rows:[{result:{authority_revision:0,current_publication:{publication_id:'70000000-0000-4000-8000-000000000001'}}}]};
-  if(statement.includes('static_weekly_v8_vacate_roster_slot'))return {rows:[{result:{revision:1,data:{completion_mode:'projection_required',original_publication_id:'70000000-0000-4000-8000-000000000001'}}}]};
-  if(statement.includes('static_weekly_v3_read_publication_source'))return {rows:[{result:{compiler_input:datedVacancy(),exceptions:[]}}]};
+  if(statement.includes('static_weekly_v3_read_manager_snapshot'))return {rows:[{result:{authority_revision:0,current_service_date:'2026-09-30',current_publication:{publication_id:'70000000-0000-4000-8000-000000000001'}}}]};
+  if(statement.includes('static_weekly_v3_read_authority_source'))return {rows:[{result:{source_id:request.sourceId,compiler_input:input(),exceptions:[]}}]};
+  if(statement.includes('static_weekly_read_vacancy_reviewed_preparation'))return {rows:[{result:{found:false}}]};
+  if(statement.includes('static_weekly_v8_vacate_roster_slot')){mutated=true;return {rows:[{result:{revision:1,data:{completion_mode:'projection_required',original_publication_id:'70000000-0000-4000-8000-000000000001'}}}]};}
+  if(statement.includes('static_weekly_v3_read_publication_source'))return {rows:[{result:{compiler_input:mutated?datedVacancy():input(),exceptions:[]}}]};
+  if(statement==='rollback')mutated=false;
   return {rows:[]};},release(){}};
  const plane=createStaticWeeklyControlPlane({database:{async connect(){return client;}},
   compilerPreparer:async()=>{prepared++;throw Error('EXPECTED_DOWNSTREAM_COMPILER_FAILURE');}});
- await assert.rejects(plane.vacateRosterSlot({manager,sourceId:request.sourceId,slotId:rule.slotId,employeeId:rule.employeeId,
+ const previewManager={...manager,credential_id:'11000000-0000-4000-8000-000000000001',device_id:'synthetic-owner-workdays',access_level:'full_access'};
+ await assert.rejects(plane.previewVacancyRosterSlot({manager:previewManager,sourceId:request.sourceId,slotId:rule.slotId,employeeId:rule.employeeId,
   effectiveStart:'2026-09-30',reason:'Synthetic VCC-01 departure',expectedRevision:0,idempotencyKey:'vcc01-control-plane'}),/EXPECTED_DOWNSTREAM_COMPILER_FAILURE/);
  assert.equal(prepared,1);assert.ok(queries.includes('rollback'));assert.ok(!queries.includes('commit'));
+ assert.equal(mutated,false);
  assert.ok(!queries.some(q=>q.includes('static_weekly_v3_materialize_projection')));
+});
+await test('actual vacancy confirmation still requires its reviewed preview before any SQL',async()=>{
+ const queries=[];let prepared=0;
+ const plane=createStaticWeeklyControlPlane({database:{async connect(){queries.push('connect');throw Error('SQL_NOT_ALLOWED');}},
+  compilerPreparer:async()=>{prepared++;throw Error('COMPILER_NOT_ALLOWED');}});
+ await assert.rejects(plane.vacateRosterSlot({manager,sourceId:request.sourceId,slotId:rule.slotId,employeeId:rule.employeeId,
+  effectiveStart:'2026-09-30',reason:'Synthetic VCC-01 departure',expectedRevision:0,idempotencyKey:'vcc01-missing-preview'}),
+  {code:'static_weekly_vacancy_reviewed_preview_required'});
+ assert.equal(prepared,0);assert.deepEqual(queries,[]);
 });
 await test('source registration refuses obsolete Karen weekdays',async()=>{
  const i=input([2,3,4,5,6]);const packet={packetSchema:'memphis-zoo.static-weekly.verified-schedule-packet.v1',

@@ -1,0 +1,1253 @@
+{
+  "schema_version": 1,
+  "updated_at": "2026-10-30T00:16:47Z",
+  "title": "Custodial manual Tuesday working draft",
+  "schedule_day": "Tuesday",
+  "timezone": "America/Chicago",
+  "status": "APPROVED / LOCKED Tuesday rebalance working scope: original reviewed 23s bases, reliefs and handoffs, reaffirmed after comparison. Tuesday 9:45 and weekly Elephant Trunk remain separately unresolved. Not production or measured physical feasibility.",
+  "scope": "Tuesday only, not a dated future appointment or whole-week implementation. No HTML/program/PDF/publication changes.",
+  "authority": "Eric's explicit voice dictation relayed by the parent. Copying specific Monday BASE choices was requested; do not copy lunches/relief/handoffs or no-9:45 decision.",
+  "on_duty": [
+    "Tammy Miller",
+    "Karen Robinson",
+    "Kathy Phelps",
+    "Jada Rawlings",
+    "Derrick Henderson",
+    "Xavier Green"
+  ],
+  "off": [
+    "Alijah Collins",
+    "Kiltra Horton"
+  ],
+  "employees": [
+    {
+      "name": "Tammy Miller",
+      "shift_baseline": {
+        "start": "05:00",
+        "end": "14:00",
+        "status": "Verified corrected eight-person Tuesday PDF reference, not a newly changed shift"
+      },
+      "own_lunch_baseline": {
+        "start": "08:30",
+        "end": "09:30",
+        "status": "Verified Tuesday reference retained and used in Eric's approved full-hour relief plan; not actual punches."
+      },
+      "requested_base_areas": [
+        "Teton and restrooms",
+        "Northwest Passage",
+        "East End restrooms"
+      ],
+      "selection_status": "Eric explicitly approved the reviewed 23-point balanced-chain proposal and requested handoff updates; these are the current Tuesday working bases, not production.",
+      "at_0945": {
+        "status": "NOT DICTATED; do not extend Monday's no-changeover rule",
+        "areas": null
+      },
+      "lunch_relief": {
+        "status": "APPROVED full-hour relief",
+        "coverers": [
+          {
+            "name": "Karen Robinson",
+            "start": "08:30",
+            "end": "09:30",
+            "areas": [
+              "Teton and restrooms",
+              "Northwest Passage",
+              "East End restrooms"
+            ]
+          }
+        ],
+        "covers_other_employees": [
+          {
+            "name": "Karen Robinson",
+            "start": "09:30",
+            "end": "10:30",
+            "areas": [
+              "Zambezi and restrooms",
+              "Primate Pavilion",
+              "Breezeway restrooms",
+              "Tropical Birds"
+            ]
+          },
+          {
+            "name": "Kathy Phelps",
+            "start": "10:30",
+            "end": "11:30",
+            "areas": [
+              "East Admin and restrooms",
+              "West Admin and restrooms",
+              "Courtyard restrooms",
+              "Nocturnal",
+              "Primate Canyon"
+            ]
+          }
+        ],
+        "exemption": "Tuesday explicitly approves Karen 09:30–10:30 then Kathy 10:30–11:30. Monday's no-other-lunch rule remains unchanged."
+      }
+    },
+    {
+      "name": "Karen Robinson",
+      "shift_baseline": {
+        "start": "05:00",
+        "end": "14:00",
+        "status": "Verified corrected eight-person Tuesday PDF reference, not a newly changed shift"
+      },
+      "own_lunch_baseline": {
+        "start": "09:30",
+        "end": "10:30",
+        "status": "Verified Tuesday reference retained and used in Eric's approved full-hour relief plan; not actual punches."
+      },
+      "requested_base_areas": [
+        "Zambezi and restrooms",
+        "Primate Pavilion",
+        "Breezeway restrooms",
+        "Tropical Birds"
+      ],
+      "selection_status": "Eric explicitly approved the reviewed 23-point balanced-chain proposal and requested handoff updates; these are the current Tuesday working bases, not production.",
+      "at_0945": {
+        "status": "NOT DICTATED; do not extend Monday's no-changeover rule",
+        "areas": null
+      },
+      "lunch_relief": {
+        "status": "APPROVED full-hour relief",
+        "coverers": [
+          {
+            "name": "Tammy Miller",
+            "start": "09:30",
+            "end": "10:30",
+            "areas": [
+              "Zambezi and restrooms",
+              "Primate Pavilion",
+              "Breezeway restrooms",
+              "Tropical Birds"
+            ]
+          }
+        ],
+        "covers_other_employees": [
+          {
+            "name": "Tammy Miller",
+            "start": "08:30",
+            "end": "09:30",
+            "areas": [
+              "Teton and restrooms",
+              "Northwest Passage",
+              "East End restrooms"
+            ]
+          },
+          {
+            "name": "Derrick Henderson",
+            "start": "10:30",
+            "end": "11:30",
+            "areas": [
+              "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+              "China and restrooms",
+              "Bonobos restrooms"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "Kathy Phelps",
+      "shift_baseline": {
+        "start": "06:00",
+        "end": "15:00",
+        "status": "Verified corrected eight-person Tuesday PDF reference, not a newly changed shift"
+      },
+      "own_lunch_baseline": {
+        "start": "10:30",
+        "end": "11:30",
+        "status": "Verified Tuesday reference retained and used in Eric's approved full-hour relief plan; not actual punches."
+      },
+      "requested_base_areas": [
+        "East Admin and restrooms",
+        "West Admin and restrooms",
+        "Courtyard restrooms",
+        "Nocturnal",
+        "Primate Canyon"
+      ],
+      "selection_status": "Eric explicitly approved the reviewed 23-point balanced-chain proposal and requested handoff updates; these are the current Tuesday working bases, not production.",
+      "at_0945": {
+        "status": "NOT DICTATED; do not extend Monday's no-changeover rule",
+        "areas": null
+      },
+      "lunch_relief": {
+        "status": "APPROVED full-hour relief",
+        "coverers": [
+          {
+            "name": "Tammy Miller",
+            "start": "10:30",
+            "end": "11:30",
+            "areas": [
+              "East Admin and restrooms",
+              "West Admin and restrooms",
+              "Courtyard restrooms",
+              "Nocturnal",
+              "Primate Canyon"
+            ]
+          }
+        ],
+        "covers_other_employees": []
+      },
+      "tuesday_only_additions": [
+        "Courtyard restrooms",
+        "Nocturnal",
+        "Primate Canyon"
+      ]
+    },
+    {
+      "name": "Jada Rawlings",
+      "shift_baseline": {
+        "start": "06:00",
+        "end": "15:00",
+        "status": "Verified corrected eight-person Tuesday PDF reference, not a newly changed shift"
+      },
+      "own_lunch_baseline": {
+        "start": "10:00",
+        "end": "11:00",
+        "status": "Verified Tuesday reference retained and used in Eric's approved full-hour relief plan; not actual punches."
+      },
+      "requested_base_areas": [
+        "Cat House Cafe restrooms",
+        "Herpetarium",
+        "Event Center and restrooms",
+        "Cat Country",
+        "Komodos"
+      ],
+      "selection_status": "Eric explicitly approved the reviewed 23-point balanced-chain proposal and requested handoff updates; these are the current Tuesday working bases, not production.",
+      "at_0945": {
+        "status": "NOT DICTATED; do not extend Monday's no-changeover rule",
+        "areas": null
+      },
+      "lunch_relief": {
+        "status": "APPROVED full-hour relief",
+        "coverers": [
+          {
+            "name": "Xavier Green",
+            "start": "10:00",
+            "end": "11:00",
+            "areas": [
+              "Cat House Cafe restrooms",
+              "Herpetarium",
+              "Event Center and restrooms",
+              "Cat Country",
+              "Komodos"
+            ]
+          }
+        ],
+        "covers_other_employees": [
+          {
+            "name": "Xavier Green",
+            "start": "12:30",
+            "end": "13:30",
+            "areas": [
+              "Expo and restrooms",
+              "MemMex restrooms",
+              "Aquarium"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "Derrick Henderson",
+      "shift_baseline": {
+        "start": "07:00",
+        "end": "16:00",
+        "status": "Verified corrected eight-person Tuesday PDF reference, not a newly changed shift"
+      },
+      "own_lunch_baseline": {
+        "start": "10:30",
+        "end": "11:30",
+        "status": "Verified Tuesday reference retained and used in Eric's approved full-hour relief plan; not actual punches."
+      },
+      "requested_base_areas": [
+        "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+        "China and restrooms",
+        "Bonobos restrooms"
+      ],
+      "selection_status": "Eric explicitly approved the reviewed 23-point balanced-chain proposal and requested handoff updates; these are the current Tuesday working bases, not production.",
+      "at_0945": {
+        "status": "NOT DICTATED; do not extend Monday's no-changeover rule",
+        "areas": null
+      },
+      "lunch_relief": {
+        "status": "APPROVED full-hour relief",
+        "coverers": [
+          {
+            "name": "Karen Robinson",
+            "start": "10:30",
+            "end": "11:30",
+            "areas": [
+              "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+              "China and restrooms",
+              "Bonobos restrooms"
+            ]
+          }
+        ],
+        "covers_other_employees": []
+      }
+    },
+    {
+      "name": "Xavier Green",
+      "shift_baseline": {
+        "start": "08:00",
+        "end": "17:00",
+        "status": "Verified corrected eight-person Tuesday PDF reference, not a newly changed shift"
+      },
+      "own_lunch_baseline": {
+        "start": "12:30",
+        "end": "13:30",
+        "status": "Verified Tuesday reference retained and used in Eric's approved full-hour relief plan; not actual punches."
+      },
+      "requested_base_areas": [
+        "Expo and restrooms",
+        "MemMex restrooms",
+        "Aquarium"
+      ],
+      "selection_status": "Eric explicitly approved the reviewed 23-point balanced-chain proposal and requested handoff updates; these are the current Tuesday working bases, not production.",
+      "at_0945": {
+        "status": "NOT DICTATED; do not extend Monday's no-changeover rule",
+        "areas": null
+      },
+      "lunch_relief": {
+        "status": "APPROVED full-hour relief",
+        "coverers": [
+          {
+            "name": "Jada Rawlings",
+            "start": "12:30",
+            "end": "13:30",
+            "areas": [
+              "Expo and restrooms",
+              "MemMex restrooms",
+              "Aquarium"
+            ]
+          }
+        ],
+        "covers_other_employees": [
+          {
+            "name": "Jada Rawlings",
+            "start": "10:00",
+            "end": "11:00",
+            "areas": [
+              "Cat House Cafe restrooms",
+              "Herpetarium",
+              "Event Center and restrooms",
+              "Cat Country",
+              "Komodos"
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "area_definitions": {
+    "Education": {
+      "display": "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+      "rule": "ONE umbrella group, not five independent assignments",
+      "includes": [
+        "Volunteer",
+        "IT",
+        "Interpretation",
+        "four classrooms"
+      ],
+      "classroom_count": 4
+    },
+    "Admin": "East and West Admin include private restrooms; West includes BOTH floors.",
+    "Teton": "Use established Teton/restrooms; noisy Southwest/Switchyards/Kilt Lodge phrases do not create new locations."
+  },
+  "conflicts": [],
+  "pending_questions": [],
+  "unassigned_regular_areas": [],
+  "weekly_duty_reference": {
+    "task": "Elephant Trunk employee men's and women's restrooms",
+    "source": "REV3 Tuesday Kathy page 8 and corrected eight-person Tuesday Kathy page 10: once weekly after opening",
+    "status": "PENDING whether retained in the new Tuesday manual plan. Kathy's standing back-of-house base does not automatically cancel this employee-restroom task; no fresh assignment or extra appointment inferred."
+  },
+  "afternoon_handoffs": {
+    "status": "All dictated Tuesday 14:00, 15:00 and 16:00 handoffs approved and saved.",
+    "trigger_scope": "Planned shift-end times, not verified actual-clock-out integration or runtime.",
+    "assignments": [
+      {
+        "time": "14:00",
+        "from": "Karen Robinson",
+        "to": "Kathy Phelps",
+        "areas": [
+          "Zambezi and restrooms",
+          "Primate Pavilion",
+          "Breezeway restrooms",
+          "Tropical Birds"
+        ],
+        "recipient_retains_own_base": true,
+        "status": "Explicitly approved latest correction",
+        "source_quote": "No, wait ... Give Kathy all of Karen's stuff. Give Jada all of Tammy's stuff",
+        "derived_reconciliation": "ALL current/inherited groups reconciled after explicit approval of reviewed 23-point plan; same recipient/time."
+      },
+      {
+        "time": "14:00",
+        "from": "Tammy Miller",
+        "to": "Jada Rawlings",
+        "areas": [
+          "Teton and restrooms",
+          "Northwest Passage",
+          "East End restrooms"
+        ],
+        "recipient_retains_own_base": true,
+        "status": "Explicitly approved latest correction",
+        "source_quote": "No, wait ... Give Kathy all of Karen's stuff. Give Jada all of Tammy's stuff",
+        "derived_reconciliation": "ALL current/inherited groups reconciled after explicit approval of reviewed 23-point plan; same recipient/time."
+      },
+      {
+        "time": "15:00",
+        "from": "Kathy Phelps",
+        "to": "Derrick Henderson",
+        "areas": [
+          "East Admin and restrooms",
+          "West Admin and restrooms",
+          "Courtyard restrooms",
+          "Nocturnal",
+          "Primate Canyon",
+          "Zambezi and restrooms",
+          "Primate Pavilion",
+          "Breezeway restrooms",
+          "Tropical Birds"
+        ],
+        "recipient_retains_own_base": true,
+        "status": "Explicitly approved by Eric",
+        "source_quote": "Sure",
+        "source_context": "Assistant: 'Derrick to take Kathy's full list and Xavier to take Jada's ...?' Eric approved.",
+        "includes_inherited_areas": true,
+        "derived_reconciliation": "ALL current/inherited groups reconciled after explicit approval of reviewed 23-point plan; same recipient/time."
+      },
+      {
+        "time": "15:00",
+        "from": "Jada Rawlings",
+        "to": "Xavier Green",
+        "areas": [
+          "Cat House Cafe restrooms",
+          "Herpetarium",
+          "Event Center and restrooms",
+          "Cat Country",
+          "Komodos",
+          "Teton and restrooms",
+          "Northwest Passage",
+          "East End restrooms"
+        ],
+        "recipient_retains_own_base": true,
+        "status": "Explicitly approved by Eric",
+        "source_quote": "Sure",
+        "source_context": "Assistant: 'Derrick to take Kathy's full list and Xavier to take Jada's ...?' Eric approved.",
+        "includes_inherited_areas": true,
+        "derived_reconciliation": "ALL current/inherited groups reconciled after explicit approval of reviewed 23-point plan; same recipient/time."
+      },
+      {
+        "time": "16:00",
+        "from": "Derrick Henderson",
+        "to": "Xavier Green",
+        "areas": [
+          "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+          "China and restrooms",
+          "Bonobos restrooms",
+          "East Admin and restrooms",
+          "West Admin and restrooms",
+          "Courtyard restrooms",
+          "Nocturnal",
+          "Primate Canyon",
+          "Zambezi and restrooms",
+          "Primate Pavilion",
+          "Breezeway restrooms",
+          "Tropical Birds"
+        ],
+        "recipient_retains_own_base": true,
+        "includes_inherited_areas": true,
+        "status": "Explicitly approved final handoff",
+        "source_quote": "Yep ... idea is ... every location always has an owner",
+        "source_context": "Assistant asked whether Xavier receives everything again when Derrick leaves at 16:00; Eric approved.",
+        "derived_reconciliation": "ALL current/inherited groups reconciled after explicit approval of reviewed 23-point plan; same recipient/time."
+      }
+    ],
+    "pending": [],
+    "superseded": "Prior Karen → Jada 14:00 handoff is CANCELED. Latest explicit correction also resolves Tammy's Teton/Northwest Passage/East End recipient as Jada; do not retain earlier ambiguity or proposals as current."
+  },
+  "current_user_rules": [
+    "Eric dictates and resolves conflicts; no autonomous balancing, solver, extra areas or week extrapolation.",
+    "Full-hour lunch relief must be explicitly selected and fit shift/own-lunch/other-relief windows; no old relief matrix inherited.",
+    "Retain base while temporary relief is active; coverage is on-call/issues, not another mandatory daily cleaning trip.",
+    "Monday-only removal of 9:45 changeovers does NOT decide Tuesday.",
+    "Proximity and workload matter; two public restroom sets is a rough guideline, not a hard universal count. Inventory is not feasibility.",
+    "Ignore unrelated radio/coworker talk; no assignment derived from radio East End availability.",
+    "Current Tuesday rebalance proposals may be evaluated under rebalance_proposal_constraints; no proposed transfer becomes an assignment without Eric's approval."
+  ],
+  "sources": {
+    "monday_working_draft": "/user_notes/long_form/custodial_manual_monday_working_draft.json",
+    "monday_verified_version": "2026-10-29T18:23:58.109234Z",
+    "tuesday_reference": "/user_notes/long_form/custodial_tuesday_reference_20261029.md",
+    "corrected_pdf": "/workspace/shared/schedule_retrieval/Memphis_Zoo_Eight_Employee_Handouts.pdf",
+    "source_quotes": [
+      "Let's start with Tammy ... get her the standard",
+      "Karen, the same thing she had Monday ... Kathy ... East Admin, West Admin, and Education",
+      "Karen with ... Pavilion, Pinet Canyon, and Breezeway",
+      "do Jada with whatever she had Monday",
+      "Courtyard, cathouse, and tropical birds",
+      "start by giving them what they had the previous day on Monday",
+      "take it from Derek We'll leave it with Kathy ... that's Kathy's schedule every day she's there. Just keep her away from the public",
+      "Karen on Primate Pavilion, not Canyon. Is that right?",
+      "she supposed to have both"
+    ],
+    "historical_weight_reference": "/workspace/shared/CUSTODIAL_HISTORICAL_GPS_AND_WEIGHT_REFERENCE_20261029.md",
+    "historical_weight_reference_scope": "Historical reference completed separately; no further research or live-value equivalence inferred.",
+    "stored_weights_and_gps": "/user_notes/long_form/custodial_stored_weights_20261029/README.md",
+    "stored_weights_and_gps_scope": "Existing audit agent's read-only direct Supabase/source retrieval, approximately 20:27–20:33 UTC; full evidence preserved. No new retrieval or program mutation by memory."
+  },
+  "next_user_decisions": [
+    "Clarify Tuesday 9:45 policy if needed; no rearrangement was dictated, but no global rule removal inferred.",
+    "Confirm retention/assignment of weekly Tuesday Elephant Trunk employee-restroom extra."
+  ],
+  "inventory_check": {
+    "requested_entries": 23,
+    "unique_regular_groups": 23,
+    "duplicate_groups": [],
+    "unassigned_groups": [],
+    "status": "PASS after approved reviewed plan: 23 groups assigned exactly once.",
+    "checked_at": "2026-10-30T00:15:00Z"
+  },
+  "resolved_conflicts": [
+    {
+      "area": "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+      "resolution": "KEEP Kathy, REMOVE Derrick",
+      "source_quote": "take it from Derek We'll leave it with Kathy",
+      "resolved_at": "2026-10-29T18:32:00Z"
+    },
+    {
+      "area": "Primate Canyon",
+      "resolution": "Karen explicitly has BOTH Pavilion and Canyon; remove Canyon from Derrick",
+      "source_assistant_question": "Karen on Primate Pavilion, not Canyon. Is that right?",
+      "source_user_answer": "she supposed to have both",
+      "resolved_at": "2026-10-29T18:35:00Z"
+    }
+  ],
+  "standing_assignment_rules": {
+    "Kathy_Phelps": {
+      "workdays": [
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday",
+        "Saturday"
+      ],
+      "base_areas": [
+        "East Admin and restrooms",
+        "West Admin and restrooms",
+        "Education (includes Volunteer, IT, Interpretation, and four classrooms)"
+      ],
+      "preference": "Back-of-house assignment preference; no derogatory interpretation or personnel inference.",
+      "scope": "Explicit all-workday instruction, superseding old Courtyard/Breezeway anchors for the new manual days. Kathy remains OFF Monday; no other shifts changed.",
+      "source_quote": "that's Kathy's schedule every day she's there. Just keep her away from the public",
+      "weekly_Tuesday_exception": "Elephant Trunk EMPLOYEE restroom task remains pending user retention decision, not automatically canceled.",
+      "latest_Tuesday_override": "Eric accepted Tuesday East Admin/West Admin/Courtyard/Nocturnal/Primate Canyon; Education moves to Derrick. Earlier all-workday Education anchor remains history/other-day context, not the current Tuesday assignment."
+    }
+  },
+  "latest_base_batch": {
+    "source": "Eric approved review layout Sentinel_0510dda1e114819197c53286a4f66b96 at October 30 00:14 UTC",
+    "quote": "All right, I like it. Go ahead and update the handoff",
+    "moves": [
+      "Tropical Birds: Jada→Karen",
+      "Nocturnal and Primate Canyon: Karen→Kathy",
+      "Education: Kathy→Derrick",
+      "Cat Country and Komodos: Derrick→Jada"
+    ],
+    "scope": "Original reviewed balanced-chain plan, not another alternative. Derived relief/handoffs updated; no new coverer/time choice.",
+    "base_only_sums": {
+      "Tammy Miller": 24,
+      "Karen Robinson": 23,
+      "Kathy Phelps": 23,
+      "Jada Rawlings": 23,
+      "Derrick Henderson": 23,
+      "Xavier Green": 20
+    },
+    "total": 136
+  },
+  "lunch_preparation": {
+    "instruction": "Use Monday relief where possible, but only as candidates. No user selection inferred; updated Tuesday areas/load must be reviewed.",
+    "surviving_Monday_pairs": [
+      {
+        "coverer": "Karen Robinson",
+        "recipient": "Derrick Henderson",
+        "start": "10:30",
+        "end": "11:30",
+        "status": "Explicitly selected for Tuesday using the recipient's current Tuesday base."
+      },
+      {
+        "coverer": "Jada Rawlings",
+        "recipient": "Xavier Green",
+        "start": "12:30",
+        "end": "13:30",
+        "status": "Explicitly selected for Tuesday using the recipient's current Tuesday base."
+      }
+    ],
+    "unavailable_Monday_helpers": [
+      "Alijah Collins",
+      "Kiltra Horton"
+    ],
+    "exempt_from_covering_others": [],
+    "no_current_assignments": false,
+    "time_only_options": [
+      {
+        "recipient": "Tammy Miller",
+        "start": "08:30",
+        "end": "09:30",
+        "full_hour_time_candidates": [
+          "Karen Robinson",
+          "Kathy Phelps",
+          "Jada Rawlings",
+          "Derrick Henderson",
+          "Xavier Green"
+        ],
+        "selected_coverer": "Karen Robinson",
+        "option_status": "Earlier time-only candidate reference, not a complete recomputation after current assignments. Check selected relief and own-lunch conflicts before suggesting further coverage."
+      },
+      {
+        "recipient": "Karen Robinson",
+        "start": "09:30",
+        "end": "10:30",
+        "full_hour_time_candidates": [
+          "Kathy Phelps",
+          "Derrick Henderson",
+          "Xavier Green"
+        ],
+        "selected_coverer": "Tammy Miller",
+        "option_status": "Earlier time-only candidate reference, not a complete recomputation after current assignments. Check selected relief and own-lunch conflicts before suggesting further coverage."
+      },
+      {
+        "recipient": "Kathy Phelps",
+        "start": "10:30",
+        "end": "11:30",
+        "full_hour_time_candidates": [
+          "Karen Robinson",
+          "Xavier Green"
+        ],
+        "selected_coverer": "Tammy Miller",
+        "option_status": "Earlier time-only candidate reference, not a complete recomputation after current assignments. Check selected relief and own-lunch conflicts before suggesting further coverage."
+      },
+      {
+        "recipient": "Jada Rawlings",
+        "start": "10:00",
+        "end": "11:00",
+        "full_hour_time_candidates": [
+          "Xavier Green"
+        ],
+        "selected_coverer": "Xavier Green",
+        "option_status": "Earlier time-only candidate reference, not a complete recomputation after current assignments. Check selected relief and own-lunch conflicts before suggesting further coverage."
+      },
+      {
+        "recipient": "Derrick Henderson",
+        "start": "10:30",
+        "end": "11:30",
+        "full_hour_time_candidates": [
+          "Karen Robinson",
+          "Xavier Green"
+        ],
+        "selected_coverer": "Karen Robinson",
+        "option_status": "Earlier time-only candidate reference, not a complete recomputation after current assignments. Check selected relief and own-lunch conflicts before suggesting further coverage."
+      },
+      {
+        "recipient": "Xavier Green",
+        "start": "12:30",
+        "end": "13:30",
+        "full_hour_time_candidates": [
+          "Karen Robinson",
+          "Kathy Phelps",
+          "Jada Rawlings",
+          "Derrick Henderson"
+        ],
+        "selected_coverer": "Jada Rawlings",
+        "option_status": "Earlier time-only candidate reference, not a complete recomputation after current assignments. Check selected relief and own-lunch conflicts before suggesting further coverage."
+      }
+    ],
+    "scope": "Full-hour availability from shift and own-lunch baselines ONLY, before any relief is assigned; no workload/travel/route feasibility claim or simultaneous-relief allocation.",
+    "important_constraints": [
+      "Karen → Kathy is canceled; current 10:30–11:30 choices are Tammy → Kathy and Karen → Derrick.",
+      "Tammy's two approved reliefs meet at 10:30 without overlap; every coverer retains their own base.",
+      "Jada covers ONLY Xavier's Expo/restrooms, MemMex restrooms and Aquarium 12:30–13:30. Komodos remains with Derrick."
+    ],
+    "status": "COMPLETE dictated six-person lunch matrix; no unassigned own-lunch relief.",
+    "tammy_exception": "Tuesday explicitly approved Tammy → Karen 09:30–10:30 and Tammy → Kathy 10:30–11:30; Monday unchanged."
+  },
+  "weight_totals": {
+    "status": "Approved Tuesday BASE-only sums: Tammy 24, Karen 23, Kathy 23, Jada 23, Derrick 23, Xavier 20; total 136. Excludes lunch/inherited areas/time/GPS; not combined 75/25 or measured feasibility.",
+    "scope": "No workload scores inferred from area counts."
+  },
+  "scoring_intent": {
+    "source": "Eric's direct October 29, 2026 voice statement, relayed by the parent",
+    "quotes": [
+      "that's what we really should go by is the weights ... based on the difficulty ratings and the GPS proximities",
+      "75 percent ... GPS side,25 percent ... difficulty side"
+    ],
+    "gps_proximity_percent": 75,
+    "difficulty_percent": 25,
+    "status": "Eric's 75% GPS/proximity / 25% difficulty intent remains recorded. Actual installed active coefficients are .75 proximity/.25 difficulty/0 priority, but inspected installed candidate mathematics use route-grid/cluster spread, NOT latitude/longitude distance. Runtime binding to every latest scheduling path is not established.",
+    "authority_limit": "No program editing, new solver, automatic reassignment or publication authorized by this preference.",
+    "new_user_ratings": "/user_notes/long_form/custodial_difficulty_ratings_user_20261029.json",
+    "future_pointer": "Dashboard-map provenance is now recovered. Eric explicitly confirmed the approved map is in the new program; do not ask again. Approved artwork/pixel anchors and historical map-reference coordinates remain separate from stored scheduler coordinates.",
+    "recovered_calculations": {
+      "ui_weight": "Difficulty × Priority, separate from candidate score.",
+      "candidate": "round(0.75 × marginal route-spread penalty + 0.25 × group difficulty + 0 × group priority, 2)",
+      "route_spread": "With more than one group proximity record: round(0.75 × route_x range + 0.25 × route_y range + 8 × max(distinct clusters − 1, 0), 2); marginal increase clamped to at least zero.",
+      "difficulty": "Active manual_load_points override, otherwise sum of active individual difficulty ratings (missing defaults 1). Bonobos override 75 supersedes raw individual difficulty sum 16 in this function.",
+      "limits": "Installed definitions retrieved, NOT executed. No Haversine/common 0–100 normalization in this chain; internal x/y 75/25 differs from proximity/difficulty 75/25. This is not a runtime-tested employee score."
+    },
+    "current_working_model": "/user_notes/long_form/custodial_area_group_scoring_draft_20261029.json",
+    "working_model_supersession": "Eric's current voice direction uses ONE combined 1–10 workload per assigned area group, including building/restrooms and effort/time/traffic/frequency/importance; proximity separate. This supersedes earlier individual-rating proposals as the working model, not stored evidence or production formulas.",
+    "current_workflow": "Keep Eric's own weights + GPS/proximity method in planning, independent of legacy grid/formula/overrides; integrate only at a later authorized step after it is figured out."
+  },
+  "base_review_state": {
+    "status": "Eric explicitly approved reviewed full plan and directed handoff reconciliation; current Tuesday bases/reliefs/handoffs now reflect it.",
+    "scope": "User's current manual review decision, not measured workload, route feasibility, live publication or whole-program approval."
+  },
+  "lunch_relief_assignments": [
+    {
+      "coverer": "Karen Robinson",
+      "recipient": "Tammy Miller",
+      "start": "08:30",
+      "end": "09:30",
+      "areas": [
+        "Teton and restrooms",
+        "Northwest Passage",
+        "East End restrooms"
+      ],
+      "status": "Explicitly approved by Eric",
+      "source_quote": "give Karen Tammy's lunch coverage",
+      "derived_reconciliation": "Updated under Eric's approved reviewed-base plan and explicit 'update the handoff' instruction; same coverer/full-hour time, all current recipient groups."
+    },
+    {
+      "coverer": "Tammy Miller",
+      "recipient": "Karen Robinson",
+      "start": "09:30",
+      "end": "10:30",
+      "areas": [
+        "Zambezi and restrooms",
+        "Primate Pavilion",
+        "Breezeway restrooms",
+        "Tropical Birds"
+      ],
+      "status": "Explicitly approved by Eric; Tuesday-only exception to Tammy's prior no-other-lunch coverage preference",
+      "source_quote": "let's have Tammy cover Karen for this swap",
+      "derived_reconciliation": "Updated under Eric's approved reviewed-base plan and explicit 'update the handoff' instruction; same coverer/full-hour time, all current recipient groups."
+    },
+    {
+      "coverer": "Xavier Green",
+      "recipient": "Jada Rawlings",
+      "start": "10:00",
+      "end": "11:00",
+      "areas": [
+        "Cat House Cafe restrooms",
+        "Herpetarium",
+        "Event Center and restrooms",
+        "Cat Country",
+        "Komodos"
+      ],
+      "status": "Explicitly approved by Eric",
+      "source_quote": "it's gotta be him then. So yeah give it to Xavier",
+      "derived_reconciliation": "Updated under Eric's approved reviewed-base plan and explicit 'update the handoff' instruction; same coverer/full-hour time, all current recipient groups."
+    },
+    {
+      "coverer": "Tammy Miller",
+      "recipient": "Kathy Phelps",
+      "start": "10:30",
+      "end": "11:30",
+      "areas": [
+        "East Admin and restrooms",
+        "West Admin and restrooms",
+        "Courtyard restrooms",
+        "Nocturnal",
+        "Primate Canyon"
+      ],
+      "status": "Explicitly approved replacement of Karen → Kathy; Tuesday-only Tammy coverage exception",
+      "source_quote": "Yeah, I like ... what you just said there",
+      "source_context": "Historical coverer-selection proposal had old area lists; Eric approved Tammy for Kathy and Karen for Derrick. The later approved balanced-chain plan updates all area lists above, not these selected coverers/times.",
+      "area_scope": "East and West Admin private restrooms/both West floors, Courtyard, Nocturnal and Primate Canyon. Education is now Derrick's base, not Kathy's.",
+      "derived_reconciliation": "Updated under Eric's approved reviewed-base plan and explicit 'update the handoff' instruction; same coverer/full-hour time, all current recipient groups."
+    },
+    {
+      "coverer": "Karen Robinson",
+      "recipient": "Derrick Henderson",
+      "start": "10:30",
+      "end": "11:30",
+      "areas": [
+        "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+        "China and restrooms",
+        "Bonobos restrooms"
+      ],
+      "status": "Explicitly approved by Eric in the 10:30–11:30 swap",
+      "source_quote": "Yeah, I like ... what you just said there",
+      "derived_reconciliation": "Updated under Eric's approved reviewed-base plan and explicit 'update the handoff' instruction; same coverer/full-hour time, all current recipient groups."
+    },
+    {
+      "coverer": "Jada Rawlings",
+      "recipient": "Xavier Green",
+      "start": "12:30",
+      "end": "13:30",
+      "areas": [
+        "Expo and restrooms",
+        "MemMex restrooms",
+        "Aquarium"
+      ],
+      "status": "Explicitly approved by Eric",
+      "source_quote": "Do it",
+      "source_context": "Original user selection approved Jada for Xavier's full 12:30–13:30 lunch. The earlier statement that Komodos remained Derrick's is historical and superseded: approved current Tuesday Komodos belongs to Jada, not Xavier's relief.",
+      "derived_reconciliation": "Updated under Eric's approved reviewed-base plan and explicit 'update the handoff' instruction; same coverer/full-hour time, all current recipient groups."
+    }
+  ],
+  "relief_consistency_check": {
+    "checked_at": "2026-10-30T00:15:00Z",
+    "approved_assignments": 6,
+    "full_hour": true,
+    "exact_recipient_lunch": true,
+    "within_coverer_shift": true,
+    "no_coverer_own_lunch_overlap": true,
+    "reciprocal_boundary": "Karen finishes Tammy coverage exactly at 09:30 and starts own lunch; Tammy returns at 09:30 and covers Karen until 10:30.",
+    "retains_base": true,
+    "scope": "Time availability only, not workload/travel feasibility.",
+    "rejected_or_corrected": [
+      "Jada covering Karen was proposed then rejected because Jada's own 10:00–11:00 lunch overlaps.",
+      "Karen's own lunch remains 09:30–10:30; erroneous voice 09:00–10:00 was corrected."
+    ],
+    "no_coverer_relief_overlap": true,
+    "latest": "Full six-relief matrix checked. Jada's own lunch 10:00–11:00 ends before Xavier relief 12:30–13:30. No coverer own-lunch or assigned-relief overlaps; all full hours within shifts. Inventory/time checks only, not physical feasibility.",
+    "superseded_assignments": [
+      {
+        "coverer": "Karen Robinson",
+        "recipient": "Kathy Phelps",
+        "start": "10:30",
+        "end": "11:30",
+        "status": "CANCELED by Eric's approved replacement; not current coverage."
+      }
+    ],
+    "all_six_own_lunches_covered_once": true,
+    "recipient_areas_exact": true
+  },
+  "afternoon_partial_snapshot": {
+    "time": "14:00",
+    "ownership": {
+      "Kathy Phelps": [
+        "East Admin and restrooms",
+        "West Admin and restrooms",
+        "Courtyard restrooms",
+        "Nocturnal",
+        "Primate Canyon",
+        "Zambezi and restrooms",
+        "Primate Pavilion",
+        "Breezeway restrooms",
+        "Tropical Birds"
+      ],
+      "Jada Rawlings": [
+        "Cat House Cafe restrooms",
+        "Herpetarium",
+        "Event Center and restrooms",
+        "Cat Country",
+        "Komodos",
+        "Teton and restrooms",
+        "Northwest Passage",
+        "East End restrooms"
+      ],
+      "Derrick Henderson": [
+        "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+        "China and restrooms",
+        "Bonobos restrooms"
+      ],
+      "Xavier Green": [
+        "Expo and restrooms",
+        "MemMex restrooms",
+        "Aquarium"
+      ]
+    },
+    "counts": {
+      "Kathy Phelps": 9,
+      "Jada Rawlings": 8,
+      "Derrick Henderson": 3,
+      "Xavier Green": 3
+    },
+    "status": "Complete approved 14:00 ownership snapshot: 23 original bundled groups exactly once; no planned inventory handoff gaps at this transition.",
+    "scope": "Inventory only, not measured workload/travel feasibility or actual-clock-out runtime."
+  },
+  "current_area_snapshots": [
+    {
+      "time": "14:00",
+      "ownership": {
+        "Kathy Phelps": [
+          "East Admin and restrooms",
+          "West Admin and restrooms",
+          "Courtyard restrooms",
+          "Nocturnal",
+          "Primate Canyon",
+          "Zambezi and restrooms",
+          "Primate Pavilion",
+          "Breezeway restrooms",
+          "Tropical Birds"
+        ],
+        "Jada Rawlings": [
+          "Cat House Cafe restrooms",
+          "Herpetarium",
+          "Event Center and restrooms",
+          "Cat Country",
+          "Komodos",
+          "Teton and restrooms",
+          "Northwest Passage",
+          "East End restrooms"
+        ],
+        "Derrick Henderson": [
+          "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+          "China and restrooms",
+          "Bonobos restrooms"
+        ],
+        "Xavier Green": [
+          "Expo and restrooms",
+          "MemMex restrooms",
+          "Aquarium"
+        ]
+      },
+      "counts": {
+        "Kathy Phelps": 9,
+        "Jada Rawlings": 8,
+        "Derrick Henderson": 3,
+        "Xavier Green": 3
+      },
+      "inventory_status": "23 unique original bundled groups; no planned inventory handoff gaps."
+    },
+    {
+      "time": "15:00",
+      "ownership": {
+        "Derrick Henderson": [
+          "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+          "China and restrooms",
+          "Bonobos restrooms",
+          "East Admin and restrooms",
+          "West Admin and restrooms",
+          "Courtyard restrooms",
+          "Nocturnal",
+          "Primate Canyon",
+          "Zambezi and restrooms",
+          "Primate Pavilion",
+          "Breezeway restrooms",
+          "Tropical Birds"
+        ],
+        "Xavier Green": [
+          "Expo and restrooms",
+          "MemMex restrooms",
+          "Aquarium",
+          "Cat House Cafe restrooms",
+          "Herpetarium",
+          "Event Center and restrooms",
+          "Cat Country",
+          "Komodos",
+          "Teton and restrooms",
+          "Northwest Passage",
+          "East End restrooms"
+        ]
+      },
+      "counts": {
+        "Derrick Henderson": 12,
+        "Xavier Green": 11
+      },
+      "inventory_status": "23 unique original bundled groups; no planned inventory handoff gaps.",
+      "scope": "Inventory only, not measured workload/travel feasibility or actual-clock-out runtime."
+    },
+    {
+      "time": "16:00",
+      "through": "17:00",
+      "ownership": {
+        "Xavier Green": [
+          "Expo and restrooms",
+          "MemMex restrooms",
+          "Aquarium",
+          "Cat House Cafe restrooms",
+          "Herpetarium",
+          "Event Center and restrooms",
+          "Cat Country",
+          "Komodos",
+          "Teton and restrooms",
+          "Northwest Passage",
+          "East End restrooms",
+          "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+          "China and restrooms",
+          "Bonobos restrooms",
+          "East Admin and restrooms",
+          "West Admin and restrooms",
+          "Courtyard restrooms",
+          "Nocturnal",
+          "Primate Canyon",
+          "Zambezi and restrooms",
+          "Primate Pavilion",
+          "Breezeway restrooms",
+          "Tropical Birds"
+        ]
+      },
+      "counts": {
+        "Xavier Green": 23
+      },
+      "inventory_status": "All 23 original bundled groups assigned once to Xavier for 16:00–17:00.",
+      "scope": "Only planned staffed window until Xavier's 17:00 shift end. No 24-hour or post-17:00 ownership promise; no actual-clock-out runtime proof."
+    }
+  ],
+  "coverage_end": {
+    "time": "17:00",
+    "last_employee": "Xavier Green",
+    "status": "End of planned staffed window; no later coverage or 24-hour ownership inferred."
+  },
+  "final_manual_consistency_check": {
+    "checked_at": "2026-10-30T00:15:00Z",
+    "base_people": 6,
+    "base_groups": 23,
+    "base_groups_unique": true,
+    "lunch_reliefs": 6,
+    "each_own_lunch_covered_once": true,
+    "full_hour_reliefs": true,
+    "relief_matches_current_recipient_areas": true,
+    "within_coverer_shifts": true,
+    "no_coverer_own_lunch_overlap": true,
+    "no_same_coverer_relief_overlap": true,
+    "handoff_snapshots": [
+      {
+        "time": "14:00",
+        "counts": {
+          "Kathy Phelps": 9,
+          "Jada Rawlings": 8,
+          "Derrick Henderson": 3,
+          "Xavier Green": 3
+        },
+        "total_groups": 23,
+        "unique_groups": 23,
+        "inventory_gaps": [],
+        "duplicate_groups": []
+      },
+      {
+        "time": "15:00",
+        "counts": {
+          "Derrick Henderson": 12,
+          "Xavier Green": 11
+        },
+        "total_groups": 23,
+        "unique_groups": 23,
+        "inventory_gaps": [],
+        "duplicate_groups": []
+      },
+      {
+        "time": "16:00",
+        "counts": {
+          "Xavier Green": 23
+        },
+        "total_groups": 23,
+        "unique_groups": 23,
+        "inventory_gaps": [],
+        "duplicate_groups": []
+      }
+    ],
+    "superseded_choices_excluded": [
+      "Karen → Kathy lunch; replaced by Tammy → Kathy and Karen → Derrick",
+      "Karen → Jada 14:00; replaced by Karen → Kathy and Tammy → Jada"
+    ],
+    "scope": "Base/relief/handoff inventory and time consistency, using dictated unchanged bases; Tuesday 9:45 choice/weekly Elephant Trunk remain unresolved. Full 23-group interval check covers 08:00–17:00 only, not earlier arrivals/24-hour service, physical travel/workload or runtime proof.",
+    "interval_checks": [
+      {
+        "start_minutes": 480,
+        "end_minutes": 510,
+        "unique_groups": 23,
+        "pass": true
+      },
+      {
+        "start_minutes": 510,
+        "end_minutes": 570,
+        "unique_groups": 23,
+        "pass": true
+      },
+      {
+        "start_minutes": 570,
+        "end_minutes": 600,
+        "unique_groups": 23,
+        "pass": true
+      },
+      {
+        "start_minutes": 600,
+        "end_minutes": 630,
+        "unique_groups": 23,
+        "pass": true
+      },
+      {
+        "start_minutes": 630,
+        "end_minutes": 660,
+        "unique_groups": 23,
+        "pass": true
+      },
+      {
+        "start_minutes": 660,
+        "end_minutes": 690,
+        "unique_groups": 23,
+        "pass": true
+      },
+      {
+        "start_minutes": 690,
+        "end_minutes": 750,
+        "unique_groups": 23,
+        "pass": true
+      },
+      {
+        "start_minutes": 750,
+        "end_minutes": 810,
+        "unique_groups": 23,
+        "pass": true
+      },
+      {
+        "start_minutes": 810,
+        "end_minutes": 840,
+        "unique_groups": 23,
+        "pass": true
+      },
+      {
+        "start_minutes": 840,
+        "end_minutes": 900,
+        "unique_groups": 23,
+        "pass": true
+      },
+      {
+        "start_minutes": 900,
+        "end_minutes": 960,
+        "unique_groups": 23,
+        "pass": true
+      },
+      {
+        "start_minutes": 960,
+        "end_minutes": 1020,
+        "unique_groups": 23,
+        "pass": true
+      }
+    ],
+    "errors": []
+  },
+  "manual_plan_completion": {
+    "base_and_lunches_and_departure_handoffs": "All explicitly dictated choices saved and verified.",
+    "unresolved": [
+      "Tuesday 9:45 policy was not explicitly chosen; no rearrangement has been dictated, and Monday-only no-changeover instruction is not silently extended.",
+      "Weekly Tuesday Elephant Trunk employee-restroom extra remains unresolved; neither canceled nor newly assigned."
+    ],
+    "not_implemented": "No HTML, program, PDF, database or publication changes.",
+    "status": "Approved reviewed Tuesday bases and all six full-hour reliefs plus corrected 14:00/15:00/16:00 handoffs saved and verified; 9:45 and weekly Elephant Trunk questions remain distinct unresolved details."
+  },
+  "stored_reference_summary": {
+    "location_rows": 49,
+    "active_location_rows": 47,
+    "inactive_elephant_trunk_restrooms": 2,
+    "tuesday_families": 23,
+    "tuesday_individual_rows": 45,
+    "other_active_rows": "Two seasonal Splash Pad rows; active database flag does not cancel schedule exclusion.",
+    "coordinates": "22 group geographic points (mostly updated April 28) plus Cat Country direct point (July 29), not survey proof. Cat Country lacks a group route grid row; inspected spread function does not substitute its direct GPS.",
+    "map": "Renderer loads accepted October 10 artwork/fit and 47 pixel anchors; display positioning is separate from scheduler GPS and October 2 unapplied/frozen reference.",
+    "receipt": "Table posted in chat Sentinel_2ba5bb5644e481918dbe7a246809c2bc at 20:29 UTC; spoken acknowledgment uncertain.",
+    "new_ratings": "NEW October 29 user ratings remain separately preserved, pending discussion/decisions; no DB write or assignment change."
+  },
+  "education_label_clarification": {
+    "received_at_utc": "2026-10-29T21:29:07Z",
+    "display": "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+    "scope": "Description only: explicit four classrooms; same one-group identity, owners, shifts, lunches and handoff choices unchanged."
+  },
+  "previous_base_batch": {
+    "source": "Direct Eric dictation on October 29, 2026, including final Komodos correction relayed at 18:39:56 UTC.",
+    "quotes": [
+      "take Cat Country from Kathy and give her Courtyard Restrooms and take those from Jada ... give Jada Cat House Cafe, Tropical Birds, Herpetarium, and Event Center ... give Derek ... Cat Country",
+      "yeah, keep that with Jada",
+      "No, no ... Komodos goes to ... Derrick",
+      "yeah, give Derek ... Komodo"
+    ],
+    "moves": [
+      "Cat Country: Kathy → Derrick",
+      "Courtyard restrooms: Jada → Kathy, Tuesday ONLY",
+      "Event Center/restrooms: Xavier → Jada",
+      "Nocturnal explicitly stays with Jada",
+      "Komodos: Xavier → Derrick, final explicit correction after unrelated radio interruption"
+    ],
+    "standing_Kathy_rule": "Three standing private Admin/Education anchors unchanged; Courtyard is the latest explicit Tuesday exception, replacing the earlier Tuesday Cat Country addition."
+  },
+  "rebalance_proposal_constraints": {
+    "received_at_utc": "2026-10-30T00:11:41Z",
+    "authority": "Eric's explicit current Tuesday rebalance-proposal request relayed by parent.",
+    "fixed_anchors": {
+      "Tammy Miller": [
+        "Teton and restrooms",
+        "Northwest Passage",
+        "East End restrooms"
+      ],
+      "Karen Robinson": [
+        "Zambezi and restrooms",
+        "Primate Pavilion"
+      ],
+      "Kathy Phelps": [
+        "East Admin and restrooms",
+        "West Admin and restrooms",
+        "Courtyard restrooms"
+      ]
+    },
+    "karen_minimum": "AT LEAST Zambezi and Primate Pavilion stay with Karen; this does not lock all five of her current areas.",
+    "education_movable": "Education was permitted to move and Eric accepted the reviewed plan assigning it to Derrick for TUESDAY; prior Kathy Education lock is superseded for this day only.",
+    "scope": "Proposal reviewed and explicitly accepted; these anchor constraints were satisfied. No automatic future moves.",
+    "no_changes": "Accepted plan now applied to Tuesday WORKING memory only; Monday remains approved/locked. No HTML/DB/program/publication changes.",
+    "previous_base_sums_before_acceptance": {
+      "Tammy Miller": 24,
+      "Karen Robinson": 22,
+      "Kathy Phelps": 27,
+      "Jada Rawlings": 22,
+      "Derrick Henderson": 21,
+      "Xavier Green": 20
+    },
+    "current_approved_base_sums": {
+      "Tammy Miller": 24,
+      "Karen Robinson": 23,
+      "Kathy Phelps": 23,
+      "Jada Rawlings": 23,
+      "Derrick Henderson": 23,
+      "Xavier Green": 20
+    }
+  },
+  "pending_rebalance_proposal": {
+    "path": "/user_notes/long_form/custodial_tuesday_rebalance_proposal_20261030.json",
+    "status": "ACCEPTED by Eric and APPLIED to this WORKING draft",
+    "chat_message_id": "Sentinel_0510dda1e114819197c53286a4f66b96",
+    "identity": "Original balanced-chain proposal, not the two-move alternative.",
+    "current_assignments": "Now the complete approved balanced-chain plan: 24/23/23/23/23/20, total 136; earlier Nocturnal→Karen plan superseded.",
+    "owner_route_note": "Eric confirms Karen's Zambezi–Tropical Birds route is acceptable/used before; not a measured distance or acceptance of the whole proposal.",
+    "approval_quote": "All right, I like it. Go ahead and update the handoff"
+  },
+  "user_review_approval": {
+    "received_at_utc": "2026-10-30T00:14:09Z",
+    "quote": "All right, I like it. Go ahead and update the handoff",
+    "review_message_id": "Sentinel_0510dda1e114819197c53286a4f66b96",
+    "proposal_source": "/user_notes/long_form/custodial_tuesday_rebalance_proposal_20261030.json",
+    "scope": "Applies the complete original reviewed 23-point plan and reconciles existing six full-hour reliefs/2/3/4 p.m. ALL-current-area handoffs. Not the two-move alternative, no production change.",
+    "latest_reaffirmation": {
+      "received_at_utc": "2026-10-30T00:16:47Z",
+      "quote": "Yeah, let's do that",
+      "context": "Eric viewed two-swap comparison Sentinel_9d7f228a616c81919f3b1c64b1358d53 and REAFFIRMED the original reviewed 23s plan already applied at 00:15:10, not the alternative.",
+      "assignment_changes": false
+    },
+    "locked_scope": "Accepted/locked current Tuesday rebalance bases, existing six relief choices/times and derived 2/3/4 p.m. handoffs. Tuesday 9:45 policy and weekly Elephant Trunk remain separately open; no production lock/activation."
+  },
+  "previous_nocturnal_transfer_batch": {
+    "source": "Direct Eric voice, relayed October 30 00:05:21 UTC (October 29 evening CDT)",
+    "quote": "give Karen nocturnal",
+    "moves": [
+      "Nocturnal: Jada Rawlings → Karen Robinson, TUESDAY ONLY"
+    ],
+    "derived_consequences": [
+      "Tammy covers Karen 09:30–10:30 including Nocturnal.",
+      "Xavier covers Jada 10:00–11:00 excluding Nocturnal.",
+      "Nocturnal Karen→Kathy at 14:00, Kathy→Derrick at 15:00, Derrick→Xavier at 16:00."
+    ],
+    "scope": "Same coverers/full-hour times and existing ALL-current/inherited transfer rules; no new recipient choices. Monday APPROVED/LOCKED and unchanged.",
+    "base_only_sums": {
+      "Tammy Miller": 24,
+      "Karen Robinson": 22,
+      "Kathy Phelps": 27,
+      "Jada Rawlings": 22,
+      "Derrick Henderson": 21,
+      "Xavier Green": 20
+    },
+    "total": 136
+  }
+}

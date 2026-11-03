@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import express from 'express';
+import '../src/leadership-bootstrap.js';
+import {createGeneralJsonMiddleware} from '../src/request-json-parser.js';
+import {createMemphisResponder} from '../src/memphis-ai.js';
 import {
   guestFeatureState,
   normalizeFeedbackInput,
@@ -11,6 +15,30 @@ import {
 } from "../src/public-submission-controls.js";
 
 const root = resolve(import.meta.dirname, "..");
+if(process.argv.includes('--feedback-json-verbatim-only')) {
+  const app=express();app.use(createGeneralJsonMiddleware());
+  app.post('/feedback-api/submit',(req,res)=>res.json({body:req.body,message:normalizeFeedbackInput(req.body).message}));
+  const server=await new Promise(resolve=>{const listener=app.listen(0,'127.0.0.1',()=>resolve(listener));});
+  const message='Who’s working? “Keep this”—including ‘quotes’, en–dash, ñ 🦁\nand the next line.';
+  const body={category:'app_problem',message,body:message,userMessage:message,user_message:message,prompt:message};
+  try {
+    for(const wire of [JSON.stringify(body),JSON.stringify(body).replace(/[’‘“”–—]/g,c=>'\\u'+c.charCodeAt(0).toString(16).padStart(4,'0'))]) {
+      const response=await fetch('http://127.0.0.1:'+server.address().port+'/feedback-api/submit',
+        {method:'POST',headers:{'content-type':'application/json'},body:wire});
+      assert.equal(response.status,200);const result=await response.json();
+      assert.deepEqual(result.body,body,'the actual mounted JSON parser preserves every submitted string');
+      assert.equal(result.message,message,'normal Feedback storage input preserves punctuation and internal whitespace');
+    }
+    const responder=createMemphisResponder({runReadOnlySql:async()=>[],runRpc:async()=>null});
+    const straight=await responder.diagnoseMessage({userMessage:"Who's working?"});
+    const smart=await responder.diagnoseMessage({userMessage:'Who’s working?'});
+    assert.equal(straight.route.intent,'daily_staff_schedule');
+    assert.deepEqual(smart.route,straight.route,'smart punctuation is normalized only for intent matching');
+    assert.equal(smart.original_message,'Who’s working?');
+    console.log('FEEDBACK_VERBATIM_JSON_AND_LOCAL_PROMPT_MATCHING_PASS: real loopback parser and storage normalizer; no database or authenticated submission claim');
+  } finally {server.closeAllConnections?.();await new Promise((resolve,reject)=>server.close(e=>e?reject(e):resolve()));}
+  process.exit(0);
+}
 const api = readFileSync(resolve(root, "src/index.js"), "utf8");
 const migration = readFileSync(resolve(root, "supabase/migrations/20260729225858_audit5_feedback_guest_approval_lifecycle.sql"), "utf8");
 const recoveryFenceMigration = readFileSync(resolve(root, "supabase/migrations/20260827150000_disaster_recovery_global_mutation_fence.sql"), "utf8");

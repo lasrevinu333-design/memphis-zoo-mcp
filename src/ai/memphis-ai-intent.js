@@ -27,6 +27,7 @@ const LOCATION_CODE_STOP_WORDS = new Set([
   "YESTERDAY",
   "NEXT",
   "OPEN",
+  "SHOW",
   "OWNER",
   "PHONE",
   "NUMBER",

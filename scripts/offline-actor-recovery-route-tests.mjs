@@ -65,7 +65,8 @@ const generalAccess = await authenticateDeviceCredentialRequest(request("tool_ge
   env, store: store(revokedCredential), runReadOnlySql: resolver, now: new Date("2026-08-10T02:00:00.000Z"),
 });
 assert.equal(generalAccess.ok, false);
-assert.equal(generalAccess.code, "device_credential_required");
+assert.equal(generalAccess.code, "device_credential_recovery_required",
+  "a proven but revoked same-device credential has no normal access and needs manager recovery");
 
 const activeCredential = { ...revokedCredential, revoked_at: null };
 const normalCommit = await authenticateDeviceCredentialRequest(request("tool_commit_cleaning_workflow"), {
@@ -78,7 +79,10 @@ const forged = await authenticateDeviceCredentialRequest(request("tool_commit_cl
   env, store: store(revokedCredential), runReadOnlySql: resolver, now: new Date("2026-08-10T02:00:00.000Z"),
 });
 assert.equal(forged.ok, false);
-assert.equal(forged.code, "device_credential_required");
+assert.equal(forged.code, "device_credential_recovery_required",
+  "a wrong secret may signal manager recovery status, but grants no employee access");
+assert.equal(forged.offline_recovery_only, undefined,
+  "a wrong secret cannot enter the restricted frozen-work recovery lane");
 
 // Direct authentication tests do not prove production middleware order. This
 // route parses valid JSON before authentication while retaining parse failures

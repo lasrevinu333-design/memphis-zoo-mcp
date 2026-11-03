@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {migrationReplayNames} from './migration-replay-order.mjs';
 // Proves that the additive reconciliation migration converges both plausible
 // 20260813210000 histories without consulting or mutating any durable database.
 import assert from "node:assert/strict";
@@ -13,7 +14,7 @@ import { createStaticWeeklyControlPlane } from "../src/static-weekly-control-pla
 const execFileAsync = promisify(execFile);
 const root = path.resolve(new URL("..", import.meta.url).pathname);
 const migrationsDir = path.join(root, "supabase/migrations");
-const migrationNames = fs.readdirSync(migrationsDir).filter((name) => name.endsWith(".sql")).sort();
+const migrationNames = migrationReplayNames(process.cwd());
 const uncertainMigration = "20260813210000_custodial_u4_ops_closure.sql";
 const additiveMigration = "20260814224034_reconcile_static_weekly_day_change_receipts.sql";
 const oldHistoryCommit = "3900f7db34ba8ed9aa7a743db4a2dee112e82c4c";

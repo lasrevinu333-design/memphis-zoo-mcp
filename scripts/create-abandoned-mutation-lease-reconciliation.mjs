@@ -28,10 +28,20 @@ if (!/^[a-zA-Z0-9._:-]{1,120}$/.test(keyId)) throw new Error("ABANDONED_LEASE_RE
 
 function sha256(value) { return createHash("sha256").update(value).digest("hex"); }
 function iso(value) { return new Date(value).toISOString(); }
+function sqlAuthorityGeneration(value) {
+  if (typeof value !== "string" || !/^(?:0|[1-9][0-9]{0,18})(?![\s\S])/.test(value)) {
+    throw new Error("Original SQL authority generation must be canonical nonnegative decimal TEXT.");
+  }
+  const exact = BigInt(value);
+  if (exact > BigInt(Number.MAX_SAFE_INTEGER)) {
+    throw new Error("Original SQL authority generation exceeds the supported v1 safe-integer contract.");
+  }
+  return Number(exact);
+}
 function normalizeLease(row) {
   return {
     request_id: String(row.request_id),
-    authority_generation: Number(row.authority_generation),
+    authority_generation: sqlAuthorityGeneration(row.authority_generation),
     service_name: String(row.service_name),
     admitted_at: iso(row.admitted_at),
     heartbeat_at: iso(row.heartbeat_at),
@@ -84,6 +94,7 @@ try {
     throw new Error("Abandoned leases can be reconciled only in READY or fail-closed PAUSED_FAILURE state.");
   }
   if (control.target_project_ref && control.target_project_ref !== projectRef) throw new Error("The control plane targets a different project.");
+  const authorityGeneration = sqlAuthorityGeneration(control.authority_generation);
   const leaseResult = await db.query(`
     select request_id,authority_generation,service_name,admitted_at,heartbeat_at,expires_at
     from custodial_dr.application_mutation_leases order by request_id
@@ -95,7 +106,7 @@ try {
   const intent = {
     reconciliation_id: randomUUID(),
     target_project_ref: projectRef,
-    authority_generation: Number(control.authority_generation),
+    authority_generation: authorityGeneration,
     restore_id: control.restore_id ? String(control.restore_id) : null,
     control_state: control.state,
     leases,

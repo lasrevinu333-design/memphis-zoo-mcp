@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 import {assertReleaseWorkflowSource} from './release-migration-workflow-preflight.mjs';
+import {assertProductionDatabaseIdentity} from './production-database-identity.mjs';
 import {openIsolatedPreservationArchive} from './release-migration-isolated-preservation-archive.mjs';
 import {prepareIsolatedReleaseDataPreservation} from './isolated-release-data-preservation.mjs';
 import {runTargetCaptureStep,writeTargetCaptureRefusal} from './release-migration-target-refusal.mjs';
-import {prepareTargetCapture,writeTargetCapture} from './release-migration-target-capture.mjs';
+import {prepareTargetCapture,writeTargetCapture,assertTargetCapturePreservationPlan} from './release-migration-target-capture.mjs';
 import {resolveReleaseMigrationSource,releaseMigrationPlanIdentity} from './production-forward-source.mjs';
+import {readMigrationReplayPlan} from './migration-replay-order.mjs';
 
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -180,11 +182,18 @@ let isolatedPreservationArchive=null;
 let transactionStarted=false;
 try {
 // BEGIN ISOLATED PRESERVATION ARCHIVE
-isolatedPreservationArchive=rehearsal&&plan.length===160
+// New301/302 plans require the SAME complete source-derived closure before
+// opening the preservation archive; no guessed pending-count admission.
+const successorPreservationClosure=rehearsal&&![160,163,164,165,166].includes(plan.length)
+ ?assertTargetCapturePreservationPlan(root,plan):null;
+isolatedPreservationArchive=rehearsal&&([160,163,164,165,166].includes(plan.length)||successorPreservationClosure!==null)
  ?openIsolatedPreservationArchive({backendRoot:root,databaseUrl,rehearsal,apply,targetCapture,candidateCommit,candidateTree,
    sourceLedgerSha256,captureContext,env:process.env}):null;
 // END ISOLATED PRESERVATION ARCHIVE
   await db.connect();
+  // Production migrations use the existing migration-owning identity. A backup
+  // reader must be refused before transaction locks; never broaden its grants.
+  if (!rehearsal) await assertProductionDatabaseIdentity(db, { migrationAuthority: true });
   if (targetCapture) {
     const profile = (await db.query(`select current_user actor,session_user original_actor,
       (select datdba::regrole::text from pg_database where datname=current_database()) database_owner,
@@ -348,6 +357,7 @@ isolatedPreservationArchive=rehearsal&&plan.length===160
     await db.query('rollback');
     if(!rollbackVerified)throw new Error('Target preparation rollback did not preserve the exact original catalog and ledger.');
     captureContext.assertSourceCurrent();
+    const captureReplay=readMigrationReplayPlan(root);
     writeTargetCapture(captureContext.output,{
       schema:'custodial.production-migration-target-preparation.v1',scope:'target_preparation',
       committed:false,rollback_verified:true,production_authorized:false,candidate_migration_admission:false,
@@ -358,8 +368,9 @@ isolatedPreservationArchive=rehearsal&&plan.length===160
       actual_private_schema_owners:privateSchemaOwners,source_data_preservation:originalDataPreservationReceipt,
       source_catalog_fingerprint:beforeCatalogIdentity.fingerprint,source_ledger_sha256:sourceLedgerSha256,
       source_ledger_count:beforeLedger.rowCount,source_ledger_head:beforeHead.version,
-      source_authority_migration_count:134,canonical_source_count:294,
-      canonical_replay_manifest_sha256:'5a0ac3a398d25f59a0a7f6e045d0db1c4d59b28924a18ec479f01bbe5a710121',
+      source_authority_migration_count:134,canonical_source_count:captureReplay.files.length,
+      canonical_replay_manifest_sha256:captureReplay.manifestSha256,
+      ...(successorPreservationClosure?{target_capture_source_closure:successorPreservationClosure}:{}),
       plan_sha256:planSha256,applied,target_catalog_fingerprint:afterCatalogIdentity.fingerprint,
       target_catalog_counts:catalogCounts(afterCatalog),target_ledger_count:afterLedger.rowCount,
       target_ledger_head:afterLedger.rows.at(-1).version,target_ledger_sha256:ledgerFileSha256(afterLedger.rows),

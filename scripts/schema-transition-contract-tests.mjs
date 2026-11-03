@@ -71,7 +71,7 @@ assert.equal(
   "the clean target must bind all nine public-schema grants",
 );
 assert.deepEqual(
-  canonicalCatalog.schema_grants.filter((grant) => grant.schema_name !== "public"),
+  canonicalCatalog.schema_grants.filter((grant) => grant.schema_name === "custodial_recovery"),
   [
     {
       grantee: "migration_owner",
@@ -90,6 +90,9 @@ assert.deepEqual(
   ],
   "the fixed function-only recovery schema must retain only its two migration-owner grants",
 );
+assert.ok(canonicalCatalog.schema_grants.filter(grant=>grant.schema_name!=="public")
+  .every(grant=>!["PUBLIC","anon","authenticated"].includes(grant.grantee)),
+  "all captured private schemas must deny world and direct employee API schema access");
 assert.deepEqual(
   canonicalCatalog.schema_grants.filter((grant) =>
     grant.grantee === "migration_owner" &&
@@ -194,7 +197,7 @@ await assert.rejects(() => captureSchemaCatalog({
     if (name === "unsupported_types") return { rows: [] };
     return { rows: [] };
   },
-}), /Unsupported public foreign table must be reviewed before schema fingerprint capture: foreign_bridge/);
+}), /Unsupported selected foreign table must be reviewed before schema fingerprint capture: foreign_bridge/);
 await assert.rejects(() => captureSchemaCatalog({
   async query(sql) {
     const name = queryNames.get(sql);
@@ -202,7 +205,7 @@ await assert.rejects(() => captureSchemaCatalog({
     if (name === "unsupported_relations") return { rows: [] };
     return { rows: [] };
   },
-}), /Unsupported public composite type must be reviewed before schema fingerprint capture: composite_bridge/);
+}), /Unsupported selected composite type must be reviewed before schema fingerprint capture: composite_bridge/);
 assert.throws(() => assertSchemaAlignment({
   backendManifest: backend,
   frontendManifest: { schema_fingerprint: "f".repeat(64), schema_transition: transition },

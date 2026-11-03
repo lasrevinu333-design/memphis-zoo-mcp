@@ -1,0 +1,1320 @@
+{
+  "schema_version": 1,
+  "updated_at": "2026-10-30T00:01:03Z",
+  "title": "Custodial manual Monday working draft",
+  "scope": "Monday schedule day only; not a dated future appointment or a wholesale eight-/nine-position implementation.",
+  "timezone": "America/Chicago",
+  "authority": "Eric's explicit live choices, relayed by the parent; retain as the current working draft until Eric changes them.",
+  "status": "APPROVED / LOCKED Monday working plan by Eric. Not production, program publication, runtime implementation or physical acceptance. Change only on new explicit user direction.",
+  "references": [
+    "Original September 30 REV3",
+    "Current eight-employee and nine-position artifacts, not accepted as practical allocations",
+    "Static Schedule Builder v6: /home/eric/Downloads/memphis_zoo_static_schedule_builder_employee_management.html",
+    "/user_notes/long_form/custodial_handout_review_queue_20261028.md"
+  ],
+  "employees": [
+    {
+      "name": "Tammy Miller",
+      "shift": {
+        "start": "05:00",
+        "end": "14:00",
+        "status": "Confirmed in voice readback"
+      },
+      "lunch": {
+        "start": "08:30",
+        "end": "09:30",
+        "relief_workers": [
+          "Kiltra Horton"
+        ],
+        "relief_status": "Kiltra explicitly assigned full 08:30–09:30; time availability PASS, not workload/route proof",
+        "relief_assignment_id": "monday-tammy-lunch-kiltra-0830-0930",
+        "time_source": "/workspace/shared/schedule_retrieval/Memphis_Zoo_Eight_Employee_Handouts.pdf — Monday pages",
+        "time_status": "Previously confirmed in voice; verified baseline agrees"
+      },
+      "morning_owned_areas": [
+        "Teton and restrooms",
+        "Northwest Passage",
+        "East End restrooms"
+      ],
+      "rebalance_0945": {
+        "status": "MONDAY: no 9:45 changeover, explicitly confirmed for all seven; retain this base",
+        "owned_areas": [
+          "Teton and restrooms",
+          "Northwest Passage",
+          "East End restrooms"
+        ]
+      },
+      "covers_other_employee_lunches": {
+        "status": "Explicitly NONE",
+        "assignments": []
+      },
+      "selection_status": "Monday base accepted, no 9:45 changeover. Tammy covers no other employee lunches. Kiltra is assigned Tammy's own full-hour relief; time availability passes, not workload/route feasibility.",
+      "source_quotes": [
+        "Tammy ... always has Teton and restrooms, always has Northwest Passage, always has East End restrooms",
+        "right now, we'll leave her at that. If we need to add something, we will ... Her 9:45 schedule will be the same",
+        "And then she'll have no lunch coverages",
+        "that's Tammy. That takes care of that"
+      ]
+    },
+    {
+      "name": "Karen Robinson",
+      "shift": {
+        "start": "05:00",
+        "end": "14:00",
+        "status": "Existing shift retained in voice readback"
+      },
+      "lunch": {
+        "start": "09:30",
+        "end": "10:30",
+        "relief_workers": [
+          "Alijah Collins"
+        ],
+        "relief_status": "Alijah explicitly covers ALL three areas 09:30–10:30; time availability PASS only",
+        "time_source": "/workspace/shared/schedule_retrieval/Memphis_Zoo_Eight_Employee_Handouts.pdf — Monday pages",
+        "time_status": "Previously confirmed in voice; verified baseline agrees",
+        "relief_assignment_id": "monday-karen-lunch-alijah-0930-1030"
+      },
+      "morning_owned_areas": [
+        "Zambezi and restrooms",
+        "Primate Pavilion",
+        "Breezeway restrooms"
+      ],
+      "rebalance_0945": {
+        "status": "MONDAY: no 9:45 changeover, explicitly confirmed for all seven; retain this base",
+        "owned_areas": [
+          "Zambezi and restrooms",
+          "Primate Pavilion",
+          "Breezeway restrooms"
+        ]
+      },
+      "covers_other_employee_lunches": {
+        "status": "Explicitly assigned Derrick's 10:30–11:30 lunch, retaining Karen's own base",
+        "assignments": [
+          {
+            "assignment_id": "monday-derrick-lunch-karen-1030-1130",
+            "employee_on_lunch": "Derrick Henderson",
+            "start": "10:30",
+            "end": "11:30",
+            "areas": [
+              "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+              "Nocturnal",
+              "Primate Canyon",
+              "Bonobos restrooms"
+            ]
+          }
+        ]
+      },
+      "selection_status": "Monday base unchanged. Alijah covers Karen 09:30–10:30; Karen covers Derrick 10:30–11:30 after her own lunch.",
+      "source_quotes": [
+        "let's do Karen next. Karen is always Zambezi. ... Primate Pavilion's close, so Primate Pavilion. ... Breezeway restrooms are not too far off ... let's give her those ... we'll keep that locked as is for right now",
+        "Yeah, I think so ... Karen's got two sets of restrooms ... keeps them for balance rest of the day already",
+        "Gotcha",
+        "Okay, that's doable"
+      ]
+    },
+    {
+      "name": "Alijah Collins",
+      "shift": {
+        "start": "07:00",
+        "end": "16:00",
+        "status": "Known shift retained; not a new shift change"
+      },
+      "lunch": {
+        "start": "11:30",
+        "end": "12:30",
+        "relief_workers": [
+          "Jada Rawlings"
+        ],
+        "relief_status": "Jada covers ALL Alijah current base areas 11:30–12:30: East Admin, West Admin and Courtyard; derived from existing cover-all choice, no new coverer/time.",
+        "time_source": "/workspace/shared/schedule_retrieval/Memphis_Zoo_Eight_Employee_Handouts.pdf — Monday pages",
+        "time_status": "Verified corrected eight-person PDF baseline retained; user may change, not a new dictated time",
+        "relief_assignment_id": "monday-alijah-lunch-jada-1130-1230"
+      },
+      "morning_owned_areas": [
+        "East Admin and restrooms",
+        "West Admin and restrooms",
+        "Courtyard restrooms"
+      ],
+      "rebalance_0945": {
+        "status": "MONDAY: no 9:45 changeover, explicitly confirmed for all seven; retain this base",
+        "owned_areas": [
+          "East Admin and restrooms",
+          "West Admin and restrooms",
+          "Courtyard restrooms"
+        ]
+      },
+      "covers_other_employee_lunches": {
+        "status": "Explicitly assigned Karen's full 09:30–10:30 lunch, retaining Alijah's own base",
+        "assignments": [
+          {
+            "assignment_id": "monday-karen-lunch-alijah-0930-1030",
+            "employee_on_lunch": "Karen Robinson",
+            "start": "09:30",
+            "end": "10:30",
+            "areas": [
+              "Zambezi and restrooms",
+              "Primate Pavilion",
+              "Breezeway restrooms"
+            ]
+          }
+        ]
+      },
+      "selection_status": "Latest explicit Monday swap: Courtyard moves from Jada to Alijah; Cat Country moves from Alijah to Jada. Base now East Admin, West Admin and Courtyard. Own shift/lunch and selected coverers unchanged.",
+      "source_quotes": [
+        "let's do Elijah and let's give him East Admin and restrooms, West Admin and restrooms, and education, uh, slash volunteer slash IT slash interp",
+        "classrooms",
+        "We just call it education, though",
+        "put a note that it does include all those locations in it ... parentheses",
+        "We're not going to change him either ... we'll leave him at at that for 9:45",
+        "some of them are private and don't get used that much",
+        "remove ... Education from him [Elijah] ... give it to Derrick ... give Elijah Cat Country",
+        "Elijah can shoot straight down that path from East Admin ... to Zambezi ... and Primate Pavilion ... give Karen's areas to Elijah for lunch",
+        "Give him Karen's lunch coverage",
+        "Perfect",
+        "Let's give him courtyard restrooms"
+      ]
+    },
+    {
+      "name": "Jada Rawlings",
+      "shift": {
+        "start": "06:00",
+        "end": "15:00",
+        "status": "Known shift retained"
+      },
+      "lunch": {
+        "start": "10:00",
+        "end": "11:00",
+        "relief_workers": [
+          "Kiltra Horton"
+        ],
+        "relief_status": "Kiltra covers ALL four current Jada base groups 10:00–11:00, including Cat Country and Komodos, excluding Courtyard; derived from existing cover-all choice.",
+        "time_source": "/workspace/shared/schedule_retrieval/Memphis_Zoo_Eight_Employee_Handouts.pdf — Monday pages",
+        "time_status": "Verified corrected eight-person PDF baseline retained; user may change, not a new dictated time",
+        "relief_assignment_id": "monday-jada-lunch-kiltra-1000-1100"
+      },
+      "morning_owned_areas": [
+        "Cat House Cafe restrooms",
+        "Tropical Birds",
+        "Cat Country",
+        "Komodos"
+      ],
+      "rebalance_0945": {
+        "status": "MONDAY: no 9:45 changeover, explicitly confirmed for all seven; retain this base",
+        "owned_areas": [
+          "Cat House Cafe restrooms",
+          "Tropical Birds",
+          "Cat Country",
+          "Komodos"
+        ]
+      },
+      "covers_other_employee_lunches": {
+        "status": "Explicitly covers Alijah 11:30–12:30 and then Xavier 12:30–13:30, retaining Jada's own base",
+        "assignments": [
+          {
+            "assignment_id": "monday-alijah-lunch-jada-1130-1230",
+            "employee_on_lunch": "Alijah Collins",
+            "start": "11:30",
+            "end": "12:30",
+            "areas": [
+              "East Admin and restrooms",
+              "West Admin and restrooms",
+              "Courtyard restrooms"
+            ]
+          },
+          {
+            "assignment_id": "monday-xavier-lunch-jada-1230-1330",
+            "employee_on_lunch": "Xavier Green",
+            "start": "12:30",
+            "end": "13:30",
+            "areas": [
+              "Expo and restrooms",
+              "MemMex restrooms",
+              "Aquarium"
+            ]
+          }
+        ]
+      },
+      "selection_status": "Latest Monday base: Cat House Cafe restrooms, Tropical Birds, Cat Country and Komodos. Explicit Komodos transfer from Xavier follows prior Courtyard/Cat Country swap; coverers/times unchanged.",
+      "supersedes": "Current explicit swap removes Courtyard from Jada and adds Cat Country; previous Courtyard/Jada and Cat Country/Alijah base statements are superseded. Earlier Herpetarium moved to Kiltra; Tropical Birds remains Jada.",
+      "source_quotes": [
+        "Jada Let's give Jada courtyard restrooms, uh, cat house cafe restrooms, and Herpetarium",
+        "perfect ... keep her locked into that ... I'm trying to ... two sets of restrooms from the beginning",
+        "Let's switch Herpetarium from Jada to Kiltra, and give Jada Tropical Birds",
+        "Okay, let's do it",
+        "Jada",
+        "Let's give Jada Cat Country",
+        "Let's give Jada Komodos"
+      ]
+    },
+    {
+      "name": "Kiltra Horton",
+      "shift": {
+        "start": "07:00",
+        "end": "16:00",
+        "status": "Previously approved shift retained; not a newly dictated change"
+      },
+      "lunch": {
+        "start": "12:00",
+        "end": "13:00",
+        "relief_workers": [
+          "Derrick Henderson"
+        ],
+        "relief_status": "Derrick Henderson explicitly covers all three areas for 12:00–13:00; time availability PASS only",
+        "time_source": "/workspace/shared/schedule_retrieval/Memphis_Zoo_Eight_Employee_Handouts.pdf — Monday pages",
+        "time_status": "Verified corrected eight-person PDF baseline retained; user may change, not a new dictated time",
+        "relief_assignment_id": "monday-kiltra-lunch-derrick-1200-1300"
+      },
+      "morning_owned_areas": [
+        "China and restrooms",
+        "Event Center and restrooms",
+        "Herpetarium"
+      ],
+      "area_scope_reference": {
+        "Event_Center": "Original REV3 Monday explicitly bundles Event Center with its restrooms; this is source scope, not a separate new assignment."
+      },
+      "rebalance_0945": {
+        "status": "MONDAY: no 9:45 changeover, explicitly confirmed for all seven; retain this base",
+        "owned_areas": [
+          "China and restrooms",
+          "Event Center and restrooms",
+          "Herpetarium"
+        ]
+      },
+      "covers_other_employee_lunches": {
+        "status": "Explicitly covers Tammy 08:30–09:30 and Jada 10:00–11:00, retaining Kiltra's own base",
+        "assignments": [
+          {
+            "assignment_id": "monday-tammy-lunch-kiltra-0830-0930",
+            "employee_on_lunch": "Tammy Miller",
+            "start": "08:30",
+            "end": "09:30",
+            "areas": [
+              "Teton and restrooms",
+              "Northwest Passage",
+              "East End restrooms"
+            ]
+          },
+          {
+            "assignment_id": "monday-jada-lunch-kiltra-1000-1100",
+            "employee_on_lunch": "Jada Rawlings",
+            "start": "10:00",
+            "end": "11:00",
+            "areas": [
+              "Cat House Cafe restrooms",
+              "Tropical Birds",
+              "Cat Country",
+              "Komodos"
+            ]
+          }
+        ]
+      },
+      "selection_status": "Monday base unchanged. Kiltra covers Tammy 08:30–09:30 and Jada 10:00–11:00; Derrick covers Kiltra's own 12:00–13:00 lunch.",
+      "source_quotes": [
+        "Kiltra I want to give her China and China restrooms ... [Bonobos] restrooms ... and Event Center",
+        "Right",
+        "Let's give it to Kiltra. She goes as far as China ... let's give it to Kiltra",
+        "Let's give Kiltra Jada's lunch coverage, which is what, ten to 11"
+      ]
+    },
+    {
+      "name": "Xavier Green",
+      "shift": {
+        "start": "08:00",
+        "end": "17:00",
+        "status": "Previously approved shift retained; not a newly dictated change"
+      },
+      "lunch": {
+        "start": "12:30",
+        "end": "13:30",
+        "relief_workers": [
+          "Jada Rawlings"
+        ],
+        "relief_status": "Jada covers ALL three current Xavier base groups 12:30–13:30: Expo, MemMex restrooms and Aquarium; Komodos excluded after the explicit base transfer.",
+        "time_source": "/workspace/shared/schedule_retrieval/Memphis_Zoo_Eight_Employee_Handouts.pdf — Monday pages",
+        "time_status": "Verified corrected eight-person PDF baseline retained; user may change, not a new dictated time",
+        "correction_note": "Incorrect voice suggestion 11:00–12:00 was explicitly CORRECTED during the call. Retain verified 12:30–13:30; never adopt the mistaken time.",
+        "relief_assignment_id": "monday-xavier-lunch-jada-1230-1330"
+      },
+      "morning_owned_areas": [
+        "Expo and restrooms",
+        "MemMex restrooms",
+        "Aquarium"
+      ],
+      "rebalance_0945": {
+        "status": "MONDAY: no 9:45 changeover, explicitly confirmed for all seven; retain this base",
+        "owned_areas": [
+          "Expo and restrooms",
+          "MemMex restrooms",
+          "Aquarium"
+        ]
+      },
+      "covers_other_employee_lunches": {
+        "status": "Not assigned in this working draft",
+        "assignments": null
+      },
+      "selection_status": "Latest Monday base: Expo and restrooms, MemMex restrooms, Aquarium ONLY. Komodos explicitly moved to Jada; own shift/lunch and coverer unchanged.",
+      "source_quotes": [
+        "Expo and restrooms can go to Xavier ... Mimx restrooms can go to Xavier And we'll give him the aquarium also",
+        "Let's give Xavier ... Komodos"
+      ]
+    },
+    {
+      "name": "Derrick Henderson",
+      "shift": {
+        "start": "07:00",
+        "end": "16:00",
+        "status": "Previously approved shift retained; not a newly dictated change"
+      },
+      "lunch": {
+        "start": "10:30",
+        "end": "11:30",
+        "relief_workers": [
+          "Karen Robinson"
+        ],
+        "relief_status": "Karen explicitly covers all four areas 10:30–11:30; time availability PASS only",
+        "time_source": "/workspace/shared/schedule_retrieval/Memphis_Zoo_Eight_Employee_Handouts.pdf — Monday pages",
+        "time_status": "Verified corrected eight-person PDF baseline retained; user may change, not a new dictated time",
+        "relief_assignment_id": "monday-derrick-lunch-karen-1030-1130"
+      },
+      "covers_other_employee_lunches": {
+        "status": "Explicitly covers Kiltra's full 12:00–13:00 lunch, retaining Derrick's own four-area base",
+        "assignments": [
+          {
+            "assignment_id": "monday-kiltra-lunch-derrick-1200-1300",
+            "employee_on_lunch": "Kiltra Horton",
+            "start": "12:00",
+            "end": "13:00",
+            "areas": [
+              "China and restrooms",
+              "Event Center and restrooms",
+              "Herpetarium"
+            ]
+          }
+        ]
+      },
+      "source_quotes": [
+        "Derek's got Education, Nocturnal, and Primate Canyon ... give him Bonobo's restrooms also",
+        "Do it",
+        "is he the best fit",
+        "Then yeah"
+      ],
+      "morning_owned_areas": [
+        "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+        "Nocturnal",
+        "Primate Canyon",
+        "Bonobos restrooms"
+      ],
+      "rebalance_0945": {
+        "status": "MONDAY: no 9:45 changeover, explicitly confirmed for all seven; retain this base",
+        "owned_areas": [
+          "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+          "Nocturnal",
+          "Primate Canyon",
+          "Bonobos restrooms"
+        ]
+      },
+      "selection_status": "Monday base unchanged. Karen covers Derrick 10:30–11:30; Derrick covers Kiltra 12:00–13:00.",
+      "area_label_rules": {
+        "Education": {
+          "display": "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+          "counting_rule": "One umbrella assignment, not five separate assignments",
+          "includes": [
+            "Volunteer",
+            "IT",
+            "Interpretation",
+            "four classrooms"
+          ],
+          "classroom_count": 4
+        }
+      }
+    }
+  ],
+  "pending_decisions": [
+    "No undecided Monday base/lunch/14:00/15:00/16:00 choices remain in this dictated plan; later changes require Eric",
+    "Actual clock-out integration, physical workload/travel/route feasibility and program publication remain outside this memory-only save"
+  ],
+  "constraints": [
+    "Do not expand either employee's choices to other days without Eric's direction.",
+    "No autonomous optimization, solver, full rewrite or publication.",
+    "Preserve originals and prior constraints; builder drag/drop control remains unverified.",
+    "New entries must distinguish explicit user choices from unanswered questions and physical/runtime implementation.",
+    "Preserve existing assignments when a change is unnecessary while maintaining balanced workload; this is not authority for automatic extra areas or rebalancing."
+  ],
+  "monday_staffing": {
+    "confirmed_on_duty": [
+      "Tammy Miller",
+      "Karen Robinson",
+      "Alijah Collins",
+      "Xavier Green",
+      "Jada Rawlings",
+      "Derrick Henderson",
+      "Kiltra Horton"
+    ],
+    "confirmed_count": 7,
+    "off": [
+      "Kathy Phelps"
+    ],
+    "status": "Eric explicitly confirmed scheduling all seven Monday workers from the current eight-person plan; not five and not a filled ninth vacancy. Attendance/punches are not inferred.",
+    "source_quotes": [
+      "Yeah, yeah, we're going to do, we're going to schedule all seven people"
+    ]
+  },
+  "balance_preference": {
+    "quote": "We're not looking to change schedules if we don't have to. ... we do want to keep a balanced schedule",
+    "status": "Direct user direction; retain anchors and avoid unnecessary changes while preserving balance.",
+    "public_restroom_guideline": "Rough starting goal of about two public restroom sets, NOT a hard universal count. Eric notes some private Admin restrooms have lower use; do not treat every restroom as equal workload or add areas automatically.",
+    "accepted_final_base_exception": "Eric explicitly accepted Tammy 24 as the familiar-anchor exception; other final Monday base-only totals are 17–20. This is user planning acceptance, not measured workload or 75/25 feasibility proof."
+  },
+  "rebalance_policy_review": {
+    "status": "DECIDED: no 9:45 changeovers on MONDAY for all seven workers",
+    "scope": "Monday only; this does NOT remove or change the global rule or any other day's 9:45 arrangements.",
+    "quote": "That's a pretty ... fair schedule for a Monday and I don't think we have to do any any 9:45 changeovers",
+    "lunch_quote": "Obviously, we still have to do lunch coverage",
+    "instruction": "Retain each latest Monday base; explicit temporary lunch coverage still adds/removes areas. Do not inherit an old lunch matrix or alter other days."
+  },
+  "baseline_reference_facts": {
+    "source": "Parent read original September 30 REV3 Monday; source facts are not new user decisions or live edits.",
+    "event_center": "Event Center includes its restrooms.",
+    "admin": "Admin restrooms are private; West Admin scope includes both floors.",
+    "alijah_monday_lunch": {
+      "start": "11:30",
+      "end": "12:30",
+      "source": "Original REV3 PDF page 4, explicitly verified by parent",
+      "decision_status": "Original REV3 reference agrees with the newly verified corrected eight-person Monday baseline. Retain 11:30–12:30 unless Eric changes it; no old relief assignment inherited."
+    },
+    "elephant_trunk_employee_restroom": "Weekly task falls on TUESDAY in REV3, not Monday."
+  },
+  "remaining_regular_areas_not_assigned": [],
+  "unplaced_monday_employees": [],
+  "unassigned_area_rule": "All 23 original bundled regular areas are represented once in the latest user-directed base. This is an assignment inventory check only, NOT proof of workload, opening capacity, travel/route feasibility, lunch relief or operational acceptance.",
+  "latest_batch": {
+    "source": "Direct Eric voice choices relayed October 29, 2026 17:10 UTC",
+    "changes": [
+      "Education: Alijah → Derrick; Cat Country → Alijah",
+      "Bonobos restrooms: Kiltra → Derrick",
+      "Komodos → Xavier",
+      "Herpetarium: Jada → Kiltra; Tropical Birds → Jada"
+    ],
+    "proximity_quote": "That way everybody's pretty close in their areas",
+    "scope": "User rationale, not independently measured travel/route feasibility; Monday only."
+  },
+  "regular_area_inventory_check": {
+    "bundled_area_count": 23,
+    "unique_assignments": 23,
+    "duplicate_assignments": 0,
+    "unassigned_original_regular_areas": 0,
+    "scope": "Latest user-directed base inventory only, exactly 23 groups once. No measured balance, travel or physical feasibility claim."
+  },
+  "lunch_relief_assignments": [
+    {
+      "id": "monday-tammy-lunch-kiltra-0830-0930",
+      "employee_on_lunch": "Tammy Miller",
+      "relief_employee": "Kiltra Horton",
+      "start": "08:30",
+      "end": "09:30",
+      "areas": [
+        "Teton and restrooms",
+        "Northwest Passage",
+        "East End restrooms"
+      ],
+      "status": "Explicitly assigned by Eric for the FULL one-hour lunch window",
+      "retains_relief_employee_own_base": true,
+      "coverage_type": "Temporary on-call/issues coverage, not another full daily cleaning assignment",
+      "compatibility": "TIME AVAILABILITY PASS ONLY: Kiltra's 07:00–16:00 shift and verified 12:00–13:00 baseline lunch permit the full 08:30–09:30 Tammy relief. Workload, travel and route feasibility are not proved.",
+      "source_quote": "Let's give it to Kiltra. She goes as far as China ... let's give it to Kiltra",
+      "time_availability_check": {
+        "result": "PASS",
+        "scope": "Full one-hour window is within Kiltra's shift and does not overlap her baseline lunch; not workload acceptance."
+      }
+    },
+    {
+      "id": "monday-karen-lunch-alijah-0930-1030",
+      "employee_on_lunch": "Karen Robinson",
+      "relief_employee": "Alijah Collins",
+      "start": "09:30",
+      "end": "10:30",
+      "areas": [
+        "Zambezi and restrooms",
+        "Primate Pavilion",
+        "Breezeway restrooms"
+      ],
+      "status": "Explicitly assigned by Eric for the FULL one-hour lunch window; all three areas confirmed by readback and 'Perfect'",
+      "retains_relief_employee_own_base": true,
+      "coverage_type": "Temporary on-call/issues coverage, not a mandated extra cleaning trip or another full daily cleaning assignment",
+      "compatibility": "TIME AVAILABILITY PASS ONLY: Alijah's 07:00–16:00 shift and 11:30–12:30 baseline lunch permit 09:30–10:30. Travel/workload feasibility is not independently proved.",
+      "time_availability_check": {
+        "result": "PASS",
+        "scope": "Full window within shift, no overlap with own verified baseline lunch"
+      },
+      "source_quotes": [
+        "Elijah can shoot straight down that path from East Admin ... to Zambezi ... and Primate Pavilion ... give Karen's areas to Elijah for lunch",
+        "Give him Karen's lunch coverage",
+        "Perfect"
+      ]
+    },
+    {
+      "id": "monday-jada-lunch-kiltra-1000-1100",
+      "employee_on_lunch": "Jada Rawlings",
+      "relief_employee": "Kiltra Horton",
+      "start": "10:00",
+      "end": "11:00",
+      "areas": [
+        "Cat House Cafe restrooms",
+        "Tropical Birds",
+        "Cat Country",
+        "Komodos"
+      ],
+      "status": "Explicitly assigned by Eric for the FULL one-hour lunch window",
+      "retains_relief_employee_own_base": true,
+      "coverage_type": "Temporary on-call/issues coverage, not another full daily cleaning assignment",
+      "compatibility": "TIME AVAILABILITY PASS ONLY: within Kiltra's 07:00–16:00 shift; no overlap with her 12:00–13:00 lunch or Tammy relief 08:30–09:30. Workload/travel feasibility not independently proved.",
+      "time_availability_check": {
+        "result": "PASS",
+        "scope": "Full-hour shift/lunch/other assigned relief non-overlap only"
+      },
+      "source_quote": "Let's give Kiltra Jada's lunch coverage, which is what, ten to 11",
+      "area_reconciliation": "Derived from Eric's explicit Komodos Xavier→Jada base transfer received October 30 00:00 UTC, under existing cover-ALL-current-base rule. Coverer/window unchanged."
+    },
+    {
+      "id": "monday-derrick-lunch-karen-1030-1130",
+      "employee_on_lunch": "Derrick Henderson",
+      "relief_employee": "Karen Robinson",
+      "start": "10:30",
+      "end": "11:30",
+      "areas": [
+        "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+        "Nocturnal",
+        "Primate Canyon",
+        "Bonobos restrooms"
+      ],
+      "status": "Eric accepted the full-hour/all-four-area readback: 'Gotcha' and 'Okay, that's doable'",
+      "retains_relief_employee_own_base": true,
+      "coverage_type": "Temporary on-call/issues coverage, not a mandated extra cleaning trip or another full daily cleaning assignment",
+      "compatibility": "TIME AVAILABILITY PASS ONLY: Karen's 05:00–14:00 shift includes this full hour; her own lunch ends at 10:30. No independent workload/route feasibility proof.",
+      "time_availability_check": {
+        "result": "PASS",
+        "scope": "Shift and lunch-window timing only; starts exactly when Karen returns from lunch"
+      },
+      "source_assistant_readback": "I'd lean on Karen for that slot. She's back from lunch by 10:30, while Kiltra's still covering Jada until 11 ... she'd cover Education, Nocturnal ... Primate Canyon, and Bonobo restrooms for that hour.",
+      "source_user_acceptance": [
+        "Gotcha",
+        "Okay, that's doable"
+      ]
+    },
+    {
+      "id": "monday-alijah-lunch-jada-1130-1230",
+      "employee_on_lunch": "Alijah Collins",
+      "relief_employee": "Jada Rawlings",
+      "start": "11:30",
+      "end": "12:30",
+      "areas": [
+        "East Admin and restrooms",
+        "West Admin and restrooms",
+        "Courtyard restrooms"
+      ],
+      "area_scope": "East and West Admin private restrooms, both West Admin floors, and Courtyard restrooms. Cat Country is no longer Alijah's base.",
+      "status": "Explicitly approved by Eric: 'Okay, let's do it'",
+      "retains_relief_employee_own_base": true,
+      "coverage_type": "Temporary on-call/issues coverage, not a mandated extra cleaning trip or another full daily cleaning assignment",
+      "compatibility": "TIME AVAILABILITY PASS ONLY: within Jada's 06:00–15:00 shift, after her 10:00–11:00 lunch; no other assigned relief overlap. Workload/route feasibility not independently proved.",
+      "time_availability_check": {
+        "result": "PASS",
+        "scope": "Shift/lunch/assigned-relief timing only"
+      },
+      "source_assistant_readback": "Jada ... back at 11, could take Alijah's 11:30 to 12:30 ... cover East and West Admin and the restrooms, plus Cat Country.",
+      "source_user_acceptance": "Okay, let's do it",
+      "area_reconciliation": "Derived from October 29 23:56 UTC explicit Courtyard/Cat Country base swap under the already approved cover-ALL-recipient-areas rule; coverer and full-hour window unchanged."
+    },
+    {
+      "id": "monday-kiltra-lunch-derrick-1200-1300",
+      "employee_on_lunch": "Kiltra Horton",
+      "relief_employee": "Derrick Henderson",
+      "start": "12:00",
+      "end": "13:00",
+      "areas": [
+        "China and restrooms",
+        "Event Center and restrooms",
+        "Herpetarium"
+      ],
+      "status": "Explicitly approved by Eric: 'Do it', then 'Then yeah' after asking about fit",
+      "retains_relief_employee_own_base": true,
+      "retained_base": [
+        "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+        "Nocturnal",
+        "Primate Canyon",
+        "Bonobos restrooms"
+      ],
+      "coverage_type": "Temporary on-call/issues coverage, not a mandated extra cleaning trip or another full daily cleaning assignment",
+      "compatibility": "TIME AVAILABILITY PASS ONLY: within Derrick's 07:00–16:00 shift, after his 10:30–11:30 lunch; no other assigned relief overlap. No measured route or comparative best-fit claim.",
+      "time_availability_check": {
+        "result": "PASS",
+        "scope": "Shift/lunch/assigned-relief timing only"
+      },
+      "source_user_acceptance": [
+        "Do it",
+        "is he the best fit",
+        "Then yeah"
+      ]
+    },
+    {
+      "id": "monday-xavier-lunch-jada-1230-1330",
+      "employee_on_lunch": "Xavier Green",
+      "relief_employee": "Jada Rawlings",
+      "start": "12:30",
+      "end": "13:30",
+      "areas": [
+        "Expo and restrooms",
+        "MemMex restrooms",
+        "Aquarium"
+      ],
+      "status": "Eric explicitly selected Jada for the FULL hour",
+      "retains_relief_employee_own_base": true,
+      "coverage_type": "Temporary on-call/issues coverage, not another full daily cleaning assignment",
+      "compatibility": "TIME AVAILABILITY PASS ONLY: within Jada's 06:00–15:00 shift and after her 10:00–11:00 lunch. Alijah relief ends exactly at 12:30 when Xavier relief begins: consecutive, NOT overlapping. No travel-buffer or workload/route feasibility proof.",
+      "time_availability_check": {
+        "result": "PASS",
+        "scope": "Shift, own-lunch and other-relief time overlap only; back-to-back at 12:30 is allowed by the explicit assignment."
+      },
+      "source_user_selection": "Jada",
+      "selection_note": "Jada already covers Alijah 11:30–12:30; do not describe her as having had no other lunch relief.",
+      "area_reconciliation": "Derived from Eric's explicit Komodos Xavier→Jada base transfer received October 30 00:00 UTC, under existing cover-ALL-current-base rule. Coverer/window unchanged."
+    }
+  ],
+  "verified_lunch_baseline": {
+    "source": "/workspace/shared/schedule_retrieval/Memphis_Zoo_Eight_Employee_Handouts.pdf",
+    "section": "Monday pages",
+    "verified_by": "Parent direct PDF read, relayed October 29, 2026 17:13 UTC",
+    "status": "Verified reference times retained as baseline; Eric may change them. Old relief matrix is NOT inherited.",
+    "times": {
+      "Tammy Miller": {
+        "start": "08:30",
+        "end": "09:30"
+      },
+      "Karen Robinson": {
+        "start": "09:30",
+        "end": "10:30"
+      },
+      "Jada Rawlings": {
+        "start": "10:00",
+        "end": "11:00"
+      },
+      "Derrick Henderson": {
+        "start": "10:30",
+        "end": "11:30"
+      },
+      "Alijah Collins": {
+        "start": "11:30",
+        "end": "12:30"
+      },
+      "Kiltra Horton": {
+        "start": "12:00",
+        "end": "13:00"
+      },
+      "Xavier Green": {
+        "start": "12:30",
+        "end": "13:30"
+      }
+    },
+    "fingerprint": "Source SHA is retained in the earlier retrieval receipt; no digest invented in this update."
+  },
+  "next_user_decision": "No outstanding Monday planning choices. Preserve locked plan; wait for explicit new changes. Tuesday remains separate and unchanged.",
+  "lunch_relief_selection_notes": "For Jada's 10:00–11:00 lunch, Kiltra is the selected coverer. Considered/rejected Alijah or Derrick are NOT assigned.",
+  "call_state": {
+    "status": "Eric has approved and locked the Monday working plan; no automatic further Monday rearrangement."
+  },
+  "identity_corrections": {
+    "Derrick_Henderson": "Karen's 10:30–11:30 relief remains for DERRICK HENDERSON only. The voice slip 'Derek Lowry' was erroneous; no such new person, employee record or assignment is created.",
+    "retracted_Xavier_voice_allocation": "Earlier voice claims assigning Education/China/Bonobos and their misstated scores to Xavier were RETRACTED. They are not assignments. Xavier's current Monday base is Expo 8, MemMex 7, Aquarium 5."
+  },
+  "lunch_plan_status": {
+    "user_selections": "All seven full-hour lunch relief assignments saved",
+    "time_validation": "PASS: within shifts, no own-lunch overlap, no conflicting relief windows; Jada's two windows meet at 12:30 without overlap.",
+    "scope": "Time consistency and assigned-area inventory only. Not proof of workload, travel, route, handoff feasibility or operational acceptance.",
+    "afternoon_handoffs": "APPROVED user choices saved for 14:00, latest REVISED 15:00, and 16:00 through 17:00.",
+    "implementation": "No PDF regeneration, HTML edits, program mutation or publication."
+  },
+  "afternoon_handoffs": [
+    {
+      "time": "14:00",
+      "departing_employees": [
+        "Tammy Miller",
+        "Karen Robinson"
+      ],
+      "status": "Final explicit USER choices; supersedes the rejected assistant split",
+      "trigger_scope": "Planned Monday 2 p.m. departure handoff; no actual punch, runtime trigger or physical departure verified",
+      "incoming_additions": [
+        {
+          "employee": "Kiltra Horton",
+          "areas": [
+            "East End restrooms",
+            "Northwest Passage"
+          ],
+          "retain_own_base": true
+        },
+        {
+          "employee": "Jada Rawlings",
+          "areas": [
+            "Teton and restrooms",
+            "Zambezi and restrooms"
+          ],
+          "retain_own_base": true
+        },
+        {
+          "employee": "Alijah Collins",
+          "areas": [
+            "Primate Pavilion",
+            "Breezeway restrooms"
+          ],
+          "retain_own_base": true
+        }
+      ],
+      "no_new_areas": [
+        "Derrick Henderson",
+        "Xavier Green"
+      ],
+      "purpose": "Current area ownership/checks/alerts, NOT a mandatory new cleaning round",
+      "source_quotes": [
+        "Let's do Kiltra at East End Restroom, Northwest Passage and Jada at Teton and Zambezi ... and Elijah at Primate Pavilion",
+        "give ... Breezeway Restroom ... Elijah too because it's ... on the way"
+      ],
+      "rejected_assistant_proposal": [
+        "Jada gets East End",
+        "Kiltra gets Teton",
+        "Alijah gets Zambezi",
+        "Derrick gets Breezeway"
+      ],
+      "rejection_rule": "Do NOT use these rejected proposal assignments; only the final incoming_additions above apply."
+    },
+    {
+      "time": "15:00",
+      "departing_employees": [
+        "Jada Rawlings"
+      ],
+      "status": "LATEST explicit USER choice supersedes the previous all-Jada-to-Xavier handoff",
+      "trigger_scope": "Planned Monday 3 p.m. departure handoff; no actual punch, runtime trigger or physical departure verified",
+      "incoming_additions": [
+        {
+          "employee": "Kiltra Horton",
+          "areas": [
+            "Teton and restrooms",
+            "Zambezi and restrooms"
+          ],
+          "retain_own_base": true,
+          "retain_existing_areas": [
+            "China and restrooms",
+            "Event Center and restrooms",
+            "Herpetarium",
+            "East End restrooms",
+            "Northwest Passage"
+          ]
+        },
+        {
+          "employee": "Derrick Henderson",
+          "areas": [
+            "Cat House Cafe restrooms",
+            "Tropical Birds",
+            "Cat Country",
+            "Komodos"
+          ],
+          "retain_own_base": true,
+          "retain_existing_areas": [
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+            "Nocturnal",
+            "Primate Canyon",
+            "Bonobos restrooms"
+          ]
+        }
+      ],
+      "no_new_areas": [
+        "Alijah Collins",
+        "Xavier Green"
+      ],
+      "purpose": "Current area ownership/checks/alerts, NOT a mandatory new cleaning round",
+      "source_quote": "Okay, give Teton and Zambezi to Kiltra. And give the rest to Derek",
+      "identity": "Derek refers to Derrick Henderson, the existing employee; no new record.",
+      "superseded_decisions": [
+        "Earlier all-Jada-to-Xavier and initial all-Jada-to-Kiltra proposals remain CANCELED.",
+        "Current explicit split: Kiltra receives Teton and Zambezi; Derrick receives Jada's current other four groups. Historical Courtyard/three-group wording is superseded by explicit base revisions."
+      ],
+      "derived_reconciliation": "Existing 'remaining Jada areas to Derrick' rule now includes Komodos and Cat Country at 15:00; Courtyard stays with Alijah. No new recipient decision."
+    },
+    {
+      "time": "16:00",
+      "departing_employees": [
+        "Alijah Collins",
+        "Kiltra Horton",
+        "Derrick Henderson"
+      ],
+      "status": "Explicitly APPROVED by Eric: all current/inherited areas go to Xavier until 17:00",
+      "trigger_scope": "Planned shift-end handoff only. Actual clock-out integration, observed departures and runtime execution remain unresolved/unverified.",
+      "incoming_additions": [
+        {
+          "employee": "Xavier Green",
+          "areas": [
+            "East Admin and restrooms",
+            "West Admin and restrooms",
+            "Courtyard restrooms",
+            "Primate Pavilion",
+            "Breezeway restrooms",
+            "China and restrooms",
+            "Event Center and restrooms",
+            "Herpetarium",
+            "East End restrooms",
+            "Northwest Passage",
+            "Teton and restrooms",
+            "Zambezi and restrooms",
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+            "Nocturnal",
+            "Primate Canyon",
+            "Bonobos restrooms",
+            "Cat House Cafe restrooms",
+            "Tropical Birds",
+            "Cat Country",
+            "Komodos"
+          ],
+          "retain_own_base": true,
+          "retain_existing_areas": [
+            "Expo and restrooms",
+            "MemMex restrooms",
+            "Aquarium"
+          ]
+        }
+      ],
+      "donor_current_holdings": [
+        {
+          "employee": "Alijah Collins",
+          "areas": [
+            "East Admin and restrooms",
+            "West Admin and restrooms",
+            "Courtyard restrooms",
+            "Primate Pavilion",
+            "Breezeway restrooms"
+          ]
+        },
+        {
+          "employee": "Kiltra Horton",
+          "areas": [
+            "China and restrooms",
+            "Event Center and restrooms",
+            "Herpetarium",
+            "East End restrooms",
+            "Northwest Passage",
+            "Teton and restrooms",
+            "Zambezi and restrooms"
+          ]
+        },
+        {
+          "employee": "Derrick Henderson",
+          "areas": [
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+            "Nocturnal",
+            "Primate Canyon",
+            "Bonobos restrooms",
+            "Cat House Cafe restrooms",
+            "Tropical Birds",
+            "Cat Country",
+            "Komodos"
+          ]
+        }
+      ],
+      "purpose": "All active area ownership/checks/alerts through 17:00, NOT a mandatory new full cleaning round",
+      "source_user_quotes": [
+        "And that leaves us with just what? Them all getting off, right? And giving everything else to Xavier",
+        "Nice. Make sure all of that's saved, dude"
+      ],
+      "source_assistant_readback": "At4 Kiltra, Alijah, Derrick leave, everything they're holding goes toXavier till5"
+    }
+  ],
+  "current_area_snapshots": [
+    {
+      "time": "14:00",
+      "scope": "After the specified Tammy/Karen handoff, before Jada's 15:00 departure; all lunch overlays have ended",
+      "employees": [
+        {
+          "name": "Alijah Collins",
+          "areas": [
+            "East Admin and restrooms",
+            "West Admin and restrooms",
+            "Courtyard restrooms",
+            "Primate Pavilion",
+            "Breezeway restrooms"
+          ],
+          "base_retained": true
+        },
+        {
+          "name": "Jada Rawlings",
+          "areas": [
+            "Cat House Cafe restrooms",
+            "Tropical Birds",
+            "Cat Country",
+            "Komodos",
+            "Teton and restrooms",
+            "Zambezi and restrooms"
+          ],
+          "base_retained": true
+        },
+        {
+          "name": "Kiltra Horton",
+          "areas": [
+            "China and restrooms",
+            "Event Center and restrooms",
+            "Herpetarium",
+            "East End restrooms",
+            "Northwest Passage"
+          ],
+          "base_retained": true
+        },
+        {
+          "name": "Xavier Green",
+          "areas": [
+            "Expo and restrooms",
+            "MemMex restrooms",
+            "Aquarium"
+          ],
+          "base_retained": true
+        },
+        {
+          "name": "Derrick Henderson",
+          "areas": [
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+            "Nocturnal",
+            "Primate Canyon",
+            "Bonobos restrooms"
+          ],
+          "base_retained": true
+        }
+      ]
+    },
+    {
+      "time": "15:00",
+      "scope": "LATEST approved 3–4 p.m. ownership; superseded all-Jada-to-Xavier proposal is canceled",
+      "employees": [
+        {
+          "name": "Alijah Collins",
+          "areas": [
+            "East Admin and restrooms",
+            "West Admin and restrooms",
+            "Courtyard restrooms",
+            "Primate Pavilion",
+            "Breezeway restrooms"
+          ],
+          "prior_holdings_retained": true
+        },
+        {
+          "name": "Kiltra Horton",
+          "areas": [
+            "China and restrooms",
+            "Event Center and restrooms",
+            "Herpetarium",
+            "East End restrooms",
+            "Northwest Passage",
+            "Teton and restrooms",
+            "Zambezi and restrooms"
+          ],
+          "prior_holdings_retained": true
+        },
+        {
+          "name": "Xavier Green",
+          "areas": [
+            "Expo and restrooms",
+            "MemMex restrooms",
+            "Aquarium"
+          ],
+          "prior_holdings_retained": true
+        },
+        {
+          "name": "Derrick Henderson",
+          "areas": [
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+            "Nocturnal",
+            "Primate Canyon",
+            "Bonobos restrooms",
+            "Cat House Cafe restrooms",
+            "Tropical Birds",
+            "Cat Country",
+            "Komodos"
+          ],
+          "prior_holdings_retained": true
+        }
+      ]
+    },
+    {
+      "time": "16:00",
+      "end": "17:00",
+      "scope": "Approved planned 4–5 p.m. ownership; Xavier alone, all 23 groups, no after-hours extension",
+      "employees": [
+        {
+          "name": "Xavier Green",
+          "areas": [
+            "Expo and restrooms",
+            "MemMex restrooms",
+            "Aquarium",
+            "East Admin and restrooms",
+            "West Admin and restrooms",
+            "Courtyard restrooms",
+            "Primate Pavilion",
+            "Breezeway restrooms",
+            "China and restrooms",
+            "Event Center and restrooms",
+            "Herpetarium",
+            "East End restrooms",
+            "Northwest Passage",
+            "Teton and restrooms",
+            "Zambezi and restrooms",
+            "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+            "Nocturnal",
+            "Primate Canyon",
+            "Bonobos restrooms",
+            "Cat House Cafe restrooms",
+            "Tropical Birds",
+            "Cat Country",
+            "Komodos"
+          ],
+          "prior_holdings_retained": true
+        }
+      ]
+    }
+  ],
+  "afternoon_inventory_check": {
+    "status": "PASS: 14:00, revised 15:00 and 16:00 each retain exactly 23 unique assigned groups with expected planned on-duty owners; no inventory handoff gaps. Not physical feasibility or actual-clock-out proof."
+  },
+  "afternoon_inventory_checks": [
+    {
+      "time": "14:00",
+      "staff": 5,
+      "unique_groups": 23,
+      "pass": true
+    },
+    {
+      "time": "15:00",
+      "staff": 4,
+      "unique_groups": 23,
+      "pass": true
+    },
+    {
+      "time": "16:00",
+      "staff": 1,
+      "unique_groups": 23,
+      "pass": true
+    }
+  ],
+  "coverage_end": {
+    "time": "17:00",
+    "last_employee": "Xavier Green",
+    "scope": "Planned coverage ends with Xavier's shift; no later staffing or extra hours inferred."
+  },
+  "manual_plan_completion": {
+    "status": "Monday base, seven shifts/lunches/full-hour reliefs, no 9:45 changeovers and corrected 14:00/15:00/16:00 handoffs are fully saved, explicitly approved and LOCKED as the working plan.",
+    "implementation": "No HTML edits, program mutation, PDF regeneration, publication or physical feasibility acceptance.",
+    "scope": "Planned shift ends only; actual-clock-out integration unresolved."
+  },
+  "final_manual_consistency_check": {
+    "pass": true,
+    "errors": [],
+    "relief": [
+      {
+        "recipient": "Tammy Miller",
+        "coverer": "Kiltra Horton",
+        "window": "08:30–09:30",
+        "pass": true
+      },
+      {
+        "recipient": "Karen Robinson",
+        "coverer": "Alijah Collins",
+        "window": "09:30–10:30",
+        "pass": true
+      },
+      {
+        "recipient": "Jada Rawlings",
+        "coverer": "Kiltra Horton",
+        "window": "10:00–11:00",
+        "pass": true
+      },
+      {
+        "recipient": "Derrick Henderson",
+        "coverer": "Karen Robinson",
+        "window": "10:30–11:30",
+        "pass": true
+      },
+      {
+        "recipient": "Alijah Collins",
+        "coverer": "Jada Rawlings",
+        "window": "11:30–12:30",
+        "pass": true
+      },
+      {
+        "recipient": "Kiltra Horton",
+        "coverer": "Derrick Henderson",
+        "window": "12:00–13:00",
+        "pass": true
+      },
+      {
+        "recipient": "Xavier Green",
+        "coverer": "Jada Rawlings",
+        "window": "12:30–13:30",
+        "pass": true
+      }
+    ],
+    "snapshots": [
+      {
+        "time": "14:00",
+        "staff": 5,
+        "unique_groups": 23,
+        "pass": true
+      },
+      {
+        "time": "15:00",
+        "staff": 4,
+        "unique_groups": 23,
+        "pass": true
+      },
+      {
+        "time": "16:00",
+        "staff": 1,
+        "unique_groups": 23,
+        "pass": true
+      }
+    ],
+    "scope": "Inventory uniqueness/coverage and shift/own-lunch/relief time consistency only, 08:00–17:00 once all seven are scheduled on duty; no claim of full 23-group coverage before all arrivals, measured workload/travel/physical feasibility or actual clock-out integration.",
+    "verified_at_utc": "2026-10-30T00:00:50Z",
+    "base_groups": 23,
+    "base_unique_groups": 23,
+    "interval_checks": [
+      {
+        "start_minutes": 480,
+        "end_minutes": 510,
+        "unique_groups": 23,
+        "pass": true
+      },
+      {
+        "start_minutes": 510,
+        "end_minutes": 570,
+        "unique_groups": 23,
+        "pass": true
+      },
+      {
+        "start_minutes": 570,
+        "end_minutes": 600,
+        "unique_groups": 23,
+        "pass": true
+      },
+      {
+        "start_minutes": 600,
+        "end_minutes": 630,
+        "unique_groups": 23,
+        "pass": true
+      },
+      {
+        "start_minutes": 630,
+        "end_minutes": 660,
+        "unique_groups": 23,
+        "pass": true
+      },
+      {
+        "start_minutes": 660,
+        "end_minutes": 690,
+        "unique_groups": 23,
+        "pass": true
+      },
+      {
+        "start_minutes": 690,
+        "end_minutes": 720,
+        "unique_groups": 23,
+        "pass": true
+      },
+      {
+        "start_minutes": 720,
+        "end_minutes": 750,
+        "unique_groups": 23,
+        "pass": true
+      },
+      {
+        "start_minutes": 750,
+        "end_minutes": 780,
+        "unique_groups": 23,
+        "pass": true
+      },
+      {
+        "start_minutes": 780,
+        "end_minutes": 810,
+        "unique_groups": 23,
+        "pass": true
+      },
+      {
+        "start_minutes": 810,
+        "end_minutes": 840,
+        "unique_groups": 23,
+        "pass": true
+      },
+      {
+        "start_minutes": 840,
+        "end_minutes": 900,
+        "unique_groups": 23,
+        "pass": true
+      },
+      {
+        "start_minutes": 900,
+        "end_minutes": 960,
+        "unique_groups": 23,
+        "pass": true
+      },
+      {
+        "start_minutes": 960,
+        "end_minutes": 1020,
+        "unique_groups": 23,
+        "pass": true
+      }
+    ]
+  },
+  "education_label_clarification": {
+    "received_at_utc": "2026-10-29T21:29:07Z",
+    "display": "Education (includes Volunteer, IT, Interpretation, and four classrooms)",
+    "scope": "Description only: explicit four classrooms; same one-group identity, owners, shifts, lunches and handoff choices unchanged."
+  },
+  "latest_base_revision": {
+    "received_at_utc": "2026-10-29T23:56:35Z",
+    "explicit_user_quotes": [
+      "Let's give him courtyard restrooms",
+      "Let's give Jada Cat Country",
+      "Let's give Jada Komodos"
+    ],
+    "explicit_base_moves": [
+      "Courtyard restrooms: Jada Rawlings → Alijah Collins",
+      "Cat Country: Alijah Collins → Jada Rawlings",
+      "Komodos: Xavier Green → Jada Rawlings"
+    ],
+    "derived_consequences": [
+      "Kiltra covers Jada 10:00–11:00 including Cat Country, excluding Courtyard.",
+      "Jada covers Alijah 11:30–12:30 including Courtyard, excluding Cat Country.",
+      "Courtyard stays with Alijah at 15:00 and transfers to Xavier at 16:00.",
+      "Cat Country transfers from Jada to Derrick at 15:00, then Xavier at 16:00.",
+      "Kiltra's 10:00–11:00 Jada relief adds Komodos.",
+      "Jada's 12:30–13:30 Xavier relief removes Komodos; Xavier has Expo, MemMex and Aquarium.",
+      "Komodos transfers Jada → Derrick at 15:00 → Xavier at 16:00."
+    ],
+    "scope": "Derived changes follow already-approved ALL-current-area coverage/receiving rules. No new coverer, time or recipient decision; Tuesday unchanged.",
+    "base_only_sums": {
+      "Tammy Miller": 24,
+      "Karen Robinson": 18,
+      "Alijah Collins": 19,
+      "Jada Rawlings": 18,
+      "Kiltra Horton": 17,
+      "Xavier Green": 20,
+      "Derrick Henderson": 20
+    },
+    "total": 136,
+    "followup_received_at_utc": "2026-10-30T00:00:09Z"
+  },
+  "user_final_approval": {
+    "received_at_utc": "2026-10-30T00:01:03Z",
+    "source_quotes": [
+      "call that good",
+      "lock all that in",
+      "make sure all passed down handoffs corrected"
+    ],
+    "scope": "Monday manual working plan including latest Komodos/Courtyard/Cat Country moves and derived full-current-area handoffs; not production approval.",
+    "accepted_load_exception": "Tammy's 24-point familiar anchor assignment explicitly accepted; other base-only totals are 17–20. Scores exclude relief, inherited holdings, time and GPS.",
+    "locked": true,
+    "requires_new_explicit_direction_to_change": true
+  }
+}

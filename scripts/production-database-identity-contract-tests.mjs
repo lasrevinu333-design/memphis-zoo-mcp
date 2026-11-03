@@ -96,6 +96,24 @@ assert.throws(() => validateProductionDatabaseIdentityRow({
   return /physical-cluster identity/.test(String(error.message));
 });
 
+// Backup/runtime roles and incomplete authority remain unacceptable even on
+// the exact physical cluster; the release must never fix these by grants.
+const migrationRow = { database_role: "postgres", database_name: "postgres",
+  system_identifier: fixtureSystemIdentifier, can_create_public: true,
+  can_record_migration: true, notification_jobs_owner: "postgres" };
+for (const change of [
+  { database_role: "memphis_zoo_backup" },
+  { database_role: "custodial_readonly_runtime_20260822" },
+  { can_create_public: false }, { can_record_migration: false },
+  { notification_jobs_owner: "another_owner" },
+]) assert.throws(() => validateProductionDatabaseIdentityRow({ ...migrationRow, ...change },
+  { expectedSystemIdentifierSha256: fixtureDigest, migrationAuthority: true }),
+  /reviewed postgres identity|migration-owning postgres identity/);
+const applySource = read("scripts/apply-release-migration-plan.mjs");
+const authorityCheck = "if (!rehearsal) await assertProductionDatabaseIdentity(db, { migrationAuthority: true });";
+assert.ok(applySource.indexOf(authorityCheck) > applySource.indexOf("await db.connect()"));
+assert.ok(applySource.indexOf(authorityCheck) < applySource.indexOf('await db.query("begin isolation level serializable")'));
+
 const bridgeWorkflow = read(".github/workflows/production-database-credential-bridge.yml");
 const bridgeScript = read("scripts/production-database-credential-bridge.mjs");
 assert.match(bridgeWorkflow, /^on:\n  workflow_dispatch:/m);

@@ -148,6 +148,8 @@ const summary = {
   consistent_database_snapshot: true,
   project_ref: projectRef,
   database_snapshot: { database_name: "fixture_source", snapshot_id: "fixture" },
+  table_count: catalog.length,
+  backed_up_schemas: [...new Set(catalog.map((table) => table.schema_name))],
   database_row_count: Object.values(archiveRows).reduce((total, rows) => total + rows.length, 0),
   source_identity: sourceIdentity,
 };

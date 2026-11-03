@@ -19,7 +19,7 @@ async function runRpc(fn, args) {
     return { id: MANAGER_USER_ID, user_id: MANAGER_USER_ID, display_name: "Authority Test Manager", role: "manager", is_active: true, ops_manager_id: MANAGER_ID };
   }
   if (fn === "msg_get_or_create_ops_manager_thread") throw new Error("named manager identity must not depend on the retired shared room");
-  if (fn === "msg_send_broadcast") return { id: "broadcast-test", sender_user_id: args.p_sender_user_id };
+  if (fn === "msg_broadcast_operation_v1") return { id: "broadcast-test", sender_user_id: args.p_sender_user_id };
   if (fn === "msg_create_group_thread_v2") return { id: THREAD_ID, created_by_user_id: args.p_created_by_user_id, title: args.p_title, client_thread_id: args.p_client_thread_id };
   if (fn === "msg_send_message") return { id: "message-test", sender_user_id: args.p_sender_user_id };
   if (fn === "msg_mark_thread_read") return { marked: true, user_id: args.p_user_id };
@@ -209,9 +209,9 @@ try {
   });
   assert.equal(forgedBroadcast.status, 403);
 
-  const validBroadcast = await post("/messaging-api/broadcast", { title: "Operations", body: "Manager authority test" });
+  const validBroadcast = await post("/messaging-api/broadcast", { title: "Operations", body: "Manager authority test", client_broadcast_id: "authority-test-original-broadcast" });
   assert.equal(validBroadcast.status, 200);
-  const broadcastCall = calls.find((call) => call.fn === "msg_send_broadcast");
+  const broadcastCall = calls.find((call) => call.fn === "msg_broadcast_operation_v1");
   assert.equal(broadcastCall.args.p_sender_user_id, MANAGER_USER_ID);
 
   const selectedRecipients = [

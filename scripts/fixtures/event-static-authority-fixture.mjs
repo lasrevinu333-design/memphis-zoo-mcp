@@ -79,7 +79,33 @@ function insertRows(table, rows, { conflict = "" } = {}) {
   return `insert into public.${table}(${columns.join(",")}) select ${columns.map((column) => `r.${column}`).join(",")} from jsonb_populate_recordset(null::public.${table},${j(rows)}) r ${conflict};`;
 }
 
-export async function seedCompiledEventAuthority({ sql, container, database = "postgres", managerId, employeeId, dates, label = "event-static-authority", source: suppliedSource, mode = "official" }) {
+// A psql-only fixture has no parameter-binding API. COPY keeps large JSON out
+// of the SQL parser, then supplies ordinary row values to the unchanged RPC.
+// The one-row input table is private to this disposable session and disappears
+// at commit. It never supplies authority rows or changes production grants.
+export function copiedJsonRpcStatement({ role, value, select, columns = ["payload"] }) {
+  assert.ok(["static_weekly_control_plane", "static_weekly_release_operator", "supabase_admin"].includes(role));
+  assert.equal(typeof select, "string");
+  assert.ok(Array.isArray(columns) && columns.length > 0 && columns.length <= 8);
+  assert.ok(columns.every(column => /^[a-z_]+$/.test(column)));
+  assert.equal(new Set(columns).size, columns.length);
+  const values = columns.length === 1 && columns[0] === "payload" ? [value] : columns.map(column => value[column]);
+  // Separate JSON parameters must remain separate columns. Extracting several
+  // small fields from one toasted bundle repeatedly expands the whole packet,
+  // unlike the production client's separately bound parameters.
+  const row = values.map(item => JSON.stringify(item).replaceAll("\\", "\\\\").replaceAll("\n", "\\n").replaceAll("\r", "\\r").replaceAll("\t", "\\t")).join("\t");
+  return `begin;
+    create temporary table event_rpc_input(${columns.map(column => `${column} jsonb`).join(",")}) on commit drop;
+    copy pg_temp.event_rpc_input(${columns.join(",")}) from stdin;
+${row}
+\\.
+    grant select on pg_temp.event_rpc_input to ${role};
+    set local role ${role};
+    ${select}
+    commit;`;
+}
+
+export async function seedCompiledEventAuthority({ sql, container, database = "postgres", managerId, employeeId, dates, label = "event-static-authority", source: suppliedSource, mode = "official", compiler = compileStaticWeeklySchedule }) {
   assert.match(container || "", /^mz_schema_rebuild_[a-zA-Z0-9_]+$/);
   assert.match(database, /^(postgres|mz_schema_rebuild_[a-zA-Z0-9_]+)$/);
   assert.ok(["official", "synthetic_append_only"].includes(mode));
@@ -90,6 +116,8 @@ export async function seedCompiledEventAuthority({ sql, container, database = "p
   const jsonQuery = async (statement) => JSON.parse(await query(statement));
   const cp = async (name, args) => jsonQuery(`set role static_weekly_control_plane; select public.${name}(${args})::text;`);
   const release = async (name, args) => jsonQuery(`set role static_weekly_release_operator; select public.${name}(${args})::text;`);
+  const copied = (role, value, select, columns) => jsonQuery(copiedJsonRpcStatement({ role, value, select, columns }));
+  const phase = (name, detail = {}) => { if (process.env.EVENT_AUTHORITY_PHASES === "1") console.error("EVENT_AUTHORITY_PHASE", name, JSON.stringify(detail)); };
   const managerName = await query(`select display_name from public.ops_manager_managers where manager_id=${q(managerId)}::uuid and active and not is_system_principal;`);
   assert.ok(managerName, "fixture needs an active named manager");
   let source = suppliedSource && clone(suppliedSource);
@@ -108,7 +136,7 @@ export async function seedCompiledEventAuthority({ sql, container, database = "p
   assert.equal(source.exceptions?.length || 0, 0, "seed baseline first; accept dated exceptions through applyException");
   const actor = { managerId, managerName, idempotencyKey: `${label}-${randomUUID()}` };
   const compile = async (input) => {
-    const result = await compileStaticWeeklySchedule(input);
+    const result = await compiler(input);
     assert.equal(result.status, "FEASIBLE", JSON.stringify(result.fatal || result.reviewWork));
     assert.equal(result.verifier?.ok, true);
     assert.equal(result.publicationAuthority, "ACCEPTABLE");
@@ -132,11 +160,24 @@ export async function seedCompiledEventAuthority({ sql, container, database = "p
     if (health.active_key_count === 0) await release("static_weekly_v3_configure_initial_authority_key", `${q("static-weekly-authority-hmac-v2")},${q(`disposable-fixture-${randomUUID()}-never-production`)},${q(label)}`);
     else assert.equal(health.ready, true);
     const sourceId = randomUUID();
-    await release("static_weekly_v3_register_authority_source", `${q(sourceId)}::uuid,${j(baseline.canonicalAuthority.compilerInput)},${q(label)}`);
+    await copied("static_weekly_release_operator", baseline.canonicalAuthority.compilerInput,
+      `select public.static_weekly_v3_register_authority_source(${q(sourceId)}::uuid,args.payload,${q(label)})::text from pg_temp.event_rpc_input args;`);
+    phase("SOURCE_REGISTERED");
     await release("static_weekly_v6_initialize_registered_roster", `${q(sourceId)}::uuid,${q(managerId)}::uuid,${q(label)}`);
+    phase("ROSTER_INITIALIZED");
     const draft = createStaticWeeklyDraftRpcInput({ result: baseline, expectedRevision: await revision(), actor });
-    const created = await cp("static_weekly_v3_create_draft", `${q(draft.effectiveStart)}::date,${q(draft.objectiveVersion)},${j(draft.objective)},${j(draft.inputProvenance)},${j(draft.document)},${draft.expectedRevision},${q(managerId)}::uuid,${q(actor.idempotencyKey)},${q(sourceId)}::uuid`);
+    if(process.env.LUNCH_PUBLICATION_DIAGNOSTICS==='1')console.error('DRAFT_COMPONENT_BYTES',JSON.stringify({
+      document:Buffer.byteLength(JSON.stringify(draft.document)),authority:Buffer.byteLength(JSON.stringify(draft.document.authority)),
+      receipt:Buffer.byteLength(JSON.stringify(draft.document.receipt)),compilerInput:Buffer.byteLength(JSON.stringify(baseline.canonicalAuthority.compilerInput))}));
+    const created = await copied("static_weekly_control_plane", {
+      objective: draft.objective, provenance: draft.inputProvenance, document: draft.document,
+    }, `
+      select public.static_weekly_v3_create_draft(${q(draft.effectiveStart)}::date,${q(draft.objectiveVersion)},
+        args.objective,args.provenance,args.document,${draft.expectedRevision},${q(managerId)}::uuid,
+        ${q(actor.idempotencyKey)},${q(sourceId)}::uuid)::text from pg_temp.event_rpc_input args;`, ["objective", "provenance", "document"]);
+    phase("DRAFT_CREATED");
     const published = await cp("static_weekly_v3_publish_draft", `${q(created.data.version_id)}::uuid,1,${created.revision},${q(managerId)}::uuid,${q(`${actor.idempotencyKey}-publish`)},'publish',null`);
+    phase("PUBLISHED");
     result.sourceId = sourceId; result.versionId = published.data.version_id; result.publicationId = published.data.publication_id;
     result.recompile = async (weekStart) => {
       assert.equal(eventAuthorityWeekStart(weekStart), weekStart);
@@ -150,7 +191,10 @@ export async function seedCompiledEventAuthority({ sql, container, database = "p
       const { version, ...input } = payload.compiler_input;
       const compiled = await compile({ ...input, serviceDate: weekStart, versions: [version], exceptions: payload.exceptions });
       const p = createStaticWeeklyProjectionRpcInput({ result: compiled, publicationId: result.publicationId, expectedRevision: await revision(), actor: { ...actor, idempotencyKey: `${label}-${randomUUID()}` } });
-      const materialized = await cp("static_weekly_v3_materialize_projection", `${q(p.publicationId)}::uuid,${q(p.serviceDate)}::date,${q(p.exceptionSetDigest)},${q(p.compilerVersion)},${j(p.objective)},${j(p.metrics)},${q(p.replayDigest)},${j(p.envelope)},${p.expectedRevision},${q(managerId)}::uuid,${q(p.idempotencyKey)}`);
+      phase("MATERIALIZE_BEGIN", { envelopeBytes: Buffer.byteLength(JSON.stringify(p.envelope)) });
+      const materialized = await copied("static_weekly_control_plane", { objective: p.objective, metrics: p.metrics, envelope: p.envelope },
+        `select public.static_weekly_v3_materialize_projection(${q(p.publicationId)}::uuid,${q(p.serviceDate)}::date,${q(p.exceptionSetDigest)},${q(p.compilerVersion)},args.objective,args.metrics,${q(p.replayDigest)},args.envelope,${p.expectedRevision},${q(managerId)}::uuid,${q(p.idempotencyKey)})::text from pg_temp.event_rpc_input args;`, ["objective", "metrics", "envelope"]);
+      phase("MATERIALIZED");
       compiledByWeek[weekStart] = compiled; envelopes[weekStart] = p.envelope; projectionIds[weekStart] = materialized.data.projection_id; publicationsByWeek[weekStart] = result.publicationId;
       compiledByProjection.set(materialized.data.projection_id, { compiled, envelope: p.envelope });
       return { ...materialized, compiled, envelope: p.envelope };

@@ -1,0 +1,9 @@
+{
+  "newLoopbackOnlyAuthenticator": true,
+  "memberships": [
+    "anon",
+    "authenticated",
+    "service_role"
+  ],
+  "production": false
+}

@@ -433,7 +433,7 @@ async function planVerifiedOrdinaryTables(verifiedArchive,original,sql,assertCon
     if(originals.get(child).row_count==='0')continue;
     if(parent===child){
       const table=originals.get(child);
-      if(!['public','auth','storage'].includes(table.schema_name)
+      if(!['public','auth','storage','custodial_employment','custodial_coverall','custodial_leadership_private'].includes(table.schema_name)
         ||table.schema_name==='public'&&table.table_name==='release_deployment_manifest')fail();
       selfTables.add(child);continue; // Only the fixed staged single-statement path below.
     }
@@ -1182,7 +1182,7 @@ export async function reconcileCommittedImmutableFreshAuthority(options){
     const names=new Set(),relations=[];
     for(const table of state.original.selection.databaseTables){
       const {schema_name:schema,table_name:name}=table;
-      if(!['public','auth','storage','custodial_release_identity'].includes(schema)||typeof name!=='string'
+      if(!['public','auth','storage','custodial_release_identity','custodial_employment','custodial_coverall','custodial_leadership_private'].includes(schema)||typeof name!=='string'
         ||!name.length||name.includes('\0')||Buffer.byteLength(name,'utf8')>63)unavailable();
       const identity=JSON.stringify([schema,name]);if(names.has(identity))unavailable();names.add(identity);
       const quote=value=>'"'+value.replaceAll('"','""')+'"';
@@ -2072,7 +2072,7 @@ export async function compareVerifiedImmutableOrdinaryTableData(options) {
       join pg_catalog.pg_proc ei on ei.oid=e.typinput join pg_catalog.pg_proc eo on eo.oid=e.typoutput
       where a.attrelid=c.oid and a.attnum>0 and not a.attisdropped),false) supported_io
     from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid=c.relnamespace
-    where n.nspname in ('public','auth') and c.relkind in ('r','p','f') order by n.nspname,c.relname`;
+    where n.nspname in ('public','auth','custodial_employment','custodial_coverall','custodial_leadership_private') and c.relkind in ('r','p','f') order by n.nspname,c.relname`;
   try {
     const {db,verifiedArchive}=closed(options,['db','verifiedArchive']);
     const native=()=>{if(!db||types.isProxy(db)||Object.getPrototypeOf(db)!==Client.prototype
@@ -2087,7 +2087,7 @@ export async function compareVerifiedImmutableOrdinaryTableData(options) {
     }
     // Retain every declared original in an UNSUPPORTED result even when the
     // new schema/type prerequisite refuses before the first target query.
-    const declared=dense(original.selection.databaseTables).filter(table=>['public','auth'].includes(table.schema_name));
+    const declared=dense(original.selection.databaseTables).filter(table=>['public','auth','custodial_employment','custodial_coverall','custodial_leadership_private'].includes(table.schema_name));
     selected=declared.slice();
     const inventory=readVerifiedImmutableBootstrapInventory(verifiedArchive);
     if(inventory.sourceBinding!==original.sourceBinding)refuse();
@@ -2183,7 +2183,7 @@ export async function compareVerifiedImmutableOrdinaryTableData(options) {
     for(const row of catalog){
       const c=closed(row,['schema_name','table_name','relation_oid','relation_kind','persistence','is_partition','owner_name',
         'inheritance_count','dropped_count','columns','primary_key','supported_io']);
-      if(!['public','auth'].includes(c.schema_name)||!name(c.table_name)||byId.has(key(c))||!oid(c.relation_oid))refuse();
+      if(!['public','auth','custodial_employment','custodial_coverall','custodial_leadership_private'].includes(c.schema_name)||!name(c.table_name)||byId.has(key(c))||!oid(c.relation_oid))refuse();
       byId.set(key(c),c);
     }
     if(new Set(catalog.map(c=>c.relation_oid)).size!==catalog.length)refuse();

@@ -1,0 +1,69 @@
+{
+  "status": "PASS",
+  "checks": [
+    {
+      "name": "Actual registration writer creates synthetic current generation; no reviewed-release record or native acceptance",
+      "status": "PASS",
+      "deviceIdentifier": "KIOSK_02",
+      "generationId": "f0df446f-df87-414f-9b53-06d9ddafc592"
+    },
+    {
+      "name": "Actual message enqueue trigger preserves full Unicode source body and title",
+      "status": "PASS"
+    },
+    {
+      "name": "F14 SQL rejects unrelated bounded candidate text",
+      "status": "PASS",
+      "code": "42501"
+    },
+    {
+      "name": "F14 original recipient ACK after prepare denies finalization",
+      "status": "PASS"
+    },
+    {
+      "name": "F14 actual prepare → JS candidate → SQL finalize → exact JS reservation validator; full original preserved",
+      "status": "PASS"
+    },
+    {
+      "name": "F14 original finalization replay cannot resend",
+      "status": "PASS"
+    },
+    {
+      "name": "F15 ongoing Event real current projection/claim/prepare and genuine current-day roster preserve source through end",
+      "status": "PASS",
+      "testClock": "2026-11-01T00:33:58.847Z",
+      "scheduledFor": "2026-10-31T12:15:00.000Z",
+      "preparedUntil": "2026-11-02T05:59:00.000000Z"
+    },
+    {
+      "name": "F16 SQL rejects Event body missing source-bound title/location previews",
+      "status": "PASS",
+      "code": "42501"
+    },
+    {
+      "name": "F15 audience removal after prepare denies finalization",
+      "status": "PASS"
+    },
+    {
+      "name": "F15/F16 actual ongoing Unicode Event finalizes, validates exact wire and ends at current Event end",
+      "status": "PASS"
+    },
+    {
+      "name": "F15 finalized Event cannot resend",
+      "status": "PASS"
+    },
+    {
+      "name": "F15 exact Event end cannot authorize dispatch",
+      "status": "PASS"
+    },
+    {
+      "name": "Exact synthetic device/message/event fixture absent after rollback",
+      "status": "PASS"
+    }
+  ],
+  "scope": "ACTUAL_ISOLATED_SQL_SOURCE_ADMISSION_AND_FINALIZATION_WITH_SYNTHETIC_NATIVE_REGISTRATION_NO_PROVIDER_OR_RELEASE_ACCEPTANCE",
+  "providerCalls": 0,
+  "nativePhysicalAcceptance": false,
+  "reviewedReleaseApprovalInserted": false,
+  "rolledBack": true
+}

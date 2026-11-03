@@ -1,0 +1,43 @@
+{
+  "schema": "custodial.accepted-operational-exception.v1",
+  "classification": "LOCAL_OWNER_ACCEPTANCE_RECORD_ONLY",
+  "exceptionId": "friday-herpetarium-1500-1600-owner-20260930",
+  "scope": {
+    "dayOfWeek": 5,
+    "locationCode": "HERPETARIUM",
+    "window": {
+      "start": "15:00",
+      "end": "16:00"
+    },
+    "expectedStatus": "OPEN",
+    "ownerSlotId": null,
+    "ownerPersonId": null,
+    "appliesTo": "October 1-4 transition and October 5 recurring pattern under the unchanged approved six-person availability"
+  },
+  "acceptance": {
+    "acceptedBy": "Eric",
+    "acceptedAtUtc": "2026-09-30T22:50:24Z",
+    "decision": "We will just leave it open.",
+    "assistantQuestion": "One real staffing gap remains: Friday, 3–4 p.m., Herpetarium. The eligible custodians have left, and Alijah’s restriction still applies. Who should cover that hour?",
+    "provenance": "Exact owner exchange relayed through September 30 codex_delegation; not an independent transcript retrieval."
+  },
+  "binding": {
+    "candidateRevision": "ee75f76a21e0d3a82291b8c720b5548532e1f168f1941a0cd74e80662302bd08",
+    "transitionSourceDigest": "5c35cdd94e6d6dc19b1ea5e31bfa6f2f78619e9654e80e9504b5c455f6e17527",
+    "recurringSourceDigest": "ac98f94d0c28a9cd493898bef2463059ef59a80bfcac1f8d0a455ddf6901571a",
+    "availabilityConfigSha256": "40da4e1d4cce52b2361b5403b7e5e4477ca00def0fd3649a1d76dacb48422f30",
+    "priorCommit": "053928238b3d28383afe1dd97ca71459e0c53735"
+  },
+  "limits": {
+    "onlyThisOperationalGapAccepted": true,
+    "allowInventedCoverage": false,
+    "allowShiftChanges": false,
+    "allowAlijahHerpetarium": false,
+    "otherCoverageRulesUnchanged": true,
+    "entireScheduleAccepted": false,
+    "productionPublicationAuthorizedByThisRecord": false,
+    "auditDisclosureApproval": "PENDING",
+    "auditUploadAuthorized": false
+  },
+  "productionWritten": false
+}

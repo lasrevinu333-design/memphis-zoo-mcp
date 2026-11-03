@@ -1,0 +1,1107 @@
+{
+  "catalog_only": true,
+  "production_records": false,
+  "view": {
+    "owner": "postgres",
+    "options": null,
+    "definition_md5": "bab6b9acaa3aedd76b1eaf9a5eff699e",
+    "definition_sql": " WITH op_day AS (\n         SELECT operational_day_start(now()) AS day_start,\n            sch_service_date(now()) AS service_date\n        ), authority AS (\n         SELECT state.service_date,\n            state.governed,\n            state.authority_source,\n            state.projection_status,\n            state.version_id,\n            state.publication_id,\n            state.projection_id,\n            state.projection_authority_revision,\n            state.staffing_authority_revision,\n            state.week_start\n           FROM op_day day\n             CROSS JOIN LATERAL static_weekly_v6_schedule_authority_state(day.service_date) state(service_date, governed, authority_source, projection_status, version_id, publication_id, projection_id, projection_authority_revision, staffing_authority_revision, week_start)\n        ), scheduled_baseline AS (\n         SELECT assignment.location_id,\n            min(((day.service_date + assignment.coverage_start) AT TIME ZONE 'America/Chicago'::text)) AS baseline_at\n           FROM op_day day\n             JOIN LATERAL custodial_operational_location_assignments(day.service_date) assignment(service_date, authority_source, projection_status, version_id, publication_id, projection_id, occurrence_id, location_group_id, group_code, group_name, assigned_employee_id, assigned_employee_name, assignment_status, coverage_start, coverage_end, location_id, location_code, location_name, form_type) ON true\n          GROUP BY assignment.location_id\n        ), latest_scan AS (\n         SELECT scan_events.location_id,\n            max(COALESCE(scan_events.scanned_at, scan_events.created_at)) AS last_scan_at\n           FROM scan_events\n          GROUP BY scan_events.location_id\n        ), open_session AS (\n         SELECT DISTINCT ON (work.location_id) work.location_id,\n            work.location_code,\n            work.session_id,\n            work.session_uuid,\n            work.status AS session_status,\n            work.started_at,\n            work.ended_at,\n            work.duration_minutes,\n            work.duration_display,\n            work.employee_name,\n            work.device_identifier\n           FROM custodial_open_work() work(open_work_id, source_kind, session_id, context_id, session_uuid, client_session_id, location_id, location_code, location_name, employee_id, employee_name, device_id, device_identifier, status, started_at, ended_at, duration_minutes, duration_display, created_at)\n          WHERE work.source_kind <> 'session'::text OR work.started_at >= operational_day_start(now())\n          ORDER BY work.location_id, work.started_at DESC, work.created_at DESC, work.open_work_id DESC\n        ), latest_completed AS (\n         SELECT DISTINCT ON (session.location_id) session.location_id,\n            session.id AS session_id,\n            session.session_uuid,\n            session.started_at,\n            session.ended_at,\n            session.duration_minutes,\n            session.duration_display,\n            employee.display_name AS employee_name,\n            completion.submitted_at,\n            completion.response_json,\n            COALESCE(session.ended_at, completion.submitted_at, session.started_at) AS effective_completed_at\n           FROM sessions session\n             JOIN employees employee ON employee.id = session.employee_id\n             LEFT JOIN completion_responses completion ON completion.session_id = session.id\n             CROSS JOIN op_day day\n          WHERE session.status = 'closed'::text AND COALESCE(session.ended_at, completion.submitted_at, session.started_at) >= day.day_start\n          ORDER BY session.location_id, (COALESCE(session.ended_at, completion.submitted_at, session.started_at)) DESC, session.started_at DESC\n        ), open_tickets AS (\n         SELECT maintenance_tickets.location_id,\n            count(*) AS open_ticket_count\n           FROM maintenance_tickets\n          WHERE maintenance_tickets.status = 'open'::text\n          GROUP BY maintenance_tickets.location_id\n        ), truth AS (\n         SELECT location.id AS location_id,\n            COALESCE(open_session.location_code, location.location_code) AS location_code,\n            location.location_name,\n            location.location_type,\n            location.form_type,\n            day.day_start,\n            latest_scan.last_scan_at,\n            open_session.session_id AS open_session_id,\n            open_session.session_uuid AS open_session_uuid,\n            open_session.session_status AS open_session_status,\n            open_session.started_at AS open_session_started_at,\n            open_session.ended_at AS open_session_ended_at,\n            open_session.employee_name AS open_session_employee_name,\n            open_session.device_identifier AS open_session_device_identifier,\n            latest_completed.session_id AS latest_completed_session_id,\n            latest_completed.session_uuid AS latest_completed_session_uuid,\n            latest_completed.started_at AS latest_started_at,\n            latest_completed.ended_at AS latest_ended_at,\n            latest_completed.submitted_at AS latest_submitted_at,\n            latest_completed.effective_completed_at AS latest_completed_at,\n            latest_completed.employee_name AS latest_employee_name,\n            latest_completed.duration_minutes,\n            latest_completed.duration_display,\n            latest_completed.response_json,\n            COALESCE(open_tickets.open_ticket_count, 0::bigint) AS open_ticket_count,\n            scheduled_baseline.baseline_at,\n                CASE\n                    WHEN scheduled_baseline.baseline_at IS NULL THEN NULL::timestamp with time zone\n                    ELSE GREATEST(COALESCE(latest_completed.effective_completed_at, scheduled_baseline.baseline_at), scheduled_baseline.baseline_at)\n                END AS due_baseline_at,\n            authority.authority_source AS schedule_authority_source,\n            authority.projection_status AS schedule_projection_status\n           FROM locations location\n             CROSS JOIN op_day day\n             CROSS JOIN authority\n             LEFT JOIN scheduled_baseline ON scheduled_baseline.location_id = location.id\n             LEFT JOIN latest_scan ON latest_scan.location_id = location.id\n             LEFT JOIN open_session ON open_session.location_id = location.id\n             LEFT JOIN latest_completed ON latest_completed.location_id = location.id\n             LEFT JOIN open_tickets ON open_tickets.location_id = location.id\n          WHERE location.active = true\n        )\n SELECT location_id,\n    location_code,\n    location_name,\n    location_type,\n    form_type,\n    day_start AS operational_day_start,\n    last_scan_at,\n    open_session_id,\n    open_session_uuid,\n    open_session_status,\n    open_session_started_at,\n    open_session_ended_at,\n    latest_completed_session_id,\n    latest_completed_session_uuid,\n    latest_started_at,\n    latest_ended_at,\n    latest_submitted_at,\n    latest_completed_at,\n    latest_employee_name,\n    duration_minutes,\n    duration_display,\n    COALESCE(response_json -> 'services_performed'::text, response_json -> 'servicesPerformed'::text, response_json -> 'services'::text, response_json -> 'completed_services'::text, response_json -> 'completedServices'::text, '[]'::jsonb) AS services_performed,\n    COALESCE(response_json ->> 'notes'::text, response_json ->> 'cleaning_notes'::text, response_json ->> 'cleaningNotes'::text, response_json ->> 'maintenance_notes'::text, response_json ->> 'maintenanceNotes'::text, response_json ->> 'other_service_performed'::text, response_json ->> 'otherServicePerformed'::text, response_json ->> 'note'::text) AS notes,\n    open_ticket_count,\n        CASE\n            WHEN open_session_status = ANY (ARRAY['active'::text, 'pending_submit'::text]) THEN 'in_progress'::text\n            WHEN due_baseline_at IS NULL THEN 'not_cleaned'::text\n            WHEN form_type = 'restroom'::text AND now() >= (due_baseline_at + make_interval(mins => get_setting_int('restroom_overdue_minutes'::text, 120))) THEN 'overdue'::text\n            WHEN form_type = 'restroom'::text AND now() >= (due_baseline_at + make_interval(mins => get_setting_int('restroom_due_soon_minutes'::text, 90))) THEN 'due_soon'::text\n            WHEN form_type = 'exhibit'::text AND now() >= (due_baseline_at + make_interval(mins => get_setting_int('exhibit_overdue_minutes'::text, 240))) THEN 'overdue'::text\n            WHEN form_type = 'exhibit'::text AND now() >= (due_baseline_at + make_interval(mins => get_setting_int('exhibit_due_soon_minutes'::text, 195))) THEN 'due_soon'::text\n            ELSE 'okay'::text\n        END AS status_code,\n        CASE\n            WHEN open_session_status = ANY (ARRAY['active'::text, 'pending_submit'::text]) THEN 'blue'::text\n            WHEN due_baseline_at IS NULL THEN 'black'::text\n            WHEN form_type = 'restroom'::text AND now() >= (due_baseline_at + make_interval(mins => get_setting_int('restroom_overdue_minutes'::text, 120))) OR form_type = 'exhibit'::text AND now() >= (due_baseline_at + make_interval(mins => get_setting_int('exhibit_overdue_minutes'::text, 240))) THEN 'red'::text\n            WHEN form_type = 'restroom'::text AND now() >= (due_baseline_at + make_interval(mins => get_setting_int('restroom_due_soon_minutes'::text, 90))) OR form_type = 'exhibit'::text AND now() >= (due_baseline_at + make_interval(mins => get_setting_int('exhibit_due_soon_minutes'::text, 195))) THEN 'yellow'::text\n            ELSE 'green'::text\n        END AS status_color,\n    to_char(timezone('America/Chicago'::text, day_start), 'MM/DD/YYYY HH12:MI AM'::text) || ' Central'::text AS operational_day_start_display,\n    to_char(timezone('America/Chicago'::text, last_scan_at), 'MM/DD/YYYY HH12:MI AM'::text) || ' Central'::text AS last_scan_at_display,\n    to_char(timezone('America/Chicago'::text, open_session_started_at), 'MM/DD/YYYY HH12:MI AM'::text) || ' Central'::text AS open_session_started_at_display,\n    to_char(timezone('America/Chicago'::text, open_session_ended_at), 'MM/DD/YYYY HH12:MI AM'::text) || ' Central'::text AS open_session_ended_at_display,\n    to_char(timezone('America/Chicago'::text, latest_started_at), 'MM/DD/YYYY HH12:MI AM'::text) || ' Central'::text AS latest_started_at_display,\n    to_char(timezone('America/Chicago'::text, latest_ended_at), 'MM/DD/YYYY HH12:MI AM'::text) || ' Central'::text AS latest_ended_at_display,\n    to_char(timezone('America/Chicago'::text, latest_submitted_at), 'MM/DD/YYYY HH12:MI AM'::text) || ' Central'::text AS latest_submitted_at_display,\n    to_char(timezone('America/Chicago'::text, latest_completed_at), 'MM/DD/YYYY HH12:MI AM'::text) || ' Central'::text AS latest_completed_at_display,\n    open_session_employee_name,\n    open_session_device_identifier,\n    schedule_authority_source,\n    schedule_projection_status\n   FROM truth;"
+  },
+  "helpers": [
+    {
+      "acl": null,
+      "owner": null,
+      "present": false,
+      "body_md5": null,
+      "signature": "custodial_release_identity.read_current_original_dashboard_completions_v1()",
+      "volatility": null,
+      "configuration": null,
+      "definition_md5": null,
+      "reader_execute": false,
+      "security_definer": null
+    },
+    {
+      "acl": [
+        {
+          "grantee": "PUBLIC",
+          "privilege": "EXECUTE",
+          "grant_option": false
+        },
+        {
+          "grantee": "postgres",
+          "privilege": "EXECUTE",
+          "grant_option": false
+        },
+        {
+          "grantee": "service_role",
+          "privilege": "EXECUTE",
+          "grant_option": false
+        }
+      ],
+      "owner": "postgres",
+      "present": true,
+      "body_md5": "1fc63ecfbab39b8e0d756ae4af258cf6",
+      "signature": "public.custodial_canonical_utc_millis(timestamptz)",
+      "volatility": "i",
+      "configuration": [
+        "search_path=pg_catalog"
+      ],
+      "definition_md5": "7f56274f9afa33d7e964f11b0d9559d2",
+      "reader_execute": true,
+      "security_definer": false
+    },
+    {
+      "acl": [
+        {
+          "grantee": "postgres",
+          "privilege": "EXECUTE",
+          "grant_option": false
+        },
+        {
+          "grantee": "service_role",
+          "privilege": "EXECUTE",
+          "grant_option": false
+        },
+        {
+          "grantee": "custodial_application_reader",
+          "privilege": "EXECUTE",
+          "grant_option": false
+        }
+      ],
+      "owner": "postgres",
+      "present": true,
+      "body_md5": "18805bc1087e08b3dc816ce22f6020a2",
+      "signature": "public.custodial_open_work()",
+      "volatility": "s",
+      "configuration": [
+        "search_path=pg_catalog, public"
+      ],
+      "definition_md5": "9af0c49939e4bea29f249fdd32dd08d4",
+      "reader_execute": true,
+      "security_definer": true
+    },
+    {
+      "acl": [
+        {
+          "grantee": "postgres",
+          "privilege": "EXECUTE",
+          "grant_option": false
+        },
+        {
+          "grantee": "custodial_application_reader",
+          "privilege": "EXECUTE",
+          "grant_option": false
+        }
+      ],
+      "owner": "postgres",
+      "present": true,
+      "body_md5": "9fdb343a491cd6c652c168e2147c640d",
+      "signature": "public.custodial_operational_location_assignments(date)",
+      "volatility": "s",
+      "configuration": [
+        "search_path=pg_catalog, public"
+      ],
+      "definition_md5": "c8b8d73bd90e580ab6a81a3c80e7e72d",
+      "reader_execute": true,
+      "security_definer": true
+    },
+    {
+      "acl": [
+        {
+          "grantee": "postgres",
+          "privilege": "EXECUTE",
+          "grant_option": false
+        },
+        {
+          "grantee": "service_role",
+          "privilege": "EXECUTE",
+          "grant_option": false
+        },
+        {
+          "grantee": "custodial_application_reader",
+          "privilege": "EXECUTE",
+          "grant_option": false
+        }
+      ],
+      "owner": "postgres",
+      "present": true,
+      "body_md5": "7ae77b31b61d1fbfe47976ab4041f06c",
+      "signature": "public.get_setting_int(text,integer)",
+      "volatility": "s",
+      "configuration": null,
+      "definition_md5": "661012346c042b10ca22e0491a495802",
+      "reader_execute": true,
+      "security_definer": false
+    },
+    {
+      "acl": null,
+      "owner": null,
+      "present": false,
+      "body_md5": null,
+      "signature": "public.mz_latest_verified_check(uuid,timestamptz,timestamptz)",
+      "volatility": null,
+      "configuration": null,
+      "definition_md5": null,
+      "reader_execute": false,
+      "security_definer": null
+    },
+    {
+      "acl": [
+        {
+          "grantee": "postgres",
+          "privilege": "EXECUTE",
+          "grant_option": false
+        },
+        {
+          "grantee": "service_role",
+          "privilege": "EXECUTE",
+          "grant_option": false
+        },
+        {
+          "grantee": "custodial_application_reader",
+          "privilege": "EXECUTE",
+          "grant_option": false
+        }
+      ],
+      "owner": "postgres",
+      "present": true,
+      "body_md5": "d33db6b640b600d3018f70a57e54f5b9",
+      "signature": "public.operational_day_start(timestamptz)",
+      "volatility": "s",
+      "configuration": null,
+      "definition_md5": "5d65060220af58fb51aeeb0a23fadf66",
+      "reader_execute": true,
+      "security_definer": false
+    },
+    {
+      "acl": null,
+      "owner": null,
+      "present": false,
+      "body_md5": null,
+      "signature": "public.place_operational_location_name(uuid,timestamptz)",
+      "volatility": null,
+      "configuration": null,
+      "definition_md5": null,
+      "reader_execute": false,
+      "security_definer": null
+    },
+    {
+      "acl": [
+        {
+          "grantee": "postgres",
+          "privilege": "EXECUTE",
+          "grant_option": false
+        },
+        {
+          "grantee": "service_role",
+          "privilege": "EXECUTE",
+          "grant_option": false
+        },
+        {
+          "grantee": "static_weekly_control_plane",
+          "privilege": "EXECUTE",
+          "grant_option": false
+        },
+        {
+          "grantee": "static_weekly_release_operator",
+          "privilege": "EXECUTE",
+          "grant_option": false
+        },
+        {
+          "grantee": "custodial_application_reader",
+          "privilege": "EXECUTE",
+          "grant_option": false
+        }
+      ],
+      "owner": "postgres",
+      "present": true,
+      "body_md5": "b48c1e21e30d806f841d738932f1e4d7",
+      "signature": "public.sch_service_date(timestamptz)",
+      "volatility": "s",
+      "configuration": null,
+      "definition_md5": "115a49622bc7aa7d24c1e1dfd53e585b",
+      "reader_execute": true,
+      "security_definer": false
+    },
+    {
+      "acl": [
+        {
+          "grantee": "postgres",
+          "privilege": "EXECUTE",
+          "grant_option": false
+        },
+        {
+          "grantee": "custodial_application_reader",
+          "privilege": "EXECUTE",
+          "grant_option": false
+        }
+      ],
+      "owner": "postgres",
+      "present": true,
+      "body_md5": "2e1dae7586af419e392a8f44f7226258",
+      "signature": "public.static_weekly_v6_schedule_authority_state(date)",
+      "volatility": "s",
+      "configuration": [
+        "search_path=pg_catalog, public"
+      ],
+      "definition_md5": "f8df463c359f46214c6393eae2045ccc",
+      "reader_execute": true,
+      "security_definer": true
+    }
+  ],
+  "view_columns": [
+    {
+      "present": true,
+      "sql_type": "text",
+      "column_name": "duration_display",
+      "reader_select": true
+    },
+    {
+      "present": true,
+      "sql_type": "text",
+      "column_name": "form_type",
+      "reader_select": true
+    },
+    {
+      "present": false,
+      "sql_type": null,
+      "column_name": "latest_checked_at",
+      "reader_select": false
+    },
+    {
+      "present": true,
+      "sql_type": "timestamp with time zone",
+      "column_name": "latest_completed_at",
+      "reader_select": true
+    },
+    {
+      "present": true,
+      "sql_type": "text",
+      "column_name": "latest_completed_at_display",
+      "reader_select": true
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "latest_completed_session_id",
+      "reader_select": true
+    },
+    {
+      "present": true,
+      "sql_type": "text",
+      "column_name": "latest_completed_session_uuid",
+      "reader_select": true
+    },
+    {
+      "present": true,
+      "sql_type": "text",
+      "column_name": "latest_employee_name",
+      "reader_select": true
+    },
+    {
+      "present": true,
+      "sql_type": "text",
+      "column_name": "location_code",
+      "reader_select": true
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "location_id",
+      "reader_select": true
+    },
+    {
+      "present": true,
+      "sql_type": "text",
+      "column_name": "location_name",
+      "reader_select": true
+    },
+    {
+      "present": true,
+      "sql_type": "text",
+      "column_name": "location_type",
+      "reader_select": true
+    },
+    {
+      "present": true,
+      "sql_type": "text",
+      "column_name": "open_session_device_identifier",
+      "reader_select": true
+    },
+    {
+      "present": true,
+      "sql_type": "text",
+      "column_name": "open_session_employee_name",
+      "reader_select": true
+    },
+    {
+      "present": true,
+      "sql_type": "text",
+      "column_name": "open_session_started_at_display",
+      "reader_select": true
+    },
+    {
+      "present": true,
+      "sql_type": "text",
+      "column_name": "open_session_status",
+      "reader_select": true
+    },
+    {
+      "present": true,
+      "sql_type": "text",
+      "column_name": "open_session_uuid",
+      "reader_select": true
+    },
+    {
+      "present": true,
+      "sql_type": "bigint",
+      "column_name": "open_ticket_count",
+      "reader_select": true
+    },
+    {
+      "present": true,
+      "sql_type": "jsonb",
+      "column_name": "services_performed",
+      "reader_select": true
+    },
+    {
+      "present": true,
+      "sql_type": "text",
+      "column_name": "status_code",
+      "reader_select": true
+    },
+    {
+      "present": true,
+      "sql_type": "text",
+      "column_name": "status_color",
+      "reader_select": true
+    }
+  ],
+  "native_columns": [
+    {
+      "present": true,
+      "sql_type": "text",
+      "column_name": "client_completion_id",
+      "relation_name": "public.completion_responses"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "device_id",
+      "relation_name": "public.completion_responses"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "id",
+      "relation_name": "public.completion_responses"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "location_id",
+      "relation_name": "public.completion_responses"
+    },
+    {
+      "present": true,
+      "sql_type": "jsonb",
+      "column_name": "response_json",
+      "relation_name": "public.completion_responses"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "session_id",
+      "relation_name": "public.completion_responses"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "submitted_by_employee_id",
+      "relation_name": "public.completion_responses"
+    },
+    {
+      "present": true,
+      "sql_type": "text",
+      "column_name": "client_session_id",
+      "relation_name": "public.custodial_offline_actor_contexts"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "context_id",
+      "relation_name": "public.custodial_offline_actor_contexts"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "credential_id",
+      "relation_name": "public.custodial_offline_actor_contexts"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "device_id",
+      "relation_name": "public.custodial_offline_actor_contexts"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "employee_id",
+      "relation_name": "public.custodial_offline_actor_contexts"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "location_id",
+      "relation_name": "public.custodial_offline_actor_contexts"
+    },
+    {
+      "present": true,
+      "sql_type": "timestamp with time zone",
+      "column_name": "native_completed_at",
+      "relation_name": "public.custodial_offline_actor_contexts"
+    },
+    {
+      "present": true,
+      "sql_type": "text",
+      "column_name": "native_completion_attestation_sha256",
+      "relation_name": "public.custodial_offline_actor_contexts"
+    },
+    {
+      "present": true,
+      "sql_type": "text",
+      "column_name": "native_completion_attestation_version",
+      "relation_name": "public.custodial_offline_actor_contexts"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "native_finish_scan_entry_id",
+      "relation_name": "public.custodial_offline_actor_contexts"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "native_scan_entry_id",
+      "relation_name": "public.custodial_offline_actor_contexts"
+    },
+    {
+      "present": true,
+      "sql_type": "text",
+      "column_name": "native_start_attestation_version",
+      "relation_name": "public.custodial_offline_actor_contexts"
+    },
+    {
+      "present": true,
+      "sql_type": "text",
+      "column_name": "occurrence_fingerprint",
+      "relation_name": "public.custodial_offline_actor_contexts"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "occurrence_id",
+      "relation_name": "public.custodial_offline_actor_contexts"
+    },
+    {
+      "present": true,
+      "sql_type": "timestamp with time zone",
+      "column_name": "started_at",
+      "relation_name": "public.custodial_offline_actor_contexts"
+    },
+    {
+      "present": true,
+      "sql_type": "text",
+      "column_name": "status",
+      "relation_name": "public.custodial_offline_actor_contexts"
+    },
+    {
+      "present": true,
+      "sql_type": "text",
+      "column_name": "client_completion_id",
+      "relation_name": "public.custodial_offline_reconciliation_records"
+    },
+    {
+      "present": true,
+      "sql_type": "text",
+      "column_name": "client_session_id",
+      "relation_name": "public.custodial_offline_reconciliation_records"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "completion_response_id",
+      "relation_name": "public.custodial_offline_reconciliation_records"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "context_id",
+      "relation_name": "public.custodial_offline_reconciliation_records"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "credential_id",
+      "relation_name": "public.custodial_offline_reconciliation_records"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "device_id",
+      "relation_name": "public.custodial_offline_reconciliation_records"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "location_id",
+      "relation_name": "public.custodial_offline_reconciliation_records"
+    },
+    {
+      "present": true,
+      "sql_type": "text",
+      "column_name": "occurrence_fingerprint",
+      "relation_name": "public.custodial_offline_reconciliation_records"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "occurrence_id",
+      "relation_name": "public.custodial_offline_reconciliation_records"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "original_employee_id",
+      "relation_name": "public.custodial_offline_reconciliation_records"
+    },
+    {
+      "present": true,
+      "sql_type": "jsonb",
+      "column_name": "payload_json",
+      "relation_name": "public.custodial_offline_reconciliation_records"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "reconciliation_id",
+      "relation_name": "public.custodial_offline_reconciliation_records"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "session_id",
+      "relation_name": "public.custodial_offline_reconciliation_records"
+    },
+    {
+      "present": true,
+      "sql_type": "text",
+      "column_name": "state",
+      "relation_name": "public.custodial_offline_reconciliation_records"
+    },
+    {
+      "present": true,
+      "sql_type": "text",
+      "column_name": "client_event_id",
+      "relation_name": "public.custodial_offline_scan_event_evidence"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "context_id",
+      "relation_name": "public.custodial_offline_scan_event_evidence"
+    },
+    {
+      "present": true,
+      "sql_type": "jsonb",
+      "column_name": "event_payload",
+      "relation_name": "public.custodial_offline_scan_event_evidence"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "reconciliation_id",
+      "relation_name": "public.custodial_offline_scan_event_evidence"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "session_id",
+      "relation_name": "public.custodial_offline_scan_event_evidence"
+    },
+    {
+      "present": true,
+      "sql_type": "text",
+      "column_name": "client_session_id",
+      "relation_name": "public.sessions"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "device_id",
+      "relation_name": "public.sessions"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "employee_id",
+      "relation_name": "public.sessions"
+    },
+    {
+      "present": true,
+      "sql_type": "timestamp with time zone",
+      "column_name": "ended_at",
+      "relation_name": "public.sessions"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "id",
+      "relation_name": "public.sessions"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "location_id",
+      "relation_name": "public.sessions"
+    },
+    {
+      "present": true,
+      "sql_type": "timestamp with time zone",
+      "column_name": "started_at",
+      "relation_name": "public.sessions"
+    },
+    {
+      "present": true,
+      "sql_type": "text",
+      "column_name": "status",
+      "relation_name": "public.sessions"
+    }
+  ],
+  "protected_columns": [
+    {
+      "present": true,
+      "sql_type": "text",
+      "column_name": "client_completion_id",
+      "relation_name": "public.completion_responses"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "device_id",
+      "relation_name": "public.completion_responses"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "id",
+      "relation_name": "public.completion_responses"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "location_id",
+      "relation_name": "public.completion_responses"
+    },
+    {
+      "present": true,
+      "sql_type": "jsonb",
+      "column_name": "response_json",
+      "relation_name": "public.completion_responses"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "session_id",
+      "relation_name": "public.completion_responses"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "submitted_by_employee_id",
+      "relation_name": "public.completion_responses"
+    },
+    {
+      "present": true,
+      "sql_type": "bigint",
+      "column_name": "assignment_epoch",
+      "relation_name": "public.custodial_offline_actor_contexts"
+    },
+    {
+      "present": true,
+      "sql_type": "text",
+      "column_name": "client_session_id",
+      "relation_name": "public.custodial_offline_actor_contexts"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "context_id",
+      "relation_name": "public.custodial_offline_actor_contexts"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "credential_id",
+      "relation_name": "public.custodial_offline_actor_contexts"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "device_id",
+      "relation_name": "public.custodial_offline_actor_contexts"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "employee_id",
+      "relation_name": "public.custodial_offline_actor_contexts"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "location_id",
+      "relation_name": "public.custodial_offline_actor_contexts"
+    },
+    {
+      "present": true,
+      "sql_type": "timestamp with time zone",
+      "column_name": "native_completed_at",
+      "relation_name": "public.custodial_offline_actor_contexts"
+    },
+    {
+      "present": true,
+      "sql_type": "text",
+      "column_name": "native_completion_attestation_sha256",
+      "relation_name": "public.custodial_offline_actor_contexts"
+    },
+    {
+      "present": true,
+      "sql_type": "text",
+      "column_name": "native_completion_attestation_version",
+      "relation_name": "public.custodial_offline_actor_contexts"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "native_finish_scan_entry_id",
+      "relation_name": "public.custodial_offline_actor_contexts"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "native_scan_entry_id",
+      "relation_name": "public.custodial_offline_actor_contexts"
+    },
+    {
+      "present": true,
+      "sql_type": "text",
+      "column_name": "native_start_attestation_version",
+      "relation_name": "public.custodial_offline_actor_contexts"
+    },
+    {
+      "present": true,
+      "sql_type": "text",
+      "column_name": "occurrence_fingerprint",
+      "relation_name": "public.custodial_offline_actor_contexts"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "occurrence_id",
+      "relation_name": "public.custodial_offline_actor_contexts"
+    },
+    {
+      "present": true,
+      "sql_type": "integer",
+      "column_name": "snapshot_assignment_epoch",
+      "relation_name": "public.custodial_offline_actor_contexts"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "snapshot_employee_id",
+      "relation_name": "public.custodial_offline_actor_contexts"
+    },
+    {
+      "present": true,
+      "sql_type": "text",
+      "column_name": "snapshot_id",
+      "relation_name": "public.custodial_offline_actor_contexts"
+    },
+    {
+      "present": true,
+      "sql_type": "timestamp with time zone",
+      "column_name": "started_at",
+      "relation_name": "public.custodial_offline_actor_contexts"
+    },
+    {
+      "present": true,
+      "sql_type": "text",
+      "column_name": "status",
+      "relation_name": "public.custodial_offline_actor_contexts"
+    },
+    {
+      "present": true,
+      "sql_type": "text",
+      "column_name": "client_completion_id",
+      "relation_name": "public.custodial_offline_reconciliation_records"
+    },
+    {
+      "present": true,
+      "sql_type": "text",
+      "column_name": "client_session_id",
+      "relation_name": "public.custodial_offline_reconciliation_records"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "completion_response_id",
+      "relation_name": "public.custodial_offline_reconciliation_records"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "context_id",
+      "relation_name": "public.custodial_offline_reconciliation_records"
+    },
+    {
+      "present": true,
+      "sql_type": "timestamp with time zone",
+      "column_name": "created_at",
+      "relation_name": "public.custodial_offline_reconciliation_records"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "credential_id",
+      "relation_name": "public.custodial_offline_reconciliation_records"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "device_id",
+      "relation_name": "public.custodial_offline_reconciliation_records"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "location_id",
+      "relation_name": "public.custodial_offline_reconciliation_records"
+    },
+    {
+      "present": true,
+      "sql_type": "text",
+      "column_name": "occurrence_fingerprint",
+      "relation_name": "public.custodial_offline_reconciliation_records"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "occurrence_id",
+      "relation_name": "public.custodial_offline_reconciliation_records"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "original_employee_id",
+      "relation_name": "public.custodial_offline_reconciliation_records"
+    },
+    {
+      "present": true,
+      "sql_type": "text",
+      "column_name": "payload_fingerprint",
+      "relation_name": "public.custodial_offline_reconciliation_records"
+    },
+    {
+      "present": true,
+      "sql_type": "jsonb",
+      "column_name": "payload_json",
+      "relation_name": "public.custodial_offline_reconciliation_records"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "reconciliation_id",
+      "relation_name": "public.custodial_offline_reconciliation_records"
+    },
+    {
+      "present": true,
+      "sql_type": "jsonb",
+      "column_name": "result_json",
+      "relation_name": "public.custodial_offline_reconciliation_records"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "session_id",
+      "relation_name": "public.custodial_offline_reconciliation_records"
+    },
+    {
+      "present": true,
+      "sql_type": "text",
+      "column_name": "state",
+      "relation_name": "public.custodial_offline_reconciliation_records"
+    },
+    {
+      "present": true,
+      "sql_type": "text",
+      "column_name": "client_event_id",
+      "relation_name": "public.custodial_offline_scan_event_evidence"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "context_id",
+      "relation_name": "public.custodial_offline_scan_event_evidence"
+    },
+    {
+      "present": true,
+      "sql_type": "jsonb",
+      "column_name": "event_payload",
+      "relation_name": "public.custodial_offline_scan_event_evidence"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "reconciliation_id",
+      "relation_name": "public.custodial_offline_scan_event_evidence"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "session_id",
+      "relation_name": "public.custodial_offline_scan_event_evidence"
+    },
+    {
+      "present": true,
+      "sql_type": "text",
+      "column_name": "display_name",
+      "relation_name": "public.employees"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "id",
+      "relation_name": "public.employees"
+    },
+    {
+      "present": true,
+      "sql_type": "text",
+      "column_name": "client_session_id",
+      "relation_name": "public.sessions"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "device_id",
+      "relation_name": "public.sessions"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "employee_id",
+      "relation_name": "public.sessions"
+    },
+    {
+      "present": true,
+      "sql_type": "timestamp with time zone",
+      "column_name": "ended_at",
+      "relation_name": "public.sessions"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "id",
+      "relation_name": "public.sessions"
+    },
+    {
+      "present": true,
+      "sql_type": "uuid",
+      "column_name": "location_id",
+      "relation_name": "public.sessions"
+    },
+    {
+      "present": true,
+      "sql_type": "text",
+      "column_name": "session_uuid",
+      "relation_name": "public.sessions"
+    },
+    {
+      "present": true,
+      "sql_type": "timestamp with time zone",
+      "column_name": "started_at",
+      "relation_name": "public.sessions"
+    },
+    {
+      "present": true,
+      "sql_type": "text",
+      "column_name": "status",
+      "relation_name": "public.sessions"
+    }
+  ],
+  "protected_schema": {
+    "acl": "{postgres=UC/postgres,custodial_application_reader=U/postgres}",
+    "owner": "postgres",
+    "anon_usage": false,
+    "reader_usage": true,
+    "reader_create": false,
+    "service_usage": false,
+    "authenticated_usage": false
+  },
+  "protected_relations": [
+    {
+      "rls": true,
+      "owner": "postgres",
+      "identity": "completion_responses",
+      "force_rls": true
+    },
+    {
+      "rls": true,
+      "owner": "postgres",
+      "identity": "sessions",
+      "force_rls": true
+    }
+  ],
+  "full_predecessor_output_columns": [
+    "location_id",
+    "location_code",
+    "location_name",
+    "location_type",
+    "form_type",
+    "operational_day_start",
+    "last_scan_at",
+    "open_session_id",
+    "open_session_uuid",
+    "open_session_status",
+    "open_session_started_at",
+    "open_session_ended_at",
+    "latest_completed_session_id",
+    "latest_completed_session_uuid",
+    "latest_started_at",
+    "latest_ended_at",
+    "latest_submitted_at",
+    "latest_completed_at",
+    "latest_employee_name",
+    "duration_minutes",
+    "duration_display",
+    "services_performed",
+    "notes",
+    "open_ticket_count",
+    "status_code",
+    "status_color",
+    "operational_day_start_display",
+    "last_scan_at_display",
+    "open_session_started_at_display",
+    "open_session_ended_at_display",
+    "latest_started_at_display",
+    "latest_ended_at_display",
+    "latest_submitted_at_display",
+    "latest_completed_at_display",
+    "open_session_employee_name",
+    "open_session_device_identifier",
+    "schedule_authority_source",
+    "schedule_projection_status"
+  ]
+}

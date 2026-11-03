@@ -1,3 +1,4 @@
+import {migrationReplayNames} from './migration-replay-order.mjs';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
@@ -20,7 +21,7 @@ const reject = (name, query, pattern = /ERROR/) => { let error; try { sql(query)
 const cleanup = () => { if (!owned) return; docker(['rm', '-f', container]); owned = false; assert.equal(docker(['ps', '-a', '--filter', `name=^/${container}$`, '--format', '{{.Names}}']).trim(), ''); console.log('OWNED_CONTAINER_REMOVED', container); };
 for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => { try { cleanup(); } finally { process.exit(143); } });
 
-const files = readdirSync('supabase/migrations').filter(file => file.endsWith('.sql')).sort();
+const files = migrationReplayNames(process.cwd());
 assert.equal(files.at(-1), '20260925190000_gps_exact_location_authority_boundary.sql');
 try {
   docker(['image', 'inspect', image]);

@@ -13,7 +13,7 @@ const env = {
   SUPABASE_SERVICE_ROLE_KEY: "scheduler-runtime-test-service-role-key",
   OPS_MANAGER_SESSION_SECRET: "scheduler-runtime-test-session-secret-0123456789",
 };
-const manager = { manager_id: "10000000-0000-4000-8000-000000000091", display_name: "Runtime Named Manager", roles: ["OPS_MANAGER"], active: true };
+const manager = { manager_id: "10000000-0000-4000-8000-000000000091", display_name: "Runtime Named Manager", system_key: "eric_custodial_manager", is_system_principal: false, roles: ["OPS_MANAGER"], active: true };
 const credentialId = "runtime-credential";
 const deviceId = "runtime-device";
 const session = createOpsManagerSession({ credentialId, deviceId, manager, authMode: "trusted_device", accessLevel: "full_access", maximumAccessLevel: "full_access", env });
@@ -29,6 +29,80 @@ const currentTrustedDevice = (overrides = {}) => ({
   manager: { ...manager },
   ...overrides,
 });
+
+if(process.argv.includes('--approved-confirmation-status-http-only')){
+ const calls=[],operations=[];let current=currentTrustedDevice(),failRead=false,leaseBegins=0;
+ const cp={async runManagerOperation(context,run){operations.push(context);return run();},
+  async getApprovedInitialConfirmationStatus(input){calls.push({kind:'initial',input});if(failRead)throw Object.assign(Error('UNIT unresolved read'),{code:'55P03'});
+   return{schema:'custodial.approved-static-confirmation-status.v1',kind:'initial',state:'NOT_FOUND',confirmationKey:input.confirmationKey,request:null,receipt:null};},
+  async getApprovedStaticConfirmationStatus(input){calls.push({kind:'recurring',input});if(failRead)throw Object.assign(Error('UNIT unresolved read'),{code:'55P03'});
+   return{schema:'custodial.approved-static-confirmation-status.v1',kind:'recurring',state:'NOT_FOUND',confirmationKey:input.confirmationKey,request:null,receipt:null};},
+  async getRecurringConfirmationStatus(){throw Error('Old compiler ledger must never answer for an approved-pattern confirmation');}};
+ const runtime=createStaticWeeklyControlPlaneRuntime({env,database:{},controlPlane:cp,datedTransitionController:null,
+  trustedDeviceStore:{async find(){return current;}},supabase:{async rpc(name){
+   if(name==='custodial_begin_application_mutation_lease')leaseBegins++;
+   return{data:true,error:null};}}});
+ const server=createServer(runtime.app);let checks=0;
+ await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(0,'127.0.0.1',resolve);});
+ const origin=`http://127.0.0.1:${server.address().port}`,key='99000000-0000-4000-8000-000000000009';
+ const headers={Authorization:`Bearer ${session.token}`};
+ try{
+  for(const [path,kind]of [['approved-initial','initial'],['recurring-adaptation','recurring']]){
+   const url=origin+'/static-weekly/'+path+'/confirmations/'+key,before=calls.length;
+   assert.equal((await fetch(url)).status,401);assert.equal(calls.length,before);checks++;
+   const response=await fetch(url,{headers});assert.equal(response.status,200,await response.clone().text());
+   const body=await response.json();assert.equal(body.data.kind,kind);assert.equal(body.data.confirmationKey,key);
+   assert.equal(body.data.state,'NOT_FOUND');assert.equal(calls.at(-1).kind,kind);
+   assert.equal(calls.at(-1).input.manager.manager_id,manager.manager_id);assert.equal(calls.at(-1).input.confirmationKey,key);
+   assert.equal(Number.isFinite(operations.at(-1).deadlineAt),true);assert.equal(operations.at(-1).permission,'write');checks++;
+   const count=calls.length;
+   for(const query of ['?manager_id=forged','?receipt=accepted','?confirmationKey=other']){
+    assert.equal((await fetch(url+query,{headers})).status,422);assert.equal(calls.length,count);checks++;
+   }
+   failRead=true;const unresolved=await fetch(url,{headers});assert.equal(unresolved.ok,false);
+   assert.equal((await unresolved.json()).ok,false);failRead=false;checks++;
+  }
+  const readonly=createOpsManagerSession({credentialId,deviceId,manager,authMode:'trusted_device',
+   accessLevel:'read_only',maximumAccessLevel:'read_only',env});
+  current=currentTrustedDevice({max_access_level:'read_only'});const before=calls.length;
+  const denied=await fetch(origin+'/static-weekly/approved-initial/confirmations/'+key,{headers:{Authorization:`Bearer ${readonly.token}`}});
+  assert.equal(denied.status,403);assert.equal(calls.length,before);checks++;
+  current={...currentTrustedDevice(),revoked_at:new Date().toISOString()};
+  assert.equal((await fetch(origin+'/static-weekly/recurring-adaptation/confirmations/'+key,{headers})).status,401);
+  assert.equal(calls.length,before);checks++;
+  assert.equal(leaseBegins,0,'GET recovery cannot acquire a mutation lease or start a publication');
+  console.log(JSON.stringify({checks,actual_HTTP:true,normal_signed_auth:true,actual_SQL:false,real_manager:false,
+   scope:'NEW exact approved original status routes and current named-session checks only',mutation_leases:leaseBegins,old_groups:0,resources0:true}));
+ }finally{await new Promise(resolve=>server.close(resolve));}
+ process.exit(0);
+}
+
+if(process.argv.includes('--audit-delegated-absence-http-only')){
+ const delegate={...manager,display_name:'SYNTHETIC delegated absence manager',system_key:null};
+ const signed=createOpsManagerSession({credentialId,deviceId,manager:delegate,authMode:'trusted_device',accessLevel:'read_only',maximumAccessLevel:'read_only',env});
+ let current=currentTrustedDevice({max_access_level:'read_only',manager:delegate}),calls=0;const permissions=[];
+ const cp={async runManagerOperation(context,fn){assert.equal(context.permission,'manage_absences');assert.equal(context.manager.read_only,true);assert.equal(context.manager.permissions.owner,false);permissions.push(context.permission);return fn();}};
+ for(const name of ['beginStaffingCommand','prepareStaffingCommand','getStaffingCommand','listPendingStaffingCommands','getStaffingDeliveryStatus','acceptStaffingCommand','cancelStaffingPreparation'])
+  cp[name]=async input=>{assert.equal(input.manager.manager_id,delegate.manager_id);calls++;return{state:'SYNTHETIC_ROUTE_RESULT_ONLY'};};
+ const runtime=createStaticWeeklyControlPlaneRuntime({env,database:{},controlPlane:cp,datedTransitionController:null,
+  trustedDeviceStore:{async find(){return current;}},supabase:{async rpc(name){return{data:name==='custodial_begin_application_mutation_lease'?{mutations_paused:false,state:'READY',authority_generation:0,restore_id:null}:true,error:null};}}});
+ const server=createServer(runtime.app);await new Promise((ok,no)=>{server.once('error',no);server.listen(0,'127.0.0.1',ok);});
+ const origin=`http://127.0.0.1:${server.address().port}`,operation='99000000-0000-4000-8000-000000000003';let checks=0;
+ try{
+  for(const [method,path]of [['POST',''],['POST','/'+operation+'/prepare'],['GET','/pending'],['GET','/'+operation],['GET','/'+operation+'/delivery'],['POST','/'+operation+'/confirm'],['POST','/'+operation+'/cancel']]){
+   const response=await fetch(origin+'/static-weekly/staffing-commands'+path,{method,headers:{'Content-Type':'application/json',Authorization:`Bearer ${signed.token}`},...(method==='POST'?{body:'{}'}:{})});
+   assert.equal(response.status,200,await response.text());checks++;
+  }
+  assert.equal(calls,7);assert.equal(permissions.length,7);checks+=2;
+  const ownerOnly=await fetch(origin+'/static-weekly/employees/departed',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${signed.token}`},body:'{}'});
+  assert.equal(ownerOnly.status,403);assert.equal(calls,7);checks+=2;
+  current={...current,revoked_at:new Date().toISOString()};
+  const denied=await fetch(origin+'/static-weekly/staffing-commands/'+operation+'/confirm',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${signed.token}`},body:'{}'});
+  assert.equal(denied.status,401);assert.equal(calls,7);checks+=2;
+  console.log(JSON.stringify({checks,actual_HTTP:true,normal_signed_auth:true,actual_SQL:false,real_named_manager_browser:false,scope:'NEW delegated command route and bounded permission dispatch only; synthetic private registry/CP/lease callbacks'}));
+ }finally{await new Promise(ok=>server.close(ok));}
+ process.exit(0);
+}
 
 const tlsOptions = staticWeeklyDatabaseConnectionOptions({
   connectionString: "postgresql://runtime:secret@db.example.invalid:5432/postgres?sslmode=require&sslrootcert=%2Ftmp%2Funtrusted.crt&uselibpqcompat=true",
@@ -85,10 +159,27 @@ let rebuildRequest = null;
 let dayChangesRequest = null;
 let mutationFailure = null;
 let vacancyRequest = null;
+let vacancyPreviewRequest = null;
+let separationRead = null;
 let fillRequest = null;
+let recurringPreviewRequest = null;
+let recurringConfirmationRequest = null;
+let recurringStatusRequest = null;
+let recurringDeliveryRequest = null;
 const controlPlane = {
+  async getCurrentRecurringDelivery(request) { recurringDeliveryRequest=request;return {mode:'RECURRING_SCHEDULE',affectedPhonesUpdated:false,targets:[]}; },
+  async confirmApprovedStaticPattern(request) { recurringConfirmationRequest=request;return {state:'ACCEPTED',receipt:{accepted:true,affectedPhonesUpdated:false}}; },
+  async getRecurringConfirmationStatus(request) { recurringStatusRequest=request;return {state:'NOT_FOUND'}; },
+  async getApprovedStaticConfirmationStatus(request) { recurringStatusRequest=request;return {
+    schema:'custodial.approved-static-confirmation-status.v1',kind:'recurring',state:'NOT_FOUND',confirmationKey:request.confirmationKey,request:null,receipt:null}; },
+  async getApprovedInitialConfirmationStatus(request) { return {
+    schema:'custodial.approved-static-confirmation-status.v1',kind:'initial',state:'NOT_FOUND',confirmationKey:request.confirmationKey,request:null,receipt:null}; },
+  async previewApprovedStaticPattern(request) { recurringPreviewRequest = request; return { status: "CANDIDATE_ONLY",
+    previewDigest: "a".repeat(64), admitted: false, published: false, affectedPhonesUpdated: false }; },
   async fillVacantRosterSlot(request) { fillRequest = request; return { revision: request.expectedRevision + 2, data: { phone_assignment: null } }; },
+  async previewVacancyRosterSlot(request) { vacancyPreviewRequest = request; return { previewDigest: "c".repeat(64), admitted: false }; },
   async vacateRosterSlot(request) { vacancyRequest = request; return { revision: request.expectedRevision + 1, data: { replacement_employee_id: null } }; },
+  async readSeparation(request) { separationRead = request; return { slot_id: request.slotId, state: "PENDING_RECONCILIATION", native_inventory_state: "UNKNOWN" }; },
   async health() { return { ready: true }; },
   async getManagerSnapshot({ weekStart }) { snapshots += 1; return { schema: "memphis-zoo.static-weekly-manager-snapshot.v1", week_start: weekStart, authority_revision: 0 }; },
   async applyContractorCapacity() { mutations += 1; return { revision: mutations, data: { exception_id: `contractor-${mutations}` } }; },
@@ -110,6 +201,8 @@ const runtime = createStaticWeeklyControlPlaneRuntime({
   trustedDeviceStore: store,
   database: {},
   controlPlane,
+  recurringOperationAdmission: ({action}) => action(),
+
 });
 const server = createServer(runtime.app);
 await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -186,6 +279,68 @@ try {
   assert.equal(snapshot.body.data.schema, "memphis-zoo.static-weekly-manager-snapshot.v1");
   assert.equal(snapshots, 1);
 
+  const previewUrl = `${origin}/static-weekly/recurring-adaptation/preview`;
+  const previewBody = { effective_start: "2026-10-05", expected_revision: 42,
+    template_id: "owner-corrected-six-initial" };
+  let previewResponse = await fetch(previewUrl, { method: "POST",
+    headers: { "Content-Type": "application/json" }, body: JSON.stringify(previewBody) });
+  assert.equal(previewResponse.status, 401, "unauthenticated callers cannot request a roster preview");
+  assert.equal(recurringPreviewRequest, null);
+  previewResponse = await fetch(previewUrl, { method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.token}` },
+    body: JSON.stringify(previewBody) });
+  assert.equal(previewResponse.status, 200);
+  assert.equal((await previewResponse.json()).data.status, "CANDIDATE_ONLY");
+  assert.equal(recurringPreviewRequest.manager.manager_id, manager.manager_id);
+  assert.equal(recurringPreviewRequest.serviceDate, previewBody.effective_start);
+  assert.equal(recurringPreviewRequest.expectedRevision, previewBody.expected_revision);
+  assert.equal(recurringPreviewRequest.templateId, previewBody.template_id);
+  assert.equal(recurringPreviewRequest.signal instanceof AbortSignal,true,'preview receives the restore mutation signal');
+  assert.equal(recurringPreviewRequest.signal.aborted,true,'preview cannot continue after response settlement');
+  assert.equal(recurringPreviewRequest.deadlineAt<=performance.now()+60_000,true,'preview has one absolute minute');
+
+  const fixedPreviewRequest=recurringPreviewRequest;
+  const forbiddenLegacy=await fetch(previewUrl,{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${session.token}`},
+    body:JSON.stringify({...previewBody,full_nine_source_id:'22222222-2222-4222-8222-222222222222'})});
+  assert.equal(forbiddenLegacy.status,409,'the retired optimizer source selector cannot enter fixed-pattern preview');
+  assert.equal((await forbiddenLegacy.json()).code,'static_template_legacy_source_selector_not_supported');
+  assert.equal(recurringPreviewRequest,fixedPreviewRequest,'no approved-template call or solver fallback occurs');
+
+  const confirmationKey='30000000-0000-4000-8000-000000000091';
+  const confirmationUrl=`${origin}/static-weekly/recurring-adaptation/confirm`;
+  const confirmationBody={confirmation_key:confirmationKey,effective_start:'2026-10-05',expected_revision:42,preview_digest:'b'.repeat(64)};
+  let confirmationResponse=await fetch(confirmationUrl,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(confirmationBody)});
+  assert.equal(confirmationResponse.status,401);assert.equal(recurringConfirmationRequest,null);
+  confirmationResponse=await fetch(confirmationUrl,{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${session.token}`},body:JSON.stringify(confirmationBody)});
+  assert.equal(confirmationResponse.status,200);
+  assert.equal((await confirmationResponse.json()).data.receipt.affectedPhonesUpdated,false);
+  const {signal: confirmationSignal,deadlineAt: confirmationDeadlineAt,...confirmedFields}=recurringConfirmationRequest;
+  assert.deepEqual(confirmedFields,{manager:recurringPreviewRequest.manager,idempotencyKey:confirmationKey,serviceDate:'2026-10-05',expectedRevision:42,previewDigest:'b'.repeat(64),templateId:null});
+  assert.equal(confirmationSignal instanceof AbortSignal,true,'the exact restore mutation lease abort signal reaches confirmation');
+  assert.equal(confirmationSignal.aborted,true,'a settled response revokes trailing mutation authority');
+  assert.equal(Number.isFinite(confirmationDeadlineAt),true,'the route supplies one monotonic absolute operation deadline');
+  assert.equal(confirmationDeadlineAt<=performance.now()+60_000,true,'the route never grants over one minute');
+  const validConfirmationRequest=recurringConfirmationRequest;
+  for(const extra of [{manager_id:'forged'},{canonical_source:{forged:true}},{decision:{forged:true}}]){
+   const denied=await fetch(confirmationUrl,{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${session.token}`},body:JSON.stringify({...confirmationBody,...extra})});
+   assert.equal(denied.status,422);assert.equal(recurringConfirmationRequest,validConfirmationRequest);
+  }
+  const statusUrl=`${origin}/static-weekly/recurring-adaptation/confirmations/${confirmationKey}`;
+  assert.equal((await fetch(statusUrl)).status,401);assert.equal(recurringStatusRequest,null);
+  const statusResponse=await fetch(statusUrl,{headers:{Authorization:`Bearer ${session.token}`}});
+  assert.equal(statusResponse.status,200);assert.equal((await statusResponse.json()).data.state,'NOT_FOUND');
+  assert.deepEqual(recurringStatusRequest,{manager:recurringPreviewRequest.manager,confirmationKey});
+  const deliveryUrl=`${origin}/static-weekly/recurring-adaptation/delivery?service_date=2026-10-05`;
+  assert.equal((await fetch(deliveryUrl)).status,401);assert.equal(recurringDeliveryRequest,null);
+  const deliveryResponse=await fetch(deliveryUrl,{headers:{Authorization:`Bearer ${session.token}`}});
+  assert.equal(deliveryResponse.status,200);assert.equal((await deliveryResponse.json()).data.affectedPhonesUpdated,false);
+  assert.deepEqual(recurringDeliveryRequest,{manager:recurringPreviewRequest.manager,serviceDate:'2026-10-05'});
+  const validDeliveryRequest=recurringDeliveryRequest;
+  for(const extra of ['&manager_id=forged','&service_date=2026-10-06','&projection_id=forged']){
+   assert.equal((await fetch(deliveryUrl+extra,{headers:{Authorization:`Bearer ${session.token}`}})).status,422);
+   assert.equal(recurringDeliveryRequest,validDeliveryRequest);
+  }
+
   const rejectedOrigin = await fetch(`${origin}/static-weekly/manager-snapshot`, {
     method: "OPTIONS",
     headers: { Origin: "https://untrusted.example", "Access-Control-Request-Method": "GET" },
@@ -211,7 +366,10 @@ try {
   assert.equal(response.status, 200, "a valid trusted named-manager credential may invoke rebuild-only projection recovery");
   assert.equal(response.body.data.revision, 1);
   assert.equal(rebuilds, 1);
-  assert.deepEqual(rebuildRequest, { manager: exceptionRequest.manager, weekStart: "2026-10-05", expectedRevision: 0, idempotencyKey: "runtime-rebuild" }, "the named recovery endpoint passes only its manager authority and rebuild command identity");
+  const {signal:rebuildSignal,deadlineAt:rebuildDeadline,...rebuildFields}=rebuildRequest;
+  assert.deepEqual(rebuildFields,{manager:exceptionRequest.manager,weekStart:"2026-10-05",expectedRevision:0,idempotencyKey:"runtime-rebuild"},"only the current actor and original command identities are accepted");
+  assert.ok(rebuildSignal instanceof AbortSignal&&rebuildSignal.aborted,"settled regeneration authority is revoked");
+  assert.ok(Number.isFinite(rebuildDeadline)&&rebuildDeadline<=performance.now()+60000,"regeneration uses its original bounded ingress deadline");
 
   const retiredIncumbency = await fetch(`${origin}/static-weekly/incumbencies`, {
     method: "POST",
@@ -222,6 +380,8 @@ try {
   assert.equal(mutations, 2, "the retired endpoint cannot reach any scheduler mutation");
 
   lookup = async () => currentTrustedDevice({ revoked_at: new Date().toISOString() });
+  assert.equal((await fetch(statusUrl,{headers:{Authorization:`Bearer ${session.token}`}})).status,401);
+  assert.equal((await fetch(confirmationUrl,{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${session.token}`},body:JSON.stringify(confirmationBody)})).status,401);
   response = await mutation();
   assert.equal(response.status, 401, "a revoked trusted-device credential must be rejected before scheduler mutation");
   assert.equal(mutations, 2);
@@ -274,12 +434,30 @@ try {
   const unauthenticatedVacancy = await fetch(vacancyUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(vacancyBody) });
   assert.equal(unauthenticatedVacancy.status, 401);
   assert.equal(vacancyRequest, null, "unauthenticated request cannot reach vacancy authority");
-  const acceptedVacancy = await fetch(vacancyUrl, { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.token }, body: JSON.stringify(vacancyBody) });
+  const vacancyHeaders = { "Content-Type": "application/json", Authorization: "Bearer " + session.token };
+  const unreviewedVacancy = await fetch(vacancyUrl, { method: "POST", headers: vacancyHeaders, body: JSON.stringify(vacancyBody) });
+  assert.equal(unreviewedVacancy.status, 409, "confirmation without its reviewed preview cannot enter vacancy authority");
+  assert.equal(vacancyRequest, null);
+  const vacancyPreview = await fetch(vacancyUrl + "/preview", { method: "POST", headers: vacancyHeaders, body: JSON.stringify(vacancyBody) });
+  assert.equal(vacancyPreview.status, 200);
+  assert.equal(vacancyPreviewRequest.sourceId, vacancyBody.source_id);
+  assert.equal(vacancyPreviewRequest.previewDigest, null);
+  const previewDigest = (await vacancyPreview.json()).data.previewDigest;
+  const acceptedVacancy = await fetch(vacancyUrl, { method: "POST", headers: vacancyHeaders, body: JSON.stringify({ ...vacancyBody, preview_digest: previewDigest }) });
   assert.equal(acceptedVacancy.status, 200);
+  assert.equal(vacancyRequest.previewDigest, previewDigest, "the exact reviewed digest reaches confirmation");
   assert.equal(vacancyRequest.employeeId, vacancyBody.employee_id);
   assert.equal(vacancyRequest.slotId, "20000000-0000-4000-8000-000000000091");
   assert.equal(vacancyRequest.sourceId, vacancyBody.source_id);
   assert.equal(vacancyRequest.manager.manager_id, manager.manager_id);
+  const separationUrl = origin + "/static-weekly/roster/20000000-0000-4000-8000-000000000091/separation";
+  const deniedRead = await fetch(separationUrl);
+  assert.equal(deniedRead.status, 401);
+  assert.equal(separationRead, null, "unauthenticated caller cannot inspect separation state");
+  const allowedRead = await fetch(separationUrl, { headers: { Authorization: "Bearer " + session.token } });
+  assert.equal(allowedRead.status, 200);
+  assert.equal((await allowedRead.json()).data.native_inventory_state, "UNKNOWN");
+  assert.equal(separationRead.manager.manager_id, manager.manager_id);
   const fillUrl = origin + "/static-weekly/roster/vacant-slots/20000000-0000-4000-8000-000000000091/fill";
   const fillBody = { source_id: vacancyBody.source_id, new_employee_name: "Synthetic Authorized Hire", effective_start: vacancyBody.effective_start,
     reason: "Synthetic fill", expected_revision: 0, idempotency_key: "runtime-source-bound-fill" };

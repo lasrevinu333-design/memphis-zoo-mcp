@@ -1,3 +1,4 @@
+import {deriveFixedStaticWeeklyOwnershipWitness} from './static-weekly-fixed-ownership.js';
 import assert from "node:assert/strict";
 import {createApprovedPendingStaffingWeekInput} from './static-weekly-staffing-preview.js';
 import { createHash } from "node:crypto";
@@ -10,7 +11,7 @@ import {deriveLunchCoverageFromPreparedProblem} from './static-weekly-lunch-deri
 import { recurringPatternAuthority } from "./static-weekly-recurring-repair-basis.js";
 import { createShiftEndContinuityPolicy,deriveApprovedMappedShiftEndCoverage,deriveApprovedDatedMappedShiftEndCoverage } from "./static-weekly-shift-end-derivation.js";
 import { assertNormalOwnerEligibility, hardRestrictedSlots,
-  validateOwnerEligibilityConfig,normalGeographyRestrictionApplies } from "./static-weekly-owner-eligibility.js";
+  validateOwnerEligibilityConfig,normalGeographyRestrictionApplies,isHardForbidden,mandatoryNormalOwner } from "./static-weekly-owner-eligibility.js";
 import {createRecurringPhaseDescriptor,createRecurringPhaseProspectiveSource,
   enumerateRecurringPhaseMinimum,evaluateRecurringPhaseCanonicalSource,
   solveRecurringPhaseCanonicalMinimum,assertRecurringPhasePreferenceNormalization,
@@ -388,7 +389,7 @@ export function mapApprovedStaticTemplateCandidate({ templates, admittedBindings
       require(configOwner && configOwner[1].personId === actual.personId && configOwner[1].vacancy !== true,
         'static_template_current_person_config_mismatch');
       for (const row of rows) {
-        try { assertNormalOwnerEligibility({ key: configOwner[0], ...configOwner[1] }, row.locationCodeSnapshot); }
+        try { assertNormalOwnerEligibility({ key: configOwner[0], ...configOwner[1] }, row.locationCodeSnapshot,row.dayOfWeek,row.coveragePurpose); }
         catch { fits = false; break; }
         const roleAvailability = approved.states.get(row.dayOfWeek).availability.get(role);
         const actualContext = target.availabilityByDaySlot.get(`${row.dayOfWeek}\u0000${actual.slotId}`);
@@ -574,59 +575,9 @@ export function prepareApprovedStaticTemplateProjection(args) {
         fail('static_template_dated_week_publication_unavailable');
     }
     if(problem.error)fail('static_template_feasibility_source_invalid');
-    const model = buildStaticWeeklySchedulingModel(problem,[],
-      {name:'approved_static_fixed_feasibility',family:'approved_static_fixed_feasibility',terms:[]},args.deadline);
-    if(model.error)fail('static_template_feasibility_model_invalid');
-    if(model.general.size || model.priorBindings.length)fail('static_template_unexpected_rank_or_binding');
-    const values = new Map([...model.binary].map(name=>[name,0]));
-    const version= mapping.candidateSource.version || mapping.candidateSource.versions.find(v=>v.id===problem.version.id);
-    const rowOwners=new Map((datedClosing?problem.version.assignments:version.assignments).map(row=>[`${row.dayOfWeek}:${row.workId}`,row.ownerSlotId]));
-    const assignments=[];
-    for(const item of problem.work){
-      tick();
-      const slotId=rowOwners.get(item.key) || item.originSlotId;
-      const variable=model.x.get(`${item.key}\u0000${slotId}`);
-      if(!variable){
-        // Preserve an already-authorized explicitly permitted OPEN derived
-        // vacancy row. This is not permission to drop required work, choose a
-        // new owner, or relabel ordinary best-effort work as permitted-open.
-        if(item.required!==false || item.coverageClass!=='permitted_open')fail('static_template_fixed_owner_ineligible');
-        values.set(model.uncovered.get(item.key),1);
-        assignments.push({planWorkId:item.key,workId:item.workId,dayOfWeek:item.dayOfWeek,
-          serviceDate:weekdayDate(problem.serviceDate,item.dayOfWeek),locationId:item.locationId,
-          slotId:null,personId:null,displayName:null,status:'OPEN',coverageClass:item.coverageClass,
-          window:structuredClone(item.window),serviceMode:item.serviceMode,
-          serviceEffortMinutes:item.effort.minutes,includedLocations:structuredClone(item.includedLocations)});
-        continue;
-      }
-      const person=problem.incumbencyByDaySlot.get(`${item.dayOfWeek}\u0000${slotId}`);
-      if(!person?.personId || person.kind==='CONTRACTOR_CAPACITY')fail('static_template_fixed_person_unavailable');
-      values.set(variable,1);
-      assignments.push({planWorkId:item.key,workId:item.workId,dayOfWeek:item.dayOfWeek,
-        serviceDate:weekdayDate(problem.serviceDate,item.dayOfWeek),locationId:item.locationId,
-        slotId,personId:person.personId,displayName:person.displayName,status:'ASSIGNED',
-        window:structuredClone(item.window),serviceMode:item.serviceMode,
-        serviceEffortMinutes:item.effort.minutes,includedLocations:structuredClone(item.includedLocations)});
-    }
-    for(const group of model.routeGroups){
-      tick();values.set(group.base,1);
-      const middle=group.nodes.filter(node=>!['start','end'].includes(node.kind)&&values.get(node.active)===1)
-        .sort((a,b)=>a.startMinute-b.startMinute || a.endMinute-b.endMinute || (a.id<b.id?-1:a.id>b.id?1:0));
-      const path=[group.nodes.find(n=>n.kind==='start'),...middle,group.nodes.find(n=>n.kind==='end')];
-      for(let i=1;i<path.length;i++){
-        const arcs=group.arcs.filter(a=>a.from===path[i-1]&&a.to===path[i]);
-        if(arcs.length!==1)fail('static_template_fixed_route_incompatible');
-        values.set(arcs[0].name,1);
-      }
-    }
-    for(const row of model.modelBasis.constraints.rows){
-      tick();
-      if(!Number.isSafeInteger(row.value)||row.terms.some(([n,v])=>!Number.isSafeInteger(n)||!values.has(v)))
-        fail('static_template_hard_row_not_exact');
-      const actual=row.terms.reduce((n,[coefficient,v])=>n+BigInt(coefficient)*BigInt(values.get(v)),0n),bound=BigInt(row.value);
-      if(!(row.relation==='='?actual===bound:row.relation==='<='?actual<=bound:row.relation==='>='&&actual>=bound))
-        fail('static_template_hard_constraint_violation');
-    }
+    const version=mapping.candidateSource.version||mapping.candidateSource.versions.find(v=>v.id===problem.version.id),
+      rowOwners=new Map((datedClosing?problem.version.assignments:version.assignments).map(row=>[`${row.dayOfWeek}:${row.workId}`,row.ownerSlotId])),
+      {assignments,model,values}=deriveFixedStaticWeeklyOwnershipWitness(problem,{rowOwners,deadline:args.deadline??null});
     const lunch=deriveLunchCoverageFromPreparedProblem(problem,assignments);
     if(lunch.status!=='PLANNED')fail('static_template_lunch_coverage_incompatible');
     const byWork=new Map(problem.work.map(work=>[work.key,work]));
@@ -762,7 +713,7 @@ export function prepareApprovedStaticTemplateProjection(args) {
           authority_digest:baseAuthorityDigest,replay_digest:baseReplayDigest}};
       document.validation.database_document_identity=postgresJsonbContentDigest(document);
       const projection={adapter,service_date:problem.serviceDate,week_start:problem.serviceDate,
-        week_end:weekdayDate(problem.serviceDate,0),authority:staticAuthority,receipt,
+        week_end:new Date(Date.parse(problem.serviceDate+'T12:00:00Z')+6*86400000).toISOString().slice(0,10),authority:staticAuthority,receipt,
         authority_digest:baseAuthorityDigest,replay_digest:baseReplayDigest,compiler_version:adapter.version,
         objective,metrics:{hardConstraints:model.modelBasis.constraints.count,violations:0},applied_exceptions:[],
         assignments:projectionAssignments,semantic_snapshot:{schema:'custodial.approved-static-projection-snapshot.v1',
@@ -990,7 +941,7 @@ export function createFullNineReductionContext({publishedSource,managerSnapshot,
     }
     const restriction=`owner:${sourceConfigSha}:hard_place_eligibility;base:${currentHandout.base}`;
     if(row.restrictionProvenance===restriction)normalized.restrictionProvenance=restriction;
-    if(Object.hasOwn(row,'restrictedSlotIds'))normalized.restrictedSlotIds=hardRestrictedSlots(fullConfig,row.locationCodeSnapshot,original.restrictedSlotIds||[]);
+    if(Object.hasOwn(row,'restrictedSlotIds'))normalized.restrictedSlotIds=hardRestrictedSlots(fullConfig,row.locationCodeSnapshot,original.restrictedSlotIds||[],row.dayOfWeek);
     assert.equal(canonicalJson(row),canonicalJson(normalized),'historical full-row/physical/workload/provenance drift');
   }
   // Target people must already be represented by the authenticated hydrated
@@ -1050,7 +1001,7 @@ export function createFullNineReductionContext({publishedSource,managerSnapshot,
         serviceEffortMinutes:old.reduce((n,r)=>n+r.serviceEffortMinutes,0),window:phase==='morning'?{start:owner.shift[0],end:'09:45'}:{start:'09:45',end:owner.shift[1]},
         serviceEffortProvenance:`base:${currentHandout.base}:effort`,priorityProvenance:`base:${currentHandout.base}:priority`,
         qualificationProvenance:`base:${currentHandout.base}:qualifications`,restrictionProvenance:`owner:40da4e1d4cce52b2361b5403b7e5e4477ca00def0fd3649a1d76dacb48422f30:hard_place_eligibility;base:${currentHandout.base}`,
-        restrictedSlotIds:hardRestrictedSlots(config,family,old.flatMap(r=>r.restrictedSlotIds||[]))});
+        restrictedSlotIds:hardRestrictedSlots(config,family,old.flatMap(r=>r.restrictedSlotIds||[]),day)});
       rows.push(row);(config.overrides[String(day)][phase][key]||=[]).push(family);
       comparisonLedger.push({day,phase,family,originalRows:structuredClone(old),originalRowsDigest:contentDigest(old),referenceSlotId:targetSlots[correctedAdminKey||originalKey].slotId,
         comparisonSourceOwnerSlotId:owner.slotId,...(mandatory?{mandatoryCurrentOwnerBinding:mandatory}:{}),
@@ -1580,9 +1531,9 @@ export function adaptRegisteredRecurringSource({ registeredSource, patternConfig
     const ownerKey = keyBySlot.get(assignment.originSlotId);
     assert.ok(ownerKey, `assignment owner outside stable positions ${assignment.workId}`);
     assertNormalOwnerEligibility({ key: ownerKey, ...patternConfig.slots[ownerKey] },
-      assignment.locationCodeSnapshot);
+      assignment.locationCodeSnapshot,assignment.dayOfWeek,assignment.coveragePurpose);
     assignment.restrictedSlotIds = hardRestrictedSlots(patternConfig, assignment.locationCodeSnapshot,
-      assignment.restrictedSlotIds || []);
+      assignment.restrictedSlotIds || [],assignment.dayOfWeek);
     assert.ok(!assignment.restrictedSlotIds.includes(assignment.ownerSlotId),
       `hard-restricted source owner ${assignment.workId}`);
     assignment.serviceEffortProvenance = `base:${baseHash}:effort`;
@@ -2055,7 +2006,9 @@ export function deriveRecurringStaffingPattern({ currentConfig, targetSlots, ful
             .find(b=>b.dayOfWeek===day&&b.family===family):null;
           if(mandatory&&targetSlots[owner].slotId!==mandatory.mandatoryPrimarySlotId)continue;
         }
-        if (targetSlots[owner].hardForbiddenFamilies?.includes(family)) continue;
+        if (isHardForbidden(targetSlots[owner],family,day)) continue;
+        const protectedOwner=mandatoryNormalOwner(result,family,day);
+        if(protectedOwner&&owners.some(k=>targetSlots[k].slotId===protectedOwner)&&targetSlots[owner].slotId!==protectedOwner)continue;
         if (normalGeographyRestrictionApplies({key:owner,...targetSlots[owner]})
           && !targetSlots[owner].normalAssignmentFamilies.includes(family)) continue;
         // Monday-only route packages stay with their actual handout owner.

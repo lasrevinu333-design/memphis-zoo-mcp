@@ -104,12 +104,12 @@ is never registration authority.
 |---|---:|---|
 | `ADMIN_API_KEY` | **Yes in production** | Server-to-server/admin automation key accepted via `X-Admin-Key` / `X-API-Key`. |
 | `RESTROOM_REBALANCE_SWEEP_MS` | Retired | The independent 09:45 background writer is permanently fenced after static-weekly cutover. Any positive legacy value is ignored and reported as `legacy_background_writer_retired`; only an explicit manager-approved schedule or absence publication may rebalance current coverage. |
-| `OPS_MANAGER_FULL_ACCESS_KEY` | **Yes in production for Ops UI writes** | Full-access Ops Manager public-link key accepted via `X-Ops-Access-Key`; mints signed bearer sessions for protected read/write routes. |
-| `OPS_MANAGER_READ_ONLY_ACCESS_KEY` | Recommended | Read-only Ops Manager public-link key accepted via `X-Ops-Access-Key`; mints signed bearer sessions for protected read routes only. |
+| `OPS_MANAGER_FULL_ACCESS_KEY` | Retired | Legacy public-link key. Current named-manager authentication does not accept `X-Ops-Access-Key` or use this value to enroll a manager. |
+| `OPS_MANAGER_READ_ONLY_ACCESS_KEY` | Retired | Legacy public-link key. Current protected manager reads require the supported authenticated manager session. |
 | `OPS_MANAGER_SESSION_SECRET` | **Yes in production** | Dedicated HMAC secret used to sign bounded Ops Manager bearer sessions. It must not be shared with employee-device, Supabase, Gemini, Moxie, MCP, GitHub, or another secret class. Production refuses startup if it is absent. |
 | `OPS_AUTH_OPEN_MODE` | Local/dev only | Explicit local development open mode. Ignored on Render/production and must not be used for public deployments. |
 
-Render production must have at least one valid Ops/Admin credential before protected routes are publicly usable. If keys were missing while public routes were reachable, generate fresh keys and rotate any previously shared public-link/admin keys before enabling the deployment.
+Manager browser access requires personal enrollment for an active named manager and a valid trusted-device record. The dedicated `OPS_MANAGER_SESSION_SECRET` signs short-lived sessions and authenticates trusted credentials; it does not itself enroll a manager. Server-to-server `ADMIN_API_KEY` access is separate and does not establish a named human-manager session. See [Ops Manager trusted-device authentication](ops-manager-trusted-device-auth.md) for enrollment and recovery instructions. Preserve existing keys and credentials unless a specific rotation or reenrollment operation is authorized.
 
 ## Memphis AI / Gemini
 

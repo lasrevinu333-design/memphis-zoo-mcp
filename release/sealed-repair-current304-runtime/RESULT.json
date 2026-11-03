@@ -1,0 +1,1081 @@
+{
+  "status": "PASS",
+  "scope": "OWNED_CURRENT_EIGHT_TYPED_INITIAL_MANAGER_EMPLOYEE_AND_FULL_HOUR_SQL",
+  "productionWritten": false,
+  "physicalPhone": false,
+  "genuineManagerBrowser": false,
+  "providerCalls": 0,
+  "finalAudit": false,
+  "finalBuild": false,
+  "connectionErrors": [],
+  "phase": "frozen_isolated_repair_extension",
+  "repairExtension": {
+    "status": "PASS",
+    "scope": "OWNED_CANONICAL304_FRESH_SOURCE_ACTIVATION_AND_FULL_WORKFLOWS_NOT_RELEASE_ACCEPTANCE",
+    "results": [
+      {
+        "id": "main_fresh304_capture",
+        "stage": "ACTUAL_FRESH304_READ_ONLY_CAPTURE",
+        "status": "PASS",
+        "scope": "ACTUAL_FRESH304_CONSTRUCTION_AND_READ_ONLY_CATALOG_BEFORE_INITIAL_ACTIVATION",
+        "expectedCanonicalMigration": {
+          "name": "20261031225210_custodial_sealed_repairs_current_eight.sql",
+          "sha256": "f4e3dc5be9a465e2099bd9b23488f99b3f9e4c1d9d969844b2fa06b1fbdc7a73",
+          "bytes": 211245
+        },
+        "constructionMigrations": 304,
+        "actualReceipt": {
+          "schema": "custodial.ci-fresh-only-migrations-construction.v1",
+          "state": "CONSTRUCTED_NOT_FUNCTIONALLY_QUALIFIED",
+          "container": "5d0535015ef20884c8b8384cc1c47067c7e518f661498a844f9f90748050ea85",
+          "name": "mz_schema_rebuild_atomic304_e47ab0066902445db65d9a12d7801854",
+          "owner": "45baf79c-e5a2-4828-a813-d50b3536dcf9",
+          "database": "postgres",
+          "image": "public.ecr.aws/supabase/postgres@sha256:28f0e16a019e648089fc1a6d333549a55548f6019c15ae4bd7cd58b989027518",
+          "image_id": "sha256:28f0e16a019e648089fc1a6d333549a55548f6019c15ae4bd7cd58b989027518",
+          "custody_directory": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/MAIN_EIGHT_ACTIVE_LAUNCH_20261031/MAIN_ACTUAL_CANONICAL304_002/tmp/custodial-ci-fixture-HaMSJb/custodial-ci-fresh-custody-PIqYHk",
+          "socket_directory": "/run/user/1000/custodial-s27-TYfois/socket",
+          "max_connections": 60,
+          "selected_replay": {
+            "format": "custodial.ci-fresh-only-selected-replay.v1",
+            "manifest_sha256": "5094a272dcc9f01ccbf043f3de7012e12bdb542606089a0a818629c1ecf86b26",
+            "migrations": 304,
+            "overrides": 22,
+            "source_successor": {
+              "sha256": "17071df15c837a52c1b9962abc1cb26453d5b7be935ec3904a728e7caffcc4a5",
+              "predecessor_manifest_sha256": "5094a272dcc9f01ccbf043f3de7012e12bdb542606089a0a818629c1ecf86b26",
+              "predecessor_successor_sha256": "d51728e9973dcfba729164bce441d45efff8cf10b59f3382ade56efbae515e27",
+              "appended_migration": "20261031225210_custodial_sealed_repairs_current_eight.sql"
+            },
+            "full_vendor_NORMAL": false,
+            "expected_fingerprint_authority": null
+          },
+          "data_storage": "owned-disk",
+          "owned_disk_storage": {
+            "schema": "custodial.ci-owned-disk.v1",
+            "kind": "owned-disk",
+            "parent": {
+              "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/MAIN_EIGHT_ACTIVE_LAUNCH_20261031/MAIN_ACTUAL_CANONICAL304_002/tmp",
+              "dev": 2099,
+              "ino": 61238011,
+              "uid": 1000,
+              "gid": 1000,
+              "mode": 448
+            },
+            "namespace": {
+              "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/MAIN_EIGHT_ACTIVE_LAUNCH_20261031/MAIN_ACTUAL_CANONICAL304_002/tmp/custodial-ci-fixture-HaMSJb",
+              "dev": 2099,
+              "ino": 61238019,
+              "uid": 1000,
+              "gid": 1000,
+              "mode": 448
+            },
+            "data": {
+              "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/MAIN_EIGHT_ACTIVE_LAUNCH_20261031/MAIN_ACTUAL_CANONICAL304_002/tmp/custodial-ci-fixture-HaMSJb/pgdata",
+              "dev": 2099,
+              "ino": 61238020,
+              "uid": 1000,
+              "gid": 1000,
+              "mode": 448
+            },
+            "filesystem": {
+              "type": 61267,
+              "bsize": 4096,
+              "available_bytes": 2490484936704
+            },
+            "budget": {
+              "max_data_bytes": 1073741824,
+              "min_available_bytes": 536870912,
+              "hard_quota": false,
+              "observation_only_between_operations": true
+            },
+            "settings_source_sha256": "a42bde5d3934d628fe43be6deb881ba44ae3670c8996b250dea70b8cc37b696e",
+            "settings_source_scope": "Observed postgres owner session PG17.6/170006; not either Render runtime account",
+            "settings": {
+              "jit": "off",
+              "work_mem": "2184kB",
+              "shared_buffers": "224MB",
+              "max_connections": "60",
+              "maintenance_work_mem": "32MB",
+              "statement_timeout": "2min",
+              "lock_timeout": "0",
+              "idle_in_transaction_session_timeout": "0",
+              "temp_file_limit": "-1"
+            },
+            "original_mount": {
+              "type": "bind",
+              "source": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/MAIN_EIGHT_ACTIVE_LAUNCH_20261031/MAIN_ACTUAL_CANONICAL304_002/tmp/custodial-ci-fixture-HaMSJb/pgdata",
+              "target": "/var/lib/postgresql/data",
+              "read_only": false,
+              "bind_propagation": "rprivate",
+              "bind_recursive": "disabled"
+            }
+          },
+          "owned_disk_settings_readback": {
+            "settings": {
+              "jit": "off",
+              "work_mem": "2184kB",
+              "lock_timeout": "0",
+              "shared_buffers": "224MB",
+              "max_connections": "60",
+              "temp_file_limit": "-1",
+              "statement_timeout": "2min",
+              "maintenance_work_mem": "32MB",
+              "idle_in_transaction_session_timeout": "0"
+            },
+            "server_version_num": "170006"
+          },
+          "owned_disk_budget_observation": {
+            "at_ms": 1793493014350,
+            "data_bytes": 137093120,
+            "available_bytes": 2490234003456,
+            "current_data_identity": {
+              "path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/MAIN_EIGHT_ACTIVE_LAUNCH_20261031/MAIN_ACTUAL_CANONICAL304_002/tmp/custodial-ci-fixture-HaMSJb/pgdata",
+              "dev": 2099,
+              "ino": 61238020,
+              "uid": 100,
+              "gid": 1000,
+              "mode": 448
+            },
+            "budget": {
+              "max_data_bytes": 1073741824,
+              "min_available_bytes": 536870912,
+              "hard_quota": false,
+              "observation_only_between_operations": true
+            },
+            "hard_quota": false,
+            "cached": false
+          },
+          "fingerprint_check": "PASS_COMMITTED_CANONICAL_FILE",
+          "no_auto_table_grants": false,
+          "measured_no_auto_catalog": null,
+          "fingerprint_file_sha256": "bc15a8e5d5e550194f957ce6d1e632e14e03d02e39ee653dfd99bedfbe1122e6",
+          "full_suite_PASS": false,
+          "synthetic_fixture_checks_executed": false,
+          "migration_witnesses": null,
+          "original_child": {
+            "schema": "custodial.ci-fixture.original-child-closed.v1",
+            "pid": 3778033,
+            "pgid": 3778033,
+            "actual_wait_returned": true,
+            "exit": 0,
+            "signal": null,
+            "timed_out": false,
+            "stream_limit_exceeded": false,
+            "child_error": null,
+            "fresh_PID_PGID_proc_absent": true,
+            "seconds": 164.238,
+            "stdout_bytes": 25946,
+            "stderr_bytes": 0,
+            "stdout_sha256": "115c8245122e3dc5665fe760fdd4cc12d01ee3c6a75976f4cf22bbc127c8cae2",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stdout_path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/MAIN_EIGHT_ACTIVE_LAUNCH_20261031/MAIN_ACTUAL_CANONICAL304_002/tmp/custodial-ci-fixture-HaMSJb/PARENT_ORIGINAL_CHILD.stdout",
+            "stderr_path": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/MAIN_EIGHT_ACTIVE_LAUNCH_20261031/MAIN_ACTUAL_CANONICAL304_002/tmp/custodial-ci-fixture-HaMSJb/PARENT_ORIGINAL_CHILD.stderr"
+          },
+          "parent_custody_directory": "/mnt/ai_models/codex-preserved-custodial/current-source-staging-20261024/root-manager-recovery-20261027/FULL_PROGRAM_FIRST_TEST_IMPLEMENTATION_20261028/solo-main-return-20261028/MAIN_EIGHT_ACTIVE_LAUNCH_20261031/MAIN_ACTUAL_CANONICAL304_002/tmp/custodial-ci-fixture-HaMSJb"
+        },
+        "appliedAtomicAppendCount": 1,
+        "fingerprint": "ff233923ac21cd46b70985a9eaeb20dbb2a4c0bdc6f69f527159d437ed893440",
+        "counts": {
+          "column_grants": 43,
+          "columns": 3344,
+          "constraints": 2105,
+          "cron_jobs": 9,
+          "default_privileges": 12,
+          "extensions": 8,
+          "functions": 1105,
+          "indexes": 986,
+          "owned_scheduler_role_memberships": 3,
+          "owned_scheduler_roles": 3,
+          "policies": 50,
+          "private_schema_owners": 3,
+          "privilege_bearing_roles": 4,
+          "recovery_schema_owners": 1,
+          "role_memberships": 10,
+          "routine_grants": 674,
+          "schema_grants": 19,
+          "sequence_grants": 0,
+          "sequences": 0,
+          "table_grants": 1808,
+          "tables": 316,
+          "triggers": 658,
+          "type_grants": 0,
+          "types": 0,
+          "views": 33
+        },
+        "closedFunctionNames": 41,
+        "allFunctionGrantInventoryDigestsAndRootsCurrent": true,
+        "newRpcOnlyPublicTablesDirectApiDenied": true,
+        "readOnlyRepeatableRead": true,
+        "readOnlyTransactionRolledBack": true,
+        "samePhysicalBackendPid": 2647,
+        "artifacts": {
+          "raw": "MAIN_FRESH304_RAW_CATALOG.json",
+          "normalized": "MAIN_FRESH304_NORMALIZED_CATALOG.json",
+          "bindings": "MAIN_FRESH304_RECOVERY_BINDINGS.json"
+        },
+        "actualFresh304": true,
+        "functionalAppAcceptance": false,
+        "fullVendorNormal": false,
+        "productionWritten": false,
+        "hostedEquivalence": false,
+        "wholeProgramAcceptance": false,
+        "providerCalls": 0
+      },
+      {
+        "id": "F18_regression",
+        "stage": "REGRESSION",
+        "status": "RETURNED",
+        "sha256": "23b4ec384f3be5c9643a52be98af97a8a12de37c85b19037d97dcf51510d387c"
+      },
+      {
+        "id": "F06_F07_regression",
+        "stage": "REGRESSION",
+        "status": "RETURNED",
+        "sha256": "e545b2547b75aa94160383c082c6e8cb9cb943d6ba18797f48bae7cce4398261"
+      },
+      {
+        "id": "F05_regression",
+        "stage": "REGRESSION",
+        "status": "RETURNED",
+        "sha256": "868e6b7386d5107dab6ceb66b34df75ca9aa333987aa1dad471e7e73d9b6cb28"
+      },
+      {
+        "id": "operations_regression",
+        "stage": "REGRESSION",
+        "status": "RETURNED",
+        "sha256": "72cea4220f58c1bc9812071cb12fd435de4b81e02b3544517bb87d6e9ea29c6d"
+      },
+      {
+        "id": "native_callback_parser_preflight",
+        "stage": "REGRESSION",
+        "status": "RETURNED",
+        "sha256": "78131f74d0e1a3e303f1371b48e6e6af029b5067115e94e8d62654a683b34621"
+      },
+      {
+        "id": "native_event_manual_compatibility_regression",
+        "stage": "REGRESSION",
+        "status": "RETURNED",
+        "sha256": "80aca6922ffa221beb8de8ba551c94f244b138af49e6f3d22bb3507b3690cdf9"
+      },
+      {
+        "id": "Q07_regression",
+        "stage": "REGRESSION",
+        "status": "RETURNED",
+        "sha256": "71bea4d1e06ed6be7adb39c2d3b3f6d97f42149d18da111b54cb0aff7bf50aa4"
+      },
+      {
+        "id": "F25_F26_regression",
+        "stage": "REGRESSION",
+        "status": "RETURNED",
+        "sha256": "d4b0c5671a1ebac4248a4a243b96a7b66f304ec37785acfc55b987a12ca91500"
+      },
+      {
+        "id": "manual_repeat_memory_equivalence",
+        "stage": "REGRESSION",
+        "status": "RETURNED",
+        "sha256": "5d2b801d0b581e3e8a047eca0fab24f5a50f6b7cefff74d14e87d02d4fc8fa31"
+      },
+      {
+        "id": "signed_setup",
+        "stage": "SIGNED_SETUP",
+        "status": "RETURNED",
+        "sha256": "e79a1a1be9f6414d04b9125b301e5578872cd7642ac6a6402592b31d3de9a5d5"
+      },
+      {
+        "id": "F01_regression",
+        "stage": "SIGNED_REGRESSION",
+        "status": "RETURNED",
+        "sha256": "18130e1290e21c66829ab2c0134b63389668995aee8dac5aa705a68a86076ef1"
+      },
+      {
+        "id": "restore_helper",
+        "stage": "MODULE",
+        "status": "PASS",
+        "scope": "ROOT_OWNED_ACTUAL_COMPLETION_HELPER_REAL_SQL_ROLLBACK_ONLY",
+        "checks": [
+          {
+            "name": "ready protected generation and current original c720 registration observed on owned client",
+            "status": "PASS"
+          },
+          {
+            "name": "actual old registration and opaque-cookie runtime readback denied despite legacy completion flag true",
+            "status": "PASS",
+            "legacy_authority_invalidated": true,
+            "unsafe_generation_count": "0",
+            "registration_denied": true,
+            "opaque_cookie_readback_denied": true,
+            "backend_pid": 2746,
+            "trigger_mode": "origin"
+          },
+          {
+            "name": "actual exported completion helper accepts the matching paused generation and fully invalidated old set",
+            "status": "PASS",
+            "schema": "custodial.leadership-restore-generation.v1",
+            "restore_id": "bbc592cb-dbbf-4c7f-a1da-278f25b9b15d",
+            "authority_generation": 1,
+            "registration_count": 2,
+            "unsafe_generation_count": 0,
+            "accepted_registration_count": 0,
+            "outcome": "RESTORED_REGISTRATIONS_DENIED"
+          },
+          {
+            "name": "actual helper rejects wrong restore ownership and protected generation",
+            "status": "PASS"
+          },
+          {
+            "name": "actual helper rejects unrevoked current-generation authority even though pause currently denies its session",
+            "status": "PASS",
+            "legacy_authority_invalidated": true,
+            "unsafe_generation_count": "1",
+            "registration_denied": true,
+            "opaque_cookie_readback_denied": true,
+            "backend_pid": 2746,
+            "trigger_mode": "origin"
+          },
+          {
+            "name": "actual helper rejects unrevoked future-generation authority even though pause currently denies its session",
+            "status": "PASS",
+            "legacy_authority_invalidated": true,
+            "unsafe_generation_count": "1",
+            "registration_denied": true,
+            "opaque_cookie_readback_denied": true,
+            "backend_pid": 2746,
+            "trigger_mode": "origin"
+          },
+          {
+            "name": "actual helper accepts an explicitly revoked row without confusing it with live future authority",
+            "status": "PASS"
+          },
+          {
+            "name": "actual helper and session reader fail closed when protected singleton is unavailable",
+            "status": "PASS"
+          },
+          {
+            "name": "rollback removes synthetic restore metadata and restores exact original rows and current cohort session",
+            "status": "PASS"
+          }
+        ],
+        "helperCalls": [
+          {
+            "label": "old-generation restored registrations denied",
+            "outcome": "RETURNED",
+            "result": {
+              "schema": "custodial.leadership-restore-generation.v1",
+              "restore_id": "bbc592cb-dbbf-4c7f-a1da-278f25b9b15d",
+              "authority_generation": 1,
+              "registration_count": 2,
+              "unsafe_generation_count": 0,
+              "accepted_registration_count": 0,
+              "outcome": "RESTORED_REGISTRATIONS_DENIED"
+            }
+          },
+          {
+            "label": "wrong original restore identity",
+            "outcome": "REFUSED",
+            "code": null,
+            "message": "Restored leadership authority remains unverified; completion must stay paused."
+          },
+          {
+            "label": "wrong protected generation",
+            "outcome": "REFUSED",
+            "code": null,
+            "message": "Restored leadership authority remains unverified; completion must stay paused."
+          },
+          {
+            "label": "current-generation unrevoked row",
+            "outcome": "REFUSED",
+            "code": null,
+            "message": "Restored leadership authority remains unverified; completion must stay paused."
+          },
+          {
+            "label": "future-generation unrevoked row",
+            "outcome": "REFUSED",
+            "code": null,
+            "message": "Restored leadership authority remains unverified; completion must stay paused."
+          },
+          {
+            "label": "revoked future-generation row remains invalidated",
+            "outcome": "RETURNED",
+            "result": {
+              "schema": "custodial.leadership-restore-generation.v1",
+              "restore_id": "bbc592cb-dbbf-4c7f-a1da-278f25b9b15d",
+              "authority_generation": 1,
+              "registration_count": 2,
+              "unsafe_generation_count": 0,
+              "accepted_registration_count": 0,
+              "outcome": "RESTORED_REGISTRATIONS_DENIED"
+            }
+          },
+          {
+            "label": "protected generation unavailable",
+            "outcome": "REFUSED",
+            "code": null,
+            "message": "Restored leadership authority remains unverified; completion must stay paused."
+          },
+          {
+            "label": "reconciled old set before final rollback",
+            "outcome": "RETURNED",
+            "result": {
+              "schema": "custodial.leadership-restore-generation.v1",
+              "restore_id": "bbc592cb-dbbf-4c7f-a1da-278f25b9b15d",
+              "authority_generation": 1,
+              "registration_count": 2,
+              "unsafe_generation_count": 0,
+              "accepted_registration_count": 0,
+              "outcome": "RESTORED_REGISTRATIONS_DENIED"
+            }
+          }
+        ],
+        "backendPid": 2746,
+        "rollbackVerified": true,
+        "production": false,
+        "restoreExecuted": false,
+        "importExecuted": false,
+        "activationExecuted": false,
+        "socketsOpened": 0,
+        "createdPools": 0,
+        "createdDatabases": 0,
+        "independentAcceptance": false
+      },
+      {
+        "id": "record_routes_concurrency",
+        "stage": "MODULE",
+        "status": "PASS",
+        "checks": [
+          {
+            "name": "unique fixtures use current directory/session table guards",
+            "status": "PASS"
+          },
+          {
+            "name": "actual shared auth/current CP service rejects invalid CSRF, origin, token, selected claim and missing markers without correction",
+            "status": "PASS"
+          },
+          {
+            "name": "actual HTTP→bridge→current CP /records→SQL commits once, reads truth/status, preserves original audit on replay",
+            "status": "PASS",
+            "operationId": "c7290000-0000-4000-8000-000000000201",
+            "correctionId": "a83fcb09-4853-4451-9537-a0984737347e",
+            "cohortId": "c7200000-0000-4000-8000-000000000001",
+            "claimedAccountId": "828a53b6-ffa1-4767-835e-6f37f893ab0b"
+          },
+          {
+            "name": "later correction cannot substitute original receipt; conflicting replay/stale preview deny; original session/response remain exact",
+            "status": "PASS"
+          },
+          {
+            "name": "same-operation concurrency: observed real lock wait, one correction/audit, exact original replay",
+            "status": "PASS",
+            "sessionId": "c7290000-0000-4000-8000-000000000101",
+            "operationA": "c7290000-0000-4000-8000-000000000301",
+            "operationB": "c7290000-0000-4000-8000-000000000301",
+            "pids": [
+              2746,
+              2887
+            ],
+            "observedBlocking": true,
+            "correctionId": "3cf8d37b-2f27-4e90-bb31-10db193839ee",
+            "secondResult": "EXACT_ORIGINAL_REPLAY",
+            "correctionRows": 1,
+            "auditRows": 1
+          },
+          {
+            "name": "different-operation concurrency: observed real lock wait, one correction/audit, one 40901 conflict",
+            "status": "PASS",
+            "sessionId": "c7290000-0000-4000-8000-000000000102",
+            "operationA": "c7290000-0000-4000-8000-000000000401",
+            "operationB": "c7290000-0000-4000-8000-000000000402",
+            "pids": [
+              2887,
+              2746
+            ],
+            "observedBlocking": true,
+            "correctionId": "7208c355-7e65-431f-8672-84b89fa84b1c",
+            "secondResult": "40901",
+            "correctionRows": 1,
+            "auditRows": 1
+          },
+          {
+            "name": "shared original records and current cohort remain available for later root extensions; no legacy RPC used",
+            "status": "PASS"
+          }
+        ],
+        "transportCalls": [
+          {
+            "path": "/custodial-leadership-internal/verify",
+            "action": null,
+            "status": 403
+          },
+          {
+            "path": "/custodial-leadership-internal/verify",
+            "action": null,
+            "status": 403
+          },
+          {
+            "path": "/custodial-leadership-internal/verify",
+            "action": null,
+            "status": 403
+          },
+          {
+            "path": "/custodial-leadership-internal/verify",
+            "action": null,
+            "status": 200
+          },
+          {
+            "path": "/custodial-leadership-internal/verify",
+            "action": null,
+            "status": 200
+          },
+          {
+            "path": "/custodial-leadership-internal/verify",
+            "action": null,
+            "status": 200
+          },
+          {
+            "path": "/custodial-leadership-internal/verify",
+            "action": null,
+            "status": 200
+          },
+          {
+            "path": "/custodial-leadership-internal/verify",
+            "action": null,
+            "status": 200
+          },
+          {
+            "path": "/custodial-leadership-internal/records",
+            "action": "correct",
+            "status": 200
+          },
+          {
+            "path": "/custodial-leadership-internal/verify",
+            "action": null,
+            "status": 200
+          },
+          {
+            "path": "/custodial-leadership-internal/records",
+            "action": "truth",
+            "status": 200
+          },
+          {
+            "path": "/custodial-leadership-internal/verify",
+            "action": null,
+            "status": 200
+          },
+          {
+            "path": "/custodial-leadership-internal/records",
+            "action": "correct",
+            "status": 200
+          },
+          {
+            "path": "/custodial-leadership-internal/verify",
+            "action": null,
+            "status": 200
+          },
+          {
+            "path": "/custodial-leadership-internal/records",
+            "action": "correction_outcome",
+            "status": 200
+          },
+          {
+            "path": "/custodial-leadership-internal/verify",
+            "action": null,
+            "status": 200
+          },
+          {
+            "path": "/custodial-leadership-internal/records",
+            "action": "correct",
+            "status": 200
+          },
+          {
+            "path": "/custodial-leadership-internal/verify",
+            "action": null,
+            "status": 200
+          },
+          {
+            "path": "/custodial-leadership-internal/records",
+            "action": "correction_outcome",
+            "status": 200
+          },
+          {
+            "path": "/custodial-leadership-internal/verify",
+            "action": null,
+            "status": 200
+          },
+          {
+            "path": "/custodial-leadership-internal/records",
+            "action": "correct",
+            "status": 200
+          },
+          {
+            "path": "/custodial-leadership-internal/verify",
+            "action": null,
+            "status": 200
+          },
+          {
+            "path": "/custodial-leadership-internal/records",
+            "action": "correct",
+            "status": 409
+          },
+          {
+            "path": "/custodial-leadership-internal/verify",
+            "action": null,
+            "status": 200
+          },
+          {
+            "path": "/custodial-leadership-internal/records",
+            "action": "correct",
+            "status": 409
+          }
+        ],
+        "legacyCalls": 0,
+        "scope": "ROOT_OWNED_REAL_SQL_WITH_IN_MEMORY_HTTP_AND_OBSERVED_TWO_CONNECTION_LOCK_WAITS",
+        "socketsOpened": 0,
+        "createdPools": 0,
+        "production": false,
+        "physicalAcceptance": false,
+        "independentAudit": false
+      },
+      {
+        "id": "broadcast_concurrency",
+        "stage": "MODULE",
+        "status": "PASS",
+        "scope": "Actual two-connection original broadcast, no provider dispatch",
+        "checks": [
+          "distinct backend PIDs",
+          "concurrent same-key exact original receipt",
+          "one thread/broadcast/message/receipt",
+          "read-only original result"
+        ],
+        "calls": [
+          {
+            "client": 0,
+            "pid": 2746
+          },
+          {
+            "client": 1,
+            "pid": 2887
+          }
+        ],
+        "results": [
+          [
+            {
+              "thread_id": "fd7580a6-5ac0-44c9-99a7-98ec458fb354",
+              "broadcast_id": "78107ebf-3c36-4579-be10-b92854f000ab",
+              "message_id": "3174dbeb-be50-4bda-a036-3e89dba8e183",
+              "recipient_count": 30
+            }
+          ],
+          [
+            {
+              "thread_id": "fd7580a6-5ac0-44c9-99a7-98ec458fb354",
+              "broadcast_id": "78107ebf-3c36-4579-be10-b92854f000ab",
+              "message_id": "3174dbeb-be50-4bda-a036-3e89dba8e183",
+              "recipient_count": 30
+            }
+          ]
+        ],
+        "counts": {
+          "threads": 1,
+          "broadcasts": 1,
+          "messages": 1,
+          "receipts": 1
+        }
+      },
+      {
+        "id": "native_source_finalization",
+        "stage": "MODULE",
+        "status": "PASS",
+        "checks": [
+          {
+            "name": "Actual registration writer creates synthetic current generation; no reviewed-release record or native acceptance",
+            "status": "PASS",
+            "deviceIdentifier": "KIOSK_02",
+            "generationId": "f0df446f-df87-414f-9b53-06d9ddafc592"
+          },
+          {
+            "name": "Actual message enqueue trigger preserves full Unicode source body and title",
+            "status": "PASS"
+          },
+          {
+            "name": "F14 SQL rejects unrelated bounded candidate text",
+            "status": "PASS",
+            "code": "42501"
+          },
+          {
+            "name": "F14 original recipient ACK after prepare denies finalization",
+            "status": "PASS"
+          },
+          {
+            "name": "F14 actual prepare → JS candidate → SQL finalize → exact JS reservation validator; full original preserved",
+            "status": "PASS"
+          },
+          {
+            "name": "F14 original finalization replay cannot resend",
+            "status": "PASS"
+          },
+          {
+            "name": "F15 ongoing Event real current projection/claim/prepare and genuine current-day roster preserve source through end",
+            "status": "PASS",
+            "testClock": "2026-11-01T00:33:58.847Z",
+            "scheduledFor": "2026-10-31T12:15:00.000Z",
+            "preparedUntil": "2026-11-02T05:59:00.000000Z"
+          },
+          {
+            "name": "F16 SQL rejects Event body missing source-bound title/location previews",
+            "status": "PASS",
+            "code": "42501"
+          },
+          {
+            "name": "F15 audience removal after prepare denies finalization",
+            "status": "PASS"
+          },
+          {
+            "name": "F15/F16 actual ongoing Unicode Event finalizes, validates exact wire and ends at current Event end",
+            "status": "PASS"
+          },
+          {
+            "name": "F15 finalized Event cannot resend",
+            "status": "PASS"
+          },
+          {
+            "name": "F15 exact Event end cannot authorize dispatch",
+            "status": "PASS"
+          },
+          {
+            "name": "Exact synthetic device/message/event fixture absent after rollback",
+            "status": "PASS"
+          }
+        ],
+        "scope": "ACTUAL_ISOLATED_SQL_SOURCE_ADMISSION_AND_FINALIZATION_WITH_SYNTHETIC_NATIVE_REGISTRATION_NO_PROVIDER_OR_RELEASE_ACCEPTANCE",
+        "providerCalls": 0,
+        "nativePhysicalAcceptance": false,
+        "reviewedReleaseApprovalInserted": false,
+        "rolledBack": true
+      },
+      {
+        "id": "manual_period",
+        "stage": "MODULE",
+        "status": "PASS",
+        "checks": [
+          {
+            "name": "F03 actual current source-aligned period metadata",
+            "status": "PASS",
+            "origin": "2026-10-31",
+            "weekday": 6,
+            "fridayClaim": false
+          },
+          {
+            "name": "F03 actual stored-stale historical authority is distinct from an absent future projection",
+            "status": "PASS",
+            "serviceDate": "2026-10-30",
+            "projectionId": "8cba5932-e28a-4a56-b6d6-3745f863cac1",
+            "projectionRevision": 3,
+            "staffingRevision": 7,
+            "scope": "HISTORICAL_STALE_READ_ONLY; not native-manual stale recovery"
+          },
+          {
+            "name": "F03 true absent native future projection has exact manager staffing-status precedence",
+            "status": "PASS",
+            "frame": "2026-11-07",
+            "authorityStatus": "missing_projection",
+            "managerStatus": "stale_staffing_change",
+            "physicalProjectionCount": 0
+          },
+          {
+            "name": "F03 missing next period materializes unchanged source and original retry reads persisted projection",
+            "status": "PASS",
+            "frame": "2026-11-07",
+            "projectionId": "2f1360e9-ac85-4fe1-8548-583635bd1712"
+          },
+          {
+            "name": "F02 actual browser period vector passes persisted multi-frame PTO preview and acceptance",
+            "status": "PASS",
+            "operationId": "72dbae6a-ae5e-4816-a9da-3944392e8484",
+            "frames": [
+              {
+                "weekStart": "2026-10-31",
+                "publicationId": "faff803d-dba9-4a44-938e-8ee7d96f4933",
+                "versionId": "51d445e3-bb8a-46c1-89ef-6bb83ae37a55",
+                "authorityRevision": 12
+              },
+              {
+                "weekStart": "2026-11-07",
+                "publicationId": "faff803d-dba9-4a44-938e-8ee7d96f4933",
+                "versionId": "51d445e3-bb8a-46c1-89ef-6bb83ae37a55",
+                "authorityRevision": 12
+              }
+            ]
+          },
+          {
+            "name": "F02 exact original multi-frame cancellation persists and reads both actual frames",
+            "status": "PASS"
+          },
+          {
+            "name": "Q01 exact third absence requires explicit CoverAll choice",
+            "status": "PASS",
+            "code": "static_manual_coverall_choice_required"
+          },
+          {
+            "name": "Q01 third absence preserves retained two-absence basis with actual confirmed full-hour CoverAll choice",
+            "status": "PASS",
+            "operationId": "9c80d4f2-69ec-4b7b-84d3-e1ec083c8319",
+            "serviceDate": "2026-11-03",
+            "capacityId": "4a84606d-16f0-4ccf-861f-1fc31e55aec2"
+          },
+          {
+            "name": "F09 named actual accepted-period issue → persistence → public read",
+            "status": "PASS",
+            "linkId": "fbaab823-9890-4e2f-b9a7-b205dd15abb7",
+            "period": "2026-10-31"
+          },
+          {
+            "name": "F09 cohort actual accepted-period issue → persistence → public read",
+            "status": "PASS",
+            "linkId": "336d0c3d-bd6d-409d-9789-4135fb95ea4c",
+            "period": "2026-10-31"
+          },
+          {
+            "name": "F09 distinct real cohort FK and original request/claim persisted without trusted-device mirror",
+            "status": "PASS"
+          },
+          {
+            "name": "F09 cohort issuance without original signed transaction context denied",
+            "status": "PASS",
+            "code": "42501"
+          },
+          {
+            "name": "F09 SQL rejects caller period differing from actual accepted projection",
+            "status": "PASS",
+            "code": "40001"
+          },
+          {
+            "name": "F09 mixed legacy/cohort credential row denied",
+            "status": "PASS",
+            "code": "23514"
+          },
+          {
+            "name": "F09 named original credential revocation denies read",
+            "status": "PASS",
+            "code": "42501",
+            "rolledBack": true
+          },
+          {
+            "name": "F09 cohort registration revocation denies public read",
+            "status": "PASS",
+            "code": "42501",
+            "rolledBack": true
+          },
+          {
+            "name": "F09 changed cohort policy epoch denies public read",
+            "status": "PASS",
+            "code": "42501",
+            "rolledBack": true
+          },
+          {
+            "name": "F09 changed original browser binding denies public read",
+            "status": "PASS",
+            "code": "42501",
+            "rolledBack": true
+          },
+          {
+            "name": "F09 expired capability denies read",
+            "status": "PASS",
+            "code": "42501",
+            "rolledBack": true
+          },
+          {
+            "name": "F09 changed authority revision denies stale read",
+            "status": "PASS",
+            "code": "40001",
+            "rolledBack": true
+          },
+          {
+            "name": "F09 anon cannot read capability SQL",
+            "status": "PASS",
+            "code": "42501"
+          },
+          {
+            "name": "F09 authenticated cannot read capability SQL",
+            "status": "PASS",
+            "code": "42501"
+          },
+          {
+            "name": "F09 service_role cannot read capability SQL",
+            "status": "PASS",
+            "code": "42501"
+          },
+          {
+            "name": "F09 CP cannot invoke private cohort resolver",
+            "status": "PASS",
+            "code": "42501"
+          },
+          {
+            "name": "F09 named explicit revoke denies public read",
+            "status": "PASS",
+            "code": "42501"
+          },
+          {
+            "name": "F09 cohort explicit revoke denies public read",
+            "status": "PASS",
+            "code": "42501"
+          },
+          {
+            "name": "F09 cohort revocation preserves actual original registration/claim/request",
+            "status": "PASS"
+          },
+          {
+            "name": "F09 cohort durable tombstone blocks delayed original issue",
+            "status": "PASS",
+            "code": "23505"
+          },
+          {
+            "name": "Historical stored-stale authority preserved without rebuild or source changes",
+            "status": "PASS",
+            "scope": "HISTORICAL_STALE_READ_ONLY"
+          },
+          {
+            "name": "Approved normal source preserved after dated adjustments; source bytes frozen",
+            "status": "PASS"
+          }
+        ],
+        "operations": 54,
+        "origin": "2026-10-31",
+        "productionWritten": false,
+        "providerCalls": 0,
+        "physicalBrowser": false,
+        "physicalPhone": false,
+        "canonicalIdentityQualified": false,
+        "finalAudit": false
+      },
+      {
+        "id": "manual_repeat_memory_receipt",
+        "stage": "MODULE",
+        "status": "PASS",
+        "scope": "ACTUAL_ORIGINAL_RECURRING_CANONICAL_REQUEST_AND_SAME_TRANSACTION_RECEIPT_READBACK",
+        "witness": {
+          "ownerXid": "1410",
+          "frameStart": "2026-11-07",
+          "operationId": "690793f7-8ddd-58ef-820f-8bbd8ebede2b",
+          "receiptXmin": "1410",
+          "projectionId": "2f1360e9-ac85-4fe1-8548-583635bd1712",
+          "publicationId": "faff803d-dba9-4a44-938e-8ee7d96f4933",
+          "originalKeyExact": true,
+          "lunchIdentityExact": true,
+          "canonicalDigestExact": true,
+          "canonicalRequestExact": true,
+          "originalBasisPreserved": true,
+          "originalConfirmationExact": true,
+          "originalOwnerReceiptExact": true
+        },
+        "readOnly": true,
+        "providerCalls": 0,
+        "replayed": false,
+        "normalPatternChanged": false,
+        "memoryLimitIncreased": false,
+        "canonicalIdentityQualified": false
+      }
+    ],
+    "phoneAcceptance": false,
+    "production": false
+  },
+  "sessionBoundaries": [
+    {
+      "purpose": "after_historical_and_employment_setup",
+      "before": {
+        "backend_pid": 2724,
+        "memory_context_total_bytes": "12896320",
+        "memory_context_used_bytes": "9666440"
+      },
+      "after": {
+        "backend_pid": 2738,
+        "memory_context_total_bytes": "1344808",
+        "memory_context_used_bytes": "966120"
+      },
+      "committedRowsPreserved": true,
+      "memoryLimitUnchanged": true
+    },
+    {
+      "purpose": "before_release_packet_preparation",
+      "before": {
+        "backend_pid": 2738,
+        "memory_context_total_bytes": "4955760",
+        "memory_context_used_bytes": "3367360"
+      },
+      "after": {
+        "backend_pid": 2745,
+        "memory_context_total_bytes": "1344808",
+        "memory_context_used_bytes": "966120"
+      },
+      "committedRowsPreserved": true,
+      "memoryLimitUnchanged": true
+    },
+    {
+      "purpose": "after_release_packet_preparation",
+      "before": {
+        "backend_pid": 2745,
+        "memory_context_total_bytes": "5413696",
+        "memory_context_used_bytes": "3307656"
+      },
+      "after": {
+        "backend_pid": 2746,
+        "memory_context_total_bytes": "1344808",
+        "memory_context_used_bytes": "966120"
+      },
+      "committedRowsPreserved": true,
+      "memoryLimitUnchanged": true
+    }
+  ],
+  "currentDate": "2026-10-31",
+  "publicationId": "faff803d-dba9-4a44-938e-8ee7d96f4933",
+  "projectionId": "f19193ce-ea89-4ab6-a839-50261b05dfe5",
+  "activationOperation": "ba70b8dd-8d43-400e-a139-99f8556d46ac",
+  "original22Preserved": true,
+  "actualSlots30": true,
+  "newEmployeeRows0": true,
+  "allEightActiveForSchedule": true,
+  "firstWorkdayExclusions": 0,
+  "fullHourLunches": 40,
+  "employeeDayReadbacks": 40,
+  "ownershipChecks": 162540,
+  "actualCredentialBoundManagerSQL": true,
+  "samePhysicalTransaction": true,
+  "normalSevenSourcesChanged": false,
+  "physicalDelivery": false,
+  "canonicalSourceMigrations": 304,
+  "canonicalSourceQualified": false,
+  "protectedSourcesPreserved": true,
+  "cleanup": "SUPPORTED_ORIGINAL_OWNED_FIXTURE_CLEANUP_RETURNED",
+  "ids": {
+    "run": "e47ab006-6902-445d-b65d-9a12d7801854",
+    "manager": "00000000-0000-4000-8000-000000000001",
+    "credential": "c3285573-5b20-4dda-bafa-67fe15778e12",
+    "device": "c5ca9696-14b0-4d69-b665-f6d5358af669",
+    "deviceCredential": "be3d7b6d-c20f-4878-9f99-018494e1a6d7",
+    "packet": "da725e0a-bb9a-4aa8-914f-540fac4bad5f",
+    "source": "4e908807-ca3e-46b3-8b44-10e814380d4a",
+    "version": "51d445e3-bb8a-46c1-89ef-6bb83ae37a55",
+    "templatePublication": "faff803d-dba9-4a44-938e-8ee7d96f4933",
+    "activation": "ba70b8dd-8d43-400e-a139-99f8556d46ac",
+    "negativeActivation": "b22e8e2b-2f09-4817-830e-26dc60f3c184",
+    "employmentRequests": [
+      "6fa06b78-0b9a-4728-86ab-9bf93b1f0127",
+      "2a84aedc-77df-4736-a741-4716e3d017a4"
+    ],
+    "capacityIds": [
+      "4a84606d-16f0-4ccf-861f-1fc31e55aec2",
+      "f42efaf5-4c15-48fb-a228-67a08f95497b",
+      "c192deb4-cf4a-4761-96e1-eb3d37745dd6",
+      "752a5ff4-4733-41d5-bce4-1e1e6c0fc6f0",
+      "9df56f49-e7fc-42a4-afbd-1aafa35cfc07",
+      "fa1247e9-777c-4d2b-ac26-6007105d6427",
+      "5425f856-e1e4-4944-9f20-163fd5962288",
+      "a11f6997-5907-4a4d-833c-da810351eecb"
+    ],
+    "activationKey": "owned-current-initial:58884d3f-fa8c-4267-9046-1604faed2839",
+    "launchScope": "CURRENT_EIGHT_PERSON_TYPED_INITIAL_ONLY"
+  },
+  "directPoolQueriesReturned": 213,
+  "sqlCommandIntents": 281,
+  "finishedAt": "2026-11-01T00:38:26.877Z",
+  "noAutomaticRetry": true
+}

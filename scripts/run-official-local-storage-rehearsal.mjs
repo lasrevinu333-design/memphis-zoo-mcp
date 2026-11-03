@@ -10,7 +10,7 @@ import { Readable } from 'node:stream';
 import { createInterface } from 'node:readline';
 import { createServer, createConnection, isIP } from 'node:net';
 
-export const IMAGE = 'public.ecr.aws/supabase/storage-api@sha256:528ec49c3c32561908b07ee91bced7f8456f3b688164e341eaa422441767a0bd';
+export const IMAGE = 'docker.io/supabase/storage-api@sha256:528ec49c3c32561908b07ee91bced7f8456f3b688164e341eaa422441767a0bd';
 const MIRROR_IMAGE = 'docker.io/supabase/storage-api@sha256:528ec49c3c32561908b07ee91bced7f8456f3b688164e341eaa422441767a0bd';
 const PG_IMAGE = 'supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed';
 const CAP = 1024 * 1024, WORK_MS = 900000;
@@ -43,7 +43,7 @@ export function assertPinnedPgResources(value,cid,name,profile){
   return true;
 }
 export function validatePinnedOfficialImage(value){
-  insist(/^sha256:[a-f0-9]{64}$/.test(value.id) && Array.isArray(value.repo_digests) && value.repo_digests.includes(IMAGE)
+  insist(/^sha256:[a-f0-9]{64}$/.test(value.id) && Array.isArray(value.repo_digests) && value.repo_digests.some(ref=>ref===IMAGE || ref===IMAGE.slice('docker.io/'.length))
     && (value.user===null || value.user===''),'Pinned registry reference and official default-root image required.');
   return value.id;
 }
@@ -339,10 +339,10 @@ async function host(){
     const mirrorMetadata=JSON.parse(await run(['docker','image','inspect','--format','{"id":{{json .Id}},"repo_digests":{{json .RepoDigests}},"user":{{json (index .Config "User")}}}',MIRROR_IMAGE]));
     const mirrorImageId=validatePinnedOfficialMirror(mirrorMetadata);
     durable(resolve(custody,'PINNED_OFFICIAL_MIRROR_METADATA.json'),{registry_reference:MIRROR_IMAGE,config_image_id:mirrorImageId,repo_digests:mirrorMetadata.repo_digests,default_root:true});
-    await run(['docker','pull',IMAGE],{seconds:120});
+    // The exact official DockerHub IMAGE was pulled and verified above; no ECR request or alias fabrication.
     const imageMetadata=JSON.parse(await run(['docker','image','inspect','--format','{"id":{{json .Id}},"repo_digests":{{json .RepoDigests}},"user":{{json (index .Config "User")}}}',IMAGE]));
     verifiedImageId=validatePinnedOfficialImage(imageMetadata);
-    insist(verifiedImageId===mirrorImageId,'Official mirror and original ECR config identities differ.');
+    insist(verifiedImageId===mirrorImageId,'Official DockerHub runtime config identity changed between inspections.');
     durable(resolve(custody,'PINNED_OFFICIAL_IMAGE_METADATA.json'),{registry_reference:IMAGE,config_image_id:verifiedImageId,repo_digests:imageMetadata.repo_digests,default_root:true});
     cid=(await run(['docker','create','--name',namespace,'--label','custodial.owner='+namespace,'--network',network,
       '--cpus','1','--memory','512m','--pids-limit','128','--read-only','--tmpfs','/tmp:rw,size=32m','--tmpfs','/owned-files:rw,size=128m',

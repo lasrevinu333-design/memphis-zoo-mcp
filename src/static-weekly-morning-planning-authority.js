@@ -4,7 +4,7 @@ import {canonicalJson, snapshotDatedRosterSlot, assertServiceDate, normalizeWind
  bytewiseCompare} from './static-weekly-schedule-model.js';
 import {admitStaticWeeklyRawInput, normalizeStaticWeeklyAuthority, weekdayDate,
  STATIC_WEEKLY_SERVER_LIMITS, postgresJsonbContentDigest as digest} from './static-weekly-schedule-program.js';
-import {validateOwnerEligibilityConfig, normalGeographyRestrictionApplies} from './static-weekly-owner-eligibility.js';
+import {validateOwnerEligibilityConfig, normalGeographyRestrictionApplies,forbiddenFamiliesForDay} from './static-weekly-owner-eligibility.js';
 import {getScheduleComponentWeightLedger, COMPONENT_WEIGHT_LEDGER_DIGEST,
  COMPONENT_WEIGHT_UNIT, INHERITED_WORKLOAD_UNIT} from './schedule-component-weight-authority.js';
 
@@ -138,7 +138,7 @@ function derive(input){
    baselineAvailablePre09ClockMinutes:av?.status==='working'?pre09Minutes(av.shift,[av.lunch,...(av.blockedWindows||[])]):0,
    effectiveAvailablePre09ClockMinutes:dated?null:av?.status==='working'?pre09Minutes(av.shift,[av.lunch,...(av.blockedWindows||[])]):0,
    normalGeographyApplies:normalGeographyRestrictionApplies(c),
-   normalAssignmentFamilies:clone(c.normalAssignmentFamilies||[]),hardForbiddenFamilies:clone(c.hardForbiddenFamilies||[])};
+   normalAssignmentFamilies:clone(c.normalAssignmentFamilies||[]),hardForbiddenFamilies:forbiddenFamiliesForDay(c,dayOfWeek)};
  }).sort((a,b)=>bytewiseCompare(a.slotId,b.slotId));
  requireFact(v.slotAvailability.filter(a=>a.dayOfWeek===dayOfWeek).every(a=>ordinary.has(a.slotId)),'unbound_baseline_capacity');
  const morning=v.assignments.filter(r=>r.dayOfWeek===dayOfWeek&&normalizeWindow(r.window).startMinute<585

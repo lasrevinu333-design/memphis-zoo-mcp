@@ -1,0 +1,193 @@
+{
+  "status": "PASS",
+  "checks": [
+    {
+      "name": "F03 actual current source-aligned period metadata",
+      "status": "PASS",
+      "origin": "2026-10-31",
+      "weekday": 6,
+      "fridayClaim": false
+    },
+    {
+      "name": "F03 actual stored-stale historical authority is distinct from an absent future projection",
+      "status": "PASS",
+      "serviceDate": "2026-10-30",
+      "projectionId": "8cba5932-e28a-4a56-b6d6-3745f863cac1",
+      "projectionRevision": 3,
+      "staffingRevision": 7,
+      "scope": "HISTORICAL_STALE_READ_ONLY; not native-manual stale recovery"
+    },
+    {
+      "name": "F03 true absent native future projection has exact manager staffing-status precedence",
+      "status": "PASS",
+      "frame": "2026-11-07",
+      "authorityStatus": "missing_projection",
+      "managerStatus": "stale_staffing_change",
+      "physicalProjectionCount": 0
+    },
+    {
+      "name": "F03 missing next period materializes unchanged source and original retry reads persisted projection",
+      "status": "PASS",
+      "frame": "2026-11-07",
+      "projectionId": "2f1360e9-ac85-4fe1-8548-583635bd1712"
+    },
+    {
+      "name": "F02 actual browser period vector passes persisted multi-frame PTO preview and acceptance",
+      "status": "PASS",
+      "operationId": "72dbae6a-ae5e-4816-a9da-3944392e8484",
+      "frames": [
+        {
+          "weekStart": "2026-10-31",
+          "publicationId": "faff803d-dba9-4a44-938e-8ee7d96f4933",
+          "versionId": "51d445e3-bb8a-46c1-89ef-6bb83ae37a55",
+          "authorityRevision": 12
+        },
+        {
+          "weekStart": "2026-11-07",
+          "publicationId": "faff803d-dba9-4a44-938e-8ee7d96f4933",
+          "versionId": "51d445e3-bb8a-46c1-89ef-6bb83ae37a55",
+          "authorityRevision": 12
+        }
+      ]
+    },
+    {
+      "name": "F02 exact original multi-frame cancellation persists and reads both actual frames",
+      "status": "PASS"
+    },
+    {
+      "name": "Q01 exact third absence requires explicit CoverAll choice",
+      "status": "PASS",
+      "code": "static_manual_coverall_choice_required"
+    },
+    {
+      "name": "Q01 third absence preserves retained two-absence basis with actual confirmed full-hour CoverAll choice",
+      "status": "PASS",
+      "operationId": "9c80d4f2-69ec-4b7b-84d3-e1ec083c8319",
+      "serviceDate": "2026-11-03",
+      "capacityId": "4a84606d-16f0-4ccf-861f-1fc31e55aec2"
+    },
+    {
+      "name": "F09 named actual accepted-period issue → persistence → public read",
+      "status": "PASS",
+      "linkId": "fbaab823-9890-4e2f-b9a7-b205dd15abb7",
+      "period": "2026-10-31"
+    },
+    {
+      "name": "F09 cohort actual accepted-period issue → persistence → public read",
+      "status": "PASS",
+      "linkId": "336d0c3d-bd6d-409d-9789-4135fb95ea4c",
+      "period": "2026-10-31"
+    },
+    {
+      "name": "F09 distinct real cohort FK and original request/claim persisted without trusted-device mirror",
+      "status": "PASS"
+    },
+    {
+      "name": "F09 cohort issuance without original signed transaction context denied",
+      "status": "PASS",
+      "code": "42501"
+    },
+    {
+      "name": "F09 SQL rejects caller period differing from actual accepted projection",
+      "status": "PASS",
+      "code": "40001"
+    },
+    {
+      "name": "F09 mixed legacy/cohort credential row denied",
+      "status": "PASS",
+      "code": "23514"
+    },
+    {
+      "name": "F09 named original credential revocation denies read",
+      "status": "PASS",
+      "code": "42501",
+      "rolledBack": true
+    },
+    {
+      "name": "F09 cohort registration revocation denies public read",
+      "status": "PASS",
+      "code": "42501",
+      "rolledBack": true
+    },
+    {
+      "name": "F09 changed cohort policy epoch denies public read",
+      "status": "PASS",
+      "code": "42501",
+      "rolledBack": true
+    },
+    {
+      "name": "F09 changed original browser binding denies public read",
+      "status": "PASS",
+      "code": "42501",
+      "rolledBack": true
+    },
+    {
+      "name": "F09 expired capability denies read",
+      "status": "PASS",
+      "code": "42501",
+      "rolledBack": true
+    },
+    {
+      "name": "F09 changed authority revision denies stale read",
+      "status": "PASS",
+      "code": "40001",
+      "rolledBack": true
+    },
+    {
+      "name": "F09 anon cannot read capability SQL",
+      "status": "PASS",
+      "code": "42501"
+    },
+    {
+      "name": "F09 authenticated cannot read capability SQL",
+      "status": "PASS",
+      "code": "42501"
+    },
+    {
+      "name": "F09 service_role cannot read capability SQL",
+      "status": "PASS",
+      "code": "42501"
+    },
+    {
+      "name": "F09 CP cannot invoke private cohort resolver",
+      "status": "PASS",
+      "code": "42501"
+    },
+    {
+      "name": "F09 named explicit revoke denies public read",
+      "status": "PASS",
+      "code": "42501"
+    },
+    {
+      "name": "F09 cohort explicit revoke denies public read",
+      "status": "PASS",
+      "code": "42501"
+    },
+    {
+      "name": "F09 cohort revocation preserves actual original registration/claim/request",
+      "status": "PASS"
+    },
+    {
+      "name": "F09 cohort durable tombstone blocks delayed original issue",
+      "status": "PASS",
+      "code": "23505"
+    },
+    {
+      "name": "Historical stored-stale authority preserved without rebuild or source changes",
+      "status": "PASS",
+      "scope": "HISTORICAL_STALE_READ_ONLY"
+    },
+    {
+      "name": "Approved normal source preserved after dated adjustments; source bytes frozen",
+      "status": "PASS"
+    }
+  ],
+  "operations": 54,
+  "origin": "2026-10-31",
+  "productionWritten": false,
+  "providerCalls": 0,
+  "physicalBrowser": false,
+  "physicalPhone": false,
+  "canonicalIdentityQualified": false,
+  "finalAudit": false
+}

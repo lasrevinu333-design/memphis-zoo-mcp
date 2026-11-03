@@ -12,7 +12,25 @@ await check('accepted command sequence is not transport array order',()=>{const 
 await check('another slot cannot change employee times',()=>{const r=clone(record);r.exceptions=[change('lunch',{slotId:id(9),lunch:{start:'13:00',end:'14:00'}})];assert.equal(deriveHomeTimeFacts(day,r).lunch.start,'12:00');});
 await check('shift override supplies the approved time',()=>{const r=clone(record);r.exceptions=[change('shift_override',{shift:{start:'07:00',end:'16:00'}})];assert.equal(deriveHomeTimeFacts(day,r).shift.shift_start,'07:00');});
 await check('full PTO is not a working shift',()=>{const r=clone(record);r.exceptions=[change('pto')];assert.equal(deriveHomeTimeFacts(day,r).schedule_status,'off');});
+await check('off-day and unavailable facts retain exact projection/publication binding',()=>{
+ const r=clone(record);r.exceptions=[change('pto')];
+ for(const value of [deriveHomeTimeFacts(day,r),deriveHomeTimeFacts(day,null)]){
+  assert.equal(value.projection_id,day.projection_id);assert.equal(value.publication_id,day.publication_id);
+ }
+});
 await check('partial absence is disclosed without inventing a new shift',()=>{const r=clone(record);r.exceptions=[{...change('partial_absence'),window:{start:'09:00',end:'10:00'}}];const value=deriveHomeTimeFacts(day,r);assert.equal(value.has_partial_absence,true);assert.equal(value.shift.shift_start,'08:00');});
+await check('union of adjacent, overlapping or unordered absences covering shift is off',()=>{
+ for(const windows of [[['08:00','12:00'],['12:00','17:00']],[['12:00','18:00'],['07:00','13:00']],
+  [['08:00','10:00'],['12:00','17:00'],['09:00','12:00']]]){
+  const r=clone(record);r.exceptions=windows.map(([start,end],i)=>({...change('partial_absence',{},i+1),window:{start,end}}));
+  assert.equal(deriveHomeTimeFacts(day,r).schedule_status,'off');
+ }
+});
+await check('a real gap between partial absences is not erased',()=>{
+ const r=clone(record);r.exceptions=[{...change('partial_absence',{},1),window:{start:'08:00',end:'11:59'}},
+  {...change('partial_absence',{},2),window:{start:'12:00',end:'17:00'}}];
+ assert.equal(deriveHomeTimeFacts(day,r).schedule_status,'scheduled');
+});
 await check('off base needs an explicit working override',()=>{const r=clone(record);r.roster.active=false;r.exceptions=[change('shift_override',{shift:{start:'07:00',end:'16:00'}})];assert.equal(deriveHomeTimeFacts(day,r).schedule_status,'off');r.exceptions[0].payload.status='working';assert.equal(deriveHomeTimeFacts(day,r).schedule_status,'scheduled');});
 await check('an inactive or departed person cannot be restored by a time override',()=>{for(const mode of ['inactive','departed']){const r=clone(record);if(mode==='inactive')r.employee_active=false;else r.roster.staffing_state='departed_named_absent';r.exceptions=[change('shift_override',{status:'working',shift:{start:'07:00',end:'16:00'}})];assert.equal(deriveHomeTimeFacts(day,r).schedule_status,'off');}});
 await check('missing lunch stays missing',()=>{const r=clone(record);r.roster.lunch_start=null;r.roster.lunch_end=null;assert.equal(deriveHomeTimeFacts(day,r).lunch,null);});

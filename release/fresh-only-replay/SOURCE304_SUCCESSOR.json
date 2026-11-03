@@ -1,0 +1,45 @@
+{
+  "schema": "custodial.ci-fresh-only-exact-source-successor.v1",
+  "scope": "DISPOSABLE_CONSTRUCTION_ONLY_NOT_VENDOR_NORMAL_OR_PRODUCTION_ADMISSION",
+  "predecessor_manifest": {
+    "path": "release/fresh-only-replay/MANIFEST.json",
+    "sha256": "5094a272dcc9f01ccbf043f3de7012e12bdb542606089a0a818629c1ecf86b26",
+    "migrations": 297,
+    "overrides": 22
+  },
+  "predecessor_successor": {
+    "path": "release/fresh-only-replay/SOURCE303_SUCCESSOR.json",
+    "sha256": "d51728e9973dcfba729164bce441d45efff8cf10b59f3382ade56efbae515e27",
+    "bytes": 1874,
+    "source_migrations": 303
+  },
+  "preserved_predecessor_replay": {
+    "path": "release/fresh-only-replay/SOURCE303_REPLAY_ORDER.json",
+    "sha256": "3e5a9219707a0724b375d94225940b6271d30dcda1b34a4289a9bf77d290f0dd",
+    "bytes": 57485
+  },
+  "source_migrations": 304,
+  "replay_manifest": {
+    "path": "supabase/canonical/migration-replay-order.json",
+    "sha256": "abba683ec10c75fb3ab585e8a12351a410438bd24822569d3f3671c9ae6fa751",
+    "bytes": 57672
+  },
+  "append": {
+    "name": "20261031225210_custodial_sealed_repairs_current_eight.sql",
+    "original": {
+      "path": "supabase/migrations/20261031225210_custodial_sealed_repairs_current_eight.sql",
+      "sha256": "f4e3dc5be9a465e2099bd9b23488f99b3f9e4c1d9d969844b2fa06b1fbdc7a73",
+      "bytes": 211245
+    },
+    "selected": {
+      "path": "supabase/migrations/20261031225210_custodial_sealed_repairs_current_eight.sql",
+      "sha256": "f4e3dc5be9a465e2099bd9b23488f99b3f9e4c1d9d969844b2fa06b1fbdc7a73",
+      "bytes": 211245
+    },
+    "atomic_mode": "exact-Source-BEGIN-COMMIT"
+  },
+  "observed_empty_source_fingerprint": "ff233923ac21cd46b70985a9eaeb20dbb2a4c0bdc6f69f527159d437ed893440",
+  "source_capture_scope": "ACTUAL_FRESH304_CONSTRUCTION_AND_READ_ONLY_CATALOG_BEFORE_INITIAL_ACTIVATION",
+  "full_vendor_NORMAL": false,
+  "expected_fingerprint_authority": null
+}

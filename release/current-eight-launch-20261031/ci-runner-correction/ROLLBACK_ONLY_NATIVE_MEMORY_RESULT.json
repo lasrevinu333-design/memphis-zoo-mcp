@@ -1,0 +1,35 @@
+{
+  "scope": "ROLLBACK_ONLY_ORIGINAL04_NATIVE_MEMORY_MEASUREMENT",
+  "container": "2d88fda14df43fefe2d5a8d90eb7237d1c5a66e3dd0d39164e3872b5f8ee2c56",
+  "owner": "68f88640-bc65-42d9-bff3-ad96784fd7dc",
+  "originalOperation": "a048d67d-b5d8-413f-a4aa-33e1e9350093",
+  "commit": false,
+  "raisedMemoryLimit": false,
+  "productionWritten": false,
+  "clientErrors": [],
+  "beginReturned": true,
+  "returnSchema": "custodial.coverall-initial-uncommitted.v1",
+  "rollbackReturned": true,
+  "functionsRestored": {
+    "static_weekly_begin_coverall_activation": true,
+    "static_weekly_coverall_activate_source301": true
+  },
+  "originalReadback": {
+    "operations": "0",
+    "receipts": "0"
+  },
+  "checkpoints": [
+    "2026-10-31 17:08:39.487 UTC [1] LOG:  server process (PID 2423) was terminated by signal 9: Killed",
+    "2026-10-31 17:08:39.487 UTC [1] DETAIL:  Failed process was running: select public.static_weekly_begin_coverall_activation($1,$2,$3,$4,$5,$6,$7,$8) as value",
+    "2026-10-31 17:14:59.038 UTC [2446] LOG:  MAIN_CUSTODIAL_MEM04 outer_after_capacity total=6950272 used=4499328 datum=0",
+    "2026-10-31 17:14:59.136 UTC [2446] LOG:  MAIN_CUSTODIAL_MEM04 outer_after_template total=7829272 used=5185944 datum=0",
+    "2026-10-31 17:14:59.148 UTC [2446] LOG:  MAIN_CUSTODIAL_MEM04 outer_after_manual_packet total=7962392 used=5298312 datum=0",
+    "2026-10-31 17:14:59.547 UTC [2446] LOG:  MAIN_CUSTODIAL_MEM04 outer_after_basis total=9954968 used=7024296 datum=568738",
+    "2026-10-31 17:14:59.937 UTC [2446] LOG:  MAIN_CUSTODIAL_MEM04 inner_after_basis total=10914928 used=7831800 datum=568738",
+    "2026-10-31 17:15:01.102 UTC [2446] LOG:  MAIN_CUSTODIAL_MEM04 inner_after_store total=13720928 used=9759160 datum=0",
+    "2026-10-31 17:15:01.556 UTC [2446] LOG:  MAIN_CUSTODIAL_MEM04 inner_after_envelope total=14261744 used=10193144 datum=1016",
+    "2026-10-31 17:15:03.957 UTC [2446] LOG:  MAIN_CUSTODIAL_MEM04 inner_after_materialize total=27908136 used=19293600 datum=0",
+    "2026-10-31 17:15:03.962 UTC [2446] LOG:  MAIN_CUSTODIAL_MEM04 outer_after_activate total=27392592 used=18803128 datum=0"
+  ],
+  "state": "MEASUREMENT_CLOSED_NO_COMMIT_OR_FUNCTION_DRIFT"
+}

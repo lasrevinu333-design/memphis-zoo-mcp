@@ -1,0 +1,60 @@
+{
+  "recorded_at": "2026-10-06T11:48:19.252537+00:00",
+  "checks": [
+    {
+      "name": "owner-access",
+      "exit": 0,
+      "log": "final-owner-access.log",
+      "sha256": "319bf9603a7c3b15c64e69a96b69ddf65376b9f237cb881836d64c200e18bc66"
+    },
+    {
+      "name": "frontend",
+      "exit": 0,
+      "log": "final-frontend.log",
+      "sha256": "b84f14bcd8edebdb10a12edea2762d9b18c1d3654d16f4bf815368c7a50cd147"
+    },
+    {
+      "name": "dependency",
+      "exit": 0,
+      "log": "final-dependency.log",
+      "sha256": "de998f4f2a2f0bf1b33203085e46ca538e0005e0d3ec6793f35382ebca772a06",
+      "counts": {
+        "info": 0,
+        "low": 0,
+        "moderate": 5,
+        "high": 0,
+        "critical": 0,
+        "total": 5
+      }
+    },
+    {
+      "name": "migration-authorization",
+      "exit": 0,
+      "log": "final-migration-authorization.log",
+      "sha256": "1a4a89e1afe78facb44528eaec622f6f41b4f4b515c2559fbe5fa48b3ec1d639"
+    },
+    {
+      "name": "release-closure",
+      "exit": 0,
+      "log": "final-release-closure.log",
+      "sha256": "54a0fec438e03a1eb638377a867ac194b631c7113b9968f6496138c777549e64"
+    },
+    {
+      "name": "workflow-contracts",
+      "exit": 0,
+      "log": "final-workflow-contracts.log",
+      "sha256": "dc2892cd91848c8bd71949fc6981549db8eb129df99ea33815ddb1cb0076a3f6"
+    }
+  ],
+  "full_historical_rebuild": "Both existing suite-order clean rebuilds passed with 131 source migrations and schema fingerprint 09cad1cd3941e367192c5939c220823713ec0161affc7f4db656d1452b3e41ae",
+  "historical_five_migration_replay": "Existing isolated replay test passed with rollback/ledger/privilege checks; no live migration replay",
+  "live_deployment": false,
+  "corrections": [
+    "proxy-addr 2.0.7 to maintainer-patched 2.0.8 with seven behavioral regressions",
+    "Four exact frontend expectations now pin the tested owner-access frontend",
+    "Named managers can read phone assignment snapshots; assignment and enrollment remain owner-only",
+    "Historical replay plan includes the additive owner-action migration and matches the rebuilt canonical target"
+  ],
+  "historical_plan_is_not_live_reapply_authorization": true,
+  "source_application_tests_use_synthetic_identities": true
+}

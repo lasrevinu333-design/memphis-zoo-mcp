@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import express from "express";
+import { request as httpRequest } from "node:http";
 import { readFile } from "node:fs/promises";
 import {
   assertOpsManagerSessionSecret,
@@ -9,12 +10,16 @@ import {
 const env = {
   NODE_ENV: "production",
   RENDER: "1",
+  MEMPHIS_MAP_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_synthetic_boundary",
+  OPS_MANAGER_INVITE_ALLOWED_ORIGINS: "http://custodian-g12-manager.localhost:31874,http://custodian-g12-employee.localhost:31875",
   OPS_MANAGER_SESSION_SECRET: "manager-boundary-test-secret-at-least-32-characters",
 };
 const allowedOrigin = "https://localhost";
 const manager = {
   manager_id: "00000000-0000-4000-8000-000000000002",
   display_name: "Named Manager",
+  system_key: "eric_custodial_manager",
+  is_system_principal: false,
   roles: ["OPS_MANAGER"],
   active: true,
   revoked_at: null,
@@ -79,7 +84,10 @@ assert.match(migration, /pre_bounded_trust_expires_at/i, "the cutover must prese
 assert.match(migration, /check \(expires_at <= created_at \+ interval '365 days'\)/i);
 
 let enrolled = null;
+let mapEnrolled = null;
+const mapManager = { manager_id: "00000000-0000-4000-8000-000000000003", display_name: "Named Map Delegate", system_key: "annie_feist_operations_admin", is_system_principal: false, roles: ["OPS_MANAGER"], active: true, revoked_at: null };
 let revokeFailure = false;
+const revokeCalls = [];
 const store = {
   async getManagerCodeRateLimit() { return null; },
   async recordManagerCodeFailure() { return { locked_until: null }; },
@@ -99,12 +107,16 @@ const store = {
     };
     return { ok: true, manager, trusted_device: enrolled };
   },
-  async find(credentialId) { return credentialId === enrolled?.credential_id ? enrolled : null; },
+  async getManagerBySystemKey(systemKey) { return systemKey === mapManager.system_key ? mapManager : null; },
+  async enroll(record) { mapEnrolled = { ...record, manager: mapManager, revoked_at: null }; return mapEnrolled; },
+  async find(credentialId) { return credentialId === enrolled?.credential_id ? enrolled : credentialId === mapEnrolled?.credential_id ? mapEnrolled : null; },
   async touch() {},
   async audit() {},
   async revoke(credentialId) {
+    revokeCalls.push(credentialId);
     if (revokeFailure) throw new Error("simulated revocation outage");
     if (credentialId === enrolled?.credential_id) enrolled.revoked_at = new Date().toISOString();
+    if (credentialId === mapEnrolled?.credential_id) mapEnrolled.revoked_at = new Date().toISOString();
   },
 };
 
@@ -115,11 +127,31 @@ const server = app.listen(0, "127.0.0.1");
 await new Promise((resolve) => server.once("listening", resolve));
 const base = `http://127.0.0.1:${server.address().port}`;
 
-async function json(path, { method = "GET", origin, cookie, body, deviceId = "manager-phone" } = {}) {
-  const headers = { "x-device-id": deviceId };
+async function json(path, { method = "GET", origin, cookie, body, deviceId = "manager-phone", extraHeaders = {} } = {}) {
+  const headers = { "x-device-id": deviceId, ...extraHeaders };
   if (origin) headers.origin = origin;
   if (cookie) headers.cookie = cookie;
   if (body !== undefined) headers["content-type"] = "application/json";
+  // Node fetch ignores an explicit Host override. These browser-authority
+  // cases use the ordinary HTTP client so the exact tested Host reaches Express.
+  if (extraHeaders.host !== undefined) {
+    return await new Promise((resolve, reject) => {
+      const request = httpRequest(`${base}${path}`, { method, headers }, (incoming) => {
+        const chunks = []; let size = 0;
+        incoming.on("data", (chunk) => { size += chunk.length; if (size > 65536) incoming.destroy(new Error("bounded fixture response exceeded")); else chunks.push(chunk); });
+        incoming.on("error", reject);
+        incoming.on("end", () => {
+          try {
+            const text = Buffer.concat(chunks).toString("utf8");
+            resolve({ response: { status: incoming.statusCode, headers: new Headers(incoming.headers) }, payload: text ? JSON.parse(text) : null });
+          } catch (error) { reject(error); }
+        });
+      });
+      request.setTimeout(5000, () => request.destroy(new Error("bounded fixture HTTP timeout")));
+      request.on("error", reject);
+      request.end(body === undefined ? undefined : JSON.stringify(body));
+    });
+  }
   const response = await fetch(`${base}${path}`, {
     method,
     headers,
@@ -162,6 +194,147 @@ try {
   assert.equal(result.response.status, 200);
   assert.equal(result.payload.data.session.manager_id, manager.manager_id);
 
+  const sameOriginHeaders = { host: "custodian-g12-manager.localhost:31874", "sec-fetch-site": "same-origin" };
+  result = await json("/auth-api/session?access_level=full_access", { cookie, extraHeaders: sameOriginHeaders });
+  assert.equal(result.response.status, 200, "normal same-origin GET must refresh only actual trusted manager cookie");
+  assert.equal(result.payload.data.session.manager_id, manager.manager_id);
+  const head = await json("/auth-api/session?access_level=full_access", { method: "HEAD", cookie, extraHeaders: sameOriginHeaders });
+  assert.equal(head.response.status, 200, "normal same-origin HEAD uses the existing GET route without mutation");
+  assert.equal(head.payload, null);
+  result = await json("/auth-api/session?access_level=full_access", { extraHeaders: sameOriginHeaders });
+  assert.equal(result.response.status, 401, "same-origin context is not a substitute for manager credentials");
+  for (const extraHeaders of [
+    { ...sameOriginHeaders, origin: "" },
+    { ...sameOriginHeaders, origin: "null" },
+    { ...sameOriginHeaders, origin: "https://attacker.example" },
+    { ...sameOriginHeaders, "sec-fetch-site": "cross-site" },
+    { ...sameOriginHeaders, "sec-fetch-site": "same-site" },
+    { host: sameOriginHeaders.host },
+    { ...sameOriginHeaders, host: "attacker.example" },
+    { ...sameOriginHeaders, host: "custodian-g12-manager.localhost:31876" },
+    { ...sameOriginHeaders, host: "attacker.example", "x-forwarded-host": sameOriginHeaders.host },
+  ]) {
+    result = await json("/auth-api/session?access_level=full_access", { cookie, extraHeaders });
+    assert.equal(result.response.status, 403, "missing/foreign Origin may use only exact same-origin browser/direct allowed authority");
+  }
+  result = await json("/auth-api/ops/manager-codes/consume", { method: "POST", body: enrollmentBody, extraHeaders: sameOriginHeaders });
+  assert.equal(result.response.status, 403, "same-origin metadata must not replace Origin for code consumption");
+  result = await json("/auth-api/ops/logout", { method: "POST", cookie, extraHeaders: sameOriginHeaders });
+  assert.equal(result.response.status, 403, "same-origin metadata must not replace Origin for logout");
+  assert.equal(enrolled.revoked_at, null, "denied Origin-less logout must preserve the current credential");
+
+  // No caller may revoke a chosen credential by guessing its public UUID.
+  // These requests exercise the actual mounted HTTP route, not a helper stub.
+  const beforeDeniedLogout = revokeCalls.length;
+  const forgedCookie = `memphis_ops_trust=${enrolled.credential_id}.${'A'.repeat(43)}`;
+  for (const invalidCookie of [forgedCookie, undefined, 'memphis_ops_trust=malformed',
+    `memphis_ops_trust=99999999-9999-4999-8999-999999999999.${'B'.repeat(43)}`]) {
+    result = await json("/auth-api/ops/logout", { method: "POST", origin: allowedOrigin, cookie: invalidCookie });
+    assert.equal(result.response.status, 401, "missing/malformed/unknown/forged cookie must not authorize revocation");
+    assert.equal(result.response.headers.get("set-cookie"), null, "denied logout must not clear unrelated current trust");
+    assert.equal(revokeCalls.length, beforeDeniedLogout, "denied cookie must not even invoke the revocation store");
+    assert.equal(enrolled.revoked_at, null, "forged correctly shaped trust must preserve victim credential");
+  }
+  const normalExpiry = enrolled.expires_at;
+  enrolled.expires_at = new Date(Date.now() - 1000).toISOString();
+  result = await json("/auth-api/ops/logout", { method: "POST", origin: allowedOrigin, cookie });
+  assert.equal(result.response.status, 401, "expired cookie authority cannot revoke");
+  assert.equal(revokeCalls.length, beforeDeniedLogout);
+  enrolled.expires_at = normalExpiry;
+  enrolled.revoked_at = new Date().toISOString();
+  result = await json("/auth-api/ops/logout", { method: "POST", origin: allowedOrigin, cookie });
+  assert.equal(result.response.status, 401, "already revoked trust cannot authorize another revocation");
+  assert.equal(revokeCalls.length, beforeDeniedLogout);
+  enrolled.revoked_at = null;
+  manager.active = false;
+  result = await json("/auth-api/ops/logout", { method: "POST", origin: allowedOrigin, cookie });
+  assert.equal(result.response.status, 403, "inactive named manager cannot authorize logout mutation");
+  assert.equal(revokeCalls.length, beforeDeniedLogout);
+  manager.active = true;
+  result = await json("/auth-api/ops/logout", { method: "POST", origin: allowedOrigin, cookie,
+    extraHeaders: { authorization: 'Bearer invalid-session' } });
+  assert.equal(result.response.status, 401, "invalid explicit bearer must not fall back to an otherwise valid cookie");
+  assert.equal(revokeCalls.length, beforeDeniedLogout);
+
+  // Canonical projection must reach the normal HTTP session consumed by FE,
+  // not just an exported helper or a synthetic frontend session fixture.
+  result = await json("/auth-api/session?access_level=full_access", { cookie, extraHeaders: sameOriginHeaders });
+  assert.equal(result.payload.data.session.permissions.schema, "custodial.manager-permissions.v1");
+  assert.equal(result.payload.data.session.permissions.read, true);
+  assert.equal(result.payload.data.session.permissions.owner, true);
+  assert.equal(result.payload.data.session.read_only, false);
+  result = await json("/auth-api/session?access_level=read_only", { cookie, extraHeaders: sameOriginHeaders });
+  assert.equal(result.payload.data.session.permissions.read, true);
+  assert.equal(result.payload.data.session.permissions.owner, false);
+  assert.equal(result.payload.data.session.permissions.manage_absences, false, "read-only owner cannot be promoted by requested role");
+  manager.system_key = "other_named_manager";
+  result = await json("/auth-api/session?access_level=full_access", { cookie, extraHeaders: sameOriginHeaders });
+  assert.equal(result.payload.data.session.permissions.read, true);
+  assert.equal(result.payload.data.session.permissions.owner, false, "role alone is not owner authority");
+  assert.equal(result.payload.data.session.read_only, true);
+  assert.equal(result.payload.data.session.permissions.manage_absences, true);
+  assert.equal(result.payload.data.session.permissions.manage_coverall, true);
+  assert.equal(result.payload.data.session.permissions.regenerate_routes, true);
+  assert.equal(result.payload.data.session.permissions.close_scan_tickets, true);
+  manager.system_key = "eric_custodial_manager";
+  enrolled.max_access_level = "read_only";
+  result = await json("/auth-api/session?access_level=full_access", { cookie, extraHeaders: sameOriginHeaders });
+  assert.equal(result.payload.data.session.permissions.owner, false, "an old limited credential stays limited");
+  enrolled.max_access_level = "full_access";
+  const originalRoles = manager.roles;
+  manager.roles = ["EMPLOYEE"];
+  result = await json("/auth-api/session?access_level=full_access", { cookie, extraHeaders: sameOriginHeaders });
+  assert.equal(result.response.status, 403, "employee roles cannot become manager permission projections");
+  assert.equal(result.payload.data?.session, undefined);
+  manager.roles = originalRoles;
+  manager.is_system_principal = true;
+  result = await json("/auth-api/session?access_level=full_access", { cookie, extraHeaders: sameOriginHeaders });
+  assert.equal(result.response.status, 403, "system principals cannot become real named managers");
+  manager.is_system_principal = false;
+  manager.revoked_at = new Date().toISOString();
+  result = await json("/auth-api/session?access_level=full_access", { cookie, extraHeaders: sameOriginHeaders });
+  assert.equal(result.response.status, 403, "revoked managers cannot obtain a permission projection");
+  manager.revoked_at = null;
+  const credentialRevoked = enrolled.revoked_at;
+  enrolled.revoked_at = new Date().toISOString();
+  result = await json("/auth-api/session?access_level=full_access", { cookie, extraHeaders: sameOriginHeaders });
+  assert.equal(result.response.status, 401, "revoked manager credentials remain rejected");
+  enrolled.revoked_at = credentialRevoked;
+
+  // Exercise the preserved normal Map-to-trusted-credential lifecycle with a
+  // fixed synthetic provider response. No provider/network/account is accessed.
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input, options) => {
+    const url = String(input);
+    if (url === "https://dwzdqekusvivjbxsapdu.supabase.co/auth/v1/user") return {
+      ok: true, json: async () => ({ id: "00000000-0000-4000-8000-000000000004", email: "afeist@memphiszoo.org", email_confirmed_at: "2026-01-01T00:00:00.000Z" }),
+    };
+    return originalFetch(input, options);
+  };
+  try {
+    const mapLogin = await json("/auth-api/map-session", { method: "POST", origin: allowedOrigin, body: { access_token: "synthetic-provider-token" }, deviceId: "map-browser" });
+    assert.equal(mapLogin.response.status, 200);
+    assert.equal(mapLogin.payload.data.session.identity_source, "memphis_map");
+    assert.equal(mapLogin.payload.data.session.trusted_device, true);
+    assert.equal(mapLogin.payload.data.session.permissions.read, true);
+    assert.equal(mapLogin.payload.data.session.permissions.owner, false);
+    assert.equal(mapLogin.payload.data.session.permissions.manage_absences, true);
+    const mapCookie = mapLogin.response.headers.get("set-cookie").split(";")[0];
+    const refreshed = await json("/auth-api/session?access_level=full_access", { cookie: mapCookie, deviceId: "map-browser", extraHeaders: sameOriginHeaders });
+    assert.equal(refreshed.response.status, 200);
+    assert.equal(refreshed.payload.data.session.permissions.schema, "custodial.manager-permissions.v1");
+    assert.equal(refreshed.payload.data.session.read_only, true);
+    mapEnrolled.metadata_json.manager_system_key = "wrong_manager_assignment";
+    const moved = await json("/auth-api/session?access_level=full_access", { cookie: mapCookie, deviceId: "map-browser", extraHeaders: sameOriginHeaders });
+    assert.equal(moved.response.status, 403, "Map trust must stay bound to the current named assignment");
+    mapEnrolled.metadata_json.manager_system_key = mapManager.system_key;
+    const mapLogout = await json("/auth-api/ops/logout", { method: "POST", origin: allowedOrigin, cookie: mapCookie, deviceId: "map-browser", extraHeaders: { ...sameOriginHeaders, authorization: `Bearer ${refreshed.payload.data.session.token}` } });
+    assert.equal(mapLogout.response.status, 200);
+    assert.ok(mapEnrolled.revoked_at, "Map logout revokes the established normal trusted credential");
+    const staleMap = await json("/auth-api/session?access_level=full_access", { cookie: mapCookie, deviceId: "map-browser", extraHeaders: sameOriginHeaders });
+    assert.equal(staleMap.response.status, 401);
+  } finally { globalThis.fetch = originalFetch; }
+
   enrolled.created_at = new Date(Date.now() - 366 * 86_400_000).toISOString();
   enrolled.expires_at = new Date(Date.now() + 3650 * 86_400_000).toISOString();
   result = await json("/auth-api/session?access_level=full_access", { origin: allowedOrigin, cookie, deviceId: "manager-phone" });
@@ -180,6 +353,7 @@ try {
   assert.equal(result.response.status, 200);
   assert.match(result.response.headers.get("set-cookie") || "", /Max-Age=0/);
   assert.ok(enrolled.revoked_at, "successful logout must durably revoke before clearing the cookie");
+  assert.equal(revokeCalls.at(-1), enrolled.credential_id, "valid normal cookie revokes only its proven credential");
 
   console.log("MANAGER_CREDENTIAL_BOUNDARY_PASS");
 } finally {

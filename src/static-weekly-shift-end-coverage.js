@@ -1,3 +1,4 @@
+import {isHardForbidden} from './static-weekly-owner-eligibility.js';
 import {assertServiceDate,snapshotDatedRosterSlot} from './static-weekly-schedule-model.js';
 // Pure segment completion. Runtime callers must use the source-bound derivation
 // wrapper; the config-taking entry point also supports offline legacy evidence.
@@ -7,6 +8,24 @@ const clone=value=>JSON.parse(JSON.stringify(value));
 const minute=value=>Number(value.slice(0,2))*60+Number(value.slice(3,5));
 const clock=value=>`${String(Math.floor(value/60)).padStart(2,'0')}:${String(value%60).padStart(2,'0')}`;
 const ids=row=>row.includedLocations?.length?row.includedLocations.map(x=>x.locationId):[row.locationId];
+
+// Preserve the existing dimensionless workload budget across changed windows.
+// This does not turn either that budget or the new group ratings into minutes.
+export function splitPreservedWorkloadBudget(budget,windows){
+ assert.ok(Number.isSafeInteger(budget)&&windows.length>0&&budget>=windows.length,'positive budget required for every segment');
+ const durations=windows.map(w=>minute(w.end)-minute(w.start));
+ assert.ok(durations.every(d=>Number.isSafeInteger(d)&&d>0),'positive exact segment windows required');
+ const total=durations.reduce((a,b)=>a+b,0),distributable=budget-windows.length;
+ assert.ok(Number.isSafeInteger(total*budget),'workload split exceeds exact arithmetic');
+ const allocation=durations.map((d,index)=>({index,points:1+Math.floor(distributable*d/total),remainder:(distributable*d)%total}));
+ let left=budget-allocation.reduce((n,r)=>n+r.points,0);
+ for(const item of allocation.slice().sort((a,b)=>b.remainder-a.remainder||a.index-b.index)){
+  if(left<=0)break;item.points++;left--;
+ }
+ const points=allocation.map(a=>a.points);
+ assert.equal(points.reduce((a,b)=>a+b,0),budget,'workload budget was not conserved');
+ return points;
+}
 function datedPositions(source,config,day){
  const base=assertServiceDate(source.serviceDate),date=new Date(`${base}T12:00:00Z`);
  date.setUTCDate(date.getUTCDate()+(day-date.getUTCDay()+7)%7);
@@ -51,14 +70,49 @@ export function completeRecurringShiftEndCoverage(source,config){
     ?[s.acceptedRouteAnchorLocationId]:[])];
   }));
   const current=normal.map(row=>({original:row,owner:row.ownerSlotId,rows:[row]}));
+  const planned=config.plannedClosingOwnership?.[String(day)];
+  if(planned){
+   assert.ok(Array.isArray(planned)&&planned.length>0&&planned.length<=8,'bounded planned closing stages required');
+   const families=[...new Set(normal.map(row=>row.locationCodeSnapshot))].sort();
+   const firstDeparture=Math.min(...workers.map(s=>minute(s.shift[1])));
+   let previous=firstDeparture;
+   for(const stage of planned){
+    assert.equal(minute(stage.start),previous,'planned closing stage gap');
+    assert.ok(minute(stage.end)>previous&&minute(stage.end)<=lastEnd,'planned closing stage bounds');
+    assert.equal(JSON.stringify(Object.keys(stage.owners).sort()),JSON.stringify(families),'planned closing must own every family exactly once');
+    for(const unit of current){
+     const row=unit.original,owner=stage.owners[row.locationCodeSnapshot],slot=slotById.get(owner);
+     assert.ok(slot&&!slot.incumbent.vacant&&slot.status!=='departed_named_absent','planned closer must be a real active incumbent');
+     assert.ok(minute(slot.shift[0])<=previous&&minute(stage.end)<=minute(slot.shift[1]),'planned closer must cover the whole interval');
+     assert.ok(!(minute(slot.lunch[0])<minute(stage.end)&&previous<minute(slot.lunch[1])),'planned closing cannot overlap helper lunch');
+     assert.ok(!(row.restrictedSlotIds||[]).includes(owner)&&!isHardForbidden(slot,row.locationCodeSnapshot,day)
+      &&(!config.sourceBoundEligibility||(row.requiredQualifications||[]).every(q=>slot.qualifications.includes(q))&&!ids(row).some(id=>slot.restrictions.includes(id))),
+      'planned closer is restricted or unqualified');
+     const namedKey=`${day}:${row.locationCodeSnapshot}:${stage.start}`,handoff=named.get(namedKey);
+     if(handoff){assert.equal(unit.owner,handoff.fromSlotId,'planned named handoff source');assert.equal(owner,handoff.toSlotId,'planned named handoff recipient');usedNamed.add(namedKey);}
+     const last=unit.rows.at(-1);
+     if(unit.owner===owner){last.window.end=stage.end;continue;}
+     last.window.end=stage.start;
+     const distance=Math.max(...ids(row).map(target=>Math.min(...(anchors.get(owner)||[]).map(anchor=>target===anchor?0:distances.get(`${anchor}|${target}`)??Infinity))));
+     assert.ok(Number.isFinite(distance),'planned closer needs verified directed proximity');
+     const next={...clone(row),workId:`${row.workId}:handoff:${stage.start}:${config.fullSegmentIdentity?owner:owner.slice(0,8)}`,
+      ownerSlotId:owner,originSlotId:owner,window:{start:stage.start,end:stage.end}};
+     notes.push({day,at:stage.start,workId:next.workId,fromSlotId:unit.owner,toSlotId:owner,locationCode:row.locationCodeSnapshot,
+      locationIds:ids(row),directedProximityMinutes:distance,fromVacantPosition:false});
+     unit.owner=owner;unit.rows.push(next);added.push(next);
+    }
+    previous=minute(stage.end);
+   }
+   assert.equal(previous,lastEnd,'planned closing must reach final scheduled departure');
+  }
   const boundaries=[...new Set(positions.map(s=>minute(s.shift[1])))].filter(t=>t<lastEnd).sort((a,b)=>a-b);
-  for(const at of boundaries){
+  for(const at of planned?[]:boundaries){
    const leaving=current.filter(u=>minute(slotById.get(u.owner).shift[1])===at);
    const remaining=workers.filter(s=>minute(s.shift[0])<=at && at<minute(s.shift[1]));
    const loads=new Map(remaining.map(s=>[s.slotId,current.filter(u=>u.owner===s.slotId).reduce((n,u)=>n+Number(config.weights[u.original.locationCodeSnapshot]??1),0)]));
    for(const unit of leaving.sort((a,b)=>a.original.workId.localeCompare(b.original.workId))){
     const row=unit.original;
-    const rankEligible=domain=>domain.filter(s=>!(s.forbiddenFamilies||[]).includes(row.locationCodeSnapshot)
+    const rankEligible=domain=>domain.filter(s=>!(s.forbiddenFamilies||[]).includes(row.locationCodeSnapshot)&&!isHardForbidden(s,row.locationCodeSnapshot,day)
       && (!s.normalAllowedFamilies||s.normalAllowedFamilies.includes(row.locationCodeSnapshot))
       && (!config.sourceBoundEligibility || (!(row.restrictedSlotIds||[]).includes(s.slotId)
         && (row.requiredQualifications||[]).every(q=>s.qualifications.includes(q))
@@ -108,16 +162,10 @@ export function completeRecurringShiftEndCoverage(source,config){
       owners:unit.rows.map(row=>row.ownerSlotId),windows:unit.rows.map(row=>row.window)});
     continue;
    }
-   const durations=unit.rows.map(r=>minute(r.window.end)-minute(r.window.start));
-   const total=durations.reduce((a,b)=>a+b,0),distributable=budget-unit.rows.length;
-   const allocation=durations.map((d,index)=>({index,points:1+Math.floor(distributable*d/total),remainder:(distributable*d)%total}));
-   let left=budget-allocation.reduce((n,r)=>n+r.points,0);
-   for(const item of allocation.slice().sort((a,b)=>b.remainder-a.remainder||a.index-b.index)){
-    if(left<=0)break;item.points++;left--;
-   }
-   for(const item of allocation){
-    unit.rows[item.index].serviceEffortMinutes=item.points;
-    unit.rows[item.index].serviceEffortProvenance+=`;shift-split-preserves-budget`;
+   const allocation=splitPreservedWorkloadBudget(budget,unit.rows.map(r=>r.window));
+   for(const [index,points] of allocation.entries()){
+    unit.rows[index].serviceEffortMinutes=points;
+    unit.rows[index].serviceEffortProvenance+=`;shift-split-preserves-budget`;
    }
    assert.equal(unit.rows.reduce((n,r)=>n+r.serviceEffortMinutes,0),budget);
   }
@@ -157,7 +205,7 @@ export function validateRecurringShiftEndCoverage(baseline,candidate,config){
     const owner=positions.get(row.ownerSlotId);
     assert.ok(owner?.workDays.includes(day)&&minute(owner.shift[0])<=at
       &&at<minute(owner.shift[1]),`off-duty recurring owner at ${day}/${clock(at)}`);
-    assert.ok(!(owner.forbiddenFamilies||[]).includes(row.locationCodeSnapshot),'forbidden handoff family');
+    assert.ok(!(owner.forbiddenFamilies||[]).includes(row.locationCodeSnapshot)&&!isHardForbidden(owner,row.locationCodeSnapshot,day),'forbidden handoff family');
     assert.ok(!owner.normalAllowedFamilies||owner.normalAllowedFamilies.includes(row.locationCodeSnapshot),'handoff outside established geographic areas');
     for(const id of ids(row))counts.set(id,(counts.get(id)||0)+1);
    }

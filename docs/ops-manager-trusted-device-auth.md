@@ -31,3 +31,73 @@ This is an exact-pair cutover because the old manager app depends on the retired
 Rollback before physical acceptance: restore the prior exact backend/app pair, drop `ops_manager_trusted_devices_bounded_lifetime`, and restore `expires_at` only from the preserved `pre_bounded_trust_expires_at` value after explicit approval. Do not restore a revoked credential.
 
 MCP never accepts an Ops Manager token. A dedicated `MCP_CONNECTOR_TOKEN` remains available for strict service and legacy SSE clients; Streamable HTTP access follows the separately documented full/read-only tokenless connector policy.
+
+
+## Recover the first named manager after disaster restore
+
+Normal restore intentionally revokes every restored manager credential and active
+personal enrollment code. An old trusted cookie or bearer cannot bootstrap the
+restored service, even with the same signing secret. Never un-revoke those rows.
+
+Use `scripts/production-restore-manager-recovery.mjs` from the admitted current
+backend on the protected operator host. This command is not a public HTTP route.
+It uses the existing restore reconciliation signing/verification authority, with
+a separate signed purpose. Configure the normal protected database connection,
+project reference, independent `OPS_MANAGER_SESSION_SECRET`, and existing
+`RESTORE_RECONCILIATION_*` signing or verification key/ID through the normal
+secret channel. Do not put secret values in shell history or turn on shell tracing.
+
+The approving operator selects the actual existing active, non-system named
+`CUSTODIAL_MANAGER` ID using `RESTORE_MANAGER_RECOVERY_MANAGER_ID` and identifies
+themself with `RESTORE_RECONCILIATION_NAMED_ACTOR`. No manager, role or assignment
+is created or changed. With the restored database fully reconciled and unpaused:
+
+```
+node scripts/production-restore-manager-recovery.mjs --create
+```
+
+This read-only command emits a short-lived signed recovery envelope, not a code.
+Review and supply that exact envelope as `RESTORE_MANAGER_RECOVERY_JSON`. For
+application, set `RESTORE_MANAGER_RECOVERY_APPLY=true` and the exact
+`RESTORE_MANAGER_RECOVERY_CONFIRM_PROJECT_REF`. Set
+`RESTORE_MANAGER_RECOVERY_CODE_FD` to a dedicated owned private pipe descriptor
+between 3 and 9, then run:
+
+```
+node scripts/production-restore-manager-recovery.mjs --apply
+```
+
+The pipe must have no group/other permission bits and must not alias stdout or
+stderr. Its authorized receiver keeps the code in memory and delivers it directly
+to the named manager; it must not log or persist the secret. For an interactive
+operator, a private shell process-substitution pipe can feed a RAM-only receiver
+that displays the code on that operator's unrecorded terminal. Do not use `tee`,
+a capture log, a world-readable FIFO, or a reusable credential file. The pipe
+receives one JSON record containing `code_id`, `one_time_code`, and `expires_at`.
+Wait for the separate sanitized committed stdout receipt before using the code.
+Private delivery failure rolls back issuance; a failed COMMIT is an unknown
+outcome and must be reconciled, never blindly retried with a new intent.
+
+The command uses the existing restore and application-mutation fences and locks
+normal enrollment/trust/manager tables. It requires the exact signed completed
+restore generation, archive, manifest and database identity, no open discrepancies
+or mutation leases, no usable manager trust, and no conflicting live recovery or
+same-manager personal code. It inserts only a standard five-attempt, at-most-15-
+minute hashed personal code plus a `MANAGER_RECOVERY_ISSUANCE` restore event.
+It never creates a trusted credential, session or bearer itself. The manager
+consumes the personal code through the unchanged normal Hub enrollment UI; the
+normal service creates the HttpOnly trusted credential. Then ordinary leadership
+code issuance can recover the remaining managers.
+
+Reapplying a committed signed intent returns metadata only; it never remints or
+redisplays the secret. If the delivered code is lost, expires or is explicitly
+revoked before consumption, an operator may authorize a NEW signed intent after
+the old code is no longer active and no usable manager trust exists. Existing
+pending personal codes are not silently revoked to make recovery succeed.
+
+For an uncertain COMMIT or lost receipt, use the original signed envelope and
+verification authority with `--status`. This authenticated read-only command
+accepts an expired approval solely to look up its exact historical restore event
+and intent digest. It reports `COMMITTED` or `NOT_OBSERVED` and current control
+state separately; no event is not proof of rollback. It never issues or returns
+a code and never authorizes another recovery from a historical event.

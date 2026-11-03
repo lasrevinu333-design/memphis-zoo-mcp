@@ -55,6 +55,7 @@ const app = express();
 app.use(express.json());
 app.use("/schedule-api", createScheduleRouter({
   runReadOnlySql: async (sql) => {
+    if (/static_weekly_v6_schedule_authority_state/.test(sql)) return [{governed:false,authority_source:'legacy_daily_schedule',projection_status:'legacy_ungoverned'}];
     if (/from public\.coverall_assignment_links/i.test(sql)) return [{ id: "00000000-0000-4000-8000-000000000001" }];
     if (/from public\.employees/i.test(sql)) return [1, 2, 3, 4].map((number) => ({
       employee_id: `00000000-0000-4000-8000-00000000000${number}`,
