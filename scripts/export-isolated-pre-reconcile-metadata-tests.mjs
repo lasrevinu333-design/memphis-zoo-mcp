@@ -12,9 +12,21 @@ function fixture(){
  const manifest={restore_id:rid,authority_generation:'1',database_verified:true,storage_verified:true,authority_invalidated:true,post_restore_verified:true,final_manifest_sha256:hash,native_text_import:native,database_tables:'217',database_rows:'80324',storage_sql:storage,storage_metadata_verified:'true',authority_invalidations:invalidated};
  const snapshots=Object.keys(CATEGORY_TABLES).sort().map(category=>({category,row_count:'0',snapshot_sha256:hash,missing:'false',fields:['id'],data_encoding:'SYNTHETIC_METADATA_ONLY'}));
  const discrepancies=Object.keys(CATEGORY_TABLES).sort().slice(0,9).map(category=>({category,status:'OPEN',before_count:'0',restored_count:'1',before_sha256:hash,restored_sha256:'b'.repeat(64),pre_restore_missing:'false',restored_missing:'false',pre_restore_fields:['id'],restored_fields:['id'],data_encoding:'SYNTHETIC_METADATA_ONLY',evidence_truncated:'false'}));
- return {summary,archiveDigest:hash,restore,profile,control,manifest,discrepancyCount:'9',discrepancies,snapshots,leases:{total:'0',active:'0',expired:'0'},runId:'12345'};
+ return {summary,storageTableCount:8,archiveDigest:hash,restore,profile,control,manifest,discrepancyCount:'9',discrepancies,snapshots,leases:{total:'0',active:'0',expired:'0'},runId:'12345'};
 }
 check('positive metadata export remains HOLD, with no resolve/unpause/capture credit',()=>{const d=validateDiagnostic(fixture());assert.equal(d.state,'HOLD_ROOT_DISPOSITION_BEFORE_ANY_RESOLVE_OR_UNPAUSE');assert.equal(d.resolve_performed,false);assert.equal(d.unpause_performed,false);assert.equal(d.target_capture_performed,false);assert.equal(d.Root_disposition,null);assert.equal(d.proof_scope.all217_post_authority_byte_equality,false)});
+
+check('current authenticated219 and storage10 census produces HOLD metadata only',()=>{const f=fixture();f.summary.table_count=219;f.summary.database_row_count=80331;f.storageTableCount=10;f.restore.database_tables=219;f.restore.database_rows=80331;f.restore.database_evidence.native_text_readback.tables=219;f.restore.storage.exact_table_data.tables=10;f.manifest.database_tables='219';f.manifest.database_rows='80331';const d=validateDiagnostic(f);assert.deepEqual(d.archive_table_counts,{database:219,storage:10});assert.equal(d.proof_scope.all219_post_authority_byte_equality,false);assert.equal(d.resolve_performed,false);assert.equal(d.unpause_performed,false);assert.equal(d.target_capture_performed,false);assert.equal(d.Root_disposition,null);assert.throws(()=>reviewedTargetCaptureResolutions(d,f.summary,REVIEWED_ROOT_DISPOSITION_SHA256));});
+for(const [name,edit] of [
+ ['storage census differs from verified catalog',f=>{f.storageTableCount=10;}],
+ ['restore storage census differs from verified catalog',f=>{f.restore.storage.exact_table_data.tables=10;}],
+ ['manifest table count differs from signed summary',f=>{f.manifest.database_tables='219';}],
+ ['native original table readback differs',f=>{f.restore.database_evidence.native_text_readback.tables=219;}],
+ ...[undefined,-1,1.5,Number.MAX_SAFE_INTEGER+1,'8',null,218].map(value=>['invalid verified storage count '+String(value),f=>{f.storageTableCount=value;}]),
+ ...[0,-1,1.5,Number.MAX_SAFE_INTEGER+1,'217',null].map(value=>['invalid signed table count '+String(value),f=>{f.summary.table_count=value;}])
+])check(name+' refuses',()=>{const f=fixture();edit(f);assert.throws(()=>validateDiagnostic(f));});
+check('CLI derives table census only from authenticated original catalog',()=>{const s=readFileSync(new URL('./export-isolated-pre-reconcile-metadata.mjs',import.meta.url),'utf8');assert.match(s,/readVerifiedRestoreTableSelection\(archive,\{databaseOnly:true\}\)/);assert.match(s,/assert.equal\(selection.databaseTables.length,binding.summary.table_count\)/);assert.match(s,/storageTableCount=selection.storageTables.length/);});
+
 check('fresh signed80320 count binds restore and manifest without fixed historical count',()=>{const f=fixture();f.summary.database_row_count=80320;f.restore.database_rows=80320;f.manifest.database_rows='80320';const d=validateDiagnostic(f);assert.equal(d.manifest.database_rows,'80320');assert.equal(d.Root_disposition,null);assert.equal(d.resolve_performed,false)});
 check('another signed positive count is not pinned to80320',()=>{const f=fixture();f.summary.database_row_count=80321;f.restore.database_rows=80321;f.manifest.database_rows='80321';assert.equal(validateDiagnostic(f).manifest.database_rows,'80321')});
 for(const [name,edit]of [
