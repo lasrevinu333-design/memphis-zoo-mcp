@@ -670,7 +670,7 @@
       {
         "path": "package.json",
         "mode": "100644",
-        "object_id": "d12256e356534e93270e22bdb3ac3c23028e883c"
+        "object_id": "7704707ef244863602f8e4481787eb1e0c948ea5"
       },
       {
         "path": "proposals/approved-manual-coverall-management.sql",
@@ -4503,6 +4503,11 @@
         "object_id": "fa10f7b40c112eed01cabdee1eb0bfdfe35bffea"
       },
       {
+        "path": "scripts/manager-enrollment-registry-tests.mjs",
+        "mode": "100644",
+        "object_id": "3577b995bf4e412ec855b527dbd38b76fbd40006"
+      },
+      {
         "path": "scripts/manager-held-event-review-reader-tests.mjs",
         "mode": "100644",
         "object_id": "9a2bb5f7387fd657ce8f6d5644001d6139e2d0e8"
@@ -7965,7 +7970,7 @@
       {
         "path": "src/auth/shared-access-auth.js",
         "mode": "100644",
-        "object_id": "d2d385cb30988c9dd8cc98d269588b28c6b58ef6"
+        "object_id": "ebd9c482b25a04ce1a536dbe963a803422478ac8"
       },
       {
         "path": "src/completion-selection-read-boundary.js",
@@ -11348,7 +11353,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 2244,
+    "authority_path_count": 2245,
     "migration_path_count": 311,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
