@@ -4,7 +4,7 @@ import vm from 'node:vm';
 import {fileURLToPath} from 'node:url';
 import {join} from 'node:path';
 import pg from 'pg';
-import {loadOriginal235PreservationSource,validateOriginal235PreservationPlan,nativeTextColumnProjection,compileOriginalTableComparison,compileApprovedOffsiteComparison,NATIVE_TEXT_PRESERVATION_SETTINGS,prepareIsolatedReleaseDataPreservation,readOriginal217PreservationScope} from './isolated-release-data-preservation.mjs';
+import {loadOriginal235PreservationSource,planIncludesApprovedOffsiteRepair,validateOriginal235PreservationPlan,nativeTextColumnProjection,compileOriginalTableComparison,compileApprovedOffsiteComparison,NATIVE_TEXT_PRESERVATION_SETTINGS,prepareIsolatedReleaseDataPreservation,readOriginal217PreservationScope} from './isolated-release-data-preservation.mjs';
 import {bindExistingPostgresForwardSources,productionForwardSourceManifest} from './production-forward-source.mjs';
 import {readMigrationReplayPlan} from './migration-replay-order.mjs';
 import {createHash} from 'node:crypto';
@@ -73,8 +73,12 @@ await test('approved Q07 compares every native field and every row except the tw
  assert.ok(!sql.includes('jsonb'),'Untouched values must retain lossless native TEXT');
  assert.throws(()=>compileApprovedOffsiteComparison({...t,schema:'auth'}));
  assert.throws(()=>compileApprovedOffsiteComparison({...t,columns:t.columns.slice(1)}));
- assert.ok(module.includes("plan.at(-1)?.file==='20261031225210_custodial_sealed_repairs_current_eight.sql'"));
- assert.ok(module.includes("plan.at(-1).sha256,'f4e3dc5be9a465e2099bd9b23488f99b3f9e4c1d9d969844b2fa06b1fbdc7a73'"));
+ assert.equal(planIncludesApprovedOffsiteRepair(actualPlan),false);
+ assert.equal(planIncludesApprovedOffsiteRepair(current177.slice(0,170)),true);
+ assert.equal(planIncludesApprovedOffsiteRepair(current177),true);
+ for(const mutate of [p=>p[169].sha256='0'.repeat(64),p=>p[169].order=171,p=>p[169].forward_source={},p=>p.push({...p[169]})]){
+  const p=structuredClone(current177);mutate(p);assert.throws(()=>planIncludesApprovedOffsiteRepair(p));
+ }
  assert.ok(module.includes("assert.equal(row.source_eligible,'1');assert.equal(row.current_eligible,'1');assert.equal(row.invalid_transformation,'0')"));
  const ordinary=compileOriginalTableComparison(t);assert.ok(!ordinary.includes('Q07_APPROVED_MIGRATION_TIME'),'Historical plans keep their exact original row comparison');
 });

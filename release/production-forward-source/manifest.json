@@ -208,6 +208,13 @@
       "forward_file": "release/production-forward-source/20261022041249_original_schedule_delivery_outcome.sql",
       "forward_sha256": "ee140104c1f3f9c523f345e1a9295fb0be490e2c15a221b815353f8a63c75ef1",
       "profile": "existing-postgres-owner"
+    },
+    {
+      "canonical_file": "20261102151842_current_source_recovery_binding.sql",
+      "canonical_sha256": "999b061a970c847d53572f837d55ac78cf83888115d4fb22f182d711bf17f67a",
+      "forward_file": "release/production-forward-source/20261102151842_current_source_recovery_binding.sql",
+      "forward_sha256": "4549f266a90e6c993e4caee7b6afaad81772aa4d1d952ac2d6e6820f763f66b2",
+      "profile": "existing-postgres-owner"
     }
   ]
 }

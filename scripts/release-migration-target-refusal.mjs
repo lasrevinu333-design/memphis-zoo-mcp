@@ -1,5 +1,5 @@
 import {REGISTERED_VACANCY_SOURCE_FILE,REGISTERED_VACANCY_SOURCE_SHA256,REGISTERED_VACANCY_FORWARD_SHA256,readRegisteredVacancyRefusal} from './release-migration-registered-vacancy-refusal.mjs';
-import {CURRENT308_FILE,CURRENT308_SHA256,readCurrent308Refusal} from './release-migration-current308-refusal.mjs';
+import {CURRENT308_FILE,CURRENT308_SHA256,CURRENT308_FORWARD_SHA256,CURRENT_TAIL_STAGES,readCurrent308Refusal} from './release-migration-current308-refusal.mjs';
 import {APPROVED_DATED_SOURCE_FILE,APPROVED_DATED_SOURCE_SHA256,APPROVED_DATED_FORWARD_SHA256,readApprovedDatedRefusal} from './release-migration-approved-dated-refusal.mjs';
 import assert from 'node:assert/strict';
 import {writeFileSync,readFileSync} from 'node:fs';
@@ -522,8 +522,17 @@ async function readAuthorityIdentity158Refusal(db){
 
 async function readSelectedTargetRefusal(db,migration) {
  if(migration.file===CURRENT308_FILE){
-  assert.equal(migration.order,175);assert.equal(migration.sha256,CURRENT308_SHA256);
-  return {metadata_source_file:CURRENT308_FILE,metadata_source_sha256:CURRENT308_SHA256,current308:await readCurrent308Refusal(db)};
+  assert.equal(migration.order,175);assert.ok([CURRENT308_SHA256,CURRENT308_FORWARD_SHA256].includes(migration.sha256));
+  if(migration.sha256===CURRENT308_FORWARD_SHA256){
+   assert.deepEqual(migration.forward_source,{schema:'custodial.production-forward-source-binding.v1',profile:'existing-postgres-owner',canonical_sha256:CURRENT308_SHA256,file:'release/production-forward-source/'+CURRENT308_FILE,sha256:CURRENT308_FORWARD_SHA256});
+   assert.equal(createHash('sha256').update(readFileSync(new URL('../'+migration.forward_source.file,import.meta.url))).digest('hex'),CURRENT308_FORWARD_SHA256);
+  }
+  return {metadata_source_file:CURRENT308_FILE,metadata_source_sha256:CURRENT308_SHA256,metadata_executed_sha256:migration.sha256,current308:await readCurrent308Refusal(db)};
+ }
+ const tailStage=CURRENT_TAIL_STAGES.find(stage=>stage.file===migration.file);
+ if(tailStage){
+  assert.equal(migration.order,tailStage.order);assert.equal(migration.sha256,tailStage.sha256);assert.ok(!migration.forward_source);
+  return {metadata_source_file:tailStage.file,metadata_source_sha256:tailStage.sha256,[tailStage.stage]:await readCurrent308Refusal(db,{predecessors:false,relations:true})};
  }
  if(migration.file===AUTHORITY_IDENTITY158_SOURCE_FILE){
   assert.equal(migration.order,158);assert.equal(migration.sha256,AUTHORITY_IDENTITY158_FORWARD_SHA256);

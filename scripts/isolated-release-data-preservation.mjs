@@ -66,12 +66,12 @@ export function validateOriginal235PreservationPlan(backendRoot,plan){
   if(plan.length>=164)additions.push(['20261028224728_full_scheduled_lunch_source_policy.sql','a47387ddf244a04df646c9bb2d60eef86a769b96baf9106759f1c2a703248514']);
   if(plan.length>=165)additions.push(['20261030031200_approved_manual_full_hour_coverers.sql','de548422310c3369bac0560e14507e4022cc9d5b9effe898d4f24ae79156cf6a']);
   if(plan.length>=166)additions.push(['20261030050235_compact_approved_initial_confirmation.sql','fa9373adcf48f8d13db1b8e4876a5f134b02f8a897f20f887987cbd384393469']);
-  if(successorClosure)additions.push(...successorClosure.pending.slice(166).map(item=>[item.file,item.sha256]));
+  if(successorClosure)additions.push(...successorClosure.pending.slice(166).map(item=>[item.file,item.forward_source?.canonical_sha256??item.sha256]));
   assert.deepEqual(replay.files.slice(294),additions.map(([file])=>file));
   for(const [index,[file,digest]]of additions.entries()){
    const item=plan[160+index];assert.equal(item.order,161+index);assert.equal(item.file,file);
-   assert.equal(item.source_migration_version,file.slice(0,14));assert.equal(item.sha256,digest);
-   assert.ok(!Object.hasOwn(item,'forward_source'),'New selected sources execute their exact reviewed canonical bytes');
+   assert.equal(item.source_migration_version,file.slice(0,14));assert.equal(item.forward_source?.canonical_sha256??item.sha256,digest);
+   assert.ok(!Object.hasOwn(item,'forward_source')||(successorClosure?.canonical_source_count===311&&item.order>170),'Only the exact closed current311 tail may select a dual-hash owner adapter');
    const source=resolveReleaseMigrationSource(backendRoot,item);assert.equal(source.canonical_sha256,digest);
    if(Object.hasOwn(item,'sql'))assert.equal(item.sql,source.sql);
   }
@@ -119,6 +119,13 @@ export function compileOriginalTableComparison(t){
  select (select count(*)::text from expected) before_rows,(select count(*)::text from actual) after_rows,
  (select count(*)::text from missing) missing_rows,(select count(*)::text from extra) extra_rows,
  (select ${hashes('e')} from expected e) before_sha256,(select ${hashes('a')} from actual a) after_sha256`;
+}
+export function planIncludesApprovedOffsiteRepair(plan){
+ const matches=plan.filter(item=>item.file==='20261031225210_custodial_sealed_repairs_current_eight.sql');
+ if(!matches.length)return false;
+ assert.equal(matches.length,1);assert.equal(matches[0].order,170);
+ assert.equal(matches[0].sha256,'f4e3dc5be9a465e2099bd9b23488f99b3f9e4c1d9d969844b2fa06b1fbdc7a73');
+ assert.ok(!matches[0].forward_source);return true;
 }
 // Q07 changes exactly two fields of the existing event-only OFFSITE row.
 // Keep every original column as native TEXT and every row duplicate-sensitive;
@@ -273,8 +280,7 @@ export async function prepareIsolatedReleaseDataPreservation({client,backendRoot
    and not exists(select 1 from jsonb_each(to_jsonb(c)-array['singleton','paused','pause_reason','updated_at']) x where x.value<>'null'::jsonb))::text expected
    from public.system_feedback_email_relay_config c`)).rows[0];assert.deepEqual(relay,{rows:'1',expected:'1'});
   for(const table of ['system_feedback_email_intents','system_feedback_email_attempts','system_feedback_email_receipts','system_feedback_email_relay_requests'])assert.equal((await query('select count(*)::text n from public.'+ident(table))).rows[0].n,'0','no migration-time relay data/send evidence');
-  const approvedOffsite=plan.at(-1)?.file==='20261031225210_custodial_sealed_repairs_current_eight.sql';
-  if(approvedOffsite)assert.equal(plan.at(-1).sha256,'f4e3dc5be9a465e2099bd9b23488f99b3f9e4c1d9d969844b2fa06b1fbdc7a73');
+  const approvedOffsite=planIncludesApprovedOffsiteRepair(plan);
   const results=[];
   await textProfile(async()=>{for(const t of tables){if(t.schema==='public'&&['custodial_release_authority_restore_inventory','events_app_events'].includes(t.name))continue;
    const q07=approvedOffsite&&tableKey(t)==='public.location_groups';
