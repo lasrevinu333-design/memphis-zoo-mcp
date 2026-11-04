@@ -1,0 +1,47 @@
+{
+  "schema": "custodial.source252-production-role-order.v1",
+  "source_production_run": 41761975715,
+  "source_capture_state": "AFTER_FAILED_STEP_SAVEPOINT_ROLLBACK",
+  "source_rollback_verified": true,
+  "prior_forward_sha256": "4a961ebc7aefdfd99d04044fef0d7ceebc0f095783ff525491332244f329ce2a",
+  "historical_profile_sha256": "a9fc28be337bc43d6feaf17e13be103400c5d5c0da85dd9ba0bca600d51c738f",
+  "preimage_aggregate_sha256": "63b9a4e815d453adb8d7349eae2190e13874095fe407c5633e54866263d722c8",
+  "post_repair_aggregate_sha256": "36c298d2d3152ae660bb7b6b3fee01c92f7e770f1b0e6f8aa025d12b666f6d33",
+  "row_count": 6884,
+  "role_order": [
+    "service_role",
+    "static_weekly_control_plane",
+    "custodial_application_reader"
+  ],
+  "differences": [
+    {
+      "object_kind": "grant",
+      "object_identity": "static_weekly_v5_read_employee_day(date,uuid,timestamp with time zone)",
+      "restore_order": 950009,
+      "prior_saved_sha256": "048274d946755c1ae04a485257f8b16653e515d9a14aa46dffeaf482f2a6c8ce",
+      "saved_sha256": "5269ca4aea78073c99970e6cc899620de94e6aaa78251158d93022040200255b",
+      "saved_definition_sql": "select public.custodial_release_authority_reset_grants('public.static_weekly_v5_read_employee_day(date,uuid,timestamp with time zone)'); grant execute on function static_weekly_v5_read_employee_day(date,uuid,timestamp with time zone) to service_role; grant execute on function static_weekly_v5_read_employee_day(date,uuid,timestamp with time zone) to static_weekly_control_plane; grant execute on function static_weekly_v5_read_employee_day(date,uuid,timestamp with time zone) to custodial_application_reader;",
+      "current_definition_sql": "select public.custodial_release_authority_reset_grants('static_weekly_v5_read_employee_day(date,uuid,timestamp with time zone)'); grant execute on function static_weekly_v5_read_employee_day(date,uuid,timestamp with time zone) to service_role; grant execute on function static_weekly_v5_read_employee_day(date,uuid,timestamp with time zone) to custodial_application_reader;",
+      "current_sha256": "15c9a6a60b821065f4e36a1da987057991f428b3224a3f11d61c19e9f831c5db",
+      "replacement_sql": "select public.custodial_release_authority_reset_grants('static_weekly_v5_read_employee_day(date,uuid,timestamp with time zone)'); grant execute on function static_weekly_v5_read_employee_day(date,uuid,timestamp with time zone) to service_role; grant execute on function static_weekly_v5_read_employee_day(date,uuid,timestamp with time zone) to custodial_application_reader;",
+      "replacement_sha256": "15c9a6a60b821065f4e36a1da987057991f428b3224a3f11d61c19e9f831c5db"
+    },
+    {
+      "object_kind": "grant",
+      "object_identity": "static_weekly_v8_read_lunch_document(date)",
+      "restore_order": 950012,
+      "prior_saved_sha256": "d8e6d38d5d06db6e2b0f45209c3c3e282df12e345d29cb962ae8505ca7e8efd1",
+      "saved_sha256": "67f821953e3232e8f36df8ce0a820c53260f72910cb8bdbb309af81e6934f791",
+      "saved_definition_sql": "select public.custodial_release_authority_reset_grants('static_weekly_v8_read_lunch_document(date)'); grant execute on function static_weekly_v8_read_lunch_document(date) to service_role; grant execute on function static_weekly_v8_read_lunch_document(date) to static_weekly_control_plane; grant execute on function static_weekly_v8_read_lunch_document(date) to custodial_application_reader;",
+      "current_definition_sql": "select public.custodial_release_authority_reset_grants('static_weekly_v8_read_lunch_document(date)'); grant execute on function static_weekly_v8_read_lunch_document(date) to service_role; grant execute on function static_weekly_v8_read_lunch_document(date) to static_weekly_control_plane; grant execute on function static_weekly_v8_read_lunch_document(date) to custodial_application_reader;",
+      "current_sha256": "67f821953e3232e8f36df8ce0a820c53260f72910cb8bdbb309af81e6934f791",
+      "replacement_sql": "select public.custodial_release_authority_reset_grants('static_weekly_v8_read_lunch_document(date)'); grant execute on function static_weekly_v8_read_lunch_document(date) to service_role; grant execute on function static_weekly_v8_read_lunch_document(date) to custodial_application_reader; grant execute on function static_weekly_v8_read_lunch_document(date) to static_weekly_control_plane;",
+      "replacement_sha256": "d8e6d38d5d06db6e2b0f45209c3c3e282df12e345d29cb962ae8505ca7e8efd1"
+    }
+  ],
+  "new_grants": false,
+  "revocations": false,
+  "owner_swaps": false,
+  "business_row_writes": false,
+  "production_authorized": false
+}

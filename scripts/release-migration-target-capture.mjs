@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {source252RoleOrderPredecessorPlan} from './source252-production-role-order-proof.mjs';
 import {readFileSync,writeFileSync} from 'node:fs';
 import {resolve} from 'node:path';
 import {execFileSync} from 'node:child_process';
@@ -181,7 +182,9 @@ export function assertTargetCapturePendingPlan(pending,declared,closure=null) {
   {file:'20261027231000_canonical_coverall_capacity_links.sql',sha256:'c4be89a07f46717ddcc7ceebed639cdc10b589b8ff72e9cf20a3523bdec43903',order:162},
   {file:'20261027234814_mcp_oauth_durable_token_families.sql',sha256:'e74210f033e5c65d5e99a090ca201d1c010d6cb5c4159a015bb08e3719c44f6e',order:163},
  ],'Only the exact source-selected three additions can extend rollback-only target preparation');
- assert.equal(sha(stableJson(releaseMigrationPlanIdentity(pending))),
+ const historicalPlan=pending[118].sha256==='fffd25207dc1f7c1953bafe2dc23d4867c79724c4ed4f19995e36d3a71c95653'
+  ?source252RoleOrderPredecessorPlan(pending):pending;
+ assert.equal(sha(stableJson(releaseMigrationPlanIdentity(historicalPlan))),
   'e022f25547c93d1e012dd500e0a02052d6eebf4aa14d227af8a2ac70f9056a7b',
   'Retain the complete established163 plan identity and executed owner-profile bytes');
  return pending;
