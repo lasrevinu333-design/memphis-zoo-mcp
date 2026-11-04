@@ -13,7 +13,19 @@ const binding=JSON.parse(readFileSync(resolve(root,'release/current291-staged-so
 const plan=readMigrationReplayPlan(root);const checks=[];
 const check=(name,fn)=>{fn();checks.push(name);};
 const sha=b=>createHash('sha256').update(b).digest('hex');
-if([298,299,300].includes(plan.files.length)){
+if(plan.files.length===311){
+ check('exact current311 source and existing235 populated target are bound',()=>{
+  assert.equal(plan.baseCount,134);assert.equal(state.pending_migrations.length,177);assert.equal(state.pending_migrations.filter(x=>x.forward_source).length,32);
+  assert.deepEqual(state.pending_migrations.map(x=>x.file),plan.files.slice(134));assert.equal(plan.manifestSha256,'84ac9ee339abf929a2d50c411b0c69b4cb05699f71fa13ee9ddb17606cd5dabe');
+  assert.equal(binding.preserved134.length,134);for(const row of binding.preserved134)assert.equal(sha(readFileSync(resolve(root,'supabase/migrations',row.file))),row.sha256);
+  for(const item of state.pending_migrations)assert.equal(sha(resolveReleaseMigrationSource(root,item).sql),item.sha256);
+  const target=resolveReleaseSchemaTarget(root);assert.equal(target.canonicalFingerprint,'fea262d4eb49204e7c920662cef476c36015c28330435cafd238a358defd79dc');assert.equal(target.deploymentFingerprint,'c7a78eb3789702ef8b285b398511b4d382c3fefa629f20fce99b265689d7cfc7');
+  const capture=state.target.normal_source_capture;assert.equal(capture.original_run_id,41749829802);assert.equal(capture.rollback_evidence.rollback_verified,true);assert.equal(capture.source_data_preservation.original_tables,219);assert.equal(capture.source_data_preservation.applied_migration_count,177);
+  for(const k of ['production_authorized','candidate_migration_admission','runtime_admission','full_rehearsal_attestation'])assert.equal(capture[k],false);
+  const checked=assertReleaseWorkflowSource(root);assert.deepEqual(checked,{sourceCount:235,sourceHead:'20261021111917',targetCount:412,targetHead:'20261103004520',pendingCount:177,targetFingerprint:target.deploymentFingerprint});
+ });
+ console.log(JSON.stringify({status:'PASS_CURRENT311_SOURCE_ONLY_NO_DB',checks,production_authorized:false,full_rehearsal:false}));
+}else if([298,299,300].includes(plan.files.length)){
  const compact=plan.files.length===300,successor=plan.files.length>=299,pendingCount=plan.files.length-134,targetCount=235+pendingCount;
  const canonical=compact?'aa4d4fad502031a493a15ddfad6305d783cbae90eee5aefb85a8f0c19a737c40':successor?'95ad1f4e76159d18c5ccdb7c84fb639918005f05155b152641f79c15919f082d':'432052a95830b4a8550cd6478d766bacc2bbbb4b2dd21d44544b238c70c5f001';
  const physical=compact?'742caa62cb7a7dff55b3ddeaf0a3eafde511930cb9d9ba7c965ed9f8be3a80a5':successor?'09a3374c452a81cd0a8904273d9212444de3ba41be01bf4d07fd887a21f4d0c6':'b57982c0c739632fcbfc9ba30177fccab05a5847ce44121408b5ddab8d169d33';

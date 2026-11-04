@@ -65,8 +65,14 @@ export function readTargetCaptureSourceClosure(backendRoot){
  }
  const count=current311?304:sourceCount;
  const replay=current311?{...fullReplay,files:fullReplay.files.slice(0,304)}:fullReplay;
- const read=(path,expected)=>readActual(current311&&path==='supabase/canonical/migration-replay-order.json'
-  ?'release/fresh-only-replay/SOURCE304_REPLAY_ORDER.json':path,expected);
+ const preserved304Aliases={
+  'supabase/canonical/migration-replay-order.json':'release/fresh-only-replay/SOURCE304_REPLAY_ORDER.json',
+  'supabase/canonical/schema-fingerprint-input.json':'release/schema-evidence/SOURCE304_PREDECESSOR_CANONICAL_CATALOG.json',
+  'supabase/canonical/schema-fingerprint.txt':'release/schema-evidence/SOURCE304_PREDECESSOR_CANONICAL_FINGERPRINT.txt',
+ };
+ // The historical selector verifies literal304 evidence. Current311's full
+ // canonical catalog is checked separately by its exact release profile.
+ const read=(path,expected)=>readActual(current311?(preserved304Aliases[path]??path):path,expected);
  const manifest=JSON.parse(read('release/fresh-only-replay/MANIFEST.json')),
   priorBytes=read('release/fresh-only-replay/SOURCE301_SUCCESSOR.json'),prior=JSON.parse(priorBytes),
   currentBytes=read('supabase/canonical/migration-replay-order.json'),current=JSON.parse(currentBytes);
