@@ -531,8 +531,12 @@ async function readSelectedTargetRefusal(db,migration) {
  }
  const tailStage=CURRENT_TAIL_STAGES.find(stage=>stage.file===migration.file);
  if(tailStage){
-  assert.equal(migration.order,tailStage.order);assert.equal(migration.sha256,tailStage.sha256);assert.ok(!migration.forward_source);
-  return {metadata_source_file:tailStage.file,metadata_source_sha256:tailStage.sha256,[tailStage.stage]:await readCurrent308Refusal(db,{predecessors:false,relations:true})};
+  assert.equal(migration.order,tailStage.order);assert.ok([tailStage.sha256,tailStage.forward_sha256].includes(migration.sha256));
+  if(migration.sha256===tailStage.forward_sha256){
+   assert.deepEqual(migration.forward_source,{schema:'custodial.production-forward-source-binding.v1',profile:'existing-postgres-owner',canonical_sha256:tailStage.sha256,file:'release/production-forward-source/'+tailStage.file,sha256:tailStage.forward_sha256});
+   assert.equal(createHash('sha256').update(readFileSync(new URL('../'+migration.forward_source.file,import.meta.url))).digest('hex'),tailStage.forward_sha256);
+  }else assert.ok(!migration.forward_source);
+  return {metadata_source_file:tailStage.file,metadata_source_sha256:tailStage.sha256,metadata_executed_sha256:migration.sha256,[tailStage.stage]:await readCurrent308Refusal(db,{predecessors:false,relations:true})};
  }
  if(migration.file===AUTHORITY_IDENTITY158_SOURCE_FILE){
   assert.equal(migration.order,158);assert.equal(migration.sha256,AUTHORITY_IDENTITY158_FORWARD_SHA256);

@@ -215,6 +215,20 @@
       "forward_file": "release/production-forward-source/20261102151842_current_source_recovery_binding.sql",
       "forward_sha256": "adbbd03be64c1898ba4e10b193ec24450af3533122db4b58a5b08500eecc0e27",
       "profile": "existing-postgres-owner"
+    },
+    {
+      "canonical_file": "20261102161602_current_recovery_column_order.sql",
+      "canonical_sha256": "067e5fd187f68f2b9174c6317e08e283f026426ad39dd3bfd44cc8b498216665",
+      "forward_file": "release/production-forward-source/20261102161602_current_recovery_column_order.sql",
+      "forward_sha256": "d63717c9f843bd5ddf2134ff37c50c8183bdd8a75b847a4a298248ec2ae323be",
+      "profile": "existing-postgres-owner"
+    },
+    {
+      "canonical_file": "20261103004520_authoritative_events_cancellation.sql",
+      "canonical_sha256": "21aae942d552b162e024061d34c0fe164adafaa58c6ceb735761f0a2c95a537b",
+      "forward_file": "release/production-forward-source/20261103004520_authoritative_events_cancellation.sql",
+      "forward_sha256": "c47b1d5e1718eaefd9c6a628fd2cc0ffb6e4c5099b40435af6fe306df2deb17f",
+      "profile": "existing-postgres-owner"
     }
   ]
 }

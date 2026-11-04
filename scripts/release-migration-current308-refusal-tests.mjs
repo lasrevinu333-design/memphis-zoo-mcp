@@ -35,7 +35,7 @@ for(const changed of [null,'order','sha256']){
 }
 for(const selected of [
  {...migration,sha256:CURRENT308_FORWARD_SHA256,forward_source:{schema:'custodial.production-forward-source-binding.v1',profile:'existing-postgres-owner',canonical_sha256:CURRENT308_SHA256,file:'release/production-forward-source/'+CURRENT308_FILE,sha256:CURRENT308_FORWARD_SHA256}},
- ...CURRENT_TAIL_STAGES]){
+ ...CURRENT_TAIL_STAGES,...CURRENT_TAIL_STAGES.map(x=>({...x,sha256:x.forward_sha256,forward_source:{schema:'custodial.production-forward-source-binding.v1',profile:'existing-postgres-owner',canonical_sha256:x.sha256,file:'release/production-forward-source/'+x.file,sha256:x.forward_sha256}}))]){
  for(const changed of [false,true]){
   const db=fixture();let receipt;const error=Object.assign(Error('original'),{code:'P0001'});
   const candidate=structuredClone(selected);if(changed){if(candidate.forward_source)candidate.forward_source.canonical_sha256='0'.repeat(64);else candidate.sha256='0'.repeat(64);}
