@@ -213,7 +213,7 @@
       "canonical_file": "20261102151842_current_source_recovery_binding.sql",
       "canonical_sha256": "999b061a970c847d53572f837d55ac78cf83888115d4fb22f182d711bf17f67a",
       "forward_file": "release/production-forward-source/20261102151842_current_source_recovery_binding.sql",
-      "forward_sha256": "4549f266a90e6c993e4caee7b6afaad81772aa4d1d952ac2d6e6820f763f66b2",
+      "forward_sha256": "adbbd03be64c1898ba4e10b193ec24450af3533122db4b58a5b08500eecc0e27",
       "profile": "existing-postgres-owner"
     }
   ]

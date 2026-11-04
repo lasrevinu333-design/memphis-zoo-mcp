@@ -37,7 +37,7 @@ BEGIN
   RAISE EXCEPTION 'Exact measured current308 canary predecessor differs';END IF;
  -- Existing-owner profile: compare the complete measured 44 API default ACL
  -- rows. Do not grant, revoke, or replace the original platform defaults.
- IF (SELECT jsonb_agg(to_jsonb(q) ORDER BY owner_name,schema_name,object_type,grantee,grantor,privilege_type,is_grantable) FROM (
+ IF (SELECT jsonb_agg(to_jsonb(q) ORDER BY owner_name COLLATE "C",schema_name COLLATE "C",object_type COLLATE "C",grantee COLLATE "C",grantor COLLATE "C",privilege_type COLLATE "C",is_grantable) FROM (
   SELECT r.rolname owner_name,CASE WHEN d.defaclnamespace=0 THEN '' ELSE n.nspname END schema_name,d.defaclobjtype::text object_type,
    coalesce(g.rolname,'PUBLIC') grantee,grantor.rolname grantor,a.privilege_type,a.is_grantable
   FROM pg_default_acl d JOIN pg_roles r ON r.oid=d.defaclrole LEFT JOIN pg_namespace n ON n.oid=d.defaclnamespace

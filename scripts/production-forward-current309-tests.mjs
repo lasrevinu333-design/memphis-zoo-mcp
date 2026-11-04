@@ -12,6 +12,7 @@ assert.equal(profile.inventory.count,'7571');assert.equal(profile.api_defaults.l
 assert.ok(forward.includes("inventory_expected constant text:='"+profile.inventory.sha256+"'"));
 assert.ok(forward.includes("canary_expected constant text:='"+profile.canary.function_sha256+"'"));
 assert.deepEqual(JSON.parse(forward.split('$current308_defaults$')[1]),profile.api_defaults);
+for(const field of ['owner_name','schema_name','object_type','grantee','grantor','privilege_type'])assert.ok(forward.includes(field+' COLLATE \"C\"'));
 const tuples=sql=>sql.split('INSERT INTO q309_expected_mismatches VALUES\n')[1].split('\nDO $actual_mismatches$')[0];
 assert.equal(tuples(forward),tuples(original));assert.equal(CURRENT308_PREDECESSORS.length,39);
 // All mutation and verification logic after the precondition must be exact,
