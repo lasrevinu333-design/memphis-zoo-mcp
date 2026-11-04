@@ -22,6 +22,7 @@ SELECT pg_advisory_xact_lock(hashtextextended('custodial-outlook-events-v1',0));
 LOCK TABLE public.custodial_release_authority_restore_inventory IN ACCESS EXCLUSIVE MODE;
 DO $preflight$
 DECLARE actual text; writer oid:=to_regprocedure('public.custodial_outlook_event_sync_v1(text,jsonb)');
+ expected_inventory text:='0213f2b256bcac7b8db623758ef26807583ea27074a7c362af259122d4275dca';
 BEGIN
  IF current_user IS DISTINCT FROM session_user OR current_user NOT IN('postgres','supabase_admin') THEN
   RAISE EXCEPTION 'Maintained migration owner required';END IF;
@@ -38,7 +39,23 @@ BEGIN
   RAISE EXCEPTION 'Exact current310 recovery inventory count required';END IF;
  SELECT public.static_weekly_digest_text(string_agg(restore_order::text||E'\n'||object_kind||E'\n'||object_identity||E'\n'||definition_sha256||E'\n'||public.static_weekly_digest_text(definition_sql),E'\n---\n' ORDER BY object_kind COLLATE "C",object_identity COLLATE "C"))
  INTO actual FROM public.custodial_release_authority_restore_inventory;
- IF actual IS DISTINCT FROM '0213f2b256bcac7b8db623758ef26807583ea27074a7c362af259122d4275dca' THEN
+ -- BEGIN FINITE CURRENT311 PRODUCTION ROLE ORDER
+ -- Only the measured full census and the exact unchanged named grants qualify.
+ IF actual='4cb0ab4c8248557decffbf23878124483cfb16e620f851d8404bd46c9c74caf1' THEN
+  IF NOT ('service_role'::regrole::oid<'static_weekly_control_plane'::regrole::oid
+   AND 'static_weekly_control_plane'::regrole::oid<'custodial_application_reader'::regrole::oid)
+   OR public.custodial_release_authority_current_grant_definition('static_weekly_v8_read_lunch_document(date)')
+    IS DISTINCT FROM $role_order_v8$select public.custodial_release_authority_reset_grants('static_weekly_v8_read_lunch_document(date)'); grant execute on function static_weekly_v8_read_lunch_document(date) to service_role; grant execute on function static_weekly_v8_read_lunch_document(date) to static_weekly_control_plane; grant execute on function static_weekly_v8_read_lunch_document(date) to custodial_application_reader;$role_order_v8$
+   OR NOT EXISTS(SELECT 1 FROM public.custodial_release_authority_restore_inventory
+    WHERE object_kind='grant' AND object_identity='static_weekly_v8_read_lunch_document(date)'
+     AND restore_order=950012 AND definition_sha256='67f821953e3232e8f36df8ce0a820c53260f72910cb8bdbb309af81e6934f791'
+     AND public.static_weekly_digest_text(definition_sql)='67f821953e3232e8f36df8ce0a820c53260f72910cb8bdbb309af81e6934f791'
+     AND definition_sql=$role_order_v8$select public.custodial_release_authority_reset_grants('static_weekly_v8_read_lunch_document(date)'); grant execute on function static_weekly_v8_read_lunch_document(date) to service_role; grant execute on function static_weekly_v8_read_lunch_document(date) to static_weekly_control_plane; grant execute on function static_weekly_v8_read_lunch_document(date) to custodial_application_reader;$role_order_v8$) THEN
+   RAISE EXCEPTION 'Exact measured production role-order grant required';END IF;
+  expected_inventory:='4cb0ab4c8248557decffbf23878124483cfb16e620f851d8404bd46c9c74caf1';
+ END IF;
+ -- END FINITE CURRENT311 PRODUCTION ROLE ORDER
+ IF actual IS DISTINCT FROM expected_inventory THEN
   RAISE EXCEPTION 'Exact current310 recovery predecessor differs; reconcile other deltas first';END IF;
  IF (SELECT count(*) FROM public.custodial_release_authority_restore_inventory WHERE object_kind='function'
   AND object_identity IN('custodial_outlook_event_sync_v1(text,jsonb)','public.custodial_outlook_event_sync_v1(text,jsonb)'))<>1

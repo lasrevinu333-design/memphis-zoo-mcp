@@ -4,6 +4,7 @@ import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 import {resolveReleaseMigrationSource,bindExistingPostgresForwardSources} from './production-forward-source.mjs';
 import {CURRENT_TAIL_STAGES} from './release-migration-current308-refusal.mjs';
+import {reverseCurrent310ProductionRoleOrderOnly} from './current310-production-role-order-proof.mjs';
 const read=f=>fs.readFileSync(new URL('../'+f,import.meta.url),'utf8'),sha=s=>createHash('sha256').update(s).digest('hex');
 const proof=JSON.parse(read('release/production-forward-source/current309-tail-projection.json'));
 const defaults=JSON.parse(read('release/production-forward-source/current308-existing-profile.json')).api_defaults;
@@ -23,7 +24,8 @@ for(const stage of CURRENT_TAIL_STAGES){const canonical=read('supabase/migration
  assert.equal(sha(canonical),stage.sha256);assert.equal(sha(variant),stage.forward_sha256);
  assert.deepEqual(JSON.parse(variant.split('$existing_defaults$')[1]),defaults);
  const acl=canonical.match(/ IF EXISTS\(SELECT 1 FROM pg_default_acl d CROSS JOIN LATERAL aclexplode\(d.defaclacl\) a[\s\S]*?RAISE EXCEPTION 'No API table or sequence defaults required';END IF;/)[0];
- let restored=variant.slice(variant.indexOf('\n')+1).replace(/DO \$production_forward_original_owner\$[\s\S]*?END \$production_forward_original_owner\$;\n/,'');
+ const historicalVariant=reverseCurrent310ProductionRoleOrderOnly(variant,stage.order);
+ let restored=historicalVariant.slice(historicalVariant.indexOf('\n')+1).replace(/DO \$production_forward_original_owner\$[\s\S]*?END \$production_forward_original_owner\$;\n/,'');
  restored=restored.replace(/ -- Existing-owner profile:[\s\S]*?RAISE EXCEPTION 'Exact existing existing API defaults differ';END IF;/,acl);
  restored=restored.replaceAll(proof.derived_current310_inventory_sha256,'7896672674d8355bdfb1c79eaf1cec8df290b8279accf6ce83907f01b4777cf0');
  if(stage.order===176)restored=restored.replaceAll(proof.measured_inventory.sha256,'f0b21739e0757ecaa1413f5b6f05b61bba526b550bc1c65cb49b860ad952a068').replaceAll(proof.measured_canary.function_sha256,'a60ddcc37b6affa49becbb5adb76a96a9bcd2dc25b6c7fec6085311346042224');

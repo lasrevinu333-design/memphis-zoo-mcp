@@ -6,8 +6,8 @@ export const CURRENT308_FILE='20261102151842_current_source_recovery_binding.sql
 export const CURRENT308_SHA256='999b061a970c847d53572f837d55ac78cf83888115d4fb22f182d711bf17f67a';
 export const CURRENT308_FORWARD_SHA256='adbbd03be64c1898ba4e10b193ec24450af3533122db4b58a5b08500eecc0e27';
 export const CURRENT_TAIL_STAGES=Object.freeze([
- {file:'20261102161602_current_recovery_column_order.sql',order:176,sha256:'067e5fd187f68f2b9174c6317e08e283f026426ad39dd3bfd44cc8b498216665',forward_sha256:'d63717c9f843bd5ddf2134ff37c50c8183bdd8a75b847a4a298248ec2ae323be',stage:'current309'},
- {file:'20261103004520_authoritative_events_cancellation.sql',order:177,sha256:'21aae942d552b162e024061d34c0fe164adafaa58c6ceb735761f0a2c95a537b',forward_sha256:'c47b1d5e1718eaefd9c6a628fd2cc0ffb6e4c5099b40435af6fe306df2deb17f',stage:'current310'},
+ {file:'20261102161602_current_recovery_column_order.sql',order:176,sha256:'067e5fd187f68f2b9174c6317e08e283f026426ad39dd3bfd44cc8b498216665',forward_sha256:'018714b1eb313850f7011c4559abe635830e436a9a842fabce81640499600300',stage:'current309'},
+ {file:'20261103004520_authoritative_events_cancellation.sql',order:177,sha256:'21aae942d552b162e024061d34c0fe164adafaa58c6ceb735761f0a2c95a537b',forward_sha256:'5cfc3ea93f746154e74442cacd54e8b7ec6ac490dbb4b995f8fd6c53da52c9c9',stage:'current310'},
 ].map(Object.freeze));
 for(const stage of CURRENT_TAIL_STAGES)assert.equal(createHash('sha256').update(readFileSync(new URL('../supabase/migrations/'+stage.file,import.meta.url))).digest('hex'),stage.sha256);
 const source=readFileSync(new URL('../supabase/migrations/'+CURRENT308_FILE,import.meta.url),'utf8');

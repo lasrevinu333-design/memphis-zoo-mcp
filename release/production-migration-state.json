@@ -4037,13 +4037,13 @@
       "file": "20261102161602_current_recovery_column_order.sql",
       "phase": "current_recovery_column_order",
       "source_migration_version": "20261102161602",
-      "sha256": "d63717c9f843bd5ddf2134ff37c50c8183bdd8a75b847a4a298248ec2ae323be",
+      "sha256": "018714b1eb313850f7011c4559abe635830e436a9a842fabce81640499600300",
       "forward_source": {
         "schema": "custodial.production-forward-source-binding.v1",
         "profile": "existing-postgres-owner",
         "canonical_sha256": "067e5fd187f68f2b9174c6317e08e283f026426ad39dd3bfd44cc8b498216665",
         "file": "release/production-forward-source/20261102161602_current_recovery_column_order.sql",
-        "sha256": "d63717c9f843bd5ddf2134ff37c50c8183bdd8a75b847a4a298248ec2ae323be"
+        "sha256": "018714b1eb313850f7011c4559abe635830e436a9a842fabce81640499600300"
       }
     },
     {
@@ -4051,13 +4051,13 @@
       "file": "20261103004520_authoritative_events_cancellation.sql",
       "phase": "authoritative_events_cancellation",
       "source_migration_version": "20261103004520",
-      "sha256": "c47b1d5e1718eaefd9c6a628fd2cc0ffb6e4c5099b40435af6fe306df2deb17f",
+      "sha256": "5cfc3ea93f746154e74442cacd54e8b7ec6ac490dbb4b995f8fd6c53da52c9c9",
       "forward_source": {
         "schema": "custodial.production-forward-source-binding.v1",
         "profile": "existing-postgres-owner",
         "canonical_sha256": "21aae942d552b162e024061d34c0fe164adafaa58c6ceb735761f0a2c95a537b",
         "file": "release/production-forward-source/20261103004520_authoritative_events_cancellation.sql",
-        "sha256": "c47b1d5e1718eaefd9c6a628fd2cc0ffb6e4c5099b40435af6fe306df2deb17f"
+        "sha256": "5cfc3ea93f746154e74442cacd54e8b7ec6ac490dbb4b995f8fd6c53da52c9c9"
       }
     }
   ],

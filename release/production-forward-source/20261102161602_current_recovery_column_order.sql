@@ -268,8 +268,13 @@ INSERT INTO q310_expected_relations VALUES
 ('public.weekly_schedule_slot_availability',1137,'e291df033bf016144770991f354245554bdf5e5d7e2603d0696442ade8289108','27994b62e35b01e8cf2a2c958183451eb2e07ec36c9319ade34474badb5496c7',true,ARRAY['availability_id','version_id','slot_id','day_of_week','availability_state','shift_start','shift_end','lunch_start','lunch_end','capacity_units','max_load_points','qualification_snapshot','qualification_provenance','restriction_snapshot','restriction_provenance','slot_label_snapshot','incumbent_person_id_snapshot','incumbent_name_snapshot','content_digest','created_at']::text[]),
 ('public.weekly_schedule_versions',1138,'470b14096a678da11617e948df0077b73a99c5118d0d8e9241895e3e74c4b12f','3684a2671bfdc47d68b9f98cc696a234acae3c6f39e31b668c065bf3892f8f45',true,ARRAY['version_id','version_number','lifecycle_state','publication_kind','draft_of_version_id','rollback_of_version_id','effective_start','revision','objective_version','objective_json','input_provenance_json','draft_document','content_digest','created_by_manager_id','created_by_manager_name_snapshot','created_at','published_by_manager_id','published_by_manager_name_snapshot','published_at','authority_source_id']::text[]),
 ('public.zones',1139,'350d5f20c571644715e3a4b1439a569a0e4bbb7b3c503d07f7a79b589aff31a0','a350d53c5e6e0f7541b997522190d501c04b88af7083e18fb157dbe26742054e',true,ARRAY['id','zone_code','zone_name','active','notes','created_at','updated_at']::text[]);
+-- BEGIN FINITE CURRENT310 POSTCONDITION SELECTION
+CREATE TEMP TABLE q310_role_order_profile(expected_post text NOT NULL) ON COMMIT DROP;
+INSERT INTO q310_role_order_profile VALUES('0213f2b256bcac7b8db623758ef26807583ea27074a7c362af259122d4275dca');
+-- END FINITE CURRENT310 POSTCONDITION SELECTION
 DO $predecessor$
 DECLARE actual text; obj record; relation_oid oid; names text[]; ordinals integer[]; dropped boolean;
+ expected_inventory text:='3ad9148af807267bbf0ea00b893a720b760114244b92c97f6d76ea1805f77e8f';
 BEGIN
  IF current_user IS DISTINCT FROM session_user OR current_user NOT IN('postgres','supabase_admin') THEN
   RAISE EXCEPTION 'Maintained migration owner required';END IF;
@@ -277,7 +282,24 @@ BEGIN
   RAISE EXCEPTION 'Exact current309 inventory count required';END IF;
  SELECT public.static_weekly_digest_text(string_agg(restore_order::text||E'\n'||object_kind||E'\n'||object_identity||E'\n'||definition_sha256||E'\n'||public.static_weekly_digest_text(definition_sql),E'\n---\n' ORDER BY object_kind COLLATE "C",object_identity COLLATE "C"))
  INTO actual FROM public.custodial_release_authority_restore_inventory;
- IF actual IS DISTINCT FROM '3ad9148af807267bbf0ea00b893a720b760114244b92c97f6d76ea1805f77e8f' THEN RAISE EXCEPTION 'Exact frozen current309 inventory predecessor differs';END IF;
+ -- BEGIN FINITE CURRENT310 PRODUCTION ROLE ORDER
+ -- Only the measured full census and the exact unchanged named grants qualify.
+ IF actual='2c9da8fe8b1cb0a5f66aa2bd6e94e4f13adaa73753b6b7b8e1d4ce2e66730879' THEN
+  IF NOT ('service_role'::regrole::oid<'static_weekly_control_plane'::regrole::oid
+   AND 'static_weekly_control_plane'::regrole::oid<'custodial_application_reader'::regrole::oid)
+   OR public.custodial_release_authority_current_grant_definition('static_weekly_v8_read_lunch_document(date)')
+    IS DISTINCT FROM $role_order_v8$select public.custodial_release_authority_reset_grants('static_weekly_v8_read_lunch_document(date)'); grant execute on function static_weekly_v8_read_lunch_document(date) to service_role; grant execute on function static_weekly_v8_read_lunch_document(date) to static_weekly_control_plane; grant execute on function static_weekly_v8_read_lunch_document(date) to custodial_application_reader;$role_order_v8$
+   OR NOT EXISTS(SELECT 1 FROM public.custodial_release_authority_restore_inventory
+    WHERE object_kind='grant' AND object_identity='static_weekly_v8_read_lunch_document(date)'
+     AND restore_order=950012 AND definition_sha256='67f821953e3232e8f36df8ce0a820c53260f72910cb8bdbb309af81e6934f791'
+     AND public.static_weekly_digest_text(definition_sql)='67f821953e3232e8f36df8ce0a820c53260f72910cb8bdbb309af81e6934f791'
+     AND definition_sql=$role_order_v8$select public.custodial_release_authority_reset_grants('static_weekly_v8_read_lunch_document(date)'); grant execute on function static_weekly_v8_read_lunch_document(date) to service_role; grant execute on function static_weekly_v8_read_lunch_document(date) to static_weekly_control_plane; grant execute on function static_weekly_v8_read_lunch_document(date) to custodial_application_reader;$role_order_v8$) THEN
+   RAISE EXCEPTION 'Exact measured production role-order grant required';END IF;
+  expected_inventory:='2c9da8fe8b1cb0a5f66aa2bd6e94e4f13adaa73753b6b7b8e1d4ce2e66730879';
+  UPDATE q310_role_order_profile SET expected_post='4cb0ab4c8248557decffbf23878124483cfb16e620f851d8404bd46c9c74caf1';
+ END IF;
+ -- END FINITE CURRENT310 PRODUCTION ROLE ORDER
+ IF actual IS DISTINCT FROM expected_inventory THEN RAISE EXCEPTION 'Exact frozen current309 inventory predecessor differs';END IF;
  IF public.static_weekly_digest_text(pg_get_functiondef('public.custodial_release_authority_current_relation_definition(text)'::regprocedure))
   IS DISTINCT FROM 'a9f77828c5917b95f5dea85ee46bed6ef6581e203cb468a7f15647b59fd7f125' THEN RAISE EXCEPTION 'Exact old relation renderer differs';END IF;
  IF public.static_weekly_digest_text(pg_get_functiondef('public.custodial_release_canary_authority_surface()'::regprocedure))
@@ -380,7 +402,7 @@ BEGIN
   RAISE EXCEPTION 'Changed inventory tuple readback differs';END IF;
  SELECT public.static_weekly_digest_text(string_agg(restore_order::text||E'\n'||object_kind||E'\n'||object_identity||E'\n'||definition_sha256||E'\n'||public.static_weekly_digest_text(definition_sql),E'\n---\n' ORDER BY object_kind COLLATE "C",object_identity COLLATE "C"))
  INTO actual FROM public.custodial_release_authority_restore_inventory;
- IF actual IS DISTINCT FROM '0213f2b256bcac7b8db623758ef26807583ea27074a7c362af259122d4275dca' THEN RAISE EXCEPTION 'Exact derived post-binding inventory aggregate differs';END IF;
+ IF actual IS DISTINCT FROM (SELECT expected_post FROM q310_role_order_profile) THEN RAISE EXCEPTION 'Exact derived post-binding inventory aggregate differs';END IF;
  IF EXISTS(SELECT b.* FROM q310_inventory_before b WHERE NOT EXISTS(SELECT 1 FROM q310_updates u WHERE u.kind=b.object_kind AND u.identity=b.object_identity)
   EXCEPT SELECT * FROM public.custodial_release_authority_restore_inventory) OR EXISTS(
   SELECT i.* FROM public.custodial_release_authority_restore_inventory i WHERE NOT EXISTS(SELECT 1 FROM q310_updates u WHERE u.kind=i.object_kind AND u.identity=i.object_identity)
