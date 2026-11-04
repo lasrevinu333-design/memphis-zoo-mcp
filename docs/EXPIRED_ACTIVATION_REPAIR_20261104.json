@@ -1,0 +1,25 @@
+{
+  "schema": "custodial.expired-activation-repair-delivery.v1",
+  "project_id": "rqquvtjdmugpigbndmne",
+  "migration_version": "20261104174218",
+  "migration_name": "expired_unconsumed_assigned_activation_closure",
+  "migration_sha256": "acbdbc92b7f30fbbd77c77ba812117362827bb0d91f9edb306dfe0e99017ae6f",
+  "apply_success": true,
+  "post_apply_function_md5": "9bf1a4e915b767961c1620787b1b1432",
+  "owner_and_acl_unchanged": true,
+  "recovery_guard_mode": "ALWAYS",
+  "qualification": {
+    "existing_activation_checks": 83,
+    "new_closure_checks": 16,
+    "all_passed": true,
+    "scope": "227-file integration base plus exact live function preimage; exact production repair",
+    "full311_fresh_replay": "Not established by this repair. Legacy empty-schema harness refused at 20261025094420_authority_identity_renderer_counterparts.sql; no check weakened."
+  },
+  "phone_native_activation": {
+    "operation_id": "c1dc79b4-4a9d-428f-b175-dbf83ff9ac28",
+    "state": "native_active",
+    "confirmed": true
+  },
+  "phone_ui_acceptance": false,
+  "source_filename_note": "SQL bytes generated with local Supabase CLI timestamp 20261104173006, archived using the actual apply_migration receipt version 20261104174218. Do not apply a duplicate."
+}
