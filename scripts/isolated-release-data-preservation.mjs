@@ -88,7 +88,12 @@ export function readOriginal217PreservationScope({backendRoot,verifiedArchive}){
  assert.equal(source.sourceBinding,binding);assert.equal(binding.summary.project_ref,manifest.project_ref);
  assert.equal(fingerprintSchemaCatalog(source.catalog).fingerprint,manifest.source_catalog_fingerprint);
  assert.equal(source.ledger.length,manifest.source_ledger_count);assert.equal(source.ledger.at(-1).version,manifest.source_ledger_head);
- assert.equal(selection.databaseTables.length,217);assert.equal(selection.privateTables.length,0);assert.equal(selection.storageTables.length,8);
+ // Only the exact authenticated November archive extends the historical census.
+ // Every selected relation and original column is still captured and compared.
+ const currentArchive=binding.archive_digest==='f246930e213d8e9313db08b1d948ed5b1457a4ef0e40925a2ed2ebc7247e88c3';
+ const expectedTables=currentArchive?219:217,expectedStorage=currentArchive?10:8;
+ assert.equal(binding.summary.table_count,expectedTables);
+ assert.equal(selection.databaseTables.length,expectedTables);assert.equal(selection.privateTables.length,0);assert.equal(selection.storageTables.length,expectedStorage);
  assert.equal(selection.databaseTables.filter(t=>t.schema_name==='auth').length,27);
  assert.ok(selection.databaseTables.every(t=>t.data_encoding===postgresTextColumnsLineEncoding));
  const tables=Object.freeze(selection.databaseTables.map(t=>Object.freeze({schema:t.schema_name,name:t.table_name,columns:Object.freeze(t.columns.map(c=>c.name))})));
@@ -283,7 +288,7 @@ export async function prepareIsolatedReleaseDataPreservation({client,backendRoot
    join pg_attribute a on a.attrelid=c.oid where n.nspname in('public','auth','storage') and c.relkind='r' and a.attnum>0 and not a.attisdropped`)).rows;
   for(const old of census()){const now=currentColumns.find(x=>x.schema===old.schema&&x.name===old.name&&x.column_name===old.column_name);assert.ok(now);const {locked,...before}=old;assert.deepEqual(now,before,'original relation/column/type identity changed');}
   assertCurrent();
-  return Object.freeze({schema:'custodial.isolated-release-data-preservation.v1',scope:plan.length>=163?`ISOLATED_EXISTING160_PLUS_SELECTED${plan.length-160}_TRANSACTION_DATA_PROOF`:'ISOLATED_EXISTING160_TRANSACTION_DATA_PROOF',applied_migration_count:plan.length,original_tables:217,original_public_tables:182,ordinary_public_tables:178,nonpublic_tables:35,nonpublic_exact_native_text:true,
+  return Object.freeze({schema:'custodial.isolated-release-data-preservation.v1',scope:plan.length>=163?`ISOLATED_EXISTING160_PLUS_SELECTED${plan.length-160}_TRANSACTION_DATA_PROOF`:'ISOLATED_EXISTING160_TRANSACTION_DATA_PROOF',applied_migration_count:plan.length,original_tables:tables.length,original_public_tables:182,ordinary_public_tables:178,nonpublic_tables:nonpublic.length,nonpublic_exact_native_text:true,
    events:eventResult,four_settings_constants_verified:true,four_settings:settingsDigest,relay_paused_no_migration_time_send_evidence:true,
    recovery_metadata:'DELIBERATE_CANONICAL_GUARDED_REPAIRS_NOT_BUSINESS_EXEMPTION',tables:results,
    raw_values_exported:false,production_authorized:false,full_candidate_admission:false});

@@ -45,14 +45,14 @@ await test('maintained ordinary restore canonical formatting is exactly retained
 });
 const canonicalPlan=manifest.plan.map(x=>({order:x.order,file:x.file,source_migration_version:x.file.slice(0,14),sha256:x.canonical_sha256}));
 const actualPlan=bindExistingPostgresForwardSources(root,canonicalPlan);
-const current170=bindExistingPostgresForwardSources(root,readMigrationReplayPlan(root).files.slice(134).map((file,index)=>({
+const current177=bindExistingPostgresForwardSources(root,readMigrationReplayPlan(root).files.slice(134).map((file,index)=>({
  order:index+1,file,phase:file.slice(15,-4),source_migration_version:file.slice(0,14),sha256:createHash('sha256').update(read('supabase/migrations/'+file)).digest('hex'),
 })));
-await test('exact closed304/170 plan preserves all original235 comparison obligations',()=>{
- assert.equal(current170.length,170);assert.deepEqual(validateOriginal235PreservationPlan(root,current170),manifest);
+await test('exact closed311/177 plan preserves all original235 comparison obligations',()=>{
+ assert.equal(current177.length,177);assert.deepEqual(validateOriginal235PreservationPlan(root,current177),manifest);
 });
 for(const mutation of [p=>p.at(-1).sha256='0'.repeat(64),p=>p.at(-1).phase='unknown',p=>p.at(-1).forward_source={},p=>p[160].sha256='0'.repeat(64),p=>p.push({...p.at(-1)})]){
- await test('compact preservation rejects changed tail, prefix, execution profile or extra migration',()=>{const p=structuredClone(current170);mutation(p);assert.throws(()=>validateOriginal235PreservationPlan(root,p));});
+ await test('compact preservation rejects changed tail, prefix, execution profile or extra migration',()=>{const p=structuredClone(current177);mutation(p);assert.throws(()=>validateOriginal235PreservationPlan(root,p));});
 }
 await test('all160 actual source inputs admitted through shipping dualhash resolver',()=>{
  validateOriginal235PreservationPlan(root,actualPlan);
@@ -123,9 +123,32 @@ await test('owner guard refuses plain fake and disconnected real client before a
 });
 await test('all217 scope requires the existing authenticated archive capability, not detached metadata',()=>{
  assert.throws(()=>readOriginal217PreservationScope({backendRoot:root,verifiedArchive:{sourceBinding:{summary:{table_count:217}},databaseTables:nonpublicFixture.tables}}));
- for(const seam of ['readVerifiedArchiveSourceBinding(verifiedArchive)','readVerifiedRestoreTableSelection(verifiedArchive,{databaseOnly:true})','readVerifiedMigrationTargetCaptureSource(verifiedArchive)','selection.databaseTables.length,217','selection.privateTables.length,0','selection.storageTables.length,8',"t.schema_name==='auth').length,27",'postgresTextColumnsLineEncoding','assertCurrent();'])assert.ok(module.includes(seam));
+ for(const seam of ['readVerifiedArchiveSourceBinding(verifiedArchive)','readVerifiedRestoreTableSelection(verifiedArchive,{databaseOnly:true})','readVerifiedMigrationTargetCaptureSource(verifiedArchive)','selection.databaseTables.length,expectedTables','selection.privateTables.length,0','selection.storageTables.length,expectedStorage',"t.schema_name==='auth').length,27",'postgresTextColumnsLineEncoding','assertCurrent();'])assert.ok(module.includes(seam));
  assert.ok(module.includes("in access share mode"));assert.ok(module.includes("ELSE 'AccessShareLock' END"));
- assert.ok(module.includes('nonpublic_tables:35,nonpublic_exact_native_text:true'));
+ assert.ok(module.includes('nonpublic_tables:nonpublic.length,nonpublic_exact_native_text:true'));
+});
+await test('current signed archive includes both added storage relations in preservation scope',()=>{
+ const begin=module.indexOf('export function readOriginal217PreservationScope('),end=module.indexOf('\nconst hashes=',begin);
+ assert.ok(begin>=0&&end>begin);
+ const encoding='FIXTURE_NATIVE_TEXT',verifiedArchive={};
+ const binding={archive_digest:'f246930e213d8e9313db08b1d948ed5b1457a4ef0e40925a2ed2ebc7247e88c3',summary:{project_ref:manifest.project_ref,table_count:219}};
+ const relations=[...manifest.tables,...nonpublicFixture.tables,
+  {schema:'storage',name:'fixture_additional_storage_a',columns:['id']},{schema:'storage',name:'fixture_additional_storage_b',columns:['id']}];
+ const databaseTables=relations.map(t=>({schema_name:t.schema,table_name:t.name,columns:t.columns.map(name=>({name})),data_encoding:encoding}));
+ const selection={databaseTables,privateTables:[],storageTables:databaseTables.filter(t=>t.schema_name==='storage')};
+ const source={sourceBinding:binding,catalog:{},ledger:Array.from({length:235},(_,i)=>({version:i===234?manifest.source_ledger_head:String(i)}))};
+ const dependencies={
+  assert,loadOriginal235PreservationSource:()=>manifest,readVerifiedArchiveSourceBinding:()=>binding,
+  readVerifiedRestoreTableSelection:()=>selection,readVerifiedMigrationTargetCaptureSource:()=>source,
+  fingerprintSchemaCatalog:()=>({fingerprint:manifest.source_catalog_fingerprint}),postgresTextColumnsLineEncoding:encoding,tableKey:t=>t.schema+'.'+t.name,
+ };
+ const scopeReader=vm.compileFunction('return ('+module.slice(begin,end).replace('export function','function')+')',Object.keys(dependencies))(...Object.values(dependencies));
+ const scope=scopeReader({backendRoot:root,verifiedArchive});assert.equal(scope.tables.length,219);
+ assert.equal(scope.tables.filter(t=>t.schema==='storage').length,10);scope.assertCurrent();
+ assert.ok(scope.tables.some(t=>t.name==='fixture_additional_storage_b'));
+ binding.archive_digest='0'.repeat(64);assert.throws(()=>scopeReader({backendRoot:root,verifiedArchive}));
+ binding.archive_digest='f246930e213d8e9313db08b1d948ed5b1457a4ef0e40925a2ed2ebc7247e88c3';
+ selection.databaseTables.pop();assert.throws(()=>scopeReader({backendRoot:root,verifiedArchive}));
 });
 await test('public exceptions cannot spill into a same-named nonpublic relation',()=>{
  for(const name of ['system_settings','events_app_event_history','events_app_events','custodial_release_authority_restore_inventory']){
