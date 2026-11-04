@@ -1260,10 +1260,6 @@
         {
           "name": "20261103004520_authoritative_events_cancellation.sql",
           "sha256": "21aae942d552b162e024061d34c0fe164adafaa58c6ceb735761f0a2c95a537b"
-        },
-        {
-          "name": "20261104174218_expired_unconsumed_assigned_activation_closure.sql",
-          "sha256": "acbdbc92b7f30fbbd77c77ba812117362827bb0d91f9edb306dfe0e99017ae6f"
         }
       ]
     }
@@ -1308,17 +1304,5 @@
       }
     ],
     "scope": "Additive R008 exact column order recovery repair; local qualification only; no production admission"
-  },
-  "assigned_activation_expiry_repair_append": {
-    "previous_migration_count": 311,
-    "previous_replay_manifest_sha256": "84ac9ee339abf929a2d50c411b0c69b4cb05699f71fa13ee9ddb17606cd5dabe",
-    "previous_rows_unchanged": true,
-    "appended": [
-      {
-        "name": "20261104174218_expired_unconsumed_assigned_activation_closure.sql",
-        "sha256": "acbdbc92b7f30fbbd77c77ba812117362827bb0d91f9edb306dfe0e99017ae6f"
-      }
-    ],
-    "scope": "Exact source archive of the owner-authorized live repair applied as migration 20261104174218. The existing replay manifest remains source reconstruction metadata, not blanket deployment authorization."
   }
 }

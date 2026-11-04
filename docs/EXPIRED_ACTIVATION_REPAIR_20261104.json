@@ -21,5 +21,13 @@
     "confirmed": true
   },
   "phone_ui_acceptance": false,
-  "source_filename_note": "SQL bytes generated with local Supabase CLI timestamp 20261104173006, archived using the actual apply_migration receipt version 20261104174218. Do not apply a duplicate."
+  "source_filename_note": "SQL bytes generated with local Supabase CLI timestamp 20261104173006, archived using the actual apply_migration receipt version 20261104174218. Do not apply a duplicate.",
+  "applied_sql_archive": "docs/applied-repairs/20261104174218_expired_unconsumed_assigned_activation_closure.sql",
+  "historical_release_plan": {
+    "status": "preserved_exactly",
+    "migration_count": 311,
+    "manifest_sha256": "84ac9ee339abf929a2d50c411b0c69b4cb05699f71fa13ee9ddb17606cd5dabe",
+    "reason": "The qualified repair is already applied to the live target. Appending it to the historical pending plan would invalidate its measured catalog and rehearsal bindings. The exact SQL and live receipt are archived here; no duplicate apply or full-release qualification is implied.",
+    "full_replay_requalification": "Deferred; not a precondition for the already qualified diagnostic repair or phone installation."
+  }
 }
