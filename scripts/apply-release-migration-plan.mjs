@@ -9,7 +9,7 @@ import {resolveReleaseMigrationSource,releaseMigrationPlanIdentity} from './prod
 import {readMigrationReplayPlan} from './migration-replay-order.mjs';
 
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import pg from "pg";
 import {
@@ -42,6 +42,8 @@ const candidateTree = String(process.env.RELEASE_MIGRATION_CANDIDATE_TREE || "")
 
 const targetCapture = String(process.env.RELEASE_MIGRATION_TARGET_CAPTURE || 'false') === 'true';
 let captureContext = null;
+let productionRefusal = null;
+let productionLockedSource = null;
 // A normal apply must have a complete current target before opening a DB.
 // The existing targetCapture route separately enforces signed archive + owned
 // loopback postgres-only rollback, and is the producer of these missing facts.
@@ -244,6 +246,8 @@ isolatedPreservationArchive=rehearsal&&([160,163,164,165,166].includes(plan.leng
   }
   if (targetCapture) captureContext.locked_source={fingerprint:beforeCatalogIdentity.fingerprint,
     counts:catalogCounts(beforeCatalog),ledger:beforeLedger.rows,database:currentDatabase};
+  if (!targetCapture && !rehearsal) productionLockedSource={fingerprint:beforeCatalogIdentity.fingerprint,
+    counts:catalogCounts(beforeCatalog),ledger:beforeLedger.rows,database:currentDatabase};
   const outlookBefore = await outlookSnapshot(db);
   if (outlookBefore.present !== state.observed_production.outlook_event_sync_table_present) {
     throw new Error("Restored Outlook event-sync authority presence differs from the admitted production state.");
@@ -259,7 +263,8 @@ isolatedPreservationArchive=rehearsal&&([160,163,164,165,166].includes(plan.leng
   for (const migration of plan) {
     try {
       await runTargetCaptureStep({db,migration,targetCapture,
-        onRefusal:diagnostic=>{captureContext.refusal=diagnostic;},
+        productionRefusal:!targetCapture && !rehearsal,
+        onRefusal:diagnostic=>{if(targetCapture)captureContext.refusal=diagnostic;else productionRefusal=diagnostic;},
         run:async()=>{
           await db.query(migration.body);
           await db.query(`
@@ -409,7 +414,26 @@ isolatedPreservationArchive=rehearsal&&([160,163,164,165,166].includes(plan.leng
   // pg queues queries before connect; never queue a rollback on that path.
   if (!transactionStarted) throw error;
   if (!targetCapture) {
-    await db.query("rollback").catch(() => {});
+    await db.query("rollback");
+    if (productionRefusal && productionLockedSource) {
+      const original=productionLockedSource;
+      await db.query('begin isolation level repeatable read read only');
+      const sourceCatalog=normalizeCatalog(await captureCatalogFromSnapshot(db),original.database);
+      const sourceLedger=await db.query('select version::text,name::text,statements from supabase_migrations.schema_migrations order by version');
+      const preserved=fingerprintSchemaCatalog(sourceCatalog).fingerprint===original.fingerprint
+        &&stableJson(catalogCounts(sourceCatalog))===stableJson(original.counts)
+        &&stableJson(sourceLedger.rows)===stableJson(original.ledger);
+      await db.query('rollback');
+      if(!preserved)throw new Error('Production refusal rollback failed exact original catalog/ledger readback.');
+      const receipt={schema:'custodial.production-source252-refusal.v1',committed:false,rollback_verified:true,
+        project_ref:projectRef,candidate_commit:candidateCommit,candidate_tree:candidateTree,
+        source_catalog_fingerprint:original.fingerprint,source_ledger_sha256:sourceLedgerSha256,
+        source_ledger_count:original.ledger.length,plan_sha256:planSha256,
+        refusal:productionRefusal,completed_at:new Date().toISOString()};
+      if(process.env.RUNNER_TEMP)writeFileSync(resolve(process.env.RUNNER_TEMP,'build52-production-migration-refusal.json'),
+        JSON.stringify(receipt,null,2)+'\n',{mode:0o600,flag:'wx'});
+      else console.error(JSON.stringify(receipt));
+    }
     throw error;
   }
   await db.query("rollback");

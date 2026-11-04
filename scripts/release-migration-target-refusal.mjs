@@ -577,8 +577,15 @@ async function readSelectedTargetRefusal(db,migration) {
     md5(p.prosrc) body_md5,md5(pg_get_functiondef(p.oid)) definition_md5,p.prosecdef,p.provolatile,p.proconfig
     from pg_proc p where p.oid=to_regprocedure('public.custodial_release_authority_current_grant_definition(text)')`)).rows};
 }
-export async function runTargetCaptureStep({db,migration,run,targetCapture,onRefusal}) {
- if(!targetCapture)return run();
+export function isProductionSource252Diagnostic(migration) {
+ return migration?.order===119 && migration.file===PRIVATE_CUSTODY_SOURCE252_FILE
+  && migration.sha256===PRIVATE_CUSTODY_SOURCE252_FORWARD_SHA256;
+}
+export async function runTargetCaptureStep({db,migration,run,targetCapture,productionRefusal=false,onRefusal}) {
+ // Normal production keeps all existing authorization/admission in its owner.
+ // Only this already-pinned failed step gains a metadata-only failure read.
+ // A refusal ALWAYS propagates to the owner's whole-transaction rollback.
+ if(!targetCapture && !(productionRefusal && isProductionSource252Diagnostic(migration)))return run();
  await db.query('savepoint custodial_target_migration_step');
  try {const value=await run();await db.query('release savepoint custodial_target_migration_step');return value;}
  catch(error){

@@ -338,5 +338,6 @@ jobs:
             ${{ runner.temp }}/build52-production-migration-result.json
             ${{ runner.temp }}/build52-production-post-apply-verification.json
             ${{ runner.temp }}/build52-production-migration-receipt.jsonl
+            ${{ runner.temp }}/build52-production-migration-refusal.json
           if-no-files-found: warn
           retention-days: 30
