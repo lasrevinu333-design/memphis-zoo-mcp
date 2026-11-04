@@ -1300,7 +1300,19 @@ export function createSupabaseTrustedDeviceStore(supabase) {
           : {},
       });
       if (error) throw error;
-      return data;
+      if (!data?.ok) return data;
+      // The enrollment RPC predates the current permission projection and its
+      // manager JSON omits system_key/is_system_principal. Read the protected
+      // registry before issuing a session; never infer authority from RPC roles.
+      const managerId = data.trusted_device?.manager_id;
+      if (!managerId || data.manager?.manager_id !== managerId) {
+        throw new Error("Enrolled manager association is unavailable.");
+      }
+      const manager = await getManager(managerId);
+      if (!manager || manager.manager_id !== managerId) {
+        throw new Error("Enrolled manager registry record is unavailable.");
+      }
+      return { ...data, manager };
     },
     async getManagerCodeRateLimit(keyHash) {
       const { data, error } = await supabase
