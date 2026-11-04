@@ -5890,7 +5890,7 @@
       {
         "path": "scripts/release-closure-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "febce935edf40b3b8f43251c55fe39da533bee78"
+        "object_id": "fed2af21710e37422a5ef4bcdbf95355c7e60b7a"
       },
       {
         "path": "scripts/release-ledger-head-order-tests.mjs",
@@ -8675,7 +8675,7 @@
       {
         "path": "src/release-contract.js",
         "mode": "100644",
-        "object_id": "b9d6fdd102a50855ec42189f899129720cdedf26"
+        "object_id": "cb09f982ee77e64df17fc35fa07d26f11b66f5fb"
       },
       {
         "path": "src/release-manifest.js",
