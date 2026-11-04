@@ -131,27 +131,34 @@ await test('all217 scope requires the existing authenticated archive capability,
  assert.ok(module.includes("in access share mode"));assert.ok(module.includes("ELSE 'AccessShareLock' END"));
  assert.ok(module.includes('nonpublic_tables:nonpublic.length,nonpublic_exact_native_text:true'));
 });
-await test('current signed archive includes both added storage relations in preservation scope',()=>{
+await test('fresh signed archives reuse only the exact authenticated current219 relation inventory',()=>{
  const begin=module.indexOf('export function readOriginal217PreservationScope('),end=module.indexOf('\nconst hashes=',begin);
  assert.ok(begin>=0&&end>begin);
  const encoding='FIXTURE_NATIVE_TEXT',verifiedArchive={};
- const binding={archive_digest:'f246930e213d8e9313db08b1d948ed5b1457a4ef0e40925a2ed2ebc7247e88c3',summary:{project_ref:manifest.project_ref,table_count:219}};
+ const inventoryRaw=read('scripts/fixtures/original235-current219-relations.json');
+ const relationHash=createHash('sha256').update(inventoryRaw).digest('hex');assert.equal(relationHash,'c04f9fe6e4779928b076ee2f795f8059be243190f9a83556de60aef2c52c563c');
+ const binding={archive_digest:'f246930e213d8e9313db08b1d948ed5b1457a4ef0e40925a2ed2ebc7247e88c3',source_identity:{original_relations_sha256:relationHash,source_catalog_sha256:'f034e7a0a019010093b15388ab1c2ee7865420bf343a4404d23a9a21c183b277',migration_ledger_sha256:'2f80104d2f1fe54a6604c2c84436f823b1a78542bc4ba3d7975236951db93b66'},summary:{project_ref:manifest.project_ref,table_count:219}};
+ const inventory={sourceBinding:binding,inventory:{'inventory/original-relations.json':inventoryRaw}};
  const relations=[...manifest.tables,...nonpublicFixture.tables,
-  {schema:'storage',name:'fixture_additional_storage_a',columns:['id']},{schema:'storage',name:'fixture_additional_storage_b',columns:['id']}];
+  {schema:'storage',name:'bucket_lifecycle_states',columns:['id']},{schema:'storage',name:'lifecycle_abandoned_artifacts',columns:['id']}];
  const databaseTables=relations.map(t=>({schema_name:t.schema,table_name:t.name,columns:t.columns.map(name=>({name})),data_encoding:encoding}));
  const selection={databaseTables,privateTables:[],storageTables:databaseTables.filter(t=>t.schema_name==='storage')};
  const source={sourceBinding:binding,catalog:{},ledger:Array.from({length:235},(_,i)=>({version:i===234?manifest.source_ledger_head:String(i)}))};
  const dependencies={
   assert,loadOriginal235PreservationSource:()=>manifest,readVerifiedArchiveSourceBinding:()=>binding,
   readVerifiedRestoreTableSelection:()=>selection,readVerifiedMigrationTargetCaptureSource:()=>source,
+  readVerifiedImmutableBootstrapInventory:()=>inventory,sha:x=>createHash('sha256').update(x).digest('hex'),
   fingerprintSchemaCatalog:()=>({fingerprint:manifest.source_catalog_fingerprint}),postgresTextColumnsLineEncoding:encoding,tableKey:t=>t.schema+'.'+t.name,
  };
  const scopeReader=vm.compileFunction('return ('+module.slice(begin,end).replace('export function','function')+')',Object.keys(dependencies))(...Object.values(dependencies));
  const scope=scopeReader({backendRoot:root,verifiedArchive});assert.equal(scope.tables.length,219);
  assert.equal(scope.tables.filter(t=>t.schema==='storage').length,10);scope.assertCurrent();
- assert.ok(scope.tables.some(t=>t.name==='fixture_additional_storage_b'));
- binding.archive_digest='0'.repeat(64);assert.throws(()=>scopeReader({backendRoot:root,verifiedArchive}));
- binding.archive_digest='f246930e213d8e9313db08b1d948ed5b1457a4ef0e40925a2ed2ebc7247e88c3';
+ assert.ok(scope.tables.some(t=>t.name==='lifecycle_abandoned_artifacts'));
+ // Genuine old and fresh archive identities differ, while the signed SOURCE inventory is exact.
+ for(const archiveDigest of ['6bfd207d37183f4bf5908b465bebd066793e68fdd4d2f08a18d610876ff3ffd8','1'.repeat(64)]){binding.archive_digest=archiveDigest;assert.equal(scopeReader({backendRoot:root,verifiedArchive}).tables.length,219);}
+ for(const field of ['original_relations_sha256','source_catalog_sha256','migration_ledger_sha256']){const before=binding.source_identity[field];binding.source_identity[field]='0'.repeat(64);assert.throws(()=>scopeReader({backendRoot:root,verifiedArchive}));binding.source_identity[field]=before;}
+ inventory.inventory['inventory/original-relations.json']=inventoryRaw+' ';assert.throws(()=>scopeReader({backendRoot:root,verifiedArchive}));inventory.inventory['inventory/original-relations.json']=inventoryRaw;
+ const originalName=selection.databaseTables.at(-1).table_name;selection.databaseTables.at(-1).table_name='unknown_storage_relation';assert.throws(()=>scopeReader({backendRoot:root,verifiedArchive}));selection.databaseTables.at(-1).table_name=originalName;
  selection.databaseTables.pop();assert.throws(()=>scopeReader({backendRoot:root,verifiedArchive}));
 });
 await test('public exceptions cannot spill into a same-named nonpublic relation',()=>{

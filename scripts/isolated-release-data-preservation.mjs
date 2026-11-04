@@ -7,7 +7,7 @@ import {fingerprintSchemaCatalog} from './schema-fingerprint-catalog.mjs';
 import {resolveReleaseMigrationSource} from './production-forward-source.mjs';
 import {readMigrationReplayPlan} from './migration-replay-order.mjs';
 import {assertTargetCapturePendingPlan,assertTargetCapturePreservationPlan} from './release-migration-target-capture.mjs';
-import {readVerifiedArchiveSourceBinding,readVerifiedRestoreTableSelection,readVerifiedMigrationTargetCaptureSource,postgresTextColumnsLineEncoding} from './disaster-recovery-archive.mjs';
+import {readVerifiedArchiveSourceBinding,readVerifiedRestoreTableSelection,readVerifiedMigrationTargetCaptureSource,readVerifiedImmutableBootstrapInventory,postgresTextColumnsLineEncoding} from './disaster-recovery-archive.mjs';
 const {Client}=pg,originalQuery=Client.prototype.query;
 const sha=x=>createHash('sha256').update(x).digest('hex');
 const EXCEPTIONS=new Set(['custodial_release_authority_restore_inventory','system_settings','events_app_events','events_app_event_history']);
@@ -88,9 +88,24 @@ export function readOriginal217PreservationScope({backendRoot,verifiedArchive}){
  assert.equal(source.sourceBinding,binding);assert.equal(binding.summary.project_ref,manifest.project_ref);
  assert.equal(fingerprintSchemaCatalog(source.catalog).fingerprint,manifest.source_catalog_fingerprint);
  assert.equal(source.ledger.length,manifest.source_ledger_count);assert.equal(source.ledger.at(-1).version,manifest.source_ledger_head);
- // Only the exact authenticated November archive extends the historical census.
- // Every selected relation and original column is still captured and compared.
- const currentArchive=binding.archive_digest==='f246930e213d8e9313db08b1d948ed5b1457a4ef0e40925a2ed2ebc7247e88c3';
+ // The exact November SOURCE relation inventory is stable across fresh signed
+ // backups. Pinning a whole archive here would create a source/backup cycle.
+ // The existing reader authenticates the original inventory and its lifetime;
+ // every selected relation and original column is still captured and compared.
+ const currentArchive=binding.source_identity.original_relations_sha256==='c04f9fe6e4779928b076ee2f795f8059be243190f9a83556de60aef2c52c563c';
+ let currentInventory=null;
+ if(currentArchive){
+  assert.equal(binding.source_identity.source_catalog_sha256,'f034e7a0a019010093b15388ab1c2ee7865420bf343a4404d23a9a21c183b277');
+  assert.equal(binding.source_identity.migration_ledger_sha256,'2f80104d2f1fe54a6604c2c84436f823b1a78542bc4ba3d7975236951db93b66');
+  currentInventory=readVerifiedImmutableBootstrapInventory(verifiedArchive);
+  assert.equal(currentInventory.sourceBinding,binding);
+  const raw=currentInventory.inventory['inventory/original-relations.json'];
+  assert.equal(sha(raw),binding.source_identity.original_relations_sha256);
+  const relations=JSON.parse(raw);
+  assert.equal(relations.length,219);
+  assert.ok(relations.every(t=>t.relation_kind==='r'&&t.is_partition===false));
+  assert.deepEqual(selection.databaseTables.map(t=>t.schema_name+'.'+t.table_name).sort(),relations.map(t=>t.schema_name+'.'+t.table_name).sort());
+ }
  const expectedTables=currentArchive?219:217,expectedStorage=currentArchive?10:8;
  assert.equal(binding.summary.table_count,expectedTables);
  assert.equal(selection.databaseTables.length,expectedTables);assert.equal(selection.privateTables.length,0);assert.equal(selection.storageTables.length,expectedStorage);
@@ -103,6 +118,7 @@ export function readOriginal217PreservationScope({backendRoot,verifiedArchive}){
   assert.equal(readVerifiedArchiveSourceBinding(verifiedArchive),binding);
   assert.equal(readVerifiedRestoreTableSelection(verifiedArchive,{databaseOnly:true}),selection);
   assert.equal(readVerifiedMigrationTargetCaptureSource(verifiedArchive).sourceBinding,binding);
+  if(currentInventory)assert.equal(readVerifiedImmutableBootstrapInventory(verifiedArchive),currentInventory);
  };
  assertCurrent();return Object.freeze({manifest,tables,assertCurrent});
 }
