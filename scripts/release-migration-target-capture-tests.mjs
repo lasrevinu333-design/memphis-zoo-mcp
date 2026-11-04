@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';import {join,resolve} from 'node:path';import {tmpdir} from 'node:os';import {createHash} from 'node:crypto';
 import {fullCandidateMigrationCommand} from './run-release-migration-full-candidate.mjs';
 import {targetCaptureCommand} from './run-release-migration-target-capture.mjs';
-import {assertTargetCaptureBoundary,assertOwnedTargetMetadata,targetCaptureState,assertTargetCapturePendingPlan,writeTargetCapture} from './release-migration-target-capture.mjs';
+import {readTargetCaptureSourceClosure,assertTargetCaptureBoundary,assertOwnedTargetMetadata,targetCaptureState,assertTargetCapturePendingPlan,writeTargetCapture} from './release-migration-target-capture.mjs';
 import {materializeVerifiedArchive,readVerifiedMigrationTargetCaptureSource} from './disaster-recovery-archive.mjs';
 import {archiveSignatureBinding,signBinding,stableJsonFile,stableJsonFileSha256} from './disaster-recovery-crypto.mjs';
 import {bindBackupSchemaExtension} from './backup-release-schema-binding.mjs';
@@ -22,12 +22,26 @@ for(const [name,ports]of [['blank port',{'5432/tcp':[{HostIp:'127.0.0.1',HostPor
 for(const [name,change]of [['wrong run',x=>x.runId='124'],['stopped',x=>x.metadata.running=false],['wrong image',x=>x.metadata.image='sha256:'+'b'.repeat(64)],['mutable tag',x=>x.metadata.image_reference='supabase/postgres:latest'],['missing repository pin',x=>x.image.digests=[]],['public port',x=>x.metadata.ports['5432/tcp'][0].HostIp='0.0.0.0'],['wrong port',x=>x.metadata.ports['5432/tcp'][0].HostPort='8888'],['old volume',x=>x.metadata.mounts.push({Type:'volume'})],['privileged',x=>x.metadata.privileged=true]])run('owned target refuses '+name,()=>{const x=target();change(x);assert.throws(()=>assertOwnedTargetMetadata(x));});
 const declaredState=JSON.parse(fs.readFileSync(join(root,'release/production-migration-state.json')));
 const actualPlan=bindExistingPostgresForwardSources(root,readMigrationReplayPlan(root).files.slice(134).map((file,i)=>({order:i+1,file,phase:file.slice(15,-4),source_migration_version:file.slice(0,14),sha256:sha(fs.readFileSync(join(root,'supabase/migrations',file)))})));
-run('current163 plan accepts complete actual current declaration',()=>assert.deepEqual(assertTargetCapturePendingPlan(actualPlan,declaredState.pending_migrations),actualPlan));
-run('historical160 exact prefix remains supported without rewriting original plan',()=>assert.deepEqual(assertTargetCapturePendingPlan(actualPlan,actualPlan.slice(0,160)),actualPlan));
-for(const n of [0,159,161,162,167])run('capture plan rejects unsupported declared count '+n,()=>assert.throws(()=>assertTargetCapturePendingPlan(actualPlan,Array.from({length:n},(_,i)=>actualPlan[i]||actualPlan[0]))));
-run('current163 prefix drift refuses',()=>{const d=structuredClone(actualPlan);d[0].sha256='f'.repeat(64);assert.throws(()=>assertTargetCapturePendingPlan(actualPlan,d));});
-run('current163 tail drift refuses',()=>{const d=structuredClone(actualPlan);d[162].sha256='f'.repeat(64);assert.throws(()=>assertTargetCapturePendingPlan(actualPlan,d));});
-run('tail cannot be jointly redefined by plan and state',()=>{const d=structuredClone(actualPlan);d[161].sha256='f'.repeat(64);assert.throws(()=>assertTargetCapturePendingPlan(d,d));});
+const closure=readTargetCaptureSourceClosure(root);
+run('exact current311 plan accepts the preserved actual declaration',()=>{assert.equal(closure.canonical_source_count,311);assert.equal(closure.pending.length,177);assert.equal(closure.runtime_admission,false);assert.deepEqual(assertTargetCapturePendingPlan(actualPlan,declaredState.pending_migrations,closure),actualPlan);});
+run('a cloned closure cannot authorize the plan',()=>assert.throws(()=>assertTargetCapturePendingPlan(actualPlan,declaredState.pending_migrations,structuredClone(closure))));
+run('current311 refuses a changed unqualified manifest and keeps source files untouched',()=>{
+ const temp=fs.mkdtempSync(join(tmpdir(),'custodial-current311-source-test-'));
+ try{
+  fs.mkdirSync(join(temp,'supabase/canonical'),{recursive:true});
+  fs.symlinkSync(join(root,'supabase/migrations'),join(temp,'supabase/migrations'),'dir');
+  fs.symlinkSync(join(root,'release'),join(temp,'release'),'dir');
+  const manifest=JSON.parse(fs.readFileSync(join(root,'supabase/canonical/migration-replay-order.json')));
+  manifest.reason+=' UNQUALIFIED_CHANGED_SOURCE';
+  fs.writeFileSync(join(temp,'supabase/canonical/migration-replay-order.json'),JSON.stringify(manifest,null,2)+'\n');
+  assert.throws(()=>readTargetCaptureSourceClosure(temp));
+ }finally{fs.rmSync(temp,{recursive:true,force:true});}
+});
+run('historical160 exact prefix remains supported without rewriting original plan',()=>assert.deepEqual(assertTargetCapturePendingPlan(actualPlan,actualPlan.slice(0,160),closure),actualPlan));
+for(const n of [0,159,161,162,171,176])run('capture plan rejects unsupported declared count '+n,()=>assert.throws(()=>assertTargetCapturePendingPlan(actualPlan,Array.from({length:n},(_,i)=>actualPlan[i]||actualPlan[0]),closure)));
+run('current163 prefix drift refuses',()=>{const d=structuredClone(actualPlan);d[0].sha256='f'.repeat(64);assert.throws(()=>assertTargetCapturePendingPlan(actualPlan,d,closure));});
+run('current163 tail drift refuses',()=>{const d=structuredClone(actualPlan);d[162].sha256='f'.repeat(64);assert.throws(()=>assertTargetCapturePendingPlan(actualPlan,d,closure));});
+run('tail cannot be jointly redefined by plan and state',()=>{const d=structuredClone(actualPlan);d[161].sha256='f'.repeat(64);assert.throws(()=>assertTargetCapturePendingPlan(d,d,closure));});
 run('full-hour164 source retains exact163 predecessor',()=>{
  const predecessor=actualPlan.slice(0,164);assert.equal(predecessor.length,164);
  assert.deepEqual(assertTargetCapturePendingPlan(predecessor,predecessor),predecessor);
@@ -39,14 +53,14 @@ run('named-coverer165 retains complete164 prefix and exact source tail',()=>{
  assert.deepEqual(assertTargetCapturePendingPlan(predecessor,predecessor.slice(0,164)),predecessor);
 });
 run('compact166 retains complete165 prefix and exact source tail',()=>{
- assert.equal(actualPlan.length,166);assert.deepEqual(assertTargetCapturePendingPlan(actualPlan,actualPlan),actualPlan);
- assert.deepEqual(assertTargetCapturePendingPlan(actualPlan,actualPlan.slice(0,165)),actualPlan);
+ const predecessor=actualPlan.slice(0,166);assert.equal(predecessor.length,166);assert.deepEqual(assertTargetCapturePendingPlan(predecessor,predecessor),predecessor);
+ assert.deepEqual(assertTargetCapturePendingPlan(predecessor,predecessor.slice(0,165)),predecessor);
 });
 for(const mutate of [p=>p.at(-1).sha256='f'.repeat(64),p=>p.at(-1).order=167,
  p=>p.at(-1).file='20990101000000_foreign.sql',p=>p.at(-1).forward_source={file:'foreign'},
  p=>p[0].sha256='f'.repeat(64),p=>p.push({...p.at(-1),order:165})])
- run('full-hour successor rejects changed tail, history or extra member',()=>{const p=structuredClone(actualPlan);mutate(p);assert.throws(()=>assertTargetCapturePendingPlan(p,p));});
-run('current163 reordering refuses',()=>{const d=structuredClone(actualPlan);[d[0],d[1]]=[d[1],d[0]];assert.throws(()=>assertTargetCapturePendingPlan(actualPlan,d));});
+ run('full-hour successor rejects changed tail, history or extra member',()=>{const p=structuredClone(actualPlan);mutate(p);assert.throws(()=>assertTargetCapturePendingPlan(p,p,closure));});
+run('current163 reordering refuses',()=>{const d=structuredClone(actualPlan);[d[0],d[1]]=[d[1],d[0]];assert.throws(()=>assertTargetCapturePendingPlan(actualPlan,d,closure));});
 run('captured release state preserves original160 metadata and protected policy',()=>{const h=declaredState.historical_294_160_target_preparation;assert.deepEqual(declaredState.pending_migrations.slice(0,160),h.pending_migrations);assert.equal(declaredState.target.pending_migration_count,declaredState.pending_migrations.length);assert.equal(declaredState.target.production_ledger_count,235+declaredState.pending_migrations.length);assert.equal(declaredState.target.normal_source_capture.rollback_evidence.rollback_verified,true);assert.equal(declaredState.target.normal_source_capture.candidate_migration_admission,false);assert.equal(declaredState.target.normal_source_capture.runtime_admission,false);assert.equal(declaredState.historical_Source05_current_prose.state,'HISTORY_ONLY_SOURCE05_TEXT_NOT_CURRENT_AUTHORIZATION');});
 const work=fs.mkdtempSync(join(tmpdir(),'UNIT-target-source-capture-')),key='UNIT-target-capture-archive-signing-key-20261021',keyId='UNIT-target-capture';let serial=0;const snapshots=[];
 const runnerTemp=join(work,'runner');fs.mkdirSync(join(runnerTemp,'production-backup'),{recursive:true});

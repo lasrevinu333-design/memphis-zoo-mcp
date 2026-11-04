@@ -43,9 +43,12 @@ export const REVIEWED_ROOT_DISPOSITION_JSON = "{\n  \"schema\": \"custodial.Root
 // historical review byte-for-byte and refuse every unissued digest/archive.
 export const FULL_HOUR_ROOT_DISPOSITION_SHA256 = '5a366bf5ff093b632fa690ab111b9b9382209aa7b3eced80fc1245908be449c4';
 export const FULL_HOUR_ROOT_DISPOSITION_JSON = readFileSync(new URL('../release/restore-dispositions/20261029-backup-40960771863.json',import.meta.url),'utf8');
+export const CURRENT311_ROOT_DISPOSITION_SHA256 = '44507c6427cf03898bc4489c640e0ec03aeaac05a551688f7b2345c655db43fe';
+export const CURRENT311_ROOT_DISPOSITION_JSON = readFileSync(new URL('../release/restore-dispositions/20261103-backup-41725404138.json',import.meta.url),'utf8');
 export function reviewedTargetCaptureResolutions(diagnostic, summary, dispositionSha256) {
  const issued=dispositionSha256===REVIEWED_ROOT_DISPOSITION_SHA256?REVIEWED_ROOT_DISPOSITION_JSON:
-  dispositionSha256===FULL_HOUR_ROOT_DISPOSITION_SHA256?FULL_HOUR_ROOT_DISPOSITION_JSON:null;
+  dispositionSha256===FULL_HOUR_ROOT_DISPOSITION_SHA256?FULL_HOUR_ROOT_DISPOSITION_JSON:
+  dispositionSha256===CURRENT311_ROOT_DISPOSITION_SHA256?CURRENT311_ROOT_DISPOSITION_JSON:null;
  assert.ok(issued,'Exact issued Root disposition required');
  assert.equal(sha(issued),dispositionSha256);
  const reviewed=JSON.parse(issued);
@@ -67,8 +70,8 @@ export function reviewedTargetCaptureResolutions(diagnostic, summary, dispositio
  assert.equal(diagnostic.manifest.restore_id,diagnostic.restore_identity.restore_id);assert.equal(diagnostic.manifest.authority_generation,diagnostic.restore_identity.authority_generation);assert.equal(diagnostic.manifest.final_manifest_sha256,diagnostic.restore_identity.final_manifest_sha256);
  for(const k of ['database_verified','storage_verified','authority_invalidated','post_restore_verified'])assert.equal(diagnostic.manifest[k],true);
  assert.equal(diagnostic.manifest.database_tables,String(summary.table_count));assert.equal(diagnostic.manifest.database_rows,String(summary.database_row_count));
- assert.deepEqual(diagnostic.manifest.native_text_import,{state:'MATCH',tables:217,original_text_multiset:true});
- assert.equal(diagnostic.manifest.storage_sql.status,'MATCH');assert.equal(diagnostic.manifest.storage_sql.tables,8);assert.equal(diagnostic.manifest.storage_sql.original_text_multiset,true);
+ assert.deepEqual(diagnostic.manifest.native_text_import,{state:'MATCH',tables:reviewed.expected_manifest_database_tables,original_text_multiset:true});
+ assert.equal(diagnostic.manifest.storage_sql.status,'MATCH');assert.equal(diagnostic.manifest.storage_sql.tables,dispositionSha256===CURRENT311_ROOT_DISPOSITION_SHA256?reviewed.expected_storage_sql_tables:8);assert.equal(diagnostic.manifest.storage_sql.original_text_multiset,true);
  assert.deepEqual(diagnostic.leases,{total:'0',active:'0',expired:'0'});assert.deepEqual(diagnostic.unknown_categories,[]);
  for(const k of ['resolve_performed','unpause_performed','target_capture_performed'])assert.equal(diagnostic[k],false);
  assert.equal(diagnostic.Root_disposition,null);
