@@ -20,7 +20,7 @@ if(plan.files.length===311){
   assert.equal(binding.preserved134.length,134);for(const row of binding.preserved134)assert.equal(sha(readFileSync(resolve(root,'supabase/migrations',row.file))),row.sha256);
   for(const item of state.pending_migrations)assert.equal(sha(resolveReleaseMigrationSource(root,item).sql),item.sha256);
   const target=resolveReleaseSchemaTarget(root);assert.equal(target.canonicalFingerprint,'fea262d4eb49204e7c920662cef476c36015c28330435cafd238a358defd79dc');assert.equal(target.deploymentFingerprint,'c7a78eb3789702ef8b285b398511b4d382c3fefa629f20fce99b265689d7cfc7');
-  const capture=state.target.normal_source_capture;assert.equal(capture.original_run_id,41749829802);assert.equal(capture.rollback_evidence.rollback_verified,true);assert.equal(capture.source_data_preservation.original_tables,219);assert.equal(capture.source_data_preservation.applied_migration_count,177);
+  const capture=state.target.normal_source_capture;assert.equal(capture.original_run_id,41768329871);assert.equal(capture.rollback_evidence.rollback_verified,true);assert.equal(capture.source_data_preservation.original_tables,219);assert.equal(capture.source_data_preservation.applied_migration_count,177);
   for(const k of ['production_authorized','candidate_migration_admission','runtime_admission','full_rehearsal_attestation'])assert.equal(capture[k],false);
   const checked=assertReleaseWorkflowSource(root);assert.deepEqual(checked,{sourceCount:235,sourceHead:'20261021111917',targetCount:412,targetHead:'20261103004520',pendingCount:177,targetFingerprint:target.deploymentFingerprint});
  });

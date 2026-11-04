@@ -8,11 +8,11 @@
   "archive_digest": "f246930e213d8e9313db08b1d948ed5b1457a4ef0e40925a2ed2ebc7247e88c3",
   "source_migrations": 311,
   "capture": {
-    "report_sha256": "5bf45d00f624f35fb01eb2af77a1b2955ce8421201e61bc4b95bf382901ffd3c",
-    "report_bytes": 21508682,
-    "candidate_commit": "6c365a4d45fca604e6167d4517eac8832a0ba063",
-    "candidate_tree": "c6cd67077859c709ada2c304ba878f1127376eab",
-    "plan_sha256": "261b578ff88a1d2d2e131c931b81ebd861b42da243f225ef5b55920f9f486f91",
+    "report_sha256": "137bb925c6f621bdc6618cfc73b8945bd8536443016ddcdd51ee8982df6883ed",
+    "report_bytes": 21522147,
+    "candidate_commit": "867feb04aec7e3ab07edc51bf2ecaafbf5f120dd",
+    "candidate_tree": "9519aea9b1026f2d297a2172cd914b7f5289d3d6",
+    "plan_sha256": "96e450dfa9adec650d9661e064cfa62de5e58aac426e8ff39b834d360e5d775d",
     "source_ledger_count": 235,
     "target_ledger_count": 412,
     "pending_count": 177
@@ -47,6 +47,11 @@
       "path": "release/schema-evidence/SOURCE311_AUDITED_FRESH_CATALOG.json",
       "sha256": "927f3e36d8ad4b75082162c2f772bc297625fa99c55994201bf647ace8016125",
       "bytes": 8314658
+    },
+    {
+      "path": "release/schema-evidence/SOURCE311_PRODUCTION_ROLE_ORDER_TARGET_CAPTURE.json",
+      "sha256": "137bb925c6f621bdc6618cfc73b8945bd8536443016ddcdd51ee8982df6883ed",
+      "bytes": 21522147
     }
   ],
   "catalog_delta": {
