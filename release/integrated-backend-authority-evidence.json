@@ -485,7 +485,7 @@
       {
         "path": "docs/EXPIRED_ACTIVATION_REPAIR_20261104.json",
         "mode": "100644",
-        "object_id": "2bcafbdf704b9e517ec5eba346c3c1cf88be2424"
+        "object_id": "1723974b54a68bba3c3ab2654723221ca363a548"
       },
       {
         "path": "docs/NATIVE_LOCATION_LIFECYCLE_STAGE.md",
@@ -516,6 +516,11 @@
         "path": "docs/OUTLOOK_SHARED_EVENTS.md",
         "mode": "100644",
         "object_id": "6fcb6c1203bccbb46b9ff4b3e185d32d9e52ba95"
+      },
+      {
+        "path": "docs/applied-repairs/20261104174218_expired_unconsumed_assigned_activation_closure.sql",
+        "mode": "100644",
+        "object_id": "8fcd9ad660ac46416a6df9e9594ee2186f5f8f8b"
       },
       {
         "path": "docs/approved-manual-period-integration.md",
@@ -9125,7 +9130,7 @@
       {
         "path": "supabase/canonical/migration-replay-order.json",
         "mode": "100644",
-        "object_id": "bf84421b299a56a9d637e88adcf4b69cc09853cb"
+        "object_id": "297293999a415b4b6f93792253c374a81ea5e9f1"
       },
       {
         "path": "supabase/canonical/production-schema-fingerprint-input.json",
@@ -11353,18 +11358,13 @@
         "object_id": "55ccc56d20d4fa7444d822791e4f98c6f0219a75"
       },
       {
-        "path": "supabase/migrations/20261104174218_expired_unconsumed_assigned_activation_closure.sql",
-        "mode": "100644",
-        "object_id": "8fcd9ad660ac46416a6df9e9594ee2186f5f8f8b"
-      },
-      {
         "path": "tmp/write_probe.txt",
         "mode": "100644",
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
     "authority_path_count": 2247,
-    "migration_path_count": 312,
+    "migration_path_count": 311,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
   },
@@ -12307,9 +12307,6 @@
     },
     {
       "name": "20261103004520_authoritative_events_cancellation.sql"
-    },
-    {
-      "name": "20261104174218_expired_unconsumed_assigned_activation_closure.sql"
     }
   ],
   "release_boundary": "Prepare distinct minimum-32-character backend, native-route, and employee-device credential secrets before cutover; configure database digests immediately after the migrations that create each configuration function, retain the bridge backend artifact through the scan-snapshot phase, require manager-code recovery without phone-local work loss for any device-credential generation mismatch, and require the executable health/restoration probes before traffic changes."
