@@ -160,7 +160,7 @@
       {
         "path": ".github/workflows/foundation-security-gate.yml",
         "mode": "100644",
-        "object_id": "a676ca0f3c1359d1b510ac3811ae90534cfcb7db"
+        "object_id": "7e3156aac7c13570e68714d5baa3f97264077b7b"
       },
       {
         "path": ".github/workflows/integrated-release-attestation.yml",
@@ -646,6 +646,16 @@
         "path": "docs/pending-repairs/20261110054150_custodial_activation_digest_callsite_retention.sql",
         "mode": "100644",
         "object_id": "a7179281c1e707a5d9a8751f8d7ec454ccadfb29"
+      },
+      {
+        "path": "docs/pending-repairs/20261110081113_custodial_home_reader_projection_scope.json",
+        "mode": "100644",
+        "object_id": "a8868b73f0c07daa541720e16e7521e2a85026bb"
+      },
+      {
+        "path": "docs/pending-repairs/20261110081113_custodial_home_reader_projection_scope.sql",
+        "mode": "100644",
+        "object_id": "f2c7ea7f25db297d2250ec772551e8bca60fb4ee"
       },
       {
         "path": "docs/plans/2026-06-09-scheduler-open-owner-repair.md",
@@ -3323,9 +3333,14 @@
         "object_id": "73e5c032ec64de82e02d49438ff9f2196169acf8"
       },
       {
+        "path": "scripts/employee-home-reader-rls-tests.mjs",
+        "mode": "100644",
+        "object_id": "e23ef05cd67c367a21f85fdc3937938f3a6b15b5"
+      },
+      {
         "path": "scripts/employee-home-time-facts-tests.mjs",
         "mode": "100644",
-        "object_id": "8f95613d548414544a7168f5815b331ab0a732e0"
+        "object_id": "ced736801a8184ca1b0846e25472c59ed0cf6e2a"
       },
       {
         "path": "scripts/employee-message-prepare-predecessor-tests.mjs",
@@ -3370,7 +3385,7 @@
       {
         "path": "scripts/employee-zoo-wide-coverage-tests.mjs",
         "mode": "100644",
-        "object_id": "6394aa952622b356a81654789ecd3b0db4ba743c"
+        "object_id": "8ea93de2363f56d1394d1d860e025c90ca3698de"
       },
       {
         "path": "scripts/empty-database-rebuild-check.mjs",
@@ -6820,7 +6835,7 @@
       {
         "path": "scripts/static-weekly-employee-day-route-tests.mjs",
         "mode": "100644",
-        "object_id": "b59212f8a8035b384da274902f588bb8b2e65d28"
+        "object_id": "17d9e934e004e8d1436351b904ec8b8da1f67169"
       },
       {
         "path": "scripts/static-weekly-existing-employee-restore-database-tests.mjs",
@@ -8140,7 +8155,7 @@
       {
         "path": "src/employee-home-time-facts.js",
         "mode": "100644",
-        "object_id": "202614e6cace9f031a7122978df88dfa9f3a9ec0"
+        "object_id": "18d1425e6381ff10e3d63091be27268852618996"
       },
       {
         "path": "src/employee-notifications.js",
@@ -8150,7 +8165,7 @@
       {
         "path": "src/employee-zoo-wide-coverage.js",
         "mode": "100644",
-        "object_id": "95c0966b02186ea6ab5717e32bf5a2a2a54cd967"
+        "object_id": "f7704f02ee96171fb14fc849212904abb462a65f"
       },
       {
         "path": "src/events-api.js",
@@ -11448,7 +11463,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 2264,
+    "authority_path_count": 2267,
     "migration_path_count": 311,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
