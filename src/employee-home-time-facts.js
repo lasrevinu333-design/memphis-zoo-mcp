@@ -82,6 +82,17 @@ export function deriveProjectedHomeTimeFacts(day,record) {
       lunch:lunch?{start:lunch.start,end:lunch.end}:null,has_partial_absence:blocked.length>0};
   }catch{return base;}
 }
+// Only the existing bounded database reader may supply normal projection facts.
+// A canonical roster used by the coverage caller must name the same exact slot.
+export function deriveBoundedHomeTimeFacts(day,record,expectedRoster=null) {
+  if(record?.contract_version!=='employee-home-projected-record.v1'
+    ||record.service_date!==day.service_date||!same(record.employee_id,day.employee_id||day.employee?.id)
+    ||!same(record.projection_id,day.projection_id)||!same(record.publication_id,day.publication_id)
+    ||record.projection_status!=='current'
+    ||expectedRoster&&['employee_id','projection_id','publication_id','version_id','slot_id']
+      .some(key=>!same(record.roster?.[key],expectedRoster[key])))return unavailable(day);
+  return deriveProjectedHomeTimeFacts(day,record);
+}
 export async function readHomeTimeFacts({day,employeeId,runReadOnlySql}) {
   const fallback=unavailable(day);
   if(!UUID.test(employeeId||'')||!UUID.test(day.projection_id||'')||!UUID.test(day.publication_id||'')
@@ -97,23 +108,10 @@ export async function readHomeTimeFacts({day,employeeId,runReadOnlySql}) {
         &&facts?.contract_version==='employee-home-time-facts.v1'?facts:fallback;
     }catch{return fallback;}
   }
-  // The existing security-definer canonical reader performs current exception,
-  // staffing and projection checks inside its authorized boundary. Bind that
-  // fresh result to this employee day's exact immutable projection. No direct
-  // invocation of private digest/exception helpers is allowed for this reader.
-  const sql=`select jsonb_build_object('roster',to_jsonb(r),'employee_active',emp.active,
-      'availability',(select jsonb_agg(jsonb_build_object('slotId',a->'slotId','incumbentPersonId',a->'incumbentPersonId',
-        'serviceDate',a->'serviceDate','dayOfWeek',a->'dayOfWeek','status',a->'status',
-        'shift',a->'shift','lunch',a->'lunch','blockedWindows',a->'blockedWindows')) from jsonb_array_elements(
-        p.projection_envelope#>'{authority,projectionAvailability}') a
-        where a->>'serviceDate'='${day.service_date}' and a->>'incumbentPersonId'=r.employee_id::text)) as facts
-    from public.static_weekly_v6_read_roster('${day.service_date}'::date) r
-    join public.employees emp on emp.id=r.employee_id
-    join public.weekly_schedule_compiled_projections p on p.projection_id=r.projection_id
-      and p.publication_id=r.publication_id and p.version_id=r.version_id
-    where r.employee_id='${employeeId}'::uuid and r.projection_id='${day.projection_id}'::uuid
-      and r.publication_id='${day.publication_id}'::uuid and r.governed is true
-      and r.projection_status='current' and '${day.service_date}'::date between p.week_start and p.week_end`;
-  try{const rows=await runReadOnlySql(sql);return Array.isArray(rows)&&rows.length===1?deriveProjectedHomeTimeFacts(day,rows[0].facts):fallback;}
+  // The application reader cannot directly see projection rows under RLS.
+  // Keep the exact employee/publication/projection lookup inside its existing
+  // bounded reader, which checks canonical freshness before returning times.
+  const sql=`select public.static_weekly_v27_read_home_time_facts('${day.service_date}'::date,'${employeeId}'::uuid,'${day.publication_id}'::uuid,'${day.projection_id}'::uuid) as facts`;
+  try{const rows=await runReadOnlySql(sql);return Array.isArray(rows)&&rows.length===1?deriveBoundedHomeTimeFacts(day,rows[0].facts):fallback;}
   catch{return fallback;}
 }

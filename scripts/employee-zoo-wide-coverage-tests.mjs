@@ -41,11 +41,23 @@ for(const change of [x=>x.roster[1].availability[0].shift.end='17:00',
  x=>x.roster.push(structuredClone(x.roster[0])),x=>x.assignments=[]]){
  const altered=structuredClone(published);change(altered);assert.equal(deriveZooWideCoverage(day,altered),null);
 }
-let query='';assert.deepEqual(await readZooWideCoverage({day,runReadOnlySql:async sql=>{query=sql;return [{facts:published}];}}),expected);
+const bounded={...structuredClone(published),availability_authority:'bounded_home_reader.v1'};
+bounded.roster=published.roster.map(record=>({roster:structuredClone(record.roster),home_record:{...structuredClone(record),
+  contract_version:'employee-home-projected-record.v1',service_date:day.service_date,employee_id:record.roster.employee_id,
+  publication_id:day.publication_id,projection_id:day.projection_id,projection_status:'current'}}));
+assert.deepEqual(deriveZooWideCoverage(day,bounded),expected);
+for(const change of [x=>x.roster[1].home_record=null,x=>delete x.roster[1].home_record,
+ x=>x.roster[1].home_record.roster.slot_id=id(99),x=>x.roster[1].home_record.roster.version_id=id(99),
+ x=>x.roster[1].home_record.projection_id=id(99),x=>x.roster[1].home_record.service_date='2026-10-29',
+ x=>x.roster[1].home_record.availability=[],x=>x.roster[1].home_record.contract_version='wrong',
+ x=>x.assignments[2].assignment_status='open',x=>x.assignments[2].coverage_start='16:30']){
+ const altered=structuredClone(bounded);change(altered);assert.equal(deriveZooWideCoverage(day,altered),null,'Missing or mismatched peer cannot be omitted to manufacture sole coverage');
+}
+let query='';assert.deepEqual(await readZooWideCoverage({day,runReadOnlySql:async sql=>{query=sql;return [{facts:bounded}];}}),expected);
 assert.match(query,/current_plan\.projection_status='current'/);assert.match(query,/current_plan\.governed is true/);
-assert.match(query,/current_plan\.version_id=p\.version_id/);assert.match(query,/r\.version_id=p\.version_id/);
-assert.match(query,/projectionAvailability/);assert.match(query,/with current_projection as materialized/);
-assert.doesNotMatch(query,/static_weekly_(?:digest|compiler_exception_set|accepted_exception_set)/);
+assert.match(query,/r\.version_id=p\.version_id/);assert.match(query,/roster_facts as materialized/);
+assert.match(query,/static_weekly_v27_read_home_time_facts/);assert.match(query,/with current_projection as materialized/);
+assert.doesNotMatch(query,/weekly_schedule_compiled_projections|projection_envelope|static_weekly_(?:digest|compiler_exception_set|accepted_exception_set)/);
 assert.doesNotMatch(query,/\b(insert|update|delete|alter|drop|truncate)\b/i);
 assert.equal(await readZooWideCoverage({day,runReadOnlySql:async()=>[{facts:input}]}),null,'Current reader cannot fall back to unbound legacy exception facts');
 assert.equal(await readZooWideCoverage({day,runReadOnlySql:async()=>{throw Error('unavailable');}}),null);

@@ -1,0 +1,47 @@
+{
+  "schema": "custodial.bounded-home-reader-repair.v1",
+  "scope": "PENDING_EXACT_PREIMAGE_REPAIR",
+  "preimage_receipt": "home-reader-exact-preimage-readonly.json",
+  "target": {
+    "identity": "public.static_weekly_v27_read_home_time_facts(date,uuid,uuid,uuid)",
+    "preimage_sha256": "43c3d0b75b45dfcc001864e098e067d5a8623aca49e9c30e9f0c1a9059473f78",
+    "replacement": "CREATE OR REPLACE FUNCTION public.static_weekly_v27_read_home_time_facts(p_date date, p_employee uuid, p_publication uuid, p_projection uuid)\n RETURNS jsonb\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare rec jsonb:=public.custodial_dated_record(p_date);roster jsonb;working boolean;normal_facts jsonb;\nbegin\n if p_date is null or p_employee is null or p_publication is null or p_projection is null then return null;end if;\n -- Normal publication facts stay inside this existing bounded reader. The\n -- canonical roster owns exception/staffing freshness; raw projection RLS stays\n -- unchanged. Return only this dated employee's selected published time fields.\n if rec is null then\n  select jsonb_agg(jsonb_build_object(\n   'contract_version','employee-home-projected-record.v1','service_date',p_date,\n   'employee_id',p_employee,'publication_id',p_publication,'projection_id',p_projection,'projection_status','current',\n   'roster',jsonb_build_object('employee_id',r.employee_id,'projection_id',r.projection_id,\n    'publication_id',r.publication_id,'version_id',r.version_id,'slot_id',r.slot_id,\n    'projection_status',r.projection_status,'staffing_state',r.staffing_state),\n   'employee_active',emp.active,\n   'availability',(select jsonb_agg(jsonb_build_object('slotId',a->'slotId','incumbentPersonId',a->'incumbentPersonId',\n    'serviceDate',a->'serviceDate','dayOfWeek',a->'dayOfWeek','status',a->'status',\n    'shift',a->'shift','lunch',a->'lunch','blockedWindows',a->'blockedWindows'))\n    from jsonb_array_elements(p.projection_envelope#>'{authority,projectionAvailability}') a\n    where a->>'serviceDate'=p_date::text and a->>'incumbentPersonId'=r.employee_id::text))) into normal_facts\n  from public.static_weekly_v6_read_roster(p_date) r\n  join public.employees emp on emp.id=r.employee_id\n  join public.weekly_schedule_compiled_projections p on p.projection_id=r.projection_id\n   and p.publication_id=r.publication_id and p.version_id=r.version_id\n  where r.employee_id=p_employee and r.projection_id=p_projection and r.publication_id=p_publication\n   and r.governed is true and r.projection_status='current' and p_date between p.week_start and p.week_end;\n  if jsonb_array_length(normal_facts) is distinct from 1 then return null;end if;\n  return normal_facts->0;\n end if;\n if rec is null or rec->>'projectionStatus'<>'current' or rec->>'publicationId'<>p_publication::text or rec->>'projectionId'<>p_projection::text then return null;end if;\n select r into roster from jsonb_array_elements(public.custodial_dated_rows('roster',p_date)) r where r->>'employee_id'=p_employee::text;\n if roster is null then return null;end if;working:=roster->>'active'='true';\n return jsonb_build_object('contract_version','employee-home-time-facts.v1','service_date',p_date,'employee_id',p_employee,\n  'employee_name',roster->>'employee_name','projection_status','current','projection_id',p_projection,'publication_id',p_publication,\n  'candidate_revision',rec->>'phonePdfRevision','source','static_weekly_projection','reason',null,\n  'schedule_status',case when working then 'scheduled' else 'off' end,\n  'shift',case when working then jsonb_build_object('active',true,'start',roster->>'shift_start','end',roster->>'shift_end',\n   'shift_start',roster->>'shift_start','shift_end',roster->>'shift_end','lunch_start',roster->>'lunch_start','lunch_end',roster->>'lunch_end') else jsonb_build_object('active',false) end,\n  'lunch',case when working then jsonb_build_object('start',roster->>'lunch_start','end',roster->>'lunch_end') else null end);\nend $function$\n",
+    "replacement_sha256": "daf9df7d12b6b1d6244ab4e15dc24dc084b268a9d16c29871c50b72ba118027b",
+    "metadata": {
+      "acl": "{postgres=X/postgres,service_role=X/postgres,custodial_application_reader=X/postgres}",
+      "owner": "postgres",
+      "config": [
+        "search_path=pg_catalog, public"
+      ],
+      "strict": false,
+      "definer": true,
+      "language": "plpgsql",
+      "parallel": "u",
+      "volatility": "s"
+    },
+    "inventory": [
+      {
+        "object_kind": "function",
+        "object_identity": "public.static_weekly_v27_read_home_time_facts(date,uuid,uuid,uuid)",
+        "restore_order": 100317,
+        "definition_sql": "CREATE OR REPLACE FUNCTION public.static_weekly_v27_read_home_time_facts(p_date date, p_employee uuid, p_publication uuid, p_projection uuid)\n RETURNS jsonb\n LANGUAGE plpgsql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare rec jsonb:=public.custodial_dated_record(p_date);roster jsonb;working boolean;\nbegin\n if p_date is null or p_employee is null or p_publication is null or p_projection is null then return null;end if;\n if rec is null or rec->>'projectionStatus'<>'current' or rec->>'publicationId'<>p_publication::text or rec->>'projectionId'<>p_projection::text then return null;end if;\n select r into roster from jsonb_array_elements(public.custodial_dated_rows('roster',p_date)) r where r->>'employee_id'=p_employee::text;\n if roster is null then return null;end if;working:=roster->>'active'='true';\n return jsonb_build_object('contract_version','employee-home-time-facts.v1','service_date',p_date,'employee_id',p_employee,\n  'employee_name',roster->>'employee_name','projection_status','current','projection_id',p_projection,'publication_id',p_publication,\n  'candidate_revision',rec->>'phonePdfRevision','source','static_weekly_projection','reason',null,\n  'schedule_status',case when working then 'scheduled' else 'off' end,\n  'shift',case when working then jsonb_build_object('active',true,'start',roster->>'shift_start','end',roster->>'shift_end',\n   'shift_start',roster->>'shift_start','shift_end',roster->>'shift_end','lunch_start',roster->>'lunch_start','lunch_end',roster->>'lunch_end') else jsonb_build_object('active',false) end,\n  'lunch',case when working then jsonb_build_object('start',roster->>'lunch_start','end',roster->>'lunch_end') else null end);\nend $function$\n",
+        "definition_sha256": "43c3d0b75b45dfcc001864e098e067d5a8623aca49e9c30e9f0c1a9059473f78"
+      },
+      {
+        "object_kind": "grant",
+        "object_identity": "public.static_weekly_v27_read_home_time_facts(date,uuid,uuid,uuid)",
+        "restore_order": 950163,
+        "definition_sql": "select public.custodial_release_authority_reset_grants('public.static_weekly_v27_read_home_time_facts(date,uuid,uuid,uuid)'); grant execute on function static_weekly_v27_read_home_time_facts(date,uuid,uuid,uuid) to service_role; grant execute on function static_weekly_v27_read_home_time_facts(date,uuid,uuid,uuid) to custodial_application_reader;",
+        "definition_sha256": "66e8c793a1af99cc91fe80af26314446e12d6e308c2635b808fe07d1cd175901"
+      }
+    ]
+  },
+  "projection_rls": [
+    {
+      "relrowsecurity": true,
+      "relforcerowsecurity": true
+    }
+  ],
+  "projection_policies": [],
+  "matching_authority_surface": []
+}

@@ -48,7 +48,7 @@ function employeeDay(projectionStatus = "current") {
 }
 
 function homeTimes() {
-  return {employee_active:true,roster:{employee_id:employeeId,
+  return {contract_version:'employee-home-projected-record.v1',service_date:serviceDate,employee_id:employeeId,projection_status:'current',projection_id:'71000000-0000-4000-8000-000000000009',publication_id:'70000000-0000-4000-8000-000000000009',employee_active:true,roster:{employee_id:employeeId,
     projection_id:'71000000-0000-4000-8000-000000000009',publication_id:'70000000-0000-4000-8000-000000000009',
     version_id:'60000000-0000-4000-8000-000000000009',slot_id:'50000000-0000-4000-8000-000000000009',
     active:true,staffing_state:'working',projection_status:'current',shift_start:'07:00:00',shift_end:'16:00:00',lunch_start:'12:00:00',lunch_end:'13:00:00'},
@@ -86,7 +86,7 @@ const currentCalls = [];
 await withServer(buildApp(async (sql) => {
   currentCalls.push(sql);
   if (sql.includes("static_weekly_v5_read_employee_day")) return [{ data: employeeDay() }];
-  if (sql.includes("static_weekly_v6_read_roster")) return [{facts:homeTimes()}];
+  if (sql.includes("static_weekly_v27_read_home_time_facts")) return [{facts:homeTimes()}];
   throw new Error(`legacy schedule read was reached: ${sql}`);
 }), async (origin) => {
   const summary = await fetch(`${origin}/schedule-api/my-day-summary?employee_id=${employeeId}&service_date=${serviceDate}`);
@@ -107,7 +107,7 @@ await withServer(buildApp(async (sql) => {
   assert.equal(html.status, 200);
   assert.match(await html.text(), /Taylor New[\s\S]*Teton Restroom/);
 });
-assert.equal(currentCalls.every((sql) => sql.includes("static_weekly_v5_read_employee_day") || sql.includes("static_weekly_v6_read_roster")), true, "governed dates read only canonical published authority, not the legacy scheduler");
+assert.equal(currentCalls.every((sql) => sql.includes("static_weekly_v5_read_employee_day") || sql.includes("static_weekly_v27_read_home_time_facts")), true, "governed dates read only canonical published authority, not the legacy scheduler");
 assert.equal(currentCalls.some(sql=>/static_weekly_(?:digest|compiler_exception_set|accepted_exception_set)/.test(sql)),false,
   "Home route must not invoke owner-only digest or exception functions through the dedicated reader");
 
@@ -142,7 +142,7 @@ await withServer(buildApp(async (sql) => {
     assert.doesNotMatch(sql, new RegExp(conflictingEmployeeId));
     return [{ data: employeeDay() }];
   }
-  if (sql.includes("static_weekly_v6_read_roster")) {
+  if (sql.includes("static_weekly_v27_read_home_time_facts")) {
     assert.match(sql,new RegExp(employeeId));assert.doesNotMatch(sql,new RegExp(conflictingEmployeeId));
     return [{facts:homeTimes()}];
   }

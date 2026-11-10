@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
-import {deriveHomeTimeFacts,deriveProjectedHomeTimeFacts,readHomeTimeFacts} from '../src/employee-home-time-facts.js';
+import {deriveHomeTimeFacts,deriveProjectedHomeTimeFacts,deriveBoundedHomeTimeFacts,readHomeTimeFacts} from '../src/employee-home-time-facts.js';
 const id=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 const day={service_date:'2026-09-21',employee_id:id(1),employee_name:'Fixture Custodian',projection_id:id(2),publication_id:id(3),projection_status:'current'};
 const record={employee_active:true,roster:{employee_id:id(1),projection_id:id(2),publication_id:id(3),version_id:id(4),slot_id:id(5),projection_status:'current',active:true,staffing_state:'working',shift_start:'08:00:00',shift_end:'17:00:00',lunch_start:'12:00:00',lunch_end:'13:00:00'},exceptions:[]};
 const change=(type,payload={},sequence=1)=>({id:id(sequence+100),type,serviceDate:day.service_date,status:'accepted',sequence,baseVersionId:id(4),publicationId:id(3),payload:{slotId:id(5),...payload}});
 const clone=value=>structuredClone(value),results=[];
 const projected={employee_active:true,roster:clone(record.roster),availability:[{slotId:id(5),incumbentPersonId:id(1),serviceDate:day.service_date,dayOfWeek:1,status:'working',shift:{start:'08:00',end:'17:00'},lunch:{start:'12:00',end:'13:00'}}]};
+const bounded={...clone(projected),contract_version:'employee-home-projected-record.v1',service_date:day.service_date,employee_id:day.employee_id,publication_id:day.publication_id,projection_id:day.projection_id,projection_status:'current'};
 async function check(name,fn){try{await fn();results.push({name,passed:true});}catch(error){results.push({name,passed:false,error:error.message});}}
 await check('published base shift and lunch',()=>{const r=deriveHomeTimeFacts(day,record);assert.deepEqual(r.lunch,{start:'12:00',end:'13:00'});assert.equal(r.shift.shift_start,'08:00');assert.equal(r.reason,null);});
 await check('accepted dated lunch replaces only that day',()=>{const r=clone(record);r.exceptions=[change('lunch',{lunch:{start:'13:00',end:'14:00'}})];assert.equal(deriveHomeTimeFacts(day,r).lunch.start,'13:00');r.exceptions[0].serviceDate='2026-09-22';assert.equal(deriveHomeTimeFacts(day,r).lunch.start,'12:00');});
@@ -40,13 +41,10 @@ await check('wrong projection, employee and publication are rejected',()=>{for(c
 await check('unaccepted or wrong-publication exceptions are not used',()=>{for(const key of ['status','publicationId']){const r=clone(record);r.exceptions=[change('lunch',{lunch:{start:'13:00',end:'14:00'}})];r.exceptions[0][key]=key==='status'?'draft':id(99);assert.equal(deriveHomeTimeFacts(day,r).shift,null);}});
 await check('duplicate and malformed commands refuse fabricated times',()=>{const r=clone(record);r.exceptions=[change('lunch',{lunch:{start:'13:00',end:'14:00'}})];r.exceptions.push(clone(r.exceptions[0]));assert.equal(deriveHomeTimeFacts(day,r).shift,null);r.exceptions=[{...change('lunch'),sequence:'invalid'}];assert.equal(deriveHomeTimeFacts(day,r).shift,null);});
 await check('lookup is scoped to the accepted employee and exact projection',async()=>{
-  const queries=[];const value=await readHomeTimeFacts({day,employeeId:id(1),runReadOnlySql:async sql=>{queries.push(sql);return [{facts:projected}];}});
+  const queries=[];const value=await readHomeTimeFacts({day,employeeId:id(1),runReadOnlySql:async sql=>{queries.push(sql);return [{facts:bounded}];}});
   assert.equal(value.shift.shift_start,'08:00');assert.equal(queries.length,1);
-  assert.ok(queries[0].includes(`r.employee_id='${id(1)}'::uuid`));assert.ok(queries[0].includes(`r.projection_id='${id(2)}'::uuid`));
-  assert.match(queries[0],/static_weekly_v6_read_roster/);assert.match(queries[0],/r\.governed is true/);
-  assert.match(queries[0],/r\.projection_status='current'/);assert.match(queries[0],/p\.publication_id=r\.publication_id and p\.version_id=r\.version_id/);
-  assert.match(queries[0],/projectionAvailability/);assert.match(queries[0],/between p\.week_start and p\.week_end/);
-  assert.doesNotMatch(queries[0],/static_weekly_(?:digest|compiler_exception_set|accepted_exception_set)/);
+  assert.equal(queries[0],`select public.static_weekly_v27_read_home_time_facts('${day.service_date}'::date,'${id(1)}'::uuid,'${id(3)}'::uuid,'${id(2)}'::uuid) as facts`);
+  assert.doesNotMatch(queries[0],/weekly_schedule_compiled_projections|projection_envelope|static_weekly_(?:digest|compiler_exception_set|accepted_exception_set)/);
   assert.doesNotMatch(queries[0],/\b(insert|update|delete|alter|drop|truncate)\b/i);
 });
 await check('missing or duplicate roster facts remain unavailable',async()=>{for(const rows of [[],[{facts:record},{facts:record}]]){const value=await readHomeTimeFacts({day,employeeId:id(1),runReadOnlySql:async()=>rows});assert.equal(value.shift,null);}});
@@ -79,5 +77,24 @@ await check('projected missing or ambiguous availability and mismatched authorit
   assert.equal(deriveProjectedHomeTimeFacts({...day,projection_status:'stale_staffing_change'},projected).shift,null);
 });
 await check('noncanonical publication cannot interpolate into reader SQL',async()=>{let calls=0;const value=await readHomeTimeFacts({day:{...day,publication_id:"bad';--"},employeeId:id(1),runReadOnlySql:async()=>{calls++;return[];}});assert.equal(calls,0);assert.equal(value.shift,null);});
+await check('bounded reader contract rejects every mismatched top-level binding',()=>{
+  assert.equal(deriveBoundedHomeTimeFacts(day,bounded).shift.start,'08:00');
+  for(const key of ['contract_version','service_date','employee_id','publication_id','projection_id','projection_status']){
+    const r=clone(bounded);r[key]='wrong';assert.equal(deriveBoundedHomeTimeFacts(day,r).shift,null,key);
+  }
+  assert.equal(deriveBoundedHomeTimeFacts(day,projected).shift,null);
+});
+await check('coverage bounded facts must match its independently current canonical slot and version',()=>{
+  for(const key of ['slot_id','version_id','employee_id','publication_id','projection_id']){
+    const expected=clone(record.roster);expected[key]=id(99);assert.equal(deriveBoundedHomeTimeFacts(day,bounded,expected).shift,null,key);
+  }
+});
+await check('dated reader contract remains unchanged with exact revision requirement',async()=>{
+  const datedDay={...day,authority_scope:'dated_transition',candidate_revision:'fixture-revision'};
+  const facts={...deriveHomeTimeFacts(day,record),candidate_revision:datedDay.candidate_revision};
+  assert.deepEqual(await readHomeTimeFacts({day:datedDay,employeeId:day.employee_id,runReadOnlySql:async()=>[{facts}]}),facts);
+  const wrong={...facts,candidate_revision:'stale'};
+  assert.equal((await readHomeTimeFacts({day:datedDay,employeeId:day.employee_id,runReadOnlySql:async()=>[{facts:wrong}]})).shift,null);
+});
 console.log(JSON.stringify({scope:'Published-time model and read-only query construction with synthetic SQL results; no database write or migration execution',passed:results.filter(r=>r.passed).length,failed:results.filter(r=>!r.passed).length,results},null,2));
 process.exitCode=results.some(result=>!result.passed)?1:0;
