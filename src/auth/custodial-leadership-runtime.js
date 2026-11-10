@@ -174,6 +174,9 @@ export function createCustodialLeadershipApiProxy({env=process.env,fetchImpl=fet
   if(!enabled(env))return res.status(503).json({ok:false,error:'leadership_disabled'});
   try{const step=req.params.step;if(!['session','challenge','enroll','revoke'].includes(step)||!((step==='session'&&req.method==='GET')||(step!=='session'&&req.method==='POST')))return res.sendStatus(404);
    if(req.secure!==true)throw error('origin_or_transport_denied');const origin=text(req.get('Origin'));requireOrigin(origin,env);
+   // Keep an allowed browser able to read a bounded upstream failure. Origin
+   // validation still precedes these headers; no session or write is retried.
+   res.set({'Cache-Control':'no-store','Access-Control-Allow-Origin':origin,'Access-Control-Allow-Credentials':'true','Vary':'Origin'});
    const cookie=String(req.get('Cookie')||'').split(';').filter(x=>Object.values(CUSTODIAL_LEADERSHIP_COOKIE_NAMES).includes(x.trim().split('=')[0])).join(';');
    const body=req.method==='POST'?JSON.stringify(req.body):undefined;if(body&&Buffer.byteLength(body)>2048)throw error('invalid_request',413);
    const source=text(req.ip),sourceTime=String(Date.now()),sourceMac=scopeMac(env,'custodial-proxy-source-v1',source+'\n'+sourceTime+'\n/'+step);
@@ -184,7 +187,7 @@ export function createCustodialLeadershipApiProxy({env=process.env,fetchImpl=fet
     if(!Object.values(CUSTODIAL_LEADERSHIP_COOKIE_NAMES).some(n=>c.startsWith(n+'='))||!c.includes('Secure')||!c.includes('HttpOnly')||/;\s*Domain=/i.test(c))throw error('custodial_cookie_transport_invalid',503);
     res.append('Set-Cookie',c);
    }
-   res.set({'Cache-Control':'no-store','Access-Control-Allow-Origin':origin,'Access-Control-Allow-Credentials':'true','Vary':'Origin'}).status(response.status).json(result);
+   res.status(response.status).json(result);
   }catch(e){if(req.body&&Object.hasOwn(req.body,'pin'))delete req.body.pin;res.status(e.status||503).json({ok:false,error:'custodial_leadership_unavailable'});}
  });
  return proxy;
