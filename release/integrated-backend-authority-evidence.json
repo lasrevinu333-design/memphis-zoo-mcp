@@ -613,6 +613,21 @@
         "object_id": "8d334e33a3beefe1c9bcfa9af2bb6fd65e1c6f2c"
       },
       {
+        "path": "docs/pending-repairs/20261110050014_custodial_activation_context_retention.json",
+        "mode": "100644",
+        "object_id": "92894678eeb01e96c12085bb9c445b83ee28ca81"
+      },
+      {
+        "path": "docs/pending-repairs/20261110050014_custodial_activation_context_retention.preimages.json",
+        "mode": "100644",
+        "object_id": "ade5cc3cb4bd841beb6c35d1c6157b33c9b5e45c"
+      },
+      {
+        "path": "docs/pending-repairs/20261110050014_custodial_activation_context_retention.sql",
+        "mode": "100644",
+        "object_id": "bfba1ed5ecd8433588720bfe9476d2fbf8cd94f2"
+      },
+      {
         "path": "docs/plans/2026-06-09-scheduler-open-owner-repair.md",
         "mode": "100644",
         "object_id": "571624968a65ce4457de4165ae1965b988a1665d"
@@ -695,7 +710,7 @@
       {
         "path": "package.json",
         "mode": "100644",
-        "object_id": "bba4a953456e6203bb3ffadfeb2df9232faca10f"
+        "object_id": "e91de53d0f72bdf7addb5810c0a32cbd55ab58e0"
       },
       {
         "path": "proposals/approved-manual-coverall-management.sql",
@@ -2443,6 +2458,11 @@
         "object_id": "eee23be75e490bbb992c2d63bd27eefb9cf6ddb5"
       },
       {
+        "path": "scripts/activation-context-retention-tests.mjs",
+        "mode": "100644",
+        "object_id": "164d2766b599f21e094c62390bb2798bff8e6fe4"
+      },
+      {
         "path": "scripts/apply-abandoned-mutation-lease-reconciliation.mjs",
         "mode": "100644",
         "object_id": "04fa0c9c28c8d40e7339aa3e172316411fe84c7a"
@@ -3551,6 +3571,11 @@
         "path": "scripts/final-uncertainty-closure-database-tests.mjs",
         "mode": "100644",
         "object_id": "697a67f33ce33bbe3e63688b082c730d622294c6"
+      },
+      {
+        "path": "scripts/fixtures/activation-context-retention.sql",
+        "mode": "100644",
+        "object_id": "d022eee5c204594ecc30c218bd513cfebbddab44"
       },
       {
         "path": "scripts/fixtures/approved-dated152-helper-owner-predicates.sql",
@@ -11393,7 +11418,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 2253,
+    "authority_path_count": 2258,
     "migration_path_count": 311,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
