@@ -30,3 +30,11 @@ test('City reader uses fixed public read-only query, counts every row, shares re
  await read();assert.equal(requests.length,2);time+=60001;fail=true;
  const bad=await read();assert.equal(bad.state,'unavailable');assert.deepEqual(bad.rows,[]);assert.doesNotMatch(JSON.stringify(bad),/PRIVATE/);
 });
+
+test('the actual City filter field governs location while a contradictory secondary name remains flagged',()=>{
+ const r={...row,Facility_Code:'15Z86 - CAT HOUSE CAFE',Facility_FullName:'15T02 - BELLEVUE TENNIS'};
+ const out=projectCityWorkOrders(payload([r]),1,at);assert.equal(out.rows[0].facility,r.Facility_Code);
+ assert.equal(out.rows[0].facility_label_conflict,true);
+ const same=projectCityWorkOrders(payload([{...r,Facility_FullName:r.Facility_Code}]),1,at);
+ assert.equal(same.rows[0].facility_label_conflict,false);
+});

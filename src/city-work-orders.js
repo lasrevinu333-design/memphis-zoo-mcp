@@ -18,7 +18,8 @@ export function projectCityWorkOrders(payload,count,at){
       ||(r.RequestDescription!=null&&r.RequestDescription!==''&&text(r.RequestDescription,1000)===null)
       ||[r.RequestDate,r.CloseDate,r.last_edited_date].some(v=>date(v)===undefined))throw Error('city_snapshot_invalid');
     ids.add(r.OBJECTID);
-    return {id:String(r.OBJECTID),work_order_id:text(r.WorkOrderID,30),facility:text(r.Facility_FullName||r.Facility_Code,500),
+    return {id:String(r.OBJECTID),work_order_id:text(r.WorkOrderID,30),facility:text(r.Facility_Code,500),
+      facility_label_conflict:!!text(r.Facility_FullName,500)&&text(r.Facility_FullName,500)!==text(r.Facility_Code,500),
       description:text(r.RequestDescription,1000),status:r.RequestStatus,requested_at:date(r.RequestDate),
       // A prior close date can survive reopening. The City's active layer and
       // current status govern this list; preserve the date without inferring.

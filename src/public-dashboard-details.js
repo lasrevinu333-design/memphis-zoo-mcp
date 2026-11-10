@@ -44,7 +44,7 @@ export function publicOperationsDetails(events, mail, now = new Date(), city = n
       'status','issue','students','chaperones','teachers','unclassified','buses','adults','total']),
     spiceworks:mailFeed(mail?.spiceworks,['ticket_id','title','category','assignee','status','custodial','active']),
     spiceworks_activity:mailFeed(mail?.spiceworks_activity,['ticket_id','title','kind','from','to','at']),
-    city:mailFeed(city,['id','work_order_id','facility','description','status','requested_at','source_close_date','updated_at']),
+    city:mailFeed(city,['id','work_order_id','facility','facility_label_conflict','description','status','requested_at','source_close_date','updated_at']),
     staff_locations:{state:'unavailable',reason:'qualified_location_projection_not_bound',rows:[]},school_departure_policy:null};
 }
 const date = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
