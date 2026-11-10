@@ -3175,7 +3175,7 @@
       {
         "path": "scripts/custodial-leadership-runtime-tests.mjs",
         "mode": "100644",
-        "object_id": "653cd5305f5d98e07a81d25ae1c708caa793bd2b"
+        "object_id": "60c4f5d2a48a550a96e8a56862e54e1425e68708"
       },
       {
         "path": "scripts/custodial-leadership-ticket-database-tests.mjs",
@@ -8030,7 +8030,7 @@
       {
         "path": "src/auth/custodial-leadership-runtime.js",
         "mode": "100644",
-        "object_id": "1ce593c8c092ef32b5cf11f881a5b2c54cd1ff71"
+        "object_id": "196b8ffcc4891efd2797f2e020aff08b1c637eca"
       },
       {
         "path": "src/auth/custodial-leadership-ticket-operation.mjs",
