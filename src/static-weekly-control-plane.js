@@ -14,7 +14,8 @@ import { hasManagerPermission, isCustodialLeadershipManagementSession } from "./
  */
 import { randomBytes, createHash, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { MANAGER_OPERATION_MILLISECONDS, CLEANUP_RESERVE_MILLISECONDS } from "./static-weekly-manager-operation.js";
+import { MANAGER_OPERATION_MILLISECONDS, CLEANUP_RESERVE_MILLISECONDS,
+  INITIAL_MANUAL_ACTIVATION_MILLISECONDS, initialManualActivationWorkerDeadline } from "./static-weekly-manager-operation.js";
 import { assertOwnerRecurringWorkdays } from "./static-weekly-owner-workdays.js";
 import { createCoverAllPrintDocument, coverAllIssuingManagerFromActor } from "./static-weekly-coverall-print.js";
 import {listCoverAllEventBriefPreviews,confirmCoverAllEventBrief,revalidateConfirmedCoverAllEventBrief} from './coverall-event-brief.js';
@@ -84,7 +85,7 @@ function operationRemaining(deadlineAt, signal) {
   assertOperationActive(signal);
   const remaining = Math.floor(deadlineAt - performance.now());
   if (remaining < 1) throw fail("static_weekly_recurring_operation_deadline_exceeded",
-    "The recurring operation exceeded its one-minute deadline; check its exact status before retrying.");
+    "The recurring operation exceeded its request deadline; check its exact status before retrying.");
   return remaining;
 }
 
@@ -1817,7 +1818,7 @@ export function createStaticWeeklyControlPlane({
       const actor=requireManager(manager),id=requireUuid(packetId,'static_manual_activation_packet_required'),revision=requireRevision(expectedRevision),
         key=requireIdempotencyKey(idempotencyKey),preview=text(previewDigest),requestContext=managerRequest.getStore(),
         startedAt=performance.now(),expiresAt=Math.min(deadlineAt==null?Infinity:Number(deadlineAt),requestContext?.deadlineAt??Infinity,
-          startedAt+STATIC_WEEKLY_MANAGER_OPERATION_DEADLINE_MS);
+          startedAt+INITIAL_MANUAL_ACTIVATION_MILLISECONDS);
       if(key.length>120||!/^[a-f0-9]{64}$/.test(preview)||!Number.isFinite(expiresAt))throw fail('static_manual_activation_identity_invalid');
       return transaction(async client=>{
         // The initial native publication evaluates large checked JSON inputs.
@@ -1849,7 +1850,7 @@ export function createStaticWeeklyControlPlane({
           prepareOperational:async({beginning})=>{
             assertOperationActive(signal);
             const input=approvedManualInitialEmploymentWorkerInput({basis:beginning.basis,actor,operationId:operation}),
-              workerResult=await prepareApprovedManualPeriodIsolated(input,{deadlineAtMilliseconds:expiresAt-STATIC_WEEKLY_MANAGER_CLEANUP_RESERVE_MS});
+              workerResult=await prepareApprovedManualPeriodIsolated(input,{deadlineAtMilliseconds:initialManualActivationWorkerDeadline(expiresAt)});
             assertOperationActive(signal);
             const native=approvedManualInitialEmploymentTransport({workerInput:input,workerResult,basis:beginning.basis,operationId:operation});
             actualSelectionSolverInvoked=workerResult.period.solverInvoked;

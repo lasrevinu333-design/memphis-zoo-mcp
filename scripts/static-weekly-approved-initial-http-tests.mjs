@@ -9,7 +9,7 @@ const issue=level=>createOpsManagerSession({credentialId,deviceId,manager,authMo
 const session=issue('full_access'),readonly=issue('read_only'),timerCallbacks=new Map(),timers=new Set(),leases=new Set(),calls=[],results=[];
 let revoked=false,storeBroken=false,mode='normal',releasedBeforeResult=false,authPending=null,authEntered=false;
 const store={async find(){authEntered=true;if(authPending)await authPending;if(storeBroken)throw Error('fixture store unavailable');return {credential_id:credentialId,device_id:deviceId,max_access_level:'full_access',created_at:new Date(Date.now()-60000).toISOString(),expires_at:new Date(Date.now()+60000).toISOString(),revoked_at:revoked?new Date().toISOString():null,manager_id:manager.manager_id,manager:{...manager}};}};
-const clock={now:()=>performance.now(),setTimer:(fn,ms)=>{assert.equal(ms,55000);const timer=setTimeout(fn,ms);timers.add(timer);timerCallbacks.set(timer,fn);return timer;},clearTimer:t=>{clearTimeout(t);timers.delete(t);timerCallbacks.delete(t);}};
+const clock={now:()=>performance.now(),setTimer:(fn,ms)=>{assert.ok(ms===55000||ms===115000);const timer=setTimeout(fn,ms);timers.add(timer);timerCallbacks.set(timer,fn);return timer;},clearTimer:t=>{clearTimeout(t);timers.delete(t);timerCallbacks.delete(t);}};
 const controlPlane={
  async getApprovedManualActivationRoster(request){calls.push({kind:'manual-roster',request});return{schema:'custodial.manual-live-roster-readback.v1',serviceDate:'2026-10-30',authorityRevision:42};},
  async previewApprovedManualActivation(request){calls.push({kind:'manual-preview',request});return{schema:'custodial.approved-manual-activation-preview.v1',status:'PREVIEW_ONLY',serviceDate:'2026-10-30',windowEnd:'2026-11-05',published:false};},
@@ -75,7 +75,7 @@ try{
   assert.ok(calls.at(-1).request.signal instanceof AbortSignal);
  });
  await test('manual current-day confirmation settles its restore lease before success',async()=>{
-  const r=await request('/static-weekly/manual-activation/confirm',manualConfirm);assert.equal(r.status,200);
+  const r=await request('/static-weekly/manual-activation/confirm',manualConfirm);assert.equal(r.status,200);assert.ok(calls.at(-1).request.deadlineAt>performance.now()+110000);assert.ok(calls.at(-1).request.deadlineAt<=performance.now()+120000);
   assert.equal(r.releasedBeforeResult,true);assert.equal(r.payload.data.atomicRosterAndPublication,true);
   assert.equal(calls.at(-1).request.idempotencyKey,manualConfirm.idempotency_key);
  });

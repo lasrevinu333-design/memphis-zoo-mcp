@@ -206,7 +206,8 @@
     "test:request-json-parser": "node scripts/request-json-parser-scan-completion-tests.mjs && node scripts/request-json-parser-native-inventory-tests.mjs && node scripts/request-json-parser-inventory-manager-tests.mjs",
     "test:activation-baseline-materialization": "node scripts/activation-baseline-materialization-tests.mjs",
     "test:activation-context-retention": "node scripts/activation-context-retention-tests.mjs",
-    "test:activation-digest-callsite": "node scripts/activation-digest-callsite-tests.mjs"
+    "test:activation-digest-callsite": "node scripts/activation-digest-callsite-tests.mjs",
+    "test:initial-manual-activation-deadline": "node scripts/initial-manual-activation-deadline-tests.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.2",
