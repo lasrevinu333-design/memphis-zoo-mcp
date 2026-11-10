@@ -1,4 +1,4 @@
-import {deriveHomeTimeFacts} from './employee-home-time-facts.js';
+import {deriveHomeTimeFacts,deriveProjectedHomeTimeFacts} from './employee-home-time-facts.js';
 
 const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
 const minute=value=>{
@@ -10,16 +10,18 @@ const clock=value=>`${String(Math.floor(value/60)).padStart(2,'0')}:${String(val
 // Display summary only. Keep the actual per-location assignments and clocks.
 // Never describe an OPEN gap or a restricted location as zoo-wide ownership.
 export function deriveZooWideCoverage(day,document){
+  const projected=document?.availability_authority==='published_projection.v1';
   if(day?.projection_status!=='current'||!UUID.test(day.employee_id||'')
     ||!Array.isArray(document?.roster)||!document.roster.length
-    ||!Array.isArray(document.exceptions)||!Array.isArray(document.assignments))return null;
+    ||(!projected&&!Array.isArray(document.exceptions))||!Array.isArray(document.assignments))return null;
   const workers=[],seen=new Set();
   for(const record of document.roster){
     const employee=record.roster?.employee_id;
     if(employee==null)continue; // An open position is not a custodian.
     if(!UUID.test(employee)||seen.has(employee))return null;
     seen.add(employee);
-    const facts=deriveHomeTimeFacts({...day,employee_id:employee},{...record,exceptions:document.exceptions});
+    const facts=projected?deriveProjectedHomeTimeFacts({...day,employee_id:employee},record)
+      :deriveHomeTimeFacts({...day,employee_id:employee},{...record,exceptions:document.exceptions});
     if(facts.shift?.active===false)continue;
     if(!facts.shift||facts.has_partial_absence)return null;
     workers.push({employee,start:minute(facts.shift.start),end:minute(facts.shift.end),lunchEnd:minute(facts.lunch?.end)});
@@ -55,25 +57,37 @@ export async function readZooWideCoverage({day,runReadOnlySql}){
   if(day?.projection_status!=='current'||day.authority_scope==='dated_transition'
     ||!UUID.test(day.employee_id||'')||!UUID.test(day.projection_id||'')||!UUID.test(day.publication_id||'')
     ||!/^\d{4}-\d{2}-\d{2}$/.test(day.service_date||''))return null;
-  // The same accepted projection supplies roster, exceptions and location
-  // ownership in one read. No roster identities are returned to the phone.
-  const sql=`select jsonb_build_object(
-    'roster',(select jsonb_agg(jsonb_build_object('roster',to_jsonb(r),'employee_active',e.active))
+  // Canonical authority performs freshness checks inside its existing reader
+  // permission boundary. Published availability already includes exceptions.
+  // Keep roster, availability and location ownership on that exact projection.
+  const sql=`with current_projection as materialized (
+    select p.projection_id,p.publication_id,p.version_id,
+      p.projection_envelope#>'{authority,projectionAvailability}' as availability
+    from public.weekly_schedule_compiled_projections p
+    join public.static_weekly_v6_schedule_authority_state('${day.service_date}'::date) current_plan
+      on current_plan.projection_id=p.projection_id and current_plan.publication_id=p.publication_id and current_plan.version_id=p.version_id
+    where p.projection_id='${day.projection_id}'::uuid and p.publication_id='${day.publication_id}'::uuid
+      and current_plan.governed is true and current_plan.projection_status='current'
+      and '${day.service_date}'::date between p.week_start and p.week_end
+    ) select jsonb_build_object(
+    'availability_authority','published_projection.v1',
+    'roster',(select jsonb_agg(jsonb_build_object('roster',to_jsonb(r),'employee_active',e.active,
+      'availability',(select jsonb_agg(jsonb_build_object('slotId',a->'slotId','incumbentPersonId',a->'incumbentPersonId',
+        'serviceDate',a->'serviceDate','dayOfWeek',a->'dayOfWeek','status',a->'status',
+        'shift',a->'shift','lunch',a->'lunch','blockedWindows',a->'blockedWindows'))
+        from jsonb_array_elements(p.availability) a
+        where a->>'serviceDate'='${day.service_date}' and a->>'incumbentPersonId'=r.employee_id::text)))
       from public.static_weekly_v6_read_roster('${day.service_date}'::date) r
       left join public.employees e on e.id=r.employee_id
-      where r.projection_id=p.projection_id and r.publication_id=p.publication_id and r.projection_status='current'),
-    'exceptions',public.static_weekly_compiler_exception_set(p.publication_id,p.week_start),
+      where r.projection_id=p.projection_id and r.publication_id=p.publication_id and r.version_id=p.version_id
+        and r.governed is true and r.projection_status='current'),
     'assignments',(select jsonb_agg(to_jsonb(a)) from public.custodial_operational_location_assignments('${day.service_date}'::date) a
       where a.projection_id=p.projection_id and a.publication_id=p.publication_id)
     ) as facts
-    from public.weekly_schedule_compiled_projections p
-    join public.static_weekly_v6_schedule_authority_state('${day.service_date}'::date) current_plan
-      on current_plan.projection_id=p.projection_id and current_plan.publication_id=p.publication_id
-    where p.projection_id='${day.projection_id}'::uuid and p.publication_id='${day.publication_id}'::uuid
-      and current_plan.projection_status='current'
-      and p.exception_set_digest=public.static_weekly_digest_jsonb(public.static_weekly_accepted_exception_set(p.publication_id,p.week_start))`;
+    from current_projection p`;
   try{
     const rows=await runReadOnlySql(sql);
-    return Array.isArray(rows)&&rows.length===1?deriveZooWideCoverage(day,rows[0].facts):null;
+    return Array.isArray(rows)&&rows.length===1&&rows[0].facts?.availability_authority==='published_projection.v1'
+      ?deriveZooWideCoverage(day,rows[0].facts):null;
   }catch{return null;} // Preserve the ordinary location list when unavailable.
 }

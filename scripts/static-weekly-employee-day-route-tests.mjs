@@ -52,9 +52,9 @@ function homeTimes() {
     projection_id:'71000000-0000-4000-8000-000000000009',publication_id:'70000000-0000-4000-8000-000000000009',
     version_id:'60000000-0000-4000-8000-000000000009',slot_id:'50000000-0000-4000-8000-000000000009',
     active:true,staffing_state:'working',projection_status:'current',shift_start:'07:00:00',shift_end:'16:00:00',lunch_start:'12:00:00',lunch_end:'13:00:00'},
-    exceptions:[{id:'91000000-0000-4000-8000-000000000009',type:'lunch',serviceDate,status:'accepted',sequence:1,
-      baseVersionId:'60000000-0000-4000-8000-000000000009',publicationId:'70000000-0000-4000-8000-000000000009',
-      payload:{slotId:'50000000-0000-4000-8000-000000000009',lunch:{start:'13:00',end:'14:00'}}}]};
+    availability:[{slotId:'50000000-0000-4000-8000-000000000009',incumbentPersonId:employeeId,
+      serviceDate,dayOfWeek:1,status:'working',shift:{start:'07:00',end:'16:00'},
+      lunch:{start:'13:00',end:'14:00'},blockedWindows:[]}]};
 }
 
 function buildApp(read, requireDeviceAccess, runRpc = async () => ({})) {
@@ -108,6 +108,8 @@ await withServer(buildApp(async (sql) => {
   assert.match(await html.text(), /Taylor New[\s\S]*Teton Restroom/);
 });
 assert.equal(currentCalls.every((sql) => sql.includes("static_weekly_v5_read_employee_day") || sql.includes("static_weekly_v6_read_roster")), true, "governed dates read only canonical published authority, not the legacy scheduler");
+assert.equal(currentCalls.some(sql=>/static_weekly_(?:digest|compiler_exception_set|accepted_exception_set)/.test(sql)),false,
+  "Home route must not invoke owner-only digest or exception functions through the dedicated reader");
 
 const conflictingEmployeeId = "30000000-0000-4000-8000-000000000088";
 const authenticatedCredentialId = "40000000-0000-4000-8000-000000000099";
