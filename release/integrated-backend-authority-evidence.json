@@ -488,6 +488,11 @@
         "object_id": "1723974b54a68bba3c3ab2654723221ca363a548"
       },
       {
+        "path": "docs/INITIAL_MANUAL_ACTIVATION_OPERATION_BUDGET_20261110.md",
+        "mode": "100644",
+        "object_id": "c2ed9db557f1059a6e7e5d12726cb3b19e06673b"
+      },
+      {
         "path": "docs/NATIVE_LOCATION_LIFECYCLE_STAGE.md",
         "mode": "100644",
         "object_id": "2d885be20364557ca4b4076f6b722d938fd9eca8"
@@ -725,7 +730,7 @@
       {
         "path": "package.json",
         "mode": "100644",
-        "object_id": "49717c4907a9434fc7972b04a10e43a6cbc9111f"
+        "object_id": "46a39b0c163e85e34dd01a04cd1b30d5d90b02ab"
       },
       {
         "path": "proposals/approved-manual-coverall-management.sql",
@@ -4443,6 +4448,11 @@
         "object_id": "da84f127708b753e87c81f48d13b625adb507cbb"
       },
       {
+        "path": "scripts/initial-manual-activation-deadline-tests.mjs",
+        "mode": "100644",
+        "object_id": "f4c21a948a69840dc3b5e6d24fb6c36a1ed2e7b9"
+      },
+      {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
         "object_id": "32b21942d8fb0219e13b5bfb7cfded0a0eec5056"
@@ -6665,7 +6675,7 @@
       {
         "path": "scripts/static-weekly-approved-initial-http-tests.mjs",
         "mode": "100644",
-        "object_id": "0c225d69a1412e57574a181e30b3ac32d69f36ba"
+        "object_id": "0c84863f8ddcf601bdbc8acc4c25781a9d556a92"
       },
       {
         "path": "scripts/static-weekly-atomic-roster-database-tests.mjs",
@@ -8920,7 +8930,7 @@
       {
         "path": "src/static-weekly-control-plane.js",
         "mode": "100644",
-        "object_id": "0b8d1b06bfe79637dfd09d160d142e3fe8259254"
+        "object_id": "0536e8e4be9582302f67a089cffb5f98c28dd956"
       },
       {
         "path": "src/static-weekly-coverall-access.js",
@@ -8980,7 +8990,7 @@
       {
         "path": "src/static-weekly-manager-operation.js",
         "mode": "100644",
-        "object_id": "90001236e4e7b05afdd4a434970cb424de80f7d3"
+        "object_id": "5cca9ec77d17df4e8a6479b8cad8e84e3847a42d"
       },
       {
         "path": "src/static-weekly-morning-planning-authority.js",
@@ -11438,7 +11448,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 2262,
+    "authority_path_count": 2264,
     "migration_path_count": 311,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
