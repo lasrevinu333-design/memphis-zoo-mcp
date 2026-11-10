@@ -2,6 +2,7 @@ import { makeEmployeeFeedbackOriginalReceiptReader } from './employee-feedback-o
 import { listSharedEvents } from "./events-api.js";
 import { makeSharedManagerEventsHandler, retiredEventIntake } from "./shared-events-feed.js";
 import { makeOperationsBoardHandler } from "./operations-board.js";
+import { installPublicDashboardDetails } from "./public-dashboard-details.js";
 import { readOperationsMailLedger } from "./operations-mail-ledger.js";
 import { installBoundManagerHeldReviewRoute } from "./manager-held-event-review-reader.js";
 import { installManagerHeldEventCorrectionRoutes } from "./manager-held-event-correction-route.js";
@@ -3094,6 +3095,8 @@ app.get("/dashboard-api/events-feed", requireOpsManagerAuth, makeSharedManagerEv
 installBoundManagerHeldReviewRoute(app, { client: supabaseAdmin, requireOpsManagerAuth });
 installManagerHeldEventCorrectionRoutes(app, { client: supabaseAdmin, requireOpsManagerWrite });
 app.get("/dashboard-api/operations", requireOpsManagerAuth, makeOperationsBoardHandler({readEvents: () => listSharedEvents(runReadOnlySql), readMail: () => readOperationsMailLedger({client:supabaseAdmin})}));
+installPublicDashboardDetails(app, {readSummary:runPublicDashboardSummary,
+  readEvents:()=>listSharedEvents(runReadOnlySql),readMail:()=>readOperationsMailLedger({client:supabaseAdmin}),runReadOnlySql});
 installGpsMapContextRoute(app, {
   requireOpsManagerAuth,
   runReadOnlyQuery: async sql => runSupabaseReadOnlySql({ sql }),
