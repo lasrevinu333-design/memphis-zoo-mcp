@@ -31,21 +31,23 @@ export function spiceworksObservation(input) {
   const provenance=source(input?.source,'help@memzoomaint.on.spiceworks.com');
   if (!/^[1-9]\d{0,9}$/.test(input.ticket_id) || !Array.isArray(input.change_lines)
     || input.change_lines.length>20) fail('ticket_notification_invalid');
-  const changes={};
+  const changes={};let activity=null;
   for (const line of input.change_lines) {
     // Full anchored structured change rows only, not prose, quoted history,
     // suggestions to close, or words in a ticket's description.
     const status=/^changed status from (Open|Closed|Pending|Waiting) -> (Open|Closed|Pending|Waiting)$/.exec(line);
     const field=/^set (category|assignee) to (.{1,160})$/.exec(line);
     let key,value;
-    if (status) {key='status';value=status[2];}
+    if (line==='opened a new ticket.') {key='status';value='Open';activity={kind:'opened',from:null,to:'Open'};}
+    else if (status) {key='status';value=status[2];
+      if(status[1]!==status[2]&&['Open','Closed'].includes(status[2]))activity={kind:status[2]==='Closed'?'closed':status[1]==='Closed'?'reopened':'opened',from:status[1],to:status[2]};}
     else if (field) {key=field[1];value=clean(field[2],160);}
     else continue;
     if (!value || Object.hasOwn(changes,key)) fail('ambiguous_ticket_change');
     changes[key]=value;
   }
   if (!Object.keys(changes).length) fail('no_authoritative_ticket_change');
-  return {ticket_id:input.ticket_id,title:clean(input.title,240)||null,changes,provenance};
+  return {ticket_id:input.ticket_id,title:clean(input.title,240)||null,changes,activity,provenance};
 }
 export function reconcileSpiceworks(observations) {
   if (!Array.isArray(observations) || observations.length>10000) fail('ticket_history_limit');
@@ -57,8 +59,9 @@ export function reconcileSpiceworks(observations) {
     if (prior && prior!==serialized) fail('conflicting_mail_replay');
     if (prior) continue;
     messages.set(p.message_id,serialized);
-    const ticket=tickets.get(row.ticket_id)||{ticket_id:row.ticket_id,fields:{},provenance:[]};
+    const ticket=tickets.get(row.ticket_id)||{ticket_id:row.ticket_id,fields:{},activity:[],provenance:[]};
     ticket.provenance.push(p);
+    if(row.activity)ticket.activity.push({...row.activity,at:new Date(p.source_at).toISOString()});
     for (const [key,value] of Object.entries({...row.changes,...(row.title?{title:row.title}:{})})) {
       const current=ticket.fields[key],at=Date.parse(p.source_at);
       if (current && at===current.at && current.value!==value) fail('conflicting_same_time_ticket_change');
@@ -70,19 +73,21 @@ export function reconcileSpiceworks(observations) {
     const f=Object.fromEntries(Object.entries(ticket.fields).map(([key,row])=>[key,row.value]));
     return {ticket_id:ticket.ticket_id,title:f.title||null,category:f.category||null,assignee:f.assignee||null,
       status:f.status||'Unknown',custodial:f.category==='Custodial'||(!f.category&&f.assignee==='Eric Operle'),
-      active:f.status!=='Closed',provenance:ticket.provenance.sort((a,b)=>a.source_at.localeCompare(b.source_at)||a.message_id.localeCompare(b.message_id))};
+      active:f.status!=='Closed',activity:ticket.activity.sort((a,b)=>a.at.localeCompare(b.at)),provenance:ticket.provenance.sort((a,b)=>a.source_at.localeCompare(b.source_at)||a.message_id.localeCompare(b.message_id))};
   });
 }
 export const SCHOOL_HEADERS=Object.freeze(['Order ID','Cust Name','Buses','item purchased','visit date of tickets','Visit Time','Qty of purchase']);
 function excelDate(v) {
   if (typeof v==='string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
-  if (!Number.isInteger(v)||v<61||v>100000) fail('school_visit_date_invalid');
-  return new Date(Date.UTC(1899,11,30)+v*86400000).toISOString().slice(0,10);
+  if (!Number.isFinite(v)||v<61||v>100000) fail('school_visit_date_invalid');
+  return new Date(Date.UTC(1899,11,30)+Math.floor(v)*86400000).toISOString().slice(0,10);
 }
-function excelTime(v) {
+function excelTime(v, date) {
   if (typeof v==='string' && /^\d{2}:\d{2}(?::00)?$/.test(v)) return v.slice(0,5);
-  if (typeof v!=='number'||!Number.isFinite(v)||v<0||v>=1) fail('school_arrival_invalid');
+  if (typeof v!=='number'||!Number.isFinite(v)||v<0) fail('school_arrival_invalid');
+  if(v>=1){if(excelDate(v)!==date)fail('school_arrival_date_mismatch');v-=Math.floor(v);}
   const minutes=Math.round(v*1440);
+  if(minutes>=1440)fail('school_arrival_invalid');
   return `${String(Math.floor(minutes/60)).padStart(2,'0')}:${String(minutes%60).padStart(2,'0')}`;
 }
 export function projectSchoolAttachment({headers,rows,source:inputSource,attachment,date_system='1900'}) {
@@ -91,14 +96,19 @@ export function projectSchoolAttachment({headers,rows,source:inputSource,attachm
   const provenance={...mail,attachment_id:attachment.id,attachment_sha256:attachment.sha256};
   if (date_system!=='1900'||JSON.stringify(headers)!==JSON.stringify(SCHOOL_HEADERS)
     ||!Array.isArray(rows)||rows.length>5000) fail('school_attachment_format_invalid');
-  const groups=new Map();let current=null;
+  const groups=new Map();let current=null,sectionTotal=0,sectionItems=0;
   for (const row of rows) {
     if (!Array.isArray(row)||row.length>7) fail('school_row_invalid');
     const [id,name,buses,product,date,time,qty]=row;
-    if (row.every(v=>v==null||v==='') || /^(?:MON(?:DAY)?|TUE(?:SDAY)?|WED(?:NESDAY)?|THU(?:RSDAY)?|FRI(?:DAY)?|SAT(?:URDAY)?|SUN(?:DAY)?|TOTAL)$/i.test(String(id||name||''))) {current=null;continue;}
+    if (row.every(v=>v==null||v==='')) {current=null;continue;}
+    if (/^(?:MON(?:DAY)?|TUE(?:S|SDAY)?|WED(?:NESDAY)?|THU(?:RS|RSDAY)?|FRI(?:DAY)?|SAT(?:URDAY)?|SUN(?:DAY)?|TOTAL)$/i.test(String(id||name||''))) {current=null;sectionTotal=0;sectionItems=0;continue;}
+    if([id,name,buses,product,date,time].every(v=>v==null||v==='')){
+      if(!sectionItems||!Number.isSafeInteger(qty)||qty!==sectionTotal)fail('school_subtotal_mismatch');
+      current=null;sectionTotal=0;sectionItems=0;continue;
+    }
     if (id!=null&&id!=='') {
       if (!/^[1-9]\d*$/.test(String(id))||!clean(name)||!(buses==null||buses===''||(Number.isSafeInteger(buses)&&buses>=0))) fail('school_order_invalid');
-      const visit=excelDate(date),arrival=time==null||time===''?null:excelTime(time),key=`${id}:${visit}`;
+      const visit=excelDate(date),arrival=time==null||time===''?null:excelTime(time,visit),key=`${id}:${visit}`;
       if (groups.has(key)) fail('duplicate_school_order_block');
       // Validate the visit date even when arrival is absent. This noon
       // conversion is admission only, never a projected departure/cutoff.
@@ -111,9 +121,12 @@ export function projectSchoolAttachment({headers,rows,source:inputSource,attachm
         issue:start===null?'Arrival not provided.':null,
         students:0,chaperones:0,teachers:0,unclassified:0,buses:buses===''||buses==null?null:buses,
         provenance,notes:null};groups.set(key,current);
-    } else if (!current || [name,buses,date,time].some(v=>v!=null&&v!=='')) fail('school_continuation_identity_invalid');
+    } else if (!current || [name,buses].some(v=>v!=null&&v!=='')
+      ||(date!=null&&date!==''&&excelDate(date)!==current.date)
+      ||(time!=null&&time!==''&&chicagoInstant(current.date,excelTime(time,current.date))!==current.arrival_at)) fail('school_continuation_identity_invalid');
     if (!current||!Number.isSafeInteger(qty)||qty<0||!clean(product)) fail('school_quantity_invalid');
-    const key=/^Field Trip (?:Elem Student 1-5|High Student 9-12|Middle Student 6-8|College Student)$/.test(product)?'students'
+    sectionTotal+=qty;sectionItems++;if(!Number.isSafeInteger(sectionTotal))fail('school_quantity_overflow');
+    const key=/^Field Trip (?:Elem Student 1-5|High Student 9-12|Middle Student 6-8|College Student|PreK and Kindergarten)$/.test(product)?'students'
       :product==='Field Trip Paid Chaperone'?'chaperones':product==='Field Trip Teacher'?'teachers':'unclassified';
     current[key]+=qty;
     if (!Number.isSafeInteger(current[key])) fail('school_quantity_overflow');

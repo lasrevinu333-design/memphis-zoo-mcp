@@ -24,7 +24,7 @@ export function projectOperationsEvents(rows) {
   }));
 }
 
-export function makeOperationsBoardHandler({readEvents, readMail = null, now = () => new Date()} = {}) {
+export function makeOperationsBoardHandler({readEvents, readMail = null, readCity = null, now = () => new Date()} = {}) {
   if (typeof readEvents !== 'function') throw new Error('operations_event_reader_required');
   return async function operationsBoard(req, res) {
     // Route middleware remains the authority; this additionally prevents an
@@ -34,14 +34,16 @@ export function makeOperationsBoardHandler({readEvents, readMail = null, now = (
     res.setHeader('Cache-Control', 'private, no-store');
     try {
       const events = projectOperationsEvents(await readEvents());
-      let mail=null;
-      if(typeof readMail==='function')try{mail=await readMail();}catch{/* mail failure must not hide Events */}
+      const safe=async reader=>{try{return typeof reader==='function'?await reader():null;}catch{return null;}};
+      const [mail,city]=await Promise.all([safe(readMail),safe(readCity)]);
       return res.status(200).json({ok:true,data:{schema:'custodial.operations-board.v1',
         generated_at:now().toISOString(),timezone:'America/Chicago',events,
         // Server-owned projection only. Imported snapshots do not assert
         // unattended mailbox completeness or freshness.
         schools:mail?.schools||{state:'unavailable',reason:'outlook_school_producer_not_bound',rows:[]},
         spiceworks:mail?.spiceworks||{state:'unavailable',reason:'outlook_spiceworks_producer_not_bound',rows:[]},
+        spiceworks_activity:mail?.spiceworks_activity||{state:'unavailable',reason:'outlook_spiceworks_producer_not_bound',rows:[]},
+        city:city||{state:'unavailable',reason:'city_source_unavailable',rows:[]},
         staff_locations:{state:'unavailable',reason:'qualified_manager_location_projection_not_bound',rows:[]},
         // No general school departure cutoff has established source authority.
         school_departure_policy:null,

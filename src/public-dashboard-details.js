@@ -35,7 +35,7 @@ function mailFeed(feed, fields) {
   if (!['current','snapshot'].includes(feed?.state)) return {state:'unavailable',reason:'source_unavailable',rows:[]};
   return {...pick(feed,['state','generated_at','source_latest_at','coverage','mailbox_completeness_verified']),rows:rows(feed.rows,fields)};
 }
-export function publicOperationsDetails(events, mail, now = new Date()) {
+export function publicOperationsDetails(events, mail, now = new Date(), city = null) {
   // Addressed employee messages and unresolved audiences are not a public event feed.
   const visible = events.filter(row => ['assigned_location','all_working_employees'].includes(row?.audience_scope));
   return {schema:'custodial.operations-board.v1',generated_at:now.toISOString(),timezone:'America/Chicago',
@@ -43,6 +43,8 @@ export function publicOperationsDetails(events, mail, now = new Date()) {
     schools:mailFeed(mail?.schools,['id','order_id','name','date','arrival_at','departure_at','departure_source',
       'status','issue','students','chaperones','teachers','unclassified','buses','adults','total']),
     spiceworks:mailFeed(mail?.spiceworks,['ticket_id','title','category','assignee','status','custodial','active']),
+    spiceworks_activity:mailFeed(mail?.spiceworks_activity,['ticket_id','title','kind','from','to','at']),
+    city:mailFeed(city,['id','work_order_id','facility','description','status','requested_at','source_close_date','updated_at']),
     staff_locations:{state:'unavailable',reason:'qualified_location_projection_not_bound',rows:[]},school_departure_policy:null};
 }
 const date = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
@@ -66,12 +68,12 @@ export async function readPublicSchedule(runReadOnlySql, serviceDate) {
     roster:rows(data.roster,['employee_name','shift_start','shift_end','lunch_start','lunch_end','active','slot_label','staffing_state']),
     assignments:rows(data.assignments,['group_name','assigned_employee_name','coverage_start','coverage_end','status','coverage_purpose','service_mode'],['included_locations'])};
 }
-export function installPublicDashboardDetails(app, {readSummary, readEvents, readMail, runReadOnlySql, now=()=>new Date()}) {
+export function installPublicDashboardDetails(app, {readSummary, readEvents, readMail, readCity=async()=>null, runReadOnlySql, now=()=>new Date()}) {
   const readers = {
     summary:async()=>publicDashboardDetails(await readSummary()),
     operations:async()=>{
-      const [events,mail] = await Promise.all([readEvents(),readMail().catch(()=>null)]);
-      return publicOperationsDetails(events,mail,now());
+      const [events,mail,city] = await Promise.all([readEvents(),readMail().catch(()=>null),readCity().catch(()=>null)]);
+      return publicOperationsDetails(events,mail,now(),city);
     },
     schedule:req=>readPublicSchedule(runReadOnlySql,req.query.service_date || now().toLocaleDateString('en-CA',{timeZone:'America/Chicago'})),
   };

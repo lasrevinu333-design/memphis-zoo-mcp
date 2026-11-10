@@ -107,6 +107,8 @@ export function projectOperationsMailRows(rows){
   return {
     spiceworks:feed('spiceworks',items=>reconcileSpiceworks(items).map(({ticket_id,title,category,assignee,status,custodial,active,provenance})=>
       ({ticket_id,title,category,assignee,status,custodial,active,source_revision:sha(canonical(provenance))}))),
+    spiceworks_activity:feed('spiceworks',items=>reconcileSpiceworks(items).flatMap(({ticket_id,title,activity})=>
+      activity.map(row=>({ticket_id,title,...row})))),
     schools:feed('school',items=>reconcileSchoolSnapshots(items).rows.map(row=>{
       const {provenance,prior_provenance,superseded_by,...display}=row;
       return {...display,source_revision:sha(canonical({provenance,prior_provenance:prior_provenance||null,superseded_by:superseded_by||null}))};
@@ -114,7 +116,7 @@ export function projectOperationsMailRows(rows){
   };
 }
 export async function readOperationsMailLedger({client,signal}={}){
-  const missing=reason=>({schools:unavailable(reason),spiceworks:unavailable(reason)});
+  const missing=reason=>({schools:unavailable(reason),spiceworks:unavailable(reason),spiceworks_activity:unavailable(reason)});
   if(!client?.from)return missing('operations_mail_service_not_configured');
   try{
     // One statement, exact count: a response cap must not silently remove a

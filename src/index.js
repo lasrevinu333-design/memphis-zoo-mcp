@@ -1,3 +1,4 @@
+import {makeCityWorkOrderReader} from './city-work-orders.js';
 import { makeEmployeeFeedbackOriginalReceiptReader } from './employee-feedback-original-receipt.js';
 import { listSharedEvents } from "./events-api.js";
 import { makeSharedManagerEventsHandler, retiredEventIntake } from "./shared-events-feed.js";
@@ -3094,9 +3095,10 @@ async function readOutlookEventSyncStatus() {
 app.get("/dashboard-api/events-feed", requireOpsManagerAuth, makeSharedManagerEventsHandler({readEvents: () => listSharedEvents(runReadOnlySql),readSyncStatus:readOutlookEventSyncStatus,readSchools:readSharedSchoolSnapshot,requireOpsManagerAuth}));
 installBoundManagerHeldReviewRoute(app, { client: supabaseAdmin, requireOpsManagerAuth });
 installManagerHeldEventCorrectionRoutes(app, { client: supabaseAdmin, requireOpsManagerWrite });
-app.get("/dashboard-api/operations", requireOpsManagerAuth, makeOperationsBoardHandler({readEvents: () => listSharedEvents(runReadOnlySql), readMail: () => readOperationsMailLedger({client:supabaseAdmin})}));
+const readCityWorkOrders=makeCityWorkOrderReader();
+app.get("/dashboard-api/operations", requireOpsManagerAuth, makeOperationsBoardHandler({readEvents: () => listSharedEvents(runReadOnlySql), readMail: () => readOperationsMailLedger({client:supabaseAdmin}),readCity:readCityWorkOrders}));
 installPublicDashboardDetails(app, {readSummary:runPublicDashboardSummary,
-  readEvents:()=>listSharedEvents(runReadOnlySql),readMail:()=>readOperationsMailLedger({client:supabaseAdmin}),runReadOnlySql});
+  readEvents:()=>listSharedEvents(runReadOnlySql),readMail:()=>readOperationsMailLedger({client:supabaseAdmin}),readCity:readCityWorkOrders,runReadOnlySql});
 installGpsMapContextRoute(app, {
   requireOpsManagerAuth,
   runReadOnlyQuery: async sql => runSupabaseReadOnlySql({ sql }),
