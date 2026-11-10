@@ -628,6 +628,21 @@
         "object_id": "bfba1ed5ecd8433588720bfe9476d2fbf8cd94f2"
       },
       {
+        "path": "docs/pending-repairs/20261110054150_custodial_activation_digest_callsite_retention.json",
+        "mode": "100644",
+        "object_id": "397955fad7b4c5cc43eb8291b35d85114efda7d9"
+      },
+      {
+        "path": "docs/pending-repairs/20261110054150_custodial_activation_digest_callsite_retention.md",
+        "mode": "100644",
+        "object_id": "bbcdb461e685df5d30e5de5d20928db152b999b6"
+      },
+      {
+        "path": "docs/pending-repairs/20261110054150_custodial_activation_digest_callsite_retention.sql",
+        "mode": "100644",
+        "object_id": "a7179281c1e707a5d9a8751f8d7ec454ccadfb29"
+      },
+      {
         "path": "docs/plans/2026-06-09-scheduler-open-owner-repair.md",
         "mode": "100644",
         "object_id": "571624968a65ce4457de4165ae1965b988a1665d"
@@ -710,7 +725,7 @@
       {
         "path": "package.json",
         "mode": "100644",
-        "object_id": "e91de53d0f72bdf7addb5810c0a32cbd55ab58e0"
+        "object_id": "49717c4907a9434fc7972b04a10e43a6cbc9111f"
       },
       {
         "path": "proposals/approved-manual-coverall-management.sql",
@@ -2461,6 +2476,11 @@
         "path": "scripts/activation-context-retention-tests.mjs",
         "mode": "100644",
         "object_id": "164d2766b599f21e094c62390bb2798bff8e6fe4"
+      },
+      {
+        "path": "scripts/activation-digest-callsite-tests.mjs",
+        "mode": "100644",
+        "object_id": "c0fa6c4eb590a940957dc611c4ba7b001144c0fb"
       },
       {
         "path": "scripts/apply-abandoned-mutation-lease-reconciliation.mjs",
@@ -11418,7 +11438,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 2258,
+    "authority_path_count": 2262,
     "migration_path_count": 311,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
