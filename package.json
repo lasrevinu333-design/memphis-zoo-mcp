@@ -204,7 +204,8 @@
     "test:current-candidate-replay-profile": "node scripts/current-candidate-replay-profile-tests.mjs",
     "test:current-candidate-rebuild": "python3 scripts/current-candidate-rebuild.py",
     "test:request-json-parser": "node scripts/request-json-parser-scan-completion-tests.mjs && node scripts/request-json-parser-native-inventory-tests.mjs && node scripts/request-json-parser-inventory-manager-tests.mjs",
-    "test:activation-baseline-materialization": "node scripts/activation-baseline-materialization-tests.mjs"
+    "test:activation-baseline-materialization": "node scripts/activation-baseline-materialization-tests.mjs",
+    "test:activation-context-retention": "node scripts/activation-context-retention-tests.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.2",
