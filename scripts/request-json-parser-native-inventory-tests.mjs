@@ -3,13 +3,13 @@
 import fs from 'node:fs';
 import {createRequire} from 'node:module';
 import {pathToFileURL,fileURLToPath} from 'node:url';
-const root=fileURLToPath(new URL('../../',import.meta.url)),out=process.argv[2];
-const require=createRequire(root+'/backend/package.json'),express=require('express');
-const {createGeneralJsonMiddleware,createGeneralUrlencodedMiddleware}=await import(pathToFileURL(root+'/backend/src/request-json-parser.js'));
-const {installSameOriginalRecoveryNativeChallengeComposition:install}=await import(pathToFileURL(root+'/backend/src/same-original-recovery-native-challenge-composition.js'));
+const root=fileURLToPath(new URL('../',import.meta.url)),out=process.argv[2];
+const require=createRequire(root+'/package.json'),express=require('express');
+const {createGeneralJsonMiddleware,createGeneralUrlencodedMiddleware}=await import(pathToFileURL(root+'/src/request-json-parser.js'));
+const {installSameOriginalRecoveryNativeChallengeComposition:install}=await import(pathToFileURL(root+'/src/same-original-recovery-native-challenge-composition.js'));
 let externalCalls=0;const refuse=async()=>{externalCalls++;throw Error('Synthetic refusal port; no external access');};
 const deps={env:{NODE_ENV:'test'},store:{findCredential:refuse},runReadOnlySql:refuse,db:{rpc:refuse}};
-const production=fs.readFileSync(root+'/backend/src/index.js','utf8');
+const production=fs.readFileSync(root+'/src/index.js','utf8');
 if(!production.includes('app.use(createGeneralJsonMiddleware());\napp.use(createGeneralUrlencodedMiddleware());'))throw Error('Production must mount the tested shared parser pair in order');
 const servers=[];
 async function create(general){

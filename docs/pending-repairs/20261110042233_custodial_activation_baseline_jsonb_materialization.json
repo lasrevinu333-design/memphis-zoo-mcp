@@ -1,0 +1,30 @@
+{
+  "schema": "custodial.pending-diagnostic-sql-repair.v1",
+  "status": "SOURCE_QUALIFIED_PENDING_EXACT_RUNTIME_REHEARSAL_AND_OWNER_APPLY",
+  "operation": "baseline-one-snapshot-digest",
+  "generated_with": "Supabase CLI2.109.1 migration new; moved to pending repair before use; not part of historical replay plan",
+  "sql_path": "docs/pending-repairs/20261110042233_custodial_activation_baseline_jsonb_materialization.sql",
+  "sql_sha256": "c60e89eee2ab3f167b93632637176e9efcf95d65ad456e632416c26f2d403e10",
+  "exact_live_preimage_sha256": "05c3a7ed26461506dd28e36c355d14e9ca0636d67d816271dab2f9d66699d448",
+  "function_identity": "public.static_weekly_manual_store_initial_baseline(uuid,text,jsonb)",
+  "restore_inventory_order": 100614,
+  "global_digest_helpers_changed": false,
+  "lunch_validator_closure_changed": false,
+  "runtime_transaction_deadline_changed": false,
+  "historical_migration_replay_changed": false,
+  "applied": false,
+  "validation_command": "npm run test:activation-baseline-materialization",
+  "fixture_scope": "actual captured function and exact SQL, synthetic dependency ports, isolated networkless PG17.6; not full actual activation",
+  "precedent": "docs/EXPIRED_ACTIVATION_REPAIR_20261104.json",
+  "required_before_apply": [
+    "exact current live predecessor and recovery metadata",
+    "same actor/request/restore admission and unchanged60-second full forced-ROLLBACK rehearsal",
+    "verify original live definitions/inventory and original operation state after rollback"
+  ],
+  "required_after_apply": [
+    "archive exact SQL and actual migration receipt in docs/applied-repairs",
+    "reconcile original activation/current Chicago service date before commit attempt",
+    "refresh normal release authority inventory from exact clean source commit"
+  ],
+  "diagnostic_correction": "Actual baseline input is already uncompressed; earlier copy optimization was removed after exact live section measurements"
+}

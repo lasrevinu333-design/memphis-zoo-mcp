@@ -3,11 +3,11 @@
 import fs from 'node:fs';
 import {createRequire} from 'node:module';
 import {pathToFileURL,fileURLToPath} from 'node:url';
-const root=fileURLToPath(new URL('../../',import.meta.url)),out=process.argv[2];
-const require=createRequire(root+'/backend/package.json'),express=require('express');
-const {createGeneralJsonMiddleware,createGeneralUrlencodedMiddleware}=await import(pathToFileURL(root+'/backend/src/request-json-parser.js'));
-const {installOriginalInventorySeparationManagerComposition:install}=await import(pathToFileURL(root+'/backend/src/original-inventory-separation-manager-composition.js'));
-const {createInventoryManagerCompositionFixture:createFixture}=await import(pathToFileURL(root+'/backend/scripts/original-inventory-separation-manager-tests.mjs'));
+const root=fileURLToPath(new URL('../',import.meta.url)),out=process.argv[2];
+const require=createRequire(root+'/package.json'),express=require('express');
+const {createGeneralJsonMiddleware,createGeneralUrlencodedMiddleware}=await import(pathToFileURL(root+'/src/request-json-parser.js'));
+const {installOriginalInventorySeparationManagerComposition:install}=await import(pathToFileURL(root+'/src/original-inventory-separation-manager-composition.js'));
+const {createInventoryManagerCompositionFixture:createFixture}=await import(pathToFileURL(root+'/scripts/original-inventory-separation-manager-tests.mjs'));
 const fixture=createFixture({rpcFormat:'object'}),preview=await fixture.invoke('preview');
 if(preview.res.statusCode!==200)throw Error('Current joined synthetic fixture must qualify independently before HTTP composition');
 const headers={...preview.req.headers,'content-type':'application/json'};

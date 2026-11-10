@@ -202,7 +202,9 @@
     "test:sealed-repair-contracts": "node scripts/sealed-repair-contract-tests.mjs",
     "test:source304": "node scripts/ci-fresh-only-source304-tests.mjs && node scripts/canonical304-construction-protocol-tests.mjs",
     "test:current-candidate-replay-profile": "node scripts/current-candidate-replay-profile-tests.mjs",
-    "test:current-candidate-rebuild": "python3 scripts/current-candidate-rebuild.py"
+    "test:current-candidate-rebuild": "python3 scripts/current-candidate-rebuild.py",
+    "test:request-json-parser": "node scripts/request-json-parser-scan-completion-tests.mjs && node scripts/request-json-parser-native-inventory-tests.mjs && node scripts/request-json-parser-inventory-manager-tests.mjs",
+    "test:activation-baseline-materialization": "node scripts/activation-baseline-materialization-tests.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.2",
