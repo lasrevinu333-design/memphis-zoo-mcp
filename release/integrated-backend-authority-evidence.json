@@ -2853,6 +2853,11 @@
         "object_id": "ae7bd965eb88e2f2198974cb54ff250f9858cb32"
       },
       {
+        "path": "scripts/city-work-orders-tests.mjs",
+        "mode": "100644",
+        "object_id": "c52d69e812f0da885771dd1f50ca771546af5240"
+      },
+      {
         "path": "scripts/cleaning-identity-gps-database-tests.mjs",
         "mode": "100644",
         "object_id": "40aa0374121e6048aef8b3346bfca384f95b0f3d"
@@ -5545,7 +5550,7 @@
       {
         "path": "scripts/operations-mail-ledger-tests.mjs",
         "mode": "100644",
-        "object_id": "bce6d02cdd3ea5862e543c4ffe7f1564ffffb0aa"
+        "object_id": "f092c5d0c118d4bfb94b90a1d1d1651765eba27c"
       },
       {
         "path": "scripts/operations-mail-sync-adapter-tests.mjs",
@@ -8078,6 +8083,11 @@
         "object_id": "ebd9c482b25a04ce1a536dbe963a803422478ac8"
       },
       {
+        "path": "src/city-work-orders.js",
+        "mode": "100644",
+        "object_id": "81c0a6a4567e96547da004b07af477aaa914801c"
+      },
+      {
         "path": "src/completion-selection-read-boundary.js",
         "mode": "100644",
         "object_id": "ee6c0ea687a531826c6fa38ec74d75cedaeebbc1"
@@ -8275,7 +8285,7 @@
       {
         "path": "src/index.js",
         "mode": "100644",
-        "object_id": "43d50dfd7e77e469d03fdb4e021558e87251dd52"
+        "object_id": "0c8509d17cdcfe164007f8b050d71cffc1f05c21"
       },
       {
         "path": "src/integrated-backend-authority-release-evidence.js",
@@ -8675,17 +8685,17 @@
       {
         "path": "src/operations-board.js",
         "mode": "100644",
-        "object_id": "2630b4bffd9c75d41d1c717c7b64b7d7220d4aca"
+        "object_id": "110e8adb8cb705d542263dc7be954b188433ba21"
       },
       {
         "path": "src/operations-mail-contract.js",
         "mode": "100644",
-        "object_id": "e039dba3092355d5e65d23bf52e7bd58c8ae2c18"
+        "object_id": "b7aa88a7e2050f7551fd66b4b677175527ce26ca"
       },
       {
         "path": "src/operations-mail-ledger.js",
         "mode": "100644",
-        "object_id": "4c8c397b207a10e1cd68e40b8d4b362fd0a76e59"
+        "object_id": "8ae2a75a14009128e21e89aff22328b40b2a9070"
       },
       {
         "path": "src/operations-mail-sync.js",
@@ -8770,7 +8780,7 @@
       {
         "path": "src/public-dashboard-details.js",
         "mode": "100644",
-        "object_id": "940d4c1ba40f1303d0af25e157ba7d43566f459a"
+        "object_id": "30458b9910a324da3ae80a36d1e35fd9201acc0d"
       },
       {
         "path": "src/public-operations-viewer.js",
@@ -11463,7 +11473,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 2267,
+    "authority_path_count": 2269,
     "migration_path_count": 311,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
