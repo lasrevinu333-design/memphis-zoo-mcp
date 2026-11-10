@@ -5813,6 +5813,11 @@
         "object_id": "32a807cb40e921b06e9de6270654b6be79dba337"
       },
       {
+        "path": "scripts/public-dashboard-details-tests.mjs",
+        "mode": "100644",
+        "object_id": "1b7f5b70a786850e53d2f586dc1d30cdceef13f2"
+      },
+      {
         "path": "scripts/public-operations-viewer-tests.mjs",
         "mode": "100644",
         "object_id": "70a85da065722f1187d199482eb3df10a464de80"
@@ -8180,7 +8185,7 @@
       {
         "path": "src/index.js",
         "mode": "100644",
-        "object_id": "58cadd2aa109a585cf006d68fa512920532fdfd7"
+        "object_id": "43d50dfd7e77e469d03fdb4e021558e87251dd52"
       },
       {
         "path": "src/integrated-backend-authority-release-evidence.js",
@@ -8671,6 +8676,11 @@
         "path": "src/production-schema-identity.js",
         "mode": "100644",
         "object_id": "24c3a13878b22aad144ddee70cff3a7806ca4443"
+      },
+      {
+        "path": "src/public-dashboard-details.js",
+        "mode": "100644",
+        "object_id": "940d4c1ba40f1303d0af25e157ba7d43566f459a"
       },
       {
         "path": "src/public-operations-viewer.js",
@@ -11363,7 +11373,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 2247,
+    "authority_path_count": 2249,
     "migration_path_count": 311,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
