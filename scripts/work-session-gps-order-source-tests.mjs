@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';import fs from 'node:fs';import path from 'node:path';import vm from 'node:vm';import{pathToFileURL}from'node:url';
+import {sanitizeReadOnlySql} from '../src/supabase/read.js';
 export async function runWorkSessionGpsOrderSourceTests(root=process.cwd()){
  let checks=0;const eq=(a,b,n)=>{assert.deepEqual(a,b,n);checks++;},match=(s,re,n)=>{assert.match(s,re,n);checks++;};
  const source=fs.readFileSync(path.join(root,'src/index.js'),'utf8'),start=source.indexOf('app.get("/dashboard-api/work-session-alerts", requireOpsManagerAuth,'),end=source.indexOf('\nfunction offlineAuthorityManagerId',start);
  assert.ok(start>0&&end>start);checks++;
  const block=source.slice(start,end),query=block.match(/runReadOnlySql\(`([\s\S]*?)`\)/)?.[1];assert.ok(query);checks++;
+ assert.doesNotThrow(()=>sanitizeReadOnlySql(query));checks++;
  match(query,/order by \(se\.payload_json->>'observed_at'\)::timestamptz desc nulls last,\s*se\.scanned_at desc, se\.id desc/,'capture order, NULL handling and deterministic receipt tie');
  match(query,/from public\.custodial_open_work\(\) work/,'only the existing open-work projection');
  match(query,/where se\.event_type = 'work_position_check'/,'existing GPS event family only');

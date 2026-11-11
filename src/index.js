@@ -3135,7 +3135,7 @@ app.get("/dashboard-api/work-session-alerts", requireOpsManagerAuth, async (_req
             or (work.client_session_id is not null and se.payload_json->>'client_session_id' = work.client_session_id)
           )
         -- Offline replay can arrive after a newer capture. Compare the stored
-        -- phone capture instant first; missing capture time stays unknown.
+        -- phone capture instant first. Missing capture time stays unknown.
         order by (se.payload_json->>'observed_at')::timestamptz desc nulls last,
                  se.scanned_at desc, se.id desc
         limit 1
