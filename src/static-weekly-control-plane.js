@@ -1761,7 +1761,8 @@ export function createStaticWeeklyControlPlane({
         // This metadata never represents current assignments or a new publication.
         snapshot={...snapshot,approved_manual_period:{schema:'custodial.approved-manual-period-window.v1',
           manifestSha256:registered.compiler_input.version.manualGroupRatingAuthority.manifestSha256,
-          publicationId:registered.publication_id,versionId:registered.version_id,origin,frameStart:frame,frameEnd,normalSourceLocked:true}};
+          publicationId:registered.publication_id,versionId:registered.version_id,origin,frameStart:frame,frameEnd,normalSourceLocked:true,
+          rosterSlotIds:registered.compiler_input.slots.map(slot=>slot.id)}};
         if(snapshot.projection_status!=='current'||!['approved-static-fixed-v1','approved-manual-period-v1'].includes(snapshot.latest_projection?.compiler_version))return snapshot;
         const lunch=await call(client,'static_weekly_v8_read_lunch_document',[frame]);
         let projectionAvailability=null;

@@ -25,6 +25,8 @@ try{
  for(const status of ['missing','stale'])await test('F03 '+status+' source identity without fabricated current work',async()=>{
   snapshot.projection_status=status;const before=calls.length,value=await plane.getManagerSnapshot({manager,weekStart:'2026-11-02'});
   assert.equal(value.approved_manual_period?.frameStart,'2026-10-30');assert.equal(value.projection_status,status);assert.equal(value.approved_manual_schedule,undefined);
+  assert.deepEqual(value.approved_manual_period.rosterSlotIds,source.compiler_input.slots.map(slot=>slot.id));
+  assert.deepEqual(value.roster,snapshot.roster,'Historical roster retained for original command readback');
   assert.equal(calls.slice(before).some(c=>c.sql.includes('read_lunch_document')),false);
  });
  await test('F03 source revision race refuses mixed snapshot metadata',async()=>{
