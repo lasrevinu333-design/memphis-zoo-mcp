@@ -3338,6 +3338,11 @@
         "object_id": "73e5c032ec64de82e02d49438ff9f2196169acf8"
       },
       {
+        "path": "scripts/employee-events-bigint-auth-tests.mjs",
+        "mode": "100644",
+        "object_id": "a905610c38b2b96b5af9a8e1f4e6cc3db3c8aea5"
+      },
+      {
         "path": "scripts/employee-home-reader-rls-tests.mjs",
         "mode": "100644",
         "object_id": "e23ef05cd67c367a21f85fdc3937938f3a6b15b5"
@@ -8065,7 +8070,7 @@
       {
         "path": "src/auth/device-credential-auth.js",
         "mode": "100644",
-        "object_id": "9532dd71e8bf3e5afcdaa63b99fea87e6e57b9b6"
+        "object_id": "4b21481dc90ff1a4e8f41863a4d08e354e1218d0"
       },
       {
         "path": "src/auth/manager-permissions.js",
@@ -11523,7 +11528,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 2279,
+    "authority_path_count": 2280,
     "migration_path_count": 313,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
