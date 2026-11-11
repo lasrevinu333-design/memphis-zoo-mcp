@@ -5570,7 +5570,7 @@
       {
         "path": "scripts/operations-mail-ledger-tests.mjs",
         "mode": "100644",
-        "object_id": "f092c5d0c118d4bfb94b90a1d1d1651765eba27c"
+        "object_id": "c5d180094cdf6c5e4fdd4690d1d86f14571fd95b"
       },
       {
         "path": "scripts/operations-mail-sync-adapter-tests.mjs",
@@ -8730,7 +8730,7 @@
       {
         "path": "src/operations-mail-ledger.js",
         "mode": "100644",
-        "object_id": "8ae2a75a14009128e21e89aff22328b40b2a9070"
+        "object_id": "881696faed25f3c9789e2d5022c2841cf28fac50"
       },
       {
         "path": "src/operations-mail-sync.js",
@@ -8951,6 +8951,11 @@
         "path": "src/schema-transition.js",
         "mode": "100644",
         "object_id": "7e4b35875a63a8015fe55df16536457b91aeacd9"
+      },
+      {
+        "path": "src/school-owner-corrections.js",
+        "mode": "100644",
+        "object_id": "7f4d5cd38900cfdfc6935f0693488fb0713209b6"
       },
       {
         "path": "src/security-http-boundaries.js",
@@ -11518,7 +11523,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 2278,
+    "authority_path_count": 2279,
     "migration_path_count": 313,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
