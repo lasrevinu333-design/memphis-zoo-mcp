@@ -4713,6 +4713,11 @@
         "object_id": "c554eb9e10dad51c94e3984279fa3ce1a72f936f"
       },
       {
+        "path": "scripts/mcp-descriptor-annotations-tests.mjs",
+        "mode": "100644",
+        "object_id": "68b6fadb2663cda42384538047760e3035abcba8"
+      },
+      {
         "path": "scripts/mcp-oauth-durable-family-database-tests.mjs",
         "mode": "100644",
         "object_id": "04c05be7f4366352c0b813f34bf200fec5476389"
@@ -5910,7 +5915,7 @@
       {
         "path": "scripts/public-dashboard-details-tests.mjs",
         "mode": "100644",
-        "object_id": "1b7f5b70a786850e53d2f586dc1d30cdceef13f2"
+        "object_id": "ed2c8811512730963f2fcb69e33c71289808deef"
       },
       {
         "path": "scripts/public-operations-viewer-tests.mjs",
@@ -8365,7 +8370,7 @@
       {
         "path": "src/mcp/register.js",
         "mode": "100644",
-        "object_id": "e539abf8f361956624b2eef541890fbad891b812"
+        "object_id": "2263d423139887e8b762d585172478392df9db7d"
       },
       {
         "path": "src/mcp/responses.js",
@@ -8780,7 +8785,7 @@
       {
         "path": "src/public-dashboard-details.js",
         "mode": "100644",
-        "object_id": "906b9ed8657f893865afaff6eab64de7dfead72f"
+        "object_id": "f6f09c9c81c4431d542ea2a2faf67a2facb00dff"
       },
       {
         "path": "src/public-operations-viewer.js",
@@ -11483,7 +11488,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 2271,
+    "authority_path_count": 2272,
     "migration_path_count": 313,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
