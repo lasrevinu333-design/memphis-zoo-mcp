@@ -350,9 +350,10 @@ try {
       || !/^[0-9a-f]{64}$/.test(String(releaseIdentity.migration_manifest_sha256 || ""))) {
     throw new Error("The production release identity is incomplete or malformed.");
   }
-  if (String(releaseIdentity.migration_head) !== migrationHead) {
-    // Preserve both true identities; admit only the exact previously applied
-    // source extension, never an arbitrary drift or invented deployed release.
+  {
+    // Always enforce the selected exact ledger/catalog contract. Equal heads
+    // do not prove an unchanged deployed identity or an approved database.
+    // Preserve both true identities; never invent an application upgrade.
     const declaration=JSON.parse(readFileSync(new URL("../release/production-backup-source-extension-v2.active.json",import.meta.url),"utf8"));
     assertBackupSchemaBoundary({projectRef,releaseIdentity,migrationLedger,declaration});
     const catalog=await captureCatalogFromSnapshot(client);

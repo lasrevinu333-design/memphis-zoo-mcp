@@ -95,9 +95,11 @@ test('qualified historical contract keeps the same snapshot and full source bind
  assert.equal(schemaBinding.verifyArchivedSchemaExtension({binding:r.result.sourceSchemaBinding,catalog:r.fixture.catalog,ledger:r.fixture.ledger,
   summary:{project_ref:original.project_ref,source_identity:{release:r.fixture.release,migration_head:r.result.migrationHead,migration_ledger_count:r.fixture.ledger.length}}}),true);
 });
-test('matching deployed head retains normal runtime validation before schema capture',async()=>{
- const r=await run(f=>f.release.migration_head=f.ledger.at(-1).version);assert.ifError(r.error);
- assert.equal(r.events.includes('catalog'),false);assert.ok(r.events.indexOf('runtime-contract')<r.events.indexOf('pg_dump'));
+test('matching deployed head cannot bypass historical identity qualification',async()=>{
+ const r=await run(f=>f.release.migration_head=f.ledger.at(-1).version);
+ assert.equal(r.error?.code,'BACKUP_SOURCE_CONTRACT_MISMATCH');assert.equal(r.error.retryable,false);
+ assert.equal(r.events.includes('catalog'),false);assert.equal(r.events.includes('pg_dump'),false);
+ assert.deepEqual(r.events.slice(-2),['rollback','close']);
 });
 
 test('permanent preflight drift rolls back and closes once with no retry or expensive capture',async()=>{
@@ -157,4 +159,17 @@ test('reviewed active v2 path completes full synthetic source binding in one sna
  for(const event of ['snapshot','ledger','release','catalog','pg_dump','rollback','close'])assert.equal(r.events.filter(e=>e===event).length,1,event);
  assert.ok(r.events.indexOf('catalog')<r.events.indexOf('pg_dump'));assert.ok(r.events.indexOf('runtime-contract')<r.events.indexOf('pg_dump'));
  assert.equal(schemaBinding.verifyArchivedSchemaExtension({summary:{project_ref:r.fixture.declaration.project_ref,source_identity:{release:r.fixture.release,migration_head:r.result.migrationHead,migration_ledger_count:r.fixture.ledger.length}},binding:r.result.sourceSchemaBinding,catalog:r.fixture.catalog,ledger:r.fixture.ledger}),true);
+});
+test('matching v2 deployed head plus changed release cannot bypass selected contract',async()=>{
+ const r=await run(f=>{v2Fixture(f);f.declaration.activation_status='active';f.release.migration_head=f.ledger.at(-1).version;f.release.backend_commit='f'.repeat(40);});
+ assert.equal(r.error?.code,'BACKUP_SOURCE_CONTRACT_MISMATCH');assert.equal(r.error.details.stage,'source-preflight');assert.equal(r.error.retryable,false);
+ assert.equal(r.events.includes('catalog'),false);assert.equal(r.events.includes('pg_dump'),false);assert.deepEqual(r.events.slice(-2),['rollback','close']);
+ for(const event of ['ledger','release','rollback','close'])assert.equal(r.events.filter(e=>e===event).length,1);
+});
+test('extra migration with matching new deployed head still fails before capture and closes snapshot',async()=>{
+ const r=await run(f=>{v2Fixture(f);f.declaration.activation_status='active';f.ledger.push({version:'20261111161431',name:'unapproved_next_migration',statements:['select 1;']});f.release.migration_head=f.ledger.at(-1).version;});
+ assert.equal(r.error?.code,'BACKUP_SOURCE_CONTRACT_MISMATCH');assert.equal(r.error.retryable,false);
+ assert.deepEqual(r.error.details,{stage:'source-preflight',expected_ledger_count:419,observed_ledger_count:420,expected_ledger_head:'20261111161430',observed_ledger_head:'20261111161431'});
+ assert.equal(r.events.includes('catalog'),false);assert.equal(r.events.includes('pg_dump'),false);assert.deepEqual(r.events.slice(-2),['rollback','close']);
+ for(const event of ['ledger','release','rollback','close'])assert.equal(r.events.filter(e=>e===event).length,1);
 });
