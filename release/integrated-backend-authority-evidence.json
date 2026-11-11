@@ -3550,7 +3550,7 @@
       {
         "path": "scripts/feedback-email-relay-tests.mjs",
         "mode": "100644",
-        "object_id": "fa4f71188e2c7db6534f4534c574cee6a4358a99"
+        "object_id": "128f77050430d8e204466ff02cf93e6492fd7f43"
       },
       {
         "path": "scripts/feedback-manager-write-route-tests.mjs",
@@ -4653,6 +4653,11 @@
         "object_id": "d0c0038551cf4c69fbf2c483c2fe00edc6eedf38"
       },
       {
+        "path": "scripts/manager-on-duty-tests.mjs",
+        "mode": "100644",
+        "object_id": "f1a8aa484d163ca06d5b82af40615b6e9e03732d"
+      },
+      {
         "path": "scripts/manager-original-recovery-approval-tests.mjs",
         "mode": "100644",
         "object_id": "b294da8b30f0f2d2d04b15d8f30c240491deac71"
@@ -4706,6 +4711,11 @@
         "path": "scripts/map-owner-session-http-tests.mjs",
         "mode": "100644",
         "object_id": "ff9a22817a105dde9b2af53c52d7daabdd9ed816"
+      },
+      {
+        "path": "scripts/mcp-advertised-schema-tests.mjs",
+        "mode": "100644",
+        "object_id": "2de66865dec11042733c5aef4d50273e47f08835"
       },
       {
         "path": "scripts/mcp-connector-auth-tests.mjs",
@@ -4850,12 +4860,17 @@
       {
         "path": "scripts/messaging-manager-authority-tests.mjs",
         "mode": "100644",
-        "object_id": "8cb9c38fe94b2efa8c0d2176ac2815cf8a58a18d"
+        "object_id": "8a6a7e9a7101075302c2aed3c14afe7b8043e2ce"
       },
       {
         "path": "scripts/messaging-synthetic-roundtrip-tests.mjs",
         "mode": "100644",
         "object_id": "ee74a3ef676efcaf028f24e56dd961102d76842e"
+      },
+      {
+        "path": "scripts/messenger-recipient-directory-tests.mjs",
+        "mode": "100644",
+        "object_id": "629f5cc3e587cf8c97df1ef54cd46a8867a66b99"
       },
       {
         "path": "scripts/migrate-annie-log.mjs",
@@ -8333,6 +8348,11 @@
         "object_id": "859e363a1b5f7528e5280980c0e88aa110d887c7"
       },
       {
+        "path": "src/manager-on-duty.js",
+        "mode": "100644",
+        "object_id": "95694f92d53871361243d19a97a7c4a940f14bd3"
+      },
+      {
         "path": "src/manager-original-inventory-separation.js",
         "mode": "100644",
         "object_id": "2e09ce10a85553762e71e958409436fe2ad08e84"
@@ -8341,6 +8361,11 @@
         "path": "src/manager-original-recovery-approval.js",
         "mode": "100644",
         "object_id": "0e23d96e19d8c427af09e75fe9ca06fcfe2264d3"
+      },
+      {
+        "path": "src/mcp/advertised-schema.js",
+        "mode": "100644",
+        "object_id": "02759ed8900fc4581e78cd2739572a40a2ee4e9f"
       },
       {
         "path": "src/mcp/create-mcp-server.js",
@@ -8370,7 +8395,7 @@
       {
         "path": "src/mcp/register.js",
         "mode": "100644",
-        "object_id": "2263d423139887e8b762d585172478392df9db7d"
+        "object_id": "aa0475fcecf414f5928d73ac3e991d421e82e1b7"
       },
       {
         "path": "src/mcp/responses.js",
@@ -8405,12 +8430,17 @@
       {
         "path": "src/messaging-api.js",
         "mode": "100644",
-        "object_id": "d8eb0959f47498f321c17f9c7355b4bc3c2fb482"
+        "object_id": "0bbfdc3777dee19823291d58aad552a2a3728bae"
       },
       {
         "path": "src/messaging-original-outcome.js",
         "mode": "100644",
         "object_id": "21221b13c1517a209cc27cb0921b9bb6ca08bc8c"
+      },
+      {
+        "path": "src/messenger-recipient-directory.js",
+        "mode": "100644",
+        "object_id": "afd317eb1bc2af7e2856956ce2045bfe11b69196"
       },
       {
         "path": "src/native-alert-reservation.js",
@@ -8690,7 +8720,7 @@
       {
         "path": "src/operations-board.js",
         "mode": "100644",
-        "object_id": "110e8adb8cb705d542263dc7be954b188433ba21"
+        "object_id": "68fd6d767cba75d99a1e7637a6b3be8c8741192e"
       },
       {
         "path": "src/operations-mail-contract.js",
@@ -11488,7 +11518,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 2272,
+    "authority_path_count": 2278,
     "migration_path_count": 313,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
