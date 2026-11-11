@@ -36,6 +36,22 @@ test('schedule reader binds one authoritative snapshot, validates dates, and ref
   const stale=await readPublicSchedule(async()=>[{data:{...current,projection_status:'stale_staffing_change'}}],'2026-11-09');
   assert.deepEqual(stale,{service_date:'2026-11-09',projection_status:'unavailable',roster:[],assignments:[]});
 });
+test('database Date timestamps survive the public projection without widening its field allowlist',()=>{
+  const completed=new Date('2026-11-10T23:57:52.854Z');
+  const source={...summary,snapshot:{...summary.snapshot,operational_day_start:new Date('2026-11-10T10:00:00Z')},
+    restrooms:[{...row,latest_completed_at:completed,latest_checked_at:completed,
+      latest_completed_session_id:'744b35f6-caa5-47b5-9403-88eab4b8c67d',
+      latest_completed_session_uuid:'5137e10f-1e3f-491c-b3ea-3745f5bca1fd',private_timestamp:completed}]};
+  const out=publicDashboardDetails(source), wire=JSON.parse(JSON.stringify(out));
+  assert.equal(wire.restrooms[0].latest_completed_at,completed.toISOString());
+  assert.equal(wire.restrooms[0].latest_checked_at,completed.toISOString());
+  assert.equal(wire.snapshot.operational_day_start,'2026-11-10T10:00:00.000Z');
+  assert.equal(wire.restrooms[0].status_code,'okay');
+  assert.equal(Object.hasOwn(wire.restrooms[0],'private_timestamp'),false);
+  assert.equal(JSON.stringify(wire).includes(secret),false);
+  assert.equal(source.restrooms[0].latest_completed_at,completed);
+  assert.throws(()=>publicDashboardDetails({...summary,restrooms:[{...row,latest_completed_at:new Date(NaN)}]}),/public_display_source_invalid/);
+});
 test('actual anonymous HTTP reads require no cookie or token; writes and manager access remain denied',async()=>{
   const app=express();installLeadershipHttpRoutes(app,{env:{},supabase:{}});
   let reads=0;installPublicDashboardDetails(app,{readSummary:async()=>{reads++;return summary;},readEvents:async()=>events,readMail:async()=>mail,

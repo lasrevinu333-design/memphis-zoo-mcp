@@ -4,8 +4,17 @@ import {projectOperationsEvents} from './operations-board.js';
 // read surface, not an anonymous manager session or a grant on manager routes.
 const scalar = value => value === null || ['string','number','boolean'].includes(typeof value);
 function pick(value, fields) {
-  return Object.fromEntries(fields.filter(key => Object.hasOwn(value || {}, key) && scalar(value[key]))
-    .map(key => [key, value[key]]));
+  return Object.fromEntries(fields.filter(key => Object.hasOwn(value || {}, key))
+    .map(key => {
+      const field = value[key];
+      // The PostgreSQL reader returns timestamp columns as Date objects. Match
+      // normal JSON serialization before filtering approved display fields.
+      if (field instanceof Date) {
+        if (!Number.isFinite(field.getTime())) throw Error('public_display_source_invalid');
+        return [key, field.toISOString()];
+      }
+      return [key, field];
+    }).filter(([, field]) => scalar(field)));
 }
 function rows(value, fields, arrays = []) {
   if (!Array.isArray(value) || value.length > 10000) throw Error('public_display_source_invalid');
