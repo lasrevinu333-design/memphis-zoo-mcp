@@ -5,7 +5,7 @@ import {resolve} from 'node:path';
 import {tmpdir} from 'node:os';
 import {createHash} from 'node:crypto';
 import {spawn} from 'node:child_process';
-import {PG_IMAGE,selectPrivateProfile,freshIntentEnvelope,assertOwnedPg,assertPrivateResult,safeSourcePreparationFailure,originalOwnerMetadataDiagnostics} from './run-private-backup-only-rehearsal.mjs';
+import {PG_IMAGE,selectPrivateProfile,freshIntentEnvelope,assertOwnedPg,assertPrivateResult,safeSourcePreparationFailure,originalOwnerMetadataDiagnostics,targetCreationOperation,targetCreationMetadata,classifyPinnedPostgresPullFailure} from './run-private-backup-only-rehearsal.mjs';
 import {storageWorkerActor,assertPrivatePgOwnerProfile,resourceProfile,assertPrivatePgNetwork,assertPrivateNetworkMembers,privateRestoreFailureDiagnostic,privateRestoreStreamDiagnostic,privateEvidenceFile,privateEvidenceReceipt,safeStartupFailure,stable,IMAGE} from './run-official-local-storage-rehearsal.mjs';
 import {captureVerifiedOriginalRestoreIntent} from './disaster-recovery-crypto.mjs';
 import {captureVerifiedImmutableFreshRestoreIntent} from './immutable-private-fresh-restore-intent.mjs';
@@ -330,4 +330,59 @@ test('private parent cancels only owned pending inspectors before target cleanup
   assert.ok(source.indexOf('closing=true;inspectionController.abort()')<source.indexOf('await Promise.allSettled([...pendingConnections])'));
   assert.match(source,/timeout:10000,abortSignal:inspectionController.signal/);
   assert.equal((source.match(/assert.equal\(closing,false,'Target inspection refused during cleanup'\)/g)||[]).length,2);
+});
+
+
+test('creation diagnostics distinguish startup assertions using only bounded booleans and closed labels',()=>{
+  const good=pg();good.State={Running:true,Status:'running',OOMKilled:false,ExitCode:0,Error:''};
+  const current=targetCreationMetadata('POSTGRES',good,identity);
+  assert.equal(current.running,true);assert.equal(current.postgres_port_key_present,true);assert.equal(current.all_ports_unpublished,true);
+  assert.equal(current.network_count,1);assert.equal(current.container_id_matches,true);
+  const missing=pg();missing.NetworkSettings.Ports={};const absent=targetCreationMetadata('POSTGRES',missing,identity);
+  assert.equal(absent.ports_object_present,true);assert.equal(absent.postgres_port_key_present,false);assert.equal(absent.port_key_count,0);
+  assert.throws(()=>assertOwnedPg(missing,identity),'Diagnostics must not relax the failed assertion');
+  const stopped=pg();stopped.State={Running:false,Status:'exited',OOMKilled:true,ExitCode:137,Error:privateSentinels.join('\n')};
+  const failed=targetCreationMetadata('POSTGRES',stopped,identity);assert.equal(failed.running,false);assert.equal(failed.oom_killed,true);assert.equal(failed.exit_code,137);assert.equal(failed.state_error_present,true);assertNoPrivate(failed);
+  const bad=pg();bad.Config.Env=privateSentinels;bad.Config.Labels['custodial.private-owner-profile']=privateSentinels[0];
+  bad.NetworkSettings.Ports['5432/tcp']=[{HostIp:privateSentinels[0],HostPort:'5432'}];bad.NetworkSettings.Networks[privateSentinels[0]]={};
+  const denied=targetCreationMetadata('POSTGRES',bad,identity);assert.equal(denied.owner_profile_matches,false);assert.equal(denied.all_ports_unpublished,false);assert.equal(denied.sole_expected_network,false);assertNoPrivate(denied);
+  const net=targetCreationMetadata('NETWORK',{Id:identity.networkId,Internal:true,Labels:{'custodial.private-backup-rehearsal':identity.owner},Containers:{[identity.id]:{private:privateSentinels}}},identity);
+  assert.equal(net.internal,true);assert.equal(net.sole_expected_postgres,true);assertNoPrivate(net);
+  let reads=0;const getter=Object.defineProperty({},'Config',{get(){reads++;throw Error(privateSentinels[0]);}});
+  assertNoPrivate(targetCreationMetadata('POSTGRES',getter,identity));assert.equal(reads,0);
+  assertNoPrivate(targetCreationMetadata('POSTGRES',new Proxy({},{ownKeys(){throw Error(privateSentinels[0]);}}),identity));
+  assert.equal(targetCreationOperation('START_OWNED_POSTGRES'),'START_OWNED_POSTGRES');assert.equal(targetCreationOperation(privateSentinels[0]),null);
+  assert.equal(targetCreationMetadata(privateSentinels[0],good,identity),null);
+  const nested=pg();nested.NetworkSettings.Ports['5432/tcp']=new Proxy([],{get(){reads++;throw Error(privateSentinels[0]);}});
+  nested.NetworkSettings.Networks[identity.networkName].IPAddress={toString(){reads++;throw Error(privateSentinels[0]);}};
+  const bounded=targetCreationMetadata('POSTGRES',nested,identity);assert.equal(bounded.all_ports_unpublished,false);assert.equal(bounded.network_ipv4_present,false);assert.equal(reads,0);
+});
+
+test('creation subprocess diagnostic survives refusal and cleanup without leaking raw output',async()=>{
+  const source=readFileSync(new URL('./run-private-backup-only-rehearsal.mjs',import.meta.url),'utf8');
+  const start=source.indexOf('  const run=(command,args,'),end=source.indexOf('  const docker=',start);
+  const factory=new Function('ports',`const {root,spawn,targetCreationOperation}=ports;const stopping=false,baseEnv={},children=new Set(),phase='create_owned_target';
+    let creationOperation='START_OWNED_POSTGRES',creationProcess=null;${source.slice(start,end)}return {run,receipt:()=>creationProcess};`);
+  const {run,receipt}=factory({root:tmpdir(),spawn,targetCreationOperation});
+  const payload=privateSentinels.join('\n'),program=`process.stdout.write(${JSON.stringify(payload)});process.stderr.write(${JSON.stringify(payload)});process.exitCode=17;`;
+  await assert.rejects(run(process.execPath,['-e',program]),/Owned subprocess refused/);
+  const captured=receipt();assert.equal(captured.operation,'START_OWNED_POSTGRES');assert.equal(captured.exit_code,17);
+  assert.equal(captured.stdout_bytes,Buffer.byteLength(payload));assert.equal(captured.stderr_bytes,Buffer.byteLength(payload));assert.equal(captured.spawn_error,false);assert.equal(captured.timed_out,false);assertNoPrivate(captured);
+  await run(process.execPath,['-e',''],{cleanup:true});assert.deepEqual(receipt(),captured,'Cleanup cannot overwrite the original creation observation');
+  await assert.rejects(run(process.execPath,['-e','setInterval(()=>{},1000);'],{timeout:80}));assert.equal(receipt().timed_out,true);assertNoPrivate(receipt());
+});
+
+
+test('exact pinned pull diagnostic uses only closed transport labels and never authorizes retries',()=>{
+  for(const [text,expected] of [
+    ['toomanyrequests: You have reached your unauthenticated pull rate limit','REGISTRY_RATE_LIMIT'],
+    ['unauthorized: authentication required','REGISTRY_ACCESS_DENIED'],
+    ['net/http: TLS handshake timeout','TRANSPORT_TIMEOUT'],['dial tcp: lookup registry.invalid: no such host','DNS_FAILURE'],
+    ['x509: certificate signed by unknown authority','TLS_CERTIFICATE_ERROR'],
+    ['Cannot connect to the Docker daemon','DOCKER_DAEMON_UNAVAILABLE'],['manifest unknown','PINNED_IMAGE_MANIFEST_UNAVAILABLE'],
+    [privateSentinels.join('\n'),'UNKNOWN'],['x'.repeat(65537)+'toomanyrequests:','UNKNOWN'],[{},'UNKNOWN'],
+  ]){const result=classifyPinnedPostgresPullFailure(text);assert.equal(result,expected);assertNoPrivate(result);}
+  const source=readFileSync(new URL('./run-private-backup-only-rehearsal.mjs',import.meta.url),'utf8');
+  assert.match(source,/operationAtStart==='PULL_PINNED_POSTGRES_IMAGE'&&command==='docker'&&args.length===2&&args\[0\]==='pull'&&args\[1\]===PG_IMAGE/);
+  assert.match(source,/pinnedPull&&\(code!==0\|\|failed\)\?\{docker_pull_failure:pullErrorTruncated\?'UNKNOWN'/);
 });

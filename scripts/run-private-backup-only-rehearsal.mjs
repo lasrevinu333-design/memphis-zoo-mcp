@@ -2,6 +2,7 @@
 // originals. No alternate importer, production target, migration or resume path.
 import assert from 'node:assert/strict';
 import {isDeepStrictEqual} from 'node:util';
+import {isProxy} from 'node:util/types';
 import {randomBytes,randomUUID,createHash} from 'node:crypto';
 import {spawn} from 'node:child_process';
 import {createServer,createConnection,isIP} from 'node:net';
@@ -102,6 +103,56 @@ export function freshIntentEnvelope(binding,key,keyId,now=new Date()){
   return {format:'memphis-zoo-production-restore-intent.v1',algorithm:'hmac-sha256',key_id:keyId,
     intent,signature:signBinding(restoreIntentBinding(intent),key)};
 }
+const targetCreationOperations=new Set(['CHECK_TARGET_ABSENCE','PULL_PINNED_POSTGRES_IMAGE','CREATE_OWNED_NETWORK',
+  'CHECK_NETWORK_ID_SHAPE','START_OWNED_POSTGRES','CHECK_CONTAINER_ID_SHAPE','INSPECT_OWNED_POSTGRES','VERIFY_OWNED_POSTGRES',
+  'INSPECT_OWNED_NETWORK','VERIFY_OWNED_NETWORK']);
+export function targetCreationOperation(value){return targetCreationOperations.has(value)?value:null;}
+// Used only for the exact pinned Docker pull failure. Labels describe observed
+// transport text, never authorize a retry, credential change or alternate image.
+export function classifyPinnedPostgresPullFailure(stderr){
+  if(typeof stderr!=='string'||Buffer.byteLength(stderr)>65536)return 'UNKNOWN';
+  if(/toomanyrequests:|429 Too Many Requests|You have reached your unauthenticated pull rate limit/i.test(stderr))return 'REGISTRY_RATE_LIMIT';
+  if(/unauthorized: authentication required|pull access denied/i.test(stderr))return 'REGISTRY_ACCESS_DENIED';
+  if(/net\/http: TLS handshake timeout|i\/o timeout|context deadline exceeded/i.test(stderr))return 'TRANSPORT_TIMEOUT';
+  if(/lookup [^\r\n]{1,512}: no such host|temporary failure in name resolution/i.test(stderr))return 'DNS_FAILURE';
+  if(/x509: certificate signed by unknown authority|x509: certificate has expired/i.test(stderr))return 'TLS_CERTIFICATE_ERROR';
+  if(/Cannot connect to the Docker daemon|permission denied while trying to connect to the Docker daemon socket/i.test(stderr))return 'DOCKER_DAEMON_UNAVAILABLE';
+  if(/manifest unknown|no matching manifest for/i.test(stderr))return 'PINNED_IMAGE_MANIFEST_UNAVAILABLE';
+  return 'UNKNOWN';
+}
+// Observational DATA only. Never serialize a Docker object, error, environment,
+// address or label value. Missing/invalid observations do not satisfy guards.
+export function targetCreationMetadata(kind,value,expected){
+  const own=(object,key)=>{if(!object||typeof object!=='object'||isProxy(object))return undefined;
+    const d=Object.getOwnPropertyDescriptor(object,key);return d&&Object.hasOwn(d,'value')?d.value:undefined;};
+  const object=value=>value && typeof value==='object'&&!isProxy(value)&&!Array.isArray(value)?value:null;
+  const keys=value=>object(value)?Object.keys(value):null;
+  const boundedCount=value=>Array.isArray(value)&&value.length<=65536?value.length:null;
+  if(kind==='POSTGRES'){
+    const config=own(value,'Config'),labels=own(config,'Labels'),state=own(value,'State'),settings=own(value,'NetworkSettings');
+    const ports=own(settings,'Ports'),portKeys=keys(ports),networks=own(settings,'Networks'),networkKeys=keys(networks),endpoint=own(networks,expected.networkName);
+    const bindings=portKeys?.map(key=>own(ports,key)),address=own(endpoint,'IPAddress');
+    return Object.freeze({container_id_matches:own(value,'Id')===expected.id,container_name_matches:own(value,'Name')==='/'+expected.name,
+      pinned_image_matches:own(config,'Image')===PG_IMAGE,owner_label_matches:own(labels,label)===expected.owner,
+      owner_profile_matches:own(labels,'custodial.private-owner-profile')===expected.ownerProfile.id,
+      owner_actor_matches:own(labels,'custodial.private-owner-actor')===expected.ownerProfile.actor,
+      running:own(state,'Running')===true,status:['created','running','paused','restarting','removing','exited','dead'].includes(own(state,'Status'))?own(state,'Status'):'UNAVAILABLE',
+      oom_killed:typeof own(state,'OOMKilled')==='boolean'?own(state,'OOMKilled'):null,
+      exit_code:Number.isInteger(own(state,'ExitCode'))&&own(state,'ExitCode')>=0&&own(state,'ExitCode')<=255?own(state,'ExitCode'):null,
+      state_error_present:typeof own(state,'Error')==='string'&&own(state,'Error').length>0,
+      ports_object_present:portKeys!==null,postgres_port_key_present:portKeys?.includes('5432/tcp')??false,
+      port_key_count:boundedCount(portKeys),all_ports_unpublished:bindings?.every(p=>p===null||!isProxy(p)&&Array.isArray(p)&&p.length===0)??false,
+      network_count:boundedCount(networkKeys),sole_expected_network:networkKeys?.length===1&&networkKeys[0]===expected.networkName,
+      network_id_matches:own(endpoint,'NetworkID')===expected.networkId,network_ipv4_present:typeof address==='string'&&isIP(address)===4});
+  }
+  if(kind==='NETWORK'){
+    const members=own(value,'Containers'),memberKeys=keys(members);
+    return Object.freeze({network_id_matches:own(value,'Id')===expected.networkId,internal:own(value,'Internal')===true,
+      owner_label_matches:own(own(value,'Labels'),label)===expected.owner,member_count:boundedCount(memberKeys),
+      sole_expected_postgres:memberKeys?.length===1&&memberKeys[0]===expected.id});
+  }
+  return null;
+}
 export function assertOwnedPg(value,{id,name,owner,networkId,networkName,ownerProfile}){
   assert.equal(value.Id,id);assert.equal(value.Name,'/'+name);assert.equal(value.Config.Image,PG_IMAGE);
   assert.equal(value.Config.Labels[label],owner);assert.equal(value.State.Running,true);
@@ -155,7 +206,7 @@ export async function runPrivate(){
   const networkName=name+'_private_'+owner, database=name;
   let archive,cid,networkId,relay,relayClosed=true,pgAbsent=false,networkAbsent=false;
   const sockets=new Set(),children=new Set(),pendingConnections=new Set(),inspectionController=new AbortController();let stopping=false,closing=false,failure,phase='authenticate',result,source,sourceMetadata,ownerMetadata,ownerProfile;
-  let cancelTimer;
+  let cancelTimer,creationOperation=null,creationProcess=null,creationPostgres=null,creationNetwork=null;
   const stop=()=>{stopping=true;for(const pid of children)try{process.kill(-pid,'SIGTERM');}catch{}
     cancelTimer??=setTimeout(()=>{for(const pid of children)try{process.kill(-pid,'SIGKILL');}catch{}},60000);};
   process.on('SIGTERM',stop);process.on('SIGINT',stop);
@@ -163,18 +214,27 @@ export async function runPrivate(){
   const run=(command,args,{input,env=baseEnv,timeout=60000,cleanup=false,abortSignal=null}={})=>new Promise((yes,no)=>{
     if(stopping&&!cleanup || abortSignal?.aborted)return no(new Error('Cancelled'));
     const child=spawn(command,args,{cwd:root,env,detached:true,stdio:['pipe','pipe','pipe']});
-    let stdout='',bytes=0,failed=false,hardTimer;children.add(child.pid);
-    const kill=()=>{failed=true;try{process.kill(-child.pid,'SIGTERM');}catch{}
+    let stdout='',bytes=0,stdoutBytes=0,stderrBytes=0,failed=false,hardTimer,timedOut=false,outputLimit=false,cancelled=false,spawnError=false;children.add(child.pid);
+    const operationAtStart=phase==='create_owned_target'&&!cleanup?targetCreationOperation(creationOperation):null;
+    const pinnedPull=operationAtStart==='PULL_PINNED_POSTGRES_IMAGE'&&command==='docker'&&args.length===2&&args[0]==='pull'&&args[1]===PG_IMAGE;
+    const pullErrorChunks=[];let pullErrorBytes=0,pullErrorTruncated=false;
+    const kill=(reason='TIMEOUT')=>{failed=true;timedOut ||= reason==='TIMEOUT';outputLimit ||= reason==='OUTPUT_LIMIT';try{process.kill(-child.pid,'SIGTERM');}catch{}
       hardTimer??=setTimeout(()=>{try{process.kill(-child.pid,'SIGKILL');}catch{}},60000);};
-    const cancelInspector=()=>{failed=true;if(child.exitCode===null&&child.signalCode===null)try{process.kill(-child.pid,'SIGKILL');}catch{}};
+    const cancelInspector=()=>{failed=true;cancelled=true;if(child.exitCode===null&&child.signalCode===null)try{process.kill(-child.pid,'SIGKILL');}catch{}};
     if(abortSignal){abortSignal.addEventListener('abort',cancelInspector,{once:true});if(abortSignal.aborted)cancelInspector();}
     const timer=setTimeout(kill,timeout);
-    child.stdout.on('data',b=>{bytes+=b.length;if(bytes>16*1024*1024)kill();else stdout+=b;});
+    child.stdout.on('data',b=>{bytes+=b.length;stdoutBytes+=b.length;if(bytes>16*1024*1024)kill('OUTPUT_LIMIT');else stdout+=b;});
     // Private SQL/rows/errors never enter CI logs or receipt artifacts.
-    child.stderr.on('data',b=>{bytes+=b.length;if(bytes>16*1024*1024)kill();});
+    child.stderr.on('data',b=>{bytes+=b.length;stderrBytes+=b.length;
+      if(pinnedPull){pullErrorBytes+=b.length;if(pullErrorBytes<=65536)pullErrorChunks.push(b);else pullErrorTruncated=true;}
+      if(bytes>16*1024*1024)kill('OUTPUT_LIMIT');});
     child.stdin.on('error',()=>{});child.stdin.end(input);
-    child.once('error',()=>{failed=true;});
-    child.once('close',code=>{clearTimeout(timer);clearTimeout(hardTimer);abortSignal?.removeEventListener('abort',cancelInspector);children.delete(child.pid);
+    child.once('error',()=>{failed=true;spawnError=true;});
+    child.once('close',(code,signal)=>{clearTimeout(timer);clearTimeout(hardTimer);abortSignal?.removeEventListener('abort',cancelInspector);children.delete(child.pid);
+      if(operationAtStart)creationProcess=Object.freeze({operation:operationAtStart,exit_code:Number.isInteger(code)&&code>=0&&code<=255?code:null,
+        signal:['SIGTERM','SIGKILL','SIGINT','SIGABRT','SIGSEGV','SIGBUS'].includes(signal)?signal:null,
+        stdout_bytes:stdoutBytes,stderr_bytes:stderrBytes,timed_out:timedOut,output_limit_exceeded:outputLimit,cancelled,spawn_error:spawnError,
+        ...(pinnedPull&&(code!==0||failed)?{docker_pull_failure:pullErrorTruncated?'UNKNOWN':classifyPinnedPostgresPullFailure(Buffer.concat(pullErrorChunks).toString('utf8'))}:{} )});
       if(code!==0||failed)no(new Error('Owned subprocess refused during '+phase));else yes(stdout.trim());});
   });
   const docker=(args,options)=>run('docker',args,options);
@@ -199,21 +259,32 @@ export async function runPrivate(){
       RESTORE_APPLY:'true',RESTORE_DATABASE_ONLY:'true',SUPABASE_PROJECT_REF:source.sourceBinding.project_ref,
       RESTORE_CONFIRM_PROJECT_REF:source.sourceBinding.project_ref};
     requireOwnerProfile();phase='create_owned_target';
+    creationOperation='CHECK_TARGET_ABSENCE';
     assert.equal(await docker(['ps','-aq','--filter','name=^/'+name+'$']),'','Never reuse an existing target');
+    creationOperation='PULL_PINNED_POSTGRES_IMAGE';
     await docker(['pull',PG_IMAGE],{timeout:180000});
+    creationOperation='CREATE_OWNED_NETWORK';
     networkId=await docker(['network','create','--internal','--label',label+'='+owner,networkName]);
+    creationOperation='CHECK_NETWORK_ID_SHAPE';
     assert.match(networkId,/^[0-9a-f]{64}$/);
+    creationOperation='START_OWNED_POSTGRES';
     cid=await docker(['run','-d','--name',name,'--label',label+'='+owner,'--label','custodial.private-owner-profile='+ownerProfile.id,
       '--label','custodial.private-owner-actor='+ownerProfile.actor,'--network',networkName,
       '--memory','1g','--memory-swap','1g','--cpus','1','--pids-limit','256','--tmpfs','/var/lib/postgresql/data:rw,size=1g',
       '-e','POSTGRES_PASSWORD=postgres','-e','PGPASSWORD=postgres',PG_IMAGE,'postgres','-D','/etc/postgresql',
       '-c',"listen_addresses=*",'-c','shared_preload_libraries=pg_cron,pg_net,pg_stat_statements',
       '-c','cron.database_name='+database,'-c','cron.launch_active_jobs=off']);
+    creationOperation='CHECK_CONTAINER_ID_SHAPE';
     assert.match(cid,/^[0-9a-f]{64}$/);
     const identity={id:cid,name,owner,networkId,networkName,ownerProfile};
-    const initial=await inspect(),address=assertOwnedPg(initial,identity);
+    creationOperation='INSPECT_OWNED_POSTGRES';
+    const initial=await inspect();creationPostgres=targetCreationMetadata('POSTGRES',initial,identity);
+    creationOperation='VERIFY_OWNED_POSTGRES';
+    const address=assertOwnedPg(initial,identity);
     assert.deepEqual(Object.keys(initial.NetworkSettings.Networks),[networkName]);
-    const net=JSON.parse(await docker(['network','inspect',networkId]))[0];
+    creationOperation='INSPECT_OWNED_NETWORK';
+    const net=JSON.parse(await docker(['network','inspect',networkId]))[0];creationNetwork=targetCreationMetadata('NETWORK',net,identity);
+    creationOperation='VERIFY_OWNED_NETWORK';
     assert.equal(net.Id,networkId);assert.equal(net.Internal,true);assert.equal(net.Labels[label],owner);
     assert.deepEqual(Object.keys(net.Containers),[cid]);
     phase='wait_owned_postgres';let ready=false;
@@ -295,6 +366,7 @@ export async function runPrivate(){
       database_tables:!failure?result?.database_tables:null,database_rows:!failure?result?.database_rows:null,
       provider_verified:!failure&&result?.storage?.provider_verified===true,
       phase,blocker:failure?'PRIVATE_REHEARSAL_REFUSED':stopping?'CANCELLED':null,
+      target_creation:{operation:targetCreationOperation(creationOperation),process:creationProcess,postgres:creationPostgres,network:creationNetwork},
       source_preparation:safeSourcePreparationFailure(failure),original_rows_metadata:sourceMetadata??null,original_owner_metadata:ownerMetadata??null,authenticated_owner_profile:ownerProfile??null};
     writeFileSync(receiptPath,JSON.stringify(receipt,null,2)+'\n',{mode:0o600,flag:'wx'});
     if(!failure&&!stopping)process.stdout.write(JSON.stringify(receipt)+'\n');
