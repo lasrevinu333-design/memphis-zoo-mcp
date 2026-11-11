@@ -1,6 +1,7 @@
 import {createHash,randomUUID} from 'node:crypto';
 import {spiceworksObservation,reconcileSpiceworks,reconcileSchoolSnapshots} from './operations-mail-contract.js';
 import {withApplicationMutationLease} from './restore-mutation-gate.js';
+import {schoolOwnerCorrection} from './school-owner-corrections.js';
 
 // Existing service-only Outlook ledger. No new grant, public ingestion route,
 // mailbox credential, scheduler, ticket database or external ticket mutation.
@@ -111,7 +112,10 @@ export function projectOperationsMailRows(rows){
       activity.map(row=>({ticket_id,title,...row})))),
     schools:feed('school',items=>reconcileSchoolSnapshots(items).rows.map(row=>{
       const {provenance,prior_provenance,superseded_by,...display}=row;
-      return {...display,source_revision:sha(canonical({provenance,prior_provenance:prior_provenance||null,superseded_by:superseded_by||null}))};
+      const correction=schoolOwnerCorrection(row);
+      return {...display,...(correction?{arrival_at:correction.corrected_arrival_at}:{}),
+        source_revision:sha(canonical({provenance,prior_provenance:prior_provenance||null,superseded_by:superseded_by||null,
+          ...(correction?{owner_correction:correction}:{})}))};
     })),
   };
 }

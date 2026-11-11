@@ -5,6 +5,7 @@ import {createClient} from '@supabase/supabase-js';
 import {recordOperationsMail,readOperationsMailLedger,projectOperationsMailRows} from '../src/operations-mail-ledger.js';
 import {makeOperationsBoardHandler} from '../src/operations-board.js';
 import {SCHOOL_HEADERS,projectSchoolAttachment} from '../src/operations-mail-contract.js';
+import {projectSharedSchools} from '../src/shared-events-feed.js';
 const at='2026-10-05T12:00:00Z';
 const source=(id='m1',time=at,sender='help@memzoomaint.on.spiceworks.com')=>({mailbox:'eoperle@memphiszoo.org',sender,message_id:id,content_sha256:'a'.repeat(64),source_at:time});
 const ticket=(id='m1',time=at,change_lines=['set category to Custodial','changed status from Closed -> Open'])=>({source:source(id,time),ticket_id:'6914',title:'Synthetic gate',change_lines});
@@ -61,6 +62,32 @@ test('actual SDK insert-ignore and saved readback bind exact source; duplicate i
 test('conflicting retry cannot overwrite original observation',async()=>{
  const f=fixture();await f.save('spiceworks',ticket());const original=structuredClone(f.rows);
  await assert.rejects(f.save('spiceworks',{...ticket(),title:'changed same message'}),/replay_conflict/);assert.deepEqual(f.rows,original);
+});
+test('owner Alcy correction changes only the bound active display; raw source and newer sources survive',async()=>{
+ const f=fixture(),input=school('owner-correction-source','2026-11-04T18:36:58Z',[
+  [353904,'Alcy Elementary',4,'Field Trip Elem Student 1-5',46339.895833333299,46339.895833333299,94],
+  [null,null,null,'Field Trip Teacher',46339.895833333299,46339.895833333299,9]]);
+ input.source.content_sha256='4b08e76eeb1abfac80cee30580f4c278c48ea2c4e3f09e42a3e7e8c0f49e24b9';
+ input.attachment.sha256='0312cf2375b6e41c89363617ae7871640e10adf2d21bca88bba475f1cd7c7857';
+ input.complete_for_dates=['2026-11-13'];
+ const original=structuredClone(input);await f.save('school',input);
+ const ledgerBefore=JSON.stringify(f.rows),raw=projectSchoolAttachment(input)[0];
+ assert.equal(raw.arrival_at,'2026-11-14T03:30:00.000Z');
+ let projected=await readOperationsMailLedger({client:f.client});
+ assert.equal(projected.schools.rows[0].arrival_at,'2026-11-13T15:30:00.000Z');
+ assert.equal(projected.schools.rows[0].total,103);assert.equal(projected.schools.rows[0].buses,4);
+ assert.equal(projected.schools.rows[0].departure_at,null);
+ assert.equal(projectSharedSchools(projected.schools).rows[0].arrival_at,'2026-11-13T15:30:00.000Z');
+ assert.equal(JSON.stringify(f.rows),ledgerBefore);assert.deepEqual(input,original);
+ const next=structuredClone(input);next.source.message_id='newer-source';next.source.source_at='2026-11-11T12:00:00Z';next.attachment.id='newer-attachment';
+ for(const row of next.rows)row[4]=row[5]=46339.4166666667;
+ await f.save('school',next);projected=await readOperationsMailLedger({client:f.client});
+ assert.equal(projected.schools.rows.find(r=>r.status==='SCHEDULED').arrival_at,'2026-11-13T16:00:00.000Z');
+ assert.equal(projectSchoolAttachment(f.rows[0].source_payload.observation)[0].arrival_at,'2026-11-14T03:30:00.000Z');
+ for(const mutate of [s=>s.attachment.sha256='c'.repeat(64),s=>s.source.content_sha256='d'.repeat(64),s=>s.source.source_at='2026-11-04T18:37:58Z',s=>s.rows[0][0]=353905]){
+  const other=structuredClone(input);mutate(other);const isolated=fixture();await isolated.save('school',other);
+  assert.equal((await readOperationsMailLedger({client:isolated.client})).schools.rows[0].arrival_at,'2026-11-14T03:30:00.000Z');
+ }
 });
 test('lost write acknowledgment is unknown; same-source retry resolves without duplication',async()=>{
  const f=fixture();f.setFault('lost-write-ack');await assert.rejects(f.save('spiceworks',ticket()),/write_unconfirmed|write_outcome_unknown/);
