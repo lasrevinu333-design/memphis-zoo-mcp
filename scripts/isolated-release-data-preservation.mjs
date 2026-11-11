@@ -117,7 +117,7 @@ export async function prepareIsolatedReleaseDataPreservation({client,backendRoot
  const relationCensus=(await query(`select n.nspname schema,c.relname name,c.relkind::text kind,c.relispartition,
   has_schema_privilege(current_user,n.oid,'USAGE') usage,has_table_privilege(current_user,c.oid,'SELECT') readable
   from pg_class c join pg_namespace n on n.oid=c.relnamespace
-  where n.nspname in('public','auth','storage','custodial_release_identity') and c.relkind in('r','p','f')`)).rows;
+  where n.nspname in('public','auth','storage','custodial_release_identity','custodial_employment','custodial_coverall','custodial_leadership_private') and c.relkind in('r','p','f')`)).rows;
  assert.deepEqual(relationCensus.map(tableKey).sort(),tables.map(tableKey).sort());
  for(const t of relationCensus){assert.equal(t.kind,'r');assert.equal(t.relispartition,false);
   assert.equal(t.usage,true,'Existing namespace USAGE required for '+tableKey(t));

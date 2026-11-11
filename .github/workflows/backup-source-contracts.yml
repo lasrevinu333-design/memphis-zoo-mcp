@@ -1,0 +1,45 @@
+name: Backup source contracts (offline)
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/**'
+      - 'release/**'
+      - 'supabase/**'
+      - 'package*.json'
+      - '.github/workflows/**'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/**'
+      - 'release/**'
+      - 'supabase/**'
+      - 'package*.json'
+      - '.github/workflows/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backup-source-contracts-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contracts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22.23.1'
+      - name: Install locked dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Check offline fixture tools
+        run: python3 --version && openssl version
+      - name: Validate source-only backup and recovery contracts
+        run: npm run test:backup-source-contracts
+      - name: Validate CI source contracts
+        run: npm run test:ci-workflows

@@ -12,7 +12,7 @@ import {restoreCronJobs,verifyRestoredCronJobs,normalizedCronJobs} from './disas
 
 const Client=pg.Client,nativeQuery=Client.prototype.query,attempted=new WeakSet();
 const sha=value=>createHash('sha256').update(value).digest('hex');
-const schemas=['public','auth','storage','custodial_release_identity'];
+const schemas=['public','auth','storage','custodial_release_identity','custodial_employment','custodial_coverall','custodial_leadership_private'];
 const quote=value=>'"'+value.replaceAll('"','""')+'"';
 const native=client=>client&&typeof client==='object'&&!types.isProxy(client)
  &&Object.getPrototypeOf(client)===Client.prototype&&!Object.hasOwn(client,'query')&&Client.prototype.query===nativeQuery;

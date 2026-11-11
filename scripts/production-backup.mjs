@@ -19,6 +19,7 @@ import { promisify, types } from "node:util";
 import pg from "pg";
 import {captureCatalogFromSnapshot} from "./schema-catalog-readonly-client.mjs";
 import {bindBackupSchemaExtension} from "./backup-release-schema-binding.mjs";
+import {assertBackupSchemaBoundary} from "./backup-source-preflight.mjs";
 import { captureProductionBackupOriginalMetadata,readProductionBackupOriginalRelease } from "./production-backup-original-metadata.mjs";
 import {
   archiveSignatureBinding,
@@ -35,7 +36,7 @@ import {
 } from "./disaster-recovery-storage.mjs";
 import {
   productionBackupPgDumpDockerArgs,
-  productionBackupDataSchemas,
+  productionBackupDataSchemas,productionBackupAllowedDataSchemas,
   productionBackupSnapshotStatements,
   requireProductionBackupDataScope,
   productionBackupRowCount,
@@ -57,7 +58,8 @@ const backupDirInput = String(process.env.BACKUP_DIR || "").trim();
 const backupDir = backupDirInput ? resolve(backupDirInput) : "";
 const pageSize = Math.max(100, Math.min(5000, Number(process.env.BACKUP_PAGE_SIZE || 1000)));
 const startedAt = new Date().toISOString();
-const schemas = productionBackupDataSchemas;
+const schemaCandidates=productionBackupAllowedDataSchemas;
+let schemas = productionBackupDataSchemas;
 const manifestSigningKey = requireSigningKey(process.env.BACKUP_MANIFEST_SIGNING_KEY, "BACKUP_MANIFEST_SIGNING_KEY");
 const manifestSigningKeyId = String(process.env.BACKUP_MANIFEST_SIGNING_KEY_ID || "").trim();
 const backupToolCommit = String(process.env.BACKUP_TOOL_COMMIT || "").trim().toLowerCase();
@@ -292,7 +294,6 @@ try {
   for (const statement of backupNativeTextOutputStatements) await client.query(statement);
   const exportedSnapshotResult = await client.query("select pg_export_snapshot() exported_snapshot");
   const exportedSnapshot = String(exportedSnapshotResult.rows[0]?.exported_snapshot || "");
-  applicationSchemaSections = await captureApplicationSchema(exportedSnapshot);
   const snapshotResult = await client.query(`
     select current_database() database_name, current_setting('server_version') server_version,
            current_setting('TimeZone') timezone, transaction_timestamp() captured_at,
@@ -301,15 +302,14 @@ try {
   `, [exportedSnapshot]);
   snapshot = snapshotResult.rows[0];
 
-  const migrationResult = await client.query("select max(version)::text migration_head from supabase_migrations.schema_migrations");
-  migrationHead = String(migrationResult.rows[0]?.migration_head || "").trim();
-  if (!/^\d{14}$/.test(migrationHead)) throw new Error("The production migration head is unavailable or malformed.");
   const migrationLedgerResult = await client.query(`
     select version::text, name::text, statements
     from supabase_migrations.schema_migrations
     order by version
   `);
   migrationLedger = migrationLedgerResult.rows;
+  migrationHead = String(migrationLedger.at(-1)?.version || "").trim();
+  if (!/^\d{14}$/.test(migrationHead)) throw new Error("The production migration head is unavailable or malformed.");
   if (!migrationLedger.length || String(migrationLedger.at(-1)?.version || "") !== migrationHead) {
     throw new Error("The captured migration ledger does not terminate at the production migration head.");
   }
@@ -353,8 +353,9 @@ try {
   if (String(releaseIdentity.migration_head) !== migrationHead) {
     // Preserve both true identities; admit only the exact previously applied
     // source extension, never an arbitrary drift or invented deployed release.
+    const declaration=JSON.parse(readFileSync(new URL("../release/production-backup-source-extension-v2.active.json",import.meta.url),"utf8"));
+    assertBackupSchemaBoundary({projectRef,releaseIdentity,migrationLedger,declaration});
     const catalog=await captureCatalogFromSnapshot(client);
-    const declaration=JSON.parse(readFileSync(new URL("../release/production-backup-source-extension.json",import.meta.url),"utf8"));
     sourceSchemaBinding=bindBackupSchemaExtension({projectRef,releaseIdentity,migrationLedger,catalog,declaration,
       readSource:(filename,location)=>readFileSync(new URL((location==="retained_installed"?"../release/installed-source/":"../supabase/migrations/")+filename,import.meta.url))});
     writeJson(join(backupDir,"inventory","source-catalog.json"),catalog);
@@ -370,14 +371,18 @@ try {
   writeJson(join(backupDir, "inventory", "runtime-contract.json"), runtimeContract);
   writeJson(join(backupDir, "inventory", "runtime-configuration.json"), runtimeConfiguration);
 
+  // Reject stale source/runtime contracts before additional pg_dump connections.
+  // Keep the original exported repeatable-read, read-only snapshot.
+  applicationSchemaSections = await captureApplicationSchema(exportedSnapshot);
+
   const namespaceResult = await client.query(`
     select nspname schema_name,has_schema_privilege(current_user,oid,'USAGE') usage_allowed
     from pg_namespace where nspname=any($1::text[]) order by nspname
-  `, [schemas]);
+  `, [schemaCandidates]);
   const privateRelationResult = await client.query(`
-    select c.relname table_name,c.relkind::text relation_kind,c.relispartition is_partition
+    select n.nspname schema_name,c.relname table_name,c.relkind::text relation_kind,c.relispartition is_partition,has_table_privilege(current_user,c.oid,'SELECT') select_allowed
     from pg_class c join pg_namespace n on n.oid=c.relnamespace
-    where n.nspname='custodial_release_identity' and c.relkind in ('r','p','f') order by c.relname
+    where n.nspname in ('custodial_release_identity','custodial_employment','custodial_coverall','custodial_leadership_private') and c.relkind in ('r','p','f') order by n.nspname,c.relname
   `);
   const catalogResult = await client.query(`
     select n.nspname schema_name, c.relname table_name,
@@ -398,8 +403,8 @@ try {
     from pg_class c join pg_namespace n on n.oid=c.relnamespace
     where n.nspname=any($1::text[]) and c.relkind in ('r','p') and not c.relispartition
     order by n.nspname,c.relname
-  `, [schemas]);
-  requireProductionBackupDataScope(namespaceResult.rows,privateRelationResult.rows,catalogResult.rows);
+  `, [schemaCandidates]);
+  schemas=requireProductionBackupDataScope(namespaceResult.rows,privateRelationResult.rows,catalogResult.rows);
 
   for (const catalog of catalogResult.rows) {
     const target = qualified(catalog.schema_name, catalog.table_name);
