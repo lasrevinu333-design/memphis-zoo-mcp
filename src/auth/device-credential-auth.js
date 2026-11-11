@@ -897,17 +897,23 @@ export async function authenticateDeviceCredentialRequest(req, {
         // Revalidation must never repair a credential, consume recovery or
         // call touch/audit, even when ordinary authentication could do so.
         const checkedAt = Date.now();
+        // PostgreSQL bigint reads are decimal strings. Normalize only this
+        // exact, safely representable server value; never coerce malformed
+        // epochs or round an assignment identity into another generation.
+        const rawEpoch = device.assignment_epoch;
+        const assignmentEpoch = typeof rawEpoch === 'number' ? rawEpoch
+          : typeof rawEpoch === 'string' && /^[1-9][0-9]{0,15}$/.test(rawEpoch) ? Number(rawEpoch) : NaN;
         if (typeof row.confirmed_at !== "string" || !Number.isFinite(Date.parse(row.confirmed_at))
           || !recordedSecretKeyId || !/^[0-9a-f]{64}$/.test(recordedSecretKeyId)
           || !UUID_PATTERN.test(String(device.canonical_device_pk || ""))
           || !UUID_PATTERN.test(String(device.assigned_employee_id || ""))
-          || !Number.isSafeInteger(device.assignment_epoch) || device.assignment_epoch < 1
+          || !Number.isSafeInteger(assignmentEpoch) || assignmentEpoch < 1
           || typeof device.role !== "string" || !device.role
           || !Number.isFinite(checkedAt) || expiresAt <= checkedAt) {
           return {ok:false,status:401,code:"device_credential_required",
             error:"Current confirmed device authority is required.",enrollment_required:true,policy_mode:policy.mode};
         }
-        return {ok:true,device,credentialed:true,credential:row,policy_mode:policy.mode,enrollment_required:false};
+        return {ok:true,device:{...device,assignment_epoch:assignmentEpoch},credentialed:true,credential:row,policy_mode:policy.mode,enrollment_required:false};
       }
       const metadata = row?.metadata_json;
       const operationBound = Boolean(
