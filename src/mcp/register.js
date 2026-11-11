@@ -1,5 +1,6 @@
 import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { MCP_TOOL_MANIFEST, TOOL_SAFETY } from "./tool-manifest.js";
+import { advertisedInputSchema } from "./advertised-schema.js";
 
 const serverToolAuth = new WeakMap();
 const toolSafety = new Map(MCP_TOOL_MANIFEST.map((tool) => [tool.name, tool.safety]));
@@ -108,7 +109,8 @@ export function finalizeMcpToolAuth(server) {
       ...result,
       tools: (result?.tools || []).map((tool) => {
         const securitySchemes = cloneSecuritySchemes(tool?._meta?.securitySchemes);
-        return securitySchemes.length ? { ...tool, securitySchemes } : tool;
+        return { ...tool, inputSchema: advertisedInputSchema(tool.inputSchema),
+          ...(securitySchemes.length ? { securitySchemes } : {}) };
       }),
     };
   });

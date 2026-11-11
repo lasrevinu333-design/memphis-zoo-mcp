@@ -1,3 +1,4 @@
+import {managerOnDuty,chicagoServiceDate} from './manager-on-duty.js';
 // Manager-only display projection. Never returns source mail, generic event
 // notes, recipients, credentials or raw GPS payloads. No mutation endpoint.
 const text = (v, max = 1000) => typeof v === 'string' ? v.trim().slice(0, max) : null;
@@ -38,6 +39,7 @@ export function makeOperationsBoardHandler({readEvents, readMail = null, readCit
       const [mail,city]=await Promise.all([safe(readMail),safe(readCity)]);
       return res.status(200).json({ok:true,data:{schema:'custodial.operations-board.v1',
         generated_at:now().toISOString(),timezone:'America/Chicago',events,
+        manager_on_duty:managerOnDuty(chicagoServiceDate(now())),
         // Server-owned projection only. Imported snapshots do not assert
         // unattended mailbox completeness or freshness.
         schools:mail?.schools||{state:'unavailable',reason:'outlook_school_producer_not_bound',rows:[]},

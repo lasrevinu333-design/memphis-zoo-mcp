@@ -6,6 +6,7 @@ import { createMemphisResponder } from "./services/index.js";
 import { resolveCanonicalDevice } from "./device-identity.js";
 import { nativeNotificationReceiptArguments } from "./native-notification-receipt.js";
 import { createOriginalMessageActions } from "./messaging-original-outcome.js";
+import { recipientDirectory } from "./messenger-recipient-directory.js";
 
 export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPayload, requireDeviceAccess, requireOpsManagerAuth: suppliedOpsManagerAuth, leadershipMessagingBridge, registerOperationalJobHandler, appVersion, releaseId, contractVersion }) {
   const router = express.Router();
@@ -258,10 +259,13 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     return (await getLeadershipProfilesForMessagingUsers([userId])).get(String(userId || "").trim()) || null;
   }
 
-  async function enrichMessagingUsers(rows = []) {
+  async function enrichMessagingUsers(rows = [], currentUserId = '') {
     const users = Array.isArray(rows) ? rows : [];
     const profiles = await getLeadershipProfilesForMessagingUsers(users.map((row) => row?.id));
-    return users.map((row) => {
+    const ids=[...new Set([...users.map(row=>String(row?.id||'')),currentUserId].filter(isUuid))];
+    const links=ids.length?await runReadOnlySql(`select id,ops_manager_id,custodial_cohort_manager_id,custodial_claimed_account_id
+      from public.msg_users where is_active=true and id in (${ids.map(id=>`'${esc(id)}'::uuid`).join(',')})`):[];
+    return recipientDirectory(users.map((row) => {
       const profile = profiles.get(String(row?.id || "").trim()) || null;
       return {
         ...row,
@@ -270,7 +274,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
         department_key: String(profile?.department_key || "").trim() || null,
         manager_roles: Array.isArray(profile?.manager_roles) ? profile.manager_roles : null,
       };
-    });
+    }),Array.isArray(links)?links:[],currentUserId);
   }
 
   async function getManagerMessagingIdentity(managerSession = {}) {
@@ -1493,7 +1497,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       const deviceId = String(req.query.device_id || req.header("x-device-id") || "").trim();
       const viewer = await resolveViewerContext({ userId: requestedUserId, deviceId, managerSession: req.memphisAuth || null });
       const baseRows = await runReadOnlySql(`select * from public.msg_list_users('${esc(viewer.effectiveUserId)}'::uuid)`);
-      const rows = await enrichMessagingUsers(baseRows);
+      const rows = await enrichMessagingUsers(baseRows,viewer.effectiveUserId);
       res.status(200).json({ ok: true, data: rows, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
       fail(res, error, "Messaging users failed");

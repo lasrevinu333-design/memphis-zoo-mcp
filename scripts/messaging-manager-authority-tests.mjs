@@ -10,6 +10,7 @@ const THREAD_ID = "00000000-0000-4000-8000-000000000704";
 const MESSAGE_ID = "00000000-0000-4000-8000-000000000708";
 const ARCHIVED_THREAD_ID = "00000000-0000-4000-8000-000000000709";
 const OVERVIEW_ONLY_THREAD_ID = "00000000-0000-4000-8000-000000000710";
+const OTHER_MANAGER_USER_ID = "00000000-0000-4000-8000-000000000711";
 const calls = [];
 
 async function runRpc(fn, args) {
@@ -29,18 +30,19 @@ async function runRpc(fn, args) {
 
 async function runReadOnlySql(sql) {
   if (/from public\.msg_users u[\s\S]*join public\.ops_manager_managers m/i.test(sql)) {
-    return [{
-      msg_user_id: MANAGER_USER_ID,
+    return [MANAGER_USER_ID,OTHER_MANAGER_USER_ID].map(msg_user_id=>({
+      msg_user_id,
       manager_id: MANAGER_ID,
       manager_display_name: "Authority Test Manager",
       job_title: "Director of Test Operations",
       department_key: "operations",
       manager_roles: ["DIRECTOR"],
-    }];
+    }));
   }
   if (/msg_list_users/i.test(sql)) {
     return [
       { id: MANAGER_USER_ID, display_name: "Authority Test Manager", role: "manager", is_active: true },
+      { id: OTHER_MANAGER_USER_ID, display_name: "Other Authority Test Manager", role: "manager", is_active: true },
       { id: FORGED_EMPLOYEE_ID, display_name: "Authority Test Employee", role: "employee", is_active: true },
     ];
   }
@@ -140,7 +142,8 @@ try {
 
   const users = await get("/messaging-api/users");
   assert.equal(users.status, 200);
-  const managerContact = users.body.data.find((row) => row.id === MANAGER_USER_ID);
+  assert.equal(users.body.data.some(row=>row.id===MANAGER_USER_ID),false,'current manager is excluded from new recipients');
+  const managerContact = users.body.data.find((row) => row.id === OTHER_MANAGER_USER_ID);
   assert.equal(managerContact.role_title, "Director of Test Operations");
   assert.equal(managerContact.job_title, "Director of Test Operations");
   const employeeContact = users.body.data.find((row) => row.id === FORGED_EMPLOYEE_ID);

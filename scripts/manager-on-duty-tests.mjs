@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import {managerOnDuty,chicagoServiceDate} from '../src/manager-on-duty.js';
+assert.equal(managerOnDuty('2026-11-11').name,'Eric McKenney');
+assert.equal(managerOnDuty('2026-11-15').name,'Eric Operle');
+assert.equal(managerOnDuty('2026-11-10').state,'unavailable');
+assert.equal(managerOnDuty('2026-11-12').state,'unavailable');
+assert.equal(managerOnDuty('2026-11-08').state,'unavailable');
+assert.equal(managerOnDuty('2026-11-15',{datedOverrides:{'2026-11-15':{manager_id:'synthetic-cover',name:'Synthetic Cover'}}}).name,'Synthetic Cover');
+assert.equal(chicagoServiceDate(new Date('2026-11-11T05:59:59Z')),'2026-11-10');
+assert.equal(chicagoServiceDate(new Date('2026-11-11T06:00:00Z')),'2026-11-11');
+assert.throws(()=>managerOnDuty('2026-02-30'));
+console.log('PASS date-specific MOD identity, Sunday rule, dated cover priority and Central midnight');
