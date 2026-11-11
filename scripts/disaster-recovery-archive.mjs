@@ -29,6 +29,7 @@ const schemaSectionSnapshots = new WeakMap();
 // No cached source lifetime/currentness or target/import admission verdict.
 const restoreTableSelectionParses = new WeakMap();
 const immutableBootstrapInventoryReads = new WeakMap();
+const migrationTargetCaptureReads = new WeakMap();
 const schemaSectionProfiles = Object.freeze([
   Object.freeze({ section: "pre-data", path: "inventory/application-schema-pre-data.sql" }),
   Object.freeze({ section: "post-data", path: "inventory/application-schema-post-data.sql" }),
@@ -836,13 +837,29 @@ export function readVerifiedMigrationTargetCaptureSource(archive) {
     return {path,original,sha256};
   });
   requireBootstrapMemberPins(archive,sourceBinding,context,members);
+  // Cache immutable authenticated Source DATA only. Every hit still proves the
+  // original named members, inode/ctime/size/link identity and live binding
+  // before and after use. No target observation or effect verdict is cached.
+  const cached=migrationTargetCaptureReads.get(context);
+  if(cached){
+    requireBootstrapMemberPins(archive,sourceBinding,context,members);
+    if(cached.sourceBinding!==sourceBinding)throw new Error('Target-capture cached source changed.');
+    requireBootstrapMemberPins(archive,sourceBinding,context,members);
+    return cached;
+  }
   const fd=openSync(context.directory,DIRECTORY_FLAGS),values=[];
   try {for(const member of members){
     values.push(JSON.parse(requireSectionFile(fd,member,member.original,true).sql));
     requireBootstrapMemberPins(archive,sourceBinding,context,members);
   }} finally {closeSync(fd);}
   requireBootstrapMemberPins(archive,sourceBinding,context,members);
-  return {sourceBinding,binding:values[0],catalog:values[1],ledger:values[2]};
+  const queue=[...values];while(queue.length){const value=queue.pop();if(value&&typeof value==='object'){
+    queue.push(...Object.values(value));Object.freeze(value);
+  }}
+  const result=Object.freeze({sourceBinding,binding:values[0],catalog:values[1],ledger:values[2]});
+  requireBootstrapMemberPins(archive,sourceBinding,context,members);
+  migrationTargetCaptureReads.set(context,result);
+  return result;
 }
 
 function sha256(value) {

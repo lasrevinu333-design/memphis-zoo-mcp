@@ -8,9 +8,11 @@ import {TLSSocket} from 'node:tls';
 import {readVerifiedPrivateImportSource,openVerifiedRestoreTableData,decodeRestoreTableRowLine,createRestoreRowUtf8Guard,
   createRestoreRowLineBatchDecoder,postgresJsonTextLineEncoding,postgresTextColumnsLineEncoding,readVerifiedImmutableBootstrapInventory,
   assertRestoreRowMutationFidelity,assertVerifiedLegacyRestoreDataCurrent} from './disaster-recovery-archive.mjs';
+import {readVerifiedImmutableArchiveOwnerProfile} from './immutable-private-owner-profile.mjs';
 import {deriveOriginalAuthEnumDescriptors} from './immutable-original-enum-source.mjs';
 import {splitSchemaStatements} from './isolated-event-owner-schema.mjs';
-import {prepareVerifiedImmutableBootstrapSource,readVerifiedImmutableBootstrapSourceRows} from './immutable-private-source-bootstrap.mjs';
+import {prepareVerifiedImmutableBootstrapSource,readVerifiedImmutableBootstrapSourceRows,
+ readVerifiedImmutableBootstrapOwnerProfile,readVerifiedImmutableBootstrapStatement} from './immutable-private-source-bootstrap.mjs';
 import {captureVerifiedOriginalRestoreIntent} from './disaster-recovery-crypto.mjs';
 import {initializeVerifiedImmutableFreshSource} from './immutable-private-source-initializer.mjs';
 import {captureVerifiedImmutableFreshRestoreIntent,readVerifiedImmutableFreshRestoreIntent} from './immutable-private-fresh-restore-intent.mjs';
@@ -1299,7 +1301,6 @@ export async function commitVerifiedImmutableFreshAuthority(options){
 const committedAuthorityDataReads=new WeakMap();
 const committedAuthorityPostReadbacks=new WeakMap(),freshPostAuthorityFenceAttempts=new WeakSet();
 const committedAuthorityOrdinaryReads=new WeakSet();
-const committedAuthoritySourceSha256='e60545804e8c76d94769c6b80426e3dcb86f0bdf47527cd42b5735eb7eff600a';
 const committedAuthorityTargets=Object.freeze([
   ['public','device_auth_credentials','credential_id','employee_credentials',"(o.image).revoked_at is null",['revoked_at','revoked_reason']],
   ['public','device_auth_enrollment_codes','enrollment_id','employee_enrollment',"(o.image).revoked_at is null",['revoked_at']],
@@ -1357,14 +1358,15 @@ const committedAuthorityReadOnlySql=`select pg_catalog.jsonb_build_object(
  'isolation',pg_catalog.current_setting('transaction_isolation'),'replication',pg_catalog.current_setting('session_replication_role'),
  'row_security',pg_catalog.current_setting('row_security'),'search_path',pg_catalog.current_setting('search_path'),
  'first_schema',(pg_catalog.current_schemas(true))[1]::text) context`;
-function captureCommittedAuthorityReadOnly(value,completion){
+function captureCommittedAuthorityReadOnly(value,completion,verifiedArchive){
+  const ownerProfile=readVerifiedImmutableArchiveOwnerProfile(verifiedArchive);
   const observed=closed(value,['database_oid','backend_pid','transaction_id','actor','session_actor','read_only','isolation',
     'replication','row_security','search_path','first_schema']);
   if(observed.database_oid!==completion.database_oid||observed.backend_pid!==completion.backend_pid
     ||typeof observed.transaction_id!=='string'||!/^[1-9][0-9]{0,18}(?![\s\S])/.test(observed.transaction_id)
     ||BigInt(observed.transaction_id)>9223372036854775807n
     ||[completion.transaction_id,completion.original_transaction_id].includes(observed.transaction_id)
-    ||observed.actor!=='supabase_admin'||observed.session_actor!==observed.actor||observed.read_only!=='on'
+    ||observed.actor!==ownerProfile.actor||observed.session_actor!==observed.actor||observed.read_only!=='on'
     ||observed.isolation!=='repeatable read'||observed.replication!=='origin'||observed.row_security!=='off'
     ||observed.search_path!=='pg_catalog, pg_temp'||observed.first_schema!=='pg_catalog')fail();
   return Object.freeze(observed);
@@ -1376,7 +1378,8 @@ function committedAuthoritySingleContext(reply){
     ||Reflect.ownKeys(values).length!==2||nativeData(values,'length')!==1)fail();
   return closed(nativeData(values,'0'),['context']).context;
 }
-function captureCommittedAuthorityFrame(value,completion,expectedPid){
+function captureCommittedAuthorityFrame(value,completion,expectedPid,source,verifiedArchive){
+  const ownerProfile=readVerifiedImmutableBootstrapOwnerProfile(source,verifiedArchive);
   const frame=closed(value,['database_oid','backend_pid','transaction_id','snapshot','read_only','isolation','replication',
     'row_security','search_path','first_schema','actor','session_actor','control_owner','held_fences','control','manifest',
     'completion','effect_transaction_started_at','finite_effect_time']);
@@ -1389,7 +1392,7 @@ function captureCommittedAuthorityFrame(value,completion,expectedPid){
     ||typeof frame.snapshot!=='string'||!/^[0-9]+:[0-9]+:[0-9,]*(?![\s\S])/.test(frame.snapshot)
     ||frame.read_only!=='on'||frame.isolation!=='repeatable read'||frame.replication!=='origin'
     ||frame.row_security!=='off'||frame.search_path!=='pg_catalog, pg_temp'||frame.first_schema!=='pg_catalog'
-    ||frame.actor!=='supabase_admin'||frame.session_actor!==frame.actor||frame.control_owner!==frame.actor
+    ||frame.actor!==ownerProfile.actor||frame.session_actor!==frame.actor||frame.control_owner!==frame.actor
     ||frame.held_fences!==2||typeof frame.control!=='string'||typeof frame.manifest!=='string'
     ||!isDeepStrictEqual(frame.completion,completion)||frame.finite_effect_time!==true
     ||typeof frame.effect_transaction_started_at!=='string'||!frame.effect_transaction_started_at.length)fail();
@@ -1399,7 +1402,7 @@ async function readCommittedAuthorityFrame(db,verifiedArchive,descriptor){
   currentCommittedAuthorityData(db,verifiedArchive,descriptor);
   const reply=await Reflect.apply(query,db,[committedAuthorityFrameSql,committedAuthorityScopeArgs(descriptor.completion)]);
   currentCommittedAuthorityData(db,verifiedArchive,descriptor);
-  const frame=captureCommittedAuthorityFrame(committedAuthoritySingleContext(reply),descriptor.completion,descriptor.port.processID);
+  const frame=captureCommittedAuthorityFrame(committedAuthoritySingleContext(reply),descriptor.completion,descriptor.port.processID,descriptor.source,verifiedArchive);
   if(descriptor.frame&&!isDeepStrictEqual(frame,descriptor.frame))fail();
   return frame;
 }
@@ -1495,10 +1498,11 @@ export async function inspectCommittedImmutableFreshAuthorityData(options){
     };
     readPhase='READ_ONLY_SNAPSHOT';beforeSource();
     const initialReply=await Reflect.apply(query,db,[committedAuthorityReadOnlySql]);beforeSource();
-    const initial=captureCommittedAuthorityReadOnly(committedAuthoritySingleContext(initialReply),completion);
+    const initial=captureCommittedAuthorityReadOnly(committedAuthoritySingleContext(initialReply),completion,verifiedArchive);
     readPhase='CURRENT_SOURCE';beforeSource();descriptor.source=await prepareVerifiedImmutableBootstrapSource(verifiedArchive);beforeSource();
     const recipes=descriptor.source.statements.filter(row=>row.sourcePath==='proposals/immutable-original-authority-reconciliation.sql');
-    if(recipes.length!==1||recipes[0].sourceSha256!==committedAuthoritySourceSha256)unavailable();
+    if(recipes.length!==1)unavailable();
+    readVerifiedImmutableBootstrapStatement(descriptor.source,verifiedArchive,recipes[0]);
     committedAuthorityDataReads.set(db,descriptor);
     const current=()=>currentCommittedAuthorityData(db,verifiedArchive,descriptor);
     current();
@@ -1745,6 +1749,8 @@ export async function compareVerifiedImmutablePrivateTableData(options) {
     'database_oid',(select oid::text from pg_catalog.pg_database where datname=pg_catalog.current_database()),
     'database_name',pg_catalog.current_database(),'backend_pid',pg_catalog.pg_backend_pid(),
     'actor',current_user,'session_actor',session_user,
+    'control_owner',(select pg_catalog.pg_get_userbyid(relowner) from pg_catalog.pg_class
+      where oid=pg_catalog.to_regclass('custodial_dr.restore_control') and relkind='r'),
     'transaction_id',pg_catalog.pg_current_xact_id_if_assigned()::text,
     'virtual_xid',(select virtualtransaction::text from pg_catalog.pg_locks
       where pid=pg_catalog.pg_backend_pid() and locktype='virtualxid' and granted),
@@ -1778,7 +1784,9 @@ export async function compareVerifiedImmutablePrivateTableData(options) {
         ||Object.hasOwn(db,'query')||Client.prototype.query!==query)refuse();
     };
     native();const original=readVerifiedPrivateImportSource(verifiedArchive);
-    const source=()=>{native();sameSource(verifiedArchive,original);};
+    const ownerProfile=readVerifiedImmutableArchiveOwnerProfile(verifiedArchive);
+    const source=()=>{native();sameSource(verifiedArchive,original);
+      if(!isDeepStrictEqual(readVerifiedImmutableArchiveOwnerProfile(verifiedArchive),ownerProfile))refuse();};
     const nativeRead=async(sql,params=[])=>{
       // Only this actual native-query catch can observe an SQLSTATE. Source,
       // decoder and cleanup errors cannot supply one. Stop own later queries
@@ -1827,11 +1835,11 @@ export async function compareVerifiedImmutablePrivateTableData(options) {
       source();const reply=await nativeRead(contextSql);source();
       const observed=rows(reply);if(observed.length!==1)refuse();
       const value=closed(closed(observed[0],['context']).context,['database_oid','database_name','backend_pid',
-        'actor','session_actor','transaction_id','virtual_xid','snapshot_id','transaction_started_at',
+        'actor','session_actor','control_owner','transaction_id','virtual_xid','snapshot_id','transaction_started_at',
         'read_only','isolation','row_security','search_path','first_schema','float_digits']);
       if(!oid(value.database_oid)||typeof value.database_name!=='string'||!value.database_name
         ||!Number.isInteger(value.backend_pid)||value.backend_pid<=0||value.backend_pid>2147483647
-        ||typeof value.actor!=='string'||!value.actor||value.actor!==value.session_actor
+        ||value.actor!==ownerProfile.actor||value.actor!==value.session_actor||value.control_owner!==value.actor
         ||(value.transaction_id!==null&&(!decimal(value.transaction_id)||value.transaction_id==='0'))
         ||typeof value.virtual_xid!=='string'||!(/^[1-9][0-9]*\/[1-9][0-9]*$/).test(value.virtual_xid)
         ||typeof value.snapshot_id!=='string'||!(/^[0-9]+:[0-9]+:[0-9,]*$/).test(value.snapshot_id)
@@ -1860,7 +1868,7 @@ export async function compareVerifiedImmutablePrivateTableData(options) {
         'persistence','is_partition','owner_name','inheritance_count','dropped_count','columns','primary_key']);
       if(actual.schema_name!==schema||actual.table_name!==table.table_name||!oid(actual.relation_oid)
         ||actual.relation_kind!=='r'||actual.persistence!=='p'||actual.is_partition!==false
-        ||typeof actual.owner_name!=='string'||!actual.owner_name||actual.inheritance_count!=='0'||actual.dropped_count!=='0'
+        ||actual.owner_name!==ownerProfile.actor||actual.inheritance_count!=='0'||actual.dropped_count!=='0'
         ||!isDeepStrictEqual(actual.columns,table.columns)||!isDeepStrictEqual(actual.primary_key,table.primary_key))refuse();
     }
     if(originalCatalog[0].relation_oid===originalCatalog[1].relation_oid)refuse();
@@ -1972,6 +1980,8 @@ export async function compareVerifiedImmutableOrdinaryTableData(options) {
     'database_oid',(select oid::text from pg_catalog.pg_database where datname=pg_catalog.current_database()),
     'database_name',pg_catalog.current_database(),'backend_pid',pg_catalog.pg_backend_pid(),
     'actor',current_user,'session_actor',session_user,
+    'control_owner',(select pg_catalog.pg_get_userbyid(relowner) from pg_catalog.pg_class
+      where oid=pg_catalog.to_regclass('custodial_dr.restore_control') and relkind='r'),
     'transaction_id',pg_catalog.pg_current_xact_id_if_assigned()::text,
     'virtual_xid',(select virtualtransaction::text from pg_catalog.pg_locks
       where pid=pg_catalog.pg_backend_pid() and locktype='virtualxid' and granted),
@@ -2078,6 +2088,7 @@ export async function compareVerifiedImmutableOrdinaryTableData(options) {
     const native=()=>{if(!db||types.isProxy(db)||Object.getPrototypeOf(db)!==Client.prototype
       ||Object.hasOwn(db,'query')||Client.prototype.query!==query)refuse();};
     native();const original=readVerifiedPrivateImportSource(verifiedArchive);
+    const ownerProfile=readVerifiedImmutableArchiveOwnerProfile(verifiedArchive);
     const authorityData=committedAuthorityDataReads.get(db);
     if(authorityData){
       if(!authorityData.frame||!committedAuthorityOrdinaryReads.has(authorityData))refuse();
@@ -2095,6 +2106,7 @@ export async function compareVerifiedImmutableOrdinaryTableData(options) {
     const originalEnums=deriveOriginalAuthEnumDescriptors(enumSchema);
     const source=()=>{
       native();sameSource(verifiedArchive,original);
+      if(!isDeepStrictEqual(readVerifiedImmutableArchiveOwnerProfile(verifiedArchive),ownerProfile))refuse();
       if(authorityData)currentCommittedAuthorityData(db,verifiedArchive,authorityData);
       // This newly consumed original dependency remains the SAME authenticated
       // schema through every existing synchronous Source/actual-await boundary.
@@ -2154,11 +2166,11 @@ export async function compareVerifiedImmutableOrdinaryTableData(options) {
     const context=async()=>{
       source();const reply=await nativeRead(contextSql);source();const observed=rows(reply);
       if(observed.length!==1)refuse();
-      const value=closed(closed(observed[0],['context']).context,['database_oid','database_name','backend_pid','actor','session_actor',
+      const value=closed(closed(observed[0],['context']).context,['database_oid','database_name','backend_pid','actor','session_actor','control_owner',
         'transaction_id','virtual_xid','snapshot_id','transaction_started_at','read_only','isolation','row_security','search_path','first_schema',
         'timezone','date_style','interval_style','float_digits']);
       if(!oid(value.database_oid)||!name(value.database_name)||!Number.isInteger(value.backend_pid)||value.backend_pid<=0||value.backend_pid>2147483647
-        ||!name(value.actor)||value.actor!==value.session_actor
+        ||value.actor!==ownerProfile.actor||value.actor!==value.session_actor||value.control_owner!==value.actor
         ||(value.transaction_id!==null&&(!decimal(value.transaction_id)||value.transaction_id==='0'))
         ||typeof value.virtual_xid!=='string'||!(/^[1-9][0-9]*\/[1-9][0-9]*$/).test(value.virtual_xid)
         ||typeof value.snapshot_id!=='string'||!(/^[0-9]+:[0-9]+:[0-9,]*$/).test(value.snapshot_id)

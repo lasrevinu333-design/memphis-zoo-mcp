@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 import {types} from 'node:util';
 import pg from 'pg';
+import {readVerifiedImmutableArchiveOwnerProfile} from './immutable-private-owner-profile.mjs';
 import {readVerifiedImmutableFreshRestoreIntent} from './immutable-private-fresh-restore-intent.mjs';
 
 const Client=pg.Client,prototype=Client.prototype,nativeQuery=prototype.query,attempted=new WeakSet();
@@ -52,10 +53,12 @@ export async function prepareVerifiedImmutableFreshRestoreControl(options){
   &&Object.getPrototypeOf(db)===prototype&&!Object.hasOwn(db,'query')&&prototype.query===nativeQuery,'Actual original native pg.Client required');
  native();assert.ok(!attempted.has(db),'Original fresh control attempt already consumed');attempted.add(db);
  const original=readVerifiedImmutableFreshRestoreIntent(freshIntent,verifiedArchive);
+ const ownerProfile=readVerifiedImmutableArchiveOwnerProfile(verifiedArchive);
  const {intent,sourceBinding}=closed(original,['intent','envelope','sourceBinding']);
  assert.equal(intent.authority_generation,1);assert.equal(intent.retry_of_restore_id,null);assert.equal(intent.resume_after_verification,false);
  const current=()=>{
-  native();const live=readVerifiedImmutableFreshRestoreIntent(freshIntent,verifiedArchive);
+  native();assert.deepEqual(readVerifiedImmutableArchiveOwnerProfile(verifiedArchive),ownerProfile);
+  const live=readVerifiedImmutableFreshRestoreIntent(freshIntent,verifiedArchive);
   assert.ok(live.intent===original.intent&&live.envelope===original.envelope&&live.sourceBinding===sourceBinding,'Original fresh intent/source changed');
  };
  const releaseIdentity={archive:sourceBinding.source_identity.release,target:intent.target_release_identity,retry_of_restore_id:null};
@@ -76,8 +79,8 @@ export async function prepareVerifiedImmutableFreshRestoreControl(options){
   assert.equal(typeof row.transaction_id,'string');assert.match(row.transaction_id,/^[1-9][0-9]{0,18}(?![\s\S])/);assert.ok(BigInt(row.transaction_id)<=9223372036854775807n);
   const stable={database_oid:row.database_oid,backend_pid:row.backend_pid,transaction_id:row.transaction_id};
   if(originalContext)assert.deepEqual(stable,originalContext,'Original control database/backend/transaction changed');
-  assert.equal(row.actor,'supabase_admin');assert.equal(row.session_actor,row.actor);assert.equal(row.database_owner,'postgres');
-  assert.equal(row.dr_owner,'postgres');assert.equal(row.control_owner,'supabase_admin');
+  assert.equal(row.actor,ownerProfile.actor);assert.equal(row.session_actor,row.actor);assert.equal(row.database_owner,'postgres');
+  assert.equal(row.dr_owner,'postgres');assert.equal(row.control_owner,row.actor);
   assert.equal(row.replication,'origin');assert.equal(row.row_security,'off');assert.equal(row.search_path,'pg_catalog');assert.equal(row.read_only,'off');
   assert.equal(row.lease_count,'0');assert.equal(row.held_fences,2);assert.equal(row.control_count,1);assert.equal(row.events_count,0);
   const control=closed(row.control,Object.keys(ready));

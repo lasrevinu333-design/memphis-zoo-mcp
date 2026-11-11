@@ -7,6 +7,8 @@ import {fileURLToPath} from 'node:url';
 import {types} from 'node:util';
 import {readVerifiedPrivateImportSource,readVerifiedImmutableBootstrapInventory,
  collectVerifiedRestoreBootstrapRows,postgresJsonTextLineEncoding,postgresTextColumnsLineEncoding} from './disaster-recovery-archive.mjs';
+import {readVerifiedImmutableArchiveOwnerProfile} from './immutable-private-owner-profile.mjs';
+import {loadImmutableCurrentPostgresSource} from './immutable-private-postgres-source.mjs';
 import {loadImmutableMessageSourceRecipes} from './immutable-private-message-source.mjs';
 import {loadImmutableDomainSourceRecipes} from './immutable-private-domain-source.mjs';
 
@@ -87,10 +89,10 @@ function readAuthoritySources(){
   }finally{closeSync(fd);}
  });
 }
-function baseRecipes(originalGuards){
+function baseRecipes(originalGuards,owner){
  assert.ok(Array.isArray(originalGuards));assert.equal(originalGuards.length,2);
  for(let i=0;i<2;i++){
-  const g=originalGuards[i];closed(g,['definition','owner','prosrc']);assert.equal(g.owner,'supabase_admin');
+  const g=originalGuards[i];closed(g,['definition','owner','prosrc']);assert.equal(g.owner,owner);
   assert.equal(typeof g.prosrc,'string');assert.equal(sha(g.prosrc),guardBodySha[i]);
   assert.equal(typeof g.definition,'string');assert.ok(g.definition.startsWith('CREATE OR REPLACE FUNCTION '+guardIds[i]+'\n'));
   assert.ok(g.definition.endsWith('AS $function$'+g.prosrc+'$function$\n'));
@@ -186,7 +188,9 @@ export async function prepareVerifiedImmutableBootstrapSource(verifiedArchive){
  const deployedReleaseRow=selectOriginalDeployedReleaseRow({releaseRows:raw.releaseRows,
   releaseTable:releaseTable[0],signedRelease:identity.release});
  sourcePhase='SOURCE_RECIPES';
- const allRecipes=[...baseRecipes(parse('original-guards.json')),...domain.recipes,...messages.recipes];
+ const ownerProfile=readVerifiedImmutableArchiveOwnerProfile(verifiedArchive);
+ const postgresProgram=ownerProfile.id==='immutable-private-current-postgres'?loadImmutableCurrentPostgresSource():null;
+ const allRecipes=[...baseRecipes(parse('original-guards.json'),ownerProfile.actor),...(postgresProgram?postgresProgram.recipes:[...domain.recipes,...messages.recipes])];
  assert.equal(allRecipes.length,25);assert.equal(new Set(allRecipes.map(r=>r.identity)).size,25);
  const recipes=allRecipes.map(recipe=>{
   closed(recipe,['identity','registry_identity','before','after','beforeHash','afterHash','beforeBodyHash','afterBodyHash']);
@@ -211,7 +215,7 @@ export async function prepareVerifiedImmutableBootstrapSource(verifiedArchive){
  }
  assert.equal(Object.keys(registrySource).length,24);
  sourcePhase='SOURCE_STATEMENTS';
- const statements=[Object.freeze({sourcePath:sourceOrder[0],sourceSha256:baseSha,sql:base.sql}),...domain.statements,...messages.statements,
+ const statements=postgresProgram?postgresProgram.statements.map(({sourcePath,sourceSha256,sql})=>({sourcePath,sourceSha256,sql})):[Object.freeze({sourcePath:sourceOrder[0],sourceSha256:baseSha,sql:base.sql}),...domain.statements,...messages.statements,
   ...authority.map(({sourcePath,sourceSha256,sql})=>Object.freeze({sourcePath,sourceSha256,sql}))];
  assert.equal(statements.length,sourceOrder.length);assert.equal(new Set(statements.map(s=>s.sourcePath)).size,sourceOrder.length);
  const ordered=sourceOrder.map(sourcePath=>{
@@ -220,10 +224,10 @@ export async function prepareVerifiedImmutableBootstrapSource(verifiedArchive){
   return Object.freeze({...statement});
  });
  const result=Object.freeze({schema:'custodial.immutable-private-source-bootstrap.v1',sourceBinding:original.sourceBinding,
-  inventory:observed.inventory,releaseRows:raw.releaseRows,deployedReleaseRow,registryRows:raw.registryRows,memberProofs:raw.memberProofs,
+  ownerProfile,inventory:observed.inventory,releaseRows:raw.releaseRows,deployedReleaseRow,registryRows:raw.registryRows,memberProofs:raw.memberProofs,
   recipes:Object.freeze(recipes),registrySource:Object.freeze(registrySource),statements:Object.freeze(ordered),
   target_authority:false,transaction_authority:false,import_authority:false,resume_allowed:false});
- plans.set(result,{archive:verifiedArchive,original,inventory:observed.inventory,baseIdentity:base.identity,domain,messages,
+ plans.set(result,{archive:verifiedArchive,original,ownerProfile,postgresProgram,inventory:observed.inventory,baseIdentity:base.identity,domain,messages,
   authorityIdentities:authority.map(row=>row.identity)});
  sourcePhase='FINAL_CURRENTNESS';
  assertVerifiedImmutableBootstrapSource(result,verifiedArchive);return result;
@@ -239,6 +243,8 @@ export function assertVerifiedImmutableBootstrapSource(source,verifiedArchive){
  sourcePhase='PROGRAM_CURRENTNESS';
  assert.deepEqual(readBaseSource().identity,record.baseIdentity);record.domain.assertCurrent();record.messages.assertCurrent();
  assert.deepEqual(readAuthoritySources().map(row=>row.identity),record.authorityIdentities);
+ if(record.postgresProgram)record.postgresProgram.assertCurrent();
+ assert.deepEqual(readVerifiedImmutableArchiveOwnerProfile(verifiedArchive),record.ownerProfile);
  sourcePhase='INVENTORY_CURRENTNESS';
  const observed=readVerifiedImmutableBootstrapInventory(verifiedArchive);
  assert.equal(observed.sourceBinding,record.original.sourceBinding);assert.deepEqual(observed.inventory,record.inventory);
@@ -278,7 +284,7 @@ export function readVerifiedImmutableBootstrapSourceRows(source,verifiedArchive)
   assert.equal(matches.length,1);
   const relation=matches[0];closed(relation,['schema_name','table_name','relation_kind','is_partition','owner_name','relrowsecurity','relforcerowsecurity']);
   assert.equal(relation.relation_kind,'r');assert.equal(relation.is_partition,false);
-  assert.equal(relation.owner_name,'supabase_admin');
+  assert.equal(relation.owner_name,readVerifiedImmutableBootstrapOwnerProfile(source,verifiedArchive).actor);
   assert.equal(typeof relation.relrowsecurity,'boolean');assert.equal(typeof relation.relforcerowsecurity,'boolean');
   assert.ok(Object.isFrozen(originalRows)&&originalRows.length>0&&originalRows.every(row=>typeof row==='string'));
   assert.ok(Object.isFrozen(replacements));
@@ -287,4 +293,36 @@ export function readVerifiedImmutableBootstrapSourceRows(source,verifiedArchive)
  const expected=Object.freeze({sourceBinding:record.original.sourceBinding,tables:Object.freeze(tables),metadata_only:true});
  assertVerifiedImmutableBootstrapSource(source,verifiedArchive);
  sourceRowExpectations.set(source,expected);return expected;
+}
+
+// Closed profile DATA and exact executable statement from the branded Source.
+export function readVerifiedImmutableBootstrapOwnerProfile(source,verifiedArchive){
+ assertVerifiedImmutableBootstrapSource(source,verifiedArchive);
+ return plans.get(source).ownerProfile;
+}
+export function readVerifiedImmutableBootstrapStatement(source,verifiedArchive,statement){
+ assertVerifiedImmutableBootstrapSource(source,verifiedArchive);
+ assert.ok(source.statements.includes(statement),'Foreign statement is not a branded Source member');
+ const record=plans.get(source);let wrapper;
+ if(record.postgresProgram){
+  const pinned=record.postgresProgram.statements.filter(s=>s.sourcePath===statement.sourcePath);
+  assert.equal(pinned.length,1);assert.equal(pinned[0].sourceSha256,statement.sourceSha256);assert.equal(pinned[0].sql,statement.sql);
+  wrapper=pinned[0].wrapper;
+ }else{
+  if(statement.sourcePath==='proposals/immutable-original-employee-push-authority-restore.sql')
+   assert.equal(statement.sourceSha256,'2b8c5dad21a56d6132688a998ab3ae3df78584686c8b2f4fdd7baf7bbafd527d');
+  if(statement.sourcePath==='proposals/immutable-original-manager-push-restore.sql')
+   assert.equal(statement.sourceSha256,'2a9dd3a1050d0f7e7714abdd8feeb4259eea54287c68ffacd787b9072a9f7f9d');
+  wrapper=['proposals/immutable-private-owner-context.sql','proposals/immutable-original-employee-restore.sql',
+   'proposals/immutable-original-device-boundary-restore.sql','proposals/immutable-original-authority-reconciliation.sql',
+   'proposals/immutable-original-manager-push-restore.sql'].includes(statement.sourcePath)?'OUTER_TRANSACTION':'NONE';
+ }
+ assert.equal(sha(statement.sql),statement.sourceSha256);
+ let sql=statement.sql;
+ if(wrapper==='OUTER_TRANSACTION'){
+  const begin=statement.sourcePath==='proposals/immutable-private-owner-context.sql'?'\nBEGIN;':'\nBEGIN;\n';
+  assert.equal(sql.split(begin).length,2);assert.match(sql,/\nCOMMIT;\s*$/);
+  sql=sql.replace(begin,'\n').replace(/\nCOMMIT;\s*$/,'\n');
+ }else assert.ok(wrapper==='NONE'||wrapper==='DO_ONLY');
+ assertVerifiedImmutableBootstrapSource(source,verifiedArchive);return sql;
 }

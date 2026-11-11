@@ -13,8 +13,8 @@ import {requireSigningKey,signBinding,restoreIntentBinding} from './disaster-rec
 import {captureVerifiedImmutableFreshRestoreIntent} from './immutable-private-fresh-restore-intent.mjs';
 import {loadImmutableDomainSourceRecipes} from './immutable-private-domain-source.mjs';
 import {loadImmutableMessageSourceRecipes} from './immutable-private-message-source.mjs';
-import {prepareVerifiedImmutableBootstrapSource} from './immutable-private-source-bootstrap.mjs';
-import {closeOwnedRelay,storageResult} from './run-official-local-storage-rehearsal.mjs';
+import {prepareVerifiedImmutableBootstrapSource,readVerifiedImmutableBootstrapOwnerProfile} from './immutable-private-source-bootstrap.mjs';
+import {closeOwnedRelay,storageResult,assertPrivatePgOwnerProfile,assertPrivatePgNetwork} from './run-official-local-storage-rehearsal.mjs';
 
 export const PG_IMAGE='supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
@@ -102,13 +102,15 @@ export function freshIntentEnvelope(binding,key,keyId,now=new Date()){
   return {format:'memphis-zoo-production-restore-intent.v1',algorithm:'hmac-sha256',key_id:keyId,
     intent,signature:signBinding(restoreIntentBinding(intent),key)};
 }
-export function assertOwnedPg(value,{id,name,owner,networkId,networkName}){
+export function assertOwnedPg(value,{id,name,owner,networkId,networkName,ownerProfile}){
   assert.equal(value.Id,id);assert.equal(value.Name,'/'+name);assert.equal(value.Config.Image,PG_IMAGE);
   assert.equal(value.Config.Labels[label],owner);assert.equal(value.State.Running,true);
+  assertPrivatePgOwnerProfile(value,ownerProfile);
   assert.ok(Object.values(value.NetworkSettings.Ports||{}).every(p=>p===null||Array.isArray(p)&&p.length===0),
     'Private PostgreSQL must have no published ports');
-  // Provider may later attach its separately verified internal network. Before
-  // our forward is born, exactly this owned network is permitted.
+  // The private provider borrows this sole network. Extra attachments are
+  // never admitted, including after provider start or during cleanup.
+  assert.deepEqual(Object.keys(value.NetworkSettings.Networks),[networkName]);
   const endpoint=value.NetworkSettings.Networks[networkName];
   assert.equal(endpoint?.NetworkID,networkId);assert.equal(isIP(endpoint?.IPAddress),4);
   return endpoint.IPAddress;
@@ -152,36 +154,41 @@ export async function runPrivate(){
   const owner=randomBytes(16).toString('hex'),name='mz_schema_rebuild_'+process.env.GITHUB_RUN_ID;
   const networkName=name+'_private_'+owner, database=name;
   let archive,cid,networkId,relay,relayClosed=true,pgAbsent=false,networkAbsent=false;
-  const sockets=new Set(),children=new Set(),pendingConnections=new Set();let stopping=false,closing=false,failure,phase='authenticate',result,source,sourceMetadata,ownerMetadata;
+  const sockets=new Set(),children=new Set(),pendingConnections=new Set(),inspectionController=new AbortController();let stopping=false,closing=false,failure,phase='authenticate',result,source,sourceMetadata,ownerMetadata,ownerProfile;
   let cancelTimer;
   const stop=()=>{stopping=true;for(const pid of children)try{process.kill(-pid,'SIGTERM');}catch{}
     cancelTimer??=setTimeout(()=>{for(const pid of children)try{process.kill(-pid,'SIGKILL');}catch{}},60000);};
   process.on('SIGTERM',stop);process.on('SIGINT',stop);
   const baseEnv=Object.fromEntries(['PATH','HOME','RUNNER_TEMP'].filter(k=>process.env[k]).map(k=>[k,process.env[k]]));
-  const run=(command,args,{input,env=baseEnv,timeout=60000,cleanup=false}={})=>new Promise((yes,no)=>{
-    if(stopping&&!cleanup)return no(new Error('Cancelled'));
+  const run=(command,args,{input,env=baseEnv,timeout=60000,cleanup=false,abortSignal=null}={})=>new Promise((yes,no)=>{
+    if(stopping&&!cleanup || abortSignal?.aborted)return no(new Error('Cancelled'));
     const child=spawn(command,args,{cwd:root,env,detached:true,stdio:['pipe','pipe','pipe']});
     let stdout='',bytes=0,failed=false,hardTimer;children.add(child.pid);
     const kill=()=>{failed=true;try{process.kill(-child.pid,'SIGTERM');}catch{}
       hardTimer??=setTimeout(()=>{try{process.kill(-child.pid,'SIGKILL');}catch{}},60000);};
+    const cancelInspector=()=>{failed=true;if(child.exitCode===null&&child.signalCode===null)try{process.kill(-child.pid,'SIGKILL');}catch{}};
+    if(abortSignal){abortSignal.addEventListener('abort',cancelInspector,{once:true});if(abortSignal.aborted)cancelInspector();}
     const timer=setTimeout(kill,timeout);
     child.stdout.on('data',b=>{bytes+=b.length;if(bytes>16*1024*1024)kill();else stdout+=b;});
     // Private SQL/rows/errors never enter CI logs or receipt artifacts.
     child.stderr.on('data',b=>{bytes+=b.length;if(bytes>16*1024*1024)kill();});
     child.stdin.on('error',()=>{});child.stdin.end(input);
     child.once('error',()=>{failed=true;});
-    child.once('close',code=>{clearTimeout(timer);clearTimeout(hardTimer);children.delete(child.pid);
+    child.once('close',code=>{clearTimeout(timer);clearTimeout(hardTimer);abortSignal?.removeEventListener('abort',cancelInspector);children.delete(child.pid);
       if(code!==0||failed)no(new Error('Owned subprocess refused during '+phase));else yes(stdout.trim());});
   });
   const docker=(args,options)=>run('docker',args,options);
-  const inspect=async(cleanup=false)=>JSON.parse(await docker(['inspect',cid],{cleanup}))[0];
+  const inspect=async(cleanup=false,options={})=>JSON.parse(await docker(['inspect',cid],{cleanup,...options}))[0];
   const receiptPath=resolve(tmp,'private-backup-only-rehearsal.json');
   try{
     archive=authenticate();source=readVerifiedPrivateImportSource(archive);assert.equal(selectPrivateProfile(source),'private');
     sourceMetadata=originalRowsMetadataDiagnostics({source,inventory:readVerifiedImmutableBootstrapInventory(archive).inventory});
     ownerMetadata=originalOwnerMetadataDiagnostics(readVerifiedImmutableBootstrapInventory(archive).inventory);
     // Fail on absent source/ACL/guard recipes before resources are created.
-    await prepareVerifiedImmutableBootstrapSource(archive);
+    const bootstrapSource=await prepareVerifiedImmutableBootstrapSource(archive);
+    ownerProfile=readVerifiedImmutableBootstrapOwnerProfile(bootstrapSource,archive);
+    const requireOwnerProfile=()=>{const current=readVerifiedImmutableBootstrapOwnerProfile(bootstrapSource,archive);
+      assert.deepEqual(current,ownerProfile);return current;};
     const key=randomBytes(32).toString('hex'),keyId='private-rehearsal-'+process.env.GITHUB_RUN_ID;
     const envelope=freshIntentEnvelope(source.sourceBinding,key,keyId);
     captureVerifiedImmutableFreshRestoreIntent({verifiedArchive:archive,originalIntentEnvelope:envelope,intentVerifyKey:key,intentVerifyKeyId:keyId});
@@ -191,18 +198,19 @@ export async function runPrivate(){
       RESTORE_INTENT_VERIFY_KEY:key,RESTORE_INTENT_VERIFY_KEY_ID:keyId,RESTORE_INTENT_JSON:JSON.stringify(envelope),
       RESTORE_APPLY:'true',RESTORE_DATABASE_ONLY:'true',SUPABASE_PROJECT_REF:source.sourceBinding.project_ref,
       RESTORE_CONFIRM_PROJECT_REF:source.sourceBinding.project_ref};
-    phase='create_owned_target';
+    requireOwnerProfile();phase='create_owned_target';
     assert.equal(await docker(['ps','-aq','--filter','name=^/'+name+'$']),'','Never reuse an existing target');
     await docker(['pull',PG_IMAGE],{timeout:180000});
     networkId=await docker(['network','create','--internal','--label',label+'='+owner,networkName]);
     assert.match(networkId,/^[0-9a-f]{64}$/);
-    cid=await docker(['run','-d','--name',name,'--label',label+'='+owner,'--network',networkName,
+    cid=await docker(['run','-d','--name',name,'--label',label+'='+owner,'--label','custodial.private-owner-profile='+ownerProfile.id,
+      '--label','custodial.private-owner-actor='+ownerProfile.actor,'--network',networkName,
       '--memory','1g','--memory-swap','1g','--cpus','1','--pids-limit','256','--tmpfs','/var/lib/postgresql/data:rw,size=1g',
       '-e','POSTGRES_PASSWORD=postgres','-e','PGPASSWORD=postgres',PG_IMAGE,'postgres','-D','/etc/postgresql',
       '-c',"listen_addresses=*",'-c','shared_preload_libraries=pg_cron,pg_net,pg_stat_statements',
       '-c','cron.database_name='+database,'-c','cron.launch_active_jobs=off']);
     assert.match(cid,/^[0-9a-f]{64}$/);
-    const identity={id:cid,name,owner,networkId,networkName};
+    const identity={id:cid,name,owner,networkId,networkName,ownerProfile};
     const initial=await inspect(),address=assertOwnedPg(initial,identity);
     assert.deepEqual(Object.keys(initial.NetworkSettings.Networks),[networkName]);
     const net=JSON.parse(await docker(['network','inspect',networkId]))[0];
@@ -225,7 +233,12 @@ export async function runPrivate(){
     await docker(['exec','-i',cid,'psql','-X','-v','ON_ERROR_STOP=1','-U','supabase_admin','-d','postgres'],
       {input:readFileSync(resolve(root,'supabase/canonical/production-source-role-catalog.sql'),'utf8')});
     await docker(['exec',cid,'createdb','-U','supabase_admin','-O','postgres','-T','template0',database]);
-    const verifyTarget=async()=>assert.equal(assertOwnedPg(await inspect(),identity),address);
+    const networkIdentity={networkId,networkName,owner,pgid:cid,pgName:name,address};
+    const verifyTarget=async()=>{assert.equal(closing,false,'Target inspection refused during cleanup');requireOwnerProfile();
+      const options={timeout:10000,abortSignal:inspectionController.signal};
+      assert.equal(assertOwnedPg(await inspect(false,options),identity),address);
+      assert.equal(closing,false,'Target inspection refused during cleanup');
+      assertPrivatePgNetwork(JSON.parse(await docker(['network','inspect',networkId],options))[0],networkIdentity);};
     await verifyTarget();relayClosed=false;
     relay=createServer(client=>{
       if(stopping||closing||sockets.size>=64){client.destroy();return;}
@@ -244,17 +257,19 @@ export async function runPrivate(){
     await new Promise((yes,no)=>{relay.once('error',no);relay.listen({host:'127.0.0.1',port:0,exclusive:true},yes);});
     relay.on('error',stop);
     const listener=relay.address();assert.equal(listener.address,'127.0.0.1');
-    secretEnv.SUPABASE_DB_URL='postgresql://supabase_admin:postgres@127.0.0.1:'+listener.port+'/'+database;
+    // Fixed administrator is used only by the existing schema/ACL replay adapter.
+    const schemaDatabaseUrl='postgresql://supabase_admin:postgres@127.0.0.1:'+listener.port+'/'+database;
+    secretEnv.SUPABASE_DB_URL='postgresql://'+requireOwnerProfile().actor+':postgres@127.0.0.1:'+listener.port+'/'+database;
     // Existing adapter replays authenticated schema unchanged. No hydration,
     // legacy restore-intent producer, forward migrations or reconciliation.
-    await run(process.execPath,['scripts/restore-isolated-event-owner-schema.mjs'],{env:secretEnv,timeout:300000});
+    await run(process.execPath,['scripts/restore-isolated-event-owner-schema.mjs'],{env:{...secretEnv,SUPABASE_DB_URL:schemaDatabaseUrl},timeout:300000});
     phase='private_original_restore_and_storage';await verifyTarget();
     result=JSON.parse(await run(process.execPath,['scripts/run-official-local-storage-rehearsal.mjs'],{env:secretEnv,timeout:1900000}));
     assertPrivateResult(result,source,envelope.intent);await verifyTarget();
     phase='verified_waiting_cleanup';
   }catch(e){failure=e;}
   finally{
-    phase=failure?phase:'cleanup';closing=true;
+    phase=failure?phase:'cleanup';closing=true;inspectionController.abort();
     try{if(relay){await closeOwnedRelay(relay,sockets,Date.now()+15000);relayClosed=true;}
       await Promise.allSettled([...pendingConnections]);}catch(e){failure??=e;}
     try{
@@ -280,7 +295,7 @@ export async function runPrivate(){
       database_tables:!failure?result?.database_tables:null,database_rows:!failure?result?.database_rows:null,
       provider_verified:!failure&&result?.storage?.provider_verified===true,
       phase,blocker:failure?'PRIVATE_REHEARSAL_REFUSED':stopping?'CANCELLED':null,
-      source_preparation:safeSourcePreparationFailure(failure),original_rows_metadata:sourceMetadata??null,original_owner_metadata:ownerMetadata??null};
+      source_preparation:safeSourcePreparationFailure(failure),original_rows_metadata:sourceMetadata??null,original_owner_metadata:ownerMetadata??null,authenticated_owner_profile:ownerProfile??null};
     writeFileSync(receiptPath,JSON.stringify(receipt,null,2)+'\n',{mode:0o600,flag:'wx'});
     if(!failure&&!stopping)process.stdout.write(JSON.stringify(receipt)+'\n');
   }

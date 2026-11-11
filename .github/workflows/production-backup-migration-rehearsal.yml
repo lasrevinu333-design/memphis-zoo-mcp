@@ -52,7 +52,8 @@ jobs:
       - run: npm ci --ignore-scripts
       - name: Check isolated private rehearsal contracts
         run: |
-          node --test scripts/private-backup-only-rehearsal-tests.mjs scripts/immutable-release-history-tests.mjs
+          node scripts/build-immutable-postgres-program.mjs --check
+          node --test scripts/private-backup-only-rehearsal-tests.mjs scripts/immutable-release-history-tests.mjs scripts/immutable-private-owner-profile-tests.mjs scripts/immutable-original-owner-context-tests.mjs scripts/immutable-source-cache-tests.mjs
           node scripts/disaster-recovery-archive-tests.mjs --native-text-columns-archive-only --text-archive-case=bootstrap
           node scripts/disaster-recovery-archive-tests.mjs --immutable-bootstrap-raw-source-only
           node scripts/disaster-recovery-archive-tests.mjs --immutable-bootstrap-prerequisite-errors-only

@@ -6,6 +6,7 @@ import { readFileSync, writeFileSync, openSync, fsyncSync, closeSync, mkdirSync,
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
+import { isProxy } from 'node:util/types';
 import { Readable } from 'node:stream';
 import { createInterface } from 'node:readline';
 import { createServer, createConnection, isIP } from 'node:net';
@@ -30,11 +31,54 @@ export function supportedOfficialStartupMigration(rows,profile){
 }
 export function resourceProfile(profile){
   if(profile==='native-text-v4-fresh-supabase-admin')return Object.freeze({work_ms:900000,node_heap_mib:256,cpus:1,cleanup_ms:45000});
-  if(profile==='immutable-private-fresh-supabase-admin')return Object.freeze({work_ms:1800000,node_heap_mib:384,cpus:1,cleanup_ms:45000});
+  if(profile==='immutable-private-fresh-supabase-admin' || profile==='immutable-private-fresh-postgres')return Object.freeze({work_ms:1800000,node_heap_mib:384,cpus:1,cleanup_ms:45000});
   throw new Error('Only authenticated closed archive profiles select resource bounds.');
 }
+// Exact DATA contract only; host derives ownerProfile from the branded archive.
+// A caller-provided profile never substitutes for that source authentication.
+export function storageWorkerActor(sourceProfile,ownerProfile){
+  if(sourceProfile==='native-text-v4-fresh-supabase-admin'){
+    insist(ownerProfile===undefined,'Native Storage profile cannot carry private owner selection.');return 'supabase_admin';
+  }
+  insist(ownerProfile && Object.keys(ownerProfile).sort().join(',')==='actor,id','Exact authenticated owner profile required.');
+  if(sourceProfile==='immutable-private-fresh-supabase-admin'){
+    insist(ownerProfile.id==='immutable-private-legacy-supabase-admin' && ownerProfile.actor==='supabase_admin','Legacy private owner mismatch.');return 'supabase_admin';
+  }
+  if(sourceProfile==='immutable-private-fresh-postgres'){
+    insist(ownerProfile.id==='immutable-private-current-postgres' && ownerProfile.actor==='postgres','Current private owner mismatch.');return 'postgres';
+  }
+  throw new Error('Closed authenticated Storage owner profile required.');
+}
+export function assertPrivatePgOwnerProfile(value,ownerProfile){
+  const sourceProfile=ownerProfile?.id==='immutable-private-current-postgres'?'immutable-private-fresh-postgres':'immutable-private-fresh-supabase-admin';
+  const actor=storageWorkerActor(sourceProfile,ownerProfile),labels=value.Config?.Labels;
+  insist(labels?.['custodial.private-owner-profile']===ownerProfile.id && labels?.['custodial.private-owner-actor']===actor
+    && /^[a-f0-9]{32}$/.test(labels?.['custodial.private-backup-rehearsal']),'Private PG source owner labels differ.');
+  insist(value.NetworkSettings?.Ports && typeof value.NetworkSettings.Ports==='object' && !Array.isArray(value.NetworkSettings.Ports)
+    && Object.hasOwn(value.NetworkSettings.Ports,'5432/tcp')
+    && Object.values(value.NetworkSettings.Ports).every(ports=>ports===null || Array.isArray(ports) && ports.length===0),
+    'Private original must retain its owned forward and no published PG ports.');
+  return true;
+}
+// Borrowed private network identity is derived from the owned PG inspection,
+// never an environment/network selector. The parent retains network ownership.
+export function assertPrivatePgNetwork(value,{networkId,networkName,owner,pgid,pgName,address}){
+  insist(/^[a-f0-9]{32}$/.test(owner) && networkName===pgName+'_private_'+owner
+    && value.Id===networkId && value.Name===networkName && value.Internal===true
+    && value.Labels?.['custodial.private-backup-rehearsal']===owner,'Exact parent-owned internal PG network required.');
+  const pg=value.Containers?.[pgid];
+  insist(pg && pg.Name===pgName && typeof pg.IPv4Address==='string' && pg.IPv4Address.split('/')[0]===address
+    && isIP(address)===4,'Owned PG endpoint changed in private network.');
+  return true;
+}
+export function assertPrivateNetworkMembers(value,identity,providerId=null){
+  assertPrivatePgNetwork(value,identity);
+  const expected=providerId===null?[identity.pgid]:[identity.pgid,providerId];
+  insist(stable(Object.keys(value.Containers).sort())===stable(expected.sort()),'Foreign member in private provider network.');
+  return true;
+}
 export function assertPinnedPgResources(value,cid,name,profile){
-  insist(['native-text-v4-fresh-supabase-admin','immutable-private-fresh-supabase-admin'].includes(profile),'Closed PG resource profile required.');
+  insist(['native-text-v4-fresh-supabase-admin','immutable-private-fresh-supabase-admin','immutable-private-fresh-postgres'].includes(profile),'Closed PG resource profile required.');
   const memory=(profile==='native-text-v4-fresh-supabase-admin'?2:1)*1024**3;
   insist(value.Id===cid && value.Name==='/'+name && value.Config.Image===PG_IMAGE
     && value.HostConfig.Memory===memory && value.HostConfig.MemorySwap===memory
@@ -96,17 +140,21 @@ export function storageResult(result,archive,intent){
 
 // One original process group per invocation. Actual wait is durable before
 // absence/cleanup assertions; no secret-bearing argv or environment is logged.
-function runner(root,getDeadline,cleanupBudget){let sequence=0;return async function run(argv,{env=process.env,seconds=60,cleanup=false,input=null,logSecrets=null}={}){
+function runner(root,getDeadline,cleanupBudget,privacy){let sequence=0;return async function run(argv,{env=process.env,seconds=60,cleanup=false,input=null,logSecrets=null,abortSignal=null}={}){
   if(logSecrets!==null)insist(Array.isArray(logSecrets) && argv[0]==='docker' && argv[1]==='logs' && argv[2]==='--timestamps' && argv[3]==='--tail' && argv[4]==='120' && /^[a-f0-9]{64}$/.test(argv[5]) && argv.length===6,'Only fixed owned provider logs admit redacted transport.');
+  insist(!abortSignal?.aborted,'Owned inspector cancelled before child birth.');
   if(cleanup)cleanupBudget.deadline??=Date.now()+45000;
   insist(cleanup?Date.now()<cleanupBudget.deadline:!stopping && Date.now()<getDeadline(),'Original work/cleanup deadline exhausted before child birth.');
   if(!cleanup)memoryFloor(2*1024**3);
   const number=String(++sequence).padStart(3,'0'),prefix=resolve(root,number),started=Date.now();
   durable(prefix+'.INTENT.json',{original:true,program:argv[0],argument_sha256:hash(stable(argv.slice(1))),started,seconds});
-  let child,owner,code,signal,error;const chunks=[[],[]],sizes=[0,0];
+  let child,owner,code,signal,error,cancelInspector;const chunks=[[],[]],sizes=[0,0];
   try{
     child=spawn(argv[0],argv.slice(1),{env,detached:true,stdio:[input===null?'ignore':'pipe','pipe','pipe']});liveGroups.add(child.pid);
     const completion=new Promise((done,reject)=>{child.once('error',reject);child.once('exit',(c,s)=>done([c,s]));});completion.catch(()=>{});
+    if(abortSignal){cancelInspector=()=>{error??=new Error('Owned inspector cancelled for relay cleanup.');
+      if(child.exitCode===null && child.signalCode===null)try{process.kill(-child.pid,'SIGKILL');}catch{}};
+      abortSignal.addEventListener('abort',cancelInspector,{once:true});if(abortSignal.aborted)cancelInspector();}
     owner={pid:child.pid,pgid:child.pid,proc_start_ticks:ticks(child.pid)};durable(prefix+'.OWNER.json',owner);
     if(input!==null){insist(typeof input==='string' && Buffer.byteLength(input,'utf8')<=4096,'Fixed private stdin bound exceeded.');child.stdin.on('error',()=>{error??=new Error('Private original stdin refused.');});child.stdin.end(input);}
     for(const [i,stream] of [child.stdout,child.stderr].entries())stream.on('data',chunk=>{
@@ -120,20 +168,22 @@ function runner(root,getDeadline,cleanupBudget){let sequence=0;return async func
     const drained=await Promise.race([Promise.all([child.stdout,child.stderr].map(stream=>stream.readableEnded?Promise.resolve():new Promise(r=>stream.once('end',r)))).then(()=>true),pause(2000).then(()=>false)]);
     if(!drained){try{process.kill(-child.pid,'SIGKILL');}catch{};child.stdout.destroy();child.stderr.destroy();error??=new Error('Original stream drain deadline exceeded.');}
     for(const [i,suffix] of ['stdout','stderr'].entries()){
-      const raw=Buffer.concat(chunks[i]),saved=logSecrets===null?raw:Buffer.from(redactProviderLogs(raw.toString('utf8'),logSecrets));
-      if(logSecrets!==null)durable(prefix+'.'+suffix+'.REDACTION.json',{original_bytes:raw.length,original_sha256:hash(raw),saved_bytes:saved.length,saved_sha256:hash(saved),raw_vendor_bytes_persisted:false});
+      const raw=Buffer.concat(chunks[i]),saved=privacy.privateData?Buffer.from(JSON.stringify(privateRestoreStreamDiagnostic(raw))+'\n')
+        :logSecrets===null?raw:Buffer.from(redactProviderLogs(raw.toString('utf8'),logSecrets));
+      if(privacy.privateData || logSecrets!==null)durable(prefix+'.'+suffix+'.REDACTION.json',{original_bytes:raw.length,original_sha256:hash(raw),saved_bytes:saved.length,saved_sha256:hash(saved),raw_vendor_bytes_persisted:false,...(privacy.privateData?{private_payload_bytes_persisted:false}:{} )});
       writeFileSync(prefix+'.'+suffix,saved,{mode:0o600,flag:'wx'});
     }
     try{process.kill(-child.pid,0);throw new Error('Original group remains after wait.');}catch(e){if(e.code!=='ESRCH')throw e;}
     insist(!existsSync(`/proc/${child.pid}`),'Original PID remains after wait.');
     if(error)throw error;insist(code===0,'Original child refused; private streams retained.');
-    return logSecrets===null?Buffer.concat(chunks[0]).toString('utf8'):redactProviderLogs(Buffer.concat(chunks[0]).toString('utf8'),logSecrets);
+    return logSecrets===null?Buffer.concat(chunks[0]).toString('utf8'):privacy.privateData
+      ?JSON.stringify(privateRestoreStreamDiagnostic(Buffer.concat(chunks[0]))):redactProviderLogs(Buffer.concat(chunks[0]).toString('utf8'),logSecrets);
   }catch(e){
     if(child?.pid && code===undefined){try{process.kill(-child.pid,'SIGKILL');}catch{}
       await new Promise(r=>child.exitCode!==null||child.signalCode!==null?r():child.once('exit',r));
       if(!existsSync(prefix+'.ACTUAL_WAIT.json'))durable(prefix+'.ACTUAL_WAIT.json',{...owner,code:child.exitCode,signal:child.signalCode,setup_failure:true});}
     liveGroups.delete(child?.pid);throw e;
-  }
+  }finally{if(cancelInspector)abortSignal.removeEventListener('abort',cancelInspector);}
 };}
 
 export function redactProviderLogs(text,secrets){
@@ -141,7 +191,75 @@ export function redactProviderLogs(text,secrets){
   return text.replace(/postgres(?:ql)?:\/\/[^\s"'<>]+/gi,'[REDACTED_DATABASE_URL]')
     .replace(/[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g,'[REDACTED_JWT]');
 }
-export function safeStartupFailure(error,phase){
+// Private failure channels never copy arbitrary driver/vendor text, properties
+// or stack operands. These DATA diagnostics grant no retry/restore authority.
+export function privateRestoreStreamDiagnostic(raw){
+  insist(Buffer.isBuffer(raw),'Owned byte stream required.');
+  return Object.freeze({classification:'PRIVATE_SUBPROCESS_STREAM_WITHHELD',bytes:raw.length,sha256:hash(raw),private_payload_exported:false});
+}
+export function privateRestoreFailureDiagnostic(error,phase){
+  const phases=['connect_gate','capture_before_catalog','require_locator','require_backend','construct_backend','construct_locator',
+    'verify_empty_namespace','read_verified_object','official_archived_version_upload','verify_post_bootstrap_migrations',
+    'official_entrypoint_start','official_entrypoint_exit','database_connection','archive_lifecycle','archive_cleanup'];
+  const sqlStates=['0A000','08000','08001','08003','08004','08006','08007','08P01','22001','22003','22007','22023','22P02',
+    '23502','23503','23505','23514','25000','25006','25P02','28000','28P01','3D000','3F000','40001',
+    '40P01','42501','42601','42703','42883','42P01','53000','53100','53200','53300','53400','54000','54001','54011',
+    '55000','57014','57P01','57P02','57P03','58000','58030','P0001','XX000'];
+  const nodeCodes=['ECONNRESET','ECONNREFUSED','EPIPE','ETIMEDOUT','EHOSTUNREACH','ENETUNREACH','ERR_STREAM_PREMATURE_CLOSE'];
+  const descriptor=error && typeof error==='object' && !isProxy(error)?Object.getOwnPropertyDescriptor(error,'code'):undefined;
+  const code=descriptor && Object.hasOwn(descriptor,'value')?descriptor.value:undefined;
+  return Object.freeze({phase:phases.includes(phase)?phase:'PRIVATE_FAILURE',classification:'PRIVATE_RESTORE_FAILURE',
+    ...(sqlStates.includes(code)?{sql_state:code}:nodeCodes.includes(code)?{node_code:code}:{}),private_payload_exported:false});
+}
+const privateEvidenceFields=Object.freeze({
+  'FINAL.json':['ok','provider_verified','production_provider_verified','service_born','service_CID_or_name_fresh_absent','network_fresh_absent','borrowed_network_retained_verified','relay_closed_or_never_born','cleanup_checked','error'],
+  'PROVIDER_VERIFIED.json':['provider_verified','production_provider_verified','archive_digest','original_intent_sha256','container_id','database_oid','archived_migrations_74_full_tuple_sha256','actual_archived_migration_count','buckets','objects'],
+  'WORKER_INPUT_REDACTED.json':['input_sha256','worker_sha256','original_intent_sha256','archive_digest','database_oid','migrations_full_tuple_sha256','secrets_retained'],
+  'ARCHIVED_STORAGE_MIGRATIONS_FULL_TUPLES.json':['source_profile','count','sha256','authenticated_source_metadata_only'],
+  'STORAGE_CATALOG_BEFORE_PROVIDER.json':['sha256'],
+  'STORAGE_CATALOG_AFTER_PROVIDER.json':['sha256'],
+  'STORAGE_ROLE_CREDENTIAL_NONSECRET_INVARIANCE.json':['database_oid','owned_container_id','only_ephemeral_password_initialized','plaintext_or_verifier_exported'],
+  'PROVIDER_LOG_CAPTURE_REFUSED.json':['fixed_owned_container','original_exception_preserved','raw_logs_exported'],
+  'PROVIDER_STARTUP_FAILURE.json':[],
+  'PINNED_OFFICIAL_IMAGE_METADATA.json':['config_image_id','default_root'],
+  'PINNED_OFFICIAL_MIRROR_METADATA.json':['config_image_id','default_root'],
+  'OWNED_LOOPBACK_RELAY_BOUND.json':['container_id','config_image_id','network_id','external_network_attached','payloads_logged'],
+  'OWNED_LOOPBACK_RELAY_CLOSED.json':['listener_closed','owned_sockets_remaining','before_container_removal'],
+});
+export function privateEvidenceFile(name){
+  return Object.hasOwn(privateEvidenceFields,name) || /^[0-9]{3}\.(?:INTENT\.json|OWNER\.json|ACTUAL_WAIT\.json|stdout|stderr|(?:stdout|stderr)\.REDACTION\.json)$/.test(name);
+}
+export function privateEvidenceReceipt(name,raw){
+  if(!privateEvidenceFile(name))return null;
+  const value=JSON.parse(raw.toString('utf8'));
+  if(name==='PROVIDER_STARTUP_FAILURE.json')return privateRestoreFailureDiagnostic({code:value.sql_state??value.node_code},value.phase);
+  const fields=privateEvidenceFields[name]??(name.endsWith('.INTENT.json')?['argument_sha256','started','seconds']
+    :name.endsWith('.OWNER.json')?['pid','pgid','proc_start_ticks']
+    :name.endsWith('.ACTUAL_WAIT.json')?['pid','pgid','proc_start_ticks','code','signal','elapsed_ms','setup_failure']
+    :name.endsWith('.REDACTION.json')?['original_bytes','original_sha256','saved_bytes','saved_sha256','raw_vendor_bytes_persisted','private_payload_bytes_persisted']
+    :['bytes','sha256']);
+  const result={classification:'PRIVATE_RESTORE_METADATA_RECEIPT',private_payload_exported:false};
+  for(const key of fields){
+    const v=value[key];
+    if(typeof v==='boolean' || Number.isSafeInteger(v)&&v>=0 || v===null)result[key]=v;
+    else if(typeof v==='string' && ((/(?:sha256|digest)$/.test(key)||['container_id','owned_container_id','fixed_owned_container','network_id'].includes(key))&&/^[a-f0-9]{64}$/.test(v)
+      || key==='config_image_id'&&/^sha256:[a-f0-9]{64}$/.test(v)
+      || ['database_oid','proc_start_ticks'].includes(key)&&/^[1-9][0-9]{0,19}$/.test(v)
+      || key==='signal'&&['SIGTERM','SIGKILL','SIGINT'].includes(v)
+      || key==='error'&&v==='OWNING_REHEARSAL_REFUSED'
+      || key==='source_profile'&&['immutable-private-fresh-supabase-admin','immutable-private-fresh-postgres'].includes(v)))result[key]=v;
+  }
+  if(name==='STORAGE_ROLE_CREDENTIAL_NONSECRET_INVARIANCE.json')result.catalog_invariance_verified=Boolean(value.before && value.after
+    && typeof value.before==='object' && typeof value.after==='object' && !Array.isArray(value.before) && !Array.isArray(value.after)
+    && stable(value.before)===stable(value.after));
+  if(name==='STORAGE_CATALOG_BEFORE_PROVIDER.json'||name==='STORAGE_CATALOG_AFTER_PROVIDER.json'){
+    result.catalog_counts=Object.fromEntries(['schema','relations','columns','constraints','indexes','routines','views','sequences','triggers','policies','types','enums','default_acls','roles','role_settings','memberships']
+      .map(key=>[key,Array.isArray(value.catalog?.[key])?value.catalog[key].length:0]));
+  }
+  return Object.freeze(result);
+}
+export function safeStartupFailure(error,phase,privateData=false){
+  if(privateData)return privateRestoreFailureDiagnostic(error,phase);
   const label=value=>typeof value==='string' && /^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(value)?value:null;
   const locations=String(error?.stack||'').split('\n').flatMap(line=>{const m=/((?:\/app\/dist\/|\/custody\/)[A-Za-z0-9_./-]+\.(?:js|mjs)):(\d+):(\d+)\)?$/.exec(line);return m?[{source:m[1],line:Number(m[2]),column:Number(m[3])}]:[];}).slice(0,8);
   return {phase,name:label(error?.name),code:typeof error?.code==='string' && /^[0-9A-Z]{5}$/.test(error.code)?error.code:label(error?.code),syscall:label(error?.syscall),source_locations:locations,message_or_environment_exported:false};
@@ -201,6 +319,8 @@ async function storageCatalog(db){const r=await db.query(STORAGE_CATALOG_SQL);in
 async function containerGate(){
   const require=createRequire('/app/package.json'),{Client}=require('pg');
   const input=JSON.parse(readFileSync('/custody/input.json','utf8'));let phase='connect_gate';
+  const expectedActor=storageWorkerActor(input.source_profile,input.owner_profile);
+  insist(new URL(process.env.CUSTODIAL_GATE_DATABASE_URL).username===expectedActor,'Worker gate actor differs from original owner profile.');
   try{
   const db=new Client({connectionString:process.env.CUSTODIAL_GATE_DATABASE_URL,application_name:'owned-storage-pre-server',connectionTimeoutMillis:5000,query_timeout:10000});
   await db.connect();const deadline=Date.now()+resourceProfile(input.source_profile).work_ms;
@@ -208,8 +328,10 @@ async function containerGate(){
     for(;;){
       insist(Date.now()<deadline,'Pre-server original boundary deadline exceeded.');
       const context=await db.query(`select current_database() database_name,(select oid::text from pg_database where datname=current_database()) database_oid,
-        (select pg_get_userbyid(datdba) from pg_database where datname=current_database()) database_owner`);
-      insist(stable(context.rows[0])===stable(input.database),'Provider DB identity changed.');
+        (select pg_get_userbyid(datdba) from pg_database where datname=current_database()) database_owner,
+        session_user::text session_user,current_user::text current_user`);
+      insist(context.rowCount===1 && context.rows[0].session_user===expectedActor && context.rows[0].current_user===expectedActor
+        && stable(context.rows[0])===stable(input.database),'Provider DB identity changed.');
       try{
         const c=await db.query(`select restore_id::text,authority_generation::text,archive_digest,source_project_ref,target_project_ref,state,mutations_paused
           from custodial_dr.restore_control where singleton=true`);
@@ -241,7 +363,7 @@ async function containerGate(){
   for(const s of ['SIGTERM','SIGINT'])process.on(s,()=>child.kill(s));
   const code=await new Promise((r,j)=>{child.once('error',j);child.once('exit',(c,s)=>r(c??(s?1:0)));});
   if(code!==0)durable('/audit/PROVIDER_STARTUP_FAILURE.json',{phase:'official_entrypoint_exit',exit:code,message_or_environment_exported:false},0o644);process.exitCode=code;
-  }catch(error){try{durable('/audit/PROVIDER_STARTUP_FAILURE.json',safeStartupFailure(error,phase),0o644);}catch{}throw error;}
+  }catch(error){try{durable('/audit/PROVIDER_STARTUP_FAILURE.json',safeStartupFailure(error,phase,Boolean(input.owner_profile)),0o644);}catch{}throw error;}
 }
 
 async function host(){
@@ -254,20 +376,22 @@ async function host(){
   const original=JSON.parse(process.env.RESTORE_INTENT_JSON);
   const crypto=await import(pathToFileURL(resolve(root,'scripts/disaster-recovery-crypto.mjs')));
   const intent=crypto.captureVerifiedOriginalRestoreIntent(original,process.env.RESTORE_INTENT_VERIFY_KEY,process.env.RESTORE_INTENT_VERIFY_KEY_ID);
-  const custody=mkdtempSync(resolve(tmp,'official-storage-')),started=Date.now();let deadline=started+WORK_MS;const cleanupBudget={deadline:null};const run=runner(custody,()=>deadline,cleanupBudget);
-  const namespace='mz_schema_rebuild_storage_'+randomBytes(10).toString('hex'),alias=namespace+'_db',network=namespace+'_net';
-  let archive,client,cid=null,pgid=null,networkBorn=false,networkId=null,connected=false,failure,output,cleanupFailure=null,serviceAbsent=false,networkAbsent=false,relay=null,relayClosed=true,verifiedImageId=null;const relaySockets=new Set();
+  const custody=mkdtempSync(resolve(tmp,'official-storage-')),started=Date.now();let deadline=started+WORK_MS;const cleanupBudget={deadline:null},privacy={privateData:false};const run=runner(custody,()=>deadline,cleanupBudget,privacy);
+  const namespace='mz_schema_rebuild_storage_'+randomBytes(10).toString('hex');let alias=namespace+'_db',network=namespace+'_net',privateNetwork=null,borrowedNetworkRetained=false;
+  let archive,client,cid=null,pgid=null,networkBorn=false,networkId=null,connected=false,failure,output,cleanupFailure=null,serviceAbsent=false,networkAbsent=false,relay=null,relayClosed=true,relayClosing=false,verifiedImageId=null;const relaySockets=new Set(),relayPending=new Set(),relayInspectionController=new AbortController();
   try{
     archive=api.materializeVerifiedArchive({sourceDir:process.env.RESTORE_SOURCE_DIR,archiveVerifyKey:process.env.RESTORE_ARCHIVE_VERIFY_KEY,
       archiveVerifyKeyId:process.env.RESTORE_ARCHIVE_VERIFY_KEY_ID,supportedFormats:['memphis-zoo-disaster-recovery.v4'],
       requiredEntries:['backup-summary.json','inventory/table-catalog.json','inventory/storage-buckets.json','inventory/storage-objects.json']});
     api.assertVerifiedArchiveIndependentIntentKey(archive,process.env.RESTORE_INTENT_VERIFY_KEY);
     const a=storage.freshLocalStorageArchiveBinding(archive),s=a.sourceBinding;
+    privacy.privateData=Boolean(a.owner_profile);
     const budget=resourceProfile(a.source_profile);deadline=started+budget.work_ms;
     insist(intent.archive_digest===s.archive_digest && intent.source_identity_sha256===s.source_identity_sha256 && intent.source_project_ref===s.project_ref,'Original intent source mismatch.');
     if(a.source_profile==='native-text-v4-fresh-supabase-admin')insist(a.bucket_count===3 && a.object_count===1,'Production G31 original requires authenticated three buckets and one object.');
-    else insist(a.source_profile==='immutable-private-fresh-supabase-admin' && a.bucket_count>0 && a.object_count>0 && a.bucket_count<=65536 && a.object_count<=65536,'Private original requires bounded genuine nonempty Storage.');
-    u.username=a.expected_session_user;const databaseUrl=u.href;
+    else insist(storageWorkerActor(a.source_profile,a.owner_profile)===a.expected_session_user && a.bucket_count>0 && a.object_count>0 && a.bucket_count<=65536 && a.object_count<=65536,'Private original requires bounded genuine nonempty Storage.');
+    if(a.owner_profile)insist(u.username===a.expected_session_user,'Selected connection differs from authenticated source owner.');
+    else u.username=a.expected_session_user;const databaseUrl=u.href;
     client=new Client({connectionString:databaseUrl,connectionTimeoutMillis:5000,query_timeout:10000});await client.connect();
     const identity=await client.query(`select current_database() database_name,(select oid::text from pg_database where datname=current_database()) database_oid,
       (select pg_get_userbyid(datdba) from pg_database where datname=current_database()) database_owner,session_user::text session_user,current_user::text current_user`);
@@ -289,13 +413,22 @@ async function host(){
       insist(typeof contentType==='string' && contentType.length>0 && cacheControl!=='undefined' && !/[\r\n]/.test(contentType+cacheControl),'Exact original object metadata required.');
       objects.push({...o,file,version:native.version,contentType,cacheControl});
     }
-    const input={source_profile:a.source_profile,database:{database_name:id.database_name,database_oid:id.database_oid,database_owner:id.database_owner},intent,migration_count:migrationCount,migrations_sha256:migrationsHash,objects};
+    const input={source_profile:a.source_profile,...(a.owner_profile?{owner_profile:a.owner_profile}:{}),database:{database_name:id.database_name,database_oid:id.database_oid,database_owner:id.database_owner,session_user:id.session_user,current_user:id.current_user},intent,migration_count:migrationCount,migrations_sha256:migrationsHash,objects};
     durable(resolve(custody,'WORKER_INPUT_REDACTED.json'),{input_sha256:hash(stable(input)),worker_sha256:hash(readFileSync(fileURLToPath(import.meta.url))),
       original_intent_sha256:hash(stable(original)),archive_digest:s.archive_digest,database_oid:id.database_oid,migrations_full_tuple_sha256:migrationsHash,
       objects:objects.map(o=>({sha256:o.sha256,size_bytes:o.size_bytes,version_sha256:hash(String(o.version))})),secrets_retained:false});
     durable(resolve(mount,'input.json'),input);writeFileSync(resolve(mount,'worker.mjs'),readFileSync(fileURLToPath(import.meta.url)),{mode:0o400,flag:'wx'});
     const pgName='mz_schema_rebuild_'+process.env.GITHUB_RUN_ID;
     const pg=JSON.parse(await run(['docker','inspect','--format',inspectFormat,pgName]));insist(pg.Name==='/'+pgName && pg.Config.Image===PG_IMAGE && /^[a-f0-9]{64}$/.test(pg.Id),'Existing owned PG identity mismatch.');pgid=pg.Id;
+    if(a.owner_profile){
+      assertPrivatePgOwnerProfile(pg,a.owner_profile);
+      const names=Object.keys(pg.NetworkSettings.Networks);insist(names.length===1,'Private PG must retain its sole parent-owned network.');
+      network=names[0];const endpoint=pg.NetworkSettings.Networks[network];
+      networkId=endpoint.NetworkID;alias=pgName;
+      insist((endpoint.Aliases||[]).includes(pgName) || (endpoint.DNSNames||[]).includes(pgName),'Existing private PG name must be its verified DNS alias.');
+      privateNetwork=Object.freeze({networkId,networkName:network,owner:pg.Config.Labels['custodial.private-backup-rehearsal'],pgid,pgName,address:endpoint.IPAddress});
+      assertPrivateNetworkMembers(JSON.parse(await run(['docker','network','inspect',networkId]))[0],privateNetwork);
+    }
     const pgMemory=a.source_profile==='native-text-v4-fresh-supabase-admin'?'2g':'1g';
     if(pgMemory==='2g')memoryFloor(4*1024**3);
     await run(['docker','update','--memory',pgMemory,'--memory-swap',pgMemory,'--cpus','1','--pids-limit','256',pgid]);
@@ -304,9 +437,7 @@ async function host(){
     const pgPorts=boundedPg.NetworkSettings.Ports['5432/tcp'];
     if(a.source_profile==='native-text-v4-fresh-supabase-admin')
       insist(pgPorts?.length===1 && pgPorts[0].HostIp==='127.0.0.1' && Number(pgPorts[0].HostPort)===Number(u.port),'Exact owned PG loopback port mismatch.');
-    else insist(a.source_profile==='immutable-private-fresh-supabase-admin'
-      && Object.values(boundedPg.NetworkSettings.Ports||{}).every(ports=>ports===null || Array.isArray(ports) && ports.length===0),
-      'Private original must retain its owned forward and no published PG ports.');
+    else assertPrivatePgOwnerProfile(boundedPg,a.owner_profile);
     // Archive roles intentionally exclude passwords. Initialize only this
     // disposable existing role's credential, never LOGIN/grants/HBA or actor.
     const bootstrap=decodeURIComponent(u.password);
@@ -332,9 +463,11 @@ async function host(){
       DB_INSTALL_ROLES:'false',DB_ALLOW_MIGRATION_REFRESH:'false',DB_MIGRATIONS_FREEZE_AT:a.source_profile==='native-text-v4-fresh-supabase-admin'?supportedOfficialStartupMigration(typed,a.source_profile):typed.at(-1).name,
       DATABASE_MAX_CONNECTIONS:'8',PG_QUEUE_ENABLE:'false',IMAGE_TRANSFORMATION_ENABLED:'false',PORT:'5000'};
     const envFile=resolve(custody,'provider.env');writeFileSync(envFile,Object.entries(config).map(([k,v])=>k+'='+v).join('\n')+'\n',{mode:0o600,flag:'wx'});
-    networkId=(await run(['docker','network','create','--internal','--label','custodial.owner='+namespace,network])).trim();networkBorn=true;
-    insist(/^[a-f0-9]{64}$/.test(networkId),'Owned network identity missing.');
-    await run(['docker','network','connect','--alias',alias,network,pgid]);connected=true;
+    if(!privateNetwork){
+      networkId=(await run(['docker','network','create','--internal','--label','custodial.owner='+namespace,network])).trim();networkBorn=true;
+      insist(/^[a-f0-9]{64}$/.test(networkId),'Owned network identity missing.');
+      await run(['docker','network','connect','--alias',alias,network,pgid]);connected=true;
+    }else assertPrivateNetworkMembers(JSON.parse(await run(['docker','network','inspect',networkId]))[0],privateNetwork);
     await run(['docker','pull',MIRROR_IMAGE],{seconds:120});
     const mirrorMetadata=JSON.parse(await run(['docker','image','inspect','--format','{"id":{{json .Id}},"repo_digests":{{json .RepoDigests}},"user":{{json (index .Config "User")}}}',MIRROR_IMAGE]));
     const mirrorImageId=validatePinnedOfficialMirror(mirrorMetadata);
@@ -357,23 +490,41 @@ async function host(){
       && isIP(endpoint.IPAddress)===4 && inspect.State.Running===true
       && Object.values(inspect.NetworkSettings.Ports||{}).every(v=>v===null),'Exact sole-internal service endpoint required.');
     const relayNetwork=JSON.parse(await run(['docker','network','inspect',network]))[0];
-    insist(relayNetwork.Id===networkId && relayNetwork.Name===network && relayNetwork.Internal===true
+    if(privateNetwork)assertPrivateNetworkMembers(relayNetwork,privateNetwork,cid);
+    else insist(relayNetwork.Id===networkId && relayNetwork.Name===network && relayNetwork.Internal===true
       && relayNetwork.Labels['custodial.owner']===namespace && Object.keys(relayNetwork.Containers||{}).length===2
       && Object.hasOwn(relayNetwork.Containers,cid) && Object.hasOwn(relayNetwork.Containers,pgid),'Exact owned internal relay network required.');
     const destination=endpoint.IPAddress;
-    const assertRelayTarget=async()=>{const v=JSON.parse(await run(['docker','inspect','--format',inspectFormat,cid]));
+    const inspectRelay=argv=>{insist(!relayClosing,'Relay inspection refused after cleanup starts.');
+      return run(argv,privateNetwork?{seconds:10,abortSignal:relayInspectionController.signal}:{});};
+    const assertRelayTarget=async()=>{const v=JSON.parse(await inspectRelay(['docker','inspect','--format',inspectFormat,cid]));
       insist(v.Id===cid && v.ImageId===verifiedImageId && v.Name==='/'+namespace && v.Config.Image===IMAGE && v.Config.Labels['custodial.owner']===namespace
         && v.State.Running===true && Object.keys(v.NetworkSettings.Networks).length===1
         && v.NetworkSettings.Networks[network]?.NetworkID===networkId && v.NetworkSettings.Networks[network]?.IPAddress===destination
-        && Object.values(v.NetworkSettings.Ports||{}).every(p=>p===null),'Owned relay target identity changed.');};
+        && Object.values(v.NetworkSettings.Ports||{}).every(p=>p===null),'Owned relay target identity changed.');
+      if(privateNetwork){
+        const pg=JSON.parse(await inspectRelay(['docker','inspect','--format',inspectFormat,pgid]));
+        assertPrivatePgOwnerProfile(pg,a.owner_profile);
+        insist(pg.Id===pgid && pg.Name==='/'+privateNetwork.pgName && pg.Config.Image===PG_IMAGE && pg.State.Running===true
+          && stable(Object.keys(pg.NetworkSettings.Networks))===stable([network])
+          && pg.NetworkSettings.Networks[network].NetworkID===networkId && pg.NetworkSettings.Networks[network].IPAddress===privateNetwork.address,'Private PG attachment changed.');
+        assertPrivateNetworkMembers(JSON.parse(await inspectRelay(['docker','network','inspect',networkId]))[0],privateNetwork,cid);
+      }
+    };
     relayClosed=false;
     relay=createServer(client=>{
-      if(stopping || Date.now()>=deadline || relaySockets.size>=64){client.destroy();return;}
-      const upstream=createConnection({host:destination,port:5000});
-      for(const socket of [client,upstream]){relaySockets.add(socket);socket.setTimeout(10000);
-        socket.on('timeout',()=>socket.destroy());socket.on('error',()=>{client.destroy();upstream.destroy();});
-        socket.on('close',()=>{relaySockets.delete(socket);if(socket===client)upstream.destroy();else client.destroy();});}
-      client.pipe(upstream);upstream.pipe(client);
+      if(stopping || relayClosing || Date.now()>=deadline || relaySockets.size>=64){client.destroy();return;}
+      const connect=()=>{
+        if(client.destroyed || stopping || relayClosing){client.destroy();return;}
+        const upstream=createConnection({host:destination,port:5000});
+        for(const socket of [client,upstream]){relaySockets.add(socket);socket.setTimeout(10000);
+          socket.on('timeout',()=>socket.destroy());socket.on('error',()=>{client.destroy();upstream.destroy();});
+          socket.on('close',()=>{relaySockets.delete(socket);if(socket===client)upstream.destroy();else client.destroy();});}
+        client.pipe(upstream);upstream.pipe(client);client.resume();
+      };
+      if(!privateNetwork){connect();return;}
+      client.pause();relaySockets.add(client);client.on('error',()=>client.destroy());client.on('close',()=>relaySockets.delete(client));
+      const pending=assertRelayTarget().then(connect).catch(()=>client.destroy()).finally(()=>relayPending.delete(pending));relayPending.add(pending);
     });
     await new Promise((yes,no)=>{relay.once('error',no);relay.listen({host:'127.0.0.1',port:0,exclusive:true},yes);});
     relay.on('error',()=>{stopping=true;for(const socket of relaySockets)socket.destroy();});
@@ -382,7 +533,7 @@ async function host(){
       network_id:networkId,network_name:network,destination_address:destination,destination_port:5000,external_network_attached:false,payloads_logged:false};
     durable(resolve(custody,'OWNED_LOOPBACK_RELAY_BOUND.json'),relayBinding);
     await assertRelayTarget();
-    const binding={purpose:'custodial-immutable-fresh-local-storage-provider',source_profile:a.source_profile,original_intent_sha256:hash(stable(original)),
+    const binding={purpose:'custodial-immutable-fresh-local-storage-provider',source_profile:a.source_profile,...(a.owner_profile?{owner_profile:a.owner_profile}:{}),original_intent_sha256:hash(stable(original)),
       ...Object.fromEntries(['restore_id','authority_generation','archive_digest','source_identity_sha256','source_project_ref','target_project_ref'].map(k=>[k,intent[k]])),
       approved_at:new Date().toISOString(),expires_at:intent.expires_at,
       host_target:{hostname:'127.0.0.1',port:Number(u.port),database_name:id.database_name,database_oid:id.database_oid,session_user:a.expected_session_user,database_owner:id.database_owner},
@@ -393,7 +544,7 @@ async function host(){
     const envelope={format:'custodial.immutable-fresh-local-storage-provider.v1',algorithm:'hmac-sha256',key_id:process.env.RESTORE_INTENT_VERIFY_KEY_ID,binding,signature:sign(binding,process.env.RESTORE_INTENT_VERIFY_KEY)};
     storage.validateFreshLocalStorageProviderData({providerEnvelope:envelope,originalIntentEnvelope:original,intentVerifyKey:process.env.RESTORE_INTENT_VERIFY_KEY,
       intentVerifyKeyId:process.env.RESTORE_INTENT_VERIFY_KEY_ID,serviceKey,jwtSecret:secret,databaseUrl,
-      expected:{source_profile:a.source_profile,expected_session_user:a.expected_session_user,expected_database_owner:a.expected_database_owner,
+      expected:{source_profile:a.source_profile,...(a.owner_profile?{owner_profile:a.owner_profile}:{}),expected_session_user:a.expected_session_user,expected_database_owner:a.expected_database_owner,
         archive_digest:s.archive_digest,source_project_ref:s.project_ref,source_identity_sha256:s.source_identity_sha256,archived_storage_inventory_sha256:a.archived_storage_inventory_sha256}});
     await client.end();client=null;
     const allowed=/^Cpus_allowed_list:\s+([0-9]+)/m.exec(readFileSync('/proc/self/status','utf8'));insist(allowed,'CPU affinity unavailable.');
@@ -410,9 +561,10 @@ async function host(){
       namespace,container_id:cid,image:IMAGE,database_oid:id.database_oid,archived_migrations_74_full_tuple_sha256:migrationsHash,actual_archived_migration_count:migrationCount,resource_profile:budget,buckets:a.bucket_count,objects:a.object_count});
   }catch(e){failure=e;}
   finally{
-    cleanupBudget.deadline??=Date.now()+45000;
+    cleanupBudget.deadline??=Date.now()+45000;relayClosing=true;relayInspectionController.abort();
     try{if(relay){
       await closeOwnedRelay(relay,relaySockets,cleanupBudget.deadline);relayClosed=true;
+      await Promise.allSettled([...relayPending]);
       durable(resolve(custody,'OWNED_LOOPBACK_RELAY_CLOSED.json'),{listener_closed:true,owned_sockets_remaining:0,before_container_removal:true});}}
     catch(e){cleanupFailure=e;failure??=e;}
     if(client)try{await client.end();}catch(e){failure??=e;}
@@ -426,6 +578,10 @@ async function host(){
         await run(['docker','rm','-f',cid],{cleanup:true});
         // A missing exact CID is established by successful empty filtered lists.
         insist(!(await run(['docker','ps','-aq','--filter','id='+cid],{cleanup:true})).trim(),'Owned service remains.');serviceAbsent=true;}else serviceAbsent=true;
+      if(privateNetwork){
+        assertPrivateNetworkMembers(JSON.parse(await run(['docker','network','inspect',networkId],{cleanup:true}))[0],privateNetwork);
+        borrowedNetworkRetained=true;
+      }else{
       const networks=(await run(['docker','network','ls','-q','--filter','label=custodial.owner='+namespace],{cleanup:true})).trim().split('\n').filter(Boolean);
       insist(networks.length<=1,'Ambiguous owned network.');
       if(networks.length){const n=JSON.parse(await run(['docker','network','inspect',network],{cleanup:true}))[0];
@@ -434,16 +590,26 @@ async function host(){
         insist(Object.keys(after.Containers||{}).length===0,'Foreign network member prevents cleanup.');insist(n.Labels['custodial.owner']===namespace && Object.keys(after.Containers||{}).length===0,'Foreign network member prevents cleanup.');await run(['docker','network','rm',network],{cleanup:true});}
       insist(!(await run(['docker','network','ls','--no-trunc','-q','--filter','name=^'+network+'$'],{cleanup:true})).trim(),'Owned network name remains.');
       if(networkId)insist(!(await run(['docker','network','ls','--no-trunc','-q','--filter','id='+networkId],{cleanup:true})).trim(),'Owned network ID remains.');networkAbsent=true;
+      }
     }catch(e){cleanupFailure=e;failure??=e;}
     try{archive?.cleanup();}catch(e){failure??=e;}
     // Private source bytes/local keys live only in this owned directory.
     try{rmSync(resolve(custody,'provider-input'),{recursive:true,force:true});rmSync(resolve(custody,'provider.env'),{force:true});}catch(e){failure??=e;}
     durable(resolve(custody,'FINAL.json'),{ok:!failure,provider_verified:!failure,production_provider_verified:false,resource_namespace:namespace,
-      service_born:cid!==null,service_CID_or_name_fresh_absent:serviceAbsent,network_fresh_absent:networkAbsent,relay_closed_or_never_born:relayClosed,cleanup_checked:cleanupFailure===null && relayClosed && serviceAbsent && networkAbsent,scope:'OFFICIAL_LOCAL_FILE_BACKEND_SAME_ORIGINAL',error:failure?'OWNING_REHEARSAL_REFUSED':null});
+      service_born:cid!==null,service_CID_or_name_fresh_absent:serviceAbsent,network_fresh_absent:networkAbsent,...(privateNetwork?{borrowed_network_retained_verified:borrowedNetworkRetained}:{}),relay_closed_or_never_born:relayClosed,cleanup_checked:cleanupFailure===null && relayClosed && serviceAbsent && (privateNetwork?borrowedNetworkRetained:networkAbsent),scope:'OFFICIAL_LOCAL_FILE_BACKEND_SAME_ORIGINAL',error:failure?'OWNING_REHEARSAL_REFUSED':null});
     const evidence=resolve(tmp,'official-local-storage-provider-evidence',namespace);mkdirSync(evidence,{recursive:true,mode:0o700});
+    if(privacy.privateData){
+      for(const name of readdirSync(custody))if(privateEvidenceFile(name))durable(resolve(evidence,name),privateEvidenceReceipt(name,readFileSync(resolve(custody,name))));
+    }else{
     for(const name of readdirSync(custody))if(/^(?:[0-9]{3}\.(?:INTENT\.json|OWNER\.json|ACTUAL_WAIT\.json|stdout|stderr|(?:stdout|stderr)\.REDACTION\.json)|FINAL\.json|PROVIDER_VERIFIED\.json|ARCHIVED_STORAGE_MIGRATIONS_FULL_TUPLES\.json|PROVIDER_LOG_CAPTURE_REFUSED\.json|WORKER_INPUT_REDACTED\.json|STORAGE_CATALOG_AFTER_PROVIDER\.json|OWNED_LOOPBACK_RELAY_(?:BOUND|CLOSED)\.json|PINNED_OFFICIAL_(?:IMAGE|MIRROR)_METADATA\.json|STORAGE_ROLE_CREDENTIAL_NONSECRET_INVARIANCE\.json)$/.test(name))copyFileSync(resolve(custody,name),resolve(evidence,name));
-    const beforeFile=resolve(custody,'provider-audit','STORAGE_CATALOG_BEFORE_PROVIDER.json');if(existsSync(beforeFile))copyFileSync(beforeFile,resolve(evidence,'STORAGE_CATALOG_BEFORE_PROVIDER.json'));
-    const failureFile=resolve(custody,'provider-audit','PROVIDER_STARTUP_FAILURE.json');if(existsSync(failureFile))copyFileSync(failureFile,resolve(evidence,'PROVIDER_STARTUP_FAILURE.json'));
+    }
+    for(const name of ['STORAGE_CATALOG_BEFORE_PROVIDER.json','PROVIDER_STARTUP_FAILURE.json']){
+      const file=resolve(custody,'provider-audit',name);if(existsSync(file)){
+        if(privacy.privateData)durable(resolve(evidence,name),privateEvidenceReceipt(name,readFileSync(file)));
+        else copyFileSync(file,resolve(evidence,name));
+      }
+    }
+    if(privacy.privateData)for(const name of ['STORAGE_CATALOG_AFTER_PROVIDER.json','STORAGE_ROLE_CREDENTIAL_NONSECRET_INVARIANCE.json','ARCHIVED_STORAGE_MIGRATIONS_FULL_TUPLES.json'])rmSync(resolve(custody,name),{force:true});
     rmSync(resolve(custody,'provider-audit'),{recursive:true,force:true});
   }
   if(failure)throw failure;process.stdout.write(JSON.stringify(output)+'\n');

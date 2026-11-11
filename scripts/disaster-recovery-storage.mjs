@@ -9,6 +9,8 @@ import { readVerifiedArchiveSourceBinding, readVerifiedRestoreTableSelection, op
   postgresTextColumnsLineEncoding, createRestoreRowUtf8Guard, readVerifiedStorageUploadInventory,
   assertVerifiedStorageUploadCurrent, readVerifiedStorageUploadBlob, assertVerifiedArchiveIndependentIntentKey } from "./disaster-recovery-archive.mjs";
 
+import { readVerifiedImmutableArchiveOwnerProfile } from "./immutable-private-owner-profile.mjs";
+
 const StorageTableClient = pg.Client;
 const storageTableQuery = StorageTableClient.prototype.query;
 const storageScalarTypeOids = Object.freeze(Object.values(pg.types.builtins)
@@ -99,6 +101,7 @@ export async function compareVerifiedStorageTableData(options) {
   // Both reads above require the original opaque verified archive brand.
   // The existing closed profile resolver additionally binds its authenticated
   // Storage inventory; caller format/empty-table lookalikes cannot select this.
+  const privateOwnerProfile = selection.privateTables.length ? readVerifiedImmutableArchiveOwnerProfile(verifiedArchive) : null;
   const nativeTextSource = selection.privateTables.length===0 && selection.databaseTables.length>0
     && selection.databaseTables.every(table=>table.data_encoding===postgresTextColumnsLineEncoding);
   if(nativeTextSource){
@@ -111,6 +114,8 @@ export async function compareVerifiedStorageTableData(options) {
     try {
     if (readVerifiedArchiveSourceBinding(verifiedArchive) !== sourceBinding
         || readVerifiedRestoreTableSelection(verifiedArchive, { databaseOnly: true }) !== selection) unavailable();
+    if(privateOwnerProfile){const profile=readVerifiedImmutableArchiveOwnerProfile(verifiedArchive);
+      if(profile.id!==privateOwnerProfile.id || profile.actor!==privateOwnerProfile.actor)unavailable();}
     } catch { throw remember(); }
     finally { storageCheckPhase = previous; }
   };
@@ -161,6 +166,7 @@ export async function compareVerifiedStorageTableData(options) {
     if (!value.snapshot) contextUnavailable("SNAPSHOT");
     if (!value.actor || !value.session_actor) contextUnavailable("PRINCIPAL");
     if(nativeTextSource && (value.actor!=="supabase_admin" || value.session_actor!==value.actor))contextUnavailable("NATIVE_PRINCIPAL");
+    if(privateOwnerProfile && (value.actor!==privateOwnerProfile.actor || value.session_actor!==value.actor))contextUnavailable("PRINCIPAL");
     const encoded = stableJson(value);
     if (originalContext !== undefined && encoded !== originalContext) contextUnavailable("SAME_CONTEXT");
     originalContext = encoded;
@@ -1323,12 +1329,15 @@ function freshStorageClosed(value,keys){
 export function freshLocalStorageArchiveBinding(verifiedArchive){
   const sourceBinding=readVerifiedArchiveSourceBinding(verifiedArchive);
   const selection=readVerifiedRestoreTableSelection(verifiedArchive,{databaseOnly:true});
-  const source_profile=selection.privateTables.length ? "immutable-private-fresh-supabase-admin"
+  const ownerProfile=selection.privateTables.length ? readVerifiedImmutableArchiveOwnerProfile(verifiedArchive) : null;
+  const source_profile=ownerProfile ? ownerProfile.id==="immutable-private-legacy-supabase-admin" && ownerProfile.actor==="supabase_admin"
+      ? "immutable-private-fresh-supabase-admin" : ownerProfile.id==="immutable-private-current-postgres" && ownerProfile.actor==="postgres"
+        ? "immutable-private-fresh-postgres" : null
     : selection.databaseTables.length && selection.databaseTables.every(t=>t.data_encoding===postgresTextColumnsLineEncoding)
       ? "native-text-v4-fresh-supabase-admin" : null;
   if(!source_profile)freshStorageRefuse();
   const inventory=readVerifiedStorageUploadInventory(verifiedArchive);
-  return Object.freeze({source_profile,expected_session_user:"supabase_admin",
+  return Object.freeze({source_profile,...(ownerProfile?{owner_profile:ownerProfile}:{}),expected_session_user:ownerProfile?.actor??"supabase_admin",
     expected_database_owner:"postgres",sourceBinding,
     archived_storage_inventory_sha256:freshStorageHash(stableJson({buckets:inventory.bucketRecords,objects:inventory.objectRecords})),
     bucket_count:inventory.bucketRecords.length,object_count:inventory.objectRecords.length});
@@ -1339,8 +1348,18 @@ export function validateFreshLocalStorageProviderData(options){
   try {
   const o=freshStorageData(options);
   freshStorageClosed(o,["providerEnvelope","originalIntentEnvelope","intentVerifyKey","intentVerifyKeyId","serviceKey","jwtSecret","databaseUrl","expected"]);
-  const e=freshStorageClosed(o.expected,["source_profile","expected_session_user","expected_database_owner","archive_digest","source_project_ref","source_identity_sha256","archived_storage_inventory_sha256"]);
-  const profiles={"native-text-v4-fresh-supabase-admin":"supabase_admin","immutable-private-fresh-supabase-admin":"supabase_admin"};
+  const privateProfile=o.expected?.source_profile!=="native-text-v4-fresh-supabase-admin";
+  const e=freshStorageClosed(o.expected,[...(privateProfile?["owner_profile"]:[]),"source_profile","expected_session_user","expected_database_owner","archive_digest","source_project_ref","source_identity_sha256","archived_storage_inventory_sha256"]);
+  const profiles={"native-text-v4-fresh-supabase-admin":"supabase_admin","immutable-private-fresh-supabase-admin":"supabase_admin","immutable-private-fresh-postgres":"postgres"};
+  if(privateProfile){
+    const owner=freshStorageClosed(e.owner_profile,["id","actor"]);
+    if(e.source_profile==="immutable-private-fresh-supabase-admin"){
+      if(owner.id!=="immutable-private-legacy-supabase-admin" || owner.actor!=="supabase_admin")freshStorageRefuse();
+    }else if(e.source_profile==="immutable-private-fresh-postgres"){
+      if(owner.id!=="immutable-private-current-postgres" || owner.actor!=="postgres")freshStorageRefuse();
+    }else freshStorageRefuse();
+    if(owner.actor!==e.expected_session_user)freshStorageRefuse();
+  }
   if(!Object.hasOwn(profiles,e.source_profile) || e.expected_session_user!==profiles[e.source_profile] || e.expected_database_owner!=="postgres")freshStorageRefuse();
   const intent=captureVerifiedOriginalRestoreIntent(o.originalIntentEnvelope,o.intentVerifyKey,o.intentVerifyKeyId);
   freshStorageClosed(intent,["restore_id","authority_generation","retry_of_restore_id","archive_digest","source_project_ref","target_project_ref","source_identity_sha256","target_migration_head","target_release_identity","actor","approved_at","expires_at","resume_after_verification"]);
@@ -1349,8 +1368,9 @@ export function validateFreshLocalStorageProviderData(options){
   const envelope=freshStorageClosed(o.providerEnvelope,["format","algorithm","key_id","binding","signature"]);
   if(envelope.format!=="custodial.immutable-fresh-local-storage-provider.v1" || envelope.algorithm!=="hmac-sha256" || envelope.key_id!==o.intentVerifyKeyId
     || !/^[a-f0-9]{64}$/.test(envelope.signature) || !verifyBinding(envelope.binding,envelope.signature,o.intentVerifyKey))freshStorageRefuse();
-  const b=freshStorageClosed(envelope.binding,["purpose","source_profile","original_intent_sha256","restore_id","authority_generation","archive_digest","source_identity_sha256","source_project_ref","target_project_ref","approved_at","expires_at","host_target","provider"]);
+  const b=freshStorageClosed(envelope.binding,[...(privateProfile?["owner_profile"]:[]),"purpose","source_profile","original_intent_sha256","restore_id","authority_generation","archive_digest","source_identity_sha256","source_project_ref","target_project_ref","approved_at","expires_at","host_target","provider"]);
   if(b.purpose!=="custodial-immutable-fresh-local-storage-provider" || b.source_profile!==e.source_profile || b.original_intent_sha256!==freshStorageHash(stableJson(o.originalIntentEnvelope)))freshStorageRefuse();
+  if(privateProfile && stableJson(freshStorageClosed(b.owner_profile,["id","actor"]))!==stableJson(e.owner_profile))freshStorageRefuse();
   for(const key of ["restore_id","authority_generation","archive_digest","source_identity_sha256","source_project_ref","target_project_ref"])if(b[key]!==intent[key])freshStorageRefuse();
   const approved=Date.parse(b.approved_at),expires=Date.parse(b.expires_at),originalApproved=Date.parse(intent.approved_at),originalExpires=Date.parse(intent.expires_at);
   if(![approved,expires,originalApproved,originalExpires].every(Number.isFinite) || approved<originalApproved || approved>Date.now() || expires>originalExpires
@@ -1384,7 +1404,7 @@ export function captureVerifiedFreshLocalStorageProvider(options){
   assertVerifiedArchiveIndependentIntentKey(verifiedArchive,jwtSecret);
   const archive=freshLocalStorageArchiveBinding(verifiedArchive),s=archive.sourceBinding;
   const captured=validateFreshLocalStorageProviderData({providerEnvelope,originalIntentEnvelope,intentVerifyKey,intentVerifyKeyId,serviceKey,jwtSecret,databaseUrl,
-    expected:{source_profile:archive.source_profile,expected_session_user:archive.expected_session_user,expected_database_owner:archive.expected_database_owner,
+    expected:{source_profile:archive.source_profile,...(archive.owner_profile?{owner_profile:archive.owner_profile}:{}),expected_session_user:archive.expected_session_user,expected_database_owner:archive.expected_database_owner,
       archive_digest:s.archive_digest,source_project_ref:s.project_ref,source_identity_sha256:s.source_identity_sha256,archived_storage_inventory_sha256:archive.archived_storage_inventory_sha256}});
   const token=Object.freeze({});
   freshLocalStorageTokens.set(token,{...captured,verifiedArchive,sourceBinding:s,serviceKey,jwtSecret,databaseUrl,db:null,connection:null,stream:null});
@@ -1399,6 +1419,8 @@ export async function verifyFreshLocalStorageProvider({token,db,state}){
       || !db || isProxy(db) || Object.getPrototypeOf(db)!==StorageTableClient.prototype || Object.hasOwn(db,"query")
       || StorageTableClient.prototype.query!==storageTableQuery || db._connected!==true || db._ending!==false || db._ended!==false || db._queryable!==true
       || db._txStatus!=="I" || db.readyForQuery!==true || db._activeQuery || db._queryQueue.length || globalThis.fetch!==freshLocalStorageFetch)freshStorageRefuse();
+    if(b.owner_profile){const owner=readVerifiedImmutableArchiveOwnerProfile(c.verifiedArchive);
+      if(owner.id!==b.owner_profile.id || owner.actor!==b.owner_profile.actor || owner.actor!==b.host_target.session_user)freshStorageRefuse();}
     const connection=db.connection,stream=connection?.stream;
     if(!connection || isProxy(connection) || !stream || isProxy(stream) || stream.destroyed || stream.remoteAddress!=="127.0.0.1"
       || stream.remotePort!==b.host_target.port || db.connectionParameters?.database!==b.host_target.database_name || db.connectionParameters?.user!==b.host_target.session_user)freshStorageRefuse();

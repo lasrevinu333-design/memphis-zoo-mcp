@@ -6,6 +6,7 @@ import { join, resolve, sep } from "node:path";
 import { createInterface } from "node:readline";
 import { pipeline } from "node:stream/promises";
 import pg from "pg";
+import {privateRestoreFailureDiagnostic} from "./run-official-local-storage-rehearsal.mjs";
 import { verifyRestoredLeadershipGeneration } from "./leadership-restore-generation.mjs";
 import { types } from "node:util";
 import {verifyArchivedSchemaExtension} from "./backup-release-schema-binding.mjs";
@@ -16,7 +17,7 @@ import {stageVerifiedImmutablePrivateData,stageVerifiedImmutableFreshData,commit
   reconcileCommittedImmutableFreshAuthority,commitVerifiedImmutableFreshAuthority} from './immutable-private-data-import.mjs';
 import {readVerifiedImmutableFreshDatabaseCommitOutcome,
   readVerifiedImmutableFreshAuthorityCommitOutcome} from './immutable-private-fresh-restore-recovery.mjs';
-import {prepareVerifiedImmutableBootstrapSource,assertVerifiedImmutableBootstrapSource} from './immutable-private-source-bootstrap.mjs';
+import {prepareVerifiedImmutableBootstrapSource,assertVerifiedImmutableBootstrapSource,readVerifiedImmutableBootstrapOwnerProfile} from './immutable-private-source-bootstrap.mjs';
 import { createClient } from "@supabase/supabase-js";
 import {
   requireSigningKey,
@@ -95,7 +96,7 @@ const verifiedArchive = materializeVerifiedArchive({
 const cleanupVerifiedArchive = verifiedArchive.cleanup;
 let archiveSuccessOutput, archiveLifecycleFailure, archiveCleanupFailure;
 let archiveLifecycleFailed = false, archiveCleanupFailed = false;
-let archiveFreshFailureOutput;
+let archiveFreshFailureOutput,archiveContainsPrivateData=false;
 try {
   archiveSuccessOutput = await (async () => {
 const sourceDir = verifiedArchive.directory;
@@ -183,6 +184,7 @@ if (tableSelection !== null) {
 // substitute for the still-missing owning original-DATA import contract.
 const privateImportBlocker = tableSelection?.privateTables.length
   ? "PRIVATE_ORIGINAL_DATA_IMPORT_UNSUPPORTED" : null;
+archiveContainsPrivateData=privateImportBlocker!==null;
 // Native TEXT uses the ordinary owner only for the existing isolated DB-only
 // target. Full production and mixed legacy/native DATA retain their pre-connect
 // hold. The signed tag chooses representation, never a target or effect grant.
@@ -312,6 +314,11 @@ if (freshStorageProviderInput || freshStorageServiceKey || freshStorageJwtSecret
     if(providerEnvelope.binding.source_profile!=="native-text-v4-fresh-supabase-admin")
       throw new Error("Fresh native whole-archive restore requires its authenticated Supabase administrator profile.");
     freshNativeRestoreTarget=Object.freeze({...providerEnvelope.binding.host_target});
+  }else if(freshPrivateDatabase){
+    const owner=readVerifiedImmutableBootstrapOwnerProfile(immutableBootstrapSource,verifiedArchive);
+    if(stableJson(providerEnvelope.binding.owner_profile)!==stableJson(owner)
+      || providerEnvelope.binding.host_target.session_user!==owner.actor || new URL(databaseUrl).username!==owner.actor)
+      throw new Error("Fresh private Storage owner differs from the authenticated original source.");
   }
 }
 
@@ -464,7 +471,9 @@ let restoreTable = null;
 let prepared = false;
 let mutationFenceHeld = false;
 db.on("error", (error) => {
-  console.error(JSON.stringify({ ok: false, restore_phase: restorePhase, restore_table: restoreTable, connection_error: error instanceof Error ? error.message : String(error) }));
+  if(freshPrivateDatabase)console.error(JSON.stringify({ok:false,restore_phase:restorePhase,restore_table:null,
+    ...privateRestoreFailureDiagnostic(error,'database_connection')}));
+  else console.error(JSON.stringify({ ok: false, restore_phase: restorePhase, restore_table: restoreTable, connection_error: error instanceof Error ? error.message : String(error) }));
 });
 
 async function recordEvent(phase, outcome, evidence = {}) {
@@ -1141,6 +1150,8 @@ try {
     let transactionAttempted = false, commitInvoked = false;
     try {
       requireOriginalArchiveSource();
+      const owner=readVerifiedImmutableBootstrapOwnerProfile(immutableBootstrapSource,verifiedArchive);
+      if(new URL(databaseUrl).username!==owner.actor)throw new Error("Fresh private actor differs from the authenticated original owner.");
       restorePhase = "fresh_private_database_transaction";
       transactionAttempted = true;
       await db.query("begin");
@@ -1815,11 +1826,15 @@ try {
     if(state&&Object.hasOwn(state,"value")&&typeof state.value==='string'&&/^[0-9A-Z]{5}$/.test(state.value))
       failureOutput.sql_state=state.value;
   }
+  if(freshPrivateDatabase && Object.hasOwn(failureOutput,'sql_state')){
+    const sqlState=privateRestoreFailureDiagnostic({code:failureOutput.sql_state},'archive_lifecycle').sql_state;
+    if(sqlState===undefined)delete failureOutput.sql_state;else failureOutput.sql_state=sqlState;
+  }
   if (freshPrivateDatabase) freshFailureOutput = failureOutput;
   else console.error(JSON.stringify(failureOutput));
   if (prepared && !outcomeUnknown) {
-    await setControl("PAUSED_FAILURE", { paused: true, failureReason: error instanceof Error ? error.message.slice(0, 2000) : String(error).slice(0, 2000) }).catch(() => {});
-    await recordEvent(restorePhase, "FAILED", { error: error instanceof Error ? error.message : String(error), ...uncertainty }).catch(() => {});
+    await setControl("PAUSED_FAILURE", { paused: true, failureReason: freshPrivateDatabase ? "PRIVATE_RESTORE_FAILURE" : error instanceof Error ? error.message.slice(0, 2000) : String(error).slice(0, 2000) }).catch(() => {});
+    await recordEvent(restorePhase, "FAILED", { error: freshPrivateDatabase ? "PRIVATE_RESTORE_FAILURE" : error instanceof Error ? error.message : String(error), ...uncertainty }).catch(() => {});
   }
   throw error;
 }
@@ -1957,13 +1972,24 @@ return restoreSuccessOutput;
   try { await Reflect.apply(cleanupVerifiedArchive, verifiedArchive, []); }
   catch (error) { archiveCleanupFailed = true; archiveCleanupFailure = error; }
 }
-if (archiveLifecycleFailed) {
-  if (archiveCleanupFailed) {
-    throw new AggregateError([archiveLifecycleFailure, archiveCleanupFailure],
-      "Production restore failed; verified archive cleanup also failed.", { cause: archiveLifecycleFailure });
+if(archiveContainsPrivateData && (archiveLifecycleFailed || archiveCleanupFailed)){
+  // All owned cleanup already ran. Preserve nonzero refusal without allowing
+  // Node's uncaught-error formatter to print driver SQL, rows, cause or stack.
+  if(archiveLifecycleFailed)console.error(JSON.stringify({ok:false,...privateRestoreFailureDiagnostic(archiveLifecycleFailure,'archive_lifecycle')}));
+  if(archiveCleanupFailed){
+    if(archiveFreshFailureOutput)console.error(JSON.stringify(archiveFreshFailureOutput));
+    console.error(JSON.stringify({ok:false,...privateRestoreFailureDiagnostic(archiveCleanupFailure,'archive_cleanup')}));
   }
-  throw archiveLifecycleFailure;
+  process.exitCode=1;
+}else{
+  if (archiveLifecycleFailed) {
+    if (archiveCleanupFailed) {
+      throw new AggregateError([archiveLifecycleFailure, archiveCleanupFailure],
+        "Production restore failed; verified archive cleanup also failed.", { cause: archiveLifecycleFailure });
+    }
+    throw archiveLifecycleFailure;
+  }
+  if (archiveCleanupFailed && archiveFreshFailureOutput) console.error(JSON.stringify(archiveFreshFailureOutput));
+  if (archiveCleanupFailed) throw archiveCleanupFailure;
+  console.log(archiveSuccessOutput);
 }
-if (archiveCleanupFailed && archiveFreshFailureOutput) console.error(JSON.stringify(archiveFreshFailureOutput));
-if (archiveCleanupFailed) throw archiveCleanupFailure;
-console.log(archiveSuccessOutput);

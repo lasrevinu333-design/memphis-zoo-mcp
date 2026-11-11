@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 import {types} from 'node:util';
 import pg from 'pg';
+import {readVerifiedImmutableArchiveOwnerProfile} from './immutable-private-owner-profile.mjs';
 import {readVerifiedImmutableFreshRestoreIntent} from './immutable-private-fresh-restore-intent.mjs';
 import {readVerifiedImmutableFreshCommitPreparation,readVerifiedImmutableFreshCommitRecord} from './immutable-private-fresh-restore-commit-context.mjs';
 import {buildVerifiedImmutableFreshDatabaseEvidence} from './immutable-private-fresh-restore-evidence.mjs';
@@ -48,7 +49,9 @@ const recordSql=`with changed_control as (
   and m.reconciliation_manifest_sha256 is null
   and (select count(*) from custodial_dr.restore_control)=1 and (select count(*) from custodial_dr.restore_manifests)=1
   and not exists(select 1 from custodial_dr.restore_events)
-  and current_user=session_user and current_user='supabase_admin'
+  and current_user=session_user and current_user=$13::text
+  and current_user=(select pg_catalog.pg_get_userbyid(relowner) from pg_catalog.pg_class
+    where oid=pg_catalog.to_regclass('custodial_dr.restore_control') and relkind='r')
   and x.database_oid=$9::oid and x.database_oid=(select oid from pg_catalog.pg_database where datname=current_database())
   and x.backend_pid=$10::integer and x.backend_pid=pg_backend_pid() and x.transaction_id=$11::bigint and x.transaction_id=txid_current()
   and x.restore_id=c.restore_id and x.authority_generation=c.authority_generation and x.archive_digest=c.archive_digest
@@ -80,8 +83,10 @@ export async function recordVerifiedImmutableFreshDatabaseEvidence(options){
  native();assert.ok(!attempted.has(db),'Original DATABASE record attempt already consumed');attempted.add(db);
  const opts=Object.freeze({db,verifiedArchive,freshIntent}),original=readVerifiedImmutableFreshRestoreIntent(freshIntent,verifiedArchive);
  const {intent,sourceBinding}=closed(original,['intent','envelope','sourceBinding']);
+ const ownerProfile=readVerifiedImmutableArchiveOwnerProfile(verifiedArchive);
  const current=()=>{
-  native();const live=readVerifiedImmutableFreshRestoreIntent(freshIntent,verifiedArchive);
+  native();assert.deepEqual(readVerifiedImmutableArchiveOwnerProfile(verifiedArchive),ownerProfile);
+  const live=readVerifiedImmutableFreshRestoreIntent(freshIntent,verifiedArchive);
   assert.ok(live.intent===original.intent&&live.envelope===original.envelope&&live.sourceBinding===sourceBinding,'Original DATABASE intent/source changed');
  };
  const guarded=async(operation)=>{
@@ -104,7 +109,7 @@ export async function recordVerifiedImmutableFreshDatabaseEvidence(options){
  const releaseIdentity={archive:sourceBinding.source_identity.release,target:intent.target_release_identity,retry_of_restore_id:null};
  const recorded=reply(await guarded(()=>Reflect.apply(nativeQuery,db,[recordSql,[finished.restore_id,finished.authority_generation,finished.archive_digest,
   sourceBinding.project_ref,intent.target_project_ref,intent.actor,databaseJson,eventJson,
-  finished.database_oid,finished.backend_pid,finished.transaction_id,JSON.stringify(releaseIdentity)]])));
+  finished.database_oid,finished.backend_pid,finished.transaction_id,JSON.stringify(releaseIdentity),ownerProfile.actor]])));
  assert.deepEqual(recorded,{control_count:1,manifest_count:1,event_count:1,database_oid:finished.database_oid,
   backend_pid:finished.backend_pid,transaction_id:finished.transaction_id,restore_id:finished.restore_id,
   authority_generation:finished.authority_generation,archive_digest:finished.archive_digest},'Incomplete original DATABASE metadata record');

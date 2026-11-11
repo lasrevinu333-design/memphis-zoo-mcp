@@ -5,7 +5,8 @@ import assert from 'node:assert/strict';
 import {types,isDeepStrictEqual} from 'node:util';
 import {createHash} from 'node:crypto';
 import pg from 'pg';
-import {prepareVerifiedImmutableBootstrapSource,assertVerifiedImmutableBootstrapSource} from './immutable-private-source-bootstrap.mjs';
+import {prepareVerifiedImmutableBootstrapSource,assertVerifiedImmutableBootstrapSource,
+ readVerifiedImmutableBootstrapOwnerProfile,readVerifiedImmutableBootstrapStatement} from './immutable-private-source-bootstrap.mjs';
 import {reconcileVerifiedImmutableBootstrapAcls} from './immutable-private-source-acl.mjs';
 import {postgresJsonTextLineEncoding,postgresTextColumnsLineEncoding} from './disaster-recovery-archive.mjs';
 import {restoreCronJobs,verifyRestoredCronJobs,normalizedCronJobs} from './disaster-recovery-cron.mjs';
@@ -37,39 +38,19 @@ const contextSql=`select current_user actor,session_user session_actor,current_d
    and l.classid=((hashtextextended(f.name,0)>>32)&4294967295)::oid
    and l.objid=(hashtextextended(f.name,0)&4294967295)::oid and l.objsubid=1)) held_fences`;
 
-function unwrapSource(statement){
- if(statement.sourcePath==='proposals/immutable-original-employee-push-authority-restore.sql'){
-  // This reviewed DO-only Source must stay inside the original transaction.
-  assert.equal(statement.sourceSha256,'2b8c5dad21a56d6132688a998ab3ae3df78584686c8b2f4fdd7baf7bbafd527d');
-  assert.equal(sha(statement.sql),statement.sourceSha256);
-  return statement.sql;
- }
- if(statement.sourcePath==='proposals/immutable-original-manager-push-restore.sql'){
-  // This one newly admitted wrapper is fixed program Source, never caller SQL.
-  assert.equal(statement.sourceSha256,'2a9dd3a1050d0f7e7714abdd8feeb4259eea54287c68ffacd787b9072a9f7f9d');
-  assert.equal(sha(statement.sql),statement.sourceSha256);
- }
- const outer=['proposals/immutable-private-owner-context.sql','proposals/immutable-original-employee-restore.sql',
-  'proposals/immutable-original-device-boundary-restore.sql','proposals/immutable-original-authority-reconciliation.sql',
-  'proposals/immutable-original-manager-push-restore.sql'].includes(statement.sourcePath);
- if(!outer)return statement.sql;
- const begin=statement.sourcePath==='proposals/immutable-private-owner-context.sql'?'\nBEGIN;':'\nBEGIN;\n';
- assert.equal(statement.sql.split(begin).length,2);assert.match(statement.sql,/\nCOMMIT;\s*$/);
- // Only the fixed Source's declared outer wrapper is omitted. Its owner,
- // predecessor, RLS/ACL, ALWAYS and currentness checks are not rewritten.
- return statement.sql.replace(begin,'\n').replace(/\nCOMMIT;\s*$/,'\n');
-}
 
 export async function initializeVerifiedImmutableFreshSource({db,verifiedArchive}={}){
  if(!native(db)||attempted.has(db))throw new Error('Original fresh Source initializer is unavailable.');
  attempted.add(db); // No second attempt on a connection with an uncertain write.
  const source=await prepareVerifiedImmutableBootstrapSource(verifiedArchive);
+ const ownerProfile=readVerifiedImmutableBootstrapOwnerProfile(source,verifiedArchive);
  let originalContext;
- const checkSource=()=>{assert.ok(native(db));assertVerifiedImmutableBootstrapSource(source,verifiedArchive);};
+ const checkSource=()=>{assert.ok(native(db));assertVerifiedImmutableBootstrapSource(source,verifiedArchive);
+  assert.deepEqual(readVerifiedImmutableBootstrapOwnerProfile(source,verifiedArchive),ownerProfile);};
  const readContext=async()=>{
   checkSource();const result=await Reflect.apply(nativeQuery,db,[contextSql]);checkSource();
   assert.equal(result.rowCount,1);const row=result.rows[0];
-  assert.equal(row.actor,'supabase_admin');assert.equal(row.session_actor,row.actor);assert.equal(row.readonly,'off');
+  assert.equal(row.actor,ownerProfile.actor);assert.equal(row.session_actor,row.actor);assert.equal(row.readonly,'off');
   assert.equal(row.replication,'origin');assert.equal(row.row_security,'off');assert.equal(row.search_path,'pg_catalog');
   assert.equal(row.database_owner,'postgres');assert.equal(row.dr_owner,'postgres');
   assert.equal(row.original_owned_relations,5);assert.equal(row.active_leases,0);assert.equal(row.held_fences,2);
@@ -174,10 +155,10 @@ export async function initializeVerifiedImmutableFreshSource({db,verifiedArchive
  };
  const originalRecipes=await readRecipeCatalog();
  for(const [index,recipe] of source.recipes.entries()){
-  const original=originalRecipes[index];assert.equal(original.owner,'supabase_admin');
+  const original=originalRecipes[index];assert.equal(original.owner,ownerProfile.actor);
   assert.equal(original.definition,recipe.before);assert.equal(sha(original.prosrc),recipe.beforeBodyHash);
  }
- for(const statement of source.statements)await query(unwrapSource(statement));
+ for(const statement of source.statements)await query(readVerifiedImmutableBootstrapStatement(source,verifiedArchive,statement));
  // The base proposal installs its original INSERT-only guard. Apply ONLY
  // the pinned complete successor recipe after the private six-effect scope
  // exists and before the first original import seals target_shape. Existing
@@ -186,7 +167,7 @@ export async function initializeVerifiedImmutableFreshSource({db,verifiedArchive
  assert.ok(applicationGuard);await query(applicationGuard.after);
  const installedRecipes=await readRecipeCatalog();
  for(const [index,recipe] of source.recipes.entries()){
-  const installed=installedRecipes[index];assert.equal(installed.owner,'supabase_admin');
+  const installed=installedRecipes[index];assert.equal(installed.owner,ownerProfile.actor);
   assert.equal(installed.definition,recipe.after);assert.equal(sha(installed.prosrc),recipe.afterBodyHash);
  }
  await query('select custodial_dr.immutable_import_owner_fence()');

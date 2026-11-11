@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 import {types} from 'node:util';
 import pg from 'pg';
+import {readVerifiedImmutableArchiveOwnerProfile} from './immutable-private-owner-profile.mjs';
 import {readVerifiedPrivateImportSource} from './disaster-recovery-archive.mjs';
 import {readVerifiedImmutableFreshRestoreIntent} from './immutable-private-fresh-restore-intent.mjs';
 import {buildVerifiedImmutableFreshDatabaseEvidence} from './immutable-private-fresh-restore-evidence.mjs';
@@ -29,6 +30,7 @@ const fenceSql=`with owner_guard as materialized(select custodial_dr.immutable_i
  pg_catalog.pg_backend_pid() backend_pid,pg_catalog.txid_current()::text transaction_id from owner_guard`;
 const contextSql=`select
  current_user actor,session_user session_actor,
+ (select pg_catalog.pg_get_userbyid(relowner) from pg_catalog.pg_class where oid=pg_catalog.to_regclass('custodial_dr.restore_control') and relkind='r') control_owner,
  pg_catalog.current_setting('transaction_read_only') read_only,
  pg_catalog.current_setting('row_security') row_security,
  pg_catalog.current_setting('session_replication_role') replication,
@@ -120,9 +122,10 @@ async function readContext(options,recorded,postDatabase=false,authorityPreparat
     native();
     const prior=postDatabase?priorFinished(priorData):null;
     const captured=readVerifiedImmutableFreshRestoreIntent(freshIntent,verifiedArchive);
+    const ownerProfile=readVerifiedImmutableArchiveOwnerProfile(verifiedArchive);
     const original=readVerifiedPrivateImportSource(verifiedArchive),binding=original.sourceBinding,intent=captured.intent;
     assert.equal(captured.sourceBinding,binding);
-    const current=()=>{native();const live=readVerifiedImmutableFreshRestoreIntent(freshIntent,verifiedArchive);
+    const current=()=>{native();assert.deepEqual(readVerifiedImmutableArchiveOwnerProfile(verifiedArchive),ownerProfile);const live=readVerifiedImmutableFreshRestoreIntent(freshIntent,verifiedArchive);
       assert.equal(live,captured);assert.equal(readVerifiedPrivateImportSource(verifiedArchive).sourceBinding,binding);};
     const raw=async(sql,args)=>{current();const reply=await Reflect.apply(nativeQuery,db,args===undefined?[sql]:[sql,args]);current();return reply;};
     if(postDatabase)checkPhase='NATIVE_FENCE';
@@ -144,9 +147,9 @@ async function readContext(options,recorded,postDatabase=false,authorityPreparat
       for(const key of ['inserted','updated','deleted'])assert.equal(epoch[key],'0');
     }
     if(postDatabase)checkPhase='ORIGINAL_CONTEXT';
-    const row=closed(one(await raw(postDatabase?postDatabaseContextSql:contextSql,postDatabase?[prior.transaction_id]:undefined)),['actor','session_actor','read_only','row_security','replication','search_path',
+    const row=closed(one(await raw(postDatabase?postDatabaseContextSql:contextSql,postDatabase?[prior.transaction_id]:undefined)),['actor','session_actor','control_owner','read_only','row_security','replication','search_path',
       'context_count','import_context','control_count','control','manifest_count','manifest','events',...(postDatabase?['isolation','first_schema']:[])]);
-    assert.equal(row.actor,'supabase_admin');assert.equal(row.session_actor,row.actor);assert.equal(row.read_only,postDatabase&&!authorityPreparation?'on':'off');
+    assert.equal(row.actor,ownerProfile.actor);assert.equal(row.session_actor,row.actor);assert.equal(row.control_owner,row.actor);assert.equal(row.read_only,postDatabase&&!authorityPreparation?'on':'off');
     if(postDatabase)assert.equal(row.isolation,firstRead.isolation);
     assert.equal(row.row_security,'off');assert.equal(row.replication,'origin');assert.equal(row.search_path,postDatabase?'pg_catalog, pg_temp':'pg_catalog');
     if(postDatabase)assert.equal(row.first_schema,'pg_catalog');

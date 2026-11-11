@@ -1035,8 +1035,11 @@ if(process.argv.includes('--immutable-fresh-commit-context-source-only')){
   const body=text.slice(start).replaceAll('export async function','async function');
   let groups=0,getters=0;
   for(const mode of ['preparation','recorded','phase','shape','expired','foreign-original','foreign-control','partial-marker',
-    'history','source-withdraw','final-xid','original-xid','getter-row']){
-    const recorded=mode==='recorded'||mode==='partial-marker',calls=[],archive={},token={};let sourceWithdrawn=false;
+    'history','source-withdraw','final-xid','original-xid','getter-row',
+    'postgres','wrong-profile-actor','wrong-session','wrong-control-owner','owner-source-withdraw']){
+    const recorded=mode==='recorded'||mode==='partial-marker',calls=[],archive={},token={};let sourceWithdrawn=false,ownerWithdrawn=false;
+    const ownerProfile=Object.freeze({id:mode==='postgres'?'immutable-private-current-postgres':'immutable-private-legacy-supabase-admin',
+      actor:mode==='postgres'?'postgres':'supabase_admin'});
     const release={release_id:'UNIT_ONLY',backend_commit:'a'.repeat(40),frontend_commit:'b'.repeat(40),
       migration_head:'20261016143226',migration_manifest_sha256:'c'.repeat(64)};
     const binding={archive_digest:'d'.repeat(64),source_identity_sha256:'e'.repeat(64),project_ref:'abcdefghijklmnopqrst',source_identity:{release}};
@@ -1056,12 +1059,15 @@ if(process.argv.includes('--immutable-fresh-commit-context-source-only')){
         source_identity_sha256:binding.source_identity_sha256,source_project_ref:binding.project_ref,target_project_ref:intent.target_project_ref,
         actor:intent.actor,expires_at:intent.expires_at,target_migration_head:intent.target_migration_head,target_release_identity:release,
         catalog:original.selection.databaseTables,private_data_members:original.privateDataMembers}};
-    const row={actor:'supabase_admin',session_actor:'supabase_admin',read_only:'off',row_security:'off',replication:'origin',search_path:'pg_catalog',
+    const row={actor:ownerProfile.actor,session_actor:ownerProfile.actor,control_owner:ownerProfile.actor,read_only:'off',row_security:'off',replication:'origin',search_path:'pg_catalog',
       context_count:1,import_context:ctx,control_count:1,control:{...control,state:recorded?'DATABASE_RESTORED':'PREPARING'},manifest_count:1,
       manifest:{restore_id:intent.restore_id,authority_generation:'1',archive_digest:binding.archive_digest,database_verified:recorded,
         storage_verified:false,authority_invalidated:false,post_restore_verified:false,database_evidence:recorded?evidence.database:{},
         storage_evidence:{},authority_evidence:{},final_manifest_sha256:null,reconciliation_manifest_sha256:null},
       events:recorded?[{restore_id:intent.restore_id,authority_generation:'1',phase:'DATABASE',outcome:'PASSED',actor:intent.actor,evidence_json:evidence.event}]:[]};
+    if(mode==='wrong-profile-actor')row.actor=row.session_actor=row.control_owner='postgres';
+    if(mode==='wrong-session')row.session_actor='different_owner';
+    if(mode==='wrong-control-owner')row.control_owner='different_owner';
     if(mode==='phase')ctx.phase='STAGING';if(mode==='shape')ctx.shape_matches=false;if(mode==='expired')ctx.unexpired=false;
     if(mode==='foreign-original')ctx.restore_id='22222222-2222-2222-2222-222222222222';
     if(mode==='foreign-control')row.control.mutations_paused=false;
@@ -1071,13 +1077,13 @@ if(process.argv.includes('--immutable-fresh-commit-context-source-only')){
       if(sql.startsWith('with owner_guard'))return{rowCount:1,rows:[{database_oid:'5',backend_pid:411,
         transaction_id:mode==='original-xid'?'0':mode==='final-xid'&&calls.length===3?'1286':'1285'}]};
       assert.ok(sql.includes('context_count')&&sql.includes('immutable_import_target_shape()'));
-      if(mode==='source-withdraw')sourceWithdrawn=true;return{rowCount:1,rows:[row]};}}
+      if(mode==='source-withdraw')sourceWithdrawn=true;if(mode==='owner-source-withdraw')ownerWithdrawn=true;return{rowCount:1,rows:[row]};}}
     const db=new RecordingClient(),make=new Function('assert','types','pg','readVerifiedPrivateImportSource',
-      'readVerifiedImmutableFreshRestoreIntent','buildVerifiedImmutableFreshDatabaseEvidence',body+
+      'readVerifiedImmutableFreshRestoreIntent','buildVerifiedImmutableFreshDatabaseEvidence','readVerifiedImmutableArchiveOwnerProfile',body+
       '\nreturn{pre:readVerifiedImmutableFreshCommitPreparation,record:readVerifiedImmutableFreshCommitRecord};');
-    const api=make(assert,types,{Client:RecordingClient},()=>original,()=>{if(sourceWithdrawn)throw Error('WITHDRAWN');return captured;},()=>evidence);
+    const api=make(assert,types,{Client:RecordingClient},()=>original,()=>{if(sourceWithdrawn)throw Error('WITHDRAWN');return captured;},()=>evidence,()=>{if(ownerWithdrawn)throw Error('WITHDRAWN');return ownerProfile;});
     const read=()=>recorded?api.record({db,verifiedArchive:archive,freshIntent:token}):api.pre({db,verifiedArchive:archive,freshIntent:token});
-    if(['preparation','recorded'].includes(mode)){
+    if(['preparation','recorded','postgres'].includes(mode)){
       const result=await read();assert.deepEqual(result,{...witness,private_rows:'2',transaction_authority:false,admission_resumed:false});
       assert.ok(Object.isFrozen(result));assert.deepEqual(calls,['fence','context','fence']);
     }else await assert.rejects(read,error=>error.code==='IMMUTABLE_FRESH_COMMIT_CONTEXT_UNAVAILABLE'&&error.retry_safe===false);
