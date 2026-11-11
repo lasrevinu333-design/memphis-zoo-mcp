@@ -133,9 +133,19 @@
         "object_id": "3d693669b23c340c57a3457bdc8b6fefe1806cc5"
       },
       {
+        "path": ".github/workflows/backup-source-contracts.yml",
+        "mode": "100644",
+        "object_id": "78ba90096adadb1ad85152c541a6e654a252de52"
+      },
+      {
         "path": ".github/workflows/build52-production-migration-apply.yml",
         "mode": "100644",
         "object_id": "ed9e6bccc234af1196e01d1fb5a7ad1e5110a538"
+      },
+      {
+        "path": ".github/workflows/custodial-backup-identity-check.yml",
+        "mode": "100644",
+        "object_id": "4576fa3798e50e2f1bd3296ef372fc5c9ea56eae"
       },
       {
         "path": ".github/workflows/custodial-populated-schema-preflight.yml",
@@ -145,7 +155,7 @@
       {
         "path": ".github/workflows/custodial-production-repair.yml",
         "mode": "100644",
-        "object_id": "59e5fb738a7b884a7d2f2ee1b41d80c379ef19a9"
+        "object_id": "ff7f76d553293550b0641310e0c028d821c69317"
       },
       {
         "path": ".github/workflows/device-credential-foundation.yml",
@@ -160,7 +170,7 @@
       {
         "path": ".github/workflows/foundation-security-gate.yml",
         "mode": "100644",
-        "object_id": "a44495d52a8885d57c2a3a3cac8788ad971c4617"
+        "object_id": "84abe28f9d696a209fa97c0f480e8eac34afa3a5"
       },
       {
         "path": ".github/workflows/integrated-release-attestation.yml",
@@ -200,7 +210,7 @@
       {
         "path": ".github/workflows/production-backup-migration-rehearsal.yml",
         "mode": "100644",
-        "object_id": "87baf6e5131a538e35deeb3b54f5bbd4b0fd13ec"
+        "object_id": "eaa37f0f26e9397051ac965e6e3eb05e15bbcd91"
       },
       {
         "path": ".github/workflows/production-database-credential-bridge.yml",
@@ -210,7 +220,7 @@
       {
         "path": ".github/workflows/production-disaster-recovery-backup.yml",
         "mode": "100644",
-        "object_id": "49f0ab5be05e7c84dd805512519e7f87d6ac8e2a"
+        "object_id": "bfcd2ebdaba0ec6856fa6b7f43de90102278c03e"
       },
       {
         "path": ".github/workflows/production-release-deployment-record.yml",
@@ -445,7 +455,7 @@
       {
         "path": "package.json",
         "mode": "100644",
-        "object_id": "04dce09a94a0abb085ccb1c9914a2d9a5e9559b1"
+        "object_id": "3eeec7c9f326700fc3da0a0535ff1e0af29346d9"
       },
       {
         "path": "proposals/immutable-original-authority-reconciliation.sql",
@@ -508,6 +518,11 @@
         "object_id": "0a03cf201608deedfd770224d182ac6136d7ef1f"
       },
       {
+        "path": "proposals/immutable-private-current-postgres-program.json",
+        "mode": "100644",
+        "object_id": "e1c8e3d88dd2fba7fa16cc9326914edc91b025e2"
+      },
+      {
         "path": "proposals/immutable-private-owner-context.sql",
         "mode": "100644",
         "object_id": "99a7cbc493505d1a7caef32d2e91db275a91401c"
@@ -556,6 +571,11 @@
         "path": "public/moxie-assets/settings-woodland-cog.png",
         "mode": "100644",
         "object_id": "3e06fc6aaea8f2af937b1436560fc5805dcf2652"
+      },
+      {
+        "path": "release/backup-installed-source-provenance.json",
+        "mode": "100644",
+        "object_id": "df31aedb929ea36270246334cc2a22e008a94b06"
       },
       {
         "path": "release/current291-staged-source-binding.json",
@@ -723,6 +743,481 @@
         "object_id": "c0d92434784114c52b3759f6e2415114063866be"
       },
       {
+        "path": "release/installed-source/20260922050000_lunch_delivery_failure_manager_alert.sql",
+        "mode": "100644",
+        "object_id": "bcf98139043f7aedf15ab07751b0961b23849bf0"
+      },
+      {
+        "path": "release/installed-source/20260922070000_completed_cleaning_reminder_cycles.sql",
+        "mode": "100644",
+        "object_id": "c74df2f5b20568ff8316b73e5521e24cb527328b"
+      },
+      {
+        "path": "release/installed-source/20260922090000_verified_visit_reminder_state.sql",
+        "mode": "100644",
+        "object_id": "31919c5ae172f70b8cc0848f12e4d86b71038ab0"
+      },
+      {
+        "path": "release/installed-source/20260922163000_static_weekly_lunch_publication.sql",
+        "mode": "100644",
+        "object_id": "c9977d76ebc4f613a30bf7a946b063bba2b7d394"
+      },
+      {
+        "path": "release/installed-source/20260922200000_lunch_notification_producer.sql",
+        "mode": "100644",
+        "object_id": "e20d1f9cc1dfe6689136957e11f758d5ec8646b6"
+      },
+      {
+        "path": "release/installed-source/20260922235500_static_weekly_existing_employee_restore.sql",
+        "mode": "100644",
+        "object_id": "d30b295a6742a4c4a4a24fe27f513e0ada4c21a6"
+      },
+      {
+        "path": "release/installed-source/20260923065000_static_weekly_vacate_roster_slot.sql",
+        "mode": "100644",
+        "object_id": "20859267241ac0be490dbef42b1495e8ffb0426c"
+      },
+      {
+        "path": "release/installed-source/20260923121151_visitor_attendance_reader.sql",
+        "mode": "100644",
+        "object_id": "055996c664427cc0d44871e173a7712e543c56a8"
+      },
+      {
+        "path": "release/installed-source/20260924022250_release_selection_and_occurrence_guards.sql",
+        "mode": "100644",
+        "object_id": "d8fdb118a56b8616123bd417a73df099a98189fe"
+      },
+      {
+        "path": "release/installed-source/20260924023930_notification_receipt_and_lunch_integrity.sql",
+        "mode": "100644",
+        "object_id": "de691d60827b7e1cacfbc5b8f340d5b53e67cfe1"
+      },
+      {
+        "path": "release/installed-source/20260924032226_bind_release_selection_guard_recovery.sql",
+        "mode": "100644",
+        "object_id": "7342adc0a5dbfbc953f479455a0c65c35e4f85e2"
+      },
+      {
+        "path": "release/installed-source/20260924042758_static_weekly_canonical_shift_end_derivation.sql",
+        "mode": "100644",
+        "object_id": "d96965aaf97323e41833c3a8b20abd1a0a4841b1"
+      },
+      {
+        "path": "release/installed-source/20260924044035_static_weekly_atomic_roster_completion.sql",
+        "mode": "100644",
+        "object_id": "495d10e0f7884b251d27df6537439a823c8b7ec0"
+      },
+      {
+        "path": "release/installed-source/20260924053507_assigned_phone_activation_transport.sql",
+        "mode": "100644",
+        "object_id": "60bcf4eec46f7d4273b5a7f9c486d62457f5b4ec"
+      },
+      {
+        "path": "release/installed-source/20260924080839_custodial_legacy_installation_observation.sql",
+        "mode": "100644",
+        "object_id": "989168d8b116866b3f7be3ac3140a02e542e29d1"
+      },
+      {
+        "path": "release/installed-source/20260924161004_owner_oc24_cleaning_and_inspection_boundaries.sql",
+        "mode": "100644",
+        "object_id": "bce8c5bec5ab3820032fde17f87b6c3782dc8759"
+      },
+      {
+        "path": "release/installed-source/20260924172500_oc24_manual_contractor_lunch.sql",
+        "mode": "100644",
+        "object_id": "f043b4deed4a51df7ab5bf7a8e2f603e27f8b60d"
+      },
+      {
+        "path": "release/installed-source/20260924201258_native_provider_durable_authority.sql",
+        "mode": "100644",
+        "object_id": "23b52b89869e38d3365fc0a8e21613d99ec35605"
+      },
+      {
+        "path": "release/installed-source/20260925015905_oc24_completion_selection_normalization.sql",
+        "mode": "100644",
+        "object_id": "504da1e86122ee69dd4b8be43c489a32689e6eed"
+      },
+      {
+        "path": "release/installed-source/20260925020244_oc24_bound_legacy_completion_replay.sql",
+        "mode": "100644",
+        "object_id": "8024a4fd3dfe8439fdefd03998be253f50eac6a6"
+      },
+      {
+        "path": "release/installed-source/20260925050718_static_weekly_staffing_command_ledger.sql",
+        "mode": "100644",
+        "object_id": "927e2987d8be7e38684af7cc26a8272573492c2b"
+      },
+      {
+        "path": "release/installed-source/20260925054802_static_weekly_staffing_atomic_acceptance.sql",
+        "mode": "100644",
+        "object_id": "ae2c635ae17680ef599df97f238079706a2fd30f"
+      },
+      {
+        "path": "release/installed-source/20260925190000_gps_exact_location_authority_boundary.sql",
+        "mode": "100644",
+        "object_id": "aaf698aaae8ea6236c75b4737ba4637da5509f9e"
+      },
+      {
+        "path": "release/installed-source/20260926143542_static_weekly_protected_separation.sql",
+        "mode": "100644",
+        "object_id": "7af2fed60fbcb467421c039bdd7ab6b80319a6a3"
+      },
+      {
+        "path": "release/installed-source/20260926180000_retire_direct_employee_status_rpc.sql",
+        "mode": "100644",
+        "object_id": "4a243e7b1b4e5a0d605d576469831caf8761d46e"
+      },
+      {
+        "path": "release/installed-source/20260926192656_static_weekly_recurring_confirmation_ledger.sql",
+        "mode": "100644",
+        "object_id": "edff078286b99abfca9858b91578457e254e264a"
+      },
+      {
+        "path": "release/installed-source/20260926193000_retire_direct_employee_mutation_helpers.sql",
+        "mode": "100644",
+        "object_id": "24bdb65a01c822e47751007cf3f892fe28328202"
+      },
+      {
+        "path": "release/installed-source/20260926193651_static_weekly_recurring_source_admission.sql",
+        "mode": "100644",
+        "object_id": "7041fd4daef7aae7669baa4c0204b8c1cc34e34d"
+      },
+      {
+        "path": "release/installed-source/20260926194644_static_weekly_recurring_generation_fence.sql",
+        "mode": "100644",
+        "object_id": "67dd97b7bae2da9a996ce6b1589fa7eedf88f5eb"
+      },
+      {
+        "path": "release/installed-source/20260926200458_static_weekly_recurring_future_same_monday.sql",
+        "mode": "100644",
+        "object_id": "dbb542bcbef510d871c9d9c124d4718fb94747b9"
+      },
+      {
+        "path": "release/installed-source/20260926201644_static_weekly_recurring_dependency_snapshot.sql",
+        "mode": "100644",
+        "object_id": "7b1828054e3154f609f684bab76ab6be88738f8d"
+      },
+      {
+        "path": "release/installed-source/20260926202657_static_weekly_recurring_publication_binding.sql",
+        "mode": "100644",
+        "object_id": "e3cb0188616ab43357f99f9327f2364d18a75480"
+      },
+      {
+        "path": "release/installed-source/20260926204235_static_weekly_recurring_terminal_targets.sql",
+        "mode": "100644",
+        "object_id": "2fef0b81a458d9573b575c4179ca330b378d5f3b"
+      },
+      {
+        "path": "release/installed-source/20260926205849_static_weekly_recurring_blocked_authority_repair.sql",
+        "mode": "100644",
+        "object_id": "5c855b9bcd4d909393aec7686af76f82d24c6fec"
+      },
+      {
+        "path": "release/installed-source/20260926211714_static_weekly_recurring_common_lock_order.sql",
+        "mode": "100644",
+        "object_id": "606120543f7f58c6c96352f0fcf23e56d334cd10"
+      },
+      {
+        "path": "release/installed-source/20260926220510_static_weekly_recurring_dependency_reconciliation.sql",
+        "mode": "100644",
+        "object_id": "943fc6d11fa58e74f32cc0bc7f77998ae3745290"
+      },
+      {
+        "path": "release/installed-source/20260926223914_static_weekly_recurring_application_targets.sql",
+        "mode": "100644",
+        "object_id": "8ec968df7e99fa452c59ba3bffc4e8006156571e"
+      },
+      {
+        "path": "release/installed-source/20260926225613_static_weekly_recurring_atomic_finalization.sql",
+        "mode": "100644",
+        "object_id": "fd65de87da9591ac251d6f5cdf8253f09c987571"
+      },
+      {
+        "path": "release/installed-source/20260926234537_static_weekly_authenticated_schedule_delivery.sql",
+        "mode": "100644",
+        "object_id": "d9b29c505f12b25789589ef950ba2b1550c12b00"
+      },
+      {
+        "path": "release/installed-source/20260927001706_static_weekly_lunch_validation_materialization.sql",
+        "mode": "100644",
+        "object_id": "9f4d85510a32a4294635713fa8d9f952be632dec"
+      },
+      {
+        "path": "release/installed-source/20260927010911_static_weekly_current_recurring_delivery_status.sql",
+        "mode": "100644",
+        "object_id": "0037498e96ca4329cb280bc46b2675e6139ca52a"
+      },
+      {
+        "path": "release/installed-source/20260927031806_schedule_bound_location_reminders.sql",
+        "mode": "100644",
+        "object_id": "94f72cb6da0b4dccdf2d3314f976e4a5ed667e79"
+      },
+      {
+        "path": "release/installed-source/20260927052929_schedule_notification_admission_corrections.sql",
+        "mode": "100644",
+        "object_id": "9e120240e3ccb9af05b834e0fac1cd65fe3c7b93"
+      },
+      {
+        "path": "release/installed-source/20260927072146_schedule_notification_exact_canary.sql",
+        "mode": "100644",
+        "object_id": "44005e577fe956739122e068459d8b04f56ef61c"
+      },
+      {
+        "path": "release/installed-source/20260927075352_protected_separation_original_context.sql",
+        "mode": "100644",
+        "object_id": "033437cae337ecf0135200d02464642f39dc641a"
+      },
+      {
+        "path": "release/installed-source/20260929125440_custodial_recovery_inventory_closure.sql",
+        "mode": "100644",
+        "object_id": "8fb71a3ded034e352a4725d742371bfc3b0d8817"
+      },
+      {
+        "path": "release/installed-source/20261001130750_october_bounded_dated_transition.sql",
+        "mode": "100644",
+        "object_id": "fa48db09905db982a2f4648260732ee2fe5ce1ae"
+      },
+      {
+        "path": "release/installed-source/20261001152633_october_dated_consumer_corrections.sql",
+        "mode": "100644",
+        "object_id": "41750cdd913f0aba4bda00a0c3d93fdf3154b4eb"
+      },
+      {
+        "path": "release/installed-source/20261001161831_october_dated_review_authority_corrections.sql",
+        "mode": "100644",
+        "object_id": "8225f2bec2da4cef79d6465d380e3265c927472e"
+      },
+      {
+        "path": "release/installed-source/20261002050000_feedback_email_intent_capture.sql",
+        "mode": "100644",
+        "object_id": "005dc5c3f7251ee84d5542a19faca164758e2b06"
+      },
+      {
+        "path": "release/installed-source/20261002060000_event_needs_review_isolation.sql",
+        "mode": "100644",
+        "object_id": "73549bb301a318c037745f58c5f5dff4601abae1"
+      },
+      {
+        "path": "release/installed-source/20261002070000_feedback_email_relay_boundary.sql",
+        "mode": "100644",
+        "object_id": "19000ea647133619736dc9eacf95a3db3d8fcb8b"
+      },
+      {
+        "path": "release/installed-source/20261002080000_event_manager_revision_compare_and_swap.sql",
+        "mode": "100644",
+        "object_id": "de68d2db36b54a1e9b0623a31b2cf4a324ac852e"
+      },
+      {
+        "path": "release/installed-source/20261002090000_manager_issue_outcomes.sql",
+        "mode": "100644",
+        "object_id": "b83f36657cbd017a81717d5e485bc7a90a80bddb"
+      },
+      {
+        "path": "release/installed-source/20261002100000_place_lifecycle_authority.sql",
+        "mode": "100644",
+        "object_id": "e8d99f69e3c60f5168dae4e01fbce3c36d2b54b6"
+      },
+      {
+        "path": "release/installed-source/20261002110000_event_impact_preview_and_custodial_notes.sql",
+        "mode": "100644",
+        "object_id": "9f797104af60dd0a00c25369b0efb89403d12304"
+      },
+      {
+        "path": "release/installed-source/20261002120000_october_dated_recovery_inventory_rebind.sql",
+        "mode": "100644",
+        "object_id": "50a5536e8b395ad676f09e189e43f45c3fe7f77a"
+      },
+      {
+        "path": "release/installed-source/20261002130000_native_provider_clock_transport.sql",
+        "mode": "100644",
+        "object_id": "8f15c6f8c5cb65b32bf5c07b4182961be5230fc7"
+      },
+      {
+        "path": "release/installed-source/20261002140000_event_supersession_and_chicago_instants.sql",
+        "mode": "100644",
+        "object_id": "54e32c125538eca2190f10bc82100d1e55c450ea"
+      },
+      {
+        "path": "release/installed-source/20261002150000_feedback_delivery_readback.sql",
+        "mode": "100644",
+        "object_id": "f675ed69f7ace209ee28e9dea7d722bc3c2cb6f2"
+      },
+      {
+        "path": "release/installed-source/20261002160000_place_event_venue_bridge.sql",
+        "mode": "100644",
+        "object_id": "e842b4ff346dc7806ff340dff62166e356ab7535"
+      },
+      {
+        "path": "release/installed-source/20261002170000_event_cancellation_cas_restore.sql",
+        "mode": "100644",
+        "object_id": "d99b6d08133c23d33e95814d4e20067000b87308"
+      },
+      {
+        "path": "release/installed-source/20261002180000_native_provider_location_reservation.sql",
+        "mode": "100644",
+        "object_id": "7256f23201f0d92653ce9602862a7aeea7fcba9d"
+      },
+      {
+        "path": "release/installed-source/20261002200000_place_operational_metadata_bridge.sql",
+        "mode": "100644",
+        "object_id": "7026acf843b05e6178d15a22fb6c1165a3bf3172"
+      },
+      {
+        "path": "release/installed-source/20261002210000_event_place_overlay_admission.sql",
+        "mode": "100644",
+        "object_id": "7f6d585ecf543a6dd60e9fe5844a24526301b35b"
+      },
+      {
+        "path": "release/installed-source/20261002220000_feedback_relay_preflight_and_reconciliation.sql",
+        "mode": "100644",
+        "object_id": "a6fdd11aaba63f377051d6c61bc6db6be2099ba5"
+      },
+      {
+        "path": "release/installed-source/20261002230000_feedback_protected_attachment_admission.sql",
+        "mode": "100644",
+        "object_id": "dff40600ed494c5ae1500c9f5731e03e1e86f7c4"
+      },
+      {
+        "path": "release/installed-source/20261003000000_memphis_current_schedule_day.sql",
+        "mode": "100644",
+        "object_id": "aabdcb5d42b6a5f8e5710ef48e0ffb1618808141"
+      },
+      {
+        "path": "release/installed-source/20261003010000_native_location_lifecycle.sql",
+        "mode": "100644",
+        "object_id": "a224cf46877336be8154b4cbd9aea39c2160c210"
+      },
+      {
+        "path": "release/installed-source/20261003030000_place_operational_name_adoption.sql",
+        "mode": "100644",
+        "object_id": "f2d1b6670f81647642ea8ad460901ade930ae9b8"
+      },
+      {
+        "path": "release/installed-source/20261003050000_native_provider_events.sql",
+        "mode": "100644",
+        "object_id": "6d41802b2dd2eefcf293dcff48ad4e4b2d3bb6b9"
+      },
+      {
+        "path": "release/installed-source/20261003060000_event_notification_current_projection.sql",
+        "mode": "100644",
+        "object_id": "ccdfaffeac56ade596dc8a38ed1364168fd68364"
+      },
+      {
+        "path": "release/installed-source/20261003070000_feedback_triage_receipts.sql",
+        "mode": "100644",
+        "object_id": "d255bf47996b8b62500e65d8efaf7178f86374ee"
+      },
+      {
+        "path": "release/installed-source/20261003080000_native_location_dispatch_and_ack.sql",
+        "mode": "100644",
+        "object_id": "76e49284bd5c3e5a2998a2276f0bf1033fb4f6ac"
+      },
+      {
+        "path": "release/installed-source/20261003120000_completion_taxonomy_evidence.sql",
+        "mode": "100644",
+        "object_id": "37fef77fe941a5b5c553c524cab550ae8e73f571"
+      },
+      {
+        "path": "release/installed-source/20261003121757_employee_message_source_admission.sql",
+        "mode": "100644",
+        "object_id": "b3c04aafa8239df8b1062d9a62333a6bc2f64eff"
+      },
+      {
+        "path": "release/installed-source/20261003140000_static_weekly_nonemployee_contractor_capacity.sql",
+        "mode": "100644",
+        "object_id": "1920a39a84cd93f84236a8d875d9f33313baf9a4"
+      },
+      {
+        "path": "release/installed-source/20261003143000_issue_constraint_index_recovery.sql",
+        "mode": "100644",
+        "object_id": "82b6e80c9200ecebb2e8da4c95075c7af49c5134"
+      },
+      {
+        "path": "release/installed-source/20261003150000_native_provider_interval_protocol.sql",
+        "mode": "100644",
+        "object_id": "91c8e805d3cfb4f3cfc3098c4b24812ccf0c57e7"
+      },
+      {
+        "path": "release/installed-source/20261003160000_static_weekly_contractor_capacity_extension.sql",
+        "mode": "100644",
+        "object_id": "d2c150f643837bf425525dd647a14ee58559e995"
+      },
+      {
+        "path": "release/installed-source/20261003170000_native_target_source_projection.sql",
+        "mode": "100644",
+        "object_id": "01cacbe002248d1318029de83737044c976b502c"
+      },
+      {
+        "path": "release/installed-source/20261003190000_static_weekly_capacity_current_source_bridge.sql",
+        "mode": "100644",
+        "object_id": "cf199550a89fa5806447da06b360e8beabfd9fc5"
+      },
+      {
+        "path": "release/installed-source/20261003193000_coverall_event_brief_private_reader.sql",
+        "mode": "100644",
+        "object_id": "e1f9abc244f8460cfd1be43cc81f4e428627ef50"
+      },
+      {
+        "path": "release/installed-source/20261003194000_native_lunch_delivery.sql",
+        "mode": "100644",
+        "object_id": "35230ae1cc1a60ebdd035736e8026578f989ba3b"
+      },
+      {
+        "path": "release/installed-source/20261003210000_static_weekly_splash_season_gate.sql",
+        "mode": "100644",
+        "object_id": "e17e065860ff668447f8817e16ca07e5f1e91a6d"
+      },
+      {
+        "path": "release/installed-source/20261003211000_static_weekly_splash_source_retention.sql",
+        "mode": "100644",
+        "object_id": "474e112bc87f541a90a813807336d934728ae966"
+      },
+      {
+        "path": "release/installed-source/20261003220000_current_release_authority_completion.sql",
+        "mode": "100644",
+        "object_id": "b5005219c3751e01dc02a72ccda6eb15afe1fa6e"
+      },
+      {
+        "path": "release/installed-source/20261003230000_static_weekly_named_handoff_derivation.sql",
+        "mode": "100644",
+        "object_id": "c0e42dae891d3c74020e95c9b3c257a002af7571"
+      },
+      {
+        "path": "release/installed-source/20261004000000_native_provider_event_decision_lookup.sql",
+        "mode": "100644",
+        "object_id": "1e377360b9fca5c701e9cbcbdd205ff1c45771ca"
+      },
+      {
+        "path": "release/installed-source/20261004140657_approved_static_template_authority.sql",
+        "mode": "100644",
+        "object_id": "012817e46badb49a26462ec6392defd3dc4a8af2"
+      },
+      {
+        "path": "release/installed-source/20261004150151_native_alert_two_stage_preparation.sql",
+        "mode": "100644",
+        "object_id": "7618fdb72ecee916614c09dc36e1c2829ccd2651"
+      },
+      {
+        "path": "release/installed-source/20261004150425_native_alert_finalization.sql",
+        "mode": "100644",
+        "object_id": "93b49736f2cc64e0a8e69bf324b0a424bde7cbb1"
+      },
+      {
+        "path": "release/installed-source/20261004161015_native_alert_provider_inventory_events.sql",
+        "mode": "100644",
+        "object_id": "fc05ae000936143189a7308684c1f0a9213d63e8"
+      },
+      {
+        "path": "release/installed-source/20261005113826_native_alert_original_decisions.sql",
+        "mode": "100644",
+        "object_id": "2327afd8df2a6f2c24ea163dc9c15bd39388fac2"
+      },
+      {
+        "path": "release/installed-source/20261005115223_overdue_popup_stops_at_scan_start.sql",
+        "mode": "100644",
+        "object_id": "c1797e2c84b8b5707ee2c20960981ebf0374758c"
+      },
+      {
         "path": "release/installed-source/20261006031304_custodial_owner_delegated_actions.sql",
         "mode": "100644",
         "object_id": "e6bc4d5ad8685ec908f4750baadaf6da470f1049"
@@ -738,9 +1233,304 @@
         "object_id": "c35aaff789432b776e196e01fe283b7e14c37a74"
       },
       {
+        "path": "release/installed-source/20261006172928_custodial_manager_scheduler_permissions.sql",
+        "mode": "100644",
+        "object_id": "94a7aad98f98a789c3646cff8f097914cc7aeb74"
+      },
+      {
+        "path": "release/installed-source/20261006190426_manager_scheduler_recovery_binding.sql",
+        "mode": "100644",
+        "object_id": "edb0a747c6b817420e91d26836ee5e0a6bb136ec"
+      },
+      {
         "path": "release/installed-source/20261006203931_custodial_delegated_coverall.sql",
         "mode": "100644",
         "object_id": "121da249344d6cbeb50e6a66428d5d193f5b4b00"
+      },
+      {
+        "path": "release/installed-source/20261006211215_preserved_coverall_validator_recovery.sql",
+        "mode": "100644",
+        "object_id": "ac4ab2193956fd1c1b6fa539e6170c872e646959"
+      },
+      {
+        "path": "release/installed-source/20261007104735_native_alert_inventory_guard_recovery.sql",
+        "mode": "100644",
+        "object_id": "b8b0c1dbca2267f12d654f5640eaae7cc7c2b4e8"
+      },
+      {
+        "path": "release/installed-source/20261007161645_approved_initial_selection_metadata.sql",
+        "mode": "100644",
+        "object_id": "a09f67a4c89a2896f204a0cfe1ac5db6caa6559c"
+      },
+      {
+        "path": "release/installed-source/20261008032718_native_lunch_spoken_accepted_duties.sql",
+        "mode": "100644",
+        "object_id": "45f006b27d4738207c074da6f6d8391a91fb8f07"
+      },
+      {
+        "path": "release/installed-source/20261008053837_native_schedule_lunch_recipient_source.sql",
+        "mode": "100644",
+        "object_id": "77496978a5d273af3bb01a2aaeb1f27fc0817f8a"
+      },
+      {
+        "path": "release/installed-source/20261008064748_native_schedule_server_source_window.sql",
+        "mode": "100644",
+        "object_id": "33932eb418f79c3cc8d61caf2e5f371cdf460d73"
+      },
+      {
+        "path": "release/installed-source/20261008075109_native_schedule_source_reservation.sql",
+        "mode": "100644",
+        "object_id": "4b1f320e8d36f7ecc7bb2161286b70a077eaa9fd"
+      },
+      {
+        "path": "release/installed-source/20261008083139_native_schedule_content_source.sql",
+        "mode": "100644",
+        "object_id": "264d05090db8fe4eab8613c5587e9ae294ae19b3"
+      },
+      {
+        "path": "release/installed-source/20261008095837_native_schedule_server_finalization.sql",
+        "mode": "100644",
+        "object_id": "05f509b0f65d39a6aa0832e1f4ea750f2324d1ae"
+      },
+      {
+        "path": "release/installed-source/20261008102957_native_schedule_inventory.sql",
+        "mode": "100644",
+        "object_id": "0573a937434a89f466a4913059a13c43ce915206"
+      },
+      {
+        "path": "release/installed-source/20261008111355_native_schedule_observation_binding.sql",
+        "mode": "100644",
+        "object_id": "155c5d1ab70dec3fc36433d0b81fa70ee66b12c7"
+      },
+      {
+        "path": "release/installed-source/20261008115557_native_schedule_job_preparation.sql",
+        "mode": "100644",
+        "object_id": "f32dd4e3c1ed2979bb396dd25ecd7b12022507fd"
+      },
+      {
+        "path": "release/installed-source/20261008122247_native_schedule_attempt_outcome.sql",
+        "mode": "100644",
+        "object_id": "3a8211a3c5ccd6e6ae122f0127e82c2cc9c4045c"
+      },
+      {
+        "path": "release/installed-source/20261008124644_native_schedule_sender_inventory.sql",
+        "mode": "100644",
+        "object_id": "46a8eade6eec2e933fa6e3862884684ebf216ceb"
+      },
+      {
+        "path": "release/installed-source/20261008135429_native_schedule_source_discovery.sql",
+        "mode": "100644",
+        "object_id": "87afa699af6d5be0279457c47cfc308f17a17018"
+      },
+      {
+        "path": "release/installed-source/20261008142316_native_schedule_preparation_source.sql",
+        "mode": "100644",
+        "object_id": "32c9cda2c5a65edade7938acbca9f2f1ffc74946"
+      },
+      {
+        "path": "release/installed-source/20261008205342_native_target_source_kind_guard.sql",
+        "mode": "100644",
+        "object_id": "d51f651227cc27027ac17d02c1b497a101b45bcf"
+      },
+      {
+        "path": "release/installed-source/20261009033647_protected_separation_original_generation_reader.sql",
+        "mode": "100644",
+        "object_id": "aecfd013fdec608f1d71bbd57fd9d8d6cca161ad"
+      },
+      {
+        "path": "release/installed-source/20261009052125_native_schedule_exact_recovery_identities.sql",
+        "mode": "100644",
+        "object_id": "e4931a6f5c4ac9131bd9c40320a5cbbf6e4efbda"
+      },
+      {
+        "path": "release/installed-source/20261009092054_retained_original_native_evidence_intake.sql",
+        "mode": "100644",
+        "object_id": "2ccd41e84b979ca294fe3b069bdbe7dd579d30b9"
+      },
+      {
+        "path": "release/installed-source/20261009191246_retained_original_native_value_chunks.sql",
+        "mode": "100644",
+        "object_id": "7f2f54a0ba2134f818f374326792f9ba0e3101c6"
+      },
+      {
+        "path": "release/installed-source/20261010193211_native_private_custody_chunk_retention.sql",
+        "mode": "100644",
+        "object_id": "fc2c15ca173f5487670f5a9d7a78b1481ed6ac88"
+      },
+      {
+        "path": "release/installed-source/20261011000206_native_private_custody_complete_frame_readback.sql",
+        "mode": "100644",
+        "object_id": "8dad5b67ebf62d9ca1243652df5ee57aaf97ff41"
+      },
+      {
+        "path": "release/installed-source/20261011121818_custodial_held_event_correction_v2.sql",
+        "mode": "100644",
+        "object_id": "79a60740e8ed583038b0288cc56735673165eef9"
+      },
+      {
+        "path": "release/installed-source/20261011150049_staffing_original_outcome_reader.sql",
+        "mode": "100644",
+        "object_id": "34532bf352eecf298bcb4e431a0469a7069aec20"
+      },
+      {
+        "path": "release/installed-source/20261011214943_custodial_feedback_triage_receipt_reader.sql",
+        "mode": "100644",
+        "object_id": "53c87de248cde1da1e4dc5554b8254803e2fe9ed"
+      },
+      {
+        "path": "release/installed-source/20261011214944_custodial_feedback_triage_receipt_recovery_binding.sql",
+        "mode": "100644",
+        "object_id": "701bf5727a9a769b0e0e8f8110db77da9d55902f"
+      },
+      {
+        "path": "release/installed-source/20261012000449_staffing_prepared_preview_bound_fields.sql",
+        "mode": "100644",
+        "object_id": "5b5ea27c3d1e9f0e4133e32dd1d7fef9a2a2abc0"
+      },
+      {
+        "path": "release/installed-source/20261012001357_staffing_nonemployee_refresh_identity.sql",
+        "mode": "100644",
+        "object_id": "889500ecb322bab58e0b1afde8b5a793621cddca"
+      },
+      {
+        "path": "release/installed-source/20261012004258_staffing_absence_cancellation_target_fields.sql",
+        "mode": "100644",
+        "object_id": "23956a328ec4a6109cebc8b6f9ac37c10c6700d3"
+      },
+      {
+        "path": "release/installed-source/20261012023928_staffing_original_target_current_plan_cancellation.sql",
+        "mode": "100644",
+        "object_id": "664806afed3e7e5822935279c4a9c0ea074c9452"
+      },
+      {
+        "path": "release/installed-source/20261012043840_staffing_vacancy_original_plan_readback.sql",
+        "mode": "100644",
+        "object_id": "db047236396e9b6be6d4c796312858c8da1ea877"
+      },
+      {
+        "path": "release/installed-source/20261012052430_employee_event_open_original_receipt.sql",
+        "mode": "100644",
+        "object_id": "ae5796637bbef58afed74068cd7bd88cfd44fa45"
+      },
+      {
+        "path": "release/installed-source/20261012063248_staffing_vacancy_reviewed_preparation.sql",
+        "mode": "100644",
+        "object_id": "0dbc155343689debdf3f49697ae7806308105c8c"
+      },
+      {
+        "path": "release/installed-source/20261012070515_employee_event_open_service_date_binding.sql",
+        "mode": "100644",
+        "object_id": "bb3a3859ad477609c7543cf9805116076108c917"
+      },
+      {
+        "path": "release/installed-source/20261012142853_original_completion_protected_reader.sql",
+        "mode": "100644",
+        "object_id": "b3a07838f7a639a7a79f933b3a0e62748c813280"
+      },
+      {
+        "path": "release/installed-source/20261012211736_custodial_employee_message_original_outcomes.sql",
+        "mode": "100644",
+        "object_id": "20a7bd909dd4789af23b62b8880ddf67a041731f"
+      },
+      {
+        "path": "release/installed-source/20261013113033_gemini_original_turn_preservation.sql",
+        "mode": "100644",
+        "object_id": "97e4c7d5f12a039f8c374ab1dd74626f506d04a7"
+      },
+      {
+        "path": "release/installed-source/20261013171946_messenger_original_group_creation.sql",
+        "mode": "100644",
+        "object_id": "b2a631ef7746dd499f2a9eba4331fd75a2a11532"
+      },
+      {
+        "path": "release/installed-source/20261014000624_same_original_recovery_preparation.sql",
+        "mode": "100644",
+        "object_id": "cd07b76231e46a3d15bf84a5d4087b04d3fa00e3"
+      },
+      {
+        "path": "release/installed-source/20261014010337_same_original_recovery_target_read.sql",
+        "mode": "100644",
+        "object_id": "c7f70f95ec9f32f1cbe7db69d13a95bfb2d31bf2"
+      },
+      {
+        "path": "release/installed-source/20261014024357_same_original_native_challenge_registration.sql",
+        "mode": "100644",
+        "object_id": "73280f837c8e580c26a1d131a4b3771261a3374b"
+      },
+      {
+        "path": "release/installed-source/20261014031928_same_original_native_registration_status.sql",
+        "mode": "100644",
+        "object_id": "206a9652b1149b2e079b18b38f6276a3ddde09bd"
+      },
+      {
+        "path": "release/installed-source/20261014143050_same_original_current_manager_preparation_read.sql",
+        "mode": "100644",
+        "object_id": "3bf1eaa04cbe8333c7e044a4f0f97ec9fc98edd3"
+      },
+      {
+        "path": "release/installed-source/20261015040830_same_original_retained_completion_read.sql",
+        "mode": "100644",
+        "object_id": "6d74f300aa3029b6211f2260a4572ed6c38e4f54"
+      },
+      {
+        "path": "release/installed-source/20261016095134_native_original_inventory_request_registration.sql",
+        "mode": "100644",
+        "object_id": "0dcd44188b2b94d9c5f63a12fa46f0dae053947d"
+      },
+      {
+        "path": "release/installed-source/20261016103024_native_original_inventory_request_status_read.sql",
+        "mode": "100644",
+        "object_id": "e77ec6c44f26418e044b5bea68af9698c148f62d"
+      },
+      {
+        "path": "release/installed-source/20261016111320_native_inventory_current_confirmation_guard.sql",
+        "mode": "100644",
+        "object_id": "f1ec3efb20a7f5fe0706e7e981351f842af44849"
+      },
+      {
+        "path": "release/installed-source/20261016121857_native_original_inventory_manifest_chunks.sql",
+        "mode": "100644",
+        "object_id": "403434894c72858d7d0f3a4bed5618078d9636bc"
+      },
+      {
+        "path": "release/installed-source/20261016133120_native_original_inventory_manager_manifest_read.sql",
+        "mode": "100644",
+        "object_id": "42cd2768d822b62e7b52a7b23f145490561a0b44"
+      },
+      {
+        "path": "release/installed-source/20261016140703_native_original_inventory_semantic_review.sql",
+        "mode": "100644",
+        "object_id": "9fcf02a84c6a5c39f849261f50fc5a6d80e2c0b6"
+      },
+      {
+        "path": "release/installed-source/20261016143226_native_original_inventory_manager_decision.sql",
+        "mode": "100644",
+        "object_id": "cb3ffe3587e69ce2d3c635c2150e8f5d35bda47d"
+      },
+      {
+        "path": "release/installed-source/20261017200958_approved_static_original_confirmation_receipts.sql",
+        "mode": "100644",
+        "object_id": "fe242409ead21aca63223ceaf989cb1940d2dcdb"
+      },
+      {
+        "path": "release/installed-source/20261017201251_approved_static_current_basis_binding.sql",
+        "mode": "100644",
+        "object_id": "936c1c368456d1aaefde4ef0e134e7cab9a23b8e"
+      },
+      {
+        "path": "release/installed-source/20261017225101_approved_static_dated_original_materialization.sql",
+        "mode": "100644",
+        "object_id": "b2029b79574016e35586552869ff1191bf773e13"
+      },
+      {
+        "path": "release/installed-source/20261018151858_registered_never_filled_vacancy_source_recovery.sql",
+        "mode": "100644",
+        "object_id": "8338ff5ae704b356925e6f5e183079527d54053f"
+      },
+      {
+        "path": "release/installed-source/20261018161845_approved_static_pending_staffing_original_recovery.sql",
+        "mode": "100644",
+        "object_id": "4906a770664c6735953923ca34c1abda63ac1c1a"
       },
       {
         "path": "release/installed-source/20261021111917_dashboard_application_reader_operational_day_repair.sql",
@@ -748,9 +1538,169 @@
         "object_id": "77ffba7d41f447c0f7e5105d0627f46feeb83585"
       },
       {
+        "path": "release/installed-source/20261021124949_dashboard_independent_verified_check_reader.sql",
+        "mode": "100644",
+        "object_id": "1ea97d2e978680a20bbea8f393acd28a196fa0ab"
+      },
+      {
+        "path": "release/installed-source/20261022041249_original_schedule_delivery_outcome.sql",
+        "mode": "100644",
+        "object_id": "92b94037026664eceb6aa4cb871ab101a7bb2863"
+      },
+      {
+        "path": "release/installed-source/20261022071830_recurring_normal_notification_plan.sql",
+        "mode": "100644",
+        "object_id": "ac8fa55f363b7731b874594cf227d73dab743bac"
+      },
+      {
+        "path": "release/installed-source/20261025094420_authority_identity_renderer_counterparts.sql",
+        "mode": "100644",
+        "object_id": "2a22913feabc560a280d0f109bf9ef2d3b439d4f"
+      },
+      {
+        "path": "release/installed-source/20261025124437_manager_completion_evidence_opaque_session_domain.sql",
+        "mode": "100644",
+        "object_id": "7251086e053be8d168811c95aa07e5f3de544eea"
+      },
+      {
+        "path": "release/installed-source/20261026065000_location_scan_state_qualified_lookup.sql",
+        "mode": "100644",
+        "object_id": "0fb59a84b907599230a65d6854bf2e48d44dd7af"
+      },
+      {
+        "path": "release/installed-source/20261027230000_accepted_actual_lunch_windows.sql",
+        "mode": "100644",
+        "object_id": "cf8aad05ccded77b86c611d80f929fcd69f13882"
+      },
+      {
+        "path": "release/installed-source/20261027231000_canonical_coverall_capacity_links.sql",
+        "mode": "100644",
+        "object_id": "15fc927358a632614fa4c8234da7e196293fdbe0"
+      },
+      {
+        "path": "release/installed-source/20261027234814_mcp_oauth_durable_token_families.sql",
+        "mode": "100644",
+        "object_id": "a857b7f9a76ed0aa4a7b99baf5279bf41be5fbdb"
+      },
+      {
+        "path": "release/installed-source/20261028224728_full_scheduled_lunch_source_policy.sql",
+        "mode": "100644",
+        "object_id": "6fe2d1d184a6baf868fc80f66a01690c44d746bd"
+      },
+      {
+        "path": "release/installed-source/20261030031200_approved_manual_full_hour_coverers.sql",
+        "mode": "100644",
+        "object_id": "43b0dfd5f15169084cf345102322de012ea912a0"
+      },
+      {
+        "path": "release/installed-source/20261030050235_compact_approved_initial_confirmation.sql",
+        "mode": "100644",
+        "object_id": "786e8c28827946c7cec800f7ba732ed57812adcd"
+      },
+      {
+        "path": "release/installed-source/20261030155202_approved_manual_current_day_activation.sql",
+        "mode": "100644",
+        "object_id": "4eba561ef6eb87332486e89f7ca2f6167a52b993"
+      },
+      {
+        "path": "release/installed-source/20261031125902_approved_manual_native_operations.sql",
+        "mode": "100644",
+        "object_id": "0e779ef2458c1c54702998e842e19724c449e0e6"
+      },
+      {
+        "path": "release/installed-source/20261031180631_cohort_ticket_transaction_context.sql",
+        "mode": "100644",
+        "object_id": "c170057e0b771880e531503522b1422bc7036014"
+      },
+      {
+        "path": "release/installed-source/20261031225210_custodial_sealed_repairs_current_eight.sql",
+        "mode": "100644",
+        "object_id": "6531a2c5abcba3ee54ad5c720ab7b36b0c38b3d1"
+      },
+      {
+        "path": "release/installed-source/20261101034931_custodial_completion_evidence_cohort_read.sql",
+        "mode": "100644",
+        "object_id": "ac5369041d9341e4b29fcc89174f363c8651cda3"
+      },
+      {
+        "path": "release/installed-source/20261101044239_custodial_cohort_places_feedback.sql",
+        "mode": "100644",
+        "object_id": "3e4ce3f7656f78b117e5a4bbfd14298eaf91ffc4"
+      },
+      {
+        "path": "release/installed-source/20261102000000_unfinished_work_owner_attention.sql",
+        "mode": "100644",
+        "object_id": "133a8af24943cd9511245f15b752ab38a38fe082"
+      },
+      {
+        "path": "release/installed-source/20261102010000_local_retained_enrollment_partition.sql",
+        "mode": "100644",
+        "object_id": "63ba1f78e28ef5185b92af98658c3db3e559f8aa"
+      },
+      {
+        "path": "release/installed-source/20261102151842_current_source_recovery_binding.sql",
+        "mode": "100644",
+        "object_id": "88f6dda14fba327d0faf615630618a5934f183f3"
+      },
+      {
+        "path": "release/installed-source/20261102161602_current_recovery_column_order.sql",
+        "mode": "100644",
+        "object_id": "5d5e040ff6c99018cd68234cfbb0da1514d65a47"
+      },
+      {
+        "path": "release/installed-source/20261103004520_authoritative_events_cancellation.sql",
+        "mode": "100644",
+        "object_id": "92fddf702e429c3a0e1a8be8a5d149404ec57c4a"
+      },
+      {
+        "path": "release/installed-source/20261104174218_expired_unconsumed_assigned_activation_closure.sql",
+        "mode": "100644",
+        "object_id": "8fcd9ad660ac46416a6df9e9594ee2186f5f8f8b"
+      },
+      {
+        "path": "release/installed-source/20261110061622_custodial_activation_digest_callsite_retention.sql",
+        "mode": "100644",
+        "object_id": "a7179281c1e707a5d9a8751f8d7ec454ccadfb29"
+      },
+      {
+        "path": "release/installed-source/20261110081920_custodial_home_reader_projection_scope.sql",
+        "mode": "100644",
+        "object_id": "f2c7ea7f25db297d2250ec772551e8bca60fb4ee"
+      },
+      {
+        "path": "release/installed-source/20261110235315_active_cleaning_dashboard_status_precedence.sql",
+        "mode": "100644",
+        "object_id": "e8cdbdcfc23aba7d44b8e0729212a9436eb08f9d"
+      },
+      {
+        "path": "release/installed-source/20261110235935_native_active_session_gps_binding.sql",
+        "mode": "100644",
+        "object_id": "b36a620707356d26f0aff07dc05680d7efdcdb9b"
+      },
+      {
+        "path": "release/installed-source/20261111024546_memphis_native_schedule_format.sql",
+        "mode": "100644",
+        "object_id": "4c5781d3eff2399923e094f24c168dac6fbca902"
+      },
+      {
+        "path": "release/installed-source/20261111161430_active_work_gps_reader_policy.sql",
+        "mode": "100644",
+        "object_id": "57877d2e967d8c7822d51022b5c34434295ab03d"
+      },
+      {
         "path": "release/integrated-backend-authority-input.json",
         "mode": "100644",
         "object_id": "b4c928d84d7c48181224acdbaa86a1d69d0648de"
+      },
+      {
+        "path": "release/production-backup-source-extension-v2.active.json",
+        "mode": "100644",
+        "object_id": "d459868eb9c672a68bc0fbfb5bf0e5c68b682928"
+      },
+      {
+        "path": "release/production-backup-source-extension-v2.candidate.json",
+        "mode": "100644",
+        "object_id": "65e0832741617f0dc7bcb3647f1e0a4605a73762"
       },
       {
         "path": "release/production-backup-source-extension.json",
@@ -1018,14 +1968,39 @@
         "object_id": "9cec14e875700a13142c8aba767634ebfa81b085"
       },
       {
+        "path": "scripts/backup-contract-ci-wiring-tests.mjs",
+        "mode": "100644",
+        "object_id": "1bc02c44d9b0ca2eef9798f39d379f49d4b7a02e"
+      },
+      {
+        "path": "scripts/backup-ledger-binding-v2-tests.mjs",
+        "mode": "100644",
+        "object_id": "aa4014f87dd262c0b1bc616ae2a35e32481e9701"
+      },
+      {
+        "path": "scripts/backup-ledger-binding-v2.mjs",
+        "mode": "100644",
+        "object_id": "7da2e3f6ae00ef5fe7cbbef7eb6ac0ef3ab8ab7f"
+      },
+      {
+        "path": "scripts/backup-private-namespace-compatibility-tests.mjs",
+        "mode": "100644",
+        "object_id": "cbbbb584b9dcf60da40acb20417f660f7f7dcc19"
+      },
+      {
         "path": "scripts/backup-release-schema-binding-tests.mjs",
         "mode": "100644",
-        "object_id": "599f711bfd8cee5d8b0c205100925e4c0a536783"
+        "object_id": "6740dc823c004b520e7fb902f2bf7a0c2236fe85"
       },
       {
         "path": "scripts/backup-release-schema-binding.mjs",
         "mode": "100644",
-        "object_id": "421c0c9756c9b3ec10dd0918ce510f39615495a8"
+        "object_id": "8244fbb329de39cbf973943a0efc1ab9b957be47"
+      },
+      {
+        "path": "scripts/backup-source-preflight.mjs",
+        "mode": "100644",
+        "object_id": "235cd6a17e027dd54654690c72e67d9fa626cb4c"
       },
       {
         "path": "scripts/batch-2-event-messenger-cutover-database-tests.mjs",
@@ -1036,6 +2011,11 @@
         "path": "scripts/batch-2-event-messenger-cutover-tests.mjs",
         "mode": "100644",
         "object_id": "8b7800fb76fb8c7010645f0bf7b624e16cd3494e"
+      },
+      {
+        "path": "scripts/build-immutable-postgres-program.mjs",
+        "mode": "100644",
+        "object_id": "6c847c9dd18c52f40aa64c4badc33626912f82eb"
       },
       {
         "path": "scripts/build52-release-recovery-binding-database-tests.mjs",
@@ -1065,7 +2045,7 @@
       {
         "path": "scripts/ci-workflow-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "fbfbd2b4434ac9a883ef9a4718f5087dc1ffcbf0"
+        "object_id": "0f8cf1217d7eca36414344884c15c9e41e6501d8"
       },
       {
         "path": "scripts/cleaning-identity-gps-database-tests.mjs",
@@ -1235,12 +2215,12 @@
       {
         "path": "scripts/disaster-recovery-archive-tests.mjs",
         "mode": "100644",
-        "object_id": "a768fd7f5b24009ab4554b3eaae6549dd808ba77"
+        "object_id": "39db8a4fc805de6e011d41c41fb8b9aeea83bac2"
       },
       {
         "path": "scripts/disaster-recovery-archive.mjs",
         "mode": "100644",
-        "object_id": "2f0046581944ea8cccc2a43097e666571fe999e0"
+        "object_id": "749d1b9639cc8ecd70fccaacd84c19cc6ed450fe"
       },
       {
         "path": "scripts/disaster-recovery-cron-tests.mjs",
@@ -1285,12 +2265,12 @@
       {
         "path": "scripts/disaster-recovery-storage-tests.mjs",
         "mode": "100644",
-        "object_id": "f1519d7060b9e565e274199da33a84451d2fbaf7"
+        "object_id": "215f32b43553407cac3c1166402a79502463928c"
       },
       {
         "path": "scripts/disaster-recovery-storage.mjs",
         "mode": "100644",
-        "object_id": "73e5c032ec64de82e02d49438ff9f2196169acf8"
+        "object_id": "d2da7a83a98a2dd16a8fe44ed8a7efc32987bf87"
       },
       {
         "path": "scripts/employee-home-time-facts-tests.mjs",
@@ -1348,6 +2328,11 @@
         "object_id": "c13a2b56d085bce9fca3319a869aa7ced852dcd0"
       },
       {
+        "path": "scripts/extract-rehearsal-archive.py",
+        "mode": "100644",
+        "object_id": "58e09ca0ed9ec5039d41ba6711715fcb399093f9"
+      },
+      {
         "path": "scripts/extract-weighted-static-weekly-pdf.mjs",
         "mode": "100644",
         "object_id": "58cf6db43b9e3584052984f19185777e2d4b8545"
@@ -1396,6 +2381,11 @@
         "path": "scripts/final-uncertainty-closure-database-tests.mjs",
         "mode": "100644",
         "object_id": "697a67f33ce33bbe3e63688b082c730d622294c6"
+      },
+      {
+        "path": "scripts/fixtures/backup-namespace/historical-schema-fingerprint-catalog.mjs",
+        "mode": "100644",
+        "object_id": "02fd37bb163eb1109e22235bd9bf71fa5e59b646"
       },
       {
         "path": "scripts/fixtures/completed-cleaning-reminder-fixture.sql",
@@ -1528,9 +2518,14 @@
         "object_id": "2f258d22836c1da5d5ad1ccbd04e3fe2b2507e55"
       },
       {
+        "path": "scripts/immutable-original-owner-context-tests.mjs",
+        "mode": "100644",
+        "object_id": "b4fcefc0170dadff3e07762268b4287c4c97e376"
+      },
+      {
         "path": "scripts/immutable-private-data-import.mjs",
         "mode": "100644",
-        "object_id": "cc093c4608966408e0016933b5b16f512291dd6c"
+        "object_id": "f61836e9c4025e641492263c7a269d60be5dcc10"
       },
       {
         "path": "scripts/immutable-private-domain-source.mjs",
@@ -1540,12 +2535,12 @@
       {
         "path": "scripts/immutable-private-fresh-restore-commit-context.mjs",
         "mode": "100644",
-        "object_id": "46f8aca369d5d6d12411abd6811e1676571857d7"
+        "object_id": "1ee7aa0becba1ee6234b91b58f3881b6ba4e2770"
       },
       {
         "path": "scripts/immutable-private-fresh-restore-control.mjs",
         "mode": "100644",
-        "object_id": "7ebfc5b85258b5069851b47bc0512098c58fdfe3"
+        "object_id": "012bc02df2a8c931e2bc5e1d4f274a19d4827e3e"
       },
       {
         "path": "scripts/immutable-private-fresh-restore-evidence.mjs",
@@ -1560,7 +2555,7 @@
       {
         "path": "scripts/immutable-private-fresh-restore-record.mjs",
         "mode": "100644",
-        "object_id": "09da5872ec60bb8a45f95f502f917fffe9faad8b"
+        "object_id": "03d56ec5138c7bb9d70a73e91f3d31f44ab38498"
       },
       {
         "path": "scripts/immutable-private-fresh-restore-recovery.mjs",
@@ -1573,19 +2568,44 @@
         "object_id": "59aea725c0980a9a92b33d0aff756a2ee10a12a6"
       },
       {
+        "path": "scripts/immutable-private-owner-profile-tests.mjs",
+        "mode": "100644",
+        "object_id": "5c29c9fa00ae82c167fba74754c072c4376c3cb5"
+      },
+      {
+        "path": "scripts/immutable-private-owner-profile.mjs",
+        "mode": "100644",
+        "object_id": "af9d34d83890c08c2385d5e88d33a63aab858239"
+      },
+      {
+        "path": "scripts/immutable-private-postgres-source.mjs",
+        "mode": "100644",
+        "object_id": "82416b934720869bef9dbc1667bca6434544ebec"
+      },
+      {
         "path": "scripts/immutable-private-source-acl.mjs",
         "mode": "100644",
-        "object_id": "f74c297d3b07446ba78c71f9f630dfa3f369d6b2"
+        "object_id": "a6abd3c213aad2d2c93b865a19f7f088e28bce53"
       },
       {
         "path": "scripts/immutable-private-source-bootstrap.mjs",
         "mode": "100644",
-        "object_id": "7e3c9821e7b4d135b9aff3799be32d0c84d02e3e"
+        "object_id": "83f176f6e1fbd630cf4c4c2673d434f378d90596"
       },
       {
         "path": "scripts/immutable-private-source-initializer.mjs",
         "mode": "100644",
-        "object_id": "4f1b0e4675a8e0bc597a40d1c0aab18f7322775a"
+        "object_id": "b757954238e7223f6f855a5c041028532bf62a08"
+      },
+      {
+        "path": "scripts/immutable-release-history-tests.mjs",
+        "mode": "100644",
+        "object_id": "b244ada2cc6340e89f7cb1052d8a6e190c91ba3d"
+      },
+      {
+        "path": "scripts/immutable-source-cache-tests.mjs",
+        "mode": "100644",
+        "object_id": "ee566b2694e4a20a4f50e2db8c97ec3bfd980bb3"
       },
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
@@ -1625,7 +2645,7 @@
       {
         "path": "scripts/isolated-release-data-preservation.mjs",
         "mode": "100644",
-        "object_id": "7bea4c48288ca036082560cb79b4d5417773b011"
+        "object_id": "8232f234d2bc7baea9ea7376e343b5f6762009f7"
       },
       {
         "path": "scripts/isolated-restore-lease-shim-tests.mjs",
@@ -1641,6 +2661,16 @@
         "path": "scripts/json-value-stream.mjs",
         "mode": "100644",
         "object_id": "e0cb6edaf57e0db5405cb65424d680426d04e2d7"
+      },
+      {
+        "path": "scripts/leadership-restore-generation-tests.mjs",
+        "mode": "100644",
+        "object_id": "fffe0fa788ab77e51745629f0b57dcfde77a997b"
+      },
+      {
+        "path": "scripts/leadership-restore-generation.mjs",
+        "mode": "100644",
+        "object_id": "f30a850785b8de07cfd6e7927b2f759a92b7df7a"
       },
       {
         "path": "scripts/legacy-activation-database-tests.mjs",
@@ -1938,9 +2968,14 @@
         "object_id": "d69e276192620fd254708aa35e9afc7003c31a13"
       },
       {
+        "path": "scripts/private-backup-only-rehearsal-tests.mjs",
+        "mode": "100644",
+        "object_id": "3009b79ba896a79387872012367e667b256c8ba3"
+      },
+      {
         "path": "scripts/production-backup-original-metadata.mjs",
         "mode": "100644",
-        "object_id": "50587acc25d59cdb287ab5d5e91b4bef96a36663"
+        "object_id": "815187c69d7a210dbc8d9ef3a5870f7c48ac2f0d"
       },
       {
         "path": "scripts/production-backup-pg-dump-command-tests.mjs",
@@ -1950,7 +2985,7 @@
       {
         "path": "scripts/production-backup-pg-dump-command.mjs",
         "mode": "100644",
-        "object_id": "b83ed72edad2dcb2e2ecff0f6e2b3e222627b528"
+        "object_id": "6a24683439dfc81353410fe581c069c2c679373b"
       },
       {
         "path": "scripts/production-backup-rehearsal-scope.mjs",
@@ -1958,9 +2993,14 @@
         "object_id": "12ae318ba3087d9f16d9b328736564db52aab66a"
       },
       {
+        "path": "scripts/production-backup-source-preflight-tests.mjs",
+        "mode": "100644",
+        "object_id": "9918dc8358c8ebb2f9eba5715464ac4182526d72"
+      },
+      {
         "path": "scripts/production-backup.mjs",
         "mode": "100644",
-        "object_id": "3012a07d046b5a2d28fec2d46e1df0118d56178b"
+        "object_id": "a746d3688bd9d769bf23880e1a530aadd1304f90"
       },
       {
         "path": "scripts/production-database-credential-bridge.mjs",
@@ -2010,7 +3050,7 @@
       {
         "path": "scripts/production-restore.mjs",
         "mode": "100644",
-        "object_id": "c63ff4e1897f2ec8aaf408e80b554a5f29c7282d"
+        "object_id": "1eb5b6be888fde8dcd90ab2d3989ecffb526bc08"
       },
       {
         "path": "scripts/production-runtime-contract-tests.mjs",
@@ -2230,7 +3270,12 @@
       {
         "path": "scripts/run-official-local-storage-rehearsal.mjs",
         "mode": "100644",
-        "object_id": "4b3e01e664984a71494e6805c8e8adc8c02427cf"
+        "object_id": "4077728ab3daf4318d37f081dbbefe1174cfe3d7"
+      },
+      {
+        "path": "scripts/run-private-backup-only-rehearsal.mjs",
+        "mode": "100644",
+        "object_id": "dce99a3f062ed807590e8e1890605dfeedd8ba9c"
       },
       {
         "path": "scripts/run-production-backup-migration-rehearsal.sh",
@@ -2295,12 +3340,12 @@
       {
         "path": "scripts/schema-catalog-readonly-client.mjs",
         "mode": "100644",
-        "object_id": "e4c830f6baf447cbb463f981b64daeba8ee0b77e"
+        "object_id": "33ed14d6913f767a88d802851c95469a4c8fa9ed"
       },
       {
         "path": "scripts/schema-fingerprint-catalog.mjs",
         "mode": "100644",
-        "object_id": "02fd37bb163eb1109e22235bd9bf71fa5e59b646"
+        "object_id": "459241b59c61cdaf900b2aa20ddeea095dd34bd5"
       },
       {
         "path": "scripts/schema-fingerprint-check.mjs",
@@ -2693,6 +3738,11 @@
         "object_id": "45c70b2fef9aedd041db4b87ef209845ca8e5e10"
       },
       {
+        "path": "scripts/test-encrypted-backup-readback.py",
+        "mode": "100644",
+        "object_id": "d83aead19ef6297dbedad69ede31344b62f99540"
+      },
+      {
         "path": "scripts/thursday-notification-presentation-tests.mjs",
         "mode": "100644",
         "object_id": "3708ab6e7a642eae8f989fba3ef1c925bdd5fc45"
@@ -2711,6 +3761,11 @@
         "path": "scripts/verified-visit-reminder-database-tests.mjs",
         "mode": "100644",
         "object_id": "c8f15fb1cb73e5a6696e0cc210fe445e44c2a728"
+      },
+      {
+        "path": "scripts/verify-encrypted-backup-readback.py",
+        "mode": "100644",
+        "object_id": "ac77d48f2b1d70584c680bcc2e0313c55b7e80d9"
       },
       {
         "path": "scripts/verify-isolated-rehearsal-backend-dependencies.sh",
@@ -5683,7 +6738,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 1111,
+    "authority_path_count": 1322,
     "migration_path_count": 294,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
