@@ -4690,7 +4690,7 @@
       {
         "path": "scripts/manual-period-boundary-tests.mjs",
         "mode": "100644",
-        "object_id": "98fd2b71414f00fe70e9e0a253f005ce7bfbac73"
+        "object_id": "eb3b2fbfe67f2fe65e3b197ba80f9653430fd289"
       },
       {
         "path": "scripts/manual-period-repair-database-extension.mjs",
@@ -8990,7 +8990,7 @@
       {
         "path": "src/static-weekly-control-plane.js",
         "mode": "100644",
-        "object_id": "0536e8e4be9582302f67a089cffb5f98c28dd956"
+        "object_id": "db89e520cbb3919d9305b286906c4e71ec0d65cc"
       },
       {
         "path": "src/static-weekly-coverall-access.js",
