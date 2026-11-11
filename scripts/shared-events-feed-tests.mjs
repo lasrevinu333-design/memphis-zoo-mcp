@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import express from 'express';
+import pg from 'pg';
 import { readFileSync, existsSync } from 'node:fs';
 import { employeeVisibleEvents, sharedEventFeed, makeSharedManagerEventsHandler, retiredEventIntake } from '../src/shared-events-feed.js';
 import { createEventsPublicRouter, createEventsEmployeeRouter, listSharedEvents, normalizeEventPayload, createEventMaintenanceController } from '../src/events-api.js';
@@ -19,6 +20,19 @@ test('employee identity required',()=>assert.throws(()=>employeeVisibleEvents([r
 test('all surfaces have identical safe projection and revision',()=>{const rows=[row()], manager=sharedEventFeed(rows,{now}),employee=sharedEventFeed(rows,{now,employeeId:E});assert.deepEqual(manager.rows,employee.rows);assert.deepEqual(manager.rows,projectOperationsEvents(rows));assert.equal(manager.rows[0].revision,3);assert.equal(manager.rows[0].attendees,0);assert.doesNotMatch(JSON.stringify(manager),/PRIVATE|audience_employee_ids|created_by/);assert.equal(manager.mailbox_completeness_verified,false);});
 for(const status of ['CANCELLED','SUPERSEDED'])test(`lifecycle retained: ${status}`,()=>assert.equal(sharedEventFeed([row({status})],{now,employeeId:E}).rows[0].status,status));
 test('unknown attendance is not zero',()=>assert.equal(sharedEventFeed([row({attendee_count:null})],{now}).rows[0].attendees,null));
+test('actual PostgreSQL timestamp values retain exact instants across shared feeds',()=>{
+ const parse=pg.types.getTypeParser(1184),start=parse('2026-11-11 19:00:00+00'),end=parse('2026-11-11 22:00:00+00');
+ assert.ok(start instanceof Date);assert.ok(end instanceof Date);
+ const rows=[row({start_instant_utc:start,end_instant_utc:end,updated_at:start})];
+ const manager=sharedEventFeed(rows,{now}),employee=sharedEventFeed(rows,{now,employeeId:E});
+ assert.deepEqual(manager.rows,employee.rows);
+ assert.equal(employee.rows[0].start_at,'2026-11-11T19:00:00.000Z');
+ assert.equal(employee.rows[0].end_at,'2026-11-11T22:00:00.000Z');
+ assert.equal(employee.rows[0].updated_at,'2026-11-11T19:00:00.000Z');
+ assert.equal(rows[0].end_instant_utc,end,'source not changed');
+ for(const missing of [null,new Date(NaN),'2026-11-11T22:00:00',{},0])
+  assert.equal(projectOperationsEvents([row({end_instant_utc:missing})])[0].end_at,null);
+});
 test('duplicate event identities fail',()=>assert.throws(()=>sharedEventFeed([row(),row()],{now})));
 test('missing revision fails',()=>assert.throws(()=>sharedEventFeed([row({revision:null})],{now})));
 test('oversized feed fails',()=>assert.throws(()=>sharedEventFeed(Array.from({length:501},()=>row()),{now})));
