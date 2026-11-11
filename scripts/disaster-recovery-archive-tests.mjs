@@ -1251,7 +1251,7 @@ if (process.argv.includes('--immutable-bootstrap-metadata-source-only') || proce
       const tag=api.postgresTextColumnsLineEncoding,encode=wire.encodeProductionBackupTextColumnsDataRow;
       assert.equal(tag,wire.productionBackupTextColumnsDataEncoding);assert.equal(tag,'postgres-text-columns-line.v2');
       assert.equal(hash(readFileSync(new URL('./production-backup-pg-dump-command.mjs',import.meta.url))),
-        '8ad52b64334f4338582429ade37ad1a3c094d6732a28ec9b5f213b5142f3d55f');
+        '6d0bb83a263e8c103c46094de05a5082c88d4cf96ead95d6d904ca3b277870d2');
       const rawNull=' { "id" : "9223372036854775807", "value" : null } ';
       const rawJSONNull=' { "id" : "9223372036854775807", "value" : "null" } ';
       const rawPrecise=' { "value" : "{  \\"n\\":9007199254740993,\\"fraction\\":0.12345678901234567890,\\"n\\":2 }", "id" : "1" } ';
@@ -1358,10 +1358,11 @@ if (process.argv.includes('--immutable-bootstrap-metadata-source-only') || proce
         const release=[rawPrecise],registry=[rawNull,rawJSONNull],data=Buffer.from(encode(rawNull)+'\n');
         const bootstrap=(options={})=>materialize(fresh({data,ordinaryTables:[
           {schema:'public',name:'release_deployment_manifest',primaryKey:['id'],columns:table.columns.map(c=>({...c,data_type:'text',generated:'',identity:''})),
-            data:Buffer.from(encode(release[0])+'\n')},
+            data:Buffer.from((options.release??release).map(encode).join('\n')+'\n')},
           {schema:'public',name:'custodial_release_authority_restore_inventory',primaryKey:['id'],columns:table.columns.map(c=>({...c,data_type:'text',generated:'',identity:''})),
             data:options.registryWire??Buffer.from(registry.map(encode).join('\n')+'\n')}],
-          declaredRows:1+release.length+(options.count??registry.length),changeCatalog:catalog=>{
+          declaredRows:1+(options.release??release).length+(options.count??registry.length),changeCatalog:catalog=>{
+            catalog.find(t=>t.table_name==='release_deployment_manifest').row_count=String((options.release??release).length);
             catalog.find(t=>t.table_name==='custodial_release_authority_restore_inventory').row_count=String(options.count??registry.length);
           }}));
         const archive=bootstrap(),result=await api.collectVerifiedRestoreBootstrapRows(archive);
@@ -1371,6 +1372,9 @@ if (process.argv.includes('--immutable-bootstrap-metadata-source-only') || proce
         for(const proof of result.memberProofs){const bytes=readFileSync(join(archive.directory,proof.data_file));
           assert.equal(proof.sha256,hash(bytes));assert.equal(proof.bytes,bytes.length);}
         noFds(archive);scenarios++;
+        const history=Array.from({length:5},(_,i)=>JSON.stringify({id:String(9007199254740993n+BigInt(i)),value:'original-'+i}));
+        const historical=bootstrap({release:history}),retained=await api.collectVerifiedRestoreBootstrapRows(historical);
+        assert.deepEqual(retained.releaseRows,history);assert.equal(retained.memberProofs[0].row_count,'5');noFds(historical);scenarios++;
         for(const options of [{count:3},{count:1},{registryWire:Buffer.from(encode(rawNull)+'\n')},
           {registryWire:Buffer.from(JSON.stringify('{"id":"1","value":{}}')+'\n'),count:1}]){
           const invalid=bootstrap(options);await assert.rejects(()=>api.collectVerifiedRestoreBootstrapRows(invalid));noFds(invalid);scenarios++;
@@ -1455,7 +1459,7 @@ if (process.argv.includes('--immutable-bootstrap-metadata-source-only') || proce
           assert.equal(error.code,code);assert.equal(error.source_member,member);
           assert.equal(Object.hasOwn(error,'cause'),false);
           assert.deepEqual(JSON.parse(JSON.stringify(error)),{code,source_member:member});
-          assert.ok(['Fixed signed bootstrap inventory is unavailable.','Bootstrap requires one original release and nonempty original registry.',
+          assert.ok(['Fixed signed bootstrap inventory is unavailable.','Bootstrap requires nonempty original release history and original registry.',
             'Bootstrap original member is unavailable.'].includes(error.message));
           return true;
         };
@@ -1476,7 +1480,7 @@ if (process.argv.includes('--immutable-bootstrap-metadata-source-only') || proce
           }
         });
         await rawRun('BOOTSTRAP_DIAGNOSTIC_NEW only fixed original row prerequisites named',async()=>{
-          for(const options of [{omitRelease:true},{releaseSchema:'auth'},{release:[]},{release:[raw,raw]},{release:[],releaseCount:1}]){
+          for(const options of [{omitRelease:true},{releaseSchema:'auth'},{release:[]},{release:[],releaseCount:1}]){
             const {archive}=bootstrap(options);await assert.rejects(()=>collect(archive),typed('IMMUTABLE_BOOTSTRAP_ORIGINAL_ROWS_UNAVAILABLE','public.release_deployment_manifest'));noFds(archive);
           }
           for(const options of [{omitRegistry:true},{registrySchema:'auth'},{registry:[]},{registryWire:Buffer.alloc(0),registryCount:1}]){
@@ -1512,8 +1516,11 @@ if (process.argv.includes('--immutable-bootstrap-metadata-source-only') || proce
         // The unrelated malformed public.records was never consumed; the
         // importer's all-DATA gates remain separate, not waived by this getter.
       });
-      await rawRun('BOOTSTRAP_RAW_NEW release exactly one and registry exact nonzero counts required',async()=>{
-        for(const options of [{release:[]},{release:[raw,raw]},{registry:[]},{registryCount:3},{registryCount:1}]){
+      await rawRun('BOOTSTRAP_RAW_NEW complete release history and registry exact nonzero counts required',async()=>{
+        const historical=Array.from({length:5},(_,index)=>raw.replace('9223372036854775807',String(9007199254740993n+BigInt(index))));
+        const {archive:history}=bootstrap({release:historical});const retained=await collect(history);
+        assert.deepEqual(retained.releaseRows,historical);assert.equal(retained.memberProofs[0].row_count,'5');noFds(history);
+        for(const options of [{release:[]},{releaseCount:2},{releaseCount:0},{registry:[]},{registryCount:3},{registryCount:1}]){
           const {archive}=bootstrap(options);await assert.rejects(()=>collect(archive));noFds(archive);
         }
       });

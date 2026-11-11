@@ -51,7 +51,11 @@ jobs:
           cache: npm
       - run: npm ci --ignore-scripts
       - name: Check isolated private rehearsal contracts
-        run: node --test scripts/private-backup-only-rehearsal-tests.mjs
+        run: |
+          node --test scripts/private-backup-only-rehearsal-tests.mjs scripts/immutable-release-history-tests.mjs
+          node scripts/disaster-recovery-archive-tests.mjs --native-text-columns-archive-only --text-archive-case=bootstrap
+          node scripts/disaster-recovery-archive-tests.mjs --immutable-bootstrap-raw-source-only
+          node scripts/disaster-recovery-archive-tests.mjs --immutable-bootstrap-prerequisite-errors-only
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: memphis-zoo-disaster-recovery-${{ inputs.backup_run_id }}

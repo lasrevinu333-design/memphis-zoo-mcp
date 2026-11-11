@@ -125,6 +125,36 @@ function requireArchive(archive,original){
  assert.equal(current.sourceBinding,original.sourceBinding);
  assert.deepEqual(current.selection,original.selection);assert.deepEqual(current.privateDataMembers,original.privateDataMembers);
 }
+// Metadata selection only. Preserve every original raw row; exactly one
+// deployed row binds the runtime identity, independently of historical rows.
+// This helper creates no source token, target or import authority.
+export function selectOriginalDeployedReleaseRow({releaseRows,releaseTable,signedRelease}){
+ assert.ok(Array.isArray(releaseRows)&&releaseRows.length>0);
+ assert.equal(String(releaseRows.length),releaseTable.row_count);
+ assert.equal(signedRelease.status,'deployed');
+ assert.ok([postgresTextColumnsLineEncoding,postgresJsonTextLineEncoding].includes(releaseTable.data_encoding));
+ const names=releaseTable.columns.map(column=>column.name);
+ assert.ok(names.includes('status')&&names.includes('release_id'));
+ const deployed=[],identities=new Set();
+ for(const raw of releaseRows){
+  assert.equal(typeof raw,'string');const row=JSON.parse(raw);closed(row,names);
+  assert.equal(typeof row.release_id,'string');assert.ok(row.release_id.length>0&&!identities.has(row.release_id));
+  identities.add(row.release_id);
+  assert.equal(typeof row.status,'string');
+  if(releaseTable.data_encoding===postgresTextColumnsLineEncoding)
+   for(const name of names)assert.ok(row[name]===null||typeof row[name]==='string');
+  if(row.status==='deployed')deployed.push({raw,row});
+ }
+ assert.equal(deployed.length,1,'Exactly one original deployed release required');
+ const {raw,row}=deployed[0];closed(row,Object.keys(signedRelease));
+ if(releaseTable.data_encoding===postgresTextColumnsLineEncoding){
+  // Full native decoded comparison remains mandatory inside PostgreSQL before
+  // bootstrap DATA insertion. Do not normalize timestamps/JSON/numerics in JS.
+  for(const column of releaseTable.columns)
+   if(column.data_type==='text')assert.equal(row[column.name],signedRelease[column.name]);
+ }else assert.deepEqual(row,signedRelease);
+ return raw;
+}
 // Caller objects, archived SQL and these strings cannot authorize target
 // writes. The later fixed installer must obtain this Source itself and retain
 // actual original owner/fresh-target/fence/currentness checks across every IO.
@@ -150,23 +180,11 @@ export async function prepareVerifiedImmutableBootstrapSource(verifiedArchive){
  const ledger=parse('migration-ledger.json');assert.ok(Array.isArray(ledger)&&ledger.length>0);
  assert.equal(ledger.length,identity.migration_ledger_count);assert.equal(ledger.at(-1).version,identity.migration_head);
  sourcePhase='ORIGINAL_RELEASE';
- assert.equal(raw.releaseRows.length,1);assert.ok(raw.registryRows.length>0);
+ assert.ok(raw.releaseRows.length>0);assert.ok(raw.registryRows.length>0);
  const releaseTable=catalog.filter(table=>table.schema_name==='public'&&table.table_name==='release_deployment_manifest');
  assert.equal(releaseTable.length,1);
- if(releaseTable[0].data_encoding===postgresTextColumnsLineEncoding){
-  // This is Source preparation ONLY. Native text is not ordinary JSON DATA:
-  // do not coerce boolean/time/JSON fields in JS to manufacture equality.
-  // The initializer must compare the COMPLETE actual decoded native record
-  // to signed release metadata before its first bootstrap DATA insertion.
-  const textRow=JSON.parse(raw.releaseRows[0]);closed(textRow,Object.keys(identity.release));
-  for(const column of releaseTable[0].columns){
-   assert.ok(textRow[column.name]===null||typeof textRow[column.name]==='string');
-   if(column.data_type==='text')assert.equal(textRow[column.name],identity.release[column.name]);
-  }
- }else{
-  assert.equal(releaseTable[0].data_encoding,postgresJsonTextLineEncoding);
-  assert.deepEqual(JSON.parse(raw.releaseRows[0]),identity.release);
- }
+ const deployedReleaseRow=selectOriginalDeployedReleaseRow({releaseRows:raw.releaseRows,
+  releaseTable:releaseTable[0],signedRelease:identity.release});
  sourcePhase='SOURCE_RECIPES';
  const allRecipes=[...baseRecipes(parse('original-guards.json')),...domain.recipes,...messages.recipes];
  assert.equal(allRecipes.length,25);assert.equal(new Set(allRecipes.map(r=>r.identity)).size,25);
@@ -202,7 +220,7 @@ export async function prepareVerifiedImmutableBootstrapSource(verifiedArchive){
   return Object.freeze({...statement});
  });
  const result=Object.freeze({schema:'custodial.immutable-private-source-bootstrap.v1',sourceBinding:original.sourceBinding,
-  inventory:observed.inventory,releaseRows:raw.releaseRows,registryRows:raw.registryRows,memberProofs:raw.memberProofs,
+  inventory:observed.inventory,releaseRows:raw.releaseRows,deployedReleaseRow,registryRows:raw.registryRows,memberProofs:raw.memberProofs,
   recipes:Object.freeze(recipes),registrySource:Object.freeze(registrySource),statements:Object.freeze(ordered),
   target_authority:false,transaction_authority:false,import_authority:false,resume_allowed:false});
  plans.set(result,{archive:verifiedArchive,original,inventory:observed.inventory,baseIdentity:base.identity,domain,messages,

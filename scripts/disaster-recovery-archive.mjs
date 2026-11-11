@@ -700,8 +700,8 @@ export async function collectVerifiedRestoreBootstrapRows(verifiedArchive) {
   const selection = readVerifiedRestoreTableSelection(verifiedArchive, {databaseOnly: true});
   const members = ["release_deployment_manifest", "custodial_release_authority_restore_inventory"].map(name => {
     const table = selection.databaseTables.find(value => value.schema_name === "public" && value.table_name === name);
-    if (!table || (name === "release_deployment_manifest" ? table.row_count !== "1" : BigInt(table.row_count) === 0n))
-      throw Object.assign(new Error("Bootstrap requires one original release and nonempty original registry."), {
+    if (!table || BigInt(table.row_count) === 0n)
+      throw Object.assign(new Error("Bootstrap requires nonempty original release history and original registry."), {
         code: "IMMUTABLE_BOOTSTRAP_ORIGINAL_ROWS_UNAVAILABLE", source_member: "public." + name,
       });
     const path = table.data_file, original = context.files.get(path), sha256 = context.checksums.get(path);

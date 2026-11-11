@@ -196,7 +196,7 @@ export async function initializeVerifiedImmutableFreshSource({db,verifiedArchive
  // the original text member, restored/compared through the native v2 codec.
  if(metadataCatalog.find(table=>table.schema_name==='public'&&table.table_name==='release_deployment_manifest').data_encoding===postgresTextColumnsLineEncoding){
   const observed=(await query(`select pg_catalog.row_to_json(r)::text original_row
-   from ${metadataRecord('release_deployment_manifest','$1::json')} r`,[source.releaseRows[0]])).rows;
+   from ${metadataRecord('release_deployment_manifest','$1::json')} r`,[source.deployedReleaseRow])).rows;
   assert.equal(observed.length,1);
   assert.deepEqual(JSON.parse(observed[0].original_row),source.sourceBinding.source_identity.release);
  }
@@ -233,7 +233,11 @@ export async function initializeVerifiedImmutableFreshSource({db,verifiedArchive
  assert.ok(isDeepStrictEqual(verifiedCron.expected,expectedCron),'Original mapped cron inventory differs');
  assert.equal(verifiedCron.differences.length,0,'Original verified cron state differs');
  const cronExpectedRaw=JSON.stringify(expectedCron); // Closed TEXT/boolean/safe port fields; BIGINT IDs remain TEXT.
- await query(`insert into public.release_deployment_manifest select * from ${metadataRecord('release_deployment_manifest','$1::json')}`,[source.releaseRows[0]]);
+ const releaseOriginals='['+source.releaseRows.join(',')+']';
+ const released=await query(`insert into public.release_deployment_manifest
+  select r.* from pg_catalog.json_array_elements($1::json) with ordinality e(image,ordinality)
+  cross join lateral ${metadataRecord('release_deployment_manifest','e.image')} r order by e.ordinality`,[releaseOriginals]);
+ assert.equal(released.rowCount,source.releaseRows.length);
  const expected=`with original as(select value image,ordinality from json_array_elements($1::json) with ordinality),
   expected as(select case when image->>'object_kind'='function' and $2::jsonb ? (image->>'object_identity')
    then jsonb_set(jsonb_set(image::jsonb,'{definition_sql}',$2::jsonb->(image->>'object_identity')->'definition_sql'),
@@ -251,10 +255,19 @@ export async function initializeVerifiedImmutableFreshSource({db,verifiedArchive
   (select count(*)::int from public.release_deployment_manifest) releases,
   (select count(*)::int from public.custodial_release_authority_restore_inventory) registry,
   (select count(*)::int from cron.job) jobs`)).rows[0];
- assert.deepEqual(metadataCounts,{releases:1,registry:source.registryRows.length,jobs:cron.length});
- const releaseRows=(await query(`select count(*)::int n from public.release_deployment_manifest t
-  where to_jsonb(t)=to_jsonb(${metadataRecord('release_deployment_manifest','$1::json')})`,[source.releaseRows[0]])).rows;
- assert.deepEqual(releaseRows,[{n:1}]);
+ assert.deepEqual(metadataCounts,{releases:source.releaseRows.length,registry:source.registryRows.length,jobs:cron.length});
+ const releaseCompared=(await query(`with expected as(
+  select to_jsonb(r) image from pg_catalog.json_array_elements($1::json) e(image)
+  cross join lateral ${metadataRecord('release_deployment_manifest','e.image')} r),
+  actual as(select to_jsonb(t) image from public.release_deployment_manifest t),
+  mismatch as((select image from expected except all select image from actual) union all
+   (select image from actual except all select image from expected))
+  select count(*)::int n from mismatch`,[releaseOriginals])).rows;
+ assert.deepEqual(releaseCompared,[{n:0}]);
+ const deployed=(await query(`select count(*)::int n,
+  count(*) filter(where to_jsonb(t)=to_jsonb(${metadataRecord('release_deployment_manifest','$1::json')}))::int matching
+  from public.release_deployment_manifest t where status='deployed'`,[source.deployedReleaseRow])).rows;
+ assert.deepEqual(deployed,[{n:1,matching:1}]);
  const restoredLedger=(await query(`select version::text,name::text,statements from supabase_migrations.schema_migrations
   order by array_position($1::text[],version::text)`,[ledger.map(row=>row.version)])).rows;
  assert.deepEqual(restoredLedger,ledger);

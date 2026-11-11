@@ -1,13 +1,14 @@
 // Closed disposable qualification for signed archives containing the two immutable
 // originals. No alternate importer, production target, migration or resume path.
 import assert from 'node:assert/strict';
+import {isDeepStrictEqual} from 'node:util';
 import {randomBytes,randomUUID} from 'node:crypto';
 import {spawn} from 'node:child_process';
 import {createServer,createConnection,isIP} from 'node:net';
 import {readFileSync,writeFileSync,mkdtempSync,rmSync,realpathSync} from 'node:fs';
 import {resolve,dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {materializeVerifiedArchive,readVerifiedPrivateImportSource,readVerifiedArchiveSourceBinding} from './disaster-recovery-archive.mjs';
+import {materializeVerifiedArchive,readVerifiedPrivateImportSource,readVerifiedArchiveSourceBinding,readVerifiedImmutableBootstrapInventory} from './disaster-recovery-archive.mjs';
 import {requireSigningKey,signBinding,restoreIntentBinding} from './disaster-recovery-crypto.mjs';
 import {captureVerifiedImmutableFreshRestoreIntent} from './immutable-private-fresh-restore-intent.mjs';
 import {prepareVerifiedImmutableBootstrapSource} from './immutable-private-source-bootstrap.mjs';
@@ -28,6 +29,19 @@ export function safeSourcePreparationFailure(error){
   return {code:code.value,source_phase:phase.value};
 }
 
+export function originalRowsMetadataDiagnostics({source,inventory}){
+  const catalog=JSON.parse(inventory['inventory/table-catalog.json']);
+  const ledger=JSON.parse(inventory['inventory/migration-ledger.json']);
+  const count=name=>{
+    const tables=source.selection.databaseTables.filter(t=>t.schema_name==='public'&&t.table_name===name);
+    if(tables.length!==1||! /^(0|[1-9][0-9]*)$/.test(tables[0].row_count))return null;
+    return tables[0].row_count;
+  };
+  return {release_manifest_rows:count('release_deployment_manifest'),restore_registry_rows:count('custodial_release_authority_restore_inventory'),
+    catalog_matches_original_selection:isDeepStrictEqual(catalog,source.selection.databaseTables),
+    ledger_count_matches:Array.isArray(ledger)&&ledger.length===source.sourceBinding.source_identity.migration_ledger_count,
+    ledger_head_matches:Array.isArray(ledger)&&ledger.at(-1)?.version===source.sourceBinding.source_identity.migration_head};
+}
 export function selectPrivateProfile(source){
   const names=source.selection.privateTables.map(t=>t.table_name).sort();
   if(!names.length)return 'native';
@@ -99,7 +113,7 @@ export async function runPrivate(){
   const owner=randomBytes(16).toString('hex'),name='mz_schema_rebuild_'+process.env.GITHUB_RUN_ID;
   const networkName=name+'_private_'+owner, database=name;
   let archive,cid,networkId,relay,relayClosed=true,pgAbsent=false,networkAbsent=false;
-  const sockets=new Set(),children=new Set(),pendingConnections=new Set();let stopping=false,closing=false,failure,phase='authenticate',result,source;
+  const sockets=new Set(),children=new Set(),pendingConnections=new Set();let stopping=false,closing=false,failure,phase='authenticate',result,source,sourceMetadata;
   let cancelTimer;
   const stop=()=>{stopping=true;for(const pid of children)try{process.kill(-pid,'SIGTERM');}catch{}
     cancelTimer??=setTimeout(()=>{for(const pid of children)try{process.kill(-pid,'SIGKILL');}catch{}},60000);};
@@ -125,6 +139,7 @@ export async function runPrivate(){
   const receiptPath=resolve(tmp,'private-backup-only-rehearsal.json');
   try{
     archive=authenticate();source=readVerifiedPrivateImportSource(archive);assert.equal(selectPrivateProfile(source),'private');
+    sourceMetadata=originalRowsMetadataDiagnostics({source,inventory:readVerifiedImmutableBootstrapInventory(archive).inventory});
     // Fail on absent source/ACL/guard recipes before resources are created.
     await prepareVerifiedImmutableBootstrapSource(archive);
     const key=randomBytes(32).toString('hex'),keyId='private-rehearsal-'+process.env.GITHUB_RUN_ID;
@@ -225,7 +240,7 @@ export async function runPrivate(){
       database_tables:!failure?result?.database_tables:null,database_rows:!failure?result?.database_rows:null,
       provider_verified:!failure&&result?.storage?.provider_verified===true,
       phase,blocker:failure?'PRIVATE_REHEARSAL_REFUSED':stopping?'CANCELLED':null,
-      source_preparation:safeSourcePreparationFailure(failure)};
+      source_preparation:safeSourcePreparationFailure(failure),original_rows_metadata:sourceMetadata??null};
     writeFileSync(receiptPath,JSON.stringify(receipt,null,2)+'\n',{mode:0o600,flag:'wx'});
     if(!failure&&!stopping)process.stdout.write(JSON.stringify(receipt)+'\n');
   }
@@ -237,12 +252,13 @@ if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
   try{
     assert.equal(process.argv.length,3);
     if(mode==='--preflight'){
-      let archive;
-      try{archive=authenticate();assert.equal(selectPrivateProfile(readVerifiedPrivateImportSource(archive)),'private');
+      let archive,sourceMetadata;
+      try{archive=authenticate();const source=readVerifiedPrivateImportSource(archive);assert.equal(selectPrivateProfile(source),'private');
+        sourceMetadata=originalRowsMetadataDiagnostics({source,inventory:readVerifiedImmutableBootstrapInventory(archive).inventory});
         await prepareVerifiedImmutableBootstrapSource(archive);
-        console.log(JSON.stringify({ok:true,scope:'PRIVATE_SOURCE_PREPARATION_ONLY',target_created:false,restore_performed:false}));
+        console.log(JSON.stringify({ok:true,scope:'PRIVATE_SOURCE_PREPARATION_ONLY',target_created:false,restore_performed:false,original_rows_metadata:sourceMetadata}));
       }catch(error){console.log(JSON.stringify({ok:false,scope:'PRIVATE_SOURCE_PREPARATION_ONLY',target_created:false,restore_performed:false,
-        source_preparation:safeSourcePreparationFailure(error)}));process.exitCode=1;
+        source_preparation:safeSourcePreparationFailure(error),original_rows_metadata:sourceMetadata??null}));process.exitCode=1;
       }finally{archive?.cleanup();}
     }else if(mode==='--profile'||mode==='--dispatch'){
       assert.equal(process.env.REHEARSAL_SCOPE,'backup_only');
