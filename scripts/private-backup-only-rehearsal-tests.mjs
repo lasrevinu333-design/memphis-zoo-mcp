@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {PG_IMAGE,selectPrivateProfile,freshIntentEnvelope,assertOwnedPg,assertPrivateResult,safeSourcePreparationFailure} from './run-private-backup-only-rehearsal.mjs';
+import {PG_IMAGE,selectPrivateProfile,freshIntentEnvelope,assertOwnedPg,assertPrivateResult,safeSourcePreparationFailure,originalOwnerMetadataDiagnostics} from './run-private-backup-only-rehearsal.mjs';
 import {captureVerifiedOriginalRestoreIntent} from './disaster-recovery-crypto.mjs';
 import {captureVerifiedImmutableFreshRestoreIntent} from './immutable-private-fresh-restore-intent.mjs';
 const key='offline-fixture-independent-intent-key-32bytes',keyId='fixture';
@@ -99,4 +99,38 @@ test('source preparation failure exposes only exact closed code and phase, never
   assert.equal(safeSourcePreparationFailure({...error,source_phase:'private fixture'}),null);
   assert.equal(safeSourcePreparationFailure({...error,code:'other'}),null);
   assert.equal(safeSourcePreparationFailure({get code(){throw Error('must not invoke')}}),null);
+});
+
+test('signed owner diagnostic emits only fixed identities, bounded owner enums and hashes',()=>{
+  const marker='private SQL must not escape';
+  const inventory={'inventory/original-guards.json':JSON.stringify([{owner:'postgres',definition:marker,prosrc:marker},
+    {owner:marker,definition:marker,prosrc:marker}]),'inventory/original-relations.json':JSON.stringify([
+    {schema_name:'custodial_release_identity',table_name:'group_original_creations',owner_name:'postgres'}]),
+    'inventory/original-acls.json':JSON.stringify({routines:[{kind:'FUNCTION',identity:'custodial_release_identity.guard_group_original_creation()',owner_name:'postgres',prosecdef:true,grants:marker}],namespaces_columns:[{kind:'SCHEMA',schema_name:'custodial_release_identity',owner_name:'postgres',grants:marker}]})};
+  const result=originalOwnerMetadataDiagnostics(inventory);
+  assert.equal(result.guards[0].owner,'postgres');assert.equal(result.guards[1].owner,'OTHER_OR_MISSING');
+  assert.match(result.guards[0].definition_sha256,/^[a-f0-9]{64}$/);assert.equal(result.admission_changed,false);
+  assert.equal(result.release_identity_namespace_owner,'postgres');
+  assert.equal(result.recipe_function_count,25);assert.equal(new Set(result.recipe_functions.map(r=>r.identity)).size,25);
+  assert.equal(result.recipe_functions[0].owner,'postgres');
+  assert.equal(result.recipe_functions[0].owner_evidence,'EXACT_ACL_MATCH');
+  assert.equal(result.recipe_functions[1].owner_evidence,'MISSING');
+  assert.equal(result.recipe_functions[1].owner,'OTHER_OR_MISSING');
+  assert.ok(result.recipe_functions.every(r=>r.security_definer==='NOT_REPRESENTED_IN_ACL_INVENTORY'));
+  assert.equal(result.restore_control.role,'TARGET_CREATED_RESTORE_CONTROL');
+  assert.equal(result.restore_control.source_inventory_match_count,0);
+  assert.equal(JSON.stringify(result).includes(marker),false);
+  const acls=JSON.parse(inventory['inventory/original-acls.json']);
+  acls.routines.push({...acls.routines[0],owner_name:marker});
+  inventory['inventory/original-acls.json']=JSON.stringify(acls);
+  const duplicate=originalOwnerMetadataDiagnostics(inventory).recipe_functions[0];
+  assert.equal(duplicate.owner_evidence,'AMBIGUOUS');assert.equal(duplicate.owner,'OTHER_OR_MISSING');
+  assert.equal(duplicate.acl_match_count,2);
+  acls.routines.shift();inventory['inventory/original-acls.json']=JSON.stringify(acls);
+  assert.equal(originalOwnerMetadataDiagnostics(inventory).recipe_functions[0].owner,'OTHER_OR_MISSING');
+  acls.routines=result.recipe_functions.map(({identity},i)=>({kind:'FUNCTION',identity,owner_name:i%2?'supabase_admin':'postgres'}));
+  inventory['inventory/original-acls.json']=JSON.stringify(acls);
+  const complete=originalOwnerMetadataDiagnostics(inventory);
+  assert.ok(complete.recipe_functions.every((r,i)=>r.acl_match_count===1&&r.owner_evidence==='EXACT_ACL_MATCH'&&r.owner===(i%2?'supabase_admin':'postgres')));
+  assert.deepEqual(complete.recipe_functions.map(r=>r.identity),result.recipe_functions.map(r=>r.identity));
 });

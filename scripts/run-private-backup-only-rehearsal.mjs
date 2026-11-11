@@ -2,7 +2,7 @@
 // originals. No alternate importer, production target, migration or resume path.
 import assert from 'node:assert/strict';
 import {isDeepStrictEqual} from 'node:util';
-import {randomBytes,randomUUID} from 'node:crypto';
+import {randomBytes,randomUUID,createHash} from 'node:crypto';
 import {spawn} from 'node:child_process';
 import {createServer,createConnection,isIP} from 'node:net';
 import {readFileSync,writeFileSync,mkdtempSync,rmSync,realpathSync} from 'node:fs';
@@ -11,6 +11,8 @@ import {fileURLToPath} from 'node:url';
 import {materializeVerifiedArchive,readVerifiedPrivateImportSource,readVerifiedArchiveSourceBinding,readVerifiedImmutableBootstrapInventory} from './disaster-recovery-archive.mjs';
 import {requireSigningKey,signBinding,restoreIntentBinding} from './disaster-recovery-crypto.mjs';
 import {captureVerifiedImmutableFreshRestoreIntent} from './immutable-private-fresh-restore-intent.mjs';
+import {loadImmutableDomainSourceRecipes} from './immutable-private-domain-source.mjs';
+import {loadImmutableMessageSourceRecipes} from './immutable-private-message-source.mjs';
 import {prepareVerifiedImmutableBootstrapSource} from './immutable-private-source-bootstrap.mjs';
 import {closeOwnedRelay,storageResult} from './run-official-local-storage-rehearsal.mjs';
 
@@ -41,6 +43,43 @@ export function originalRowsMetadataDiagnostics({source,inventory}){
     catalog_matches_original_selection:isDeepStrictEqual(catalog,source.selection.databaseTables),
     ledger_count_matches:Array.isArray(ledger)&&ledger.length===source.sourceBinding.source_identity.migration_ledger_count,
     ledger_head_matches:Array.isArray(ledger)&&ledger.at(-1)?.version===source.sourceBinding.source_identity.migration_head};
+}
+// Diagnostic metadata only, never an owner-admission profile or role override.
+// Original SQL, grant lists and row payloads are deliberately not emitted.
+export function originalOwnerMetadataDiagnostics(inventory){
+  const guards=JSON.parse(inventory['inventory/original-guards.json']);
+  const relations=JSON.parse(inventory['inventory/original-relations.json']);
+  const acls=JSON.parse(inventory['inventory/original-acls.json']);
+  assert.ok(Array.isArray(guards)&&guards.length===2&&Array.isArray(relations)&&Array.isArray(acls.namespaces_columns));
+  const owner=value=>value==='postgres'?'postgres':value==='supabase_admin'?'supabase_admin':'OTHER_OR_MISSING';
+  const hash=value=>typeof value==='string'?createHash('sha256').update(value).digest('hex'):null;
+  const ids=['custodial_release_identity.guard_group_original_creation()','custodial_dr.guard_application_mutation()'];
+  const domain=loadImmutableDomainSourceRecipes(),messages=loadImmutableMessageSourceRecipes();
+  const recipeIds=[...ids,...domain.recipes.map(r=>r.identity),...messages.recipes.map(r=>r.identity)];
+  assert.equal(recipeIds.length,25);assert.equal(new Set(recipeIds).size,25);
+  domain.assertCurrent();messages.assertCurrent();
+  const routines=Array.isArray(acls.routines)?acls.routines:[];
+  const recipeFunctions=recipeIds.map(identity=>{
+    const rows=routines.filter(r=>r.kind==='FUNCTION'&&r.identity===identity);
+    return {identity,acl_match_count:rows.length,
+      owner:rows.length===1?owner(rows[0].owner_name):'OTHER_OR_MISSING',
+      owner_evidence:rows.length===1?'EXACT_ACL_MATCH':rows.length===0?'MISSING':'AMBIGUOUS',
+      security_definer:'NOT_REPRESENTED_IN_ACL_INVENTORY'};
+  });
+  const fixedTables=[['custodial_release_identity','group_original_creations'],['custodial_release_identity','employee_message_original_outcomes'],
+    ['public','release_deployment_manifest'],['public','custodial_release_authority_restore_inventory']];
+  const namespace=acls.namespaces_columns.filter(r=>r.kind==='SCHEMA'&&r.schema_name==='custodial_release_identity');
+  return {guards:ids.map((identity,i)=>({identity,owner:owner(guards[i]?.owner),
+      body_sha256:hash(guards[i]?.prosrc),definition_sha256:hash(guards[i]?.definition)})),
+    recipe_functions:recipeFunctions,recipe_function_count:recipeFunctions.length,
+    release_identity_namespace_owner:namespace.length===1?owner(namespace[0].owner_name):'OTHER_OR_MISSING',
+    original_relations:fixedTables.map(([schema_name,table_name])=>{
+      const rows=relations.filter(r=>r.schema_name===schema_name&&r.table_name===table_name);
+      return {schema_name,table_name,owner:rows.length===1?owner(rows[0].owner_name):'OTHER_OR_MISSING'};
+    }),control_table_owners:'NOT_IN_ORIGINAL_RELATIONS_INVENTORY',
+    restore_control:{identity:'custodial_dr.restore_control',role:'TARGET_CREATED_RESTORE_CONTROL',
+      source_inventory_match_count:relations.filter(r=>r.schema_name==='custodial_dr'&&r.table_name==='restore_control').length,
+      owner:'NOT_ESTABLISHED_BY_SOURCE_INVENTORY'},admission_changed:false};
 }
 export function selectPrivateProfile(source){
   const names=source.selection.privateTables.map(t=>t.table_name).sort();
@@ -113,7 +152,7 @@ export async function runPrivate(){
   const owner=randomBytes(16).toString('hex'),name='mz_schema_rebuild_'+process.env.GITHUB_RUN_ID;
   const networkName=name+'_private_'+owner, database=name;
   let archive,cid,networkId,relay,relayClosed=true,pgAbsent=false,networkAbsent=false;
-  const sockets=new Set(),children=new Set(),pendingConnections=new Set();let stopping=false,closing=false,failure,phase='authenticate',result,source,sourceMetadata;
+  const sockets=new Set(),children=new Set(),pendingConnections=new Set();let stopping=false,closing=false,failure,phase='authenticate',result,source,sourceMetadata,ownerMetadata;
   let cancelTimer;
   const stop=()=>{stopping=true;for(const pid of children)try{process.kill(-pid,'SIGTERM');}catch{}
     cancelTimer??=setTimeout(()=>{for(const pid of children)try{process.kill(-pid,'SIGKILL');}catch{}},60000);};
@@ -140,6 +179,7 @@ export async function runPrivate(){
   try{
     archive=authenticate();source=readVerifiedPrivateImportSource(archive);assert.equal(selectPrivateProfile(source),'private');
     sourceMetadata=originalRowsMetadataDiagnostics({source,inventory:readVerifiedImmutableBootstrapInventory(archive).inventory});
+    ownerMetadata=originalOwnerMetadataDiagnostics(readVerifiedImmutableBootstrapInventory(archive).inventory);
     // Fail on absent source/ACL/guard recipes before resources are created.
     await prepareVerifiedImmutableBootstrapSource(archive);
     const key=randomBytes(32).toString('hex'),keyId='private-rehearsal-'+process.env.GITHUB_RUN_ID;
@@ -240,7 +280,7 @@ export async function runPrivate(){
       database_tables:!failure?result?.database_tables:null,database_rows:!failure?result?.database_rows:null,
       provider_verified:!failure&&result?.storage?.provider_verified===true,
       phase,blocker:failure?'PRIVATE_REHEARSAL_REFUSED':stopping?'CANCELLED':null,
-      source_preparation:safeSourcePreparationFailure(failure),original_rows_metadata:sourceMetadata??null};
+      source_preparation:safeSourcePreparationFailure(failure),original_rows_metadata:sourceMetadata??null,original_owner_metadata:ownerMetadata??null};
     writeFileSync(receiptPath,JSON.stringify(receipt,null,2)+'\n',{mode:0o600,flag:'wx'});
     if(!failure&&!stopping)process.stdout.write(JSON.stringify(receipt)+'\n');
   }
@@ -252,13 +292,14 @@ if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
   try{
     assert.equal(process.argv.length,3);
     if(mode==='--preflight'){
-      let archive,sourceMetadata;
+      let archive,sourceMetadata,ownerMetadata;
       try{archive=authenticate();const source=readVerifiedPrivateImportSource(archive);assert.equal(selectPrivateProfile(source),'private');
         sourceMetadata=originalRowsMetadataDiagnostics({source,inventory:readVerifiedImmutableBootstrapInventory(archive).inventory});
+        ownerMetadata=originalOwnerMetadataDiagnostics(readVerifiedImmutableBootstrapInventory(archive).inventory);
         await prepareVerifiedImmutableBootstrapSource(archive);
-        console.log(JSON.stringify({ok:true,scope:'PRIVATE_SOURCE_PREPARATION_ONLY',target_created:false,restore_performed:false,original_rows_metadata:sourceMetadata}));
+        console.log(JSON.stringify({ok:true,scope:'PRIVATE_SOURCE_PREPARATION_ONLY',target_created:false,restore_performed:false,original_rows_metadata:sourceMetadata,original_owner_metadata:ownerMetadata}));
       }catch(error){console.log(JSON.stringify({ok:false,scope:'PRIVATE_SOURCE_PREPARATION_ONLY',target_created:false,restore_performed:false,
-        source_preparation:safeSourcePreparationFailure(error),original_rows_metadata:sourceMetadata??null}));process.exitCode=1;
+        source_preparation:safeSourcePreparationFailure(error),original_rows_metadata:sourceMetadata??null,original_owner_metadata:ownerMetadata??null}));process.exitCode=1;
       }finally{archive?.cleanup();}
     }else if(mode==='--profile'||mode==='--dispatch'){
       assert.equal(process.env.REHEARSAL_SCOPE,'backup_only');
