@@ -2970,7 +2970,7 @@
       {
         "path": "scripts/private-backup-only-rehearsal-tests.mjs",
         "mode": "100644",
-        "object_id": "61fa0883837cdebf9ada6ef9baacfa697d41832e"
+        "object_id": "0fc88e0f56c0f8de68d6e1ae36fb93f264e595f6"
       },
       {
         "path": "scripts/production-backup-original-metadata.mjs",
@@ -3285,7 +3285,7 @@
       {
         "path": "scripts/run-official-local-storage-rehearsal.mjs",
         "mode": "100644",
-        "object_id": "9b0694f2c6028c082f1755632e42ba325634e54b"
+        "object_id": "3fbc845b0f8e7290ebab1c3f532887fbef346a0d"
       },
       {
         "path": "scripts/run-private-backup-only-rehearsal.mjs",
