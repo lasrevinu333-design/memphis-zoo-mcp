@@ -1,3 +1,4 @@
+import {recordImmutableFreshFailure,readImmutableFreshFailure} from './immutable-private-stage-diagnostic.mjs';
 // Exact shipping closures with inert recording clients. These tests prove
 // actor plumbing/refusal order only; they do not assert native SQL admission.
 import test from 'node:test';
@@ -6,8 +7,8 @@ import {readFileSync} from 'node:fs';
 import {types,isDeepStrictEqual} from 'node:util';
 import {createHash} from 'node:crypto';
 const text=file=>readFileSync(new URL(file,import.meta.url),'utf8');
-const load=(file,deps,result)=>new Function(...Object.keys(deps),text(file)
- .replace(/^import\s[\s\S]*?;\n/gm,'').replaceAll('export async function','async function')+'\nreturn '+result+';')(...Object.values(deps));
+const load=(file,deps,result)=>{deps={recordImmutableFreshFailure,...deps};return new Function(...Object.keys(deps),text(file)
+ .replace(/^import\s[\s\S]*?;\n/gm,'').replaceAll('export async function','async function')+'\nreturn '+result+';')(...Object.values(deps));};
 const profiles=[
  Object.freeze({id:'immutable-private-legacy-supabase-admin',actor:'supabase_admin'}),
  Object.freeze({id:'immutable-private-current-postgres',actor:'postgres'}),
@@ -152,5 +153,50 @@ for(const profile of profiles)for(const kind of ['private','ordinary'])test(kind
  for(const mode of ['valid','actor','session','control','withdraw','forged']){
   const f=comparatorFixture(profile,kind,mode),result=await f.run();assert.equal(result.state,'UNSUPPORTED');
   assert.equal(f.calls(),mode==='valid'?2:mode==='forged'?0:1);
+ }
+});
+
+test('initializer records exact pinned statement refusal without changing error identity or continuing',async()=>{
+ for(const profile of profiles)for(let ordinal=1;ordinal<=13;ordinal++){
+  const archive={},executed=[],error=Object.assign(new Error('Exact original messenger function/ACL/trigger predecessor differs'),{code:'55000'});
+  const context={actor:profile.actor,session_actor:profile.actor,readonly:'off',replication:'origin',row_security:'off',search_path:'pg_catalog',database:'UNIT_ONLY',database_oid:'5',backend_pid:411,transaction_id:'1285',database_owner:'postgres',dr_owner:'postgres',original_owned_relations:5,active_leases:0,held_fences:2};
+  const relations=[{schema_name:'public',table_name:'fixture',relation_kind:'r',is_partition:false}];
+  const recipes=Array.from({length:25},(_,i)=>({identity:'public.fixture_'+i+'()',before:'UNIT '+i,beforeBodyHash:createHash('sha256').update('BODY '+i).digest('hex')}));
+  const source={inventory:{'inventory/table-catalog.json':'[]','inventory/original-relations.json':JSON.stringify(relations)},recipes,statements:Array.from({length:13},(_,i)=>'PINNED_STATEMENT_'+(i+1))};
+  class RecordingClient{async query(sql){
+   if(sql.startsWith('select current_user actor'))return {rowCount:1,rows:[context]};
+   if(sql.startsWith('select n.nspname'))return {rows:relations};
+   if(sql.startsWith('select proparallel'))return {rowCount:1,rows:[{counter_parallel_safety:'u'}]};
+   if(sql.startsWith('select schema_name,table_name,row_count'))return {rowCount:1,rows:[{schema_name:'public',table_name:'fixture',row_count:'0',transaction_id:'1285'}]};
+   if(sql.startsWith('select (select count(*)::int'))return {rows:[{controls:0,manifests:0,events:0,migrations:0,jobs:0,existing_import:null}]};
+   if(sql.startsWith('insert into custodial_dr.restore_control'))return {rowCount:1,rows:[]};
+   if(sql.startsWith('select i.ordinality'))return {rowCount:25,rows:recipes.map((r,i)=>({ordinal:i+1,identity:r.identity,definition:r.before,prosrc:'BODY '+i,owner:profile.actor}))};
+   assert.ok(source.statements.includes(sql));executed.push(sql);if(executed.length===ordinal)throw error;return {rows:[]};
+  }}
+  const fn=load('./immutable-private-source-initializer.mjs',{assert,types,isDeepStrictEqual,createHash,pg:{Client:RecordingClient},
+   prepareVerifiedImmutableBootstrapSource:async()=>source,assertVerifiedImmutableBootstrapSource:()=>{},readVerifiedImmutableBootstrapOwnerProfile:()=>profile,
+   reconcileVerifiedImmutableBootstrapAcls:async()=>({}),readVerifiedImmutableBootstrapStatement:(s,a,statement)=>{assert.equal(s,source);assert.equal(a,archive);return statement;}},'initializeVerifiedImmutableFreshSource');
+  await assert.rejects(fn({db:new RecordingClient(),verifiedArchive:archive}),e=>e===error);
+  assert.equal(executed.length,ordinal);
+  assert.deepEqual(readImmutableFreshFailure(error),{initializer_stage:'INSTALL_PINNED_STATEMENT',initializer_operation:'EXECUTE_QUERY',source_statement:String(ordinal).padStart(2,'0'),fresh_refusal:'MESSENGER_PREDECESSOR_DIFFERS'});
+ }
+});
+
+test('fresh composition labels original initializer/control/snapshot/import refusals and stops',async()=>{
+ const source=text('./immutable-private-data-import.mjs'),start=source.indexOf('export async function stageVerifiedImmutableFreshData(options)'),end=source.indexOf('// One original fresh DATA transaction decision.',start);
+ assert.ok(start>=0&&end>start);const body=source.slice(start,end).replace('export async function','async function');
+ for(const [failed,phase] of [['initialize','INITIALIZE_SOURCE'],['control','PREPARE_RESTORE_CONTROL'],['snapshot','CAPTURE_PRE_RESTORE_STATE'],['import','IMPORT_ORIGINAL_DATA']]){
+  const error=Object.assign(new Error('UNIT PRIVATE PAYLOAD'),{code:'55000'}),calls=[],archive={},dbClass=class{query(){}},db=new dbClass(),intent={restore_id:'UNIT',authority_generation:1,target_project_ref:'UNIT'},binding={archive_digest:'a'.repeat(64)};
+  const original={selection:{privateTables:[{table_name:'employee_message_original_outcomes'},{table_name:'group_original_creations'}],databaseTables:[]},privateDataMembers:[{data_encoding:'TEXT',row_count:'0'},{data_encoding:'TEXT',row_count:'0'}],sourceBinding:binding};
+  const captured={sourceBinding:binding,intent,envelope:{}},witness={database_oid:'5',backend_pid:411,transaction_id:'1285',restore_id:'UNIT',authority_generation:'1',archive_digest:binding.archive_digest};
+  const enter=key=>{calls.push(key);if(key===failed)throw error;};
+  const deps={types,isDeepStrictEqual,recordImmutableFreshFailure,Client:dbClass,query:dbClass.prototype.query,closed:v=>v,fail:()=>{throw Error('UNEXPECTED FAILURE');},captureFreshNativePort:()=>({}),sameFreshNativePort:()=>{},nativeData:()=> 'T',freshClients:new WeakSet(),freshArchives:new WeakSet(),freshStaged:new WeakMap(),sameSource:()=>{},
+   identities:['employee_message_original_outcomes','group_original_creations'],witnessKeys:Object.keys(witness),postgresJsonTextLineEncoding:'JSON',postgresTextColumnsLineEncoding:'TEXT',
+   readVerifiedPrivateImportSource:()=>original,captureVerifiedImmutableFreshRestoreIntent:()=>({}),readVerifiedImmutableFreshRestoreIntent:()=>captured,requireLegacyOriginalDataFidelity:async()=>{},
+   initializeVerifiedImmutableFreshSource:async()=>{enter('initialize');return {schema:'custodial.immutable-private-source-initialized.v1',initialized_source_only:true,transaction_authority:false,restore_complete:false,admission_resumed:false,guard_recipes:25,source_statements:13,authority_scope_functions:6,...witness};},
+   prepareVerifiedImmutableFreshRestoreControl:async()=>{enter('control');return witness;},capturePreRestoreState:async()=>{enter('snapshot');},stageVerifiedImmutablePrivateData:async()=>{enter('import');}};
+  const fn=new Function(...Object.keys(deps),body+';return stageVerifiedImmutableFreshData;')(...Object.values(deps));
+  await assert.rejects(fn({db,verifiedArchive:archive,originalIntentEnvelope:{},intentVerifyKey:'unit',intentVerifyKeyId:'unit'}),e=>e===error);
+  assert.equal(calls.at(-1),failed);assert.deepEqual(readImmutableFreshFailure(error),{fresh_stage:phase});
  }
 });

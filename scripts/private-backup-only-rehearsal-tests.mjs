@@ -7,7 +7,7 @@ import {createHash} from 'node:crypto';
 import {spawn} from 'node:child_process';
 import {EventEmitter} from 'node:events';
 import {PG_IMAGE,selectPrivateProfile,freshIntentEnvelope,assertOwnedPg,assertPrivateResult,safeSourcePreparationFailure,originalOwnerMetadataDiagnostics,targetCreationOperation,targetCreationMetadata,classifyPinnedPostgresPullFailure,privateSubprocessOperation} from './run-private-backup-only-rehearsal.mjs';
-import {storageWorkerActor,assertPrivatePgOwnerProfile,privatePgPortIsolation,resourceProfile,assertPrivatePgNetwork,assertPrivateNetworkMembers,privateRestoreFailureDiagnostic,privateRestoreStreamDiagnostic,privateRestoreStageDiagnostic,projectPrivateRestoreDiagnostic,readPrivateRestoreDiagnostics,exactPrivateRestoreInvocation,privateEvidenceFile,privateEvidenceReceipt,safeStartupFailure,hostMemoryAvailability,hostStartupDiagnostic,hostStageDiagnostic,nativeClientFailureGuard,withOwnedNativeClient,ownedHostStartupRecorder,selectedMode,STORAGE_CREDENTIAL_NONSECRET_SQL,stable,IMAGE} from './run-official-local-storage-rehearsal.mjs';
+import {stageOwnedStorageWorker,verifyOwnedDiagnosticBinding,storageWorkerActor,assertPrivatePgOwnerProfile,privatePgPortIsolation,resourceProfile,assertPrivatePgNetwork,assertPrivateNetworkMembers,privateRestoreFailureDiagnostic,privateRestoreStreamDiagnostic,privateRestoreStageDiagnostic,projectPrivateRestoreDiagnostic,readPrivateRestoreDiagnostics,exactPrivateRestoreInvocation,privateEvidenceFile,privateEvidenceReceipt,safeStartupFailure,hostMemoryAvailability,hostStartupDiagnostic,hostStageDiagnostic,nativeClientFailureGuard,withOwnedNativeClient,ownedHostStartupRecorder,selectedMode,STORAGE_CREDENTIAL_NONSECRET_SQL,stable,IMAGE} from './run-official-local-storage-rehearsal.mjs';
 import {captureVerifiedOriginalRestoreIntent} from './disaster-recovery-crypto.mjs';
 import {captureVerifiedImmutableFreshRestoreIntent} from './immutable-private-fresh-restore-intent.mjs';
 const key='offline-fixture-independent-intent-key-32bytes',keyId='fixture';
@@ -778,4 +778,54 @@ test('shipping private runner persists closed restore stderr only and rejects di
     await assert.rejects(run(['docker','logs','owned'],options));await assert.rejects(run(argv,{...options,cleanup:true}));
     await assert.rejects(run(argv,{...options,env:{}}));privacy.privateData=false;await assert.rejects(run(argv,options));assert.equal(births,1);
   }finally{rmSync(root,{recursive:true,force:true});}
+});
+
+test('fresh factory failure metadata survives both projections without private error fields',async()=>{
+ const {recordImmutableFreshFailure,readImmutableFreshFailure,immutableFreshDiagnosticFields}=await import('./immutable-private-stage-diagnostic.mjs');
+ const payload=privateSentinels.join('\n');
+ for(let ordinal=1;ordinal<=13;ordinal++){
+  const error=Object.freeze(Object.assign(new Error('Exact original messenger function/ACL/trigger predecessor differs'),{code:'55000',detail:payload,query:payload,stack:payload}));
+  recordImmutableFreshFailure(error,{initializer_stage:'INSTALL_PINNED_STATEMENT',initializer_operation:'EXECUTE_QUERY',source_statement:String(ordinal).padStart(2,'0'),unexpected:payload});
+  recordImmutableFreshFailure(error,{fresh_stage:'INITIALIZE_SOURCE'});
+  const record=privateRestoreStageDiagnostic('stage_fresh_private_database','REFUSED',error);
+  const first=privateRestoreStreamDiagnostic(Buffer.from(JSON.stringify(record)+'\n'),true);
+  const result=privateEvidenceReceipt('018.stderr',Buffer.from(JSON.stringify(first))).restore_diagnostics[0];
+  assert.deepEqual(result,record);assert.equal(result.source_statement,String(ordinal).padStart(2,'0'));assert.equal(result.fresh_stage,'INITIALIZE_SOURCE');
+  assert.equal(result.fresh_refusal,'MESSENGER_PREDECESSOR_DIFFERS');assert.equal(result.sql_state,'55000');assertNoPrivate(result);
+  for(const field of ['fresh_stage','initializer_stage','initializer_operation','source_statement','fresh_refusal']){
+   assert.equal(projectPrivateRestoreDiagnostic({...record,[field]:payload}),null);
+  }
+ }
+ let traps=0;const proxy=new Proxy({},{get(){traps++;throw Error(payload);},getOwnPropertyDescriptor(){traps++;throw Error(payload);},ownKeys(){traps++;throw Error(payload);}});
+ recordImmutableFreshFailure(proxy,proxy);assert.deepEqual(readImmutableFreshFailure(proxy),{});assert.deepEqual(immutableFreshDiagnosticFields(proxy),{});
+ const accessor={};for(const key of ['message','code','fresh_stage','initializer_stage','initializer_operation','source_statement','fresh_refusal'])Object.defineProperty(accessor,key,{get(){traps++;throw Error(payload);}});
+ recordImmutableFreshFailure(accessor,accessor);assert.deepEqual(readImmutableFreshFailure(accessor),{});assert.deepEqual(immutableFreshDiagnosticFields(accessor),{});assert.equal(traps,0);
+ for(const message of [payload,'Exact original messenger function/ACL/trigger predecessor differs '+payload])
+  assert.deepEqual(readImmutableFreshFailure(Object.assign(new Error(message),{code:'55000'})),{});
+ assert.deepEqual(readImmutableFreshFailure(Object.assign(new Error('Exact original messenger function/ACL/trigger predecessor differs'),{code:'XX001'})),{});
+ assert.deepEqual(immutableFreshDiagnosticFields({initializer_stage:'RESTORE_METADATA',source_statement:'04'}),{initializer_stage:'RESTORE_METADATA'});
+});
+
+test('standalone worker carries its exact read-only helper and refuses missing or changed dependency before import',async()=>{
+ const dir=mkdtempSync(resolve(tmpdir(),'owned-worker-import-'));
+ const invoke=()=>new Promise((yes,no)=>{
+  const child=spawn(process.execPath,['--input-type=module','-e',`await import(${JSON.stringify(new URL('file://'+resolve(dir,'worker.mjs')).href)});`],{env:{PATH:process.env.PATH},stdio:['ignore','pipe','pipe']});
+  let stdout='',stderr='';child.stdout.on('data',b=>{stdout+=b;});child.stderr.on('data',b=>{stderr+=b;});child.once('error',no);child.once('close',code=>yes({code,stdout,stderr}));
+ });
+ try{
+  const bound=stageOwnedStorageWorker(dir),helper=resolve(dir,'immutable-private-stage-diagnostic.mjs'),worker=resolve(dir,'worker.mjs');
+  assert.deepEqual(Object.keys(bound).sort(),['diagnostic_helper_bytes','diagnostic_helper_sha256','worker_sha256']);
+  assert.equal(lstatSync(helper).mode&0o777,0o400);assert.equal(lstatSync(worker).mode&0o777,0o400);
+  assert.equal(createHash('sha256').update(readFileSync(helper)).digest('hex'),bound.diagnostic_helper_sha256);
+  assert.equal(readFileSync(helper).length,bound.diagnostic_helper_bytes);assert.equal(createHash('sha256').update(readFileSync(worker)).digest('hex'),bound.worker_sha256);
+  assert.equal(verifyOwnedDiagnosticBinding(bound),true);
+  for(const bad of [{},{...bound,diagnostic_helper_sha256:'0'.repeat(64)},{...bound,diagnostic_helper_bytes:0}])assert.throws(()=>verifyOwnedDiagnosticBinding(bad));
+  const receipt=privateEvidenceReceipt('WORKER_INPUT_REDACTED.json',Buffer.from(JSON.stringify({...bound,payload:privateSentinels.join('\n')})));
+  assert.equal(receipt.diagnostic_helper_sha256,bound.diagnostic_helper_sha256);assert.equal(receipt.diagnostic_helper_bytes,bound.diagnostic_helper_bytes);assertNoPrivate(receipt);
+  const good=await invoke();assert.equal(good.code,0);assert.equal(good.stdout,'');assert.equal(good.stderr,'');
+  renameSync(helper,helper+'.held');const missing=await invoke();assert.notEqual(missing.code,0);assert.equal(missing.stdout,'');renameSync(helper+'.held',helper);
+  chmodSync(helper,0o600);writeFileSync(helper,"process.stdout.write('UNTRUSTED_HELPER_EXECUTED');\n");chmodSync(helper,0o400);
+  const changed=await invoke();assert.notEqual(changed.code,0);assert.equal(changed.stdout,'');assert.ok(changed.stderr.includes('Fixed diagnostic helper differs.'));assert.ok(!changed.stderr.includes('UNTRUSTED_HELPER_EXECUTED'));
+  assert.throws(()=>stageOwnedStorageWorker(dir));
+ }finally{rmSync(dir,{recursive:true,force:true});}
 });

@@ -45,6 +45,18 @@ const extraPins={'immutable-private-owner-context.sql':'9624907a8e154e07f266597c
 const all=[...domain.statements,...messages.statements,...Object.entries(extraPins).map(([name,pin])=>{const sql=readFileSync('proposals/'+name,'utf8');assert.equal(sha(sql),pin);return {sourcePath:'proposals/'+name,sourceSha256:pin,sql};})];
 // Exact token changes in trusted pinned program Source only. No original body
 // contains this actor token. The emitted artifact is fully hash-pinned at runtime.
+// The current authenticated owner is postgres itself. The installed grant
+// exporter (20260825174500) excludes the owner, so its legacy non-owner
+// postgres grant cannot be part of this profile's exact expected DATA.
+// These closed substitutions change no catalog ACL, role, owner or predicate.
+const ownerGrantProfiles={
+ 'immutable-original-messenger-restore.sql':['msg_enforce_canonical_active_pair_participants','msg_enforce_canonical_active_pair_thread','msg_reject_retired_ops_manager_shared_participation','msg_reject_retired_ops_manager_shared_thread_mutation'],
+ 'immutable-original-message-guards-restore.sql':['msg_reject_retired_ops_manager_shared_message_mutation','mz_reject_event_messenger_message'],
+ 'immutable-original-message-effects-restore.sql':['msg_enqueue_background_work','msg_memphis_pre_generate_schedule','msg_audit_persisted_message','mz_enqueue_employee_message_push','ops_manager_enqueue_message_push'],
+ 'immutable-original-message-audit-restore.sql':['msg_reject_retired_ops_manager_shared_message_audit_mutation'],
+ 'immutable-original-message-receipts-restore.sql':['msg_reject_retired_ops_manager_shared_receipt_mutation'],
+};
+const ownerAclStatements=['immutable-original-device-boundary-restore.sql','immutable-original-manager-push-restore.sql','immutable-original-employee-push-authority-restore.sql'];
 const statements=order.map(name=>{
  const old=all.find(s=>s.sourcePath==='proposals/'+name);assert.ok(old);
  let sql=old.sql;
@@ -65,6 +77,18 @@ const statements=order.map(name=>{
   sql=once(sql,"insertion_point constant text",'insertion_point text');
   const anchor="    before_definition := pg_catalog.pg_get_functiondef(function_oid);";
   sql=once(sql,anchor,anchor+"\n    insertion_point := CASE WHEN profile->>'lookup_identity'='public.ops_manager_enqueue_message_push()' THEN E'\\nBEGIN\\n' ELSE E'\\nbegin\\n' END;");
+ }
+ for(const identity of ownerGrantProfiles[name]||[]){
+  const after="select public.custodial_release_authority_reset_grants('"+identity+"()');";
+  const before=after+' grant execute on function '+identity+'() to postgres;';
+  sql=once(sql,JSON.stringify(before),JSON.stringify(after));
+  sql=once(sql,sha(before),sha(after));
+ }
+ if(ownerAclStatements.includes(name)){
+  // Both exact OID lookups are postgres in this separately pinned profile.
+  // Retain grantee/grantor/EXECUTE/no-grant-option and explicit owner checks.
+  const predicate="IF (SELECT count(*) FROM pg_catalog.aclexplode(coalesce(original.proacl,pg_catalog.acldefault('f',owner_oid))))<>";
+  sql=once(sql,predicate+'2',predicate+'1');
  }
  const wrapper=name==='immutable-original-employee-push-authority-restore.sql'?'DO_ONLY':
  ['immutable-private-owner-context.sql','immutable-original-employee-restore.sql','immutable-original-device-boundary-restore.sql','immutable-original-authority-reconciliation.sql','immutable-original-manager-push-restore.sql'].includes(name)?'OUTER_TRANSACTION':'NONE';

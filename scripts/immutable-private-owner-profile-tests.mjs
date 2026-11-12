@@ -67,3 +67,43 @@ test('all current original normal bodies survive restore additions byte-for-byte
  const push=p.recipes.find(r=>r.identity==='public.ops_manager_enqueue_message_push()');
  assert.ok(push.before.includes('CUSTODIAL_LEADERSHIP_REGISTRATION'));
 });
+
+test('postgres expected ACL DATA excludes only its owner and legacy source stays distinct',()=>{
+ const p=loadImmutableCurrentPostgresSource();let changed=0,alreadyOwnerOnly=0;
+ for(const s of p.statements){
+  const legacy=readFileSync(s.sourcePath,'utf8');
+  const tags=[...legacy.matchAll(/\$(\w+)\$\s*\[/g)];
+  for(const match of tags){
+   const tag='$'+match[1]+'$',before=JSON.parse(legacy.split(tag)[1].trim()),after=JSON.parse(s.sql.split(tag)[1].trim());
+   assert.equal(after.length,before.length);
+   for(let i=0;i<before.length;i++)if(before[i].before_grant_definition){
+    const b=before[i],a=after[i],suffix=' grant execute on function '+b.identity+' to postgres;';
+    if(b.before_grant_definition.endsWith(suffix)){
+     assert.equal(a.before_grant_definition,b.before_grant_definition.slice(0,-suffix.length));changed++;
+    }else{assert.equal(a.before_grant_definition,b.before_grant_definition);alreadyOwnerOnly++;}
+    assert.equal(sha(a.before_grant_definition),a.before_grant_sha256);
+   }
+  }
+ }
+ assert.equal(changed,13);assert.equal(alreadyOwnerOnly,1);
+ for(const name of ['immutable-original-device-boundary-restore.sql','immutable-original-manager-push-restore.sql','immutable-original-employee-push-authority-restore.sql']){
+  const legacy=readFileSync('proposals/'+name,'utf8'),current=p.statements.find(s=>s.sourcePath==='proposals/'+name).sql;
+  const block=sql=>sql.slice(sql.indexOf("IF (SELECT count(*) FROM pg_catalog.aclexplode(coalesce(original.proacl,"),sql.indexOf('THEN RAISE EXCEPTION',sql.indexOf("IF (SELECT count(*) FROM pg_catalog.aclexplode(coalesce(original.proacl,")));
+  assert.ok(block(legacy).includes('))<>2'));assert.equal(block(current),block(legacy).replace('))<>2','))<>1'));
+  assert.equal((current.match(/SELECT oid INTO (?:owner_oid|postgres_oid) FROM pg_catalog.pg_roles WHERE rolname='postgres';/g)||[]).length,2);
+ }
+});
+
+test('synthetic native qualifier matches the unchanged owned target namespace before any resource birth',async()=>{
+ const {assertPrivatePgOwnerProfile}=await import('./run-official-local-storage-rehearsal.mjs');
+ const {immutablePostgresAclFixtureSql}=await import('./qualify-immutable-postgres-acls.mjs');
+ const source=readFileSync(new URL('./qualify-immutable-postgres-acls.mjs',import.meta.url),'utf8');
+ const line=source.match(/const owner=randomBytes\(16\)\.toString\('hex'\),name=[^\n]+;/)[0];
+ const {owner,name,networkName}=new Function('randomBytes',line+'return {owner,name,networkName};')(()=>Buffer.alloc(16,1));
+ const profile={id:'immutable-private-current-postgres',actor:'postgres'};
+ const metadata={Name:'/'+name,Config:{Labels:{'custodial.private-backup-rehearsal':owner,'custodial.private-owner-profile':profile.id,'custodial.private-owner-actor':profile.actor},ExposedPorts:{'5432/tcp':{}}},HostConfig:{PortBindings:{},PublishAllPorts:false,NetworkMode:networkName},NetworkSettings:{Networks:{[networkName]:{}},Ports:{}}};
+ assert.equal(assertPrivatePgOwnerProfile(metadata,profile),true);
+ for(const bad of ['mz_acl_qualification_'+owner,'mz_schema_rebuild_acl_qualification_'+owner+'_other'])assert.throws(()=>assertPrivatePgOwnerProfile({...metadata,Name:'/'+bad},profile));
+ const fixture=immutablePostgresAclFixtureSql();assert.equal(fixture.checks,69);assert.ok(fixture.sql.startsWith('begin read only;'));assert.ok(fixture.sql.endsWith('rollback;\n'));
+ assert.doesNotMatch(fixture.sql,/\b(?:create|alter|drop|insert|update|delete|revoke)\b/i);
+});

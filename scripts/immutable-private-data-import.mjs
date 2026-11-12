@@ -1,3 +1,4 @@
+import {recordImmutableFreshFailure} from './immutable-private-stage-diagnostic.mjs';
 import {types,isDeepStrictEqual} from 'node:util';
 import {createHash} from 'node:crypto';
 import {createInterface} from 'node:readline';
@@ -653,6 +654,8 @@ async function consumeVerifiedOrdinaryTable(verifiedArchive,original,selected,mu
 // all effects stay in the caller's original exclusive transaction. The normal
 // CLI's pre-connect private APPLY hold remains until that route is qualified.
 export async function stageVerifiedImmutableFreshData(options) {
+  let freshStage='ADMIT_FRESH_STAGE';
+  try{
   const {db,verifiedArchive,originalIntentEnvelope,intentVerifyKey,intentVerifyKeyId}=closed(options,
     ['db','verifiedArchive','originalIntentEnvelope','intentVerifyKey','intentVerifyKeyId']);
   const native=()=>{
@@ -683,16 +686,19 @@ export async function stageVerifiedImmutableFreshData(options) {
     return captured;
   };
   current();
+  freshStage='VERIFY_ORIGINAL_FIDELITY';
   await requireLegacyOriginalDataFidelity(verifiedArchive,original,current);
   current();
   if(original.selection.databaseTables.some(table=>table.data_encoding!==postgresTextColumnsLineEncoding))
     try{assertVerifiedLegacyRestoreDataCurrent(verifiedArchive);}catch(error){fail(error,'IMMUTABLE_LEGACY_DATA_FIDELITY_UNPROVEN');}
+  freshStage='INITIALIZE_SOURCE';
   const initialized=await initializeVerifiedImmutableFreshSource({db,verifiedArchive});
   current();
   if(initialized.schema!=='custodial.immutable-private-source-initialized.v1'
     ||initialized.initialized_source_only!==true||initialized.transaction_authority!==false
     ||initialized.restore_complete!==false||initialized.admission_resumed!==false
     ||initialized.guard_recipes!==25||initialized.source_statements!==13||initialized.authority_scope_functions!==6)fail();
+  freshStage='PREPARE_RESTORE_CONTROL';
   const prepared=await prepareVerifiedImmutableFreshRestoreControl({db,verifiedArchive,freshIntent});
   const captured=current(),intent=captured.intent;
   const expected=Object.freeze({database_oid:initialized.database_oid,backend_pid:initialized.backend_pid,
@@ -702,13 +708,16 @@ export async function stageVerifiedImmutableFreshData(options) {
   // Save the first target state under this SAME authenticated original and
   // native transaction before archive DATA can replace ordinary authority.
   // These protected rows are reconciliation DATA, never effect admission.
+  freshStage='CAPTURE_PRE_RESTORE_STATE';
   await capturePreRestoreState(db,{restoreId:intent.restore_id,generation:intent.authority_generation});
   current();
   // Never recapture caller objects after the initializer/control awaits. The
   // private intent token supplies the same detached signed original envelope.
+  freshStage='IMPORT_ORIGINAL_DATA';
   const imported=await stageVerifiedImmutablePrivateData({db,verifiedArchive,
     originalIntentEnvelope:captured.envelope,intentVerifyKey,intentVerifyKeyId});
   current();
+  freshStage='VERIFY_STAGED_DATA';
   const staged=closed(imported,[...witnessKeys,'private_rows','transaction_authority','admission_resumed']);
   for(const key of witnessKeys)if(!isDeepStrictEqual(staged[key],expected[key]))fail();
   if(staged.private_rows!==expectedPrivateRows||staged.transaction_authority!==false||staged.admission_resumed!==false)fail();
@@ -721,6 +730,7 @@ export async function stageVerifiedImmutableFreshData(options) {
   return Object.freeze({schema:'custodial.immutable-private-fresh-data-staged.v1',...expected,
     private_rows:staged.private_rows,source_initialized:true,transaction_authority:false,
     restore_complete:false,admission_resumed:false});
+  }catch(error){recordImmutableFreshFailure(error,{fresh_stage:freshStage});throw error;}
 }
 
 // One original fresh DATA transaction decision. The caller still owns its

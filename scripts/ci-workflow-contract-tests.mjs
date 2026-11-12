@@ -441,7 +441,7 @@ const productionBackupRehearsal = readFileSync(resolve(workflowDirectory, "produ
 // not as a parser for arbitrary future YAML. Any workflow edit fails before
 // an actual workflow reaches scalar measurement and requires a reviewed pin.
 assert.equal(createHash("sha256").update(productionBackupRehearsal, "utf8").digest("hex"),
-  "0f8be05db6dba64e87276e9743ffed622cc8a6402b6e54fbe40248edc2575f65",
+  "43e9f0ea8ba13aafdea4008ea49166e5f845760535b6c169d2492e39fbf52196",
   "rehearsal length measurement requires the exact reviewed whole workflow");
 const blankGapPlainRunMutant = productionBackupRehearsal.replace(
   "      - run: npm ci --ignore-scripts\n",

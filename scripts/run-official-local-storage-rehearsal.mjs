@@ -131,6 +131,30 @@ const hash = value => createHash('sha256').update(value).digest('hex');
 export const stable = value => JSON.stringify(value,(_,v)=>v && typeof v==='object' && !Array.isArray(v)
   ? Object.fromEntries(Object.keys(v).sort().map(k=>[k,v[k]])) : v);
 const insist = (value,message) => { if(!value) throw new Error(message); };
+// One fixed dependency, authenticated before import. The exact URL preserves
+// the host factory's WeakMap instance; the provider receives an owned0400 copy.
+const diagnosticHelperUrl=new URL('./immutable-private-stage-diagnostic.mjs',import.meta.url);
+const diagnosticHelperSha256='9910c5a126aac672231be8f4bc1877d717a2d98d0ae4b3fc2df41d17e77ae5c6';
+const diagnosticHelperBytes=readFileSync(diagnosticHelperUrl);
+insist(diagnosticHelperBytes.length===4316 && hash(diagnosticHelperBytes)===diagnosticHelperSha256,'Fixed diagnostic helper differs.');
+const {readImmutableFreshFailure,immutableFreshDiagnosticFields}=await import(diagnosticHelperUrl.href);
+insist(readFileSync(diagnosticHelperUrl).equals(diagnosticHelperBytes),'Fixed diagnostic helper changed.');
+export function stageOwnedStorageWorker(mount){
+  const directory=lstatSync(mount);
+  insist(directory.isDirectory()&&!directory.isSymbolicLink()&&directory.uid===process.getuid()&&(directory.mode&0o777)===0o700,'Owned worker directory required.');
+  const workerBytes=readFileSync(fileURLToPath(import.meta.url)),helperBytes=readFileSync(diagnosticHelperUrl);
+  insist(helperBytes.equals(diagnosticHelperBytes),'Fixed diagnostic helper changed before custody.');
+  writeFileSync(resolve(mount,'worker.mjs'),workerBytes,{mode:0o400,flag:'wx'});
+  writeFileSync(resolve(mount,'immutable-private-stage-diagnostic.mjs'),helperBytes,{mode:0o400,flag:'wx'});
+  insist(readFileSync(resolve(mount,'worker.mjs')).equals(workerBytes)
+    &&readFileSync(resolve(mount,'immutable-private-stage-diagnostic.mjs')).equals(helperBytes),'Owned worker copy differs.');
+  return Object.freeze({worker_sha256:hash(workerBytes),diagnostic_helper_sha256:diagnosticHelperSha256,diagnostic_helper_bytes:helperBytes.length});
+}
+export function verifyOwnedDiagnosticBinding(input){
+  insist(input?.diagnostic_helper_sha256===diagnosticHelperSha256&&input?.diagnostic_helper_bytes===diagnosticHelperBytes.length,'Owned diagnostic helper binding differs.');
+  return true;
+}
+
 const pause = ms => new Promise(r=>setTimeout(r,ms));
 const sign = (value,key) => createHmac('sha256',key).update(stable(value)).digest('hex');
 function durable(path,value,mode=0o600){const fd=openSync(path,'wx',mode);try{writeFileSync(fd,JSON.stringify(value,null,2)+'\n');fsyncSync(fd);}finally{closeSync(fd);}}
@@ -331,7 +355,7 @@ const privateRestoreCodes=new Set(['original_restore_intent_capture_invalid','im
   'RESTORE_RETRY_RECONCILIATION_REQUIRED']);
 const privateSourcePhases=new Set(['ARCHIVE_ADMISSION','ORIGINAL_INVENTORY','PROGRAM_SOURCE','ORIGINAL_ROWS','ORIGINAL_RELEASE','SOURCE_RECIPES',
   'ORIGINAL_REGISTRY','SOURCE_STATEMENTS','FINAL_CURRENTNESS','SOURCE_HANDLE','ARCHIVE_CURRENTNESS','PROGRAM_CURRENTNESS','INVENTORY_CURRENTNESS']);
-export function privateRestoreStageDiagnostic(phase,event,error=null){
+export function privateRestoreStageDiagnostic(phase,event,error=null,freshFields=null){
   const own=key=>{if(!error||typeof error!=='object'||isProxy(error))return undefined;const d=Object.getOwnPropertyDescriptor(error,key);return d&&Object.hasOwn(d,'value')?d.value:undefined;};
   const native=privateRestoreFailureDiagnostic(error,'archive_lifecycle'),sql=privateRestoreFailureDiagnostic({code:own('sql_state')},'archive_lifecycle');
   const common=hostStartupDiagnostic('SELECT_MODE',null,error),code=own('code'),source=own('source_phase');
@@ -339,17 +363,18 @@ export function privateRestoreStageDiagnostic(phase,event,error=null){
     event:privateRestoreEvents.has(event)?event:'REFUSED',private_payload_exported:false,
     ...(privateRestoreCodes.has(code)?{code}:common.code?{code:common.code}:{}),
     ...(sql.sql_state||native.sql_state?{sql_state:sql.sql_state??native.sql_state}:{}),
-    ...(native.node_code?{node_code:native.node_code}:{}),...(privateSourcePhases.has(source)?{source_phase:source}:{} )});
+    ...(native.node_code?{node_code:native.node_code}:{}),...(privateSourcePhases.has(source)?{source_phase:source}:{} ),
+    ...immutableFreshDiagnosticFields(freshFields??readImmutableFreshFailure(error))});
 }
 export function projectPrivateRestoreDiagnostic(value){
   if(!value||typeof value!=='object'||isProxy(value)||Array.isArray(value)||![Object.prototype,null].includes(Object.getPrototypeOf(value)))return null;
   const descriptors=Object.getOwnPropertyDescriptors(value),keys=Reflect.ownKeys(descriptors);
-  const allowed=['schema','phase','event','private_payload_exported','code','sql_state','node_code','source_phase'];
+  const allowed=['schema','phase','event','private_payload_exported','code','sql_state','node_code','source_phase','fresh_stage','initializer_stage','initializer_operation','source_statement','fresh_refusal'];
   if(keys.some(key=>!allowed.includes(key)||!Object.hasOwn(descriptors[key],'value')||descriptors[key].enumerable!==true))return null;
   const data=Object.fromEntries(keys.map(key=>[key,descriptors[key].value]));
   if(keys.some(key=>key!=='private_payload_exported'&&typeof data[key]!=='string'))return null;
   if(data.schema!=='custodial.private-restore-stage.v1'||!privateRestorePhases.has(data.phase)||!privateRestoreEvents.has(data.event)||data.private_payload_exported!==false)return null;
-  const projected=privateRestoreStageDiagnostic(data.phase,data.event,{code:data.code??data.node_code??data.sql_state,sql_state:data.sql_state,source_phase:data.source_phase});
+  const projected=privateRestoreStageDiagnostic(data.phase,data.event,{code:data.code??data.node_code??data.sql_state,sql_state:data.sql_state,source_phase:data.source_phase},data);
   return stable(data)===stable(projected)?projected:null;
 }
 export function readPrivateRestoreDiagnostics(raw){
@@ -382,7 +407,7 @@ export function privateRestoreFailureDiagnostic(error,phase){
 const privateEvidenceFields=Object.freeze({
   'FINAL.json':['ok','provider_verified','production_provider_verified','service_born','service_CID_or_name_fresh_absent','network_fresh_absent','borrowed_network_retained_verified','relay_closed_or_never_born','cleanup_checked','error'],
   'PROVIDER_VERIFIED.json':['provider_verified','production_provider_verified','archive_digest','original_intent_sha256','container_id','database_oid','archived_migrations_74_full_tuple_sha256','actual_archived_migration_count','buckets','objects'],
-  'WORKER_INPUT_REDACTED.json':['input_sha256','worker_sha256','original_intent_sha256','archive_digest','database_oid','migrations_full_tuple_sha256','secrets_retained'],
+  'WORKER_INPUT_REDACTED.json':['input_sha256','worker_sha256','diagnostic_helper_sha256','diagnostic_helper_bytes','original_intent_sha256','archive_digest','database_oid','migrations_full_tuple_sha256','secrets_retained'],
   'ARCHIVED_STORAGE_MIGRATIONS_FULL_TUPLES.json':['source_profile','count','sha256','authenticated_source_metadata_only'],
   'STORAGE_CATALOG_BEFORE_PROVIDER.json':['sha256'],
   'STORAGE_CATALOG_AFTER_PROVIDER.json':['sha256'],
@@ -490,8 +515,8 @@ async function storageCatalog(db){const r=await db.query(STORAGE_CATALOG_SQL);in
  const text=stable(r.rows[0].catalog);insist(Buffer.byteLength(text)<=16*1024**2,'Storage catalog bound exceeded.');return {catalog:r.rows[0].catalog,sha256:hash(text)};}
 
 async function containerGate(){
+  const input=JSON.parse(readFileSync('/custody/input.json','utf8'));verifyOwnedDiagnosticBinding(input);let phase='connect_gate';
   const require=createRequire('/app/package.json'),{Client}=require('pg');
-  const input=JSON.parse(readFileSync('/custody/input.json','utf8'));let phase='connect_gate';
   const expectedActor=storageWorkerActor(input.source_profile,input.owner_profile);
   insist(new URL(process.env.CUSTODIAL_GATE_DATABASE_URL).username===expectedActor,'Worker gate actor differs from original owner profile.');
   let gateChild=null;const nativeGuard=nativeClientFailureGuard(()=>{if(gateChild)gateChild.kill('SIGTERM');});
@@ -609,11 +634,12 @@ async function host(){
       insist(typeof contentType==='string' && contentType.length>0 && cacheControl!=='undefined' && !/[\r\n]/.test(contentType+cacheControl),'Exact original object metadata required.');
       objects.push({...o,file,version:native.version,contentType,cacheControl});
     }
-    mark('BIND_WORKER_INPUT');const input={source_profile:a.source_profile,...(a.owner_profile?{owner_profile:a.owner_profile}:{}),database:{database_name:id.database_name,database_oid:id.database_oid,database_owner:id.database_owner,session_user:id.session_user,current_user:id.current_user},intent,migration_count:migrationCount,migrations_sha256:migrationsHash,objects};
-    durable(resolve(custody,'WORKER_INPUT_REDACTED.json'),{input_sha256:hash(stable(input)),worker_sha256:hash(readFileSync(fileURLToPath(import.meta.url))),
+    mark('BIND_WORKER_INPUT');const worker=stageOwnedStorageWorker(mount);
+    const input={diagnostic_helper_sha256:worker.diagnostic_helper_sha256,diagnostic_helper_bytes:worker.diagnostic_helper_bytes,source_profile:a.source_profile,...(a.owner_profile?{owner_profile:a.owner_profile}:{}),database:{database_name:id.database_name,database_oid:id.database_oid,database_owner:id.database_owner,session_user:id.session_user,current_user:id.current_user},intent,migration_count:migrationCount,migrations_sha256:migrationsHash,objects};
+    durable(resolve(custody,'WORKER_INPUT_REDACTED.json'),{input_sha256:hash(stable(input)),...worker,
       original_intent_sha256:hash(stable(original)),archive_digest:s.archive_digest,database_oid:id.database_oid,migrations_full_tuple_sha256:migrationsHash,
       objects:objects.map(o=>({sha256:o.sha256,size_bytes:o.size_bytes,version_sha256:hash(String(o.version))})),secrets_retained:false});
-    durable(resolve(mount,'input.json'),input);writeFileSync(resolve(mount,'worker.mjs'),readFileSync(fileURLToPath(import.meta.url)),{mode:0o400,flag:'wx'});
+    durable(resolve(mount,'input.json'),input);
     mark('VERIFY_OWNED_POSTGRES');const pgName='mz_schema_rebuild_'+process.env.GITHUB_RUN_ID;
     const pg=JSON.parse(await run(['docker','inspect','--format',inspectFormat,pgName]));insist(pg.Name==='/'+pgName && pg.Config.Image===PG_IMAGE && /^[a-f0-9]{64}$/.test(pg.Id),'Existing owned PG identity mismatch.');pgid=pg.Id;
     if(a.owner_profile){
