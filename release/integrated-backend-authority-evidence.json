@@ -2970,7 +2970,7 @@
       {
         "path": "scripts/private-backup-only-rehearsal-tests.mjs",
         "mode": "100644",
-        "object_id": "79dd2fedd39e87e2ef39e46015116021f76d72ea"
+        "object_id": "4bc1b6e36f0ed18f46922228a8ef8f7ef17291b1"
       },
       {
         "path": "scripts/production-backup-original-metadata.mjs",
@@ -3270,12 +3270,12 @@
       {
         "path": "scripts/run-official-local-storage-rehearsal.mjs",
         "mode": "100644",
-        "object_id": "4077728ab3daf4318d37f081dbbefe1174cfe3d7"
+        "object_id": "ce02df2735ba7aa336de998365c1224ca24cd708"
       },
       {
         "path": "scripts/run-private-backup-only-rehearsal.mjs",
         "mode": "100644",
-        "object_id": "17e526815dd8c87a7a7435dd21f64195c95c91c8"
+        "object_id": "8132101ec9585517e98267dffe6ff9f1b1056c69"
       },
       {
         "path": "scripts/run-production-backup-migration-rehearsal.sh",
