@@ -5,8 +5,8 @@ import {resolve} from 'node:path';
 import {tmpdir} from 'node:os';
 import {createHash} from 'node:crypto';
 import {spawn} from 'node:child_process';
-import {PG_IMAGE,selectPrivateProfile,freshIntentEnvelope,assertOwnedPg,assertPrivateResult,safeSourcePreparationFailure,originalOwnerMetadataDiagnostics,targetCreationOperation,targetCreationMetadata,classifyPinnedPostgresPullFailure} from './run-private-backup-only-rehearsal.mjs';
-import {storageWorkerActor,assertPrivatePgOwnerProfile,resourceProfile,assertPrivatePgNetwork,assertPrivateNetworkMembers,privateRestoreFailureDiagnostic,privateRestoreStreamDiagnostic,privateEvidenceFile,privateEvidenceReceipt,safeStartupFailure,stable,IMAGE} from './run-official-local-storage-rehearsal.mjs';
+import {PG_IMAGE,selectPrivateProfile,freshIntentEnvelope,assertOwnedPg,assertPrivateResult,safeSourcePreparationFailure,originalOwnerMetadataDiagnostics,targetCreationOperation,targetCreationMetadata,classifyPinnedPostgresPullFailure,privateSubprocessOperation} from './run-private-backup-only-rehearsal.mjs';
+import {storageWorkerActor,assertPrivatePgOwnerProfile,privatePgPortIsolation,resourceProfile,assertPrivatePgNetwork,assertPrivateNetworkMembers,privateRestoreFailureDiagnostic,privateRestoreStreamDiagnostic,privateEvidenceFile,privateEvidenceReceipt,safeStartupFailure,stable,IMAGE} from './run-official-local-storage-rehearsal.mjs';
 import {captureVerifiedOriginalRestoreIntent} from './disaster-recovery-crypto.mjs';
 import {captureVerifiedImmutableFreshRestoreIntent} from './immutable-private-fresh-restore-intent.mjs';
 const key='offline-fixture-independent-intent-key-32bytes',keyId='fixture';
@@ -38,15 +38,15 @@ test('fresh branded capture cannot accept public forged archive',()=>{
   assert.throws(()=>captureVerifiedImmutableFreshRestoreIntent({verifiedArchive:binding,
     originalIntentEnvelope:freshIntentEnvelope(binding,key,keyId),intentVerifyKey:key,intentVerifyKeyId:keyId}));
 });
-const identity={id:'1'.repeat(64),name:'mz_schema_rebuild_123',owner:'a'.repeat(32),ownerProfile:{id:'immutable-private-current-postgres',actor:'postgres'},networkId:'2'.repeat(64),networkName:'owned'};
-const pg=()=>({Id:identity.id,Name:'/'+identity.name,Config:{Image:PG_IMAGE,Labels:{'custodial.private-backup-rehearsal':identity.owner,'custodial.private-owner-profile':identity.ownerProfile.id,'custodial.private-owner-actor':identity.ownerProfile.actor}},
-  State:{Running:true},NetworkSettings:{Ports:{'5432/tcp':null},Networks:{owned:{NetworkID:identity.networkId,IPAddress:'172.20.0.2'}}}});
+const identity={id:'1'.repeat(64),name:'mz_schema_rebuild_123',owner:'a'.repeat(32),ownerProfile:{id:'immutable-private-current-postgres',actor:'postgres'},networkId:'2'.repeat(64),networkName:'mz_schema_rebuild_123_private_'+'a'.repeat(32)};
+const pg=()=>({Id:identity.id,Name:'/'+identity.name,Config:{Image:PG_IMAGE,ExposedPorts:{'5432/tcp':{}},Labels:{'custodial.private-backup-rehearsal':identity.owner,'custodial.private-owner-profile':identity.ownerProfile.id,'custodial.private-owner-actor':identity.ownerProfile.actor}},
+  HostConfig:{PortBindings:{},PublishAllPorts:false,NetworkMode:identity.networkName},State:{Running:true},NetworkSettings:{Ports:{'5432/tcp':null},Networks:{[identity.networkName]:{NetworkID:identity.networkId,IPAddress:'172.20.0.2'}}}});
 test('owned target validates exact ID/image/label/network, never published ports',()=>{
   assert.equal(assertOwnedPg(pg(),identity),'172.20.0.2');
   for(const change of [p=>p.Id='3'.repeat(64),p=>p.Config.Image='postgres:latest',p=>p.Config.Labels={},p=>p.State.Running=false,
     p=>p.NetworkSettings.Ports['5432/tcp']=[{HostIp:'127.0.0.1',HostPort:'1234'}],
     p=>p.NetworkSettings.Ports['5432/tcp']=[{HostIp:'0.0.0.0',HostPort:'5432'}],
-    p=>p.NetworkSettings.Networks.owned.NetworkID='wrong',p=>p.NetworkSettings.Networks.owned.IPAddress='localhost']){
+    p=>p.NetworkSettings.Networks[identity.networkName].NetworkID='wrong',p=>p.NetworkSettings.Networks[identity.networkName].IPAddress='localhost']){
     const p=pg();change(p);assert.throws(()=>assertOwnedPg(p,identity));
   }
 });
@@ -340,7 +340,8 @@ test('creation diagnostics distinguish startup assertions using only bounded boo
   assert.equal(current.network_count,1);assert.equal(current.container_id_matches,true);
   const missing=pg();missing.NetworkSettings.Ports={};const absent=targetCreationMetadata('POSTGRES',missing,identity);
   assert.equal(absent.ports_object_present,true);assert.equal(absent.postgres_port_key_present,false);assert.equal(absent.port_key_count,0);
-  assert.throws(()=>assertOwnedPg(missing,identity),'Diagnostics must not relax the failed assertion');
+  assert.equal(assertOwnedPg(missing,identity),'172.20.0.2','Empty runtime map requires all independent isolation proofs');
+  delete missing.HostConfig.PortBindings;assert.throws(()=>assertOwnedPg(missing,identity));
   const stopped=pg();stopped.State={Running:false,Status:'exited',OOMKilled:true,ExitCode:137,Error:privateSentinels.join('\n')};
   const failed=targetCreationMetadata('POSTGRES',stopped,identity);assert.equal(failed.running,false);assert.equal(failed.oom_killed,true);assert.equal(failed.exit_code,137);assert.equal(failed.state_error_present,true);assertNoPrivate(failed);
   const bad=pg();bad.Config.Env=privateSentinels;bad.Config.Labels['custodial.private-owner-profile']=privateSentinels[0];
@@ -385,4 +386,70 @@ test('exact pinned pull diagnostic uses only closed transport labels and never a
   const source=readFileSync(new URL('./run-private-backup-only-rehearsal.mjs',import.meta.url),'utf8');
   assert.match(source,/operationAtStart==='PULL_PINNED_POSTGRES_IMAGE'&&command==='docker'&&args.length===2&&args\[0\]==='pull'&&args\[1\]===PG_IMAGE/);
   assert.match(source,/pinnedPull&&\(code!==0\|\|failed\)\?\{docker_pull_failure:pullErrorTruncated\?'UNKNOWN'/);
+});
+
+
+test('private PG accepts only two unpublished runtime maps with independent configuration proof',()=>{
+  for(const runtime of [{},{'5432/tcp':null}])for(const configured of [{},null]){
+    const value=pg();value.NetworkSettings.Ports=runtime;value.HostConfig.PortBindings=configured;
+    assert.equal(assertOwnedPg(value,identity),'172.20.0.2');
+    assert.equal(assertPrivatePgOwnerProfile(value,identity.ownerProfile),true);
+    assert.ok(Object.values(privatePgPortIsolation(value,identity.networkName)).every(v=>v===true));
+  }
+  const mutations=[
+    p=>delete p.Config.ExposedPorts,p=>p.Config.ExposedPorts=null,p=>p.Config.ExposedPorts={},
+    p=>p.Config.ExposedPorts={'5432/udp':{}},p=>p.Config.ExposedPorts={'5432/tcp':{},'80/tcp':{}},
+    p=>p.Config.ExposedPorts={'5432/tcp':null},p=>p.Config.ExposedPorts={'5432/tcp':[]},
+    p=>delete p.HostConfig,p=>delete p.HostConfig.PortBindings,p=>p.HostConfig.PortBindings=[],
+    p=>p.HostConfig.PortBindings={'5432/tcp':null},p=>p.HostConfig.PortBindings={'5432/tcp':[]},
+    p=>p.HostConfig.PublishAllPorts=true,p=>delete p.HostConfig.PublishAllPorts,p=>p.HostConfig.PublishAllPorts='false',
+    p=>delete p.HostConfig.NetworkMode,p=>p.HostConfig.NetworkMode='host',p=>p.HostConfig.NetworkMode='bridge',
+    p=>p.HostConfig.NetworkMode='default',p=>p.HostConfig.NetworkMode='container:'+identity.id,
+    p=>p.HostConfig.NetworkMode=identity.networkId,p=>p.HostConfig.NetworkMode='other',
+    p=>delete p.NetworkSettings.Ports,p=>p.NetworkSettings.Ports=null,p=>p.NetworkSettings.Ports=[],
+    p=>p.NetworkSettings.Ports={'5432/tcp':[]},p=>p.NetworkSettings.Ports={'5432/tcp':{}},
+    p=>p.NetworkSettings.Ports={'80/tcp':null},p=>p.NetworkSettings.Ports={'5432/tcp':null,'80/tcp':null},
+    p=>p.NetworkSettings.Networks.foreign={NetworkID:'e'.repeat(64),IPAddress:'172.21.0.2'},
+    p=>{p.NetworkSettings.Networks.foreign=p.NetworkSettings.Networks[identity.networkName];delete p.NetworkSettings.Networks[identity.networkName];p.HostConfig.NetworkMode='foreign';},
+  ];
+  for(const host of ['127.0.0.1','0.0.0.0','::1','::',''])for(const port of ['5432','12345','']){
+    mutations.push(p=>p.HostConfig.PortBindings={'5432/tcp':[{HostIp:host,HostPort:port}]});
+    mutations.push(p=>p.NetworkSettings.Ports={'5432/tcp':[{HostIp:host,HostPort:port}]});
+  }
+  for(const runtime of [{},{'5432/tcp':null}])for(const mutate of mutations){
+    const value=pg();value.NetworkSettings.Ports=structuredClone(runtime);mutate(value);
+    assert.throws(()=>assertPrivatePgOwnerProfile(value,identity.ownerProfile));assert.throws(()=>assertOwnedPg(value,identity));
+  }
+  let accessed=0;const sentinel=privateSentinels.join('\n');
+  const accessor=pg();Object.defineProperty(accessor.HostConfig,'PortBindings',{get(){accessed++;throw Error(sentinel);}});
+  assert.equal(privatePgPortIsolation(accessor,identity.networkName).host_port_bindings_absent,false);
+  for(const field of ['Config','HostConfig','NetworkSettings']){
+    const value=pg();value[field]=new Proxy({},{getOwnPropertyDescriptor(){accessed++;throw Error(sentinel);}});
+    assertNoPrivate(privatePgPortIsolation(value,identity.networkName));
+  }
+  const secret=pg();secret.HostConfig.PortBindings={'5432/tcp':[{HostIp:sentinel,HostPort:sentinel}]};secret.Config.ExposedPorts[sentinel]={};
+  assertNoPrivate(privatePgPortIsolation(secret,identity.networkName));assert.equal(accessed,0);
+  const worker=readFileSync(new URL('./run-official-local-storage-rehearsal.mjs',import.meta.url),'utf8');
+  for(const field of ['.Config \"ExposedPorts\"','.HostConfig.PortBindings','.HostConfig.PublishAllPorts','.HostConfig.NetworkMode'])
+    assert.ok(worker.slice(worker.indexOf('const inspectFormat='),worker.indexOf('const hash =')).includes(field));
+});
+
+test('schema and provider child failures retain closed operation/status only and cleanup cannot overwrite',async()=>{
+  const source=readFileSync(new URL('./run-private-backup-only-rehearsal.mjs',import.meta.url),'utf8');
+  const start=source.indexOf('  const run=(command,args,'),end=source.indexOf('  const docker=',start);
+  const factory=new Function('ports',`const {root,spawn,privateSubprocessOperation}=ports;const stopping=false,baseEnv={},children=new Set(),phase='prepare_schema_only';
+    let subprocessFailure=null;${source.slice(start,end)}return {run,receipt:()=>subprocessFailure};`);
+  for(const operation of ['REPLAY_FIXED_ROLE_CATALOG','CREATE_EMPTY_DATABASE','RESTORE_AUTHENTICATED_SCHEMA','RESTORE_PRIVATE_DATA_AND_STORAGE']){
+    const {run,receipt}=factory({root:tmpdir(),spawn,privateSubprocessOperation});
+    const payload=privateSentinels.join('\n');
+    await assert.rejects(run(process.execPath,['-e',`process.stderr.write(${JSON.stringify(payload)});process.exitCode=17;`],{diagnosticOperation:operation}));
+    const captured=receipt();assert.equal(captured.operation,operation);assert.equal(captured.exit_code,17);
+    assert.equal(captured.stderr_bytes,Buffer.byteLength(payload));assert.equal(captured.stdout_bytes,0);assertNoPrivate(captured);
+    await run(process.execPath,['-e',''],{cleanup:true,diagnosticOperation:operation});assert.deepEqual(receipt(),captured);
+  }
+  assert.equal(privateSubprocessOperation(privateSentinels[0]),null);
+  const {run,receipt}=factory({root:tmpdir(),spawn,privateSubprocessOperation});
+  await assert.rejects(run(process.execPath,['-e','process.exitCode=17;'],{diagnosticOperation:privateSentinels[0]}));assert.equal(receipt(),null);
+  for(const operation of ['REPLAY_FIXED_ROLE_CATALOG','CREATE_EMPTY_DATABASE','RESTORE_AUTHENTICATED_SCHEMA','RESTORE_PRIVATE_DATA_AND_STORAGE'])
+    assert.equal((source.match(new RegExp("diagnosticOperation:'"+operation+"'",'g'))||[]).length,1);
 });

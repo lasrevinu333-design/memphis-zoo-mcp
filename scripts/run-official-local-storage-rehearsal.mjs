@@ -49,15 +49,35 @@ export function storageWorkerActor(sourceProfile,ownerProfile){
   }
   throw new Error('Closed authenticated Storage owner profile required.');
 }
+// Docker's declared container ports are not host publication. A running,
+// unpublished endpoint may report Ports={} or {'5432/tcp':null}. Accept only
+// those two representations, with independent configuration and network proof.
+// This helper emits detached booleans only, also safe for public diagnostics.
+export function privatePgPortIsolation(value,networkName){
+  const own=(object,key)=>{if(!object||typeof object!=='object'||isProxy(object))return undefined;
+    const d=Object.getOwnPropertyDescriptor(object,key);return d&&Object.hasOwn(d,'value')?d.value:undefined;};
+  const record=value=>value!==null&&typeof value==='object'&&!isProxy(value)&&!Array.isArray(value)
+    && [Object.prototype,null].includes(Object.getPrototypeOf(value));
+  const empty=value=>record(value)&&Reflect.ownKeys(value).length===0;
+  const exactPort=value=>record(value)&&Reflect.ownKeys(value).length===1&&Object.hasOwn(value,'5432/tcp');
+  const config=own(value,'Config'),host=own(value,'HostConfig'),settings=own(value,'NetworkSettings');
+  const exposed=own(config,'ExposedPorts'),bindings=own(host,'PortBindings'),ports=own(settings,'Ports');
+  return Object.freeze({declared_postgres_port_exact:exactPort(exposed)&&empty(own(exposed,'5432/tcp')),
+    host_port_bindings_absent:bindings===null||empty(bindings),publish_all_ports_disabled:own(host,'PublishAllPorts')===false,
+    runtime_ports_unpublished:empty(ports)||exactPort(ports)&&own(ports,'5432/tcp')===null,
+    network_mode_matches:typeof networkName==='string'&&networkName.length>0&&own(host,'NetworkMode')===networkName});
+}
 export function assertPrivatePgOwnerProfile(value,ownerProfile){
   const sourceProfile=ownerProfile?.id==='immutable-private-current-postgres'?'immutable-private-fresh-postgres':'immutable-private-fresh-supabase-admin';
   const actor=storageWorkerActor(sourceProfile,ownerProfile),labels=value.Config?.Labels;
   insist(labels?.['custodial.private-owner-profile']===ownerProfile.id && labels?.['custodial.private-owner-actor']===actor
     && /^[a-f0-9]{32}$/.test(labels?.['custodial.private-backup-rehearsal']),'Private PG source owner labels differ.');
-  insist(value.NetworkSettings?.Ports && typeof value.NetworkSettings.Ports==='object' && !Array.isArray(value.NetworkSettings.Ports)
-    && Object.hasOwn(value.NetworkSettings.Ports,'5432/tcp')
-    && Object.values(value.NetworkSettings.Ports).every(ports=>ports===null || Array.isArray(ports) && ports.length===0),
-    'Private original must retain its owned forward and no published PG ports.');
+  const networks=Object.keys(value.NetworkSettings?.Networks||{}),name=value.Name;
+  insist(typeof name==='string' && /^\/mz_schema_rebuild_[A-Za-z0-9_]+$/.test(name)
+    && networks.length===1 && networks[0]===name.slice(1)+'_private_'+labels['custodial.private-backup-rehearsal'],
+    'Private PG must retain the exact sole parent-owned network.');
+  insist(Object.values(privatePgPortIsolation(value,networks[0])).every(v=>v===true),
+    'Private original must retain its declared PG port, owned network mode and no host publication.');
   return true;
 }
 // Borrowed private network identity is derived from the owned PG inspection,
@@ -106,7 +126,7 @@ export async function closeOwnedRelay(relay,sockets,deadline){
 }
 let stopping=false;const liveGroups=new Set();
 function stop(){stopping=true;for(const pid of liveGroups)try{process.kill(-pid,'SIGKILL');}catch{}}
-const inspectFormat='{"Id":{{json .Id}},"ImageId":{{json .Image}},"Name":{{json .Name}},"Config":{"Image":{{json .Config.Image}},"Labels":{{json .Config.Labels}}},"HostConfig":{"Memory":{{json .HostConfig.Memory}},"MemorySwap":{{json .HostConfig.MemorySwap}},"Tmpfs":{{json .HostConfig.Tmpfs}},"NanoCpus":{{json .HostConfig.NanoCpus}},"ReadonlyRootfs":{{json .HostConfig.ReadonlyRootfs}},"PidsLimit":{{json .HostConfig.PidsLimit}}},"State":{{json .State}},"NetworkSettings":{"Ports":{{json .NetworkSettings.Ports}},"Networks":{{json .NetworkSettings.Networks}}}}';
+const inspectFormat='{"Id":{{json .Id}},"ImageId":{{json .Image}},"Name":{{json .Name}},"Config":{"Image":{{json .Config.Image}},"Labels":{{json .Config.Labels}},"ExposedPorts":{{json (index .Config "ExposedPorts")}}},"HostConfig":{"PortBindings":{{json .HostConfig.PortBindings}},"PublishAllPorts":{{json .HostConfig.PublishAllPorts}},"NetworkMode":{{json .HostConfig.NetworkMode}},"Memory":{{json .HostConfig.Memory}},"MemorySwap":{{json .HostConfig.MemorySwap}},"Tmpfs":{{json .HostConfig.Tmpfs}},"NanoCpus":{{json .HostConfig.NanoCpus}},"ReadonlyRootfs":{{json .HostConfig.ReadonlyRootfs}},"PidsLimit":{{json .HostConfig.PidsLimit}}},"State":{{json .State}},"NetworkSettings":{"Ports":{{json .NetworkSettings.Ports}},"Networks":{{json .NetworkSettings.Networks}}}}';
 const hash = value => createHash('sha256').update(value).digest('hex');
 export const stable = value => JSON.stringify(value,(_,v)=>v && typeof v==='object' && !Array.isArray(v)
   ? Object.fromEntries(Object.keys(v).sort().map(k=>[k,v[k]])) : v);

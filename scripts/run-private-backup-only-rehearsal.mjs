@@ -15,7 +15,7 @@ import {captureVerifiedImmutableFreshRestoreIntent} from './immutable-private-fr
 import {loadImmutableDomainSourceRecipes} from './immutable-private-domain-source.mjs';
 import {loadImmutableMessageSourceRecipes} from './immutable-private-message-source.mjs';
 import {prepareVerifiedImmutableBootstrapSource,readVerifiedImmutableBootstrapOwnerProfile} from './immutable-private-source-bootstrap.mjs';
-import {closeOwnedRelay,storageResult,assertPrivatePgOwnerProfile,assertPrivatePgNetwork} from './run-official-local-storage-rehearsal.mjs';
+import {closeOwnedRelay,storageResult,assertPrivatePgOwnerProfile,assertPrivatePgNetwork,privatePgPortIsolation} from './run-official-local-storage-rehearsal.mjs';
 
 export const PG_IMAGE='supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
@@ -107,6 +107,9 @@ const targetCreationOperations=new Set(['CHECK_TARGET_ABSENCE','PULL_PINNED_POST
   'CHECK_NETWORK_ID_SHAPE','START_OWNED_POSTGRES','CHECK_CONTAINER_ID_SHAPE','INSPECT_OWNED_POSTGRES','VERIFY_OWNED_POSTGRES',
   'INSPECT_OWNED_NETWORK','VERIFY_OWNED_NETWORK']);
 export function targetCreationOperation(value){return targetCreationOperations.has(value)?value:null;}
+const privateSubprocessOperations=new Set(['REPLAY_FIXED_ROLE_CATALOG','CREATE_EMPTY_DATABASE',
+  'RESTORE_AUTHENTICATED_SCHEMA','RESTORE_PRIVATE_DATA_AND_STORAGE']);
+export function privateSubprocessOperation(value){return privateSubprocessOperations.has(value)?value:null;}
 // Used only for the exact pinned Docker pull failure. Labels describe observed
 // transport text, never authorize a retry, credential change or alternate image.
 export function classifyPinnedPostgresPullFailure(stderr){
@@ -132,7 +135,7 @@ export function targetCreationMetadata(kind,value,expected){
     const config=own(value,'Config'),labels=own(config,'Labels'),state=own(value,'State'),settings=own(value,'NetworkSettings');
     const ports=own(settings,'Ports'),portKeys=keys(ports),networks=own(settings,'Networks'),networkKeys=keys(networks),endpoint=own(networks,expected.networkName);
     const bindings=portKeys?.map(key=>own(ports,key)),address=own(endpoint,'IPAddress');
-    return Object.freeze({container_id_matches:own(value,'Id')===expected.id,container_name_matches:own(value,'Name')==='/'+expected.name,
+    return Object.freeze({...privatePgPortIsolation(value,expected.networkName),container_id_matches:own(value,'Id')===expected.id,container_name_matches:own(value,'Name')==='/'+expected.name,
       pinned_image_matches:own(config,'Image')===PG_IMAGE,owner_label_matches:own(labels,label)===expected.owner,
       owner_profile_matches:own(labels,'custodial.private-owner-profile')===expected.ownerProfile.id,
       owner_actor_matches:own(labels,'custodial.private-owner-actor')===expected.ownerProfile.actor,
@@ -206,16 +209,17 @@ export async function runPrivate(){
   const networkName=name+'_private_'+owner, database=name;
   let archive,cid,networkId,relay,relayClosed=true,pgAbsent=false,networkAbsent=false;
   const sockets=new Set(),children=new Set(),pendingConnections=new Set(),inspectionController=new AbortController();let stopping=false,closing=false,failure,phase='authenticate',result,source,sourceMetadata,ownerMetadata,ownerProfile;
-  let cancelTimer,creationOperation=null,creationProcess=null,creationPostgres=null,creationNetwork=null;
+  let cancelTimer,creationOperation=null,creationProcess=null,creationPostgres=null,creationNetwork=null,subprocessFailure=null;
   const stop=()=>{stopping=true;for(const pid of children)try{process.kill(-pid,'SIGTERM');}catch{}
     cancelTimer??=setTimeout(()=>{for(const pid of children)try{process.kill(-pid,'SIGKILL');}catch{}},60000);};
   process.on('SIGTERM',stop);process.on('SIGINT',stop);
   const baseEnv=Object.fromEntries(['PATH','HOME','RUNNER_TEMP'].filter(k=>process.env[k]).map(k=>[k,process.env[k]]));
-  const run=(command,args,{input,env=baseEnv,timeout=60000,cleanup=false,abortSignal=null}={})=>new Promise((yes,no)=>{
+  const run=(command,args,{input,env=baseEnv,timeout=60000,cleanup=false,abortSignal=null,diagnosticOperation=null}={})=>new Promise((yes,no)=>{
     if(stopping&&!cleanup || abortSignal?.aborted)return no(new Error('Cancelled'));
     const child=spawn(command,args,{cwd:root,env,detached:true,stdio:['pipe','pipe','pipe']});
     let stdout='',bytes=0,stdoutBytes=0,stderrBytes=0,failed=false,hardTimer,timedOut=false,outputLimit=false,cancelled=false,spawnError=false;children.add(child.pid);
     const operationAtStart=phase==='create_owned_target'&&!cleanup?targetCreationOperation(creationOperation):null;
+    const privateOperation=!cleanup&&diagnosticOperation!==null?privateSubprocessOperation(diagnosticOperation):null;
     const pinnedPull=operationAtStart==='PULL_PINNED_POSTGRES_IMAGE'&&command==='docker'&&args.length===2&&args[0]==='pull'&&args[1]===PG_IMAGE;
     const pullErrorChunks=[];let pullErrorBytes=0,pullErrorTruncated=false;
     const kill=(reason='TIMEOUT')=>{failed=true;timedOut ||= reason==='TIMEOUT';outputLimit ||= reason==='OUTPUT_LIMIT';try{process.kill(-child.pid,'SIGTERM');}catch{}
@@ -231,10 +235,14 @@ export async function runPrivate(){
     child.stdin.on('error',()=>{});child.stdin.end(input);
     child.once('error',()=>{failed=true;spawnError=true;});
     child.once('close',(code,signal)=>{clearTimeout(timer);clearTimeout(hardTimer);abortSignal?.removeEventListener('abort',cancelInspector);children.delete(child.pid);
-      if(operationAtStart)creationProcess=Object.freeze({operation:operationAtStart,exit_code:Number.isInteger(code)&&code>=0&&code<=255?code:null,
-        signal:['SIGTERM','SIGKILL','SIGINT','SIGABRT','SIGSEGV','SIGBUS'].includes(signal)?signal:null,
-        stdout_bytes:stdoutBytes,stderr_bytes:stderrBytes,timed_out:timedOut,output_limit_exceeded:outputLimit,cancelled,spawn_error:spawnError,
-        ...(pinnedPull&&(code!==0||failed)?{docker_pull_failure:pullErrorTruncated?'UNKNOWN':classifyPinnedPostgresPullFailure(Buffer.concat(pullErrorChunks).toString('utf8'))}:{} )});
+      if(operationAtStart||privateOperation){
+        const diagnostic={exit_code:Number.isInteger(code)&&code>=0&&code<=255?code:null,
+          signal:['SIGTERM','SIGKILL','SIGINT','SIGABRT','SIGSEGV','SIGBUS'].includes(signal)?signal:null,
+          stdout_bytes:stdoutBytes,stderr_bytes:stderrBytes,timed_out:timedOut,output_limit_exceeded:outputLimit,cancelled,spawn_error:spawnError};
+        if(operationAtStart)creationProcess=Object.freeze({operation:operationAtStart,...diagnostic,
+          ...(pinnedPull&&(code!==0||failed)?{docker_pull_failure:pullErrorTruncated?'UNKNOWN':classifyPinnedPostgresPullFailure(Buffer.concat(pullErrorChunks).toString('utf8'))}:{} )});
+        if(privateOperation&&(code!==0||failed))subprocessFailure??=Object.freeze({operation:privateOperation,...diagnostic});
+      }
       if(code!==0||failed)no(new Error('Owned subprocess refused during '+phase));else yes(stdout.trim());});
   });
   const docker=(args,options)=>run('docker',args,options);
@@ -302,8 +310,8 @@ export async function runPrivate(){
     assert.equal(healthy,true);await new Promise(r=>setTimeout(r,10000));
     phase='prepare_schema_only';
     await docker(['exec','-i',cid,'psql','-X','-v','ON_ERROR_STOP=1','-U','supabase_admin','-d','postgres'],
-      {input:readFileSync(resolve(root,'supabase/canonical/production-source-role-catalog.sql'),'utf8')});
-    await docker(['exec',cid,'createdb','-U','supabase_admin','-O','postgres','-T','template0',database]);
+      {input:readFileSync(resolve(root,'supabase/canonical/production-source-role-catalog.sql'),'utf8'),diagnosticOperation:'REPLAY_FIXED_ROLE_CATALOG'});
+    await docker(['exec',cid,'createdb','-U','supabase_admin','-O','postgres','-T','template0',database],{diagnosticOperation:'CREATE_EMPTY_DATABASE'});
     const networkIdentity={networkId,networkName,owner,pgid:cid,pgName:name,address};
     const verifyTarget=async()=>{assert.equal(closing,false,'Target inspection refused during cleanup');requireOwnerProfile();
       const options={timeout:10000,abortSignal:inspectionController.signal};
@@ -333,9 +341,9 @@ export async function runPrivate(){
     secretEnv.SUPABASE_DB_URL='postgresql://'+requireOwnerProfile().actor+':postgres@127.0.0.1:'+listener.port+'/'+database;
     // Existing adapter replays authenticated schema unchanged. No hydration,
     // legacy restore-intent producer, forward migrations or reconciliation.
-    await run(process.execPath,['scripts/restore-isolated-event-owner-schema.mjs'],{env:{...secretEnv,SUPABASE_DB_URL:schemaDatabaseUrl},timeout:300000});
+    await run(process.execPath,['scripts/restore-isolated-event-owner-schema.mjs'],{env:{...secretEnv,SUPABASE_DB_URL:schemaDatabaseUrl},timeout:300000,diagnosticOperation:'RESTORE_AUTHENTICATED_SCHEMA'});
     phase='private_original_restore_and_storage';await verifyTarget();
-    result=JSON.parse(await run(process.execPath,['scripts/run-official-local-storage-rehearsal.mjs'],{env:secretEnv,timeout:1900000}));
+    result=JSON.parse(await run(process.execPath,['scripts/run-official-local-storage-rehearsal.mjs'],{env:secretEnv,timeout:1900000,diagnosticOperation:'RESTORE_PRIVATE_DATA_AND_STORAGE'}));
     assertPrivateResult(result,source,envelope.intent);await verifyTarget();
     phase='verified_waiting_cleanup';
   }catch(e){failure=e;}
@@ -367,7 +375,7 @@ export async function runPrivate(){
       provider_verified:!failure&&result?.storage?.provider_verified===true,
       phase,blocker:failure?'PRIVATE_REHEARSAL_REFUSED':stopping?'CANCELLED':null,
       target_creation:{operation:targetCreationOperation(creationOperation),process:creationProcess,postgres:creationPostgres,network:creationNetwork},
-      source_preparation:safeSourcePreparationFailure(failure),original_rows_metadata:sourceMetadata??null,original_owner_metadata:ownerMetadata??null,authenticated_owner_profile:ownerProfile??null};
+      subprocess_failure:subprocessFailure,source_preparation:safeSourcePreparationFailure(failure),original_rows_metadata:sourceMetadata??null,original_owner_metadata:ownerMetadata??null,authenticated_owner_profile:ownerProfile??null};
     writeFileSync(receiptPath,JSON.stringify(receipt,null,2)+'\n',{mode:0o600,flag:'wx'});
     if(!failure&&!stopping)process.stdout.write(JSON.stringify(receipt)+'\n');
   }
