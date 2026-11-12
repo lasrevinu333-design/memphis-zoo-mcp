@@ -1,12 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync,writeFileSync,openSync,fsyncSync,closeSync,mkdtempSync,readdirSync,rmSync,existsSync} from 'node:fs';
+import {readFileSync,writeFileSync,openSync,fsyncSync,closeSync,mkdtempSync,readdirSync,rmSync,existsSync,mkdirSync,symlinkSync,renameSync,chmodSync,lstatSync} from 'node:fs';
 import {resolve} from 'node:path';
 import {tmpdir} from 'node:os';
 import {createHash} from 'node:crypto';
 import {spawn} from 'node:child_process';
 import {PG_IMAGE,selectPrivateProfile,freshIntentEnvelope,assertOwnedPg,assertPrivateResult,safeSourcePreparationFailure,originalOwnerMetadataDiagnostics,targetCreationOperation,targetCreationMetadata,classifyPinnedPostgresPullFailure,privateSubprocessOperation} from './run-private-backup-only-rehearsal.mjs';
-import {storageWorkerActor,assertPrivatePgOwnerProfile,privatePgPortIsolation,resourceProfile,assertPrivatePgNetwork,assertPrivateNetworkMembers,privateRestoreFailureDiagnostic,privateRestoreStreamDiagnostic,privateEvidenceFile,privateEvidenceReceipt,safeStartupFailure,stable,IMAGE} from './run-official-local-storage-rehearsal.mjs';
+import {storageWorkerActor,assertPrivatePgOwnerProfile,privatePgPortIsolation,resourceProfile,assertPrivatePgNetwork,assertPrivateNetworkMembers,privateRestoreFailureDiagnostic,privateRestoreStreamDiagnostic,privateEvidenceFile,privateEvidenceReceipt,safeStartupFailure,hostMemoryAvailability,hostStartupDiagnostic,ownedHostStartupRecorder,selectedMode,stable,IMAGE} from './run-official-local-storage-rehearsal.mjs';
 import {captureVerifiedOriginalRestoreIntent} from './disaster-recovery-crypto.mjs';
 import {captureVerifiedImmutableFreshRestoreIntent} from './immutable-private-fresh-restore-intent.mjs';
 const key='offline-fixture-independent-intent-key-32bytes',keyId='fixture';
@@ -452,4 +452,91 @@ test('schema and provider child failures retain closed operation/status only and
   await assert.rejects(run(process.execPath,['-e','process.exitCode=17;'],{diagnosticOperation:privateSentinels[0]}));assert.equal(receipt(),null);
   for(const operation of ['REPLAY_FIXED_ROLE_CATALOG','CREATE_EMPTY_DATABASE','RESTORE_AUTHENTICATED_SCHEMA','RESTORE_PRIVATE_DATA_AND_STORAGE'])
     assert.equal((source.match(new RegExp("diagnosticOperation:'"+operation+"'",'g'))||[]).length,1);
+});
+
+
+test('host startup diagnostics preserve the4GiB memory guard and never expose arbitrary values',()=>{
+  const required=4*1024**3;
+  for(const [text,available,met] of [
+    ['MemAvailable: 4194303 kB\n',required-1024,false],['MemAvailable: 4194304 kB\n',required,true],
+    ['MemAvailable: 8388608 kB\n',required*2,true],['MemAvailable: 0 kB\n',0,false],
+    [privateSentinels.join('\n'),null,false],['MemAvailable: 9999999999999999999999 kB\n',null,false],
+  ]){
+    const memory=hostMemoryAvailability(text,required);assert.deepEqual(memory,{required_bytes:required,available_bytes:available,floor_met:met});
+    const diagnostic=hostStartupDiagnostic('CHECK_MEMORY_FLOOR',memory,new Error(privateSentinels.join('\n')));
+    assert.equal(diagnostic.required_memory_bytes,required);assert.equal(diagnostic.available_memory_bytes,available);
+    assert.equal(diagnostic.memory_floor_met,met);assert.equal(diagnostic.ok,false);assertNoPrivate(diagnostic);
+  }
+  for(const code of ['ERR_MODULE_NOT_FOUND','ENOMEM','ENOSPC','original_restore_intent_capture_invalid']){
+    const diagnostic=hostStartupDiagnostic('CAPTURE_ORIGINAL_INTENT',null,{code,message:privateSentinels.join('\n')});
+    assert.equal(diagnostic.code,code);assertNoPrivate(diagnostic);
+  }
+  let reads=0;const bad=new Proxy({},{getOwnPropertyDescriptor(){reads++;throw Error(privateSentinels[0]);}});
+  assertNoPrivate(hostStartupDiagnostic(privateSentinels[0],bad,bad));
+  const accessor=Object.defineProperty({},'code',{get(){reads++;throw Error(privateSentinels[0]);}});
+  assert.equal(Object.hasOwn(hostStartupDiagnostic('SELECT_MODE',null,accessor),'code'),false);assert.equal(reads,0);
+  const extra={required_bytes:required,available_bytes:required,secret:privateSentinels,floor_met:privateSentinels[0]};
+  assertNoPrivate(hostStartupDiagnostic('HOST_STARTUP_READY',extra));
+  assert.equal(hostStartupDiagnostic(privateSentinels[0],null,{code:privateSentinels[0]}).phase,'HOST_STARTUP_REFUSED');
+});
+
+test('host startup receipts require canonical owned directories and reject symlink or identity drift',()=>{
+  const tmp=mkdtempSync(resolve(tmpdir(),'host-startup-receipt-'));
+  const base=resolve(tmp,'official-local-storage-provider-evidence');
+  try{
+    assert.throws(()=>ownedHostStartupRecorder('relative'));assert.throws(()=>ownedHostStartupRecorder(resolve(tmp,'absent')));
+    mkdirSync(resolve(tmp,'target'),{mode:0o700});symlinkSync(resolve(tmp,'target'),resolve(tmp,'alias'));
+    assert.throws(()=>ownedHostStartupRecorder(resolve(tmp,'alias')));assert.deepEqual(readdirSync(resolve(tmp,'target')),[]);
+    symlinkSync(resolve(tmp,'target'),base);assert.throws(()=>ownedHostStartupRecorder(tmp));assert.deepEqual(readdirSync(resolve(tmp,'target')),[]);rmSync(base);
+    mkdirSync(base,{mode:0o777});chmodSync(base,0o777);assert.throws(()=>ownedHostStartupRecorder(tmp));assert.deepEqual(readdirSync(base),[]);chmodSync(base,0o700);
+    const record=ownedHostStartupRecorder(tmp),[name]=readdirSync(base),directory=resolve(base,name);
+    assert.equal(lstatSync(directory).mode&0o077,0);assert.deepEqual(readdirSync(directory),[]);
+    record.record('IMPORT_POSTGRES_CLIENT',null,Object.assign(new Error(privateSentinels.join('\n')),{code:'ERR_MODULE_NOT_FOUND'}));
+    const file=resolve(directory,'HOST_STARTUP.json'),receipt=JSON.parse(readFileSync(file,'utf8'));assert.equal(receipt.phase,'IMPORT_POSTGRES_CLIENT');assertNoPrivate(receipt);
+    assert.throws(()=>record.record('HOST_STARTUP_READY',null),'Receipt is exclusive and cannot overwrite');
+    const second=ownedHostStartupRecorder(tmp),secondName=readdirSync(base).find(x=>x!==name),secondDir=resolve(base,secondName);
+    renameSync(secondDir,secondDir+'-retained');mkdirSync(secondDir,{mode:0o700});
+    assert.throws(()=>second.record('CHECK_MEMORY_FLOOR',null));assert.deepEqual(readdirSync(secondDir),[]);
+  }finally{rmSync(tmp,{recursive:true,force:true});}
+});
+
+test('exact host startup flow reports early failures before custody without targets, SQL or raw text',async()=>{
+  const source=readFileSync(new URL('./run-official-local-storage-rehearsal.mjs',import.meta.url),'utf8');
+  const begin=source.indexOf('  const startup=ownedHostStartupRecorder(process.env.RUNNER_TEMP)'),end=source.indexOf('  const started=Date.now();',begin);
+  assert.ok(begin>0&&end>begin);
+  const memoryBegin=source.indexOf('function memoryFloor('),memoryEnd=source.indexOf('const hostStartupPhases=',memoryBegin);
+  const memoryFactory=new Function('ports',`const {hostMemoryAvailability,readFileSync,insist}=ports;${source.slice(memoryBegin,memoryEnd)}return memoryFloor;`);
+  const factory=new Function('ports',`const {root,process,ownedHostStartupRecorder,selectedMode,pathToFileURL,resolve,loadModule,memoryFloor,mkdtempSync}=ports;
+    return async()=>{${source.slice(begin,end).replaceAll('await import(','await loadModule(')}return {intent,custody};};`);
+  const env={REHEARSAL_SCOPE:'backup_only',OFFICIAL_LOCAL_STORAGE_PROVIDER:'true',RESTORE_APPLY:'true',RESTORE_DATABASE_ONLY:'true',
+    SUPABASE_DB_URL:'postgresql://postgres:postgres@127.0.0.1:54321/mz_schema_rebuild_test',
+    RESTORE_INTENT_JSON:JSON.stringify(freshIntentEnvelope(binding,key,keyId)),RESTORE_INTENT_VERIFY_KEY:key,RESTORE_INTENT_VERIFY_KEY_ID:keyId};
+  for(const phase of ['SELECT_MODE','IMPORT_ARCHIVE','IMPORT_STORAGE','IMPORT_POSTGRES_CLIENT','CHECK_MEMORY_FLOOR','PARSE_ORIGINAL_INTENT',
+    'IMPORT_CRYPTO','CAPTURE_ORIGINAL_INTENT','CREATE_CUSTODY','HOST_STARTUP_READY']){
+    const tmp=mkdtempSync(resolve(tmpdir(),'host-startup-stage-')),calls=[];
+    try{
+      const failure=Object.assign(new Error(privateSentinels.join('\n')),{code:'ERR_MODULE_NOT_FOUND'});
+      const e={...env,RUNNER_TEMP:tmp};if(phase==='SELECT_MODE')e.REHEARSAL_SCOPE='denied';
+      if(phase==='PARSE_ORIGINAL_INTENT')e.RESTORE_INTENT_JSON=privateSentinels.join('\n');
+      if(phase==='CAPTURE_ORIGINAL_INTENT')e.RESTORE_INTENT_VERIFY_KEY='wrong-key-'.repeat(4);
+      const loadModule=async spec=>{const text=String(spec);let stage,module;
+        if(text.endsWith('disaster-recovery-archive.mjs')){stage='IMPORT_ARCHIVE';module={};}
+        else if(text.endsWith('disaster-recovery-storage.mjs')){stage='IMPORT_STORAGE';module={};}
+        else if(text==='pg'){stage='IMPORT_POSTGRES_CLIENT';module={Client:class{constructor(){assert.fail('No database client during startup');}}};}
+        else if(text.endsWith('disaster-recovery-crypto.mjs')){stage='IMPORT_CRYPTO';module={captureVerifiedOriginalRestoreIntent};}
+        else assert.fail('Unexpected import');calls.push(stage);if(stage===phase)throw failure;return module;
+      };
+      const memoryFloor=memoryFactory({hostMemoryAvailability,readFileSync:path=>{assert.equal(path,'/proc/meminfo');return phase==='CHECK_MEMORY_FLOOR'?'MemAvailable: 4194303 kB\n':'MemAvailable: 4194304 kB\n';},insist:(v,m)=>assert.ok(v,m)});
+      const run=factory({root:'/fixture',process:{env:e},ownedHostStartupRecorder,selectedMode,pathToFileURL:value=>value,resolve,loadModule,memoryFloor,
+        mkdtempSync:path=>{calls.push('CREATE_CUSTODY');if(phase==='CREATE_CUSTODY')throw Object.assign(new Error(privateSentinels[0]),{code:'ENOSPC'});return mkdtempSync(path);}});
+      if(phase==='HOST_STARTUP_READY'){const result=await run();assert.deepEqual(result.intent,JSON.parse(e.RESTORE_INTENT_JSON).intent);}
+      else await assert.rejects(run());
+      const base=resolve(tmp,'official-local-storage-provider-evidence'),dirs=readdirSync(base);assert.equal(dirs.length,1);
+      const receipt=JSON.parse(readFileSync(resolve(base,dirs[0],'HOST_STARTUP.json'),'utf8'));assert.equal(receipt.phase,phase);assert.equal(receipt.ok,phase==='HOST_STARTUP_READY');assertNoPrivate(receipt);
+      if(phase==='CHECK_MEMORY_FLOOR'){assert.equal(receipt.required_memory_bytes,4*1024**3);assert.equal(receipt.available_memory_bytes,4*1024**3-1024);assert.equal(calls.includes('CREATE_CUSTODY'),false);}
+      if(phase==='CAPTURE_ORIGINAL_INTENT')assert.equal(receipt.code,'original_restore_intent_capture_invalid');
+      if(phase!=='HOST_STARTUP_READY')assert.equal(readdirSync(tmp).some(x=>x.startsWith('official-storage-')),false);
+    }finally{rmSync(tmp,{recursive:true,force:true});}
+  }
+  assert.match(source,/startupPhase='CHECK_MEMORY_FLOOR';memoryFloor\(4\*1024\*\*3/);
 });

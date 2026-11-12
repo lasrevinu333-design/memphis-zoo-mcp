@@ -2,7 +2,7 @@
 // signed original DB, archived FileBackend versions. Never a production target.
 import { createHash, createHmac, randomBytes } from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { readFileSync, writeFileSync, openSync, fsyncSync, closeSync, mkdirSync, mkdtempSync, rmSync, statSync, readdirSync, existsSync, copyFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, openSync, fsyncSync, closeSync, mkdirSync, mkdtempSync, rmSync, statSync, lstatSync, realpathSync, readdirSync, existsSync, copyFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
@@ -135,7 +135,49 @@ const pause = ms => new Promise(r=>setTimeout(r,ms));
 const sign = (value,key) => createHmac('sha256',key).update(stable(value)).digest('hex');
 function durable(path,value,mode=0o600){const fd=openSync(path,'wx',mode);try{writeFileSync(fd,JSON.stringify(value,null,2)+'\n');fsyncSync(fd);}finally{closeSync(fd);}}
 function ticks(pid){return readFileSync(`/proc/${pid}/stat`,'utf8').split(') ')[1].split(' ')[19];}
-function memoryFloor(bytes){const m=/^MemAvailable:\s+(\d+) kB$/m.exec(readFileSync('/proc/meminfo','utf8'));insist(m && Number(m[1])*1024>=bytes,'Insufficient available memory.');}
+export function hostMemoryAvailability(text,requiredBytes){
+  insist(Number.isSafeInteger(requiredBytes)&&requiredBytes>0,'Fixed memory floor required.');
+  const m=typeof text==='string'?/^MemAvailable:\s+(\d+) kB$/m.exec(text):null;
+  const observed=m?Number(m[1])*1024:null;
+  const available=Number.isSafeInteger(observed)&&observed>=0?observed:null;
+  return Object.freeze({required_bytes:requiredBytes,available_bytes:available,floor_met:available!==null&&available>=requiredBytes});
+}
+function memoryFloor(bytes,observe=null){
+  const memory=hostMemoryAvailability(readFileSync('/proc/meminfo','utf8'),bytes);
+  if(observe)observe(memory);insist(memory.floor_met,'Insufficient available memory.');
+}
+const hostStartupPhases=new Set(['SELECT_MODE','IMPORT_ARCHIVE','IMPORT_STORAGE','IMPORT_POSTGRES_CLIENT',
+  'CHECK_MEMORY_FLOOR','PARSE_ORIGINAL_INTENT','IMPORT_CRYPTO','CAPTURE_ORIGINAL_INTENT','CREATE_CUSTODY','HOST_STARTUP_READY']);
+export function hostStartupDiagnostic(phase,memory,error=null){
+  const own=(object,key)=>{if(!object||typeof object!=='object'||isProxy(object))return undefined;
+    const d=Object.getOwnPropertyDescriptor(object,key);return d&&Object.hasOwn(d,'value')?d.value:undefined;};
+  const codes=['ERR_MODULE_NOT_FOUND','MODULE_NOT_FOUND','ERR_DLOPEN_FAILED','ENOMEM','EACCES','EPERM','ENOSPC','EMFILE','ENFILE','ENOENT','EEXIST',
+    'original_restore_intent_capture_invalid'];
+  const code=own(error,'code'),required=own(memory,'required_bytes'),available=own(memory,'available_bytes');
+  const knownMemory=required===4*1024**3;
+  const safeAvailable=Number.isSafeInteger(available)&&available>=0?available:null;
+  return Object.freeze({schema:'custodial.official-storage-host-startup.v1',ok:phase==='HOST_STARTUP_READY'&&error===null,
+    phase:hostStartupPhases.has(phase)?phase:'HOST_STARTUP_REFUSED',
+    ...(codes.includes(code)?{code}:{}),required_memory_bytes:knownMemory?required:null,
+    available_memory_bytes:knownMemory?safeAvailable:null,memory_floor_met:knownMemory&&safeAvailable!==null&&safeAvailable>=required,
+    private_payload_exported:false,production_action_performed:false});
+}
+// The startup receipt exists before provider custody, but only under verified
+// owned directories. It never accepts a caller path/name or raw failure text.
+export function ownedHostStartupRecorder(tmp){
+  insist(typeof tmp==='string'&&tmp===resolve(tmp)&&realpathSync(tmp)===tmp,'Canonical runner temporary directory required.');
+  const checked=(path,privateMode)=>{const s=lstatSync(path);
+    insist(s.isDirectory()&&!s.isSymbolicLink()&&s.uid===process.getuid()&&(!privateMode||(s.mode&0o077)===0),'Owned startup receipt directory required.');return s;};
+  const rootIdentity=checked(tmp,false),base=resolve(tmp,'official-local-storage-provider-evidence');
+  try{mkdirSync(base,{mode:0o700});}catch(error){if(error?.code!=='EEXIST')throw error;}
+  const baseIdentity=checked(base,true),directory=mkdtempSync(resolve(base,'startup-')),identity=checked(directory,true);
+  const same=(path,prior,privateMode)=>{const current=checked(path,privateMode);
+    insist(current.dev===prior.dev&&current.ino===prior.ino,'Startup receipt directory changed.');};
+  return Object.freeze({tmp,record(phase,memory,error=null){
+    same(tmp,rootIdentity,false);same(base,baseIdentity,true);same(directory,identity,true);
+    durable(resolve(directory,'HOST_STARTUP.json'),hostStartupDiagnostic(phase,memory,error));
+  }});
+}
 export function selectedMode(env){
   insist(env.REHEARSAL_SCOPE==='backup_only' && env.OFFICIAL_LOCAL_STORAGE_PROVIDER==='true','Explicit backup_only provider opt-in required.');
   insist(env.RESTORE_APPLY==='true' && env.RESTORE_DATABASE_ONLY==='true','Original whole database-only APPLY required.');
@@ -387,16 +429,22 @@ async function containerGate(){
 }
 
 async function host(){
-  const u=selectedMode(process.env),root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
-  const api=await import(pathToFileURL(resolve(root,'scripts/disaster-recovery-archive.mjs')));
-  const storage=await import(pathToFileURL(resolve(root,'scripts/disaster-recovery-storage.mjs')));
-  const {Client}=await import('pg');
-  memoryFloor(4*1024**3);
-  const tmp=process.env.RUNNER_TEMP;insist(tmp && statSync(tmp).uid===process.getuid(),'Owned runner temporary directory required.');
-  const original=JSON.parse(process.env.RESTORE_INTENT_JSON);
-  const crypto=await import(pathToFileURL(resolve(root,'scripts/disaster-recovery-crypto.mjs')));
-  const intent=crypto.captureVerifiedOriginalRestoreIntent(original,process.env.RESTORE_INTENT_VERIFY_KEY,process.env.RESTORE_INTENT_VERIFY_KEY_ID);
-  const custody=mkdtempSync(resolve(tmp,'official-storage-')),started=Date.now();let deadline=started+WORK_MS;const cleanupBudget={deadline:null},privacy={privateData:false};const run=runner(custody,()=>deadline,cleanupBudget,privacy);
+  const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
+  const startup=ownedHostStartupRecorder(process.env.RUNNER_TEMP),tmp=startup.tmp;
+  let startupPhase='SELECT_MODE',startupMemory=null,u,api,storage,Client,original,intent,custody;
+  try{
+    u=selectedMode(process.env);
+    startupPhase='IMPORT_ARCHIVE';api=await import(pathToFileURL(resolve(root,'scripts/disaster-recovery-archive.mjs')));
+    startupPhase='IMPORT_STORAGE';storage=await import(pathToFileURL(resolve(root,'scripts/disaster-recovery-storage.mjs')));
+    startupPhase='IMPORT_POSTGRES_CLIENT';({Client}=await import('pg'));
+    startupPhase='CHECK_MEMORY_FLOOR';memoryFloor(4*1024**3,value=>{startupMemory=value;});
+    startupPhase='PARSE_ORIGINAL_INTENT';original=JSON.parse(process.env.RESTORE_INTENT_JSON);
+    startupPhase='IMPORT_CRYPTO';const crypto=await import(pathToFileURL(resolve(root,'scripts/disaster-recovery-crypto.mjs')));
+    startupPhase='CAPTURE_ORIGINAL_INTENT';intent=crypto.captureVerifiedOriginalRestoreIntent(original,process.env.RESTORE_INTENT_VERIFY_KEY,process.env.RESTORE_INTENT_VERIFY_KEY_ID);
+    startupPhase='CREATE_CUSTODY';custody=mkdtempSync(resolve(tmp,'official-storage-'));
+    startup.record('HOST_STARTUP_READY',startupMemory);
+  }catch(error){try{startup.record(startupPhase,startupMemory,error);}catch{}throw error;}
+  const started=Date.now();let deadline=started+WORK_MS;const cleanupBudget={deadline:null},privacy={privateData:false};const run=runner(custody,()=>deadline,cleanupBudget,privacy);
   const namespace='mz_schema_rebuild_storage_'+randomBytes(10).toString('hex');let alias=namespace+'_db',network=namespace+'_net',privateNetwork=null,borrowedNetworkRetained=false;
   let archive,client,cid=null,pgid=null,networkBorn=false,networkId=null,connected=false,failure,output,cleanupFailure=null,serviceAbsent=false,networkAbsent=false,relay=null,relayClosed=true,relayClosing=false,verifiedImageId=null;const relaySockets=new Set(),relayPending=new Set(),relayInspectionController=new AbortController();
   try{
