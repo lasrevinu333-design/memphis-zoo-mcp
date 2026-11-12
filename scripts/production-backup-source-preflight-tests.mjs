@@ -18,12 +18,12 @@ const end=source.indexOf('  const namespaceResult =',start);
 assert.ok(start>=0&&end>start);
 const AsyncFunction=Object.getPrototypeOf(async function(){}).constructor;
 const execute=new AsyncFunction('io',`
- const {client,Client,productionBackupSnapshotStatements,projectRef,captureApplicationSchema,captureCatalogFromSnapshot,
+ const {client,Client,captureBackupExporterIdentity,productionBackupSnapshotStatements,projectRef,captureApplicationSchema,captureCatalogFromSnapshot,
  readFileSync,bindBackupSchemaExtension,assertBackupSchemaBoundary,
  readProductionBackupOriginalRelease,loadRecoveryRuntimeContract,
  validateRecoveryRuntimeConfiguration,writeJson,join}=io;
  const backupDir='/synthetic-backup',runtimeContractPath='/synthetic-contract',runtimeConfigurationInput='{}';
- let applicationSchemaSections,snapshot,migrationHead,migrationLedger,cronJobs,extensionInventory,releaseIdentity,sourceSchemaBinding;
+ let backupExporterIdentity,applicationSchemaSections,snapshot,migrationHead,migrationLedger,cronJobs,extensionInventory,releaseIdentity,sourceSchemaBinding;
  const backupNativeTextOutputStatements=[];
  ${source.slice(start,end).replaceAll('import.meta.url',JSON.stringify(import.meta.url))}
  finishBackupArtifacts=async()=>{};
@@ -56,6 +56,7 @@ async function run(change=()=>{}){
    if(sql.includes('from cron.job')||sql.includes('from pg_extension'))return select([]);
    throw Error('Unexpected source-preflight query');
   }},
+  async captureBackupExporterIdentity(){return Object.freeze({backend_pid:23,virtualxid:'3/4'});},
   async captureApplicationSchema(snapshot){assert.equal(snapshot,'synthetic-snapshot');events.push('pg_dump');return ['synthetic-schema'];},
   async captureCatalogFromSnapshot(){events.push('catalog');return f.catalog;},
   readFileSync(url){if(String(url).endsWith('/production-backup-source-extension-v2.active.json'))return JSON.stringify(f.declaration);return readFileSync(url);},

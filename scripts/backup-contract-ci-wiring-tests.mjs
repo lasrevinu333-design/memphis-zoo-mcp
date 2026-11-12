@@ -7,12 +7,13 @@ const workflow=read('.github/workflows/backup-source-contracts.yml');
 const commands={
  'test:backup-binding':'node --test scripts/backup-release-schema-binding-tests.mjs scripts/backup-ledger-binding-v2-tests.mjs',
  'test:backup-source-preflight':'node --test scripts/production-backup-source-preflight-tests.mjs',
+ 'test:backup-pg-dump-retry':'node --test scripts/production-backup-pg-dump-retry-tests.mjs',
  'test:backup-private-namespaces':'node scripts/backup-private-namespace-compatibility-tests.mjs',
  'test:backup-leadership-guard':'node scripts/leadership-restore-generation-tests.mjs',
  'test:backup-encrypted-readback':'python3 scripts/test-encrypted-backup-readback.py',
  'test:backup-ci-wiring':'node --test scripts/backup-contract-ci-wiring-tests.mjs',
 };
-test('aggregate requires all six offline suites with no failure masking',()=>{
+test('aggregate requires all seven offline suites with no failure masking',()=>{
  for(const [name,command]of Object.entries(commands))assert.equal(pkg.scripts[name],command);
  assert.equal(pkg.scripts['test:backup-source-contracts'],['test:backup-ci-wiring',...Object.keys(commands).filter(k=>k!=='test:backup-ci-wiring')].map(k=>'npm run --silent '+k).join(' && '));
 });
@@ -42,4 +43,10 @@ test('published offline tests do not depend on private evidence or live captures
  for(const file of ['scripts/backup-ledger-binding-v2-tests.mjs','scripts/production-backup-source-preflight-tests.mjs'])
   assert.doesNotMatch(read(file),/\.\.\/evidence\/|\/mnt\/ai_models\/|live-expanded-catalog|live-source-2026/);
  const provenance=JSON.parse(read('release/backup-installed-source-provenance.json'));assert.equal(provenance.statement_source_bindings.length,189);
+});
+
+test('native retry qualification is explicit opt-in and never part of offline aggregate',()=>{
+ assert.equal(pkg.scripts['test:backup-pg-dump-retry:native'],'RUN_SYNTHETIC_BACKUP_RETRY_NATIVE=1 node scripts/production-backup-pg-dump-retry-native-tests.mjs');
+ assert.doesNotMatch(pkg.scripts['test:backup-source-contracts'],/:native|RUN_SYNTHETIC_BACKUP_RETRY_NATIVE/);
+ assert.match(read('scripts/production-backup-pg-dump-retry-native-tests.mjs'),/assert.equal\(process.env.RUN_SYNTHETIC_BACKUP_RETRY_NATIVE, '1'/);
 });

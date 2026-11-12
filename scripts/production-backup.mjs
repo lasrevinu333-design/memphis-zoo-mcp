@@ -17,6 +17,7 @@ import { Readable } from "node:stream";
 import { finished, pipeline } from "node:stream/promises";
 import { promisify, types } from "node:util";
 import pg from "pg";
+import { createBackupPgDumpExecutor, captureBackupExporterIdentity } from "./production-backup-pg-dump-retry.mjs";
 import {captureCatalogFromSnapshot} from "./schema-catalog-readonly-client.mjs";
 import {bindBackupSchemaExtension} from "./backup-release-schema-binding.mjs";
 import {assertBackupSchemaBoundary} from "./backup-source-preflight.mjs";
@@ -49,7 +50,7 @@ import {
 } from "./production-backup-pg-dump-command.mjs";
 
 const { Client } = pg;
-const execFileAsync = promisify(execFile);
+const rawExecFileAsync = promisify(execFile);
 const projectRef = String(process.env.SUPABASE_PROJECT_REF || "").trim();
 const secret = String(process.env.SUPABASE_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
 const databaseUrl = String(process.env.SUPABASE_DB_URL || process.env.DATABASE_URL || "").trim();
@@ -275,11 +276,36 @@ let migrationLedger = [];
 let cronJobs = [];
 let extensionInventory = [];
 let snapshot = null;
+let backupExporterIdentity = null;
 let migrationHead = null;
 let releaseIdentity = null;
 let sourceSchemaBinding = null;
 let applicationSchemaSections = null;
 let originalMetadata = null;
+
+// This wrapper leaves the source-pinned capture commands and validations intact.
+// Retry only a proven pre-auth refusal while the original guarded exporter lives.
+const execFileAsync = createBackupPgDumpExecutor({
+  run: rawExecFileAsync,
+  inventoryDir: join(backupDir, "inventory"),
+  assertExporterLive: async () => {
+    if (!backupTransactionMayBeOpen || !snapshot || !backupExporterIdentity) throw new Error("Exporter unavailable.");
+    const identity = await captureBackupExporterIdentity(client);
+    if (identity.backend_pid !== backupExporterIdentity.backend_pid || identity.virtualxid !== backupExporterIdentity.virtualxid) {
+      throw new Error("Exporter transaction changed.");
+    }
+    const result = await client.query(`select
+      txid_current_snapshot()::text snapshot_id,
+      date_trunc('milliseconds', transaction_timestamp()) = $1::timestamptz same_transaction,
+      current_setting('transaction_read_only') read_only,
+      current_setting('transaction_isolation') isolation`, [snapshot.captured_at]);
+    const row = result.rows[0];
+    if (result.rowCount !== 1 || row.snapshot_id !== snapshot.snapshot_id
+        || row.same_transaction !== true || row.read_only !== 'on' || row.isolation !== 'repeatable read') {
+      throw new Error("Exporter transaction changed.");
+    }
+  },
+});
 
 const endBackupClient = Client.prototype.end;
 let backupTransactionMayBeOpen = false;
@@ -301,6 +327,7 @@ try {
            $1::text schema_export_snapshot
   `, [exportedSnapshot]);
   snapshot = snapshotResult.rows[0];
+  backupExporterIdentity = await captureBackupExporterIdentity(client);
 
   const migrationLedgerResult = await client.query(`
     select version::text, name::text, statements
