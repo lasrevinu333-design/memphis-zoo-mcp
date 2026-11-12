@@ -155,7 +155,7 @@
       {
         "path": ".github/workflows/custodial-production-repair.yml",
         "mode": "100644",
-        "object_id": "ff7f76d553293550b0641310e0c028d821c69317"
+        "object_id": "2154dd5d304f30f61b5a5277869f5cea72480a69"
       },
       {
         "path": ".github/workflows/device-credential-foundation.yml",
@@ -170,7 +170,7 @@
       {
         "path": ".github/workflows/foundation-security-gate.yml",
         "mode": "100644",
-        "object_id": "84abe28f9d696a209fa97c0f480e8eac34afa3a5"
+        "object_id": "c25ea819fdc2ae10e66371a92b3d94c2493bbe8a"
       },
       {
         "path": ".github/workflows/integrated-release-attestation.yml",
@@ -455,7 +455,7 @@
       {
         "path": "package.json",
         "mode": "100644",
-        "object_id": "3eeec7c9f326700fc3da0a0535ff1e0af29346d9"
+        "object_id": "4d9e6e925b42af2a5a2aea139e34e0b26c39a988"
       },
       {
         "path": "proposals/immutable-original-authority-reconciliation.sql",
@@ -1970,7 +1970,7 @@
       {
         "path": "scripts/backup-contract-ci-wiring-tests.mjs",
         "mode": "100644",
-        "object_id": "1bc02c44d9b0ca2eef9798f39d379f49d4b7a02e"
+        "object_id": "f931389393161aa5e1910384d7966e4f2d16e3c6"
       },
       {
         "path": "scripts/backup-ledger-binding-v2-tests.mjs",
@@ -2045,7 +2045,7 @@
       {
         "path": "scripts/ci-workflow-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "0f8cf1217d7eca36414344884c15c9e41e6501d8"
+        "object_id": "05dc0e63ddc9dcec2d53430c3ce83f67f7525429"
       },
       {
         "path": "scripts/cleaning-identity-gps-database-tests.mjs",
@@ -2970,7 +2970,7 @@
       {
         "path": "scripts/private-backup-only-rehearsal-tests.mjs",
         "mode": "100644",
-        "object_id": "4bc1b6e36f0ed18f46922228a8ef8f7ef17291b1"
+        "object_id": "61fa0883837cdebf9ada6ef9baacfa697d41832e"
       },
       {
         "path": "scripts/production-backup-original-metadata.mjs",
@@ -2988,6 +2988,21 @@
         "object_id": "6a24683439dfc81353410fe581c069c2c679373b"
       },
       {
+        "path": "scripts/production-backup-pg-dump-retry-native-tests.mjs",
+        "mode": "100644",
+        "object_id": "8eaad4ce710a59408aa20d6b709d1387a7ccad7f"
+      },
+      {
+        "path": "scripts/production-backup-pg-dump-retry-tests.mjs",
+        "mode": "100644",
+        "object_id": "7cf965f65dfec42912ddb9f5c688b9350e3c3e28"
+      },
+      {
+        "path": "scripts/production-backup-pg-dump-retry.mjs",
+        "mode": "100644",
+        "object_id": "fcbc3ac41db79bd20decff7eedd9a7015558b140"
+      },
+      {
         "path": "scripts/production-backup-rehearsal-scope.mjs",
         "mode": "100644",
         "object_id": "12ae318ba3087d9f16d9b328736564db52aab66a"
@@ -2995,12 +3010,12 @@
       {
         "path": "scripts/production-backup-source-preflight-tests.mjs",
         "mode": "100644",
-        "object_id": "9918dc8358c8ebb2f9eba5715464ac4182526d72"
+        "object_id": "c551c3ba2dc2cef87f35d4725f99124553d9f2b3"
       },
       {
         "path": "scripts/production-backup.mjs",
         "mode": "100644",
-        "object_id": "a746d3688bd9d769bf23880e1a530aadd1304f90"
+        "object_id": "cd9e20abc39705982d809febbfbd147de8bd8184"
       },
       {
         "path": "scripts/production-database-credential-bridge.mjs",
@@ -3270,7 +3285,7 @@
       {
         "path": "scripts/run-official-local-storage-rehearsal.mjs",
         "mode": "100644",
-        "object_id": "ce02df2735ba7aa336de998365c1224ca24cd708"
+        "object_id": "9b0694f2c6028c082f1755632e42ba325634e54b"
       },
       {
         "path": "scripts/run-private-backup-only-rehearsal.mjs",
@@ -6738,7 +6753,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 1322,
+    "authority_path_count": 1325,
     "migration_path_count": 294,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
