@@ -5,8 +5,9 @@ import {resolve} from 'node:path';
 import {tmpdir} from 'node:os';
 import {createHash} from 'node:crypto';
 import {spawn} from 'node:child_process';
+import {EventEmitter} from 'node:events';
 import {PG_IMAGE,selectPrivateProfile,freshIntentEnvelope,assertOwnedPg,assertPrivateResult,safeSourcePreparationFailure,originalOwnerMetadataDiagnostics,targetCreationOperation,targetCreationMetadata,classifyPinnedPostgresPullFailure,privateSubprocessOperation} from './run-private-backup-only-rehearsal.mjs';
-import {storageWorkerActor,assertPrivatePgOwnerProfile,privatePgPortIsolation,resourceProfile,assertPrivatePgNetwork,assertPrivateNetworkMembers,privateRestoreFailureDiagnostic,privateRestoreStreamDiagnostic,privateEvidenceFile,privateEvidenceReceipt,safeStartupFailure,hostMemoryAvailability,hostStartupDiagnostic,ownedHostStartupRecorder,selectedMode,stable,IMAGE} from './run-official-local-storage-rehearsal.mjs';
+import {storageWorkerActor,assertPrivatePgOwnerProfile,privatePgPortIsolation,resourceProfile,assertPrivatePgNetwork,assertPrivateNetworkMembers,privateRestoreFailureDiagnostic,privateRestoreStreamDiagnostic,privateEvidenceFile,privateEvidenceReceipt,safeStartupFailure,hostMemoryAvailability,hostStartupDiagnostic,hostStageDiagnostic,nativeClientFailureGuard,withOwnedNativeClient,ownedHostStartupRecorder,selectedMode,STORAGE_CREDENTIAL_NONSECRET_SQL,stable,IMAGE} from './run-official-local-storage-rehearsal.mjs';
 import {captureVerifiedOriginalRestoreIntent} from './disaster-recovery-crypto.mjs';
 import {captureVerifiedImmutableFreshRestoreIntent} from './immutable-private-fresh-restore-intent.mjs';
 const key='offline-fixture-independent-intent-key-32bytes',keyId='fixture';
@@ -275,14 +276,14 @@ test('private errors and catalog receipts never export PII, SQL, tokens, configs
 test('private subprocess persistence hashes arbitrary stdout/stderr without exporting payloads',async()=>{
   const worker=readFileSync(new URL('./run-official-local-storage-rehearsal.mjs',import.meta.url),'utf8');
   const start=worker.indexOf('function runner('),end=worker.indexOf('export function redactProviderLogs(',start);
-  const root=mkdtempSync(resolve(tmpdir(),'private-output-contract-'));
+  const root=mkdtempSync(resolve(tmpdir(),'private-output-contract-')),groups=new Set();
   const hash=value=>createHash('sha256').update(value).digest('hex');
   const durable=(path,value)=>{const fd=openSync(path,'wx',0o600);try{writeFileSync(fd,JSON.stringify(value));fsyncSync(fd);}finally{closeSync(fd);}};
   const factory=new Function('ports',`const {insist,Date,stopping,memoryFloor,resolve,durable,hash,stable,spawn,liveGroups,ticks,CAP,pause,existsSync,Buffer,writeFileSync,privateRestoreStreamDiagnostic,redactProviderLogs}=ports;
     ${worker.slice(start,end)}return runner;`);
   try{
     const runner=factory({insist:(condition,message)=>assert.ok(condition,message),Date,stopping:false,memoryFloor:()=>{},resolve,durable,hash,stable,spawn,
-      liveGroups:new Set(),ticks:pid=>readFileSync('/proc/'+pid+'/stat','utf8').split(') ')[1].split(' ')[19],CAP:1048576,
+      liveGroups:groups,ticks:pid=>readFileSync('/proc/'+pid+'/stat','utf8').split(') ')[1].split(' ')[19],CAP:1048576,
       pause:ms=>new Promise(r=>setTimeout(r,ms)),existsSync,Buffer,writeFileSync,privateRestoreStreamDiagnostic,redactProviderLogs:()=>assert.fail('Private output cannot use credential-only redaction')});
     const run=runner(root,()=>Date.now()+10000,{deadline:null},{privateData:true});
     const payload=privateSentinels.join('\n');
@@ -297,8 +298,16 @@ test('private subprocess persistence hashes arbitrary stdout/stderr without expo
     await assert.rejects(run([process.execPath,'-e',source],{abortSignal:controller.signal}),/cancelled before child birth/);
     const wait=JSON.parse(readFileSync(resolve(root,'003.ACTUAL_WAIT.json'),'utf8'));
     assert.equal(wait.signal,'SIGKILL');assert.equal(existsSync('/proc/'+wait.pid),false);
+    const nativeGuard=nativeClientFailureGuard(()=>{for(const pid of groups)process.kill(-pid,'SIGKILL');});
+    const emitter=nativeGuard.observe(new EventEmitter());
+    const nativePending=nativeGuard.run(()=>run([process.execPath,'-e','setInterval(()=>{},1000);'],{seconds:60}));
+    const nativeRefused=assert.rejects(nativePending);
+    await new Promise(resolve=>setTimeout(resolve,50));emitter.emit('error',Object.assign(new Error(payload),{code:'08006'}));await nativeRefused;
+    const nativeWait=JSON.parse(readFileSync(resolve(root,'004.ACTUAL_WAIT.json'),'utf8'));
+    assert.equal(nativeWait.signal,'SIGKILL');assert.equal(existsSync('/proc/'+nativeWait.pid),false);assert.equal(groups.size,0);
+    await assert.rejects(nativeGuard.run(()=>run([process.execPath,'-e',source])));assert.equal(existsSync(resolve(root,'005.INTENT.json')),false);
     for(const file of readdirSync(root))assertNoPrivate(readFileSync(resolve(root,file),'utf8'));
-    assert.ok(readdirSync(root).filter(name=>/\.(stdout|stderr)$/.test(name)).length===6);
+    assert.ok(readdirSync(root).filter(name=>/\.(stdout|stderr)$/.test(name)).length===8);
   }finally{rmSync(root,{recursive:true,force:true});}
 });
 
@@ -539,4 +548,126 @@ test('exact host startup flow reports early failures before custody without targ
     }finally{rmSync(tmp,{recursive:true,force:true});}
   }
   assert.match(source,/startupPhase='CHECK_MEMORY_FLOOR';memoryFloor\(4\*1024\*\*3/);
+});
+
+
+test('owned pg lifecycle catches idle errors without swallowing failure and closes connect refusals',async()=>{
+  for(const mode of ['valid','connect_refusal','query_refusal','query_idle_error','between_queries','close_idle_error']){
+    let constructed=0,connected=0,queries=0,closed=0,notices=0,current;
+    const payload=privateSentinels.join('\n'),error=Object.assign(new Error(payload),{code:'08006'});
+    class Native extends EventEmitter{
+      constructor(){super();constructed++;current=this;}
+      async connect(){connected++;assert.equal(this.listenerCount('error'),1);if(mode==='connect_refusal')throw error;}
+      async query(){queries++;if(mode==='query_refusal')throw error;if(mode==='query_idle_error')this.emit('error',error);return {rows:[{ok:true}]};}
+      async end(){closed++;if(mode==='close_idle_error')this.emit('error',error);}
+    }
+    const guard=nativeClientFailureGuard(()=>{notices++;throw new Error('Diagnostic callback failure must not escape');}),tracked=new Set();
+    const work=()=>withOwnedNativeClient(Native,{},guard,tracked,async db=>{
+      await db.query('INERT');if(mode==='between_queries')current.emit('error',error);await db.query('INERT');return true;
+    });
+    if(mode==='valid')assert.equal(await work(),true);else await assert.rejects(work());
+    assert.equal(constructed,1);assert.equal(connected,1);assert.equal(closed,1);assert.equal(tracked.size,0);
+    assert.equal(queries,mode==='connect_refusal'?0:['query_refusal','query_idle_error','between_queries'].includes(mode)?1:2);
+    if(['query_idle_error','between_queries','close_idle_error'].includes(mode)){
+      assert.equal(notices,1);assert.doesNotThrow(()=>current.emit('error',error));assert.equal(notices,1);
+      await assert.rejects(withOwnedNativeClient(Native,{},guard,tracked,()=>assert.fail('Continuation forbidden')));
+      assert.equal(constructed,1);try{guard.check();assert.fail('Must refuse');}catch(failure){assertNoPrivate({message:failure.message,code:failure.code});assert.equal(failure.code,'08006');}
+    }
+  }
+});
+
+test('native deadline and cancellation checks prevent new clients and reject completed stale work',async()=>{
+  let permitted=false,born=0;
+  const guard=nativeClientFailureGuard(()=>{},()=>assert.ok(permitted,'Work budget or cancellation'));
+  class Native extends EventEmitter{constructor(){super();born++;}async connect(){}async end(){}}
+  await assert.rejects(withOwnedNativeClient(Native,{},guard,new Set(),()=>true),/Work budget/);assert.equal(born,0);
+  permitted=true;await assert.rejects(guard.run(async()=>{permitted=false;return 'must not admit';}),/Work budget/);
+});
+
+test('actual installed pg idle emitter error reaches guarded finally without stderr or private payload',async()=>{
+  const module=new URL('./run-official-local-storage-rehearsal.mjs',import.meta.url).href;
+  const program=`import {Client} from 'pg';import {nativeClientFailureGuard} from ${JSON.stringify(module)};
+    const guard=nativeClientFailureGuard(),client=guard.observe(new Client());let caught=false,cleaned=false;
+    try{await guard.run(()=>new Promise(resolve=>setImmediate(()=>{client.emit('error',Object.assign(new Error(${JSON.stringify(privateSentinels.join('\n'))}),{code:'08006'}));resolve();})));}
+    catch{caught=true;}finally{cleaned=true;}
+    process.stdout.write(JSON.stringify({caught,cleaned,listeners:client.listenerCount('error')}));`;
+  const child=spawn(process.execPath,['--input-type=module','-e',program],{cwd:resolve(new URL('..',import.meta.url).pathname),stdio:['ignore','pipe','pipe']});
+  const chunks=[[],[]];child.stdout.on('data',x=>chunks[0].push(x));child.stderr.on('data',x=>chunks[1].push(x));
+  const code=await new Promise((yes,no)=>{child.once('error',no);child.once('close',yes);});
+  assert.equal(code,0);const out=Buffer.concat(chunks[0]).toString(),err=Buffer.concat(chunks[1]).toString();
+  assert.deepEqual(JSON.parse(out),{caught:true,cleaned:true,listeners:1});assert.equal(err,'');assertNoPrivate(out+err);
+});
+
+test('host native sessions end before long archive/Docker work and every reopened session reproves identity',async()=>{
+  const source=readFileSync(new URL('./run-official-local-storage-rehearsal.mjs',import.meta.url),'utf8');
+  const start=source.indexOf('    const withDatabase=work=>'),end=source.indexOf('    typed.sort(',start);
+  const credentialStart=source.indexOf("    mark('READ_CREDENTIAL_BASELINE');"),credentialEnd=source.indexOf("    durable(resolve(custody,'STORAGE_ROLE_CREDENTIAL_NONSECRET_INVARIANCE.json')",credentialStart);
+  assert.ok(start>0&&end>start&&credentialStart>end&&credentialEnd>credentialStart);
+  const factory=new Function('ports',`const {Client,databaseUrl,nativeGuard,nativeClients,withOwnedNativeClient,a,originalRows,archive,api,mark,stable,insist,STORAGE_CREDENTIAL_NONSECRET_SQL,run,bootstrap,pgid}=ports;
+    return (async()=>{${source.slice(start,end)}
+      await ports.longWork('ARCHIVE_OBJECTS');${source.slice(credentialStart,credentialEnd)}
+      await ports.longWork('IMAGE_PULLS');await withDatabase(requireSameIdentity);
+      return {id,typed};})();`);
+  for(const drift of [false,true]){
+    let active=0,connections=0,ends=0,identityChecks=0,credentialReads=0,clock=0;const phases=[];
+    const id={database_name:'UNIT_ONLY',database_oid:'5',database_owner:'postgres',session_user:'postgres',current_user:'postgres'};
+    class Native extends EventEmitter{
+      async connect(){active++;connections++;this.at=clock;}
+      async query(sql,args){assert.equal(clock-this.at<30000,true,'No proxy idle timeout during bounded native reads');
+        if(sql.startsWith('select current_database()')){identityChecks++;return {rowCount:1,rows:[{...id,...(drift&&connections===2?{database_oid:'6'}:{})}]};}
+        if(sql===STORAGE_CREDENTIAL_NONSECRET_SQL){credentialReads++;return {rows:[{snapshot:{role:{login:true},unchanged:true}}]};}
+        return {rows:[{row:JSON.parse(args[0])}]};
+      }
+      async end(){ends++;active--;}
+    }
+    const run=async()=>{assert.equal(active,0);clock+=60000;};
+    const invoke=()=>factory({Client:Native,withOwnedNativeClient,pgid:'UNIT',databaseUrl:'INERT',nativeGuard:nativeClientFailureGuard(),nativeClients:new Set(),a:{expected_database_owner:'postgres',expected_session_user:'postgres'},
+      originalRows:async()=>{assert.equal(active,0);clock+=120000;return [{id:1,name:'fixture'}];},archive:{},api:{},mark:p=>phases.push(p),stable,insist:(v,m)=>assert.ok(v,m),
+      STORAGE_CREDENTIAL_NONSECRET_SQL,run,bootstrap:'postgres',longWork:async()=>{assert.equal(active,0);clock+=240000;}});
+    if(drift)await assert.rejects(invoke(),/Fresh native target identity changed/);else assert.equal((await invoke()).id.database_oid,'5');
+    assert.equal(active,0);assert.equal(ends,connections);assert.equal(identityChecks,connections);assert.equal(credentialReads,drift?0:2);
+    assert.equal(connections,drift?2:4);
+  }
+  const host=source.slice(source.indexOf('async function host(){'));
+  assert.equal((host.match(/new Client\(/g)||[]).length,0,'All host clients use tracked scoped ownership');
+  assert.ok(host.indexOf("mark('VERIFY_CURRENT_TARGET');await withDatabase(requireSameIdentity)")<host.indexOf("mark('BIND_PROVIDER_ENVELOPE')"));
+  const gate=source.slice(source.indexOf('async function containerGate(){'),source.indexOf('async function host(){'));
+  assert.match(gate,/await withOwnedNativeClient\(Client/);assert.match(gate,/nativeGuard.check\(\);phase='official_entrypoint_start'/);
+  assert.match(host,/if\(!hostCleaning\)\{stop\(\);relayInspectionController.abort\(\)/);
+  assert.match(host,/const value=await runOwned\(argv,options\)/);
+});
+
+test('post-startup stage journal preserves closed failure and cleanup progress outside custody',()=>{
+  const tmp=mkdtempSync(resolve(tmpdir(),'host-stage-journal-'));
+  try{
+    const recorder=ownedHostStartupRecorder(tmp);recorder.record('HOST_STARTUP_READY',hostMemoryAvailability('MemAvailable: 4194304 kB\n',4*1024**3));
+    const error=Object.assign(new Error(privateSentinels.join('\n')),{code:'08006',stack:privateSentinels.join('\n')});
+    recorder.stage('PIN_PROVIDER_IMAGES','ENTER');recorder.stage('PIN_PROVIDER_IMAGES','NATIVE_CLIENT_ERROR',error);
+    recorder.stage('CLEANUP_PROVIDER','ENTER');recorder.stage('EXPORT_FINAL_EVIDENCE','REFUSED',{code:'ENOSPC',path:privateSentinels[0]});
+    const base=resolve(tmp,'official-local-storage-provider-evidence'),directory=resolve(base,readdirSync(base)[0]),files=readdirSync(directory).sort();
+    assert.equal(files.length,5);
+    for(const file of files){assert.equal(lstatSync(resolve(directory,file)).mode&0o777,0o600);assertNoPrivate(readFileSync(resolve(directory,file),'utf8'));}
+    const failed=JSON.parse(readFileSync(resolve(directory,'HOST_STAGE_002.json'),'utf8'));assert.equal(failed.phase,'PIN_PROVIDER_IMAGES');assert.equal(failed.event,'NATIVE_CLIENT_ERROR');assert.equal(failed.sql_state,'08006');
+    const exportFailure=JSON.parse(readFileSync(resolve(directory,'HOST_STAGE_004.json'),'utf8'));assert.equal(exportFailure.code,'ENOSPC');
+    for(let i=4;i<128;i++)recorder.stage('CLEANUP_PROVIDER','ENTER');assert.throws(()=>recorder.stage('CLEANUP_PROVIDER','ENTER'),/bound/);
+    let reads=0;const bad=new Proxy({},{getOwnPropertyDescriptor(){reads++;throw Error(privateSentinels[0]);}});
+    assertNoPrivate(hostStageDiagnostic(privateSentinels[0],privateSentinels[0],bad));assert.equal(reads,0);
+  }finally{rmSync(tmp,{recursive:true,force:true});}
+});
+
+
+test('host native failure cancels owned work but never interrupts cleanup subprocesses',()=>{
+  const source=readFileSync(new URL('./run-official-local-storage-rehearsal.mjs',import.meta.url),'utf8');
+  const host=source.indexOf('async function host(){'),start=source.indexOf('  const nativeGuard=nativeClientFailureGuard(',host),end=source.indexOf('  const mark=',start);
+  assert.ok(start>host&&end>start);
+  const factory=new Function('ports',`const {nativeClientFailureGuard,hostCleaning,report,stop,relayInspectionController,relaySockets,insist}=ports;
+    let failure=null,stopping=false;const deadline=Date.now()+10000;${source.slice(start,end)}return {nativeGuard,failure:()=>failure};`);
+  for(const hostCleaning of [false,true]){
+    let stops=0,aborts=0,destroys=0,reports=0;
+    const {nativeGuard,failure}=factory({nativeClientFailureGuard,hostCleaning,report:()=>reports++,stop:()=>stops++,
+      relayInspectionController:{abort:()=>aborts++},relaySockets:new Set([{destroy:()=>destroys++}]),insist:(v,m)=>assert.ok(v,m)});
+    const emitter=nativeGuard.observe(new EventEmitter());emitter.emit('error',Object.assign(new Error(privateSentinels[0]),{code:'08006'}));
+    assert.equal(stops,hostCleaning?0:1);assert.equal(aborts,hostCleaning?0:1);assert.equal(destroys,hostCleaning?0:1);assert.equal(reports,1);
+    assert.ok(failure());assert.throws(()=>nativeGuard.check());assertNoPrivate({message:failure().message,code:failure().code});
+  }
 });

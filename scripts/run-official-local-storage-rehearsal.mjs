@@ -162,6 +162,46 @@ export function hostStartupDiagnostic(phase,memory,error=null){
     available_memory_bytes:knownMemory?safeAvailable:null,memory_floor_met:knownMemory&&safeAvailable!==null&&safeAvailable>=required,
     private_payload_exported:false,production_action_performed:false});
 }
+const hostPhases=new Set(['INITIALIZE_HOST','ADMIT_ARCHIVE','BIND_ARCHIVE_SOURCE','VERIFY_INTENT_SOURCE','READ_ARCHIVED_MIGRATIONS',
+  'VERIFY_TARGET_AND_TYPE_MIGRATIONS','PREPARE_ARCHIVED_OBJECTS','BIND_WORKER_INPUT','VERIFY_OWNED_POSTGRES','BOUND_OWNED_POSTGRES',
+  'READ_CREDENTIAL_BASELINE','INITIALIZE_EPHEMERAL_CREDENTIAL','VERIFY_CREDENTIAL_INVARIANCE','PREPARE_PROVIDER_CONFIG',
+  'VERIFY_PROVIDER_NETWORK','PIN_PROVIDER_IMAGES','CREATE_PROVIDER','VERIFY_PROVIDER','BIND_OWNED_RELAY','VERIFY_CURRENT_TARGET',
+  'BIND_PROVIDER_ENVELOPE','RESTORE_ORIGINAL_DATA','VERIFY_RESTORE_OUTPUT','VERIFY_FINAL_CATALOG','VERIFY_PROVIDER_COMPLETE',
+  'CLEANUP_RELAY','CLEANUP_CLIENTS','CLEANUP_PROVIDER','CLEANUP_ARCHIVE','CLEANUP_PRIVATE_INPUTS','WRITE_FINAL_RECEIPT',
+  'EXPORT_FINAL_EVIDENCE','CLEANUP_PRIVATE_EVIDENCE','HOST_FINISHED']);
+export function hostStageDiagnostic(phase,event,error=null){
+  const native=privateRestoreFailureDiagnostic(error,'database_connection'),startup=hostStartupDiagnostic('SELECT_MODE',null,error);
+  return Object.freeze({schema:'custodial.official-storage-host-stage.v1',phase:hostPhases.has(phase)?phase:'HOST_FAILURE',
+    event:['ENTER','REFUSED','NATIVE_CLIENT_ERROR','FINISHED'].includes(event)?event:'REFUSED',
+    ...(native.sql_state?{sql_state:native.sql_state}:native.node_code?{node_code:native.node_code}:startup.code?{code:startup.code}:{}),
+    private_payload_exported:false,production_action_performed:false});
+}
+// An idle pg error is an EventEmitter event, not a rejected query promise.
+// Latch it without throwing from its callback. Every later native operation
+// fails closed, and the host callback cancels owned work without abandoning wait.
+export function nativeClientFailureGuard(onFailure=()=>{},beforeOperation=()=>{}){
+  let failure=null;
+  const check=()=>{if(failure)throw failure;beforeOperation();};
+  return Object.freeze({check,observe(client){client.on('error',error=>{
+    if(failure)return;
+    const diagnostic=privateRestoreFailureDiagnostic(error,'database_connection');
+    failure=Object.assign(new Error('Owned native client failed; continuation refused.'),
+      {code:diagnostic.sql_state??diagnostic.node_code??'OWNED_NATIVE_CLIENT_FAILURE'});
+    try{onFailure(error,failure);}catch{} // Failure reporting must never become an unhandled emitter error.
+  });return client;},async run(operation){check();const value=await operation();check();return value;}});
+}
+// Connect, query and close are one tracked lifetime. No client is held idle
+// across archive/file IO, Docker work, image pulls or the restore subprocess.
+export async function withOwnedNativeClient(Client,options,guard,tracked,work){
+  guard.check();const client=guard.observe(new Client(options));tracked.add(client);
+  let result,failure;
+  try{await guard.run(()=>client.connect());
+    const db=Object.freeze({query:(...args)=>guard.run(()=>client.query(...args))});
+    result=await guard.run(()=>work(db));
+  }catch(error){failure=error;}
+  finally{try{await client.end();tracked.delete(client);}catch(error){failure??=error;}}
+  if(failure)throw failure;guard.check();return result;
+}
 // The startup receipt exists before provider custody, but only under verified
 // owned directories. It never accepts a caller path/name or raw failure text.
 export function ownedHostStartupRecorder(tmp){
@@ -173,9 +213,12 @@ export function ownedHostStartupRecorder(tmp){
   const baseIdentity=checked(base,true),directory=mkdtempSync(resolve(base,'startup-')),identity=checked(directory,true);
   const same=(path,prior,privateMode)=>{const current=checked(path,privateMode);
     insist(current.dev===prior.dev&&current.ino===prior.ino,'Startup receipt directory changed.');};
+  const current=()=>{same(tmp,rootIdentity,false);same(base,baseIdentity,true);same(directory,identity,true);};let sequence=0;
   return Object.freeze({tmp,record(phase,memory,error=null){
-    same(tmp,rootIdentity,false);same(base,baseIdentity,true);same(directory,identity,true);
-    durable(resolve(directory,'HOST_STARTUP.json'),hostStartupDiagnostic(phase,memory,error));
+    current();durable(resolve(directory,'HOST_STARTUP.json'),hostStartupDiagnostic(phase,memory,error));
+  },stage(phase,event,error=null){
+    current();insist(sequence<128,'Host stage receipt bound exceeded.');
+    durable(resolve(directory,'HOST_STAGE_'+String(++sequence).padStart(3,'0')+'.json'),hostStageDiagnostic(phase,event,error));
   }});
 }
 export function selectedMode(env){
@@ -383,10 +426,10 @@ async function containerGate(){
   const input=JSON.parse(readFileSync('/custody/input.json','utf8'));let phase='connect_gate';
   const expectedActor=storageWorkerActor(input.source_profile,input.owner_profile);
   insist(new URL(process.env.CUSTODIAL_GATE_DATABASE_URL).username===expectedActor,'Worker gate actor differs from original owner profile.');
+  let gateChild=null;const nativeGuard=nativeClientFailureGuard(()=>{if(gateChild)gateChild.kill('SIGTERM');});
   try{
-  const db=new Client({connectionString:process.env.CUSTODIAL_GATE_DATABASE_URL,application_name:'owned-storage-pre-server',connectionTimeoutMillis:5000,query_timeout:10000});
-  await db.connect();const deadline=Date.now()+resourceProfile(input.source_profile).work_ms;
-  try{
+  await withOwnedNativeClient(Client,{connectionString:process.env.CUSTODIAL_GATE_DATABASE_URL,application_name:'owned-storage-pre-server',connectionTimeoutMillis:5000,query_timeout:10000},nativeGuard,new Set(),async db=>{
+    const deadline=Date.now()+resourceProfile(input.source_profile).work_ms;
     for(;;){
       insist(Date.now()<deadline,'Pre-server original boundary deadline exceeded.');
       const context=await db.query(`select current_database() database_name,(select oid::text from pg_database where datname=current_database()) database_oid,
@@ -413,18 +456,18 @@ async function containerGate(){
     phase='construct_backend';const backend=new FileBackend();phase='construct_locator';const locator=new TenantLocation(process.env.GLOBAL_S3_BUCKET);
     phase='verify_empty_namespace';insist(readdirSync(process.env.STORAGE_FILE_BACKEND_PATH).length===0,'FILE namespace was not empty.');
     for(const object of input.objects){
-      phase='read_verified_object';const bytes=readFileSync('/custody/'+object.file);
+      nativeGuard.check();phase='read_verified_object';const bytes=readFileSync('/custody/'+object.file);
       insist(bytes.length===object.size_bytes && hash(bytes)===object.sha256,'Verified original object changed.');
       const key=locator.getKeyLocation({tenantId:process.env.TENANT_ID,bucketId:object.bucket_id,objectName:object.name});
-      phase='official_archived_version_upload';await backend.uploadObject(process.env.GLOBAL_S3_BUCKET,key,object.version??undefined,Readable.from(bytes),object.contentType,object.cacheControl,undefined,bytes.length);
+      phase='official_archived_version_upload';await nativeGuard.run(()=>backend.uploadObject(process.env.GLOBAL_S3_BUCKET,key,object.version??undefined,Readable.from(bytes),object.contentType,object.cacheControl,undefined,bytes.length));
     }
     phase='verify_post_bootstrap_migrations';const r=await db.query('select row_to_json(m) row from storage.migrations m order by id');
     insist(hash(stable(r.rows.map(x=>x.row)))===input.migrations_sha256,'Bootstrap changed archived migration metadata.');
-  }finally{await db.end();}
-  phase='official_entrypoint_start';const child=spawn('docker-entrypoint.sh',['node','dist/start/server.js'],{stdio:'inherit',env:process.env});
+  });
+  nativeGuard.check();phase='official_entrypoint_start';const child=gateChild=spawn('docker-entrypoint.sh',['node','dist/start/server.js'],{stdio:'inherit',env:process.env});
   for(const s of ['SIGTERM','SIGINT'])process.on(s,()=>child.kill(s));
   const code=await new Promise((r,j)=>{child.once('error',j);child.once('exit',(c,s)=>r(c??(s?1:0)));});
-  if(code!==0)durable('/audit/PROVIDER_STARTUP_FAILURE.json',{phase:'official_entrypoint_exit',exit:code,message_or_environment_exported:false},0o644);process.exitCode=code;
+  nativeGuard.check();if(code!==0)durable('/audit/PROVIDER_STARTUP_FAILURE.json',{phase:'official_entrypoint_exit',exit:code,message_or_environment_exported:false},0o644);process.exitCode=code;
   }catch(error){try{durable('/audit/PROVIDER_STARTUP_FAILURE.json',safeStartupFailure(error,phase,Boolean(input.owner_profile)),0o644);}catch{}throw error;}
 }
 
@@ -444,32 +487,49 @@ async function host(){
     startupPhase='CREATE_CUSTODY';custody=mkdtempSync(resolve(tmp,'official-storage-'));
     startup.record('HOST_STARTUP_READY',startupMemory);
   }catch(error){try{startup.record(startupPhase,startupMemory,error);}catch{}throw error;}
-  const started=Date.now();let deadline=started+WORK_MS;const cleanupBudget={deadline:null},privacy={privateData:false};const run=runner(custody,()=>deadline,cleanupBudget,privacy);
+  const started=Date.now();let deadline=started+WORK_MS;const cleanupBudget={deadline:null},privacy={privateData:false};const runOwned=runner(custody,()=>deadline,cleanupBudget,privacy);
   const namespace='mz_schema_rebuild_storage_'+randomBytes(10).toString('hex');let alias=namespace+'_db',network=namespace+'_net',privateNetwork=null,borrowedNetworkRetained=false;
-  let archive,client,cid=null,pgid=null,networkBorn=false,networkId=null,connected=false,failure,output,cleanupFailure=null,serviceAbsent=false,networkAbsent=false,relay=null,relayClosed=true,relayClosing=false,verifiedImageId=null;const relaySockets=new Set(),relayPending=new Set(),relayInspectionController=new AbortController();
+  let archive,cid=null,pgid=null,networkBorn=false,networkId=null,connected=false,failure,output,cleanupFailure=null,serviceAbsent=false,networkAbsent=false,relay=null,relayClosed=true,relayClosing=false,verifiedImageId=null;const relaySockets=new Set(),relayPending=new Set(),relayInspectionController=new AbortController(),nativeClients=new Set();
+  let hostPhase='INITIALIZE_HOST',hostCleaning=false;
+  const report=(event,error=null)=>{try{startup.stage(hostPhase,event,error);}catch{}};
+  const nativeGuard=nativeClientFailureGuard((error,refusal)=>{
+    failure??=refusal;report('NATIVE_CLIENT_ERROR',error);
+    if(!hostCleaning){stop();relayInspectionController.abort();for(const socket of relaySockets)socket.destroy();}
+  },()=>insist(!stopping && Date.now()<deadline,'Host native work deadline or cancellation refused.'));
+  const mark=phase=>{hostPhase=phase;if(hostCleaning)report('ENTER');else{nativeGuard.check();startup.stage(phase,'ENTER');}};
+  const run=async(argv,options={})=>{
+    if(!options.cleanup)nativeGuard.check();const value=await runOwned(argv,options);
+    if(!options.cleanup)nativeGuard.check();return value;
+  };
   try{
+  try{
+    mark('ADMIT_ARCHIVE');
     archive=api.materializeVerifiedArchive({sourceDir:process.env.RESTORE_SOURCE_DIR,archiveVerifyKey:process.env.RESTORE_ARCHIVE_VERIFY_KEY,
       archiveVerifyKeyId:process.env.RESTORE_ARCHIVE_VERIFY_KEY_ID,supportedFormats:['memphis-zoo-disaster-recovery.v4'],
       requiredEntries:['backup-summary.json','inventory/table-catalog.json','inventory/storage-buckets.json','inventory/storage-objects.json']});
-    api.assertVerifiedArchiveIndependentIntentKey(archive,process.env.RESTORE_INTENT_VERIFY_KEY);
+    mark('BIND_ARCHIVE_SOURCE');api.assertVerifiedArchiveIndependentIntentKey(archive,process.env.RESTORE_INTENT_VERIFY_KEY);
     const a=storage.freshLocalStorageArchiveBinding(archive),s=a.sourceBinding;
     privacy.privateData=Boolean(a.owner_profile);
     const budget=resourceProfile(a.source_profile);deadline=started+budget.work_ms;
-    insist(intent.archive_digest===s.archive_digest && intent.source_identity_sha256===s.source_identity_sha256 && intent.source_project_ref===s.project_ref,'Original intent source mismatch.');
+    mark('VERIFY_INTENT_SOURCE');insist(intent.archive_digest===s.archive_digest && intent.source_identity_sha256===s.source_identity_sha256 && intent.source_project_ref===s.project_ref,'Original intent source mismatch.');
     if(a.source_profile==='native-text-v4-fresh-supabase-admin')insist(a.bucket_count===3 && a.object_count===1,'Production G31 original requires authenticated three buckets and one object.');
     else insist(storageWorkerActor(a.source_profile,a.owner_profile)===a.expected_session_user && a.bucket_count>0 && a.object_count>0 && a.bucket_count<=65536 && a.object_count<=65536,'Private original requires bounded genuine nonempty Storage.');
     if(a.owner_profile)insist(u.username===a.expected_session_user,'Selected connection differs from authenticated source owner.');
     else u.username=a.expected_session_user;const databaseUrl=u.href;
-    client=new Client({connectionString:databaseUrl,connectionTimeoutMillis:5000,query_timeout:10000});await client.connect();
-    const identity=await client.query(`select current_database() database_name,(select oid::text from pg_database where datname=current_database()) database_oid,
+    const withDatabase=work=>withOwnedNativeClient(Client,{connectionString:databaseUrl,connectionTimeoutMillis:5000,query_timeout:10000},nativeGuard,nativeClients,work);
+    const readIdentity=async db=>{const identity=await db.query(`select current_database() database_name,(select oid::text from pg_database where datname=current_database()) database_oid,
       (select pg_get_userbyid(datdba) from pg_database where datname=current_database()) database_owner,session_user::text session_user,current_user::text current_user`);
-    const id=identity.rows[0];insist(id.database_owner===a.expected_database_owner && id.session_user===a.expected_session_user && id.current_user===id.session_user,'Source profile/DB owner mismatch.');
-    const rows=await originalRows(archive,'migrations',api),typed=[];
-    for(const row of rows){const r=await client.query('select row_to_json(x) row from json_populate_record(null::storage.migrations,$1::json) x',[JSON.stringify(row)]);typed.push(r.rows[0].row);}
+      const current=identity.rows[0];insist(identity.rowCount===1 && current.database_owner===a.expected_database_owner && current.session_user===a.expected_session_user && current.current_user===current.session_user,'Source profile/DB owner mismatch.');return current;};
+    mark('READ_ARCHIVED_MIGRATIONS');const rows=await originalRows(archive,'migrations',api),typed=[];
+    mark('VERIFY_TARGET_AND_TYPE_MIGRATIONS');const id=await withDatabase(async db=>{
+      const current=await readIdentity(db);
+      for(const row of rows){const r=await db.query('select row_to_json(x) row from json_populate_record(null::storage.migrations,$1::json) x',[JSON.stringify(row)]);typed.push(r.rows[0].row);}return current;
+    });
+    const requireSameIdentity=async db=>insist(stable(await readIdentity(db))===stable(id),'Fresh native target identity changed.');
     typed.sort((x,y)=>x.id-y.id);const migrationCount=typed.length;insist(migrationCount>0 && migrationCount<=1024 && new Set(typed.map(x=>x.id)).size===migrationCount && typeof typed.at(-1).name==='string','Authenticated full migration identity required.');
     if(a.source_profile==='native-text-v4-fresh-supabase-admin')insist(migrationCount===74,'Production original exact74 migration rows required.');
     durable(resolve(custody,'ARCHIVED_STORAGE_MIGRATIONS_FULL_TUPLES.json'),{source_profile:a.source_profile,rows:typed,count:migrationCount,sha256:hash(stable(typed)),authenticated_source_metadata_only:true});
-    const migrationsHash=hash(stable(typed)),objectsRows=await originalRows(archive,'objects',api),inventory=api.readVerifiedStorageUploadInventory(archive),objects=[];
+    mark('PREPARE_ARCHIVED_OBJECTS');const migrationsHash=hash(stable(typed)),objectsRows=await originalRows(archive,'objects',api),inventory=api.readVerifiedStorageUploadInventory(archive),objects=[];
     const mount=resolve(custody,'provider-input');mkdirSync(mount,{mode:0o700});
     const audit=resolve(custody,'provider-audit');mkdirSync(audit,{mode:0o700});
     for(const o of inventory.objectRecords){
@@ -481,12 +541,12 @@ async function host(){
       insist(typeof contentType==='string' && contentType.length>0 && cacheControl!=='undefined' && !/[\r\n]/.test(contentType+cacheControl),'Exact original object metadata required.');
       objects.push({...o,file,version:native.version,contentType,cacheControl});
     }
-    const input={source_profile:a.source_profile,...(a.owner_profile?{owner_profile:a.owner_profile}:{}),database:{database_name:id.database_name,database_oid:id.database_oid,database_owner:id.database_owner,session_user:id.session_user,current_user:id.current_user},intent,migration_count:migrationCount,migrations_sha256:migrationsHash,objects};
+    mark('BIND_WORKER_INPUT');const input={source_profile:a.source_profile,...(a.owner_profile?{owner_profile:a.owner_profile}:{}),database:{database_name:id.database_name,database_oid:id.database_oid,database_owner:id.database_owner,session_user:id.session_user,current_user:id.current_user},intent,migration_count:migrationCount,migrations_sha256:migrationsHash,objects};
     durable(resolve(custody,'WORKER_INPUT_REDACTED.json'),{input_sha256:hash(stable(input)),worker_sha256:hash(readFileSync(fileURLToPath(import.meta.url))),
       original_intent_sha256:hash(stable(original)),archive_digest:s.archive_digest,database_oid:id.database_oid,migrations_full_tuple_sha256:migrationsHash,
       objects:objects.map(o=>({sha256:o.sha256,size_bytes:o.size_bytes,version_sha256:hash(String(o.version))})),secrets_retained:false});
     durable(resolve(mount,'input.json'),input);writeFileSync(resolve(mount,'worker.mjs'),readFileSync(fileURLToPath(import.meta.url)),{mode:0o400,flag:'wx'});
-    const pgName='mz_schema_rebuild_'+process.env.GITHUB_RUN_ID;
+    mark('VERIFY_OWNED_POSTGRES');const pgName='mz_schema_rebuild_'+process.env.GITHUB_RUN_ID;
     const pg=JSON.parse(await run(['docker','inspect','--format',inspectFormat,pgName]));insist(pg.Name==='/'+pgName && pg.Config.Image===PG_IMAGE && /^[a-f0-9]{64}$/.test(pg.Id),'Existing owned PG identity mismatch.');pgid=pg.Id;
     if(a.owner_profile){
       assertPrivatePgOwnerProfile(pg,a.owner_profile);
@@ -497,7 +557,7 @@ async function host(){
       privateNetwork=Object.freeze({networkId,networkName:network,owner:pg.Config.Labels['custodial.private-backup-rehearsal'],pgid,pgName,address:endpoint.IPAddress});
       assertPrivateNetworkMembers(JSON.parse(await run(['docker','network','inspect',networkId]))[0],privateNetwork);
     }
-    const pgMemory=a.source_profile==='native-text-v4-fresh-supabase-admin'?'2g':'1g';
+    mark('BOUND_OWNED_POSTGRES');const pgMemory=a.source_profile==='native-text-v4-fresh-supabase-admin'?'2g':'1g';
     if(pgMemory==='2g')memoryFloor(4*1024**3);
     await run(['docker','update','--memory',pgMemory,'--memory-swap',pgMemory,'--cpus','1','--pids-limit','256',pgid]);
     const boundedPg=JSON.parse(await run(['docker','inspect','--format',inspectFormat,pgid]));
@@ -510,18 +570,18 @@ async function host(){
     // disposable existing role's credential, never LOGIN/grants/HBA or actor.
     const bootstrap=decodeURIComponent(u.password);
     insist(/^(?:postgres|[a-f0-9]{64})$/.test(bootstrap),'Fixed disposable bootstrap credential shape required.');
-    const beforeCredential=(await client.query(STORAGE_CREDENTIAL_NONSECRET_SQL)).rows[0].snapshot;
+    mark('READ_CREDENTIAL_BASELINE');const beforeCredential=await withDatabase(async db=>{await requireSameIdentity(db);return (await db.query(STORAGE_CREDENTIAL_NONSECRET_SQL)).rows[0].snapshot;});
     insist(beforeCredential.role?.login===true,'Existing login Storage role required; no attribute changes admitted.');
     const credentialSQL="\\set VERBOSITY terse\nset log_statement='none';\nset log_min_error_statement='panic';\n"+
       "do $credential$ begin if current_setting('log_statement')<>'none' then raise exception 'Credential logging refused'; end if; end $credential$;\n"+
       "alter role supabase_storage_admin password '"+bootstrap.replaceAll("'","''")+"';\n";
-    await run(['docker','exec','-i',pgid,'psql','-X','-q','-v','ON_ERROR_STOP=1','-U','supabase_admin','-d',id.database_name],{input:credentialSQL});
-    const afterCredential=(await client.query(STORAGE_CREDENTIAL_NONSECRET_SQL)).rows[0].snapshot;
+    mark('INITIALIZE_EPHEMERAL_CREDENTIAL');await run(['docker','exec','-i',pgid,'psql','-X','-q','-v','ON_ERROR_STOP=1','-U','supabase_admin','-d',id.database_name],{input:credentialSQL});
+    mark('VERIFY_CREDENTIAL_INVARIANCE');const afterCredential=await withDatabase(async db=>{await requireSameIdentity(db);return (await db.query(STORAGE_CREDENTIAL_NONSECRET_SQL)).rows[0].snapshot;});
     insist(stable(beforeCredential)===stable(afterCredential),'Password-only setup changed nonsecret role/membership/ACL/owner metadata.');
     durable(resolve(custody,'STORAGE_ROLE_CREDENTIAL_NONSECRET_INVARIANCE.json'),{role:'supabase_storage_admin',before:beforeCredential,after:afterCredential,
       database_oid:id.database_oid,owned_container_id:pgid,only_ephemeral_password_initialized:true,plaintext_or_verifier_exported:false});
 
-    const secret=randomBytes(32).toString('hex'),now=Math.floor(Date.now()/1000),jwt=(role)=>{
+    mark('PREPARE_PROVIDER_CONFIG');const secret=randomBytes(32).toString('hex'),now=Math.floor(Date.now()/1000),jwt=(role)=>{
       const h=Buffer.from(JSON.stringify({alg:'HS256',typ:'JWT'})).toString('base64url'),p=Buffer.from(JSON.stringify({role,iss:'supabase',iat:now,exp:Math.min(Math.floor(Date.parse(intent.expires_at)/1000),now+Math.ceil(budget.work_ms/1000)+30)})).toString('base64url');
       return h+'.'+p+'.'+createHmac('sha256',secret).update(h+'.'+p).digest('base64url');};
     const serviceKey=jwt('service_role'),internal=new URL(databaseUrl);internal.hostname=alias;internal.port='5432';internal.username='supabase_storage_admin';
@@ -531,11 +591,13 @@ async function host(){
       DB_INSTALL_ROLES:'false',DB_ALLOW_MIGRATION_REFRESH:'false',DB_MIGRATIONS_FREEZE_AT:a.source_profile==='native-text-v4-fresh-supabase-admin'?supportedOfficialStartupMigration(typed,a.source_profile):typed.at(-1).name,
       DATABASE_MAX_CONNECTIONS:'8',PG_QUEUE_ENABLE:'false',IMAGE_TRANSFORMATION_ENABLED:'false',PORT:'5000'};
     const envFile=resolve(custody,'provider.env');writeFileSync(envFile,Object.entries(config).map(([k,v])=>k+'='+v).join('\n')+'\n',{mode:0o600,flag:'wx'});
+    mark('VERIFY_PROVIDER_NETWORK');
     if(!privateNetwork){
       networkId=(await run(['docker','network','create','--internal','--label','custodial.owner='+namespace,network])).trim();networkBorn=true;
       insist(/^[a-f0-9]{64}$/.test(networkId),'Owned network identity missing.');
       await run(['docker','network','connect','--alias',alias,network,pgid]);connected=true;
     }else assertPrivateNetworkMembers(JSON.parse(await run(['docker','network','inspect',networkId]))[0],privateNetwork);
+    mark('PIN_PROVIDER_IMAGES');
     await run(['docker','pull',MIRROR_IMAGE],{seconds:120});
     const mirrorMetadata=JSON.parse(await run(['docker','image','inspect','--format','{"id":{{json .Id}},"repo_digests":{{json .RepoDigests}},"user":{{json (index .Config "User")}}}',MIRROR_IMAGE]));
     const mirrorImageId=validatePinnedOfficialMirror(mirrorMetadata);
@@ -545,12 +607,12 @@ async function host(){
     verifiedImageId=validatePinnedOfficialImage(imageMetadata);
     insist(verifiedImageId===mirrorImageId,'Official mirror and original ECR config identities differ.');
     durable(resolve(custody,'PINNED_OFFICIAL_IMAGE_METADATA.json'),{registry_reference:IMAGE,config_image_id:verifiedImageId,repo_digests:imageMetadata.repo_digests,default_root:true});
-    cid=(await run(['docker','create','--name',namespace,'--label','custodial.owner='+namespace,'--network',network,
+    mark('CREATE_PROVIDER');cid=(await run(['docker','create','--name',namespace,'--label','custodial.owner='+namespace,'--network',network,
       '--cpus','1','--memory','512m','--pids-limit','128','--read-only','--tmpfs','/tmp:rw,size=32m','--tmpfs','/owned-files:rw,size=128m',
       '--env-file',envFile,'--mount',`type=bind,src=${mount},dst=/custody,readonly`,
       '--mount',`type=bind,src=${audit},dst=/audit`,'--entrypoint','node',IMAGE,'/custody/worker.mjs','--container-gate'])).trim();
     insist(/^[a-f0-9]{64}$/.test(cid),'Owned service CID missing.');await run(['docker','start',cid]);
-    const inspect=JSON.parse(await run(['docker','inspect','--format',inspectFormat,cid]));
+    mark('VERIFY_PROVIDER');const inspect=JSON.parse(await run(['docker','inspect','--format',inspectFormat,cid]));
     insist(inspect.Id===cid && inspect.ImageId===verifiedImageId && inspect.Name==='/'+namespace && inspect.Config.Image===IMAGE && inspect.Config.Labels['custodial.owner']===namespace
       && inspect.HostConfig.Memory===512*1024**2 && inspect.HostConfig.NanoCpus===1e9 && inspect.HostConfig.ReadonlyRootfs===true,'Owned service identity/configuration mismatch.');
     const endpoint=inspect.NetworkSettings.Networks[network];
@@ -579,7 +641,7 @@ async function host(){
         assertPrivateNetworkMembers(JSON.parse(await inspectRelay(['docker','network','inspect',networkId]))[0],privateNetwork,cid);
       }
     };
-    relayClosed=false;
+    mark('BIND_OWNED_RELAY');relayClosed=false;
     relay=createServer(client=>{
       if(stopping || relayClosing || Date.now()>=deadline || relaySockets.size>=64){client.destroy();return;}
       const connect=()=>{
@@ -601,7 +663,8 @@ async function host(){
       network_id:networkId,network_name:network,destination_address:destination,destination_port:5000,external_network_attached:false,payloads_logged:false};
     durable(resolve(custody,'OWNED_LOOPBACK_RELAY_BOUND.json'),relayBinding);
     await assertRelayTarget();
-    const binding={purpose:'custodial-immutable-fresh-local-storage-provider',source_profile:a.source_profile,...(a.owner_profile?{owner_profile:a.owner_profile}:{}),original_intent_sha256:hash(stable(original)),
+    mark('VERIFY_CURRENT_TARGET');await withDatabase(requireSameIdentity);
+    mark('BIND_PROVIDER_ENVELOPE');const binding={purpose:'custodial-immutable-fresh-local-storage-provider',source_profile:a.source_profile,...(a.owner_profile?{owner_profile:a.owner_profile}:{}),original_intent_sha256:hash(stable(original)),
       ...Object.fromEntries(['restore_id','authority_generation','archive_digest','source_identity_sha256','source_project_ref','target_project_ref'].map(k=>[k,intent[k]])),
       approved_at:new Date().toISOString(),expires_at:intent.expires_at,
       host_target:{hostname:'127.0.0.1',port:Number(u.port),database_name:id.database_name,database_oid:id.database_oid,session_user:a.expected_session_user,database_owner:id.database_owner},
@@ -614,28 +677,28 @@ async function host(){
       intentVerifyKeyId:process.env.RESTORE_INTENT_VERIFY_KEY_ID,serviceKey,jwtSecret:secret,databaseUrl,
       expected:{source_profile:a.source_profile,...(a.owner_profile?{owner_profile:a.owner_profile}:{}),expected_session_user:a.expected_session_user,expected_database_owner:a.expected_database_owner,
         archive_digest:s.archive_digest,source_project_ref:s.project_ref,source_identity_sha256:s.source_identity_sha256,archived_storage_inventory_sha256:a.archived_storage_inventory_sha256}});
-    await client.end();client=null;
     const allowed=/^Cpus_allowed_list:\s+([0-9]+)/m.exec(readFileSync('/proc/self/status','utf8'));insist(allowed,'CPU affinity unavailable.');
-    const stdout=await run(['taskset','-c',allowed[1],process.execPath,'--max-old-space-size='+budget.node_heap_mib,resolve(root,'scripts/production-restore.mjs')],{seconds:budget.work_ms/1000,
+    mark('RESTORE_ORIGINAL_DATA');const stdout=await run(['taskset','-c',allowed[1],process.execPath,'--max-old-space-size='+budget.node_heap_mib,resolve(root,'scripts/production-restore.mjs')],{seconds:budget.work_ms/1000,
       env:{...process.env,SUPABASE_DB_URL:databaseUrl,RESTORE_FRESH_STORAGE_PROVIDER_JSON:JSON.stringify(envelope),RESTORE_FRESH_STORAGE_SERVICE_KEY:serviceKey,RESTORE_FRESH_STORAGE_JWT_SECRET:secret}});
-    output=storageResult(JSON.parse(stdout),s,intent);
+    mark('VERIFY_RESTORE_OUTPUT');output=storageResult(JSON.parse(stdout),s,intent);
     await assertRelayTarget();
-    const final=new Client({connectionString:databaseUrl,connectionTimeoutMillis:5000,query_timeout:10000});await final.connect();
-    try{const before=JSON.parse(readFileSync(resolve(audit,'STORAGE_CATALOG_BEFORE_PROVIDER.json'),'utf8')),after=await storageCatalog(final);
-      insist(hash(stable(before.catalog))===before.sha256 && before.sha256===after.sha256 && stable(before.catalog)===stable(after.catalog),'Official provider changed Storage catalog/ACL/role metadata.');
-      durable(resolve(custody,'STORAGE_CATALOG_AFTER_PROVIDER.json'),after);
-      const actual=await final.query('select row_to_json(m) row from storage.migrations m order by id');insist(actual.rowCount===migrationCount && hash(stable(actual.rows.map(x=>x.row)))===migrationsHash,'Official startup changed archived migration metadata.');}finally{await final.end();}
-    durable(resolve(custody,'PROVIDER_VERIFIED.json'),{provider_verified:true,production_provider_verified:false,archive_digest:s.archive_digest,original_intent_sha256:hash(stable(original)),
+    mark('VERIFY_FINAL_CATALOG');const before=JSON.parse(readFileSync(resolve(audit,'STORAGE_CATALOG_BEFORE_PROVIDER.json'),'utf8'));
+    const {after,actual}=await withDatabase(async db=>{await requireSameIdentity(db);return {after:await storageCatalog(db),actual:await db.query('select row_to_json(m) row from storage.migrations m order by id')};});
+    insist(hash(stable(before.catalog))===before.sha256 && before.sha256===after.sha256 && stable(before.catalog)===stable(after.catalog),'Official provider changed Storage catalog/ACL/role metadata.');
+    durable(resolve(custody,'STORAGE_CATALOG_AFTER_PROVIDER.json'),after);
+    insist(actual.rowCount===migrationCount && hash(stable(actual.rows.map(x=>x.row)))===migrationsHash,'Official startup changed archived migration metadata.');
+    mark('VERIFY_PROVIDER_COMPLETE');durable(resolve(custody,'PROVIDER_VERIFIED.json'),{provider_verified:true,production_provider_verified:false,archive_digest:s.archive_digest,original_intent_sha256:hash(stable(original)),
       namespace,container_id:cid,image:IMAGE,database_oid:id.database_oid,archived_migrations_74_full_tuple_sha256:migrationsHash,actual_archived_migration_count:migrationCount,resource_profile:budget,buckets:a.bucket_count,objects:a.object_count});
-  }catch(e){failure=e;}
+  }catch(e){failure??=e;report('REFUSED',e);}
   finally{
-    cleanupBudget.deadline??=Date.now()+45000;relayClosing=true;relayInspectionController.abort();
+    hostCleaning=true;mark('CLEANUP_RELAY');cleanupBudget.deadline??=Date.now()+45000;relayClosing=true;relayInspectionController.abort();
     try{if(relay){
       await closeOwnedRelay(relay,relaySockets,cleanupBudget.deadline);relayClosed=true;
       await Promise.allSettled([...relayPending]);
       durable(resolve(custody,'OWNED_LOOPBACK_RELAY_CLOSED.json'),{listener_closed:true,owned_sockets_remaining:0,before_container_removal:true});}}
     catch(e){cleanupFailure=e;failure??=e;}
-    if(client)try{await client.end();}catch(e){failure??=e;}
+    mark('CLEANUP_CLIENTS');for(const client of nativeClients)try{await client.end();}catch(e){cleanupFailure??=e;failure??=e;}nativeClients.clear();
+    mark('CLEANUP_PROVIDER');
     try{
       if(!cid){const candidates=(await run(['docker','ps','-aq','--no-trunc','--filter','name=^/'+namespace+'$'],{cleanup:true})).trim().split('\n').filter(Boolean);insist(candidates.length<=1,'Ambiguous cleanup name.');cid=candidates[0]??null;}
       if(cid){const v=JSON.parse(await run(['docker','inspect','--format',inspectFormat,cid],{cleanup:true}));insist(v.Id===cid && v.ImageId===verifiedImageId && v.Config.Labels['custodial.owner']===namespace && v.Config.Image===IMAGE,'Cleanup identity mismatch.');
@@ -660,12 +723,12 @@ async function host(){
       if(networkId)insist(!(await run(['docker','network','ls','--no-trunc','-q','--filter','id='+networkId],{cleanup:true})).trim(),'Owned network ID remains.');networkAbsent=true;
       }
     }catch(e){cleanupFailure=e;failure??=e;}
-    try{archive?.cleanup();}catch(e){failure??=e;}
+    mark('CLEANUP_ARCHIVE');try{archive?.cleanup();}catch(e){failure??=e;}
     // Private source bytes/local keys live only in this owned directory.
-    try{rmSync(resolve(custody,'provider-input'),{recursive:true,force:true});rmSync(resolve(custody,'provider.env'),{force:true});}catch(e){failure??=e;}
-    durable(resolve(custody,'FINAL.json'),{ok:!failure,provider_verified:!failure,production_provider_verified:false,resource_namespace:namespace,
+    mark('CLEANUP_PRIVATE_INPUTS');try{rmSync(resolve(custody,'provider-input'),{recursive:true,force:true});rmSync(resolve(custody,'provider.env'),{force:true});}catch(e){failure??=e;}
+    mark('WRITE_FINAL_RECEIPT');durable(resolve(custody,'FINAL.json'),{ok:!failure,provider_verified:!failure,production_provider_verified:false,resource_namespace:namespace,
       service_born:cid!==null,service_CID_or_name_fresh_absent:serviceAbsent,network_fresh_absent:networkAbsent,...(privateNetwork?{borrowed_network_retained_verified:borrowedNetworkRetained}:{}),relay_closed_or_never_born:relayClosed,cleanup_checked:cleanupFailure===null && relayClosed && serviceAbsent && (privateNetwork?borrowedNetworkRetained:networkAbsent),scope:'OFFICIAL_LOCAL_FILE_BACKEND_SAME_ORIGINAL',error:failure?'OWNING_REHEARSAL_REFUSED':null});
-    const evidence=resolve(tmp,'official-local-storage-provider-evidence',namespace);mkdirSync(evidence,{recursive:true,mode:0o700});
+    mark('EXPORT_FINAL_EVIDENCE');const evidence=resolve(tmp,'official-local-storage-provider-evidence',namespace);mkdirSync(evidence,{recursive:true,mode:0o700});
     if(privacy.privateData){
       for(const name of readdirSync(custody))if(privateEvidenceFile(name))durable(resolve(evidence,name),privateEvidenceReceipt(name,readFileSync(resolve(custody,name))));
     }else{
@@ -677,10 +740,11 @@ async function host(){
         else copyFileSync(file,resolve(evidence,name));
       }
     }
-    if(privacy.privateData)for(const name of ['STORAGE_CATALOG_AFTER_PROVIDER.json','STORAGE_ROLE_CREDENTIAL_NONSECRET_INVARIANCE.json','ARCHIVED_STORAGE_MIGRATIONS_FULL_TUPLES.json'])rmSync(resolve(custody,name),{force:true});
+    mark('CLEANUP_PRIVATE_EVIDENCE');if(privacy.privateData)for(const name of ['STORAGE_CATALOG_AFTER_PROVIDER.json','STORAGE_ROLE_CREDENTIAL_NONSECRET_INVARIANCE.json','ARCHIVED_STORAGE_MIGRATIONS_FULL_TUPLES.json'])rmSync(resolve(custody,name),{force:true});
     rmSync(resolve(custody,'provider-audit'),{recursive:true,force:true});
   }
-  if(failure)throw failure;process.stdout.write(JSON.stringify(output)+'\n');
+  if(failure)throw failure;hostPhase='HOST_FINISHED';startup.stage(hostPhase,'FINISHED');process.stdout.write(JSON.stringify(output)+'\n');
+  }catch(error){report('REFUSED',error);throw error;}
 }
 
 if(process.argv[1] && resolve(process.argv[1])===fileURLToPath(import.meta.url)){
