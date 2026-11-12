@@ -7,7 +7,7 @@ import {createHash} from 'node:crypto';
 import {spawn} from 'node:child_process';
 import {EventEmitter} from 'node:events';
 import {PG_IMAGE,selectPrivateProfile,freshIntentEnvelope,assertOwnedPg,assertPrivateResult,safeSourcePreparationFailure,originalOwnerMetadataDiagnostics,targetCreationOperation,targetCreationMetadata,classifyPinnedPostgresPullFailure,privateSubprocessOperation} from './run-private-backup-only-rehearsal.mjs';
-import {storageWorkerActor,assertPrivatePgOwnerProfile,privatePgPortIsolation,resourceProfile,assertPrivatePgNetwork,assertPrivateNetworkMembers,privateRestoreFailureDiagnostic,privateRestoreStreamDiagnostic,privateEvidenceFile,privateEvidenceReceipt,safeStartupFailure,hostMemoryAvailability,hostStartupDiagnostic,hostStageDiagnostic,nativeClientFailureGuard,withOwnedNativeClient,ownedHostStartupRecorder,selectedMode,STORAGE_CREDENTIAL_NONSECRET_SQL,stable,IMAGE} from './run-official-local-storage-rehearsal.mjs';
+import {storageWorkerActor,assertPrivatePgOwnerProfile,privatePgPortIsolation,resourceProfile,assertPrivatePgNetwork,assertPrivateNetworkMembers,privateRestoreFailureDiagnostic,privateRestoreStreamDiagnostic,privateRestoreStageDiagnostic,projectPrivateRestoreDiagnostic,readPrivateRestoreDiagnostics,exactPrivateRestoreInvocation,privateEvidenceFile,privateEvidenceReceipt,safeStartupFailure,hostMemoryAvailability,hostStartupDiagnostic,hostStageDiagnostic,nativeClientFailureGuard,withOwnedNativeClient,ownedHostStartupRecorder,selectedMode,STORAGE_CREDENTIAL_NONSECRET_SQL,stable,IMAGE} from './run-official-local-storage-rehearsal.mjs';
 import {captureVerifiedOriginalRestoreIntent} from './disaster-recovery-crypto.mjs';
 import {captureVerifiedImmutableFreshRestoreIntent} from './immutable-private-fresh-restore-intent.mjs';
 const key='offline-fixture-independent-intent-key-32bytes',keyId='fixture';
@@ -670,4 +670,112 @@ test('host native failure cancels owned work but never interrupts cleanup subpro
     assert.equal(stops,hostCleaning?0:1);assert.equal(aborts,hostCleaning?0:1);assert.equal(destroys,hostCleaning?0:1);assert.equal(reports,1);
     assert.ok(failure());assert.throws(()=>nativeGuard.check());assertNoPrivate({message:failure().message,code:failure().code});
   }
+});
+
+
+test('exact restore diagnostic records survive both privacy layers while arbitrary private stderr does not',()=>{
+  const payload=privateSentinels.join('\n');
+  const records=[privateRestoreStageDiagnostic('MATERIALIZE_ARCHIVE','ENTER'),
+    privateRestoreStageDiagnostic('CONNECT_NATIVE_CLIENT','ENTER'),
+    privateRestoreStageDiagnostic('ACQUIRE_RESTORE_SESSION_LOCK','REFUSED',Object.assign(new Error(payload),{code:'57014',query:payload,stack:payload})),
+    privateRestoreStageDiagnostic('stage_fresh_private_database','REFUSED',{code:'IMMUTABLE_PRIVATE_DATA_COMMIT_NOT_ADMITTED',sql_state:'42501',source_phase:'FINAL_CURRENTNESS',detail:payload})];
+  const raw=Buffer.from(payload+'\n'+records.map(JSON.stringify).join('\n')+'\n'+JSON.stringify({restore_phase:'connect',error:payload})+'\n');
+  const ordinary=privateRestoreStreamDiagnostic(raw);assert.equal(Object.hasOwn(ordinary,'restore_diagnostics'),false);
+  const first=privateRestoreStreamDiagnostic(raw,true);assert.deepEqual(first.restore_diagnostics,records);assertNoPrivate(first);
+  const second=privateEvidenceReceipt('018.stderr',Buffer.from(JSON.stringify(first)));assert.deepEqual(second.restore_diagnostics,records);assertNoPrivate(second);
+  assert.equal(Object.hasOwn(privateEvidenceReceipt('018.stdout',Buffer.from(JSON.stringify(first))),'restore_diagnostics'),false);
+  const invalids=[{...records[0],message:payload},{...records[0],phase:payload},{...records[0],event:payload},
+    {...records[0],sql_state:'JOHN1'},{...records[0],node_code:payload},{...records[0],code:payload},
+    {...records[0],source_phase:payload},{...records[0],private_payload_exported:true},{...records[0],schema:'other'},
+    {...records[0],code:{secret:payload}},{...records[0],code:['57014']}];
+  for(const invalid of invalids){assert.equal(projectPrivateRestoreDiagnostic(invalid),null);assert.deepEqual(readPrivateRestoreDiagnostics(Buffer.from(JSON.stringify(invalid)+'\n')),[]);
+    const tampered={...first,restore_diagnostics:[invalid]};const result=privateEvidenceReceipt('018.stderr',Buffer.from(JSON.stringify(tampered)));assert.equal(Object.hasOwn(result,'restore_diagnostics'),false);assertNoPrivate(result);}
+  let traps=0;const hostile=new Proxy({},{getOwnPropertyDescriptor(){traps++;throw Error(payload);},ownKeys(){traps++;throw Error(payload);}});
+  assert.equal(projectPrivateRestoreDiagnostic(hostile),null);
+  const accessor=Object.defineProperty({...records[0]},'code',{get(){traps++;throw Error(payload);},enumerable:true});assert.equal(projectPrivateRestoreDiagnostic(accessor),null);
+  const nested={...records[0],code:{toJSON(){traps++;throw Error(payload);}}};assert.equal(projectPrivateRestoreDiagnostic(nested),null);assert.equal(traps,0);
+  assert.deepEqual(readPrivateRestoreDiagnostics(Buffer.from(Array(129).fill(JSON.stringify(records[0])).join('\n'))),[]);
+  assert.deepEqual(readPrivateRestoreDiagnostics(Buffer.alloc(1024*1024+1)),[]);
+  assert.deepEqual(readPrivateRestoreDiagnostics(Buffer.from(' '.repeat(2049)+JSON.stringify(records[0]))),[]);
+  const duplicate=JSON.stringify(records[0]).replace('"phase":"MATERIALIZE_ARCHIVE"','"phase":"PRIVATE_RESTORE_FAILURE","phase":"MATERIALIZE_ARCHIVE"');
+  assert.deepEqual(readPrivateRestoreDiagnostics(Buffer.from(duplicate)),[]);
+});
+
+test('restore diagnostic parser is restricted to the exact private stderr invocation',()=>{
+  const argv=['taskset','-c','0',process.execPath,'--max-old-space-size=384',new URL('./production-restore.mjs',import.meta.url).pathname];
+  assert.equal(exactPrivateRestoreInvocation(argv),true);
+  for(const change of [a=>a[0]='docker',a=>a[1]='-a',a=>a[2]='0,1',a=>a[3]='/other/node',a=>a[4]='--max-old-space-size=256',a=>a[5]+='.other',a=>a.push('extra')]){
+    const copy=[...argv];change(copy);assert.equal(exactPrivateRestoreInvocation(copy),false);
+  }
+  let traps=0;assert.equal(exactPrivateRestoreInvocation(new Proxy(argv,{get(){traps++;throw Error('trap');}})),false);
+  const accessor=[...argv];Object.defineProperty(accessor,'0',{get(){traps++;throw Error('trap');}});assert.equal(exactPrivateRestoreInvocation(accessor),false);assert.equal(traps,0);
+  const source=readFileSync(new URL('./run-official-local-storage-rehearsal.mjs',import.meta.url),'utf8');
+  assert.match(source,/privacy.privateData===true && exactPrivateRestoreInvocation\(argv\) && !cleanup && env.RESTORE_PRIVATE_DIAGNOSTICS==='bounded-v1'/);
+  assert.match(source,/privateRestoreStreamDiagnostic\(raw,privateRestoreDiagnostics&&i===1\)/);
+  assert.match(source,/privateRestoreDiagnostics:privacy.privateData/);
+  assert.match(source,/privacy.privateData\?\{RESTORE_PRIVATE_DIAGNOSTICS:'bounded-v1'\}/);
+});
+
+test('production early private setup refuses with a marked phase and no raw exception',async()=>{
+  const child=spawn(process.execPath,[new URL('./production-restore.mjs',import.meta.url).pathname],{
+    cwd:resolve(new URL('..',import.meta.url).pathname),env:{PATH:process.env.PATH,RESTORE_PRIVATE_DIAGNOSTICS:'bounded-v1',REHEARSAL_SCOPE:'backup_only',
+      OFFICIAL_LOCAL_STORAGE_PROVIDER:'true',RESTORE_DATABASE_ONLY:'true',RESTORE_ARCHIVE_VERIFY_KEY:'short'},stdio:['ignore','pipe','pipe']});
+  const chunks=[[],[]];child.stdout.on('data',x=>chunks[0].push(x));child.stderr.on('data',x=>chunks[1].push(x));
+  const code=await new Promise((yes,no)=>{child.once('error',no);child.once('close',yes);});assert.equal(code,1);
+  assert.equal(Buffer.concat(chunks[0]).length,0);const raw=Buffer.concat(chunks[1]),records=readPrivateRestoreDiagnostics(raw);
+  assert.deepEqual(records.map(x=>[x.phase,x.event]),[['LOAD_CONFIGURATION','ENTER'],['LOAD_CONFIGURATION','REFUSED']]);
+  assert.equal(raw.toString(),records.map(JSON.stringify).join('\n')+'\n');assertNoPrivate(raw.toString());
+});
+
+test('actual connect and session-lock boundaries retain distinct safe failure phases',async()=>{
+  const source=readFileSync(new URL('./production-restore.mjs',import.meta.url),'utf8');
+  const start=source.indexOf("  privateRestorePhase('CONNECT_NATIVE_CLIENT');"),end=source.indexOf('try {\n  if (freshPrivateDatabase)',start);
+  assert.ok(start>0&&end>start);
+  const factory=new Function('ports',`const {db,privateRestorePhase}=ports;let restoreSessionLockHeld=false;return async()=>{${source.slice(start,end)}return restoreSessionLockHeld;};`);
+  for(const failConnect of [true,false]){
+    let queries=0,phase;const error=Object.assign(new Error(privateSentinels.join('\n')),{code:failConnect?'ECONNREFUSED':'57014'});
+    const run=factory({db:{connect:async()=>{if(failConnect)throw error;},query:async()=>{queries++;throw error;}},privateRestorePhase:x=>{phase=x;}});
+    await assert.rejects(run());assert.equal(queries,failConnect?0:1);
+    const diagnostic=privateRestoreStageDiagnostic(phase,'REFUSED',error),first=privateRestoreStreamDiagnostic(Buffer.from(JSON.stringify(diagnostic)+'\n'),true);
+    const delivered=privateEvidenceReceipt('018.stderr',Buffer.from(JSON.stringify(first))).restore_diagnostics[0];
+    assert.equal(delivered.phase,failConnect?'CONNECT_NATIVE_CLIENT':'ACQUIRE_RESTORE_SESSION_LOCK');assertNoPrivate(delivered);
+    assert.equal(failConnect?delivered.node_code:delivered.sql_state,failConnect?'ECONNREFUSED':'57014');
+  }
+  assert.ok(source.indexOf("privateRestorePhase('MATERIALIZE_ARCHIVE')")<source.indexOf('const verifiedArchive = materializeVerifiedArchive'));
+  for(const phase of ['VALIDATE_ARCHIVE_INVENTORY','PREPARE_ORIGINAL_SOURCE','VALIDATE_TARGET_SCOPE','CAPTURE_ORIGINAL_INTENT','VALIDATE_ORIGINAL_INTENT','CAPTURE_LOCAL_PROVIDER','VERIFY_LOCAL_PROVIDER_OWNER'])
+    assert.ok(source.includes("privateRestorePhase('"+phase+"')"));
+  assert.match(source,/try\{await runRestoreLifecycle\(\);\}/);
+  assert.match(source,/if\(privateDiagnosticsRequested\)process.exitCode=1;else throw error/);
+});
+
+
+test('shipping private runner persists closed restore stderr only and rejects diagnostic opt-in for other children',async()=>{
+  const source=readFileSync(new URL('./run-official-local-storage-rehearsal.mjs',import.meta.url),'utf8');
+  const start=source.indexOf('function runner('),end=source.indexOf('export function redactProviderLogs(',start);
+  const factory=new Function('ports',`const {insist,Date,stopping,memoryFloor,resolve,durable,hash,stable,spawn,liveGroups,ticks,CAP,pause,existsSync,Buffer,writeFileSync,privateRestoreStreamDiagnostic,redactProviderLogs,exactPrivateRestoreInvocation}=ports;
+    ${source.slice(start,end)}return runner;`);
+  const root=mkdtempSync(resolve(tmpdir(),'restore-diagnostic-transport-'));
+  let births=0;
+  try{
+    const diagnostic=privateRestoreStageDiagnostic('ACQUIRE_RESTORE_SESSION_LOCK','REFUSED',{code:'57014'});
+    const payload=privateSentinels.join('\n')+'\n'+JSON.stringify(diagnostic)+'\n';
+    const program=`process.stdout.write(${JSON.stringify(payload)});process.stderr.write(${JSON.stringify(payload)});process.exitCode=17;`;
+    const runner=factory({insist:(v,m)=>assert.ok(v,m),Date,stopping:false,memoryFloor:()=>{},resolve,
+      durable:(path,value)=>{const fd=openSync(path,'wx',0o600);try{writeFileSync(fd,JSON.stringify(value));fsyncSync(fd);}finally{closeSync(fd);}},
+      hash:value=>createHash('sha256').update(value).digest('hex'),stable,
+      spawn:(cmd,args,options)=>{births++;assert.equal(cmd,'taskset');return spawn(process.execPath,['-e',program],options);},
+      liveGroups:new Set(),ticks:pid=>readFileSync('/proc/'+pid+'/stat','utf8').split(') ')[1].split(' ')[19],CAP:1048576,
+      pause:ms=>new Promise(r=>setTimeout(r,ms)),existsSync,Buffer,writeFileSync,privateRestoreStreamDiagnostic,
+      redactProviderLogs:()=>assert.fail('No generic redaction'),exactPrivateRestoreInvocation});
+    const privacy={privateData:true},run=runner(root,()=>Date.now()+10000,{deadline:null},privacy);
+    const argv=['taskset','-c','0',process.execPath,'--max-old-space-size=384',new URL('./production-restore.mjs',import.meta.url).pathname];
+    const options={env:{RESTORE_PRIVATE_DIAGNOSTICS:'bounded-v1'},privateRestoreDiagnostics:true};
+    await assert.rejects(run(argv,options));assert.equal(births,1);
+    const stderr=readFileSync(resolve(root,'001.stderr')),stdout=JSON.parse(readFileSync(resolve(root,'001.stdout'),'utf8'));
+    assert.deepEqual(JSON.parse(stderr).restore_diagnostics,[diagnostic]);assert.equal(Object.hasOwn(stdout,'restore_diagnostics'),false);
+    assert.deepEqual(privateEvidenceReceipt('001.stderr',stderr).restore_diagnostics,[diagnostic]);
+    for(const file of readdirSync(root))assertNoPrivate(readFileSync(resolve(root,file),'utf8'));
+    await assert.rejects(run(['docker','logs','owned'],options));await assert.rejects(run(argv,{...options,cleanup:true}));
+    await assert.rejects(run(argv,{...options,env:{}}));privacy.privateData=false;await assert.rejects(run(argv,options));assert.equal(births,1);
+  }finally{rmSync(root,{recursive:true,force:true});}
 });

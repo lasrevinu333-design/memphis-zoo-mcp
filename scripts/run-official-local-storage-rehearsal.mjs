@@ -245,7 +245,8 @@ export function storageResult(result,archive,intent){
 
 // One original process group per invocation. Actual wait is durable before
 // absence/cleanup assertions; no secret-bearing argv or environment is logged.
-function runner(root,getDeadline,cleanupBudget,privacy){let sequence=0;return async function run(argv,{env=process.env,seconds=60,cleanup=false,input=null,logSecrets=null,abortSignal=null}={}){
+function runner(root,getDeadline,cleanupBudget,privacy){let sequence=0;return async function run(argv,{env=process.env,seconds=60,cleanup=false,input=null,logSecrets=null,abortSignal=null,privateRestoreDiagnostics=false}={}){
+  if(privateRestoreDiagnostics)insist(privacy.privateData===true && exactPrivateRestoreInvocation(argv) && !cleanup && env.RESTORE_PRIVATE_DIAGNOSTICS==='bounded-v1','Only the exact private restore child admits closed diagnostics.');
   if(logSecrets!==null)insist(Array.isArray(logSecrets) && argv[0]==='docker' && argv[1]==='logs' && argv[2]==='--timestamps' && argv[3]==='--tail' && argv[4]==='120' && /^[a-f0-9]{64}$/.test(argv[5]) && argv.length===6,'Only fixed owned provider logs admit redacted transport.');
   insist(!abortSignal?.aborted,'Owned inspector cancelled before child birth.');
   if(cleanup)cleanupBudget.deadline??=Date.now()+45000;
@@ -273,7 +274,7 @@ function runner(root,getDeadline,cleanupBudget,privacy){let sequence=0;return as
     const drained=await Promise.race([Promise.all([child.stdout,child.stderr].map(stream=>stream.readableEnded?Promise.resolve():new Promise(r=>stream.once('end',r)))).then(()=>true),pause(2000).then(()=>false)]);
     if(!drained){try{process.kill(-child.pid,'SIGKILL');}catch{};child.stdout.destroy();child.stderr.destroy();error??=new Error('Original stream drain deadline exceeded.');}
     for(const [i,suffix] of ['stdout','stderr'].entries()){
-      const raw=Buffer.concat(chunks[i]),saved=privacy.privateData?Buffer.from(JSON.stringify(privateRestoreStreamDiagnostic(raw))+'\n')
+      const raw=Buffer.concat(chunks[i]),saved=privacy.privateData?Buffer.from(JSON.stringify(privateRestoreStreamDiagnostic(raw,privateRestoreDiagnostics&&i===1))+'\n')
         :logSecrets===null?raw:Buffer.from(redactProviderLogs(raw.toString('utf8'),logSecrets));
       if(privacy.privateData || logSecrets!==null)durable(prefix+'.'+suffix+'.REDACTION.json',{original_bytes:raw.length,original_sha256:hash(raw),saved_bytes:saved.length,saved_sha256:hash(saved),raw_vendor_bytes_persisted:false,...(privacy.privateData?{private_payload_bytes_persisted:false}:{} )});
       writeFileSync(prefix+'.'+suffix,saved,{mode:0o600,flag:'wx'});
@@ -298,10 +299,72 @@ export function redactProviderLogs(text,secrets){
 }
 // Private failure channels never copy arbitrary driver/vendor text, properties
 // or stack operands. These DATA diagnostics grant no retry/restore authority.
-export function privateRestoreStreamDiagnostic(raw){
+export function privateRestoreStreamDiagnostic(raw,restoreDiagnostics=false){
   insist(Buffer.isBuffer(raw),'Owned byte stream required.');
-  return Object.freeze({classification:'PRIVATE_SUBPROCESS_STREAM_WITHHELD',bytes:raw.length,sha256:hash(raw),private_payload_exported:false});
+  return Object.freeze({classification:'PRIVATE_SUBPROCESS_STREAM_WITHHELD',bytes:raw.length,sha256:hash(raw),private_payload_exported:false,
+    ...(restoreDiagnostics===true?{restore_diagnostics:readPrivateRestoreDiagnostics(raw)}:{})});
 }
+export function exactPrivateRestoreInvocation(argv){
+  if(!Array.isArray(argv)||isProxy(argv)||argv.length!==6)return false;
+  const values=[];for(let i=0;i<6;i++){const d=Object.getOwnPropertyDescriptor(argv,String(i));if(!d||!Object.hasOwn(d,'value')||typeof d.value!=='string')return false;values.push(d.value);}
+  return values[0]==='taskset'&&values[1]==='-c'&&/^[0-9]{1,6}$/.test(values[2])&&values[3]===process.execPath
+    && values[4]==='--max-old-space-size=384'&&values[5]===resolve(dirname(fileURLToPath(import.meta.url)),'production-restore.mjs');
+}
+const privateRestorePhases=new Set(['LOAD_CONFIGURATION','MATERIALIZE_ARCHIVE','VALIDATE_ARCHIVE_INVENTORY','SELECT_ORIGINAL_TABLES',
+  'PREPARE_ORIGINAL_SOURCE','VALIDATE_TARGET_SCOPE','CAPTURE_ORIGINAL_INTENT','VALIDATE_ORIGINAL_INTENT','CAPTURE_LOCAL_PROVIDER',
+  'VERIFY_LOCAL_PROVIDER_OWNER','CREATE_NATIVE_CLIENT','CONNECT_NATIVE_CLIENT','ACQUIRE_RESTORE_SESSION_LOCK','RESTORE_CLEANUP','ARCHIVE_CLEANUP',
+  'PRIVATE_RESTORE_FAILURE','PRIVATE_RESTORE_FINISHED','connect','record_fresh_original_authority_evidence','restore_cron','restore_storage',
+  'post_restore_verification','fresh_private_database_transaction','stage_fresh_private_database','commit_fresh_private_database',
+  'read_committed_fresh_original_data','reconcile_committed_fresh_original_authority','commit_fresh_original_authority',
+  'read_committed_fresh_original_authority','read_committed_fresh_original_authority_data','hold_fresh_original_authority_post_data_fence',
+  'preflight','pause_admission','drain_admitted_mutations','acquire_global_mutation_fence','quiescent_target_identity','quiescent_snapshot',
+  'restore_database','restore_immutable_mixed_data','truncate_target_tables','suspend_unvalidated_restore_checks','restore_table',
+  'reinstate_unvalidated_restore_checks','commit_native_text_data','commit_immutable_mixed_data','authority_reconciliation']);
+const privateRestoreEvents=new Set(['ENTER','REFUSED','PREREQUISITE_REFUSED','NATIVE_CLIENT_ERROR','CLEANUP_ERROR','FINISHED']);
+const privateRestoreCodes=new Set(['original_restore_intent_capture_invalid','immutable_fresh_original_intent_invalid',
+  'IMMUTABLE_BOOTSTRAP_SOURCE_UNAVAILABLE','IMMUTABLE_BOOTSTRAP_INVENTORY_UNAVAILABLE','IMMUTABLE_BOOTSTRAP_ORIGINAL_ROWS_UNAVAILABLE',
+  'PRIVATE_ORIGINAL_DATA_IMPORT_UNSUPPORTED','IMMUTABLE_PRIVATE_DATA_COMMIT_NOT_ADMITTED','IMMUTABLE_PRIVATE_DATA_COMMIT_OUTCOME_UNKNOWN',
+  'IMMUTABLE_FRESH_POST_DATABASE_READ_UNAVAILABLE','IMMUTABLE_FRESH_AUTHORITY_OUTCOME_UNKNOWN','IMMUTABLE_FRESH_AUTHORITY_COMMIT_OUTCOME_UNKNOWN',
+  'IMMUTABLE_FRESH_POST_AUTHORITY_READ_UNAVAILABLE','IMMUTABLE_FRESH_POST_AUTHORITY_CONTINUATION_UNAVAILABLE',
+  'IMMUTABLE_PRIVATE_DATA_READBACK_SQL_FAILED','IMMUTABLE_ORDINARY_DATA_READBACK_SQL_FAILED','IMMUTABLE_FRESH_DATABASE_EVIDENCE_INVALID',
+  'IMMUTABLE_FRESH_COMMIT_RECOVERY_INVALID','IMMUTABLE_FRESH_AUTHORITY_COMMIT_RECOVERY_INVALID','STORAGE_EXACT_SNAPSHOT_UNAVAILABLE',
+  'RESTORE_RETRY_RECONCILIATION_REQUIRED']);
+const privateSourcePhases=new Set(['ARCHIVE_ADMISSION','ORIGINAL_INVENTORY','PROGRAM_SOURCE','ORIGINAL_ROWS','ORIGINAL_RELEASE','SOURCE_RECIPES',
+  'ORIGINAL_REGISTRY','SOURCE_STATEMENTS','FINAL_CURRENTNESS','SOURCE_HANDLE','ARCHIVE_CURRENTNESS','PROGRAM_CURRENTNESS','INVENTORY_CURRENTNESS']);
+export function privateRestoreStageDiagnostic(phase,event,error=null){
+  const own=key=>{if(!error||typeof error!=='object'||isProxy(error))return undefined;const d=Object.getOwnPropertyDescriptor(error,key);return d&&Object.hasOwn(d,'value')?d.value:undefined;};
+  const native=privateRestoreFailureDiagnostic(error,'archive_lifecycle'),sql=privateRestoreFailureDiagnostic({code:own('sql_state')},'archive_lifecycle');
+  const common=hostStartupDiagnostic('SELECT_MODE',null,error),code=own('code'),source=own('source_phase');
+  return Object.freeze({schema:'custodial.private-restore-stage.v1',phase:privateRestorePhases.has(phase)?phase:'PRIVATE_RESTORE_FAILURE',
+    event:privateRestoreEvents.has(event)?event:'REFUSED',private_payload_exported:false,
+    ...(privateRestoreCodes.has(code)?{code}:common.code?{code:common.code}:{}),
+    ...(sql.sql_state||native.sql_state?{sql_state:sql.sql_state??native.sql_state}:{}),
+    ...(native.node_code?{node_code:native.node_code}:{}),...(privateSourcePhases.has(source)?{source_phase:source}:{} )});
+}
+export function projectPrivateRestoreDiagnostic(value){
+  if(!value||typeof value!=='object'||isProxy(value)||Array.isArray(value)||![Object.prototype,null].includes(Object.getPrototypeOf(value)))return null;
+  const descriptors=Object.getOwnPropertyDescriptors(value),keys=Reflect.ownKeys(descriptors);
+  const allowed=['schema','phase','event','private_payload_exported','code','sql_state','node_code','source_phase'];
+  if(keys.some(key=>!allowed.includes(key)||!Object.hasOwn(descriptors[key],'value')||descriptors[key].enumerable!==true))return null;
+  const data=Object.fromEntries(keys.map(key=>[key,descriptors[key].value]));
+  if(keys.some(key=>key!=='private_payload_exported'&&typeof data[key]!=='string'))return null;
+  if(data.schema!=='custodial.private-restore-stage.v1'||!privateRestorePhases.has(data.phase)||!privateRestoreEvents.has(data.event)||data.private_payload_exported!==false)return null;
+  const projected=privateRestoreStageDiagnostic(data.phase,data.event,{code:data.code??data.node_code??data.sql_state,sql_state:data.sql_state,source_phase:data.source_phase});
+  return stable(data)===stable(projected)?projected:null;
+}
+export function readPrivateRestoreDiagnostics(raw){
+  if(!Buffer.isBuffer(raw)||raw.length>CAP)return Object.freeze([]);
+  const result=[];
+  for(const line of raw.toString('utf8').split('\n')){
+    if(!line||Buffer.byteLength(line)>2048)continue;
+    let value;try{value=JSON.parse(line);}catch{continue;}
+    const record=projectPrivateRestoreDiagnostic(value);
+    // Require the exact producer serialization as well as closed field shapes.
+    if(record&&JSON.stringify(record)===line){result.push(record);if(result.length>128)return Object.freeze([]);}
+  }
+  return Object.freeze(result);
+}
+
 export function privateRestoreFailureDiagnostic(error,phase){
   const phases=['connect_gate','capture_before_catalog','require_locator','require_backend','construct_backend','construct_locator',
     'verify_empty_namespace','read_verified_object','official_archived_version_upload','verify_post_bootstrap_migrations',
@@ -344,6 +407,11 @@ export function privateEvidenceReceipt(name,raw){
     :name.endsWith('.REDACTION.json')?['original_bytes','original_sha256','saved_bytes','saved_sha256','raw_vendor_bytes_persisted','private_payload_bytes_persisted']
     :['bytes','sha256']);
   const result={classification:'PRIVATE_RESTORE_METADATA_RECEIPT',private_payload_exported:false};
+  if(/^[0-9]{3}\.stderr$/.test(name)&&value.classification==='PRIVATE_SUBPROCESS_STREAM_WITHHELD'
+      &&value.private_payload_exported===false&&Array.isArray(value.restore_diagnostics)&&value.restore_diagnostics.length<=128){
+    const records=value.restore_diagnostics.map(projectPrivateRestoreDiagnostic);
+    if(records.every(record=>record!==null))result.restore_diagnostics=records;
+  }
   for(const key of fields){
     const v=value[key];
     if(typeof v==='boolean' || Number.isSafeInteger(v)&&v>=0 || v===null)result[key]=v;
@@ -678,8 +746,8 @@ async function host(){
       expected:{source_profile:a.source_profile,...(a.owner_profile?{owner_profile:a.owner_profile}:{}),expected_session_user:a.expected_session_user,expected_database_owner:a.expected_database_owner,
         archive_digest:s.archive_digest,source_project_ref:s.project_ref,source_identity_sha256:s.source_identity_sha256,archived_storage_inventory_sha256:a.archived_storage_inventory_sha256}});
     const allowed=/^Cpus_allowed_list:\s+([0-9]+)/m.exec(readFileSync('/proc/self/status','utf8'));insist(allowed,'CPU affinity unavailable.');
-    mark('RESTORE_ORIGINAL_DATA');const stdout=await run(['taskset','-c',allowed[1],process.execPath,'--max-old-space-size='+budget.node_heap_mib,resolve(root,'scripts/production-restore.mjs')],{seconds:budget.work_ms/1000,
-      env:{...process.env,SUPABASE_DB_URL:databaseUrl,RESTORE_FRESH_STORAGE_PROVIDER_JSON:JSON.stringify(envelope),RESTORE_FRESH_STORAGE_SERVICE_KEY:serviceKey,RESTORE_FRESH_STORAGE_JWT_SECRET:secret}});
+    mark('RESTORE_ORIGINAL_DATA');const stdout=await run(['taskset','-c',allowed[1],process.execPath,'--max-old-space-size='+budget.node_heap_mib,resolve(root,'scripts/production-restore.mjs')],{seconds:budget.work_ms/1000,privateRestoreDiagnostics:privacy.privateData,
+      env:{...process.env,...(privacy.privateData?{RESTORE_PRIVATE_DIAGNOSTICS:'bounded-v1'}:{}),SUPABASE_DB_URL:databaseUrl,RESTORE_FRESH_STORAGE_PROVIDER_JSON:JSON.stringify(envelope),RESTORE_FRESH_STORAGE_SERVICE_KEY:serviceKey,RESTORE_FRESH_STORAGE_JWT_SECRET:secret}});
     mark('VERIFY_RESTORE_OUTPUT');output=storageResult(JSON.parse(stdout),s,intent);
     await assertRelayTarget();
     mark('VERIFY_FINAL_CATALOG');const before=JSON.parse(readFileSync(resolve(audit,'STORAGE_CATALOG_BEFORE_PROVIDER.json'),'utf8'));
