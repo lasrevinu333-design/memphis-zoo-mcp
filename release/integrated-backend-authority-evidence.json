@@ -388,6 +388,11 @@
         "object_id": "a7b04aa9a314b3532cc3e5d7ac69437e46bb03b8"
       },
       {
+        "path": "config/schedules/manual-approved-20261030/owner-start-correction-20261113.json",
+        "mode": "100644",
+        "object_id": "91d318511f7ad038f92c36349565bc1d2a5266bf"
+      },
+      {
         "path": "config/schedules/manual-approved-20261030/packet/INTEGRATION_HANDOFF.md",
         "mode": "100644",
         "object_id": "fabc36432ed063cf4c49b78f87e399f0839b709c"
@@ -2530,7 +2535,7 @@
       {
         "path": "scripts/approved-manual-absence-tests.mjs",
         "mode": "100644",
-        "object_id": "9d8b3f853b9ddede45439e966da9a44ff16e6aa5"
+        "object_id": "2bc6a955a3e04914b842b3190611c7e94e69fbb6"
       },
       {
         "path": "scripts/approved-manual-activation-choices-revision-source-tests.mjs",
@@ -2545,22 +2550,27 @@
       {
         "path": "scripts/approved-manual-actual-window-tests.mjs",
         "mode": "100644",
-        "object_id": "bd5b385831603eea0052e9454dc3a667a02abe65"
+        "object_id": "858998020d8961eafdeef0314d3c34f1cb5a47df"
+      },
+      {
+        "path": "scripts/approved-manual-all-absence-review.mjs",
+        "mode": "100644",
+        "object_id": "5af9321410ab2ecdef489abc3538bdf88785e62d"
       },
       {
         "path": "scripts/approved-manual-canonical-roster-activation-package-tests.mjs",
         "mode": "100644",
-        "object_id": "c03abe7db2598554100dcdd70557a6ce3863f189"
+        "object_id": "81ccf8bd6a5038301110f8d5f9be8ebc617f8f1b"
       },
       {
         "path": "scripts/approved-manual-canonical-roster-snapshot-tests.mjs",
         "mode": "100644",
-        "object_id": "2b070085ca307448f0818850a3319f5fbdb6039b"
+        "object_id": "8972739b11b76d2aed8f93f6640917b77d951ca6"
       },
       {
         "path": "scripts/approved-manual-canonical-roster-typed-capacity-tests.mjs",
         "mode": "100644",
-        "object_id": "065214460788fe4299c3fbc55be8278bf73b86c2"
+        "object_id": "2fa2fd84f07f6866d8a385e1329b337c2de49ab2"
       },
       {
         "path": "scripts/approved-manual-capacity-transition-tests.mjs",
@@ -2575,7 +2585,7 @@
       {
         "path": "scripts/approved-manual-coverall-workflow-tests.mjs",
         "mode": "100644",
-        "object_id": "9021b4a92563976b551d868f7067bfbc1d9f5066"
+        "object_id": "31958ee3fed52a6841f93da166925c2e302bb7fc"
       },
       {
         "path": "scripts/approved-manual-device-delivery-tests.mjs",
@@ -2610,12 +2620,12 @@
       {
         "path": "scripts/approved-manual-manager-view-tests.mjs",
         "mode": "100644",
-        "object_id": "1bf0f82f547a4d887f3d5ef53755b805927daca2"
+        "object_id": "2ea5c49049f62cd5df8573ae7a3340b6bc8af165"
       },
       {
         "path": "scripts/approved-manual-native-template-tests.mjs",
         "mode": "100644",
-        "object_id": "44b1cb8c73879f1a3e59299160ab3a15f1d7486b"
+        "object_id": "9c31ddec88132906968ff889e21274cb751e7a26"
       },
       {
         "path": "scripts/approved-manual-notification-continuity-tests.mjs",
@@ -2625,7 +2635,7 @@
       {
         "path": "scripts/approved-manual-period-projection-tests.mjs",
         "mode": "100644",
-        "object_id": "cf642bb23fcf192c2f2c52ae1aa28e7c3c810fdd"
+        "object_id": "5766437d0b52c95bdfbc99a0e0d3cc1459883c03"
       },
       {
         "path": "scripts/approved-manual-period-tests.mjs",
@@ -2635,7 +2645,7 @@
       {
         "path": "scripts/approved-manual-period-worker-tests.mjs",
         "mode": "100644",
-        "object_id": "8c3fcc9d03ab248bdb8d6b01cc3ff4af0eddeee7"
+        "object_id": "325a2d087a3a9cf42604ab314374ef30e84e13c9"
       },
       {
         "path": "scripts/approved-manual-recurring-delivery-tests.mjs",
@@ -2650,17 +2660,22 @@
       {
         "path": "scripts/approved-manual-recurring-transport-tests.mjs",
         "mode": "100644",
-        "object_id": "1ba5c73bb344936b08200512b4ceeda3d40ec48f"
+        "object_id": "36c7d5fef6f2beb16b0bbd40999b8ead9bb35677"
       },
       {
         "path": "scripts/approved-manual-release-packet-preparation-tests.mjs",
         "mode": "100644",
-        "object_id": "fc939b6861dfbfe4f2fdb635b1e8fe60fe1657e2"
+        "object_id": "4a683e1e5d691cf6d476b4717a50dac100f8da12"
       },
       {
         "path": "scripts/approved-manual-roster-transition-tests.mjs",
         "mode": "100644",
-        "object_id": "bb9589b0ca5e6ec4116537db861619891a944681"
+        "object_id": "fa045c9ea486677288eb595932ab87173b24e911"
+      },
+      {
+        "path": "scripts/approved-manual-start-correction-tests.mjs",
+        "mode": "100644",
+        "object_id": "1f16cf24cd2c853908c3501b080ab816bb24a7e6"
       },
       {
         "path": "scripts/approved-manual-week-database-tests.mjs",
@@ -2670,7 +2685,7 @@
       {
         "path": "scripts/approved-manual-week-tests.mjs",
         "mode": "100644",
-        "object_id": "a8b7a63c74ed985e7bf07e98234a3caba37e162b"
+        "object_id": "07c7ea7a388debcb7915e93f7dfbeabb2e7b7a17"
       },
       {
         "path": "scripts/approved-static-template-control-plane-tests.mjs",
@@ -3150,7 +3165,7 @@
       {
         "path": "scripts/custodial-device-removal-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "aeeba0b154bc0b6ad84f4ebd8b5af5c8d282d025"
+        "object_id": "e3baac1e2e41f91c36857858016814a84d511ac9"
       },
       {
         "path": "scripts/custodial-device-removal-database-tests.mjs",
@@ -3225,7 +3240,7 @@
       {
         "path": "scripts/custodial-repair-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "a3555d4ff9f75b7d0b7325c91a22a72cd338a1b9"
+        "object_id": "58398b6d931fb2350bf467ec69d632d1bb324a60"
       },
       {
         "path": "scripts/custodial-u4-migration-convergence-tests.mjs",
@@ -3405,7 +3420,7 @@
       {
         "path": "scripts/employee-notification-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "2bc692fdfa5d0b5cc3defeb652389a2c3dcf7bfa"
+        "object_id": "c86a6e951db11fc4894b7ff3acd57ec138437827"
       },
       {
         "path": "scripts/employee-schedule-identity-tests.mjs",
@@ -3666,6 +3681,11 @@
         "path": "scripts/fixtures/approved-manual-capacity-source.mjs",
         "mode": "100644",
         "object_id": "4f3d59623b07efb4eb8a1ee664d1e2525d2016e7"
+      },
+      {
+        "path": "scripts/fixtures/approved-manual-week-before-start-correction.json",
+        "mode": "100644",
+        "object_id": "3632195c8ec976b0d7f7ce3068aa41717b378f2c"
       },
       {
         "path": "scripts/fixtures/approved-schedule-web-consumer-7ddd.js",
@@ -4225,12 +4245,12 @@
       {
         "path": "scripts/fixtures/reminder-timing-source-successor.json",
         "mode": "100644",
-        "object_id": "e16eeb416669ffe9d95fd72a83df445f7ad5ff67"
+        "object_id": "36ee5072ca02745792f680800d445cdcebcbfbf4"
       },
       {
         "path": "scripts/fixtures/reminder-timing-source-successor.mjs",
         "mode": "100644",
-        "object_id": "139c649f7f5616cc5b77aa5d137380822b61adeb"
+        "object_id": "9e2dab572bd76ab2283c7fff3b1c2aa15a08cd65"
       },
       {
         "path": "scripts/fixtures/runtime-predecessor/MANIFEST.json",
@@ -5920,7 +5940,7 @@
       {
         "path": "scripts/prepare-approved-manual-release-packet.mjs",
         "mode": "100644",
-        "object_id": "12fa19a2d2f8cfbe03e7735ed6eedbd3b1d43098"
+        "object_id": "3fed5e2f43d8c1ad43013ce54b5f9aea7926264a"
       },
       {
         "path": "scripts/prepare-approved-manual-week.mjs",
@@ -8195,7 +8215,7 @@
       {
         "path": "src/approved-manual-coverall-workflow.js",
         "mode": "100644",
-        "object_id": "81f0d5cd2b718f96512420f21200446f1daf724d"
+        "object_id": "2fb939ca1cc09ee199c6869b2db8d40b30c39470"
       },
       {
         "path": "src/approved-manual-device-delivery.js",
@@ -8265,7 +8285,7 @@
       {
         "path": "src/approved-manual-recurring-period.js",
         "mode": "100644",
-        "object_id": "104199c110511781a0ecd34ec1c243c9ea713ad8"
+        "object_id": "d81358f25e51a7aa4128b52960974fc63f29f726"
       },
       {
         "path": "src/approved-manual-recurring-transport.js",
@@ -8275,7 +8295,7 @@
       {
         "path": "src/approved-manual-roster-transition.js",
         "mode": "100644",
-        "object_id": "4bdc4c4925e19a3a90918477e968f5fbf2e12b31"
+        "object_id": "e7d1164b85108dae3e238553f82559805b8a8b1e"
       },
       {
         "path": "src/approved-manual-source-draft.js",
@@ -8290,7 +8310,7 @@
       {
         "path": "src/approved-manual-week.js",
         "mode": "100644",
-        "object_id": "4cc3cba28d50184287bbb374faf75cb28493cbdf"
+        "object_id": "942cd2134147d80bce07254515554211f9fb42ae"
       },
       {
         "path": "src/assigned-activation-transport.js",
@@ -11803,13 +11823,18 @@
         "object_id": "6ee6791a829487ae17ca4e93f3f40635e88bfec5"
       },
       {
+        "path": "supabase/migrations/20261113164433_approved_manual_exact_shift_count_compatibility.sql",
+        "mode": "100644",
+        "object_id": "b95420e81a319c147a2f728c4da850ac5883b9c1"
+      },
+      {
         "path": "tmp/write_probe.txt",
         "mode": "100644",
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 2336,
-    "migration_path_count": 316,
+    "authority_path_count": 2341,
+    "migration_path_count": 317,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
   },
@@ -12767,6 +12792,9 @@
     },
     {
       "name": "20261113132242_native_provider_best_effort_timing.sql"
+    },
+    {
+      "name": "20261113164433_approved_manual_exact_shift_count_compatibility.sql"
     }
   ],
   "release_boundary": "Prepare distinct minimum-32-character backend, native-route, and employee-device credential secrets before cutover; configure database digests immediately after the migrations that create each configuration function, retain the bridge backend artifact through the scan-snapshot phase, require manager-code recovery without phone-local work loss for any device-credential generation mismatch, and require the executable health/restoration probes before traffic changes."
