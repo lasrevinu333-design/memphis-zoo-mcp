@@ -898,6 +898,11 @@
         "object_id": "99a7cbc493505d1a7caef32d2e91db275a91401c"
       },
       {
+        "path": "proposals/manual-event-cohort-intake.sql",
+        "mode": "100644",
+        "object_id": "496a8cae1fc2286008ff707c35fa710bee41fc4a"
+      },
+      {
         "path": "proposals/registered-never-filled-vacancy.sql",
         "mode": "100644",
         "object_id": "663b116973d8518a716023108d89038d9e8554a2"
@@ -8055,7 +8060,7 @@
       {
         "path": "src/auth/custodial-leadership-runtime.js",
         "mode": "100644",
-        "object_id": "196b8ffcc4891efd2797f2e020aff08b1c637eca"
+        "object_id": "c1d090e5dac5f623be9aea06d249491564dc65e7"
       },
       {
         "path": "src/auth/custodial-leadership-ticket-operation.mjs",
@@ -8071,6 +8076,11 @@
         "path": "src/auth/manager-permissions.js",
         "mode": "100644",
         "object_id": "e498245d6332278a45e63ce4c908872571f6193c"
+      },
+      {
+        "path": "src/auth/manual-events-operation.mjs",
+        "mode": "100644",
+        "object_id": "d27bbb7e571b7bdee379fb13c7007ee77e54b40d"
       },
       {
         "path": "src/auth/map-manager-identity.js",
@@ -8305,7 +8315,7 @@
       {
         "path": "src/index.js",
         "mode": "100644",
-        "object_id": "9022fc5d15d220de9e30eebf4625bd96d25805fc"
+        "object_id": "4887bf8bd026f303d072a7cc142c11477ee09aff"
       },
       {
         "path": "src/integrated-backend-authority-release-evidence.js",
@@ -8361,6 +8371,16 @@
         "path": "src/manager-original-recovery-approval.js",
         "mode": "100644",
         "object_id": "0e23d96e19d8c427af09e75fe9ca06fcfe2264d3"
+      },
+      {
+        "path": "src/manual-events-parser.js",
+        "mode": "100644",
+        "object_id": "82f306d57cdfb54e9a7745ebce3fcf6144fe3ed7"
+      },
+      {
+        "path": "src/manual-events-router.js",
+        "mode": "100644",
+        "object_id": "7fc664a8e59adc647f8c69e6a304fe0b8dba90fc"
       },
       {
         "path": "src/mcp/advertised-schema.js",
@@ -11518,7 +11538,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 2278,
+    "authority_path_count": 2282,
     "migration_path_count": 313,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
