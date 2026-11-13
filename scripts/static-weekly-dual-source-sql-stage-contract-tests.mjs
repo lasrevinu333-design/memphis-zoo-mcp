@@ -1,3 +1,4 @@
+import {withHistoricalNative289SourceFixture} from './fixtures/historical-native289-source-fixture.mjs';
 import assert from 'node:assert/strict';
 import {readCurrentManagerCanonicalSource,withFrozenManagerSource,frozenManagerSourceModel} from './fixtures/current-manager-source-contract-models.mjs';
 import {spawnSync} from 'node:child_process';
@@ -14,10 +15,11 @@ import {assertCurrentManager219Manifest,assertCurrentManager219MigrationSet,CURR
  from './fixtures/current-manager-219-source.mjs';
 import {postgresJsonbContentDigest as digest} from '../src/static-weekly-schedule-compiler.js';
 
+await withHistoricalNative289SourceFixture(fileURLToPath(new URL('../',import.meta.url)),async historicalReaderRoot=>{
 let checks=0;
 const check=(name,fn)=>{fn();checks++;console.log('PASS',name);};
 const fixture=createDualSourceRegisteredCorrectionSqlSource();
-check('explicit complete canonical289 Source does not authorize old dual-source SQL stages',()=>{const current=readCurrentManagerCanonicalSource();assert.equal(current.migration_profile,'CURRENT_CANONICAL_289');assert.equal(current.migrations.length,289);assert.equal(current.canonical_manifest_sha256,'e5867270c2509b986708caf32109956bedf0703363dcc1d775f1737f502c5c68');assert.equal(current.manifest_sha256,'fe4617a721731b9601b399193eaa67c904d4197efe9af506a575d2d01a1696b8');});
+check('explicit complete canonical289 Source does not authorize old dual-source SQL stages',()=>{const current=readCurrentManagerCanonicalSource(historicalReaderRoot);assert.equal(current.migration_profile,'CURRENT_CANONICAL_289');assert.equal(current.migrations.length,289);assert.equal(current.canonical_manifest_sha256,'e5867270c2509b986708caf32109956bedf0703363dcc1d775f1737f502c5c68');assert.equal(current.manifest_sha256,'fe4617a721731b9601b399193eaa67c904d4197efe9af506a575d2d01a1696b8');});
 const runner=readFileSync(new URL('./run-isolated-shift-end-tests.mjs',import.meta.url),'utf8');
 const child=readFileSync(new URL('./static-weekly-dual-source-current-correction-sql-tests.mjs',import.meta.url),'utf8');
 const publishedStart=runner.indexOf(' if(publishedStage)runRecurringClockedChild(');
@@ -186,3 +188,5 @@ check('child executes lost-COMMIT response, concurrent retries and denied roles 
 });
 console.log(JSON.stringify({status:'PASS_DUAL_SOURCE_219_SOURCE_ONLY',checks,digests:[fixture.historical.sourceDigest,
  fixture.correction.sourceDigest],database:'NOT_RUN',solver:'NOT_RUN',production:false}));
+
+});

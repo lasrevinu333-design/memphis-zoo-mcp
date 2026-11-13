@@ -112,9 +112,13 @@ export async function runNativeScheduleSenderFactoryTests() {
   await reject('factory capability remains one use',()=>actualSender(input),e=>e.code==='native_schedule_sender_already_consumed');
   eq('no duplicate synthetic FCM request',network.length,2);
   const worker=readFileSync(new URL('../src/employee-notifications.js',import.meta.url),'utf8');
-  eq('qualification hold remains before all legacy delivery',
+  eq('malformed schedule hold remains before all legacy delivery',
     worker.indexOf('holdUnqualifiedNativeScheduleJob(job);')<worker.indexOf('if (originalMessage) return deliverNativeMessageJob'),true);
-  eq('schedule transport not activated in worker',worker.includes('deliverNativeScheduleJob'),false);
+  eq('only exact schedule-owned native jobs enter the strict dispatcher',{
+    strictImport:worker.includes("import { deliverNativeScheduleJob } from './native-schedule-dispatch.js';"),
+    calls:(worker.match(/deliverNativeScheduleJob\(/g)||[]).length,
+    guarded:worker.includes("if (job?.job_type === 'employee_native_push' && job.payload_json?.data_json?.kind === 'employee_schedule_ownership') {\n      return deliverNativeScheduleJob({db,pushRuntime,job});\n    }"),
+  },{strictImport:true,calls:1,guarded:true});
   eq('no new refresh loop in owning factory',runtimeSource.includes('setInterval('),false);
   return {status:'PASS',checks,actual_runtime_factory:true,actual_strict_sender:true,synthetic_OAuth_and_fetch:true,
     SQL_executed:false,real_key_access:false,provider_dispatch:false,native_qualified:false,phone:false};

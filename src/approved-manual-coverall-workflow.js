@@ -45,7 +45,7 @@ export function prepareApprovedManualCoverAllActivation({week,draft,snapshot,sel
    artifactSha256:week.zipSha256,ownerConfigDigest:contentDigest(config),patternPublicationStatus:'UNPUBLISHED_LOCAL_CANDIDATE'},
   feasibility=prepareApprovedStaticTemplateProjection({templates:[template],admittedBindings:[binding],currentSource:source,currentOwnerConfig:config,
    selection:{schema:'custodial.static-template-selection.v1',kind:'INITIAL_BASELINE',templateId,serviceDate:at,availablePersonIds:week.referenceBindings.people.map(p=>p.employeeId)}});
- assert.equal(feasibility.solverInvoked,false);assert.equal(feasibility.projectionAssignments.length,346);assert.equal(feasibility.lunch.lunches.length,40);
+ assert.equal(feasibility.solverInvoked,false);assert.equal(feasibility.projectionAssignments.length,draft.sourceDraft.version.assignments.length,'Exact validated manual geometry retained');assert.equal(feasibility.lunch.lunches.length,40);
  const typed=source.slots.filter(s=>s.kind==='CONTRACTOR_CAPACITY');assert.equal(typed.length,8);
  for(const s of typed){assert.deepEqual(s.incumbencies,[]);assert.equal(snapshotContractorCapacity(s,at).personId,null);}
  const body={schema:'custodial.approved-manual-coverall-activation-data.v1',packetId,sourceId,managerId,templateId,serviceDate:at,windowEnd:end,

@@ -1,3 +1,5 @@
+import {restoreRecognizedRuntimeSource} from './scheduler-runtime-source-successor.mjs';
+import {restoreCurrentCanonicalForHistoricalProof,restoreCurrentDepartureProofSource,restoreRecognizedCurrentDepartureSource,isCurrentDepartureProofPath} from './current-departure-source-successor.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
@@ -11,8 +13,23 @@ assert.equal(document.profiles.length,15);assert.equal(new Set(document.profiles
 const implementationBytes=readFileSync(new URL('./current-scheduler-implementation-source-successors.json',import.meta.url));
 assert.ok(implementationBytes.length<=256*1024);assert.equal(sha(implementationBytes),'0d525297806b6e54d5a3dcb5a1e9d2028b03e3c2f8cb2a905c5b1dc0c8df3652');
 const implementations=JSON.parse(implementationBytes);assert.equal(implementations.schema,'custodial.test-only-exact-implementation-source-successors.v1');assert.equal(implementations.profiles.length,2);
+export function restoreDeviceObservationProofSource(source){
+ source=restoreRecognizedCurrentDepartureSource('src/auth/device-credential-auth.js',source);
+ const row=implementations.profiles.find(r=>r.profile==='NATIVE_CURRENT_DEVICE_FULL_SOURCE_FOR_RETAINED_WIRING');
+ assert.equal(sha(source),row.current_sha256);
+ for(const change of row.hunks){assert.equal(source.split(change.current).length,2);source=source.replace(change.current,change.prior);}
+ assert.equal(sha(source),row.prior_sha256);return source;
+}
 export function restoreSchedulerProofSource(profile,source){
  assert.equal(typeof profile,'string');assert.equal(typeof source,'string');
+ const selected=document.profiles.find(value=>value.profile===profile);
+ if(selected)source=restoreRecognizedRuntimeSource(selected.path,source);
+ if(selected&&isCurrentDepartureProofPath(selected.path))source=restoreRecognizedCurrentDepartureSource(selected.path,source);
+ if(profile==='NATIVE_CURRENT_DEVICE_FULL_SOURCE_FOR_RETAINED_WIRING'&&sha(source)==='65c7604bb58e775e74eddf5aeb8ac1506c61048f3843e9de9fe45e81a52ed335')source=restoreCurrentDepartureProofSource('src/auth/device-credential-auth.js',source);
+ if(profile==='NATIVE_CURRENT_CREDENTIAL_WIRING_RETAINED_SOURCE')source=restoreRecognizedCurrentDepartureSource('scripts/native-provider-credential-observation-ci-wiring.mjs',source);
+ if(profile==='NATIVE_CURRENT_HTTP_SELECTED_DEVICE_PIN')source=restoreRecognizedCurrentDepartureSource('scripts/native-provider-credential-observation-http-tests.mjs',source);
+ if(profile==='MESSAGE_CURRENT_CANONICAL_REPLAY_TEST')source=restoreRecognizedCurrentDepartureSource('scripts/employee-message-source-admission-replay-contract-tests.mjs',source);
+ if(profile==='NATIVE_CURRENT_REPLAY_MANIFEST_RETAINED_WIRING')source=restoreCurrentCanonicalForHistoricalProof(source);
  const row=document.profiles.find(value=>value.profile===profile);assert.ok(row,'explicit retained Source profile required');
  // Restore only these two complete, hash-bound implementation successors
  // to their preserved Git ancestors before the immutable15 historical proofs.

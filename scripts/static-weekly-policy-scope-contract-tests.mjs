@@ -1,3 +1,5 @@
+import {readHistoricalOwnerConfig} from './fixtures/historical-owner-config-source.mjs';
+import {restoreFullHourProofSource} from './fixtures/full-hour-source-predecessors.mjs';
 import assert from 'node:assert/strict';
 import {reconstructProgramBeforeOperationDeadline} from './static-weekly-operation-deadline-ci-wiring.mjs';
 import fs from 'node:fs';
@@ -164,7 +166,7 @@ export function runStaticWeeklyPolicyScopeContractTests(){
  check('exact two cases, immutable historical pins and explicit current source pins',()=>{
   assert.deepEqual(Object.keys(packet.cases),['baseline','one']);assert.deepEqual(packet.sourcePins,sourcePins);
   assert.deepEqual(Object.keys(currentSourcePins),Object.keys(sourcePins));
-  for(const [file,digest]of Object.entries(currentFixedRankSourcePins))assert.equal(sha(fs.readFileSync(new URL('../'+file,import.meta.url))),digest,file);
+  for(const [file,digest]of Object.entries(currentFixedRankSourcePins))assert.equal(sha(file==='config/custodial-six-person-static-20261005.json'?readHistoricalOwnerConfig():['src/static-weekly-schedule-program.js','src/static-weekly-schedule-model.js','src/static-weekly-schedule-compiler.js'].includes(file)?restoreFullHourProofSource(file,fs.readFileSync(new URL('../'+file,import.meta.url),'utf8')):fs.readFileSync(new URL('../'+file,import.meta.url))),digest,file);
   // Prove the complete deadline-only delta; historical fixture pins stay
   // untouched, and the actual imports above still execute the current60s code.
   reconstructProgramBeforeOperationDeadline(fs.readFileSync(new URL('../src/static-weekly-schedule-program.js',import.meta.url),'utf8'));
@@ -174,7 +176,7 @@ export function runStaticWeeklyPolicyScopeContractTests(){
   assert.equal(packet.limitations.newSolve,false);assert.equal(packet.limitations.publication,false);
   assert.deepEqual(packet.limitations.unclosed,['SCH-012 normal-design optimum','SCH-013 nearest-feasible start ladder','SCH-014 phase balance','SCH-016 half-unit feasibility','SCH-022 exact-ID seasonal admission']);
  });
- const config=JSON.parse(fs.readFileSync(new URL('../config/custodial-six-person-static-20261005.json',import.meta.url)));
+ const config=JSON.parse(readHistoricalOwnerConfig());
  const people=new Set(Object.values(config.slots).filter(s=>s.personId).map(s=>s.personId));
  check('current six employees, not contractor employee headcount',()=>assert.equal(people.size,6));
  const programs={};

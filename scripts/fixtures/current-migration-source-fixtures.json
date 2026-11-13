@@ -1,0 +1,2915 @@
+{
+  "schema": "custodial.exact-source-only-fixture-inventory.v1",
+  "scope": "315 SOURCE FILES; 311 CANONICAL MEMBERS; OWNED 304 HISTORICAL AND 311 CURRENT SOURCE FIXTURES; NO SQL EXECUTION",
+  "sql_execution": false,
+  "runtime_admission": false,
+  "migrations": [
+    {
+      "path": "supabase/migrations/00000000000000_production_baseline.sql",
+      "bytes": 801972,
+      "sha256": "decf8dcdceb1f722ec966d16addd8c47d7ceaca9a21f1464a26bf8cbfee7d7fb"
+    },
+    {
+      "path": "supabase/migrations/20260717161000_custodial_foundation_repair_delta.sql",
+      "bytes": 3619,
+      "sha256": "6e24f20512de2e3e1212ec105bda30031b5597c54a1b6210e759539ca8fe3ad3"
+    },
+    {
+      "path": "supabase/migrations/20260717170136_custodial_foundation_repair_device_eval_fix.sql",
+      "bytes": 3103,
+      "sha256": "b812b7795bca30a73897866b5865681b2fe18d93ed3f5e27f57c1177fac1120d"
+    },
+    {
+      "path": "supabase/migrations/20260717175320_ops_manager_pairing_links.sql",
+      "bytes": 10846,
+      "sha256": "a1b411e02020330bea9c9f3bd279240c6b3a5335c2f7b53968c585e54aaada6b"
+    },
+    {
+      "path": "supabase/migrations/20260717200242_manager_passwordless_onboarding_security_app.sql",
+      "bytes": 24133,
+      "sha256": "8f8423ebd06b08443a5ca214ab2c5912cd7917fc3fbf80f5a964ad6db2f26019"
+    },
+    {
+      "path": "supabase/migrations/20260717210744_device_security_code_rpc_qualification.sql",
+      "bytes": 5603,
+      "sha256": "8ccb7d4061bc0b67f52cbbb3b1eae03c1e828230efd05c38b4e54518338a07a0"
+    },
+    {
+      "path": "supabase/migrations/20260717235932_ops_manager_one_time_codes.sql",
+      "bytes": 12751,
+      "sha256": "71af1217a5663fe7b6683be32f3ca9d7e3d0c9a486d1277282ebf844031832c2"
+    },
+    {
+      "path": "supabase/migrations/20260718021910_event_input_console_scope_venue_taxonomy.sql",
+      "bytes": 30659,
+      "sha256": "6f83136ac91184190dd6d42533d68cce0e5800d6d1504a00148c57196d4c487b"
+    },
+    {
+      "path": "supabase/migrations/20260718022648_event_input_console_verified_venue_backfill_20260718.sql",
+      "bytes": 5642,
+      "sha256": "ab24e5b9a3a154d1729d294e41f101b4ee8e1c49e9d5568c5fdd6f2ad6f34bb6"
+    },
+    {
+      "path": "supabase/migrations/20260718055946_ops_manager_shared_48_hour_enrollment.sql",
+      "bytes": 22095,
+      "sha256": "5e1a6383e61632934d86ea68dbc7206c8579e99abc20c08e97cba47e31396783"
+    },
+    {
+      "path": "supabase/migrations/20260718071500_ops_manager_shared_enrollment_fk_indexes.sql",
+      "bytes": 1231,
+      "sha256": "d3c178d34f7bc042e88f86e47dd9b97e0de4638807fa10e833289d509de25372"
+    },
+    {
+      "path": "supabase/migrations/20260718075000_gemini_console_professional_foundation.sql",
+      "bytes": 24622,
+      "sha256": "69d246862facff02a8a798215a1f541cf00def7311515c40573d2bf5a0aa7dea"
+    },
+    {
+      "path": "supabase/migrations/20260718083000_schema_authority_cron_jobs.sql",
+      "bytes": 1957,
+      "sha256": "9f9539445178cee7a1b8d551d2cfeb6ec0ec76234a675123780d957c7c003e73"
+    },
+    {
+      "path": "supabase/migrations/20260718083100_reconstruct_public_grant_hardening.sql",
+      "bytes": 1162,
+      "sha256": "ed9aac28cb07f3565f3289d15d67458297222910ac44b1a77e8b5ae71b4c59c3"
+    },
+    {
+      "path": "supabase/migrations/20260718084600_schema_authority_comments.sql",
+      "bytes": 911,
+      "sha256": "0cf5e24ebee7118310d403231e12b69b87bb8fbd82aa4d3c95fa0777503bf3b6"
+    },
+    {
+      "path": "supabase/migrations/20260718103215_custodial_v3_reliability_and_retention.sql",
+      "bytes": 25536,
+      "sha256": "bc96269db052387256979c61ba5dadf001a753f4be1ce00cc2cbec5bcdffd22e"
+    },
+    {
+      "path": "supabase/migrations/20260718104747_restore_members_night_retention_recovery.sql",
+      "bytes": 5596,
+      "sha256": "ef8f382688922a6b6a30ac138a45d8049479ae6f43c0afe98897f5f4f5cd2429"
+    },
+    {
+      "path": "supabase/migrations/20260718130700_prevent_cleaning_notes_false_maintenance_tickets.sql",
+      "bytes": 8477,
+      "sha256": "00b1736fa1a8f3ce4de836a58da232d0dfa56d264d0f60b42be79a8e674eba06"
+    },
+    {
+      "path": "supabase/migrations/20260718141948_moxie_password_rotation.sql",
+      "bytes": 3070,
+      "sha256": "3bf371a96fe523fdc38015979b2a4c8d1f1cf0f46c0b2ad4b37cdcc39bfd10a0"
+    },
+    {
+      "path": "supabase/migrations/20260718152337_ops_manager_shared_messenger.sql",
+      "bytes": 7117,
+      "sha256": "8bee083ba9f66f8bfa6f37711941a90751d0e5101047e429a6ab479bb30a29c2"
+    },
+    {
+      "path": "supabase/migrations/20260718172800_professional_employee_messenger.sql",
+      "bytes": 13478,
+      "sha256": "a6da82b63fba61e7ec81288afaa675d6db88a9ac6986824ef3d405447f9f9139"
+    },
+    {
+      "path": "supabase/migrations/20260718184652_messenger_delete_retention_shared_identity.sql",
+      "bytes": 31512,
+      "sha256": "c6d9f2e1eb9beb1b48d12b35c3160c7d6fb570b795328e33f76775c5a05234e3"
+    },
+    {
+      "path": "supabase/migrations/20260718195210_messenger_delete_actor_fk_indexes.sql",
+      "bytes": 451,
+      "sha256": "6419d1f4794234b18b2a3a24f6091309db585d4d3c080b81498bc49bce4f4bde"
+    },
+    {
+      "path": "supabase/migrations/20260719231728_gps_proximity_motion_hardening.sql",
+      "bytes": 16468,
+      "sha256": "ce9cdcd8d6c3a0d96640fa665b77096da277c92858c59b3367eba8d6fe16c7c1"
+    },
+    {
+      "path": "supabase/migrations/20260721190000_operations_leadership_mobile_foundation.sql",
+      "bytes": 23355,
+      "sha256": "0fa077078369d0aa2317d29f19ca6d7b4be1fafc5186002461acdc2b67634015"
+    },
+    {
+      "path": "supabase/migrations/20260721203000_manager_mobile_notifications.sql",
+      "bytes": 22753,
+      "sha256": "e5f62382bc079f51c4d032221cf79ff4060757842fd75884013e767d4a503e3a"
+    },
+    {
+      "path": "supabase/migrations/20260722143000_custodial_employee_phone_foundation.sql",
+      "bytes": 6151,
+      "sha256": "b54cdaef08f1b4258cc493292500929a6ce8cbd5f447b3e52815037fec3a18a6"
+    },
+    {
+      "path": "supabase/migrations/20260722143100_custodial_employee_phone_assignment.sql",
+      "bytes": 8451,
+      "sha256": "c8e753fadf572102b6d29e8f4f72a1be0c60166233ac49e9f1467f59ddb2f04f"
+    },
+    {
+      "path": "supabase/migrations/20260722143200_custodial_employee_status_management.sql",
+      "bytes": 4463,
+      "sha256": "b150e1ed42918f92ce5333dee47ec81f303f82a627396d4a964dcfe0e1098bc3"
+    },
+    {
+      "path": "supabase/migrations/20260722143300_retire_forced_operations_leadership_thread.sql",
+      "bytes": 3151,
+      "sha256": "af2701e1465776b10711f4909d88de783906f4c521cf8c3ada20b605973abd2b"
+    },
+    {
+      "path": "supabase/migrations/20260722224000_event_notification_retention_integrity.sql",
+      "bytes": 1383,
+      "sha256": "5885fc109f6315c1b952c3092437fcacd95567ccaad79d459d327efb6f0d549a"
+    },
+    {
+      "path": "supabase/migrations/20260722233500_operational_retention_and_analytics.sql",
+      "bytes": 21419,
+      "sha256": "5994c7e805fd0fb9fa3c8a898f69419c4b35e44035cd2571058e3a00bd5032a1"
+    },
+    {
+      "path": "supabase/migrations/20260722233600_event_retention_history_guard.sql",
+      "bytes": 1767,
+      "sha256": "a6eca8b9c4f5248bcc3d67771d584dcca0d3ac5579d81f0b34edad78dc4df711"
+    },
+    {
+      "path": "supabase/migrations/20260723111020_v17_trigger_privilege_hardening.sql",
+      "bytes": 829,
+      "sha256": "8593176ec87629d0ca15b3b32aa814d6dddb80e7651e870bf6e8abffb7198fd3"
+    },
+    {
+      "path": "supabase/migrations/20260724010000_native_employee_event_delivery.sql",
+      "bytes": 14925,
+      "sha256": "8f6557ded3e82e749e8b0b63806cfd2f657c883ae1566fea4157552aeec95797"
+    },
+    {
+      "path": "supabase/migrations/20260724020000_event_messenger_cutover_deletion_semantics.sql",
+      "bytes": 12801,
+      "sha256": "796855768336a80a6d97bb790c05608c30d64786b95cbebf1dbf8a5c321a5ea3"
+    },
+    {
+      "path": "supabase/migrations/20260724023000_msg_thread_deletion_operations_user_index.sql",
+      "bytes": 318,
+      "sha256": "f01533a9afcc1fcdab06ba2eb508164de8a78cf51d60151782ea274aac54a778"
+    },
+    {
+      "path": "supabase/migrations/20260729150527_audit_defense_in_depth_hardening.sql",
+      "bytes": 2130,
+      "sha256": "420157f3073a3ea1b0055fc6e6246374a9babf2db576cda3bc4272a01e27cc4f"
+    },
+    {
+      "path": "supabase/migrations/20260729203938_third_audit_recovery_gemini_gps.sql",
+      "bytes": 12564,
+      "sha256": "1a1bf9596e8dc813451475a3727b365b01199f7dce6ffb4c61ef48fedaf8b4b8"
+    },
+    {
+      "path": "supabase/migrations/20260729215914_audit4_attendance_inspection_integrity.sql",
+      "bytes": 7036,
+      "sha256": "d56b21de71a1709b12ff6f482e6dae96f17ad2ccbd34c014d7a8dd8378098023"
+    },
+    {
+      "path": "supabase/migrations/20260729225858_audit5_feedback_guest_approval_lifecycle.sql",
+      "bytes": 10140,
+      "sha256": "5e5c11f38b449bc988f64875acf534406b01d4dda6332c29c1f43c19a0ce916a"
+    },
+    {
+      "path": "supabase/migrations/20260730142940_audit6_coverall_assignment_link_security.sql",
+      "bytes": 2783,
+      "sha256": "8e3c51cec409ec3f629bab7cb6e386bdb574294bd213866e64c69424234ff869"
+    },
+    {
+      "path": "supabase/migrations/20260730143853_audit6_coverall_assignment_link_service_policy.sql",
+      "bytes": 268,
+      "sha256": "2842209a168ba9eb328d5a16279fc4d01679dadd168954a011c1b6b929aac8ab"
+    },
+    {
+      "path": "supabase/migrations/20260730183500_disaster_recovery_backup_reader.sql",
+      "bytes": 899,
+      "sha256": "7d65c3f3a518347bd6277722001fadddf1976da08042a76b1f9004bfffac7b1b"
+    },
+    {
+      "path": "supabase/migrations/20260730221607_production_availability_warm_bridge.sql",
+      "bytes": 1192,
+      "sha256": "79f94041a548ab7357e32ff87f00a4a4e4dbd7c2845d74750ea48e3ec9966d69"
+    },
+    {
+      "path": "supabase/migrations/20260730222357_index_remaining_foreign_keys.sql",
+      "bytes": 3290,
+      "sha256": "a38e5a226b60159fc89f3a106ca7753b3a943339f376875ff66de789f990740d"
+    },
+    {
+      "path": "supabase/migrations/20260731003221_deactivate_render_free_tier_warm_bridge.sql",
+      "bytes": 765,
+      "sha256": "a9d7082101bdcef3f27bea1fde78728b70c834abbcbd1abc3f1e0c2aa3e070ff"
+    },
+    {
+      "path": "supabase/migrations/20260731141831_inspection_spot_check_policy.sql",
+      "bytes": 671,
+      "sha256": "1cb39c82d5e4d22f43ee830ec1a56e7639de1733d67ffc6433602265113c534b"
+    },
+    {
+      "path": "supabase/migrations/20260731211500_native_employee_message_location_push.sql",
+      "bytes": 11581,
+      "sha256": "2346ecfcb0e66fafad46f1851b98fbece5542271a4f48842e35d012117f8b65b"
+    },
+    {
+      "path": "supabase/migrations/20260801131340_custodial_atomic_offline_completion_identity.sql",
+      "bytes": 17321,
+      "sha256": "bee53b2acea9ab6e0d56e930b0a33db8269d87b14e63df1a4ae97326ee68f51b"
+    },
+    {
+      "path": "supabase/migrations/20260801134430_reconcile_canonical_schema_security_metadata.sql",
+      "bytes": 8184,
+      "sha256": "d20ebb49c76ddd801ed7b8ee381fe79fcaf902f935e39f4b1408d36e19945e38"
+    },
+    {
+      "path": "supabase/migrations/20260801164407_custodial_enrollment_resume_and_push_revocation.sql",
+      "bytes": 30019,
+      "sha256": "c7e62361943578a47d13ad5117b070cfd9686468ddea0d26ee4bc3732ae3a765"
+    },
+    {
+      "path": "supabase/migrations/20260801195620_custodial_device_removal_operation.sql",
+      "bytes": 9218,
+      "sha256": "f23a5cd53292af904b27d5979c5af2e05bf8c85cc1de64c361f246bb68de8166"
+    },
+    {
+      "path": "supabase/migrations/20260809125735_cleaning_inspection_24_hour_freshness.sql",
+      "bytes": 4134,
+      "sha256": "5629870fc9bfece9cec6f8a8182cca579c4070a8e9552039d4a1bb3035ae2052"
+    },
+    {
+      "path": "supabase/migrations/20260810120000_retire_named_manager_shared_room_authority.sql",
+      "bytes": 3718,
+      "sha256": "7d1c2e952ebe09a5350c72d0e396db5bd611f1a077971e6fc40ed0fdb3b54d3a"
+    },
+    {
+      "path": "supabase/migrations/20260810130000_harden_named_manager_retired_archive_and_concurrency.sql",
+      "bytes": 31437,
+      "sha256": "0b78e7a84fcb03bc1b58e0c4f07ac4ff0de826cd192256cb7bd214ea2598ebc0"
+    },
+    {
+      "path": "supabase/migrations/20260810140000_finalize_named_manager_messenger_retirement_integrity.sql",
+      "bytes": 53603,
+      "sha256": "5bc2f12e1ebb0de1a4ab43df82f03d52e8dd6f8f3a432e78622b09b4bbc0a860"
+    },
+    {
+      "path": "supabase/migrations/20260810143000_offline_actor_occurrence_reconciliation.sql",
+      "bytes": 14697,
+      "sha256": "6419d791845b257271c880f768dc8c9e8d6b6bc89b7296509d24650b313a7988"
+    },
+    {
+      "path": "supabase/migrations/20260810150000_enforce_integrated_backend_authority.sql",
+      "bytes": 46122,
+      "sha256": "ed21f67236622e924979be1bacc3578c932af3284cd1dd86fd2b6a091d89cf1f"
+    },
+    {
+      "path": "supabase/migrations/20260810160000_close_offline_authority_integrity_gaps.sql",
+      "bytes": 46511,
+      "sha256": "9f735a259cc103735e41aaab40339a57f135714205e4055fa0f1a650516d9a8e"
+    },
+    {
+      "path": "supabase/migrations/20260810170000_finish_offline_authority_operational_closure.sql",
+      "bytes": 52197,
+      "sha256": "a860643a26c27319635ccb258de1f79a28e9fec9575d41226baf9799a9ea0275"
+    },
+    {
+      "path": "supabase/migrations/20260810190000_final_integrated_backend_operational_correction.sql",
+      "bytes": 49952,
+      "sha256": "b7db33e260ccb34b478a406cf31a86aec1fcc5f4cbe59a7666bfe93607bb214c"
+    },
+    {
+      "path": "supabase/migrations/20260810200000_static_weekly_scheduler_authority_integrated.sql",
+      "bytes": 111129,
+      "sha256": "22936a91bfd7cf0c2a87a7c7fed6b287b53b7b61674a6adf62b41d3986a034a9"
+    },
+    {
+      "path": "supabase/migrations/20260810210000_static_weekly_scheduler_three_high_foundation_correction.sql",
+      "bytes": 61548,
+      "sha256": "b1c5f73ae49f29eaf3fe1f4c5608c8fc755ea74472479b7c7d80cd9668c9a37e"
+    },
+    {
+      "path": "supabase/migrations/20260810220000_static_weekly_scheduler_complete_authority_correction.sql",
+      "bytes": 75752,
+      "sha256": "76aa63cc7169d7d622870c7a70f479e88bc326f1358a118db317130ac3b54392"
+    },
+    {
+      "path": "supabase/migrations/20260810230000_static_weekly_scheduler_authority_closure_correction.sql",
+      "bytes": 34885,
+      "sha256": "b82af008a1e45646c945b684417d112d1c11ae72569457736d6c63c94ce32b74"
+    },
+    {
+      "path": "supabase/migrations/20260812032055_static_weekly_manager_snapshot.sql",
+      "bytes": 9679,
+      "sha256": "dff09dc30f34206d66f888bc8db2680fc34ec452d2421923b9eb2b84a17831d7"
+    },
+    {
+      "path": "supabase/migrations/20260812130000_static_weekly_employee_turnover.sql",
+      "bytes": 58866,
+      "sha256": "a02b7af05b89489f4887a0655be79231321ee88234c87ff93c2e8293f3d6f7e8"
+    },
+    {
+      "path": "supabase/migrations/20260813035530_offline_scan_authority_snapshot.sql",
+      "bytes": 5801,
+      "sha256": "48d3272976876e418696fb7cc3294dce7ecb2fa6911b4468a56652ee6eb11cf9"
+    },
+    {
+      "path": "supabase/migrations/20260813050000_offline_snapshot_operational_truth_closure.sql",
+      "bytes": 43057,
+      "sha256": "1afd5feef8ba060989d79aa40770a18ebf2a2470d4f2136df8b920bc3ffce159"
+    },
+    {
+      "path": "supabase/migrations/20260813060000_release_canary_operational_recovery.sql",
+      "bytes": 16011,
+      "sha256": "215aff4e59fb80713a13e14212ab1949af6a22513568d59eec61c5debfeb1ced"
+    },
+    {
+      "path": "supabase/migrations/20260813070000_operational_service_date_foundation.sql",
+      "bytes": 14747,
+      "sha256": "ee84f1d9ef3eb31746f3b61050bef4a9629331c3f72a1fde82db8b2e8123c5c6"
+    },
+    {
+      "path": "supabase/migrations/20260813141806_custodial_operational_boundary_closure.sql",
+      "bytes": 5237,
+      "sha256": "6c4c0d7e0f386d9307b9c08e10cbd3269c35cbe8a7902c1eb68b8d8ba90fe16a"
+    },
+    {
+      "path": "supabase/migrations/20260813173000_device_sync_actor_groups.sql",
+      "bytes": 8129,
+      "sha256": "9bef89e40a690c30c7dd6cf07ffc682fa9a560f1859f3ad6e3e49535ee1d8de1"
+    },
+    {
+      "path": "supabase/migrations/20260813190000_release_phone_transport_and_offline_activation_closure.sql",
+      "bytes": 56245,
+      "sha256": "98f40bc9bdf6a848ba1f07567b9b5ed8aff32441bb2dd89d7ac5b34c91026ab6"
+    },
+    {
+      "path": "supabase/migrations/20260813210000_custodial_u4_ops_closure.sql",
+      "bytes": 140857,
+      "sha256": "3fc7573beac21cf090fbf059c33ef59b472e88770382f7ff28d9f556a1e29f0b"
+    },
+    {
+      "path": "supabase/migrations/20260814224034_reconcile_static_weekly_day_change_receipts.sql",
+      "bytes": 47560,
+      "sha256": "bb2acc717fab50bf1c255038a2b1d2706dcd7be98c4751b8dd9b2f8446dafe48"
+    },
+    {
+      "path": "supabase/migrations/20260815160613_normalize_managed_production_schema_security.sql",
+      "bytes": 913,
+      "sha256": "fcc15cab9a3c492f9958d91643e5c88f88f0917b31a3507d340c6fab67cb011a"
+    },
+    {
+      "path": "supabase/migrations/20260815163346_restore_explicit_public_schema_usage.sql",
+      "bytes": 454,
+      "sha256": "3a3e8f394066a08baf0e9d986613829ccd025ba112bca223870f21e45ef9060f"
+    },
+    {
+      "path": "supabase/migrations/20260820120831_contain_release_recovery_ddl_authority.sql",
+      "bytes": 1804,
+      "sha256": "2b0ce3fad9200db8b8275b78313d5aefb5c618a0d7550eaa6239343016790506"
+    },
+    {
+      "path": "supabase/migrations/20260820121025_revoke_residual_public_security_definer_execute.sql",
+      "bytes": 1265,
+      "sha256": "e4822a4386491178a3d7e347dfa1c348465108bd52c88c2a63d4266f9929cbfa"
+    },
+    {
+      "path": "supabase/migrations/20260820121117_revoke_public_trigger_function_rpc_execute.sql",
+      "bytes": 672,
+      "sha256": "203f69719dd0729fc336d9f21c33a8e16e2b2cc45d230808431e10e65409585f"
+    },
+    {
+      "path": "supabase/migrations/20260820125325_custodial_disaster_restore_generation_authority.sql",
+      "bytes": 5598,
+      "sha256": "315853219694bc7c05e26fd83b10f673acd561a4507bafb4229fa861cf004715"
+    },
+    {
+      "path": "supabase/migrations/20260820133000_create_application_read_authority.sql",
+      "bytes": 4750,
+      "sha256": "46635ef8ad01fce1b8540545961c60e75be0f8a524fc7213ed08aca60a0dc5e0"
+    },
+    {
+      "path": "supabase/migrations/20260820133100_retire_owner_sql_proxy.sql",
+      "bytes": 465,
+      "sha256": "064a882c50bce17a2451ad223c306eaea9d36e1cca527449ce4f4afc3220a7b3"
+    },
+    {
+      "path": "supabase/migrations/20260820143000_bound_ops_manager_device_trust.sql",
+      "bytes": 981,
+      "sha256": "0eeee019d724b4bba79170ebe223ec6cee5d3e5dec921f436447e310a1d3530f"
+    },
+    {
+      "path": "supabase/migrations/20260820143200_finalize_function_authority_recovery.sql",
+      "bytes": 5366,
+      "sha256": "d202ce1aca1d933130dc5a506ad4997be186218f7ce47e5b73aafa9fe2dfdb8e"
+    },
+    {
+      "path": "supabase/migrations/20260820153000_append_only_cleaning_identity_corrections.sql",
+      "bytes": 24473,
+      "sha256": "37638e894bcd36a2b3d31b4f54a243d833d33fad923ca923e7d5821c46a8e3fe"
+    },
+    {
+      "path": "supabase/migrations/20260820154000_late_gps_is_advisory_only.sql",
+      "bytes": 10259,
+      "sha256": "b6708def2b7a24178fbbc944d4ccba18fa82a54c1e24b2530d78c1738d75db0c"
+    },
+    {
+      "path": "supabase/migrations/20260820154500_precise_terminal_writer_detection.sql",
+      "bytes": 2616,
+      "sha256": "b0b58afbda38eef898c16473c28135a621b9bb18baad31024d4dd86d234c4a12"
+    },
+    {
+      "path": "supabase/migrations/20260820155000_rebind_release_recovery_inventory_to_current_authority.sql",
+      "bytes": 15999,
+      "sha256": "9e79fca19dc8a6b65578b3b9c7a8698be970ded9bbd760eaef3424db8b0136e6"
+    },
+    {
+      "path": "supabase/migrations/20260822142500_grant_readonly_cron_catalog_observation.sql",
+      "bytes": 2310,
+      "sha256": "b732a81250383882d2b462339d3e6b6175c950ebd6c45eaedffe48e40ebe2e13"
+    },
+    {
+      "path": "supabase/migrations/20260822150000_fence_application_reader_relation_authority.sql",
+      "bytes": 3161,
+      "sha256": "2baaca12c5b9a4b27cbdcc3a395401e569e093cd73d0ae9594e36164388fc050"
+    },
+    {
+      "path": "supabase/migrations/20260822153000_bridge_cron_identity_and_rebind_recovery_acl.sql",
+      "bytes": 6980,
+      "sha256": "07b87d6aa82b63293f8b8c7161ab367c06b68e988df2a3e0fc5231f2b2e2aa0d"
+    },
+    {
+      "path": "supabase/migrations/20260822170000_repair_runtime_read_and_scan_alert_authority.sql",
+      "bytes": 4396,
+      "sha256": "c6c11be7788e8f4044935c89f2ff1812da6bced6586f13c0bf3f98d3968ec486"
+    },
+    {
+      "path": "supabase/migrations/20260822222500_correct_coverall_second_absence_policy.sql",
+      "bytes": 10165,
+      "sha256": "e794b31f26a115de0ee598848893322f0c423e02fa8d62e90e895107c15475d8"
+    },
+    {
+      "path": "supabase/migrations/20260823024500_provision_static_weekly_runtime_identity.sql",
+      "bytes": 2689,
+      "sha256": "8b94b9a65bb58fb8739d171e19082398e7368cb8dc39684c7efec741649a5602"
+    },
+    {
+      "path": "supabase/migrations/20260823060000_static_weekly_family_location_truth.sql",
+      "bytes": 10767,
+      "sha256": "ba48a19ad89c695b85dcc514f6130fa771773162808b8950906cc08aeeb5cd3b"
+    },
+    {
+      "path": "supabase/migrations/20260823070000_static_weekly_service_mode_truth.sql",
+      "bytes": 11275,
+      "sha256": "42f6936a8ae372c3fb35c0a266171a50cbaaa6d9dedce1889a088c865d131009"
+    },
+    {
+      "path": "supabase/migrations/20260823071000_static_weekly_solver_certificate_v5_authority.sql",
+      "bytes": 17007,
+      "sha256": "3ecd564f96f90df360788b75226cac7ba5016cc688e1c41aa9c723189bb938b2"
+    },
+    {
+      "path": "supabase/migrations/20260823113624_static_weekly_end_of_day_window_parity.sql",
+      "bytes": 1964,
+      "sha256": "85e03f3801ca78de5096039276291c6c3e23137dd32cea36d5058fe00754fd26"
+    },
+    {
+      "path": "supabase/migrations/20260823143000_static_weekly_registered_roster_bootstrap.sql",
+      "bytes": 8839,
+      "sha256": "e126b5d8da98ba33097142646e5f82ea2c8f7dc518a1250a55d8dc5d63cda9b0"
+    },
+    {
+      "path": "supabase/migrations/20260824130000_static_weekly_memory_bounded_document_authority.sql",
+      "bytes": 10539,
+      "sha256": "c08e330d8611adeb3a2bbc5d43d2b3c608f281ba55b3a85ec8a8cdabd194f5e0"
+    },
+    {
+      "path": "supabase/migrations/20260824130500_static_weekly_memory_bounded_validator_and_receipt.sql",
+      "bytes": 36647,
+      "sha256": "a92d355c21e064417a947d42c9d11350204dbe3d3d021b494a8893e797dc4e2a"
+    },
+    {
+      "path": "supabase/migrations/20260824131000_static_weekly_manager_snapshot_authority_source.sql",
+      "bytes": 9247,
+      "sha256": "9d8e6af42a7bc55ce4300aea93591c0cddcac3223983b8a92c92f526d6d2a230"
+    },
+    {
+      "path": "supabase/migrations/20260824131500_static_weekly_compact_document_consumers.sql",
+      "bytes": 20823,
+      "sha256": "e9424e5d641b06c2b7840d1c0bc2470233a0bd72639c1744f67fe1188334b59e"
+    },
+    {
+      "path": "supabase/migrations/20260824132000_static_weekly_initial_contractor_snapshot.sql",
+      "bytes": 2946,
+      "sha256": "40da636d025b0a5f5a4f8e23b6824e5a2f6a018e95b3121e9703314ecbb4a30c"
+    },
+    {
+      "path": "supabase/migrations/20260824170000_static_weekly_projection_compact_snapshot.sql",
+      "bytes": 5563,
+      "sha256": "03bb41c732c73f8ac2b82f406d36b03df025e1ad72bf0f05ab1853d1d324d3fd"
+    },
+    {
+      "path": "supabase/migrations/20260824213000_static_weekly_operational_truth_cutover.sql",
+      "bytes": 38454,
+      "sha256": "ba2385840aa68073b0df771994ac97eceac9257323e81542861393613d2695e9"
+    },
+    {
+      "path": "supabase/migrations/20260825134500_scan_alert_runtime_authority_closure.sql",
+      "bytes": 2238,
+      "sha256": "5d3b2bef6d70a501528494fe040c81654ea8aee74513d0f9c90cabce5c47a1ca"
+    },
+    {
+      "path": "supabase/migrations/20260825173000_restore_application_reader_device_identity.sql",
+      "bytes": 5502,
+      "sha256": "d5cbc80464a802d6abc201bc9dcc22ad8c024c4c19906bc7e4bd836e27c1b62d"
+    },
+    {
+      "path": "supabase/migrations/20260825173500_fence_application_reader_device_credentials.sql",
+      "bytes": 1552,
+      "sha256": "c47e59dd68b836c68227a1c18be069621aa454f770d3c6d7c04a96ba085f2fa3"
+    },
+    {
+      "path": "supabase/migrations/20260825174500_rebind_application_reader_release_recovery.sql",
+      "bytes": 23315,
+      "sha256": "68f082382e9d9f05664e034716851121485d95d586b36c6b0714111b314be736"
+    },
+    {
+      "path": "supabase/migrations/20260826020000_preserve_offline_work_across_manager_credential_recovery.sql",
+      "bytes": 27998,
+      "sha256": "c002a6969cffb359c61250c4b41414fc29a35a3ab1b0ea021aaf7ccbf54fc868"
+    },
+    {
+      "path": "supabase/migrations/20260826114516_retire_legacy_daily_schedule_writers_after_static_weekly_cutover.sql",
+      "bytes": 17049,
+      "sha256": "62329525c73705bb253fc87cd2c31c9b29ecb89a5cce14b550d4b04dce727cbf"
+    },
+    {
+      "path": "supabase/migrations/20260826155000_restore_application_reader_messenger_runtime.sql",
+      "bytes": 12283,
+      "sha256": "eb8188ba7b0bfb8ff7ed310bf0697d7dc7d6af848a350d843c86b5b64e1ddd3a"
+    },
+    {
+      "path": "supabase/migrations/20260826160000_restore_application_reader_employee_events_runtime.sql",
+      "bytes": 8335,
+      "sha256": "5058addb210be6f20f96646d0050cf7d928edde9e5f8bfd0f571965089666379"
+    },
+    {
+      "path": "supabase/migrations/20260827010500_static_weekly_vacant_roster_slots.sql",
+      "bytes": 35338,
+      "sha256": "0486d6d3d17e505e06ba21bdd1197009cc1305f6b8b1df3114adf60d93e45f1e"
+    },
+    {
+      "path": "supabase/migrations/20260827024500_static_weekly_initial_draft_roster_hydration.sql",
+      "bytes": 5837,
+      "sha256": "be0ee60af8b1f6d9fad011625098657b2e268d43a5300b25f188bb57c9a18d07"
+    },
+    {
+      "path": "supabase/migrations/20260827033500_static_weekly_registered_source_dated_status.sql",
+      "bytes": 5842,
+      "sha256": "886a3aedc334ee3f9fdf681a15cd930eb07ec005f74462cf1a2dbf2040568590"
+    },
+    {
+      "path": "supabase/migrations/20260827150000_disaster_recovery_global_mutation_fence.sql",
+      "bytes": 12284,
+      "sha256": "468d9ca9f2c685fa220ac88d36debd55d1258dade93bac692b06e1e9c6a19bd2"
+    },
+    {
+      "path": "supabase/migrations/20260827151000_restore_application_reader_feedback_runtime.sql",
+      "bytes": 11093,
+      "sha256": "85e463dc262b0001182969db7dfd6efb2bebcdd64368c784332659b1c2c3b8c5"
+    },
+    {
+      "path": "supabase/migrations/20260827152000_adopt_outlook_event_sync_authority.sql",
+      "bytes": 6602,
+      "sha256": "27ee85fc8dba1365cbdcd7143d941242d7c281a072aa8d19b4db6375bde9de52"
+    },
+    {
+      "path": "supabase/migrations/20260827153000_scope_release_health_identity_projection.sql",
+      "bytes": 7899,
+      "sha256": "f821899197b375bbd1a96dfeef11034a3e1ec5313a4b387c8a91e7a8e14cbc1a"
+    },
+    {
+      "path": "supabase/migrations/20260914051527_messaging_read_horizon_and_send_idempotency.sql",
+      "bytes": 17156,
+      "sha256": "923cf50c1a0f4f3e971f20e01204cd882da53d2312d95c77cba2b34302cc667f"
+    },
+    {
+      "path": "supabase/migrations/20260916010000_project_native_start_into_operational_truth.sql",
+      "bytes": 65512,
+      "sha256": "1c0ea0f3e131a100baa118ee08ef422d71a927b9968a37f04cb5ff888c0dfda2"
+    },
+    {
+      "path": "supabase/migrations/20260918010000_align_two_internal_absences.sql",
+      "bytes": 9974,
+      "sha256": "78ae02d5b2d3cd989361abe40b9d99066011bc2059b6d04fd4fc5f5e37949905"
+    },
+    {
+      "path": "supabase/migrations/20260918011000_pause_guest_notifications_when_disabled.sql",
+      "bytes": 3074,
+      "sha256": "d9f8bef965e092cf8b17fd9c37685c67c95bd57e4bcf8ac2d9f4d0a065f7baec"
+    },
+    {
+      "path": "supabase/migrations/20260918012000_event_reminder_workday_and_owner_contract.sql",
+      "bytes": 19882,
+      "sha256": "1ebd66aa0b6d4eb0212bc8e80d4dd1878a36363ec4f7e1d34a96a92a0317b2b2"
+    },
+    {
+      "path": "supabase/migrations/20260920010000_event_reminder_static_weekly_authority.sql",
+      "bytes": 16456,
+      "sha256": "58e03f2e327916b53191ead3ade40ba9373b580ccc1ad4116893bc5d8ead63c4"
+    },
+    {
+      "path": "supabase/migrations/20260922050000_lunch_delivery_failure_manager_alert.sql",
+      "bytes": 13997,
+      "sha256": "e5ac20bf41779c54c4b9145b5f56d10b62ef8ce850c3b6132ddc55a4f07e70f2"
+    },
+    {
+      "path": "supabase/migrations/20260922070000_completed_cleaning_reminder_cycles.sql",
+      "bytes": 19265,
+      "sha256": "e288d359cfbccc7e89e8ddbd395c4bb705235f4f4a1766838436b2986f36f712"
+    },
+    {
+      "path": "supabase/migrations/20260922090000_verified_visit_reminder_state.sql",
+      "bytes": 43363,
+      "sha256": "273f8786beaf5567382f08b411816cc4fc688324c480bab7da672dba9ee730e2"
+    },
+    {
+      "path": "supabase/migrations/20260922163000_static_weekly_lunch_publication.sql",
+      "bytes": 44609,
+      "sha256": "738e6bf8032cbefe9643888196262305e729c13467c533138e228ffc5afc16ab"
+    },
+    {
+      "path": "supabase/migrations/20260922200000_lunch_notification_producer.sql",
+      "bytes": 19650,
+      "sha256": "578017a8fdd5402d9d592b14651c89ef89a5a9023888f39f3b715edb45388145"
+    },
+    {
+      "path": "supabase/migrations/20260922235500_static_weekly_existing_employee_restore.sql",
+      "bytes": 14822,
+      "sha256": "c28bbb6ec36824c9100bbb18cdc8e07d69dcb45a82e26596b59726f86c31398b"
+    },
+    {
+      "path": "supabase/migrations/20260923065000_static_weekly_vacate_roster_slot.sql",
+      "bytes": 43196,
+      "sha256": "9246b744dc81004e885e788d7e2a00ec5fa7286a8d6d2a2ab79e9c97d3728834"
+    },
+    {
+      "path": "supabase/migrations/20260923121151_visitor_attendance_reader.sql",
+      "bytes": 14059,
+      "sha256": "f50364935b636627a0c3691841e0b932913ae2bcd1e661c87cf6cb169bcafbe0"
+    },
+    {
+      "path": "supabase/migrations/20260924022250_release_selection_and_occurrence_guards.sql",
+      "bytes": 3311,
+      "sha256": "2e98f268ed876ec16064af02c8b4daafb8c4e44835101bd99796d968e602931d"
+    },
+    {
+      "path": "supabase/migrations/20260924023930_notification_receipt_and_lunch_integrity.sql",
+      "bytes": 14285,
+      "sha256": "7156b75a986f329139c8edf5b8efc257be568480ee5e9beaaac094420f5b9cbc"
+    },
+    {
+      "path": "supabase/migrations/20260924032226_bind_release_selection_guard_recovery.sql",
+      "bytes": 4943,
+      "sha256": "244a0de60deae538b0c3c76d15b51bb9e983044c5466660d0d4e537d04e16ad6"
+    },
+    {
+      "path": "supabase/migrations/20260924042758_static_weekly_canonical_shift_end_derivation.sql",
+      "bytes": 31251,
+      "sha256": "a07dfc4fbb29c7c762daebad7f6e12725cebc7c395bb24b3dd38085c92f46ce5"
+    },
+    {
+      "path": "supabase/migrations/20260924044035_static_weekly_atomic_roster_completion.sql",
+      "bytes": 12797,
+      "sha256": "b08cd44d3e9a656bfacb6f8066bac7d27118ecae8c98566910f5e7ebc65555e0"
+    },
+    {
+      "path": "supabase/migrations/20260924053507_assigned_phone_activation_transport.sql",
+      "bytes": 35992,
+      "sha256": "c53fa85013799b9b5333e7272bd664fdec059fdba56de0f5ac9e8632b8e14372"
+    },
+    {
+      "path": "supabase/migrations/20260924080839_custodial_legacy_installation_observation.sql",
+      "bytes": 19542,
+      "sha256": "b10bdd8df2acdf1e35e9fe7e0fc34137f912508ab56bd326042a309d978530e3"
+    },
+    {
+      "path": "supabase/migrations/20260924161004_owner_oc24_cleaning_and_inspection_boundaries.sql",
+      "bytes": 8019,
+      "sha256": "4f4c956efc50e147e30c00a840e535623f4f841ea2e3bc0fae102cd885bc93d8"
+    },
+    {
+      "path": "supabase/migrations/20260924172500_oc24_manual_contractor_lunch.sql",
+      "bytes": 4932,
+      "sha256": "7b9a36d1469a2920f3a45dd19112c44f1a13bbbf0c09951c17426f42aa7eeaa5"
+    },
+    {
+      "path": "supabase/migrations/20260924201258_native_provider_durable_authority.sql",
+      "bytes": 20335,
+      "sha256": "fe4f617f2531cfc941624660138bbba2c3dff983e87cb04dafe04ff58dee7538"
+    },
+    {
+      "path": "supabase/migrations/20260925015905_oc24_completion_selection_normalization.sql",
+      "bytes": 6978,
+      "sha256": "769070342011d4ceb28e5dfbbfd2e436e5a98dc7d02d160ac47e2d75fa120316"
+    },
+    {
+      "path": "supabase/migrations/20260925020244_oc24_bound_legacy_completion_replay.sql",
+      "bytes": 8117,
+      "sha256": "a52245120109a50240a02b33de477281c47c389a028580820cdfea4fbcb1194d"
+    },
+    {
+      "path": "supabase/migrations/20260925050718_static_weekly_staffing_command_ledger.sql",
+      "bytes": 50764,
+      "sha256": "acc2e14294425d221af49f8567d6995f3bed0b3c015ffa54b76a6809e4770a24"
+    },
+    {
+      "path": "supabase/migrations/20260925054802_static_weekly_staffing_atomic_acceptance.sql",
+      "bytes": 49889,
+      "sha256": "34dbeb5ac62da3f507737d189a0f4c982a5187bdb34905cb87468f1776ed2e39"
+    },
+    {
+      "path": "supabase/migrations/20260925190000_gps_exact_location_authority_boundary.sql",
+      "bytes": 9770,
+      "sha256": "4a524505fa7eadf9755153a1946a8e06d91dbd8ed8196a82aa9cd6f53cffbdf4"
+    },
+    {
+      "path": "supabase/migrations/20260926143542_static_weekly_protected_separation.sql",
+      "bytes": 19958,
+      "sha256": "5a9123649c92635091854a66ad06404a5dcbc8a6b0b63b7b8b0dd8894de58032"
+    },
+    {
+      "path": "supabase/migrations/20260926180000_retire_direct_employee_status_rpc.sql",
+      "bytes": 2375,
+      "sha256": "dd2c306b679d48e015e839d1efd8f339aada7b7082e18e502344c15a7d06bc2b"
+    },
+    {
+      "path": "supabase/migrations/20260926192656_static_weekly_recurring_confirmation_ledger.sql",
+      "bytes": 19796,
+      "sha256": "f41b7f8c118dbf324088ee09b33e8efa3d5805d7909f5d8265a2c94bba035022"
+    },
+    {
+      "path": "supabase/migrations/20260926193000_retire_direct_employee_mutation_helpers.sql",
+      "bytes": 2850,
+      "sha256": "682966928d90687ea78e9a905c781438efabf5323dd6c712b7711d6668c4d597"
+    },
+    {
+      "path": "supabase/migrations/20260926193651_static_weekly_recurring_source_admission.sql",
+      "bytes": 15848,
+      "sha256": "373e8b08a8637915b4daa815f3dbef2a9107ef437b8ec1c64f1ae9dc3a35cd71"
+    },
+    {
+      "path": "supabase/migrations/20260926194644_static_weekly_recurring_generation_fence.sql",
+      "bytes": 12247,
+      "sha256": "f55c95b9a88d0042fdb419511a96b800f1461a5db1da3247190b8b1959a35102"
+    },
+    {
+      "path": "supabase/migrations/20260926200458_static_weekly_recurring_future_same_monday.sql",
+      "bytes": 8760,
+      "sha256": "9d96dd9a8ec118c4640949d20daf1e26c3cf920eba0b24e12828aeaaf8ff5dfa"
+    },
+    {
+      "path": "supabase/migrations/20260926201644_static_weekly_recurring_dependency_snapshot.sql",
+      "bytes": 7885,
+      "sha256": "92dc22d9eeb0e88c97752d156da5c098b3974f7d84f9b72cd02fa6f515965437"
+    },
+    {
+      "path": "supabase/migrations/20260926202657_static_weekly_recurring_publication_binding.sql",
+      "bytes": 18728,
+      "sha256": "42973f964f0dad31a5db6924136037864895bd3bbb6ba0896acf8e3dff86658a"
+    },
+    {
+      "path": "supabase/migrations/20260926204235_static_weekly_recurring_terminal_targets.sql",
+      "bytes": 25454,
+      "sha256": "bd2ee52ece3ceb29bc769110e7cf27bd4a1f7e0505e6aa280a236e2e55829778"
+    },
+    {
+      "path": "supabase/migrations/20260926205849_static_weekly_recurring_blocked_authority_repair.sql",
+      "bytes": 10399,
+      "sha256": "165d2d8c31b3632ac769ec44cd12944763200c462d6b83418ba1016b42c65bfd"
+    },
+    {
+      "path": "supabase/migrations/20260926211714_static_weekly_recurring_common_lock_order.sql",
+      "bytes": 2756,
+      "sha256": "53ce7d4c5151a18d0fb4d0a52b793c424d06b67f09b2551bea19bb202c4729f0"
+    },
+    {
+      "path": "supabase/migrations/20260926220510_static_weekly_recurring_dependency_reconciliation.sql",
+      "bytes": 23140,
+      "sha256": "46d5ff181cdaa82054eb9d46bdcdddf0b0285ec55db533a626c695a6d01a80c9"
+    },
+    {
+      "path": "supabase/migrations/20260926223914_static_weekly_recurring_application_targets.sql",
+      "bytes": 23627,
+      "sha256": "9fb269ef1e617d1e937674ee3f7fb093cadc02fba16b9aec1199e4e0c45aaf25"
+    },
+    {
+      "path": "supabase/migrations/20260926225613_static_weekly_recurring_atomic_finalization.sql",
+      "bytes": 15289,
+      "sha256": "00d217074b423fe02e05ee95a5175b9840b3f66b8db418cbe7d51bafe37fdd14"
+    },
+    {
+      "path": "supabase/migrations/20260926234537_static_weekly_authenticated_schedule_delivery.sql",
+      "bytes": 10482,
+      "sha256": "b51016c329b64713fccaa5d8670e9feac9817b3b793c44be96041638335faf3e"
+    },
+    {
+      "path": "supabase/migrations/20260927001706_static_weekly_lunch_validation_materialization.sql",
+      "bytes": 3276,
+      "sha256": "021b00a7765ab5424eae57f91de57ea14b975f104cdc3c3c512ca49522c36ab9"
+    },
+    {
+      "path": "supabase/migrations/20260927010911_static_weekly_current_recurring_delivery_status.sql",
+      "bytes": 8428,
+      "sha256": "0e482db72f32d3e645a86a527a51f402e9883db2d9cdaebf2db0ea1daab3d3ed"
+    },
+    {
+      "path": "supabase/migrations/20260927031806_schedule_bound_location_reminders.sql",
+      "bytes": 4861,
+      "sha256": "3ac8bb9fc3374f33721d987ec6bd6551e719d622c376d1f9d7edefa639df9aa2"
+    },
+    {
+      "path": "supabase/migrations/20260927052929_schedule_notification_admission_corrections.sql",
+      "bytes": 10229,
+      "sha256": "14f0413bfe7cef39cd17c548c1044e7bda50f71f56619f4ad4a780f3fe16dcd1"
+    },
+    {
+      "path": "supabase/migrations/20260927072146_schedule_notification_exact_canary.sql",
+      "bytes": 2048,
+      "sha256": "2d20c35105aaf2e6cfde58eec4590c10b995d41103aff0f7bd7a57a7e294e216"
+    },
+    {
+      "path": "supabase/migrations/20260927075352_protected_separation_original_context.sql",
+      "bytes": 7840,
+      "sha256": "2e6958276c9e5679d5b40b5cbc30d6345cfc134ac17783bb525949ecfc63f930"
+    },
+    {
+      "path": "supabase/migrations/20260929125440_custodial_recovery_inventory_closure.sql",
+      "bytes": 29236,
+      "sha256": "4631cebc6d4afd048fabca05244be481359cb27b20cdeb160c04c97f05ed7dd9"
+    },
+    {
+      "path": "supabase/migrations/20261001130750_october_bounded_dated_transition.sql",
+      "bytes": 39648,
+      "sha256": "2c260b0bf1e6cd5e119348ea8e442c71f074f389af9f851b0e7852ddfd894e20"
+    },
+    {
+      "path": "supabase/migrations/20261001152633_october_dated_consumer_corrections.sql",
+      "bytes": 19511,
+      "sha256": "6a15cf945b69429d5fe3243e0bf9112ef4940d104b6c3c6c71db6683c769eb0b"
+    },
+    {
+      "path": "supabase/migrations/20261001161831_october_dated_review_authority_corrections.sql",
+      "bytes": 16525,
+      "sha256": "0a6a72072e40a82f1a45b0b8b284e8970f68fcfdaa96b7ed143add547045d06f"
+    },
+    {
+      "path": "supabase/migrations/20261002050000_feedback_email_intent_capture.sql",
+      "bytes": 6762,
+      "sha256": "62b6d5300c9a524ed773f05a0a294d2fb7e61a4cd269e4c2fe6ff9f95db2d90d"
+    },
+    {
+      "path": "supabase/migrations/20261002060000_event_needs_review_isolation.sql",
+      "bytes": 7497,
+      "sha256": "ac1b6000c5e5f52266bd5fc57cb1d82ebdbb5e22618befcb5a18848ee34c90a6"
+    },
+    {
+      "path": "supabase/migrations/20261002070000_feedback_email_relay_boundary.sql",
+      "bytes": 30129,
+      "sha256": "21a75ed75caa204d8f94c7fde7096c03ea675855259361b06c6cd0caadcb6cd4"
+    },
+    {
+      "path": "supabase/migrations/20261002080000_event_manager_revision_compare_and_swap.sql",
+      "bytes": 2043,
+      "sha256": "8f11bd7bc52cf973f7bb3abbc3d387531f2c23f81114708522503c76b7604e46"
+    },
+    {
+      "path": "supabase/migrations/20261002090000_manager_issue_outcomes.sql",
+      "bytes": 19138,
+      "sha256": "4e2032be8225a87bd5612824d9b26c7d4197d2a950e1e6411d9faecd59220017"
+    },
+    {
+      "path": "supabase/migrations/20261002100000_place_lifecycle_authority.sql",
+      "bytes": 22008,
+      "sha256": "ced37a6298b0d80188675ffe2d6c31c0df1454cb228037ff0c091c7a03e7b5aa"
+    },
+    {
+      "path": "supabase/migrations/20261002110000_event_impact_preview_and_custodial_notes.sql",
+      "bytes": 23096,
+      "sha256": "a85957778f111e3a64c4ba43be58db8b30e1c5293cd5adad5884d331b4d937ee"
+    },
+    {
+      "path": "supabase/migrations/20261002120000_october_dated_recovery_inventory_rebind.sql",
+      "bytes": 6851,
+      "sha256": "3ba81c38118b4b56543d2f89135bbdb7a6652c700c78b5dedcf898b3e60f6000"
+    },
+    {
+      "path": "supabase/migrations/20261002130000_native_provider_clock_transport.sql",
+      "bytes": 4756,
+      "sha256": "741b231b014d6123dffc5b537ecb1b44a840bd65eca8e1d4a033bdbeb64cf777"
+    },
+    {
+      "path": "supabase/migrations/20261002140000_event_supersession_and_chicago_instants.sql",
+      "bytes": 18977,
+      "sha256": "2e8ca5217c668daefe81ead57a28ad2c2cfb6671cc976b0f39d8894240cdc14a"
+    },
+    {
+      "path": "supabase/migrations/20261002150000_feedback_delivery_readback.sql",
+      "bytes": 4141,
+      "sha256": "acbf3c651f2134cadf960bf66db816cdab8c90bda7c83974a30d65cf5bed2468"
+    },
+    {
+      "path": "supabase/migrations/20261002160000_place_event_venue_bridge.sql",
+      "bytes": 23441,
+      "sha256": "6ce6a61985d99ed56c54c128b2dad28c08eadba952ee6e5b674d2c4ca6657422"
+    },
+    {
+      "path": "supabase/migrations/20261002170000_event_cancellation_cas_restore.sql",
+      "bytes": 19033,
+      "sha256": "4f4b506f239c3f41d430b34f9f39a16847fc7becb8e665dc5147e499a5866217"
+    },
+    {
+      "path": "supabase/migrations/20261002180000_native_provider_location_reservation.sql",
+      "bytes": 23165,
+      "sha256": "5ac7d3eb62a415edaed19feb3c1e2552cf95a6e75c1121a1cfe5d1e883d9fcf0"
+    },
+    {
+      "path": "supabase/migrations/20261002200000_place_operational_metadata_bridge.sql",
+      "bytes": 38260,
+      "sha256": "00c5852cabd0e9b296064a6ae38853fba011a6b3571c279fc7f66ad4a4f911e4"
+    },
+    {
+      "path": "supabase/migrations/20261002210000_event_place_overlay_admission.sql",
+      "bytes": 9488,
+      "sha256": "2897af88ae8499a4e2b16c3e88bd072887d6b068a7c3a446ea41a5662b48ddd5"
+    },
+    {
+      "path": "supabase/migrations/20261002220000_feedback_relay_preflight_and_reconciliation.sql",
+      "bytes": 32362,
+      "sha256": "2273f6e05074d74e8c51322217c6ccf6f71ac42cbc72a3e2de589159618f4ede"
+    },
+    {
+      "path": "supabase/migrations/20261002230000_feedback_protected_attachment_admission.sql",
+      "bytes": 17885,
+      "sha256": "34b0658726218d3db75d9d9d979a3ab6ea3143d8a7f53b1bfc2bf8da18eeaf6d"
+    },
+    {
+      "path": "supabase/migrations/20261003000000_memphis_current_schedule_day.sql",
+      "bytes": 11029,
+      "sha256": "fb42ea74db34f71fecdc4e6eaaed7aeec239091099969bb755864b53192a4534"
+    },
+    {
+      "path": "supabase/migrations/20261003010000_native_location_lifecycle.sql",
+      "bytes": 41422,
+      "sha256": "e0512cb5dcc284b18a92b666c495ada7cf956c2f4cce2b3753e7acbd066b0211"
+    },
+    {
+      "path": "supabase/migrations/20261003030000_place_operational_name_adoption.sql",
+      "bytes": 35551,
+      "sha256": "b59b337e081f23b8feb72130fae70e85d4dfd623723b8ca289946a6bbbefb572"
+    },
+    {
+      "path": "supabase/migrations/20261003050000_native_provider_events.sql",
+      "bytes": 23554,
+      "sha256": "cb665620d9612b0f6e7e4d15ace7aebc55a8a473ddf7ee88524bb4ca149d1e17"
+    },
+    {
+      "path": "supabase/migrations/20261003060000_event_notification_current_projection.sql",
+      "bytes": 19010,
+      "sha256": "31641c1a4363f289bc2bfa59793444102da5a7bf6e6d0621d010b54c224c2370"
+    },
+    {
+      "path": "supabase/migrations/20261003070000_feedback_triage_receipts.sql",
+      "bytes": 11165,
+      "sha256": "d9d19c2400c3d98f3819976ae557efc3e1cc5efcba4e6addc0c01d02dcdac234"
+    },
+    {
+      "path": "supabase/migrations/20261003080000_native_location_dispatch_and_ack.sql",
+      "bytes": 18140,
+      "sha256": "d9713b8df261c5a9e2dd32493d6e3b3ae4094755abed4fee8ea65bed13233cfc"
+    },
+    {
+      "path": "supabase/migrations/20261003120000_completion_taxonomy_evidence.sql",
+      "bytes": 90182,
+      "sha256": "a732bcd9077aa98b263a39e7ce29edd61a084db843c0ef02b84f6c2cd78890bf"
+    },
+    {
+      "path": "supabase/migrations/20261003121757_employee_message_source_admission.sql",
+      "bytes": 13317,
+      "sha256": "20ff06f8c0c5e82814189e1e2969b928ffa48eb1181098a73156962dc9ac1e7f"
+    },
+    {
+      "path": "supabase/migrations/20261003140000_static_weekly_nonemployee_contractor_capacity.sql",
+      "bytes": 34889,
+      "sha256": "8ae8467900940a76b296030f630fbc610b7d21d619661a13d8caee32c4d8ddca"
+    },
+    {
+      "path": "supabase/migrations/20261003143000_issue_constraint_index_recovery.sql",
+      "bytes": 4929,
+      "sha256": "651d9c0562fc6fce55d1a76553e3f1016ef2bf52d879773101e551923b757276"
+    },
+    {
+      "path": "supabase/migrations/20261003150000_native_provider_interval_protocol.sql",
+      "bytes": 21938,
+      "sha256": "cb94f7cd6dd949407a936a2c6915bd0ef0972fb79a1cf89b2e480d628c50b194"
+    },
+    {
+      "path": "supabase/migrations/20261003160000_static_weekly_contractor_capacity_extension.sql",
+      "bytes": 8114,
+      "sha256": "3c6ec864d7b2bdd6264e44225a9c3e25c98a6fe522645bfdc5fad020e5877ac7"
+    },
+    {
+      "path": "supabase/migrations/20261003170000_native_target_source_projection.sql",
+      "bytes": 17793,
+      "sha256": "e9d998154190b1156009311c9c241b418b15c4d9c029c22186c49df5cf691b5c"
+    },
+    {
+      "path": "supabase/migrations/20261003190000_static_weekly_capacity_current_source_bridge.sql",
+      "bytes": 45910,
+      "sha256": "4454a7048e7845f39bb372397dd52bcb247de5fa68ec81f3fad01cc6186aa716"
+    },
+    {
+      "path": "supabase/migrations/20261003193000_coverall_event_brief_private_reader.sql",
+      "bytes": 17829,
+      "sha256": "c4b3ef269efad069b684ccfb2ebaf72923f87200d0093a3e5c46daba930ea318"
+    },
+    {
+      "path": "supabase/migrations/20261003194000_native_lunch_delivery.sql",
+      "bytes": 36290,
+      "sha256": "22ef0f716accbd8c2222a117ba876a04631163399ec5619418ddc2e0835f156b"
+    },
+    {
+      "path": "supabase/migrations/20261003210000_static_weekly_splash_season_gate.sql",
+      "bytes": 25865,
+      "sha256": "2f17a1d235f7da72cd0db6372a76793b6860490bf5fb2688240dc883102a78bd"
+    },
+    {
+      "path": "supabase/migrations/20261003211000_static_weekly_splash_source_retention.sql",
+      "bytes": 13877,
+      "sha256": "c03305a1da6f03db6e5a737e9605cb28b594703c5a3f14778b2575fdeb124eba"
+    },
+    {
+      "path": "supabase/migrations/20261003220000_current_release_authority_completion.sql",
+      "bytes": 49863,
+      "sha256": "ad0bcc43d23d7b72935ed464490ec3cc44c73ed64436c15ac3f2520c02c1dc58"
+    },
+    {
+      "path": "supabase/migrations/20261003230000_static_weekly_named_handoff_derivation.sql",
+      "bytes": 15673,
+      "sha256": "ef4c6fc1183002af23797b5ac226660a3b1c2b85f3a543df75c1afa61d8fd500"
+    },
+    {
+      "path": "supabase/migrations/20261004000000_native_provider_event_decision_lookup.sql",
+      "bytes": 17626,
+      "sha256": "ab4e6eb848bd214f8616fb52f094829786df9a9a81d2eb8d00d247b1f28e52fd"
+    },
+    {
+      "path": "supabase/migrations/20261004140657_approved_static_template_authority.sql",
+      "bytes": 43811,
+      "sha256": "23f311b1d506c0d5ad3c0f04554a2388956f4fd8539af42e96107b1c07afa5b4"
+    },
+    {
+      "path": "supabase/migrations/20261004150151_native_alert_two_stage_preparation.sql",
+      "bytes": 20902,
+      "sha256": "ac72bda04ba89560117b04e8939f3d17b2eb65b0002b107c36f96436a02600eb"
+    },
+    {
+      "path": "supabase/migrations/20261004150425_native_alert_finalization.sql",
+      "bytes": 29961,
+      "sha256": "ff3cd8d783543702ca4e74d8ab6bd1d690c3c00b826ccbcec336adc2117b6699"
+    },
+    {
+      "path": "supabase/migrations/20261004161015_native_alert_provider_inventory_events.sql",
+      "bytes": 26231,
+      "sha256": "d4d96265a5595272f4ac8dc2d5dc35c167611bc312ffefd3621a6c320e14e2ba"
+    },
+    {
+      "path": "supabase/migrations/20261005113826_native_alert_original_decisions.sql",
+      "bytes": 8834,
+      "sha256": "dbe1df87aead707e2e59e429bf5d40b7f1d5988d52afda7dfc78c4925181fc97"
+    },
+    {
+      "path": "supabase/migrations/20261005115223_overdue_popup_stops_at_scan_start.sql",
+      "bytes": 4411,
+      "sha256": "8647da0e9f78a6ca273c9463589acde1cb306c0bb1be99bba7d48b84d2f4f3ae"
+    },
+    {
+      "path": "supabase/migrations/20261006031304_custodial_owner_delegated_actions.sql",
+      "bytes": 10874,
+      "sha256": "4da5a15f22065b9467136eb4a622fa58a9559758c16edd844228f33a84223cf1"
+    },
+    {
+      "path": "supabase/migrations/20261006113610_custodial_shared_events_outlook.sql",
+      "bytes": 16152,
+      "sha256": "9172c433894853a0ccc378036f9d2d633422991d3ee30dca6007b1b81eeac001"
+    },
+    {
+      "path": "supabase/migrations/20261006162427_custodial_shared_events_recovery_binding.sql",
+      "bytes": 13120,
+      "sha256": "c889928458f5b8e70b860c41f707e8c1438d88270dc60b68cea32c6f06bc2537"
+    },
+    {
+      "path": "supabase/migrations/20261006172928_custodial_manager_scheduler_permissions.sql",
+      "bytes": 20948,
+      "sha256": "f4cf312cd905e82181e4b376948c0fb309fd70c575a066934f843e41a17c8d12"
+    },
+    {
+      "path": "supabase/migrations/20261006190426_manager_scheduler_recovery_binding.sql",
+      "bytes": 37386,
+      "sha256": "7a57b1b3607d27bd298646f72bc65917cb522e26a2c6169bb610ec79500c6209"
+    },
+    {
+      "path": "supabase/migrations/20261006203931_custodial_delegated_coverall.sql",
+      "bytes": 4692,
+      "sha256": "2f84424673d75eb2986a2c5d4b51c51baf4cbcb869def741aa5f5c84b5b3e475"
+    },
+    {
+      "path": "supabase/migrations/20261006211215_preserved_coverall_validator_recovery.sql",
+      "bytes": 6038,
+      "sha256": "2a47538c6c202482711e0ff80516c8a62a7acdf993302b3b3ef3dc0d3a237399"
+    },
+    {
+      "path": "supabase/migrations/20261007104735_native_alert_inventory_guard_recovery.sql",
+      "bytes": 5247,
+      "sha256": "a7e28742590fc62bc49bbceb349bd47b1481e3efb347ed1e97f0d6358b790195"
+    },
+    {
+      "path": "supabase/migrations/20261007161645_approved_initial_selection_metadata.sql",
+      "bytes": 7373,
+      "sha256": "c155c2dc027ddc395dcf74e2c3a964cf97be253b71e0c4f349a8197517c9694d"
+    },
+    {
+      "path": "supabase/migrations/20261008032718_native_lunch_spoken_accepted_duties.sql",
+      "bytes": 12638,
+      "sha256": "6f51364149b88f791825175b4ae5b5ab3e95aac7ead2f193a0efa48ea20c1c1c"
+    },
+    {
+      "path": "supabase/migrations/20261008053837_native_schedule_lunch_recipient_source.sql",
+      "bytes": 5073,
+      "sha256": "fc207c1b57592c15595be03671825ae42f8801e5634e4f8d7444b0ce3d6764ed"
+    },
+    {
+      "path": "supabase/migrations/20261008064748_native_schedule_server_source_window.sql",
+      "bytes": 18675,
+      "sha256": "e8cf7343635fd0180fd89a617538a09c1bf39b77e17cc7d68d1a11e29cadc036"
+    },
+    {
+      "path": "supabase/migrations/20261008075109_native_schedule_source_reservation.sql",
+      "bytes": 19343,
+      "sha256": "dfa2d15872e6dbe274fd31c375a6b7e28999649140e29d7eb1292412c2d3dda5"
+    },
+    {
+      "path": "supabase/migrations/20261008083139_native_schedule_content_source.sql",
+      "bytes": 7540,
+      "sha256": "3ac5159ec6682eb3e4b6b3a8db61ae9a07fadc5a9b121e87b0135ff589377764"
+    },
+    {
+      "path": "supabase/migrations/20261008095837_native_schedule_server_finalization.sql",
+      "bytes": 30579,
+      "sha256": "546e266027a5d881660717e6d47a6889a2a5754fdfb2c50b4f566d8a1dabdd1b"
+    },
+    {
+      "path": "supabase/migrations/20261008102957_native_schedule_inventory.sql",
+      "bytes": 10250,
+      "sha256": "1dc56786eb5783df203bb11264b0d3ad24ee7144e12a137b28c651b5d21fd4ea"
+    },
+    {
+      "path": "supabase/migrations/20261008111355_native_schedule_observation_binding.sql",
+      "bytes": 20284,
+      "sha256": "e5e843e965c273ad5104e5549453f153389054585c7f2125f21f8256fe8e46e8"
+    },
+    {
+      "path": "supabase/migrations/20261008115557_native_schedule_job_preparation.sql",
+      "bytes": 17972,
+      "sha256": "d8e60a063312022b4f44c6479c83b1ce70a4dc19008ec50686815756b4c318a7"
+    },
+    {
+      "path": "supabase/migrations/20261008122247_native_schedule_attempt_outcome.sql",
+      "bytes": 22934,
+      "sha256": "2b547c771f90d95e5fbe68c3f14d787e4115a93311812b61f432e056f12b126e"
+    },
+    {
+      "path": "supabase/migrations/20261008124644_native_schedule_sender_inventory.sql",
+      "bytes": 12534,
+      "sha256": "5ffae3607b44915187e06a33517b7423965588267eac7927b31e9c53ca02dd6c"
+    },
+    {
+      "path": "supabase/migrations/20261008135429_native_schedule_source_discovery.sql",
+      "bytes": 10328,
+      "sha256": "cacc3ca2a86e0028bee8c8013f9e65ee68e96edf78ab0ee0005b2cfdbdb121ce"
+    },
+    {
+      "path": "supabase/migrations/20261008142316_native_schedule_preparation_source.sql",
+      "bytes": 8587,
+      "sha256": "266cfdb8e28f87ec5bfe2aa5d62d8cb70375fc219df13602043fe0c0a5d64df0"
+    },
+    {
+      "path": "supabase/migrations/20261008205342_native_target_source_kind_guard.sql",
+      "bytes": 4472,
+      "sha256": "dfab42ea761f92fbfef0a03996782fd0825fc01427c4097a5dc9b9002a8ae051"
+    },
+    {
+      "path": "supabase/migrations/20261009033647_protected_separation_original_generation_reader.sql",
+      "bytes": 10586,
+      "sha256": "0b088239de2befd5711b1e83be056f7bebcd23e808149e0ba18564083bf0514c"
+    },
+    {
+      "path": "supabase/migrations/20261009052125_native_schedule_exact_recovery_identities.sql",
+      "bytes": 6668,
+      "sha256": "8e8ff4080efe401df4bded1de5651bdc403e186487b8cc781d82c1924856104d"
+    },
+    {
+      "path": "supabase/migrations/20261009092054_retained_original_native_evidence_intake.sql",
+      "bytes": 38172,
+      "sha256": "a479c5047824cd7b16639b845cd6786cee13724b1300669a33ef93702a383837"
+    },
+    {
+      "path": "supabase/migrations/20261009191246_retained_original_native_value_chunks.sql",
+      "bytes": 67388,
+      "sha256": "56cf1b0bffc34f3c5691ab909c69281b231abaabdfdf038a555559378da7ff1e"
+    },
+    {
+      "path": "supabase/migrations/20261010193211_native_private_custody_chunk_retention.sql",
+      "bytes": 36531,
+      "sha256": "28275c65a49b26a21ee0f37538a0f9c337a45c5fb41f0fa701d2ffdf555f863b"
+    },
+    {
+      "path": "supabase/migrations/20261011000206_native_private_custody_complete_frame_readback.sql",
+      "bytes": 11171,
+      "sha256": "ae478c85db3321c257038273765f7124c821eb0c40d4636daa051affae75657d"
+    },
+    {
+      "path": "supabase/migrations/20261011121818_custodial_held_event_correction_v2.sql",
+      "bytes": 34334,
+      "sha256": "9a71543fd9e2d8797ea16f96b8ec73ab46d59b0de81e1b4d29e2ec44ecb956d0"
+    },
+    {
+      "path": "supabase/migrations/20261011150049_staffing_original_outcome_reader.sql",
+      "bytes": 10066,
+      "sha256": "fbed2fec6e4292a0e8e88cce9d8abd5964b443fb2cb4c7a04af4bb0d82b8fbac"
+    },
+    {
+      "path": "supabase/migrations/20261011214943_custodial_feedback_triage_receipt_reader.sql",
+      "bytes": 6672,
+      "sha256": "88ca748da7713fd87502675663e34144ea6dea925a29cedd5d358cfbf55c139b"
+    },
+    {
+      "path": "supabase/migrations/20261011214944_custodial_feedback_triage_receipt_recovery_binding.sql",
+      "bytes": 11514,
+      "sha256": "378ab1007b09f319331d3ca26b9e1e20e18e770e58e26aa580c920094c92e280"
+    },
+    {
+      "path": "supabase/migrations/20261012000449_staffing_prepared_preview_bound_fields.sql",
+      "bytes": 26378,
+      "sha256": "aecfd950a23d61ead5fda7c09a59013f09db8869ade352b3f2fe16404a7f2a67"
+    },
+    {
+      "path": "supabase/migrations/20261012001357_staffing_nonemployee_refresh_identity.sql",
+      "bytes": 4995,
+      "sha256": "1306d7d80e4c02c5b41b4daebdbd3f4f6733741e0730a36bfc84b0bf15f25c3e"
+    },
+    {
+      "path": "supabase/migrations/20261012004258_staffing_absence_cancellation_target_fields.sql",
+      "bytes": 17368,
+      "sha256": "127c514506c9bd4e6b550f93d56bcee759f850a703e06428af5189eea95278cd"
+    },
+    {
+      "path": "supabase/migrations/20261012023928_staffing_original_target_current_plan_cancellation.sql",
+      "bytes": 76774,
+      "sha256": "a4a25afb8715d82f2f5e03f4ede9504fcb0882c26920af30ea84bb02557e7703"
+    },
+    {
+      "path": "supabase/migrations/20261012043840_staffing_vacancy_original_plan_readback.sql",
+      "bytes": 13551,
+      "sha256": "02e4e30310c68a514c7d024532baae655e9790d200dfb80f606d6fa3a05e4417"
+    },
+    {
+      "path": "supabase/migrations/20261012052430_employee_event_open_original_receipt.sql",
+      "bytes": 14884,
+      "sha256": "bd31605b4fe10a1a57f6e46f5e510a44bd12fcf385b53a3c4d1e6a8cfe893a00"
+    },
+    {
+      "path": "supabase/migrations/20261012063248_staffing_vacancy_reviewed_preparation.sql",
+      "bytes": 40520,
+      "sha256": "8ad600506a41cb91f21ea42bd0e3ee4fc83dc1f4a14585efa0a6c1e323425abb"
+    },
+    {
+      "path": "supabase/migrations/20261012070515_employee_event_open_service_date_binding.sql",
+      "bytes": 9111,
+      "sha256": "11bfe9ece8a4ad20fadc68a0abff5bea1b91a51def3a3d5725de3550a0a9d5b4"
+    },
+    {
+      "path": "supabase/migrations/20261012142853_original_completion_protected_reader.sql",
+      "bytes": 23937,
+      "sha256": "c4c39b1a7e79eba40680e6ad43a8e213c7e205117eee48c44b15d7feeb5a9280"
+    },
+    {
+      "path": "supabase/migrations/20261012211736_custodial_employee_message_original_outcomes.sql",
+      "bytes": 35882,
+      "sha256": "9ae81a6a52e1a706ec0d18e08b901108e0ff20c0d22d99a63da60216f8bdcd44"
+    },
+    {
+      "path": "supabase/migrations/20261013113033_gemini_original_turn_preservation.sql",
+      "bytes": 10288,
+      "sha256": "33249306963b02d90e84e56f06bfe2d852c2009e869f7b50b8c8d87b91f712f4"
+    },
+    {
+      "path": "supabase/migrations/20261013171946_messenger_original_group_creation.sql",
+      "bytes": 46330,
+      "sha256": "e3cd2f32d0482e8578d109507256c944f054eecda502fc12996e205d9ede52e7"
+    },
+    {
+      "path": "supabase/migrations/20261014000624_same_original_recovery_preparation.sql",
+      "bytes": 27394,
+      "sha256": "3c6506413076bc39a0bae52a281ffd7da0d7683f30c3df1a1a21367e3c7361cb"
+    },
+    {
+      "path": "supabase/migrations/20261014010337_same_original_recovery_target_read.sql",
+      "bytes": 5193,
+      "sha256": "f91331d9f179a41c4ee81e3535c3503ae042e0203d1b6238d23947be8cd48abb"
+    },
+    {
+      "path": "supabase/migrations/20261014024357_same_original_native_challenge_registration.sql",
+      "bytes": 15643,
+      "sha256": "20b181b6021fb73b4e72eaafbc4e2e2486c3e7c85aa2f898eb9700d85e6a66ae"
+    },
+    {
+      "path": "supabase/migrations/20261014031928_same_original_native_registration_status.sql",
+      "bytes": 4931,
+      "sha256": "d5a559cb102b31ee7553e618655666c43b034492794e2df3b59f5dd3007e6965"
+    },
+    {
+      "path": "supabase/migrations/20261014143050_same_original_current_manager_preparation_read.sql",
+      "bytes": 9980,
+      "sha256": "10eea4b25e210d345382f7c89c3a82fda2273a3b486532ffe6fc70cb5d39bd2e"
+    },
+    {
+      "path": "supabase/migrations/20261015040830_same_original_retained_completion_read.sql",
+      "bytes": 33844,
+      "sha256": "ecb708c726535401ddf085d122c54bfad1e58b6322c17c0c89af7c234b046c3d"
+    },
+    {
+      "path": "supabase/migrations/20261016095134_native_original_inventory_request_registration.sql",
+      "bytes": 18660,
+      "sha256": "c0d0f2b0aa9bd7a98adeb4b7a460256c2cc57b5edd748fdf3778504bf9fd7041"
+    },
+    {
+      "path": "supabase/migrations/20261016103024_native_original_inventory_request_status_read.sql",
+      "bytes": 9038,
+      "sha256": "e181509806947b79d00bc43a3472fadf46512b5983876f9a093cafc7a7a37aa6"
+    },
+    {
+      "path": "supabase/migrations/20261016111320_native_inventory_current_confirmation_guard.sql",
+      "bytes": 13718,
+      "sha256": "760877770d9739ec041d8cefa7d20f48ef771dc4f9437c3c09264d2b0be0c4c3"
+    },
+    {
+      "path": "supabase/migrations/20261016121857_native_original_inventory_manifest_chunks.sql",
+      "bytes": 23086,
+      "sha256": "4f3687fe9a35376b5859c90b3c33f417bd6d87ec41658fb53f6d79d2d51d84ce"
+    },
+    {
+      "path": "supabase/migrations/20261016133120_native_original_inventory_manager_manifest_read.sql",
+      "bytes": 9550,
+      "sha256": "7acafd2bd12cedc790aafb4fb696ba6326eb20f530f98fc6f7e6ab1b89d89827"
+    },
+    {
+      "path": "supabase/migrations/20261016140703_native_original_inventory_semantic_review.sql",
+      "bytes": 27262,
+      "sha256": "e61de073f2374bea3305ad23fa06fa22c9d2f1ef9f5c25115e8b98bb0ccbf0e8"
+    },
+    {
+      "path": "supabase/migrations/20261016143226_native_original_inventory_manager_decision.sql",
+      "bytes": 23051,
+      "sha256": "ec4d2920dc99830d217a7e179a3696e487d6ebe6170801f9f53112b9ccc00d79"
+    },
+    {
+      "path": "supabase/migrations/20261017200958_approved_static_original_confirmation_receipts.sql",
+      "bytes": 134337,
+      "sha256": "2a093cd4ef89d4e77f911b7a12c68db717a2dba298da35e565c84fee387156e8"
+    },
+    {
+      "path": "supabase/migrations/20261017201251_approved_static_current_basis_binding.sql",
+      "bytes": 7300,
+      "sha256": "905f654a03cf25b78799cc5102beb8fbb074b5993cd1cfd0f3ddac71ddf4a629"
+    },
+    {
+      "path": "supabase/migrations/20261017225101_approved_static_dated_original_materialization.sql",
+      "bytes": 170030,
+      "sha256": "2526dde3e55268da83ba43c8ce30c61c5f1a8c83df50aae85d557c517c383418"
+    },
+    {
+      "path": "supabase/migrations/20261018151858_registered_never_filled_vacancy_source_recovery.sql",
+      "bytes": 39435,
+      "sha256": "4127e4a9aa2cb0a5fab6f230040002af04fa3352ee54f231402e3ca05b7fe9ed"
+    },
+    {
+      "path": "supabase/migrations/20261018161845_approved_static_pending_staffing_original_recovery.sql",
+      "bytes": 101394,
+      "sha256": "8063bc0c21a881c14806ef685749acc14c809a0fbfe69629f844ea7fa51ce047"
+    },
+    {
+      "path": "supabase/migrations/20261021124949_dashboard_independent_verified_check_reader.sql",
+      "bytes": 15930,
+      "sha256": "743a210140bee5653b6c7bdaf932850dc08c0ab4564ce40f4efa3c9f8f35e761"
+    },
+    {
+      "path": "supabase/migrations/20261022041249_original_schedule_delivery_outcome.sql",
+      "bytes": 6511,
+      "sha256": "4d201d542066718e58932199db06b358e19e947f60de72a0c1ca8097a79ff71a"
+    },
+    {
+      "path": "supabase/migrations/20261022071830_recurring_normal_notification_plan.sql",
+      "bytes": 66152,
+      "sha256": "f3083dba31b1973cd42692362ceda5e4c08d505c063ceb505c75214dd4e16c95"
+    },
+    {
+      "path": "supabase/migrations/20261025094420_authority_identity_renderer_counterparts.sql",
+      "bytes": 227761,
+      "sha256": "19e55cfdc9f1ddfd34c2912892ac23979ad5fc44a45da7e444a008b1da0a8c9b"
+    },
+    {
+      "path": "supabase/migrations/20261025124437_manager_completion_evidence_opaque_session_domain.sql",
+      "bytes": 31145,
+      "sha256": "ef296210e35b3e6b0118d0ca84bee0db6152b039547960bc05803cfd320c77a8"
+    },
+    {
+      "path": "supabase/migrations/20261026065000_location_scan_state_qualified_lookup.sql",
+      "bytes": 3443,
+      "sha256": "ca79547cd57ef3f8b3436e846bd4ed57581ea17be2d57701c72d1e45646591db"
+    },
+    {
+      "path": "supabase/migrations/20261027230000_accepted_actual_lunch_windows.sql",
+      "bytes": 3711,
+      "sha256": "55b2cd92ebe36c6920a3c27cc13031ef6ca263d8f10114182c3058fd0991c81b"
+    },
+    {
+      "path": "supabase/migrations/20261027231000_canonical_coverall_capacity_links.sql",
+      "bytes": 21347,
+      "sha256": "c4be89a07f46717ddcc7ceebed639cdc10b589b8ff72e9cf20a3523bdec43903"
+    },
+    {
+      "path": "supabase/migrations/20261027234814_mcp_oauth_durable_token_families.sql",
+      "bytes": 9003,
+      "sha256": "e74210f033e5c65d5e99a090ca201d1c010d6cb5c4159a015bb08e3719c44f6e"
+    },
+    {
+      "path": "supabase/migrations/20261028224728_full_scheduled_lunch_source_policy.sql",
+      "bytes": 30019,
+      "sha256": "a47387ddf244a04df646c9bb2d60eef86a769b96baf9106759f1c2a703248514"
+    },
+    {
+      "path": "supabase/migrations/20261030031200_approved_manual_full_hour_coverers.sql",
+      "bytes": 4436,
+      "sha256": "de548422310c3369bac0560e14507e4022cc9d5b9effe898d4f24ae79156cf6a"
+    },
+    {
+      "path": "supabase/migrations/20261030050235_compact_approved_initial_confirmation.sql",
+      "bytes": 6030,
+      "sha256": "fa9373adcf48f8d13db1b8e4876a5f134b02f8a897f20f887987cbd384393469"
+    },
+    {
+      "path": "supabase/migrations/20261030155202_approved_manual_current_day_activation.sql",
+      "bytes": 56747,
+      "sha256": "54d95f3ab7ffb088a7e72241c360fe22edb1a06a24a3f768f9adcc494ed69492"
+    },
+    {
+      "path": "supabase/migrations/20261031125902_approved_manual_native_operations.sql",
+      "bytes": 865020,
+      "sha256": "10238c293dda15a52321fa670f3763dd772ab6d976665cf306f737c613696b6d"
+    },
+    {
+      "path": "supabase/migrations/20261031180631_cohort_ticket_transaction_context.sql",
+      "bytes": 10348,
+      "sha256": "063669e808c354d4f4498b13c7597b7603636badc9d2e5f9b5d819cdfeee179b"
+    },
+    {
+      "path": "supabase/migrations/20261031225210_custodial_sealed_repairs_current_eight.sql",
+      "bytes": 211245,
+      "sha256": "f4e3dc5be9a465e2099bd9b23488f99b3f9e4c1d9d969844b2fa06b1fbdc7a73"
+    },
+    {
+      "path": "supabase/migrations/20261101034931_custodial_completion_evidence_cohort_read.sql",
+      "bytes": 25489,
+      "sha256": "99f982986326bcca994f9a38c5d00090ac2aa0ce88f1d81973c863387ec79630"
+    },
+    {
+      "path": "supabase/migrations/20261101044239_custodial_cohort_places_feedback.sql",
+      "bytes": 83291,
+      "sha256": "d87fe5d221c4441e7c865c19e37f2e6e26cbc56b510816de10fef649a69cde78"
+    },
+    {
+      "path": "supabase/migrations/20261102000000_unfinished_work_owner_attention.sql",
+      "bytes": 42663,
+      "sha256": "e8fb1bb569b653a53b05f52944a14ab232e5e0542eaeec30173a9194fd6ca835"
+    },
+    {
+      "path": "supabase/migrations/20261102010000_local_retained_enrollment_partition.sql",
+      "bytes": 14734,
+      "sha256": "83f817a25ffe468c715323cf71f62a0c65cbe5a2fe68fde9d75903b55678a4d1"
+    },
+    {
+      "path": "supabase/migrations/20261102151842_current_source_recovery_binding.sql",
+      "bytes": 29232,
+      "sha256": "999b061a970c847d53572f837d55ac78cf83888115d4fb22f182d711bf17f67a"
+    },
+    {
+      "path": "supabase/migrations/20261102161602_current_recovery_column_order.sql",
+      "bytes": 107001,
+      "sha256": "067e5fd187f68f2b9174c6317e08e283f026426ad39dd3bfd44cc8b498216665"
+    },
+    {
+      "path": "supabase/migrations/20261103004520_authoritative_events_cancellation.sql",
+      "bytes": 11704,
+      "sha256": "21aae942d552b162e024061d34c0fe164adafaa58c6ceb735761f0a2c95a537b"
+    },
+    {
+      "path": "supabase/migrations/20261110235223_active_cleaning_dashboard_status_precedence.sql",
+      "bytes": 1003,
+      "sha256": "155cdc57039955cb05988ae6de620e8c2329a5364635fce92d2139a005aab98b"
+    },
+    {
+      "path": "supabase/migrations/20261110235651_native_active_session_gps_binding.sql",
+      "bytes": 13069,
+      "sha256": "4e2e53ccb2e98159900febcf9f03cf04718daa6a4353029f570576937fa7ae0c"
+    },
+    {
+      "path": "supabase/migrations/20261111160601_active_work_gps_reader_policy.sql",
+      "bytes": 5305,
+      "sha256": "7f6eee0ea560ac796e3b6975a689eeb8bfa892cddade1024ff7ace4334d6650a"
+    },
+    {
+      "path": "supabase/migrations/20261111172325_assigned_phone_location.sql",
+      "bytes": 10259,
+      "sha256": "ee80b17bc3786cd1cf227da3131a9b4bd37e8f69e15b2f8994d1a75e47be9825"
+    }
+  ],
+  "closure": [
+    {
+      "path": "release/fresh-only-replay/BOOTSTRAP.sql",
+      "bytes": 9720,
+      "sha256": "ca40788ea43f7c70b69def1de58bae6ae024ca3956116bda4b43b8f8484fbb68"
+    },
+    {
+      "path": "release/fresh-only-replay/MANIFEST.json",
+      "bytes": 184119,
+      "sha256": "5094a272dcc9f01ccbf043f3de7012e12bdb542606089a0a818629c1ecf86b26"
+    },
+    {
+      "path": "release/fresh-only-replay/SELECTED_PROFILE.json",
+      "bytes": 3653,
+      "sha256": "5f9edfaed64318fd01134a6d01491fb0315fbb5d823e7adc40d10be1e0770b4a"
+    },
+    {
+      "path": "release/fresh-only-replay/SOURCE298_REPLAY_ORDER.json",
+      "bytes": 56565,
+      "sha256": "aca06e305ff4c5918e83045acf4d739fcb8746e41dcc89ceb59fcd0f98ab20ba"
+    },
+    {
+      "path": "release/fresh-only-replay/SOURCE298_SUCCESSOR.json",
+      "bytes": 1535,
+      "sha256": "c163c4018512ca66189effbb750c22b89ae0760909e5b067593652e357bbb65e"
+    },
+    {
+      "path": "release/fresh-only-replay/SOURCE299_REPLAY_ORDER.json",
+      "bytes": 56748,
+      "sha256": "965300d634959010c017ac203d71fe915f65b4b42e69910b173b96d034c38001"
+    },
+    {
+      "path": "release/fresh-only-replay/SOURCE299_SUCCESSOR.json",
+      "bytes": 2012,
+      "sha256": "aacbb20c43419718fce0b4fbf1d5845a45c48700fb1a2a51b1b07ad184327de8"
+    },
+    {
+      "path": "release/fresh-only-replay/SOURCE300_REPLAY_ORDER.json",
+      "bytes": 56934,
+      "sha256": "be9f1ce99e037690b3095c8b8e963fc30efd8c83adaa1e415856a79808dc31b1"
+    },
+    {
+      "path": "release/fresh-only-replay/SOURCE300_SUCCESSOR.json",
+      "bytes": 2054,
+      "sha256": "6c72ea5ddc4587d21ac9464f71126ad7c5b77c9b72768247d6b8394125b5e078"
+    },
+    {
+      "path": "release/fresh-only-replay/SOURCE301_REPLAY_ORDER.json",
+      "bytes": 57121,
+      "sha256": "aa3225489f809029f362f9bb2a5ff30f1442a85eb5dda468663b3f0800a9e83b"
+    },
+    {
+      "path": "release/fresh-only-replay/SOURCE301_SUCCESSOR.json",
+      "bytes": 2169,
+      "sha256": "dacdeccb363fd648660f5a47cac7ae96d5f5d8793a37ed449c2ec312c7f3ba0e"
+    },
+    {
+      "path": "release/fresh-only-replay/SOURCE302_REPLAY_ORDER.json",
+      "bytes": 57303,
+      "sha256": "af4d8f471f1e5e6276f3232e396d3511a1ae1767edde093f12fe145f461930a9"
+    },
+    {
+      "path": "release/fresh-only-replay/SOURCE302_SUCCESSOR.json",
+      "bytes": 1882,
+      "sha256": "e4ebb172dbcdfa58690742b9ff09973d33bf35e93ab53d1ebdc41b5a554bcf69"
+    },
+    {
+      "path": "release/fresh-only-replay/SOURCE303_REPLAY_ORDER.json",
+      "bytes": 57485,
+      "sha256": "3e5a9219707a0724b375d94225940b6271d30dcda1b34a4289a9bf77d290f0dd"
+    },
+    {
+      "path": "release/fresh-only-replay/SOURCE303_SUCCESSOR.json",
+      "bytes": 1874,
+      "sha256": "d51728e9973dcfba729164bce441d45efff8cf10b59f3382ade56efbae515e27"
+    },
+    {
+      "path": "release/fresh-only-replay/SOURCE304_REPLAY_ORDER.json",
+      "bytes": 57672,
+      "sha256": "abba683ec10c75fb3ab585e8a12351a410438bd24822569d3f3671c9ae6fa751"
+    },
+    {
+      "path": "release/fresh-only-replay/SOURCE304_SUCCESSOR.json",
+      "bytes": 1903,
+      "sha256": "17071df15c837a52c1b9962abc1cb26453d5b7be935ec3904a728e7caffcc4a5"
+    },
+    {
+      "path": "release/fresh-only-replay/images/20261002090000_manager_issue_outcomes.sql",
+      "bytes": 29977,
+      "sha256": "93dbc3bef3b64112a74474036f3f0201e92220237f830352b1ba51c7fa85c833"
+    },
+    {
+      "path": "release/fresh-only-replay/images/20261002110000_event_impact_preview_and_custodial_notes.sql",
+      "bytes": 26491,
+      "sha256": "491352e43ebe24eda77c03d2a4c93abac63c99a7a8fe2c630cca46271b752f1c"
+    },
+    {
+      "path": "release/fresh-only-replay/images/20261002140000_event_supersession_and_chicago_instants.sql",
+      "bytes": 22372,
+      "sha256": "c458b8c5b3a37b4e8be739b5061231da30b45c46bb7a96e79889a0869fe01479"
+    },
+    {
+      "path": "release/fresh-only-replay/images/20261003220000_current_release_authority_completion.sql",
+      "bytes": 53098,
+      "sha256": "24713a6578e5a1faf3d2b5b054231195b6bfe59d9263137fb01c2222b8672d8e"
+    },
+    {
+      "path": "release/fresh-only-replay/images/20261006113610_custodial_shared_events_outlook.sql",
+      "bytes": 115644,
+      "sha256": "098b85e7946dcfbfabb6c168b139a6aee29517913eb63f7ff0287d72acab851f"
+    },
+    {
+      "path": "release/fresh-only-replay/images/20261006162427_custodial_shared_events_recovery_binding.sql",
+      "bytes": 115808,
+      "sha256": "bb430abde5e0150fea896279874e307594435ce83776a43832c074cd480a5469"
+    },
+    {
+      "path": "release/fresh-only-replay/images/20261006190426_manager_scheduler_recovery_binding.sql",
+      "bytes": 37393,
+      "sha256": "7408a2115cc48216613604e28960809756d5a56e3ecd4259a2822929f28d9610"
+    },
+    {
+      "path": "release/fresh-only-replay/images/20261006211215_preserved_coverall_validator_recovery.sql",
+      "bytes": 6045,
+      "sha256": "22f69e74a8dc72e24062141ba83feb5c0c9c243c2eeb16fddf3ac4dfae7b3ca9"
+    },
+    {
+      "path": "release/fresh-only-replay/images/20261007161645_approved_initial_selection_metadata.sql",
+      "bytes": 7373,
+      "sha256": "c7c26bc26fe7edfe73f29cd7737eca1a6282df500d2b605bd29ccac20e7ce011"
+    },
+    {
+      "path": "release/fresh-only-replay/images/20261008032718_native_lunch_spoken_accepted_duties.sql",
+      "bytes": 12638,
+      "sha256": "a2cc7aab3596fe3007ee1581675a28e9aa6aa752275a2d368c9853d9a40d4ec0"
+    },
+    {
+      "path": "release/fresh-only-replay/images/20261008064748_native_schedule_server_source_window.sql",
+      "bytes": 18768,
+      "sha256": "1b2efeb79ac70d44c9715194316e7dbdf25b1c4b35374a97a89e74b04699f9a6"
+    },
+    {
+      "path": "release/fresh-only-replay/images/20261008135429_native_schedule_source_discovery.sql",
+      "bytes": 10377,
+      "sha256": "850290d000d7ed3720e4a45c811b9f43aa83468ad0defa52bc22184c5c5f6f6a"
+    },
+    {
+      "path": "release/fresh-only-replay/images/20261008142316_native_schedule_preparation_source.sql",
+      "bytes": 8636,
+      "sha256": "578c24b22b1eab7a95bd19f1db3756f254d93dca6d91dc5fb9a21e17cbfe032d"
+    },
+    {
+      "path": "release/fresh-only-replay/images/20261009033647_protected_separation_original_generation_reader.sql",
+      "bytes": 10586,
+      "sha256": "a9ecad1e01dc41bf75dc6119c81a1a5b6e689db73e80fc7339d4e5bc18b88440"
+    },
+    {
+      "path": "release/fresh-only-replay/images/20261009052125_native_schedule_exact_recovery_identities.sql",
+      "bytes": 6668,
+      "sha256": "de8013dc7480cb546cfc10a6dd230c2da6a699821e8d276baf9ebf26f7926416"
+    },
+    {
+      "path": "release/fresh-only-replay/images/20261009092054_retained_original_native_evidence_intake.sql",
+      "bytes": 38172,
+      "sha256": "1f619dcd5cac011167f07cc17ee9b72bbdc3a88fbfd9189cf55e94f9371766a5"
+    },
+    {
+      "path": "release/fresh-only-replay/images/20261009191246_retained_original_native_value_chunks.sql",
+      "bytes": 67388,
+      "sha256": "27ec51a4fd2eb6562e3755592c9a2b3f4a23e43b4439e774723395f4418e8a3a"
+    },
+    {
+      "path": "release/fresh-only-replay/images/20261010193211_native_private_custody_chunk_retention.sql",
+      "bytes": 36531,
+      "sha256": "359fa47e70eee96c6c9a8d3d54de5a15ad2b398835584d924b40d4f3f64a1388"
+    },
+    {
+      "path": "release/fresh-only-replay/images/20261011000206_native_private_custody_complete_frame_readback.sql",
+      "bytes": 11171,
+      "sha256": "b9926637dc9f02f02998fbd58db3e3a701e00ebb04df21c7e9025d44399dad0d"
+    },
+    {
+      "path": "release/fresh-only-replay/images/20261018151858_registered_never_filled_vacancy_source_recovery.sql",
+      "bytes": 39435,
+      "sha256": "c280b389640d29227c0ce7eb86c8ff73bad67bbcf6782a79eb5e26cea0159f09"
+    },
+    {
+      "path": "release/fresh-only-replay/images/20261018161845_approved_static_pending_staffing_original_recovery.sql",
+      "bytes": 101394,
+      "sha256": "6d168b774c807a89d644c094e23a6123201d25a79488d13d780637a8560a1651"
+    },
+    {
+      "path": "release/fresh-only-replay/images/20261022041249_original_schedule_delivery_outcome.sql",
+      "bytes": 6518,
+      "sha256": "ee140104c1f3f9c523f345e1a9295fb0be490e2c15a221b815353f8a63c75ef1"
+    },
+    {
+      "path": "release/fresh-only-replay/no-auto/REFERENCE_PREFIX226.json",
+      "bytes": 13002540,
+      "sha256": "1f3d00389cb962075664be4c6cc89209e8da859981d684d9535aea869a192c61"
+    },
+    {
+      "path": "release/fresh-only-replay/no-auto/images/20261006113610_custodial_shared_events_outlook.sql",
+      "bytes": 131748,
+      "sha256": "4f45d175514e99b5a172c915043c3c3370ed3a9d9f1f65e05d696b5a62210e84"
+    },
+    {
+      "path": "release/fresh-only-replay/no-auto/images/20261006162427_custodial_shared_events_recovery_binding.sql",
+      "bytes": 131912,
+      "sha256": "56a54717b1a3127afaf35fc44982c2b0144840f568d7a7f1c7cbae7599af674f"
+    },
+    {
+      "path": "release/fresh-only-replay/no-auto/images/20261010193211_native_private_custody_chunk_retention.sql",
+      "bytes": 52346,
+      "sha256": "1d1a2aab8a4b1ecbb49f8549548ced772c9c2b0503bee70365b289b2395cdf28"
+    },
+    {
+      "path": "release/fresh-only-replay/no-auto/images/20261011000206_native_private_custody_complete_frame_readback.sql",
+      "bytes": 26986,
+      "sha256": "84abc0fc688043bbbf38f7af5a7035a2eafa6a51ad08aac362e90c60c15e02b9"
+    },
+    {
+      "path": "release/fresh-only-replay/source302-eight-active-normal-evidence/CATALOG_NORMALIZED.json",
+      "bytes": 7832432,
+      "sha256": "ab8f96d2178c74d21ed406b798f6f4be226f11569471b1d62d78bc5fc40cb541"
+    },
+    {
+      "path": "release/fresh-only-replay/source302-eight-active-normal-evidence/CATALOG_RAW.json",
+      "bytes": 7865696,
+      "sha256": "eaf0f8ddfcb1c876a059fd8478d55f1a4cb0c3af6d68cb624dc4276af3aaa41d"
+    },
+    {
+      "path": "release/fresh-only-replay/source302-eight-active-normal-evidence/CONSTRUCTED_SOURCE302_SUCCESSOR.json",
+      "bytes": 1808,
+      "sha256": "c6df2f5c0499fd29320f9ea3fb3d3ca09fa579183580a4dd002786451fd47ee9"
+    },
+    {
+      "path": "release/fresh-only-replay/source302-eight-active-normal-evidence/FINGERPRINT.txt",
+      "bytes": 65,
+      "sha256": "51776a391ef0ce39615de0a11f5c04db2242dcab6c2f60d14ca8832cf13535d8"
+    },
+    {
+      "path": "release/fresh-only-replay/source302-eight-active-normal-evidence/PARENT_WAIT.json",
+      "bytes": 331,
+      "sha256": "4e80f9a3b442c43ca6069a7d092524a83d305752639824cc61a60b688bc95cf8"
+    },
+    {
+      "path": "release/fresh-only-replay/source302-eight-active-normal-evidence/RESULT.json",
+      "bytes": 5589,
+      "sha256": "dee964744b8c0fbf05c8141e9fc00ea7fe58840ad2ebe975259233080900634d"
+    },
+    {
+      "path": "release/fresh-only-replay/source302-normal-evidence/CATALOG_NORMALIZED.json",
+      "bytes": 7831931,
+      "sha256": "42cb5274f2e5335050fb2db0617e5a01cc8041b5b6fa3700689cd6ef02fb495c"
+    },
+    {
+      "path": "release/fresh-only-replay/source302-normal-evidence/CATALOG_RAW.json",
+      "bytes": 7865195,
+      "sha256": "2b9bb58567ba06616416c5de62c75cd2e5e7eac9134ae63a434ced483952d487"
+    },
+    {
+      "path": "release/fresh-only-replay/source302-normal-evidence/CONSTRUCTED_SOURCE302_SUCCESSOR.json",
+      "bytes": 1792,
+      "sha256": "dbb6372350215d5e7c969d667056700ead4f06c5c9ab23db85ce0235caae43a0"
+    },
+    {
+      "path": "release/fresh-only-replay/source302-normal-evidence/FINGERPRINT.txt",
+      "bytes": 65,
+      "sha256": "264147acd88039a20856fceb59c49e62d6356fa4286b3256178c12358b7ec63c"
+    },
+    {
+      "path": "release/fresh-only-replay/source302-normal-evidence/PARENT_WAIT.json",
+      "bytes": 331,
+      "sha256": "693e5696f82daee5ddc35ced4b571cf70951b96394e930f294712f68ca173062"
+    },
+    {
+      "path": "release/fresh-only-replay/source302-normal-evidence/RESULT.json",
+      "bytes": 5608,
+      "sha256": "d74c68af20baf1b7fe27fd137399258ca5f99d792659d2bab4289e1957829dc8"
+    },
+    {
+      "path": "release/fresh-only-replay/source303-ticket-normal-evidence/CATALOG_NORMALIZED.json",
+      "bytes": 7839956,
+      "sha256": "ccde9462dadd63c07d65e6b94125d9b628d87af29c9e9f2f9adcb97f82f5b6c5"
+    },
+    {
+      "path": "release/fresh-only-replay/source303-ticket-normal-evidence/CATALOG_RAW.json",
+      "bytes": 7873227,
+      "sha256": "ce7bd00b5f293ac1091836f2ac813504f2aeaba125d6231b385883ad70e95914"
+    },
+    {
+      "path": "release/fresh-only-replay/source303-ticket-normal-evidence/CONSTRUCTED_SOURCE303_SUCCESSOR.json",
+      "bytes": 1798,
+      "sha256": "da1227114d54d0add0e2219fc8a1d1a8f515939d9c2f496b70c0e2a40eb0e221"
+    },
+    {
+      "path": "release/fresh-only-replay/source303-ticket-normal-evidence/FINGERPRINT.txt",
+      "bytes": 65,
+      "sha256": "1e798aa925d33b8646c01ce3a3e0bdfb5562c55a32ee9f05635fe2d71db4102d"
+    },
+    {
+      "path": "release/fresh-only-replay/source303-ticket-normal-evidence/PARENT_WAIT.json",
+      "bytes": 331,
+      "sha256": "fbeae47d887f2729442122cc538012ab56372fed823dfac5ad14e11b20c44e98"
+    },
+    {
+      "path": "release/fresh-only-replay/source303-ticket-normal-evidence/RESULT.json",
+      "bytes": 5587,
+      "sha256": "c34b1bbf41dbcde8773d87702ec8b14d35eb1b9bce046c0913babbe610c61d40"
+    },
+    {
+      "path": "release/fresh-only-replay/source304-fresh-evidence/CANONICAL304_ORIGINAL_CONSTRUCTION_RECEIPT.json",
+      "bytes": 7397,
+      "sha256": "17931947023cfed45c362f00f5bbf7c2a862af42c82a6e80eb0b7457fa1c4fa6"
+    },
+    {
+      "path": "release/fresh-only-replay/source304-fresh-evidence/CONSTRUCTED_SOURCE304_SUCCESSOR.json",
+      "bytes": 1835,
+      "sha256": "90bc59181179c0640a0490b545e0078285cbdbc8e372125fb332ecfa3e5d6ebe"
+    },
+    {
+      "path": "release/fresh-only-replay/source304-fresh-evidence/MAIN_FRESH304_CAPTURE_RESULT.json",
+      "bytes": 9473,
+      "sha256": "f6c65eac3b8fed4512b7a05cc79b3ca9aa5a02abd5ed29f9f6acdaa19e2f2d1c"
+    },
+    {
+      "path": "release/fresh-only-replay/source304-fresh-evidence/MAIN_FRESH304_NORMALIZED_CATALOG.json",
+      "bytes": 7957988,
+      "sha256": "937a45649c0338376a6f6689f7220deff307be8e250a13d8c422fa857128275d"
+    },
+    {
+      "path": "release/fresh-only-replay/source304-fresh-evidence/MAIN_FRESH304_RAW_CATALOG.json",
+      "bytes": 7991574,
+      "sha256": "a4a6d527c64a2b4f2de9b51fde3ab0e2b9f95c730661a76b70b8c1859c37d4c2"
+    },
+    {
+      "path": "release/fresh-only-replay/source304-fresh-evidence/MAIN_FRESH304_READ_ONLY_PROFILE.json",
+      "bytes": 566,
+      "sha256": "3a59404472f3f3a05b486d1f57cd362a7f7c8b2484d1d83a9d03c956d66db364"
+    },
+    {
+      "path": "release/fresh-only-replay/source304-fresh-evidence/MAIN_FRESH304_RECOVERY_BINDINGS.json",
+      "bytes": 44401,
+      "sha256": "163d51f478dc7a48bf229f9c186c768e57f5049f5167f738462d336ccc356a48"
+    },
+    {
+      "path": "release/fresh-only-replay/source304-main-atomic-append-evidence/FRESH_CURRENT_SOURCE303_CONSTRUCTION_ONLY.json",
+      "bytes": 7653,
+      "sha256": "7e39ca6fe5a53c690c10af66db41e89cf8b759270b9ab18c2270c76960d1202b"
+    },
+    {
+      "path": "release/fresh-only-replay/source304-main-atomic-append-evidence/MAIN_ATOMIC_POST_APPEND_CAPTURE_RESULT.json",
+      "bytes": 1760,
+      "sha256": "45e4b16bc423ef3015c4e150ef17535c851b917c01b0979a412eb89f256dc1f4"
+    },
+    {
+      "path": "release/fresh-only-replay/source304-main-atomic-append-evidence/MAIN_ATOMIC_POST_APPEND_NORMALIZED_CATALOG.json",
+      "bytes": 7957988,
+      "sha256": "937a45649c0338376a6f6689f7220deff307be8e250a13d8c422fa857128275d"
+    },
+    {
+      "path": "release/fresh-only-replay/source304-main-atomic-append-evidence/MAIN_ATOMIC_POST_APPEND_RAW_CATALOG.json",
+      "bytes": 7991574,
+      "sha256": "a4a6d527c64a2b4f2de9b51fde3ab0e2b9f95c730661a76b70b8c1859c37d4c2"
+    },
+    {
+      "path": "release/fresh-only-replay/source304-main-atomic-append-evidence/MAIN_ATOMIC_POST_APPEND_READ_ONLY_PROFILE.json",
+      "bytes": 569,
+      "sha256": "0e9ec24ad00dac2f7366674a310797d23abcd2b3f7cd7233f46e4dfc4b175bb8"
+    },
+    {
+      "path": "release/fresh-only-replay/source304-main-atomic-append-evidence/MAIN_ATOMIC_POST_APPEND_RECOVERY_BINDINGS.json",
+      "bytes": 44411,
+      "sha256": "4156444d252df5d1da70f8337e5e9a4c59bcda7677c87540d45279560d7d37de"
+    },
+    {
+      "path": "release/fresh-only-replay/source304-main-atomic-append-evidence/REPAIR_ATOMIC_BATCH_main_atomic_twelve_BEFORE.json",
+      "bytes": 324,
+      "sha256": "91be9c440ffc8c3d90e2ace2b7366a0ea4a33c3027d002c9ef9c0e175d8b2976"
+    },
+    {
+      "path": "release/fresh-only-replay/source304-main-atomic-append-evidence/REPAIR_ATOMIC_BATCH_main_atomic_twelve_RETURNED.json",
+      "bytes": 10332,
+      "sha256": "861d22510fe4957078ef049a1c91c254574591e7d48746c56a64e6f18c2f845a"
+    },
+    {
+      "path": "release/production-forward-source/20261002090000_manager_issue_outcomes.sql",
+      "bytes": 20946,
+      "sha256": "1746b47a53e1f03ab66d373e3e94046b1319f89af5e1e83222c2300ae5d9e6cd"
+    },
+    {
+      "path": "release/production-forward-source/20261002120000_october_dated_recovery_inventory_rebind.sql",
+      "bytes": 9715,
+      "sha256": "688e336bc4b985bbc5ba0847f9d6c0e0f64fc05bf027d217f95e3778649d9a16"
+    },
+    {
+      "path": "release/production-forward-source/20261003220000_current_release_authority_completion.sql",
+      "bytes": 54071,
+      "sha256": "2121d2b2dbedc40b6345bcefcaf3f4cf7ed4ec22617c54f727a405c9e5a93332"
+    },
+    {
+      "path": "release/production-forward-source/20261006190426_manager_scheduler_recovery_binding.sql",
+      "bytes": 41672,
+      "sha256": "178cc832516e2aa78835b8441da04fe801204caf123477e3c7a6eda5dc405906"
+    },
+    {
+      "path": "release/production-forward-source/20261007161645_approved_initial_selection_metadata.sql",
+      "bytes": 22332,
+      "sha256": "48f78ed71206c475fb9097f34abcb1358d78ceefb1949772f445dd3511b97999"
+    },
+    {
+      "path": "release/production-forward-source/20261008032718_native_lunch_spoken_accepted_duties.sql",
+      "bytes": 27380,
+      "sha256": "4df71a1c903b39b8378ec12c5c0b68c873427474b109671bfcbe669b3e92ea4e"
+    },
+    {
+      "path": "release/production-forward-source/20261008064748_native_schedule_server_source_window.sql",
+      "bytes": 34847,
+      "sha256": "39623f94c0b10d0882640bc8dad5c4c12ae87756d4746f548edfe6616f5182b1"
+    },
+    {
+      "path": "release/production-forward-source/20261008075109_native_schedule_source_reservation.sql",
+      "bytes": 41456,
+      "sha256": "5f1ecc1175729df13d381227cf54644cf7edbfe3351a372370971e4ea721ac50"
+    },
+    {
+      "path": "release/production-forward-source/20261008083139_native_schedule_content_source.sql",
+      "bytes": 23573,
+      "sha256": "70ededd08ce9db86db7d3255dba4b797ae80f2f4437d3bf14e66bbe6aafcec8e"
+    },
+    {
+      "path": "release/production-forward-source/20261008095837_native_schedule_server_finalization.sql",
+      "bytes": 52809,
+      "sha256": "5c180b74a81cddfb5055668a26ae0cfddc805b81b3edd8686f00fe822d7aa4e9"
+    },
+    {
+      "path": "release/production-forward-source/20261008102957_native_schedule_inventory.sql",
+      "bytes": 24820,
+      "sha256": "55c88058b165eaaf889a62f1a6eefe5e44f6d4a7b14a9c811d8726bcd30d09a6"
+    },
+    {
+      "path": "release/production-forward-source/20261008111355_native_schedule_observation_binding.sql",
+      "bytes": 39144,
+      "sha256": "9bb421c182795b160ca45f92cdb95c453c0c62118619dc66b1009bb553833761"
+    },
+    {
+      "path": "release/production-forward-source/20261008115557_native_schedule_job_preparation.sql",
+      "bytes": 36993,
+      "sha256": "fa81126b7674ad6327d46399659c843eeefd71b4dd1e6e53f70f3b96bf05af45"
+    },
+    {
+      "path": "release/production-forward-source/20261008122247_native_schedule_attempt_outcome.sql",
+      "bytes": 49942,
+      "sha256": "60cbe8e4c4103adfbc0d17196c8634e5995a107eb127c707c4c210c2af13bb00"
+    },
+    {
+      "path": "release/production-forward-source/20261008124644_native_schedule_sender_inventory.sql",
+      "bytes": 28293,
+      "sha256": "12c6d0a5108569e64b014ada39b8444921019e26431be5c287a2382374a546a0"
+    },
+    {
+      "path": "release/production-forward-source/20261008135429_native_schedule_source_discovery.sql",
+      "bytes": 26177,
+      "sha256": "c99c64ce08b90b068133c656ea3e0166a2ac19737a23cd1c5003ca20058e92cb"
+    },
+    {
+      "path": "release/production-forward-source/20261008142316_native_schedule_preparation_source.sql",
+      "bytes": 24700,
+      "sha256": "10e6712d3ad8251e51709d6912ddb6f243f0d0a269f8b91263bf89039678c4c7"
+    },
+    {
+      "path": "release/production-forward-source/20261010193211_native_private_custody_chunk_retention.sql",
+      "bytes": 2265510,
+      "sha256": "fffd25207dc1f7c1953bafe2dc23d4867c79724c4ed4f19995e36d3a71c95653"
+    },
+    {
+      "path": "release/production-forward-source/20261011000206_native_private_custody_complete_frame_readback.sql",
+      "bytes": 2172881,
+      "sha256": "ac22e6cce896c87cf754022ee565815811fbb04e58b00fde278efc835a665889"
+    },
+    {
+      "path": "release/production-forward-source/20261011214943_custodial_feedback_triage_receipt_reader.sql",
+      "bytes": 21476,
+      "sha256": "ffc4bbe60bdd7986b3553d430dab96ec819c9846806553793ae939500ebb5910"
+    },
+    {
+      "path": "release/production-forward-source/20261012004258_staffing_absence_cancellation_target_fields.sql",
+      "bytes": 21395,
+      "sha256": "9b8178cf4c18322da053b06ea57ae7cbe287ed7961fd7b7650042f0f584e8709"
+    },
+    {
+      "path": "release/production-forward-source/20261012063248_staffing_vacancy_reviewed_preparation.sql",
+      "bytes": 67286,
+      "sha256": "1dd73eca8c1042096d0cf2d9b3a69bb6afa710e467389899b99ee33ecdbc821c"
+    },
+    {
+      "path": "release/production-forward-source/20261015040830_same_original_retained_completion_read.sql",
+      "bytes": 36356,
+      "sha256": "18298fc042702b47e56e30ec21bcde0bfeac3646d806f488b02d453811c8961d"
+    },
+    {
+      "path": "release/production-forward-source/20261017225101_approved_static_dated_original_materialization.sql",
+      "bytes": 178043,
+      "sha256": "7bb4e47bd18487a150f422a6a9dbe335e76e5f0309073e7ad4fa982adf8d9454"
+    },
+    {
+      "path": "release/production-forward-source/20261018151858_registered_never_filled_vacancy_source_recovery.sql",
+      "bytes": 45619,
+      "sha256": "4f31bf55eb23e3e29b99000b4ff138e9c8cc735699b67129b583dcdc1000c60b"
+    },
+    {
+      "path": "release/production-forward-source/20261018161845_approved_static_pending_staffing_original_recovery.sql",
+      "bytes": 104510,
+      "sha256": "b14504a2b97890944be54f4be5762c3f0dbd653cc14748da3777bc47357cfca5"
+    },
+    {
+      "path": "release/production-forward-source/20261021124949_dashboard_independent_verified_check_reader.sql",
+      "bytes": 16839,
+      "sha256": "fc57bbd278fea04890721ed2d15ca8799c58b5b2bae7de14bb40b8d4847d131a"
+    },
+    {
+      "path": "release/production-forward-source/20261022041249_original_schedule_delivery_outcome.sql",
+      "bytes": 6518,
+      "sha256": "ee140104c1f3f9c523f345e1a9295fb0be490e2c15a221b815353f8a63c75ef1"
+    },
+    {
+      "path": "release/production-forward-source/20261025094420_authority_identity_renderer_counterparts.sql",
+      "bytes": 240102,
+      "sha256": "0e7b14e1e6ec1b60cab5a4d00f97491a4ae0fd8386c68d9b3c49b84f50c5ddd0"
+    },
+    {
+      "path": "release/production-forward-source/20261102151842_current_source_recovery_binding.sql",
+      "bytes": 38790,
+      "sha256": "adbbd03be64c1898ba4e10b193ec24450af3533122db4b58a5b08500eecc0e27"
+    },
+    {
+      "path": "release/production-forward-source/20261102161602_current_recovery_column_order.sql",
+      "bytes": 118586,
+      "sha256": "018714b1eb313850f7011c4559abe635830e436a9a842fabce81640499600300"
+    },
+    {
+      "path": "release/production-forward-source/20261103004520_authoritative_events_cancellation.sql",
+      "bytes": 22888,
+      "sha256": "5cfc3ea93f746154e74442cacd54e8b7ec6ac490dbb4b995f8fd6c53da52c9c9"
+    },
+    {
+      "path": "release/production-forward-source/ACL-COMPARISON-ORDER.md",
+      "bytes": 1505,
+      "sha256": "2f3d50429f4d6c84deb794e0fecb561ab241d24fe6f340c5238eca2be2062f11"
+    },
+    {
+      "path": "release/production-forward-source/CREATOR-OWNER-ROLLOUT.md",
+      "bytes": 2719,
+      "sha256": "52cd9d9603332c6a891981101811c8144d93485151c3a9bc8339bc6a8e0b715b"
+    },
+    {
+      "path": "release/production-forward-source/ISSUE-COLUMN-ORDER54.md",
+      "bytes": 1198,
+      "sha256": "6019d92ac8509cb93dda707d03a3679d0897208d531188ea4376092e45d98026"
+    },
+    {
+      "path": "release/production-forward-source/PRIVATE-CUSTODY-EXISTING-RUNTIME-ROLLOUT.md",
+      "bytes": 8810,
+      "sha256": "90fa524f456b706afb47cdebeaef19e34646d46dfccc29c72372fa103803e851"
+    },
+    {
+      "path": "release/production-forward-source/PRIVATE-CUSTODY-SOURCE253-CLOSURE.md",
+      "bytes": 4453,
+      "sha256": "ec9c3fa4786580ee9a09dd714c9ae1508590da7b85369c3558707a333525240f"
+    },
+    {
+      "path": "release/production-forward-source/ROLLOUT.md",
+      "bytes": 14027,
+      "sha256": "dd93a4931fedb21cb84491cbcaadc0b6fd4c4267216536ff4f766fb6d329cc47"
+    },
+    {
+      "path": "release/production-forward-source/approved-dated152-helper-owner-evidence.json",
+      "bytes": 8740,
+      "sha256": "dbcc0115474b1a3a7175feee0d679df3b83c69896275f5b409ed81549331dd33"
+    },
+    {
+      "path": "release/production-forward-source/cancellation127-evidence.json",
+      "bytes": 7742,
+      "sha256": "60b492e72081810f41fb1890ac683f8f2621a8b427ab6d716e3439e0a1d65475"
+    },
+    {
+      "path": "release/production-forward-source/creator-owner-equivalence-evidence.json",
+      "bytes": 323917,
+      "sha256": "89e8f1de67e574be2f04462718bd900e813f032d7b1308730a51cdeb50dfb875"
+    },
+    {
+      "path": "release/production-forward-source/creator131-owner-equivalence-evidence.json",
+      "bytes": 54356,
+      "sha256": "11d92bfd50b52adb19183b8f47d19c641a49497220bbcfbbc0ed74183ff101f5"
+    },
+    {
+      "path": "release/production-forward-source/current308-existing-profile.json",
+      "bytes": 44769,
+      "sha256": "666e9ed58c52f103a62de1de9c1bf843cb08747cf11e6241eb962e892abf50a9"
+    },
+    {
+      "path": "release/production-forward-source/current309-production-role-order-projection.json",
+      "bytes": 2371,
+      "sha256": "a2d7e28dae142bc8ba51137c236b7c9f27bb808db8ddebffd67a56cbacda8871"
+    },
+    {
+      "path": "release/production-forward-source/current309-tail-projection.json",
+      "bytes": 3006208,
+      "sha256": "2ef92dd5f9c604cdcfd4aa96adca88820e17460836c984ee666ad3268998163b"
+    },
+    {
+      "path": "release/production-forward-source/grant-owner-closure-evidence.json",
+      "bytes": 55547,
+      "sha256": "86a656a5e0fa3e0557b5ef51aa03c6ea6405056435d20b3e696066d2f8750c6f"
+    },
+    {
+      "path": "release/production-forward-source/issue-column-order54-evidence.json",
+      "bytes": 7514,
+      "sha256": "0271598aefe41cfaace340bc41637365dbd949f49912fef0506b245851bd28c3"
+    },
+    {
+      "path": "release/production-forward-source/manifest.json",
+      "bytes": 14391,
+      "sha256": "2953e45aa0548b855342892243e626cdfe77ec89ad0985021f86b54973e8343b"
+    },
+    {
+      "path": "release/production-forward-source/october-recovery-owner-evidence.json",
+      "bytes": 48919,
+      "sha256": "26a23b4e05ef17b2490b6303d776dd4abd41afb916529883b154f6a86c001cad"
+    },
+    {
+      "path": "release/production-forward-source/private-custody-acl-comparison-evidence.json",
+      "bytes": 3095,
+      "sha256": "7785a5e57cac9d21d8bc33904ea35cff7f5b753e43d4719d182e17dec66a637c"
+    },
+    {
+      "path": "release/production-forward-source/private-custody-existing-postgres-evidence.json",
+      "bytes": 2078,
+      "sha256": "62064d200577152bc0a0bd2d9b234a09bc787a966a178e9ab30dfa2727801607"
+    },
+    {
+      "path": "release/production-forward-source/private-custody-existing-postgres-profile.json",
+      "bytes": 3790511,
+      "sha256": "a9fc28be337bc43d6feaf17e13be103400c5d5c0da85dd9ba0bca600d51c738f"
+    },
+    {
+      "path": "release/production-forward-source/private-custody-production-role-order.json",
+      "bytes": 4580,
+      "sha256": "00712a7ed626e2d5f3edebc57ec7fbe0d6f466b762236d3789efac93b5daa106"
+    },
+    {
+      "path": "release/production-forward-source/private-custody-source252-reference.json",
+      "bytes": 1042262,
+      "sha256": "2f0b2b84762a4786560c59880a076b1e869575af5b1f221830b7b4f0ca67c5b3"
+    },
+    {
+      "path": "release/production-forward-source/private-custody-source253-existing-evidence.json",
+      "bytes": 1567,
+      "sha256": "0360a2fbf0d27b9549891ae73b250b86782bd8459f510a65cc646566365b6bcf"
+    },
+    {
+      "path": "release/production-forward-source/private-custody-source253-existing-profile.json",
+      "bytes": 3014235,
+      "sha256": "92658305ec278150cb2711ce1a7f0f83cb7d1e92488ca87d187f076c9078afdd"
+    },
+    {
+      "path": "release/production-forward-source/registered-vacancy153-owner-evidence.json",
+      "bytes": 10541,
+      "sha256": "c725dfff162822904be3340f96c039cc4f055be2c8536f4c95d0abf924ffbad4"
+    },
+    {
+      "path": "release/schema-evidence/SOURCE304_PREDECESSOR_CANONICAL_CATALOG.json",
+      "bytes": 7957988,
+      "sha256": "937a45649c0338376a6f6689f7220deff307be8e250a13d8c422fa857128275d"
+    },
+    {
+      "path": "release/schema-evidence/SOURCE304_PREDECESSOR_CANONICAL_FINGERPRINT.txt",
+      "bytes": 65,
+      "sha256": "bc15a8e5d5e550194f957ce6d1e632e14e03d02e39ee653dfd99bedfbe1122e6"
+    },
+    {
+      "path": "release/schema-evidence/SOURCE304_PREDECESSOR_PRODUCTION_MIGRATION_STATE.json",
+      "bytes": 346139,
+      "sha256": "3a08995c01785006951d9fc6d19595c7f72827d2c97df65605a7211aef26d78a"
+    },
+    {
+      "path": "supabase/canonical/migration-replay-order.json",
+      "bytes": 60726,
+      "sha256": "84ac9ee339abf929a2d50c411b0c69b4cb05699f71fa13ee9ddb17606cd5dabe"
+    },
+    {
+      "path": "supabase/canonical/schema-fingerprint-input.json",
+      "bytes": 8063187,
+      "sha256": "988a56fca0d09f2b0cc08c25895d53e8b21ed83d79186b13d7f8707334c093c0"
+    },
+    {
+      "path": "supabase/canonical/schema-fingerprint.txt",
+      "bytes": 65,
+      "sha256": "92864be338d5fb46c9a25ae43f0311ef945d522c13fb54a3fa99b3b907088b92"
+    },
+    {
+      "path": "release/production-migration-state.json",
+      "bytes": 611528,
+      "sha256": "3862997b6ef4c68614adca4e137c7ad34fceafa6122551e3c70d0a067ca9765f"
+    }
+  ],
+  "historical_aliases": {
+    "supabase/canonical/migration-replay-order.json": "release/fresh-only-replay/SOURCE304_REPLAY_ORDER.json",
+    "supabase/canonical/schema-fingerprint-input.json": "release/schema-evidence/SOURCE304_PREDECESSOR_CANONICAL_CATALOG.json",
+    "supabase/canonical/schema-fingerprint.txt": "release/schema-evidence/SOURCE304_PREDECESSOR_CANONICAL_FINGERPRINT.txt",
+    "release/production-migration-state.json": "release/schema-evidence/SOURCE304_PREDECESSOR_PRODUCTION_MIGRATION_STATE.json"
+  },
+  "historical_names": [
+    "00000000000000_production_baseline.sql",
+    "20260717161000_custodial_foundation_repair_delta.sql",
+    "20260717170136_custodial_foundation_repair_device_eval_fix.sql",
+    "20260717175320_ops_manager_pairing_links.sql",
+    "20260717200242_manager_passwordless_onboarding_security_app.sql",
+    "20260717210744_device_security_code_rpc_qualification.sql",
+    "20260717235932_ops_manager_one_time_codes.sql",
+    "20260718021910_event_input_console_scope_venue_taxonomy.sql",
+    "20260718022648_event_input_console_verified_venue_backfill_20260718.sql",
+    "20260718055946_ops_manager_shared_48_hour_enrollment.sql",
+    "20260718071500_ops_manager_shared_enrollment_fk_indexes.sql",
+    "20260718075000_gemini_console_professional_foundation.sql",
+    "20260718083000_schema_authority_cron_jobs.sql",
+    "20260718083100_reconstruct_public_grant_hardening.sql",
+    "20260718084600_schema_authority_comments.sql",
+    "20260718103215_custodial_v3_reliability_and_retention.sql",
+    "20260718104747_restore_members_night_retention_recovery.sql",
+    "20260718130700_prevent_cleaning_notes_false_maintenance_tickets.sql",
+    "20260718141948_moxie_password_rotation.sql",
+    "20260718152337_ops_manager_shared_messenger.sql",
+    "20260718172800_professional_employee_messenger.sql",
+    "20260718184652_messenger_delete_retention_shared_identity.sql",
+    "20260718195210_messenger_delete_actor_fk_indexes.sql",
+    "20260719231728_gps_proximity_motion_hardening.sql",
+    "20260721190000_operations_leadership_mobile_foundation.sql",
+    "20260721203000_manager_mobile_notifications.sql",
+    "20260722143000_custodial_employee_phone_foundation.sql",
+    "20260722143100_custodial_employee_phone_assignment.sql",
+    "20260722143200_custodial_employee_status_management.sql",
+    "20260722143300_retire_forced_operations_leadership_thread.sql",
+    "20260722224000_event_notification_retention_integrity.sql",
+    "20260722233500_operational_retention_and_analytics.sql",
+    "20260722233600_event_retention_history_guard.sql",
+    "20260723111020_v17_trigger_privilege_hardening.sql",
+    "20260724010000_native_employee_event_delivery.sql",
+    "20260724020000_event_messenger_cutover_deletion_semantics.sql",
+    "20260724023000_msg_thread_deletion_operations_user_index.sql",
+    "20260729150527_audit_defense_in_depth_hardening.sql",
+    "20260729203938_third_audit_recovery_gemini_gps.sql",
+    "20260729215914_audit4_attendance_inspection_integrity.sql",
+    "20260729225858_audit5_feedback_guest_approval_lifecycle.sql",
+    "20260730142940_audit6_coverall_assignment_link_security.sql",
+    "20260730143853_audit6_coverall_assignment_link_service_policy.sql",
+    "20260730183500_disaster_recovery_backup_reader.sql",
+    "20260730221607_production_availability_warm_bridge.sql",
+    "20260730222357_index_remaining_foreign_keys.sql",
+    "20260731003221_deactivate_render_free_tier_warm_bridge.sql",
+    "20260731141831_inspection_spot_check_policy.sql",
+    "20260731211500_native_employee_message_location_push.sql",
+    "20260801131340_custodial_atomic_offline_completion_identity.sql",
+    "20260801134430_reconcile_canonical_schema_security_metadata.sql",
+    "20260801164407_custodial_enrollment_resume_and_push_revocation.sql",
+    "20260801195620_custodial_device_removal_operation.sql",
+    "20260809125735_cleaning_inspection_24_hour_freshness.sql",
+    "20260810120000_retire_named_manager_shared_room_authority.sql",
+    "20260810130000_harden_named_manager_retired_archive_and_concurrency.sql",
+    "20260810140000_finalize_named_manager_messenger_retirement_integrity.sql",
+    "20260810143000_offline_actor_occurrence_reconciliation.sql",
+    "20260810150000_enforce_integrated_backend_authority.sql",
+    "20260810160000_close_offline_authority_integrity_gaps.sql",
+    "20260810170000_finish_offline_authority_operational_closure.sql",
+    "20260810190000_final_integrated_backend_operational_correction.sql",
+    "20260810200000_static_weekly_scheduler_authority_integrated.sql",
+    "20260810210000_static_weekly_scheduler_three_high_foundation_correction.sql",
+    "20260810220000_static_weekly_scheduler_complete_authority_correction.sql",
+    "20260810230000_static_weekly_scheduler_authority_closure_correction.sql",
+    "20260812032055_static_weekly_manager_snapshot.sql",
+    "20260812130000_static_weekly_employee_turnover.sql",
+    "20260813035530_offline_scan_authority_snapshot.sql",
+    "20260813050000_offline_snapshot_operational_truth_closure.sql",
+    "20260813060000_release_canary_operational_recovery.sql",
+    "20260813070000_operational_service_date_foundation.sql",
+    "20260813141806_custodial_operational_boundary_closure.sql",
+    "20260813173000_device_sync_actor_groups.sql",
+    "20260813190000_release_phone_transport_and_offline_activation_closure.sql",
+    "20260813210000_custodial_u4_ops_closure.sql",
+    "20260814224034_reconcile_static_weekly_day_change_receipts.sql",
+    "20260815160613_normalize_managed_production_schema_security.sql",
+    "20260815163346_restore_explicit_public_schema_usage.sql",
+    "20260820120831_contain_release_recovery_ddl_authority.sql",
+    "20260820121025_revoke_residual_public_security_definer_execute.sql",
+    "20260820121117_revoke_public_trigger_function_rpc_execute.sql",
+    "20260820125325_custodial_disaster_restore_generation_authority.sql",
+    "20260820133000_create_application_read_authority.sql",
+    "20260820133100_retire_owner_sql_proxy.sql",
+    "20260820143000_bound_ops_manager_device_trust.sql",
+    "20260820143200_finalize_function_authority_recovery.sql",
+    "20260820153000_append_only_cleaning_identity_corrections.sql",
+    "20260820154000_late_gps_is_advisory_only.sql",
+    "20260820154500_precise_terminal_writer_detection.sql",
+    "20260820155000_rebind_release_recovery_inventory_to_current_authority.sql",
+    "20260822142500_grant_readonly_cron_catalog_observation.sql",
+    "20260822150000_fence_application_reader_relation_authority.sql",
+    "20260822153000_bridge_cron_identity_and_rebind_recovery_acl.sql",
+    "20260822170000_repair_runtime_read_and_scan_alert_authority.sql",
+    "20260822222500_correct_coverall_second_absence_policy.sql",
+    "20260823024500_provision_static_weekly_runtime_identity.sql",
+    "20260823060000_static_weekly_family_location_truth.sql",
+    "20260823070000_static_weekly_service_mode_truth.sql",
+    "20260823071000_static_weekly_solver_certificate_v5_authority.sql",
+    "20260823113624_static_weekly_end_of_day_window_parity.sql",
+    "20260823143000_static_weekly_registered_roster_bootstrap.sql",
+    "20260824130000_static_weekly_memory_bounded_document_authority.sql",
+    "20260824130500_static_weekly_memory_bounded_validator_and_receipt.sql",
+    "20260824131000_static_weekly_manager_snapshot_authority_source.sql",
+    "20260824131500_static_weekly_compact_document_consumers.sql",
+    "20260824132000_static_weekly_initial_contractor_snapshot.sql",
+    "20260824170000_static_weekly_projection_compact_snapshot.sql",
+    "20260824213000_static_weekly_operational_truth_cutover.sql",
+    "20260825134500_scan_alert_runtime_authority_closure.sql",
+    "20260825173000_restore_application_reader_device_identity.sql",
+    "20260825173500_fence_application_reader_device_credentials.sql",
+    "20260825174500_rebind_application_reader_release_recovery.sql",
+    "20260826020000_preserve_offline_work_across_manager_credential_recovery.sql",
+    "20260826114516_retire_legacy_daily_schedule_writers_after_static_weekly_cutover.sql",
+    "20260826155000_restore_application_reader_messenger_runtime.sql",
+    "20260826160000_restore_application_reader_employee_events_runtime.sql",
+    "20260827010500_static_weekly_vacant_roster_slots.sql",
+    "20260827024500_static_weekly_initial_draft_roster_hydration.sql",
+    "20260827033500_static_weekly_registered_source_dated_status.sql",
+    "20260827150000_disaster_recovery_global_mutation_fence.sql",
+    "20260827151000_restore_application_reader_feedback_runtime.sql",
+    "20260827152000_adopt_outlook_event_sync_authority.sql",
+    "20260827153000_scope_release_health_identity_projection.sql",
+    "20260914051527_messaging_read_horizon_and_send_idempotency.sql",
+    "20260916010000_project_native_start_into_operational_truth.sql",
+    "20260918010000_align_two_internal_absences.sql",
+    "20260918011000_pause_guest_notifications_when_disabled.sql",
+    "20260918012000_event_reminder_workday_and_owner_contract.sql",
+    "20260920010000_event_reminder_static_weekly_authority.sql",
+    "20261006031304_custodial_owner_delegated_actions.sql",
+    "20261006113610_custodial_shared_events_outlook.sql",
+    "20261006162427_custodial_shared_events_recovery_binding.sql",
+    "20261006203931_custodial_delegated_coverall.sql",
+    "20260922050000_lunch_delivery_failure_manager_alert.sql",
+    "20260922070000_completed_cleaning_reminder_cycles.sql",
+    "20260922090000_verified_visit_reminder_state.sql",
+    "20260922163000_static_weekly_lunch_publication.sql",
+    "20260922200000_lunch_notification_producer.sql",
+    "20260922235500_static_weekly_existing_employee_restore.sql",
+    "20260923065000_static_weekly_vacate_roster_slot.sql",
+    "20260923121151_visitor_attendance_reader.sql",
+    "20260924022250_release_selection_and_occurrence_guards.sql",
+    "20260924023930_notification_receipt_and_lunch_integrity.sql",
+    "20260924032226_bind_release_selection_guard_recovery.sql",
+    "20260924042758_static_weekly_canonical_shift_end_derivation.sql",
+    "20260924044035_static_weekly_atomic_roster_completion.sql",
+    "20260924053507_assigned_phone_activation_transport.sql",
+    "20260924080839_custodial_legacy_installation_observation.sql",
+    "20260924161004_owner_oc24_cleaning_and_inspection_boundaries.sql",
+    "20260924172500_oc24_manual_contractor_lunch.sql",
+    "20260924201258_native_provider_durable_authority.sql",
+    "20260925015905_oc24_completion_selection_normalization.sql",
+    "20260925020244_oc24_bound_legacy_completion_replay.sql",
+    "20260925050718_static_weekly_staffing_command_ledger.sql",
+    "20260925054802_static_weekly_staffing_atomic_acceptance.sql",
+    "20260925190000_gps_exact_location_authority_boundary.sql",
+    "20260926143542_static_weekly_protected_separation.sql",
+    "20260926180000_retire_direct_employee_status_rpc.sql",
+    "20260926192656_static_weekly_recurring_confirmation_ledger.sql",
+    "20260926193000_retire_direct_employee_mutation_helpers.sql",
+    "20260926193651_static_weekly_recurring_source_admission.sql",
+    "20260926194644_static_weekly_recurring_generation_fence.sql",
+    "20260926200458_static_weekly_recurring_future_same_monday.sql",
+    "20260926201644_static_weekly_recurring_dependency_snapshot.sql",
+    "20260926202657_static_weekly_recurring_publication_binding.sql",
+    "20260926204235_static_weekly_recurring_terminal_targets.sql",
+    "20260926205849_static_weekly_recurring_blocked_authority_repair.sql",
+    "20260926211714_static_weekly_recurring_common_lock_order.sql",
+    "20260926220510_static_weekly_recurring_dependency_reconciliation.sql",
+    "20260926223914_static_weekly_recurring_application_targets.sql",
+    "20260926225613_static_weekly_recurring_atomic_finalization.sql",
+    "20260926234537_static_weekly_authenticated_schedule_delivery.sql",
+    "20260927001706_static_weekly_lunch_validation_materialization.sql",
+    "20260927010911_static_weekly_current_recurring_delivery_status.sql",
+    "20260927031806_schedule_bound_location_reminders.sql",
+    "20260927052929_schedule_notification_admission_corrections.sql",
+    "20260927072146_schedule_notification_exact_canary.sql",
+    "20260927075352_protected_separation_original_context.sql",
+    "20260929125440_custodial_recovery_inventory_closure.sql",
+    "20261001130750_october_bounded_dated_transition.sql",
+    "20261001152633_october_dated_consumer_corrections.sql",
+    "20261001161831_october_dated_review_authority_corrections.sql",
+    "20261002050000_feedback_email_intent_capture.sql",
+    "20261002060000_event_needs_review_isolation.sql",
+    "20261002070000_feedback_email_relay_boundary.sql",
+    "20261002080000_event_manager_revision_compare_and_swap.sql",
+    "20261002090000_manager_issue_outcomes.sql",
+    "20261002100000_place_lifecycle_authority.sql",
+    "20261002110000_event_impact_preview_and_custodial_notes.sql",
+    "20261002120000_october_dated_recovery_inventory_rebind.sql",
+    "20261002130000_native_provider_clock_transport.sql",
+    "20261002140000_event_supersession_and_chicago_instants.sql",
+    "20261002150000_feedback_delivery_readback.sql",
+    "20261002160000_place_event_venue_bridge.sql",
+    "20261002170000_event_cancellation_cas_restore.sql",
+    "20261002180000_native_provider_location_reservation.sql",
+    "20261002200000_place_operational_metadata_bridge.sql",
+    "20261002210000_event_place_overlay_admission.sql",
+    "20261002220000_feedback_relay_preflight_and_reconciliation.sql",
+    "20261002230000_feedback_protected_attachment_admission.sql",
+    "20261003000000_memphis_current_schedule_day.sql",
+    "20261003010000_native_location_lifecycle.sql",
+    "20261003030000_place_operational_name_adoption.sql",
+    "20261003050000_native_provider_events.sql",
+    "20261003060000_event_notification_current_projection.sql",
+    "20261003070000_feedback_triage_receipts.sql",
+    "20261003080000_native_location_dispatch_and_ack.sql",
+    "20261003120000_completion_taxonomy_evidence.sql",
+    "20261003121757_employee_message_source_admission.sql",
+    "20261003140000_static_weekly_nonemployee_contractor_capacity.sql",
+    "20261003143000_issue_constraint_index_recovery.sql",
+    "20261003150000_native_provider_interval_protocol.sql",
+    "20261003160000_static_weekly_contractor_capacity_extension.sql",
+    "20261003170000_native_target_source_projection.sql",
+    "20261003190000_static_weekly_capacity_current_source_bridge.sql",
+    "20261003193000_coverall_event_brief_private_reader.sql",
+    "20261003194000_native_lunch_delivery.sql",
+    "20261003210000_static_weekly_splash_season_gate.sql",
+    "20261003211000_static_weekly_splash_source_retention.sql",
+    "20261003220000_current_release_authority_completion.sql",
+    "20261003230000_static_weekly_named_handoff_derivation.sql",
+    "20261004000000_native_provider_event_decision_lookup.sql",
+    "20261004140657_approved_static_template_authority.sql",
+    "20261006172928_custodial_manager_scheduler_permissions.sql",
+    "20261006190426_manager_scheduler_recovery_binding.sql",
+    "20261006211215_preserved_coverall_validator_recovery.sql",
+    "20261004150151_native_alert_two_stage_preparation.sql",
+    "20261004150425_native_alert_finalization.sql",
+    "20261004161015_native_alert_provider_inventory_events.sql",
+    "20261005113826_native_alert_original_decisions.sql",
+    "20261005115223_overdue_popup_stops_at_scan_start.sql",
+    "20261007104735_native_alert_inventory_guard_recovery.sql",
+    "20261007161645_approved_initial_selection_metadata.sql",
+    "20261008032718_native_lunch_spoken_accepted_duties.sql",
+    "20261008053837_native_schedule_lunch_recipient_source.sql",
+    "20261008064748_native_schedule_server_source_window.sql",
+    "20261008075109_native_schedule_source_reservation.sql",
+    "20261008083139_native_schedule_content_source.sql",
+    "20261008095837_native_schedule_server_finalization.sql",
+    "20261008102957_native_schedule_inventory.sql",
+    "20261008111355_native_schedule_observation_binding.sql",
+    "20261008115557_native_schedule_job_preparation.sql",
+    "20261008122247_native_schedule_attempt_outcome.sql",
+    "20261008124644_native_schedule_sender_inventory.sql",
+    "20261008135429_native_schedule_source_discovery.sql",
+    "20261008142316_native_schedule_preparation_source.sql",
+    "20261008205342_native_target_source_kind_guard.sql",
+    "20261009033647_protected_separation_original_generation_reader.sql",
+    "20261009052125_native_schedule_exact_recovery_identities.sql",
+    "20261009092054_retained_original_native_evidence_intake.sql",
+    "20261009191246_retained_original_native_value_chunks.sql",
+    "20261010193211_native_private_custody_chunk_retention.sql",
+    "20261011000206_native_private_custody_complete_frame_readback.sql",
+    "20261011121818_custodial_held_event_correction_v2.sql",
+    "20261011150049_staffing_original_outcome_reader.sql",
+    "20261011214943_custodial_feedback_triage_receipt_reader.sql",
+    "20261011214944_custodial_feedback_triage_receipt_recovery_binding.sql",
+    "20261012000449_staffing_prepared_preview_bound_fields.sql",
+    "20261012001357_staffing_nonemployee_refresh_identity.sql",
+    "20261012004258_staffing_absence_cancellation_target_fields.sql",
+    "20261012023928_staffing_original_target_current_plan_cancellation.sql",
+    "20261012043840_staffing_vacancy_original_plan_readback.sql",
+    "20261012052430_employee_event_open_original_receipt.sql",
+    "20261012063248_staffing_vacancy_reviewed_preparation.sql",
+    "20261012070515_employee_event_open_service_date_binding.sql",
+    "20261012142853_original_completion_protected_reader.sql",
+    "20261012211736_custodial_employee_message_original_outcomes.sql",
+    "20261013113033_gemini_original_turn_preservation.sql",
+    "20261013171946_messenger_original_group_creation.sql",
+    "20261014000624_same_original_recovery_preparation.sql",
+    "20261014010337_same_original_recovery_target_read.sql",
+    "20261014024357_same_original_native_challenge_registration.sql",
+    "20261014031928_same_original_native_registration_status.sql",
+    "20261014143050_same_original_current_manager_preparation_read.sql",
+    "20261015040830_same_original_retained_completion_read.sql",
+    "20261016095134_native_original_inventory_request_registration.sql",
+    "20261016103024_native_original_inventory_request_status_read.sql",
+    "20261016111320_native_inventory_current_confirmation_guard.sql",
+    "20261016121857_native_original_inventory_manifest_chunks.sql",
+    "20261016133120_native_original_inventory_manager_manifest_read.sql",
+    "20261016140703_native_original_inventory_semantic_review.sql",
+    "20261016143226_native_original_inventory_manager_decision.sql",
+    "20261017200958_approved_static_original_confirmation_receipts.sql",
+    "20261017201251_approved_static_current_basis_binding.sql",
+    "20261017225101_approved_static_dated_original_materialization.sql",
+    "20261018151858_registered_never_filled_vacancy_source_recovery.sql",
+    "20261018161845_approved_static_pending_staffing_original_recovery.sql",
+    "20261021124949_dashboard_independent_verified_check_reader.sql",
+    "20261022041249_original_schedule_delivery_outcome.sql",
+    "20261022071830_recurring_normal_notification_plan.sql",
+    "20261025094420_authority_identity_renderer_counterparts.sql",
+    "20261025124437_manager_completion_evidence_opaque_session_domain.sql",
+    "20261026065000_location_scan_state_qualified_lookup.sql",
+    "20261027230000_accepted_actual_lunch_windows.sql",
+    "20261027231000_canonical_coverall_capacity_links.sql",
+    "20261027234814_mcp_oauth_durable_token_families.sql",
+    "20261028224728_full_scheduled_lunch_source_policy.sql",
+    "20261030031200_approved_manual_full_hour_coverers.sql",
+    "20261030050235_compact_approved_initial_confirmation.sql",
+    "20261030155202_approved_manual_current_day_activation.sql",
+    "20261031125902_approved_manual_native_operations.sql",
+    "20261031180631_cohort_ticket_transaction_context.sql",
+    "20261031225210_custodial_sealed_repairs_current_eight.sql"
+  ],
+  "current_names": [
+    "00000000000000_production_baseline.sql",
+    "20260717161000_custodial_foundation_repair_delta.sql",
+    "20260717170136_custodial_foundation_repair_device_eval_fix.sql",
+    "20260717175320_ops_manager_pairing_links.sql",
+    "20260717200242_manager_passwordless_onboarding_security_app.sql",
+    "20260717210744_device_security_code_rpc_qualification.sql",
+    "20260717235932_ops_manager_one_time_codes.sql",
+    "20260718021910_event_input_console_scope_venue_taxonomy.sql",
+    "20260718022648_event_input_console_verified_venue_backfill_20260718.sql",
+    "20260718055946_ops_manager_shared_48_hour_enrollment.sql",
+    "20260718071500_ops_manager_shared_enrollment_fk_indexes.sql",
+    "20260718075000_gemini_console_professional_foundation.sql",
+    "20260718083000_schema_authority_cron_jobs.sql",
+    "20260718083100_reconstruct_public_grant_hardening.sql",
+    "20260718084600_schema_authority_comments.sql",
+    "20260718103215_custodial_v3_reliability_and_retention.sql",
+    "20260718104747_restore_members_night_retention_recovery.sql",
+    "20260718130700_prevent_cleaning_notes_false_maintenance_tickets.sql",
+    "20260718141948_moxie_password_rotation.sql",
+    "20260718152337_ops_manager_shared_messenger.sql",
+    "20260718172800_professional_employee_messenger.sql",
+    "20260718184652_messenger_delete_retention_shared_identity.sql",
+    "20260718195210_messenger_delete_actor_fk_indexes.sql",
+    "20260719231728_gps_proximity_motion_hardening.sql",
+    "20260721190000_operations_leadership_mobile_foundation.sql",
+    "20260721203000_manager_mobile_notifications.sql",
+    "20260722143000_custodial_employee_phone_foundation.sql",
+    "20260722143100_custodial_employee_phone_assignment.sql",
+    "20260722143200_custodial_employee_status_management.sql",
+    "20260722143300_retire_forced_operations_leadership_thread.sql",
+    "20260722224000_event_notification_retention_integrity.sql",
+    "20260722233500_operational_retention_and_analytics.sql",
+    "20260722233600_event_retention_history_guard.sql",
+    "20260723111020_v17_trigger_privilege_hardening.sql",
+    "20260724010000_native_employee_event_delivery.sql",
+    "20260724020000_event_messenger_cutover_deletion_semantics.sql",
+    "20260724023000_msg_thread_deletion_operations_user_index.sql",
+    "20260729150527_audit_defense_in_depth_hardening.sql",
+    "20260729203938_third_audit_recovery_gemini_gps.sql",
+    "20260729215914_audit4_attendance_inspection_integrity.sql",
+    "20260729225858_audit5_feedback_guest_approval_lifecycle.sql",
+    "20260730142940_audit6_coverall_assignment_link_security.sql",
+    "20260730143853_audit6_coverall_assignment_link_service_policy.sql",
+    "20260730183500_disaster_recovery_backup_reader.sql",
+    "20260730221607_production_availability_warm_bridge.sql",
+    "20260730222357_index_remaining_foreign_keys.sql",
+    "20260731003221_deactivate_render_free_tier_warm_bridge.sql",
+    "20260731141831_inspection_spot_check_policy.sql",
+    "20260731211500_native_employee_message_location_push.sql",
+    "20260801131340_custodial_atomic_offline_completion_identity.sql",
+    "20260801134430_reconcile_canonical_schema_security_metadata.sql",
+    "20260801164407_custodial_enrollment_resume_and_push_revocation.sql",
+    "20260801195620_custodial_device_removal_operation.sql",
+    "20260809125735_cleaning_inspection_24_hour_freshness.sql",
+    "20260810120000_retire_named_manager_shared_room_authority.sql",
+    "20260810130000_harden_named_manager_retired_archive_and_concurrency.sql",
+    "20260810140000_finalize_named_manager_messenger_retirement_integrity.sql",
+    "20260810143000_offline_actor_occurrence_reconciliation.sql",
+    "20260810150000_enforce_integrated_backend_authority.sql",
+    "20260810160000_close_offline_authority_integrity_gaps.sql",
+    "20260810170000_finish_offline_authority_operational_closure.sql",
+    "20260810190000_final_integrated_backend_operational_correction.sql",
+    "20260810200000_static_weekly_scheduler_authority_integrated.sql",
+    "20260810210000_static_weekly_scheduler_three_high_foundation_correction.sql",
+    "20260810220000_static_weekly_scheduler_complete_authority_correction.sql",
+    "20260810230000_static_weekly_scheduler_authority_closure_correction.sql",
+    "20260812032055_static_weekly_manager_snapshot.sql",
+    "20260812130000_static_weekly_employee_turnover.sql",
+    "20260813035530_offline_scan_authority_snapshot.sql",
+    "20260813050000_offline_snapshot_operational_truth_closure.sql",
+    "20260813060000_release_canary_operational_recovery.sql",
+    "20260813070000_operational_service_date_foundation.sql",
+    "20260813141806_custodial_operational_boundary_closure.sql",
+    "20260813173000_device_sync_actor_groups.sql",
+    "20260813190000_release_phone_transport_and_offline_activation_closure.sql",
+    "20260813210000_custodial_u4_ops_closure.sql",
+    "20260814224034_reconcile_static_weekly_day_change_receipts.sql",
+    "20260815160613_normalize_managed_production_schema_security.sql",
+    "20260815163346_restore_explicit_public_schema_usage.sql",
+    "20260820120831_contain_release_recovery_ddl_authority.sql",
+    "20260820121025_revoke_residual_public_security_definer_execute.sql",
+    "20260820121117_revoke_public_trigger_function_rpc_execute.sql",
+    "20260820125325_custodial_disaster_restore_generation_authority.sql",
+    "20260820133000_create_application_read_authority.sql",
+    "20260820133100_retire_owner_sql_proxy.sql",
+    "20260820143000_bound_ops_manager_device_trust.sql",
+    "20260820143200_finalize_function_authority_recovery.sql",
+    "20260820153000_append_only_cleaning_identity_corrections.sql",
+    "20260820154000_late_gps_is_advisory_only.sql",
+    "20260820154500_precise_terminal_writer_detection.sql",
+    "20260820155000_rebind_release_recovery_inventory_to_current_authority.sql",
+    "20260822142500_grant_readonly_cron_catalog_observation.sql",
+    "20260822150000_fence_application_reader_relation_authority.sql",
+    "20260822153000_bridge_cron_identity_and_rebind_recovery_acl.sql",
+    "20260822170000_repair_runtime_read_and_scan_alert_authority.sql",
+    "20260822222500_correct_coverall_second_absence_policy.sql",
+    "20260823024500_provision_static_weekly_runtime_identity.sql",
+    "20260823060000_static_weekly_family_location_truth.sql",
+    "20260823070000_static_weekly_service_mode_truth.sql",
+    "20260823071000_static_weekly_solver_certificate_v5_authority.sql",
+    "20260823113624_static_weekly_end_of_day_window_parity.sql",
+    "20260823143000_static_weekly_registered_roster_bootstrap.sql",
+    "20260824130000_static_weekly_memory_bounded_document_authority.sql",
+    "20260824130500_static_weekly_memory_bounded_validator_and_receipt.sql",
+    "20260824131000_static_weekly_manager_snapshot_authority_source.sql",
+    "20260824131500_static_weekly_compact_document_consumers.sql",
+    "20260824132000_static_weekly_initial_contractor_snapshot.sql",
+    "20260824170000_static_weekly_projection_compact_snapshot.sql",
+    "20260824213000_static_weekly_operational_truth_cutover.sql",
+    "20260825134500_scan_alert_runtime_authority_closure.sql",
+    "20260825173000_restore_application_reader_device_identity.sql",
+    "20260825173500_fence_application_reader_device_credentials.sql",
+    "20260825174500_rebind_application_reader_release_recovery.sql",
+    "20260826020000_preserve_offline_work_across_manager_credential_recovery.sql",
+    "20260826114516_retire_legacy_daily_schedule_writers_after_static_weekly_cutover.sql",
+    "20260826155000_restore_application_reader_messenger_runtime.sql",
+    "20260826160000_restore_application_reader_employee_events_runtime.sql",
+    "20260827010500_static_weekly_vacant_roster_slots.sql",
+    "20260827024500_static_weekly_initial_draft_roster_hydration.sql",
+    "20260827033500_static_weekly_registered_source_dated_status.sql",
+    "20260827150000_disaster_recovery_global_mutation_fence.sql",
+    "20260827151000_restore_application_reader_feedback_runtime.sql",
+    "20260827152000_adopt_outlook_event_sync_authority.sql",
+    "20260827153000_scope_release_health_identity_projection.sql",
+    "20260914051527_messaging_read_horizon_and_send_idempotency.sql",
+    "20260916010000_project_native_start_into_operational_truth.sql",
+    "20260918010000_align_two_internal_absences.sql",
+    "20260918011000_pause_guest_notifications_when_disabled.sql",
+    "20260918012000_event_reminder_workday_and_owner_contract.sql",
+    "20260920010000_event_reminder_static_weekly_authority.sql",
+    "20261006031304_custodial_owner_delegated_actions.sql",
+    "20261006113610_custodial_shared_events_outlook.sql",
+    "20261006162427_custodial_shared_events_recovery_binding.sql",
+    "20261006203931_custodial_delegated_coverall.sql",
+    "20260922050000_lunch_delivery_failure_manager_alert.sql",
+    "20260922070000_completed_cleaning_reminder_cycles.sql",
+    "20260922090000_verified_visit_reminder_state.sql",
+    "20260922163000_static_weekly_lunch_publication.sql",
+    "20260922200000_lunch_notification_producer.sql",
+    "20260922235500_static_weekly_existing_employee_restore.sql",
+    "20260923065000_static_weekly_vacate_roster_slot.sql",
+    "20260923121151_visitor_attendance_reader.sql",
+    "20260924022250_release_selection_and_occurrence_guards.sql",
+    "20260924023930_notification_receipt_and_lunch_integrity.sql",
+    "20260924032226_bind_release_selection_guard_recovery.sql",
+    "20260924042758_static_weekly_canonical_shift_end_derivation.sql",
+    "20260924044035_static_weekly_atomic_roster_completion.sql",
+    "20260924053507_assigned_phone_activation_transport.sql",
+    "20260924080839_custodial_legacy_installation_observation.sql",
+    "20260924161004_owner_oc24_cleaning_and_inspection_boundaries.sql",
+    "20260924172500_oc24_manual_contractor_lunch.sql",
+    "20260924201258_native_provider_durable_authority.sql",
+    "20260925015905_oc24_completion_selection_normalization.sql",
+    "20260925020244_oc24_bound_legacy_completion_replay.sql",
+    "20260925050718_static_weekly_staffing_command_ledger.sql",
+    "20260925054802_static_weekly_staffing_atomic_acceptance.sql",
+    "20260925190000_gps_exact_location_authority_boundary.sql",
+    "20260926143542_static_weekly_protected_separation.sql",
+    "20260926180000_retire_direct_employee_status_rpc.sql",
+    "20260926192656_static_weekly_recurring_confirmation_ledger.sql",
+    "20260926193000_retire_direct_employee_mutation_helpers.sql",
+    "20260926193651_static_weekly_recurring_source_admission.sql",
+    "20260926194644_static_weekly_recurring_generation_fence.sql",
+    "20260926200458_static_weekly_recurring_future_same_monday.sql",
+    "20260926201644_static_weekly_recurring_dependency_snapshot.sql",
+    "20260926202657_static_weekly_recurring_publication_binding.sql",
+    "20260926204235_static_weekly_recurring_terminal_targets.sql",
+    "20260926205849_static_weekly_recurring_blocked_authority_repair.sql",
+    "20260926211714_static_weekly_recurring_common_lock_order.sql",
+    "20260926220510_static_weekly_recurring_dependency_reconciliation.sql",
+    "20260926223914_static_weekly_recurring_application_targets.sql",
+    "20260926225613_static_weekly_recurring_atomic_finalization.sql",
+    "20260926234537_static_weekly_authenticated_schedule_delivery.sql",
+    "20260927001706_static_weekly_lunch_validation_materialization.sql",
+    "20260927010911_static_weekly_current_recurring_delivery_status.sql",
+    "20260927031806_schedule_bound_location_reminders.sql",
+    "20260927052929_schedule_notification_admission_corrections.sql",
+    "20260927072146_schedule_notification_exact_canary.sql",
+    "20260927075352_protected_separation_original_context.sql",
+    "20260929125440_custodial_recovery_inventory_closure.sql",
+    "20261001130750_october_bounded_dated_transition.sql",
+    "20261001152633_october_dated_consumer_corrections.sql",
+    "20261001161831_october_dated_review_authority_corrections.sql",
+    "20261002050000_feedback_email_intent_capture.sql",
+    "20261002060000_event_needs_review_isolation.sql",
+    "20261002070000_feedback_email_relay_boundary.sql",
+    "20261002080000_event_manager_revision_compare_and_swap.sql",
+    "20261002090000_manager_issue_outcomes.sql",
+    "20261002100000_place_lifecycle_authority.sql",
+    "20261002110000_event_impact_preview_and_custodial_notes.sql",
+    "20261002120000_october_dated_recovery_inventory_rebind.sql",
+    "20261002130000_native_provider_clock_transport.sql",
+    "20261002140000_event_supersession_and_chicago_instants.sql",
+    "20261002150000_feedback_delivery_readback.sql",
+    "20261002160000_place_event_venue_bridge.sql",
+    "20261002170000_event_cancellation_cas_restore.sql",
+    "20261002180000_native_provider_location_reservation.sql",
+    "20261002200000_place_operational_metadata_bridge.sql",
+    "20261002210000_event_place_overlay_admission.sql",
+    "20261002220000_feedback_relay_preflight_and_reconciliation.sql",
+    "20261002230000_feedback_protected_attachment_admission.sql",
+    "20261003000000_memphis_current_schedule_day.sql",
+    "20261003010000_native_location_lifecycle.sql",
+    "20261003030000_place_operational_name_adoption.sql",
+    "20261003050000_native_provider_events.sql",
+    "20261003060000_event_notification_current_projection.sql",
+    "20261003070000_feedback_triage_receipts.sql",
+    "20261003080000_native_location_dispatch_and_ack.sql",
+    "20261003120000_completion_taxonomy_evidence.sql",
+    "20261003121757_employee_message_source_admission.sql",
+    "20261003140000_static_weekly_nonemployee_contractor_capacity.sql",
+    "20261003143000_issue_constraint_index_recovery.sql",
+    "20261003150000_native_provider_interval_protocol.sql",
+    "20261003160000_static_weekly_contractor_capacity_extension.sql",
+    "20261003170000_native_target_source_projection.sql",
+    "20261003190000_static_weekly_capacity_current_source_bridge.sql",
+    "20261003193000_coverall_event_brief_private_reader.sql",
+    "20261003194000_native_lunch_delivery.sql",
+    "20261003210000_static_weekly_splash_season_gate.sql",
+    "20261003211000_static_weekly_splash_source_retention.sql",
+    "20261003220000_current_release_authority_completion.sql",
+    "20261003230000_static_weekly_named_handoff_derivation.sql",
+    "20261004000000_native_provider_event_decision_lookup.sql",
+    "20261004140657_approved_static_template_authority.sql",
+    "20261006172928_custodial_manager_scheduler_permissions.sql",
+    "20261006190426_manager_scheduler_recovery_binding.sql",
+    "20261006211215_preserved_coverall_validator_recovery.sql",
+    "20261004150151_native_alert_two_stage_preparation.sql",
+    "20261004150425_native_alert_finalization.sql",
+    "20261004161015_native_alert_provider_inventory_events.sql",
+    "20261005113826_native_alert_original_decisions.sql",
+    "20261005115223_overdue_popup_stops_at_scan_start.sql",
+    "20261007104735_native_alert_inventory_guard_recovery.sql",
+    "20261007161645_approved_initial_selection_metadata.sql",
+    "20261008032718_native_lunch_spoken_accepted_duties.sql",
+    "20261008053837_native_schedule_lunch_recipient_source.sql",
+    "20261008064748_native_schedule_server_source_window.sql",
+    "20261008075109_native_schedule_source_reservation.sql",
+    "20261008083139_native_schedule_content_source.sql",
+    "20261008095837_native_schedule_server_finalization.sql",
+    "20261008102957_native_schedule_inventory.sql",
+    "20261008111355_native_schedule_observation_binding.sql",
+    "20261008115557_native_schedule_job_preparation.sql",
+    "20261008122247_native_schedule_attempt_outcome.sql",
+    "20261008124644_native_schedule_sender_inventory.sql",
+    "20261008135429_native_schedule_source_discovery.sql",
+    "20261008142316_native_schedule_preparation_source.sql",
+    "20261008205342_native_target_source_kind_guard.sql",
+    "20261009033647_protected_separation_original_generation_reader.sql",
+    "20261009052125_native_schedule_exact_recovery_identities.sql",
+    "20261009092054_retained_original_native_evidence_intake.sql",
+    "20261009191246_retained_original_native_value_chunks.sql",
+    "20261010193211_native_private_custody_chunk_retention.sql",
+    "20261011000206_native_private_custody_complete_frame_readback.sql",
+    "20261011121818_custodial_held_event_correction_v2.sql",
+    "20261011150049_staffing_original_outcome_reader.sql",
+    "20261011214943_custodial_feedback_triage_receipt_reader.sql",
+    "20261011214944_custodial_feedback_triage_receipt_recovery_binding.sql",
+    "20261012000449_staffing_prepared_preview_bound_fields.sql",
+    "20261012001357_staffing_nonemployee_refresh_identity.sql",
+    "20261012004258_staffing_absence_cancellation_target_fields.sql",
+    "20261012023928_staffing_original_target_current_plan_cancellation.sql",
+    "20261012043840_staffing_vacancy_original_plan_readback.sql",
+    "20261012052430_employee_event_open_original_receipt.sql",
+    "20261012063248_staffing_vacancy_reviewed_preparation.sql",
+    "20261012070515_employee_event_open_service_date_binding.sql",
+    "20261012142853_original_completion_protected_reader.sql",
+    "20261012211736_custodial_employee_message_original_outcomes.sql",
+    "20261013113033_gemini_original_turn_preservation.sql",
+    "20261013171946_messenger_original_group_creation.sql",
+    "20261014000624_same_original_recovery_preparation.sql",
+    "20261014010337_same_original_recovery_target_read.sql",
+    "20261014024357_same_original_native_challenge_registration.sql",
+    "20261014031928_same_original_native_registration_status.sql",
+    "20261014143050_same_original_current_manager_preparation_read.sql",
+    "20261015040830_same_original_retained_completion_read.sql",
+    "20261016095134_native_original_inventory_request_registration.sql",
+    "20261016103024_native_original_inventory_request_status_read.sql",
+    "20261016111320_native_inventory_current_confirmation_guard.sql",
+    "20261016121857_native_original_inventory_manifest_chunks.sql",
+    "20261016133120_native_original_inventory_manager_manifest_read.sql",
+    "20261016140703_native_original_inventory_semantic_review.sql",
+    "20261016143226_native_original_inventory_manager_decision.sql",
+    "20261017200958_approved_static_original_confirmation_receipts.sql",
+    "20261017201251_approved_static_current_basis_binding.sql",
+    "20261017225101_approved_static_dated_original_materialization.sql",
+    "20261018151858_registered_never_filled_vacancy_source_recovery.sql",
+    "20261018161845_approved_static_pending_staffing_original_recovery.sql",
+    "20261021124949_dashboard_independent_verified_check_reader.sql",
+    "20261022041249_original_schedule_delivery_outcome.sql",
+    "20261022071830_recurring_normal_notification_plan.sql",
+    "20261025094420_authority_identity_renderer_counterparts.sql",
+    "20261025124437_manager_completion_evidence_opaque_session_domain.sql",
+    "20261026065000_location_scan_state_qualified_lookup.sql",
+    "20261027230000_accepted_actual_lunch_windows.sql",
+    "20261027231000_canonical_coverall_capacity_links.sql",
+    "20261027234814_mcp_oauth_durable_token_families.sql",
+    "20261028224728_full_scheduled_lunch_source_policy.sql",
+    "20261030031200_approved_manual_full_hour_coverers.sql",
+    "20261030050235_compact_approved_initial_confirmation.sql",
+    "20261030155202_approved_manual_current_day_activation.sql",
+    "20261031125902_approved_manual_native_operations.sql",
+    "20261031180631_cohort_ticket_transaction_context.sql",
+    "20261031225210_custodial_sealed_repairs_current_eight.sql",
+    "20261101034931_custodial_completion_evidence_cohort_read.sql",
+    "20261101044239_custodial_cohort_places_feedback.sql",
+    "20261102000000_unfinished_work_owner_attention.sql",
+    "20261102010000_local_retained_enrollment_partition.sql",
+    "20261102151842_current_source_recovery_binding.sql",
+    "20261102161602_current_recovery_column_order.sql",
+    "20261103004520_authoritative_events_cancellation.sql"
+  ]
+}

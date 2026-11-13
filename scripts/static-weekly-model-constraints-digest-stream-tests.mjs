@@ -1,3 +1,4 @@
+import {restoreFullHourProofSource} from './fixtures/full-hour-source-predecessors.mjs';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {types,isDeepStrictEqual} from 'node:util';
@@ -65,7 +66,7 @@ function install(mode,stats){
 }
 async function runCase(mode,{exoticOnly=false,primitiveOnly=false,depthOnly=false}={}){
  stage('import');let checks=0;const stats={sinks:0,writes:0,maxChunk:0,fallbacks:0};install(mode,stats);const legacy=await predecessor();checks++;
- assert.equal(sha(readFileSync(new URL('../src/static-weekly-schedule-model.js',import.meta.url))),modelSha);checks++;
+ assert.equal(sha(restoreFullHourProofSource('src/static-weekly-schedule-model.js',readFileSync(new URL('../src/static-weekly-schedule-model.js',import.meta.url),'utf8'))),modelSha);checks++;
  assert.equal(sha(readFileSync(new URL('../src/static-weekly-schedule-verifier.js',import.meta.url))),verifierSha);checks++;
  for(const altered of [text.replace('const modelBytes =','const modelBytesX ='),text.replace(newSite,newSite+'\n'+newSite),text.replace(newSite,oldSite)]){
   assert.throws(()=>reverseSingleSite(altered));checks++;

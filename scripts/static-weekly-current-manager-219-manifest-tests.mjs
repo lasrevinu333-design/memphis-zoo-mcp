@@ -1,3 +1,4 @@
+import {restoreCurrentDepartureProofSource} from './fixtures/current-departure-source-successor.mjs';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {readFileSync,mkdtempSync,mkdirSync,symlinkSync,rmSync} from 'node:fs';
@@ -14,7 +15,7 @@ export function runCurrentManager219ManifestTests({root=new URL('../',import.met
   const check=fn=>{fn();checks++;};
   const rows=assertCurrentManager219MigrationSet(root),original=JSON.stringify(rows);
   check(()=>assert.equal(rows.length,219));
-  check(()=>assert.equal(createHash('sha256').update(readFileSync(new URL('./fixtures/current-manager-publication-source.mjs',import.meta.url))).digest('hex'),
+  check(()=>assert.equal(createHash('sha256').update(restoreCurrentDepartureProofSource('scripts/fixtures/current-manager-publication-source.mjs',readFileSync(new URL('./fixtures/current-manager-publication-source.mjs',import.meta.url),'utf8'))).digest('hex'),
     'fb8ac53c6c6925ce63385bd13b0f68cc27572c0976efa1943bd7cee32eafaad1'));
   for(const [name,mutate] of [
     ['missing',r=>r.pop()],['extra',r=>r.push({file:'20261004010000_unapproved.sql',sha256:'0'.repeat(64)})],

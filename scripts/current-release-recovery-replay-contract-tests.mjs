@@ -1,3 +1,4 @@
+import {withHistoricalNative289SourceFixture} from './fixtures/historical-native289-source-fixture.mjs';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {readFileSync,readdirSync,mkdirSync,writeFileSync} from 'node:fs';
@@ -39,7 +40,8 @@ const predecessorReasons={
 // Current Source admission remains a separate full canonical289 proof. The
 // in-memory fake replay below exercises explicitly frozen218/219 original
 // plans and SQL bytes, never a filtered subset of current migration files.
-const currentCanonicalSource=readCurrentManagerCanonicalSource();
+await withHistoricalNative289SourceFixture(fileURLToPath(new URL('../',import.meta.url)),async historicalReaderRoot=>{
+const currentCanonicalSource=readCurrentManagerCanonicalSource(historicalReaderRoot);
 assert.equal(currentCanonicalSource.migration_profile,'CURRENT_CANONICAL_289');
 const forwardMigrations=withFrozenManagerSource('CURRENT_219',(frozenRoot,rows)=>new Map(
   rows.map(row=>[row.file,readFileSync(new URL('supabase/migrations/'+row.file,frozenRoot))])));
@@ -655,3 +657,5 @@ await test('raw partial migration failure output remains durable fake evidence',
 await test('seed readback keeps existing text completion operation type',async()=>{const {f}=await prepared();const sql=f.calls.find(x=>x.phase==='seed_readback').call.input;assert.ok(sql.includes("client_completion_id='"));assert.doesNotMatch(sql,/client_completion_id='[^']+'::uuid/)});
 await test('actual source enforces private exclusive durable outputs without endpoint imports',()=>{const text=readFileSync(new URL('./current-release-recovery-replay.mjs',import.meta.url),'utf8');assert.match(text,/O_CREAT\|constants.O_EXCL\|constants.O_NOFOLLOW/);assert.match(text,/fsyncSync\(fd\)/);assert.match(text,/s.uid===process.getuid/);assert.doesNotMatch(text,/from ['"].*(?:native-target-source-database-tests|empty-database-rebuild-check|refresh-schema-fingerprint)/);assert.doesNotMatch(text,/DATABASE_URL|process\.env\.(?:PG|DOCKER)|docker.*pull/)});
 console.log(JSON.stringify({schema:'custodial.current-recovery-replay-contract-receipt.v1',checks,engine_executed:false,database_connections:0,authority_configurations:0,containers_launched:0,output_files_created:0,subprocesses:'explicit in-memory fake only',release_admission:false}));
+
+});

@@ -1,3 +1,4 @@
+import {scheduleVersion,scheduleBoundaryValid,scheduleNotificationKey,scheduleLocalBoundary} from './native-schedule-version.js';
 import {createHash} from 'node:crypto';
 import {isDeepStrictEqual} from 'node:util';
 import {canonicalNativeLocation,validateNativeLocationRecipient} from './native-location-reservation.js';
@@ -27,10 +28,10 @@ export function validateNativeSchedulePayload(p,{jobId,expected,sourceCandidate}
  expected=validateNativeLocationRecipient(expected);
  if(!UUID.test(jobId)||!exact(p,NATIVE_SCHEDULE_PAYLOAD_KEYS)||!exact(sourceCandidate,candidateKeys)
   ||Object.entries(p).some(([key,x])=>!text(x)||!x||/[\u0000-\u001f\u007f-\u009f]/u.test(x)||Buffer.byteLength(x)>({title:180,notification_key:240}[key]||1000))
-  ||Object.values(sourceCandidate).some(x=>!text(x))||p.schema!==NATIVE_SCHEDULE_PAYLOAD_SCHEMA
-  ||sourceCandidate.schema!=='custodial.native-schedule-content-candidate.v1'||p.kind!=='employee_schedule_ownership'
+  ||Object.values(sourceCandidate).some(x=>!text(x))||!scheduleVersion(p.schema,'payload')
+  ||scheduleVersion(sourceCandidate.schema,'content-candidate')!==scheduleVersion(p.schema,'payload')||p.kind!=='employee_schedule_ownership'
   ||p.notification_type!=='schedule_ownership'||p.channel_id!=='employee-schedule-ownership'
-  ||p.route!=='employee-schedule.html?hub=employee'||p.boundary_local!=='09:45'||p.receipt_job_id!==jobId)invalid();
+  ||p.route!=='employee-schedule.html?hub=employee'||!scheduleBoundaryValid(p.boundary_local,scheduleVersion(p.schema,'payload'))||p.receipt_job_id!==jobId)invalid();
  for(const [field,key] of Object.entries({generation_id:'generation_id',principal_digest:'principal_digest',token_digest:'token_digest',receipt_credential_id:'credential_id',
   receipt_employee_id:'employee_id',receipt_device_id:'device_id',receipt_assignment_epoch:'assignment_epoch'}))if(p[field]!==expected[key])invalid();
  if(sourceCandidate.employee_id!==expected.employee_id||sourceCandidate.generation_id!==expected.generation_id)invalid();
@@ -38,9 +39,9 @@ export function validateNativeSchedulePayload(p,{jobId,expected,sourceCandidate}
  for(const field of ['generation_id','receipt_credential_id','receipt_employee_id','source_reservation_id','source_operation_id','projection_id','publication_id','version_id','assignment_occurrence_id'])if(!UUID.test(p[field]))invalid();
  for(const field of ['principal_digest','token_digest','content_sha256','source_window_sha256','server_source_sha256'])if(!SHA.test(p[field]))invalid();
  if(!/^[1-9][0-9]{0,15}$/.test(p.source_revision)||!Number.isSafeInteger(Number(p.source_revision))
-  ||p.notification_key!==`schedule-ownership:${p.service_date}:${p.receipt_employee_id}:09:45`)invalid();
+  ||p.notification_key!==scheduleNotificationKey(p,p.receipt_employee_id,scheduleVersion(p.schema,'payload')))invalid();
  const from=instant(p.source_valid_from),end=instant(p.source_valid_until),at=instant(p.reservation_at),until=instant(p.valid_until);
- if(!chicagoBoundary(from,p.service_date)||from>at||at>=until||until>end||from>=end)invalid();
+ if(!(scheduleLocalBoundary(from).date===p.service_date&&scheduleLocalBoundary(from).boundary===p.boundary_local&&scheduleLocalBoundary(from).exactMinute)||from>at||at>=until||until>end||from>=end)invalid();
  const wire=canonicalNativeLocation(p);
  if(Buffer.byteLength(p.title)>180||Buffer.byteLength(p.notification_key)>240||Buffer.byteLength(wire)>3500
   ||createHash('sha256').update(canonicalNativeLocation(p,{excludeHash:true})).digest('hex')!==p.content_sha256)invalid();

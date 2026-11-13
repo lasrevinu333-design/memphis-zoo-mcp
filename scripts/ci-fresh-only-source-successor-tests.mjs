@@ -1,3 +1,4 @@
+import {withCurrentMigrationSourceFixture} from './fixtures/current-migration-source-fixtures.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync,readdirSync} from 'node:fs';
 import {createHash} from 'node:crypto';
@@ -5,7 +6,9 @@ import {fileURLToPath} from 'node:url';
 import {resolve} from 'node:path';
 import {selectFreshOnlySourceRows} from './ci-fresh-only-source-successor.mjs';
 import {loadCiFreshOnlyReplay} from './ci-fresh-only-replay.mjs';
-const root=new URL('../',import.meta.url),sha=value=>createHash('sha256').update(value).digest('hex');
+const actualRoot=resolve(fileURLToPath(new URL('../',import.meta.url)));
+await withCurrentMigrationSourceFixture(actualRoot,304,async fixtureRoot=>{
+const root=new URL('file://'+fixtureRoot+'/'),sha=value=>createHash('sha256').update(value).digest('hex');
 const manifest=JSON.parse(readFileSync(new URL('release/fresh-only-replay/MANIFEST.json',root)));
 const names=readdirSync(new URL('supabase/migrations',root)).filter(x=>x.endsWith('.sql')).sort();
 const read=(path,expected)=>{const bytes=readFileSync(new URL(path,root));if(expected){assert.equal(bytes.length,expected.bytes);assert.equal(sha(bytes),expected.sha256);}return bytes;};
@@ -40,3 +43,5 @@ for(const path of ['release/fresh-only-replay/MANIFEST.json',...['298','299','30
  assert.throws(()=>selectFreshOnlySourceRows(manifest,names,(p,expected)=>{if(p!==path)return read(p,expected);const b=p==='release/fresh-only-replay/SOURCE302_SUCCESSOR.json'?Buffer.from(JSON.stringify({...JSON.parse(read(p)),source_migrations:303})):p==='release/fresh-only-replay/SOURCE303_SUCCESSOR.json'?Buffer.from(JSON.stringify({...JSON.parse(read(p)),source_migrations:304})):p==='release/fresh-only-replay/SOURCE304_SUCCESSOR.json'?Buffer.from(JSON.stringify({...JSON.parse(read(p)),source_migrations:305})):Buffer.concat([read(p),Buffer.from(' ')]);if(expected){assert.equal(b.length,expected.bytes);assert.equal(sha(b),expected.sha256);}return b;}),path);checks++;
 }
 console.log(JSON.stringify({status:'PASS',checks,predecessorMigrations:297,preservedSuccessors:[298,299,300,301,302,303],currentMigrations:304,frozenPredecessorUnchanged:true,profiles:['selected','no-auto'],SQL_executed:false}));
+
+});

@@ -1,8 +1,11 @@
+import {restoreCurrentDepartureProofSource} from './fixtures/current-departure-source-successor.mjs';
+import {restoreReminderHistoricalSource} from './fixtures/reminder-timing-source-successor.mjs';
+import {restoreSchedulerProofSource} from './fixtures/current-scheduler-source-profiles.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
-const root=new URL('../',import.meta.url),read=p=>readFileSync(new URL(p,root),'utf8');
+const root=new URL('../',import.meta.url),read=p=>restoreReminderHistoricalSource(p,readFileSync(new URL(p,root),'utf8'));
 const sha=s=>createHash('sha256').update(s).digest('hex');
 const path='scripts/fixtures/native-provider-credential-observation-proposal.sql';
 const signature='public.custodial_native_provider_credential_observation(uuid,text,text,uuid,text,text,jsonb)';
@@ -44,8 +47,8 @@ export function assertCredentialObservationSqlProposal(sql){
  return true;
 }
 export function runCredentialObservationSqlContractTests(){
- let checks=0;for(const[p,h]of Object.entries(pins)){assert.equal(sha(read(p)),h,p);checks++;}
- const auth=read('src/auth/device-credential-auth.js');
+ let checks=0;for(const[p,h]of Object.entries(pins)){assert.equal(sha(p==='src/request-json-parser.js'?restoreCurrentDepartureProofSource(p,read(p)):read(p)),h,p);checks++;}
+ const auth=restoreSchedulerProofSource('NATIVE_CURRENT_DEVICE_FULL_SOURCE_FOR_RETAINED_WIRING',read('src/auth/device-credential-auth.js'));
  const removed=auth.replace(/\/\/ BEGIN native credential observation imports[^]*?\/\/ END native credential observation imports\.\n/,'')
   .replace(/\/\/ BEGIN native credential observation proof\.[^]*?\/\/ END native credential observation proof\.\n\n/,'');
  assert.equal(sha(removed),'6e97fd2a8ebb5f1d87f81dd93697df9e052e8a97adeac9a7c6bd62e3c2d62660','reviewed current ordinary auth exact outside the observation blocks');checks++;

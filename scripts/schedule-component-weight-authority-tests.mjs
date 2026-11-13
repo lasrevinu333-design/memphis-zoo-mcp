@@ -1,3 +1,5 @@
+import './owner-schedule-oct28-tests.mjs';
+import {readHistoricalOwnerConfig} from './fixtures/historical-owner-config-source.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {createHash} from 'node:crypto';
@@ -14,7 +16,7 @@ const fixtureBytes=fs.readFileSync(new URL('./fixtures/six-person-absence-source
 assert.equal(sha(fixtureBytes),'882e5895d60338313b08f28ec327f2087468261749cdbac5dc7d78ac22e20469');
 const fixture=JSON.parse(fixtureBytes);
 const source=fixture.compilerInput;
-const configBytes=fs.readFileSync(new URL('../config/custodial-six-person-static-20261005.json',import.meta.url));
+const configBytes=readHistoricalOwnerConfig();
 assert.equal(sha(configBytes),'40da4e1d4cce52b2361b5403b7e5e4477ca00def0fd3649a1d76dacb48422f30');
 const ownerConfig=JSON.parse(configBytes),ledger=getScheduleComponentWeightLedger();
 const originalSource=JSON.stringify(source),originalConfig=JSON.stringify(ownerConfig);
@@ -111,7 +113,7 @@ check('phase report computes component sums, not inherited budgets',()=>{
 });
 check('source/config/all historical IDs and budget bytes unchanged',()=>{assert.equal(JSON.stringify(source),originalSource);assert.equal(JSON.stringify(ownerConfig),originalConfig);assert.equal(postgresJsonbContentDigest(source),fixture.sourceDigest);});
 const generator=fs.readFileSync(new URL('./generate-owner-corrected-static-weekly-schedule.mjs',import.meta.url),'utf8');
-check('generator exact-handout validation precedes compile',()=>{assert.ok(generator.includes('const componentWeightInputReceipt = exactSixPersonHandout'));assert.ok(generator.indexOf('validateScheduleComponentWeightSource({source:input,ownerConfig:config})')<generator.indexOf('await compileStaticWeeklySchedule(compileInput)'));});
+check('generator exact-handout validation precedes compile',()=>{assert.ok(generator.includes('const componentWeightInputReceipt = exactSixPersonHandout'));const validation=generator.indexOf('validateScheduleComponentWeightSource({source:input,ownerConfig:config})'),compile=generator.indexOf('await compileStaticWeeklyScheduleIsolated(compileInput)');assert.ok(validation>=0&&compile>validation);assert.equal(generator.split('await compileStaticWeeklyScheduleIsolated(compileInput)').length,2);assert.ok(generator.includes('finally { await shutdownStaticWeeklyCompiler(); }'));});
 check('canonical packet validation precedes registration',()=>assert.ok(generator.indexOf('validateScheduleComponentWeightPacket({packet,ownerConfig:config})')<generator.indexOf('await prepareStaticWeeklyRegistrationArtifact(packet)')));
 check('new receipt is separate sidecar with exact file hashes',()=>{assert.ok(generator.includes('`${OUTPUT}.component-weights.json`'));assert.ok(generator.includes('ownerConfigFileSha256:fileHash(CONFIG_PATH),packetFileSha256:fileHash(OUTPUT)'));});
 let retainedPacketReceipt=null;

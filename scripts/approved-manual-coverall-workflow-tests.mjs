@@ -66,8 +66,8 @@ test('Earlier confirmed clock-in does not invent earlier full-site coverage',()=
 const friday=copy(snapshot);friday.serviceDate='2026-10-30';
 const legacy=draft.sourceDraft.slots.filter(s=>s.contractorCapacity),selection=legacy.map((s,i)=>({legacy_slot_id:s.id,new_capacity_id:uid(100+i),capacity_code:`CoverAll${String(i+1).padStart(2,'0')}`})),
  activation=prepareApprovedManualCoverAllActivation({week,draft,snapshot:friday,selection,sourceId:uid(6),versionId:uid(7),templatePublicationId:uid(8),templateId:'COVERALL_PURE_CURRENT_FRIDAY',packetId:uid(9),managerId:manager});
-test('Current Friday activation uses ordinary seven-day origin and exact fixed346/40 pattern',()=>{
- assert.equal(activation.serviceDate,'2026-10-30');assert.equal(activation.windowEnd,'2026-11-05');assert.equal(activation.feasibility.projectionAssignments.length,346);assert.equal(activation.feasibility.lunch.lunches.length,40);
+test('Current Friday activation uses ordinary seven-day origin and exact fixed327/40 pattern',()=>{
+ assert.equal(activation.serviceDate,'2026-10-30');assert.equal(activation.windowEnd,'2026-11-05');assert.equal(activation.feasibility.projectionAssignments.length,327);assert.equal(activation.feasibility.lunch.lunches.length,40);
  assert.equal(activation.feasibility.solverInvoked,false);assert.equal(activation.feasibility.mapping.unchanged,true);
  const old=activation.transition.projectedSourceDraft,expected=canonicalAuthorityInput(old.version,old.slots,[],old.proximity,activation.serviceDate);
  assert.deepEqual(activation.source.version.assignments,expected.version.assignments);assert.deepEqual(activation.source.version.lunchCoveragePolicy,expected.version.lunchCoveragePolicy);

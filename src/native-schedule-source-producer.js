@@ -3,7 +3,7 @@ import {readNativeScheduleSourceRequests} from './native-schedule-source-discove
 import {prepareDiscoveredNativeScheduleJob} from './native-schedule-source-orchestration.js';
 // Client I/O budget only; it does not define cue timing or extend SQL validity.
 export const NATIVE_SCHEDULE_PREPARATION_BUDGET_MS=10_000;
-const allowed=new Set(['custodial_native_schedule_source_requests','custodial_native_schedule_preparation_source',
+const allowed=new Set(['custodial_native_departure_source_requests','custodial_native_departure_preparation_source','custodial_native_departure_source_reserve','custodial_native_schedule_source_requests','custodial_native_schedule_preparation_source',
  'custodial_native_schedule_source_reserve','custodial_native_schedule_content_source','custodial_native_schedule_job_prepare']);
 const skipped=new Set(['NO_OWNERSHIP_CHANGE','SOURCE_WINDOW_EXPIRED']);
 const freeze=v=>{if(v&&typeof v==='object'){Object.values(v).forEach(freeze);Object.freeze(v);}return v;};
@@ -18,13 +18,13 @@ export function boundedNativeScheduleSourceDb(db,signal){
   return builder.retry(false).abortSignal(signal);
  }});
 }
-export async function prepareNativeScheduleSourceJobs({db}){
+export async function prepareNativeScheduleSourceJobs({db,departure=false}){
  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),NATIVE_SCHEDULE_PREPARATION_BUDGET_MS);timer.unref?.();
  const base={schema:'custodial.native-schedule-source-producer.v1',dispatch_authorized:false,delivery_admitted:false,
   clock_effect_authority:null,retention_authority:null,native_qualified:false};
  let requested=null,prepared=0,replayed=0,pending=0,skip=0;const jobs=[],reasons=[];
  try{
-  const sourceDb=boundedNativeScheduleSourceDb(db,controller.signal),discovery=await readNativeScheduleSourceRequests({db:sourceDb});
+  const sourceDb=boundedNativeScheduleSourceDb(db,controller.signal),discovery=await readNativeScheduleSourceRequests({db:sourceDb,departure});
   if(discovery.status!=='SOURCE_CANDIDATES_ONLY')return freeze({...base,status:discovery.status,requested:null,prepared,replayed,pending:null,skipped:skip,jobs,reasons:[discovery.status]});
   requested=discovery.requests.length;
   for(const request of discovery.requests){

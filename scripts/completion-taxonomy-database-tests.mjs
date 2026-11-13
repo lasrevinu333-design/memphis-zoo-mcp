@@ -1,36 +1,21 @@
-import {migrationReplayNames} from './migration-replay-order.mjs';
+import {consumeCurrentQualifiedSqlFixture} from './current-qualified-sql-ci-fixture.mjs';
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
-import {readdirSync,readFileSync} from 'node:fs';
+import {readFileSync} from 'node:fs';
 import {createHash,randomUUID} from 'node:crypto';
-
-const container=`mz_completion_taxonomy_${process.pid}`;
-const image='supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed';
+// The original current310 producer owns construction and final cleanup. No
+// unbounded tmpfs launch or all-directory migration replay is accepted here.
+const fixture=await consumeCurrentQualifiedSqlFixture({name:'mz_schema_rebuild_taxonomy_'+process.pid});
+const container=fixture.container;
 const docker=(args,extra={})=>execFileSync('docker',args,{encoding:'utf8',timeout:60000,maxBuffer:32*1024*1024,stdio:['pipe','pipe','pipe'],...extra});
 const sql=statement=>docker(['exec','-i',container,'psql','-X','-q','-At','-v','ON_ERROR_STOP=1','-U','supabase_admin','-d','postgres'],{input:'set client_min_messages=warning;set statement_timeout=30000;'+statement}).trim();
 const q=value=>`'${String(value).replaceAll("'","''")}'`;
 const j=value=>`${q(JSON.stringify(value))}::jsonb`;
+let checks=0;
 const reject=(label,statement,pattern)=>{let error;try{sql(statement)}catch(e){error=e}assert.ok(error,label);assert.match(String(error.stderr),pattern,label);checks++;console.log('PASS',label)};
 const check=(label,actual,expected)=>{assert.deepEqual(actual,expected,label);checks++;console.log('PASS',label)};
-const defaultCount="select count(*) from pg_default_acl d cross join lateral aclexplode(d.defaclacl) a where d.defaclnamespace in (0,'public'::regnamespace) and d.defaclrole in ('postgres'::regrole,'supabase_admin'::regrole) and d.defaclobjtype in ('r','S') and a.grantee in (0,'anon'::regrole,'authenticated'::regrole,'service_role'::regrole)";
-const removeDefaults=()=>{for(const owner of ['postgres','supabase_admin'])for(const scope of ['',' in schema public'])sql(`alter default privileges for role ${owner}${scope} revoke all on tables from public,anon,authenticated,service_role;alter default privileges for role ${owner}${scope} revoke all on sequences from public,anon,authenticated,service_role;`)};
-let owned=false,checks=0;
-const cleanup=()=>{if(owned){docker(['rm','-f',container]);owned=false;assert.equal(docker(['ps','-a','--filter',`name=^/${container}$`,'--format','{{.Names}}']).trim(),'');console.log('OWNED_CONTAINER_REMOVED',container)}};
-for(const signal of ['SIGINT','SIGTERM'])process.once(signal,()=>{try{cleanup()}finally{process.exit(143)}});
-const files=migrationReplayNames(process.cwd());
-assert.ok(files.includes('20261003120000_completion_taxonomy_evidence.sql'));
-assert.ok(files.includes('20261003143000_issue_constraint_index_recovery.sql'));
-assert.ok(files.indexOf('20261003120000_completion_taxonomy_evidence.sql') <
-  files.indexOf('20261003143000_issue_constraint_index_recovery.sql'));
-const manifest=createHash('sha256').update(files.map(file=>`${file} ${createHash('sha256').update(readFileSync(`supabase/migrations/${file}`)).digest('hex')}`).join('\n')).digest('hex');
 try{
- docker(['image','inspect',image]);
- docker(['run','--rm','-d','--network','none','--name',container,'--tmpfs','/var/lib/postgresql/data:rw,size=1g','-e','POSTGRES_PASSWORD=postgres','-e','PGPASSWORD=postgres',image,'-c','shared_preload_libraries=pg_cron,pg_net,pg_stat_statements']);owned=true;
- console.log(JSON.stringify({container,image,manifest,migrations:files.length,synthetic:true}));
- let ready=0;for(let n=0;n<60&&ready<4;n++){try{sql('select 1');ready++}catch{ready=0}await new Promise(resolve=>setTimeout(resolve,500))}assert.equal(ready,4);
- removeDefaults();let defaultRepairs=0;
- for(const file of files){assert.equal(sql(defaultCount),'0','defaults before '+file);try{sql(readFileSync(`supabase/migrations/${file}`,'utf8'))}catch(error){console.error('FAILED_MIGRATION',file,String(error.stderr));throw error}if(Number(sql(defaultCount))){defaultRepairs++;removeDefaults()}assert.equal(sql(defaultCount),'0','defaults after '+file)}
- console.log('REPLAY_COMPLETE',files.length,'default_repairs',defaultRepairs);
+ await fixture.assertOwned();
  const expectedFunctions=[
   'public.custodial_completion_taxonomy_immutable()',
   'public.custodial_completion_assert_taxonomy(jsonb)',
@@ -173,4 +158,4 @@ try{
  reject('scoped restore keeps anonymous RPC denied',`set role anon;select public.custodial_manager_completion_evidence(${q(manager)},'taxonomy-session-1',${q(secret)});`,/permission denied/);
  console.log('GLOBAL_RESTORE_STATUS','PASS');
  console.log('PASS_COUNT',checks);
-}finally{cleanup()}
+}finally{await fixture.cleanup()}

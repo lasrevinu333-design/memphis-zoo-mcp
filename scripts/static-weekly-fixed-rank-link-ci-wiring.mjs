@@ -1,3 +1,4 @@
+import {restoreRuntimeCurrentSource} from './fixtures/scheduler-runtime-source-successor.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {resolve} from 'node:path';
@@ -43,7 +44,7 @@ function validate(source,wrapper,files){
 }
 export function verifyFixedRankLinkWiring(source,root){
  const wrapper=readFileSync(resolve(root,'scripts/static-weekly-fixed-rank-link-ci-tests.mjs'),'utf8');
- const files=Object.fromEntries(Object.keys(pins).map(path=>{const bytes=readFileSync(resolve(root,path),'utf8');return[path,path==='src/static-weekly-schedule-program.js'?restoreFullHourProofSource(path,bytes):bytes];}));
+ const files=Object.fromEntries(Object.keys(pins).map(path=>{const bytes=readFileSync(resolve(root,path),'utf8');return[path,path==='src/static-weekly-schedule-program.js'?restoreFullHourProofSource(path,bytes):restoreRuntimeCurrentSource(path,bytes)];}));
  const prior=validate(source,wrapper,files);let rejected=0;
  for(const replacement of ['',`// ${statement}`,statement+'\n'+statement,`if(false){${statement}}`,statement.replace('await ',''),statement.replace(');',').catch(()=>{});')]){assert.throws(()=>validate(source.replace(statement,replacement),wrapper,files));rejected++;}
  for(const[from,to]of [['process.uptime()*1000','0'],['+60000','+315000'],['receipt.checks,79','receipt.checks,0'],['receipt.completeTruthCases,16584','receipt.completeTruthCases,0'],['receipt.actualPrivateCaptureChecked,false','receipt.actualPrivateCaptureChecked,true'],['await runBoundedNodeProof','runBoundedNodeProof']]){

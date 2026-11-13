@@ -58,6 +58,9 @@ try{
  check((await request('/unconfigured/preview')).status,503,'missing service client fail closed');
  paused=true;const count=calls.filter(c=>c.name==='custodial_place_command').length;check((await request('/admin-api/places/commands',{body:command})).status,503,'actual restore guard pause');check(calls.filter(c=>c.name==='custodial_place_command').length,count,'pause never changes place');
  check(placeHttpFailure({message:'unrecognized'}).body.command_rejected,false,'unexpected failure conservatively unconfirmed');
- const index=readFileSync(new URL('../src/index.js',import.meta.url),'utf8');assert.match(index,/app\.use\("\/admin-api\/places", createPlacesAdminRouter\(\{ client: supabaseAdmin, requireManagerWrite: requireOpsManagerWrite, runReadOnlySql \}\)\)/);checks++;
+ const index=readFileSync(new URL('../src/index.js',import.meta.url),'utf8');assert.match(index,/app\.use\("\/admin-api\/places", createPlacesAdminRouter\(\{ client: supabaseAdmin, requireManagerWrite: requireOpsManagerWrite, runReadOnlySql, leadershipRecordBridge:createCustodialLeadershipRecordBridge\(\{env:process\.env\}\) \}\)\)/);checks++;
  console.log(JSON.stringify({status:'PLACE_HTTP_AUTH_GUARD_RPC_CONTRACT_PASS',checks,actualHttp:true,actualExistingAuth:true,database:'mock RPC; unchanged foundation has separate480-check DB proof',productionWritten:false}));
 }finally{await new Promise(r=>server.close(r));}
+
+// Current named-manager record bridge has its own actual router regressions.
+await import('./cohort-places-feedback-tests.mjs');

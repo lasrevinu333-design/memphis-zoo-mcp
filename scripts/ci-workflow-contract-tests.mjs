@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import {restoreCurrentDepartureProofSource} from './fixtures/current-departure-source-successor.mjs';
+import {verifyCurrentFoundationSource,currentFoundationReviewedRegressionView,restoreCurrentRepairWorkflowProof,restoreCurrentBuild52WorkflowProof} from './fixtures/current-foundation-source-successor.mjs';
 import {verifyFreshCurrentOwningWiring} from './current-system-fresh-owning-wiring.mjs';
 import './fixtures/full-hour-source-predecessors-tests.mjs';
 import './ci-fresh-only-source-successor-tests.mjs';
@@ -82,12 +84,12 @@ const postgresImagePins = postgresPinSources.flatMap((path) => {
     assert.deepEqual([...new Set(pins)], [qualifiedFreshReplayImage],
       `${path} must use only the exact qualified fresh-only replay image`);
   } else if (path === mixedFreshRepairWorkflowPath) {
-    assert.equal(createHash("sha256").update(readFileSync(path)).digest("hex"), mixedFreshRepairWorkflowSha256,
+    assert.equal(createHash("sha256").update(restoreCurrentRepairWorkflowProof(readFileSync(path,"utf8"))).digest("hex"), mixedFreshRepairWorkflowSha256,
       "mixed-image Repair must be the exact reviewed workflow with only two explicit fresh-only construction steps");
     assert.deepEqual([...new Set(pins)].sort(), [rehearsalPostgresImage, qualifiedFreshReplayImage, qualifiedFreshReplayMirror].sort(),
       "Repair must retain its recorder pin and exact-index mirror preseed with original ECR identity verification");
   } else if (path === mixedFreshFoundationWorkflowPath) {
-    assert.equal(createHash("sha256").update(readFileSync(path)).digest("hex"), mixedFreshFoundationWorkflowSha256,
+    assert.equal(createHash("sha256").update(verifyCurrentFoundationSource(root)).digest("hex"), mixedFreshFoundationWorkflowSha256,
       "mixed-image Foundation must be the exact reviewed workflow with only fixed manifest-selected fresh image provisioning");
     assert.deepEqual([...new Set(pins)].sort(), [rehearsalPostgresImage, qualifiedFreshReplayImage, qualifiedFreshReplayMirror].sort(),
       "Foundation retains its recorder image and separately selected fresh-only fixture image");
@@ -249,7 +251,7 @@ for (const name of workflowNames) {
   }
 }
 
-const schedulerGate = readFileSync(resolve(workflowDirectory, "foundation-security-gate.yml"), "utf8");
+const schedulerGate = currentFoundationReviewedRegressionView(readFileSync(resolve(workflowDirectory, "foundation-security-gate.yml"), "utf8"));
 assert.match(schedulerGate, /if: failure\(\)[\s\S]*name: ci-fresh-only-failure-evidence-\$\{\{ github\.run_id \}\}[\s\S]*path: \$\{\{ runner\.temp \}\}\/ci-fresh-only-failure-evidence\/[\s\S]*if-no-files-found: warn/,
   "failed fresh fixtures must export only their fixed bounded evidence path without changing required provenance upload");
 for (const selectedFreshWorkflow of [schedulerGate, readFileSync(mixedFreshRepairWorkflowPath, "utf8")]) {
@@ -636,6 +638,7 @@ console.log('Replay-digest called source gate PASS: '+replayDigestWiringMutation
 const modelBasisWrapper = readFileSync(resolve(root,'scripts/static-weekly-model-basis-digest-stream-ci-tests.mjs'),'utf8');
 const modelBasisTest = readFileSync(resolve(root,'scripts/static-weekly-model-basis-digest-stream-tests.mjs'),'utf8');
 function assertModelBasisCalledWiring(wrapper, owningTest) {
+  owningTest=restoreCurrentDepartureProofSource('scripts/static-weekly-model-basis-digest-stream-tests.mjs',owningTest);
   assert.equal(createHash('sha256').update(wrapper).digest('hex'),
     '43d1eeed288c6ec1e23174d8cd8a7154648783b84e20c7c6adf05239324a5a0a',
     'exact isolated called wrapper, clean environment, five modes and finite limits required');
@@ -678,6 +681,7 @@ const constraintsWrapper=readFileSync(resolve(root,'scripts/static-weekly-model-
 const constraintsTest=readFileSync(resolve(root,'scripts/static-weekly-model-constraints-digest-stream-tests.mjs'),'utf8');
 const constraintsProgram=readFileSync(resolve(root,'src/static-weekly-schedule-program.js'),'utf8');
 function assertConstraintsCalledWiring(sourceSuite,wrapper,owningTest,program) {
+  owningTest=restoreCurrentDepartureProofSource('scripts/static-weekly-model-constraints-digest-stream-tests.mjs',owningTest);
   assertCompletionRecoveryWiring(productionRepairGate,sourceSuite);
   const imports=sourceSuite.split('\n').map(line=>line.trim()).filter(line=>/^await import\(/.test(line));
   assert.equal(imports.length,50,'exact50 owning inventory required');
@@ -772,6 +776,7 @@ const messageOwningTest=readFileSync(resolve(root,'scripts/employee-message-sour
 const messageReplayTest=readFileSync(resolve(root,'scripts/employee-message-source-admission-replay-contract-tests.mjs'),'utf8');
 const lunchFusionImport="await import('./static-weekly-lunch-fused-seed-ci-tests.mjs');";
 function assertMessageCalledWiring(sourceSuite,wrapper,owningTest,replayTest) {
+  wrapper=restoreCurrentDepartureProofSource('scripts/employee-message-source-admission-ci-tests.mjs',wrapper);
   replayTest=restoreSchedulerProofSource('MESSAGE_CURRENT_CANONICAL_REPLAY_TEST',replayTest);
   assertCompletionRecoveryWiring(productionRepairGate,sourceSuite);
   const lines=sourceSuite.split('\n');
@@ -1098,7 +1103,7 @@ const fullCandidateMigrationInvoker = readFileSync(resolve(root,"scripts/run-rel
 const ownedMigrationCommandProducer = readFileSync(resolve(root,"scripts/run-release-migration-target-capture.mjs"),"utf8");
 const localProductionBackupRehearsal = readFileSync(resolve(root, "scripts/run-production-backup-migration-rehearsal.sh"), "utf8");
 const build52ProductionMigrationApply = readFileSync(resolve(workflowDirectory, "build52-production-migration-apply.yml"), "utf8");
-assert.equal(createHash("sha256").update(build52ProductionMigrationApply, "utf8").digest("hex"),
+assert.equal(createHash("sha256").update(restoreCurrentBuild52WorkflowProof(build52ProductionMigrationApply), "utf8").digest("hex"),
   "6f6f498a29f0cf189123050b7dda63feada17c9fed49fe208281390a0fbd0a05",
   "Build52 length measurement requires the exact reviewed whole workflow");
 assert.match(build52ProductionMigrationApply, /node scripts\/current291-production-plan-source-tests\.mjs/,

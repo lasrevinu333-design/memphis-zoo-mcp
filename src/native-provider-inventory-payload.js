@@ -1,7 +1,8 @@
 import {createHash} from 'node:crypto';
 import {isDeepStrictEqual} from 'node:util';
 import {NATIVE_EVENT_SCHEMA,NATIVE_MESSAGE_SCHEMA,NATIVE_EVENT_KEYS,NATIVE_MESSAGE_KEYS,canonicalNativeAlert} from './native-alert-reservation.js';
-import {NATIVE_SCHEDULE_PAYLOAD_SCHEMA,NATIVE_SCHEDULE_PAYLOAD_KEYS} from './native-schedule-payload.js';
+import {NATIVE_SCHEDULE_PAYLOAD_KEYS} from './native-schedule-payload.js';
+import {scheduleVersion,scheduleBoundaryValid,scheduleNotificationKey,scheduleLocalBoundary} from './native-schedule-version.js';
 
 // Inventory response validation ONLY. SQL owns current business source and
 // original registration/token bindings; this parser does not manufacture a
@@ -31,7 +32,7 @@ export function validateNativeProviderInventoryPayload(p,actor){
   ||!SHA.test(actor.principal_digest)||!/^KIOSK_(?:0[2-9]|10)$/.test(actor.device_id))fail();
  positive(actor.assignment_epoch,16);
  const schema=p&&Object.getPrototypeOf(p)===Object.prototype?Object.getOwnPropertyDescriptor(p,'schema')?.value:null;
- const schedule=schema===NATIVE_SCHEDULE_PAYLOAD_SCHEMA,event=schema===NATIVE_EVENT_SCHEMA,message=schema===NATIVE_MESSAGE_SCHEMA;
+ const schedule=scheduleVersion(schema,'payload'),event=schema===NATIVE_EVENT_SCHEMA,message=schema===NATIVE_MESSAGE_SCHEMA;
  if(!schedule&&!event&&!message)fail();
  if(!exact(p,schedule?NATIVE_SCHEDULE_PAYLOAD_KEYS:event?NATIVE_EVENT_KEYS:NATIVE_MESSAGE_KEYS)
   ||Object.entries(p).some(([k,v])=>!text(v)||!v||/[\u0000-\u001f\u007f-\u009f]/u.test(v)
@@ -45,14 +46,13 @@ export function validateNativeProviderInventoryPayload(p,actor){
   ||createHash('sha256').update(canonicalNativeAlert(p,{excludeHash:true})).digest('hex')!==p.content_sha256)fail();
  if(schedule){
   if(p.kind!=='employee_schedule_ownership'||p.notification_type!=='schedule_ownership'||p.channel_id!=='employee-schedule-ownership'
-   ||p.route!=='employee-schedule.html?hub=employee'||p.boundary_local!=='09:45'
-   ||p.notification_key!==`schedule-ownership:${p.service_date}:${actor.employee_id}:09:45`)fail();
+   ||p.route!=='employee-schedule.html?hub=employee'||!scheduleBoundaryValid(p.boundary_local,schedule)
+   ||p.notification_key!==scheduleNotificationKey(p,actor.employee_id,schedule))fail();
   for(const k of ['source_reservation_id','source_operation_id','projection_id','publication_id','version_id','assignment_occurrence_id'])if(!UUID.test(p[k]))fail();
   for(const k of ['source_window_sha256','server_source_sha256'])if(!SHA.test(p[k]))fail();positive(p.source_revision,16);
   const start=instant(p.source_valid_from),end=instant(p.source_valid_until);if(start>from||until>end||start>=end)fail();
-  const x=Object.fromEntries(new Intl.DateTimeFormat('en-GB',{timeZone:'America/Chicago',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'})
-   .formatToParts(new Date(start)).map(v=>[v.type,v.value]));
-  if(`${x.year.padStart(4,'0')}-${x.month}-${x.day}`!==p.service_date||x.hour!=='09'||x.minute!=='45'||x.second!=='00'||!start.endsWith('00.000000Z'))fail();
+  const x=scheduleLocalBoundary(start);
+  if(x.date!==p.service_date||x.boundary!==p.boundary_local||!x.exactMinute)fail();
  }else if(event){
   if(p.kind!=='employee_event'||p.notification_type!=='event'||p.channel_id!=='employee-events'
    ||![p.event_id,p.instance_id,p.recipient_device_uuid].every(v=>UUID.test(v))||!SHA.test(p.source_revision)

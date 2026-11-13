@@ -1,3 +1,4 @@
+import {withHistoricalNative289SourceFixture} from './fixtures/historical-native289-source-fixture.mjs';
 import assert from 'node:assert/strict';
 import {readCurrentManagerCanonicalSource,withFrozenManagerSource,frozenManagerSourceModel} from './fixtures/current-manager-source-contract-models.mjs';
 import {spawnSync} from 'node:child_process';
@@ -18,9 +19,10 @@ import {postgresJsonbContentDigest} from '../src/static-weekly-schedule-program.
 import {normalizeStaticWeeklyAuthority} from '../src/static-weekly-schedule-program.js';
 import {assertStoredNamedSourceBoundary} from './static-weekly-named-handoff-contract-tests.mjs';
 
+await withHistoricalNative289SourceFixture(fileURLToPath(new URL('../',import.meta.url)),async historicalReaderRoot=>{
 let checks=0;const check=(name,fn)=>{fn();checks++;console.log('PASS',name);};
 const f=loadCurrentManagerPublicationFixture(),p=f.packet;
-check('explicit complete canonical289 Source remains separate from historical SQL fixtures',()=>{const current=readCurrentManagerCanonicalSource();assert.equal(current.migration_profile,'CURRENT_CANONICAL_289');assert.equal(current.migrations.length,289);assert.equal(current.canonical_manifest_sha256,'e5867270c2509b986708caf32109956bedf0703363dcc1d775f1737f502c5c68');assert.equal(current.manifest_sha256,'fe4617a721731b9601b399193eaa67c904d4197efe9af506a575d2d01a1696b8');});
+check('explicit complete canonical289 Source remains separate from historical SQL fixtures',()=>{const current=readCurrentManagerCanonicalSource(historicalReaderRoot);assert.equal(current.migration_profile,'CURRENT_CANONICAL_289');assert.equal(current.migrations.length,289);assert.equal(current.canonical_manifest_sha256,'e5867270c2509b986708caf32109956bedf0703363dcc1d775f1737f502c5c68');assert.equal(current.manifest_sha256,'fe4617a721731b9601b399193eaa67c904d4197efe9af506a575d2d01a1696b8');});
 check('historical Source profiles are explicit and never inferred from current count',()=>{for(const profile of [undefined,null,'AUTO','CURRENT_CANONICAL_289',218])assert.throws(()=>frozenManagerSourceModel(profile));});
 check('historical Source copies close on callback failure without replacing its error',()=>{let observedRoot;const failure=new Error('owned Source callback failure');assert.throws(()=>withFrozenManagerSource('CURRENT_219',root=>{observedRoot=root;throw failure;}),error=>error===failure);assert.ok(observedRoot);assert.equal(existsSync(observedRoot),false);});
 check('old SQL stage validators independently refuse the complete current289 source',()=>{for(const validate of [assertCurrentManagerMigrationSet,assertCurrentManager217MigrationSet,assertCurrentManager218MigrationSet,assertCurrentManager219MigrationSet])assert.throws(()=>validate(),/requires all21[6789] migrations/);});
@@ -209,3 +211,5 @@ check('current stage registers original only as immutable source and preserves s
 });
 console.log(JSON.stringify({status:'PASS',checks,scope:'current-manager fixture and executable-route preflight only',
  migrationCount:219,originalRows:314,currentRows:323,derivedRows:494,solver:false,database:false,publication:false,production:false}));
+
+});

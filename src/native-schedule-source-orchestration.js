@@ -37,17 +37,17 @@ export function validateNativeSchedulePreparationSource(v,{discovery,request}){
 // Every write below uses the existing
 // typed source/job RPCs; all native qualification/send permissions stay false.
 export async function prepareDiscoveredNativeScheduleJob({db,discovery,request,sourceOperationId,jobOperationId}){
- const c=context(discovery,request);
+ const c=context(discovery,request),departure=c.discovery.schema==='custodial.native-schedule-source-requests.v2';
  if(typeof db?.rpc!=='function'||![sourceOperationId,jobOperationId].every(x=>typeof x==='string'&&UUID.test(x)))invalid();
  const pending=reason=>freeze({schema:'custodial.native-schedule-source-orchestration.v1',status:'SOURCE_JOB_PENDING',reason,
   dispatch_authorized:false,delivery_admitted:false,clock_effect_authority:null,retention_authority:null,job:null});
- let r;try{r=await db.rpc('custodial_native_schedule_preparation_source',{p_source:c.request.source_key,p_employee:c.request.employee_id,p_generation:c.request.generation_id});}
+ let r;try{r=await db.rpc(departure?'custodial_native_departure_preparation_source':'custodial_native_schedule_preparation_source',{p_source:c.request.source_key,p_employee:c.request.employee_id,p_generation:c.request.generation_id});}
  catch{return pending('PREPARATION_SOURCE_UNAVAILABLE');}
  if(r?.error)return pending('PREPARATION_SOURCE_UNAVAILABLE');
  const source=validateNativeSchedulePreparationSource(r?.data,c);
  if(source.status!=='CURRENT_PREPARATION_SOURCE_ONLY')return pending(source.source_status);
  const p=source.preparation;
- const content=await prepareNativeScheduleContent({db,sourceKey:p.source_key,employeeId:p.employee_id,generationId:p.generation_id,
+ const content=await prepareNativeScheduleContent({db,departure,sourceKey:p.source_key,employeeId:p.employee_id,generationId:p.generation_id,
   expectedSourceSha256:p.expected_source_sha256,operationId:sourceOperationId});
  if(content.status!=='CONTENT_PREPARED_NATIVE_UNQUALIFIED')return pending(content.reason);
  const candidate=content.candidate;

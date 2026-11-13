@@ -1,3 +1,4 @@
+import {restoreRecognizedRuntimeSource} from './fixtures/scheduler-runtime-source-successor.mjs';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {constants,readFileSync,openSync,fstatSync,closeSync,mkdtempSync,writeFileSync,unlinkSync,rmdirSync} from 'node:fs';
@@ -109,7 +110,7 @@ export async function runStaticWeeklyFixedRankLinkTests({actual=false}={}){
  const previous=reverseFixedRankLinks(text);checks++;
  for(const bad of [text+'\n',text.replace(linkStart,linkStart+linkStart),text.replace('const modelBytes =','const modelBytesX =')]){assert.throws(()=>reverseFixedRankLinks(bad));checks++;}
  const legacy=await moduleFrom(previous),privateModule=await moduleFrom(text+'\nexport { fixedBinaryDailyRankValues as __testFixedValues };\n'),helper=privateModule.__testFixedValues;
- for(const [file,digest]of [['static-weekly-schedule-model.js','6c956a2f3e7cb1a9f6366515393cf2eab03639776f64e53a38317a0010956271'],['static-weekly-schedule-verifier.js','1700488fafa6e7683aed9ba11e1d6b0eb9800ed4a19d2713410a987417bfcabf'],['static-weekly-schedule-compiler.js','12256a5922c1f1e4f4d4b67da211c4adb74f5b328fb82ff178eb032387f94b03']]){assert.equal(sha(readFileSync(new URL('../src/'+file,import.meta.url))),digest);checks++;}
+ for(const [file,digest]of [['static-weekly-schedule-model.js','6c956a2f3e7cb1a9f6366515393cf2eab03639776f64e53a38317a0010956271'],['static-weekly-schedule-verifier.js','1700488fafa6e7683aed9ba11e1d6b0eb9800ed4a19d2713410a987417bfcabf'],['static-weekly-schedule-compiler.js','12256a5922c1f1e4f4d4b67da211c4adb74f5b328fb82ff178eb032387f94b03']]){assert.equal(sha(restoreRecognizedRuntimeSource('src/'+file,readFileSync(new URL('../src/'+file,import.meta.url),'utf8'))),digest);checks++;}
  const verifier=readFileSync(new URL('../src/static-weekly-schedule-verifier.js',import.meta.url),'utf8');
  assert.ok(verifier.includes('generateStaticWeeklySchedulingProgram(input, null, deadline)'));assert.ok(verifier.includes('iterateStaticWeeklySchedulingWitnessTiers(regenerated, witnessByName, deadline)'));checks+=2;
  same(derive(helper,shape()),[5,0,0],'Supported endpoint bindings');checks++;

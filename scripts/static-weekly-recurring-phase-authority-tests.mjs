@@ -1,3 +1,4 @@
+import {readHistoricalOwnerConfig} from './fixtures/historical-owner-config-source.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {fileURLToPath} from 'node:url';
@@ -147,7 +148,7 @@ export function runStaticWeeklyRecurringPhaseAuthorityTests(){
   const p=enumerateRecurringPhaseMinimum(f);assert.equal(p.status,'UNKNOWN_RESOURCE_BOUND');assert.equal(p.enumerated,0);assert.equal(p.minimumDoubledSpread,null);assert.equal(p.halfUnitFeasible,null);});
  // Actual retained six-person input, not a synthetic-success replacement.
  const packetBytes=fs.readFileSync(new URL('./fixtures/static-weekly-policy-scope-receipts.json',import.meta.url));
- const configBytes=fs.readFileSync(new URL('../config/custodial-six-person-static-20261005.json',import.meta.url));
+ const configBytes=readHistoricalOwnerConfig();
  check('retained actual source fixture and current owner config bytes pinned',()=>{
   assert.equal(createHash('sha256').update(packetBytes).digest('hex'),'197d8eb0078f2bc9acb3cfb667c64874c8e41944f600bbaa026675d4594e9dfc');
   assert.equal(createHash('sha256').update(configBytes).digest('hex'),'40da4e1d4cce52b2361b5403b7e5e4477ca00def0fd3649a1d76dacb48422f30');
@@ -267,7 +268,7 @@ export async function runStaticWeeklyRecurringPhaseScalableTests(){
   });
  }
  const packet=JSON.parse(fs.readFileSync(new URL('./fixtures/static-weekly-policy-scope-receipts.json',import.meta.url)));
- const source=packet.cases.baseline.input,currentConfig=JSON.parse(fs.readFileSync(new URL('../config/custodial-six-person-static-20261005.json',import.meta.url)));
+ const source=packet.cases.baseline.input,currentConfig=JSON.parse(readHistoricalOwnerConfig());
  const guidance=JSON.parse(fs.readFileSync(new URL('../config/custodial-full-nine-family-owners-20260926.json',import.meta.url))).owners;
  const currentBefore=canonicalJson(source),current=deriveScalableCanonicalRecurringPhaseCandidate({source,currentConfig,fullOwners:guidance,dayOfWeek:1,solver});
  console.log('CURRENT_PHASE_RESULT',JSON.stringify({status:current.status,reason:current.reason,minimumDoubledSpread:current.minimumDoubledSpread,
@@ -374,7 +375,7 @@ export async function runStaticWeeklyRecurringPhaseScalableTests(){
 export async function runRecurringAdminMorningReferenceTests(){
  const started=performance.now();let checks=0;const check=(name,fn)=>{fn();checks++;console.log('PASS',name);};
  installStaticWeeklySha256HexAccelerator(text=>createHash('sha256').update(text,'utf8').digest('hex'));
- const currentConfig=JSON.parse(fs.readFileSync(new URL('../config/custodial-six-person-static-20261005.json',import.meta.url))),
+ const currentConfig=JSON.parse(readHistoricalOwnerConfig()),
   guidance=JSON.parse(fs.readFileSync(new URL('../config/custodial-full-nine-family-owners-20260926.json',import.meta.url))).owners;
  const configBefore=canonicalJson(currentConfig),guideBefore=canonicalJson(guidance);
  for(let day=0;day<7;day++)for(const family of ['EAST_ADMIN','WEST_ADMIN']){
@@ -495,7 +496,7 @@ export function runRecurringIdentityRadixTests(){
 }
 function fullNineSyntheticFixtureFactory(){
  const fullConfig=JSON.parse(fs.readFileSync(new URL('../config/custodial-recurring-schedule-20260924.json',import.meta.url))),
-  correctionConfig=JSON.parse(fs.readFileSync(new URL('../config/custodial-six-person-static-20261005.json',import.meta.url))),
+  correctionConfig=JSON.parse(readHistoricalOwnerConfig()),
   fullIdentity=JSON.parse(fs.readFileSync(new URL('../config/custodial-full-nine-family-owners-20260926.json',import.meta.url))),fullOwners=fullIdentity.owners;
  // Hosted loading verifies the included lossless historical compiler input,
  // not its omitted original wrapper. An explicitly requested original has an
@@ -777,7 +778,7 @@ export async function runRecurringCurrentHandoutStructureTests(){
  const started=performance.now();let checks=0;const check=(name,fn)=>{fn();checks++;console.log('PASS',name);};
  installStaticWeeklySha256HexAccelerator(text=>createHash('sha256').update(text,'utf8').digest('hex'));
  const packet=JSON.parse(fs.readFileSync(new URL('./fixtures/static-weekly-policy-scope-receipts.json',import.meta.url))),
-  templateConfig=JSON.parse(fs.readFileSync(new URL('../config/custodial-six-person-static-20261005.json',import.meta.url))),
+  templateConfig=JSON.parse(readHistoricalOwnerConfig()),
   fullOwners=JSON.parse(fs.readFileSync(new URL('../config/custodial-full-nine-family-owners-20260926.json',import.meta.url))).owners;
  const fullConfig=JSON.parse(fs.readFileSync(new URL('../config/custodial-recurring-schedule-20260924.json',import.meta.url)));
  const make=count=>{

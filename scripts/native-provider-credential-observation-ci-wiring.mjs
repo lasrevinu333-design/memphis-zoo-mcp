@@ -1,3 +1,4 @@
+import {restoreCurrentDepartureProofSource} from './fixtures/current-departure-source-successor.mjs';
 import {restoreSchedulerProofSource} from './fixtures/current-scheduler-source-profiles.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -29,7 +30,7 @@ function validate(source,actual,files){
 }
 export function verifyCredentialObservationWiring(source,root){
  const actual=readFileSync(resolve(root,'scripts/native-provider-credential-observation-ci-tests.mjs'),'utf8');
- const files=Object.fromEntries(Object.keys(pins).map(p=>{const source=readFileSync(resolve(root,p),'utf8');return[p,p==='src/auth/device-credential-auth.js'?restoreSchedulerProofSource('NATIVE_CURRENT_DEVICE_FULL_SOURCE_FOR_RETAINED_WIRING',source):p==='scripts/native-provider-credential-observation-http-tests.mjs'?restoreSchedulerProofSource('NATIVE_CURRENT_HTTP_SELECTED_DEVICE_PIN',source):source];}));
+ const files=Object.fromEntries(Object.keys(pins).map(p=>{const source=readFileSync(resolve(root,p),'utf8');return[p,['src/request-json-parser.js','scripts/native-provider-credential-observation-sql-contract-tests.mjs'].includes(p)?restoreCurrentDepartureProofSource(p,source):p==='src/auth/device-credential-auth.js'?restoreSchedulerProofSource('NATIVE_CURRENT_DEVICE_FULL_SOURCE_FOR_RETAINED_WIRING',source):p==='scripts/native-provider-credential-observation-http-tests.mjs'?restoreSchedulerProofSource('NATIVE_CURRENT_HTTP_SELECTED_DEVICE_PIN',source):source];}));
  const prior=validate(source,actual,files);let hostile=0;
  for(const replacement of ['', '// '+statement,statement+'\n'+statement,'if(false){'+statement+'}',statement.replace('await ',''),statement.replace(');',').catch(()=>{});')]){
   assert.throws(()=>validate(source.replace(statement,replacement),actual,files));hostile++;

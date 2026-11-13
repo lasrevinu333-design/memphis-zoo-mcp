@@ -1,0 +1,1 @@
+Exact SQL files extracted from the existing pinned Supabase PostgreSQL image. Hashes and image identity are in ../current-replay-vendor-files.json. Used only by the explicit no-network owned test reconstruction; no production replay authority.

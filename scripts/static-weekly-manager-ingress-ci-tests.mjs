@@ -25,8 +25,8 @@ for(const[file,expected]of entries){
   const proof=JSON.parse(result.stdout.trim().split('\n').at(-1));
   assert.equal(proof.status,'PASS');assert.equal(proof.checks,expected);
   if(file==='scripts/static-weekly-manager-operation-tests.mjs'){
-   assert.equal(proof.currentChecks,56);
-   assert.equal(proof.currentOwnerSourceSha256,'ae546852ebde937d1b75f2cb6db35cdfcdc8aea3bc44e5da400076e995e8a32f');
+   assert.equal(proof.currentChecks,78);
+   assert.equal(proof.currentOwnerSourceSha256,'5ceffc972ea3c23ae27b47db5974e4d707923e1431ec8200a55117514ca242f6');
    assert.equal(proof.historicalOwnerSourceSha256,'74510b9c0f65f6ad03e523e7bd7ff5b0d4af859ec8939044781bfce58797c717');
   }
  }else assert.equal(result.stdout.trim().split('\n').filter(x=>x===expected).length,1);

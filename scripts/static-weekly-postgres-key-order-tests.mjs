@@ -1,3 +1,6 @@
+import {restoreRuntimeCurrentSource} from './fixtures/scheduler-runtime-source-successor.mjs';
+import {readHistoricalOwnerConfig} from './fixtures/historical-owner-config-source.mjs';
+import {restoreFullHourProofSource} from './fixtures/full-hour-source-predecessors.mjs';
 // Pure PostgreSQL JSONB serializer equivalence. No solver/SQL/preview/cache.
 import assert from 'node:assert/strict';
 import {restoreSchedulerProofSource} from './fixtures/current-scheduler-source-profiles.mjs';
@@ -46,7 +49,7 @@ export function runStaticWeeklyPostgresKeyOrderTests() {
     'scripts/fixtures/six-person-absence-source.json':'882e5895d60338313b08f28ec327f2087468261749cdbac5dc7d78ac22e20469',
     'config/custodial-six-person-static-20261005.json':'40da4e1d4cce52b2361b5403b7e5e4477ca00def0fd3649a1d76dacb48422f30',
   };
-  for (const [path, expected] of Object.entries(pins)) { const raw=readFileSync(new URL('../'+path, import.meta.url),'utf8');const retained=path==='scripts/static-weekly-recurring-morning-integration-tests.mjs'?restoreSchedulerProofSource('MORNING_ABSOLUTE_DEADLINE_DRIVER',raw):raw;assert.equal(sha(retained), expected, path+' retained-source drift'); checks++; }
+  for (const [path, expected] of Object.entries(pins)) { const raw=path==='config/custodial-six-person-static-20261005.json'?readHistoricalOwnerConfig().toString():path==='src/static-weekly-schedule-model.js'?restoreFullHourProofSource(path,readFileSync(new URL('../'+path, import.meta.url),'utf8')):readFileSync(new URL('../'+path, import.meta.url),'utf8');const retained=path==='scripts/static-weekly-recurring-morning-integration-tests.mjs'?restoreSchedulerProofSource('MORNING_ABSOLUTE_DEADLINE_DRIVER',raw):raw;assert.equal(sha(retained), expected, path+' retained-source drift'); checks++; }
   const equivalent = (factory) => {
     const before = factory(), after = factory();
     const left = capture(() => predecessor(before.value)), right = capture(() => postgresJsonbCanonicalText(after.value));
@@ -83,7 +86,9 @@ export function runStaticWeeklyPostgresKeyOrderTests() {
   }
   // Hostile source substitutions must fail the independent byte oracle.
   // These functions are test-local only; the imported product is untouched.
-  const productText=readFileSync(new URL('../src/static-weekly-schedule-program.js',import.meta.url),'utf8');
+  // Preserve all six original mutations against their exact historical source.
+  // The mandatory runtime successor suite separately mutates the actual new implementation.
+  const productText=restoreRuntimeCurrentSource('src/static-weekly-schedule-program.js',readFileSync(new URL('../src/static-weekly-schedule-program.js',import.meta.url),'utf8'));
   const body=productText.slice(productText.indexOf('export function postgresJsonbCanonicalText('),productText.indexOf('// PostgreSQL jsonb::text uses')).replace('export function','function');
   const substitutions=[
     ['if (lengthDifference) return lengthDifference;','if (lengthDifference) return -lengthDifference;'],

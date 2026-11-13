@@ -1,3 +1,8 @@
+import {runHistoricalManagerOperationProof} from './fixtures/historical-manager-operation-proof.mjs';
+await runHistoricalManagerOperationProof();
+await import('./initial-manual-activation-deadline-tests.mjs');
+await import('./scheduling-current310-snapshot-context-tests.mjs');
+// Separately identified R007 current-source successor. Original test and historical block are preserved.
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
 import {beginBoundedManagerRequest,MANAGER_OPERATION_MILLISECONDS,CLEANUP_RESERVE_MILLISECONDS} from './fixtures/static-weekly-manager-operation-before-general-owner.mjs';
@@ -56,15 +61,15 @@ for(const path of ['/static-weekly/recurring-adaptation/PREVIEW', '/static-weekl
 let currentChecks=0;const currentSame=(actual,expected,label)=>{assert.deepEqual(actual,expected,label);currentChecks++;};
 const sourceSha=path=>createHash('sha256').update(readFileSync(new URL(path,import.meta.url))).digest('hex');
 currentSame(sourceSha('./fixtures/static-weekly-manager-operation-before-general-owner.mjs'),'74510b9c0f65f6ad03e523e7bd7ff5b0d4af859ec8939044781bfce58797c717','exact historical208368 Source');
-currentSame(sourceSha('../src/static-weekly-manager-operation.js'),'ae546852ebde937d1b75f2cb6db35cdfcdc8aea3bc44e5da400076e995e8a32f','exact current general owner Source');
+currentSame(sourceSha('../src/static-weekly-manager-operation.js'),'5ceffc972ea3c23ae27b47db5974e4d707923e1431ec8200a55117514ca242f6','exact current manager owner Source');
 currentSame(CURRENT_MANAGER_OPERATION_MILLISECONDS,60000,'same absolute owner budget');currentSame(CURRENT_CLEANUP_RESERVE_MILLISECONDS,5000,'same interior cleanup reserve');
 for(const path of ['/static-weekly/manager-snapshot','/static-weekly/recurring-adaptation/preview//','/static-weekly/recurring-adaptation/preview-extra','/static-weekly/approved-initial/confirm','/static-weekly/staffing-commands/confirm']){
  const f=fixture(path,'POST',beginCurrentBoundedManagerRequest);currentSame(f.context.deadlineAt,60100,'all static-weekly POST starts at original ingress');currentSame(f.context.readOnly,false,'POST is not a readonly owner');currentSame(f.timer.delay,55000,'same reserve');f.finish();currentSame(f.timer,null,'normal completion clears exact timer');
 }
-for(const path of ['/static-weekly/APPROVED-INITIAL/selection/','/static-weekly/approved-initial/confirmations/owned-original','/static-weekly/recurring-adaptation/confirmations/owned-original','/static-weekly/staffing-commands','/static-weekly/staffing-commands/owned-original']){
+for(const path of ['/static-weekly/manager-snapshot','/static-weekly/manual-activation/roster','/static-weekly/manual-activation/outcome','/static-weekly/approved-choices','/static-weekly/APPROVED-CHOICES/','/static-weekly/APPROVED-INITIAL/selection/','/static-weekly/approved-initial/confirmations/owned-original','/static-weekly/recurring-adaptation/confirmations/owned-original','/static-weekly/staffing-commands','/static-weekly/staffing-commands/owned-original']){
  const f=fixture(path,'GET',beginCurrentBoundedManagerRequest);currentSame(f.context.deadlineAt,60100,'approved original reader shares same ingress budget');currentSame(f.context.readOnly,true,'actual approved GET owner is readonly');f.finish();currentSame(f.timer,null,'reader finish clears timer');
 }
-for(const [path,method]of [['/outside/static-weekly','POST'],['/static-weekly/manager-snapshot','GET'],['/static-weekly/approved-initial/selection-extra','GET'],['/static-weekly/approved-initial/confirmations/','GET']]){
+for(const [path,method]of [['/static-weekly/approved-choices-extra','GET'],['/static-weekly/approved-choices/extra','GET'],['/outside/static-weekly','POST'],['/static-weekly/manager-snapshot-extra','GET'],['/static-weekly/approved-initial/selection-extra','GET'],['/static-weekly/approved-initial/confirmations/','GET']]){
  const f=fixture(path,method,beginCurrentBoundedManagerRequest);currentSame(f.context,null,'unrelated current route gets no owner');currentSame(f.timer,null,'unrelated current route gets no timer');
 }
 {
@@ -76,5 +81,6 @@ for(const [path,method]of [['/outside/static-weekly','POST'],['/static-weekly/ma
 {
  const f=fixture('/static-weekly/manager-snapshot','POST',beginCurrentBoundedManagerRequest);f.res.emit('close');currentSame(f.context.signal.aborted,true,'current premature close aborts original owner');currentSame(f.timer,null,'close clears owned timer');
 }
+{ const f=fixture('/static-weekly/approved-choices','GET',beginCurrentBoundedManagerRequest);f.expire();currentSame(f.context.signal.aborted,true,'choices keeps original ingress deadline');currentSame(f.status,503,'choices timeout fails closed');currentSame(f.timer,null,'choices deadline clears timer'); }
 // CURRENT_OWNER_COVERAGE_END
 console.log(JSON.stringify({status:'PASS',checks,currentChecks,currentOwnerSourceSha256:sourceSha('../src/static-weekly-manager-operation.js'),historicalOwnerSourceSha256:sourceSha('./fixtures/static-weekly-manager-operation-before-general-owner.mjs'),scope:'original28 frozen208368 route cases plus actual current allPOST/approvedGET ingress/cleanup; no HTTP/SQL/solver'}));

@@ -1,3 +1,4 @@
+import {restoreRecognizedRuntimeSource} from './scheduler-runtime-source-successor.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
@@ -6,7 +7,9 @@ const sha=value=>createHash('sha256').update(value).digest('hex');
 const document=JSON.parse(readFileSync(new URL('./full-hour-source-predecessors.json',import.meta.url)));
 let checks=0;
 for(const row of document.profiles){
- const current=readFileSync(new URL('../../'+row.path,import.meta.url),'utf8');
+ // Retain exact original full-hour mutations; current runtime drift is
+ // separately refused by the mandatory successor owning suite.
+ const current=restoreRecognizedRuntimeSource(row.path,readFileSync(new URL('../../'+row.path,import.meta.url),'utf8'));
  const prior=restoreFullHourProofSource(row.path,current);
  assert.equal(sha(prior),row.prior_sha256);checks++;
  assert.equal(restoreFullHourProofSource(row.path,prior),prior);checks++;

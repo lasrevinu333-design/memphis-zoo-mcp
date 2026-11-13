@@ -1,3 +1,4 @@
+import {readHistoricalOwnerConfig} from './historical-owner-config-source.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync, readdirSync} from 'node:fs';
 import {createHash} from 'node:crypto';
@@ -53,7 +54,7 @@ export function assertCurrentManager218MigrationSet(root=new URL('../../',import
 // reinterpret the approved nine-person pattern, or optimize any assignment.
 export function loadCurrentManagerPublicationFixture() {
   const current=loadSixPersonAbsenceSource(),original=loadFullNineV6Source();
-  const configBytes=readFileSync(new URL('../../config/custodial-six-person-static-20261005.json',import.meta.url));
+  const configBytes=readHistoricalOwnerConfig();
   assert.equal(sha(configBytes),'40da4e1d4cce52b2361b5403b7e5e4477ca00def0fd3649a1d76dacb48422f30');
   const config=JSON.parse(configBytes),source=current.compilerInput,week=source.serviceDate;
   assert.equal(week,'2026-10-05');

@@ -4,6 +4,7 @@ import {readFile} from 'node:fs/promises';
 import {runInNewContext} from 'node:vm';
 import {deliverNativeMessageJob} from '../../src/native-message-dispatch.js';
 import {deliverNativeEventJob} from '../../src/native-event-dispatch.js';
+import {deliverNativeScheduleJob} from '../../src/native-schedule-dispatch.js';
 import {holdUnqualifiedNativeScheduleJob} from '../../src/native-schedule-job-preparation.js';
 import {prepareNativeScheduleSourceJobs} from '../../src/native-schedule-source-producer.js';
 import {nativeAlertUtf8Prefix,nativeAlertPreview} from '../../src/native-alert-text.js';
@@ -16,6 +17,7 @@ export async function qualifiedAlertDispatcher(f){
   "import { deliverNativeLocationJob } from './native-location-dispatch.js';","import { deliverNativeLunchJob } from './native-lunch-dispatch.js';",
   "import { deliverNativeMessageJob } from './native-message-dispatch.js';","import { deliverNativeEventJob } from './native-event-dispatch.js';",
   "import { holdUnqualifiedNativeScheduleJob } from './native-schedule-job-preparation.js';",
+  "import { deliverNativeScheduleJob } from './native-schedule-dispatch.js';",
   "import { prepareNativeScheduleSourceJobs } from './native-schedule-source-producer.js';",
   "import { nativeAlertUtf8Prefix, nativeAlertPreview } from './native-alert-text.js';"]){
   if(source.split(line).length!==2)throw Error('exact worker import seam changed');source=source.replace(line,'');
@@ -25,7 +27,7 @@ export async function qualifiedAlertDispatcher(f){
   crypto,isDeepStrictEqual,structuredClone,nativeAlertUtf8Prefix,nativeAlertPreview,process:{pid:1,env:{}},console,
   createClient(){throw Error('No real environment DB allowed');},makeDeviceCredentialMiddleware(){return()=>{};},
   deliverNativeLocationJob:()=>({unchanged:'location'}),deliverNativeLunchJob:()=>({unchanged:'lunch'}),
-  deliverNativeMessageJob,deliverNativeEventJob,holdUnqualifiedNativeScheduleJob,prepareNativeScheduleSourceJobs,setInterval(){return{unref(){}};},
+  deliverNativeMessageJob,deliverNativeEventJob,deliverNativeScheduleJob,holdUnqualifiedNativeScheduleJob,prepareNativeScheduleSourceJobs,setInterval(){return{unref(){}};},
  });
- return install({use(){},get(){},post(){},delete(){}},{supabase:f.db,pushRuntime:f.pushRuntime});
+ return install({use(){},get(){},post(){},delete(){}},{supabase:f.db,pushRuntime:f.pushRuntime,registerOperationalJobHandler:f.registerOperationalJobHandler});
 }

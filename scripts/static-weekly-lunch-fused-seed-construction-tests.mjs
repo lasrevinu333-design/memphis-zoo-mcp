@@ -1,3 +1,5 @@
+import {restoreFullHourProofSource} from './fixtures/full-hour-source-predecessors.mjs';
+import {restoreCurrentDepartureProofSource} from './fixtures/current-departure-source-successor.mjs';
 import assert from 'node:assert/strict';
 import {restoreSchedulerProofSource} from './fixtures/current-scheduler-source-profiles.mjs';
 import {reconstructProgramBeforeOperationDeadline} from './static-weekly-operation-deadline-ci-wiring.mjs';
@@ -11,7 +13,7 @@ import * as currentPublication from '../src/static-weekly-lunch-publication.js';
 import * as currentVerifier from '../src/static-weekly-schedule-verifier.js';
 
 const sha = value => createHash('sha256').update(value).digest('hex');
-const source = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
+const source = path => {const raw=readFileSync(new URL('../' + path, import.meta.url), 'utf8');return ['src/static-weekly-lunch-derivation.js','src/static-weekly-lunch-authority-adapter.js'].includes(path)?restoreCurrentDepartureProofSource(path,raw):['src/static-weekly-schedule-model.js','src/static-weekly-schedule-program.js','src/static-weekly-schedule-compiler.js'].includes(path)?restoreFullHourProofSource(path,raw):raw;};
 const predecessor = {
   verifier: '4ffdc408d4cc6414c3ec9779d3b70ecc0ef61244dd17b6554d72ebef61074740',
   coverage: '78cf722a4dffbfb07bc3ed08788e72bdf76ecccc08dea961e836241d832e102b',

@@ -24,7 +24,7 @@ import {
   windowContains,
   windowsOverlap,
 } from "./static-weekly-schedule-model.js";
-import {deriveDatedShiftEndCoverage} from "./static-weekly-shift-end-derivation.js";
+import {deriveDatedShiftEndCoverage,deriveDatedShiftEndCoverageValidation} from "./static-weekly-shift-end-derivation.js";
 import {validateFullHourLunchPolicy} from './static-weekly-lunch-policy.js';
 
 export const STATIC_WEEKLY_PROGRAM_SCHEMA = "memphis-zoo.static-weekly-canonical-program.v1";
@@ -185,8 +185,8 @@ export function normalizeStaticWeeklyIncludedLocations(raw) {
   }
   const seen = new Set();
   const normalized = source.map((entry) => {
-    if (!entry || typeof entry !== "object" || Array.isArray(entry)
-      || Object.keys(entry).sort(identityCompare).join("\u0000") !== ["locationId", "locationNameSnapshot"].sort(identityCompare).join("\u0000")) {
+    const keys = entry && typeof entry === "object" && !Array.isArray(entry) ? Object.keys(entry) : [];
+    if (keys.length !== 2 || !keys.includes("locationId") || !keys.includes("locationNameSnapshot")) {
       throw Object.assign(new Error("Each included location must contain only locationId and locationNameSnapshot."), { code: "invalid_included_location_facts" });
     }
     const locationId = text(entry.locationId);
@@ -204,7 +204,11 @@ export function normalizeStaticWeeklyIncludedLocations(raw) {
 }
 
 function normalizeAssignment(raw) {
-  const assignment = normalizeSemanticCollections(clone(raw));
+  return normalizeDetachedAssignment(normalizeSemanticCollections(clone(raw)));
+}
+// Private detached JSON has already undergone collection normalization. All
+// assignment domain/identity/member checks still run through this shared body.
+function normalizeDetachedAssignment(assignment) {
   assignment.dayOfWeek = canonicalWeekday(assignment.dayOfWeek, "assignment dayOfWeek");
   assignment.workId = text(assignment.workId || assignment.id);
   assignment.serviceMode = text(assignment.serviceMode || STATIC_WEEKLY_SERVICE_MODES.SCAN_TRACKED);
@@ -214,7 +218,9 @@ function normalizeAssignment(raw) {
   return assignment;
 }
 function normalizeAvailability(raw) {
-  const availability = normalizeSemanticCollections(clone(raw));
+  return normalizeDetachedAvailability(normalizeSemanticCollections(clone(raw)));
+}
+function normalizeDetachedAvailability(availability) {
   availability.dayOfWeek = canonicalWeekday(availability.dayOfWeek, "slot availability dayOfWeek");
   availability.slotId = text(availability.slotId);
   return availability;
@@ -465,6 +471,18 @@ function postgresJsonbNumberText(value) {
   return negative && output !== "0" ? `-${output}` : output;
 }
 
+function postgresJsonbOrderedKeys(value) {
+  const raw=Object.keys(value || {});
+  // ASCII code units are exactly UTF-8 bytes. Non-ASCII and replacement-byte
+  // ties retain the original encoder and stable sort without reinterpretation.
+  if(raw.every(key=>!/[^\x00-\x7f]/.test(key)))return raw.sort((a,b)=>a.length-b.length||(a<b?-1:a>b?1:0));
+  const encoder=new TextEncoder();
+  return raw.map(key=>({key,bytes:encoder.encode(key)})).sort((a,b)=>{
+    const length=a.bytes.length-b.bytes.length;if(length)return length;
+    for(let i=0;i<a.bytes.length;i++)if(a.bytes[i]!==b.bytes[i])return a.bytes[i]<b.bytes[i]?-1:1;return 0;
+  }).map(entry=>entry.key);
+}
+
 export function postgresJsonbCanonicalText(value) {
   if (value === null) return "null";
   if (typeof value === "string") return JSON.stringify(value);
@@ -479,15 +497,7 @@ export function postgresJsonbCanonicalText(value) {
   // no values and never survive the call; recursive values/getters are still
   // read in the same stable sorted order (including equal replacement-byte
   // encodings for distinct lone-surrogate keys).
-  const encoder = new TextEncoder();
-  const keys = Object.keys(value || {}).map((key) => ({ key, bytes: encoder.encode(key) })).sort((left, right) => {
-    const lengthDifference = left.bytes.length - right.bytes.length;
-    if (lengthDifference) return lengthDifference;
-    for (let index = 0; index < left.bytes.length; index += 1) {
-      if (left.bytes[index] !== right.bytes[index]) return left.bytes[index] < right.bytes[index] ? -1 : 1;
-    }
-    return 0;
-  }).map((entry) => entry.key);
+  const keys = postgresJsonbOrderedKeys(value);
   return `{${keys.map((key) => `${JSON.stringify(key)}: ${postgresJsonbCanonicalText(value[key])}`).join(", ")}}`;
 }
 
@@ -712,14 +722,19 @@ function normalizeProximity(raw) {
 // weekday projection, maps, candidate creation, compiler identities, and
 // verifier regeneration.  Ordered accepted-route stops remain ordered
 // operational authority; membership-style arrays are canonical sets.
-export function normalizeStaticWeeklyAuthority(version, slots, exceptions, proximity, serviceDate = null) {
+function normalizeAuthorityVersion(version) {
   const normalizedVersion = normalizeSemanticCollections(clone(version));
-  normalizedVersion.assignments = array(version.assignments).map(normalizeAssignment).sort(planWorkCompare);
-  normalizedVersion.slotAvailability = array(version.slotAvailability).map(normalizeAvailability)
+  normalizedVersion.assignments = array(normalizedVersion.assignments).map(normalizeDetachedAssignment).sort(planWorkCompare);
+  normalizedVersion.slotAvailability = array(normalizedVersion.slotAvailability).map(normalizeDetachedAvailability)
     .sort((left, right) => left.dayOfWeek - right.dayOfWeek || identityCompare(left.slotId, right.slotId) || bytewiseCompare(canonicalJson(left), canonicalJson(right)));
   normalizedVersion.namedAbsentSlotIds = semanticTextSet(array(version.namedAbsentSlotIds));
   normalizedVersion.vacancyCapableSlotIds = semanticTextSet(array(version.vacancyCapableSlotIds));
   normalizedVersion.vacantSlotIds = semanticTextSet(array(version.vacantSlotIds));
+  return normalizedVersion;
+}
+
+export function normalizeStaticWeeklyAuthority(version, slots, exceptions, proximity, serviceDate = null) {
+  const normalizedVersion = normalizeAuthorityVersion(version);
   const normalizedSlots = array(slots).map(normalizeSlot).sort(byId);
   const normalizedExceptions = array(exceptions).map(normalizeException).sort(exceptionOrderCompare);
   validateExceptionCollection(normalizedExceptions);
@@ -734,6 +749,34 @@ export function normalizeStaticWeeklyAuthority(version, slots, exceptions, proxi
 
 export function canonicalAuthorityInput(version, slots, exceptions, proximity, serviceDate = null) {
   return normalizeStaticWeeklyAuthority(version, slots, exceptions, proximity, serviceDate);
+}
+
+// Private to one complete preparation. All inputs below are detached JSON
+// produced by the unchanged authority normalizer, never caller-owned facts.
+// Reuse only normalization of unchanged local components; every returned view
+// is an independent clone. No solver, witness, digest or cross-call cache.
+function createPreparationCanonicalViews(normalizedAuthority, serviceDate) {
+  // This exact detached result has already passed the shared normalizer in
+  // this preparation. Its fixed components and immutable version have not
+  // changed; avoid normalizing the same local bytes a second time.
+  const fixed = normalizedAuthority;
+  const versions = new WeakMap([[normalizedAuthority.version, normalizedAuthority.version]]);
+  return (version, includeExceptions = false, includeProximity = true, includeDate = true) => {
+    let normalized = versions.get(version);
+    if (!normalized) {
+      normalized = normalizeAuthorityVersion(version);
+      versions.set(version, normalized);
+    }
+    const detachedVersion = clone(normalized);
+    versions.set(detachedVersion, normalized);
+    return {
+      ...(includeDate ? { serviceDate } : {}),
+      version: detachedVersion,
+      slots: clone(fixed.slots),
+      exceptions: includeExceptions ? clone(fixed.exceptions) : [],
+      proximity: includeProximity ? clone(fixed.proximity) : [],
+    };
+  };
 }
 
 export function weekdayDate(serviceDate, targetDay) {
@@ -1069,7 +1112,8 @@ function candidateReasons(work, slot, availability, capacity, lockOwner) {
   return failures;
 }
 
-export function prepareStaticWeeklySchedulingProblem(input, deadline = null) {
+function prepareStaticWeeklyProblem(input, deadline, projection) {
+  const descriptorFactsOnly = projection === "descriptor";
   if (deadline != null) remainingStaticWeeklyMilliseconds(deadline);
   const serviceDate = assertServiceDate(input.serviceDate);
   if (input.classification === "CANDIDATE_WORKBOOK_EVIDENCE_NOT_PRODUCTION_OR_PUBLICATION_AUTHORITY" || input.publicationAuthority === "REVIEW_REQUIRED") return { error: programReason("candidate_workbook_evidence_not_publishable", { classification: input.classification || null, reason: input.admission?.failClosedReason || "verified schedule packet required" }) };
@@ -1130,13 +1174,14 @@ export function prepareStaticWeeklySchedulingProblem(input, deadline = null) {
   // Keep the immutable registered template separate from dated effective work.
   // This is roster hydration, not a daily exception/absence rescheduler.
   const immutableVersion = version;
+  const canonicalView = createPreparationCanonicalViews(normalizedAuthority, serviceDate);
   let shiftEndDerivation = null;
   if (version.shiftEndContinuityPolicy) {
     try {
-      const derived = deriveDatedShiftEndCoverage(
-        canonicalAuthorityInput(immutableVersion, slots, [], proximity, serviceDate),
+      const derived = (projection ? deriveDatedShiftEndCoverageValidation : deriveDatedShiftEndCoverage)(
+        canonicalView(immutableVersion),
         postgresJsonbContentDigest,
-        (effective) => canonicalAuthorityInput(effective.version, slots, [], proximity, serviceDate),
+        (effective) => canonicalView(effective.version),
       );
       version = derived.effectiveInput.version;
       shiftEndDerivation = derived.receipt;
@@ -1253,13 +1298,42 @@ export function prepareStaticWeeklySchedulingProblem(input, deadline = null) {
   if (exactEquityScale == null) return { error: programReason("unrepresentable_exact_equity_denominators", { denominators: [...new Set([...dailyCapacityDenominators, ...weeklyCapacityDenominators.values()])].sort((a, b) => a - b), maximumEffort }) };
   const serviceDay = serviceDateWeekday(serviceDate); const serviceDayAvailability = states.get(serviceDay).availability;
   const roster = slots.map((slot) => ({ ...incumbencyByDaySlot.get(`${serviceDay}\u0000${slot.id}`), availability: serviceDayAvailability.get(slot.id)?.status || "unavailable" }));
-  const baselineCanonicalInput = canonicalAuthorityInput(immutableVersion, slots, [], proximity, serviceDate);
-  const derivedBaselineCanonicalInput = canonicalAuthorityInput(version, slots, [], proximity, serviceDate);
-  const canonicalInput = canonicalAuthorityInput(version, slots, exceptions, proximity, serviceDate);
-  const prepared = { serviceDate, version, slots, roster, incumbencyByDaySlot, states, work: work.sort((a, b) => stableCompare(a.key, b.key)), candidates, availabilityByDaySlot, staticRejections, edges, applied, exactEquityScale, baselineCanonicalInput, derivedBaselineCanonicalInput, shiftEndDerivation, canonicalInput, inputDigest: postgresJsonbContentDigest(canonicalInput), baselineInputDigest: postgresJsonbContentDigest(baselineCanonicalInput), weeklyVersionDigest: immutableVersion.contentDigest || postgresJsonbContentDigest(canonicalAuthorityInput(immutableVersion, slots, [], [])) };
+  if (descriptorFactsOnly) {
+    // Every domain/provenance and operational bound above still runs. This
+    // projection has no compiler/model/digest authority and cannot replace a
+    // full prepared problem or a complete canonical witness.
+    const preflight=preflightProblem({slots,work,candidates,availabilityByDaySlot,exactEquityScale});
+    if(preflight.error)return {error:preflight.error};
+    return {availabilityByDaySlot,incumbencyByDaySlot};
+  }
+  if (projection === "model") {
+    // The full canonical hard model consumes these validated facts and the
+    // exact current input digest. Historical publication/derivation receipts
+    // are not model inputs. Every rule, candidate and preflight above remains.
+    const prepared = { slots, work: work.sort((a,b)=>stableCompare(a.key,b.key)), candidates,
+      availabilityByDaySlot, edges, exactEquityScale,
+      inputDigest: postgresJsonbContentDigest(canonicalView(version, true)) };
+    const preflight = preflightProblem(prepared);
+    if(preflight.error)return {error:preflight.error};
+    return {...prepared, preflight:preflight.facts};
+  }
+  const baselineCanonicalInput = canonicalView(immutableVersion);
+  const derivedBaselineCanonicalInput = canonicalView(version);
+  const canonicalInput = canonicalView(version, true);
+  const prepared = { serviceDate, version, slots, roster, incumbencyByDaySlot, states, work: work.sort((a, b) => stableCompare(a.key, b.key)), candidates, availabilityByDaySlot, staticRejections, edges, applied, exactEquityScale, baselineCanonicalInput, derivedBaselineCanonicalInput, shiftEndDerivation, canonicalInput, inputDigest: postgresJsonbContentDigest(canonicalInput), baselineInputDigest: postgresJsonbContentDigest(baselineCanonicalInput), weeklyVersionDigest: immutableVersion.contentDigest || postgresJsonbContentDigest(canonicalView(immutableVersion, false, false, false)) };
   const preflight = preflightProblem(prepared);
   if (preflight.error) return { error: preflight.error };
   return { ...prepared, preflight: preflight.facts };
+}
+
+export function prepareStaticWeeklySchedulingProblem(input, deadline = null) {
+  return prepareStaticWeeklyProblem(input, deadline, null);
+}
+export function prepareStaticWeeklyHardModelFacts(input) {
+  return prepareStaticWeeklyProblem(input, null, "model");
+}
+export function prepareStaticWeeklyDescriptorFacts(input) {
+  return prepareStaticWeeklyProblem(input, null, "descriptor");
 }
 
 function term(coefficient, variable) { return `${coefficient < 0 ? "-" : "+"} ${Math.abs(coefficient)} ${variable}`; }

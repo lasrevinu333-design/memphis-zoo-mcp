@@ -1,3 +1,5 @@
+import {source252RoleOrderPredecessorPlan} from './source252-production-role-order-proof.mjs';
+import {withCurrentMigrationSourceFixture,historical304ForwardBytes} from './fixtures/current-migration-source-fixtures.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync,readdirSync} from 'node:fs';
 import {resolve,dirname} from 'node:path';
@@ -7,7 +9,8 @@ import {selectFreshOnlySourceRows} from './ci-fresh-only-source-successor.mjs';
 import {loadCiFreshOnlyReplay} from './ci-fresh-only-replay.mjs';
 import {readTargetCaptureSourceClosure,assertTargetCapturePendingPlan} from './release-migration-target-capture.mjs';
 
-const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
+const actualRoot=resolve(dirname(fileURLToPath(import.meta.url)),'..');
+await withCurrentMigrationSourceFixture(actualRoot,304,async root=>{
 const read=name=>readFileSync(resolve(root,name));
 const manifest=JSON.parse(read('release/fresh-only-replay/MANIFEST.json'));
 const currentNames=readdirSync(resolve(root,'supabase/migrations')).filter(n=>n.endsWith('.sql')).sort();
@@ -42,6 +45,8 @@ refuses(map=>{
  const next=structuredClone(successor),bytes=Buffer.from(read(next.append.original.path));bytes[bytes.length-2]^=1;
  next.append.original.sha256=hash(bytes);next.append.selected={...next.append.original};map.set(next.append.original.path,bytes);map.set(successorPath,encode(next));
 });
+
+
 refuses(map=>{const p='release/fresh-only-replay/SOURCE302_SUCCESSOR.json';const n=JSON.parse(read(p));n.full_vendor_NORMAL=true;map.set(p,encode(n));});
 refuses(map=>{const p='supabase/canonical/migration-replay-order.json';const n=JSON.parse(retained303Read(p));[n.phases[0].files[0],n.phases[0].files[1]]=[n.phases[0].files[1],n.phases[0].files[0]];map.set(p,encode(n));});
 refuses(map=>{const p='release/fresh-only-replay/source303-ticket-normal-evidence/RESULT.json';const n=JSON.parse(read(p));n.actualReceipt.original_child.exit=1;map.set(p,encode(n));});
@@ -52,3 +57,39 @@ const reordered=structuredClone(closure.pending);[reordered[0],reordered[1]]=[re
 assert.throws(()=>assertTargetCapturePendingPlan(reordered,state.pending_migrations,closure));passed++;
 assert.throws(()=>assertTargetCapturePendingPlan(closure.pending,state.pending_migrations,structuredClone(closure)));passed++;
 console.log(JSON.stringify({passed,scope:'Source selection and rollback-only target-plan boundaries; no SQL execution, production admission or physical acceptance'}));
+
+});
+
+// Separate exact current311 source plan. The historical170 checks above remain
+// literal; this does not claim a current311 SQL execution or catalog acceptance.
+await withCurrentMigrationSourceFixture(actualRoot,311,async root=>{
+ const closure=readTargetCaptureSourceClosure(root);
+ const state=JSON.parse(readFileSync(resolve(root,'release/production-migration-state.json')));
+ const historical=JSON.parse(readFileSync(resolve(root,'release/schema-evidence/SOURCE304_PREDECESSOR_PRODUCTION_MIGRATION_STATE.json')));
+ assert.equal(closure.canonical_source_count,311);assert.equal(closure.pending.length,177);
+ assert.equal(closure.source304_pending_count,170);
+ assertTargetCapturePendingPlan(closure.pending,state.pending_migrations,closure);
+ assert.deepEqual(source252RoleOrderPredecessorPlan(closure.pending.slice(0,170)),historical.pending_migrations);
+ assert.throws(()=>assertTargetCapturePendingPlan(closure.pending,historical.pending_migrations,closure));
+ const changed=structuredClone(closure.pending);[changed[0],changed[1]]=[changed[1],changed[0]];
+ assert.throws(()=>assertTargetCapturePendingPlan(changed,state.pending_migrations,closure));
+ assert.throws(()=>assertTargetCapturePendingPlan(closure.pending,state.pending_migrations,structuredClone(closure)));
+ assert.throws(()=>assertTargetCapturePendingPlan(closure.pending,closure.pending.slice(0,-1),closure));
+ const tail=structuredClone(state.pending_migrations);tail.at(-1).sha256='0'.repeat(64);
+ assert.throws(()=>assertTargetCapturePendingPlan(closure.pending,tail,closure));
+ console.log(JSON.stringify({status:'PASS',current_plan:177,preserved_plan:170,negative_controls:5,SQL_executed:false,runtime_admission:false}));
+});
+
+// A changed byte inside the removed ownership block must fail before reversal.
+const forwardPath='release/production-forward-source/20261010193211_native_private_custody_chunk_retention.sql';
+const forward=readFileSync(resolve(actualRoot,forwardPath),'utf8');
+const marker='  -- BEGIN FINITE PRODUCTION SOURCE252 ROLE ORDER';
+assert.ok(forward.includes(marker));
+assert.throws(()=>historical304ForwardBytes(forwardPath,forward.replace(marker,marker+' CHANGED')));
+const forwardManifestPath='release/production-forward-source/manifest.json';
+const forwardManifest=JSON.parse(readFileSync(resolve(actualRoot,forwardManifestPath)));
+for(const field of ['canonical_file','canonical_sha256','profile','forward_sha256']){
+ const bad=structuredClone(forwardManifest);bad.migrations.find(x=>x.forward_file===forwardPath)[field]='unknown';
+ assert.throws(()=>historical304ForwardBytes(forwardManifestPath,JSON.stringify(bad,null,2)+'\n'));
+}
+console.log(JSON.stringify({status:'PASS',historical_forward_input_mutations_rejected:5,SQL_executed:false}));
