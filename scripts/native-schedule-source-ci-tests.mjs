@@ -1,3 +1,7 @@
+await import('./current-full-hour-ci-tests.mjs');
+await import('./current-device-auth-ci-tests.mjs');
+await import('./fixtures/current-departure-source-successor-tests.mjs');
+import {withCurrentMigrationSourceFixture} from './fixtures/current-migration-source-fixtures.mjs';
 // Mandatory executed consumer proof; no SQL, clock or delivery qualification.
 import assert from 'node:assert/strict';
 import {runNativeScheduleOccurrenceTests} from './native-schedule-occurrence-tests.mjs';
@@ -44,7 +48,7 @@ assert.equal(payloadReceipt.phone,false);
 console.log(JSON.stringify({suite:'native-schedule-closed-wire-called',...payloadReceipt}));
 
 import {runNativeScheduleFinalizationSourceTests} from './native-schedule-finalization-source-tests.mjs';
-const finalizationReceipt=runNativeScheduleFinalizationSourceTests();
+const finalizationReceipt=await withCurrentMigrationSourceFixture(process.cwd(),311,root=>runNativeScheduleFinalizationSourceTests(root));
 assert.equal(finalizationReceipt.status,'PASS');
 assert.equal(finalizationReceipt.checks,20);
 for(const field of ['new_sql_executed','provider_dispatch','native_qualified','phone'])assert.equal(finalizationReceipt[field],false);
@@ -108,7 +112,7 @@ console.log(JSON.stringify({suite:'native-schedule-source-orchestration-called',
 import {runNativeScheduleSourceProducerTests} from './native-schedule-source-producer-tests.mjs';
 const producerReceipt=await runNativeScheduleSourceProducerTests();
 assert.equal(producerReceipt.status,'PASS');
-assert.equal(producerReceipt.checks,62);
+assert.equal(producerReceipt.checks,64);
 assert.equal(producerReceipt.actual_worker_sweep,true);
 for(const field of ['actual_SQL','provider_dispatch','phone'])assert.equal(producerReceipt[field],false);
 console.log(JSON.stringify({suite:'native-schedule-source-producer-called',...producerReceipt}));
@@ -123,3 +127,14 @@ assert.equal(factoryReceipt.actual_strict_sender,true);
 assert.equal(factoryReceipt.synthetic_OAuth_and_fetch,true);
 for(const field of ['SQL_executed','real_key_access','provider_dispatch','native_qualified','phone'])assert.equal(factoryReceipt[field],false);
 console.log(JSON.stringify({suite:'native-schedule-private-factory-called',...factoryReceipt}));
+
+import {runNativeDepartureCurrentCiTests} from './native-departure-current-ci-tests.mjs';
+const departureReceipt=await runNativeDepartureCurrentCiTests();
+assert.equal(departureReceipt.status,'PASS');
+assert.equal(departureReceipt.checks,390);
+assert.equal(departureReceipt.retained_sql_cases,37);
+assert.equal(departureReceipt.actual_current_modules,true);
+assert.equal(departureReceipt.actual_HTTP_cases,37);
+assert.equal(departureReceipt.retained_SQL_evidence_only,true);
+for(const field of ['new_SQL','provider_dispatch','clock_qualified','audio_qualified','worker_activated','phone'])assert.equal(departureReceipt[field],false);
+console.log(JSON.stringify({suite:'native-departure-current-called',...departureReceipt}));

@@ -28,7 +28,7 @@ export function createShiftEndContinuityPolicy(weights,sourceConfigurationSha256
 
 // All domain facts come from the immutable canonical source or its dated
 // roster hydration. There is no filesystem, network, clock or mutable config.
-export function deriveDatedShiftEndCoverage(source,digest,canonicalizeEffective=value=>value){
+function deriveDatedShiftEndCoverageResult(source,digest,canonicalizeEffective,validationOnly){
  const original=canonicalJson(source),policy=source.version?.shiftEndContinuityPolicy;
  requireFact(policy&&typeof digest==='function','source-bound continuity policy is required');
  const expectedKeys=['algorithm','normalPhaseStart','policyDigest','provenance','schema','weights',
@@ -129,7 +129,7 @@ export function deriveDatedShiftEndCoverage(source,digest,canonicalizeEffective=
   requireFact(rows.reduce((n,r)=>n+r.serviceEffortMinutes,0)===parent.serviceEffortMinutes,'parent workload is not conserved');
   requireFact(rows.every(r=>Number.isSafeInteger(r.serviceEffortMinutes)&&r.serviceEffortMinutes>0),'positive exact segment workload required');
   if(normal)requireFact(previous===completed.validation.staffedDepartureByDay[parent.dayOfWeek],'chain does not end at actual staffed boundary');
-  chains.push({dayOfWeek:parent.dayOfWeek,parentWorkId:parent.workId,physicalIdentityDigest:digest(physical(parent)),
+  if(!validationOnly)chains.push({dayOfWeek:parent.dayOfWeek,parentWorkId:parent.workId,physicalIdentityDigest:digest(physical(parent)),
    workloadBefore:parent.serviceEffortMinutes,workloadAfter:rows.reduce((n,r)=>n+r.serviceEffortMinutes,0),
    segments:rows.map(r=>({workId:r.workId,ownerSlotId:r.ownerSlotId,window:clone(r.window),
     serviceEffortMinutes:r.serviceEffortMinutes,kind:r.workId===parent.workId?'baseline':r.workId.includes(':open:')?'open':'handoff'}))});
@@ -139,12 +139,26 @@ export function deriveDatedShiftEndCoverage(source,digest,canonicalizeEffective=
  roster.sort((a,b)=>a.dayOfWeek-b.dayOfWeek||a.slotId.localeCompare(b.slotId));
  chains.sort((a,b)=>a.dayOfWeek-b.dayOfWeek||a.parentWorkId.localeCompare(b.parentWorkId));
  const effectiveInput=canonicalizeEffective(completed.input);
+ if(validationOnly){
+  requireFact(canonicalJson(source)===original,'immutable source mutated during derivation');
+  return {effectiveInput,validation:completed.validation};
+ }
  const receipt={schema:SHIFT_END_RECEIPT_SCHEMA,algorithm:SHIFT_END_ALGORITHM,templateDigest:digest(source),policyDigest,
   datedRosterDigest:digest(roster),derivedBaselineDigest:digest(effectiveInput),
   staffedDepartureByDay:completed.validation.staffedDepartureByDay,parentChains:chains,
   outputWorkDigest:digest(effectiveInput.version.assignments),continuity:completed.validation};
  requireFact(canonicalJson(source)===original,'immutable source mutated during derivation');
  return {effectiveInput,receipt,...completed};
+}
+
+export function deriveDatedShiftEndCoverage(source,digest,canonicalizeEffective=value=>value){
+ return deriveDatedShiftEndCoverageResult(source,digest,canonicalizeEffective,false);
+}
+// Validation projection only: every continuity, identity, provenance, positive
+// budget, physical coverage and immutability assertion remains in the shared
+// implementation. Unused output receipts are not manufactured for a descriptor.
+export function deriveDatedShiftEndCoverageValidation(source,digest,canonicalizeEffective=value=>value){
+ return deriveDatedShiftEndCoverageResult(source,digest,canonicalizeEffective,true);
 }
 
 // Selected-day DATA only. Both week inputs are the same retained, canonical

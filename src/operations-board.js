@@ -3,8 +3,11 @@ import {managerOnDuty,chicagoServiceDate} from './manager-on-duty.js';
 // notes, recipients, credentials or raw GPS payloads. No mutation endpoint.
 const text = (v, max = 1000) => typeof v === 'string' ? v.trim().slice(0, max) : null;
 const count = v => Number.isSafeInteger(v) && v >= 0 ? v : null;
-const instant = v => typeof v === 'string' && /(?:Z|[+-]\d{2}:\d{2})$/.test(v)
-  && Number.isFinite(Date.parse(v)) ? new Date(v).toISOString() : null;
+// Direct PostgreSQL reads return timestamptz as Date; RPC snapshots use ISO
+// strings. Both represent the stored instant, never a guessed local cutoff.
+const instant = v => v instanceof Date ? (Number.isFinite(v.getTime()) ? v.toISOString() : null)
+  : typeof v === 'string' && /(?:Z|[+-]\d{2}:\d{2})$/.test(v)
+    && Number.isFinite(Date.parse(v)) ? new Date(v).toISOString() : null;
 const CODES = Object.freeze({trash_boxes:'Trash boxes requested', extra_cans:'Extra trash cans requested',
   restroom_checks:'Restroom checks requested'});
 export function projectOperationsEvents(rows) {
@@ -37,9 +40,10 @@ export function makeOperationsBoardHandler({readEvents, readMail = null, readCit
       const events = projectOperationsEvents(await readEvents());
       const safe=async reader=>{try{return typeof reader==='function'?await reader():null;}catch{return null;}};
       const [mail,city]=await Promise.all([safe(readMail),safe(readCity)]);
+      const generatedAt=now();
       return res.status(200).json({ok:true,data:{schema:'custodial.operations-board.v1',
-        generated_at:now().toISOString(),timezone:'America/Chicago',events,
-        manager_on_duty:managerOnDuty(chicagoServiceDate(now())),
+        generated_at:generatedAt.toISOString(),timezone:'America/Chicago',events,
+        manager_on_duty:managerOnDuty(chicagoServiceDate(generatedAt)),
         // Server-owned projection only. Imported snapshots do not assert
         // unattended mailbox completeness or freshness.
         schools:mail?.schools||{state:'unavailable',reason:'outlook_school_producer_not_bound',rows:[]},

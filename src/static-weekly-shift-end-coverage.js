@@ -199,18 +199,33 @@ export function validateRecurringShiftEndCoverage(baseline,candidate,config){
    assert.ok((original&&original.ownerSlotId===row.ownerSlotId||row.workId.includes(':open:'))&&!row.workId.includes(':handoff:'),
     'vacancy cannot receive a physical handoff');
   }
+  // Numeric row facts are local to this complete validation. Keep every
+  // minute, owner check and expected-location multiplicity check. Eligibility
+  // is evaluated lazily on the first active minute so invalid inactive rows
+  // cannot change the original refusal order.
+  const timedRows=rows.map(row=>({row,start:minute(row.window.start),end:minute(row.window.end),fact:null}));
   for(let at=585;at<final;at++){
    const counts=new Map();
-   for(const row of rows.filter(r=>minute(r.window.start)<=at&&at<minute(r.window.end))){
-    const owner=positions.get(row.ownerSlotId);
-    assert.ok(owner?.workDays.includes(day)&&minute(owner.shift[0])<=at
-      &&at<minute(owner.shift[1]),`off-duty recurring owner at ${day}/${clock(at)}`);
-    assert.ok(!(owner.forbiddenFamilies||[]).includes(row.locationCodeSnapshot)&&!isHardForbidden(owner,row.locationCodeSnapshot,day),'forbidden handoff family');
-    assert.ok(!owner.normalAllowedFamilies||owner.normalAllowedFamilies.includes(row.locationCodeSnapshot),'handoff outside established geographic areas');
-    for(const id of ids(row))counts.set(id,(counts.get(id)||0)+1);
+   for(const timed of timedRows){
+    if(!(timed.start<=at&&at<timed.end))continue;
+    const row=timed.row;
+    if(!timed.fact){
+     const owner=positions.get(row.ownerSlotId);
+     if(!(owner?.workDays.includes(day)&&minute(owner.shift[0])<=at&&at<minute(owner.shift[1])))
+      assert.ok(false,`off-duty recurring owner at ${day}/${clock(at)}`);
+     const permitted=!(owner.forbiddenFamilies||[]).includes(row.locationCodeSnapshot)&&!isHardForbidden(owner,row.locationCodeSnapshot,day);
+     assert.ok(permitted,'forbidden handoff family');
+     const geographic=!owner.normalAllowedFamilies||owner.normalAllowedFamilies.includes(row.locationCodeSnapshot);
+     assert.ok(geographic,'handoff outside established geographic areas');
+     timed.fact={start:minute(owner.shift[0]),end:minute(owner.shift[1]),permitted,geographic,locationIds:ids(row)};
+    }
+    if(!(timed.fact.start<=at&&at<timed.fact.end))assert.ok(false,`off-duty recurring owner at ${day}/${clock(at)}`);
+    assert.ok(timed.fact.permitted,'forbidden handoff family');
+    assert.ok(timed.fact.geographic,'handoff outside established geographic areas');
+    for(const id of timed.fact.locationIds)counts.set(id,(counts.get(id)||0)+1);
    }
-   assert.equal(counts.size,expected.size,`coverage gap at ${day}/${clock(at)}`);
-   for(const id of expected)assert.equal(counts.get(id),1,`missing/duplicate location ${id} at ${day}/${clock(at)}`);
+   if(counts.size!==expected.size)assert.equal(counts.size,expected.size,`coverage gap at ${day}/${clock(at)}`);
+   for(const id of expected)if(counts.get(id)!==1)assert.equal(counts.get(id),1,`missing/duplicate location ${id} at ${day}/${clock(at)}`);
    minuteSamples++;locationMinuteChecks+=expected.size;
   }
  }

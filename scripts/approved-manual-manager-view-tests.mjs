@@ -32,8 +32,14 @@ assert.equal(points('2026-11-06','15:00','KILTRA'),67);assert.equal(points('2026
 for(const [name,n]of [['ALIJAH',45],['KILTRA',52],['XAVIER',39]])assert.equal(points('2026-11-07','15:00',name),n);
 for(const [name,n]of [['ALIJAH',36],['KILTRA',35],['DERRICK',36],['XAVIER',29]])assert.equal(points('2026-11-08','15:00',name),n);
 assert.ok(view.days.flatMap(d=>d.phases).some(p=>p.owners.some(o=>o.lunchGroups.length>0)));
-for(const date of ['2026-11-02','2026-11-03','2026-11-04','2026-11-07','2026-11-08']){
+for(const date of ['2026-11-03','2026-11-07','2026-11-08']){
  const end=phase(date,'16:00');assert.equal(end.zooWideCoverage,true);assert.equal(end.owners[0].slotId,slot('XAVIER'));assert.equal(end.owners[0].points,136);
+}
+// Both confirmed closers retain their custody through17:00 on the corrected days.
+for(const [date,derrickPoints,xavierPoints]of [['2026-11-02',38,98],['2026-11-04',68,68]]){
+ const end=phase(date,'16:00');assert.equal(end.zooWideCoverage,false);assert.equal(end.owners.length,2);
+ assert.equal(points(date,'16:00','DERRICK'),derrickPoints);assert.equal(points(date,'16:00','XAVIER'),xavierPoints);
+ assert.equal(end.end,'17:00');assert.equal(end.totalPoints,136);
 }
 for(const date of ['2026-11-05','2026-11-06'])assert.equal(view.days.find(d=>d.serviceDate===date).phases.at(-1).end,'16:00');
 const bad=structuredClone(lunchDocument);bad.responsibilities=[];assert.throws(()=>approvedManualManagerView({snapshot,source,lunchDocument:bad}),/accepted named coverer/);

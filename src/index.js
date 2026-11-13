@@ -40,6 +40,7 @@ import { makeCompletionEvidenceReader } from "./completion-taxonomy-manager.js";
 import { hasCanonicalCompletionSelection } from "./completion-selection-read-boundary.js";
 import { makeManagerNotificationHistoryHandler } from "./manager-notification-history.js";
 import { installGpsMapContextRoute } from "./gps-map-context-route.js";
+import { installAssignedPhoneLocationRoutes } from "./assigned-phone-location.js";
 import { createPlacesAdminRouter } from "./places-api.js";
 import { isMcpReadOnlyNoAuthEnabled, makeMcpConnectorMiddleware } from "./auth/mcp-connector-auth.js";
 import {
@@ -3104,6 +3105,11 @@ installPublicDashboardDetails(app, {readSummary:runPublicDashboardSummary,
 installGpsMapContextRoute(app, {
   requireOpsManagerAuth,
   runReadOnlyQuery: async sql => runSupabaseReadOnlySql({ sql }),
+});
+installAssignedPhoneLocationRoutes(app, {
+  parseJson: parseScanAuthorityJsonBeforeAuthentication, requireDevice: requireEmployeeDeviceCredential,
+  requireManager: requireOpsManagerAuth, rateLimit: scanRpcRateLimit,
+  verifyNative: verifyNativeDeviceRequestAttestation, runRpc,
 });
 app.get("/dashboard-api/summary", requireOpsManagerAuth, async (_req, res) => {
   try { const data = await runPublicDashboardSummary(); res.status(200).json({ ok: true, data }); }

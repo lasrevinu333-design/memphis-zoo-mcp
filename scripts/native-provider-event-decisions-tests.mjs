@@ -1,3 +1,4 @@
+import {withCurrentMigrationSourceFixture} from './fixtures/current-migration-source-fixtures.mjs';
 import assert from 'node:assert/strict';
 import {createHash,createHmac} from 'node:crypto';
 import {readFileSync} from 'node:fs';
@@ -149,7 +150,7 @@ try{
  // This exact decision migration remains mandatory, but later approved
  // forwards do not remove it. Validate the complete byte-bound declared
  // replay order, rather than mistaking the lexicographic tip for authority.
- const replay=readMigrationReplayPlan(fileURLToPath(new URL('..',import.meta.url)));
+ const replay=await withCurrentMigrationSourceFixture(fileURLToPath(new URL('..',import.meta.url)),311,root=>readMigrationReplayPlan(root));
  assert.equal(replay.files.filter(name=>name===migration).length,1);checks++;
  const fixture=await import('./fixtures/native-provider-event-decisions-database-cases.mjs');
  assert.equal(typeof fixture.nativeProviderEventDecisionDatabaseCases,'function');checks++;

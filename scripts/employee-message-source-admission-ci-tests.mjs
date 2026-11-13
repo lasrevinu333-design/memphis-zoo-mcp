@@ -1,3 +1,6 @@
+import {withHistoricalNative289SourceFixture} from './fixtures/historical-native289-source-fixture.mjs';
+import {pathToFileURL} from 'node:url';
+import {join} from 'node:path';
 // Mandatory called source proof; importing an export-only test is not execution.
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -16,7 +19,10 @@ assert.equal(createHash('sha256').update(readFileSync(predecessor)).digest('hex'
 const dispatcher=await runEmployeeMessageSourceAdmissionTests({sourcePath:predecessor});
 assert.equal(dispatcher.status,'PASS');
 assert.equal(dispatcher.checks,256);
-const migration=await runEmployeeMessageMigrationSourceTests();
+const migration=await withHistoricalNative289SourceFixture(fileURLToPath(new URL('..',import.meta.url)),async fixtureRoot=>{
+ const {runEmployeeMessageMigrationSourceTests}=await import(pathToFileURL(join(fixtureRoot,'scripts/employee-message-source-admission-tests.mjs')).href);
+ return await runEmployeeMessageMigrationSourceTests();
+});
 assert.equal(migration.status,'PASS');
 assert.equal(migration.checks,64);
 assert.equal(migration.predecessor_checks.status,'PASS');

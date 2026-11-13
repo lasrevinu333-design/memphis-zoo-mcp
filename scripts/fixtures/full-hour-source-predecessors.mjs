@@ -1,3 +1,4 @@
+import {restoreRecognizedRuntimeSource} from './scheduler-runtime-source-successor.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
@@ -12,6 +13,7 @@ const document=JSON.parse(bytes);
 assert.equal(document.schema,'custodial.full-hour-retained-source-predecessors.v1');
 assert.equal(document.profiles.length,4);
 export function restoreFullHourProofSource(path,source){
+ source=restoreRecognizedRuntimeSource(path,source);
  const row=document.profiles.find(value=>value.path===path);
  assert.ok(row,'explicit full-hour historical source path required');
  assert.equal(typeof source,'string');

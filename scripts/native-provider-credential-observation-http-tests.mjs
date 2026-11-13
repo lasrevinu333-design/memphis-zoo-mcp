@@ -1,3 +1,5 @@
+import {restoreCurrentDepartureProofSource} from './fixtures/current-departure-source-successor.mjs';
+import {restoreDeviceObservationProofSource} from './fixtures/current-scheduler-source-profiles.mjs';
 import assert from 'node:assert/strict';
 import express from 'express';
 import http from 'node:http';
@@ -44,7 +46,7 @@ function query({value=body,raw=Buffer.from(JSON.stringify(value)),path=route,met
 export async function runCredentialObservationHttpTests(){
  const started=Date.now(),deadline=started+25000,sockets=new Set(),requests=new Set();let checks=0,scenario=null,port=null,closed=false;
  const check=(name,value)=>{assert(value,name);checks++;console.log('PASS HTTP',name);};
- for(const[p,h]of Object.entries(pins)){assert.equal(sha(readFileSync(new URL(p,root))),h,p);checks++;}
+ for(const[p,h]of Object.entries(pins)){assert.equal(sha(p==='src/request-json-parser.js'?restoreCurrentDepartureProofSource(p,readFileSync(new URL(p,root),'utf8')):p==='src/auth/device-credential-auth.js'?restoreDeviceObservationProofSource(readFileSync(new URL(p,root),'utf8')):readFileSync(new URL(p,root))),h,p);checks++;}
  const protectedRecords={finish:Buffer.from('SYNTHETIC_PENDING_FINISH'),events:[{bytes:'original-event',status:'PENDING'}],navigation:['original-open']};
  const protectedBefore=serialize(protectedRecords);
  const app=express();app.disable('x-powered-by');

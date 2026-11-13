@@ -1,3 +1,4 @@
+import {scheduleVersion,scheduleBoundaryValid,scheduleNotificationKey,scheduleLocalBoundary} from './native-schedule-version.js';
 import{createHash}from'node:crypto';import{isDeepStrictEqual}from'node:util';
 import{validateNativeLocationRecipient}from'./native-location-reservation.js';
 import{prepareNativeScheduleAttempt,validateNativeScheduleDispatch,readNativeScheduleAttempt,recordNativeScheduleOutcome}from'./native-schedule-attempt-lifecycle.js';
@@ -12,10 +13,10 @@ const invalid=()=>{throw failure('native_schedule_dispatch_contract_invalid');};
 function candidate(v,expected,source){
  if(!exact(v,KEYS)||Object.entries(v).some(([k,x])=>typeof x!=='string'||!x||Buffer.from(x,'utf8').toString('utf8')!==x
   ||/[\u0000-\u001f\u007f-\u009f]/u.test(x)||Buffer.byteLength(x)>({title:180,notification_key:240}[k]||1000))
-  ||v.schema!=='custodial.native-schedule-content-candidate.v1'||v.kind!=='employee_schedule_ownership'||v.notification_type!=='schedule_ownership'
-  ||v.channel_id!=='employee-schedule-ownership'||v.route!=='employee-schedule.html?hub=employee'||v.boundary_local!=='09:45'
+  ||!scheduleVersion(v.schema,'content-candidate')||v.kind!=='employee_schedule_ownership'||v.notification_type!=='schedule_ownership'
+  ||v.channel_id!=='employee-schedule-ownership'||v.route!=='employee-schedule.html?hub=employee'||!scheduleBoundaryValid(v.boundary_local,scheduleVersion(v.schema,'content-candidate'))
   ||v.employee_id!==expected.employee_id||v.generation_id!==expected.generation_id||v.source_reservation_id!==source
-  ||v.notification_key!==`schedule-ownership:${v.service_date}:${expected.employee_id}:09:45`
+  ||v.notification_key!==scheduleNotificationKey(v,expected.employee_id,scheduleVersion(v.schema,'content-candidate'))
   ||!['source_reservation_id','source_operation_id','projection_id','publication_id','version_id','assignment_occurrence_id'].every(k=>id(v[k]))
   ||!['source_window_sha256','server_source_sha256'].every(k=>SHA.test(v[k]))
   ||!/^[1-9][0-9]{0,15}$/.test(v.source_revision)||BigInt(v.source_revision)>9007199254740991n)invalid();
@@ -38,8 +39,8 @@ function settled(a,replayed){
  if(a.provider_outcome==='provider_accepted')return Object.freeze({provider_message_id:a.evidence.provider_message_id,replayed,native_schedule:true,delivery_admitted:false});
  throw failure(a.provider_outcome==='known_nonacceptance'?'native_schedule_provider_refused':'native_schedule_outcome_unknown_no_resend',true);
 }
-// This callable seam is NOT installed into the worker. The worker's existing
-// native qualification hold stays first; the injected sender is private.
+// Only exact schedule jobs enter this worker lane. Final SQL admission checks
+// the server-owned accepted release and current generation before one attempt.
 export async function deliverNativeScheduleJob({db,pushRuntime,job}){
  if(!id(job?.job_id)||!id(job?.lease_token)||job.job_type!=='employee_native_push'
   ||!exact(job.payload_json,['credential_id','device_id','device_identifier','employee_id','assignment_epoch','data_json'])
@@ -67,6 +68,7 @@ export async function deliverNativeScheduleJob({db,pushRuntime,job}){
   ||expected.device_id!==job.payload_json.device_identifier||expected.assignment_epoch!==job.payload_json.assignment_epoch)invalid();
  const permit=await prepareNativeScheduleAttempt({db,jobId,leaseToken,sourceReservationId,expected,sourceCandidate});
  if(permit.dispatch_authorized!==true){
+  if(permit.reason==='NATIVE_RELEASE_UNQUALIFIED')throw failure('native_schedule_delivery_unqualified');
   const original=await readNativeScheduleAttempt({db,jobId});if(original.attempted)return settled(original.attempt,true);
   if(permit.status==='ATTEMPT_RECONCILIATION_PENDING'||original.status==='ATTEMPT_RECONCILIATION_PENDING')throw failure('native_schedule_attempt_reconciliation_pending');
   throw failure('native_schedule_admission_superseded',true);

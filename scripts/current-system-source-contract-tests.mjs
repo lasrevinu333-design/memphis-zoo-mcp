@@ -1,4 +1,9 @@
 import {runFreshCurrentOwningEntry} from './current-system-fresh-owning-entry.mjs';
+import {verifyReminderTimingSourceInputs} from './fixtures/reminder-timing-source-successor.mjs';
+import {fileURLToPath} from 'node:url';
+verifyReminderTimingSourceInputs(fileURLToPath(new URL('../',import.meta.url)));
+await import('./native-provider-best-effort-tests.mjs');
+await import('./native-schedule-worker-admission-tests.mjs');
 // Explicit source/loopback suite, no database replay, provider or release action.
 // Keep standalone database runners separate: their fixtures are not optional.
 await import('./events-chicago-time-tests.mjs');
@@ -56,4 +61,5 @@ await import('./static-weekly-recurring-morning-integration-ci-tests.mjs');
 await import('./static-weekly-recurring-correction-ci-tests.mjs');
 await import('./current-release-recovery-probe-contract-tests.mjs');
 await import('./current-release-recovery-replay-contract-tests.mjs');
-console.log('CURRENT_SYSTEM_SOURCE_CONTRACTS_PASS: 55 explicit owning suites; no database/provider/production/phone proof');
+verifyReminderTimingSourceInputs(fileURLToPath(new URL('../',import.meta.url)));
+console.log('CURRENT_SYSTEM_SOURCE_CONTRACTS_PASS: 55 retained owning suites plus 2 reminder suites; no database/provider/production/phone proof');

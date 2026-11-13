@@ -61,7 +61,7 @@ export async function prepareNativeScheduleAttempt({db,jobId,leaseToken,sourceRe
  const v=r?.data;
  if(!exact(v,['schema','dispatch_authorized','delivery_admitted','replayed','reason','attempt'])||v.schema!=='custodial.native-schedule-dispatch.v1'
   ||v.dispatch_authorized!==false||v.delivery_admitted!==false||v.attempt!==null
-  ||!(v.replayed===true&&v.reason==='ORIGINAL_ATTEMPT_RETAINED'||v.replayed===false&&v.reason==='SOURCE_OR_JOB_SUPERSEDED'))invalid();
+  ||!(v.replayed===true&&v.reason==='ORIGINAL_ATTEMPT_RETAINED'||v.replayed===false&&['SOURCE_OR_JOB_SUPERSEDED','NATIVE_RELEASE_UNQUALIFIED'].includes(v.reason)))invalid();
  return Object.freeze({...v});
 }
 export async function readNativeScheduleAttempt({db,jobId}){

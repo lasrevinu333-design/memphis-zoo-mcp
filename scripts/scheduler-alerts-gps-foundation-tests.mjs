@@ -161,7 +161,7 @@ assert.match(gpsMotionHardening, /revoke all on function public\.tool_evaluate_l
 
 const gpsOrderReceipt=await runWorkSessionGpsOrderSourceTests();
 assert.equal(gpsOrderReceipt.status,'PASS');
-assert.equal(gpsOrderReceipt.checks,18);
+assert.equal(gpsOrderReceipt.checks,19);
 assert.equal(gpsOrderReceipt.actual_SQL,false);
 assert.equal(gpsOrderReceipt.manager_login_proof,false);
 assert.equal(gpsOrderReceipt.geographic_alignment,false);

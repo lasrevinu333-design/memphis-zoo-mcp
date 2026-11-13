@@ -4,7 +4,7 @@ import {canonicalNativeLocation,NATIVE_LOCATION_PAYLOAD_KEYS,validateNativeLocat
 import {NATIVE_LUNCH_SCHEMA,validateNativeLunchPayload} from './native-lunch-reservation.js';
 import {validateNativeProviderInventoryPayload} from './native-provider-inventory-payload.js';
 import {NATIVE_EVENT_SCHEMA,NATIVE_MESSAGE_SCHEMA} from './native-alert-reservation.js';
-import {NATIVE_SCHEDULE_PAYLOAD_SCHEMA} from './native-schedule-payload.js';
+import {scheduleVersion} from './native-schedule-version.js';
 
 const uuid=/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/,sha=/^[0-9a-f]{64}$/;
 const exact=(v,fields)=>v&&Object.getPrototypeOf(v)===Object.prototype&&isDeepStrictEqual(Object.keys(v).sort(),[...fields].sort());
@@ -94,7 +94,7 @@ export function validateNativeLocationInventoryResponse(value,request){
    try{validateNativeLunchPayload(p,{jobId:p.receipt_job_id,expected:{generation_id:p.generation_id,
     principal_digest:q.principal_digest,credential_id:q.credential_id,employee_id:q.employee_id,
     device_id:q.device_id,assignment_epoch:String(q.assignment_epoch)}})}catch{fail()}
-  }else if([NATIVE_EVENT_SCHEMA,NATIVE_MESSAGE_SCHEMA,NATIVE_SCHEDULE_PAYLOAD_SCHEMA].includes(p?.schema)){
+  }else if([NATIVE_EVENT_SCHEMA,NATIVE_MESSAGE_SCHEMA].includes(p?.schema)||scheduleVersion(p?.schema,'payload')){
    try{validateNativeProviderInventoryPayload(p,{generation_id:p.generation_id,principal_digest:q.principal_digest,
     credential_id:q.credential_id,employee_id:q.employee_id,device_id:q.device_id,assignment_epoch:String(q.assignment_epoch)});}catch{fail();}
   }else if(!exact(p,NATIVE_LOCATION_PAYLOAD_KEYS)||Object.values(p).some(v=>typeof v!=='string')||p.schema!=='custodial.native-location-payload.v2'

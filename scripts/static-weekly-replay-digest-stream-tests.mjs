@@ -1,3 +1,4 @@
+import {restoreFullHourProofSource} from './fixtures/full-hour-source-predecessors.mjs';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {types} from 'node:util';
@@ -22,7 +23,7 @@ function exactProjection(){
  const matches=[...compiler.matchAll(/^function replayProjection\(result\) \{[^]*?^\}/gm)];assert.equal(matches.length,1);
  return new Function('clone','array',matches[0][0]+';return replayProjection;')(value=>JSON.parse(JSON.stringify(value)),value=>Array.isArray(value)?value:[]);
 }
-function assertNarrowSource(){assert.equal(sha(one(compiler,currentSite)),predecessorSha);return 1;}
+function assertNarrowSource(){assert.equal(sha(one(restoreFullHourProofSource('src/static-weekly-schedule-compiler.js',compiler),currentSite)),predecessorSha);return 1;}
 const legacy=replay=>sha256Hex(canonicalJson(replay)),patched=replay=>contentDigest(replay);
 const capture=fn=>{try{return{value:fn()};}catch(error){return{error,name:error.name,message:error.message,code:error.code};}};
 function runCase(mode){

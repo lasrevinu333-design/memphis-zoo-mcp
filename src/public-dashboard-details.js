@@ -1,3 +1,4 @@
+import {managerOnDuty,chicagoServiceDate} from './manager-on-duty.js';
 import {projectOperationsEvents} from './operations-board.js';
 
 // Owner-authorized link access to operational display facts. This is a separate
@@ -49,6 +50,7 @@ export function publicOperationsDetails(events, mail, now = new Date(), city = n
   const visible = events.filter(row => ['assigned_location','all_working_employees'].includes(row?.audience_scope));
   return {schema:'custodial.operations-board.v1',generated_at:now.toISOString(),timezone:'America/Chicago',
     events:projectOperationsEvents(visible),
+    manager_on_duty:managerOnDuty(chicagoServiceDate(now)),
     schools:mailFeed(mail?.schools,['id','order_id','name','date','arrival_at','departure_at','departure_source',
       'status','issue','students','chaperones','teachers','unclassified','buses','adults','total']),
     spiceworks:mailFeed(mail?.spiceworks,['ticket_id','title','category','assignee','status','custodial','active']),

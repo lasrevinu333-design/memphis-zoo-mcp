@@ -1,3 +1,4 @@
+import {scheduleVersion,scheduleBoundaryValid,scheduleNotificationKey,scheduleLocalBoundary} from './native-schedule-version.js';
 import {isDeepStrictEqual} from 'node:util';
 import {postgresJsonbContentDigest} from './static-weekly-schedule-program.js';
 
@@ -48,18 +49,18 @@ function original(value,expected){
  requireValue(exact(value,['reservation_id','operation_id','reserved_at','window','window_sha256']));
  requireValue([value.reservation_id,value.operation_id].every(x=>utf8(x)&&UUID.test(x))&&utf8(value.window_sha256)&&SHA.test(value.window_sha256));
  const w=value.window;requireValue(exact(w,windowKeys)&&exact(w.recipient,recipientKeys));
- requireValue(w.schema==='custodial.native-schedule-server-window.v1'&&w.timezone==='America/Chicago'
+ requireValue(scheduleVersion(w.schema,'server-window')>0&&w.timezone==='America/Chicago'
   &&w.employee_id===expected.employeeId&&w.generation_id===expected.generationId&&w.assignment_occurrence_id===expected.sourceKey
   &&w.server_source_sha256===expected.expectedSourceSha256&&w.server_digest_format==='postgres-jsonb-sha256.v1'
   &&[w.projection_id,w.publication_id,w.version_id].every(x=>utf8(x)&&UUID.test(x))
   &&clean(w.employee_name,180)&&w.employee_name.trim().length>0
   &&utf8(w.source_revision)&&/^[1-9][0-9]{0,15}$/.test(w.source_revision)&&Number.isSafeInteger(Number(w.source_revision))
-  &&w.logical_key===`schedule-ownership:${w.service_date}:${w.employee_id}:09:45`);
+  &&w.logical_key===scheduleNotificationKey({...w,boundary_local:scheduleLocalBoundary(w.valid_from).boundary},w.employee_id,scheduleVersion(w.schema,'server-window')));
  const r=w.recipient;requireValue(r.employee_id===w.employee_id&&r.generation_id===w.generation_id
   &&[r.device_id,r.credential_id].every(x=>utf8(x)&&UUID.test(x))&&/^KIOSK_(?:0[2-9]|10)$/.test(r.device_identifier)
   &&Number.isSafeInteger(r.assignment_epoch)&&r.assignment_epoch>=1&&[r.principal_digest,r.token_digest].every(x=>utf8(x)&&SHA.test(x)));
  const from=micros(w.valid_from),until=micros(w.valid_until),at=micros(w.server_now);
- requireValue(from<=at&&at<until&&value.reserved_at===w.server_now&&boundaryDate(w.valid_from)===w.service_date);
+ requireValue(from<=at&&at<until&&value.reserved_at===w.server_now&&scheduleLocalBoundary(w.valid_from).date===w.service_date&&scheduleLocalBoundary(w.valid_from).exactMinute&&scheduleBoundaryValid(scheduleLocalBoundary(w.valid_from).boundary,scheduleVersion(w.schema,'server-window')));
  units(w.before_units);units(w.after_units);requireValue(!isDeepStrictEqual(w.before_units,w.after_units));
  requireValue(Buffer.byteLength(JSON.stringify(w))<=2097152&&postgresJsonbContentDigest(w)===value.window_sha256);
  return value;
@@ -77,11 +78,12 @@ export function validateNativeScheduleSourceReservation(value,context){
 }
 export function buildNativeScheduleContentCandidate(value,context){
  const source=validateNativeScheduleSourceReservation(value,context);requireValue(source.reserved===true);
- const r=source.reservation,w=r.window;
- const candidate={schema:NATIVE_SCHEDULE_CONTENT_SCHEMA,kind:'employee_schedule_ownership',notification_type:'schedule_ownership',
-  title:'9:45 assignment update',body:`${w.employee_name}, your scheduled responsibilities have changed at 9:45 AM. Please see your Schedule page for your updated assignments.`,
+ const r=source.reservation,w=r.window,version=scheduleVersion(w.schema,'server-window'),boundary=scheduleLocalBoundary(w.valid_from).boundary;
+ const [h,m]=boundary.split(':').map(Number),label=`${h%12||12}:${String(m).padStart(2,'0')} ${h<12?'AM':'PM'}`;
+ const candidate={schema:version===2?'custodial.native-schedule-content-candidate.v2':NATIVE_SCHEDULE_CONTENT_SCHEMA,kind:'employee_schedule_ownership',notification_type:'schedule_ownership',
+  title:version===2?'Assignment update':'9:45 assignment update',body:version===2?`${w.employee_name}, your assignments changed at ${label} as a scheduled shift ended. Please see your Schedule page for your updated assignments.`:`${w.employee_name}, your scheduled responsibilities have changed at 9:45 AM. Please see your Schedule page for your updated assignments.`,
   channel_id:'employee-schedule-ownership',route:'employee-schedule.html?hub=employee',notification_key:w.logical_key,
-  service_date:w.service_date,boundary_local:'09:45',employee_id:w.employee_id,generation_id:w.generation_id,
+  service_date:w.service_date,boundary_local:boundary,employee_id:w.employee_id,generation_id:w.generation_id,
   source_reservation_id:r.reservation_id,source_operation_id:r.operation_id,source_window_sha256:r.window_sha256,
   server_source_sha256:w.server_source_sha256,source_revision:w.source_revision,projection_id:w.projection_id,
   publication_id:w.publication_id,version_id:w.version_id,assignment_occurrence_id:w.assignment_occurrence_id,
@@ -90,12 +92,12 @@ export function buildNativeScheduleContentCandidate(value,context){
   &&Buffer.byteLength(candidate.notification_key)<=240&&Buffer.byteLength(JSON.stringify(candidate))<=3500);
  return freeze(candidate);
 }
-export async function prepareNativeScheduleContent({db,...context}){
+export async function prepareNativeScheduleContent({db,departure=false,...context}){
  const expected=request(context);requireValue(typeof db?.rpc==='function');
  const pending=reason=>freeze({schema:'custodial.native-schedule-content-preparation.v1',status:'SOURCE_PENDING',reason,
   delivery_admitted:false,dispatch_authorized:false,clock_effect_authority:null,retention_authority:null,candidate:null});
  let first;
- try{first=await db.rpc('custodial_native_schedule_source_reserve',{p_source_key:expected.sourceKey,p_employee_id:expected.employeeId,
+ try{first=await db.rpc(departure?'custodial_native_departure_source_reserve':'custodial_native_schedule_source_reserve',{p_source_key:expected.sourceKey,p_employee_id:expected.employeeId,
   p_generation_id:expected.generationId,p_expected_source_sha256:expected.expectedSourceSha256,p_operation_id:expected.operationId});}
  catch{return pending('SOURCE_RESERVATION_UNAVAILABLE');}
  if(first?.error)return pending('SOURCE_RESERVATION_UNAVAILABLE');

@@ -18,7 +18,8 @@ function query(body,scheduleOriginals,structureOnly){
  for(const key of ['current_generation_id','credential_id','employee_id'])if(typeof r[key]!=='string'||!UUID.test(r[key]))fail();
  for(const key of ['principal_digest','token_digest'])if(typeof r[key]!=='string'||!SHA.test(r[key]))fail();
  if(typeof r.device_id!=='string'||!/^KIOSK_(?:0[2-9]|10)$/.test(r.device_id)||!Number.isSafeInteger(r.assignment_epoch)||r.assignment_epoch<1)fail();
- const input={schema:'custodial.native-provider-events.v2',events:body.events};
+ const input={schema:Array.isArray(body.events)&&body.events.some(e=>e?.schema==='custodial.native-provider-event.v3')
+  ?'custodial.native-provider-events.v3':'custodial.native-provider-events.v2',events:body.events};
  const batch=structureOnly?validateNativeProviderEventsStructure(input):validateNativeProviderEventsRequest(input,{scheduleOriginals});
  for(const e of batch.events)for(const [key,original]of [['credential_id','receipt_credential_id'],['employee_id','receipt_employee_id'],
   ['device_id','receipt_device_id'],['assignment_epoch','receipt_assignment_epoch'],['principal_digest','principal_digest']])if(r[key]!==e[original])fail();
@@ -49,8 +50,9 @@ export function validateNativeProviderEventDecisions(value,request,context,{sche
    if(!exact(result,['event_id','decision']))fail();results.push(Object.freeze({...result}));continue;
   }
   if(!exact(result,['event_id','decision','receipt'])||result.decision!=='ORIGINAL_ACCEPTED'||result.receipt?.replayed!==true)fail();
-  const checked=validateNativeProviderEventsResponse({ok:true,data:{schema:'custodial.native-provider-event-receipts.v2',results:[result.receipt]}},
-   {schema:'custodial.native-provider-events.v2',events:[e]},{scheduleOriginals});
+  const version=e.schema==='custodial.native-provider-event.v3'?'v3':'v2';
+  const checked=validateNativeProviderEventsResponse({ok:true,data:{schema:'custodial.native-provider-event-receipts.'+version,results:[result.receipt]}},
+   {schema:'custodial.native-provider-events.'+version,events:[e]},{scheduleOriginals});
   if(checked.data.results[0]?.admitted_state!=='ACCEPTED')fail();
   results.push(Object.freeze({event_id:e.event_id,decision:result.decision,receipt:checked.data.results[0]}));
  }

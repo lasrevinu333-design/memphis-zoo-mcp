@@ -1,3 +1,4 @@
+import {withHistoricalNative289SourceFixture} from './fixtures/historical-native289-source-fixture.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync,mkdtempSync,mkdirSync,copyFileSync,writeFileSync,unlinkSync,rmSync,symlinkSync} from 'node:fs';
 import {tmpdir} from 'node:os';
@@ -12,11 +13,12 @@ import {assertMessageManifest,readMessageSource,assertMessageTarget,compareMessa
  MESSAGE_FILE,MESSAGE_SHA,MESSAGE_MANIFEST,MESSAGE_IDENTITY,PREPARE_PRIOR,PREPARE_CURRENT,PREPARE_GRANT} from './employee-message-source-admission-replay.mjs';
 
 // Pure/fake-only. This never launches Docker or supplies engine acceptance.
+await withHistoricalNative289SourceFixture(fileURLToPath(new URL('../',import.meta.url)),async fixtureRoot=>{
 const hash=x=>createHash('sha256').update(x).digest('hex'),clone=x=>structuredClone(x);
 let checks=0;
 const equal=(a,b,label)=>{assert.deepEqual(a,b,label);checks++;};
 const rejects=fn=>{assert.throws(fn);checks++;};
-const source=readMessageSource(undefined,{profile:'CURRENT_CANONICAL_289'});
+const source=readMessageSource(fixtureRoot,{profile:'CURRENT_CANONICAL_289'});
 const frozenBytes=readFileSync(new URL('./fixtures/native-provider-event-decision-historical-source-models.json',import.meta.url));
 equal(hash(frozenBytes),'30e660c3f708e1d1ca0f64547eaffcfbbca99059630b314361ae9797dc55cb0d');
 const frozen=JSON.parse(frozenBytes).models.CURRENT_219;
@@ -109,7 +111,7 @@ for(const required of ["assert.equal(git('status','--porcelain'),'','clean commi
  "process.once('SIGINT',stop)","process.once('SIGTERM',stop)",'verifyEmployeeMessageSourceAdmissionDatabase({sql,target:',
  '4f2cac31af750c5bc10a50445583b27ae2c6e67b0f66fe72c078b53c533d00db']){assert.ok(text.includes(required),required);checks++;}
 // Real Node CLI preflight, explicitly SOURCE ONLY. No --execute call anywhere.
-const cli=JSON.parse(execFileSync(process.execPath,[fileURLToPath(new URL('./employee-message-source-admission-replay.mjs',import.meta.url)),'--source-check-current'],{encoding:'utf8',timeout:10000}));
+const cli=JSON.parse(execFileSync(process.execPath,[join(fixtureRoot,'scripts/employee-message-source-admission-replay.mjs'),'--source-check-current'],{encoding:'utf8',timeout:10000}));
 equal(cli.scope,'SOURCE_ONLY_NO_ENGINE');equal(cli.migration_profile,'CURRENT_CANONICAL_289');equal(cli.manifest_sha256,source.manifest_sha256);equal(cli.canonical_manifest_sha256,source.canonical_manifest_sha256);equal(cli.migrations,source.migrations);equal(cli.message_boundary,source.message_boundary);
 equal(source.inputs.length,23);equal(Object.fromEntries(source.inputs.slice(0,-1).map(row=>[row.file,row.sha256])),CURRENT_MESSAGE_SOURCE_PINS);
 equal(currentCanonicalMessageProfile(source.migrations).message_boundary,{file:MESSAGE_FILE,sha256:MESSAGE_SHA,predecessor_count:209,predecessor_manifest_sha256:'f070f410e8c02c35a2d37780e6c2165975e731e50bf63a5bf0bd3ca6341480a9',following_migrations:79,following_manifest_sha256:'ff36e204a9169145903e92fa948e9195f51743d9c248ca4fd2f59b386f1a5ace'});
@@ -124,7 +126,7 @@ assert.ok(text.includes("const source=readMessageSource(),git="));checks++;
 // Actual maintained canonical reader and all Source pins, fresh owned copies.
 const privateSource=mkdtempSync(join(tmpdir(),'custodial-message-source-contract-'));
 try{
- const root=fileURLToPath(new URL('../',import.meta.url));
+ const root=fixtureRoot;
  for(const file of ['supabase/canonical/migration-replay-order.json',...source.migrations.map(row=>'supabase/migrations/'+row.file),...source.inputs.map(row=>row.file)]){
   mkdirSync(dirname(join(privateSource,file)),{recursive:true});copyFileSync(join(root,file),join(privateSource,file));
  }
@@ -139,4 +141,6 @@ try{
  const extra=join(privateSource,'supabase/migrations/20261022000000_unowned.sql');writeFileSync(extra,'-- test-only unowned Source\n',{flag:'wx'});try{rejects(()=>readMessageSource(privateSource,{profile:'CURRENT_CANONICAL_289'}));}finally{unlinkSync(extra);}
  equal(readMessageSource(privateSource,{profile:'CURRENT_CANONICAL_289'}),source);
 }finally{rmSync(privateSource,{recursive:true});}
-console.log(JSON.stringify({status:'PASS',checks,scope:'fake subprocess and source/manifest/delta/cleanup contracts only; no Docker/SQL/HTTP/JVM/provider',engine_executed:false}));
+console.log(JSON.stringify({status:'PASS',checks,scope:'Retained289 fake subprocess and source/manifest/delta/cleanup contracts only; no Docker/SQL/HTTP/JVM/provider',historical_source_fixture:true,current_inventory_files:315,current_canonical_members:311,engine_executed:false}));
+
+});

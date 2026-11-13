@@ -55,6 +55,7 @@ export async function runNativeScheduleSourceProducerTests(){
  // hold must run before OAuth/provider/finish and create no second timer.
  const workerFake=nativeScheduleSourceProducerFixture(),sourceRpc=workerFake.db.rpc.bind(workerFake.db),ordinary=[];
  workerFake.db.rpc=(fn,args)=>{
+  if(fn==='custodial_native_departure_source_requests')return {retry(){return this;},abortSignal(){return this;},then(resolve){return resolve({data:{...clone(workerFake.f.discovery),schema:'custodial.native-schedule-source-requests.v2',requests:[]}});}};
   if(fn.startsWith('custodial_native_schedule_'))return sourceRpc(fn,args);
   ordinary.push(fn);if(fn.startsWith('mz_enqueue_'))return Promise.resolve({data:0});
   if(fn==='claim_operational_notification_job_by_key')return Promise.resolve({data:{job_type:'employee_native_push',job_key:'employee-schedule-push:'+workerFake.f.first.reservation.reservation_id,
@@ -64,17 +65,18 @@ export async function runNativeScheduleSourceProducerTests(){
  workerFake.db.from=table=>{eq(table,'operational_notification_jobs');const q={select(){return this;},in(){return this;},lte(){return this;},order(){return this;},limit(){return Promise.resolve({data:[{job_key:'synthetic-schedule'}]});}};return q;};
  const runtime=await qualifiedAlertDispatcher({db:workerFake.db,pushRuntime:{configured:true,send(){throw Error('no source send');}}});
  const sweep=await runtime.sweep();eq(sweep.ok,true,'ordinary sweep completed, not program readiness');eq(sweep.claimed,1);
+ eq(sweep.departure_preparation.status,'NO_SOURCE_REQUESTS');eq(sweep.departure_preparation.dispatch_authorized,false);
  eq(sweep.schedule_preparation.status,'SOURCE_JOBS_PREPARED_NATIVE_UNQUALIFIED');eq(sweep.schedule_preparation.delivery_admitted,false);
  eq(ordinary,['mz_enqueue_employee_event_pushes','mz_enqueue_employee_location_pushes','mz_enqueue_employee_lunch_coverage_pushes','claim_operational_notification_job_by_key'],'old lanes unchanged; held schedule has no finish');
  for(const failOrdinary of [false,true]){
   const f=fixture(),log=[];let release,reads=0,fail=failOrdinary;const gate=new Promise(r=>release=r);
   const db={rpc(fn){
-   if(fn==='custodial_native_schedule_source_requests')return {retry(){return this;},abortSignal(){return this;},async then(resolve){reads++;await gate;resolve({data:{...clone(f.discovery),requests:[]}});}};
+   if(['custodial_native_schedule_source_requests','custodial_native_departure_source_requests'].includes(fn))return {retry(){return this;},abortSignal(){return this;},async then(resolve){reads++;await gate;resolve({data:{...clone(f.discovery),schema:fn.includes('departure')?'custodial.native-schedule-source-requests.v2':f.discovery.schema,requests:[]}});}};
    log.push(fn);return Promise.resolve(fail?{error:Error('SYNTHETIC_ORDINARY_FAILURE')}:{data:0});
   },from(){const q={select(){return this;},in(){return this;},lte(){return this;},order(){return this;},limit(){return Promise.resolve({data:[]});}};return q;}};
   const r=await qualifiedAlertDispatcher({db,pushRuntime:{configured:true}});const first=r.sweep();first.catch(()=>{});
   await new Promise(done=>setImmediate(done));eq(log.slice(0,3),['mz_enqueue_employee_event_pushes','mz_enqueue_employee_location_pushes','mz_enqueue_employee_lunch_coverage_pushes'],'ordinary work starts without waiting on source');
-  eq((await r.sweep()).skipped,'in_flight','source lifetime remains single-flight even ordinary failure');eq(reads,1,'no second source pass');
+  eq((await r.sweep()).skipped,'in_flight','source lifetime remains single-flight even ordinary failure');eq(reads,2,'one pass for each version; no duplicate sweep');
   release();if(failOrdinary){await assert.rejects(()=>first,/SYNTHETIC_ORDINARY_FAILURE/);checks++;}else eq((await first).schedule_preparation.status,'NO_SOURCE_REQUESTS');
   fail=false;eq((await r.sweep()).ok,true,'single-flight clears after all owned source work settles');
  }

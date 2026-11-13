@@ -13,7 +13,7 @@ function date(v){
  const d=new Date(v+'T00:00:00Z');return Number.isFinite(d.valueOf())&&d.toISOString().slice(0,10)===v;
 }
 export function validateNativeScheduleSourceRequests(v){
- if(!exact(v,keys)||v.schema!=='custodial.native-schedule-source-requests.v1'||!date(v.service_date)
+ if(!exact(v,keys)||!['custodial.native-schedule-source-requests.v1','custodial.native-schedule-source-requests.v2'].includes(v.schema)||!date(v.service_date)
   ||v.timezone!=='America/Chicago'||v.dispatch_authorized!==false||v.delivery_admitted!==false
   ||v.clock_effect_authority!==null||v.retention_authority!==null||!Array.isArray(v.requests)
   ||Object.getPrototypeOf(v.requests)!==Array.prototype||v.requests.length>4096
@@ -27,23 +27,24 @@ export function validateNativeScheduleSourceRequests(v){
    ||!['projection_id','publication_id','version_id'].every(k=>id(v.authority[k]))
    ||typeof v.authority.source_revision!=='string'||!/^[1-9][0-9]{0,15}$/.test(v.authority.source_revision)
    ||!Number.isSafeInteger(Number(v.authority.source_revision)))invalid();
-  let previous='';
+  let previous='';const departure=v.schema==='custodial.native-schedule-source-requests.v2',employeeGenerations=new Map();
   const anchors=new Set(),generations=new Set();
   for(const r of v.requests){
    if(!exact(r,['source_key','employee_id','generation_id'])||!Object.values(r).every(id)
-    ||r.employee_id<=previous||generations.has(r.generation_id))invalid();
+    ||(departure?`${r.employee_id}:${r.source_key}`:r.employee_id)<=previous||(!departure&&generations.has(r.generation_id))
+    ||(departure&&employeeGenerations.has(r.employee_id)&&employeeGenerations.get(r.employee_id)!==r.generation_id))invalid();
    // A temporary lunch coverer may legitimately share an anchor with its
    // normal owner. Logical episodes are per employee, never per artwork pin.
-   previous=r.employee_id;generations.add(r.generation_id);anchors.add(r.source_key);
+   previous=departure?`${r.employee_id}:${r.source_key}`:r.employee_id;generations.add(r.generation_id);anchors.add(r.source_key);employeeGenerations.set(r.employee_id,r.generation_id);
   }
  }
  return freeze(structuredClone(v));
 }
 // Read-only service seam. No caller date/time, direct table access, source
 // reservation, new timer, provider, token, clock permit or worker activation.
-export async function readNativeScheduleSourceRequests({db}){
+export async function readNativeScheduleSourceRequests({db,departure=false}){
  if(typeof db?.rpc!=='function')invalid();
- let r;try{r=await db.rpc('custodial_native_schedule_source_requests',{});}catch{
+ let r;try{r=await db.rpc(departure?'custodial_native_departure_source_requests':'custodial_native_schedule_source_requests',{});}catch{
   return freeze({status:'SOURCE_READ_PENDING',dispatch_authorized:false,delivery_admitted:false,requests:[]});
  }
  if(r?.error)return freeze({status:'SOURCE_READ_PENDING',dispatch_authorized:false,delivery_admitted:false,requests:[]});

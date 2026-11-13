@@ -21,9 +21,10 @@ export const MANAGER_CONTRACT_SOURCE_PINS=Object.freeze({
  "scripts/fixtures/current-manager-historical-source/20261002140000_event_supersession_and_chicago_instants.sql": "dbd4b8f5cae0adcb12ad691404734399012d91fc28ba08f4a961f7ea049fe78e",
  "scripts/fixtures/current-manager-historical-source/20261003220000_current_release_authority_completion.sql": "33ca9d153233441b542d62e0f76d1ffa3b07788cf7e9fccd0c4b993b719abb27"
 });
-export function readCurrentManagerCanonicalSource(){
- const current=readCurrentCanonicalDecisionSource(fileURLToPath(ROOT));
- const manager_inputs=Object.entries(MANAGER_CONTRACT_SOURCE_PINS).map(([file,sha256])=>{assert.equal(sha(readFileSync(new URL(file,ROOT))),sha256,file);return {file,sha256};});
+export function readCurrentManagerCanonicalSource(root=ROOT){
+ const location=typeof root==='string'?pathToFileURL(root+'/'):root;
+ const current=readCurrentCanonicalDecisionSource(fileURLToPath(location));
+ const manager_inputs=Object.entries(MANAGER_CONTRACT_SOURCE_PINS).map(([file,sha256])=>{assert.equal(sha(readFileSync(new URL(file,location))),sha256,file);return {file,sha256};});
  return {...current,manager_inputs};
 }
 const ARCHIVED_HISTORICAL_SOURCE=Object.freeze({

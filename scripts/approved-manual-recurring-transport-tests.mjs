@@ -8,9 +8,18 @@ import {approvedManualRecurringOperationId,approvedManualRecurringWorkerInput,ap
 import {prepareApprovedManualPeriodWorkerData} from '../src/approved-manual-period-worker.js';
 import {readOwnerConfirmedEmploymentAdmissionData,prepareApprovedManualEmploymentAdmission} from '../src/approved-manual-employment-admission.js';
 import {readApprovedManualWeek} from '../src/approved-manual-week.js';
+import {prepareApprovedManualSourceDraft} from '../src/approved-manual-source-draft.js';
+import {withApprovedManualFixtureCapacities} from './fixtures/approved-manual-capacity-source.mjs';
 installStaticWeeklySha256HexAccelerator(x=>createHash('sha256').update(x).digest('hex'));
+// The current worker reads the corrected week. Its source/config must come
+// from that same authority; the archived346-row fixture remains untouched.
+const week=readApprovedManualWeek(),draft=prepareApprovedManualSourceDraft({week,
+ referenceBytes:readFileSync(new URL('../'+week.referenceBindings.reference.path,import.meta.url))}),
+ source=withApprovedManualFixtureCapacities(draft.sourceDraft);
+delete source.publicationAuthority;source.serviceDate='2026-11-02';
+Object.assign(source.version,{id:'00000000-0000-4000-8000-000000001001',publicationId:'00000000-0000-4000-8000-000000001002',status:'published',effectiveStart:source.serviceDate});
 const checks=[],test=async(n,f)=>{await f();checks.push(n);},clone=structuredClone,
- fixture=JSON.parse(readFileSync(new URL('../release/worker1-coverall-workflow-20261030/TYPED_THIRD_ABSENCE_PURE_FIXTURE.json',import.meta.url))),
+ fixture={source,ownerConfig:structuredClone(draft.ownerConfig)},
  uid=n=>`79000000-0000-4000-8000-${String(n).padStart(12,'0')}`,actor={managerId:uid(1),managerName:'OWNED_SYNTHETIC_PROTOCOL_FIXTURE'},
  manager={manager_id:actor.managerId,credential_id:uid(2),device_id:'OWNED_SYNTHETIC_DEVICE_NOT_PHYSICAL',access_level:'full_access'},
  pub=fixture.source.version.publicationId,op=approvedManualRecurringOperationId(actor.managerId,'same-original-period-key'),at=(d,n)=>new Date(Date.parse(d+'T12:00Z')+n*86400000).toISOString().slice(0,10),
@@ -29,7 +38,7 @@ function makeBasis({preStart=false}={}){
   ownerConfig:clone(fixture.ownerConfig),catalogEntryDigest:'c'.repeat(64),generation:3,employmentByDate,employmentRevisionVector,preparedExceptions:[],preparedSummary:[],priorProjection:null,priorDayBases:[],rosterUnavailableByDate:[],acceptedCoverAllDays:[]};
  return{...b,basisDigest:digest(b)};
 }
-const seal=b=>{delete b.basisDigest;b.basisDigest=digest(b);return b;},basis=makeBasis(),input=approvedManualRecurringWorkerInput({basis,actor,operationId:op}),before=digest({basis,input,fixture}),week=readApprovedManualWeek();
+const seal=b=>{delete b.basisDigest;b.basisDigest=digest(b);return b;},basis=makeBasis(),input=approvedManualRecurringWorkerInput({basis,actor,operationId:op}),before=digest({basis,input,fixture});
 await test('Stable original operation UUID is manager/key-bound and retry-stable',()=>{
  assert.equal(approvedManualRecurringOperationId(actor.managerId,'same-original-period-key'),op);
  assert.notEqual(approvedManualRecurringOperationId(actor.managerId,'new-key'),op);assert.notEqual(approvedManualRecurringOperationId(uid(4),'same-original-period-key'),op);
@@ -69,7 +78,7 @@ await test('Canonical PTO and pre-start mathematical union remain separate actua
 // Real mathematical normal projection DATA, not a fake result/attestation. All
 // seven days unchanged => existing worker bypasses the optimizer entirely.
 const native=await prepareApprovedManualPeriodWorkerData(input,performance.now()+45000),projection=approvedManualRecurringTransport({workerInput:input,workerResult:native,basis,operationId:op});
-await test('Real unchanged native DATA has346rows/40full-hour lunches and no solver invocation',()=>{assert.equal(native.period.solverInvoked,false);assert.equal(native.nativeProjection.projectionAssignments.length,346);assert.equal(projection.lunchDocument.loans.length,40);assert.equal(projection.envelope.semantic_snapshot.recurringOperation.kind,'RECURRING_MANUAL_MATERIALIZATION');assert.ok(!('originalCommand'in projection.envelope.semantic_snapshot));});
+await test('Real unchanged current native DATA has327rows/40full-hour lunches and no solver invocation',()=>{assert.equal(native.period.solverInvoked,false);assert.equal(native.nativeProjection.projectionAssignments.length,327);assert.equal(projection.lunchDocument.loans.length,40);assert.equal(projection.envelope.semantic_snapshot.recurringOperation.kind,'RECURRING_MANUAL_MATERIALIZATION');assert.ok(!('originalCommand'in projection.envelope.semantic_snapshot));});
 await test('Lowering preserves all fourteen bindings, fresh lunch hashes and native hard proof',()=>{
  assert.deepEqual(projection.envelope.authority.employmentRevisionVector,basis.employmentRevisionVector);assert.equal(projection.envelope.database_projection_identity,digest(Object.fromEntries(Object.entries(projection.envelope).filter(([k])=>k!=='database_projection_identity'))));
  assert.equal(projection.lunchDocument.base_authority_digest,projection.envelope.authority_digest);assert.equal(projection.lunchDocument.base_replay_digest,projection.replayDigest);
@@ -81,7 +90,7 @@ function ports({state='NATIVE_ADJUSTMENT_REQUIRED',wrongPhysical=false,stageConf
   if(name==='static_weekly_begin_manual_recurring')return{state:originalReceipt?'ORIGINAL_RECEIPT':state,operationId:op,backendPid:40001,transactionId:'12345',basis,
    repeatBasis:{schema:'custodial.approved-manual-recurring-basis.v1',managerId:actor.managerId,sourceId:uid(3),publicationId:pub,versionId:basis.versionId,origin:'2026-10-26',frameStart:basis.frameStart,frameEnd:basis.frameEnd,
     authorityRevision:42,generation:3,manifestSha256:fixture.source.version.manualGroupRatingAuthority.manifestSha256,baselineSnapshotDigest:'a'.repeat(64),catalogEntryDigest:'b'.repeat(64),sourceProjectionIdentity:'c'.repeat(64),sourceLunchIdentity:'d'.repeat(64),
-    assignmentCount:346,lunchCount:40,acceptedExceptions:[],adjustmentReasons:[],employmentByDate:basis.employmentByDate,existingProjectionId:null,
+    manualDataDigest:week.dataDigest,assignmentCount:327,lunchCount:40,acceptedExceptions:[],adjustmentReasons:[],employmentByDate:basis.employmentByDate,existingProjectionId:null,
     participants:Array.from({length:7},(_,n)=>({serviceDate:at(basis.frameStart,n),assignmentEmployeeIds:[],lunchOwnerEmployeeIds:[],lunchCovererEmployeeIds:[]}))},
    receipt:{status:'PERSISTED_CURRENT',operationId:op,projectionId:uid(50)}};
   if(name==='static_weekly_finish_manual_recurring_normal'){
@@ -117,5 +126,5 @@ await test('CP dispatch precedes legacy compiler and generic no-op; original leg
  assert.match(cp,/static_weekly_coverall_bind_actor/);assert.match(cp,/static_manual_coverall_cancellation_must_retain_original_two_plan/);
  assert.match(cp,/static_manual_coverall_choice_required/);assert.match(cp,/requireMonday\(requestedDate,'projection start'\)/);
 });
-console.log(JSON.stringify({status:'PASS',groups:checks.length,checks,realUnchangedNativeRows:346,realUnchangedNativeLunches:40,realNormalSolverInvoked:false,
+console.log(JSON.stringify({status:'PASS',groups:checks.length,checks,realUnchangedNativeRows:327,realUnchangedNativeLunches:40,realNormalSolverInvoked:false,
  mockedTransactionCases:true,sqlExecuted:false,productionWritten:false,actualManagerOrPhysicalDevice:false,scope:'Pure typed recurrence/real unchanged DATA and mocked same-client transaction ports; SQL unqualified'}));

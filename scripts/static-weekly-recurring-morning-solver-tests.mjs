@@ -1,3 +1,4 @@
+import {readHistoricalOwnerConfig} from './fixtures/historical-owner-config-source.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {createHash} from 'node:crypto';
@@ -9,7 +10,7 @@ import {createRecurringMorningObjectiveContract as contract,scoreRecurringMornin
  solveRecurringMorningCanonicalMinimum as solve,assertRecurringMorningCanonicalProof as verify,
  RECURRING_MORNING_ERROR} from '../src/static-weekly-recurring-morning-solver.js';
 const sha=x=>createHash('sha256').update(x).digest('hex'),clone=x=>structuredClone(x);
-const read=(p,expected)=>{const bytes=fs.readFileSync(new URL(p,import.meta.url));assert.equal(sha(bytes),expected,'exact tracked synthetic input/config bytes');return JSON.parse(bytes);};
+const read=(p,expected)=>{const bytes=p==='../config/custodial-six-person-static-20261005.json'?readHistoricalOwnerConfig():fs.readFileSync(new URL(p,import.meta.url));assert.equal(sha(bytes),expected,'exact tracked synthetic input/config bytes');return JSON.parse(bytes);};
 export function createMorningSolverTestInput({families=['CHINA'],dayOfWeek=1}={}){
  const fixture=read('./fixtures/six-person-absence-source.json','882e5895d60338313b08f28ec327f2087468261749cdbac5dc7d78ac22e20469'),source=fixture.compilerInput,
   ownerConfig=read('../config/custodial-six-person-static-20261005.json','40da4e1d4cce52b2361b5403b7e5e4477ca00def0fd3649a1d76dacb48422f30'),

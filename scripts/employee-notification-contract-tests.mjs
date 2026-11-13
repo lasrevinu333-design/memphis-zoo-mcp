@@ -645,292 +645,201 @@ await assert.rejects(
 );
 assert.equal(leaseExpirySendCount, 1, 'lease expiry during FCM must not permit a second provider dispatch');
 
-const eventClaimedJob = {
-  ...claimedJob,
-  job_id: '88888888-8888-4888-8888-888888888881',
-  job_key: 'employee-event:cancel-boundary',
-  job_type: 'employee_event_push',
-  source_id: '88888888-8888-4888-8888-888888888882',
-};
-const eventInstance = {
-  instance_id: eventClaimedJob.source_id,
-  event_id: '88888888-8888-4888-8888-888888888883',
-  employee_id: '88888888-8888-4888-8888-888888888884',
-  event_revision: 1,
-  notification_key: 'event:cancel-boundary',
-  notification_kind: 'day_before',
-  credential_id: canonicalCredentialId,
-  assignment_epoch: 4,
-  state: 'pending',
-  employees: { display_name: 'Tammy' },
-  events_app_events: { event_name: 'Cancelled event', display_location: 'Zoo Footprint',
-    event_date: '2026-10-20', start_time: '18:00:00', end_time: '20:30:00', attendee_count: 240 },
-};
-const currentEventProjection = { current:true,event_id:eventInstance.event_id,
-  event_revision:eventInstance.event_revision,instance_id:eventInstance.instance_id,
-  employee_id:eventInstance.employee_id,notification_key:eventInstance.notification_key,
-  employee_name:'Tammy',event_name:'Current confirmed event',display_location:'Canonical Event Center',
-  event_date:'2026-10-20',start_instant_utc:'2026-10-20T23:00:00Z',
-  end_instant_utc:'2026-10-21T01:30:00Z',attendee_count:240,
-  custodial_note_codes:['trash_boxes'],custodial_public_notes:'Waxed floor: use protected route.' };
-function eventInstanceQuery(row, { onUpdate = null } = {}) {
-  const query = {
-    select() { return query; },
-    update() { onUpdate?.(); return query; },
-    eq() { return query; },
-    in() { return query; },
-    single: async () => ({ data: row, error: null }),
-    maybeSingle: async () => ({ data: null, error: null }),
+// Real Event jobs now use the private two-stage native authority. These
+// integration fixtures run that owning branch through the installed worker;
+// legacy table mutations and generic push dispatch are forbidden, even on error.
+const { eventFixture } = await import('./fixtures/native-event-dispatch-fixture.mjs');
+function nativeEventWorkerFixture(options = {}) {
+  const fixture = eventFixture(options);
+  fixture.db.from = (name) => {
+    fixture.calls.push({ name: `LEGACY_TABLE:${name}` });
+    throw new Error(`Native Event must not enter the legacy table path: ${name}`);
   };
-  return query;
+  const runtime = installEmployeeNotificationRoutes(express(), {
+    supabase: fixture.db,
+    pushRuntime: fixture.pushRuntime,
+  });
+  return Object.assign(fixture, { runtime });
+}
+const eventCallNames = (fixture) => fixture.calls.map(({ name }) => name);
+function assertNoLegacyEventCalls(fixture) {
+  assert.equal(eventCallNames(fixture).some((name) => name.startsWith('mz_') || name.startsWith('LEGACY_TABLE:')), false,
+    'real Event delivery must never use the obsolete claim/release/update boundary');
+}
+function assertNoEventProviderDispatch(fixture) {
+  assert.equal(fixture.requests.length, 0);
+  assert.equal(eventCallNames(fixture).includes('FCM_SYNTHETIC'), false);
+  assertNoLegacyEventCalls(fixture);
 }
 
-let cancelledEventSendCount = 0;
-const cancelledBeforeProviderRuntime = installEmployeeNotificationRoutes(express(), {
-  supabase: {
-    async rpc(name) {
-      if (name === 'mz_resolve_employee_push_delivery') {
-        return { data: { ok: true, registration: authorizedRegistration }, error: null };
-      }
-      assert.equal(name, 'mz_claim_employee_event_push_delivery');
-      return { data: { ok: false, terminal: true, reason: 'event_push_instance_cancelled' }, error: null };
-    },
-    from(name) {
-      assert.equal(name, 'event_push_instances');
-      return eventInstanceQuery(eventInstance);
-    },
-  },
-  pushRuntime: {
-    configured: true,
-    async send() { cancelledEventSendCount += 1; return 'provider-message-must-not-exist'; },
-  },
+const cancelledBeforeProvider = nativeEventWorkerFixture({
+  targetTransform: () => ({ current: false, reason: 'native_alert_job_superseded' }),
 });
 await assert.rejects(
-  () => cancelledBeforeProviderRuntime.deliverClaimedJob(eventClaimedJob),
-  (error) => error?.terminal === true && error?.code === 'event_push_instance_cancelled',
-  'an event cancelled after job claim must fail the database-bound pre-provider check',
+  () => cancelledBeforeProvider.runtime.deliverClaimedJob(cancelledBeforeProvider.job),
+  (error) => error?.terminal === true && error?.code === 'native_alert_job_superseded',
+  'a cancelled or superseded Event must fail native source admission before preparation or dispatch',
 );
-assert.equal(cancelledEventSendCount, 0, 'FCM must not receive an event that is cancelled before provider dispatch');
+assert.deepEqual(eventCallNames(cancelledBeforeProvider), [
+  'custodial_native_alert_dispatch_status', 'OAUTH_SYNTHETIC', 'custodial_native_alert_target',
+]);
+assertNoEventProviderDispatch(cancelledBeforeProvider);
 
-let duplicateClaimEventUpdates = 0;
-let duplicateClaimEventSends = 0;
-const duplicateSameLeaseClaimRuntime = installEmployeeNotificationRoutes(express(), {
-  supabase: {
-    async rpc(name) {
-      if (name === 'mz_resolve_employee_push_delivery') {
-        return { data: { ok: true, registration: authorizedRegistration }, error: null };
-      }
-      assert.equal(name, 'mz_claim_employee_event_push_delivery');
-      return { data: { ok: false, terminal: false, defer_finish: true,
-        reason: 'event_push_delivery_in_flight', state: 'leased' }, error: null };
-    },
-    from(name) {
-      assert.equal(name, 'event_push_instances');
-      return eventInstanceQuery(eventInstance, { onUpdate: () => { duplicateClaimEventUpdates += 1; } });
-    },
-  },
-  pushRuntime: {
-    configured: true,
-    async send() { duplicateClaimEventSends += 1; return 'provider-message-must-not-exist'; },
-  },
+const currentEvent = nativeEventWorkerFixture();
+const deliveredEvent = await currentEvent.runtime.deliverClaimedJob(currentEvent.job);
+assert.deepEqual(deliveredEvent, {
+  provider_message_id: 'projects/synthetic-zoo/messages/original', replayed: false, native_event: true,
 });
-await assert.rejects(
-  () => duplicateSameLeaseClaimRuntime.deliverClaimedJob(eventClaimedJob),
-  (error) => error?.deferFinish === true && error?.terminal !== true && error?.code === 'event_push_delivery_in_flight',
-  'an exact same-lease event claim retry must leave the original provider boundary untouched',
-);
-assert.equal(duplicateClaimEventSends, 0);
-assert.equal(duplicateClaimEventUpdates, 0);
+assert.deepEqual(eventCallNames(currentEvent), [
+  'custodial_native_alert_dispatch_status', 'OAUTH_SYNTHETIC', 'custodial_native_alert_target',
+  'custodial_native_alert_prepare', 'custodial_native_alert_finalize', 'FCM_SYNTHETIC',
+  'custodial_native_alert_record_outcome',
+]);
+const eventWire = currentEvent.requests[0].body.message;
+assert.deepEqual(Object.keys(eventWire).sort(), ['android', 'data', 'token']);
+assert.equal(eventWire.data.schema, 'custodial.native-event-payload.v1');
+assert.equal(eventWire.data.instance_id, currentEvent.job.source_id);
+assert.equal(eventWire.data.notification_key, currentEvent.job.payload_json.notification_key);
+assert.equal(eventWire.data.receipt_employee_id, currentEvent.expected.employee_id);
+assert.equal(eventWire.data.receipt_credential_id, currentEvent.expected.credential_id);
+assert.equal(eventWire.data.recipient_device_uuid, currentEvent.expected.device_uuid);
+assert.equal(eventWire.data.token_digest, createHash('sha256').update(eventWire.token).digest('hex'));
+assert.match(eventWire.data.body, /Synthetic Employee.*Synthetic Event.*Synthetic Pavilion/);
+assert.match(eventWire.data.body, /Expected attendance is 120/);
+assert.match(eventWire.data.body, /Eight trash boxes requested/);
+assert.doesNotMatch(eventWire.data.body, /PRIVATE CATERING/);
+assertNoLegacyEventCalls(currentEvent);
+assert.deepEqual(await currentEvent.runtime.deliverClaimedJob(currentEvent.job), {
+  ...deliveredEvent, replayed: true,
+});
+assert.equal(currentEvent.requests.length, 1, 'the exact original native Event receipt must suppress resend');
+assert.equal(currentEvent.ledger.provider_outcome, 'provider_accepted');
+assert.equal(eventCallNames(currentEvent).at(-1), 'custodial_native_alert_dispatch_status');
+assertNoLegacyEventCalls(currentEvent);
 
-let crossingEventSendCount = 0;
-let crossingEventBody = '';
-const cancelledAcrossProviderRuntime = installEmployeeNotificationRoutes(express(), {
-  supabase: {
-    async rpc(name) {
-      if (name === 'mz_resolve_employee_push_delivery') {
-        return { data: { ok: true, registration: authorizedRegistration }, error: null };
-      }
-      if (name === 'mz_claim_employee_event_push_delivery') {
-        return { data: { ok: true, instance_id: eventInstance.instance_id, state: 'leased' }, error: null };
-      }
-      if (name === 'mz_employee_event_push_current_projection') return {data:currentEventProjection,error:null};
-      assert.equal(name, 'mz_record_employee_event_push_delivery');
-      return { data: { current: false, recorded: false, reason: 'event_or_revision_superseded' }, error: null };
-    },
-    from(name) {
-      assert.equal(name, 'event_push_instances');
-      return eventInstanceQuery(eventInstance);
-    },
-  },
-  pushRuntime: {
-    configured: true,
-    async send(push) { crossingEventSendCount += 1; crossingEventBody=push.body; return 'provider-message-cancelled-at-boundary'; },
+const staleEventProjection = nativeEventWorkerFixture({
+  prepareTransform: (value) => {
+    value.source_projection.display_location = '';
+    return value;
   },
 });
 await assert.rejects(
-  () => cancelledAcrossProviderRuntime.deliverClaimedJob(eventClaimedJob),
-  (error) => error?.terminal === true && error?.code === 'event_or_revision_superseded_after_provider_dispatch',
-  'a cancellation crossing the provider boundary cannot be recorded as a successful event delivery',
+  () => staleEventProjection.runtime.deliverClaimedJob(staleEventProjection.job),
+  (error) => error?.deferFinish === true && error?.code === 'native_event_qualification_pending',
+  'incomplete current Event authority remains pending without a fabricated terminal denial',
 );
-assert.equal(crossingEventSendCount, 1);
-assert.match(crossingEventBody,/Canonical Event Center/);
-assert.match(crossingEventBody,/Waxed floor/);
-assert.doesNotMatch(crossingEventBody,/Cancelled event|Zoo Footprint|PRIVATE_MANAGER_SOURCE/);
+assert.equal(eventCallNames(staleEventProjection).includes('custodial_native_alert_finalize'), false);
+assertNoEventProviderDispatch(staleEventProjection);
 
-let staleProjectionSends=0;
-const staleProjectionRuntime=installEmployeeNotificationRoutes(express(),{
-  supabase:{
-    async rpc(name){
-      if(name==='mz_resolve_employee_push_delivery')return {data:{ok:true,registration:authorizedRegistration},error:null};
-      if(name==='mz_claim_employee_event_push_delivery')return {data:{ok:true,dispatch_authorized:true},error:null};
-      if(name==='mz_employee_event_push_current_projection')return {data:{current:false,reason:'event_place_needs_review'},error:null};
-      if(name==='mz_release_employee_event_push_delivery')return {data:{current:true,released:true},error:null};
-      throw new Error(`unexpected stale projection RPC ${name}`);
-    },
-    from(name){assert.equal(name,'event_push_instances');return eventInstanceQuery(eventInstance);},
-  },pushRuntime:{configured:true,async send(){staleProjectionSends++;return 'must-not-send';}},
-});
-await assert.rejects(()=>staleProjectionRuntime.deliverClaimedJob(eventClaimedJob),
-  error=>error?.terminal===true&&error?.code==='event_place_needs_review');
-assert.equal(staleProjectionSends,0);
+const lostEventFinalize = nativeEventWorkerFixture({ finalizeError: true });
+await assert.rejects(
+  () => lostEventFinalize.runtime.deliverClaimedJob(lostEventFinalize.job),
+  (error) => error?.terminal === true && error?.code === 'native_event_outcome_unknown_no_resend',
+  'a committed but unreadable native Event permit cannot fall back to the legacy sender',
+);
+await assert.rejects(
+  () => lostEventFinalize.runtime.deliverClaimedJob(lostEventFinalize.job),
+  (error) => error?.terminal === true && error?.code === 'native_event_outcome_unknown_no_resend',
+);
+assert.equal(eventCallNames(lostEventFinalize).filter((name) => name === 'custodial_native_alert_finalize').length, 1);
+assert.equal(lostEventFinalize.ledger.provider_outcome, 'prepared');
+assertNoEventProviderDispatch(lostEventFinalize);
 
-let releaseEventLeaseExpirySend;
-let markEventLeaseExpirySendStarted;
-let preparedEventLease = null;
-let currentEventLease = eventClaimedJob.lease_token;
-let eventLeaseExpirySendCount = 0;
-const eventLeaseExpirySendStarted = new Promise((resolve) => { markEventLeaseExpirySendStarted = resolve; });
-const eventLeaseExpirySendRelease = new Promise((resolve) => { releaseEventLeaseExpirySend = resolve; });
-const reclaimedEventJob = { ...eventClaimedJob, lease_token: '88888888-8888-4888-8888-888888888899' };
-const eventLeaseExpiryRuntime = installEmployeeNotificationRoutes(express(), {
-  supabase: {
-    async rpc(name, args) {
-      if (name === 'mz_resolve_employee_push_delivery') {
-        return { data: { ok: true, registration: authorizedRegistration }, error: null };
-      }
-      if (name === 'mz_claim_employee_event_push_delivery') {
-        if (preparedEventLease) {
-          return { data: { ok: false, terminal: true, dispatch_authorized: false,
-            reason: 'event_push_delivery_outcome_unknown' }, error: null };
-        }
-        preparedEventLease = args.p_lease_token;
-        return { data: { ok: true, dispatch_authorized: true, instance_id: eventInstance.instance_id, state: 'leased' }, error: null };
-      }
-      if (name === 'mz_employee_event_push_current_projection') return {data:currentEventProjection,error:null};
-      assert.equal(name, 'mz_record_employee_event_push_delivery');
-      return args.p_lease_token === currentEventLease
-        ? { data: { current: true, recorded: true }, error: null }
-        : { data: { current: false, recorded: false, reason: 'employee_event_push_lease_superseded' }, error: null };
-    },
-    from(name) {
-      assert.equal(name, 'event_push_instances');
-      return eventInstanceQuery(eventInstance);
-    },
-  },
-  pushRuntime: {
-    configured: true,
-    async send() {
-      eventLeaseExpirySendCount += 1;
-      markEventLeaseExpirySendStarted();
-      await eventLeaseExpirySendRelease;
-      return 'provider-event-lease-expiry';
-    },
+let releaseEventProvider;
+let markEventProviderStarted;
+const eventProviderStarted = new Promise((resolve) => { markEventProviderStarted = resolve; });
+const eventProviderRelease = new Promise((resolve) => { releaseEventProvider = resolve; });
+const eventInFlight = nativeEventWorkerFixture({
+  fetchImpl: async () => {
+    markEventProviderStarted();
+    await eventProviderRelease;
+    return new Response(JSON.stringify({ name: 'projects/synthetic-zoo/messages/in-flight-original' }));
   },
 });
-const staleEventWorkerDelivery = eventLeaseExpiryRuntime.deliverClaimedJob(eventClaimedJob);
-await eventLeaseExpirySendStarted;
-currentEventLease = reclaimedEventJob.lease_token;
-await assert.rejects(
-  () => eventLeaseExpiryRuntime.deliverClaimedJob(reclaimedEventJob),
-  (error) => error?.terminal === true && error?.code === 'event_push_delivery_outcome_unknown',
-  'a reclaimed event worker must not repeat an unresolved provider dispatch',
-);
-releaseEventLeaseExpirySend();
-await assert.rejects(
-  () => staleEventWorkerDelivery,
-  (error) => error?.terminal === true && error?.code === 'employee_event_push_lease_superseded_after_provider_dispatch',
-);
-assert.equal(eventLeaseExpirySendCount, 1, 'lease expiry during event FCM must not permit a second provider dispatch');
+const originalEventDelivery = eventInFlight.runtime.deliverClaimedJob(eventInFlight.job);
+try {
+  await Promise.race([
+    eventProviderStarted,
+    originalEventDelivery.then(() => assert.fail('original Event did not stop at the synthetic provider boundary')),
+  ]);
+  for (const job of [eventInFlight.job, {
+    ...eventInFlight.job, lease_token: '88888888-8888-4888-8888-888888888899',
+  }]) {
+    await assert.rejects(
+      () => eventInFlight.runtime.deliverClaimedJob(job),
+      (error) => error?.terminal === true && error?.code === 'native_event_outcome_unknown_no_resend',
+      'neither an exact retry nor a replacement lease may cross the unresolved original dispatch',
+    );
+  }
+  assert.equal(eventInFlight.requests.length, 1);
+  assert.equal(eventCallNames(eventInFlight).filter((name) => name === 'custodial_native_alert_prepare').length, 1);
+  assert.equal(eventCallNames(eventInFlight).filter((name) => name === 'custodial_native_alert_finalize').length, 1);
+  assert.equal(eventInFlight.ledger.provider_outcome, 'prepared');
+} finally {
+  releaseEventProvider();
+}
+assert.deepEqual(await originalEventDelivery, {
+  provider_message_id: 'projects/synthetic-zoo/messages/in-flight-original', replayed: false, native_event: true,
+});
+assert.equal(eventInFlight.ledger.provider_outcome, 'provider_accepted');
+assertNoLegacyEventCalls(eventInFlight);
 
-let rotatedFailureEventUpdates = 0;
-const rotatedDuringProviderFailureRuntime = installEmployeeNotificationRoutes(express(), {
-  supabase: {
-    async rpc(name) {
-      if (name === 'mz_resolve_employee_push_delivery') {
-        return { data: { ok: true, registration: authorizedRegistration }, error: null };
-      }
-      if (name === 'mz_claim_employee_event_push_delivery') {
-        return { data: { ok: true, instance_id: eventInstance.instance_id, state: 'leased' }, error: null };
-      }
-      if (name === 'mz_employee_event_push_current_projection') return {data:currentEventProjection,error:null};
-      if (name === 'mz_release_employee_event_push_delivery') {
-        return { data: { current: true, released: true, state: 'failed' }, error: null };
-      }
-      assert.equal(name, 'mz_record_employee_push_delivery');
-      return { data: { current: false, recorded: false, reason: 'push_registration_superseded' }, error: null };
-    },
-    from(name) {
-      assert.equal(name, 'event_push_instances');
-      return eventInstanceQuery(eventInstance, { onUpdate: () => { rotatedFailureEventUpdates += 1; } });
-    },
-  },
-  pushRuntime: {
-    configured: true,
-    async send() {
-      throw Object.assign(new Error('old provider token rejected'), { permanent: true, deliveryNotAccepted: true });
-    },
-  },
+const rotatedEventToken = nativeEventWorkerFixture({
+  targetTransform: (value) => ({ ...value, token: value.token + '-rotated' }),
 });
 await assert.rejects(
-  () => rotatedDuringProviderFailureRuntime.deliverClaimedJob(eventClaimedJob),
-  (error) => error?.terminal !== true && error?.permanent !== true
-    && error?.code === 'push_registration_rotated_after_provider_failure',
-  'an old-token provider failure must remain retryable against the replacement token',
+  () => rotatedEventToken.runtime.deliverClaimedJob(rotatedEventToken.job),
+  (error) => error?.code === 'native_event_dispatch_contract_invalid',
+  'a target token not bound to the original recipient digest cannot reach preparation',
 );
-assert.equal(rotatedFailureEventUpdates, 1, 'a stale provider failure must transition the leased event to retryable failed state');
+assert.equal(eventCallNames(rotatedEventToken).includes('custodial_native_alert_prepare'), false);
+assertNoEventProviderDispatch(rotatedEventToken);
 
-let ambiguousReleaseCalls = 0;
-let ambiguousEventUpdates = 0;
-const ambiguousProviderRuntime = installEmployeeNotificationRoutes(express(), {
-  supabase: {
-    async rpc(name) {
-      if (name === 'mz_resolve_employee_push_delivery') {
-        return { data: { ok: true, registration: authorizedRegistration }, error: null };
-      }
-      if (name === 'mz_claim_employee_event_push_delivery') {
-        return { data: { ok: true, instance_id: eventInstance.instance_id, state: 'leased' }, error: null };
-      }
-      if (name === 'mz_employee_event_push_current_projection') return {data:currentEventProjection,error:null};
-      if (name === 'mz_release_employee_event_push_delivery') {
-        ambiguousReleaseCalls += 1;
-        return { data: { current: true, released: true }, error: null };
-      }
-      throw new Error(`unexpected ambiguous-provider RPC ${name}`);
-    },
-    from(name) {
-      assert.equal(name, 'event_push_instances');
-      return eventInstanceQuery(eventInstance, { onUpdate: () => { ambiguousEventUpdates += 1; } });
-    },
-  },
-  pushRuntime: {
-    configured: true,
-    async send() {
-      throw Object.assign(new Error('FCM returned HTTP 200.'), { deliveryNotAccepted: false });
-    },
-  },
-});
-await assert.rejects(
-  () => ambiguousProviderRuntime.deliverClaimedJob(eventClaimedJob),
-  (error) => error?.terminal === true && error?.permanent === true
-    && error?.code === 'event_push_delivery_outcome_unknown',
-  'an ambiguous FCM 200 must terminally preserve the prepared at-most-once marker',
-);
-assert.equal(ambiguousReleaseCalls, 0, 'ambiguous provider acceptance must never release the durable dispatch marker');
-assert.equal(ambiguousEventUpdates, 1, 'ambiguous provider acceptance terminally cancels the event instead of creating a retryable state');
+for (const [label, fetchImpl, code] of [
+  ['known refusal', async () => new Response('refused', { status: 400 }), 'native_event_provider_refused'],
+  ['ambiguous accepted response', async () => new Response('{}'), 'native_event_outcome_unknown_no_resend'],
+  ['lost provider response', async () => { throw new Error('synthetic provider response loss'); }, 'native_event_outcome_unknown_no_resend'],
+]) {
+  const fixture = nativeEventWorkerFixture({ fetchImpl });
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    await assert.rejects(
+      () => fixture.runtime.deliverClaimedJob(fixture.job),
+      (error) => error?.terminal === true && error?.permanent === true && error?.code === code,
+      `${label} must durably preserve the exact original provider result without resend`,
+    );
+  }
+  assert.equal(fixture.requests.length, 1);
+  assert.equal(eventCallNames(fixture).filter((name) => name === 'custodial_native_alert_record_outcome').length, 1);
+  assert.equal(fixture.ledger.provider_outcome,
+    code === 'native_event_provider_refused' ? 'known_nonacceptance' : 'delivery_outcome_unknown');
+  assertNoLegacyEventCalls(fixture);
+}
+
+const lostEventOutcomeResponse = nativeEventWorkerFixture({ recordError: true });
+assert.equal((await lostEventOutcomeResponse.runtime.deliverClaimedJob(lostEventOutcomeResponse.job)).replayed, true);
+assert.equal(lostEventOutcomeResponse.requests.length, 1);
+assert.equal(eventCallNames(lostEventOutcomeResponse).at(-1), 'custodial_native_alert_dispatch_status');
+assertNoLegacyEventCalls(lostEventOutcomeResponse);
+
+for (const mutate of [
+  (job) => { job.payload_json.notification_kind = 'day_before'; },
+  (job) => { job.payload_json.test_delivery = false; },
+  (job) => { job.job_key = 'employee-event:legacy'; },
+]) {
+  const fixture = nativeEventWorkerFixture();
+  mutate(fixture.job);
+  await assert.rejects(
+    () => fixture.runtime.deliverClaimedJob(fixture.job),
+    (error) => error?.code === 'native_event_dispatch_contract_invalid',
+    'obsolete Event fixture identities cannot acquire authority or reach a legacy fallback',
+  );
+  assert.deepEqual(fixture.calls, []);
+  assertNoEventProviderDispatch(fixture);
+}
 
 assert.match(source, /resolveAuthorizedDelivery\(credential, assignmentEpoch\)[\s\S]*beforeFinalDeliveryCheck[\s\S]*resolveAuthorizedDelivery\(credential, assignmentEpoch\)/);
-assert.match(source, /claimEventDelivery\(job, eventInstance, credential, assignmentEpoch, registration\)[\s\S]*pushRuntime\.send/);
-assert.match(source, /recordEventDelivery\(job, eventInstance, credential, assignmentEpoch, registration, providerMessageId\)/);
+assert.match(source, /if \(job\?\.job_type === 'employee_event_push'\) \{\s*return deliverNativeEventJob\(\{db,pushRuntime,job,eventBody:/);
+assert.match(source, /import \{\s*deliverNativeEventJob\s*\} from '\.\/native-event-dispatch\.js'/);
 assert.match(source, /mz_get_employee_native_push_delivery_receipt/);
 assert.match(source, /mz_prepare_employee_native_push_delivery/);
 assert.match(source, /mz_release_employee_native_push_delivery/);

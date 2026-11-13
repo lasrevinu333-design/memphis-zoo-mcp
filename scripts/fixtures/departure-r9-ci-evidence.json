@@ -1,0 +1,2655 @@
+{
+  "schema": "custodial.departure-current-ci-evidence.v1",
+  "scope": "Retained isolated SQL evidence; source test fixture, no new SQL or live admission",
+  "wire_sha256": "c993754ed76e3c69ddd792a4c3114e2ec3da55c21f7bdbbe41f90a06e8276572",
+  "proposal_sha256": "1e4054e0957f6b4fa3e1eda5a3dcf9b42ec33e8eabd9db4a9579c0e8d6763c70",
+  "original_result_sha256": "b7abf52347e2c239073e44f00c6706ebaabcaa5d2ba00d9bf7cbbaf8581bdd4e",
+  "cleanup": true,
+  "producer": {
+    "status": "PASS",
+    "scope": "Actual async producer; lazy retry(false)/AbortSignal adapter to real isolated SQL cores, autocommit per RPC and pinned server times. Not HTTP/provider/device acceptance.",
+    "budget_ms": 10000,
+    "groups": [
+      {
+        "day": "2026-11-09",
+        "boundary": "14:00",
+        "expected": [
+          "06228c5d-5123-4b8b-b730-e01114bdc971",
+          "77d50e9a-6338-43b1-aed5-9f47d7129466",
+          "d5fecc86-659b-464a-bc99-f0d914385db4"
+        ],
+        "prepared": [
+          {
+            "job_id": "55b046b8-b371-4a73-b9af-cc8034ef7f8e",
+            "employee_id": "06228c5d-5123-4b8b-b730-e01114bdc971",
+            "job_operation_id": "f2f271a6-57c7-4d26-8902-44e9548e2099",
+            "source_operation_id": "7866b801-87fb-494f-a675-c805e2fdb33f",
+            "source_reservation_id": "0dba62d9-3612-4af8-a814-d037274507b5"
+          },
+          {
+            "job_id": "e881cc28-5e86-44c0-8804-2aedad192287",
+            "employee_id": "77d50e9a-6338-43b1-aed5-9f47d7129466",
+            "job_operation_id": "3bf0a27b-7635-4918-b72c-d581a72e7a7a",
+            "source_operation_id": "54c316e5-9174-452d-a0fb-9bffdf48edad",
+            "source_reservation_id": "2e3e57c5-c9f8-419a-9d49-5d11c57ac4e2"
+          },
+          {
+            "job_id": "e1fee5d1-0bba-4ee9-b977-9c2d1b0f04f1",
+            "employee_id": "d5fecc86-659b-464a-bc99-f0d914385db4",
+            "job_operation_id": "adf6e5cf-0286-4b68-bcd0-5138f7a98f0f",
+            "source_operation_id": "7d6c2911-ec7e-44f1-8809-5be342e34c63",
+            "source_reservation_id": "da70c436-aae9-401b-a765-f60f5f806f98"
+          }
+        ],
+        "preparation_passes": 2,
+        "results_from": 0,
+        "results_count": 3
+      },
+      {
+        "day": "2026-11-09",
+        "boundary": "15:00",
+        "expected": [
+          "06228c5d-5123-4b8b-b730-e01114bdc971",
+          "8067cca2-7487-4589-ba7c-aa442e135045"
+        ],
+        "prepared": [
+          {
+            "job_id": "ad2d6005-8a32-419c-87ee-0beec015465b",
+            "employee_id": "06228c5d-5123-4b8b-b730-e01114bdc971",
+            "job_operation_id": "a58f7283-5f32-49be-977e-c42f43f083b2",
+            "source_operation_id": "5a0fec0f-297d-41d3-a226-050eb4f072c6",
+            "source_reservation_id": "27d577e8-0a9c-4a06-be41-3b8b79e9ff5e"
+          },
+          {
+            "job_id": "a8e7757f-f750-41c5-b4f6-812cbfc31975",
+            "employee_id": "8067cca2-7487-4589-ba7c-aa442e135045",
+            "job_operation_id": "12f0fb1a-7272-4868-bd88-9ebbf6196110",
+            "source_operation_id": "95f22c86-8d0f-433a-a979-b9aa0eefbf48",
+            "source_reservation_id": "20618632-c276-42fa-91ad-613153df4aee"
+          }
+        ],
+        "preparation_passes": 1,
+        "results_from": 3,
+        "results_count": 2
+      },
+      {
+        "day": "2026-11-09",
+        "boundary": "16:00",
+        "expected": [
+          "1318b295-fd70-4e78-8828-62c29302f96f"
+        ],
+        "prepared": [
+          {
+            "job_id": "a5fcdf16-e753-46d1-9022-6e87da0bc321",
+            "employee_id": "1318b295-fd70-4e78-8828-62c29302f96f",
+            "job_operation_id": "782e28a1-8478-4e27-8912-64919c5f3b6c",
+            "source_operation_id": "1d5634e8-81cb-483d-bb48-99f66ae458a8",
+            "source_reservation_id": "2f30169f-a3e3-4398-b35b-5717e9d8a236"
+          }
+        ],
+        "preparation_passes": 1,
+        "results_from": 5,
+        "results_count": 2
+      },
+      {
+        "day": "2026-11-10",
+        "boundary": "14:00",
+        "expected": [
+          "30ec85e0-a579-45a8-9c27-c164e77a9190",
+          "d5fecc86-659b-464a-bc99-f0d914385db4"
+        ],
+        "prepared": [
+          {
+            "job_id": "4235dabd-3014-42a7-a54f-10d74a481759",
+            "employee_id": "30ec85e0-a579-45a8-9c27-c164e77a9190",
+            "job_operation_id": "9fc8e7b8-23d4-4b53-b05f-03ccb8783336",
+            "source_operation_id": "57324eb7-1ca6-45eb-96de-46de167bc699",
+            "source_reservation_id": "c964e61c-383f-496a-9cde-afccf2b1e9ac"
+          },
+          {
+            "job_id": "441235bd-ed6d-4684-9394-fbd4ca7ec9d6",
+            "employee_id": "d5fecc86-659b-464a-bc99-f0d914385db4",
+            "job_operation_id": "9bd8c143-7ca7-46d5-95a6-ddffc3450551",
+            "source_operation_id": "00774af3-9192-4bf4-8594-130c921d035a",
+            "source_reservation_id": "7d76742d-9542-4bdc-893e-cd2e2298f487"
+          }
+        ],
+        "preparation_passes": 1,
+        "results_from": 7,
+        "results_count": 2
+      },
+      {
+        "day": "2026-11-10",
+        "boundary": "15:00",
+        "expected": [
+          "1318b295-fd70-4e78-8828-62c29302f96f",
+          "8067cca2-7487-4589-ba7c-aa442e135045"
+        ],
+        "prepared": [
+          {
+            "job_id": "411f3e1f-df36-47d5-bb25-0b75d4ffbb6f",
+            "employee_id": "1318b295-fd70-4e78-8828-62c29302f96f",
+            "job_operation_id": "2d436aa3-e411-484d-8ed9-42620e562cc5",
+            "source_operation_id": "0b6edafe-ed80-4d5c-b9e8-6412ead8a4c9",
+            "source_reservation_id": "32aec0d6-c61d-4059-afe3-b40ccc251e37"
+          },
+          {
+            "job_id": "8e6eabd2-5094-4cd3-8aaa-7e149d71ee90",
+            "employee_id": "8067cca2-7487-4589-ba7c-aa442e135045",
+            "job_operation_id": "b574fcc1-cf0b-4663-bf78-124934c3f205",
+            "source_operation_id": "f5d59547-e30d-440e-8ee3-7f6fa5bdb150",
+            "source_reservation_id": "1bff82d3-2d84-4342-bb49-e7d3b069895b"
+          }
+        ],
+        "preparation_passes": 1,
+        "results_from": 9,
+        "results_count": 2
+      },
+      {
+        "day": "2026-11-10",
+        "boundary": "16:00",
+        "expected": [
+          "1318b295-fd70-4e78-8828-62c29302f96f"
+        ],
+        "prepared": [
+          {
+            "job_id": "a72bd82c-edf9-4b27-927b-b9ed46b9ae00",
+            "employee_id": "1318b295-fd70-4e78-8828-62c29302f96f",
+            "job_operation_id": "b4b47cb9-cdcb-4424-8dd3-1854e22b4625",
+            "source_operation_id": "5f4d0964-dff0-4737-8978-cc267aa0ee70",
+            "source_reservation_id": "b713eb6a-aca3-4f3f-91ce-ebf0018827bf"
+          }
+        ],
+        "preparation_passes": 1,
+        "results_from": 11,
+        "results_count": 2
+      },
+      {
+        "day": "2026-11-11",
+        "boundary": "14:00",
+        "expected": [
+          "1318b295-fd70-4e78-8828-62c29302f96f",
+          "30ec85e0-a579-45a8-9c27-c164e77a9190",
+          "8067cca2-7487-4589-ba7c-aa442e135045"
+        ],
+        "prepared": [
+          {
+            "job_id": "fcbf6f04-d4ee-4321-951f-75eccf5d0fe8",
+            "employee_id": "1318b295-fd70-4e78-8828-62c29302f96f",
+            "job_operation_id": "c27789ff-f487-4bda-98ba-4e2836d31344",
+            "source_operation_id": "8bac17b7-881a-49b7-a9b2-0a7817097343",
+            "source_reservation_id": "bed5093e-47e0-4883-93b5-7917fa001963"
+          },
+          {
+            "job_id": "ae2cc019-2fc4-4d03-bd24-80d8045720f1",
+            "employee_id": "30ec85e0-a579-45a8-9c27-c164e77a9190",
+            "job_operation_id": "ce1c2768-19bb-40c3-850b-8975fa55913d",
+            "source_operation_id": "3e4846d0-c525-476c-9cc9-5650a78ab19f",
+            "source_reservation_id": "e8db4b51-1932-4563-866d-37992d309362"
+          },
+          {
+            "job_id": "10b65ac0-37dc-491d-8b34-b1f445757bcc",
+            "employee_id": "8067cca2-7487-4589-ba7c-aa442e135045",
+            "job_operation_id": "037346b7-2dd0-436f-88b1-df9849a400a4",
+            "source_operation_id": "1dc0fc64-111d-4bfc-93b4-22ef2af247f2",
+            "source_reservation_id": "31025e6a-3e5e-4db8-ad0b-32fdeeb3721c"
+          }
+        ],
+        "preparation_passes": 1,
+        "results_from": 13,
+        "results_count": 2
+      },
+      {
+        "day": "2026-11-11",
+        "boundary": "15:00",
+        "expected": [
+          "1318b295-fd70-4e78-8828-62c29302f96f",
+          "8067cca2-7487-4589-ba7c-aa442e135045"
+        ],
+        "prepared": [
+          {
+            "job_id": "91fac423-be81-4203-8b41-6347d69c896b",
+            "employee_id": "1318b295-fd70-4e78-8828-62c29302f96f",
+            "job_operation_id": "6d83a20c-92b2-4bdf-b987-43e48d7428ba",
+            "source_operation_id": "80e30eff-3793-48fc-8b54-260eb9365bc1",
+            "source_reservation_id": "0827c9c4-383b-4b87-8cda-367f61aa4f01"
+          },
+          {
+            "job_id": "7a3d8f6d-92ff-4a85-bfa0-5e8ddcecc25e",
+            "employee_id": "8067cca2-7487-4589-ba7c-aa442e135045",
+            "job_operation_id": "1feb1246-7ac1-4e4d-959d-3be374d2f1d4",
+            "source_operation_id": "6b94088a-f933-46e8-bb8a-118758d23cba",
+            "source_reservation_id": "cb9b734f-3301-4767-a033-dfd0df9d4752"
+          }
+        ],
+        "preparation_passes": 1,
+        "results_from": 15,
+        "results_count": 2
+      },
+      {
+        "day": "2026-11-11",
+        "boundary": "16:00",
+        "expected": [
+          "1318b295-fd70-4e78-8828-62c29302f96f"
+        ],
+        "prepared": [
+          {
+            "job_id": "142dcc74-1ef9-481e-ab93-adb81e256e2a",
+            "employee_id": "1318b295-fd70-4e78-8828-62c29302f96f",
+            "job_operation_id": "ffdf5a42-52ed-4bb8-a6d6-19a0d2e70c24",
+            "source_operation_id": "b6806ee6-7027-4852-96be-112729f2de75",
+            "source_reservation_id": "bcd20324-d429-4e42-a170-74c9440b153d"
+          }
+        ],
+        "preparation_passes": 1,
+        "results_from": 17,
+        "results_count": 2
+      },
+      {
+        "day": "2026-11-12",
+        "boundary": "14:00",
+        "expected": [
+          "06228c5d-5123-4b8b-b730-e01114bdc971",
+          "77d50e9a-6338-43b1-aed5-9f47d7129466"
+        ],
+        "prepared": [
+          {
+            "job_id": "617c0379-eacb-4fc3-b165-6065fa1b6620",
+            "employee_id": "06228c5d-5123-4b8b-b730-e01114bdc971",
+            "job_operation_id": "e5c42b63-0380-42de-b179-4f9a7847a58b",
+            "source_operation_id": "6cb05c54-81ed-4767-89e0-3c385cbbf62b",
+            "source_reservation_id": "25a49dff-c8e0-4045-994b-788c6a27c3ad"
+          },
+          {
+            "job_id": "6ad8d712-4dd7-470d-8cac-da0104809318",
+            "employee_id": "77d50e9a-6338-43b1-aed5-9f47d7129466",
+            "job_operation_id": "ecb88660-8e4c-4606-b7c5-d9437263384d",
+            "source_operation_id": "bb97ef67-43ad-4e92-ba62-d897962cdff1",
+            "source_reservation_id": "dcf1da44-2804-449f-91b4-e54735f18be3"
+          }
+        ],
+        "preparation_passes": 1,
+        "results_from": 19,
+        "results_count": 2
+      },
+      {
+        "day": "2026-11-12",
+        "boundary": "15:00",
+        "expected": [
+          "06228c5d-5123-4b8b-b730-e01114bdc971",
+          "77d50e9a-6338-43b1-aed5-9f47d7129466",
+          "8067cca2-7487-4589-ba7c-aa442e135045"
+        ],
+        "prepared": [
+          {
+            "job_id": "f5486b7f-cf4f-4fe7-9753-0c441aebc9a2",
+            "employee_id": "06228c5d-5123-4b8b-b730-e01114bdc971",
+            "job_operation_id": "ce027d2d-7080-4437-9103-7c4212ea28af",
+            "source_operation_id": "2ed11898-e64d-4a18-88dd-c37d4d77a956",
+            "source_reservation_id": "5e4cbdb6-7769-4e12-a3b3-8da86d36f16d"
+          },
+          {
+            "job_id": "8e1bdc40-63f5-40dd-8ea3-65e2384ae7c4",
+            "employee_id": "77d50e9a-6338-43b1-aed5-9f47d7129466",
+            "job_operation_id": "7241e4fb-89e4-4be8-984d-eadda34832ec",
+            "source_operation_id": "f7f9c13a-0814-49d8-833f-3567da66ec58",
+            "source_reservation_id": "15fd7aa5-c923-4ddf-9d0d-36dba1efb27d"
+          },
+          {
+            "job_id": "032c3ee1-9144-4337-9e32-4394dd50ecea",
+            "employee_id": "8067cca2-7487-4589-ba7c-aa442e135045",
+            "job_operation_id": "37720fb1-9328-418c-8018-a42032d3a3a9",
+            "source_operation_id": "380741ed-7c00-40e9-9cf0-7513048e0401",
+            "source_reservation_id": "40c77cf3-22de-47cf-b2d2-4835cb2a7897"
+          }
+        ],
+        "preparation_passes": 2,
+        "results_from": 21,
+        "results_count": 3
+      },
+      {
+        "day": "2026-11-13",
+        "boundary": "14:00",
+        "expected": [
+          "30ec85e0-a579-45a8-9c27-c164e77a9190",
+          "d5fecc86-659b-464a-bc99-f0d914385db4"
+        ],
+        "prepared": [
+          {
+            "job_id": "743adf35-7c3d-458f-b342-c14238462d4e",
+            "employee_id": "30ec85e0-a579-45a8-9c27-c164e77a9190",
+            "job_operation_id": "0f9bed0c-f028-4890-8f61-69687393962f",
+            "source_operation_id": "293a7c49-411f-4177-aadd-0c455aa5cbe5",
+            "source_reservation_id": "89a32561-bb77-4537-962b-aac9aceb2ffe"
+          },
+          {
+            "job_id": "27309518-e805-42b5-b6c7-1b0e0b9529e1",
+            "employee_id": "d5fecc86-659b-464a-bc99-f0d914385db4",
+            "job_operation_id": "bda242c5-b1ee-4a86-b2eb-dd33c45cb28d",
+            "source_operation_id": "3fc554ea-e21b-4916-8b34-06661fc54615",
+            "source_reservation_id": "ece3be99-8de6-435e-9a97-6373cea4e231"
+          }
+        ],
+        "preparation_passes": 1,
+        "results_from": 24,
+        "results_count": 2
+      },
+      {
+        "day": "2026-11-13",
+        "boundary": "15:00",
+        "expected": [
+          "06228c5d-5123-4b8b-b730-e01114bdc971",
+          "77d50e9a-6338-43b1-aed5-9f47d7129466"
+        ],
+        "prepared": [
+          {
+            "job_id": "312dabd2-cc72-4217-b7e3-a3f45147badb",
+            "employee_id": "06228c5d-5123-4b8b-b730-e01114bdc971",
+            "job_operation_id": "a6ae0517-796e-44b1-9894-875ca5a9ea89",
+            "source_operation_id": "d9ee14c5-08b2-42b7-aa92-e291596b0873",
+            "source_reservation_id": "1ec3ae22-41c6-4e82-9c01-9de471d28871"
+          },
+          {
+            "job_id": "ef690487-d6fe-4f4c-9a9b-a0ef768c6b81",
+            "employee_id": "77d50e9a-6338-43b1-aed5-9f47d7129466",
+            "job_operation_id": "97809062-a442-4e96-b37d-55f32560a59b",
+            "source_operation_id": "23a20b29-a9f9-435b-bc07-a06a0efc29cd",
+            "source_reservation_id": "71e665dc-a789-4cea-b8ac-53213622a582"
+          }
+        ],
+        "preparation_passes": 1,
+        "results_from": 26,
+        "results_count": 2
+      },
+      {
+        "day": "2026-11-14",
+        "boundary": "14:00",
+        "expected": [
+          "30ec85e0-a579-45a8-9c27-c164e77a9190",
+          "77d50e9a-6338-43b1-aed5-9f47d7129466",
+          "d5fecc86-659b-464a-bc99-f0d914385db4"
+        ],
+        "prepared": [
+          {
+            "job_id": "1fcc3c3c-b168-448c-88a6-263a0221c511",
+            "employee_id": "30ec85e0-a579-45a8-9c27-c164e77a9190",
+            "job_operation_id": "e86b485b-e477-4ce2-a862-5feecad02e7c",
+            "source_operation_id": "937c35d2-5be5-484d-8b1f-136e8b2eda61",
+            "source_reservation_id": "de0da62a-51c2-4704-a095-f858ff466966"
+          },
+          {
+            "job_id": "25cf2e03-f223-4b2d-aaf1-dba93c36b65d",
+            "employee_id": "77d50e9a-6338-43b1-aed5-9f47d7129466",
+            "job_operation_id": "8017e083-469b-4e7d-bbc3-35cb2a593d7f",
+            "source_operation_id": "3b97ec47-be68-42cf-8998-6aa3f1545967",
+            "source_reservation_id": "d6d1f9c6-eb19-4ad8-ad36-10b276bf6cca"
+          },
+          {
+            "job_id": "7a65361b-d859-42f2-9cd3-ab7fa638d548",
+            "employee_id": "d5fecc86-659b-464a-bc99-f0d914385db4",
+            "job_operation_id": "710ca17f-37a4-461a-8fce-b8f5d576eb17",
+            "source_operation_id": "f78345d1-1100-44a1-beeb-0968f08ff549",
+            "source_reservation_id": "53988513-984b-49dc-b3fa-2fa39fc9c323"
+          }
+        ],
+        "preparation_passes": 1,
+        "results_from": 28,
+        "results_count": 2
+      },
+      {
+        "day": "2026-11-14",
+        "boundary": "15:00",
+        "expected": [
+          "06228c5d-5123-4b8b-b730-e01114bdc971",
+          "1318b295-fd70-4e78-8828-62c29302f96f",
+          "77d50e9a-6338-43b1-aed5-9f47d7129466"
+        ],
+        "prepared": [
+          {
+            "job_id": "b8324a6b-764e-4bea-96b2-aa4cd09dddee",
+            "employee_id": "06228c5d-5123-4b8b-b730-e01114bdc971",
+            "job_operation_id": "8ee03403-984f-4db2-a45b-2c876f3d5c25",
+            "source_operation_id": "a634b9fb-acdf-46bc-b32d-6a2a5699e379",
+            "source_reservation_id": "8835d8c2-7619-42dd-b084-bd96b082b028"
+          },
+          {
+            "job_id": "02cdd08e-bf3b-4dfe-8bfe-8d6a38121368",
+            "employee_id": "1318b295-fd70-4e78-8828-62c29302f96f",
+            "job_operation_id": "0b8aecb4-5c21-4d4b-adc4-8b470471d7cb",
+            "source_operation_id": "d08d7e12-f4a4-472d-b990-2521184381f8",
+            "source_reservation_id": "5388b35b-276c-48d2-bda7-50f131ea8310"
+          },
+          {
+            "job_id": "15aaf3c4-cae6-409a-a9a3-c67b7755533b",
+            "employee_id": "77d50e9a-6338-43b1-aed5-9f47d7129466",
+            "job_operation_id": "5383d6a0-dead-463e-9383-182cf65382b2",
+            "source_operation_id": "c182419e-4c4b-4fc7-b84d-7963d8c6dedb",
+            "source_reservation_id": "09950ca0-321e-46ef-9c15-3d5c0a9434c6"
+          }
+        ],
+        "preparation_passes": 2,
+        "results_from": 30,
+        "results_count": 3
+      },
+      {
+        "day": "2026-11-14",
+        "boundary": "16:00",
+        "expected": [
+          "1318b295-fd70-4e78-8828-62c29302f96f"
+        ],
+        "prepared": [
+          {
+            "job_id": "a6b9b97d-43c8-426b-b15c-b561fb53ecbb",
+            "employee_id": "1318b295-fd70-4e78-8828-62c29302f96f",
+            "job_operation_id": "0fa63ec9-ce14-445d-a2d6-cceca51b8c0a",
+            "source_operation_id": "455ab2c4-191b-404e-a814-fff5e4a6e431",
+            "source_reservation_id": "ee724902-b398-4c5a-a347-d942d8cf776c"
+          }
+        ],
+        "preparation_passes": 1,
+        "results_from": 33,
+        "results_count": 2
+      },
+      {
+        "day": "2026-11-15",
+        "boundary": "15:00",
+        "expected": [
+          "06228c5d-5123-4b8b-b730-e01114bdc971",
+          "77d50e9a-6338-43b1-aed5-9f47d7129466",
+          "8067cca2-7487-4589-ba7c-aa442e135045"
+        ],
+        "prepared": [
+          {
+            "job_id": "8e89b470-79f5-4021-aaa9-0fdf477ffd8e",
+            "employee_id": "06228c5d-5123-4b8b-b730-e01114bdc971",
+            "job_operation_id": "9a2c6782-515d-45c4-92ba-662bb5fe3265",
+            "source_operation_id": "58b29fcd-8a74-4180-8070-755409f3d8df",
+            "source_reservation_id": "743d116a-bceb-4c5a-a1b4-50db191d102a"
+          },
+          {
+            "job_id": "a6883948-9182-4d67-9ce1-d44de0ac2d31",
+            "employee_id": "77d50e9a-6338-43b1-aed5-9f47d7129466",
+            "job_operation_id": "f6fbeae4-3ecc-49e6-a21e-bf83de5e8455",
+            "source_operation_id": "f8e5e9fb-29c9-4203-807c-72e02b858664",
+            "source_reservation_id": "462b1a9e-9264-417d-88ff-65f5023c5efe"
+          },
+          {
+            "job_id": "178b85f5-52a7-45f6-bac7-5b9c4d3022d2",
+            "employee_id": "8067cca2-7487-4589-ba7c-aa442e135045",
+            "job_operation_id": "48aadba7-733d-4bf2-ad54-1c2a3a0f3130",
+            "source_operation_id": "2cccc40c-8ea5-4b2d-a012-9823f390ffea",
+            "source_reservation_id": "f5d10910-336d-4a78-8687-af4d3bc4feb9"
+          }
+        ],
+        "preparation_passes": 2,
+        "results_from": 35,
+        "results_count": 3
+      },
+      {
+        "day": "2026-11-15",
+        "boundary": "16:00",
+        "expected": [
+          "1318b295-fd70-4e78-8828-62c29302f96f"
+        ],
+        "prepared": [
+          {
+            "job_id": "fadf7251-e558-40d6-b196-4cfb32a22d32",
+            "employee_id": "1318b295-fd70-4e78-8828-62c29302f96f",
+            "job_operation_id": "300d0aaf-ad8e-464a-9ade-4cee9c281163",
+            "source_operation_id": "b7781093-ca87-4435-8412-f54ed15ef55b",
+            "source_reservation_id": "e20f573d-08ed-4208-b64b-43a41ac59096"
+          }
+        ],
+        "preparation_passes": 1,
+        "results_from": 38,
+        "results_count": 2
+      }
+    ],
+    "results": [
+      {
+        "label": "prepare 2026-11-09 14:00 pass1",
+        "at": "2026-11-09 14:00 America/Chicago",
+        "elapsed_ms": 10000.118539,
+        "budget_abort_observed": true,
+        "result": {
+          "schema": "custodial.native-schedule-source-producer.v1",
+          "dispatch_authorized": false,
+          "delivery_admitted": false,
+          "clock_effect_authority": null,
+          "retention_authority": null,
+          "native_qualified": false,
+          "status": "SOURCE_PREPARATION_PENDING",
+          "requested": 3,
+          "prepared": 2,
+          "replayed": 0,
+          "pending": 1,
+          "skipped": 0,
+          "jobs": [
+            {
+              "job_id": "55b046b8-b371-4a73-b9af-cc8034ef7f8e",
+              "source_reservation_id": "0dba62d9-3612-4af8-a814-d037274507b5",
+              "replayed": false
+            },
+            {
+              "job_id": "e881cc28-5e86-44c0-8804-2aedad192287",
+              "source_reservation_id": "2e3e57c5-c9f8-419a-9d49-5d11c57ac4e2",
+              "replayed": false
+            }
+          ],
+          "reasons": [
+            "SOURCE_RPC_BUDGET"
+          ]
+        },
+        "rpcCalls": [
+          {
+            "fn": "custodial_native_departure_source_requests",
+            "ms": 374.35003600000005,
+            "status": "SOURCE_CANDIDATES_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_preparation_source",
+            "ms": 751.2853630000001,
+            "status": "CURRENT_PREPARATION_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_source_reserve",
+            "ms": 853.8832399999999,
+            "status": "SOURCE_RESERVED_NATIVE_UNQUALIFIED"
+          },
+          {
+            "fn": "custodial_native_schedule_content_source",
+            "ms": 855.730849,
+            "status": "CONTENT_CURRENT_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_schedule_job_prepare",
+            "ms": 1080.2735699999998,
+            "status": "JOB_PREPARED_NATIVE_UNQUALIFIED"
+          },
+          {
+            "fn": "custodial_native_departure_preparation_source",
+            "ms": 835.5808810000003,
+            "status": "CURRENT_PREPARATION_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_source_reserve",
+            "ms": 871.4996930000007,
+            "status": "SOURCE_RESERVED_NATIVE_UNQUALIFIED"
+          },
+          {
+            "fn": "custodial_native_schedule_content_source",
+            "ms": 943.0536040000006,
+            "status": "CONTENT_CURRENT_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_schedule_job_prepare",
+            "ms": 1070.3555979999992,
+            "status": "JOB_PREPARED_NATIVE_UNQUALIFIED"
+          },
+          {
+            "fn": "custodial_native_departure_preparation_source",
+            "ms": 1070.3984010000004,
+            "status": "CURRENT_PREPARATION_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_source_reserve",
+            "ms": 1061.1427070000009,
+            "status": "SOURCE_RESERVED_NATIVE_UNQUALIFIED"
+          }
+        ]
+      },
+      {
+        "label": "prepare 2026-11-09 14:00 pass2",
+        "at": "2026-11-09 14:00 America/Chicago",
+        "elapsed_ms": 4152.035481000001,
+        "budget_abort_observed": false,
+        "result": {
+          "schema": "custodial.native-schedule-source-producer.v1",
+          "dispatch_authorized": false,
+          "delivery_admitted": false,
+          "clock_effect_authority": null,
+          "retention_authority": null,
+          "native_qualified": false,
+          "status": "SOURCE_JOBS_PREPARED_NATIVE_UNQUALIFIED",
+          "requested": 1,
+          "prepared": 1,
+          "replayed": 0,
+          "pending": 0,
+          "skipped": 0,
+          "jobs": [
+            {
+              "job_id": "e1fee5d1-0bba-4ee9-b977-9c2d1b0f04f1",
+              "source_reservation_id": "da70c436-aae9-401b-a765-f60f5f806f98",
+              "replayed": false
+            }
+          ],
+          "reasons": []
+        },
+        "rpcCalls": [
+          {
+            "fn": "custodial_native_departure_source_requests",
+            "ms": 326.3831740000005,
+            "status": "SOURCE_CANDIDATES_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_preparation_source",
+            "ms": 1016.4076210000003,
+            "status": "CURRENT_PREPARATION_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_source_reserve",
+            "ms": 916.299285000001,
+            "status": "ORIGINAL_SOURCE_RESERVED"
+          },
+          {
+            "fn": "custodial_native_schedule_content_source",
+            "ms": 866.8362800000014,
+            "status": "CONTENT_CURRENT_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_schedule_job_prepare",
+            "ms": 1017.4085130000003,
+            "status": "JOB_PREPARED_NATIVE_UNQUALIFIED"
+          }
+        ]
+      },
+      {
+        "label": "settled 2026-11-09 14:00",
+        "at": "2026-11-09 14:00 America/Chicago",
+        "elapsed_ms": 479.8286310000003,
+        "budget_abort_observed": false,
+        "result": {
+          "schema": "custodial.native-schedule-source-producer.v1",
+          "dispatch_authorized": false,
+          "delivery_admitted": false,
+          "clock_effect_authority": null,
+          "retention_authority": null,
+          "native_qualified": false,
+          "status": "NO_SOURCE_REQUESTS",
+          "requested": 0,
+          "prepared": 0,
+          "replayed": 0,
+          "pending": 0,
+          "skipped": 0,
+          "jobs": [],
+          "reasons": []
+        },
+        "rpcCalls": [
+          {
+            "fn": "custodial_native_departure_source_requests",
+            "ms": 479.55711599999995,
+            "status": "SOURCE_CANDIDATES_ONLY"
+          }
+        ]
+      },
+      {
+        "label": "prepare 2026-11-09 15:00 pass1",
+        "at": "2026-11-09 15:00 America/Chicago",
+        "elapsed_ms": 7797.784768000001,
+        "budget_abort_observed": false,
+        "result": {
+          "schema": "custodial.native-schedule-source-producer.v1",
+          "dispatch_authorized": false,
+          "delivery_admitted": false,
+          "clock_effect_authority": null,
+          "retention_authority": null,
+          "native_qualified": false,
+          "status": "SOURCE_JOBS_PREPARED_NATIVE_UNQUALIFIED",
+          "requested": 2,
+          "prepared": 2,
+          "replayed": 0,
+          "pending": 0,
+          "skipped": 0,
+          "jobs": [
+            {
+              "job_id": "ad2d6005-8a32-419c-87ee-0beec015465b",
+              "source_reservation_id": "27d577e8-0a9c-4a06-be41-3b8b79e9ff5e",
+              "replayed": false
+            },
+            {
+              "job_id": "a8e7757f-f750-41c5-b4f6-812cbfc31975",
+              "source_reservation_id": "20618632-c276-42fa-91ad-613153df4aee",
+              "replayed": false
+            }
+          ],
+          "reasons": []
+        },
+        "rpcCalls": [
+          {
+            "fn": "custodial_native_departure_source_requests",
+            "ms": 583.0148420000005,
+            "status": "SOURCE_CANDIDATES_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_preparation_source",
+            "ms": 1004.1036290000011,
+            "status": "CURRENT_PREPARATION_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_source_reserve",
+            "ms": 884.9612180000004,
+            "status": "ORIGINAL_SOURCE_RESERVED"
+          },
+          {
+            "fn": "custodial_native_schedule_content_source",
+            "ms": 846.5907350000016,
+            "status": "CONTENT_CURRENT_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_schedule_job_prepare",
+            "ms": 902.9800159999977,
+            "status": "JOB_PREPARED_NATIVE_UNQUALIFIED"
+          },
+          {
+            "fn": "custodial_native_departure_preparation_source",
+            "ms": 876.2538419999983,
+            "status": "CURRENT_PREPARATION_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_source_reserve",
+            "ms": 955.8549139999996,
+            "status": "SOURCE_RESERVED_NATIVE_UNQUALIFIED"
+          },
+          {
+            "fn": "custodial_native_schedule_content_source",
+            "ms": 856.4379079999999,
+            "status": "CONTENT_CURRENT_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_schedule_job_prepare",
+            "ms": 874.408922999999,
+            "status": "JOB_PREPARED_NATIVE_UNQUALIFIED"
+          }
+        ]
+      },
+      {
+        "label": "settled 2026-11-09 15:00",
+        "at": "2026-11-09 15:00 America/Chicago",
+        "elapsed_ms": 338.631566,
+        "budget_abort_observed": false,
+        "result": {
+          "schema": "custodial.native-schedule-source-producer.v1",
+          "dispatch_authorized": false,
+          "delivery_admitted": false,
+          "clock_effect_authority": null,
+          "retention_authority": null,
+          "native_qualified": false,
+          "status": "NO_SOURCE_REQUESTS",
+          "requested": 0,
+          "prepared": 0,
+          "replayed": 0,
+          "pending": 0,
+          "skipped": 0,
+          "jobs": [],
+          "reasons": []
+        },
+        "rpcCalls": [
+          {
+            "fn": "custodial_native_departure_source_requests",
+            "ms": 338.2885349999997,
+            "status": "SOURCE_CANDIDATES_ONLY"
+          }
+        ]
+      },
+      {
+        "label": "prepare 2026-11-09 16:00 pass1",
+        "at": "2026-11-09 16:00 America/Chicago",
+        "elapsed_ms": 4099.582735,
+        "budget_abort_observed": false,
+        "result": {
+          "schema": "custodial.native-schedule-source-producer.v1",
+          "dispatch_authorized": false,
+          "delivery_admitted": false,
+          "clock_effect_authority": null,
+          "retention_authority": null,
+          "native_qualified": false,
+          "status": "SOURCE_JOBS_PREPARED_NATIVE_UNQUALIFIED",
+          "requested": 1,
+          "prepared": 1,
+          "replayed": 0,
+          "pending": 0,
+          "skipped": 0,
+          "jobs": [
+            {
+              "job_id": "a5fcdf16-e753-46d1-9022-6e87da0bc321",
+              "source_reservation_id": "2f30169f-a3e3-4398-b35b-5717e9d8a236",
+              "replayed": false
+            }
+          ],
+          "reasons": []
+        },
+        "rpcCalls": [
+          {
+            "fn": "custodial_native_departure_source_requests",
+            "ms": 327.79723399999784,
+            "status": "SOURCE_CANDIDATES_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_preparation_source",
+            "ms": 839.5587020000021,
+            "status": "CURRENT_PREPARATION_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_source_reserve",
+            "ms": 964.3122430000003,
+            "status": "SOURCE_RESERVED_NATIVE_UNQUALIFIED"
+          },
+          {
+            "fn": "custodial_native_schedule_content_source",
+            "ms": 1021.5935080000017,
+            "status": "CONTENT_CURRENT_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_schedule_job_prepare",
+            "ms": 942.3615079999981,
+            "status": "JOB_PREPARED_NATIVE_UNQUALIFIED"
+          }
+        ]
+      },
+      {
+        "label": "settled 2026-11-09 16:00",
+        "at": "2026-11-09 16:00 America/Chicago",
+        "elapsed_ms": 336.25584100000196,
+        "budget_abort_observed": false,
+        "result": {
+          "schema": "custodial.native-schedule-source-producer.v1",
+          "dispatch_authorized": false,
+          "delivery_admitted": false,
+          "clock_effect_authority": null,
+          "retention_authority": null,
+          "native_qualified": false,
+          "status": "NO_SOURCE_REQUESTS",
+          "requested": 0,
+          "prepared": 0,
+          "replayed": 0,
+          "pending": 0,
+          "skipped": 0,
+          "jobs": [],
+          "reasons": []
+        },
+        "rpcCalls": [
+          {
+            "fn": "custodial_native_departure_source_requests",
+            "ms": 335.97819199999867,
+            "status": "SOURCE_CANDIDATES_ONLY"
+          }
+        ]
+      },
+      {
+        "label": "prepare 2026-11-10 14:00 pass1",
+        "at": "2026-11-10 14:00 America/Chicago",
+        "elapsed_ms": 7292.364666999998,
+        "budget_abort_observed": false,
+        "result": {
+          "schema": "custodial.native-schedule-source-producer.v1",
+          "dispatch_authorized": false,
+          "delivery_admitted": false,
+          "clock_effect_authority": null,
+          "retention_authority": null,
+          "native_qualified": false,
+          "status": "SOURCE_JOBS_PREPARED_NATIVE_UNQUALIFIED",
+          "requested": 2,
+          "prepared": 2,
+          "replayed": 0,
+          "pending": 0,
+          "skipped": 0,
+          "jobs": [
+            {
+              "job_id": "4235dabd-3014-42a7-a54f-10d74a481759",
+              "source_reservation_id": "c964e61c-383f-496a-9cde-afccf2b1e9ac",
+              "replayed": false
+            },
+            {
+              "job_id": "441235bd-ed6d-4684-9394-fbd4ca7ec9d6",
+              "source_reservation_id": "7d76742d-9542-4bdc-893e-cd2e2298f487",
+              "replayed": false
+            }
+          ],
+          "reasons": []
+        },
+        "rpcCalls": [
+          {
+            "fn": "custodial_native_departure_source_requests",
+            "ms": 309.73339399999895,
+            "status": "SOURCE_CANDIDATES_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_preparation_source",
+            "ms": 833.0288489999984,
+            "status": "CURRENT_PREPARATION_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_source_reserve",
+            "ms": 849.4537130000026,
+            "status": "SOURCE_RESERVED_NATIVE_UNQUALIFIED"
+          },
+          {
+            "fn": "custodial_native_schedule_content_source",
+            "ms": 910.4739449999979,
+            "status": "CONTENT_CURRENT_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_schedule_job_prepare",
+            "ms": 910.8643830000001,
+            "status": "JOB_PREPARED_NATIVE_UNQUALIFIED"
+          },
+          {
+            "fn": "custodial_native_departure_preparation_source",
+            "ms": 843.3379390000009,
+            "status": "CURRENT_PREPARATION_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_source_reserve",
+            "ms": 889.4324889999989,
+            "status": "SOURCE_RESERVED_NATIVE_UNQUALIFIED"
+          },
+          {
+            "fn": "custodial_native_schedule_content_source",
+            "ms": 836.2631420000034,
+            "status": "CONTENT_CURRENT_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_schedule_job_prepare",
+            "ms": 901.8972819999981,
+            "status": "JOB_PREPARED_NATIVE_UNQUALIFIED"
+          }
+        ]
+      },
+      {
+        "label": "settled 2026-11-10 14:00",
+        "at": "2026-11-10 14:00 America/Chicago",
+        "elapsed_ms": 316.078585999996,
+        "budget_abort_observed": false,
+        "result": {
+          "schema": "custodial.native-schedule-source-producer.v1",
+          "dispatch_authorized": false,
+          "delivery_admitted": false,
+          "clock_effect_authority": null,
+          "retention_authority": null,
+          "native_qualified": false,
+          "status": "NO_SOURCE_REQUESTS",
+          "requested": 0,
+          "prepared": 0,
+          "replayed": 0,
+          "pending": 0,
+          "skipped": 0,
+          "jobs": [],
+          "reasons": []
+        },
+        "rpcCalls": [
+          {
+            "fn": "custodial_native_departure_source_requests",
+            "ms": 315.62884699999995,
+            "status": "SOURCE_CANDIDATES_ONLY"
+          }
+        ]
+      },
+      {
+        "label": "prepare 2026-11-10 15:00 pass1",
+        "at": "2026-11-10 15:00 America/Chicago",
+        "elapsed_ms": 7679.546644000002,
+        "budget_abort_observed": false,
+        "result": {
+          "schema": "custodial.native-schedule-source-producer.v1",
+          "dispatch_authorized": false,
+          "delivery_admitted": false,
+          "clock_effect_authority": null,
+          "retention_authority": null,
+          "native_qualified": false,
+          "status": "SOURCE_JOBS_PREPARED_NATIVE_UNQUALIFIED",
+          "requested": 2,
+          "prepared": 2,
+          "replayed": 0,
+          "pending": 0,
+          "skipped": 0,
+          "jobs": [
+            {
+              "job_id": "411f3e1f-df36-47d5-bb25-0b75d4ffbb6f",
+              "source_reservation_id": "32aec0d6-c61d-4059-afe3-b40ccc251e37",
+              "replayed": false
+            },
+            {
+              "job_id": "8e6eabd2-5094-4cd3-8aaa-7e149d71ee90",
+              "source_reservation_id": "1bff82d3-2d84-4342-bb49-e7d3b069895b",
+              "replayed": false
+            }
+          ],
+          "reasons": []
+        },
+        "rpcCalls": [
+          {
+            "fn": "custodial_native_departure_source_requests",
+            "ms": 349.3625180000017,
+            "status": "SOURCE_CANDIDATES_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_preparation_source",
+            "ms": 1027.8235910000003,
+            "status": "CURRENT_PREPARATION_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_source_reserve",
+            "ms": 901.5212969999993,
+            "status": "SOURCE_RESERVED_NATIVE_UNQUALIFIED"
+          },
+          {
+            "fn": "custodial_native_schedule_content_source",
+            "ms": 887.4927070000049,
+            "status": "CONTENT_CURRENT_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_schedule_job_prepare",
+            "ms": 876.1692860000039,
+            "status": "JOB_PREPARED_NATIVE_UNQUALIFIED"
+          },
+          {
+            "fn": "custodial_native_departure_preparation_source",
+            "ms": 880.9486439999964,
+            "status": "CURRENT_PREPARATION_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_source_reserve",
+            "ms": 918.3972960000028,
+            "status": "SOURCE_RESERVED_NATIVE_UNQUALIFIED"
+          },
+          {
+            "fn": "custodial_native_schedule_content_source",
+            "ms": 972.6887060000008,
+            "status": "CONTENT_CURRENT_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_schedule_job_prepare",
+            "ms": 856.7347360000058,
+            "status": "JOB_PREPARED_NATIVE_UNQUALIFIED"
+          }
+        ]
+      },
+      {
+        "label": "settled 2026-11-10 15:00",
+        "at": "2026-11-10 15:00 America/Chicago",
+        "elapsed_ms": 330.07280800000444,
+        "budget_abort_observed": false,
+        "result": {
+          "schema": "custodial.native-schedule-source-producer.v1",
+          "dispatch_authorized": false,
+          "delivery_admitted": false,
+          "clock_effect_authority": null,
+          "retention_authority": null,
+          "native_qualified": false,
+          "status": "NO_SOURCE_REQUESTS",
+          "requested": 0,
+          "prepared": 0,
+          "replayed": 0,
+          "pending": 0,
+          "skipped": 0,
+          "jobs": [],
+          "reasons": []
+        },
+        "rpcCalls": [
+          {
+            "fn": "custodial_native_departure_source_requests",
+            "ms": 329.87707400000363,
+            "status": "SOURCE_CANDIDATES_ONLY"
+          }
+        ]
+      },
+      {
+        "label": "prepare 2026-11-10 16:00 pass1",
+        "at": "2026-11-10 16:00 America/Chicago",
+        "elapsed_ms": 4058.113185000002,
+        "budget_abort_observed": false,
+        "result": {
+          "schema": "custodial.native-schedule-source-producer.v1",
+          "dispatch_authorized": false,
+          "delivery_admitted": false,
+          "clock_effect_authority": null,
+          "retention_authority": null,
+          "native_qualified": false,
+          "status": "SOURCE_JOBS_PREPARED_NATIVE_UNQUALIFIED",
+          "requested": 1,
+          "prepared": 1,
+          "replayed": 0,
+          "pending": 0,
+          "skipped": 0,
+          "jobs": [
+            {
+              "job_id": "a72bd82c-edf9-4b27-927b-b9ed46b9ae00",
+              "source_reservation_id": "b713eb6a-aca3-4f3f-91ce-ebf0018827bf",
+              "replayed": false
+            }
+          ],
+          "reasons": []
+        },
+        "rpcCalls": [
+          {
+            "fn": "custodial_native_departure_source_requests",
+            "ms": 324.9006340000051,
+            "status": "SOURCE_CANDIDATES_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_preparation_source",
+            "ms": 854.7505749999982,
+            "status": "CURRENT_PREPARATION_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_source_reserve",
+            "ms": 877.5722919999971,
+            "status": "SOURCE_RESERVED_NATIVE_UNQUALIFIED"
+          },
+          {
+            "fn": "custodial_native_schedule_content_source",
+            "ms": 970.3085900000005,
+            "status": "CONTENT_CURRENT_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_schedule_job_prepare",
+            "ms": 1010.6264710000032,
+            "status": "JOB_PREPARED_NATIVE_UNQUALIFIED"
+          }
+        ]
+      },
+      {
+        "label": "settled 2026-11-10 16:00",
+        "at": "2026-11-10 16:00 America/Chicago",
+        "elapsed_ms": 327.7984360000046,
+        "budget_abort_observed": false,
+        "result": {
+          "schema": "custodial.native-schedule-source-producer.v1",
+          "dispatch_authorized": false,
+          "delivery_admitted": false,
+          "clock_effect_authority": null,
+          "retention_authority": null,
+          "native_qualified": false,
+          "status": "NO_SOURCE_REQUESTS",
+          "requested": 0,
+          "prepared": 0,
+          "replayed": 0,
+          "pending": 0,
+          "skipped": 0,
+          "jobs": [],
+          "reasons": []
+        },
+        "rpcCalls": [
+          {
+            "fn": "custodial_native_departure_source_requests",
+            "ms": 327.5773479999989,
+            "status": "SOURCE_CANDIDATES_ONLY"
+          }
+        ]
+      },
+      {
+        "label": "prepare 2026-11-11 14:00 pass1",
+        "at": "2026-11-11 14:00 America/Chicago",
+        "elapsed_ms": 10000.506694000003,
+        "budget_abort_observed": true,
+        "result": {
+          "schema": "custodial.native-schedule-source-producer.v1",
+          "dispatch_authorized": false,
+          "delivery_admitted": false,
+          "clock_effect_authority": null,
+          "retention_authority": null,
+          "native_qualified": false,
+          "status": "SOURCE_PREPARATION_PENDING",
+          "requested": 3,
+          "prepared": 2,
+          "replayed": 0,
+          "pending": 1,
+          "skipped": 0,
+          "jobs": [
+            {
+              "job_id": "fcbf6f04-d4ee-4321-951f-75eccf5d0fe8",
+              "source_reservation_id": "bed5093e-47e0-4883-93b5-7917fa001963",
+              "replayed": false
+            },
+            {
+              "job_id": "ae2cc019-2fc4-4d03-bd24-80d8045720f1",
+              "source_reservation_id": "e8db4b51-1932-4563-866d-37992d309362",
+              "replayed": false
+            }
+          ],
+          "reasons": [
+            "SOURCE_RPC_BUDGET"
+          ]
+        },
+        "rpcCalls": [
+          {
+            "fn": "custodial_native_departure_source_requests",
+            "ms": 307.39852200000314,
+            "status": "SOURCE_CANDIDATES_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_preparation_source",
+            "ms": 827.1317659999986,
+            "status": "CURRENT_PREPARATION_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_source_reserve",
+            "ms": 848.6728779999976,
+            "status": "SOURCE_RESERVED_NATIVE_UNQUALIFIED"
+          },
+          {
+            "fn": "custodial_native_schedule_content_source",
+            "ms": 897.8345590000026,
+            "status": "CONTENT_CURRENT_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_schedule_job_prepare",
+            "ms": 899.8217040000018,
+            "status": "JOB_PREPARED_NATIVE_UNQUALIFIED"
+          },
+          {
+            "fn": "custodial_native_departure_preparation_source",
+            "ms": 833.9115680000032,
+            "status": "CURRENT_PREPARATION_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_source_reserve",
+            "ms": 831.6201389999987,
+            "status": "SOURCE_RESERVED_NATIVE_UNQUALIFIED"
+          },
+          {
+            "fn": "custodial_native_schedule_content_source",
+            "ms": 827.9755379999988,
+            "status": "CONTENT_CURRENT_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_schedule_job_prepare",
+            "ms": 860.1244179999994,
+            "status": "JOB_PREPARED_NATIVE_UNQUALIFIED"
+          },
+          {
+            "fn": "custodial_native_departure_preparation_source",
+            "ms": 835.6163000000015,
+            "status": "CURRENT_PREPARATION_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_source_reserve",
+            "ms": 838.8887939999986,
+            "status": "SOURCE_RESERVED_NATIVE_UNQUALIFIED"
+          },
+          {
+            "fn": "custodial_native_schedule_content_source",
+            "ms": 841.4352220000001,
+            "status": "CONTENT_CURRENT_SOURCE_ONLY"
+          }
+        ]
+      },
+      {
+        "label": "settled 2026-11-11 14:00",
+        "at": "2026-11-11 14:00 America/Chicago",
+        "elapsed_ms": 339.26177999999345,
+        "budget_abort_observed": false,
+        "result": {
+          "schema": "custodial.native-schedule-source-producer.v1",
+          "dispatch_authorized": false,
+          "delivery_admitted": false,
+          "clock_effect_authority": null,
+          "retention_authority": null,
+          "native_qualified": false,
+          "status": "NO_SOURCE_REQUESTS",
+          "requested": 0,
+          "prepared": 0,
+          "replayed": 0,
+          "pending": 0,
+          "skipped": 0,
+          "jobs": [],
+          "reasons": []
+        },
+        "rpcCalls": [
+          {
+            "fn": "custodial_native_departure_source_requests",
+            "ms": 339.02752899999905,
+            "status": "SOURCE_CANDIDATES_ONLY"
+          }
+        ]
+      },
+      {
+        "label": "prepare 2026-11-11 15:00 pass1",
+        "at": "2026-11-11 15:00 America/Chicago",
+        "elapsed_ms": 7314.785893999993,
+        "budget_abort_observed": false,
+        "result": {
+          "schema": "custodial.native-schedule-source-producer.v1",
+          "dispatch_authorized": false,
+          "delivery_admitted": false,
+          "clock_effect_authority": null,
+          "retention_authority": null,
+          "native_qualified": false,
+          "status": "SOURCE_JOBS_PREPARED_NATIVE_UNQUALIFIED",
+          "requested": 2,
+          "prepared": 2,
+          "replayed": 0,
+          "pending": 0,
+          "skipped": 0,
+          "jobs": [
+            {
+              "job_id": "91fac423-be81-4203-8b41-6347d69c896b",
+              "source_reservation_id": "0827c9c4-383b-4b87-8cda-367f61aa4f01",
+              "replayed": false
+            },
+            {
+              "job_id": "7a3d8f6d-92ff-4a85-bfa0-5e8ddcecc25e",
+              "source_reservation_id": "cb9b734f-3301-4767-a033-dfd0df9d4752",
+              "replayed": false
+            }
+          ],
+          "reasons": []
+        },
+        "rpcCalls": [
+          {
+            "fn": "custodial_native_departure_source_requests",
+            "ms": 310.510037,
+            "status": "SOURCE_CANDIDATES_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_preparation_source",
+            "ms": 850.1238740000044,
+            "status": "CURRENT_PREPARATION_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_source_reserve",
+            "ms": 887.071468999995,
+            "status": "SOURCE_RESERVED_NATIVE_UNQUALIFIED"
+          },
+          {
+            "fn": "custodial_native_schedule_content_source",
+            "ms": 905.4331509999975,
+            "status": "CONTENT_CURRENT_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_schedule_job_prepare",
+            "ms": 866.0492290000038,
+            "status": "JOB_PREPARED_NATIVE_UNQUALIFIED"
+          },
+          {
+            "fn": "custodial_native_departure_preparation_source",
+            "ms": 849.6848870000031,
+            "status": "CURRENT_PREPARATION_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_source_reserve",
+            "ms": 841.1415100000013,
+            "status": "SOURCE_RESERVED_NATIVE_UNQUALIFIED"
+          },
+          {
+            "fn": "custodial_native_schedule_content_source",
+            "ms": 862.1893829999972,
+            "status": "CONTENT_CURRENT_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_schedule_job_prepare",
+            "ms": 934.5039429999961,
+            "status": "JOB_PREPARED_NATIVE_UNQUALIFIED"
+          }
+        ]
+      },
+      {
+        "label": "settled 2026-11-11 15:00",
+        "at": "2026-11-11 15:00 America/Chicago",
+        "elapsed_ms": 329.2211360000074,
+        "budget_abort_observed": false,
+        "result": {
+          "schema": "custodial.native-schedule-source-producer.v1",
+          "dispatch_authorized": false,
+          "delivery_admitted": false,
+          "clock_effect_authority": null,
+          "retention_authority": null,
+          "native_qualified": false,
+          "status": "NO_SOURCE_REQUESTS",
+          "requested": 0,
+          "prepared": 0,
+          "replayed": 0,
+          "pending": 0,
+          "skipped": 0,
+          "jobs": [],
+          "reasons": []
+        },
+        "rpcCalls": [
+          {
+            "fn": "custodial_native_departure_source_requests",
+            "ms": 328.9812180000008,
+            "status": "SOURCE_CANDIDATES_ONLY"
+          }
+        ]
+      },
+      {
+        "label": "prepare 2026-11-11 16:00 pass1",
+        "at": "2026-11-11 16:00 America/Chicago",
+        "elapsed_ms": 3996.6179370000027,
+        "budget_abort_observed": false,
+        "result": {
+          "schema": "custodial.native-schedule-source-producer.v1",
+          "dispatch_authorized": false,
+          "delivery_admitted": false,
+          "clock_effect_authority": null,
+          "retention_authority": null,
+          "native_qualified": false,
+          "status": "SOURCE_JOBS_PREPARED_NATIVE_UNQUALIFIED",
+          "requested": 1,
+          "prepared": 1,
+          "replayed": 0,
+          "pending": 0,
+          "skipped": 0,
+          "jobs": [
+            {
+              "job_id": "142dcc74-1ef9-481e-ab93-adb81e256e2a",
+              "source_reservation_id": "bcd20324-d429-4e42-a170-74c9440b153d",
+              "replayed": false
+            }
+          ],
+          "reasons": []
+        },
+        "rpcCalls": [
+          {
+            "fn": "custodial_native_departure_source_requests",
+            "ms": 324.9318350000103,
+            "status": "SOURCE_CANDIDATES_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_preparation_source",
+            "ms": 919.9711690000113,
+            "status": "CURRENT_PREPARATION_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_source_reserve",
+            "ms": 867.7317670000048,
+            "status": "SOURCE_RESERVED_NATIVE_UNQUALIFIED"
+          },
+          {
+            "fn": "custodial_native_schedule_content_source",
+            "ms": 856.4360610000003,
+            "status": "CONTENT_CURRENT_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_schedule_job_prepare",
+            "ms": 1023.8912550000096,
+            "status": "JOB_PREPARED_NATIVE_UNQUALIFIED"
+          }
+        ]
+      },
+      {
+        "label": "settled 2026-11-11 16:00",
+        "at": "2026-11-11 16:00 America/Chicago",
+        "elapsed_ms": 417.4482990000106,
+        "budget_abort_observed": false,
+        "result": {
+          "schema": "custodial.native-schedule-source-producer.v1",
+          "dispatch_authorized": false,
+          "delivery_admitted": false,
+          "clock_effect_authority": null,
+          "retention_authority": null,
+          "native_qualified": false,
+          "status": "NO_SOURCE_REQUESTS",
+          "requested": 0,
+          "prepared": 0,
+          "replayed": 0,
+          "pending": 0,
+          "skipped": 0,
+          "jobs": [],
+          "reasons": []
+        },
+        "rpcCalls": [
+          {
+            "fn": "custodial_native_departure_source_requests",
+            "ms": 417.09730700000364,
+            "status": "SOURCE_CANDIDATES_ONLY"
+          }
+        ]
+      },
+      {
+        "label": "prepare 2026-11-12 14:00 pass1",
+        "at": "2026-11-12 14:00 America/Chicago",
+        "elapsed_ms": 8111.726414000004,
+        "budget_abort_observed": false,
+        "result": {
+          "schema": "custodial.native-schedule-source-producer.v1",
+          "dispatch_authorized": false,
+          "delivery_admitted": false,
+          "clock_effect_authority": null,
+          "retention_authority": null,
+          "native_qualified": false,
+          "status": "SOURCE_JOBS_PREPARED_NATIVE_UNQUALIFIED",
+          "requested": 2,
+          "prepared": 2,
+          "replayed": 0,
+          "pending": 0,
+          "skipped": 0,
+          "jobs": [
+            {
+              "job_id": "617c0379-eacb-4fc3-b165-6065fa1b6620",
+              "source_reservation_id": "25a49dff-c8e0-4045-994b-788c6a27c3ad",
+              "replayed": false
+            },
+            {
+              "job_id": "6ad8d712-4dd7-470d-8cac-da0104809318",
+              "source_reservation_id": "dcf1da44-2804-449f-91b4-e54735f18be3",
+              "replayed": false
+            }
+          ],
+          "reasons": []
+        },
+        "rpcCalls": [
+          {
+            "fn": "custodial_native_departure_source_requests",
+            "ms": 350.94522999999754,
+            "status": "SOURCE_CANDIDATES_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_preparation_source",
+            "ms": 851.331554000004,
+            "status": "CURRENT_PREPARATION_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_source_reserve",
+            "ms": 933.8245549999992,
+            "status": "SOURCE_RESERVED_NATIVE_UNQUALIFIED"
+          },
+          {
+            "fn": "custodial_native_schedule_content_source",
+            "ms": 822.4058229999937,
+            "status": "CONTENT_CURRENT_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_schedule_job_prepare",
+            "ms": 833.223382000011,
+            "status": "JOB_PREPARED_NATIVE_UNQUALIFIED"
+          },
+          {
+            "fn": "custodial_native_departure_preparation_source",
+            "ms": 860.1480819999997,
+            "status": "CURRENT_PREPARATION_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_source_reserve",
+            "ms": 1392.1124979999877,
+            "status": "SOURCE_RESERVED_NATIVE_UNQUALIFIED"
+          },
+          {
+            "fn": "custodial_native_schedule_content_source",
+            "ms": 1137.0817239999888,
+            "status": "CONTENT_CURRENT_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_schedule_job_prepare",
+            "ms": 922.9253159999935,
+            "status": "JOB_PREPARED_NATIVE_UNQUALIFIED"
+          }
+        ]
+      },
+      {
+        "label": "settled 2026-11-12 14:00",
+        "at": "2026-11-12 14:00 America/Chicago",
+        "elapsed_ms": 317.961924999996,
+        "budget_abort_observed": false,
+        "result": {
+          "schema": "custodial.native-schedule-source-producer.v1",
+          "dispatch_authorized": false,
+          "delivery_admitted": false,
+          "clock_effect_authority": null,
+          "retention_authority": null,
+          "native_qualified": false,
+          "status": "NO_SOURCE_REQUESTS",
+          "requested": 0,
+          "prepared": 0,
+          "replayed": 0,
+          "pending": 0,
+          "skipped": 0,
+          "jobs": [],
+          "reasons": []
+        },
+        "rpcCalls": [
+          {
+            "fn": "custodial_native_departure_source_requests",
+            "ms": 317.7558310000022,
+            "status": "SOURCE_CANDIDATES_ONLY"
+          }
+        ]
+      },
+      {
+        "label": "prepare 2026-11-12 15:00 pass1",
+        "at": "2026-11-12 15:00 America/Chicago",
+        "elapsed_ms": 10000.866379,
+        "budget_abort_observed": true,
+        "result": {
+          "schema": "custodial.native-schedule-source-producer.v1",
+          "dispatch_authorized": false,
+          "delivery_admitted": false,
+          "clock_effect_authority": null,
+          "retention_authority": null,
+          "native_qualified": false,
+          "status": "SOURCE_PREPARATION_PENDING",
+          "requested": 3,
+          "prepared": 2,
+          "replayed": 0,
+          "pending": 1,
+          "skipped": 0,
+          "jobs": [
+            {
+              "job_id": "f5486b7f-cf4f-4fe7-9753-0c441aebc9a2",
+              "source_reservation_id": "5e4cbdb6-7769-4e12-a3b3-8da86d36f16d",
+              "replayed": false
+            },
+            {
+              "job_id": "8e1bdc40-63f5-40dd-8ea3-65e2384ae7c4",
+              "source_reservation_id": "15fd7aa5-c923-4ddf-9d0d-36dba1efb27d",
+              "replayed": false
+            }
+          ],
+          "reasons": [
+            "SOURCE_RPC_BUDGET"
+          ]
+        },
+        "rpcCalls": [
+          {
+            "fn": "custodial_native_departure_source_requests",
+            "ms": 310.1642690000008,
+            "status": "SOURCE_CANDIDATES_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_preparation_source",
+            "ms": 843.304381000009,
+            "status": "CURRENT_PREPARATION_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_source_reserve",
+            "ms": 1074.113744999995,
+            "status": "SOURCE_RESERVED_NATIVE_UNQUALIFIED"
+          },
+          {
+            "fn": "custodial_native_schedule_content_source",
+            "ms": 845.2957230000029,
+            "status": "CONTENT_CURRENT_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_schedule_job_prepare",
+            "ms": 841.7642669999914,
+            "status": "JOB_PREPARED_NATIVE_UNQUALIFIED"
+          },
+          {
+            "fn": "custodial_native_departure_preparation_source",
+            "ms": 904.0718639999977,
+            "status": "CURRENT_PREPARATION_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_source_reserve",
+            "ms": 870.583386000013,
+            "status": "SOURCE_RESERVED_NATIVE_UNQUALIFIED"
+          },
+          {
+            "fn": "custodial_native_schedule_content_source",
+            "ms": 833.4303959999961,
+            "status": "CONTENT_CURRENT_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_schedule_job_prepare",
+            "ms": 1088.3791029999993,
+            "status": "JOB_PREPARED_NATIVE_UNQUALIFIED"
+          },
+          {
+            "fn": "custodial_native_departure_preparation_source",
+            "ms": 846.246948,
+            "status": "CURRENT_PREPARATION_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_source_reserve",
+            "ms": 869.8243329999968,
+            "status": "SOURCE_RESERVED_NATIVE_UNQUALIFIED"
+          }
+        ]
+      },
+      {
+        "label": "prepare 2026-11-12 15:00 pass2",
+        "at": "2026-11-12 15:00 America/Chicago",
+        "elapsed_ms": 3842.0253909999883,
+        "budget_abort_observed": false,
+        "result": {
+          "schema": "custodial.native-schedule-source-producer.v1",
+          "dispatch_authorized": false,
+          "delivery_admitted": false,
+          "clock_effect_authority": null,
+          "retention_authority": null,
+          "native_qualified": false,
+          "status": "SOURCE_JOBS_PREPARED_NATIVE_UNQUALIFIED",
+          "requested": 1,
+          "prepared": 1,
+          "replayed": 0,
+          "pending": 0,
+          "skipped": 0,
+          "jobs": [
+            {
+              "job_id": "032c3ee1-9144-4337-9e32-4394dd50ecea",
+              "source_reservation_id": "40c77cf3-22de-47cf-b2d2-4835cb2a7897",
+              "replayed": false
+            }
+          ],
+          "reasons": []
+        },
+        "rpcCalls": [
+          {
+            "fn": "custodial_native_departure_source_requests",
+            "ms": 324.4648700000107,
+            "status": "SOURCE_CANDIDATES_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_preparation_source",
+            "ms": 843.8271499999973,
+            "status": "CURRENT_PREPARATION_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_source_reserve",
+            "ms": 981.160732999997,
+            "status": "ORIGINAL_SOURCE_RESERVED"
+          },
+          {
+            "fn": "custodial_native_schedule_content_source",
+            "ms": 838.3439340000041,
+            "status": "CONTENT_CURRENT_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_schedule_job_prepare",
+            "ms": 850.9333100000076,
+            "status": "JOB_PREPARED_NATIVE_UNQUALIFIED"
+          }
+        ]
+      },
+      {
+        "label": "settled 2026-11-12 15:00",
+        "at": "2026-11-12 15:00 America/Chicago",
+        "elapsed_ms": 361.28920199999993,
+        "budget_abort_observed": false,
+        "result": {
+          "schema": "custodial.native-schedule-source-producer.v1",
+          "dispatch_authorized": false,
+          "delivery_admitted": false,
+          "clock_effect_authority": null,
+          "retention_authority": null,
+          "native_qualified": false,
+          "status": "NO_SOURCE_REQUESTS",
+          "requested": 0,
+          "prepared": 0,
+          "replayed": 0,
+          "pending": 0,
+          "skipped": 0,
+          "jobs": [],
+          "reasons": []
+        },
+        "rpcCalls": [
+          {
+            "fn": "custodial_native_departure_source_requests",
+            "ms": 361.129025000002,
+            "status": "SOURCE_CANDIDATES_ONLY"
+          }
+        ]
+      },
+      {
+        "label": "prepare 2026-11-13 14:00 pass1",
+        "at": "2026-11-13 14:00 America/Chicago",
+        "elapsed_ms": 7460.118642000001,
+        "budget_abort_observed": false,
+        "result": {
+          "schema": "custodial.native-schedule-source-producer.v1",
+          "dispatch_authorized": false,
+          "delivery_admitted": false,
+          "clock_effect_authority": null,
+          "retention_authority": null,
+          "native_qualified": false,
+          "status": "SOURCE_JOBS_PREPARED_NATIVE_UNQUALIFIED",
+          "requested": 2,
+          "prepared": 2,
+          "replayed": 0,
+          "pending": 0,
+          "skipped": 0,
+          "jobs": [
+            {
+              "job_id": "743adf35-7c3d-458f-b342-c14238462d4e",
+              "source_reservation_id": "89a32561-bb77-4537-962b-aac9aceb2ffe",
+              "replayed": false
+            },
+            {
+              "job_id": "27309518-e805-42b5-b6c7-1b0e0b9529e1",
+              "source_reservation_id": "ece3be99-8de6-435e-9a97-6373cea4e231",
+              "replayed": false
+            }
+          ],
+          "reasons": []
+        },
+        "rpcCalls": [
+          {
+            "fn": "custodial_native_departure_source_requests",
+            "ms": 305.29452100000344,
+            "status": "SOURCE_CANDIDATES_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_preparation_source",
+            "ms": 822.9428660000121,
+            "status": "CURRENT_PREPARATION_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_source_reserve",
+            "ms": 873.4443389999942,
+            "status": "SOURCE_RESERVED_NATIVE_UNQUALIFIED"
+          },
+          {
+            "fn": "custodial_native_schedule_content_source",
+            "ms": 897.4187499999971,
+            "status": "CONTENT_CURRENT_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_schedule_job_prepare",
+            "ms": 976.8731550000084,
+            "status": "JOB_PREPARED_NATIVE_UNQUALIFIED"
+          },
+          {
+            "fn": "custodial_native_departure_preparation_source",
+            "ms": 847.894558,
+            "status": "CURRENT_PREPARATION_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_source_reserve",
+            "ms": 882.1490090000007,
+            "status": "SOURCE_RESERVED_NATIVE_UNQUALIFIED"
+          },
+          {
+            "fn": "custodial_native_schedule_content_source",
+            "ms": 902.2580190000008,
+            "status": "CONTENT_CURRENT_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_schedule_job_prepare",
+            "ms": 943.364579999994,
+            "status": "JOB_PREPARED_NATIVE_UNQUALIFIED"
+          }
+        ]
+      },
+      {
+        "label": "settled 2026-11-13 14:00",
+        "at": "2026-11-13 14:00 America/Chicago",
+        "elapsed_ms": 371.12934500000847,
+        "budget_abort_observed": false,
+        "result": {
+          "schema": "custodial.native-schedule-source-producer.v1",
+          "dispatch_authorized": false,
+          "delivery_admitted": false,
+          "clock_effect_authority": null,
+          "retention_authority": null,
+          "native_qualified": false,
+          "status": "NO_SOURCE_REQUESTS",
+          "requested": 0,
+          "prepared": 0,
+          "replayed": 0,
+          "pending": 0,
+          "skipped": 0,
+          "jobs": [],
+          "reasons": []
+        },
+        "rpcCalls": [
+          {
+            "fn": "custodial_native_departure_source_requests",
+            "ms": 370.976238999996,
+            "status": "SOURCE_CANDIDATES_ONLY"
+          }
+        ]
+      },
+      {
+        "label": "prepare 2026-11-13 15:00 pass1",
+        "at": "2026-11-13 15:00 America/Chicago",
+        "elapsed_ms": 7442.8248789999925,
+        "budget_abort_observed": false,
+        "result": {
+          "schema": "custodial.native-schedule-source-producer.v1",
+          "dispatch_authorized": false,
+          "delivery_admitted": false,
+          "clock_effect_authority": null,
+          "retention_authority": null,
+          "native_qualified": false,
+          "status": "SOURCE_JOBS_PREPARED_NATIVE_UNQUALIFIED",
+          "requested": 2,
+          "prepared": 2,
+          "replayed": 0,
+          "pending": 0,
+          "skipped": 0,
+          "jobs": [
+            {
+              "job_id": "312dabd2-cc72-4217-b7e3-a3f45147badb",
+              "source_reservation_id": "1ec3ae22-41c6-4e82-9c01-9de471d28871",
+              "replayed": false
+            },
+            {
+              "job_id": "ef690487-d6fe-4f4c-9a9b-a0ef768c6b81",
+              "source_reservation_id": "71e665dc-a789-4cea-b8ac-53213622a582",
+              "replayed": false
+            }
+          ],
+          "reasons": []
+        },
+        "rpcCalls": [
+          {
+            "fn": "custodial_native_departure_source_requests",
+            "ms": 325.5833629999979,
+            "status": "SOURCE_CANDIDATES_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_preparation_source",
+            "ms": 930.1559910000069,
+            "status": "CURRENT_PREPARATION_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_source_reserve",
+            "ms": 927.9179900000017,
+            "status": "SOURCE_RESERVED_NATIVE_UNQUALIFIED"
+          },
+          {
+            "fn": "custodial_native_schedule_content_source",
+            "ms": 828.6213050000079,
+            "status": "CONTENT_CURRENT_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_schedule_job_prepare",
+            "ms": 851.885488999993,
+            "status": "JOB_PREPARED_NATIVE_UNQUALIFIED"
+          },
+          {
+            "fn": "custodial_native_departure_preparation_source",
+            "ms": 868.2807690000045,
+            "status": "CURRENT_PREPARATION_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_source_reserve",
+            "ms": 989.7001820000005,
+            "status": "SOURCE_RESERVED_NATIVE_UNQUALIFIED"
+          },
+          {
+            "fn": "custodial_native_schedule_content_source",
+            "ms": 852.5177470000053,
+            "status": "CONTENT_CURRENT_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_schedule_job_prepare",
+            "ms": 861.8602339999925,
+            "status": "JOB_PREPARED_NATIVE_UNQUALIFIED"
+          }
+        ]
+      },
+      {
+        "label": "settled 2026-11-13 15:00",
+        "at": "2026-11-13 15:00 America/Chicago",
+        "elapsed_ms": 334.96790200000396,
+        "budget_abort_observed": false,
+        "result": {
+          "schema": "custodial.native-schedule-source-producer.v1",
+          "dispatch_authorized": false,
+          "delivery_admitted": false,
+          "clock_effect_authority": null,
+          "retention_authority": null,
+          "native_qualified": false,
+          "status": "NO_SOURCE_REQUESTS",
+          "requested": 0,
+          "prepared": 0,
+          "replayed": 0,
+          "pending": 0,
+          "skipped": 0,
+          "jobs": [],
+          "reasons": []
+        },
+        "rpcCalls": [
+          {
+            "fn": "custodial_native_departure_source_requests",
+            "ms": 334.77096800001164,
+            "status": "SOURCE_CANDIDATES_ONLY"
+          }
+        ]
+      },
+      {
+        "label": "prepare 2026-11-14 14:00 pass1",
+        "at": "2026-11-14 14:00 America/Chicago",
+        "elapsed_ms": 10000.023671000003,
+        "budget_abort_observed": true,
+        "result": {
+          "schema": "custodial.native-schedule-source-producer.v1",
+          "dispatch_authorized": false,
+          "delivery_admitted": false,
+          "clock_effect_authority": null,
+          "retention_authority": null,
+          "native_qualified": false,
+          "status": "SOURCE_PREPARATION_PENDING",
+          "requested": 3,
+          "prepared": 2,
+          "replayed": 0,
+          "pending": 1,
+          "skipped": 0,
+          "jobs": [
+            {
+              "job_id": "1fcc3c3c-b168-448c-88a6-263a0221c511",
+              "source_reservation_id": "de0da62a-51c2-4704-a095-f858ff466966",
+              "replayed": false
+            },
+            {
+              "job_id": "25cf2e03-f223-4b2d-aaf1-dba93c36b65d",
+              "source_reservation_id": "d6d1f9c6-eb19-4ad8-ad36-10b276bf6cca",
+              "replayed": false
+            }
+          ],
+          "reasons": [
+            "SOURCE_RPC_BUDGET"
+          ]
+        },
+        "rpcCalls": [
+          {
+            "fn": "custodial_native_departure_source_requests",
+            "ms": 331.5111590000015,
+            "status": "SOURCE_CANDIDATES_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_preparation_source",
+            "ms": 829.9402839999966,
+            "status": "CURRENT_PREPARATION_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_source_reserve",
+            "ms": 956.5259020000085,
+            "status": "SOURCE_RESERVED_NATIVE_UNQUALIFIED"
+          },
+          {
+            "fn": "custodial_native_schedule_content_source",
+            "ms": 864.7844859999896,
+            "status": "CONTENT_CURRENT_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_schedule_job_prepare",
+            "ms": 849.7038010000106,
+            "status": "JOB_PREPARED_NATIVE_UNQUALIFIED"
+          },
+          {
+            "fn": "custodial_native_departure_preparation_source",
+            "ms": 883.4674379999924,
+            "status": "CURRENT_PREPARATION_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_source_reserve",
+            "ms": 840.4255180000036,
+            "status": "SOURCE_RESERVED_NATIVE_UNQUALIFIED"
+          },
+          {
+            "fn": "custodial_native_schedule_content_source",
+            "ms": 841.5140759999922,
+            "status": "CONTENT_CURRENT_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_schedule_job_prepare",
+            "ms": 904.7568690000044,
+            "status": "JOB_PREPARED_NATIVE_UNQUALIFIED"
+          },
+          {
+            "fn": "custodial_native_departure_preparation_source",
+            "ms": 849.7367320000048,
+            "status": "CURRENT_PREPARATION_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_source_reserve",
+            "ms": 866.3229539999884,
+            "status": "SOURCE_RESERVED_NATIVE_UNQUALIFIED"
+          },
+          {
+            "fn": "custodial_native_schedule_content_source",
+            "ms": 844.4565319999965,
+            "status": "CONTENT_CURRENT_SOURCE_ONLY"
+          }
+        ]
+      },
+      {
+        "label": "settled 2026-11-14 14:00",
+        "at": "2026-11-14 14:00 America/Chicago",
+        "elapsed_ms": 347.4519810000056,
+        "budget_abort_observed": false,
+        "result": {
+          "schema": "custodial.native-schedule-source-producer.v1",
+          "dispatch_authorized": false,
+          "delivery_admitted": false,
+          "clock_effect_authority": null,
+          "retention_authority": null,
+          "native_qualified": false,
+          "status": "NO_SOURCE_REQUESTS",
+          "requested": 0,
+          "prepared": 0,
+          "replayed": 0,
+          "pending": 0,
+          "skipped": 0,
+          "jobs": [],
+          "reasons": []
+        },
+        "rpcCalls": [
+          {
+            "fn": "custodial_native_departure_source_requests",
+            "ms": 347.19160200000624,
+            "status": "SOURCE_CANDIDATES_ONLY"
+          }
+        ]
+      },
+      {
+        "label": "prepare 2026-11-14 15:00 pass1",
+        "at": "2026-11-14 15:00 America/Chicago",
+        "elapsed_ms": 10000.953458999997,
+        "budget_abort_observed": true,
+        "result": {
+          "schema": "custodial.native-schedule-source-producer.v1",
+          "dispatch_authorized": false,
+          "delivery_admitted": false,
+          "clock_effect_authority": null,
+          "retention_authority": null,
+          "native_qualified": false,
+          "status": "SOURCE_PREPARATION_PENDING",
+          "requested": 3,
+          "prepared": 2,
+          "replayed": 0,
+          "pending": 1,
+          "skipped": 0,
+          "jobs": [
+            {
+              "job_id": "b8324a6b-764e-4bea-96b2-aa4cd09dddee",
+              "source_reservation_id": "8835d8c2-7619-42dd-b084-bd96b082b028",
+              "replayed": false
+            },
+            {
+              "job_id": "02cdd08e-bf3b-4dfe-8bfe-8d6a38121368",
+              "source_reservation_id": "5388b35b-276c-48d2-bda7-50f131ea8310",
+              "replayed": false
+            }
+          ],
+          "reasons": [
+            "SOURCE_RPC_BUDGET"
+          ]
+        },
+        "rpcCalls": [
+          {
+            "fn": "custodial_native_departure_source_requests",
+            "ms": 352.13395500001207,
+            "status": "SOURCE_CANDIDATES_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_preparation_source",
+            "ms": 950.4724649999989,
+            "status": "CURRENT_PREPARATION_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_source_reserve",
+            "ms": 860.7094700000016,
+            "status": "SOURCE_RESERVED_NATIVE_UNQUALIFIED"
+          },
+          {
+            "fn": "custodial_native_schedule_content_source",
+            "ms": 852.1492270000017,
+            "status": "CONTENT_CURRENT_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_schedule_job_prepare",
+            "ms": 936.8809879999899,
+            "status": "JOB_PREPARED_NATIVE_UNQUALIFIED"
+          },
+          {
+            "fn": "custodial_native_departure_preparation_source",
+            "ms": 863.461765,
+            "status": "CURRENT_PREPARATION_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_source_reserve",
+            "ms": 918.4281740000006,
+            "status": "SOURCE_RESERVED_NATIVE_UNQUALIFIED"
+          },
+          {
+            "fn": "custodial_native_schedule_content_source",
+            "ms": 1145.6600659999967,
+            "status": "CONTENT_CURRENT_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_schedule_job_prepare",
+            "ms": 947.3982889999897,
+            "status": "JOB_PREPARED_NATIVE_UNQUALIFIED"
+          },
+          {
+            "fn": "custodial_native_departure_preparation_source",
+            "ms": 861.5702759999986,
+            "status": "CURRENT_PREPARATION_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_source_reserve",
+            "ms": 846.128865000006,
+            "status": "SOURCE_RESERVED_NATIVE_UNQUALIFIED"
+          }
+        ]
+      },
+      {
+        "label": "prepare 2026-11-14 15:00 pass2",
+        "at": "2026-11-14 15:00 America/Chicago",
+        "elapsed_ms": 4103.376663000003,
+        "budget_abort_observed": false,
+        "result": {
+          "schema": "custodial.native-schedule-source-producer.v1",
+          "dispatch_authorized": false,
+          "delivery_admitted": false,
+          "clock_effect_authority": null,
+          "retention_authority": null,
+          "native_qualified": false,
+          "status": "SOURCE_JOBS_PREPARED_NATIVE_UNQUALIFIED",
+          "requested": 1,
+          "prepared": 1,
+          "replayed": 0,
+          "pending": 0,
+          "skipped": 0,
+          "jobs": [
+            {
+              "job_id": "15aaf3c4-cae6-409a-a9a3-c67b7755533b",
+              "source_reservation_id": "09950ca0-321e-46ef-9c15-3d5c0a9434c6",
+              "replayed": false
+            }
+          ],
+          "reasons": []
+        },
+        "rpcCalls": [
+          {
+            "fn": "custodial_native_departure_source_requests",
+            "ms": 348.75353200000245,
+            "status": "SOURCE_CANDIDATES_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_preparation_source",
+            "ms": 994.542266000004,
+            "status": "CURRENT_PREPARATION_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_source_reserve",
+            "ms": 1026.2562160000089,
+            "status": "ORIGINAL_SOURCE_RESERVED"
+          },
+          {
+            "fn": "custodial_native_schedule_content_source",
+            "ms": 868.1962910000002,
+            "status": "CONTENT_CURRENT_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_schedule_job_prepare",
+            "ms": 862.4210400000156,
+            "status": "JOB_PREPARED_NATIVE_UNQUALIFIED"
+          }
+        ]
+      },
+      {
+        "label": "settled 2026-11-14 15:00",
+        "at": "2026-11-14 15:00 America/Chicago",
+        "elapsed_ms": 333.1248879999912,
+        "budget_abort_observed": false,
+        "result": {
+          "schema": "custodial.native-schedule-source-producer.v1",
+          "dispatch_authorized": false,
+          "delivery_admitted": false,
+          "clock_effect_authority": null,
+          "retention_authority": null,
+          "native_qualified": false,
+          "status": "NO_SOURCE_REQUESTS",
+          "requested": 0,
+          "prepared": 0,
+          "replayed": 0,
+          "pending": 0,
+          "skipped": 0,
+          "jobs": [],
+          "reasons": []
+        },
+        "rpcCalls": [
+          {
+            "fn": "custodial_native_departure_source_requests",
+            "ms": 332.76267100000405,
+            "status": "SOURCE_CANDIDATES_ONLY"
+          }
+        ]
+      },
+      {
+        "label": "prepare 2026-11-14 16:00 pass1",
+        "at": "2026-11-14 16:00 America/Chicago",
+        "elapsed_ms": 4310.082664999994,
+        "budget_abort_observed": false,
+        "result": {
+          "schema": "custodial.native-schedule-source-producer.v1",
+          "dispatch_authorized": false,
+          "delivery_admitted": false,
+          "clock_effect_authority": null,
+          "retention_authority": null,
+          "native_qualified": false,
+          "status": "SOURCE_JOBS_PREPARED_NATIVE_UNQUALIFIED",
+          "requested": 1,
+          "prepared": 1,
+          "replayed": 0,
+          "pending": 0,
+          "skipped": 0,
+          "jobs": [
+            {
+              "job_id": "a6b9b97d-43c8-426b-b15c-b561fb53ecbb",
+              "source_reservation_id": "ee724902-b398-4c5a-a347-d942d8cf776c",
+              "replayed": false
+            }
+          ],
+          "reasons": []
+        },
+        "rpcCalls": [
+          {
+            "fn": "custodial_native_departure_source_requests",
+            "ms": 321.8765489999787,
+            "status": "SOURCE_CANDIDATES_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_preparation_source",
+            "ms": 939.2558439999993,
+            "status": "CURRENT_PREPARATION_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_source_reserve",
+            "ms": 881.7524390000035,
+            "status": "SOURCE_RESERVED_NATIVE_UNQUALIFIED"
+          },
+          {
+            "fn": "custodial_native_schedule_content_source",
+            "ms": 1059.963563999976,
+            "status": "CONTENT_CURRENT_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_schedule_job_prepare",
+            "ms": 1100.4995409999974,
+            "status": "JOB_PREPARED_NATIVE_UNQUALIFIED"
+          }
+        ]
+      },
+      {
+        "label": "settled 2026-11-14 16:00",
+        "at": "2026-11-14 16:00 America/Chicago",
+        "elapsed_ms": 316.8379260000074,
+        "budget_abort_observed": false,
+        "result": {
+          "schema": "custodial.native-schedule-source-producer.v1",
+          "dispatch_authorized": false,
+          "delivery_admitted": false,
+          "clock_effect_authority": null,
+          "retention_authority": null,
+          "native_qualified": false,
+          "status": "NO_SOURCE_REQUESTS",
+          "requested": 0,
+          "prepared": 0,
+          "replayed": 0,
+          "pending": 0,
+          "skipped": 0,
+          "jobs": [],
+          "reasons": []
+        },
+        "rpcCalls": [
+          {
+            "fn": "custodial_native_departure_source_requests",
+            "ms": 316.670438000001,
+            "status": "SOURCE_CANDIDATES_ONLY"
+          }
+        ]
+      },
+      {
+        "label": "prepare 2026-11-15 15:00 pass1",
+        "at": "2026-11-15 15:00 America/Chicago",
+        "elapsed_ms": 10000.843907000002,
+        "budget_abort_observed": true,
+        "result": {
+          "schema": "custodial.native-schedule-source-producer.v1",
+          "dispatch_authorized": false,
+          "delivery_admitted": false,
+          "clock_effect_authority": null,
+          "retention_authority": null,
+          "native_qualified": false,
+          "status": "SOURCE_PREPARATION_PENDING",
+          "requested": 3,
+          "prepared": 2,
+          "replayed": 0,
+          "pending": 1,
+          "skipped": 0,
+          "jobs": [
+            {
+              "job_id": "8e89b470-79f5-4021-aaa9-0fdf477ffd8e",
+              "source_reservation_id": "743d116a-bceb-4c5a-a1b4-50db191d102a",
+              "replayed": false
+            },
+            {
+              "job_id": "a6883948-9182-4d67-9ce1-d44de0ac2d31",
+              "source_reservation_id": "462b1a9e-9264-417d-88ff-65f5023c5efe",
+              "replayed": false
+            }
+          ],
+          "reasons": [
+            "SOURCE_RPC_BUDGET"
+          ]
+        },
+        "rpcCalls": [
+          {
+            "fn": "custodial_native_departure_source_requests",
+            "ms": 327.7027320000052,
+            "status": "SOURCE_CANDIDATES_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_preparation_source",
+            "ms": 930.5270679999958,
+            "status": "CURRENT_PREPARATION_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_source_reserve",
+            "ms": 935.3172510000004,
+            "status": "SOURCE_RESERVED_NATIVE_UNQUALIFIED"
+          },
+          {
+            "fn": "custodial_native_schedule_content_source",
+            "ms": 847.5078639999847,
+            "status": "CONTENT_CURRENT_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_schedule_job_prepare",
+            "ms": 991.089645,
+            "status": "JOB_PREPARED_NATIVE_UNQUALIFIED"
+          },
+          {
+            "fn": "custodial_native_departure_preparation_source",
+            "ms": 929.9482410000055,
+            "status": "CURRENT_PREPARATION_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_source_reserve",
+            "ms": 928.080145999993,
+            "status": "SOURCE_RESERVED_NATIVE_UNQUALIFIED"
+          },
+          {
+            "fn": "custodial_native_schedule_content_source",
+            "ms": 954.7001450000098,
+            "status": "CONTENT_CURRENT_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_schedule_job_prepare",
+            "ms": 989.0004940000072,
+            "status": "JOB_PREPARED_NATIVE_UNQUALIFIED"
+          },
+          {
+            "fn": "custodial_native_departure_preparation_source",
+            "ms": 861.9146499999915,
+            "status": "CURRENT_PREPARATION_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_source_reserve",
+            "ms": 903.9966580000182,
+            "status": "SOURCE_RESERVED_NATIVE_UNQUALIFIED"
+          }
+        ]
+      },
+      {
+        "label": "prepare 2026-11-15 15:00 pass2",
+        "at": "2026-11-15 15:00 America/Chicago",
+        "elapsed_ms": 3919.92049400002,
+        "budget_abort_observed": false,
+        "result": {
+          "schema": "custodial.native-schedule-source-producer.v1",
+          "dispatch_authorized": false,
+          "delivery_admitted": false,
+          "clock_effect_authority": null,
+          "retention_authority": null,
+          "native_qualified": false,
+          "status": "SOURCE_JOBS_PREPARED_NATIVE_UNQUALIFIED",
+          "requested": 1,
+          "prepared": 1,
+          "replayed": 0,
+          "pending": 0,
+          "skipped": 0,
+          "jobs": [
+            {
+              "job_id": "178b85f5-52a7-45f6-bac7-5b9c4d3022d2",
+              "source_reservation_id": "f5d10910-336d-4a78-8687-af4d3bc4feb9",
+              "replayed": false
+            }
+          ],
+          "reasons": []
+        },
+        "rpcCalls": [
+          {
+            "fn": "custodial_native_departure_source_requests",
+            "ms": 403.9660089999961,
+            "status": "SOURCE_CANDIDATES_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_preparation_source",
+            "ms": 905.2303239999746,
+            "status": "CURRENT_PREPARATION_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_source_reserve",
+            "ms": 884.7335670000175,
+            "status": "ORIGINAL_SOURCE_RESERVED"
+          },
+          {
+            "fn": "custodial_native_schedule_content_source",
+            "ms": 848.7421649999742,
+            "status": "CONTENT_CURRENT_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_schedule_job_prepare",
+            "ms": 873.0877320000145,
+            "status": "JOB_PREPARED_NATIVE_UNQUALIFIED"
+          }
+        ]
+      },
+      {
+        "label": "settled 2026-11-15 15:00",
+        "at": "2026-11-15 15:00 America/Chicago",
+        "elapsed_ms": 326.2097880000074,
+        "budget_abort_observed": false,
+        "result": {
+          "schema": "custodial.native-schedule-source-producer.v1",
+          "dispatch_authorized": false,
+          "delivery_admitted": false,
+          "clock_effect_authority": null,
+          "retention_authority": null,
+          "native_qualified": false,
+          "status": "NO_SOURCE_REQUESTS",
+          "requested": 0,
+          "prepared": 0,
+          "replayed": 0,
+          "pending": 0,
+          "skipped": 0,
+          "jobs": [],
+          "reasons": []
+        },
+        "rpcCalls": [
+          {
+            "fn": "custodial_native_departure_source_requests",
+            "ms": 326.0257730000012,
+            "status": "SOURCE_CANDIDATES_ONLY"
+          }
+        ]
+      },
+      {
+        "label": "prepare 2026-11-15 16:00 pass1",
+        "at": "2026-11-15 16:00 America/Chicago",
+        "elapsed_ms": 3925.2682429999986,
+        "budget_abort_observed": false,
+        "result": {
+          "schema": "custodial.native-schedule-source-producer.v1",
+          "dispatch_authorized": false,
+          "delivery_admitted": false,
+          "clock_effect_authority": null,
+          "retention_authority": null,
+          "native_qualified": false,
+          "status": "SOURCE_JOBS_PREPARED_NATIVE_UNQUALIFIED",
+          "requested": 1,
+          "prepared": 1,
+          "replayed": 0,
+          "pending": 0,
+          "skipped": 0,
+          "jobs": [
+            {
+              "job_id": "fadf7251-e558-40d6-b196-4cfb32a22d32",
+              "source_reservation_id": "e20f573d-08ed-4208-b64b-43a41ac59096",
+              "replayed": false
+            }
+          ],
+          "reasons": []
+        },
+        "rpcCalls": [
+          {
+            "fn": "custodial_native_departure_source_requests",
+            "ms": 314.4628780000203,
+            "status": "SOURCE_CANDIDATES_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_preparation_source",
+            "ms": 875.0783539999975,
+            "status": "CURRENT_PREPARATION_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_departure_source_reserve",
+            "ms": 935.1364360000007,
+            "status": "SOURCE_RESERVED_NATIVE_UNQUALIFIED"
+          },
+          {
+            "fn": "custodial_native_schedule_content_source",
+            "ms": 876.482256999996,
+            "status": "CONTENT_CURRENT_SOURCE_ONLY"
+          },
+          {
+            "fn": "custodial_native_schedule_job_prepare",
+            "ms": 920.2162439999811,
+            "status": "JOB_PREPARED_NATIVE_UNQUALIFIED"
+          }
+        ]
+      },
+      {
+        "label": "settled 2026-11-15 16:00",
+        "at": "2026-11-15 16:00 America/Chicago",
+        "elapsed_ms": 314.7238650000072,
+        "budget_abort_observed": false,
+        "result": {
+          "schema": "custodial.native-schedule-source-producer.v1",
+          "dispatch_authorized": false,
+          "delivery_admitted": false,
+          "clock_effect_authority": null,
+          "retention_authority": null,
+          "native_qualified": false,
+          "status": "NO_SOURCE_REQUESTS",
+          "requested": 0,
+          "prepared": 0,
+          "replayed": 0,
+          "pending": 0,
+          "skipped": 0,
+          "jobs": [],
+          "reasons": []
+        },
+        "rpcCalls": [
+          {
+            "fn": "custodial_native_departure_source_requests",
+            "ms": 314.5304929999984,
+            "status": "SOURCE_CANDIDATES_ONLY"
+          }
+        ]
+      }
+    ],
+    "prepared_boundaries": 37,
+    "production": false,
+    "dispatch": false,
+    "rollback": false,
+    "fixture_autocommit": true
+  }
+}

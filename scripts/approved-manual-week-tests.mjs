@@ -16,7 +16,7 @@ import {prepareStaticWeeklySchedulingProblem} from '../src/static-weekly-schedul
 const week=readApprovedManualWeek(),pointByGroup=new Map(week.ratings.map(r=>[r.group,r.score]));
 const compilerData=prepareApprovedManualCompilerData(week),nativeLunches=validateFullHourLunchPolicy(compilerData.lunchCoveragePolicy,postgresJsonbContentDigest);
 assert.equal(nativeLunches.size,40);assert.equal(compilerData.availabilityInputs.length,40);
-assert.equal(compilerData.assignmentInputs.length,346);assert.equal(compilerData.groupRatingAuthority.groups.length,23);
+assert.equal(compilerData.assignmentInputs.length,327);assert.equal(compilerData.groupRatingAuthority.groups.length,23);
 assert.equal(compilerData.groupRatingAuthority.groups.reduce((n,g)=>n+g.score,0),136);
 assert.equal(compilerData.groupRatingAuthority.legacyComponentWeightsReplaced,false);
 assert.equal(compilerData.canonicalCompilerInput,null);assert.equal(compilerData.registrationEligible,false);
@@ -120,9 +120,10 @@ assert.equal(binding.unresolvedLegacyDuties[0].score,null);
 const referenceBytes=readFileSync(new URL('../release/static-schedules/custodial-eight-20261102-registration.json',import.meta.url)),
   referenceBefore=Buffer.from(referenceBytes),weekBefore=JSON.stringify(week),
   sourceDraft=prepareApprovedManualSourceDraft({week,referenceBytes}),draft=sourceDraft.sourceDraft;
-assert.equal(draft.version.assignments.length,346);assert.equal(draft.version.slotAvailability.length,40);
+assert.equal(draft.version.assignments.length,327);assert.equal(draft.version.slotAvailability.length,40);
 assert.equal(sourceDraft.budgetBindings.length,161);assert.equal(sourceDraft.restrictionConflicts.length,0);
-assert.equal(sourceDraft.restrictionClassifications.length,5);
+// Wednesday Herpetarium remains with Derrick through17:00 after the confirmed end correction.
+assert.equal(sourceDraft.restrictionClassifications.length,4);
 const fridayAlert=sourceDraft.restrictionClassifications.find(c=>c.dayOfWeek===5);
 assert.equal(fridayAlert.coveragePurpose,'INHERITED_ALERTS_AND_ISSUES_ONLY');
 assert.equal(fridayAlert.locationCode,'HERPETARIUM');assert.equal(fridayAlert.normalAssignmentRestrictionRetained,true);

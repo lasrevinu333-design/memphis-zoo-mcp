@@ -15,7 +15,7 @@ import { assertNormalOwnerEligibility, hardRestrictedSlots,
 import {createRecurringPhaseDescriptor,createRecurringPhaseProspectiveSource,
   enumerateRecurringPhaseMinimum,evaluateRecurringPhaseCanonicalSource,
   solveRecurringPhaseCanonicalMinimum,assertRecurringPhasePreferenceNormalization,
-  createRecurringPhaseEvidenceInvocation} from './static-weekly-recurring-phase-authority.js';
+  createRecurringPhaseWeekInvocation,recurringIntegerLoadRange} from './static-weekly-recurring-phase-authority.js';
 import {createRecurringMorningObjectiveContract,createRecurringMorningProspectiveSource,
  solveRecurringMorningCanonicalMinimum,assertRecurringMorningCanonicalProof} from './static-weekly-recurring-morning-solver.js';
 
@@ -2030,6 +2030,17 @@ export function deriveRecurringStaffingPattern({ currentConfig, targetSlots, ful
         constraints.push(` sites_${a}_${b}: ${expression([...termsFor(owners[a], false, true), ...termsFor(owners[b], false, true).map(([n,v]) => [-n,v])])} <= 1`);
         if (phase === "equalized") constraints.push(` load_${a}_${b}: ${expression([...termsFor(owners[a], true), ...termsFor(owners[b], true).map(([n,v]) => [-n,v])])} <= 3`);
       }
+      if (phase === "equalized") {
+        // Preserve the existing <=3 pairwise integer workload rule. Its fixed
+        // sum implies tighter per-owner integer bounds; no allocation or
+        // objective is removed from the original feasible integer model.
+        const total=families.reduce((sum,family)=>sum+result.weights[family]*2,0),
+          range=recurringIntegerLoadRange({total,owners:owners.length,spread:3});
+        for(const [index,owner]of owners.entries()) {
+          constraints.push(` integer_load_floor_${index}: ${expression(termsFor(owner,true))} >= ${range.lower}`);
+          constraints.push(` integer_load_ceiling_${index}: ${expression(termsFor(owner,true))} <= ${range.upper}`);
+        }
+      }
       const groups = new Map();
       if (phase === "morning") {
         for (const owner of owners) {
@@ -2200,8 +2211,17 @@ function phaseInvocationSource({source,currentConfig,dayOfWeek,phaseSourceBasis}
 }
 function freezeInvocationFact(x){if(x&&typeof x==='object'){for(const v of Object.values(x))freezeInvocationFact(v);Object.freeze(x);}return x;}
 function createScalableInvocation(){
-  const evidence=createRecurringPhaseEvidenceInvocation();let basisFact=null;
-  return Object.freeze({...evidence,sourceForDay(input){
+  const evidence=createRecurringPhaseWeekInvocation();let basisFact=null,reductionFact=null;
+  return Object.freeze({...evidence,checkedReductionContext(context){
+    // Full actual bytes are checked at every use. Only a private detached
+    // validated context is retained for this one invocation; changed/rehash
+    // inputs must pass every original context check again.
+    const key=contentDigest(context);
+    if(!reductionFact||reductionFact.key!==key){
+      reductionFact=freezeInvocationFact({key,context:structuredClone(assertReductionContext(context))});
+    }
+    return reductionFact.context;
+  },sourceForDay(input){
     if(!input.phaseSourceBasis?.reductionContext)return input.source;
     // Actual bytes, not supplied hashes or an object-identity-only cache.
     const key=contentDigest({source:input.source,currentConfig:input.currentConfig,phaseSourceBasis:input.phaseSourceBasis});
@@ -2218,7 +2238,7 @@ function createScalableInvocation(){
   }});
 }
 function reductionPreferenceReceipt({phaseSourceBasis,proof,dayOfWeek,fullOwners,evidenceInvocation=null}){
-  const context=assertReductionContext(phaseSourceBasis.reductionContext),bindings=context.currentConfig.fullNineReductionBinding
+  const context=(evidenceInvocation?.checkedReductionContext||assertReductionContext)(phaseSourceBasis.reductionContext),bindings=context.currentConfig.fullNineReductionBinding
     .mandatoryPrimaryOwnerBindings.filter(b=>b.dayOfWeek===dayOfWeek);
   for(const binding of bindings){
     const pkg=proof.descriptor.packages.find(p=>p.family===binding.family),choice=proof.descriptor.choices.find(c=>c.workId===pkg?.workId);
@@ -2314,15 +2334,14 @@ export function deriveScalableCanonicalRecurringWeekCandidate({source,currentCon
     const basis=structuredClone(finalSource),v=basis.version||basis.versions[0];
     v.assignments=v.assignments.map((row,index)=>row.dayOfWeek===dayOfWeek?structuredClone(original.assignments[index]):row);
     try{
-      const prior=first[dayOfWeek],descriptor=createRecurringPhaseDescriptor({source:basis,ownerConfig:currentConfig,
-        dayOfWeek,selectedWorkIds:prior.descriptor.selectedWorkIds});
+      const prior=first[dayOfWeek],{descriptor,candidate}=evidenceInvocation.rebind({source:basis,ownerConfig:currentConfig,
+        dayOfWeek,selectedWorkIds:prior.descriptor.selectedWorkIds,selection:prior.selectedOwnership});
       const dayBasis=input=>{const out=structuredClone(input),version=out.version||out.versions[0];
         version.assignments=version.assignments.filter(row=>row.dayOfWeek===dayOfWeek);return out;};
       assert.equal(canonicalJson(dayBasis(basis)),canonicalJson(dayBasis(source)),'day relaxation source facts changed');
       const semantic=input=>{const out=structuredClone(input);delete out.sourceDigest;delete out.descriptorDigest;
         delete out.fixedSourceRowsDigest;return out;};
       assert.equal(canonicalJson(semantic(descriptor)),canonicalJson(semantic(prior.descriptor)),'day relaxation descriptor changed');
-      const candidate=createRecurringPhaseProspectiveSource({source:basis,ownerConfig:currentConfig,descriptor,selection:prior.selectedOwnership});
       assert.equal(contentDigest(candidate),finalDigest,'bound selection does not produce exact final source');
       const body={status:'PROVEN_CANONICAL_PHASE_MINIMUM',descriptor,candidateSourceDigest:finalDigest,
         minimumDoubledSpread:prior.minimumDoubledSpread,halfUnitFeasible:prior.halfUnitFeasible,

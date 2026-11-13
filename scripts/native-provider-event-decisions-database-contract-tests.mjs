@@ -1,3 +1,4 @@
+import {withHistoricalNative289SourceFixture} from './fixtures/historical-native289-source-fixture.mjs';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {readFileSync,mkdtempSync,mkdirSync,copyFileSync,writeFileSync,unlinkSync,rmSync,symlinkSync} from 'node:fs';
@@ -14,6 +15,7 @@ import {assertDecisionMigrationManifest,assertCurrentDecisionMigrationManifest,a
 
 // Only actual source reads, pure hostile-data cases and --source-check. No
 // database/container/HTTP/solver process or forged engine receipt is permitted.
+await withHistoricalNative289SourceFixture(fileURLToPath(new URL('../',import.meta.url)),async fixtureRoot=>{
 let checks=0;const check=(name,fn)=>{fn();checks++;console.log('PASS',name);};
 // Explicit pure DTO models, NOT Java preparation or engine evidence.
 const wireSha=x=>createHash('sha256').update(x).digest('hex'),uid=n=>'44000000-0000-4000-8000-'+String(n).padStart(12,'0');
@@ -53,7 +55,7 @@ for(const mutate of [x=>x.data.native_request_id=uid(41),x=>x.data.request_body_
  x=>x.data.results.pop(),x=>x.data.results.push(x.data.results[0]),x=>x.data.results[0].event_id=uid(90),x=>x.data.results[0].decision='PERMANENTLY_DENIED',
  x=>x.data.results[0].receipt.replayed=false,x=>x.data.results[0].receipt.original_observation.boot_count=8,x=>x.data.results[0].receipt.receipt_job_id=uid(90)])
  check('pure hostile raw response derivative rejects even with recomputed transport checksum',()=>{const bad=httpCapture(modelPrepared),value=JSON.parse(Buffer.from(bad.body_base64,'base64'));mutate(value);const raw=JSON.stringify(value);bad.body_base64=Buffer.from(raw).toString('base64');bad.body_sha256=wireSha(raw);assert.throws(()=>assertNativeDecisionHttpCapture(modelPrepared,bad));});
-const source=readDecisionSource(undefined,{profile:'CURRENT_CANONICAL_289'});
+const source=readDecisionSource(fixtureRoot,{profile:'CURRENT_CANONICAL_289'});
 // Frozen full historical Source models from their original pinned commits;
 // none are inferred by removing/filtering members from the current schema.
 const frozenBytes=readFileSync(new URL('./fixtures/native-provider-event-decision-historical-source-models.json',import.meta.url));
@@ -148,7 +150,7 @@ for(const mutate of [x=>x.inventory.pop(),x=>x.inventory.push({...other,object_i
  x=>x.inventory[0].restore_order++,x=>x.surface.pop(),x=>x.surface[0].purpose='changed',x=>x.surface.push({...x.surface[0]}),
  x=>x.inventory[2].object_kind='view',x=>x.inventory[3].object_identity='public.other()',x=>x.surface[1].object_kind='view'])
  check('recovery delta mutation refused',()=>{const bad=structuredClone(after);mutate(bad);assert.throws(()=>compareDecisionRecoverySets(before,bad));});
-const runnerPath=fileURLToPath(new URL('./native-provider-event-decisions-database-tests.mjs',import.meta.url)),runner=readFileSync(runnerPath,'utf8');
+const runnerPath=join(fixtureRoot,'scripts/native-provider-event-decisions-database-tests.mjs'),runner=readFileSync(runnerPath,'utf8');
 check('historical218 verifier bytes and constants are preserved exactly without Git-object dependency',()=>{
  const start=runner.indexOf('export function assertDecisionMigrationManifest(rows){'),end=runner.indexOf('// Explicit current profile',start);
  assert.ok(start>0&&end>start);assert.equal(wireSha(runner.slice(start,end)),'c169cb9c47828cb46dfb662fe756a9197b013466ea1b5f92f85ebd522a6c23f5');
@@ -273,7 +275,7 @@ check('current289 is never a SQL execution selection and old execute source fenc
 // Mutations never touch the original source or an existing runtime owner.
 const privateSource=mkdtempSync(join(tmpdir(),'custodial-decision-source-contract-'));
 try{
- const originalRoot=fileURLToPath(new URL('../',import.meta.url));
+ const originalRoot=fixtureRoot;
  const sourceFiles=['supabase/canonical/migration-replay-order.json',...source.migrations.map(row=>'supabase/migrations/'+row.file),...source.inputs.map(row=>row.file)];
  for(const file of sourceFiles){mkdirSync(dirname(join(privateSource,file)),{recursive:true});copyFileSync(join(originalRoot,file),join(privateSource,file));}
  check('fresh complete current Source copy agrees with actual maintained reader',()=>assert.deepEqual(readDecisionSource(privateSource,{profile:'CURRENT_CANONICAL_289'}),source));
@@ -287,4 +289,6 @@ try{
  check('undeclared migration refuses rather than filtering observed survivors',()=>{const extra=join(privateSource,'supabase/migrations/20261022000000_unowned.sql');writeFileSync(extra,'-- test-only unowned Source\n',{flag:'wx'});try{assert.throws(()=>readDecisionSource(privateSource,{profile:'CURRENT_CANONICAL_289'}));}finally{unlinkSync(extra);}});
  check('restored complete Source copy is revalidated after all refusals',()=>assert.deepEqual(readDecisionSource(privateSource,{profile:'CURRENT_CANONICAL_289'}),source));
 }finally{rmSync(privateSource,{recursive:true});}
-console.log(JSON.stringify({status:'PASS',checks,scope:'SOURCE_CONTRACT_AND_PURE_HOSTILE_DATA_ONLY',actualSourceCheck:true,databaseExecuted:false,containerCreated:false,httpExecuted:false,engineEvidence:false}));
+console.log(JSON.stringify({status:'PASS',checks,scope:'RETAINED_289_SOURCE_CONTRACT_AND_PURE_HOSTILE_DATA_ONLY',historical_source_fixture:true,current_inventory_files:315,current_canonical_members:311,actualSourceCheck:true,databaseExecuted:false,containerCreated:false,httpExecuted:false,engineEvidence:false}));
+
+});

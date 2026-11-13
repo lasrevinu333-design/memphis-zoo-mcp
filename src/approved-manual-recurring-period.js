@@ -5,6 +5,12 @@ import {canonicalJson} from './static-weekly-schedule-model.js';
 import {postgresJsonbContentDigest as digest} from './static-weekly-schedule-program.js';
 import {prepareApprovedManualEmploymentAvailability} from './approved-manual-employment-admission.js';
 const MANIFEST='fe02bbdebc736d95360b55cc7dfe5b73c5a9eaa76f364f1c0f4420a0afb9950f';
+const HISTORICAL_MANUAL_DATA='eeff371f1510c6e4a079bde3ba17136dc10f64b100c7562d9b139fd14805a1c8';
+// Coalescing changes only for the exact later owner-approved shift correction.
+// A caller-supplied count or an unknown source digest never selects geometry.
+const NORMAL_ASSIGNMENTS=new Map([[HISTORICAL_MANUAL_DATA,346],
+ ['85ad93db39597cffc033992ec74d5eea98612ce9a8388a9e93f5566f4e38bc4c',327]]);
+const normalAssignmentCount=manualDataDigest=>{assert.ok(NORMAL_ASSIGNMENTS.has(manualDataDigest),'Exact admitted manual policy required');return NORMAL_ASSIGNMENTS.get(manualDataDigest);};
 const DAY=86400000,clone=structuredClone;
 const uuid=v=>{assert.equal(typeof v,'string');assert.match(v,/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/);return v;};
 const hash=v=>{assert.equal(typeof v,'string');assert.match(v,/^[a-f0-9]{64}$/);return v;};
@@ -20,7 +26,8 @@ export function approvedManualRecurringFrame(origin,serviceDate){
 // SQL derives the same rows privately, so client-generated DATA cannot authorize it.
 export function repeatApprovedManualNormalRows({sourceId,origin,frameStart,assignments,projectionAvailability,lunchDocument,overlayCompilerInput}){
  uuid(sourceId);const f=approvedManualRecurringFrame(origin,frameStart);assert.equal(f.frameStart,frameStart);assert.ok(f.periodIndex>0);
- assert.ok(Array.isArray(assignments)&&assignments.length===346);assert.ok(Array.isArray(projectionAvailability));
+ const expectedCount=normalAssignmentCount(overlayCompilerInput?.version?.lunchCoveragePolicy?.sourceDigest);
+ assert.ok(Array.isArray(assignments)&&assignments.length===expectedCount);assert.ok(Array.isArray(projectionAvailability));
  assert.equal(lunchDocument.loans.length,40);assert.equal(lunchDocument.week_start,origin);assert.ok(overlayCompilerInput&&overlayCompilerInput.serviceDate===origin);assert.deepEqual(overlayCompilerInput.exceptions,[]);
  const seen=new Set();for(const r of assignments){assert.ok(Number.isInteger(r.day_of_week)&&r.day_of_week>=0&&r.day_of_week<=6);
   assert.equal(r.service_date,dayDate(origin,r.day_of_week));assert.equal(r.status,'assigned');uuid(r.owner_person_id);
@@ -47,7 +54,10 @@ export function prepareApprovedManualRecurringPeriod({basis,serviceDate,expected
  rev(expectedRevision);rev(expectedGeneration);assert.equal(basis.authorityRevision,expectedRevision);assert.equal(basis.generation,expectedGeneration);
  assert.equal(basis.manifestSha256,MANIFEST);for(const k of ['baselineSnapshotDigest','catalogEntryDigest','sourceProjectionIdentity','sourceLunchIdentity'])hash(basis[k]);
  const frame=approvedManualRecurringFrame(basis.origin,serviceDate);assert.ok(frame.periodIndex>0,'Initial frame belongs to original activation');
- assert.equal(basis.frameStart,frame.frameStart);assert.equal(basis.frameEnd,frame.frameEnd);assert.equal(basis.assignmentCount,346);assert.equal(basis.lunchCount,40);
+ // An absent field is only the original authenticated v1/346-row basis. New
+ // readers emit the admitted digest explicitly; a327-row basis requires it.
+ const manualDataDigest=Object.hasOwn(basis,'manualDataDigest')?basis.manualDataDigest:HISTORICAL_MANUAL_DATA;
+ assert.equal(basis.frameStart,frame.frameStart);assert.equal(basis.frameEnd,frame.frameEnd);assert.equal(basis.assignmentCount,normalAssignmentCount(manualDataDigest));assert.equal(basis.lunchCount,40);
  assert.ok(Array.isArray(basis.acceptedExceptions)&&basis.acceptedExceptions.length<=512);assert.equal(basis.participants.length,7);assert.equal(basis.employmentByDate.length,7);
  const reasons=clone(basis.adjustmentReasons);assert.ok(Array.isArray(reasons));
  if(basis.acceptedExceptions.length)reasons.push({kind:'ACCEPTED_EXCEPTIONS',exceptionIds:basis.acceptedExceptions.map(e=>e.id)});

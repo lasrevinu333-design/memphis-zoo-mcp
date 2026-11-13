@@ -33,7 +33,7 @@ export function createGeneralUrlencodedMiddleware() {
 // existing dedicated parser/limit/error-order contracts.
 export function createGeneralJsonMiddleware() {
   const parser = express.json({limit: '10mb'});
-  const dedicatedPath = /^\/(?:scan-api\/(?:rpc|original-completion)|oauth\/register)\/?$/i;
+  const dedicatedPath = /^\/(?:scan-api\/(?:rpc|original-completion|phone-position)|oauth\/register)\/?$/i;
   // Express route parameters consume one path segment, with optional trailing
   // slash and case-insensitive routing by default. Preserve the ORIGINAL bytes
   // only for the two typed, fully attested native legacy POST endpoints.

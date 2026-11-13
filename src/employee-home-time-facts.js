@@ -112,6 +112,23 @@ export async function readHomeTimeFacts({day,employeeId,runReadOnlySql}) {
   // Keep the exact employee/publication/projection lookup inside its existing
   // bounded reader, which checks canonical freshness before returning times.
   const sql=`select public.static_weekly_v27_read_home_time_facts('${day.service_date}'::date,'${employeeId}'::uuid,'${day.publication_id}'::uuid,'${day.projection_id}'::uuid) as facts`;
-  try{const rows=await runReadOnlySql(sql);return Array.isArray(rows)&&rows.length===1?deriveBoundedHomeTimeFacts(day,rows[0].facts):fallback;}
+  try{
+    const rows=await runReadOnlySql(sql);
+    if(!Array.isArray(rows)||rows.length!==1)return fallback;
+    if(rows[0].facts!==null)return deriveBoundedHomeTimeFacts(day,rows[0].facts);
+    // An approved weekly roster can omit a person's off day. A missing time
+    // row alone is not OFF: require the existing canonical employee-day reader
+    // to explicitly say OFF for this same current publication and projection.
+    const days=await runReadOnlySql(`select public.static_weekly_v5_read_employee_day('${day.service_date}'::date,'${employeeId}'::uuid) as day`);
+    const off=Array.isArray(days)&&days.length===1?days[0].day:null;
+    if(day.projection_status!=='current'||!same(employeeId,day.employee_id||day.employee?.id)
+      ||off?.governed!==true||off.source!=='static_weekly_projection'||off.projection_status!=='current'
+      ||off.service_date!==day.service_date||!same(off.employee_id,employeeId)
+      ||!same(off.publication_id,day.publication_id)||!same(off.projection_id,day.projection_id)
+      ||off.phase!=='off_day'||off.schedule_status!=='off'
+      ||!(off.shift===null||off.shift?.active===false)
+      ||!Array.isArray(off.all_items)||off.all_items.length!==0)return fallback;
+    return {...fallback,reason:null,phase:'off_day',schedule_status:'off',shift:{active:false}};
+  }
   catch{return fallback;}
 }

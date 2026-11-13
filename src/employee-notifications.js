@@ -7,6 +7,7 @@ import { deliverNativeLunchJob } from './native-lunch-dispatch.js';
 import { deliverNativeMessageJob } from './native-message-dispatch.js';
 import { deliverNativeEventJob } from './native-event-dispatch.js';
 import { holdUnqualifiedNativeScheduleJob } from './native-schedule-job-preparation.js';
+import { deliverNativeScheduleJob } from './native-schedule-dispatch.js';
 import { prepareNativeScheduleSourceJobs } from './native-schedule-source-producer.js';
 import { nativeAlertUtf8Prefix, nativeAlertPreview } from './native-alert-text.js';
 
@@ -659,6 +660,9 @@ export function installEmployeeNotificationRoutes(app, {
   });
 
   async function deliverClaimedJob(job) {
+    if (job?.job_type === 'employee_native_push' && job.payload_json?.data_json?.kind === 'employee_schedule_ownership') {
+      return deliverNativeScheduleJob({db,pushRuntime,job});
+    }
     // Never allow SCHEDULE, malformed aliases or test flags to reach a legacy
     // sender before its separate source/qualification/lifecycle admission.
     holdUnqualifiedNativeScheduleJob(job);
@@ -876,6 +880,7 @@ export function installEmployeeNotificationRoutes(app, {
     // One bounded preparation pass in the existing sweep, not another timer.
     // It never delays current human-message delivery or authorizes native send.
     const schedulePreparation = prepareNativeScheduleSourceJobs({ db });
+    const departurePreparation = prepareNativeScheduleSourceJobs({ db, departure: true });
     try {
       const now = new Date().toISOString();
       const [eventsEnqueued, locationsEnqueued, lunchEnqueued] = await Promise.all([
@@ -928,11 +933,12 @@ export function installEmployeeNotificationRoutes(app, {
         enqueued: { events: eventsEnqueued.data, locations: locationsEnqueued.data, lunch: lunchEnqueued.data },
         claimed: jobs.length,
         schedule_preparation: await schedulePreparation,
+        departure_preparation: await departurePreparation,
       };
     } finally {
       // Keep the existing single-flight lifecycle until its bounded source
       // work settles, including an unrelated ordinary-lane failure.
-      try { await schedulePreparation; } finally { inFlight = false; }
+      try { await Promise.all([schedulePreparation, departurePreparation]); } finally { inFlight = false; }
     }
   }
 
