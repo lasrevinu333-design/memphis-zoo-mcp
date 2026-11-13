@@ -1,3 +1,4 @@
+import {createManualEventsRouter} from './manual-events-router.js';
 import {makeCityWorkOrderReader} from './city-work-orders.js';
 import { makeEmployeeFeedbackOriginalReceiptReader } from './employee-feedback-original-receipt.js';
 import { listSharedEvents } from "./events-api.js";
@@ -2508,6 +2509,7 @@ app.get("/status/deep", requireOpsManagerAuth, (_req, res) => {
 
 
 app.use("/admin-api", (req, res, next) => { setAdminApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
+app.use("/admin-api/manual-events", createManualEventsRouter({runReadOnlySql,requireOpsManagerAuth,requireOpsManagerWrite}));
 app.use("/admin-api/places", createPlacesAdminRouter({ client: supabaseAdmin, requireManagerWrite: requireOpsManagerWrite, runReadOnlySql, leadershipRecordBridge:createCustodialLeadershipRecordBridge({env:process.env}) }));
 app.use("/dashboard-api", (req, res, next) => { setPublicDashboardCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
 app.use("/scan-api", (req, res, next) => { setScanApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });

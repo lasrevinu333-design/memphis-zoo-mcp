@@ -1,3 +1,4 @@
+import {installManualEventCompanion} from './manual-events-operation.mjs';
 import {installCustodialLeadershipRecordCompanion} from './custodial-leadership-record-operation.mjs';
 // Main-owned central wiring. Disabled until explicit protected configuration;
 // Main API has no enrollment DB grant: it proxies/reads the fixed control plane.
@@ -30,7 +31,7 @@ function allowedPath(req){
  if(/^\/analytics-api\/(cleaning-performance|inspection-coverage|inspections|session-facts|ticket-trends)(?:\/|$)/.test(p))return true;
  if(/^\/feedback-api\/(submit|original-receipt|image|acknowledge)(?:\/|$)/.test(p))return true;
  if(p==='/gemini-api'||p.startsWith('/gemini-api/'))return true;
- return ['/static-weekly','/custodial-admin-api','/admin-api/custodial','/admin-api/device-security','/admin-api/device-auth','/dashboard-api','/manager-notifications-api','/messaging-api','/schedule-api','/leadership-api/roster','/leadership-api/phone-assignments','/admin-api/places','/admin-api/access/coverage','/admin-api/close-ticket'].some(k=>p===k||p.startsWith(k+'/'));
+ return ['/static-weekly','/custodial-admin-api','/admin-api/custodial','/admin-api/device-security','/admin-api/device-auth','/dashboard-api','/manager-notifications-api','/messaging-api','/schedule-api','/leadership-api/roster','/leadership-api/phone-assignments','/admin-api/places','/admin-api/manual-events','/admin-api/access/coverage','/admin-api/close-ticket'].some(k=>p===k||p.startsWith(k+'/'));
 }
 function controlOrigin(env){
  const raw=text(env.STATIC_WEEKLY_CONTROL_PLANE_PUBLIC_URL).replace(/\/$/,'');
@@ -103,6 +104,7 @@ export function createCustodialLeadershipControlPlane({env=process.env,database,
  const messagingOperation=database?.connect?createCustodialLeadershipMessagingOperation({database,service,verifyTransaction}):null;
  const appRouter=express.Router();
  installCustodialLeadershipRecordCompanion({router:appRouter,database,service,verifyTransaction,requireOrigin:origin=>requireOrigin(origin,env),token});
+ installManualEventCompanion({router:appRouter,database,service,verifyTransaction,requireOrigin:origin=>requireOrigin(origin,env),token});
  appRouter.post(internal+'/messaging',express.json({limit:'32kb'}),createCustodialLeadershipMessagingHandler({operation:messagingOperation,assertOrigin:origin=>requireOrigin(origin,env)}));
  appRouter.use('/custodial-leadership-api',createCustodialLeadershipPinRouter({service,allowedOrigins:custodialLeadershipOrigins(env),sourceIdentity:req=>{
    const source=text(req.get('X-Custodial-Source')),stamp=text(req.get('X-Custodial-Source-Time')),mac=text(req.get('X-Custodial-Source-Mac'));
