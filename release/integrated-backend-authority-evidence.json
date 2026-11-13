@@ -4660,7 +4660,7 @@
       {
         "path": "scripts/manager-on-duty-tests.mjs",
         "mode": "100644",
-        "object_id": "f1a8aa484d163ca06d5b82af40615b6e9e03732d"
+        "object_id": "dee6de0c021ce1aadfb243e9e84d4546ea4d9ffe"
       },
       {
         "path": "scripts/manager-original-recovery-approval-tests.mjs",
@@ -5935,7 +5935,7 @@
       {
         "path": "scripts/public-dashboard-details-tests.mjs",
         "mode": "100644",
-        "object_id": "ed2c8811512730963f2fcb69e33c71289808deef"
+        "object_id": "336afed50bae16d1b2bd0c93a3c6c1efe74549dc"
       },
       {
         "path": "scripts/public-operations-viewer-tests.mjs",
@@ -8355,7 +8355,7 @@
       {
         "path": "src/manager-on-duty.js",
         "mode": "100644",
-        "object_id": "95694f92d53871361243d19a97a7c4a940f14bd3"
+        "object_id": "932da4a2e485409f4be91495e1f6021ba4b5cef8"
       },
       {
         "path": "src/manager-original-inventory-separation.js",
@@ -8725,7 +8725,7 @@
       {
         "path": "src/operations-board.js",
         "mode": "100644",
-        "object_id": "6960c904ad9e826b20da49b7932f45c5d5d6e667"
+        "object_id": "64e720037558ae341ded72c2deb5cff839c3e66c"
       },
       {
         "path": "src/operations-mail-contract.js",
@@ -8820,7 +8820,7 @@
       {
         "path": "src/public-dashboard-details.js",
         "mode": "100644",
-        "object_id": "f6f09c9c81c4431d542ea2a2faf67a2facb00dff"
+        "object_id": "10a0add21f4cda7a2b2fa81a1a2e881582686ee7"
       },
       {
         "path": "src/public-operations-viewer.js",
