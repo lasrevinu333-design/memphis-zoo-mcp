@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: production-disaster-recovery-backup
@@ -18,11 +19,17 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 179ec718050c3d211f7b95e8a74655023728ec16
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '22.23.1'
           cache: npm
       - run: npm ci
+      - name: Check backup source contracts before production access
+        run: npm run test:backup-source-contracts
+      - name: Check CI workflow contracts before production access
+        run: npm run test:ci-workflows
       - name: Require configured recovery secrets
         env:
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
@@ -42,7 +49,7 @@ jobs:
           test -n "$BACKUP_RUNTIME_CONFIGURATION_JSON"
       - name: Bind backup tooling to the exact source tree
         run: |
-          echo "BACKUP_TOOL_COMMIT=${GITHUB_SHA}" >> "$GITHUB_ENV"
+          echo "BACKUP_TOOL_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
           echo "BACKUP_TOOL_TREE=$(git rev-parse HEAD^{tree})" >> "$GITHUB_ENV"
           echo "BACKUP_PG_DUMP_IMAGE=supabase/postgres@sha256:fbf77524fc188126c1775fd2d2e54040bde295438a3e6f07936f3c39e6f688ed" >> "$GITHUB_ENV"
       - name: Pull exact schema-capture tooling before opening the database snapshot
@@ -67,17 +74,58 @@ jobs:
           RESTORE_ARCHIVE_VERIFY_KEY_ID: ${{ vars.BACKUP_MANIFEST_SIGNING_KEY_ID }}
         run: npm run restore:verify
       - name: Encrypt archive
+        id: ciphertext
         env:
           BACKUP_DIR: ${{ runner.temp }}/memphis-zoo-backup
           ARCHIVE_PATH: ${{ runner.temp }}/memphis-zoo-backup.tar.gz
           ENCRYPTED_PATH: ${{ runner.temp }}/memphis-zoo-backup.tar.gz.enc
           BACKUP_ENCRYPTION_PASSPHRASE: ${{ secrets.BACKUP_ENCRYPTION_PASSPHRASE }}
         run: |
+          set -euo pipefail
+          umask 077
           tar -C "$BACKUP_DIR" -czf "$ARCHIVE_PATH" .
           openssl enc -aes-256-cbc -salt -pbkdf2 -iter 250000 -in "$ARCHIVE_PATH" -out "$ENCRYPTED_PATH" -pass env:BACKUP_ENCRYPTION_PASSPHRASE
+          echo "sha256=$(sha256sum "$ENCRYPTED_PATH" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          echo "size=$(stat -c %s "$ENCRYPTED_PATH")" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        id: encrypted_upload
         with:
           name: memphis-zoo-disaster-recovery-${{ github.run_id }}
           path: ${{ runner.temp }}/memphis-zoo-backup.tar.gz.enc
+          retention-days: 14
+          if-no-files-found: error
+      # Success requires fresh bytes downloaded from the exact upload, never local plaintext.
+      - name: Download exact just-uploaded encrypted artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          artifact-ids: ${{ steps.encrypted_upload.outputs.artifact-id }}
+          path: ${{ runner.temp }}/uploaded-backup-readback
+          merge-multiple: true
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ github.run_id }}
+      - name: Verify downloaded ciphertext and signed archive without restoring
+        env:
+          BACKUP_ENCRYPTION_PASSPHRASE: ${{ secrets.BACKUP_ENCRYPTION_PASSPHRASE }}
+          RESTORE_ARCHIVE_VERIFY_KEY: ${{ secrets.BACKUP_MANIFEST_SIGNING_KEY }}
+          RESTORE_ARCHIVE_VERIFY_KEY_ID: ${{ vars.BACKUP_MANIFEST_SIGNING_KEY_ID }}
+          EXPECTED_SHA256: ${{ steps.ciphertext.outputs.sha256 }}
+          EXPECTED_SIZE: ${{ steps.ciphertext.outputs.size }}
+          UPLOADED_ARTIFACT_ID: ${{ steps.encrypted_upload.outputs.artifact-id }}
+        run: |
+          set -euo pipefail
+          umask 077
+          python3 scripts/verify-encrypted-backup-readback.py \
+            --ciphertext "$RUNNER_TEMP/uploaded-backup-readback/memphis-zoo-backup.tar.gz.enc" \
+            --sha256 "$EXPECTED_SHA256" --size "$EXPECTED_SIZE" \
+            --repository "$GITHUB_REPOSITORY" --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" --artifact-id "$UPLOADED_ARTIFACT_ID" \
+            --receipt "$RUNNER_TEMP/backup-readback-receipt.json"
+      - name: Publish successful readback receipt only
+        if: ${{ success() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: backup-readback-receipt-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/backup-readback-receipt.json
           retention-days: 14
           if-no-files-found: error
