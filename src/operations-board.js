@@ -40,9 +40,10 @@ export function makeOperationsBoardHandler({readEvents, readMail = null, readCit
       const events = projectOperationsEvents(await readEvents());
       const safe=async reader=>{try{return typeof reader==='function'?await reader():null;}catch{return null;}};
       const [mail,city]=await Promise.all([safe(readMail),safe(readCity)]);
+      const generatedAt=now();
       return res.status(200).json({ok:true,data:{schema:'custodial.operations-board.v1',
-        generated_at:now().toISOString(),timezone:'America/Chicago',events,
-        manager_on_duty:managerOnDuty(chicagoServiceDate(now())),
+        generated_at:generatedAt.toISOString(),timezone:'America/Chicago',events,
+        manager_on_duty:managerOnDuty(chicagoServiceDate(generatedAt)),
         // Server-owned projection only. Imported snapshots do not assert
         // unattended mailbox completeness or freshness.
         schools:mail?.schools||{state:'unavailable',reason:'outlook_school_producer_not_bound',rows:[]},
